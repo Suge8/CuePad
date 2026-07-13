@@ -1,23 +1,23 @@
 # CuePad 开发文档
 
-技术栈：Tauri v2 + SvelteKit (Svelte 5) + TypeScript + Tailwind CSS 4 + Bits UI + CodeMirror 6 + SQLite（tauri-plugin-sql）。
+技术栈：Electron 37 + SvelteKit (Svelte 5) + TypeScript + Tailwind CSS 4 + Bits UI + CodeMirror 6 + SQLite（Electron 主进程 `node:sqlite`）。Tauri 壳仅保留作迁移期基线，计划在 Electron 能力等价后下线。
 
 ## 常用命令
 
 ```bash
-bun tauri dev        # 桌面开发模式
-bun run check        # svelte-check 类型检查
-bun test             # bun test + check
-bun run test:e2e     # 无头视觉验收（Playwright WebKit，见下）
-bun run test:tauri   # 真实 Tauri 权限链路（全自动，见下）
-bun run lint         # eslint
-bun run build        # 前端产物构建
-cargo check --manifest-path src-tauri/Cargo.toml
+bun run dev:electron  # Electron 桌面开发模式
+bun run test:electron # 真实 Electron + SQLite 验收
+bun run check         # svelte-check 类型检查
+bun test              # Bun 单元测试
+bun run test:e2e      # 无头视觉验收（Playwright WebKit，见下）
+bun run test:tauri    # 迁移期 Tauri 基线验收
+bun run lint          # eslint
+bun run build         # 前端产物构建
 ```
 
 ## 架构要点
 
-- **数据层**（`src/lib/db/`）：repository 纯函数 + `RepositoryContext`，测试用 bun:sqlite、运行时用 tauri-plugin-sql。`connection.ts#executeBatch` 用 `BEGIN IMMEDIATE…COMMIT` 单次 execute 保证批量原子性，失败时关闭连接池回滚重建。schema 见 `src-tauri/migrations/`；v5 `tasks` 仅含正文、项目关联、基础顺序、完成时间和时间戳。
+- **数据层**（`src/lib/db/`、`electron/db.ts`）：repository 保持运行时无关；renderer 只经 `window.cuepad.sql` 调用，SQLite 连接、迁移和 `BEGIN IMMEDIATE…COMMIT` 真事务都在 Electron 主进程。schema 见根目录 `migrations/`；首次启动在目标库不存在时复制旧 Tauri `.db`/`.db-wal`/`.db-shm`，源文件不改不删，并把 `_sqlx_migrations` 的成功版本继承到 `schema_migrations`。v5 `tasks` 仅含正文、项目关联、基础顺序、完成时间和时间戳。
 - **状态层**：`workspace`（`src/lib/workspace/store.svelte.ts`）是工作区单一事实源（`WorkspaceView`、项目/卡片/任务/标签/回收站、面板、主题、快捷键）；`editor`（`editor.svelte.ts`）管沉浸编辑草稿。主界面由横向项目栏和单项目卡片墙（`CardBoard.svelte`）组成；桌面端项目栏和卡片层均使用完整工作区宽度，任务区作为可收起浮层覆盖右上区域，不永久挤压卡片布局。`projectId === null` 是虚拟「未归档」（数据库中无项目行）：首个空工作区草稿默认进入未归档；选择未归档后可继续新建；编辑器可把任意卡片移入未归档；恢复仍隶属已删除项目的单卡时也会进入未归档。当前项目只写入 `cuepad:active-project`，加载后用 SQLite 项目列表校验；失效时按「有卡的未归档 → 首个置顶项目 → 首个普通项目 → 未归档」回退。项目置顶与卡片收藏只划分稳定展示分区，`mergePartitionOrder` 把分区内拖拽写回原 `sort_order` 槽位。
 - **悬浮任务**（`tasks.ts` / `TaskStack.svelte`）：SQLite `tasks` 是持久事实源，`workspace.tasks` 是全局响应式缓存，不随 `WorkspaceView` 过滤。活动区按 `sort_order`，完成区按 `completed_at` 新到旧；完成/恢复不改基础顺序。每个任务只有一条串行写链，在途更新合并最终 patch，失败后按 id 恢复 SQLite 状态。排序由 `TaskStack` 的 Pointer Capture 按活动行中点计算插入槽位，不经过 HTML5 DnD 或 `elementFromPoint`；排除源任务后只渲染一条独立横线，始终表示松手后的最终任务间隙。项目软删除保留 `project_id` 并显示「项目已回收」；恢复项目自动复原，硬删除或清空回收站由 `ON DELETE SET NULL` 置空。任务完成可逆，永久删除采用两击确认，不进入项目/卡片回收站；桌面端任务区从项目栏下方开始，`56rem` 以下入口直接参与顶栏 actions 排版，展开层仍固定在工作区右侧。
 - **Motion contract**（`src/lib/motion.ts` / `src/routes/layout.css`）：Svelte transition、WAAPI icon switch 和 FLIP 共用时长、缓动与减动分支。任务新增/完成/恢复/删除只动画对应 `.task-motion`，项目菜单和窄窗入口独立进出；父任务栈不整体闪动。`prefers-reduced-motion` 取消位移、缩放和 FLIP，只保留状态颜色、焦点与淡变。
@@ -38,10 +38,11 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 ## 自动验收
 
-自动验收固定分两层，不再用 AppleScript / AX / CGEvent 驱动 CuePad：
+自动验收固定分三层，不再用 AppleScript / AX / CGEvent 驱动 CuePad：
 
-- `bun run test:e2e`：Playwright headless WebKit + 可变 Tauri IPC mock（`e2e/`），负责视觉、布局、工作区与任务 CRUD、完整 pointerup 命中、独立动效和快速前端回归；不碰真数据库，不启动桌面窗口。
-- `bun run test:tauri`：WebdriverIO + `tauri-plugin-wdio-webdriver`（`e2e-tauri/`），负责真实 WKWebView、Tauri command、SQLite migrations、Pin / Star、项目/卡片/任务拖拽和跨进程恢复。插件只在 debug 测试构建注册。
+- `bun run test:e2e`：Playwright headless WebKit + 桌面桥 mock（`e2e/`），负责视觉、布局、工作区与任务 CRUD、完整 pointerup 命中、独立动效和快速前端回归；SQL 走 `window.cuepad.sql` fixture，其余待 G3 迁移的壳能力暂走 Tauri invoke mock。
+- `bun run test:electron`：Playwright Electron（`e2e-electron/`），使用隔离 userData 验证安全 preload、空库迁移、真实 CRUD 重启恢复、主进程事务回滚，以及带 `_sqlx_migrations` 的旧 Tauri WAL 数据继承与源文件不变。
+- `bun run test:tauri`：保留迁移前 Tauri 基线验收代码与历史证据；当前 migration 已移出 `src-tauri/`，不属于 Electron 迁移期间的每轮回归，待 G5 随旧壳一并下线。
 
 `bun run test:tauri` 全自动覆盖两组真实运行时链路：① `AXIsProcessTrusted() == false` → `dispatch_text` 返回 `ACCESSIBILITY_PERMISSION_REQUIRED` → 权限引导 Toast；② UI 创建项目/卡片/任务 → Pin / Star → 三类分区拖拽 → SQLite 落库 → 新进程恢复任务正文、项目分配、完成状态和顺序。隔离规则：
 
