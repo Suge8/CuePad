@@ -34,7 +34,7 @@ bun run build         # 前端产物构建
 
 - 定稿源图在 `design/final/`（logo、lockup、app icon、IP 姿势）；应用内透明底 IP 在 `src/lib/assets/`，由 `src/lib/ui/Mascot.svelte` 统一渲染（悬浮微动 + `popRise` 入场，见 `src/lib/motion.ts`）。
 - 触点原则：插画只放体验边缘（空态/错误/成功/首启），不进正文工作区。姿势→场景：empty=首屏空态、welcome=收藏空/首启欢迎卡（`WelcomeCard.svelte`，localStorage `cuepad:welcomed`）、search=无结果、trash/clean=回收站空/刚清空、error=加载失败（`workspace.loadError` + 重试）、hello=设置页脚。四角星（`Sparkle.svelte`）是最小品牌单元：success toast 星尘迸发、空态点缀；微动效全部尊重 `prefers-reduced-motion`。
-- 重新生成（macOS 本机，无外部依赖）：`design/tools/cutout.swift` 用 Vision 抠图；`design/tools/icon.swift` 从黑白 logo 提取 mark，合成 1024 squircle（喂 `bun tauri icon` 生成全套）与 `src-tauri/icons/tray.png`（44px 黑+alpha 模板图，`lib.rs` 中 `icon_as_template(true)`）。Electron 将该图作为 `trayTemplate@2x.png`，并配套 22px 的 `trayTemplate.png`；缺少密度后缀会被当成 44pt，导致菜单栏图标放大一倍。
+- 重新生成（macOS 本机，无外部依赖）：`design/tools/cutout.swift` 用 Vision 抠图；`design/tools/icon.swift` 从黑白 logo 提取 mark，合成 1024 squircle（喂 `bun tauri icon` 生成全套）与 `src-tauri/icons/tray.png`（44px 黑+alpha 模板图，`lib.rs` 中 `icon_as_template(true)`）。Electron 从该图生成 macOS 推荐的 16px `trayTemplate.png` 与 32px `trayTemplate@2x.png`；缺少密度后缀会被当成 44pt，导致菜单栏图标放大。
 
 ## 自动验收
 
