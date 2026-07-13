@@ -15,7 +15,9 @@ mod macos {
         NSApplicationActivationOptions, NSApplicationActivationPolicy, NSRunningApplication,
         NSWorkspace, NSWorkspaceApplicationKey, NSWorkspaceDidActivateApplicationNotification,
     };
-    use objc2_foundation::{NSDefaultRunLoopMode, NSNotification, NSPort, NSRunLoop, NSString};
+    use objc2_foundation::{
+        NSDefaultRunLoopMode, NSNotification, NSPort, NSRunLoop, NSString, NSTimer,
+    };
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
     use std::{
@@ -27,7 +29,9 @@ mod macos {
     };
 
     const ACCESSIBILITY_REQUIRED: &str = "ACCESSIBILITY_PERMISSION_REQUIRED";
+    const ACTIVATION_TIMEOUT_SECONDS: f64 = 2.0;
     const NO_TARGET: &str = "NO_DISPATCH_TARGET";
+    const PASTE_SETTLE_SECONDS: f64 = 0.1;
     const TARGET_UNAVAILABLE: &str = "DISPATCH_TARGET_UNAVAILABLE";
 
     #[derive(Clone, Serialize)]
@@ -51,6 +55,13 @@ mod macos {
         key_up: CGEvent,
     }
 
+    struct PendingDispatch {
+        request_id: u64,
+        target_pid: i32,
+        key_down: CGEvent,
+        key_up: CGEvent,
+    }
+
     #[derive(Clone, Default)]
     struct Exclusions {
         pid: Option<i32>,
@@ -65,6 +76,7 @@ mod macos {
 
     thread_local! {
         static PREPARED_DISPATCH: std::cell::RefCell<Option<PreparedDispatch>> = const { std::cell::RefCell::new(None) };
+        static PENDING_DISPATCH: std::cell::RefCell<Option<PendingDispatch>> = const { std::cell::RefCell::new(None) };
     }
 
     #[derive(Deserialize)]
@@ -191,9 +203,9 @@ mod macos {
         let block = RcBlock::new(move || {
             let response = match serde_json::from_str::<Request>(&line) {
                 Ok(request) => handle_request(&state, request),
-                Err(error) => Response::error(0, format!("INVALID_REQUEST:{error}")),
+                Err(error) => Some(Response::error(0, format!("INVALID_REQUEST:{error}"))),
             };
-            if write_response(&response).is_err() {
+            if response.is_some_and(|response| write_response(&response).is_err()) {
                 stop_main_run_loop();
             }
         });
@@ -219,7 +231,7 @@ mod macos {
         }
     }
 
-    fn handle_request(state: &DispatchState, request: Request) -> Response {
+    fn handle_request(state: &DispatchState, request: Request) -> Option<Response> {
         let result = match request.cmd.as_str() {
             "target" if request.prepare => {
                 prepare_dispatch(state, request.bundle_id).and_then(|target| {
@@ -232,13 +244,16 @@ mod macos {
             "targets" => {
                 serde_json::to_value(dispatch_targets(state)).map_err(|error| error.to_string())
             }
-            "dispatch" => dispatch(state, request.bundle_id).map(|()| Value::Null),
+            "dispatch" => match dispatch(state, request.bundle_id, request.id) {
+                Ok(()) => return None,
+                Err(error) => Err(error),
+            },
             _ => Err("UNKNOWN_COMMAND".to_string()),
         };
-        match result {
+        Some(match result {
             Ok(data) => Response::success(request.id, data),
             Err(error) => Response::error(request.id, error),
-        }
+        })
     }
 
     fn write_response(response: &Response) -> io::Result<()> {
@@ -301,6 +316,70 @@ mod macos {
         }
         *state.target.lock().expect("dispatch target mutex poisoned") =
             Some(target_from(application));
+        complete_pending_dispatch(pid);
+    }
+
+    fn complete_pending_dispatch(target_pid: i32) {
+        let pending = PENDING_DISPATCH.with(|pending| {
+            let mut pending = pending.borrow_mut();
+            if pending
+                .as_ref()
+                .is_some_and(|dispatch| dispatch.target_pid == target_pid)
+            {
+                pending.take()
+            } else {
+                None
+            }
+        });
+        let Some(pending) = pending else {
+            return;
+        };
+        pending.key_down.post_to_pid(pending.target_pid);
+        pending.key_up.post_to_pid(pending.target_pid);
+        schedule_dispatch_response(pending.request_id);
+    }
+
+    fn schedule_dispatch_response(request_id: u64) {
+        let block = RcBlock::new(move |_timer: NonNull<NSTimer>| {
+            if write_response(&Response::success(request_id, Value::Null)).is_err() {
+                stop_main_run_loop();
+            }
+        });
+        let _timer = unsafe {
+            NSTimer::scheduledTimerWithTimeInterval_repeats_block(
+                PASTE_SETTLE_SECONDS,
+                false,
+                &block,
+            )
+        };
+    }
+
+    fn schedule_activation_timeout(request_id: u64) {
+        let block = RcBlock::new(move |_timer: NonNull<NSTimer>| {
+            let pending = PENDING_DISPATCH.with(|pending| {
+                let mut pending = pending.borrow_mut();
+                if pending
+                    .as_ref()
+                    .is_some_and(|dispatch| dispatch.request_id == request_id)
+                {
+                    pending.take()
+                } else {
+                    None
+                }
+            });
+            if pending.is_some()
+                && write_response(&Response::error(request_id, TARGET_UNAVAILABLE.into())).is_err()
+            {
+                stop_main_run_loop();
+            }
+        });
+        let _timer = unsafe {
+            NSTimer::scheduledTimerWithTimeInterval_repeats_block(
+                ACTIVATION_TIMEOUT_SECONDS,
+                false,
+                &block,
+            )
+        };
     }
 
     fn target_from(application: &NSRunningApplication) -> TargetApp {
@@ -392,7 +471,11 @@ mod macos {
         Ok(target)
     }
 
-    fn dispatch(state: &DispatchState, selector: Option<String>) -> Result<(), String> {
+    fn dispatch(
+        state: &DispatchState,
+        selector: Option<String>,
+        request_id: u64,
+    ) -> Result<(), String> {
         let prepared = PREPARED_DISPATCH.with(|prepared| {
             prepared
                 .borrow_mut()
@@ -412,11 +495,29 @@ mod macos {
             }
         };
         let application = application_for_target(&prepared.target)?;
+        if application.isActive() {
+            prepared.key_down.post_to_pid(prepared.target.pid);
+            prepared.key_up.post_to_pid(prepared.target.pid);
+            schedule_dispatch_response(request_id);
+            return Ok(());
+        }
+
+        PENDING_DISPATCH.with(|pending| {
+            *pending.borrow_mut() = Some(PendingDispatch {
+                request_id,
+                target_pid: prepared.target.pid,
+                key_down: prepared.key_down,
+                key_up: prepared.key_up,
+            });
+        });
         if !application.activateWithOptions(NSApplicationActivationOptions::empty()) {
+            PENDING_DISPATCH.with(|pending| pending.borrow_mut().take());
             return Err(TARGET_UNAVAILABLE.into());
         }
-        prepared.key_down.post_to_pid(prepared.target.pid);
-        prepared.key_up.post_to_pid(prepared.target.pid);
+        schedule_activation_timeout(request_id);
+        if application.isActive() {
+            complete_pending_dispatch(prepared.target.pid);
+        }
         Ok(())
     }
 
