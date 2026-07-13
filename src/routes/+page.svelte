@@ -7,7 +7,6 @@
 		overlayEnter,
 		popRise
 	} from '$lib/motion';
-	import { listen } from '@tauri-apps/api/event';
 	import SearchIcon from 'lucide-svelte/icons/search';
 	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import StarIcon from 'lucide-svelte/icons/star';
@@ -30,16 +29,6 @@
 
 	$effect(() => {
 		workspace.init();
-	});
-
-	// 托盘菜单「设置」→ Rust 侧 emit → 打开设置页
-	$effect(() => {
-		const unlisten = listen('cuepad://open-settings', () => {
-			workspace.settingsOpen = true;
-		});
-		return () => {
-			unlisten.then((stop) => stop());
-		};
 	});
 
 	// capture 阶段拦截，任意焦点（含 CodeMirror）下都先于编辑器和浏览器默认查找；

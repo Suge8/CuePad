@@ -3,18 +3,23 @@
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
+	"main": "dist-electron/main.js",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
 		"tauri": "tauri",
 		"prepare": "svelte-kit sync || echo ''",
+		"postinstall": "bun node_modules/electron/install.js",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "eslint .",
 		"test": "bun test && bun run check",
 		"test:e2e": "bun e2e/run.ts",
-		"test:tauri": "zsh e2e-tauri/run.zsh"
+		"test:tauri": "zsh e2e-tauri/run.zsh",
+		"build:electron": "cd electron && bun build main.ts preload.ts --outdir=../dist-electron --format=cjs --target=node --external=electron && printf '{\"type\":\"commonjs\"}\\n' > ../dist-electron/package.json",
+		"dev:electron": "bun run build:electron && bun -e \"import { spawn } from 'node:child_process'; import { createServer } from 'vite'; const server = await createServer({ server: { host: '127.0.0.1', port: 0 } }); await server.listen(); server.printUrls(); let exitCode = 1; try { const address = server.httpServer?.address(); if (!address || typeof address === 'string') throw new Error('无法读取 Vite 监听地址'); const electron = spawn('electron', ['.'], { stdio: 'inherit', env: { ...process.env, ELECTRON_START_URL: 'http://127.0.0.1:' + address.port } }); exitCode = await new Promise((resolve, reject) => { electron.once('error', reject); electron.once('exit', (code) => resolve(code ?? 1)); }); } finally { await server.close(); } process.exit(exitCode);\"",
+		"test:electron": "bun run build:electron && CUEPAD_ELECTRON_PORT=$(node -e \"const server = require('node:net').createServer(); server.listen(0, '127.0.0.1', () => { console.log(server.address().port); server.close(); });\") CUEPAD_TEST=1 bunx playwright test --config=playwright.electron.config.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -33,6 +38,8 @@
 		"@wdio/spec-reporter": "9.29.1",
 		"@wdio/tauri-service": "1.2.0",
 		"@wdio/types": "9.29.1",
+		"electron": "37.10.3",
+		"electron-builder": "26.15.3",
 		"eslint": "^10.4.1",
 		"eslint-plugin-svelte": "^3.19.0",
 		"globals": "^17.6.0",
