@@ -27,7 +27,13 @@ await mkdir(artifacts, { recursive: true });
 await cp('node_modules/.vite', `${artifacts}/vite-cache`, { recursive: true }).catch((error) => {
 	if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 });
-const playwright = spawn('bunx', ['playwright', 'test', ...process.argv.slice(2)], {
+const isMacOS = process.platform === 'darwin';
+if (isMacOS) spawn('/usr/bin/caffeinate', ['-u', '-t', '3'], { stdio: 'ignore' }).unref();
+const playwrightCommand = isMacOS ? '/usr/bin/caffeinate' : 'bunx';
+const playwrightArgs = isMacOS
+	? ['-d', '--', 'bunx', 'playwright', 'test', ...process.argv.slice(2)]
+	: ['playwright', 'test', ...process.argv.slice(2)];
+const playwright = spawn(playwrightCommand, playwrightArgs, {
 	stdio: 'inherit',
 	env: {
 		...process.env,

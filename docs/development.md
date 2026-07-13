@@ -65,7 +65,7 @@ bun run build         # 前端产物构建
 
 历轮验收在无人值守环境反复踩到，均为 WebKit/macOS 行为而非产品 bug：
 
-1. **显示器睡眠/锁屏时 WebKit 冻结动画时间线**（`document.timeline` 不推进、rAF 停止、WAAPI onfinish 不触发）→ svelte outro transition 不完成、元素滞留 DOM；timeline 恢复后动画补完成。无头驱动验收前先 `caffeinate -u -t 3` 并保持 `caffeinate -d`，DOM 断言优先换成状态层断言。
+1. **显示器睡眠/锁屏时 WebKit 冻结动画时间线与任务队列**（`document.timeline` 不推进、rAF/输入事件停滞、WAAPI onfinish 不触发）→ svelte 状态回写、outro 和表单输入会出现假失败。`e2e/run.ts` 在 macOS 自动触发 `caffeinate -u -t 3`，并用 `caffeinate -d` 包住完整 Playwright 进程；DOM 断言仍优先换成状态层断言。
 2. 窗口遮挡/隐藏 ~10s 后 WebKit 挂起整个 page task queue（timer 冻结、MessageChannel 丢消息）。
 3. 合成键盘事件不触发系统全局热键（OS 限制），热键验证只能物理按键。
 4. 本机 AX 拿不到 tauri dev 窗口（count 恒 0），窗口可见性断言用 Rust `is_visible` 或 CGWindowList。
