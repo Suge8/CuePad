@@ -38,9 +38,16 @@ test('安全桥加载 CuePad 且测试窗口保持隐藏', async () => {
 
 		expect(await page.evaluate(() => window.cuepad.app.version())).toBe(packageJson.version);
 		expect(await page.evaluate(() => ({
+			eventListener: typeof window.cuepad.events.onOpenSettings,
+			ipcRenderer: 'ipcRenderer' in window.cuepad,
 			require: typeof (window as Window & { require?: unknown }).require,
 			process: typeof (window as Window & { process?: unknown }).process
-		}))).toEqual({ require: 'undefined', process: 'undefined' });
+		}))).toEqual({
+			eventListener: 'function',
+			ipcRenderer: false,
+			require: 'undefined',
+			process: 'undefined'
+		});
 
 		const windowState = await electronApp.evaluate(({ BrowserWindow }) => {
 			const window = BrowserWindow.getAllWindows()[0];
