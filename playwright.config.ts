@@ -1,9 +1,9 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * 无头视觉验收（e2e/*.e2e.ts）：WebKit 引擎与 Tauri 的 WKWebView 同族。
- * macOS 上 tauri-driver 不可用，视觉面用 vite dev + IPC mock 无头验证，
- * 托盘/全局热键/真 SQL 等壳能力仍需真机人工核查。
+ * 无头视觉验收（e2e/*.e2e.ts）：Chromium 与 Electron 使用同一渲染引擎。
+ * 视觉面用 vite dev + IPC mock 无头验证；托盘、全局热键与真 SQL 等壳能力
+ * 由真实 Electron 验收覆盖。
  *
  * e2e/run.ts 为每次调用分配空闲端口与独立产物目录；webServer 由 playwright
  * 独享管理（自启自收，不复用外部服务）。
@@ -22,9 +22,11 @@ export default defineConfig({
 	fullyParallel: false,
 	use: {
 		baseURL: `http://127.0.0.1:${PORT}`,
-		viewport: { width: 1200, height: 760 }
+		viewport: { width: 1200, height: 760 },
+		screenshot: 'only-on-failure',
+		trace: 'retain-on-failure'
 	},
-	projects: [{ name: 'webkit', use: { browserName: 'webkit' } }],
+	projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
 	webServer: {
 		command: `bunx vite dev --host 127.0.0.1 --port ${PORT} --strictPort`,
 		url: `http://127.0.0.1:${PORT}`,

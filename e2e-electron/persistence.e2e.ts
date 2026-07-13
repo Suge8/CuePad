@@ -1,7 +1,14 @@
 import { access, mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { expect, test, _electron, type ElectronApplication, type Page } from '@playwright/test';
+import {
+	expect,
+	test,
+	_electron,
+	type ElectronApplication,
+	type Locator,
+	type Page
+} from '@playwright/test';
 
 const port = process.env.CUEPAD_ELECTRON_PORT;
 if (!port) throw new Error('Electron E2E 端口未设置');
@@ -25,6 +32,10 @@ async function launchCuePad(userDataPath: string, environment: NodeJS.ProcessEnv
 	});
 	await expect(page).toHaveTitle('CuePad', { timeout: RENDER_TIMEOUT });
 	await expect(page.locator('main.app-shell')).toBeVisible({ timeout: RENDER_TIMEOUT });
+	expect(await electronApp.evaluate(({ BrowserWindow }) => {
+		const window = BrowserWindow.getAllWindows()[0];
+		return { visible: window.isVisible(), focused: window.isFocused() };
+	})).toEqual({ visible: false, focused: false });
 	return { electronApp, page };
 }
 
@@ -37,13 +48,12 @@ async function createProject(page: Page, name: string) {
 	await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
 }
 
-async function createCard(page: Page, title: string, body: string, favorite = false) {
+async function createCard(page: Page, title: string, body: string) {
 	await page.getByRole('button', { name: '新建卡片' }).click();
 	await expect(page.locator('.focus')).toBeVisible();
 	await page.getByRole('button', { name: '编辑标题' }).click();
 	await page.getByRole('textbox', { name: '标题' }).fill(title);
 	await page.locator('.cm-content').fill(body);
-	if (favorite) await page.locator('.focus').getByRole('button', { name: '收藏' }).click();
 	await page.getByRole('button', { name: '退出沉浸编辑（Esc）' }).click();
 	await expect(page.locator('.focus')).toBeHidden();
 	await expect(page.getByText(title, { exact: true })).toBeVisible();
@@ -54,6 +64,29 @@ async function createTask(page: Page, content: string) {
 	await page.getByRole('textbox', { name: '任务内容' }).fill(content);
 	await page.getByRole('button', { name: '添加任务' }).click();
 	await expect(page.locator('[data-task-state="active"]', { hasText: content })).toBeVisible();
+}
+
+async function dragPointer(
+	page: Page,
+	sourceHandle: Locator,
+	target: Locator,
+	targetXRatio: number,
+	targetYRatio: number
+) {
+	const sourceBox = await sourceHandle.boundingBox();
+	const targetBox = await target.boundingBox();
+	if (!sourceBox || !targetBox) throw new Error('拖拽元素不可见');
+	await page.mouse.move(
+		sourceBox.x + sourceBox.width / 2,
+		sourceBox.y + sourceBox.height / 2
+	);
+	await page.mouse.down();
+	await page.mouse.move(
+		targetBox.x + targetBox.width * targetXRatio,
+		targetBox.y + targetBox.height * targetYRatio,
+		{ steps: 16 }
+	);
+	await page.mouse.up();
 }
 
 async function closeApp(electronApp: ElectronApplication) {
@@ -109,7 +142,7 @@ async function fileExists(filePath: string) {
 	return access(filePath).then(() => true, () => false);
 }
 
-test('项目、卡片、任务与排序在同一 userData 重启后恢复', async () => {
+test('Pin、Star 与三类拖拽落库并在同一 userData 重启后恢复', async () => {
 	const userDataPath = `/tmp/cuepad-electron-e2e/${port}/persistence-user-data`;
 	await rm(userDataPath, { recursive: true, force: true });
 	let firstApp: ElectronApplication | undefined;
@@ -125,7 +158,13 @@ test('项目、卡片、任务与排序在同一 userData 重启后恢复', asyn
 
 		await createProject(page, 'Electron Alpha');
 		await createCard(page, 'Alpha One', '第一张卡片正文');
-		await createCard(page, 'Alpha Starred', '置顶展示的卡片正文', true);
+		await createCard(page, 'Alpha Starred', '置顶展示的卡片正文');
+		const alphaOne = page.locator('[data-card-id]', { hasText: 'Alpha One' });
+		const alphaStarred = page.locator('[data-card-id]', { hasText: 'Alpha Starred' });
+		await dragPointer(page, alphaOne.locator('.card-hit'), alphaStarred.locator('.card'), 0.05, 0.8);
+		await expect(page.locator('.grid > [data-card-id]').first()).toContainText('Alpha One');
+		await alphaStarred.getByRole('button', { name: '收藏' }).click();
+		await expect(alphaStarred.getByRole('button', { name: '取消收藏' })).toBeVisible();
 		await page.evaluate(async () => {
 			await window.cuepad.sql.execute(
 				`INSERT INTO tags (name, created_at, updated_at) VALUES ($1, $2, $2)`,
@@ -140,15 +179,33 @@ test('项目、卡片、任务与排序在同一 userData 重启后恢复', asyn
 		});
 
 		await createProject(page, 'Electron Beta');
-		await page.getByRole('button', { name: /^更多项目操作：Electron Beta/ }).click();
+		const alphaProject = page.locator('[data-project-id]', { hasText: 'Electron Alpha' });
+		const betaProject = page.locator('[data-project-id]', { hasText: 'Electron Beta' });
+		await betaProject.getByRole('button', { name: /^更多项目操作：Electron Beta/ }).click();
 		await page.getByRole('button', { name: '置顶项目' }).click();
-		await page.locator('[data-project-id]', { hasText: 'Electron Alpha' }).getByRole('button', {
-			name: 'Electron Alpha',
-			exact: true
-		}).click();
+		await expect(betaProject).toHaveClass(/pinned/);
+		await betaProject.getByRole('button', { name: /^更多项目操作：Electron Beta，已置顶/ }).click();
+		await page.getByRole('button', { name: '取消置顶项目' }).click();
+		await expect(betaProject).not.toHaveClass(/pinned/);
+		await page.locator('.project-bar').evaluate(async (bar) => {
+			await Promise.all(
+				bar.getAnimations({ subtree: true })
+					.map((animation) => animation.finished.catch(() => undefined))
+			);
+		});
+		await dragPointer(page, betaProject.locator('.project-select'), alphaProject, 0.05, 0.8);
+		await expect(page.locator('.project-item[data-project-id]').first()).toContainText('Electron Beta');
+		await betaProject.getByRole('button', { name: /^更多项目操作：Electron Beta/ }).click();
+		await page.getByRole('button', { name: '置顶项目' }).click();
+		await expect(betaProject).toHaveClass(/pinned/);
+		await alphaProject.getByRole('button', { name: 'Electron Alpha', exact: true }).click();
 
 		await createTask(page, 'Electron Task One');
 		await createTask(page, 'Electron Task Two');
+		const taskOne = page.locator('[data-task-state="active"]', { hasText: 'Electron Task One' });
+		const taskTwo = page.locator('[data-task-state="active"]', { hasText: 'Electron Task Two' });
+		await dragPointer(page, taskOne.locator('.task-copy'), taskTwo, 0.5, 0.15);
+		await expect(page.locator('[data-task-state="active"]').first()).toContainText('Electron Task One');
 		await page.getByRole('button', { name: '设置' }).click();
 		await page.getByRole('dialog', { name: '设置' }).getByRole('button', { name: '深色' }).click();
 
@@ -176,16 +233,16 @@ test('项目、卡片、任务与排序在同一 userData 重启后恢复', asyn
 			)
 		}));
 		expect(persisted.projects).toEqual([
-			{ name: 'Electron Alpha', is_pinned: 0, sort_order: 0 },
-			{ name: 'Electron Beta', is_pinned: 1, sort_order: 1 }
+			{ name: 'Electron Beta', is_pinned: 1, sort_order: 0 },
+			{ name: 'Electron Alpha', is_pinned: 0, sort_order: 1 }
 		]);
 		expect(persisted.cards).toEqual([
-			{ title: 'Alpha Starred', body: '置顶展示的卡片正文', is_favorite: 1, sort_order: -1 },
-			{ title: 'Alpha One', body: '第一张卡片正文', is_favorite: 0, sort_order: 0 }
+			{ title: 'Alpha One', body: '第一张卡片正文', is_favorite: 0, sort_order: 0 },
+			{ title: 'Alpha Starred', body: '置顶展示的卡片正文', is_favorite: 1, sort_order: 1 }
 		]);
 		expect(persisted.tasks.map((task) => task.content)).toEqual([
-			'Electron Task Two',
-			'Electron Task One'
+			'Electron Task One',
+			'Electron Task Two'
 		]);
 		expect(persisted.tags).toEqual([{ name: 'electron-tag' }]);
 		expect(persisted.settings).toEqual([{ value: '"dark"' }]);
@@ -216,19 +273,20 @@ test('项目、卡片、任务与排序在同一 userData 重启后恢复', asyn
 		expect(await restartedPage.locator('[data-project-id]').evaluateAll((items) =>
 			items.map((item) => item.textContent?.trim()).filter((text) => text?.startsWith('Electron'))
 		)).toEqual(['Electron Beta', 'Electron Alpha']);
+		await expect(
+			restartedPage.locator('[data-project-id]', { hasText: 'Electron Beta' })
+		).toHaveClass(/pinned/);
 		expect(await restartedPage.locator('[data-card-id]').evaluateAll((items) =>
 			items.map((item) => item.querySelector('h3')?.textContent?.trim()).filter(Boolean)
 		)).toEqual(['Alpha Starred', 'Alpha One']);
-		expect(await restartedPage.locator('[data-task-state="active"]').evaluateAll((items) =>
-			items.map((item) => item.textContent).filter((text) => text?.includes('Electron Task'))
-		)).toEqual(expect.arrayContaining([
-			expect.stringContaining('Electron Task Two'),
-			expect.stringContaining('Electron Task One')
-		]));
+		await expect(
+			restartedPage.locator('[data-card-id]', { hasText: 'Alpha Starred' })
+				.getByRole('button', { name: '取消收藏' })
+		).toBeVisible();
 		const taskOrder = await restartedPage.locator('[data-task-state="active"]').evaluateAll((items) =>
 			items.map((item) => item.textContent?.match(/Electron Task (One|Two)/)?.[0]).filter(Boolean)
 		);
-		expect(taskOrder).toEqual(['Electron Task Two', 'Electron Task One']);
+		expect(taskOrder).toEqual(['Electron Task One', 'Electron Task Two']);
 		expect(await restartedPage.evaluate(() => document.documentElement.dataset.theme)).toBe('dark');
 		await restartedPage.getByText('Alpha Starred', { exact: true }).click();
 		await expect(restartedPage.getByRole('button', { name: 'electron-tag，选颜色' })).toBeVisible();
@@ -239,7 +297,7 @@ test('项目、卡片、任务与排序在同一 userData 重启后恢复', asyn
 });
 
 
-test('首次启动复制 Tauri v5 数据并兼容 sqlx 迁移账本', async () => {
+test('首次启动复制旧版 v5 数据并兼容 sqlx 迁移账本', async () => {
 	const fixtureRoot = `/tmp/cuepad-electron-e2e/${port}/legacy-fixture`;
 	const userDataPath = `/tmp/cuepad-electron-e2e/${port}/legacy-user-data`;
 	const legacyDatabasePath = path.join(

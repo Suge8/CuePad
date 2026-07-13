@@ -1,9 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
- * 无头视觉验收：Playwright WebKit + 桌面桥 mock（e2e/bridge-mock.js）。
- * 覆盖真 Tauri 壳之外的全部视觉验收面：卡片墙、顶栏、六类弹层进出、
- * 深浅主题、沉浸编辑块装饰、减动降级。托盘/全局热键/真 SQL 仍需真机。
+ * 无头视觉验收：Playwright Chromium + 桌面桥 mock（e2e/bridge-mock.js）。
+ * 覆盖 Electron 壳之外的视觉验收面：卡片墙、顶栏、六类弹层进出、
+ * 深浅主题、沉浸编辑块装饰、减动降级。托盘/全局热键/真 SQL 由 Electron E2E 覆盖。
  * 文件后缀 .e2e.ts：避开 bun test 的 *.test/*.spec 匹配。
  */
 
@@ -89,10 +89,7 @@ function motionLog(page: Page, targetClass: string): Promise<AnimationRecord[]> 
 	);
 }
 
-/**
- * 等两帧后再采样 computed style：WebKit 对 hover/press 触发的过渡，
- * 首帧 computed 仍是起点值（即使 duration 0.01ms），立即采样会假阴性。
- */
+/** 等两帧后再采样 computed style，避开 hover/press 过渡首帧仍处于起点的竞态。 */
 function settled(page: Page) {
 	return page.evaluate(
 		() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
@@ -141,7 +138,7 @@ function cardMovementAfterInsert(page: Page, cardId: string) {
 	);
 }
 
-/** 走 WebKit 真实鼠标链路；坐标刻意让 X/Y 判定相反。 */
+/** 走 Chromium 真实鼠标链路；坐标刻意让 X/Y 判定相反。 */
 async function dragBefore(
 	page: Page,
 	sourceHandle: Locator,
@@ -484,8 +481,8 @@ test('项目切换、置顶/收藏最终意图、全局收藏与窄窗', async (
 	await secondCard.hover();
 	for (const action of await secondCard.locator('.card-action').all()) {
 		const actionBox = await action.boundingBox();
-		expect(actionBox?.width ?? 0).toBeGreaterThanOrEqual(40);
-		expect(actionBox?.height ?? 0).toBeGreaterThanOrEqual(40);
+		expect(actionBox?.width ?? 0).toBeCloseTo(40, 3);
+		expect(actionBox?.height ?? 0).toBeCloseTo(40, 3);
 		expect((await action.locator('.card-action-icon').boundingBox())?.width ?? 999).toBeLessThanOrEqual(28);
 		expect(await action.evaluate((button) => getComputedStyle(button).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
 	}
@@ -593,7 +590,7 @@ test('悬浮任务：全局 CRUD、排序、完成反悔、项目关联与窄窗
 	);
 	await page.screenshot({ path: `${ARTIFACTS}/tasks-light.png` });
 
-	// 真实 WKWebView 的 Pointer Capture 下不能依赖 elementFromPoint；两项须能向上换序再向下复原
+	// Pointer Capture 下不能依赖 elementFromPoint；两项须能向上换序再向下复原
 	expect(await activeTaskIds()).toEqual(['1', '2']);
 	await page.evaluate(() => {
 		const globals = window as unknown as {
@@ -1287,7 +1284,7 @@ test('减弱动态效果：装饰动画停用，过渡降级为纯淡入淡出',
 		await trashButton.evaluate((el) =>
 			getComputedStyle(el)
 				.transitionDuration.split(', ')
-				.every((duration) => duration === '0.00001s')
+				.every((duration) => Number.parseFloat(duration) === 0.00001)
 		)
 	).toBe(true);
 	await card.hover();
