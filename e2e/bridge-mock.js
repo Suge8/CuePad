@@ -1,5 +1,4 @@
-// Tauri IPC mock：以 addInitScript 注入，页面脚本执行前建立 window.__TAURI_INTERNALS__。
-// 只 mock 到 invoke 边界（@tauri-apps/api 与全部插件 JS 最终都走这里），
+// 桌面桥 mock：SQL 走 window.cuepad.sql，其余 G3 尚未迁移的能力仍走 Tauri invoke。
 // SQL 按查询特征路由到静态 fixture——无头视觉验收不需要真数据库。
 (() => {
 	const now = 1783470918000;
@@ -272,10 +271,39 @@
 				if (deletedIds.has(PROJECTS[index].id)) PROJECTS.splice(index, 1);
 			}
 		}
+		return [1, lastInsertId];
+	}
+
+	function recordSqlWrite(query, values) {
 		persistDatabase();
 		window.__E2E_SQL_WRITES__.push({ query, values });
 		window.dispatchEvent(new CustomEvent('cuepad:e2e-sql-write', { detail: { query, values } }));
-		return [1, lastInsertId];
+	}
+
+	function selectSql(query, values = []) {
+		const rows = structuredClone(routeSelect(query, values));
+		const entity = query.includes('FROM projects')
+			? 'projects'
+			: query.includes('FROM cards') || query.includes('cards.*')
+				? 'cards'
+				: query.includes('FROM tasks')
+					? 'tasks'
+					: null;
+		if (
+			entity &&
+			query.includes('WHERE id = $1') &&
+			window.__E2E_HOLD_ENTITY_SELECT__ === entity
+		) {
+			window.__E2E_HOLD_ENTITY_SELECT__ = null;
+			return new Promise((resolve) => {
+				window.__E2E_RELEASE_ENTITY_SELECT__ = () => {
+					window.__E2E_RELEASE_ENTITY_SELECT__ = null;
+					resolve(rows);
+				};
+				window.dispatchEvent(new CustomEvent('cuepad:e2e-select-held', { detail: entity }));
+			});
+		}
+		return Promise.resolve(rows);
 	}
 
 	let callbackId = 0;
@@ -294,41 +322,32 @@
 		{ bundleId: 'dev.zed.Zed', name: 'Zed' }
 	];
 
+	window.cuepad = {
+		app: { version: () => Promise.resolve('0.0.0-e2e') },
+		events: { onOpenSettings: () => () => undefined },
+		sql: {
+			execute(query, values = []) {
+				const [rowsAffected, lastInsertId] = routeExecute(query, values);
+				recordSqlWrite(query, values);
+				return Promise.resolve({ rowsAffected, lastInsertId });
+			},
+			select: selectSql,
+			executeBatch(statements) {
+				for (const statement of statements) {
+					routeExecute(statement.query, statement.bindValues ?? []);
+				}
+				recordSqlWrite(
+					statements.map((statement) => statement.query).join(';\n'),
+					statements.flatMap((statement) => statement.bindValues ?? [])
+				);
+				return Promise.resolve();
+			}
+		}
+	};
+
 	window.__TAURI_INTERNALS__ = {
 		invoke(cmd, args = {}) {
 			switch (cmd) {
-				case 'plugin:sql|load':
-					return Promise.resolve('sqlite:cuepad.db');
-				case 'plugin:sql|select': {
-					const query = args.query ?? '';
-					const rows = structuredClone(routeSelect(query, args.values ?? []));
-					const entity = query.includes('FROM projects')
-						? 'projects'
-						: query.includes('FROM cards') || query.includes('cards.*')
-							? 'cards'
-							: query.includes('FROM tasks')
-								? 'tasks'
-								: null;
-					if (
-						entity &&
-						query.includes('WHERE id = $1') &&
-						window.__E2E_HOLD_ENTITY_SELECT__ === entity
-					) {
-						window.__E2E_HOLD_ENTITY_SELECT__ = null;
-						return new Promise((resolve) => {
-							window.__E2E_RELEASE_ENTITY_SELECT__ = () => {
-								window.__E2E_RELEASE_ENTITY_SELECT__ = null;
-								resolve(rows);
-							};
-							window.dispatchEvent(
-								new CustomEvent('cuepad:e2e-select-held', { detail: entity })
-							);
-						});
-					}
-					return Promise.resolve(rows);
-				}
-				case 'plugin:sql|execute':
-					return Promise.resolve(routeExecute(args.query ?? '', args.values ?? []));
 				case 'plugin:global-shortcut|is_registered':
 					return Promise.resolve(false);
 				case 'plugin:app|version':

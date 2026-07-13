@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
- * 无头视觉验收：Playwright WebKit + Tauri IPC mock（e2e/tauri-mock.js）。
+ * 无头视觉验收：Playwright WebKit + 桌面桥 mock（e2e/bridge-mock.js）。
  * 覆盖真 Tauri 壳之外的全部视觉验收面：卡片墙、顶栏、六类弹层进出、
  * 深浅主题、沉浸编辑块装饰、减动降级。托盘/全局热键/真 SQL 仍需真机。
  * 文件后缀 .e2e.ts：避开 bun test 的 *.test/*.spec 匹配。
@@ -16,7 +16,7 @@ async function boot(
 	{ welcomed = true, activeProject = '1' }: { welcomed?: boolean; activeProject?: string | null } = {}
 ) {
 	await page.addInitScript({ path: './e2e/animation-recorder.js' });
-	await page.addInitScript({ path: './e2e/tauri-mock.js' });
+	await page.addInitScript({ path: './e2e/bridge-mock.js' });
 	await page.addInitScript(
 		({ welcomed, activeProject }) => {
 			if (localStorage.getItem('cuepad:e2e-seeded')) return;

@@ -3,7 +3,6 @@ import { createCuePadRepository } from './repository';
 
 export const cuePadRepository = createCuePadRepository(getCuePadDatabase);
 
-export { CUEPAD_DATABASE_URL } from './client';
 export { getCuePadDatabase } from './connection';
 export { createCuePadRepository } from './repository';
 export type { CuePadRepository } from './repository';

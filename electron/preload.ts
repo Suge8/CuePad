@@ -11,6 +11,11 @@ const bridge: CuePadBridge = {
 			ipcRenderer.on('cuepad:open-settings', wrapped);
 			return () => ipcRenderer.removeListener('cuepad:open-settings', wrapped);
 		}
+	},
+	sql: {
+		execute: (query, bindValues) => ipcRenderer.invoke('sql:execute', query, bindValues),
+		select: (query, bindValues) => ipcRenderer.invoke('sql:select', query, bindValues),
+		executeBatch: (statements) => ipcRenderer.invoke('sql:executeBatch', statements)
 	}
 };
 

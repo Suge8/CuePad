@@ -42,7 +42,7 @@ class BunSqliteDatabase implements SqlDatabase {
 
 function createTestRepository() {
 	const database = new Database(':memory:');
-	const migrationsUrl = new URL('../src-tauri/migrations/', import.meta.url);
+	const migrationsUrl = new URL('../migrations/', import.meta.url);
 	for (const filename of readdirSync(migrationsUrl).sort()) {
 		const migration = readFileSync(new URL(filename, migrationsUrl), 'utf8');
 		database.exec(migration);
@@ -102,7 +102,7 @@ describe('CuePad repository', () => {
 	test('v4 保留旧 project favorite 值为 pin，并在重启后持久化更新', async () => {
 		const directory = mkdtempSync(join(tmpdir(), 'cuepad-project-pin-'));
 		const databasePath = join(directory, 'cuepad.sqlite');
-		const migrationsUrl = new URL('../src-tauri/migrations/', import.meta.url);
+		const migrationsUrl = new URL('../migrations/', import.meta.url);
 		try {
 			const database = new Database(databasePath);
 			for (const filename of readdirSync(migrationsUrl).sort().slice(0, 3)) {
