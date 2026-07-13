@@ -68,9 +68,9 @@ function pngSize(filename: string) {
 	return { width: image.readUInt32BE(16), height: image.readUInt32BE(20) };
 }
 
-test('托盘资源以 22pt + 2x Retina 密度提供', () => {
-	expect(pngSize('trayTemplate.png')).toEqual({ width: 22, height: 22 });
-	expect(pngSize('trayTemplate@2x.png')).toEqual({ width: 44, height: 44 });
+test('托盘资源使用 macOS 推荐的 16pt + 2x Retina 密度', () => {
+	expect(pngSize('trayTemplate.png')).toEqual({ width: 16, height: 16 });
+	expect(pngSize('trayTemplate@2x.png')).toEqual({ width: 32, height: 32 });
 });
 
 test('W3C accelerator 转为 Electron accelerator', () => {
