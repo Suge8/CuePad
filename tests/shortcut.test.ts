@@ -1,21 +1,28 @@
-import { expect, mock, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 
-// 模拟 Rust 进程侧的注册表：跨「webview 重载」（模块内存丢失）持续存在
+// 模拟主进程注册表：跨 renderer 重载（模块内存丢失）持续存在
 const registry = new Set<string>();
 let failRegister: string[] = [];
 let failUnregister: string[] = [];
 
-mock.module('@tauri-apps/plugin-global-shortcut', () => ({
-	isRegistered: async (accelerator: string) => registry.has(accelerator),
-	register: async (accelerator: string) => {
-		if (failRegister.includes(accelerator)) throw new Error(`taken: ${accelerator}`);
-		registry.add(accelerator);
-	},
-	unregister: async (accelerator: string) => {
-		if (failUnregister.includes(accelerator)) throw new Error(`stuck: ${accelerator}`);
-		registry.delete(accelerator);
+Object.defineProperty(globalThis, 'window', {
+	configurable: true,
+	value: {
+		cuepad: {
+			shortcut: {
+				isRegistered: async (accelerator: string) => registry.has(accelerator),
+				register: async (accelerator: string) => {
+					if (failRegister.includes(accelerator)) throw new Error(`taken: ${accelerator}`);
+					registry.add(accelerator);
+				},
+				unregister: async (accelerator: string) => {
+					if (failUnregister.includes(accelerator)) throw new Error(`stuck: ${accelerator}`);
+					registry.delete(accelerator);
+				}
+			}
+		}
 	}
-}));
+});
 
 const { applyGlobalShortcut, updateGlobalShortcut } = await import('../src/lib/shell/shortcut');
 const { DEFAULT_GLOBAL_SHORTCUT } = await import('../src/lib/shell/accelerator');
@@ -56,7 +63,7 @@ test('注册失败且旧键恢复失败：错误明示无快捷键生效，并�
 
 test('校准回退：目标键不在但默认键在注册表时，从默认键切换', async () => {
 	failRegister = [];
-	registry.add(DEFAULT_GLOBAL_SHORTCUT); // 模拟 Rust 启动注册的默认键
+	registry.add(DEFAULT_GLOBAL_SHORTCUT); // 模拟主进程启动注册的默认键
 	await applyGlobalShortcut('Control+KeyZ');
 	expect([...registry]).toEqual(['Control+KeyZ']);
 });

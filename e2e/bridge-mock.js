@@ -1,5 +1,5 @@
-// 桌面桥 mock：SQL 走 window.cuepad.sql，其余 G3 尚未迁移的能力仍走 Tauri invoke。
-// SQL 按查询特征路由到静态 fixture——无头视觉验收不需要真数据库。
+// 桌面桥 mock：SQL 按查询特征路由到静态 fixture；壳能力保留可观察事件钩子。
+// 无头视觉验收不需要真数据库或真实系统剪贴板。
 (() => {
 	const now = 1783470918000;
 
@@ -306,8 +306,6 @@
 		return Promise.resolve(rows);
 	}
 
-	let callbackId = 0;
-
 	window.__E2E_CLIPBOARD__ = '';
 	window.__E2E_SQL_WRITES__ = [];
 	window.__E2E_DISPATCH__ = '';
@@ -321,10 +319,80 @@
 		{ bundleId: 'com.microsoft.VSCode', name: 'Visual Studio Code' },
 		{ bundleId: 'dev.zed.Zed', name: 'Zed' }
 	];
+	const registeredShortcuts = new Set(['Alt+Space']);
+
+	function writeClipboard(text) {
+		window.__E2E_CLIPBOARD__ = text;
+		return new Promise((resolve) => {
+			resolve();
+			// 下一 task 才报告完成：确保 copyPrompt 的 await/finally 已执行完
+			setTimeout(
+				() => window.dispatchEvent(
+					new CustomEvent('cuepad:e2e-clipboard-complete', { detail: text })
+				),
+				0
+			);
+		});
+	}
+
+	function dispatchText(text, bundleId) {
+		if (window.__E2E_DISPATCH_ERROR__) return Promise.reject(window.__E2E_DISPATCH_ERROR__);
+		if (
+			bundleId &&
+			!window.__E2E_DISPATCH_TARGETS__.some((target) => target.bundleId === bundleId)
+		) {
+			return Promise.reject('DISPATCH_TARGET_UNAVAILABLE');
+		}
+		return new Promise((resolve) =>
+			setTimeout(() => {
+				window.__E2E_DISPATCH__ = text;
+				window.__E2E_DISPATCH_CALLS__ += 1;
+				window.__E2E_DISPATCH_TARGET__ = bundleId;
+				const detail = { text, bundleId, calls: window.__E2E_DISPATCH_CALLS__ };
+				resolve();
+				// 下一 task 才报告完成：确保 dispatchPrompt 的 await/finally 已执行完
+				setTimeout(
+					() => window.dispatchEvent(
+						new CustomEvent('cuepad:e2e-dispatch-complete', { detail })
+					),
+					0
+				);
+			}, window.__E2E_DISPATCH_DELAY__ ?? 0)
+		);
+	}
 
 	window.cuepad = {
-		app: { version: () => Promise.resolve('0.0.0-e2e') },
-		events: { onOpenSettings: () => () => undefined },
+		app: {
+			version: () => Promise.resolve('0.0.0-e2e'),
+			databasePath: () => Promise.resolve('/tmp/cuepad-e2e/cuepad.db'),
+			revealDataFile: () => Promise.resolve()
+		},
+		clipboard: { writeText: writeClipboard },
+		dispatch: {
+			target: () => Promise.resolve({ bundleId: 'com.apple.Terminal', name: 'Terminal' }),
+			targets: () => Promise.resolve(window.__E2E_DISPATCH_TARGETS__),
+			text: dispatchText
+		},
+		events: {
+			onOpenSettings(listener) {
+				window.addEventListener('cuepad:e2e-open-settings', listener);
+				return () => window.removeEventListener('cuepad:e2e-open-settings', listener);
+			}
+		},
+		shortcut: {
+			register(accelerator) {
+				if (registeredShortcuts.has(accelerator)) {
+					return Promise.reject(new Error(`taken: ${accelerator}`));
+				}
+				registeredShortcuts.add(accelerator);
+				return Promise.resolve();
+			},
+			unregister(accelerator) {
+				registeredShortcuts.delete(accelerator);
+				return Promise.resolve();
+			},
+			isRegistered: (accelerator) => Promise.resolve(registeredShortcuts.has(accelerator))
+		},
 		sql: {
 			execute(query, values = []) {
 				const [rowsAffected, lastInsertId] = routeExecute(query, values);
@@ -342,78 +410,6 @@
 				);
 				return Promise.resolve();
 			}
-		}
-	};
-
-	window.__TAURI_INTERNALS__ = {
-		invoke(cmd, args = {}) {
-			switch (cmd) {
-				case 'plugin:global-shortcut|is_registered':
-					return Promise.resolve(false);
-				case 'plugin:app|version':
-					return Promise.resolve('0.0.0-e2e');
-				case 'plugin:clipboard-manager|write_text': {
-					const text = args?.data ?? args?.text ?? '';
-					window.__E2E_CLIPBOARD__ = text;
-					return new Promise((resolve) => {
-						resolve(null);
-						// 下一 task 才报告完成：确保 copyPrompt 的 await/finally 已执行完
-						setTimeout(
-							() =>
-								window.dispatchEvent(
-									new CustomEvent('cuepad:e2e-clipboard-complete', { detail: text })
-								),
-							0
-						);
-					});
-				}
-				case 'dispatch_target':
-					return Promise.resolve({ bundleId: 'com.apple.Terminal', name: 'Terminal' });
-				case 'dispatch_targets':
-					return Promise.resolve(window.__E2E_DISPATCH_TARGETS__);
-				case 'dispatch_text':
-					if (window.__E2E_DISPATCH_ERROR__) {
-						return Promise.reject(window.__E2E_DISPATCH_ERROR__);
-					}
-					if (
-						args.bundleId &&
-						!window.__E2E_DISPATCH_TARGETS__.some((target) => target.bundleId === args.bundleId)
-					) {
-						return Promise.reject('DISPATCH_TARGET_UNAVAILABLE');
-					}
-					return new Promise((resolve) =>
-						setTimeout(() => {
-							window.__E2E_DISPATCH__ = args.text;
-							window.__E2E_DISPATCH_CALLS__ += 1;
-							window.__E2E_DISPATCH_TARGET__ = args.bundleId ?? null;
-							const detail = {
-								text: args.text,
-								bundleId: args.bundleId ?? null,
-								calls: window.__E2E_DISPATCH_CALLS__
-							};
-							resolve(null);
-							// 下一 task 才报告完成：确保 dispatchPrompt 的 await/finally 已执行完
-							setTimeout(
-								() =>
-									window.dispatchEvent(
-										new CustomEvent('cuepad:e2e-dispatch-complete', { detail })
-									),
-								0
-							);
-						}, window.__E2E_DISPATCH_DELAY__ ?? 0)
-					);
-				default:
-					// listen/unlisten/register/path 等：成功空响应即可
-					return Promise.resolve(null);
-			}
-		},
-		transformCallback(callback) {
-			const id = ++callbackId;
-			window[`_${id}`] = callback;
-			return id;
-		},
-		unregisterCallback(id) {
-			delete window[`_${id}`];
 		}
 	};
 })();

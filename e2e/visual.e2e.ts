@@ -901,10 +901,21 @@ test('悬浮任务：全局 CRUD、排序、完成反悔、项目关联与窄窗
 test('设置弹层：回收站入口、深色主题切换、进场含位移动画', async ({ page }) => {
 	await boot(page);
 
-	await page.getByRole('button', { name: '设置' }).click();
+	await page.evaluate(() => window.dispatchEvent(new Event('cuepad:e2e-open-settings')));
 	const settings = page.getByRole('dialog', { name: '设置' });
 	await expect(settings).toBeVisible();
 	await expect(settings.getByText('回收站')).toBeVisible();
+	await expect(settings.getByText('/tmp/cuepad-e2e/cuepad.db')).toBeVisible();
+	await expect(settings.getByText('CuePad v0.0.0-e2e')).toBeVisible();
+	await settings.getByRole('button', { name: '重新录制全局快捷键' }).click();
+	await settings.locator('[data-shortcut-recorder]').dispatchEvent('keydown', {
+		key: 'j',
+		code: 'KeyJ',
+		ctrlKey: true,
+		altKey: true,
+		bubbles: true
+	});
+	await expect(settings.getByRole('button', { name: '重新录制全局快捷键' })).toBeVisible();
 	// 进场：DIALOG_FLY 经 motionFly 产生 transform 关键帧
 	await expectMotionSince(page, 'settings-card', 0, 'transform');
 
