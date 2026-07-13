@@ -8,8 +8,7 @@ node_modules
 /.svelte-kit*
 /build*/
 /dist-electron/
-/src-tauri/target/
-/src-tauri/gen/
+/release/
 /native/*/target/
 /.flow/
 /e2e/.artifacts/

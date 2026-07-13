@@ -6,9 +6,10 @@ export function createTray(actions: {
 	openSettings(): void;
 	quit(): void;
 }): Tray {
-	const image = nativeImage.createFromPath(
-		path.join(app.getAppPath(), 'electron', 'assets', 'trayTemplate.png')
-	);
+	const assetsPath = app.isPackaged
+		? path.join(process.resourcesPath, 'assets')
+		: path.join(app.getAppPath(), 'electron', 'assets');
+	const image = nativeImage.createFromPath(path.join(assetsPath, 'trayTemplate.png'));
 	if (image.isEmpty()) throw new Error('无法加载托盘图标');
 	image.setTemplateImage(true);
 

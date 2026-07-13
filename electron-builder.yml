@@ -1,0 +1,21 @@
+appId: com.sugeh.cuepad
+productName: CuePad
+directories:
+  output: release
+files:
+  - build/**/*
+  - dist-electron/**/*
+  - migrations/**/*
+extraResources:
+  - from: native/dispatch/target/release/cuepad-dispatch
+    to: cuepad-dispatch
+  - from: electron/assets
+    to: assets
+mac:
+  target:
+    - target: dir
+      arch:
+        - arm64
+  icon: electron/assets/icon.icns
+  identity: "-"
+  hardenedRuntime: false

@@ -1,6 +1,7 @@
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { app, BrowserWindow, clipboard, ipcMain, shell, type Tray } from 'electron';
+import { pathToFileURL } from 'node:url';
+import { app, BrowserWindow, clipboard, ipcMain, net, protocol, shell, type Tray } from 'electron';
 import { CuePadDatabase } from './db';
 import { registerSqlIpc } from './ipc-sql';
 import {
@@ -14,6 +15,11 @@ import { createTray } from './tray';
 
 const BUNDLE_ID = 'com.sugeh.cuepad';
 const DEFAULT_SHORTCUT = 'Alt+Space';
+const APP_SCHEME = 'cuepad';
+protocol.registerSchemesAsPrivileged([{
+	scheme: APP_SCHEME,
+	privileges: { standard: true, secure: true, supportFetchAPI: true }
+}]);
 const isTest = process.env.CUEPAD_TEST === '1';
 let database: CuePadDatabase | null = null;
 let databasePromise: Promise<CuePadDatabase> | undefined;
@@ -25,7 +31,7 @@ let stoppingSidecar = false;
 
 async function createWindow() {
 	const startUrl = process.env.ELECTRON_START_URL;
-	if (!startUrl) throw new Error('ELECTRON_START_URL 未设置');
+	if (!startUrl && !app.isPackaged) throw new Error('ELECTRON_START_URL 未设置');
 
 	const window = new BrowserWindow({
 		width: 1200,
@@ -51,7 +57,20 @@ async function createWindow() {
 	window.on('closed', () => {
 		if (mainWindow === window) mainWindow = null;
 	});
-	await window.loadURL(startUrl);
+	await window.loadURL(startUrl ?? `${APP_SCHEME}://app/`);
+}
+
+function registerAppProtocol() {
+	const buildRoot = path.join(app.getAppPath(), 'build');
+	protocol.handle(APP_SCHEME, (request) => {
+		const pathname = decodeURIComponent(new URL(request.url).pathname);
+		const filePath = path.resolve(buildRoot, pathname === '/' ? '200.html' : pathname.slice(1));
+		const relativePath = path.relative(buildRoot, filePath);
+		if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+			return new Response('Not found', { status: 404 });
+		}
+		return net.fetch(pathToFileURL(filePath).toString());
+	});
 }
 
 function showMainWindow() {
@@ -143,7 +162,7 @@ function loadDatabase(): Promise<CuePadDatabase> {
 function legacyDatabasePath() {
 	if (isTest) {
 		return process.env.CUEPAD_TEST_LEGACY_DATABASE_PATH
-			?? path.join(app.getPath('userData'), 'missing-tauri-cuepad.db');
+			?? path.join(app.getPath('userData'), 'missing-legacy-cuepad.db');
 	}
 	return path.join(homedir(), 'Library', 'Application Support', 'com.sugeh.cuepad', 'cuepad.db');
 }
@@ -154,6 +173,7 @@ function exitWithError(error: unknown) {
 }
 
 app.whenReady().then(async () => {
+	if (app.isPackaged) registerAppProtocol();
 	dispatchSidecar = createDispatchSidecar({
 		appPath: app.getAppPath(),
 		isPackaged: app.isPackaged,

@@ -17,11 +17,9 @@ export default defineConfig({
 			ignored: [
 				'**/.flow/**',
 				'**/build/**',
-				'**/build-wdio/**',
 				'**/e2e/**',
 				'**/design/**',
 				'**/docs/**',
-				'**/.svelte-kit-wdio/**',
 				...(e2eArtifacts ? ['**/.svelte-kit/**'] : [])
 			]
 		}
