@@ -1,0 +1,24 @@
+{
+	"identifier": "com.sugeh.cuepad.wdio",
+	"build": {
+		"frontendDist": "../build-wdio"
+	},
+	"app": {
+		"windows": [
+			{
+				"label": "main",
+				"title": "CuePad",
+				"x": 1,
+				"y": 1,
+				"width": 1,
+				"height": 1,
+				"minWidth": 1,
+				"minHeight": 1,
+				"resizable": false,
+				"decorations": false,
+				"focus": false,
+				"focusable": false
+			}
+		]
+	}
+}

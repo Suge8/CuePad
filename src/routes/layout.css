@@ -1,0 +1,389 @@
+@import 'tailwindcss';
+
+@font-face {
+	font-family: 'OPPO Sans';
+	src: url('/fonts/OPPO-Sans-4.0.ttf') format('truetype');
+	font-style: normal;
+	font-weight: 300;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'OPPO Sans';
+	src: url('/fonts/OPPO-Sans-4.0.ttf') format('truetype');
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'OPPO Sans';
+	src: url('/fonts/OPPO-Sans-4.0.ttf') format('truetype');
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+}
+
+@font-face {
+	font-family: 'OPPO Sans';
+	src: url('/fonts/OPPO-Sans-4.0.ttf') format('truetype');
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+}
+
+:root,
+:root[data-theme='light'] {
+	color-scheme: light;
+	--font-sans:
+		'OPPO Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--font-mono:
+		'SF Mono', 'JetBrains Mono', ui-monospace, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+	--color-canvas: #f4f1ea;
+	--color-canvas-soft: #fbfaf7;
+	--color-surface: rgba(255, 255, 252, 0.78);
+	--color-surface-solid: #fffefa;
+	--color-surface-muted: rgba(244, 239, 229, 0.78);
+	--color-surface-raised: rgba(255, 255, 255, 0.9);
+	--color-text-strong: #171512;
+	--color-text: #393630;
+	--color-text-muted: #7b7469;
+	--color-text-soft: #a19a90;
+	--color-border-subtle: rgba(42, 35, 26, 0.08);
+	--color-border-strong: rgba(42, 35, 26, 0.14);
+	--color-accent: #6d7f72;
+	--color-accent-soft: rgba(109, 127, 114, 0.14);
+	--color-accent-text: #1f3027;
+	--color-danger: #9f3f38;
+	--color-star: #c8a24a;
+	--color-focus: rgba(109, 127, 114, 0.36);
+	--glyph-outline: rgba(0, 0, 0, 0.1);
+	--shadow-control: 0 1px 1px rgba(33, 27, 20, 0.04), 0 6px 18px rgba(33, 27, 20, 0.08);
+	--shadow-panel: 0 24px 80px rgba(38, 31, 23, 0.13), 0 1px 0 rgba(255, 255, 255, 0.84) inset;
+	--shadow-float: 0 18px 50px rgba(39, 32, 24, 0.16);
+	/* 卡片两级深度：静态贴地→悬浮抬升，与内描边组合使用 */
+	--shadow-card: 0 1px 2px rgba(28, 23, 16, 0.04), 0 4px 12px rgba(28, 23, 16, 0.03);
+	--shadow-card-hover: 0 2px 4px rgba(33, 27, 20, 0.05), 0 14px 32px rgba(33, 27, 20, 0.11);
+	--radius-shell: 2rem;
+	--radius-panel: 1.5rem;
+	--radius-card: 1.125rem;
+	--radius-control: 0.875rem;
+	--ease-standard: cubic-bezier(0.2, 0, 0, 1);
+	--ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-exit: cubic-bezier(0.32, 0.72, 0, 1);
+	/* 弹性缓动：与 src/lib/motion.ts 的 EASE_SPRING（backOut）同手感，只用于 transform */
+	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	/* 装饰性变换幅度（单一事实源）：减动时归 1，hover/press 不再产生任何缩放终态 */
+	--hover-pop: 1.12;
+	--press-scale: 0.96;
+	/* 与 src/lib/motion.ts 的 DURATION 保持一致；hover 微交互统一用 --duration-fast */
+	--duration-fast: 120ms;
+	--duration-base: 180ms;
+	--duration-overlay: 220ms;
+	--duration-view: 260ms;
+	--duration-emphasis: 420ms;
+	--duration-press: 80ms;
+	/* 元素级联入场步长（CSS 侧 stagger，与 motion.ts STAGGER_MS 同族） */
+	--stagger-step: 35ms;
+	/* pointerdown 即进拖拽态，短点击不闪烁的淡出延迟 */
+	--drag-fade-delay: 150ms;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+		--color-canvas: #0f1110;
+		--color-canvas-soft: #151716;
+		--color-surface: rgba(24, 27, 25, 0.78);
+		--color-surface-solid: #181b19;
+		--color-surface-muted: rgba(30, 34, 31, 0.74);
+		--color-surface-raised: rgba(34, 38, 35, 0.9);
+		--color-text-strong: #f6f1e8;
+		--color-text: #d9d1c6;
+		--color-text-muted: #9a9287;
+		--color-text-soft: #6f756f;
+		--color-border-subtle: rgba(244, 239, 229, 0.08);
+		--color-border-strong: rgba(244, 239, 229, 0.14);
+		--color-accent: #a7b9a9;
+		--color-accent-soft: rgba(167, 185, 169, 0.15);
+		--color-accent-text: #eef6ee;
+		--color-danger: #d4867d;
+		--color-star: #d8b45e;
+		--color-focus: rgba(167, 185, 169, 0.34);
+		--glyph-outline: rgba(255, 255, 255, 0.1);
+		--shadow-control: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 24px rgba(0, 0, 0, 0.24);
+		--shadow-panel: 0 24px 80px rgba(0, 0, 0, 0.34), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+		--shadow-float: 0 18px 50px rgba(0, 0, 0, 0.38);
+		--shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 2px 8px rgba(0, 0, 0, 0.2);
+		--shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 14px 32px rgba(0, 0, 0, 0.4);
+	}
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 2px 8px rgba(0, 0, 0, 0.2);
+	--shadow-card-hover: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 14px 32px rgba(0, 0, 0, 0.4);
+	--color-canvas: #0f1110;
+	--color-canvas-soft: #151716;
+	--color-surface: rgba(24, 27, 25, 0.78);
+	--color-surface-solid: #181b19;
+	--color-surface-muted: rgba(30, 34, 31, 0.74);
+	--color-surface-raised: rgba(34, 38, 35, 0.9);
+	--color-text-strong: #f6f1e8;
+	--color-text: #d9d1c6;
+	--color-text-muted: #9a9287;
+	--color-text-soft: #6f756f;
+	--color-border-subtle: rgba(244, 239, 229, 0.08);
+	--color-border-strong: rgba(244, 239, 229, 0.14);
+	--color-accent: #a7b9a9;
+	--color-accent-soft: rgba(167, 185, 169, 0.15);
+	--color-accent-text: #eef6ee;
+	--color-danger: #d4867d;
+	--color-star: #d8b45e;
+	--color-focus: rgba(167, 185, 169, 0.34);
+	--glyph-outline: rgba(255, 255, 255, 0.1);
+	--shadow-control: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 24px rgba(0, 0, 0, 0.24);
+	--shadow-panel: 0 24px 80px rgba(0, 0, 0, 0.34), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+	--shadow-float: 0 18px 50px rgba(0, 0, 0, 0.38);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+/* 减动全局兜底：所有 CSS 过渡/动画瞬时完成（hover/press 缩放、布局收拢等一律无运动过程）。
+ * 各组件内的显式门控（animation: none）仍保留——它们彻底关掉循环动画；
+ * svelte transition 走 JS 路径（motion.ts 的 matchMedia 判定），不受此规则影响。 */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		transition-delay: 0ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
+
+	/* 装饰变换幅度归零：hover/press 只剩颜色/阴影反馈。
+	 * 选择器必须补 :root[data-theme]：token 定义在 `:root, :root[data-theme='light']`（特异度 0-1-1），
+	 * 裸 :root（0-0-1）在显式主题下覆盖不了 */
+	:root,
+	:root[data-theme] {
+		--hover-pop: 1;
+		--press-scale: 1;
+	}
+}
+
+html {
+	font-family: var(--font-sans);
+	color: var(--color-text);
+	background: var(--color-canvas);
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* 背景纹理：顶部极淡强调色光晕，纯 CSS 渐变、不加图片；两主题随 token 自适应 */
+body {
+	margin: 0;
+	min-width: 320px;
+	min-height: 100vh;
+	background:
+		radial-gradient(
+			110% 65% at 50% 0%,
+			color-mix(in srgb, var(--color-accent) 5%, transparent),
+			transparent 70%
+		),
+		var(--color-canvas);
+	overflow: hidden;
+}
+
+button,
+input,
+textarea {
+	font: inherit;
+}
+
+button {
+	-webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+[role='button'],
+label:has(input[type='checkbox']),
+label:has(input[type='radio']) {
+	cursor: pointer;
+}
+
+button:disabled {
+	cursor: not-allowed;
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 3px;
+}
+
+/* 不自定义 ::-webkit-scrollbar：WebKit 一旦定义即退出系统 overlay 模式，
+ * 滚动条会变成常驻。原生 overlay（滑动才浮现、自动淡出）就是最佳效果。 */
+
+::selection {
+	color: var(--color-accent-text);
+	background: var(--color-accent-soft);
+}
+
+kbd,
+.tabular-nums {
+	font-variant-numeric: tabular-nums;
+}
+
+/* 状态图标两态常驻同一槽位；只交叉淡变，不替换 SVG 或改变布局。 */
+.fx-icon-switch {
+	display: inline-grid;
+	width: 1em;
+	height: 1em;
+	place-items: center;
+}
+
+.fx-icon-switch > svg {
+	grid-area: 1 / 1;
+}
+
+.fx-icon-switch .fx-icon-off {
+	opacity: 1;
+	transform: scale(1);
+	filter: blur(0);
+}
+
+.fx-icon-switch .fx-icon-on {
+	opacity: 0;
+	transform: scale(0.35) rotate(-10deg);
+	filter: blur(4px);
+}
+
+[data-icon-switch][data-state='active'] .fx-icon-off {
+	opacity: 0;
+	transform: scale(0.55) rotate(8deg);
+	filter: blur(3px);
+}
+
+[data-icon-switch][data-state='active'] .fx-icon-on {
+	opacity: 1;
+	transform: scale(1) rotate(0);
+	filter: blur(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fx-icon-switch > svg,
+	[data-icon-switch][data-state='active'] .fx-icon-off,
+	[data-icon-switch][data-state='active'] .fx-icon-on {
+		transform: none;
+		filter: none;
+	}
+}
+
+@keyframes fx-doodle-drift {
+	from { transform: translateY(0) rotate(-2deg); }
+	to { transform: translateY(-9px) rotate(3deg); }
+}
+
+@keyframes fx-breathe {
+	from { transform: scale(1); }
+	to { transform: scale(1.02); }
+}
+
+@keyframes fx-bar-rise {
+	from { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes fx-recording-pulse {
+	50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 40%, transparent) inset; }
+}
+
+@keyframes fx-arm-pulse {
+	50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-danger) 22%, transparent); }
+}
+
+@keyframes fx-mascot-float {
+	from { transform: translateY(0); }
+	to { transform: translateY(-5px); }
+}
+
+@keyframes fx-spark-fly {
+	0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+	30% { opacity: 1; }
+	100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1); }
+}
+
+@keyframes fx-icon-pop {
+	from { scale: 0.4; opacity: 0; }
+	to { scale: 1; opacity: 1; }
+}
+
+/* 项目色块质感：顶部高光 + 主题描边 + 微投影；background-color 由使用处提供 */
+.glyph-sheen {
+	background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.02) 58%);
+	box-shadow:
+		inset 0 0 0 1px var(--glyph-outline),
+		0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+kbd {
+	font-family: var(--font-mono);
+}
+
+/* 快捷键提示：纯文本、不加盒——避免在 pill/卡片内嵌套盒中盒 */
+.ui-kbd {
+	display: inline-flex;
+	align-items: center;
+	color: var(--color-text-soft);
+	font-family: var(--font-mono);
+	font-size: 0.72rem;
+	font-weight: 500;
+	letter-spacing: 0.05em;
+	user-select: none;
+	line-height: 1;
+}
+
+.ui-label {
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	line-height: 1;
+	text-transform: uppercase;
+	color: var(--color-text-soft);
+}
+
+.ui-title {
+	font-size: clamp(1.55rem, 1.8vw, 2.35rem);
+	font-weight: 600;
+	letter-spacing: -0.045em;
+	line-height: 1.05;
+	color: var(--color-text-strong);
+}
+
+.ui-body {
+	max-width: 65ch;
+	font-size: 0.95rem;
+	line-height: 1.75;
+	color: var(--color-text-muted);
+}
+
+.editor-prose {
+	font-size: clamp(1rem, 1.18vw, 1.12rem);
+	line-height: 1.9;
+	letter-spacing: -0.012em;
+	color: var(--color-text);
+}
+
+h1,
+h2,
+h3 {
+	text-wrap: balance;
+}
+
+p,
+li {
+	text-wrap: pretty;
+}
