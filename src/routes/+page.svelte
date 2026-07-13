@@ -7,7 +7,6 @@
 		overlayEnter,
 		popRise
 	} from '$lib/motion';
-	import { listen } from '@tauri-apps/api/event';
 	import SearchIcon from 'lucide-svelte/icons/search';
 	import SettingsIcon from 'lucide-svelte/icons/settings';
 	import StarIcon from 'lucide-svelte/icons/star';
@@ -32,15 +31,10 @@
 		workspace.init();
 	});
 
-	// 托盘菜单「设置」→ Rust 侧 emit → 打开设置页
-	$effect(() => {
-		const unlisten = listen('cuepad://open-settings', () => {
-			workspace.settingsOpen = true;
-		});
-		return () => {
-			unlisten.then((stop) => stop());
-		};
-	});
+	// 托盘菜单「设置」→ 主进程事件 → 打开设置页
+	$effect(() => window.cuepad.events.onOpenSettings(() => {
+		workspace.settingsOpen = true;
+	}));
 
 	// capture 阶段拦截，任意焦点（含 CodeMirror）下都先于编辑器和浏览器默认查找；
 	// 设置页快捷键录制中的按键不拦截，交给录制按钮自己处理
@@ -69,7 +63,7 @@
 		icon={workspace.toast.icon}
 	/>
 
-	<header class="topbar" data-tauri-drag-region>
+	<header class="topbar" data-app-drag>
 		<span class="brandmark" role="img" aria-label="CuePad" style="--mark: url({markUrl})"></span>
 
 		<button type="button" class="searchbar" onclick={() => (workspace.paletteOpen = true)}>

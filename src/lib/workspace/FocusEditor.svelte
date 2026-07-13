@@ -151,7 +151,7 @@
 {#if card}
 	{@const Icon = projectIcon(project?.icon ?? null)}
 	<div class="focus" aria-label="沉浸编辑">
-		<header class="focus-bar" data-tauri-drag-region>
+		<header class="focus-bar" data-app-drag>
 			<Button
 				variant="ghost"
 				size="icon"
@@ -246,7 +246,7 @@
 			{/if}
 
 			<!-- 显式窗口拖拽区：占据顶栏中部弹性空白 -->
-			<div class="bar-drag" data-tauri-drag-region></div>
+			<div class="bar-drag" data-app-drag></div>
 
 			<div class="bar-tags"><TagRow /></div>
 

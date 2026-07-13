@@ -1,13 +1,12 @@
-import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { DEFAULT_GLOBAL_SHORTCUT } from './accelerator';
 
-// 显隐逻辑和默认键注册都在 Rust 侧（lib.rs）：窗口隐藏后 webview 可能被
-// App Nap/WebKit 冻结，JS handler 不保证执行，后台呼出不能依赖 webview 活性。
-// JS 侧只在用户自定义快捷键时注销默认键/注册新键，handler 为占位。
 const NOOP = () => undefined;
+const isRegistered = (accelerator: string) => window.cuepad.shortcut.isRegistered(accelerator);
+const register = (accelerator: string) => window.cuepad.shortcut.register(accelerator);
+const unregister = (accelerator: string) => window.cuepad.shortcut.unregister(accelerator);
 
-// 本模块内存会随 webview 重载丢失，而 Rust 进程的注册表不会，
-// 所以现状必须惰性从插件真实状态校准，否则重载后会把自己已注册的键误判为被占用
+// 本模块内存会随 renderer 重载丢失，而主进程的注册表不会，
+// 所以必须惰性从主进程真实状态校准，否则重载后会把自己已注册的键误判为被占用
 let registered: string | null = null;
 
 // 串行队列：注销/注册/持久化共享同一张注册表，并发交错会导致多键同时生效
@@ -42,12 +41,12 @@ async function switchTo(accelerator: string): Promise<void> {
 		registered = null;
 	}
 	try {
-		await register(accelerator, NOOP);
+		await register(accelerator);
 		registered = accelerator;
 	} catch (cause) {
 		let restoreError: unknown = null;
 		if (previous) {
-			await register(previous, NOOP)
+			await register(previous)
 				.then(() => (registered = previous))
 				.catch((error: unknown) => (restoreError = error));
 		}

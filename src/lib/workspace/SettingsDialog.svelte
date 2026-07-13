@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { Dialog } from 'bits-ui';
 	import { DURATION, motionDialog, motionFade, motionFly } from '$lib/motion';
-	import { getVersion } from '@tauri-apps/api/app';
-	import { invoke } from '@tauri-apps/api/core';
-	import { appConfigDir, join } from '@tauri-apps/api/path';
 	import FolderOpenIcon from 'lucide-svelte/icons/folder-open';
 	import MonitorIcon from 'lucide-svelte/icons/monitor';
 	import MoonIcon from 'lucide-svelte/icons/moon';
@@ -37,12 +34,10 @@
 		}
 		shortcutError = '';
 		if (!databasePath) {
-			void appConfigDir()
-				.then((dir) => join(dir, 'cuepad.db'))
-				.then((path) => (databasePath = path));
+			void window.cuepad.app.databasePath().then((path) => (databasePath = path));
 		}
 		if (!appVersion) {
-			void getVersion().then((version) => (appVersion = version));
+			void window.cuepad.app.version().then((version) => (appVersion = version));
 		}
 	});
 
@@ -76,7 +71,7 @@
 
 	async function revealDataFile() {
 		try {
-			await invoke('reveal_data_file');
+			await window.cuepad.app.revealDataFile();
 		} catch (error) {
 			workspace.showToast('打开失败', {
 				detail: error instanceof Error ? error.message : String(error),

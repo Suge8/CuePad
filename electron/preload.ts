@@ -3,7 +3,17 @@ import type { CuePadBridge } from './shared/bridge-types';
 
 const bridge: CuePadBridge = {
 	app: {
-		version: () => ipcRenderer.invoke('app:version')
+		version: () => ipcRenderer.invoke('app:version'),
+		databasePath: () => ipcRenderer.invoke('app:databasePath'),
+		revealDataFile: () => ipcRenderer.invoke('app:revealDataFile')
+	},
+	clipboard: {
+		writeText: (text) => ipcRenderer.invoke('clipboard:writeText', text)
+	},
+	dispatch: {
+		target: () => ipcRenderer.invoke('dispatch:target'),
+		targets: () => ipcRenderer.invoke('dispatch:targets'),
+		text: (text, bundleId) => ipcRenderer.invoke('dispatch:text', text, bundleId)
 	},
 	events: {
 		onOpenSettings(listener) {
@@ -11,6 +21,11 @@ const bridge: CuePadBridge = {
 			ipcRenderer.on('cuepad:open-settings', wrapped);
 			return () => ipcRenderer.removeListener('cuepad:open-settings', wrapped);
 		}
+	},
+	shortcut: {
+		register: (accelerator) => ipcRenderer.invoke('shortcut:register', accelerator),
+		unregister: (accelerator) => ipcRenderer.invoke('shortcut:unregister', accelerator),
+		isRegistered: (accelerator) => ipcRenderer.invoke('shortcut:isRegistered', accelerator)
 	},
 	sql: {
 		execute: (query, bindValues) => ipcRenderer.invoke('sql:execute', query, bindValues),

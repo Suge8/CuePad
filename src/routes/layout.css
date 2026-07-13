@@ -220,6 +220,14 @@ button:disabled {
 	cursor: not-allowed;
 }
 
+[data-app-drag] {
+	-webkit-app-region: drag;
+}
+
+[data-app-drag] :where(a, button, input, select, textarea, [role='button'], [contenteditable='true']) {
+	-webkit-app-region: no-drag;
+}
+
 :focus-visible {
 	outline: 2px solid var(--color-focus);
 	outline-offset: 3px;

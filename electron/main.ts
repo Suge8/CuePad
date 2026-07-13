@@ -1,19 +1,29 @@
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, shell, type Tray } from 'electron';
 import { CuePadDatabase } from './db';
 import { registerSqlIpc } from './ipc-sql';
+import {
+	isShortcutRegistered,
+	registerShortcut,
+	unregisterAllShortcuts,
+	unregisterShortcut
+} from './shortcuts';
+import { createTray } from './tray';
 
+const DEFAULT_SHORTCUT = 'Alt+Space';
 const isTest = process.env.CUEPAD_TEST === '1';
 let database: CuePadDatabase | null = null;
 let databasePromise: Promise<CuePadDatabase> | undefined;
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let quitting = false;
 
 async function createWindow() {
 	const startUrl = process.env.ELECTRON_START_URL;
 	if (!startUrl) throw new Error('ELECTRON_START_URL 未设置');
 
-	mainWindow = new BrowserWindow({
+	const window = new BrowserWindow({
 		width: 1200,
 		height: 760,
 		minWidth: 720,
@@ -28,15 +38,70 @@ async function createWindow() {
 			backgroundThrottling: !isTest
 		}
 	});
-	mainWindow.on('closed', () => {
-		mainWindow = null;
+	mainWindow = window;
+	window.on('close', (event) => {
+		if (quitting) return;
+		event.preventDefault();
+		window.hide();
 	});
-	await mainWindow.loadURL(startUrl);
+	window.on('closed', () => {
+		if (mainWindow === window) mainWindow = null;
+	});
+	await window.loadURL(startUrl);
+}
+
+function showMainWindow() {
+	if (isTest || !mainWindow) return;
+	mainWindow.show();
+	mainWindow.focus();
+}
+
+function trayToggleMainWindow() {
+	if (!mainWindow) return;
+	if (mainWindow.isVisible()) mainWindow.hide();
+	else showMainWindow();
+}
+
+function hotkeyToggleMainWindow() {
+	if (!mainWindow) return;
+	if (mainWindow.isVisible() && mainWindow.isFocused()) mainWindow.hide();
+	else showMainWindow();
+}
+
+function openSettings() {
+	showMainWindow();
+	mainWindow?.webContents.send('cuepad:open-settings');
+}
+
+function databasePath() {
+	return path.join(app.getPath('userData'), 'cuepad.db');
+}
+
+function registerDesktopIpc() {
+	ipcMain.handle('app:version', () => app.getVersion());
+	ipcMain.handle('app:databasePath', databasePath);
+	ipcMain.handle('app:revealDataFile', () => shell.showItemInFolder(databasePath()));
+	ipcMain.handle('clipboard:writeText', (_event, text: string) => clipboard.writeText(text));
+	ipcMain.handle('shortcut:register', (_event, accelerator: string) => {
+		registerShortcut(accelerator, hotkeyToggleMainWindow);
+	});
+	ipcMain.handle('shortcut:unregister', (_event, accelerator: string) => {
+		unregisterShortcut(accelerator);
+	});
+	ipcMain.handle('shortcut:isRegistered', (_event, accelerator: string) => {
+		return isShortcutRegistered(accelerator);
+	});
+	const dispatchUnavailable = () => {
+		throw new Error('DISPATCH_TARGET_UNAVAILABLE');
+	};
+	ipcMain.handle('dispatch:target', dispatchUnavailable);
+	ipcMain.handle('dispatch:targets', dispatchUnavailable);
+	ipcMain.handle('dispatch:text', dispatchUnavailable);
 }
 
 function loadDatabase(): Promise<CuePadDatabase> {
 	databasePromise ??= CuePadDatabase.open(
-		path.join(app.getPath('userData'), 'cuepad.db'),
+		databasePath(),
 		path.join(app.getAppPath(), 'migrations'),
 		legacyDatabasePath()
 	).then(
@@ -66,16 +131,32 @@ function exitWithError(error: unknown) {
 }
 
 app.whenReady().then(async () => {
-	ipcMain.handle('app:version', () => app.getVersion());
+	registerDesktopIpc();
 	registerSqlIpc(loadDatabase);
+	try {
+		registerShortcut(DEFAULT_SHORTCUT, hotkeyToggleMainWindow);
+	} catch (error) {
+		console.error(error);
+	}
 	await createWindow();
+	tray = createTray({
+		toggle: trayToggleMainWindow,
+		openSettings,
+		quit: () => app.quit()
+	});
 	app.on('activate', () => {
-		if (BrowserWindow.getAllWindows().length === 0) void createWindow().catch(exitWithError);
+		if (mainWindow) showMainWindow();
+		else void createWindow().catch(exitWithError);
 	});
 }).catch(exitWithError);
 
-app.on('window-all-closed', () => app.quit());
+app.on('before-quit', () => {
+	quitting = true;
+});
 app.on('will-quit', () => {
+	unregisterAllShortcuts();
+	tray?.destroy();
+	tray = null;
 	database?.close();
 	database = null;
 });

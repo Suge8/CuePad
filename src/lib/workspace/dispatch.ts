@@ -1,5 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
-import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import type { DispatchApp } from '../../../electron/shared/bridge-types';
 import { parseVariables } from '$lib/editor/variables';
 import { IS_MAC } from '$lib/shell/accelerator';
 import { workspace } from './store.svelte';
@@ -9,10 +8,7 @@ export const DISPATCH_TARGET_EVENT = 'cuepad:dispatch-target';
 export const VARIABLE_FILL_EVENT = 'cuepad:fill-variables';
 const PINNED_TARGET_KEY = 'cuepad:dispatch-target';
 
-export type DispatchApp = {
-	bundleId: string | null;
-	name: string;
-};
+export type { DispatchApp };
 
 export type PromptIntent = 'copy' | 'dispatch';
 export type VariableFillRequest = {
@@ -77,7 +73,7 @@ export function setDispatchTarget(target: DispatchApp | null): void {
 export async function dispatchRecentTarget(): Promise<DispatchApp | null> {
 	if (!dispatchAvailable) return null;
 	try {
-		return await invoke<DispatchApp | null>('dispatch_target');
+		return await window.cuepad.dispatch.target();
 	} catch (error) {
 		workspace.showToast('读取投送目标失败', { detail: messageOf(error), tone: 'danger' });
 		return null;
@@ -92,7 +88,7 @@ export function dispatchTarget(): Promise<DispatchApp | null> {
 export async function dispatchTargets(): Promise<DispatchApp[]> {
 	if (!dispatchAvailable) return [];
 	try {
-		return await invoke<DispatchApp[]>('dispatch_targets');
+		return await window.cuepad.dispatch.targets();
 	} catch (error) {
 		workspace.showToast('读取应用列表失败', { detail: messageOf(error), tone: 'danger' });
 		return [];
@@ -109,7 +105,7 @@ export async function copyPrompt(output: PromptOutput): Promise<void> {
 	try {
 		const text = await prepareText(output, 'copy');
 		if (text === null) return;
-		await writeText(text);
+		await window.cuepad.clipboard.writeText(text);
 		workspace.showToast(`已复制${output.label}`, { icon: 'copy', tone: 'success' });
 	} catch (error) {
 		workspace.showToast('复制失败', { detail: messageOf(error), tone: 'danger' });
@@ -132,10 +128,7 @@ async function runDispatch(output: PromptOutput): Promise<void> {
 	const text = await prepareText(output, 'dispatch');
 	if (text === null) return;
 	try {
-		await invoke('dispatch_text', {
-			text,
-			bundleId: dispatchPinnedTarget()?.bundleId ?? null
-		});
+		await window.cuepad.dispatch.text(text, dispatchPinnedTarget()?.bundleId ?? null);
 	} catch (error) {
 		const message = messageOf(error);
 		if (message.includes('ACCESSIBILITY_PERMISSION_REQUIRED')) {
