@@ -4,6 +4,7 @@ import packageJson from '../package.json' with { type: 'json' };
 const port = process.env.CUEPAD_ELECTRON_PORT;
 if (!port) throw new Error('Electron E2E 端口未设置');
 const startUrl = `http://127.0.0.1:${port}`;
+const RENDER_TIMEOUT = 20_000;
 
 function observeErrors(page: Page, observedPages: WeakSet<Page>, errors: string[]) {
 	if (observedPages.has(page)) return;
@@ -32,9 +33,14 @@ test('安全桥加载 CuePad 且测试窗口保持隐藏', async () => {
 	try {
 		const page = await electronApp.firstWindow();
 		observeErrors(page, observedPages, rendererErrors);
-		await expect(page).toHaveTitle('CuePad');
-		await expect(page.locator('main.app-shell')).toBeVisible();
-		await expect(page.locator('.hero-error')).toBeVisible();
+		// firstWindow 可能先返回 about:blank；每轮独立 Vite 缓存还会触发冷编译。
+		await page.waitForURL((url) => url.origin === startUrl, {
+			waitUntil: 'domcontentloaded',
+			timeout: RENDER_TIMEOUT
+		});
+		await expect(page).toHaveTitle('CuePad', { timeout: RENDER_TIMEOUT });
+		await expect(page.locator('main.app-shell')).toBeVisible({ timeout: RENDER_TIMEOUT });
+		await expect(page.locator('.hero-error')).toBeVisible({ timeout: RENDER_TIMEOUT });
 
 		expect(await page.evaluate(() => window.cuepad.app.version())).toBe(packageJson.version);
 		expect(await page.evaluate(() => ({
