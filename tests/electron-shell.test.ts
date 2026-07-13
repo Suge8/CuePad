@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, mock, test } from 'bun:test';
 
 const registered = new Map<string, () => void>();
@@ -61,6 +62,16 @@ const {
 	unregisterShortcut
 } = await import('../electron/shortcuts');
 const { createTray } = await import('../electron/tray');
+
+function pngSize(filename: string) {
+	const image = readFileSync(new URL(`../electron/assets/${filename}`, import.meta.url));
+	return { width: image.readUInt32BE(16), height: image.readUInt32BE(20) };
+}
+
+test('托盘资源以 22pt + 2x Retina 密度提供', () => {
+	expect(pngSize('trayTemplate.png')).toEqual({ width: 22, height: 22 });
+	expect(pngSize('trayTemplate@2x.png')).toEqual({ width: 44, height: 44 });
+});
 
 test('W3C accelerator 转为 Electron accelerator', () => {
 	expect(toElectronAccelerator('Alt+Space')).toBe('Alt+Space');
