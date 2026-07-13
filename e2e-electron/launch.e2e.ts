@@ -1,4 +1,5 @@
-import { rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
+import path from 'node:path';
 import { expect, test, _electron, type ElectronApplication, type Page } from '@playwright/test';
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -8,6 +9,7 @@ const startUrl = `http://127.0.0.1:${port}`;
 const RENDER_TIMEOUT = 20_000;
 const CUSTOM_SHORTCUT = 'Control+Alt+KeyU';
 const CUSTOM_ELECTRON_SHORTCUT = 'Control+Alt+U';
+const DISPATCH_FIXTURE = path.resolve('e2e-electron/dispatch-sidecar.fixture.mjs');
 
 function observeErrors(page: Page, observedPages: WeakSet<Page>, errors: string[]) {
 	if (observedPages.has(page)) return;
@@ -38,7 +40,15 @@ async function closeApp(electronApp: ElectronApplication) {
 
 test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', async () => {
 	const userDataPath = `/tmp/cuepad-electron-e2e/${port}/launch-user-data`;
-	await rm(userDataPath, { recursive: true, force: true });
+	const dispatchLogPath = `/tmp/cuepad-electron-e2e/${port}/dispatch-sidecar.log`;
+	await Promise.all([
+		rm(userDataPath, { recursive: true, force: true }),
+		rm(dispatchLogPath, { force: true })
+	]);
+	const dispatchEnvironment = {
+		CUEPAD_DISPATCH_SIDECAR_PATH: DISPATCH_FIXTURE,
+		CUEPAD_TEST_DISPATCH_LOG: dispatchLogPath
+	};
 	let electronApp: ElectronApplication | undefined;
 	let restartedApp: ElectronApplication | undefined;
 	let appClosed = false;
@@ -47,7 +57,12 @@ test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', asy
 	try {
 		electronApp = await _electron.launch({
 			args: ['.', `--user-data-dir=${userDataPath}`],
-			env: { ...process.env, CUEPAD_TEST: '1', ELECTRON_START_URL: startUrl }
+			env: {
+				...process.env,
+				...dispatchEnvironment,
+				CUEPAD_TEST: '1',
+				ELECTRON_START_URL: startUrl
+			}
 		});
 		electronApp.on('close', () => {
 			appClosed = true;
@@ -108,6 +123,98 @@ test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', asy
 			const clipboardProbe = `CuePad Electron ${port}`;
 			await page.evaluate((text) => window.cuepad.clipboard.writeText(text), clipboardProbe);
 			expect(await electronApp.evaluate(({ clipboard }) => clipboard.readText())).toBe(clipboardProbe);
+
+			expect(await page.evaluate(() => window.cuepad.dispatch.target())).toMatchObject({
+				bundleId: 'com.apple.finder'
+			});
+			expect(await page.evaluate(() => window.cuepad.dispatch.targets())).toEqual([
+				{ bundleId: 'com.apple.finder', name: 'Finder' }
+			]);
+			await electronApp.evaluate(({ BrowserWindow }) => {
+				const window = BrowserWindow.getAllWindows()[0];
+				const calls = { hide: 0, show: 0, focus: 0 };
+				const hide = window.hide.bind(window);
+				window.hide = () => {
+					calls.hide += 1;
+					hide();
+				};
+				window.show = () => {
+					calls.show += 1;
+				};
+				window.focus = () => {
+					calls.focus += 1;
+				};
+				(globalThis as typeof globalThis & { dispatchWindowCalls?: typeof calls })
+					.dispatchWindowCalls = calls;
+			});
+			await page.evaluate(() => Promise.all([
+				window.cuepad.dispatch.text('dispatch first', 'test.first'),
+				window.cuepad.dispatch.text('dispatch second', 'test.second')
+			]));
+			expect(await electronApp.evaluate(({ clipboard }) => clipboard.readText()))
+				.toBe('dispatch second');
+			expect(await electronApp.evaluate(() =>
+				(globalThis as typeof globalThis & { dispatchWindowCalls?: unknown }).dispatchWindowCalls
+			)).toEqual({ hide: 2, show: 0, focus: 0 });
+
+			await electronApp.evaluate(({ clipboard }) => clipboard.writeText('dispatch sentinel'));
+			const missingError = await page.evaluate(async () => {
+				try {
+					await window.cuepad.dispatch.text('must not copy', 'test.missing');
+					return '';
+				} catch (error) {
+					return String(error);
+				}
+			});
+			expect(missingError).toContain('DISPATCH_TARGET_UNAVAILABLE');
+			expect(await electronApp.evaluate(({ clipboard }) => clipboard.readText()))
+				.toBe('dispatch sentinel');
+
+			const failedError = await page.evaluate(async () => {
+				try {
+					await window.cuepad.dispatch.text('dispatch failure', 'test.fail');
+					return '';
+				} catch (error) {
+					return String(error);
+				}
+			});
+			expect(failedError).toContain('DISPATCH_TARGET_UNAVAILABLE');
+			expect(await electronApp.evaluate(() =>
+				(globalThis as typeof globalThis & { dispatchWindowCalls?: unknown }).dispatchWindowCalls
+			)).toEqual({ hide: 3, show: 1, focus: 1 });
+
+			const firstSidecarPid = Number((await page.evaluate(() =>
+				window.cuepad.dispatch.target()
+			))?.name.replace('Fixture ', ''));
+			const crashError = await page.evaluate(async () => {
+				try {
+					await window.cuepad.dispatch.text('dispatch crash', 'test.crash');
+					return '';
+				} catch (error) {
+					return String(error);
+				}
+			});
+			expect(crashError).toContain('DISPATCH_SIDECAR_EXITED:code 86');
+			const restartedSidecarPid = Number((await page.evaluate(() =>
+				window.cuepad.dispatch.target()
+			))?.name.replace('Fixture ', ''));
+			expect(restartedSidecarPid).not.toBe(firstSidecarPid);
+
+			const dispatchRequests = (await readFile(dispatchLogPath, 'utf8'))
+				.trim()
+				.split('\n')
+				.map(JSON.parse)
+				.filter((record) => record.event === 'request' && [
+					'test.first',
+					'test.second'
+				].includes(record.request.bundleId))
+				.map((record) => [record.request.cmd, record.request.bundleId]);
+			expect(dispatchRequests).toEqual([
+				['target', 'test.first'],
+				['dispatch', 'test.first'],
+				['target', 'test.second'],
+				['dispatch', 'test.second']
+			]);
 		} finally {
 			await electronApp.evaluate(({ clipboard }, text) => clipboard.writeText(text), originalClipboard);
 		}
@@ -191,7 +298,12 @@ test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', asy
 		electronApp = undefined;
 		restartedApp = await _electron.launch({
 			args: ['.', `--user-data-dir=${userDataPath}`],
-			env: { ...process.env, CUEPAD_TEST: '1', ELECTRON_START_URL: startUrl }
+			env: {
+				...process.env,
+				...dispatchEnvironment,
+				CUEPAD_TEST: '1',
+				ELECTRON_START_URL: startUrl
+			}
 		});
 		await waitForRenderer(restartedApp, rendererErrors);
 		await expect.poll(() => restartedApp?.evaluate(({ globalShortcut }, customShortcut) => ({
@@ -199,6 +311,19 @@ test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', asy
 			default: globalShortcut.isRegistered('Alt+Space')
 		}), CUSTOM_ELECTRON_SHORTCUT)).toEqual({ custom: true, default: false });
 		expect(rendererErrors).toEqual([]);
+		await closeApp(restartedApp);
+		restartedApp = undefined;
+		const lifecycleRecords = (await readFile(dispatchLogPath, 'utf8'))
+			.trim()
+			.split('\n')
+			.map(JSON.parse);
+		const startedPids = lifecycleRecords
+			.filter((record) => record.event === 'start')
+			.map((record) => record.pid);
+		const closedPids = lifecycleRecords
+			.filter((record) => record.event === 'close')
+			.map((record) => record.pid);
+		expect(closedPids).toEqual(startedPids.slice(1));
 	} finally {
 		if (electronApp) await electronApp.close();
 		if (restartedApp) await restartedApp.close();
