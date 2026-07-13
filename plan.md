@@ -15,7 +15,7 @@
 
 使用：
 
-- Tauri v2
+- Electron 37
 - SvelteKit 最新稳定版
 - Svelte 5
 - TypeScript

@@ -16,7 +16,7 @@ const VALID_KEY_CODE =
 	/^(Key[A-Z]|Digit[0-9]|F([1-9]|1[0-2])|Space|Enter|Tab|Backquote|Minus|Equal|BracketLeft|BracketRight|Backslash|Semicolon|Quote|Comma|Period|Slash|Arrow(Up|Down|Left|Right)|Home|End|PageUp|PageDown)$/;
 
 /**
- * 按键组合 → Tauri Global Shortcut accelerator 字符串。
+ * 按键组合 → 持久化用 W3C code accelerator 字符串。
  * 无修饰键、或主键不在允许集合（纯修饰键/Escape 等）时返回 null。
  */
 export function acceleratorFromStroke(stroke: KeyStroke): string | null {
