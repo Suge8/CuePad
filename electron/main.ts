@@ -9,15 +9,19 @@ import {
 	unregisterAllShortcuts,
 	unregisterShortcut
 } from './shortcuts';
+import { createDispatchSidecar, type DispatchSidecar } from './sidecar';
 import { createTray } from './tray';
 
+const BUNDLE_ID = 'com.sugeh.cuepad';
 const DEFAULT_SHORTCUT = 'Alt+Space';
 const isTest = process.env.CUEPAD_TEST === '1';
 let database: CuePadDatabase | null = null;
 let databasePromise: Promise<CuePadDatabase> | undefined;
+let dispatchSidecar: DispatchSidecar | null = null;
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
+let stoppingSidecar = false;
 
 async function createWindow() {
 	const startUrl = process.env.ELECTRON_START_URL;
@@ -77,6 +81,26 @@ function databasePath() {
 	return path.join(app.getPath('userData'), 'cuepad.db');
 }
 
+async function dispatchText(text: string, bundleId: string | null) {
+	const dispatchWindow: { hidden?: BrowserWindow } = {};
+	try {
+		await dispatchSidecar!.dispatch(bundleId, () => {
+			clipboard.writeText(text);
+			const window = mainWindow;
+			if (!window || window.isDestroyed()) throw new Error('MAIN_WINDOW_UNAVAILABLE');
+			window.hide();
+			dispatchWindow.hidden = window;
+		});
+	} catch (error) {
+		const window = dispatchWindow.hidden;
+		if (window && !window.isDestroyed()) {
+			window.show();
+			window.focus();
+		}
+		throw error;
+	}
+}
+
 function registerDesktopIpc() {
 	ipcMain.handle('app:version', () => app.getVersion());
 	ipcMain.handle('app:databasePath', databasePath);
@@ -91,12 +115,11 @@ function registerDesktopIpc() {
 	ipcMain.handle('shortcut:isRegistered', (_event, accelerator: string) => {
 		return isShortcutRegistered(accelerator);
 	});
-	const dispatchUnavailable = () => {
-		throw new Error('DISPATCH_TARGET_UNAVAILABLE');
-	};
-	ipcMain.handle('dispatch:target', dispatchUnavailable);
-	ipcMain.handle('dispatch:targets', dispatchUnavailable);
-	ipcMain.handle('dispatch:text', dispatchUnavailable);
+	ipcMain.handle('dispatch:target', () => dispatchSidecar!.target());
+	ipcMain.handle('dispatch:targets', () => dispatchSidecar!.targets());
+	ipcMain.handle('dispatch:text', (_event, text: string, bundleId: string | null) => {
+		return dispatchText(text, bundleId);
+	});
 }
 
 function loadDatabase(): Promise<CuePadDatabase> {
@@ -131,6 +154,14 @@ function exitWithError(error: unknown) {
 }
 
 app.whenReady().then(async () => {
+	dispatchSidecar = createDispatchSidecar({
+		appPath: app.getAppPath(),
+		isPackaged: app.isPackaged,
+		resourcesPath: process.resourcesPath,
+		hostPid: process.pid,
+		bundleId: BUNDLE_ID
+	});
+	void dispatchSidecar.start().catch(console.error);
 	registerDesktopIpc();
 	registerSqlIpc(loadDatabase);
 	try {
@@ -150,8 +181,12 @@ app.whenReady().then(async () => {
 	});
 }).catch(exitWithError);
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
 	quitting = true;
+	if (!dispatchSidecar || stoppingSidecar) return;
+	event.preventDefault();
+	stoppingSidecar = true;
+	void dispatchSidecar.close().finally(() => app.quit());
 });
 app.on('will-quit', () => {
 	unregisterAllShortcuts();
@@ -159,4 +194,5 @@ app.on('will-quit', () => {
 	tray = null;
 	database?.close();
 	database = null;
+	dispatchSidecar = null;
 });
