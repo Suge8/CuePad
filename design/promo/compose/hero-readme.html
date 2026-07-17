@@ -1,5 +1,6 @@
 <!doctype html>
-<!-- README hero 2400×1260（显示 1200 宽 @2x）；设计 token 取自 src/routes/layout.css -->
+<!-- README hero 2400×1260（显示 1200 宽 @2x）；设计 token 取自 src/routes/layout.css
+     双语：?lang=en 出英文版（文案定稿见 design/promo/AGENTS.md） -->
 <html lang="zh">
 <head>
 <meta charset="utf-8" />
@@ -17,7 +18,9 @@
 	}
 	.head { margin-top: 120px; text-align: center; position: relative; z-index: 2; }
 	h1 { font-size: 112px; font-weight: 600; color: #171512; letter-spacing: 0.02em; }
+	body.en h1 { font-size: 86px; letter-spacing: 0; }
 	.sub { margin-top: 36px; font-size: 40px; font-weight: 400; color: #7b7469; letter-spacing: 0.04em; }
+	body.en .sub { letter-spacing: 0.01em; }
 	.stage { position: relative; margin-top: 96px; }
 	.shot {
 		display: block; width: 1880px; border-radius: 28px;
@@ -39,5 +42,14 @@
 		<img class="mascot" src="../visual/mascot-welcome.png" alt="" />
 		<img class="shot" src="../shots/raw/board-light-collapsed.png" alt="" />
 	</div>
+	<script>
+		if (new URLSearchParams(location.search).get('lang') === 'en') {
+			document.documentElement.lang = 'en';
+			document.body.classList.add('en');
+			document.querySelector('h1').textContent = 'Write your prompt, dispatch in one tap';
+			document.querySelector('.sub').textContent =
+				'A macOS scratchpad for coding agents · straight to your terminal and editor';
+		}
+	</script>
 </body>
 </html>
