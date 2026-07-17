@@ -5,7 +5,7 @@
 ## 产品文案定稿（对外描述的单一事实源）
 
 - **GitHub 仓库 description**：
-  `📝 Prompt Scratchpad for Coding Agents - Write Comfortably, Dispatch in One Tap | 给 Vibe Coding 的提示词灵感本，写好一键直达终端`
+  `📝 Prompt Scratchpad for Coding Agents - Write Comfortably, Dispatch in One Tap | Vibe Coding 的灵感本，轻松一键发送给 Agent`
 - **中文标语**：提示词写好，一键投送 · 副题：给 coding agents 设计的 macOS 草稿本 · 写好直达终端与编辑器
 - **英文标语**：Write your prompt, dispatch in one tap · 副题：A macOS scratchpad for coding agents · straight to your terminal and editor
 - hero / social 图的中英文案以此为准；英文图用 `?lang=en` 出（见下表）
