@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- README hero 2400×1260（显示 1200 宽 @2x）；设计 token 取自 src/routes/layout.css -->
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<style>
+	@font-face {
+		font-family: 'OPPO Sans';
+		src: url('../../../static/fonts/OPPO-Sans-4.0.ttf') format('truetype');
+	}
+	* { margin: 0; box-sizing: border-box; }
+	body {
+		width: 2400px; height: 1260px; overflow: hidden;
+		background: #f4f1ea;
+		font-family: 'OPPO Sans', 'PingFang SC', sans-serif;
+		display: flex; flex-direction: column; align-items: center;
+	}
+	.head { margin-top: 120px; text-align: center; position: relative; z-index: 2; }
+	h1 { font-size: 112px; font-weight: 600; color: #171512; letter-spacing: 0.02em; }
+	.sub { margin-top: 36px; font-size: 40px; font-weight: 400; color: #7b7469; letter-spacing: 0.04em; }
+	.stage { position: relative; margin-top: 96px; }
+	.shot {
+		display: block; width: 1880px; border-radius: 28px;
+		border: 2px solid rgba(42, 35, 26, 0.08);
+		box-shadow: 0 2px 4px rgba(33, 27, 20, 0.05), 0 40px 120px rgba(33, 27, 20, 0.16);
+	}
+	.mascot {
+		position: absolute; top: -196px; right: 64px; height: 230px; z-index: 1;
+		filter: drop-shadow(0 12px 24px rgba(33, 27, 20, 0.12));
+	}
+</style>
+</head>
+<body>
+	<div class="head">
+		<h1>提示词写好，一键投送</h1>
+		<div class="sub">给 coding agents 设计的 macOS 草稿本 · 写好直达终端与编辑器</div>
+	</div>
+	<div class="stage">
+		<img class="mascot" src="../visual/mascot-welcome.png" alt="" />
+		<img class="shot" src="../shots/raw/board-light-collapsed.png" alt="" />
+	</div>
+</body>
+</html>

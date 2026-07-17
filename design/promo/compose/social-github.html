@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- GitHub social preview 1280×640；左文右图 -->
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<style>
+	@font-face {
+		font-family: 'OPPO Sans';
+		src: url('../../../static/fonts/OPPO-Sans-4.0.ttf') format('truetype');
+	}
+	* { margin: 0; box-sizing: border-box; }
+	body {
+		width: 1280px; height: 640px; overflow: hidden;
+		background: #f4f1ea;
+		font-family: 'OPPO Sans', 'PingFang SC', sans-serif;
+		display: flex; align-items: center;
+	}
+	.left { width: 620px; padding-left: 88px; flex-shrink: 0; }
+	.brand { display: flex; align-items: center; gap: 18px; }
+	.brand img { height: 56px; }
+	.brand span { font-size: 40px; font-weight: 600; color: #171512; letter-spacing: 0.01em; }
+	h1 { margin-top: 56px; font-size: 64px; font-weight: 600; color: #171512; line-height: 1.28; letter-spacing: 0.02em; }
+	.sub { margin-top: 28px; font-size: 25px; color: #7b7469; line-height: 1.6; }
+	.right { position: relative; flex: 1; height: 100%; }
+	.shot {
+		position: absolute; top: 150px; left: 48px; width: 900px; border-radius: 18px;
+		border: 2px solid rgba(42, 35, 26, 0.08);
+		box-shadow: 0 2px 4px rgba(33, 27, 20, 0.05), 0 30px 80px rgba(33, 27, 20, 0.18);
+	}
+	.mascot {
+		position: absolute; top: 16px; left: 450px; height: 140px; z-index: 1;
+		filter: drop-shadow(0 8px 18px rgba(33, 27, 20, 0.12));
+	}
+</style>
+</head>
+<body>
+	<div class="left">
+		<div class="brand">
+			<img src="../visual/lockup-cut.png" alt="" />
+			<span>CuePad</span>
+		</div>
+		<h1>提示词写好<br />一键投送</h1>
+		<div class="sub">给 coding agents 设计的 macOS 草稿本<br />写好直达终端与编辑器</div>
+	</div>
+	<div class="right">
+		<img class="mascot" src="../visual/mascot-welcome.png" alt="" />
+		<img class="shot" src="../shots/raw/board-light-collapsed.png" alt="" />
+	</div>
+</body>
+</html>

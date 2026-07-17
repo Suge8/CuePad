@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- 功能图统一框架：?img=<相对路径>；米白画布 + 圆角 + 阴影，compose.mjs 按 body 实际尺寸截图 -->
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<style>
+	* { margin: 0; box-sizing: border-box; }
+	body {
+		display: inline-block; padding: 88px;
+		background: #f4f1ea;
+	}
+	img {
+		display: block; width: 2000px; border-radius: 24px;
+		border: 2px solid rgba(42, 35, 26, 0.08);
+		box-shadow: 0 2px 4px rgba(33, 27, 20, 0.05), 0 32px 90px rgba(33, 27, 20, 0.14);
+	}
+</style>
+</head>
+<body>
+	<img id="shot" alt="" />
+	<script>
+		document.getElementById('shot').src = new URLSearchParams(location.search).get('img');
+	</script>
+</body>
+</html>
