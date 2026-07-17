@@ -274,8 +274,8 @@
 			<div class="palette-foot" aria-hidden="true">
 				<span class="foot-mark" style="--mark: url({markUrl})"></span>
 				<span class="foot-hints">
-					<kbd class="ui-kbd">↑↓</kbd> 选择
-					<kbd class="ui-kbd">⏎</kbd> 打开
+					<span class="hint"><kbd class="ui-kbd">↑↓</kbd>选择</span>
+					<span class="hint"><kbd class="ui-kbd">⏎</kbd>打开</span>
 				</span>
 			</div>
 		</div>
@@ -371,6 +371,19 @@
 		-webkit-mask: var(--mark) center / contain no-repeat;
 		mask: var(--mark) center / contain no-repeat;
 		opacity: 0.6;
+	}
+
+	.foot-hints {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.9rem;
+		margin-left: auto;
+	}
+
+	.foot-hints .hint {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
 	}
 
 

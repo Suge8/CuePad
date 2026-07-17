@@ -72,13 +72,13 @@
 	}
 
 	.primary {
-		background: var(--color-text-strong);
-		color: var(--color-canvas-soft);
+		background: var(--color-accent-strong);
+		color: var(--color-accent-contrast);
 		box-shadow: var(--shadow-control);
 	}
 
 	.primary:not(:disabled):hover {
-		background: color-mix(in srgb, var(--color-text-strong) 90%, var(--color-accent));
+		background: color-mix(in srgb, var(--color-accent-strong) 88%, var(--color-text-strong));
 	}
 
 	.secondary {

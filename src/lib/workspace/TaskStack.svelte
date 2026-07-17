@@ -4,6 +4,7 @@
 	import { onDestroy } from 'svelte';
 	import {
 		DURATION,
+		motionExpand,
 		motionFlip,
 		motionFly,
 		motionMenu,
@@ -495,7 +496,7 @@
 			</div>
 		</div>
 		{#if editingTaskId === task.id && editError}
-			<span class="field-error" role="alert">{editError}</span>
+			<span class="field-error" role="alert" in:motionFly={{ y: -3, duration: DURATION.fast }}>{editError}</span>
 		{/if}
 	</div>
 {/snippet}
@@ -563,7 +564,7 @@
 			</header>
 
 			{#if stackExpanded}
-				<div class="task-list-scroll">
+				<div class="task-list-scroll" transition:motionExpand>
 					{#if adding}
 						<div class="task-row-wrap" in:motionScale={{ start: 0.96, duration: DURATION.base }}>
 							<form
@@ -588,7 +589,7 @@
 									<PlusIcon size={15} strokeWidth={2.2} />
 								</button>
 							</form>
-							{#if newError}<span class="field-error" role="alert">{newError}</span>{/if}
+							{#if newError}<span class="field-error" role="alert" in:motionFly={{ y: -3, duration: DURATION.fast }}>{newError}</span>{/if}
 						</div>
 					{/if}
 
@@ -639,7 +640,7 @@
 								<ChevronDownIcon class={completedOpen ? 'open' : undefined} size={14} strokeWidth={2} />
 							</button>
 							{#if completedOpen}
-								<div class="completed-tasks" aria-label="已完成任务">
+								<div class="completed-tasks" aria-label="已完成任务" transition:motionExpand>
 									{#each completedTasks as task (task.id)}
 										<div
 											class="task-motion"
@@ -758,11 +759,14 @@
 
 	.task-list-scroll {
 		display: grid;
-		width: 100%;
+		/* padding 留足胶囊阴影（18px blur）扩散空间，负 margin + 补宽抵消布局位移，
+		 * 避免 overflow 裁剪出生硬的阴影截断带 */
+		width: calc(100% + 2.2rem);
 		max-height: calc(100dvh - 13.35rem);
 		gap: 0.55rem;
 		overflow-y: auto;
-		padding: 0.45rem 0.15rem 0.5rem;
+		padding: 1.25rem 1.25rem 1.5rem;
+		margin: -0.8rem -1.1rem -1rem;
 	}
 
 	.active-tasks,
@@ -1074,7 +1078,7 @@
 		gap: 0.25rem;
 		overflow-y: auto;
 		padding: 0.55rem;
-		border-radius: var(--radius-control);
+		border-radius: var(--radius-card);
 		background: var(--color-surface-raised);
 		box-shadow: var(--shadow-float);
 		color: var(--color-text);
@@ -1092,7 +1096,7 @@
 		min-height: 2.5rem;
 		padding: 0 0.55rem;
 		border: 0;
-		border-radius: 0.65rem;
+		border-radius: 0.75rem;
 		background: transparent;
 		color: var(--color-text);
 		font-size: 0.8rem;

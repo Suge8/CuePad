@@ -35,7 +35,7 @@ async function boot(
 }
 
 type AnimationRecord = { target: string; props: string[] };
-type DispatchResult = { text: string; bundleId: string | null; calls: number };
+type DispatchResult = { text: string; bundleId: string | null; submit: boolean; calls: number };
 type SqlWrite = { query: string; values: unknown[] };
 
 /** 先订阅 mock 外部边界的唯一完成事件，再触发操作；不读取可能属于上一操作的全局快照。 */
@@ -1014,9 +1014,19 @@ test('沉浸编辑：变量填充、复制与投送', async ({ page }) => {
 	// 覆盖层进场：overlayEnter 全程不透明缩放（transform）
 	await expectMotionSince(page, 'focus-overlay', 0, 'transform');
 
-	// 块系统视觉：角色分隔线 pill 标签 + {{变量}} 高亮（正文永远是纯文本，装饰只加样式）
-	await expect(page.locator('.cm-cue-divider-label').filter({ hasText: 'Q1' })).toBeVisible();
+	// 块系统视觉：分隔线编号 pill + {{变量}} 高亮；历史角色标记（---ask--- 等）宽容解析为普通分隔线
+	await expect(page.locator('.cm-cue-divider-label').filter({ hasText: '2' })).toBeVisible();
 	await expect(page.locator('.cm-cue-var')).toHaveText('{{产品名}}');
+
+	// 分隔线已控件化：源标记永不渲染；块首 Backspace 整条删除合并块，撤销可恢复
+	await expect(page.locator('.cm-content')).not.toContainText('---ask---');
+	await expect(page.locator('.cm-cue-divider')).toHaveCount(2);
+	await page.locator('.cm-line', { hasText: '性能、隐私、价格。' }).click();
+	await page.keyboard.press('Home');
+	await page.keyboard.press('Backspace');
+	await expect(page.locator('.cm-cue-divider')).toHaveCount(1);
+	await page.keyboard.press('Meta+z');
+	await expect(page.locator('.cm-cue-divider')).toHaveCount(2);
 
 	// 默认上一个应用；可从运行中应用固定目标，选择立即持久化并同步按钮标签
 	await expect(page.getByRole('button', { name: '投送全文到 Terminal' })).toBeVisible();
@@ -1064,6 +1074,15 @@ test('沉浸编辑：变量填充、复制与投送', async ({ page }) => {
 	const dispatchedResult = await dispatchedPrompt;
 	expect(dispatchedResult.text).toContain('介绍 CuePad 的核心能力');
 	expect(dispatchedResult.bundleId).toBe('dev.zed.Zed');
+	expect(dispatchedResult.submit).toBe(false);
+
+	// 投送后自动发送：菜单顶部开关（位置稳定不随应用列表漂移），持久化并随后续投送透传
+	await page.getByRole('button', { name: '选择投送目标' }).click();
+	const submitToggle = page.getByRole('menuitem', { name: /自动发送/ });
+	await expect(page.getByRole('menu').getByRole('menuitem').first()).toContainText('自动发送');
+	await submitToggle.click();
+	await page.keyboard.press('Escape');
+	expect(await page.evaluate(() => localStorage.getItem('cuepad:dispatch-submit'))).toBe('1');
 
 	// 无变量卡直达路径的并发防重：同步双击模拟快速连击，in-flight 锁下 dispatch_text 恰好一次
 	await page.keyboard.press('Escape');
@@ -1080,6 +1099,7 @@ test('沉浸编辑：变量填充、复制与投送', async ({ page }) => {
 	const directResult = await directDispatch;
 	expect(directResult.text).toContain('快速草稿：明天的演示流程');
 	expect(directResult.calls).toBe(2);
+	expect(directResult.submit).toBe(true);
 
 	// 剪贴板互斥：投送在途时复制被忽略，不会覆盖目标即将粘贴的内容
 	await page.evaluate(() => {
@@ -1124,7 +1144,7 @@ test('沉浸编辑：变量填充、复制与投送', async ({ page }) => {
 	await expect(focus).toBeVisible();
 
 	// 编号是编辑态草稿：切换后不等写库立即复制，必须用新编号（同步连击模拟）
-	await page.getByRole('button', { name: '分段' }).click();
+	await page.getByRole('button', { name: '更多操作' }).click();
 	await expect(page.getByRole('group', { name: '编号风格' })).toBeVisible();
 	await page.evaluate(() => {
 		const options = Array.from(document.querySelectorAll<HTMLButtonElement>('.numbering-option'));
@@ -1137,7 +1157,7 @@ test('沉浸编辑：变量填充、复制与投送', async ({ page }) => {
 	await numberingDialog.getByRole('button', { name: '复制', exact: true }).click();
 	await expect(numberingDialog).toBeHidden();
 	const renumbered = await numberingCopy;
-	expect(renumbered).toContain('## Q1');
+	expect(renumbered).toContain('---\n\n用户最关心');
 	expect(renumbered).not.toContain('## 1');
 	await page.keyboard.press('Escape');
 

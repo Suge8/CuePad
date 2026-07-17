@@ -51,12 +51,14 @@
 	--color-text-soft: #a19a90;
 	--color-border-subtle: rgba(42, 35, 26, 0.08);
 	--color-border-strong: rgba(42, 35, 26, 0.14);
-	--color-accent: #6d7f72;
-	--color-accent-soft: rgba(109, 127, 114, 0.14);
+	--color-accent: #568067;
+	--color-accent-strong: #47715a;
+	--color-accent-contrast: #fffefa;
+	--color-accent-soft: rgba(86, 128, 103, 0.14);
 	--color-accent-text: #1f3027;
 	--color-danger: #9f3f38;
 	--color-star: #c8a24a;
-	--color-focus: rgba(109, 127, 114, 0.36);
+	--color-focus: rgba(86, 128, 103, 0.36);
 	--glyph-outline: rgba(0, 0, 0, 0.1);
 	--shadow-control: 0 1px 1px rgba(33, 27, 20, 0.04), 0 6px 18px rgba(33, 27, 20, 0.08);
 	--shadow-panel: 0 24px 80px rgba(38, 31, 23, 0.13), 0 1px 0 rgba(255, 255, 255, 0.84) inset;
@@ -104,12 +106,14 @@
 		--color-text-soft: #6f756f;
 		--color-border-subtle: rgba(244, 239, 229, 0.08);
 		--color-border-strong: rgba(244, 239, 229, 0.14);
-		--color-accent: #a7b9a9;
-		--color-accent-soft: rgba(167, 185, 169, 0.15);
+		--color-accent: #94cba6;
+		--color-accent-strong: #94cba6;
+		--color-accent-contrast: #122d1d;
+		--color-accent-soft: rgba(148, 203, 166, 0.16);
 		--color-accent-text: #eef6ee;
 		--color-danger: #d4867d;
 		--color-star: #d8b45e;
-		--color-focus: rgba(167, 185, 169, 0.34);
+		--color-focus: rgba(148, 203, 166, 0.34);
 		--glyph-outline: rgba(255, 255, 255, 0.1);
 		--shadow-control: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 24px rgba(0, 0, 0, 0.24);
 		--shadow-panel: 0 24px 80px rgba(0, 0, 0, 0.34), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
@@ -135,12 +139,14 @@
 	--color-text-soft: #6f756f;
 	--color-border-subtle: rgba(244, 239, 229, 0.08);
 	--color-border-strong: rgba(244, 239, 229, 0.14);
-	--color-accent: #a7b9a9;
-	--color-accent-soft: rgba(167, 185, 169, 0.15);
+	--color-accent: #94cba6;
+	--color-accent-strong: #94cba6;
+	--color-accent-contrast: #122d1d;
+	--color-accent-soft: rgba(148, 203, 166, 0.16);
 	--color-accent-text: #eef6ee;
 	--color-danger: #d4867d;
 	--color-star: #d8b45e;
-	--color-focus: rgba(167, 185, 169, 0.34);
+	--color-focus: rgba(148, 203, 166, 0.34);
 	--glyph-outline: rgba(255, 255, 255, 0.1);
 	--shadow-control: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 24px rgba(0, 0, 0, 0.24);
 	--shadow-panel: 0 24px 80px rgba(0, 0, 0, 0.34), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
@@ -192,7 +198,7 @@ body {
 	background:
 		radial-gradient(
 			110% 65% at 50% 0%,
-			color-mix(in srgb, var(--color-accent) 5%, transparent),
+			color-mix(in srgb, var(--color-accent) 8%, transparent),
 			transparent 70%
 		),
 		var(--color-canvas);

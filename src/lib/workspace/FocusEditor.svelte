@@ -3,13 +3,13 @@
 	import {
 		motionFade,
 		motionFly,
-		motionIconSwitch,
 		motionMenu
 	} from '$lib/motion';
 	import ArrowLeftIcon from 'lucide-svelte/icons/arrow-left';
 	import CheckIcon from 'lucide-svelte/icons/check';
 	import ChevronDownIcon from 'lucide-svelte/icons/chevron-down';
 	import CopyIcon from 'lucide-svelte/icons/copy';
+	import EllipsisIcon from 'lucide-svelte/icons/ellipsis';
 	import InboxIcon from 'lucide-svelte/icons/inbox';
 	import PencilLineIcon from 'lucide-svelte/icons/pencil-line';
 	import SendIcon from 'lucide-svelte/icons/send';
@@ -21,12 +21,14 @@
 	import {
 		DISPATCH_TARGET_EVENT,
 		copyPrompt,
+		dispatchAutoSubmit,
 		dispatchAvailable,
 		dispatchPinnedTarget,
 		dispatchPrompt,
 		dispatchRecentTarget,
 		dispatchTarget,
 		dispatchTargets,
+		setDispatchAutoSubmit,
 		setDispatchTarget,
 		type DispatchApp
 	} from './dispatch';
@@ -76,6 +78,7 @@
 	let dispatchTargetApp = $state<DispatchApp | null>(null);
 	let recentDispatchApp = $state<DispatchApp | null>(null);
 	let dispatchApps = $state<DispatchApp[]>([]);
+	let autoSubmit = $state(dispatchAutoSubmit());
 	let pinnedDispatchApp = $state<DispatchApp | null>(null);
 	let dispatchRefreshSequence = 0;
 	const dispatchTargetName = $derived(dispatchTargetApp?.name ?? null);
@@ -254,24 +257,6 @@
 				<button
 					type="button"
 					class="bar-button"
-					class:starred={card.isFavorite}
-					aria-label={card.isFavorite ? '取消收藏' : '收藏'}
-					aria-pressed={card.isFavorite}
-					title={card.isFavorite ? '取消收藏' : '收藏'}
-					data-icon-switch
-					data-state={card.isFavorite ? 'active' : 'idle'}
-					use:motionIconSwitch={card.isFavorite}
-					onclick={() => editor.toggleFavorite()}
-				>
-					<span class="fx-icon-switch" aria-hidden="true">
-						<StarIcon class="fx-icon-off" size={15} strokeWidth={2} />
-						<StarIcon class="fx-icon-on" size={15} strokeWidth={2} fill="currentColor" />
-					</span>
-				</button>
-
-				<button
-					type="button"
-					class="bar-button"
 					aria-label="复制全文"
 					title="复制全文"
 					onclick={copyFormatted}
@@ -319,6 +304,24 @@
 												<div {...props} class="menu target-menu" in:motionMenu out:motionMenu>
 													<DropdownMenu.Item
 														class="menu-item"
+														closeOnSelect={false}
+														onSelect={() => {
+															autoSubmit = !autoSubmit;
+															setDispatchAutoSubmit(autoSubmit);
+														}}
+														textValue="自动发送"
+													>
+														<span class="target-copy">
+															<strong>自动发送</strong>
+															<small>投送后补发回车</small>
+														</span>
+														{#if autoSubmit}
+															<CheckIcon class="target-check" size={14} strokeWidth={2.2} />
+														{/if}
+													</DropdownMenu.Item>
+													<div class="menu-separator"></div>
+													<DropdownMenu.Item
+														class="menu-item"
 														onSelect={() => chooseDispatchTarget(null)}
 														textValue="上一个应用"
 													>
@@ -363,22 +366,42 @@
 					</div>
 				{/if}
 
-				{#if segments.length >= 2}
-					<DropdownMenu.Root>
-						<DropdownMenu.Trigger>
-							{#snippet child({ props })}
-								<Button {...props} variant="secondary" size="sm">
-									分段
-									<ChevronDownIcon size={13} strokeWidth={2} />
-								</Button>
-							{/snippet}
-						</DropdownMenu.Trigger>
-						<DropdownMenu.Portal>
-							<DropdownMenu.Content align="end" sideOffset={6} forceMount>
-								{#snippet child({ wrapperProps, props, open })}
-									{#if open}
-										<div {...wrapperProps}>
-											<div {...props} class="menu" in:motionMenu out:motionMenu>
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<button
+								{...props}
+								type="button"
+								class="bar-button"
+								aria-label="更多操作"
+								title="更多操作"
+							>
+								<EllipsisIcon size={15} strokeWidth={2} />
+							</button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Portal>
+						<DropdownMenu.Content align="end" sideOffset={6} forceMount>
+							{#snippet child({ wrapperProps, props, open })}
+								{#if open}
+									<div {...wrapperProps}>
+										<div {...props} class="menu" in:motionMenu out:motionMenu>
+											<DropdownMenu.Item
+												class="menu-item"
+												onSelect={() => editor.toggleFavorite()}
+												textValue={card.isFavorite ? '取消收藏' : '收藏'}
+											>
+												<span class="menu-star" class:active={card.isFavorite}>
+													<StarIcon
+														size={14}
+														strokeWidth={2}
+														fill={card.isFavorite ? 'currentColor' : 'none'}
+													/>
+												</span>
+												{card.isFavorite ? '取消收藏' : '收藏'}
+											</DropdownMenu.Item>
+											{#if segments.length >= 2}
+												<div class="menu-separator"></div>
 												<div class="numbering-row" role="group" aria-label="编号风格">
 													<span class="numbering-label">编号</span>
 													{#each NUMBERING_OPTIONS as option (option.value)}
@@ -417,23 +440,23 @@
 														</DropdownMenu.Item>
 													{/each}
 												{/if}
-												<div class="menu-separator"></div>
-												<DropdownMenu.Item
-													class="menu-item"
-													onSelect={() => copyText(editor.body, '原始全文')}
-													textValue="复制原始全文"
-												>
-													<CopyIcon size={13} strokeWidth={2} />
-													复制原始全文
-												</DropdownMenu.Item>
-											</div>
+											{/if}
+											<div class="menu-separator"></div>
+											<DropdownMenu.Item
+												class="menu-item"
+												onSelect={() => copyText(editor.body, '原始全文')}
+												textValue="复制原始全文"
+											>
+												<CopyIcon size={13} strokeWidth={2} />
+												复制原始全文
+											</DropdownMenu.Item>
 										</div>
-									{/if}
-								{/snippet}
-							</DropdownMenu.Content>
-						</DropdownMenu.Portal>
-					</DropdownMenu.Root>
-				{/if}
+									</div>
+								{/if}
+							{/snippet}
+						</DropdownMenu.Content>
+					</DropdownMenu.Portal>
+				</DropdownMenu.Root>
 			</div>
 		</header>
 
@@ -555,9 +578,9 @@
 		align-items: center;
 		gap: 0.45rem;
 		min-height: 2.5rem;
-		padding: 0 0.7rem;
+		padding: 0 0.85rem 0 0.7rem;
 		border: 0;
-		border-radius: var(--radius-control);
+		border-radius: 999px;
 		background: var(--color-surface-muted);
 		color: var(--color-text);
 		font-size: 0.8rem;
@@ -637,16 +660,21 @@
 		gap: 1px;
 	}
 
-	.bar-actions :global(.dispatch-button) {
+	.bar-actions :global(.ui-button.sm) {
+		min-height: 2.5rem;
+		border-radius: 999px;
+	}
+
+	.bar-actions :global(.ui-button.sm.dispatch-button) {
 		max-width: 13rem;
-		border-radius: 0.75rem 0.35rem 0.35rem 0.75rem;
+		border-radius: 999px 0.4rem 0.4rem 999px;
 	}
 
 	.dispatch-control :global(.dispatch-picker) {
 		width: 2.5rem;
 		height: 2.5rem;
 		padding: 0;
-		border-radius: 0.35rem 0.75rem 0.75rem 0.35rem;
+		border-radius: 0.4rem 999px 999px 0.4rem;
 	}
 
 	.dispatch-name {
@@ -661,7 +689,7 @@
 		height: 2.5rem;
 		place-items: center;
 		border: 0;
-		border-radius: var(--radius-control);
+		border-radius: 999px;
 		background: var(--color-surface-solid);
 		color: var(--color-text-soft);
 		box-shadow: var(--shadow-control);
@@ -679,7 +707,14 @@
 		transform: scale(var(--press-scale));
 	}
 
-	.bar-button.starred {
+	/* 菜单内收藏星：激活态金色，与卡片墙星标同语义 */
+	.menu-star {
+		display: inline-grid;
+		place-items: center;
+		color: var(--color-text-muted);
+	}
+
+	.menu-star.active {
 		color: var(--color-star);
 	}
 
@@ -702,7 +737,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.55rem;
-		min-height: 2.35rem;
+		min-height: 2.5rem;
 		padding: 0 0.65rem;
 		border-radius: 0.75rem;
 		color: var(--color-text);

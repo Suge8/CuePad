@@ -69,7 +69,8 @@ export function motionScale(node: Element, params: ScaleParams = {}, options?: M
 	});
 }
 
-/** Dialog 进场有重量，退场更短更浅；translate 使用独立 CSS 属性时不受 transform 覆盖。 */
+/** Dialog 进场有重量，退场更短更浅；translate 使用独立 CSS 属性时不受 transform 覆盖。
+ * 不用 blur 动画：实测（Playwright rAF 采样）整卡 blur(4px) 动画把打开帧率压到 ~25fps。 */
 export function motionDialog(node: Element, _params = {}, options?: MotionOptions) {
 	void node;
 	void _params;
@@ -78,12 +79,11 @@ export function motionDialog(node: Element, _params = {}, options?: MotionOption
 	const duration = exiting ? DURATION.fast : DURATION.view;
 	const y = exiting ? 6 : 14;
 	const start = exiting ? 0.98 : 0.96;
-	const blur = exiting ? 2 : 4;
 	return {
 		duration,
 		easing: EASE,
 		css: (progress: number) =>
-			`opacity: ${progress}; transform: translateY(${(1 - progress) * y}px) scale(${start + (1 - start) * progress}); filter: blur(${(1 - progress) * blur}px)`
+			`opacity: ${progress}; transform: translateY(${(1 - progress) * y}px) scale(${start + (1 - start) * progress})`
 	};
 }
 
@@ -100,7 +100,7 @@ export function motionMenu(
 		duration: exiting ? DURATION.fast : DURATION.base,
 		easing: EASE,
 		css: (progress: number) =>
-			`opacity: ${progress}; transform: translate(${(1 - progress) * x * distance}px, ${(1 - progress) * y * distance}px) scale(${0.97 + 0.03 * progress}); filter: blur(${(1 - progress) * 2}px)`
+			`opacity: ${progress}; transform: translate(${(1 - progress) * x * distance}px, ${(1 - progress) * y * distance}px) scale(${0.97 + 0.03 * progress})`
 	};
 }
 
@@ -166,6 +166,23 @@ export function overlayEnter(node: Element) {
 		easing: EASE,
 		css: (progress: number) =>
 			`transform: scale(${1.015 - 0.015 * progress}); opacity: 1`
+	};
+}
+
+/**
+ * 展开/收起：高度 + 透明度。高度动画逐帧重排，仅限短列表小面板（任务栈类），
+ * 不用于长列表或高频流式更新。
+ */
+export function motionExpand(node: Element, _params = {}, options?: MotionOptions) {
+	void _params;
+	if (reducedMotion) return fadeOnly();
+	const height = (node as HTMLElement).offsetHeight;
+	const exiting = options?.direction === 'out';
+	return {
+		duration: exiting ? DURATION.base : DURATION.overlay,
+		easing: EASE,
+		css: (progress: number) =>
+			`overflow: hidden; height: ${progress * height}px; opacity: ${Math.min(1, progress * 1.4)}`
 	};
 }
 

@@ -8,6 +8,7 @@
 		STAGGER_MS,
 		motionFade,
 		motionFlip,
+		motionFly,
 		motionIconSwitch,
 		motionMenu,
 		motionScale,
@@ -220,7 +221,7 @@
 													}}
 													title="编辑项目"
 												>
-													<span class="project-menu-icon"><PencilIcon size={13} strokeWidth={2} /></span>
+													<span class="project-menu-icon"><PencilIcon size={15} strokeWidth={2} /></span>
 												</button>
 												<button
 													type="button"
@@ -236,9 +237,9 @@
 												>
 													<span class="project-menu-icon">
 														{#if project.isPinned}
-															<PinOffIcon size={13} strokeWidth={2} />
+															<PinOffIcon size={15} strokeWidth={2} />
 														{:else}
-															<PinIcon size={13} strokeWidth={2} />
+															<PinIcon size={15} strokeWidth={2} />
 														{/if}
 													</span>
 												</button>
@@ -252,7 +253,7 @@
 														void workspace.deleteProject(project.id);
 													}}
 												>
-													<span class="project-menu-icon"><Trash2Icon size={13} strokeWidth={2} /></span>
+													<span class="project-menu-icon"><Trash2Icon size={15} strokeWidth={2} /></span>
 												</button>
 											</div>
 										</div>
@@ -297,8 +298,9 @@
 						class="cell"
 						data-card-id={card.id}
 						animate:flip={motionFlip()}
-						in:motionFade={{
-							duration: DURATION.overlay,
+						in:motionFly={{
+							y: 6,
+							duration: DURATION.base,
 							delay: staggerDelay(cardIndex, STAGGER_MS.card)
 						}}
 						out:motionFade|local={{ duration: DURATION.fast }}
@@ -361,7 +363,7 @@
 									title="移入回收站"
 									onclick={() => workspace.deleteCard(card.id)}
 								>
-									<span class="card-action-icon"><Trash2Icon size={13} strokeWidth={2} /></span>
+									<span class="card-action-icon"><Trash2Icon size={15} strokeWidth={2} /></span>
 								</button>
 								<button
 									type="button"
@@ -377,8 +379,8 @@
 								>
 									<span class="card-action-icon">
 										<span class="fx-icon-switch" aria-hidden="true">
-											<StarIcon class="fx-icon-off" size={13} strokeWidth={2} />
-											<StarIcon class="fx-icon-on" size={13} strokeWidth={2} fill="currentColor" />
+											<StarIcon class="fx-icon-off" size={15} strokeWidth={2} />
+											<StarIcon class="fx-icon-on" size={15} strokeWidth={2} fill="currentColor" />
 										</span>
 									</span>
 								</button>
@@ -472,11 +474,13 @@
 	.project-item.inbox:not(.selected):hover {
 		background: color-mix(in srgb, var(--color-surface-solid) 88%, transparent);
 		box-shadow: 0 0 0 1px var(--color-border-strong) inset;
+		transform: translateY(-1px);
 	}
 
 	.project-item:not(.inbox):not(.selected):not(.pinned):hover {
-		background: color-mix(in srgb, var(--project-color) 9%, var(--color-surface-solid));
+		background: color-mix(in srgb, var(--project-color) 12%, var(--color-surface-solid));
 		box-shadow: 0 0 0 1px var(--color-border-strong) inset;
+		transform: translateY(-1px);
 	}
 
 	.project-item.pinned {
@@ -484,8 +488,12 @@
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--project-color) 30%, var(--color-border-strong)) inset;
 	}
 
+	.project-item.pinned:not(.selected):hover {
+		transform: translateY(-1px);
+	}
+
 	.project-item.selected {
-		background: color-mix(in srgb, var(--project-color, var(--color-accent)) 10%, var(--color-surface-solid));
+		background: color-mix(in srgb, var(--project-color, var(--color-accent)) 16%, var(--color-surface-solid));
 		box-shadow:
 			0 0 0 1px var(--color-border-strong) inset,
 			var(--shadow-control);
@@ -607,7 +615,7 @@
 		gap: 0.1rem;
 		width: fit-content;
 		padding: 0.25rem;
-		border-radius: 0.75rem;
+		border-radius: 999px;
 		background: var(--color-surface-raised);
 		box-shadow: var(--shadow-float);
 		backdrop-filter: blur(18px) saturate(1.05);
