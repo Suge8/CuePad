@@ -60,6 +60,7 @@ mod macos {
         target_pid: i32,
         key_down: CGEvent,
         key_up: CGEvent,
+        submit: bool,
     }
 
     #[derive(Clone, Default)]
@@ -87,6 +88,8 @@ mod macos {
         bundle_id: Option<String>,
         #[serde(default)]
         prepare: bool,
+        #[serde(default)]
+        submit: bool,
     }
 
     #[derive(Serialize)]
@@ -244,7 +247,7 @@ mod macos {
             "targets" => {
                 serde_json::to_value(dispatch_targets(state)).map_err(|error| error.to_string())
             }
-            "dispatch" => match dispatch(state, request.bundle_id, request.id) {
+            "dispatch" => match dispatch(state, request.bundle_id, request.id, request.submit) {
                 Ok(()) => return None,
                 Err(error) => Err(error),
             },
@@ -336,11 +339,19 @@ mod macos {
         };
         pending.key_down.post_to_pid(pending.target_pid);
         pending.key_up.post_to_pid(pending.target_pid);
-        schedule_dispatch_response(pending.request_id);
+        schedule_dispatch_response(pending.request_id, pending.target_pid, pending.submit);
     }
 
-    fn schedule_dispatch_response(request_id: u64) {
+    /// 粘贴落地（PASTE_SETTLE）后再回复；submit 时先补一次回车再回复，
+    /// 保证 Cmd+V 已被目标处理才提交。
+    fn schedule_dispatch_response(request_id: u64, target_pid: i32, submit: bool) {
         let block = RcBlock::new(move |_timer: NonNull<NSTimer>| {
+            if submit {
+                if let Ok((down, up)) = return_events() {
+                    down.post_to_pid(target_pid);
+                    up.post_to_pid(target_pid);
+                }
+            }
             if write_response(&Response::success(request_id, Value::Null)).is_err() {
                 stop_main_run_loop();
             }
@@ -451,6 +462,17 @@ mod macos {
         Ok((down, up))
     }
 
+    /// 无修饰键的回车；自动提交用。
+    fn return_events() -> Result<(CGEvent, CGEvent), String> {
+        let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+            .map_err(|_| "CG_EVENT_SOURCE_FAILED".to_string())?;
+        let down = CGEvent::new_keyboard_event(source.clone(), KeyCode::RETURN, true)
+            .map_err(|_| "CG_EVENT_CREATE_FAILED".to_string())?;
+        let up = CGEvent::new_keyboard_event(source, KeyCode::RETURN, false)
+            .map_err(|_| "CG_EVENT_CREATE_FAILED".to_string())?;
+        Ok((down, up))
+    }
+
     fn prepare_dispatch(
         state: &DispatchState,
         selector: Option<String>,
@@ -475,6 +497,7 @@ mod macos {
         state: &DispatchState,
         selector: Option<String>,
         request_id: u64,
+        submit: bool,
     ) -> Result<(), String> {
         let prepared = PREPARED_DISPATCH.with(|prepared| {
             prepared
@@ -498,7 +521,7 @@ mod macos {
         if application.isActive() {
             prepared.key_down.post_to_pid(prepared.target.pid);
             prepared.key_up.post_to_pid(prepared.target.pid);
-            schedule_dispatch_response(request_id);
+            schedule_dispatch_response(request_id, prepared.target.pid, submit);
             return Ok(());
         }
 
@@ -508,6 +531,7 @@ mod macos {
                 target_pid: prepared.target.pid,
                 key_down: prepared.key_down,
                 key_up: prepared.key_up,
+                submit,
             });
         });
         if !application.activateWithOptions(NSApplicationActivationOptions::empty()) {

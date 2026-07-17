@@ -100,10 +100,10 @@ function databasePath() {
 	return path.join(app.getPath('userData'), 'cuepad.db');
 }
 
-async function dispatchText(text: string, bundleId: string | null) {
+async function dispatchText(text: string, bundleId: string | null, submit: boolean) {
 	const dispatchWindow: { hidden?: BrowserWindow } = {};
 	try {
-		await dispatchSidecar!.dispatch(bundleId, () => {
+		await dispatchSidecar!.dispatch(bundleId, submit, () => {
 			clipboard.writeText(text);
 			const window = mainWindow;
 			if (!window || window.isDestroyed()) throw new Error('MAIN_WINDOW_UNAVAILABLE');
@@ -136,8 +136,8 @@ function registerDesktopIpc() {
 	});
 	ipcMain.handle('dispatch:target', () => dispatchSidecar!.target());
 	ipcMain.handle('dispatch:targets', () => dispatchSidecar!.targets());
-	ipcMain.handle('dispatch:text', (_event, text: string, bundleId: string | null) => {
-		return dispatchText(text, bundleId);
+	ipcMain.handle('dispatch:text', (_event, text: string, bundleId: string | null, submit: boolean) => {
+		return dispatchText(text, bundleId, submit === true);
 	});
 }
 

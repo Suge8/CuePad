@@ -148,8 +148,8 @@ test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', asy
 					.dispatchWindowCalls = calls;
 			});
 			await page.evaluate(() => Promise.all([
-				window.cuepad.dispatch.text('dispatch first', 'test.first'),
-				window.cuepad.dispatch.text('dispatch second', 'test.second')
+				window.cuepad.dispatch.text('dispatch first', 'test.first', false),
+				window.cuepad.dispatch.text('dispatch second', 'test.second', true)
 			]));
 			expect(await electronApp.evaluate(({ clipboard }) => clipboard.readText()))
 				.toBe('dispatch second');
@@ -160,7 +160,7 @@ test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', asy
 			await electronApp.evaluate(({ clipboard }) => clipboard.writeText('dispatch sentinel'));
 			const missingError = await page.evaluate(async () => {
 				try {
-					await window.cuepad.dispatch.text('must not copy', 'test.missing');
+					await window.cuepad.dispatch.text('must not copy', 'test.missing', false);
 					return '';
 				} catch (error) {
 					return String(error);
@@ -172,7 +172,7 @@ test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', asy
 
 			const failedError = await page.evaluate(async () => {
 				try {
-					await window.cuepad.dispatch.text('dispatch failure', 'test.fail');
+					await window.cuepad.dispatch.text('dispatch failure', 'test.fail', false);
 					return '';
 				} catch (error) {
 					return String(error);
@@ -188,7 +188,7 @@ test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', asy
 			))?.name.replace('Fixture ', ''));
 			const crashError = await page.evaluate(async () => {
 				try {
-					await window.cuepad.dispatch.text('dispatch crash', 'test.crash');
+					await window.cuepad.dispatch.text('dispatch crash', 'test.crash', false);
 					return '';
 				} catch (error) {
 					return String(error);
@@ -208,12 +208,13 @@ test('桌面壳安全桥、快捷键、剪贴板、拖拽区与 close=hide', asy
 					'test.first',
 					'test.second'
 				].includes(record.request.bundleId))
-				.map((record) => [record.request.cmd, record.request.bundleId]);
+				.map((record) => [record.request.cmd, record.request.bundleId, record.request.submit]);
+			// submit 穿透到 sidecar 协议：dispatch 携带自动回车意图，target/prepare 不携带
 			expect(dispatchRequests).toEqual([
-				['target', 'test.first'],
-				['dispatch', 'test.first'],
-				['target', 'test.second'],
-				['dispatch', 'test.second']
+				['target', 'test.first', undefined],
+				['dispatch', 'test.first', false],
+				['target', 'test.second', undefined],
+				['dispatch', 'test.second', true]
 			]);
 		} finally {
 			await electronApp.evaluate(({ clipboard }, text) => clipboard.writeText(text), originalClipboard);

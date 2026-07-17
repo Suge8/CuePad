@@ -52,11 +52,11 @@ export class DispatchSidecar {
 		return this.enqueue(() => this.request<DispatchApp[]>('targets'));
 	}
 
-	dispatch(bundleId: string | null, prepare: () => void | Promise<void>): Promise<void> {
+	dispatch(bundleId: string | null, submit: boolean, prepare: () => void | Promise<void>): Promise<void> {
 		return this.enqueue(async () => {
 			await this.request<DispatchApp>('target', { bundleId, prepare: true });
 			await prepare();
-			await this.request('dispatch', { bundleId });
+			await this.request('dispatch', { bundleId, submit });
 		});
 	}
 

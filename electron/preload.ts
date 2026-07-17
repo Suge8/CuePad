@@ -13,7 +13,7 @@ const bridge: CuePadBridge = {
 	dispatch: {
 		target: () => ipcRenderer.invoke('dispatch:target'),
 		targets: () => ipcRenderer.invoke('dispatch:targets'),
-		text: (text, bundleId) => ipcRenderer.invoke('dispatch:text', text, bundleId)
+		text: (text, bundleId, submit) => ipcRenderer.invoke('dispatch:text', text, bundleId, submit)
 	},
 	events: {
 		onOpenSettings(listener) {

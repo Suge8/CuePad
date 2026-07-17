@@ -7,6 +7,7 @@ export const dispatchAvailable = IS_MAC;
 export const DISPATCH_TARGET_EVENT = 'cuepad:dispatch-target';
 export const VARIABLE_FILL_EVENT = 'cuepad:fill-variables';
 const PINNED_TARGET_KEY = 'cuepad:dispatch-target';
+const AUTO_SUBMIT_KEY = 'cuepad:dispatch-submit';
 
 export type { DispatchApp };
 
@@ -46,6 +47,16 @@ function prepareText(output: PromptOutput, intent: PromptIntent): Promise<string
 		resolve(null);
 		workspace.showToast('变量表单未就绪', { tone: 'danger' });
 	});
+}
+
+export function dispatchAutoSubmit(): boolean {
+	return localStorage.getItem(AUTO_SUBMIT_KEY) === '1';
+}
+
+export function setDispatchAutoSubmit(enabled: boolean): void {
+	if (enabled) localStorage.setItem(AUTO_SUBMIT_KEY, '1');
+	else localStorage.removeItem(AUTO_SUBMIT_KEY);
+	window.dispatchEvent(new Event(DISPATCH_TARGET_EVENT));
 }
 
 export function dispatchPinnedTarget(): PinnedTarget | null {
@@ -128,7 +139,7 @@ async function runDispatch(output: PromptOutput): Promise<void> {
 	const text = await prepareText(output, 'dispatch');
 	if (text === null) return;
 	try {
-		await window.cuepad.dispatch.text(text, dispatchPinnedTarget()?.bundleId ?? null);
+		await window.cuepad.dispatch.text(text, dispatchPinnedTarget()?.bundleId ?? null, dispatchAutoSubmit());
 	} catch (error) {
 		const message = messageOf(error);
 		if (message.includes('ACCESSIBILITY_PERMISSION_REQUIRED')) {

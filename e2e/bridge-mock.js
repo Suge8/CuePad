@@ -335,7 +335,7 @@
 		});
 	}
 
-	function dispatchText(text, bundleId) {
+	function dispatchText(text, bundleId, submit) {
 		if (window.__E2E_DISPATCH_ERROR__) return Promise.reject(window.__E2E_DISPATCH_ERROR__);
 		if (
 			bundleId &&
@@ -348,7 +348,7 @@
 				window.__E2E_DISPATCH__ = text;
 				window.__E2E_DISPATCH_CALLS__ += 1;
 				window.__E2E_DISPATCH_TARGET__ = bundleId;
-				const detail = { text, bundleId, calls: window.__E2E_DISPATCH_CALLS__ };
+				const detail = { text, bundleId, submit: submit === true, calls: window.__E2E_DISPATCH_CALLS__ };
 				resolve();
 				// 下一 task 才报告完成：确保 dispatchPrompt 的 await/finally 已执行完
 				setTimeout(

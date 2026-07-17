@@ -17,7 +17,7 @@ export interface CuePadBridge {
 	dispatch: {
 		target(): Promise<DispatchApp | null>;
 		targets(): Promise<DispatchApp[]>;
-		text(text: string, bundleId: string | null): Promise<void>;
+		text(text: string, bundleId: string | null, submit: boolean): Promise<void>;
 	};
 	events: {
 		onOpenSettings(listener: () => void): () => void;

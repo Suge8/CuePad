@@ -39,12 +39,12 @@ test('sidecar 请求全链路串行，异常退出后在下次调用重启', asy
 		const firstPid = Number(firstTarget?.name.replace('Fixture ', ''));
 		const prepared: string[] = [];
 		await Promise.all([
-			sidecar.dispatch('first', () => prepared.push('first')),
-			sidecar.dispatch('second', () => prepared.push('second'))
+			sidecar.dispatch('first', false, () => prepared.push('first')),
+			sidecar.dispatch('second', false, () => prepared.push('second'))
 		]);
 		expect(prepared).toEqual(['first', 'second']);
 
-		await expect(sidecar.dispatch('test.crash', () => prepared.push('crash')))
+		await expect(sidecar.dispatch('test.crash', false, () => prepared.push('crash')))
 			.rejects.toThrow('DISPATCH_SIDECAR_EXITED:code 86');
 		const restartedTarget = await sidecar.target();
 		const restartedPid = Number(restartedTarget?.name.replace('Fixture ', ''));
