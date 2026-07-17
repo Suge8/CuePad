@@ -51,6 +51,7 @@ bun run test:package  # 验证已打包应用的 renderer、SQLite 与资源
 - `native/dispatch/` 是 macOS-only 长驻 sidecar。它订阅前台应用激活通知，通过 stdio JSON 行协议响应目标查询与投送请求，不轮询。
 - 主进程把“权限/目标/CGEvent 预检 → 写剪贴板 → 隐藏窗口 → 激活目标 → 定向 `Cmd+V`”放入同一串行队列。失败会恢复窗口；目标未运行或权限不足会返回明确错误，不回退到其他应用。
 - sidecar 等目标激活通知后才发送按键，并保留 100ms 有界消费窗口，防止连续投送覆盖前一次剪贴板。崩溃时当前请求失败，下次调用自动重启。
+- 投送请求可携带 `submit: true`（UI 中的「自动发送」开关，偏好存 localStorage）：sidecar 在粘贴落地窗口后补发一次无修饰键回车，适合终端与聊天输入框。
 
 ## 打包
 

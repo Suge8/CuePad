@@ -23,8 +23,8 @@ It ships as a macOS Electron app with a Svelte interface. Your data stays on you
 - **Floating tasks.** Jot tasks beside the main view, assign them to a project, reorder by drag, and complete or restore them. Narrow windows keep a single task entry.
 - **Immersive editing.** Click a card to write full-screen. `## headings`, `- lists`, code blocks, and `{{variables}}` get light visual treatment while the body always saves as plain text.
 - **Autosave.** Every keystroke persists to the database. A local backup and retry keep your text safe when a write fails.
-- **Split copy.** A lone `---split---` line cuts a draft into segments. Copy the whole draft or any single segment.
-- **One-tap dispatch (macOS).** Leave your cursor in the target input. CuePad sends the text to the previous app by default, or to a pinned Terminal, iTerm, Zed, or VSCode.
+- **Split copy.** Press `Shift+Enter` to cut a draft into blocks (a lone `---split---` line works too). Copy the whole draft or any single segment.
+- **One-tap dispatch (macOS).** Leave your cursor in the target input. CuePad sends the text to the previous app by default, or to a pinned Terminal, iTerm, Zed, or VSCode. Optional auto-send presses Enter after pasting.
 - **Variable templates.** Fill in `{{variables}}` before you copy or dispatch. Each card remembers your last values.
 - **Global search.** `Cmd/Ctrl + F` opens the palette. Search projects, card titles and bodies, and tags, then press Enter to jump.
 - **Trash.** Projects and cards are soft-deleted, so you can restore or purge them.
