@@ -3,6 +3,8 @@ import { EditorState } from '@codemirror/state';
 import {
 	blockRange,
 	markerLineNumbers,
+	mergeBackwardChange,
+	mergeForwardChange,
 	nextBlockStart,
 	prevBlockStart,
 	splitChange
@@ -126,5 +128,75 @@ describe('splitChange（Shift+Enter 切块）', () => {
 		const { doc, cursor } = applySplit('abcdef', 1, 5);
 		expect(doc).toBe(`a\n${SPLIT_MARKER}\nf`);
 		expect(doc.slice(cursor)).toBe('f');
+	});
+});
+
+describe('mergeBackwardChange（块首 Backspace 合并块）', () => {
+	// `a\n---split---\nb`：a=0，\n=1，marker=[2,13]，\n=13，b=14
+	const doc = `a\n${SPLIT_MARKER}\nb`;
+
+	function applyMerge(change: { from: number; to: number } | null, source: string): string | null {
+		if (!change) return null;
+		return source.slice(0, change.from) + source.slice(change.to);
+	}
+
+	test('光标在分隔线后块首：删除整条分隔线，保留一个换行', () => {
+		const change = mergeBackwardChange(state(doc, 14));
+		expect(applyMerge(change, doc)).toBe('a\nb');
+		expect(change?.anchor).toBe(2);
+	});
+
+	test('分隔线是文档首行：删除分隔线与其换行', () => {
+		const headDoc = `${SPLIT_MARKER}\nb`;
+		const change = mergeBackwardChange(state(headDoc, 12));
+		expect(applyMerge(change, headDoc)).toBe('b');
+		expect(change?.anchor).toBe(0);
+	});
+
+	test('前一行不是分隔线：回落默认（null）', () => {
+		expect(mergeBackwardChange(state('a\nb', 2))).toBeNull();
+	});
+
+	test('光标不在行首：回落默认', () => {
+		expect(mergeBackwardChange(state(doc, 15))).toBeNull();
+	});
+
+	test('非空选区：回落默认', () => {
+		expect(mergeBackwardChange(state(doc, 14, 15))).toBeNull();
+	});
+
+	test('连续分隔线：一次只删最近一条', () => {
+		const multi = `a\n${SPLIT_MARKER}\n---ask---\nb`;
+		const change = mergeBackwardChange(state(multi, 24));
+		expect(applyMerge(change, multi)).toBe(`a\n${SPLIT_MARKER}\nb`);
+	});
+});
+
+describe('mergeForwardChange（块尾 Delete 合并块）', () => {
+	const doc = `a\n${SPLIT_MARKER}\nb`;
+
+	function applyMerge(change: { from: number; to: number } | null, source: string): string | null {
+		if (!change) return null;
+		return source.slice(0, change.from) + source.slice(change.to);
+	}
+
+	test('光标在分隔线前块尾：删除整条分隔线，光标不动', () => {
+		const change = mergeForwardChange(state(doc, 1));
+		expect(applyMerge(change, doc)).toBe('a\nb');
+		expect(change?.anchor).toBe(1);
+	});
+
+	test('分隔线是文档末行：删除换行与分隔线', () => {
+		const tailDoc = `a\n${SPLIT_MARKER}`;
+		const change = mergeForwardChange(state(tailDoc, 1));
+		expect(applyMerge(change, tailDoc)).toBe('a');
+	});
+
+	test('下一行不是分隔线：回落默认', () => {
+		expect(mergeForwardChange(state('a\nb', 1))).toBeNull();
+	});
+
+	test('光标不在行尾：回落默认', () => {
+		expect(mergeForwardChange(state(doc, 0))).toBeNull();
 	});
 });

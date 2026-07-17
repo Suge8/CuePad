@@ -2,36 +2,22 @@ import type { CardNumbering } from '$lib/db';
 
 export const SPLIT_MARKER = '---split---';
 
-/** 分隔线定义其后一段的角色；第一段（无分隔线）恒为 none。 */
-export type SegmentRole = 'none' | 'ask' | 'answer' | 'system';
+/** 历史版本的角色分隔线；宽容解析为普通分隔线，旧数据不迁移也不炸。 */
+const LEGACY_MARKERS = new Set(['---ask---', '---answer---', '---system---']);
 
-const MARKER_ROLES: Record<string, SegmentRole> = {
-	[SPLIT_MARKER]: 'none',
-	'---ask---': 'ask',
-	'---answer---': 'answer',
-	'---system---': 'system'
-};
-
-export const ROLE_MARKERS: Record<SegmentRole, string> = {
-	none: SPLIT_MARKER,
-	ask: '---ask---',
-	answer: '---answer---',
-	system: '---system---'
-};
-
-/** 独占一行且 trim 后严格等于某个分隔标记时返回其角色，否则 null。 */
-export function markerRole(lineText: string): SegmentRole | null {
-	return MARKER_ROLES[lineText.trim()] ?? null;
+/** 独占一行且 trim 后是分隔标记（含历史角色标记）时为分隔线行。 */
+export function isMarkerLine(lineText: string): boolean {
+	const trimmed = lineText.trim();
+	return trimmed === SPLIT_MARKER || LEGACY_MARKERS.has(trimmed);
 }
 
 export interface Segment {
-	role: SegmentRole;
 	text: string;
 }
 
-/** 首个非分隔线的非空行；卡片预览/标题兜底用，避免把 `---ask---` 当正文展示。 */
+/** 首个非分隔线的非空行；卡片预览/标题兜底用，避免把分隔标记当正文展示。 */
 export function firstContentLine(text: string): string {
-	return text.split('\n').find((line) => line.trim() && markerRole(line) === null) ?? '';
+	return text.split('\n').find((line) => line.trim() && !isMarkerLine(line)) ?? '';
 }
 
 /**
@@ -40,18 +26,15 @@ export function firstContentLine(text: string): string {
 export function parseSegments(text: string): Segment[] {
 	const segments: Segment[] = [];
 	let current: string[] = [];
-	let role: SegmentRole = 'none';
 	for (const line of text.split('\n')) {
-		const next = markerRole(line);
-		if (next === null) {
+		if (!isMarkerLine(line)) {
 			current.push(line);
 			continue;
 		}
-		segments.push({ role, text: current.join('\n') });
+		segments.push({ text: current.join('\n') });
 		current = [];
-		role = next;
 	}
-	segments.push({ role, text: current.join('\n') });
+	segments.push({ text: current.join('\n') });
 	return segments;
 }
 
@@ -98,27 +81,19 @@ export function trimSegment(text: string): string {
 /**
  * 复制排版（确定性规则，无 LLM）：
  * - 每段 trim 首尾空行，空段丢弃
- * - 角色段头：ask → `## Q<n>`（n 为第几问），answer → `## A<n>`（跟随最近的问），system → `## System`
- * - 普通段按 numbering 注入 `## <编号>`；numbering 为 none 时段间用 `---` 分隔
- * - 单个普通段不加任何头，纯 trim 返回
+ * - 开启编号时按 numbering 注入 `## <编号>` 段头；无编号时段间用 `---` 分隔
+ * - 单段不加任何头，纯 trim 返回
  */
 export function formatSegments(text: string, numbering: CardNumbering): string {
 	const segments = parseSegments(text)
-		.map((segment) => ({ ...segment, text: trimSegment(segment.text) }))
-		.filter((segment) => segment.text !== '');
+		.map((segment) => trimSegment(segment.text))
+		.filter((segment) => segment !== '');
 	if (segments.length === 0) return '';
-	if (segments.length === 1 && segments[0].role === 'none') return segments[0].text;
+	if (segments.length === 1) return segments[0];
 
-	let askCount = 0;
 	const parts = segments.map((segment, index) => {
-		let heading = '';
-		if (segment.role === 'ask') heading = `## Q${++askCount}`;
-		else if (segment.role === 'answer') heading = `## A${Math.max(askCount, 1)}`;
-		else if (segment.role === 'system') heading = '## System';
-		else if (numbering !== 'none') heading = `## ${segmentLabel(index, numbering)}`;
-
-		if (heading) return `${heading}\n${segment.text}`;
-		return index === 0 ? segment.text : `---\n\n${segment.text}`;
+		if (numbering !== 'none') return `## ${segmentLabel(index, numbering)}\n${segment}`;
+		return index === 0 ? segment : `---\n\n${segment}`;
 	});
 	return parts.join('\n\n');
 }

@@ -1,4 +1,12 @@
-import { Facet, RangeSetBuilder, StateField, type EditorState, type Text } from '@codemirror/state';
+import {
+	EditorState,
+	Facet,
+	RangeSet,
+	RangeSetBuilder,
+	RangeValue,
+	StateField,
+	type Text
+} from '@codemirror/state';
 import {
 	Decoration,
 	EditorView,
@@ -8,7 +16,7 @@ import {
 	type ViewUpdate
 } from '@codemirror/view';
 import type { CardNumbering } from '$lib/db';
-import { markerRole, ROLE_MARKERS, segmentLabel, SPLIT_MARKER, type SegmentRole } from './segments';
+import { isMarkerLine, segmentLabel, SPLIT_MARKER } from './segments';
 import { VARIABLE_PATTERN } from './variables';
 
 const headingLine = Decoration.line({ class: 'cm-cue-heading' });
@@ -58,8 +66,7 @@ function countFencesBefore(fences: number[], pos: number): number {
 interface MarkerInfo {
 	from: number;
 	to: number;
-	role: SegmentRole;
-	/** none → 其后段的 0-based 序号（按非空段计，与 formatSegments 编号一致）；ask/answer → 第几问（1-based）。 */
+	/** 其后段的 0-based 序号（按非空段计，与 formatSegments 编号一致）。 */
 	seq: number;
 }
 
@@ -71,7 +78,7 @@ interface MarkerInfo {
 export function lastContentLine(doc: Text): number {
 	for (let number = doc.lines; number >= 1; number--) {
 		const text = doc.line(number).text;
-		if (text.trim() !== '' && markerRole(text) === null) return number;
+		if (text.trim() !== '' && !isMarkerLine(text)) return number;
 	}
 	return 0;
 }
@@ -79,21 +86,17 @@ export function lastContentLine(doc: Text): number {
 /** 全文分隔线行（升序）。逐行扫描，docChanged 时重建，与 scanFences 同量级。 */
 function scanMarkers(doc: Text): MarkerInfo[] {
 	const markers: MarkerInfo[] = [];
-	let askCount = 0;
 	let closedSegments = 0;
 	let segmentHasText = false;
 	for (let number = 1; number <= doc.lines; number++) {
 		const line = doc.line(number);
-		const role = markerRole(line.text);
-		if (role === null) {
+		if (!isMarkerLine(line.text)) {
 			if (!segmentHasText && line.text.trim() !== '') segmentHasText = true;
 			continue;
 		}
 		if (segmentHasText) closedSegments++;
 		segmentHasText = false;
-		if (role === 'ask') askCount++;
-		const seq = role === 'ask' || role === 'answer' ? Math.max(askCount, 1) : closedSegments;
-		markers.push({ from: line.from, to: line.to, role, seq });
+		markers.push({ from: line.from, to: line.to, seq: closedSegments });
 	}
 	return markers;
 }
@@ -108,7 +111,7 @@ function hasLeadContent(doc: Text, markers: MarkerInfo[]): boolean {
 	return false;
 }
 
-/** 首块虚拟块头：不存在于文本，点击在文档开头插入角色分隔线。 */
+/** 首块虚拟块头：不存在于文本，只在开启编号时补齐首块编号。 */
 class LeadBadgeWidget extends WidgetType {
 	constructor(readonly label: string) {
 		super();
@@ -118,20 +121,13 @@ class LeadBadgeWidget extends WidgetType {
 		return other.label === this.label;
 	}
 
-	toDOM(view: EditorView) {
+	toDOM() {
 		const element = document.createElement('div');
 		element.className = 'cm-cue-lead';
 		const label = document.createElement('span');
 		label.className = 'cm-cue-divider-label';
 		label.textContent = this.label;
 		element.append(label);
-		element.title = '点击设置首块角色';
-		element.onmousedown = (event) => {
-			event.preventDefault();
-			// 阻止冒泡到 markerClickHandler：插入后首行已是分隔线，否则会被它再切一次
-			event.stopPropagation();
-			view.dispatch({ changes: { from: 0, insert: `${ROLE_MARKERS.ask}\n` } });
-		};
 		return element;
 	}
 }
@@ -160,33 +156,21 @@ class SplitButtonWidget extends WidgetType {
 const splitButton = Decoration.widget({ widget: new SplitButtonWidget(), side: 1 });
 
 /**
- * 分隔线控件：光标不在该行时替换整行标记文本（live-preview 语义，
- * 光标进入即还原源文本）。点击循环切换角色，由 markerClickHandler 处理。
+ * 分隔线控件：永远替换整行标记文本，纯虚线 + 可选编号标签；
+ * 源标记对用户不可见，删除由块边界 Backspace/Delete 完成。
  */
 class DividerWidget extends WidgetType {
-	constructor(
-		readonly label: string,
-		readonly role: SegmentRole
-	) {
+	constructor(readonly label: string) {
 		super();
 	}
 
 	eq(other: DividerWidget) {
-		return other.label === this.label && other.role === this.role;
+		return other.label === this.label;
 	}
 
 	toDOM() {
 		const element = document.createElement('span');
 		element.className = 'cm-cue-divider';
-		element.dataset.role = this.role;
-		// 职责分离：icon 是控件（点击切角色），其余区域交给 CM 默认行为（点击放光标→还原源文本）
-		const icon = document.createElement('span');
-		icon.className = 'cm-cue-divider-icon';
-		icon.title = '点击切换角色（普通 → 问 → 答 → 系统）';
-		// 分割线图标：上下两短横，中间留缝
-		icon.innerHTML =
-			'<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 3.8h8M2 8.2h8"/></svg>';
-		element.append(icon);
 		if (this.label) {
 			const label = document.createElement('span');
 			label.className = 'cm-cue-divider-label';
@@ -203,22 +187,6 @@ class DividerWidget extends WidgetType {
 		return false;
 	}
 }
-
-function markerBadge(marker: MarkerInfo, numbering: CardNumbering): string {
-	switch (marker.role) {
-		case 'ask':
-			return `Q${marker.seq}`;
-		case 'answer':
-			return `A${marker.seq}`;
-		case 'system':
-			return 'SYS';
-		default:
-			return segmentLabel(marker.seq, numbering);
-	}
-}
-
-/** 光标所在的分隔线行：显示源文本，只做淡化样式 */
-const markerSourceLine = Decoration.line({ class: 'cm-cue-source' });
 
 /** 光标所在块的正文范围；无分隔线（单块）时返回 null 不高亮。 */
 function activeBlockBounds(
@@ -249,7 +217,6 @@ function buildDecorations(
 	const markerAt = new Map(markers.map((marker) => [marker.from, marker]));
 	const head = view.state.selection.main.head;
 	const active = activeBlockBounds(view.state.doc, markers, head);
-	const cursorLine = view.state.doc.lineAt(head);
 	const builder = new RangeSetBuilder<Decoration>();
 	for (const range of view.visibleRanges) {
 		let pos = range.from;
@@ -263,17 +230,13 @@ function buildDecorations(
 			const inCode =
 				!marker && (text.startsWith(FENCE) || countFencesBefore(fences, line.from) % 2 === 1);
 			if (marker) {
-				if (line.number === cursorLine.number) {
-					builder.add(line.from, line.from, markerSourceLine);
-				} else {
-					builder.add(
-						line.from,
-						line.to,
-						Decoration.replace({
-							widget: new DividerWidget(markerBadge(marker, numbering), marker.role)
-						})
-					);
-				}
+				builder.add(
+					line.from,
+					line.to,
+					Decoration.replace({
+						widget: new DividerWidget(segmentLabel(marker.seq, numbering))
+					})
+				);
 			}
 			else if (inCode) builder.add(line.from, line.from, codeLine);
 			else if (HEADING_RE.test(text)) builder.add(line.from, line.from, headingLine);
@@ -292,9 +255,18 @@ function buildDecorations(
 	return builder.finish();
 }
 
+/** 分隔线行的原子范围：光标移动/选区扩展整行跳过，永不落入源文本内部。 */
+class AtomicMarker extends RangeValue {}
+const atomicMarker = new AtomicMarker();
+
+function markerAtomics(markers: MarkerInfo[]): RangeSet<AtomicMarker> {
+	return RangeSet.of(markers.map((marker) => atomicMarker.range(marker.from, marker.to)));
+}
+
 const decorationsPlugin = ViewPlugin.fromClass(
 	class {
 		decorations: DecorationSet;
+		atomics: RangeSet<AtomicMarker>;
 		#fences: number[];
 		#markers: MarkerInfo[];
 		#contentEnd: number;
@@ -303,6 +275,7 @@ const decorationsPlugin = ViewPlugin.fromClass(
 			this.#fences = scanFences(view.state.doc.toString());
 			this.#markers = scanMarkers(view.state.doc);
 			this.#contentEnd = lastContentLine(view.state.doc);
+			this.atomics = markerAtomics(this.#markers);
 			this.decorations = buildDecorations(view, this.#fences, this.#markers, this.#contentEnd);
 		}
 
@@ -311,6 +284,7 @@ const decorationsPlugin = ViewPlugin.fromClass(
 				this.#fences = scanFences(update.state.doc.toString());
 				this.#markers = scanMarkers(update.state.doc);
 				this.#contentEnd = lastContentLine(update.state.doc);
+				this.atomics = markerAtomics(this.#markers);
 			}
 			const numberingChanged =
 				update.state.facet(numberingFacet) !== update.startState.facet(numberingFacet);
@@ -319,7 +293,11 @@ const decorationsPlugin = ViewPlugin.fromClass(
 			}
 		}
 	},
-	{ decorations: (plugin) => plugin.decorations }
+	{
+		decorations: (plugin) => plugin.decorations,
+		provide: (plugin) =>
+			EditorView.atomicRanges.of((view) => view.plugin(plugin)?.atomics ?? RangeSet.empty)
+	}
 );
 
 /**
@@ -352,31 +330,6 @@ const leadBadgeField = StateField.define<DecorationSet>({
 	provide: (field) => EditorView.decorations.from(field)
 });
 
-const ROLE_CYCLE: Record<SegmentRole, SegmentRole> = {
-	none: 'ask',
-	ask: 'answer',
-	answer: 'system',
-	system: 'none'
-};
-
-/** 点击块头循环切换角色：只替换分隔线那一行文本。 */
-const markerClickHandler = EditorView.domEventHandlers({
-	mousedown(event, view) {
-		// instanceof Element 而非 HTMLElement：点在 SVG 图形上时 target 是 SVGElement
-		const target =
-			event.target instanceof Element ? event.target.closest('.cm-cue-divider-icon') : null;
-		if (!target) return false;
-		const line = view.state.doc.lineAt(view.posAtDOM(target));
-		const role = markerRole(line.text);
-		if (role === null) return false;
-		event.preventDefault();
-		view.dispatch({
-			changes: { from: line.from, to: line.to, insert: ROLE_MARKERS[ROLE_CYCLE[role]] }
-		});
-		return true;
-	}
-});
-
 /** 视觉增强只改样式，不隐藏任何原始字符。 */
 const decorationTheme = EditorView.baseTheme({
 	'.cm-cue-heading': {
@@ -397,8 +350,7 @@ const decorationTheme = EditorView.baseTheme({
 		fontSize: '0.86em',
 		background: 'color-mix(in srgb, var(--color-text-strong) 4.5%, transparent)'
 	},
-	// 分隔线控件（光标不在该行）：纯虚线，有编号/角色才带小标签
-	// 高度与 .cm-cue-source 严格一致（1rem + 1.2rem + 0.4rem），光标进出不跳行
+	// 分隔线控件（永远替换源文本）：纯虚线，有编号才带小标签
 	'.cm-cue-divider': {
 		display: 'inline-flex',
 		width: '100%',
@@ -409,26 +361,7 @@ const decorationTheme = EditorView.baseTheme({
 		padding: '1rem 0 0.4rem',
 		verticalAlign: 'bottom'
 	},
-	// 控件级热区：22px 方块 + hover 底色，与正文点击区域职责分离
-	'.cm-cue-divider-icon': {
-		display: 'inline-grid',
-		width: '22px',
-		height: '22px',
-		placeItems: 'center',
-		flexShrink: '0',
-		borderRadius: '6px',
-		color: 'var(--color-text-soft)',
-		opacity: '0.75',
-		cursor: 'pointer',
-		transition:
-			'opacity var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard)'
-	},
-	'.cm-cue-divider-icon:hover': {
-		opacity: '1',
-		background: 'var(--color-surface-muted)',
-		color: 'var(--color-text-muted)'
-	},
-	// 编号/角色小标签：pill 形态，角色用主题色弱底区分
+	// 编号小标签：pill 形态
 	'.cm-cue-divider-label': {
 		padding: '0.22em 0.6em',
 		borderRadius: '999px',
@@ -439,14 +372,6 @@ const decorationTheme = EditorView.baseTheme({
 		letterSpacing: '0.08em',
 		lineHeight: '1',
 		color: 'var(--color-text-soft)'
-	},
-	'.cm-cue-divider[data-role="ask"] .cm-cue-divider-label': {
-		background: 'var(--color-accent-soft)',
-		color: 'var(--color-accent-text)'
-	},
-	'.cm-cue-divider[data-role="answer"] .cm-cue-divider-label': {
-		background: 'color-mix(in srgb, var(--color-star) 16%, transparent)',
-		color: 'color-mix(in srgb, var(--color-star) 72%, var(--color-text-strong))'
 	},
 	'.cm-cue-divider-line': {
 		flex: '1',
@@ -459,20 +384,9 @@ const decorationTheme = EditorView.baseTheme({
 	'.cm-cue-divider:hover .cm-cue-divider-line': {
 		opacity: '1'
 	},
-	// 光标所在的分隔线行：还原源文本，只淡化
-	'.cm-cue-source': {
-		paddingTop: '1rem',
-		paddingBottom: '0.4rem',
-		lineHeight: '1.2rem',
-		fontFamily: 'var(--font-mono)',
-		fontSize: '0.72em',
-		letterSpacing: '0.08em',
-		color: 'var(--color-text-soft)'
-	},
 	// 首块虚拟编号：只在开启编号时存在
 	'.cm-cue-lead': {
-		padding: '0 0 0.35em',
-		cursor: 'pointer'
+		padding: '0 0 0.35em'
 	},
 	// 空行悬浮才浮现的分块按钮；隐藏时 pointer-events 关闭，避免点空行放光标误触。
 	// 绝对定位脱离文本流：否则隐形按钮占位，回车后空行光标被顶离行首
@@ -522,4 +436,42 @@ const decorationTheme = EditorView.baseTheme({
 	}
 });
 
-export const cueDecorations = [decorationsPlugin, leadBadgeField, markerClickHandler, decorationTheme];
+/** 沿方向逃离分隔线行（含连续分隔线）；无处可去返回 null。 */
+function escapeMarker(doc: Text, head: number, forward: boolean): number | null {
+	let line = doc.lineAt(head);
+	while (isMarkerLine(line.text)) {
+		if (forward) {
+			if (line.number >= doc.lines) return null;
+			line = doc.line(line.number + 1);
+		} else {
+			if (line.number <= 1) return null;
+			line = doc.line(line.number - 1);
+		}
+	}
+	return forward ? line.from : line.to;
+}
+
+/**
+ * 光标永不落在分隔线行（含端点）：移动整行跳过，也杜绝停留时打字把字符
+ * 插进标记行、撕裂标记露出源文本的坏路径。范围选区和改动文档的事务不拦截
+ *（跨块选择删除合法；命令产生的光标都落正文）。
+ */
+const markerCursorGuard = EditorState.transactionFilter.of((tr) => {
+	if (!tr.selection || tr.docChanged) return tr;
+	const next = tr.newSelection.main;
+	if (!next.empty) return tr;
+	const line = tr.newDoc.lineAt(next.head);
+	if (!isMarkerLine(line.text)) return tr;
+	const forward = next.head >= tr.startState.selection.main.head;
+	const target =
+		escapeMarker(tr.newDoc, next.head, forward) ?? escapeMarker(tr.newDoc, next.head, !forward);
+	if (target === null) return tr;
+	return [tr, { selection: { anchor: target } }];
+});
+
+export const cueDecorations = [
+	decorationsPlugin,
+	leadBadgeField,
+	markerCursorGuard,
+	decorationTheme
+];

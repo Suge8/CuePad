@@ -15,11 +15,11 @@ function texts(input: string): string[] {
 describe('parseSegments', () => {
 	test('无分隔符时整篇为一段，逐字保留', () => {
 		const text = '第一行\n\n  缩进行\t\n结尾';
-		expect(parseSegments(text)).toEqual([{ role: 'none', text }]);
+		expect(parseSegments(text)).toEqual([{ text }]);
 	});
 
 	test('空文本得到一个空段', () => {
-		expect(parseSegments('')).toEqual([{ role: 'none', text: '' }]);
+		expect(parseSegments('')).toEqual([{ text: '' }]);
 	});
 
 	test('单个分隔符切成两段，分段不含分隔符', () => {
@@ -54,20 +54,9 @@ describe('parseSegments', () => {
 		expect(texts(`${SPLIT_MARKER}\n正文\n${SPLIT_MARKER}`)).toEqual(['', '正文', '']);
 	});
 
-	test('角色分隔线定义其后一段的角色，首段恒为 none', () => {
-		expect(parseSegments(`背景\n---ask---\n问题\n---answer---\n回答`)).toEqual([
-			{ role: 'none', text: '背景' },
-			{ role: 'ask', text: '问题' },
-			{ role: 'answer', text: '回答' }
-		]);
-	});
-
-	test('system 分隔线与普通分隔线混用', () => {
-		expect(parseSegments(`---system---\n你是助手\n${SPLIT_MARKER}\n正文`)).toEqual([
-			{ role: 'none', text: '' },
-			{ role: 'system', text: '你是助手' },
-			{ role: 'none', text: '正文' }
-		]);
+	test('历史角色标记宽容解析为普通分隔线（旧数据兼容）', () => {
+		expect(texts(`背景\n---ask---\n问题\n---answer---\n回答`)).toEqual(['背景', '问题', '回答']);
+		expect(texts(`---system---\n你是助手\n${SPLIT_MARKER}\n正文`)).toEqual(['', '你是助手', '正文']);
 	});
 });
 
@@ -124,19 +113,9 @@ describe('formatSegments', () => {
 		expect(formatSegments(`a\n${SPLIT_MARKER}\nb`, 'none')).toBe('a\n\n---\n\nb');
 	});
 
-	test('问答角色输出 Q/A 配对编号', () => {
-		const text = `---ask---\n问一\n---answer---\n答一\n---ask---\n问二\n---answer---\n答二`;
-		expect(formatSegments(text, 'none')).toBe(
-			'## Q1\n问一\n\n## A1\n答一\n\n## Q2\n问二\n\n## A2\n答二'
-		);
-	});
-
-	test('system 段头与编号段混排', () => {
-		const text = `---system---\n你是助手\n${SPLIT_MARKER}\n正文`;
-		expect(formatSegments(text, 'decimal')).toBe('## System\n你是助手\n\n## 2\n正文');
-	});
-
-	test('无前置 ask 的 answer 编号兜底为 A1', () => {
-		expect(formatSegments(`---answer---\n答`, 'none')).toBe('## A1\n答');
+	test('历史角色标记按普通分隔线排版（旧数据兼容）', () => {
+		const text = `---ask---\n问一\n---answer---\n答一`;
+		expect(formatSegments(text, 'none')).toBe('问一\n\n---\n\n答一');
+		expect(formatSegments(text, 'decimal')).toBe('## 1\n问一\n\n## 2\n答一');
 	});
 });

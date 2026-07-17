@@ -1,12 +1,12 @@
 import type { EditorState } from '@codemirror/state';
 import { EditorView, keymap, type Command, type KeyBinding } from '@codemirror/view';
-import { markerRole, SPLIT_MARKER } from './segments';
+import { isMarkerLine, SPLIT_MARKER } from './segments';
 
 /** 所有分隔线行的行号（1-based，升序）。文档为提示词量级，逐行扫描足够快。 */
 export function markerLineNumbers(state: EditorState): number[] {
 	const lines: number[] = [];
 	for (let number = 1; number <= state.doc.lines; number++) {
-		if (markerRole(state.doc.line(number).text) !== null) lines.push(number);
+		if (isMarkerLine(state.doc.line(number).text)) lines.push(number);
 	}
 	return lines;
 }
@@ -106,10 +106,55 @@ const splitBlockAtCursor: Command = (view) => {
 	return true;
 };
 
+/**
+ * 块首 Backspace 合并块：前一行是分隔线时整条删除（保留一个换行），
+ * 否则返回 null 回落默认 Backspace。分隔线已控件化，避免逐字符删出残缺标记。
+ */
+export function mergeBackwardChange(
+	state: EditorState
+): { from: number; to: number; anchor: number } | null {
+	const range = state.selection.main;
+	if (!range.empty) return null;
+	const line = state.doc.lineAt(range.head);
+	if (range.head !== line.from || line.number === 1) return null;
+	const previous = state.doc.line(line.number - 1);
+	if (!isMarkerLine(previous.text)) return null;
+	if (previous.from === 0) return { from: 0, to: previous.to + 1, anchor: 0 };
+	return { from: previous.from - 1, to: previous.to, anchor: previous.from };
+}
+
+/** 块尾 Delete 对称合并：下一行是分隔线时整条删除，光标不动。 */
+export function mergeForwardChange(
+	state: EditorState
+): { from: number; to: number; anchor: number } | null {
+	const range = state.selection.main;
+	if (!range.empty) return null;
+	const line = state.doc.lineAt(range.head);
+	if (range.head !== line.to || line.number === state.doc.lines) return null;
+	const next = state.doc.line(line.number + 1);
+	if (!isMarkerLine(next.text)) return null;
+	return { from: line.to, to: next.to, anchor: line.to };
+}
+
+function runMerge(
+	view: EditorView,
+	change: { from: number; to: number; anchor: number } | null
+): boolean {
+	if (!change) return false;
+	view.dispatch({
+		changes: { from: change.from, to: change.to },
+		selection: { anchor: change.anchor },
+		scrollIntoView: true
+	});
+	return true;
+}
+
 /** 块级快捷键；copyBlock 由宿主注入（剪贴板 + toast 属于应用层）。 */
 export function blockKeymap(copyBlock: (text: string) => void) {
 	const bindings: KeyBinding[] = [
 		{ key: 'Shift-Enter', run: splitBlockAtCursor },
+		{ key: 'Backspace', run: (view) => runMerge(view, mergeBackwardChange(view.state)) },
+		{ key: 'Delete', run: (view) => runMerge(view, mergeForwardChange(view.state)) },
 		{ key: 'Mod-ArrowDown', run: gotoNextBlock },
 		{ key: 'Mod-ArrowUp', run: gotoPrevBlock },
 		{
