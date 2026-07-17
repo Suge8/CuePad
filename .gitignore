@@ -15,6 +15,9 @@ node_modules
 /logs/
 *.out
 
+# Local dev notes (internal planning brief, not for public tree)
+/plan.md
+
 # OS
 .DS_Store
 Thumbs.db
