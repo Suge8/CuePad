@@ -2,6 +2,17 @@
 	"name": "cuepad",
 	"private": true,
 	"version": "0.0.1",
+	"description": "A lightweight local prompt scratchpad for coding agents — write comfortably, then dispatch to your terminal or editor in one keystroke.",
+	"license": "Apache-2.0",
+	"author": "Suge8 <nnyless@foxmail.com>",
+	"homepage": "https://github.com/Suge8/CuePad#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Suge8/CuePad.git"
+	},
+	"bugs": {
+		"url": "https://github.com/Suge8/CuePad/issues"
+	},
 	"type": "module",
 	"main": "dist-electron/main.js",
 	"scripts": {
