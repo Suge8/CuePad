@@ -1,32 +1,81 @@
+<p align="right">English | <a href="README.zh-CN.md">简体中文</a></p>
+
 <p align="center">
-  <img src="design/final/ip-welcome.png" alt="CuePad 吉祥物" width="200" />
+  <img src="design/promo/visual/hero-readme-2400x1260.png" alt="CuePad: write your prompt, dispatch it in one tap" width="820" />
 </p>
+
 <p align="center">
-  <img src="design/final/lockup.png" alt="CuePad" width="340" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-111111.svg" alt="Platform: macOS (Apple Silicon)" />
 </p>
 
-CuePad 是一个极轻量的本地桌面提示词草稿本，为 coding agents 场景设计：快速打开、顺手写作、自动保存，并能把提示词一键投送到刚才使用的终端或编辑器。
+CuePad is a lightweight local prompt scratchpad built for the coding-agent workflow: open it fast, write comfortably, autosave, and dispatch your prompt to the terminal or editor you were just using in one keystroke.
 
-目前提供 macOS Electron 桌面应用，界面基于 Svelte，数据只保存在本机 SQLite。
+It ships as a macOS Electron app with a Svelte interface. Your data stays on your machine in a local SQLite database.
 
-## 功能
+<p align="center">
+  <img src="design/promo/motion/demo-dispatch.gif" alt="Open a card in CuePad, tap dispatch, and the prompt lands in the terminal" width="720" />
+</p>
 
-- **项目 / 卡片两层组织**：在横向项目栏切换当前项目，可置顶常用项目；「全局收藏」集中展示各项目的收藏卡片，未归档内容进入收件箱。
-- **悬浮任务**：在主界面右侧随手记任务、分配项目、拖动排序、完成或恢复；窄窗口只保留一个任务入口。
-- **沉浸编辑**：点击卡片进入全屏写作，`## 标题`、`- 列表`、代码块、`{{变量}}` 有轻量视觉增强，正文始终保存为纯文本。
-- **自动保存**：输入后自动落库，保存失败不丢内容（本地备份 + 重试）。
-- **分段复制**：正文中独占一行的 `---split---` 把草稿切成多段，可一键复制全文或任意一段。
-- **一键投送（macOS）**：先把光标留在目标输入框；默认送到上一个应用，也可固定到当前运行的 Terminal、iTerm、Zed 或 VSCode。
-- **变量模板**：复制或投送含 `{{变量}}` 的卡片前集中填写；同一卡片会记住上次的值。
-- **全局搜索**：`Cmd/Ctrl + F` 呼出面板，搜项目、卡片标题/正文、标签，回车直达。
-- **回收站**：项目和卡片软删除，可恢复或永久删除。
-- **后台常驻**：关闭窗口只是隐藏；`Alt/Option + Space`（可在设置中改）随时呼出；托盘菜单可显示/隐藏/退出。
-- **浅色 / 深色 / 跟随系统**三种主题；数据存本机 SQLite。
+## Features
 
-## 快捷键
+- **Projects and cards.** Switch the active project in the horizontal project bar and pin the ones you use often. Global Favorites gathers starred cards from every project; unfiled notes land in the inbox.
+- **Floating tasks.** Jot tasks beside the main view, assign them to a project, reorder by drag, and complete or restore them. Narrow windows keep a single task entry.
+- **Immersive editing.** Click a card to write full-screen. `## headings`, `- lists`, code blocks, and `{{variables}}` get light visual treatment while the body always saves as plain text.
+- **Autosave.** Every keystroke persists to the database. A local backup and retry keep your text safe when a write fails.
+- **Split copy.** A lone `---split---` line cuts a draft into segments. Copy the whole draft or any single segment.
+- **One-tap dispatch (macOS).** Leave your cursor in the target input. CuePad sends the text to the previous app by default, or to a pinned Terminal, iTerm, Zed, or VSCode.
+- **Variable templates.** Fill in `{{variables}}` before you copy or dispatch. Each card remembers your last values.
+- **Global search.** `Cmd/Ctrl + F` opens the palette. Search projects, card titles and bodies, and tags, then press Enter to jump.
+- **Trash.** Projects and cards are soft-deleted, so you can restore or purge them.
+- **Runs in the background.** Closing the window only hides it. `Alt/Option + Space` (configurable) summons it anytime, and the tray menu shows, hides, or quits.
+- **Light, dark, and system themes.** Data lives in a local SQLite database.
 
-| 快捷键 | 作用 |
+## Keyboard shortcuts
+
+| Shortcut | Action |
 | --- | --- |
-| `Cmd/Ctrl + F` | 搜索 / 命令面板 |
-| `Esc` | 退出沉浸编辑 / 关闭面板 |
-| `Alt/Option + Space` | 全局显示 / 隐藏窗口（可自定义） |
+| `Cmd/Ctrl + F` | Search / command palette |
+| `Esc` | Exit immersive editing / close a panel |
+| `Alt/Option + Space` | Show / hide the window globally (configurable) |
+
+## Screenshots
+
+<details>
+<summary>Immersive editing / split dispatch / variable templates / global search / floating tasks / dark theme</summary>
+<p align="center">
+  <img src="design/promo/shots/final/editor-light-2176.png" alt="Immersive editing" width="760" />
+  <img src="design/promo/shots/final/segments-light-2176.png" alt="Split dispatch" width="760" />
+  <img src="design/promo/shots/final/variables-light-2176.png" alt="Variable templates" width="760" />
+  <img src="design/promo/shots/final/search-light-2176.png" alt="Global search" width="760" />
+  <img src="design/promo/shots/final/tasks-light-2176.png" alt="Floating tasks" width="760" />
+  <img src="design/promo/shots/final/board-dark-2176.png" alt="Dark theme" width="760" />
+</p>
+</details>
+
+## Build from source
+
+```bash
+git clone https://github.com/Suge8/CuePad.git
+cd CuePad
+bun install
+bun run package:app   # produces release/mac-arm64/CuePad.app
+```
+
+To run in development instead:
+
+```bash
+bun run dev:electron
+```
+
+**Requirements:** [Bun](https://bun.sh), macOS (Apple Silicon), and a Rust toolchain for packaging the dispatch sidecar. The app is ad-hoc signed and not notarized, so on first launch you may need to right-click it and choose **Open**.
+
+The architecture, commands, and test layers are documented in [docs/development.md](docs/development.md).
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for setup, commands, and conventions, and [SECURITY.md](.github/SECURITY.md) to report a vulnerability.
+
+## License
+
+CuePad is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
