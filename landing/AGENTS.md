@@ -1,6 +1,6 @@
 # landing/ — 产品落地页（SvelteKit + Vercel）
 
-CuePad 双语（EN/中）营销落地页：**Svelte 5（runes）+ SvelteKit 2 + GSAP**，`@sveltejs/adapter-vercel` 全量预渲染，部署 Vercel 时把项目 Root Directory 指到本目录即可（框架自动识别，无需额外配置）。
+CuePad 双语（EN/中）营销落地页：**Svelte 5（runes）+ SvelteKit 2 + GSAP**，`@sveltejs/adapter-vercel` 全量预渲染。公开址 [cue-pad.com](https://cue-pad.com)；Vercel 项目 `cuepad-landing` 的 Root Directory 为本目录，已连 GitHub `main` 自动部署。
 
 ## 命令
 

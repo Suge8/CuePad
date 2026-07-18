@@ -51,7 +51,7 @@
 
 ## 下载
 
-Apple Silicon 构建见 [GitHub Releases](https://github.com/Suge8/CuePad/releases)。产品站：[cuepad-landing.vercel.app](https://cuepad-landing.vercel.app)。
+Apple Silicon 构建见 [GitHub Releases](https://github.com/Suge8/CuePad/releases)。产品站：[cue-pad.com](https://cue-pad.com)。
 
 ad-hoc 签名、未公证——首次启动请右键选择「打开」。
 

@@ -51,7 +51,7 @@
 
 ## Download
 
-Apple Silicon build: [GitHub Releases](https://github.com/Suge8/CuePad/releases). Product site: [cuepad-landing.vercel.app](https://cuepad-landing.vercel.app).
+Apple Silicon build: [GitHub Releases](https://github.com/Suge8/CuePad/releases). Product site: [cue-pad.com](https://cue-pad.com).
 
 Ad-hoc signed, not notarized — on first launch, right-click the app and choose **Open**.
 

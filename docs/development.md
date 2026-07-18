@@ -64,7 +64,7 @@ bun run test:package  # 验证已打包应用的 renderer、SQLite 与资源
 - 本地验收：`release/mac-arm64/CuePad.app`
 - 分发产物：`release/CuePad-<version>-arm64.zip`（挂到 GitHub Releases）
 
-营销落地页在 `landing/`，Vercel Root Directory 指该目录；公开址见仓库 homepage。
+营销落地页在 `landing/`，Vercel 项目 `cuepad-landing`（Root Directory = `landing/`，连 GitHub `main` 自动部署）；公开址 [cue-pad.com](https://cue-pad.com)。
 
 构建后先运行：
 
