@@ -186,7 +186,7 @@
 			</h1>
 			<p class="hero-sub">{t('hero.sub')}</p>
 			<div class="hero-ctas">
-				<a class="btn btn-primary" href={LINKS.releases} target="_blank" rel="noopener">
+				<a class="btn btn-primary" href={LINKS.download} download>
 					<Icon name="download" /><span>{t('hero.cta1')}</span>
 				</a>
 				<a class="btn btn-ghost" href={LINKS.repo} target="_blank" rel="noopener">

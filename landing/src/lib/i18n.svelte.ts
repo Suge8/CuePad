@@ -4,7 +4,9 @@ export type Lang = 'en' | 'zh';
 
 export const LINKS = {
 	repo: 'https://github.com/Suge8/CuePad',
-	releases: 'https://github.com/Suge8/CuePad/releases'
+	/** Stable asset name — see electron-builder.yml artifactName */
+	download:
+		'https://github.com/Suge8/CuePad/releases/latest/download/CuePad-mac-arm64.zip'
 } as const;
 
 export const i18n = $state({ lang: 'en' as Lang });
@@ -78,7 +80,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 		'cinema.img': 'CuePad card board in dark theme',
 		'dl.h': 'Download. Open. Write.',
 		'dl.p':
-			'CuePad is free and open source under Apache-2.0. Grab the latest Apple Silicon build from GitHub Releases.',
+			'CuePad is free and open source under Apache-2.0. One click gets the latest Apple Silicon build.',
 		'dl.cta1': 'Download for macOS',
 		'dl.cta2': 'Star on GitHub',
 		'dl.note':
@@ -151,7 +153,7 @@ const DICT: Record<Lang, Record<string, string>> = {
 		'cinema.p': '浅色、深色或跟随系统——纸感始终柔和。',
 		'cinema.img': '深色主题下的 CuePad 卡片墙',
 		'dl.h': '下载，打开，开写。',
-		'dl.p': 'CuePad 免费开源（Apache-2.0）。在 GitHub Releases 下载 Apple Silicon 最新构建。',
+		'dl.p': 'CuePad 免费开源（Apache-2.0）。一键下载最新 Apple Silicon 构建。',
 		'dl.cta1': '下载 macOS 版',
 		'dl.cta2': '去 GitHub 加星',
 		'dl.note': 'ad-hoc 签名、未公证——首次启动请右键选择「打开」。',

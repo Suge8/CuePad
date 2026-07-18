@@ -71,7 +71,7 @@
 		<SplitH text={t('dl.h')} />
 		<p>{t('dl.p')}</p>
 		<div class="dl-ctas">
-			<a class="btn btn-primary" href={LINKS.releases} target="_blank" rel="noopener">
+			<a class="btn btn-primary" href={LINKS.download} download>
 				<Icon name="download" /><span>{t('dl.cta1')}</span>
 			</a>
 			<a class="btn btn-ghost" href={LINKS.repo} target="_blank" rel="noopener">

@@ -51,7 +51,7 @@
 
 ## Download
 
-Apple Silicon build: [GitHub Releases](https://github.com/Suge8/CuePad/releases). Product site: [cue-pad.com](https://cue-pad.com).
+Apple Silicon: [download zip](https://github.com/Suge8/CuePad/releases/latest/download/CuePad-mac-arm64.zip). Product site: [cue-pad.com](https://cue-pad.com).
 
 Ad-hoc signed, not notarized — on first launch, right-click the app and choose **Open**.
 
@@ -61,7 +61,7 @@ Ad-hoc signed, not notarized — on first launch, right-click the app and choose
 git clone https://github.com/Suge8/CuePad.git
 cd CuePad
 bun install
-bun run package:app   # release/mac-arm64/CuePad.app + CuePad-<ver>-arm64.zip
+bun run package:app   # release/mac-arm64/CuePad.app + CuePad-mac-arm64.zip
 ```
 
 To run in development instead: `bun run dev:electron`

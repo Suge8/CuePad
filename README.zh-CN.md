@@ -51,7 +51,7 @@
 
 ## 下载
 
-Apple Silicon 构建见 [GitHub Releases](https://github.com/Suge8/CuePad/releases)。产品站：[cue-pad.com](https://cue-pad.com)。
+Apple Silicon：[下载 zip](https://github.com/Suge8/CuePad/releases/latest/download/CuePad-mac-arm64.zip)。产品站：[cue-pad.com](https://cue-pad.com)。
 
 ad-hoc 签名、未公证——首次启动请右键选择「打开」。
 
@@ -61,7 +61,7 @@ ad-hoc 签名、未公证——首次启动请右键选择「打开」。
 git clone https://github.com/Suge8/CuePad.git
 cd CuePad
 bun install
-bun run package:app   # release/mac-arm64/CuePad.app + CuePad-<ver>-arm64.zip
+bun run package:app   # release/mac-arm64/CuePad.app + CuePad-mac-arm64.zip
 ```
 
 开发模式运行：`bun run dev:electron`

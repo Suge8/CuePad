@@ -22,4 +22,5 @@ mac:
   icon: electron/assets/icon.icns
   identity: "-"
   hardenedRuntime: false
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  # Stable name so landing can use /releases/latest/download/CuePad-mac-arm64.zip
+  artifactName: ${productName}-mac-${arch}.${ext}

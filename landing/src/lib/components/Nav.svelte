@@ -42,7 +42,7 @@
 			<a class="gh-link" href={LINKS.repo} target="_blank" rel="noopener" aria-label="CuePad on GitHub">
 				<Icon name="github" />
 			</a>
-			<a class="nav-cta" href={LINKS.releases} target="_blank" rel="noopener">
+			<a class="nav-cta" href={LINKS.download} download>
 				<Icon name="download" /><span>{t('nav.cta')}</span>
 			</a>
 		</div>

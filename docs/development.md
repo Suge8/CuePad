@@ -62,7 +62,7 @@ bun run test:package  # 验证已打包应用的 renderer、SQLite 与资源
 - `build/`、`dist-electron/`、`migrations/` 进入 app.asar
 - `cuepad-dispatch` 与托盘/应用图标进入 `Contents/Resources/`
 - 本地验收：`release/mac-arm64/CuePad.app`
-- 分发产物：`release/CuePad-<version>-arm64.zip`（挂到 GitHub Releases）
+- 分发产物：`release/CuePad-mac-arm64.zip`（稳定文件名，挂到 GitHub Releases；落地页经 `/releases/latest/download/` 直链）
 
 营销落地页在 `landing/`，Vercel 项目 `cuepad-landing`（Root Directory = `landing/`，连 GitHub `main` 自动部署）；公开址 [cue-pad.com](https://cue-pad.com)。
 
