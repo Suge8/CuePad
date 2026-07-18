@@ -15,7 +15,7 @@ bun run check         # Svelte / TypeScript 检查
 bun run lint          # ESLint
 bun run test:e2e      # Playwright Chromium 无头 UI 验收
 bun run test:electron # 真实 Electron / preload / SQLite 验收；不编译 Rust
-bun run package:app   # 构建 sidecar 并产出 release/mac-arm64/CuePad.app
+bun run package:app   # 构建 sidecar，产出 .app + GitHub Release 用 zip
 bun run test:package  # 验证已打包应用的 renderer、SQLite 与资源
 ```
 
@@ -55,12 +55,16 @@ bun run test:package  # 验证已打包应用的 renderer、SQLite 与资源
 
 ## 打包
 
-`electron-builder.yml` 只产出 macOS arm64 `dir` target：
+`electron-builder.yml` 产出 macOS arm64 `dir` + `zip`：
 
 - appId：`com.sugeh.cuepad`
-- 应用签名：ad-hoc（`identity: "-"`），不做 DMG、公证或分发
+- 应用签名：ad-hoc（`identity: "-"`），不做 DMG 或公证
 - `build/`、`dist-electron/`、`migrations/` 进入 app.asar
 - `cuepad-dispatch` 与托盘/应用图标进入 `Contents/Resources/`
+- 本地验收：`release/mac-arm64/CuePad.app`
+- 分发产物：`release/CuePad-<version>-arm64.zip`（挂到 GitHub Releases）
+
+营销落地页在 `landing/`，Vercel Root Directory 指该目录；公开址见仓库 homepage。
 
 构建后先运行：
 

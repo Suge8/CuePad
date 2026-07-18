@@ -49,18 +49,24 @@
 </p>
 </details>
 
+## 下载
+
+Apple Silicon 构建见 [GitHub Releases](https://github.com/Suge8/CuePad/releases)。产品站：[cuepad-landing.vercel.app](https://cuepad-landing.vercel.app)。
+
+ad-hoc 签名、未公证——首次启动请右键选择「打开」。
+
 ## 从源码构建
 
 ```bash
 git clone https://github.com/Suge8/CuePad.git
 cd CuePad
 bun install
-bun run package:app   # 产出 release/mac-arm64/CuePad.app
+bun run package:app   # release/mac-arm64/CuePad.app + CuePad-<ver>-arm64.zip
 ```
 
 开发模式运行：`bun run dev:electron`
 
-**环境要求**：[Bun](https://bun.sh)、macOS（Apple Silicon）、Rust 工具链（构建投送 sidecar）。应用为 ad-hoc 签名、未公证——首次启动请右键选择「打开」。
+**环境要求**：[Bun](https://bun.sh)、macOS（Apple Silicon）、Rust 工具链（构建投送 sidecar）。
 
 架构、命令与测试分层见 [docs/development.md](docs/development.md)。
 

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>CuePad — Write your prompt, dispatch in one tap</title>
+		<meta
+			name="description"
+			content="CuePad is a calm, paper-like scratchpad for coding agents. Write comfortably, autosave every keystroke, and land your prompt in the terminal or editor in one tap. 100% local on macOS."
+		/>
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="CuePad — Write your prompt, dispatch in one tap" />
+		<meta
+			property="og:description"
+			content="A calm, paper-like scratchpad that lives beside your coding agents. One tap, and your prompt lands where you were typing."
+		/>
+		<meta property="og:image" content="/assets/og.jpg" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<link rel="icon" type="image/png" href="/assets/favicon.png" />
+		<link rel="apple-touch-icon" href="/assets/favicon.png" />
+		<link
+			rel="preload"
+			as="font"
+			type="font/woff2"
+			href="/assets/fonts/bricolage-latin.woff2"
+			crossorigin
+		/>
+		<script>
+			// Set language before first paint to avoid a flash of the wrong locale.
+			(function () {
+				var lang = 'en';
+				try {
+					lang = localStorage.getItem('cuepad-lang') || '';
+				} catch (e) {}
+				if (!lang) {
+					lang = (navigator.language || 'en').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+				}
+				var root = document.documentElement;
+				root.lang = lang === 'zh' ? 'zh-CN' : 'en';
+				root.setAttribute('data-lang', lang);
+				root.classList.add('js');
+			})();
+		</script>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

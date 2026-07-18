@@ -16,6 +16,10 @@ mac:
     - target: dir
       arch:
         - arm64
+    - target: zip
+      arch:
+        - arm64
   icon: electron/assets/icon.icns
   identity: "-"
   hardenedRuntime: false
+  artifactName: ${productName}-${version}-${arch}.${ext}

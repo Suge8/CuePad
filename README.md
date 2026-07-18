@@ -49,18 +49,24 @@
 </p>
 </details>
 
+## Download
+
+Apple Silicon build: [GitHub Releases](https://github.com/Suge8/CuePad/releases). Product site: [cuepad-landing.vercel.app](https://cuepad-landing.vercel.app).
+
+Ad-hoc signed, not notarized — on first launch, right-click the app and choose **Open**.
+
 ## Build from source
 
 ```bash
 git clone https://github.com/Suge8/CuePad.git
 cd CuePad
 bun install
-bun run package:app   # produces release/mac-arm64/CuePad.app
+bun run package:app   # release/mac-arm64/CuePad.app + CuePad-<ver>-arm64.zip
 ```
 
 To run in development instead: `bun run dev:electron`
 
-**Requirements:** [Bun](https://bun.sh), macOS (Apple Silicon), and a Rust toolchain for the dispatch sidecar. The app is ad-hoc signed and not notarized — on first launch, right-click it and choose **Open**.
+**Requirements:** [Bun](https://bun.sh), macOS (Apple Silicon), and a Rust toolchain for the dispatch sidecar.
 
 Architecture, commands, and test layers: [docs/development.md](docs/development.md).
 

@@ -1,7 +1,7 @@
 {
 	"name": "cuepad",
 	"private": true,
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"description": "A lightweight local prompt scratchpad for coding agents — write comfortably, then dispatch to your terminal or editor in one keystroke.",
 	"license": "Apache-2.0",
 	"author": "Suge8 <nnyless@foxmail.com>",
