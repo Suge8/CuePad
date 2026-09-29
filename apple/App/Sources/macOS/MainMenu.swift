@@ -5,9 +5,17 @@ import AppKit
 @MainActor
 enum MainMenu {
     static func install() {
+        let main = build()
+        NSApp.mainMenu = main
+        NSApp.windowsMenu = main.items.last?.submenu
+    }
+
+    static func build() -> NSMenu {
         let main = NSMenu()
         main.addItem(submenu(title: "CuePad", items: [
             .item("关于 CuePad", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
+            .separator,
+            .item("设置…", #selector(AppDelegate.showSettings(_:)), ","),
             .separator,
             .item("隐藏 CuePad", #selector(NSApplication.hide(_:)), "h"),
             .separator,
@@ -27,8 +35,7 @@ enum MainMenu {
             .item("最小化", #selector(NSWindow.performMiniaturize(_:)), "m"),
         ])
         main.addItem(window)
-        NSApp.mainMenu = main
-        NSApp.windowsMenu = window.submenu
+        return main
     }
 
     private enum Entry {

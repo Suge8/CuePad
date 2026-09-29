@@ -27,4 +27,5 @@ apple/scripts/xc.sh shot ios      # 构建 → 模拟器安装启动 → 截图 
 - 签名配置在 `App/Config/Signing.xcconfig`：本机 ad-hoc，分发时按文件内注释改成 Developer ID。
 - 链接的 `CuePadKit` products：CueText / CueStore / CueEditor 全平台，CueDispatch / CuePi 仅 macOS（工程里按平台过滤）。
 - 资料库在 `~/Library/Application Support/CuePad/Library/`；首次启动从 Electron 版库（`~/Library/Application Support/cuepad/cuepad.db`）导入一次，完成标记是库目录里的 `.electron-import-completed`。环境变量 `CUEPAD_LIBRARY_DIR` 指向隔离目录（不导入旧库）；`shot mac` 用它把库放进 `.derived/library`。
+- 壳层：主窗口在 `MainWindowFactory` 创建时就设好外框（内容铺到透明标题栏下），界面不要再在运行时改窗口样式；设置窗口（⌘,）由 `SettingsWindowController` 承载，内容来自 `RootViews.settings`；`CuePadApplication` 在退出前结束挂在窗口上的弹窗，⌘Q 与 SIGTERM 才不会被 sheet/alert 卡住；菜单栏面板 `MenuBarPanel` 随内容尺寸变化，顶边固定在图标下方。
 - 服务测试用临时目录、独立 UserDefaults 与记录型替身，不碰真实资料库、`~/.pi` 和其他应用。

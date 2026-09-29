@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowDelegate: MainWindowDelegate?
     private var statusItem: StatusItemController?
     private var menuBarPanel: MenuBarPanel?
+    private var settingsWindow: SettingsWindowController?
     private var sigterm: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -28,9 +29,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             togglePanel: { panel.toggle(below: $0) },
             toggleWindow: { shell.toggleFromMenu() })
 
+        settingsWindow = SettingsWindowController { RootViews.settings(services) }
+
         services.start()
-        installSigtermHandler()
+        sigterm = TerminationSignal.install()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    @objc func showSettings(_ sender: Any?) {
+        settingsWindow?.show()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -48,29 +55,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeMainWindow(_ services: AppServices) -> NSWindow {
-        let window = NSWindow(
-            contentRect: .zero,
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "CuePad"
-        window.contentMinSize = NSSize(width: 720, height: 520)
-        window.contentViewController = NSHostingController(rootView: RootViews.mainWindow(services))
-        window.setContentSize(NSSize(width: 1200, height: 760)) // 须在设置 contentViewController 之后，否则被内容尺寸覆盖
-        window.isReleasedWhenClosed = false
+        let window = MainWindowFactory.make(content: RootViews.mainWindow(services))
         if !window.setFrameUsingName("main") { window.center() }
         window.setFrameAutosaveName("main")
         return window
     }
+}
 
-    /// SIGTERM 走正常退出流程，使快捷键与菜单栏图标被释放。
-    private func installSigtermHandler() {
+/// SIGTERM 走正常退出流程，使快捷键与菜单栏图标被释放。
+/// 信号在后台队列接收、再投到主线程 run loop 的 common modes：主队列在应用级模态面板运行时不被处理。
+enum TerminationSignal {
+    static func install() -> DispatchSourceSignal {
         signal(SIGTERM, SIG_IGN)
-        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-        source.setEventHandler { MainActor.assumeIsolated { NSApp.terminate(nil) } }
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
+        source.setEventHandler(handler: terminateOnMainRunLoop)
         source.resume()
-        sigterm = source
+        return source
+    }
+
+    private static let terminateOnMainRunLoop: @Sendable () -> Void = {
+        let loop = CFRunLoopGetMain()
+        CFRunLoopPerformBlock(loop, CFRunLoopMode.commonModes.rawValue) {
+            MainActor.assumeIsolated { NSApp.terminate(nil) }
+        }
+        CFRunLoopWakeUp(loop)
     }
 }
 #endif

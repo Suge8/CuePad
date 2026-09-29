@@ -10,6 +10,14 @@ enum RootViews {
         MainRoot(workspace: Workspace(services: services)).environment(services)
     }
 
+    /// 设置窗口（⌘, 与菜单"设置…"）的内容。
+    static func settings(_ services: AppServices) -> some View {
+        SettingsView()
+            .environment(Workspace(services: services))
+            .modifier(PaletteProvider())
+            .environment(services)
+    }
+
     static func menuBarPad(_ services: AppServices) -> some View {
         MenuBarPad()
             .environment(Workspace(services: services))

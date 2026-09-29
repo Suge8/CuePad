@@ -12,8 +12,10 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
     private static let reopenGuard: Duration = .milliseconds(250)
 
     private let panel: Panel
-    private let host = NSHostingView(rootView: AnyView(EmptyView()))
+    private let host = SizingHostingView(rootView: AnyView(EmptyView()))
     private var lastResign = ContinuousClock.now - reopenGuard
+    /// 面板在屏幕上的锚点（图标位置与所在屏幕的可见区域）：内容尺寸变化时据此重新定位。
+    private var placement: (anchor: CGRect, visible: CGRect)?
 
     override init() {
         panel = Panel(
@@ -29,9 +31,11 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.contentView = host
         panel.delegate = self
+        host.onIntrinsicSizeChange = { [weak self] in self?.fitToContent() }
     }
 
     var isVisible: Bool { panel.isVisible }
+    var frame: CGRect { panel.frame }
 
     func setContent<Content: View>(_ content: Content) {
         host.rootView = AnyView(content)
@@ -47,11 +51,18 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
     }
 
     func show(below anchor: CGRect) {
-        panel.setContentSize(host.fittingSize)
         let screen = NSScreen.screens.first { $0.frame.intersects(anchor) } ?? NSScreen.main
-        let visible = screen?.visibleFrame ?? anchor
-        panel.setFrameOrigin(Self.origin(for: panel.frame.size, below: anchor, in: visible))
+        placement = (anchor, screen?.visibleFrame ?? anchor)
+        fitToContent()
         panel.makeKeyAndOrderFront(nil)
+    }
+
+    /// 面板跟随内容尺寸，顶边始终留在图标下方。
+    private func fitToContent() {
+        guard let placement else { return }
+        let size = host.fittingSize
+        let origin = Self.origin(for: size, below: placement.anchor, in: placement.visible)
+        panel.setFrame(NSRect(origin: origin, size: size), display: panel.isVisible)
     }
 
     func hide() {
@@ -68,6 +79,16 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         let x = min(max(anchor.midX - size.width / 2, visible.minX + edgeMargin), visible.maxX - edgeMargin - size.width)
         let y = max(anchor.minY - anchorGap - size.height, visible.minY + edgeMargin)
         return CGPoint(x: x, y: y)
+    }
+}
+
+/// 内容的固有尺寸变化（SwiftUI 布局结果）时通知面板调整窗口。
+private final class SizingHostingView: NSHostingView<AnyView> {
+    var onIntrinsicSizeChange: (() -> Void)?
+
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        onIntrinsicSizeChange?()
     }
 }
 
