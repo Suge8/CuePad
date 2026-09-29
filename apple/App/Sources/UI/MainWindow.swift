@@ -26,7 +26,6 @@ struct MainWindow: View {
             Button("取消", role: .cancel) { workspace.busySend = nil }
         }
         .background { WorkspaceShortcuts(workspace: workspace) }
-        .background { WindowChrome() }
         .observing(services.store, [.projectDirectories], into: $workspace.directories) { try $0.projectDirectories() }
     }
 
@@ -41,7 +40,7 @@ struct MainWindow: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if workspace.openCard == nil, workspace.page != .trash, workspace.overlay != .search, workspace.overlay != .settings {
+            if workspace.openCard == nil, workspace.page != .trash, workspace.overlay != .search {
                 CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
             }
         }
@@ -58,16 +57,6 @@ struct MainWindow: View {
                     Color.black.opacity(palette.dark ? 0.3 : 0.08).ignoresSafeArea()
                         .onTapGesture { workspace.overlay = nil }
                     SearchPalette(paperSpace: paperSpace)
-                }
-                .transition(.opacity)
-            }
-        }
-        .overlay {
-            if workspace.overlay == .settings {
-                ZStack {
-                    Color.black.opacity(palette.dark ? 0.3 : 0.08).ignoresSafeArea()
-                        .onTapGesture { workspace.overlay = nil }
-                    SettingsView()
                 }
                 .transition(.opacity)
             }
@@ -138,7 +127,7 @@ private struct TasksButton: View {
     }
 }
 
-/// 窗口级快捷键：⌘K 搜索、⌘\ 侧栏、⌘1–9 切项目、⌘N 新建卡片、⌘, 设置、Esc 关浮层。
+/// 窗口级快捷键：⌘K 搜索、⌘\ 侧栏、⌘1–9 切项目、⌘N 新建卡片、Esc 关浮层。设置（⌘,）在主菜单。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
     @Environment(AppServices.self) private var services
@@ -149,7 +138,6 @@ private struct WorkspaceShortcuts: View {
             Button("搜索") { workspace.toggle(.search) }.keyboardShortcut("k")
             Button("侧栏") { withAnimation { workspace.toggleSidebar() } }.keyboardShortcut("\\")
             Button("任务") { workspace.toggle(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
-            Button("设置") { workspace.toggle(.settings) }.keyboardShortcut(",")
             Button("新建卡片") { newCard() }.keyboardShortcut("n")
             if workspace.overlay != nil {
                 Button("关闭") { workspace.overlay = nil }.keyboardShortcut(.cancelAction)

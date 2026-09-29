@@ -18,7 +18,6 @@ final class Workspace {
     enum Overlay: Equatable {
         case search
         case tasks
-        case settings
     }
 
     struct Notice: Identifiable, Equatable {

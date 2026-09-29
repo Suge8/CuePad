@@ -13,7 +13,6 @@ enum RootViews {
     /// 设置窗口（⌘, 与菜单"设置…"）的内容。
     static func settings(_ services: AppServices) -> some View {
         SettingsView()
-            .environment(Workspace(services: services))
             .modifier(PaletteProvider())
             .environment(services)
     }
@@ -48,9 +47,11 @@ private struct MainRoot: View {
 
     @ViewBuilder private var content: some View {
         #if DEBUG
+        // 截图只截主窗口：菜单栏面板与设置窗口的内容放进主窗口里拍
         if DebugScene.scene == "menubar" {
-            // 截图只截主窗口：把菜单栏面板放进主窗口里拍
             DebugMenuBarStage().environment(workspace)
+        } else if DebugScene.scene == "settings" {
+            SettingsView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             MainWindow(workspace: workspace)
         }

@@ -91,7 +91,7 @@ struct Sidebar: View {
             HStack {
                 Button("新建项目", systemImage: "plus") { creating = true }
                 Spacer()
-                Button("设置", systemImage: "gearshape") { workspace.toggle(.settings) }
+                Button("设置", systemImage: "gearshape") { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
                     .help("设置（⌘,）")
             }
             .labelStyle(.iconOnly)
@@ -131,7 +131,7 @@ private struct PiSection: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .help("跳到所在终端")
+                    .help([session.state.detail, "点按跳到所在终端"].compactMap { $0 }.joined(separator: "\n"))
                 }
                 ForEach(ended) { session in
                     HStack(spacing: 9) {

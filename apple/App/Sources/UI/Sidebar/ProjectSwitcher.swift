@@ -20,7 +20,8 @@ struct ProjectSwitcher: View {
         Menu {
             ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                 let item = Button { workspace.show(.project(project.id)) } label: {
-                    Label { Text(project.name) } icon: { Image(systemName: ProjectGlyph.symbol(project.icon)) }
+                    Label { Text(project.name) } icon: { Image(nsImage: Self.menuIcon(project)) }
+                        .labelStyle(.titleAndIcon)
                 }
                 if index < Self.numbered {
                     item.keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
@@ -30,9 +31,9 @@ struct ProjectSwitcher: View {
             }
             Divider()
             if (data?.inboxCount ?? 0) > 0 {
-                Button("未归档", systemImage: "tray") { workspace.show(.inbox) }
+                Button { workspace.show(.inbox) } label: { Label("未归档", systemImage: "tray").labelStyle(.titleAndIcon) }
             }
-            Button("回收站", systemImage: "trash") { workspace.show(.trash) }
+            Button { workspace.show(.trash) } label: { Label("回收站", systemImage: "trash").labelStyle(.titleAndIcon) }
         } label: {
             HStack(spacing: 6) {
                 current(projects)
@@ -50,6 +51,17 @@ struct ProjectSwitcher: View {
                 projects: SidebarOrder.projects(try store.projects(), summaries: summaries),
                 inboxCount: summaries.first { $0.projectID == nil }?.cardCount ?? 0)
         }
+    }
+
+    /// 菜单项里 SwiftUI 的前景色不生效，用带项目色的非模板符号图。
+    private static func menuIcon(_ project: Project) -> NSImage {
+        let color = NSColor(Palette.projectTint(project.color))
+        let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
+        let image = NSImage(systemSymbolName: ProjectGlyph.symbol(project.icon), accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration) ?? NSImage()
+        image.isTemplate = false
+        return image
     }
 
     @ViewBuilder private func current(_ projects: [Project]) -> some View {

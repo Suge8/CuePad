@@ -90,6 +90,7 @@ private struct PiColumn: View {
                     Text(session.stateSince, style: .timer).font(.system(size: 11).monospacedDigit()).foregroundStyle(palette.ink3)
                 }
                 Text(session.state.label).font(.system(size: 12, weight: .medium)).foregroundStyle(session.state.tint)
+                PiDetail(state: session.state)
             }
         }
     }

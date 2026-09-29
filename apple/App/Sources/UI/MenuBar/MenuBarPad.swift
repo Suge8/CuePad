@@ -21,12 +21,15 @@ struct MenuBarPad: View {
             if !sessions.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {
                     ForEach(sessions) { session in
-                        HStack(spacing: 8) {
-                            PiDot(state: session.state, size: 6).frame(width: 12)
-                            Text(Workspace.sessionName(session)).font(.system(size: 13, weight: .medium))
-                            Spacer()
-                            Text(session.state.label).font(.system(size: 12))
-                                .foregroundStyle(session.state.needsAttention ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 8) {
+                                PiDot(state: session.state, size: 6).frame(width: 12)
+                                Text(Workspace.sessionName(session)).font(.system(size: 13, weight: .medium))
+                                Spacer()
+                                Text(session.state.label).font(.system(size: 12))
+                                    .foregroundStyle(session.state.needsAttention ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                            }
+                            PiDetail(state: session.state, size: 11.5).padding(.leading, 20)
                         }
                     }
                 }

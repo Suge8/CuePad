@@ -31,11 +31,27 @@ extension PiAgentState {
         case .idle: "空闲"
         case .thinking: "思考中"
         case .outputting: "输出中"
-        case .tool(let name, _, _): "工具 · \(name)"
+        case .tool(let name, let running, _): running.count > 1 ? "工具 · \(name) 等 \(running.count) 个" : "工具 · \(name)"
         case .waitingUser: "等你确认"
         case .done(let aborted): aborted ? "已中止" : "完成"
         case .error: "出错"
         }
+    }
+
+    /// 此刻在做什么的一句话：工具调用摘要、弹窗标题或错误信息；旧扩展不带详情时为 nil，界面只显示状态。
+    var detail: String? {
+        let text: String? = switch self {
+        case .tool(_, _, let detail): detail
+        case .waitingUser(_, let title): title
+        case .error(let message): message
+        default: nil
+        }
+        return text.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+    }
+
+    /// 详情是命令或路径（工具调用）时用等宽字。
+    var detailIsCode: Bool {
+        if case .tool = self { true } else { false }
     }
 
     var tint: Color {
@@ -73,6 +89,23 @@ struct PiDot: View {
                 }
             }
             .accessibilityLabel(state?.label ?? "已结束")
+    }
+}
+
+/// 状态详情的一行文字；没有详情时不占位。
+struct PiDetail: View {
+    let state: PiAgentState
+    var size: CGFloat = 12
+
+    var body: some View {
+        if let detail = state.detail {
+            Text(detail)
+                .font(.system(size: size, design: state.detailIsCode ? .monospaced : .default))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(detail)
+        }
     }
 }
 

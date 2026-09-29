@@ -3,18 +3,13 @@ import AppKit
 import CuePi
 import SwiftUI
 
-/// 设置：主题、全局快捷键、投送后回车、辅助功能授权、Pi 扩展。
+/// 设置窗口的内容：主题、全局快捷键、投送后回车、辅助功能授权、Pi 扩展。操作结果就地显示在对应行下。
 struct SettingsView: View {
-    @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
 
     var body: some View {
         @Bindable var settings = services.settings
-        VStack(spacing: 0) {
-            Text("设置").font(.system(size: 15, weight: .semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 24).padding(.top, 18)
-            Form {
+        Form {
                 Section("外观") {
                     Picker("主题", selection: $settings.theme) {
                         Text("跟随系统").tag(AppSettings.Theme.system)
@@ -36,16 +31,8 @@ struct SettingsView: View {
                 }
                 Section("Pi") { PiExtensionRow() }
             }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-            HStack {
-                Spacer()
-                Button("完成") { workspace.overlay = nil }.keyboardShortcut(.defaultAction)
-            }
-            .padding(16)
-        }
-        .frame(width: 520, height: 580)
-        .paper(radius: 26, lifted: true)
+        .formStyle(.grouped)
+        .frame(width: 500, height: 520)
         .onAppear { services.accessibility.refresh() }
     }
 }
@@ -142,9 +129,9 @@ private struct AccessibilityRow: View {
 }
 
 private struct PiExtensionRow: View {
-    @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var working = false
+    @State private var result: (text: String, failed: Bool)?
 
     var body: some View {
         let status = services.piExtension.status
@@ -164,6 +151,9 @@ private struct PiExtensionRow: View {
                     Button(status?.file == .missing ? "安装" : "升级", action: install).disabled(working)
                 }
             }
+        }
+        if let result {
+            Text(result.text).font(.caption).foregroundStyle(result.failed ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
         }
         Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把卡片（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。")
             .font(.caption).foregroundStyle(.secondary)
@@ -192,9 +182,9 @@ private struct PiExtensionRow: View {
             defer { working = false }
             do {
                 try await services.piExtension.install()
-                workspace.say("扩展已安装；已在运行的 Pi 会话重启后生效")
+                result = ("已安装；已在运行的 Pi 会话重启后生效", false)
             } catch {
-                workspace.fail(error)
+                result = (ErrorText.describe(error), true)
             }
         }
     }
