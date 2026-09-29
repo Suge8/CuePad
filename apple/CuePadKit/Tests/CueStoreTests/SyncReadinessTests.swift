@@ -44,10 +44,10 @@ import Testing
   @Test func deviceSpecificFieldsLiveOnlyInLocalTables() throws {
     for table in Self.synced {
       let columns = try raw.rows("SELECT name FROM pragma_table_info('\(table)')").map { $0[0] }
-      #expect(!columns.contains("readOffset") && !columns.contains("cwd") && !columns.contains("directory"))
+      #expect(!columns.contains("checkpoint") && !columns.contains("cwd") && !columns.contains("directory"))
     }
     let sessions = try raw.rows("SELECT name FROM pragma_table_info('piSessions')").map { $0[0] }
-    #expect(sessions.contains("readOffset") && sessions.contains("cwd"))
+    #expect(sessions.contains("checkpoint") && sessions.contains("cwd") && !sessions.contains("readOffset"))
     let directories = try raw.rows("SELECT name FROM pragma_table_info('projectDirectories')").map { $0[0] }
     #expect(directories.contains("projectID") && directories.contains("directory"))
   }

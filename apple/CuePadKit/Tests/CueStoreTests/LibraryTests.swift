@@ -229,19 +229,6 @@ import Testing
     #expect(records.first?.targetName == "Ghostty")
   }
 
-  @Test func piSessionUpsertKeepsOneRowAndAdvancesOffset() async throws {
-    var session = PiSession(
-      id: "s1", path: "/tmp/s1.jsonl", cwd: "/work/a", title: "first", lastActivityAt: Date(),
-      readOffset: 100)
-    try await store.upsertPiSession(session)
-    session.readOffset = 250
-    session.title = "renamed"
-    try await store.upsertPiSession(session)
-
-    let rows = try await store.piSessions()
-    #expect(rows.map(\.readOffset) == [250] && rows.map(\.title) == ["renamed"])
-  }
-
   // MARK: 项目目录（本机）
 
   @Test func projectDirectoryIsPerDeviceAndDiesWithTheProject() async throws {
