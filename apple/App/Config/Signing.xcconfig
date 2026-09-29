@@ -1,0 +1,10 @@
+// 签名事实源。本机开发：ad-hoc（Sign to Run Locally），无需 Apple 账号。
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+// 分发：改为以下三行（Developer ID 签名 + 公证需要 hardened runtime，已默认开启）
+// CODE_SIGN_STYLE = Manual
+// CODE_SIGN_IDENTITY = Developer ID Application
+// DEVELOPMENT_TEAM = <Team ID>
+ENABLE_HARDENED_RUNTIME = YES

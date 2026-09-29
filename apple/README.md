@@ -1,0 +1,26 @@
+# CuePad Apple 工程
+
+`CuePad.xcodeproj`：一个多平台 App target（macOS + iOS/iPadOS，最低 26），Swift 6 严格并发；源码在 `App/Sources/` 与 `App/Tests/`（文件夹同步组，增删文件不用改工程文件）。共用 Swift 包在 `CuePadKit/`，方案见 [docs/swift-rewrite.md](../docs/swift-rewrite.md)。
+
+## 命令
+
+统一入口 `scripts/xc.sh <build|test|shot> <mac|ios> [截图路径]`，构建产物在 `.derived/`（自带 `.gitignore`），退出码即 xcodebuild 的退出码。
+
+```bash
+apple/scripts/xc.sh build mac
+apple/scripts/xc.sh test mac
+apple/scripts/xc.sh build ios
+apple/scripts/xc.sh test ios
+apple/scripts/xc.sh shot mac      # 构建 → 后台启动 → 单窗口截图 → 退出，输出 .derived/shot-mac.png
+apple/scripts/xc.sh shot ios      # 构建 → 模拟器安装启动 → 截图 → 终止，输出 .derived/shot-ios.png
+```
+
+## 约定
+
+- `shot mac` 用 `open -g` 后台启动，不抢焦点；按 pid 找窗口 ID 后 `screencapture -l` 只截该窗口（首次需给终端授予屏幕录制权限）；以 SIGTERM 退出，走应用正常退出流程。
+- 窗口位置/尺寸会被系统记住（`NSWindow Frame main`），截图尺寸以上次为准；要恢复默认：`defaults delete com.sugeh.cuepad "NSWindow Frame main"`。
+- iOS 模拟器默认 `iPhone 17`，用 `CUEPAD_IOS_DEVICE` 覆盖。
+- 单元测试以 App 为宿主；宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。壳层测试只在 macOS 编译，`test ios` 目前执行 0 个测试。
+- 测试只用替身或不产生按键事件的系统调用，不向其他应用发送键鼠事件；全局热键的物理触发只能人工验证。
+- 签名配置在 `App/Config/Signing.xcconfig`：本机 ad-hoc，分发时按文件内注释改成 Developer ID。
+- 工程尚未链接 `CuePadKit`：链接本地包会让每次全新构建都解析其远程依赖（SQLiteData 等）。需要时在 target 的 Package Dependencies 添加对应 product。
