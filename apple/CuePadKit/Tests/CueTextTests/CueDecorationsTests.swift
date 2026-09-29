@@ -23,7 +23,7 @@ private func styles(_ text: String) -> [CueLineStyle] {
 @Suite("标题行")
 struct TitleTests {
     @Test("标题是首个非空、非分隔线的行，前面的空行与分隔线不算")
-    func firstContentLine() {
+    func firstNonBlankLine() {
         let text = "\n  \n\(S)\n\n周报\n正文"
         #expect(decorations(text).titleLocation == (text as NSString).range(of: "周报").location)
         #expect(styles(text).map(\.isTitle) == [false, false, false, false, true, false])
@@ -64,7 +64,7 @@ struct TitleRuleTests {
         return (text as NSString, splits)
     }
 
-    @Test("编辑器的标题行就是 CueSegments.firstContentLine 取到的那一行", arguments: [
+    @Test("编辑器的标题行就是 CueSegments.contentLines 的第一行", arguments: [
         "\n\n周报\n正文",
         "![](cuepad://img/ab)\n标题",
         "---split---\n![](cuepad://img/ab) 说明\n后",
@@ -75,7 +75,7 @@ struct TitleRuleTests {
     func sameRule(stored: String) {
         let (text, splits) = runtime(stored)
         let d = CueDecorations(CueBuffer(text: text) { splits.contains($0) })
-        let expected = CueSegments.firstContentLine(stored)
+        let expected = CueSegments.contentLines(stored).first ?? ""
         guard let location = d.titleLocation else { return #expect(expected.isEmpty) }
         let line = text.substring(with: NSRange(location: location, length: text.length - location)).components(separatedBy: "\n")[0]
         #expect(line.replacingOccurrences(of: S, with: "").trimmingCharacters(in: .whitespaces) == expected)

@@ -22,19 +22,17 @@ public enum CueSegments {
         return segments
     }
 
-    /// 卡片标题的唯一规则：非空、不是分隔线，且除图片引用（存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字。
-    /// 卡片列表、界面与编辑器的标题行装饰都以此判定。
+    // 卡片标题只有一条规则，实现在私有的 `titleText(of:)`：非空、不是分隔线，且除图片引用
+    // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字。`isTitleLine` 与 `contentLines` 是它的两个公开视图：
+    // 编辑器标题行装饰要逐行判定（找位置），卡片标题与摘要要各行文字。
+
+    /// 这一行是不是标题行。
     public static func isTitleLine(_ line: String) -> Bool { !titleText(of: line).isEmpty }
 
     /// 正文里全部标题行的文字（去掉图片引用，空白折成单个空格），按出现顺序。
-    /// 卡片标题是第一行，摘要是其后各行。
+    /// 卡片标题是第一行，摘要是其后各行。没有标题行则为空数组。
     public static func contentLines(_ stored: String) -> [String] {
         stored.components(separatedBy: "\n").map(titleText(of:)).filter { !$0.isEmpty }
-    }
-
-    /// 卡片标题 = 首个标题行；没有标题行返回空串。
-    public static func firstContentLine(_ stored: String) -> String {
-        contentLines(stored).first ?? ""
     }
 
     private static func titleText(of line: String) -> String {
