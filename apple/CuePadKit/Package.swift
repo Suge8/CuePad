@@ -22,7 +22,7 @@ let package = Package(
         // macOS 通用投送：前台应用追踪、激活、定向粘贴。
         .target(name: "CueDispatch"),
         // macOS Pi 桥：扩展（随包资源）、socket 客户端、会话历史索引、终端跳转。仅 macOS，iOS 目标不依赖。
-        .target(name: "CuePi", resources: [.copy("Extension")]),
+        .target(name: "CuePi", exclude: ["README.md"], resources: [.copy("Extension")]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor"]),
