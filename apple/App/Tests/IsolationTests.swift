@@ -60,9 +60,8 @@ struct IsolationTests {
     }
 
     @Test func 启动参数覆盖已存的设置() throws {
-        let suite = "cuepad-launch-args-\(UUID().uuidString)"
-        defer { UserDefaults().removePersistentDomain(forName: suite) }
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let temp = TempDefaults()
+        let defaults = temp.defaults
         AppSettings(defaults: defaults).theme = .light
 
         let overridden = AppSettings(defaults: defaults, launchArguments: ["theme": "dark", "autoSubmit": "YES"])
@@ -73,9 +72,8 @@ struct IsolationTests {
     }
 
     @Test func 窗口位置存进设置_不写系统的自动保存域() throws {
-        let suite = "cuepad-frames-\(UUID().uuidString)"
-        defer { UserDefaults().removePersistentDomain(forName: suite) }
-        let settings = AppSettings(defaults: try #require(UserDefaults(suiteName: suite)), launchArguments: [:])
+        let temp = TempDefaults()
+        let settings = AppSettings(defaults: temp.defaults, launchArguments: [:])
         let before = realDomain()
         let window = NSWindow(contentRect: NSRect(x: 100, y: 120, width: 640, height: 480), styleMask: [.titled, .resizable], backing: .buffered, defer: true)
         let keeper = WindowFrameKeeper(window: window, name: "main", settings: settings)

@@ -78,7 +78,8 @@ final class RecordingWindow: ShellWindow {
 final class Rig {
     let directory = FileManager.default.temporaryDirectory
         .appending(path: "cuepad-app-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-    let suite = "cuepad-app-tests-\(UUID().uuidString)"
+    /// 偏好放在临时目录里（路径型套件），随目录一起删除，不在 ~/Library/Preferences 里留文件。
+    var suite: String { directory.appending(path: "preferences").path }
     let channels = FakeChannels()
     let hotkeys = InMemoryHotkeys()
     let window = RecordingWindow()
@@ -94,10 +95,12 @@ final class Rig {
 
     deinit {
         try? FileManager.default.removeItem(at: directory)
-        UserDefaults().removePersistentDomain(forName: suite)
     }
 
-    var defaults: UserDefaults { UserDefaults(suiteName: suite)! }
+    var defaults: UserDefaults {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return UserDefaults(suiteName: suite)!
+    }
     var piPaths: PiPaths {
         PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: directory.appending(path: "sock"))
     }
@@ -124,6 +127,20 @@ final class Rig {
         services.windowShell = WindowShell(window: window)
         return services
     }
+}
+
+/// 临时目录里的独立偏好存储，释放时连目录一起删除。
+final class TempDefaults {
+    let directory = FileManager.default.temporaryDirectory
+        .appending(path: "cuepad-defaults-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let defaults: UserDefaults
+
+    init() {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defaults = UserDefaults(suiteName: directory.appending(path: "preferences").path)!
+    }
+
+    deinit { try? FileManager.default.removeItem(at: directory) }
 }
 
 // MARK: 夹具

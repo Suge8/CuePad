@@ -6,7 +6,9 @@ import Testing
 
 @MainActor
 struct ShellChromeTests {
-    @Test func 退出前结束所有挂在窗口上的弹窗_含嵌套() async {
+    /// `NSApp.terminate` 在弹窗还挂着时会拒绝退出（"blocked by modal sheet"），所以继续退出之前，
+    /// 弹窗必须已经真正结束，而不是刚发出 endSheet。
+    @Test func 弹窗真正结束之后才继续退出_含嵌套() async {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
         let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 60), styleMask: [.titled], backing: .buffered, defer: true)
         let nested = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 80, height: 40), styleMask: [.titled], backing: .buffered, defer: true)
@@ -16,11 +18,28 @@ struct ShellChromeTests {
         window.beginSheet(sheet) { _ in ended.insert("sheet") }
         sheet.beginSheet(nested) { _ in ended.insert("nested") }
         #expect(window.attachedSheet === sheet)
+        var proceeded = false
+        var stillAttached: [String] = []
 
-        CuePadApplication.dismissPresentations(in: [window])
+        CuePadApplication.dismissPresentations(in: [window]) {
+            proceeded = true
+            if window.attachedSheet != nil { stillAttached.append("sheet") }
+            if sheet.attachedSheet != nil { stillAttached.append("nested") }
+        }
 
-        await eventually { ended == ["sheet", "nested"] }
-        #expect(ended == ["sheet", "nested"], "弹窗没有全部结束：\(ended)")
+        await eventually { proceeded }
+        #expect(proceeded, "弹窗没有全部结束，退出一直没有继续")
+        #expect(stillAttached.isEmpty, "继续退出时这些弹窗还挂着：\(stillAttached)")
+        #expect(ended == ["sheet", "nested"])
+    }
+
+    @Test func 没有弹窗时立即继续退出() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        var proceeded = false
+
+        CuePadApplication.dismissPresentations(in: [window]) { proceeded = true }
+
+        #expect(proceeded)
     }
 
     @Test func 主菜单有设置项_快捷键是命令加逗号() throws {
