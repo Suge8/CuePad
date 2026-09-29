@@ -6,6 +6,7 @@ enum SQLValue: Sendable, Equatable {
   case null
   case int(Int64)
   case text(String)
+  case blob(Data)
 }
 
 protocol SQLBindable: Sendable {
@@ -15,6 +16,7 @@ protocol SQLBindable: Sendable {
 extension String: SQLBindable { var sqlValue: SQLValue { .text(self) } }
 extension Int: SQLBindable { var sqlValue: SQLValue { .int(Int64(self)) } }
 extension Int64: SQLBindable { var sqlValue: SQLValue { .int(self) } }
+extension Data: SQLBindable { var sqlValue: SQLValue { .blob(self) } }
 extension Bool: SQLBindable { var sqlValue: SQLValue { .int(self ? 1 : 0) } }
 /// 库里 UUID 一律存小写文本（CKRecord 的 recordName 也用这个字符串）。
 extension UUID: SQLBindable { var sqlValue: SQLValue { .text(uuidString.lowercased()) } }
@@ -52,6 +54,13 @@ struct Row {
   func bool(_ column: Int32) -> Bool { int(column) != 0 }
   func date(_ column: Int32) -> Date { Date(timeIntervalSince1970: Double(int(column)) / 1000) }
   func uuid(_ column: Int32) -> UUID { UUID(uuidString: text(column))! }
+
+  func blobOrNil(_ column: Int32) -> Data? {
+    guard !isNull(column) else { return nil }
+    let count = Int(sqlite3_column_bytes(statement, column))
+    guard count > 0, let bytes = sqlite3_column_blob(statement, column) else { return Data() }
+    return Data(bytes: bytes, count: count)
+  }
 
   func textOrNil(_ column: Int32) -> String? { isNull(column) ? nil : text(column) }
   func intOrNil(_ column: Int32) -> Int64? { isNull(column) ? nil : int(column) }
@@ -103,6 +112,15 @@ final class SQLite {
       case .int(let value): sqlite3_bind_int64(statement, position, value)
       case .text(let value):
         sqlite3_bind_text(statement, position, value, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+      case .blob(let value):
+        // 空 Data 没有基址，直接 bind_blob 会变成 NULL
+        if value.isEmpty {
+          sqlite3_bind_zeroblob(statement, position, 0)
+        } else {
+          value.withUnsafeBytes {
+            _ = sqlite3_bind_blob(statement, position, $0.baseAddress, Int32($0.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+          }
+        }
       }
     }
     var rows: [T] = []

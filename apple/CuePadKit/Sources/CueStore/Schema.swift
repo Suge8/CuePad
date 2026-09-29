@@ -18,7 +18,14 @@ enum Schema {
   static let syncedTables: [Table] = [.projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments]
 
   /// 依次执行，`PRAGMA user_version` 记录已执行个数。
-  static let migrations: [String] = [v1, v2]
+  static let migrations: [String] = [v1, v2, v3]
+
+  /// Pi 历史索引的检查点（服务层的不透明字节，含读取偏移与分支树）替代单独的读取偏移列。
+  /// 旧偏移随列删除，已有会话重新索引。
+  private static let v3 = """
+    ALTER TABLE piSessions ADD COLUMN checkpoint BLOB;
+    ALTER TABLE piSessions DROP COLUMN readOffset;
+    """
 
   /// 项目目标卡；发送记录按卡片查最近发送时间。
   private static let v2 = """

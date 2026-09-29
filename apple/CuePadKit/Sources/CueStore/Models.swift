@@ -105,26 +105,20 @@ public struct Attachment: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
 }
 
-/// 仅本机：Pi 会话历史索引与读取偏移。不同步。
+/// 仅本机：Pi 会话历史索引的元数据。检查点（含读取偏移）另存，用 `piCheckpoint(of:)` 读取。不同步。
 public struct PiSession: Identifiable, Equatable, Sendable {
   public let id: String
   public var path: String
   public var cwd: String
   public var title: String
   public var lastActivityAt: Date
-  /// 会话文件已解析到的字节偏移。
-  public var readOffset: Int
 
-  public init(
-    id: String, path: String, cwd: String, title: String = "", lastActivityAt: Date,
-    readOffset: Int = 0
-  ) {
+  public init(id: String, path: String, cwd: String, title: String = "", lastActivityAt: Date) {
     self.id = id
     self.path = path
     self.cwd = cwd
     self.title = title
     self.lastActivityAt = lastActivityAt
-    self.readOffset = readOffset
   }
 }
 
@@ -240,12 +234,12 @@ extension Attachment: Record {
 
 extension PiSession: Record {
   static let table = Table.piSessions
-  static let columns = ["id", "path", "cwd", "title", "lastActivityAt", "readOffset"]
-  var bindings: [any SQLBindable] { [id, path, cwd, title, lastActivityAt, readOffset] }
+  static let columns = ["id", "path", "cwd", "title", "lastActivityAt"]
+  var bindings: [any SQLBindable] { [id, path, cwd, title, lastActivityAt] }
   init(row: Row) {
     self.init(
       id: row.text(0), path: row.text(1), cwd: row.text(2), title: row.text(3),
-      lastActivityAt: row.date(4), readOffset: Int(row.int(5)))
+      lastActivityAt: row.date(4))
   }
 }
 

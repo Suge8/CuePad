@@ -343,16 +343,17 @@ extension CueStore {
     }
   }
 
-  /// 插入或更新会话索引（含读取偏移）；仅本机，不同步。
-  public func upsertPiSession(_ session: PiSession) throws {
+  /// 插入或更新会话索引；`checkpoint` 为 nil 时保留已存的检查点，非 nil 时在同一事务里替换。仅本机，不同步。
+  public func upsertPiSession(_ session: PiSession, checkpoint: Data? = nil) throws {
     try write {
       let assignments = PiSession.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
-      let placeholders = PiSession.columns.map { _ in "?" }.joined(separator: ", ")
+      let placeholders = (PiSession.columns + ["checkpoint"]).map { _ in "?" }.joined(separator: ", ")
       try db.run(
         """
-        INSERT INTO piSessions (\(PiSession.columns.joined(separator: ", "))) VALUES (\(placeholders))
-        ON CONFLICT(id) DO UPDATE SET \(assignments)
-        """, session.bindings)
+        INSERT INTO piSessions (\(PiSession.columns.joined(separator: ", ")), checkpoint) VALUES (\(placeholders))
+        ON CONFLICT(id) DO UPDATE SET \(assignments),
+          checkpoint = COALESCE(excluded.checkpoint, piSessions.checkpoint)
+        """, session.bindings + [checkpoint])
     }
   }
 }

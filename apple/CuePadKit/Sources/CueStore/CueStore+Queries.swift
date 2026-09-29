@@ -73,6 +73,11 @@ extension CueStore {
       ) { ($0.uuid(0), $0.date(1)) })
   }
 
+  /// 会话的检查点（服务层存入的不透明字节）；会话不存在或尚未索引返回 nil。
+  public func piCheckpoint(of session: String) throws -> Data? {
+    try db.first("SELECT checkpoint FROM piSessions WHERE id = ?", [session]) { $0.blobOrNil(0) } ?? nil
+  }
+
   public func piSessions() throws -> [PiSession] {
     try select(PiSession.self, orderBy: "lastActivityAt DESC, id")
   }
