@@ -7,6 +7,7 @@ import Testing
 /// 只用 CKRecord 能直接存的列类型、同步字段与本机字段分表。
 @Suite struct SyncReadinessTests {
   static let synced = ["projects", "cards", "tags", "cardTags", "tasks", "sendRecords", "attachments"]
+  static let local = ["piSessions", "projectDirectories"]
   let fixture = try! Fixture()
   var raw: RawDB { RawDB(fixture.url) }
 
@@ -14,7 +15,7 @@ import Testing
     let tables = try raw.rows(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'searchIndex%'"
     ).map { $0[0] }
-    #expect(Set(tables) == Set(Self.synced + ["piSessions"]))
+    #expect(Set(tables) == Set(Self.synced + Self.local))
   }
 
   @Test(arguments: synced)
@@ -39,13 +40,16 @@ import Testing
     }
   }
 
-  @Test func localPiIndexIsSeparateFromSyncedTables() throws {
+  /// Pi 索引与偏移、项目绑定的代码目录（路径因设备而异）只在本机表，同步表不带这些列。
+  @Test func deviceSpecificFieldsLiveOnlyInLocalTables() throws {
     for table in Self.synced {
       let columns = try raw.rows("SELECT name FROM pragma_table_info('\(table)')").map { $0[0] }
-      #expect(!columns.contains("readOffset") && !columns.contains("cwd"))
+      #expect(!columns.contains("readOffset") && !columns.contains("cwd") && !columns.contains("directory"))
     }
-    let local = try raw.rows("SELECT name FROM pragma_table_info('piSessions')").map { $0[0] }
-    #expect(local.contains("readOffset") && local.contains("cwd"))
+    let sessions = try raw.rows("SELECT name FROM pragma_table_info('piSessions')").map { $0[0] }
+    #expect(sessions.contains("readOffset") && sessions.contains("cwd"))
+    let directories = try raw.rows("SELECT name FROM pragma_table_info('projectDirectories')").map { $0[0] }
+    #expect(directories.contains("projectID") && directories.contains("directory"))
   }
 
   @Test func recordsGetLowercaseUUIDTextIDsAndModifiedAtAdvancesOnEdit() async throws {

@@ -242,6 +242,34 @@ import Testing
     #expect(rows.map(\.readOffset) == [250] && rows.map(\.title) == ["renamed"])
   }
 
+  // MARK: 项目目录（本机）
+
+  @Test func projectDirectoryIsPerDeviceAndDiesWithTheProject() async throws {
+    let p = try await store.createProject(name: "P", color: "#111")
+    #expect(try await store.directory(of: p.id) == nil)
+
+    try await store.setDirectory("/work/a", for: p.id)
+    try await store.setDirectory("/work/b", for: p.id)
+    #expect(try await store.directory(of: p.id) == "/work/b")
+    #expect(try await store.projectDirectories() == [p.id: "/work/b"])
+
+    try await store.setDirectory(nil, for: p.id)
+    #expect(try await store.directory(of: p.id) == nil)
+
+    try await store.setDirectory("/work/c", for: p.id)
+    try await store.trashProject(p.id)
+    try await store.purgeProject(p.id)
+    #expect(try await store.projectDirectories().isEmpty)
+  }
+
+  @Test func projectDirectoryChangesWakeObservers() async throws {
+    let p = try await store.createProject(name: "P", color: "#111")
+    var values = store.observe([.projectDirectories]) { try $0.projectDirectories() }.makeAsyncIterator()
+    #expect(try await values.next() == [:])
+    try await store.setDirectory("/work/a", for: p.id)
+    #expect(try await values.next() == [p.id: "/work/a"])
+  }
+
   @Test func reopeningTheFileKeepsData() async throws {
     let card = try await store.createCard(in: nil, body: "persisted")
     let reopened = try CueStore(url: fixture.url)

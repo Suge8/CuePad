@@ -1,6 +1,9 @@
 import CueStore
+import CoreGraphics
 import Foundation
+import ImageIO
 import SQLite3
+import UniformTypeIdentifiers
 import Testing
 
 /// 临时目录里的真实库文件；释放时清理。
@@ -69,4 +72,18 @@ func sameInstant(_ a: Date?, _ b: Date, sourceLocation: SourceLocation = #_sourc
     return
   }
   #expect(abs(a.timeIntervalSince(b)) < 0.002, sourceLocation: sourceLocation)
+}
+
+/// 纯色 PNG；`shade` 不同则字节不同。
+func pngData(width: Int, height: Int, shade: CGFloat = 0.5) -> Data {
+  let context = CGContext(
+    data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+  context.setFillColor(red: shade, green: 0.2, blue: 0.8, alpha: 1)
+  context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+  let data = NSMutableData()
+  let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)!
+  CGImageDestinationAddImage(destination, context.makeImage()!, nil)
+  CGImageDestinationFinalize(destination)
+  return data as Data
 }
