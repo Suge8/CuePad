@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import SwiftUI
+import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -9,11 +10,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: StatusItemController?
     private var menuBarPanel: MenuBarPanel?
     private var settingsWindow: SettingsWindowController?
+    private var mainFrameKeeper: WindowFrameKeeper?
     private var sigterm: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        sigterm = TerminationSignal.install()
+        let location: LibraryLocation
+        do {
+            location = try LibraryLocation.resolve()
+        } catch {
+            abortLaunch(error)
+            return
+        }
         MainMenu.install()
-        let services = AppServices()
+        let services = AppServices(location: location, defaults: location.makeDefaults(), mac: .live(bundleID: AppServices.bundleID))
         let window = makeMainWindow(services)
         let shell = WindowShell(window: window)
         let windowDelegate = MainWindowDelegate(shell: shell)
@@ -29,10 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             togglePanel: { panel.toggle(below: $0) },
             toggleWindow: { shell.toggleFromMenu() })
 
-        settingsWindow = SettingsWindowController { RootViews.settings(services) }
+        settingsWindow = SettingsWindowController(settings: services.settings) { RootViews.settings(services) }
 
         services.start()
-        sigterm = TerminationSignal.install()
         window.makeKeyAndOrderFront(nil)
     }
 
@@ -54,10 +63,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.remove()
     }
 
+    /// 配置有误时不能带着错误的位置去读写数据：说明原因后退出。
+    private func abortLaunch(_ error: any Error) {
+        Logger(subsystem: AppServices.bundleID, category: "launch").error("\(error.localizedDescription, privacy: .public)")
+        FileHandle.standardError.write(Data("CuePad 无法启动：\(error.localizedDescription)\n".utf8))
+        let alert = NSAlert(error: error)
+        alert.messageText = "CuePad 无法启动"
+        alert.runModal()
+        NSApp.terminate(nil)
+    }
+
     private func makeMainWindow(_ services: AppServices) -> NSWindow {
         let window = MainWindowFactory.make(content: RootViews.mainWindow(services))
-        if !window.setFrameUsingName("main") { window.center() }
-        window.setFrameAutosaveName("main")
+        let keeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
+        if !keeper.restore() { window.center() }
+        mainFrameKeeper = keeper
         return window
     }
 }

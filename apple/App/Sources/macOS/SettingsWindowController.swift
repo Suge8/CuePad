@@ -6,12 +6,13 @@ import SwiftUI
 /// 内容视图在第一次打开时才创建。
 @MainActor
 final class SettingsWindowController {
-    private static let frameName = "settings"
-
     private let makeContent: () -> AnyView
+    private let settings: AppSettings
     private var window: NSWindow?
+    private var frameKeeper: WindowFrameKeeper?
 
-    init(content: @escaping () -> some View) {
+    init(settings: AppSettings, content: @escaping () -> some View) {
+        self.settings = settings
         makeContent = { AnyView(content()) }
     }
 
@@ -26,8 +27,9 @@ final class SettingsWindowController {
         window.title = "设置"
         window.contentViewController = NSHostingController(rootView: makeContent())
         window.isReleasedWhenClosed = false
-        if !window.setFrameUsingName(Self.frameName) { window.center() }
-        window.setFrameAutosaveName(Self.frameName)
+        let keeper = WindowFrameKeeper(window: window, name: "settings", settings: settings)
+        if !keeper.restore() { window.center() }
+        frameKeeper = keeper
         return window
     }
 }

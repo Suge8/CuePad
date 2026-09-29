@@ -86,7 +86,8 @@ final class AppServices {
 
     #if os(macOS)
     convenience init() {
-        self.init(location: .standard, defaults: .standard, mac: .live(bundleID: Self.bundleID))
+        let location = LibraryLocation.standard
+        self.init(location: location, defaults: location.makeDefaults(), mac: .live(bundleID: Self.bundleID))
     }
 
     init(location: LibraryLocation, defaults: UserDefaults, mac: MacDependencies) {
@@ -106,7 +107,8 @@ final class AppServices {
     }
     #else
     convenience init() {
-        self.init(location: .standard, defaults: .standard)
+        let location = LibraryLocation.standard
+        self.init(location: location, defaults: location.makeDefaults())
     }
 
     init(location: LibraryLocation, defaults: UserDefaults) {

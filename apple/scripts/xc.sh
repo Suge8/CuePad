@@ -2,11 +2,12 @@
 # 用法：xc.sh <build|test|shot> <mac|ios> [截图输出路径] [-- 启动参数…]
 # shot mac 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；
 # CUEPAD_DERIVED 指定产物目录（默认 apple/.derived）；并行的 agent 各用一个，否则同目录的构建与测试会互相覆盖。
-# CUEPAD_SHOT_LIBRARY 指定隔离资料库目录（默认 .derived/library），CUEPAD_SHOT_SETTLE 为出窗后等待渲染的秒数。
+# CUEPAD_SHOT_LIBRARY 指定隔离资料库目录（默认 .derived/library；隔离库内含偏好设置；相对路径按当前目录解析），CUEPAD_SHOT_SETTLE 为出窗后等待渲染的秒数。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}"
+absolute() { case "$1" in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
+DERIVED="$(absolute "${CUEPAD_DERIVED:-$APPLE_DIR/.derived}")"
 BUNDLE_ID=com.sugeh.cuepad
 IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 
@@ -51,7 +52,7 @@ shot_mac() {
   # -g：后台启动，不抢当前焦点
   # 库与 Pi 目录都隔离：不碰真实资料库、不导入 Electron 旧库、不读 ~/.pi 的会话
   # （socket 路径受 sun_path 104 字节限制，放 /tmp）
-  open -g -n --env CUEPAD_LIBRARY_DIR="${CUEPAD_SHOT_LIBRARY:-$DERIVED/library}" \
+  open -g -n --env CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library}")" \
     --env PI_CODING_AGENT_DIR="$DERIVED/pi-agent" --env CUEPAD_PI_SOCKET_DIR="/tmp/cuepad-shot-$(id -u)" \
     "$app" ${launch_args[@]+--args "${launch_args[@]}"}
   local pid="" wid="" i

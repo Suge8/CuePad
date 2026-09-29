@@ -18,6 +18,8 @@ final class AppSettings {
         static let piExtensionDeclinedVersion = "piExtensionDeclinedVersion"
     }
 
+    private static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
+
     @ObservationIgnored private let defaults: UserDefaults
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
@@ -35,12 +37,32 @@ final class AppSettings {
         set { defaults.set(newValue, forKey: Key.piExtensionDeclinedVersion) }
     }
 
-    init(defaults: UserDefaults) {
+    /// `launchArguments` 是启动参数（`-theme dark` 这类）解析出的覆盖值，优先于已存的设置。
+    /// 标准偏好域自带这层覆盖；隔离模式的套件读不到，所以显式传入。
+    init(
+        defaults: UserDefaults,
+        launchArguments: [String: Any] = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+    ) {
         self.defaults = defaults
-        theme = defaults.string(forKey: Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
-        globalShortcut = defaults.string(forKey: Key.globalShortcut) ?? Self.defaultGlobalShortcut
-        autoSubmit = defaults.bool(forKey: Key.autoSubmit)
-        currentProject = defaults.string(forKey: Key.currentProject).flatMap(UUID.init(uuidString:))
+        func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
+        theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
+        globalShortcut = string(Key.globalShortcut) ?? Self.defaultGlobalShortcut
+        autoSubmit = launchArguments[Key.autoSubmit].map(Self.isTrue) ?? defaults.bool(forKey: Key.autoSubmit)
+        currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
+    }
+
+    private static func isTrue(_ value: Any) -> Bool {
+        if let flag = value as? Bool { return flag }
+        return ["yes", "true", "1"].contains(String(describing: value).lowercased())
+    }
+
+    /// 窗口位置（`NSWindow.frameDescriptor` 字符串）：设备本地偏好，与其他偏好同处一个存储。
+    func windowFrame(for name: String) -> String? {
+        defaults.string(forKey: Self.frameKeyPrefix + name)
+    }
+
+    func setWindowFrame(_ descriptor: String, for name: String) {
+        defaults.set(descriptor, forKey: Self.frameKeyPrefix + name)
     }
 
     /// 旧版设置只作初始值：用户在新版里设置过的项不覆盖。
