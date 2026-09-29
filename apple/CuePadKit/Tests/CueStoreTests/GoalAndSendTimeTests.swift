@@ -45,16 +45,21 @@ import Testing
     let untouched = try await store.createCard(in: other.id, body: "other goal")
     try await store.setGoal(untouched.id, for: other.id)
 
-    for leave: @Sendable (CueStore, UUID) async throws -> Void in [
-      { try await $0.trashCard($1) },
-      { try await $0.purgeCard($1) },
-      { try await $0.moveCard($1, to: nil, after: nil) },
-    ] {
+    func newGoal() async throws -> Card {
       let card = try await store.createCard(in: p.id, body: "goal")
       try await store.setGoal(card.id, for: p.id)
-      try await leave(store, card.id)
-      #expect(try await goal(of: p) == nil)
+      return card
     }
+
+    try await store.trashCard(try await newGoal().id)
+    #expect(try await goal(of: p) == nil)
+
+    try await store.purgeCard(try await newGoal().id)
+    #expect(try await goal(of: p) == nil)
+
+    try await store.moveCard(try await newGoal().id, to: nil, after: nil)
+    #expect(try await goal(of: p) == nil)
+
     #expect(try await store.project(other.id)?.goalCardID == untouched.id)
   }
 
