@@ -87,7 +87,7 @@ struct GlobalShortcutTests {
 
     @Test func 启动时按设置注册_更换成功才落设置_失败回滚() throws {
         let rig = Rig()
-        let services = rig.services
+        let services: AppServices = rig.services
         services.settings.globalShortcut = "Control+Alt+KeyP"
         services.applySavedShortcut()
         let saved = Shortcut(keyCode: 35, modifiers: [.control, .option])

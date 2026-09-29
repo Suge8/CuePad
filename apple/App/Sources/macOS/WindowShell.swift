@@ -22,6 +22,10 @@ final class WindowShell {
         window.show()
     }
 
+    func hide() {
+        window.hide()
+    }
+
     /// 全局热键：窗口在前台才隐藏；可见但被遮挡时先拉到前台。
     func toggleFromHotkey() {
         if window.isVisible && window.isFocused { window.hide() } else { window.show() }

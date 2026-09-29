@@ -42,7 +42,8 @@ shot_mac() {
   mkdir -p "$(dirname "$out")"
   pkill -f "$app/Contents/MacOS/CuePad" 2>/dev/null || true
   # -g：后台启动，不抢当前焦点
-  open -g -n "$app"
+  # 库放进 .derived：不碰真实资料库，也不导入 Electron 旧库
+  open -g -n --env CUEPAD_LIBRARY_DIR="$DERIVED/library" "$app"
   local pid="" wid="" i
   for i in $(seq 100); do
     pid="$(pgrep -f "$app/Contents/MacOS/CuePad" | head -1 || true)"

@@ -10,7 +10,7 @@ struct MenuBarPanelPlacementTests {
     @Test func 面板在图标正下方居中() {
         let icon = CGRect(x: 1000, y: 875, width: 30, height: 25)
         let origin = MenuBarPanel.origin(for: size, below: icon, in: screen)
-        #expect(origin.x == 1015 - 150)
+        #expect(origin.x == 865.0) // 图标中心 1015 − 面板半宽 150
         #expect(origin.y + size.height <= icon.minY)
     }
 

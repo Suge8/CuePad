@@ -1,6 +1,6 @@
 # CuePad Apple 工程
 
-`CuePad.xcodeproj`：一个多平台 App target（macOS + iOS/iPadOS，最低 26），Swift 6 严格并发；源码在 `App/Sources/` 与 `App/Tests/`（文件夹同步组，增删文件不用改工程文件）。共用 Swift 包在 `CuePadKit/`，方案见 [docs/swift-rewrite.md](../docs/swift-rewrite.md)。
+`CuePad.xcodeproj`：一个多平台 App target（macOS + iOS/iPadOS，最低 26），Swift 6 严格并发；源码在 `App/Sources/` 与 `App/Tests/`（文件夹同步组，增删文件不用改工程文件）：`Shared/AppServices.swift` 是组合根，`Services/` 是其实现，`macOS/` 是壳层（窗口、快捷键、菜单栏图标与面板），`UI/` 是界面。共用 Swift 包在 `CuePadKit/`，方案见 [docs/swift-rewrite.md](../docs/swift-rewrite.md)。
 
 ## 命令
 
@@ -23,4 +23,6 @@ apple/scripts/xc.sh shot ios      # 构建 → 模拟器安装启动 → 截图 
 - 单元测试以 App 为宿主；宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。壳层测试只在 macOS 编译，`test ios` 目前执行 0 个测试。
 - 测试只用替身或不产生按键事件的系统调用，不向其他应用发送键鼠事件；全局热键的物理触发只能人工验证。
 - 签名配置在 `App/Config/Signing.xcconfig`：本机 ad-hoc，分发时按文件内注释改成 Developer ID。
-- 工程尚未链接 `CuePadKit`：链接本地包会让每次全新构建都解析其远程依赖（SQLiteData 等）。需要时在 target 的 Package Dependencies 添加对应 product。
+- 链接的 `CuePadKit` products：CueText / CueStore / CueEditor 全平台，CueDispatch / CuePi 仅 macOS（工程里按平台过滤）。
+- 资料库在 `~/Library/Application Support/CuePad/Library/`；首次启动从 Electron 版库（`~/Library/Application Support/cuepad/cuepad.db`）导入一次，完成标记是库目录里的 `.electron-import-completed`。环境变量 `CUEPAD_LIBRARY_DIR` 指向隔离目录（不导入旧库）；`shot mac` 用它把库放进 `.derived/library`。
+- 服务测试用临时目录、独立 UserDefaults 与记录型替身，不碰真实资料库、`~/.pi` 和其他应用。

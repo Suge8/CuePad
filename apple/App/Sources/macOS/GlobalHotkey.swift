@@ -19,6 +19,7 @@ nonisolated struct Shortcut: Hashable, Sendable {
 
 nonisolated enum HotkeyError: Error, Equatable {
     case occupied(Shortcut)
+    case unsupportedAccelerator(String)
     case system(Int32)
 }
 
