@@ -24,11 +24,11 @@ public final class WorkspaceApps: AppDirectory, @unchecked Sendable {
         self.excludedPID = excludedPID
         self.excludedBundleID = excludedBundleID
         self.center = notificationCenter
-        if let front = NSWorkspace.shared.frontmostApplication { record(AppInfo(front)) }
+        if let front = NSWorkspace.shared.frontmostApplication { record(front) }
         observer = center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: nil) {
             [weak self] note in
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
-            self?.record(AppInfo(app))
+            self?.record(app)
         }
     }
 
@@ -61,26 +61,32 @@ public final class WorkspaceApps: AppDirectory, @unchecked Sendable {
         }
     }
 
-    /// 目标选择器用的运行中应用：普通应用、去重、按名称排序。
+    /// 目标选择器用的运行中应用：可投送、去重、按名称排序。
     public func runningTargets() -> [AppInfo] {
         var seen = Set<String>()
         return NSWorkspace.shared.runningApplications
-            .filter { !$0.isTerminated && $0.activationPolicy == .regular }
+            .filter { !$0.isTerminated && isDispatchable($0) }
             .map(AppInfo.init)
-            .filter { app in !isExcluded(app) && app.bundleID.map { seen.insert($0).inserted } == true }
+            .filter { $0.bundleID.map { seen.insert($0).inserted } == true }
             .sorted { $0.name < $1.name }
     }
 
-    private func record(_ app: AppInfo) {
-        let subscribers = state.withLock { state in
-            if app.pid >= 0, !isExcluded(app) { state.last = app }
-            return Array(state.subscribers.values)
-        }
-        for subscriber in subscribers { subscriber.yield(app.pid) }
+    /// 上一个前台应用与目标列表共用的口径：普通应用（排除 loginwindow、Dock、Spotlight 等）且不是被排除者。
+    private func isDispatchable(_ app: NSRunningApplication) -> Bool {
+        app.activationPolicy == .regular
+            && app.processIdentifier != excludedPID
+            && (excludedBundleID == nil || app.bundleIdentifier != excludedBundleID)
     }
 
-    private func isExcluded(_ app: AppInfo) -> Bool {
-        app.pid == excludedPID || (excludedBundleID != nil && app.bundleID == excludedBundleID)
+    /// 所有激活都通知订阅者（等待目标激活用）；只有可投送应用才更新"上一个前台应用"。
+    private func record(_ app: NSRunningApplication) {
+        let info = AppInfo(app)
+        let dispatchable = isDispatchable(app) && info.pid >= 0
+        let subscribers = state.withLock { state in
+            if dispatchable { state.last = info }
+            return Array(state.subscribers.values)
+        }
+        for subscriber in subscribers { subscriber.yield(info.pid) }
     }
 }
 
