@@ -7,7 +7,7 @@ extension CueTextView {
 
     func buffer() -> CueBuffer {
         let storage = textStorage!
-        return CueBuffer(text: storage.string as NSString) { index in
+        return CueBuffer(text: storage.mutableString) { index in
             index < storage.length && storage.attribute(.attachment, at: index, effectiveRange: nil) is CueDividerAttachment
         }
     }

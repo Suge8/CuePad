@@ -32,7 +32,7 @@ public struct CueBuffer {
 
     func isSplitLine(_ line: Line) -> Bool { line.end - line.start == 1 && isSplit(line.start) }
 
-    private func isBlank(_ line: Line) -> Bool {
+    func isBlank(_ line: Line) -> Bool {
         (line.start..<line.end).allSatisfy {
             Unicode.Scalar(text.character(at: $0)).map(\.properties.isWhitespace) ?? false
         }

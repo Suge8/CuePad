@@ -17,7 +17,12 @@ public final class CueTextView: NSTextView {
     public var onError: ((any Error) -> Void)?
 
     private var isLoading = false
-    private var pendingEdits: [NSRange] = []
+    /// 自上次刷新以来的编辑：新坐标下的范围与长度变化。
+    private var pendingEdits: [(range: NSRange, delta: Int)] = []
+    /// 现有段落是按哪份装饰上下文排版的。
+    var flushedDecorations = CueDecorations(CueBuffer(text: "", isSplit: { _ in false }))
+    var decorations = CueDecorations(CueBuffer(text: "", isSplit: { _ in false }))
+    private var decorationDelegate: DecorationDelegate?
     private var editObserver: (any NSObjectProtocol)?
     private lazy var settler = LayoutSettler(textView: self)
     lazy var thumbnails = ThumbnailLoader(textView: self)
@@ -32,6 +37,10 @@ public final class CueTextView: NSTextView {
         container.widthTracksTextView = true
         layout.textContainer = container
         super.init(frame: .zero, textContainer: container)
+        let delegate = DecorationDelegate(textView: self)
+        decorationDelegate = delegate
+        content.delegate = delegate
+        layout.delegate = delegate
         configure()
         applyTheme()
         // 输入法组合期间 didChangeNotification 不触发，所以高亮挂在 storage 的 didProcessEditing 上。
@@ -78,6 +87,7 @@ public final class CueTextView: NSTextView {
         undoManager?.removeAllActions()
         setSelectedRange(NSRange(location: 0, length: 0))
         pendingEdits = []
+        flushedDecorations = decorations
         refreshVariableHighlight(around: nil)
         refreshDividerLabels()
         settler.restart()
@@ -145,6 +155,7 @@ public final class CueTextView: NSTextView {
             storage.addAttributes(baseAttributes, range: NSRange(location: 0, length: storage.length))
         }
         refreshVariableHighlight(around: nil)
+        restyle(NSRange(location: 0, length: textStorage!.length))
         dividerViews().forEach { $0.needsDisplay = true }
         settler.restart()
     }
@@ -162,7 +173,8 @@ public final class CueTextView: NSTextView {
     /// 此刻 TextKit 的内容管理器还没同步新文本，位置换算要等到下一个同步点（见 `flushHighlight`）。
     private func storageDidProcessEditing() {
         guard textStorage!.editedMask.contains(.editedCharacters) else { return }
-        pendingEdits.append(textStorage!.editedRange)
+        pendingEdits.append((textStorage!.editedRange, textStorage!.changeInLength))
+        decorations = CueDecorations(buffer())
         DispatchQueue.main.async { [weak self] in self?.flushHighlight() }
     }
 
@@ -173,7 +185,8 @@ public final class CueTextView: NSTextView {
         let edits = pendingEdits
         pendingEdits = []
         // 多次编辑累积时新旧坐标混杂，直接全文重扫
-        refreshVariableHighlight(around: edits.count == 1 ? edits[0] : nil)
+        refreshVariableHighlight(around: edits.count == 1 ? edits[0].range : nil)
+        restyleAfter(edits)
         if numbering != .none { refreshDividerLabels() }
     }
 
