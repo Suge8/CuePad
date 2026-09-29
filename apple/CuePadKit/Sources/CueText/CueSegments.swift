@@ -34,11 +34,7 @@ public enum CueSegments {
 
     /// 卡片标题 = 首个标题行；没有标题行返回空串。
     public static func firstContentLine(_ stored: String) -> String {
-        for line in stored.components(separatedBy: "\n") {
-            let text = titleText(of: line)
-            if !text.isEmpty { return text }
-        }
-        return ""
+        contentLines(stored).first ?? ""
     }
 
     private static func titleText(of line: String) -> String {
