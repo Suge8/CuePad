@@ -35,4 +35,16 @@ import Testing
         activate(finder, on: center)
         #expect(apps.lastFrontmost()?.pid != finder.processIdentifier)
     }
+
+    @Test func 非普通应用激活时不覆盖上一个前台应用也不出现在目标列表() throws {
+        let finder = try finder()
+        let dock = try #require(NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first)
+        try #require(dock.activationPolicy != .regular)
+        let center = NotificationCenter()
+        let apps = WorkspaceApps(excludedPID: -1, notificationCenter: center)
+        activate(finder, on: center)
+        activate(dock, on: center)
+        #expect(apps.lastFrontmost()?.pid == finder.processIdentifier)
+        #expect(!apps.runningTargets().contains { $0.pid == dock.processIdentifier })
+    }
 }
