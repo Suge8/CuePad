@@ -122,7 +122,7 @@ public struct PiSession: Identifiable, Equatable, Sendable {
   }
 }
 
-public struct SendTarget: Sendable {
+public struct SendTarget: Equatable, Sendable {
   public var kind: SendTargetKind
   public var name: String
   public var ref: String?
@@ -144,38 +144,48 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
   public var projects: Set<UUID?>?
   /// true 只要含图片的卡，false 只要不含图片的卡，nil 不限。
   public var hasImages: Bool?
-  /// 至少有一条发送记录符合的卡。
-  public var sentTo: SendFilter?
+  /// 发送条件：不限、从未发送过、或发送过（可限目标）。
+  public var sent: SendCondition
   /// 卡片最近修改时间落在区间内（含两端）。
   public var modifiedIn: ClosedRange<Date>?
   /// true 只搜回收站里的内容（含随项目进回收站的卡片），false 只搜未删除内容。
   public var inTrash: Bool
 
   public init(
-    text: String = "", projects: Set<UUID?>? = nil, hasImages: Bool? = nil, sentTo: SendFilter? = nil,
+    text: String = "", projects: Set<UUID?>? = nil, hasImages: Bool? = nil, sent: SendCondition = .any,
     modifiedIn: ClosedRange<Date>? = nil, inTrash: Bool = false
   ) {
     self.text = text
     self.projects = projects
     self.hasImages = hasImages
-    self.sentTo = sentTo
+    self.sent = sent
     self.modifiedIn = modifiedIn
     self.inTrash = inTrash
   }
 
   public init(stringLiteral value: String) { self.init(text: value) }
 
-  var hasCardFilters: Bool { projects != nil || hasImages != nil || sentTo != nil || modifiedIn != nil }
+  var hasCardFilters: Bool { projects != nil || hasImages != nil || sent != .any || modifiedIn != nil }
 }
 
-/// 发送目标筛选：种类与名称都可省略；名称精确匹配；都省略表示"发送过"。
-public struct SendFilter: Sendable {
-  public var kind: SendTargetKind?
-  public var name: String?
+/// 搜索的发送条件。
+public enum SendCondition: Equatable, Sendable {
+  /// 不限。
+  case any
+  /// 从未发送过（没有任何关联该卡的发送记录）。
+  case never
+  /// 至少发送过一次；可限目标种类与名称（名称精确匹配），都省略表示发到哪里都行。
+  case sent(kind: SendTargetKind? = nil, name: String? = nil)
+}
 
-  public init(kind: SendTargetKind? = nil, name: String? = nil) {
-    self.kind = kind
-    self.name = name
+/// 一张卡最近一次发送：何时、发给谁。
+public struct LastSend: Equatable, Sendable {
+  public var sentAt: Date
+  public var target: SendTarget
+
+  public init(sentAt: Date, target: SendTarget) {
+    self.sentAt = sentAt
+    self.target = target
   }
 }
 

@@ -60,17 +60,41 @@ extension CueStore {
     try select(SendRecord.self, orderBy: "sentAt DESC, id")
   }
 
-  /// 项目（nil = 未归档）里可见卡片的最近发送时间：卡片 id → 最近一次 sentAt；从未发送的卡不在结果里。
+  /// 项目（nil = 未归档）里可见卡片的最近一次发送（时间与目标）：卡片 id → `LastSend`；从未发送的卡不在结果里。
   /// 一次查询覆盖整个项目，界面据此判断"未发送"和工作集，不必逐卡查询。
-  public func lastSentTimes(in project: UUID?) throws -> [UUID: Date] {
+  public func lastSends(in project: UUID?) throws -> [UUID: LastSend] {
     Dictionary(
       uniqueKeysWithValues: try db.query(
         """
-        SELECT cardID, MAX(sentAt) FROM sendRecords
-        WHERE cardID IN (SELECT id FROM cards WHERE (\(cardVisible)) AND projectID IS ?)
-        GROUP BY cardID
+        SELECT s.cardID, s.sentAt, s.targetKind, s.targetName, s.targetRef FROM sendRecords s
+        WHERE s.cardID IN (SELECT id FROM cards WHERE (\(cardVisible)) AND projectID IS ?)
+          AND s.id = (SELECT t.id FROM sendRecords t WHERE t.cardID = s.cardID ORDER BY t.sentAt DESC, t.id DESC LIMIT 1)
         """, [project]
-      ) { ($0.uuid(0), $0.date(1)) })
+      ) {
+        (
+          $0.uuid(0),
+          LastSend(
+            sentAt: $0.date(1),
+            target: SendTarget(
+              kind: SendTargetKind(rawValue: $0.text(2)) ?? .app, name: $0.text(3), ref: $0.textOrNil(4)))
+        )
+      })
+  }
+
+  /// 发送过卡片的目标，按种类与名称去重，最近使用的在前（`ref` 取该目标最近一次的）。
+  /// 只含关联了卡片的发送：这些目标才可能筛出卡片，供搜索的"发给某目标"下拉使用。
+  /// `ref` 靠 SQLite 对单个 MAX 聚合的裸列语义取自最近一行。
+  public func sendTargets() throws -> [SendTarget] {
+    try db.query(
+      """
+      SELECT targetKind, targetName, targetRef, MAX(sentAt) FROM sendRecords
+      WHERE cardID IS NOT NULL
+      GROUP BY targetKind, targetName
+      ORDER BY MAX(sentAt) DESC, targetKind, targetName
+      """
+    ) {
+      SendTarget(kind: SendTargetKind(rawValue: $0.text(0)) ?? .app, name: $0.text(1), ref: $0.textOrNil(2))
+    }
   }
 
   /// 会话的检查点（服务层存入的不透明字节）；会话不存在或尚未索引返回 nil。
@@ -147,13 +171,18 @@ extension CueStore {
     if let hasImages = query.hasImages {
       parts.append("instr(body, 'cuepad://img/') \(hasImages ? ">" : "=") 0")
     }
-    if let sent = query.sentTo {
+    switch query.sent {
+    case .any:
+      break
+    case .never:
+      parts.append("id NOT IN (SELECT cardID FROM sendRecords WHERE cardID IS NOT NULL)")
+    case .sent(let kind, let name):
       var subquery = "SELECT cardID FROM sendRecords WHERE cardID IS NOT NULL"
-      if let kind = sent.kind {
+      if let kind {
         subquery += " AND targetKind = ?"
         arguments.append(kind.rawValue)
       }
-      if let name = sent.name {
+      if let name {
         subquery += " AND targetName = ?"
         arguments.append(name)
       }
