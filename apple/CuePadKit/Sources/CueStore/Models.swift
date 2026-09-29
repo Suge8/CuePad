@@ -148,6 +148,8 @@ public enum CueStoreError: Error, Equatable {
   case blankTaskContent
   case blankTagName
   case notAnImage
+  /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
+  case attachmentFilesNotRemoved([String])
 }
 
 // MARK: - 行映射

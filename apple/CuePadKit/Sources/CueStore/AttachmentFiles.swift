@@ -51,6 +51,12 @@ public struct AttachmentFiles: Sendable {
     return (hash, format)
   }
 
+  /// 删除文件；文件本来就不存在不算失败。
+  func remove(hash: String) throws {
+    let url = directory.appending(path: hash)
+    if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+  }
+
   private static func isValid(_ hash: String) -> Bool {
     hash.utf8.count == 64 && hash.utf8.allSatisfy { ($0 >= 0x30 && $0 <= 0x39) || ($0 >= 0x61 && $0 <= 0x66) }
   }

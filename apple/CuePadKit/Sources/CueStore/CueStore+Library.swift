@@ -51,14 +51,15 @@ extension CueStore {
   /// 永久删除：连同随项目进回收站的卡片；更早单独进回收站的卡片留在回收站（归入未归档）；
   /// 任务归为全局。
   public func purgeProject(_ id: UUID) throws {
-    try write {
+    try reportingFileFailures { try write {
       let now = Date.stamp
-      try purgeCards(where: "projectID = ? AND deletedAt IS NULL", [id])
+      let orphaned = try purgeCards(where: "projectID = ? AND deletedAt IS NULL", [id])
       try db.run("UPDATE cards SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, id])
       try db.run("UPDATE tasks SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, id])
       try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [id])
       try db.run("DELETE FROM projects WHERE id = ?", [id])
-    }
+      return try reclaimAttachments(orphaned)
+    } }
   }
 }
 
@@ -153,24 +154,53 @@ extension CueStore {
 
   /// 永久删除；发送记录保留内容快照。
   public func purgeCard(_ id: UUID) throws {
-    try write { try purgeCards(where: "id = ?", [id]) }
+    try reportingFileFailures { try write { try reclaimAttachments(purgeCards(where: "id = ?", [id])) } }
   }
 
   /// 清空回收站：单独删除的卡片，以及回收站项目连同其卡片。
   public func emptyTrash() throws {
-    try write {
-      try purgeCards(
+    try reportingFileFailures { try write {
+      let orphaned = try purgeCards(
         where: "deletedAt IS NOT NULL OR projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)")
       try db.run("DELETE FROM projects WHERE deletedAt IS NOT NULL")
-    }
+      return try reclaimAttachments(orphaned)
+    } }
   }
 
-  /// 删卡并在同一事务里清理引用它的记录（同步表没有外键级联）。
-  private func purgeCards(where condition: String, _ arguments: [any SQLBindable] = []) throws {
+  /// 删卡并在同一事务里清理引用它的记录（同步表没有外键级联）。返回这些卡正文引用过的图片哈希，
+  /// 由调用方在同一事务里交给 `reclaimAttachments` 判断是否已无人引用。
+  private func purgeCards(where condition: String, _ arguments: [any SQLBindable] = []) throws -> Set<String> {
     let ids = "SELECT id FROM cards WHERE \(condition)"
+    let bodies = try db.query("SELECT body FROM cards WHERE \(condition)", arguments) { $0.text(0) }
+    let referenced = Set(bodies.flatMap { $0.matches(of: /cuepad:\/\/img\/([0-9a-f]{64})/).map { String($0.output.1) } })
     try db.run("DELETE FROM cardTags WHERE cardID IN (\(ids))", arguments)
     try db.run("UPDATE sendRecords SET cardID = NULL, modifiedAt = ? WHERE cardID IN (\(ids))", [Date.stamp] + arguments)
     try db.run("DELETE FROM cards WHERE \(condition)", arguments)
+    return referenced
+  }
+
+  /// 删除候选图片中已不被任何卡片正文（含回收站里的卡）引用的：先删文件，成功后再删记录，
+  /// 所以记录与文件始终配对；删不掉的文件保留记录并返回其哈希。
+  /// 只看被删卡片引用过的图片，不做全表扫描：刚粘贴、正文尚未保存的图片不能被顺手回收。
+  /// 不处理跨设备竞态：另一台设备可能刚好在引用同一哈希，阶段 3 接入同步时再处理。
+  private func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
+    var failed: [String] = []
+    for hash in candidates.sorted() {
+      let used = try db.first("SELECT 1 FROM cards WHERE instr(body, ?) > 0", ["cuepad://img/\(hash)"]) { _ in true }
+      if used != nil { continue }
+      do { try files.remove(hash: hash) } catch {
+        failed.append(hash)
+        continue
+      }
+      try db.run("DELETE FROM attachments WHERE hash = ?", [hash])
+    }
+    return failed
+  }
+
+  /// 事务已提交后，把删不掉文件的哈希作为错误报告（永久删除本身已生效）。
+  private func reportingFileFailures(_ body: () throws -> [String]) throws {
+    let failed = try body()
+    if !failed.isEmpty { throw CueStoreError.attachmentFilesNotRemoved(failed) }
   }
 }
 
