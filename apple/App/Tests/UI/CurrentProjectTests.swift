@@ -66,3 +66,36 @@ struct CurrentProjectTests {
     }
 }
 #endif
+
+/// 竞态：界面选中项目之后、写入之前项目被删；Store 在写事务里拒绝（invalidProject），入口据此回落并提示，不吞错。
+@MainActor
+struct CurrentProjectRaceTests {
+    let rig = Rig()
+    var services: AppServices { rig.services }
+
+    @Test func 写入时项目已被删_卡片落到未归档_纠正当前项目并提示() async throws {
+        let project = try await services.store.createProject(name: "A", color: "#000000")
+        services.settings.currentProject = project.id
+        let workspace = Workspace(services: services)
+        let target = workspace.currentProject
+        try await services.store.trashProject(project.id)
+
+        let card = try await workspace.createCard(body: "想法", in: target)
+
+        #expect(card.projectID == nil)
+        #expect(try await services.store.cards(in: nil).map(\.id) == [card.id])
+        #expect(services.settings.currentProject == nil)
+        #expect(workspace.notice?.isError == true)
+    }
+
+    @Test func 写入时项目已被删_任务归为全局并提示() async throws {
+        let project = try await services.store.createProject(name: "A", color: "#000000")
+        let workspace = Workspace(services: services)
+        try await services.store.trashProject(project.id)
+
+        let task = try await workspace.createTask("跟进", in: project.id)
+
+        #expect(task.projectID == nil)
+        #expect(workspace.notice?.isError == true)
+    }
+}
