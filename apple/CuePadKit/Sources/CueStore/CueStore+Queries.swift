@@ -97,19 +97,22 @@ extension CueStore {
   }
 
   /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。
+  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串：单个词只匹配正文与标签（项目名命中的项目在
+  /// `projects` 里单列）；多个词时每个词也可以落在卡片所属项目的名字里，项目要求每个词都在名字里。
   /// 卡片按最近修改倒序（同刻按 id）；`totalCards` 是全部命中数。
   public func search(_ query: SearchQuery, limit: Int = 20, offset: Int = 0) throws -> SearchResults {
-    let text = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
-    let (condition, arguments) = cardCondition(query, text: text)
+    let terms = query.text.split(whereSeparator: \.isWhitespace).map(String.init)
+    let (condition, arguments) = cardCondition(query, terms: terms)
     let cards = try select(
       Card.self, where: condition, arguments, orderBy: "modifiedAt DESC, id", limit: limit, offset: offset)
     let total = try db.first("SELECT COUNT(*) FROM cards WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
 
     var projects: [Project] = []
-    if !text.isEmpty, !query.hasCardFilters, offset == 0 {
+    if !terms.isEmpty, !query.hasCardFilters, offset == 0 {
+      let named = terms.map { _ in "id IN (\(Self.hit("project")))" }.joined(separator: " AND ")
       projects = try select(
-        Project.self, where: "id IN (\(Self.hit("project"))) AND (deletedAt IS NOT NULL) = ?",
-        [Self.likePattern(text), query.inTrash], orderBy: "sortKey, id", limit: 10)
+        Project.self, where: "\(named) AND (deletedAt IS NOT NULL) = ?",
+        terms.map(Self.likePattern) + [query.inTrash], orderBy: "sortKey, id", limit: 10)
     }
     return SearchResults(projects: projects, cards: cards, totalCards: total)
   }
@@ -122,14 +125,21 @@ extension CueStore {
     "%\(text.replacing(/[\\%_]/) { "\\\($0.output)" })%"
   }
 
-  private func cardCondition(_ query: SearchQuery, text: String) -> (String, [any SQLBindable]) {
+  private func cardCondition(_ query: SearchQuery, terms: [String]) -> (String, [any SQLBindable]) {
     var parts = [query.inTrash ? "NOT (\(cardVisible))" : "(\(cardVisible))"]
     var arguments: [any SQLBindable] = []
 
-    if !text.isEmpty {
-      parts.append(
-        "(id IN (\(Self.hit("card"))) OR id IN (SELECT cardID FROM cardTags WHERE tagID IN (\(Self.hit("tag")))))")
-      arguments += [Self.likePattern(text), Self.likePattern(text)]
+    for term in terms {
+      var alternatives = [
+        "id IN (\(Self.hit("card")))",
+        "id IN (SELECT cardID FROM cardTags WHERE tagID IN (\(Self.hit("tag"))))",
+      ]
+      arguments += [Self.likePattern(term), Self.likePattern(term)]
+      if terms.count > 1 {
+        alternatives.append("projectID IN (\(Self.hit("project")))")
+        arguments.append(Self.likePattern(term))
+      }
+      parts.append("(\(alternatives.joined(separator: " OR ")))")
     }
     if let projects = query.projects {
       let ids = projects.compactMap { $0 }
