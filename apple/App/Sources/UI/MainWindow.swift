@@ -88,6 +88,9 @@ struct MainWindow: View {
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        if workspace.sidebar == .detailOnly {
+            ToolbarItem(placement: .navigation) { ProjectSwitcher() }
+        }
         ToolbarItem(placement: .navigation) {
             if workspace.openCard != nil {
                 Button("返回", systemImage: "chevron.left") { closeCard() }

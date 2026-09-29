@@ -6,31 +6,29 @@ import SwiftUI
 nonisolated struct ProjectPageData: Sendable {
     var project: Project?
     var cards: [Card]
-    var lastSent: [UUID: Date]
-    /// 卡片最近一次发送的目标名。
-    var lastTarget: [UUID: String]
+    /// 卡片最近一次发送（时间与目标）；从未发送的卡不在里面。
+    var lastSends: [UUID: LastSend]
     /// 本项目未完成的任务。
     var tasks: [CueTask]
     var directory: String?
 
+    /// 卡片最近一次发送的目标名。
+    var lastTarget: [UUID: String] { lastSends.mapValues(\.target.name) }
+
+    var goalCard: Card? {
+        project?.goalCardID.flatMap { goal in cards.first { $0.id == goal } }
+    }
+
     /// 目标卡在"目标与下一步"里，不再上墙或进更早。
     func stamps() -> [CardStamp] {
-        cards.filter { $0.id != project?.goalCardID }.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSent[$0.id], isPinned: $0.isFavorite) }
+        cards.filter { $0.id != project?.goalCardID }.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isFavorite) }
     }
 
     static func read(_ project: UUID?, from store: isolated CueStore) throws -> ProjectPageData {
-        let cards = try store.cards(in: project)
-        let ids = Set(cards.map(\.id))
-        var lastTarget: [UUID: String] = [:]
-        for record in try store.sendRecords() {
-            guard let card = record.cardID, ids.contains(card), lastTarget[card] == nil else { continue }
-            lastTarget[card] = record.targetName
-        }
-        return ProjectPageData(
+        ProjectPageData(
             project: try project.flatMap { try store.project($0) },
-            cards: cards,
-            lastSent: try store.lastSentTimes(in: project),
-            lastTarget: lastTarget,
+            cards: try store.cards(in: project),
+            lastSends: try store.lastSends(in: project),
             tasks: try store.tasks().filter { $0.projectID == project },
             directory: try project.flatMap { try store.directory(of: $0) })
     }
@@ -65,7 +63,7 @@ struct ProjectPage: View {
                 withAnimation(Motion.quick) { collapsed = isCollapsed }
             }
             .overlay(alignment: .top) {
-                if collapsed, let data, hasGoal(data) {
+                if collapsed, let data, showsFocus(data) {
                     CompactFocus(data: data) {
                         withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
                     }
@@ -87,29 +85,30 @@ struct ProjectPage: View {
     @ViewBuilder
     private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
         let byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
+        let lastTarget = data.lastTarget
         VStack(alignment: .leading, spacing: 28) {
             ProjectHeader(data: data)
-            if hasGoal(data) { FocusBand(data: data, paperSpace: paperSpace) }
+            if showsFocus(data) { FocusBand(data: data, paperSpace: paperSpace) }
             if data.cards.isEmpty {
                 EmptyProject()
             } else {
                 if !arrangement.pinned.isEmpty {
-                    wallSection(title: "置顶", count: arrangement.pinned.count, hint: nil, ids: arrangement.pinned, byID: byID, data: data)
+                    wallSection(title: "置顶", count: arrangement.pinned.count, hint: nil, ids: arrangement.pinned, byID: byID, data: data, lastTarget: lastTarget)
                 }
                 if !arrangement.wall.isEmpty {
-                    wallSection(title: "工作集", count: arrangement.wall.count, hint: "两周内编辑，或一个月内编辑且没发送过", ids: arrangement.wall, byID: byID, data: data)
+                    wallSection(title: "工作集", count: arrangement.wall.count, hint: "两周内编辑，或一个月内编辑且没发送过", ids: arrangement.wall, byID: byID, data: data, lastTarget: lastTarget)
                 }
                 if !arrangement.older.isEmpty {
                     OlderList(
                         groups: OlderGroup.group(arrangement.older.compactMap { stamp(byID[$0], data) }, now: .now, calendar: .current),
-                        cards: byID, lastTarget: data.lastTarget, paperSpace: paperSpace)
+                        cards: byID, lastTarget: lastTarget, paperSpace: paperSpace)
                 }
             }
         }
         .padding(.horizontal, 32).padding(.top, 6).padding(.bottom, 150)
     }
 
-    private func wallSection(title: String, count: Int, hint: String?, ids: [UUID], byID: [UUID: Card], data: ProjectPageData) -> some View {
+    private func wallSection(title: String, count: Int, hint: String?, ids: [UUID], byID: [UUID: Card], data: ProjectPageData, lastTarget: [UUID: String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
@@ -120,20 +119,20 @@ struct ProjectPage: View {
             MasonryLayout {
                 ForEach(ids.compactMap { byID[$0] }) { card in
                     CardTile(
-                        card: card, lastTarget: data.lastTarget[card.id], floated: floated.contains(card.id),
+                        card: card, lastTarget: lastTarget[card.id], floated: floated.contains(card.id),
                         isGoal: data.project?.goalCardID == card.id, paperSpace: paperSpace)
                 }
             }
         }
     }
 
-    private func hasGoal(_ data: ProjectPageData) -> Bool {
-        guard let goal = data.project?.goalCardID else { return false }
-        return data.cards.contains { $0.id == goal }
+    /// 有目标卡、未完成任务或本项目的 Pi 会话之一就显示；缺的那一栏各自隐藏。
+    private func showsFocus(_ data: ProjectPageData) -> Bool {
+        data.goalCard != nil || !data.tasks.isEmpty || !workspace.liveSessions(in: projectID).isEmpty
     }
 
     private func stamp(_ card: Card?, _ data: ProjectPageData) -> CardStamp? {
-        card.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: data.lastSent[$0.id], isPinned: $0.isFavorite) }
+        card.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: data.lastSends[$0.id]?.sentAt, isPinned: $0.isFavorite) }
     }
 
     private func rearrange() {
@@ -177,7 +176,6 @@ private struct ProjectHeader: View {
                 HStack(spacing: 10) {
                     ProjectGlyph(project: data.project, size: 20)
                     Text(data.project?.name ?? "未归档").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
-                    if workspace.sidebar == .detailOnly { ProjectSwitcher() }
                 }
                 .contextMenu { if let project = data.project { ProjectMenu(project: project) { renaming = project } } }
                 HStack(spacing: 4) {
@@ -203,29 +201,6 @@ private struct ProjectHeader: View {
         let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
         let trimmed = home.hasSuffix("/") ? String(home.dropLast()) : home
         return path.hasPrefix(trimmed) ? "~" + path.dropFirst(trimmed.count) : path
-    }
-}
-
-/// 侧栏收起时，项目名旁的切换菜单。
-private struct ProjectSwitcher: View {
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @State private var projects: [Project]?
-
-    var body: some View {
-        Menu {
-            ForEach(projects ?? []) { project in
-                Button(project.name) { workspace.show(.project(project.id)) }
-            }
-        } label: {
-            Image(systemName: "chevron.down").font(.system(size: 12, weight: .bold))
-        }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-        .foregroundStyle(.secondary)
-        .accessibilityLabel("切换项目")
-        .observing(services.store, [.projects, .cards], into: $projects) { store in
-            try SidebarOrder.projects(store.projects(), summaries: store.projectSummaries())
-        }
     }
 }
 

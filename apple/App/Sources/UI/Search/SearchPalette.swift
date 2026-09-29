@@ -17,17 +17,12 @@ nonisolated struct PaletteQuery: Equatable {
         }
     }
 
-    enum Sent: Hashable {
-        case any
-        case kind(SendTargetKind)
-        case named(String)
-    }
 
     var text = ""
     /// nil 不限；`.some(nil)` 是未归档。
     var project: UUID??
     var withImages = false
-    var sent: Sent = .any
+    var sent: SendCondition = .any
     var period: Period = .any
     var pages = 1
 
@@ -39,11 +34,7 @@ nonisolated struct PaletteQuery: Equatable {
         var query = SearchQuery(text: text)
         if let project { query.projects = [project] }
         if withImages { query.hasImages = true }
-        switch sent {
-        case .any: break
-        case .kind(let kind): query.sentTo = SendFilter(kind: kind)
-        case .named(let name): query.sentTo = SendFilter(name: name)
-        }
+        query.sent = sent
         if period != .any { query.modifiedIn = now.addingTimeInterval(-Double(period.rawValue) * 86_400)...now }
         return query
     }
@@ -53,8 +44,8 @@ nonisolated private struct PaletteData: Sendable {
     var cards: [Card]
     var total: Int
     var projects: [Project]
-    var lastSent: [UUID: Date]
-    var targetNames: [String]
+    var lastSends: [UUID: LastSend]
+    var targets: [SendTarget]
 }
 
 /// ⌘K：跨项目搜索卡片，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览。
@@ -82,7 +73,7 @@ struct SearchPalette: View {
                 Keycap(text: "esc")
             }
             .padding(.horizontal, 18).frame(height: 52)
-            FilterBar(query: $query, projects: data?.projects ?? [], targetNames: data?.targetNames ?? [], total: data?.total)
+            FilterBar(query: $query, projects: data?.projects ?? [], targets: data?.targets ?? [], total: data?.total)
                 .padding(.horizontal, 14).padding(.bottom, 10)
             Divider()
             HStack(alignment: .top, spacing: 0) {
@@ -102,15 +93,13 @@ struct SearchPalette: View {
         .background { shortcuts }
         .observing(services.store, [.cards, .projects, .sendRecords], id: query, into: $data, onError: workspace.fail) { [query] store in
             let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
-            var lastSent: [UUID: Date] = [:]
-            var names: [String] = []
-            for record in try store.sendRecords() {
-                if let card = record.cardID, lastSent[card] == nil { lastSent[card] = record.sentAt }
-                if !names.contains(record.targetName) { names.append(record.targetName) }
+            var lastSends: [UUID: LastSend] = [:]
+            for owner in Set(found.cards.map(\.projectID)) {
+                lastSends.merge(try store.lastSends(in: owner)) { current, _ in current }
             }
             return PaletteData(
                 cards: found.cards, total: found.totalCards, projects: try store.projects(),
-                lastSent: lastSent, targetNames: names)
+                lastSends: lastSends, targets: try store.sendTargets())
         }
         .onChange(of: data?.cards.map(\.id)) {
             if let ids = data?.cards.map(\.id), selection.map(ids.contains) != true { selection = ids.first }
@@ -175,7 +164,7 @@ struct SearchPalette: View {
             let project = data.projects.first { $0.id == card.projectID }
             VStack(alignment: .leading, spacing: 10) {
                 Text(text.title.isEmpty ? "空白卡片" : text.title).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
-                Text("\(project?.name ?? "未归档") · \(DateLabel.short(card.modifiedAt)) · \(data.lastSent[card.id] == nil ? "未发送" : "已发送")")
+                Text("\(project?.name ?? "未归档") · \(DateLabel.short(card.modifiedAt)) · \(data.lastSends[card.id].map { "已发 \($0.target.name)" } ?? "未发送")")
                     .font(.system(size: 11)).foregroundStyle(palette.ink3)
                 if let image = text.images.first { Thumbnail(hash: image, height: 150) }
                 ScrollView {
@@ -240,7 +229,7 @@ struct SearchPalette: View {
 private struct FilterBar: View {
     @Binding var query: PaletteQuery
     let projects: [Project]
-    let targetNames: [String]
+    let targets: [SendTarget]
     let total: Int?
 
     var body: some View {
@@ -258,12 +247,16 @@ private struct FilterBar: View {
             FilterToken(name: "发送目标", value: sentLabel, on: query.sent != .any) {
                 Button("任意") { query.sent = .any }
                 Divider()
-                Button("Pi 会话") { query.sent = .kind(.piSession) }
-                Button("应用") { query.sent = .kind(.app) }
-                Button("剪贴板") { query.sent = .kind(.clipboard) }
-                if !targetNames.isEmpty {
+                Button("从未发送") { query.sent = .never }
+                Divider()
+                Button("Pi 会话") { query.sent = .sent(kind: .piSession) }
+                Button("应用") { query.sent = .sent(kind: .app) }
+                Button("剪贴板") { query.sent = .sent(kind: .clipboard) }
+                if !targets.isEmpty {
                     Divider()
-                    ForEach(targetNames, id: \.self) { name in Button(name) { query.sent = .named(name) } }
+                    ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
+                        Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
+                    }
                 }
             }
             FilterToken(name: "时间", value: query.period.label, on: query.period != .any) {
@@ -285,10 +278,12 @@ private struct FilterBar: View {
     private var sentLabel: String {
         switch query.sent {
         case .any: "任意"
-        case .kind(.piSession): "Pi 会话"
-        case .kind(.app): "应用"
-        case .kind(.clipboard): "剪贴板"
-        case .named(let name): name
+        case .never: "从未发送"
+        case .sent(let kind, .some(let name)): kind == .piSession ? "Pi · \(name)" : name
+        case .sent(.piSession, nil): "Pi 会话"
+        case .sent(.app, nil): "应用"
+        case .sent(.clipboard, nil): "剪贴板"
+        case .sent(nil, nil): "发送过"
         }
     }
 }

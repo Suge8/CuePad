@@ -31,7 +31,7 @@ extension PiAgentState {
         case .idle: "空闲"
         case .thinking: "思考中"
         case .outputting: "输出中"
-        case .tool(let name, _): "工具 · \(name)"
+        case .tool(let name, _, _): "工具 · \(name)"
         case .waitingUser: "等你确认"
         case .done(let aborted): aborted ? "已中止" : "完成"
         case .error: "出错"

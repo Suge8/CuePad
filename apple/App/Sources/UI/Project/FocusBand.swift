@@ -3,7 +3,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 目标与下一步：目标卡 + 本项目未完成任务 + 本项目的 Pi 会话。只在项目有目标卡时出现。
+/// 目标与下一步：目标卡 + 本项目未完成任务 + 本项目的 Pi 会话。没有目标卡时不显示目标一栏。
 struct FocusBand: View {
     let data: ProjectPageData
     let paperSpace: Namespace.ID
@@ -14,8 +14,10 @@ struct FocusBand: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            column { goal }
-            divider
+            if let card = data.goalCard {
+                column { goal(card) }
+                divider
+            }
             column { tasks }
             divider
             column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
@@ -24,25 +26,23 @@ struct FocusBand: View {
         .paper(radius: 18)
     }
 
-    @ViewBuilder private var goal: some View {
+    @ViewBuilder private func goal(_ card: Card) -> some View {
         SectionLabel(text: "目标", systemImage: "scope")
-        if let card = data.cards.first(where: { $0.id == data.project?.goalCardID }) {
-            let text = CardText(card.body)
-            Button {
-                withAnimation(Motion.paper) { workspace.openCard = card.id }
-            } label: {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(text.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
-                    if !text.preview.isEmpty {
-                        Text(VariableText.styled(text.preview, palette)).font(.system(size: 13)).lineSpacing(3)
-                            .foregroundStyle(palette.ink2).lineLimit(3)
-                    }
+        let text = CardText(card.body)
+        Button {
+            withAnimation(Motion.paper) { workspace.openCard = card.id }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(text.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
+                if !text.preview.isEmpty {
+                    Text(VariableText.styled(text.preview, palette)).font(.system(size: 13)).lineSpacing(3)
+                        .foregroundStyle(palette.ink2).lineLimit(3)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
         }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder private var tasks: some View {
@@ -95,7 +95,7 @@ private struct PiColumn: View {
     }
 }
 
-/// 下滚后收成的一行：目标 · 下一步数 · Pi 状态；点一下回到顶部。
+/// 下滚后收成的一行：目标（有才显示）· 下一步数 · Pi 状态；点一下回到顶部。
 struct CompactFocus: View {
     let data: ProjectPageData
     let scrollToTop: () -> Void
@@ -103,11 +103,11 @@ struct CompactFocus: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let goal = data.cards.first { $0.id == data.project?.goalCardID }.map { CardText($0.body).title } ?? ""
+        let goal = data.goalCard.map { CardText($0.body).title }
         let session = workspace.liveSessions(in: data.project?.id).first
         Button(action: scrollToTop) {
             HStack(spacing: 14) {
-                Label(goal, systemImage: "scope").lineLimit(1)
+                if let goal { Label(goal, systemImage: "scope").lineLimit(1) }
                 Label("下一步 \(data.tasks.count)", systemImage: "checklist").foregroundStyle(palette.ink2)
                 if let session {
                     HStack(spacing: 6) {
