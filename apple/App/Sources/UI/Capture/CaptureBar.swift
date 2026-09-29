@@ -1,0 +1,58 @@
+#if os(macOS)
+import SwiftUI
+
+/// 底部玻璃输入栏：随手记下想法，↩ 存为当前项目的卡片，⌘↩ 直接发出（不存卡，发送记录照常写）。⌥↩ 换行。
+struct CaptureBar: View {
+    let project: UUID?
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private static let width: CGFloat = 620
+
+    var body: some View {
+        let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        GlassEffectContainer(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: "plus").foregroundStyle(.secondary)
+                    TextField("记下想法…", text: $text, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 14))
+                        .lineLimit(1...6)
+                        .focused($focused)
+                        .onSubmit(save)
+                    if !empty {
+                        Text("↩ 存为卡片").font(.system(size: 12)).foregroundStyle(.secondary).fixedSize()
+                    }
+                }
+                .padding(.horizontal, 18).padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .glass(in: .rect(cornerRadius: 24), interactive: true)
+                SendControl(project: project, disabled: empty) { send($0) }
+            }
+        }
+        .frame(maxWidth: Self.width)
+        .padding(.horizontal, 24)
+    }
+
+    private func save() {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+        text = ""
+        let project = project
+        workspace.perform { _ = try await $0.createCard(in: project, body: body) }
+        workspace.say("已存为卡片")
+        focused = true
+    }
+
+    private func send(_ choice: SendChoice) {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+        Task {
+            if await workspace.send(body, via: choice) { text = "" }
+        }
+    }
+}
+#endif

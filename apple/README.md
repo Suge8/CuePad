@@ -12,11 +12,13 @@ apple/scripts/xc.sh test mac
 apple/scripts/xc.sh build ios
 apple/scripts/xc.sh test ios
 apple/scripts/xc.sh shot mac      # 构建 → 后台启动 → 单窗口截图 → 退出，输出 .derived/shot-mac.png
+apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -theme dark  # 带启动参数
 apple/scripts/xc.sh shot ios      # 构建 → 模拟器安装启动 → 截图 → 终止，输出 .derived/shot-ios.png
 ```
 
 ## 约定
 
+- `shot mac` 的 `--` 之后是 App 启动参数。Debug 构建认 `-CuePadDemo YES`（空库时写入演示数据）、`-CuePadProject <名称>`、`-CuePadScene <collapsed|older|editor|search|tasks|trash|settings|menubar>`、`-CuePadSearch`、`-CuePadCard`、`-CuePadWindowSize 1280x800`，说明见 `App/Sources/UI/Debug/DebugScene.swift`；设置项可直接覆盖（`-theme dark`）。`CUEPAD_SHOT_LIBRARY` 换库目录，`CUEPAD_SHOT_SETTLE` 是出窗后等待渲染的秒数。Pi 目录同样隔离（`.derived/pi-agent`、`/tmp/cuepad-shot-<uid>`），截图不含 `~/.pi` 的会话。
 - `shot mac` 用 `open -g` 后台启动，不抢焦点；按 pid 找窗口 ID 后 `screencapture -l` 只截该窗口（首次需给终端授予屏幕录制权限）；以 SIGTERM 退出，走应用正常退出流程。
 - 窗口位置/尺寸会被系统记住（`NSWindow Frame main`），截图尺寸以上次为准；要恢复默认：`defaults delete com.sugeh.cuepad "NSWindow Frame main"`。
 - iOS 模拟器默认 `iPhone 17`，用 `CUEPAD_IOS_DEVICE` 覆盖。

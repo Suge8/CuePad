@@ -1,16 +1,54 @@
 #if os(macOS)
+import AppKit
 import SwiftUI
 
-/// 界面接入点：主窗口与菜单栏面板的根视图都在这里创建，界面实现替换这两处即可。
-/// 视图通过环境取得 `AppServices`（`@Environment(AppServices.self)`）。
+/// 界面接入点：主窗口与菜单栏面板的根视图都在这里创建。
+/// 视图通过环境取得 `AppServices`（`@Environment(AppServices.self)`）与本窗口的 `Workspace`。
 @MainActor
 enum RootViews {
     static func mainWindow(_ services: AppServices) -> some View {
-        PlaceholderView().environment(services)
+        MainRoot(workspace: Workspace(services: services)).environment(services)
     }
 
     static func menuBarPad(_ services: AppServices) -> some View {
-        Text("菜单栏").padding().environment(services)
+        MenuBarPad()
+            .environment(Workspace(services: services))
+            .modifier(PaletteProvider())
+            .environment(services)
+    }
+}
+
+/// 主窗口根：按设置切换明暗（连同窗口外框），注入配色。
+private struct MainRoot: View {
+    let workspace: Workspace
+    @Environment(AppServices.self) private var services
+
+    var body: some View {
+        content
+            .modifier(PaletteProvider())
+            .onChange(of: services.settings.theme, initial: true) { _, theme in
+                NSApp.appearance = switch theme {
+                case .system: nil
+                case .light: NSAppearance(named: .aqua)
+                case .dark: NSAppearance(named: .darkAqua)
+                }
+            }
+            #if DEBUG
+            .task { await DebugScene.prepare(workspace) }
+            #endif
+    }
+
+    @ViewBuilder private var content: some View {
+        #if DEBUG
+        if DebugScene.scene == "menubar" {
+            // 截图只截主窗口：把菜单栏面板放进主窗口里拍
+            DebugMenuBarStage().environment(workspace)
+        } else {
+            MainWindow(workspace: workspace)
+        }
+        #else
+        MainWindow(workspace: workspace)
+        #endif
     }
 }
 #endif
