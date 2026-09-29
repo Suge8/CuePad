@@ -1,0 +1,62 @@
+// 测试用假模型：真实 Pi + 真实桥扩展，零网络、结果确定。
+// 最后一条 user 文字里的标记决定行为：
+//   [[slow]]      流式输出前等 1.5 秒（制造"正忙"窗口）
+//   [[fail]]      以 error 结束
+//   [[tool:CMD]]  先发起 bash 工具调用，收到工具结果后回复 TOOL_DONE
+// 其余：回复 "ECHO <文字> IMAGES[<mime>:<base64长度>,…]"，证明文字与图片都进了模型上下文。
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
+
+const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export default function (pi: any) {
+	pi.registerProvider("fake", {
+		baseUrl: "http://127.0.0.1:1",
+		apiKey: "fake",
+		api: "fake-api",
+		models: [{ id: "echo", name: "Echo", reasoning: false, input: ["text", "image"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100000, maxTokens: 4096 }],
+		streamSimple(model: any, context: any) {
+			const stream = createAssistantMessageEventStream();
+			(async () => {
+				const msg: any = { role: "assistant", content: [], api: model.api, provider: model.provider, model: model.id, usage, stopReason: "stop", timestamp: Date.now() };
+				const lastMessage = context.messages[context.messages.length - 1];
+				const lastUser = [...context.messages].reverse().find((m: any) => m.role === "user");
+				const parts = typeof lastUser.content === "string" ? [{ type: "text", text: lastUser.content }] : lastUser.content;
+				const text = parts.filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n");
+				const images = parts.filter((p: any) => p.type === "image").map((p: any) => `${p.mimeType}:${p.data.length}`);
+
+				if (text.includes("[[slow]]")) await sleep(1500);
+				stream.push({ type: "start", partial: msg });
+
+				if (text.includes("[[fail]]")) {
+					msg.stopReason = "error";
+					msg.errorMessage = "fake model failure";
+					stream.push({ type: "error", reason: "error", error: msg });
+					stream.end();
+					return;
+				}
+
+				const tool = /\[\[tool:(.+?)\]\]/.exec(text);
+				if (tool && lastMessage.role !== "toolResult") {
+					const call = { type: "toolCall", id: "call_1", name: "bash", arguments: { command: tool[1] } };
+					msg.content.push(call);
+					msg.stopReason = "toolUse";
+					stream.push({ type: "toolcall_start", contentIndex: 0, partial: msg });
+					stream.push({ type: "toolcall_end", contentIndex: 0, toolCall: call, partial: msg });
+					stream.push({ type: "done", reason: "toolUse", message: msg });
+					stream.end();
+					return;
+				}
+
+				const reply = tool ? "TOOL_DONE" : `ECHO ${text} IMAGES[${images.join(",")}]`;
+				msg.content.push({ type: "text", text: reply });
+				stream.push({ type: "text_start", contentIndex: 0, partial: msg });
+				stream.push({ type: "text_delta", contentIndex: 0, delta: reply, partial: msg });
+				stream.push({ type: "text_end", contentIndex: 0, content: reply, partial: msg });
+				stream.push({ type: "done", reason: "stop", message: msg });
+				stream.end();
+			})();
+			return stream;
+		},
+	});
+}

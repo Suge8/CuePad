@@ -1,0 +1,280 @@
+import Foundation
+import Testing
+@testable import CuePi
+
+/// 客户端 ↔ 桥扩展的 socket 协议接缝：用假扩展（说同一字节协议）驱动 `PiBridge`。
+@MainActor
+struct BridgeClientTests {
+    let dir: URL
+    let bridge: PiBridge
+
+    init() throws {
+        dir = try makeSocketDirectory()
+        bridge = PiBridge(socketDirectory: dir)
+    }
+
+    private func session(_ id: String) -> PiSession? { bridge.sessions.first { $0.id == id } }
+
+    // MARK: 发现
+
+    @Test func discoversSessionsRunningBeforeStartAndStartedLater() async throws {
+        let early = FakeExtension(directory: dir)
+        try early.start()
+        try bridge.start()
+        try await eventually("已运行的会话被发现") { session(early.id) != nil }
+
+        let late = FakeExtension(directory: dir, options: .init(cwd: "/work/other", mode: "rpc", model: nil, sessionFile: nil, tty: nil, env: [:]))
+        try late.start()
+        try await eventually("启动后新增的会话被发现（FSEvents）") { session(late.id) != nil }
+
+        let s = try #require(session(early.id))
+        #expect(s.sessionID == early.sessionID)
+        #expect(s.pid == getpid())
+        #expect(s.cwd.path == "/work/project")
+        #expect(s.mode == "tui")
+        #expect(s.model == "test-model")
+        #expect(s.sessionFile?.path == "/work/session.jsonl")
+        #expect(s.state == .idle)
+        #expect(s.terminal == PiTerminal(tty: "ttys009", program: "ghostty", bundleID: "com.mitchellh.ghostty",
+                                         tmuxPane: "%3", tmuxSocketPath: "/private/tmp/tmux-501/default"))
+        #expect(s.extensionVersion == 1)
+
+        let l = try #require(session(late.id))
+        #expect(l.sessionFile == nil && l.model == nil && l.terminal == PiTerminal())
+    }
+
+    @Test func hellosSnapshotReflectsStateAtConnectTime() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        ext.setState(["kind": "tool", "tool": "bash", "tools": ["bash", "read"]])
+        try bridge.start()
+        try await eventually("快照带当前状态") {
+            session(ext.id)?.state == .tool(name: "bash", running: ["bash", "read"])
+        }
+    }
+
+    // MARK: 状态
+
+    @Test func stateChangesAreObservableInOrder() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        let log = ChangeLog(bridge)
+        try await eventually("appeared") { session(ext.id) != nil }
+
+        let script: [([String: Any], PiAgentState)] = [
+            (["kind": "thinking"], .thinking),
+            (["kind": "tool", "tool": "bash", "tools": ["bash"]], .tool(name: "bash", running: ["bash"])),
+            (["kind": "outputting"], .outputting),
+            (["kind": "waiting_user", "promptKind": "confirm", "title": "OK?"], .waitingUser(kind: "confirm", title: "OK?")),
+            (["kind": "error", "error": "boom"], .error(message: "boom")),
+            (["kind": "done", "aborted": true], .done(aborted: true)),
+        ]
+        for (wire, _) in script { ext.setState(wire) }
+        try await eventually("全部状态切换到达") { log.states.count == script.count }
+
+        #expect(log.states == script.map(\.1))
+        #expect(session(ext.id)?.state == .done(aborted: true))
+        let since = try #require(session(ext.id)?.stateSince)
+        #expect(abs(since.timeIntervalSinceNow) < 5)
+    }
+
+    // MARK: 结束与残留清理
+
+    @Test func closingWithByeEndsSessionWithReasonAndNextSessionAppears() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        let log = ChangeLog(bridge)
+        try await eventually("appeared") { session(ext.id) != nil }
+
+        ext.close(bye: "new")
+        try await eventually("ended") { !log.ended.isEmpty }
+        #expect(log.ended.first?.1 == .closed(reason: "new"))
+        #expect(bridge.sessions.isEmpty)
+
+        let next = FakeExtension(directory: dir)
+        try next.start()
+        try await eventually("/new 之后的新会话") { session(next.id) != nil }
+    }
+
+    @Test func connectionDropWithoutByeEndsSessionAndRemovesStaleSocket() async throws {
+        let dead = try deadPid()
+        let ext = FakeExtension(directory: dir, pid: dead)
+        try ext.start()
+        try bridge.start()
+        let log = ChangeLog(bridge)
+        try await eventually("appeared") { session(ext.id) != nil }
+
+        ext.crash() // 等同 kill -9：无 bye，socket 文件残留，属主 pid 已不存在
+        try await eventually("ended") { !log.ended.isEmpty }
+        #expect(log.ended.first?.1 == .disconnected)
+        try await eventually("残留 socket 被清掉") { fileGone(ext.socketURL) }
+    }
+
+    @Test func staleSocketFromDeadProcessIsRemovedAtStartWithoutBecomingASession() async throws {
+        let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try deadPid()).sock")
+        try FakeExtension.makeStaleSocket(at: stale)
+        try bridge.start()
+        try await eventually("启动扫描清掉残留") { fileGone(stale) }
+        #expect(bridge.sessions.isEmpty)
+    }
+
+    @Test func unlistenedSocketOfLiveProcessIsKeptWhileDeadOnesAreRemoved() async throws {
+        // 进程活着但还没 listen（刚 bind）：不能删，否则会破坏正在启动的会话
+        let pending = dir.appending(path: "\(UUID().uuidString.lowercased()).\(getpid()).sock")
+        let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try deadPid()).sock")
+        try FakeExtension.makeStaleSocket(at: pending)
+        try FakeExtension.makeStaleSocket(at: stale)
+        try bridge.start()
+        try await eventually("扫描已发生：属主已死的残留被删") { fileGone(stale) }
+        try await Task.sleep(for: .milliseconds(600)) // 覆盖对存活属主的一次重试
+        #expect(!fileGone(pending))
+    }
+
+    // MARK: 目录安全
+
+    @Test func rejectsDirectoryThatOthersCouldWriteTo() throws {
+        chmod(dir.path, 0o755)
+        #expect(throws: PiBridgeError.self) { try bridge.start() }
+        #expect(bridge.sessions.isEmpty)
+    }
+
+    @Test func rejectsDirectoryPathTooLongForSunPath() throws {
+        let long = PiBridge(socketDirectory: URL(filePath: "/tmp/" + String(repeating: "d", count: 60)))
+        #expect(throws: PiBridgeError.socketDirectoryTooLong) { try long.start() }
+    }
+
+    @Test func createsMissingDirectoryWithOwnerOnlyPermissions() throws {
+        let fresh = dir.appending(path: "sub")
+        try PiBridge(socketDirectory: fresh).start()
+        var st = stat()
+        #expect(lstat(fresh.path, &st) == 0)
+        #expect(st.st_mode & 0o777 == 0o700)
+        #expect(st.st_uid == getuid())
+    }
+
+    // MARK: 协议兼容
+
+    @Test func incompatibleProtocolIsReportedNotListed() async throws {
+        let ext = FakeExtension(directory: dir, options: .init(protocolVersion: 99))
+        try ext.start()
+        try bridge.start()
+        let log = ChangeLog(bridge)
+        try await eventually("incompatible") {
+            log.changes.contains { if case .incompatible(let id, _) = $0 { id == ext.id } else { false } }
+        }
+        #expect(bridge.sessions.isEmpty)
+    }
+
+    @Test func corruptedMessageDropsConnectionAsIncompatible() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        let log = ChangeLog(bridge)
+        try await eventually("appeared") { session(ext.id) != nil }
+        ext.sendRaw(#"{"t":"state","state":{"kind":"warp-drive"}}"#)
+        try await eventually("被判为不兼容并断开") {
+            log.changes.contains { if case .incompatible = $0 { true } else { false } } && bridge.sessions.isEmpty
+        }
+    }
+
+    // MARK: 命令
+
+    @Test func sendEncodesProtocolBytesAndReturnsDelivery() async throws {
+        let ext = FakeExtension(directory: dir)
+        ext.onCommand = { _, _ in ["ok": true, "delivered": "steer"] }
+        try ext.start()
+        try bridge.start()
+        try await eventually("appeared") { session(ext.id) != nil }
+
+        let png = Data([0x89, 0x50, 0x4E, 0x47])
+        let delivery = try await bridge.send(PiMessage(text: "看图", images: [PiImage(mimeType: "image/png", data: png)], whenBusy: .steer), to: ext.id)
+        #expect(delivery == .queued(.steer))
+
+        let cmd = try #require(ext.commands.first?.json)
+        #expect(cmd["t"] as? String == "send")
+        #expect(cmd["text"] as? String == "看图")
+        #expect(cmd["deliverAs"] as? String == "steer")
+        let images = try #require(cmd["images"] as? [[String: Any]])
+        #expect(images.count == 1)
+        #expect(images[0]["mimeType"] as? String == "image/png")
+        #expect(images[0]["data"] as? String == png.base64EncodedString())
+        #expect((cmd["id"] as? String)?.isEmpty == false)
+    }
+
+    @Test func sendOmitsOptionalFieldsAndReportsImmediateDelivery() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        try await eventually("appeared") { session(ext.id) != nil }
+
+        let delivery = try await bridge.send(PiMessage(text: "hi"), to: ext.id)
+        #expect(delivery == .immediate)
+        let cmd = try #require(ext.commands.first?.json)
+        #expect(cmd["images"] == nil && cmd["deliverAs"] == nil)
+    }
+
+    @Test func pasteEncodesProtocolBytes() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        try await eventually("appeared") { session(ext.id) != nil }
+
+        try await bridge.paste("放进输入框", into: ext.id)
+        let cmd = try #require(ext.commands.first?.json)
+        #expect(cmd["t"] as? String == "paste")
+        #expect(cmd["text"] as? String == "放进输入框")
+    }
+
+    @Test func rejectionFromExtensionSurfacesAsError() async throws {
+        let ext = FakeExtension(directory: dir)
+        ext.onCommand = { _, _ in ["ok": false, "error": "no_editor"] }
+        try ext.start()
+        try bridge.start()
+        try await eventually("appeared") { session(ext.id) != nil }
+        await #expect(throws: PiBridgeError.rejected("no_editor")) { try await bridge.paste("x", into: ext.id) }
+    }
+
+    @Test func sendToUnknownSessionFails() async {
+        try? bridge.start()
+        await #expect(throws: PiBridgeError.unknownSession("nope")) { try await bridge.send(PiMessage(text: "x"), to: "nope") }
+    }
+
+    @Test func pendingSendFailsWhenSessionEndsBeforeAck() async throws {
+        let ext = FakeExtension(directory: dir)
+        ext.onCommand = { _, _ in nil } // 收到不回
+        try ext.start()
+        try bridge.start()
+        try await eventually("appeared") { session(ext.id) != nil }
+        let pending = Task { try await bridge.send(PiMessage(text: "x"), to: ext.id) }
+        try await eventually("命令到达") { !ext.commands.isEmpty }
+        ext.crash()
+        await #expect(throws: PiBridgeError.sessionEnded) { try await pending.value }
+    }
+
+    // MARK: 多客户端
+
+    @Test func twoClientsOnOneSessionBothGetSnapshotAndStateAndOwnAcks() async throws {
+        let ext = FakeExtension(directory: dir)
+        // ack 回显命令文字：证明 ack 只回给发送方那条连接
+        ext.onCommand = { _, cmd in ["ok": false, "error": "echo:\((cmd["text"] as? String) ?? "")"] }
+        try ext.start()
+        let other = PiBridge(socketDirectory: dir)
+        try bridge.start()
+        try other.start()
+        try await eventually("两个客户端都连上") {
+            session(ext.id) != nil && other.sessions.contains { $0.id == ext.id } && ext.connectionCount == 2
+        }
+
+        ext.setState(["kind": "thinking"])
+        try await eventually("两个客户端都收到状态切换") {
+            session(ext.id)?.state == .thinking && other.sessions.first?.state == .thinking
+        }
+
+        async let a: Void = { await #expect(throws: PiBridgeError.rejected("echo:from-A")) { try await self.bridge.send(PiMessage(text: "from-A"), to: ext.id) } }()
+        async let b: Void = { await #expect(throws: PiBridgeError.rejected("echo:from-B")) { try await other.send(PiMessage(text: "from-B"), to: ext.id) } }()
+        _ = await (a, b)
+        #expect(ext.commands.count == 2)
+    }
+}
