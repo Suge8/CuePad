@@ -137,7 +137,8 @@ public struct SendTarget: Sendable {
 /// 卡片搜索条件。所有条件同时满足；筛选在分页之前生效。
 /// 没有关键词、没有任何筛选时列出该范围内的全部卡片（按最近修改）。
 public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
-  /// 项目名、卡片正文、标签名的子串（大小写不敏感）；空表示不按文字过滤。
+  /// 按空白拆成多个词，每个词都要命中（子串，大小写不敏感）。卡片按正文与标签命中；项目名只用于单列的项目结果。
+  /// 空表示不按文字过滤。
   public var text: String
   /// 限定所属项目；nil 元素表示未归档；nil 表示不限；空集合无结果。
   public var projects: Set<UUID?>?

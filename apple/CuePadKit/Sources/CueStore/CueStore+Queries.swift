@@ -97,8 +97,8 @@ extension CueStore {
   }
 
   /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。
-  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串：单个词只匹配正文与标签（项目名命中的项目在
-  /// `projects` 里单列）；多个词时每个词也可以落在卡片所属项目的名字里，项目要求每个词都在名字里。
+  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串。卡片只按正文与标签命中；项目名只用于
+  /// `projects` 里单列的项目（每个词都在名字里）。按项目缩小卡片范围用 `projects` 筛选。
   /// 卡片按最近修改倒序（同刻按 id）；`totalCards` 是全部命中数。
   public func search(_ query: SearchQuery, limit: Int = 20, offset: Int = 0) throws -> SearchResults {
     let terms = query.text.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -130,16 +130,9 @@ extension CueStore {
     var arguments: [any SQLBindable] = []
 
     for term in terms {
-      var alternatives = [
-        "id IN (\(Self.hit("card")))",
-        "id IN (SELECT cardID FROM cardTags WHERE tagID IN (\(Self.hit("tag"))))",
-      ]
+      parts.append(
+        "(id IN (\(Self.hit("card"))) OR id IN (SELECT cardID FROM cardTags WHERE tagID IN (\(Self.hit("tag")))))")
       arguments += [Self.likePattern(term), Self.likePattern(term)]
-      if terms.count > 1 {
-        alternatives.append("projectID IN (\(Self.hit("project")))")
-        arguments.append(Self.likePattern(term))
-      }
-      parts.append("(\(alternatives.joined(separator: " OR ")))")
     }
     if let projects = query.projects {
       let ids = projects.compactMap { $0 }
