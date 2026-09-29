@@ -179,14 +179,18 @@ extension CueStore {
     return referenced
   }
 
-  /// 删除候选图片中已不被任何卡片正文（含回收站里的卡）引用的：先删文件，成功后再删记录，
+  /// 删除候选图片中已不被任何卡片正文（含回收站里的卡）和发送记录快照（一键重发要用）引用的：先删文件，成功后再删记录，
   /// 所以记录与文件始终配对；删不掉的文件保留记录并返回其哈希。
   /// 只看被删卡片引用过的图片，不做全表扫描：刚粘贴、正文尚未保存的图片不能被顺手回收。
   /// 不处理跨设备竞态：另一台设备可能刚好在引用同一哈希，阶段 3 接入同步时再处理。
   private func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
     var failed: [String] = []
     for hash in candidates.sorted() {
-      let used = try db.first("SELECT 1 FROM cards WHERE instr(body, ?) > 0", ["cuepad://img/\(hash)"]) { _ in true }
+      let used = try db.first(
+        """
+        SELECT 1 FROM cards WHERE instr(body, ?1) > 0
+        UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
+        """, ["cuepad://img/\(hash)"]) { _ in true }
       if used != nil { continue }
       do { try files.remove(hash: hash) } catch {
         failed.append(hash)
