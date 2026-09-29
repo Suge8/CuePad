@@ -46,7 +46,7 @@ import Testing
     try await store.trashProject(p.id)
 
     #expect(try await store.search("needle").cards.isEmpty)
-    let trash = try await store.search("needle", inTrash: true)
+    let trash = try await store.search(SearchQuery(text: "needle", inTrash: true))
     #expect(Set(trash.cards.map(\.id)) == [inProject.id, alone.id])
   }
 }
