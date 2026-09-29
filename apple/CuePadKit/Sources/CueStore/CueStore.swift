@@ -6,6 +6,8 @@ import Foundation
 /// 写：每个写方法是一个事务，提交后向订阅者发布一次变更。
 public actor CueStore {
   let db: SQLite
+  /// 图片文件的读取（原图、缩略图）；不经过 actor，界面可并发调用。写入用 `addImage`。
+  public nonisolated let files: AttachmentFiles
   private var subscribers: [UUID: (tables: Set<Table>, signal: AsyncStream<Void>.Continuation)] = [:]
 
   public init(url: URL) throws {
@@ -21,6 +23,7 @@ public actor CueStore {
       }
     }
     db = connection
+    files = AttachmentFiles(directory: url.deletingLastPathComponent().appending(path: "Attachments", directoryHint: .isDirectory))
   }
 
   // MARK: 观察

@@ -10,7 +10,7 @@ public enum SendTargetKind: String, Sendable {
 
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Sendable, CaseIterable {
-  case projects, cards, tags, cardTags, tasks, sendRecords, attachments, piSessions
+  case projects, cards, tags, cardTags, tasks, sendRecords, attachments, piSessions, projectDirectories
 }
 
 /// 表行与列的对应。`bindings[0]` 是主键；`columns` 与 `bindings`、`init(row:)` 的读取序号一致。
@@ -26,8 +26,6 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var name: String
   public var icon: String?
   public var color: String
-  /// 绑定的代码目录；Pi 会话按工作目录归入项目。
-  public var directory: String?
   public var sortKey: String
   public var isPinned: Bool
   /// 回收站中的项目；其卡片随之进回收站（由项目推导，卡片自身不记）。
@@ -149,19 +147,20 @@ public enum CueStoreError: Error, Equatable {
   case notFound
   case blankTaskContent
   case blankTagName
+  case notAnImage
 }
 
 // MARK: - 行映射
 
 extension Project: Record {
   static let table = Table.projects
-  static let columns = ["id", "name", "icon", "color", "directory", "sortKey", "isPinned", "deletedAt", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, name, icon, color, directory, sortKey, isPinned, deletedAt, createdAt, modifiedAt] }
+  static let columns = ["id", "name", "icon", "color", "sortKey", "isPinned", "deletedAt", "createdAt", "modifiedAt"]
+  var bindings: [any SQLBindable] { [id, name, icon, color, sortKey, isPinned, deletedAt, createdAt, modifiedAt] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), name: row.text(1), icon: row.textOrNil(2), color: row.text(3),
-      directory: row.textOrNil(4), sortKey: row.text(5), isPinned: row.bool(6),
-      deletedAt: row.dateOrNil(7), createdAt: row.date(8), modifiedAt: row.date(9))
+      sortKey: row.text(4), isPinned: row.bool(5), deletedAt: row.dateOrNil(6),
+      createdAt: row.date(7), modifiedAt: row.date(8))
   }
 }
 

@@ -11,7 +11,7 @@ import Foundation
 ///   引用完整性由写入逻辑维护（同一事务内清理），同名标签、同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
-/// 本机表（不同步）：piSessions、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
+/// 本机表（不同步）：piSessions、projectDirectories、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
 ///
 /// 之后的迁移只能加表或加可空列，不改已有列。
 enum Schema {
@@ -22,7 +22,7 @@ enum Schema {
 
   private static let v1 = """
     CREATE TABLE projects (
-      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, icon TEXT, color TEXT NOT NULL, directory TEXT,
+      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, icon TEXT, color TEXT NOT NULL,
       sortKey TEXT NOT NULL, isPinned INTEGER NOT NULL, deletedAt INTEGER,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
@@ -71,6 +71,11 @@ enum Schema {
       lastActivityAt INTEGER NOT NULL, readOffset INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX piSessions_cwd ON piSessions(cwd);
+
+    -- 项目绑定的代码目录：路径因设备而异，只在本机。Pi 会话按 cwd 归入项目时用它。
+    CREATE TABLE projectDirectories (
+      projectID TEXT PRIMARY KEY NOT NULL, directory TEXT NOT NULL
+    ) STRICT;
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');

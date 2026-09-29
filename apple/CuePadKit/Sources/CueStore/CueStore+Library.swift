@@ -5,20 +5,20 @@ import Foundation
 extension CueStore {
   /// 新项目追加在末尾。
   public func createProject(
-    name: String, color: String, icon: String? = nil, directory: String? = nil
+    name: String, color: String, icon: String? = nil
   ) throws -> Project {
     try write {
       let last = try db.first("SELECT MAX(sortKey) FROM projects") { $0.textOrNil(0) } ?? nil
       let now = Date.stamp
       let project = Project(
-        id: UUID(), name: name, icon: icon, color: color, directory: directory,
+        id: UUID(), name: name, icon: icon, color: color,
         sortKey: SortKey.after(last), isPinned: false, deletedAt: nil, createdAt: now, modifiedAt: now)
       try insert(project)
       return project
     }
   }
 
-  /// 改名称、颜色、图标、目录、置顶等字段；顺序与删除用专门的方法。
+  /// 改名称、颜色、图标、置顶等字段；顺序与删除用专门的方法。
   public func updateProject(_ id: UUID, _ edit: @Sendable (inout Project) -> Void) throws {
     try write {
       guard var project = try find(Project.self, id) else { throw CueStoreError.notFound }
@@ -56,8 +56,40 @@ extension CueStore {
       try purgeCards(where: "projectID = ? AND deletedAt IS NULL", [id])
       try db.run("UPDATE cards SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, id])
       try db.run("UPDATE tasks SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, id])
+      try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [id])
       try db.run("DELETE FROM projects WHERE id = ?", [id])
     }
+  }
+}
+
+// MARK: 项目目录（本机）
+
+extension CueStore {
+  /// 绑定项目的代码目录（nil = 解除）。目录因设备而异，不同步。
+  public func setDirectory(_ directory: String?, for project: UUID) throws {
+    try write {
+      guard let directory else {
+        try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [project])
+        return
+      }
+      try db.run(
+        """
+        INSERT INTO projectDirectories (projectID, directory) VALUES (?, ?)
+        ON CONFLICT(projectID) DO UPDATE SET directory = excluded.directory
+        """, [project, directory])
+    }
+  }
+
+  public func directory(of project: UUID) throws -> String? {
+    try db.first("SELECT directory FROM projectDirectories WHERE projectID = ?", [project]) { $0.text(0) }
+  }
+
+  /// 本机所有项目的目录绑定。
+  public func projectDirectories() throws -> [UUID: String] {
+    Dictionary(
+      uniqueKeysWithValues: try db.query("SELECT projectID, directory FROM projectDirectories") {
+        ($0.uuid(0), $0.text(1))
+      })
   }
 }
 

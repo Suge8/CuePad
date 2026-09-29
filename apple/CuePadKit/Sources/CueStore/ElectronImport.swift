@@ -68,7 +68,7 @@ struct LegacyLibrary {
     projects = zip(projectRows, SortKey.sequence(count: projectRows.count)).map { row, key in
       Project(
         id: LegacyID.uuid("project", row.id), name: row.name ?? "", icon: row.icon, color: row.color,
-        directory: nil, sortKey: key, isPinned: row.flag, deletedAt: row.deletedAt,
+        sortKey: key, isPinned: row.flag, deletedAt: row.deletedAt,
         createdAt: row.createdAt, modifiedAt: row.updatedAt)
     }
 
