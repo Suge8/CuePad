@@ -49,6 +49,39 @@ struct TitleTests {
     }
 }
 
+@Suite("标题规则唯一")
+struct TitleRuleTests {
+    /// 存储格式转成运行时正文：分隔线与图片各占一个 U+FFFC，返回文本与分隔线偏移。
+    private func runtime(_ stored: String) -> (text: NSString, splits: Set<Int>) {
+        var text = "", splits = Set<Int>()
+        for token in CueFormat.parse(stored) {
+            switch token {
+            case .text(let s): text += s
+            case .image: text += S
+            case .split: splits.insert(text.utf16.count); text += S
+            }
+        }
+        return (text as NSString, splits)
+    }
+
+    @Test("编辑器的标题行就是 CueSegments.firstContentLine 取到的那一行", arguments: [
+        "\n\n周报\n正文",
+        "![](cuepad://img/ab)\n标题",
+        "---split---\n![](cuepad://img/ab) 说明\n后",
+        "---ask---\n \n![](cuepad://img/ab)![](cuepad://img/cd)\n真标题",
+        "![](cuepad://img/ab)\n---split---\n",
+        "",
+    ])
+    func sameRule(stored: String) {
+        let (text, splits) = runtime(stored)
+        let d = CueDecorations(CueBuffer(text: text) { splits.contains($0) })
+        let expected = CueSegments.firstContentLine(stored)
+        guard let location = d.titleLocation else { return #expect(expected.isEmpty) }
+        let line = text.substring(with: NSRange(location: location, length: text.length - location)).components(separatedBy: "\n")[0]
+        #expect(line.replacingOccurrences(of: S, with: "").trimmingCharacters(in: .whitespaces) == expected)
+    }
+}
+
 @Suite("行样式")
 struct LineStyleTests {
     @Test("标题 1–6 个 # 加空白；7 个或没有空白不是标题；标记长度含空白")

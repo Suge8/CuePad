@@ -76,11 +76,24 @@ struct CueSegmentsTests {
         #expect(numbering.label(forSegment: index) == expected)
     }
 
-    @Test("预览行跳过分隔线与空行")
+    @Test("卡片标题只有一条规则：非空、不是分隔线、除图片外还有文字")
+    func titleLine() {
+        let cases: [(String, Bool)] = [
+            ("周报", true), ("  周报  ", true), ("", false), ("   ", false),
+            ("---split---", false), ("---ask---", false),
+            ("![](cuepad://img/ab)", false), ("![](cuepad://img/ab) ![](cuepad://img/cd)", false),
+            ("![](cuepad://img/ab) 说明", true), ("\u{FFFC}", false), ("\u{FFFC} 说明", true),
+        ]
+        for (line, expected) in cases { #expect(CueSegments.isTitleLine(line) == expected, "\(line.debugDescription)") }
+    }
+
+    @Test("标题取首个标题行，去掉图片引用与两端空白；没有则为空串")
     func firstLine() {
         #expect(CueSegments.firstContentLine("---ask---\n问题正文") == "问题正文")
         #expect(CueSegments.firstContentLine("\n\(split)\n\n正文") == "正文")
+        #expect(CueSegments.firstContentLine("![](cuepad://img/ab)\n\n  周报 ![](cuepad://img/cd)  \n正文") == "周报")
         #expect(CueSegments.firstContentLine("---ask---\n\n") == "")
+        #expect(CueSegments.firstContentLine("![](cuepad://img/ab)") == "")
         #expect(CueSegments.firstContentLine("") == "")
     }
 
