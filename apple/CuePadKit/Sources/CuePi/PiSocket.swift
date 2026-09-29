@@ -20,9 +20,11 @@ enum PiSocketDirectory {
         }
     }
 
+    /// 是 socket、属于当前用户、且只有属主可读写。扩展 bind 之后才 chmod 0600，
+    /// 之前的瞬间权限偏宽，跳过即可：chmod 的属性变更事件会触发重扫。
     static func isOwnSocket(_ path: String) -> Bool {
         var st = stat()
-        return lstat(path, &st) == 0 && st.st_mode & S_IFMT == S_IFSOCK && st.st_uid == getuid()
+        return lstat(path, &st) == 0 && st.st_mode & S_IFMT == S_IFSOCK && st.st_uid == getuid() && st.st_mode & 0o077 == 0
     }
 
     /// 文件名 `<sessionId>.<pid>.sock` 中的 pid

@@ -96,6 +96,7 @@ final class FakeExtension: @unchecked Sendable {
         var model: String? = "test-model"
         var sessionFile: String? = "/work/session.jsonl"
         var tty: String? = "ttys009"
+        var socketMode: mode_t = 0o600
         var env: [String: String] = ["TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty",
                                      "TMUX_PANE": "%3", "TMUX": "/private/tmp/tmux-501/default,123,0"]
     }
@@ -138,7 +139,7 @@ final class FakeExtension: @unchecked Sendable {
         let fd = try Self.boundSocket(at: socketURL)
         guard listen(fd, 8) == 0 else { throw POSIXError(.init(rawValue: errno)!) }
         // 与真实扩展一致：bind 之后 chmod（FSEvents 不报告仅 bind 的 socket 创建）
-        chmod(socketURL.path, 0o600)
+        chmod(socketURL.path, options.socketMode)
         listenFD = fd
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         src.setEventHandler { [weak self] in self?.accept() }
@@ -149,6 +150,7 @@ final class FakeExtension: @unchecked Sendable {
     /// 只 bind 不 listen 后关闭：留下一个无人监听的 socket 文件（进程被强杀后的残留）。
     static func makeStaleSocket(at url: URL) throws {
         let fd = try boundSocket(at: url)
+        chmod(url.path, 0o600) // 真实扩展总会 chmod，残留的也是 0600
         Darwin.close(fd)
     }
 

@@ -154,6 +154,17 @@ struct BridgeClientTests {
         #expect(st.st_uid == getuid())
     }
 
+    @Test func doesNotConnectToASocketOthersCouldWriteTo() async throws {
+        let ext = FakeExtension(directory: dir, options: .init(socketMode: 0o666))
+        try ext.start()
+        try bridge.start()
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(bridge.sessions.isEmpty && ext.connectionCount == 0)
+
+        chmod(ext.socketURL.path, 0o600) // 收紧权限（属性变更触发重扫）后才会被接受
+        try await eventually("权限收紧后被发现") { session(ext.id) != nil }
+    }
+
     // MARK: 协议兼容
 
     @Test func incompatibleProtocolIsReportedNotListed() async throws {
