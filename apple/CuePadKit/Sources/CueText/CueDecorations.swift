@@ -33,7 +33,7 @@ public struct CueLineStyle: Equatable, Sendable {
 /// 一份运行时正文的装饰上下文：标题位置与围栏位置是全文性质，逐行样式据此判定。
 /// 范围对齐 Electron 版：`^#{1,6}\s`、`^\s*-\s`、顶格 ``` 围栏，另加有序列表、行内 code 与标题行。
 public struct CueDecorations: Sendable {
-    /// 标题行的行首偏移：首个非空、非分隔线、且带文字的行（只有图片的行顺延）；没有则为 nil。
+    /// 标题行（`CueSegments.isTitleLine`）的行首偏移；没有则为 nil。
     public let titleLocation: Int?
     /// 顶格 ``` 围栏行的数量。奇数说明有围栏未闭合，其后的行都是代码。
     public var fenceCount: Int { fences.count }
@@ -61,19 +61,16 @@ public struct CueDecorations: Sendable {
 
     // MARK: 全文性质
 
+    /// 标题行的判定只有一处：`CueSegments.isTitleLine`。
     private static func titleLocation(in buffer: CueBuffer) -> Int? {
         var location = 0
         while location <= buffer.length {
             let line = buffer.line(at: location)
-            if !buffer.isBlank(line), !buffer.isSplitLine(line), !isObjectsOnly(line, in: buffer) { return line.start }
+            let text = buffer.text.substring(with: NSRange(location: line.start, length: line.end - line.start))
+            if CueSegments.isTitleLine(text) { return line.start }
             location = line.end + 1
         }
         return nil
-    }
-
-    /// 只有图片的行没有文字可以套标题样式，标题顺延到下一个有文字的行。
-    private static func isObjectsOnly(_ line: CueBuffer.Line, in buffer: CueBuffer) -> Bool {
-        (line.start..<line.end).allSatisfy { buffer.text.character(at: $0) == CueFormat.objectCharacter }
     }
 
     private static func fenceLocations(in text: NSString) -> [Int] {

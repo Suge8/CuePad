@@ -22,11 +22,26 @@ public enum CueSegments {
         return segments
     }
 
-    /// 首个非分隔线的非空行；卡片预览/标题兜底用。
+    /// 卡片标题的唯一规则：非空、不是分隔线，且除图片引用（存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字。
+    /// 卡片列表、界面与编辑器的标题行装饰都以此判定。
+    public static func isTitleLine(_ line: String) -> Bool { !titleText(of: line).isEmpty }
+
+    /// 卡片标题 = 首个标题行，去掉图片引用与两端空白；没有标题行返回空串。
     public static func firstContentLine(_ stored: String) -> String {
-        stored.components(separatedBy: "\n").first {
-            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !CueFormat.isMarkerLine($0)
-        } ?? ""
+        for line in stored.components(separatedBy: "\n") {
+            let text = titleText(of: line)
+            if !text.isEmpty { return text }
+        }
+        return ""
+    }
+
+    private static func titleText(of line: String) -> String {
+        guard !CueFormat.isMarkerLine(line) else { return "" }
+        let text = CueFormat.parse(line).compactMap { token -> String? in
+            if case .text(let text) = token { text } else { nil }
+        }.joined()
+        let object = String(UnicodeScalar(CueFormat.objectCharacter)!)
+        return text.replacingOccurrences(of: object, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// 去掉段首尾空行与两端空白，段内格式不动。
