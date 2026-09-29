@@ -29,6 +29,13 @@ struct TitleTests {
         #expect(styles(text).map(\.isTitle) == [false, false, false, false, true, false])
     }
 
+    @Test("只有图片的行不能当标题，标题顺延到下一个有文字的行")
+    func imageOnlyLineIsSkipped() {
+        let ns = "\u{FFFC}\n\u{FFFC}\n标题" as NSString
+        let d = CueDecorations(CueBuffer(text: ns) { _ in false })
+        #expect(d.titleLocation == 4)
+    }
+
     @Test("没有正文行时没有标题")
     func noTitle() {
         #expect(decorations("").titleLocation == nil)
