@@ -26,13 +26,13 @@ final class DirectoryImageStore: CueImageStore, @unchecked Sendable {
     func fileURL(for id: String) -> URL? { lock.withLock { files[id] } }
 }
 
-func makePNG(width: Int = 1600, height: Int = 1000, seed: Int = 0) -> Data {
+func makePNG(width: Int = 1600, height: Int = 1000, seed: Int = 0, color: NSColor? = nil) -> Data {
     let rep = NSBitmapImageRep(
         bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
-    NSColor(hue: CGFloat(seed % 20) / 20, saturation: 0.6, brightness: 0.9, alpha: 1).setFill()
+    (color ?? NSColor(hue: CGFloat(seed % 20) / 20, saturation: 0.6, brightness: 0.9, alpha: 1)).setFill()
     NSRect(x: 0, y: 0, width: width, height: height).fill()
     NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])!
@@ -63,20 +63,19 @@ final class EditorHarness {
     func layout() {
         window.layoutIfNeeded()
         window.displayIfNeeded()
-        pump(0.05)
     }
 
-    /// 让主循环运转一小段：TextKit 视口布局与异步缩略图都在主循环里推进。
-    func pump(_ seconds: TimeInterval = 0.05) {
-        RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+    /// 让出主线程一小段：分片布局、异步缩略图都排在主队列里，同步测试体里推进不了它们。
+    func pump(_ seconds: TimeInterval = 0.05) async {
+        try? await Task.sleep(for: .seconds(seconds))
     }
 
-    /// 条件等待：主循环运转到条件成立，超时视为失败。
-    func wait(timeout: TimeInterval = 3, until condition: () -> Bool) -> Bool {
+    /// 条件等待：让出主线程直到条件成立，超时视为失败。
+    func wait(timeout: TimeInterval = 3, until condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() {
             if Date() > deadline { return false }
-            pump(0.02)
+            await pump(0.02)
         }
         return true
     }
@@ -84,6 +83,26 @@ final class EditorHarness {
     func subviews<T: NSView>(of type: T.Type) -> [T] {
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
         return walk(textView).compactMap { $0 as? T }
+    }
+
+    /// 只含一张图片的行的布局矩形（文本视图坐标）。
+    func imageLineFrames() -> [CGRect] {
+        var frames: [CGRect] = []
+        let origin = textView.textContainerOrigin
+        textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: []) { fragment in
+            if (fragment.textElement as? NSTextParagraph)?.attributedString.string.trimmingCharacters(in: .newlines) == "\u{FFFC}" {
+                frames.append(fragment.layoutFragmentFrame.offsetBy(dx: origin.x, dy: origin.y))
+            }
+            return true
+        }
+        return frames
+    }
+
+    /// 把文本视图的一块区域真实绘制出来后读取中心像素。
+    func renderedCenterColor(of rect: CGRect) -> NSColor? {
+        let rep = textView.bitmapImageRepForCachingDisplay(in: rect)!
+        textView.cacheDisplay(in: rect, to: rep)
+        return rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh / 2)?.usingColorSpace(.sRGB)
     }
 
     func keyEvent(_ characters: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags = []) -> NSEvent {

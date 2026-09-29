@@ -111,20 +111,29 @@ struct BlockTests {
     @Test("分隔线标签按所选编号样式随块序号更新，无编号时不显示")
     func numberingLabels() {
         let h = EditorHarness()
-        h.load("甲\n\(split)\n乙\n\(split)\n丙")
-        func labels() -> [String] { h.subviews(of: CueDividerView.self).map(\.labelText) }
-        #expect(labels() == ["", ""])
+        h.load("甲乙\n\(split)\n丙")
+        /// 按文档中的先后顺序取各分隔线的标签。
+        func labels() -> [String] {
+            h.subviews(of: CueDividerView.self)
+                .sorted { $0.convert(NSPoint.zero, to: h.textView).y < $1.convert(NSPoint.zero, to: h.textView).y }
+                .map(\.labelText)
+        }
+        #expect(labels() == [""])
 
         h.textView.numbering = .decimal
         h.layout()
-        #expect(labels() == ["2", "3"])
+        #expect(labels() == ["2"])
         h.textView.numbering = .cjk
         h.layout()
-        #expect(labels() == ["二", "三"])
+        #expect(labels() == ["二"])
 
         h.setCaret(1)
         h.textView.insertSplit()
         h.layout()
-        #expect(labels() == ["二", "三", "四"])
+        #expect(labels() == ["二", "三"])
+
+        h.textView.numbering = .none
+        h.layout()
+        #expect(labels() == ["", ""])
     }
 }

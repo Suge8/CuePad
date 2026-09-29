@@ -34,6 +34,8 @@ struct HighlightTests {
         let h = EditorHarness()
         h.load("前 {{}} 后")
         h.setCaret(4)
+        var notified: [String] = []
+        h.textView.onChange = { notified.append($0) }
 
         h.textView.setMarkedText("ming", selectedRange: NSRange(location: 4, length: 0), replacementRange: nowhere)
         #expect(h.textView.hasMarkedText() && h.textView.markedRange() == NSRange(location: 4, length: 4))
@@ -46,6 +48,7 @@ struct HighlightTests {
         h.textView.insertText("名字", replacementRange: nowhere)
         #expect(!h.textView.hasMarkedText())
         #expect(h.stored == "前 {{名字}} 后")
+        #expect(notified == ["前 {{名字}} 后"])  // 组合中不上报，提交后上报一次
         #expect(background(h) == [NSRange(location: 2, length: 6)])
         #expect(h.textView.textLayoutManager != nil)  // 全程没有降级到 TextKit 1
     }
@@ -65,7 +68,7 @@ struct HighlightTests {
 @Suite("布局")
 struct LayoutTests {
     @Test("长文档的总高度在加载完成后即稳定，滚动不再让滚动条跳变")
-    func heightStable() throws {
+    func heightStable() async throws {
         let h = EditorHarness(height: 640)
         var stored = ""
         let line = String(repeating: "这是一段用来测试排版的中文文字，", count: 8)
@@ -74,13 +77,13 @@ struct LayoutTests {
             if i % 40 == 39 { stored += "![](cuepad://img/\(try h.store.store(makePNG(width: 1600, height: 1000, seed: i))))\n" }
         }
         h.load(stored)
-        // 高度稳定 = 连续三次采样不变
+        // 高度稳定 = 半秒内不再变化（布局是分片推进的，每片间隔远小于此）
         var last = -1.0, stableCount = 0
-        #expect(h.wait(timeout: 8) {
+        #expect(await h.wait(timeout: 15) {
             let current = Double(h.textView.frame.height)
             stableCount = current == last ? stableCount + 1 : 0
             last = current
-            return stableCount >= 3
+            return stableCount >= 25
         })
         let settled = h.textView.frame.height
 

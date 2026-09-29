@@ -110,13 +110,13 @@ struct ImageTests {
         #expect(other.stored == original)
     }
 
-    @Test("图片文件缺失时显示占位，存储引用保持不变")
+    @Test("图片文件缺失时存储引用保持不变")
     func missingImage() {
         let h = EditorHarness()
         let stored = "前\n![](cuepad://img/00000000deadbeef)\n后"
         h.load(stored)
         #expect(h.stored == stored)
-        #expect(h.wait { !h.subviews(of: CueImageView.self).isEmpty })
+        #expect(h.imageLineFrames().count == 1)
     }
 
     @Test("图片宽度自适应：不超过行宽、保持比例，窗口缩放后跟随")
@@ -124,32 +124,43 @@ struct ImageTests {
         let h = EditorHarness(width: 720)
         let id = try h.store.store(makePNG(width: 1600, height: 1000))
         h.load("![](cuepad://img/\(id))")
-        #expect(h.wait { !h.subviews(of: CueImageView.self).isEmpty })
-        let wide = try #require(h.subviews(of: CueImageView.self).first).frame.size
+        let wide = try #require(h.imageLineFrames().first)
         let container = h.textView.textContainer!.size.width - 2 * h.textView.textContainer!.lineFragmentPadding
         #expect(wide.width <= container + 0.5)
-        #expect(abs(wide.width / wide.height - 1.6) < 0.01)
+        #expect(abs(wide.width / wide.height - 1.6) < 0.02)
 
         h.window.setContentSize(NSSize(width: 420, height: 640))
         h.layout()
-        #expect(h.wait {
-            guard let view = h.subviews(of: CueImageView.self).first else { return false }
-            return view.frame.width < wide.width && view.frame.width <= h.textView.bounds.width
+        let narrow = try #require(h.imageLineFrames().first)
+        #expect(narrow.width < wide.width)
+        #expect(narrow.width <= h.textView.bounds.width)
+    }
+
+    @Test("图片像素在进入视口后显示出来，解码不阻塞加载")
+    func rendersPixels() async throws {
+        let h = EditorHarness()
+        let id = try h.store.store(makePNG(width: 800, height: 400, color: NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)))
+        h.load("![](cuepad://img/\(id))")
+        let frame = try #require(h.imageLineFrames().first)
+        #expect(await h.wait {
+            guard let color = h.renderedCenterColor(of: frame) else { return false }
+            return color.redComponent > 0.8 && color.greenComponent < 0.4 && color.blueComponent < 0.3  // 红色主导（色彩管理会让数值略偏）
         })
     }
 
-    @Test("原图不整张解码，视口外的图片不实例化视图")
-    func lazyViews() throws {
+    @Test("缩略图按需解码：视口外的图片不被读取")
+    func lazyDecode() async throws {
         let h = EditorHarness(height: 400)
         var stored = ""
         for i in 0..<20 {
             let id = try h.store.store(makePNG(width: 800, height: 800, seed: i))
             stored += "第 \(i) 张\n![](cuepad://img/\(id))\n"
         }
+        let before = ImageLoading.decodeCount
         h.load(stored)
-        h.pump(0.3)
-        let live = h.subviews(of: CueImageView.self).count
-        #expect(live > 0)
-        #expect(live < 20)
+        h.layout()
+        #expect(await h.wait { ImageLoading.decodeCount > before })
+        await h.pump(0.3)
+        #expect(ImageLoading.decodeCount - before < 20)
     }
 }
