@@ -79,6 +79,12 @@ struct MenuBarPad: View {
             project = services.settings.currentProject
             focused = true
         }
+        #if DEBUG
+        // 截图演示：面板先于启动参数选好项目出现，这里跟上参数指定的项目
+        .onChange(of: services.settings.currentProject) { _, current in
+            if DebugScene.scene == "menubar" { project = current }
+        }
+        #endif
         .observing(services.store, [.projects], into: $projects) { try $0.projects() }
         .observing(services.store, [.projectDirectories], into: directories) { try $0.projectDirectories() }
     }
