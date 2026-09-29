@@ -74,6 +74,19 @@ import Testing
     #expect(try exists(pending))
   }
 
+  @Test func imageReferencedBySendRecordSnapshotSurvivesPurgingItsCard() async throws {
+    let sent = try await image(0.1)
+    let unsent = try await image(0.2)
+    let card = try await store.createCard(in: nil, body: ref(sent) + ref(unsent))
+    try await store.recordSend(
+      ref(sent), to: SendTarget(kind: .piSession, name: "s", ref: "s1"), card: card.id)  // 快照只含 sent
+
+    try await store.purgeCard(card.id)
+
+    #expect(try exists(sent))  // 一键重发还要用它
+    #expect(try !exists(unsent))
+  }
+
   @Test func failureToDeleteAFileIsReportedNotSwallowed() async throws {
     let stuck = try await image(0.1)
     let free = try await image(0.2)
