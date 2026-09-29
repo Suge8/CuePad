@@ -4,7 +4,7 @@
 
 ## 命令
 
-统一入口 `scripts/xc.sh <build|test|shot> <mac|ios> [截图路径]`，构建产物在 `.derived/`（自带 `.gitignore`），退出码即 xcodebuild 的退出码。
+统一入口 `scripts/xc.sh <build|test|shot> <mac|ios> [截图路径]`，构建产物在 `.derived/`（自带 `.gitignore`），退出码即 xcodebuild 的退出码。**并行的 agent 必须各用一个产物目录**（`CUEPAD_DERIVED=/tmp/xxx apple/scripts/xc.sh …`，截图、隔离库、Pi 目录随之落在该目录下），共用同一个目录时构建与测试会互相覆盖而随机失败。
 
 ```bash
 apple/scripts/xc.sh build mac

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # 用法：xc.sh <build|test|shot> <mac|ios> [截图输出路径] [-- 启动参数…]
 # shot mac 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；
+# CUEPAD_DERIVED 指定产物目录（默认 apple/.derived）；并行的 agent 各用一个，否则同目录的构建与测试会互相覆盖。
 # CUEPAD_SHOT_LIBRARY 指定隔离资料库目录（默认 .derived/library），CUEPAD_SHOT_SETTLE 为出窗后等待渲染的秒数。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-DERIVED="$APPLE_DIR/.derived"
+DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}"
 BUNDLE_ID=com.sugeh.cuepad
 IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 
