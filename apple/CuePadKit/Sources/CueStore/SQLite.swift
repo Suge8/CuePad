@@ -113,13 +113,8 @@ final class SQLite {
       case .text(let value):
         sqlite3_bind_text(statement, position, value, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
       case .blob(let value):
-        // 空 Data 没有基址，直接 bind_blob 会变成 NULL
-        if value.isEmpty {
-          sqlite3_bind_zeroblob(statement, position, 0)
-        } else {
-          value.withUnsafeBytes {
-            _ = sqlite3_bind_blob(statement, position, $0.baseAddress, Int32($0.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self))
-          }
+        value.withUnsafeBytes {
+          _ = sqlite3_bind_blob(statement, position, $0.baseAddress, Int32($0.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self))
         }
       }
     }
