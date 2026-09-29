@@ -212,6 +212,8 @@ public enum CueStoreError: Error, Equatable {
   case notAnImage
   /// 目标卡必须是该项目里未删除的卡。
   case invalidGoal
+  /// 卡片或任务只能归属存在且未在回收站的项目（或不归属任何项目）。
+  case invalidProject
   /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
 }

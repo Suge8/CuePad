@@ -110,9 +110,10 @@ extension CueStore {
 // MARK: 卡片
 
 extension CueStore {
-  /// 新卡片放在所在项目（nil = 未归档）的最前。
+  /// 新卡片放在所在项目（nil = 未归档）的最前。项目必须存在且未在回收站，否则抛 `invalidProject`。
   public func createCard(in project: UUID?, body: String = "") throws -> Card {
     try write {
+      try requireLiveProject(project)
       let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID IS ?", [project]) {
         $0.textOrNil(0)
       } ?? nil
@@ -136,9 +137,10 @@ extension CueStore {
     }
   }
 
-  /// 移到 `project`（nil = 未归档）里 `previous` 之后（nil = 最前）。
+  /// 移到 `project`（nil = 未归档）里 `previous` 之后（nil = 最前）。项目必须存在且未在回收站，否则抛 `invalidProject`。
   public func moveCard(_ id: UUID, to project: UUID?, after previous: UUID?) throws {
     try write {
+      try requireLiveProject(project)
       try db.run("UPDATE cards SET projectID = ? WHERE id = ?", [project, id])
       guard db.changes > 0 else { throw CueStoreError.notFound }
       try clearGoal(where: "id = ?", [id], exceptProject: project)
@@ -266,12 +268,13 @@ extension CueStore {
 // MARK: 任务
 
 extension CueStore {
-  /// 新任务放在未完成任务的最前。
+  /// 新任务放在未完成任务的最前。项目（可省略）必须存在且未在回收站，否则抛 `invalidProject`。
   public func createTask(_ content: String, in project: UUID? = nil) throws -> CueTask {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       throw CueStoreError.blankTaskContent
     }
     return try write {
+      try requireLiveProject(project)
       let first = try db.first("SELECT MIN(sortKey) FROM tasks WHERE completedAt IS NULL") {
         $0.textOrNil(0)
       } ?? nil
@@ -285,10 +288,13 @@ extension CueStore {
   }
 
   /// 改内容、勾选完成（`completedAt`）、所属项目、关联 Pi 会话；顺序用 `moveTask`。
+  /// 改挂的项目必须存在且未在回收站，否则抛 `invalidProject`。
   public func updateTask(_ id: UUID, _ edit: @Sendable (inout CueTask) -> Void) throws {
     try write {
       guard var task = try find(CueTask.self, id) else { throw CueStoreError.notFound }
+      let originalProject = task.projectID
       edit(&task)
+      if task.projectID != originalProject { try requireLiveProject(task.projectID) }
       guard !task.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         throw CueStoreError.blankTaskContent
       }
@@ -355,6 +361,18 @@ extension CueStore {
           checkpoint = COALESCE(excluded.checkpoint, piSessions.checkpoint)
         """, session.bindings + [checkpoint])
     }
+  }
+}
+
+// MARK: 引用校验
+
+extension CueStore {
+  /// 卡片和任务只能归属存在且未在回收站的项目（或不归属）。必须在写事务内调用，
+  /// 与随后的写入之间没有别的写入可以插进来。失效时报错，不静默改成未归档。
+  fileprivate func requireLiveProject(_ project: UUID?) throws {
+    guard let project else { return }
+    let live = try db.first("SELECT 1 FROM projects WHERE id = ? AND deletedAt IS NULL", [project]) { _ in true }
+    guard live != nil else { throw CueStoreError.invalidProject }
   }
 }
 
