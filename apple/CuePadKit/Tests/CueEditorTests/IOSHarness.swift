@@ -65,11 +65,18 @@ final class EditorHarness {
         UIPasteboard(name: UIPasteboard.Name("cue-editor-tests-\(UUID().uuidString)"), create: true)!
     }
 
-    /// 屏幕上真实渲染出来的一块区域的中心像素。
-    func renderedCenterColor(of rect: CGRect) -> UIColor? {
+    /// 让各图层完成绘制：无宿主 App 的测试进程里没有显示周期，附件的绘制回调要手动触发。
+    func display() {
+        func display(_ layer: CALayer) { layer.displayIfNeeded(); layer.sublayers?.forEach(display) }
         layout()
-        let image = UIGraphicsImageRenderer(size: textView.bounds.size).image { _ in
-            textView.drawHierarchy(in: textView.bounds, afterScreenUpdates: true)
+        display(textView.layer)
+    }
+
+    /// 屏幕上真实渲染出来的一块区域的中心像素（drawHierarchy 在这种环境里画不出内容，直接渲染图层树）。
+    func renderedCenterColor(of rect: CGRect) -> UIColor? {
+        display()
+        let image = UIGraphicsImageRenderer(size: textView.bounds.size).image { context in
+            textView.layer.render(in: context.cgContext)
         }
         guard let cg = image.cgImage else { return nil }
         let scale = image.scale

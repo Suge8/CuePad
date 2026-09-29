@@ -154,7 +154,8 @@ struct IOSEditingTests {
         let wide = try #require(h.imageLineFrames().first)
         let container = h.textView.textContainer.size.width - 2 * h.textView.textContainer.lineFragmentPadding
         #expect(wide.width <= container + 0.5)
-        #expect(abs(wide.width / wide.height - 1.6) < 0.02)
+        let expectedHeight = wide.width / 1.6  // 行高比图片本身多出基线下的字体下降与行距
+        #expect(wide.height >= expectedHeight && wide.height - expectedHeight < 12)
 
         h.window.frame.size.width = 300
         h.textView.frame.size.width = 300
@@ -187,7 +188,7 @@ struct IOSEditingTests {
         }
         let before = ImageLoading.decodeCount
         h.load(stored)
-        #expect(await h.wait { ImageLoading.decodeCount > before })
+        #expect(await h.wait { h.display(); return ImageLoading.decodeCount > before })
         await h.pump(0.3)
         #expect(ImageLoading.decodeCount - before < 20)
     }

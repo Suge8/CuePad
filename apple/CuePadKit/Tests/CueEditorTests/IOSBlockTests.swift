@@ -113,9 +113,13 @@ struct IOSBlockTests {
 
         h.setCaret(h.textView.textStorage.length)
         run(command(h, input: UIKeyCommand.inputDownArrow, flags: .command), on: h)
-        #expect(h.caret == h.textView.textStorage.length)
+        #expect(h.caret == h.textView.textStorage.length)  // 末块：无块可跳，回落到文档尾
+        run(command(h, input: UIKeyCommand.inputUpArrow, flags: .command), on: h)
+        #expect(h.caret == 5)  // 末块只有一行，光标已在块首行：直接到上一块块首
         run(command(h, input: UIKeyCommand.inputUpArrow, flags: .command), on: h)
         #expect(h.caret == 0)
+        run(command(h, input: UIKeyCommand.inputUpArrow, flags: .command), on: h)
+        #expect(h.caret == 0)  // 首块块首：无块可跳，回落到文档首
     }
 
     @Test("分隔线标签按所选编号样式随块序号更新，无编号时不显示")
