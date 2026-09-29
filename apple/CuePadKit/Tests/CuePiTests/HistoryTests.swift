@@ -295,18 +295,21 @@ struct HistoryIndexerTests {
 
     @Test func liveAppendsAndNewFilesAreIndexedIncrementally() async throws {
         let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
-        // 调用方从不返回检查点：索引器自己对已触碰的文件保留，增量不能退化成重读
+        // 调用方从不返回检查点：索引器自己对回填之后被触碰的文件保留，之后的增量不能退化成重读
         let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in nil })
         try await eventually("回填完成") { log.finishedBackfill }
-        let before = log.updates.count
 
-        let appended = [SessionFile.user("u2", "a", "second", at: 3), SessionFile.assistant("a2", "u2", text: "r2", at: 4)]
-        try f.appendRaw(appended.joined(separator: "\n") + "\n")
-        try await eventually("追加被索引") { log.updates.count > before }
+        let firstAppend = [SessionFile.user("u2", "a", "second", at: 3), SessionFile.assistant("a2", "u2", text: "r2", at: 4)]
+        try f.appendRaw(firstAppend.joined(separator: "\n") + "\n")
+        try await eventually("第一次追加被索引") { log.updates.contains { $0.history.turns.count == 2 } }
+
+        let secondAppend = SessionFile.user("u3", "a2", "third", at: 5)
+        try f.appendRaw(secondAppend + "\n")
+        try await eventually("第二次追加被索引") { log.updates.contains { $0.history.turns.count == 3 } }
         let update = try #require(log.updates.last)
         #expect(update.file.lastPathComponent == "a.jsonl")
-        #expect(update.bytesRead == appended.joined(separator: "\n").utf8.count + 1)
-        #expect(update.history.turns.map(\.prompt) == ["first", "second"])
+        #expect(update.bytesRead == secondAppend.utf8.count + 1)
+        #expect(update.history.turns.map(\.prompt) == ["first", "second", "third"])
 
         try makeSession("p3", "fresh.jsonl", prompt: "brand new", modified: Date())
         try await eventually("新文件被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }

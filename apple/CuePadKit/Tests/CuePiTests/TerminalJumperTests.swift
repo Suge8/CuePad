@@ -9,7 +9,7 @@ struct TerminalJumperTests {
         private var _runs: [[String]] = []
         private var _scripts: [String] = []
         private var _activated: [String] = []
-        var tmuxClientTTY = "/dev/ttys021\n"
+        var tmuxClients = "100 /dev/ttys004\n300 /dev/ttys021\n200 /dev/ttys007\n" // "<最近活动> <tty>"
         var tmuxSwitchStatus: Int32 = 0
         var scriptResult: Result<String, any Error> = .success("ok")
         var canActivate = true
@@ -20,7 +20,7 @@ struct TerminalJumperTests {
 
         func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String) {
             lock.withLock { _runs.append([executable] + arguments) }
-            if arguments.contains("list-clients") { return (0, tmuxClientTTY) }
+            if arguments.contains("list-clients") { return (0, tmuxClients) }
             if arguments.contains("switch-client") { return (tmuxSwitchStatus, "") }
             return (0, "")
         }
@@ -61,7 +61,7 @@ struct TerminalJumperTests {
         #expect(switchCmd?.contains("/private/tmp/tmux-501/default") == true)
         #expect(r.tmuxPaneSelected)
         #expect(r.precision == .tab)
-        // pane 自己的 tty 在 tmux 里是伪终端，应该用承载它的 tmux 客户端的 tty 去找标签页
+        // pane 自己的 tty 在 tmux 里是伪终端，应该用承载它的 tmux 客户端（最近活动的那个）的 tty 去找标签页
         #expect(sys.scripts.first?.contains("/dev/ttys021") == true)
         #expect(sys.scripts.first?.contains("ttys015") == false)
     }

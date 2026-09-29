@@ -23,13 +23,18 @@ final class PiProcess: @unchecked Sendable {
     private let lock = NSLock()
     private var _events: [PiEvent] = []
     private var pending = Data()
+    private let errPipe = Pipe()
+    private var _stderr = Data()
+    /// Pi 的 stderr（诊断用）
+    var stderr: String { lock.withLock { String(decoding: _stderr, as: UTF8.self) } }
 
     var pid: Int32 { process.processIdentifier }
     var events: [PiEvent] { lock.withLock { _events } }
 
     /// - Parameter installBridge: 先用安装器把桥扩展装进临时 agent 目录，让 Pi 按自己的发现规则加载。
+    /// - Parameter oneShotPrompt: 非 nil 时以 print 模式跑这条 prompt 然后退出（否则 RPC 常驻）。
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
-         env: [String: String] = [:]) async throws {
+         oneShotPrompt: String? = nil, env: [String: String] = [:]) async throws {
         root = try makeTempDirectory()
         cwd = root.appending(path: "work")
         try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
@@ -39,7 +44,7 @@ final class PiProcess: @unchecked Sendable {
             try await installer.install()
         }
 
-        var args = ["--mode", "rpc", "--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes",
+        var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes",
                     "--model", "fake/echo", "--thinking", "off", "-e", fixtures.appending(path: "fake-model.ts").path]
         for e in extraExtensions { args += ["-e", fixtures.appending(path: e).path] }
 
@@ -59,14 +64,32 @@ final class PiProcess: @unchecked Sendable {
         process.standardInput = stdin
         let out = Pipe()
         process.standardOutput = out
-        process.standardError = Pipe()
-        out.fileHandleForReading.readabilityHandler = { [weak self] handle in self?.ingest(handle.availableData) }
+        process.standardError = errPipe
         try process.run()
+        if oneShotPrompt != nil { try stdin.fileHandleForWriting.close() } // print 模式会读 stdin 直到 EOF
+        // 专用线程读到 EOF：readabilityHandler 在句柄被关闭后会抛 ObjC 异常
+        Self.drain(out.fileHandleForReading) { [weak self] in self?.ingest($0) }
+        Self.drain(errPipe.fileHandleForReading) { [weak self] data in self?.lock.withLock { self?._stderr.append(data) } }
     }
 
-    deinit {
+    func stop() {
         if process.isRunning { process.terminate() }
         try? FileManager.default.removeItem(at: root)
+    }
+
+    deinit { stop() }
+
+    private static func drain(_ handle: FileHandle, _ consume: @escaping @Sendable (Data) -> Void) {
+        let fd = handle.fileDescriptor
+        Thread.detachNewThread {
+            var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+            while true {
+                let n = read(fd, &buffer, buffer.count) // 有多少读多少；FileHandle.read(upToCount:) 会等满
+                if n <= 0 { break }
+                consume(Data(buffer[0..<n]))
+            }
+            _ = handle // 读线程存活期间持有句柄，fd 不会被提前关闭
+        }
     }
 
     private func ingest(_ data: Data) {
@@ -87,6 +110,10 @@ final class PiProcess: @unchecked Sendable {
     }
 
     func prompt(_ text: String) throws { try send(["type": "prompt", "message": text]) }
+
+    func waitUntilExit() async {
+        while process.isRunning { try? await Task.sleep(for: .milliseconds(20)) }
+    }
 
     func kill(_ signal: Int32) { Darwin.kill(process.processIdentifier, signal) }
 

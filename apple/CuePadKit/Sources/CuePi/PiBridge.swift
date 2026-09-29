@@ -1,0 +1,247 @@
+import Darwin
+import Foundation
+import Observation
+
+/// 发现并连接本机所有活着的 Pi 会话（经扩展的 Unix socket），实时状态只在内存。
+///
+/// - 会话出现 = 连上 socket 并收到 hello 快照；会话结束 = 连接断开（无心跳、无轮询）。
+/// - 目录新增由 FSEvents 触发重扫；启动时全量扫描一次。残留 socket（进程被强杀）按文件名里的 pid 判死后删除。
+/// - 多个客户端（包括多个 `PiBridge`）可同时连同一会话：各自都收到 hello 与全部状态切换，
+///   命令各走各的连接，`ack` 只回给发送方；扩展不做仲裁，命令按到达顺序交给 Pi。
+@MainActor @Observable
+public final class PiBridge {
+    public private(set) var sessions: [PiSession] = []
+
+    @ObservationIgnored private let directory: URL
+    @ObservationIgnored private var links: [String: Link] = [:]       // socket 文件名（不含 .sock）→ 连接
+    /// 已经重试过一次的"被拒绝"socket：文件还在时不再排重试，之后只在目录事件/重扫时再看
+    @ObservationIgnored private var retried: Set<String> = []
+    /// 已报告不兼容的 socket：文件还在时不再重连，避免每次目录事件都重复报告
+    @ObservationIgnored private var incompatible: Set<String> = []
+    @ObservationIgnored private var watcher: FSEventsWatcher?
+    @ObservationIgnored private var watchTask: Task<Void, Never>?
+    @ObservationIgnored private var subscribers: [UUID: AsyncStream<PiSessionChange>.Continuation] = [:]
+
+    /// 一条已连接的 socket 及其未完成的命令。
+    private final class Link {
+        let connection: PiSocketConnection
+        var session: PiSession?
+        var pending: [String: CheckedContinuation<PiWire.Ack, any Error>] = [:]
+        var nextCommand = 0
+        var byeReason: String?
+        var rejected = false
+        var exitWatcher: ProcessExitWatcher?
+        init(connection: PiSocketConnection) { self.connection = connection }
+    }
+
+    private static let ackTimeout: Duration = .seconds(10)
+    /// 对"进程活着但还没 listen"的 socket 只重试一次；之后由下一次目录事件/重扫再看
+    private static let retryDelay: Duration = .milliseconds(200)
+
+    public init(socketDirectory: URL = PiPaths().socketDirectory) {
+        directory = socketDirectory
+    }
+
+    // MARK: 生命周期
+
+    public func start() throws {
+        guard watcher == nil else { return }
+        try PiSocketDirectory.prepare(directory)
+        let watcher = FSEventsWatcher(root: directory)
+        self.watcher = watcher
+        watchTask = Task { [weak self] in
+            for await _ in watcher.paths { self?.scan() }
+        }
+        scan()
+    }
+
+    public func stop() {
+        watchTask?.cancel()
+        watchTask = nil
+        watcher?.stop()
+        watcher = nil
+        for link in links.values { link.connection.close() }
+        links = [:]
+        sessions = []
+        for continuation in subscribers.values { continuation.finish() }
+        subscribers = [:]
+    }
+
+    /// 会话出现/状态切换/结束的事件流（每次调用得到独立的流）。
+    public func changes() -> AsyncStream<PiSessionChange> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            subscribers[id] = continuation
+            continuation.onTermination = { [weak self] _ in
+                Task { @MainActor in self?.subscribers[id] = nil }
+            }
+        }
+    }
+
+    private func emit(_ change: PiSessionChange) {
+        for continuation in subscribers.values { continuation.yield(change) }
+    }
+
+    // MARK: 命令
+
+    /// 发消息（文字 + 图片）。返回会话受理时的投递方式；`ack` 只表示已受理，不代表模型成功。
+    @discardableResult
+    public func send(_ message: PiMessage, to id: PiSession.ID) async throws -> PiDelivery {
+        let ack = try await request(to: id) { try PiWire.sendCommand(id: $0, message) }
+        switch ack.delivered {
+        case "steer": return .queued(.steer)
+        case "followUp": return .queued(.followUp)
+        default: return .immediate
+        }
+    }
+
+    /// 把文字粘贴进该会话的输入框（不发送）。
+    public func paste(_ text: String, into id: PiSession.ID) async throws {
+        _ = try await request(to: id) { try PiWire.pasteCommand(id: $0, text: text) }
+    }
+
+    private func request(to id: PiSession.ID, encode: (String) throws -> Data) async throws -> PiWire.Ack {
+        guard let link = links[id], link.session != nil else { throw PiBridgeError.unknownSession(id) }
+        link.nextCommand += 1
+        let commandID = "c\(link.nextCommand)"
+        let data = try encode(commandID)
+        let ack: PiWire.Ack = try await withCheckedThrowingContinuation { continuation in
+            link.pending[commandID] = continuation
+            link.connection.write(data)
+            Task { [weak link] in
+                try? await Task.sleep(for: Self.ackTimeout)
+                link?.pending.removeValue(forKey: commandID)?.resume(throwing: PiBridgeError.ackTimeout)
+            }
+        }
+        guard ack.ok else { throw PiBridgeError.rejected(ack.error ?? "unknown") }
+        return ack
+    }
+
+    // MARK: 发现
+
+    private func scan() {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        let present = Set(names.filter { $0.hasSuffix(".sock") }.map { String($0.dropLast(".sock".count)) })
+        incompatible.formIntersection(present)
+        retried.formIntersection(present)
+        for name in present where links[name] == nil && !incompatible.contains(name) { connect(name) }
+    }
+
+    private func connect(_ name: String) {
+        let path = directory.appending(path: name + ".sock").path
+        guard PiSocketDirectory.isOwnSocket(path) else { return }
+        do {
+            let link = Link(connection: try PiSocketConnection(path: path))
+            links[name] = link
+            Task { await consume(link, name: name) }
+        } catch PiSocketConnection.ConnectError.connect(let code) where code == ECONNREFUSED {
+            handleRefused(name)
+        } catch PiSocketConnection.ConnectError.connect(let code) where code == ENOENT {
+            // 扫描与文件删除之间的竞态
+        } catch {
+            incompatible.insert(name)
+            emit(.incompatible(id: name, detail: "cannot connect: \(error)"))
+        }
+    }
+
+    /// ECONNREFUSED = 没人在 listen。属主 pid 已死 → 强杀残留，删；pid 还活着 → 可能刚 bind 还没 listen，不删。
+    private func handleRefused(_ name: String) {
+        if removeIfStale(name) { return }
+        guard retried.insert(name).inserted else { return }
+        Task {
+            try? await Task.sleep(for: Self.retryDelay)
+            if links[name] == nil { connect(name) }
+        }
+    }
+
+    @discardableResult
+    private func removeIfStale(_ name: String) -> Bool {
+        guard let pid = PiSocketDirectory.pid(fromSocketName: name + ".sock"), PiSocketDirectory.processIsDead(pid) else { return false }
+        return unlink(directory.appending(path: name + ".sock").path) == 0
+    }
+
+    // MARK: 读循环
+
+    private func consume(_ link: Link, name: String) async {
+        for await line in link.connection.lines {
+            do {
+                try handle(try PiWire.decode(line), on: link, name: name)
+            } catch {
+                reject(link, name: name, detail: "\(error)")
+            }
+            if link.rejected { break }
+        }
+        finish(link, name: name)
+    }
+
+    private func handle(_ message: PiWire.Message, on link: Link, name: String) throws {
+        switch message {
+        case .hello(let hello):
+            guard link.session == nil else { throw HandlingError.duplicateHello }
+            guard hello.protocolVersion == PiWire.protocolVersion else { throw HandlingError.unsupportedProtocol(hello.protocolVersion) }
+            guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
+            guard let state = hello.state.agentState else { throw HandlingError.unknownState(hello.state.kind) }
+            let session = PiSession(
+                id: name, sessionID: hello.sessionId, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
+                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), mode: hello.mode, model: hello.model,
+                terminal: PiTerminal(tty: hello.tty, environment: hello.term), extensionVersion: hello.extensionVersion,
+                state: state, stateSince: hello.state.sinceDate)
+            link.session = session
+            link.exitWatcher = ProcessExitWatcher(pid: hello.pid) { [weak self] in
+                Task { @MainActor in self?.processExited(name) }
+            }
+            sessions.append(session)
+            emit(.appeared(session))
+        case .state(let wire):
+            guard var session = link.session else { throw HandlingError.messageBeforeHello }
+            guard let state = wire.agentState else { throw HandlingError.unknownState(wire.kind) }
+            let previous = session.state
+            session.state = state
+            session.stateSince = wire.sinceDate
+            update(session, on: link)
+            emit(.stateChanged(session, from: previous))
+        case .ack(let ack):
+            if let id = ack.id { link.pending.removeValue(forKey: id)?.resume(returning: ack) }
+        case .bye(let reason):
+            link.byeReason = reason
+        }
+    }
+
+    private enum HandlingError: Error {
+        case duplicateHello, unsupportedProtocol(Int), nameMismatch, unknownState(String), messageBeforeHello
+    }
+
+    private func update(_ session: PiSession, on link: Link) {
+        link.session = session
+        if let index = sessions.firstIndex(where: { $0.id == session.id }) { sessions[index] = session }
+    }
+
+    /// 不兼容/损坏：报告并断开。会话若已出现，随后走正常的结束路径。
+    private func reject(_ link: Link, name: String, detail: String) {
+        link.rejected = true
+        incompatible.insert(name)
+        emit(.incompatible(id: name, detail: detail))
+        link.connection.close()
+    }
+
+    /// 进程已退出：它的 socket 文件若还在（强杀）就删掉。正常退出时扩展自己已删。
+    private func processExited(_ name: String) {
+        let path = directory.appending(path: name + ".sock").path
+        if PiSocketDirectory.isOwnSocket(path) { unlink(path) }
+    }
+
+    private func finish(_ link: Link, name: String) {
+        link.exitWatcher?.cancel()
+        links[name] = nil
+        for continuation in link.pending.values { continuation.resume(throwing: PiBridgeError.sessionEnded) }
+        link.pending = [:]
+        guard let session = link.session else { return }
+        sessions.removeAll { $0.id == session.id }
+        if let reason = link.byeReason {
+            emit(.ended(session, reason: .closed(reason: reason)))
+        } else {
+            emit(.ended(session, reason: .disconnected))
+            removeIfStale(name) // 没有告别就断开 = 进程被强杀，socket 文件会残留
+        }
+    }
+}

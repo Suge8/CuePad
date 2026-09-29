@@ -4,9 +4,25 @@ import Testing
 
 // MARK: - 临时目录 / 条件等待
 
-/// socket 路径有 104 字节上限，临时目录必须短：`/tmp/cpt-XXXXXX`。
+/// 本进程所有临时目录的根（进程退出时整体删除）。socket 路径有 104 字节上限，所以路径要短：`/tmp/cpt-XXXXXX/N`。
+private let temporaryRoot: URL = {
+    let root = URL(filePath: "/tmp/cpt-\(String(UUID().uuidString.prefix(6)))", directoryHint: .isDirectory)
+    try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    atexit { try? FileManager.default.removeItem(atPath: temporaryRootPath) }
+    temporaryRootPath = root.path
+    return root
+}()
+nonisolated(unsafe) private var temporaryRootPath = ""
+private let temporaryCounter = LockedCounter()
+
+private final class LockedCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func next() -> Int { lock.withLock { value += 1; return value } }
+}
+
 func makeTempDirectory() throws -> URL {
-    let dir = URL(filePath: "/tmp/cpt-\(String(UUID().uuidString.prefix(6)))", directoryHint: .isDirectory)
+    let dir = temporaryRoot.appending(path: String(temporaryCounter.next()), directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     return dir
 }
@@ -227,11 +243,16 @@ final class FakeExtension: @unchecked Sendable {
         try? FileManager.default.removeItem(at: socketURL)
     }
 
-    /// 不告别直接断开并留下 socket 文件（等同 kill -9）。
+    /// 不告别直接断开并留下 socket 文件（等同 kill -9）。幂等：fd 是进程全局的，重复 close 会误关别的测试刚复用的描述符。
     func crash() {
+        let (listener, open): (Int32, [Connection]) = lock.withLock {
+            defer { listenFD = -1; connections = [] }
+            return (listenFD, connections)
+        }
         source?.cancel()
-        if listenFD >= 0 { Darwin.close(listenFD); listenFD = -1 }
-        for conn in lock.withLock({ connections }) {
+        source = nil
+        if listener >= 0 { Darwin.close(listener) }
+        for conn in open {
             conn.source?.cancel()
             shutdown(conn.fd, SHUT_RDWR)
             Darwin.close(conn.fd)
