@@ -116,19 +116,28 @@ final class Workspace {
         }
     }
 
-    /// 新建卡片。目标项目在写入前核对：不存在或在回收站时落到未归档，卡片不会写进看不见的地方。
+    /// 新建卡片。项目是否有效由 Store 在写事务里判定：项目已不存在或在回收站（`invalidProject`）时，
+    /// 重新核对当前项目，卡片落到未归档并提示，不会写进看不见的地方。
     func createCard(body: String = "", in project: UUID?) async throws -> Card {
-        try await services.store.createCard(in: liveProject(project), body: body)
+        let store = services.store
+        return try await fallingBack(from: project) { try await store.createCard(in: $0, body: body) }
     }
 
-    /// 新建任务；目标项目失效时归为全局。
+    /// 新建任务；项目失效时同样回落，任务归为全局并提示。
     func createTask(_ content: String, in project: UUID?) async throws -> CueTask {
-        try await services.store.createTask(content, in: liveProject(project))
+        let store = services.store
+        return try await fallingBack(from: project) { try await store.createTask(content, in: $0) }
     }
 
-    private func liveProject(_ id: UUID?) async throws -> UUID? {
-        guard let id, let project = try await services.store.project(id), project.deletedAt == nil else { return nil }
-        return id
+    private func fallingBack<T>(from project: UUID?, _ write: (UUID?) async throws -> T) async throws -> T {
+        do {
+            return try await write(project)
+        } catch CueStoreError.invalidProject where project != nil {
+            await reconcileCurrentProject()
+            let result = try await write(nil)
+            say("原项目已不存在或在回收站，已放到未归档", isError: true)
+            return result
+        }
     }
 
     /// 执行一个异步操作，失败时提示。

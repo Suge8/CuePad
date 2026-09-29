@@ -118,6 +118,7 @@ enum ErrorText {
         case DispatchError.noTarget: "没有可投送的目标应用"
         case DispatchError.targetUnavailable: "目标应用没有在运行"
         case DispatchError.clipboardWriteFailed: "写入剪贴板失败"
+        case CueStoreError.invalidProject: "目标项目已不存在或在回收站"
         case PiBridgeError.unknownSession: "这个 Pi 会话已经结束"
         case PiBridgeError.sessionEnded: "Pi 会话在发送途中结束了"
         case PiBridgeError.ackTimeout: "Pi 没有响应，请确认会话仍在运行"
