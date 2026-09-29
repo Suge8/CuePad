@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import CueText
 import Testing
@@ -99,3 +100,5 @@ struct LayoutTests {
         #expect(abs(afterScroll - settled) / afterScroll < 0.02)
     }
 }
+
+#endif

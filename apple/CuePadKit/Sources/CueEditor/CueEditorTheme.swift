@@ -108,3 +108,42 @@ extension NSFont {
     }
 }
 #endif
+
+#if canImport(UIKit)
+extension CueEditorTheme {
+    /// 中性默认值（iOS）：系统语义色；字号是 Dynamic Type 的设计基准。
+    public static let neutral = CueEditorTheme(
+        font: .pingFang(17),
+        titleFont: .pingFang(24, weight: .semibold),
+        headingFont: .pingFang(20, weight: .semibold),
+        codeFont: .monospacedSystemFont(ofSize: 15, weight: .regular),
+        markerColor: .tertiaryLabel,
+        codeBackground: CueColor.label.withAlphaComponent(0.06),
+        textColor: .label,
+        backgroundColor: .systemBackground,
+        variableColor: .systemPurple,
+        variableBackground: CueColor.systemPurple.withAlphaComponent(0.12),
+        dividerColor: .tertiaryLabel,
+        dividerLabelColor: .secondaryLabel,
+        placeholderColor: .quaternaryLabel,
+        horizontalInset: 16,
+        verticalInset: 12,
+        lineSpacing: 3,
+        headingSpacing: 8,
+        imageCornerRadius: 6,
+        dividerHeight: 32)
+}
+
+extension UIFont {
+    /// 中文正文一律苹方；系统未提供该字重时退回系统字体。
+    static func pingFang(_ size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
+        let name: String
+        switch weight {
+        case .semibold, .bold, .heavy, .black: name = "PingFangSC-Semibold"
+        case .medium: name = "PingFangSC-Medium"
+        default: name = "PingFangSC-Regular"
+        }
+        return UIFont(name: name, size: size) ?? .systemFont(ofSize: size, weight: weight)
+    }
+}
+#endif

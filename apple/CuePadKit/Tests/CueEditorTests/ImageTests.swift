@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import CueText
 import Testing
@@ -171,3 +172,5 @@ struct ImageTests {
         #expect(ImageLoading.decodeCount - before < 20)
     }
 }
+
+#endif

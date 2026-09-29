@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import CueText
 import Testing
@@ -137,3 +138,5 @@ struct BlockTests {
         #expect(labels() == ["", ""])
     }
 }
+
+#endif

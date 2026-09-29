@@ -1,3 +1,4 @@
+#if canImport(AppKit)
 import AppKit
 import CueText
 import Testing
@@ -207,3 +208,5 @@ struct DecorationTests {
         #expect(font(displayed(h)[0]) == next.titleFont)
     }
 }
+
+#endif
