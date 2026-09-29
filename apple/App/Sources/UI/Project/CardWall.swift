@@ -103,13 +103,14 @@ private struct CardMeta: View {
             if text.blockCount > 1 { Text("\(text.blockCount) 块") }
             if let lastTarget {
                 Label(lastTarget, systemImage: "checkmark").labelStyle(.titleAndIcon).lineLimit(1)
+                    .accessibilityLabel("已发给 \(lastTarget)")
             } else {
                 Text("未发送")
             }
             Spacer(minLength: 0)
-            if isGoal { Image(systemName: "scope").help("项目目标") }
-            if floated { Image(systemName: "arrow.up").help("从更早回到墙上") }
-            if card.isFavorite { Image(systemName: "pin.fill").help("置顶") }
+            if isGoal { Image(systemName: "scope").help("项目目标").accessibilityLabel("项目目标") }
+            if floated { Image(systemName: "arrow.up").help("从更早回到墙上").accessibilityLabel("从更早回到墙上") }
+            if card.isFavorite { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
         }
         .font(.system(size: 11))
         .foregroundStyle(palette.ink3)

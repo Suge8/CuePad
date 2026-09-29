@@ -38,7 +38,7 @@ struct OlderList: View {
         let open = isExpanded(group.period)
         let header = HStack {
             if isCollapsible(group.period) {
-                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
+                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).accessibilityHidden(true)
                     .rotationEffect(.degrees(open ? 90 : 0))
             }
             Text(Self.title(group.period)).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2)
@@ -110,12 +110,16 @@ private struct OlderRow: View {
         HStack(spacing: 10) {
             Image(systemName: !text.images.isEmpty ? "photo" : "doc.text")
                 .font(.system(size: 12)).foregroundStyle(palette.ink3).frame(width: 18)
+                .accessibilityLabel(text.images.isEmpty ? "卡片" : "含图片的卡片")
             Text(text.title.isEmpty ? "空白卡片" : text.title)
                 .font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(text.preview).font(.system(size: 13)).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)
             if text.blockCount > 1 { Text("\(text.blockCount) 块") }
-            if let lastTarget { Label(lastTarget, systemImage: "arrow.up.right").labelStyle(.titleAndIcon).lineLimit(1) }
+            if let lastTarget {
+                Label(lastTarget, systemImage: "arrow.up.right").labelStyle(.titleAndIcon).lineLimit(1)
+                    .accessibilityLabel("已发给 \(lastTarget)")
+            }
             Text(DateLabel.short(card.modifiedAt)).monospacedDigit().frame(width: 64, alignment: .trailing)
         }
         .font(.system(size: 11.5)).foregroundStyle(palette.ink3)

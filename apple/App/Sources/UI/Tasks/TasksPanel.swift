@@ -190,7 +190,7 @@ struct NewTaskField: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.ink3)
+            Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
             TextField("添加任务", text: $text).textFieldStyle(.plain).font(.system(size: 13))
                 .onSubmit(add)
         }

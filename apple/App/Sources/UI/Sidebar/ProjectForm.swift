@@ -46,33 +46,43 @@ struct ProjectForm: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var icon = "folder"
-    @State private var color = ProjectForm.colors[0]
+    @State private var color = ProjectForm.colors[0].hex
 
-    static let colors = ["#D9774B", "#C9A227", "#5E9E5A", "#3F8FB8", "#6A6FD1", "#A260C4", "#D0607D", "#8A8A84"]
+    /// 可选颜色：存储值 → 读屏与提示用的颜色名。
+    static let colors: [(hex: String, name: String)] = [
+        ("#D9774B", "橙色"), ("#C9A227", "黄色"), ("#5E9E5A", "绿色"), ("#3F8FB8", "蓝色"),
+        ("#6A6FD1", "靛蓝"), ("#A260C4", "紫色"), ("#D0607D", "粉色"), ("#8A8A84", "灰色"),
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(project == nil ? "新建项目" : "编辑项目").font(.headline)
             TextField("名称", text: $name).textFieldStyle(.roundedBorder).onSubmit(save)
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(30), spacing: 6), count: 8), spacing: 6) {
-                ForEach(ProjectGlyph.choices, id: \.self) { symbol in
+                ForEach(ProjectGlyph.choices, id: \.symbol) { choice in
+                    let symbol = choice.symbol
                     Button { icon = symbol } label: {
                         Image(systemName: symbol).frame(width: 30, height: 30)
                             .background(icon == symbol ? AnyShapeStyle(.selection) : AnyShapeStyle(.clear), in: .rect(cornerRadius: 7))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Palette.projectTint(color))
-                    .accessibilityLabel(symbol)
+                    .accessibilityLabel("图标：\(choice.name)")
+                    .accessibilityAddTraits(icon == symbol ? .isSelected : [])
+                    .help(choice.name)
                 }
             }
             HStack(spacing: 8) {
-                ForEach(Self.colors, id: \.self) { hex in
+                ForEach(Self.colors, id: \.hex) { choice in
+                    let hex = choice.hex
                     Button { color = hex } label: {
                         Circle().fill(Palette.projectTint(hex)).frame(width: 20, height: 20)
                             .overlay { if color == hex { Circle().stroke(.primary, lineWidth: 2).padding(-3) } }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("颜色 \(hex)")
+                    .accessibilityLabel("颜色：\(choice.name)")
+                    .accessibilityAddTraits(color == hex ? .isSelected : [])
+                    .help(choice.name)
                 }
             }
             HStack {

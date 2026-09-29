@@ -29,7 +29,7 @@ struct SendControl: View {
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(disabled)
             SendTargetMenu(project: project) {
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).accessibilityHidden(true)
                     .padding(.trailing, compact ? 10 : 14).padding(.leading, 4)
                     .frame(height: compact ? 28 : 44)
                     .contentShape(.rect)
@@ -50,8 +50,8 @@ struct SendControl: View {
     @ViewBuilder private func icon(_ choice: SendChoice) -> some View {
         switch choice {
         case .pi(let id), .piInput(let id): PiDot(state: workspace.session(id)?.state, size: 6)
-        case .clipboard: Image(systemName: "doc.on.clipboard")
-        case .app, .lastApp: Image(systemName: "paperplane.fill")
+        case .clipboard: Image(systemName: "doc.on.clipboard").accessibilityHidden(true)
+        case .app, .lastApp: Image(systemName: "paperplane.fill").accessibilityHidden(true)
         }
     }
 }

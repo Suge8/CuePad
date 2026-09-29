@@ -37,7 +37,7 @@ struct ProjectSwitcher: View {
         } label: {
             HStack(spacing: 6) {
                 current(projects)
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary).accessibilityHidden(true)
             }
             .font(.system(size: 13, weight: .semibold))
         }
@@ -71,10 +71,10 @@ struct ProjectSwitcher: View {
             ProjectGlyph(project: project, size: 12)
             Text(project?.name ?? "")
         case .inbox:
-            Image(systemName: "tray")
+            Image(systemName: "tray").accessibilityHidden(true)
             Text("未归档")
         case .trash:
-            Image(systemName: "trash")
+            Image(systemName: "trash").accessibilityHidden(true)
             Text("回收站")
         }
     }

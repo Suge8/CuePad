@@ -16,7 +16,7 @@ struct CaptureBar: View {
         GlassEffectContainer(spacing: 8) {
             HStack(alignment: .bottom, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Image(systemName: "plus").foregroundStyle(.secondary)
+                    Image(systemName: "plus").foregroundStyle(.secondary).accessibilityHidden(true)
                     TextField("记下想法…", text: $text, axis: .vertical)
                         .textFieldStyle(.plain)
                         .font(.system(size: 14))

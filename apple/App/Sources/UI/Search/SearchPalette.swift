@@ -63,7 +63,7 @@ struct SearchPalette: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
                 TextField("搜索卡片", text: $query.text)
                     .textFieldStyle(.plain).font(.system(size: 18))
                     .focused($focused)
@@ -147,6 +147,7 @@ struct SearchPalette: View {
         let isSelected = card.id == selection
         return HStack(spacing: 10) {
             Image(systemName: text.images.isEmpty ? "doc.text" : "photo").frame(width: 16).foregroundStyle(.secondary)
+                .accessibilityLabel(text.images.isEmpty ? "卡片" : "含图片的卡片")
             Text(Highlight.matches(text.title.isEmpty ? "空白卡片" : text.title, query.text)).font(.system(size: 13.5)).lineLimit(1)
             Spacer()
             Text(DateLabel.short(card.modifiedAt)).font(.system(size: 11)).foregroundStyle(.secondary)
@@ -312,7 +313,7 @@ private struct FilterCapsule: View {
             Text(name).foregroundStyle(on ? AnyShapeStyle(palette.onSolid) : AnyShapeStyle(.secondary))
             if let value {
                 Text(value).fontWeight(.medium)
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6).accessibilityHidden(true)
             }
         }
         .font(.system(size: 12))

@@ -120,6 +120,7 @@ struct ProjectGlyph: View {
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? .secondary)
             .frame(width: size + 6)
+            .accessibilityHidden(true) // 项目名总在旁边，图标只是装饰
     }
 
     /// Electron 版的图标名（lucide）映射到 SF Symbols；认不出的用文件夹。
@@ -129,9 +130,12 @@ struct ProjectGlyph: View {
         return lucide[name] ?? "folder"
     }
 
-    static let choices = [
-        "folder", "sparkles", "bubble.left.and.bubble.right", "terminal", "globe", "hammer", "book", "target",
-        "briefcase", "cart", "megaphone", "paintbrush", "lightbulb", "flag", "cube", "leaf",
+    /// 新建项目时可选的图标：SF Symbol 名 → 读屏与提示用的中文含义。
+    static let choices: [(symbol: String, name: String)] = [
+        ("folder", "文件夹"), ("sparkles", "闪光"), ("bubble.left.and.bubble.right", "对话"), ("terminal", "终端"),
+        ("globe", "地球"), ("hammer", "锤子"), ("book", "书"), ("target", "靶心"),
+        ("briefcase", "公文包"), ("cart", "购物车"), ("megaphone", "喇叭"), ("paintbrush", "画笔"),
+        ("lightbulb", "灯泡"), ("flag", "旗帜"), ("cube", "方块"), ("leaf", "叶子"),
     ]
 
     private static let lucide: [String: String] = [

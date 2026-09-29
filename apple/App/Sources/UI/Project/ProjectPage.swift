@@ -224,7 +224,7 @@ private struct EmptyProject: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: "square.on.square.dashed").font(.system(size: 28)).foregroundStyle(palette.ink3)
+            Image(systemName: "square.on.square.dashed").font(.system(size: 28)).foregroundStyle(palette.ink3).accessibilityHidden(true)
             Text("这个项目还没有卡片").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink2)
             Text("在下方输入框记下想法按 ↩ 存为卡片，或按 ⌘N 新建").font(.system(size: 13)).foregroundStyle(palette.ink3)
         }

@@ -55,7 +55,7 @@ struct TrashPage: View {
     private func content(_ data: TrashData) -> some View {
         if data.projects.isEmpty && data.cards.isEmpty {
             VStack(spacing: 8) {
-                Image(systemName: "trash").font(.system(size: 28)).foregroundStyle(palette.ink3)
+                Image(systemName: "trash").font(.system(size: 28)).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 Text("回收站是空的").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink2)
             }
             .frame(maxWidth: .infinity).padding(.top, 80)
@@ -76,7 +76,7 @@ struct TrashPage: View {
                 ForEach(data.cards) { card in
                     let text = CardText(card.body)
                     TrashRow(
-                        icon: AnyView(Image(systemName: "doc.text").foregroundStyle(palette.ink3)),
+                        icon: AnyView(Image(systemName: "doc.text").foregroundStyle(palette.ink3).accessibilityHidden(true)),
                         title: text.title.isEmpty ? "空白卡片" : text.title, detail: text.preview, deletedAt: card.deletedAt,
                         restore: { workspace.perform { try await $0.restoreCard(card.id) } },
                         purge: { workspace.perform { try await $0.purgeCard(card.id) } })

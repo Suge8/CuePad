@@ -208,7 +208,7 @@ private struct VariablesChip: View {
                     .foregroundStyle(card.variableValues[names[0]]?.isEmpty == false ? .primary : .secondary)
                     .lineLimit(1)
                 if names.count > 1 { Text("+\(names.count - 1)").foregroundStyle(.secondary) }
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary).accessibilityHidden(true)
             }
             .font(.system(size: 13, weight: .medium))
             .padding(.horizontal, 14).frame(height: 44)
@@ -217,7 +217,7 @@ private struct VariablesChip: View {
         }
         .buttonStyle(.plain)
         .glass(in: .capsule, interactive: true)
-        .popover(isPresented: $editing, arrowEdge: .top) { VariablesForm(card: card, names: names) }
+        .popover(isPresented: $editing, arrowEdge: .top) { VariablesForm(card: card, names: names) { editing = false } }
         .help("变量取值")
         .accessibilityLabel("变量取值，共 \(names.count) 个")
     }
@@ -226,6 +226,7 @@ private struct VariablesChip: View {
 private struct VariablesForm: View {
     let card: Card
     let names: [String]
+    let close: () -> Void
     @Environment(Workspace.self) private var workspace
     @State private var values: [String: String] = [:]
 
@@ -239,7 +240,7 @@ private struct VariablesForm: View {
         .frame(width: 320)
         .onAppear { values = card.variableValues }
         .onDisappear(perform: save)
-        .onSubmit(save)
+        .onSubmit(close) // ↩ 提交并关闭（关闭时保存），与 ⌘K 一致
     }
 
     private func save() {
