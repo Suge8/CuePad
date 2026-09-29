@@ -166,12 +166,11 @@
 				LastUpgradeCheck = 2700;
 			};
 			buildConfigurationList = A10000000000000000000072 /* Build configuration list for PBXProject "CuePad" */;
-			developmentRegion = en;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
-				Base,
 				"zh-Hans",
+				Base,
 			);
 			mainGroup = A10000000000000000000006;
 			minimizedProjectReferenceProxies = 1;

@@ -4,6 +4,25 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
+/// 收起动画进行中的宿主窗口：endSheet 只是发出请求，弹窗要等 `finishDismissal` 才算结束。
+@MainActor
+private final class SlowSheetWindow: NSWindow {
+    private var pendingSheet: NSWindow? = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: true)
+    private(set) var endRequested = false
+
+    convenience init() {
+        self.init(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: true)
+    }
+
+    override var attachedSheet: NSWindow? { pendingSheet }
+    override func endSheet(_ sheetWindow: NSWindow) { endRequested = true }
+
+    func finishDismissal() {
+        pendingSheet = nil
+        NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: self)
+    }
+}
+
 @MainActor
 struct ShellChromeTests {
     /// `NSApp.terminate` 在弹窗还挂着时会拒绝退出（"blocked by modal sheet"），所以继续退出之前，
@@ -31,6 +50,18 @@ struct ShellChromeTests {
         #expect(proceeded, "弹窗没有全部结束，退出一直没有继续")
         #expect(stillAttached.isEmpty, "继续退出时这些弹窗还挂着：\(stillAttached)")
         #expect(ended == ["sheet", "nested"])
+    }
+
+    @Test func 系统报告弹窗结束之前不继续退出() {
+        let slow = SlowSheetWindow()
+        var proceeded = false
+
+        CuePadApplication.dismissPresentations(in: [slow]) { proceeded = true }
+
+        #expect(slow.endRequested)
+        #expect(!proceeded, "收起动画还没结束就继续退出，系统会以 blocked by modal sheet 拒绝")
+        slow.finishDismissal()
+        #expect(proceeded)
     }
 
     @Test func 没有弹窗时立即继续退出() {
