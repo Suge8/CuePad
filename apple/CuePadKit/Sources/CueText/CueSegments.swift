@@ -26,7 +26,13 @@ public enum CueSegments {
     /// 卡片列表、界面与编辑器的标题行装饰都以此判定。
     public static func isTitleLine(_ line: String) -> Bool { !titleText(of: line).isEmpty }
 
-    /// 卡片标题 = 首个标题行，去掉图片引用与两端空白；没有标题行返回空串。
+    /// 正文里全部标题行的文字（去掉图片引用，空白折成单个空格），按出现顺序。
+    /// 卡片标题是第一行，摘要是其后各行。
+    public static func contentLines(_ stored: String) -> [String] {
+        stored.components(separatedBy: "\n").map(titleText(of:)).filter { !$0.isEmpty }
+    }
+
+    /// 卡片标题 = 首个标题行；没有标题行返回空串。
     public static func firstContentLine(_ stored: String) -> String {
         for line in stored.components(separatedBy: "\n") {
             let text = titleText(of: line)
@@ -41,7 +47,7 @@ public enum CueSegments {
             if case .text(let text) = token { text } else { nil }
         }.joined()
         let object = String(UnicodeScalar(CueFormat.objectCharacter)!)
-        return text.replacingOccurrences(of: object, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.replacingOccurrences(of: object, with: "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
     /// 去掉段首尾空行与两端空白，段内格式不动。
