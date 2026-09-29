@@ -5,8 +5,8 @@ public enum PiAgentState: Sendable, Equatable {
     case idle
     case thinking
     case outputting
-    /// `name` 是最近开始的工具，`running` 是并行执行中的全部工具名
-    case tool(name: String, running: [String])
+    /// `name` 是最近开始的工具，`running` 是并行执行中的全部工具名，`detail` 是该工具调用的一句话摘要（可空）
+    case tool(name: String, running: [String], detail: String? = nil)
     /// 扩展发起的 `ctx.ui` 弹窗（Pi 没有内置工具审批）
     case waitingUser(kind: String?, title: String?)
     /// 一轮结束且 Pi 不会再自动继续（`agent_settled`）

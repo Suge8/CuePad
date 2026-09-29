@@ -11,13 +11,15 @@ import net from "node:net";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
-const EXTENSION_VERSION = 1;
+const EXTENSION_VERSION = 2;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
 /** 一行命令（含 base64 图片）的上限，超过就断开该客户端 */
 const MAX_LINE_BYTES = 64 * 1024 * 1024;
+/** 工具状态里一句话详情的字符数上限（含省略号） */
+const DETAIL_LIMIT = 120;
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = [
 	"TERM_PROGRAM", "TERM_PROGRAM_VERSION", "__CFBundleIdentifier", "TERM_SESSION_ID", "ITERM_SESSION_ID",
@@ -28,7 +30,7 @@ type State =
 	| { kind: "idle" }
 	| { kind: "thinking" }
 	| { kind: "outputting" }
-	| { kind: "tool"; tool: string; tools: string[] }
+	| { kind: "tool"; tool: string; tools: string[]; detail?: string }
 	| { kind: "waiting_user"; promptKind: string; title?: string }
 	| { kind: "done"; aborted: boolean }
 	| { kind: "error"; error: string };
@@ -37,7 +39,7 @@ type State =
 class StateTracker {
 	active = false;
 	phase: "thinking" | "outputting" = "thinking";
-	tools = new Map<string, string>();
+	tools = new Map<string, { name: string; detail?: string }>();
 	prompt: { kind: string; title?: string } | null = null;
 	/** agent_end 记录结果，agent_settled 才生效：重试/压缩/排队消息都可能在 agent_end 之后继续 */
 	outcome: State = { kind: "done", aborted: false };
@@ -47,13 +49,25 @@ class StateTracker {
 		if (this.prompt) return { kind: "waiting_user", promptKind: this.prompt.kind, title: this.prompt.title };
 		if (this.active) {
 			if (this.tools.size > 0) {
-				const names = [...this.tools.values()];
-				return { kind: "tool", tool: names[names.length - 1], tools: names };
+				const running = [...this.tools.values()];
+				const latest = running[running.length - 1];
+				return { kind: "tool", tool: latest.name, tools: running.map((t) => t.name), detail: latest.detail };
 			}
 			return { kind: this.phase };
 		}
 		return this.settled ?? { kind: "idle" };
 	}
+}
+
+/** 只上报一句话摘要，不上报完整参数：命令/搜索模式取首个非空行，文件类工具取文件名，超长截断。 */
+function toolDetail(args: any): string | undefined {
+	const raw = typeof args?.command === "string" ? args.command
+		: typeof args?.pattern === "string" ? args.pattern
+		: typeof args?.path === "string" ? path.basename(args.path) : undefined;
+	const line = raw?.split("\n").map((l) => l.trim()).find((l) => l.length > 0);
+	if (!line) return undefined;
+	const chars = Array.from(line);
+	return chars.length <= DETAIL_LIMIT ? line : chars.slice(0, DETAIL_LIMIT - 1).join("") + "…";
 }
 
 /** 目录必须是"当前用户的 0700 目录"，否则拒绝（/tmp 下的目录可能被他人预先创建）。 */
@@ -247,7 +261,7 @@ export default function (pi: any) {
 		tracker.phase = next;
 		commit();
 	});
-	pi.on("tool_execution_start", (event: any) => { tracker.tools.set(event.toolCallId, event.toolName); commit(); });
+	pi.on("tool_execution_start", (event: any) => { tracker.tools.set(event.toolCallId, { name: event.toolName, detail: toolDetail(event.args) }); commit(); });
 	pi.on("tool_execution_end", (event: any) => { tracker.tools.delete(event.toolCallId); tracker.phase = "thinking"; commit(); });
 	pi.on("ui_prompt_start", (event: any) => { tracker.prompt = { kind: event.kind, title: event.title }; commit(); });
 	pi.on("ui_prompt_end", () => { tracker.prompt = null; commit(); });

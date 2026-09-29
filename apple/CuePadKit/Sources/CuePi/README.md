@@ -24,7 +24,9 @@
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
 | `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
-`state.kind`：`idle`、`thinking`、`outputting`、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`done`（`aborted`）、`error`（`error`）。只有 `agent_settled` 才进入 `done`/`error`。
+`state.kind`：`idle`、`thinking`、`outputting`、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`done`（`aborted`）、`error`（`error`）。只有 `agent_settled` 才进入 `done`/`error`。
+
+`detail` 是扩展 v2 加的可选字段：命令（`command`）或搜索模式（`pattern`）取首个非空行，文件类工具（`path`）取文件名，超过 120 个字符截断（含省略号）；不上报完整参数。旧扩展没有这个字段，客户端得到 `nil`，并被 `hasOutdatedExtension` 标为过期。
 
 CuePad → 扩展（都带 `id`）：
 

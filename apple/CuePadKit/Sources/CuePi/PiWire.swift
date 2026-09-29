@@ -9,6 +9,7 @@ enum PiWire {
         var kind: String
         var tool: String?
         var tools: [String]?
+        var detail: String?
         var promptKind: String?
         var title: String?
         var error: String?
@@ -21,7 +22,7 @@ enum PiWire {
             case "idle": .idle
             case "thinking": .thinking
             case "outputting": .outputting
-            case "tool": .tool(name: tool ?? "?", running: tools ?? [])
+            case "tool": .tool(name: tool ?? "?", running: tools ?? [], detail: detail)
             case "waiting_user": .waitingUser(kind: promptKind, title: title)
             case "done": .done(aborted: aborted ?? false)
             case "error": .error(message: error ?? "")
