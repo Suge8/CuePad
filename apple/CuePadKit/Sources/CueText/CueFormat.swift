@@ -1,0 +1,75 @@
+import Foundation
+
+/// 正文的结构化视图：卡片正文的存储格式与运行时 token 之间的桥。
+public enum CueToken: Equatable, Sendable {
+    case text(String)
+    /// 内联图片，值为内容哈希（小写十六进制）。
+    case image(String)
+    /// 分隔线（独占一行）。
+    case split
+}
+
+/// 存储格式（纯字符串，唯一事实源）：
+/// 分隔线是独占一行的 `---split---`（历史角色标记宽容解析为分隔线，保存时归一化）；
+/// 图片是行内 `![](cuepad://img/<hash>)`。
+public enum CueFormat {
+    public static let splitMarker = "---split---"
+    /// 运行时正文里分隔线与图片各占的一个占位字符（NSTextAttachment 用的 U+FFFC）。
+    public static let objectCharacter: UniChar = 0xFFFC
+
+    private static let legacyMarkers: Set<String> = ["---ask---", "---answer---", "---system---"]
+    private static let imagePrefix = "![](cuepad://img/"
+
+    /// 独占一行且 trim 后是分隔标记（含历史角色标记）时为分隔线行。
+    public static func isMarkerLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed == splitMarker || legacyMarkers.contains(trimmed)
+    }
+
+    public static func imageMarkup(id: String) -> String { imagePrefix + id + ")" }
+
+    public static func parse(_ stored: String) -> [CueToken] {
+        var tokens: [CueToken] = []
+        for (index, line) in stored.components(separatedBy: "\n").enumerated() {
+            if index > 0 { tokens.append(.text("\n")) }
+            if isMarkerLine(line) {
+                tokens.append(.split)
+            } else {
+                appendInline(line, to: &tokens)
+            }
+        }
+        return tokens
+    }
+
+    public static func serialize(_ tokens: [CueToken]) -> String {
+        tokens.map {
+            switch $0 {
+            case .text(let text): text
+            case .image(let id): imageMarkup(id: id)
+            case .split: splitMarker
+            }
+        }.joined()
+    }
+
+    private static func appendInline(_ line: String, to tokens: inout [CueToken]) {
+        var rest = Substring(line)
+        var pending = Substring()
+        while let start = rest.range(of: imagePrefix) {
+            let afterPrefix = rest[start.upperBound...]
+            let hex = afterPrefix.prefix { $0.isASCII && ($0.isNumber || ("a"..."f").contains($0)) }
+            let close = afterPrefix[hex.endIndex...]
+            guard !hex.isEmpty, close.first == ")" else {
+                pending += rest[..<start.upperBound]
+                rest = afterPrefix
+                continue
+            }
+            pending += rest[..<start.lowerBound]
+            if !pending.isEmpty { tokens.append(.text(String(pending))) }
+            pending = Substring()
+            tokens.append(.image(String(hex)))
+            rest = close.dropFirst()
+        }
+        pending += rest
+        if !pending.isEmpty { tokens.append(.text(String(pending))) }
+    }
+}
