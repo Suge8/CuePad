@@ -1,6 +1,6 @@
 # CuePad 模块索引
 
-产品定位与功能见 [README.md](README.md)；开发命令、架构要点与验收环境事实见 [docs/development.md](docs/development.md)。
+产品定位与功能见 [README.md](README.md)；开发命令、架构要点与验收环境事实见 [docs/development.md](docs/development.md)。正在进行 Swift 原生重写，涉及新架构、数据模型或阶段进度时先读 [docs/swift-rewrite.md](docs/swift-rewrite.md)。
 
 | 模块 | 职责 |
 | --- | --- |
