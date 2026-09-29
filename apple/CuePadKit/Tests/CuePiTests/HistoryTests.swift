@@ -294,7 +294,7 @@ struct HistoryIndexerTests {
     }
 
     @Test func liveAppendsAndNewFilesAreIndexedIncrementally() async throws {
-        var f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
+        let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
         // 调用方从不返回检查点：索引器自己对已触碰的文件保留，增量不能退化成重读
         let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in nil })
         try await eventually("回填完成") { log.finishedBackfill }
@@ -313,7 +313,7 @@ struct HistoryIndexerTests {
     }
 
     @Test func callerSuppliedCheckpointMeansOnlyNewBytesAreRead() async throws {
-        var f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
+        let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
         let checkpoint = try PiHistory.index(file: f.url, from: nil).checkpoint
         let tail = SessionFile.user("u2", "a", "while app was closed", at: 3)
         try f.appendRaw(tail + "\n")
