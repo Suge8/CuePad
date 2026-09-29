@@ -87,11 +87,18 @@ struct CueSegmentsTests {
         for (line, expected) in cases { #expect(CueSegments.isTitleLine(line) == expected, "\(line.debugDescription)") }
     }
 
+    @Test("标题行文字：去掉图片引用，空白折成单个空格；正文各标题行按出现顺序")
+    func contentLines() {
+        #expect(CueSegments.contentLines("a ![](cuepad://img/ab) b\n\n![](cuepad://img/cd)\n---split---\n  第三行  \n") == ["a b", "第三行"])
+        #expect(CueSegments.contentLines("").isEmpty)
+    }
+
     @Test("标题取首个标题行，去掉图片引用与两端空白；没有则为空串")
     func firstLine() {
         #expect(CueSegments.firstContentLine("---ask---\n问题正文") == "问题正文")
         #expect(CueSegments.firstContentLine("\n\(split)\n\n正文") == "正文")
         #expect(CueSegments.firstContentLine("![](cuepad://img/ab)\n\n  周报 ![](cuepad://img/cd)  \n正文") == "周报")
+        #expect(CueSegments.firstContentLine("a ![](cuepad://img/ab) b") == "a b")
         #expect(CueSegments.firstContentLine("---ask---\n\n") == "")
         #expect(CueSegments.firstContentLine("![](cuepad://img/ab)") == "")
         #expect(CueSegments.firstContentLine("") == "")
