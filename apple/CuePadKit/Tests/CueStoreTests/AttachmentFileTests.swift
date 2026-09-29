@@ -50,7 +50,8 @@ import Testing
   }
 
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64)])
-  func unknownOrMalformedHashIsNotFound(hash: String) throws {
+  func unknownOrMalformedHashIsNotFound(hash: String) async throws {
+    _ = try await store.addImage(pngData(width: 4, height: 4))  // 附件目录存在，"../cuepad.db" 才真的指向库文件
     #expect(throws: CueStoreError.notFound) { try store.files.original(hash: hash) }
     #expect(throws: CueStoreError.notFound) { try store.files.thumbnail(hash: hash, maxPixel: 50) }
   }
