@@ -10,8 +10,6 @@ nonisolated struct LibraryLocation: Sendable {
     var attachmentsDirectory: URL { directory.appending(path: "Attachments", directoryHint: .isDirectory) }
     /// 旧库导入完成的标记，与库同生共死：库被删掉后重新导入才是对的，标记留在别处则会漏导。
     var legacyImportMarker: URL { directory.appending(path: ".electron-import-completed") }
-    /// Pi 历史索引的检查点缓存；删除只会让索引重新读一遍会话文件。
-    var piCheckpointsDirectory: URL { directory.appending(path: "PiCheckpoints", directoryHint: .isDirectory) }
 
     /// 环境变量 `CUEPAD_LIBRARY_DIR` 指向隔离的资料库目录（开发与视觉验收用），此时不导入旧库。
     static var standard: LibraryLocation {

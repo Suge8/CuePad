@@ -100,7 +100,7 @@ final class AppServices {
         terminal = mac.terminal
         piExtension = PiExtensionManager(installer: mac.installer, settings: settings)
         accessibility = AccessibilityAccess(isTrusted: mac.isAccessibilityTrusted)
-        historyStore = PiHistoryPersistence(store: library.store, checkpoints: location.piCheckpointsDirectory)
+        historyStore = PiHistoryPersistence(store: library.store)
     }
     #else
     convenience init() {

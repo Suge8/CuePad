@@ -16,7 +16,7 @@ extension AppServices {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
         let checkpoints = historyStore
-        let indexer = PiHistoryIndexer(root: paths.sessionsDirectory) { checkpoints.checkpoint(for: $0) }
+        let indexer = PiHistoryIndexer(root: paths.sessionsDirectory) { await checkpoints.checkpoint(for: $0) }
         tasks = [
             Task { await importLegacyIfNeeded() },
             Task { await piExtension.refresh() },
@@ -70,10 +70,6 @@ extension AppServices {
                 finishPiHistoryBackfill()
             }
         }
-    }
-
-    func piCheckpoint(for file: URL) -> PiHistoryCheckpoint? {
-        historyStore.checkpoint(for: file)
     }
 
     /// 激活会话所在终端，尽量精确到标签页；精度与原因见返回值。
