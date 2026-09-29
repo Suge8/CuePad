@@ -82,31 +82,84 @@ extension CueStore {
     try select(PiSession.self, orderBy: "lastActivityAt DESC, id")
   }
 
-  // MARK: 搜索
+  // MARK: 汇总与搜索
 
-  /// 按项目名、卡片正文、标签名做子串搜索（大小写不敏感）；卡片可经标签命中。
-  /// `inTrash` 为 true 时只搜回收站里的内容（含随项目进回收站的卡片）。
-  public func search(_ term: String, inTrash: Bool = false) throws -> SearchResults {
-    let term = term.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !term.isEmpty else { return SearchResults(projects: [], cards: []) }
-    let escaped = term.replacing(/[\\%_]/) { "\\\($0.output)" }
-    let pattern = "%\(escaped)%"
-    let hit = { (kind: String) in
-      "SELECT refID FROM searchIndex WHERE kind = '\(kind)' AND text LIKE ? ESCAPE '\\'"
+  /// 每个活动项目（按手动顺序）和未归档（最后）的可见卡片数、最近修改时间。一次查询，侧栏不必读全部卡片。
+  public func projectSummaries() throws -> [ProjectSummary] {
+    let groups = try db.query(
+      "SELECT projectID, COUNT(*), MAX(modifiedAt) FROM cards WHERE \(cardVisible) GROUP BY projectID"
+    ) { (id: $0.uuidOrNil(0), count: Int($0.int(1)), last: $0.dateOrNil(2)) }
+    let byProject = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
+    let owners: [UUID?] = try projects().map(\.id) + [nil]
+    return owners.map {
+      ProjectSummary(projectID: $0, cardCount: byProject[$0]?.count ?? 0, lastModifiedAt: byProject[$0]?.last)
     }
+  }
 
-    let projects = try select(
-      Project.self,
-      where: "id IN (\(hit("project"))) AND (deletedAt IS NOT NULL) = ?",
-      [pattern, inTrash], orderBy: "sortKey, id", limit: 10)
-    let visibility = inTrash ? "NOT (\(cardVisible))" : cardVisible
+  /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。
+  /// 卡片按最近修改倒序（同刻按 id）；`totalCards` 是全部命中数。
+  public func search(_ query: SearchQuery, limit: Int = 20, offset: Int = 0) throws -> SearchResults {
+    let text = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let (condition, arguments) = cardCondition(query, text: text)
     let cards = try select(
-      Card.self,
-      where: """
-        (id IN (\(hit("card"))) OR id IN (SELECT cardID FROM cardTags WHERE tagID IN (\(hit("tag")))))
-        AND (\(visibility))
-        """,
-      [pattern, pattern], orderBy: "modifiedAt DESC, id", limit: 20)
-    return SearchResults(projects: projects, cards: cards)
+      Card.self, where: condition, arguments, orderBy: "modifiedAt DESC, id", limit: limit, offset: offset)
+    let total = try db.first("SELECT COUNT(*) FROM cards WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
+
+    var projects: [Project] = []
+    if !text.isEmpty, !query.hasCardFilters, offset == 0 {
+      projects = try select(
+        Project.self, where: "id IN (\(Self.hit("project"))) AND (deletedAt IS NOT NULL) = ?",
+        [Self.likePattern(text), query.inTrash], orderBy: "sortKey, id", limit: 10)
+    }
+    return SearchResults(projects: projects, cards: cards, totalCards: total)
+  }
+
+  private static func hit(_ kind: String) -> String {
+    "SELECT refID FROM searchIndex WHERE kind = '\(kind)' AND text LIKE ? ESCAPE '\\'"
+  }
+
+  private static func likePattern(_ text: String) -> String {
+    "%\(text.replacing(/[\\%_]/) { "\\\($0.output)" })%"
+  }
+
+  private func cardCondition(_ query: SearchQuery, text: String) -> (String, [any SQLBindable]) {
+    var parts = [query.inTrash ? "NOT (\(cardVisible))" : "(\(cardVisible))"]
+    var arguments: [any SQLBindable] = []
+
+    if !text.isEmpty {
+      parts.append(
+        "(id IN (\(Self.hit("card"))) OR id IN (SELECT cardID FROM cardTags WHERE tagID IN (\(Self.hit("tag")))))")
+      arguments += [Self.likePattern(text), Self.likePattern(text)]
+    }
+    if let projects = query.projects {
+      let ids = projects.compactMap { $0 }
+      var alternatives: [String] = []
+      if !ids.isEmpty {
+        alternatives.append("projectID IN (\(ids.map { _ in "?" }.joined(separator: ", ")))")
+        arguments += ids
+      }
+      if projects.contains(UUID?.none) { alternatives.append("projectID IS NULL") }
+      parts.append(alternatives.isEmpty ? "0" : "(\(alternatives.joined(separator: " OR ")))")
+    }
+    if let hasImages = query.hasImages {
+      parts.append("instr(body, 'cuepad://img/') \(hasImages ? ">" : "=") 0")
+    }
+    if let sent = query.sentTo {
+      var subquery = "SELECT cardID FROM sendRecords WHERE cardID IS NOT NULL"
+      if let kind = sent.kind {
+        subquery += " AND targetKind = ?"
+        arguments.append(kind.rawValue)
+      }
+      if let name = sent.name {
+        subquery += " AND targetName = ?"
+        arguments.append(name)
+      }
+      parts.append("id IN (\(subquery))")
+    }
+    if let range = query.modifiedIn {
+      parts.append("modifiedAt BETWEEN ? AND ?")
+      arguments += [range.lowerBound, range.upperBound]
+    }
+    return (parts.joined(separator: " AND "), arguments)
   }
 }

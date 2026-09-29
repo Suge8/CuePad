@@ -76,12 +76,12 @@ public actor CueStore {
 
   func select<R: Record>(
     _ type: R.Type, where condition: String = "1", _ arguments: [any SQLBindable] = [],
-    orderBy: String = "rowid", limit: Int = -1
+    orderBy: String = "rowid", limit: Int = -1, offset: Int = 0
   ) throws -> [R] {
     try db.query(
       """
       SELECT \(R.columns.joined(separator: ", ")) FROM \(R.table.rawValue)
-      WHERE \(condition) ORDER BY \(orderBy) LIMIT \(limit)
+      WHERE \(condition) ORDER BY \(orderBy) LIMIT \(limit) OFFSET \(offset)
       """,
       arguments
     ) { R(row: $0) }

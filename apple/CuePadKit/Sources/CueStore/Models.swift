@@ -134,9 +134,64 @@ public struct SendTarget: Sendable {
   }
 }
 
+/// 卡片搜索条件。所有条件同时满足；筛选在分页之前生效。
+/// 没有关键词、没有任何筛选时列出该范围内的全部卡片（按最近修改）。
+public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
+  /// 项目名、卡片正文、标签名的子串（大小写不敏感）；空表示不按文字过滤。
+  public var text: String
+  /// 限定所属项目；nil 元素表示未归档；nil 表示不限；空集合无结果。
+  public var projects: Set<UUID?>?
+  /// true 只要含图片的卡，false 只要不含图片的卡，nil 不限。
+  public var hasImages: Bool?
+  /// 至少有一条发送记录符合的卡。
+  public var sentTo: SendFilter?
+  /// 卡片最近修改时间落在区间内（含两端）。
+  public var modifiedIn: ClosedRange<Date>?
+  /// true 只搜回收站里的内容（含随项目进回收站的卡片），false 只搜未删除内容。
+  public var inTrash: Bool
+
+  public init(
+    text: String = "", projects: Set<UUID?>? = nil, hasImages: Bool? = nil, sentTo: SendFilter? = nil,
+    modifiedIn: ClosedRange<Date>? = nil, inTrash: Bool = false
+  ) {
+    self.text = text
+    self.projects = projects
+    self.hasImages = hasImages
+    self.sentTo = sentTo
+    self.modifiedIn = modifiedIn
+    self.inTrash = inTrash
+  }
+
+  public init(stringLiteral value: String) { self.init(text: value) }
+
+  var hasCardFilters: Bool { projects != nil || hasImages != nil || sentTo != nil || modifiedIn != nil }
+}
+
+/// 发送目标筛选：种类与名称都可省略；名称精确匹配；都省略表示"发送过"。
+public struct SendFilter: Sendable {
+  public var kind: SendTargetKind?
+  public var name: String?
+
+  public init(kind: SendTargetKind? = nil, name: String? = nil) {
+    self.kind = kind
+    self.name = name
+  }
+}
+
 public struct SearchResults: Sendable {
+  /// 项目名命中的项目；只在有关键词、没有卡片筛选、第一页时返回。
   public var projects: [Project]
+  /// 当前页的卡片，按最近修改。
   public var cards: [Card]
+  /// 符合条件的卡片总数（不受分页影响）。
+  public var totalCards: Int
+}
+
+/// 侧栏用：项目（nil = 未归档）的可见卡片数与最近修改时间；没有卡片时 `lastModifiedAt` 为 nil。
+public struct ProjectSummary: Equatable, Sendable {
+  public var projectID: UUID?
+  public var cardCount: Int
+  public var lastModifiedAt: Date?
 }
 
 public enum CueStoreError: Error, Equatable {
