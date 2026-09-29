@@ -79,6 +79,24 @@ struct BridgeClientTests {
         #expect(abs(since.timeIntervalSinceNow) < 5)
     }
 
+    @Test func toolDetailIsExposedAndOptionalSoOlderExtensionsStillWork() async throws {
+        let old = FakeExtension(directory: dir) // 扩展版本 1：没有 detail 字段
+        let current = FakeExtension(directory: dir, options: .init(extensionVersion: PiExtensionBundle.version))
+        try old.start()
+        try current.start()
+        try bridge.start()
+        try await eventually("appeared") { session(old.id) != nil && session(current.id) != nil }
+
+        old.setState(["kind": "tool", "tool": "bash", "tools": ["bash"]])
+        current.setState(["kind": "tool", "tool": "bash", "tools": ["bash", "read"], "detail": "ls -la"])
+        try await eventually("状态到达") {
+            session(old.id)?.state == .tool(name: "bash", running: ["bash"], detail: nil)
+                && session(current.id)?.state == .tool(name: "bash", running: ["bash", "read"], detail: "ls -la")
+        }
+        #expect(session(old.id)?.hasOutdatedExtension == true)
+        #expect(session(current.id)?.hasOutdatedExtension == false)
+    }
+
     // MARK: 结束与残留清理
 
     @Test func closingWithByeEndsSessionWithReasonAndNextSessionAppears() async throws {

@@ -2,7 +2,8 @@
 // 最后一条 user 文字里的标记决定行为：
 //   [[slow]]      流式输出前等 1.5 秒（制造"正忙"窗口）
 //   [[fail]]      以 error 结束
-//   [[tool:CMD]]  先发起 bash 工具调用，收到工具结果后回复 TOOL_DONE
+//   [[tool:CMD]]  先发起 bash 工具调用（CMD 里的字面 \n 会变成换行），收到工具结果后回复 TOOL_DONE
+//   [[write:PATH]] 先发起 write 工具调用（写 PATH），收到工具结果后回复 TOOL_DONE
 // 其余：回复 "ECHO <文字> IMAGES[<mime>:<base64长度>,…]"，证明文字与图片都进了模型上下文。
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 
@@ -36,9 +37,13 @@ export default function (pi: any) {
 					return;
 				}
 
-				const tool = /\[\[tool:(.+?)\]\]/.exec(text);
+				const bash = /\[\[tool:(.+?)\]\]/.exec(text);
+				const write = /\[\[write:(.+?)\]\]/.exec(text);
+				const tool = bash ?? write;
 				if (tool && lastMessage.role !== "toolResult") {
-					const call = { type: "toolCall", id: "call_1", name: "bash", arguments: { command: tool[1] } };
+					const call = bash
+						? { type: "toolCall", id: "call_1", name: "bash", arguments: { command: bash[1].replaceAll("\\n", "\n") } }
+						: { type: "toolCall", id: "call_1", name: "write", arguments: { path: write![1], content: "x" } };
 					msg.content.push(call);
 					msg.stopReason = "toolUse";
 					stream.push({ type: "toolcall_start", contentIndex: 0, partial: msg });

@@ -2,6 +2,9 @@ import Foundation
 import Testing
 @testable import CuePi
 
+private let longCommand = "echo " + String(repeating: "a", count: 200)
+private let cjkCommand = "echo " + String(repeating: "你", count: 130)
+
 /// 端到端：真实 Pi 0.87.1 + 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
 @MainActor
 @Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"))
@@ -59,8 +62,35 @@ struct RealPiTests {
             let log = ChangeLog(bridge)
             try pi.prompt("[[tool:echo hi]]")
             try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
-            #expect(log.states.contains(.tool(name: "bash", running: ["bash"])))
+            #expect(log.states.contains { if case .tool(let name, let running, _) = $0 { name == "bash" && running == ["bash"] } else { false } })
             try await eventually("回复", timeout: .seconds(20)) { (try? self.history(of: s).turns.first?.reply) == "TOOL_DONE" }
+        }
+    }
+
+    /// 工具状态只带一句话摘要：bash 取命令首行，超长截到 120 字符（含省略号），不上报完整参数。
+    @Test(arguments: [
+        ("echo hi", "echo hi"),
+        ("echo first\\necho second", "echo first"),
+        (longCommand, String(longCommand.prefix(119)) + "…"),
+        (cjkCommand, String(cjkCommand.prefix(119)) + "…"),
+    ])
+    func bashToolDetailIsTheFirstLineTruncatedTo120Characters(command: String, expected: String) async throws {
+        try await withRig { pi, bridge, _ in
+            let log = ChangeLog(bridge)
+            try pi.prompt("[[tool:\(command)]]")
+            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
+            let details = log.states.compactMap { if case .tool(_, _, let detail) = $0 { detail } else { nil } }
+            #expect(details.first == expected)
+            #expect(details.allSatisfy { $0.count <= 120 && !$0.contains("second") })
+        }
+    }
+
+    @Test func fileToolDetailIsTheFileName() async throws {
+        try await withRig { pi, bridge, _ in
+            let log = ChangeLog(bridge)
+            try pi.prompt("[[write:\(pi.cwd.path)/notes/hello.txt]]")
+            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
+            #expect(log.states.contains(.tool(name: "write", running: ["write"], detail: "hello.txt")))
         }
     }
 
