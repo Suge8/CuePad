@@ -26,12 +26,12 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var name: String
   public var icon: String?
   public var color: String
-  public var sortKey: String
+  public internal(set) var sortKey: String
   public var isPinned: Bool
   /// 项目目标卡；必须是本项目里未删除的卡。用 `setGoal` 设置，卡片离开项目或进回收站时自动清空。
-  public var goalCardID: UUID?
+  public internal(set) var goalCardID: UUID?
   /// 回收站中的项目；其卡片随之进回收站（由项目推导，卡片自身不记）。
-  public var deletedAt: Date?
+  public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
 }
@@ -39,15 +39,15 @@ public struct Project: Identifiable, Equatable, Sendable {
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// nil 表示未归档（收件箱）。
-  public var projectID: UUID?
+  public internal(set) var projectID: UUID?
   /// 纯字符串正文：分块为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
   public var numbering: Numbering
   public var isFavorite: Bool
   public var variableValues: [String: String]
-  public var sortKey: String
+  public internal(set) var sortKey: String
   /// 单独删除进回收站的时间；随项目删除的卡为 nil。
-  public var deletedAt: Date?
+  public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
 }
@@ -73,7 +73,7 @@ public struct CueTask: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var content: String
   public var projectID: UUID?
-  public var sortKey: String
+  public internal(set) var sortKey: String
   public var completedAt: Date?
   /// 关联的 Pi 会话（Pi 自己的会话 id）。
   public var piSessionID: String?

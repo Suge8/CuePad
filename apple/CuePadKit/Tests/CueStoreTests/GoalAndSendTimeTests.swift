@@ -24,6 +24,16 @@ import Testing
     #expect(try await goal(of: p) == nil)
   }
 
+  @Test func editingOtherProjectFieldsKeepsTheGoal() async throws {
+    let p = try await store.createProject(name: "P", color: "#111")
+    let card = try await store.createCard(in: p.id, body: "goal")
+    try await store.setGoal(card.id, for: p.id)
+
+    try await store.updateProject(p.id) { $0.name = "Renamed" }
+
+    #expect(try await goal(of: p) == card.id)
+  }
+
   @Test func goalMustBeALiveCardOfThatProject() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let q = try await store.createProject(name: "Q", color: "#222")

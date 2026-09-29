@@ -18,7 +18,7 @@ extension CueStore {
     }
   }
 
-  /// 改名称、颜色、图标、置顶等字段；顺序与删除用专门的方法。
+  /// 改名称、颜色、图标、置顶。排序键、删除状态、目标卡对调用方只读，各有专门的方法（编译期保证）。
   public func updateProject(_ id: UUID, _ edit: @Sendable (inout Project) -> Void) throws {
     try write {
       guard var project = try find(Project.self, id) else { throw CueStoreError.notFound }
@@ -126,7 +126,7 @@ extension CueStore {
     }
   }
 
-  /// 改正文、编号方式、收藏、变量取值等字段；归属、顺序与删除用专门的方法。
+  /// 改正文、编号方式、收藏、变量取值。归属项目、排序键、删除状态对调用方只读，各有专门的方法（编译期保证）。
   public func updateCard(_ id: UUID, _ edit: @Sendable (inout Card) -> Void) throws {
     try write {
       guard var card = try find(Card.self, id) else { throw CueStoreError.notFound }
