@@ -210,15 +210,8 @@ struct NewCardButton: View {
 
     var body: some View {
         Button("新建卡片", systemImage: "plus") {
-            let store = workspace.services.store, project = project
-            Task {
-                do {
-                    let card = try await store.createCard(in: project)
-                    workspace.openCard = card.id
-                } catch {
-                    workspace.fail(error)
-                }
-            }
+            let project = project
+            workspace.attempt { workspace.openCard = try await workspace.createCard(in: project).id }
         }
         .buttonStyle(.glass)
         .controlSize(.large)

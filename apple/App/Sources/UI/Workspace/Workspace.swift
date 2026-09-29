@@ -99,6 +99,45 @@ final class Workspace {
         say(ErrorText.describe(error), isError: true)
     }
 
+    // MARK: 当前项目与新建位置
+
+    /// 保存的当前项目以 Store 为准：不存在或已进回收站时回落到侧栏第一个有效项目，没有项目则到未归档，并纠正设置。
+    /// 根视图在项目表每次变化后调用。
+    func reconcileCurrentProject() async {
+        guard let saved = services.settings.currentProject else { return }
+        do {
+            let projects = try await services.store.projects()
+            guard !projects.contains(where: { $0.id == saved }) else { return }
+            let summaries = try await services.store.projectSummaries()
+            let fallback = SidebarOrder.projects(projects, summaries: summaries).first?.id
+            if services.settings.currentProject == saved { services.settings.currentProject = fallback }
+        } catch {
+            fail(error)
+        }
+    }
+
+    /// 新建卡片。目标项目在写入前核对：不存在或在回收站时落到未归档，卡片不会写进看不见的地方。
+    func createCard(body: String = "", in project: UUID?) async throws -> Card {
+        try await services.store.createCard(in: liveProject(project), body: body)
+    }
+
+    /// 新建任务；目标项目失效时归为全局。
+    func createTask(_ content: String, in project: UUID?) async throws -> CueTask {
+        try await services.store.createTask(content, in: liveProject(project))
+    }
+
+    private func liveProject(_ id: UUID?) async throws -> UUID? {
+        guard let id, let project = try await services.store.project(id), project.deletedAt == nil else { return nil }
+        return id
+    }
+
+    /// 执行一个异步操作，失败时提示。
+    func attempt(_ work: @escaping @MainActor () async throws -> Void) {
+        Task {
+            do { try await work() } catch { fail(error) }
+        }
+    }
+
     /// 执行一个 Store 写操作，失败时提示。
     func perform(_ work: @escaping @Sendable (CueStore) async throws -> Void) {
         let store = services.store

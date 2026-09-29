@@ -144,9 +144,9 @@ struct CardMenu: View {
         }
         Button("转为任务") {
             let title = CardText(card.body).title, project = card.projectID
-            workspace.perform { store in
-                _ = try await store.createTask(title.isEmpty ? "未命名任务" : title, in: project)
-                try await store.trashCard(id)
+            workspace.attempt {
+                _ = try await workspace.createTask(title.isEmpty ? "未命名任务" : title, in: project)
+                try await workspace.services.store.trashCard(id)
             }
             workspace.say("已转为任务，原卡片在回收站")
         }

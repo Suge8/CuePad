@@ -9,6 +9,8 @@ struct MainWindow: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var paperSpace
+    /// 有效项目的 id；变化时核对保存的当前项目是否仍然存在。
+    @State private var projectIDs: [UUID]?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.sidebar) {
@@ -27,6 +29,8 @@ struct MainWindow: View {
         }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .observing(services.store, [.projectDirectories], into: $workspace.directories) { try $0.projectDirectories() }
+        .observing(services.store, [.projects], into: $projectIDs) { try $0.projects().map(\.id) }
+        .onChange(of: projectIDs) { Task { await workspace.reconcileCurrentProject() } }
     }
 
     private var detail: some View {
@@ -158,15 +162,10 @@ private struct WorkspaceShortcuts: View {
 
     private func newCard() {
         let project = workspace.currentProject
-        let store = services.store
-        Task {
-            do {
-                let card = try await store.createCard(in: project)
-                workspace.overlay = nil
-                workspace.openCard = card.id
-            } catch {
-                workspace.fail(error)
-            }
+        workspace.attempt {
+            let card = try await workspace.createCard(in: project)
+            workspace.overlay = nil
+            workspace.openCard = card.id
         }
     }
 }

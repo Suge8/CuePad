@@ -48,7 +48,9 @@ struct TasksPanel: View {
 
     @ViewBuilder
     private func list(_ data: TasksData) -> some View {
-        let groups = Dictionary(grouping: data.open, by: \.projectID)
+        // 挂在回收站项目上的任务归到"未归属"显示，否则会从面板里消失
+        let live = Set(data.projects.map(\.id))
+        let groups = Dictionary(grouping: data.open) { $0.projectID.flatMap { live.contains($0) ? $0 : nil } }
         let owners: [UUID?] = [nil] + data.projects.map(\.id)
         LazyVStack(alignment: .leading, spacing: 0) {
             if data.open.isEmpty {
@@ -139,9 +141,9 @@ struct TaskRow: View {
             }
         }
         Button("转为卡片") {
-            workspace.perform { store in
-                _ = try await store.createCard(in: project, body: content)
-                try await store.deleteTask(id)
+            workspace.attempt {
+                _ = try await workspace.createCard(body: content, in: project)
+                try await workspace.services.store.deleteTask(id)
             }
         }
         if !projects.isEmpty {
@@ -200,7 +202,7 @@ struct NewTaskField: View {
         guard !content.isEmpty else { return }
         text = ""
         let project = project
-        workspace.perform { _ = try await $0.createTask(content, in: project) }
+        workspace.attempt { _ = try await workspace.createTask(content, in: project) }
     }
 }
 #endif

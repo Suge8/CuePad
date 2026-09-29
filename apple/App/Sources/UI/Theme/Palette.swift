@@ -74,27 +74,28 @@ enum Typeface {
 }
 
 extension CueEditorTheme {
-    /// 纸面主题。颜色是固定值而非动态色：外观切换时整体替换主题。`compact` 用于菜单栏小稿纸。
-    static func paper(_ palette: Palette, compact: Bool = false) -> CueEditorTheme {
-        let size: CGFloat = compact ? 14 : 15.5
+    /// 编辑页的纸面主题。颜色是固定值而非动态色：外观切换时整体替换主题。
+    static func paper(_ palette: Palette) -> CueEditorTheme {
+        let size: CGFloat = 15.5
         return CueEditorTheme(
             font: Typeface.pingFang(size),
-            titleFont: Typeface.pingFang(compact ? 15 : 28, weight: .semibold),
-            headingFont: Typeface.pingFang(compact ? 14 : 18, weight: .semibold),
+            titleFont: Typeface.pingFang(28, weight: .semibold),
+            headingFont: Typeface.pingFang(18, weight: .semibold),
             codeFont: .monospacedSystemFont(ofSize: size - 2, weight: .regular),
             markerColor: NSColor(palette.ink3),
             codeBackground: NSColor(palette.fill),
             textColor: NSColor(palette.ink),
-            backgroundColor: NSColor(palette.paper),
+            // 纸由宿主画（带 1px 描边）；编辑器不画底，否则实色底会盖住纸边描边，在编辑区上下沿形成台阶
+            backgroundColor: .clear,
             variableColor: NSColor(palette.variable),
             variableBackground: NSColor(palette.variableBackground),
             dividerColor: NSColor(palette.ink3),
             dividerLabelColor: NSColor(palette.ink2),
             placeholderColor: NSColor(palette.fill),
-            horizontalInset: compact ? 12 : 64,
-            verticalInset: compact ? 10 : 8,
-            lineSpacing: compact ? 4 : 7,
-            headingSpacing: compact ? 4 : 10,
+            horizontalInset: 64,
+            verticalInset: 8,
+            lineSpacing: 7,
+            headingSpacing: 10,
             imageCornerRadius: 10,
             dividerHeight: 32)
     }

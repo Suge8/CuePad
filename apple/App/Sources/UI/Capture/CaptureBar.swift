@@ -42,7 +42,7 @@ struct CaptureBar: View {
         guard !body.isEmpty else { return }
         text = ""
         let project = project
-        workspace.perform { _ = try await $0.createCard(in: project, body: body) }
+        workspace.attempt { _ = try await workspace.createCard(body: body, in: project) }
         workspace.say("已存为卡片")
         focused = true
     }

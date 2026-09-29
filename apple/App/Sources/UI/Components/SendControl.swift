@@ -89,6 +89,7 @@ struct SendTargetMenu<Label: View>: View {
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
         .help("选择发送目标")
+        .accessibilityLabel("选择发送目标")
     }
 
     private func choose(_ choice: SendChoice) {

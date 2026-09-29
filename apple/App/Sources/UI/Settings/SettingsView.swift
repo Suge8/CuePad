@@ -29,10 +29,16 @@ struct SettingsView: View {
                 } footer: {
                     Text("投送到其他应用会写入剪贴板并在目标应用里粘贴，需要辅助功能授权；发给 Pi 会话不需要。")
                 }
-                Section("Pi") { PiExtensionRow() }
+                Section {
+                    PiExtensionRow()
+                } header: {
+                    Text("Pi")
+                } footer: {
+                    Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把卡片（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。")
+                }
             }
         .formStyle(.grouped)
-        .frame(width: 500, height: 520)
+        .frame(width: 500, height: 580)
         .onAppear { services.accessibility.refresh() }
     }
 }
@@ -155,8 +161,6 @@ private struct PiExtensionRow: View {
         if let result {
             Text(result.text).font(.caption).foregroundStyle(result.failed ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
         }
-        Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把卡片（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。")
-            .font(.caption).foregroundStyle(.secondary)
     }
 
     private func fileLabel(_ file: PiExtensionFile?) -> String {

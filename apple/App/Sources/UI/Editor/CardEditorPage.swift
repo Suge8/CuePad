@@ -100,6 +100,7 @@ struct CardEditorPage: View {
         .overlay(alignment: .bottom) {
             LinearGradient(colors: [palette.paper.opacity(0), palette.paper], startPoint: .top, endPoint: .bottom)
                 .frame(height: 28)
+                .padding(.horizontal, 1) // 让出纸边描边
                 .allowsHitTesting(false)
         }
     }
@@ -180,6 +181,8 @@ private struct NumberingMenu: View {
         }
         .menuStyle(.button).menuIndicator(.hidden).fixedSize()
         .help("分块编号：复制与发送时每块前加编号标题")
+        .accessibilityLabel("分块编号")
+        .accessibilityValue(Self.options.first { $0.0 == card.numbering }?.1 ?? "")
     }
 
     private var binding: Binding<Numbering> {
@@ -216,6 +219,7 @@ private struct VariablesChip: View {
         .glass(in: .capsule, interactive: true)
         .popover(isPresented: $editing, arrowEdge: .top) { VariablesForm(card: card, names: names) }
         .help("变量取值")
+        .accessibilityLabel("变量取值，共 \(names.count) 个")
     }
 }
 
