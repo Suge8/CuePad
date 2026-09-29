@@ -18,7 +18,13 @@ enum Schema {
   static let syncedTables: [Table] = [.projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments]
 
   /// 依次执行，`PRAGMA user_version` 记录已执行个数。
-  static let migrations: [String] = [v1]
+  static let migrations: [String] = [v1, v2]
+
+  /// 项目目标卡；发送记录按卡片查最近发送时间。
+  private static let v2 = """
+    ALTER TABLE projects ADD COLUMN goalCardID TEXT;
+    CREATE INDEX sendRecords_cardID_sentAt ON sendRecords(cardID, sentAt);
+    """
 
   private static let v1 = """
     CREATE TABLE projects (

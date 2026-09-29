@@ -12,7 +12,7 @@ extension CueStore {
       let now = Date.stamp
       let project = Project(
         id: UUID(), name: name, icon: icon, color: color,
-        sortKey: SortKey.after(last), isPinned: false, deletedAt: nil, createdAt: now, modifiedAt: now)
+        sortKey: SortKey.after(last), isPinned: false, goalCardID: nil, deletedAt: nil, createdAt: now, modifiedAt: now)
       try insert(project)
       return project
     }
@@ -31,6 +31,19 @@ extension CueStore {
   /// 把项目移到 `previous` 之后（nil = 最前）。
   public func moveProject(_ id: UUID, after previous: UUID?) throws {
     try write { try place(.projects, scope: "deletedAt IS NULL", id: id, after: previous) }
+  }
+
+  /// 设置项目目标卡（nil = 取消）。目标必须是该项目里未删除的卡。
+  public func setGoal(_ card: UUID?, for project: UUID) throws {
+    try write {
+      if let card {
+        let valid = try db.first(
+          "SELECT 1 FROM cards WHERE id = ? AND projectID = ? AND deletedAt IS NULL", [card, project]) { _ in true }
+        guard valid != nil else { throw CueStoreError.invalidGoal }
+      }
+      try db.run("UPDATE projects SET goalCardID = ?, modifiedAt = ? WHERE id = ?", [card, Date.stamp, project])
+      guard db.changes > 0 else { throw CueStoreError.notFound }
+    }
   }
 
   /// 进回收站；它的卡片随之隐藏（由项目推导），卡片行不动。
@@ -128,12 +141,14 @@ extension CueStore {
     try write {
       try db.run("UPDATE cards SET projectID = ? WHERE id = ?", [project, id])
       guard db.changes > 0 else { throw CueStoreError.notFound }
+      try clearGoal(where: "id = ?", [id], exceptProject: project)
       try place(.cards, scope: "deletedAt IS NULL AND projectID IS ?", [project], id: id, after: previous)
     }
   }
 
   public func trashCard(_ id: UUID) throws {
     try write {
+      try clearGoal(where: "id = ?", [id])
       try db.run(
         "UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND deletedAt IS NULL", [Date.stamp, id])
     }
@@ -167,10 +182,24 @@ extension CueStore {
     } }
   }
 
+  /// 目标卡离开（进回收站、删除、移出项目）时，在同一事务里清空指向它的项目目标。
+  /// 清空而不是读时推导：存下的值始终真实，整行读改写（updateProject）不会丢它，
+  /// 同步时也只是一次普通字段变更。代价：卡片恢复后不自动变回目标。
+  private func clearGoal(
+    where condition: String, _ arguments: [any SQLBindable], exceptProject keep: UUID? = nil
+  ) throws {
+    try db.run(
+      """
+      UPDATE projects SET goalCardID = NULL, modifiedAt = ?
+      WHERE goalCardID IN (SELECT id FROM cards WHERE \(condition)) AND id IS NOT ?
+      """, [Date.stamp] + arguments + [keep])
+  }
+
   /// 删卡并在同一事务里清理引用它的记录（同步表没有外键级联）。返回这些卡正文引用过的图片哈希，
   /// 由调用方在同一事务里交给 `reclaimAttachments` 判断是否已无人引用。
   private func purgeCards(where condition: String, _ arguments: [any SQLBindable] = []) throws -> Set<String> {
     let ids = "SELECT id FROM cards WHERE \(condition)"
+    try clearGoal(where: condition, arguments)
     let bodies = try db.query("SELECT body FROM cards WHERE \(condition)", arguments) { $0.text(0) }
     let referenced = Set(bodies.flatMap { $0.matches(of: /cuepad:\/\/img\/([0-9a-f]{64})/).map { String($0.output.1) } })
     try db.run("DELETE FROM cardTags WHERE cardID IN (\(ids))", arguments)

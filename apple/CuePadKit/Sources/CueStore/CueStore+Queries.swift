@@ -60,6 +60,19 @@ extension CueStore {
     try select(SendRecord.self, orderBy: "sentAt DESC, id")
   }
 
+  /// 项目（nil = 未归档）里可见卡片的最近发送时间：卡片 id → 最近一次 sentAt；从未发送的卡不在结果里。
+  /// 一次查询覆盖整个项目，界面据此判断"未发送"和工作集，不必逐卡查询。
+  public func lastSentTimes(in project: UUID?) throws -> [UUID: Date] {
+    Dictionary(
+      uniqueKeysWithValues: try db.query(
+        """
+        SELECT cardID, MAX(sentAt) FROM sendRecords
+        WHERE cardID IN (SELECT id FROM cards WHERE (\(cardVisible)) AND projectID IS ?)
+        GROUP BY cardID
+        """, [project]
+      ) { ($0.uuid(0), $0.date(1)) })
+  }
+
   public func piSessions() throws -> [PiSession] {
     try select(PiSession.self, orderBy: "lastActivityAt DESC, id")
   }

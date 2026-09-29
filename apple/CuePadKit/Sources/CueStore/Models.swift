@@ -28,6 +28,8 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var color: String
   public var sortKey: String
   public var isPinned: Bool
+  /// 项目目标卡；必须是本项目里未删除的卡。用 `setGoal` 设置，卡片离开项目或进回收站时自动清空。
+  public var goalCardID: UUID?
   /// 回收站中的项目；其卡片随之进回收站（由项目推导，卡片自身不记）。
   public var deletedAt: Date?
   public var createdAt: Date
@@ -148,6 +150,8 @@ public enum CueStoreError: Error, Equatable {
   case blankTaskContent
   case blankTagName
   case notAnImage
+  /// 目标卡必须是该项目里未删除的卡。
+  case invalidGoal
   /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
 }
@@ -156,13 +160,13 @@ public enum CueStoreError: Error, Equatable {
 
 extension Project: Record {
   static let table = Table.projects
-  static let columns = ["id", "name", "icon", "color", "sortKey", "isPinned", "deletedAt", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, name, icon, color, sortKey, isPinned, deletedAt, createdAt, modifiedAt] }
+  static let columns = ["id", "name", "icon", "color", "sortKey", "isPinned", "deletedAt", "createdAt", "modifiedAt", "goalCardID"]
+  var bindings: [any SQLBindable] { [id, name, icon, color, sortKey, isPinned, deletedAt, createdAt, modifiedAt, goalCardID] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), name: row.text(1), icon: row.textOrNil(2), color: row.text(3),
-      sortKey: row.text(4), isPinned: row.bool(5), deletedAt: row.dateOrNil(6),
-      createdAt: row.date(7), modifiedAt: row.date(8))
+      sortKey: row.text(4), isPinned: row.bool(5), goalCardID: row.uuidOrNil(9),
+      deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8))
   }
 }
 
