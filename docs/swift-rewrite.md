@@ -22,8 +22,8 @@ CuePad 是开发者与编程 agent 协作时的思考空间：写 prompt、记�
 
 | 模块 | 职责 | 平台 |
 | --- | --- | --- |
-| Store | SQLite 唯一事实源；界面直接观察查询，不在内存复制状态；FTS5 搜索 | 全部 |
-| Sync | CKSyncEngine 同步 Store（优先 SQLiteData）；图片以 CKAsset 同步；正文用加密字段 | 全部 |
+| Store | 系统 SQLite3 直连（零第三方依赖）的唯一事实源；写事务提交后发布变更，界面据此重读查询，不在内存复制状态；FTS5 搜索 | 全部 |
+| Sync | 直接用 CKSyncEngine 同步 Store 的记录；图片以 CKAsset 同步；正文用加密字段 | 全部 |
 | Editor | TextKit 2 编辑器：内联图片、分块、变量高亮；文本模型共用，AppKit/UIKit 各一层宿主 | 全部 |
 | Dispatch | 权限预检 → 写剪贴板 → 激活目标 → 定向 `Cmd+V`，单一串行队列 | macOS |
 | Agent | FSEvents 索引 Pi 会话文件（历史）；Unix socket 连接 Pi 扩展（实时状态与图文发送） | macOS |
