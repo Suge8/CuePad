@@ -67,11 +67,28 @@ import Testing
 
   @Test func sendTargetFilterMatchesKindAndName() async throws {
     let w = try await world()
-    #expect(try await store.search(SearchQuery(sentTo: SendFilter(kind: .piSession))).cards.map(\.id) == [w.c3.id])
-    #expect(try await store.search(SearchQuery(sentTo: SendFilter(name: "Ghostty"))).cards.map(\.id) == [w.c4.id])
-    #expect(try await store.search(SearchQuery(sentTo: SendFilter(kind: .app, name: "s1-title"))).cards.isEmpty)
-    let anySend = try await store.search(SearchQuery(sentTo: SendFilter()))
+    #expect(try await store.search(SearchQuery(sent: .sent(kind: .piSession))).cards.map(\.id) == [w.c3.id])
+    #expect(try await store.search(SearchQuery(sent: .sent(name: "Ghostty"))).cards.map(\.id) == [w.c4.id])
+    #expect(try await store.search(SearchQuery(sent: .sent(kind: .app, name: "s1-title"))).cards.isEmpty)
+    let anySend = try await store.search(SearchQuery(sent: .sent()))
     #expect(Set(anySend.cards.map(\.id)) == [w.c3.id, w.c4.id])
+  }
+
+  @Test func neverSentSelectsCardsWithoutAnySendRecord() async throws {
+    let w = try await world()
+    #expect(Set(try await store.search(SearchQuery(sent: .never)).cards.map(\.id)) == [w.c1.id, w.c2.id, w.c5.id])
+    #expect(Set(try await store.search(SearchQuery(text: "alpha", sent: .never)).cards.map(\.id)) == [w.c1.id, w.c2.id, w.c5.id])
+    #expect(try await store.search(SearchQuery(projects: [w.p.id], hasImages: true, sent: .never)).cards.map(\.id) == [w.c1.id])
+
+    try await store.recordSend("late", to: SendTarget(kind: .clipboard, name: "clipboard"), card: w.c1.id)
+    #expect(Set(try await store.search(SearchQuery(sent: .never)).cards.map(\.id)) == [w.c2.id, w.c5.id])
+    let all = try await store.search(SearchQuery(sent: .any))  // 不限：已发送与未发送都在
+    #expect(all.totalCards == 5)
+  }
+
+  @Test func neverSentCountsAsACardFilterSoProjectsAreNotListed() async throws {
+    _ = try await world()
+    #expect(try await store.search(SearchQuery(text: "P", sent: .never)).projects.isEmpty)
   }
 
   @Test func modifiedRangeFilterIsInclusive() async throws {
@@ -82,7 +99,7 @@ import Testing
 
   @Test func filtersCombineAndWorkWithoutKeyword() async throws {
     let w = try await world()
-    let query = SearchQuery(projects: [w.q.id], sentTo: SendFilter(kind: .piSession))
+    let query = SearchQuery(projects: [w.q.id], sent: .sent(kind: .piSession))
     #expect(try await store.search(query).cards.map(\.id) == [w.c3.id])
     #expect(try await store.search(SearchQuery(text: "gamma", projects: [w.q.id])).cards.isEmpty)
   }
@@ -90,9 +107,9 @@ import Testing
   @Test func filtersApplyInsideTheTrashScopeToo() async throws {
     let w = try await world()
     try await store.trashCard(w.c3.id)
-    let live = SearchQuery(sentTo: SendFilter(kind: .piSession))
+    let live = SearchQuery(sent: .sent(kind: .piSession))
     #expect(try await store.search(live).cards.isEmpty)
-    let trash = SearchQuery(sentTo: SendFilter(kind: .piSession), inTrash: true)
+    let trash = SearchQuery(sent: .sent(kind: .piSession), inTrash: true)
     #expect(try await store.search(trash).cards.map(\.id) == [w.c3.id])
   }
 
