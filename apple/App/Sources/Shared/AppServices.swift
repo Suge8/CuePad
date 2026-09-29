@@ -59,6 +59,8 @@ final class AppServices {
         case globalShortcutUnavailable(String)
         #if os(macOS)
         case piBridgeUnavailable(String)
+        /// Pi 历史索引读写 Store 失败；该会话文件不再写回。
+        case piHistoryUnavailable(String)
         #endif
     }
 
@@ -100,7 +102,7 @@ final class AppServices {
         terminal = mac.terminal
         piExtension = PiExtensionManager(installer: mac.installer, settings: settings)
         accessibility = AccessibilityAccess(isTrusted: mac.isAccessibilityTrusted)
-        historyStore = PiHistoryPersistence(store: library.store)
+        historyStore = PiHistoryPersistence(storage: mac.historyStorage ?? library.store)
     }
     #else
     convenience init() {

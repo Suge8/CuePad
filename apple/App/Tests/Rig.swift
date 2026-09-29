@@ -83,10 +83,12 @@ final class Rig {
     let hotkeys = InMemoryHotkeys()
     let window = RecordingWindow()
     let legacy: URL?
+    let historyStorage: (any PiIndexStorage)?
     private(set) var services: AppServices!
 
-    init(legacy: URL? = nil) {
+    init(legacy: URL? = nil, historyStorage: (any PiIndexStorage)? = nil) {
         self.legacy = legacy
+        self.historyStorage = historyStorage
         services = makeServices()
     }
 
@@ -114,7 +116,8 @@ final class Rig {
             paths: piPaths,
             installer: PiExtensionInstaller(paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")])),
             terminal: PiTerminalJumper(),
-            isAccessibilityTrusted: { true })
+            isAccessibilityTrusted: { true },
+            historyStorage: historyStorage)
         let services = AppServices(
             location: LibraryLocation(directory: directory.appending(path: "Library"), electronDatabase: legacy),
             defaults: defaults, mac: mac)

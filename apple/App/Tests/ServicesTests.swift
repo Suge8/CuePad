@@ -168,7 +168,7 @@ struct PiHistoryPersistenceTests {
         try handle.close()
         let restarted = rig.relaunch()
         // 索引器按文件路径取检查点：重启后仍能对应到会话
-        #expect(await restarted.historyStore.checkpoint(for: file) != nil)
+        #expect(try await restarted.historyStore.checkpoint(for: file) != nil)
         let data = try #require(try await restarted.store.piCheckpoint(of: "sess-1"))
         let checkpoint = try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
         let resumed = try PiHistory.index(file: file, from: checkpoint)

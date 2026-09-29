@@ -86,6 +86,8 @@ struct MacDependencies {
     var installer: PiExtensionInstaller
     var terminal: PiTerminalJumper
     var isAccessibilityTrusted: @Sendable () -> Bool
+    /// 索引落盘的存储；nil 用资料库本身，测试注入失败替身。
+    var historyStorage: (any PiIndexStorage)?
 
     @MainActor
     static func live(bundleID: String) -> MacDependencies {
@@ -98,7 +100,8 @@ struct MacDependencies {
             paths: paths,
             installer: PiExtensionInstaller(paths: paths),
             terminal: PiTerminalJumper(),
-            isAccessibilityTrusted: Accessibility.isTrusted)
+            isAccessibilityTrusted: Accessibility.isTrusted,
+            historyStorage: nil)
     }
 }
 #endif

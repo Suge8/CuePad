@@ -15,8 +15,9 @@ extension AppServices {
         } catch {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
-        let checkpoints = historyStore
-        let indexer = PiHistoryIndexer(root: paths.sessionsDirectory) { await checkpoints.checkpoint(for: $0) }
+        let indexer = PiHistoryIndexer(root: paths.sessionsDirectory) { [weak self] file in
+            await self?.loadPiCheckpoint(for: file)
+        }
         tasks = [
             Task { await importLegacyIfNeeded() },
             Task { await piExtension.refresh() },
@@ -56,6 +57,16 @@ extension AppServices {
 
     // MARK: Pi
 
+    /// 索引器取检查点：Store 读失败要报告（该文件不再写回）并从头读；没有或失效的检查点也是从头读。
+    func loadPiCheckpoint(for file: URL) async -> PiHistoryCheckpoint? {
+        do {
+            return try await historyStore.checkpoint(for: file)
+        } catch {
+            reportIssue(.piHistoryUnavailable("读取 \(file.path) 的检查点失败：\(error)"))
+            return nil
+        }
+    }
+
     /// 消费历史索引事件：先落检查点再写会话行。
     func consumePiHistory(_ events: AsyncStream<PiHistoryEvent>) async {
         for await event in events {
@@ -64,7 +75,7 @@ extension AppServices {
                 do {
                     try await historyStore.persist(update)
                 } catch {
-                    Self.log.error("Pi 历史索引写入失败：\(String(describing: error), privacy: .public)")
+                    reportIssue(.piHistoryUnavailable("写入 \(update.file.path) 失败：\(error)"))
                 }
             case .backfillFinished:
                 finishPiHistoryBackfill()
