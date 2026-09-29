@@ -65,7 +65,7 @@ import Testing
     #expect(try await store.search("alp et").cards.map(\.id) == [both.id])  // 每个词是子串
   }
 
-  @Test func termsMayLandInBodyTagOrProjectName() async throws {
+  @Test func cardsMatchOnBodyAndTagsOnlyNeverOnProjectName() async throws {
     let project = try await store.createProject(name: "Flow", color: "#111")
     let inBody = try await store.createCard(in: nil, body: "优化 启动速度")
     let tagged = try await store.createCard(in: nil, body: "alpha")
@@ -74,11 +74,13 @@ import Testing
 
     #expect(try await store.search("优化 速度").cards.map(\.id) == [inBody.id])  // 两字词
     #expect(try await store.search("alpha 重构").cards.map(\.id) == [tagged.id])  // 正文 + 标签
-    #expect(Set(try await store.search("flow 启动").cards.map(\.id)) == [inProject.id])  // 项目名 + 正文
 
-    // 单个词的行为不变：项目名不让整个项目的卡片命中，项目在 projects 里单列。
-    let single = try await store.search("flow")
-    #expect(single.cards.isEmpty && single.projects.map(\.id) == [project.id])
+    // 项目名不参与卡片命中，无论几个词；缩小到某个项目用项目筛选。
+    #expect(try await store.search("flow").cards.isEmpty)
+    #expect(try await store.search("flow 启动").cards.isEmpty)
+    let scoped = try await store.search(SearchQuery(text: "启动", projects: [project.id]))
+    #expect(scoped.cards.map(\.id) == [inProject.id])
+    #expect(try await store.search("flow").projects.map(\.id) == [project.id])
   }
 
   @Test func projectMatchesOnlyWhenEveryTermIsInItsName() async throws {
