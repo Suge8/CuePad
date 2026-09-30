@@ -1,3 +1,4 @@
+import CueStore
 import Foundation
 
 /// 一次命令行调用的结果：进程退出码与两路输出（原样，不追加换行）。
@@ -30,11 +31,27 @@ enum CLI {
         let args = try Arguments(rest, options: command.options)
         json = args.json
         if args.help { return CLIResult(code: 0, out: Help.command(command), err: "") }
-        let call = Call(args: args, store: try Library.open(environment: environment), stdin: stdin)
+        let call = Call(args: args, store: try openStore(environment: environment), stdin: stdin)
         return CLIResult(code: 0, out: try render(await command.run(call), json: json), err: "")
       }
     } catch {
       return failure(CLIError(error), json: json, hint: hint)
+    }
+  }
+
+  /// 真实库必须已由 App 建好，CLI 不凭空造一个；隔离目录按需创建（同 App）。
+  private static func openStore(environment: [String: String]) throws -> CueStore {
+    let location: LibraryLocation
+    do { location = try .resolve(environment: environment) } catch {
+      throw CLIError.invalid(error.localizedDescription)
+    }
+    guard location.isIsolated || FileManager.default.fileExists(atPath: location.databaseURL.path) else {
+      throw CLIError(
+        kind: .noLibrary,
+        message: "找不到 CuePad 资料库（\(location.databaseURL.path)）：先打开一次 CuePad.app，或用 \(LibraryLocation.environmentKey) 指向隔离目录")
+    }
+    do { return try CueStore(location: location) } catch {
+      throw CLIError(kind: .store, message: "无法打开资料库 \(location.databaseURL.path)：\(error)")
     }
   }
 
