@@ -45,6 +45,23 @@ import Testing
     #expect(merged.count == 1 && merged[0].detail == "edit")  // 只有最新的一次落盘
   }
 
+  /// 合并定时器到点的同时来了一次立即写入（完成）：挂起的旧细节不能在更新的状态之后落盘，
+  /// 否则手机上的会话会一直显示"工作中"。
+  @Test(.timeLimit(.minutes(1)))
+  func pendingDetailFiringAlongsideANewerStateNeverOverwritesIt() async throws {
+    let recorder = recorder()
+    for round in 0..<40 {
+      let id = "s\(round)"
+      try await recorder.update(sessionID: id, state: .thinking)
+      try await recorder.update(sessionID: id, state: .tool, detail: "stale")
+      await clock.waitForSleeper()
+      clock.advance(.seconds(5))
+      try await recorder.update(sessionID: id, state: .settled)
+      try await recorder.update(sessionID: id, state: .settled)
+      #expect(try await states()[id]?.state == .known(.settled), "第 \(round) 轮")
+    }
+  }
+
   @Test func afterTheIntervalHasPassedWorkingChangesWriteImmediately() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking)
