@@ -235,6 +235,23 @@ public enum CueStoreError: Error, Equatable {
   case unsupportedSchemaVersion(Int)
 }
 
+extension CueStoreError: LocalizedError {
+  public var errorDescription: String? {
+    switch self {
+    case .notFound: "找不到这条记录，可能已被删除"
+    case .blankTaskContent: "任务内容不能为空"
+    case .notAnImage: "不是可识别的图片"
+    case .invalidGoal: "目标卡必须是这个项目里未删除的卡片"
+    case .invalidProject: "目标项目已不存在或在回收站"
+    case .notAConflictCopy: "这张卡片不是冲突副本"
+    case .attachmentHashMismatch: "附件内容与其哈希不符"
+    case .blankDeliveryContent: "发送内容不能为空"
+    case .attachmentFilesNotRemoved(let hashes): "已永久删除，但有 \(hashes.count) 个图片文件没能删掉"
+    case .unsupportedSchemaVersion(let version): "资料库由另一个版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
+    }
+  }
+}
+
 // MARK: - 行映射
 
 extension Project: Record {
