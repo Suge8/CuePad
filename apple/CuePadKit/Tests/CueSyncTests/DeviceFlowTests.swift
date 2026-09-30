@@ -46,7 +46,11 @@ import Testing
     try await cloud.exchange()  // 手机 → Mac
     _ = try await eventually(mac.store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .known(.succeeded) }
     try await cloud.exchange()  // Mac → 手机：结果回来
-    #expect(try await phone.store.deliveryRequest(request.id)?.status == .known(.succeeded))
+    let back = try #require(try await phone.store.deliveryRequest(request.id))
+    #expect(back.status == .known(.succeeded))
+    let roundTrip = try #require(back.roundTrip)  // 发起的手机用本机时钟算：创建 → 看到结果
+    #expect(roundTrip >= .zero && roundTrip < .seconds(60))
+    #expect(try await mac.store.deliveryRequest(request.id)?.roundTrip == nil)  // 执行方不算往返
 
     await clock.waitForSleeper()
     clock.advance(.seconds(61))
