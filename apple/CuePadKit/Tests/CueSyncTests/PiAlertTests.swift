@@ -57,7 +57,8 @@ import Testing
 
     await fake.resetCounters()
     try await manager.ensure(in: fake)
-    #expect(await fake.saved.isEmpty && fake.deleted.isEmpty)
+    #expect(await fake.saved.isEmpty)
+    #expect(await fake.deleted.isEmpty)
   }
 
   @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAreRemovedButForeignOnesAreLeftAlone() async throws {

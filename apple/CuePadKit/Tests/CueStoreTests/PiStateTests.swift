@@ -189,7 +189,8 @@ import Testing
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .waitingForUser)
     try await recorder.update(sessionID: "s2", state: .settled)
-    #expect(try await alert("s1") == nil && alert("s2") == nil)
+    #expect(try await alert("s1") == nil)
+    #expect(try await alert("s2") == nil)
   }
 
   @Test func unknownAlertKindsFromNewerVersionsAreKept() async throws {
