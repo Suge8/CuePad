@@ -18,6 +18,27 @@ extension CueStore {
 
   public func project(_ id: UUID) throws -> Project? { try find(Project.self, id) }
 
+  /// 工作目录（如 Pi 会话的 cwd）属于哪个项目：项目绑定的目录是该目录本身或其祖先，按路径分段比较
+  /// （`/a/proj` 不会误配 `/a/project`）；多个命中取绑定目录最深的，同深度取项目列表里靠前的。
+  /// 只看未删除的项目，依据本机的目录绑定（`setDirectory`）。界面与命令行共用这唯一一份规则。
+  public func project(containing directory: URL) throws -> Project? {
+    let target = Self.pathSegments(directory.standardizedFileURL.path)
+    let bound = try db.query(
+      """
+      SELECT p.id, d.directory FROM projectDirectories d JOIN projects p ON p.id = d.projectID
+      WHERE p.deletedAt IS NULL ORDER BY p.sortKey, p.id
+      """
+    ) { (id: $0.uuid(0), segments: Self.pathSegments($0.text(1))) }
+
+    var best: (id: UUID, depth: Int)?
+    for candidate in bound where !candidate.segments.isEmpty && target.starts(with: candidate.segments) {
+      if best.map({ candidate.segments.count > $0.depth }) ?? true { best = (candidate.id, candidate.segments.count) }
+    }
+    return try best.flatMap { try find(Project.self, $0.id) }
+  }
+
+  private static func pathSegments(_ path: String) -> [Substring] { path.split(separator: "/") }
+
   /// 某项目（nil = 未归档）里可见的卡片，按手动顺序。
   public func cards(in project: UUID?) throws -> [Card] {
     try select(Card.self, where: "(\(cardVisible)) AND projectID IS ?", [project], orderBy: "sortKey, id")
