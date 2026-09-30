@@ -111,27 +111,15 @@ final class AppServices {
         case clipboard
     }
 
-    /// 发到 Mac 的发送方式。原始值是 `DeliveryRequest.mode`，Mac 执行器按它选择 Pi 的发送方式。
-    nonisolated enum MacSendMode: String, CaseIterable, Hashable, Sendable {
-        /// 直接发送（会话空闲时）。
-        case send
-        /// 插话：打断正在进行的这一轮。
-        case steer
-        /// 排队：这一轮结束后再发。
-        case followUp
-        /// 只放进 Pi 的输入框，不发送；只有文字。
-        case paste
-    }
-
     /// 发到 Mac：写一条投送请求，交给运行该 Pi 会话的那台 Mac（取自会话的 `hostID`）执行；
     /// 那台 Mac 执行后写回结果并记发送记录，这里不记。
     @discardableResult
     func requestMacDelivery(
-        _ storedText: String, to session: PiSessionState, mode: MacSendMode, card: UUID? = nil, task: UUID? = nil
+        _ storedText: String, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil, task: UUID? = nil
     ) async throws -> DeliveryRequest {
         try await store.requestDelivery(
             storedText, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID,
-            mode: mode.rawValue, card: card, task: task)
+            mode: mode, card: card, task: task)
     }
 
     /// 发送并写一条发送记录；失败不写记录，错误原样抛给界面展示。

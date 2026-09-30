@@ -190,6 +190,7 @@ struct NewTaskLine: View {
 
 extension Workspace {
     /// 按 Store 里的当前状态切换：界面手里的副本可能已过时（列表没刷新就又点了一次）。
+    /// 与 Mac 端将放进共用 `Workspace` 的勾选方法是同一条规则（TaskToggleTests）；那边落地后删掉这份改用共用的。
     func toggle(_ task: CueTask) {
         let id = task.id
         perform { try await $0.updateTask(id) { $0.completedAt = $0.completedAt == nil ? .now : nil } }

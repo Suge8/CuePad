@@ -17,7 +17,7 @@ struct SendToMacSheet: View {
     @Environment(\.palette) private var palette
     @State private var data: OutboxData?
     @State private var chosen: String?
-    @State private var chosenMode: MacDelivery.Mode?
+    @State private var chosenMode: DeliveryMode?
     @State private var sentID: UUID?
     @State private var sending = false
 
@@ -53,12 +53,12 @@ struct SendToMacSheet: View {
         return sessions.first { $0.projectID != nil && $0.projectID == outbox.project } ?? sessions.first
     }
 
-    private var modes: [MacDelivery.Mode] {
+    private var modes: [DeliveryMode] {
         session.map { MacDelivery.modes(for: $0.state, hasImages: hasImages) } ?? []
     }
 
     /// 会话状态变了（比如开始干活）时，原来选的方式可能不再可用：换成当前可用的第一个。
-    private var mode: MacDelivery.Mode? {
+    private var mode: DeliveryMode? {
         chosenMode.flatMap { modes.contains($0) ? $0 : nil } ?? modes.first
     }
 

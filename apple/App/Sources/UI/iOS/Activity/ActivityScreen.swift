@@ -246,7 +246,7 @@ private struct DeliveryRow: View {
                 Spacer(minLength: 8)
                 DeliveryStatusLabel(status: request.status)
             }
-            Text("\(DateLabel.short(request.createdAt)) → \(request.target.name) · \(MacDelivery.Mode(rawValue: request.mode)?.label ?? request.mode)")
+            Text("\(DateLabel.short(request.createdAt)) → \(request.target.name) · \(request.mode.label)")
                 .font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
             if request.status == .failed {
                 if let reason = request.resultDetail { Text(reason).font(.footnote).foregroundStyle(.red) }

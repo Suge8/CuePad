@@ -17,21 +17,20 @@ struct IOSWorkflowTests {
 
     // MARK: 发到 Mac
 
-    @Test func 发到Mac_请求指定会话所在的Mac_目标是该会话_方式是Mac认得的字符串() async throws {
+    @Test func 发到Mac_请求指定会话所在的Mac_目标是该会话_方式原样交给Mac() async throws {
         let target = try await session("atlas", .settled, host: "mac-b")
-        let expected: [(MacDelivery.Mode, String)] = [(.send, "send"), (.steer, "steer"), (.followUp, "followUp"), (.paste, "paste")]
 
-        for (mode, raw) in expected {
+        for mode in [DeliveryMode.send, .steer, .followUp, .paste] {
             let request = try await app.services.requestMacDelivery("正文", to: target, mode: mode)
             #expect(request.hostID == "mac-b")
             #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
-            #expect(request.mode == raw)
+            #expect(request.mode == mode)
             #expect(request.status == .pending)
         }
     }
 
     @Test(arguments: [
-        (PiWorkState.settled, false, [MacDelivery.Mode.send, .paste]),
+        (PiWorkState.settled, false, [DeliveryMode.send, .paste]),
         (.error, false, [.send, .paste]),
         (.thinking, false, [.steer, .followUp, .paste]),
         (.tool, false, [.steer, .followUp, .paste]),
@@ -39,7 +38,7 @@ struct IOSWorkflowTests {
         (.settled, true, [.send]),
         (.outputting, true, [.steer, .followUp]),
     ])
-    func 发送方式_会话忙时插话或排队_含图片不能放进输入框(state: PiWorkState, hasImages: Bool, modes: [MacDelivery.Mode]) {
+    func 发送方式_会话忙时插话或排队_含图片不能放进输入框(state: PiWorkState, hasImages: Bool, modes: [DeliveryMode]) {
         #expect(MacDelivery.modes(for: state, hasImages: hasImages) == modes)
     }
 
