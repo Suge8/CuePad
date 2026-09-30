@@ -121,4 +121,38 @@ import Testing
     #expect(try await store.cards(in: nil).isEmpty)
     #expect(try RawDB(rig.fixture.url).rows("SELECT projectID FROM cards") == [[rig.id(projectID)]])
   }
+
+  // MARK: 项目被远端永久删除
+
+  @Test func remotelyPurgedProjectReleasesLocalCardsAndTasksToInboxAndGlobal() async throws {
+    let project = try await store.createProject(name: "P", color: "#111")
+    try await store.setDirectory("/work/p", for: project.id)
+    try await rig.coordinator.reconcile()
+    try await rig.simulatePush()
+    // 本机离线期间在该项目下新增的内容（另一台设备的 purge 不知道它们）
+    let card = try await store.createCard(in: project.id, body: "written offline")
+    let task = try await store.createTask("offline task", in: project.id)
+
+    await rig.coordinator.handle(.fetched(modifications: [], deletions: [(rig.recordID(project.id), "projects")]))
+
+    #expect(try await store.project(project.id) == nil)
+    #expect(try await store.cards(in: nil).map(\.id) == [card.id])  // 内容保留，归入未归档，而不是悬空隐藏
+    #expect(try await store.tasks().first { $0.id == task.id }?.projectID == nil)
+    #expect(try await store.directory(of: project.id) == nil)
+    #expect(try await rig.reconcileDelta().saves == [rig.id(card.id), rig.id(task.id)])  // 归属变更推回去
+  }
+
+  @Test func remotelyPurgedProjectDoesNotResurrectCardsTheOtherDeviceAlsoDeleted() async throws {
+    let project = try await store.createProject(name: "P", color: "#111")
+    let card = try await store.createCard(in: project.id, body: "known to both")
+    try await rig.coordinator.reconcile()
+    try await rig.simulatePush()
+
+    await rig.coordinator.handle(.fetched(modifications: [], deletions: [
+      (rig.recordID(project.id), "projects"), (rig.recordID(card.id), "cards"),
+    ]))
+
+    #expect(try await store.card(card.id) == nil)
+    #expect(try await rig.reconcileDelta().saves.isEmpty)
+  }
 }
