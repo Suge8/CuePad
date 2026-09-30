@@ -1,0 +1,46 @@
+import CueStore
+import Foundation
+
+/// 选项声明：帮助、解析、用法行都从它生成；`value` 为 nil 表示开关。
+struct Opt {
+  let name: String
+  let value: String?
+  let help: String
+
+  init(_ name: String, _ help: String, value: String? = nil) {
+    self.name = name
+    self.value = value
+    self.help = help
+  }
+
+  static func project(_ help: String) -> Opt { Opt("project", help, value: "项目") }
+  static let inbox = Opt("inbox", "未归档（不属于任何项目）")
+  static let body = Opt("body", "正文；省略则读 stdin（原样，不裁剪）", value: "正文")
+}
+
+/// 一个命令：`path` 是 ["card", "add"] 这样的名词-动词（或单词命令）。帮助文本是它的唯一文档。
+struct Command: Sendable {
+  let path: [String]
+  let summary: String
+  var arguments = ""
+  var options: [Opt] = []
+  var notes = ""
+  let run: @Sendable (Call) async throws -> Reply
+
+  var name: String { path.joined(separator: " ") }
+
+  static let all: [Command] = project + card + task + [search] + conflicts
+}
+
+/// 命令的输出：文本给人读，`json` 给 agent；`--json` 时只输出后者。
+struct Reply {
+  var text: String
+  var json: any Sendable
+}
+
+/// 命令运行时拿到的一切：解析好的参数、资料库、stdin。
+struct Call {
+  let args: Arguments
+  let store: CueStore
+  let stdin: StdinReader
+}

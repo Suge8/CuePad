@@ -17,6 +17,10 @@ apple/scripts/xc.sh shot ios      # 构建 → 模拟器安装启动 → 截图 
 apple/scripts/xc.sh shot ipad     # 同上，iPad 模拟器
 ```
 
+## 命令行
+
+`cuepad` 是给人和 agent 读写本机资料库的命令行（源码 `CuePadKit/Sources/CueCLI`，经 CueStore 读写）。安装：`cd apple/CuePadKit && swift build -c release --product cuepad && cp .build/release/cuepad /usr/local/bin/`；用法与 JSON 结构见 `cuepad --help`。
+
 ## 约定
 
 - `shot mac` 的 `--` 之后是 App 启动参数。Debug 构建认 `-CuePadDemo YES`（空库时写入演示数据）、`-CuePadProject <名称>`、`-CuePadScene <collapsed|older|editor|search|tasks|trash|settings|menubar>`、`-CuePadSearch`、`-CuePadCard`、`-CuePadWindowSize 1280x800`，说明见 `App/Sources/UI/Debug/DebugScene.swift`；设置项可直接覆盖（`-theme dark`）。`CUEPAD_SHOT_LIBRARY` 换库目录，`CUEPAD_SHOT_SETTLE` 是出窗后等待渲染的秒数。Pi 目录同样隔离（`.derived/pi-agent`、`/tmp/cuepad-shot-<uid>`），截图不含 `~/.pi` 的会话。隔离的 Pi 目录里没装扩展，侧栏底部出现"连接 Pi"征求同意是正确状态；截图不要它时传 `-piExtensionDeclinedVersion '<integer>N</integer>'`，N 取 `cuepad-bridge.ts` 里的 `EXTENSION_VERSION`（这只写入参数域，不改已保存的设置）。`settings`、`menubar` 画面把设置窗口、菜单栏面板的内容放进主窗口拍，因为只截主窗口。
