@@ -152,11 +152,11 @@ struct SendToMacSheet: View {
     private func send() {
         guard let session, let mode, !sending else { return }
         sending = true
-        let content = outbox.content, card = outbox.card, task = outbox.task, store = services.store
+        let content = outbox.content, card = outbox.card, task = outbox.task
         Task {
             defer { sending = false }
             do {
-                let request = try await MacDelivery.request(content, to: session, mode: mode, card: card, task: task, in: store)
+                let request = try await services.requestMacDelivery(content, to: session, mode: mode, card: card, task: task)
                 withAnimation(Motion.quick) { sentID = request.id }
             } catch {
                 workspace.fail(error)

@@ -22,7 +22,7 @@ struct IOSWorkflowTests {
         let expected: [(MacDelivery.Mode, String)] = [(.send, "send"), (.steer, "steer"), (.followUp, "followUp"), (.paste, "paste")]
 
         for (mode, raw) in expected {
-            let request = try await MacDelivery.request("正文", to: target, mode: mode, card: nil, task: nil, in: store)
+            let request = try await app.services.requestMacDelivery("正文", to: target, mode: mode)
             #expect(request.hostID == "mac-b")
             #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
             #expect(request.mode == raw)

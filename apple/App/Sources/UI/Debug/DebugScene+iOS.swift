@@ -7,7 +7,7 @@ import SwiftUI
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
         let project = await prepareLibrary(workspace)
-        if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services.store) }
+        if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         let split = navigation.layout == .split
         func open(_ route: Navigation.Route) {
             if split { navigation.select(route) } else { navigation.projectsPath = [route] }
@@ -45,7 +45,8 @@ extension DebugScene {
     }
 
     /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。
-    private static func seedRemote(_ store: CueStore) async {
+    private static func seedRemote(_ services: AppServices) async {
+        let store = services.store
         guard (try? await store.piSessionStates().isEmpty) == true, let projects = try? await store.projects() else { return }
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
@@ -59,9 +60,9 @@ extension DebugScene {
         }
         if let table = project("圆桌"), let goal = try? await store.cards(in: table).first(where: { $0.body.hasPrefix("目标") }) {
             try? await store.setGoal(goal.id, for: table)
-            _ = try? await store.requestDelivery(
-                "评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"),
-                on: "demo-mac", mode: "followUp")
+        }
+        if let atlas = try? await store.piSessionStates().first(where: { $0.sessionID == "atlas" }) {
+            _ = try? await services.requestMacDelivery("评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: atlas, mode: .followUp)
         }
     }
 }
