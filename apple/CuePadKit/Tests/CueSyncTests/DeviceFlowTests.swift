@@ -37,7 +37,9 @@ import Testing
 
   @Test(.timeLimit(.minutes(1)))
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
-    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", retention: .seconds(60), timing: clock.timing) { _ in .succeeded }
+    let executor = DeliveryExecutor(
+      store: mac.store, hostID: "mac", retention: .seconds(60), timing: clock.timing, onIssue: { Issue.record("\($0)") }
+    ) { _ in .succeeded }
     try await executor.start()
     let request = try await phone.store.requestDelivery("run this", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"), on: "mac")
 

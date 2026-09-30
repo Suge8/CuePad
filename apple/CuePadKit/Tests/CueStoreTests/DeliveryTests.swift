@@ -30,10 +30,33 @@ import Testing
   private func executor(
     _ handler: Handler, host: String = "mac-a", maxAge: Duration = .seconds(600), retention: Duration = .seconds(60)
   ) -> DeliveryExecutor {
-    DeliveryExecutor(store: store, hostID: host, maxAge: maxAge, retention: retention, timing: clock.timing) { await handler.handle($0) }
+    DeliveryExecutor(
+      store: store, hostID: host, maxAge: maxAge, retention: retention, timing: clock.timing,
+      onIssue: { Issue.record("执行器意外上报：\($0)") }
+    ) { await handler.handle($0) }
   }
 
   private func request(_ id: UUID) async throws -> DeliveryRequest? { try await store.deliveryRequest(id) }
+
+  /// 结果没能写回时手机会一直等：执行器必须上报，不能吞掉。
+  @Test(.timeLimit(.minutes(1)))
+  func failureToWriteTheResultBackIsReported() async throws {
+    try RawDB(fixture.url).exec(
+      """
+      CREATE TRIGGER refuseResult BEFORE UPDATE OF status ON deliveryRequests WHEN new.status = 'succeeded'
+      BEGIN SELECT RAISE(ABORT, 'disk said no'); END;
+      """)
+    let (issues, reported) = AsyncStream<String>.makeStream()
+    let executor = DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing, onIssue: { reported.yield("\($0)") }) { _ in
+      .succeeded
+    }
+    try await executor.start()
+    _ = try await store.requestDelivery("do it", to: pi, on: "mac-a")
+
+    var iterator = issues.makeAsyncIterator()
+    #expect(await iterator.next()?.contains("disk said no") == true)
+    await executor.stop()
+  }
 
   @Test func requestIsRecordedAsPendingWithContentAndTarget() async throws {
     let card = try await store.createCard(in: nil, body: "c")
@@ -161,7 +184,9 @@ import Testing
     let hash = try elsewhere.store.files.store(data)
     let store = store
     let runs = RunLog()
-    let executor = DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing) { request in
+    let executor = DeliveryExecutor(
+      store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }
+    ) { request in
       await runs.record(request.content.hasPrefix("look") ? "look" : request.content, imagePresent: store.files.fileURL(for: hash) != nil)
       return .succeeded
     }
