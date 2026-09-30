@@ -18,6 +18,7 @@ extension Table {
     .projects, .cards, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests,
   ]
 
+  /// 同步的列（CKRecord 的字段）；不含本机列。
   package var columns: [String] {
     switch self {
     case .projects: Project.columns
@@ -28,7 +29,7 @@ extension Table {
     case .piSessions: PiSession.columns
     case .projectDirectories: ["projectID", "directory"]
     case .piSessionStates: PiSessionState.columns
-    case .deliveryRequests: DeliveryRequest.columns
+    case .deliveryRequests: DeliveryRequest.syncedColumns
     }
   }
 }

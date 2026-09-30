@@ -65,6 +65,13 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var createdAt: Date
   public var completedAt: Date?
   public var modifiedAt: Date
+  /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
+  public internal(set) var resultReceivedAt: Date?
+
+  /// 往返时间：创建 → 结果回到本机，两端都是发起设备的时钟。执行方与还没收到结果时为 nil。
+  public var roundTrip: Duration? {
+    resultReceivedAt.map { .milliseconds(Int64(($0.timeIntervalSince(createdAt) * 1000).rounded())) }
+  }
 }
 
 public enum DeliveryOutcome: Sendable {
@@ -88,10 +95,11 @@ extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "taskID", "status",
-    "resultDetail", "handledBy", "createdAt", "completedAt", "modifiedAt",
+    "resultDetail", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt",
   ]
+  static let syncedColumns = columns.filter { $0 != "resultReceivedAt" }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, taskID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, taskID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt]
   }
   init(row: Row) {
     self.init(
@@ -99,6 +107,6 @@ extension DeliveryRequest: Record {
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7), taskID: row.uuidOrNil(8),
       status: Open(rawValue: row.text(9)), resultDetail: row.textOrNil(10), handledBy: row.textOrNil(11),
-      createdAt: row.date(12), completedAt: row.dateOrNil(13), modifiedAt: row.date(14))
+      createdAt: row.date(12), completedAt: row.dateOrNil(13), modifiedAt: row.date(14), resultReceivedAt: row.dateOrNil(15))
   }
 }

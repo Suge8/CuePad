@@ -11,6 +11,8 @@ import Foundation
 ///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
+/// 同步表里的本机列（不进 CKRecord）：deliveryRequests.resultReceivedAt。
+///
 /// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
 ///
 /// 同步表只能加表或加可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。
@@ -64,7 +66,8 @@ enum Schema {
     CREATE TABLE deliveryRequests (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, taskID TEXT, status TEXT NOT NULL,
-      resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL
+      resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
+      resultReceivedAt INTEGER
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 

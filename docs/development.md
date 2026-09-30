@@ -71,7 +71,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 ## 同步
 
-主 App 启动时创建 `CloudSync` 并启动（隔离模式 `CUEPAD_LIBRARY_DIR` 与测试不同步）；回到前台、Mac 系统唤醒时立即 `syncNow()`，推送由引擎自己处理。`AppServices` 暴露 `syncStatus`、`syncIssues`、`conflicts` 与 `resolveSync`、`resolveConflict`。Mac 端把 Pi 会话状态写成同步记录（启动时先清掉本机遗留的），并只执行发给本机 `hostID`（硬件 UUID 的哈希前缀）的手机投送请求。
+主 App 启动时创建 `CloudSync` 并启动（隔离模式 `CUEPAD_LIBRARY_DIR` 与测试不同步）；回到前台、Mac 系统唤醒时立即 `syncNow()`，推送由引擎自己处理。`AppServices` 暴露 `syncStatus`、`syncIssues`、`conflicts` 与 `resolveSync`、`resolveConflict`。Mac 端把 Pi 会话状态写成同步记录（启动时先清掉本机遗留的），并只执行发给本机 `hostID`（硬件 UUID 的哈希前缀）的手机投送请求。投送请求的往返时间（`DeliveryRequest.roundTrip`，创建 → 结果回到本机）由发起的设备在应用远端结果时用本机时钟记下，存在同步表的本机列里，不进 CloudKit。
 
 **Pi 锁屏通知**：Pi 会话状态记录带明文可查询的 `notify` 标志（"等你确认"、"完成"的转换那一次写入上置位）。CloudKit 服务端订阅在标志置位时直接生成可见通知，不依赖静默推送与 App 在后台运行；订阅由 iOS 建立（幂等，账号切换时重建），点通知路由到对应会话。通知文案只用本地化 key 的通用句（标题与详情是加密字段，不会出现在通知里）。通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的后续写入取代就不送出，同状态的更新则沿用标志——状态记录不是事件日志，要保证每个事件都送达需要单独的追加式通知事件记录，那是另一种设计。该字段的可查询索引由生成的数据结构声明，已部署到生产环境。
 

@@ -14,7 +14,8 @@ extension CueStore {
       let now = Date.stamp
       let request = DeliveryRequest(
         id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card, taskID: task,
-        status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now)
+        status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
+        resultReceivedAt: nil)
       try insert(request)
       try registerImages(in: content)
       return request

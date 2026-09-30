@@ -252,6 +252,16 @@ extension CueStore {
   ///   卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。
   /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data) throws {
+    let awaitingResult = try remote.table == .deliveryRequests && isAwaitingResult(remote.id)
+    try applyVersion(remote, systemFields)
+    if awaitingResult {
+      try db.run(
+        "UPDATE deliveryRequests SET resultReceivedAt = ? WHERE id = ? AND status IN ('succeeded', 'failed')",
+        [Date.stamp, remote.id])
+    }
+  }
+
+  private func applyVersion(_ remote: SyncRow, _ systemFields: Data) throws {
     let table = remote.table
     let pushed = try db.first("SELECT pushedModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) { $0.int(0) }
     guard let local = try readSyncRow(table, remote.id) else {
@@ -279,6 +289,13 @@ extension CueStore {
       // 本机版本留下并继续待推送，但要带上服务器最新的系统字段，否则推送会再次冲突。
       try setMetadata(table, remote.id, systemFields, pushed: pushed ?? 0)
     }
+  }
+
+  /// 投送请求在本机还在等结果：远端版本把它变成完成时，记下本机时刻（往返时间的终点）。
+  /// 执行方在本机写结果，不走远端应用；第一次就收到已完成请求的设备从没等过它，也不记。
+  private func isAwaitingResult(_ id: String) throws -> Bool {
+    try db.first(
+      "SELECT 1 FROM deliveryRequests WHERE id = ? AND status IN ('pending', 'executing')", [id]) { _ in true } != nil
   }
 
   /// 目标卡不变量在远端变更之后仍要成立：目标卡已回收、或已不属于该项目的，清空（并因此重新推送，让各设备收敛）。
