@@ -55,7 +55,8 @@ import Testing
     try await store.updateCard(card.id) { $0.body = "edited while waiting" }
     #expect(try await rig.reconcileDelta().saves.isEmpty)
     await rig.coordinator.handle(.fetched(modifications: [remoteRecord(.cards, cardFields(project: nil, body: "other user", modifiedAt: 9_000_000_000_000))], deletions: []))
-    #expect(try await store.cards(in: nil).map(\.body) == ["edited while waiting"])
+    #expect(try await store.card(card.id)?.body == "edited while waiting")
+    #expect(try await store.cards(in: nil).isEmpty)  // 新账号的记录没有被应用
   }
 
   @Test func uploadingLocalDataAfterASwitchMakesEverythingPendingAgain() async throws {

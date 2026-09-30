@@ -62,6 +62,7 @@ import Testing
         id TEXT PRIMARY KEY NOT NULL, path TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL,
         lastActivityAt INTEGER NOT NULL, readOffset INTEGER NOT NULL
       ) STRICT;
+      CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT;
       INSERT INTO piSessions VALUES ('legacy', '/p', '/c', 't', 1000, 4096);
       PRAGMA user_version = 2;
       """)
