@@ -150,7 +150,7 @@ struct MacSyncTests {
 
         #expect(rig.channels.calls.contains(.dispatch(Payload(text: "hi"), .bundleID("com.mitchellh.ghostty"), submit: false)))
         #expect(done.status == .failed)
-        #expect(done.resultDetail?.contains("辅助功能") == true)
+        #expect(done.resultDetail == DispatchError.accessibilityRequired.localizedDescription, "写回的是错误自身的说明")
     }
 
     @Test func 本机标识由硬件UUID稳定派生_不含原值() {
