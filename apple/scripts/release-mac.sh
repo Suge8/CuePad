@@ -67,5 +67,5 @@ spctl --assess --type execute --verbose=2 "$app"
 zip="$OUT/CuePad-$version-mac.zip"
 ditto -c -k --keepParent "$app" "$zip"
 echo "$zip"
-# 自动更新：把这个 zip 收进 updates/，生成/更新 appcast.xml（含增量更新）；部署由人决定
+# 自动更新：把这个 zip 收进更新历史目录（在产物目录之外，上面的 rm -rf 不碰它），生成/更新 appcast.xml；部署由人决定
 "$APPLE_DIR/scripts/sparkle.sh" appcast "$zip"

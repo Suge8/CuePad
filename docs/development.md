@@ -155,7 +155,7 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 
 用 Sparkle 2（EdDSA 校验、增量更新），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉 Sparkle 源码。更新源 `https://cue-pad.com/appcast.xml` 与公钥在 `App/Config/CuePad-macOS-Info.plist`；设置窗口底部有"自动检查更新"开关和"检查更新…"，App 菜单里也有"检查更新…"。隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
 
-EdDSA 私钥在专用钥匙串（`~/.appstoreconnect/cuepad-signing.keychain-db` 里的 `cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。`xc.sh release mac` 用时间戳作构建号（Sparkle 按 `CFBundleVersion` 比较新旧，每次发布必须递增），在公证、装订后把 zip 收进 `<产物目录>/release/mac/updates/` 并生成 `appcast.xml`（含与历史版本的增量包，所以历史 zip 要保留在 `updates/` 里）。更新包的下载地址前缀用 `CUEPAD_UPDATE_URL_PREFIX`（默认 `https://cue-pad.com/downloads/`）；`updates/` 里的 zip、增量包与 `appcast.xml` 部署到对应位置由人决定。
+EdDSA 私钥在专用钥匙串（`~/.appstoreconnect/cuepad-signing.keychain-db` 里的 `cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。`xc.sh release mac` 用时间戳作构建号（Sparkle 按 `CFBundleVersion` 比较新旧，每次发布必须递增），在公证、装订后把 zip 收进更新历史目录 `~/.appstoreconnect/cuepad-updates/` 并生成 `appcast.xml`（含与历史版本的增量包，所以历史 zip 必须留在这里；它在产物目录之外，清理产物目录或换 `CUEPAD_DERIVED` 不影响），`appcast.xml` 另复制到 `<产物目录>/release/mac/`。更新包的下载地址前缀用 `CUEPAD_UPDATE_URL_PREFIX`（默认 `https://cue-pad.com/downloads/`）；更新历史目录里的 zip、增量包与 `appcast.xml` 部署到对应位置由人决定。
 
 ## 落地页与设计资源
 
