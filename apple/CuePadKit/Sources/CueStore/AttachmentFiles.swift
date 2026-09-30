@@ -57,6 +57,33 @@ public struct AttachmentFiles: Sendable {
     if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
   }
 
+  /// 同步下载的附件文件：内容哈希必须与声明一致，才按哈希放进附件目录；已有同哈希文件则不重写。
+  package func adopt(fileAt source: URL, hash: String) throws {
+    guard Self.isValid(hash) else { throw CueStoreError.notFound }
+    let data = try Data(contentsOf: source)
+    guard SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == hash else {
+      throw CueStoreError.attachmentHashMismatch
+    }
+    let url = directory.appending(path: hash)
+    if !FileManager.default.fileExists(atPath: url.path) {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      try data.write(to: url, options: .atomic)
+    }
+  }
+
+  /// 已登记的附件文件（用于上传）；不存在返回 nil。
+  package func url(hash: String) -> URL? {
+    guard Self.isValid(hash) else { return nil }
+    let url = directory.appending(path: hash)
+    return FileManager.default.fileExists(atPath: url.path) ? url : nil
+  }
+
+  /// 清空附件目录（账号切换后丢弃本机数据时用）。
+  package func removeAll() throws {
+    guard FileManager.default.fileExists(atPath: directory.path) else { return }
+    try FileManager.default.removeItem(at: directory)
+  }
+
   private static func isValid(_ hash: String) -> Bool {
     hash.utf8.count == 64 && hash.utf8.allSatisfy { ($0 >= 0x30 && $0 <= 0x39) || ($0 >= 0x61 && $0 <= 0x66) }
   }

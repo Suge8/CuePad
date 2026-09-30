@@ -120,7 +120,7 @@ extension CueStore {
       let now = Date.stamp
       let card = Card(
         id: UUID(), projectID: project, body: body, numbering: .none, isFavorite: false,
-        variableValues: [:], sortKey: SortKey.before(first), deletedAt: nil, createdAt: now,
+        variableValues: [:], conflictOf: nil, sortKey: SortKey.before(first), deletedAt: nil, createdAt: now,
         modifiedAt: now)
       try insert(card)
       return card
@@ -236,6 +236,42 @@ extension CueStore {
   private func reportingFileFailures(_ body: () throws -> [String]) throws {
     let failed = try body()
     if !failed.isEmpty { throw CueStoreError.attachmentFilesNotRemoved(failed) }
+  }
+}
+
+// MARK: 冲突副本
+
+extension CueStore {
+  /// 待用户处理的正文冲突：原卡与副本都还在的卡对，最近产生的在前。
+  public func conflicts() throws -> [CardConflict] {
+    try select(
+      Card.self,
+      where: "conflictOf IS NOT NULL AND deletedAt IS NULL AND conflictOf IN (SELECT id FROM cards)",
+      orderBy: "modifiedAt DESC, id"
+    ).compactMap { copy in
+      try copy.conflictOf.flatMap { try find(Card.self, $0) }.map { CardConflict(original: $0, copy: copy) }
+    }
+  }
+
+  /// 选定保留的版本并删除副本。原卡已不存在时，副本是唯一的版本：转为普通卡，不删除。
+  public func resolveConflict(copy id: UUID, keep choice: ConflictChoice) throws {
+    try reportingFileFailures {
+      try write {
+        guard let copy = try find(Card.self, id), let originalID = copy.conflictOf else {
+          throw CueStoreError.notAConflictCopy
+        }
+        guard var original = try find(Card.self, originalID) else {
+          try db.run("UPDATE cards SET conflictOf = NULL, modifiedAt = ? WHERE id = ?", [Date.stamp, id])
+          return []
+        }
+        if case .copy = choice {
+          original.body = copy.body
+          original.modifiedAt = Date.stamp
+          try update(original)
+        }
+        return try reclaimAttachments(purgeCards(where: "id = ?", [id]))
+      }
+    }
   }
 }
 

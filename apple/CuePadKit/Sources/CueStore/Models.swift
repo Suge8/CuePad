@@ -1,16 +1,77 @@
 import Foundation
 
-public enum Numbering: String, Sendable {
+/// 分块编号方式。其他版本可能写入本版本不认识的值：保留为 `.unknown`（原样写回），不当成已知值。
+public enum Numbering: Hashable, Sendable, RawRepresentable {
   case none, decimal, alpha, cjk
+  case unknown(String)
+
+  public init(rawValue: String) {
+    switch rawValue {
+    case "none": self = .none
+    case "decimal": self = .decimal
+    case "alpha": self = .alpha
+    case "cjk": self = .cjk
+    default: self = .unknown(rawValue)
+    }
+  }
+
+  public var rawValue: String {
+    switch self {
+    case .none: "none"
+    case .decimal: "decimal"
+    case .alpha: "alpha"
+    case .cjk: "cjk"
+    case .unknown(let raw): raw
+    }
+  }
 }
 
-public enum SendTargetKind: String, Sendable {
+/// 发送目标种类。其他版本可能写入本版本不认识的值：保留为 `.unknown`（原样写回），不当成已知值。
+public enum SendTargetKind: Hashable, Sendable, RawRepresentable {
   case piSession, app, clipboard
+  case unknown(String)
+
+  public init(rawValue: String) {
+    switch rawValue {
+    case "piSession": self = .piSession
+    case "app": self = .app
+    case "clipboard": self = .clipboard
+    default: self = .unknown(rawValue)
+    }
+  }
+
+  public var rawValue: String {
+    switch self {
+    case .piSession: "piSession"
+    case .app: "app"
+    case .clipboard: "clipboard"
+    case .unknown(let raw): raw
+    }
+  }
 }
 
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Sendable, CaseIterable {
   case projects, cards, tags, cardTags, tasks, sendRecords, attachments, piSessions, projectDirectories
+}
+
+extension Table {
+  /// 进入 iCloud 同步的表；其余是本机表。
+  package static let synced: [Table] = [.projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments]
+
+  package var columns: [String] {
+    switch self {
+    case .projects: Project.columns
+    case .cards: Card.columns
+    case .tags: Tag.columns
+    case .cardTags: CardTag.columns
+    case .tasks: CueTask.columns
+    case .sendRecords: SendRecord.columns
+    case .attachments: Attachment.columns
+    case .piSessions: PiSession.columns
+    case .projectDirectories: ["projectID", "directory"]
+    }
+  }
 }
 
 /// 表行与列的对应。`bindings[0]` 是主键；`columns` 与 `bindings`、`init(row:)` 的读取序号一致。
@@ -45,6 +106,9 @@ public struct Card: Identifiable, Equatable, Sendable {
   public var numbering: Numbering
   public var isFavorite: Bool
   public var variableValues: [String: String]
+  /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
+  /// 由用户用 `resolveConflict` 选择保留哪一个。普通卡为 nil。
+  public internal(set) var conflictOf: UUID?
   public internal(set) var sortKey: String
   /// 单独删除进回收站的时间；随项目删除的卡为 nil。
   public internal(set) var deletedAt: Date?
@@ -214,6 +278,10 @@ public enum CueStoreError: Error, Equatable {
   case invalidGoal
   /// 卡片或任务只能归属存在且未在回收站的项目（或不归属任何项目）。
   case invalidProject
+  /// `resolveConflict` 的目标不是冲突副本。
+  case notAConflictCopy
+  /// 下载的附件内容与其哈希不符。
+  case attachmentHashMismatch
   /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
 }
@@ -234,17 +302,17 @@ extension Project: Record {
 
 extension Card: Record {
   static let table = Table.cards
-  static let columns = ["id", "projectID", "body", "numbering", "isFavorite", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt"]
+  static let columns = ["id", "projectID", "body", "numbering", "isFavorite", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf"]
   var bindings: [any SQLBindable] {
     let variables = try! JSONEncoder.sorted.encode(variableValues)
-    return [id, projectID, body, numbering.rawValue, isFavorite, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt]
+    return [id, projectID, body, numbering.rawValue, isFavorite, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2),
-      numbering: Numbering(rawValue: row.text(3)) ?? .none, isFavorite: row.bool(4),
+      numbering: Numbering(rawValue: row.text(3)), isFavorite: row.bool(4),
       variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(5).utf8))) ?? [:],
-      sortKey: row.text(6), deletedAt: row.dateOrNil(7), createdAt: row.date(8), modifiedAt: row.date(9))
+      conflictOf: row.uuidOrNil(10), sortKey: row.text(6), deletedAt: row.dateOrNil(7), createdAt: row.date(8), modifiedAt: row.date(9))
   }
 }
 
@@ -285,7 +353,7 @@ extension SendRecord: Record {
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
-      targetKind: SendTargetKind(rawValue: row.text(2)) ?? .app, targetName: row.text(3),
+      targetKind: SendTargetKind(rawValue: row.text(2)), targetName: row.text(3),
       targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5), taskID: row.uuidOrNil(6),
       sentAt: row.date(7), modifiedAt: row.date(8))
   }
@@ -317,4 +385,17 @@ extension JSONEncoder {
     encoder.outputFormatting = .sortedKeys
     return encoder
   }
+}
+
+/// 一张卡的冲突：原卡（较新的版本）与冲突副本（较旧的正文）。
+public struct CardConflict: Equatable, Sendable {
+  public var original: Card
+  public var copy: Card
+}
+
+public enum ConflictChoice: Sendable {
+  /// 保留原卡的正文，删除副本。
+  case original
+  /// 用副本的正文替换原卡的正文，删除副本。
+  case copy
 }

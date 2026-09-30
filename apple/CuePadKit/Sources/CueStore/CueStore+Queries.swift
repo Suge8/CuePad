@@ -75,8 +75,7 @@ extension CueStore {
           $0.uuid(0),
           LastSend(
             sentAt: $0.date(1),
-            target: SendTarget(
-              kind: SendTargetKind(rawValue: $0.text(2)) ?? .app, name: $0.text(3), ref: $0.textOrNil(4)))
+            target: SendTarget(kind: SendTargetKind(rawValue: $0.text(2)), name: $0.text(3), ref: $0.textOrNil(4)))
         )
       })
   }
@@ -93,7 +92,7 @@ extension CueStore {
       ORDER BY MAX(sentAt) DESC, targetKind, targetName
       """
     ) {
-      SendTarget(kind: SendTargetKind(rawValue: $0.text(0)) ?? .app, name: $0.text(1), ref: $0.textOrNil(2))
+      SendTarget(kind: SendTargetKind(rawValue: $0.text(0)), name: $0.text(1), ref: $0.textOrNil(2))
     }
   }
 

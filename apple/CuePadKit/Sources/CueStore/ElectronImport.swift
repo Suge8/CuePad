@@ -79,8 +79,8 @@ struct LegacyLibrary {
       return Card(
         id: LegacyID.uuid("card", row.id), projectID: row.projectID.map { LegacyID.uuid("project", $0) },
         body: [row.title, row.body].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n\n"),
-        numbering: Numbering(rawValue: row.numbering ?? "") ?? .none, isFavorite: row.flag,
-        variableValues: [:], sortKey: key, deletedAt: followsProject ? nil : row.deletedAt,
+        numbering: Numbering(rawValue: row.numbering ?? "none"), isFavorite: row.flag,
+        variableValues: [:], conflictOf: nil, sortKey: key, deletedAt: followsProject ? nil : row.deletedAt,
         createdAt: row.createdAt, modifiedAt: row.updatedAt)
     }
 

@@ -11,14 +11,26 @@ import Foundation
 ///   引用完整性由写入逻辑维护（同一事务内清理），同名标签、同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
-/// 本机表（不同步）：piSessions、projectDirectories、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
+/// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
 ///
 /// 之后的迁移只能加表或加可空列，不改已有列。
 enum Schema {
   static let syncedTables: [Table] = [.projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments]
 
   /// 依次执行，`PRAGMA user_version` 记录已执行个数。
-  static let migrations: [String] = [v1, v2, v3]
+  static let migrations: [String] = [v1, v2, v3, v4]
+
+  /// 同步：冲突副本指向原卡；本机同步元数据（每条记录服务器端的系统字段与已推送的修改时间）与引擎状态。
+  /// 元数据行同时是"服务器上有"的记录：行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。
+  private static let v4 = """
+    ALTER TABLE cards ADD COLUMN conflictOf TEXT;
+    CREATE TABLE syncRecords (
+      recordName TEXT PRIMARY KEY NOT NULL, recordType TEXT NOT NULL, systemFields BLOB NOT NULL,
+      pushedModifiedAt INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
+    CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
+    """
 
   /// Pi 历史索引的检查点（服务层的不透明字节，含读取偏移与分支树）替代单独的读取偏移列。
   /// 旧偏移随列删除，已有会话重新索引。

@@ -2,7 +2,7 @@ import Foundation
 import SQLite3
 
 /// 绑定到语句的值。只有 CueStore 用到的三种存储类。
-enum SQLValue: Sendable, Equatable {
+package enum SQLValue: Sendable, Equatable {
   case null
   case int(Int64)
   case text(String)
@@ -12,6 +12,8 @@ enum SQLValue: Sendable, Equatable {
 protocol SQLBindable: Sendable {
   var sqlValue: SQLValue { get }
 }
+
+extension SQLValue: SQLBindable { var sqlValue: SQLValue { self } }
 
 extension String: SQLBindable { var sqlValue: SQLValue { .text(self) } }
 extension Int: SQLBindable { var sqlValue: SQLValue { .int(Int64(self)) } }
@@ -46,6 +48,16 @@ struct Row {
   /// 结果集中某列的序号；没有该列返回 nil。
   func index(of name: String) -> Int32? {
     (0..<sqlite3_column_count(statement)).first { String(cString: sqlite3_column_name(statement, $0)) == name }
+  }
+
+  /// 按存储类读出（同步表只有整数与文本两类）。
+  func value(_ column: Int32) -> SQLValue {
+    switch sqlite3_column_type(statement, column) {
+    case SQLITE_NULL: .null
+    case SQLITE_INTEGER: .int(int(column))
+    case SQLITE_BLOB: .blob(blobOrNil(column) ?? Data())
+    default: .text(text(column))
+    }
   }
 
   func isNull(_ column: Int32) -> Bool { sqlite3_column_type(statement, column) == SQLITE_NULL }
