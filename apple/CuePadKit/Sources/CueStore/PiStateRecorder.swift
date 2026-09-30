@@ -16,12 +16,20 @@ extension CueStore {
       let record = PiSessionState(
         id: id, sessionID: sessionID, hostID: hostID, title: title, projectID: projectID, state: state, detail: detail,
         notify: notify, stateSince: stateSince, createdAt: now, modifiedAt: now)
-      let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" }.map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
+      let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
+        .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
       try db.run(
         """
         INSERT INTO piSessionStates (\(PiSessionState.columns.joined(separator: ", "))) VALUES (\(placeholders))
-        ON CONFLICT(id) DO UPDATE SET \(assignments)
+        ON CONFLICT(id) DO UPDATE SET \(assignments),
+          notify = CASE
+            WHEN excluded.notify IS NOT NULL THEN excluded.notify
+            WHEN piSessionStates.notify IS NOT NULL AND piSessionStates.state = excluded.state AND (
+              NOT EXISTS (SELECT 1 FROM syncRecords s WHERE s.recordName = piSessionStates.id)
+              OR piSessionStates.modifiedAt > (SELECT s.pushedModifiedAt FROM syncRecords s WHERE s.recordName = piSessionStates.id))
+            THEN piSessionStates.notify
+          END
         """, record.bindings)
     }
   }
@@ -128,9 +136,9 @@ public actor PiStateRecorder {
 
   /// 手机通知只发两种转换：进入等你确认；从工作中进入完成。首次看到的会话（没有上一个状态）不通知，
   /// 这样重启后重新登记已有会话不会把旧事件再推一遍。
-  /// 标志只在这次写入上；上传前被后续写入取代的通知不会送出：状态记录不是事件日志，通知反映上传那一刻的状态
-  /// （已恢复工作的会话不再提示"等你确认"，连续多轮的会话不会每轮都提示完成）。要保证每个事件都送达，需要单独的
-  /// 追加式通知事件记录，那是另一种设计。
+  /// 标志置位后，同一状态下的后续写入（如仍在等、只换了问题文本）在标志上传之前沿用它（见 `writePiState`），
+  /// 上传之后的同状态写入不再带标志，订阅不会为同一次等待重复通知。状态一旦前进（如用户答完回到思考中），
+  /// 未上传的标志随之作废——已恢复工作的会话不该再提示"等你确认"。会话结束（`end`）删除记录，未上传的标志也随之丢失。
   private static func alert(entering state: PiWorkState, from previous: PiWorkState?) -> PiAlert? {
     guard let previous else { return nil }
     if state == .waitingForUser, previous != .waitingForUser { return .waitingForUser }
