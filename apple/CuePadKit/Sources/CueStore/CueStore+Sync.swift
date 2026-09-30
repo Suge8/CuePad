@@ -291,13 +291,7 @@ extension CueStore {
   /// 远端删除附件记录后回收文件；仍被卡片或发送记录引用的保留（引用它的记录也许马上就到）。删不掉的作为失败报告。
   private func removeFiles(of hashes: [String]) throws -> [RemoteFailure] {
     var failures: [RemoteFailure] = []
-    for hash in Set(hashes).sorted() {
-      let used = try db.first(
-        """
-        SELECT 1 FROM cards WHERE instr(body, ?1) > 0
-        UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
-        """, ["cuepad://img/\(hash)"]) { _ in true }
-      if used != nil { continue }
+    for hash in Set(hashes).sorted() where try !isImageReferenced(hash) {
       do { try files.remove(hash: hash) } catch {
         failures.append(RemoteFailure(recordName: hash, message: "附件文件没能删除：\(error)"))
       }

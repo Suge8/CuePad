@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 /// 卡片可见：自身未删除，且所属项目（如果有）未删除。
@@ -173,7 +174,7 @@ extension CueStore {
       parts.append(alternatives.isEmpty ? "0" : "(\(alternatives.joined(separator: " OR ")))")
     }
     if let hasImages = query.hasImages {
-      parts.append("instr(body, 'cuepad://img/') \(hasImages ? ">" : "=") 0")
+      parts.append("instr(body, '\(CueFormat.imagePrefix)') \(hasImages ? ">" : "=") 0")
     }
     switch query.sent {
     case .any:

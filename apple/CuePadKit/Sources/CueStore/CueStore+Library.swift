@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 // MARK: 项目
@@ -203,25 +204,19 @@ extension CueStore {
     let ids = "SELECT id FROM cards WHERE \(condition)"
     try clearGoal(where: condition, arguments)
     let bodies = try db.query("SELECT body FROM cards WHERE \(condition)", arguments) { $0.text(0) }
-    let referenced = Set(bodies.flatMap { $0.matches(of: /cuepad:\/\/img\/([0-9a-f]{64})/).map { String($0.output.1) } })
+    let referenced = Set(bodies.flatMap(CueFormat.imageHashes(in:)))
     try db.run("UPDATE sendRecords SET cardID = NULL, modifiedAt = ? WHERE cardID IN (\(ids))", [Date.stamp] + arguments)
     try db.run("DELETE FROM cards WHERE \(condition)", arguments)
     return referenced
   }
 
-  /// 删除候选图片中已不被任何卡片正文（含回收站里的卡）和发送记录快照（一键重发要用）引用的：先删文件，成功后再删记录，
+  /// 删除候选图片中已无人引用的（`isImageReferenced`）：先删文件，成功后再删记录，
   /// 所以记录与文件始终配对；删不掉的文件保留记录并返回其哈希。
   /// 只看被删卡片引用过的图片，不做全表扫描：刚粘贴、正文尚未保存的图片不能被顺手回收。
   /// 不处理跨设备竞态：另一台设备可能刚好在引用同一哈希。
   private func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
     var failed: [String] = []
-    for hash in candidates.sorted() {
-      let used = try db.first(
-        """
-        SELECT 1 FROM cards WHERE instr(body, ?1) > 0
-        UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
-        """, ["cuepad://img/\(hash)"]) { _ in true }
-      if used != nil { continue }
+    for hash in candidates.sorted() where try !isImageReferenced(hash) {
       do { try files.remove(hash: hash) } catch {
         failed.append(hash)
         continue
@@ -229,6 +224,15 @@ extension CueStore {
       try db.run("DELETE FROM attachments WHERE hash = ?", [hash])
     }
     return failed
+  }
+
+  /// 还有卡片正文（含回收站里的卡）或发送记录快照（一键重发要用）引用这张图片。
+  func isImageReferenced(_ hash: String) throws -> Bool {
+    try db.first(
+      """
+      SELECT 1 FROM cards WHERE instr(body, ?1) > 0
+      UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
+      """, [CueFormat.imageMarkup(id: hash)]) { _ in true } != nil
   }
 
   /// 事务已提交后，把删不掉文件的哈希作为错误报告（永久删除本身已生效）。

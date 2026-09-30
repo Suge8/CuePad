@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 extension CueStore {
@@ -167,12 +168,8 @@ public actor DeliveryExecutor {
     scheduleCleanup()
   }
 
-  private nonisolated func imageHashes(in content: String) -> [String] {
-    content.matches(of: /cuepad:\/\/img\/([0-9a-f]{64})/).map { String($0.output.1) }
-  }
-
   private func hasMissingImages(_ request: DeliveryRequest) -> Bool {
-    imageHashes(in: request.content).contains { store.files.url(hash: $0) == nil }
+    CueFormat.imageHashes(in: request.content).contains { store.files.url(hash: $0) == nil }
   }
 
   private func scheduleCleanup() {

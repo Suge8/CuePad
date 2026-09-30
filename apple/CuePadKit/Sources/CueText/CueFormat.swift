@@ -18,7 +18,8 @@ public enum CueFormat {
     public static let objectCharacter: UniChar = 0xFFFC
 
     private static let legacyMarkers: Set<String> = ["---ask---", "---answer---", "---system---"]
-    private static let imagePrefix = "![](cuepad://img/"
+    /// 图片引用的开头；其后是内容哈希（小写十六进制）与 `)`。
+    public static let imagePrefix = "![](cuepad://img/"
 
     /// 独占一行且 trim 后是分隔标记（含历史角色标记）时为分隔线行。
     public static func isMarkerLine(_ line: String) -> Bool {
@@ -27,6 +28,11 @@ public enum CueFormat {
     }
 
     public static func imageMarkup(id: String) -> String { imagePrefix + id + ")" }
+
+    /// 正文里引用的图片哈希，按出现顺序（可重复）。
+    public static func imageHashes(in stored: String) -> [String] {
+        parse(stored).compactMap { if case .image(let hash) = $0 { hash } else { nil } }
+    }
 
     public static func parse(_ stored: String) -> [CueToken] {
         var tokens: [CueToken] = []
