@@ -64,6 +64,7 @@ final class FakeSync: SyncControlling, Sendable {
     init() { (updates, continuation) = AsyncStream.makeStream() }
 
     var started: Int { state.withLock { $0.started } }
+    var stopped: Int { state.withLock { $0.stopped } }
     var syncNows: Int { state.withLock { $0.syncNows } }
     var resolutions: [String] { state.withLock { $0.resolutions } }
 

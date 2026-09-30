@@ -28,6 +28,24 @@ struct MacSyncTests {
         }
     }
 
+    // MARK: 退出
+
+    @Test func 退出时停止同步引擎与远程投送执行器() async throws {
+        services.startSync()
+        try await services.startDeliveryExecutor()
+        await eventually { rig.sync.started == 1 }
+
+        await services.stop()
+
+        #expect(rig.sync.stopped == 1)
+        let request = try await services.store.requestDelivery(
+            "hi", to: SendTarget(kind: .clipboard, name: "剪贴板"), on: TestApp.hostID)
+        // 停止后不再有观察者领取：没有事件可等，给执行器足够的时间再确认仍未处理
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(try await services.store.deliveryRequest(request.id)?.status == .pending)
+        #expect(rig.channels.calls.isEmpty)
+    }
+
     // MARK: 唤醒
 
     @Test func 系统唤醒时立即同步() async {

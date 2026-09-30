@@ -123,6 +123,12 @@ struct SendTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
+    /// 选定的应用退出后，发送按钮仍显示它的名字：按 bundle ID 找已安装的应用，不要求它在运行。
+    @Test func 应用名按bundle_ID从已安装的应用解析_找不到才用bundle_ID() {
+        #expect(services.appName(bundleID: "com.apple.Safari") == "Safari")
+        #expect(services.appName(bundleID: "com.example.not-installed") == "com.example.not-installed")
+    }
+
     // MARK: 记录
 
     @Test func 记录带内容快照与关联的卡片任务() async throws {
