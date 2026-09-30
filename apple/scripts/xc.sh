@@ -70,26 +70,36 @@ JXA
 
 shot_mac() {
   mkdir -p "$(dirname "$out")"
-  pkill -f "$app/Contents/MacOS/CuePad" 2>/dev/null || true
-  # -g：后台启动，不抢当前焦点
+  local exe="$app/Contents/MacOS/CuePad" pidfile="$DERIVED/shot-mac.pid" pid="" wid="" i
+  # 上次被中断的截图留下的实例：只结束记录下的那个 PID，并确认它仍是这个产物目录里的 CuePad
+  if [ -f "$pidfile" ]; then
+    pid="$(cat "$pidfile")"
+    if [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = "$exe" ]; then
+      kill -TERM "$pid"
+      while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done
+    fi
+    rm -f "$pidfile"
+  fi
+  # 直接启动可执行文件以拿到确切 PID；不经 LaunchServices 激活，不抢当前焦点
   # 库与 Pi 目录都隔离：不碰真实资料库、不导入 Electron 旧库、不读 ~/.pi 的会话
   # （socket 路径受 sun_path 104 字节限制，放 /tmp）
-  open -g -n --env CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library}")" \
-    --env PI_CODING_AGENT_DIR="$DERIVED/pi-agent" --env CUEPAD_PI_SOCKET_DIR="/tmp/cuepad-shot-$(id -u)" \
-    "$app" ${launch_args[@]+--args "${launch_args[@]}"}
-  local pid="" wid="" i
+  CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library}")" \
+    PI_CODING_AGENT_DIR="$DERIVED/pi-agent" CUEPAD_PI_SOCKET_DIR="/tmp/cuepad-shot-$(id -u)" \
+    "$exe" ${launch_args[@]+"${launch_args[@]}"} >"$DERIVED/shot-mac.log" 2>&1 &
+  pid=$!
+  echo "$pid" > "$pidfile"
   for i in $(seq 100); do
-    pid="$(pgrep -f "$app/Contents/MacOS/CuePad" | head -1 || true)"
-    [ -n "$pid" ] && wid="$(window_id "$pid")"
+    wid="$(window_id "$pid")"
     [ -n "$wid" ] && break
     sleep 0.1
   done
-  [ -n "$wid" ] || { echo "10 秒内没有出现 CuePad 窗口" >&2; [ -z "$pid" ] || kill "$pid"; exit 1; }
+  [ -n "$wid" ] || { echo "10 秒内没有出现 CuePad 窗口" >&2; kill -TERM "$pid"; rm -f "$pidfile"; exit 1; }
   sleep "${CUEPAD_SHOT_SETTLE:-1.5}" # 等数据读入与首帧：界面没有渲染完成的通知
   screencapture -x -o -l "$wid" "$out"
   # SIGTERM 走应用的正常退出流程
   kill -TERM "$pid"
-  while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done
+  wait "$pid" || true
+  rm -f "$pidfile"
   echo "$out"
 }
 

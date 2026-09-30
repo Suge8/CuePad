@@ -119,7 +119,7 @@ macOS 首次启动从旧版（Electron 时代）数据库 `~/Library/Application
 
 ## 视觉验收
 
-`shot mac` 用 `open -g` 后台启动，不抢焦点；按 pid 找窗口 ID 后 `screencapture -l` 只截该窗口（首次需给终端授予屏幕录制权限）；以 SIGTERM 退出，走应用正常退出流程。`shot ios` / `shot ipad` 构建 → 模拟器安装启动 → 截图 → 终止，库与偏好放进 `.derived/library-ios`。`--` 之后是 App 启动参数：
+`shot mac` 直接启动产物里的可执行文件并记下它的 PID（不经 LaunchServices 激活，不抢焦点；上次中断遗留的实例只按记下的 PID 结束），按该 PID 找窗口 ID 后 `screencapture -l` 只截该窗口（首次需给终端授予屏幕录制权限）；以 SIGTERM 退出，走应用正常退出流程。`shot ios` / `shot ipad` 构建 → 模拟器安装启动 → 截图 → 终止，库与偏好放进 `.derived/library-ios`。`--` 之后是 App 启动参数：
 
 ```bash
 apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -theme dark
