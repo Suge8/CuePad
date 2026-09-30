@@ -80,8 +80,8 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var content: String
   public var target: SendTarget
-  /// 指定由哪台 Mac 执行；nil 表示任意一台（多台 Mac 同时在线时可能重复执行，尽量指定）。
-  public var hostID: String?
+  /// 指定执行的那台 Mac（只有它会领取）。读到没有该字段的记录（旧版本写的）时为空串，没有 Mac 会领取它。
+  public var hostID: String
   /// 发送方式（如 send / steer / followUp / paste），由 App 层约定。
   public var mode: String
   public var cardID: UUID?
@@ -177,7 +177,7 @@ extension DeliveryRequest: Record {
     self.init(
       id: row.uuid(0), content: row.text(1),
       target: SendTarget(kind: SendTargetKind(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
-      hostID: row.textOrNil(5), mode: row.text(6), cardID: row.uuidOrNil(7), taskID: row.uuidOrNil(8),
+      hostID: row.textOrNil(5) ?? "", mode: row.text(6), cardID: row.uuidOrNil(7), taskID: row.uuidOrNil(8),
       status: DeliveryStatus(rawValue: row.text(9)), resultDetail: row.textOrNil(10), handledBy: row.textOrNil(11),
       createdAt: row.date(12), completedAt: row.dateOrNil(13), modifiedAt: row.date(14))
   }

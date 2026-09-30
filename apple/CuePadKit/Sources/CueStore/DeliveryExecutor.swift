@@ -1,10 +1,11 @@
 import Foundation
 
 extension CueStore {
-  /// 手机端：写一条投送请求，等 Mac 执行。`host` 指定执行的 Mac（nil = 任意一台）。
+  /// 手机端：写一条投送请求，等 `host` 指定的那台 Mac 执行。必须指定：只有被指定的 Mac 会领取，
+  /// 所以同一请求不会被多台 Mac 各执行一次。`host` 取自该目标 Pi 会话的 `PiSessionState.hostID`。
   @discardableResult
   public func requestDelivery(
-    _ content: String, to target: SendTarget, on host: String? = nil, mode: String = "send", card: UUID? = nil,
+    _ content: String, to target: SendTarget, on host: String, mode: String = "send", card: UUID? = nil,
     task: UUID? = nil
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
@@ -33,7 +34,7 @@ extension CueStore {
 
   fileprivate func pendingDeliveries(for host: String) throws -> [DeliveryRequest] {
     try select(
-      DeliveryRequest.self, where: "status = 'pending' AND (hostID IS NULL OR hostID = ?)", [host],
+      DeliveryRequest.self, where: "status = 'pending' AND hostID = ?", [host],
       orderBy: "createdAt, rowid")
   }
 
@@ -75,7 +76,7 @@ extension CueStore {
   }
 }
 
-/// Mac 端的投送执行器：领取发给本机（或不指定机器）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，
+/// Mac 端的投送执行器：只领取发给本机（`hostID` 等于本机）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，
 /// 把结果写回请求；完成的请求保留 `retention` 后清理。
 /// - 创建后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）；
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
