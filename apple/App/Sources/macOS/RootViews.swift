@@ -12,9 +12,13 @@ enum RootViews {
 
     /// 设置窗口（⌘, 与菜单"设置…"）的内容。
     static func settings(_ services: AppServices) -> some View {
-        SettingsView()
-            .modifier(PaletteProvider())
-            .environment(services)
+        VStack(spacing: 0) {
+            SettingsView()
+            Divider()
+            CommandLineToolBar()
+        }
+        .modifier(PaletteProvider())
+        .environment(services)
     }
 
     static func menuBarPad(_ services: AppServices) -> some View {

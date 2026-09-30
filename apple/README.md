@@ -57,6 +57,10 @@ Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，�
 
 只能在网页上做的一次性前置（已做）：App Group `group.com.sugeh.cuepad` 与 iCloud 容器 `iCloud.com.sugeh.cuepad` 的创建及挂到 App ID；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成，`provision.py devid-import <.cer>` 导入）；App Store Connect 里的 App 记录。
 
+## 命令行工具
+
+`cuepad`（读写本机资料库，供 agent 在 bash 里直接调用）随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由工程里的 `CuePadCLI` 目标统一构建、随 App 一起签名与公证。设置窗口底部的开关会在 `~/.local/bin/cuepad` 建指向它的符号链接（首次启动提示一次；位置被别的文件占用时不覆盖，App 被移动后能检测并一键修复；不做需要提权的 /usr/local/bin）。它与 App 用同一套资料库位置规则（`CUEPAD_LIBRARY_DIR` 同样生效）。
+
 ## 同步
 
 主 App 启动时创建 `CloudSync` 并启动（隔离模式 `CUEPAD_LIBRARY_DIR` 与测试不同步）；应用回到前台、Mac 系统唤醒时立即 `syncNow()`，推送由引擎自己处理。`AppServices` 暴露 `syncStatus`、`syncIssues`、`conflicts` 与 `resolveSync`、`resolveConflict`。Mac 端把 Pi 会话状态写成同步记录（启动时先清掉本机遗留的），并只执行发给本机 `hostID`（硬件 UUID 的哈希前缀）的手机投送请求。

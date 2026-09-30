@@ -57,6 +57,8 @@ final class AppServices {
     let piExtension: PiExtensionManager
     /// 辅助功能授权（通用投送的前提）。
     let accessibility: AccessibilityAccess
+    /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
+    let commandLineTool: CommandLineToolInstaller
     /// Pi 历史首次回填是否已完成。
     private(set) var piHistoryBackfilled = false
     /// 主窗口显隐；通用投送前后与全局快捷键都经它。
@@ -138,6 +140,7 @@ final class AppServices {
         terminal = mac.terminal
         piExtension = PiExtensionManager(installer: mac.installer, settings: settings)
         accessibility = AccessibilityAccess(isTrusted: mac.isAccessibilityTrusted)
+        commandLineTool = mac.commandLineTool
         historyStore = PiHistoryPersistence(storage: mac.historyStorage ?? library.store)
     }
     #else

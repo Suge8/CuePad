@@ -44,6 +44,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         services.start()
         window.makeKeyAndOrderFront(nil)
+        if !location.isIsolated { Task { await offerCommandLineTool(services) } }
+    }
+
+    /// 首次启动提示一次：装了就不打扰；位置被占用等情况在设置里看。
+    private func offerCommandLineTool(_ services: AppServices) async {
+        guard !services.settings.commandLineToolPrompted else { return }
+        services.settings.commandLineToolPrompted = true
+        let tool = services.commandLineTool
+        await tool.refresh()
+        guard tool.state == .notInstalled else { return }
+        let alert = NSAlert()
+        alert.messageText = "把 cuepad 命令行装进 PATH？"
+        alert.informativeText = "装好后 agent 可以在 bash 里直接用 cuepad 读写你的卡片和任务。会在 ~/.local/bin/cuepad 建一个指向 App 的链接，不需要管理员权限，随时可在设置里卸载。"
+        alert.addButton(withTitle: "安装")
+        alert.addButton(withTitle: "以后再说")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            try await tool.install()
+        } catch {
+            NSAlert(error: error).runModal()
+        }
     }
 
     @objc func showSettings(_ sender: Any?) {
