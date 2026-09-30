@@ -80,14 +80,21 @@ struct Row {
   func uuidOrNil(_ column: Int32) -> UUID? { isNull(column) ? nil : uuid(column) }
 }
 
-/// 系统 SQLite3 的最薄封装：一个连接、预编译语句、绑定、事务。线程安全由持有它的 actor 保证。
+/// 一个写事务改动的行：每张表插入或更新过的 rowid，以及删过行的表。由 SQLite 的 update hook 记下（含触发器引起的改动）。
+struct Changes {
+  var rows: [String: Set<Int64>] = [:]
+  var deletedFrom: Set<String> = []
+
+  var tables: Set<String> { deletedFrom.union(rows.keys) }
+}
+
+/// 系统 SQLite3 的最薄封装：一个连接、语句、绑定、事务。线程安全由持有它的 actor 保证。
 final class SQLite {
   private var handle: OpaquePointer?
   private let changeLog = ChangeLog()
 
-  init(path: String, readOnly: Bool = false) throws {
-    let flags = readOnly ? SQLITE_OPEN_READONLY : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
-    guard sqlite3_open_v2(path, &handle, flags | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else {
+  init(path: String) throws {
+    guard sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else {
       let message = handle.map { String(cString: sqlite3_errmsg($0)) } ?? "open failed"
       sqlite3_close_v2(handle)
       throw SQLiteError(message: message, sql: "open \(path)")
@@ -95,8 +102,8 @@ final class SQLite {
     sqlite3_busy_timeout(handle, 5000)
     sqlite3_update_hook(
       handle,
-      { context, _, _, table, _ in
-        Unmanaged<ChangeLog>.fromOpaque(context!).takeUnretainedValue().tables.insert(String(cString: table!))
+      { context, operation, _, table, rowid in
+        Unmanaged<ChangeLog>.fromOpaque(context!).takeUnretainedValue().record(operation, String(cString: table!), rowid)
       }, Unmanaged.passUnretained(changeLog).toOpaque())
   }
 
@@ -147,14 +154,14 @@ final class SQLite {
   /// 最近一条语句改动的行数。
   var changes: Int { Int(sqlite3_changes(handle)) }
 
-  /// 提交后返回本事务改动过的表；回滚则丢弃。
-  func transaction<T>(_ body: () throws -> T) throws -> (result: T, changedTables: Set<String>) {
+  /// 提交后返回本事务改动过的行；回滚则丢弃。
+  func transaction<T>(_ body: () throws -> T) throws -> (result: T, changes: Changes) {
     try exec("BEGIN IMMEDIATE")
-    changeLog.tables = []
+    changeLog.changes = Changes()
     do {
       let result = try body()
       try exec("COMMIT")
-      return (result, changeLog.tables)
+      return (result, changeLog.changes)
     } catch {
       try? exec("ROLLBACK")
       throw error
@@ -168,5 +175,13 @@ final class SQLite {
 
 /// 更新钩子只在持有连接的 actor 上、语句执行期间被调用，无并发访问。
 private final class ChangeLog: @unchecked Sendable {
-  var tables: Set<String> = []
+  var changes = Changes()
+
+  func record(_ operation: Int32, _ table: String, _ rowid: Int64) {
+    if operation == SQLITE_DELETE {
+      changes.deletedFrom.insert(table)
+    } else {
+      changes.rows[table, default: []].insert(rowid)
+    }
+  }
 }

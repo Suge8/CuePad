@@ -1,6 +1,6 @@
 import Foundation
 
-/// CuePad 的 SQLite 唯一事实源（系统 SQLite3，App 是唯一写者）。
+/// CuePad 的 SQLite 唯一事实源（系统 SQLite3）。App 与命令行各开一个连接写同一个库，提交后经跨进程通知互相唤醒。
 ///
 /// 读：`projects()`、`cards(in:)` 等查询；界面用 `observe` 订阅表变更并重读，不在内存里复制状态。
 /// 写：每个写方法是一个事务，提交后向订阅者发布一次变更。
@@ -9,6 +9,7 @@ public actor CueStore {
   /// 图片文件的读取（原图、缩略图）；不经过 actor，界面可并发调用。写入用 `addImage`。
   public nonisolated let files: AttachmentFiles
   private var subscribers: [UUID: (tables: Set<Table>, signal: AsyncStream<Void>.Continuation)] = [:]
+  private var syncSubscribers: [UUID: AsyncStream<PendingSync?>.Continuation] = [:]
   private let notificationName: String
   private let changeListener: ChangeListener
   private var lastDataVersion: Int64
@@ -47,6 +48,7 @@ public actor CueStore {
     guard let version = try? db.first("PRAGMA data_version", [], { $0.int(0) }), version != lastDataVersion else { return }
     lastDataVersion = version
     for subscriber in subscribers.values { subscriber.signal.yield() }
+    for subscriber in syncSubscribers.values { subscriber.yield(nil) }
   }
 
   // MARK: 观察
@@ -87,16 +89,32 @@ public actor CueStore {
 
   // MARK: 内部：事务与通用行读写
 
-  /// 一个写事务；提交后通知订阅者。
+  /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
-    let (result, changed) = try db.transaction(body)
-    let tables = Set(changed.compactMap(Table.init(rawValue:)))
+    let (result, changes) = try db.transaction(body)
+    let tables = Set(changes.tables.compactMap(Table.init(rawValue:)))
     if !tables.isEmpty { ChangeNotification.post(notificationName) }
     for (_, subscriber) in subscribers where !subscriber.tables.isDisjoint(with: tables) {
       subscriber.signal.yield()
     }
+    if !syncSubscribers.isEmpty, !tables.isDisjoint(with: Table.synced) {
+      let delta = try? pendingSync(in: changes)  // 算不出增量时让订阅者全量对账
+      for subscriber in syncSubscribers.values { subscriber.yield(delta) }
+    }
     return result
   }
+
+  /// 同步订阅：本连接每次提交改动了同步表，就给出这次提交中变成待推送的记录；
+  /// nil 表示改动范围未知（别的进程提交过，或增量没算出来），需要全量对账（`pendingSync()`）。订阅在返回前已生效。
+  package func syncChanges() -> AsyncStream<PendingSync?> {
+    let (stream, continuation) = AsyncStream<PendingSync?>.makeStream()
+    let token = UUID()
+    syncSubscribers[token] = continuation
+    continuation.onTermination = { _ in Task { await self.removeSyncSubscriber(token) } }
+    return stream
+  }
+
+  private func removeSyncSubscriber(_ token: UUID) { syncSubscribers[token] = nil }
 
   func select<R: Record>(
     _ type: R.Type, where condition: String = "1", _ arguments: [any SQLBindable] = [],

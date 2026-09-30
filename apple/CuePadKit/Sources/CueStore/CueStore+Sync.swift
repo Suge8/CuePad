@@ -67,23 +67,42 @@ extension CueStore {
     return nil
   }
 
+  /// 全量对账：所有同步表里待推送的记录。
   package func pendingSync() throws -> PendingSync {
-    var saves: [SyncKey] = []
-    var deletes: [String] = []
+    var pending = PendingSync(saves: [], deletes: [])
     for table in Table.synced {
-      let name = table.rawValue
-      saves += try db.query(
-        """
-        SELECT t.id FROM \(name) t LEFT JOIN syncRecords s ON s.recordName = t.id
-        WHERE s.recordName IS NULL OR t.modifiedAt > s.pushedModifiedAt ORDER BY t.rowid
-        """
-      ) { SyncKey(table: table, id: $0.text(0)) }
-      deletes += try db.query(
-        "SELECT recordName FROM syncRecords WHERE recordType = ? AND recordName NOT IN (SELECT id FROM \(name))",
-        [name]
-      ) { $0.text(0) }
+      pending.saves += try pendingSaves(table, where: "1")
+      pending.deletes += try pendingDeletes(table)
     }
-    return PendingSync(saves: saves, deletes: deletes)
+    return pending
+  }
+
+  /// 一次提交里改动的行中变成待推送的；删除只查删过行的表。
+  func pendingSync(in changes: Changes) throws -> PendingSync {
+    var pending = PendingSync(saves: [], deletes: [])
+    for table in Table.synced {
+      if let rows = changes.rows[table.rawValue] {
+        pending.saves += try pendingSaves(table, where: "t.rowid IN (\(rows.sorted().map(String.init).joined(separator: ",")))")
+      }
+      if changes.deletedFrom.contains(table.rawValue) { pending.deletes += try pendingDeletes(table) }
+    }
+    return pending
+  }
+
+  private func pendingSaves(_ table: Table, where condition: String) throws -> [SyncKey] {
+    try db.query(
+      """
+      SELECT t.id FROM \(table.rawValue) t LEFT JOIN syncRecords s ON s.recordName = t.id
+      WHERE (\(condition)) AND (s.recordName IS NULL OR t.modifiedAt > s.pushedModifiedAt) ORDER BY t.rowid
+      """
+    ) { SyncKey(table: table, id: $0.text(0)) }
+  }
+
+  private func pendingDeletes(_ table: Table) throws -> [String] {
+    try db.query(
+      "SELECT recordName FROM syncRecords WHERE recordType = ? AND recordName NOT IN (SELECT id FROM \(table.rawValue))",
+      [table.rawValue]
+    ) { $0.text(0) }
   }
 
   package func systemFields(of recordName: String) throws -> Data? {
@@ -91,8 +110,12 @@ extension CueStore {
   }
 
   /// 服务器已接受这条记录：记下它的系统字段与被推送版本的修改时间。之后再改才会重新变成待推送。
-  package func markPushed(_ row: SyncRow, systemFields: Data) throws {
-    try write { try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt) }
+  /// 返回本机版本是否在这之后又改过（仍待推送）。
+  package func markPushed(_ row: SyncRow, systemFields: Data) throws -> Bool {
+    try write {
+      try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
+      return try readSyncRow(row.table, row.id).map { $0.modifiedAt > row.modifiedAt } ?? false
+    }
   }
 
   /// 服务器上已没有这条记录（删除已确认、或本来就不存在）：忘掉它的元数据。
