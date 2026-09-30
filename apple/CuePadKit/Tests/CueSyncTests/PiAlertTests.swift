@@ -27,19 +27,49 @@ import Testing
     #expect(record.encryptedValues["title"] as? String == "secret title")
   }
 
-  /// 状态记录不是事件日志：标志只在置位的那一次写入上，上传前被更新的写入取代，服务端收到的就是没有标志的最新记录。
-  /// 这是有意的——通知反映"上传那一刻的状态"，已经恢复工作的会话不再提示"等你确认"，一轮接一轮的会话也不会每轮都提示完成。
-  @Test func anAlertSupersededBeforeUploadIsNotDelivered() async throws {
+  /// 状态已经往前走（用户在 Mac 上答了，回到思考中）：通知不再送出。这一种取代是有意的——已恢复工作的会话不该再提示"等你确认"。
+  @Test func anAlertForAStateThatHasSinceMovedOnIsNotDelivered() async throws {
     let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
     try await recorder.update(sessionID: "s1", state: .thinking)
     try await recorder.update(sessionID: "s1", state: .waitingForUser)  // 置位，还没上传
-    try await recorder.update(sessionID: "s1", state: .thinking)  // 用户在 Mac 上答了，继续工作
+    try await recorder.update(sessionID: "s1", state: .thinking)  // 继续工作
 
     let id = try #require(try await rig.store.piSessionStates().first).id
     let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
     #expect(record["notify"] == nil)
     #expect(record["state"] as? String == "thinking")
+  }
+
+  /// 仍在等你确认、只是问题文本变了：上传前标志必须还在，服务端才会通知。
+  @Test func aSameStateUpdateBeforeUploadKeepsTheFlag() async throws {
+    let rig = try Rig()
+    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "要不要覆盖？")
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "要覆盖 a.txt 吗？")
+
+    let id = try #require(try await rig.store.piSessionStates().first).id
+    let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
+    #expect(record["notify"] as? String == "waitingForUser")
+    #expect(record.encryptedValues["detail"] as? String == "要覆盖 a.txt 吗？")
+  }
+
+  /// 标志已经上传过，之后同状态的更新不再带标志，订阅不会为同一次等待重复通知。
+  @Test func aSameStateUpdateAfterUploadDoesNotAlertAgain() async throws {
+    let rig = try Rig()
+    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q1")
+    try await rig.coordinator.reconcile()
+    try await rig.simulatePush()  // 带标志的记录已被服务端接受
+
+    try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q2")
+
+    let id = try #require(try await rig.store.piSessionStates().first).id
+    let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
+    #expect(record["notify"] == nil && record.encryptedValues["detail"] as? String == "q2")
   }
 
   // MARK: 订阅的形状

@@ -139,7 +139,7 @@ import Testing
     try await states()[sessionID]?.notify
   }
 
-  @Test func enteringWaitingForUserFlagsOnlyTheWriteThatEntersIt() async throws {
+  @Test func enteringWaitingForUserFlagsTheWriteThatEntersItAndSurvivesSameStateUpdatesUntilUploaded() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking)
     #expect(try await alert() == nil)
@@ -147,8 +147,10 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "确认写入？")
     #expect(try await alert() == .waitingForUser)
 
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "换了个问题")  // 仍在等：不再通知
-    #expect(try await alert() == nil)
+    // 仍在等、只是问题换了：标志还没上传就不能被抹掉（否则用户仍被等着，锁屏却收不到通知）
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "换了个问题")
+    #expect(try await alert() == .waitingForUser)
+    #expect(try await states()["s1"]?.detail == "换了个问题")
   }
 
   @Test func settledIsFlaggedOnlyWhenComingFromWork() async throws {
