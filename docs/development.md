@@ -94,7 +94,7 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 ### macOS 壳层
 
-主窗口在 `MainWindowFactory` 创建时就设好外框（内容铺到透明标题栏下），界面不要再在运行时改窗口样式；设置窗口（⌘,）由 `SettingsWindowController` 承载；`CuePadApplication` 在退出前结束挂在窗口上的弹窗，⌘Q 与 SIGTERM 才不会被 sheet/alert 卡住；菜单栏面板 `MenuBarPanel` 随内容尺寸变化，顶边固定在图标下方。单元测试以 App 为宿主，宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。
+主窗口在 `MainWindowFactory` 创建时就设好外框（内容铺到透明标题栏下），界面不要再在运行时改窗口样式；设置窗口（⌘,）由 `SettingsWindowController` 承载；`CuePadApplication` 在退出前结束挂在窗口上的弹窗，⌘Q 与 SIGTERM 才不会被 sheet/alert 卡住；退出时先等服务收尾（停止远程投送执行器、同步引擎、Pi 连接与全局快捷键）再放行；菜单栏面板 `MenuBarPanel` 随内容尺寸变化，顶边固定在图标下方。单元测试以 App 为宿主，宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。
 
 ### iOS / iPadOS
 

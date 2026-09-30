@@ -50,11 +50,14 @@ extension AppServices {
         })
     }
 
-    /// 真正退出时释放：后台任务、Pi 连接、全局快捷键。
-    func stop() {
+    /// 真正退出时释放：后台任务、远程投送执行器、同步引擎、Pi 连接、全局快捷键。
+    func stop() async {
         cancelBackgroundWork()
         pi.stop()
         hotkey.unregister()
+        await deliveryExecutor?.stop()
+        deliveryExecutor = nil
+        await sync?.stop()
     }
 
     // MARK: 全局快捷键

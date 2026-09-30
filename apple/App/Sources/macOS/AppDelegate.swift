@@ -89,8 +89,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return true
     }
 
+    /// 服务的收尾要等 actor 完成：先回复"稍后"，收尾结束再放行退出。
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let services else { return .terminateNow }
+        Task {
+            await services.stop()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
-        services?.stop()
         statusItem?.remove()
     }
 
