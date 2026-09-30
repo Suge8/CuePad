@@ -8,6 +8,7 @@ extension AppServices {
         guard tasks.isEmpty else { return }
         startCaptureIngest()
         startSnapshots()
+        startSync()
     }
 }
 #endif

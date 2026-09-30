@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import CueStore
 import CueEditor
+import CueSync
 import os
 #if os(macOS)
 import CueDispatch
@@ -33,6 +34,13 @@ final class AppServices {
 
     @ObservationIgnored let location: LibraryLocation
 
+    /// iCloud 同步引擎；隔离模式与测试为 nil。状态、问题与冲突见下，动作见 `AppServices+Sync`。
+    @ObservationIgnored let sync: (any SyncControlling)?
+    private(set) var syncStatus: SyncStatus = .idle
+    private(set) var syncIssues: [SyncIssue] = []
+    /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
+    private(set) var conflicts: [CardConflict] = []
+
     /// 小组件、分享扩展打开 App 的链接，界面处理后调用 `consumeDeepLink()`。
     private(set) var pendingDeepLink: DeepLink?
 
@@ -59,6 +67,11 @@ final class AppServices {
     @ObservationIgnored let terminal: PiTerminalJumper
     @ObservationIgnored let historyStore: PiHistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
+    /// 这台 Mac 的稳定标识：Pi 状态记录与投送请求都靠它区分是哪台 Mac。
+    @ObservationIgnored let hostID: String
+    @ObservationIgnored let wakeNotifications: NotificationCenter
+    @ObservationIgnored let piStateRecorder: PiStateRecorder
+    @ObservationIgnored var deliveryExecutor: DeliveryExecutor?
     @ObservationIgnored lazy var hotkey = GlobalHotkey(backend: hotkeyBackend) { [weak self] in
         self?.windowShell?.toggleFromHotkey()
     }
@@ -69,6 +82,8 @@ final class AppServices {
         case globalShortcutUnavailable(String)
         /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
         case captureImportFailed(String)
+        /// iCloud 同步（或依赖它的 Mac 端远程功能）没能启动。
+        case syncUnavailable(String)
         /// 小组件与分享扩展用的快照写不出来。
         case widgetDataUnavailable(String)
         #if os(macOS)
@@ -101,15 +116,21 @@ final class AppServices {
     #if os(macOS)
     convenience init() {
         let location = LibraryLocation.standard
-        self.init(location: location, defaults: location.makeDefaults(), mac: .live(bundleID: Self.bundleID))
+        self.init(
+            location: location, defaults: location.makeDefaults(),
+            sync: { Self.makeSync(store: $0, location: location) }, mac: .live(bundleID: Self.bundleID))
     }
 
-    init(location: LibraryLocation, defaults: UserDefaults, mac: MacDependencies) {
+    init(location: LibraryLocation, defaults: UserDefaults, sync: (CueStore) -> (any SyncControlling)? = { _ in nil }, mac: MacDependencies) {
         let library = Self.openLibrary(at: location)
         store = library.store
         images = library.images
         settings = AppSettings(defaults: defaults)
         self.location = location
+        self.sync = sync(library.store)
+        hostID = mac.hostID
+        wakeNotifications = mac.wakeNotifications
+        piStateRecorder = PiStateRecorder(store: library.store, hostID: mac.hostID)
         pi = mac.pi
         channels = mac.channels
         hotkeyBackend = mac.hotkeys
@@ -122,15 +143,19 @@ final class AppServices {
     #else
     convenience init() {
         let location = LibraryLocation.standard
-        self.init(location: location, defaults: location.makeDefaults())
+        self.init(location: location, defaults: location.makeDefaults(), sync: { Self.makeSync(store: $0, location: location) })
     }
 
-    init(location: LibraryLocation, defaults: UserDefaults, pasteboard: UIPasteboard = .general) {
+    init(
+        location: LibraryLocation, defaults: UserDefaults, sync: (CueStore) -> (any SyncControlling)? = { _ in nil },
+        pasteboard: UIPasteboard = .general
+    ) {
         let library = Self.openLibrary(at: location)
         store = library.store
         images = library.images
         settings = AppSettings(defaults: defaults)
         self.location = location
+        self.sync = sync(library.store)
         self.pasteboard = pasteboard
     }
     #endif
@@ -143,6 +168,15 @@ final class AppServices {
         } catch {
             preconditionFailure("无法打开资料库 \(location.databaseURL.path)：\(error)")
         }
+    }
+
+    func setSyncState(status: SyncStatus, issues: [SyncIssue]) {
+        syncStatus = status
+        syncIssues = issues
+    }
+
+    func setConflicts(_ conflicts: [CardConflict]) {
+        self.conflicts = conflicts
     }
 
     func setDeepLink(_ link: DeepLink?) {

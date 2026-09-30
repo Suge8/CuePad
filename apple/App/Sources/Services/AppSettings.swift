@@ -37,12 +37,20 @@ final class AppSettings {
         set { defaults.set(newValue, forKey: Key.piExtensionDeclinedVersion) }
     }
 
-    /// `launchArguments` 是启动参数（`-theme dark` 这类）解析出的覆盖值，优先于已存的设置。
+    /// 启动参数（`-theme dark` 这类）覆盖已存的设置，只在 DEBUG 构建生效：视觉验收要用，发布版不能被命令行参数改设置。
     /// 标准偏好域自带这层覆盖；隔离模式的套件读不到，所以显式传入。
-    init(
-        defaults: UserDefaults,
-        launchArguments: [String: Any] = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
-    ) {
+    static var launchArgumentOverrides: [String: Any] {
+        #if DEBUG
+        UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+        #else
+        [:]
+        #endif
+    }
+
+    init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
+        #if !DEBUG
+        if defaults === UserDefaults.standard { defaults.removeVolatileDomain(forName: UserDefaults.argumentDomain) }
+        #endif
         self.defaults = defaults
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system

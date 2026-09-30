@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import CueDispatch
 import CuePi
 import CueStore
@@ -13,6 +14,8 @@ nonisolated struct PiSessionInfo {
 @MainActor
 protocol SendChannels {
     func piSession(_ id: CuePi.PiSession.ID) -> PiSessionInfo?
+    /// Pi 自己的会话 id（手机与同步记录里用的）→ 这台 Mac 上桥连接的会话 id；不在这台 Mac 上则 nil。
+    func piSessionID(forSession sessionID: String) -> CuePi.PiSession.ID?
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws
     func paste(_ text: String, into id: CuePi.PiSession.ID) async throws
     /// 权限与目标检查，不改任何状态；失败时调用方不必动窗口。
@@ -43,6 +46,10 @@ struct LiveSendChannels: SendChannels {
                 target: SendTarget(kind: .piSession, name: $0.cwd.lastPathComponent, ref: $0.sessionID),
                 isBusy: $0.state.isBusy)
         }
+    }
+
+    func piSessionID(forSession sessionID: String) -> CuePi.PiSession.ID? {
+        pi.sessions.first { $0.sessionID == sessionID }?.id
     }
 
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws {
@@ -88,6 +95,9 @@ struct MacDependencies {
     var isAccessibilityTrusted: @Sendable () -> Bool
     /// 索引落盘的存储；nil 用资料库本身，测试注入失败替身。
     var historyStorage: (any PiIndexStorage)?
+    var hostID: String
+    /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
+    var wakeNotifications: NotificationCenter
 
     @MainActor
     static func live(bundleID: String) -> MacDependencies {
@@ -101,7 +111,9 @@ struct MacDependencies {
             installer: PiExtensionInstaller(paths: paths),
             terminal: PiTerminalJumper(),
             isAccessibilityTrusted: Accessibility.isTrusted,
-            historyStorage: nil)
+            historyStorage: nil,
+            hostID: HostIdentity.current(),
+            wakeNotifications: NSWorkspace.shared.notificationCenter)
     }
 }
 #endif

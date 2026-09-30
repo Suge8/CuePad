@@ -21,6 +21,8 @@
 		C10000000000000000000014 /* CuePadWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* CuePadWidget.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C1000000000000000000F00A /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = C1000000000000000000F001 /* CueStore */; };
 		C1000000000000000000F00A /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = C1000000000000000000F002 /* CueStore */; };
+		D1000000000000000000A00B /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D1000000000000000000A001 /* CueSync */; };
+		D1000000000000000000A00B /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D1000000000000000000A002 /* CueSync */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,6 +93,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D1000000000000000000A00B /* CueSync in Frameworks */,
 				B10000000000000000000003 /* CueText in Frameworks */,
 				B10000000000000000000007 /* CueStore in Frameworks */,
 				B1000000000000000000000B /* CueEditor in Frameworks */,
@@ -103,6 +106,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D1000000000000000000A00B /* CueSync in Frameworks */,
 				B10000000000000000000005 /* CueText in Frameworks */,
 				B10000000000000000000009 /* CueStore in Frameworks */,
 				B1000000000000000000000D /* CueEditor in Frameworks */,
@@ -194,6 +198,7 @@
 			);
 			name = CuePad;
 			packageProductDependencies = (
+				D1000000000000000000A001 /* CueSync */,
 				B10000000000000000000002 /* CueText */,
 				B10000000000000000000006 /* CueStore */,
 				B1000000000000000000000A /* CueEditor */,
@@ -222,6 +227,7 @@
 			);
 			name = CuePadTests;
 			packageProductDependencies = (
+				D1000000000000000000A002 /* CueSync */,
 				B10000000000000000000004 /* CueText */,
 				B10000000000000000000008 /* CueStore */,
 				B1000000000000000000000C /* CueEditor */,
@@ -774,6 +780,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
 			productName = CueStore;
+		};
+		D1000000000000000000A001 /* CueSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueSync;
+		};
+		D1000000000000000000A002 /* CueSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueSync;
 		};
 /* End XCSwiftPackageProductDependency section */
 

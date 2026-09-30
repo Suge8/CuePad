@@ -17,7 +17,10 @@ struct SceneRoot: View {
             .onOpenURL { services.handle(url: $0) }
             .onChange(of: phase) { _, phase in
                 switch phase {
-                case .active: Task { await services.drainCaptures() }
+                case .active: Task {
+                    await services.drainCaptures()
+                    await services.handleActivation()
+                }
                 case .background: Task { await BackgroundWork.run { await services.prepareForBackground() } }
                 default: break
                 }

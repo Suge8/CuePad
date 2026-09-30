@@ -44,6 +44,9 @@ final class FakeChannels: SendChannels {
     var app = AppInfo(pid: 42, bundleID: "com.example.editor", name: "Editor")
 
     func piSession(_ id: String) -> PiSessionInfo? { sessions[id] }
+    /// Pi 自己的会话 id → 桥上的会话 id
+    var bridgeIDs: [String: String] = [:]
+    func piSessionID(forSession sessionID: String) -> String? { bridgeIDs[sessionID] }
     func send(_ message: PiMessage, to id: String) async throws { calls.append(.send(message, id)) }
     func paste(_ text: String, into id: String) async throws { calls.append(.paste(text, id)) }
     func runningApps() -> [AppInfo] { [] }
@@ -76,11 +79,14 @@ final class RecordingWindow: ShellWindow {
 
 /// 一次"App 启动"：临时库目录 + 独立 UserDefaults + 替身通道。`relaunch()` 用同一批目录再起一个实例。
 final class Rig {
+    static let hostID = "mac-test"
     let directory = FileManager.default.temporaryDirectory
         .appending(path: "cuepad-app-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
     /// 偏好放在临时目录里（路径型套件），随目录一起删除，不在 ~/Library/Preferences 里留文件。
     var suite: String { directory.appending(path: "preferences").path }
     let channels = FakeChannels()
+    let sync = FakeSync()
+    let wakeCenter = NotificationCenter()
     let hotkeys = InMemoryHotkeys()
     let window = RecordingWindow()
     let legacy: URL?
@@ -116,7 +122,7 @@ final class Rig {
     private func location() -> LibraryLocation {
         if let legacy {
             let support = directory.appending(path: "support", directoryHint: .isDirectory)
-            let electron = support.appending(path: "cuepad/cuepad.db")
+            let electron = support.appending(path: "CuePad/cuepad.db")
             try! FileManager.default.createDirectory(at: electron.deletingLastPathComponent(), withIntermediateDirectories: true)
             try? FileManager.default.removeItem(at: electron)
             try! FileManager.default.createSymbolicLink(at: electron, withDestinationURL: legacy)
@@ -134,8 +140,11 @@ final class Rig {
             installer: PiExtensionInstaller(paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")])),
             terminal: PiTerminalJumper(),
             isAccessibilityTrusted: { true },
-            historyStorage: historyStorage)
-        let services = AppServices(location: location(), defaults: defaults, mac: mac)
+            historyStorage: historyStorage,
+            hostID: Rig.hostID,
+            wakeNotifications: wakeCenter)
+        let sync = self.sync
+        let services = AppServices(location: location(), defaults: defaults, sync: { _ in sync }, mac: mac)
         services.windowShell = WindowShell(window: window)
         return services
     }

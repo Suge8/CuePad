@@ -1,6 +1,8 @@
 import CueStore
 import CoreGraphics
+import CueSync
 import Foundation
+import Synchronization
 import ImageIO
 import UniformTypeIdentifiers
 @testable import CuePad
@@ -43,6 +45,44 @@ final class TempDefaults {
     deinit { try? FileManager.default.removeItem(at: directory) }
 }
 
+/// 记录调用的同步引擎替身；`emit` 推一个状态给订阅者。
+final class FakeSync: SyncControlling, Sendable {
+    private struct State {
+        var started = 0
+        var stopped = 0
+        var syncNows = 0
+        var resolutions: [String] = []
+    }
+
+    private let state = Mutex(State())
+    private let updates: AsyncStream<SyncStatus>
+    private let continuation: AsyncStream<SyncStatus>.Continuation
+    let startError = Mutex<(any Error)?>(nil)
+
+    init() { (updates, continuation) = AsyncStream.makeStream() }
+
+    var started: Int { state.withLock { $0.started } }
+    var syncNows: Int { state.withLock { $0.syncNows } }
+    var resolutions: [String] { state.withLock { $0.resolutions } }
+
+    var statusUpdates: AsyncStream<SyncStatus> { updates }
+    var issues: [SyncIssue] { get async { [] } }
+
+    func emit(_ status: SyncStatus) { continuation.yield(status) }
+
+    func start() async throws {
+        state.withLock { $0.started += 1 }
+        if let error = startError.withLock({ $0 }) { throw error }
+    }
+
+    func stop() async { state.withLock { $0.stopped += 1 } }
+    func syncNow() async throws { state.withLock { $0.syncNows += 1 } }
+
+    func resolve(_ resolution: SyncResolution) async throws {
+        state.withLock { $0.resolutions.append("\(resolution)") }
+    }
+}
+
 #if os(macOS)
 typealias TestApp = Rig
 #else
@@ -50,6 +90,7 @@ typealias TestApp = Rig
 final class TestApp {
     let directory = FileManager.default.temporaryDirectory
         .appending(path: "cuepad-app-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let sync = FakeSync()
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     private(set) var services: AppServices!
 
@@ -72,7 +113,8 @@ final class TestApp {
     private func makeServices() -> AppServices {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let location = try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
-        return AppServices(location: location, defaults: location.makeDefaults(), pasteboard: pasteboard)
+        let sync = self.sync
+        return AppServices(location: location, defaults: location.makeDefaults(), sync: { _ in sync }, pasteboard: pasteboard)
     }
 }
 #endif

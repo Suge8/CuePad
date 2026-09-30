@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import CueDispatch
 import CuePi
 import Foundation
@@ -10,6 +11,7 @@ extension AppServices {
         guard tasks.isEmpty else { return }
         applySavedShortcut()
         accessibility.refresh()
+        let piChanges = pi.changes() // 先订阅再启动桥：启动时扫到的会话不能漏
         do {
             try pi.start()
         } catch {
@@ -22,7 +24,30 @@ extension AppServices {
             Task { await importLegacyIfNeeded() },
             Task { await piExtension.refresh() },
             Task { await consumePiHistory(indexer.events()) },
+            Task {
+                do {
+                    try await resetPiState()
+                    try await consumePiChanges(piChanges)
+                } catch {
+                    reportIssue(.syncUnavailable("Pi 状态没能写入同步记录：\(error)"))
+                }
+            },
+            Task {
+                do {
+                    try await startDeliveryExecutor()
+                } catch {
+                    reportIssue(.syncUnavailable("远程投送执行器没能启动：\(error)"))
+                }
+            },
         ]
+        startSync()
+    }
+
+    /// 系统唤醒后立即同步：睡眠期间的推送可能没收到。
+    func startWakeSync() {
+        tasks.append(Task { [wakeNotifications] in
+            for await _ in wakeNotifications.notifications(named: NSWorkspace.didWakeNotification) { await syncNow() }
+        })
     }
 
     /// 真正退出时释放：后台任务、Pi 连接、全局快捷键。
