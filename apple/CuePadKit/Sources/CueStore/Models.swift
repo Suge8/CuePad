@@ -291,6 +291,8 @@ public enum CueStoreError: Error, Equatable {
   case blankDeliveryContent
   /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
+  /// 库文件的结构版本不是本版本建的（开发期旧结构或更新版本的库），不打开。
+  case unsupportedSchemaVersion(Int)
 }
 
 // MARK: - 行映射

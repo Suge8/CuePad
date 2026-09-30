@@ -18,12 +18,14 @@ public actor CueStore {
       at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let connection = try SQLite(path: url.path)
     try connection.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL")
-    let applied = try connection.first("PRAGMA user_version") { Int($0.int(0)) } ?? 0
-    for (index, script) in Schema.migrations.enumerated() where index >= applied {
+    let version = try connection.first("PRAGMA user_version") { Int($0.int(0)) } ?? 0
+    if version == 0 {
       _ = try connection.transaction {
-        try connection.exec(script)
-        try connection.exec("PRAGMA user_version = \(index + 1)")
+        try connection.exec(Schema.create)
+        try connection.exec("PRAGMA user_version = \(Schema.version)")
       }
+    } else if version != Schema.version {
+      throw CueStoreError.unsupportedSchemaVersion(version)
     }
     db = connection
     files = AttachmentFiles(directory: url.deletingLastPathComponent().appending(path: "Attachments", directoryHint: .isDirectory))
