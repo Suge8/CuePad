@@ -158,20 +158,20 @@ struct NewTaskLine: View {
                 .onSubmit(add)
             if let projects, !projects.isEmpty {
                 Menu {
-                    Button("不挂项目") { chosen = .some(nil) }
+                    Button("未归属") { chosen = .some(nil) }
                     Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
                     let current = projects.first { $0.id == target }
                     HStack(spacing: 4) {
                         ProjectGlyph(project: current, size: 11)
-                        Text(current?.name ?? "不挂项目").lineLimit(1)
+                        Text(current?.name ?? "未归属").lineLimit(1)
                     }
                     .font(.footnote).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 10).frame(minHeight: 30)
                     .background(palette.fill, in: .capsule)
                 }
-                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "不挂项目")")
+                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未归属")")
             }
         }
     }

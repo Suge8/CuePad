@@ -67,16 +67,6 @@ struct IOSRootView: View {
     }
 }
 
-extension View {
-    /// 列表与表单铺在桌面色上，与书架、项目页同一底色。
-    func deskBackground() -> some View { modifier(DeskBackground()) }
-}
-
-private struct DeskBackground: ViewModifier {
-    @Environment(\.palette) private var palette
-    func body(content: Content) -> some View { content.scrollContentBackground(.hidden).background(palette.desk) }
-}
-
 /// 全局强调色用墨色（黑白品牌），不用系统蓝。
 private struct InkTint: ViewModifier {
     @Environment(\.palette) private var palette
@@ -140,7 +130,6 @@ private struct TabsRoot: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .modifier(CaptureAccessoryPlacement(shown: !navigation.isEditingCard))
-        .sensoryFeedback(.selection, trigger: navigation.tab)
         .observing(services.store, [.tasks, .piSessionStates], into: $badges) { store in
             Badges(tasks: try store.tasks().count, waiting: try store.piSessionStates().filter { $0.state == .waitingForUser }.count)
         }

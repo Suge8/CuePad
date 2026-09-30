@@ -196,39 +196,11 @@ private struct SplitSidebar: View {
 
 /// 项目页底部的玻璃随手记栏（宽 iPad 没有标签栏附件栏）。
 private struct SplitCaptureBar: View {
-    @Environment(Navigation.self) private var navigation
-
     var body: some View {
-        HStack(spacing: 0) {
-            Button { navigation.startCapture() } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "square.and.pencil").accessibilityHidden(true)
-                    Text("记下想法…").foregroundStyle(.secondary)
-                    Spacer()
-                    Text("⌘⇧N").font(.caption).foregroundStyle(.tertiary).accessibilityHidden(true)
-                }
-                .padding(.leading, 18).padding(.trailing, 8)
-                .frame(maxHeight: .infinity)
-                .contentShape(.rect)
-            }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
-            .accessibilityLabel("随手记")
-            if CameraPicker.isAvailable {
-                icon("拍照", "camera") { navigation.startCapture(.camera) }
-            }
-            icon("从相册选图", "photo.on.rectangle") { navigation.startCapture(.photos) }.padding(.trailing, 8)
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: 560).frame(height: 50)
-        .glass(in: .capsule, interactive: true)
-        .padding(.horizontal, 24)
-    }
-
-    private func icon(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 44, height: 44).contentShape(.rect)
-        }
-        .accessibilityLabel(label)
+        CaptureBar()
+            .frame(maxWidth: 560).frame(height: 50)
+            .glass(in: .capsule, interactive: true)
+            .padding(.horizontal, 24)
     }
 }
 

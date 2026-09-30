@@ -104,10 +104,8 @@ struct SendToMacSheet: View {
                             .listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets())
                         } footer: {
-                            Text(mode.explanation)
+                            if let explanation = mode.explanation { Text(explanation) }
                         }
-                    } else if let mode {
-                        Section { } footer: { Text(mode.explanation) }
                     }
                 }
             }

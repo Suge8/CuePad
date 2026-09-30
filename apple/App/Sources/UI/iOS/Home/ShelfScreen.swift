@@ -95,9 +95,7 @@ struct ShelfScreen: View {
             }
             if !recent.isEmpty || data.inboxCount > 0 {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("最近").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-                        .padding(.horizontal, 4)
-                        .accessibilityAddTraits(.isHeader)
+                    SectionHeader(title: "最近")
                     VStack(spacing: 0) {
                         ForEach(Array(recent.enumerated()), id: \.element.id) { index, entry in
                             if index > 0 { Divider().padding(.leading, 60) }
@@ -108,6 +106,7 @@ struct ShelfScreen: View {
                             ShelfRow(route: .inbox, entry: nil, inboxCount: data.inboxCount)
                         }
                     }
+                    .clipShape(.rect(cornerRadius: 16, style: .continuous))
                     .paper(radius: 16)
                 }
             }
@@ -156,7 +155,7 @@ private struct PinnedShelfCard: View {
                 }
                 Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
                 Group {
-                    if let goal = entry.goal { Text(Image(systemName: "scope")) + Text(" \(goal)") } else { Text("还没有目标") }
+                    if let goal = entry.goal { Text("\(Image(systemName: "scope")) \(goal)") } else { Text("还没有目标") }
                 }
                 .font(.footnote)
                 .foregroundStyle(entry.goal == nil ? palette.ink3 : palette.ink2)
@@ -224,7 +223,7 @@ private struct ShelfRow: View {
                         if let pi = entry?.pi { PiDot(state: pi, size: 6) }
                     }
                     Group {
-                        if entry?.goal?.isEmpty == false { Text(Image(systemName: "scope")) + Text(" \(subtitle)") } else { Text(subtitle) }
+                        if entry?.goal?.isEmpty == false { Text("\(Image(systemName: "scope")) \(subtitle)") } else { Text(subtitle) }
                     }
                     .font(.footnote).foregroundStyle(palette.ink3).lineLimit(stacked ? 3 : 1)
                     // 辅助功能大字号下计数换到名称下方，名称不被挤成省略号
@@ -238,7 +237,7 @@ private struct ShelfRow: View {
             .padding(.horizontal, 14).padding(.vertical, 11)
             .contentShape(.rect)
         }
-        .buttonStyle(PressableStyle(scale: 1))
+        .buttonStyle(PressableStyle(kind: .row))
         .accessibilityElement(children: .combine)
         .accessibilityValue(entry?.pi.map { "Pi \($0.label)" } ?? "")
     }
@@ -248,19 +247,6 @@ private struct ShelfRow: View {
         if let goal = entry.goal, !goal.isEmpty { return goal }
         if let latest = entry.latest { return "\(latest.title.nonEmpty ?? "空白卡片") · \(DateLabel.short(latest.date))" }
         return "还没有卡片"
-    }
-}
-
-/// 按下时轻微下沉（整卡与行只降一点透明度与位移，不缩放文字）。
-struct PressableStyle: ButtonStyle {
-    var scale: CGFloat = 0.98
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? scale : 1)
-            .opacity(configuration.isPressed ? 0.75 : 1)
-            .animation(.easeOut(duration: configuration.isPressed ? 0.08 : 0.18), value: configuration.isPressed)
     }
 }
 #endif
