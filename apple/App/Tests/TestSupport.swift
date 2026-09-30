@@ -45,7 +45,7 @@ final class TempDefaults {
     deinit { try? FileManager.default.removeItem(at: directory) }
 }
 
-/// 记录调用的同步引擎替身；`emit` 推一个状态给订阅者。
+/// 记录调用的同步引擎替身；`emit` 推一个状态快照给订阅者。
 final class FakeSync: SyncControlling, Sendable {
     private struct State {
         var started = 0
@@ -55,8 +55,8 @@ final class FakeSync: SyncControlling, Sendable {
     }
 
     private let state = Mutex(State())
-    private let updates: AsyncStream<SyncStatus>
-    private let continuation: AsyncStream<SyncStatus>.Continuation
+    private let updates: AsyncStream<SyncState>
+    private let continuation: AsyncStream<SyncState>.Continuation
     let startError = Mutex<(any Error)?>(nil)
 
     init() { (updates, continuation) = AsyncStream.makeStream() }
@@ -65,10 +65,9 @@ final class FakeSync: SyncControlling, Sendable {
     var syncNows: Int { state.withLock { $0.syncNows } }
     var resolutions: [String] { state.withLock { $0.resolutions } }
 
-    var statusUpdates: AsyncStream<SyncStatus> { updates }
-    var issues: [SyncIssue] { get async { [] } }
+    var stateUpdates: AsyncStream<SyncState> { updates }
 
-    func emit(_ status: SyncStatus) { continuation.yield(status) }
+    func emit(_ state: SyncState) { continuation.yield(state) }
 
     func start() async throws {
         state.withLock { $0.started += 1 }
