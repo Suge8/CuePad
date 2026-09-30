@@ -125,7 +125,8 @@ struct SendTests {
 
     /// 选定的应用退出后，发送按钮仍显示它的名字：按 bundle ID 找已安装的应用，不要求它在运行。
     @Test func 应用名按bundle_ID从已安装的应用解析_找不到才用bundle_ID() {
-        #expect(services.appName(bundleID: "com.apple.Safari") == "Safari")
+        // 系统自带应用的显示名随系统语言变化（Safari 在中文系统叫"Safari浏览器"），用名称不随语言变的 CuePad 自己
+        #expect(services.appName(bundleID: AppServices.bundleID) == "CuePad")
         #expect(services.appName(bundleID: "com.example.not-installed") == "com.example.not-installed")
     }
 
