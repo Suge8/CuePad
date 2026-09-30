@@ -33,12 +33,15 @@ case "$mode" in
 <key>com.sugeh.cuepad.share</key><string>CuePad Share iOS AppStore</string>
 <key>com.sugeh.cuepad.widget</key><string>CuePad Widget iOS AppStore</string>
 </dict>
-<key>destination</key><string>upload</string>
+<key>destination</key><string>export</string>
 </dict></plist>
 PLIST
     xcodebuild -exportArchive -archivePath "$OUT/CuePad.xcarchive" -exportOptionsPlist "$OUT/export.plist" \
-      -exportPath "$OUT/export" "${asc_auth[@]}"
+      -exportPath "$OUT/export"
+    # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）
+    xcrun altool --upload-app -f "$OUT/export/CuePad.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
     echo "已上传构建 $build，App Store Connect 处理完成后出现在 TestFlight"
+    python3 "$APPLE_DIR/scripts/testflight.py" group
     ;;
   device)
     # 取第一台已连接的真机；未登记则登记，再刷新 Development 描述文件
