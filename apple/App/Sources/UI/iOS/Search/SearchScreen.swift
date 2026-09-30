@@ -47,8 +47,9 @@ struct SearchScreen: View {
                 }
             }
         }
+        .deskBackground()
         .navigationTitle("搜索")
-        .searchable(text: $query.text, prompt: "搜索卡片")
+        .searchable(text: $query.text, prompt: "搜索卡片，空格分隔多个词")
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear {
             #if DEBUG
@@ -85,9 +86,9 @@ private struct ResultRow: View {
         NavigationLink(value: Navigation.Route.card(card.id)) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(Highlight.matches(text.title.isEmpty ? "空白卡片" : text.title, term)).font(.body.weight(.medium)).lineLimit(1)
+                    Text(highlight(text.title.nonEmpty ?? "空白卡片")).font(.body.weight(.medium)).lineLimit(1)
                     if !text.preview.isEmpty {
-                        Text(Highlight.matches(text.preview, term)).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                        Text(highlight(text.preview)).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
                     }
                     Text(DateLabel.short(card.modifiedAt)).font(.caption).foregroundStyle(.tertiary)
                 }
@@ -97,6 +98,13 @@ private struct ResultRow: View {
         }
         .zoomSource(card.id, in: zoom)
         .contextMenu { CardActions(card: card, isGoal: false) }
+    }
+
+    /// 搜索按空白拆成多个词、每个都要命中：每个词各自标出。
+    private func highlight(_ text: String) -> AttributedString {
+        term.split(whereSeparator: \.isWhitespace).reduce(AttributedString(text)) { result, word in
+            Highlight.matches(text, String(word), base: result)
+        }
     }
 }
 

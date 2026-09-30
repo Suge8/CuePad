@@ -10,14 +10,16 @@ nonisolated private struct EditorData: Sendable {
     var project: Project?
 }
 
-/// 打开的卡：一整张纸页。键盘上方是编辑器自带的工具栏（分块、插图、变量取值）；
-/// 导航栏右侧是分享与"更多"（复制、编号、置顶、设为目标、移到回收站）。
+/// 打开的卡：一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面）。键盘上方是工具栏（分块、插图、变量取值、发送）；
+/// 导航栏右侧是复制、发到 Mac 与"更多"（分享、编号、置顶、设为目标、移动、移到回收站）。
 struct CardEditorScreen: View {
     let cardID: UUID
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var data: EditorData?
     @State private var initialText: String?
     @State private var liveText = ""
@@ -29,15 +31,54 @@ struct CardEditorScreen: View {
     @State private var editingVariables = false
     @State private var flushToken: UUID?
 
+    private static let pageWidth: CGFloat = 760
+
     var body: some View {
+        page
+            .frame(maxWidth: wide ? Self.pageWidth : .infinity, maxHeight: .infinity, alignment: .top)
+            .background(palette.paper, in: .rect(cornerRadius: wide ? 22 : 0, style: .continuous))
+            .overlay {
+                if wide { RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(palette.hair).allowsHitTesting(false) }
+            }
+            .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(wide ? palette.desk : palette.paper)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
+            .toolbar { toolbar }
+            .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
+            .onChange(of: pickedImage) { insertPicked() }
+            .sheet(isPresented: $editingVariables) {
+                if let card = data?.card { VariablesSheet(card: card, names: CueVariables.names(in: handle.text ?? liveText)) }
+            }
+            .observing(services.store, [.cards, .projects], id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
+                guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
+                return EditorData(card: card, project: try card.projectID.flatMap { try store.project($0) })
+            }
+            .onChange(of: data?.card.id, initial: true) {
+                guard initialText == nil, let card = data?.card else { return }
+                initialText = card.body
+                liveText = card.body
+            }
+            .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { dismiss() } }
+            .onAppear(perform: makeAutosave)
+            .onDisappear {
+                if let autosave { Task { await autosave.flush() } }
+                if let flushToken { services.removeBackgroundFlush(flushToken) }
+            }
+    }
+
+    private var wide: Bool { sizeClass == .regular }
+
+    @ViewBuilder private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let data {
-                meta(data).padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 6)
+                meta(data).padding(.horizontal, inset).padding(.top, wide ? 20 : 4).padding(.bottom, 6)
             }
             if let data, let initialText {
                 IOSEditorHost(
                     initialText: initialText,
-                    theme: .paper(palette, horizontalInset: 20),
+                    theme: .paper(palette, horizontalInset: inset),
                     numbering: CueNumbering(rawValue: data.card.numbering.rawValue) ?? .none,
                     handle: handle,
                     onChange: { next in
@@ -46,35 +87,14 @@ struct CardEditorScreen: View {
                     },
                     onInsertImage: { pickingImage = true },
                     onVariables: { editingVariables = true },
+                    onSend: sendToMac,
                     onBlockAction: blockAction,
                     onError: workspace.fail)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(palette.paper)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbar }
-        .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
-        .onChange(of: pickedImage) { insertPicked() }
-        .sheet(isPresented: $editingVariables) {
-            if let card = data?.card { VariablesSheet(card: card, names: CueVariables.names(in: liveText)) }
-        }
-        .observing(services.store, [.cards, .projects], id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
-            guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
-            return EditorData(card: card, project: try card.projectID.flatMap { try store.project($0) })
-        }
-        .onChange(of: data?.card.id, initial: true) {
-            guard initialText == nil, let card = data?.card else { return }
-            initialText = card.body
-            liveText = card.body
-        }
-        .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { dismiss() } }
-        .onAppear(perform: makeAutosave)
-        .onDisappear {
-            if let autosave { Task { await autosave.flush() } }
-            if let flushToken { services.removeBackgroundFlush(flushToken) }
-        }
     }
+
+    private var inset: CGFloat { wide ? 44 : 20 }
 
     private func meta(_ data: EditorData) -> some View {
         HStack(spacing: 6) {
@@ -82,29 +102,38 @@ struct CardEditorScreen: View {
             Text(data.project?.name ?? "未归档").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
             Text("·")
             Text(DateLabel.short(data.card.modifiedAt))
-            Text(saving ? "保存中…" : "已自动保存")
+            Text("·")
+            Text(saving ? "保存中…" : "已保存").contentTransition(.opacity)
+            if data.project?.goalCardID == data.card.id { Image(systemName: "scope").accessibilityLabel("项目目标") }
             if data.card.isFavorite { Image(systemName: "pin.fill").accessibilityLabel("置顶") }
         }
         .font(.caption)
         .foregroundStyle(palette.ink3)
+        .animation(Motion.quick, value: saving)
         .accessibilityElement(children: .combine)
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if let card = data?.card {
-            ToolbarItem(placement: .primaryAction) {
-                ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button("复制", systemImage: "doc.on.doc") { copy(card) }
+                Button("发到 Mac", systemImage: "paperplane", action: sendToMac)
+                    .keyboardShortcut(.return, modifiers: .command)
             }
             ToolbarItem(placement: .secondaryAction) {
                 Menu("更多", systemImage: "ellipsis") {
-                    Button("复制整张", systemImage: "doc.on.doc") { copy(card) }
-                        .keyboardShortcut("c", modifiers: [.command, .shift])
+                    ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
                     NumberingPicker(card: card)
                     Divider()
-                    CardActions(card: card, isGoal: data?.project?.goalCardID == card.id)
+                    CardActions(card: card, isGoal: data?.project?.goalCardID == card.id, includesCopy: false)
                 }
             }
         }
+    }
+
+    private func sendToMac() {
+        guard let card = data?.card else { return }
+        navigation.outbox = Navigation.Outbox(content: outgoing(card), card: card.id, project: card.projectID)
     }
 
     /// 当前编辑中的正文（未保存的也算），变量已填、编号已排。
@@ -135,7 +164,7 @@ struct CardEditorScreen: View {
         Task {
             do {
                 guard let data = try await item.loadTransferable(type: Data.self) else { return }
-                handle.insertImage(data)
+                handle.insertImage(PickedImage(data: data).data)
             } catch {
                 workspace.fail(error)
             }

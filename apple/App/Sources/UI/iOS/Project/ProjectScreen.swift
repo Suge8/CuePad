@@ -14,25 +14,30 @@ struct ProjectScreen: View {
     @State private var data: ProjectPageData?
     @State private var board = WallBoard()
     @State private var editingProject: Project?
+    @State private var sessions: [PiSessionState]?
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
+        ScrollView {
+            ScrollViewReader { proxy in
                 if let data, let arrangement = board.arrangement {
                     content(data, arrangement)
                 }
+                #if DEBUG
+                Color.clear.frame(height: 0)
+                    .onChange(of: board.arrangement != nil) { DebugScene.scrollIfNeeded(proxy) }
+                #endif
             }
-            #if DEBUG
-            .onChange(of: board.arrangement != nil) { DebugScene.scrollIfNeeded(proxy) }
-            #endif
         }
         .background(palette.desk)
         .navigationTitle(data?.project?.name ?? "未归档")
-        .navigationSubtitle(data.map { "\($0.cards.count) 张卡片" } ?? "")
+        .navigationSubtitle(subtitle)
         .toolbar { toolbar }
         .sheet(item: $editingProject) { ProjectFormSheet(project: $0) }
         .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $data, onError: workspace.fail) {
             [projectID] store in try ProjectPageData.read(projectID, from: store)
+        }
+        .observing(services.store, [.piSessionStates], id: projectID, into: $sessions) { [projectID] store in
+            try store.piSessionStates().filter { $0.projectID != nil && $0.projectID == projectID }
         }
         .onChange(of: data?.stamps()) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
@@ -44,7 +49,7 @@ struct ProjectScreen: View {
         let byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
         let lastTarget = data.lastTarget
         VStack(alignment: .leading, spacing: 24) {
-            if data.goalCard != nil || !data.tasks.isEmpty { FocusCard(data: data) }
+            if data.project != nil { FocusCard(data: data, sessions: sessions ?? []) }
             if data.cards.isEmpty {
                 ContentUnavailableView("还没有卡片", systemImage: "square.on.square.dashed", description: Text("在下方随手记里写下想法，或点右上角新建"))
                     .padding(.top, 40)
@@ -66,6 +71,19 @@ struct ProjectScreen: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
+    }
+
+    private var subtitle: String {
+        guard let data else { return "" }
+        let directory = data.directory.map(Self.homeRelative)
+        return [directory, "\(data.cards.count) 张卡片"].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// 绑定的目录是 Mac 上的路径：`/Users/<name>/…` 显示成 `~/…`。
+    private static func homeRelative(_ path: String) -> String {
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count > 3, parts[1] == "Users" else { return path }
+        return "~/" + parts.dropFirst(3).joined(separator: "/")
     }
 
     private func section(_ title: String, count: Int, @ViewBuilder content: () -> some View) -> some View {
@@ -138,9 +156,11 @@ struct ProjectActions: View {
     }
 }
 
-/// 目标与下一步：目标卡 + 本项目未完成任务（最多 3 条，其余在任务页）。没有目标卡时只有下一步。
+/// 目标与下一步：目标卡 + 本项目未完成任务（最多 3 条，其余在任务页）+ 本项目的 Pi 会话。
+/// 没有目标卡时只有下一步；什么都没有时是一行"添加任务"。
 private struct FocusCard: View {
     let data: ProjectPageData
+    let sessions: [PiSessionState]
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
 
@@ -153,7 +173,7 @@ private struct FocusCard: View {
                 Button { navigation.open(card: goal.id) } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         SectionLabel(text: "目标", systemImage: "scope")
-                        Text(text.title).font(.headline).foregroundStyle(palette.ink).multilineTextAlignment(.leading)
+                        Text(text.title.nonEmpty ?? "空白卡片").font(.headline).foregroundStyle(palette.ink).multilineTextAlignment(.leading)
                         if !text.preview.isEmpty {
                             Text(VariableText.styled(text.preview, palette)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
                         }
@@ -162,17 +182,35 @@ private struct FocusCard: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                if !data.tasks.isEmpty { Divider() }
+                Divider()
             }
-            if !data.tasks.isEmpty || data.goalCard != nil {
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(text: "下一步 · \(data.tasks.count)", systemImage: "checklist")
-                    ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskLine(task: task) }
-                    if data.tasks.count > Self.visibleTasks {
-                        Button("还有 \(data.tasks.count - Self.visibleTasks) 条") { navigation.tab = .tasks }
-                            .font(.subheadline).foregroundStyle(palette.ink3)
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(text: data.tasks.isEmpty ? "下一步" : "下一步 · \(data.tasks.count)", systemImage: "checklist")
+                ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskLine(task: task) }
+                if data.tasks.count > Self.visibleTasks {
+                    Button("还有 \(data.tasks.count - Self.visibleTasks) 条") {
+                        if navigation.layout == .split { navigation.panel = .tasks } else { navigation.tab = .tasks }
                     }
-                    NewTaskLine(project: data.project?.id)
+                    .font(.subheadline).foregroundStyle(palette.ink3)
+                }
+                NewTaskLine(project: data.project?.id)
+            }
+            if !sessions.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel(text: "Pi", systemImage: "terminal")
+                    ForEach(sessions) { session in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            PiDot(state: session.state, size: 7)
+                            Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
+                            Text(session.summary).font(.subheadline).foregroundStyle(session.state.tint).lineLimit(1)
+                            Spacer(minLength: 4)
+                            if session.state.isWorking || session.state == .waitingForUser {
+                                Text(session.stateSince, style: .timer).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
                 }
             }
         }

@@ -42,11 +42,14 @@ struct CardTileView: View {
     }
 }
 
-/// 卡片操作（长按菜单与编辑页"更多"共用）：置顶、设为目标、复制、转为任务、移到项目、移到回收站。
+/// 卡片操作（长按菜单与编辑页"更多"共用）：置顶、设为目标、复制、发到 Mac、转为任务、移到项目、移到回收站。
 struct CardActions: View {
     let card: Card
     let isGoal: Bool
+    /// 编辑页的复制与发送在导航栏上，菜单里不重复。
+    var includesCopy = true
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
     @State private var projects: [Project]?
 
     var body: some View {
@@ -61,8 +64,13 @@ struct CardActions: View {
                 workspace.perform { try await $0.setGoal(goal, for: project) }
             }
         }
-        Button("复制", systemImage: "doc.on.doc") { workspace.copy(card) }
-        ShareLink(item: Outgoing.text(of: card)) { Label("分享", systemImage: "square.and.arrow.up") }
+        if includesCopy {
+            Button("复制", systemImage: "doc.on.doc") { workspace.copy(card) }
+            Button("发到 Mac", systemImage: "paperplane") {
+                navigation.outbox = Navigation.Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID)
+            }
+            ShareLink(item: Outgoing.text(of: card)) { Label("分享", systemImage: "square.and.arrow.up") }
+        }
         Button("转为任务", systemImage: "checklist") {
             let title = CardText(card.body).title, project = card.projectID
             workspace.attempt {
