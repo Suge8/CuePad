@@ -457,6 +457,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = CuePad;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = App/Config/CuePad.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "$(CUEPAD_MAC_ENTITLEMENTS)";
@@ -497,6 +498,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = CuePad;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = App/Config/CuePad.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "$(CUEPAD_MAC_ENTITLEMENTS)";
