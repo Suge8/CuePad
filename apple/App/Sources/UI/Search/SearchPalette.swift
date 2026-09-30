@@ -284,6 +284,7 @@ private struct FilterBar: View {
         case .sent(.piSession, nil): "Pi 会话"
         case .sent(.app, nil): "应用"
         case .sent(.clipboard, nil): "剪贴板"
+        case .sent(.unknown, nil): "其他"
         case .sent(nil, nil): "发送过"
         }
     }
