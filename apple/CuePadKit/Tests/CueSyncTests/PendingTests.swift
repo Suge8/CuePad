@@ -64,6 +64,43 @@ import Testing
     await rig.coordinator.stop()
   }
 
+  /// 开始同步后，每次本机写入只登记这次改动的记录（由提交时记下的改动行得出），不再全表对账。
+  @Test(.timeLimit(.minutes(1)))
+  func eachLocalWriteRegistersOnlyTheRecordsItChanged() async throws {
+    let untouched = rig.id(try await store.createCard(in: nil, body: "没推送、之后也没再改").id)
+    let edited = try await store.createCard(in: nil, body: "v1")
+    try await rig.coordinator.start()  // 启动时全量对账一次
+    await rig.queue.waitUntil { saves, _ in saves.contains(untouched) }
+    await rig.queue.clear()
+
+    try await Task.sleep(for: .milliseconds(3))
+    try await store.updateCard(edited.id) { $0.body = "v2" }
+    let marker = rig.id(try await store.createCard(in: nil, body: "之后的一次写入").id)
+    await rig.queue.waitUntil { saves, _ in saves.contains(marker) }
+
+    #expect(await rig.queue.saves.sorted() == [rig.id(edited.id), marker].sorted())
+    await rig.coordinator.stop()
+  }
+
+  /// 引擎发送旧版本期间记录又改了：发送成功后它仍待推送，要重新登记（引擎已移除这条待办）。
+  @Test(.timeLimit(.minutes(1)))
+  func editMadeWhileThePreviousVersionWasSendingIsRegisteredAgain() async throws {
+    try await rig.coordinator.start()
+    let card = try await store.createCard(in: nil, body: "v1")
+    let id = rig.id(card.id)
+    await rig.queue.waitUntil { saves, _ in saves.contains(id) }
+    let sending = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
+
+    try await Task.sleep(for: .milliseconds(3))
+    try await store.updateCard(card.id) { $0.body = "v2" }
+    await rig.queue.waitUntil { saves, _ in saves.count == 2 }
+    await rig.queue.clear()
+    await rig.coordinator.handle(.sent(saved: [sending], failedSaves: [], deleted: [], failedDeletes: []))
+
+    await rig.queue.waitUntil { saves, _ in saves.contains(id) }
+    await rig.coordinator.stop()
+  }
+
   @Test func recordProviderBuildsFromCurrentRowAndReturnsNilForDeletedOnes() async throws {
     let card = try await store.createCard(in: nil, body: "now")
     let record = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
