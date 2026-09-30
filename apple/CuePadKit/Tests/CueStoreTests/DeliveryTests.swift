@@ -78,8 +78,6 @@ import Testing
   func onlyRequestsAddressedToThisHostAreExecuted() async throws {
     let handler = Handler()
     let executor = executor(handler, host: "mac-a")
-    let unaddressed = try await store.requestDelivery("from an old version", to: pi, on: "placeholder")
-    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET hostID = NULL")  // 没有指定机器的记录（旧版本写的）：谁也不领
     let other = try await store.requestDelivery("for b", to: pi, on: "mac-b")
     let mine = try await store.requestDelivery("for a", to: pi, on: "mac-a")
     try await executor.start()
@@ -88,7 +86,6 @@ import Testing
 
     #expect(await handler.seen.map(\.id) == [mine.id])
     #expect(try await request(other.id)?.status == .pending)
-    #expect(try await request(unaddressed.id)?.status == .pending)
     await executor.stop()
   }
 

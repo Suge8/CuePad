@@ -155,4 +155,22 @@ import Testing
     #expect(try await store.card(card.id) == nil)
     #expect(try await rig.reconcileDelta().saves.isEmpty)
   }
+
+  // MARK: 损坏的记录
+
+  @Test func deliveryRequestWithoutAHostIsReportedAsACorruptRecordAndNotApplied() async throws {
+    let fields: [String: SQLValue] = [
+      "content": .text("x"), "targetKind": .text("piSession"), "targetName": .text("n"), "targetRef": .null,
+      "hostID": .null, "mode": .text("send"), "cardID": .null, "taskID": .null, "status": .text("pending"),
+      "resultDetail": .null, "handledBy": .null, "createdAt": .int(1_000), "completedAt": .null, "modifiedAt": .int(1_000),
+    ]
+    let broken = remoteRecord(.deliveryRequests, fields)
+
+    await rig.coordinator.handle(.fetched(modifications: [broken], deletions: []))
+
+    #expect(try await store.deliveryRequests().isEmpty)
+    #expect(try RawDB(rig.fixture.url).count("syncRecords") == 0)
+    let issues = await rig.coordinator.issues
+    #expect(issues.contains { $0.recordName == broken.recordID.recordName })
+  }
 }
