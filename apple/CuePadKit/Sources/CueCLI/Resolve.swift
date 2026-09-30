@@ -89,7 +89,7 @@ extension Call {
     if let ref { return .project(try await project(ref)) }
     if args.has(nullFlag) { return .inbox }
     if args.has("all-projects") || !implicit { return .any }
-    return try await store.project(containing: directory).map(Scope.project) ?? .any
+    return try await store.project(containing: URL(filePath: directory)).map(Scope.project) ?? .any
   }
 
   /// 正文：`--body` 优先，否则 stdin。stdin 为空视为误操作（没接管道的 agent 会得到空串）。
