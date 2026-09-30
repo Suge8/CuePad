@@ -212,9 +212,9 @@ private struct FilterBar: View {
                 Divider()
                 Button("从未发送") { query.sent = .never }
                 Divider()
-                Button("Pi 会话") { query.sent = .sent(kind: .piSession) }
-                Button("应用") { query.sent = .sent(kind: .app) }
-                Button("剪贴板") { query.sent = .sent(kind: .clipboard) }
+                Button("Pi 会话") { query.sent = .sent(kind: .known(.piSession)) }
+                Button("应用") { query.sent = .sent(kind: .known(.app)) }
+                Button("剪贴板") { query.sent = .sent(kind: .known(.clipboard)) }
                 if !targets.isEmpty {
                     Divider()
                     ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
@@ -242,10 +242,10 @@ private struct FilterBar: View {
         switch query.sent {
         case .any: "任意"
         case .never: "从未发送"
-        case .sent(let kind, .some(let name)): kind == .piSession ? "Pi · \(name)" : name
-        case .sent(.piSession, nil): "Pi 会话"
-        case .sent(.app, nil): "应用"
-        case .sent(.clipboard, nil): "剪贴板"
+        case .sent(let kind, .some(let name)): kind == .known(.piSession) ? "Pi · \(name)" : name
+        case .sent(.known(.piSession), nil): "Pi 会话"
+        case .sent(.known(.app), nil): "应用"
+        case .sent(.known(.clipboard), nil): "剪贴板"
         case .sent(.unknown(let raw), nil): raw
         case .sent(nil, nil): "发送过"
         }

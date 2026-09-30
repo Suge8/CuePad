@@ -22,9 +22,9 @@ nonisolated struct ActivityData: Sendable {
     static func read(from store: isolated CueStore) throws -> ActivityData {
         let states = try store.piSessionStates()
         return ActivityData(
-            waiting: states.filter { $0.state == .waitingForUser },
+            waiting: states.filter { $0.state == .known(.waitingForUser) },
             running: states.filter(\.state.isWorking),
-            idle: states.filter { $0.state != .waitingForUser && !$0.state.isWorking },
+            idle: states.filter { $0.state != .known(.waitingForUser) && !$0.state.isWorking },
             deliveries: try store.deliveryRequests(),
             sends: Array(try store.sendRecords().prefix(sendLimit)),
             projects: Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) }))
@@ -215,7 +215,7 @@ private struct SessionRow: View {
                     Text(session.state.label).font(.subheadline.weight(.medium)).foregroundStyle(session.state.tint)
                     if let detail = session.detail, !detail.isEmpty {
                         Text(detail)
-                            .font(session.state == .tool ? .footnote.monospaced() : .footnote)
+                            .font(session.state == .known(.tool) ? .footnote.monospaced() : .footnote)
                             .foregroundStyle(palette.ink2).lineLimit(3)
                     }
                 }
@@ -248,7 +248,7 @@ private struct DeliveryRow: View {
             }
             Text("\(DateLabel.short(request.createdAt)) → \(request.target.name) · \(request.mode.label)")
                 .font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
-            if request.status == .failed {
+            if request.status == .known(.failed) {
                 if let reason = request.resultDetail { Text(reason).font(.footnote).foregroundStyle(.red) }
                 HStack(spacing: 10) {
                     if live != nil {
@@ -281,16 +281,16 @@ private struct DeliveryRow: View {
 }
 
 struct DeliveryStatusLabel: View {
-    let status: DeliveryStatus
+    let status: Open<DeliveryStatus>
 
     var body: some View {
         Group {
             switch status {
-            case .pending: Label("等 Mac 接手", systemImage: "clock").foregroundStyle(.secondary)
-            case .executing:
+            case .known(.pending): Label("等 Mac 接手", systemImage: "clock").foregroundStyle(.secondary)
+            case .known(.executing):
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("正在发送") }.foregroundStyle(.secondary)
-            case .succeeded: Label("已送达", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-            case .failed: Label("失败", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+            case .known(.succeeded): Label("已送达", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            case .known(.failed): Label("失败", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
             case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(.secondary)
             }
         }
@@ -350,9 +350,12 @@ nonisolated extension SendTargetKind {
         case .piSession: "Pi"
         case .app: "应用"
         case .clipboard: "剪贴板"
-        case .unknown: "其他"
         }
     }
+}
+
+nonisolated extension Open<SendTargetKind> {
+    var label: String { known?.label ?? "其他" }
 }
 
 nonisolated extension String {

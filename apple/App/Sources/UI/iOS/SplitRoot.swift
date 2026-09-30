@@ -80,7 +80,7 @@ private struct PanelButtons: View {
         }
         .accessibilityValue((waiting ?? 0) > 0 ? "\(waiting ?? 0) 个会话等你确认" : "")
         .observing(services.store, [.piSessionStates], into: $waiting) {
-            try $0.piSessionStates().filter { $0.state == .waitingForUser }.count
+            try $0.piSessionStates().filter { $0.state == .known(.waitingForUser) }.count
         }
     }
 }
@@ -115,7 +115,7 @@ private struct SidePanel: View {
 nonisolated private struct SidebarData: Sendable {
     var projects: [Project]
     var counts: [UUID?: Int]
-    var pi: [UUID: PiWorkState]
+    var pi: [UUID: Open<PiWorkState>]
     var waiting: Int
 }
 
@@ -162,7 +162,7 @@ private struct SplitSidebar: View {
                 projects: SidebarOrder.projects(try store.projects(), summaries: summaries),
                 counts: Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) }),
                 pi: PiSessionState.byProject(states),
-                waiting: states.filter { $0.state == .waitingForUser }.count)
+                waiting: states.filter { $0.state == .known(.waitingForUser) }.count)
         }
     }
 

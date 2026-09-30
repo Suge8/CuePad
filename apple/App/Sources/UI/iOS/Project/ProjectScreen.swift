@@ -205,7 +205,7 @@ private struct FocusCard: View {
                             Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
                             Text(session.summary).font(.subheadline).foregroundStyle(session.state.tint).lineLimit(1)
                             Spacer(minLength: 4)
-                            if session.state.isWorking || session.state == .waitingForUser {
+                            if session.state.isWorking || session.state == .known(.waitingForUser) {
                                 Text(session.stateSince, style: .timer).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
                             }
                         }

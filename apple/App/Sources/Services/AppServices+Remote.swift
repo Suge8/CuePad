@@ -56,21 +56,21 @@ extension AppServices {
     private func destination(for request: DeliveryRequest) throws -> Destination {
         let target = request.target
         switch target.kind {
-        case .piSession:
+        case .known(.piSession):
             guard let ref = target.ref, let id = channels.piSessionID(forSession: ref) else {
                 throw RemoteDeliveryError.sessionEnded(target.name)
             }
             switch request.mode {
-            case .paste: return .piInput(id)
-            case .steer: return .pi(id, whenBusy: .steer)
-            case .followUp: return .pi(id, whenBusy: .followUp)
-            case .send: return .pi(id, whenBusy: nil)
+            case .known(.paste): return .piInput(id)
+            case .known(.steer): return .pi(id, whenBusy: .steer)
+            case .known(.followUp): return .pi(id, whenBusy: .followUp)
+            case .known(.send): return .pi(id, whenBusy: nil)
             case .unknown(let raw): throw RemoteDeliveryError.unsupportedTarget(raw) // 执行器已先按失败写回，走不到这里
             }
-        case .app:
+        case .known(.app):
             guard let bundleID = target.ref else { throw RemoteDeliveryError.unsupportedTarget(target.name) }
             return .app(.bundleID(bundleID), submit: settings.autoSubmit)
-        case .clipboard:
+        case .known(.clipboard):
             return .clipboard
         case .unknown:
             throw RemoteDeliveryError.unsupportedTarget(target.name)

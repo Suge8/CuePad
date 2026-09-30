@@ -34,7 +34,7 @@ struct SendTests {
 
         #expect(channels.calls == [.copy(Payload([.text("before\n"), .image(png), .text("\nafter")]))])
         let record = try #require(try await services.store.sendRecords().first)
-        #expect(record.targetKind == .clipboard)
+        #expect(record.targetKind == .known(.clipboard))
         #expect(record.content == body)
     }
 
@@ -48,7 +48,7 @@ struct SendTests {
             .send(PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)]), "s1.100")
         ])
         let record = try #require(try await services.store.sendRecords().first)
-        #expect(record.targetKind == .piSession)
+        #expect(record.targetKind == .known(.piSession))
         #expect(record.targetName == "work")
         #expect(record.targetRef == "sess-1")
     }
@@ -97,7 +97,7 @@ struct SendTests {
         ])
         #expect(rig.window.events == ["hide"])
         let record = try #require(try await services.store.sendRecords().first)
-        #expect(record.targetKind == .app)
+        #expect(record.targetKind == .known(.app))
         #expect(record.targetName == "Editor")
         #expect(record.targetRef == "com.example.editor")
     }

@@ -57,7 +57,7 @@ struct MacSyncTests {
         try await services.consumePiChanges(changes([.appeared(session("s1", state: agent))]))
 
         let stored = try #require(try await services.store.piSessionStates().first)
-        #expect(stored.state == work)
+        #expect(stored.state == .known(work))
         #expect(stored.detail == detail)
         #expect(stored.sessionID == "s1")
         #expect(stored.hostID == Rig.hostID)
@@ -93,7 +93,7 @@ struct MacSyncTests {
         let watchdog = Task { try await Task.sleep(for: .seconds(10)); throw CancellationError() }
         defer { watchdog.cancel() }
         for try await request in services.store.observe([.deliveryRequests], { try $0.deliveryRequest(id) }) {
-            if let request, request.status == .succeeded || request.status == .failed { return request }
+            if let request, request.status == .known(.succeeded) || request.status == .known(.failed) { return request }
         }
         throw CancellationError()
     }
@@ -108,7 +108,7 @@ struct MacSyncTests {
             "做这件事", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: Rig.hostID, mode: .steer)
         let done = try await awaitFinished(request.id)
 
-        #expect(done.status == .succeeded)
+        #expect(done.status == .known(.succeeded))
         #expect(rig.channels.calls == [.send(PiMessage(text: "做这件事", whenBusy: .steer), "sess-1.100")])
         #expect(done.handledBy == Rig.hostID)
     }
@@ -134,7 +134,7 @@ struct MacSyncTests {
             "hi", to: SendTarget(kind: .piSession, name: "gone", ref: "sess-gone"), on: Rig.hostID)
         let done = try await awaitFinished(request.id)
 
-        #expect(done.status == .failed)
+        #expect(done.status == .known(.failed))
         #expect(done.resultDetail?.contains("会话") == true)
         #expect(rig.channels.calls.isEmpty)
     }
@@ -149,7 +149,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(rig.channels.calls.contains(.dispatch(Payload(text: "hi"), .bundleID("com.mitchellh.ghostty"), submit: false)))
-        #expect(done.status == .failed)
+        #expect(done.status == .known(.failed))
         #expect(done.resultDetail?.contains("辅助功能") == true)
     }
 

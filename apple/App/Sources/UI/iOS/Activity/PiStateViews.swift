@@ -12,7 +12,6 @@ nonisolated extension PiWorkState {
         case .waitingForUser: "等你确认"
         case .settled: "空闲"
         case .error: "出错"
-        case .unknown: "未知状态"
         }
     }
 
@@ -23,7 +22,7 @@ nonisolated extension PiWorkState {
         case .tool: .blue
         case .waitingForUser: .orange
         case .error: .red
-        case .settled, .unknown: .gray
+        case .settled: .gray
         }
     }
 
@@ -33,9 +32,16 @@ nonisolated extension PiWorkState {
         case .waitingForUser: 4
         case .error: 3
         case .thinking, .outputting, .tool: 2
-        case .settled, .unknown: 1
+        case .settled: 1
         }
     }
+}
+
+/// 其他版本写入的、本版本不认识的状态：灰色、最低优先。
+nonisolated extension Open<PiWorkState> {
+    var label: String { known?.label ?? "未知状态" }
+    var tint: Color { known?.tint ?? .gray }
+    var urgency: Int { known?.urgency ?? 1 }
 }
 
 nonisolated extension PiSessionState {
@@ -45,8 +51,8 @@ nonisolated extension PiSessionState {
     }
 
     /// 每个项目最需要注意的会话状态（书架与侧栏的状态点）。
-    static func byProject(_ sessions: [PiSessionState]) -> [UUID: PiWorkState] {
-        var result: [UUID: PiWorkState] = [:]
+    static func byProject(_ sessions: [PiSessionState]) -> [UUID: Open<PiWorkState>] {
+        var result: [UUID: Open<PiWorkState>] = [:]
         for session in sessions {
             guard let project = session.projectID else { continue }
             if (result[project]?.urgency ?? 0) < session.state.urgency { result[project] = session.state }
@@ -57,7 +63,7 @@ nonisolated extension PiSessionState {
 
 /// 状态点：干活时轻微呼吸（减弱动态效果时静止），状态靠颜色与旁边的文字表达。
 struct PiDot: View {
-    let state: PiWorkState
+    let state: Open<PiWorkState>
     var size: CGFloat = 8
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var breathing = false

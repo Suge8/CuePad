@@ -88,6 +88,6 @@ extension Command {
     guard let kind = kinds[parts[0].lowercased()] else {
       throw CLIError.usage("--to 的目标种类是 pi / app / clipboard，收到「\(target)」")
     }
-    return .sent(kind: kind, name: parts.count > 1 ? parts[1] : nil)
+    return .sent(kind: .known(kind), name: parts.count > 1 ? parts[1] : nil)
   }
 }

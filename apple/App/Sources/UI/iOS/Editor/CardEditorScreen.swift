@@ -79,7 +79,7 @@ struct CardEditorScreen: View {
                 IOSEditorHost(
                     initialText: initialText,
                     theme: .paper(palette, horizontalInset: inset),
-                    numbering: CueNumbering(rawValue: data.card.numbering.rawValue) ?? .none,
+                    numbering: data.card.numbering.known ?? .none,
                     handle: handle,
                     onChange: { next in
                         liveText = next
@@ -192,12 +192,12 @@ private struct NumberingPicker: View {
     let card: Card
     @Environment(Workspace.self) private var workspace
 
-    private static let options: [(Numbering, String)] = [(.none, "不编号"), (.decimal, "1 2 3"), (.alpha, "A B C"), (.cjk, "一 二 三")]
+    private static let options: [(CueNumbering, String)] = [(.none, "不编号"), (.decimal, "1 2 3"), (.alpha, "A B C"), (.cjk, "一 二 三")]
 
     var body: some View {
-        Picker(selection: Binding(get: { card.numbering }, set: { value in
+        Picker(selection: Binding(get: { card.numbering.known ?? .none }, set: { value in
             let id = card.id
-            workspace.perform { try await $0.updateCard(id) { $0.numbering = value } }
+            workspace.perform { try await $0.updateCard(id) { $0.numbering = .known(value) } }
         })) {
             ForEach(Self.options, id: \.0) { Text($0.1).tag($0.0) }
         } label: {

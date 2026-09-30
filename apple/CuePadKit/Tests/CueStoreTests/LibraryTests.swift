@@ -138,12 +138,12 @@ import Testing
   @Test func cardFieldsRoundTrip() async throws {
     let card = try await store.createCard(in: nil, body: "hi {{name}}")
     try await store.updateCard(card.id) {
-      $0.numbering = .cjk
+      $0.numbering = .known(.cjk)
       $0.isPinned = true
       $0.variableValues = ["name": "Pi"]
     }
     let row = try await store.card(card.id)
-    #expect(row?.numbering == .cjk)
+    #expect(row?.numbering == .known(.cjk))
     #expect(row?.variableValues == ["name": "Pi"])
     #expect(row?.isPinned == true)
   }

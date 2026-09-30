@@ -12,8 +12,8 @@ extension CueStore {
     return try write {
       let now = Date.stamp
       let request = DeliveryRequest(
-        id: UUID(), content: content, target: target, hostID: host, mode: mode, cardID: card, taskID: task,
-        status: .pending, resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now)
+        id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card, taskID: task,
+        status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now)
       try insert(request)
       return request
     }

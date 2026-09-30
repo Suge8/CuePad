@@ -60,7 +60,7 @@ struct SearchScreen: View {
             let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
             return SearchData(
                 cards: found.cards, total: found.totalCards, projects: try store.projects(),
-                targets: try store.sendTargets().filter { $0.kind == .clipboard })
+                targets: try store.sendTargets().filter { $0.kind == .known(.clipboard) })
         }
     }
 
@@ -157,7 +157,7 @@ private struct FilterChips: View {
         case .any: "任意"
         case .never: "从未发送"
         case .sent(_, .some(let name)): name
-        case .sent(.clipboard, nil): "剪贴板"
+        case .sent(.known(.clipboard), nil): "剪贴板"
         case .sent: "发送过"
         }
     }

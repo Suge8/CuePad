@@ -14,8 +14,8 @@ extension CueStore {
       let now = Date.stamp
       let id = DeterministicID.uuid("pi-session/\(sessionID)")
       let record = PiSessionState(
-        id: id, sessionID: sessionID, hostID: hostID, title: title, projectID: projectID, state: state, detail: detail,
-        notify: notify, stateSince: stateSince, createdAt: now, modifiedAt: now)
+        id: id, sessionID: sessionID, hostID: hostID, title: title, projectID: projectID, state: .known(state), detail: detail,
+        notify: notify.map(Open.known), stateSince: stateSince, createdAt: now, modifiedAt: now)
       let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
         .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")

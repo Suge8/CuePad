@@ -119,7 +119,7 @@ extension CueStore {
       } ?? nil
       let now = Date.stamp
       let card = Card(
-        id: UUID(), projectID: project, body: body, numbering: .none, isPinned: false,
+        id: UUID(), projectID: project, body: body, numbering: .known(.none), isPinned: false,
         variableValues: [:], conflictOf: nil, sortKey: SortKey.before(first), deletedAt: nil, createdAt: now,
         modifiedAt: now)
       try insert(card)

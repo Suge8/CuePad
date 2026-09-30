@@ -24,11 +24,11 @@ import Testing
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.piSessionStates().first)
-    #expect(seen.sessionID == "s1" && seen.state == .waitingForUser && seen.detail == "确认写入？" && seen.title == "fix bug")
+    #expect(seen.sessionID == "s1" && seen.state == .known(.waitingForUser) && seen.detail == "确认写入？" && seen.title == "fix bug")
 
     try await recorder.update(sessionID: "s1", state: .settled)
     try await cloud.exchange()
-    #expect(try await phone.store.piSessionStates().first?.state == .settled)
+    #expect(try await phone.store.piSessionStates().first?.state == .known(.settled))
 
     try await recorder.end(sessionID: "s1")
     try await cloud.exchange()
@@ -42,9 +42,9 @@ import Testing
     let request = try await phone.store.requestDelivery("run this", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"), on: "mac")
 
     try await cloud.exchange()  // 手机 → Mac
-    _ = try await eventually(mac.store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .succeeded }
+    _ = try await eventually(mac.store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .known(.succeeded) }
     try await cloud.exchange()  // Mac → 手机：结果回来
-    #expect(try await phone.store.deliveryRequest(request.id)?.status == .succeeded)
+    #expect(try await phone.store.deliveryRequest(request.id)?.status == .known(.succeeded))
 
     await clock.waitForSleeper()
     clock.advance(.seconds(61))

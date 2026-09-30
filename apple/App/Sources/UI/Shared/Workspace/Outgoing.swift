@@ -12,9 +12,8 @@ nonisolated enum Outgoing {
         text(body: card.body, values: card.variableValues, numbering: card.numbering)
     }
 
-    static func text(body: String, values: [String: String], numbering: Numbering) -> String {
-        CueSegments.format(
-            CueVariables.fill(body, values: values), numbering: CueNumbering(rawValue: numbering.rawValue) ?? .none)
+    static func text(body: String, values: [String: String], numbering: Open<CueNumbering>) -> String {
+        CueSegments.format(CueVariables.fill(body, values: values), numbering: numbering.known ?? .none)
     }
 }
 

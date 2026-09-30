@@ -89,7 +89,7 @@ struct CardEditorPage: View {
         EditorHost(
             initialText: text,
             theme: .paper(palette),
-            numbering: CueNumbering(rawValue: data.card.numbering.rawValue) ?? .none,
+            numbering: data.card.numbering.known ?? .none,
             handle: handle,
             onChange: { next in
                 liveText = next
@@ -168,7 +168,7 @@ private struct NumberingMenu: View {
     let card: Card
     @Environment(Workspace.self) private var workspace
 
-    private static let options: [(Numbering, String)] = [(.none, "不编号"), (.decimal, "1 2 3"), (.alpha, "A B C"), (.cjk, "一 二 三")]
+    private static let options: [(CueNumbering, String)] = [(.none, "不编号"), (.decimal, "1 2 3"), (.alpha, "A B C"), (.cjk, "一 二 三")]
 
     var body: some View {
         Menu {
@@ -177,18 +177,18 @@ private struct NumberingMenu: View {
             }
             .pickerStyle(.inline)
         } label: {
-            Image(systemName: card.numbering == .none ? "list.bullet" : "list.number")
+            Image(systemName: card.numbering == .known(.none) ? "list.bullet" : "list.number")
         }
         .menuStyle(.button).menuIndicator(.hidden).fixedSize()
         .help("分块编号：复制与发送时每块前加编号标题")
         .accessibilityLabel("分块编号")
-        .accessibilityValue(Self.options.first { $0.0 == card.numbering }?.1 ?? "")
+        .accessibilityValue(Self.options.first { $0.0 == card.numbering.known }?.1 ?? "")
     }
 
-    private var binding: Binding<Numbering> {
-        Binding(get: { card.numbering }, set: { value in
+    private var binding: Binding<CueNumbering> {
+        Binding(get: { card.numbering.known ?? .none }, set: { value in
             let id = card.id
-            workspace.perform { try await $0.updateCard(id) { $0.numbering = value } }
+            workspace.perform { try await $0.updateCard(id) { $0.numbering = .known(value) } }
         })
     }
 }

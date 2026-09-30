@@ -14,7 +14,7 @@ import Testing
     let project = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: project.id, body: "hello ![](cuepad://img/\(hash))")
     try await store.updateCard(card.id) {
-      $0.numbering = .cjk
+      $0.numbering = .known(.cjk)
       $0.isPinned = true
       $0.variableValues = ["k": "v"]
     }

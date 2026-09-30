@@ -142,7 +142,7 @@ private struct TabsRoot: View {
         .modifier(CaptureAccessoryPlacement(shown: !navigation.isEditingCard))
         .sensoryFeedback(.selection, trigger: navigation.tab)
         .observing(services.store, [.tasks, .piSessionStates], into: $badges) { store in
-            Badges(tasks: try store.tasks().count, waiting: try store.piSessionStates().filter { $0.state == .waitingForUser }.count)
+            Badges(tasks: try store.tasks().count, waiting: try store.piSessionStates().filter { $0.state == .known(.waitingForUser) }.count)
         }
     }
 

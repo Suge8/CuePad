@@ -1,53 +1,9 @@
+import CueText
 import Foundation
 
-/// 分块编号方式。其他版本可能写入本版本不认识的值：保留为 `.unknown`（原样写回），不当成已知值。
-public enum Numbering: Hashable, Sendable, RawRepresentable {
-  case none, decimal, alpha, cjk
-  case unknown(String)
-
-  public init(rawValue: String) {
-    switch rawValue {
-    case "none": self = .none
-    case "decimal": self = .decimal
-    case "alpha": self = .alpha
-    case "cjk": self = .cjk
-    default: self = .unknown(rawValue)
-    }
-  }
-
-  public var rawValue: String {
-    switch self {
-    case .none: "none"
-    case .decimal: "decimal"
-    case .alpha: "alpha"
-    case .cjk: "cjk"
-    case .unknown(let raw): raw
-    }
-  }
-}
-
-/// 发送目标种类。其他版本可能写入本版本不认识的值：保留为 `.unknown`（原样写回），不当成已知值。
-public enum SendTargetKind: Hashable, Sendable, RawRepresentable {
+/// 发送目标种类。
+public enum SendTargetKind: String, Sendable, CaseIterable {
   case piSession, app, clipboard
-  case unknown(String)
-
-  public init(rawValue: String) {
-    switch rawValue {
-    case "piSession": self = .piSession
-    case "app": self = .app
-    case "clipboard": self = .clipboard
-    default: self = .unknown(rawValue)
-    }
-  }
-
-  public var rawValue: String {
-    switch self {
-    case .piSession: "piSession"
-    case .app: "app"
-    case .clipboard: "clipboard"
-    case .unknown(let raw): raw
-    }
-  }
 }
 
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
@@ -106,7 +62,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var projectID: UUID?
   /// 纯字符串正文：分块为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
-  public var numbering: Numbering
+  public var numbering: Open<CueNumbering>
   public var isPinned: Bool
   public var variableValues: [String: String]
   /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
@@ -135,7 +91,7 @@ public struct SendRecord: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// 发送时的内容快照；卡片之后改动或删除都不影响。
   public var content: String
-  public var targetKind: SendTargetKind
+  public var targetKind: Open<SendTargetKind>
   public var targetName: String
   /// Pi 会话 id 或应用 bundle id。
   public var targetRef: String?
@@ -173,14 +129,18 @@ public struct PiSession: Identifiable, Equatable, Sendable {
 }
 
 public struct SendTarget: Equatable, Sendable {
-  public var kind: SendTargetKind
+  public var kind: Open<SendTargetKind>
   public var name: String
   public var ref: String?
 
-  public init(kind: SendTargetKind, name: String, ref: String? = nil) {
+  public init(kind: Open<SendTargetKind>, name: String, ref: String? = nil) {
     self.kind = kind
     self.name = name
     self.ref = ref
+  }
+
+  public init(kind: SendTargetKind, name: String, ref: String? = nil) {
+    self.init(kind: .known(kind), name: name, ref: ref)
   }
 }
 
@@ -225,7 +185,7 @@ public enum SendCondition: Equatable, Sendable {
   /// 从未发送过（没有任何关联该卡的发送记录）。
   case never
   /// 至少发送过一次；可限目标种类与名称（名称精确匹配），都省略表示发到哪里都行。
-  case sent(kind: SendTargetKind? = nil, name: String? = nil)
+  case sent(kind: Open<SendTargetKind>? = nil, name: String? = nil)
 }
 
 /// 一张卡最近一次发送：何时、发给谁。
@@ -298,7 +258,7 @@ extension Card: Record {
   init(row: Row) {
     self.init(
       id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2),
-      numbering: Numbering(rawValue: row.text(3)), isPinned: row.bool(4),
+      numbering: Open(rawValue: row.text(3)), isPinned: row.bool(4),
       variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(5).utf8))) ?? [:],
       conflictOf: row.uuidOrNil(10), sortKey: row.text(6), deletedAt: row.dateOrNil(7), createdAt: row.date(8), modifiedAt: row.date(9))
   }
@@ -323,7 +283,7 @@ extension SendRecord: Record {
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
-      targetKind: SendTargetKind(rawValue: row.text(2)), targetName: row.text(3),
+      targetKind: Open(rawValue: row.text(2)), targetName: row.text(3),
       targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5), taskID: row.uuidOrNil(6),
       sentAt: row.date(7), modifiedAt: row.date(8))
   }
