@@ -60,7 +60,7 @@ extension CueStore {
         let latest = cards.sorted { $0.modifiedAt > $1.modifiedAt }.prefix(Self.inboxCardLimit)
         return InboxSnapshot(
             cards: latest.map {
-                InboxSnapshot.Card(id: $0.id, title: CueSegments.contentLines($0.body).first ?? "", modifiedAt: $0.modifiedAt)
+                InboxSnapshot.Card(id: $0.id, title: CueSummary($0.body).title, modifiedAt: $0.modifiedAt)
             },
             total: cards.count)
     }

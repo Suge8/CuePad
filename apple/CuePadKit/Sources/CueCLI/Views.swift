@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import Foundation
 
 typealias JSONObject = [String: any Sendable]
@@ -26,12 +27,11 @@ private func minutes(_ date: Date) -> String {
       timeZone: .current, calendar: .current))
 }
 
-/// 正文第一个非空行，过长截断。
-private func preview(_ body: String) -> String {
-  let first = body.split(whereSeparator: \.isNewline).lazy
-    .map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
-  guard let first else { return "（空）" }
-  return first.count > 60 ? first.prefix(60) + "…" : first
+/// 卡片标题（`CueSummary`），过长截断。
+private func title(_ body: String) -> String {
+  let title = CueSummary(body).title
+  guard !title.isEmpty else { return "（空）" }
+  return title.count > 60 ? title.prefix(60) + "…" : title
 }
 
 struct ProjectView {
@@ -66,7 +66,7 @@ struct CardView {
   }
 
   var line: String {
-    "\(short(card.id))  \(project ?? "未归档")  \(card.isPinned ? "★ " : "")\(preview(card.body))"
+    "\(short(card.id))  \(project ?? "未归档")  \(card.isPinned ? "★ " : "")\(title(card.body))"
   }
 
   /// `card show` 的文本：元信息，空行，正文原样。
