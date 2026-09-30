@@ -6,11 +6,9 @@ import Testing
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  @Test func findsProjectsCardsAndCardsByTagIncludingShortCJKTerms() async throws {
+  @Test func findsProjectsAndCardsIncludingShortCJKTerms() async throws {
     let flow = try await store.createProject(name: "Flow 启动", color: "#111")
     let card = try await store.createCard(in: flow.id, body: "优化 flow 启动速度")
-    let tagged = try await store.createCard(in: nil, body: "无关正文")
-    _ = try await store.addTag("重构", to: tagged.id)
 
     let byName = try await store.search("flow")
     #expect(byName.projects.map(\.id) == [flow.id])
@@ -18,9 +16,6 @@ import Testing
 
     let cjk = try await store.search("优化")  // 两个字，短于三字符索引
     #expect(cjk.cards.map(\.id) == [card.id])
-
-    let byTag = try await store.search("重构")
-    #expect(byTag.cards.map(\.id) == [tagged.id])
 
     _ = try await store.createCard(in: nil, body: "1000 items")
     let percent = try await store.createCard(in: nil, body: "达成 100% 完成")
@@ -65,15 +60,12 @@ import Testing
     #expect(try await store.search("alp et").cards.map(\.id) == [both.id])  // 每个词是子串
   }
 
-  @Test func cardsMatchOnBodyAndTagsOnlyNeverOnProjectName() async throws {
+  @Test func cardsMatchOnBodyOnlyNeverOnProjectName() async throws {
     let project = try await store.createProject(name: "Flow", color: "#111")
     let inBody = try await store.createCard(in: nil, body: "优化 启动速度")
-    let tagged = try await store.createCard(in: nil, body: "alpha")
-    try await store.addTag("重构", to: tagged.id)
     let inProject = try await store.createCard(in: project.id, body: "启动速度")
 
     #expect(try await store.search("优化 速度").cards.map(\.id) == [inBody.id])  // 两字词
-    #expect(try await store.search("alpha 重构").cards.map(\.id) == [tagged.id])  // 正文 + 标签
 
     // 项目名不参与卡片命中，无论几个词；缩小到某个项目用项目筛选。
     #expect(try await store.search("flow").cards.isEmpty)

@@ -3,12 +3,12 @@ import Foundation
 /// 表分两类。
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、tags、cardTags、tasks、sendRecords、attachments、piSessionStates、deliveryRequests。约束：
+/// projects、cards、tasks、sendRecords、attachments、piSessionStates、deliveryRequests。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
 /// - 没有 FOREIGN KEY、UNIQUE：CKSyncEngine 乱序送达记录，引用可能先于目标到达，
-///   引用完整性由写入逻辑维护（同一事务内清理），同名标签、同哈希附件的并发重复可容忍；
+///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
 /// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
@@ -32,19 +32,6 @@ enum Schema {
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
-
-    CREATE TABLE tags (
-      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, color TEXT,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
-    ) STRICT;
-    CREATE INDEX tags_name ON tags(name);
-
-    CREATE TABLE cardTags (
-      id TEXT PRIMARY KEY NOT NULL, cardID TEXT NOT NULL, tagID TEXT NOT NULL,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
-    ) STRICT;
-    CREATE INDEX cardTags_cardID ON cardTags(cardID);
-    CREATE INDEX cardTags_tagID ON cardTags(tagID);
 
     CREATE TABLE tasks (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, projectID TEXT, sortKey TEXT NOT NULL,
@@ -105,7 +92,6 @@ enum Schema {
     CREATE VIRTUAL TABLE searchIndex USING fts5(text, refID, kind UNINDEXED, tokenize = 'trigram');
     \(searchTriggers(table: "projects", column: "name", kind: "project"))
     \(searchTriggers(table: "cards", column: "body", kind: "card"))
-    \(searchTriggers(table: "tags", column: "name", kind: "tag"))
     """
 
   /// 触发器对本地写入与将来同步引擎的写入一视同仁，索引始终跟随数据。

@@ -87,7 +87,7 @@ xcrun cktool import-schema $C --validate --file apple/CloudKit/cuepad.ckdb
 xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端把字段按字母序排列并补系统字段，逐类型核对字段与权限
 ```
 
-开发环境的结构已导入并回读核对，生产环境已部署。生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构，所以映射再改时需重复"生成 → 导入开发环境 → 控制台部署"。
+开发环境的结构已导入并回读核对，生产环境已部署。生产环境里已部署的记录类型删不掉：已下线的 `tags`、`cardTags`、`probes` 仍留在服务端，生成的结构不再包含它们，客户端也不再读写。生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构，所以映射再改时需重复"生成 → 导入开发环境 → 控制台部署"。
 
 ## 平台
 

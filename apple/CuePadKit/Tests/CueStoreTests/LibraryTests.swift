@@ -133,7 +133,7 @@ import Testing
     #expect(try await store.trashedProjects().isEmpty)
   }
 
-  // MARK: 卡片、标签、附件
+  // MARK: 卡片、附件
 
   @Test func cardFieldsRoundTrip() async throws {
     let card = try await store.createCard(in: nil, body: "hi {{name}}")
@@ -146,27 +146,6 @@ import Testing
     #expect(row?.numbering == .cjk)
     #expect(row?.variableValues == ["name": "Pi"])
     #expect(try await store.favoriteCards().map(\.id) == [card.id])
-  }
-
-  @Test func tagsAreSharedByNameAndLinkedOncePerCard() async throws {
-    let one = try await store.createCard(in: nil, body: "1")
-    let two = try await store.createCard(in: nil, body: "2")
-    let first = try await store.addTag("idea", to: one.id)
-    _ = try await store.addTag("idea", to: one.id)
-    let second = try await store.addTag("idea", to: two.id)
-    #expect(first.id == second.id)
-    #expect(try RawDB(fixture.url).count("cardTags") == 2)
-
-    try await store.removeTag(first.id, from: one.id)
-    #expect(try await store.tags(of: one.id).isEmpty)
-    #expect(try await store.tags(of: two.id).map(\.name) == ["idea"])
-  }
-
-  @Test func purgingCardRemovesItsTagLinks() async throws {
-    let card = try await store.createCard(in: nil, body: "1")
-    try await store.addTag("idea", to: card.id)
-    try await store.purgeCard(card.id)
-    #expect(try RawDB(fixture.url).count("cardTags") == 0)
   }
 
   @Test func attachmentsDedupeByContentHash() async throws {

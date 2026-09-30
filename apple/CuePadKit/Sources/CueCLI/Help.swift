@@ -41,7 +41,7 @@ enum Help {
 /// 各命令 --help 里的输出说明：字段名的唯一定义处（测试比对它与实际 JSON 的键）。
 enum Schema {
   static let project = "Project {id, name, icon, color, pinned, goalCardId, directory, cardCount, createdAt, modifiedAt}"
-  static let card = "Card {id, projectId, project, body, tags, favorite, conflictOf, deletedAt, createdAt, modifiedAt}"
+  static let card = "Card {id, projectId, project, body, favorite, conflictOf, deletedAt, createdAt, modifiedAt}"
   static let task = "Task {id, content, projectId, project, done, completedAt, createdAt, modifiedAt}"
   static let search = "Search {total, projects, cards}"
   static let conflict = "Conflict {original, copy}"

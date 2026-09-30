@@ -56,12 +56,11 @@ struct ProjectView {
 struct CardView {
   let card: Card
   let project: String?
-  let tags: [String]
 
   var json: JSONObject {
     [
       "id": uuid(card.id), "projectId": uuid(card.projectID), "project": nullable(project), "body": card.body,
-      "tags": tags, "favorite": card.isFavorite, "conflictOf": uuid(card.conflictOf),
+      "favorite": card.isFavorite, "conflictOf": uuid(card.conflictOf),
       "deletedAt": iso(card.deletedAt), "createdAt": iso(card.createdAt), "modifiedAt": iso(card.modifiedAt),
     ]
   }
@@ -73,7 +72,6 @@ struct CardView {
   /// `card show` 的文本：元信息，空行，正文原样。
   var detail: String {
     var rows = ["id: \(card.id.uuidString.lowercased())", "项目: \(project ?? "未归档")"]
-    if !tags.isEmpty { rows.append("标签: \(tags.joined(separator: ", "))") }
     if card.isFavorite { rows.append("收藏: 是") }
     if let original = card.conflictOf { rows.append("冲突副本，原卡: \(original.uuidString.lowercased())") }
     if let deleted = card.deletedAt { rows.append("已删除: \(minutes(deleted))") }
@@ -109,12 +107,7 @@ extension Call {
 
   func cardViews(_ cards: [Card]) async throws -> [CardView] {
     let names = try await projectNames()
-    var views: [CardView] = []
-    for card in cards {
-      let tags = try await store.tags(of: card.id).map(\.name)
-      views.append(CardView(card: card, project: card.projectID.flatMap { names[$0] }, tags: tags))
-    }
-    return views
+    return cards.map { CardView(card: $0, project: $0.projectID.flatMap { names[$0] }) }
   }
 
   func taskViews(_ tasks: [CueTask]) async throws -> [TaskView] {

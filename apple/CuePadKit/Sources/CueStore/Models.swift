@@ -52,22 +52,20 @@ public enum SendTargetKind: Hashable, Sendable, RawRepresentable {
 
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Sendable, CaseIterable {
-  case projects, cards, tags, cardTags, tasks, sendRecords, attachments, piSessions, projectDirectories
+  case projects, cards, tasks, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, deliveryRequests
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
-    .projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests,
+    .projects, .cards, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests,
   ]
 
   package var columns: [String] {
     switch self {
     case .projects: Project.columns
     case .cards: Card.columns
-    case .tags: Tag.columns
-    case .cardTags: CardTag.columns
     case .tasks: CueTask.columns
     case .sendRecords: SendRecord.columns
     case .attachments: Attachment.columns
@@ -119,23 +117,6 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-}
-
-public struct Tag: Identifiable, Equatable, Sendable {
-  public let id: UUID
-  public var name: String
-  public var color: String?
-  public var createdAt: Date
-  public var modifiedAt: Date
-}
-
-/// 卡片与标签的关联；同步记录各有单值 id，所以关联也是独立记录。
-struct CardTag: Sendable {
-  let id: UUID
-  var cardID: UUID
-  var tagID: UUID
-  var createdAt: Date
-  var modifiedAt: Date
 }
 
 public struct CueTask: Identifiable, Equatable, Sendable {
@@ -206,7 +187,7 @@ public struct SendTarget: Equatable, Sendable {
 /// 卡片搜索条件。所有条件同时满足；筛选在分页之前生效。
 /// 没有关键词、没有任何筛选时列出该范围内的全部卡片（按最近修改）。
 public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
-  /// 按空白拆成多个词，每个词都要命中（子串，大小写不敏感）。卡片按正文与标签命中；项目名只用于单列的项目结果。
+  /// 按空白拆成多个词，每个词都要命中（子串，大小写不敏感）。卡片按正文命中；项目名只用于单列的项目结果。
   /// 空表示不按文字过滤。
   public var text: String
   /// 限定所属项目；nil 元素表示未归档；nil 表示不限；空集合无结果。
@@ -277,7 +258,6 @@ public struct ProjectSummary: Equatable, Sendable {
 public enum CueStoreError: Error, Equatable {
   case notFound
   case blankTaskContent
-  case blankTagName
   case notAnImage
   /// 目标卡必须是该项目里未删除的卡。
   case invalidGoal
@@ -321,24 +301,6 @@ extension Card: Record {
       numbering: Numbering(rawValue: row.text(3)), isFavorite: row.bool(4),
       variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(5).utf8))) ?? [:],
       conflictOf: row.uuidOrNil(10), sortKey: row.text(6), deletedAt: row.dateOrNil(7), createdAt: row.date(8), modifiedAt: row.date(9))
-  }
-}
-
-extension Tag: Record {
-  static let table = Table.tags
-  static let columns = ["id", "name", "color", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, name, color, createdAt, modifiedAt] }
-  init(row: Row) {
-    self.init(id: row.uuid(0), name: row.text(1), color: row.textOrNil(2), createdAt: row.date(3), modifiedAt: row.date(4))
-  }
-}
-
-extension CardTag: Record {
-  static let table = Table.cardTags
-  static let columns = ["id", "cardID", "tagID", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, cardID, tagID, createdAt, modifiedAt] }
-  init(row: Row) {
-    self.init(id: row.uuid(0), cardID: row.uuid(1), tagID: row.uuid(2), createdAt: row.date(3), modifiedAt: row.date(4))
   }
 }
 

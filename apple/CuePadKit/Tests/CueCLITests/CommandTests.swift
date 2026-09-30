@@ -46,12 +46,10 @@ import Testing
     let sb = try Sandbox()
     let alpha = try await sb.project("Alpha")
     let card = try await sb.store.createCard(in: alpha.id, body: "正文")
-    try await sb.store.addTag("t1", to: card.id)
 
     let shown = try await sb.object("card", "show", card.id.uuidString)
     #expect(shown.string("id") == card.id.uuidString.lowercased())
     #expect(shown.string("projectId") == alpha.id.uuidString.lowercased())
-    #expect(shown["tags"] as? [String] == ["t1"])
     #expect(shown["favorite"] as? Bool == false)
     #expect(shown["conflictOf"] is NSNull && shown["deletedAt"] is NSNull)
     #expect(shown.string("modifiedAt")?.hasSuffix("Z") == true)

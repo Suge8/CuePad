@@ -38,19 +38,16 @@ import Testing
   @Test func permanentDeletionEnqueuesDeletesWithoutATombstoneTable() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: project.id, body: "x")
-    let tag = try await store.addTag("idea", to: card.id)
     let send = try await store.recordSend("s", to: SendTarget(kind: .clipboard, name: "c"), card: card.id)
     try await rig.coordinator.reconcile()
     try await rig.simulatePush()
-    let linkID = try #require(try RawDB(rig.fixture.url).rows("SELECT id FROM cardTags").first?[0])
 
     try await Task.sleep(for: .milliseconds(3))
     try await store.purgeCard(card.id)
 
     let delta = try await rig.reconcileDelta()
-    #expect(delta.deletes == [rig.id(card.id), linkID])  // 卡片与标签关联；标签本身、项目仍在
+    #expect(delta.deletes == [rig.id(card.id)])  // 项目仍在
     #expect(delta.saves == [rig.id(send.id)])  // 发送记录的 cardID 被清空，是一次普通修改
-    _ = tag
     #expect(try RawDB(rig.fixture.url).rows("SELECT name FROM sqlite_master WHERE type='table' AND lower(name) LIKE '%tomb%'").isEmpty)
   }
 

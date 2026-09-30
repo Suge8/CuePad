@@ -18,7 +18,6 @@ import Testing
       $0.isFavorite = true
       $0.variableValues = ["k": "v"]
     }
-    try await store.addTag("idea", to: card.id)
     let task = try await store.createTask("t", in: project.id)
     try await store.recordSend("x", to: SendTarget(kind: .piSession, name: "n", ref: "r"), card: card.id, task: task.id)
     try await store.registerAttachment(hash: hash, byteCount: 3, format: "png")
@@ -53,7 +52,7 @@ import Testing
     #expect(record["sortKey"] as? String == card.sortKey)
     #expect(record["modifiedAt"] as? Int64 != nil && record.encryptedValues["modifiedAt"] == nil)
 
-    let names = ["projects": "name", "tasks": "content", "sendRecords": "content", "tags": "name"]
+    let names = ["projects": "name", "tasks": "content", "sendRecords": "content"]
     for key in try await store.pendingSync().saves {
       guard let field = names[key.table.rawValue] else { continue }
       let other = RecordMapper.record(from: try #require(try await store.syncRow(recordName: key.id)), zoneID: testZone)

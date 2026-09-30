@@ -3,21 +3,17 @@ import Foundation
 public struct ImportCounts: Equatable, Sendable {
   public var projects = 0
   public var cards = 0
-  public var tags = 0
-  public var cardTags = 0
   public var tasks = 0
 
-  public init(projects: Int = 0, cards: Int = 0, tags: Int = 0, cardTags: Int = 0, tasks: Int = 0) {
+  public init(projects: Int = 0, cards: Int = 0, tasks: Int = 0) {
     self.projects = projects
     self.cards = cards
-    self.tags = tags
-    self.cardTags = cardTags
     self.tasks = tasks
   }
 }
 
 public struct ImportReport: Equatable, Sendable {
-  /// 旧库里读到的行数（已删除标签除外）。
+  /// 旧库里读到的行数。
   public var found: ImportCounts
   /// 本次新写入的行数；已导入过的行不重复写、也不覆盖之后的修改。
   public var inserted: ImportCounts
@@ -28,7 +24,7 @@ public struct ImportReport: Equatable, Sendable {
 extension CueStore {
   /// 导入 Electron 版 SQLite 库。幂等：旧行 id 映射为确定的 UUID，已存在的行跳过。
   /// 只读取源库的副本（含 -wal），源文件从不被打开或修改。
-  /// 映射：整数 id → UUID；sort_order → 分数索引；置顶/收藏/编号/任务完成时间照搬；卡片标题并入正文首行；
+  /// 映射：整数 id → UUID；sort_order → 分数索引；置顶/收藏/编号/任务完成时间照搬；卡片标题并入正文首行；标签不导入（产品不做标签）；
   /// 单独删除的卡保留 deletedAt，随项目删除的卡由项目推导；旧库不存变量取值（原在 localStorage），不导入。
   public func importElectronLibrary(from source: URL) throws -> ImportReport {
     let library = try LegacyLibrary(copyingFrom: source)
@@ -40,8 +36,6 @@ extension CueStore {
 struct LegacyLibrary {
   var projects: [Project] = []
   var cards: [Card] = []
-  var tags: [Tag] = []
-  var cardTags: [CardTag] = []
   var tasks: [CueTask] = []
   var settings: [String: String] = [:]
 
@@ -83,21 +77,6 @@ struct LegacyLibrary {
         createdAt: row.createdAt, modifiedAt: row.updatedAt)
     }
 
-    tags = try legacy.query("SELECT * FROM tags WHERE deleted_at IS NULL ORDER BY id", [], LegacyRow.init).map { row in
-      Tag(
-        id: LegacyID.uuid("tag", row.id), name: row.name ?? "", color: row.color,
-        createdAt: row.createdAt, modifiedAt: row.updatedAt)
-    }
-    let liveTags = Set(tags.map(\.id))
-    cardTags = try legacy.query("SELECT * FROM card_tags ORDER BY card_id, tag_id", [], LegacyRow.init).compactMap { row in
-      let tagID = LegacyID.uuid("tag", row.tagID!)
-      guard liveTags.contains(tagID) else { return nil }
-      return CardTag(
-        id: LegacyID.uuid("cardTag", "\(row.cardID!)-\(row.tagID!)"),
-        cardID: LegacyID.uuid("card", row.cardID!), tagID: tagID,
-        createdAt: row.createdAt, modifiedAt: row.createdAt)
-    }
-
     let taskRows = try legacy.query("SELECT * FROM tasks ORDER BY sort_order, id", [], LegacyRow.init)
     tasks = zip(taskRows, SortKey.sequence(count: taskRows.count)).map { row, key in
       CueTask(
@@ -115,13 +94,10 @@ struct LegacyLibrary {
     var inserted = ImportCounts()
     for row in projects where try store.insert(row, ignoringExisting: true) { inserted.projects += 1 }
     for row in cards where try store.insert(row, ignoringExisting: true) { inserted.cards += 1 }
-    for row in tags where try store.insert(row, ignoringExisting: true) { inserted.tags += 1 }
-    for row in cardTags where try store.insert(row, ignoringExisting: true) { inserted.cardTags += 1 }
     for row in tasks where try store.insert(row, ignoringExisting: true) { inserted.tasks += 1 }
     return ImportReport(
       found: ImportCounts(
-        projects: projects.count, cards: cards.count, tags: tags.count, cardTags: cardTags.count,
-        tasks: tasks.count),
+        projects: projects.count, cards: cards.count, tasks: tasks.count),
       inserted: inserted, legacySettings: settings)
   }
 }
@@ -130,8 +106,6 @@ struct LegacyLibrary {
 private struct LegacyRow {
   let id: Int64
   let projectID: Int64?
-  let cardID: Int64?
-  let tagID: Int64?
   let name: String?
   let title: String?
   let body: String?
@@ -152,8 +126,6 @@ private struct LegacyRow {
     func date(_ name: String) -> Date? { int(name).map { Date(timeIntervalSince1970: Double($0) / 1000) } }
     id = int("id") ?? 0
     projectID = int("project_id")
-    cardID = int("card_id")
-    tagID = int("tag_id")
     name = text("name")
     title = text("title")
     body = text("body")

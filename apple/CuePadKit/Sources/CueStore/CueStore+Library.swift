@@ -204,7 +204,6 @@ extension CueStore {
     try clearGoal(where: condition, arguments)
     let bodies = try db.query("SELECT body FROM cards WHERE \(condition)", arguments) { $0.text(0) }
     let referenced = Set(bodies.flatMap { $0.matches(of: /cuepad:\/\/img\/([0-9a-f]{64})/).map { String($0.output.1) } })
-    try db.run("DELETE FROM cardTags WHERE cardID IN (\(ids))", arguments)
     try db.run("UPDATE sendRecords SET cardID = NULL, modifiedAt = ? WHERE cardID IN (\(ids))", [Date.stamp] + arguments)
     try db.run("DELETE FROM cards WHERE \(condition)", arguments)
     return referenced
@@ -272,32 +271,6 @@ extension CueStore {
         return try reclaimAttachments(purgeCards(where: "id = ?", [id]))
       }
     }
-  }
-}
-
-// MARK: 标签
-
-extension CueStore {
-  /// 给卡片加标签；同名标签复用，重复添加无效果。
-  @discardableResult
-  public func addTag(_ name: String, to card: UUID) throws -> Tag {
-    let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !name.isEmpty else { throw CueStoreError.blankTagName }
-    return try write {
-      let now = Date.stamp
-      let existing = try select(Tag.self, where: "name = ?", [name], orderBy: "createdAt, id").first
-      let tag = existing ?? Tag(id: UUID(), name: name, color: nil, createdAt: now, modifiedAt: now)
-      if existing == nil { try insert(tag) }
-      let linked = try db.first("SELECT 1 FROM cardTags WHERE cardID = ? AND tagID = ?", [card, tag.id]) { _ in true }
-      if linked == nil {
-        try insert(CardTag(id: UUID(), cardID: card, tagID: tag.id, createdAt: now, modifiedAt: now))
-      }
-      return tag
-    }
-  }
-
-  public func removeTag(_ tag: UUID, from card: UUID) throws {
-    try write { try db.run("DELETE FROM cardTags WHERE cardID = ? AND tagID = ?", [card, tag]) }
   }
 }
 

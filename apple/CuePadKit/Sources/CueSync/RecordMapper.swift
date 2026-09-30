@@ -7,7 +7,6 @@ enum RecordMapper {
   static let encryptedColumns: [Table: Set<String>] = [
     .projects: ["name"],
     .cards: ["body", "variableValues"],
-    .tags: ["name"],
     .tasks: ["content"],
     .sendRecords: ["content", "targetName", "targetRef"],
     .piSessionStates: ["title", "detail"],

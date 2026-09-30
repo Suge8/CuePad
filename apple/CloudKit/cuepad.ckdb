@@ -31,26 +31,6 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
-    RECORD TYPE tags (
-        "___recordID" REFERENCE QUERYABLE,
-        name          ENCRYPTED STRING,
-        color         STRING,
-        createdAt     INT64,
-        modifiedAt    INT64,
-        GRANT WRITE TO "_creator",
-        GRANT CREATE TO "_icloud"
-    );
-
-    RECORD TYPE cardTags (
-        "___recordID" REFERENCE QUERYABLE,
-        cardID        STRING,
-        tagID         STRING,
-        createdAt     INT64,
-        modifiedAt    INT64,
-        GRANT WRITE TO "_creator",
-        GRANT CREATE TO "_icloud"
-    );
-
     RECORD TYPE tasks (
         "___recordID" REFERENCE QUERYABLE,
         content       ENCRYPTED STRING,

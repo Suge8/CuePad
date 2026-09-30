@@ -66,16 +66,6 @@ extension CueStore {
     try select(CueTask.self, where: "completedAt IS NOT NULL", orderBy: "completedAt DESC, id")
   }
 
-  public func tags() throws -> [Tag] {
-    try select(Tag.self, orderBy: "name, id")
-  }
-
-  /// 某卡片的标签，按名称。
-  public func tags(of card: UUID) throws -> [Tag] {
-    try select(
-      Tag.self, where: "id IN (SELECT tagID FROM cardTags WHERE cardID = ?)", [card], orderBy: "name, id")
-  }
-
   /// 发送记录，最近的在前。
   public func sendRecords() throws -> [SendRecord] {
     try select(SendRecord.self, orderBy: "sentAt DESC, id")
@@ -141,7 +131,7 @@ extension CueStore {
   }
 
   /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。
-  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串。卡片只按正文与标签命中；项目名只用于
+  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串。卡片只按正文命中；项目名只用于
   /// `projects` 里单列的项目（每个词都在名字里）。按项目缩小卡片范围用 `projects` 筛选。
   /// 卡片按最近修改倒序（同刻按 id）；`totalCards` 是全部命中数。
   public func search(_ query: SearchQuery, limit: Int = 20, offset: Int = 0) throws -> SearchResults {
@@ -174,9 +164,8 @@ extension CueStore {
     var arguments: [any SQLBindable] = []
 
     for term in terms {
-      parts.append(
-        "(id IN (\(Self.hit("card"))) OR id IN (SELECT cardID FROM cardTags WHERE tagID IN (\(Self.hit("tag")))))")
-      arguments += [Self.likePattern(term), Self.likePattern(term)]
+      parts.append("id IN (\(Self.hit("card")))")
+      arguments.append(Self.likePattern(term))
     }
     if let projects = query.projects {
       let ids = projects.compactMap { $0 }
