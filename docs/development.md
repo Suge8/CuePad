@@ -8,8 +8,9 @@ CuePad 是 Swift 原生应用：macOS 26+、iOS/iPadOS 26+，iCloud 同步，Pi 
 
 ```bash
 apple/scripts/xc.sh build mac
-apple/scripts/xc.sh test mac        # test ios 跑 iOS 专属的 App 测试（Swift Testing；xcodebuild 摘要里的 "Executed 0 tests" 只数 XCTest）
+apple/scripts/xc.sh test mac
 apple/scripts/xc.sh build ios
+apple/scripts/xc.sh test ios        # 同一测试目标，跑其中 iOS 也编译的部分（Swift Testing；摘要里的 "Executed 0 tests" 只数 XCTest）
 apple/scripts/xc.sh shot mac        # 构建 → 后台启动 → 单窗口截图 → 退出，输出 .derived/shot-mac.png
 cd apple/CuePadKit && swift test    # 共用包的全部测试
 cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
@@ -64,7 +65,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - **冲突**：iCloud 按记录同步。同一卡片离线并发编辑时保留两个版本交给用户选择，不静默覆盖。任务是独立记录而非卡片正文里的清单，勾选只改该条，不与卡片编辑冲突。
 - **编辑器**：存储格式是纯字符串，唯一事实源——分块为独占行 `---split---`，图片为行内 `![](cuepad://img/<哈希>)`；运行时二者各为 U+FFFC + 附件，保存只经序列化，编辑器内复制输出存储格式。变量高亮用 `NSTextLayoutManager` 渲染属性（不写 storage、不进 undo），监听 `didProcessEditingNotification` 以覆盖输入法组合期。**禁止访问 `NSTextView.layoutManager`**（会永久降级到 TextKit 1）。附件只挂降采样缩略图并按视口懒加载，原图留在文件。iOS 另写粘贴/拖入委托、光标规范化（改写 `selectedTextRange`）与工具栏"分块"按钮。
 - **Pi 桥**：扩展随 App 打包，首次启动征得同意后写入 Pi 扩展目录（要求 Pi ≥ 0.84.4）。实时状态只在内存，历史只来自 Pi 会话文件（沿当前分支解析、只读新增字节、偏移存进 Store）。协议、多客户端、版本与已知边界以 CuePi README 为准。
-- **发给 Pi**："直接发送"支持文字 + 图片与 steer/followUp；"放进输入框"只有文字，用 `pasteToEditor`（`setEditorText` 会覆盖用户已输入内容），含图片的卡片只能直接发送。图片发原图，Pi 自行缩放（最长边 2000px、base64 ≤ 4.5MB）。发送方式是 Store 里类型化的 `DeliveryMode`（send / steer / followUp / paste，唯一定义）：手机经同步下发的投送请求里读到本版本不认识的值时原样保留、Mac 不执行、按失败写回，不静默当成已知值。
+- **发给 Pi**："直接发送"支持文字 + 图片与 steer/followUp；"放进输入框"只有文字，用 `pasteToEditor`（`setEditorText` 会覆盖用户已输入内容），含图片的卡片只能直接发送。图片发原图，Pi 自行缩放（最长边 2000px、base64 ≤ 4.5MB）。发送方式是 Store 里类型化的 `DeliveryMode`（send / steer / followUp / paste，唯一定义），Mac 界面的发送目标与手机发来的投送请求都用它，只在调用 Pi 桥时落成桥的插话/排队：手机经同步下发的投送请求里读到本版本不认识的值时原样保留、Mac 不执行、按失败写回，不静默当成已知值。
 - **投送**：进程内 `Dispatcher` actor，经前台应用/剪贴板/按键三个协议接缝测试。顺序靠任务链而非 actor 本身（actor 在 await 处可重入）。激活先订阅通知再调用，超时报错不发键；目标未运行时报错且不动剪贴板。单条目同时放文字与 PNG 时，图形应用只取其一，所以含图卡片写成按原顺序含图的 RTFD 并附纯文字兜底。辅助功能授权归属 CuePad.app。窗口隐藏与发送记录由调用方负责。
 - **命令行**：`cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标统一构建、随 App 签名与公证。设置窗口底部的开关在 `~/.local/bin/cuepad` 建符号链接（位置被别的文件占用时不覆盖，App 被移动后能检测并一键修复；不做需要提权的 /usr/local/bin）。它与 App 用同一套资料库位置规则。
 - **测试**：Swift Testing 覆盖 Store、同步映射、Pi 会话解析与桥协议、投送队列、命令行；另有"构建 → 运行 → 截图"的视觉验收流程。测试只用替身或不产生按键事件的系统调用，不向其他应用发送键鼠事件；服务测试用临时目录、独立 UserDefaults 与记录型替身，不碰真实资料库、`~/.pi` 和其他应用。全局热键的物理触发与跨应用粘贴只能人工验证。
@@ -93,7 +94,7 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 ### macOS 壳层
 
-主窗口在 `MainWindowFactory` 创建时就设好外框（内容铺到透明标题栏下），界面不要再在运行时改窗口样式；设置窗口（⌘,）由 `SettingsWindowController` 承载；`CuePadApplication` 在退出前结束挂在窗口上的弹窗，⌘Q 与 SIGTERM 才不会被 sheet/alert 卡住；菜单栏面板 `MenuBarPanel` 随内容尺寸变化，顶边固定在图标下方。单元测试以 App 为宿主，宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。
+主窗口在 `MainWindowFactory` 创建时就设好外框（内容铺到透明标题栏下），界面不要再在运行时改窗口样式；设置窗口（⌘,）由 `SettingsWindowController` 承载；`CuePadApplication` 在退出前结束挂在窗口上的弹窗，⌘Q 与 SIGTERM 才不会被 sheet/alert 卡住；退出时先等服务收尾（停止远程投送执行器、同步引擎、Pi 连接与全局快捷键）再放行；菜单栏面板 `MenuBarPanel` 随内容尺寸变化，顶边固定在图标下方。单元测试以 App 为宿主，宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。
 
 ### iOS / iPadOS
 
@@ -118,7 +119,7 @@ macOS 首次启动从旧版（Electron 时代）数据库 `~/Library/Application
 
 ## 视觉验收
 
-`shot mac` 用 `open -g` 后台启动，不抢焦点；按 pid 找窗口 ID 后 `screencapture -l` 只截该窗口（首次需给终端授予屏幕录制权限）；以 SIGTERM 退出，走应用正常退出流程。`shot ios` / `shot ipad` 构建 → 模拟器安装启动 → 截图 → 终止，库与偏好放进 `.derived/library-ios`。`--` 之后是 App 启动参数：
+`shot mac` 直接启动产物里的可执行文件并记下它的 PID（不经 LaunchServices 激活，不抢焦点；上次中断遗留的实例只按记下的 PID 结束），按该 PID 找窗口 ID 后 `screencapture -l` 只截该窗口（首次需给终端授予屏幕录制权限）；以 SIGTERM 退出，走应用正常退出流程。`shot ios` / `shot ipad` 构建 → 模拟器安装启动 → 截图 → 终止，库与偏好放进 `.derived/library-ios`。`--` 之后是 App 启动参数：
 
 ```bash
 apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -theme dark
@@ -155,7 +156,7 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 
 用 Sparkle 2（EdDSA 校验、增量更新），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉 Sparkle 源码。更新源 `https://cue-pad.com/appcast.xml` 与公钥在 `App/Config/CuePad-macOS-Info.plist`；设置窗口底部有"自动检查更新"开关和"检查更新…"，App 菜单里也有"检查更新…"。隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
 
-EdDSA 私钥在专用钥匙串（`~/.appstoreconnect/cuepad-signing.keychain-db` 里的 `cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。`xc.sh release mac` 用时间戳作构建号（Sparkle 按 `CFBundleVersion` 比较新旧，每次发布必须递增），在公证、装订后把 zip 收进 `<产物目录>/release/mac/updates/` 并生成 `appcast.xml`（含与历史版本的增量包，所以历史 zip 要保留在 `updates/` 里）。更新包的下载地址前缀用 `CUEPAD_UPDATE_URL_PREFIX`（默认 `https://cue-pad.com/downloads/`）；`updates/` 里的 zip、增量包与 `appcast.xml` 部署到对应位置由人决定。
+EdDSA 私钥在专用钥匙串（`~/.appstoreconnect/cuepad-signing.keychain-db` 里的 `cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。`xc.sh release mac` 用时间戳作构建号（Sparkle 按 `CFBundleVersion` 比较新旧，每次发布必须递增），在公证、装订后把 zip 收进更新历史目录 `~/.appstoreconnect/cuepad-updates/` 并生成 `appcast.xml`（含与历史版本的增量包，所以历史 zip 必须留在这里；它在产物目录之外，清理产物目录或换 `CUEPAD_DERIVED` 不影响），`appcast.xml` 另复制到 `<产物目录>/release/mac/`。更新包的下载地址前缀用 `CUEPAD_UPDATE_URL_PREFIX`（默认 `https://cue-pad.com/downloads/`）；更新历史目录里的 zip、增量包与 `appcast.xml` 部署到对应位置由人决定。
 
 ## 落地页与设计资源
 

@@ -9,7 +9,7 @@ import Testing
 
 @MainActor
 struct SendTests {
-    let rig = Rig()
+    let rig = TestApp()
     var services: AppServices { rig.services }
     var channels: FakeChannels { rig.channels }
     let png = pngData()
@@ -42,7 +42,7 @@ struct SendTests {
         idleSession()
         let body = try await bodyWithImage()
 
-        try await services.send(body, to: .pi("s1.100", whenBusy: nil))
+        try await services.send(body, to: .pi("s1.100", .send))
 
         #expect(channels.calls == [
             .send(PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)]), "s1.100")
@@ -57,39 +57,40 @@ struct SendTests {
         idleSession(busy: true)
 
         await #expect(throws: SendError.piSessionBusy) {
-            try await services.send("hi", to: .pi("s1.100", whenBusy: nil))
+            try await services.send("hi", to: .pi("s1.100", .send))
         }
         #expect(channels.calls.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)
 
-        try await services.send("hi", to: .pi("s1.100", whenBusy: .steer))
+        try await services.send("hi", to: .pi("s1.100", .steer))
         #expect(channels.calls == [.send(PiMessage(text: "hi", whenBusy: .steer), "s1.100")])
     }
 
     @Test func 未知Pi会话报错且不写记录() async throws {
         await #expect(throws: PiBridgeError.unknownSession("nope")) {
-            try await services.send("hi", to: .pi("nope", whenBusy: nil))
+            try await services.send("hi", to: .pi("nope", .send))
         }
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 放进输入框只送文字_含图片则拒绝且什么都不发() async throws {
         idleSession()
-        try await services.send("plain", to: .piInput("s1.100"))
+        try await services.send("plain", to: .pi("s1.100", .paste))
         #expect(channels.calls == [.paste("plain", "s1.100")])
 
         let body = try await bodyWithImage()
         await #expect(throws: SendError.imagesNotSupported) {
-            try await services.send(body, to: .piInput("s1.100"))
+            try await services.send(body, to: .pi("s1.100", .paste))
         }
         #expect(channels.calls.count == 1)
         #expect(try await services.store.sendRecords().count == 1)
     }
 
-    @Test func 通用投送_先预检再隐藏窗口再投送_记录应用名与bundle() async throws {
+    @Test func 通用投送_先预检再隐藏窗口再投送_按设置回车_记录应用名与bundle() async throws {
         let body = try await bodyWithImage()
+        services.settings.autoSubmit = true
 
-        try await services.send(body, to: .app(.terminal, submit: true))
+        try await services.send(body, to: .app(.terminal))
 
         #expect(channels.calls == [
             .preflight(.terminal),
@@ -106,7 +107,7 @@ struct SendTests {
         channels.preflightError = DispatchError.accessibilityRequired
 
         await #expect(throws: DispatchError.accessibilityRequired) {
-            try await services.send("hi", to: .app(.lastFrontmost, submit: false))
+            try await services.send("hi", to: .app(.lastFrontmost))
         }
         #expect(rig.window.events.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)
@@ -116,10 +117,17 @@ struct SendTests {
         channels.dispatchError = DispatchError.targetUnavailable
 
         await #expect(throws: DispatchError.targetUnavailable) {
-            try await services.send("hi", to: .app(.lastFrontmost, submit: false))
+            try await services.send("hi", to: .app(.lastFrontmost))
         }
         #expect(rig.window.events == ["hide", "show"])
         #expect(try await services.store.sendRecords().isEmpty)
+    }
+
+    /// 选定的应用退出后，发送按钮仍显示它的名字：按 bundle ID 找已安装的应用，不要求它在运行。
+    @Test func 应用名按bundle_ID从已安装的应用解析_找不到才用bundle_ID() {
+        // 系统自带应用的显示名随系统语言变化（Safari 在中文系统叫"Safari浏览器"），用名称不随语言变的 CuePad 自己
+        #expect(services.appName(bundleID: AppServices.bundleID) == "CuePad")
+        #expect(services.appName(bundleID: "com.example.not-installed") == "com.example.not-installed")
     }
 
     // MARK: 记录

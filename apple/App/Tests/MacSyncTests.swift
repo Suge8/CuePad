@@ -10,7 +10,7 @@ import AppKit
 /// Mac 端的同步职责：唤醒时同步；把 Pi 会话状态写成同步记录；执行手机发来的投送请求。
 @MainActor
 struct MacSyncTests {
-    let rig = Rig()
+    let rig = TestApp()
     var services: AppServices { rig.services }
 
     private func session(
@@ -26,6 +26,24 @@ struct MacSyncTests {
             items.forEach { continuation.yield($0) }
             continuation.finish()
         }
+    }
+
+    // MARK: 退出
+
+    @Test func 退出时停止同步引擎与远程投送执行器() async throws {
+        services.startSync()
+        try await services.startDeliveryExecutor()
+        await eventually { rig.sync.started == 1 }
+
+        await services.stop()
+
+        #expect(rig.sync.stopped == 1)
+        let request = try await services.store.requestDelivery(
+            "hi", to: SendTarget(kind: .clipboard, name: "剪贴板"), on: TestApp.hostID)
+        // 停止后不再有观察者领取：没有事件可等，给执行器足够的时间再确认仍未处理
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(try await services.store.deliveryRequest(request.id)?.status == .known(.pending))
+        #expect(rig.channels.calls.isEmpty)
     }
 
     // MARK: 唤醒
@@ -60,7 +78,7 @@ struct MacSyncTests {
         #expect(stored.state == .known(work))
         #expect(stored.detail == detail)
         #expect(stored.sessionID == "s1")
-        #expect(stored.hostID == Rig.hostID)
+        #expect(stored.hostID == TestApp.hostID)
     }
 
     @Test func 会话按工作目录归入项目_结束后记录删除() async throws {
@@ -77,7 +95,7 @@ struct MacSyncTests {
     }
 
     @Test func 启动时清掉这台Mac遗留的记录_不动别的Mac() async throws {
-        let mine = PiStateRecorder(store: services.store, hostID: Rig.hostID)
+        let mine = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
         let other = PiStateRecorder(store: services.store, hostID: "mac-other")
         try await mine.update(sessionID: "old", state: .thinking)
         try await other.update(sessionID: "theirs", state: .thinking)
@@ -105,12 +123,12 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
-            "做这件事", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: Rig.hostID, mode: .steer)
+            "做这件事", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .steer)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.channels.calls == [.send(PiMessage(text: "做这件事", whenBusy: .steer), "sess-1.100")])
-        #expect(done.handledBy == Rig.hostID)
+        #expect(done.handledBy == TestApp.hostID)
     }
 
     @Test func 手机的放进输入框请求只粘贴文字() async throws {
@@ -120,7 +138,7 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
-            "草稿", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: Rig.hostID, mode: .paste)
+            "草稿", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .paste)
         _ = try await awaitFinished(request.id)
 
         #expect(rig.channels.calls == [.paste("草稿", "sess-1.100")])
@@ -131,7 +149,7 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
-            "hi", to: SendTarget(kind: .piSession, name: "gone", ref: "sess-gone"), on: Rig.hostID)
+            "hi", to: SendTarget(kind: .piSession, name: "gone", ref: "sess-gone"), on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.failed))
@@ -145,12 +163,12 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
-            "hi", to: SendTarget(kind: .app, name: "Ghostty", ref: "com.mitchellh.ghostty"), on: Rig.hostID)
+            "hi", to: SendTarget(kind: .app, name: "Ghostty", ref: "com.mitchellh.ghostty"), on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
         #expect(rig.channels.calls.contains(.dispatch(Payload(text: "hi"), .bundleID("com.mitchellh.ghostty"), submit: false)))
         #expect(done.status == .known(.failed))
-        #expect(done.resultDetail?.contains("辅助功能") == true)
+        #expect(done.resultDetail == DispatchError.accessibilityRequired.localizedDescription, "写回的是错误自身的说明")
     }
 
     @Test func 本机标识由硬件UUID稳定派生_不含原值() {

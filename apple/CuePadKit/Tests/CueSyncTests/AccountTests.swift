@@ -133,11 +133,23 @@ import Testing
   }
 
   @Test(.timeLimit(.minutes(1)))
-  func statusChangesAreDeliveredToSubscribers() async throws {
-    var updates = rig.coordinator.statusUpdates.makeAsyncIterator()
-    #expect(await updates.next() == .idle)  // 订阅时先给出当前状态
+  func statusAndIssueChangesAreDeliveredToSubscribers() async throws {
+    var updates = rig.coordinator.stateUpdates.makeAsyncIterator()
+    #expect(await updates.next() == SyncState(status: .idle, issues: []))  // 订阅时先给出当前状态
     await rig.coordinator.handle(.accountStatus(.noAccount))
-    #expect(await updates.next() == .noAccount)
+    #expect(await updates.next()?.status == .noAccount)
+
+    // 不改状态的事项与重复的同一失败也要送达：界面据此显示"N 条没能同步的记录"
+    await rig.coordinator.note("订阅没能建立")
+    #expect(await updates.next() == SyncState(status: .noAccount, issues: [SyncIssue(message: "订阅没能建立")]))
+    await rig.coordinator.handle(.accountStatus(.available))
+    _ = await updates.next()
+    await rig.coordinator.handle(.zoneSaveFailed(CKError(.internalError)))
+    let failed = try #require(await updates.next())
+    await rig.coordinator.handle(.zoneSaveFailed(CKError(.internalError)))
+    let repeated = try #require(await updates.next())
+    #expect(repeated.status == failed.status)
+    #expect(repeated.issues.count == failed.issues.count + 1)
   }
 
   @Test func engineStateIsPersistedInTheLocalDatabase() async throws {

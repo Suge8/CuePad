@@ -188,7 +188,7 @@ private struct PiExtensionRow: View {
                 try await services.piExtension.install()
                 result = ("已安装；已在运行的 Pi 会话重启后生效", false)
             } catch {
-                result = (ErrorText.describe(error), true)
+                result = (error.localizedDescription, true)
             }
         }
     }

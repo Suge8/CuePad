@@ -8,7 +8,7 @@ import Testing
 /// 切换不能按副本推算"下一个状态"，否则已勾的点了回不去、没勾的点了还是勾上。
 @MainActor
 struct TaskToggleTests {
-    let rig = Rig()
+    let rig = TestApp()
     var services: AppServices { rig.services }
 
     @Test func 连续两次勾选同一任务_完成后又回到未完成_即使手里的副本已过时() async throws {

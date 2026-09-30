@@ -12,12 +12,16 @@ actor SyncCoordinator {
   private var watcher: Task<Void, Never>?
   /// 有登记被搁置（配额、未预期失败）：下一次本机改动时全量对账一次，把它们重新登记。
   private var needsFullReconcile = false
-  private var subscribers: [UUID: AsyncStream<SyncStatus>.Continuation] = [:]
+  private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
 
-  private(set) var status: SyncStatus = .idle {
-    didSet { if status != oldValue { for continuation in subscribers.values { continuation.yield(status) } } }
+  private(set) var state = SyncState(status: .idle, issues: []) {
+    didSet { if state != oldValue { for continuation in subscribers.values { continuation.yield(state) } } }
   }
-  private(set) var issues: [SyncIssue] = []
+  private(set) var status: SyncStatus {
+    get { state.status }
+    set { state.status = newValue }
+  }
+  var issues: [SyncIssue] { state.issues }
 
   init(store: CueStore, queue: any ChangeQueue, zoneID: CKRecordZone.ID) {
     self.store = store
@@ -27,8 +31,8 @@ actor SyncCoordinator {
 
   // MARK: 状态订阅
 
-  /// 先给出当前状态，之后每次变化给出新状态。
-  nonisolated var statusUpdates: AsyncStream<SyncStatus> {
+  /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
+  nonisolated var stateUpdates: AsyncStream<SyncState> {
     AsyncStream { continuation in
       let token = UUID()
       Task {
@@ -38,9 +42,9 @@ actor SyncCoordinator {
     }
   }
 
-  private func subscribe(_ token: UUID, _ continuation: AsyncStream<SyncStatus>.Continuation) {
+  private func subscribe(_ token: UUID, _ continuation: AsyncStream<SyncState>.Continuation) {
     subscribers[token] = continuation
-    continuation.yield(status)
+    continuation.yield(state)
   }
 
   private func unsubscribe(_ token: UUID) { subscribers[token] = nil }
@@ -295,9 +299,11 @@ actor SyncCoordinator {
   }
 
   private func report(_ message: String, recordType: String?, recordName: String?, failed: Bool = false) {
-    issues.append(SyncIssue(recordType: recordType, recordName: recordName, message: message))
-    if issues.count > Self.issueLimit { issues.removeFirst(issues.count - Self.issueLimit) }
-    if failed, needsDecision == nil { status = .failed(message) }
+    var next = state
+    next.issues.append(SyncIssue(recordType: recordType, recordName: recordName, message: message))
+    if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }
+    if failed, needsDecision == nil { next.status = .failed(message) }
+    state = next  // 问题与状态一次送达
   }
 
   private func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }

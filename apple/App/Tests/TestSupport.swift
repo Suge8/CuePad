@@ -6,7 +6,9 @@ import Synchronization
 import ImageIO
 import UniformTypeIdentifiers
 @testable import CuePad
-#if os(iOS)
+#if os(macOS)
+import CuePi
+#else
 import UIKit
 #endif
 
@@ -45,7 +47,7 @@ final class TempDefaults {
     deinit { try? FileManager.default.removeItem(at: directory) }
 }
 
-/// 记录调用的同步引擎替身；`emit` 推一个状态给订阅者。
+/// 记录调用的同步引擎替身；`emit` 推一个状态快照给订阅者。
 final class FakeSync: SyncControlling, Sendable {
     private struct State {
         var started = 0
@@ -55,20 +57,20 @@ final class FakeSync: SyncControlling, Sendable {
     }
 
     private let state = Mutex(State())
-    private let updates: AsyncStream<SyncStatus>
-    private let continuation: AsyncStream<SyncStatus>.Continuation
+    private let updates: AsyncStream<SyncState>
+    private let continuation: AsyncStream<SyncState>.Continuation
     let startError = Mutex<(any Error)?>(nil)
 
     init() { (updates, continuation) = AsyncStream.makeStream() }
 
     var started: Int { state.withLock { $0.started } }
+    var stopped: Int { state.withLock { $0.stopped } }
     var syncNows: Int { state.withLock { $0.syncNows } }
     var resolutions: [String] { state.withLock { $0.resolutions } }
 
-    var statusUpdates: AsyncStream<SyncStatus> { updates }
-    var issues: [SyncIssue] { get async { [] } }
+    var stateUpdates: AsyncStream<SyncState> { updates }
 
-    func emit(_ status: SyncStatus) { continuation.yield(status) }
+    func emit(_ state: SyncState) { continuation.yield(state) }
 
     func start() async throws {
         state.withLock { $0.started += 1 }
@@ -83,25 +85,41 @@ final class FakeSync: SyncControlling, Sendable {
     }
 }
 
-#if os(macOS)
-typealias TestApp = Rig
-#else
-/// iOS 上的一次"App 启动"：临时库目录 + 独立偏好 + 私有命名剪贴板（不与 Mac 同步剪贴板）。
+/// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键、窗口；iOS 的私有命名剪贴板，
+/// 模拟器的通用剪贴板会与 Mac 同步）。`relaunch()` 用同一批目录与偏好再起一个实例。
 final class TestApp {
     let directory = FileManager.default.temporaryDirectory
         .appending(path: "cuepad-app-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let preferences = TempDefaults()
     let sync = FakeSync()
+    #if os(macOS)
+    static let hostID = "mac-test"
+    let channels = FakeChannels()
+    let updater = FakeUpdater()
+    let wakeCenter = NotificationCenter()
+    let hotkeys = InMemoryHotkeys()
+    let window = RecordingWindow()
+    let legacy: URL?
+    #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
+    #endif
     private(set) var services: AppServices!
 
+    #if os(macOS)
+    init(legacy: URL? = nil) {
+        self.legacy = legacy
+        services = makeServices()
+    }
+    #else
     init() { services = makeServices() }
+    #endif
 
     deinit {
         try? FileManager.default.removeItem(at: directory)
+        #if os(iOS)
         UIPasteboard.remove(withName: pasteboardName)
+        #endif
     }
-
-    var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }
 
     @discardableResult
     func relaunch() -> AppServices {
@@ -110,11 +128,52 @@ final class TestApp {
         return services
     }
 
-    private func makeServices() -> AppServices {
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let location = try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
-        let sync = self.sync
-        return AppServices(location: location, defaults: location.makeDefaults(), sync: { _ in sync }, pasteboard: pasteboard)
+    private var isolatedLocation: LibraryLocation {
+        try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
     }
+
+    #if os(macOS)
+    var piPaths: PiPaths {
+        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: directory.appending(path: "sock"))
+    }
+
+    /// 没有旧库：隔离目录；有旧库：把它挂到"应用支持目录"里 Electron 版的位置（旧库位置只由这条规则决定）。
+    private func location() -> LibraryLocation {
+        guard let legacy else { return isolatedLocation }
+        let support = directory.appending(path: "support", directoryHint: .isDirectory)
+        let electron = support.appending(path: "CuePad/cuepad.db")
+        try! FileManager.default.createDirectory(at: electron.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: electron)
+        try! FileManager.default.createSymbolicLink(at: electron, withDestinationURL: legacy)
+        return try! LibraryLocation.resolve(environment: [:], base: .applicationSupport(support))
+    }
+
+    private func makeServices() -> AppServices {
+        let mac = MacDependencies(
+            pi: PiBridge(socketDirectory: piPaths.socketDirectory),
+            channels: channels,
+            hotkeys: hotkeys,
+            paths: piPaths,
+            installer: PiExtensionInstaller(paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")])),
+            terminal: PiTerminalJumper(),
+            isAccessibilityTrusted: { true },
+            hostID: Self.hostID,
+            wakeNotifications: wakeCenter,
+            commandLineTool: CommandLineToolInstaller(
+                helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
+                linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
+            updater: updater)
+        let sync = self.sync
+        let services = AppServices(location: location(), defaults: preferences.defaults, sync: { _ in sync }, mac: mac)
+        services.windowShell = WindowShell(window: window)
+        return services
+    }
+    #else
+    var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }
+
+    private func makeServices() -> AppServices {
+        let sync = self.sync
+        return AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: { _ in sync }, pasteboard: pasteboard)
+    }
+    #endif
 }
-#endif

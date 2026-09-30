@@ -12,7 +12,6 @@ extension AppServices {
         do {
             let report = try await store.importElectronLibrary(from: source)
             adoptLegacySettings(report.legacySettings)
-            finishLegacyImport(report)
             try Data().write(to: location.legacyImportMarker)
         } catch {
             reportIssue(.legacyImportFailed("\(error)"))

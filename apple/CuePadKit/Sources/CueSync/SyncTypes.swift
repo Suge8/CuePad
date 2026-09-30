@@ -54,6 +54,23 @@ public struct SyncIssue: Equatable, Sendable {
   public var recordType: String?
   public var recordName: String?
   public var message: String
+
+  public init(recordType: String? = nil, recordName: String? = nil, message: String) {
+    self.recordType = recordType
+    self.recordName = recordName
+    self.message = message
+  }
+}
+
+/// 界面订阅的同步快照：状态与最近的问题一起给出，任一变化都送达。
+public struct SyncState: Equatable, Sendable {
+  public var status: SyncStatus
+  public var issues: [SyncIssue]
+
+  public init(status: SyncStatus, issues: [SyncIssue]) {
+    self.status = status
+    self.issues = issues
+  }
 }
 
 enum AccountChange: Sendable { case signedIn, signedOut, switched }

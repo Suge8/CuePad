@@ -8,7 +8,7 @@ struct SendControl: View {
     let project: UUID?
     var compact = false
     var disabled = false
-    let send: (SendChoice) -> Void
+    let send: (AppServices.Destination) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -47,11 +47,11 @@ struct SendControl: View {
         name.count > limit ? name.prefix(limit - 1) + "…" : name
     }
 
-    @ViewBuilder private func icon(_ choice: SendChoice) -> some View {
+    @ViewBuilder private func icon(_ choice: AppServices.Destination) -> some View {
         switch choice {
-        case .pi(let id), .piInput(let id): PiDot(state: workspace.session(id)?.state, size: 6)
+        case .pi(let id, _): PiDot(state: workspace.session(id)?.state, size: 6)
         case .clipboard: Image(systemName: "doc.on.clipboard").accessibilityHidden(true)
-        case .app, .lastApp: Image(systemName: "paperplane.fill").accessibilityHidden(true)
+        case .app: Image(systemName: "paperplane.fill").accessibilityHidden(true)
         }
     }
 }
@@ -70,15 +70,15 @@ struct SendTargetMenu<Label: View>: View {
                 Section("Pi") {
                     ForEach(sessions) { session in
                         let name = Workspace.sessionName(session)
-                        Button("\(name) · \(session.state.label)") { choose(.pi(session.id)) }
-                        Button("放进 \(name) 的输入框（仅文字）") { choose(.piInput(session.id)) }
+                        Button("\(name) · \(session.state.label)") { choose(.pi(session.id, .send)) }
+                        Button("放进 \(name) 的输入框（仅文字）") { choose(.pi(session.id, .paste)) }
                     }
                 }
             }
             Section("应用") {
-                Button("上一个前台应用") { choose(.lastApp) }
+                Button("上一个前台应用") { choose(.app(.lastFrontmost)) }
                 ForEach(services.runningApps().filter { $0.bundleID != nil }, id: \.pid) { app in
-                    Button(app.name) { choose(.app(bundleID: app.bundleID!, name: app.name)) }
+                    Button(app.name) { choose(.app(.bundleID(app.bundleID!))) }
                 }
             }
             Button("只复制到剪贴板") { choose(.clipboard) }
@@ -92,7 +92,7 @@ struct SendTargetMenu<Label: View>: View {
         .accessibilityLabel("选择发送目标")
     }
 
-    private func choose(_ choice: SendChoice) {
+    private func choose(_ choice: AppServices.Destination) {
         workspace.sendChoice = choice
     }
 }
