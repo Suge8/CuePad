@@ -1,5 +1,6 @@
 import CueStore
 import Foundation
+import UniformTypeIdentifiers
 #if os(macOS)
 import CueDispatch
 import CuePi
@@ -33,10 +34,20 @@ extension AppServices {
         #if os(macOS)
         try channels.copy(payload(content))
         #else
-        guard !content.hasImages else { throw SendError.imagesNotSupported }
-        UIPasteboard.general.string = content.plainText
+        // 每段文字、每张图片各一个条目，按原顺序：目标应用能取到哪些由它决定
+        pasteboard.setItems(try content.segments.compactMap { segment -> [String: Any]? in
+            switch segment {
+            case .text(let text): text.isEmpty ? nil : [UTType.utf8PlainText.identifier: text]
+            case .image(let hash): [UTType.png.identifier: try pngData(for: hash)]
+            }
+        })
         #endif
         return SendTarget(kind: .clipboard, name: "剪贴板")
+    }
+
+    func pngData(for hash: String) throws -> Data {
+        guard let png = ImageFiles.png(from: try imageData(hash)) else { throw SendError.imageUnavailable(hash) }
+        return png
     }
 
     func imageData(_ hash: String) throws -> Data {
@@ -89,8 +100,7 @@ extension AppServices {
             case .text(let text):
                 return .text(text)
             case .image(let hash):
-                guard let png = ImageFiles.png(from: try imageData(hash)) else { throw SendError.imageUnavailable(hash) }
-                return .image(png)
+                return .image(try pngData(for: hash))
             }
         })
     }

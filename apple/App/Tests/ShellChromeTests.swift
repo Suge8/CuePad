@@ -123,11 +123,4 @@ struct MenuBarPanelSizingTests {
         #expect(panel.frame.maxY == top)
     }
 }
-
-/// 没有事件可订阅的系统异步（窗口结束弹窗、布局后改尺寸）：有界条件等待。
-@MainActor
-func eventually(timeout: Duration = .seconds(2), _ condition: () -> Bool) async {
-    let deadline = ContinuousClock.now + timeout
-    while !condition(), ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(10)) }
-}
 #endif

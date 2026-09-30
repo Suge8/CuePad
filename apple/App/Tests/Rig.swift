@@ -107,6 +107,7 @@ final class Rig {
 
     @discardableResult
     func relaunch() -> AppServices {
+        services.cancelBackgroundWork()
         services = makeServices()
         return services
     }
@@ -129,34 +130,7 @@ final class Rig {
     }
 }
 
-/// 临时目录里的独立偏好存储，释放时连目录一起删除。
-final class TempDefaults {
-    let directory = FileManager.default.temporaryDirectory
-        .appending(path: "cuepad-defaults-\(UUID().uuidString)", directoryHint: .isDirectory)
-    let defaults: UserDefaults
-
-    init() {
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defaults = UserDefaults(suiteName: directory.appending(path: "preferences").path)!
-    }
-
-    deinit { try? FileManager.default.removeItem(at: directory) }
-}
-
 // MARK: 夹具
-
-func pngData(shade: CGFloat = 0.5) -> Data {
-    let context = CGContext(
-        data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
-        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-    context.setFillColor(red: shade, green: 0.2, blue: 0.8, alpha: 1)
-    context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
-    let data = NSMutableData()
-    let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)!
-    CGImageDestinationAddImage(destination, context.makeImage()!, nil)
-    CGImageDestinationFinalize(destination)
-    return data as Data
-}
 
 /// Electron 版旧库（schema 取其迁移最终状态的必要列）。
 func makeLegacyDatabase(settings: [String: String] = [:], at url: URL? = nil) throws -> URL {

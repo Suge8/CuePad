@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 用法：xc.sh <build|test|shot> <mac|ios> [截图输出路径] [-- 启动参数…]
-# shot mac 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；
+# 用法：xc.sh <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
+# ios 是 iPhone 模拟器（CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
+# shot 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；
 # CUEPAD_DERIVED 指定产物目录（默认 apple/.derived）；并行的 agent 各用一个，否则同目录的构建与测试会互相覆盖。
 # CUEPAD_SHOT_LIBRARY 指定隔离资料库目录（默认 .derived/library；隔离库内含偏好设置；相对路径按当前目录解析），CUEPAD_SHOT_SETTLE 为出窗后等待渲染的秒数。
 set -euo pipefail
@@ -10,6 +11,7 @@ absolute() { case "$1" in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
 DERIVED="$(absolute "${CUEPAD_DERIVED:-$APPLE_DIR/.derived}")"
 BUNDLE_ID=com.sugeh.cuepad
 IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
+IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 
 cmd="${1:-}"; platform="${2:-}"; out="${3:-$DERIVED/shot-$platform.png}"
 launch_args=()
@@ -17,8 +19,9 @@ if [ "$#" -gt 3 ] && [ "$4" = "--" ]; then launch_args=("${@:5}"); fi
 
 case "$platform" in
   mac) destination='platform=macOS,arch=arm64'; products="$DERIVED/Build/Products/Debug" ;;
-  ios) destination="platform=iOS Simulator,name=$IOS_DEVICE"; products="$DERIVED/Build/Products/Debug-iphonesimulator" ;;
-  *) echo "用法：$0 <build|test|shot> <mac|ios> [截图输出路径] [-- 启动参数…]" >&2; exit 2 ;;
+  ios) device="$IOS_DEVICE"; destination="platform=iOS Simulator,name=$device"; products="$DERIVED/Build/Products/Debug-iphonesimulator" ;;
+  ipad) device="$IPAD_DEVICE"; destination="platform=iOS Simulator,name=$device"; products="$DERIVED/Build/Products/Debug-iphonesimulator" ;;
+  *) echo "用法：$0 <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]" >&2; exit 2 ;;
 esac
 app="$products/CuePad.app"
 
@@ -71,25 +74,30 @@ shot_mac() {
   echo "$out"
 }
 
-shot_ios() {
+# iOS/iPadOS：库与偏好放进隔离目录（每个设备各一个，默认 .derived/library-<ios|ipad>），启动参数原样传给 App。
+# simctl 用 SIMCTL_CHILD_ 前缀把环境变量传给模拟器里的进程。
+shot_sim() {
   mkdir -p "$(dirname "$out")"
   local booted_here=0
-  if ! xcrun simctl list devices booted | grep -q "$IOS_DEVICE"; then
-    xcrun simctl boot "$IOS_DEVICE"; booted_here=1
+  if ! xcrun simctl list devices booted | grep -qF "$device ("; then
+    xcrun simctl boot "$device"; booted_here=1
   fi
-  xcrun simctl bootstatus "$IOS_DEVICE" -b >/dev/null
-  xcrun simctl install "$IOS_DEVICE" "$app"
-  xcrun simctl launch "$IOS_DEVICE" "$BUNDLE_ID" >/dev/null
-  sleep 1.5 # 等首帧：simctl 没有渲染完成的通知
-  xcrun simctl io "$IOS_DEVICE" screenshot "$out" >/dev/null
-  xcrun simctl terminate "$IOS_DEVICE" "$BUNDLE_ID"
-  [ "$booted_here" = 0 ] || xcrun simctl shutdown "$IOS_DEVICE"
+  xcrun simctl bootstatus "$device" -b >/dev/null
+  xcrun simctl install "$device" "$app"
+  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library-$platform}")" \
+    xcrun simctl launch "$device" "$BUNDLE_ID" ${launch_args[@]+"${launch_args[@]}"} >/dev/null
+  sleep "${CUEPAD_SHOT_SETTLE:-1.5}" # 等数据读入与首帧：simctl 没有渲染完成的通知
+  xcrun simctl io "$device" screenshot "$out" >/dev/null
+  xcrun simctl terminate "$device" "$BUNDLE_ID"
+  [ "$booted_here" = 0 ] || xcrun simctl shutdown "$device"
   echo "$out"
 }
+shot_ios() { shot_sim; }
+shot_ipad() { shot_sim; }
 
 case "$cmd" in
   build) xcb -quiet build ;;
   test) xcb test ;;
   shot) xcb -quiet build; "shot_$platform" ;;
-  *) echo "用法：$0 <build|test|shot> <mac|ios> [截图输出路径]" >&2; exit 2 ;;
+  *) echo "用法：$0 <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]" >&2; exit 2 ;;
 esac

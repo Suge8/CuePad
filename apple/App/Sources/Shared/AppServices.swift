@@ -33,6 +33,17 @@ final class AppServices {
 
     @ObservationIgnored let location: LibraryLocation
 
+    /// 小组件、分享扩展打开 App 的链接，界面处理后调用 `consumeDeepLink()`。
+    private(set) var pendingDeepLink: DeepLink?
+
+    @ObservationIgnored var tasks: [Task<Void, Never>] = []
+    /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
+    @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
+
+    #if os(iOS)
+    @ObservationIgnored let pasteboard: UIPasteboard
+    #endif
+
     #if os(macOS)
     /// Pi 扩展的检测与安装（写入前需征得同意）。
     let piExtension: PiExtensionManager
@@ -51,12 +62,15 @@ final class AppServices {
     @ObservationIgnored lazy var hotkey = GlobalHotkey(backend: hotkeyBackend) { [weak self] in
         self?.windowShell?.toggleFromHotkey()
     }
-    @ObservationIgnored var tasks: [Task<Void, Never>] = []
     #endif
 
     nonisolated enum StartupIssue: Equatable {
         case legacyImportFailed(String)
         case globalShortcutUnavailable(String)
+        /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
+        case captureImportFailed(String)
+        /// 小组件与分享扩展用的快照写不出来。
+        case widgetDataUnavailable(String)
         #if os(macOS)
         case piBridgeUnavailable(String)
         /// Pi 历史索引读写 Store 失败；该会话文件不再写回。
@@ -111,12 +125,13 @@ final class AppServices {
         self.init(location: location, defaults: location.makeDefaults())
     }
 
-    init(location: LibraryLocation, defaults: UserDefaults) {
+    init(location: LibraryLocation, defaults: UserDefaults, pasteboard: UIPasteboard = .general) {
         let library = Self.openLibrary(at: location)
         store = library.store
         images = library.images
         settings = AppSettings(defaults: defaults)
         self.location = location
+        self.pasteboard = pasteboard
     }
     #endif
 
@@ -128,6 +143,10 @@ final class AppServices {
         } catch {
             preconditionFailure("无法打开资料库 \(location.databaseURL.path)：\(error)")
         }
+    }
+
+    func setDeepLink(_ link: DeepLink?) {
+        pendingDeepLink = link
     }
 
     func finishLegacyImport(_ report: ImportReport) {

@@ -27,8 +27,7 @@ extension AppServices {
 
     /// 真正退出时释放：后台任务、Pi 连接、全局快捷键。
     func stop() {
-        tasks.forEach { $0.cancel() }
-        tasks = []
+        cancelBackgroundWork()
         pi.stop()
         hotkey.unregister()
     }

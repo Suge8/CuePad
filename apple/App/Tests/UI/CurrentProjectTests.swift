@@ -66,6 +66,7 @@ struct CurrentProjectTests {
     }
 }
 #endif
+#if os(macOS)
 
 /// 竞态：界面选中项目之后、写入之前项目被删；Store 在写事务里拒绝（invalidProject），入口据此回落并提示，不吞错。
 @MainActor
@@ -99,3 +100,4 @@ struct CurrentProjectRaceTests {
         #expect(workspace.notice?.isError == true)
     }
 }
+#endif

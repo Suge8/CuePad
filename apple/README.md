@@ -4,7 +4,7 @@
 
 ## 命令
 
-统一入口 `scripts/xc.sh <build|test|shot> <mac|ios> [截图路径]`，构建产物在 `.derived/`（自带 `.gitignore`），退出码即 xcodebuild 的退出码。**并行的 agent 必须各用一个产物目录**（`CUEPAD_DERIVED=/tmp/xxx apple/scripts/xc.sh …`，截图、隔离库、Pi 目录随之落在该目录下），共用同一个目录时构建与测试会互相覆盖而随机失败。
+统一入口 `scripts/xc.sh <build|test|shot> <mac|ios|ipad> [截图路径]`（`ios` 是 iPhone 模拟器，`ipad` 是 iPad 模拟器，`CUEPAD_IPAD_DEVICE` 换机型），构建产物在 `.derived/`（自带 `.gitignore`），退出码即 xcodebuild 的退出码。**并行的 agent 必须各用一个产物目录**（`CUEPAD_DERIVED=/tmp/xxx apple/scripts/xc.sh …`，截图、隔离库、Pi 目录随之落在该目录下），共用同一个目录时构建与测试会互相覆盖而随机失败。
 
 ```bash
 apple/scripts/xc.sh build mac
@@ -13,7 +13,8 @@ apple/scripts/xc.sh build ios
 apple/scripts/xc.sh test ios
 apple/scripts/xc.sh shot mac      # 构建 → 后台启动 → 单窗口截图 → 退出，输出 .derived/shot-mac.png
 apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -theme dark  # 带启动参数
-apple/scripts/xc.sh shot ios      # 构建 → 模拟器安装启动 → 截图 → 终止，输出 .derived/shot-ios.png
+apple/scripts/xc.sh shot ios      # 构建 → 模拟器安装启动 → 截图 → 终止，输出 .derived/shot-ios.png；同样支持 `-- 启动参数`，库与偏好放进 .derived/library-ios
+apple/scripts/xc.sh shot ipad     # 同上，iPad 模拟器
 ```
 
 ## 约定
@@ -29,3 +30,9 @@ apple/scripts/xc.sh shot ios      # 构建 → 模拟器安装启动 → 截图 
 - 资料库在 `~/Library/Application Support/CuePad/Library/`；首次启动从 Electron 版库（`~/Library/Application Support/cuepad/cuepad.db`）导入一次，完成标记是库目录里的 `.electron-import-completed`。环境变量 `CUEPAD_LIBRARY_DIR` 指向隔离目录（必须是绝对路径，否则 App 弹窗说明后退出）：资料库、偏好设置（主题、快捷键、当前项目、窗口位置）都放进这个目录，不导入旧库，不碰真实的 `com.sugeh.cuepad` 偏好域，并行实例互不影响；`shot mac` 用它把库放进 `.derived/library`。
 - 壳层：主窗口在 `MainWindowFactory` 创建时就设好外框（内容铺到透明标题栏下），界面不要再在运行时改窗口样式；设置窗口（⌘,）由 `SettingsWindowController` 承载，内容来自 `RootViews.settings`；`CuePadApplication` 在退出前结束挂在窗口上的弹窗，⌘Q 与 SIGTERM 才不会被 sheet/alert 卡住；菜单栏面板 `MenuBarPanel` 随内容尺寸变化，顶边固定在图标下方。
 - 服务测试用临时目录、独立 UserDefaults 与记录型替身，不碰真实资料库、`~/.pi` 和其他应用。
+
+## iOS / iPadOS
+
+- 资料库在 App Group 共享容器 `group.com.sugeh.cuepad` 的 `Library/`（库文件、`Attachments/`、待入库的 `Capture/`、给小组件的 `Snapshots/`），偏好用同名 UserDefaults 套件。`CUEPAD_LIBRARY_DIR` 隔离照旧。模拟器直接可用；真机需要开发者账号给三个目标（App、分享扩展、小组件）签上该 App Group。
+- 分享扩展（`CuePadShare`）与小组件（`CuePadWidget`）是 iOS 独有的目标，随 App 嵌入；三者共用 `App/AppGroup/`。资料库始终只有主 App 写：扩展把内容放进 `Capture/`，主 App 在前台、收到扩展的进程间通知时入库；小组件与扩展不打开资料库，只读主 App 写的 JSON 快照。
+- 每个窗口（iPad 多窗口）各有一个 `SceneContext`，选中项目不放进全局偏好。界面接入点：`Sources/iOS/IOSRootViews.swift`（每个窗口的根视图）、`App/ShareExtension/ShareViews.swift`、`App/Widget/WidgetViews.swift`。
