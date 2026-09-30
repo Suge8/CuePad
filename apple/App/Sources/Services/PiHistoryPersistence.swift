@@ -19,7 +19,6 @@ extension CueStore: PiIndexStorage {}
 /// Store 读写失败时，该文件的索引不再写回：库异常时反复重写只会放大问题。失败作为错误抛给调用方报告。
 /// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：记日志后当作没有检查点。
 actor PiHistoryPersistence {
-    private static let titleLimit = 80
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "pi-history")
 
     private let storage: any PiIndexStorage
@@ -53,13 +52,12 @@ actor PiHistoryPersistence {
     func persist(_ update: PiHistoryUpdate) async throws {
         guard !blocked.contains(update.file.path) else { return }
         let history = update.history
-        let firstPrompt = history.turns.first?.prompt.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.titleLimit)
         let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
         let session = StoredPiSession(
             id: history.sessionID ?? update.file.deletingPathExtension().lastPathComponent,
             path: update.file.path,
             cwd: history.cwd ?? "",
-            title: history.name ?? firstPrompt.map(String.init) ?? "",
+            title: history.name ?? history.firstPrompt ?? "",
             lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
         do {
             try await storage.upsertPiSession(session, checkpoint: JSONEncoder().encode(update.checkpoint))
