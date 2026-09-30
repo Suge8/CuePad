@@ -33,7 +33,7 @@ extension DebugScene {
     private static func resizeWindow() {
         guard let value = defaults.string(forKey: "CuePadWindowSize") else { return }
         let parts = value.split(separator: "x").compactMap { Double($0) }
-        guard parts.count == 2, let window = NSApp.windows.first(where: { $0.styleMask.contains(.titled) }) else { return }
+        guard parts.count == 2, let window = NSApp.windows.first(where: { $0.styleMask.contains(.resizable) && $0.styleMask.contains(.fullSizeContentView) }) else { return }
         window.setContentSize(NSSize(width: parts[0], height: parts[1]))
         window.center()
     }
