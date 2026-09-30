@@ -262,4 +262,12 @@ import Testing
     let reopened = try CueStore(url: fixture.url)
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
+
+  /// 库的结构版本不是本版本建的（开发期的旧结构、或更新版本的库）：拒绝打开，不在错位的表结构上读写。
+  @Test func libraryFromAnotherSchemaVersionIsRefused() throws {
+    let url = fixture.directory.appending(path: "other/cuepad.db")
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 6;")
+    #expect(throws: CueStoreError.unsupportedSchemaVersion(6)) { try CueStore(url: url) }
+  }
 }
