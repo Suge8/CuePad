@@ -23,7 +23,7 @@ extension Workspace {
     func label(for choice: AppServices.Destination) -> String {
         switch choice {
         case .pi(let id, let mode): (session(id).map(Self.sessionName) ?? "Pi") + (mode == .paste ? " 输入框" : "")
-        case .app(.bundleID(let bundleID)): services.runningApps().first { $0.bundleID == bundleID }?.name ?? bundleID
+        case .app(.bundleID(let bundleID)): services.appName(bundleID: bundleID)
         case .app(.lastFrontmost): services.lastFrontmostApp()?.name ?? "上一个应用"
         case .clipboard: "剪贴板"
         }
