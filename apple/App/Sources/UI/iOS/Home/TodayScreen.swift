@@ -23,7 +23,7 @@ struct TodayScreen: View {
             LazyVStack(spacing: 12) {
                 if let data {
                     if data.cards.isEmpty {
-                        ContentUnavailableView("今天还没有动过的卡", systemImage: "sun.max", description: Text("在下方随手记写下第一条"))
+                        ContentUnavailableView("今天还没有动过的卡", systemImage: "sun.max")
                             .padding(.top, 60)
                     }
                     ForEach(data.cards) { card in TodayRow(card: card, project: card.projectID.flatMap { data.projects[$0] }) }

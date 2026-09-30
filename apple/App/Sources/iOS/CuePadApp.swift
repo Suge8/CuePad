@@ -4,12 +4,13 @@ import SwiftUI
 
 @main
 struct CuePadApp: App {
+    @UIApplicationDelegateAdaptor(IOSAppDelegate.self) private var delegate
     private let launch = Launch.make()
 
     var body: some Scene {
         WindowGroup {
             switch launch {
-            case .ready(let services): SceneRoot(services: services)
+            case .ready(let services): SceneRoot(services: services, alerts: delegate.alerts)
             case .failed(let error): LaunchFailureView(message: error.localizedDescription)
             case .testHost: EmptyView()
             }

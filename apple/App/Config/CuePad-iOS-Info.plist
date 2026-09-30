@@ -15,5 +15,9 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>CuePad 用相机拍照，把照片记进随手记或卡片。</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

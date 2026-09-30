@@ -6,9 +6,10 @@ import SwiftUI
 struct IOSRoot: View {
     @Environment(AppServices.self) private var services
     @Environment(SceneContext.self) private var scene
+    @Environment(PiAlertCenter.self) private var alerts
 
     var body: some View {
-        IOSRootView(services: services, scene: scene)
+        IOSRootView(services: services, scene: scene, alerts: alerts)
     }
 }
 
@@ -20,9 +21,11 @@ struct IOSRootView: View {
     @Namespace private var zoom
     /// 有效项目的 id；变化时核对保存的当前项目是否仍然存在。
     @State private var projectIDs: [UUID]?
+    let alerts: PiAlertCenter
 
-    init(services: AppServices, scene: SceneContext) {
+    init(services: AppServices, scene: SceneContext, alerts: PiAlertCenter) {
         _workspace = State(initialValue: Workspace(services: services, holder: scene))
+        self.alerts = alerts
     }
 
     var body: some View {
@@ -49,6 +52,7 @@ struct IOSRootView: View {
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link, workspace: workspace) }
         }
+        .onChange(of: alerts.pendingTap, initial: true) { navigation.open(alert: alerts.consumeTap()) }
         #if DEBUG
         .task { await DebugScene.prepare(workspace, navigation) }
         #endif

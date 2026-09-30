@@ -27,8 +27,6 @@ struct SettingsScreen: View {
                         Label("\(services.conflicts.count) 张卡片有两个版本", systemImage: "square.on.square")
                             .foregroundStyle(.orange)
                     }
-                } footer: {
-                    Text("同一张卡在两台设备上离线改过，两个版本都保留着，等你选一份")
                 }
             }
             if !services.startupIssues.isEmpty {
@@ -64,7 +62,7 @@ private struct SyncSection: View {
     var body: some View {
         Section {
             if services.sync == nil {
-                Label("这个版本没有开启 iCloud 同步", systemImage: "icloud.slash").foregroundStyle(.secondary)
+                Label("iCloud 同步没有开启", systemImage: "icloud.slash").foregroundStyle(.secondary)
             } else {
                 let status = SyncStatusText(services.syncStatus)
                 Label {

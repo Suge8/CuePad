@@ -219,7 +219,7 @@ private struct VariablesSheet: View {
         NavigationStack {
             Form {
                 if names.isEmpty {
-                    Text("正文里还没有变量。用 {{名称}} 写一个，发送与复制时会换成这里的取值。").foregroundStyle(.secondary)
+                    Text("正文里还没有 {{变量}}").foregroundStyle(.secondary)
                 }
                 ForEach(names, id: \.self) { name in
                     LabeledContent("{{\(name)}}") {

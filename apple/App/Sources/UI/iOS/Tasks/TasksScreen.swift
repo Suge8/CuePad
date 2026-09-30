@@ -22,7 +22,7 @@ struct TasksScreen: View {
             Section { NewTaskLine(project: nil, projects: data?.projects) }
             if let data {
                 if data.open.isEmpty {
-                    Text(data.completed.isEmpty ? "还没有任务。写下一句要去做的事，可以挂到项目上" : "全部完成了").foregroundStyle(.secondary)
+                    Text(data.completed.isEmpty ? "还没有任务" : "全部完成了").foregroundStyle(.secondary)
                 }
                 let live = Set(data.projects.map(\.id))
                 // 挂在回收站项目上的任务归到"未归属"，否则会从列表里消失
@@ -189,9 +189,10 @@ struct NewTaskLine: View {
 }
 
 extension Workspace {
+    /// 按 Store 里的当前状态切换：界面手里的副本可能已过时（列表没刷新就又点了一次）。
     func toggle(_ task: CueTask) {
-        let id = task.id, completed: Date? = task.completedAt == nil ? .now : nil
-        perform { try await $0.updateTask(id) { $0.completedAt = completed } }
+        let id = task.id
+        perform { try await $0.updateTask(id) { $0.completedAt = $0.completedAt == nil ? .now : nil } }
     }
 }
 #endif

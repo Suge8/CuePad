@@ -87,15 +87,13 @@ struct SendToMacSheet: View {
                     Section {
                         ContentUnavailableView(
                             "Mac 上没有运行中的 Pi 会话", systemImage: "terminal",
-                            description: Text("在 Mac 上启动 Pi 并打开 CuePad，会话会经 iCloud 出现在这里"))
+                            description: Text("在 Mac 上启动 Pi 后再试"))
                     }
                 } else {
                     Section {
                         ForEach(data.sessions) { item in sessionRow(item, project: item.projectID.flatMap { data.projects[$0] }) }
                     } header: {
-                        Text("Pi 会话 · 图文")
-                    } footer: {
-                        Text("经 iCloud 交给运行这个会话的 Mac，由那台 Mac 上的 CuePad 发出")
+                        Text("Pi 会话")
                     }
                     if let mode, modes.count > 1 {
                         Section {
@@ -106,18 +104,14 @@ struct SendToMacSheet: View {
                             .listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets())
                         } footer: {
-                            Text(footer(mode))
+                            Text(mode.explanation)
                         }
                     } else if let mode {
-                        Section { } footer: { Text(footer(mode)) }
+                        Section { } footer: { Text(mode.explanation) }
                     }
                 }
             }
         }
-    }
-
-    private func footer(_ mode: MacDelivery.Mode) -> String {
-        hasImages ? "\(mode.explanation)。含图片，只能直接发给 Pi，不能放进输入框" : mode.explanation
     }
 
     private func sessionRow(_ item: PiSessionState, project: Project?) -> some View {
@@ -271,7 +265,7 @@ private struct DeliveryProgress: View {
     private var detail: String? {
         switch status {
         case .failed: request??.resultDetail ?? "Mac 没有说明原因"
-        case .pending, .none: "已交给 iCloud，Mac 上的 CuePad 收到后会立即发出"
+        case .pending, .none: "Mac 上的 CuePad 需要开着"
         default: nil
         }
     }

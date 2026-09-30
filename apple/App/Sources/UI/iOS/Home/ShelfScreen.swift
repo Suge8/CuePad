@@ -84,8 +84,6 @@ struct ShelfScreen: View {
             if data.entries.isEmpty {
                 ContentUnavailableView {
                     Label("还没有项目", systemImage: "books.vertical")
-                } description: {
-                    Text("下方随手记的想法会先放进未归档；建一个项目来整理它们")
                 } actions: {
                     Button("新建项目") { creating = true }.buttonStyle(.glassProminent)
                 }
@@ -246,7 +244,7 @@ private struct ShelfRow: View {
     }
 
     private var subtitle: String {
-        guard let entry else { return "随手记先放在这里" }
+        guard let entry else { return "待整理" }
         if let goal = entry.goal, !goal.isEmpty { return goal }
         if let latest = entry.latest { return "\(latest.title.nonEmpty ?? "空白卡片") · \(DateLabel.short(latest.date))" }
         return "还没有卡片"

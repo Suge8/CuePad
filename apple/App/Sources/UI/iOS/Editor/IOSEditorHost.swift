@@ -42,11 +42,11 @@ struct IOSEditorHost: UIViewRepresentable {
 
     func updateUIView(_ view: CueTextView, context: Context) {
         view.onChange = onChange
-        view.onInsertImageRequest = onInsertImage
-        view.onVariablesRequest = onVariables
         view.onBlockAction = onBlockAction
         view.onError = onError
         context.coordinator.send = onSend
+        context.coordinator.insertImage = onInsertImage
+        context.coordinator.variables = onVariables
         if view.numbering != numbering { view.numbering = numbering }
         if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset { view.theme = theme }
     }
@@ -54,9 +54,11 @@ struct IOSEditorHost: UIViewRepresentable {
 
 /// 键盘上方的工具栏：分块、插图、变量取值、收起键盘、发送。
 final class KeyboardBar: UIToolbar {
-    /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）。
+    /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）：插图与变量由外部弹出选择器与面板。
     @MainActor final class Actions {
         var send: () -> Void = {}
+        var insertImage: () -> Void = {}
+        var variables: () -> Void = {}
     }
 
     init(textView: CueTextView, actions: Actions) {
@@ -74,8 +76,8 @@ final class KeyboardBar: UIToolbar {
         send.style = .prominent
         items = [
             item("分块", "rectangle.split.1x2") { $0.insertSplit() },
-            item("插入图片", "photo") { $0.onInsertImageRequest?() },
-            item("变量取值", "curlybraces") { $0.onVariablesRequest?() },
+            item("插入图片", "photo") { _ in actions.insertImage() },
+            item("变量取值", "curlybraces") { _ in actions.variables() },
             .flexibleSpace(),
             item("收起键盘", "keyboard.chevron.compact.down") { $0.resignFirstResponder() },
             send,

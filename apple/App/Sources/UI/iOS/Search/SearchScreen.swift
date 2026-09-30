@@ -49,7 +49,7 @@ struct SearchScreen: View {
         }
         .deskBackground()
         .navigationTitle("搜索")
-        .searchable(text: $query.text, prompt: "搜索卡片，空格分隔多个词")
+        .searchable(text: $query.text, prompt: "搜索卡片")
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear {
             #if DEBUG

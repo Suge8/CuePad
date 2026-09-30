@@ -116,12 +116,9 @@ struct OlderSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("更早").font(.headline).foregroundStyle(palette.ink)
-                    Text("\(groups.reduce(0) { $0 + $1.cards.count })").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
-                }
-                Text("墙以外的卡按周收在这里，再次编辑会回到上面").font(.caption).foregroundStyle(palette.ink3)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("更早").font(.headline).foregroundStyle(palette.ink)
+                Text("\(groups.reduce(0) { $0 + $1.cards.count })").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)

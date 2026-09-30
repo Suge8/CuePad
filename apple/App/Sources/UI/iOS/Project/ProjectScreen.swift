@@ -51,7 +51,7 @@ struct ProjectScreen: View {
         VStack(alignment: .leading, spacing: 24) {
             if data.project != nil { FocusCard(data: data, sessions: sessions ?? []) }
             if data.cards.isEmpty {
-                ContentUnavailableView("还没有卡片", systemImage: "square.on.square.dashed", description: Text("在下方随手记里写下想法，或点右上角新建"))
+                ContentUnavailableView("还没有卡片", systemImage: "square.on.square.dashed")
                     .padding(.top, 40)
             }
             if !arrangement.pinned.isEmpty {

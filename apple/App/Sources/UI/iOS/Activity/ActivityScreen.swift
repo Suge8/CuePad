@@ -35,10 +35,15 @@ nonisolated struct ActivityData: Sendable {
 struct ActivityScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var data: ActivityData?
 
+    /// 通知定位到的会话标出多久。
+    private static let focusDuration: Duration = .seconds(1.6)
+
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             if let data {
                 VStack(alignment: .leading, spacing: 22) {
@@ -47,16 +52,22 @@ struct ActivityScreen: View {
                         ContentUnavailableView {
                             Label("还没有活动", systemImage: "waveform.path.ecg")
                         } description: {
-                            Text("Mac 上运行的 Pi 会话会经 iCloud 显示在这里；从手机发到 Mac 的内容也记在这里")
+                            Text("在 Mac 上用 Pi 干活时，进度会显示在这里")
                         }
                         .padding(.top, 40)
                     }
-                    ForEach(data.waiting) { WaitingCard(session: $0, project: $0.projectID.flatMap { data.projects[$0] }) }
+                    ForEach(data.waiting) { session in
+                        WaitingCard(session: session, project: session.projectID.flatMap { data.projects[$0] })
+                            .focusRing(session.id == navigation.focusedSession, radius: 18)
+                            .id(session.id)
+                    }
                     if !data.running.isEmpty || !data.idle.isEmpty {
                         ActivitySection(title: "Pi 会话", count: data.running.count + data.idle.count) {
                             ForEach(Array((data.running + data.idle).enumerated()), id: \.element.id) { index, session in
                                 if index > 0 { Divider().padding(.leading, 44) }
                                 SessionRow(session: session, project: session.projectID.flatMap { data.projects[$0] })
+                                    .focusRing(session.id == navigation.focusedSession, radius: 16)
+                                    .id(session.id)
                             }
                         }
                     }
@@ -82,12 +93,35 @@ struct ActivityScreen: View {
                 .animation(Motion.quick, value: data.sessions.map(\.state))
             }
         }
+        .task(id: FocusKey(session: navigation.focusedSession, loaded: data != nil)) {
+            guard let id = navigation.focusedSession, data != nil else { return }
+            withAnimation(Motion.quick) { proxy.scrollTo(id, anchor: .top) }
+            try? await Task.sleep(for: Self.focusDuration)
+            withAnimation(Motion.quick) { navigation.focusedSession = nil }
+        }
+        }
         .background(palette.desk)
         .navigationTitle("活动")
-        .navigationSubtitle("Pi 状态只读 · 回应在 Mac 上")
         .refreshable { await services.syncNow() }
         .observing(services.store, [.piSessionStates, .deliveryRequests, .sendRecords, .projects], into: $data, onError: workspace.fail) {
             try ActivityData.read(from: $0)
+        }
+    }
+}
+
+private struct FocusKey: Equatable {
+    var session: UUID?
+    var loaded: Bool
+}
+
+extension View {
+    /// 通知定位到的会话：一圈强调色描边，片刻后消失。
+    fileprivate func focusRing(_ on: Bool, radius: CGFloat) -> some View {
+        overlay {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(.tint, lineWidth: 2)
+                .opacity(on ? 1 : 0)
+                .allowsHitTesting(false)
         }
     }
 }
@@ -97,7 +131,7 @@ struct SyncOffNote: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Label("这台设备没有开启 iCloud 同步，看不到 Mac 上的 Pi，也发不到 Mac", systemImage: "icloud.slash")
+        Label("iCloud 同步没有开启，看不到 Mac 上的 Pi", systemImage: "icloud.slash")
             .font(.footnote).foregroundStyle(palette.ink2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
@@ -142,7 +176,7 @@ private struct WaitingCard: View {
             if let detail = session.detail, !detail.isEmpty {
                 Text(detail).font(.body).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
             }
-            Text([project?.name, "需要在 Mac 上的 Pi 里回应"].compactMap { $0 }.joined(separator: " · "))
+            Text([project?.name, "去 Mac 上回应"].compactMap { $0 }.joined(separator: " · "))
                 .font(.footnote).foregroundStyle(palette.ink3)
         }
         .padding(16)

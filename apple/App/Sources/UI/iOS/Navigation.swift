@@ -1,4 +1,5 @@
 #if os(iOS)
+import CueSync
 import Foundation
 import Observation
 import SwiftUI
@@ -67,6 +68,8 @@ final class Navigation {
     var sidebar: NavigationSplitViewVisibility = .automatic
     /// 分栏：右侧面板；nil 为收起。
     var panel: Panel?
+    /// 活动页要定位并标出的会话（`PiSessionState.id`），来自点开的通知；活动页滚到后清掉。
+    var focusedSession: UUID?
 
     /// 随手记记入的位置：正在看的项目页（含其上打开的卡），否则未归档。
     var captureProject: UUID? {
@@ -138,6 +141,18 @@ final class Navigation {
         case .card(let id):
             if layout == .tabs { tab = .projects }
             push(.card(id))
+        }
+    }
+
+    /// 点开的 Pi 通知：打开活动（iPhone 切到活动标签，iPad 打开右侧活动面板）并定位到该会话。
+    func open(alert tap: PiAlertTap?) {
+        guard let tap else { return }
+        focusedSession = tap.sessionState
+        switch layout {
+        case .tabs:
+            tab = .activity
+            activityPath = []
+        case .split: panel = .activity
         }
     }
 
