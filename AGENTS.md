@@ -1,20 +1,23 @@
 # CuePad 模块索引
 
-产品定位与功能见 [README.md](README.md)；开发命令、架构要点与验收环境事实见 [docs/development.md](docs/development.md)。正在进行 Swift 原生重写，涉及新架构、数据模型或阶段进度时先读 [docs/swift-rewrite.md](docs/swift-rewrite.md)。
+Swift 原生应用（macOS / iOS / iPadOS）。产品说明见 [README.md](README.md)；开发命令、架构约定、验收环境与发布见 [docs/development.md](docs/development.md)，改动前先读。并行的 agent 各用独立的 `CUEPAD_DERIVED` 产物目录，否则构建与测试会互相覆盖。
 
-| 模块 | 职责 |
+| 路径 | 职责 |
 | --- | --- |
-| `src/lib/db/` | 运行时无关的 SQLite repository：projects / cards / tasks / tags / trash / settings / search；renderer 经 `window.cuepad.sql` 调用 |
-| `electron/` | Electron 主进程与 preload；`db.ts` 负责 `node:sqlite`、旧版数据继承、迁移和真事务，`ipc-sql.ts` 暴露 SQL IPC，`sidecar.ts` 管理投送子进程、协议、串行队列与生命周期 |
-| `native/dispatch/` | macOS 一键投送 Rust sidecar：前台应用追踪、目标解析、Accessibility 检查、激活与定向 `Cmd+V` |
-| `src/lib/workspace/` | 工作区 UI 与状态：`store.svelte.ts`（当前项目/全局收藏/任务单一事实源）、`editor.svelte.ts`（沉浸编辑）、`dispatch.ts`（复制/投送入口）、`CardBoard.svelte`（横向项目栏 + 单项目卡片墙）、`TaskStack.svelte`（全局悬浮任务）、命令面板、设置、回收站 |
-| `src/lib/editor/` | CodeMirror 封装、轻量装饰（decorations）、块系统（控件化分隔线/编号/排版复制/块快捷键，`segments.ts` `blocks.ts`）、变量模板（`variables.ts`）、自动保存、本地备份 |
-| `src/lib/shell/` | 全局快捷键注册与 accelerator 编解码 |
-| `src/lib/ui/` | 通用 UI 原子组件（Button / Toast / Dialog / 色板 / Mascot 吉祥物等） |
-| `src/lib/assets/` | 品牌 IP 透明底定稿（空状态/关于页用）；源图与 logo 定稿在 `design/final/` |
-| `migrations/` | 运行时无关的 SQLite schema 迁移（001–005） |
-| `landing/` | 双语营销落地页：Svelte 5 + SvelteKit 2 + GSAP，`adapter-vercel` 全量预渲染，含 gpt-image 品牌插画、Grok 生成的环境视频循环（`static/assets/loops/`，奶油底 radial mask / 黑底 screen 混合融入页面）与 ScrollTrigger 投送序列；部署 Vercel 时 Root Directory 指向本目录 |
-| `tests/` | bun test（repository，含 tasks / segments / autosave / backup / accelerator / search） |
-| `e2e/` | 无头视觉验收：Playwright Chromium + 桌面桥 mock，覆盖工作区、悬浮任务、真实鼠标拖拽、动效与响应式布局（`bun run test:e2e`） |
-| `e2e-electron/` | 真实 Electron 验收：安全桥、SQLite CRUD/事务、Pin/Star 与三类拖拽落库、重启/旧库恢复；`package-smoke.ts` 验证最终 `.app`（`bun run test:electron` / `bun run test:package`） |
-| `electron-builder.yml` | macOS arm64 `.app` 打包事实源：ad-hoc 签名、app.asar 内容、sidecar 与图标 extraResources |
+| `apple/CuePad.xcodeproj` | 多平台 App 工程：macOS 与 iOS/iPadOS 主 App、分享扩展、小组件、命令行目标；签名事实源 `apple/App/Config/Signing.xcconfig` |
+| `apple/App/Sources/Shared`、`Services` | 组合根 `AppServices` 与服务：发送、同步、Pi 扩展管理、命令行工具安装、快照 |
+| `apple/App/Sources/macOS` | Mac 壳层：窗口、全局快捷键、菜单栏图标与面板 |
+| `apple/App/Sources/iOS`、`apple/App/AppGroup`、`ShareExtension`、`Widget` | iOS/iPadOS 入口、App Group 位置与快照、分享扩展、小组件 |
+| `apple/App/Sources/UI` | 界面：`Shared/` 组件、主题、规则、工作区状态；`macOS/`、`iOS/` 各平台界面；`Debug/` 视觉验收场景与演示数据 |
+| `apple/App/Tests` | 以 App 为宿主的服务与界面规则测试 |
+| `apple/CuePadKit/Sources/CueText` | 卡片正文纯文本模型：解析/序列化、分块、变量、光标规范化（仅 Foundation） |
+| `apple/CuePadKit/Sources/CueStore` | SQLite 唯一事实源：迁移、仓储、搜索、资料库位置、跨进程变更通知、旧库导入 |
+| `apple/CuePadKit/Sources/CueEditor` | TextKit 2 编辑器，AppKit/UIKit 宿主 |
+| `apple/CuePadKit/Sources/CueSync` | CKSyncEngine ↔ CueStore 的记录映射、待推送、冲突与附件 |
+| `apple/CuePadKit/Sources/CueDispatch` | macOS 通用投送：前台应用、剪贴板、定向 `Cmd+V` |
+| `apple/CuePadKit/Sources/CuePi` | macOS Pi 桥：扩展、socket 协议（[README](apple/CuePadKit/Sources/CuePi/README.md)）、会话历史、终端跳转 |
+| `apple/CuePadKit/Sources/CueCLI` | `cuepad` 命令行；`cuepad --help` 是其唯一文档 |
+| `apple/CuePadKit/Tests` | 各模块的 Swift Testing 测试 |
+| `apple/scripts` | `xc.sh`（build/test/shot/release/provision）与签名、发布脚本 |
+| `landing/` | 双语营销落地页（SvelteKit + GSAP，部署 Vercel），见 [landing/AGENTS.md](landing/AGENTS.md) |
+| `design/` | 品牌 IP 与 logo 定稿（`final/`）、宣传素材源与合成模板（`promo/`）、图标脚本（`tools/`） |

@@ -1,7 +1,7 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// 模块边界见 docs/swift-rewrite.md「架构」。每个 target 只有一个写者；依赖变更由主会话统一改本文件。
+// 模块边界见 docs/development.md「代码地图」。每个 target 只有一个写者；依赖变更由主会话统一改本文件。
 let package = Package(
     name: "CuePadKit",
     platforms: [.macOS(.v26), .iOS(.v26)],

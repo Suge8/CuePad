@@ -1,5 +1,5 @@
 // CuePad Pi bridge extension
-// 由 CuePad 安装到 Pi 扩展目录，升级时整文件覆盖，请勿手改。协议说明见 docs/swift-rewrite.md「Pi 桥」。
+// 由 CuePad 安装到 Pi 扩展目录，升级时整文件覆盖，请勿手改。协议说明见 apple/CuePadKit/Sources/CuePi/README.md。
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
 //   扩展 → CuePad  hello（连接后第一条，含当前状态快照）/ state（仅状态切换）/ ack / bye

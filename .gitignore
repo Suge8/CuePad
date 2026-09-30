@@ -1,34 +1,19 @@
-node_modules
-
-# Output
-.output
-.vercel
-.netlify
-.wrangler
-/.svelte-kit*
-/build*/
-/dist-electron/
-/release/
-/native/*/target/
-/.flow/
-/e2e/.artifacts/
-/logs/
-*.out
-
-# Local dev notes (internal planning brief, not for public tree)
-/plan.md
-
 # OS
 .DS_Store
 Thumbs.db
+
+# Xcode / Swift（apple/.derived 与 CuePadKit/.build 各自带 .gitignore）
+xcuserdata/
+*.xcuserstate
+__pycache__/
 
 # Env
 .env
 .env.*
 !.env.example
-!.env.test
 
-# Vite
-/e2e/.artifacts/vite-cache/
-vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
+/logs/
+*.out
+
+# Local dev notes (internal planning brief, not for public tree)
+/plan.md

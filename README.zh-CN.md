@@ -1,74 +1,65 @@
 <p align="right"><a href="README.md">English</a> | 简体中文</p>
 
+<!-- TODO 截图待更新：以下图片仍是旧版界面，Swift 版截图另行安排，路径保持不变即可替换 -->
 <p align="center">
   <img src="design/promo/visual/hero-readme-2400x1260.png" alt="CuePad — 提示词写好，一键投送" width="820" />
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-111111.svg" alt="Platform: macOS (Apple Silicon)" />
+  <img src="https://img.shields.io/badge/platform-macOS%2026%20%7C%20iOS%2026-111111.svg" alt="Platform: macOS 26, iOS 26" />
 </p>
 
-**CuePad 是从想法到提示词的最短路径。** 一块安静的纸感草稿板，伴在你的 coding agents 旁边——舒服地写、逐键自动保存，写好一键把文本送回刚才的终端或编辑器，不切窗口、不找光标。
+**CuePad 是与 coding agents 协作时的思考空间。** 写提示词、记想法与目标、看 agent 在做什么、把文字一键交给它。一本安静的纸感笔记本，Mac、iPhone、iPad 原生，经 iCloud 同步。
 
-完全本地：所有卡片保存在你 Mac 上的一个 SQLite 文件里。
+本地优先：所有数据保存在设备上的 SQLite 库里；iCloud 同步用的是你自己的私有 CloudKit 数据库。无需账号，没有服务器，没有遥测。
 
+<!-- TODO 截图待更新 -->
 <p align="center">
   <img src="design/promo/motion/demo-dispatch.gif" alt="在 CuePad 打开卡片，一键投送，提示词直达终端" width="720" />
 </p>
 
 ## 功能
 
-- **一键投送**：光标留在目标输入框，呼出 CuePad 点投送——文本直达刚才打字的地方。可固定 Terminal、iTerm、Zed、VSCode；可选「自动发送」替你补按回车。
-- **沉浸写作**：全屏卡片，`## 标题`、`- 列表`、代码块、`{{变量}}` 有轻量视觉增强；纯文本进、纯文本出，逐键自动保存。
-- **分块**：`Shift+Enter` 把草稿切成多块，整卡或任意一块单独复制/投送，可选编号。
-- **变量模板**：复制或投送前集中填写 `{{变量}}`，每张卡记住上次的值。
-- **项目 · 收藏 · 任务**：横向项目栏、全局收藏、悬浮待办，还有一个可以反悔的回收站。
-- **即时搜索**：`Cmd + F` 随处搜项目、卡片与标签，回车直达。
-- **随叫随到**：常驻托盘、关闭即隐藏，`Option + Space`（可自定义）随时唤回；浅色 / 深色 / 跟随系统三种主题。
+- **捕获 → 打磨 → 发出 → 回看**：卡片承载任意长的文字，含内联图片、`{{变量}}` 与分块；任务是一行待办，可全局或挂到项目。逐键自动保存。
+- **发给 agent**：把卡片直达运行中的 [Pi](https://pi.dev) 会话（图文皆可，无需辅助功能权限），或经剪贴板与定向 `Cmd+V` 送进任意应用。每次发送自动记录内容快照，可一键重发。
+- **看见 agent**：Pi 会话显示实时状态（思考中、跑工具、等你、完成）与历史，并按工作目录归入对应项目。
+- **懂代码的项目**：项目可绑定代码目录，Pi 会话与 `cuepad` 命令行按所在目录自动选中项目。
+- **分块与变量**：草稿切成多块，整卡或任意一块单独复制、发送；发送前集中填写 `{{变量}}`，每张卡记住上次的值。
+- **随处搜索**：`⌘K` 搜项目、卡片与标签，可按项目、含图片、发送目标、时间筛选。
+- **Mac**：玻璃侧栏、`⌘↩` 直接发出的菜单栏小稿纸、全局快捷键（默认 `Option + Space`）随时唤回。
+- **iPhone 与 iPad**：项目书架、随手记输入栏、分享扩展与小组件。手机上写的卡片稍后出现在 Mac 上，手机也能把文字发给 Mac 上的 Pi 会话。
+- **iCloud 同步**：按记录同步；同一张卡在两台设备离线并发编辑时，两个版本都保留，由你选择。
 
-## 快捷键
+## `cuepad`：给 agent 的记忆
 
-| 快捷键 | 作用 |
-| --- | --- |
-| `Cmd/Ctrl + F` | 搜索 / 命令面板 |
-| `Esc` | 退出沉浸编辑 / 关闭面板 |
-| `Alt/Option + Space` | 全局显示 / 隐藏窗口（可自定义） |
+`cuepad` 是读写同一个资料库的命令行，agent 可以在会话之间查资料、记笔记、管待办：
 
-## 更多截图
+```bash
+cuepad search 部署 脚本                      # 查卡片（每个词都要命中）
+printf '发布清单…' | cuepad card add          # 记一张卡片
+cuepad task add 写发布说明
+cuepad task done <id>
+```
 
-<details>
-<summary>沉浸编辑 / 分块投送 / 变量模板 / 全局搜索 / 悬浮任务 / 深色主题</summary>
-<p align="center">
-  <img src="design/promo/shots/final/editor-light-2176.png" alt="沉浸编辑" width="760" />
-  <img src="design/promo/shots/final/segments-light-2176.png" alt="分块投送" width="760" />
-  <img src="design/promo/shots/final/variables-light-2176.png" alt="变量模板" width="760" />
-  <img src="design/promo/shots/final/search-light-2176.png" alt="全局搜索" width="760" />
-  <img src="design/promo/shots/final/tasks-light-2176.png" alt="悬浮任务" width="760" />
-  <img src="design/promo/shots/final/board-dark-2176.png" alt="深色主题" width="760" />
-</p>
-</details>
+在绑定了目录的项目里运行时，默认只作用于该项目。`--json` 给 agent 稳定的输出。在 CuePad 设置里安装（链接到 `~/.local/bin/cuepad`）；完整用法见 `cuepad --help` 与 `cuepad <命令> --help`。
 
 ## 下载
 
-Apple Silicon：[下载 zip](https://github.com/Suge8/CuePad/releases/latest/download/CuePad-mac-arm64.zip)。产品站：[cue-pad.com](https://cue-pad.com)。
-
-ad-hoc 签名、未公证——首次启动请右键选择「打开」。
+Mac 版见 [GitHub Releases](https://github.com/Suge8/CuePad/releases/latest)（Developer ID 签名并公证，需 macOS 26 或更高）。iPhone 与 iPad 版经 TestFlight 分发。产品站：[cue-pad.com](https://cue-pad.com)。
 
 ## 从源码构建
+
+需要 Xcode 26。本机构建用 ad-hoc 签名，不需要开发者账号。
 
 ```bash
 git clone https://github.com/Suge8/CuePad.git
 cd CuePad
-bun install
-bun run package:app   # release/mac-arm64/CuePad.app + CuePad-mac-arm64.zip
+apple/scripts/xc.sh build mac    # 还有 build ios、test mac、shot mac
+cd apple/CuePadKit && swift test
 ```
 
-开发模式运行：`bun run dev:electron`
-
-**环境要求**：[Bun](https://bun.sh)、macOS（Apple Silicon）、Rust 工具链（构建投送 sidecar）。
-
-架构、命令与测试分层见 [docs/development.md](docs/development.md)。
+架构、命令与约定见 [docs/development.md](docs/development.md)。
 
 ## 参与贡献
 
