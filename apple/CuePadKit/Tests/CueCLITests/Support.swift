@@ -46,7 +46,7 @@ final class Sandbox: @unchecked Sendable {
     var handle: OpaquePointer?
     defer { sqlite3_close(handle) }
     #expect(sqlite3_open(directory.appending(path: "cuepad.db").path, &handle) == SQLITE_OK)
-    let sql = "UPDATE cards SET conflictOf = '\(original.uuidString)' WHERE id = '\(copy.uuidString)'"
+    let sql = "UPDATE cards SET conflictOf = '\(original.uuidString.lowercased())' WHERE id = '\(copy.uuidString.lowercased())'"
     #expect(sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK)
   }
 }
