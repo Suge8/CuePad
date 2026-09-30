@@ -28,7 +28,7 @@ enum Schema {
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
     CREATE TABLE deliveryRequests (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
-      targetRef TEXT, hostID TEXT, mode TEXT NOT NULL, cardID TEXT, taskID TEXT, status TEXT NOT NULL,
+      targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, taskID TEXT, status TEXT NOT NULL,
       resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
