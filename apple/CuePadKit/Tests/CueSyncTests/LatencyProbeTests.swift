@@ -37,6 +37,26 @@ import Testing
     #expect(slowPull.dominantDelay == .slowPull)  // 推送到了，拉取慢
   }
 
+  @Test func sampleDecompositionSubtractsEveryMeasuredComponentFromTheRoundTrip() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    let sample = LatencyProbe.sample(
+      seq: 1, start: start, end: start.addingTimeInterval(1.0), uploadDone: start.addingTimeInterval(0.2),
+      peerFetchStarted: Date(timeIntervalSince1970: 5_000), peerApplied: Date(timeIntervalSince1970: 5_000.1),
+      pongSentAt: Date(timeIntervalSince1970: 5_000.15), myFetchStarted: start.addingTimeInterval(0.9))
+    #expect(sample.rtt == 1.0 && abs((sample.upload ?? 0) - 0.2) < 1e-6)  // 各设备时钟互不相干，只用同一时钟内的差
+    #expect(abs((sample.peerPull ?? 0) - 0.1) < 1e-6 && abs((sample.peerProcessing ?? 0) - 0.05) < 1e-6)
+    #expect(abs((sample.myPull ?? 0) - 0.1) < 1e-6)
+    #expect(abs((sample.remainder ?? 0) - (1.0 - 0.2 - 0.1 - 0.05 - 0.1)) < 1e-6)
+  }
+
+  @Test func missingTimingDataLeavesTheComponentsAndRemainderUnknown() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    let sample = LatencyProbe.sample(
+      seq: 1, start: start, end: start.addingTimeInterval(1.0), uploadDone: nil, peerFetchStarted: nil,
+      peerApplied: nil, pongSentAt: start, myFetchStarted: nil)
+    #expect(sample.rtt == 1.0 && sample.upload == nil && sample.remainder == nil)
+  }
+
   // MARK: 往返
 
   /// 脚本化的网络：ping 上传 50ms、对端拉取 30ms、对端立即回 pong，pong 网络等待 70ms、本端拉取 20ms。
@@ -46,6 +66,9 @@ import Testing
     await responder.startResponding()
     let initiator = LatencyProbe(store: phone.store, label: "phone", log: phone.log, timing: clock.timing)
     let cloud = Loopback(a: phone, b: mac)
+    try await phone.coordinator.start()  // 写入后自动登记待推送
+    try await mac.coordinator.start()
+    defer { Task { await phone.coordinator.stop(); await mac.coordinator.stop() } }
 
     async let report = initiator.run(count: 2, appState: "foreground", timeout: .seconds(30))
     for _ in 0..<2 {

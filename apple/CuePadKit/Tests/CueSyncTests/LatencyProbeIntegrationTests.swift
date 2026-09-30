@@ -25,7 +25,7 @@ struct LatencyProbeIntegrationTests {
     let probe = LatencyProbe(store: fixture.store, label: role, log: sync.timingLog)
     if role == "responder" {
       await probe.startResponding()
-      try await Task.sleep(for: .minutes(25))
+      try await Task.sleep(for: .seconds(25 * 60))
       await probe.stopResponding()
     } else {
       let report = try await probe.run(

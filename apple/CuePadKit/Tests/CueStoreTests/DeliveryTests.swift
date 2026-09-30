@@ -136,7 +136,8 @@ import Testing
     await executor.stop()
   }
 
-  @Test func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
+  @Test(.timeLimit(.minutes(1)))
+  func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
     let handler = Handler()
     let stale = try await store.requestDelivery("old prompt", to: pi, on: "mac-a")
     clock.advance(.seconds(601))
@@ -146,27 +147,62 @@ import Testing
     let executor = executor(handler, maxAge: .seconds(600))
     try await executor.start()
 
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .failed }
     let after = try #require(try await request(stale.id))
-    #expect(after.status == .failed && after.resultDetail?.isEmpty == false)
+    #expect(after.resultDetail?.isEmpty == false)
     #expect(await handler.seen.isEmpty)
     await executor.stop()
   }
 
   @Test(.timeLimit(.minutes(1)))
-  func requestWaitsForItsImagesToArriveThenRuns() async throws {
+  func requestWaitsForItsImagesToArriveThenRunsAfterOtherRequests() async throws {
     let data = pngData(width: 6, height: 6)
-    let hash = try await Fixture().store.addImage(data).hash  // 图片在另一台设备上，尚未同步到本机
-    let handler = Handler()
-    let executor = executor(handler)
+    let elsewhere = try Fixture()  // 图片在另一台设备上，尚未同步到本机
+    let hash = try await elsewhere.store.addImage(data).hash
+    let store = store
+    let runs = RunLog()
+    let executor = DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing) { request in
+      await runs.record(request.content.hasPrefix("look") ? "look" : request.content, imagePresent: store.files.url(hash: hash) != nil)
+      return .succeeded
+    }
     try await executor.start()
-    _ = try await store.requestDelivery("look ![](cuepad://img/\(hash))", to: pi, on: "mac-a")
-    #expect(await handler.seen.isEmpty)
+    let waiting = try await store.requestDelivery("look ![](cuepad://img/\(hash))", to: pi, on: "mac-a")
+    _ = try await store.requestDelivery("plain", to: pi, on: "mac-a")
+
+    // 排在后面的普通请求先执行，说明前面那条被跳过而不是抢跑
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 1 }
+    #expect(try await store.deliveryRequest(waiting.id)?.status == .pending)
 
     _ = try await store.addImage(data)  // 图片同步到了
 
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .succeeded }
-    #expect(await handler.seen.count == 1)
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 2 }
+    #expect(await runs.entries.map(\.name) == ["plain", "look"])
+    #expect(await runs.entries.last?.imagePresent == true)  // 执行时图片已经在本机
     await executor.stop()
+  }
+
+  actor RunLog {
+    struct Entry: Sendable { var name: String; var imagePresent: Bool }
+    private(set) var entries: [Entry] = []
+    func record(_ name: String, imagePresent: Bool) { entries.append(Entry(name: name, imagePresent: imagePresent)) }
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func twoExecutorsNeverRunTheSameRequestTwice() async throws {
+    let first = Handler()
+    let second = Handler()
+    let one = executor(first)
+    let two = executor(second)
+    try await one.start()
+    try await two.start()
+    for index in 0..<6 { _ = try await store.requestDelivery("r\(index)", to: pi, on: nil) }
+
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 6 }
+
+    let all = await first.seen.map(\.id) + second.seen.map(\.id)
+    #expect(all.count == 6 && Set(all).count == 6)  // 领取是原子的
+    await one.stop()
+    await two.stop()
   }
 
   @Test func unknownStatusFromANewerVersionIsPreserved() async throws {

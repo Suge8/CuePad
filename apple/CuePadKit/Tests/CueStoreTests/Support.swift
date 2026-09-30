@@ -93,7 +93,7 @@ final class ManualTiming: @unchecked Sendable {
   private let lock = NSLock()
   private var current: Date
   private var sleepers: [UUID: (deadline: Date, continuation: CheckedContinuation<Void, Error>)] = [:]
-  private var sleeperWaiters: [CheckedContinuation<Void, Never>] = []
+  private var sleeperWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
 
   /// 默认从真实的现在开始（毫秒精度）：Store 用真实时间给记录盖章，两者要在同一时间线上。
   init(start: Date = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 * 1000).rounded() / 1000)) { current = start }
@@ -112,18 +112,23 @@ final class ManualTiming: @unchecked Sendable {
     for continuation in due { continuation.resume() }
   }
 
-  /// 等到至少有一个任务挂在 `sleep` 上（确保 `advance` 会真的唤醒它）。
+  /// 等到至少有一个任务挂在 `sleep` 上（确保 `advance` 会真的唤醒它）；被取消（如超出测试时限）时立即返回。
   func waitForSleeper() async {
     if sleeperCount > 0 { return }
-    await withCheckedContinuation { continuation in
-      lock.lock()
-      if !sleepers.isEmpty {
-        lock.unlock()
-        continuation.resume()
-      } else {
-        sleeperWaiters.append(continuation)
-        lock.unlock()
+    let id = UUID()
+    await withTaskCancellationHandler {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        lock.lock()
+        if !sleepers.isEmpty || Task.isCancelled {
+          lock.unlock()
+          continuation.resume()
+        } else {
+          sleeperWaiters[id] = continuation
+          lock.unlock()
+        }
       }
+    } onCancel: {
+      lock.withLock { sleeperWaiters.removeValue(forKey: id) }?.resume()
     }
   }
 
@@ -132,9 +137,15 @@ final class ManualTiming: @unchecked Sendable {
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
         lock.lock()
+        // 取消可能发生在登记之前（此时 onCancel 找不到它），登记时要再看一次
+        if Task.isCancelled {
+          lock.unlock()
+          continuation.resume(throwing: CancellationError())
+          return
+        }
         sleepers[id] = (current.addingTimeInterval(Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18), continuation)
-        let waiters = sleeperWaiters
-        sleeperWaiters = []
+        let waiters = sleeperWaiters.values
+        sleeperWaiters = [:]
         lock.unlock()
         for waiter in waiters { waiter.resume() }
       }
