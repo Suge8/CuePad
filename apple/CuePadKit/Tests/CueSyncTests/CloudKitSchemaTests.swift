@@ -42,10 +42,12 @@ import Testing
     try await CloudKitSchema.generate().write(to: Self.schemaFile, atomically: true, encoding: .utf8)
   }
 
-  @Test func everySyncedTableIsARecordTypeAndNothingElseIs() async throws {
+  /// 同步表各一个记录类型，外加生产环境里删不掉的已下线类型；本机表（piSessions 等）不进 CloudKit。
+  @Test func everySyncedTableIsARecordTypeAndOnlyRetiredOnesAreExtra() async throws {
     let schema = try await CloudKitSchema.generate()
     let types = lines(schema).filter { $0.hasPrefix("RECORD TYPE ") }.map { $0.dropFirst("RECORD TYPE ".count).dropLast(2) }
-    #expect(types.map(String.init) == Table.synced.map(\.rawValue))  // 本机表（piSessions 等）不进 CloudKit
+    #expect(types.map(String.init) == Table.synced.map(\.rawValue) + ["tags", "cardTags", "probes"])
+    #expect(fields(of: "cards", in: schema).contains("isFavorite INT64"))  // 生产里已有，只声明不读写
   }
 
   @Test func fieldTypesAndEncryptionFollowTheMapping() async throws {

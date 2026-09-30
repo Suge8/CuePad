@@ -27,6 +27,7 @@ DEFINE SCHEMA
         createdAt      INT64,
         modifiedAt     INT64,
         conflictOf     STRING,
+        isFavorite     INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -102,6 +103,40 @@ DEFINE SCHEMA
         createdAt     INT64,
         completedAt   INT64,
         modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE tags (
+        "___recordID" REFERENCE QUERYABLE,
+        color         STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        name          ENCRYPTED STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cardTags (
+        "___recordID" REFERENCE QUERYABLE,
+        cardID        STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        tagID         STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE probes (
+        "___recordID"      REFERENCE QUERYABLE,
+        kind               STRING,
+        modifiedAt         INT64,
+        origin             STRING,
+        peerAppliedAt      INT64,
+        peerFetchStartedAt INT64,
+        run                STRING,
+        sentAt             INT64,
+        seq                INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
