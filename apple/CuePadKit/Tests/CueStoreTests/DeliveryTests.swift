@@ -37,11 +37,11 @@ import Testing
 
   @Test func requestIsRecordedAsPendingWithContentAndTarget() async throws {
     let card = try await store.createCard(in: nil, body: "c")
-    let made = try await store.requestDelivery("prompt", to: pi, on: "mac-a", mode: "followUp", card: card.id)
+    let made = try await store.requestDelivery("prompt", to: pi, on: "mac-a", mode: .followUp, card: card.id)
 
     let stored = try #require(try await request(made.id))
     #expect(stored.status == .pending && stored.content == "prompt" && stored.target == pi)
-    #expect(stored.hostID == "mac-a" && stored.mode == "followUp" && stored.cardID == card.id)
+    #expect(stored.hostID == "mac-a" && stored.mode == .followUp && stored.cardID == card.id)
     #expect(stored.completedAt == nil && stored.resultDetail == nil)
     await #expect(throws: CueStoreError.blankDeliveryContent) { try await store.requestDelivery("  ", to: pi, on: "mac-a") }
   }
@@ -203,6 +203,38 @@ import Testing
     #expect(all.count == 6 && Set(all).count == 6)  // 领取是原子的
     await one.stop()
     await two.stop()
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func everyKnownModeReachesTheHandlerAsItsTypedValue() async throws {
+    let handler = Handler()
+    let executor = executor(handler)
+    try await executor.start()
+    let modes: [DeliveryMode] = [.send, .steer, .followUp, .paste]
+    for mode in modes { _ = try await store.requestDelivery("m", to: pi, on: "mac-a", mode: mode) }
+
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 4 }
+
+    #expect(await handler.seen.map(\.mode) == modes)
+    #expect(modes.map(\.rawValue) == ["send", "steer", "followUp", "paste"])  // 落盘与线上的字面值
+    await executor.stop()
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func aModeFromANewerVersionIsKeptButNeverExecutedAndFailsWithAReason() async throws {
+    let handler = Handler()
+    let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET mode = 'quantumSend'")
+    #expect(try await request(made.id)?.mode == .unknown("quantumSend"))  // 原样保留
+
+    let executor = executor(handler)
+    try await executor.start()
+    let done = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.first?.status == .failed }
+
+    #expect(await handler.seen.isEmpty)  // 不认识的发送方式不执行，也不猜成 send
+    #expect(done[0].resultDetail?.contains("quantumSend") == true)
+    #expect(done[0].mode == .unknown("quantumSend") && done[0].completedAt != nil)
+    await executor.stop()
   }
 
   @Test func unknownStatusFromANewerVersionIsPreserved() async throws {
