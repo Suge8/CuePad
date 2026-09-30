@@ -21,7 +21,7 @@ cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
   release)
     case "$platform" in
-      mac) exec "$APPLE_DIR/scripts/release-mac.sh" ;;
+      mac) exec "$APPLE_DIR/scripts/release-mac.sh" "${@:3}" ;;
       ios) exec "$APPLE_DIR/scripts/release-ios.sh" testflight ;;
       *) echo "用法：$0 release <mac|ios>" >&2; exit 2 ;;
     esac ;;
