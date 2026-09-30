@@ -1,0 +1,141 @@
+DEFINE SCHEMA
+
+    RECORD TYPE projects (
+        "___recordID" REFERENCE QUERYABLE,
+        name          ENCRYPTED STRING,
+        icon          STRING,
+        color         STRING,
+        sortKey       STRING,
+        isPinned      INT64,
+        deletedAt     INT64,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        goalCardID    STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cards (
+        "___recordID"  REFERENCE QUERYABLE,
+        projectID      STRING,
+        body           ENCRYPTED STRING,
+        numbering      STRING,
+        isFavorite     INT64,
+        variableValues ENCRYPTED STRING,
+        sortKey        STRING,
+        deletedAt      INT64,
+        createdAt      INT64,
+        modifiedAt     INT64,
+        conflictOf     STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE tags (
+        "___recordID" REFERENCE QUERYABLE,
+        name          ENCRYPTED STRING,
+        color         STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cardTags (
+        "___recordID" REFERENCE QUERYABLE,
+        cardID        STRING,
+        tagID         STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE tasks (
+        "___recordID" REFERENCE QUERYABLE,
+        content       ENCRYPTED STRING,
+        projectID     STRING,
+        sortKey       STRING,
+        completedAt   INT64,
+        piSessionID   STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE sendRecords (
+        "___recordID" REFERENCE QUERYABLE,
+        content       ENCRYPTED STRING,
+        targetKind    STRING,
+        targetName    ENCRYPTED STRING,
+        targetRef     ENCRYPTED STRING,
+        cardID        STRING,
+        taskID        STRING,
+        sentAt        INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE attachments (
+        "___recordID" REFERENCE QUERYABLE,
+        hash          STRING,
+        byteCount     INT64,
+        format        STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        file          ASSET,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE piSessionStates (
+        "___recordID" REFERENCE QUERYABLE,
+        sessionID     STRING,
+        hostID        STRING,
+        title         ENCRYPTED STRING,
+        projectID     STRING,
+        state         STRING,
+        detail        ENCRYPTED STRING,
+        stateSince    INT64,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        notify        STRING QUERYABLE,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE deliveryRequests (
+        "___recordID" REFERENCE QUERYABLE,
+        content       ENCRYPTED STRING,
+        targetKind    STRING,
+        targetName    ENCRYPTED STRING,
+        targetRef     ENCRYPTED STRING,
+        hostID        STRING,
+        mode          STRING,
+        cardID        STRING,
+        taskID        STRING,
+        status        STRING,
+        resultDetail  ENCRYPTED STRING,
+        handledBy     STRING,
+        createdAt     INT64,
+        completedAt   INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE probes (
+        "___recordID"      REFERENCE QUERYABLE,
+        run                STRING,
+        seq                INT64,
+        kind               STRING,
+        origin             STRING,
+        sentAt             INT64,
+        peerFetchStartedAt INT64,
+        peerAppliedAt      INT64,
+        modifiedAt         INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );

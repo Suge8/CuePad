@@ -55,6 +55,8 @@ protocol SubscriptionStore: Sendable {
 /// 标志在上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废（见 `PiStateRecorder`）。
 /// 上线前需在 CloudKit Dashboard 里为 `piSessionStates.notify` 建立可查询索引（开发环境自动建立）。
 struct PiAlertSubscriptions {
+  /// 通知标志字段（明文、可查询）。
+  static let flagField = "notify"
   static let prefix = "cuepad.pi."
   static let waitingID = prefix + "waiting"
   static let settledID = prefix + "settled"
@@ -82,7 +84,7 @@ struct PiAlertSubscriptions {
 
   private func make(id: String, flag: String, key: String) -> CKQuerySubscription {
     let subscription = CKQuerySubscription(
-      recordType: RecordMapper.recordType(for: .piSessionStates), predicate: NSPredicate(format: "notify == %@", flag),
+      recordType: RecordMapper.recordType(for: .piSessionStates), predicate: NSPredicate(format: "%K == %@", Self.flagField, flag),
       subscriptionID: id, options: [.firesOnRecordCreation, .firesOnRecordUpdate])
     subscription.zoneID = zoneID
     let info = CKSubscription.NotificationInfo()

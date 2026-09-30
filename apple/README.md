@@ -57,6 +57,10 @@ Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，�
 
 只能在网页上做的一次性前置（已做）：App Group `group.com.sugeh.cuepad` 与 iCloud 容器 `iCloud.com.sugeh.cuepad` 的创建及挂到 App ID；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成，`provision.py devid-import <.cer>` 导入）；App Store Connect 里的 App 记录。
 
+## App 图标
+
+`App/Sources/AppIcon.icon` 是 Icon Composer 的分层图标（Liquid Glass，浅色/深色/着色三种外观），由 `scripts/make-icon.py` 从品牌 logo `design/final/logo-final.png` 矢量化生成（potrace 描成 SVG，C 与纸片两层）；换 logo 后重跑脚本即可，预览见 `design/final/app-icon-preview.png`。菜单栏模板图仍是 `Assets.xcassets/MenuBarIcon`。
+
 ## 自动更新（macOS）
 
 用 Sparkle 2（EdDSA 校验、增量更新），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉 Sparkle 源码。更新源 `https://cue-pad.com/appcast.xml` 与公钥在 `App/Config/CuePad-macOS-Info.plist`；设置窗口底部有"自动检查更新"开关和"检查更新…"，App 菜单里也有"检查更新…"。隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
@@ -72,3 +76,16 @@ EdDSA 私钥在专用钥匙串（`~/.appstoreconnect/cuepad-signing.keychain-db`
 主 App 启动时创建 `CloudSync` 并启动（隔离模式 `CUEPAD_LIBRARY_DIR` 与测试不同步）；应用回到前台、Mac 系统唤醒时立即 `syncNow()`，推送由引擎自己处理。`AppServices` 暴露 `syncStatus`、`syncIssues`、`conflicts` 与 `resolveSync`、`resolveConflict`。Mac 端把 Pi 会话状态写成同步记录（启动时先清掉本机遗留的），并只执行发给本机 `hostID`（硬件 UUID 的哈希前缀）的手机投送请求。
 
 iOS 有同步时，每个窗口出现后请求通知权限并注册远程通知（`Info.plist` 声明 `remote-notification` 后台模式）；锁屏 Pi 通知由 CloudKit 订阅在服务端生成，文案按 key 取自 `App/Sources/zh-Hans.lproj/Localizable.strings`。点开通知由 `Sources/iOS/PiAlertCenter.swift` 交给界面：打开活动（iPhone 标签 / iPad 右侧面板）并定位到该会话。
+
+CloudKit 数据结构由记录映射推出，不手写：`CloudKit/cuepad.ckdb` 是生成物，`CloudKitSchemaTests` 保证它与映射一致；映射改了测试会失败，在 `CuePadKit/` 下用 `CUEPAD_REGENERATE_SCHEMA=1 swift test --filter regenerateSchemaFile` 重新生成，再导入开发环境（管理令牌在钥匙串 `cuepad-cloudkit-management-token`，不入库、不打印）：
+
+```bash
+export CLOUDKIT_MANAGEMENT_TOKEN=$(security find-generic-password -a cuepad -s cuepad-cloudkit-management-token -w)
+C="--team-id SVPPQJM9JG --container-id iCloud.com.sugeh.cuepad --environment development"
+xcrun cktool validate-schema $C --file CloudKit/cuepad.ckdb
+xcrun cktool import-schema $C --validate --file CloudKit/cuepad.ckdb
+xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端把字段按字母序排列并补系统字段，逐类型核对字段与权限
+```
+
+生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构。
+
