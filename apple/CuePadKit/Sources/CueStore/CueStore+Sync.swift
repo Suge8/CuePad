@@ -142,6 +142,7 @@ extension CueStore {
           failures.append(RemoteFailure(recordName: change.recordName, message: "\(error)"))
         }
       }
+      try clearInvalidGoals()
     }
     return failures + (try removeFiles(of: removedHashes))
   }
@@ -197,6 +198,9 @@ extension CueStore {
       }
       try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
+      if key.table == .cards {
+        try db.run("UPDATE projects SET goalCardID = NULL, modifiedAt = ? WHERE goalCardID = ?", [Date.stamp, key.id])
+      }
       return hash
     case .save(let remote, let systemFields):
       try applySave(remote, systemFields)
@@ -238,6 +242,19 @@ extension CueStore {
       // 本机版本留下并继续待推送，但要带上服务器最新的系统字段，否则推送会再次冲突。
       try setMetadata(table, remote.id, systemFields, pushed: pushed ?? 0)
     }
+  }
+
+  /// 目标卡不变量在远端变更之后仍要成立：目标卡已回收、或已不属于该项目的，清空（并因此重新推送，让各设备收敛）。
+  /// 离线并发下较新的本机项目版本可能仍指着一张已被别处回收的卡。目标卡"还没到"（本机没有这张卡）不算失效：
+  /// 记录乱序到达是常态，提前清掉会丢掉目标。
+  private func clearInvalidGoals() throws {
+    try db.run(
+      """
+      UPDATE projects SET goalCardID = NULL, modifiedAt = ?
+      WHERE goalCardID IS NOT NULL AND EXISTS (
+        SELECT 1 FROM cards c
+        WHERE c.id = projects.goalCardID AND (c.deletedAt IS NOT NULL OR c.projectID IS NOT projects.id))
+      """, [Date.stamp])
   }
 
   /// 被淘汰的卡片版本存成一张新卡（和留下的版本同项目、放在项目最前），指回原卡。
