@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
@@ -109,3 +110,4 @@ enum PiWire {
         try JSONEncoder().encode(command) + Data([0x0A])
     }
 }
+#endif

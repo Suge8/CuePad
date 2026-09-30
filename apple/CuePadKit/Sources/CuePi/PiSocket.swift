@@ -1,3 +1,4 @@
+#if os(macOS)
 import Darwin
 import Foundation
 
@@ -140,3 +141,4 @@ final class ProcessExitWatcher {
 
     func cancel() { source.cancel() }
 }
+#endif

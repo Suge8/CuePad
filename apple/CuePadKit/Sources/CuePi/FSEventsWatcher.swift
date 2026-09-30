@@ -1,3 +1,4 @@
+#if os(macOS)
 import CoreServices
 import Foundation
 
@@ -39,3 +40,4 @@ final class FSEventsWatcher: @unchecked Sendable {
 
     deinit { stop() }
 }
+#endif

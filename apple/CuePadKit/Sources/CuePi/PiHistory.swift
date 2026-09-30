@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 public enum PiTurnStatus: Sendable, Equatable, Codable {
@@ -285,3 +286,4 @@ public enum PiHistory {
         }
     }
 }
+#endif

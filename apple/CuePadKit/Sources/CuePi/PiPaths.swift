@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 /// Pi 与 CuePad 桥用到的全部目录，唯一权威来源。
@@ -27,3 +28,4 @@ public struct PiPaths: Sendable, Equatable {
         return FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent", directoryHint: .isDirectory)
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import Testing
 @testable import CuePi
@@ -328,3 +329,4 @@ struct HistoryIndexerTests {
         #expect(update.history.turns.last?.prompt == "while app was closed")
     }
 }
+#endif

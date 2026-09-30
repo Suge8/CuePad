@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import Testing
 @testable import CuePi
@@ -125,3 +126,4 @@ struct TerminalJumperTests {
         #expect(sys.activated == ["com.example.term"])
     }
 }
+#endif

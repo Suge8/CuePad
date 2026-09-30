@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 /// 扩展上报的会话实时状态（只在内存，来自连接）。
@@ -124,3 +125,4 @@ public enum PiBridgeError: Error, Equatable {
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`
     case rejected(String)
 }
+#endif

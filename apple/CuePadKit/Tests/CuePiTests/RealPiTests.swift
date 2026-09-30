@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import Testing
 @testable import CuePi
@@ -214,3 +215,4 @@ struct RealPiTests {
         #expect(bridge.sessions.isEmpty)
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 /// 后台索引 Pi 会话目录：先按修改时间倒序回填（最近的会话最先可用），发出 `backfillFinished` 后
@@ -92,3 +93,4 @@ public struct PiHistoryIndexer: Sendable {
         }
     }
 }
+#endif

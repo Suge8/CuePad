@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Foundation
 
@@ -188,3 +189,4 @@ public struct LivePiTerminalSystem: PiTerminalSystem {
         var errorDescription: String? { message }
     }
 }
+#endif

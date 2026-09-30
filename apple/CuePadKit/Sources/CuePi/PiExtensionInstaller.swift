@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 public struct PiVersion: Sendable, Equatable, Comparable, CustomStringConvertible {
@@ -163,3 +164,4 @@ public struct PiExtensionInstaller: Sendable {
         }
     }
 }
+#endif

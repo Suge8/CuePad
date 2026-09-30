@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import Testing
 @testable import CuePi
@@ -124,3 +125,4 @@ struct InstallerTests {
         try installer().uninstall()
     }
 }
+#endif

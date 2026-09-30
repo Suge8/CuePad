@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import Testing
 @testable import CuePi
@@ -307,3 +308,4 @@ struct BridgeClientTests {
         #expect(ext.commands.count == 2)
     }
 }
+#endif
