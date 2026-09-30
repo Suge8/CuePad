@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "CueDispatch", targets: ["CueDispatch"]),
         .library(name: "CuePi", targets: ["CuePi"]),
         .library(name: "CueSync", targets: ["CueSync"]),
+        .executable(name: "cuepad", targets: ["CueCLI"]),
     ],
     targets: [
         // 卡片正文的纯文本模型：解析/序列化、分块、变量、光标规范化。仅依赖 Foundation。
@@ -27,6 +28,9 @@ let package = Package(
         // iCloud 同步：CKSyncEngine ↔ CueStore 的记录映射、待推送变更、冲突与附件。
         .target(name: "CueSync", dependencies: ["CueStore"]),
         .testTarget(name: "CueSyncTests", dependencies: ["CueSync"]),
+        // `cuepad` 命令行：供人和 agent 读写本机资料库（经 CueStore，零第三方依赖）。
+        .executableTarget(name: "CueCLI", dependencies: ["CueStore", "CueText"]),
+        .testTarget(name: "CueCLITests", dependencies: ["CueCLI"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor"]),
