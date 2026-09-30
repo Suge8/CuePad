@@ -5,7 +5,7 @@
 用法：provision.py <ids|identity|profiles|device|devid-csr|devid-import|unlock|all> ...
   ids                           创建 App ID（主 App、分享扩展、小组件）并开启能力（App Groups、iCloud、推送）
   identity <distribution|development>  本机没有该证书的私钥时创建证书，放进专用钥匙串
-  profiles                      创建并安装 iOS 描述文件（App Store；有已登记设备时再建 Development）
+  profiles                      创建并安装描述文件：iOS（App Store；有已登记设备时再建 Development）与 macOS（Developer ID）
   device <UDID> <名称>          登记一台真机
   devid-csr                     为 Developer ID Application 证书生成私钥与 CSR（证书只有账号持有人能创建，见 README）
   devid-import <.cer 路径>      把网页上下载的 Developer ID 证书连同私钥导入专用钥匙串
@@ -97,6 +97,19 @@ def import_identity(cert_der, key_pem):
 
 # ---- 命令 ----
 
+def install_profile(profile, extension):
+    """安装描述文件，并清掉本机上同名的旧文件（服务端的旧版本创建新版本前已删除）。"""
+    for name in os.listdir(PROFILES_DIR):
+        path = os.path.join(PROFILES_DIR, name)
+        if name.endswith((".mobileprovision", ".provisionprofile")):
+            decoded = subprocess.run(["security", "cms", "-D", "-i", path], capture_output=True).stdout
+            if decoded and plistlib.loads(decoded).get("Name") == profile["name"]:
+                os.remove(path)
+    with open(os.path.join(PROFILES_DIR, profile["uuid"] + extension), "wb") as f:
+        f.write(base64.b64decode(profile["profileContent"]))
+    print(f"已安装描述文件「{profile['name']}」")
+
+
 def ensure_ids():
     existing = {x["attributes"]["identifier"]: x["id"] for x in api("GET", "/v1/bundleIds?limit=200")["data"]}
     ids = {}
@@ -170,10 +183,8 @@ def ensure_profiles():
                 relationships["devices"] = {"data": [{"type": "devices", "id": d} for d in devices]}
             body = {"data": {"type": "profiles", "attributes": {"name": name, "profileType": profile_type}, "relationships": relationships}}
             profile = api("POST", "/v1/profiles", body)["data"]["attributes"]
-            content = base64.b64decode(profile["profileContent"])
-            path = os.path.join(PROFILES_DIR, profile["uuid"] + ".mobileprovision")
-            open(path, "wb").write(content)
-            print(f"已安装描述文件「{name}」")
+            install_profile(profile, ".mobileprovision")
+    ensure_mac_profile(ids)
 
 
 DEVID_KEY = os.path.join(HOME, "developer-id.key")
@@ -197,6 +208,23 @@ def devid_import(cer_path):
     os.remove(DEVID_KEY)
     os.remove(DEVID_CSR)
     print("已导入：" + (local_identity("Developer ID Application") or "（没有识别到 Developer ID Application 身份，检查证书类型）"))
+
+
+MAC_PROFILE = "CuePad macOS DeveloperID"
+
+
+def ensure_mac_profile(ids):
+    certs = local_cert_ids("Developer ID Application", "DEVELOPER_ID_APPLICATION,DEVELOPER_ID_APPLICATION_G2")
+    if not certs:
+        print("本机没有 Developer ID Application 证书：跳过 macOS 描述文件（见 README「签名与发布」）")
+        return
+    for old in api("GET", f"/v1/profiles?filter[name]={MAC_PROFILE.replace(' ', '%20')}&limit=50")["data"]:
+        api("DELETE", f"/v1/profiles/{old['id']}")
+    body = {"data": {"type": "profiles", "attributes": {"name": MAC_PROFILE, "profileType": "MAC_APP_DIRECT"},
+                     "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": ids[APP_ID]}},
+                                       "certificates": {"data": [{"type": "certificates", "id": c} for c in certs]}}}}
+    profile = api("POST", "/v1/profiles", body)["data"]["attributes"]
+    install_profile(profile, ".provisionprofile")
 
 
 def register_device(udid, name):

@@ -75,6 +75,7 @@
 		A10000000000000000000004 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		C1000000000000000000E001 /* Extension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Extension.entitlements"; sourceTree = "<group>"; };
 		C1000000000000000000E002 /* CuePad-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "CuePad-macOS.entitlements"; sourceTree = "<group>"; };
+		C1000000000000000000E004 /* CuePad-macOS-local.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "CuePad-macOS-local.entitlements"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -150,6 +151,7 @@
 				C10000000000000000000006 /* CuePad.entitlements */,
 				C1000000000000000000E001 /* Extension.entitlements */,
 				C1000000000000000000E002 /* CuePad-macOS.entitlements */,
+				C1000000000000000000E004 /* CuePad-macOS-local.entitlements */,
 				C10000000000000000000007 /* CuePad-iOS-Info.plist */,
 				C10000000000000000000008 /* ShareExtension-Info.plist */,
 				C10000000000000000000009 /* Widget-Info.plist */,
@@ -451,7 +453,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = CuePad;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = App/Config/CuePad.entitlements;
-				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/Config/CuePad-macOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "$(CUEPAD_MAC_ENTITLEMENTS)";
 				"INFOPLIST_FILE[sdk=iphone*]" = "App/Config/CuePad-iOS-Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Pi 会话的那个终端标签页。";
@@ -477,6 +479,10 @@
 		A10000000000000000000083 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				APS_ENVIRONMENT = production;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				"CODE_SIGN_STYLE[sdk=macosx*]" = Manual;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "CuePad macOS DeveloperID";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
 				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "CuePad iOS AppStore";
@@ -487,7 +493,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = CuePad;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = App/Config/CuePad.entitlements;
-				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "App/Config/CuePad-macOS.entitlements";
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "$(CUEPAD_MAC_ENTITLEMENTS)";
 				"INFOPLIST_FILE[sdk=iphone*]" = "App/Config/CuePad-iOS-Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Pi 会话的那个终端标签页。";
