@@ -3,25 +3,13 @@ import CueText
 import UIKit
 
 extension CueTextView {
-    func buffer() -> CueBuffer {
-        let storage = textStorage
-        return CueBuffer(text: storage.mutableString) { index in
-            index < storage.length && storage.attribute(.attachment, at: index, effectiveRange: nil) is CueDividerAttachment
-        }
-    }
-
     /// 在光标处切块（硬件键盘 Shift+Enter 与键盘工具栏的"分块"共用）。
     public func insertSplit() {
-        apply(buffer().splitEdit(selection: selectedRange))
+        apply(core.buffer().splitEdit(selection: selectedRange))
     }
 
     private func apply(_ edit: CueEdit) {
-        let insertion = NSMutableAttributedString()
-        for (index, part) in edit.insert.components(separatedBy: String(UnicodeScalar(CueFormat.objectCharacter)!)).enumerated() {
-            if index > 0 { insertion.append(dividerString()) }
-            insertion.append(NSAttributedString(string: part, attributes: baseAttributes))
-        }
-        replace(edit.range, with: insertion, caret: edit.caret)
+        replace(edit.range, with: core.insertion(for: edit), caret: edit.caret)
     }
 
     /// 所有程序性编辑的唯一入口：替换文本、放置光标、登记撤销（UITextView 不会为直接改 storage 登记撤销）、
@@ -35,7 +23,7 @@ extension CueTextView {
         }
         textStorage.replaceCharacters(in: range, with: replacement)
         selectedRange = NSRange(location: caret, length: 0)
-        typingAttributes = baseAttributes
+        typingAttributes = core.baseAttributes
         scrollRangeToVisible(selectedRange)
         NotificationCenter.default.post(name: UITextView.textDidChangeNotification, object: self)
         delegate?.textViewDidChange?(self)
@@ -45,7 +33,19 @@ extension CueTextView {
 
     /// 块首 Backspace 整条合并分隔线；其它情况走系统默认删除。
     public override func deleteBackward() {
-        if markedTextRange == nil, let edit = buffer().mergeBackward(selection: selectedRange) { apply(edit) } else { super.deleteBackward() }
+        if markedTextRange == nil, let edit = core.buffer().mergeBackward(selection: selectedRange) { apply(edit) } else { super.deleteBackward() }
+    }
+
+    /// 硬件键盘前向删除：块尾按下时整条合并分隔线，返回 true 表示已处理；其它位置交还系统默认。
+    func handleForwardDelete() -> Bool {
+        guard markedTextRange == nil, let edit = core.buffer().mergeForward(selection: selectedRange) else { return false }
+        apply(edit)
+        return true
+    }
+
+    public override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if presses.contains(where: { $0.key?.keyCode == .keyboardDeleteForward }), handleForwardDelete() { return }
+        super.pressesBegan(presses, with: event)
     }
 
     public override var keyCommands: [UIKeyCommand]? {
@@ -67,15 +67,15 @@ extension CueTextView {
 
     /// ⌘↑/↓：先跳块，无块可跳时回落到文档首尾。
     @objc private func previousBlockCommand(_ sender: UIKeyCommand) {
-        jump(to: buffer().prevBlockStart(from: selectedRange.location) ?? 0)
+        jump(to: core.buffer().prevBlockStart(from: selectedRange.location) ?? 0)
     }
 
     @objc private func nextBlockCommand(_ sender: UIKeyCommand) {
-        jump(to: buffer().nextBlockStart(from: selectedRange.location) ?? textStorage.length)
+        jump(to: core.buffer().nextBlockStart(from: selectedRange.location) ?? textStorage.length)
     }
 
     @objc private func copyBlockCommand(_ sender: UIKeyCommand) {
-        performBlockAction(.copy, blockIndex: buffer().blockIndex(at: selectedRange.location))
+        core.performBlockAction(.copy, blockIndex: core.buffer().blockIndex(at: selectedRange.location))
     }
 
     private func jump(to location: Int) {
@@ -110,49 +110,8 @@ extension CueTextView {
 
     private func normalized(_ range: NSRange) -> NSRange {
         guard range.length == 0, textStorage.length > 0 else { return range }
-        let caret = buffer().normalizedCaret(from: super.selectedRange.location, to: range.location)
+        let caret = core.buffer().normalizedCaret(from: super.selectedRange.location, to: range.location)
         return NSRange(location: caret, length: 0)
-    }
-
-    // MARK: 块动作与编号
-
-    func performDividerAction(_ kind: CueBlockActionKind, from attachment: CueDividerAttachment) {
-        guard let location = dividerLocation(of: attachment),
-              let divider = buffer().dividers().first(where: { $0.location == location }) else { return }
-        performBlockAction(kind, blockIndex: divider.blockIndex)
-    }
-
-    private func performBlockAction(_ kind: CueBlockActionKind, blockIndex: Int) {
-        let segments = CueSegments.parse(storedText)
-        guard segments.indices.contains(blockIndex) else { return }
-        onBlockAction?(CueBlockAction(kind: kind, blockIndex: blockIndex, text: segments[blockIndex].text))
-    }
-
-    private func dividerLocation(of attachment: CueDividerAttachment) -> Int? {
-        var found: Int?
-        textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: textStorage.length)) { value, range, stop in
-            if value as? CueDividerAttachment === attachment { found = range.location; stop.pointee = true }
-        }
-        return found
-    }
-
-    func refreshDividerLabels() {
-        if numbering != .none {
-            for divider in buffer().dividers() {
-                let attachment = textStorage.attribute(.attachment, at: divider.location, effectiveRange: nil) as? CueDividerAttachment
-                setLabel(numbering.label(forSegment: divider.sequence), on: attachment)
-            }
-            return
-        }
-        textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: textStorage.length)) { value, _, _ in
-            setLabel("", on: value as? CueDividerAttachment)
-        }
-    }
-
-    private func setLabel(_ label: String, on attachment: CueDividerAttachment?) {
-        guard let attachment, attachment.label != label else { return }
-        attachment.label = label
-        attachment.view?.labelText = label
     }
 }
 #endif

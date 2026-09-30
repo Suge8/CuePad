@@ -1,45 +1,7 @@
 #if canImport(AppKit)
 import AppKit
 
-/// 分隔线附件：不可编辑控件，自带编号标签与复制/发送按钮。
-final class CueDividerAttachment: NSTextAttachment {
-    weak var owner: CueTextView?
-    weak var view: CueDividerView?
-    var label = ""
-
-    init() { super.init(data: nil, ofType: nil) }
-    required init?(coder: NSCoder) { nil }
-
-    override func viewProvider(
-        for parentView: NSView?, location: any NSTextLocation, textContainer: NSTextContainer?
-    ) -> NSTextAttachmentViewProvider? {
-        let provider = CueDividerViewProvider(
-            textAttachment: self, parentView: parentView, textLayoutManager: textContainer?.textLayoutManager, location: location)
-        provider.tracksTextAttachmentViewBounds = true
-        return provider
-    }
-}
-
-final class CueDividerViewProvider: NSTextAttachmentViewProvider {
-    override func loadView() {
-        nonisolated(unsafe) let attachment = textAttachment as! CueDividerAttachment
-        view = MainActor.assumeIsolated {
-            let divider = CueDividerView(attachment: attachment)
-            attachment.view = divider
-            return divider
-        }
-    }
-
-    override func attachmentBounds(
-        for attributes: [NSAttributedString.Key: Any], location: any NSTextLocation, textContainer: NSTextContainer?,
-        proposedLineFragment: CGRect, position: CGPoint
-    ) -> CGRect {
-        nonisolated(unsafe) let attachment = textAttachment as! CueDividerAttachment
-        let height = MainActor.assumeIsolated { attachment.owner?.theme.dividerHeight ?? 28 }
-        return CGRect(x: 0, y: -height / 4, width: max(proposedLineFragment.width, 1), height: height)
-    }
-}
-
+/// 分隔线控件：编号标签 + 虚线 + 复制/发送按钮。
 @MainActor
 final class CueDividerView: NSView {
     private unowned let attachment: CueDividerAttachment
@@ -53,7 +15,7 @@ final class CueDividerView: NSView {
         }
     }
 
-    private var theme: CueEditorTheme { attachment.owner?.theme ?? .neutral }
+    private var theme: CueEditorTheme { attachment.core?.style ?? .neutral }
 
     init(attachment: CueDividerAttachment) {
         self.attachment = attachment
@@ -73,8 +35,8 @@ final class CueDividerView: NSView {
 
     required init?(coder: NSCoder) { nil }
 
-    @objc private func copyTapped() { attachment.owner?.performDividerAction(.copy, from: attachment) }
-    @objc private func sendTapped() { attachment.owner?.performDividerAction(.send, from: attachment) }
+    @objc private func copyTapped() { attachment.core?.performDividerAction(.copy, from: attachment) }
+    @objc private func sendTapped() { attachment.core?.performDividerAction(.send, from: attachment) }
 
     private var labelAttributes: [NSAttributedString.Key: Any] {
         [.font: NSFont.systemFont(ofSize: 11, weight: .medium), .foregroundColor: theme.dividerLabelColor]

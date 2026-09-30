@@ -1,25 +1,30 @@
+import CoreGraphics
+import Foundation
+
 #if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 
 /// 内联图片附件。只保存 id 与文件位置；尺寸只读文件头，像素在附件被绘制（进入视口）时才由
 /// `ThumbnailLoader` 降采样解码。
 ///
-/// 这里不用 NSTextAttachmentViewProvider：TextKit 不保证首次布局后加载视图，视图还会吞掉点击、
+/// 这里不用 NSTextAttachmentViewProvider：TextKit（macOS）不保证首次布局后加载视图，视图还会吞掉点击、
 /// 遮住选区高亮。附件带一张 1×1 占位图只是为了让 TextKit 走 `image(for:…)` 绘制路径，真图在那里按需提供。
 final class CueImageAttachment: NSTextAttachment {
     private static let placeholderSize = CGSize(width: 240, height: 120)
-    private static let stub = NSImage(size: NSSize(width: 1, height: 1))
 
     let imageID: String
     let fileURL: URL?
-    weak var owner: CueTextView?
+    weak var core: EditorCore?
     private lazy var pointSize: CGSize? = fileURL.flatMap(ImageLoading.pointSize(at:))
 
     init(id: String, fileURL: URL?) {
         imageID = id
         self.fileURL = fileURL
         super.init(data: nil, ofType: nil)
-        image = Self.stub
+        image = CueImageRendering.stub
     }
 
     required init?(coder: NSCoder) { nil }
@@ -44,10 +49,9 @@ final class CueImageAttachment: NSTextAttachment {
     override func image(
         for bounds: CGRect, attributes: [NSAttributedString.Key: Any], location: any NSTextLocation,
         textContainer: NSTextContainer?
-    ) -> NSImage? {
-        let owner = owner
+    ) -> CueImage? {
+        nonisolated(unsafe) let core = core
         let url = fileURL
-        return MainActor.assumeIsolated { owner?.thumbnails.image(at: url, size: bounds.size) }
+        return MainActor.assumeIsolated { core?.thumbnails.image(at: url, size: bounds.size) }
     }
 }
-#endif

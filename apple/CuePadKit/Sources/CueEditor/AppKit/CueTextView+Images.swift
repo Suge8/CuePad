@@ -12,7 +12,7 @@ extension CueTextView {
             let ids = try importImages(from: pboard)
             if !ids.isEmpty {
                 let insertion = NSMutableAttributedString()
-                ids.forEach { insertion.append(imageString(id: $0)) }
+                ids.forEach { insertion.append(core.imageString(id: $0)) }
                 insertText(insertion, replacementRange: selectedRange())
                 return true
             }
@@ -22,7 +22,7 @@ extension CueTextView {
         }
         // 文本一律按存储格式解析：分隔线行与图片标记还原成控件
         guard let text = pboard.string(forType: .string) else { return false }
-        insertText(attributed(CueFormat.parse(text)), replacementRange: selectedRange())
+        insertText(core.attributed(CueFormat.parse(text)), replacementRange: selectedRange())
         return true
     }
 
@@ -66,17 +66,6 @@ extension CueTextView {
             ?? super.preferredPasteboardType(from: availableTypes, restrictedToTypesFrom: allowedTypes)
     }
 
-    /// 缩略图解码完成后重绘引用它的附件。只给视图打重绘标记没用：TextKit 缓存了片段的渲染结果，
-    /// 必须让对应片段失效重排。
-    func redrawImages(at url: URL) {
-        let storage = textStorage!
-        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
-            guard let image = value as? CueImageAttachment, image.fileURL == url, let target = textRange(range) else { return }
-            textLayoutManager?.invalidateLayout(for: target)
-        }
-        needsLayout = true
-    }
-
     // MARK: 复制
 
     /// 复制/剪切/拖出选区一律输出存储格式字符串：附件不会被归档成 RTFD 而丢失图片 id。
@@ -84,7 +73,7 @@ extension CueTextView {
         let range = selectedRange()
         guard range.length > 0 else { return false }
         pboard.declareTypes([.string], owner: nil)
-        return pboard.setString(CueFormat.serialize(tokens(in: range)), forType: .string)
+        return pboard.setString(CueFormat.serialize(core.tokens(in: range)), forType: .string)
     }
 
     public override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {

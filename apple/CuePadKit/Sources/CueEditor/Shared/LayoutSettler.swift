@@ -1,5 +1,10 @@
+import Foundation
+
 #if canImport(AppKit)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 
 /// TextKit 2 只布局视口，其余按估算高度算滚动范围，滚动时才逐步修正，滚动条会跳变。
 /// 这里在主循环空闲时分片把整篇文档预先布局完，让文档总高度在用户滚动前收敛。
@@ -8,10 +13,10 @@ import AppKit
 final class LayoutSettler {
     private static let sliceBudget: Duration = .milliseconds(6)
 
-    private weak var textView: CueTextView?
+    private unowned let core: EditorCore
     private var generation = 0
 
-    init(textView: CueTextView) { self.textView = textView }
+    init(core: EditorCore) { self.core = core }
 
     func restart() {
         generation += 1
@@ -26,17 +31,15 @@ final class LayoutSettler {
     }
 
     private func runSlice(from start: (any NSTextLocation)?, generation: Int) {
-        guard let layout = textView?.textLayoutManager, let content = layout.textContentManager else { return }
+        let content = core.content
         let deadline = ContinuousClock.now + Self.sliceBudget
         var next: (any NSTextLocation)?
-        layout.enumerateTextLayoutFragments(from: start ?? content.documentRange.location, options: [.ensuresLayout]) { fragment in
+        core.layout.enumerateTextLayoutFragments(from: start ?? content.documentRange.location, options: [.ensuresLayout]) { fragment in
             next = fragment.rangeInElement.endLocation
             return ContinuousClock.now < deadline
         }
-        // 让文本视图按最新的用量重算总高度；不这样做高度要等下一次视口布局才更新
-        textView?.needsLayout = true
+        core.layoutDidAdvance()
         guard let next, next.compare(content.documentRange.endLocation) == .orderedAscending else { return }
         schedule(from: next, generation: generation)
     }
 }
-#endif

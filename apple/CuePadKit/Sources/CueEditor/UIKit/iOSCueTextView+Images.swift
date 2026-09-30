@@ -4,9 +4,9 @@ import UIKit
 import UniformTypeIdentifiers
 
 /// 粘贴与拖入共用 UITextPasteDelegate：UIKit 把拖入的条目也交给它转换，
-/// 转换结果由 UITextView 插入并登记撤销。
+/// 转换结果由 UITextView 插入并登记撤销。拖出选区一律输出存储格式字符串。
 @MainActor
-final class PasteDropDelegate: NSObject, UITextPasteDelegate, UITextDropDelegate {
+final class TransferDelegate: NSObject, UITextPasteDelegate, UITextDropDelegate, UITextDragDelegate {
     private weak var textView: CueTextView?
 
     init(textView: CueTextView) { self.textView = textView }
@@ -14,6 +14,14 @@ final class PasteDropDelegate: NSObject, UITextPasteDelegate, UITextDropDelegate
     func textPasteConfigurationSupporting(_ textPasteConfigurationSupporting: any UITextPasteConfigurationSupporting, transform item: UITextPasteItem) {
         guard let textView else { return item.setNoResult() }
         textView.transform(item)
+    }
+
+    func textDraggableView(_ textDraggableView: any UIView & UITextDraggable, itemsForDrag dragRequest: any UITextDragRequest) -> [UIDragItem] {
+        guard let textView else { return dragRequest.suggestedItems }
+        let start = textView.offset(from: textView.beginningOfDocument, to: dragRequest.dragRange.start)
+        let length = textView.offset(from: dragRequest.dragRange.start, to: dragRequest.dragRange.end)
+        let text = CueFormat.serialize(textView.core.tokens(in: NSRange(location: start, length: length)))
+        return [UIDragItem(itemProvider: NSItemProvider(object: text as NSString))]
     }
 
     func textDroppableView(_ textDroppableView: any UIView & UITextDroppable, proposalForDrop drop: any UITextDropRequest) -> UITextDropProposal {
@@ -30,7 +38,7 @@ extension CueTextView {
             importImage(from: provider) { [weak self] result in
                 guard let self else { return item.setNoResult() }
                 switch result {
-                case .success(let id): item.setResult(attributedString: imageString(id: id))
+                case .success(let id): item.setResult(attributedString: core.imageString(id: id))
                 case .failure(let error):
                     onError?(error)
                     item.setNoResult()
@@ -43,7 +51,7 @@ extension CueTextView {
                 let text = object as? String
                 Task { @MainActor in
                     guard let self, let text else { return item.setNoResult() }
-                    item.setResult(attributedString: self.attributed(CueFormat.parse(text)))
+                    item.setResult(attributedString: self.core.attributed(CueFormat.parse(text)))
                 }
             }
         } else {
@@ -82,18 +90,9 @@ extension CueTextView {
 
     private func insert(_ result: Result<String, any Error>) {
         switch result {
-        case .success(let id): replace(selectedRange, with: imageString(id: id), caret: selectedRange.location + 1)
+        case .success(let id): replace(selectedRange, with: core.imageString(id: id), caret: selectedRange.location + 1)
         case .failure(let error): onError?(error)
         }
-    }
-
-    /// 缩略图解码完成后重绘引用它的附件：TextKit 缓存了片段的渲染结果，必须让对应片段失效重排。
-    func redrawImages(at url: URL) {
-        textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: textStorage.length)) { value, range, _ in
-            guard let image = value as? CueImageAttachment, image.fileURL == url, let target = textRange(range) else { return }
-            textLayoutManager?.invalidateLayout(for: target)
-        }
-        setNeedsLayout()
     }
 
     // MARK: 复制
@@ -102,7 +101,7 @@ extension CueTextView {
     public override func copy(_ sender: Any?) {
         let range = selectedRange
         guard range.length > 0 else { return }
-        pasteboard.string = CueFormat.serialize(tokens(in: range))
+        pasteboard.string = CueFormat.serialize(core.tokens(in: range))
     }
 
     public override func cut(_ sender: Any?) {

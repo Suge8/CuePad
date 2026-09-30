@@ -3,15 +3,15 @@ import CueText
 import UIKit
 import UniformTypeIdentifiers
 
-/// TextKit 2 编辑器（iOS/iPadOS）。正文的唯一事实源是 `storedText`（存储格式字符串）：
+/// TextKit 2 编辑器（iOS/iPadOS 薄宿主）。正文的唯一事实源是 `storedText`（存储格式字符串）：
 /// 图片与分隔线在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化。
 /// 全程不得访问 `UITextView.layoutManager`：一次访问就会把视图永久降级到 TextKit 1。
 @MainActor
-public final class CueTextView: UITextView {
+public final class CueTextView: UITextView, CueEditorHost {
     public let imageStore: any CueImageStore
     /// 设计基准样式；字号会按系统字号档位（Dynamic Type）缩放后使用。
     public var theme: CueEditorTheme { didSet { applyTheme() } }
-    public var numbering: CueNumbering = .none { didSet { refreshDividerLabels() } }
+    public var numbering: CueNumbering = .none { didSet { core.refreshDividerLabels() } }
     /// 用户编辑后的新正文；程序设置 `storedText` 与输入法组合期间不触发。
     public var onChange: ((String) -> Void)?
     public var onBlockAction: ((CueBlockAction) -> Void)?
@@ -24,39 +24,22 @@ public final class CueTextView: UITextView {
 
     /// 复制与剪切写入的剪贴板。
     var pasteboard: UIPasteboard = .general
-    /// 主题缩放后的实际样式，所有排版都读它。
-    private(set) var style: CueEditorTheme
-    /// 自上次刷新以来的编辑：新坐标下的范围与长度变化。
-    private var pendingEdits: [(range: NSRange, delta: Int)] = []
-    /// 现有段落是按哪份装饰上下文排版的。
-    var flushedDecorations = CueDecorations(CueBuffer(text: "", isSplit: { _ in false }))
-    var decorations = CueDecorations(CueBuffer(text: "", isSplit: { _ in false }))
+    private(set) var core: EditorCore!
     private var isLoading = false
     private var observers: [any NSObjectProtocol] = []
-    private var decorationDelegate: DecorationDelegate?
-    private var pasteDropDelegate: PasteDropDelegate?
-    private lazy var settler = LayoutSettler(textView: self)
-    lazy var thumbnails = ThumbnailLoader(textView: self)
+    private var transferDelegate: TransferDelegate?
 
     public init(imageStore: any CueImageStore, theme: CueEditorTheme = .neutral) {
         self.imageStore = imageStore
         self.theme = theme
-        style = theme
-        let content = NSTextContentStorage()
-        let layout = NSTextLayoutManager()
-        content.addTextLayoutManager(layout)
-        let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
-        container.widthTracksTextView = true
-        layout.textContainer = container
-        super.init(frame: .zero, textContainer: container)
-        let decoration = DecorationDelegate(textView: self)
-        decorationDelegate = decoration
-        content.delegate = decoration
-        layout.delegate = decoration
-        let paste = PasteDropDelegate(textView: self)
-        pasteDropDelegate = paste
-        pasteDelegate = paste
-        textDropDelegate = paste
+        let stack = CueTextStack.make()
+        super.init(frame: .zero, textContainer: stack.container)
+        core = EditorCore(host: self, imageStore: imageStore, style: theme, storage: textStorage, content: stack.content, layout: stack.layout)
+        let transfer = TransferDelegate(textView: self)
+        transferDelegate = transfer
+        pasteDelegate = transfer
+        textDropDelegate = transfer
+        textDragDelegate = transfer
         configure()
         applyTheme()
         observe()
@@ -85,7 +68,7 @@ public final class CueTextView: UITextView {
         let center = NotificationCenter.default
         // 输入法组合期间也要记账；此刻 TextKit 的内容管理器还没同步新文本，位置换算等下一个同步点
         observers.append(center.addObserver(forName: NSTextStorage.didProcessEditingNotification, object: textStorage, queue: nil) { [weak self] _ in
-            MainActor.assumeIsolated { self?.storageDidProcessEditing() }
+            MainActor.assumeIsolated { self?.core.storageDidProcessEditing() }
         })
         // 一次编辑结束的同步点（键入、组合的每一步、程序编辑都会触发）
         observers.append(center.addObserver(forName: UITextView.textDidChangeNotification, object: self, queue: nil) { [weak self] _ in
@@ -100,71 +83,14 @@ public final class CueTextView: UITextView {
 
     /// 存储格式正文。读取时序列化当前内容；设置时整体替换、清空撤销栈，不触发 `onChange`。
     public var storedText: String {
-        get { CueFormat.serialize(tokens(in: NSRange(location: 0, length: textStorage.length))) }
-        set { load(newValue) }
-    }
-
-    private func load(_ stored: String) {
-        isLoading = true
-        defer { isLoading = false }
-        textStorage.setAttributedString(attributed(CueFormat.parse(stored)))
-        undoManager?.removeAllActions()
-        selectedRange = NSRange(location: 0, length: 0)
-        pendingEdits = []
-        flushedDecorations = decorations
-        refreshVariableHighlight(around: nil)
-        refreshDividerLabels()
-        settler.restart()
-    }
-
-    func tokens(in range: NSRange) -> [CueToken] {
-        var tokens: [CueToken] = []
-        textStorage.enumerateAttribute(.attachment, in: range) { value, run, _ in
-            switch value {
-            case let image as CueImageAttachment: tokens.append(.image(image.imageID))
-            case is CueDividerAttachment: tokens.append(.split)
-            default: tokens.append(.text(textStorage.attributedSubstring(from: run).string))
-            }
+        get { core.stored() }
+        set {
+            isLoading = true
+            defer { isLoading = false }
+            core.load(newValue)
+            undoManager?.removeAllActions()
+            selectedRange = NSRange(location: 0, length: 0)
         }
-        return tokens
-    }
-
-    // MARK: 运行时富文本
-
-    var baseAttributes: [NSAttributedString.Key: Any] {
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = style.lineSpacing
-        return [.font: style.font, .foregroundColor: style.textColor, .paragraphStyle: paragraph]
-    }
-
-    func attributed(_ tokens: [CueToken]) -> NSAttributedString {
-        let result = NSMutableAttributedString()
-        for token in tokens {
-            switch token {
-            case .text(let text): result.append(NSAttributedString(string: text, attributes: baseAttributes))
-            case .image(let id): result.append(imageString(id: id))
-            case .split: result.append(dividerString())
-            }
-        }
-        return result
-    }
-
-    func imageString(id: String) -> NSAttributedString {
-        let attachment = CueImageAttachment(id: id, fileURL: imageStore.fileURL(for: id))
-        attachment.owner = self
-        return attachmentString(attachment)
-    }
-
-    func dividerString() -> NSAttributedString {
-        let attachment = CueDividerAttachment()
-        attachment.owner = self
-        return attachmentString(attachment)
-    }
-
-    private func attachmentString(_ attachment: NSTextAttachment) -> NSAttributedString {
-        let string = NSMutableAttributedString(attachment: attachment)
-        string.addAttributes(baseAttributes, range: NSRange(location: 0, length: string.length))
-        return string
     }
 
     // MARK: 主题与动态字体
@@ -184,54 +110,33 @@ public final class CueTextView: UITextView {
     }
 
     private func applyTheme() {
-        style = scaledStyle()
+        let style = scaledStyle()
+        core.style = style
         backgroundColor = style.backgroundColor
         textContainerInset = UIEdgeInsets(top: style.verticalInset, left: style.horizontalInset, bottom: style.verticalInset, right: style.horizontalInset)
-        typingAttributes = baseAttributes
-        if textStorage.length > 0 {
-            textStorage.addAttributes(baseAttributes, range: NSRange(location: 0, length: textStorage.length))
-        }
-        refreshVariableHighlight(around: nil)
-        restyle(NSRange(location: 0, length: textStorage.length))
-        dividerViews().forEach { $0.setNeedsDisplay() }
-        settler.restart()
-    }
-
-    func dividerViews() -> [CueDividerView] {
-        func walk(_ view: UIView) -> [CueDividerView] {
-            (view as? CueDividerView).map { [$0] } ?? view.subviews.flatMap(walk)
-        }
-        return walk(self)
+        typingAttributes = core.baseAttributes
+        core.styleDidChange()
+        cueDividerViews(in: self).forEach { $0.setNeedsDisplay() }
     }
 
     // MARK: 编辑通知
 
-    private func storageDidProcessEditing() {
-        guard textStorage.editedMask.contains(.editedCharacters) else { return }
-        pendingEdits.append((textStorage.editedRange, textStorage.changeInLength))
-        decorations = CueDecorations(buffer())
-        DispatchQueue.main.async { [weak self] in self?.flushHighlight() }
-    }
-
-    /// 同步点之后刷新高亮与装饰；兜底的主队列回调覆盖撤销等其它路径。
-    func flushHighlight() {
-        guard !pendingEdits.isEmpty else { return }
-        let edits = pendingEdits
-        pendingEdits = []
-        // 多次编辑累积时新旧坐标混杂，直接全文重扫
-        refreshVariableHighlight(around: edits.count == 1 ? edits[0].range : nil)
-        restyleAfter(edits)
-        if numbering != .none { refreshDividerLabels() }
-    }
-
     private func editDidFinish() {
-        flushHighlight()
+        core.flushHighlight()
         // 组合中的拼音只是标记文本，提交后才是内容，不上报
         if !isLoading, markedTextRange == nil { onChange?(storedText) }
     }
 
     public override var bounds: CGRect {
-        didSet { if bounds.width != oldValue.width { settler.restart() } }
+        didSet { if bounds.width != oldValue.width { core?.settler.restart() } }
     }
+
+    // MARK: CueEditorHost
+
+    func resolvedColor(_ color: CueColor) -> CueColor { color.resolvedColor(with: traitCollection) }
+    /// 单纯 ensureLayout 不会更新 contentSize，要走一次视口布局。
+    func layoutDidAdvance() { core.layout.textViewportLayoutController.layoutViewport() }
+    func needsRelayout() { setNeedsLayout() }
+    func blockActionRequested(_ action: CueBlockAction) { onBlockAction?(action) }
 }
 #endif
