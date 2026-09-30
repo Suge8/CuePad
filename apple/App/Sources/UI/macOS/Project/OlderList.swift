@@ -16,13 +16,9 @@ struct OlderList: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
                 PaperStack()
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("更早").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
-                        Text("\(total)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
-                    }
-                    Text("墙以外的卡按周收在这里，三个月前的按月；再次编辑会回到上面")
-                        .font(.system(size: 11)).foregroundStyle(palette.ink3)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("更早").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
+                    Text("\(total)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
                 }
                 Rectangle().fill(palette.hair).frame(height: 1)
             }
@@ -93,6 +89,7 @@ private struct OlderRow: View {
     var body: some View {
         let text = CardText(card.body)
         let isOpen = workspace.openCard == card.id
+        Button(action: open) {
         HStack(spacing: 10) {
             Image(systemName: !text.images.isEmpty ? "photo" : "doc.text")
                 .font(.system(size: 12)).foregroundStyle(palette.ink3).frame(width: 18)
@@ -111,15 +108,15 @@ private struct OlderRow: View {
         .font(.system(size: 11.5)).foregroundStyle(palette.ink3)
         .padding(.horizontal, 12).frame(height: 34)
         .background(hovering ? palette.fill : .clear)
+        .contentShape(.rect)
+        }
+        .buttonStyle(CardPressStyle())
         .opacity(isOpen ? 0 : 1)
         .matchedGeometryEffect(id: card.id, in: paperSpace, isSource: !isOpen)
-        .contentShape(.rect)
         .onHover { hovering = $0 }
-        .onTapGesture(perform: open)
+        .animation(Motion.quick, value: hovering)
         .contextMenu { CardMenu(card: card, isGoal: false) }
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { open() }
     }
 }
 

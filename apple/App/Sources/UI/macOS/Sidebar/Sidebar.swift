@@ -118,7 +118,7 @@ private struct PiSection: View {
                             }
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressStyle(scale: 0.98))
                     .help([session.state.detail, "点按跳到所在终端"].compactMap { $0 }.joined(separator: "\n"))
                 }
                 ForEach(ended) { session in

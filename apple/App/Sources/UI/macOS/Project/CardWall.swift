@@ -18,6 +18,7 @@ struct CardTile: View {
     var body: some View {
         let text = CardText(card.body)
         let isOpen = workspace.openCard == card.id
+        Button(action: open) {
         VStack(alignment: .leading, spacing: 8) {
             if let image = text.images.first {
                 Thumbnail(hash: image, height: 118).padding(-8).padding(.bottom, 6)
@@ -37,17 +38,16 @@ struct CardTile: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .paper(radius: 16, lifted: hovering)
+        .contentShape(.rect(cornerRadius: 16))
+        }
+        .buttonStyle(CardPressStyle())
         .offset(y: hovering && !reduceMotion ? -1 : 0)
         .opacity(isOpen ? 0 : 1)
         .matchedGeometryEffect(id: card.id, in: paperSpace, isSource: !isOpen)
-        .contentShape(.rect)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
-        .onTapGesture { open() }
         .contextMenu { CardMenu(card: card, isGoal: isGoal) }
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { open() }
     }
 
     private func open() {

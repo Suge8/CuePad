@@ -55,7 +55,7 @@ struct ProjectScreen: View {
                 }
             }
             if !arrangement.wall.isEmpty {
-                section("工作集", count: arrangement.wall.count) {
+                section("最近", count: arrangement.wall.count) {
                     wall(arrangement.wall.compactMap { byID[$0] }, data: data, lastTarget: lastTarget)
                 }
             }

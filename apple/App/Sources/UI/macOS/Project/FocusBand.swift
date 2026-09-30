@@ -42,7 +42,7 @@ struct FocusBand: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(CardPressStyle())
     }
 
     @ViewBuilder private var tasks: some View {
@@ -77,7 +77,7 @@ private struct PiColumn: View {
         SectionLabel(text: "Pi", systemImage: "terminal")
         let sessions = workspace.liveSessions(in: project)
         if sessions.isEmpty {
-            Text(hasDirectory ? "没有运行中的会话" : "绑定代码目录后，在其中运行的 Pi 会显示在这里")
+            Text(hasDirectory ? "没有运行中的会话" : "还没绑定代码目录")
                 .font(.system(size: 12.5)).foregroundStyle(palette.ink3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -123,7 +123,7 @@ struct CompactFocus: View {
             .padding(.horizontal, 16).frame(height: 34)
             .paper(radius: 17, lifted: true)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(scale: 0.98))
         .help("回到顶部")
     }
 }

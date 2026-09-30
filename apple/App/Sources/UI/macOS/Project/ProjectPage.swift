@@ -24,7 +24,7 @@ struct ProjectPage: View {
                 }
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
-            .mask(BottomFade())
+            .overlay { BottomFade() }
             .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                 withAnimation(Motion.quick) { collapsed = isCollapsed }
             }
@@ -59,10 +59,10 @@ struct ProjectPage: View {
                 EmptyProject()
             } else {
                 if !arrangement.pinned.isEmpty {
-                    wallSection(title: "置顶", count: arrangement.pinned.count, hint: nil, ids: arrangement.pinned, byID: byID, data: data, lastTarget: lastTarget)
+                    wallSection(title: "置顶", count: arrangement.pinned.count, ids: arrangement.pinned, byID: byID, data: data, lastTarget: lastTarget)
                 }
                 if !arrangement.wall.isEmpty {
-                    wallSection(title: "工作集", count: arrangement.wall.count, hint: "两周内编辑，或一个月内编辑且没发送过", ids: arrangement.wall, byID: byID, data: data, lastTarget: lastTarget)
+                    wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, data: data, lastTarget: lastTarget)
                 }
                 if !arrangement.older.isEmpty {
                     OlderList(
@@ -74,13 +74,11 @@ struct ProjectPage: View {
         .padding(.horizontal, 32).padding(.top, 6).padding(.bottom, 150)
     }
 
-    private func wallSection(title: String, count: Int, hint: String?, ids: [UUID], byID: [UUID: Card], data: ProjectPageData, lastTarget: [UUID: String]) -> some View {
+    private func wallSection(title: String, count: Int, ids: [UUID], byID: [UUID: Card], data: ProjectPageData, lastTarget: [UUID: String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
                 Text("\(count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
-                Spacer()
-                if let hint { Text(hint).font(.system(size: 11)).foregroundStyle(palette.ink3) }
             }
             MasonryLayout {
                 ForEach(ids.compactMap { byID[$0] }) { card in
@@ -128,7 +126,7 @@ private struct ProjectHeader: View {
                             ProjectDirectory.choose(for: project.id, workspace: workspace)
                         }
                         .buttonStyle(.plain)
-                        .help(data.directory == nil ? "Pi 会话按目录归到项目" : "更换代码目录")
+                        .help(data.directory == nil ? "在这个目录里运行的 Pi 会出现在项目页" : "更换代码目录")
                         Text("·")
                     }
                     Text("\(data.cards.count) 张卡片").monospacedDigit()

@@ -146,7 +146,7 @@ private struct EditorBar: View {
                     NumberingMenu(card: card)
                 }
                 .labelStyle(.iconOnly)
-                .buttonStyle(.plain)
+                .buttonStyle(PressStyle(scale: 0.88))
                 .font(.system(size: 14))
                 .padding(.horizontal, 16).frame(height: 44)
                 .glass(in: .capsule, interactive: true)
@@ -215,7 +215,7 @@ private struct VariablesChip: View {
             .frame(maxWidth: 260)
             .contentShape(.capsule)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle(scale: 0.97))
         .glass(in: .capsule, interactive: true)
         .popover(isPresented: $editing, arrowEdge: .top) { VariablesForm(card: card, names: names) { editing = false } }
         .help("变量取值")

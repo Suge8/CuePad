@@ -62,7 +62,7 @@ struct TasksScreen: View {
     private func row(_ task: CueTask, projects: [Project]) -> some View {
         TaskLine(task: task)
             .swipeActions(edge: .leading) {
-                Button(task.completedAt == nil ? "完成" : "未完成", systemImage: "checkmark") { workspace.toggle(task) }
+                Button(task.completedAt == nil ? "完成" : "未完成", systemImage: "checkmark") { workspace.attempt { try await workspace.toggle(task) } }
                     .tint(.green)
             }
             .swipeActions(edge: .trailing) {
@@ -84,7 +84,7 @@ struct TaskLine: View {
     var body: some View {
         let done = task.completedAt != nil
         HStack(spacing: 10) {
-            Button { workspace.toggle(task) } label: {
+            Button { workspace.attempt { try await workspace.toggle(task) } } label: {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(done ? palette.ink2 : palette.ink3)
                     .contentTransition(.symbolEffect(.replace))
@@ -150,13 +150,6 @@ struct NewTaskLine: View {
         focused = true
         let project = project
         workspace.attempt { _ = try await workspace.createTask(content, in: project) }
-    }
-}
-
-extension Workspace {
-    func toggle(_ task: CueTask) {
-        let id = task.id, completed: Date? = task.completedAt == nil ? .now : nil
-        perform { try await $0.updateTask(id) { $0.completedAt = completed } }
     }
 }
 #endif

@@ -23,13 +23,23 @@ struct CaptureBar: View {
                         .lineLimit(1...6)
                         .focused($focused)
                         .onSubmit(save)
-                    if !empty {
-                        Text("↩ 存为卡片").font(.system(size: 12)).foregroundStyle(.secondary).fixedSize()
-                    }
+                    Text("↩ 存为卡片").font(.system(size: 12)).foregroundStyle(.secondary).fixedSize()
+                        .opacity(empty ? 0 : 1)
+                        .accessibilityHidden(empty)
                 }
                 .padding(.horizontal, 18).padding(.vertical, 14)
                 .frame(maxWidth: .infinity)
+                // 整条都是输入区：点到加号或留白也进入输入
+                .contentShape(.rect(cornerRadius: 24))
+                .onTapGesture { focused = true }
                 .glass(in: .rect(cornerRadius: 24), interactive: true)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(palette.ink3.opacity(focused ? 0.6 : 0), lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+                .animation(Motion.quick, value: focused)
+                .animation(Motion.quick, value: empty)
                 SendControl(project: project, disabled: empty) { send($0) }
             }
         }
