@@ -1,0 +1,177 @@
+import CueStore
+import Foundation
+import Testing
+
+/// 投送请求：手机写内容与目标；Mac 执行（经回调交给 App 层）后写回结果；完成后清理。
+@Suite struct DeliveryTests {
+  let fixture = try! Fixture()
+  let clock = ManualTiming()
+  var store: CueStore { fixture.store }
+
+  private let pi = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
+
+  /// 记录被调用的请求；可控制何时返回。
+  actor Handler {
+    private(set) var seen: [DeliveryRequest] = []
+    private(set) var concurrent = 0
+    private(set) var maxConcurrent = 0
+    var outcome: DeliveryOutcome = .succeeded
+    func setOutcome(_ value: DeliveryOutcome) { outcome = value }
+    func handle(_ request: DeliveryRequest) async -> DeliveryOutcome {
+      concurrent += 1
+      maxConcurrent = max(maxConcurrent, concurrent)
+      seen.append(request)
+      await Task.yield()
+      concurrent -= 1
+      return outcome
+    }
+  }
+
+  private func executor(
+    _ handler: Handler, host: String = "mac-a", maxAge: Duration = .seconds(600), retention: Duration = .seconds(60)
+  ) -> DeliveryExecutor {
+    DeliveryExecutor(store: store, hostID: host, maxAge: maxAge, retention: retention, timing: clock.timing) { await handler.handle($0) }
+  }
+
+  private func request(_ id: UUID) async throws -> DeliveryRequest? { try await store.deliveryRequest(id) }
+
+  @Test func requestIsRecordedAsPendingWithContentAndTarget() async throws {
+    let card = try await store.createCard(in: nil, body: "c")
+    let made = try await store.requestDelivery("prompt", to: pi, on: "mac-a", mode: "followUp", card: card.id)
+
+    let stored = try #require(try await request(made.id))
+    #expect(stored.status == .pending && stored.content == "prompt" && stored.target == pi)
+    #expect(stored.hostID == "mac-a" && stored.mode == "followUp" && stored.cardID == card.id)
+    #expect(stored.completedAt == nil && stored.resultDetail == nil)
+    await #expect(throws: CueStoreError.blankDeliveryContent) { try await store.requestDelivery("  ", to: pi) }
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func executorRunsTheHandlerAndWritesTheResultBack() async throws {
+    let handler = Handler()
+    let executor = executor(handler)
+    try await executor.start()
+    let made = try await store.requestDelivery("do it", to: pi, on: "mac-a")
+
+    let done = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.first?.status == .succeeded }
+
+    #expect(done[0].id == made.id && done[0].handledBy == "mac-a" && done[0].completedAt == clock.now)
+    #expect(await handler.seen.map(\.content) == ["do it"])
+    await executor.stop()
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func failureIsWrittenBackWithItsReason() async throws {
+    let handler = Handler()
+    await handler.setOutcome(.failed("会话已结束"))
+    let executor = executor(handler)
+    try await executor.start()
+    _ = try await store.requestDelivery("x", to: pi, on: "mac-a")
+
+    let done = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.first?.status == .failed }
+    #expect(done[0].resultDetail == "会话已结束")
+    await executor.stop()
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func onlyRequestsForThisHostOrForAnyHostAreExecuted() async throws {
+    let handler = Handler()
+    let executor = executor(handler, host: "mac-a")
+    let other = try await store.requestDelivery("for b", to: pi, on: "mac-b")
+    let anyHost = try await store.requestDelivery("for anyone", to: pi, on: nil)
+    let mine = try await store.requestDelivery("for a", to: pi, on: "mac-a")
+    try await executor.start()
+
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 2 }
+
+    #expect(Set(await handler.seen.map(\.id)) == [anyHost.id, mine.id])
+    #expect(try await request(other.id)?.status == .pending)
+    await executor.stop()
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func requestsAreExecutedOneAtATimeInCreationOrder() async throws {
+    let handler = Handler()
+    let executor = executor(handler)
+    try await executor.start()
+    for index in 0..<4 {
+      _ = try await store.requestDelivery("r\(index)", to: pi, on: "mac-a")
+      clock.advance(.milliseconds(5))
+    }
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 4 }
+
+    #expect(await handler.seen.map(\.content) == ["r0", "r1", "r2", "r3"])
+    #expect(await handler.maxConcurrent == 1)
+    await executor.stop()
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func completedRequestsAreCleanedUpAfterTheRetentionButOpenOnesStay() async throws {
+    let handler = Handler()
+    let executor = executor(handler, retention: .seconds(60))
+    let open = try await store.requestDelivery("other host", to: pi, on: "mac-b")
+    try await executor.start()
+    _ = try await store.requestDelivery("finished", to: pi, on: "mac-a")
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 1 }
+
+    await clock.waitForSleeper()
+    clock.advance(.seconds(61))
+    let remaining = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.count == 1 }
+
+    #expect(remaining.map(\.id) == [open.id])
+    await executor.stop()
+  }
+
+  @Test func requestInterruptedByAnAppRestartFailsAndIsNeverRunAgain() async throws {
+    let handler = Handler()
+    let stuck = try await store.requestDelivery("half done", to: pi, on: "mac-a")
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'executing', handledBy = 'mac-a'")
+
+    let executor = executor(handler)
+    try await executor.start()
+
+    let after = try #require(try await request(stuck.id))
+    #expect(after.status == .failed && after.resultDetail?.isEmpty == false)
+    #expect(await handler.seen.isEmpty)  // 不重发：可能已经发出去了一半
+    await executor.stop()
+  }
+
+  @Test func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
+    let handler = Handler()
+    let stale = try await store.requestDelivery("old prompt", to: pi, on: "mac-a")
+    clock.advance(.seconds(601))
+    // 请求的创建时间来自真实时钟：让它落到"过去"
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET createdAt = createdAt - 700000")
+
+    let executor = executor(handler, maxAge: .seconds(600))
+    try await executor.start()
+
+    let after = try #require(try await request(stale.id))
+    #expect(after.status == .failed && after.resultDetail?.isEmpty == false)
+    #expect(await handler.seen.isEmpty)
+    await executor.stop()
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func requestWaitsForItsImagesToArriveThenRuns() async throws {
+    let data = pngData(width: 6, height: 6)
+    let hash = try await Fixture().store.addImage(data).hash  // 图片在另一台设备上，尚未同步到本机
+    let handler = Handler()
+    let executor = executor(handler)
+    try await executor.start()
+    _ = try await store.requestDelivery("look ![](cuepad://img/\(hash))", to: pi, on: "mac-a")
+    #expect(await handler.seen.isEmpty)
+
+    _ = try await store.addImage(data)  // 图片同步到了
+
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .succeeded }
+    #expect(await handler.seen.count == 1)
+    await executor.stop()
+  }
+
+  @Test func unknownStatusFromANewerVersionIsPreserved() async throws {
+    let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'queuedRemotely'")
+    #expect(try await request(made.id)?.status == .unknown("queuedRemotely"))
+  }
+}

@@ -35,7 +35,7 @@ import Testing
     let location = try LibraryLocation.resolve(environment: [:], base: .applicationSupport(URL(filePath: "/support")))
     #expect(location.directory.path == "/support/CuePad/Library")
     #expect(location.databaseURL.path == "/support/CuePad/Library/cuepad.db")
-    #expect(location.electronDatabase?.path == "/support/cuepad/cuepad.db")
+    #expect(location.electronDatabase?.path == "/support/CuePad/cuepad.db")
   }
 
   @Test func iOSLibraryLivesInTheAppGroupContainer() throws {

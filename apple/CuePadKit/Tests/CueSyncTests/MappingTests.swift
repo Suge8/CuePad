@@ -22,13 +22,16 @@ import Testing
     let task = try await store.createTask("t", in: project.id)
     try await store.recordSend("x", to: SendTarget(kind: .piSession, name: "n", ref: "r"), card: card.id, task: task.id)
     try await store.registerAttachment(hash: hash, byteCount: 3, format: "png")
+    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认？", title: "t", projectID: project.id)
+    try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
+    try await store.writeProbe(Probe(run: "r", seq: 1, kind: .ping, origin: "phone", sentAt: Date.now, peerFetchStartedAt: nil, peerAppliedAt: nil))
     return (card, hash)
   }
 
   @Test func everySyncedTableRoundTripsThroughCKRecord() async throws {
     _ = try await populate()
     let keys = try await store.pendingSync().saves
-    #expect(Set(keys.map(\.table)) == Set(Table.synced))  // 七张同步表都有记录
+    #expect(Set(keys.map(\.table)) == Set(Table.synced))  // 每张同步表都有记录
 
     for key in keys {
       let row = try #require(try await store.syncRow(recordName: key.id))

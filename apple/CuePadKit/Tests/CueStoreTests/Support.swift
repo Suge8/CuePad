@@ -87,3 +87,69 @@ func pngData(width: Int, height: Int, shade: CGFloat = 0.5) -> Data {
   CGImageDestinationFinalize(destination)
   return data as Data
 }
+
+/// 手动推进的时钟：`now` 只在 `advance` 时前进，`sleep` 挂起到 `advance` 越过截止时间。
+final class ManualTiming: @unchecked Sendable {
+  private let lock = NSLock()
+  private var current: Date
+  private var sleepers: [UUID: (deadline: Date, continuation: CheckedContinuation<Void, Error>)] = [:]
+  private var sleeperWaiters: [CheckedContinuation<Void, Never>] = []
+
+  /// 默认从真实的现在开始（毫秒精度）：Store 用真实时间给记录盖章，两者要在同一时间线上。
+  init(start: Date = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 * 1000).rounded() / 1000)) { current = start }
+
+  var now: Date { lock.withLock { current } }
+  var timing: Timing { Timing(now: { self.now }, sleep: { try await self.sleep($0) }) }
+  var sleeperCount: Int { lock.withLock { sleepers.count } }
+
+  func advance(_ duration: Duration) {
+    let due: [CheckedContinuation<Void, Error>] = lock.withLock {
+      current = current.addingTimeInterval(Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18)
+      let ready = sleepers.filter { $0.value.deadline <= current }
+      for id in ready.keys { sleepers[id] = nil }
+      return ready.values.map(\.continuation)
+    }
+    for continuation in due { continuation.resume() }
+  }
+
+  /// 等到至少有一个任务挂在 `sleep` 上（确保 `advance` 会真的唤醒它）。
+  func waitForSleeper() async {
+    if sleeperCount > 0 { return }
+    await withCheckedContinuation { continuation in
+      lock.lock()
+      if !sleepers.isEmpty {
+        lock.unlock()
+        continuation.resume()
+      } else {
+        sleeperWaiters.append(continuation)
+        lock.unlock()
+      }
+    }
+  }
+
+  private func sleep(_ duration: Duration) async throws {
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        lock.lock()
+        sleepers[id] = (current.addingTimeInterval(Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18), continuation)
+        let waiters = sleeperWaiters
+        sleeperWaiters = []
+        lock.unlock()
+        for waiter in waiters { waiter.resume() }
+      }
+    } onCancel: {
+      let continuation = lock.withLock { sleepers.removeValue(forKey: id)?.continuation }
+      continuation?.resume(throwing: CancellationError())
+    }
+  }
+}
+
+/// 订阅表变更直到条件成立（事件驱动，配合测试的时间限制，不轮询）。
+func eventually<T: Sendable>(
+  _ store: CueStore, watching tables: Set<Table>, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
+  until predicate: @Sendable (T) -> Bool
+) async throws -> T {
+  for try await value in store.observe(tables, read) where predicate(value) { return value }
+  throw CancellationError()
+}
