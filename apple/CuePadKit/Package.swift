@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "CueEditor", targets: ["CueEditor"]),
         .library(name: "CueDispatch", targets: ["CueDispatch"]),
         .library(name: "CuePi", targets: ["CuePi"]),
+        .library(name: "CueSync", targets: ["CueSync"]),
     ],
     targets: [
         // 卡片正文的纯文本模型：解析/序列化、分块、变量、光标规范化。仅依赖 Foundation。
@@ -23,6 +24,9 @@ let package = Package(
         .target(name: "CueDispatch"),
         // macOS Pi 桥：扩展（随包资源）、socket 客户端、会话历史索引、终端跳转。仅 macOS，iOS 目标不依赖。
         .target(name: "CuePi", exclude: ["README.md"], resources: [.copy("Extension")]),
+        // iCloud 同步：CKSyncEngine ↔ CueStore 的记录映射、待推送变更、冲突与附件。
+        .target(name: "CueSync", dependencies: ["CueStore"]),
+        .testTarget(name: "CueSyncTests", dependencies: ["CueSync"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor"]),
