@@ -105,14 +105,12 @@ struct Rig {
   let fixture: Fixture
   let queue: FakeQueue
   let coordinator: SyncCoordinator
-  let log = SyncTimingLog()
   var store: CueStore { fixture.store }
 
-  init(timing: ManualTiming? = nil) throws {
+  init() throws {
     fixture = try Fixture()
     queue = FakeQueue()
-    coordinator = SyncCoordinator(
-      store: fixture.store, queue: queue, zoneID: testZone, timing: timing?.timing ?? .system, log: log)
+    coordinator = SyncCoordinator(store: fixture.store, queue: queue, zoneID: testZone)
   }
 
   func recordID(_ id: UUID) -> CKRecord.ID { CKRecord.ID(recordName: id.uuidString.lowercased(), zoneID: testZone) }
@@ -262,7 +260,7 @@ func eventually<T: Sendable>(
 }
 
 
-/// 两台"设备"之间的假云：把一端已登记的保存与删除交给另一端（`fetchStarted` → `fetched`），并回报发送成功。
+/// 两台"设备"之间的假云：把一端已登记的保存与删除交给另一端（`fetched`），并回报发送成功。
 struct Loopback {
   let a: Rig
   let b: Rig
@@ -292,7 +290,6 @@ struct Loopback {
     await from.coordinator.handle(.sent(
       saved: records, failedSaves: [], deleted: deletions.map(\.id), failedDeletes: []))
     await from.queue.discard(saves: saves, deletes: deletes)  // .sent 之前对账可能重复登记过
-    await to.coordinator.handle(.fetchStarted)
     beforeApply()
     await to.coordinator.handle(.fetched(modifications: records, deletions: deletions))
   }

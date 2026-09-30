@@ -125,17 +125,3 @@ DEFINE SCHEMA
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
-
-    RECORD TYPE probes (
-        "___recordID"      REFERENCE QUERYABLE,
-        run                STRING,
-        seq                INT64,
-        kind               STRING,
-        origin             STRING,
-        sentAt             INT64,
-        peerFetchStartedAt INT64,
-        peerAppliedAt      INT64,
-        modifiedAt         INT64,
-        GRANT WRITE TO "_creator",
-        GRANT CREATE TO "_icloud"
-    );

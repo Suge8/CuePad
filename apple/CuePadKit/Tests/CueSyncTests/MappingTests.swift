@@ -24,7 +24,6 @@ import Testing
     try await store.registerAttachment(hash: hash, byteCount: 3, format: "png")
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认？", title: "t", projectID: project.id)
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
-    try await store.writeProbe(Probe(run: "r", seq: 1, kind: .ping, origin: "phone", sentAt: Date.now, peerFetchStartedAt: nil, peerAppliedAt: nil))
     return (card, hash)
   }
 

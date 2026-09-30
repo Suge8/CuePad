@@ -53,13 +53,13 @@ public enum SendTargetKind: Hashable, Sendable, RawRepresentable {
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Sendable, CaseIterable {
   case projects, cards, tags, cardTags, tasks, sendRecords, attachments, piSessions, projectDirectories
-  case piSessionStates, deliveryRequests, probes
+  case piSessionStates, deliveryRequests
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
-    .projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .probes,
+    .projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests,
   ]
 
   package var columns: [String] {
@@ -75,7 +75,6 @@ extension Table {
     case .projectDirectories: ["projectID", "directory"]
     case .piSessionStates: PiSessionState.columns
     case .deliveryRequests: DeliveryRequest.columns
-    case .probes: Probe.columns
     }
   }
 }

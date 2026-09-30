@@ -59,8 +59,6 @@ enum CloudEvent: Sendable {
   case accountChange(AccountChange)
   case cloudDataLost(CloudDataLoss)
   case syncing(Bool)
-  /// 引擎开始拉取远端变更（用于测量拉取耗时）。
-  case fetchStarted
   case fetched(modifications: [CKRecord], deletions: [(id: CKRecord.ID, recordType: String)])
   case sent(
     saved: [CKRecord], failedSaves: [(record: CKRecord, error: CKError)], deleted: [CKRecord.ID],

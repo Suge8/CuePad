@@ -3,7 +3,7 @@ import Foundation
 /// 表分两类。
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、tags、cardTags、tasks、sendRecords、attachments、piSessionStates、deliveryRequests、probes。约束：
+/// projects、cards、tags、cardTags、tasks、sendRecords、attachments、piSessionStates、deliveryRequests。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -80,12 +80,6 @@ enum Schema {
       resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
-
-    CREATE TABLE probes (
-      id TEXT PRIMARY KEY NOT NULL, run TEXT NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL, origin TEXT NOT NULL,
-      sentAt INTEGER NOT NULL, peerFetchStartedAt INTEGER, peerAppliedAt INTEGER, modifiedAt INTEGER NOT NULL
-    ) STRICT;
-    CREATE INDEX probes_run ON probes(run, seq);
 
     -- Pi 历史索引：checkpoint 是服务层的不透明字节（读取偏移与解析状态）。
     CREATE TABLE piSessions (

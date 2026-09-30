@@ -13,8 +13,8 @@ import Testing
   let cloud: Loopback
 
   init() throws {
-    mac = try Rig(timing: clock)
-    phone = try Rig(timing: clock)
+    mac = try Rig()
+    phone = try Rig()
     cloud = Loopback(a: mac, b: phone)
   }
 

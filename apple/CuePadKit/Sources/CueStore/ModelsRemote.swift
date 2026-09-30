@@ -151,58 +151,6 @@ public enum DeliveryOutcome: Sendable {
   case failed(String)
 }
 
-package enum ProbeKind: Hashable, Sendable, RawRepresentable {
-  case ping, pong
-  case unknown(String)
-
-  package init(rawValue: String) {
-    switch rawValue {
-    case "ping": self = .ping
-    case "pong": self = .pong
-    default: self = .unknown(rawValue)
-    }
-  }
-
-  package var rawValue: String {
-    switch self {
-    case .ping: "ping"
-    case .pong: "pong"
-    case .unknown(let raw): raw
-    }
-  }
-}
-
-/// 延迟探针记录（诊断用）：发起端写 ping，对端应用后写 pong 并带上它自己时钟下的拉取开始与应用时间。
-package struct Probe: Identifiable, Equatable, Sendable {
-  package let id: UUID
-  package var run: String
-  package var seq: Int
-  package var kind: ProbeKind
-  /// 写这条记录的设备标签。
-  package var origin: String
-  /// 写入时刻（写入者的时钟）。
-  package var sentAt: Date
-  /// pong 携带：对端开始拉取 / 应用 ping 的时刻（对端时钟）。
-  package var peerFetchStartedAt: Date?
-  package var peerAppliedAt: Date?
-  package var modifiedAt: Date
-
-  package init(
-    id: UUID = UUID(), run: String, seq: Int, kind: ProbeKind, origin: String, sentAt: Date,
-    peerFetchStartedAt: Date?, peerAppliedAt: Date?, modifiedAt: Date = Date.stamp
-  ) {
-    self.id = id
-    self.run = run
-    self.seq = seq
-    self.kind = kind
-    self.origin = origin
-    self.sentAt = sentAt
-    self.peerFetchStartedAt = peerFetchStartedAt
-    self.peerAppliedAt = peerAppliedAt
-    self.modifiedAt = modifiedAt
-  }
-}
-
 extension PiSessionState: Record {
   static let table = Table.piSessionStates
   static let columns = ["id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify"]
@@ -231,16 +179,5 @@ extension DeliveryRequest: Record {
       hostID: row.text(5), mode: DeliveryMode(rawValue: row.text(6)), cardID: row.uuidOrNil(7), taskID: row.uuidOrNil(8),
       status: DeliveryStatus(rawValue: row.text(9)), resultDetail: row.textOrNil(10), handledBy: row.textOrNil(11),
       createdAt: row.date(12), completedAt: row.dateOrNil(13), modifiedAt: row.date(14))
-  }
-}
-
-extension Probe: Record {
-  static let table = Table.probes
-  static let columns = ["id", "run", "seq", "kind", "origin", "sentAt", "peerFetchStartedAt", "peerAppliedAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, run, seq, kind.rawValue, origin, sentAt, peerFetchStartedAt, peerAppliedAt, modifiedAt] }
-  init(row: Row) {
-    self.init(
-      id: row.uuid(0), run: row.text(1), seq: Int(row.int(2)), kind: ProbeKind(rawValue: row.text(3)), origin: row.text(4),
-      sentAt: row.date(5), peerFetchStartedAt: row.dateOrNil(6), peerAppliedAt: row.dateOrNil(7), modifiedAt: row.date(8))
   }
 }
