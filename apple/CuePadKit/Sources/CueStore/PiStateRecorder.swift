@@ -128,6 +128,9 @@ public actor PiStateRecorder {
 
   /// 手机通知只发两种转换：进入等你确认；从工作中进入完成。首次看到的会话（没有上一个状态）不通知，
   /// 这样重启后重新登记已有会话不会把旧事件再推一遍。
+  /// 标志只在这次写入上；上传前被后续写入取代的通知不会送出：状态记录不是事件日志，通知反映上传那一刻的状态
+  /// （已恢复工作的会话不再提示"等你确认"，连续多轮的会话不会每轮都提示完成）。要保证每个事件都送达，需要单独的
+  /// 追加式通知事件记录，那是另一种设计。
   private static func alert(entering state: PiWorkState, from previous: PiWorkState?) -> PiAlert? {
     guard let previous else { return nil }
     if state == .waitingForUser, previous != .waitingForUser { return .waitingForUser }
