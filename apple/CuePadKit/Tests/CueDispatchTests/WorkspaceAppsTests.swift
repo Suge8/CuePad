@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Testing
 
@@ -48,3 +49,4 @@ import Testing
         #expect(!apps.runningTargets().contains { $0.pid == dock.processIdentifier })
     }
 }
+#endif

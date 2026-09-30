@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Testing
 
@@ -56,3 +57,4 @@ import Testing
         }
     }
 }
+#endif
