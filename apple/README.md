@@ -19,7 +19,7 @@ apple/scripts/xc.sh shot ipad     # 同上，iPad 模拟器
 
 ## 命令行
 
-`cuepad` 是给人和 agent 读写本机资料库的命令行（源码 `CuePadKit/Sources/CueCLI`，经 CueStore 读写）。安装：`cd apple/CuePadKit && swift build -c release --product cuepad && cp .build/release/cuepad /usr/local/bin/`；用法与 JSON 结构见 `cuepad --help`。
+`cuepad` 是给人和 agent 读写本机资料库的命令行（源码 `CuePadKit/Sources/CueCLI`，经 CueStore 读写）。随 App 分发，安装见下文「命令行工具」；用法与 JSON 结构见 `cuepad --help`。
 
 ## 约定
 

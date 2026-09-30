@@ -16,7 +16,8 @@ struct CommandLineToolBar: View {
                 Spacer()
                 if tool.state == .stale { Button("修复链接") { apply(true) } }
             }
-            Text(detail).font(.caption).foregroundStyle(warning ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+            let detail = Self.detail(state: tool.state, pathIncludesLinkDirectory: tool.pathIncludesLinkDirectory)
+            Text(detail.text).font(.caption).foregroundStyle(detail.isWarning ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
             if let error { Text(error).font(.caption).foregroundStyle(.orange) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -31,26 +32,21 @@ struct CommandLineToolBar: View {
         }
     }
 
-    private var warning: Bool {
-        switch tool.state {
-        case .stale, .blocked, .unavailable: true
-        case .installed: tool.pathIncludesLinkDirectory == false
-        case .notInstalled: false
-        }
-    }
-
-    private var detail: String {
+    /// 状态说明；`isWarning` 时用醒目颜色。已安装但链接目录可能不在 PATH 里（含读不出 PATH）都要明说，不静默。
+    static func detail(state: CommandLineToolInstaller.State, pathIncludesLinkDirectory: Bool?) -> (text: String, isWarning: Bool) {
         let path = "~/.local/bin/cuepad"
-        switch tool.state {
-        case .unavailable: return "这个构建里没有命令行工具。"
-        case .notInstalled: return "在 \(path) 建一个指向 App 内命令行工具的链接，不需要管理员权限。"
-        case .stale: return "\(path) 指向的 CuePad 已不在原位置（App 被移动过），点“修复链接”指向当前位置。"
-        case .blocked(let what): return "\(path) 位置\(what)，没有覆盖；确认不需要后请自行删除再安装。"
+        switch state {
+        case .unavailable: return ("这个构建里没有命令行工具。", true)
+        case .notInstalled: return ("在 \(path) 建一个指向 App 内命令行工具的链接，不需要管理员权限。", false)
+        case .stale: return ("\(path) 指向的 CuePad 已不在原位置（App 被移动过），点“修复链接”指向当前位置。", true)
+        case .blocked(let what): return ("\(path) 位置\(what)，没有覆盖；确认不需要后请自行删除再安装。", true)
         case .installed:
-            if tool.pathIncludesLinkDirectory == false {
-                return "已安装，但 ~/.local/bin 不在你的 shell 的 PATH 里：在 shell 配置里加 export PATH=\"$HOME/.local/bin:$PATH\"。"
+            switch pathIncludesLinkDirectory {
+            case true?: return ("已安装：\(path)。", false)
+            case false?:
+                return ("已安装，但 ~/.local/bin 不在你的 shell 的 PATH 里：在 shell 配置里加 export PATH=\"$HOME/.local/bin:$PATH\"。", true)
+            case nil: return ("已安装，但没能读取你的 shell PATH，请确认 ~/.local/bin 在 PATH 中。", true)
             }
-            return "已安装：\(path)。"
         }
     }
 
