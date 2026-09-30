@@ -13,7 +13,7 @@ import UIKit
 
 /// 组合根与界面动作的唯一入口：持有各模块的唯一实例。
 /// 界面读数据直接 `store.observe(...)`；一切副作用（投送、复制、Pi 命令、终端跳转、导入、扩展安装）只经这里，
-/// 发送记录也只在这里写。本文件的公开形状由主会话冻结：界面 Worker 与服务 Worker 并行开发，需要增改成员先找主会话。
+/// 发送记录也只在这里写。
 @MainActor @Observable
 final class AppServices {
     static let bundleID = "com.sugeh.cuepad"
@@ -29,8 +29,6 @@ final class AppServices {
     let settings: AppSettings
     /// 启动期间没能完成的事；界面据此提示，不静默。
     private(set) var startupIssues: [StartupIssue] = []
-    /// 本次启动从 Electron 旧库导入的结果；没有导入（已导入过或没有旧库）为 nil。
-    private(set) var legacyImportReport: ImportReport?
 
     @ObservationIgnored let location: LibraryLocation
 
@@ -63,8 +61,6 @@ final class AppServices {
     let commandLineTool: CommandLineToolInstaller
     /// 自动更新（Sparkle）。
     let updates: UpdateService
-    /// Pi 历史首次回填是否已完成。
-    private(set) var piHistoryBackfilled = false
     /// 主窗口显隐；通用投送前后与全局快捷键都经它。
     @ObservationIgnored var windowShell: WindowShell?
 
@@ -157,7 +153,7 @@ final class AppServices {
         accessibility = AccessibilityAccess(isTrusted: mac.isAccessibilityTrusted)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
-        historyStore = PiHistoryPersistence(storage: mac.historyStorage ?? library.store)
+        historyStore = PiHistoryPersistence(storage: library.store)
     }
     #else
     convenience init() {
@@ -201,16 +197,6 @@ final class AppServices {
     func setDeepLink(_ link: DeepLink?) {
         pendingDeepLink = link
     }
-
-    func finishLegacyImport(_ report: ImportReport) {
-        legacyImportReport = report
-    }
-
-    #if os(macOS)
-    func finishPiHistoryBackfill() {
-        piHistoryBackfilled = true
-    }
-    #endif
 
     func reportIssue(_ issue: StartupIssue) {
         Self.log.error("\(String(describing: issue), privacy: .public)")

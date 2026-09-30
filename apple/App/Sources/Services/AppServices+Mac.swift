@@ -102,7 +102,7 @@ extension AppServices {
                     reportIssue(.piHistoryUnavailable("写入 \(update.file.path) 失败：\(error)"))
                 }
             case .backfillFinished:
-                finishPiHistoryBackfill()
+                break
             }
         }
     }

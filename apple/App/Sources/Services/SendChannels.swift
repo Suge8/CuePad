@@ -93,8 +93,6 @@ struct MacDependencies {
     var installer: PiExtensionInstaller
     var terminal: PiTerminalJumper
     var isAccessibilityTrusted: @Sendable () -> Bool
-    /// 索引落盘的存储；nil 用资料库本身，测试注入失败替身。
-    var historyStorage: (any PiIndexStorage)?
     var hostID: String
     /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
@@ -114,7 +112,6 @@ struct MacDependencies {
             installer: PiExtensionInstaller(paths: paths),
             terminal: PiTerminalJumper(),
             isAccessibilityTrusted: Accessibility.isTrusted,
-            historyStorage: nil,
             hostID: HostIdentity.current(),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: CommandLineToolInstaller(),

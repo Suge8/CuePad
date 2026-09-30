@@ -9,7 +9,7 @@ import Testing
 
 @MainActor
 struct SendTests {
-    let rig = Rig()
+    let rig = TestApp()
     var services: AppServices { rig.services }
     var channels: FakeChannels { rig.channels }
     let png = pngData()

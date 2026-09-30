@@ -1,32 +1,18 @@
 #if os(macOS)
 import CuePi
 import Foundation
+import SQLite3
 import Testing
 @testable import CuePad
 
-/// 可注入读失败的索引存储：记录写入，按会话 id 决定读检查点是否失败或返回垃圾。
-final class FlakyStorage: PiIndexStorage, @unchecked Sendable {
-    struct ReadFailed: Error {}
-
-    var sessions: [StoredPiSession] = []
-    var failingReads: Set<String> = []
-    var garbage: Set<String> = []
-    private(set) var upserts: [String] = []
-
-    func piSessions() async throws -> [StoredPiSession] { sessions }
-
-    func piCheckpoint(of session: String) async throws -> Data? {
-        if failingReads.contains(session) { throw ReadFailed() }
-        return garbage.contains(session) ? Data("not a checkpoint".utf8) : nil
-    }
-
-    func upsertPiSession(_ session: StoredPiSession, checkpoint: Data?) async throws { upserts.append(session.id) }
-}
-
+/// Pi 历史索引读写 Store 失败：报告问题，并停止该文件的写回（库异常时反复重写只会放大问题）。
 @MainActor
 struct PiHistoryFailureTests {
-    private func sessionFile(_ id: String, in rig: Rig) throws -> URL {
-        let directory = rig.directory.appending(path: "sessions")
+    let app = TestApp()
+    var services: AppServices { app.services }
+
+    private func sessionFile(_ id: String) throws -> URL {
+        let directory = app.directory.appending(path: "sessions")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appending(path: "\(id).jsonl")
         let header = #"{"type":"session","version":3,"id":"\#(id)","timestamp":"2026-01-01T00:00:00.000Z","cwd":"/work/x"}"#
@@ -41,64 +27,57 @@ struct PiHistoryFailureTests {
         }
     }
 
-    @Test func Store读检查点失败_报告问题并停止该文件写回_其他文件不受影响() async throws {
-        let storage = FlakyStorage()
-        let rig = Rig(historyStorage: storage)
-        let broken = try sessionFile("broken", in: rig)
-        let healthy = try sessionFile("healthy", in: rig)
-        storage.sessions = [
-            StoredPiSession(id: "broken", path: broken.path, cwd: "/work/x", lastActivityAt: .now),
-            StoredPiSession(id: "healthy", path: healthy.path, cwd: "/work/x", lastActivityAt: .now),
-        ]
-        storage.failingReads = ["broken"]
+    /// 让资料库里的 Pi 会话表消失：之后 Store 对它的读写都真实地失败。
+    private func breakPiSessionTable() throws {
+        var handle: OpaquePointer?
+        defer { sqlite3_close(handle) }
+        guard sqlite3_open(services.location.databaseURL.path, &handle) == SQLITE_OK,
+              sqlite3_exec(handle, "DROP TABLE piSessions", nil, nil, nil) == SQLITE_OK
+        else { throw BreakFailed() }
+    }
+
+    struct BreakFailed: Error {}
+
+    @Test func 读检查点失败_报告问题并停止该文件写回_其他文件照常尝试() async throws {
+        let broken = try sessionFile("broken")
+        let healthy = try sessionFile("healthy")
+        try breakPiSessionTable()
 
         // 读失败：当作从头重读，但必须可见
-        #expect(await rig.services.loadPiCheckpoint(for: broken) == nil)
-        guard case .piHistoryUnavailable(let message)? = rig.services.startupIssues.first else {
-            Issue.record("读检查点失败没有进入 startupIssues：\(rig.services.startupIssues)")
+        #expect(await services.loadPiCheckpoint(for: broken) == nil)
+        guard case .piHistoryUnavailable(let message)? = services.startupIssues.first else {
+            Issue.record("读检查点失败没有进入 startupIssues：\(services.startupIssues)")
             return
         }
         #expect(message.contains(broken.path))
 
-        await rig.services.consumePiHistory(events(for: [broken, healthy]))
+        await services.consumePiHistory(events(for: [broken, healthy]))
 
-        #expect(storage.upserts == ["healthy"])
-        #expect(rig.services.startupIssues.count == 1)
-    }
-
-    @Test func 检查点解码失败是合法的重读_不报问题_写回照常() async throws {
-        let storage = FlakyStorage()
-        let rig = Rig(historyStorage: storage)
-        let file = try sessionFile("stale", in: rig)
-        storage.sessions = [StoredPiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now)]
-        storage.garbage = ["stale"]
-
-        #expect(await rig.services.loadPiCheckpoint(for: file) == nil)
-        await rig.services.consumePiHistory(events(for: [file]))
-
-        #expect(rig.services.startupIssues.isEmpty)
-        #expect(storage.upserts == ["stale"])
+        #expect(services.startupIssues.count == 2, "broken 不再写回，healthy 仍尝试写入（并同样失败）")
+        guard case .piHistoryUnavailable(let second)? = services.startupIssues.last else { return }
+        #expect(second.contains(healthy.path))
     }
 
     @Test func 写入失败同样报告并停止该文件写回() async throws {
-        let storage = FailingWrites()
-        let rig = Rig(historyStorage: storage)
-        let file = try sessionFile("s", in: rig)
+        let file = try sessionFile("s")
+        try breakPiSessionTable()
 
-        await rig.services.consumePiHistory(events(for: [file, file]))
+        await services.consumePiHistory(events(for: [file, file]))
 
-        #expect(storage.attempts == 1)
-        #expect(rig.services.startupIssues.count == 1)
+        #expect(services.startupIssues.count == 1)
     }
-}
 
-final class FailingWrites: PiIndexStorage, @unchecked Sendable {
-    private(set) var attempts = 0
-    func piSessions() async throws -> [StoredPiSession] { [] }
-    func piCheckpoint(of session: String) async throws -> Data? { nil }
-    func upsertPiSession(_ session: StoredPiSession, checkpoint: Data?) async throws {
-        attempts += 1
-        throw FlakyStorage.ReadFailed()
+    @Test func 检查点解码失败是合法的重读_不报问题_写回照常() async throws {
+        let file = try sessionFile("stale")
+        let garbage = Data("not a checkpoint".utf8)
+        try await services.store.upsertPiSession(
+            StoredPiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage)
+
+        #expect(await services.loadPiCheckpoint(for: file) == nil)
+        await services.consumePiHistory(events(for: [file]))
+
+        #expect(services.startupIssues.isEmpty)
+        #expect(try await services.store.piCheckpoint(of: "stale") != garbage)
     }
 }
 #endif
