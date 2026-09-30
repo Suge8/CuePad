@@ -87,7 +87,7 @@ final class ChangeLog {
 
 // MARK: - 假扩展：说桥协议的 socket 服务端
 
-/// 扮演 Pi 里的桥扩展，让客户端测试不依赖 Pi。字节协议见 `docs/swift-rewrite.md` 与 `PiWire`。
+/// 扮演 Pi 里的桥扩展，让客户端测试不依赖 Pi。字节协议见 CuePi 的 README 与 `PiWire`。
 final class FakeExtension: @unchecked Sendable {
     struct Options: Sendable {
         var protocolVersion = 1

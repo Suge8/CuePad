@@ -31,7 +31,7 @@ public struct CueLineStyle: Equatable, Sendable {
 }
 
 /// 一份运行时正文的装饰上下文：标题位置与围栏位置是全文性质，逐行样式据此判定。
-/// 范围对齐 Electron 版：`^#{1,6}\s`、`^\s*-\s`、顶格 ``` 围栏，另加有序列表、行内 code 与标题行。
+/// 范围：`^#{1,6}\s`、`^\s*-\s`、顶格 ``` 围栏，另加有序列表、行内 code 与标题行。
 public struct CueDecorations: Sendable {
     /// 标题行（`CueSegments.isTitleLine`）的行首偏移；没有则为 nil。
     public let titleLocation: Int?

@@ -2,7 +2,7 @@ import Foundation
 
 /// 表分两类。
 ///
-/// 同步表（阶段 3 由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
+/// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
 /// projects、cards、tags、cardTags、tasks、sendRecords、attachments、piSessionStates、deliveryRequests、probes。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
@@ -18,7 +18,7 @@ enum Schema {
     /// 依次执行，`PRAGMA user_version` 记录已执行个数。
   static let migrations: [String] = [v1, v2, v3, v4, v5]
 
-  /// 阶段 3 第一档：Pi 会话状态（按会话一条）、投送请求、延迟探针记录，均为同步表。
+  /// Pi 会话状态（按会话一条）、投送请求、延迟探针记录，均为同步表。
   private static let v5 = """
     CREATE TABLE piSessionStates (
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,

@@ -2,6 +2,8 @@
 
 宣传物料与可重跑产线。所有截图基于隔离演示库，不碰真实用户数据。
 
+> Electron 时代的产线（`demo-data.sql`、`make-demo-db.sh`、`shots/scene.mjs`、`motion/record-ui.mjs`）驱动的应用已从仓库删除，不再可运行；`compose/`、`visual/`、`design/tools/` 不依赖应用，仍可用。Swift 版截图走 `apple/scripts/xc.sh shot`（见 docs/development.md）。
+
 ## 产品文案定稿（对外描述的单一事实源）
 
 - **GitHub 仓库 description**：

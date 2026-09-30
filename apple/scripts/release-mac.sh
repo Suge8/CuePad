@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # macOS 分发：归档 → Developer ID 导出 → 公证 → 装订 → zip。产物：<产物目录>/release/mac/CuePad-<版本>-mac.zip
-# 前提：apple/README.md「签名与发布」里的凭据与 Developer ID 证书。
+# 前提：docs/development.md「签名与发布」里的凭据与 Developer ID 证书。
 # 公证有时要等很久（新账号首次提交可能数小时）：中断后用 `xc.sh release mac --resume <提交 id>` 接着等这次提交并装订、出 zip。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"

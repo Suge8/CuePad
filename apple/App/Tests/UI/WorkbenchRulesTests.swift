@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 项目页的纯规则：工作集卡片墙、"更早"分组、Pi 会话归项目。规格见 docs/swift-rewrite.md「视觉」。
+/// 项目页的纯规则：工作集卡片墙、"更早"分组、Pi 会话归项目。规格见 docs/development.md「视觉」。
 struct WallTests {
     static let calendar: Calendar = {
         var calendar = Calendar(identifier: .gregorian)

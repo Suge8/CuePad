@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # iOS：testflight = 归档 → 导出并上传 App Store Connect；device = 开发构建并装到连接的真机。
 # 手动签名：证书与描述文件由 provision.py 经 API 创建（Xcode 自动签名的 API 密钥管不了 App Group / iCloud 容器）。
-# 前提：apple/README.md「签名与发布」。
+# 前提：docs/development.md「签名与发布」。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$APPLE_DIR/scripts/_signing.sh"

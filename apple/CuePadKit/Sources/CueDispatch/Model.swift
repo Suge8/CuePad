@@ -25,7 +25,7 @@ public enum TargetSelector: Sendable, Equatable {
     public static let cursor = bundleID("com.todesktop.230313mzl4w4u92")
 }
 
-/// 错误码沿用 Electron 版 sidecar，界面层据此映射文案。
+/// 错误码是稳定的字符串，界面层据此映射文案。
 public enum DispatchError: String, Error, Sendable {
     case accessibilityRequired = "ACCESSIBILITY_PERMISSION_REQUIRED"
     case noTarget = "NO_DISPATCH_TARGET"
