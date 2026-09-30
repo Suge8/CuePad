@@ -9,6 +9,9 @@ public actor CueStore {
   /// 图片文件的读取（原图、缩略图）；不经过 actor，界面可并发调用。写入用 `addImage`。
   public nonisolated let files: AttachmentFiles
   private var subscribers: [UUID: (tables: Set<Table>, signal: AsyncStream<Void>.Continuation)] = [:]
+  private let notificationName: String
+  private let changeListener: ChangeListener
+  private var lastDataVersion: Int64
 
   public init(url: URL) throws {
     try FileManager.default.createDirectory(
@@ -24,6 +27,24 @@ public actor CueStore {
     }
     db = connection
     files = AttachmentFiles(directory: url.deletingLastPathComponent().appending(path: "Attachments", directoryHint: .isDirectory))
+    notificationName = ChangeNotification.name(forDatabase: url)
+    changeListener = ChangeListener(name: notificationName)
+    lastDataVersion = try connection.first("PRAGMA data_version") { $0.int(0) } ?? 0
+    Task { [weak self, events = changeListener.events] in
+      for await _ in events { await self?.externalChangeNotified() }
+    }
+  }
+
+  /// 按资料库位置打开。
+  public init(location: LibraryLocation) throws {
+    try self.init(url: location.databaseURL)
+  }
+
+  /// 收到别的进程的通知：确有别的连接提交过才算外部变更，所有订阅者整体重读（不猜是哪张表）。
+  private func externalChangeNotified() {
+    guard let version = try? db.first("PRAGMA data_version", [], { $0.int(0) }), version != lastDataVersion else { return }
+    lastDataVersion = version
+    for subscriber in subscribers.values { subscriber.signal.yield() }
   }
 
   // MARK: 观察
@@ -68,6 +89,7 @@ public actor CueStore {
   func write<T>(_ body: () throws -> T) throws -> T {
     let (result, changed) = try db.transaction(body)
     let tables = Set(changed.compactMap(Table.init(rawValue:)))
+    if !tables.isEmpty { ChangeNotification.post(notificationName) }
     for (_, subscriber) in subscribers where !subscriber.tables.isDisjoint(with: tables) {
       subscriber.signal.yield()
     }
