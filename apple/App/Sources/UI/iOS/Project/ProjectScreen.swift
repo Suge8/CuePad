@@ -2,7 +2,21 @@
 import CueStore
 import SwiftUI
 
+/// 项目页的数据：读取时一并算好上墙用的卡片事实与每张卡的摘要（在 Store 的执行体上，不占主线程）。
+nonisolated private struct ProjectPage: Sendable {
+    var data: ProjectPageData
+    var stamps: [CardStamp]
+    var entries: [UUID: CardEntry]
+
+    init(_ data: ProjectPageData) {
+        self.data = data
+        stamps = data.stamps()
+        entries = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, CardEntry($0)) })
+    }
+}
+
 /// 项目页（nil = 未归档）：目标与下一步 → 工作集（置顶在前）→ 更早。与 Mac 同一套上墙规则。
+/// 整页是一个懒加载列表：大项目只创建屏幕内的卡与行。
 struct ProjectScreen: View {
     let projectID: UUID?
     @Environment(Workspace.self) private var workspace
@@ -11,7 +25,8 @@ struct ProjectScreen: View {
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var data: ProjectPageData?
+    @State private var page: ProjectPage?
+    @State private var expanded: Set<OlderGroup.Period> = []
     @State private var board = WallBoard()
     @State private var editingProject: Project?
     @State private var sessions: [PiSessionState]?
@@ -19,8 +34,8 @@ struct ProjectScreen: View {
     var body: some View {
         ScrollView {
             ScrollViewReader { proxy in
-                if let data, let arrangement = board.arrangement {
-                    content(data, arrangement)
+                if let page, let arrangement = board.arrangement {
+                    content(page, arrangement)
                 }
                 #if DEBUG
                 Color.clear.frame(height: 0)
@@ -29,44 +44,50 @@ struct ProjectScreen: View {
             }
         }
         .background(palette.desk)
-        .navigationTitle(data?.project?.name ?? "未归档")
+        .navigationTitle(page?.data.project?.name ?? "未归档")
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
         .sheet(item: $editingProject) { ProjectFormSheet(project: $0) }
-        .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $data, onError: workspace.fail) {
-            [projectID] store in try ProjectPageData.read(projectID, from: store)
+        .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $page, onError: workspace.fail) {
+            [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
         .observing(services.store, [.piSessionStates], id: projectID, into: $sessions) { [projectID] store in
             try store.piSessionStates().filter { $0.projectID != nil && $0.projectID == projectID }
         }
-        .onChange(of: data?.stamps()) { rearrange() }
+        .onChange(of: page?.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
-        .onChange(of: data?.project?.deletedAt) { _, deleted in if deleted != nil { navigation.pop(projectID) } }
+        .onChange(of: page?.data.project?.deletedAt) { _, deleted in if deleted != nil { navigation.pop(projectID) } }
     }
 
     @ViewBuilder
-    private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
-        let byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
-        let lastTarget = data.lastTarget
-        VStack(alignment: .leading, spacing: 24) {
-            if data.project != nil { FocusCard(data: data, sessions: sessions ?? []) }
+    private func content(_ page: ProjectPage, _ arrangement: WallArrangement) -> some View {
+        let data = page.data, lastTarget = data.lastTarget
+        LazyVStack(alignment: .leading, spacing: 12) {
+            if data.project != nil { FocusCard(data: data, sessions: sessions ?? []).padding(.bottom, 12) }
             if data.cards.isEmpty {
-                ContentUnavailableView("还没有卡片", systemImage: "square.on.square.dashed")
-                    .padding(.top, 40)
+                ContentUnavailableView("还没有卡片", systemImage: "square.on.square.dashed").padding(.top, 40)
             }
             if !arrangement.pinned.isEmpty {
-                section("置顶", count: arrangement.pinned.count) {
-                    wall(arrangement.pinned.compactMap { byID[$0] }, data: data, lastTarget: lastTarget)
-                }
+                SectionHeader(title: "置顶", count: arrangement.pinned.count)
+                wall(arrangement.pinned, page: page, lastTarget: lastTarget).padding(.bottom, 12)
             }
             if !arrangement.wall.isEmpty {
-                section("最近", count: arrangement.wall.count) {
-                    wall(arrangement.wall.compactMap { byID[$0] }, data: data, lastTarget: lastTarget)
-                }
+                SectionHeader(title: "最近", count: arrangement.wall.count)
+                wall(arrangement.wall, page: page, lastTarget: lastTarget).padding(.bottom, 12)
             }
             if !arrangement.older.isEmpty {
-                OlderSection(groups: data.olderGroups(arrangement), cards: byID, lastTarget: lastTarget)
-                    .id(ScrollAnchor.older)
+                SectionHeader(title: "更早", count: arrangement.older.count).id(ScrollAnchor.older)
+                ForEach(data.olderGroups(arrangement), id: \.period) { group in
+                    OlderGroupHeader(group: group, expanded: $expanded)
+                    if !group.isMonth || expanded.contains(group.period) {
+                        let ids = group.cards
+                        ForEach(ids, id: \.self) { id in
+                            if let entry = page.entries[id] {
+                                OlderRow(entry: entry, lastTarget: lastTarget[id], isFirst: id == ids.first, isLast: id == ids.last)
+                            }
+                        }
+                    }
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -74,7 +95,7 @@ struct ProjectScreen: View {
     }
 
     private var subtitle: String {
-        guard let data else { return "" }
+        guard let data = page?.data else { return "" }
         let directory = data.directory.map(Self.homeRelative)
         return [directory, "\(data.cards.count) 张卡片"].compactMap { $0 }.joined(separator: " · ")
     }
@@ -86,23 +107,11 @@ struct ProjectScreen: View {
         return "~/" + parts.dropFirst(3).joined(separator: "/")
     }
 
-    private func section(_ title: String, count: Int, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-                Text("\(count)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            content()
-        }
-    }
-
-    private func wall(_ cards: [Card], data: ProjectPageData, lastTarget: [UUID: String]) -> some View {
+    private func wall(_ ids: [UUID], page: ProjectPage, lastTarget: [UUID: String]) -> some View {
         MasonryLayout(minColumnWidth: sizeClass == .regular ? 220 : 150, maxColumns: 4, spacing: 12) {
-            ForEach(cards) { card in
-                CardTileView(card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id),
-                             isGoal: data.project?.goalCardID == card.id)
+            ForEach(ids.compactMap { page.entries[$0] }) { entry in
+                CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id),
+                             isGoal: page.data.project?.goalCardID == entry.id)
             }
         }
     }
@@ -112,7 +121,7 @@ struct ProjectScreen: View {
             Button("新建卡片", systemImage: "square.and.pencil") { newCard() }
                 .keyboardShortcut("n")
         }
-        if let project = data?.project {
+        if let project = page?.data.project {
             ToolbarItem(placement: .secondaryAction) {
                 ProjectActions(project: project) { editingProject = project }
             }
@@ -128,7 +137,7 @@ struct ProjectScreen: View {
     }
 
     private func rearrange() {
-        guard let data else { return }
+        guard let data = page?.data else { return }
         var next = board
         if next.refresh(with: data, project: projectID) {
             board = next
@@ -195,6 +204,7 @@ private struct FocusCard: View {
                 }
                 NewTaskLine(project: data.project?.id)
             }
+            .animation(Motion.quick, value: data.tasks.map(\.id))
             if !sessions.isEmpty {
                 Divider()
                 VStack(alignment: .leading, spacing: 8) {

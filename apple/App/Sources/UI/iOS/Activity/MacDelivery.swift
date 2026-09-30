@@ -22,12 +22,13 @@ nonisolated extension DeliveryMode {
         }
     }
 
-    var explanation: String {
+    /// 不直观的方式才需要一句说明。
+    var explanation: String? {
         switch self {
-        case .send: "Pi 立即开始处理"
         case .steer: "打断 Pi 正在进行的这一轮"
         case .followUp: "等 Pi 这一轮结束后再发"
         case .paste: "只放进输入框，由你在 Mac 上确认发送"
+        case .send: nil
         }
     }
 }

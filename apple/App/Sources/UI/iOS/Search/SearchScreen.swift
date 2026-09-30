@@ -3,14 +3,33 @@ import CueStore
 import SwiftUI
 
 nonisolated private struct SearchData: Sendable {
-    var cards: [Card]
+    var groups: [Group]
     var total: Int
+    var shown: Int
     var projects: [Project]
     /// iOS 上可选的发送目标：只有本机能产生的（复制到剪贴板）。Pi 与应用投送是 Mac 专有。
     var targets: [SendTarget]
+
+    /// 结果按项目分组，组按首次出现的顺序（即最相关的在前）。
+    struct Group: Identifiable, Sendable {
+        var project: Project?
+        var cards: [CardEntry]
+        var id: UUID? { project?.id }
+    }
+
+    static func grouped(_ cards: [Card], projects: [Project]) -> [Group] {
+        let byID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
+        var order: [UUID?] = []
+        var buckets: [UUID?: [CardEntry]] = [:]
+        for card in cards {
+            if buckets[card.projectID] == nil { order.append(card.projectID) }
+            buckets[card.projectID, default: []].append(CardEntry(card))
+        }
+        return order.map { Group(project: $0.flatMap { byID[$0] }, cards: buckets[$0] ?? []) }
+    }
 }
 
-/// 搜索：跨项目，与 Mac 同样的筛选（项目、含图片、发送、时间），去掉 Mac 专有的发送目标。结果按项目分组。
+/// 搜索：跨项目，多个词都要命中，可按项目、含图片、发送、时间筛选；结果按项目分组。
 struct SearchScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -19,36 +38,34 @@ struct SearchScreen: View {
     @State private var data: SearchData?
 
     var body: some View {
-        List {
-            Section {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
                 FilterChips(query: $query, projects: data?.projects ?? [], targets: data?.targets ?? [])
-                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                    .listRowBackground(Color.clear)
-            } footer: {
-                if let data, !query.text.isEmpty || query.isFiltered { Text("\(data.total) 个结果") }
-            }
-            if let data {
-                if data.cards.isEmpty, !query.text.isEmpty || query.isFiltered {
-                    ContentUnavailableView.search(text: query.text)
-                }
-                ForEach(groups(data), id: \.owner) { group in
-                    let project = data.projects.first { $0.id == group.owner }
-                    Section {
-                        ForEach(group.cards) { card in ResultRow(card: card, term: query.text) }
-                    } header: {
+                    .padding(.horizontal, -16)
+                if let data {
+                    if data.total == 0, !query.text.isEmpty || query.isFiltered {
+                        ContentUnavailableView.search(text: query.text)
+                    }
+                    ForEach(data.groups) { group in
                         HStack(spacing: 6) {
-                            if let project { ProjectGlyph(project: project, size: 12) }
-                            Text(project?.name ?? "未归档")
+                            ProjectGlyph(project: group.project, size: 12)
+                            SectionHeader(title: group.project?.name ?? "未归档", count: nil).padding(.horizontal, -4)
                         }
+                        .padding(.top, 8)
+                        ForEach(group.cards) { CardRow(entry: $0, highlight: query.text) }
+                    }
+                    if data.total > data.shown {
+                        Button("还有 \(data.total - data.shown) 张") { query.pages += 1 }
+                            .frame(maxWidth: .infinity).padding()
                     }
                 }
-                if data.total > data.cards.count {
-                    Button("显示更多（还有 \(data.total - data.cards.count) 张）") { query.pages += 1 }
-                }
             }
+            .padding(.horizontal, 16).padding(.bottom, 24)
         }
-        .deskBackground()
+        .scrollDismissesKeyboard(.immediately)
+        .background(palette.desk)
         .navigationTitle("搜索")
+        .navigationSubtitle(data.map { !query.text.isEmpty || query.isFiltered ? "\($0.total) 张" : "" } ?? "")
         .searchable(text: $query.text, prompt: "搜索卡片")
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear {
@@ -58,52 +75,10 @@ struct SearchScreen: View {
         }
         .observing(services.store, [.cards, .projects, .sendRecords], id: query, into: $data, onError: workspace.fail) { [query] store in
             let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
+            let projects = try store.projects()
             return SearchData(
-                cards: found.cards, total: found.totalCards, projects: try store.projects(),
-                targets: try store.sendTargets().filter { $0.kind == .known(.clipboard) })
-        }
-    }
-
-    private func groups(_ data: SearchData) -> [(owner: UUID?, cards: [Card])] {
-        var order: [UUID?] = []
-        var buckets: [UUID?: [Card]] = [:]
-        for card in data.cards {
-            if buckets[card.projectID] == nil { order.append(card.projectID) }
-            buckets[card.projectID, default: []].append(card)
-        }
-        return order.map { ($0, buckets[$0] ?? []) }
-    }
-}
-
-private struct ResultRow: View {
-    let card: Card
-    let term: String
-    @Environment(\.palette) private var palette
-    @Environment(\.zoomNamespace) private var zoom
-
-    var body: some View {
-        let text = CardText(card.body)
-        NavigationLink(value: Navigation.Route.card(card.id)) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(highlight(text.title.nonEmpty ?? "空白卡片")).font(.body.weight(.medium)).lineLimit(1)
-                    if !text.preview.isEmpty {
-                        Text(highlight(text.preview)).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
-                    }
-                    Text(DateLabel.short(card.modifiedAt)).font(.caption).foregroundStyle(.tertiary)
-                }
-                Spacer(minLength: 0)
-                if let image = text.images.first { Thumbnail(hash: image, height: 48, radius: 6).frame(width: 64) }
-            }
-        }
-        .zoomSource(card.id, in: zoom)
-        .contextMenu { CardActions(card: card, isGoal: false) }
-    }
-
-    /// 搜索按空白拆成多个词、每个都要命中：每个词各自标出。
-    private func highlight(_ text: String) -> AttributedString {
-        term.split(whereSeparator: \.isWhitespace).reduce(AttributedString(text)) { result, word in
-            Highlight.matches(text, String(word), base: result)
+                groups: SearchData.grouped(found.cards, projects: projects), total: found.totalCards, shown: found.cards.count,
+                projects: projects, targets: try store.sendTargets().filter { $0.kind == .known(.clipboard) })
         }
     }
 }
@@ -171,17 +146,21 @@ private struct Chip: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(name).foregroundStyle(on ? AnyShapeStyle(palette.onSolid) : AnyShapeStyle(.secondary))
-            if let value {
+            Text(name).opacity(on ? 0.7 : 1)
+            if let value, on {
                 Text(value).fontWeight(.medium)
-                Image(systemName: "chevron.down").font(.caption2.weight(.bold)).opacity(0.6).accessibilityHidden(true)
+            }
+            if value != nil {
+                Image(systemName: "chevron.down").font(.caption2.weight(.bold)).opacity(0.5).accessibilityHidden(true)
             }
         }
         .font(.subheadline)
-        .foregroundStyle(on ? AnyShapeStyle(palette.onSolid) : AnyShapeStyle(.primary))
+        .foregroundStyle(on ? palette.onSolid : palette.ink)
         .padding(.horizontal, 12).frame(minHeight: 36)
-        .background(on ? AnyShapeStyle(palette.solid) : AnyShapeStyle(palette.fill.opacity(2)), in: .capsule)
+        .background(on ? palette.solid : palette.paper, in: .capsule)
+        .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
         .contentShape(.capsule)
+        .animation(Motion.quick, value: on)
     }
 }
 #endif

@@ -22,43 +22,49 @@ struct CaptureDraft {
     }
 }
 
-/// 标签栏上方常驻的随手记栏：点文字打开随手记，相机与相册直接带图打开。记入当前位置（项目页记入该项目，其余进未归档）。
-struct CaptureAccessory: View {
+/// 随手记栏：点文字打开随手记，相机与相册直接带图打开；记入当前位置（项目页记入该项目，其余进未归档）。
+/// iPhone 放在标签栏上方的附件栏里（底由系统画），宽 iPad 浮在项目页底部（自己画玻璃）。
+struct CaptureBar: View {
+    /// 标签栏最小化时附件栏收成一行"记一笔"。
+    var compact = false
     @Environment(Navigation.self) private var navigation
-    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
 
     var body: some View {
         HStack(spacing: 0) {
             Button { navigation.startCapture() } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "square.and.pencil").accessibilityHidden(true)
-                    Text(placement == .inline ? "记一笔" : "记下想法…").foregroundStyle(.secondary).lineLimit(1)
+                    Text(compact ? "记一笔" : "记下想法…").foregroundStyle(.secondary).lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 16)
                 .frame(maxHeight: .infinity)
                 .contentShape(.rect)
             }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
             .accessibilityLabel("随手记")
-            .accessibilityHint(navigation.captureProject == nil ? "记入未归档" : "记入当前项目")
-            if placement != .inline {
+            if !compact {
                 if CameraPicker.isAvailable {
-                    iconButton("拍照", "camera") { navigation.startCapture(.camera) }
+                    icon("拍照", "camera") { navigation.startCapture(.camera) }
                 }
-                iconButton("从相册选图", "photo.on.rectangle") { navigation.startCapture(.photos) }
-                    .padding(.trailing, 6)
+                icon("从相册选图", "photo.on.rectangle") { navigation.startCapture(.photos) }.padding(.trailing, 6)
             }
         }
         .buttonStyle(.plain)
     }
 
-    private func iconButton(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+    private func icon(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).foregroundStyle(.secondary)
-                .frame(width: 44, height: 44).contentShape(.rect)
+            Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 44, height: 44).contentShape(.rect)
         }
         .accessibilityLabel(label)
     }
+}
+
+/// 附件栏里的随手记：跟随附件栏的收起状态。
+struct CaptureAccessory: View {
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+    var body: some View { CaptureBar(compact: placement == .inline) }
 }
 
 /// 随手记面板：文字 + 图片（相册、相机）存为卡片。位置默认来自打开它的页面，可以当场换。

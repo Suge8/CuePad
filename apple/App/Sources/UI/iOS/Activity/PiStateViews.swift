@@ -61,12 +61,10 @@ nonisolated extension PiSessionState {
     }
 }
 
-/// 状态点：干活时轻微呼吸（减弱动态效果时静止），状态靠颜色与旁边的文字表达。
+/// 状态点：颜色表示状态，旁边总有文字或读屏标签说明；不做循环动画（常驻多处，循环既耗电也分散注意）。
 struct PiDot: View {
     let state: Open<PiWorkState>
     var size: CGFloat = 8
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var breathing = false
 
     var body: some View {
         Circle()
@@ -74,13 +72,8 @@ struct PiDot: View {
             .frame(width: size, height: size)
             .padding(size * 0.35)
             .background(state.tint.opacity(0.22), in: .circle)
-            .opacity(breathing ? 0.45 : 1)
-            .animation(breathe ? .easeInOut(duration: 1.1).repeatForever() : nil, value: breathing)
-            .onAppear { breathing = breathe }
-            .onChange(of: breathe) { _, on in breathing = on }
+            .animation(Motion.quick, value: state)
             .accessibilityHidden(true)
     }
-
-    private var breathe: Bool { state.isWorking && !reduceMotion }
 }
 #endif

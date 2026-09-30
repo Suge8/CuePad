@@ -90,7 +90,7 @@ struct ActivityScreen: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
-                .animation(Motion.quick, value: data.sessions.map(\.state))
+                .animation(Motion.quick, value: ActivityShape(data))
             }
         }
         .task(id: FocusKey(session: navigation.focusedSession, loaded: data != nil)) {
@@ -106,6 +106,23 @@ struct ActivityScreen: View {
         .observing(services.store, [.piSessionStates, .deliveryRequests, .sendRecords, .projects], into: $data, onError: workspace.fail) {
             try ActivityData.read(from: $0)
         }
+    }
+}
+
+/// 活动页里会引起重排的部分：会话、请求、记录的增删与状态变化（计时不算）。
+private struct ActivityShape: Equatable {
+    var sessions: [PiSessionState.ID]
+    var states: [Open<PiWorkState>]
+    var deliveries: [DeliveryRequest.ID]
+    var statuses: [Open<DeliveryStatus>]
+    var sends: [SendRecord.ID]
+
+    init(_ data: ActivityData) {
+        sessions = data.sessions.map(\.id)
+        states = data.sessions.map(\.state)
+        deliveries = data.deliveries.map(\.id)
+        statuses = data.deliveries.map(\.status)
+        sends = data.sends.map(\.id)
     }
 }
 
@@ -143,17 +160,10 @@ private struct ActivitySection<Content: View>: View {
     let title: String
     let count: Int?
     @ViewBuilder let content: Content
-    @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-                if let count { Text("\(count)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3) }
-            }
-            .padding(.horizontal, 4)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
+            SectionHeader(title: title, count: count)
             VStack(spacing: 0) { content }.paper(radius: 16)
         }
     }
@@ -171,7 +181,7 @@ private struct WaitingCard: View {
                 PiDot(state: session.state)
                 Text("\(session.title) 等你确认").font(.headline).foregroundStyle(palette.ink)
                 Spacer(minLength: 8)
-                (Text("已等 ") + Text(session.stateSince, style: .timer)).font(.footnote.monospacedDigit()).foregroundStyle(.orange)
+                Text("已等 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(.orange)
             }
             if let detail = session.detail, !detail.isEmpty {
                 Text(detail).font(.body).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -295,7 +305,9 @@ struct DeliveryStatusLabel: View {
             }
         }
         .font(.footnote.weight(.medium))
-        .contentTransition(.symbolEffect(.replace))
+        .id(status)
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .animation(Motion.quick, value: status)
     }
 }
 
@@ -317,9 +329,9 @@ private struct SendRecordRow: View {
             }
             Spacer(minLength: 8)
             if live != nil {
-                Button("重发") { resend() }.buttonStyle(.bordered).controlSize(.small)
+                rowButton("重发", "paperplane", action: resend)
             } else {
-                Button("复制") { copy() }.buttonStyle(.bordered).controlSize(.small)
+                rowButton("复制", "doc.on.doc", action: copy)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -328,6 +340,15 @@ private struct SendRecordRow: View {
             if live != nil { Button("重发", systemImage: "paperplane") { resend() } }
             ShareLink(item: record.content) { Label("分享", systemImage: "square.and.arrow.up") }
         }
+    }
+
+    private func rowButton(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(label, systemImage: symbol, action: action)
+            .labelStyle(.iconOnly)
+            .foregroundStyle(palette.ink2)
+            .frame(width: 44, height: 44)
+            .contentShape(.rect)
+            .buttonStyle(.borderless)
     }
 
     private func resend() {
@@ -356,10 +377,5 @@ nonisolated extension SendTargetKind {
 
 nonisolated extension Open<SendTargetKind> {
     var label: String { known?.label ?? "其他" }
-}
-
-nonisolated extension String {
-    /// 空串为 nil，便于 `?? 占位`。
-    var nonEmpty: String? { isEmpty ? nil : self }
 }
 #endif

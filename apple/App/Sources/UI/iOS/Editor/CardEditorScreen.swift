@@ -25,7 +25,6 @@ struct CardEditorScreen: View {
     @State private var liveText = ""
     @State private var handle = IOSEditorHandle()
     @State private var autosave: Autosave?
-    @State private var saving = false
     @State private var pickingImage = false
     @State private var pickedImage: PhotosPickerItem?
     @State private var editingVariables = false
@@ -44,7 +43,6 @@ struct CardEditorScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(wide ? palette.desk : palette.paper)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .tabBar)
             .toolbar { toolbar }
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
             .onChange(of: pickedImage) { insertPicked() }
@@ -102,14 +100,11 @@ struct CardEditorScreen: View {
             Text(data.project?.name ?? "未归档").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
             Text("·")
             Text(DateLabel.short(data.card.modifiedAt))
-            Text("·")
-            Text(saving ? "保存中…" : "已保存").contentTransition(.opacity)
             if data.project?.goalCardID == data.card.id { Image(systemName: "scope").accessibilityLabel("项目目标") }
             if data.card.isPinned { Image(systemName: "pin.fill").accessibilityLabel("置顶") }
         }
         .font(.caption)
         .foregroundStyle(palette.ink3)
-        .animation(Motion.quick, value: saving)
         .accessibilityElement(children: .combine)
     }
 
@@ -175,11 +170,7 @@ struct CardEditorScreen: View {
         guard autosave == nil else { return }
         let store = services.store, id = cardID
         let autosave = Autosave(
-            save: { body in
-                saving = true
-                defer { saving = false }
-                try await store.updateCard(id) { $0.body = body }
-            },
+            save: { body in try await store.updateCard(id) { $0.body = body } },
             onError: workspace.fail)
         self.autosave = autosave
         // 进入后台时由壳层等它落盘：之后 App 可能被系统结束，离开页面的 onDisappear 不会再来

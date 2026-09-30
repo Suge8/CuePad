@@ -66,7 +66,6 @@ final class KeyboardBar: UIToolbar {
         func item(_ label: String, _ symbol: String, _ action: @escaping (CueTextView) -> Void) -> UIBarButtonItem {
             let item = UIBarButtonItem(image: UIImage(systemName: symbol), primaryAction: UIAction { [weak textView] _ in
                 guard let textView else { return }
-                UISelectionFeedbackGenerator().selectionChanged()
                 action(textView)
             })
             item.accessibilityLabel = label
