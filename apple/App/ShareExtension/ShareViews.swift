@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 分享面板的界面（界面 Worker 替换）。`model` 负责数据，保存成功后调用 `dismiss`，取消调用 `cancel`。
+/// 分享面板的界面。`model` 负责数据，保存成功后调用 `dismiss`，取消调用 `cancel`。
 enum ShareViews {
     static func root(_ model: ShareModel, dismiss: @escaping () -> Void, cancel: @escaping () -> Void) -> some View {
         ShareForm(model: model, dismiss: dismiss, cancel: cancel)
