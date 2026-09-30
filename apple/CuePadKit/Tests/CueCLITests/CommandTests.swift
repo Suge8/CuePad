@@ -50,7 +50,7 @@ import Testing
     let shown = try await sb.object("card", "show", card.id.uuidString)
     #expect(shown.string("id") == card.id.uuidString.lowercased())
     #expect(shown.string("projectId") == alpha.id.uuidString.lowercased())
-    #expect(shown["favorite"] as? Bool == false)
+    #expect(shown["pinned"] as? Bool == false)
     #expect(shown["conflictOf"] is NSNull && shown["deletedAt"] is NSNull)
     #expect(shown.string("modifiedAt")?.hasSuffix("Z") == true)
   }
@@ -71,6 +71,8 @@ import Testing
     #expect(try await ids() == [id(a), id(b), id(inbox)])
     #expect(try await ids("--project", "Beta") == [id(b)])
     #expect(try await ids("--inbox") == [id(inbox)])
+    try await sb.store.updateCard(b.id) { $0.isPinned = true }
+    #expect(try await ids("--pinned") == [id(b)])
   }
 
   @Test func cardMoveTrashRestore() async throws {
