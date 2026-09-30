@@ -59,6 +59,8 @@ final class AppServices {
     let accessibility: AccessibilityAccess
     /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
     let commandLineTool: CommandLineToolInstaller
+    /// 自动更新（Sparkle）。
+    let updates: UpdateService
     /// Pi 历史首次回填是否已完成。
     private(set) var piHistoryBackfilled = false
     /// 主窗口显隐；通用投送前后与全局快捷键都经它。
@@ -120,7 +122,8 @@ final class AppServices {
         let location = LibraryLocation.standard
         self.init(
             location: location, defaults: location.makeDefaults(),
-            sync: { Self.makeSync(store: $0, location: location) }, mac: .live(bundleID: Self.bundleID))
+            sync: { Self.makeSync(store: $0, location: location) },
+            mac: .live(bundleID: Self.bundleID, updater: location.isIsolated ? nil : SparkleUpdater()))
     }
 
     init(location: LibraryLocation, defaults: UserDefaults, sync: (CueStore) -> (any SyncControlling)? = { _ in nil }, mac: MacDependencies) {
@@ -141,6 +144,7 @@ final class AppServices {
         piExtension = PiExtensionManager(installer: mac.installer, settings: settings)
         accessibility = AccessibilityAccess(isTrusted: mac.isAccessibilityTrusted)
         commandLineTool = mac.commandLineTool
+        updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: mac.historyStorage ?? library.store)
     }
     #else

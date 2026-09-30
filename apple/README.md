@@ -57,6 +57,12 @@ Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，�
 
 只能在网页上做的一次性前置（已做）：App Group `group.com.sugeh.cuepad` 与 iCloud 容器 `iCloud.com.sugeh.cuepad` 的创建及挂到 App ID；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成，`provision.py devid-import <.cer>` 导入）；App Store Connect 里的 App 记录。
 
+## 自动更新（macOS）
+
+用 Sparkle 2（EdDSA 校验、增量更新），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉 Sparkle 源码。更新源 `https://cue-pad.com/appcast.xml` 与公钥在 `App/Config/CuePad-macOS-Info.plist`；设置窗口底部有"自动检查更新"开关和"检查更新…"，App 菜单里也有"检查更新…"。隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
+
+EdDSA 私钥在专用钥匙串（`~/.appstoreconnect/cuepad-signing.keychain-db` 里的 `cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。`xc.sh release mac` 在公证、装订后把 zip 收进 `<产物目录>/release/mac/updates/` 并生成 `appcast.xml`（含与历史版本的增量包，所以历史 zip 要保留在 `updates/` 里）。更新包的下载地址前缀用 `CUEPAD_UPDATE_URL_PREFIX`（默认 `https://cue-pad.com/downloads/`）；`updates/` 里的 zip、增量包与 `appcast.xml` 部署到对应位置由人决定。
+
 ## 命令行工具
 
 `cuepad`（读写本机资料库，供 agent 在 bash 里直接调用）随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由工程里的 `CuePadCLI` 目标统一构建、随 App 一起签名与公证。设置窗口底部的开关会在 `~/.local/bin/cuepad` 建指向它的符号链接（首次启动提示一次；位置被别的文件占用时不覆盖，App 被移动后能检测并一键修复；不做需要提权的 /usr/local/bin）。它与 App 用同一套资料库位置规则（`CUEPAD_LIBRARY_DIR` 同样生效）。
