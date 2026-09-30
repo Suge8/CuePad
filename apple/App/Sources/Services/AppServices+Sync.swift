@@ -4,9 +4,17 @@ import Foundation
 
 /// iCloud 同步的 App 层接入：启动引擎、把状态与冲突交给界面、激活时立即同步。
 extension AppServices {
-    /// 隔离模式（`CUEPAD_LIBRARY_DIR`）不同步：它用于开发与验收，不能碰真实账号的云端数据。
-    static func makeSync(store: CueStore, location: LibraryLocation) -> (any SyncControlling)? {
-        location.isIsolated ? nil : CloudSync(store: store)
+    /// 不创建引擎的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据）；
+    /// 本机 ad-hoc 构建没有 iCloud 权限（CloudKit 缺权限时会直接抛 ObjC 异常使进程崩溃，只有签名构建才有）。
+    static func makeSync(
+        store: CueStore, location: LibraryLocation, hasCloudKitEntitlement: Bool = Entitlements.hasCloudKit
+    ) -> (any SyncControlling)? {
+        guard !location.isIsolated else { return nil }
+        guard hasCloudKitEntitlement else {
+            log.notice("这个构建没有 iCloud 权限（本机 ad-hoc 构建），同步未启用")
+            return nil
+        }
+        return CloudSync(store: store)
     }
 
     /// 启动引擎，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有引擎（隔离模式）什么都不做。

@@ -72,12 +72,14 @@ struct SyncWiringTests {
         #expect(services.conflicts.isEmpty)
     }
 
-    @Test func 隔离模式不创建同步引擎() throws {
+    @Test func 隔离模式与没有iCloud权限的构建不创建同步引擎() throws {
         let store = services.store
         let isolated = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: "/tmp/isolated-library"])
-        #expect(AppServices.makeSync(store: store, location: isolated) == nil)
         let real = try LibraryLocation.resolve(environment: [:], base: .applicationSupport(URL(filePath: "/tmp/support")))
-        #expect(AppServices.makeSync(store: store, location: real) != nil)
+
+        #expect(AppServices.makeSync(store: store, location: isolated, hasCloudKitEntitlement: true) == nil)
+        #expect(AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: false) == nil)
+        #expect(AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: true) != nil)
     }
 
     /// 库里没有创建冲突副本的公开入口（由同步引擎产生），测试直接写库文件。
