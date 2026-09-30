@@ -1,3 +1,4 @@
+#if os(macOS)
 import CueStore
 import Foundation
 import Testing
@@ -95,3 +96,4 @@ import Testing
     #expect(try await w.sb.store.card(w.inBeta.id)?.projectID == w.beta.id)
   }
 }
+#endif

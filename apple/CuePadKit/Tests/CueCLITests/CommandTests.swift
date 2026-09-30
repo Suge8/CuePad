@@ -1,3 +1,4 @@
+#if os(macOS)
 import CueStore
 import Foundation
 import Testing
@@ -310,3 +311,4 @@ import Testing
     }
   }
 }
+#endif

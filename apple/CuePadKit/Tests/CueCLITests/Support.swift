@@ -1,3 +1,4 @@
+#if os(macOS)
 import CueStore
 import Foundation
 import SQLite3
@@ -65,3 +66,4 @@ extension Dictionary where Key == String, Value == Any {
 func array(_ value: Any) throws -> [[String: Any]] {
   try #require(value as? [[String: Any]])
 }
+#endif
