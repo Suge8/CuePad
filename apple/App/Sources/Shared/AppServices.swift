@@ -102,12 +102,11 @@ final class AppServices {
     /// 发往哪里。正文一律是存储格式（变量已填、编号已排），图片引用由这里解析成真实图片。
     enum Destination: Equatable {
         #if os(macOS)
-        /// 直接发进 Pi 会话；`whenBusy` 为 nil 时会话忙则报错，否则插话或排队。
-        case pi(CuePi.PiSession.ID, whenBusy: PiQueueMode?)
-        /// 只把文字放进 Pi 输入框（含图片时由调用方禁用此项）。
-        case piInput(CuePi.PiSession.ID)
-        /// 通用投送：剪贴板 + 激活目标 + 定向粘贴，可选回车。
-        case app(TargetSelector, submit: Bool)
+        /// 发进 Pi 会话：`send` 在会话忙时报 `SendError.piSessionBusy`，`steer`/`followUp` 忙时插话或排队，
+        /// `paste` 只把文字放进输入框（含图片时报错）。
+        case pi(CuePi.PiSession.ID, DeliveryMode)
+        /// 通用投送：剪贴板 + 激活目标 + 定向粘贴；是否回车跟随设置。
+        case app(TargetSelector)
         #endif
         /// 只复制到剪贴板。
         case clipboard

@@ -57,7 +57,7 @@ struct CaptureBar: View {
         focused = true
     }
 
-    private func send(_ choice: SendChoice) {
+    private func send(_ choice: AppServices.Destination) {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { return }
         Task {

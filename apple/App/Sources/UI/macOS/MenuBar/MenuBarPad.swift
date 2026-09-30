@@ -103,7 +103,7 @@ struct MenuBarPad: View {
         workspace.attempt { _ = try await workspace.createCard(body: body, in: project) }
     }
 
-    private func send(_ choice: SendChoice) {
+    private func send(_ choice: AppServices.Destination) {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { return }
         Task { if await workspace.send(body, via: choice) { text = "" } }

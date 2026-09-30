@@ -121,7 +121,7 @@ struct CardEditorPage: View {
     private func blockAction(_ action: CueBlockAction) {
         guard let card = data?.card else { return }
         let text = CueVariables.fill(CueSegments.trim(action.text), values: card.variableValues)
-        let choice: SendChoice = action.kind == .copy ? .clipboard : workspace.effectiveChoice(for: card.projectID)
+        let choice: AppServices.Destination = action.kind == .copy ? .clipboard : workspace.effectiveChoice(for: card.projectID)
         Task { await workspace.send(text, via: choice, card: card.id) }
     }
 }
@@ -156,7 +156,7 @@ private struct EditorBar: View {
         }
     }
 
-    private func send(_ choice: SendChoice) {
+    private func send(_ choice: AppServices.Destination) {
         let body = handle.text ?? text
         let outgoing = Outgoing.text(body: body, values: card.variableValues, numbering: card.numbering)
         let id = card.id

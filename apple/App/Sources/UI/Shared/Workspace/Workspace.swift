@@ -47,7 +47,7 @@ final class Workspace {
     #if os(macOS)
     var busySend: BusySend?
     /// 用户在本窗口选过的发送目标；nil 或已失效时用默认目标。
-    var sendChoice: SendChoice?
+    var sendChoice: AppServices.Destination?
     /// 本机项目目录绑定（Pi 会话据此归项目）；由根视图订阅 Store 更新。
     var directories: [UUID: String]?
     #endif
@@ -105,7 +105,7 @@ final class Workspace {
     }
 
     func fail(_ error: any Error) {
-        say(ErrorText.describe(error), isError: true)
+        say(error.localizedDescription, isError: true)
     }
 
     // MARK: 当前项目与新建位置

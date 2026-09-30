@@ -44,12 +44,13 @@ extension AppServices {
         deliveryExecutor = executor
     }
 
+    /// 失败原因写回给手机用户看，取错误自身的说明（各模块的错误都实现了 `LocalizedError`）。
     private func execute(_ request: DeliveryRequest) async -> DeliveryOutcome {
         do {
             try await send(request.content, to: try destination(for: request), card: request.cardID, task: request.taskID)
             return .succeeded
         } catch {
-            return .failed(RemoteDeliveryError.describe(error))
+            return .failed(error.localizedDescription)
         }
     }
 
@@ -58,48 +59,16 @@ extension AppServices {
         switch target.kind {
         case .piSession:
             guard let ref = target.ref, let id = channels.piSessionID(forSession: ref) else {
-                throw RemoteDeliveryError.sessionEnded(target.name)
+                throw SendError.sessionNotOnThisMac(target.name)
             }
-            switch request.mode {
-            case .paste: return .piInput(id)
-            case .steer: return .pi(id, whenBusy: .steer)
-            case .followUp: return .pi(id, whenBusy: .followUp)
-            case .send: return .pi(id, whenBusy: nil)
-            case .unknown(let raw): throw RemoteDeliveryError.unsupportedTarget(raw) // 执行器已先按失败写回，走不到这里
-            }
+            return .pi(id, request.mode)
         case .app:
-            guard let bundleID = target.ref else { throw RemoteDeliveryError.unsupportedTarget(target.name) }
-            return .app(.bundleID(bundleID), submit: settings.autoSubmit)
+            guard let bundleID = target.ref else { throw SendError.unsupportedTarget(target.name) }
+            return .app(.bundleID(bundleID))
         case .clipboard:
             return .clipboard
         case .unknown:
-            throw RemoteDeliveryError.unsupportedTarget(target.name)
-        }
-    }
-}
-
-nonisolated enum RemoteDeliveryError: Error {
-    case sessionEnded(String)
-    case unsupportedTarget(String)
-
-    /// 写回请求、给手机用户看的失败原因。
-    static func describe(_ error: any Error) -> String {
-        switch error {
-        case RemoteDeliveryError.sessionEnded(let name): "Pi 会话「\(name)」已经结束，或不在这台 Mac 上"
-        case RemoteDeliveryError.unsupportedTarget(let name): "这台 Mac 不支持发送到「\(name)」"
-        case let error as DispatchError:
-            switch error {
-            case .accessibilityRequired: "这台 Mac 上的 CuePad 没有辅助功能权限，无法投送到其他应用"
-            case .noTarget: "这台 Mac 上没有可投送的目标应用"
-            case .targetUnavailable: "目标应用没有运行，或没能切到前台"
-            case .eventCreateFailed: "无法生成按键事件"
-            case .clipboardWriteFailed: "无法写入这台 Mac 的剪贴板"
-            }
-        case PiBridgeError.unknownSession: "Pi 会话已经结束"
-        case PiBridgeError.ackTimeout: "Pi 没有及时确认收到"
-        case PiBridgeError.sessionEnded: "发送过程中 Pi 会话结束了"
-        case PiBridgeError.rejected(let reason): "Pi 拒绝了这条消息：\(reason)"
-        default: error.localizedDescription
+            throw SendError.unsupportedTarget(target.name)
         }
     }
 }

@@ -13,9 +13,8 @@ extension AppServices {
     func deliver(_ content: SendContent, to destination: Destination) async throws -> SendTarget {
         switch destination {
         #if os(macOS)
-        case .pi(let id, let whenBusy): try await sendToPi(content, session: id, whenBusy: whenBusy)
-        case .piInput(let id): try await pasteToPi(content, session: id)
-        case .app(let selector, let submit): try await dispatch(content, to: selector, submit: submit)
+        case .pi(let id, let mode): try await sendToPi(content, session: id, mode: mode)
+        case .app(let selector): try await dispatch(content, to: selector, submit: settings.autoSubmit)
         #endif
         case .clipboard: try copyToClipboard(content)
         }
@@ -60,9 +59,22 @@ extension AppServices {
 
 #if os(macOS)
 extension AppServices {
-    private func sendToPi(_ content: SendContent, session id: CuePi.PiSession.ID, whenBusy: PiQueueMode?) async throws -> SendTarget {
+    /// Pi 桥只认插话/排队两种入队方式：发送方式在这里一次性落到桥的消息上。
+    private func sendToPi(_ content: SendContent, session id: CuePi.PiSession.ID, mode: DeliveryMode) async throws -> SendTarget {
         guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
-        if session.isBusy && whenBusy == nil { throw SendError.piSessionBusy }
+        let whenBusy: PiQueueMode?
+        switch mode {
+        case .paste:
+            guard !content.hasImages else { throw SendError.imagesNotSupported }
+            try await channels.paste(content.plainText, into: id)
+            return session.target
+        case .send:
+            guard !session.isBusy else { throw SendError.piSessionBusy }
+            whenBusy = nil
+        case .steer: whenBusy = .steer
+        case .followUp: whenBusy = .followUp
+        case .unknown(let raw): throw SendError.unsupportedMode(raw)
+        }
         let images = try content.segments.compactMap { segment -> PiImage? in
             guard case .image(let hash) = segment else { return nil }
             let data = try imageData(hash)
@@ -70,13 +82,6 @@ extension AppServices {
             return PiImage(mimeType: mimeType, data: data)
         }
         try await channels.send(PiMessage(text: content.plainText, images: images, whenBusy: whenBusy), to: id)
-        return session.target
-    }
-
-    private func pasteToPi(_ content: SendContent, session id: CuePi.PiSession.ID) async throws -> SendTarget {
-        guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
-        guard !content.hasImages else { throw SendError.imagesNotSupported }
-        try await channels.paste(content.plainText, into: id)
         return session.target
     }
 
