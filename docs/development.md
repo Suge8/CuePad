@@ -73,7 +73,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 主 App 启动时创建 `CloudSync` 并启动（隔离模式 `CUEPAD_LIBRARY_DIR` 与测试不同步）；回到前台、Mac 系统唤醒时立即 `syncNow()`，推送由引擎自己处理。`AppServices` 暴露 `syncStatus`、`syncIssues`、`conflicts` 与 `resolveSync`、`resolveConflict`。Mac 端把 Pi 会话状态写成同步记录（启动时先清掉本机遗留的），并只执行发给本机 `hostID`（硬件 UUID 的哈希前缀）的手机投送请求。
 
-**Pi 锁屏通知**：Pi 会话状态记录带明文可查询的 `notify` 标志（"等你确认"、"完成"的转换那一次写入上置位）。CloudKit 服务端订阅在标志置位时直接生成可见通知，不依赖静默推送与 App 在后台运行；订阅由 iOS 建立（幂等，账号切换时重建），点通知路由到对应会话。通知文案只用本地化 key 的通用句（标题与详情是加密字段，不会出现在通知里）。通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的后续写入取代就不送出，同状态的更新则沿用标志——状态记录不是事件日志，要保证每个事件都送达需要单独的追加式通知事件记录，那是另一种设计。上线前需在 CloudKit Dashboard 里为 `piSessionStates.notify` 建立可查询索引（开发环境自动建立）。
+**Pi 锁屏通知**：Pi 会话状态记录带明文可查询的 `notify` 标志（"等你确认"、"完成"的转换那一次写入上置位）。CloudKit 服务端订阅在标志置位时直接生成可见通知，不依赖静默推送与 App 在后台运行；订阅由 iOS 建立（幂等，账号切换时重建），点通知路由到对应会话。通知文案只用本地化 key 的通用句（标题与详情是加密字段，不会出现在通知里）。通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的后续写入取代就不送出，同状态的更新则沿用标志——状态记录不是事件日志，要保证每个事件都送达需要单独的追加式通知事件记录，那是另一种设计。该字段的可查询索引由生成的数据结构声明，已部署到生产环境。
 
 ### CloudKit 数据结构
 
@@ -100,6 +100,7 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 - 资料库在 App Group 共享容器 `group.com.sugeh.cuepad` 的 `Library/`（库文件、`Attachments/`、待入库的 `Capture/`、给小组件的 `Snapshots/`），偏好用同名 UserDefaults 套件。模拟器直接可用；真机需要开发者账号给三个目标（App、分享扩展、小组件）签上该 App Group。
 - 资料库始终只有主 App 写：分享扩展把内容放进 `Capture/`，主 App 在前台、收到扩展的进程间通知时入库；小组件与扩展不打开资料库，只读主 App 写的 JSON 快照。
 - 每个窗口（iPad 多窗口）各有一个 `SceneContext`，选中项目不放进全局偏好。
+- 有同步时，每个窗口出现后请求通知权限并注册远程通知（`Info.plist` 声明 `remote-notification` 后台模式）；锁屏通知文案按 key 取自 `App/Sources/zh-Hans.lproj/Localizable.strings`。点开通知由 `Sources/iOS/PiAlertCenter.swift` 交给界面：打开活动（iPhone 标签 / iPad 右侧面板）并定位到该会话。
 
 ## 视觉
 

@@ -1,0 +1,3 @@
+/* 锁屏通知：CloudKit 订阅按 key 在设备上取文案（标题与详情是加密字段，不进通知）。 */
+"pi_alert_waiting" = "Pi 在等你确认";
+"pi_alert_settled" = "Pi 完成了";

@@ -111,6 +111,17 @@ final class AppServices {
         case clipboard
     }
 
+    /// 发到 Mac：写一条投送请求，交给运行该 Pi 会话的那台 Mac（取自会话的 `hostID`）执行；
+    /// 那台 Mac 执行后写回结果并记发送记录，这里不记。
+    @discardableResult
+    func requestMacDelivery(
+        _ storedText: String, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil, task: UUID? = nil
+    ) async throws -> DeliveryRequest {
+        try await store.requestDelivery(
+            storedText, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID,
+            mode: mode, card: card, task: task)
+    }
+
     /// 发送并写一条发送记录；失败不写记录，错误原样抛给界面展示。
     func send(_ storedText: String, to destination: Destination, card: UUID? = nil, task: UUID? = nil) async throws {
         let target = try await deliver(SendContent(stored: storedText), to: destination)

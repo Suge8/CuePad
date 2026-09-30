@@ -11,7 +11,7 @@ enum ScrollAnchor {
 /// - `-CuePadDemo YES`：库为空时写入演示数据；
 /// - `-CuePadProject <名称>`：打开该项目；
 /// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor、search、tasks、trash、settings、menubar；
-///   iOS：project、older、today、editor、tasks、search、trash、settings、capture、share、widgets；
+///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；
 /// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；
 /// - `-CuePadBench sidebar`（仅 Mac）：开合侧栏 10 次后退出，给 Instruments 录帧耗时用的固定负载。
