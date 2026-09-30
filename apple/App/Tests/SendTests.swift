@@ -16,7 +16,7 @@ struct SendTests {
 
     /// `before\n![](cuepad://img/<哈希>)\nafter`
     func bodyWithImage() async throws -> String {
-        let hash = try await services.store.addImage(png).hash
+        let hash = try services.store.files.store(png)
         return "before\n\(CueFormat.imageMarkup(id: hash))\nafter"
     }
 

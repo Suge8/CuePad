@@ -133,7 +133,7 @@ import Testing
     #expect(try await store.trashedProjects().isEmpty)
   }
 
-  // MARK: 卡片、附件
+  // MARK: 卡片
 
   @Test func cardFieldsRoundTrip() async throws {
     let card = try await store.createCard(in: nil, body: "hi {{name}}")
@@ -146,14 +146,6 @@ import Testing
     #expect(row?.numbering == .known(.cjk))
     #expect(row?.variableValues == ["name": "Pi"])
     #expect(row?.isPinned == true)
-  }
-
-  @Test func attachmentsDedupeByContentHash() async throws {
-    let a = try await store.registerAttachment(hash: "abc123", byteCount: 10, format: "png")
-    let b = try await store.registerAttachment(hash: "abc123", byteCount: 10, format: "png")
-    let c = try await store.registerAttachment(hash: "def456", byteCount: 20, format: "jpeg")
-    #expect(a.id == b.id && a.id != c.id)
-    #expect(try RawDB(fixture.url).count("attachments") == 2)
   }
 
   // MARK: 任务

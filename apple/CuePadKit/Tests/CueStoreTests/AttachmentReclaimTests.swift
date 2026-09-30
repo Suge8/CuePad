@@ -9,7 +9,7 @@ import Testing
   var attachmentsDirectory: URL { fixture.directory.appending(path: "Attachments", directoryHint: .isDirectory) }
 
   private func image(_ shade: CGFloat) async throws -> String {
-    try await store.addImage(pngData(width: 8, height: 8, shade: shade)).hash
+    try store.files.store(pngData(width: 8, height: 8, shade: shade))
   }
 
   private func ref(_ hash: String) -> String { "text ![](cuepad://img/\(hash)) more" }
@@ -17,7 +17,7 @@ import Testing
   private func exists(_ hash: String) throws -> Bool {
     let row = try RawDB(fixture.url).rows("SELECT 1 FROM attachments WHERE hash = '\(hash)'")
     let file = FileManager.default.fileExists(atPath: attachmentsDirectory.appending(path: hash).path)
-    #expect(!row.isEmpty == file, "记录与文件必须同在同亡")
+    #expect(row.isEmpty || file, "附件记录必须有文件")
     return file
   }
 

@@ -73,7 +73,7 @@ import Testing
 
   @Test func erasingLocalDataAfterASwitchClearsSyncedTablesOnly() async throws {
     _ = try await populateAndPush()
-    let image = try await store.addImage(pngData(width: 4, height: 4))
+    let image = try store.files.store(pngData(width: 4, height: 4))
     try await store.upsertPiSession(PiSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: Date()))
     await rig.coordinator.handle(.accountChange(.switched))
 
@@ -84,7 +84,7 @@ import Testing
       #expect(try raw.count(table) == 0, "\(table) should be empty")
     }
     #expect(try await store.piSessions().map(\.id) == ["s1"])  // 本机的 Pi 索引与账号无关
-    #expect(throws: CueStoreError.notFound) { try store.files.original(hash: image.hash) }
+    #expect(throws: CueStoreError.notFound) { try store.files.original(hash: image) }
     #expect(await rig.coordinator.status == .idle)
   }
 

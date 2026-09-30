@@ -10,7 +10,7 @@ import Testing
   var store: CueStore { rig.store }
 
   private func populate() async throws -> (card: Card, hash: String) {
-    let hash = String(repeating: "a", count: 64)
+    let hash = try store.files.store(pngData(width: 2, height: 2))
     let project = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: project.id, body: "hello ![](cuepad://img/\(hash))")
     try await store.updateCard(card.id) {
@@ -20,7 +20,6 @@ import Testing
     }
     let task = try await store.createTask("t", in: project.id)
     try await store.recordSend("x", to: SendTarget(kind: .piSession, name: "n", ref: "r"), card: card.id, task: task.id)
-    try await store.registerAttachment(hash: hash, byteCount: 3, format: "png")
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认？", title: "t", projectID: project.id)
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
     return (card, hash)

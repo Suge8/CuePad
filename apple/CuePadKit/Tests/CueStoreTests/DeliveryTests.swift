@@ -158,11 +158,11 @@ import Testing
   func requestWaitsForItsImagesToArriveThenRunsAfterOtherRequests() async throws {
     let data = pngData(width: 6, height: 6)
     let elsewhere = try Fixture()  // 图片在另一台设备上，尚未同步到本机
-    let hash = try await elsewhere.store.addImage(data).hash
+    let hash = try elsewhere.store.files.store(data)
     let store = store
     let runs = RunLog()
     let executor = DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing) { request in
-      await runs.record(request.content.hasPrefix("look") ? "look" : request.content, imagePresent: store.files.url(hash: hash) != nil)
+      await runs.record(request.content.hasPrefix("look") ? "look" : request.content, imagePresent: store.files.fileURL(for: hash) != nil)
       return .succeeded
     }
     try await executor.start()
@@ -173,7 +173,13 @@ import Testing
     _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
     #expect(try await store.deliveryRequest(waiting.id)?.status == .known(.pending))
 
-    _ = try await store.addImage(data)  // 图片同步到了
+    // 图片同步到了：文件放进附件目录，附件记录随后应用
+    _ = try store.files.store(data)
+    let arrived: [String: SQLValue] = [
+      "id": .text(UUID().uuidString.lowercased()), "hash": .text(hash), "byteCount": .int(Int64(data.count)),
+      "format": .text("png"), "createdAt": .int(1), "modifiedAt": .int(1),
+    ]
+    _ = try await store.applyRemote([.save(SyncRow(table: .attachments, fields: arrived), systemFields: Data())])
 
     _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
     #expect(await runs.entries.map(\.name) == ["plain", "look"])
