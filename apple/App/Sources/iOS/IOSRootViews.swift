@@ -6,7 +6,7 @@ import SwiftUI
 @MainActor
 enum IOSRootViews {
     static func root() -> some View {
-        PlaceholderView()
+        IOSRoot()
     }
 }
 #endif

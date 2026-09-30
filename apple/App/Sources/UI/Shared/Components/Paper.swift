@@ -1,0 +1,155 @@
+import CueStore
+import CueText
+import SwiftUI
+
+/// 瀑布墙：列数随宽度变化，每张卡按实测高度放进当前最短的列，墙底边尽量齐。
+struct MasonryLayout: Layout {
+    var minColumnWidth: CGFloat = 220
+    var maxColumns = 4
+    var spacing: CGFloat = 16
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 900
+        let frames = place(subviews, width: width)
+        return CGSize(width: width, height: frames.map(\.maxY).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (subview, frame) in zip(subviews, place(subviews, width: bounds.width)) {
+            subview.place(
+                at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                proposal: ProposedViewSize(width: frame.width, height: frame.height))
+        }
+    }
+
+    private func place(_ subviews: Subviews, width: CGFloat) -> [CGRect] {
+        let columns = max(1, min(maxColumns, Int((width + spacing) / (minColumnWidth + spacing))))
+        let columnWidth = (width - spacing * CGFloat(columns - 1)) / CGFloat(columns)
+        var heights = Array(repeating: CGFloat(0), count: columns)
+        return subviews.map { subview in
+            let column = heights.indices.min { heights[$0] < heights[$1] } ?? 0
+            let height = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height
+            let frame = CGRect(x: CGFloat(column) * (columnWidth + spacing), y: heights[column], width: columnWidth, height: height)
+            heights[column] += height + spacing
+            return frame
+        }
+    }
+}
+
+/// 滚动内容在底部渐隐到桌面色，玻璃输入栏下方不叠字。
+struct BottomFade: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 64)
+            Color.clear.frame(height: 70)
+        }
+        .ignoresSafeArea()
+    }
+}
+
+/// 卡片上的元信息：时间、块数、发送目标，以及目标、浮回、置顶标记。Mac 用固定小字，iOS 随动态字体。
+struct CardMeta: View {
+    let card: Card
+    let text: CardText
+    let lastTarget: String?
+    let floated: Bool
+    let isGoal: Bool
+    var font: Font = .system(size: 11)
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(DateLabel.short(card.modifiedAt))
+            if text.blockCount > 1 { Text("\(text.blockCount) 块") }
+            if let lastTarget {
+                Label(lastTarget, systemImage: "checkmark").labelStyle(.titleAndIcon).lineLimit(1)
+                    .accessibilityLabel("已发给 \(lastTarget)")
+            } else {
+                Text("未发送")
+            }
+            Spacer(minLength: 0)
+            if isGoal { Image(systemName: "scope").help("项目目标").accessibilityLabel("项目目标") }
+            if floated { Image(systemName: "arrow.up").help("从更早回到墙上").accessibilityLabel("从更早回到墙上") }
+            if card.isFavorite { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
+        }
+        .font(font)
+        .foregroundStyle(palette.ink3)
+    }
+}
+
+/// 附件缩略图：按内容哈希从附件目录降采样读取，读不到时显示占位底色。
+struct Thumbnail: View {
+    let hash: String
+    var height: CGFloat
+    var radius: CGFloat = 10
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var scale
+    @State private var image: CGImage?
+
+    var body: some View {
+        Rectangle()
+            .fill(palette.fill)
+            .overlay {
+                if let image {
+                    Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                }
+            }
+            .frame(height: height)
+            .frame(maxWidth: .infinity)
+            .clipShape(.rect(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder((palette.dark ? Color.white : .black).opacity(0.1)))
+            .task(id: hash) {
+                let files = services.store.files, pixels = Int(height * 3 * scale)
+                image = await Task.detached(priority: .utility) { try? files.thumbnail(hash: hash, maxPixel: pixels) }.value
+            }
+    }
+}
+
+/// 预览文字里的 `{{变量}}` 染成墨色标注。
+enum VariableText {
+    static func styled(_ text: String, _ palette: Palette) -> AttributedString {
+        var result = AttributedString(text)
+        let utf16 = text.utf16
+        for range in CueVariables.ranges(in: text, within: NSRange(location: 0, length: utf16.count)) {
+            guard let swiftRange = Range(range, in: text), let attributed = Range(swiftRange, in: result) else { continue }
+            result[attributed].foregroundColor = palette.variable
+            result[attributed].backgroundColor = palette.variableBackground
+        }
+        return result
+    }
+}
+
+enum Highlight {
+    /// 关键词命中处加底色（大小写不敏感）。
+    static func matches(_ text: String, _ term: String, base: AttributedString? = nil) -> AttributedString {
+        var result = base ?? AttributedString(text)
+        let term = term.trimmingCharacters(in: .whitespaces)
+        guard !term.isEmpty else { return result }
+        var searchStart = result.startIndex
+        while searchStart < result.endIndex,
+              let range = result[searchStart...].range(of: term, options: .caseInsensitive) {
+            result[range].backgroundColor = .yellow.opacity(0.35)
+            searchStart = range.upperBound
+        }
+        return result
+    }
+}
+
+/// "更早"分组的标题：周是日期区间，月是年月。
+enum OlderGroupTitle {
+    static func text(_ period: OlderGroup.Period, calendar: Calendar = .current) -> String {
+        let chinese = Locale(identifier: "zh_CN")
+        switch period {
+        case .week(let start):
+            let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
+            let sameMonth = calendar.isDate(start, equalTo: end, toGranularity: .month)
+            let from = start.formatted(.dateTime.month(.defaultDigits).day().locale(chinese))
+            let to = sameMonth ? end.formatted(.dateTime.day().locale(chinese)) : end.formatted(.dateTime.month(.defaultDigits).day().locale(chinese))
+            return "\(from) – \(to)"
+        case .month(let start):
+            return start.formatted(.dateTime.year().month(.wide).locale(chinese))
+        }
+    }
+}

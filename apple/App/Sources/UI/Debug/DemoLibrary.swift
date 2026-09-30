@@ -1,5 +1,7 @@
-#if os(macOS) && DEBUG
-import AppKit
+#if DEBUG
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 import CueStore
 import CueText
 import Foundation
@@ -42,7 +44,7 @@ enum DemoLibrary {
                 try await store.trashCard(card.id)
             }
         }
-        let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        let home = demoHome
         for (index, item) in [("cuepad", "规划投送队列的重试边界"), ("atlas", "多 Agent 调度压测"), ("homepage", "首页改版文案")].enumerated() {
             try await store.upsertPiSession(PiSession(
                 id: "demo-\(index)", path: "/tmp/demo-\(index).jsonl", cwd: "\(home)Project/\(item.0)",
@@ -51,7 +53,7 @@ enum DemoLibrary {
     }
 
     private static func projects(image: String) -> [DemoProject] {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        let home = demoHome
         let pic = CueFormat.imageMarkup(id: image)
         return [
             DemoProject(name: "CuePad", icon: "sparkles", color: "#A260C4", pinned: false, directory: "\(home)Project/cuepad", cards: [
@@ -155,33 +157,48 @@ enum DemoLibrary {
 
     private struct DemoError: Error { var message: String }
 
-    /// 一张像界面截图的示意图：桌面底色上几块纸片。
+    /// 一张像界面截图的示意图：桌面底色上几块纸片。用 CoreGraphics 画，Mac 与 iOS 共用。
+    /// 演示用的主目录：Mac 上是真实主目录（截图用的假 Pi 会话按它归到项目），iOS 只作显示。
+    private static var demoHome: String {
+        #if os(macOS)
+        FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        #else
+        "/Users/demo/"
+        #endif
+    }
+
     private static func sampleImage() -> Data {
-        let size = NSSize(width: 960, height: 600)
-        let image = NSImage(size: size, flipped: true) { rect in
-            NSColor(red: 0.94, green: 0.93, blue: 0.91, alpha: 1).setFill()
-            rect.fill()
-            let paper = NSColor(red: 0.99, green: 0.985, blue: 0.97, alpha: 1)
-            let ink = NSColor(red: 0.11, green: 0.106, blue: 0.098, alpha: 1)
-            for (index, frame) in [
-                NSRect(x: 40, y: 90, width: 270, height: 170), NSRect(x: 340, y: 90, width: 270, height: 230),
-                NSRect(x: 640, y: 90, width: 270, height: 140), NSRect(x: 40, y: 290, width: 270, height: 250),
-            ].enumerated() {
-                paper.setFill()
-                NSBezierPath(roundedRect: frame, xRadius: 18, yRadius: 18).fill()
-                ink.withAlphaComponent(0.85).setFill()
-                NSBezierPath(roundedRect: NSRect(x: frame.minX + 20, y: frame.minY + 22, width: 120 + CGFloat(index) * 20, height: 14), xRadius: 4, yRadius: 4).fill()
-                ink.withAlphaComponent(0.3).setFill()
-                for line in 0..<3 {
-                    NSBezierPath(roundedRect: NSRect(x: frame.minX + 20, y: frame.minY + 54 + CGFloat(line) * 22, width: frame.width - 60 - CGFloat(line) * 30, height: 9), xRadius: 3, yRadius: 3).fill()
-                }
-            }
-            ink.setFill()
-            NSBezierPath(roundedRect: NSRect(x: 40, y: 30, width: 180, height: 26), xRadius: 6, yRadius: 6).fill()
-            return true
+        let width = 960, height = 600
+        let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        // 翻成左上角为原点，方便按版面坐标画
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: 1, y: -1)
+        func fill(_ rect: CGRect, radius: CGFloat, _ gray: (CGFloat, CGFloat, CGFloat, CGFloat)) {
+            context.setFillColor(red: gray.0, green: gray.1, blue: gray.2, alpha: gray.3)
+            context.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+            context.fillPath()
         }
-        let bitmap = NSBitmapImageRep(cgImage: image.cgImage(forProposedRect: nil, context: nil, hints: nil)!)
-        return bitmap.representation(using: .png, properties: [:])!
+        let ink = (0.11, 0.106, 0.098)
+        fill(CGRect(x: 0, y: 0, width: width, height: height), radius: 0, (0.94, 0.93, 0.91, 1))
+        for (index, frame) in [
+            CGRect(x: 40, y: 90, width: 270, height: 170), CGRect(x: 340, y: 90, width: 270, height: 230),
+            CGRect(x: 640, y: 90, width: 270, height: 140), CGRect(x: 40, y: 290, width: 270, height: 250),
+        ].enumerated() {
+            fill(frame, radius: 18, (0.99, 0.985, 0.97, 1))
+            fill(CGRect(x: frame.minX + 20, y: frame.minY + 22, width: 120 + CGFloat(index) * 20, height: 14), radius: 4, (ink.0, ink.1, ink.2, 0.85))
+            for line in 0..<3 {
+                fill(CGRect(x: frame.minX + 20, y: frame.minY + 54 + CGFloat(line) * 22, width: frame.width - 60 - CGFloat(line) * 30, height: 9),
+                     radius: 3, (ink.0, ink.1, ink.2, 0.3))
+            }
+        }
+        fill(CGRect(x: 40, y: 30, width: 180, height: 26), radius: 6, (ink.0, ink.1, ink.2, 1))
+        let output = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(output, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, context.makeImage()!, nil)
+        CGImageDestinationFinalize(destination)
+        return output as Data
     }
 }
 #endif
