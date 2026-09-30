@@ -23,7 +23,6 @@ import Testing
     #expect(location.isIsolated)
     #expect(location.electronDatabase == nil)
     #expect(location.databaseURL.path == "/tmp/cuepad-isolated/cuepad.db")
-    #expect(location.attachmentsDirectory.path == "/tmp/cuepad-isolated/Attachments")
   }
 
   @Test func emptyOverrideCountsAsUnset() throws {

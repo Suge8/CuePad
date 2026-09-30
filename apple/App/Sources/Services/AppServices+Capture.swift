@@ -29,7 +29,7 @@ extension AppServices {
     private func importCapture(_ entry: CaptureInbox.Entry) async throws {
         var hashes: [String] = []
         for url in entry.imageURLs() {
-            hashes.append(try await store.addImage(ImageFiles.original(at: url)).hash)
+            hashes.append(try store.files.store(fileAt: url))
         }
         let capture = entry.capture
         let sections = [

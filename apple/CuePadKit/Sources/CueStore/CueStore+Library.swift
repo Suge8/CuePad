@@ -124,6 +124,7 @@ extension CueStore {
         variableValues: [:], conflictOf: nil, sortKey: SortKey.before(first), deletedAt: nil, createdAt: now,
         modifiedAt: now)
       try insert(card)
+      try registerImages(in: body)
       return card
     }
   }
@@ -135,6 +136,7 @@ extension CueStore {
       edit(&card)
       card.modifiedAt = Date.stamp
       try update(card)
+      try registerImages(in: card.body)
     }
   }
 
@@ -343,22 +345,8 @@ extension CueStore {
         id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
         targetRef: target.ref, cardID: card, taskID: task, sentAt: now, modifiedAt: now)
       try insert(record)
+      try registerImages(in: content)
       return record
-    }
-  }
-
-  /// 登记图片附件元数据；同一内容哈希只有一条。
-  @discardableResult
-  public func registerAttachment(hash: String, byteCount: Int, format: String) throws -> Attachment {
-    try write {
-      if let existing = try select(Attachment.self, where: "hash = ?", [hash], orderBy: "createdAt, id").first {
-        return existing
-      }
-      let now = Date.stamp
-      let attachment = Attachment(
-        id: UUID(), hash: hash, byteCount: byteCount, format: format, createdAt: now, modifiedAt: now)
-      try insert(attachment)
-      return attachment
     }
   }
 

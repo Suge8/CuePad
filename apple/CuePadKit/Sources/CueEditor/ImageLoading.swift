@@ -1,9 +1,8 @@
 import CoreGraphics
 import Foundation
 import ImageIO
-import os
 
-/// 图片读取：尺寸只读文件头，缩略图用 ImageIO 直接降采样解码，原图从不整张进内存。
+/// 编辑器里的图片尺寸：只读文件头。
 enum ImageLoading {
     static let maxThumbnailPixel = 1600
     private static let fallbackDPI = 72.0
@@ -23,18 +22,23 @@ enum ImageLoading {
         return (5...8).contains(orientation) ? CGSize(width: size.height, height: size.width) : size
     }
 
-    /// 已解码的缩略图（不触发解码）。
-    static func cachedThumbnail(at url: URL) -> CGImage? {
-        ThumbnailCache.shared.object(forKey: cacheKey(url))
+    private static func positive(_ value: Any?) -> Double? {
+        (value as? NSNumber).map(\.doubleValue).flatMap { $0 > 0 ? $0 : nil }
+    }
+}
+
+/// 缩略图：ImageIO 直接降采样解码（已按 EXIF 方向校正、不放大），原图不整张进内存。编辑器与卡片墙共用这一份，
+/// 解码结果按"文件 + 尺寸"缓存；系统内存紧张时 NSCache 自动清空，下次需要时重新降采样。
+public enum Thumbnails {
+    /// 已解码的缩略图；不触发解码，可在主线程调用。
+    public static func cached(at url: URL, maxPixel: Int) -> CGImage? {
+        cache.object(forKey: key(url, maxPixel))
     }
 
-    /// 已完成的解码次数，用于确认视口外的图片没有被读取。
-    static var decodeCount: Int { decodes.withLock { $0 } }
-    private static let decodes = OSAllocatedUnfairLock(initialState: 0)
-
-    static func thumbnail(at url: URL, maxPixel: Int = maxThumbnailPixel) -> CGImage? {
-        let key = cacheKey(url)
-        if let cached = ThumbnailCache.shared.object(forKey: key) { return cached }
+    /// 最长边不超过 `maxPixel` 的缩略图；未缓存时同步解码（在后台调用）。不是图片或读不到返回 nil。
+    public static func image(at url: URL, maxPixel: Int) -> CGImage? {
+        let key = key(url, maxPixel)
+        if let cached = cache.object(forKey: key) { return cached }
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
               let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -43,23 +47,17 @@ enum ImageLoading {
                   kCGImageSourceCreateThumbnailWithTransform: true,
               ] as CFDictionary)
         else { return nil }
-        ThumbnailCache.shared.setObject(image, forKey: key, cost: image.bytesPerRow * image.height)
-        decodes.withLock { $0 += 1 }
+        cache.setObject(image, forKey: key, cost: image.bytesPerRow * image.height)
         return image
     }
 
-    private static func cacheKey(_ url: URL) -> NSString { url.path as NSString }
+    private static func key(_ url: URL, _ maxPixel: Int) -> NSString { "\(url.path)@\(maxPixel)" as NSString }
 
-    private static func positive(_ value: Any?) -> Double? {
-        (value as? NSNumber).map(\.doubleValue).flatMap { $0 > 0 ? $0 : nil }
-    }
-}
-
-/// 解码后的缩略图缓存；系统内存紧张时 NSCache 自动清空，视图下次出现时重新降采样。
-final class ThumbnailCache: NSCache<NSString, CGImage>, @unchecked Sendable {
-    static let shared: ThumbnailCache = {
-        let cache = ThumbnailCache()
+    private static let cache: ImageCache = {
+        let cache = ImageCache()
         cache.totalCostLimit = 128 * 1024 * 1024
         return cache
     }()
 }
+
+private final class ImageCache: NSCache<NSString, CGImage>, @unchecked Sendable {}

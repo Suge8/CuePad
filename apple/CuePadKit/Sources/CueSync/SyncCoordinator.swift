@@ -81,7 +81,7 @@ actor SyncCoordinator {
       let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
       let record = RecordMapper.record(from: row, zoneID: zoneID, base: base)
       if row.table == .attachments {
-        guard case .text(let hash)? = row.fields["hash"], let file = store.files.url(hash: hash) else {
+        guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
           report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
           return nil
         }

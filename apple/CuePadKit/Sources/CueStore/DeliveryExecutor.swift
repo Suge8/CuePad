@@ -16,6 +16,7 @@ extension CueStore {
         id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card, taskID: task,
         status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now)
       try insert(request)
+      try registerImages(in: content)
       return request
     }
   }
@@ -169,7 +170,7 @@ public actor DeliveryExecutor {
   }
 
   private func hasMissingImages(_ request: DeliveryRequest) -> Bool {
-    CueFormat.imageHashes(in: request.content).contains { store.files.url(hash: $0) == nil }
+    CueFormat.imageHashes(in: request.content).contains { store.files.fileURL(for: $0) == nil }
   }
 
   private func scheduleCleanup() {

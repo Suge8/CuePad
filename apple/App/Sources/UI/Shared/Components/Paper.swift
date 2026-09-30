@@ -1,3 +1,4 @@
+import CueEditor
 import CueStore
 import CueText
 import SwiftUI
@@ -109,8 +110,9 @@ struct Thumbnail: View {
             .clipShape(.rect(cornerRadius: radius))
             .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder((palette.dark ? Color.white : .black).opacity(0.1)))
             .task(id: hash) {
-                let files = services.store.files, pixels = Int(height * 3 * scale)
-                image = await Task.detached(priority: .utility) { try? files.thumbnail(hash: hash, maxPixel: pixels) }.value
+                guard let url = services.store.files.fileURL(for: hash) else { return }
+                let pixels = Int(height * 3 * scale)
+                image = await Task.detached(priority: .utility) { Thumbnails.image(at: url, maxPixel: pixels) }.value
             }
     }
 }

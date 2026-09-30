@@ -182,7 +182,7 @@ final class AppServices {
     private static func openLibrary(at location: LibraryLocation) -> (store: CueStore, images: any CueImageStore) {
         do {
             let store = try CueStore(url: location.databaseURL)
-            return (store, StoreImages(store: store, attachments: location.attachmentsDirectory))
+            return (store, store.files)
         } catch {
             preconditionFailure("无法打开资料库 \(location.databaseURL.path)：\(error)")
         }
