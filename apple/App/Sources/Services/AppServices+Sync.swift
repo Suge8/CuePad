@@ -21,7 +21,7 @@ extension AppServices {
     func startSync() {
         guard let sync else { return }
         tasks.append(Task {
-            for await status in sync.statusUpdates { await applySyncStatus(status, from: sync) }
+            for await state in sync.stateUpdates { setSyncState(state) }
         })
         tasks.append(Task {
             do {
@@ -65,9 +65,5 @@ extension AppServices {
     /// 冲突副本：选定保留的版本，另一份删除。
     func resolveConflict(copy id: UUID, keep choice: ConflictChoice) async throws {
         try await store.resolveConflict(copy: id, keep: choice)
-    }
-
-    private func applySyncStatus(_ status: SyncStatus, from sync: any SyncControlling) async {
-        setSyncState(status: status, issues: await sync.issues)
     }
 }

@@ -188,9 +188,9 @@ final class AppServices {
         }
     }
 
-    func setSyncState(status: SyncStatus, issues: [SyncIssue]) {
-        syncStatus = status
-        syncIssues = issues
+    func setSyncState(_ state: SyncState) {
+        syncStatus = state.status
+        syncIssues = state.issues
     }
 
     func setConflicts(_ conflicts: [CardConflict]) {

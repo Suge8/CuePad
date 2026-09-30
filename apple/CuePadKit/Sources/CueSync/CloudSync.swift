@@ -3,7 +3,7 @@ import Foundation
 
 /// iCloud 同步入口：私有数据库里一个自定义同步区，CKSyncEngine 驱动。
 ///
-/// 用法：`let sync = CloudSync(store: store)`；`try await sync.start()`；界面订阅 `statusUpdates`，
+/// 用法：`let sync = CloudSync(store: store)`；`try await sync.start()`；界面订阅 `stateUpdates`，
 /// 状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。冲突副本由 `CueStore.conflicts()` 提供。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
 public actor CloudSync {
@@ -40,9 +40,8 @@ public actor CloudSync {
   }
 
   public var status: SyncStatus { get async { await coordinator.status } }
-  public var issues: [SyncIssue] { get async { await coordinator.issues } }
-  /// 先给出当前状态，之后每次变化给出新状态。
-  public nonisolated var statusUpdates: AsyncStream<SyncStatus> { coordinator.statusUpdates }
+  /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
+  public nonisolated var stateUpdates: AsyncStream<SyncState> { coordinator.stateUpdates }
 
   public func start() async throws {
     guard engine == nil else { return }
