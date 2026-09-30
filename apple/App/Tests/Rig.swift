@@ -86,6 +86,7 @@ final class Rig {
     var suite: String { directory.appending(path: "preferences").path }
     let channels = FakeChannels()
     let sync = FakeSync()
+    let updater = FakeUpdater()
     let wakeCenter = NotificationCenter()
     let hotkeys = InMemoryHotkeys()
     let window = RecordingWindow()
@@ -145,7 +146,8 @@ final class Rig {
             wakeNotifications: wakeCenter,
             commandLineTool: CommandLineToolInstaller(
                 helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
-                linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }))
+                linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
+            updater: updater)
         let sync = self.sync
         let services = AppServices(location: location(), defaults: defaults, sync: { _ in sync }, mac: mac)
         services.windowShell = WindowShell(window: window)

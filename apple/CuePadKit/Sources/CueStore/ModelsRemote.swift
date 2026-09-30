@@ -100,6 +100,33 @@ public enum DeliveryStatus: Hashable, Sendable, RawRepresentable {
   }
 }
 
+/// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。
+/// 其他版本可能写入本版本不认识的值：保留为 `.unknown`（原样写回），Mac 端不执行它。
+public enum DeliveryMode: Hashable, Sendable, RawRepresentable {
+  case send, steer, followUp, paste
+  case unknown(String)
+
+  public init(rawValue: String) {
+    switch rawValue {
+    case "send": self = .send
+    case "steer": self = .steer
+    case "followUp": self = .followUp
+    case "paste": self = .paste
+    default: self = .unknown(rawValue)
+    }
+  }
+
+  public var rawValue: String {
+    switch self {
+    case .send: "send"
+    case .steer: "steer"
+    case .followUp: "followUp"
+    case .paste: "paste"
+    case .unknown(let raw): raw
+    }
+  }
+}
+
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
 public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -107,8 +134,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var target: SendTarget
   /// 指定执行的那台 Mac（只有它会领取）。必填。
   public var hostID: String
-  /// 发送方式（如 send / steer / followUp / paste），由 App 层约定。
-  public var mode: String
+  public var mode: DeliveryMode
   public var cardID: UUID?
   public var taskID: UUID?
   public var status: DeliveryStatus
@@ -196,13 +222,13 @@ extension DeliveryRequest: Record {
     "resultDetail", "handledBy", "createdAt", "completedAt", "modifiedAt",
   ]
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode, cardID, taskID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, taskID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       target: SendTarget(kind: SendTargetKind(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
-      hostID: row.text(5), mode: row.text(6), cardID: row.uuidOrNil(7), taskID: row.uuidOrNil(8),
+      hostID: row.text(5), mode: DeliveryMode(rawValue: row.text(6)), cardID: row.uuidOrNil(7), taskID: row.uuidOrNil(8),
       status: DeliveryStatus(rawValue: row.text(9)), resultDetail: row.textOrNil(10), handledBy: row.textOrNil(11),
       createdAt: row.date(12), completedAt: row.dateOrNil(13), modifiedAt: row.date(14))
   }

@@ -105,7 +105,7 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
-            "做这件事", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: Rig.hostID, mode: "steer")
+            "做这件事", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: Rig.hostID, mode: .steer)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .succeeded)
@@ -120,7 +120,7 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
-            "草稿", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: Rig.hostID, mode: "paste")
+            "草稿", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: Rig.hostID, mode: .paste)
         _ = try await awaitFinished(request.id)
 
         #expect(rig.channels.calls == [.paste("草稿", "sess-1.100")])

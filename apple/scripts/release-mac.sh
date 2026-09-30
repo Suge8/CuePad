@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# macOS 分发：归档 → Developer ID 导出 → 公证 → 装订 → zip。产物：<产物目录>/release/mac/CuePad-<版本>-mac.zip
+# macOS 分发：归档 → Developer ID 导出 → 公证 → 装订 → zip → appcast。产物：<产物目录>/release/mac/CuePad-<版本>-mac.zip 与 appcast.xml
 # 前提：apple/README.md「签名与发布」里的凭据与 Developer ID 证书。
 # 公证有时要等很久（新账号首次提交可能数小时）：中断后用 `xc.sh release mac --resume <提交 id>` 接着等这次提交并装订、出 zip。
 set -euo pipefail
@@ -20,8 +20,9 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 python3 "$APPLE_DIR/scripts/provision.py" unlock
 python3 "$APPLE_DIR/scripts/provision.py" profiles
 
+# Sparkle 按 CFBundleVersion 比较新旧，每次发布必须递增：取时间戳
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
-  -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED"
+  -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED" CURRENT_PROJECT_VERSION="$(date +%y%m%d%H%M)"
 
 cat > "$OUT/export.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -66,3 +67,5 @@ spctl --assess --type execute --verbose=2 "$app"
 zip="$OUT/CuePad-$version-mac.zip"
 ditto -c -k --keepParent "$app" "$zip"
 echo "$zip"
+# 自动更新：把这个 zip 收进 updates/，生成/更新 appcast.xml（含增量更新）；部署由人决定
+"$APPLE_DIR/scripts/sparkle.sh" appcast "$zip"

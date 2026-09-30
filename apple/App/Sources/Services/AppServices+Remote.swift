@@ -61,10 +61,11 @@ extension AppServices {
                 throw RemoteDeliveryError.sessionEnded(target.name)
             }
             switch request.mode {
-            case "paste": return .piInput(id)
-            case "steer": return .pi(id, whenBusy: .steer)
-            case "followUp": return .pi(id, whenBusy: .followUp)
-            default: return .pi(id, whenBusy: nil)
+            case .paste: return .piInput(id)
+            case .steer: return .pi(id, whenBusy: .steer)
+            case .followUp: return .pi(id, whenBusy: .followUp)
+            case .send: return .pi(id, whenBusy: nil)
+            case .unknown(let raw): throw RemoteDeliveryError.unsupportedTarget(raw) // 执行器已先按失败写回，走不到这里
             }
         case .app:
             guard let bundleID = target.ref else { throw RemoteDeliveryError.unsupportedTarget(target.name) }

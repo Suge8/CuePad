@@ -26,6 +26,7 @@
 		E1000000000000000000000A /* cuepad in Embed CLI */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* cuepad */; platformFilters = (macos, ); settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E1000000000000000000000F /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000D /* CueStore */; };
 		E10000000000000000000010 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000E /* CueText */; };
+		F1000000000000000000A003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = F1000000000000000000A002 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -100,6 +101,7 @@
 		C1000000000000000000E001 /* Extension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Extension.entitlements"; sourceTree = "<group>"; };
 		C1000000000000000000E002 /* CuePad-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "CuePad-macOS.entitlements"; sourceTree = "<group>"; };
 		C1000000000000000000E004 /* CuePad-macOS-local.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "CuePad-macOS-local.entitlements"; sourceTree = "<group>"; };
+		F1000000000000000000A004 /* CuePad-macOS-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "CuePad-macOS-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -116,6 +118,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1000000000000000000A003 /* Sparkle in Frameworks */,
 				D1000000000000000000A00B /* CueSync in Frameworks */,
 				B10000000000000000000003 /* CueText in Frameworks */,
 				B10000000000000000000007 /* CueStore in Frameworks */,
@@ -189,6 +192,7 @@
 				C1000000000000000000E001 /* Extension.entitlements */,
 				C1000000000000000000E002 /* CuePad-macOS.entitlements */,
 				C1000000000000000000E004 /* CuePad-macOS-local.entitlements */,
+				F1000000000000000000A004 /* CuePad-macOS-Info.plist */,
 				C10000000000000000000007 /* CuePad-iOS-Info.plist */,
 				C10000000000000000000008 /* ShareExtension-Info.plist */,
 				C10000000000000000000009 /* Widget-Info.plist */,
@@ -234,6 +238,7 @@
 			);
 			name = CuePad;
 			packageProductDependencies = (
+				F1000000000000000000A002 /* Sparkle */,
 				D1000000000000000000A001 /* CueSync */,
 				B10000000000000000000002 /* CueText */,
 				B10000000000000000000006 /* CueStore */,
@@ -365,6 +370,7 @@
 			mainGroup = A10000000000000000000006;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				F1000000000000000000A001 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */,
 				B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */,
 			);
 			productRefGroup = A10000000000000000000008 /* Products */;
@@ -535,6 +541,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = App/Config/CuePad.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "$(CUEPAD_MAC_ENTITLEMENTS)";
 				"INFOPLIST_FILE[sdk=iphone*]" = "App/Config/CuePad-iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=macosx*]" = "App/Config/CuePad-macOS-Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Pi 会话的那个终端标签页。";
 				INFOPLIST_KEY_NSPrincipalClass = CuePadApplication;
@@ -576,6 +583,7 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=iphone*]" = App/Config/CuePad.entitlements;
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "$(CUEPAD_MAC_ENTITLEMENTS)";
 				"INFOPLIST_FILE[sdk=iphone*]" = "App/Config/CuePad-iOS-Info.plist";
+				"INFOPLIST_FILE[sdk=macosx*]" = "App/Config/CuePad-macOS-Info.plist";
 				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "CuePad 需要控制终端应用，才能把你带到运行 Pi 会话的那个终端标签页。";
 				INFOPLIST_KEY_NSPrincipalClass = CuePadApplication;
@@ -834,6 +842,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = CuePadKit;
 		};
+		F1000000000000000000A001 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/Sparkle;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -916,6 +928,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
 			productName = CueText;
+		};
+		F1000000000000000000A002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F1000000000000000000A001 /* XCLocalSwiftPackageReference "Vendor/Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 

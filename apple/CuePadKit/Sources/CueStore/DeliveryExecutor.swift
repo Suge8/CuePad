@@ -5,7 +5,7 @@ extension CueStore {
   /// 所以同一请求不会被多台 Mac 各执行一次。`host` 取自该目标 Pi 会话的 `PiSessionState.hostID`。
   @discardableResult
   public func requestDelivery(
-    _ content: String, to target: SendTarget, on host: String, mode: String = "send", card: UUID? = nil,
+    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil,
     task: UUID? = nil
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
@@ -142,6 +142,13 @@ public actor DeliveryExecutor {
     for request in candidates {
       if timing.now().timeIntervalSince(request.createdAt) > maxAge.seconds {
         try? await store.finishDelivery(request.id, status: .failed, detail: "请求创建后超过 \(Int(maxAge.seconds)) 秒仍未执行，已放弃", at: timing.now())
+        scheduleCleanup()
+        continue
+      }
+      if case .unknown(let raw) = request.mode {
+        try? await store.finishDelivery(
+          request.id, status: .failed, detail: "这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）",
+          at: timing.now())
         scheduleCleanup()
         continue
       }

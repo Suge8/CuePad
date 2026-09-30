@@ -99,9 +99,11 @@ struct MacDependencies {
     /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
     var commandLineTool: CommandLineToolInstaller
+    /// 自动更新器；隔离模式与测试为 nil。
+    var updater: (any AppUpdater)?
 
     @MainActor
-    static func live(bundleID: String) -> MacDependencies {
+    static func live(bundleID: String, updater: (any AppUpdater)? = nil) -> MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)
         return MacDependencies(
@@ -115,7 +117,8 @@ struct MacDependencies {
             historyStorage: nil,
             hostID: HostIdentity.current(),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
-            commandLineTool: CommandLineToolInstaller())
+            commandLineTool: CommandLineToolInstaller(),
+            updater: updater)
     }
 }
 #endif

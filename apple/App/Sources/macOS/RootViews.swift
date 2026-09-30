@@ -16,6 +16,8 @@ enum RootViews {
             SettingsView()
             Divider()
             CommandLineToolBar()
+            Divider()
+            UpdateBar()
         }
         .modifier(PaletteProvider())
         .environment(services)

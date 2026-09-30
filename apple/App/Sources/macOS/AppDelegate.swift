@@ -5,7 +5,7 @@ import SwiftUI
 import os
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var services: AppServices?
     private var windowDelegate: MainWindowDelegate?
     private var statusItem: StatusItemController?
@@ -65,6 +65,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSAlert(error: error).runModal()
         }
+    }
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        services?.updates.checkForUpdates()
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        item.action == #selector(checkForUpdates(_:)) ? services?.updates.canCheckForUpdates ?? false : true
     }
 
     @objc func showSettings(_ sender: Any?) {
