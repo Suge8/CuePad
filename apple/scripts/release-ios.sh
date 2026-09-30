@@ -40,7 +40,7 @@ PLIST
       -exportPath "$OUT/export"
     # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）
     xcrun altool --upload-app -f "$OUT/export/CuePad.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
-    echo "已上传构建 $build，App Store Connect 处理完成后出现在 TestFlight"
+    echo "已上传构建 ${build}，App Store Connect 处理完成后出现在 TestFlight"
     python3 "$APPLE_DIR/scripts/testflight.py" group
     ;;
   device)
