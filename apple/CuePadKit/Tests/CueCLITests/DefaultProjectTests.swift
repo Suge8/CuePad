@@ -2,6 +2,8 @@ import CueStore
 import Foundation
 import Testing
 
+@testable import CueCLI
+
 /// 不给 --project / --inbox 时，默认范围是绑定了当前目录（或其祖先目录）的项目。
 @Suite struct DefaultProjectTests {
   private struct World {
