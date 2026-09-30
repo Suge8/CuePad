@@ -10,6 +10,6 @@ if [ -f "$ASC_ENV" ]; then
 fi
 
 require_asc() {
-  [ "${#asc_auth[@]}" -gt 0 ] || { echo "缺少 App Store Connect 凭据文件：$ASC_ENV（字段见 apple/README.md）" >&2; exit 1; }
+  [ "${#asc_auth[@]}" -gt 0 ] || { echo "缺少 App Store Connect 凭据文件：$ASC_ENV（字段见 docs/development.md「签名与发布」）" >&2; exit 1; }
   [ -f "$ASC_KEY_PATH" ] || { echo "ASC_KEY_PATH 指向的密钥文件不存在" >&2; exit 1; }
 }

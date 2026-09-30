@@ -1,6 +1,6 @@
 # Security Policy
 
-CuePad is a local-first desktop app. Your data stays on your machine in a local SQLite database; the app has no server, account system, or telemetry. The security surface is the Electron IPC bridge, the local database, and the macOS dispatch sidecar (which requires Accessibility permission to send keystrokes to other apps).
+CuePad is a local-first app for macOS, iPhone and iPad. Your data stays on your devices in a local SQLite database and, if you use sync, in your own private iCloud (CloudKit) database; the app has no server, account system, or telemetry. The security surface is the local database and its command line (`cuepad`), the Pi bridge (a per-user Unix socket), iCloud sync, and the macOS dispatch code (which requires Accessibility permission to send keystrokes to other apps).
 
 ## Reporting a vulnerability
 

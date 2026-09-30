@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """TestFlight 内部测试：建内部测试组、把测试员加进去、查构建处理状态。
-用法：testflight.py group [邮箱]    建/取内部测试组「内部」（能访问全部构建），并把账号里该邮箱的用户加进去（默认账号持有人）
+用法：testflight.py group [邮箱]    建/取内部测试组「内部」（能访问全部构建），并把账号里该邮箱的用户加进去
+                                    邮箱省略时取凭据文件里的 CUEPAD_TESTER_EMAIL，两者都没有则报错
       testflight.py builds          列出构建：版本、处理状态、是否过期
 凭据见 asc.py。
 """
@@ -61,12 +62,22 @@ def builds():
         print(a["version"], a["processingState"], "已过期" if a.get("expired") else "有效", a["uploadedDate"])
 
 
+def tester_email():
+    if len(sys.argv) > 2:
+        return sys.argv[2]
+    email = asc.load_env().get("CUEPAD_TESTER_EMAIL")
+    if not email:
+        raise SystemExit("缺少测试员邮箱：在凭据文件（~/.appstoreconnect/cuepad.env）里设 CUEPAD_TESTER_EMAIL，或运行 testflight.py group <邮箱>")
+    return email
+
+
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) > 1 else ""
     if command == "group":
+        email = tester_email()  # 先取邮箱：缺失时不发任何 API 请求
         app = app_id()
         group = ensure_group(app)
-        ensure_tester(group, sys.argv[2] if len(sys.argv) > 2 else "nnyless@foxmail.com")
+        ensure_tester(group, email)
         builds()
     elif command == "builds":
         builds()

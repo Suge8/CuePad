@@ -206,7 +206,7 @@ private struct FilterBar: View {
             Button { query.withImages.toggle() } label: {
                 FilterCapsule(name: "含图片", value: nil, on: query.withImages)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             FilterToken(name: "发送目标", value: sentLabel, on: query.sent != .any) {
                 Button("任意") { query.sent = .any }
                 Divider()

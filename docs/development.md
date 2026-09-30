@@ -1,86 +1,162 @@
 # CuePad 开发文档
 
-技术栈：Electron 37 + SvelteKit（Svelte 5）+ TypeScript + Tailwind CSS 4 + Bits UI + CodeMirror 6 + SQLite（Electron 主进程内置 `node:sqlite`）。桌面运行时仅 Electron，macOS 一键投送由独立 Rust sidecar 完成。
+CuePad 是 Swift 原生应用：macOS 26+、iOS/iPadOS 26+，iCloud 同步，Pi 深度集成。Swift 6 严格并发，界面 SwiftUI，编辑器与菜单栏面板用 AppKit/UIKit。产品定位与功能见 [README.md](../README.md)；模块索引见 [AGENTS.md](../AGENTS.md)。
 
-## 常用命令
+## 环境与命令
 
-```bash
-bun run dev:electron  # Electron + 临时 Vite 服务；不编译 Rust
-bun run build         # 构建静态 renderer 到 build/
-bun run build:electron # 构建主进程与 preload 到 dist-electron/
-bun run build:sidecar # 显式构建 macOS 投送 sidecar（唯一直接 Cargo 入口）
-bun run test:sidecar  # 构建并验证 sidecar JSON 行协议
-bun test              # Bun 单元测试
-bun run check         # Svelte / TypeScript 检查
-bun run lint          # ESLint
-bun run test:e2e      # Playwright Chromium 无头 UI 验收
-bun run test:electron # 真实 Electron / preload / SQLite 验收；不编译 Rust
-bun run package:app   # 构建 sidecar，产出 .app + GitHub Release 用 zip
-bun run test:package  # 验证已打包应用的 renderer、SQLite 与资源
-```
-
-日常开发、Chromium E2E 和 Electron E2E 都不会调用 Cargo。只有显式执行 `build:sidecar`、`test:sidecar` 或 `package:app` 才会编译 Rust。
-
-## 运行时架构
-
-### 主进程与安全桥
-
-- `electron/main.ts` 持有 BrowserWindow、托盘、全局快捷键、剪贴板、SQLite 和 sidecar 生命周期。窗口关闭只隐藏；真正退出时才释放快捷键、托盘、数据库并等待 sidecar 关闭。
-- `electron/preload.ts` 在 `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true` 下只暴露类型化 `window.cuepad`。renderer 无法访问原始 `ipcRenderer`、Node 或文件系统。
-- 开发态加载临时 Vite URL。打包态使用标准且安全的 `cuepad://app/` 本地协议，把 SvelteKit SPA fallback 的 `/_app/...` 资源映射到 app.asar 内 `build/`；路径越界请求返回 404。
-- `CUEPAD_TEST=1` 创建隐藏且不聚焦的窗口并关闭后台节流，供真实 Electron 测试使用，不抢当前桌面焦点。
-
-### SQLite 与迁移
-
-- `src/lib/db/` 是运行时无关的 repository；renderer 只经 `window.cuepad.sql` 请求主进程。
-- `electron/db.ts` 是连接与迁移的单一事实源：WAL、外键、5s busy timeout、同步 `BEGIN IMMEDIATE` 真事务。schema 位于根目录 `migrations/001–005`。
-- 目标库是 `app.getPath('userData')/cuepad.db`。首次启动且目标库不存在时，主进程会从 `~/Library/Application Support/com.sugeh.cuepad/cuepad.db` 复制旧版 `.db/.db-wal/.db-shm`，主文件最后原子落位；源文件不改不删。
-- 旧库的 `_sqlx_migrations` 成功版本会写入 `schema_migrations`，避免重复执行历史迁移。复制失败不会创建空库，renderer 明确展示加载错误。
-
-### 工作区与编辑器
-
-- `src/lib/workspace/store.svelte.ts` 是项目、卡片、任务、标签、回收站、主题和快捷键状态的单一事实源；`editor.svelte.ts` 持有沉浸编辑草稿。
-- 项目置顶、卡片收藏只划分稳定展示分区；基础 `sort_order` 仍是拖拽恢复的持久事实源。任务是全局集合，活动项按基础顺序，完成项按完成时间展示。
-- `src/lib/editor/autosave.ts` 使用 buffer → queue → 单一 drain 串行保存；每次写库前由 `backup.ts` 保存 localStorage 快照，成功后清除。
-- `src/lib/motion.ts` 统一 Svelte transition、WAAPI 图标切换和 FLIP；`prefers-reduced-motion` 禁用位移、缩放与装饰循环，仅保留状态反馈和淡变。
-
-### 桌面壳与一键投送
-
-- `electron/shortcuts.ts` 在注册边界把 W3C code accelerator 转成 Electron accelerator。设置页的“注册 → SQLite 持久化 → 失败回滚”由 renderer 串行执行，主进程只持有注册表和固定显隐回调。
-- `electron/tray.ts` 使用 18pt 模板图；1x/2x 文件位于 `electron/assets/`，打包后从 `Contents/Resources/assets/` 读取。
-- `native/dispatch/` 是 macOS-only 长驻 sidecar。它订阅前台应用激活通知，通过 stdio JSON 行协议响应目标查询与投送请求，不轮询。
-- 主进程把“权限/目标/CGEvent 预检 → 写剪贴板 → 隐藏窗口 → 激活目标 → 定向 `Cmd+V`”放入同一串行队列。失败会恢复窗口；目标未运行或权限不足会返回明确错误，不回退到其他应用。
-- sidecar 等目标激活通知后才发送按键，并保留 100ms 有界消费窗口，防止连续投送覆盖前一次剪贴板。崩溃时当前请求失败，下次调用自动重启。
-- 投送请求可携带 `submit: true`（UI 中的「自动发送」开关，偏好存 localStorage）：sidecar 在粘贴落地窗口后补发一次无修饰键回车，适合终端与聊天输入框。
-
-## 打包
-
-`electron-builder.yml` 产出 macOS arm64 `dir` + `zip`：
-
-- appId：`com.sugeh.cuepad`
-- 应用签名：ad-hoc（`identity: "-"`），不做 DMG 或公证
-- `build/`、`dist-electron/`、`migrations/` 进入 app.asar
-- `cuepad-dispatch` 与托盘/应用图标进入 `Contents/Resources/`
-- 本地验收：`release/mac-arm64/CuePad.app`
-- 分发产物：`release/CuePad-mac-arm64.zip`（稳定文件名，挂到 GitHub Releases；落地页经 `/releases/latest/download/` 直链）
-
-营销落地页在 `landing/`，Vercel 项目 `cuepad-landing`（Root Directory = `landing/`，连 GitHub `main` 自动部署）；公开址 [cue-pad.com](https://cue-pad.com)。
-
-构建后先运行：
+需要 Xcode 26。统一入口 `apple/scripts/xc.sh <build|test|shot> <mac|ios|ipad> [截图路径]`（`ios` 是 iPhone 模拟器，默认 `iPhone 17`，`CUEPAD_IOS_DEVICE` 覆盖；`ipad` 是 iPad 模拟器，`CUEPAD_IPAD_DEVICE` 覆盖），退出码即 xcodebuild 的退出码。共用 Swift 包在 `apple/CuePadKit`，直接用 SwiftPM。
 
 ```bash
-bun run test:package
-codesign --verify --deep --strict release/mac-arm64/CuePad.app
+apple/scripts/xc.sh build mac
+apple/scripts/xc.sh test mac        # test ios 目前执行 0 个测试（壳层测试只在 macOS 编译）
+apple/scripts/xc.sh build ios
+apple/scripts/xc.sh shot mac        # 构建 → 后台启动 → 单窗口截图 → 退出，输出 .derived/shot-mac.png
+cd apple/CuePadKit && swift test    # 共用包的全部测试
+cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 ```
 
-`test:package` 读取 `DevToolsActivePort` 并直接使用 CDP WebSocket，事件驱动等待 packaged renderer 首次加载；它验证 `cuepad://app/`、迁移 001–005、隔离数据库、运行应用列表和资源落位。物理全局热键、系统辅助功能授权、真实目标激活/粘贴与主观动效手感仍属于人工 smoke。
+构建产物在 `apple/.derived/`（自带 `.gitignore`）。**并行的 agent 必须各用一个产物目录**（`CUEPAD_DERIVED=/tmp/xxx apple/scripts/xc.sh …`，截图、隔离库、Pi 目录随之落在该目录下），共用同一个目录时构建与测试会互相覆盖而随机失败。
 
-## 测试分层
+## 代码地图
 
-1. **Bun 单元测试**（`tests/`、`electron/*.test.ts`）：repository、排序、自动保存、备份、快捷键编解码、托盘资源和 sidecar 客户端队列。
-2. **Playwright Chromium**（`e2e/`）：完整桌面桥 mock 下的工作区、任务、弹层、响应式、真实鼠标拖拽、动效方向和减动分支。`e2e/run.ts` 为每次运行分配独立端口与 `/tmp/cuepad-e2e/<run-id>`；成功即删除，失败只保留 PNG/trace ZIP，启动时清理超过 7 天的 run。
-3. **Playwright Electron**（`e2e-electron/*.e2e.ts`）：真实 preload、SQLite、Pin/Star、项目/卡片/任务拖拽落库、重启恢复、旧库继承、快捷键注册、剪贴板、close=hide 和 sidecar 客户端生命周期。全程隐藏且不聚焦。
-4. **Packaged smoke**（`e2e-electron/package-smoke.ts`）：验证最终 `.app` 的本地协议、数据库和 extraResources。
-5. **人工 smoke**：双击启动、真实日常数据、托盘菜单、物理全局热键、授权后的跨应用全文/分段投送。
+`apple/CuePad.xcodeproj` 是一个多平台 App target（macOS + iOS/iPadOS）加分享扩展、小组件与命令行三个目标；源码在 `apple/App/Sources/` 与 `apple/App/Tests/`（文件夹同步组，增删文件不用改工程文件）：
 
-自动测试禁止系统级合成鼠标/键盘。视觉 E2E 的动效断言由 `e2e/animation-recorder.js` 记录 WAAPI 属性，先订阅完成事件再触发操作；短过渡不做事后单帧猜测。真实拖拽使用 `page.mouse`，任务插入槽位由 Pointer Capture 状态机按活动行中点计算，不依赖 `elementFromPoint`。
+| 路径 | 职责 |
+| --- | --- |
+| `App/Sources/Shared/AppServices.swift`、`Services/` | 组合根与服务：发送、同步、Pi 扩展管理、命令行工具安装、快照 |
+| `App/Sources/macOS/` | 壳层：窗口、全局快捷键、菜单栏图标与面板 |
+| `App/Sources/iOS/` | iOS/iPadOS 应用入口与每个窗口的根视图 |
+| `App/Sources/UI/` | 界面：`Shared/`（组件、主题、规则、工作区状态）、`macOS/`、`iOS/`、`Debug/`（视觉验收场景与演示数据） |
+| `App/AppGroup/`、`ShareExtension/`、`Widget/` | iOS 的 App Group 位置与快照、分享扩展、小组件 |
+| `CuePadKit/` | 共用 Swift 包，见下表 |
+| `scripts/` | `xc.sh` 与签名、发布脚本 |
+
+| CuePadKit 模块 | 职责 | 平台 |
+| --- | --- | --- |
+| CueText | 卡片正文的纯文本模型：解析/序列化、分块、变量、光标规范化；只依赖 Foundation | 全部 |
+| CueStore | 系统 SQLite3 直连（零第三方依赖）的唯一事实源：迁移、仓储、FTS5 搜索、资料库位置、旧库导入；写事务提交后发布变更，跨进程经 Darwin 通知唤醒其他进程的观察者 | 全部 |
+| CueEditor | TextKit 2 编辑器：内联图片、分块、变量高亮；AppKit/UIKit 各一层宿主 | 全部 |
+| CueSync | 直接用 CKSyncEngine 同步 Store 的记录；图片以 CKAsset 同步；正文用加密字段 | 全部 |
+| CueDispatch | 通用投送：权限预检 → 写剪贴板 → 激活目标 → 定向 `Cmd+V` | macOS |
+| CuePi | Pi 桥：扩展（随包资源）、socket 客户端、会话历史索引、终端跳转；协议与边界见 [Sources/CuePi/README.md](../apple/CuePadKit/Sources/CuePi/README.md) | macOS |
+| CueCLI | `cuepad` 命令行：名词-动词（project/card/task/search/conflicts），默认文本、`--json` 给 agent；只经 Store 公开接口读写，`cuepad --help` 与各命令的 `--help` 是其唯一文档 | macOS |
+
+模块边界由 `Package.swift` 声明，每个 target 只有一个写者。
+
+## 产品模型
+
+功能只服务一条循环：**捕获 → 打磨 → 发出 → 回看**。
+
+| 概念 | 定义 |
+| --- | --- |
+| 项目 | 卡片的分组；可绑定一个代码目录，Pi 会话与 `cuepad` 命令行按工作目录自动归入 |
+| 卡片 | 唯一的内容类型：文字 + 内联图片 + `{{变量}}` + 分块。prompt、思考、目标、笔记都是卡片 |
+| 任务 | 独立记录的一行待办，默认全局、可挂到项目；可一键发给 Pi 会话并显示其状态，完成由用户勾选；可与卡片互转（移动而非复制）。不做子任务、截止日期、优先级、提醒 |
+| 活动 | Pi 会话的历史索引 + 实时状态，只读，不复制会话原文 |
+| 发送记录 | 每次投送/复制自动记录内容快照、目标与时间，可一键重发；即自动日志 |
+
+投送目标有两类：**Pi 会话**（经扩展通道直达，支持图文，无需辅助功能权限）与**任意应用**（剪贴板 + 定向 `Cmd+V`，仅文字）。
+
+## 架构约定
+
+- **数据**：ID 用 UUID；排序用分数索引字符串，避免多设备排序冲突；软删除只保留 `deletedAt`，项目删除时其卡片随项目进回收站（由项目推导，不逐卡记录来源）。设备本地偏好（主题、快捷键、自动发送、当前项目）进 UserDefaults，不进同步库。变量上次取值存在卡片上并同步。界面据 Store 的观察流重读查询，不在内存复制状态。
+- **图片**：按内容哈希存文件去重，正文存附件引用；缩略图为派生缓存，不同步。
+- **冲突**：iCloud 按记录同步。同一卡片离线并发编辑时保留两个版本交给用户选择，不静默覆盖。任务是独立记录而非卡片正文里的清单，勾选只改该条，不与卡片编辑冲突。
+- **编辑器**：存储格式是纯字符串，唯一事实源——分块为独占行 `---split---`，图片为行内 `![](cuepad://img/<哈希>)`；运行时二者各为 U+FFFC + 附件，保存只经序列化，编辑器内复制输出存储格式。变量高亮用 `NSTextLayoutManager` 渲染属性（不写 storage、不进 undo），监听 `didProcessEditingNotification` 以覆盖输入法组合期。**禁止访问 `NSTextView.layoutManager`**（会永久降级到 TextKit 1）。附件只挂降采样缩略图并按视口懒加载，原图留在文件。iOS 另写粘贴/拖入委托、光标规范化（改写 `selectedTextRange`）与工具栏"分块"按钮。
+- **Pi 桥**：扩展随 App 打包，首次启动征得同意后写入 Pi 扩展目录（要求 Pi ≥ 0.84.4）。实时状态只在内存，历史只来自 Pi 会话文件（沿当前分支解析、只读新增字节、偏移存进 Store）。协议、多客户端、版本与已知边界以 CuePi README 为准。
+- **发给 Pi**："直接发送"支持文字 + 图片与 steer/followUp；"放进输入框"只有文字，用 `pasteToEditor`（`setEditorText` 会覆盖用户已输入内容），含图片的卡片只能直接发送。图片发原图，Pi 自行缩放（最长边 2000px、base64 ≤ 4.5MB）。发送方式是 Store 里类型化的 `DeliveryMode`（send / steer / followUp / paste，唯一定义）：手机经同步下发的投送请求里读到本版本不认识的值时原样保留、Mac 不执行、按失败写回，不静默当成已知值。
+- **投送**：进程内 `Dispatcher` actor，经前台应用/剪贴板/按键三个协议接缝测试。顺序靠任务链而非 actor 本身（actor 在 await 处可重入）。激活先订阅通知再调用，超时报错不发键；目标未运行时报错且不动剪贴板。单条目同时放文字与 PNG 时，图形应用只取其一，所以含图卡片写成按原顺序含图的 RTFD 并附纯文字兜底。辅助功能授权归属 CuePad.app。窗口隐藏与发送记录由调用方负责。
+- **命令行**：`cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标统一构建、随 App 签名与公证。设置窗口底部的开关在 `~/.local/bin/cuepad` 建符号链接（位置被别的文件占用时不覆盖，App 被移动后能检测并一键修复；不做需要提权的 /usr/local/bin）。它与 App 用同一套资料库位置规则。
+- **测试**：Swift Testing 覆盖 Store、同步映射、Pi 会话解析与桥协议、投送队列、命令行；另有"构建 → 运行 → 截图"的视觉验收流程。测试只用替身或不产生按键事件的系统调用，不向其他应用发送键鼠事件；服务测试用临时目录、独立 UserDefaults 与记录型替身，不碰真实资料库、`~/.pi` 和其他应用。全局热键的物理触发与跨应用粘贴只能人工验证。
+
+## 同步
+
+主 App 启动时创建 `CloudSync` 并启动（隔离模式 `CUEPAD_LIBRARY_DIR` 与测试不同步）；回到前台、Mac 系统唤醒时立即 `syncNow()`，推送由引擎自己处理。`AppServices` 暴露 `syncStatus`、`syncIssues`、`conflicts` 与 `resolveSync`、`resolveConflict`。Mac 端把 Pi 会话状态写成同步记录（启动时先清掉本机遗留的），并只执行发给本机 `hostID`（硬件 UUID 的哈希前缀）的手机投送请求。
+
+**Pi 锁屏通知**：Pi 会话状态记录带明文可查询的 `notify` 标志（"等你确认"、"完成"的转换那一次写入上置位）。CloudKit 服务端订阅在标志置位时直接生成可见通知，不依赖静默推送与 App 在后台运行；订阅由 iOS 建立（幂等，账号切换时重建），点通知路由到对应会话。通知文案只用本地化 key 的通用句（标题与详情是加密字段，不会出现在通知里）。通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的后续写入取代就不送出，同状态的更新则沿用标志——状态记录不是事件日志，要保证每个事件都送达需要单独的追加式通知事件记录，那是另一种设计。该字段的可查询索引由生成的数据结构声明，已部署到生产环境。
+
+### CloudKit 数据结构
+
+数据结构由同步记录映射推出，不手写：`apple/CloudKit/cuepad.ckdb` 是生成物，`CloudKitSchemaTests` 保证它与映射一致；映射改了测试会失败，在 `apple/CuePadKit/` 下用 `CUEPAD_REGENERATE_SCHEMA=1 swift test --filter regenerateSchemaFile` 重新生成，再导入开发环境。管理令牌存在钥匙串 `cuepad-cloudkit-management-token`，不入库、不打印：
+
+```bash
+export CLOUDKIT_MANAGEMENT_TOKEN=$(security find-generic-password -a cuepad -s cuepad-cloudkit-management-token -w)
+C="--team-id SVPPQJM9JG --container-id iCloud.com.sugeh.cuepad --environment development"
+xcrun cktool validate-schema $C --file apple/CloudKit/cuepad.ckdb
+xcrun cktool import-schema $C --validate --file apple/CloudKit/cuepad.ckdb
+xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端把字段按字母序排列并补系统字段，逐类型核对字段与权限
+```
+
+开发环境的结构已导入并回读核对，生产环境已部署。生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构，所以映射再改时需重复"生成 → 导入开发环境 → 控制台部署"。
+
+## 平台
+
+### macOS 壳层
+
+主窗口在 `MainWindowFactory` 创建时就设好外框（内容铺到透明标题栏下），界面不要再在运行时改窗口样式；设置窗口（⌘,）由 `SettingsWindowController` 承载；`CuePadApplication` 在退出前结束挂在窗口上的弹窗，⌘Q 与 SIGTERM 才不会被 sheet/alert 卡住；菜单栏面板 `MenuBarPanel` 随内容尺寸变化，顶边固定在图标下方。单元测试以 App 为宿主，宿主检测到 `XCTestConfigurationFilePath` 时不启动壳层，避免注册真实全局热键和菜单栏图标。
+
+### iOS / iPadOS
+
+- 资料库在 App Group 共享容器 `group.com.sugeh.cuepad` 的 `Library/`（库文件、`Attachments/`、待入库的 `Capture/`、给小组件的 `Snapshots/`），偏好用同名 UserDefaults 套件。模拟器直接可用；真机需要开发者账号给三个目标（App、分享扩展、小组件）签上该 App Group。
+- 资料库始终只有主 App 写：分享扩展把内容放进 `Capture/`，主 App 在前台、收到扩展的进程间通知时入库；小组件与扩展不打开资料库，只读主 App 写的 JSON 快照。
+- 每个窗口（iPad 多窗口）各有一个 `SceneContext`，选中项目不放进全局偏好。
+- 有同步时，每个窗口出现后请求通知权限并注册远程通知（`Info.plist` 声明 `remote-notification` 后台模式）；锁屏通知文案按 key 取自 `App/Sources/zh-Hans.lproj/Localizable.strings`。点开通知由 `Sources/iOS/PiAlertCenter.swift` 交给界面：打开活动（iPhone 标签 / iPad 右侧面板）并定位到该会话。
+
+## 视觉
+
+内容是纸，控件是玻璃：编辑器与卡片用安静的实色底并保留纸感品牌；工具栏、侧栏、弹层、菜单栏面板用系统 Liquid Glass 组件，玻璃不叠玻璃；"降低透明度""增强对比度"开启时自动退回实底。中文正文一律苹方。界面不解释内部规则：分组的依据写在代码里，不写成给用户看的说明文案。
+
+- **Mac 版"近处卡片、远处列表"**：可收起的玻璃侧栏（⌘\），分置顶 / 最近项目 / 全局 Pi 会话，⌘1–9 切项目。项目页三段：顶部"目标与下一步"（项目目标卡 + 该项目未完成任务 + 该项目的 Pi），下滚时收成一行；中间工作集卡片墙（界面上标题就叫"最近"，不向用户解释上墙规则；置顶单列，其余为最近编辑或未发送，只在打开项目或跨天时重排）；下方"更早"按周分组，3 个月以上按月折叠。⌘K 搜索跨项目，按项目/含图片/发送目标/时间筛选；底部玻璃输入栏随手记存卡或直接发给 Pi；卡片连续放大成居中的纸页，菜单栏面板是一张小稿纸，⌘↩ 直接发出。
+- **iPhone"项目书架 + 随手记"**：首页是项目书架（置顶项目为大卡，带目标、卡片数、任务数与 Pi 状态点），顶部一行"今天 · N 张"进入按时间的流；标签栏为 项目 / 任务 / 活动 / 搜索，"活动"承载 Pi 状态与"等你确认"（角标 + 推送）；标签栏上方常驻随手记输入栏（首页记入收件箱，项目页记入该项目）；编辑为纸页，键盘上方玻璃工具栏（分块、图片、变量、发送）。
+- **iPad**：左栏项目、右侧卡片墙与项目页，任务与活动在右侧面板，编辑时纸页覆盖项目页；外接键盘快捷键与 Mac 对齐。
+
+## 资料库与隔离
+
+位置规则唯一来源是 `CueStore` 的 `LibraryLocation`：macOS 在 `~/Library/Application Support/CuePad/Library/`，iOS 在 App Group 容器；环境变量 `CUEPAD_LIBRARY_DIR`（必须是绝对路径，否则 App 弹窗说明后退出）指向隔离目录，资料库、偏好设置（主题、快捷键、当前项目、窗口位置）都放进去，不导入旧库，不碰真实的 `com.sugeh.cuepad` 偏好域，并行实例互不影响。App、命令行与测试都经它取位置。
+
+macOS 首次启动从旧版（Electron 时代）数据库 `~/Library/Application Support/CuePad/cuepad.db` 导入一次：只读源库的副本（含 `-wal`），映射为新模型，幂等；完成标记是库目录里的 `.electron-import-completed`。
+
+## 视觉验收
+
+`shot mac` 用 `open -g` 后台启动，不抢焦点；按 pid 找窗口 ID 后 `screencapture -l` 只截该窗口（首次需给终端授予屏幕录制权限）；以 SIGTERM 退出，走应用正常退出流程。`shot ios` / `shot ipad` 构建 → 模拟器安装启动 → 截图 → 终止，库与偏好放进 `.derived/library-ios`。`--` 之后是 App 启动参数：
+
+```bash
+apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -theme dark
+```
+
+- Debug 构建认 `-CuePadDemo YES`（空库时写入演示数据）、`-CuePadProject <名称>`、`-CuePadScene <collapsed|older|editor|search|tasks|trash|settings|menubar>`、`-CuePadSearch`、`-CuePadCard`、`-CuePadWindowSize 1280x800`，说明见 `App/Sources/UI/Debug/DebugScene.swift`；设置项可直接覆盖（`-theme dark`）。`settings`、`menubar` 画面把设置窗口、菜单栏面板的内容放进主窗口拍，因为只截主窗口。
+- `CUEPAD_SHOT_LIBRARY` 换库目录（默认 `.derived/library`），`CUEPAD_SHOT_SETTLE` 是出窗后等待渲染的秒数。
+- Pi 目录同样隔离（`.derived/pi-agent`、`/tmp/cuepad-shot-<uid>`），截图不含 `~/.pi` 的会话。隔离的 Pi 目录里没装扩展，侧栏底部出现"连接 Pi"征求同意是正确状态；不要它时传 `-piExtensionDeclinedVersion '<integer>N</integer>'`，N 取 `cuepad-bridge.ts` 里的 `EXTENSION_VERSION`（只写入参数域，不改已保存的设置）。
+- 窗口位置/尺寸会被系统记住（`NSWindow Frame main`），截图尺寸以上次为准；恢复默认：`defaults delete com.sugeh.cuepad "NSWindow Frame main"`。
+
+## 签名与发布
+
+本机构建走 ad-hoc 签名（`xc.sh` 覆盖工程默认的团队与身份，并换用不含 iCloud/推送的 macOS 权限文件）；签名事实源是 `App/Config/Signing.xcconfig`。发布与真机构建是手动签名：Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，所以证书与描述文件由 `scripts/provision.py` 经 App Store Connect API 创建，工程里各 target 指定名称（只对 `iphoneos` 与 macOS 的 Release 生效，模拟器与日常构建不受影响）。
+
+凭据文件 `~/.appstoreconnect/cuepad.env`（不入库）的字段：`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_PATH`（App Store Connect API 密钥 `.p8` 的路径）、`CUEPAD_TEAM_ID`；`xc.sh release ios` 另需 `CUEPAD_TESTER_EMAIL`（加入内部测试组的 App Store Connect 用户邮箱）。Apple Distribution 证书的私钥放专用钥匙串 `~/.appstoreconnect/cuepad-signing.keychain-db`。缺凭据文件时 build/test/shot 照常，只有下面的发布命令会报错；密钥内容不会打印。
+
+| 命令 | 作用 |
+| --- | --- |
+| `xc.sh provision` | 幂等：创建 App ID 与能力（App Groups、iCloud、推送）、Apple Distribution 证书、iOS 与 macOS 描述文件 |
+| `xc.sh release mac` | 刷新描述文件 → 归档（Developer ID）→ 导出 → `notarytool` 公证 → 装订 → `spctl` 与 `codesign` 校验 → `<产物目录>/release/mac/CuePad-<版本>-mac.zip`，并生成 `appcast.xml`（见「自动更新」） |
+| `xc.sh release ios` | 刷新证书与描述文件 → 归档 → 导出 IPA → `altool` 上传 → 建/取内部测试组「内部」并加入账号持有人（构建号取时间戳，自动递增） |
+| `xc.sh device` | 登记连接的真机 → Development 证书与描述文件 → 开发构建 → 安装并启动 |
+| `scripts/testflight.py builds` | 列出 TestFlight 构建与处理状态 |
+
+权限：主 App 有 iCloud（CloudKit，`iCloud.com.sugeh.cuepad`）、推送（`$(APS_ENVIRONMENT)`：Debug development，Release production）与 App Group（iOS）；扩展只有 App Group；macOS 另有 Apple Events 自动化（终端跳转）。辅助功能权限使 Mac 版不能进 Mac App Store，走官网分发并用 Sparkle 更新。
+
+只能在网页上做的一次性前置：App Group `group.com.sugeh.cuepad` 与 iCloud 容器 `iCloud.com.sugeh.cuepad` 的创建及挂到 App ID；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成，`provision.py devid-import <.cer>` 导入）；App Store Connect 里的 App 记录。
+
+## App 图标
+
+`App/Sources/AppIcon.icon` 是 Icon Composer 的分层图标（Liquid Glass，浅色/深色/着色三种外观），由 `scripts/make-icon.py` 从品牌 logo `design/final/logo-final.png` 矢量化生成（potrace 描成 SVG，C 与纸片两层；依赖 Pillow 与 potrace）；换 logo 后重跑脚本即可，预览见 `design/final/app-icon-preview.png`。菜单栏模板图仍是 `Assets.xcassets/MenuBarIcon`。
+
+## 自动更新（macOS）
+
+用 Sparkle 2（EdDSA 校验、增量更新），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉 Sparkle 源码。更新源 `https://cue-pad.com/appcast.xml` 与公钥在 `App/Config/CuePad-macOS-Info.plist`；设置窗口底部有"自动检查更新"开关和"检查更新…"，App 菜单里也有"检查更新…"。隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
+
+EdDSA 私钥在专用钥匙串（`~/.appstoreconnect/cuepad-signing.keychain-db` 里的 `cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。`xc.sh release mac` 用时间戳作构建号（Sparkle 按 `CFBundleVersion` 比较新旧，每次发布必须递增），在公证、装订后把 zip 收进 `<产物目录>/release/mac/updates/` 并生成 `appcast.xml`（含与历史版本的增量包，所以历史 zip 要保留在 `updates/` 里）。更新包的下载地址前缀用 `CUEPAD_UPDATE_URL_PREFIX`（默认 `https://cue-pad.com/downloads/`）；`updates/` 里的 zip、增量包与 `appcast.xml` 部署到对应位置由人决定。
+
+## 落地页与设计资源
+
+营销落地页在 `landing/`（SvelteKit，部署 Vercel，Root Directory 指向该目录），说明见 [landing/AGENTS.md](../landing/AGENTS.md)。`design/final/` 是品牌 IP 与 logo 定稿，`design/promo/` 是宣传图与演示素材的源与合成模板，`design/tools/` 是图标与抠图脚本。

@@ -8,8 +8,11 @@ struct MasonryLayout: Layout {
     var maxColumns = 4
     var spacing: CGFloat = 16
 
+    private static let idealWidth: CGFloat = 900
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 900
+        // 问理想尺寸（nil）或最大尺寸（无穷）时给一个常规宽度：墙本身没有固有宽度，无穷宽会让列数换算崩溃
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? Self.idealWidth
         let frames = place(subviews, width: width)
         return CGSize(width: width, height: frames.map(\.maxY).max() ?? 0)
     }
@@ -36,15 +39,20 @@ struct MasonryLayout: Layout {
     }
 }
 
-/// 滚动内容在底部渐隐到桌面色，玻璃输入栏下方不叠字。
+/// 滚动内容在底部渐隐到桌面色，玻璃输入栏下方不叠字。是盖在内容上的桌面色渐变，而不是遮罩：
+/// 遮罩要把整面滚动内容先画到离屏缓冲再裁，侧栏开合、滚动时每帧都要重来。
 struct BottomFade: View {
+    @Environment(\.palette) private var palette
+
     var body: some View {
         VStack(spacing: 0) {
-            Rectangle()
-            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 64)
-            Color.clear.frame(height: 70)
+            Spacer()
+            LinearGradient(colors: [palette.desk.opacity(0), palette.desk], startPoint: .top, endPoint: .bottom).frame(height: 64)
+            palette.desk.frame(height: 70)
         }
         .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -70,7 +78,7 @@ struct CardMeta: View {
             }
             Spacer(minLength: 0)
             if isGoal { Image(systemName: "scope").help("项目目标").accessibilityLabel("项目目标") }
-            if floated { Image(systemName: "arrow.up").help("从更早回到墙上").accessibilityLabel("从更早回到墙上") }
+            if floated { Image(systemName: "arrow.up").help("刚从更早的卡里拿回来").accessibilityLabel("刚从更早的卡里拿回来") }
             if card.isFavorite { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
         }
         .font(font)

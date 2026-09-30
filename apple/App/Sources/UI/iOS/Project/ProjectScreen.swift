@@ -72,7 +72,7 @@ struct ProjectScreen: View {
                 wall(arrangement.pinned, page: page, lastTarget: lastTarget).padding(.bottom, 12)
             }
             if !arrangement.wall.isEmpty {
-                SectionHeader(title: "工作集", count: arrangement.wall.count)
+                SectionHeader(title: "最近", count: arrangement.wall.count)
                 wall(arrangement.wall, page: page, lastTarget: lastTarget).padding(.bottom, 12)
             }
             if !arrangement.older.isEmpty {

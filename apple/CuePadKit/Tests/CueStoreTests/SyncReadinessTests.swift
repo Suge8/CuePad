@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Testing
 
-/// 阶段 3 由 CKSyncEngine 把同步表映射为 CKRecord（record type = 表名，recordName = id）。
+/// 由 CKSyncEngine 把同步表映射为 CKRecord（record type = 表名，recordName = id）。
 /// 这些约束让映射不必改表结构：单列 TEXT 主键、每条记录有 modifiedAt、没有外键与唯一约束、
 /// 只用 CKRecord 能直接存的列类型、同步字段与本机字段分表。
 @Suite struct SyncReadinessTests {

@@ -4,7 +4,7 @@ export type Lang = 'en' | 'zh';
 
 export const LINKS = {
 	repo: 'https://github.com/Suge8/CuePad',
-	/** Stable asset name — see electron-builder.yml artifactName */
+	/** Stable asset name; the download artifact is produced by `xc.sh release mac` */
 	download:
 		'https://github.com/Suge8/CuePad/releases/latest/download/CuePad-mac-arm64.zip'
 } as const;

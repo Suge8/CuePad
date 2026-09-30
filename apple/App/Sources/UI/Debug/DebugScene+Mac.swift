@@ -16,13 +16,24 @@ extension DebugScene {
         case "editor": workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)
         default: break
         }
+        if defaults.string(forKey: "CuePadBench") == "sidebar" { await benchSidebar(workspace) }
+    }
+
+    /// 帧耗时测量用的固定负载：等界面稳定后开合侧栏若干次，结束后退出，由外部录制（Instruments 动画卡顿模板）。
+    private static func benchSidebar(_ workspace: Workspace) async {
+        try? await Task.sleep(for: .seconds(3))
+        for _ in 0..<10 {
+            withAnimation { workspace.toggleSidebar() }
+            try? await Task.sleep(for: .milliseconds(800))
+        }
+        NSApp.terminate(nil)
     }
 
     /// 只调整主窗口尺寸，外框样式由壳层创建窗口时决定，这里不碰。
     private static func resizeWindow() {
         guard let value = defaults.string(forKey: "CuePadWindowSize") else { return }
         let parts = value.split(separator: "x").compactMap { Double($0) }
-        guard parts.count == 2, let window = NSApp.windows.first(where: { $0.styleMask.contains(.titled) }) else { return }
+        guard parts.count == 2, let window = NSApp.windows.first(where: { $0.styleMask.contains(.resizable) && $0.styleMask.contains(.fullSizeContentView) }) else { return }
         window.setContentSize(NSSize(width: parts[0], height: parts[1]))
         window.center()
     }

@@ -52,7 +52,9 @@ struct TasksPanel: View {
         let live = Set(data.projects.map(\.id))
         let groups = Dictionary(grouping: data.open) { $0.projectID.flatMap { live.contains($0) ? $0 : nil } }
         let owners: [UUID?] = [nil] + data.projects.map(\.id)
-        LazyVStack(alignment: .leading, spacing: 0) {
+        // 不用 LazyVStack：面板高度随内容撑开，懒加载栈在行于两组之间移动、展开"最近完成"时会漏画或留下旧状态的行。
+        // 任务量小，普通 VStack 足够。
+        VStack(alignment: .leading, spacing: 0) {
             if data.open.isEmpty {
                 Text("没有未完成的任务").font(.system(size: 13)).foregroundStyle(.secondary)
                     .padding(.horizontal, 20).padding(.vertical, 12)
@@ -111,7 +113,7 @@ struct TaskRow: View {
                     .foregroundStyle(done ? AnyShapeStyle(palette.ink2) : AnyShapeStyle(palette.ink3))
                     .contentTransition(.symbolEffect(.replace))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle(scale: 0.85))
             .accessibilityLabel(done ? "标为未完成" : "完成")
             if editing {
                 TextField("任务", text: $draft).textFieldStyle(.plain).onSubmit(commit)
@@ -160,8 +162,8 @@ struct TaskRow: View {
     }
 
     private func toggle() {
-        let id = task.id, completed: Date? = task.completedAt == nil ? .now : nil
-        workspace.perform { try await $0.updateTask(id) { $0.completedAt = completed } }
+        let task = task
+        workspace.attempt { try await workspace.toggle(task) }
     }
 
     private func commit() {

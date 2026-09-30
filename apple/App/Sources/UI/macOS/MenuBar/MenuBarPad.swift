@@ -67,7 +67,7 @@ struct MenuBarPad: View {
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 .foregroundStyle(.secondary)
                 Spacer()
-                Button("↩ 存为卡片", action: save).buttonStyle(.plain).foregroundStyle(.secondary).disabled(empty).fixedSize()
+                Button("↩ 存为卡片", action: save).buttonStyle(PressStyle()).foregroundStyle(.secondary).disabled(empty).fixedSize()
                 SendControl(project: project, compact: true, disabled: empty) { send($0) }
             }
             .font(.system(size: 12))

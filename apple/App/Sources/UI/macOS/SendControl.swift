@@ -25,7 +25,7 @@ struct SendControl: View {
                 .frame(height: compact ? 28 : 44)
                 .contentShape(.rect)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressStyle())
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(disabled)
             SendTargetMenu(project: project) {
