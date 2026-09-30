@@ -57,6 +57,10 @@ Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，�
 
 只能在网页上做的一次性前置（已做）：App Group `group.com.sugeh.cuepad` 与 iCloud 容器 `iCloud.com.sugeh.cuepad` 的创建及挂到 App ID；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成，`provision.py devid-import <.cer>` 导入）；App Store Connect 里的 App 记录。
 
+## App 图标
+
+`App/Sources/AppIcon.icon` 是 Icon Composer 的分层图标（Liquid Glass，浅色/深色/着色三种外观），由 `scripts/make-icon.py` 从品牌 logo `design/final/logo-final.png` 矢量化生成（potrace 描成 SVG，C 与纸片两层）；换 logo 后重跑脚本即可，预览见 `design/final/app-icon-preview.png`。菜单栏模板图仍是 `Assets.xcassets/MenuBarIcon`。
+
 ## 自动更新（macOS）
 
 用 Sparkle 2（EdDSA 校验、增量更新），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉 Sparkle 源码。更新源 `https://cue-pad.com/appcast.xml` 与公钥在 `App/Config/CuePad-macOS-Info.plist`；设置窗口底部有"自动检查更新"开关和"检查更新…"，App 菜单里也有"检查更新…"。隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
