@@ -13,9 +13,11 @@ struct Opt {
     self.help = help
   }
 
-  static func project(_ help: String) -> Opt { Opt("project", help, value: "项目") }
+  static func project(_ help: String) -> Opt { Opt("project", "\(help)（名称不分大小写，或 id）", value: "项目") }
   static let inbox = Opt("inbox", "未归档（不属于任何项目）")
-  static let body = Opt("body", "正文；省略则读 stdin（原样，不裁剪）", value: "正文")
+  static let global = Opt("global", "全局（不属于任何项目）")
+  static let allProjects = Opt("all-projects", "不限项目（忽略当前目录的默认项目）")
+  static let body = Opt("body", "正文；省略则读 stdin。原样读写，不裁剪；stdin 为空报错，要空正文写 --body ''", value: "正文")
 }
 
 /// 一个命令：`path` 是 ["card", "add"] 这样的名词-动词（或单词命令）。帮助文本是它的唯一文档。
@@ -42,5 +44,6 @@ struct Reply {
 struct Call {
   let args: Arguments
   let store: CueStore
+  let directory: String
   let stdin: StdinReader
 }

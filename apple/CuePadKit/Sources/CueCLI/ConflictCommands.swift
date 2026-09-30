@@ -5,7 +5,8 @@ extension Command {
   static let conflicts: [Command] = [
     Command(
       path: ["conflicts", "list"], summary: "列出待处理的正文冲突（两台设备离线并发编辑同一张卡）",
-      notes: "输出：[Conflict]，Conflict.original 是原卡（较新版本），Conflict.copy 是冲突副本（较旧正文）；最近产生的在前。"
+      notes: "original 是原卡（较新版本），copy 是冲突副本（较旧正文）；最近产生的在前。\n"
+        + Schema.output("[Conflict]", Schema.conflict, Schema.card)
     ) { call in
       try call.args.expect()
       var lines: [String] = []
@@ -20,7 +21,8 @@ extension Command {
     Command(
       path: ["conflicts", "resolve"], summary: "选定保留的版本，删除副本", arguments: "<副本>",
       options: [Opt("keep", "original（保留原卡正文）或 copy（用副本正文替换原卡）", value: "版本")],
-      notes: "<副本> 是 conflicts list 里 copy 的 id。输出：{resolved: 副本 id, kept, card: 保留下来的 Card}。"
+      notes: "<副本> 是 conflicts list 里 copy 的 id。\n"
+        + Schema.output("{resolved, kept, card}", Schema.card) + "\n  resolved 是副本 id，card 是保留下来的卡。"
     ) { call in
       try call.args.expect("副本")
       guard let choice = call.args.value("keep") else { throw CLIError.usage("需要 --keep original|copy") }

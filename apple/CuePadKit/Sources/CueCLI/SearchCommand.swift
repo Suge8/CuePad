@@ -7,7 +7,7 @@ extension Command {
   static let search = Command(
     path: ["search"], summary: "搜索卡片（多个词都要命中，子串，不分大小写；命中正文与标签）", arguments: "[词...]",
     options: [
-      .project("限定项目，可重复"), .inbox,
+      .project("限定项目，可重复"), .inbox, .allProjects,
       Opt("images", "只要含图片的卡"), Opt("no-images", "只要不含图片的卡"),
       Opt("sent", "只要发送过的卡"), Opt("unsent", "只要从未发送过的卡"),
       Opt("to", "只要发送到该目标的卡：pi | app | clipboard，可加 :名称（如 app:Cursor）", value: "目标"),
@@ -16,10 +16,12 @@ extension Command {
       Opt("limit", "最多返回几张卡（默认 \(defaultLimit)）", value: "N"),
       Opt("offset", "跳过前几张卡", value: "N"),
     ],
-    notes: """
-      没有词也没有筛选时列出全部卡片（最近修改在前）。项目名命中的项目在 projects 里（仅第一页、有词、无筛选时）。
-      输出：Search，cards 是 [Card]，total 是命中总数（不受 limit 影响），projects 是 [Project]。
-      """
+    notes: Schema.defaultProject(otherwise: "搜所有项目") + """
+
+      没有词也没有筛选时列出全部卡片（最近修改在前）。项目名命中的项目在 projects 里（仅第一页、有词、无筛选时）；
+      total 是命中总数，不受 --limit 影响。
+
+      """ + Schema.output(Schema.search, Schema.card, Schema.project)
   ) { call in
     try await runSearch(call)
   }
@@ -54,9 +56,13 @@ extension Command {
     let args = call.args
     var query = SearchQuery(text: args.positionals.joined(separator: " "), inTrash: args.has("trash"))
 
+    if args.has("all-projects"), !args.all("project").isEmpty || args.has("inbox") {
+      throw CLIError.usage("--all-projects 不能与 --project / --inbox 同用")
+    }
     var owners = Set<UUID?>()
     for ref in args.all("project") { owners.insert(try await call.project(ref).id) }
     if args.has("inbox") { owners.insert(nil) }
+    if owners.isEmpty, case .project(let project) = try await call.scope() { owners.insert(project.id) }
     if !owners.isEmpty { query.projects = owners }
 
     if args.has("images") && args.has("no-images") { throw CLIError.usage("--images 与 --no-images 只能选一个") }

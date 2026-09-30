@@ -80,11 +80,16 @@ enum Scope {
 }
 
 extension Call {
-  func scope() async throws -> Scope {
+  /// `--project 项目`、`--<nullFlag>`（未归档 / 全局）、`--all-projects` 三选一；都没给时，
+  /// `implicit` 为真则用绑定了当前目录的项目，没有就不限。
+  func scope(nullFlag: String = "inbox", implicit: Bool = true) async throws -> Scope {
     let ref = args.value("project")
-    if ref != nil, args.has("inbox") { throw CLIError.usage("--project 与 --inbox 只能选一个") }
+    let chosen = [ref != nil, args.has(nullFlag), args.has("all-projects")].filter { $0 }.count
+    if chosen > 1 { throw CLIError.usage("--project、--\(nullFlag)、--all-projects 只能选一个") }
     if let ref { return .project(try await project(ref)) }
-    return args.has("inbox") ? .inbox : .any
+    if args.has(nullFlag) { return .inbox }
+    if args.has("all-projects") || !implicit { return .any }
+    return try await store.project(containing: directory).map(Scope.project) ?? .any
   }
 
   /// 正文：`--body` 优先，否则 stdin。stdin 为空视为误操作（没接管道的 agent 会得到空串）。
