@@ -18,23 +18,30 @@ final class Sandbox: @unchecked Sendable {
 
   deinit { try? FileManager.default.removeItem(at: directory) }
 
-  func run(_ arguments: String..., stdin: String? = nil) async -> CLIResult {
-    await CLI.run(arguments, environment: ["CUEPAD_LIBRARY_DIR": directory.path], stdin: { stdin })
+  /// 默认在沙盒目录里运行：它不绑定任何项目。`cwd` 模拟从某个目录调用。
+  func call(_ arguments: [String], stdin: String? = nil, cwd: String? = nil) async -> CLIResult {
+    await CLI.run(
+      arguments, environment: ["CUEPAD_LIBRARY_DIR": directory.path], directory: cwd ?? directory.path,
+      stdin: { stdin })
+  }
+
+  func run(_ arguments: String..., stdin: String? = nil, cwd: String? = nil) async -> CLIResult {
+    await call(arguments, stdin: stdin, cwd: cwd)
   }
 
   /// 期望成功并解析 stdout 的 JSON。
-  func json(_ arguments: String..., stdin: String? = nil) async throws -> Any {
-    let result = await CLI.run(
-      arguments + ["--json"], environment: ["CUEPAD_LIBRARY_DIR": directory.path], stdin: { stdin })
-    #expect(result.code == 0, "\(arguments) → \(result.err)")
-    return try JSONSerialization.jsonObject(with: Data(result.out.utf8))
+  func json(_ arguments: String..., stdin: String? = nil, cwd: String? = nil) async throws -> Any {
+    try await jsonValue(arguments, stdin: stdin, cwd: cwd)
   }
 
-  func object(_ arguments: String..., stdin: String? = nil) async throws -> [String: Any] {
-    let result = await CLI.run(
-      arguments + ["--json"], environment: ["CUEPAD_LIBRARY_DIR": directory.path], stdin: { stdin })
+  func object(_ arguments: String..., stdin: String? = nil, cwd: String? = nil) async throws -> [String: Any] {
+    try #require(try await jsonValue(arguments, stdin: stdin, cwd: cwd) as? [String: Any])
+  }
+
+  func jsonValue(_ arguments: [String], stdin: String? = nil, cwd: String? = nil) async throws -> Any {
+    let result = await call(arguments + ["--json"], stdin: stdin, cwd: cwd)
     #expect(result.code == 0, "\(arguments) → \(result.err)")
-    return try #require(JSONSerialization.jsonObject(with: Data(result.out.utf8)) as? [String: Any])
+    return try JSONSerialization.jsonObject(with: Data(result.out.utf8))
   }
 
   func project(_ name: String) async throws -> Project {

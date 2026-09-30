@@ -18,7 +18,7 @@ enum CLI {
   }
 
   static func run(
-    _ arguments: [String], environment: [String: String], stdin: @escaping StdinReader
+    _ arguments: [String], environment: [String: String], directory: String, stdin: @escaping StdinReader
   ) async -> CLIResult {
     var hint = "cuepad --help"
     var json = arguments.contains("--json")

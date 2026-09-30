@@ -65,10 +65,7 @@ import Testing
     let inbox = try await sb.store.createCard(in: nil, body: "i")
 
     func ids(_ args: String...) async throws -> Set<String> {
-      let result = await CLI.run(
-        ["card", "list", "--json"] + args, environment: ["CUEPAD_LIBRARY_DIR": sb.directory.path], stdin: { nil })
-      #expect(result.code == 0, "\(result.err)")
-      let items = try array(JSONSerialization.jsonObject(with: Data(result.out.utf8)))
+      let items = try array(try await sb.jsonValue(["card", "list"] + args))
       return Set(items.compactMap { $0.string("id") })
     }
     func id(_ card: Card) -> String { card.id.uuidString.lowercased() }
@@ -197,10 +194,7 @@ import Testing
     _ = try await sb.store.recordSend("x", to: SendTarget(kind: .clipboard, name: "剪贴板"), card: other.id)
 
     func search(_ args: [String]) async throws -> [String: Any] {
-      let result = await CLI.run(
-        ["search"] + args + ["--json"], environment: ["CUEPAD_LIBRARY_DIR": sb.directory.path], stdin: { nil })
-      #expect(result.code == 0, "\(result.err)")
-      return try #require(JSONSerialization.jsonObject(with: Data(result.out.utf8)) as? [String: Any])
+      try #require(try await sb.jsonValue(["search"] + args) as? [String: Any])
     }
     func cardIDs(_ result: [String: Any]) throws -> Set<String> {
       Set(try array(result["cards"] as Any).compactMap { $0.string("id") })
@@ -250,21 +244,39 @@ import Testing
 }
 
 @Suite struct HelpTests {
-  @Test func rootHelpListsEveryCommandAndDocumentsJSONShapes() async throws {
+  private static let commands = [
+    "project list", "card list", "card show", "card add", "card edit", "card move", "card trash",
+    "card restore", "task list", "task add", "task done", "task undo", "task edit", "task delete", "search",
+    "conflicts list", "conflicts resolve",
+  ]
+
+  @Test func rootHelpFitsOneScreenAndTeachesTheCommonTasks() async throws {
     let sb = try Sandbox()
     let help = await sb.run("--help")
     #expect(help.code == 0 && help.err.isEmpty)
-    for command in [
-      "project list", "card list", "card show", "card add", "card edit", "card move", "card trash",
-      "card restore", "task list", "task add", "task done", "task undo", "task edit", "task delete", "search",
-      "conflicts list", "conflicts resolve",
-    ] {
-      #expect(help.out.contains(command), "缺 \(command)")
+    #expect(help.out.split(separator: "\n", omittingEmptySubsequences: false).count <= 24, "一屏放不下")
+    for example in ["cuepad search ", "cuepad card add", "cuepad task add", "cuepad task done", "cuepad card list", "cuepad task list"] {
+      #expect(help.out.contains(example), "缺示例 \(example)")
     }
+    #expect(help.out.contains("--json") && help.out.contains("退出码"))
     #expect(help.out.contains("CUEPAD_LIBRARY_DIR"))
-    let sub = await sb.run("card", "add", "--help")
-    #expect(sub.code == 0 && sub.out.contains("--body") && sub.out.contains("--project"))
-    #expect((await sb.run("card", "--help")).out.contains("card restore"))
+    #expect(!help.out.contains("goalCardId"), "字段说明属于各命令的 --help")
+  }
+
+  @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
+    let sb = try Sandbox()
+    let root = await sb.run("--help").out
+    for command in Self.commands {
+      let words = command.split(separator: " ").map(String.init)
+      #expect(root.contains("cuepad \(words[0])"), "根帮助没有提到 \(words[0])")
+      if words.count == 2 {
+        #expect((await sb.run(words[0], "--help")).out.contains(command), "\(words[0]) --help 没列出 \(command)")
+      }
+      let own = await sb.call(words + ["--help"])
+      #expect(own.code == 0 && own.out.contains("cuepad \(command)"), "\(command) --help")
+    }
+    let add = await sb.run("card", "add", "--help").out
+    #expect(add.contains("--body") && add.contains("--project"))
   }
 
   @Test func documentedFieldsMatchActualJSON() async throws {
@@ -272,23 +284,28 @@ import Testing
     let project = try await sb.project("Alpha")
     let card = try await sb.store.createCard(in: project.id, body: "x")
     let task = try await sb.store.createTask("t", in: project.id)
-    let help = await sb.run("--help").out
+    let copy = try await sb.store.createCard(in: nil, body: "旧")
+    try sb.markConflict(copy: copy.id, of: card.id)
 
-    func documented(_ type: String) throws -> Set<String> {
-      let line = try #require(help.split(separator: "\n").first { $0.trimmingCharacters(in: .whitespaces).hasPrefix("\(type) {") })
-      let fields = try #require(line.split(separator: "{").last?.split(separator: "}").first)
+    func documented(_ type: String, in command: [String]) async throws -> Set<String> {
+      let help = await sb.call(command + ["--help"]).out
+      let start = try #require(help.range(of: "\(type) {"), "\(command) --help 没有 \(type) 的字段说明")
+      let fields = try #require(help[start.upperBound...].split(separator: "}", maxSplits: 1).first)
       return Set(fields.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
     }
     let projects = try array(try await sb.json("project", "list"))
-    #expect(Set(projects[0].keys) == (try documented("Project")))
-    #expect(Set(try await sb.object("card", "show", card.id.uuidString).keys) == (try documented("Card")))
-    #expect(Set(try await sb.object("task", "done", task.id.uuidString).keys) == (try documented("Task")))
+    #expect(Set(projects[0].keys) == (try await documented("Project", in: ["project", "list"])))
+    #expect(Set(try await sb.object("card", "show", card.id.uuidString).keys) == (try await documented("Card", in: ["card", "show"])))
+    #expect(Set(try await sb.object("task", "done", task.id.uuidString).keys) == (try await documented("Task", in: ["task", "done"])))
+    #expect(Set(try await sb.object("search", "x").keys) == (try await documented("Search", in: ["search"])))
+    let conflicts = try array(try await sb.json("conflicts", "list"))
+    #expect(Set(conflicts[0].keys) == (try await documented("Conflict", in: ["conflicts", "list"])))
   }
 
   @Test func usageErrorsExitTwoWithPointerToHelp() async throws {
     let sb = try Sandbox()
     for arguments in [["nope"], ["card", "nope"], ["card", "show"], ["card", "list", "--bogus"], ["card", "add", "--body"]] {
-      let result = await CLI.run(arguments, environment: ["CUEPAD_LIBRARY_DIR": sb.directory.path], stdin: { nil })
+      let result = await sb.call(arguments)
       #expect(result.code == 2 && result.out.isEmpty && result.err.contains("--help"), "\(arguments) → \(result)")
     }
   }
