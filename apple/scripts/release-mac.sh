@@ -10,24 +10,29 @@ DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}"
 OUT="$DERIVED/release/mac"
 rm -rf "$OUT"; mkdir -p "$OUT"
 
-python3 "$APPLE_DIR/scripts/provision.py" unlock # 本机若有 Developer ID 证书，它在专用钥匙串里
+# Developer ID 证书在专用钥匙串里；描述文件（含 iCloud、推送）由 API 创建并安装。
+# 手动签名：Xcode 的自动签名用 API 密钥时管不了 iCloud 容器，工程的 Release 配置已指定证书与描述文件名。
+python3 "$APPLE_DIR/scripts/provision.py" unlock
+python3 "$APPLE_DIR/scripts/provision.py" profiles
 
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
-  -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED" "${asc_auth[@]}"
+  -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED"
 
-# 自动签名：优先本机专用钥匙串里的 Developer ID 证书，没有则用账号里云端托管的（需要密钥有该权限）
 cat > "$OUT/export.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>method</key><string>developer-id</string>
 <key>teamID</key><string>${CUEPAD_TEAM_ID}</string>
-<key>signingStyle</key><string>automatic</string>
+<key>signingStyle</key><string>manual</string>
 <key>signingCertificate</key><string>Developer ID Application</string>
+<key>provisioningProfiles</key><dict>
+<key>com.sugeh.cuepad</key><string>CuePad macOS DeveloperID</string>
+</dict>
 </dict></plist>
 PLIST
 xcodebuild -exportArchive -archivePath "$OUT/CuePad.xcarchive" -exportOptionsPlist "$OUT/export.plist" \
-  -exportPath "$OUT/export" "${asc_auth[@]}"
+  -exportPath "$OUT/export"
 
 app="$OUT/export/CuePad.app"
 codesign --verify --deep --strict --verbose=2 "$app"
