@@ -7,7 +7,7 @@ import Testing
 /// 只用 CKRecord 能直接存的列类型、同步字段与本机字段分表。
 @Suite struct SyncReadinessTests {
   static let synced = ["projects", "cards", "tags", "cardTags", "tasks", "sendRecords", "attachments"]
-  static let local = ["piSessions", "projectDirectories"]
+  static let local = ["piSessions", "projectDirectories", "syncRecords", "syncState"]
   let fixture = try! Fixture()
   var raw: RawDB { RawDB(fixture.url) }
 
