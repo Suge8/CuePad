@@ -18,10 +18,7 @@ public enum TargetSelector: Sendable, Equatable {
     case bundleID(String)
 
     public static let terminal = bundleID("com.apple.Terminal")
-    public static let iTerm = bundleID("com.googlecode.iterm2")
     public static let ghostty = bundleID("com.mitchellh.ghostty")
-    public static let zed = bundleID("dev.zed.Zed")
-    public static let vscode = bundleID("com.microsoft.VSCode")
     public static let cursor = bundleID("com.todesktop.230313mzl4w4u92")
 }
 

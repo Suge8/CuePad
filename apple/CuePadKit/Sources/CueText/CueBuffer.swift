@@ -125,19 +125,6 @@ extension CueBuffer {
 
     // MARK: 块
 
-    /// `location` 所在块的正文范围（不含两端分隔线行）；分隔线行归属上一块。
-    public func blockRange(at location: Int) -> NSRange {
-        let lines = allLines()
-        let current = lineIndex(of: location, in: lines)
-        var first = 0
-        var last = lines.count - 1
-        for marker in markerIndices(lines) {
-            if marker < current { first = marker + 1 } else { last = marker - 1; break }
-        }
-        if first > last { return NSRange(location: lines[min(first, lines.count - 1)].start, length: 0) }
-        return NSRange(location: lines[first].start, length: lines[last].end - lines[first].start)
-    }
-
     /// 下一块首行位置；无处可跳返回 nil。分隔线行归属上一块：光标在分隔线上时，下一块就是其后第一行。
     public func nextBlockStart(from head: Int) -> Int? {
         let lines = allLines()

@@ -10,18 +10,9 @@ import Testing
 
   // MARK: 排序
 
-  @Test func projectsAppendAtEndAndMoveAfterNeighbor() async throws {
-    _ = try await store.createProject(name: "A", color: "#111")
-    let b = try await store.createProject(name: "B", color: "#222")
-    let c = try await store.createProject(name: "C", color: "#333")
-    func names() async throws -> [String] { try await store.projects().map(\.name) }
-    #expect(try await names() == ["A", "B", "C"])
-
-    try await store.moveProject(c.id, after: nil)
-    #expect(try await names() == ["C", "A", "B"])
-
-    try await store.moveProject(c.id, after: b.id)
-    #expect(try await names() == ["A", "B", "C"])
+  @Test func projectsAppendAtEnd() async throws {
+    for name in ["A", "B", "C"] { _ = try await store.createProject(name: name, color: "#111") }
+    #expect(try await store.projects().map(\.name) == ["A", "B", "C"])
   }
 
   @Test func newCardGoesOnTopAndMoveOnlyTouchesTheMovedCard() async throws {
@@ -151,17 +142,14 @@ import Testing
   // MARK: 任务
 
   @Test func tasksStackNewestOnTopAndCompletedLeaveTheActiveList() async throws {
-    let a = try await store.createTask("a")
+    _ = try await store.createTask("a")
     let b = try await store.createTask("b")
-    let c = try await store.createTask("c")
+    _ = try await store.createTask("c")
     func active() async throws -> [String] { try await store.tasks().map(\.content) }
     #expect(try await active() == ["c", "b", "a"])
 
-    try await store.moveTask(c.id, after: a.id)
-    #expect(try await active() == ["b", "a", "c"])
-
     try await store.updateTask(b.id) { $0.completedAt = Date() }
-    #expect(try await active() == ["a", "c"])
+    #expect(try await active() == ["c", "a"])
     #expect(try await store.completedTasks().map(\.content) == ["b"])
   }
 

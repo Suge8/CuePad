@@ -29,11 +29,6 @@ extension CueStore {
     }
   }
 
-  /// 把项目移到 `previous` 之后（nil = 最前）。
-  public func moveProject(_ id: UUID, after previous: UUID?) throws {
-    try write { try place(.projects, scope: "deletedAt IS NULL", id: id, after: previous) }
-  }
-
   /// 设置项目目标卡（nil = 取消）。目标必须是该项目里未删除的卡。
   public func setGoal(_ card: UUID?, for project: UUID) throws {
     try write {
@@ -302,7 +297,7 @@ extension CueStore {
     }
   }
 
-  /// 改内容、勾选完成（`completedAt`）、所属项目、关联 Pi 会话；顺序用 `moveTask`。
+  /// 改内容、勾选完成（`completedAt`）、所属项目、关联 Pi 会话。
   /// 改挂的项目必须存在且未在回收站，否则抛 `invalidProject`。
   public func updateTask(_ id: UUID, _ edit: @Sendable (inout CueTask) -> Void) throws {
     try write {
@@ -316,11 +311,6 @@ extension CueStore {
       task.modifiedAt = Date.stamp
       try update(task)
     }
-  }
-
-  /// 把未完成任务移到 `previous` 之后（nil = 最前）。
-  public func moveTask(_ id: UUID, after previous: UUID?) throws {
-    try write { try place(.tasks, scope: "completedAt IS NULL", id: id, after: previous) }
   }
 
   public func deleteTask(_ id: UUID) throws {

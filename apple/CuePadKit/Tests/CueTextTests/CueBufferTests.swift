@@ -142,16 +142,6 @@ struct BlockNavigationTests {
     private let doc = "第一块\n\(S)\n第二块首\n第二块尾\n\(S)\n第三块"
     // 偏移：第一块 0…3，S 4，第二块首 6…10，第二块尾 11…15，S 16，第三块 18…21
 
-    @Test("块范围：首块、多行中间块、末块；分隔线行归上一块")
-    func ranges() {
-        let b = buffer(doc)
-        #expect(b.blockRange(at: 0) == NSRange(location: 0, length: 3))
-        #expect(b.blockRange(at: 8) == NSRange(location: 6, length: 9))
-        #expect(b.blockRange(at: 19) == NSRange(location: 18, length: 3))
-        #expect(b.blockRange(at: 4) == NSRange(location: 0, length: 3))
-        #expect(buffer("a\nb").blockRange(at: 2) == NSRange(location: 0, length: 3))
-    }
-
     @Test("块下标：分隔线行归上一块")
     func index() {
         let b = buffer(doc)
