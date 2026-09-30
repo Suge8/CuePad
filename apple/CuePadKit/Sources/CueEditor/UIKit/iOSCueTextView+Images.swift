@@ -77,7 +77,7 @@ extension CueTextView {
         }
     }
 
-    // MARK: 键盘工具栏的图片入口
+    // MARK: 外部选择器的图片入口
 
     /// 外部选择器拿到图片后调用：在光标处插入。
     public func insertImage(data: Data) {

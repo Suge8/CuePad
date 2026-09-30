@@ -17,10 +17,6 @@ public final class CueTextView: UITextView, CueEditorHost {
     public var onBlockAction: ((CueBlockAction) -> Void)?
     /// 图片入库失败（磁盘满、文件不可读）。失败的图片不会插入。
     public var onError: ((any Error) -> Void)?
-    /// 键盘工具栏"插入图片"：外部弹出选择器，拿到图片后调用 `insertImage`。
-    public var onInsertImageRequest: (() -> Void)?
-    /// 键盘工具栏"变量取值"：外部弹出取值面板。
-    public var onVariablesRequest: (() -> Void)?
 
     /// 复制与剪切写入的剪贴板。
     var pasteboard: UIPasteboard = .general
@@ -59,7 +55,6 @@ public final class CueTextView: UITextView, CueEditorHost {
         autocorrectionType = .no
         pasteConfiguration = UIPasteConfiguration(
             acceptableTypeIdentifiers: [UTType.image, .plainText, .text].map(\.identifier))
-        inputAccessoryView = CueInputToolbar(textView: self)
         alwaysBounceVertical = true
         keyboardDismissMode = .interactive
     }

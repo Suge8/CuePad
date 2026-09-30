@@ -19,7 +19,7 @@ apple/scripts/xc.sh shot ipad     # 同上，iPad 模拟器
 
 ## 命令行
 
-`cuepad` 是给人和 agent 读写本机资料库的命令行（源码 `CuePadKit/Sources/CueCLI`，经 CueStore 读写）。安装：`cd apple/CuePadKit && swift build -c release --product cuepad && cp .build/release/cuepad /usr/local/bin/`；用法与 JSON 结构见 `cuepad --help`。
+`cuepad` 是给人和 agent 读写本机资料库的命令行（源码 `CuePadKit/Sources/CueCLI`，经 CueStore 读写）。随 App 分发，安装见下文「命令行工具」；用法与 JSON 结构见 `cuepad --help`。
 
 ## 约定
 
@@ -56,6 +56,10 @@ apple/scripts/xc.sh shot ipad     # 同上，iPad 模拟器
 Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，所以发布与真机构建都是手动签名：证书与描述文件由 `provision.py` 经 API 创建，工程里各 target 指定名称（只对 `iphoneos` 与 macOS 的 Release 生效，模拟器与日常构建不受影响）。权限：主 App 有 iCloud（CloudKit，`iCloud.com.sugeh.cuepad`）、推送（`$(APS_ENVIRONMENT)`：Debug development，Release production）与 App Group（iOS）；扩展只有 App Group；macOS 另有 Apple Events 自动化（终端跳转）。
 
 只能在网页上做的一次性前置（已做）：App Group `group.com.sugeh.cuepad` 与 iCloud 容器 `iCloud.com.sugeh.cuepad` 的创建及挂到 App ID；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成，`provision.py devid-import <.cer>` 导入）；App Store Connect 里的 App 记录。
+
+## 命令行工具
+
+`cuepad`（读写本机资料库，供 agent 在 bash 里直接调用）随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由工程里的 `CuePadCLI` 目标统一构建、随 App 一起签名与公证。设置窗口底部的开关会在 `~/.local/bin/cuepad` 建指向它的符号链接（首次启动提示一次；位置被别的文件占用时不覆盖，App 被移动后能检测并一键修复；不做需要提权的 /usr/local/bin）。它与 App 用同一套资料库位置规则（`CUEPAD_LIBRARY_DIR` 同样生效）。
 
 ## 同步
 

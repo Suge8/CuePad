@@ -5,7 +5,7 @@ import CueText
 extension CueTextView {
     private static let returnKeyCode: UInt16 = 36
 
-    /// 在光标处切块（Shift+Enter；iOS 宿主的工具栏按钮同样调用它）。
+    /// 在光标处切块（Shift+Enter；外部工具栏的按钮同样调用它）。
     public func insertSplit() {
         apply(core.buffer().splitEdit(selection: selectedRange()))
     }

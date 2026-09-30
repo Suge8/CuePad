@@ -16,6 +16,7 @@ final class AppSettings {
         static let autoSubmit = "autoSubmit"
         static let currentProject = "currentProject"
         static let piExtensionDeclinedVersion = "piExtensionDeclinedVersion"
+        static let commandLineToolPrompted = "commandLineToolPrompted"
     }
 
     private static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
@@ -45,6 +46,12 @@ final class AppSettings {
         #else
         [:]
         #endif
+    }
+
+    /// 是否已经提示过安装命令行工具（只在首次启动提示一次）。
+    var commandLineToolPrompted: Bool {
+        get { defaults.bool(forKey: Key.commandLineToolPrompted) }
+        set { defaults.set(newValue, forKey: Key.commandLineToolPrompted) }
     }
 
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {

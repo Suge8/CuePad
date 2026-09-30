@@ -142,7 +142,10 @@ final class Rig {
             isAccessibilityTrusted: { true },
             historyStorage: historyStorage,
             hostID: Rig.hostID,
-            wakeNotifications: wakeCenter)
+            wakeNotifications: wakeCenter,
+            commandLineTool: CommandLineToolInstaller(
+                helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
+                linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }))
         let sync = self.sync
         let services = AppServices(location: location(), defaults: defaults, sync: { _ in sync }, mac: mac)
         services.windowShell = WindowShell(window: window)

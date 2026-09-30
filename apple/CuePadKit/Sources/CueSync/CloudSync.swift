@@ -12,16 +12,31 @@ public actor CloudSync {
   private let zoneID: CKRecordZone.ID
   private let queue = EngineQueue()
   private let coordinator: SyncCoordinator
+  private let subscribesToPiAlerts: Bool
   /// 每条记录的上传完成、拉取开始与应用时刻（延迟测量用）。
   public nonisolated let timingLog = SyncTimingLog()
   private var engine: CKSyncEngine?
   private var accountWatcher: Task<Void, Never>?
 
-  public init(store: CueStore, containerIdentifier: String = "iCloud.com.sugeh.cuepad", zoneName: String = "CuePad") {
+  /// `subscribesToPiAlerts`：是否在私有数据库建立"Pi 等你确认 / 完成"的服务端通知订阅。默认只有 iOS 建立
+  /// （Mac 是记录的写方，不需要）。App 需要请求通知权限并注册远程通知，见 `PiAlertRoute`。
+  public init(
+    store: CueStore, containerIdentifier: String = "iCloud.com.sugeh.cuepad", zoneName: String = "CuePad",
+    subscribesToPiAlerts: Bool = CloudSync.subscribesToPiAlertsByDefault
+  ) {
+    self.subscribesToPiAlerts = subscribesToPiAlerts
     self.store = store
     self.containerIdentifier = containerIdentifier
     zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
     coordinator = SyncCoordinator(store: store, queue: queue, zoneID: zoneID, log: timingLog)
+  }
+
+  public static var subscribesToPiAlertsByDefault: Bool {
+    #if os(iOS)
+    true
+    #else
+    false
+    #endif
   }
 
   public var status: SyncStatus { get async { await coordinator.status } }
@@ -42,9 +57,12 @@ public actor CloudSync {
     await queue.attach(engine)
 
     try await coordinator.start()
-    accountWatcher = Task { [coordinator] in
+    await ensurePiAlertSubscriptions(container)
+    accountWatcher = Task { [coordinator, weak self] in
       for await _ in NotificationCenter.default.notifications(named: .CKAccountChanged) {
-        if let account = try? await container.accountStatus() { await coordinator.handle(.accountStatus(account)) }
+        guard let account = try? await container.accountStatus() else { continue }
+        await coordinator.handle(.accountStatus(account))
+        await self?.ensurePiAlertSubscriptions(container)  // 账号切换后新账号的数据库里还没有订阅
       }
     }
   }
@@ -62,6 +80,15 @@ public actor CloudSync {
     guard let engine else { return }
     try await engine.fetchChanges()
     try await engine.sendChanges()
+  }
+
+  private func ensurePiAlertSubscriptions(_ container: CKContainer) async {
+    guard subscribesToPiAlerts else { return }
+    do {
+      try await PiAlertSubscriptions(zoneID: zoneID).ensure(in: DatabaseSubscriptions(database: container.privateCloudDatabase))
+    } catch {
+      await coordinator.note("Pi 通知订阅没能建立，下次启动或账号变化时重试：\(error.localizedDescription)")
+    }
   }
 
   /// 处理 `.needsDecision`：随后用全新的引擎状态重新开始同步。

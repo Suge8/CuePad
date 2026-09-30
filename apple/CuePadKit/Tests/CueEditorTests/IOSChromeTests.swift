@@ -5,34 +5,8 @@ import UIKit
 @testable import CueEditor
 
 @MainActor
-@Suite("iOS 键盘工具栏与布局")
+@Suite("iOS 布局")
 struct IOSChromeTests {
-    private func item(_ label: String, in h: EditorHarness) throws -> UIBarButtonItem {
-        let toolbar = try #require(h.textView.inputAccessoryView as? UIToolbar)
-        return try #require(toolbar.items?.first { $0.accessibilityLabel == label })
-    }
-
-    private func tap(_ item: UIBarButtonItem) {
-        item.primaryAction?.performWithSender(item, target: nil)
-    }
-
-    @Test("键盘上方工具栏：分块直接切块，插入图片与变量取值经回调交给外部")
-    func toolbar() throws {
-        let h = EditorHarness()
-        h.load("甲乙")
-        h.setCaret(1)
-        var requests: [String] = []
-        h.textView.onInsertImageRequest = { requests.append("image") }
-        h.textView.onVariablesRequest = { requests.append("variables") }
-
-        tap(try item("插入图片", in: h))
-        tap(try item("变量取值", in: h))
-        #expect(requests == ["image", "variables"])
-
-        tap(try item("分块", in: h))
-        #expect(h.stored == "甲\n\(CueFormat.splitMarker)\n乙")
-    }
-
     @Test("长文档的总高度在加载完成后即稳定，滚动不再让滚动条跳变")
     func heightStable() async throws {
         let h = EditorHarness(height: 640)

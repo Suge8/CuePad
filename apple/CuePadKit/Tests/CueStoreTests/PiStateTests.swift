@@ -132,4 +132,73 @@ import Testing
     #expect(try await states()["s1"]?.state == .unknown("compacting"))
     #expect(try await states()["s1"]?.state.rawValue == "compacting")
   }
+
+  // MARK: 手机通知标志：只在"进入等你确认"和"从工作中进入完成"的那一次写入置位
+
+  private func alert(_ sessionID: String = "s1") async throws -> PiAlert? {
+    try await states()[sessionID]?.notify
+  }
+
+  @Test func enteringWaitingForUserFlagsTheWriteThatEntersItAndSurvivesSameStateUpdatesUntilUploaded() async throws {
+    let recorder = recorder()
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    #expect(try await alert() == nil)
+
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "确认写入？")
+    #expect(try await alert() == .waitingForUser)
+
+    // 仍在等、只是问题换了：标志还没上传就不能被抹掉（否则用户仍被等着，锁屏却收不到通知）
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "换了个问题")
+    #expect(try await alert() == .waitingForUser)
+    #expect(try await states()["s1"]?.detail == "换了个问题")
+  }
+
+  @Test func settledIsFlaggedOnlyWhenComingFromWork() async throws {
+    let recorder = recorder()
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")  // 合并挂起
+    try await recorder.update(sessionID: "s1", state: .settled)  // 从工作中完成（含被合并掉的中间状态）
+    #expect(try await alert() == .settled)
+
+    try await recorder.update(sessionID: "s1", state: .thinking)  // 下一轮开始：标志清掉
+    #expect(try await alert() == nil)
+  }
+
+  @Test func settledAfterWaitingOrErrorIsNotFlagged() async throws {
+    let recorder = recorder()
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await recorder.update(sessionID: "s1", state: .waitingForUser)
+    try await recorder.update(sessionID: "s1", state: .settled)  // 不是从工作中来的
+    #expect(try await alert() == nil)
+
+    try await recorder.update(sessionID: "s2", state: .thinking)
+    try await recorder.update(sessionID: "s2", state: .error, detail: "boom")
+    try await recorder.update(sessionID: "s2", state: .settled)
+    #expect(try await alert("s2") == nil)
+  }
+
+  @Test func errorsAndWorkUpdatesNeverFlag() async throws {
+    let recorder = recorder()
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    clock.advance(.seconds(6))
+    try await recorder.update(sessionID: "s1", state: .outputting)
+    #expect(try await alert() == nil)
+    try await recorder.update(sessionID: "s1", state: .error, detail: "boom")
+    #expect(try await alert() == nil)
+  }
+
+  @Test func aSessionSeenForTheFirstTimeNeverFlagsSoRelaunchesDoNotReplayAlerts() async throws {
+    let recorder = recorder()
+    try await recorder.update(sessionID: "s1", state: .waitingForUser)
+    try await recorder.update(sessionID: "s2", state: .settled)
+    #expect(try await alert("s1") == nil)
+    #expect(try await alert("s2") == nil)
+  }
+
+  @Test func unknownAlertKindsFromNewerVersionsAreKept() async throws {
+    let recorder = recorder()
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try RawDB(fixture.url).exec("UPDATE piSessionStates SET notify = 'somethingNew'")
+    #expect(try await alert() == .unknown("somethingNew"))
+  }
 }

@@ -1,3 +1,4 @@
+#if os(macOS)
 import CueStore
 import Foundation
 import Testing
@@ -49,3 +50,4 @@ import Testing
     #expect(seen == ["来自 CLI 进程"])
   }
 }
+#endif

@@ -7,20 +7,29 @@ extension CueStore {
   }
 
   func writePiState(
-    sessionID: String, hostID: String, title: String, projectID: UUID?, state: PiWorkState, detail: String?, stateSince: Date
+    sessionID: String, hostID: String, title: String, projectID: UUID?, state: PiWorkState, detail: String?,
+    notify: PiAlert?, stateSince: Date
   ) throws {
     try write {
       let now = Date.stamp
       let id = DeterministicID.uuid("pi-session/\(sessionID)")
       let record = PiSessionState(
         id: id, sessionID: sessionID, hostID: hostID, title: title, projectID: projectID, state: state, detail: detail,
-        stateSince: stateSince, createdAt: now, modifiedAt: now)
-      let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" }.map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
+        notify: notify, stateSince: stateSince, createdAt: now, modifiedAt: now)
+      let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
+        .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
       try db.run(
         """
         INSERT INTO piSessionStates (\(PiSessionState.columns.joined(separator: ", "))) VALUES (\(placeholders))
-        ON CONFLICT(id) DO UPDATE SET \(assignments)
+        ON CONFLICT(id) DO UPDATE SET \(assignments),
+          notify = CASE
+            WHEN excluded.notify IS NOT NULL THEN excluded.notify
+            WHEN piSessionStates.notify IS NOT NULL AND piSessionStates.state = excluded.state AND (
+              NOT EXISTS (SELECT 1 FROM syncRecords s WHERE s.recordName = piSessionStates.id)
+              OR piSessionStates.modifiedAt > (SELECT s.pushedModifiedAt FROM syncRecords s WHERE s.recordName = piSessionStates.id))
+            THEN piSessionStates.notify
+          END
         """, record.bindings)
     }
   }
@@ -89,7 +98,7 @@ public actor PiStateRecorder {
     let now = timing.now()
     if startsOrEndsWork || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true {
       cancelPending(&session)
-      try await write(sessionID, &session, content, at: now)
+      try await write(sessionID, &session, content, notify: Self.alert(entering: state, from: previous), at: now)
     } else {
       session.pending = (state, detail)
       if session.timer == nil, let writtenAt = session.writtenAt {
@@ -125,11 +134,25 @@ public actor PiStateRecorder {
     if sessions[sessionID] != nil { sessions[sessionID] = session }
   }
 
-  private func write(_ sessionID: String, _ session: inout Session, _ content: Content, at now: Date) async throws {
+  /// 手机通知只发两种转换：进入等你确认；从工作中进入完成。首次看到的会话（没有上一个状态）不通知，
+  /// 这样重启后重新登记已有会话不会把旧事件再推一遍。
+  /// 标志置位后，同一状态下的后续写入（如仍在等、只换了问题文本）在标志上传之前沿用它（见 `writePiState`），
+  /// 上传之后的同状态写入不再带标志，订阅不会为同一次等待重复通知。状态一旦前进（如用户答完回到思考中），
+  /// 未上传的标志随之作废——已恢复工作的会话不该再提示"等你确认"。会话结束（`end`）删除记录，未上传的标志也随之丢失。
+  private static func alert(entering state: PiWorkState, from previous: PiWorkState?) -> PiAlert? {
+    guard let previous else { return nil }
+    if state == .waitingForUser, previous != .waitingForUser { return .waitingForUser }
+    if state == .settled, previous.isWorking { return .settled }
+    return nil
+  }
+
+  private func write(
+    _ sessionID: String, _ session: inout Session, _ content: Content, notify: PiAlert? = nil, at now: Date
+  ) async throws {
     let since = session.written?.state == content.state ? session.stateSince ?? now : now
     try await store.writePiState(
       sessionID: sessionID, hostID: hostID, title: content.title, projectID: content.projectID, state: content.state,
-      detail: content.detail, stateSince: since)
+      detail: content.detail, notify: notify, stateSince: since)
     session.written = content
     session.writtenAt = now
     session.stateSince = since

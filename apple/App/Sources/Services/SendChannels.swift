@@ -98,6 +98,7 @@ struct MacDependencies {
     var hostID: String
     /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
+    var commandLineTool: CommandLineToolInstaller
 
     @MainActor
     static func live(bundleID: String) -> MacDependencies {
@@ -113,7 +114,8 @@ struct MacDependencies {
             isAccessibilityTrusted: Accessibility.isTrusted,
             historyStorage: nil,
             hostID: HostIdentity.current(),
-            wakeNotifications: NSWorkspace.shared.notificationCenter)
+            wakeNotifications: NSWorkspace.shared.notificationCenter,
+            commandLineTool: CommandLineToolInstaller())
     }
 }
 #endif

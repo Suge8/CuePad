@@ -3,7 +3,7 @@ import CueText
 import UIKit
 
 extension CueTextView {
-    /// 在光标处切块（硬件键盘 Shift+Enter 与键盘工具栏的"分块"共用）。
+    /// 在光标处切块（硬件键盘 Shift+Enter 与外部工具栏的"分块"共用）。
     public func insertSplit() {
         apply(core.buffer().splitEdit(selection: selectedRange))
     }

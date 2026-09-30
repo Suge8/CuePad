@@ -23,6 +23,9 @@
 		C1000000000000000000F00A /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = C1000000000000000000F002 /* CueStore */; };
 		D1000000000000000000A00B /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D1000000000000000000A001 /* CueSync */; };
 		D1000000000000000000A00B /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D1000000000000000000A002 /* CueSync */; };
+		E1000000000000000000000A /* cuepad in Embed CLI */ = {isa = PBXBuildFile; fileRef = E10000000000000000000001 /* cuepad */; platformFilters = (macos, ); settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E1000000000000000000000F /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000D /* CueStore */; };
+		E10000000000000000000010 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000E /* CueText */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,6 +50,13 @@
 			remoteGlobalIDString = C1000000000000000000000B;
 			remoteInfo = CuePadWidget;
 		};
+		E1000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E10000000000000000000003;
+			remoteInfo = CuePadCLI;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -62,9 +72,21 @@
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E10000000000000000000009 /* Embed CLI */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				E1000000000000000000000A /* cuepad in Embed CLI */,
+			);
+			name = "Embed CLI";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E10000000000000000000001 /* cuepad */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = cuepad; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000004 /* CuePadShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CuePadShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000005 /* CuePadWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CuePadWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000006 /* CuePad.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CuePad.entitlements; sourceTree = "<group>"; };
@@ -86,6 +108,7 @@
 		C10000000000000000000001 /* AppGroup */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/AppGroup; sourceTree = "<group>"; };
 		C10000000000000000000002 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/ShareExtension; sourceTree = "<group>"; };
 		C10000000000000000000003 /* Widget */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Widget; sourceTree = "<group>"; };
+		E10000000000000000000002 /* CueCLI */ = {isa = PBXFileSystemSynchronizedRootGroup; path = CuePadKit/Sources/CueCLI; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -131,6 +154,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E10000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E1000000000000000000000F /* CueStore in Frameworks */,
+				E10000000000000000000010 /* CueText in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -139,6 +171,7 @@
 			children = (
 				A10000000000000000000020 /* Sources */,
 				A10000000000000000000021 /* Tests */,
+				E10000000000000000000002 /* CueCLI */,
 				C10000000000000000000001 /* AppGroup */,
 				C10000000000000000000002 /* ShareExtension */,
 				C10000000000000000000003 /* Widget */,
@@ -168,6 +201,7 @@
 			children = (
 				A10000000000000000000002 /* CuePad.app */,
 				A10000000000000000000003 /* CuePadTests.xctest */,
+				E10000000000000000000001 /* cuepad */,
 				C10000000000000000000004 /* CuePadShare.appex */,
 				C10000000000000000000005 /* CuePadWidget.appex */,
 			);
@@ -185,12 +219,14 @@
 				A10000000000000000000040 /* Frameworks */,
 				A10000000000000000000051 /* Resources */,
 				C10000000000000000000012 /* Embed Foundation Extensions */,
+				E10000000000000000000009 /* Embed CLI */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				C10000000000000000000017 /* PBXTargetDependency */,
 				C10000000000000000000018 /* PBXTargetDependency */,
+				E1000000000000000000000C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000020 /* Sources */,
@@ -286,6 +322,29 @@
 			productReference = C10000000000000000000005 /* CuePadWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		E10000000000000000000003 /* CuePadCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E10000000000000000000008 /* Build configuration list for PBXNativeTarget "CuePadCLI" */;
+			buildPhases = (
+				E10000000000000000000004 /* Sources */,
+				E10000000000000000000005 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E10000000000000000000002 /* CueCLI */,
+			);
+			name = CuePadCLI;
+			packageProductDependencies = (
+				E1000000000000000000000D /* CueStore */,
+				E1000000000000000000000E /* CueText */,
+			);
+			productName = CuePadCLI;
+			productReference = E10000000000000000000001 /* cuepad */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -316,6 +375,7 @@
 				A10000000000000000000031 /* CuePadTests */,
 				C1000000000000000000000A /* CuePadShare */,
 				C1000000000000000000000B /* CuePadWidget */,
+				E10000000000000000000003 /* CuePadCLI */,
 			);
 		};
 /* End PBXProject section */
@@ -380,6 +440,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E10000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -399,6 +466,12 @@
 			platformFilters = (ios, );
 			target = C1000000000000000000000B /* CuePadWidget */;
 			targetProxy = C10000000000000000000016 /* PBXContainerItemProxy */;
+		};
+		E1000000000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilters = (macos, );
+			target = E10000000000000000000003 /* CuePadCLI */;
+			targetProxy = E1000000000000000000000B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -665,6 +738,38 @@
 			};
 			name = Release;
 		};
+		E10000000000000000000006 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "";
+				CURRENT_PROJECT_VERSION = 1;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_MODULE_NAME = CuePadCLI;
+				PRODUCT_NAME = cuepad;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Debug;
+		};
+		E10000000000000000000007 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				"CODE_SIGN_STYLE[sdk=macosx*]" = Manual;
+				CODE_SIGN_ENTITLEMENTS = "";
+				CURRENT_PROJECT_VERSION = 1;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_MODULE_NAME = CuePadCLI;
+				PRODUCT_NAME = cuepad;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -709,6 +814,15 @@
 			buildConfigurations = (
 				C1000000000000000000001D /* Debug */,
 				C1000000000000000000001E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E10000000000000000000008 /* Build configuration list for PBXNativeTarget "CuePadCLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E10000000000000000000006 /* Debug */,
+				E10000000000000000000007 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -792,6 +906,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
 			productName = CueSync;
+		};
+		E1000000000000000000000D /* CueStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueStore;
+		};
+		E1000000000000000000000E /* CueText */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueText;
 		};
 /* End XCSwiftPackageProductDependency section */
 
