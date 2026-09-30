@@ -99,6 +99,9 @@ actor SyncCoordinator {
     }
   }
 
+  /// 记一条不影响状态的事项（如订阅创建失败，下次启动或账号变化时会重试）。
+  func note(_ message: String) { report(message, recordType: nil, recordName: nil) }
+
   func savedEngineState() async throws -> Data? { try await store.engineState() }
 
   /// 用户对 `needsDecision` 的选择。之后需要重建引擎（引擎状态属于旧账号或已失效的云端数据，这里已清掉）。

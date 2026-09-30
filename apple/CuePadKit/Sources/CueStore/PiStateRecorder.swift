@@ -7,14 +7,15 @@ extension CueStore {
   }
 
   func writePiState(
-    sessionID: String, hostID: String, title: String, projectID: UUID?, state: PiWorkState, detail: String?, stateSince: Date
+    sessionID: String, hostID: String, title: String, projectID: UUID?, state: PiWorkState, detail: String?,
+    notify: PiAlert?, stateSince: Date
   ) throws {
     try write {
       let now = Date.stamp
       let id = DeterministicID.uuid("pi-session/\(sessionID)")
       let record = PiSessionState(
         id: id, sessionID: sessionID, hostID: hostID, title: title, projectID: projectID, state: state, detail: detail,
-        stateSince: stateSince, createdAt: now, modifiedAt: now)
+        notify: notify, stateSince: stateSince, createdAt: now, modifiedAt: now)
       let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" }.map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
       try db.run(
@@ -89,7 +90,7 @@ public actor PiStateRecorder {
     let now = timing.now()
     if startsOrEndsWork || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true {
       cancelPending(&session)
-      try await write(sessionID, &session, content, at: now)
+      try await write(sessionID, &session, content, notify: Self.alert(entering: state, from: previous), at: now)
     } else {
       session.pending = (state, detail)
       if session.timer == nil, let writtenAt = session.writtenAt {
@@ -125,11 +126,22 @@ public actor PiStateRecorder {
     if sessions[sessionID] != nil { sessions[sessionID] = session }
   }
 
-  private func write(_ sessionID: String, _ session: inout Session, _ content: Content, at now: Date) async throws {
+  /// 手机通知只发两种转换：进入等你确认；从工作中进入完成。首次看到的会话（没有上一个状态）不通知，
+  /// 这样重启后重新登记已有会话不会把旧事件再推一遍。
+  private static func alert(entering state: PiWorkState, from previous: PiWorkState?) -> PiAlert? {
+    guard let previous else { return nil }
+    if state == .waitingForUser, previous != .waitingForUser { return .waitingForUser }
+    if state == .settled, previous.isWorking { return .settled }
+    return nil
+  }
+
+  private func write(
+    _ sessionID: String, _ session: inout Session, _ content: Content, notify: PiAlert? = nil, at now: Date
+  ) async throws {
     let since = session.written?.state == content.state ? session.stateSince ?? now : now
     try await store.writePiState(
       sessionID: sessionID, hostID: hostID, title: content.title, projectID: content.projectID, state: content.state,
-      detail: content.detail, stateSince: since)
+      detail: content.detail, notify: notify, stateSince: since)
     session.written = content
     session.writtenAt = now
     session.stateSince = since

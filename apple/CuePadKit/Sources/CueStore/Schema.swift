@@ -16,7 +16,12 @@ import Foundation
 /// 之后的迁移只能加表或加可空列，不改已有列。
 enum Schema {
     /// 依次执行，`PRAGMA user_version` 记录已执行个数。
-  static let migrations: [String] = [v1, v2, v3, v4, v5]
+  static let migrations: [String] = [v1, v2, v3, v4, v5, v6]
+
+  /// Pi 会话状态的通知标志：明文字段，服务端订阅按它触发手机通知。
+  private static let v6 = """
+    ALTER TABLE piSessionStates ADD COLUMN notify TEXT;
+    """
 
   /// 阶段 3 第一档：Pi 会话状态（按会话一条）、投送请求、延迟探针记录，均为同步表。
   private static let v5 = """

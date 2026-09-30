@@ -33,6 +33,29 @@ public enum PiWorkState: Hashable, Sendable, RawRepresentable {
   public var isWorking: Bool { self == .thinking || self == .outputting || self == .tool }
 }
 
+/// 需要推送到手机锁屏的事件。只在"进入等你确认"和"从工作中进入完成"的那一次写入上置位，其余写入为 nil，
+/// 服务端订阅据此触发一次通知（同一状态下的重复写入不会再通知）。其他版本可能写入未知值：保留为 `.unknown`。
+public enum PiAlert: Hashable, Sendable, RawRepresentable {
+  case waitingForUser, settled
+  case unknown(String)
+
+  public init(rawValue: String) {
+    switch rawValue {
+    case "waitingForUser": self = .waitingForUser
+    case "settled": self = .settled
+    default: self = .unknown(rawValue)
+    }
+  }
+
+  public var rawValue: String {
+    switch self {
+    case .waitingForUser: "waitingForUser"
+    case .settled: "settled"
+    case .unknown(let raw): raw
+    }
+  }
+}
+
 /// 一个 Pi 会话此刻的状态，Mac 写、手机读；每个会话一条，会话结束即删除。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -44,6 +67,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var state: PiWorkState
   /// 工具名、等待确认的问题、错误信息等。
   public var detail: String?
+  /// 这次写入是否要通知手机；见 `PiAlert`。
+  public var notify: PiAlert?
   /// 进入当前状态的时间。
   public var stateSince: Date
   public var createdAt: Date
@@ -154,13 +179,13 @@ package struct Probe: Identifiable, Equatable, Sendable {
 
 extension PiSessionState: Record {
   static let table = Table.piSessionStates
-  static let columns = ["id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt] }
+  static let columns = ["id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify"]
+  var bindings: [any SQLBindable] { [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), sessionID: row.text(1), hostID: row.text(2), title: row.text(3), projectID: row.uuidOrNil(4),
-      state: PiWorkState(rawValue: row.text(5)), detail: row.textOrNil(6), stateSince: row.date(7),
-      createdAt: row.date(8), modifiedAt: row.date(9))
+      state: PiWorkState(rawValue: row.text(5)), detail: row.textOrNil(6), notify: row.textOrNil(10).map(PiAlert.init(rawValue:)),
+      stateSince: row.date(7), createdAt: row.date(8), modifiedAt: row.date(9))
   }
 }
 

@@ -14,6 +14,8 @@ enum RecordMapper {
     .deliveryRequests: ["content", "targetName", "targetRef", "resultDetail"],
   ]
 
+  static func recordType(for table: Table) -> String { table.rawValue }
+
   static func table(named recordType: String) -> Table? {
     Table(rawValue: recordType).flatMap { Table.synced.contains($0) ? $0 : nil }
   }
