@@ -43,20 +43,20 @@ apple/scripts/xc.sh shot ipad     # 同上，iPad 模拟器
 
 ## 签名与发布
 
-凭据文件 `~/.appstoreconnect/cuepad.env`（不入库）：`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_PATH`（App Store Connect API 密钥 `.p8` 的路径）、`CUEPAD_TEAM_ID`。缺文件时 build/test/shot 照常（本机 ad-hoc 签名，工程默认的团队与自动签名被 `xc.sh` 覆盖掉），只有下面的发布命令会报错。密钥内容不会打印。
+凭据文件 `~/.appstoreconnect/cuepad.env`（不入库）：`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_PATH`（App Store Connect API 密钥 `.p8` 的路径）、`CUEPAD_TEAM_ID`。缺文件时 build/test/shot 照常（本机 ad-hoc 签名，`xc.sh` 覆盖掉工程默认的团队与身份，并换用不含 iCloud/推送的 macOS 权限文件），只有下面的发布命令会报错。密钥内容不会打印。
 
 | 命令 | 作用 |
 | --- | --- |
-| `xc.sh provision` | 幂等：创建 App ID 与能力（App Groups、iCloud、推送）、Apple Distribution 证书（私钥放专用钥匙串 `~/.appstoreconnect/cuepad-signing.keychain-db`）、iOS 描述文件 |
-| `xc.sh release mac` | 归档 → Developer ID 导出 → `notarytool` 公证 → 装订 → 产出 `<产物目录>/release/mac/CuePad-<版本>-mac.zip` |
-| `xc.sh release ios` | 刷新证书与描述文件 → 归档 → 导出并上传 TestFlight（构建号取时间戳，自动递增） |
+| `xc.sh provision` | 幂等：创建 App ID 与能力（App Groups、iCloud、推送）、Apple Distribution 证书（私钥放专用钥匙串 `~/.appstoreconnect/cuepad-signing.keychain-db`）、iOS 与 macOS 描述文件 |
+| `xc.sh release mac` | 刷新描述文件 → 归档（Developer ID）→ 导出 → `notarytool` 公证 → 装订 → `spctl` 与 `codesign` 校验 → `<产物目录>/release/mac/CuePad-<版本>-mac.zip` |
+| `xc.sh release ios` | 刷新证书与描述文件 → 归档 → 导出 IPA → `altool` 上传 → 建/取内部测试组「内部」并加入账号持有人（构建号取时间戳，自动递增） |
 | `xc.sh device` | 登记连接的真机 → Development 证书与描述文件 → 开发构建 → 安装并启动 |
+| `scripts/testflight.py builds` | 列出 TestFlight 构建与处理状态 |
 
-前置（只能在网页上做，API 与 `xcodebuild` 的 API 密钥都管不了）：
+Xcode 的自动签名用 API 密钥时管不了 App Group 与 iCloud 容器，所以发布与真机构建都是手动签名：证书与描述文件由 `provision.py` 经 API 创建，工程里各 target 指定名称（只对 `iphoneos` 与 macOS 的 Release 生效，模拟器与日常构建不受影响）。权限：主 App 有 iCloud（CloudKit，`iCloud.com.sugeh.cuepad`）、推送（`$(APS_ENVIRONMENT)`：Debug development，Release production）与 App Group（iOS）；扩展只有 App Group；macOS 另有 Apple Events 自动化（终端跳转）。
 
-1. developer.apple.com → Identifiers → App Groups：创建 `group.com.sugeh.cuepad`，再在 App ID `com.sugeh.cuepad`、`.share`、`.widget`（`xc.sh provision` 已创建）里各 Configure 勾选它；之后再跑一次 `xc.sh provision` 刷新描述文件。
-2. Developer ID Application 证书只有账号持有人能创建：`xc.sh provision devid-csr` 生成 CSR，网页 Certificates → Developer ID Application 上传它，把下载的 `.cer` 交给 `xc.sh provision devid-import <路径>`。（或者给 API 密钥开通云托管证书权限，则 `release mac` 直接用云端证书。）
-3. App Store Connect 里建 App 记录：bundle id `com.sugeh.cuepad`，名称与 SKU 自定；之后 `release ios` 才能上传。
-4. iCloud 容器 `iCloud.com.sugeh.cuepad` 与推送在阶段 3 用到：容器同样只能网页创建并挂到 App ID。当前二进制的权限里没有 iCloud、推送（避免描述文件要求），同步落地时再加进 `App/Config/*.entitlements`。
+只能在网页上做的一次性前置（已做）：App Group `group.com.sugeh.cuepad` 与 iCloud 容器 `iCloud.com.sugeh.cuepad` 的创建及挂到 App ID；Developer ID Application 证书（账号持有人创建，CSR 由 `provision.py devid-csr` 生成，`provision.py devid-import <.cer>` 导入）；App Store Connect 里的 App 记录。
 
-macOS 用自动签名（云端 Apple Development 证书，无需描述文件）；iOS 用手动签名（Release 用 Apple Distribution + App Store 描述文件，Debug 用 Apple Development + Development 描述文件，只对 `iphoneos` 生效，模拟器不受影响）。
+## 同步
+
+主 App 启动时创建 `CloudSync` 并启动（隔离模式 `CUEPAD_LIBRARY_DIR` 与测试不同步）；应用回到前台、Mac 系统唤醒时立即 `syncNow()`，推送由引擎自己处理。`AppServices` 暴露 `syncStatus`、`syncIssues`、`conflicts` 与 `resolveSync`、`resolveConflict`。Mac 端把 Pi 会话状态写成同步记录（启动时先清掉本机遗留的），并只执行发给本机 `hostID`（硬件 UUID 的哈希前缀）的手机投送请求。
