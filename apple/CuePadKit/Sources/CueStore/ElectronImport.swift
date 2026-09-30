@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 public struct ImportCounts: Equatable, Sendable {
@@ -171,21 +170,8 @@ private struct LegacyRow {
   }
 }
 
-/// 旧整数 id → 确定的 UUID（v5，固定命名空间），重复导入得到同一批 id。
+/// 旧整数 id → 确定的 UUID，重复导入得到同一批 id。
 private enum LegacyID {
-  private static let namespace: [UInt8] = [
-    0x6c, 0x9a, 0x4d, 0x1e, 0x0b, 0x53, 0x4f, 0x8a, 0x9e, 0x27, 0xc1, 0x3d, 0x5a, 0x70, 0x84, 0xb2,
-  ]
-
   static func uuid(_ kind: String, _ id: Int64) -> UUID { uuid(kind, String(id)) }
-
-  static func uuid(_ kind: String, _ key: String) -> UUID {
-    var hash = Array(Insecure.SHA1.hash(data: Data(namespace + Array("electron/\(kind)/\(key)".utf8))))
-    hash[6] = (hash[6] & 0x0f) | 0x50
-    hash[8] = (hash[8] & 0x3f) | 0x80
-    return UUID(uuid: (
-      hash[0], hash[1], hash[2], hash[3], hash[4], hash[5], hash[6], hash[7],
-      hash[8], hash[9], hash[10], hash[11], hash[12], hash[13], hash[14], hash[15]
-    ))
-  }
+  static func uuid(_ kind: String, _ key: String) -> UUID { DeterministicID.uuid("electron/\(kind)/\(key)") }
 }

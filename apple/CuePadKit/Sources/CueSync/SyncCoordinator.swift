@@ -9,6 +9,9 @@ actor SyncCoordinator {
   private let store: CueStore
   private let queue: any ChangeQueue
   private let zoneID: CKRecordZone.ID
+  private let timing: Timing
+  private let log: SyncTimingLog?
+  private var fetchStartedAt: Date?
   private var watcher: Task<Void, Never>?
   private var subscribers: [UUID: AsyncStream<SyncStatus>.Continuation] = [:]
 
@@ -17,10 +20,12 @@ actor SyncCoordinator {
   }
   private(set) var issues: [SyncIssue] = []
 
-  init(store: CueStore, queue: any ChangeQueue, zoneID: CKRecordZone.ID) {
+  init(store: CueStore, queue: any ChangeQueue, zoneID: CKRecordZone.ID, timing: Timing = .system, log: SyncTimingLog? = nil) {
     self.store = store
     self.queue = queue
     self.zoneID = zoneID
+    self.timing = timing
+    self.log = log
   }
 
   // MARK: 状态订阅
@@ -124,12 +129,17 @@ actor SyncCoordinator {
       try await accountChange(change)
     case .cloudDataLost(let loss):
       status = .needsDecision(loss == .deleted ? .cloudDataDeleted : .cloudDataReset)
+    case .fetchStarted:
+      fetchStartedAt = timing.now()
     case .syncing(let busy):
       if busy, status == .idle { status = .syncing }
       if !busy, status == .syncing { status = .idle }
     case .fetched(let modifications, let deletions):
       guard needsDecision == nil else { return }
+      let startedAt = fetchStartedAt
+      fetchStartedAt = nil
       try await applyFetched(modifications, deletions)
+      await log?.recordFetch(modifications.map(\.recordID.recordName), startedAt: startedAt, appliedAt: timing.now())
       if case .failed = status { status = .idle }
       try await reconcile()
     case .sent(let saved, let failedSaves, let deleted, let failedDeletes):
@@ -220,6 +230,7 @@ actor SyncCoordinator {
       guard let row = RecordMapper.row(from: record) else { continue }
       try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record))
     }
+    await log?.recordSend(saved.map(\.recordID.recordName), at: timing.now())
     for id in deleted { try await store.dropSyncMetadata(id.recordName) }
 
     var blocked = false

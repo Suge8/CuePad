@@ -64,7 +64,7 @@ public struct LibraryLocation: Equatable, Sendable {
     case .applicationSupport(let support):
       return LibraryLocation(
         directory: support.appending(path: "CuePad/Library", directoryHint: .isDirectory),
-        electronDatabase: support.appending(path: "cuepad/cuepad.db"), isIsolated: false)
+        electronDatabase: support.appending(path: "CuePad/cuepad.db"), isIsolated: false)
     }
   }
 }

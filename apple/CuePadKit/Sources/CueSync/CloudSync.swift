@@ -12,6 +12,8 @@ public actor CloudSync {
   private let zoneID: CKRecordZone.ID
   private let queue = EngineQueue()
   private let coordinator: SyncCoordinator
+  /// 每条记录的上传完成、拉取开始与应用时刻（延迟测量用）。
+  public nonisolated let timingLog = SyncTimingLog()
   private var engine: CKSyncEngine?
   private var accountWatcher: Task<Void, Never>?
 
@@ -19,7 +21,7 @@ public actor CloudSync {
     self.store = store
     self.containerIdentifier = containerIdentifier
     zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
-    coordinator = SyncCoordinator(store: store, queue: queue, zoneID: zoneID)
+    coordinator = SyncCoordinator(store: store, queue: queue, zoneID: zoneID, log: timingLog)
   }
 
   public var status: SyncStatus { get async { await coordinator.status } }
@@ -127,7 +129,10 @@ private final class EngineBridge: CKSyncEngineDelegate, Sendable {
         failedDeletes: sent.failedRecordDeletes.map { ($0.key, $0.value) }))
     case .sentDatabaseChanges(let sent):
       for failure in sent.failedZoneSaves { await coordinator.handle(.zoneSaveFailed(failure.error)) }
-    case .willFetchChanges, .willSendChanges: await coordinator.handle(.syncing(true))
+    case .willFetchChanges:
+      await coordinator.handle(.fetchStarted)
+      await coordinator.handle(.syncing(true))
+    case .willSendChanges: await coordinator.handle(.syncing(true))
     case .didFetchChanges, .didSendChanges: await coordinator.handle(.syncing(false))
     default: break
     }

@@ -3,7 +3,7 @@ import Foundation
 /// 表分两类。
 ///
 /// 同步表（阶段 3 由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、tags、cardTags、tasks、sendRecords、attachments。约束：
+/// projects、cards、tags、cardTags、tasks、sendRecords、attachments、piSessionStates、deliveryRequests、probes。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -15,10 +15,29 @@ import Foundation
 ///
 /// 之后的迁移只能加表或加可空列，不改已有列。
 enum Schema {
-  static let syncedTables: [Table] = [.projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments]
+    /// 依次执行，`PRAGMA user_version` 记录已执行个数。
+  static let migrations: [String] = [v1, v2, v3, v4, v5]
 
-  /// 依次执行，`PRAGMA user_version` 记录已执行个数。
-  static let migrations: [String] = [v1, v2, v3, v4]
+  /// 阶段 3 第一档：Pi 会话状态（按会话一条）、投送请求、延迟探针记录，均为同步表。
+  private static let v5 = """
+    CREATE TABLE piSessionStates (
+      id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,
+      projectID TEXT, state TEXT NOT NULL, detail TEXT, stateSince INTEGER NOT NULL,
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
+    CREATE TABLE deliveryRequests (
+      id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
+      targetRef TEXT, hostID TEXT, mode TEXT NOT NULL, cardID TEXT, taskID TEXT, status TEXT NOT NULL,
+      resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
+    CREATE TABLE probes (
+      id TEXT PRIMARY KEY NOT NULL, run TEXT NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL, origin TEXT NOT NULL,
+      sentAt INTEGER NOT NULL, peerFetchStartedAt INTEGER, peerAppliedAt INTEGER, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX probes_run ON probes(run, seq);
+    """
 
   /// 同步：冲突副本指向原卡；本机同步元数据（每条记录服务器端的系统字段与已推送的修改时间）与引擎状态。
   /// 元数据行同时是"服务器上有"的记录：行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。

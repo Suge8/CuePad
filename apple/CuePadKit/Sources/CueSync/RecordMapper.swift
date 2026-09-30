@@ -10,6 +10,8 @@ enum RecordMapper {
     .tags: ["name"],
     .tasks: ["content"],
     .sendRecords: ["content", "targetName", "targetRef"],
+    .piSessionStates: ["title", "detail"],
+    .deliveryRequests: ["content", "targetName", "targetRef", "resultDetail"],
   ]
 
   static func table(named recordType: String) -> Table? {

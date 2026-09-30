@@ -299,3 +299,29 @@ extension CueStore {
     return failures
   }
 }
+
+// MARK: 延迟探针记录（诊断用，CueSync 使用）
+
+extension CueStore {
+  package func writeProbe(_ probe: Probe) throws {
+    try write { try insert(probe) }
+  }
+
+  package func probes(run: String) throws -> [Probe] {
+    try select(Probe.self, where: "run = ?", [run], orderBy: "seq, rowid")
+  }
+
+  /// 别的设备写的、本设备还没有回 pong 的 ping。
+  package func unansweredPings(for responder: String) throws -> [Probe] {
+    try select(
+      Probe.self,
+      where: """
+        kind = 'ping' AND origin != ?1 AND NOT EXISTS (
+          SELECT 1 FROM probes q WHERE q.kind = 'pong' AND q.run = probes.run AND q.seq = probes.seq AND q.origin = ?1)
+        """, [responder], orderBy: "run, seq, rowid")
+  }
+
+  package func deleteProbes(run: String) throws {
+    try write { try db.run("DELETE FROM probes WHERE run = ?", [run]) }
+  }
+}

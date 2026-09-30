@@ -53,11 +53,14 @@ public enum SendTargetKind: Hashable, Sendable, RawRepresentable {
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Sendable, CaseIterable {
   case projects, cards, tags, cardTags, tasks, sendRecords, attachments, piSessions, projectDirectories
+  case piSessionStates, deliveryRequests, probes
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
-  package static let synced: [Table] = [.projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments]
+  package static let synced: [Table] = [
+    .projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .probes,
+  ]
 
   package var columns: [String] {
     switch self {
@@ -70,6 +73,9 @@ extension Table {
     case .attachments: Attachment.columns
     case .piSessions: PiSession.columns
     case .projectDirectories: ["projectID", "directory"]
+    case .piSessionStates: PiSessionState.columns
+    case .deliveryRequests: DeliveryRequest.columns
+    case .probes: Probe.columns
     }
   }
 }
@@ -282,6 +288,7 @@ public enum CueStoreError: Error, Equatable {
   case notAConflictCopy
   /// 下载的附件内容与其哈希不符。
   case attachmentHashMismatch
+  case blankDeliveryContent
   /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
 }
