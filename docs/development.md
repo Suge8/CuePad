@@ -84,3 +84,18 @@ codesign --verify --deep --strict release/mac-arm64/CuePad.app
 5. **人工 smoke**：双击启动、真实日常数据、托盘菜单、物理全局热键、授权后的跨应用全文/分段投送。
 
 自动测试禁止系统级合成鼠标/键盘。视觉 E2E 的动效断言由 `e2e/animation-recorder.js` 记录 WAAPI 属性，先订阅完成事件再触发操作；短过渡不做事后单帧猜测。真实拖拽使用 `page.mouse`，任务插入槽位由 Pointer Capture 状态机按活动行中点计算，不依赖 `elementFromPoint`。
+
+## Apple 版：同步（CloudKit 数据结构）
+
+CloudKit 的数据结构由同步记录映射推出，不手写：`apple/CloudKit/cuepad.ckdb` 是生成物，`CloudKitSchemaTests` 保证它与映射一致；映射改了测试会失败，在 `apple/CuePadKit/` 下用 `CUEPAD_REGENERATE_SCHEMA=1 swift test --filter regenerateSchemaFile` 重新生成，再导入开发环境。管理令牌存在钥匙串 `cuepad-cloudkit-management-token`，不入库、不打印：
+
+```bash
+export CLOUDKIT_MANAGEMENT_TOKEN=$(security find-generic-password -a cuepad -s cuepad-cloudkit-management-token -w)
+C="--team-id SVPPQJM9JG --container-id iCloud.com.sugeh.cuepad --environment development"
+xcrun cktool validate-schema $C --file apple/CloudKit/cuepad.ckdb
+xcrun cktool import-schema $C --validate --file apple/CloudKit/cuepad.ckdb
+xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端把字段按字母序排列并补系统字段，逐类型核对字段与权限
+```
+
+生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构。
+
