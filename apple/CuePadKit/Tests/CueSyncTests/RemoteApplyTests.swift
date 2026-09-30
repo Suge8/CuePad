@@ -24,11 +24,11 @@ import Testing
   private func millis(_ date: Date) -> Int64 { Int64((date.timeIntervalSince1970 * 1000).rounded()) }
 
   /// 在已推送之后再编辑一次：返回该记录此刻的 modifiedAt（毫秒），用来构造"更新/更旧/同刻"的远端版本。
-  private func editCard(_ card: Card, body: String? = nil, favorite: Bool? = nil) async throws -> Int64 {
+  private func editCard(_ card: Card, body: String? = nil, pinned: Bool? = nil) async throws -> Int64 {
     try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒，确保晚于推送时间
     try await store.updateCard(card.id) {
       if let body { $0.body = body }
-      if let favorite { $0.isFavorite = favorite }
+      if let pinned { $0.isPinned = pinned }
     }
     return millis(try #require(try await store.card(card.id)).modifiedAt)
   }
@@ -148,7 +148,7 @@ import Testing
 
   @Test func identicalBodiesAreNotAConflict() async throws {
     let card = try await pushedCard(body: "same")
-    let local = try await editCard(card, favorite: true)
+    let local = try await editCard(card, pinned: true)
 
     await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "same", modifiedAt: local + 1_000)))
 
@@ -182,14 +182,14 @@ import Testing
 
   @Test func serverRecordChangedIsMergedLikeAnyRemoteChange() async throws {
     let card = try await pushedCard(body: "base")
-    let local = try await editCard(card, favorite: true)
+    let local = try await editCard(card, pinned: true)
     let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
     let server = remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "base", modifiedAt: local + 1_000))
     let error = CKError(.serverRecordChanged, userInfo: [CKRecordChangedErrorServerRecordKey: server])
 
     await rig.coordinator.handle(.sent(saved: [], failedSaves: [(client, error)], deleted: [], failedDeletes: []))
 
-    #expect(try await store.card(card.id)?.isFavorite == false)  // 服务器版本更新，覆盖本机
+    #expect(try await store.card(card.id)?.isPinned == false)  // 服务器版本更新，覆盖本机
     #expect(try await rig.reconcileDelta().saves.isEmpty)
   }
 

@@ -60,19 +60,19 @@ struct CardView {
   var json: JSONObject {
     [
       "id": uuid(card.id), "projectId": uuid(card.projectID), "project": nullable(project), "body": card.body,
-      "favorite": card.isFavorite, "conflictOf": uuid(card.conflictOf),
+      "pinned": card.isPinned, "conflictOf": uuid(card.conflictOf),
       "deletedAt": iso(card.deletedAt), "createdAt": iso(card.createdAt), "modifiedAt": iso(card.modifiedAt),
     ]
   }
 
   var line: String {
-    "\(short(card.id))  \(project ?? "未归档")  \(card.isFavorite ? "★ " : "")\(preview(card.body))"
+    "\(short(card.id))  \(project ?? "未归档")  \(card.isPinned ? "★ " : "")\(preview(card.body))"
   }
 
   /// `card show` 的文本：元信息，空行，正文原样。
   var detail: String {
     var rows = ["id: \(card.id.uuidString.lowercased())", "项目: \(project ?? "未归档")"]
-    if card.isFavorite { rows.append("收藏: 是") }
+    if card.isPinned { rows.append("置顶: 是") }
     if let original = card.conflictOf { rows.append("冲突副本，原卡: \(original.uuidString.lowercased())") }
     if let deleted = card.deletedAt { rows.append("已删除: \(minutes(deleted))") }
     rows.append("修改: \(minutes(card.modifiedAt))")

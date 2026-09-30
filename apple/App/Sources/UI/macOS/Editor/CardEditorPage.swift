@@ -77,7 +77,7 @@ struct CardEditorPage: View {
             Text("·")
             Text(DateLabel.short(data.card.modifiedAt))
             Text(saving ? "保存中…" : "已自动保存")
-            if data.card.isFavorite { Image(systemName: "pin.fill").help("置顶") }
+            if data.card.isPinned { Image(systemName: "pin.fill").help("置顶") }
             if data.project?.goalCardID == data.card.id { Label("项目目标", systemImage: "scope") }
         }
         .font(.system(size: 12))

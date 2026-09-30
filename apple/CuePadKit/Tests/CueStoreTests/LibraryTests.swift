@@ -139,13 +139,13 @@ import Testing
     let card = try await store.createCard(in: nil, body: "hi {{name}}")
     try await store.updateCard(card.id) {
       $0.numbering = .cjk
-      $0.isFavorite = true
+      $0.isPinned = true
       $0.variableValues = ["name": "Pi"]
     }
     let row = try await store.card(card.id)
     #expect(row?.numbering == .cjk)
     #expect(row?.variableValues == ["name": "Pi"])
-    #expect(try await store.favoriteCards().map(\.id) == [card.id])
+    #expect(row?.isPinned == true)
   }
 
   @Test func attachmentsDedupeByContentHash() async throws {

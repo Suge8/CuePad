@@ -20,7 +20,7 @@ DEFINE SCHEMA
         projectID      STRING,
         body           ENCRYPTED STRING,
         numbering      STRING,
-        isFavorite     INT64,
+        isPinned       INT64,
         variableValues ENCRYPTED STRING,
         sortKey        STRING,
         deletedAt      INT64,

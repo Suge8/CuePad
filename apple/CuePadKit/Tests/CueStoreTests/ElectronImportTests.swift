@@ -97,7 +97,7 @@ private func digest(_ url: URL) throws -> String {
     let career = active.first!
     let flowCards = try await store.cards(in: flow.id)
     #expect(bodies(flowCards) == ["Todo\n\nline one", "Only title"])  // 保持旧 sort_order
-    #expect(flowCards.first?.numbering == .decimal && flowCards.first?.isFavorite == true)
+    #expect(flowCards.first?.numbering == .decimal && flowCards.first?.isPinned == true)
     let inbox = try await store.cards(in: nil)
     #expect(bodies(inbox) == ["inbox body"] && inbox.first?.numbering == .alpha)
 

@@ -119,7 +119,7 @@ extension CueStore {
       } ?? nil
       let now = Date.stamp
       let card = Card(
-        id: UUID(), projectID: project, body: body, numbering: .none, isFavorite: false,
+        id: UUID(), projectID: project, body: body, numbering: .none, isPinned: false,
         variableValues: [:], conflictOf: nil, sortKey: SortKey.before(first), deletedAt: nil, createdAt: now,
         modifiedAt: now)
       try insert(card)
@@ -127,7 +127,7 @@ extension CueStore {
     }
   }
 
-  /// 改正文、编号方式、收藏、变量取值。归属项目、排序键、删除状态对调用方只读，各有专门的方法（编译期保证）。
+  /// 改正文、编号方式、置顶、变量取值。归属项目、排序键、删除状态对调用方只读，各有专门的方法（编译期保证）。
   public func updateCard(_ id: UUID, _ edit: @Sendable (inout Card) -> Void) throws {
     try write {
       guard var card = try find(Card.self, id) else { throw CueStoreError.notFound }

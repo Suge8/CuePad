@@ -20,7 +20,7 @@ nonisolated struct ProjectPageData: Sendable {
 
     /// 目标卡在"目标与下一步"里，不再上墙或进更早。
     func stamps() -> [CardStamp] {
-        cards.filter { $0.id != project?.goalCardID }.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isFavorite) }
+        cards.filter { $0.id != project?.goalCardID }.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) }
     }
 
     static func read(_ project: UUID?, from store: isolated CueStore) throws -> ProjectPageData {
@@ -60,7 +60,7 @@ extension ProjectPageData {
     func olderGroups(_ arrangement: WallArrangement, now: Date = .now, calendar: Calendar = .current) -> [OlderGroup] {
         let byID = Dictionary(uniqueKeysWithValues: cards.map { ($0.id, $0) })
         let stamps = arrangement.older.compactMap { byID[$0] }.map {
-            CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isFavorite)
+            CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned)
         }
         return OlderGroup.group(stamps, now: now, calendar: calendar)
     }

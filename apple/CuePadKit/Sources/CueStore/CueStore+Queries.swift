@@ -44,11 +44,6 @@ extension CueStore {
     try select(Card.self, where: "(\(cardVisible)) AND projectID IS ?", [project], orderBy: "sortKey, id")
   }
 
-  /// 全局收藏（可见的）。
-  public func favoriteCards() throws -> [Card] {
-    try select(Card.self, where: "(\(cardVisible)) AND isFavorite = 1", orderBy: "sortKey, id")
-  }
-
   /// 回收站里单独删除的卡片，最近删除的在前；随项目删除的卡归在该项目名下，不在这里。
   public func trashedCards() throws -> [Card] {
     try select(Card.self, where: "deletedAt IS NOT NULL", orderBy: "deletedAt DESC, id")

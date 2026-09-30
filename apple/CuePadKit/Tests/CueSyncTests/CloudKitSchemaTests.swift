@@ -52,7 +52,7 @@ import Testing
     let schema = try await CloudKitSchema.generate()
     let cards = fields(of: "cards", in: schema)
     #expect(cards.contains("body ENCRYPTED STRING") && cards.contains("variableValues ENCRYPTED STRING"))
-    #expect(cards.contains("sortKey STRING") && cards.contains("modifiedAt INT64") && cards.contains("isFavorite INT64"))
+    #expect(cards.contains("sortKey STRING") && cards.contains("modifiedAt INT64") && cards.contains("isPinned INT64"))
     #expect(!cards.contains { $0.hasPrefix("id ") })  // 行 id 是 recordName，不是字段
 
     for (table, encrypted) in RecordMapper.encryptedColumns {

@@ -6,7 +6,7 @@ extension Command {
     Command(
       path: ["card", "list"], summary: "列出卡片（默认所有项目，项目内按手动顺序）",
       options: [
-        .project("只列该项目"), .inbox, .allProjects, Opt("favorites", "只列收藏"),
+        .project("只列该项目"), .inbox, .allProjects, Opt("pinned", "只列置顶"),
         Opt("trash", "列回收站里单独删除的卡片"),
       ],
       notes: Schema.defaultProject(otherwise: "列所有项目") + "\n" + Schema.output("[Card]", Schema.card)
@@ -14,7 +14,7 @@ extension Command {
       try call.args.expect()
       let scope = try await call.scope()
       let cards = try await listedCards(call).filter {
-        scope.contains($0.projectID) && (!call.args.has("favorites") || $0.isFavorite)
+        scope.contains($0.projectID) && (!call.args.has("pinned") || $0.isPinned)
       }
       let views = try await call.cardViews(cards)
       return listReply(views.map(\.line), json: views.map(\.json))

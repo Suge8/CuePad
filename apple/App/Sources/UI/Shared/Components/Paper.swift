@@ -79,7 +79,7 @@ struct CardMeta: View {
             Spacer(minLength: 0)
             if isGoal { Image(systemName: "scope").help("项目目标").accessibilityLabel("项目目标") }
             if floated { Image(systemName: "arrow.up").help("刚从更早的卡里拿回来").accessibilityLabel("刚从更早的卡里拿回来") }
-            if card.isFavorite { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
+            if card.isPinned { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
         }
         .font(font)
         .foregroundStyle(palette.ink3)

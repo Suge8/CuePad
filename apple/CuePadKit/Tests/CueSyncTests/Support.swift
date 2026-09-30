@@ -156,7 +156,7 @@ func cardFields(
 ) -> [String: SQLValue] {
   [
     "projectID": project.map { .text($0.uuidString.lowercased()) } ?? .null, "body": .text(body),
-    "numbering": .text(numbering), "isFavorite": .int(0), "variableValues": .text("{}"),
+    "numbering": .text(numbering), "isPinned": .int(0), "variableValues": .text("{}"),
     "sortKey": .text(sortKey), "deletedAt": .null, "createdAt": .int(1_000), "modifiedAt": .int(modifiedAt),
     "conflictOf": conflictOf.map { .text($0.uuidString.lowercased()) } ?? .null,
   ]

@@ -105,7 +105,7 @@ struct CardEditorScreen: View {
             Text("·")
             Text(saving ? "保存中…" : "已保存").contentTransition(.opacity)
             if data.project?.goalCardID == data.card.id { Image(systemName: "scope").accessibilityLabel("项目目标") }
-            if data.card.isFavorite { Image(systemName: "pin.fill").accessibilityLabel("置顶") }
+            if data.card.isPinned { Image(systemName: "pin.fill").accessibilityLabel("置顶") }
         }
         .font(.caption)
         .foregroundStyle(palette.ink3)

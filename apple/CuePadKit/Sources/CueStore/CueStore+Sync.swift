@@ -282,7 +282,7 @@ extension CueStore {
     fields["conflictOf"] = .text(winner.id)
     fields["sortKey"] = .text(SortKey.before(first))
     fields["deletedAt"] = .null
-    fields["isFavorite"] = .int(0)
+    fields["isPinned"] = .int(0)
     fields["createdAt"] = now.sqlValue
     fields["modifiedAt"] = now.sqlValue
     try overwrite(SyncRow(table: .cards, fields: fields))

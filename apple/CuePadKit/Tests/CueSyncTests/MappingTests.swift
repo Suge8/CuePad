@@ -15,7 +15,7 @@ import Testing
     let card = try await store.createCard(in: project.id, body: "hello ![](cuepad://img/\(hash))")
     try await store.updateCard(card.id) {
       $0.numbering = .cjk
-      $0.isFavorite = true
+      $0.isPinned = true
       $0.variableValues = ["k": "v"]
     }
     let task = try await store.createTask("t", in: project.id)
@@ -79,7 +79,7 @@ import Testing
     #expect(stored.numbering == .unknown("roman"))
 
     // 原样推回：其他字段被编辑后，未知值不变
-    try await store.updateCard(stored.id) { $0.isFavorite = true }
+    try await store.updateCard(stored.id) { $0.isPinned = true }
     let pushed = try #require(await rig.coordinator.record(for: card.recordID))
     #expect(pushed["numbering"] as? String == "roman")
     let pushedSend = try #require(await rig.coordinator.record(for: send.recordID))

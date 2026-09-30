@@ -107,7 +107,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 纯字符串正文：分块为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
   public var numbering: Numbering
-  public var isFavorite: Bool
+  public var isPinned: Bool
   public var variableValues: [String: String]
   /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
   /// 由用户用 `resolveConflict` 选择保留哪一个。普通卡为 nil。
@@ -290,15 +290,15 @@ extension Project: Record {
 
 extension Card: Record {
   static let table = Table.cards
-  static let columns = ["id", "projectID", "body", "numbering", "isFavorite", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf"]
+  static let columns = ["id", "projectID", "body", "numbering", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf"]
   var bindings: [any SQLBindable] {
     let variables = try! JSONEncoder.sorted.encode(variableValues)
-    return [id, projectID, body, numbering.rawValue, isFavorite, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf]
+    return [id, projectID, body, numbering.rawValue, isPinned, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2),
-      numbering: Numbering(rawValue: row.text(3)), isFavorite: row.bool(4),
+      numbering: Numbering(rawValue: row.text(3)), isPinned: row.bool(4),
       variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(5).utf8))) ?? [:],
       conflictOf: row.uuidOrNil(10), sortKey: row.text(6), deletedAt: row.dateOrNil(7), createdAt: row.date(8), modifiedAt: row.date(9))
   }

@@ -65,9 +65,9 @@ struct CardMenu: View {
     var body: some View {
         let id = card.id
         Button("打开") { workspace.openCard = id }
-        Button(card.isFavorite ? "取消置顶" : "置顶") {
-            let pinned = !card.isFavorite
-            workspace.perform { try await $0.updateCard(id) { $0.isFavorite = pinned } }
+        Button(card.isPinned ? "取消置顶" : "置顶") {
+            let pinned = !card.isPinned
+            workspace.perform { try await $0.updateCard(id) { $0.isPinned = pinned } }
         }
         if let project = card.projectID {
             Button(isGoal ? "取消项目目标" : "设为项目目标") {

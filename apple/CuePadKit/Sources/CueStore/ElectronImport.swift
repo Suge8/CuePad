@@ -24,7 +24,7 @@ public struct ImportReport: Equatable, Sendable {
 extension CueStore {
   /// 导入 Electron 版 SQLite 库。幂等：旧行 id 映射为确定的 UUID，已存在的行跳过。
   /// 只读取源库的副本（含 -wal），源文件从不被打开或修改。
-  /// 映射：整数 id → UUID；sort_order → 分数索引；置顶/收藏/编号/任务完成时间照搬；卡片标题并入正文首行；标签不导入（产品不做标签）；
+  /// 映射：整数 id → UUID；sort_order → 分数索引；置顶（旧版卡片叫收藏）/编号/任务完成时间照搬；卡片标题并入正文首行；标签不导入（产品不做标签）；
   /// 单独删除的卡保留 deletedAt，随项目删除的卡由项目推导；旧库不存变量取值（原在 localStorage），不导入。
   public func importElectronLibrary(from source: URL) throws -> ImportReport {
     let library = try LegacyLibrary(copyingFrom: source)
@@ -72,7 +72,7 @@ struct LegacyLibrary {
       return Card(
         id: LegacyID.uuid("card", row.id), projectID: row.projectID.map { LegacyID.uuid("project", $0) },
         body: [row.title, row.body].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n\n"),
-        numbering: Numbering(rawValue: row.numbering ?? "none"), isFavorite: row.flag,
+        numbering: Numbering(rawValue: row.numbering ?? "none"), isPinned: row.flag,
         variableValues: [:], conflictOf: nil, sortKey: key, deletedAt: followsProject ? nil : row.deletedAt,
         createdAt: row.createdAt, modifiedAt: row.updatedAt)
     }

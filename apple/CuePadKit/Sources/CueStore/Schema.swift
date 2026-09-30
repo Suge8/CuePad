@@ -28,7 +28,7 @@ enum Schema {
     -- conflictOf：冲突副本指向原卡。
     CREATE TABLE cards (
       id TEXT PRIMARY KEY NOT NULL, projectID TEXT, body TEXT NOT NULL, numbering TEXT NOT NULL,
-      isFavorite INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
+      isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);

@@ -26,7 +26,7 @@ import Testing
     try RawDB(fixture.url).exec("UPDATE cards SET numbering = 'roman' WHERE id = '\(card.id.uuidString.lowercased())'")
 
     #expect(try await store.card(card.id)?.numbering == .unknown("roman"))
-    try await store.updateCard(card.id) { $0.isFavorite = true }  // 改别的字段
+    try await store.updateCard(card.id) { $0.isPinned = true }  // 改别的字段
     #expect(try RawDB(fixture.url).rows("SELECT numbering FROM cards") == [["roman"]])
   }
 
