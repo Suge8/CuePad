@@ -45,6 +45,8 @@ final class AppServices {
     private(set) var pendingDeepLink: DeepLink?
 
     @ObservationIgnored var tasks: [Task<Void, Never>] = []
+    /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
+    @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
 

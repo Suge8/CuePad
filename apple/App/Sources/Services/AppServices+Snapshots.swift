@@ -6,25 +6,14 @@ import WidgetKit
 #endif
 
 /// 给小组件与分享扩展的快照：跟随资料库变化写进共享容器。扩展不打开资料库。
+/// 只写内容真正变了的那份；小组件只显示收件箱，所以只有收件箱变了才刷新它（刷新次数有系统预算）。
 extension AppServices {
-    /// 项目与收件箱变化时重写快照，直到任务取消。
+    /// 项目或卡片变化时重读快照，直到任务取消。
     func startSnapshots() {
-        let directory = location.snapshotsDirectory
         tasks.append(Task {
             do {
-                for try await snapshot in store.observe([.projects], { try $0.projectsSnapshot() }) {
-                    try Snapshots.write(snapshot, to: directory)
-                    reloadWidgets()
-                }
-            } catch {
-                reportIssue(.widgetDataUnavailable("\(error)"))
-            }
-        })
-        tasks.append(Task {
-            do {
-                for try await snapshot in store.observe([.cards], { try $0.inboxSnapshot() }) {
-                    try Snapshots.write(snapshot, to: directory)
-                    reloadWidgets()
+                for try await snapshots in store.observe([.projects, .cards], { try $0.widgetSnapshots() }) {
+                    try publish(snapshots)
                 }
             } catch {
                 reportIssue(.widgetDataUnavailable("\(error)"))
@@ -32,11 +21,19 @@ extension AppServices {
         })
     }
 
-    /// 立即按当前库内容重写全部快照。
+    /// 立即按当前库内容更新快照。
     func writeSnapshots() async throws {
-        try Snapshots.write(await store.projectsSnapshot(), to: location.snapshotsDirectory)
-        try Snapshots.write(await store.inboxSnapshot(), to: location.snapshotsDirectory)
-        reloadWidgets()
+        try publish(await store.widgetSnapshots())
+    }
+
+    private func publish(_ snapshots: WidgetSnapshots) throws {
+        let directory = location.snapshotsDirectory
+        if snapshots.projects != publishedSnapshots?.projects { try Snapshots.write(snapshots.projects, to: directory) }
+        if snapshots.inbox != publishedSnapshots?.inbox {
+            try Snapshots.write(snapshots.inbox, to: directory)
+            reloadWidgets()
+        }
+        publishedSnapshots = snapshots
     }
 
     private func reloadWidgets() {
@@ -46,22 +43,26 @@ extension AppServices {
     }
 }
 
+/// 快照的全部内容：与上次写出的比较，决定写哪份、要不要刷新小组件。
+nonisolated struct WidgetSnapshots: Equatable, Sendable {
+    var projects: ProjectsSnapshot
+    var inbox: InboxSnapshot
+}
+
 extension CueStore {
     fileprivate static let inboxCardLimit = 5
 
-    fileprivate func projectsSnapshot() throws -> ProjectsSnapshot {
-        ProjectsSnapshot(projects: try projects().map {
-            ProjectsSnapshot.Project(id: $0.id, name: $0.name, color: $0.color, icon: $0.icon)
-        })
-    }
-
-    fileprivate func inboxSnapshot() throws -> InboxSnapshot {
+    fileprivate func widgetSnapshots() throws -> WidgetSnapshots {
         let cards = try cards(in: nil)
         let latest = cards.sorted { $0.modifiedAt > $1.modifiedAt }.prefix(Self.inboxCardLimit)
-        return InboxSnapshot(
-            cards: latest.map {
-                InboxSnapshot.Card(id: $0.id, title: CueSegments.contentLines($0.body).first ?? "", modifiedAt: $0.modifiedAt)
-            },
-            total: cards.count)
+        return WidgetSnapshots(
+            projects: ProjectsSnapshot(projects: try projects().map {
+                ProjectsSnapshot.Project(id: $0.id, name: $0.name, color: $0.color, icon: $0.icon)
+            }),
+            inbox: InboxSnapshot(
+                cards: latest.map {
+                    InboxSnapshot.Card(id: $0.id, title: CueSegments.contentLines($0.body).first ?? "", modifiedAt: $0.modifiedAt)
+                },
+                total: cards.count))
     }
 }
