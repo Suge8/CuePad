@@ -8,7 +8,7 @@ CuePad 是 Swift 原生应用：macOS 26+、iOS/iPadOS 26+，iCloud 同步，Pi 
 
 ```bash
 apple/scripts/xc.sh build mac
-apple/scripts/xc.sh test mac        # test ios 目前执行 0 个测试（壳层测试只在 macOS 编译）
+apple/scripts/xc.sh test mac        # test ios 跑 iOS 专属的 App 测试（Swift Testing；xcodebuild 摘要里的 "Executed 0 tests" 只数 XCTest）
 apple/scripts/xc.sh build ios
 apple/scripts/xc.sh shot mac        # 构建 → 后台启动 → 单窗口截图 → 退出，输出 .derived/shot-mac.png
 cd apple/CuePadKit && swift test    # 共用包的全部测试
@@ -41,7 +41,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 | CuePi | Pi 桥：扩展（随包资源）、socket 客户端、会话历史索引、终端跳转；协议与边界见 [Sources/CuePi/README.md](../apple/CuePadKit/Sources/CuePi/README.md) | macOS |
 | CueCLI | `cuepad` 命令行：名词-动词（project/card/task/search/conflicts），默认文本、`--json` 给 agent；只经 Store 公开接口读写，`cuepad --help` 与各命令的 `--help` 是其唯一文档 | macOS |
 
-模块边界由 `Package.swift` 声明，每个 target 只有一个写者。
+模块边界由 `Package.swift` 声明；CueStore 依赖 CueText（图片引用、编号），测试共用的支撑在 `Tests/CueTestSupport`。
 
 ## 产品模型
 
