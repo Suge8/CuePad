@@ -43,7 +43,7 @@ import Testing
     #expect(stored.status == .pending && stored.content == "prompt" && stored.target == pi)
     #expect(stored.hostID == "mac-a" && stored.mode == "followUp" && stored.cardID == card.id)
     #expect(stored.completedAt == nil && stored.resultDetail == nil)
-    await #expect(throws: CueStoreError.blankDeliveryContent) { try await store.requestDelivery("  ", to: pi) }
+    await #expect(throws: CueStoreError.blankDeliveryContent) { try await store.requestDelivery("  ", to: pi, on: "mac-a") }
   }
 
   @Test(.timeLimit(.minutes(1)))
@@ -73,19 +73,22 @@ import Testing
     await executor.stop()
   }
 
+  /// 请求必须指定执行的 Mac，执行器只领取发给本机的：跨设备重复在结构上不会发生。
   @Test(.timeLimit(.minutes(1)))
-  func onlyRequestsForThisHostOrForAnyHostAreExecuted() async throws {
+  func onlyRequestsAddressedToThisHostAreExecuted() async throws {
     let handler = Handler()
     let executor = executor(handler, host: "mac-a")
+    let unaddressed = try await store.requestDelivery("from an old version", to: pi, on: "placeholder")
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET hostID = NULL")  // 没有指定机器的记录（旧版本写的）：谁也不领
     let other = try await store.requestDelivery("for b", to: pi, on: "mac-b")
-    let anyHost = try await store.requestDelivery("for anyone", to: pi, on: nil)
     let mine = try await store.requestDelivery("for a", to: pi, on: "mac-a")
     try await executor.start()
 
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 2 }
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 1 }
 
-    #expect(Set(await handler.seen.map(\.id)) == [anyHost.id, mine.id])
+    #expect(await handler.seen.map(\.id) == [mine.id])
     #expect(try await request(other.id)?.status == .pending)
+    #expect(try await request(unaddressed.id)?.status == .pending)
     await executor.stop()
   }
 
@@ -195,7 +198,7 @@ import Testing
     let two = executor(second)
     try await one.start()
     try await two.start()
-    for index in 0..<6 { _ = try await store.requestDelivery("r\(index)", to: pi, on: nil) }
+    for index in 0..<6 { _ = try await store.requestDelivery("r\(index)", to: pi, on: "mac-a") }
 
     _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .succeeded }.count }) { $0 == 6 }
 
