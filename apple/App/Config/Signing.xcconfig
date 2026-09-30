@@ -1,10 +1,8 @@
-// 签名事实源。本机开发：ad-hoc（Sign to Run Locally），无需 Apple 账号。
+// 签名事实源：团队 SVPPQJM9JG，自动签名（描述文件由 xcodebuild -allowProvisioningUpdates 经 App Store Connect API 密钥管理）。
+// 日常构建与测试走 scripts/xc.sh 的本机模式：覆盖为 ad-hoc（不联网、不需要账号），iCloud/推送这类受限能力只在签名构建里生效。
 CODE_SIGN_STYLE = Automatic
-CODE_SIGN_IDENTITY = -
-DEVELOPMENT_TEAM =
+CODE_SIGN_IDENTITY = Apple Development
+DEVELOPMENT_TEAM = SVPPQJM9JG
 
-// 分发：改为以下三行（Developer ID 签名 + 公证需要 hardened runtime，已默认开启）
-// CODE_SIGN_STYLE = Manual
-// CODE_SIGN_IDENTITY = Developer ID Application
-// DEVELOPMENT_TEAM = <Team ID>
+// Hardened Runtime 是 Developer ID 公证的前提；ad-hoc 构建会被系统自动关闭它。
 ENABLE_HARDENED_RUNTIME = YES

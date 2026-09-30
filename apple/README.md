@@ -40,3 +40,23 @@ apple/scripts/xc.sh shot ipad     # 同上，iPad 模拟器
 - 资料库在 App Group 共享容器 `group.com.sugeh.cuepad` 的 `Library/`（库文件、`Attachments/`、待入库的 `Capture/`、给小组件的 `Snapshots/`），偏好用同名 UserDefaults 套件。`CUEPAD_LIBRARY_DIR` 隔离照旧。模拟器直接可用；真机需要开发者账号给三个目标（App、分享扩展、小组件）签上该 App Group。
 - 分享扩展（`CuePadShare`）与小组件（`CuePadWidget`）是 iOS 独有的目标，随 App 嵌入；三者共用 `App/AppGroup/`。资料库始终只有主 App 写：扩展把内容放进 `Capture/`，主 App 在前台、收到扩展的进程间通知时入库；小组件与扩展不打开资料库，只读主 App 写的 JSON 快照。
 - 每个窗口（iPad 多窗口）各有一个 `SceneContext`，选中项目不放进全局偏好。界面接入点：`Sources/iOS/IOSRootViews.swift`（每个窗口的根视图）、`App/ShareExtension/ShareViews.swift`、`App/Widget/WidgetViews.swift`。
+
+## 签名与发布
+
+凭据文件 `~/.appstoreconnect/cuepad.env`（不入库）：`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_PATH`（App Store Connect API 密钥 `.p8` 的路径）、`CUEPAD_TEAM_ID`。缺文件时 build/test/shot 照常（本机 ad-hoc 签名，工程默认的团队与自动签名被 `xc.sh` 覆盖掉），只有下面的发布命令会报错。密钥内容不会打印。
+
+| 命令 | 作用 |
+| --- | --- |
+| `xc.sh provision` | 幂等：创建 App ID 与能力（App Groups、iCloud、推送）、Apple Distribution 证书（私钥放专用钥匙串 `~/.appstoreconnect/cuepad-signing.keychain-db`）、iOS 描述文件 |
+| `xc.sh release mac` | 归档 → Developer ID 导出 → `notarytool` 公证 → 装订 → 产出 `<产物目录>/release/mac/CuePad-<版本>-mac.zip` |
+| `xc.sh release ios` | 刷新证书与描述文件 → 归档 → 导出并上传 TestFlight（构建号取时间戳，自动递增） |
+| `xc.sh device` | 登记连接的真机 → Development 证书与描述文件 → 开发构建 → 安装并启动 |
+
+前置（只能在网页上做，API 与 `xcodebuild` 的 API 密钥都管不了）：
+
+1. developer.apple.com → Identifiers → App Groups：创建 `group.com.sugeh.cuepad`，再在 App ID `com.sugeh.cuepad`、`.share`、`.widget`（`xc.sh provision` 已创建）里各 Configure 勾选它；之后再跑一次 `xc.sh provision` 刷新描述文件。
+2. Developer ID Application 证书只有账号持有人能创建：`xc.sh provision devid-csr` 生成 CSR，网页 Certificates → Developer ID Application 上传它，把下载的 `.cer` 交给 `xc.sh provision devid-import <路径>`。（或者给 API 密钥开通云托管证书权限，则 `release mac` 直接用云端证书。）
+3. App Store Connect 里建 App 记录：bundle id `com.sugeh.cuepad`，名称与 SKU 自定；之后 `release ios` 才能上传。
+4. iCloud 容器 `iCloud.com.sugeh.cuepad` 与推送在阶段 3 用到：容器同样只能网页创建并挂到 App ID。当前二进制的权限里没有 iCloud、推送（避免描述文件要求），同步落地时再加进 `App/Config/*.entitlements`。
+
+macOS 用自动签名（云端 Apple Development 证书，无需描述文件）；iOS 用手动签名（Release 用 Apple Distribution + App Store 描述文件，Debug 用 Apple Development + Development 描述文件，只对 `iphoneos` 生效，模拟器不受影响）。

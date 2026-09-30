@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # 用法：xc.sh <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
+#       xc.sh release <mac|ios>   发布（mac：Developer ID 公证 zip；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
+#       xc.sh provision           开通标识、能力、证书与描述文件；前提见 apple/README.md「签名与发布」
+# build/test/shot 一律用本机 ad-hoc 签名（不联网、不需要账号）；凭据文件在时 xcodebuild 仍带上 API 密钥参数。
 # ios 是 iPhone 模拟器（CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
 # shot 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；
 # CUEPAD_DERIVED 指定产物目录（默认 apple/.derived）；并行的 agent 各用一个，否则同目录的构建与测试会互相覆盖。
@@ -7,13 +10,25 @@
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+. "$APPLE_DIR/scripts/_signing.sh"
 absolute() { case "$1" in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
 DERIVED="$(absolute "${CUEPAD_DERIVED:-$APPLE_DIR/.derived}")"
 BUNDLE_ID=com.sugeh.cuepad
 IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
 IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 
-cmd="${1:-}"; platform="${2:-}"; out="${3:-$DERIVED/shot-$platform.png}"
+cmd="${1:-}"; platform="${2:-}"
+case "$cmd" in
+  release)
+    case "$platform" in
+      mac) exec "$APPLE_DIR/scripts/release-mac.sh" ;;
+      ios) exec "$APPLE_DIR/scripts/release-ios.sh" testflight ;;
+      *) echo "用法：$0 release <mac|ios>" >&2; exit 2 ;;
+    esac ;;
+  device) exec "$APPLE_DIR/scripts/release-ios.sh" device ;;
+  provision) exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;
+esac
+out="${3:-$DERIVED/shot-$platform.png}"
 launch_args=()
 if [ "$#" -gt 3 ] && [ "$4" = "--" ]; then launch_args=("${@:5}"); fi
 
@@ -28,9 +43,13 @@ app="$products/CuePad.app"
 mkdir -p "$DERIVED"
 [ -f "$DERIVED/.gitignore" ] || echo '*' > "$DERIVED/.gitignore"
 
+# 本机模式：ad-hoc 签名。工程默认是团队 + 自动签名（给发布用），iCloud/推送这类受限能力在 ad-hoc 下无法启动，
+# 所以日常构建覆盖成不带团队与身份。
+local_signing=(DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=-)
+
 xcb() {
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad \
-    -destination "$destination" -derivedDataPath "$DERIVED" "$@"
+    -destination "$destination" -derivedDataPath "$DERIVED" ${asc_auth[@]+"${asc_auth[@]}"} "$@" "${local_signing[@]}"
 }
 
 # 在 pid 进程的窗口里找主窗口（layer 0、在屏幕上、面积最大）的 CGWindowID；没有则输出空。

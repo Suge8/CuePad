@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# iOS：testflight = 归档 → 导出并上传 App Store Connect；device = 开发构建并装到连接的真机。
+# 手动签名：证书与描述文件由 provision.py 经 API 创建（Xcode 自动签名的 API 密钥管不了 App Group / iCloud 容器）。
+# 前提：apple/README.md「签名与发布」。
+set -euo pipefail
+APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+. "$APPLE_DIR/scripts/_signing.sh"
+require_asc
+
+mode="${1:-}"
+DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}"
+OUT="$DERIVED/release/ios"
+provision="$APPLE_DIR/scripts/provision.py"
+
+case "$mode" in
+  testflight)
+    rm -rf "$OUT"; mkdir -p "$OUT"
+    python3 "$provision" all
+    # TestFlight 要求每次上传的构建号递增；App 与扩展必须一致
+    build="$(date +%y%m%d%H%M)"
+    xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=iOS' \
+      -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED" CURRENT_PROJECT_VERSION="$build"
+    cat > "$OUT/export.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>method</key><string>app-store-connect</string>
+<key>teamID</key><string>${CUEPAD_TEAM_ID}</string>
+<key>signingStyle</key><string>manual</string>
+<key>signingCertificate</key><string>Apple Distribution</string>
+<key>provisioningProfiles</key><dict>
+<key>com.sugeh.cuepad</key><string>CuePad iOS AppStore</string>
+<key>com.sugeh.cuepad.share</key><string>CuePad Share iOS AppStore</string>
+<key>com.sugeh.cuepad.widget</key><string>CuePad Widget iOS AppStore</string>
+</dict>
+<key>destination</key><string>upload</string>
+</dict></plist>
+PLIST
+    xcodebuild -exportArchive -archivePath "$OUT/CuePad.xcarchive" -exportOptionsPlist "$OUT/export.plist" \
+      -exportPath "$OUT/export" "${asc_auth[@]}"
+    echo "已上传构建 $build，App Store Connect 处理完成后出现在 TestFlight"
+    ;;
+  device)
+    # 取第一台已连接的真机；未登记则登记，再刷新 Development 描述文件
+    info="$(xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null | python3 -c '
+import json, sys
+text = sys.stdin.read()
+devices = json.loads(text[text.index("{"):])["result"]["devices"]
+for d in devices:
+    hw, conn = d.get("hardwareProperties", {}), d.get("connectionProperties", {})
+    if hw.get("reality") == "physical" and conn.get("tunnelState") == "connected":
+        print(d["identifier"], hw.get("udid", ""), d["deviceProperties"]["name"].replace(" ", "_")); break
+')"
+    [ -n "$info" ] || { echo "没有连接的 iPhone/iPad（数据线连接并信任这台 Mac；开发者模式需已开启）" >&2; exit 1; }
+    read -r device_id udid name <<<"$info"
+    python3 "$provision" device "$udid" "${name//_/ }" # 已登记则跳过
+    python3 "$provision" identity development
+    python3 "$provision" profiles
+    xcodebuild build -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Debug \
+      -destination "id=$udid" -derivedDataPath "$DERIVED"
+    app="$DERIVED/Build/Products/Debug-iphoneos/CuePad.app"
+    xcrun devicectl device install app --device "$device_id" "$app"
+    xcrun devicectl device process launch --device "$device_id" com.sugeh.cuepad
+    ;;
+  *) echo "用法：$0 <testflight|device>" >&2; exit 2 ;;
+esac

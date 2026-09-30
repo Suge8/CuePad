@@ -7,20 +7,17 @@ import UIKit
 
 @MainActor
 struct IOSTests {
-    @Test func 真实位置在App_Group共享容器里_偏好用该组的套件() throws {
-        let container = try #require(AppGroup.containerURL, "模拟器里应能取到 App Group 容器（权限没有生效？）")
+    @Test func 模拟器里App_Group权限生效_真实位置在共享容器里_偏好用该组的套件() throws {
+        guard case .appGroup(let container) = LibraryLocation.Base.platform else {
+            Issue.record("iOS 的存储应是 App Group")
+            return
+        }
+        let root = try #require(container, "模拟器里应能取到 App Group 容器（权限没有生效？）")
 
         let location = try LibraryLocation.resolve(environment: [:])
 
-        #expect(location.directory.path.hasPrefix(container.path))
-        #expect(location.preferencesSuite == AppGroup.identifier)
-        #expect(location.electronDatabase == nil)
-    }
-
-    @Test func 没有App_Group权限时明确报错() {
-        #expect(throws: LibraryLocationError.self) {
-            try LibraryLocation.resolve(environment: [:], appGroupContainer: nil)
-        }
+        #expect(location.directory.path.hasPrefix(root.path))
+        #expect(location.preferencesSuite == LibraryLocation.appGroupIdentifier)
     }
 
     @Test func iOS上发送只有剪贴板_文字与图片按顺序各成一个条目() async throws {

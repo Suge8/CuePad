@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import AppKit
 import SwiftUI
 import os

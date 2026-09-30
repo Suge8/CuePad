@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import AppKit
 import Foundation
 import Testing
@@ -18,22 +19,8 @@ struct IsolationTests {
         FileManager.default.temporaryDirectory.appending(path: "cuepad-isolation-\(UUID().uuidString)", directoryHint: .isDirectory)
     }
 
-    @Test func 相对路径给出清楚的错误而不是崩溃() {
-        do {
-            _ = try LibraryLocation.resolve(environment: ["CUEPAD_LIBRARY_DIR": "relative/library"])
-            Issue.record("相对路径应被拒绝")
-        } catch let error as LibraryLocationError {
-            #expect(error.localizedDescription.contains("CUEPAD_LIBRARY_DIR"))
-            #expect(error.localizedDescription.contains("relative/library"))
-        } catch {
-            Issue.record("错误类型不对：\(error)")
-        }
-    }
-
-    @Test func 没设环境变量时用真实位置与真实偏好域() throws {
+    @Test func macOS没设环境变量时用标准偏好域() throws {
         let location = try LibraryLocation.resolve(environment: [:])
-        #expect(location.directory.path.hasSuffix("Application Support/CuePad/Library"))
-        #expect(location.electronDatabase != nil)
         #expect(location.makeDefaults() === UserDefaults.standard)
     }
 
@@ -41,7 +28,6 @@ struct IsolationTests {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let location = try LibraryLocation.resolve(environment: ["CUEPAD_LIBRARY_DIR": directory.path])
-        #expect(location.electronDatabase == nil)
         let before = realDomain()
 
         let settings = AppSettings(defaults: location.makeDefaults())

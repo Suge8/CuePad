@@ -112,6 +112,19 @@ final class Rig {
         return services
     }
 
+    /// 没有旧库：隔离目录；有旧库：把它挂到"应用支持目录"里 Electron 版的位置（旧库位置只由这条规则决定）。
+    private func location() -> LibraryLocation {
+        if let legacy {
+            let support = directory.appending(path: "support", directoryHint: .isDirectory)
+            let electron = support.appending(path: "cuepad/cuepad.db")
+            try! FileManager.default.createDirectory(at: electron.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FileManager.default.removeItem(at: electron)
+            try! FileManager.default.createSymbolicLink(at: electron, withDestinationURL: legacy)
+            return try! LibraryLocation.resolve(environment: [:], base: .applicationSupport(support))
+        }
+        return try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
+    }
+
     private func makeServices() -> AppServices {
         let mac = MacDependencies(
             pi: PiBridge(socketDirectory: piPaths.socketDirectory),
@@ -122,9 +135,7 @@ final class Rig {
             terminal: PiTerminalJumper(),
             isAccessibilityTrusted: { true },
             historyStorage: historyStorage)
-        let services = AppServices(
-            location: LibraryLocation(directory: directory.appending(path: "Library"), electronDatabase: legacy),
-            defaults: defaults, mac: mac)
+        let services = AppServices(location: location(), defaults: defaults, mac: mac)
         services.windowShell = WindowShell(window: window)
         return services
     }

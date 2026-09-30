@@ -1,3 +1,4 @@
+import CueStore
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -70,9 +71,7 @@ final class TestApp {
 
     private func makeServices() -> AppServices {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let location = LibraryLocation(
-            directory: directory.appending(path: "Library"), electronDatabase: nil,
-            preferencesSuite: directory.appending(path: "preferences").path)
+        let location = try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
         return AppServices(location: location, defaults: location.makeDefaults(), pasteboard: pasteboard)
     }
 }
