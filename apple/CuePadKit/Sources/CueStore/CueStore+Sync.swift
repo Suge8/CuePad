@@ -54,6 +54,12 @@ package struct RemoteFailure: Sendable {
 }
 
 extension CueStore {
+  /// 表里各列声明的 SQLite 类型（TEXT / INTEGER）；CloudKit schema 的字段类型由它推出。
+  package func columnTypes(of table: Table) throws -> [String: String] {
+    Dictionary(
+      uniqueKeysWithValues: try db.query("SELECT name, type FROM pragma_table_info('\(table.rawValue)')") { ($0.text(0), $0.text(1)) })
+  }
+
   package func syncRow(recordName: String) throws -> SyncRow? {
     for table in Table.synced {
       if let row = try readSyncRow(table, recordName) { return row }
