@@ -23,7 +23,8 @@ struct Sidebar: View {
     nonisolated private static let historyLimit = 5
 
     var body: some View {
-        List(selection: selection) {
+        // 不用 List 的选中：系统选中是灰胶囊，压不过墨色体系；当前页由 PageRow 自己画
+        List {
             if let data {
                 let ordered = SidebarOrder.projects(data.projects, summaries: Array(data.summaries.values))
                 let pinned = ordered.filter(\.isPinned)
@@ -37,18 +38,18 @@ struct Sidebar: View {
                     Section("最近") {
                         ForEach(recent) { row($0, data) }
                         if inbox > 0 {
-                            Label("未归档", systemImage: "tray")
-                                .badge(inbox)
-                                .tag(Workspace.Page.inbox)
+                            PageRow(page: .inbox, count: inbox) {
+                                Label("未归档", systemImage: "tray")
+                            }
                         }
                     }
                 }
                 PiSection(history: data.history, historyProjects: data.historyProjects, projects: data.projects)
                 if data.trashCount > 0 || !data.projects.isEmpty {
                     Section {
-                        Label("回收站", systemImage: "trash")
-                            .badge(data.trashCount)
-                            .tag(Workspace.Page.trash)
+                        PageRow(page: .trash, count: data.trashCount) {
+                            Label("回收站", systemImage: "trash")
+                        }
                     }
                 }
             }
@@ -74,18 +75,14 @@ struct Sidebar: View {
         }
     }
 
-    private var selection: Binding<Workspace.Page?> {
-        Binding(get: { workspace.page }, set: { if let page = $0 { workspace.show(page) } })
-    }
-
     private func row(_ project: Project, _ data: SidebarData) -> some View {
-        Label {
-            Text(project.name)
-        } icon: {
-            ProjectGlyph(project: project)
+        PageRow(page: .project(project.id), count: data.summaries[project.id]?.cardCount ?? 0) {
+            Label {
+                Text(project.name)
+            } icon: {
+                ProjectGlyph(project: project)
+            }
         }
-        .badge(data.summaries[project.id]?.cardCount ?? 0)
-        .tag(Workspace.Page.project(project.id))
         .contextMenu { ProjectMenu(project: project, rename: { renaming = project }) }
     }
 
@@ -107,6 +104,38 @@ struct Sidebar: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
         }
+    }
+}
+
+/// 侧栏里通向一页的一行：当前页垫选中底色、文字加粗；其余用 85% 的墨，不发灰。
+private struct PageRow<Title: View>: View {
+    let page: Workspace.Page
+    let count: Int
+    @ViewBuilder let title: Title
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    private static var restingOpacity: Double { 0.85 }
+
+    var body: some View {
+        let selected = workspace.page == page
+        Button { workspace.show(page) } label: {
+            HStack(spacing: 6) {
+                title.fontWeight(selected ? .semibold : .regular)
+                Spacer(minLength: 4)
+                if count > 0 {
+                    Text("\(count)").font(.system(size: 11).monospacedDigit()).foregroundStyle(palette.ink3)
+                }
+            }
+            .foregroundStyle(selected ? palette.ink : palette.ink.opacity(Self.restingOpacity))
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 8))
+            .contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(scale: 0.98))
+        .listRowInsets(EdgeInsets(top: 1, leading: 2, bottom: 1, trailing: 2))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

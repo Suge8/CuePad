@@ -286,7 +286,7 @@ private struct FilterCapsule: View {
         .font(.system(size: 12))
         .foregroundStyle(on ? AnyShapeStyle(palette.onSolid) : AnyShapeStyle(.primary))
         .padding(.horizontal, 10).frame(height: 26)
-        .background(on ? AnyShapeStyle(palette.solid) : AnyShapeStyle(palette.fill.opacity(2)), in: .capsule)
+        .background(on ? AnyShapeStyle(palette.accent) : AnyShapeStyle(palette.fill.opacity(2)), in: .capsule)
         .contentShape(.capsule)
     }
 }
