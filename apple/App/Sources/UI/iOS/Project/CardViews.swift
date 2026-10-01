@@ -36,7 +36,7 @@ struct CardTileView: View {
             .paper(radius: 16)
             .contentShape(.rect(cornerRadius: 16))
         }
-        .buttonStyle(PressableStyle())
+        .buttonStyle(CardPressStyle())
         .zoomSource(card.id, in: zoom)
         .contextMenu { CardActions(card: card, isGoal: isGoal) }
     }
@@ -130,6 +130,7 @@ struct OlderGroupHeader: View {
                 if collapsible && !open { Text("\(group.cards.count) 张").font(.caption).foregroundStyle(palette.ink3) }
             }
             .padding(.horizontal, 4)
+            .frame(minHeight: 44)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -172,7 +173,7 @@ struct OlderRow: View {
             .padding(.horizontal, 14).padding(.vertical, 10)
             .contentShape(.rect)
         }
-        .buttonStyle(PressableStyle(kind: .row))
+        .buttonStyle(RowPressStyle())
         .background(palette.paper)
         .overlay(alignment: .top) { if !isFirst { Divider().padding(.leading, 14) } }
         .clipShape(UnevenRoundedRectangle(

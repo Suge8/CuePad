@@ -88,32 +88,38 @@ struct CaptureSheet: View {
 
     var body: some View {
         NavigationStack {
+            // 面板本身就是一张纸：不再套输入框，正文从顶部写到键盘上沿，记入位置与插图贴在键盘正上方
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 16) {
                     TextField("记下想法…", text: $text, axis: .vertical)
-                        .font(.body)
-                        .lineLimit(5...14)
+                        .font(.title3)
+                        .lineSpacing(4)
+                        .foregroundStyle(palette.ink)
                         .focused($focused)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .paper(radius: 14)
+                        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
                     if !images.isEmpty { imageStrip }
-                    HStack(spacing: 8) {
-                        destination
-                        Spacer(minLength: 0)
-                        if CameraPicker.isAvailable {
-                            Button("拍照", systemImage: "camera") { showsCamera = true }
-                        }
-                        Button("相册", systemImage: "photo.on.rectangle") { showsPhotos = true }
-                    }
-                    .labelStyle(.iconOnly)
-                    .font(.title3)
-                    .buttonStyle(.borderless)
                 }
-                .padding(16)
+                .padding(.horizontal, 24).padding(.top, 8)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(palette.desk)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack(spacing: 4) {
+                    destination
+                    Spacer(minLength: 0)
+                    if CameraPicker.isAvailable {
+                        Button("拍照", systemImage: "camera") { showsCamera = true }.frame(width: 44, height: 44)
+                    }
+                    Button("相册", systemImage: "photo.on.rectangle") { showsPhotos = true }.frame(width: 44, height: 44)
+                }
+                .labelStyle(.iconOnly)
+                .font(.title3)
+                .foregroundStyle(palette.ink2)
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 16).padding(.vertical, 4)
+                .background(palette.paper)
+                .overlay(alignment: .top) { Rectangle().fill(palette.hair).frame(height: 1) }
+            }
+            .background(palette.paper)
             .navigationTitle("随手记")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -125,7 +131,8 @@ struct CaptureSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationBackground(palette.paper)
+        .presentationDetents([.large])
         .interactiveDismissDisabled(!draft.isEmpty)
         .photosPicker(isPresented: $showsPhotos, selection: $picking, maxSelectionCount: 9, matching: .images)
         .fullScreenCover(isPresented: $showsCamera) {

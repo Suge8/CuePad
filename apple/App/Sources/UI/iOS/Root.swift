@@ -80,6 +80,7 @@ struct RouteView: View {
 
     var body: some View {
         switch route {
+        case .shelf: ShelfScreen()
         case .project(let id): ProjectScreen(projectID: id)
         case .inbox: ProjectScreen(projectID: nil)
         case .today: TodayScreen()
@@ -98,17 +99,12 @@ struct RouteView: View {
     }
 }
 
-/// 标签的角标：未完成任务数、等你确认的 Pi 会话数。
-nonisolated private struct Badges: Equatable, Sendable {
-    var tasks: Int
-    var waiting: Int
-}
-
 /// iPhone：标签栏，标签栏上方常驻随手记。
 private struct TabsRoot: View {
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
-    @State private var badges: Badges?
+    /// 活动标签的角标：等你确认的 Pi 会话数（未完成任务不紧急，不挂角标）。
+    @State private var waiting: Int?
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -119,19 +115,18 @@ private struct TabsRoot: View {
             Tab("任务", systemImage: "checklist", value: Navigation.Tab.tasks) {
                 stack($navigation.tasksPath) { TasksScreen() }
             }
-            .badge(badges?.tasks ?? 0)
             Tab("活动", systemImage: "waveform.path.ecg", value: Navigation.Tab.activity) {
                 stack($navigation.activityPath) { ActivityScreen() }
             }
-            .badge(badges?.waiting ?? 0)
+            .badge(waiting ?? 0)
             Tab(value: Navigation.Tab.search, role: .search) {
                 stack($navigation.searchPath) { SearchScreen() }
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        .modifier(CaptureAccessoryPlacement(shown: !navigation.isEditingCard))
-        .observing(services.store, [.tasks, .piSessionStates], into: $badges) { store in
-            Badges(tasks: try store.tasks().count, waiting: try store.piSessionStates().filter { $0.state == .waitingForUser }.count)
+        .modifier(CaptureAccessoryPlacement(shown: navigation.showsCaptureBar))
+        .observing(services.store, [.piSessionStates], into: $waiting) { store in
+            try store.piSessionStates().filter { $0.state == .waitingForUser }.count
         }
     }
 
@@ -142,7 +137,7 @@ private struct TabsRoot: View {
     }
 }
 
-/// 随手记栏常驻标签栏上方；打开的卡片纸页上收起（纸页本身就在输入，标签栏也藏起）。按条件收起要 iOS 26.1。
+/// 随手记栏在内容页常驻标签栏上方，其余页面收起。按条件收起要 iOS 26.1。
 private struct CaptureAccessoryPlacement: ViewModifier {
     let shown: Bool
 

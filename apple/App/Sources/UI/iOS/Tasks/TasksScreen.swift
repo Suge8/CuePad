@@ -12,6 +12,7 @@ nonisolated private struct TasksData: Sendable {
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
     @State private var data: TasksData?
     @State private var showsCompleted = false
 
@@ -19,10 +20,11 @@ struct TasksScreen: View {
 
     var body: some View {
         List {
-            Section { NewTaskLine(project: nil, projects: data?.projects) }
+            Section { NewTaskLine(project: nil, projects: data?.projects).listRowBackground(palette.paper) }
             if let data {
                 if data.open.isEmpty {
                     Text(data.completed.isEmpty ? "还没有任务" : "全部完成了").foregroundStyle(.secondary)
+                        .listRowBackground(palette.paper)
                 }
                 let live = Set(data.projects.map(\.id))
                 // 挂在回收站项目上的任务归到"未归属"，否则会从列表里消失
@@ -42,16 +44,29 @@ struct TasksScreen: View {
                     }
                 }
                 if !data.completed.isEmpty {
-                    Section(isExpanded: $showsCompleted) {
-                        ForEach(data.completed) { task in row(task, projects: data.projects) }
+                    Section {
+                        if showsCompleted { ForEach(data.completed) { task in row(task, projects: data.projects) } }
                     } header: {
-                        Text("最近完成 \(data.completed.count)")
+                        Button {
+                            withAnimation(Motion.quick) { showsCompleted.toggle() }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("最近完成 \(data.completed.count)")
+                                Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                                    .rotationEffect(.degrees(showsCompleted ? 90 : 0)).accessibilityHidden(true)
+                                Spacer()
+                            }
+                            .frame(minHeight: 44).contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
                     }
                 }
             }
         }
         .listStyle(.insetGrouped)
         .deskBackground()
+        .bottomEdgeFade()
         .navigationTitle("任务")
         .animation(Motion.quick, value: data.map { $0.open.map(\.id) + $0.completed.map(\.id) })
         .observing(services.store, [.tasks, .projects], into: $data, onError: workspace.fail) { store in
@@ -63,6 +78,7 @@ struct TasksScreen: View {
 
     private func row(_ task: CueTask, projects: [Project]) -> some View {
         TaskLine(task: task)
+            .listRowBackground(palette.paper)
             .swipeActions(edge: .leading) {
                 Button(task.completedAt == nil ? "完成" : "未完成", systemImage: "checkmark") { workspace.attempt { try await workspace.toggle(task) } }
                     .tint(.green)
@@ -85,18 +101,18 @@ struct TaskLine: View {
 
     var body: some View {
         let done = task.completedAt != nil
-        HStack(spacing: 10) {
+        HStack(spacing: 2) {
             Button { workspace.attempt { try await workspace.toggle(task) } } label: {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(done ? palette.ink2 : palette.ink3)
                     .contentTransition(.symbolEffect(.replace))
-                    .frame(minWidth: 28, minHeight: 28)
+                    .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: done) { !$0 && $1 }
             .accessibilityLabel(done ? "标为未完成" : "完成")
-            Text(task.content)
+            Text(task.content.textGlyphs)
                 .font(.body).strikethrough(done)
                 .foregroundStyle(done ? palette.ink3 : palette.ink)
                 .lineLimit(2)
@@ -150,9 +166,11 @@ struct NewTaskLine: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "plus").foregroundStyle(palette.ink3).frame(minWidth: 28).accessibilityHidden(true)
+        HStack(spacing: 2) {
+            Image(systemName: "plus").foregroundStyle(palette.ink3).frame(width: 44).accessibilityHidden(true)
             TextField("添加任务", text: $text)
+                .frame(minHeight: 44)
+                .contentShape(.rect)
                 .focused($focused)
                 .submitLabel(.done)
                 .onSubmit(add)
@@ -170,6 +188,7 @@ struct NewTaskLine: View {
                     .font(.footnote).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 10).frame(minHeight: 30)
                     .background(palette.fill, in: .capsule)
+                    .frame(minHeight: 44).contentShape(.rect)
                 }
                 .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未归属")")
             }

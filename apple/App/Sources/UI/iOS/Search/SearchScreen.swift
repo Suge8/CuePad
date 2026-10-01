@@ -34,8 +34,15 @@ struct SearchScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var query = PaletteQuery()
     @State private var data: SearchData?
+    @FocusState private var searching: Bool
+
+    /// 宽屏上结果按可用宽度排成多列。
+    private var columns: [GridItem] {
+        sizeClass == .regular ? [GridItem(.adaptive(minimum: 320), spacing: 12, alignment: .top)] : [GridItem(.flexible())]
+    }
 
     var body: some View {
         ScrollView {
@@ -52,7 +59,9 @@ struct SearchScreen: View {
                             SectionHeader(title: group.project?.name ?? "未归档", count: nil).padding(.horizontal, -4)
                         }
                         .padding(.top, 8)
-                        ForEach(group.cards) { CardRow(entry: $0, highlight: query.text) }
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
+                            ForEach(group.cards) { CardRow(entry: $0, highlight: query.text) }
+                        }
                     }
                     if data.total > data.shown {
                         Button("还有 \(data.total - data.shown) 张") { query.pages += 1 }
@@ -64,14 +73,18 @@ struct SearchScreen: View {
         }
         .scrollDismissesKeyboard(.immediately)
         .background(palette.desk)
+        .bottomEdgeFade()
         .navigationTitle("搜索")
         .navigationSubtitle(data.map { !query.text.isEmpty || query.isFiltered ? "\($0.total) 张" : "" } ?? "")
-        .searchable(text: $query.text, prompt: "搜索卡片")
+        // 搜索框常驻导航栏下方，进入即聚焦弹出键盘
+        .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索卡片")
+        .searchFocused($searching)
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear {
             #if DEBUG
             if query.text.isEmpty { query.text = DebugScene.searchText }
             #endif
+            searching = true
         }
         .observing(services.store, [.cards, .projects, .sendRecords], id: query, into: $data, onError: workspace.fail) { [query] store in
             let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
@@ -117,6 +130,13 @@ private struct FilterChips: View {
             }
             .padding(.horizontal, 16)
         }
+        // 延伸到屏幕边缘，右侧 24pt 渐隐：看得出还能横着滑，而不是被页边距切断
+        .mask {
+            HStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24)
+            }
+        }
     }
 
     private var projectLabel: String {
@@ -159,7 +179,8 @@ private struct Chip: View {
         .padding(.horizontal, 12).frame(minHeight: 36)
         .background(on ? palette.solid : palette.paper, in: .capsule)
         .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
-        .contentShape(.capsule)
+        .padding(.vertical, 4)
+        .contentShape(.rect)
         .animation(Motion.quick, value: on)
     }
 }

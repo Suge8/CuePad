@@ -19,6 +19,8 @@ final class Navigation {
 
     /// 可推入的页面。
     enum Route: Hashable {
+        /// 项目书架（iPhone 项目标签的根；iPad 侧栏的"项目"）。
+        case shelf
         case project(UUID)
         case inbox
         case today
@@ -63,7 +65,7 @@ final class Navigation {
     var capture: Capture?
     var outbox: Outbox?
     /// 分栏：侧栏选中的页与其上推入的页（打开的卡片纸页盖在项目页上）。
-    var splitRoot: Route = .today
+    var splitRoot: Route = .shelf
     var splitPath: [Route] = []
     var sidebar: NavigationSplitViewVisibility = .automatic
     /// 分栏：右侧面板；nil 为收起。
@@ -83,16 +85,16 @@ final class Navigation {
         return nil
     }
 
-    /// 标签栏布局下，当前标签最上面是打开的卡片。
-    var isEditingCard: Bool {
-        let path = switch tab {
-        case .projects: projectsPath
-        case .tasks: tasksPath
-        case .activity: activityPath
-        case .search: searchPath
+    /// 随手记栏只在内容页出现（书架、项目、今天）；任务、活动、搜索、设置、回收站与打开的卡片上不出现。
+    var showsCaptureBar: Bool {
+        let top: Route? = switch layout {
+        case .tabs: tab == .projects ? projectsPath.last ?? .shelf : nil
+        case .split: splitPath.last ?? splitRoot
         }
-        if case .card = path.last { return true }
-        return false
+        switch top {
+        case .shelf, .project, .inbox, .today: return true
+        default: return false
+        }
     }
 
     /// 在当前位置推入一页。
@@ -127,7 +129,7 @@ final class Navigation {
         for path in [\Navigation.projectsPath, \.tasksPath, \.activityPath, \.searchPath, \.splitPath] {
             if let index = self[keyPath: path].firstIndex(of: gone) { self[keyPath: path].removeSubrange(index...) }
         }
-        if splitRoot == gone { select(.today) }
+        if splitRoot == gone { select(.shelf) }
     }
 
     /// 小组件与分享扩展的链接：随手记、项目、卡片。

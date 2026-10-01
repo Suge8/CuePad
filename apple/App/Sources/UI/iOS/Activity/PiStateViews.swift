@@ -16,14 +16,13 @@ nonisolated extension PiWorkState {
         }
     }
 
+    /// 只有要你注意的状态有颜色（等你确认橙、出错红）；干活中是实心的中性点，空闲是浅灰点。
     var tint: Color {
         switch self {
-        case .thinking: .purple
-        case .outputting: .teal
-        case .tool: .blue
+        case .thinking, .outputting, .tool: .primary
         case .waitingForUser: .orange
         case .error: .red
-        case .settled, .unknown: .gray
+        case .settled, .unknown: .gray.opacity(0.45)
         }
     }
 

@@ -23,7 +23,7 @@ struct SplitRoot: View {
                     .toolbar { ToolbarItemGroup(placement: .primaryAction) { PanelButtons() } }
             }
             .safeAreaInset(edge: .bottom) {
-                if navigation.splitPath.isEmpty, showsCaptureBar { SplitCaptureBar().padding(.bottom, 12) }
+                if navigation.showsCaptureBar { SplitCaptureBar().padding(.bottom, 12) }
             }
         }
         .inspector(isPresented: Binding(get: { navigation.panel != nil }, set: { if !$0 { navigation.panel = nil } })) {
@@ -46,19 +46,11 @@ struct SplitRoot: View {
         withAnimation(Motion.panel) { navigation.sidebar = .detailOnly }
     }
 
-    /// 随手记栏只在内容页出现，设置、回收站这类页面不需要。
-    private var showsCaptureBar: Bool {
-        switch navigation.splitRoot {
-        case .settings, .conflicts, .trash: false
-        default: true
-        }
-    }
-
-    /// 打开窗口时的右侧页：当前项目，没有项目时是今天。
+    /// 打开窗口时的右侧页：当前项目，没有项目时是项目书架（与 iPhone 首页相同）。
     static func route(for page: Workspace.Page) -> Navigation.Route {
         switch page {
         case .project(let id): .project(id)
-        case .inbox: .today
+        case .inbox: .shelf
         case .trash: .trash
         }
     }
@@ -121,33 +113,35 @@ nonisolated private struct SidebarData: Sendable {
 
 private struct SplitSidebar: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @State private var data: SidebarData?
     @State private var creating = false
 
     var body: some View {
-        List(selection: selection) {
+        List {
             Section {
-                Label("今天", systemImage: "sun.max").tag(Navigation.Route.today)
-                Label("活动", systemImage: "waveform.path.ecg").badge(data?.waiting ?? 0).tag(Navigation.Route.activity)
-                Label("搜索", systemImage: "magnifyingglass").tag(Navigation.Route.search)
+                SidebarRow(route: .shelf, title: "项目", symbol: "books.vertical")
+                SidebarRow(route: .today, title: "今天", symbol: "sun.max")
+                SidebarRow(route: .activity, title: "活动", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
+                SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
             if let data {
                 let pinned = data.projects.filter(\.isPinned)
                 if !pinned.isEmpty {
                     Section("置顶") { ForEach(pinned) { row($0, data) } }
                 }
-                Section("最近") {
-                    ForEach(data.projects.filter { !$0.isPinned }) { row($0, data) }
-                    if let inbox = data.counts[nil], inbox > 0 {
-                        Label("未归档", systemImage: "tray").badge(inbox).tag(Navigation.Route.inbox)
+                let recent = data.projects.filter { !$0.isPinned }
+                let inbox = data.counts[nil] ?? 0
+                if !recent.isEmpty || inbox > 0 {
+                    Section("最近") {
+                        ForEach(recent) { row($0, data) }
+                        if inbox > 0 { SidebarRow(route: .inbox, title: "未归档", symbol: "tray", badge: inbox) }
                     }
                 }
             }
             Section {
-                Label("回收站", systemImage: "trash").tag(Navigation.Route.trash)
-                Label("设置", systemImage: "gearshape").tag(Navigation.Route.settings)
+                SidebarRow(route: .trash, title: "回收站", symbol: "trash")
+                SidebarRow(route: .settings, title: "设置", symbol: "gearshape")
             }
         }
         .navigationTitle("CuePad")
@@ -167,30 +161,57 @@ private struct SplitSidebar: View {
     }
 
     private func row(_ project: Project, _ data: SidebarData) -> some View {
-        Label {
-            HStack(spacing: 6) {
-                Text(project.name)
-                if let state = data.pi[project.id] { PiDot(state: state, size: 6) }
+        SidebarRow(route: .project(project.id), title: project.name, project: project, badge: data.counts[project.id] ?? 0,
+                   pi: data.pi[project.id])
+    }
+}
+
+/// 侧栏的一项。选中态是一层淡底色加粗字（不是实心胶囊）：只告诉你"在这里"，不抢内容的注意。
+private struct SidebarRow: View {
+    let route: Navigation.Route
+    let title: String
+    var symbol: String?
+    var project: Project?
+    var badge = 0
+    var pi: PiWorkState?
+    @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let selected = navigation.splitRoot == route
+        Button(action: choose) {
+            Label {
+                HStack(spacing: 6) {
+                    Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(1)
+                    if let pi { PiDot(state: pi, size: 6) }
+                    Spacer(minLength: 4)
+                    if badge > 0 { Text("\(badge)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3) }
+                }
+            } icon: {
+                if let symbol { Image(systemName: symbol) } else { ProjectGlyph(project: project, size: 15) }
             }
-        } icon: {
-            ProjectGlyph(project: project, size: 15)
+            .foregroundStyle(palette.ink)
+            .frame(minHeight: 44)
+            .contentShape(.rect)
         }
-        .badge(data.counts[project.id] ?? 0)
-        .tag(Navigation.Route.project(project.id))
-        .accessibilityValue(data.pi[project.id].map { "Pi \($0.label)" } ?? "")
+        .buttonStyle(.plain)
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(selected ? palette.hair : .clear)
+                .padding(.horizontal, 10))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityValue(pi.map { "Pi \($0.label)" } ?? "")
     }
 
     /// 选中项目同时记为当前项目（与 Mac 同一事实源）。
-    private var selection: Binding<Navigation.Route?> {
-        Binding(get: { navigation.splitRoot }, set: { route in
-            guard let route else { return }
-            navigation.select(route)
-            switch route {
-            case .project(let id): workspace.show(.project(id))
-            case .inbox: workspace.show(.inbox)
-            default: break
-            }
-        })
+    private func choose() {
+        navigation.select(route)
+        switch route {
+        case .project(let id): workspace.show(.project(id))
+        case .inbox: workspace.show(.inbox)
+        default: break
+        }
     }
 }
 

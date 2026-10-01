@@ -41,6 +41,7 @@ struct SettingsScreen: View {
             }
         }
         .deskBackground()
+        .bottomEdgeFade()
         .navigationTitle("设置")
     }
 

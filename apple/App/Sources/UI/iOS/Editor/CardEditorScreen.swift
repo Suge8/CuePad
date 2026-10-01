@@ -43,6 +43,8 @@ struct CardEditorScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(wide ? palette.desk : palette.paper)
             .navigationBarTitleDisplayMode(.inline)
+            // 纸页占满整屏：标签栏的玻璃不压在正文上
+            .toolbar(.hidden, for: .tabBar)
             .toolbar { toolbar }
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
             .onChange(of: pickedImage) { insertPicked() }
@@ -108,21 +110,26 @@ struct CardEditorScreen: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// 按钮从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        if let card = data?.card {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button("复制", systemImage: "doc.on.doc") { copy(card) }
-                Button("发到 Mac", systemImage: "paperplane", action: sendToMac)
-                    .keyboardShortcut(.return, modifiers: .command)
-            }
-            ToolbarItem(placement: .secondaryAction) {
-                Menu("更多", systemImage: "ellipsis") {
+        let card = data?.card
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button("复制", systemImage: "doc.on.doc") { if let card { copy(card) } }
+                .disabled(card == nil)
+            Button("发到 Mac", systemImage: "paperplane", action: sendToMac)
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(card == nil)
+        }
+        ToolbarItem(placement: .secondaryAction) {
+            Menu("更多", systemImage: "ellipsis") {
+                if let card {
                     ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
                     NumberingPicker(card: card)
                     Divider()
                     CardActions(card: card, isGoal: data?.project?.goalCardID == card.id, includesCopy: false)
                 }
             }
+            .disabled(card == nil)
         }
     }
 

@@ -37,8 +37,9 @@ struct TodayScreen: View {
             .animation(Motion.quick, value: data?.cards.map(\.id))
         }
         .background(palette.desk)
+        .bottomEdgeFade(capturePage: true)
         .navigationTitle("今天")
-        .navigationSubtitle(data.map { "\($0.total) 张" } ?? "")
+        .navigationSubtitle(data.map { $0.total > 0 ? "\($0.total) 张" : "" } ?? "")
         .observing(services.store, [.cards, .projects], id: pages, into: $data, onError: workspace.fail) { [pages] store in
             let now = Date.now
             let found = try store.search(

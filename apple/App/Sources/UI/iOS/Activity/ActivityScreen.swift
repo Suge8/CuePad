@@ -101,6 +101,7 @@ struct ActivityScreen: View {
         }
         }
         .background(palette.desk)
+        .bottomEdgeFade()
         .navigationTitle("活动")
         .refreshable { await services.syncNow() }
         .observing(services.store, [.piSessionStates, .deliveryRequests, .sendRecords, .projects], into: $data, onError: workspace.fail) {
@@ -181,7 +182,7 @@ private struct WaitingCard: View {
                 PiDot(state: session.state)
                 Text("\(session.title) 等你确认").font(.headline).foregroundStyle(palette.ink)
                 Spacer(minLength: 8)
-                Text("已等 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(.orange)
+                PiElapsed(session: session)
             }
             if let detail = session.detail, !detail.isEmpty {
                 Text(detail).font(.body).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -209,35 +210,46 @@ private struct SessionRow: View {
         Button {
             if let project { navigation.show(project: project.id, workspace: workspace) }
         } label: {
-            HStack(alignment: .top, spacing: 10) {
-                PiDot(state: session.state).padding(.top, 2)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(session.title).font(.body.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                        if let project {
-                            Text(project.name).font(.footnote).foregroundStyle(Palette.projectTint(project.color)).lineLimit(1)
-                        }
-                        Spacer(minLength: 8)
-                        if session.state.isWorking {
-                            Text(session.stateSince, style: .timer).font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
-                        }
-                    }
-                    Text(session.state.label).font(.subheadline.weight(.medium)).foregroundStyle(session.state.tint)
-                    if let detail = session.detail, !detail.isEmpty {
-                        Text(detail)
-                            .font(session.state == .tool ? .footnote.monospaced() : .footnote)
-                            .foregroundStyle(palette.ink2).lineLimit(3)
-                    }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(session.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                    Spacer(minLength: 8)
+                    PiElapsed(session: session)
+                }
+                HStack(spacing: 6) {
+                    PiDot(state: session.state, size: 6)
+                    Text([project?.name, session.state.label].compactMap { $0 }.joined(separator: " · "))
+                        .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
+                }
+                if let detail = session.detail, !detail.isEmpty {
+                    Text(detail).font(.footnote.monospaced()).foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.middle)
                 }
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
+            .padding(.horizontal, 16).padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RowPressStyle())
         .disabled(project == nil)
         .accessibilityElement(children: .combine)
         .accessibilityHint(project == nil ? "" : "打开项目 \(project?.name ?? "")")
+    }
+}
+
+/// 会话在当前状态里待了多久："已运行 0:42"（干活中）或"已等 1:07"（等你确认）；空闲不显示。
+struct PiElapsed: View {
+    let session: PiSessionState
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        switch session.state {
+        case .waitingForUser:
+            Text("已等 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(.orange)
+        case .thinking, .outputting, .tool:
+            Text("已运行 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
+        default:
+            EmptyView()
+        }
     }
 }
 
@@ -268,7 +280,7 @@ private struct DeliveryRow: View {
                 }
                 .font(.subheadline.weight(.medium))
                 .buttonStyle(.bordered)
-                .controlSize(.small)
+                .frame(minHeight: 44)
                 .padding(.top, 2)
             }
         }

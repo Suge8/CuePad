@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS 画面：project、older、today、editor、tasks、activity、send、search、trash、settings、capture；不给是书架。
+/// iOS 画面：project、older、today、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// iPad 上 tasks、activity 打开右侧面板。演示库另写入 Mac 同步来的 Pi 会话状态与一条发到 Mac 的请求。
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
@@ -18,6 +18,9 @@ extension DebugScene {
         }
         switch scene {
         case "project", "older": if let project { open(.project(project)) }
+        case "sidebar":
+            if let project { open(.project(project)) }
+            navigation.sidebar = .all
         case "today": open(.today)
         case "trash": open(.trash)
         case "settings": open(.settings)

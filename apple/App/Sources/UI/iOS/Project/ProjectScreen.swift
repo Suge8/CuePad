@@ -44,6 +44,7 @@ struct ProjectScreen: View {
             }
         }
         .background(palette.desk)
+        .bottomEdgeFade(capturePage: true)
         .navigationTitle(page?.data.project?.name ?? "未归档")
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
@@ -65,7 +66,14 @@ struct ProjectScreen: View {
         LazyVStack(alignment: .leading, spacing: 12) {
             if data.project != nil { FocusCard(data: data, sessions: sessions ?? []).padding(.bottom, 12) }
             if data.cards.isEmpty {
-                ContentUnavailableView("还没有卡片", systemImage: "square.on.square.dashed").padding(.top, 40)
+                ContentUnavailableView {
+                    Label("还没有卡片", systemImage: "square.on.square.dashed")
+                } description: {
+                    Text("写一张，或者在下方随手记一条")
+                } actions: {
+                    Button("新建卡片", action: newCard).prominentButton().controlSize(.large)
+                }
+                .padding(.top, 24)
             }
             if !arrangement.pinned.isEmpty {
                 SectionHeader(title: "置顶", count: arrangement.pinned.count)
@@ -97,7 +105,8 @@ struct ProjectScreen: View {
     private var subtitle: String {
         guard let data = page?.data else { return "" }
         let directory = data.directory.map(Self.homeRelative)
-        return [directory, "\(data.cards.count) 张卡片"].compactMap { $0 }.joined(separator: " · ")
+        let count = data.cards.isEmpty ? nil : "\(data.cards.count) 张卡片"
+        return [directory, count].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// 绑定的目录是 Mac 上的路径：`/Users/<name>/…` 显示成 `~/…`。
@@ -178,7 +187,7 @@ private struct FocusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let goal = data.goalCard {
-                let text = CardText(goal.body)
+                let text = CardEntry(goal).text
                 Button { navigation.open(card: goal.id) } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         SectionLabel(text: "目标", systemImage: "scope")
@@ -201,6 +210,7 @@ private struct FocusCard: View {
                         if navigation.layout == .split { navigation.panel = .tasks } else { navigation.tab = .tasks }
                     }
                     .font(.subheadline).foregroundStyle(palette.ink3)
+                    .frame(minHeight: 44)
                 }
                 NewTaskLine(project: data.project?.id)
             }
@@ -213,11 +223,10 @@ private struct FocusCard: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             PiDot(state: session.state, size: 7)
                             Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
-                            Text(session.summary).font(.subheadline).foregroundStyle(session.state.tint).lineLimit(1)
+                            Text(session.summary).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
+                                .truncationMode(.middle)
                             Spacer(minLength: 4)
-                            if session.state.isWorking || session.state == .waitingForUser {
-                                Text(session.stateSince, style: .timer).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
-                            }
+                            PiElapsed(session: session)
                         }
                         .accessibilityElement(children: .combine)
                     }

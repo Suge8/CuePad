@@ -2,19 +2,14 @@
 import CueStore
 import SwiftUI
 
-/// 按下即反馈：整卡轻微下沉（0.97），行只铺一层底色。按下 90ms，松开 180ms，都是缓出；减弱动态效果时卡片不缩放。
-struct PressableStyle: ButtonStyle {
-    enum Kind { case card, row }
-    var kind: Kind = .card
+/// 列表行的按下反馈：铺一层底色（整卡用共用的 `CardPressStyle`）。按下即出现，松开 160ms 淡去。
+struct RowPressStyle: ButtonStyle {
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
-        let pressed = configuration.isPressed
         configuration.label
-            .background { if kind == .row && pressed { palette.fill } }
-            .scaleEffect(kind == .card && pressed && !reduceMotion ? 0.97 : 1)
-            .animation(.easeOut(duration: pressed ? 0.09 : 0.18), value: pressed)
+            .background { if configuration.isPressed { palette.fill } }
+            .animation(configuration.isPressed ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
 
@@ -43,7 +38,10 @@ nonisolated struct CardEntry: Identifiable, Sendable {
 
     init(_ card: Card) {
         self.card = card
-        text = CardText(card.body)
+        var text = CardText(card.body)
+        text.title = text.title.textGlyphs
+        text.preview = text.preview.textGlyphs
+        self.text = text
     }
 }
 
@@ -73,8 +71,7 @@ struct CardRow: View {
                     .font(.caption.weight(.medium))
                     Text(marked(text.title.nonEmpty ?? "空白卡片")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
                     if !text.preview.isEmpty {
-                        Text(highlight.isEmpty ? VariableText.styled(text.preview, palette) : marked(text.preview))
-                            .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
+                        Text(marked(text.preview)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
                     }
                 }
                 .multilineTextAlignment(.leading)
@@ -88,13 +85,14 @@ struct CardRow: View {
             .paper(radius: 16)
             .contentShape(.rect(cornerRadius: 16))
         }
-        .buttonStyle(PressableStyle())
+        .buttonStyle(CardPressStyle())
         .zoomSource(card.id, in: zoom)
         .contextMenu { CardActions(card: card, isGoal: false) }
     }
 
+    /// 变量照常标色，搜索词再叠一层命中底色。
     private func marked(_ string: String) -> AttributedString {
-        highlight.split(whereSeparator: \.isWhitespace).reduce(AttributedString(string)) { result, word in
+        highlight.split(whereSeparator: \.isWhitespace).reduce(VariableText.styled(string, palette)) { result, word in
             Highlight.matches(string, String(word), base: result)
         }
     }
@@ -103,6 +101,47 @@ struct CardRow: View {
 extension View {
     /// 列表与表单铺在桌面色上，与书架、项目页同一底色。
     func deskBackground() -> some View { modifier(DeskBackground()) }
+
+    /// 主按钮：实心墨色玻璃，字用与墨色相反的颜色（深色模式下墨色是浅的，系统默认的白字会看不见）。
+    func prominentButton() -> some View { modifier(ProminentButton()) }
+
+    /// 底部玻璃（标签栏、随手记栏）之下铺实底，之上 48pt 渐隐到桌面色：滚动内容在碰到玻璃前就淡出，玻璃下不叠字。
+    /// iPhone 每页底部都有标签栏；宽 iPad 只有项目页一类（`capturePage`）底部浮着随手记栏，右侧面板里没有玻璃。
+    func bottomEdgeFade(capturePage: Bool = false) -> some View { modifier(BottomEdgeFade(capturePage: capturePage)) }
+}
+
+private struct BottomEdgeFade: ViewModifier {
+    let capturePage: Bool
+    @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
+    private static let fade: CGFloat = 48
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if navigation.layout == .tabs || capturePage { faded(content) } else { content }
+    }
+
+    private func faded(_ content: Content) -> some View {
+        content
+            .contentMargins(.bottom, Self.fade, for: .scrollContent)
+            .overlay(alignment: .bottom) {
+                GeometryReader { proxy in
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        LinearGradient(colors: [palette.desk.opacity(0), palette.desk], startPoint: .top, endPoint: .bottom)
+                            .frame(height: Self.fade)
+                        palette.desk.frame(height: proxy.safeAreaInsets.bottom)
+                    }
+                    .ignoresSafeArea(edges: .bottom)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+    }
+}
+
+private struct ProminentButton: ViewModifier {
+    @Environment(\.palette) private var palette
+    func body(content: Content) -> some View { content.buttonStyle(.glassProminent).foregroundStyle(palette.onSolid) }
 }
 
 private struct DeskBackground: ViewModifier {
@@ -113,5 +152,13 @@ private struct DeskBackground: ViewModifier {
 nonisolated extension String {
     /// 空串为 nil，便于 `?? 占位`。
     var nonEmpty: String? { isEmpty ? nil : self }
+
+    /// ↩ ↪ 这类箭头在 iOS 上默认画成彩色 emoji 按键：加文字样式选择符，按普通字形显示。
+    var textGlyphs: String {
+        guard contains(where: { Self.emojiDefaulted.contains($0) }) else { return self }
+        return String(flatMap { Self.emojiDefaulted.contains($0) ? [$0, "\u{FE0E}"] : [$0] })
+    }
+
+    private static let emojiDefaulted: Set<Character> = ["↩", "↪", "⤴", "⤵", "↔", "↕"]
 }
 #endif

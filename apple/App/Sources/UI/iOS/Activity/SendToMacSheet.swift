@@ -69,7 +69,7 @@ struct SendToMacSheet: View {
         if sentID == nil {
             ToolbarItem(placement: .confirmationAction) {
                 Button("发送", systemImage: "paperplane.fill", action: send)
-                    .buttonStyle(.glassProminent)
+                    .prominentButton()
                     .disabled(session == nil || mode == nil || sending)
                     .keyboardShortcut(.return, modifiers: .command)
             }
@@ -202,7 +202,7 @@ private struct DeliveryProgress: View {
             if status == .failed {
                 HStack(spacing: 12) {
                     Button("关闭", action: close).buttonStyle(.bordered)
-                    Button("重试", action: retry).buttonStyle(.glassProminent)
+                    Button("重试", action: retry).prominentButton()
                 }
                 .padding(.top, 6)
             }
