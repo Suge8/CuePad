@@ -3,6 +3,8 @@ import AppKit
 import CueDispatch
 import CuePi
 import Foundation
+import os
+import Synchronization
 
 /// macOS 壳层与后台服务的生命周期：启动、停止、全局快捷键、Pi 历史索引、终端跳转。
 extension AppServices {
@@ -51,13 +53,23 @@ extension AppServices {
     }
 
     /// 真正退出时释放：后台任务、远程投送执行器、同步引擎、Pi 连接、全局快捷键。
-    func stop() async {
+    /// 要等的组件依次停止，整体最多等 `limit`：卡住的不拦着退出，记一条日志指出是哪个；返回它的名字，按时结束返回 nil。
+    @discardableResult
+    func stop(within limit: Duration = .seconds(2)) async -> String? {
         cancelBackgroundWork()
         pi.stop()
         hotkey.unregister()
-        await deliveryExecutor?.stop()
+        let executor = deliveryExecutor, sync = sync
         deliveryExecutor = nil
-        await sync?.stop()
+        let late = await ShutdownSteps.run([
+            ("远程投送执行器", { await executor?.stop() }),
+            ("同步引擎", { await sync?.stop() }),
+        ], within: limit)
+        if let late {
+            Logger(subsystem: Self.bundleID, category: "shutdown")
+                .error("退出收尾：\(late, privacy: .public) 没在 \(limit, privacy: .public) 内结束，已放行退出")
+        }
+        return late
     }
 
     // MARK: 全局快捷键
@@ -132,3 +144,28 @@ extension AppServices {
     }
 }
 #endif
+
+/// 依次执行的收尾步骤，整体有时限。
+nonisolated enum ShutdownSteps {
+    /// 按顺序执行；全部结束返回 nil。超过 `limit` 时不再等，返回正在执行的那一步的名字（其后的步骤不执行，进程随即退出）。
+    static func run(_ steps: [(name: String, run: @Sendable () async -> Void)], within limit: Duration) async -> String? {
+        let (outcomes, outcome) = AsyncStream<String?>.makeStream()
+        let current = Mutex<String?>(nil)
+        let work = Task {
+            for step in steps where !Task.isCancelled {
+                current.withLock { $0 = step.name }
+                await step.run()
+            }
+            outcome.yield(nil)
+        }
+        let timer = Task {
+            guard (try? await Task.sleep(for: limit)) != nil else { return }
+            outcome.yield(current.withLock { $0 })
+        }
+        var first = outcomes.makeAsyncIterator()
+        let late = await first.next() ?? nil
+        timer.cancel()
+        if late != nil { work.cancel() }
+        return late
+    }
+}
