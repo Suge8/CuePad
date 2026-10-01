@@ -134,8 +134,8 @@ struct SendToMacSheet: View {
                                 .padding(.horizontal, 6).padding(.vertical, 2).background(palette.fill, in: .capsule)
                         }
                     }
-                    Text([project?.name, item.summary].compactMap { $0 }.joined(separator: " · "))
-                        .font(.footnote).foregroundStyle(item.state == .known(.waitingForUser) ? palette.attention : palette.ink3).lineLimit(1)
+                    PiActivityLine(text: PiActivityLine.join(project?.name, item.summary))
+                        .foregroundStyle(item.state == .known(.waitingForUser) ? palette.attention : palette.ink3)
                 }
                 Spacer(minLength: 8)
                 if item.sessionID == session?.sessionID {
