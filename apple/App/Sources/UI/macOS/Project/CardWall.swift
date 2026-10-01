@@ -4,7 +4,7 @@ import CueText
 import SwiftUI
 
 /// 卡片墙：列数随宽度（理想列宽 260），分列由 `WallColumns` 决定并保持稳定——存新卡时新卡进最矮一列的顶部，
-/// 同列的卡往下挪（有动画），别列的卡不动；只有列数变化时重新分配，且不做动画。
+/// 同列的卡往下挪（有动画），别列的卡不动；只有列数变化时重新分配。
 struct WallGrid<Tile: View>: View {
     let ids: [UUID]
     let cards: [UUID: Card]
@@ -17,40 +17,81 @@ struct WallGrid<Tile: View>: View {
     private static var idealColumnWidth: CGFloat { 260 }
 
     var body: some View {
-        HStack(alignment: .top, spacing: Self.spacing) {
-            ForEach(Array((layout?.columns ?? []).enumerated()), id: \.offset) { _, column in
-                VStack(spacing: Self.spacing) {
-                    ForEach(column, id: \.self) { id in
-                        if let card = cards[id] {
-                            tile(card).transition(.opacity.combined(with: .scale(scale: 0.98)))
-                        }
-                    }
+        // 一层平铺的卡片交给 ColumnsLayout 摆位：卡片换列只是换位置，不换父视图，不会被重建
+        ColumnsLayout(spacing: Self.spacing, columnCount: layout?.columns.count ?? 1) {
+            ForEach(placed, id: \.id) { item in
+                if let card = cards[item.id] {
+                    tile(card)
+                        .layoutValue(key: ColumnKey.self, value: item.column)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // 只在跨列数档位时重新分配：侧栏开合、拖窗口的其余帧只是列宽跟着变
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
+            let crossed = Self.count(for: newWidth) != Self.count(for: width)
             width = newWidth
-            relayout(animated: false)
+            if crossed || layout == nil { relayout(animated: false) }
         }
         .onChange(of: ids) { relayout(animated: true) }
     }
 
+    private var placed: [(id: UUID, column: Int)] {
+        (layout?.columns ?? []).enumerated().flatMap { column, ids in ids.map { (id: $0, column: column) } }
+    }
+
+    private static func count(for width: CGFloat) -> Int {
+        WallColumns.count(for: width, idealColumnWidth: idealColumnWidth, spacing: spacing)
+    }
+
     private func relayout(animated: Bool) {
         guard width > 0 else { return }
-        let count = WallColumns.count(for: width, idealColumnWidth: Self.idealColumnWidth, spacing: Self.spacing)
+        let count = Self.count(for: width)
         let columnWidth = (width - Self.spacing * CGFloat(count - 1)) / CGFloat(count)
         let cards = cards
         let height = { (id: UUID) in cards[id].map { WallColumns.estimatedHeight(of: CardText($0.body), columnWidth: columnWidth) } ?? 0 }
         var next = layout ?? WallColumns(order: ids, count: count, height: height)
         next.update(order: ids, count: count, height: height)
         guard next != layout else { return }
-        // 列数变了（窗口跨档）直接落位；同列挪动与新卡入场走短弹簧
-        if animated, layout?.columns.count == count {
+        if animated {
             withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { layout = next }
         } else {
             layout = next
+        }
+    }
+}
+
+nonisolated private struct ColumnKey: LayoutValueKey {
+    static let defaultValue = 0
+}
+
+/// 按子视图标注的列号竖排：每列从上往下依次叠放，列宽均分。
+private struct ColumnsLayout: Layout {
+    let spacing: CGFloat
+    let columnCount: Int
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+        let width = proposal.width ?? 0
+        return CGSize(width: width, height: frames(width: width, subviews: subviews).map(\.maxY).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
+        for (subview, frame) in zip(subviews, frames(width: bounds.width, subviews: subviews)) {
+            subview.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: ProposedViewSize(frame.size))
+        }
+    }
+
+    private func frames(width: CGFloat, subviews: Subviews) -> [CGRect] {
+        let count = max(columnCount, 1)
+        let columnWidth = max((width - spacing * CGFloat(count - 1)) / CGFloat(count), 0)
+        var tops = Array(repeating: CGFloat.zero, count: count)
+        return subviews.map { subview in
+            let column = min(subview[ColumnKey.self], count - 1)
+            let height = subview.sizeThatFits(ProposedViewSize(width: columnWidth, height: nil)).height
+            let frame = CGRect(x: CGFloat(column) * (columnWidth + spacing), y: tops[column], width: columnWidth, height: height)
+            tops[column] += height + spacing
+            return frame
         }
     }
 }
