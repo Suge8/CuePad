@@ -33,14 +33,19 @@ extension PiAgentState {
         if case .tool = self { true } else { false }
     }
 
-    var tint: Color {
+    /// 状态色只表达含义：运行中是中性的墨，等你确认用注意色，出错用失败色。
+    func tint(_ palette: Palette) -> Color {
         switch self {
-        case .idle, .done: .secondary
-        case .thinking, .outputting: .purple
-        case .tool: .blue
-        case .waitingUser: .orange
-        case .error: .red
+        case .idle, .done: palette.ink3
+        case .thinking, .outputting, .tool: palette.ink2
+        case .waitingUser: palette.attention
+        case .error: palette.failure
         }
+    }
+
+    /// 状态文字的颜色：只有需要处理的才上色。
+    func labelColor(_ palette: Palette) -> Color {
+        needsAttention ? tint(palette) : palette.ink3
     }
 
     /// 需要用户过去看一眼。
@@ -56,14 +61,16 @@ struct PiDot: View {
     let state: PiAgentState?
     var size: CGFloat = 7
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
 
     var body: some View {
+        let tint = state?.tint(palette) ?? palette.ink3.opacity(0.6)
         Circle()
-            .fill(state?.tint ?? .secondary.opacity(0.5))
+            .fill(tint)
             .frame(width: size, height: size)
             .overlay {
                 if state?.isBusy == true {
-                    Circle().stroke((state?.tint ?? .clear).opacity(0.35), lineWidth: 3).scaleEffect(1.6)
+                    Circle().stroke(tint.opacity(0.3), lineWidth: 3).scaleEffect(1.6)
                         .opacity(reduceMotion ? 0 : 1)
                 }
             }

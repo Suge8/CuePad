@@ -49,9 +49,18 @@ private struct GlassSurface<S: Shape>: ViewModifier {
 }
 
 /// 动效：只有卡片 ↔ 纸是大幅空间过渡；其余为短淡入淡出。减弱动态效果时一律直接到终态或只淡入淡出。
+/// 动效 token（Mac 与 iOS 共用）：一律不回弹的临界阻尼弹簧，都在 300ms 以内；弹簧从当前呈现值继续，天然可打断。
 enum Motion {
-    static let paper = Animation.spring(duration: 0.45, bounce: 0.1)
-    static let panel = Animation.spring(duration: 0.3, bounce: 0)
+    /// 短动效：列表里挪位置、面板、浮层、切换。
+    static let snappy = Animation.spring(duration: 0.25, bounce: 0)
+    /// 卡片放大成纸页。
+    static let paper = Animation.spring(duration: 0.28, bounce: 0)
+    /// 纸页缩回卡片：出场约为进场的 75%。用定长曲线而不是弹簧：完成回调要准时落在纸到位的那一刻，
+    /// 弹簧的完成要等尾巴收敛，纸会以空白状态在原卡上多停一两帧。
+    static let paperCloseDuration = 0.22
+    static let paperClose = Animation.timingCurve(0.3, 0, 0.1, 1, duration: paperCloseDuration)
+    static let panel = snappy
+    /// 颜色、透明度、悬停这类不移动位置的反馈。
     static let quick = Animation.easeOut(duration: 0.16)
 
     /// 减弱动态效果时，空间动画换成短淡入淡出。
