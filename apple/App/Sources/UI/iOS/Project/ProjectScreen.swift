@@ -129,7 +129,6 @@ struct ProjectScreen: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Button("新建卡片", systemImage: "square.and.pencil") { newCard() }
-                .keyboardShortcut("n")
         }
         if let project = page?.data.project {
             ToolbarItem(placement: .secondaryAction) {
@@ -215,7 +214,7 @@ private struct FocusCard: View {
                 }
                 NewTaskLine(project: data.project?.id)
             }
-            .animation(Motion.quick, value: data.tasks.map(\.id))
+            .animation(.easeOut(duration: 0.2), value: data.tasks.map(\.id))
             if !sessions.isEmpty {
                 Divider()
                 VStack(alignment: .leading, spacing: 8) {

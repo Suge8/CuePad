@@ -106,6 +106,24 @@ final class Navigation {
         splitPath = []
     }
 
+    /// 分栏：进入搜索前所在的页（含其上推入的页），退出搜索时回到这里。
+    private var beforeSearch: (root: Route, path: [Route])?
+
+    func openSearch() {
+        guard splitRoot != .search else { return }
+        beforeSearch = (splitRoot, splitPath)
+        select(.search)
+    }
+
+    /// 退出搜索，回到进入前的页；没有记录时回到书架。
+    func closeSearch() {
+        guard splitRoot == .search else { return }
+        let back = beforeSearch ?? (.shelf, [])
+        beforeSearch = nil
+        splitRoot = back.root
+        splitPath = back.path
+    }
+
     func toggle(_ panel: Panel) {
         self.panel = self.panel == panel ? nil : panel
     }

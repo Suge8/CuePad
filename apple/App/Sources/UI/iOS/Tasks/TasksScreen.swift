@@ -68,7 +68,7 @@ struct TasksScreen: View {
         .deskBackground()
         .bottomEdgeFade()
         .navigationTitle("任务")
-        .animation(Motion.quick, value: data.map { $0.open.map(\.id) + $0.completed.map(\.id) })
+        .animation(.easeOut(duration: 0.2), value: data.map { $0.open.map(\.id) + $0.completed.map(\.id) })
         .observing(services.store, [.tasks, .projects], into: $data, onError: workspace.fail) { store in
             TasksData(
                 open: try store.tasks(), completed: Array(try store.completedTasks().prefix(Self.completedLimit)),
@@ -93,29 +93,69 @@ struct TasksScreen: View {
     }
 }
 
-/// 一条任务：圆圈勾选完成。
+/// 一条任务：点圆圈立即显示完成（对勾、删除线、成功触感），停留片刻再从列表移出；这段时间里再点一下就撤销。
+/// 已完成的任务点一下立即恢复。
 struct TaskLine: View {
     let task: CueTask
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    private enum Phase { case idle, pending, committed }
+    /// pending：已显示完成、还没写入；committed：已写入，等列表把它移走。
+    @State private var phase = Phase.idle
+
+    /// 完成后停留多久再移出：够看清对勾、来得及反悔。
+    private static let linger: Duration = .milliseconds(900)
 
     var body: some View {
-        let done = task.completedAt != nil
+        let done = task.completedAt != nil || phase != .idle
         HStack(spacing: 2) {
-            Button { workspace.attempt { try await workspace.toggle(task) } } label: {
+            Button(action: tap) {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(done ? palette.ink2 : palette.ink3)
+                    .foregroundStyle(done ? palette.accent : palette.ink3)
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .sensoryFeedback(.success, trigger: done) { !$0 && $1 }
-            .accessibilityLabel(done ? "标为未完成" : "完成")
+            .sensoryFeedback(.success, trigger: phase) { $0 == .idle && $1 == .pending }
+            .accessibilityLabel(phase == .pending ? "撤销完成" : done ? "标为未完成" : "完成")
             Text(task.content.textGlyphs)
                 .font(.body).strikethrough(done)
                 .foregroundStyle(done ? palette.ink3 : palette.ink)
                 .lineLimit(2)
+        }
+        .animation(.easeOut(duration: 0.12), value: done)
+        .task(id: phase) {
+            guard phase == .pending else { return }
+            try? await Task.sleep(for: Self.linger)
+            guard !Task.isCancelled else { return }
+            commit()
+        }
+        // 移出前就离开了页面：照样写入，不丢这次勾选
+        .onDisappear { if phase == .pending { commit() } }
+        // 完成状态以 Store 为准：写入落地或别处恢复为未完成时，这一行回到普通状态
+        .onChange(of: task.completedAt) { phase = .idle }
+    }
+
+    private func tap() {
+        switch (task.completedAt, phase) {
+        case (.some, _): workspace.attempt { try await workspace.toggle(task) }
+        case (nil, .idle): phase = .pending
+        case (nil, .pending): phase = .idle
+        case (nil, .committed): break
+        }
+    }
+
+    /// 写入失败时这一行恢复为未完成，错误照常提示。
+    private func commit() {
+        phase = .committed
+        Task {
+            do {
+                try await workspace.toggle(task)
+            } catch {
+                phase = .idle
+                workspace.fail(error)
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 #if os(iOS)
 import CueStore
+import CueSync
 import SwiftUI
 
 /// 活动页一次读取的数据：Mac 同步来的 Pi 会话状态、手机发往 Mac 的请求、发送记录。
@@ -47,7 +48,7 @@ struct ActivityScreen: View {
         ScrollView {
             if let data {
                 VStack(alignment: .leading, spacing: 22) {
-                    if services.sync == nil { SyncOffNote() }
+                    if !services.syncStatus.reachesMac { SyncBlockedNote(status: services.syncStatus) }
                     if data.isEmpty {
                         ContentUnavailableView {
                             Label("还没有活动", systemImage: "waveform.path.ecg")
@@ -144,16 +145,35 @@ extension View {
     }
 }
 
-/// 同步没开（隔离模式或无 iCloud 权限的构建）：Pi 状态与发到 Mac 都不会到达。
-struct SyncOffNote: View {
+nonisolated extension SyncStatus {
+    /// 此刻同步能把请求送到 Mac、把 Mac 上的 Pi 状态带回来：已连上或正在连接。
+    /// 其余状态（没开 iCloud、不可用、暂停、出错、空间不足）都到不了，界面写明原因。
+    var reachesMac: Bool {
+        switch self {
+        case .starting, .idle, .syncing: true
+        default: false
+        }
+    }
+}
+
+/// 同步到不了 Mac 时的说明：哪里不通、去哪处理（与设置页同一套文案）。
+struct SyncBlockedNote: View {
+    let status: SyncStatus
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Label("iCloud 同步没有开启，看不到 Mac 上的 Pi", systemImage: "icloud.slash")
-            .font(.footnote).foregroundStyle(palette.ink2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .paper(radius: 14)
+        let summary = SyncSummary(status)
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(summary.title)，看不到 Mac 上的 Pi，也发不到 Mac").font(.footnote.weight(.medium)).foregroundStyle(palette.ink)
+                if let detail = summary.detail { Text(detail).font(.footnote).foregroundStyle(palette.ink2) }
+            }
+        } icon: {
+            Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .paper(radius: 14)
     }
 }
 
@@ -218,8 +238,8 @@ private struct SessionRow: View {
                 }
                 HStack(spacing: 6) {
                     PiDot(state: session.state, size: 6)
-                    Text([project?.name, session.state.label].compactMap { $0 }.joined(separator: " · "))
-                        .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
+                    PiActivityLine(text: PiActivityLine.join(project?.name, session.state.label), font: .subheadline)
+                        .foregroundStyle(palette.ink2)
                 }
                 if let detail = session.detail, !detail.isEmpty {
                     Text(detail).font(.footnote.monospaced()).foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.middle)
