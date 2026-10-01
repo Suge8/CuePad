@@ -44,11 +44,11 @@ nonisolated struct ShelfData: Sendable {
 /// iPhone 首页：项目书架。顶部一行"今天 · N 张"进入今天流；置顶项目是大卡，其余按最近排成行，都带目标、卡片数、任务数与 Pi 状态点。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var data: ShelfData?
-    @State private var creating = false
 
     var body: some View {
         ScrollView {
@@ -60,7 +60,7 @@ struct ShelfScreen: View {
         .navigationTitle("项目")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("新建项目", systemImage: "folder.badge.plus") { creating = true }
+                Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
             }
             ToolbarItem(placement: .secondaryAction) {
                 NavigationLink(value: Navigation.Route.settings) { Label("设置", systemImage: "gearshape") }
@@ -71,7 +71,6 @@ struct ShelfScreen: View {
                 }
             }
         }
-        .sheet(isPresented: $creating) { ProjectFormSheet(project: nil) }
         .refreshable { await services.syncNow() }
         .observing(services.store, [.projects, .cards, .tasks, .piSessionStates], into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
@@ -85,7 +84,7 @@ struct ShelfScreen: View {
         VStack(alignment: .leading, spacing: 22) {
             if data.todayCount > 0 { TodayLink(count: data.todayCount) }
             if data.entries.isEmpty && data.inboxCount == 0 {
-                EmptyShelf { creating = true }
+                EmptyShelf { navigation.projectForm = .init() }
             }
             if !pinned.isEmpty {
                 // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
@@ -169,6 +168,7 @@ private struct PinnedShelfCard: View {
             .paper(radius: 20)
         }
         .buttonStyle(CardPressStyle())
+        .projectActions(entry.project, radius: 20)
         .accessibilityElement(children: .combine)
         .accessibilityValue(entry.pi.map { "Pi \($0.label)" } ?? "")
     }
@@ -251,6 +251,8 @@ private struct ShelfRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(RowPressStyle())
+        .background(palette.paper)
+        .projectActions(entry?.project, radius: 16)
         .accessibilityElement(children: .combine)
         .accessibilityValue(entry?.pi.map { "Pi \($0.label)" } ?? "")
     }

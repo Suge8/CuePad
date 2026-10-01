@@ -19,8 +19,6 @@ struct IOSRootView: View {
     @State private var navigation = Navigation()
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
-    /// 有效项目的 id；变化时核对保存的当前项目是否仍然存在。
-    @State private var projectIDs: [UUID]?
     let alerts: PiAlertCenter
 
     init(services: AppServices, scene: SceneContext, alerts: PiAlertCenter) {
@@ -31,10 +29,12 @@ struct IOSRootView: View {
     var body: some View {
         @Bindable var navigation = navigation
         Group {
-            if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
+            // 项目目录读到之前不显示页面：页面里的项目名称、计数从第一帧起就是真实值
+            if workspace.catalog == nil { Color.clear.ignoresSafeArea().deskBackground() } else if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
         }
         .sheet(item: $navigation.capture) { CaptureSheet(capture: $0) }
         .sheet(item: $navigation.outbox) { SendToMacSheet(outbox: $0) }
+        .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
         .overlay(alignment: .top) { NoticeBanner() }
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
         .environment(\.zoomNamespace, zoom)
@@ -47,8 +47,7 @@ struct IOSRootView: View {
         .onChange(of: sizeClass, initial: true) { _, size in
             navigation.layout = size == .regular ? .split : .tabs
         }
-        .observing(workspace.services.store, [.projects], into: $projectIDs) { try $0.projects().map(\.id) }
-        .onChange(of: projectIDs) { Task { await workspace.reconcileCurrentProject() } }
+        .task { await workspace.observeCatalog() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link, workspace: workspace) }
         }

@@ -87,7 +87,7 @@ struct CardRow: View {
         }
         .buttonStyle(CardPressStyle())
         .zoomSource(card.id, in: zoom)
-        .contextMenu { CardActions(card: card, isGoal: false) }
+        .contextMenu { CardActions(card: card) }
     }
 
     /// 变量照常标色，搜索词再叠一层命中底色。
@@ -108,6 +108,25 @@ extension View {
     /// 底部玻璃（标签栏、随手记栏）之下铺实底，之上 48pt 渐隐到桌面色：滚动内容在碰到玻璃前就淡出，玻璃下不叠字。
     /// iPhone 每页底部都有标签栏；宽 iPad 只有项目页一类（`capturePage`）底部浮着随手记栏，右侧面板里没有玻璃。
     func bottomEdgeFade(capturePage: Bool = false) -> some View { modifier(BottomEdgeFade(capturePage: capturePage)) }
+
+    /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作。nil（未归档）没有菜单。
+    func projectActions(_ project: Project?, radius: CGFloat) -> some View { modifier(ProjectContextMenu(project: project, radius: radius)) }
+}
+
+private struct ProjectContextMenu: ViewModifier {
+    let project: Project?
+    let radius: CGFloat
+    @Environment(Navigation.self) private var navigation
+
+    func body(content: Content) -> some View {
+        if let project {
+            content
+                .contentShape(.contextMenuPreview, .rect(cornerRadius: radius, style: .continuous))
+                .contextMenu { ProjectActions(project: project) { navigation.projectForm = .init(project: project) } }
+        } else {
+            content
+        }
+    }
 }
 
 private struct BottomEdgeFade: ViewModifier {

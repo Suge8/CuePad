@@ -39,6 +39,8 @@ final class Workspace {
     #endif
 
     let services: AppServices
+    /// 本窗口的项目目录；nil 表示窗口刚打开、还没读到，根视图在读到之前不显示页面。
+    private(set) var catalog: ProjectCatalog?
     var sidebar: NavigationSplitViewVisibility = .all
     var nonProjectPage: Page?
     /// 打开的卡（编辑纸页）。设成某张卡时纸页立即挂上；清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
@@ -143,7 +145,22 @@ final class Workspace {
         say(error.localizedDescription, isError: true)
     }
 
-    // MARK: 当前项目与新建位置
+    // MARK: 项目目录、当前项目与新建位置
+
+    /// 订阅项目目录，直到所在任务取消（根视图在 `.task` 里调用）；项目增删时核对当前项目。
+    func observeCatalog() async {
+        do {
+            for try await next in services.store.observe(ProjectCatalog.tables, { try ProjectCatalog.read(from: $0) }) {
+                guard next != catalog else { continue }
+                let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
+                catalog = next
+                if membershipChanged { await reconcileCurrentProject() }
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
 
     /// 保存的当前项目以 Store 为准：不存在或已进回收站时回落到侧栏第一个有效项目，没有项目则到未归档，并纠正设置。
     /// 根视图在项目表每次变化后调用。

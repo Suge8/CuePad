@@ -23,9 +23,12 @@ enum RootViews {
         .environment(services)
     }
 
+    /// 面板随 App 常驻：项目目录从创建起就订阅，第一次打开时"记入"已是真实项目。
     static func menuBarPad(_ services: AppServices) -> some View {
-        MenuBarPad()
-            .environment(Workspace(services: services))
+        let workspace = Workspace(services: services)
+        Task { await workspace.observeCatalog() }
+        return MenuBarPad()
+            .environment(workspace)
             .modifier(PaletteProvider())
             .environment(services)
     }
@@ -38,6 +41,7 @@ private struct MainRoot: View {
 
     var body: some View {
         content
+            .task { await workspace.observeCatalog() }
             .modifier(PaletteProvider())
             .onChange(of: services.settings.theme, initial: true) { _, theme in
                 NSApp.appearance = switch theme {

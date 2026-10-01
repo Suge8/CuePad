@@ -84,13 +84,11 @@ private struct FloatingCaptureBar: View {
 struct CaptureSheet: View {
     let capture: Navigation.Capture
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var text = ""
     @State private var images: [PickedImage] = []
     @State private var project: UUID?
-    @State private var projects: [Project]?
     @State private var picking: [PhotosPickerItem] = []
     @State private var showsPhotos = false
     @State private var showsCamera = false
@@ -160,7 +158,6 @@ struct CaptureSheet: View {
             case .photos: showsPhotos = true
             }
         }
-        .observing(services.store, [.projects], into: $projects) { try $0.projects() }
     }
 
     private var imageStrip: some View {
@@ -191,7 +188,7 @@ struct CaptureSheet: View {
         Menu {
             Button("未归档") { project = nil }
             Divider()
-            ForEach(projects ?? []) { item in Button(item.name) { project = item.id } }
+            ForEach(workspace.catalog?.projects ?? []) { item in Button(item.name) { project = item.id } }
         } label: {
             HStack(spacing: 6) {
                 Text("记入").foregroundStyle(palette.ink2)
@@ -205,7 +202,7 @@ struct CaptureSheet: View {
         .accessibilityLabel("记入 \(current?.name ?? "未归档")")
     }
 
-    private var current: Project? { projects?.first { $0.id == project } }
+    private var current: Project? { workspace.catalog?.project(project) }
 
     private func load() {
         let items = picking

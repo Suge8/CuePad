@@ -3,6 +3,7 @@ import CueStore
 import SwiftUI
 
 /// iOS 画面：project、older、today、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 是在侧栏选中），录屏核对进入项目页的首帧。
 /// iPad 上 tasks、activity 打开右侧面板。演示库另写入 Mac 同步来的 Pi 会话状态与一条发到 Mac 的请求。
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
@@ -18,6 +19,9 @@ extension DebugScene {
         }
         switch scene {
         case "project", "older": if let project { open(.project(project)) }
+        case "push":
+            try? await Task.sleep(for: .seconds(1.5))
+            if let project { if split { navigation.select(.project(project)) } else { navigation.push(.project(project)) } }
         case "sidebar":
             if let project { open(.project(project)) }
             navigation.sidebar = .all

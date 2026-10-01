@@ -19,9 +19,7 @@ struct ProjectPage: View {
         ScrollViewReader { proxy in
             ZStack(alignment: .top) {
                 ScrollView {
-                    if let data, let arrangement = board.arrangement {
-                        content(data, arrangement).id("top")
-                    }
+                    content.id("top")
                 }
                 .overlay { BottomFade() }
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
@@ -43,19 +41,26 @@ struct ProjectPage: View {
             .onChange(of: board.arrangement != nil) { DebugScene.scrollIfNeeded(proxy) }
             #endif
         }
-        .observing(services.store, [.cards, .projects, .sendRecords, .tasks, .projectDirectories], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
+        .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
         .onChange(of: data?.stamps()) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
     }
 
-    @ViewBuilder
-    private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
-        if data.project == nil, data.cards.isEmpty, !data.hasProjects {
+    /// 页头（名称、目录、计数）取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
+    @ViewBuilder private var content: some View {
+        let catalog = workspace.catalog
+        if projectID == nil, catalog?.projects.isEmpty == true, (catalog?.cardCounts[nil] ?? 0) == 0 {
             Welcome()
         } else {
-            page(data, arrangement)
+            VStack(alignment: .leading, spacing: 28) {
+                ProjectHeader(
+                    projectID: projectID, project: catalog?.project(projectID),
+                    directory: projectID.flatMap { catalog?.directories[$0] }, cardCount: catalog?.cardCounts[projectID] ?? 0)
+                if let data, let arrangement = board.arrangement { page(data, arrangement) }
+            }
+            .padding(.horizontal, 32).padding(.top, 6).padding(.bottom, 150)
         }
     }
 
@@ -63,26 +68,22 @@ struct ProjectPage: View {
     private func page(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
         let byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
         let lastTarget = data.lastTarget
-        VStack(alignment: .leading, spacing: 28) {
-            ProjectHeader(data: data)
-            if showsFocus(data) { FocusBand(data: data) }
-            if data.cards.isEmpty {
-                EmptyProject()
-            } else {
-                if !arrangement.pinned.isEmpty {
-                    wallSection(title: "置顶", count: arrangement.pinned.count, ids: arrangement.pinned, byID: byID, data: data, lastTarget: lastTarget)
-                }
-                if !arrangement.wall.isEmpty {
-                    wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, data: data, lastTarget: lastTarget)
-                }
-                if !arrangement.older.isEmpty {
-                    OlderList(
-                        groups: data.olderGroups(arrangement),
-                        cards: byID, lastTarget: lastTarget)
-                }
+        if showsFocus(data) { FocusBand(data: data) }
+        if data.cards.isEmpty {
+            EmptyProject()
+        } else {
+            if !arrangement.pinned.isEmpty {
+                wallSection(title: "置顶", count: arrangement.pinned.count, ids: arrangement.pinned, byID: byID, data: data, lastTarget: lastTarget)
+            }
+            if !arrangement.wall.isEmpty {
+                wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, data: data, lastTarget: lastTarget)
+            }
+            if !arrangement.older.isEmpty {
+                OlderList(
+                    groups: data.olderGroups(arrangement),
+                    cards: byID, lastTarget: lastTarget)
             }
         }
-        .padding(.horizontal, 32).padding(.top, 6).padding(.bottom, 150)
     }
 
     private func wallSection(title: String, count: Int, ids: [UUID], byID: [UUID: Card], data: ProjectPageData, lastTarget: [UUID: String]) -> some View {
@@ -111,7 +112,10 @@ struct ProjectPage: View {
 }
 
 private struct ProjectHeader: View {
-    let data: ProjectPageData
+    let projectID: UUID?
+    let project: Project?
+    let directory: String?
+    let cardCount: Int
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var renaming: Project?
@@ -120,25 +124,25 @@ private struct ProjectHeader: View {
         HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 10) {
-                    ProjectGlyph(project: data.project, size: 20)
-                    Text(data.project?.name ?? "未归档").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
+                    ProjectGlyph(project: project, size: 20)
+                    Text(projectID == nil ? "未归档" : project?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
                 }
-                .contextMenu { if let project = data.project { ProjectMenu(project: project) { renaming = project } } }
+                .contextMenu { if let project { ProjectMenu(project: project) { renaming = project } } }
                 HStack(spacing: 4) {
-                    if let project = data.project {
-                        Button(data.directory.map(Self.abbreviated) ?? "绑定代码目录") {
+                    if let project {
+                        Button(directory.map(Self.abbreviated) ?? "绑定代码目录") {
                             ProjectDirectory.choose(for: project.id, workspace: workspace)
                         }
                         .buttonStyle(.plain)
-                        .help(data.directory == nil ? "在这个目录里运行的 Pi 会出现在项目页" : "更换代码目录")
-                        if !data.cards.isEmpty { Text("·") }
+                        .help(directory == nil ? "在这个目录里运行的 Pi 会出现在项目页" : "更换代码目录")
+                        if cardCount > 0 { Text("·") }
                     }
-                    if !data.cards.isEmpty { Text("\(data.cards.count) 张卡片").monospacedDigit() }
+                    if cardCount > 0 { Text("\(cardCount) 张卡片").monospacedDigit() }
                 }
                 .font(.system(size: 12)).foregroundStyle(palette.ink3)
             }
             Spacer()
-            NewCardButton(project: data.project?.id)
+            NewCardButton(project: projectID)
         }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
     }

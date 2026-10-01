@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// 项目页一次读取的全部数据。
+/// 项目页的内容（卡片、发送、任务）一次读取；项目的名称、图标、目录、计数在 `ProjectCatalog`。
 nonisolated struct ProjectPageData: Sendable {
     var project: Project?
     var cards: [Card]
@@ -9,9 +9,6 @@ nonisolated struct ProjectPageData: Sendable {
     var lastSends: [UUID: LastSend]
     /// 本项目未完成的任务。
     var tasks: [CueTask]
-    var directory: String?
-    /// 资料库里有没有任何项目：空库首次打开时页面换成引导。
-    var hasProjects = true
 
     /// 卡片最近一次发送的目标名。
     var lastTarget: [UUID: String] { lastSends.mapValues(\.target.name) }
@@ -30,9 +27,7 @@ nonisolated struct ProjectPageData: Sendable {
             project: try project.flatMap { try store.project($0) },
             cards: try store.cards(in: project),
             lastSends: try store.lastSends(in: project),
-            tasks: try store.tasks().filter { $0.projectID == project },
-            directory: try project.flatMap { try store.directory(of: $0) },
-            hasProjects: !(try store.projects().isEmpty))
+            tasks: try store.tasks().filter { $0.projectID == project })
     }
 }
 

@@ -110,7 +110,7 @@ private struct OlderRow: View {
         .cardFrameSource(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
-        .contextMenu { CardMenu(card: card, isGoal: false) }
+        .contextMenu { CardActions(card: card) }
         .accessibilityElement(children: .combine)
     }
 }

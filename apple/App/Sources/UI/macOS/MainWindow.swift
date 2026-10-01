@@ -5,11 +5,8 @@ import SwiftUI
 /// 主窗口：玻璃侧栏 + 当前页；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
 struct MainWindow: View {
     @State var workspace: Workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 有效项目的 id；变化时核对保存的当前项目是否仍然存在。
-    @State private var projectIDs: [UUID]?
     /// 窗口与侧栏宽度的读数。只在这里写、只由 `PinnedPage` 读：本视图带着工具栏，读了它们就会随几何变化重算、
     /// 每次重算都重新提交整条工具栏（AppKit 随之重排窗口），形成布局反馈环。
     @State private var widths = WindowWidths()
@@ -34,8 +31,6 @@ struct MainWindow: View {
         }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .modifier(SessionProjectsTracker(workspace: workspace))
-        .observing(services.store, [.projects], into: $projectIDs) { try $0.projects().map(\.id) }
-        .onChange(of: projectIDs) { Task { await workspace.reconcileCurrentProject() } }
     }
 
     private var detail: some View {
@@ -84,7 +79,12 @@ struct MainWindow: View {
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
     }
 
+    /// 项目目录读到之前不显示页面：页头的项目名称、目录、计数从第一帧起就是真实值。
     @ViewBuilder private var page: some View {
+        if workspace.catalog != nil { currentPage }
+    }
+
+    @ViewBuilder private var currentPage: some View {
         switch workspace.page {
         case .project(let id): ProjectPage(projectID: id).id(id)
         case .inbox: ProjectPage(projectID: nil)
@@ -209,8 +209,6 @@ private struct TasksButton: View {
 /// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
-    @Environment(AppServices.self) private var services
-    @State private var order: [UUID]?
 
     var body: some View {
         ZStack {
@@ -221,17 +219,14 @@ private struct WorkspaceShortcuts: View {
             if workspace.overlay != nil {
                 Button("关闭") { workspace.overlay = nil }.keyboardShortcut(.cancelAction)
             }
-            ForEach(Array((order ?? []).prefix(9).enumerated()), id: \.offset) { index, id in
-                Button("项目 \(index + 1)") { workspace.show(.project(id)) }
+            ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
+                Button("项目 \(index + 1)") { workspace.show(.project(project.id)) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
             }
         }
         .opacity(0)
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
-        .observing(services.store, [.projects, .cards], into: $order) { store in
-            try SidebarOrder.projects(store.projects(), summaries: store.projectSummaries()).map(\.id)
-        }
     }
 
     private func newCard() {
