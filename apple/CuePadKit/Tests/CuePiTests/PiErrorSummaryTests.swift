@@ -35,6 +35,12 @@ struct PiErrorSummaryTests {
         #expect(summary.raw == raw)  // 原文保留，供悬停显示
     }
 
+    @Test func lineAddsTheProviderMessageWhenThereIsOne() {
+        #expect(PiErrorSummary(#"401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#).line
+            == "认证失败，检查 API 密钥或重新登录（401）：invalid x-api-key")
+        #expect(PiErrorSummary("fetch failed").line == "网络连接中断")
+    }
+
     @Test func agentStateExposesTheSummaryOnlyForErrors() {
         #expect(PiAgentState.error(message: "fetch failed").errorSummary?.kind == .network)
         #expect(PiAgentState.thinking.errorSummary == nil)
