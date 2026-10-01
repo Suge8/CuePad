@@ -6,7 +6,7 @@ import Testing
 private let longCommand = "echo " + String(repeating: "a", count: 200)
 private let cjkCommand = "echo " + String(repeating: "你", count: 130)
 
-/// 端到端：真实 Pi 0.87.1 + 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
+/// 端到端：真实 Pi（`~/.local/bin/pi`，已验证到 0.99.1）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
 @MainActor
 @Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"))
 struct RealPiTests {
