@@ -30,7 +30,7 @@ enum Launch {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return .testHost }
         do {
             let location = try LibraryLocation.resolve()
-            let services = AppServices(location: location, defaults: location.makeDefaults())
+            let services = AppServices(location: location, defaults: location.makeDefaults(), sync: .iCloud)
             services.start()
             return .ready(services)
         } catch {

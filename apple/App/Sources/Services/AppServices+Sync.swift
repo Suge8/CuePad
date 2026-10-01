@@ -4,17 +4,42 @@ import Foundation
 
 /// iCloud 同步的 App 层接入：启动引擎、把状态与冲突交给界面、激活时立即同步。
 extension AppServices {
+    /// 引擎与它启动前的状态。没有引擎时状态是写明原因的 `.unavailable`，界面不会显示成已同步。
+    static func makeSync(
+        _ source: SyncSource, store: CueStore, location: LibraryLocation
+    ) -> (engine: (any SyncControlling)?, status: SyncStatus) {
+        let engine: Result<any SyncControlling, NoSync>
+        switch source {
+        case .iCloud: engine = makeSync(store: store, location: location)
+        case .custom(let sync): engine = .success(sync)
+        }
+        switch engine {
+        case .success(let sync): return (sync, .starting)
+        case .failure(let reason):
+            log.notice("同步未启用：\(reason.description, privacy: .public)")
+            return (nil, .unavailable(reason.description))
+        }
+    }
+
     /// 不创建引擎的两种情况：隔离模式（`CUEPAD_LIBRARY_DIR`，开发与验收用，不能碰真实账号的云端数据）；
     /// 本机 ad-hoc 构建没有 iCloud 权限（CloudKit 缺权限时会直接抛 ObjC 异常使进程崩溃，只有签名构建才有）。
     static func makeSync(
         store: CueStore, location: LibraryLocation, hasCloudKitEntitlement: Bool = Entitlements.hasCloudKit
-    ) -> (any SyncControlling)? {
-        guard !location.isIsolated else { return nil }
-        guard hasCloudKitEntitlement else {
-            log.notice("这个构建没有 iCloud 权限（本机 ad-hoc 构建），同步未启用")
-            return nil
+    ) -> Result<any SyncControlling, NoSync> {
+        guard !location.isIsolated else { return .failure(.isolated) }
+        guard hasCloudKitEntitlement else { return .failure(.noEntitlement) }
+        return .success(CloudSync(store: store))
+    }
+
+    nonisolated enum NoSync: Error, CustomStringConvertible {
+        case isolated, noEntitlement
+
+        var description: String {
+            switch self {
+            case .isolated: "隔离模式（CUEPAD_LIBRARY_DIR）不连 iCloud"
+            case .noEntitlement: "这个构建没有 iCloud 权限（本机开发构建），不会同步"
+            }
         }
-        return CloudSync(store: store)
     }
 
     /// 启动引擎，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有引擎（隔离模式）什么都不做。
@@ -27,7 +52,7 @@ extension AppServices {
             do {
                 try await sync.start()
             } catch {
-                reportIssue(.syncUnavailable("同步没能启动：\(error)"))
+                syncFailedToStart(error)
             }
         })
         tasks.append(Task {

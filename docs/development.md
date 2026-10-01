@@ -72,9 +72,20 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 ## 同步
 
-主 App 启动时创建 `CloudSync` 并启动（隔离模式 `CUEPAD_LIBRARY_DIR` 与测试不同步）；回到前台、Mac 系统唤醒时立即 `syncNow()`，推送由引擎自己处理。`CloudSync.stateUpdates` 推送"状态 + 问题"快照（状态不变时新增或重复的问题也送达），`AppServices` 据此暴露 `syncStatus`、`syncIssues`，另有 `conflicts` 与 `resolveSync`、`resolveConflict`。待推送的登记由数据库推导：启动、处理同步决定时全量对账；之后每次本机提交只登记这次改动的记录（SQLite update hook 记下的改动行）；别的进程（命令行）写过库、或有登记因配额等失败被搁置时，下一次改动全量对账。Mac 端把 Pi 会话状态写成同步记录（启动时先清掉本机遗留的），并只执行发给本机 `hostID`（硬件 UUID 的哈希前缀）的手机投送请求；执行器读写 Store 失败经 `onIssue` 上报，不吞掉（请求会停在原状态，手机那边一直等）。投送请求的往返时间（`DeliveryRequest.roundTrip`，创建 → 结果回到本机）由发起的设备在应用远端结果时用本机时钟记下，存在同步表的本机列里，不进 CloudKit。
+主 App 启动时创建 `CloudSync` 并启动：两个入口（Mac 的 `AppDelegate`、iOS 的 `Launch`）都以 `sync: .iCloud` 构造 `AppServices`，由 `AppServices.makeSync` 按位置与本构建的 iCloud 权限决定（隔离模式 `CUEPAD_LIBRARY_DIR` 与没有 iCloud 权限的本机构建不创建引擎）；该参数没有默认值，测试用 `.custom(替身)`。没有引擎或引擎没能启动时 `syncStatus` 是写明原因的 `.unavailable`，引擎确认账号前是 `.starting`，界面不会显示成"已同步"；未登录 iCloud 或关闭了本 App 的 iCloud 显示 `.noAccount`，文案告诉用户去哪打开（`SyncSummary`）。Mac 启动时注册远程通知，引擎才能收到别的设备改动的静默推送；回到前台、Mac 系统唤醒时立即 `syncNow()`，推送由引擎自己处理。`CloudSync.stateUpdates` 推送"状态 + 问题"快照（状态不变时新增或重复的问题也送达），`AppServices` 据此暴露 `syncStatus`、`syncIssues`，另有 `conflicts` 与 `resolveSync`、`resolveConflict`。待推送的登记由数据库推导：启动、处理同步决定时全量对账；之后每次本机提交只登记这次改动的记录（SQLite update hook 记下的改动行）；别的进程（命令行）写过库、或有登记因配额等失败被搁置时，下一次改动全量对账。Mac 端把 Pi 会话状态写成同步记录（启动时先清掉本机遗留的），并只执行发给本机 `hostID`（硬件 UUID 的哈希前缀）的手机投送请求；执行器读写 Store 失败经 `onIssue` 上报，不吞掉（请求会停在原状态，手机那边一直等）。投送请求的往返时间（`DeliveryRequest.roundTrip`，创建 → 结果回到本机）由发起的设备在应用远端结果时用本机时钟记下，存在同步表的本机列里，不进 CloudKit。
 
 **Pi 锁屏通知**：Pi 会话状态记录带明文可查询的 `notify` 标志（"等你确认"、"完成"的转换那一次写入上置位）。CloudKit 服务端订阅在标志置位时直接生成可见通知，不依赖静默推送与 App 在后台运行；订阅由 iOS 建立（幂等，账号切换时重建），点通知路由到对应会话。通知文案只用本地化 key 的通用句（标题与详情是加密字段，不会出现在通知里）。通知反映服务端收到记录那一刻的状态：标志在上传前被状态已前进的后续写入取代就不送出，同状态的更新则沿用标志——状态记录不是事件日志，要保证每个事件都送达需要单独的追加式通知事件记录，那是另一种设计。该字段的可查询索引由生成的数据结构声明，已部署到生产环境。
+
+### 排查与真机验证
+
+App 自己的日志都在 subsystem `com.sugeh.cuepad`（类别 `services`、`launch`、`shutdown`、`pi-history`）；CloudKit 与 CKSyncEngine 的日志在 `com.apple.cloudkit`：
+
+```bash
+log show --last 30m --info --debug --predicate 'subsystem == "com.sugeh.cuepad" OR (process == "CuePad" AND subsystem BEGINSWITH "com.apple.cloudkit")'
+log stream --info --predicate 'process == "CuePad" AND subsystem BEGINSWITH "com.apple.cloudkit"'   # 实时看
+```
+
+同步是否真在跑，以库为准（只读复制出来看，不碰用户的库）：`syncState` 有一行 `engine`（引擎序列化的状态），`syncRecords` 的行数随推送增长到与同步表记录数相当。真机验证：装发布版 → 打开设置的同步分区，应先显示"正在连接 iCloud…"再变"已同步"（未登录或关掉本 App 的 iCloud 时显示去哪打开）→ 几分钟内复制库检查上面两张表 → 另一台设备上能看到同一批项目与卡片。
 
 ### CloudKit 数据结构
 

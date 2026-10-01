@@ -30,9 +30,4 @@ extension LibraryLocation {
         }
         return defaults
     }
-
-    /// 给没有别处处理错误的调用方（`AppServices()`）：配置非法时带原因终止。
-    static var standard: LibraryLocation {
-        do { return try resolve() } catch { preconditionFailure("\(error.localizedDescription)") }
-    }
 }

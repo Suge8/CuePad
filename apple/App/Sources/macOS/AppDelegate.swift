@@ -24,7 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             return
         }
         MainMenu.install()
-        let services = AppServices(location: location, defaults: location.makeDefaults(), mac: .live(bundleID: AppServices.bundleID))
+        let services = AppServices(
+            location: location, defaults: location.makeDefaults(), sync: .iCloud,
+            mac: .live(bundleID: AppServices.bundleID, location: location))
         let window = makeMainWindow(services)
         let shell = WindowShell(window: window)
         let windowDelegate = MainWindowDelegate(shell: shell)

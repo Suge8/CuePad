@@ -12,10 +12,12 @@ struct SyncSummary: Equatable {
 
     init(_ status: SyncStatus) {
         switch status {
+        case .starting: (title, detail, symbol, tone) = ("正在连接 iCloud…", nil, "icloud", .normal)
+        case .unavailable(let reason): (title, detail, symbol, tone) = ("没有在同步", reason, "icloud.slash", .failure)
         case .idle: (title, detail, symbol, tone) = ("已同步", nil, "checkmark.icloud", .normal)
         case .syncing: (title, detail, symbol, tone) = ("正在同步…", nil, "arrow.triangle.2.circlepath.icloud", .normal)
         case .noAccount:
-            (title, detail, symbol, tone) = ("没有登录 iCloud", "在系统设置里登录后自动开始同步，本机数据不受影响", "icloud.slash", .attention)
+            (title, detail, symbol, tone) = ("iCloud 没有开启", Self.turnOnICloud, "icloud.slash", .attention)
         case .accountRestricted:
             (title, detail, symbol, tone) = ("iCloud 账号受限", "家长控制或设备管理限制了 iCloud，本机数据照常可用", "lock.icloud", .attention)
         case .accountUnavailable:
@@ -35,6 +37,13 @@ struct SyncSummary: Equatable {
         case .failure: palette.failure
         }
     }
+
+    /// 没登录 iCloud 或关掉了本 App 的 iCloud 时，去哪开。
+    #if os(macOS)
+    static let turnOnICloud = "在「系统设置 › Apple 账户 › iCloud」里登录，并在使用 iCloud 的 App 里打开 CuePad；打开后自动开始同步，本机数据不受影响"
+    #else
+    static let turnOnICloud = "在「设置 › 你的名字 › iCloud › 使用 iCloud 的 App」里打开 CuePad（没登录 iCloud 时先登录）；打开后自动开始同步，本机数据不受影响"
+    #endif
 
     private static func describe(_ decision: SyncDecision) -> String {
         switch decision {

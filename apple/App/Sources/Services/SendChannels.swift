@@ -100,8 +100,9 @@ struct MacDependencies {
     /// 自动更新器；隔离模式与测试为 nil。
     var updater: (any AppUpdater)?
 
+    /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
     @MainActor
-    static func live(bundleID: String, updater: (any AppUpdater)? = nil) -> MacDependencies {
+    static func live(bundleID: String, location: LibraryLocation) -> MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)
         return MacDependencies(
@@ -115,7 +116,7 @@ struct MacDependencies {
             hostID: HostIdentity.current(),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: CommandLineToolInstaller(),
-            updater: updater)
+            updater: location.isIsolated ? nil : SparkleUpdater())
     }
 }
 #endif

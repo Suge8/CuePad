@@ -14,7 +14,7 @@ actor SyncCoordinator {
   private var needsFullReconcile = false
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
 
-  private(set) var state = SyncState(status: .idle, issues: []) {
+  private(set) var state = SyncState(status: .starting, issues: []) {
     didSet { if state != oldValue { for continuation in subscribers.values { continuation.yield(state) } } }
   }
   private(set) var status: SyncStatus {
@@ -164,7 +164,7 @@ actor SyncCoordinator {
     guard needsDecision == nil else { return }
     switch account {
     case .available:
-      if [.noAccount, .accountRestricted, .accountUnavailable].contains(status) { status = .idle }
+      if [.starting, .noAccount, .accountRestricted, .accountUnavailable].contains(status) { status = .idle }
     case .noAccount: status = .noAccount
     case .restricted: status = .accountRestricted
     case .temporarilyUnavailable, .couldNotDetermine: status = .accountUnavailable

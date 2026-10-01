@@ -32,9 +32,16 @@ final class AppServices {
 
     @ObservationIgnored let location: LibraryLocation
 
-    /// iCloud 同步引擎；隔离模式与测试为 nil。状态、问题与冲突见下，动作见 `AppServices+Sync`。
+    /// iCloud 同步引擎从哪来：正式启动按位置与本构建的 iCloud 权限决定（`makeSync`），测试注入替身。
+    /// 没有默认值：入口必须写明，不能悄悄没有引擎。
+    enum SyncSource {
+        case iCloud
+        case custom(any SyncControlling)
+    }
+
+    /// iCloud 同步引擎；没有时 `syncStatus` 是写明原因的 `.unavailable`。状态、问题与冲突见下，动作见 `AppServices+Sync`。
     @ObservationIgnored let sync: (any SyncControlling)?
-    private(set) var syncStatus: SyncStatus = .idle
+    private(set) var syncStatus: SyncStatus
     private(set) var syncIssues: [SyncIssue] = []
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
     private(set) var conflicts: [CardConflict] = []
@@ -126,21 +133,13 @@ final class AppServices {
     }
 
     #if os(macOS)
-    convenience init() {
-        let location = LibraryLocation.standard
-        self.init(
-            location: location, defaults: location.makeDefaults(),
-            sync: { Self.makeSync(store: $0, location: location) },
-            mac: .live(bundleID: Self.bundleID, updater: location.isIsolated ? nil : SparkleUpdater()))
-    }
-
-    init(location: LibraryLocation, defaults: UserDefaults, sync: (CueStore) -> (any SyncControlling)? = { _ in nil }, mac: MacDependencies) {
+    init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) {
         let library = Self.openLibrary(at: location)
         store = library.store
         images = library.images
         settings = AppSettings(defaults: defaults)
         self.location = location
-        self.sync = sync(library.store)
+        (self.sync, syncStatus) = Self.makeSync(sync, store: library.store, location: location)
         hostID = mac.hostID
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: library.store, hostID: mac.hostID)
@@ -156,21 +155,13 @@ final class AppServices {
         historyStore = PiHistoryPersistence(storage: library.store)
     }
     #else
-    convenience init() {
-        let location = LibraryLocation.standard
-        self.init(location: location, defaults: location.makeDefaults(), sync: { Self.makeSync(store: $0, location: location) })
-    }
-
-    init(
-        location: LibraryLocation, defaults: UserDefaults, sync: (CueStore) -> (any SyncControlling)? = { _ in nil },
-        pasteboard: UIPasteboard = .general
-    ) {
+    init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) {
         let library = Self.openLibrary(at: location)
         store = library.store
         images = library.images
         settings = AppSettings(defaults: defaults)
         self.location = location
-        self.sync = sync(library.store)
+        (self.sync, syncStatus) = Self.makeSync(sync, store: library.store, location: location)
         self.pasteboard = pasteboard
     }
     #endif
@@ -183,6 +174,13 @@ final class AppServices {
         } catch {
             preconditionFailure("无法打开资料库 \(location.databaseURL.path)：\(error)")
         }
+    }
+
+    /// 引擎没能启动：状态写明原因（与启动问题一起），不停在"正在连接"。
+    func syncFailedToStart(_ error: any Error) {
+        let reason = "同步没能启动：\(error.localizedDescription)"
+        syncStatus = .unavailable(reason)
+        reportIssue(.syncUnavailable(reason))
     }
 
     func setSyncState(_ state: SyncState) {

@@ -3,6 +3,8 @@ import Foundation
 
 /// 对外的同步状态，界面直接显示。本机数据在任何状态下都完好，可继续使用。
 public enum SyncStatus: Equatable, Sendable {
+  /// 正在连接 iCloud：引擎刚创建，还没确认账号状态。
+  case starting
   /// 空闲（已同步，或尚无可同步的内容）。
   case idle
   case syncing
@@ -18,6 +20,8 @@ public enum SyncStatus: Equatable, Sendable {
   case needsDecision(SyncDecision)
   /// 出现了未预期的失败（描述给用户看，详情在 `issues`）；下一次本机改动会重试。
   case failed(String)
+  /// 这台设备没有在同步（原因给用户看）：没有同步引擎（隔离模式、构建没有 iCloud 权限）或引擎没能启动。由 App 层设置。
+  case unavailable(String)
 }
 
 /// 同步暂停、等用户决定的原因。

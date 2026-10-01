@@ -42,6 +42,8 @@ extension AppServices {
                 }
             },
         ]
+        // CKSyncEngine 靠静默推送得知别的设备的改动；macOS 要显式注册远程通知（iOS 由 PiAlertCenter 注册）。
+        if sync != nil { NSApplication.shared.registerForRemoteNotifications() }
         startSync()
     }
 
