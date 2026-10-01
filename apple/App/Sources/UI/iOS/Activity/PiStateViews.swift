@@ -50,7 +50,7 @@ extension Open<PiWorkState> {
 nonisolated extension PiSessionState {
     /// "工具 · bash"、"等你确认 · 要覆盖吗？"。
     var summary: String {
-        PiActivityLine.join(state.label, detail)
+        [state.label, detail].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     /// 每个项目最需要注意的会话状态（书架与侧栏的状态点）。
