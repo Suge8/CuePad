@@ -74,43 +74,37 @@ struct HistoryTests {
         try PiHistory.index(file: file.url, from: checkpoint)
     }
 
-    // MARK: 当前分支的首条 prompt（会话标题的来源）
+    // MARK: 会话标题：与活动会话、Pi 会话列表同一规则（名字 → 文件里首条用户消息 → 工作目录名）
 
-    @Test func firstPromptFollowsTheCurrentBranch() throws {
+    @Test func titleIsTheFirstUserMessageInFileOrderLikePisSessionList() throws {
         var f = SessionFile(directory: dir)
         try f.append(
-            SessionFile.header(),
+            SessionFile.header(cwd: "/work/proj"),
             SessionFile.user("u1", nil, "first prompt", at: 1),
             SessionFile.assistant("a1", "u1", text: "reply one", at: 2),
             SessionFile.user("u2", "a1", "later prompt", at: 3),
             SessionFile.assistant("t2", "u2", text: "checking", stop: "toolUse", at: 4),
-            SessionFile.toolResult("r2", "t2", at: 5))
-        #expect(try index(f).history.firstPrompt == "first prompt")  // 之后的轮次与工具输出不改变它
+            SessionFile.toolResult("r2", "t2", at: 5),
+            SessionFile.user("u0", nil, "rewritten first", at: 6))  // 回到开头另起分支：Pi 的列表仍取文件里的第一条
+        #expect(try index(f).history.displayName == "first prompt")
 
-        try f.append(SessionFile.user("u0", nil, [["type": "text", "text": "rewritten first"]], at: 6))  // 回到开头另起分支
-        #expect(try index(f).history.firstPrompt == "rewritten first")
-
-        try f.append(SessionFile.assistant("b1", "u0", text: "ok", at: 7), SessionFile.user("x1", "a1", "back on the old branch", at: 8))
-        #expect(try index(f).history.firstPrompt == "first prompt")
+        try f.append(SessionFile.info("n1", "u0", name: "Refactor auth", at: 7))
+        #expect(try index(f).history.displayName == "Refactor auth")
     }
 
-    @Test func firstPromptJoinsTextBlocksTrimsAndIsCappedAtTheLimit() throws {
+    @Test func titleJoinsTextBlocksIntoOneLine() throws {
         var f = SessionFile(directory: dir)
         try f.append(SessionFile.header(), SessionFile.user("u1", nil, [
             ["type": "text", "text": "  line one"], ["type": "image", "data": "AAAA", "mimeType": "image/png"],
             ["type": "text", "text": "line two \n"],
         ], at: 1))
-        #expect(try index(f).history.firstPrompt == "line one\nline two")
-
-        var long = SessionFile(directory: dir, name: "long.jsonl")
-        try long.append(SessionFile.header(), SessionFile.user("u1", nil, String(repeating: "字", count: 500), at: 1))
-        #expect(try index(long).history.firstPrompt?.count == PiHistory.promptPreviewLimit)
+        #expect(try index(f).history.displayName == "line one line two")
     }
 
-    @Test func sessionWithoutPromptHasNoFirstPrompt() throws {
+    @Test func sessionWithoutMessagesIsTitledByItsFolder() throws {
         var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header())
-        #expect(try index(f).history.firstPrompt == nil)
+        try f.append(SessionFile.header(cwd: "/work/proj"))
+        #expect(try index(f).history.displayName == "proj")
     }
 
     @Test func exposesHeaderNameAndLastActivity() throws {
@@ -144,7 +138,7 @@ struct HistoryTests {
         }
         let full = try index(f).history
         #expect(try index(f, from: checkpoint).history == full)
-        #expect(full.firstPrompt == "one" && full.lastActivity == SessionFile.date(6))
+        #expect(full.displayName == "one" && full.lastActivity == SessionFile.date(6))
     }
 
     @Test func unchangedFileReadsNothing() throws {
@@ -166,18 +160,18 @@ struct HistoryTests {
 
         let partial = try index(f, from: base.checkpoint)
         #expect(partial.bytesRead == 0 && partial.checkpoint.offset == base.checkpoint.offset)
-        #expect(partial.history.firstPrompt == nil)
+        #expect(partial.history.firstMessage == nil)
 
         try f.appendRaw(String(prompt[cut...]) + "\n")
         let done = try index(f, from: partial.checkpoint)
-        #expect(done.history.firstPrompt == "whole prompt")
+        #expect(done.history.displayName == "whole prompt")
         #expect(done.bytesRead == prompt.utf8.count + 1)
     }
 
     @Test func corruptAndBlankLinesAreSkipped() throws {
         let f = SessionFile(directory: dir)
         try f.write(text: [SessionFile.header(), "{not json", "", SessionFile.user("u1", nil, "p", at: 1), "[1,2]"].joined(separator: "\n") + "\n")
-        #expect(try index(f).history.firstPrompt == "p")
+        #expect(try index(f).history.displayName == "p")
     }
 
     @Test(arguments: ["shorter", "same-size-different-content"])
@@ -202,7 +196,7 @@ struct HistoryTests {
         var f = SessionFile(directory: dir, name: "later.jsonl")
         #expect(throws: (any Error).self) { try PiHistory.index(file: f.url, from: nil) }
         try f.append(SessionFile.header(), SessionFile.user("u1", nil, "p", at: 1)) // 首条消息落盘后同一路径可索引
-        #expect(try index(f).history.firstPrompt == "p")
+        #expect(try index(f).history.displayName == "p")
     }
 }
 
@@ -271,7 +265,7 @@ struct HistoryIndexerTests {
         let update = try #require(log.updates.last)
         #expect(update.file.lastPathComponent == "a.jsonl")
         #expect(update.bytesRead == secondAppend.utf8.count + 1)
-        #expect(update.history.firstPrompt == "first")
+        #expect(update.history.displayName == "first")
 
         try makeSession("p3", "fresh.jsonl", prompt: "brand new", modified: Date())
         try await eventually("新文件被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
@@ -287,7 +281,7 @@ struct HistoryIndexerTests {
         try await eventually("回填完成") { log.finishedBackfill }
         let update = try #require(log.updates.first)
         #expect(update.bytesRead == tail.utf8.count + 1)
-        #expect(update.history.lastActivity == SessionFile.date(3) && update.history.firstPrompt == "first")
+        #expect(update.history.lastActivity == SessionFile.date(3) && update.history.displayName == "first")
     }
 }
 #endif

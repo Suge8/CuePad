@@ -66,7 +66,7 @@ struct RealPiTests {
             #expect(outputting < states.count - 1, "outputting 在 done 之前")
 
             try await eventually("会话文件写入回复", timeout: .seconds(20)) { self.replies(of: s) == ["ECHO hello IMAGES[]"] }
-            #expect(try history(of: s).firstPrompt == "hello")
+            #expect(try history(of: s).displayName == "hello")
         }
     }
 
