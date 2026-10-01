@@ -44,8 +44,8 @@ struct MainWindow: View {
             }
         }
         .overlay(alignment: .bottom) {
-            // 纸页挂着（含缩回途中）时不显示：底栏只有一套，先退后进
-            if workspace.presentedCard == nil, workspace.page != .trash {
+            // 纸页挂着（含缩回途中）时不显示：底栏只有一套，先退后进。项目目录还没读到或读不出来时也不显示：库读不出来不给写入入口
+            if workspace.catalog != nil, workspace.presentedCard == nil, workspace.page != .trash {
                 // ⌘K 打开时只是藏起来（不卸下）：关掉面板的同一帧就回来
                 let searching = workspace.overlay == .search
                 CaptureBar(project: workspace.currentProject).padding(.bottom, 16)

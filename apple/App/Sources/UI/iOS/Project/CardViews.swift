@@ -87,10 +87,6 @@ struct OlderGroupHeader: View {
     }
 }
 
-extension OlderGroup {
-    var isMonth: Bool { if case .month = period { true } else { false } }
-}
-
 /// "更早"里的一行。每行是懒加载列表里独立的一项：同组的行拼成一张纸（首尾圆角、行间分隔线），
 /// 大项目几百张旧卡也只创建屏幕内的行。
 struct OlderRow: View {

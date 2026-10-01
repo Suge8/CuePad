@@ -79,8 +79,7 @@ extension DebugScene {
             }
             try? await Task.sleep(for: .milliseconds(15))
         }
-        // 正常退出流程会等窗口尺寸写盘等收尾，压力场景直接退出
-        exit(0)
+        NSApp.terminate(nil)
     }
 
     private static var mainWindow: NSWindow? {

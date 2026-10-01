@@ -31,9 +31,9 @@ struct OlderList: View {
     }
 
     private func section(_ group: OlderGroup, titled: Bool) -> some View {
-        let open = isExpanded(group.period)
+        let open = isExpanded(group)
         let header = HStack {
-            if isCollapsible(group.period) {
+            if group.isMonth {
                 Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).accessibilityHidden(true)
                     .rotationEffect(.degrees(open ? 90 : 0))
             }
@@ -44,7 +44,7 @@ struct OlderList: View {
         .padding(.horizontal, 4)
         .contentShape(.rect)
         return VStack(alignment: .leading, spacing: 6) {
-            if isCollapsible(group.period) {
+            if group.isMonth {
                 Button {
                     withAnimation(Motion.quick) {
                         if open { expanded.remove(group.period) } else { expanded.insert(group.period) }
@@ -67,13 +67,9 @@ struct OlderList: View {
         }
     }
 
-    private func isCollapsible(_ period: OlderGroup.Period) -> Bool {
-        if case .month = period { true } else { false }
-    }
-
     /// 周分组常开；月分组默认折叠。
-    private func isExpanded(_ period: OlderGroup.Period) -> Bool {
-        !isCollapsible(period) || expanded.contains(period)
+    private func isExpanded(_ group: OlderGroup) -> Bool {
+        !group.isMonth || expanded.contains(group.period)
     }
 }
 

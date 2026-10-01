@@ -85,8 +85,7 @@ struct ProjectScreen: View {
             if !arrangement.older.isEmpty {
                 SectionHeader(title: "更早", count: arrangement.older.count).id(ScrollAnchor.older)
                 let groups = data.olderGroups(arrangement)
-                // 只有一组按周的卡时不再套一层日期标题：每行自带日期
-                let titled = groups.count > 1 || groups.first?.isMonth == true
+                let titled = OlderGroup.needsTitles(in: groups)
                 ForEach(groups, id: \.period) { group in
                     if titled { OlderGroupHeader(group: group, expanded: $expanded) }
                     if !group.isMonth || expanded.contains(group.period) {
