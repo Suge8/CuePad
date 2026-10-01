@@ -12,6 +12,9 @@ public actor CloudSync {
   private let zoneID: CKRecordZone.ID
   private let queue = EngineQueue()
   private let coordinator: SyncCoordinator
+  /// CKSyncEngine 只弱引用委托：这里是它唯一的强持有者，与 CloudSync 同生命周期。
+  /// 曾经只是 `start()` 里的局部变量，返回后即被释放，引擎的事件全被丢掉（"the delegate may have been deallocated"）。
+  nonisolated let engineDelegate: EngineBridge
   private let subscribesToPiAlerts: Bool
   private var engine: CKSyncEngine?
   private var accountWatcher: Task<Void, Never>?
@@ -27,6 +30,7 @@ public actor CloudSync {
     self.containerIdentifier = containerIdentifier
     zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
     coordinator = SyncCoordinator(store: store, queue: queue, zoneID: zoneID)
+    engineDelegate = EngineBridge(coordinator: coordinator, zoneID: zoneID)
   }
 
   public static var subscribesToPiAlertsByDefault: Bool {
@@ -48,8 +52,8 @@ public actor CloudSync {
 
     let saved = try await coordinator.savedEngineState()
     let state = saved.flatMap { try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0) }
-    let bridge = EngineBridge(coordinator: coordinator, zoneID: zoneID)
-    let engine = CKSyncEngine(CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: state, delegate: bridge))
+    let engine = CKSyncEngine(
+      CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: state, delegate: engineDelegate))
     self.engine = engine
     await queue.attach(engine)
 
@@ -112,7 +116,7 @@ private actor EngineQueue: ChangeQueue {
 }
 
 /// CKSyncEngine 的委托：只做事件翻译，逻辑全在 `SyncCoordinator`。
-private final class EngineBridge: CKSyncEngineDelegate, Sendable {
+final class EngineBridge: CKSyncEngineDelegate, Sendable {
   let coordinator: SyncCoordinator
   let zoneID: CKRecordZone.ID
 
