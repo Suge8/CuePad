@@ -26,11 +26,10 @@ extension AppServices {
     }
 
     private func recordPiState(of session: CuePi.PiSession) async throws {
-        let directories = try await store.projectDirectories()
         let (state, detail) = session.state.syncRepresentation
         try await piStateRecorder.update(
             sessionID: session.sessionID, state: state, detail: detail, title: session.cwd.lastPathComponent,
-            projectID: PiProjectMatch.project(forDirectory: session.cwd.path, in: directories))
+            projectID: try await store.project(containing: session.cwd)?.id)
     }
 
     // MARK: 手机发来的投送请求

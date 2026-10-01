@@ -7,7 +7,6 @@ struct OlderList: View {
     let groups: [OlderGroup]
     let cards: [UUID: Card]
     let lastTarget: [UUID: String]
-    let paperSpace: Namespace.ID
     @Environment(\.palette) private var palette
     @State private var expanded: Set<OlderGroup.Period> = []
 
@@ -16,7 +15,7 @@ struct OlderList: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
                 PaperStack()
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                HStack(alignment: .bottom, spacing: 6) {
                     Text("更早").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
                     Text("\(total)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
                 }
@@ -59,7 +58,7 @@ struct OlderList: View {
                 VStack(spacing: 0) {
                     ForEach(Array(group.cards.compactMap { cards[$0] }.enumerated()), id: \.element.id) { index, card in
                         if index > 0 { Rectangle().fill(palette.hair).frame(height: 1).padding(.leading, 40) }
-                        OlderRow(card: card, lastTarget: lastTarget[card.id], paperSpace: paperSpace)
+                        OlderRow(card: card, lastTarget: lastTarget[card.id])
                     }
                 }
                 .paper(radius: 12)
@@ -80,7 +79,6 @@ struct OlderList: View {
 private struct OlderRow: View {
     let card: Card
     let lastTarget: String?
-    let paperSpace: Namespace.ID
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -99,10 +97,7 @@ private struct OlderRow: View {
             Text(text.preview).font(.system(size: 13)).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)
             if text.blockCount > 1 { Text("\(text.blockCount) 块") }
-            if let lastTarget {
-                Label(lastTarget, systemImage: "arrow.up.right").labelStyle(.titleAndIcon).lineLimit(1)
-                    .accessibilityLabel("已发给 \(lastTarget)")
-            }
+            if let lastTarget { SentMark(target: lastTarget) }
             Text(DateLabel.short(card.modifiedAt)).monospacedDigit().frame(width: 64, alignment: .trailing)
         }
         .font(.system(size: 11.5)).foregroundStyle(palette.ink3)
@@ -112,7 +107,7 @@ private struct OlderRow: View {
         }
         .buttonStyle(CardPressStyle())
         .opacity(isOpen ? 0 : 1)
-        .matchedGeometryEffect(id: card.id, in: paperSpace, isSource: !isOpen)
+        .cardFrameSource(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardMenu(card: card, isGoal: false) }
@@ -122,7 +117,7 @@ private struct OlderRow: View {
 
 extension OlderRow {
     fileprivate func open() {
-        withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) { workspace.openCard = card.id }
+        workspace.openCard = card.id
     }
 }
 

@@ -2,44 +2,58 @@
 import CueDispatch
 import SwiftUI
 
-/// 实心发送按钮（⌘↩）+ 目标选择。主操作用实心墨色而非玻璃：玻璃着色太浅，白字对比度不够。
-/// 目标默认是本项目的 Pi 会话，没有则是上一个前台应用；选过的目标在本窗口内记住。
+/// 实心发送按钮（⌘↩）+ 目标选择，底色是强调色（墨）。只在有内容可发时出现（由调用方决定）。
+/// 目标默认是本项目的 Pi 会话，没有则是上一个前台应用；选过的目标在本窗口内记住。还没有任何可发的目标时，
+/// 按钮写"发送…"，点开就是目标菜单。
 struct SendControl: View {
     let project: UUID?
     var compact = false
-    var disabled = false
     let send: (AppServices.Destination) -> Void
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
         let choice = workspace.effectiveChoice(for: project)
-        HStack(spacing: 0) {
-            Button { send(choice) } label: {
-                HStack(spacing: 8) {
-                    icon(choice)
-                    Text("发给 \(Self.short(workspace.label(for: choice), compact ? 8 : 14))").lineLimit(1)
-                    Text("⌘↩").opacity(0.6)
+        Group {
+            if choice == .app(.lastFrontmost), services.lastFrontmostApp() == nil {
+                SendTargetMenu(project: project) {
+                    label(icon: AnyView(Image(systemName: "paperplane.fill").accessibilityHidden(true)), text: "发送…", shortcut: nil)
+                        .padding(.trailing, compact ? 12 : 16)
                 }
-                .padding(.leading, compact ? 12 : 16).padding(.trailing, 8)
-                .frame(height: compact ? 28 : 44)
-                .contentShape(.rect)
-            }
-            .buttonStyle(PressStyle())
-            .keyboardShortcut(.return, modifiers: .command)
-            .disabled(disabled)
-            SendTargetMenu(project: project) {
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).accessibilityHidden(true)
-                    .padding(.trailing, compact ? 10 : 14).padding(.leading, 4)
-                    .frame(height: compact ? 28 : 44)
-                    .contentShape(.rect)
+            } else {
+                HStack(spacing: 0) {
+                    Button { send(choice) } label: {
+                        label(icon: AnyView(icon(choice)), text: "发给 \(Self.short(workspace.label(for: choice), compact ? 8 : 14))", shortcut: "⌘↩")
+                            .padding(.trailing, 8)
+                    }
+                    .buttonStyle(PressStyle())
+                    .keyboardShortcut(.return, modifiers: .command)
+                    SendTargetMenu(project: project) {
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).accessibilityHidden(true)
+                            .padding(.trailing, compact ? 10 : 14).padding(.leading, 4)
+                            .frame(height: compact ? 28 : 44)
+                            .contentShape(.rect)
+                    }
+                }
             }
         }
         .font(.system(size: compact ? 12.5 : 13, weight: .semibold))
-        .foregroundStyle(palette.onSolid.opacity(disabled ? 0.6 : 1))
-        .background(palette.solid.opacity(disabled ? 0.35 : 1), in: .capsule)
+        .foregroundStyle(palette.onAccent)
+        .background(palette.accent, in: .capsule)
         .shadow(color: .black.opacity(palette.dark ? 0 : 0.12), radius: 6, y: 2)
         .fixedSize()
+    }
+
+    private func label(icon: AnyView, text: String, shortcut: String?) -> some View {
+        HStack(spacing: 8) {
+            icon
+            Text(text).lineLimit(1)
+            if let shortcut { Text(shortcut).opacity(0.6) }
+        }
+        .padding(.leading, compact ? 12 : 16)
+        .frame(height: compact ? 28 : 44)
+        .contentShape(.rect)
     }
 
     /// 目标名过长（应用全名）时截断，按钮宽度随内容但有上限。

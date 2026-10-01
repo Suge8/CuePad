@@ -14,7 +14,8 @@ enum ScrollAnchor {
 ///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；
 /// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；
-/// - `-CuePadBench sidebar`（仅 Mac）：开合侧栏 10 次后退出，给 Instruments 录帧耗时用的固定负载。
+/// - `-CuePadBench <sidebar|motion|resize>`（仅 Mac）：开合侧栏 10 次 / 存卡后开合纸页（都在结束后退出，给 Instruments 或连拍取帧）；
+///   resize 在侧栏开合途中拉窄窗口后停住，给截图核对页宽。
 /// 设置项可在参数域覆盖：`-theme dark`；Mac 隔离 Pi 目录下隐藏"连接 Pi"提示：`-piExtensionDeclinedVersion '<integer>N</integer>'`（N 为随包扩展版本）。
 @MainActor
 enum DebugScene {
