@@ -45,6 +45,7 @@ struct ProjectScreen: View {
         }
         .background(palette.desk)
         .bottomEdgeFade(capturePage: true)
+        .captureBar()
         .navigationTitle(page?.data.project?.name ?? "未归档")
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }

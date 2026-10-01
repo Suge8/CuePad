@@ -22,9 +22,6 @@ struct SplitRoot: View {
                     .navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
                     .toolbar { ToolbarItemGroup(placement: .primaryAction) { PanelButtons() } }
             }
-            .safeAreaInset(edge: .bottom) {
-                if navigation.showsCaptureBar { SplitCaptureBar().padding(.bottom, 12) }
-            }
         }
         .inspector(isPresented: Binding(get: { navigation.panel != nil }, set: { if !$0 { navigation.panel = nil } })) {
             SidePanel().inspectorColumnWidth(min: 300, ideal: 360, max: 440)
@@ -212,16 +209,6 @@ private struct SidebarRow: View {
         case .inbox: workspace.show(.inbox)
         default: break
         }
-    }
-}
-
-/// 项目页底部的玻璃随手记栏（宽 iPad 没有标签栏附件栏）。
-private struct SplitCaptureBar: View {
-    var body: some View {
-        CaptureBar()
-            .frame(maxWidth: 560).frame(height: 50)
-            .glass(in: .capsule, interactive: true)
-            .padding(.horizontal, 24)
     }
 }
 

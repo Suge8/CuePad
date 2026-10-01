@@ -38,6 +38,7 @@ struct TodayScreen: View {
         }
         .background(palette.desk)
         .bottomEdgeFade(capturePage: true)
+        .captureBar()
         .navigationTitle("今天")
         .navigationSubtitle(data.map { $0.total > 0 ? "\($0.total) 张" : "" } ?? "")
         .observing(services.store, [.cards, .projects], id: pages, into: $data, onError: workspace.fail) { [pages] store in

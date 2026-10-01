@@ -124,7 +124,6 @@ private struct TabsRoot: View {
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        .modifier(CaptureAccessoryPlacement(shown: navigation.showsCaptureBar))
         .observing(services.store, [.piSessionStates], into: $waiting) { store in
             try store.piSessionStates().filter { $0.state == .waitingForUser }.count
         }
@@ -133,19 +132,6 @@ private struct TabsRoot: View {
     private func stack(_ path: Binding<[Navigation.Route]>, @ViewBuilder root: () -> some View) -> some View {
         NavigationStack(path: path) {
             root().navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
-        }
-    }
-}
-
-/// 随手记栏在内容页常驻标签栏上方，其余页面收起。按条件收起要 iOS 26.1。
-private struct CaptureAccessoryPlacement: ViewModifier {
-    let shown: Bool
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.1, *) {
-            content.tabViewBottomAccessory(isEnabled: shown) { CaptureAccessory() }
-        } else {
-            content.tabViewBottomAccessory { CaptureAccessory() }
         }
     }
 }

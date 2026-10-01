@@ -85,18 +85,6 @@ final class Navigation {
         return nil
     }
 
-    /// 随手记栏只在内容页出现（书架、项目、今天）；任务、活动、搜索、设置、回收站与打开的卡片上不出现。
-    var showsCaptureBar: Bool {
-        let top: Route? = switch layout {
-        case .tabs: tab == .projects ? projectsPath.last ?? .shelf : nil
-        case .split: splitPath.last ?? splitRoot
-        }
-        switch top {
-        case .shelf, .project, .inbox, .today: return true
-        default: return false
-        }
-    }
-
     /// 在当前位置推入一页。
     func push(_ route: Route) {
         switch (layout, tab) {

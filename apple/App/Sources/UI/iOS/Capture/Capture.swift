@@ -23,10 +23,7 @@ struct CaptureDraft {
 }
 
 /// 随手记栏：点文字打开随手记，相机与相册直接带图打开；记入当前位置（项目页记入该项目，其余进未归档）。
-/// iPhone 放在标签栏上方的附件栏里（底由系统画），宽 iPad 浮在项目页底部（自己画玻璃）。
 struct CaptureBar: View {
-    /// 标签栏最小化时附件栏收成一行"记一笔"。
-    var compact = false
     @Environment(Navigation.self) private var navigation
 
     var body: some View {
@@ -34,7 +31,7 @@ struct CaptureBar: View {
             Button { navigation.startCapture() } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "square.and.pencil").accessibilityHidden(true)
-                    Text(compact ? "记一笔" : "记下想法…").foregroundStyle(.secondary).lineLimit(1)
+                    Text("记下想法…").foregroundStyle(.secondary).lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 16)
@@ -43,12 +40,10 @@ struct CaptureBar: View {
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
             .accessibilityLabel("随手记")
-            if !compact {
-                if CameraPicker.isAvailable {
-                    icon("拍照", "camera") { navigation.startCapture(.camera) }
-                }
-                icon("从相册选图", "photo.on.rectangle") { navigation.startCapture(.photos) }.padding(.trailing, 6)
+            if CameraPicker.isAvailable {
+                icon("拍照", "camera") { navigation.startCapture(.camera) }
             }
+            icon("从相册选图", "photo.on.rectangle") { navigation.startCapture(.photos) }.padding(.trailing, 6)
         }
         .buttonStyle(.plain)
     }
@@ -61,10 +56,17 @@ struct CaptureBar: View {
     }
 }
 
-/// 附件栏里的随手记：跟随附件栏的收起状态。
-struct CaptureAccessory: View {
-    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-    var body: some View { CaptureBar(compact: placement == .inline) }
+extension View {
+    /// 内容页（书架、项目、今天）底部浮着的玻璃随手记栏。只挂在这几页上，所以设置、回收站、搜索、任务、活动与打开的卡片上都没有它，
+    /// 不依赖系统版本（标签栏附件栏要 iOS 26.1 才能按页收起）。
+    func captureBar() -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            CaptureBar()
+                .frame(maxWidth: 560).frame(height: 50)
+                .glass(in: .capsule, interactive: true)
+                .padding(.horizontal, 16).padding(.bottom, 8)
+        }
+    }
 }
 
 /// 随手记面板：文字 + 图片（相册、相机）存为卡片。位置默认来自打开它的页面，可以当场换。

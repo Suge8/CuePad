@@ -55,6 +55,7 @@ struct ShelfScreen: View {
         }
         .background(palette.desk)
         .bottomEdgeFade(capturePage: true)
+        .captureBar()
         .navigationTitle("项目")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
