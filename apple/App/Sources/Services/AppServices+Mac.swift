@@ -159,7 +159,7 @@ nonisolated enum ShutdownSteps {
     @concurrent
     static func run(_ steps: [(name: String, run: @Sendable () async -> Void)], within limit: Duration) async -> String? {
         let (outcomes, outcome) = AsyncStream<String?>.makeStream()
-        let current = Mutex<String?>(nil)
+        let current = Mutex<String?>(steps.first?.name)  // 计时器可能先于第一步开始就到点
         let work = Task {
             for step in steps where !Task.isCancelled {
                 current.withLock { $0 = step.name }
