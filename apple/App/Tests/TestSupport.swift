@@ -74,7 +74,7 @@ final class TempDefaults {
 }
 
 /// 记录调用的同步引擎替身；`emit` 推一个状态快照给订阅者。
-final class FakeSync: SyncControlling, Sendable {
+nonisolated final class FakeSync: SyncControlling, Sendable {
     private struct State {
         var started = 0
         var stopped = 0
