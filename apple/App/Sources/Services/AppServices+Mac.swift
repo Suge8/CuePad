@@ -1,10 +1,10 @@
-import Foundation
-import Synchronization
 #if os(macOS)
 import AppKit
 import CueDispatch
 import CuePi
+import Foundation
 import os
+import Synchronization
 
 /// macOS 壳层与后台服务的生命周期：启动、停止、全局快捷键、Pi 历史索引、终端跳转。
 extension AppServices {
@@ -143,7 +143,6 @@ extension AppServices {
         return name as? String ?? url.deletingPathExtension().lastPathComponent
     }
 }
-#endif
 
 /// 依次执行的收尾步骤，整体有时限。
 nonisolated enum ShutdownSteps {
@@ -169,3 +168,4 @@ nonisolated enum ShutdownSteps {
         return late
     }
 }
+#endif
