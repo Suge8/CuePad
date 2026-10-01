@@ -8,6 +8,10 @@ extension DebugScene {
         try? await Task.sleep(for: .milliseconds(100))
         resizeWindow()
         _ = await prepareLibrary(workspace)
+        // 像首次启动那样在界面起来之后导入旧版（Electron）资料库副本：项目页数据边导边变
+        if let path = defaults.string(forKey: "CuePadImport") {
+            do { _ = try await workspace.services.store.importElectronLibrary(from: URL(filePath: path)) } catch { workspace.fail(error) }
+        }
         switch scene {
         case "collapsed": workspace.sidebar = .detailOnly
         case "search": workspace.overlay = .search
@@ -20,6 +24,7 @@ extension DebugScene {
         case "sidebar": await benchSidebar(workspace)
         case "motion": await benchMotion(workspace)
         case "resize": await benchResizeWhileToggling(workspace)
+        case "churn": await benchChurn(workspace)
         default: break
         }
     }
@@ -57,6 +62,27 @@ extension DebugScene {
         window.setFrame(frame, display: true, animate: true)
     }
 
+    /// 布局反馈环的压力场景：数据持续变化（像首次启动导入）的同时，窗口宽度逐点扫过列数与目标栏的切换档位。
+    /// 配合 `-AppleShowScrollBars Always`（滚动条占宽，内容高度一变可用宽度就变）最容易触发几何读数↔布局的循环；
+    /// 出现循环时 SwiftUI 记 "Geometry action is cycling"，严重时 AppKit 因布局迭代超限抛异常退出。跑完自动退出。
+    private static func benchChurn(_ workspace: Workspace) async {
+        try? await Task.sleep(for: .seconds(1))
+        guard let window = mainWindow else { return }
+        let project = workspace.currentProject
+        let widths = Array(stride(from: 900.0, through: 1500.0, by: 1))
+        for (step, width) in widths.enumerated() {
+            var frame = window.frame
+            frame.size.width = width
+            window.setFrame(frame, display: true)
+            if step.isMultiple(of: 4) {
+                workspace.attempt { _ = try await workspace.createCard(body: "导入中 \(step)\n" + String(repeating: "正文", count: step % 40), in: project) }
+            }
+            try? await Task.sleep(for: .milliseconds(15))
+        }
+        // 正常退出流程会等窗口尺寸写盘等收尾，压力场景直接退出
+        exit(0)
+    }
+
     private static var mainWindow: NSWindow? {
         NSApp.windows.first { $0.styleMask.contains(.resizable) && $0.styleMask.contains(.fullSizeContentView) }
     }
@@ -68,6 +94,9 @@ extension DebugScene {
         guard parts.count == 2, let window = mainWindow else { return }
         window.setContentSize(NSSize(width: parts[0], height: parts[1]))
         window.center()
+        // 窗口放到给定位置（可以在屏幕外），复现窗口不可见时的布局
+        let origin = (defaults.string(forKey: "CuePadWindowOrigin") ?? "").split(separator: ",").compactMap { Double($0) }
+        if origin.count == 2 { window.setFrameOrigin(NSPoint(x: origin[0], y: origin[1])) }
     }
 }
 

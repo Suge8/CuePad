@@ -18,22 +18,25 @@ struct TrashPage: View {
     @State private var confirmEmpty = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .lastTextBaseline) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("回收站").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
-                        Text("删除的项目连同其卡片一起放在这里").font(.system(size: 12)).foregroundStyle(palette.ink3)
+        ZStack(alignment: .top) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    HStack(alignment: .lastTextBaseline) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("回收站").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
+                            Text("删除的项目连同其卡片一起放在这里").font(.system(size: 12)).foregroundStyle(palette.ink3)
+                        }
+                        Spacer()
+                        if let data, !(data.projects.isEmpty && data.cards.isEmpty) {
+                            Button("清空回收站", role: .destructive) { confirmEmpty = true }
+                                .buttonStyle(.glass).controlSize(.large)
+                        }
                     }
-                    Spacer()
-                    if let data, !(data.projects.isEmpty && data.cards.isEmpty) {
-                        Button("清空回收站", role: .destructive) { confirmEmpty = true }
-                            .buttonStyle(.glass).controlSize(.large)
-                    }
+                    if let data { content(data) }
                 }
-                if let data { content(data) }
+                .padding(.horizontal, 32).padding(.top, 6).padding(.bottom, 40)
             }
-            .padding(.horizontal, 32).padding(.top, 6).padding(.bottom, 40)
+            TopFade()
         }
         .confirmationDialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty) {
             Button("清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
