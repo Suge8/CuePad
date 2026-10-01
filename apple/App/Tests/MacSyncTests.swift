@@ -129,6 +129,16 @@ struct MacSyncTests {
         #expect(try await services.store.piSessionStates().isEmpty)
     }
 
+    @Test func 会话显示名写进同步记录_改名后跟上() async throws {
+        var named = session("s1", cwd: "/work/app")
+        try await services.consumePiChanges(changes([.appeared(named)]))
+        #expect(try await services.store.piSessionStates().first?.title == "app")  // 没有名字和消息时是文件夹名
+
+        named.name = "登录修复"
+        try await services.consumePiChanges(changes([.displayNameChanged(named)]))
+        #expect(try await services.store.piSessionStates().first?.title == "登录修复")
+    }
+
     @Test func 启动时清掉这台Mac遗留的记录_不动别的Mac() async throws {
         let mine = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
         let other = PiStateRecorder(store: services.store, hostID: "mac-other")

@@ -70,6 +70,23 @@ struct RealPiTests {
         }
     }
 
+    /// 显示名与 Pi 自己的会话列表同一规则：`/name` 设的名字 → 首条用户消息（单行）→ 工作目录名。
+    @Test func displayNameFollowsPisSessionListAndUpdatesOnRename() async throws {
+        try await withRig { pi, bridge, s in
+            let log = ChangeLog(bridge)
+            #expect(s.displayName == pi.cwd.lastPathComponent)  // 还没有名字，也没有消息
+
+            try pi.prompt("修好登录\n顺便看看日志")
+            try await eventually("首条消息成为显示名", timeout: .seconds(20)) {
+                bridge.sessions.first?.displayName == "修好登录 顺便看看日志"
+            }
+
+            try pi.send(["type": "set_session_name", "name": "登录修复"])  // 与 /name 同一路径
+            try await eventually("改名后显示名跟上", timeout: .seconds(20)) { bridge.sessions.first?.displayName == "登录修复" }
+            #expect(log.changes.contains { if case .displayNameChanged(let renamed) = $0 { renamed.displayName == "登录修复" } else { false } })
+        }
+    }
+
     @Test func toolExecutionShowsToolStateWithItsName() async throws {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)
