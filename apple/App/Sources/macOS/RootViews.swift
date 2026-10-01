@@ -48,6 +48,7 @@ private struct MainRoot: View {
             }
             #if DEBUG
             .task { await DebugScene.prepare(workspace) }
+            .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
             #endif
     }
 

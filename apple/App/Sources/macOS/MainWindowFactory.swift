@@ -15,11 +15,7 @@ enum MainWindowFactory {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.contentMinSize = NSSize(width: 720, height: 520)
-        let host = NSHostingController(rootView: content)
-        // 窗口尺寸由这里和窗口位置记忆决定，不跟随 SwiftUI 内容：默认的尺寸联动会在侧栏开合等布局变化的每一帧
-        // 重算整棵视图的最小/理想/最大尺寸并改窗口约束
-        host.sizingOptions = []
-        window.contentViewController = host
+        window.contentViewController = NSHostingController(rootView: content)
         window.setContentSize(NSSize(width: 1200, height: 760)) // 须在设置 contentViewController 之后，否则被内容尺寸覆盖
         window.isReleasedWhenClosed = false
         return window

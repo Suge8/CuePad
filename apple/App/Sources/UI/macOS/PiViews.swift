@@ -85,12 +85,8 @@ struct PiDetail: View {
 
     var body: some View {
         if let detail = state.detail {
-            Text(detail)
-                .font(.system(size: size, design: state.detailIsCode ? .monospaced : .default))
+            PiActivityLine(text: detail, font: .system(size: size), monospaced: state.detailIsCode)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(detail)
         }
     }
 }

@@ -21,6 +21,12 @@ struct SearchPalette: View {
     @State private var selection: UUID?
     @FocusState private var focused: Bool
 
+    private static let maxWidth: CGFloat = 840
+    private static let height: CGFloat = 500
+    private static let listWidth: CGFloat = 380
+    /// 列表 380 + 预览至少 300。
+    private static let sideBySide: CGFloat = 680
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -37,15 +43,20 @@ struct SearchPalette: View {
             FilterBar(query: $query, projects: data?.projects ?? [], targets: data?.targets ?? [], total: data?.total)
                 .padding(.horizontal, 14).padding(.bottom, 10)
             Divider()
-            HStack(alignment: .top, spacing: 0) {
-                results.frame(width: 380)
+            // 放得下就列表 + 预览并排，否则只留列表（最小窗口下详情区不到 500 宽）
+            ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
+                results
                 preview
             }
+            .clipped()
         }
-        .frame(width: 840, height: 500)
+        // 宽高都以详情区为上限（外层留边距）：同一窗口里面板尺寸固定，结果多少都不让它长高
+        .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
         // 面大、字多：玻璃之上再垫一层接近实色的纸，背后的内容不透出来干扰阅读
         .background(palette.paper.opacity(palette.dark ? 0.9 : 0.86), in: .rect(cornerRadius: 26))
         .glass(in: .rect(cornerRadius: 26))
+        // 第一份结果读到之前不显示：晚一帧出现，不先露一个空壳再长出内容
+        .opacity(data == nil ? 0 : 1)
         .onAppear {
             focused = true
             #if DEBUG
@@ -193,6 +204,27 @@ struct SearchPalette: View {
     }
 }
 
+/// 搜索面板的内容区：宽度够（minimumWidth）就列表定宽在左、预览占余下；不够就只摆列表，预览不占位置。
+/// 纯排版，宽高都取拿到的尺寸，不按内容长高。
+private struct ListWithPreview: Layout {
+    let listWidth: CGFloat
+    let minimumWidth: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+        proposal.replacingUnspecifiedDimensions(by: CGSize(width: minimumWidth, height: 300))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
+        guard subviews.count == 2 else { return }
+        let wide = bounds.width >= minimumWidth
+        let list = wide ? listWidth : bounds.width
+        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(width: list, height: bounds.height))
+        subviews[1].place(
+            at: CGPoint(x: bounds.minX + list, y: bounds.minY),
+            proposal: ProposedViewSize(width: wide ? bounds.width - list : 0, height: bounds.height))
+    }
+}
+
 private struct FilterBar: View {
     @Binding var query: PaletteQuery
     let projects: [Project]
@@ -200,37 +232,43 @@ private struct FilterBar: View {
     let total: Int?
 
     var body: some View {
-        HStack(spacing: 6) {
-            FilterToken(name: "项目", value: projectLabel, on: query.project != nil) {
-                Button("全部") { query.project = nil }
-                Button("未归档") { query.project = .some(nil) }
-                Divider()
-                ForEach(projects) { project in Button(project.name) { query.project = project.id } }
+        // 筛选在左、可横向滚动（窄面板里不被挤成省略号），结果数常驻右侧
+        HStack(spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) { chips }
             }
-            Button { query.withImages.toggle() } label: {
-                FilterCapsule(name: "含图片", value: nil, on: query.withImages)
-            }
-            .buttonStyle(PressStyle())
-            FilterToken(name: "发送目标", value: sentLabel, on: query.sent != .any) {
-                Button("任意") { query.sent = .any }
+            if let total { Text("\(total) 个结果").font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary).fixedSize().layoutPriority(1) }
+        }
+    }
+
+    @ViewBuilder private var chips: some View {
+        FilterToken(name: "项目", value: projectLabel, on: query.project != nil) {
+            Button("全部") { query.project = nil }
+            Button("未归档") { query.project = .some(nil) }
+            Divider()
+            ForEach(projects) { project in Button(project.name) { query.project = project.id } }
+        }
+        Button { query.withImages.toggle() } label: {
+            FilterCapsule(name: "含图片", value: nil, on: query.withImages)
+        }
+        .buttonStyle(PressStyle())
+        FilterToken(name: "发送目标", value: sentLabel, on: query.sent != .any) {
+            Button("任意") { query.sent = .any }
+            Divider()
+            Button("从未发送") { query.sent = .never }
+            Divider()
+            Button("Pi 会话") { query.sent = .sent(kind: .known(.piSession)) }
+            Button("应用") { query.sent = .sent(kind: .known(.app)) }
+            Button("剪贴板") { query.sent = .sent(kind: .known(.clipboard)) }
+            if !targets.isEmpty {
                 Divider()
-                Button("从未发送") { query.sent = .never }
-                Divider()
-                Button("Pi 会话") { query.sent = .sent(kind: .known(.piSession)) }
-                Button("应用") { query.sent = .sent(kind: .known(.app)) }
-                Button("剪贴板") { query.sent = .sent(kind: .known(.clipboard)) }
-                if !targets.isEmpty {
-                    Divider()
-                    ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
-                        Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
-                    }
+                ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
+                    Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
                 }
             }
-            FilterToken(name: "时间", value: query.period.label, on: query.period != .any) {
-                ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
-            }
-            Spacer()
-            if let total { Text("\(total) 个结果").font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary) }
+        }
+        FilterToken(name: "时间", value: query.period.label, on: query.period != .any) {
+            ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
         }
     }
 

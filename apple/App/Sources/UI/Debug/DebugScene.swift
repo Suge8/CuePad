@@ -14,14 +14,19 @@ enum ScrollAnchor {
 ///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；
 /// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；
-/// - `-CuePadBench <sidebar|motion|resize>`（仅 Mac）：开合侧栏 10 次 / 存卡后开合纸页（都在结束后退出，给 Instruments 或连拍取帧）；
-///   resize 在侧栏开合途中拉窄窗口后停住，给截图核对页宽。
+/// - `-CuePadBench <sidebar|motion|resize|churn>`（仅 Mac）：开合侧栏 10 次 / 存卡后开合纸页（都在结束后退出，给 Instruments 或连拍取帧）；
+///   resize 在侧栏开合途中拉窄窗口后停住，给截图核对页宽；churn 边加卡边逐点拉宽窗口，查布局反馈环（结束后退出）；
+/// - `-CuePadWindowOrigin x,y`（仅 Mac）：窗口放到该位置，可在屏幕外；
+/// - `-CuePadImport <cuepad.db 路径>`（仅 Mac）：界面起来后导入一份旧版资料库，复现首次启动边导边变；
+/// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检。
 /// 设置项可在参数域覆盖：`-theme dark`；Mac 隔离 Pi 目录下隐藏"连接 Pi"提示：`-piExtensionDeclinedVersion '<integer>N</integer>'`（N 为随包扩展版本）。
 @MainActor
 enum DebugScene {
     static var defaults: UserDefaults { .standard }
     static var scene: String? { defaults.string(forKey: "CuePadScene") }
     static var searchText: String { defaults.string(forKey: "CuePadSearch") ?? "" }
+    /// 挂上刻意的几何回写环（只给布局压力场景的检测器自检用）。
+    static var injectsGeometryLoop: Bool { defaults.bool(forKey: "CuePadGeometryLoop") }
 
     /// 需要时写入演示数据，并按参数选中项目；返回选中的项目。
     static func prepareLibrary(_ workspace: Workspace) async -> UUID? {

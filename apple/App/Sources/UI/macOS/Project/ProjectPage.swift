@@ -17,26 +17,27 @@ struct ProjectPage: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                if let data, let arrangement = board.arrangement {
-                    content(data, arrangement).id("top")
-                }
-            }
-            .overlay { BottomFade() }
-            .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
-                withAnimation(Motion.quick) { collapsed = isCollapsed }
-            }
-            // 下滚后收成的一行放在工具栏正中：在顶部渐隐之上，且不随页面滚动。工具栏项常驻、只换内容
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    if collapsed, let data, showsFocus(data) {
-                        CompactFocus(data: data) {
-                            withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
-                        }
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+            ZStack(alignment: .top) {
+                ScrollView {
+                    if let data, let arrangement = board.arrangement {
+                        content(data, arrangement).id("top")
                     }
                 }
-                .sharedBackgroundVisibility(.hidden)
+                .overlay { BottomFade() }
+                .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
+                    withAnimation(Motion.quick) { collapsed = isCollapsed }
+                }
+                TopFade()
+                // 下滚后收成的一行：在顶部渐隐之上、工具栏那一条里，但不放进工具栏——工具栏内容只随用户操作变，
+                // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
+                if collapsed, let data, showsFocus(data) {
+                    CompactFocus(data: data) {
+                        withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
+                    }
+                    .padding(.top, 8)
+                    .ignoresSafeArea(edges: .top)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
             #if DEBUG
             .onChange(of: board.arrangement != nil) { DebugScene.scrollIfNeeded(proxy) }

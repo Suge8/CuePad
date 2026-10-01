@@ -223,7 +223,7 @@ private struct FocusCard: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             PiDot(state: session.state, size: 7)
                             Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
-                            Text(session.summary).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
+                            PiActivityLine(text: session.summary, font: .subheadline).foregroundStyle(palette.ink2)
                             Spacer(minLength: 4)
                             PiElapsed(session: session)
                         }

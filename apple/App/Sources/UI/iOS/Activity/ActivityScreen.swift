@@ -238,11 +238,11 @@ private struct SessionRow: View {
                 }
                 HStack(spacing: 6) {
                     PiDot(state: session.state, size: 6)
-                    Text([project?.name, session.state.label].compactMap { $0 }.joined(separator: " · "))
-                        .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
+                    PiActivityLine(text: PiActivityLine.join(project?.name, session.state.label), font: .subheadline)
+                        .foregroundStyle(palette.ink2)
                 }
                 if let detail = session.detail, !detail.isEmpty {
-                    Text(detail).font(.footnote.monospaced()).foregroundStyle(palette.ink3).lineLimit(1)
+                    PiActivityLine(text: detail, monospaced: true).foregroundStyle(palette.ink3)
                 }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
