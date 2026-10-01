@@ -118,7 +118,7 @@ struct TaskLine: View {
             }
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: phase) { $0 == .idle && $1 == .pending }
-            .accessibilityLabel(done ? "标为未完成" : "完成")
+            .accessibilityLabel(phase == .pending ? "撤销完成" : done ? "标为未完成" : "完成")
             Text(task.content.textGlyphs)
                 .font(.body).strikethrough(done)
                 .foregroundStyle(done ? palette.ink3 : palette.ink)
@@ -133,6 +133,8 @@ struct TaskLine: View {
         }
         // 移出前就离开了页面：照样写入，不丢这次勾选
         .onDisappear { if phase == .pending { commit() } }
+        // 完成状态以 Store 为准：写入落地或别处恢复为未完成时，这一行回到普通状态
+        .onChange(of: task.completedAt) { phase = .idle }
     }
 
     private func tap() {
@@ -144,9 +146,17 @@ struct TaskLine: View {
         }
     }
 
+    /// 写入失败时这一行恢复为未完成，错误照常提示。
     private func commit() {
         phase = .committed
-        workspace.attempt { try await workspace.toggle(task) }
+        Task {
+            do {
+                try await workspace.toggle(task)
+            } catch {
+                phase = .idle
+                workspace.fail(error)
+            }
+        }
     }
 }
 
