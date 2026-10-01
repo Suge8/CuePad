@@ -106,6 +106,7 @@ struct MainWindow: View {
         }
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
+            SyncAlert()
             Button("搜索", systemImage: "magnifyingglass") { workspace.toggle(.search) }
                 .help("搜索（⌘K）")
             TasksButton()
@@ -161,6 +162,26 @@ private struct PinnedWidth: Layout {
 
     func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
     func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
+}
+
+/// 同步需要关注时（没登录 iCloud、需要你决定、出错等）在工具栏露一个图标：悬停看原因，点开设置处理。
+/// 平时什么都不显示；随同步状态（数据）变化，不随布局变化。
+private struct SyncAlert: View {
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let summary = SyncSummary(services.syncStatus)
+        if services.sync != nil, summary.tone != .normal {
+            Button {
+                NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
+            } label: {
+                Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
+            }
+            .help([summary.title, summary.detail, "点按在设置里处理"].compactMap { $0 }.joined(separator: "\n"))
+            .accessibilityLabel(summary.title)
+        }
+    }
 }
 
 /// 工具栏右上角：未完成任务数。Pi 的状态只在侧栏 Pi 区与项目页 Pi 栏出现，不挂在任务计数旁（会被读成任务出了问题）。
