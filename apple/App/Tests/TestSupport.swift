@@ -77,7 +77,13 @@ final class FakeSync: SyncControlling, Sendable {
         if let error = startError.withLock({ $0 }) { throw error }
     }
 
-    func stop() async { state.withLock { $0.stopped += 1 } }
+    /// 为 true 时 `stop()` 永不返回（模拟卡住的同步引擎）。
+    let stopHangs = Mutex(false)
+
+    func stop() async {
+        state.withLock { $0.stopped += 1 }
+        if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
+    }
     func syncNow() async throws { state.withLock { $0.syncNows += 1 } }
 
     func resolve(_ resolution: SyncResolution) async throws {

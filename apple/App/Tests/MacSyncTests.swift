@@ -30,6 +30,18 @@ struct MacSyncTests {
 
     // MARK: 退出
 
+    @Test(.timeLimit(.minutes(1)))
+    func 退出收尾有上限_组件卡住时到点放行并指出是哪个() async throws {
+        services.startSync()
+        await eventually { rig.sync.started == 1 }
+        rig.sync.stopHangs.withLock { $0 = true }
+
+        let late = await services.stop(within: .milliseconds(200))
+
+        #expect(late == "同步引擎")
+        #expect(rig.sync.stopped == 1)
+    }
+
     @Test func 退出时停止同步引擎与远程投送执行器() async throws {
         services.startSync()
         try await services.startDeliveryExecutor()
