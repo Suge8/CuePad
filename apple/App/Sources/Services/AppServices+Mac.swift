@@ -54,24 +54,31 @@ extension AppServices {
         })
     }
 
-    /// 真正退出时释放：后台任务、远程投送执行器、同步引擎、Pi 连接、全局快捷键。
-    /// 要等的组件依次停止，整体最多等 `limit`：卡住的不拦着退出，记一条日志指出是哪个；返回它的名字，按时结束返回 nil。
-    @discardableResult
-    func stop(within limit: Duration = .seconds(2)) async -> String? {
+    /// 退出收尾。主线程上的部分（后台任务、Pi 连接、全局快捷键）在这里同步做完；返回的等待只涉及不在主线程上的组件
+    /// （远程投送执行器、同步引擎），依次停止、整体最多等 `limit`，自身不需要主线程：退出可能发生在主线程被占住时
+    /// （在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等回复，主线程上排队的任务轮不到）。
+    /// 卡住的组件不拦着退出，记一条日志指出是哪个；等待的结果是它的名字，按时结束为 nil。
+    func beginShutdown(within limit: Duration = .seconds(2)) -> @Sendable () async -> String? {
         cancelBackgroundWork()
         pi.stop()
         hotkey.unregister()
         let executor = deliveryExecutor, sync = sync
         deliveryExecutor = nil
-        let late = await ShutdownSteps.run([
-            ("远程投送执行器", { await executor?.stop() }),
-            ("同步引擎", { await sync?.stop() }),
-        ], within: limit)
-        if let late {
-            Logger(subsystem: Self.bundleID, category: "shutdown")
-                .error("退出收尾：\(late, privacy: .public) 没在 \(limit, privacy: .public) 内结束，已放行退出")
+        let log = Logger(subsystem: Self.bundleID, category: "shutdown")
+        return { @concurrent in
+            let late = await ShutdownSteps.run([
+                ("远程投送执行器", { await executor?.stop() }),
+                ("同步引擎", { await sync?.stop() }),
+            ], within: limit)
+            if let late { log.error("退出收尾：\(late, privacy: .public) 没在 \(limit, privacy: .public) 内结束，已放行退出") }
+            return late
         }
-        return late
+    }
+
+    /// 在主线程空闲时收尾（测试与不经 terminate 的场合）。
+    @discardableResult
+    func stop(within limit: Duration = .seconds(2)) async -> String? {
+        await beginShutdown(within: limit)()
     }
 
     // MARK: 全局快捷键
@@ -149,9 +156,10 @@ extension AppServices {
 /// 依次执行的收尾步骤，整体有时限。
 nonisolated enum ShutdownSteps {
     /// 按顺序执行；全部结束返回 nil。超过 `limit` 时不再等，返回正在执行的那一步的名字（其后的步骤不执行，进程随即退出）。
+    @concurrent
     static func run(_ steps: [(name: String, run: @Sendable () async -> Void)], within limit: Duration) async -> String? {
         let (outcomes, outcome) = AsyncStream<String?>.makeStream()
-        let current = Mutex<String?>(nil)
+        let current = Mutex<String?>(steps.first?.name)  // 计时器可能先于第一步开始就到点
         let work = Task {
             for step in steps where !Task.isCancelled {
                 current.withLock { $0 = step.name }

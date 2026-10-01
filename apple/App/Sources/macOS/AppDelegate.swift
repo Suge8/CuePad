@@ -91,14 +91,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return true
     }
 
-    /// 服务的收尾要等 actor 完成：先回复"稍后"，收尾结束再放行退出。
+    /// 服务的收尾要等 actor 完成：先回复"稍后"，收尾结束再放行退出。terminate 可能是在主线程上的任务里调用的，
+    /// 此时系统在嵌套的事件循环（模态面板模式）里等回复、主线程上排队的任务轮不到：等待放在主线程之外，
+    /// 回复经主 run loop 的 common modes 送达（与 SIGTERM 同一条路），不依赖主线程上的任务。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let services else { return .terminateNow }
-        Task {
-            await services.stop()
-            sender.reply(toApplicationShouldTerminate: true)
+        let finish = services.beginShutdown()
+        Task.detached {
+            _ = await finish()
+            Self.onMainRunLoop { sender.reply(toApplicationShouldTerminate: true) }
         }
         return .terminateLater
+    }
+
+    /// 在主 run loop 的 common modes 里执行（含模态面板模式），不经主队列。
+    nonisolated static func onMainRunLoop(_ body: @escaping @MainActor () -> Void) {
+        let loop = CFRunLoopGetMain()
+        CFRunLoopPerformBlock(loop, CFRunLoopMode.commonModes.rawValue) { MainActor.assumeIsolated(body) }
+        CFRunLoopWakeUp(loop)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -136,11 +146,7 @@ enum TerminationSignal {
     }
 
     private static let terminateOnMainRunLoop: @Sendable () -> Void = {
-        let loop = CFRunLoopGetMain()
-        CFRunLoopPerformBlock(loop, CFRunLoopMode.commonModes.rawValue) {
-            MainActor.assumeIsolated { NSApp.terminate(nil) }
-        }
-        CFRunLoopWakeUp(loop)
+        AppDelegate.onMainRunLoop { NSApp.terminate(nil) }
     }
 }
 #endif

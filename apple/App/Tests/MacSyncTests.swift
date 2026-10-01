@@ -30,6 +30,29 @@ struct MacSyncTests {
 
     // MARK: 退出
 
+    /// 退出可能发生在主线程被占住时：在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等收尾的回复，
+    /// 主线程上排队的任务轮不到。收尾的等待部分若需要主线程，退出就永远等不到。
+    @Test(.timeLimit(.minutes(1)))
+    func 主线程被占住时退出收尾仍在上限内完成() async throws {
+        services.startSync()
+        try await services.startDeliveryExecutor()
+        await eventually { rig.sync.started == 1 }
+
+        let finish = services.beginShutdown(within: .seconds(2))
+        let done = DispatchSemaphore(value: 0)
+        Task.detached {
+            _ = await finish()
+            done.signal()
+        }
+        #expect(Self.blockCurrentThread(until: done, seconds: 3), "主线程被占住时收尾等不到")
+        #expect(rig.sync.stopped == 1)
+    }
+
+    /// 同步地占住当前（主）线程，直到信号或超时。
+    private nonisolated static func blockCurrentThread(until signal: DispatchSemaphore, seconds: Double) -> Bool {
+        signal.wait(timeout: .now() + seconds) == .success
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func 退出收尾有上限_组件卡住时到点放行并指出是哪个() async throws {
         services.startSync()
