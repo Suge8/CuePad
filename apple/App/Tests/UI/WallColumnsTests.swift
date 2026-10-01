@@ -41,4 +41,13 @@ struct WallColumnsTests {
 
         #expect(wall.columns == [[a, d], [b], [c]])
     }
+
+    @Test func 跨天重新排墙时按新顺序整体重新分配() {
+        let today = Date(timeIntervalSince1970: 0), tomorrow = Date(timeIntervalSince1970: 86_400)
+        var wall = WallColumns(order: [a, b, c, d], count: 2, height: height, arrangedAt: today)
+
+        wall.update(order: [d, c, b, a], count: 2, height: height, arrangedAt: tomorrow)
+
+        #expect(wall.columns == WallColumns(order: [d, c, b, a], count: 2, height: height).columns)
+    }
 }
