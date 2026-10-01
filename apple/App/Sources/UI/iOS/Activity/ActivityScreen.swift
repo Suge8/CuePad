@@ -192,8 +192,8 @@ private struct WaitingCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.orange.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.orange.opacity(palette.highContrast ? 0.8 : 0.35)))
+        .background(palette.attention.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(palette.attention.opacity(palette.highContrast ? 0.8 : 0.35)))
         .accessibilityElement(children: .combine)
     }
 }
@@ -244,7 +244,7 @@ struct PiElapsed: View {
     var body: some View {
         switch session.state.known {
         case .waitingForUser:
-            Text("已等 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(.orange)
+            Text("已等 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(palette.attention)
         case .thinking, .outputting, .tool:
             Text("已运行 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
         default:
@@ -271,7 +271,7 @@ private struct DeliveryRow: View {
             Text("\(DateLabel.short(request.createdAt)) → \(request.target.name) · \(request.mode.label)")
                 .font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
             if request.status == .known(.failed) {
-                if let reason = request.resultDetail { Text(reason).font(.footnote).foregroundStyle(.red) }
+                if let reason = request.resultDetail { Text(reason).font(.footnote).foregroundStyle(palette.failure) }
                 HStack(spacing: 10) {
                     if live != nil {
                         Button("重试", systemImage: "arrow.clockwise") { retry() }
@@ -304,16 +304,17 @@ private struct DeliveryRow: View {
 
 struct DeliveryStatusLabel: View {
     let status: Open<DeliveryStatus>
+    @Environment(\.palette) private var palette
 
     var body: some View {
         Group {
             switch status {
-            case .known(.pending): Label("等 Mac 接手", systemImage: "clock").foregroundStyle(.secondary)
+            case .known(.pending): Label("等 Mac 接手", systemImage: "clock").foregroundStyle(palette.ink2)
             case .known(.executing):
-                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("正在发送") }.foregroundStyle(.secondary)
-            case .known(.succeeded): Label("已送达", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-            case .known(.failed): Label("失败", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
-            case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(.secondary)
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("正在发送") }.foregroundStyle(palette.ink2)
+            case .known(.succeeded): Label("已送达", systemImage: "checkmark.circle.fill").foregroundStyle(palette.ink2)
+            case .known(.failed): Label("失败", systemImage: "exclamationmark.triangle.fill").foregroundStyle(palette.failure)
+            case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(palette.ink2)
             }
         }
         .font(.footnote.weight(.medium))

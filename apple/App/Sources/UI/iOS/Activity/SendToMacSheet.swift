@@ -78,6 +78,7 @@ struct SendToMacSheet: View {
 
     @ViewBuilder private var chooser: some View {
         Form {
+            Group {
             Section {
                 ContentPreview(content: outbox.content)
             }
@@ -109,6 +110,8 @@ struct SendToMacSheet: View {
                     }
                 }
             }
+            }
+            .listRowBackground(palette.paper)
         }
     }
 
@@ -127,7 +130,7 @@ struct SendToMacSheet: View {
                         }
                     }
                     Text([project?.name, item.summary].compactMap { $0 }.joined(separator: " · "))
-                        .font(.footnote).foregroundStyle(item.state == .known(.waitingForUser) ? .orange : palette.ink3).lineLimit(1)
+                        .font(.footnote).foregroundStyle(item.state == .known(.waitingForUser) ? palette.attention : palette.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 if item.sessionID == session?.sessionID {
@@ -245,8 +248,8 @@ private struct DeliveryProgress: View {
 
     @ViewBuilder private var symbol: some View {
         switch status {
-        case .succeeded: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).transition(.scale.combined(with: .opacity))
-        case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+        case .succeeded: Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.ink).transition(.scale.combined(with: .opacity))
+        case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(palette.failure)
         default: ProgressView().controlSize(.large)
         }
     }

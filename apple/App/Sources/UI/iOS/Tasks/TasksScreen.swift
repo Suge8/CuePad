@@ -23,7 +23,7 @@ struct TasksScreen: View {
             Section { NewTaskLine(project: nil, projects: data?.projects).listRowBackground(palette.paper) }
             if let data {
                 if data.open.isEmpty {
-                    Text(data.completed.isEmpty ? "还没有任务" : "全部完成了").foregroundStyle(.secondary)
+                    Text(data.completed.isEmpty ? "还没有任务" : "全部完成了").foregroundStyle(palette.ink2)
                         .listRowBackground(palette.paper)
                 }
                 let live = Set(data.projects.map(\.id))
@@ -38,7 +38,7 @@ struct TasksScreen: View {
                             HStack(spacing: 6) {
                                 if let project { ProjectGlyph(project: project, size: 12) }
                                 Text(project?.name ?? "未归属")
-                                Text("\(tasks.count)").foregroundStyle(.tertiary)
+                                Text("\(tasks.count)").foregroundStyle(palette.ink3)
                             }
                         }
                     }
@@ -81,7 +81,7 @@ struct TasksScreen: View {
             .listRowBackground(palette.paper)
             .swipeActions(edge: .leading) {
                 Button(task.completedAt == nil ? "完成" : "未完成", systemImage: "checkmark") { workspace.attempt { try await workspace.toggle(task) } }
-                    .tint(.green)
+                    .tint(palette.accent)
             }
             .swipeActions(edge: .trailing) {
                 Button("删除", systemImage: "trash", role: .destructive) {

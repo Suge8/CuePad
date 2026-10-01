@@ -6,10 +6,12 @@ import SwiftUI
 /// 设置：外观、iCloud 同步（状态、需要你决定的情况、问题明细）、冲突副本、启动时没完成的事。
 struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
 
     var body: some View {
         @Bindable var settings = services.settings
         Form {
+            Group {
             Section("外观") {
                 Picker("主题", selection: $settings.theme) {
                     Text("跟随系统").tag(AppSettings.Theme.system)
@@ -25,7 +27,7 @@ struct SettingsScreen: View {
                 Section {
                     NavigationLink(value: Navigation.Route.conflicts) {
                         Label("\(services.conflicts.count) 张卡片有两个版本", systemImage: "square.on.square")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(palette.attention)
                     }
                 }
             }
@@ -39,6 +41,8 @@ struct SettingsScreen: View {
             Section {
                 LabeledContent("版本", value: Self.version)
             }
+            }
+            .listRowBackground(palette.paper)
         }
         .deskBackground()
         .bottomEdgeFade()
@@ -57,27 +61,28 @@ struct SettingsScreen: View {
 private struct SyncSection: View {
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
     @State private var confirmErase = false
     @State private var syncing = false
 
     var body: some View {
         Section {
             if services.sync == nil {
-                Label("iCloud 同步没有开启", systemImage: "icloud.slash").foregroundStyle(.secondary)
+                Label("这台设备上的 CuePad 没有开启 iCloud 同步", systemImage: "icloud.slash").foregroundStyle(palette.ink3)
             } else {
-                let status = SyncStatusText(services.syncStatus)
+                let summary = SyncSummary(services.syncStatus)
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(status.title)
-                        if let detail = status.detail { Text(detail).font(.footnote).foregroundStyle(.secondary) }
+                        Text(summary.title)
+                        if let detail = summary.detail { Text(detail).font(.footnote).foregroundStyle(palette.ink3) }
                     }
                 } icon: {
-                    Image(systemName: status.symbol).foregroundStyle(status.tint)
+                    Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
                         .symbolEffect(.pulse, isActive: services.syncStatus == .syncing)
                 }
                 if case .needsDecision = services.syncStatus {
                     Button("上传本机数据", systemImage: "icloud.and.arrow.up") { resolve(.uploadLocal) }
-                    Button("用云端数据替换本机", systemImage: "icloud.and.arrow.down", role: .destructive) { confirmErase = true }
+                    Button("用云端数据替换本机…", systemImage: "icloud.and.arrow.down", role: .destructive) { confirmErase = true }
                 } else {
                     Button("立即同步", systemImage: "arrow.triangle.2.circlepath") {
                         syncing = true
@@ -89,9 +94,9 @@ private struct SyncSection: View {
                     .disabled(syncing || services.syncStatus == .syncing)
                 }
                 if !services.syncIssues.isEmpty {
-                    DisclosureGroup("\(services.syncIssues.count) 条没能同步的记录") {
+                    DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
                         ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
-                            Text(issue.message).font(.footnote).foregroundStyle(.secondary)
+                            Text(issue.message).font(.footnote).foregroundStyle(palette.ink3)
                         }
                     }
                 }
@@ -115,40 +120,6 @@ private struct SyncSection: View {
         workspace.attempt {
             try await services.resolveSync(resolution)
             workspace.say(done)
-        }
-    }
-}
-
-/// 同步状态给人看的文字与图标。
-struct SyncStatusText {
-    let title: String
-    let detail: String?
-    let symbol: String
-    let tint: Color
-
-    init(_ status: SyncStatus) {
-        switch status {
-        case .idle: (title, detail, symbol, tint) = ("已同步", nil, "checkmark.icloud", .green)
-        case .syncing: (title, detail, symbol, tint) = ("正在同步…", nil, "arrow.triangle.2.circlepath.icloud", .blue)
-        case .noAccount:
-            (title, detail, symbol, tint) = ("没有登录 iCloud", "在系统设置里登录后自动开始同步，本机数据不受影响", "icloud.slash", .orange)
-        case .accountRestricted:
-            (title, detail, symbol, tint) = ("iCloud 账号受限", "家长控制或设备管理限制了 iCloud，本机数据照常可用", "lock.icloud", .orange)
-        case .accountUnavailable:
-            (title, detail, symbol, tint) = ("iCloud 暂时不可用", "稍后会自动重试", "exclamationmark.icloud", .orange)
-        case .quotaExceeded:
-            (title, detail, symbol, tint) = ("iCloud 空间不足", "本机改动都已保留，空间释放后自动上传", "exclamationmark.icloud", .orange)
-        case .needsDecision(let decision):
-            (title, detail, symbol, tint) = ("同步已暂停，需要你决定", Self.describe(decision), "pause.circle", .orange)
-        case .failed(let message): (title, detail, symbol, tint) = ("同步出错", message, "xmark.icloud", .red)
-        }
-    }
-
-    private static func describe(_ decision: SyncDecision) -> String {
-        switch decision {
-        case .accountSwitched: "iCloud 账号换了，本机数据属于上一个账号"
-        case .cloudDataDeleted: "iCloud 里的 CuePad 数据被删除了"
-        case .cloudDataReset: "iCloud 里的 CuePad 数据被重置了"
         }
     }
 }

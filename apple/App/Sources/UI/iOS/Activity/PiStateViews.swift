@@ -15,15 +15,6 @@ nonisolated extension PiWorkState {
         }
     }
 
-    var tint: Color {
-        switch self {
-        case .thinking, .outputting, .tool: .primary
-        case .waitingForUser: .orange
-        case .error: .red
-        case .settled: .gray.opacity(0.45)
-        }
-    }
-
     /// 同一项目有多个会话时，状态点显示最需要注意的那个。
     var urgency: Int {
         switch self {
@@ -38,8 +29,22 @@ nonisolated extension PiWorkState {
 /// 其他版本写入的、本版本不认识的状态：灰色、最低优先。
 nonisolated extension Open<PiWorkState> {
     var label: String { known?.label ?? "未知状态" }
-    var tint: Color { known?.tint ?? .gray.opacity(0.45) }
     var urgency: Int { known?.urgency ?? 1 }
+}
+
+extension PiWorkState {
+    func tint(_ palette: Palette) -> Color {
+        switch self {
+        case .thinking, .outputting, .tool: palette.ink
+        case .waitingForUser: palette.attention
+        case .error: palette.failure
+        case .settled: palette.ink3
+        }
+    }
+}
+
+extension Open<PiWorkState> {
+    func tint(_ palette: Palette) -> Color { known?.tint(palette) ?? palette.ink3 }
 }
 
 nonisolated extension PiSessionState {
@@ -63,13 +68,15 @@ nonisolated extension PiSessionState {
 struct PiDot: View {
     let state: Open<PiWorkState>
     var size: CGFloat = 8
+    @Environment(\.palette) private var palette
 
     var body: some View {
+        let tint = state.tint(palette)
         Circle()
-            .fill(state.tint)
+            .fill(tint)
             .frame(width: size, height: size)
             .padding(size * 0.35)
-            .background(state.tint.opacity(0.22), in: .circle)
+            .background(tint.opacity(0.22), in: .circle)
             .animation(Motion.quick, value: state)
             .accessibilityHidden(true)
     }

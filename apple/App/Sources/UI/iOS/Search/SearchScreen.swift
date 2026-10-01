@@ -175,9 +175,9 @@ private struct Chip: View {
             }
         }
         .font(.subheadline)
-        .foregroundStyle(on ? palette.onSolid : palette.ink)
+        .foregroundStyle(on ? palette.onAccent : palette.ink)
         .padding(.horizontal, 12).frame(minHeight: 36)
-        .background(on ? palette.solid : palette.paper, in: .capsule)
+        .background(on ? palette.accent : palette.paper, in: .capsule)
         .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
         .padding(.vertical, 4)
         .contentShape(.rect)

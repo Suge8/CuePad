@@ -7,6 +7,7 @@ struct ProjectFormSheet: View {
     let project: Project?
     @Environment(Workspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
     @State private var name = ""
     @State private var icon = "folder"
     @State private var color = ProjectStylePicker.colors[0].hex
@@ -14,9 +15,13 @@ struct ProjectFormSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("名称", text: $name).submitLabel(.done).onSubmit(save)
-                Section("图标与颜色") { ProjectStylePicker(icon: $icon, color: $color, cell: 44) }
+                Group {
+                    TextField("名称", text: $name).submitLabel(.done).onSubmit(save)
+                    Section("图标与颜色") { ProjectStylePicker(icon: $icon, color: $color, cell: 44) }
+                }
+                .listRowBackground(palette.paper)
             }
+            .deskBackground()
             .navigationTitle(project == nil ? "新建项目" : "编辑项目")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

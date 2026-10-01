@@ -56,6 +56,7 @@ struct SplitRoot: View {
 /// 右侧面板的开关：任务与活动；活动按钮在有会话等你确认时带橙点。
 private struct PanelButtons: View {
     @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var waiting: Int?
 
@@ -64,7 +65,7 @@ private struct PanelButtons: View {
         Button { withAnimation(Motion.panel) { navigation.toggle(.activity) } } label: {
             Label("活动", systemImage: "waveform.path.ecg")
                 .overlay(alignment: .topTrailing) {
-                    if (waiting ?? 0) > 0 { Circle().fill(.orange).frame(width: 7, height: 7).offset(x: 3, y: -2) }
+                    if (waiting ?? 0) > 0 { Circle().fill(palette.attention).frame(width: 7, height: 7).offset(x: 3, y: -2) }
                 }
         }
         .accessibilityValue((waiting ?? 0) > 0 ? "\(waiting ?? 0) 个会话等你确认" : "")
@@ -110,6 +111,7 @@ nonisolated private struct SidebarData: Sendable {
 
 private struct SplitSidebar: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var data: SidebarData?
     @State private var creating = false
@@ -141,6 +143,9 @@ private struct SplitSidebar: View {
                 SidebarRow(route: .settings, title: "设置", symbol: "gearshape")
             }
         }
+        // 侧栏用共用的侧栏层色（深色是更深一档的暖黑），不用系统偏冷的灰
+        .scrollContentBackground(.hidden)
+        .background(palette.sidebar)
         .navigationTitle("CuePad")
         .toolbar {
             Button("新建项目", systemImage: "folder.badge.plus") { creating = true }
@@ -163,7 +168,7 @@ private struct SplitSidebar: View {
     }
 }
 
-/// 侧栏的一项。选中态是一层淡底色加粗字（不是实心胶囊）：只告诉你"在这里"，不抢内容的注意。
+/// 侧栏的一项。选中态是共用的选中底色加粗字（不是实心胶囊）：只告诉你"在这里"，不抢内容的注意。
 private struct SidebarRow: View {
     let route: Navigation.Route
     let title: String
@@ -195,7 +200,7 @@ private struct SidebarRow: View {
         .buttonStyle(.plain)
         .listRowBackground(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(selected ? palette.hair : .clear)
+                .fill(selected ? palette.selection : .clear)
                 .padding(.horizontal, 10))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityValue(pi.map { "Pi \($0.label)" } ?? "")

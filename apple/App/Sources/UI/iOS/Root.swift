@@ -70,7 +70,7 @@ struct IOSRootView: View {
 /// 全局强调色用墨色（黑白品牌），不用系统蓝。
 private struct InkTint: ViewModifier {
     @Environment(\.palette) private var palette
-    func body(content: Content) -> some View { content.tint(palette.ink) }
+    func body(content: Content) -> some View { content.tint(palette.accent) }
 }
 
 /// 推入页面的内容（iPhone 各标签的栈与 iPad 分栏共用）。
@@ -139,6 +139,7 @@ private struct TabsRoot: View {
 /// 顶部的短提示：操作结果与错误。错误伴随触感。
 private struct NoticeBanner: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -146,7 +147,7 @@ private struct NoticeBanner: View {
             if let notice = workspace.notice {
                 Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(notice.isError ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
+                    .foregroundStyle(notice.isError ? AnyShapeStyle(palette.failure) : AnyShapeStyle(palette.ink))
                     .padding(.horizontal, 16).padding(.vertical, 10)
                     .glass(in: .capsule)
                     .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))

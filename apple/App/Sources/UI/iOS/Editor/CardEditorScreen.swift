@@ -211,13 +211,15 @@ private struct VariablesSheet: View {
     let names: [String]
     @Environment(Workspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
     @State private var values: [String: String] = [:]
 
     var body: some View {
         NavigationStack {
             Form {
+                Group {
                 if names.isEmpty {
-                    Text("正文里还没有 {{变量}}").foregroundStyle(.secondary)
+                    Text("正文里还没有 {{变量}}").foregroundStyle(palette.ink2)
                 }
                 ForEach(names, id: \.self) { name in
                     LabeledContent("{{\(name)}}") {
@@ -225,7 +227,10 @@ private struct VariablesSheet: View {
                             .multilineTextAlignment(.trailing)
                     }
                 }
+                }
+                .listRowBackground(palette.paper)
             }
+            .deskBackground()
             .onSubmit(saveAndClose)
             .navigationTitle("变量取值")
             .navigationBarTitleDisplayMode(.inline)

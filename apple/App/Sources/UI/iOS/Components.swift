@@ -141,7 +141,7 @@ private struct BottomEdgeFade: ViewModifier {
 
 private struct ProminentButton: ViewModifier {
     @Environment(\.palette) private var palette
-    func body(content: Content) -> some View { content.buttonStyle(.glassProminent).foregroundStyle(palette.onSolid) }
+    func body(content: Content) -> some View { content.buttonStyle(.glassProminent).foregroundStyle(palette.onAccent) }
 }
 
 private struct DeskBackground: ViewModifier {

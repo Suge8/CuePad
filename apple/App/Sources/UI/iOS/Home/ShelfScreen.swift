@@ -122,7 +122,7 @@ private struct TodayLink: View {
     var body: some View {
         NavigationLink(value: Navigation.Route.today) {
             HStack(spacing: 10) {
-                Image(systemName: "sun.max.fill").foregroundStyle(.orange).accessibilityHidden(true)
+                Image(systemName: "sun.max").foregroundStyle(palette.ink2).accessibilityHidden(true)
                 Text("今天").font(.body.weight(.semibold)).foregroundStyle(palette.ink)
                 Text("\(count) 张").font(.body.monospacedDigit()).foregroundStyle(palette.ink3)
                 Spacer()

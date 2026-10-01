@@ -25,13 +25,14 @@ struct CaptureDraft {
 /// 随手记栏：点文字打开随手记，相机与相册直接带图打开；记入当前位置（项目页记入该项目，其余进未归档）。
 struct CaptureBar: View {
     @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: 0) {
             Button { navigation.startCapture() } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "square.and.pencil").accessibilityHidden(true)
-                    Text("记下想法…").foregroundStyle(.secondary).lineLimit(1)
+                    Text("记下想法…").foregroundStyle(palette.ink2).lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .padding(.leading, 16)
@@ -50,7 +51,7 @@ struct CaptureBar: View {
 
     private func icon(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 44, height: 44).contentShape(.rect)
+            Image(systemName: symbol).foregroundStyle(palette.ink2).frame(width: 44, height: 44).contentShape(.rect)
         }
         .accessibilityLabel(label)
     }
@@ -183,10 +184,10 @@ struct CaptureSheet: View {
             ForEach(projects ?? []) { item in Button(item.name) { project = item.id } }
         } label: {
             HStack(spacing: 6) {
-                Text("记入").foregroundStyle(.secondary)
+                Text("记入").foregroundStyle(palette.ink2)
                 ProjectGlyph(project: current, size: 13)
                 Text(current?.name ?? "未归档").foregroundStyle(palette.ink)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink2).accessibilityHidden(true)
             }
             .font(.subheadline)
             .frame(minHeight: 44)

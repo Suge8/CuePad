@@ -13,9 +13,11 @@ struct TrashScreen: View {
     @Environment(AppServices.self) private var services
     @State private var data: TrashData?
     @State private var confirmEmpty = false
+    @Environment(\.palette) private var palette
 
     var body: some View {
         List {
+            Group {
             if let data {
                 if data.projects.isEmpty && data.cards.isEmpty {
                     ContentUnavailableView("回收站是空的", systemImage: "trash")
@@ -40,6 +42,8 @@ struct TrashScreen: View {
                     }
                 }
             }
+            }
+            .listRowBackground(palette.paper)
         }
         .deskBackground()
         .bottomEdgeFade()
@@ -70,10 +74,10 @@ struct TrashScreen: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).lineLimit(1)
             Text([detail, deletedAt.map { "\(DateLabel.short($0)) 删除" }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                .font(.footnote).foregroundStyle(palette.ink2).lineLimit(1)
         }
         .swipeActions(edge: .leading) {
-            Button("恢复", systemImage: "arrow.uturn.backward") { workspace.perform(restore) }.tint(.blue)
+            Button("恢复", systemImage: "arrow.uturn.backward") { workspace.perform(restore) }.tint(palette.accent)
         }
         .swipeActions(edge: .trailing) {
             Button("永久删除", systemImage: "trash", role: .destructive) { workspace.perform(purge) }
