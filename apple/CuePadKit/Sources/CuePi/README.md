@@ -7,6 +7,7 @@
 | 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`sessions` 直接给界面观察，`changes()` 给通知；`send` / `paste` |
 | 安装扩展 | `PiExtensionInstaller` | 检测 Pi（≥ 0.84.4）与扩展状态，`install()`（新装/升级）、`uninstall()`；写入前 App 要先征得用户同意 |
 | 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 增量读取，只给出会话列表要的摘要（id、工作目录、名字、当前分支首条 prompt、最后活动）；检查点（Codable，不含正文）由 App 存进 Store，再传回来 |
+| 错误摘要 | `PiErrorSummary`（`PiAgentState.errorSummary`） | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度、限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
 | 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
 
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录）。测试一律用临时目录，绝不碰真实 `~/.pi`。

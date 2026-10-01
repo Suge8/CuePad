@@ -81,7 +81,7 @@ struct MacSyncTests {
         (.tool(name: "read", running: ["read"], detail: "README.md"), .tool, "read · README.md"),
         (.waitingUser(kind: "confirm", title: "覆盖文件？"), .waitingForUser, "覆盖文件？"),
         (.done(aborted: false), .settled, nil),
-        (.error(message: "rate limit"), .error, "rate limit"),
+        (.error(message: #"429 {"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#), .error, "请求太频繁，稍后再试：slow down"),
     ])
     func Pi状态映射成同步记录的状态与说明(agent: PiAgentState, work: PiWorkState, detail: String?) async throws {
         try await services.consumePiChanges(changes([.appeared(session("s1", state: agent))]))
