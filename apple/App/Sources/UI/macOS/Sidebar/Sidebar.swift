@@ -306,25 +306,11 @@ private struct StartupIssues: View {
             .popover(isPresented: $showing) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(services.startupIssues.enumerated()), id: \.offset) { _, issue in
-                        Text(StartupIssueText.describe(issue)).font(.system(size: 12)).textSelection(.enabled)
+                        Text(issue.text).font(.system(size: 12)).textSelection(.enabled)
                     }
                 }
                 .padding(14).frame(width: 340, alignment: .leading)
             }
-        }
-    }
-}
-
-enum StartupIssueText {
-    static func describe(_ issue: AppServices.StartupIssue) -> String {
-        switch issue {
-        case .legacyImportFailed(let detail): "导入旧版数据失败，下次启动会重试：\(detail)"
-        case .globalShortcutUnavailable(let detail): "全局快捷键没能注册，可在设置里换一个：\(detail)"
-        case .piBridgeUnavailable(let detail): "Pi 连接不可用：\(detail)"
-        case .piHistoryUnavailable(let detail): "Pi 历史索引出错：\(detail)"
-        case .captureImportFailed(let detail): "分享进来的内容没能存成卡片，下次会重试：\(detail)"
-        case .widgetDataUnavailable(let detail): "小组件数据没能更新：\(detail)"
-        case .syncUnavailable(let detail): "iCloud 同步出了问题：\(detail)"
         }
     }
 }

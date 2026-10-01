@@ -123,16 +123,4 @@ private struct SyncSection: View {
         }
     }
 }
-
-extension AppServices.StartupIssue {
-    var text: String {
-        switch self {
-        case .legacyImportFailed(let detail): "旧版数据导入失败：\(detail)"
-        case .globalShortcutUnavailable(let detail): "全局快捷键不可用：\(detail)"
-        case .captureImportFailed(let detail): "分享进来的内容没能入库（会自动重试）：\(detail)"
-        case .syncUnavailable(let detail): "iCloud 同步出了问题：\(detail)"
-        case .widgetDataUnavailable(let detail): "小组件数据没能更新：\(detail)"
-        }
-    }
-}
 #endif

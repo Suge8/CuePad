@@ -277,14 +277,14 @@ private struct FilterCapsule: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(name).foregroundStyle(on ? AnyShapeStyle(palette.onSolid) : AnyShapeStyle(.secondary))
+            Text(name).foregroundStyle(on ? AnyShapeStyle(palette.onAccent) : AnyShapeStyle(.secondary))
             if let value {
                 Text(value).fontWeight(.medium)
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6).accessibilityHidden(true)
             }
         }
         .font(.system(size: 12))
-        .foregroundStyle(on ? AnyShapeStyle(palette.onSolid) : AnyShapeStyle(.primary))
+        .foregroundStyle(on ? AnyShapeStyle(palette.onAccent) : AnyShapeStyle(.primary))
         .padding(.horizontal, 10).frame(height: 26)
         .background(on ? AnyShapeStyle(palette.accent) : AnyShapeStyle(palette.fill.opacity(2)), in: .capsule)
         .contentShape(.capsule)

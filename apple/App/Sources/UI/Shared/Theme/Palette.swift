@@ -38,9 +38,6 @@ struct Palette {
     var onAccent: Color { paper }
     /// 选中底色：侧栏与列表的当前项用它垫一层墨色浅底，文字保持墨色并加粗；Mac 与 iOS 共用，不用系统灰胶囊。
     var selection: Color { ink.opacity(dark ? 0.14 : 0.09) }
-    /// 与 `accent` / `onAccent` 同义；iOS 界面仍用这组名字。
-    var solid: Color { accent }
-    var onSolid: Color { onAccent }
 
     // MARK: 状态（只表达含义，不给文字大面积上色）
 
