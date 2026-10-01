@@ -19,6 +19,7 @@ extension DebugScene {
         switch defaults.string(forKey: "CuePadBench") {
         case "sidebar": await benchSidebar(workspace)
         case "motion": await benchMotion(workspace)
+        case "resize": await benchResizeWhileToggling(workspace)
         default: break
         }
     }
@@ -45,11 +46,26 @@ extension DebugScene {
         NSApp.terminate(nil)
     }
 
+    /// 页宽验收用：开合侧栏的动画进行中把窗口拉窄，停下后由外部截图看页面是否铺满详情区。
+    private static func benchResizeWhileToggling(_ workspace: Workspace) async {
+        try? await Task.sleep(for: .seconds(2))
+        workspace.toggleSidebar()
+        try? await Task.sleep(for: .milliseconds(60))
+        guard let window = mainWindow else { return }
+        var frame = window.frame
+        frame.size.width -= 360
+        window.setFrame(frame, display: true, animate: true)
+    }
+
+    private static var mainWindow: NSWindow? {
+        NSApp.windows.first { $0.styleMask.contains(.resizable) && $0.styleMask.contains(.fullSizeContentView) }
+    }
+
     /// 只调整主窗口尺寸，外框样式由壳层创建窗口时决定，这里不碰。
     private static func resizeWindow() {
         guard let value = defaults.string(forKey: "CuePadWindowSize") else { return }
         let parts = value.split(separator: "x").compactMap { Double($0) }
-        guard parts.count == 2, let window = NSApp.windows.first(where: { $0.styleMask.contains(.resizable) && $0.styleMask.contains(.fullSizeContentView) }) else { return }
+        guard parts.count == 2, let window = mainWindow else { return }
         window.setContentSize(NSSize(width: parts[0], height: parts[1]))
         window.center()
     }
