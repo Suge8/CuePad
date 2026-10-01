@@ -126,11 +126,9 @@ private struct ProjectHeader: View {
                 .contextMenu { if let project = data.project { ProjectMenu(project: project) { renaming = project } } }
                 HStack(spacing: 4) {
                     if let project = data.project {
-                        Button(data.directory.map(Self.abbreviated) ?? "绑定代码目录") {
+                        DirectoryLink(path: data.directory.map(Self.abbreviated)) {
                             ProjectDirectory.choose(for: project.id, workspace: workspace)
                         }
-                        .buttonStyle(.plain)
-                        .help(data.directory == nil ? "在这个目录里运行的 Pi 会出现在项目页" : "更换代码目录")
                         if !data.cards.isEmpty { Text("·") }
                     }
                     if !data.cards.isEmpty { Text("\(data.cards.count) 张卡片").monospacedDigit() }
@@ -165,6 +163,32 @@ struct NewCardButton: View {
     }
 }
 
+/// 项目页头部的代码目录：没绑定时是带图标的"绑定代码目录…"，绑定后是路径；都可点，悬停有下划线、指针变手形。
+private struct DirectoryLink: View {
+    let path: String?
+    let choose: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: choose) {
+            if let path {
+                Text(path).underline(hovering)
+            } else {
+                Label {
+                    Text("绑定代码目录…").underline(hovering)
+                } icon: {
+                    Image(systemName: "folder.badge.plus")
+                }
+                .labelStyle(.titleAndIcon)
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .pointerStyle(.link)
+        .help(path == nil ? "选一个目录：在里面运行的 Pi 会出现在这个项目页" : "更换代码目录")
+    }
+}
+
 private struct EmptyProject: View {
     @Environment(\.palette) private var palette
 
@@ -178,14 +202,19 @@ private struct EmptyProject: View {
     }
 }
 
-/// 空库首次打开：一句话 + 一个动作，不摆出只有内容才用得上的计数与标题。
+/// 空库首次打开：图标、一句话、一个动作，不摆出只有内容才用得上的计数与标题。结构与间距同 iOS 书架的空状态；
+/// 文案暂与 iOS 相同，iOS 把这段收进 Shared 后改用那一份。
 private struct Welcome: View {
     @Environment(\.palette) private var palette
     @State private var creating = false
 
     var body: some View {
-        VStack(spacing: 14) {
-            Text("先建一个项目，把想法分开放").font(.system(size: 20, weight: .semibold)).foregroundStyle(palette.ink)
+        VStack(spacing: 0) {
+            Image(systemName: "books.vertical").font(.system(size: 40, weight: .light)).foregroundStyle(palette.ink3)
+                .accessibilityHidden(true)
+            Text("还没有项目").font(.system(size: 20, weight: .semibold)).foregroundStyle(palette.ink).padding(.top, 16)
+            Text("建一个项目放卡片，或者先在下方随手记一条").font(.system(size: 13)).foregroundStyle(palette.ink2)
+                .multilineTextAlignment(.center).padding(.top, 8)
             Button { creating = true } label: {
                 Text("新建项目").font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(palette.onAccent)
@@ -194,10 +223,10 @@ private struct Welcome: View {
             }
             .buttonStyle(PressStyle())
             .keyboardShortcut(.defaultAction)
-            Text("或者直接在下方记一条").font(.system(size: 13)).foregroundStyle(palette.ink3)
+            .padding(.top, 20)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 180)
+        .padding(.top, 160)
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
     }
 }

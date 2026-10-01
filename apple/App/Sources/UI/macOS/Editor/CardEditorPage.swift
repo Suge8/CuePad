@@ -82,12 +82,21 @@ struct CardEditorPage: View {
         .onDisappear { if let autosave { Task { await autosave.flush() } } }
     }
 
+    /// 原卡片在本页里的边框；找不到原卡片（不在墙上）时为 nil。
+    private var sourceFrame: CGRect? {
+        workspace.cardFrames[cardID].map { $0.offsetBy(dx: -pageOrigin.x, dy: -pageOrigin.y) }
+    }
+
+    /// 纸此刻的边框：铺开时是纸页的位置，否则是原卡片的边框。
+    private var paperRect: CGRect {
+        expanded || sourceFrame == nil || reduceMotion ? paperFrame : sourceFrame!
+    }
+
     /// 纸的外框：铺开时是纸页的位置，否则是原卡片的边框（找不到原卡片时从纸页位置略缩小淡入）。
     private var paperShape: some View {
         let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-        let source = workspace.cardFrames[cardID].map { $0.offsetBy(dx: -pageOrigin.x, dy: -pageOrigin.y) }
-        let target = paperFrame
-        let rect = expanded || source == nil || reduceMotion ? target : source!
+        let source = sourceFrame
+        let rect = paperRect
         return ZStack(alignment: .top) {
             // 占位：量出纸页铺开时的位置
             Color.clear
@@ -102,6 +111,16 @@ struct CardEditorPage: View {
                 .overlay(shape.strokeBorder(palette.hair))
                 .shadow(color: .black.opacity(palette.dark ? 0 : 0.06), radius: 12, y: 4)
                 .frame(width: max(rect.width, 1), height: max(rect.height, 1))
+                // 过渡中纸上写着这张卡的标题与摘要（编辑器只在铺开后出现）：放大、缩回的每一帧纸上都有字
+                .overlay(alignment: .topLeading) {
+                    if let card = data?.card {
+                        // 按原卡片的宽度排版、不随纸变宽重新折行：纸放大时字留在原处，只是纸边退开
+                        PaperGlimpse(text: CardText(card.body))
+                            .frame(width: (source ?? rect).width, alignment: .topLeading)
+                            .opacity(contentShown ? 0 : 1)
+                    }
+                }
+                .clipShape(shape)
                 .position(x: rect.midX, y: rect.midY)
                 .opacity(source == nil && !expanded || paperFaded ? 0 : 1)
                 .allowsHitTesting(false)
@@ -110,7 +129,8 @@ struct CardEditorPage: View {
 
     private func expand() {
         withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) { expanded = true }
-        withAnimation(.easeOut(duration: 0.12).delay(reduceMotion ? 0 : 0.14)) { contentShown = true }
+        // 纸快铺满时编辑器淡入、纸上的摘要淡出，两者交叉
+        withAnimation(.easeOut(duration: 0.12).delay(reduceMotion ? 0 : 0.18)) { contentShown = true }
     }
 
     /// 正文先淡出，外框缩回原卡片，最后一段纸淡出露出原卡片；缩完卸下纸页。
@@ -332,6 +352,33 @@ private struct VariablesForm: View {
         let id = card.id, values = values
         guard values != card.variableValues else { return }
         workspace.perform { try await $0.updateCard(id) { $0.variableValues = values } }
+    }
+}
+
+
+/// 纸放大、缩回途中纸上的内容：与卡片墙上那张卡同样的排版（首图、标题、摘要），落回卡片时两者重合。
+private struct PaperGlimpse: View {
+    let text: CardText
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let image = text.images.first {
+                Thumbnail(hash: image, height: 118).padding(-8).padding(.bottom, 6)
+            }
+            Text(text.title.isEmpty ? "空白卡片" : text.title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
+                .lineLimit(2)
+            if !text.preview.isEmpty {
+                Text(VariableText.styled(text.preview, palette))
+                    .font(.system(size: 13)).lineSpacing(3).foregroundStyle(palette.ink2)
+                    .lineLimit(text.images.isEmpty ? 4 : 2)
+            }
+        }
+        .padding(14)
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
     }
 }
 #endif
