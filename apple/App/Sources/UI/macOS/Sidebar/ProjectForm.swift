@@ -3,24 +3,15 @@ import AppKit
 import CueStore
 import SwiftUI
 
-/// 项目右键菜单：编辑、置顶、绑定代码目录、移到回收站。
+/// 项目右键菜单：共用的项目操作，加上 Mac 才有的绑定代码目录。
 struct ProjectMenu: View {
     let project: Project
     let rename: () -> Void
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("编辑名称与图标…", action: rename)
-        Button(project.isPinned ? "取消置顶" : "置顶") {
-            let id = project.id, pinned = !project.isPinned
-            workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
-        }
-        Button("绑定代码目录…") { ProjectDirectory.choose(for: project.id, workspace: workspace) }
-        Divider()
-        Button("移到回收站", role: .destructive) {
-            let id = project.id
-            if workspace.currentProject == id { workspace.show(.inbox) }
-            workspace.perform { try await $0.trashProject(id) }
+        ProjectActions(project: project, edit: rename) {
+            Button("绑定代码目录…", systemImage: "folder") { ProjectDirectory.choose(for: project.id, workspace: workspace) }
         }
     }
 }

@@ -238,11 +238,11 @@ private struct SessionRow: View {
                 }
                 HStack(spacing: 6) {
                     PiDot(state: session.state, size: 6)
-                    PiActivityLine(text: PiActivityLine.join(project?.name, session.state.label), font: .subheadline)
+                    PiActivityLine(lead: [project?.name, session.state.label], font: .subheadline)
                         .foregroundStyle(palette.ink2)
                 }
                 if let detail = session.detail, !detail.isEmpty {
-                    Text(detail).font(.footnote.monospaced()).foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.middle)
+                    PiActivityLine(detail: detail, detailIsCode: session.detailIsCode).foregroundStyle(palette.ink3)
                 }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)

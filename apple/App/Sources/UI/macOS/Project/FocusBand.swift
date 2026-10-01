@@ -23,7 +23,7 @@ struct FocusBand: View {
                 }
                 column { tasks }
                 divider
-                column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
+                column { PiColumn(project: data.project?.id, hasDirectory: data.project.flatMap { workspace.catalog?.directories[$0.id] } != nil) }
                     .frame(maxWidth: 300)
             }
             .frame(minWidth: Self.stackedBelow, idealWidth: Self.stackedBelow, maxWidth: .infinity, alignment: .leading)
@@ -34,7 +34,7 @@ struct FocusBand: View {
                 }
                 column { tasks }
                 Divider().overlay(palette.hair).padding(.horizontal, 18)
-                column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
+                column { PiColumn(project: data.project?.id, hasDirectory: data.project.flatMap { workspace.catalog?.directories[$0.id] } != nil) }
             }
         }
         .paper(radius: 18)

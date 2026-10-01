@@ -4,8 +4,6 @@ import CueStore
 import SwiftUI
 
 nonisolated private struct SidebarData: Sendable {
-    var projects: [Project]
-    var summaries: [UUID?: ProjectSummary]
     var trashCount: Int
     var history: [StoredPiSession]
     /// 历史会话（会话 id）归属的项目，由 Store 按工作目录判定。
@@ -27,16 +25,17 @@ struct Sidebar: View {
 
     var body: some View {
         // 不用 List 的选中：系统选中是灰胶囊，压不过墨色体系；当前页由 PageRow 自己画，方向键由 onMoveCommand 接管
-        let pages = data.map(SidebarPages.init)
+        let catalog = workspace.catalog
+        let pages = data.flatMap { data in catalog.map { SidebarPages($0, trashCount: data.trashCount) } }
         List {
-            if let data, let pages {
+            if let data, let catalog, let pages {
                 if !pages.pinned.isEmpty {
-                    Section("置顶") { ForEach(pages.pinned) { row($0, data) } }
+                    Section("置顶") { ForEach(pages.pinned) { row($0, catalog) } }
                 }
                 // 只有内容才有意义的分组，空的时候不出现
                 if !pages.recent.isEmpty || pages.inboxCount > 0 {
                     Section("最近") {
-                        ForEach(pages.recent) { row($0, data) }
+                        ForEach(pages.recent) { row($0, catalog) }
                         if pages.inboxCount > 0 {
                             PageRow(page: .inbox, count: pages.inboxCount, select: select) {
                                 Label("未归档", systemImage: "tray")
@@ -44,7 +43,7 @@ struct Sidebar: View {
                         }
                     }
                 }
-                PiSection(history: data.history, historyProjects: data.historyProjects, projects: data.projects)
+                PiSection(history: data.history, historyProjects: data.historyProjects, projects: catalog.projects)
                 if pages.showsTrash {
                     Section {
                         PageRow(page: .trash, count: data.trashCount, select: select) {
@@ -69,12 +68,9 @@ struct Sidebar: View {
         .safeAreaInset(edge: .bottom) { footer }
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
-        .observing(services.store, [.projects, .cards, .piSessions], into: $data, onError: workspace.fail) { store in
-            let summaries = try store.projectSummaries()
+        .observing(services.store, [.projects, .cards, .piSessions, .projectDirectories], into: $data, onError: workspace.fail) { store in
             let history = Array(try store.piSessions().prefix(Self.historyLimit))
             return SidebarData(
-                projects: try store.projects(),
-                summaries: Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0) }),
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
                 history: history,
                 historyProjects: try Dictionary(uniqueKeysWithValues: history.compactMap { session in
@@ -98,8 +94,8 @@ struct Sidebar: View {
         }
     }
 
-    private func row(_ project: Project, _ data: SidebarData) -> some View {
-        PageRow(page: .project(project.id), count: data.summaries[project.id]?.cardCount ?? 0, select: select) {
+    private func row(_ project: Project, _ catalog: ProjectCatalog) -> some View {
+        PageRow(page: .project(project.id), count: catalog.cardCounts[project.id] ?? 0, select: select) {
             Label {
                 Text(project.name)
             } icon: {
@@ -112,7 +108,7 @@ struct Sidebar: View {
     private var footer: some View {
         VStack(spacing: 8) {
             // 空库首次打开先让人建项目，连接 Pi 的提示等有了项目再出现
-            if data?.projects.isEmpty == false { ExtensionConsent() }
+            if workspace.catalog?.projects.isEmpty == false { ExtensionConsent() }
             StartupIssues()
             HStack {
                 Button("新建项目", systemImage: "plus") { creating = true }
@@ -147,12 +143,11 @@ private struct SidebarPages {
     let inboxCount: Int
     let showsTrash: Bool
 
-    init(_ data: SidebarData) {
-        let ordered = SidebarOrder.projects(data.projects, summaries: Array(data.summaries.values))
-        pinned = ordered.filter(\.isPinned)
-        recent = ordered.filter { !$0.isPinned }
-        inboxCount = data.summaries[nil]?.cardCount ?? 0
-        showsTrash = data.trashCount > 0 || !data.projects.isEmpty
+    init(_ catalog: ProjectCatalog, trashCount: Int) {
+        pinned = catalog.projects.filter(\.isPinned)
+        recent = catalog.projects.filter { !$0.isPinned }
+        inboxCount = catalog.cardCounts[nil] ?? 0
+        showsTrash = trashCount > 0 || !catalog.projects.isEmpty
     }
 
     var order: [Workspace.Page] {
@@ -218,16 +213,15 @@ private struct PiSection: View {
                                 Text(Workspace.sessionName(session)).lineLimit(1)
                                 // 需要处理时（出错、等你确认）接着写原因的开头，悬停看全文
                                 PiActivityLine(
-                                    text: PiActivityLine.join(
-                                        projectName(workspace.sessionProjects[session.id]), session.state.label,
-                                        session.state.needsAttention ? session.state.detail : nil),
-                                    font: .caption)
+                                    lead: [projectName(workspace.sessionProjects[session.id]), session.state.label],
+                                    detail: session.state.needsAttention ? session.state.detail : nil,
+                                    font: .caption, full: session.state.fullDetail)
                                     .foregroundStyle(session.state.labelColor(palette))
                             }
                         }
                     }
                     .buttonStyle(PressStyle(scale: 0.98))
-                    .help([session.state.detail, "点按跳到所在终端"].compactMap { $0 }.joined(separator: "\n"))
+                    .help([session.state.fullDetail, "点按跳到所在终端"].compactMap { $0 }.joined(separator: "\n"))
                 }
                 ForEach(ended) { session in
                     HStack(spacing: 9) {

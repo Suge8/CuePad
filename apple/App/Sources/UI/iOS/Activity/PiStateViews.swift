@@ -48,10 +48,8 @@ extension Open<PiWorkState> {
 }
 
 nonisolated extension PiSessionState {
-    /// "工具 · bash"、"等你确认 · 要覆盖吗？"。
-    var summary: String {
-        [state.label, detail].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-    }
+    /// 详情是工具命令（等宽显示）。
+    var detailIsCode: Bool { state == .known(.tool) }
 
     /// 每个项目最需要注意的会话状态（书架与侧栏的状态点）。
     static func byProject(_ sessions: [PiSessionState]) -> [UUID: Open<PiWorkState>] {

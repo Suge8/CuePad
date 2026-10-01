@@ -28,7 +28,6 @@ struct ProjectScreen: View {
     @State private var page: ProjectPage?
     @State private var expanded: Set<OlderGroup.Period> = []
     @State private var board = WallBoard()
-    @State private var editingProject: Project?
     @State private var sessions: [PiSessionState]?
 
     var body: some View {
@@ -46,10 +45,9 @@ struct ProjectScreen: View {
         .background(palette.desk)
         .bottomEdgeFade(capturePage: true)
         .captureBar()
-        .navigationTitle(page?.data.project?.name ?? "未归档")
+        .navigationTitle(title)
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
-        .sheet(item: $editingProject) { ProjectFormSheet(project: $0) }
         .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
@@ -58,7 +56,7 @@ struct ProjectScreen: View {
         }
         .onChange(of: page?.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
-        .onChange(of: page?.data.project?.deletedAt) { _, deleted in if deleted != nil { navigation.pop(projectID) } }
+        .onChange(of: project == nil) { _, gone in if gone, projectID != nil { navigation.pop(projectID) } }
     }
 
     @ViewBuilder
@@ -86,8 +84,11 @@ struct ProjectScreen: View {
             }
             if !arrangement.older.isEmpty {
                 SectionHeader(title: "更早", count: arrangement.older.count).id(ScrollAnchor.older)
-                ForEach(data.olderGroups(arrangement), id: \.period) { group in
-                    OlderGroupHeader(group: group, expanded: $expanded)
+                let groups = data.olderGroups(arrangement)
+                // 只有一组按周的卡时不再套一层日期标题：每行自带日期
+                let titled = groups.count > 1 || groups.first?.isMonth == true
+                ForEach(groups, id: \.period) { group in
+                    if titled { OlderGroupHeader(group: group, expanded: $expanded) }
                     if !group.isMonth || expanded.contains(group.period) {
                         let ids = group.cards
                         ForEach(ids, id: \.self) { id in
@@ -103,10 +104,17 @@ struct ProjectScreen: View {
         .padding(.bottom, 24)
     }
 
+    /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
+    private var project: Project? { workspace.catalog?.project(projectID) }
+
+    private var title: String {
+        projectID == nil ? "未归档" : project?.name ?? ""
+    }
+
     private var subtitle: String {
-        guard let data = page?.data else { return "" }
-        let directory = data.directory.map(Self.homeRelative)
-        let count = data.cards.isEmpty ? nil : "\(data.cards.count) 张卡片"
+        let catalog = workspace.catalog
+        let directory = projectID.flatMap { catalog?.directories[$0] }.map(Self.homeRelative)
+        let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 张卡片" : nil }
         return [directory, count].compactMap { $0 }.joined(separator: " · ")
     }
 
@@ -130,9 +138,9 @@ struct ProjectScreen: View {
         ToolbarItem(placement: .primaryAction) {
             Button("新建卡片", systemImage: "square.and.pencil") { newCard() }
         }
-        if let project = page?.data.project {
+        if let project {
             ToolbarItem(placement: .secondaryAction) {
-                ProjectActions(project: project) { editingProject = project }
+                ProjectActions(project: project) { navigation.projectForm = .init(project: project) }
             }
         }
     }
@@ -152,24 +160,6 @@ struct ProjectScreen: View {
             board = next
         } else {
             withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) { board = next }
-        }
-    }
-}
-
-/// 项目的更多操作：置顶、编辑名称与图标、移到回收站。
-struct ProjectActions: View {
-    let project: Project
-    let edit: () -> Void
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let id = project.id, pinned = !project.isPinned
-        Button(project.isPinned ? "取消置顶" : "置顶", systemImage: project.isPinned ? "pin.slash" : "pin") {
-            workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
-        }
-        Button("编辑名称与图标", systemImage: "pencil", action: edit)
-        Button("移到回收站", systemImage: "trash", role: .destructive) {
-            workspace.perform { try await $0.trashProject(id) }
         }
     }
 }
@@ -223,8 +213,8 @@ private struct FocusCard: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             PiDot(state: session.state, size: 7)
                             Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
-                            Text(session.summary).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
-                                .truncationMode(.middle)
+                            PiActivityLine(lead: [session.state.label], detail: session.detail, detailIsCode: session.detailIsCode, font: .subheadline)
+                                .foregroundStyle(palette.ink2)
                             Spacer(minLength: 4)
                             PiElapsed(session: session)
                         }

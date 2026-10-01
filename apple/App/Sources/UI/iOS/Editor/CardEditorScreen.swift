@@ -124,7 +124,7 @@ struct CardEditorScreen: View {
                     ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
                     NumberingPicker(card: card)
                     Divider()
-                    CardActions(card: card, isGoal: data?.project?.goalCardID == card.id, includesCopy: false)
+                    CardActions(card: card, inEditor: true)
                 }
             }
             .disabled(card == nil)

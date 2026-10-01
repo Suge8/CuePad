@@ -103,37 +103,38 @@ private struct SidePanel: View {
 }
 
 nonisolated private struct SidebarData: Sendable {
-    var projects: [Project]
-    var counts: [UUID?: Int]
     var pi: [UUID: Open<PiWorkState>]
     var waiting: Int
+    var today: Int
 }
 
 private struct SplitSidebar: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var data: SidebarData?
-    @State private var creating = false
+    /// 今天的起点：跨过午夜时重读"今天"的张数。
+    @State private var today = Calendar.current.startOfDay(for: .now)
 
     var body: some View {
         List {
             Section {
                 SidebarRow(route: .shelf, title: "项目", symbol: "books.vertical")
-                SidebarRow(route: .today, title: "今天", symbol: "sun.max")
+                SidebarRow(route: .today, title: "今天", symbol: "sun.max", badge: data?.today ?? 0)
                 SidebarRow(route: .activity, title: "活动", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
-            if let data {
-                let pinned = data.projects.filter(\.isPinned)
+            if let catalog = workspace.catalog {
+                let pinned = catalog.projects.filter(\.isPinned)
                 if !pinned.isEmpty {
-                    Section("置顶") { ForEach(pinned) { row($0, data) } }
+                    Section("置顶") { ForEach(pinned) { row($0, catalog) } }
                 }
-                let recent = data.projects.filter { !$0.isPinned }
-                let inbox = data.counts[nil] ?? 0
+                let recent = catalog.projects.filter { !$0.isPinned }
+                let inbox = catalog.cardCounts[nil] ?? 0
                 if !recent.isEmpty || inbox > 0 {
                     Section("最近") {
-                        ForEach(recent) { row($0, data) }
+                        ForEach(recent) { row($0, catalog) }
                         if inbox > 0 { SidebarRow(route: .inbox, title: "未归档", symbol: "tray", badge: inbox) }
                     }
                 }
@@ -148,23 +149,23 @@ private struct SplitSidebar: View {
         .background(palette.sidebar)
         .navigationTitle("CuePad")
         .toolbar {
-            Button("新建项目", systemImage: "folder.badge.plus") { creating = true }
+            Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
-        .sheet(isPresented: $creating) { ProjectFormSheet(project: nil) }
-        .observing(services.store, [.projects, .cards, .piSessionStates], into: $data, onError: workspace.fail) { store in
-            let summaries = try store.projectSummaries()
+        .observing(services.store, [.piSessionStates, .cards], id: today, into: $data, onError: workspace.fail) { [today] store in
             let states = try store.piSessionStates()
             return SidebarData(
-                projects: SidebarOrder.projects(try store.projects(), summaries: summaries),
-                counts: Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) }),
-                pi: PiSessionState.byProject(states),
-                waiting: states.filter { $0.state == .known(.waitingForUser) }.count)
+                pi: PiSessionState.byProject(states), waiting: states.filter { $0.state == .known(.waitingForUser) }.count,
+                today: try store.search(SearchQuery(modifiedIn: today...Date.now), limit: 0).totalCards)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            today = Calendar.current.startOfDay(for: .now)
         }
     }
 
-    private func row(_ project: Project, _ data: SidebarData) -> some View {
-        SidebarRow(route: .project(project.id), title: project.name, project: project, badge: data.counts[project.id] ?? 0,
-                   pi: data.pi[project.id])
+    private func row(_ project: Project, _ catalog: ProjectCatalog) -> some View {
+        SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0,
+                   pi: data?.pi[project.id])
+            .projectActions(project, radius: 10)
     }
 }
 
@@ -222,8 +223,6 @@ private struct SidebarRow: View {
 private struct SplitShortcuts: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
-    @Environment(AppServices.self) private var services
-    @State private var order: [UUID]?
 
     /// 新卡放进正在看的项目（搜索、今天等页面上放进当前项目），随即打开。
     private func newCard() {
@@ -251,17 +250,14 @@ private struct SplitShortcuts: View {
             .keyboardShortcut("\\")
             Button("任务") { withAnimation(Motion.panel) { navigation.toggle(.tasks) } }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
-            ForEach(Array((order ?? []).prefix(9).enumerated()), id: \.offset) { index, id in
-                Button("项目 \(index + 1)") { navigation.show(project: id, workspace: workspace) }
+            ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
+                Button("项目 \(index + 1)") { navigation.show(project: project.id, workspace: workspace) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
             }
         }
         .opacity(0)
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
-        .observing(services.store, [.projects, .cards], into: $order) { store in
-            try SidebarOrder.projects(store.projects(), summaries: store.projectSummaries()).map(\.id)
-        }
     }
 }
 #endif

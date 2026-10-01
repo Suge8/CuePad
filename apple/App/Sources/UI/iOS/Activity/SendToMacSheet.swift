@@ -134,7 +134,7 @@ struct SendToMacSheet: View {
                                 .padding(.horizontal, 6).padding(.vertical, 2).background(palette.fill, in: .capsule)
                         }
                     }
-                    PiActivityLine(text: PiActivityLine.join(project?.name, item.summary))
+                    PiActivityLine(lead: [project?.name, item.state.label], detail: item.detail, detailIsCode: item.detailIsCode)
                         .foregroundStyle(item.state == .known(.waitingForUser) ? palette.attention : palette.ink3)
                 }
                 Spacer(minLength: 8)

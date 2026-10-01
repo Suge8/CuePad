@@ -39,8 +39,8 @@ struct TodayScreen: View {
         .background(palette.desk)
         .bottomEdgeFade(capturePage: true)
         .captureBar()
+        // 不带张数副标题：数据晚于推入到达，导航栏在推入后再加一行副标题会让整页跳一下；张数在书架的入口上
         .navigationTitle("今天")
-        .navigationSubtitle(data.map { $0.total > 0 ? "\($0.total) 张" : "" } ?? "")
         .observing(services.store, [.cards, .projects], id: pages, into: $data, onError: workspace.fail) { [pages] store in
             let now = Date.now
             let found = try store.search(

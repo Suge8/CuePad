@@ -1,10 +1,11 @@
 #if os(iOS)
+import CueStore
 import CueSync
 import Foundation
 import Observation
 import SwiftUI
 
-/// iOS 的导航状态：标签、各标签的推入路径、随手记与发到 Mac 面板、iPad 的右侧面板。
+/// iOS 的导航状态：标签、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧面板。
 /// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、当前项目）在 `Workspace`。
 @MainActor @Observable
 final class Navigation {
@@ -30,6 +31,8 @@ final class Navigation {
         case activity
         case search
         case card(UUID)
+
+        var isCard: Bool { if case .card = self { true } else { false } }
     }
 
     /// 随手记面板：记入的位置与打开时先做什么。
@@ -53,6 +56,12 @@ final class Navigation {
         var project: UUID?
     }
 
+    /// 新建（`project` 为 nil）或编辑项目的表单；书架、侧栏与项目页的入口都经这里，在根视图弹出。
+    struct ProjectForm: Identifiable {
+        let id = UUID()
+        var project: Project?
+    }
+
     /// 宽 iPad 右侧面板。
     enum Panel: Hashable { case tasks, activity }
 
@@ -64,6 +73,7 @@ final class Navigation {
     var searchPath: [Route] = []
     var capture: Capture?
     var outbox: Outbox?
+    var projectForm: ProjectForm?
     /// 分栏：侧栏选中的页与其上推入的页（打开的卡片纸页盖在项目页上）。
     var splitRoot: Route = .shelf
     var splitPath: [Route] = []
@@ -109,7 +119,11 @@ final class Navigation {
     /// 分栏：进入搜索前所在的页（含其上推入的页），退出搜索时回到这里。
     private var beforeSearch: (root: Route, path: [Route])?
 
+    /// 每次 ⌘K（或点侧栏的搜索）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
+    private(set) var searchFocusRequests = 0
+
     func openSearch() {
+        searchFocusRequests += 1
         guard splitRoot != .search else { return }
         beforeSearch = (splitRoot, splitPath)
         select(.search)

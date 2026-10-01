@@ -78,7 +78,6 @@ extension Workspace {
 /// 活着的 Pi 会话或项目目录绑定变化时，重算会话归属的项目。
 struct SessionProjectsTracker: ViewModifier {
     let workspace: Workspace
-    @State private var directories: [UUID: String]?
 
     private struct Key: Equatable {
         var sessions: [String]
@@ -86,10 +85,8 @@ struct SessionProjectsTracker: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        let key = Key(sessions: workspace.services.pi.sessions.map { "\($0.id) \($0.cwd.path)" }, directories: directories)
-        content
-            .observing(workspace.services.store, [.projectDirectories], into: $directories) { try $0.projectDirectories() }
-            .task(id: key) { await workspace.refreshSessionProjects() }
+        let key = Key(sessions: workspace.services.pi.sessions.map { "\($0.id) \($0.cwd.path)" }, directories: workspace.catalog?.directories)
+        content.task(id: key) { await workspace.refreshSessionProjects() }
     }
 }
 #endif

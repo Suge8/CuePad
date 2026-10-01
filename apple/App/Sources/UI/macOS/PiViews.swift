@@ -17,8 +17,14 @@ extension PiAgentState {
         }
     }
 
-    /// 此刻在做什么的一句话：工具调用摘要、弹窗标题或错误信息；旧扩展不带详情时为 nil，界面只显示状态。
+    /// 此刻在做什么的一句话：工具调用摘要、弹窗标题或出错的人话摘要；旧扩展不带详情时为 nil，界面只显示状态。
     var detail: String? {
+        if let summary = errorSummary { return summary.title }
+        return fullDetail
+    }
+
+    /// 详情的全文（出错时是 Pi 上报的原文），给悬停提示。
+    var fullDetail: String? {
         let text: String? = switch self {
         case .tool(_, _, let detail): detail
         case .waitingUser(_, let title): title
@@ -84,8 +90,8 @@ struct PiDetail: View {
     var size: CGFloat = 12
 
     var body: some View {
-        if let detail = state.detail {
-            PiActivityLine(text: detail, font: .system(size: size), monospaced: state.detailIsCode)
+        if state.detail != nil {
+            PiActivityLine(detail: state.detail, detailIsCode: state.detailIsCode, font: .system(size: size), full: state.fullDetail)
                 .foregroundStyle(.secondary)
         }
     }

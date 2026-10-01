@@ -9,7 +9,6 @@ struct MenuBarPad: View {
     @Environment(\.palette) private var palette
     @State private var text = ""
     @State private var project: UUID?
-    @State private var projects: [Project]?
     @FocusState private var focused: Bool
 
     private static let sessionLimit = 4
@@ -56,7 +55,7 @@ struct MenuBarPad: View {
                 .animation(Motion.quick, value: workspace.notice)
             HStack(spacing: 8) {
                 Menu {
-                    ForEach(projects ?? []) { item in Button(item.name) { project = item.id } }
+                    ForEach(workspace.catalog?.projects ?? []) { item in Button(item.name) { project = item.id } }
                     Button("未归档") { project = nil }
                 } label: {
                     // 看得出能点：图标 + 名称 + 上下箭头，按下有反馈
@@ -96,11 +95,10 @@ struct MenuBarPad: View {
             if DebugScene.scene == "menubar" { project = current }
         }
         #endif
-        .observing(services.store, [.projects], into: $projects) { try $0.projects() }
         .modifier(SessionProjectsTracker(workspace: workspace))
     }
 
-    private var current: Project? { projects?.first { $0.id == project } }
+    private var current: Project? { workspace.catalog?.project(project) }
 
     private func save() {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
