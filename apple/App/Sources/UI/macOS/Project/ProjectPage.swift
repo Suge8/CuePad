@@ -22,19 +22,21 @@ struct ProjectPage: View {
                     content(data, arrangement).id("top")
                 }
             }
-            .scrollEdgeEffectStyle(.soft, for: .top)
             .overlay { BottomFade() }
             .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                 withAnimation(Motion.quick) { collapsed = isCollapsed }
             }
-            .overlay(alignment: .top) {
-                if collapsed, let data, showsFocus(data) {
-                    CompactFocus(data: data) {
-                        withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
+            // 下滚后收成的一行放在工具栏正中：在顶部渐隐之上，且不随页面滚动。工具栏项常驻、只换内容
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    if collapsed, let data, showsFocus(data) {
+                        CompactFocus(data: data) {
+                            withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                    .padding(.top, 4)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
             #if DEBUG
             .onChange(of: board.arrangement != nil) { DebugScene.scrollIfNeeded(proxy) }

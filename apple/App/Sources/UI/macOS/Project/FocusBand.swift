@@ -9,7 +9,8 @@ struct FocusBand: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    @State private var width: CGFloat = 0
+    /// 只关心是否跨过窄档：存宽度会让侧栏开合的每一帧都重算这块的 body。
+    @State private var stacked = false
 
     private static let visibleTasks = 4
     /// 窄于这个宽度时三栏改成上下排，每栏都能放下一整行任务。
@@ -17,7 +18,7 @@ struct FocusBand: View {
 
     var body: some View {
         Group {
-            if width > 0, width < Self.stackedBelow {
+            if stacked {
                 VStack(alignment: .leading, spacing: 0) {
                     if let card = data.goalCard {
                         column { goal(card) }
@@ -41,7 +42,7 @@ struct FocusBand: View {
             }
         }
         .paper(radius: 18)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .onGeometryChange(for: Bool.self) { $0.size.width < Self.stackedBelow } action: { stacked = $0 }
     }
 
     @ViewBuilder private func goal(_ card: Card) -> some View {
@@ -143,6 +144,8 @@ struct CompactFocus: View {
             .paper(radius: 17, lifted: true)
         }
         .buttonStyle(PressStyle(scale: 0.98))
+        // 放在工具栏里时系统默认只显示图标
+        .labelStyle(.titleAndIcon)
         .help("回到顶部")
     }
 }

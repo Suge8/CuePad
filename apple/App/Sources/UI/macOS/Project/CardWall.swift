@@ -10,7 +10,8 @@ struct WallGrid<Tile: View>: View {
     let cards: [UUID: Card]
     @ViewBuilder let tile: (Card) -> Tile
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var width: CGFloat = 0
+    /// 最近量到的宽度。不是界面状态：侧栏开合时每帧都变，放进 @State 会让每帧都重算墙的 body。
+    @State private var width = WidthBox()
     @State private var layout: WallColumns?
 
     private static var spacing: CGFloat { 16 }
@@ -30,8 +31,8 @@ struct WallGrid<Tile: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // 只在跨列数档位时重新分配：侧栏开合、拖窗口的其余帧只是列宽跟着变
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
-            let crossed = Self.count(for: newWidth) != Self.count(for: width)
-            width = newWidth
+            let crossed = Self.count(for: newWidth) != Self.count(for: width.value)
+            width.value = newWidth
             if crossed || layout == nil { relayout(animated: false) }
         }
         .onChange(of: ids) { relayout(animated: true) }
@@ -46,6 +47,7 @@ struct WallGrid<Tile: View>: View {
     }
 
     private func relayout(animated: Bool) {
+        let width = width.value
         guard width > 0 else { return }
         let count = Self.count(for: width)
         let columnWidth = (width - Self.spacing * CGFloat(count - 1)) / CGFloat(count)
@@ -62,6 +64,10 @@ struct WallGrid<Tile: View>: View {
     }
 }
 
+private final class WidthBox {
+    var value: CGFloat = 0
+}
+
 nonisolated private struct ColumnKey: LayoutValueKey {
     static let defaultValue = 0
 }
@@ -75,6 +81,10 @@ private struct ColumnsLayout: Layout {
         let width = proposal.width ?? 0
         return CGSize(width: width, height: frames(width: width, subviews: subviews).map(\.maxY).max() ?? 0)
     }
+
+    // 没有对齐参考线：默认实现会把问题递归问遍墙上每张卡的子树，侧栏开合时每帧一次
+    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
         for (subview, frame) in zip(subviews, frames(width: bounds.width, subviews: subviews)) {

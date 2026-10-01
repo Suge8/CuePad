@@ -40,7 +40,6 @@ struct TrashPage: View {
         } message: {
             Text("此操作无法撤销。发送记录会保留当时的内容快照。")
         }
-        .scrollEdgeEffectStyle(.soft, for: .top)
         .observing(services.store, [.projects, .cards], into: $data, onError: workspace.fail) { store in
             let projects = try store.trashedProjects()
             return TrashData(
