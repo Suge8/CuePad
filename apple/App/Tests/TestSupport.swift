@@ -111,13 +111,20 @@ final class TestApp {
     #endif
     private(set) var services: AppServices!
 
+    /// 同步引擎的来源；默认用记录型替身 `sync`。
+    private let syncSource: AppServices.SyncSource?
+
     #if os(macOS)
-    init(legacy: URL? = nil) {
+    init(legacy: URL? = nil, sync source: AppServices.SyncSource? = nil) {
         self.legacy = legacy
+        syncSource = source
         services = makeServices()
     }
     #else
-    init() { services = makeServices() }
+    init(sync source: AppServices.SyncSource? = nil) {
+        syncSource = source
+        services = makeServices()
+    }
     #endif
 
     deinit {
@@ -169,8 +176,7 @@ final class TestApp {
                 helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                 linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
             updater: updater)
-        let sync = self.sync
-        let services = AppServices(location: location(), defaults: preferences.defaults, sync: { _ in sync }, mac: mac)
+        let services = AppServices(location: location(), defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services
     }
@@ -178,8 +184,7 @@ final class TestApp {
     var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }
 
     private func makeServices() -> AppServices {
-        let sync = self.sync
-        return AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: { _ in sync }, pasteboard: pasteboard)
+        AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard)
     }
     #endif
 }

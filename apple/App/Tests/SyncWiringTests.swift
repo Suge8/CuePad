@@ -77,14 +77,42 @@ struct SyncWiringTests {
         #expect(services.conflicts.isEmpty)
     }
 
+    /// 正式组装（`.iCloud`）没有创建引擎时，状态写明原因，不显示成"已同步"。
+    /// 真机上的事故：两个入口都绕开了创建引擎的那条路，引擎从未运行，界面却一直是已同步。
+    @Test func 正式组装没有创建同步引擎时状态写明原因() {
+        let app = TestApp(sync: .iCloud)  // 测试宿主在隔离目录里
+        #expect(app.services.sync == nil)
+        guard case .unavailable(let reason) = app.services.syncStatus else {
+            Issue.record("没有引擎却不是 unavailable：\(app.services.syncStatus)")
+            return
+        }
+        #expect(reason.contains("隔离"))
+    }
+
+    @Test func 有引擎时启动前是正在连接_不是已同步() {
+        #expect(services.syncStatus == .starting)
+    }
+
+    @Test func 引擎没能启动时状态也写明原因() async throws {
+        app.sync.startError.withLock { $0 = NoEntitlement() }
+        services.startSync()
+        defer { services.cancelBackgroundWork() }
+        await wait { if case .unavailable = services.syncStatus { true } else { false } }
+        guard case .unavailable(let reason) = services.syncStatus else {
+            Issue.record("\(services.syncStatus)")
+            return
+        }
+        #expect(reason.contains("没能启动"))
+    }
+
     @Test func 隔离模式与没有iCloud权限的构建不创建同步引擎() throws {
         let store = services.store
         let isolated = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: "/tmp/isolated-library"])
         let real = try LibraryLocation.resolve(environment: [:], base: .applicationSupport(URL(filePath: "/tmp/support")))
 
-        #expect(AppServices.makeSync(store: store, location: isolated, hasCloudKitEntitlement: true) == nil)
-        #expect(AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: false) == nil)
-        #expect(AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: true) != nil)
+        #expect((try? AppServices.makeSync(store: store, location: isolated, hasCloudKitEntitlement: true).get()) == nil)
+        #expect((try? AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: false).get()) == nil)
+        #expect((try? AppServices.makeSync(store: store, location: real, hasCloudKitEntitlement: true).get()) != nil)
     }
 
     /// 库里没有创建冲突副本的公开入口（由同步引擎产生），测试直接写库文件。

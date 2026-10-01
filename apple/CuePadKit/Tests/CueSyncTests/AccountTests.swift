@@ -31,6 +31,15 @@ import Testing
     #expect(await rig.coordinator.status == .idle)
   }
 
+  /// 账号状态确认之前不能显示成"已同步"。
+  @Test func statusIsStartingUntilTheAccountIsConfirmed() async throws {
+    #expect(await rig.coordinator.status == .starting)
+    await rig.coordinator.handle(.syncing(true))
+    #expect(await rig.coordinator.status == .starting)
+    await rig.coordinator.handle(.accountStatus(.available))
+    #expect(await rig.coordinator.status == .idle)
+  }
+
   @Test func signedOutKeepsLocalDataAndSignedInUploadsItAgain() async throws {
     let card = try await populateAndPush()
 
@@ -126,6 +135,7 @@ import Testing
   }
 
   @Test func syncingFlagShowsWhileTheEngineIsBusy() async throws {
+    await rig.coordinator.handle(.accountStatus(.available))
     await rig.coordinator.handle(.syncing(true))
     #expect(await rig.coordinator.status == .syncing)
     await rig.coordinator.handle(.syncing(false))
@@ -135,7 +145,7 @@ import Testing
   @Test(.timeLimit(.minutes(1)))
   func statusAndIssueChangesAreDeliveredToSubscribers() async throws {
     var updates = rig.coordinator.stateUpdates.makeAsyncIterator()
-    #expect(await updates.next() == SyncState(status: .idle, issues: []))  // 订阅时先给出当前状态
+    #expect(await updates.next() == SyncState(status: .starting, issues: []))  // 订阅时先给出当前状态
     await rig.coordinator.handle(.accountStatus(.noAccount))
     #expect(await updates.next()?.status == .noAccount)
 
