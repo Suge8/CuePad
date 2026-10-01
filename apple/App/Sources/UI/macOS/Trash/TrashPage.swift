@@ -40,6 +40,7 @@ struct TrashPage: View {
         } message: {
             Text("此操作无法撤销。发送记录会保留当时的内容快照。")
         }
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .observing(services.store, [.projects, .cards], into: $data, onError: workspace.fail) { store in
             let projects = try store.trashedProjects()
             return TrashData(
@@ -102,6 +103,7 @@ private struct TrashRow: View {
     let purge: () -> Void
     @Environment(\.palette) private var palette
     @State private var confirming = false
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -109,11 +111,29 @@ private struct TrashRow: View {
             Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(detail).font(.system(size: 12.5)).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)
-            if let deletedAt { Text("\(DateLabel.short(deletedAt)) 删除").font(.system(size: 11.5)).foregroundStyle(palette.ink3) }
-            Button("恢复", action: restore).controlSize(.small)
-            Button("永久删除", role: .destructive) { confirming = true }.controlSize(.small)
+            // 操作在悬停时出现（右键菜单里也有），平时只看得到删除时间
+            ZStack(alignment: .trailing) {
+                if let deletedAt {
+                    Text("\(DateLabel.short(deletedAt)) 删除").font(.system(size: 12)).foregroundStyle(palette.ink3)
+                        .opacity(hovering ? 0 : 1)
+                }
+                HStack(spacing: 6) {
+                    Button("恢复", action: restore).controlSize(.small)
+                    Button("永久删除…") { confirming = true }.controlSize(.small).foregroundStyle(palette.failure)
+                }
+                .opacity(hovering ? 1 : 0)
+                .allowsHitTesting(hovering)
+            }
         }
         .padding(.horizontal, 12).frame(minHeight: 40)
+        .background(hovering ? palette.fill : .clear)
+        .contentShape(.rect)
+        .onHover { hovering = $0 }
+        .animation(Motion.quick, value: hovering)
+        .contextMenu {
+            Button("恢复", action: restore)
+            Button("永久删除…", role: .destructive) { confirming = true }
+        }
         .confirmationDialog("永久删除「\(title)」？", isPresented: $confirming) {
             Button("永久删除", role: .destructive, action: purge)
         } message: {

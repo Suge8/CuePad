@@ -5,7 +5,6 @@ import SwiftUI
 /// 项目页：目标与下一步 → 工作集卡片墙（置顶单列在前）→ 更早。
 struct ProjectPage: View {
     let projectID: UUID?
-    let paperSpace: Namespace.ID
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -50,11 +49,20 @@ struct ProjectPage: View {
 
     @ViewBuilder
     private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
+        if data.project == nil, data.cards.isEmpty, !data.hasProjects {
+            Welcome()
+        } else {
+            page(data, arrangement)
+        }
+    }
+
+    @ViewBuilder
+    private func page(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
         let byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
         let lastTarget = data.lastTarget
         VStack(alignment: .leading, spacing: 28) {
             ProjectHeader(data: data)
-            if showsFocus(data) { FocusBand(data: data, paperSpace: paperSpace) }
+            if showsFocus(data) { FocusBand(data: data) }
             if data.cards.isEmpty {
                 EmptyProject()
             } else {
@@ -67,7 +75,7 @@ struct ProjectPage: View {
                 if !arrangement.older.isEmpty {
                     OlderList(
                         groups: data.olderGroups(arrangement),
-                        cards: byID, lastTarget: lastTarget, paperSpace: paperSpace)
+                        cards: byID, lastTarget: lastTarget)
                 }
             }
         }
@@ -76,16 +84,14 @@ struct ProjectPage: View {
 
     private func wallSection(title: String, count: Int, ids: [UUID], byID: [UUID: Card], data: ProjectPageData, lastTarget: [UUID: String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .bottom, spacing: 6) {
                 Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
                 Text("\(count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
             }
-            MasonryLayout {
-                ForEach(ids.compactMap { byID[$0] }) { card in
-                    CardTile(
-                        card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id),
-                        isGoal: data.project?.goalCardID == card.id, paperSpace: paperSpace)
-                }
+            WallGrid(ids: ids, cards: byID) { card in
+                CardTile(
+                    card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id),
+                    isGoal: data.project?.goalCardID == card.id)
             }
         }
     }
@@ -97,12 +103,7 @@ struct ProjectPage: View {
 
     private func rearrange() {
         guard let data else { return }
-        var next = board
-        if next.refresh(with: data, project: projectID) {
-            board = next
-        } else {
-            withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) { board = next }
-        }
+        board.refresh(with: data, project: projectID)
     }
 }
 
@@ -113,7 +114,7 @@ private struct ProjectHeader: View {
     @State private var renaming: Project?
 
     var body: some View {
-        HStack(alignment: .lastTextBaseline) {
+        HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 10) {
                     ProjectGlyph(project: data.project, size: 20)
@@ -127,9 +128,9 @@ private struct ProjectHeader: View {
                         }
                         .buttonStyle(.plain)
                         .help(data.directory == nil ? "在这个目录里运行的 Pi 会出现在项目页" : "更换代码目录")
-                        Text("·")
+                        if !data.cards.isEmpty { Text("·") }
                     }
-                    Text("\(data.cards.count) 张卡片").monospacedDigit()
+                    if !data.cards.isEmpty { Text("\(data.cards.count) 张卡片").monospacedDigit() }
                 }
                 .font(.system(size: 12)).foregroundStyle(palette.ink3)
             }
@@ -166,12 +167,35 @@ private struct EmptyProject: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: "square.on.square.dashed").font(.system(size: 28)).foregroundStyle(palette.ink3).accessibilityHidden(true)
-            Text("这个项目还没有卡片").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink2)
-            Text("在下方输入框记下想法按 ↩ 存为卡片，或按 ⌘N 新建").font(.system(size: 13)).foregroundStyle(palette.ink3)
+            Text("还没有卡片").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink2)
+            Text("在下方记一条，或按 ⌘N 新建").font(.system(size: 13)).foregroundStyle(palette.ink3)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
+    }
+}
+
+/// 空库首次打开：一句话 + 一个动作，不摆出只有内容才用得上的计数与标题。
+private struct Welcome: View {
+    @Environment(\.palette) private var palette
+    @State private var creating = false
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("先建一个项目，把想法分开放").font(.system(size: 20, weight: .semibold)).foregroundStyle(palette.ink)
+            Button { creating = true } label: {
+                Text("新建项目").font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(palette.onAccent)
+                    .padding(.horizontal, 20).frame(height: 36)
+                    .background(palette.accent, in: .capsule)
+            }
+            .buttonStyle(PressStyle())
+            .keyboardShortcut(.defaultAction)
+            Text("或者直接在下方记一条").font(.system(size: 13)).foregroundStyle(palette.ink3)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 180)
+        .sheet(isPresented: $creating) { ProjectForm(project: nil) }
     }
 }
 #endif

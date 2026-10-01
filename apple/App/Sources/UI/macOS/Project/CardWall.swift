@@ -3,13 +3,64 @@ import CueStore
 import CueText
 import SwiftUI
 
+/// 卡片墙：列数随宽度（理想列宽 260），分列由 `WallColumns` 决定并保持稳定——存新卡时新卡进最矮一列的顶部，
+/// 同列的卡往下挪（有动画），别列的卡不动；只有列数变化时重新分配，且不做动画。
+struct WallGrid<Tile: View>: View {
+    let ids: [UUID]
+    let cards: [UUID: Card]
+    @ViewBuilder let tile: (Card) -> Tile
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var width: CGFloat = 0
+    @State private var layout: WallColumns?
+
+    private static var spacing: CGFloat { 16 }
+    private static var idealColumnWidth: CGFloat { 260 }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Self.spacing) {
+            ForEach(Array((layout?.columns ?? []).enumerated()), id: \.offset) { _, column in
+                VStack(spacing: Self.spacing) {
+                    ForEach(column, id: \.self) { id in
+                        if let card = cards[id] {
+                            tile(card).transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
+            width = newWidth
+            relayout(animated: false)
+        }
+        .onChange(of: ids) { relayout(animated: true) }
+    }
+
+    private func relayout(animated: Bool) {
+        guard width > 0 else { return }
+        let count = WallColumns.count(for: width, idealColumnWidth: Self.idealColumnWidth, spacing: Self.spacing)
+        let columnWidth = (width - Self.spacing * CGFloat(count - 1)) / CGFloat(count)
+        let cards = cards
+        let height = { (id: UUID) in cards[id].map { WallColumns.estimatedHeight(of: CardText($0.body), columnWidth: columnWidth) } ?? 0 }
+        var next = layout ?? WallColumns(order: ids, count: count, height: height)
+        next.update(order: ids, count: count, height: height)
+        guard next != layout else { return }
+        // 列数变了（窗口跨档）直接落位；同列挪动与新卡入场走短弹簧
+        if animated, layout?.columns.count == count {
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { layout = next }
+        } else {
+            layout = next
+        }
+    }
+}
+
 /// 墙上的一张卡：标题、首图、摘要、元信息（时间、块数、发送目标、浮回与置顶标记）。
 struct CardTile: View {
     let card: Card
     let lastTarget: String?
     let floated: Bool
     let isGoal: Bool
-    let paperSpace: Namespace.ID
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -43,7 +94,7 @@ struct CardTile: View {
         .buttonStyle(CardPressStyle())
         .offset(y: hovering && !reduceMotion ? -1 : 0)
         .opacity(isOpen ? 0 : 1)
-        .matchedGeometryEffect(id: card.id, in: paperSpace, isSource: !isOpen)
+        .cardFrameSource(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardMenu(card: card, isGoal: isGoal) }
@@ -51,7 +102,7 @@ struct CardTile: View {
     }
 
     private func open() {
-        withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) { workspace.openCard = card.id }
+        workspace.openCard = card.id
     }
 }
 

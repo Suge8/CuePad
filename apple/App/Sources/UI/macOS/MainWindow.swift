@@ -8,7 +8,6 @@ struct MainWindow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var paperSpace
     /// 有效项目的 id；变化时核对保存的当前项目是否仍然存在。
     @State private var projectIDs: [UUID]?
 
@@ -28,7 +27,7 @@ struct MainWindow: View {
             Button("取消", role: .cancel) { workspace.busySend = nil }
         }
         .background { WorkspaceShortcuts(workspace: workspace) }
-        .observing(services.store, [.projectDirectories], into: $workspace.directories) { try $0.projectDirectories() }
+        .modifier(SessionProjectsTracker(workspace: workspace))
         .observing(services.store, [.projects], into: $projectIDs) { try $0.projects().map(\.id) }
         .onChange(of: projectIDs) { Task { await workspace.reconcileCurrentProject() } }
     }
@@ -37,15 +36,17 @@ struct MainWindow: View {
         ZStack {
             palette.desk.ignoresSafeArea()
             page
-            if let id = workspace.openCard {
-                palette.desk.ignoresSafeArea().transition(.opacity)
-                CardEditorPage(cardID: id, paperSpace: paperSpace)
+            if let id = workspace.presentedCard {
+                CardEditorPage(cardID: id)
                     .id(id)
+                    .zIndex(1)
             }
         }
         .overlay(alignment: .bottom) {
-            if workspace.openCard == nil, workspace.page != .trash, workspace.overlay != .search {
+            // 纸页挂着（含缩回途中）时不显示：底栏只有一套，先退后进
+            if workspace.presentedCard == nil, workspace.page != .trash, workspace.overlay != .search {
                 CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
+                    .transition(.opacity.animation(.easeOut(duration: 0.1)))
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -57,25 +58,24 @@ struct MainWindow: View {
         }
         .overlay {
             if workspace.overlay == .search {
+                // ⌘K 每天用很多次：直接出现、直接消失，不做动画
                 ZStack {
-                    Color.black.opacity(palette.dark ? 0.3 : 0.08).ignoresSafeArea()
+                    Color.black.opacity(palette.dark ? 0.4 : 0.25).ignoresSafeArea()
                         .onTapGesture { workspace.overlay = nil }
-                    SearchPalette(paperSpace: paperSpace)
+                    SearchPalette()
                 }
-                .transition(.opacity)
             }
         }
         .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
         .toolbar { toolbar }
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        .animation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion), value: workspace.overlay)
     }
 
     @ViewBuilder private var page: some View {
         switch workspace.page {
-        case .project(let id): ProjectPage(projectID: id, paperSpace: paperSpace).id(id)
-        case .inbox: ProjectPage(projectID: nil, paperSpace: paperSpace)
+        case .project(let id): ProjectPage(projectID: id).id(id)
+        case .inbox: ProjectPage(projectID: nil)
         case .trash: TrashPage()
         }
     }
@@ -100,7 +100,7 @@ struct MainWindow: View {
     }
 
     private func closeCard() {
-        withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) { workspace.openCard = nil }
+        workspace.openCard = nil
     }
 
     private var busyBinding: Binding<Bool> {
@@ -141,7 +141,7 @@ private struct WorkspaceShortcuts: View {
     var body: some View {
         ZStack {
             Button("搜索") { workspace.toggle(.search) }.keyboardShortcut("k")
-            Button("侧栏") { withAnimation { workspace.toggleSidebar() } }.keyboardShortcut("\\")
+            Button("侧栏") { workspace.toggleSidebar() }.keyboardShortcut("\\")
             Button("任务") { workspace.toggle(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
             Button("新建卡片") { newCard() }.keyboardShortcut("n")
             if workspace.overlay != nil {
@@ -173,13 +173,14 @@ private struct WorkspaceShortcuts: View {
 /// 顶部居中的短提示：操作结果与错误。
 private struct NoticeView: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     var body: some View {
         ZStack {
             if let notice = workspace.notice {
                 Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(notice.isError ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
+                    .foregroundStyle(notice.isError ? palette.failure : palette.ink)
                     .padding(.horizontal, 14).frame(height: 34)
                     .glass(in: .capsule)
                     .transition(.move(edge: .top).combined(with: .opacity))

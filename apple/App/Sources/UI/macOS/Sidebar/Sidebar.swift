@@ -8,11 +8,14 @@ nonisolated private struct SidebarData: Sendable {
     var summaries: [UUID?: ProjectSummary]
     var trashCount: Int
     var history: [StoredPiSession]
+    /// 历史会话（会话 id）归属的项目，由 Store 按工作目录判定。
+    var historyProjects: [String: UUID]
 }
 
 struct Sidebar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
     @State private var data: SidebarData?
     @State private var creating = false
     @State private var renaming: Project?
@@ -27,33 +30,47 @@ struct Sidebar: View {
                 if !pinned.isEmpty {
                     Section("置顶") { ForEach(pinned) { row($0, data) } }
                 }
-                Section("最近") {
-                    ForEach(ordered.filter { !$0.isPinned }) { row($0, data) }
-                    if let inbox = data.summaries[nil], inbox.cardCount > 0 {
-                        Label("未归档", systemImage: "tray")
-                            .badge(inbox.cardCount)
-                            .tag(Workspace.Page.inbox)
+                let recent = ordered.filter { !$0.isPinned }
+                let inbox = data.summaries[nil]?.cardCount ?? 0
+                // 只有内容才有意义的分组，空的时候不出现
+                if !recent.isEmpty || inbox > 0 {
+                    Section("最近") {
+                        ForEach(recent) { row($0, data) }
+                        if inbox > 0 {
+                            Label("未归档", systemImage: "tray")
+                                .badge(inbox)
+                                .tag(Workspace.Page.inbox)
+                        }
                     }
                 }
-                PiSection(history: data.history, projects: data.projects)
-                Section {
-                    Label("回收站", systemImage: "trash")
-                        .badge(data.trashCount)
-                        .tag(Workspace.Page.trash)
+                PiSection(history: data.history, historyProjects: data.historyProjects, projects: data.projects)
+                if data.trashCount > 0 || !data.projects.isEmpty {
+                    Section {
+                        Label("回收站", systemImage: "trash")
+                            .badge(data.trashCount)
+                            .tag(Workspace.Page.trash)
+                    }
                 }
             }
         }
         .listStyle(.sidebar)
+        // 侧栏比桌面深一档：浅色、深色都能看出分层，与内容同一色温
+        .scrollContentBackground(.hidden)
+        .background(palette.sidebar)
         .safeAreaInset(edge: .bottom) { footer }
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
         .observing(services.store, [.projects, .cards, .piSessions], into: $data, onError: workspace.fail) { store in
             let summaries = try store.projectSummaries()
+            let history = Array(try store.piSessions().prefix(Self.historyLimit))
             return SidebarData(
                 projects: try store.projects(),
                 summaries: Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0) }),
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
-                history: Array(try store.piSessions().prefix(Self.historyLimit)))
+                history: history,
+                historyProjects: try Dictionary(uniqueKeysWithValues: history.compactMap { session in
+                    try store.project(containing: URL(filePath: session.cwd)).map { (session.id, $0.id) }
+                }))
         }
     }
 
@@ -74,7 +91,8 @@ struct Sidebar: View {
 
     private var footer: some View {
         VStack(spacing: 8) {
-            ExtensionConsent()
+            // 空库首次打开先让人建项目，连接 Pi 的提示等有了项目再出现
+            if data?.projects.isEmpty == false { ExtensionConsent() }
             StartupIssues()
             HStack {
                 Button("新建项目", systemImage: "plus") { creating = true }
@@ -95,9 +113,11 @@ struct Sidebar: View {
 /// 全局 Pi：活着的会话（名称 · 所属项目 · 状态），其下是最近结束的历史会话。
 private struct PiSection: View {
     let history: [StoredPiSession]
+    let historyProjects: [String: UUID]
     let projects: [Project]
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let live = services.pi.sessions
@@ -111,9 +131,9 @@ private struct PiSection: View {
                             PiDot(state: session.state).frame(width: 16)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(Workspace.sessionName(session)).lineLimit(1)
-                                Text([projectName(session.cwd.path), session.state.label].compactMap { $0 }.joined(separator: " · "))
+                                Text([projectName(workspace.sessionProjects[session.id]), session.state.label].compactMap { $0 }.joined(separator: " · "))
                                     .font(.caption)
-                                    .foregroundStyle(session.state.needsAttention ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                                    .foregroundStyle(session.state.labelColor(palette))
                                     .lineLimit(1)
                             }
                         }
@@ -127,7 +147,7 @@ private struct PiSection: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(session.title.isEmpty ? URL(filePath: session.cwd).lastPathComponent : session.title)
                                 .lineLimit(1)
-                            Text([projectName(session.cwd), DateLabel.short(session.lastActivityAt)].compactMap { $0 }.joined(separator: " · "))
+                            Text([projectName(historyProjects[session.id]), DateLabel.short(session.lastActivityAt)].compactMap { $0 }.joined(separator: " · "))
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
@@ -138,11 +158,8 @@ private struct PiSection: View {
         }
     }
 
-    private func projectName(_ cwd: String) -> String? {
-        guard let directories = workspace.directories,
-              let id = PiProjectMatch.project(forDirectory: cwd, in: directories)
-        else { return nil }
-        return projects.first { $0.id == id }?.name
+    private func projectName(_ id: UUID?) -> String? {
+        id.flatMap { id in projects.first { $0.id == id }?.name }
     }
 
     private func jump(_ session: CuePi.PiSession) {
@@ -200,6 +217,7 @@ private struct ExtensionConsent: View {
 /// 启动时没能完成的事：只在有问题时出现，点开看详情。
 private struct StartupIssues: View {
     @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
     @State private var showing = false
 
     var body: some View {
@@ -208,7 +226,7 @@ private struct StartupIssues: View {
                 showing.toggle()
             } label: {
                 Label("\(services.startupIssues.count) 个启动问题", systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12)).foregroundStyle(.orange)
+                    .font(.system(size: 12)).foregroundStyle(palette.attention)
             }
             .buttonStyle(.plain)
             .popover(isPresented: $showing) {

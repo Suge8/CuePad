@@ -16,14 +16,30 @@ extension DebugScene {
         case "editor": workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)
         default: break
         }
-        if defaults.string(forKey: "CuePadBench") == "sidebar" { await benchSidebar(workspace) }
+        switch defaults.string(forKey: "CuePadBench") {
+        case "sidebar": await benchSidebar(workspace)
+        case "motion": await benchMotion(workspace)
+        default: break
+        }
+    }
+
+    /// 动效连拍用：存一张新卡（看分列是否稳定、同列下移），再开合一张墙上的卡（看纸页沿原路放大与缩回）。
+    private static func benchMotion(_ workspace: Workspace) async {
+        try? await Task.sleep(for: .seconds(3))
+        workspace.attempt { _ = try await workspace.createCard(body: "新记下的一条\n看看它落在哪一列", in: workspace.currentProject) }
+        try? await Task.sleep(for: .seconds(2))
+        workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)
+        try? await Task.sleep(for: .seconds(2))
+        workspace.openCard = nil
+        try? await Task.sleep(for: .seconds(2))
+        NSApp.terminate(nil)
     }
 
     /// 帧耗时测量用的固定负载：等界面稳定后开合侧栏若干次，结束后退出，由外部录制（Instruments 动画卡顿模板）。
     private static func benchSidebar(_ workspace: Workspace) async {
         try? await Task.sleep(for: .seconds(3))
         for _ in 0..<10 {
-            withAnimation { workspace.toggleSidebar() }
+            workspace.toggleSidebar()
             try? await Task.sleep(for: .milliseconds(800))
         }
         NSApp.terminate(nil)

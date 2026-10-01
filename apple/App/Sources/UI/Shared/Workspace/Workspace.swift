@@ -41,15 +41,38 @@ final class Workspace {
     let services: AppServices
     var sidebar: NavigationSplitViewVisibility = .all
     var nonProjectPage: Page?
-    var openCard: UUID?
+    /// 打开的卡（编辑纸页）。设成某张卡时纸页立即挂上；清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
+    var openCard: UUID? {
+        didSet { if let openCard { presentedCard = openCard } }
+    }
+    /// 纸页挂在屏上的卡：比 `openCard` 晚一步清空，缩回卡片的动画期间仍在。
+    private(set) var presentedCard: UUID?
+    /// 墙上卡片与"更早"各行在屏幕上的位置：纸页从这里放大、缩回到这里。持续更新，不触发界面刷新。
+    @ObservationIgnored var cardFrames: [UUID: CGRect] = [:]
     var overlay: Overlay?
     var notice: Notice?
     #if os(macOS)
     var busySend: BusySend?
     /// 用户在本窗口选过的发送目标；nil 或已失效时用默认目标。
     var sendChoice: SendChoice?
-    /// 本机项目目录绑定（Pi 会话据此归项目）；由根视图订阅 Store 更新。
-    var directories: [UUID: String]?
+    /// 活着的 Pi 会话（会话 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
+    /// 会话或目录绑定变化时由根视图调用 `refreshSessionProjects` 重算。
+    private(set) var sessionProjects: [String: UUID] = [:]
+
+    /// 重算活着的会话各归哪个项目。
+    func refreshSessionProjects() async {
+        var result: [String: UUID] = [:]
+        for session in services.pi.sessions {
+            do {
+                if let project = try await services.store.project(containing: session.cwd) { result[session.id] = project.id }
+            } catch {
+                fail(error)
+                return
+            }
+        }
+        sessionProjects = result
+    }
+
     #endif
 
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
@@ -71,8 +94,14 @@ final class Workspace {
         if case .project(let id) = page { id } else { nil }
     }
 
+    /// 纸页缩回动画结束。
+    func finishClosingCard() {
+        if openCard == nil { presentedCard = nil }
+    }
+
     func show(_ page: Page) {
         openCard = nil
+        presentedCard = nil
         switch page {
         case .project(let id):
             nonProjectPage = nil
@@ -82,12 +111,18 @@ final class Workspace {
         }
     }
 
+    /// 开关浮层。⌘K 搜索每天用很多次，直接出现；任务面板从右侧滑入（短弹簧，减弱动态效果时只淡入淡出由视图决定）。
     func toggle(_ overlay: Overlay) {
-        self.overlay = self.overlay == overlay ? nil : overlay
+        let next = self.overlay == overlay ? nil : overlay
+        if overlay == .search || self.overlay == .search {
+            self.overlay = next
+        } else {
+            withAnimation(Motion.snappy) { self.overlay = next }
+        }
     }
 
     func toggleSidebar() {
-        sidebar = sidebar == .detailOnly ? .all : .detailOnly
+        withAnimation { sidebar = sidebar == .detailOnly ? .all : .detailOnly }
     }
 
     // MARK: 提示

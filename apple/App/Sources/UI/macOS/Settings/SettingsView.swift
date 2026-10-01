@@ -1,9 +1,11 @@
 #if os(macOS)
 import AppKit
 import CuePi
+import CueStore
+import CueSync
 import SwiftUI
 
-/// 设置窗口的内容：主题、全局快捷键、投送后回车、辅助功能授权、Pi 扩展。操作结果就地显示在对应行下。
+/// 设置窗口的内容：外观、iCloud 同步与冲突副本、全局快捷键、投送、Pi 扩展。操作结果就地显示在对应行下。
 struct SettingsView: View {
     @Environment(AppServices.self) private var services
 
@@ -18,6 +20,8 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+                SyncSection()
+                ConflictsSection()
                 Section("快捷键") {
                     LabeledContent("显示或隐藏 CuePad") { ShortcutRecorder() }
                 }
@@ -38,7 +42,7 @@ struct SettingsView: View {
                 }
             }
         .formStyle(.grouped)
-        .frame(width: 500, height: 580)
+        .frame(width: 520, height: 640)
         .onAppear { services.accessibility.refresh() }
     }
 }
@@ -141,7 +145,7 @@ private struct PiExtensionRow: View {
 
     var body: some View {
         let status = services.piExtension.status
-        LabeledContent("Pi") {
+        LabeledContent("Pi 版本") {
             switch status?.pi {
             case .none: Text("检测中…").foregroundStyle(.secondary)
             case .notFound: Text("没有找到 pi 命令").foregroundStyle(.secondary)
@@ -191,6 +195,129 @@ private struct PiExtensionRow: View {
                 result = (ErrorText.describe(error), true)
             }
         }
+    }
+}
+
+/// iCloud 同步：一行状态；暂停等你决定时给出两个选择（替换本机前再确认一次）。没有 iCloud 时只说明状态。
+private struct SyncSection: View {
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @State private var confirmErase = false
+    @State private var working = false
+    @State private var failure: String?
+
+    var body: some View {
+        Section {
+            if services.sync == nil {
+                Label("这台 Mac 上的 CuePad 没有开启 iCloud 同步", systemImage: "icloud.slash").foregroundStyle(palette.ink3)
+            } else {
+                let summary = SyncSummary(services.syncStatus)
+                LabeledContent {
+                    if case .needsDecision = services.syncStatus {
+                        EmptyView()
+                    } else {
+                        Button("立即同步") {
+                            working = true
+                            Task {
+                                await services.syncNow()
+                                working = false
+                            }
+                        }
+                        .disabled(working || services.syncStatus == .syncing)
+                    }
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(summary.title)
+                            if let detail = summary.detail { Text(detail).font(.caption).foregroundStyle(palette.ink3) }
+                        }
+                    } icon: {
+                        Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
+                    }
+                }
+                if case .needsDecision = services.syncStatus {
+                    HStack {
+                        Button("上传本机数据") { resolve(.uploadLocal) }
+                        Button("用云端数据替换本机…", role: .destructive) { confirmErase = true }
+                    }
+                    .disabled(working)
+                }
+                if !services.syncIssues.isEmpty {
+                    DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
+                        ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
+                            Text(issue.message).font(.caption).foregroundStyle(palette.ink3).textSelection(.enabled)
+                        }
+                    }
+                }
+                if let failure { Text(failure).font(.caption).foregroundStyle(palette.failure) }
+            }
+        } header: {
+            Text("iCloud 同步")
+        } footer: {
+            if case .needsDecision = services.syncStatus {
+                Text("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的卡片、项目、任务与图片，从当前账号的云端重新下载。")
+            }
+        }
+        .confirmationDialog("丢弃本机数据，改用云端的？", isPresented: $confirmErase, titleVisibility: .visible) {
+            Button("用云端数据替换本机", role: .destructive) { resolve(.eraseLocal) }
+        } message: {
+            Text("本机的卡片、项目、任务与图片会被删除，无法撤销。")
+        }
+    }
+
+    private func resolve(_ resolution: SyncResolution) {
+        working = true
+        failure = nil
+        Task {
+            defer { working = false }
+            do { try await services.resolveSync(resolution) } catch { failure = ErrorText.describe(error) }
+        }
+    }
+}
+
+/// 冲突副本：同一张卡在两台设备上离线改过，两个版本上下并排，选一份保留，另一份删除。
+private struct ConflictsSection: View {
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @State private var failure: String?
+
+    var body: some View {
+        if !services.conflicts.isEmpty {
+            Section {
+                ForEach(services.conflicts, id: \.copy.id) { conflict in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(CardText(conflict.original.body).title.isEmpty ? "空白卡片" : CardText(conflict.original.body).title)
+                            .font(.headline)
+                        version("这台设备的版本", conflict.original, keep: .original, copy: conflict.copy.id)
+                        version("另一台设备的版本", conflict.copy, keep: .copy, copy: conflict.copy.id)
+                    }
+                    .padding(.vertical, 4)
+                }
+                if let failure { Text(failure).font(.caption).foregroundStyle(palette.failure) }
+            } header: {
+                Text("\(services.conflicts.count) 张卡片有两个版本")
+            }
+        }
+    }
+
+    private func version(_ label: String, _ card: Card, keep choice: ConflictChoice, copy: UUID) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("\(label) · \(DateLabel.short(card.modifiedAt))").font(.caption.weight(.medium)).foregroundStyle(palette.ink3)
+                Spacer()
+                Button("保留这一份") {
+                    failure = nil
+                    Task {
+                        do { try await services.resolveConflict(copy: copy, keep: choice) } catch { failure = ErrorText.describe(error) }
+                    }
+                }
+                .controlSize(.small)
+            }
+            Text(Outgoing.text(of: card)).font(.system(size: 12.5)).foregroundStyle(palette.ink2)
+                .lineLimit(6).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(10)
+        .paper(radius: 10)
     }
 }
 #endif

@@ -13,7 +13,6 @@ nonisolated private struct PaletteData: Sendable {
 /// ⌘K：跨项目搜索卡片，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览。
 /// ↑↓ 选择，↩ 打开，⌘↩ 发送，⌘⇧C 复制。
 struct SearchPalette: View {
-    let paperSpace: Namespace.ID
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -44,6 +43,8 @@ struct SearchPalette: View {
             }
         }
         .frame(width: 840, height: 500)
+        // 面大、字多：玻璃之上再垫一层接近实色的纸，背后的内容不透出来干扰阅读
+        .background(palette.paper.opacity(palette.dark ? 0.9 : 0.86), in: .rect(cornerRadius: 26))
         .glass(in: .rect(cornerRadius: 26))
         .onAppear {
             focused = true
@@ -127,8 +128,11 @@ struct SearchPalette: View {
             let project = data.projects.first { $0.id == card.projectID }
             VStack(alignment: .leading, spacing: 10) {
                 Text(text.title.isEmpty ? "空白卡片" : text.title).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
-                Text("\(project?.name ?? "未归档") · \(DateLabel.short(card.modifiedAt)) · \(data.lastSends[card.id].map { "已发 \($0.target.name)" } ?? "未发送")")
-                    .font(.system(size: 11)).foregroundStyle(palette.ink3)
+                HStack(spacing: 6) {
+                    Text("\(project?.name ?? "未归档") · \(DateLabel.short(card.modifiedAt))")
+                    if let send = data.lastSends[card.id] { SentMark(target: send.target.name) }
+                }
+                .font(.system(size: 11)).foregroundStyle(palette.ink3)
                 if let image = text.images.first { Thumbnail(hash: image, height: 150) }
                 ScrollView {
                     Text(Highlight.matches(text.preview, query.text, base: VariableText.styled(text.preview, palette)))
@@ -136,7 +140,7 @@ struct SearchPalette: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 HStack(spacing: 12) { Text("↩ 打开"); Text("⌘↩ 发送"); Text("⌘⇧C 复制") }
-                    .font(.system(size: 11)).foregroundStyle(palette.ink3)
+                .font(.system(size: 11)).foregroundStyle(palette.ink3)
             }
             .padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -185,7 +189,7 @@ struct SearchPalette: View {
         if card.projectID != workspace.currentProject {
             workspace.show(card.projectID.map(Workspace.Page.project) ?? .inbox)
         }
-        withAnimation(Motion.paper) { workspace.openCard = card.id }
+        workspace.openCard = card.id
     }
 }
 

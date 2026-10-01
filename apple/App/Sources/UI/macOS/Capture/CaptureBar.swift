@@ -40,8 +40,12 @@ struct CaptureBar: View {
                 }
                 .animation(Motion.quick, value: focused)
                 .animation(Motion.quick, value: empty)
-                SendControl(project: project, disabled: empty) { send($0) }
+                if !empty {
+                    SendControl(project: project) { send($0) }
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
+                }
             }
+            .animation(Motion.snappy, value: empty)
         }
         .frame(maxWidth: Self.width)
         .padding(.horizontal, 24)

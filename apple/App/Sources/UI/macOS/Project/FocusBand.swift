@@ -6,31 +6,49 @@ import SwiftUI
 /// 目标与下一步：目标卡 + 本项目未完成任务 + 本项目的 Pi 会话。没有目标卡时不显示目标一栏。
 struct FocusBand: View {
     let data: ProjectPageData
-    let paperSpace: Namespace.ID
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
+    @State private var width: CGFloat = 0
+
     private static let visibleTasks = 4
+    /// 窄于这个宽度时三栏改成上下排，每栏都能放下一整行任务。
+    private static let stackedBelow: CGFloat = 820
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            if let card = data.goalCard {
-                column { goal(card) }
-                divider
+        Group {
+            if width > 0, width < Self.stackedBelow {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let card = data.goalCard {
+                        column { goal(card) }
+                        Divider().overlay(palette.hair).padding(.horizontal, 18)
+                    }
+                    column { tasks }
+                    Divider().overlay(palette.hair).padding(.horizontal, 18)
+                    column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
+                }
+            } else {
+                HStack(alignment: .top, spacing: 0) {
+                    if let card = data.goalCard {
+                        column { goal(card) }
+                        divider
+                    }
+                    column { tasks }
+                    divider
+                    column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
+                        .frame(maxWidth: 300)
+                }
             }
-            column { tasks }
-            divider
-            column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
-                .frame(maxWidth: 300)
         }
         .paper(radius: 18)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 
     @ViewBuilder private func goal(_ card: Card) -> some View {
         SectionLabel(text: "目标", systemImage: "scope")
         let text = CardText(card.body)
         Button {
-            withAnimation(Motion.paper) { workspace.openCard = card.id }
+            workspace.openCard = card.id
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 Text(text.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
@@ -43,6 +61,7 @@ struct FocusBand: View {
             .contentShape(.rect)
         }
         .buttonStyle(CardPressStyle())
+        .cardFrameSource(card.id, in: workspace)
     }
 
     @ViewBuilder private var tasks: some View {
@@ -87,9 +106,9 @@ private struct PiColumn: View {
                     PiDot(state: session.state, size: 6)
                     Text(Workspace.sessionName(session)).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink)
                     Spacer()
-                    Text(session.stateSince, style: .timer).font(.system(size: 11).monospacedDigit()).foregroundStyle(palette.ink3)
+                    Text("已持续 \(Text(session.stateSince, style: .timer))").font(.system(size: 11).monospacedDigit()).foregroundStyle(palette.ink3)
                 }
-                Text(session.state.label).font(.system(size: 12, weight: .medium)).foregroundStyle(session.state.tint)
+                Text(session.state.label).font(.system(size: 12, weight: .medium)).foregroundStyle(session.state.labelColor(palette))
                 PiDetail(state: session.state)
             }
         }

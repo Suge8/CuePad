@@ -104,9 +104,9 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端
 
 ## 视觉
 
-内容是纸，控件是玻璃：编辑器与卡片用安静的实色底并保留纸感品牌；工具栏、侧栏、弹层、菜单栏面板用系统 Liquid Glass 组件，玻璃不叠玻璃；"降低透明度""增强对比度"开启时自动退回实底。中文正文一律苹方。界面不解释内部规则：分组的依据写在代码里，不写成给用户看的说明文案。
+内容是纸，控件是玻璃：编辑器与卡片用安静的实色底并保留纸感品牌；颜色只有纸与墨两种身份——强调色就是墨（主按钮、选中、焦点），彩色只表示状态（注意橙、失败红）与项目；三层同一色温由深到浅：侧栏 < 桌面 < 纸，深色是"夜里的纸"（暖黑），令牌在 `UI/Shared/Theme/Palette.swift`；动效用无回弹弹簧，时长不超过 300ms，减弱动态效果时退为短淡入淡出（`Motion`）；工具栏、侧栏、弹层、菜单栏面板用系统 Liquid Glass 组件，玻璃不叠玻璃；"降低透明度""增强对比度"开启时自动退回实底。中文正文一律苹方。界面不解释内部规则：分组的依据写在代码里，不写成给用户看的说明文案。
 
-- **Mac 版"近处卡片、远处列表"**：可收起的玻璃侧栏（⌘\），分置顶 / 最近项目 / 全局 Pi 会话，⌘1–9 切项目。项目页三段：顶部"目标与下一步"（项目目标卡 + 该项目未完成任务 + 该项目的 Pi），下滚时收成一行；中间工作集卡片墙（界面上标题就叫"最近"，不向用户解释上墙规则；置顶单列，其余为最近编辑或未发送，只在打开项目或跨天时重排）；下方"更早"按周分组，3 个月以上按月折叠。⌘K 搜索跨项目，按项目/含图片/发送目标/时间筛选；底部玻璃输入栏随手记存卡或直接发给 Pi；卡片连续放大成居中的纸页，菜单栏面板是一张小稿纸，⌘↩ 直接发出。
+- **Mac 版"近处卡片、远处列表"**：可收起的玻璃侧栏（⌘\），分置顶 / 最近项目 / 全局 Pi 会话，⌘1–9 切项目。项目页三段：顶部"目标与下一步"（项目目标卡 + 该项目未完成任务 + 该项目的 Pi），下滚时收成一行；中间工作集卡片墙（界面上标题就叫"最近"，不向用户解释上墙规则；置顶单列，其余为最近编辑或未发送，只在打开项目或跨天时重排；分列稳定：已有卡不换列，新卡进最短列顶部、同列下移，只有列数变化时整面重排）；下方"更早"按周分组，3 个月以上按月折叠。⌘K 搜索跨项目，按项目/含图片/发送目标/时间筛选；底部玻璃输入栏随手记存卡或直接发给 Pi；卡片连续放大成居中的纸页，关闭时沿原路缩回原卡片；发送按钮只在有内容时出现，发过的卡标纸飞机 + 目标名，没发过的什么都不标；空库首次打开只给一句话和"新建项目"；菜单栏面板是一张小稿纸，⌘↩ 直接发出。设置里有 iCloud 同步状态、"需要你决定"的两种选择和冲突副本。
 - **iPhone"项目书架 + 随手记"**：首页是项目书架（置顶项目为大卡，带目标、卡片数、任务数与 Pi 状态点），顶部一行"今天 · N 张"进入按时间的流；标签栏为 项目 / 任务 / 活动 / 搜索，"活动"承载 Pi 状态与"等你确认"（角标 + 推送）；标签栏上方常驻随手记输入栏（首页记入收件箱，项目页记入该项目）；编辑为纸页，键盘上方玻璃工具栏（分块、图片、变量、发送）。
 - **iPad**：左栏项目、右侧卡片墙与项目页，任务与活动在右侧面板，编辑时纸页覆盖项目页；外接键盘快捷键与 Mac 对齐。
 
@@ -124,7 +124,7 @@ macOS 首次启动从旧版（Electron 时代）数据库 `~/Library/Application
 apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -theme dark
 ```
 
-- Debug 构建认 `-CuePadDemo YES`（空库时写入演示数据）、`-CuePadProject <名称>`、`-CuePadScene <collapsed|older|editor|search|tasks|trash|settings|menubar>`、`-CuePadSearch`、`-CuePadCard`、`-CuePadWindowSize 1280x800`，说明见 `App/Sources/UI/Debug/DebugScene.swift`；设置项可直接覆盖（`-theme dark`）。`settings`、`menubar` 画面把设置窗口、菜单栏面板的内容放进主窗口拍，因为只截主窗口。
+- Debug 构建认 `-CuePadDemo YES`（空库时写入演示数据）、`-CuePadProject <名称>`、`-CuePadScene <collapsed|older|editor|search|tasks|trash|settings|menubar>`、`-CuePadSearch`、`-CuePadCard`、`-CuePadWindowSize 1280x800`、`-CuePadBench <sidebar|motion>`（开合侧栏 10 次 / 存卡后开合纸页，结束自动退出，供 Instruments 或连拍取帧），说明见 `App/Sources/UI/Debug/DebugScene.swift`；设置项可直接覆盖（`-theme dark`）。`settings`、`menubar` 画面把设置窗口、菜单栏面板的内容放进主窗口拍，因为只截主窗口。
 - `CUEPAD_SHOT_LIBRARY` 换库目录（默认 `.derived/library`），`CUEPAD_SHOT_SETTLE` 是出窗后等待渲染的秒数。
 - Pi 目录同样隔离（`.derived/pi-agent`、`/tmp/cuepad-shot-<uid>`），截图不含 `~/.pi` 的会话。隔离的 Pi 目录里没装扩展，侧栏底部出现"连接 Pi"征求同意是正确状态；不要它时传 `-piExtensionDeclinedVersion '<integer>N</integer>'`，N 取 `cuepad-bridge.ts` 里的 `EXTENSION_VERSION`（只写入参数域，不改已保存的设置）。
 - 窗口位置/尺寸会被系统记住（`NSWindow Frame main`），截图尺寸以上次为准；恢复默认：`defaults delete com.sugeh.cuepad "NSWindow Frame main"`。
