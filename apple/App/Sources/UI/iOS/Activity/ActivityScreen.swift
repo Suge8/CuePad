@@ -222,7 +222,7 @@ private struct SessionRow: View {
                         .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
                 }
                 if let detail = session.detail, !detail.isEmpty {
-                    Text(detail).font(.footnote.monospaced()).foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.middle)
+                    PiActivityLine(text: detail, monospaced: true).foregroundStyle(palette.ink3)
                 }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)

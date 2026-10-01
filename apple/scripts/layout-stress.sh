@@ -4,13 +4,16 @@
 #   2. 1280×907 窗口，Pi 会话全状态快速轮换
 #   3. 常驻滚动条下边加卡边逐点拉宽窗口（-CuePadBench churn）
 #   4. 本机有真实 pi（~/.local/bin/pi）时：真实 Pi 会话"发提示词 → 出错/完成 → 开新会话 → 立刻再发"，会话文件真实落盘
-#      （挑刺官第 2 轮崩溃前的操作）；并断言这条路径确实走到了：Pi 写出的会话文件不少于轮数的三分之一、应用历史里至少有一条，
+#      （挑刺官第 2 轮崩溃前的操作）；并断言这条路径确实走到了：Pi 写出的会话文件不少于轮数的一半、应用历史里至少有一条，
 #      否则判为"没覆盖到"，同样以 1 退出
 # 判定依据是该进程的系统日志："Geometry action is cycling"（SwiftUI 几何回调来回翻转）与
 # "has continued for 300 iterations"（AppKit 布局迭代超限，随后抛异常退出）。需要 DEBUG 条件编译的构建（调试场景参数）。
-# 用法：scripts/layout-stress.sh [CuePad.app]（缺省 $CUEPAD_DERIVED/Build/Products/Debug/CuePad.app）
+# 用法：scripts/layout-stress.sh [--inject-loop] [CuePad.app]（缺省 $CUEPAD_DERIVED/Build/Products/Debug/CuePad.app）
+# --inject-loop：每组都挂上刻意的几何回写环（-CuePadGeometryLoop YES），检测器有效时脚本必须以 1 退出——用来证明它抓得到这类环。
 set -u
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+inject=()
+if [ "${1:-}" = --inject-loop ]; then inject=(-CuePadGeometryLoop YES); shift; fi
 app="${1:-${CUEPAD_DERIVED:-$APPLE_DIR/.derived}/Build/Products/Debug/CuePad.app}"
 failed=0
 
@@ -20,7 +23,7 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   lib="$(mktemp -d /tmp/cuepad-stress.XXXXXX)"; sock="$(mktemp -d /tmp/cps.XXXXXX)"; chmod 700 "$sock"
   start="$(date "+%Y-%m-%d %H:%M:%S")"
   CUEPAD_LIBRARY_DIR="$lib" PI_CODING_AGENT_DIR="$lib/pi-agent" CUEPAD_PI_SOCKET_DIR="$sock" "$app/Contents/MacOS/CuePad" \
-    -CuePadDemo YES -CuePadProject CuePad -piExtensionDeclinedVersion '<integer>99</integer>' "$@" >/dev/null 2>&1 &
+    -CuePadDemo YES -CuePadProject CuePad -piExtensionDeclinedVersion '<integer>99</integer>' ${inject[@]+"${inject[@]}"} "$@" >/dev/null 2>&1 &
   pid=$!
   if [ "$mode" = none ]; then
     wait "$pid"
@@ -45,10 +48,11 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
     files=$(find "$lib/pi-agent/sessions" -name '*.jsonl' 2>/dev/null | wc -l | tr -d ' ')
     rows=$(sqlite3 "$lib/cuepad.db" 'select count(*) from piSessions;' 2>/dev/null || echo 0)
     coverage="  Pi 会话文件 $files  应用历史 $rows"
-    if [ "$files" -lt $((rounds / 3)) ] || [ "$rows" -lt 1 ]; then coverage="$coverage（没覆盖到）"; failed=1; fi
+    if [ "$files" -lt $((rounds / 2)) ] || [ "$rows" -lt 1 ]; then coverage="${coverage}（没覆盖到）"; failed=1; fi
   fi
   echo "${name}：几何循环 $cycles  布局迭代超限 $iterations  $([ $crashed = 1 ] && echo 进程中途退出 || echo 进程正常)$coverage"
   if [ "$cycles" -gt 0 ] || [ "$iterations" -gt 0 ] || [ "$crashed" = 1 ]; then failed=1; fi
+  [ -f "$lib/pi-agent/pi-stderr.log" ] && cp "$lib/pi-agent/pi-stderr.log" "/tmp/layout-stress-pi-$(date +%s).log"
   rm -rf "$lib" "$sock"
 }
 

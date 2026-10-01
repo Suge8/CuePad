@@ -16,7 +16,7 @@ struct PiActivityLine: View {
     }
 
     /// "状态 · 详情"，空的部分略去。
-    static func join(_ parts: String?...) -> String {
+    nonisolated static func join(_ parts: String?...) -> String {
         parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

@@ -110,4 +110,17 @@ struct DebugMenuBarStage: View {
         }
     }
 }
+
+/// 检测器自检用的刻意布局环（`-CuePadGeometryLoop YES`）：读自己的宽度，窄了就变宽、宽了又变窄，
+/// 正是"几何读数回写影响自身排版的状态"。`scripts/layout-stress.sh --inject-loop` 靠它证明压力场景抓得到这类环。
+struct GeometryLoopProbe: View {
+    @State private var wide = false
+
+    var body: some View {
+        Color.clear
+            .frame(width: wide ? 40 : 20, height: 1)
+            .onGeometryChange(for: Bool.self) { $0.size.width < 30 } action: { wide = $0 }
+            .accessibilityHidden(true)
+    }
+}
 #endif
