@@ -7,20 +7,43 @@ import UniformTypeIdentifiers
 
 // CueStore、CueSync、命令行测试共用的支撑：临时库、独立 sqlite3 连接、测试图片、手动时钟、事件驱动的等待。
 
-/// 临时目录里的真实库文件；释放时清理。
+/// 临时目录里的真实库文件（目录的清理见 `TestLibraries`）。
 public final class Fixture: @unchecked Sendable {
-  public let directory = FileManager.default.temporaryDirectory
-    .appending(path: "cuepad-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+  public let directory = TestLibraries.makeDirectory()
   public var url: URL { directory.appending(path: "cuepad.db") }
   public let store: CueStore
 
   public init() throws {
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     store = try CueStore(url: directory.appending(path: "cuepad.db"))
   }
-
-  deinit { try? FileManager.default.removeItem(at: directory) }
 }
+
+/// 测试用资料库的临时目录。库会被测试里的观察流、协调器、执行器一直持有到它们自己结束，
+/// 删掉仍打开的库文件时 SQLite 报 "database integrity compromised … vnode unlinked while in use"；
+/// 所以本次运行不删自己的目录，而是在下次运行开始时清掉已经结束的运行（进程已不在）留下的目录。
+public enum TestLibraries {
+  private static let root = FileManager.default.temporaryDirectory.appending(path: "cuepad-test-libraries", directoryHint: .isDirectory)
+  private static let run: URL = {
+    removeFinishedRuns()
+    return root.appending(path: "\(getpid())", directoryHint: .isDirectory)
+  }()
+
+  /// 本次运行里一个新的空目录。
+  public static func makeDirectory() -> URL {
+    let directory = run.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
+  }
+
+  private static func removeFinishedRuns() {
+    let runs = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+    for name in runs {
+      guard let pid = Int32(name), kill(pid, 0) == -1, errno == ESRCH else { continue }
+      try? FileManager.default.removeItem(at: root.appending(path: name))
+    }
+  }
+}
+
 
 /// 用独立的 sqlite3 连接直接读写库文件：构造并发场景、检查落盘格式与旧库 fixture。
 public struct RawDB {

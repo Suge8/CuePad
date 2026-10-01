@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueTestSupport
 import Foundation
 import SQLite3
 import Testing
@@ -8,16 +9,12 @@ import Testing
 
 /// 临时目录里的隔离资料库；每次调用都显式带 CUEPAD_LIBRARY_DIR，绝不落到用户的真实库。
 final class Sandbox: @unchecked Sendable {
-  let directory = FileManager.default.temporaryDirectory
-    .appending(path: "cuepad-cli-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+  let directory = TestLibraries.makeDirectory()
   let store: CueStore
 
   init() throws {
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     store = try CueStore(url: directory.appending(path: "cuepad.db"))
   }
-
-  deinit { try? FileManager.default.removeItem(at: directory) }
 
   /// 默认在沙盒目录里运行：它不绑定任何项目。`cwd` 模拟从某个目录调用。
   func call(_ arguments: [String], stdin: String? = nil, cwd: String? = nil) async -> CLIResult {

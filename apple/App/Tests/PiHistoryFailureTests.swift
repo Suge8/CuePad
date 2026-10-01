@@ -1,6 +1,7 @@
 #if os(macOS)
 import CuePi
 import Foundation
+import OSLog
 import SQLite3
 import Testing
 @testable import CuePad
@@ -78,6 +79,11 @@ struct PiHistoryFailureTests {
 
         #expect(services.startupIssues.isEmpty)
         #expect(try await services.store.piCheckpoint(of: "stale") != garbage)
+        // 测试输出里的那行"检查点无法解码，从头重读"就是这里预期的诊断日志
+        let logged = try OSLogStore(scope: .currentProcessIdentifier).getEntries()
+            .compactMap { $0 as? OSLogEntryLog }
+            .contains { $0.subsystem == "com.sugeh.cuepad" && $0.category == "pi-history" && $0.composedMessage.contains(file.path) }
+        #expect(logged, "检查点解码失败要留下诊断日志")
     }
 }
 #endif

@@ -33,6 +33,32 @@ func pngData(shade: CGFloat = 0.5) -> Data {
     return data as Data
 }
 
+/// 测试用资料库的临时目录。库会被服务里的后台任务一直持有到它们自己结束，删掉仍打开的库文件时 SQLite 报
+/// "database integrity compromised … vnode unlinked while in use"；所以本次运行不删自己的目录，
+/// 而是在下次运行开始时清掉已经结束的运行（进程已不在）留下的目录。
+enum TestLibraries {
+    private static let root = FileManager.default.temporaryDirectory.appending(path: "cuepad-app-test-libraries", directoryHint: .isDirectory)
+    private static let run: URL = {
+        removeFinishedRuns()
+        return root.appending(path: "\(getpid())", directoryHint: .isDirectory)
+    }()
+
+    /// 本次运行里一个新的空目录。
+    static func makeDirectory() -> URL {
+        let directory = run.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private static func removeFinishedRuns() {
+        let runs = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+        for name in runs {
+            guard let pid = Int32(name), kill(pid, 0) == -1, errno == ESRCH else { continue }
+            try? FileManager.default.removeItem(at: root.appending(path: name))
+        }
+    }
+}
+
 /// 临时目录里的独立偏好存储，释放时连目录一起删除。
 final class TempDefaults {
     let directory = FileManager.default.temporaryDirectory
@@ -94,8 +120,7 @@ final class FakeSync: SyncControlling, Sendable {
 /// 一次"App 启动"：临时库目录 + 独立偏好 + 替身（macOS 的发送通道、热键、窗口；iOS 的私有命名剪贴板，
 /// 模拟器的通用剪贴板会与 Mac 同步）。`relaunch()` 用同一批目录与偏好再起一个实例。
 final class TestApp {
-    let directory = FileManager.default.temporaryDirectory
-        .appending(path: "cuepad-app-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let directory = TestLibraries.makeDirectory()
     let preferences = TempDefaults()
     let sync = FakeSync()
     #if os(macOS)
@@ -127,12 +152,9 @@ final class TestApp {
     }
     #endif
 
-    deinit {
-        try? FileManager.default.removeItem(at: directory)
-        #if os(iOS)
-        UIPasteboard.remove(withName: pasteboardName)
-        #endif
-    }
+    #if os(iOS)
+    deinit { UIPasteboard.remove(withName: pasteboardName) }
+    #endif
 
     @discardableResult
     func relaunch() -> AppServices {

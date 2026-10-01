@@ -27,12 +27,12 @@ let package = Package(
         .target(name: "CuePi", exclude: ["README.md"], resources: [.copy("Extension")]),
         // iCloud 同步：CKSyncEngine ↔ CueStore 的记录映射、待推送变更、冲突与附件。
         .target(name: "CueSync", dependencies: ["CueStore"]),
-        // 测试共用的支撑（临时库、独立 sqlite3 连接、测试图片、手动时钟），只给测试目标依赖。
+        // 测试共用的支撑（临时库目录、独立 sqlite3 连接、测试图片、手动时钟），只给测试目标依赖。
         .target(name: "CueTestSupport", dependencies: ["CueStore"], path: "Tests/CueTestSupport"),
         .testTarget(name: "CueSyncTests", dependencies: ["CueSync", "CueTestSupport"]),
         // `cuepad` 命令行：供人和 agent 读写本机资料库（经 CueStore，零第三方依赖）。
         .executableTarget(name: "CueCLI", dependencies: ["CueStore", "CueText"]),
-        .testTarget(name: "CueCLITests", dependencies: ["CueCLI"]),
+        .testTarget(name: "CueCLITests", dependencies: ["CueCLI", "CueTestSupport"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor"]),
