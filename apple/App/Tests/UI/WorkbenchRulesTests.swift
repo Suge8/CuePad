@@ -132,3 +132,22 @@ struct WallTests {
         ])
     }
 }
+
+/// "更早"的组标题：只有一组按周的卡时不再套一层日期标题（每行自带日期）；按月的组要标题来折叠。Mac 与 iOS 同一条规则。
+struct OlderGroupTitleRuleTests {
+    let week = OlderGroup.Period.week(start: Date(timeIntervalSince1970: 0))
+    let earlierWeek = OlderGroup.Period.week(start: Date(timeIntervalSince1970: -604_800))
+    let month = OlderGroup.Period.month(start: Date(timeIntervalSince1970: -10_000_000))
+
+    @Test func 只有一组按周时不显示组标题() {
+        #expect(OlderGroup.needsTitles(in: [OlderGroup(period: week, cards: [UUID()])]) == false)
+    }
+
+    @Test func 唯一一组按月时显示组标题() {
+        #expect(OlderGroup.needsTitles(in: [OlderGroup(period: month, cards: [UUID()])]) == true)
+    }
+
+    @Test func 多于一组时显示组标题() {
+        #expect(OlderGroup.needsTitles(in: [OlderGroup(period: week, cards: [UUID()]), OlderGroup(period: earlierWeek, cards: [UUID()])]) == true)
+    }
+}
