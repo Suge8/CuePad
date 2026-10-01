@@ -48,6 +48,7 @@ struct ShelfScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var data: ShelfData?
 
     var body: some View {
@@ -98,11 +99,11 @@ struct ShelfScreen: View {
                     SectionHeader(title: "最近")
                     VStack(spacing: 0) {
                         ForEach(Array(recent.enumerated()), id: \.element.id) { index, entry in
-                            if index > 0 { Divider().padding(.leading, 60) }
+                            if index > 0 { Divider().padding(.leading, ShelfRow.dividerInset(typeSize)) }
                             ShelfRow(route: .project(entry.project.id), entry: entry)
                         }
                         if data.inboxCount > 0 {
-                            if !recent.isEmpty { Divider().padding(.leading, 60) }
+                            if !recent.isEmpty { Divider().padding(.leading, ShelfRow.dividerInset(typeSize)) }
                             ShelfRow(route: .inbox, entry: nil, inboxCount: data.inboxCount)
                         }
                     }
@@ -188,24 +189,14 @@ private struct ShelfCounts: View {
     }
 }
 
-/// 空库：一句现状、一句下一步、一个动作。
+/// 空库：共用的空库引导，动作是 iOS 的主按钮。
 private struct EmptyShelf: View {
     let create: () -> Void
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(spacing: 0) {
-            Image(systemName: "books.vertical").font(.system(size: 40, weight: .light)).foregroundStyle(palette.ink3)
-                .accessibilityHidden(true)
-            Text("还没有项目").font(.title3.weight(.semibold)).foregroundStyle(palette.ink).padding(.top, 16)
-            Text("建一个项目放卡片，或者先在下方随手记一条").font(.subheadline).foregroundStyle(palette.ink2)
-                .multilineTextAlignment(.center).padding(.top, 8)
-            Button("新建项目", action: create)
-                .prominentButton().controlSize(.large)
-                .frame(minHeight: 44)
-                .padding(.top, 20)
+        EmptyLibrary {
+            Button("新建项目", action: create).prominentButton().controlSize(.large).frame(minHeight: 44)
         }
-        .frame(maxWidth: .infinity)
         .padding(.top, 80)
     }
 }
@@ -220,6 +211,13 @@ private struct ShelfRow: View {
 
     private var stacked: Bool { typeSize.isAccessibilitySize }
 
+    static let tile: CGFloat = 36
+    static let horizontalPadding: CGFloat = 14
+    /// 行间分隔线的起点：与名称左缘对齐。
+    static func dividerInset(_ typeSize: DynamicTypeSize) -> CGFloat {
+        typeSize.isAccessibilitySize ? horizontalPadding : horizontalPadding + tile + 12
+    }
+
     private var counts: some View {
         ShelfCounts(cards: entry?.cardCount ?? inboxCount, tasks: entry?.openTasks ?? 0)
     }
@@ -227,11 +225,15 @@ private struct ShelfRow: View {
     var body: some View {
         NavigationLink(value: route) {
             HStack(spacing: 12) {
-                ProjectGlyph(project: entry?.project, size: 17)
-                    .frame(width: 36, height: 36)
-                    .background(entry.map { Palette.projectTint($0.project.color).opacity(0.12) } ?? palette.fill, in: .rect(cornerRadius: 10))
+                // 辅助功能大字号下图标并进名称一行，文字从行首开始，不空出一列图标宽
+                if !stacked {
+                    ProjectGlyph(project: entry?.project, size: 17)
+                        .frame(width: Self.tile, height: Self.tile)
+                        .background(entry.map { Palette.projectTint($0.project.color).opacity(0.12) } ?? palette.fill, in: .rect(cornerRadius: 10))
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
+                        if stacked { ProjectGlyph(project: entry?.project, size: 17) }
                         Text(entry?.project.name ?? "未归档").font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
                         if let pi = entry?.pi { PiDot(state: pi, size: 6) }
                     }
@@ -247,7 +249,7 @@ private struct ShelfRow: View {
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3.opacity(0.7))
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, 14).padding(.vertical, 11)
+            .padding(.horizontal, Self.horizontalPadding).padding(.vertical, 11)
             .contentShape(.rect)
         }
         .buttonStyle(RowPressStyle())

@@ -183,11 +183,10 @@ enum OlderGroupTitle {
         let chinese = Locale(identifier: "zh_CN")
         switch period {
         case .week(let start):
+            // 两端都写成"月/日"，与卡片行上的日期同一种写法
             let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
-            let sameMonth = calendar.isDate(start, equalTo: end, toGranularity: .month)
-            let from = start.formatted(.dateTime.month(.defaultDigits).day().locale(chinese))
-            let to = sameMonth ? end.formatted(.dateTime.day().locale(chinese)) : end.formatted(.dateTime.month(.defaultDigits).day().locale(chinese))
-            return "\(from) – \(to)"
+            let day = Date.FormatStyle.dateTime.month(.defaultDigits).day().locale(chinese)
+            return "\(start.formatted(day)) – \(end.formatted(day))"
         case .month(let start):
             return start.formatted(.dateTime.year().month(.wide).locale(chinese))
         }

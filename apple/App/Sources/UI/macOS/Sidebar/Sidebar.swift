@@ -213,16 +213,15 @@ private struct PiSection: View {
                                 Text(Workspace.sessionName(session)).lineLimit(1)
                                 // 需要处理时（出错、等你确认）接着写原因的开头，悬停看全文
                                 PiActivityLine(
-                                    text: PiActivityLine.join(
-                                        projectName(workspace.sessionProjects[session.id]), session.state.label,
-                                        session.state.needsAttention ? session.state.detail : nil),
-                                    font: .caption)
+                                    lead: [projectName(workspace.sessionProjects[session.id]), session.state.label],
+                                    detail: session.state.needsAttention ? session.state.detail : nil,
+                                    font: .caption, full: session.state.fullDetail)
                                     .foregroundStyle(session.state.labelColor(palette))
                             }
                         }
                     }
                     .buttonStyle(PressStyle(scale: 0.98))
-                    .help([session.state.detail, "点按跳到所在终端"].compactMap { $0 }.joined(separator: "\n"))
+                    .help([session.state.fullDetail, "点按跳到所在终端"].compactMap { $0 }.joined(separator: "\n"))
                 }
                 ForEach(ended) { session in
                     HStack(spacing: 9) {

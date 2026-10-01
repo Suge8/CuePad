@@ -79,9 +79,8 @@ struct MainWindow: View {
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
     }
 
-    /// 项目目录读到之前不显示页面：页头的项目名称、目录、计数从第一帧起就是真实值。
-    @ViewBuilder private var page: some View {
-        if workspace.catalog != nil { currentPage }
+    private var page: some View {
+        CatalogGate { currentPage }
     }
 
     @ViewBuilder private var currentPage: some View {

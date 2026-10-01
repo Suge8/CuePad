@@ -32,12 +32,14 @@ nonisolated private struct SearchData: Sendable {
 /// 搜索：跨项目，多个词都要命中，可按项目、含图片、发送、时间筛选；结果按项目分组。
 struct SearchScreen: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var query = PaletteQuery()
     @State private var data: SearchData?
     @FocusState private var searching: Bool
+    @State private var selection: TextSelection?
 
     /// 宽屏上结果按可用宽度排成多列。
     private var columns: [GridItem] {
@@ -81,21 +83,33 @@ struct SearchScreen: View {
         // 搜索框常驻导航栏下方，进入即聚焦弹出键盘
         .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索卡片")
         .searchFocused($searching)
+        .searchSelection($selection)
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear {
             #if DEBUG
             if query.text.isEmpty { query.text = DebugScene.searchText }
             #endif
-            var instant = Transaction()
-            instant.disablesAnimations = true
-            withTransaction(instant) { searching = true }
+            focusSearch()
         }
+        .onChange(of: navigation.searchFocusRequests) { focusSearch() }
         .observing(services.store, [.cards, .projects, .sendRecords], id: query, into: $data, onError: workspace.fail) { [query] store in
             let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
             let projects = try store.projects()
             return SearchData(
                 groups: SearchData.grouped(found.cards, projects: projects), total: found.totalCards, shown: found.cards.count,
                 projects: projects, targets: try store.sendTargets().filter { $0.kind == .known(.clipboard) })
+        }
+    }
+}
+
+extension SearchScreen {
+    /// 聚焦搜索框并全选已有文字（接着打字即替换），不做动画。
+    private func focusSearch() {
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            searching = true
+            selection = TextSelection(range: query.text.startIndex..<query.text.endIndex)
         }
     }
 }

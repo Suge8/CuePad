@@ -102,9 +102,10 @@ private struct SidePanel: View {
     }
 }
 
-nonisolated private struct SidebarPi: Sendable {
-    var byProject: [UUID: Open<PiWorkState>]
+nonisolated private struct SidebarData: Sendable {
+    var pi: [UUID: Open<PiWorkState>]
     var waiting: Int
+    var today: Int
 }
 
 private struct SplitSidebar: View {
@@ -112,14 +113,16 @@ private struct SplitSidebar: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
-    @State private var pi: SidebarPi?
+    @State private var data: SidebarData?
+    /// 今天的起点：跨过午夜时重读"今天"的张数。
+    @State private var today = Calendar.current.startOfDay(for: .now)
 
     var body: some View {
         List {
             Section {
                 SidebarRow(route: .shelf, title: "项目", symbol: "books.vertical")
-                SidebarRow(route: .today, title: "今天", symbol: "sun.max")
-                SidebarRow(route: .activity, title: "活动", symbol: "waveform.path.ecg", badge: pi?.waiting ?? 0)
+                SidebarRow(route: .today, title: "今天", symbol: "sun.max", badge: data?.today ?? 0)
+                SidebarRow(route: .activity, title: "活动", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
             if let catalog = workspace.catalog {
@@ -148,15 +151,20 @@ private struct SplitSidebar: View {
         .toolbar {
             Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
-        .observing(services.store, [.piSessionStates], into: $pi, onError: workspace.fail) { store in
+        .observing(services.store, [.piSessionStates, .cards], id: today, into: $data, onError: workspace.fail) { [today] store in
             let states = try store.piSessionStates()
-            return SidebarPi(byProject: PiSessionState.byProject(states), waiting: states.filter { $0.state == .known(.waitingForUser) }.count)
+            return SidebarData(
+                pi: PiSessionState.byProject(states), waiting: states.filter { $0.state == .known(.waitingForUser) }.count,
+                today: try store.search(SearchQuery(modifiedIn: today...Date.now), limit: 0).totalCards)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            today = Calendar.current.startOfDay(for: .now)
         }
     }
 
     private func row(_ project: Project, _ catalog: ProjectCatalog) -> some View {
         SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0,
-                   pi: pi?.byProject[project.id])
+                   pi: data?.pi[project.id])
             .projectActions(project, radius: 10)
     }
 }

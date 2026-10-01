@@ -28,9 +28,8 @@ struct IOSRootView: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        Group {
-            // 项目目录读到之前不显示页面：页面里的项目名称、计数从第一帧起就是真实值
-            if workspace.catalog == nil { Color.clear.ignoresSafeArea().deskBackground() } else if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
+        CatalogGate {
+            if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
         }
         .sheet(item: $navigation.capture) { CaptureSheet(capture: $0) }
         .sheet(item: $navigation.outbox) { SendToMacSheet(outbox: $0) }
@@ -47,7 +46,7 @@ struct IOSRootView: View {
         .onChange(of: sizeClass, initial: true) { _, size in
             navigation.layout = size == .regular ? .split : .tabs
         }
-        .task { await workspace.observeCatalog() }
+        .task(id: workspace.catalogAttempt) { await workspace.observeCatalog() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link, workspace: workspace) }
         }
@@ -132,6 +131,9 @@ private struct TabsRoot: View {
         NavigationStack(path: path) {
             root().navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
         }
+        // 纸页独占底部（编辑工具栏不和标签栏叠在一起）。由路径决定而不是挂在纸页上：返回时路径先变，
+        // 标签栏随返回的转场一起出现，不在转场结束后才冒出来
+        .toolbarVisibility(path.wrappedValue.last?.isCard == true ? .hidden : .visible, for: .tabBar)
     }
 }
 

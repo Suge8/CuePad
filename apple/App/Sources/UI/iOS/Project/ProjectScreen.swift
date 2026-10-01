@@ -84,8 +84,11 @@ struct ProjectScreen: View {
             }
             if !arrangement.older.isEmpty {
                 SectionHeader(title: "更早", count: arrangement.older.count).id(ScrollAnchor.older)
-                ForEach(data.olderGroups(arrangement), id: \.period) { group in
-                    OlderGroupHeader(group: group, expanded: $expanded)
+                let groups = data.olderGroups(arrangement)
+                // 只有一组按周的卡时不再套一层日期标题：每行自带日期
+                let titled = groups.count > 1 || groups.first?.isMonth == true
+                ForEach(groups, id: \.period) { group in
+                    if titled { OlderGroupHeader(group: group, expanded: $expanded) }
                     if !group.isMonth || expanded.contains(group.period) {
                         let ids = group.cards
                         ForEach(ids, id: \.self) { id in
@@ -210,8 +213,8 @@ private struct FocusCard: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             PiDot(state: session.state, size: 7)
                             Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
-                            Text(session.summary).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
-                                .truncationMode(.middle)
+                            PiActivityLine(lead: [session.state.label], detail: session.detail, detailIsCode: session.detailIsCode, font: .subheadline)
+                                .foregroundStyle(palette.ink2)
                             Spacer(minLength: 4)
                             PiElapsed(session: session)
                         }

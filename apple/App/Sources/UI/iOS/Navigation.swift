@@ -31,6 +31,8 @@ final class Navigation {
         case activity
         case search
         case card(UUID)
+
+        var isCard: Bool { if case .card = self { true } else { false } }
     }
 
     /// 随手记面板：记入的位置与打开时先做什么。
@@ -117,7 +119,11 @@ final class Navigation {
     /// 分栏：进入搜索前所在的页（含其上推入的页），退出搜索时回到这里。
     private var beforeSearch: (root: Route, path: [Route])?
 
+    /// 每次 ⌘K（或点侧栏的搜索）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
+    private(set) var searchFocusRequests = 0
+
     func openSearch() {
+        searchFocusRequests += 1
         guard splitRoot != .search else { return }
         beforeSearch = (splitRoot, splitPath)
         select(.search)
