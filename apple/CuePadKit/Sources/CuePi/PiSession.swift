@@ -61,8 +61,23 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public let extensionVersion: Int
     public internal(set) var state: PiAgentState
     public internal(set) var stateSince: Date
+    /// `/name` 设的会话名（扩展 v3 起上报）
+    public internal(set) var name: String? = nil
+    /// 首条用户消息的开头（扩展 v3 起上报）
+    public internal(set) var firstMessage: String? = nil
 
     public var hasOutdatedExtension: Bool { extensionVersion < PiExtensionBundle.version }
+
+    /// 会话的显示名（唯一规则，与 Pi 自己的会话列表一致）：`/name` 设的名字 → 首条用户消息 → 工作目录名。
+    /// 控制字符换成空格并去掉首尾空白，所以是单行。旧扩展不报名字与消息，显示工作目录名。
+    public var displayName: String {
+        [name, firstMessage].lazy.compactMap { $0.map(Self.singleLine) }.first { !$0.isEmpty } ?? cwd.lastPathComponent
+    }
+
+    private static func singleLine(_ text: String) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.map { $0.value < 0x20 || $0.value == 0x7F ? " " : $0 }))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 public enum PiSessionEndReason: Sendable, Equatable {
@@ -75,6 +90,8 @@ public enum PiSessionEndReason: Sendable, Equatable {
 public enum PiSessionChange: Sendable, Equatable {
     case appeared(PiSession)
     case stateChanged(PiSession, from: PiAgentState)
+    /// 会话名或首条消息变了，`displayName` 可能随之改变
+    case displayNameChanged(PiSession)
     case ended(PiSession, reason: PiSessionEndReason)
     /// 连上了但协议不兼容（扩展过新/过旧或消息损坏）；连接已关闭，不会出现在 `sessions` 里
     case incompatible(id: String, detail: String)

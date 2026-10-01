@@ -23,7 +23,7 @@ extension Workspace {
 
     func label(for choice: AppServices.Destination) -> String {
         switch choice {
-        case .pi(let id, let mode): (session(id).map(Self.sessionName) ?? "Pi") + (mode == .paste ? " 输入框" : "")
+        case .pi(let id, let mode): (session(id).map(\.displayName) ?? "Pi") + (mode == .paste ? " 输入框" : "")
         case .app(.bundleID(let bundleID)): services.appName(bundleID: bundleID)
         case .app(.lastFrontmost): services.lastFrontmostApp()?.name ?? "上一个应用"
         case .clipboard: "剪贴板"
@@ -32,10 +32,6 @@ extension Workspace {
 
     func session(_ id: CuePi.PiSession.ID) -> CuePi.PiSession? {
         services.pi.sessions.first { $0.id == id }
-    }
-
-    static func sessionName(_ session: CuePi.PiSession) -> String {
-        session.cwd.lastPathComponent
     }
 
     private func isAvailable(_ choice: AppServices.Destination) -> Bool {

@@ -100,7 +100,7 @@ private struct PiColumn: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
                     PiDot(state: session.state, size: 6)
-                    Text(Workspace.sessionName(session)).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink)
+                    Text(session.displayName).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink)
                     Spacer()
                     Text("已持续 \(Text(session.stateSince, style: .timer))").font(.system(size: 11).monospacedDigit()).foregroundStyle(palette.ink3)
                 }
@@ -128,7 +128,7 @@ struct CompactFocus: View {
                 if let session {
                     HStack(spacing: 6) {
                         PiDot(state: session.state, size: 6)
-                        Text("\(Workspace.sessionName(session)) \(session.state.label)")
+                        Text("\(session.displayName) \(session.state.label)")
                     }
                     .foregroundStyle(palette.ink2)
                 }

@@ -44,7 +44,7 @@ extension CueStore {
 }
 
 /// 把 Pi 会话的状态变化写成同步记录（每个会话一条）。
-/// - 开始工作、等你确认、完成、出错：立即写；
+/// - 开始工作、等你确认、完成、出错，以及会话的标题或项目变化：立即写；
 /// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`，期间只保留最新的一次；
 /// - 与已写入内容相同的更新不再写；会话结束时删除记录并丢弃挂起的更新。
 ///
@@ -99,8 +99,9 @@ public actor PiStateRecorder {
       return
     }
     let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
+    let renamed = session.written.map { $0.title != content.title || $0.projectID != content.projectID } ?? true
     let now = timing.now()
-    guard startsOrEndsWork || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {
+    guard startsOrEndsWork || renamed || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {
       session.pending = (state, detail)
       if session.timer == nil, let writtenAt = session.writtenAt {
         let wait = max(0, minInterval.seconds - now.timeIntervalSince(writtenAt))

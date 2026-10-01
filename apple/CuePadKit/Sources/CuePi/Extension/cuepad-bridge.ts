@@ -2,7 +2,7 @@
 // 由 CuePad 安装到 Pi 扩展目录，升级时整文件覆盖，请勿手改。协议说明见 apple/CuePadKit/Sources/CuePi/README.md。
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
-//   扩展 → CuePad  hello（连接后第一条，含当前状态快照）/ state（仅状态切换）/ ack / bye
+//   扩展 → CuePad  hello（连接后第一条，含当前状态与会话名快照）/ state（仅状态切换）/ info（会话名、首条消息变化）/ ack / bye
 //   CuePad → 扩展  send（文字+图片，steer/followUp）/ paste（放进输入框）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
@@ -11,7 +11,7 @@ import net from "node:net";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
-const EXTENSION_VERSION = 2;
+const EXTENSION_VERSION = 3;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -20,6 +20,8 @@ const SUN_PATH_LIMIT = 104;
 const MAX_LINE_BYTES = 64 * 1024 * 1024;
 /** 工具状态里一句话详情的字符数上限（含省略号） */
 const DETAIL_LIMIT = 120;
+/** 上报首条用户消息的字符数上限：只用来当会话的显示名 */
+const FIRST_MESSAGE_LIMIT = 200;
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = [
 	"TERM_PROGRAM", "TERM_PROGRAM_VERSION", "__CFBundleIdentifier", "TERM_SESSION_ID", "ITERM_SESSION_ID",
@@ -79,6 +81,28 @@ function ensureSecureDirectory(dir: string): void {
 	}
 }
 
+/** 消息的文字部分（文字块用空格连接），与 Pi 会话列表取首条消息的方式一致。 */
+function messageText(message: any): string {
+	const content = message?.content;
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content.filter((block: any) => block?.type === "text").map((block: any) => block.text).join(" ");
+}
+
+function preview(text: string): string | null {
+	return text ? Array.from(text).slice(0, FIRST_MESSAGE_LIMIT).join("") : null;
+}
+
+/** 会话里第一条用户消息（按文件顺序，与 Pi 会话列表一致）。 */
+function firstUserMessage(entries: any[]): string | null {
+	for (const entry of entries) {
+		if (entry?.type !== "message" || entry.message?.role !== "user") continue;
+		const text = messageText(entry.message);
+		if (text) return preview(text);
+	}
+	return null;
+}
+
 function readTTY(): Promise<string | null> {
 	return new Promise((resolve) => {
 		execFile("ps", ["-o", "tty=", "-p", String(process.pid)], { encoding: "utf8" }, (error, stdout) => {
@@ -99,6 +123,8 @@ export default function (pi: any) {
 	const clients = new Set<net.Socket>();
 	let lastKey = "";
 	let since = Date.now();
+	/** 会话名（`/name`）与首条用户消息：CuePad 据此按 Pi 会话列表的规则显示会话 */
+	let info: { name: string | null; firstMessage: string | null } = { name: null, firstMessage: null };
 
 	const write = (socket: net.Socket, message: object) => {
 		if (!socket.destroyed) socket.write(JSON.stringify(message) + "\n");
@@ -114,6 +140,13 @@ export default function (pi: any) {
 		if (clients.size === 0) return;
 		const message = { t: "state", state: { ...state, since } };
 		for (const client of clients) write(client, message);
+	}
+
+	/** 会话名或首条消息变了才发。 */
+	function updateInfo(next: { name: string | null; firstMessage: string | null }) {
+		if (next.name === info.name && next.firstMessage === info.firstMessage) return;
+		info = next;
+		for (const client of clients) write(client, { t: "info", ...info });
 	}
 
 	async function hello() {
@@ -132,6 +165,7 @@ export default function (pi: any) {
 			tty: await tty,
 			term: terminalEnv,
 			state: { ...tracker.derive(), since },
+			...info,
 		};
 	}
 
@@ -237,6 +271,7 @@ export default function (pi: any) {
 		lastKey = JSON.stringify(tracker.derive());
 		since = Date.now();
 		tty = readTTY();
+		info = { name: pi.getSessionName() ?? null, firstMessage: firstUserMessage(ctx.sessionManager.getEntries()) };
 		try {
 			start();
 		} catch (error: any) {
@@ -244,6 +279,11 @@ export default function (pi: any) {
 		}
 	});
 	pi.on("session_shutdown", (event: any) => stop(event.reason));
+	pi.on("session_info_changed", (event: any) => updateInfo({ ...info, name: event.name ?? null }));
+	pi.on("message_end", (event: any) => {
+		if (info.firstMessage !== null || event.message?.role !== "user") return;
+		updateInfo({ ...info, firstMessage: preview(messageText(event.message)) });
+	});
 
 	// ---- Pi 事件 → 状态 ----
 	pi.on("agent_start", () => {

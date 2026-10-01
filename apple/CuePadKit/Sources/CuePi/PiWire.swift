@@ -46,11 +46,19 @@ enum PiWire {
         var tty: String?
         var term: [String: String]
         var state: State
+        /// 扩展 v3 起：会话名与首条用户消息（旧扩展没有，为 nil）
+        var name: String?
+        var firstMessage: String?
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, sessionFile, pid, cwd, mode, model, tty, term, state
+            case extensionVersion, sessionId, sessionFile, pid, cwd, mode, model, tty, term, state, name, firstMessage
         }
+    }
+
+    struct Info: Decodable {
+        var name: String?
+        var firstMessage: String?
     }
 
     struct Ack: Decodable {
@@ -66,6 +74,7 @@ enum PiWire {
     enum Message {
         case hello(Hello)
         case state(State)
+        case info(Info)
         case ack(Ack)
         case bye(reason: String)
     }
@@ -78,6 +87,7 @@ enum PiWire {
         switch try decoder.decode(Envelope.self, from: line).t {
         case "hello": return .hello(try decoder.decode(Hello.self, from: line))
         case "state": return .state(try decoder.decode(StateMessage.self, from: line).state)
+        case "info": return .info(try decoder.decode(Info.self, from: line))
         case "ack": return .ack(try decoder.decode(Ack.self, from: line))
         case "bye": return .bye(reason: try decoder.decode(Bye.self, from: line).reason)
         case let other: throw DecodeError.unknownType(other)

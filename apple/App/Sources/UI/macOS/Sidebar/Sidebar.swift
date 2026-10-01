@@ -210,7 +210,7 @@ private struct PiSection: View {
                         HStack(spacing: 9) {
                             PiDot(state: session.state).frame(width: 16)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(Workspace.sessionName(session)).lineLimit(1)
+                                Text(session.displayName).lineLimit(1)
                                 // 需要处理时（出错、等你确认）接着写原因的开头，悬停看全文
                                 PiActivityLine(
                                     lead: [projectName(workspace.sessionProjects[session.id]), session.state.label],

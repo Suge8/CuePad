@@ -43,7 +43,7 @@ struct LiveSendChannels: SendChannels {
     func piSession(_ id: CuePi.PiSession.ID) -> PiSessionInfo? {
         pi.sessions.first { $0.id == id }.map {
             PiSessionInfo(
-                target: SendTarget(kind: .piSession, name: $0.cwd.lastPathComponent, ref: $0.sessionID),
+                target: SendTarget(kind: .piSession, name: $0.displayName, ref: $0.sessionID),
                 isBusy: $0.state.isBusy)
         }
     }
