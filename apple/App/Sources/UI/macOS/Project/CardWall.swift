@@ -4,10 +4,12 @@ import CueText
 import SwiftUI
 
 /// 卡片墙：列数随宽度（理想列宽 260），分列由 `WallColumns` 决定并保持稳定——存新卡时新卡进最矮一列的顶部，
-/// 同列的卡往下挪（有动画），别列的卡不动；只有列数变化时重新分配。
+/// 同列的卡往下挪（有动画），别列的卡不动；只有列数变化或跨天重新排墙时重新分配。
 struct WallGrid<Tile: View>: View {
     let ids: [UUID]
     let cards: [UUID: Card]
+    /// 这次排墙的时间：变了（跨天重排）就按新顺序整体重新分列。
+    let arrangedAt: Date?
     @ViewBuilder let tile: (Card) -> Tile
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 最近量到的宽度。不是界面状态：侧栏开合时每帧都变，放进 @State 会让每帧都重算墙的 body。
@@ -53,8 +55,8 @@ struct WallGrid<Tile: View>: View {
         let columnWidth = (width - Self.spacing * CGFloat(count - 1)) / CGFloat(count)
         let cards = cards
         let height = { (id: UUID) in cards[id].map { WallColumns.estimatedHeight(of: CardText($0.body), columnWidth: columnWidth) } ?? 0 }
-        var next = layout ?? WallColumns(order: ids, count: count, height: height)
-        next.update(order: ids, count: count, height: height)
+        var next = layout ?? WallColumns(order: ids, count: count, height: height, arrangedAt: arrangedAt)
+        next.update(order: ids, count: count, height: height, arrangedAt: arrangedAt)
         guard next != layout else { return }
         if animated {
             withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { layout = next }

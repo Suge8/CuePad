@@ -6,9 +6,12 @@ import Foundation
 /// 高度用估计值（`estimatedHeight`）：分列要在排版之前决定，估计只影响各列是否大致齐平，不影响卡片实际大小。
 nonisolated struct WallColumns: Equatable, Sendable {
     private(set) var columns: [[UUID]]
+    /// 这份分列跟随的那次排墙（`WallArrangement.arrangedAt`）。
+    private var arrangedAt: Date?
 
     /// 按 `order` 依次放进当前最矮的一列（并列取左边）。
-    init(order: [UUID], count: Int, height: (UUID) -> Double) {
+    init(order: [UUID], count: Int, height: (UUID) -> Double, arrangedAt: Date? = nil) {
+        self.arrangedAt = arrangedAt
         columns = Array(repeating: [], count: max(1, count))
         var heights = Array(repeating: 0.0, count: columns.count)
         for id in order {
@@ -19,10 +22,10 @@ nonisolated struct WallColumns: Equatable, Sendable {
     }
 
     /// 跟上新的顺序：离开的卡移除；新出现的卡放进最矮一列——排在所有已有卡之前的放顶部（新建、刚编辑回来的），
-    /// 其余放底部；列数变了就整体重新分配。
-    mutating func update(order: [UUID], count: Int, height: (UUID) -> Double) {
-        guard max(1, count) == columns.count else {
-            self = WallColumns(order: order, count: count, height: height)
+    /// 其余放底部；列数变了、或重新排了墙（跨天）就按新顺序整体重新分配。
+    mutating func update(order: [UUID], count: Int, height: (UUID) -> Double, arrangedAt: Date? = nil) {
+        guard max(1, count) == columns.count, arrangedAt == self.arrangedAt else {
+            self = WallColumns(order: order, count: count, height: height, arrangedAt: arrangedAt)
             return
         }
         let present = Set(order)

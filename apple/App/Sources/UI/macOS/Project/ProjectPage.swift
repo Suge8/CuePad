@@ -90,7 +90,7 @@ struct ProjectPage: View {
                 Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
                 Text("\(count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
             }
-            WallGrid(ids: ids, cards: byID) { card in
+            WallGrid(ids: ids, cards: byID, arrangedAt: board.arrangement?.arrangedAt) { card in
                 CardTile(
                     card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id),
                     isGoal: data.project?.goalCardID == card.id)

@@ -143,6 +143,12 @@ struct CardEditorPage: View {
         .foregroundStyle(palette.ink3)
         .padding(.horizontal, 64)
         .animation(Motion.quick, value: saveState)
+        // "已保存"只亮一会儿；状态再变（又在保存、出错）时这次计时作废
+        .task(id: saveState) {
+            guard saveState == .saved else { return }
+            try? await Task.sleep(for: SaveState.savedDisplay)
+            if !Task.isCancelled { saveState = .idle }
+        }
     }
 
     private func editor(_ data: EditorData, _ text: String) -> some View {
@@ -173,8 +179,6 @@ struct CardEditorPage: View {
                 saveState = .saving
                 try await store.updateCard(id) { $0.body = body }
                 saveState = .saved
-                try? await Task.sleep(for: SaveState.savedDisplay)
-                if saveState == .saved { saveState = .idle }
             },
             onError: { error in
                 saveState = .failed
