@@ -20,7 +20,8 @@ const SUN_PATH_LIMIT = 104;
 const MAX_LINE_BYTES = 64 * 1024 * 1024;
 /** 工具状态里一句话详情的字符数上限（含省略号） */
 const DETAIL_LIMIT = 120;
-/** 上报首条用户消息的字符数上限：只用来当会话的显示名 */
+/** 上报首条用户消息的字符数上限：它只用来当单行显示名，界面与 Pi 自己的会话列表都只显示一行，
+ * 不必把可能几 MB 的首条消息（贴入的日志、代码）在每次连接与同步时传来传去。与 CuePi 的 `PiSessionName.firstMessageLimit` 相同。 */
 const FIRST_MESSAGE_LIMIT = 200;
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = [

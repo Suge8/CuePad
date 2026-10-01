@@ -68,10 +68,20 @@ public struct PiSession: Identifiable, Sendable, Equatable {
 
     public var hasOutdatedExtension: Bool { extensionVersion < PiExtensionBundle.version }
 
-    /// 会话的显示名（唯一规则，与 Pi 自己的会话列表一致）：`/name` 设的名字 → 首条用户消息 → 工作目录名。
-    /// 控制字符换成空格并去掉首尾空白，所以是单行。旧扩展不报名字与消息，显示工作目录名。
+    /// 会话的显示名，规则见 `PiSessionName`。旧扩展不报名字与消息，显示工作目录名。
     public var displayName: String {
-        [name, firstMessage].lazy.compactMap { $0.map(Self.singleLine) }.first { !$0.isEmpty } ?? cwd.lastPathComponent
+        PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
+    }
+}
+
+/// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致：
+/// `/name` 设的名字 → 会话文件里第一条有文字的用户消息 → 工作目录名。控制字符换成空格并去掉首尾空白，所以是单行。
+public enum PiSessionName {
+    /// 首条用户消息只用来当单行显示名：只取开头这么多字符（扩展的 `FIRST_MESSAGE_LIMIT` 与之相同）。
+    public static let firstMessageLimit = 200
+
+    public static func display(name: String?, firstMessage: String?, folder: String) -> String {
+        [name, firstMessage].lazy.compactMap { $0.map(singleLine) }.first { !$0.isEmpty } ?? folder
     }
 
     private static func singleLine(_ text: String) -> String {

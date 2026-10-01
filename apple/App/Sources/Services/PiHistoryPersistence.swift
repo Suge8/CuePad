@@ -48,7 +48,7 @@ actor PiHistoryPersistence {
             id: history.sessionID ?? update.file.deletingPathExtension().lastPathComponent,
             path: update.file.path,
             cwd: history.cwd ?? "",
-            title: history.name ?? history.firstPrompt ?? "",
+            title: history.displayName,
             lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
         do {
             try await storage.upsertPiSession(session, checkpoint: JSONEncoder().encode(update.checkpoint))
