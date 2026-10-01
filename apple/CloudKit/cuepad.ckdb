@@ -20,33 +20,14 @@ DEFINE SCHEMA
         projectID      STRING,
         body           ENCRYPTED STRING,
         numbering      STRING,
-        isFavorite     INT64,
+        isPinned       INT64,
         variableValues ENCRYPTED STRING,
         sortKey        STRING,
         deletedAt      INT64,
         createdAt      INT64,
         modifiedAt     INT64,
         conflictOf     STRING,
-        GRANT WRITE TO "_creator",
-        GRANT CREATE TO "_icloud"
-    );
-
-    RECORD TYPE tags (
-        "___recordID" REFERENCE QUERYABLE,
-        name          ENCRYPTED STRING,
-        color         STRING,
-        createdAt     INT64,
-        modifiedAt    INT64,
-        GRANT WRITE TO "_creator",
-        GRANT CREATE TO "_icloud"
-    );
-
-    RECORD TYPE cardTags (
-        "___recordID" REFERENCE QUERYABLE,
-        cardID        STRING,
-        tagID         STRING,
-        createdAt     INT64,
-        modifiedAt    INT64,
+        isFavorite     INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -126,16 +107,36 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE tags (
+        "___recordID" REFERENCE QUERYABLE,
+        color         STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        name          ENCRYPTED STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cardTags (
+        "___recordID" REFERENCE QUERYABLE,
+        cardID        STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        tagID         STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE probes (
         "___recordID"      REFERENCE QUERYABLE,
-        run                STRING,
-        seq                INT64,
         kind               STRING,
-        origin             STRING,
-        sentAt             INT64,
-        peerFetchStartedAt INT64,
-        peerAppliedAt      INT64,
         modifiedAt         INT64,
+        origin             STRING,
+        peerAppliedAt      INT64,
+        peerFetchStartedAt INT64,
+        run                STRING,
+        sentAt             INT64,
+        seq                INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

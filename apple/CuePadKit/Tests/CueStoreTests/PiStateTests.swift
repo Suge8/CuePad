@@ -23,7 +23,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .thinking, title: "fix the bug", projectID: project.id)
 
     let state = try #require(try await states()["s1"])
-    #expect(state.state == .thinking && state.title == "fix the bug" && state.projectID == project.id && state.hostID == "mac-a")
+    #expect(state.state == .known(.thinking) && state.title == "fix the bug" && state.projectID == project.id && state.hostID == "mac-a")
     #expect(state.stateSince == clock.now)
   }
 
@@ -36,13 +36,30 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")
     try await recorder.update(sessionID: "s1", state: .outputting)
     try await recorder.update(sessionID: "s1", state: .tool, detail: "edit")
-    #expect(try await states()["s1"]?.state == .thinking)  // 最短间隔内不写
+    #expect(try await states()["s1"]?.state == .known(.thinking))  // 最短间隔内不写
     #expect(try await states()["s1"]?.modifiedAt == firstWrite)
 
     await clock.waitForSleeper()
     clock.advance(.seconds(5))
-    let merged = try await eventually(store, watching: [.piSessionStates], { try $0.piSessionStates() }) { $0.first?.state == .tool }
+    let merged = try await eventually(store, watching: [.piSessionStates], { try $0.piSessionStates() }) { $0.first?.state == .known(.tool) }
     #expect(merged.count == 1 && merged[0].detail == "edit")  // 只有最新的一次落盘
+  }
+
+  /// 合并定时器到点的同时来了一次立即写入（完成）：挂起的旧细节不能在更新的状态之后落盘，
+  /// 否则手机上的会话会一直显示"工作中"。
+  @Test(.timeLimit(.minutes(1)))
+  func pendingDetailFiringAlongsideANewerStateNeverOverwritesIt() async throws {
+    let recorder = recorder()
+    for round in 0..<40 {
+      let id = "s\(round)"
+      try await recorder.update(sessionID: id, state: .thinking)
+      try await recorder.update(sessionID: id, state: .tool, detail: "stale")
+      await clock.waitForSleeper()
+      clock.advance(.seconds(5))
+      try await recorder.update(sessionID: id, state: .settled)
+      try await recorder.update(sessionID: id, state: .settled)
+      #expect(try await states()[id]?.state == .known(.settled), "第 \(round) 轮")
+    }
   }
 
   @Test func afterTheIntervalHasPassedWorkingChangesWriteImmediately() async throws {
@@ -50,7 +67,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .thinking)
     clock.advance(.seconds(6))
     try await recorder.update(sessionID: "s1", state: .tool, detail: "grep")
-    #expect(try await states()["s1"]?.state == .tool)
+    #expect(try await states()["s1"]?.state == .known(.tool))
   }
 
   @Test func waitingSettledAndErrorAreWrittenImmediatelyAndSupersedeAPendingUpdate() async throws {
@@ -59,23 +76,23 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .tool, detail: "pending")  // 挂起中
 
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "确认写入文件？")
-    #expect(try await states()["s1"]?.state == .waitingForUser)
+    #expect(try await states()["s1"]?.state == .known(.waitingForUser))
     try await recorder.update(sessionID: "s1", state: .error, detail: "boom")
-    #expect(try await states()["s1"]?.state == .error)
+    #expect(try await states()["s1"]?.state == .known(.error))
     try await recorder.update(sessionID: "s1", state: .settled)
     let settled = try await states()["s1"]
-    #expect(settled?.state == .settled && settled?.detail == nil)
+    #expect(settled?.state == .known(.settled) && settled?.detail == nil)
 
     clock.advance(.seconds(30))  // 被取代的挂起更新不会再落盘
     await Task.yield()
-    #expect(try await states()["s1"]?.state == .settled)
+    #expect(try await states()["s1"]?.state == .known(.settled))
   }
 
   @Test func startOfANewWorkRoundIsImmediateEvenInsideTheInterval() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .settled)
     try await recorder.update(sessionID: "s1", state: .thinking)  // 刚完成就又开始工作
-    #expect(try await states()["s1"]?.state == .thinking)
+    #expect(try await states()["s1"]?.state == .known(.thinking))
   }
 
   @Test func identicalUpdatesDoNotWriteAgain() async throws {
@@ -135,7 +152,7 @@ import Testing
 
   // MARK: 手机通知标志：只在"进入等你确认"和"从工作中进入完成"的那一次写入置位
 
-  private func alert(_ sessionID: String = "s1") async throws -> PiAlert? {
+  private func alert(_ sessionID: String = "s1") async throws -> Open<PiAlert>? {
     try await states()[sessionID]?.notify
   }
 
@@ -145,11 +162,11 @@ import Testing
     #expect(try await alert() == nil)
 
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "确认写入？")
-    #expect(try await alert() == .waitingForUser)
+    #expect(try await alert() == .known(.waitingForUser))
 
     // 仍在等、只是问题换了：标志还没上传就不能被抹掉（否则用户仍被等着，锁屏却收不到通知）
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "换了个问题")
-    #expect(try await alert() == .waitingForUser)
+    #expect(try await alert() == .known(.waitingForUser))
     #expect(try await states()["s1"]?.detail == "换了个问题")
   }
 
@@ -158,7 +175,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .thinking)
     try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")  // 合并挂起
     try await recorder.update(sessionID: "s1", state: .settled)  // 从工作中完成（含被合并掉的中间状态）
-    #expect(try await alert() == .settled)
+    #expect(try await alert() == .known(.settled))
 
     try await recorder.update(sessionID: "s1", state: .thinking)  // 下一轮开始：标志清掉
     #expect(try await alert() == nil)

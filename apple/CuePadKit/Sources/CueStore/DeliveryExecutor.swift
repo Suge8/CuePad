@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 extension CueStore {
@@ -12,9 +13,11 @@ extension CueStore {
     return try write {
       let now = Date.stamp
       let request = DeliveryRequest(
-        id: UUID(), content: content, target: target, hostID: host, mode: mode, cardID: card, taskID: task,
-        status: .pending, resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now)
+        id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card, taskID: task,
+        status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
+        resultReceivedAt: nil)
       try insert(request)
+      try registerImages(in: content)
       return request
     }
   }
@@ -80,13 +83,15 @@ extension CueStore {
 /// 把结果写回请求；完成的请求保留 `retention` 后清理。
 /// - 创建后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）；
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
-/// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）。
+/// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
+/// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试。
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String
   private let maxAge: Duration
   private let retention: Duration
   private let timing: Timing
+  private let onIssue: @Sendable (any Error) -> Void
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   private var watcher: Task<Void, Never>?
   private var cleanup: Task<Void, Never>?
@@ -95,13 +100,15 @@ public actor DeliveryExecutor {
 
   public init(
     store: CueStore, hostID: String, maxAge: Duration = .seconds(600), retention: Duration = .seconds(60),
-    timing: Timing = .system, handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
+    timing: Timing = .system, onIssue: @escaping @Sendable (any Error) -> Void,
+    handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
   ) {
     self.store = store
     self.hostID = hostID
     self.maxAge = maxAge
     self.retention = retention
     self.timing = timing
+    self.onIssue = onIssue
     self.handler = handler
   }
 
@@ -109,11 +116,13 @@ public actor DeliveryExecutor {
     guard watcher == nil else { return }
     try await store.failInterruptedDeliveries(host: hostID, at: timing.now())
     _ = try await store.deleteCompletedDeliveries(before: timing.now().addingTimeInterval(-retention.seconds))
-    watcher = Task { [store] in
+    watcher = Task { [store, onIssue] in
       // 附件也要观察：等图片的请求在图片到达时才能继续
       do {
         for try await _ in store.observe([.deliveryRequests, .attachments], { _ in () }) { await self.process() }
-      } catch {}
+      } catch {
+        onIssue(error)
+      }
     }
   }
 
@@ -133,54 +142,62 @@ public actor DeliveryExecutor {
     defer { processing = false }
     repeat {
       rerun = false
-      while let next = await nextActionable() { await run(next) }
-    } while rerun
+      while !Task.isCancelled, let next = await nextActionable() { await run(next) }
+    } while rerun && !Task.isCancelled
   }
 
   private func nextActionable() async -> DeliveryRequest? {
-    guard let candidates = try? await store.pendingDeliveries(for: hostID) else { return nil }
+    guard let candidates = await reporting({ try await store.pendingDeliveries(for: hostID) }) else { return nil }
     for request in candidates {
       if timing.now().timeIntervalSince(request.createdAt) > maxAge.seconds {
-        try? await store.finishDelivery(request.id, status: .failed, detail: "请求创建后超过 \(Int(maxAge.seconds)) 秒仍未执行，已放弃", at: timing.now())
-        scheduleCleanup()
+        await finish(request, .failed("请求创建后超过 \(Int(maxAge.seconds)) 秒仍未执行，已放弃"))
         continue
       }
       if case .unknown(let raw) = request.mode {
-        try? await store.finishDelivery(
-          request.id, status: .failed, detail: "这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）",
-          at: timing.now())
-        scheduleCleanup()
+        await finish(request, .failed("这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）"))
         continue
       }
-      if await hasMissingImages(request) { continue }
-      if (try? await store.claimDelivery(request.id, host: hostID)) == true { return request }
+      if hasMissingImages(request) { continue }
+      if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true { return request }
     }
     return nil
   }
 
   private func run(_ request: DeliveryRequest) async {
-    let outcome = await handler(request)
-    switch outcome {
-    case .succeeded: try? await store.finishDelivery(request.id, status: .succeeded, detail: nil, at: timing.now())
-    case .failed(let reason): try? await store.finishDelivery(request.id, status: .failed, detail: reason, at: timing.now())
-    }
+    await finish(request, await handler(request))
+  }
+
+  private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome) async {
+    let (status, detail): (DeliveryStatus, String?) =
+      switch outcome {
+      case .succeeded: (.succeeded, nil)
+      case .failed(let reason): (.failed, reason)
+      }
+    await reporting { try await store.finishDelivery(request.id, status: status, detail: detail, at: timing.now()) }
     scheduleCleanup()
   }
 
-  private nonisolated func imageHashes(in content: String) -> [String] {
-    content.matches(of: /cuepad:\/\/img\/([0-9a-f]{64})/).map { String($0.output.1) }
+  /// 执行 Store 读写；失败交给 `onIssue` 并返回 nil。`stop()` 之后（所在任务已取消）的失败不再上报。
+  @discardableResult
+  private func reporting<T>(_ operation: () async throws -> T) async -> T? {
+    do { return try await operation() } catch {
+      if !Task.isCancelled { onIssue(error) }
+      return nil
+    }
   }
 
   private func hasMissingImages(_ request: DeliveryRequest) -> Bool {
-    imageHashes(in: request.content).contains { store.files.url(hash: $0) == nil }
+    CueFormat.imageHashes(in: request.content).contains { store.files.fileURL(for: $0) == nil }
   }
 
   private func scheduleCleanup() {
     guard cleanup == nil else { return }
     cleanup = Task { [timing, retention, store] in
       guard (try? await timing.sleep(retention)) != nil else { return }
-      let remaining = (try? await store.deleteCompletedDeliveries(before: timing.now().addingTimeInterval(-retention.seconds))) ?? false
-      await self.cleanupFinished(rescheduling: remaining)
+      let remaining = await self.reporting {
+        try await store.deleteCompletedDeliveries(before: timing.now().addingTimeInterval(-retention.seconds))
+      }
+      self.cleanupFinished(rescheduling: remaining ?? true)
     }
   }
 

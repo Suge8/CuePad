@@ -4,29 +4,19 @@ import CueStore
 import Foundation
 import os
 
-/// 索引落盘用到的 Store 能力；真实实现是 `CueStore`，测试用可注入失败的替身。
-protocol PiIndexStorage: Sendable {
-    func piSessions() async throws -> [StoredPiSession]
-    func piCheckpoint(of session: String) async throws -> Data?
-    func upsertPiSession(_ session: StoredPiSession, checkpoint: Data?) async throws
-}
-
-extension CueStore: PiIndexStorage {}
-
 /// Pi 历史索引的落盘：会话行与检查点都存在 Store（本机表），检查点按会话 id 存放。
 /// 索引器按文件查检查点，所以这里维护"文件路径 → 会话 id"。
 ///
 /// Store 读写失败时，该文件的索引不再写回：库异常时反复重写只会放大问题。失败作为错误抛给调用方报告。
 /// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：记日志后当作没有检查点。
 actor PiHistoryPersistence {
-    private static let titleLimit = 80
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "pi-history")
 
-    private let storage: any PiIndexStorage
+    private let storage: CueStore
     private var idsByPath: [String: String]?
     private var blocked: Set<String> = []
 
-    init(storage: any PiIndexStorage) {
+    init(storage: CueStore) {
         self.storage = storage
     }
 
@@ -53,13 +43,12 @@ actor PiHistoryPersistence {
     func persist(_ update: PiHistoryUpdate) async throws {
         guard !blocked.contains(update.file.path) else { return }
         let history = update.history
-        let firstPrompt = history.turns.first?.prompt.trimmingCharacters(in: .whitespacesAndNewlines).prefix(Self.titleLimit)
         let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
         let session = StoredPiSession(
             id: history.sessionID ?? update.file.deletingPathExtension().lastPathComponent,
             path: update.file.path,
             cwd: history.cwd ?? "",
-            title: history.name ?? firstPrompt.map(String.init) ?? "",
+            title: history.name ?? history.firstPrompt ?? "",
             lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
         do {
             try await storage.upsertPiSession(session, checkpoint: JSONEncoder().encode(update.checkpoint))

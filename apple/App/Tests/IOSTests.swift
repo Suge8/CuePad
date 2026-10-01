@@ -35,7 +35,7 @@ struct IOSTests {
         #expect(UIImage(data: image)?.size == CGSize(width: 4, height: 4))
         #expect(items[2]["public.utf8-plain-text"] as? String == "\n后")
         let record = try #require(try await app.services.store.sendRecords().first)
-        #expect(record.targetKind == .clipboard)
+        #expect(record.targetKind == .known(.clipboard))
     }
 }
 #endif

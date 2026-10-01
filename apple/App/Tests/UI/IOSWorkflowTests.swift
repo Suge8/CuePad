@@ -24,8 +24,8 @@ struct IOSWorkflowTests {
             let request = try await app.services.requestMacDelivery("正文", to: target, mode: mode)
             #expect(request.hostID == "mac-b")
             #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
-            #expect(request.mode == mode)
-            #expect(request.status == .pending)
+            #expect(request.mode == .known(mode))
+            #expect(request.status == .known(.pending))
         }
     }
 
@@ -39,7 +39,7 @@ struct IOSWorkflowTests {
         (.outputting, true, [.steer, .followUp]),
     ])
     func 发送方式_会话忙时插话或排队_含图片不能放进输入框(state: PiWorkState, hasImages: Bool, modes: [DeliveryMode]) {
-        #expect(MacDelivery.modes(for: state, hasImages: hasImages) == modes)
+        #expect(MacDelivery.modes(for: .known(state), hasImages: hasImages) == modes)
     }
 
     // MARK: 活动

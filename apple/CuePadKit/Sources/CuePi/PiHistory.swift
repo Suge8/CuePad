@@ -1,33 +1,19 @@
 #if os(macOS)
 import Foundation
 
-public enum PiTurnStatus: Sendable, Equatable, Codable {
-    case inProgress, completed, aborted, failed
-}
-
-/// 一轮：用户 prompt → 最终回复。文字只是预览（前 `PiHistory.previewLimit` 个字符），原文留在会话文件里。
-public struct PiTurn: Sendable, Equatable {
-    public var id: String
-    public var prompt: String
-    public var promptImageCount: Int
-    public var promptedAt: Date?
-    /// 这一轮里最后一条 assistant 消息的文字（没有文字时为 nil）
-    public var reply: String?
-    public var repliedAt: Date?
-    public var status: PiTurnStatus
-    public var failure: String?
-}
-
+/// 会话列表要的摘要：会话 id、工作目录、名字、当前分支的首条 prompt（名字为空时作标题）、最后活动时间。
+/// 原文留在会话文件里，这里不复制。
 public struct PiSessionHistory: Sendable, Equatable {
     public var sessionID: String?
     public var cwd: String?
     public var name: String?
-    /// 沿当前分支，时间正序
-    public var turns: [PiTurn]
+    /// 当前分支上第一条用户消息的文字（去掉首尾空白，最多 `PiHistory.promptPreviewLimit` 字）。
+    public var firstPrompt: String?
     public var lastActivity: Date?
 }
 
 /// 增量索引的可持久化状态。调用方存起来（Codable），下次传回来就只读新增字节。
+/// 只存得出摘要所需的：每个条目沿分支回溯到的首条 prompt（条目 id → `firstPrompts` 下标），不存正文。
 public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 已消费到的字节偏移（总在一个换行之后）
     public internal(set) var offset: UInt64 = 0
@@ -38,19 +24,9 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var name: String?
     var lastActivity: Date?
     var leaf: String?
-    var entries: [Entry] = []
-
-    struct Entry: Sendable, Codable, Equatable {
-        enum Role: String, Codable, Sendable { case other, user, assistant }
-        var id: String
-        var parent: String?
-        var role: Role
-        var time: Date?
-        var text: String?
-        var images: Int
-        var stopReason: String?
-        var error: String?
-    }
+    var firstPrompts: [String] = []
+    /// 其分支上已有用户消息的条目；不在表里的条目之前还没有 prompt。
+    var promptOf: [String: Int] = [:]
 }
 
 public struct PiHistoryUpdate: Sendable {
@@ -70,7 +46,7 @@ public enum PiHistoryEvent: Sendable {
 /// Pi 会话文件（JSONL，v3 树结构）的解析。当前分支 = 从文件最后一个条目沿 `parentId` 回溯到根，
 /// 与 Pi 加载会话时确定叶子的规则一致。
 public enum PiHistory {
-    public static let previewLimit = 1000
+    public static let promptPreviewLimit = 80
 
     private static let fingerprintPrefix = 256
     private static let blockSize = 8 * 1024 * 1024
@@ -84,7 +60,6 @@ public enum PiHistory {
 
         var state = try checkpoint.flatMap { try isResumable($0, handle: handle, size: size) ? $0 : nil } ?? PiHistoryCheckpoint()
         let start = state.offset
-        var index = Dictionary(uniqueKeysWithValues: state.entries.enumerated().map { ($1.id, $0) })
 
         try handle.seek(toOffset: start)
         var carry = Data()
@@ -97,7 +72,7 @@ public enum PiHistory {
             carry.append(contentsOf: block[0..<n])
             var lineStart = carry.startIndex
             while let newline = carry[lineStart...].firstIndex(of: 0x0A) {
-                ingest(carry[lineStart..<newline], into: &state, index: &index)
+                ingest(carry[lineStart..<newline], into: &state)
                 lineStart = carry.index(after: newline)
             }
             consumed += UInt64(carry.distance(from: carry.startIndex, to: lineStart))
@@ -147,8 +122,6 @@ public enum PiHistory {
     private struct Message: Decodable {
         var role: String
         var content: Content?
-        var stopReason: String?
-        var errorMessage: String?
     }
 
     private enum Content: Decodable {
@@ -168,20 +141,16 @@ public enum PiHistory {
             case .blocks(let b): b.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
             }
         }
-
-        var imageCount: Int {
-            if case .blocks(let b) = self { b.filter { $0.type == "image" }.count } else { 0 }
-        }
     }
 
     private static let timestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
-    /// toolResult 行占会话体积的绝大部分（工具输出、图片），又不含 prompt/回复：只从行首取 id/parentId 挂进树，
+    /// toolResult 行占会话体积的绝大部分（工具输出、图片），又不含 prompt：只从行首取 id/parentId 挂进树，
     /// 不做完整 JSON 解码。Pi 写出的键序固定为 type, id, parentId, timestamp, message。
     private static let toolResultMarker = Data(#""role":"toolResult""#.utf8)
     private static let headLength = 512
 
-    private static func ingestToolResult(_ raw: Data, into cp: inout PiHistoryCheckpoint, index: inout [String: Int]) -> Bool {
+    private static func ingestToolResult(_ raw: Data, into cp: inout PiHistoryCheckpoint) -> Bool {
         let head = raw.prefix(headLength)
         guard raw.count > headLength, head.range(of: toolResultMarker) != nil,
               case .string(let id) = field("id", in: head) else { return false }
@@ -191,9 +160,7 @@ public enum PiHistory {
         case .null: parent = nil
         case .missing: return false
         }
-        index[id] = cp.entries.count
-        cp.entries.append(PiHistoryCheckpoint.Entry(id: id, parent: parent, role: .other, time: nil, images: 0))
-        cp.leaf = id
+        attach(id, to: parent, in: &cp)
         return true
     }
 
@@ -208,9 +175,9 @@ public enum PiHistory {
         return .string(String(decoding: rest[rest.index(after: rest.startIndex)..<end], as: UTF8.self))
     }
 
-    private static func ingest(_ raw: Data, into cp: inout PiHistoryCheckpoint, index: inout [String: Int]) {
-        if ingestToolResult(raw, into: &cp, index: &index) { return }
-        guard !raw.isEmpty, let line = try? JSONDecoder().decode(Line.self, from: raw) else { return } // 损坏行跳过
+    private static func ingest(_ raw: Data, into cp: inout PiHistoryCheckpoint) {
+        if ingestToolResult(raw, into: &cp) { return }
+        guard !raw.isEmpty, let line = try? decoder.decode(Line.self, from: raw) else { return } // 损坏行跳过
         let time = line.timestamp.flatMap { try? Date($0, strategy: timestampStyle) }
         if let time { cp.lastActivity = max(cp.lastActivity ?? time, time) }
         if line.type == "session" {
@@ -220,70 +187,26 @@ public enum PiHistory {
         }
         guard let id = line.id else { return }
         if line.type == "session_info" { cp.name = line.name }
-
-        var entry = PiHistoryCheckpoint.Entry(id: id, parent: line.parentId, role: .other, time: time, images: 0)
-        if line.type == "message", let m = line.message {
-            switch m.role {
-            case "user":
-                entry.role = .user
-                entry.text = preview(m.content?.text ?? "")
-                entry.images = m.content?.imageCount ?? 0
-            case "assistant":
-                entry.role = .assistant
-                entry.text = m.content.map { preview($0.text) }.flatMap { $0.isEmpty ? nil : $0 }
-                entry.stopReason = m.stopReason
-                entry.error = m.errorMessage
-            default: break
-            }
+        attach(id, to: line.parentId, in: &cp)
+        if cp.promptOf[id] == nil, line.type == "message", let message = line.message, message.role == "user" {
+            let text = (message.content?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            cp.promptOf[id] = cp.firstPrompts.count
+            cp.firstPrompts.append(String(text.prefix(promptPreviewLimit)))
         }
-        index[id] = cp.entries.count
-        cp.entries.append(entry)
+    }
+
+    /// 新条目沿用父条目所在分支的首条 prompt，并成为当前叶子（当前分支 = 文件最后一个条目沿 parentId 回溯到根）。
+    private static func attach(_ id: String, to parent: String?, in cp: inout PiHistoryCheckpoint) {
+        if let parent, let prompt = cp.promptOf[parent] { cp.promptOf[id] = prompt }
         cp.leaf = id
     }
 
-    private static func preview(_ text: String) -> String { String(text.prefix(previewLimit)) }
-
-    // MARK: 当前分支 → 轮
+    private static let decoder = JSONDecoder()
 
     static func history(of cp: PiHistoryCheckpoint) -> PiSessionHistory {
-        let byID = Dictionary(uniqueKeysWithValues: cp.entries.map { ($0.id, $0) })
-        var path: [PiHistoryCheckpoint.Entry] = []
-        var cursor = cp.leaf
-        while let id = cursor, let entry = byID[id] {
-            path.append(entry)
-            cursor = entry.parent
-        }
-
-        var turns: [PiTurn] = []
-        var lastStop: [String?] = []
-        for entry in path.reversed() {
-            switch entry.role {
-            case .user:
-                turns.append(PiTurn(id: entry.id, prompt: entry.text ?? "", promptImageCount: entry.images,
-                                    promptedAt: entry.time, status: .inProgress))
-                lastStop.append(nil)
-            case .assistant where !turns.isEmpty:
-                turns[turns.count - 1].reply = entry.text
-                turns[turns.count - 1].repliedAt = entry.time
-                turns[turns.count - 1].failure = entry.error
-                lastStop[lastStop.count - 1] = entry.stopReason ?? ""
-            default: break
-            }
-        }
-        for i in turns.indices {
-            turns[i].status = status(stopReason: lastStop[i], isLast: i == turns.count - 1)
-        }
-        return PiSessionHistory(sessionID: cp.sessionID, cwd: cp.cwd, name: cp.name, turns: turns, lastActivity: cp.lastActivity)
-    }
-
-    /// 没有 assistant 回复或停在工具调用上：最后一轮视为进行中，之后又有新 prompt 的视为被打断。
-    private static func status(stopReason: String?, isLast: Bool) -> PiTurnStatus {
-        switch stopReason {
-        case "error": .failed
-        case "aborted": .aborted
-        case nil, "toolUse": isLast ? .inProgress : .aborted
-        default: .completed
-        }
+        PiSessionHistory(
+            sessionID: cp.sessionID, cwd: cp.cwd, name: cp.name,
+            firstPrompt: cp.leaf.flatMap { cp.promptOf[$0] }.map { cp.firstPrompts[$0] }, lastActivity: cp.lastActivity)
     }
 }
 #endif

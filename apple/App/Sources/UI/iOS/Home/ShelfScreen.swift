@@ -12,7 +12,7 @@ nonisolated struct ShelfData: Sendable {
         /// 最近修改的一张卡的标题与时间。
         var latest: (title: String, date: Date)?
         /// 该项目最需要注意的 Pi 会话状态；没有会话为 nil。
-        var pi: PiWorkState?
+        var pi: Open<PiWorkState>?
         var id: UUID { project.id }
     }
 

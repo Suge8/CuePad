@@ -46,13 +46,11 @@ import Testing
     let sb = try Sandbox()
     let alpha = try await sb.project("Alpha")
     let card = try await sb.store.createCard(in: alpha.id, body: "正文")
-    try await sb.store.addTag("t1", to: card.id)
 
     let shown = try await sb.object("card", "show", card.id.uuidString)
     #expect(shown.string("id") == card.id.uuidString.lowercased())
     #expect(shown.string("projectId") == alpha.id.uuidString.lowercased())
-    #expect(shown["tags"] as? [String] == ["t1"])
-    #expect(shown["favorite"] as? Bool == false)
+    #expect(shown["pinned"] as? Bool == false)
     #expect(shown["conflictOf"] is NSNull && shown["deletedAt"] is NSNull)
     #expect(shown.string("modifiedAt")?.hasSuffix("Z") == true)
   }
@@ -73,6 +71,8 @@ import Testing
     #expect(try await ids() == [id(a), id(b), id(inbox)])
     #expect(try await ids("--project", "Beta") == [id(b)])
     #expect(try await ids("--inbox") == [id(inbox)])
+    try await sb.store.updateCard(b.id) { $0.isPinned = true }
+    #expect(try await ids("--pinned") == [id(b)])
   }
 
   @Test func cardMoveTrashRestore() async throws {

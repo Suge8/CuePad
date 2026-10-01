@@ -7,7 +7,7 @@ import Testing
 /// 保存的当前项目以 Store 的实际项目为准：失效（不存在或在回收站）时回落并纠正设置；新建的卡与任务只落在真实可见的位置。
 @MainActor
 struct CurrentProjectTests {
-    let rig = Rig()
+    let rig = TestApp()
     var services: AppServices { rig.services }
     var store: CueStore { services.store }
 
@@ -71,7 +71,7 @@ struct CurrentProjectTests {
 /// 竞态：界面选中项目之后、写入之前项目被删；Store 在写事务里拒绝（invalidProject），入口据此回落并提示，不吞错。
 @MainActor
 struct CurrentProjectRaceTests {
-    let rig = Rig()
+    let rig = TestApp()
     var services: AppServices { rig.services }
 
     @Test func 写入时项目已被删_卡片落到未归档_纠正当前项目并提示() async throws {

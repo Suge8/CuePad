@@ -53,7 +53,7 @@ protocol SubscriptionStore: Sendable {
 /// 也不设 `desiredKeys`。只订阅创建与更新（删除不通知）。谓词按标志而不是按状态，因为"同一状态下的重复更新"
 /// 与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
 /// 标志在上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废（见 `PiStateRecorder`）。
-/// 上线前需在 CloudKit Dashboard 里为 `piSessionStates.notify` 建立可查询索引（开发环境自动建立）。
+/// `piSessionStates.notify` 的可查询索引由生成的数据结构声明（`RecordMapper.queryableColumns`，见 docs「CloudKit 数据结构」）。
 struct PiAlertSubscriptions {
   /// 通知标志字段（明文、可查询）。
   static let flagField = "notify"

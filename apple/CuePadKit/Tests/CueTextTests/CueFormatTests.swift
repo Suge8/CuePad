@@ -87,6 +87,25 @@ struct CueSegmentsTests {
         for (line, expected) in cases { #expect(CueSegments.isTitleLine(line) == expected, "\(line.debugDescription)") }
     }
 
+    @Test("卡片标题与摘要：标题是首个标题行并去掉 # 前缀，摘要是其后各标题行以空格连接", arguments: [
+        ("![](cuepad://img/ab)\n\n## 周报\n第二行 ![](cuepad://img/cd) 尾\n---split---\n第三行", "周报", "第二行 尾 第三行"),
+        ("标题 ![](cuepad://img/ab) 续\n正文", "标题 续", "正文"),
+        ("#无空格也去掉", "无空格也去掉", ""),
+        ("C# 入门\n不是标题前缀", "C# 入门", "不是标题前缀"),
+        ("---split---\n![](cuepad://img/ab)", "", ""),
+        ("", "", ""),
+    ])
+    func summary(stored: String, title: String, preview: String) {
+        let summary = CueSummary(stored)
+        #expect(summary.title == title)
+        #expect(summary.preview == preview)
+    }
+
+    @Test("摘要最多 240 字")
+    func previewLimit() {
+        #expect(CueSummary("标题\n" + String(repeating: "长", count: 500)).preview.count == 240)
+    }
+
     @Test("标题行文字：去掉图片引用，空白折成单个空格，跳过空行、分隔线、只有图片的行")
     func contentLines() {
         #expect(CueSegments.contentLines("a ![](cuepad://img/ab) b\n\n![](cuepad://img/cd)\n---split---\n  第三行  \n") == ["a b", "第三行"])

@@ -67,9 +67,9 @@ import Testing
 
   @Test func sendTargetFilterMatchesKindAndName() async throws {
     let w = try await world()
-    #expect(try await store.search(SearchQuery(sent: .sent(kind: .piSession))).cards.map(\.id) == [w.c3.id])
+    #expect(try await store.search(SearchQuery(sent: .sent(kind: .known(.piSession)))).cards.map(\.id) == [w.c3.id])
     #expect(try await store.search(SearchQuery(sent: .sent(name: "Ghostty"))).cards.map(\.id) == [w.c4.id])
-    #expect(try await store.search(SearchQuery(sent: .sent(kind: .app, name: "s1-title"))).cards.isEmpty)
+    #expect(try await store.search(SearchQuery(sent: .sent(kind: .known(.app), name: "s1-title"))).cards.isEmpty)
     let anySend = try await store.search(SearchQuery(sent: .sent()))
     #expect(Set(anySend.cards.map(\.id)) == [w.c3.id, w.c4.id])
   }
@@ -99,7 +99,7 @@ import Testing
 
   @Test func filtersCombineAndWorkWithoutKeyword() async throws {
     let w = try await world()
-    let query = SearchQuery(projects: [w.q.id], sent: .sent(kind: .piSession))
+    let query = SearchQuery(projects: [w.q.id], sent: .sent(kind: .known(.piSession)))
     #expect(try await store.search(query).cards.map(\.id) == [w.c3.id])
     #expect(try await store.search(SearchQuery(text: "gamma", projects: [w.q.id])).cards.isEmpty)
   }
@@ -107,9 +107,9 @@ import Testing
   @Test func filtersApplyInsideTheTrashScopeToo() async throws {
     let w = try await world()
     try await store.trashCard(w.c3.id)
-    let live = SearchQuery(sent: .sent(kind: .piSession))
+    let live = SearchQuery(sent: .sent(kind: .known(.piSession)))
     #expect(try await store.search(live).cards.isEmpty)
-    let trash = SearchQuery(sent: .sent(kind: .piSession), inTrash: true)
+    let trash = SearchQuery(sent: .sent(kind: .known(.piSession)), inTrash: true)
     #expect(try await store.search(trash).cards.map(\.id) == [w.c3.id])
   }
 

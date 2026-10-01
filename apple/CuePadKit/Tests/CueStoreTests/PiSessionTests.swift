@@ -52,26 +52,4 @@ import Testing
     try await store.upsertPiSession(recent, checkpoint: blob(seed: 2))
     #expect(try await store.piSessions().map(\.id) == ["new", "old"])
   }
-
-  @Test func developmentDatabaseWithReadOffsetColumnUpgrades() async throws {
-    let url = fixture.directory.appending(path: "old/cuepad.db")
-    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try RawDB(url).exec(
-      """
-      CREATE TABLE piSessions (
-        id TEXT PRIMARY KEY NOT NULL, path TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL,
-        lastActivityAt INTEGER NOT NULL, readOffset INTEGER NOT NULL
-      ) STRICT;
-      CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT;
-      INSERT INTO piSessions VALUES ('legacy', '/p', '/c', 't', 1000, 4096);
-      PRAGMA user_version = 2;
-      """)
-
-    let upgraded = try CueStore(url: url)
-
-    #expect(try await upgraded.piSessions().map(\.id) == ["legacy"])
-    #expect(try await upgraded.piCheckpoint(of: "legacy") == nil)  // 旧偏移作废，该会话重新索引
-    let columns = try RawDB(url).rows("SELECT name FROM pragma_table_info('piSessions')").map { $0[0] }
-    #expect(columns.contains("checkpoint") && !columns.contains("readOffset"))
-  }
 }

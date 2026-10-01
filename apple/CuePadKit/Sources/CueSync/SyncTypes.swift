@@ -41,11 +41,36 @@ public enum SyncError: Error, Equatable, Sendable {
   case nothingToResolve
 }
 
+extension SyncError: LocalizedError {
+  public var errorDescription: String? {
+    switch self {
+    case .nothingToResolve: "没有需要处理的同步决定"
+    }
+  }
+}
+
 /// 同步过程中遇到的、被跳过或没能处理的事项（未知记录类型、损坏的附件、单条记录写入失败等）。不静默。
 public struct SyncIssue: Equatable, Sendable {
   public var recordType: String?
   public var recordName: String?
   public var message: String
+
+  public init(recordType: String? = nil, recordName: String? = nil, message: String) {
+    self.recordType = recordType
+    self.recordName = recordName
+    self.message = message
+  }
+}
+
+/// 界面订阅的同步快照：状态与最近的问题一起给出，任一变化都送达。
+public struct SyncState: Equatable, Sendable {
+  public var status: SyncStatus
+  public var issues: [SyncIssue]
+
+  public init(status: SyncStatus, issues: [SyncIssue]) {
+    self.status = status
+    self.issues = issues
+  }
 }
 
 enum AccountChange: Sendable { case signedIn, signedOut, switched }
@@ -59,8 +84,6 @@ enum CloudEvent: Sendable {
   case accountChange(AccountChange)
   case cloudDataLost(CloudDataLoss)
   case syncing(Bool)
-  /// 引擎开始拉取远端变更（用于测量拉取耗时）。
-  case fetchStarted
   case fetched(modifications: [CKRecord], deletions: [(id: CKRecord.ID, recordType: String)])
   case sent(
     saved: [CKRecord], failedSaves: [(record: CKRecord, error: CKError)], deleted: [CKRecord.ID],

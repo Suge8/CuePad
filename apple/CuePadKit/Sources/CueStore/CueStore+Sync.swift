@@ -67,23 +67,42 @@ extension CueStore {
     return nil
   }
 
+  /// 全量对账：所有同步表里待推送的记录。
   package func pendingSync() throws -> PendingSync {
-    var saves: [SyncKey] = []
-    var deletes: [String] = []
+    var pending = PendingSync(saves: [], deletes: [])
     for table in Table.synced {
-      let name = table.rawValue
-      saves += try db.query(
-        """
-        SELECT t.id FROM \(name) t LEFT JOIN syncRecords s ON s.recordName = t.id
-        WHERE s.recordName IS NULL OR t.modifiedAt > s.pushedModifiedAt ORDER BY t.rowid
-        """
-      ) { SyncKey(table: table, id: $0.text(0)) }
-      deletes += try db.query(
-        "SELECT recordName FROM syncRecords WHERE recordType = ? AND recordName NOT IN (SELECT id FROM \(name))",
-        [name]
-      ) { $0.text(0) }
+      pending.saves += try pendingSaves(table, where: "1")
+      pending.deletes += try pendingDeletes(table)
     }
-    return PendingSync(saves: saves, deletes: deletes)
+    return pending
+  }
+
+  /// 一次提交里改动的行中变成待推送的；删除只查删过行的表。
+  func pendingSync(in changes: Changes) throws -> PendingSync {
+    var pending = PendingSync(saves: [], deletes: [])
+    for table in Table.synced {
+      if let rows = changes.rows[table.rawValue] {
+        pending.saves += try pendingSaves(table, where: "t.rowid IN (\(rows.sorted().map(String.init).joined(separator: ",")))")
+      }
+      if changes.deletedFrom.contains(table.rawValue) { pending.deletes += try pendingDeletes(table) }
+    }
+    return pending
+  }
+
+  private func pendingSaves(_ table: Table, where condition: String) throws -> [SyncKey] {
+    try db.query(
+      """
+      SELECT t.id FROM \(table.rawValue) t LEFT JOIN syncRecords s ON s.recordName = t.id
+      WHERE (\(condition)) AND (s.recordName IS NULL OR t.modifiedAt > s.pushedModifiedAt) ORDER BY t.rowid
+      """
+    ) { SyncKey(table: table, id: $0.text(0)) }
+  }
+
+  private func pendingDeletes(_ table: Table) throws -> [String] {
+    try db.query(
+      "SELECT recordName FROM syncRecords WHERE recordType = ? AND recordName NOT IN (SELECT id FROM \(table.rawValue))",
+      [table.rawValue]
+    ) { $0.text(0) }
   }
 
   package func systemFields(of recordName: String) throws -> Data? {
@@ -91,8 +110,12 @@ extension CueStore {
   }
 
   /// 服务器已接受这条记录：记下它的系统字段与被推送版本的修改时间。之后再改才会重新变成待推送。
-  package func markPushed(_ row: SyncRow, systemFields: Data) throws {
-    try write { try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt) }
+  /// 返回本机版本是否在这之后又改过（仍待推送）。
+  package func markPushed(_ row: SyncRow, systemFields: Data) throws -> Bool {
+    try write {
+      try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
+      return try readSyncRow(row.table, row.id).map { $0.modifiedAt > row.modifiedAt } ?? false
+    }
   }
 
   /// 服务器上已没有这条记录（删除已确认、或本来就不存在）：忘掉它的元数据。
@@ -229,6 +252,16 @@ extension CueStore {
   ///   卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。
   /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data) throws {
+    let awaitingResult = try remote.table == .deliveryRequests && isAwaitingResult(remote.id)
+    try applyVersion(remote, systemFields)
+    if awaitingResult {
+      try db.run(
+        "UPDATE deliveryRequests SET resultReceivedAt = ? WHERE id = ? AND status IN ('succeeded', 'failed')",
+        [Date.stamp, remote.id])
+    }
+  }
+
+  private func applyVersion(_ remote: SyncRow, _ systemFields: Data) throws {
     let table = remote.table
     let pushed = try db.first("SELECT pushedModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) { $0.int(0) }
     guard let local = try readSyncRow(table, remote.id) else {
@@ -258,6 +291,13 @@ extension CueStore {
     }
   }
 
+  /// 投送请求在本机还在等结果：远端版本把它变成完成时，记下本机时刻（往返时间的终点）。
+  /// 执行方在本机写结果，不走远端应用；第一次就收到已完成请求的设备从没等过它，也不记。
+  private func isAwaitingResult(_ id: String) throws -> Bool {
+    try db.first(
+      "SELECT 1 FROM deliveryRequests WHERE id = ? AND status IN ('pending', 'executing')", [id]) { _ in true } != nil
+  }
+
   /// 目标卡不变量在远端变更之后仍要成立：目标卡已回收、或已不属于该项目的，清空（并因此重新推送，让各设备收敛）。
   /// 离线并发下较新的本机项目版本可能仍指着一张已被别处回收的卡。目标卡"还没到"（本机没有这张卡）不算失效：
   /// 记录乱序到达是常态，提前清掉会丢掉目标。
@@ -282,7 +322,7 @@ extension CueStore {
     fields["conflictOf"] = .text(winner.id)
     fields["sortKey"] = .text(SortKey.before(first))
     fields["deletedAt"] = .null
-    fields["isFavorite"] = .int(0)
+    fields["isPinned"] = .int(0)
     fields["createdAt"] = now.sqlValue
     fields["modifiedAt"] = now.sqlValue
     try overwrite(SyncRow(table: .cards, fields: fields))
@@ -291,43 +331,11 @@ extension CueStore {
   /// 远端删除附件记录后回收文件；仍被卡片或发送记录引用的保留（引用它的记录也许马上就到）。删不掉的作为失败报告。
   private func removeFiles(of hashes: [String]) throws -> [RemoteFailure] {
     var failures: [RemoteFailure] = []
-    for hash in Set(hashes).sorted() {
-      let used = try db.first(
-        """
-        SELECT 1 FROM cards WHERE instr(body, ?1) > 0
-        UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
-        """, ["cuepad://img/\(hash)"]) { _ in true }
-      if used != nil { continue }
+    for hash in Set(hashes).sorted() where try !isImageReferenced(hash) {
       do { try files.remove(hash: hash) } catch {
         failures.append(RemoteFailure(recordName: hash, message: "附件文件没能删除：\(error)"))
       }
     }
     return failures
-  }
-}
-
-// MARK: 延迟探针记录（诊断用，CueSync 使用）
-
-extension CueStore {
-  package func writeProbe(_ probe: Probe) throws {
-    try write { try insert(probe) }
-  }
-
-  package func probes(run: String) throws -> [Probe] {
-    try select(Probe.self, where: "run = ?", [run], orderBy: "seq, rowid")
-  }
-
-  /// 别的设备写的、本设备还没有回 pong 的 ping。
-  package func unansweredPings(for responder: String) throws -> [Probe] {
-    try select(
-      Probe.self,
-      where: """
-        kind = 'ping' AND origin != ?1 AND NOT EXISTS (
-          SELECT 1 FROM probes q WHERE q.kind = 'pong' AND q.run = probes.run AND q.seq = probes.seq AND q.origin = ?1)
-        """, [responder], orderBy: "run, seq, rowid")
-  }
-
-  package func deleteProbes(run: String) throws {
-    try write { try db.run("DELETE FROM probes WHERE run = ?", [run]) }
   }
 }

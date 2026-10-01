@@ -13,8 +13,8 @@ import Testing
   let cloud: Loopback
 
   init() throws {
-    mac = try Rig(timing: clock)
-    phone = try Rig(timing: clock)
+    mac = try Rig()
+    phone = try Rig()
     cloud = Loopback(a: mac, b: phone)
   }
 
@@ -24,11 +24,11 @@ import Testing
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.piSessionStates().first)
-    #expect(seen.sessionID == "s1" && seen.state == .waitingForUser && seen.detail == "确认写入？" && seen.title == "fix bug")
+    #expect(seen.sessionID == "s1" && seen.state == .known(.waitingForUser) && seen.detail == "确认写入？" && seen.title == "fix bug")
 
     try await recorder.update(sessionID: "s1", state: .settled)
     try await cloud.exchange()
-    #expect(try await phone.store.piSessionStates().first?.state == .settled)
+    #expect(try await phone.store.piSessionStates().first?.state == .known(.settled))
 
     try await recorder.end(sessionID: "s1")
     try await cloud.exchange()
@@ -37,14 +37,20 @@ import Testing
 
   @Test(.timeLimit(.minutes(1)))
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
-    let executor = DeliveryExecutor(store: mac.store, hostID: "mac", retention: .seconds(60), timing: clock.timing) { _ in .succeeded }
+    let executor = DeliveryExecutor(
+      store: mac.store, hostID: "mac", retention: .seconds(60), timing: clock.timing, onIssue: { Issue.record("\($0)") }
+    ) { _ in .succeeded }
     try await executor.start()
     let request = try await phone.store.requestDelivery("run this", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"), on: "mac")
 
     try await cloud.exchange()  // 手机 → Mac
-    _ = try await eventually(mac.store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .succeeded }
+    _ = try await eventually(mac.store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .known(.succeeded) }
     try await cloud.exchange()  // Mac → 手机：结果回来
-    #expect(try await phone.store.deliveryRequest(request.id)?.status == .succeeded)
+    let back = try #require(try await phone.store.deliveryRequest(request.id))
+    #expect(back.status == .known(.succeeded))
+    let roundTrip = try #require(back.roundTrip)  // 发起的手机用本机时钟算：创建 → 看到结果
+    #expect(roundTrip >= .zero && roundTrip < .seconds(60))
+    #expect(try await mac.store.deliveryRequest(request.id)?.roundTrip == nil)  // 执行方不算往返
 
     await clock.waitForSleeper()
     clock.advance(.seconds(61))

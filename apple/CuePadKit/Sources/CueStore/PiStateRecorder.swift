@@ -14,8 +14,8 @@ extension CueStore {
       let now = Date.stamp
       let id = DeterministicID.uuid("pi-session/\(sessionID)")
       let record = PiSessionState(
-        id: id, sessionID: sessionID, hostID: hostID, title: title, projectID: projectID, state: state, detail: detail,
-        notify: notify, stateSince: stateSince, createdAt: now, modifiedAt: now)
+        id: id, sessionID: sessionID, hostID: hostID, title: title, projectID: projectID, state: .known(state), detail: detail,
+        notify: notify.map(Open.known), stateSince: stateSince, createdAt: now, modifiedAt: now)
       let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
         .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
@@ -47,6 +47,9 @@ extension CueStore {
 /// - 开始工作、等你确认、完成、出错：立即写；
 /// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`，期间只保留最新的一次；
 /// - 与已写入内容相同的更新不再写；会话结束时删除记录并丢弃挂起的更新。
+///
+/// actor 在 await 处可重入：会话状态只在 await 之前改完，不跨 await 持有副本；落盘按决定的先后串成一条任务链，
+/// 后决定的写入（含删除）不会被先决定的覆盖。
 public actor PiStateRecorder {
   private struct Content: Equatable {
     var state: PiWorkState
@@ -71,6 +74,7 @@ public actor PiStateRecorder {
   private let minInterval: Duration
   private let timing: Timing
   private var sessions: [String: Session] = [:]
+  private var tail: Task<Void, Never>?
 
   public init(store: CueStore, hostID: String, minInterval: Duration = .seconds(5), timing: Timing = .system) {
     self.store = store
@@ -87,19 +91,16 @@ public actor PiStateRecorder {
     session.observed = state
     if let title { session.title = title }
     if let projectID { session.projectID = projectID }
-    defer { sessions[sessionID] = session }
 
     let content = Content(state: state, detail: detail, title: session.title, projectID: session.projectID)
     if content == session.written {
       cancelPending(&session)
+      sessions[sessionID] = session
       return
     }
     let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
     let now = timing.now()
-    if startsOrEndsWork || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true {
-      cancelPending(&session)
-      try await write(sessionID, &session, content, notify: Self.alert(entering: state, from: previous), at: now)
-    } else {
+    guard startsOrEndsWork || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {
       session.pending = (state, detail)
       if session.timer == nil, let writtenAt = session.writtenAt {
         let wait = max(0, minInterval.seconds - now.timeIntervalSince(writtenAt))
@@ -108,13 +109,22 @@ public actor PiStateRecorder {
           await self.flush(sessionID)
         }
       }
+      sessions[sessionID] = session
+      return
+    }
+    cancelPending(&session)
+    let write = commit(sessionID, &session, content, notify: Self.alert(entering: state, from: previous), at: now)
+    sessions[sessionID] = session
+    do { try await persist(write) } catch {
+      forgetWritten(sessionID, content)
+      throw error
     }
   }
 
   /// 会话结束：删除它的记录。
   public func end(sessionID: String) async throws {
     if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }
-    try await store.deletePiState(sessionID: sessionID)
+    try await persist { [store] in try await store.deletePiState(sessionID: sessionID) }
   }
 
   /// 删除这台 Mac 遗留的所有记录（App 启动时清理上次没来得及结束的会话）。
@@ -122,7 +132,7 @@ public actor PiStateRecorder {
     for id in Array(sessions.keys) {
       if var session = sessions.removeValue(forKey: id) { cancelPending(&session) }
     }
-    try await store.deletePiStates(host: hostID)
+    try await persist { [store, hostID] in try await store.deletePiStates(host: hostID) }
   }
 
   private func flush(_ sessionID: String) async {
@@ -130,8 +140,10 @@ public actor PiStateRecorder {
     session.timer = nil
     session.pending = nil
     let content = Content(state: pending.state, detail: pending.detail, title: session.title, projectID: session.projectID)
-    do { try await write(sessionID, &session, content, at: timing.now()) } catch { session.pending = pending }
-    if sessions[sessionID] != nil { sessions[sessionID] = session }
+    let write = commit(sessionID, &session, content, at: timing.now())
+    sessions[sessionID] = session
+    // 定时写入没有调用方可报告；记为未写入，下一次更新会重写
+    do { try await persist(write) } catch { forgetWritten(sessionID, content) }
   }
 
   /// 手机通知只发两种转换：进入等你确认；从工作中进入完成。首次看到的会话（没有上一个状态）不通知，
@@ -146,16 +158,35 @@ public actor PiStateRecorder {
     return nil
   }
 
-  private func write(
+  /// 把 `content` 记为已写入，返回对应的落盘操作。
+  private func commit(
     _ sessionID: String, _ session: inout Session, _ content: Content, notify: PiAlert? = nil, at now: Date
-  ) async throws {
+  ) -> @Sendable () async throws -> Void {
     let since = session.written?.state == content.state ? session.stateSince ?? now : now
-    try await store.writePiState(
-      sessionID: sessionID, hostID: hostID, title: content.title, projectID: content.projectID, state: content.state,
-      detail: content.detail, notify: notify, stateSince: since)
     session.written = content
     session.writtenAt = now
     session.stateSince = since
+    return { [store, hostID] in
+      try await store.writePiState(
+        sessionID: sessionID, hostID: hostID, title: content.title, projectID: content.projectID, state: content.state,
+        detail: content.detail, notify: notify, stateSince: since)
+    }
+  }
+
+  /// 按决定的先后落盘：排在此前所有写入之后。
+  private func persist(_ write: @escaping @Sendable () async throws -> Void) async throws {
+    let previous = tail
+    let task = Task {
+      await previous?.value
+      try await write()
+    }
+    tail = Task { _ = await task.result }
+    try await task.value
+  }
+
+  /// 落盘失败：只要之后没有更新的写入，就当作没写过，下一次更新不会被去重跳过。
+  private func forgetWritten(_ sessionID: String, _ content: Content) {
+    if sessions[sessionID]?.written == content { sessions[sessionID]?.written = nil }
   }
 
   private func cancelPending(_ session: inout Session) {

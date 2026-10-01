@@ -1,3 +1,4 @@
+import CueEditor
 import CueStore
 import CueText
 import SwiftUI
@@ -24,6 +25,10 @@ struct MasonryLayout: Layout {
                 proposal: ProposedViewSize(width: frame.width, height: frame.height))
         }
     }
+
+    /// 墙没有文字基线可对齐；默认实现会逐个询问子视图，侧栏开合时每帧都付这笔账（时间分析里约 4%）。
+    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
 
     private func place(_ subviews: Subviews, width: CGFloat) -> [CGRect] {
         let columns = max(1, min(maxColumns, Int((width + spacing) / (minColumnWidth + spacing))))
@@ -70,19 +75,24 @@ struct CardMeta: View {
         HStack(spacing: 8) {
             Text(DateLabel.short(card.modifiedAt))
             if text.blockCount > 1 { Text("\(text.blockCount) 块") }
-            if let lastTarget {
-                Label(lastTarget, systemImage: "checkmark").labelStyle(.titleAndIcon).lineLimit(1)
-                    .accessibilityLabel("已发给 \(lastTarget)")
-            } else {
-                Text("未发送")
-            }
+            if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
             if isGoal { Image(systemName: "scope").help("项目目标").accessibilityLabel("项目目标") }
             if floated { Image(systemName: "arrow.up").help("刚从更早的卡里拿回来").accessibilityLabel("刚从更早的卡里拿回来") }
-            if card.isFavorite { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
+            if card.isPinned { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
         }
         .font(font)
         .foregroundStyle(palette.ink3)
+    }
+}
+
+/// 发过的卡的标记：浅灰小纸飞机 + 目标名。没发过是默认状态，什么都不显示。卡片与列表共用这一种。
+struct SentMark: View {
+    let target: String
+
+    var body: some View {
+        Label(target, systemImage: "paperplane").labelStyle(.titleAndIcon).lineLimit(1)
+            .accessibilityLabel("已发给 \(target)")
     }
 }
 
@@ -109,8 +119,9 @@ struct Thumbnail: View {
             .clipShape(.rect(cornerRadius: radius))
             .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder((palette.dark ? Color.white : .black).opacity(0.1)))
             .task(id: hash) {
-                let files = services.store.files, pixels = Int(height * 3 * scale)
-                image = await Task.detached(priority: .utility) { try? files.thumbnail(hash: hash, maxPixel: pixels) }.value
+                guard let url = services.store.files.fileURL(for: hash) else { return }
+                let pixels = Int(height * 3 * scale)
+                image = await Task.detached(priority: .utility) { Thumbnails.image(at: url, maxPixel: pixels) }.value
             }
     }
 }
@@ -159,5 +170,12 @@ enum OlderGroupTitle {
         case .month(let start):
             return start.formatted(.dateTime.year().month(.wide).locale(chinese))
         }
+    }
+}
+
+extension View {
+    /// 把这张卡在屏幕上的位置报给工作区，打开时纸页从这里放大、关闭时缩回这里。
+    func cardFrameSource(_ id: UUID, in workspace: Workspace) -> some View {
+        onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { workspace.cardFrames[id] = $0 }
     }
 }

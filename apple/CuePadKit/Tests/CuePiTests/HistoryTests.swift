@@ -74,82 +74,43 @@ struct HistoryTests {
         try PiHistory.index(file: file.url, from: checkpoint)
     }
 
-    // MARK: 分支与轮次
+    // MARK: 当前分支的首条 prompt（会话标题的来源）
 
-    @Test func followsTheCurrentBranchOnly() throws {
+    @Test func firstPromptFollowsTheCurrentBranch() throws {
         var f = SessionFile(directory: dir)
         try f.append(
             SessionFile.header(),
             SessionFile.user("u1", nil, "first prompt", at: 1),
             SessionFile.assistant("a1", "u1", text: "reply one", at: 2),
-            SessionFile.user("u2", "a1", [["type": "text", "text": "abandoned"]], at: 3),
+            SessionFile.user("u2", "a1", "later prompt", at: 3),
             SessionFile.assistant("t2", "u2", text: "checking", stop: "toolUse", at: 4),
-            SessionFile.toolResult("r2", "t2", at: 5),
-            SessionFile.assistant("a2", "r2", text: "abandoned reply", at: 6),
-            SessionFile.user("u3", "a1", "second prompt", at: 7)) // 从 a1 另起分支，且是文件里最后一条
+            SessionFile.toolResult("r2", "t2", at: 5))
+        #expect(try index(f).history.firstPrompt == "first prompt")  // 之后的轮次与工具输出不改变它
 
-        var h = try index(f).history
-        #expect(h.turns.map(\.prompt) == ["first prompt", "second prompt"])
-        #expect(h.turns.map(\.reply) == ["reply one", nil])
-        #expect(h.turns.map(\.status) == [.completed, .inProgress])
-        #expect(h.turns[0].promptedAt == SessionFile.date(1))
-        #expect(h.turns[0].repliedAt == SessionFile.date(2))
+        try f.append(SessionFile.user("u0", nil, [["type": "text", "text": "rewritten first"]], at: 6))  // 回到开头另起分支
+        #expect(try index(f).history.firstPrompt == "rewritten first")
 
-        try f.append(SessionFile.assistant("a3", "u3", text: "second reply", at: 8))
-        h = try index(f).history
-        #expect(h.turns.map(\.reply) == ["reply one", "second reply"])
-        #expect(h.turns.map(\.status) == [.completed, .completed])
+        try f.append(SessionFile.assistant("b1", "u0", text: "ok", at: 7), SessionFile.user("x1", "a1", "back on the old branch", at: 8))
+        #expect(try index(f).history.firstPrompt == "first prompt")
     }
 
-    @Test(arguments: [
-        ("stop", "done", PiTurnStatus.completed),
-        ("length", "cut", PiTurnStatus.completed),
-        ("toolUse", "checking", PiTurnStatus.inProgress),
-        ("aborted", "partial", PiTurnStatus.aborted),
-    ])
-    func statusFollowsTheLastAssistantStopReason(stop: String, text: String, status: PiTurnStatus) throws {
-        var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header(), SessionFile.user("u1", nil, "p", at: 1), SessionFile.assistant("a1", "u1", text: text, stop: stop, at: 2))
-        let turn = try #require(index(f).history.turns.first)
-        #expect(turn.status == status)
-        #expect(turn.reply == text)
-    }
-
-    @Test func providerErrorTurnIsFailedWithMessageAndNoReply() throws {
-        var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header(), SessionFile.user("u1", nil, "p", at: 1),
-                     SessionFile.assistant("a1", "u1", text: nil, stop: "error", error: "401 unauthorized", at: 2))
-        let turn = try #require(index(f).history.turns.first)
-        #expect(turn.status == .failed)
-        #expect(turn.failure == "401 unauthorized")
-        #expect(turn.reply == nil)
-    }
-
-    @Test func userMessageWithoutReplyFollowedByAnotherPromptIsAborted() throws {
-        var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header(), SessionFile.user("u1", nil, "interrupted", at: 1), SessionFile.user("u2", "u1", "retry", at: 2))
-        let turns = try index(f).history.turns
-        #expect(turns.map(\.status) == [.aborted, .inProgress])
-    }
-
-    @Test func contentBlocksAreJoinedAndImagesCounted() throws {
+    @Test func firstPromptJoinsTextBlocksTrimsAndIsCappedAtTheLimit() throws {
         var f = SessionFile(directory: dir)
         try f.append(SessionFile.header(), SessionFile.user("u1", nil, [
-            ["type": "text", "text": "line one"], ["type": "image", "data": "AAAA", "mimeType": "image/png"],
-            ["type": "text", "text": "line two"], ["type": "image", "data": "BBBB", "mimeType": "image/png"],
+            ["type": "text", "text": "  line one"], ["type": "image", "data": "AAAA", "mimeType": "image/png"],
+            ["type": "text", "text": "line two \n"],
         ], at: 1))
-        let turn = try #require(index(f).history.turns.first)
-        #expect(turn.prompt == "line one\nline two")
-        #expect(turn.promptImageCount == 2)
+        #expect(try index(f).history.firstPrompt == "line one\nline two")
+
+        var long = SessionFile(directory: dir, name: "long.jsonl")
+        try long.append(SessionFile.header(), SessionFile.user("u1", nil, String(repeating: "字", count: 500), at: 1))
+        #expect(try index(long).history.firstPrompt?.count == PiHistory.promptPreviewLimit)
     }
 
-    @Test func longTextsArePreviewedAtTheLimit() throws {
+    @Test func sessionWithoutPromptHasNoFirstPrompt() throws {
         var f = SessionFile(directory: dir)
-        let long = String(repeating: "字", count: PiHistory.previewLimit + 500)
-        try f.append(SessionFile.header(), SessionFile.user("u1", nil, long, at: 1), SessionFile.assistant("a1", "u1", text: long, at: 2))
-        let turn = try #require(index(f).history.turns.first)
-        #expect(turn.prompt.count == PiHistory.previewLimit)
-        #expect(turn.reply?.count == PiHistory.previewLimit)
+        try f.append(SessionFile.header())
+        #expect(try index(f).history.firstPrompt == nil)
     }
 
     @Test func exposesHeaderNameAndLastActivity() throws {
@@ -183,7 +144,7 @@ struct HistoryTests {
         }
         let full = try index(f).history
         #expect(try index(f, from: checkpoint).history == full)
-        #expect(full.turns.map(\.reply) == ["r1", "final"])
+        #expect(full.firstPrompt == "one" && full.lastActivity == SessionFile.date(6))
     }
 
     @Test func unchangedFileReadsNothing() throws {
@@ -197,26 +158,26 @@ struct HistoryTests {
 
     @Test func halfWrittenLineIsNotConsumedUntilItsNewlineArrives() throws {
         var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header(), SessionFile.user("u1", nil, "p", at: 1))
+        try f.append(SessionFile.header())
         let base = try index(f)
-        let reply = SessionFile.assistant("a1", "u1", text: "whole reply", at: 2)
-        let cut = reply.index(reply.startIndex, offsetBy: reply.count / 2)
-        try f.appendRaw(String(reply[..<cut]))
+        let prompt = SessionFile.user("u1", nil, "whole prompt", at: 2)
+        let cut = prompt.index(prompt.startIndex, offsetBy: prompt.count / 2)
+        try f.appendRaw(String(prompt[..<cut]))
 
         let partial = try index(f, from: base.checkpoint)
         #expect(partial.bytesRead == 0 && partial.checkpoint.offset == base.checkpoint.offset)
-        #expect(partial.history.turns.first?.reply == nil)
+        #expect(partial.history.firstPrompt == nil)
 
-        try f.appendRaw(String(reply[cut...]) + "\n")
+        try f.appendRaw(String(prompt[cut...]) + "\n")
         let done = try index(f, from: partial.checkpoint)
-        #expect(done.history.turns.first?.reply == "whole reply")
-        #expect(done.bytesRead == reply.utf8.count + 1)
+        #expect(done.history.firstPrompt == "whole prompt")
+        #expect(done.bytesRead == prompt.utf8.count + 1)
     }
 
     @Test func corruptAndBlankLinesAreSkipped() throws {
         let f = SessionFile(directory: dir)
         try f.write(text: [SessionFile.header(), "{not json", "", SessionFile.user("u1", nil, "p", at: 1), "[1,2]"].joined(separator: "\n") + "\n")
-        #expect(try index(f).history.turns.map(\.prompt) == ["p"])
+        #expect(try index(f).history.firstPrompt == "p")
     }
 
     @Test(arguments: ["shorter", "same-size-different-content"])
@@ -241,7 +202,7 @@ struct HistoryTests {
         var f = SessionFile(directory: dir, name: "later.jsonl")
         #expect(throws: (any Error).self) { try PiHistory.index(file: f.url, from: nil) }
         try f.append(SessionFile.header(), SessionFile.user("u1", nil, "p", at: 1)) // 首条消息落盘后同一路径可索引
-        #expect(try index(f).history.turns.count == 1)
+        #expect(try index(f).history.firstPrompt == "p")
     }
 }
 
@@ -302,15 +263,15 @@ struct HistoryIndexerTests {
 
         let firstAppend = [SessionFile.user("u2", "a", "second", at: 3), SessionFile.assistant("a2", "u2", text: "r2", at: 4)]
         try f.appendRaw(firstAppend.joined(separator: "\n") + "\n")
-        try await eventually("第一次追加被索引") { log.updates.contains { $0.history.turns.count == 2 } }
+        try await eventually("第一次追加被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(4) } }
 
         let secondAppend = SessionFile.user("u3", "a2", "third", at: 5)
         try f.appendRaw(secondAppend + "\n")
-        try await eventually("第二次追加被索引") { log.updates.contains { $0.history.turns.count == 3 } }
+        try await eventually("第二次追加被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(5) } }
         let update = try #require(log.updates.last)
         #expect(update.file.lastPathComponent == "a.jsonl")
         #expect(update.bytesRead == secondAppend.utf8.count + 1)
-        #expect(update.history.turns.map(\.prompt) == ["first", "second", "third"])
+        #expect(update.history.firstPrompt == "first")
 
         try makeSession("p3", "fresh.jsonl", prompt: "brand new", modified: Date())
         try await eventually("新文件被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
@@ -326,7 +287,7 @@ struct HistoryIndexerTests {
         try await eventually("回填完成") { log.finishedBackfill }
         let update = try #require(log.updates.first)
         #expect(update.bytesRead == tail.utf8.count + 1)
-        #expect(update.history.turns.last?.prompt == "while app was closed")
+        #expect(update.history.lastActivity == SessionFile.date(3) && update.history.firstPrompt == "first")
     }
 }
 #endif

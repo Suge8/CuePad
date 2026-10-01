@@ -5,7 +5,7 @@ private let defaultLimit = 20
 
 extension Command {
   static let search = Command(
-    path: ["search"], summary: "搜索卡片（多个词都要命中，子串，不分大小写；命中正文与标签）", arguments: "[词...]",
+    path: ["search"], summary: "搜索卡片（多个词都要命中，子串，不分大小写；命中正文）", arguments: "[词...]",
     options: [
       .project("限定项目，可重复"), .inbox, .allProjects,
       Opt("images", "只要含图片的卡"), Opt("no-images", "只要不含图片的卡"),
@@ -88,6 +88,6 @@ extension Command {
     guard let kind = kinds[parts[0].lowercased()] else {
       throw CLIError.usage("--to 的目标种类是 pi / app / clipboard，收到「\(target)」")
     }
-    return .sent(kind: kind, name: parts.count > 1 ? parts[1] : nil)
+    return .sent(kind: .known(kind), name: parts.count > 1 ? parts[1] : nil)
   }
 }

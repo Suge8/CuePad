@@ -22,16 +22,16 @@ public enum CueSegments {
         return segments
     }
 
-    // 卡片标题只有一条规则，实现在私有的 `titleText(of:)`：非空、不是分隔线，且除图片引用
-    // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字。`isTitleLine` 与 `contentLines` 是它的两个公开视图：
-    // 编辑器标题行装饰要逐行判定（找位置），卡片标题与摘要要各行文字。
+    // 标题行只有一条规则，实现在私有的 `titleText(of:)`：非空、不是分隔线，且除图片引用
+    // （存储格式的 `![](…)` 或运行时的 U+FFFC）外还有文字。编辑器标题行装饰逐行判定（`isTitleLine`），
+    // 卡片标题与摘要（`CueSummary`）取各行文字（`contentLines`）。
 
     /// 这一行是不是标题行。
     public static func isTitleLine(_ line: String) -> Bool { !titleText(of: line).isEmpty }
 
     /// 正文里全部标题行的文字（去掉图片引用，空白折成单个空格），按出现顺序。
     /// 卡片标题是第一行，摘要是其后各行。没有标题行则为空数组。
-    public static func contentLines(_ stored: String) -> [String] {
+    static func contentLines(_ stored: String) -> [String] {
         stored.components(separatedBy: "\n").map(titleText(of:)).filter { !$0.isEmpty }
     }
 
@@ -59,5 +59,26 @@ public enum CueSegments {
             return index == 0 ? segment : "---\n\n\(segment)"
         }
         return parts.joined(separator: "\n\n")
+    }
+}
+
+/// 卡片的标题与摘要（唯一规则，App、小组件、命令行共用）。卡片没有标题字段：
+/// 标题 = 首个标题行（见 `CueSegments.isTitleLine`）去掉开头的 `#`（Markdown 标题前缀）；
+/// 摘要 = 其后各标题行以空格连接，最多 `previewLimit` 字。
+public struct CueSummary: Equatable, Sendable {
+    public static let previewLimit = 240
+
+    public var title: String
+    public var preview: String
+
+    public init(_ stored: String) {
+        let lines = CueSegments.contentLines(stored)
+        title = lines.first.map(Self.stripHeading) ?? ""
+        preview = String(lines.dropFirst().joined(separator: " ").prefix(Self.previewLimit))
+    }
+
+    private static func stripHeading(_ line: String) -> String {
+        let rest = line.drop { $0 == "#" }
+        return rest.count < line.count ? rest.trimmingCharacters(in: .whitespaces) : line
     }
 }

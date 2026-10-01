@@ -127,7 +127,7 @@ struct SendToMacSheet: View {
                         }
                     }
                     Text([project?.name, item.summary].compactMap { $0 }.joined(separator: " · "))
-                        .font(.footnote).foregroundStyle(item.state == .waitingForUser ? .orange : palette.ink3).lineLimit(1)
+                        .font(.footnote).foregroundStyle(item.state == .known(.waitingForUser) ? .orange : palette.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 if item.sessionID == session?.sessionID {
@@ -237,7 +237,7 @@ private struct DeliveryProgress: View {
         switch request {
         case .none: nil
         case .some(.none): .succeeded
-        case .some(.some(let request)): request.status
+        case .some(.some(let request)): request.status.known
         }
     }
 

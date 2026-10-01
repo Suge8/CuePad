@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 // MARK: 项目
@@ -26,11 +27,6 @@ extension CueStore {
       project.modifiedAt = Date.stamp
       try update(project)
     }
-  }
-
-  /// 把项目移到 `previous` 之后（nil = 最前）。
-  public func moveProject(_ id: UUID, after previous: UUID?) throws {
-    try write { try place(.projects, scope: "deletedAt IS NULL", id: id, after: previous) }
   }
 
   /// 设置项目目标卡（nil = 取消）。目标必须是该项目里未删除的卡。
@@ -119,21 +115,23 @@ extension CueStore {
       } ?? nil
       let now = Date.stamp
       let card = Card(
-        id: UUID(), projectID: project, body: body, numbering: .none, isFavorite: false,
+        id: UUID(), projectID: project, body: body, numbering: .known(.none), isPinned: false,
         variableValues: [:], conflictOf: nil, sortKey: SortKey.before(first), deletedAt: nil, createdAt: now,
         modifiedAt: now)
       try insert(card)
+      try registerImages(in: body)
       return card
     }
   }
 
-  /// 改正文、编号方式、收藏、变量取值。归属项目、排序键、删除状态对调用方只读，各有专门的方法（编译期保证）。
+  /// 改正文、编号方式、置顶、变量取值。归属项目、排序键、删除状态对调用方只读，各有专门的方法（编译期保证）。
   public func updateCard(_ id: UUID, _ edit: @Sendable (inout Card) -> Void) throws {
     try write {
       guard var card = try find(Card.self, id) else { throw CueStoreError.notFound }
       edit(&card)
       card.modifiedAt = Date.stamp
       try update(card)
+      try registerImages(in: card.body)
     }
   }
 
@@ -203,26 +201,19 @@ extension CueStore {
     let ids = "SELECT id FROM cards WHERE \(condition)"
     try clearGoal(where: condition, arguments)
     let bodies = try db.query("SELECT body FROM cards WHERE \(condition)", arguments) { $0.text(0) }
-    let referenced = Set(bodies.flatMap { $0.matches(of: /cuepad:\/\/img\/([0-9a-f]{64})/).map { String($0.output.1) } })
-    try db.run("DELETE FROM cardTags WHERE cardID IN (\(ids))", arguments)
+    let referenced = Set(bodies.flatMap(CueFormat.imageHashes(in:)))
     try db.run("UPDATE sendRecords SET cardID = NULL, modifiedAt = ? WHERE cardID IN (\(ids))", [Date.stamp] + arguments)
     try db.run("DELETE FROM cards WHERE \(condition)", arguments)
     return referenced
   }
 
-  /// 删除候选图片中已不被任何卡片正文（含回收站里的卡）和发送记录快照（一键重发要用）引用的：先删文件，成功后再删记录，
+  /// 删除候选图片中已无人引用的（`isImageReferenced`）：先删文件，成功后再删记录，
   /// 所以记录与文件始终配对；删不掉的文件保留记录并返回其哈希。
   /// 只看被删卡片引用过的图片，不做全表扫描：刚粘贴、正文尚未保存的图片不能被顺手回收。
   /// 不处理跨设备竞态：另一台设备可能刚好在引用同一哈希。
   private func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
     var failed: [String] = []
-    for hash in candidates.sorted() {
-      let used = try db.first(
-        """
-        SELECT 1 FROM cards WHERE instr(body, ?1) > 0
-        UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
-        """, ["cuepad://img/\(hash)"]) { _ in true }
-      if used != nil { continue }
+    for hash in candidates.sorted() where try !isImageReferenced(hash) {
       do { try files.remove(hash: hash) } catch {
         failed.append(hash)
         continue
@@ -230,6 +221,15 @@ extension CueStore {
       try db.run("DELETE FROM attachments WHERE hash = ?", [hash])
     }
     return failed
+  }
+
+  /// 还有卡片正文（含回收站里的卡）或发送记录快照（一键重发要用）引用这张图片。
+  func isImageReferenced(_ hash: String) throws -> Bool {
+    try db.first(
+      """
+      SELECT 1 FROM cards WHERE instr(body, ?1) > 0
+      UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
+      """, [CueFormat.imageMarkup(id: hash)]) { _ in true } != nil
   }
 
   /// 事务已提交后，把删不掉文件的哈希作为错误报告（永久删除本身已生效）。
@@ -275,32 +275,6 @@ extension CueStore {
   }
 }
 
-// MARK: 标签
-
-extension CueStore {
-  /// 给卡片加标签；同名标签复用，重复添加无效果。
-  @discardableResult
-  public func addTag(_ name: String, to card: UUID) throws -> Tag {
-    let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !name.isEmpty else { throw CueStoreError.blankTagName }
-    return try write {
-      let now = Date.stamp
-      let existing = try select(Tag.self, where: "name = ?", [name], orderBy: "createdAt, id").first
-      let tag = existing ?? Tag(id: UUID(), name: name, color: nil, createdAt: now, modifiedAt: now)
-      if existing == nil { try insert(tag) }
-      let linked = try db.first("SELECT 1 FROM cardTags WHERE cardID = ? AND tagID = ?", [card, tag.id]) { _ in true }
-      if linked == nil {
-        try insert(CardTag(id: UUID(), cardID: card, tagID: tag.id, createdAt: now, modifiedAt: now))
-      }
-      return tag
-    }
-  }
-
-  public func removeTag(_ tag: UUID, from card: UUID) throws {
-    try write { try db.run("DELETE FROM cardTags WHERE cardID = ? AND tagID = ?", [card, tag]) }
-  }
-}
-
 // MARK: 任务
 
 extension CueStore {
@@ -323,7 +297,7 @@ extension CueStore {
     }
   }
 
-  /// 改内容、勾选完成（`completedAt`）、所属项目、关联 Pi 会话；顺序用 `moveTask`。
+  /// 改内容、勾选完成（`completedAt`）、所属项目、关联 Pi 会话。
   /// 改挂的项目必须存在且未在回收站，否则抛 `invalidProject`。
   public func updateTask(_ id: UUID, _ edit: @Sendable (inout CueTask) -> Void) throws {
     try write {
@@ -337,11 +311,6 @@ extension CueStore {
       task.modifiedAt = Date.stamp
       try update(task)
     }
-  }
-
-  /// 把未完成任务移到 `previous` 之后（nil = 最前）。
-  public func moveTask(_ id: UUID, after previous: UUID?) throws {
-    try write { try place(.tasks, scope: "completedAt IS NULL", id: id, after: previous) }
   }
 
   public func deleteTask(_ id: UUID) throws {
@@ -366,22 +335,8 @@ extension CueStore {
         id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
         targetRef: target.ref, cardID: card, taskID: task, sentAt: now, modifiedAt: now)
       try insert(record)
+      try registerImages(in: content)
       return record
-    }
-  }
-
-  /// 登记图片附件元数据；同一内容哈希只有一条。
-  @discardableResult
-  public func registerAttachment(hash: String, byteCount: Int, format: String) throws -> Attachment {
-    try write {
-      if let existing = try select(Attachment.self, where: "hash = ?", [hash], orderBy: "createdAt, id").first {
-        return existing
-      }
-      let now = Date.stamp
-      let attachment = Attachment(
-        id: UUID(), hash: hash, byteCount: byteCount, format: format, createdAt: now, modifiedAt: now)
-      try insert(attachment)
-      return attachment
     }
   }
 

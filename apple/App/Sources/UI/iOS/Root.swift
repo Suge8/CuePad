@@ -125,7 +125,7 @@ private struct TabsRoot: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .observing(services.store, [.piSessionStates], into: $waiting) { store in
-            try store.piSessionStates().filter { $0.state == .waitingForUser }.count
+            try store.piSessionStates().filter { $0.state == .known(.waitingForUser) }.count
         }
     }
 

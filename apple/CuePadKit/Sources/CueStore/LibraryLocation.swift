@@ -12,7 +12,7 @@ public enum LibraryLocationError: Error, Equatable, LocalizedError {
   }
 }
 
-/// 资料库的位置（唯一规则）。库文件 `cuepad.db` 与附件目录 `Attachments/` 同在 `directory` 下。
+/// 资料库的位置（唯一规则）。库文件 `cuepad.db` 在 `directory` 下，附件目录由 `CueStore.files` 管。
 /// - macOS：`~/Library/Application Support/CuePad/Library/`，并指向 Electron 版数据库以便导入；
 /// - iOS：App Group `group.com.sugeh.cuepad` 共享容器下的 `Library/`（分享扩展、小组件与主 App 共用）；
 /// - 环境变量 `CUEPAD_LIBRARY_DIR`（绝对路径）指向隔离目录，各平台通用，不导入旧库。
@@ -45,7 +45,6 @@ public struct LibraryLocation: Equatable, Sendable {
   public let isIsolated: Bool
 
   public var databaseURL: URL { directory.appending(path: "cuepad.db") }
-  public var attachmentsDirectory: URL { directory.appending(path: "Attachments", directoryHint: .isDirectory) }
 
   public static func resolve(
     environment: [String: String] = ProcessInfo.processInfo.environment, base: Base = .platform

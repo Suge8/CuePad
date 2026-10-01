@@ -9,13 +9,12 @@ import Testing
 struct LegacyImportTests {
     @Test func 首次启动导入旧库并采用其主题与快捷键_再次启动不重复导入() async throws {
         let legacy = try makeLegacyDatabase(settings: ["theme": "\"dark\"", "globalShortcut": "\"Alt+KeyZ\""])
-        let rig = Rig(legacy: legacy)
+        let rig = TestApp(legacy: legacy)
 
         await rig.services.importLegacyIfNeeded()
 
         #expect(try await rig.services.store.projects().map(\.name) == ["Career", "Flow"])
         #expect(try await rig.services.store.tasks().map(\.content) == ["first"])
-        #expect(rig.services.legacyImportReport?.inserted.projects == 2)
         #expect(rig.services.settings.theme == .dark)
         #expect(rig.services.settings.globalShortcut == "Alt+KeyZ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 6, modifiers: .option)])
@@ -26,12 +25,11 @@ struct LegacyImportTests {
         let restarted = rig.relaunch()
         await restarted.importLegacyIfNeeded()
         #expect(try await restarted.store.projects().map(\.name) == ["Flow"])
-        #expect(restarted.legacyImportReport == nil)
     }
 
     @Test func 已有的设置不被旧库覆盖() async throws {
         let legacy = try makeLegacyDatabase(settings: ["theme": "\"dark\"", "globalShortcut": "\"Alt+KeyZ\""])
-        let rig = Rig(legacy: legacy)
+        let rig = TestApp(legacy: legacy)
         rig.services.settings.theme = .light
 
         await rig.services.importLegacyIfNeeded()
@@ -40,11 +38,10 @@ struct LegacyImportTests {
     }
 
     @Test func 没有旧库时什么都不做() async throws {
-        let rig = Rig(legacy: FileManager.default.temporaryDirectory.appending(path: "missing-\(UUID().uuidString).db"))
+        let rig = TestApp(legacy: FileManager.default.temporaryDirectory.appending(path: "missing-\(UUID().uuidString).db"))
 
         await rig.services.importLegacyIfNeeded()
 
-        #expect(rig.services.legacyImportReport == nil)
         #expect(rig.services.startupIssues.isEmpty)
         #expect(try await rig.services.store.projects().isEmpty)
     }
@@ -52,11 +49,10 @@ struct LegacyImportTests {
     @Test func 旧库损坏时报告问题且下次启动重试() async throws {
         let broken = FileManager.default.temporaryDirectory.appending(path: "broken-\(UUID().uuidString).db")
         try Data("not a database".utf8).write(to: broken)
-        let rig = Rig(legacy: broken)
+        let rig = TestApp(legacy: broken)
 
         await rig.services.importLegacyIfNeeded()
         #expect(rig.services.startupIssues.count == 1)
-        #expect(rig.services.legacyImportReport == nil)
 
         try FileManager.default.removeItem(at: broken)
         _ = try makeLegacyDatabase(at: broken)
@@ -86,7 +82,7 @@ struct GlobalShortcutTests {
     }
 
     @Test func 启动时按设置注册_更换成功才落设置_失败回滚() throws {
-        let rig = Rig()
+        let rig = TestApp()
         let services: AppServices = rig.services
         services.settings.globalShortcut = "Control+Alt+KeyP"
         services.applySavedShortcut()
@@ -109,7 +105,7 @@ struct GlobalShortcutTests {
 @MainActor
 struct ImageStoreTests {
     @Test func 编辑器存入的图片按内容哈希落入库并可读回() async throws {
-        let rig = Rig()
+        let rig = TestApp()
         let png = pngData()
 
         let id = try rig.services.images.store(png)
@@ -131,7 +127,7 @@ struct ImageStoreTests {
 
 @MainActor
 struct PiHistoryPersistenceTests {
-    private func sessionFile(in rig: Rig, lines: [String]) throws -> URL {
+    private func sessionFile(in rig: TestApp, lines: [String]) throws -> URL {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appending(path: "s1.jsonl")
@@ -144,7 +140,7 @@ struct PiHistoryPersistenceTests {
     private let reply = #"{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"assistant","stopReason":"stop","content":[{"type":"text","text":"done"}],"timestamp":2}}"#
 
     @Test func 索引结果与检查点写入本机会话表_重启后可从中断处继续() async throws {
-        let rig = Rig()
+        let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
         let events = AsyncStream<PiHistoryEvent> { continuation in
             continuation.yield(.updated(try! PiHistory.index(file: file, from: nil)))
@@ -159,7 +155,6 @@ struct PiHistoryPersistenceTests {
         #expect(rows[0].cwd == "/work/x")
         #expect(rows[0].path == file.path)
         #expect(rows[0].title == "fix the build")
-        #expect(rig.services.piHistoryBackfilled)
 
         // 重启后从落盘的检查点继续：只读新增的字节
         let handle = try FileHandle(forWritingTo: file)
@@ -173,15 +168,14 @@ struct PiHistoryPersistenceTests {
         let checkpoint = try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
         let resumed = try PiHistory.index(file: file, from: checkpoint)
         #expect(resumed.bytesRead == reply.utf8.count + 1)
-        #expect(resumed.history.turns.map(\.prompt) == ["fix the build"])
-        #expect(resumed.history.turns.first?.reply == "done")
+        #expect(resumed.history.firstPrompt == "fix the build")
     }
 }
 
 @MainActor
 struct PiExtensionConsentTests {
-    private func rigWithPi(version: String) throws -> Rig {
-        let rig = Rig()
+    private func rigWithPi(version: String) throws -> TestApp {
+        let rig = TestApp()
         let bin = rig.directory.appending(path: "bin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         let script = bin.appending(path: "pi")
@@ -210,7 +204,7 @@ struct PiExtensionConsentTests {
         await tooOld.services.piExtension.refresh()
         #expect(!tooOld.services.piExtension.needsConsent)
 
-        let absent = Rig()
+        let absent = TestApp()
         await absent.services.piExtension.refresh()
         #expect(!absent.services.piExtension.needsConsent)
     }

@@ -12,8 +12,8 @@ struct CaptureDraft {
     var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty }
 
     func save(in project: UUID?, workspace: Workspace) async throws -> Card {
-        var hashes: [String] = []
-        for image in images { hashes.append(try await workspace.services.store.addImage(image).hash) }
+        let files = workspace.services.store.files
+        let hashes = try images.map { try files.store($0) }
         let body = [
             text.trimmingCharacters(in: .whitespacesAndNewlines),
             hashes.map { CueFormat.imageMarkup(id: $0) }.joined(separator: "\n"),

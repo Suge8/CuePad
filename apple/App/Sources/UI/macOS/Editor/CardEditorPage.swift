@@ -9,35 +9,40 @@ nonisolated private struct EditorData: Sendable {
     var project: Project?
 }
 
-/// 打开的卡：从墙上的位置连续放大成居中的纸，底部玻璃操作栏（复制、分块与编号、变量取值、发送）。
+/// 打开的卡：纸从墙上那张卡的边框连续放大成居中的纸页，关闭时沿原路缩回那张卡的边框。
+/// 过渡中只动纸的外框（一块实色形状，不重新排字），正文在纸放大后淡入、缩回前先淡出；纸始终在最上层。
 /// 纸底下的项目页保持挂载，关掉后回到原来的滚动位置。
 struct CardEditorPage: View {
     let cardID: UUID
-    let paperSpace: Namespace.ID
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var data: EditorData?
     @State private var initialText: String?
     @State private var liveText = ""
     @State private var handle = EditorHandle()
     @State private var autosave: Autosave?
-    @State private var saving = false
+    @State private var saveState = SaveState.idle
+    /// 纸是否已铺开（外框在纸页位置）；false 时外框落在原卡片上。
+    @State private var expanded = false
+    @State private var contentShown = false
+    /// 缩回的最后一段纸淡出，露出底下已经复原的原卡片（两者同一边框，看起来是纸变回了卡）。
+    @State private var paperFaded = false
+    @State private var pageOrigin: CGPoint = .zero
+    @State private var paperFrame: CGRect = .zero
 
     private static let paperWidth: CGFloat = 760
     private static let barClearance: CGFloat = 84
+    private static let radius: CGFloat = 22
+
+    private var isOpen: Bool { workspace.openCard == cardID }
 
     var body: some View {
         ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(palette.paper)
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(palette.hair))
-                .shadow(color: .black.opacity(palette.dark ? 0 : 0.06), radius: 12, y: 4)
-                .matchedGeometryEffect(id: cardID, in: paperSpace, isSource: true)
-                .frame(maxWidth: Self.paperWidth)
-                .padding(.horizontal, 24)
-                .padding(.top, 6)
-                .ignoresSafeArea(edges: .bottom)
+            // 纸铺开后才把墙盖住；纸本身全程不透明
+            palette.desk.ignoresSafeArea().opacity(expanded ? 1 : 0)
+            paperShape
             if let data, let initialText {
                 VStack(alignment: .leading, spacing: 10) {
                     meta(data)
@@ -47,15 +52,17 @@ struct CardEditorPage: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 46)
                 .padding(.bottom, Self.barClearance)
-                .transition(.opacity.animation(.easeOut(duration: 0.2).delay(0.12)))
+                .opacity(contentShown ? 1 : 0)
             }
         }
         .overlay(alignment: .bottom) {
-            if let data {
+            if let data, isOpen, contentShown {
+                // 跟正文同一个事务进出：铺开后随正文淡入，关闭时随正文先退
                 EditorBar(card: data.card, text: liveText, handle: handle).padding(.bottom, 16)
                     .transition(.opacity)
             }
         }
+        .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { pageOrigin = $0 }
         .observing(services.store, [.cards, .projects], id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(card: card, project: try card.projectID.flatMap { try store.project($0) })
@@ -66,8 +73,57 @@ struct CardEditorPage: View {
             liveText = card.body
         }
         .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.openCard = nil } }
-        .onAppear { makeAutosave() }
+        .onChange(of: isOpen) { if !isOpen { collapse() } }
+        .onAppear(perform: makeAutosave)
+        // 量到纸页位置、正文也读到之后才铺开：第一帧外框在原卡片上，正文按时淡入而不是读到时突然出现
+        .onChange(of: paperFrame.isEmpty || initialText == nil, initial: true) { _, waiting in
+            if !waiting, isOpen, !expanded { expand() }
+        }
         .onDisappear { if let autosave { Task { await autosave.flush() } } }
+    }
+
+    /// 纸的外框：铺开时是纸页的位置，否则是原卡片的边框（找不到原卡片时从纸页位置略缩小淡入）。
+    private var paperShape: some View {
+        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        let source = workspace.cardFrames[cardID].map { $0.offsetBy(dx: -pageOrigin.x, dy: -pageOrigin.y) }
+        let target = paperFrame
+        let rect = expanded || source == nil || reduceMotion ? target : source!
+        return ZStack(alignment: .top) {
+            // 占位：量出纸页铺开时的位置
+            Color.clear
+                .frame(maxWidth: Self.paperWidth, maxHeight: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.top, 6)
+                .ignoresSafeArea(edges: .bottom)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                    paperFrame = $0.offsetBy(dx: -pageOrigin.x, dy: -pageOrigin.y)
+                }
+            shape.fill(palette.paper)
+                .overlay(shape.strokeBorder(palette.hair))
+                .shadow(color: .black.opacity(palette.dark ? 0 : 0.06), radius: 12, y: 4)
+                .frame(width: max(rect.width, 1), height: max(rect.height, 1))
+                .position(x: rect.midX, y: rect.midY)
+                .opacity(source == nil && !expanded || paperFaded ? 0 : 1)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func expand() {
+        withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) { expanded = true }
+        withAnimation(.easeOut(duration: 0.12).delay(reduceMotion ? 0 : 0.14)) { contentShown = true }
+    }
+
+    /// 正文先淡出，外框缩回原卡片，最后一段纸淡出露出原卡片；缩完卸下纸页。
+    private func collapse() {
+        // 正文在铺开的纸上淡完，纸才开始缩：不让字露到纸外
+        let fade = reduceMotion ? 0 : 0.06
+        withAnimation(.easeOut(duration: fade)) { contentShown = false }
+        withAnimation(.easeIn(duration: 0.08).delay(fade + Motion.paperCloseDuration - 0.08)) { paperFaded = true }
+        withAnimation(Motion.spatial(Motion.paperClose, reduceMotion: reduceMotion).delay(fade)) {
+            expanded = false
+        } completion: {
+            workspace.finishClosingCard()
+        }
     }
 
     private func meta(_ data: EditorData) -> some View {
@@ -76,20 +132,30 @@ struct CardEditorPage: View {
             Text(data.project?.name ?? "未归档").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
             Text("·")
             Text(DateLabel.short(data.card.modifiedAt))
-            Text(saving ? "保存中…" : "已自动保存")
-            if data.card.isFavorite { Image(systemName: "pin.fill").help("置顶") }
+            if let status = saveState.text {
+                Text(status).foregroundStyle(saveState == .failed ? palette.failure : palette.ink3)
+                    .transition(.opacity)
+            }
+            if data.card.isPinned { Image(systemName: "pin.fill").help("置顶") }
             if data.project?.goalCardID == data.card.id { Label("项目目标", systemImage: "scope") }
         }
         .font(.system(size: 12))
         .foregroundStyle(palette.ink3)
         .padding(.horizontal, 64)
+        .animation(Motion.quick, value: saveState)
+        // "已保存"只亮一会儿；状态再变（又在保存、出错）时这次计时作废
+        .task(id: saveState) {
+            guard saveState == .saved else { return }
+            try? await Task.sleep(for: SaveState.savedDisplay)
+            if !Task.isCancelled { saveState = .idle }
+        }
     }
 
     private func editor(_ data: EditorData, _ text: String) -> some View {
         EditorHost(
             initialText: text,
             theme: .paper(palette),
-            numbering: CueNumbering(rawValue: data.card.numbering.rawValue) ?? .none,
+            numbering: data.card.numbering.known ?? .none,
             handle: handle,
             onChange: { next in
                 liveText = next
@@ -110,19 +176,38 @@ struct CardEditorPage: View {
         let store = services.store, id = cardID
         autosave = Autosave(
             save: { body in
-                saving = true
-                defer { saving = false }
+                saveState = .saving
                 try await store.updateCard(id) { $0.body = body }
+                saveState = .saved
             },
-            onError: workspace.fail)
+            onError: { error in
+                saveState = .failed
+                workspace.fail(error)
+            })
     }
 
     /// 分隔线上的复制/发送与 ⌘⇧C：只作用于这一块。
     private func blockAction(_ action: CueBlockAction) {
         guard let card = data?.card else { return }
         let text = CueVariables.fill(CueSegments.trim(action.text), values: card.variableValues)
-        let choice: SendChoice = action.kind == .copy ? .clipboard : workspace.effectiveChoice(for: card.projectID)
+        let choice: AppServices.Destination = action.kind == .copy ? .clipboard : workspace.effectiveChoice(for: card.projectID)
         Task { await workspace.send(text, via: choice, card: card.id) }
+    }
+}
+
+/// 保存状态：平时不显示；保存中显示，保存完显示"已保存"一会儿，失败一直显示直到下次保存成功。
+private enum SaveState: Equatable {
+    case idle, saving, saved, failed
+
+    static let savedDisplay: Duration = .seconds(1.5)
+
+    var text: String? {
+        switch self {
+        case .idle: nil
+        case .saving: "保存中…"
+        case .saved: "已保存"
+        case .failed: "没能保存"
+        }
     }
 }
 
@@ -141,7 +226,7 @@ private struct EditorBar: View {
                 HStack(spacing: 16) {
                     Button("复制整张", systemImage: "doc.on.doc") { send(.clipboard) }
                         .help("复制整张卡（变量已填、编号已排）")
-                    Button("分块", systemImage: "scissors") { handle.insertSplit() }
+                    Button("分块", systemImage: "rectangle.split.1x2") { handle.insertSplit() }
                         .help("在光标处分块（⇧↩）")
                     NumberingMenu(card: card)
                 }
@@ -156,7 +241,7 @@ private struct EditorBar: View {
         }
     }
 
-    private func send(_ choice: SendChoice) {
+    private func send(_ choice: AppServices.Destination) {
         let body = handle.text ?? text
         let outgoing = Outgoing.text(body: body, values: card.variableValues, numbering: card.numbering)
         let id = card.id
@@ -168,7 +253,7 @@ private struct NumberingMenu: View {
     let card: Card
     @Environment(Workspace.self) private var workspace
 
-    private static let options: [(Numbering, String)] = [(.none, "不编号"), (.decimal, "1 2 3"), (.alpha, "A B C"), (.cjk, "一 二 三")]
+    private static let options: [(CueNumbering, String)] = [(.none, "不编号"), (.decimal, "1 2 3"), (.alpha, "A B C"), (.cjk, "一 二 三")]
 
     var body: some View {
         Menu {
@@ -177,18 +262,18 @@ private struct NumberingMenu: View {
             }
             .pickerStyle(.inline)
         } label: {
-            Image(systemName: card.numbering == .none ? "list.bullet" : "list.number")
+            Image(systemName: card.numbering == .known(.none) ? "list.bullet" : "list.number")
         }
         .menuStyle(.button).menuIndicator(.hidden).fixedSize()
         .help("分块编号：复制与发送时每块前加编号标题")
         .accessibilityLabel("分块编号")
-        .accessibilityValue(Self.options.first { $0.0 == card.numbering }?.1 ?? "")
+        .accessibilityValue(Self.options.first { $0.0 == card.numbering.known }?.1 ?? "")
     }
 
-    private var binding: Binding<Numbering> {
-        Binding(get: { card.numbering }, set: { value in
+    private var binding: Binding<CueNumbering> {
+        Binding(get: { card.numbering.known ?? .none }, set: { value in
             let id = card.id
-            workspace.perform { try await $0.updateCard(id) { $0.numbering = value } }
+            workspace.perform { try await $0.updateCard(id) { $0.numbering = .known(value) } }
         })
     }
 }

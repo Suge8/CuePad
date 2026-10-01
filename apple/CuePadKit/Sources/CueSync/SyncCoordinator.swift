@@ -9,29 +9,30 @@ actor SyncCoordinator {
   private let store: CueStore
   private let queue: any ChangeQueue
   private let zoneID: CKRecordZone.ID
-  private let timing: Timing
-  private let log: SyncTimingLog?
-  private var fetchStartedAt: Date?
   private var watcher: Task<Void, Never>?
-  private var subscribers: [UUID: AsyncStream<SyncStatus>.Continuation] = [:]
+  /// 有登记被搁置（配额、未预期失败）：下一次本机改动时全量对账一次，把它们重新登记。
+  private var needsFullReconcile = false
+  private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
 
-  private(set) var status: SyncStatus = .idle {
-    didSet { if status != oldValue { for continuation in subscribers.values { continuation.yield(status) } } }
+  private(set) var state = SyncState(status: .idle, issues: []) {
+    didSet { if state != oldValue { for continuation in subscribers.values { continuation.yield(state) } } }
   }
-  private(set) var issues: [SyncIssue] = []
+  private(set) var status: SyncStatus {
+    get { state.status }
+    set { state.status = newValue }
+  }
+  var issues: [SyncIssue] { state.issues }
 
-  init(store: CueStore, queue: any ChangeQueue, zoneID: CKRecordZone.ID, timing: Timing = .system, log: SyncTimingLog? = nil) {
+  init(store: CueStore, queue: any ChangeQueue, zoneID: CKRecordZone.ID) {
     self.store = store
     self.queue = queue
     self.zoneID = zoneID
-    self.timing = timing
-    self.log = log
   }
 
   // MARK: 状态订阅
 
-  /// 先给出当前状态，之后每次变化给出新状态。
-  nonisolated var statusUpdates: AsyncStream<SyncStatus> {
+  /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
+  nonisolated var stateUpdates: AsyncStream<SyncState> {
     AsyncStream { continuation in
       let token = UUID()
       Task {
@@ -41,26 +42,23 @@ actor SyncCoordinator {
     }
   }
 
-  private func subscribe(_ token: UUID, _ continuation: AsyncStream<SyncStatus>.Continuation) {
+  private func subscribe(_ token: UUID, _ continuation: AsyncStream<SyncState>.Continuation) {
     subscribers[token] = continuation
-    continuation.yield(status)
+    continuation.yield(state)
   }
 
   private func unsubscribe(_ token: UUID) { subscribers[token] = nil }
 
   // MARK: 生命周期
 
-  /// 登记同步区、对账一次，并从此在每次本机写入提交后对账。
+  /// 登记同步区、全量对账一次，之后每次本机提交只登记它改动的记录。
   func start() async throws {
     await queue.ensureZone(zoneID)
+    let changes = await store.syncChanges()  // 先订阅再对账：两者之间的写入不会漏
     try await reconcile()
-    watcher = Task { [store] in
-      do {
-        for try await _ in store.observe(Set(Table.synced), { _ in () }) {
-          do { try await self.reconcile() } catch { await self.report(error, recordName: nil) }
-        }
-      } catch {
-        await self.report(error, recordName: nil)
+    watcher = Task {
+      for await change in changes {
+        do { try await self.register(change) } catch { self.report(error, recordName: nil) }
       }
     }
   }
@@ -70,11 +68,22 @@ actor SyncCoordinator {
     watcher = nil
   }
 
-  /// 待推送 = 数据库推导：从未推送过或推送后又改过的记录；服务器有而本机已不在的记录（删除）。
+  /// 全量对账。待推送 = 数据库推导：从未推送过或推送后又改过的记录；服务器有而本机已不在的记录（删除）。
   /// 本次尚未成功的推送在引擎里丢了也没关系，下一次对账会重新登记。
   func reconcile() async throws {
     guard needsDecision == nil else { return }
-    let pending = try await store.pendingSync()
+    needsFullReconcile = false
+    await enqueue(try await store.pendingSync())
+  }
+
+  /// 一次本机提交的增量；nil（改动范围未知）或此前有搁置的登记时全量对账。
+  private func register(_ change: PendingSync?) async throws {
+    guard needsDecision == nil else { return }
+    guard let change, !needsFullReconcile else { return try await reconcile() }
+    await enqueue(change)
+  }
+
+  private func enqueue(_ pending: PendingSync) async {
     guard !pending.saves.isEmpty || !pending.deletes.isEmpty else { return }
     await queue.enqueue(saves: pending.saves.map { recordID($0.id) }, deletes: pending.deletes.map(recordID))
   }
@@ -86,7 +95,7 @@ actor SyncCoordinator {
       let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
       let record = RecordMapper.record(from: row, zoneID: zoneID, base: base)
       if row.table == .attachments {
-        guard case .text(let hash)? = row.fields["hash"], let file = store.files.url(hash: hash) else {
+        guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
           report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
           return nil
         }
@@ -132,19 +141,13 @@ actor SyncCoordinator {
       try await accountChange(change)
     case .cloudDataLost(let loss):
       status = .needsDecision(loss == .deleted ? .cloudDataDeleted : .cloudDataReset)
-    case .fetchStarted:
-      fetchStartedAt = timing.now()
     case .syncing(let busy):
       if busy, status == .idle { status = .syncing }
       if !busy, status == .syncing { status = .idle }
     case .fetched(let modifications, let deletions):
       guard needsDecision == nil else { return }
-      let startedAt = fetchStartedAt
-      fetchStartedAt = nil
-      try await applyFetched(modifications, deletions)
-      await log?.recordFetch(modifications.map(\.recordID.recordName), startedAt: startedAt, appliedAt: timing.now())
+      try await applyFetched(modifications, deletions)  // 应用时的改动（本机胜出的版本、冲突副本）经提交增量登记
       if case .failed = status { status = .idle }
-      try await reconcile()
     case .sent(let saved, let failedSaves, let deleted, let failedDeletes):
       guard needsDecision == nil else { return }
       try await processSent(saved, failedSaves, deleted, failedDeletes)
@@ -229,11 +232,13 @@ actor SyncCoordinator {
     _ saved: [CKRecord], _ failedSaves: [(record: CKRecord, error: CKError)], _ deleted: [CKRecord.ID],
     _ failedDeletes: [(id: CKRecord.ID, error: CKError)]
   ) async throws {
+    var changedSince: [CKRecord.ID] = []
     for record in saved {
       guard let row = RecordMapper.row(from: record) else { continue }
-      try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record))
+      // 引擎发送的是取走时的版本；之后又改过的，引擎已移除它的待办，要重新登记
+      if try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record)) { changedSince.append(record.recordID) }
     }
-    await log?.recordSend(saved.map(\.recordID.recordName), at: timing.now())
+    var resend = changedSince
     for id in deleted { try await store.dropSyncMetadata(id.recordName) }
 
     var blocked = false
@@ -249,6 +254,7 @@ actor SyncCoordinator {
         // 服务器上没有这条记录（或整个同步区没了）：忘掉旧系统字段，作为新记录重新上传。
         if error.code == .zoneNotFound { await queue.ensureZone(zoneID) }
         try await store.dropSyncMetadata(record.recordID.recordName)
+        resend.append(record.recordID)
       default:
         blocked = classify(error, recordName: record.recordID.recordName) || blocked
       }
@@ -262,8 +268,9 @@ actor SyncCoordinator {
     }
 
     if !saved.isEmpty, failedSaves.isEmpty, failedDeletes.isEmpty, needsDecision == nil { status = .idle }
-    // 停在配额或未预期失败时不立刻重新登记（会空转）；下一次本机写入或启动时对账会重试。
-    if !blocked { try await reconcile() }
+    // 停在配额或未预期失败时不立刻重新登记（会空转）；下一次本机写入时全量对账重试。
+    if blocked { needsFullReconcile = true }
+    if !resend.isEmpty { await queue.enqueue(saves: resend, deletes: []) }
   }
 
   /// 把 CloudKit 错误映射到状态。返回 true 表示这类失败不应立刻重试。瞬时网络类错误交给引擎自己重试。
@@ -292,9 +299,11 @@ actor SyncCoordinator {
   }
 
   private func report(_ message: String, recordType: String?, recordName: String?, failed: Bool = false) {
-    issues.append(SyncIssue(recordType: recordType, recordName: recordName, message: message))
-    if issues.count > Self.issueLimit { issues.removeFirst(issues.count - Self.issueLimit) }
-    if failed, needsDecision == nil { status = .failed(message) }
+    var next = state
+    next.issues.append(SyncIssue(recordType: recordType, recordName: recordName, message: message))
+    if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }
+    if failed, needsDecision == nil { next.status = .failed(message) }
+    state = next  // 问题与状态一次送达
   }
 
   private func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }

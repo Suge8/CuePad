@@ -69,6 +69,16 @@ public enum PiInstallError: Error, Equatable {
     case foreignFile
 }
 
+extension PiInstallError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .piNotFound: "没有找到 pi 命令"
+        case .piTooOld(let found): "Pi \(found) 太旧，需要 \(PiVersion.minimumSupported) 或更新"
+        case .foreignFile: "Pi 扩展目录里已有同名的其他文件，没有覆盖"
+        }
+    }
+}
+
 /// 在哪里找 `pi` 可执行文件。GUI 应用的 PATH 很短，所以除了 PATH 还查常见安装位置。
 public struct PiExecutableLocator: Sendable {
     public var searchDirectories: [URL]

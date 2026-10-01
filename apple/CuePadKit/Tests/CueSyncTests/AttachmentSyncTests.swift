@@ -27,11 +27,21 @@ import Testing
     ]
   }
 
+  /// 存入图片并在卡片里引用它（引用时登记附件记录），返回哈希与附件记录的 id。
+  private func referencedImage(_ data: Data) async throws -> (hash: String, id: String) {
+    let hash = try store.files.store(data)
+    _ = try await store.createCard(in: nil, body: "![](cuepad://img/\(hash))")
+    let id = try #require(try RawDB(rig.fixture.url).rows("SELECT id FROM attachments WHERE hash = '\(hash)'").first?[0])
+    return (hash, id)
+  }
+
+  private func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: testZone) }
+
   @Test func pushedAttachmentRecordCarriesTheFileAsAnAsset() async throws {
     let data = pngData(width: 6, height: 6)
-    let attachment = try await store.addImage(data)
+    let attachment = try await referencedImage(data)
 
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(attachment.id)))
+    let record = try #require(await rig.coordinator.record(for: recordID(attachment.id)))
 
     #expect(record["hash"] as? String == attachment.hash)
     let asset = try #require(record["file"] as? CKAsset)
@@ -39,8 +49,9 @@ import Testing
   }
 
   @Test func attachmentWhoseFileIsMissingIsNotPushed() async throws {
-    let attachment = try await store.registerAttachment(hash: String(repeating: "b", count: 64), byteCount: 1, format: "png")
-    #expect(await rig.coordinator.record(for: rig.recordID(attachment.id)) == nil)
+    let attachment = try await referencedImage(pngData(width: 3, height: 3))
+    try FileManager.default.removeItem(at: try #require(store.files.fileURL(for: attachment.hash)))
+    #expect(await rig.coordinator.record(for: recordID(attachment.id)) == nil)
   }
 
   @Test func downloadedAssetIsAdoptedIntoTheAttachmentDirectoryByHash() async throws {
@@ -73,14 +84,15 @@ import Testing
   }
 
   @Test func remoteAttachmentDeletionRemovesTheFileUnlessACardStillReferencesIt() async throws {
-    let free = try await store.addImage(pngData(width: 4, height: 4, shade: 0.1))
-    let used = try await store.addImage(pngData(width: 4, height: 4, shade: 0.9))
-    _ = try await store.createCard(in: nil, body: "![](cuepad://img/\(used.hash))")
+    let free = try await referencedImage(pngData(width: 4, height: 4, shade: 0.1))
+    let used = try await referencedImage(pngData(width: 4, height: 4, shade: 0.9))
+    let freeCard = try #require(try await store.cards(in: nil).first { $0.body.contains(free.hash) })
+    try await store.updateCard(freeCard.id) { $0.body = "图片删掉了" }
     try await rig.coordinator.reconcile()
     try await rig.simulatePush()
 
     await rig.coordinator.handle(.fetched(
-      modifications: [], deletions: [(rig.recordID(free.id), "attachments"), (rig.recordID(used.id), "attachments")]))
+      modifications: [], deletions: [(recordID(free.id), "attachments"), (recordID(used.id), "attachments")]))
 
     #expect(throws: CueStoreError.notFound) { try store.files.original(hash: free.hash) }
     #expect(try !store.files.original(hash: used.hash).isEmpty)

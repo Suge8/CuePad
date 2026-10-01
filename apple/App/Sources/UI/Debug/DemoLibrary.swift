@@ -17,7 +17,7 @@ enum DemoLibrary {
     }
 
     static func seed(_ store: CueStore) async throws {
-        let image = try await store.addImage(sampleImage()).hash
+        let image = try store.files.store(sampleImage())
         let source = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(UUID().uuidString).db")
         defer { try? FileManager.default.removeItem(at: source) }
         try writeLegacy(projects(image: image), to: source)

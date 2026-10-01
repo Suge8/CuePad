@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 /// 卡片可见：自身未删除，且所属项目（如果有）未删除。
@@ -44,11 +45,6 @@ extension CueStore {
     try select(Card.self, where: "(\(cardVisible)) AND projectID IS ?", [project], orderBy: "sortKey, id")
   }
 
-  /// 全局收藏（可见的）。
-  public func favoriteCards() throws -> [Card] {
-    try select(Card.self, where: "(\(cardVisible)) AND isFavorite = 1", orderBy: "sortKey, id")
-  }
-
   /// 回收站里单独删除的卡片，最近删除的在前；随项目删除的卡归在该项目名下，不在这里。
   public func trashedCards() throws -> [Card] {
     try select(Card.self, where: "deletedAt IS NOT NULL", orderBy: "deletedAt DESC, id")
@@ -64,16 +60,6 @@ extension CueStore {
   /// 已完成任务，最近完成的在前。
   public func completedTasks() throws -> [CueTask] {
     try select(CueTask.self, where: "completedAt IS NOT NULL", orderBy: "completedAt DESC, id")
-  }
-
-  public func tags() throws -> [Tag] {
-    try select(Tag.self, orderBy: "name, id")
-  }
-
-  /// 某卡片的标签，按名称。
-  public func tags(of card: UUID) throws -> [Tag] {
-    try select(
-      Tag.self, where: "id IN (SELECT tagID FROM cardTags WHERE cardID = ?)", [card], orderBy: "name, id")
   }
 
   /// 发送记录，最近的在前。
@@ -96,7 +82,7 @@ extension CueStore {
           $0.uuid(0),
           LastSend(
             sentAt: $0.date(1),
-            target: SendTarget(kind: SendTargetKind(rawValue: $0.text(2)), name: $0.text(3), ref: $0.textOrNil(4)))
+            target: SendTarget(kind: Open(rawValue: $0.text(2)), name: $0.text(3), ref: $0.textOrNil(4)))
         )
       })
   }
@@ -113,7 +99,7 @@ extension CueStore {
       ORDER BY MAX(sentAt) DESC, targetKind, targetName
       """
     ) {
-      SendTarget(kind: SendTargetKind(rawValue: $0.text(0)), name: $0.text(1), ref: $0.textOrNil(2))
+      SendTarget(kind: Open(rawValue: $0.text(0)), name: $0.text(1), ref: $0.textOrNil(2))
     }
   }
 
@@ -141,7 +127,7 @@ extension CueStore {
   }
 
   /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。
-  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串。卡片只按正文与标签命中；项目名只用于
+  /// 文字按空白拆成多个词，全部命中才算命中，每个词是子串。卡片只按正文命中；项目名只用于
   /// `projects` 里单列的项目（每个词都在名字里）。按项目缩小卡片范围用 `projects` 筛选。
   /// 卡片按最近修改倒序（同刻按 id）；`totalCards` 是全部命中数。
   public func search(_ query: SearchQuery, limit: Int = 20, offset: Int = 0) throws -> SearchResults {
@@ -174,9 +160,8 @@ extension CueStore {
     var arguments: [any SQLBindable] = []
 
     for term in terms {
-      parts.append(
-        "(id IN (\(Self.hit("card"))) OR id IN (SELECT cardID FROM cardTags WHERE tagID IN (\(Self.hit("tag")))))")
-      arguments += [Self.likePattern(term), Self.likePattern(term)]
+      parts.append("id IN (\(Self.hit("card")))")
+      arguments.append(Self.likePattern(term))
     }
     if let projects = query.projects {
       let ids = projects.compactMap { $0 }
@@ -189,7 +174,7 @@ extension CueStore {
       parts.append(alternatives.isEmpty ? "0" : "(\(alternatives.joined(separator: " OR ")))")
     }
     if let hasImages = query.hasImages {
-      parts.append("instr(body, 'cuepad://img/') \(hasImages ? ">" : "=") 0")
+      parts.append("instr(body, '\(CueFormat.imagePrefix)') \(hasImages ? ">" : "=") 0")
     }
     switch query.sent {
     case .any:

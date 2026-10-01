@@ -177,7 +177,7 @@ struct TaskRow: View {
     private func sendToPi(_ session: CuePi.PiSession) {
         let id = task.id, sessionID = session.sessionID
         Task {
-            guard await workspace.send(task.content, via: .pi(session.id), task: id) else { return }
+            guard await workspace.send(task.content, via: .pi(session.id, .send), task: id) else { return }
             workspace.perform { try await $0.updateTask(id) { $0.piSessionID = sessionID } }
         }
     }

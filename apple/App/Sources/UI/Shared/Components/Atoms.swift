@@ -78,11 +78,20 @@ struct SectionLabel: View {
     var systemImage: String?
     @Environment(\.palette) private var palette
 
+    /// iOS 跟随动态字体；Mac 用固定的小号字。
+    private static var font: Font {
+        #if os(iOS)
+        .caption.weight(.semibold)
+        #else
+        .system(size: 11, weight: .semibold)
+        #endif
+    }
+
     var body: some View {
         Group {
             if let systemImage { Label(text, systemImage: systemImage) } else { Text(text) }
         }
-        .font(.system(size: 11, weight: .semibold))
+        .font(Self.font)
         .foregroundStyle(palette.ink3)
     }
 }

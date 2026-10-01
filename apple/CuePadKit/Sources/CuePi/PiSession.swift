@@ -125,4 +125,17 @@ public enum PiBridgeError: Error, Equatable {
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`
     case rejected(String)
 }
+
+extension PiBridgeError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .insecureSocketDirectory(let path): "Pi 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
+        case .socketDirectoryTooLong: "Pi 连接目录的路径太长"
+        case .unknownSession: "这个 Pi 会话已经结束"
+        case .sessionEnded: "发送途中 Pi 会话结束了"
+        case .ackTimeout: "Pi 没有及时确认收到，请确认会话仍在运行"
+        case .rejected(let reason): "Pi 拒绝了这条消息：\(reason)"
+        }
+    }
+}
 #endif

@@ -18,10 +18,7 @@ public enum TargetSelector: Sendable, Equatable {
     case bundleID(String)
 
     public static let terminal = bundleID("com.apple.Terminal")
-    public static let iTerm = bundleID("com.googlecode.iterm2")
     public static let ghostty = bundleID("com.mitchellh.ghostty")
-    public static let zed = bundleID("dev.zed.Zed")
-    public static let vscode = bundleID("com.microsoft.VSCode")
     public static let cursor = bundleID("com.todesktop.230313mzl4w4u92")
 }
 
@@ -32,6 +29,18 @@ public enum DispatchError: String, Error, Sendable {
     case targetUnavailable = "DISPATCH_TARGET_UNAVAILABLE"
     case eventCreateFailed = "CG_EVENT_CREATE_FAILED"
     case clipboardWriteFailed = "CLIPBOARD_WRITE_FAILED"
+}
+
+extension DispatchError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .accessibilityRequired: "CuePad 没有辅助功能权限，无法投送到其他应用（在 Mac 的“系统设置 › 隐私与安全性 › 辅助功能”里授权）"
+        case .noTarget: "没有可投送的目标应用"
+        case .targetUnavailable: "目标应用没有运行，或没能切到前台"
+        case .eventCreateFailed: "无法生成按键事件"
+        case .clipboardWriteFailed: "写入剪贴板失败"
+        }
+    }
 }
 
 /// 卡片正文按原顺序切成的文字与图片。

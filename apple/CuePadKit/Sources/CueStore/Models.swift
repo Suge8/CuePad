@@ -1,81 +1,35 @@
+import CueText
 import Foundation
 
-/// 分块编号方式。其他版本可能写入本版本不认识的值：保留为 `.unknown`（原样写回），不当成已知值。
-public enum Numbering: Hashable, Sendable, RawRepresentable {
-  case none, decimal, alpha, cjk
-  case unknown(String)
-
-  public init(rawValue: String) {
-    switch rawValue {
-    case "none": self = .none
-    case "decimal": self = .decimal
-    case "alpha": self = .alpha
-    case "cjk": self = .cjk
-    default: self = .unknown(rawValue)
-    }
-  }
-
-  public var rawValue: String {
-    switch self {
-    case .none: "none"
-    case .decimal: "decimal"
-    case .alpha: "alpha"
-    case .cjk: "cjk"
-    case .unknown(let raw): raw
-    }
-  }
-}
-
-/// 发送目标种类。其他版本可能写入本版本不认识的值：保留为 `.unknown`（原样写回），不当成已知值。
-public enum SendTargetKind: Hashable, Sendable, RawRepresentable {
+/// 发送目标种类。
+public enum SendTargetKind: String, Sendable, CaseIterable {
   case piSession, app, clipboard
-  case unknown(String)
-
-  public init(rawValue: String) {
-    switch rawValue {
-    case "piSession": self = .piSession
-    case "app": self = .app
-    case "clipboard": self = .clipboard
-    default: self = .unknown(rawValue)
-    }
-  }
-
-  public var rawValue: String {
-    switch self {
-    case .piSession: "piSession"
-    case .app: "app"
-    case .clipboard: "clipboard"
-    case .unknown(let raw): raw
-    }
-  }
 }
 
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Sendable, CaseIterable {
-  case projects, cards, tags, cardTags, tasks, sendRecords, attachments, piSessions, projectDirectories
-  case piSessionStates, deliveryRequests, probes
+  case projects, cards, tasks, sendRecords, attachments, piSessions, projectDirectories
+  case piSessionStates, deliveryRequests
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
-    .projects, .cards, .tags, .cardTags, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .probes,
+    .projects, .cards, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests,
   ]
 
+  /// 同步的列（CKRecord 的字段）；不含本机列。
   package var columns: [String] {
     switch self {
     case .projects: Project.columns
     case .cards: Card.columns
-    case .tags: Tag.columns
-    case .cardTags: CardTag.columns
     case .tasks: CueTask.columns
     case .sendRecords: SendRecord.columns
     case .attachments: Attachment.columns
     case .piSessions: PiSession.columns
     case .projectDirectories: ["projectID", "directory"]
     case .piSessionStates: PiSessionState.columns
-    case .deliveryRequests: DeliveryRequest.columns
-    case .probes: Probe.columns
+    case .deliveryRequests: DeliveryRequest.syncedColumns
     }
   }
 }
@@ -109,8 +63,8 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var projectID: UUID?
   /// 纯字符串正文：分块为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
-  public var numbering: Numbering
-  public var isFavorite: Bool
+  public var numbering: Open<CueNumbering>
+  public var isPinned: Bool
   public var variableValues: [String: String]
   /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
   /// 由用户用 `resolveConflict` 选择保留哪一个。普通卡为 nil。
@@ -120,23 +74,6 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-}
-
-public struct Tag: Identifiable, Equatable, Sendable {
-  public let id: UUID
-  public var name: String
-  public var color: String?
-  public var createdAt: Date
-  public var modifiedAt: Date
-}
-
-/// 卡片与标签的关联；同步记录各有单值 id，所以关联也是独立记录。
-struct CardTag: Sendable {
-  let id: UUID
-  var cardID: UUID
-  var tagID: UUID
-  var createdAt: Date
-  var modifiedAt: Date
 }
 
 public struct CueTask: Identifiable, Equatable, Sendable {
@@ -155,7 +92,7 @@ public struct SendRecord: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// 发送时的内容快照；卡片之后改动或删除都不影响。
   public var content: String
-  public var targetKind: SendTargetKind
+  public var targetKind: Open<SendTargetKind>
   public var targetName: String
   /// Pi 会话 id 或应用 bundle id。
   public var targetRef: String?
@@ -193,21 +130,25 @@ public struct PiSession: Identifiable, Equatable, Sendable {
 }
 
 public struct SendTarget: Equatable, Sendable {
-  public var kind: SendTargetKind
+  public var kind: Open<SendTargetKind>
   public var name: String
   public var ref: String?
 
-  public init(kind: SendTargetKind, name: String, ref: String? = nil) {
+  public init(kind: Open<SendTargetKind>, name: String, ref: String? = nil) {
     self.kind = kind
     self.name = name
     self.ref = ref
+  }
+
+  public init(kind: SendTargetKind, name: String, ref: String? = nil) {
+    self.init(kind: .known(kind), name: name, ref: ref)
   }
 }
 
 /// 卡片搜索条件。所有条件同时满足；筛选在分页之前生效。
 /// 没有关键词、没有任何筛选时列出该范围内的全部卡片（按最近修改）。
 public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
-  /// 按空白拆成多个词，每个词都要命中（子串，大小写不敏感）。卡片按正文与标签命中；项目名只用于单列的项目结果。
+  /// 按空白拆成多个词，每个词都要命中（子串，大小写不敏感）。卡片按正文命中；项目名只用于单列的项目结果。
   /// 空表示不按文字过滤。
   public var text: String
   /// 限定所属项目；nil 元素表示未归档；nil 表示不限；空集合无结果。
@@ -245,7 +186,7 @@ public enum SendCondition: Equatable, Sendable {
   /// 从未发送过（没有任何关联该卡的发送记录）。
   case never
   /// 至少发送过一次；可限目标种类与名称（名称精确匹配），都省略表示发到哪里都行。
-  case sent(kind: SendTargetKind? = nil, name: String? = nil)
+  case sent(kind: Open<SendTargetKind>? = nil, name: String? = nil)
 }
 
 /// 一张卡最近一次发送：何时、发给谁。
@@ -278,7 +219,6 @@ public struct ProjectSummary: Equatable, Sendable {
 public enum CueStoreError: Error, Equatable {
   case notFound
   case blankTaskContent
-  case blankTagName
   case notAnImage
   /// 目标卡必须是该项目里未删除的卡。
   case invalidGoal
@@ -291,6 +231,25 @@ public enum CueStoreError: Error, Equatable {
   case blankDeliveryContent
   /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
+  /// 库文件的结构版本不是本版本建的（开发期旧结构或更新版本的库），不打开。
+  case unsupportedSchemaVersion(Int)
+}
+
+extension CueStoreError: LocalizedError {
+  public var errorDescription: String? {
+    switch self {
+    case .notFound: "找不到这条记录，可能已被删除"
+    case .blankTaskContent: "任务内容不能为空"
+    case .notAnImage: "不是可识别的图片"
+    case .invalidGoal: "目标卡必须是这个项目里未删除的卡片"
+    case .invalidProject: "目标项目已不存在或在回收站"
+    case .notAConflictCopy: "这张卡片不是冲突副本"
+    case .attachmentHashMismatch: "附件内容与其哈希不符"
+    case .blankDeliveryContent: "发送内容不能为空"
+    case .attachmentFilesNotRemoved(let hashes): "已永久删除，但有 \(hashes.count) 个图片文件没能删掉"
+    case .unsupportedSchemaVersion(let version): "资料库由另一个版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
+    }
+  }
 }
 
 // MARK: - 行映射
@@ -309,35 +268,17 @@ extension Project: Record {
 
 extension Card: Record {
   static let table = Table.cards
-  static let columns = ["id", "projectID", "body", "numbering", "isFavorite", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf"]
+  static let columns = ["id", "projectID", "body", "numbering", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf"]
   var bindings: [any SQLBindable] {
     let variables = try! JSONEncoder.sorted.encode(variableValues)
-    return [id, projectID, body, numbering.rawValue, isFavorite, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf]
+    return [id, projectID, body, numbering.rawValue, isPinned, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2),
-      numbering: Numbering(rawValue: row.text(3)), isFavorite: row.bool(4),
+      numbering: Open(rawValue: row.text(3)), isPinned: row.bool(4),
       variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(5).utf8))) ?? [:],
       conflictOf: row.uuidOrNil(10), sortKey: row.text(6), deletedAt: row.dateOrNil(7), createdAt: row.date(8), modifiedAt: row.date(9))
-  }
-}
-
-extension Tag: Record {
-  static let table = Table.tags
-  static let columns = ["id", "name", "color", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, name, color, createdAt, modifiedAt] }
-  init(row: Row) {
-    self.init(id: row.uuid(0), name: row.text(1), color: row.textOrNil(2), createdAt: row.date(3), modifiedAt: row.date(4))
-  }
-}
-
-extension CardTag: Record {
-  static let table = Table.cardTags
-  static let columns = ["id", "cardID", "tagID", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, cardID, tagID, createdAt, modifiedAt] }
-  init(row: Row) {
-    self.init(id: row.uuid(0), cardID: row.uuid(1), tagID: row.uuid(2), createdAt: row.date(3), modifiedAt: row.date(4))
   }
 }
 
@@ -360,7 +301,7 @@ extension SendRecord: Record {
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
-      targetKind: SendTargetKind(rawValue: row.text(2)), targetName: row.text(3),
+      targetKind: Open(rawValue: row.text(2)), targetName: row.text(3),
       targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5), taskID: row.uuidOrNil(6),
       sentAt: row.date(7), modifiedAt: row.date(8))
   }

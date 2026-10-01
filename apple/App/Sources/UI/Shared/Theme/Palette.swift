@@ -1,7 +1,11 @@
 import CueEditor
 import SwiftUI
 
-/// 纸与墨：内容层（卡片、编辑页、列表）的实色。控件层用系统玻璃，不在这里。
+/// 纸与墨：内容层（卡片、编辑页、列表）的实色与全部颜色 token。控件层用系统玻璃，不在这里。
+///
+/// **强调色是墨**：品牌（logo、吉祥物）只有纸与墨两种颜色。主按钮、选中、焦点一律用墨，
+/// 这样界面上出现的彩色只有两种意思——状态（等你确认橙、出错红）和项目身份（项目图标）——一眼能读懂。
+/// 深色是"夜里的纸"：暖黑的桌面、同一色温略亮的纸、更深一档的侧栏，三层靠明度分开，不用中性灰或冷蓝。
 /// 增强对比度时加深次要文字与描边。
 struct Palette {
     let dark: Bool
@@ -12,18 +16,43 @@ struct Palette {
         highContrast = contrast == .increased
     }
 
-    var paper: Color { dark ? Color(hex: 0x1F1E1C) : Color(hex: 0xFCFBF8) }
-    var desk: Color { dark ? Color(hex: 0x131312) : Color(hex: 0xEFEDE8) }
-    var ink: Color { dark ? Color(hex: 0xEEEBE4) : Color(hex: 0x1C1B19) }
-    var ink2: Color { ink.opacity(highContrast ? 0.85 : 0.66) }
-    var ink3: Color { ink.opacity(highContrast ? 0.7 : 0.42) }
-    var hair: Color { (dark ? Color.white : .black).opacity(highContrast ? 0.3 : (dark ? 0.08 : 0.07)) }
+    // MARK: 层（由后到前：侧栏 → 桌面 → 纸）
+
+    var sidebar: Color { dark ? Color(hex: 0x141210) : Color(hex: 0xE6E2DB) }
+    var desk: Color { dark ? Color(hex: 0x1B1916) : Color(hex: 0xEFEDE8) }
+    var paper: Color { dark ? Color(hex: 0x282420) : Color(hex: 0xFCFBF8) }
+
+    // MARK: 墨
+
+    var ink: Color { dark ? Color(hex: 0xEEE9E1) : Color(hex: 0x1C1B19) }
+    var ink2: Color { ink.opacity(highContrast ? 0.85 : 0.68) }
+    var ink3: Color { ink.opacity(highContrast ? 0.7 : 0.45) }
+    var hair: Color { (dark ? Color.white : .black).opacity(highContrast ? 0.3 : (dark ? 0.09 : 0.07)) }
     var fill: Color { (dark ? Color.white : .black).opacity(dark ? 0.06 : 0.04) }
+
+    // MARK: 强调（墨）
+
+    /// 主按钮底色、焦点、可点击的强调文字。
+    var accent: Color { ink }
+    /// 主按钮上的字。
+    var onAccent: Color { paper }
+    /// 选中底色：侧栏与列表的当前项用它垫一层墨色浅底，文字保持墨色并加粗；Mac 与 iOS 共用，不用系统灰胶囊。
+    var selection: Color { ink.opacity(dark ? 0.14 : 0.09) }
+    /// 与 `accent` / `onAccent` 同义；iOS 界面仍用这组名字。
+    var solid: Color { accent }
+    var onSolid: Color { onAccent }
+
+    // MARK: 状态（只表达含义，不给文字大面积上色）
+
+    /// 等你确认、需要处理。
+    var attention: Color { dark ? Color(hex: 0xF0A44B) : Color(hex: 0xC9711A) }
+    /// 出错。
+    var failure: Color { dark ? Color(hex: 0xF07A6A) : Color(hex: 0xC23B2B) }
+
+    // MARK: 正文里的变量（朱砂色标注）
+
     var variable: Color { dark ? Color(hex: 0xE9B872) : Color(hex: 0x98560F) }
     var variableBackground: Color { variable.opacity(dark ? 0.16 : 0.11) }
-    /// 实心主按钮（发送）的底与字。
-    var solid: Color { ink }
-    var onSolid: Color { dark ? .black : .white }
 
     static func projectTint(_ hex: String) -> Color {
         Color(hex: UInt32(hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0x8A8A8A)
@@ -49,13 +78,14 @@ extension EnvironmentValues {
     }
 }
 
-/// 按外观、对比度注入 `palette`，并按设置覆盖明暗。
+/// 按外观、对比度注入 `palette`，并把强调色（墨）设为系统控件的 tint：选中、焦点、开关都用它。
 struct PaletteProvider: ViewModifier {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
-        content.environment(\.palette, Palette(scheme, contrast: contrast))
+        let palette = Palette(scheme, contrast: contrast)
+        content.environment(\.palette, palette).tint(palette.accent)
     }
 }
 

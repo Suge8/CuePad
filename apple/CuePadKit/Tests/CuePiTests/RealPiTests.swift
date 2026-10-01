@@ -24,6 +24,21 @@ struct RealPiTests {
         try PiHistory.index(file: #require(session.sessionFile), from: nil).history
     }
 
+    /// 会话文件里的消息（文件顺序）：角色、文字、图片数。真实 Pi 写出的内容，作为投送是否到达模型的证据。
+    private func messages(of session: PiSession) -> [(role: String, text: String, images: Int)] {
+        guard let file = session.sessionFile, let text = try? String(contentsOf: file, encoding: .utf8) else { return [] }
+        return text.split(separator: "\n").compactMap { line in
+            guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+                  object["type"] as? String == "message", let message = object["message"] as? [String: Any],
+                  let role = message["role"] as? String else { return nil }
+            let blocks = message["content"] as? [[String: Any]] ?? []
+            let text = (message["content"] as? String) ?? blocks.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }.joined()
+            return (role, text, blocks.filter { $0["type"] as? String == "image" }.count)
+        }
+    }
+
+    private func replies(of session: PiSession) -> [String] { messages(of: session).filter { $0.role == "assistant" }.map(\.text) }
+
     @Test func installedExtensionIsLoadedByPiAndReportsTheSession() async throws {
         try await withRig { pi, _, s in
             #expect(s.pid == pi.pid)
@@ -50,11 +65,8 @@ struct RealPiTests {
             let outputting = try #require(states.firstIndex(of: .outputting))
             #expect(outputting < states.count - 1, "outputting 在 done 之前")
 
-            try await eventually("会话文件写入回复", timeout: .seconds(20)) { (try? self.history(of: s).turns.first?.status) == .completed }
-            let turn = try #require(history(of: s).turns.first)
-            #expect(turn.prompt == "hello")
-            #expect(turn.reply == "ECHO hello IMAGES[]")
-            #expect(turn.promptedAt != nil && turn.repliedAt != nil)
+            try await eventually("会话文件写入回复", timeout: .seconds(20)) { self.replies(of: s) == ["ECHO hello IMAGES[]"] }
+            #expect(try history(of: s).firstPrompt == "hello")
         }
     }
 
@@ -64,7 +76,7 @@ struct RealPiTests {
             try pi.prompt("[[tool:echo hi]]")
             try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
             #expect(log.states.contains { if case .tool(let name, let running, _) = $0 { name == "bash" && running == ["bash"] } else { false } })
-            try await eventually("回复", timeout: .seconds(20)) { (try? self.history(of: s).turns.first?.reply) == "TOOL_DONE" }
+            try await eventually("回复", timeout: .seconds(20)) { self.replies(of: s).last == "TOOL_DONE" }
         }
     }
 
@@ -99,11 +111,11 @@ struct RealPiTests {
         try await withRig { _, bridge, s in
             let delivery = try await bridge.send(PiMessage(text: "look", images: [PiImage(mimeType: "image/png", data: tinyPNG)]), to: s.id)
             #expect(delivery == .immediate)
-            try await eventually("回复写入", timeout: .seconds(20)) { (try? self.history(of: s).turns.first?.status) == .completed }
-            let turn = try #require(history(of: s).turns.first)
-            #expect(turn.prompt.hasPrefix("look"))
-            #expect(turn.promptImageCount == 1)
-            #expect(turn.reply?.contains("IMAGES[image/png:") == true, "假模型看到了图片：\(turn.reply ?? "nil")")
+            try await eventually("回复写入", timeout: .seconds(20)) { !self.replies(of: s).isEmpty }
+            let prompt = try #require(messages(of: s).first { $0.role == "user" })
+            #expect(prompt.text.hasPrefix("look") && prompt.images == 1)
+            let reply = replies(of: s)[0]
+            #expect(reply.contains("IMAGES[image/png:"), "假模型看到了图片：\(reply)")
         }
     }
 
@@ -117,13 +129,9 @@ struct RealPiTests {
             #expect(steer == .queued(.steer))
             #expect(follow == .queued(.followUp))
 
-            try await eventually("三轮都回复", timeout: .seconds(30)) {
-                let turns = (try? self.history(of: s).turns) ?? []
-                return turns.count == 3 && turns.allSatisfy { $0.status == .completed }
-            }
-            let turns = try history(of: s).turns
-            #expect(turns[1].prompt == "STEER-ME" && turns[1].reply?.hasPrefix("ECHO STEER-ME") == true)
-            #expect(turns[2].prompt == "FOLLOW-ME" && turns[2].reply?.hasPrefix("ECHO FOLLOW-ME") == true)
+            try await eventually("三轮都回复", timeout: .seconds(30)) { self.replies(of: s).count == 3 }
+            let replies = replies(of: s)
+            #expect(replies[1].hasPrefix("ECHO STEER-ME") && replies[2].hasPrefix("ECHO FOLLOW-ME"))
         }
     }
 

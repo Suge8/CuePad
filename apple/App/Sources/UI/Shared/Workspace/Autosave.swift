@@ -20,8 +20,10 @@ final class Autosave {
         timer?.cancel()
         timer = Task { [weak self] in
             try? await Task.sleep(for: Self.delay)
-            guard !Task.isCancelled else { return }
-            await self?.flush()
+            guard !Task.isCancelled, let self else { return }
+            // 先放下自己：flush 会取消 timer，取消的若是正在跑的这一个，保存就在已取消的任务里执行
+            self.timer = nil
+            await self.flush()
         }
     }
 

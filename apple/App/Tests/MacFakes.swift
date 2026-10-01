@@ -1,12 +1,9 @@
 #if os(macOS)
-import CoreGraphics
 import CueDispatch
 import CuePi
 import CueStore
 import Foundation
-import ImageIO
 import SQLite3
-import UniformTypeIdentifiers
 @testable import CuePad
 
 // MARK: 替身
@@ -73,86 +70,6 @@ final class RecordingWindow: ShellWindow {
 
     func show() { events.append("show"); isVisible = true; isFocused = true }
     func hide() { events.append("hide"); isVisible = false; isFocused = false }
-}
-
-// MARK: 装配
-
-/// 一次"App 启动"：临时库目录 + 独立 UserDefaults + 替身通道。`relaunch()` 用同一批目录再起一个实例。
-final class Rig {
-    static let hostID = "mac-test"
-    let directory = FileManager.default.temporaryDirectory
-        .appending(path: "cuepad-app-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
-    /// 偏好放在临时目录里（路径型套件），随目录一起删除，不在 ~/Library/Preferences 里留文件。
-    var suite: String { directory.appending(path: "preferences").path }
-    let channels = FakeChannels()
-    let sync = FakeSync()
-    let updater = FakeUpdater()
-    let wakeCenter = NotificationCenter()
-    let hotkeys = InMemoryHotkeys()
-    let window = RecordingWindow()
-    let legacy: URL?
-    let historyStorage: (any PiIndexStorage)?
-    private(set) var services: AppServices!
-
-    init(legacy: URL? = nil, historyStorage: (any PiIndexStorage)? = nil) {
-        self.legacy = legacy
-        self.historyStorage = historyStorage
-        services = makeServices()
-    }
-
-    deinit {
-        try? FileManager.default.removeItem(at: directory)
-    }
-
-    var defaults: UserDefaults {
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return UserDefaults(suiteName: suite)!
-    }
-    var piPaths: PiPaths {
-        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: directory.appending(path: "sock"))
-    }
-
-    @discardableResult
-    func relaunch() -> AppServices {
-        services.cancelBackgroundWork()
-        services = makeServices()
-        return services
-    }
-
-    /// 没有旧库：隔离目录；有旧库：把它挂到"应用支持目录"里 Electron 版的位置（旧库位置只由这条规则决定）。
-    private func location() -> LibraryLocation {
-        if let legacy {
-            let support = directory.appending(path: "support", directoryHint: .isDirectory)
-            let electron = support.appending(path: "CuePad/cuepad.db")
-            try! FileManager.default.createDirectory(at: electron.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? FileManager.default.removeItem(at: electron)
-            try! FileManager.default.createSymbolicLink(at: electron, withDestinationURL: legacy)
-            return try! LibraryLocation.resolve(environment: [:], base: .applicationSupport(support))
-        }
-        return try! LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
-    }
-
-    private func makeServices() -> AppServices {
-        let mac = MacDependencies(
-            pi: PiBridge(socketDirectory: piPaths.socketDirectory),
-            channels: channels,
-            hotkeys: hotkeys,
-            paths: piPaths,
-            installer: PiExtensionInstaller(paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")])),
-            terminal: PiTerminalJumper(),
-            isAccessibilityTrusted: { true },
-            historyStorage: historyStorage,
-            hostID: Rig.hostID,
-            wakeNotifications: wakeCenter,
-            commandLineTool: CommandLineToolInstaller(
-                helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
-                linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
-            updater: updater)
-        let sync = self.sync
-        let services = AppServices(location: location(), defaults: defaults, sync: { _ in sync }, mac: mac)
-        services.windowShell = WindowShell(window: window)
-        return services
-    }
 }
 
 // MARK: 夹具

@@ -1,7 +1,7 @@
 import SwiftUI
 import WidgetKit
 
-/// 小组件的界面（界面 Worker 替换）。整块点击打开随手记（`DeepLink.capture`），卡片可用 `DeepLink.card` 链接直达。
+/// 小组件的界面。整块点击打开随手记（`DeepLink.capture`），卡片可用 `DeepLink.card` 链接直达。
 enum WidgetViews {
     static func inbox(_ entry: InboxEntry) -> some View {
         InboxView(entry: entry)

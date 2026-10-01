@@ -160,16 +160,18 @@ struct ImageTests {
     func lazyDecode() async throws {
         let h = EditorHarness(height: 400)
         var stored = ""
+        var urls: [URL] = []
         for i in 0..<20 {
-            let id = try h.store.store(makePNG(width: 800, height: 800, seed: i))
+            let id = try h.store.store(makePNG(width: 800, height: 800, seed: i + 100))
+            urls.append(try #require(h.store.fileURL(for: id)))
             stored += "第 \(i) 张\n![](cuepad://img/\(id))\n"
         }
-        let before = ImageLoading.decodeCount
+        func decoded(_ url: URL) -> Bool { Thumbnails.cached(at: url, maxPixel: ImageLoading.maxThumbnailPixel) != nil }
         h.load(stored)
         h.layout()
-        #expect(await h.wait { ImageLoading.decodeCount > before })
+        #expect(await h.wait { decoded(urls[0]) })
         await h.pump(0.3)
-        #expect(ImageLoading.decodeCount - before < 20)
+        #expect(!decoded(urls[19]))
     }
 }
 

@@ -27,7 +27,7 @@ struct MenuBarPad: View {
                                 Text(Workspace.sessionName(session)).font(.system(size: 13, weight: .medium))
                                 Spacer()
                                 Text(session.state.label).font(.system(size: 12))
-                                    .foregroundStyle(session.state.needsAttention ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                                    .foregroundStyle(session.state.labelColor(palette))
                             }
                             PiDetail(state: session.state, size: 11.5).padding(.leading, 20)
                         }
@@ -48,7 +48,7 @@ struct MenuBarPad: View {
                 .overlay(alignment: .bottomTrailing) {
                     if let notice = workspace.notice {
                         Text(notice.text).font(.system(size: 11.5))
-                            .foregroundStyle(notice.isError ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                            .foregroundStyle(notice.isError ? palette.failure : palette.ink3)
                             .padding(8)
                             .transition(.opacity)
                     }
@@ -59,18 +59,29 @@ struct MenuBarPad: View {
                     ForEach(projects ?? []) { item in Button(item.name) { project = item.id } }
                     Button("未归档") { project = nil }
                 } label: {
-                    HStack(spacing: 4) {
+                    // 看得出能点：图标 + 名称 + 上下箭头，按下有反馈
+                    HStack(spacing: 5) {
                         ProjectGlyph(project: current, size: 12)
                         Text(current?.name ?? "未归档").lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).accessibilityHidden(true)
                     }
+                    .padding(.horizontal, 8).frame(height: 26)
+                    .background(.primary.opacity(0.06), in: .capsule)
+                    .contentShape(.capsule)
                 }
-                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-                .foregroundStyle(.secondary)
+                .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
+                .foregroundStyle(.primary)
+                .accessibilityLabel("记入 \(current?.name ?? "未归档")")
                 Spacer()
-                Button("↩ 存为卡片", action: save).buttonStyle(PressStyle()).foregroundStyle(.secondary).disabled(empty).fixedSize()
-                SendControl(project: project, compact: true, disabled: empty) { send($0) }
+                if !empty {
+                    Button("↩ 存为卡片", action: save).buttonStyle(PressStyle()).foregroundStyle(.secondary).fixedSize()
+                        .transition(.opacity)
+                    SendControl(project: project, compact: true) { send($0) }
+                        .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
+                }
             }
             .font(.system(size: 12))
+            .animation(Motion.snappy, value: empty)
         }
         .padding(14)
         .frame(width: 360)
@@ -86,14 +97,10 @@ struct MenuBarPad: View {
         }
         #endif
         .observing(services.store, [.projects], into: $projects) { try $0.projects() }
-        .observing(services.store, [.projectDirectories], into: directories) { try $0.projectDirectories() }
+        .modifier(SessionProjectsTracker(workspace: workspace))
     }
 
     private var current: Project? { projects?.first { $0.id == project } }
-
-    private var directories: Binding<[UUID: String]?> {
-        Binding(get: { workspace.directories }, set: { workspace.directories = $0 })
-    }
 
     private func save() {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -103,7 +110,7 @@ struct MenuBarPad: View {
         workspace.attempt { _ = try await workspace.createCard(body: body, in: project) }
     }
 
-    private func send(_ choice: SendChoice) {
+    private func send(_ choice: AppServices.Destination) {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { return }
         Task { if await workspace.send(body, via: choice) { text = "" } }

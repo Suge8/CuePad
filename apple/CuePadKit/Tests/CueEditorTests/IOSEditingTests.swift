@@ -182,15 +182,17 @@ struct IOSEditingTests {
     func lazyDecode() async throws {
         let h = EditorHarness(height: 400)
         var stored = ""
+        var urls: [URL] = []
         for i in 0..<20 {
             let id = try h.store.store(makePNG(width: 800, height: 800, color: UIColor(hue: CGFloat(i) / 20, saturation: 0.7, brightness: 0.9, alpha: 1)))
+            urls.append(try #require(h.store.fileURL(for: id)))
             stored += "第 \(i) 张\n![](cuepad://img/\(id))\n"
         }
-        let before = ImageLoading.decodeCount
+        func decoded(_ url: URL) -> Bool { Thumbnails.cached(at: url, maxPixel: ImageLoading.maxThumbnailPixel) != nil }
         h.load(stored)
-        #expect(await h.wait { h.display(); return ImageLoading.decodeCount > before })
+        #expect(await h.wait { h.display(); return decoded(urls[0]) })
         await h.pump(0.3)
-        #expect(ImageLoading.decodeCount - before < 20)
+        #expect(!decoded(urls[19]))
     }
 }
 #endif

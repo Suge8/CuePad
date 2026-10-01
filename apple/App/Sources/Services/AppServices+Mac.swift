@@ -50,11 +50,14 @@ extension AppServices {
         })
     }
 
-    /// 真正退出时释放：后台任务、Pi 连接、全局快捷键。
-    func stop() {
+    /// 真正退出时释放：后台任务、远程投送执行器、同步引擎、Pi 连接、全局快捷键。
+    func stop() async {
         cancelBackgroundWork()
         pi.stop()
         hotkey.unregister()
+        await deliveryExecutor?.stop()
+        deliveryExecutor = nil
+        await sync?.stop()
     }
 
     // MARK: 全局快捷键
@@ -102,7 +105,7 @@ extension AppServices {
                     reportIssue(.piHistoryUnavailable("写入 \(update.file.path) 失败：\(error)"))
                 }
             case .backfillFinished:
-                finishPiHistoryBackfill()
+                break
             }
         }
     }
@@ -117,5 +120,15 @@ extension AppServices {
 
     func runningApps() -> [AppInfo] { channels.runningApps() }
     func lastFrontmostApp() -> AppInfo? { channels.lastFrontmost() }
+
+    /// 已安装应用的显示名（不要求在运行）；找不到该应用时用 bundle ID 本身。
+    func appName(bundleID: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID), let bundle = Bundle(url: url) else {
+            return bundleID
+        }
+        let name = bundle.localizedInfoDictionary?["CFBundleDisplayName"] ?? bundle.object(forInfoDictionaryKey: "CFBundleDisplayName")
+            ?? bundle.object(forInfoDictionaryKey: "CFBundleName")
+        return name as? String ?? url.deletingPathExtension().lastPathComponent
+    }
 }
 #endif

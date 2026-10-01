@@ -132,22 +132,3 @@ struct WallTests {
         ])
     }
 }
-
-struct PiProjectMatchTests {
-    let proj = UUID(), outer = UUID(), project = UUID()
-    var directories: [UUID: String] { [proj: "/a/proj", outer: "/a", project: "/a/project/"] }
-
-    @Test(arguments: [
-        ("/a/proj", "proj"),
-        ("/a/proj/src/ui", "proj"),
-        ("/a/project", "project"),
-        ("/a/project/x", "project"),
-        ("/a/other", "outer"),
-        ("/b/proj", "none"),
-    ])
-    func 会话按工作目录分段匹配_最深的目录优先(cwd: String, expected: String) {
-        let names = [proj: "proj", outer: "outer", project: "project"]
-        let matched = PiProjectMatch.project(forDirectory: cwd, in: directories)
-        #expect(matched.map { names[$0]! } ?? "none" == expected)
-    }
-}

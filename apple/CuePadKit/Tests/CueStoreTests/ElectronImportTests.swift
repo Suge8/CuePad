@@ -78,7 +78,7 @@ private func digest(_ url: URL) throws -> String {
 
   @Test func mapsLegacyRowsToTheNewModel() async throws {
     let report = try await store.importElectronLibrary(from: legacy)
-    #expect(report.found == ImportCounts(projects: 3, cards: 6, tags: 1, cardTags: 1, tasks: 3))
+    #expect(report.found == ImportCounts(projects: 3, cards: 6, tasks: 3))
     #expect(report.inserted == report.found)
     #expect(report.legacySettings == ["theme": "\"dark\"", "globalShortcut": "\"Alt+KeyZ\""])
 
@@ -97,9 +97,9 @@ private func digest(_ url: URL) throws -> String {
     let career = active.first!
     let flowCards = try await store.cards(in: flow.id)
     #expect(bodies(flowCards) == ["Todo\n\nline one", "Only title"])  // 保持旧 sort_order
-    #expect(flowCards.first?.numbering == .decimal && flowCards.first?.isFavorite == true)
+    #expect(flowCards.first?.numbering == .known(.decimal) && flowCards.first?.isPinned == true)
     let inbox = try await store.cards(in: nil)
-    #expect(bodies(inbox) == ["inbox body"] && inbox.first?.numbering == .alpha)
+    #expect(bodies(inbox) == ["inbox body"] && inbox.first?.numbering == .known(.alpha))
 
     let trashedCards = try await store.trashedCards()
     #expect(Set(bodies(trashedCards)) == ["trashed before Gone", "trashed alone"])
@@ -113,10 +113,7 @@ private func digest(_ url: URL) throws -> String {
       "SELECT deletedAt, projectID FROM cards WHERE body = 'goes with Gone'")
     #expect(followsProject == [["NULL", gone.id.uuidString.lowercased()]])
 
-    // 标签与任务
-    let tags = try await store.tags()
-    #expect(tags.map(\.name) == ["idea"])
-    #expect(try await store.tags(of: flowCards[0].id).map(\.name) == ["idea"])
+    // 任务（标签不导入：产品不做标签）
     let open = try await store.tasks()
     #expect(open.map(\.content) == ["first", "second"])
     #expect(open.first?.projectID == flow.id)
@@ -130,12 +127,12 @@ private func digest(_ url: URL) throws -> String {
     let card = try await store.cards(in: nil)[0]
     try await store.updateCard(card.id) { $0.body = "edited in Swift" }
     let raw = RawDB(fixture.url)
-    let before = try ["projects", "cards", "tags", "cardTags", "tasks"].map(raw.count)
+    let before = try ["projects", "cards", "tasks"].map(raw.count)
 
     let again = try await store.importElectronLibrary(from: legacy)
 
     #expect(again.found.cards == 6 && again.inserted == ImportCounts())
-    #expect(try ["projects", "cards", "tags", "cardTags", "tasks"].map(raw.count) == before)
+    #expect(try ["projects", "cards", "tasks"].map(raw.count) == before)
     #expect(try await store.card(card.id)?.body == "edited in Swift")
   }
 

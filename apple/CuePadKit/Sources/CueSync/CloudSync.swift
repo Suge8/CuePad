@@ -3,7 +3,7 @@ import Foundation
 
 /// iCloud 同步入口：私有数据库里一个自定义同步区，CKSyncEngine 驱动。
 ///
-/// 用法：`let sync = CloudSync(store: store)`；`try await sync.start()`；界面订阅 `statusUpdates`，
+/// 用法：`let sync = CloudSync(store: store)`；`try await sync.start()`；界面订阅 `stateUpdates`，
 /// 状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。冲突副本由 `CueStore.conflicts()` 提供。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
 public actor CloudSync {
@@ -13,8 +13,6 @@ public actor CloudSync {
   private let queue = EngineQueue()
   private let coordinator: SyncCoordinator
   private let subscribesToPiAlerts: Bool
-  /// 每条记录的上传完成、拉取开始与应用时刻（延迟测量用）。
-  public nonisolated let timingLog = SyncTimingLog()
   private var engine: CKSyncEngine?
   private var accountWatcher: Task<Void, Never>?
 
@@ -28,7 +26,7 @@ public actor CloudSync {
     self.store = store
     self.containerIdentifier = containerIdentifier
     zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
-    coordinator = SyncCoordinator(store: store, queue: queue, zoneID: zoneID, log: timingLog)
+    coordinator = SyncCoordinator(store: store, queue: queue, zoneID: zoneID)
   }
 
   public static var subscribesToPiAlertsByDefault: Bool {
@@ -40,9 +38,8 @@ public actor CloudSync {
   }
 
   public var status: SyncStatus { get async { await coordinator.status } }
-  public var issues: [SyncIssue] { get async { await coordinator.issues } }
-  /// 先给出当前状态，之后每次变化给出新状态。
-  public nonisolated var statusUpdates: AsyncStream<SyncStatus> { coordinator.statusUpdates }
+  /// 先给出当前快照，之后状态或问题列表每次变化给出新快照。
+  public nonisolated var stateUpdates: AsyncStream<SyncState> { coordinator.stateUpdates }
 
   public func start() async throws {
     guard engine == nil else { return }
@@ -156,10 +153,7 @@ private final class EngineBridge: CKSyncEngineDelegate, Sendable {
         failedDeletes: sent.failedRecordDeletes.map { ($0.key, $0.value) }))
     case .sentDatabaseChanges(let sent):
       for failure in sent.failedZoneSaves { await coordinator.handle(.zoneSaveFailed(failure.error)) }
-    case .willFetchChanges:
-      await coordinator.handle(.fetchStarted)
-      await coordinator.handle(.syncing(true))
-    case .willSendChanges: await coordinator.handle(.syncing(true))
+    case .willFetchChanges, .willSendChanges: await coordinator.handle(.syncing(true))
     case .didFetchChanges, .didSendChanges: await coordinator.handle(.syncing(false))
     default: break
     }

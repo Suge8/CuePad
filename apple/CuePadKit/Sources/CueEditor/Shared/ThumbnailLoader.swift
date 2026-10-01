@@ -20,7 +20,7 @@ final class ThumbnailLoader {
 
     func image(at url: URL?, size: CGSize) -> CueImage {
         guard let url, !failed.contains(url) else { return CueImageRendering.placeholder(size: size, style: core.style, missing: true) }
-        guard let thumbnail = ImageLoading.cachedThumbnail(at: url) else {
+        guard let thumbnail = Thumbnails.cached(at: url, maxPixel: ImageLoading.maxThumbnailPixel) else {
             decode(url)
             return CueImageRendering.placeholder(size: size, style: core.style, missing: false)
         }
@@ -34,7 +34,7 @@ final class ThumbnailLoader {
     private func decode(_ url: URL) {
         guard inFlight.insert(url).inserted else { return }
         Task { [weak self] in
-            let decoded = await Task.detached(priority: .userInitiated) { ImageLoading.thumbnail(at: url) }.value
+            let decoded = await Task.detached(priority: .userInitiated) { Thumbnails.image(at: url, maxPixel: ImageLoading.maxThumbnailPixel) }.value
             guard let self else { return }
             inFlight.remove(url)
             if decoded == nil { failed.insert(url) }

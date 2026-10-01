@@ -91,7 +91,7 @@ struct SearchScreen: View {
             let projects = try store.projects()
             return SearchData(
                 groups: SearchData.grouped(found.cards, projects: projects), total: found.totalCards, shown: found.cards.count,
-                projects: projects, targets: try store.sendTargets().filter { $0.kind == .clipboard })
+                projects: projects, targets: try store.sendTargets().filter { $0.kind == .known(.clipboard) })
         }
     }
 }
@@ -152,7 +152,7 @@ private struct FilterChips: View {
         case .any: "任意"
         case .never: "从未发送"
         case .sent(_, .some(let name)): name
-        case .sent(.clipboard, nil): "剪贴板"
+        case .sent(.known(.clipboard), nil): "剪贴板"
         case .sent: "发送过"
         }
     }

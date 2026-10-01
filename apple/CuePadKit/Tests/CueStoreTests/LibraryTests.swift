@@ -10,18 +10,9 @@ import Testing
 
   // MARK: 排序
 
-  @Test func projectsAppendAtEndAndMoveAfterNeighbor() async throws {
-    _ = try await store.createProject(name: "A", color: "#111")
-    let b = try await store.createProject(name: "B", color: "#222")
-    let c = try await store.createProject(name: "C", color: "#333")
-    func names() async throws -> [String] { try await store.projects().map(\.name) }
-    #expect(try await names() == ["A", "B", "C"])
-
-    try await store.moveProject(c.id, after: nil)
-    #expect(try await names() == ["C", "A", "B"])
-
-    try await store.moveProject(c.id, after: b.id)
-    #expect(try await names() == ["A", "B", "C"])
+  @Test func projectsAppendAtEnd() async throws {
+    for name in ["A", "B", "C"] { _ = try await store.createProject(name: name, color: "#111") }
+    #expect(try await store.projects().map(\.name) == ["A", "B", "C"])
   }
 
   @Test func newCardGoesOnTopAndMoveOnlyTouchesTheMovedCard() async throws {
@@ -133,64 +124,32 @@ import Testing
     #expect(try await store.trashedProjects().isEmpty)
   }
 
-  // MARK: 卡片、标签、附件
+  // MARK: 卡片
 
   @Test func cardFieldsRoundTrip() async throws {
     let card = try await store.createCard(in: nil, body: "hi {{name}}")
     try await store.updateCard(card.id) {
-      $0.numbering = .cjk
-      $0.isFavorite = true
+      $0.numbering = .known(.cjk)
+      $0.isPinned = true
       $0.variableValues = ["name": "Pi"]
     }
     let row = try await store.card(card.id)
-    #expect(row?.numbering == .cjk)
+    #expect(row?.numbering == .known(.cjk))
     #expect(row?.variableValues == ["name": "Pi"])
-    #expect(try await store.favoriteCards().map(\.id) == [card.id])
-  }
-
-  @Test func tagsAreSharedByNameAndLinkedOncePerCard() async throws {
-    let one = try await store.createCard(in: nil, body: "1")
-    let two = try await store.createCard(in: nil, body: "2")
-    let first = try await store.addTag("idea", to: one.id)
-    _ = try await store.addTag("idea", to: one.id)
-    let second = try await store.addTag("idea", to: two.id)
-    #expect(first.id == second.id)
-    #expect(try RawDB(fixture.url).count("cardTags") == 2)
-
-    try await store.removeTag(first.id, from: one.id)
-    #expect(try await store.tags(of: one.id).isEmpty)
-    #expect(try await store.tags(of: two.id).map(\.name) == ["idea"])
-  }
-
-  @Test func purgingCardRemovesItsTagLinks() async throws {
-    let card = try await store.createCard(in: nil, body: "1")
-    try await store.addTag("idea", to: card.id)
-    try await store.purgeCard(card.id)
-    #expect(try RawDB(fixture.url).count("cardTags") == 0)
-  }
-
-  @Test func attachmentsDedupeByContentHash() async throws {
-    let a = try await store.registerAttachment(hash: "abc123", byteCount: 10, format: "png")
-    let b = try await store.registerAttachment(hash: "abc123", byteCount: 10, format: "png")
-    let c = try await store.registerAttachment(hash: "def456", byteCount: 20, format: "jpeg")
-    #expect(a.id == b.id && a.id != c.id)
-    #expect(try RawDB(fixture.url).count("attachments") == 2)
+    #expect(row?.isPinned == true)
   }
 
   // MARK: 任务
 
   @Test func tasksStackNewestOnTopAndCompletedLeaveTheActiveList() async throws {
-    let a = try await store.createTask("a")
+    _ = try await store.createTask("a")
     let b = try await store.createTask("b")
-    let c = try await store.createTask("c")
+    _ = try await store.createTask("c")
     func active() async throws -> [String] { try await store.tasks().map(\.content) }
     #expect(try await active() == ["c", "b", "a"])
 
-    try await store.moveTask(c.id, after: a.id)
-    #expect(try await active() == ["b", "a", "c"])
-
     try await store.updateTask(b.id) { $0.completedAt = Date() }
-    #expect(try await active() == ["a", "c"])
+    #expect(try await active() == ["c", "a"])
     #expect(try await store.completedTasks().map(\.content) == ["b"])
   }
 
@@ -261,5 +220,13 @@ import Testing
     let card = try await store.createCard(in: nil, body: "persisted")
     let reopened = try CueStore(url: fixture.url)
     #expect(try await reopened.card(card.id)?.body == "persisted")
+  }
+
+  /// 库的结构版本不是本版本建的（开发期的旧结构、或更新版本的库）：拒绝打开，不在错位的表结构上读写。
+  @Test func libraryFromAnotherSchemaVersionIsRefused() throws {
+    let url = fixture.directory.appending(path: "other/cuepad.db")
+    try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 6;")
+    #expect(throws: CueStoreError.unsupportedSchemaVersion(6)) { try CueStore(url: url) }
   }
 }

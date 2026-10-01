@@ -5,7 +5,7 @@ import SQLite3
 import Testing
 @testable import CuePad
 
-/// App 层接入同步：启动引擎、镜像状态、激活时立即同步、冲突与决定经 AppServices 交给界面。
+/// App 层接入同步：启动引擎、镜像状态与问题、激活时立即同步、冲突与决定经 AppServices 交给界面。
 @MainActor
 struct SyncWiringTests {
     let app = TestApp()
@@ -15,17 +15,22 @@ struct SyncWiringTests {
         await eventually(condition)
     }
 
-    @Test func 启动同步引擎_状态镜像给界面() async throws {
+    @Test func 启动同步引擎_状态与问题镜像给界面() async throws {
         services.startSync()
         defer { services.cancelBackgroundWork() }
         await wait { app.sync.started == 1 }
         #expect(app.sync.started == 1)
 
-        app.sync.emit(.syncing)
+        app.sync.emit(SyncState(status: .syncing, issues: []))
         await wait { services.syncStatus == .syncing }
         #expect(services.syncStatus == .syncing)
 
-        app.sync.emit(.needsDecision(.accountSwitched))
+        let issue = SyncIssue(recordType: "cards", recordName: "c1", message: "附件记录没有文件，已拒绝")
+        app.sync.emit(SyncState(status: .syncing, issues: [issue]))
+        await wait { services.syncIssues == [issue] }
+        #expect(services.syncIssues == [issue])
+
+        app.sync.emit(SyncState(status: .needsDecision(.accountSwitched), issues: [issue]))
         await wait { services.syncStatus == .needsDecision(.accountSwitched) }
         #expect(services.syncStatus == .needsDecision(.accountSwitched))
     }
