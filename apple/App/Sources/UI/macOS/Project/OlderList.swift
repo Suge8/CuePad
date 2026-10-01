@@ -23,13 +23,14 @@ struct OlderList: View {
             }
             .padding(.top, 8)
             .id(ScrollAnchor.older)
+            let titled = OlderGroup.needsTitles(in: groups)
             ForEach(groups, id: \.period) { group in
-                section(group)
+                section(group, titled: titled)
             }
         }
     }
 
-    private func section(_ group: OlderGroup) -> some View {
+    private func section(_ group: OlderGroup, titled: Bool) -> some View {
         let open = isExpanded(group.period)
         let header = HStack {
             if isCollapsible(group.period) {
@@ -51,7 +52,7 @@ struct OlderList: View {
                 } label: { header }
                 .buttonStyle(.plain)
                 .accessibilityValue(open ? "已展开" : "已折叠")
-            } else {
+            } else if titled {
                 header.accessibilityAddTraits(.isHeader)
             }
             if open {

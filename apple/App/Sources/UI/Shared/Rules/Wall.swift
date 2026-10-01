@@ -79,6 +79,13 @@ nonisolated struct OlderGroup: Equatable, Sendable {
 
     static let weeklyMonths = 3
 
+    /// 要不要给各组加日期标题：只有一组按周的卡时不要（每行自带日期）；按月的组要标题来折叠，多组时要标题来分隔。
+    static func needsTitles(in groups: [OlderGroup]) -> Bool {
+        guard groups.count == 1, let only = groups.first else { return !groups.isEmpty }
+        if case .month = only.period { return true }
+        return false
+    }
+
     /// 组与组内卡片都是新的在前。
     static func group(_ cards: [CardStamp], now: Date, calendar: Calendar) -> [OlderGroup] {
         let weeklySince = calendar.date(byAdding: .month, value: -weeklyMonths, to: now) ?? now
