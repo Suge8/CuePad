@@ -50,8 +50,14 @@ struct MainWindow: View {
         }
         .overlay(alignment: .bottom) {
             // 纸页挂着（含缩回途中）时不显示：底栏只有一套，先退后进
-            if workspace.presentedCard == nil, workspace.page != .trash, workspace.overlay != .search {
+            if workspace.presentedCard == nil, workspace.page != .trash {
+                // ⌘K 打开时只是藏起来（不卸下）：关掉面板的同一帧就回来
+                let searching = workspace.overlay == .search
                 CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
+                    .opacity(searching ? 0 : 1)
+                    .allowsHitTesting(!searching)
+                    .accessibilityHidden(searching)
+                    .animation(nil, value: searching)
                     .transition(.opacity.animation(.easeOut(duration: 0.1)))
             }
         }
@@ -68,7 +74,7 @@ struct MainWindow: View {
                 ZStack {
                     Color.black.opacity(palette.dark ? 0.4 : 0.25).ignoresSafeArea()
                         .onTapGesture { workspace.overlay = nil }
-                    SearchPalette()
+                    SearchPalette().padding(24)
                 }
             }
         }
@@ -157,21 +163,19 @@ private struct PinnedWidth: Layout {
     func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
 }
 
-/// 工具栏右上角：未完成任务数 + 需要关注的 Pi 状态点。
+/// 工具栏右上角：未完成任务数。Pi 的状态只在侧栏 Pi 区与项目页 Pi 栏出现，不挂在任务计数旁（会被读成任务出了问题）。
 private struct TasksButton: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var openCount: Int?
 
     var body: some View {
-        let attention = services.pi.sessions.first { $0.state.needsAttention }
         Button {
             workspace.toggle(.tasks)
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "checklist")
                 if let openCount, openCount > 0 { Text("\(openCount)").monospacedDigit() }
-                if let attention { PiDot(state: attention.state, size: 6) }
             }
         }
         .help("任务")
