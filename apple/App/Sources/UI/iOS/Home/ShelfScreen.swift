@@ -46,6 +46,7 @@ struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var data: ShelfData?
     @State private var creating = false
 
@@ -87,7 +88,9 @@ struct ShelfScreen: View {
                 EmptyShelf { creating = true }
             }
             if !pinned.isEmpty {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
+                let columns = min(pinned.count, sizeClass == .regular ? 4 : 2)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
                     ForEach(pinned) { PinnedShelfCard(entry: $0) }
                 }
             }

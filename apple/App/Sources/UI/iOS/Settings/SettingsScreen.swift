@@ -7,6 +7,10 @@ import SwiftUI
 struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    /// 宽屏上表单限宽居中，分段控件与说明不被拉成一长条。
+    private static let readableWidth: CGFloat = 640
 
     var body: some View {
         @Bindable var settings = services.settings
@@ -44,6 +48,8 @@ struct SettingsScreen: View {
             }
             .listRowBackground(palette.paper)
         }
+        .frame(maxWidth: sizeClass == .regular ? Self.readableWidth : .infinity)
+        .frame(maxWidth: .infinity)
         .deskBackground()
         .bottomEdgeFade()
         .navigationTitle("设置")
@@ -67,19 +73,17 @@ private struct SyncSection: View {
 
     var body: some View {
         Section {
-            if services.sync == nil {
-                Label("这台设备上的 CuePad 没有开启 iCloud 同步", systemImage: "icloud.slash").foregroundStyle(palette.ink3)
-            } else {
-                let summary = SyncSummary(services.syncStatus)
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(summary.title)
-                        if let detail = summary.detail { Text(detail).font(.footnote).foregroundStyle(palette.ink3) }
-                    }
-                } icon: {
-                    Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
-                        .symbolEffect(.pulse, isActive: services.syncStatus == .syncing)
+            let summary = SyncSummary(services.syncStatus)
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(summary.title)
+                    if let detail = summary.detail { Text(detail).font(.footnote).foregroundStyle(palette.ink3) }
                 }
+            } icon: {
+                Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
+                    .symbolEffect(.pulse, isActive: services.syncStatus == .syncing)
+            }
+            if services.sync != nil {
                 if case .needsDecision = services.syncStatus {
                     Button("上传本机数据", systemImage: "icloud.and.arrow.up") { resolve(.uploadLocal) }
                     Button("用云端数据替换本机…", systemImage: "icloud.and.arrow.down", role: .destructive) { confirmErase = true }

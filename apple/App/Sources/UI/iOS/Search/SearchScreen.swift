@@ -75,6 +75,8 @@ struct SearchScreen: View {
         .background(palette.desk)
         .bottomEdgeFade()
         .navigationTitle("搜索")
+        // iPad 上 ⌘K 是高频的键盘操作：标题不做大标题收起的动画，直接是一行
+        .navigationBarTitleDisplayMode(sizeClass == .regular ? .inline : .automatic)
         .navigationSubtitle(data.map { !query.text.isEmpty || query.isFiltered ? "\($0.total) 张" : "" } ?? "")
         // 搜索框常驻导航栏下方，进入即聚焦弹出键盘
         .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索卡片")
@@ -84,7 +86,9 @@ struct SearchScreen: View {
             #if DEBUG
             if query.text.isEmpty { query.text = DebugScene.searchText }
             #endif
-            searching = true
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { searching = true }
         }
         .observing(services.store, [.cards, .projects, .sendRecords], id: query, into: $data, onError: workspace.fail) { [query] store in
             let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)

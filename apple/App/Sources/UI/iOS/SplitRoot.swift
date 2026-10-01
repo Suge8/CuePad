@@ -208,6 +208,7 @@ private struct SidebarRow: View {
 
     /// 选中项目同时记为当前项目（与 Mac 同一事实源）。
     private func choose() {
+        if route == .search { navigation.openSearch(); return }
         navigation.select(route)
         switch route {
         case .project(let id): workspace.show(.project(id))
@@ -224,10 +225,25 @@ private struct SplitShortcuts: View {
     @Environment(AppServices.self) private var services
     @State private var order: [UUID]?
 
+    /// 新卡放进正在看的项目（搜索、今天等页面上放进当前项目），随即打开。
+    private func newCard() {
+        let project = navigation.captureProject ?? workspace.currentProject
+        workspace.attempt {
+            let card = try await workspace.createCard(in: project)
+            if navigation.splitRoot == .search { navigation.closeSearch() }
+            navigation.open(card: card.id)
+        }
+    }
+
     var body: some View {
         ZStack {
-            Button("搜索") { navigation.select(.search) }.keyboardShortcut("k")
-            Button("搜索") { navigation.select(.search) }.keyboardShortcut("f")
+            Button("搜索") { navigation.openSearch() }.keyboardShortcut("k")
+            Button("搜索") { navigation.openSearch() }.keyboardShortcut("f")
+            // 搜索框没有焦点时 Esc 退出搜索（有焦点时第一下 Esc 由系统收起输入）
+            if navigation.splitRoot == .search {
+                Button("退出搜索") { navigation.closeSearch() }.keyboardShortcut(.escape, modifiers: [])
+            }
+            Button("新建卡片", action: newCard).keyboardShortcut("n")
             Button("设置") { navigation.select(.settings) }.keyboardShortcut(",")
             Button("侧栏") {
                 withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }

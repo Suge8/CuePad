@@ -70,7 +70,7 @@ struct SendToMacSheet: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("发送", systemImage: "paperplane.fill", action: send)
                     .prominentButton()
-                    .disabled(session == nil || mode == nil || sending)
+                    .disabled(!services.syncStatus.reachesMac || session == nil || mode == nil || sending)
                     .keyboardShortcut(.return, modifiers: .command)
             }
         }
@@ -79,11 +79,16 @@ struct SendToMacSheet: View {
     @ViewBuilder private var chooser: some View {
         Form {
             Group {
+            // 发不出去时原因放在最上面，紧挨着（禁用的）发送按钮
+            if !services.syncStatus.reachesMac {
+                Section { SyncBlockedNote(status: services.syncStatus).listRowInsets(EdgeInsets()) }
+                    .listRowBackground(Color.clear)
+            }
             Section {
                 ContentPreview(content: outbox.content)
             }
             if let data {
-                if services.sync == nil { Section { SyncOffNote().listRowInsets(EdgeInsets()) } }
+
                 if data.sessions.isEmpty {
                     Section {
                         ContentUnavailableView(
@@ -145,7 +150,7 @@ struct SendToMacSheet: View {
     }
 
     private func send() {
-        guard let session, let mode, !sending else { return }
+        guard services.syncStatus.reachesMac, let session, let mode, !sending else { return }
         sending = true
         let content = outbox.content, card = outbox.card, task = outbox.task
         Task {

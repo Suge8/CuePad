@@ -43,8 +43,6 @@ struct CardEditorScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(wide ? palette.desk : palette.paper)
             .navigationBarTitleDisplayMode(.inline)
-            // 纸页占满整屏：标签栏的玻璃不压在正文上
-            .toolbar(.hidden, for: .tabBar)
             .toolbar { toolbar }
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
             .onChange(of: pickedImage) { insertPicked() }

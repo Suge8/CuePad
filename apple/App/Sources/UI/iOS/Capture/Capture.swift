@@ -61,11 +61,21 @@ extension View {
     /// 内容页（书架、项目、今天）底部浮着的玻璃随手记栏。只挂在这几页上，所以设置、回收站、搜索、任务、活动与打开的卡片上都没有它，
     /// 不依赖系统版本（标签栏附件栏要 iOS 26.1 才能按页收起）。
     func captureBar() -> some View {
-        safeAreaInset(edge: .bottom, spacing: 0) {
+        safeAreaInset(edge: .bottom, spacing: 0) { FloatingCaptureBar() }
+    }
+}
+
+/// 随手记面板打开时收起，屏幕上任何时候只有一个输入处；也不随键盘上移（键盘是面板的）。
+private struct FloatingCaptureBar: View {
+    @Environment(Navigation.self) private var navigation
+
+    var body: some View {
+        if navigation.capture == nil {
             CaptureBar()
                 .frame(maxWidth: 560).frame(height: 50)
                 .glass(in: .capsule, interactive: true)
                 .padding(.horizontal, 16).padding(.bottom, 8)
+                .ignoresSafeArea(.keyboard)
         }
     }
 }
