@@ -23,6 +23,7 @@ struct Sidebar: View {
     @FocusState private var focused: Bool
 
     nonisolated private static let historyLimit = 5
+    private static let footerFade: CGFloat = 16
 
     var body: some View {
         // 不用 List 的选中：系统选中是灰胶囊，压不过墨色体系；当前页由 PageRow 自己画，方向键由 onMoveCommand 接管
@@ -126,6 +127,16 @@ struct Sidebar: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
         }
+        .padding(.top, 6)
+        // 底栏是实底：列表滚到这里先淡掉，不压在"+"与齿轮上
+        .background(palette.sidebar.ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) {
+            LinearGradient(colors: [palette.sidebar.opacity(0), palette.sidebar], startPoint: .top, endPoint: .bottom)
+                .frame(height: Self.footerFade)
+                .offset(y: -Self.footerFade)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -205,10 +216,13 @@ private struct PiSection: View {
                             PiDot(state: session.state).frame(width: 16)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(Workspace.sessionName(session)).lineLimit(1)
-                                Text([projectName(workspace.sessionProjects[session.id]), session.state.label].compactMap { $0 }.joined(separator: " · "))
-                                    .font(.caption)
+                                // 需要处理时（出错、等你确认）接着写原因的开头，悬停看全文
+                                PiActivityLine(
+                                    text: PiActivityLine.join(
+                                        projectName(workspace.sessionProjects[session.id]), session.state.label,
+                                        session.state.needsAttention ? session.state.detail : nil),
+                                    font: .caption)
                                     .foregroundStyle(session.state.labelColor(palette))
-                                    .lineLimit(1)
                             }
                         }
                     }

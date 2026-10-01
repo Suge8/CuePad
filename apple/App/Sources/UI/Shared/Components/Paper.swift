@@ -86,6 +86,27 @@ struct CardMeta: View {
     }
 }
 
+/// 滚到工具栏下的内容先淡到桌面色，工具栏按钮后面不叠字。各滚动页用它作滚动视图的兄弟层：
+/// 挂成滚动视图自己的 overlay 盖不住滚进工具栏区域的那段内容（macOS 把那段放在更上层）。
+struct TopFade: View {
+    @Environment(\.palette) private var palette
+
+    // 合起来等于工具栏高度：页面停在顶部时标题不被淡掉
+    private static let solid: CGFloat = 22
+    private static let fade: CGFloat = 30
+
+    var body: some View {
+        VStack(spacing: 0) {
+            palette.desk.frame(height: Self.solid)
+            LinearGradient(colors: [palette.desk, palette.desk.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: Self.fade)
+            Spacer(minLength: 0)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 /// 发过的卡的标记：浅灰小纸飞机 + 目标名。没发过是默认状态，什么都不显示。卡片与列表共用这一种。
 struct SentMark: View {
     let target: String

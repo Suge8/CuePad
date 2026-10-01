@@ -9,40 +9,35 @@ struct FocusBand: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    /// 只关心是否跨过窄档：存宽度会让侧栏开合的每一帧都重算这块的 body。
-    @State private var stacked = false
-
     private static let visibleTasks = 4
     /// 窄于这个宽度时三栏改成上下排，每栏都能放下一整行任务。
     private static let stackedBelow: CGFloat = 820
 
     var body: some View {
-        Group {
-            if stacked {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let card = data.goalCard {
-                        column { goal(card) }
-                        Divider().overlay(palette.hair).padding(.horizontal, 18)
-                    }
-                    column { tasks }
-                    Divider().overlay(palette.hair).padding(.horizontal, 18)
-                    column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
-                }
-            } else {
-                HStack(alignment: .top, spacing: 0) {
-                    if let card = data.goalCard {
-                        column { goal(card) }
-                        divider
-                    }
-                    column { tasks }
+        // 由排版当场选：横排的理想宽度钉在 stackedBelow，放得下就横排，否则上下排。不读几何、不写状态
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 0) {
+                if let card = data.goalCard {
+                    column { goal(card) }
                     divider
-                    column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
-                        .frame(maxWidth: 300)
                 }
+                column { tasks }
+                divider
+                column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
+                    .frame(maxWidth: 300)
+            }
+            .frame(minWidth: Self.stackedBelow, idealWidth: Self.stackedBelow, maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 0) {
+                if let card = data.goalCard {
+                    column { goal(card) }
+                    Divider().overlay(palette.hair).padding(.horizontal, 18)
+                }
+                column { tasks }
+                Divider().overlay(palette.hair).padding(.horizontal, 18)
+                column { PiColumn(project: data.project?.id, hasDirectory: data.directory != nil) }
             }
         }
         .paper(radius: 18)
-        .onGeometryChange(for: Bool.self) { $0.size.width < Self.stackedBelow } action: { stacked = $0 }
     }
 
     @ViewBuilder private func goal(_ card: Card) -> some View {

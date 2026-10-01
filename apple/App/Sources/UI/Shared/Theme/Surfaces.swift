@@ -53,6 +53,8 @@ private struct GlassSurface<S: Shape>: ViewModifier {
 enum Motion {
     /// 短动效：列表里挪位置、面板、浮层、切换。
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)
+    /// 卡片在墙上挪位（同列下移、新卡入场）：定长 0.24s，弹簧的尾巴会让实际时长超过 300ms。
+    static let move = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.24)
     /// 卡片放大成纸页。
     static let paper = Animation.spring(duration: 0.28, bounce: 0)
     /// 纸页缩回卡片：出场约为进场的 75%。用定长曲线而不是弹簧：完成回调要准时落在纸到位的那一刻，

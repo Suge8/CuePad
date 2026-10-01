@@ -10,20 +10,21 @@ struct MainWindow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 有效项目的 id；变化时核对保存的当前项目是否仍然存在。
     @State private var projectIDs: [UUID]?
-    @State private var windowWidth: CGFloat = 0
-    @State private var sidebarWidth: CGFloat = 0
+    /// 窗口与侧栏宽度的读数。只在这里写、只由 `PinnedPage` 读：本视图带着工具栏，读了它们就会随几何变化重算、
+    /// 每次重算都重新提交整条工具栏（AppKit 随之重排窗口），形成布局反馈环。
+    @State private var widths = WindowWidths()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.sidebar) {
             Sidebar()
                 // 侧栏开合时是整体滑动、宽度不变；只有拖分隔线才变
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { sidebarWidth = $0 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.sidebar = $0 }
                 .navigationSplitViewColumnWidth(min: 210, ideal: 236, max: 300)
         } detail: {
             detail
         }
         .environment(workspace)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.window = $0 }
         .confirmationDialog(
             "Pi 正在工作", isPresented: busyBinding, titleVisibility: .visible
         ) {
@@ -40,10 +41,7 @@ struct MainWindow: View {
     private var detail: some View {
         ZStack {
             palette.desk.ignoresSafeArea()
-            PinnedWidth(width: pageWidth) { page }
-                // 页宽一步到终点：开合侧栏的动画事务若带进来，页面会按插值宽度逐帧重排
-                .transaction(value: pageWidth) { $0.animation = nil }
-            TopFade()
+            PinnedPage(widths: widths, sidebarHidden: workspace.sidebar == .detailOnly) { page }
             if let id = workspace.presentedCard {
                 CardEditorPage(cardID: id)
                     .id(id)
@@ -52,8 +50,14 @@ struct MainWindow: View {
         }
         .overlay(alignment: .bottom) {
             // 纸页挂着（含缩回途中）时不显示：底栏只有一套，先退后进
-            if workspace.presentedCard == nil, workspace.page != .trash, workspace.overlay != .search {
+            if workspace.presentedCard == nil, workspace.page != .trash {
+                // ⌘K 打开时只是藏起来（不卸下）：关掉面板的同一帧就回来
+                let searching = workspace.overlay == .search
                 CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
+                    .opacity(searching ? 0 : 1)
+                    .allowsHitTesting(!searching)
+                    .accessibilityHidden(searching)
+                    .animation(nil, value: searching)
                     .transition(.opacity.animation(.easeOut(duration: 0.1)))
             }
         }
@@ -70,7 +74,7 @@ struct MainWindow: View {
                 ZStack {
                     Color.black.opacity(palette.dark ? 0.4 : 0.25).ignoresSafeArea()
                         .onTapGesture { workspace.overlay = nil }
-                    SearchPalette()
+                    SearchPalette().padding(24)
                 }
             }
         }
@@ -78,13 +82,6 @@ struct MainWindow: View {
         .toolbar { toolbar }
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-    }
-
-    /// 页面按侧栏开合的终点宽度排版、贴左摆放：开合动画中详情区每帧变宽变窄，页面只排一次，
-    /// 随详情区左缘被侧栏推着走，超出的只会是窗口右缘之外（窗口自己裁掉）。不这样做时整页（卡片墙、目标栏、更早）每帧重排，是开合卡顿的主要来源。
-    private var pageWidth: CGFloat? {
-        guard windowWidth > 0 else { return nil }
-        return workspace.sidebar == .detailOnly ? windowWidth : windowWidth - sidebarWidth
     }
 
     @ViewBuilder private var page: some View {
@@ -109,6 +106,7 @@ struct MainWindow: View {
         }
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
+            SyncAlert()
             Button("搜索", systemImage: "magnifyingglass") { workspace.toggle(.search) }
                 .help("搜索（⌘K）")
             TasksButton()
@@ -121,6 +119,27 @@ struct MainWindow: View {
 
     private var busyBinding: Binding<Bool> {
         Binding(get: { workspace.busySend != nil }, set: { if !$0 { workspace.busySend = nil } })
+    }
+}
+
+@Observable
+private final class WindowWidths {
+    var window: CGFloat = 0
+    var sidebar: CGFloat = 0
+}
+
+/// 页面按侧栏开合的终点宽度排版、贴左摆放：开合动画中详情区每帧变宽变窄，页面只排一次，
+/// 随详情区左缘被侧栏推着走，超出的只会是窗口右缘之外（窗口自己裁掉）。不这样做时整页（卡片墙、目标栏、更早）每帧重排，是开合卡顿的主要来源。
+private struct PinnedPage<Page: View>: View {
+    let widths: WindowWidths
+    let sidebarHidden: Bool
+    @ViewBuilder let page: Page
+
+    var body: some View {
+        let width: CGFloat? = widths.window > 0 ? (sidebarHidden ? widths.window : widths.window - widths.sidebar) : nil
+        PinnedWidth(width: width) { page }
+            // 页宽一步到终点：开合侧栏的动画事务若带进来，页面会按插值宽度逐帧重排
+            .transaction(value: width) { $0.animation = nil }
     }
 }
 
@@ -145,42 +164,39 @@ private struct PinnedWidth: Layout {
     func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
 }
 
-/// 滚到工具栏下的内容先淡到桌面色，工具栏按钮后面不叠字；各页共用这一条。
-/// 必须画在页面之外：macOS 把滚进工具栏区域的那段内容放在更上层，页面自己的浮层盖不住它。
-private struct TopFade: View {
+/// 同步需要关注时（没登录 iCloud、需要你决定、出错等）在工具栏露一个图标：悬停看原因，点开设置处理。
+/// 平时什么都不显示；随同步状态（数据）变化，不随布局变化。
+private struct SyncAlert: View {
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
-    // 合起来等于工具栏高度：页面停在顶部时标题不被淡掉
-    private static let solid: CGFloat = 22
-    private static let fade: CGFloat = 30
-
     var body: some View {
-        VStack(spacing: 0) {
-            palette.desk.frame(height: Self.solid)
-            LinearGradient(colors: [palette.desk, palette.desk.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: Self.fade)
-            Spacer(minLength: 0)
+        let summary = SyncSummary(services.syncStatus)
+        if services.sync != nil, summary.tone != .normal {
+            Button {
+                NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil)
+            } label: {
+                Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
+            }
+            .help([summary.title, summary.detail, "点按在设置里处理"].compactMap { $0 }.joined(separator: "\n"))
+            .accessibilityLabel(summary.title)
         }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 
-/// 工具栏右上角：未完成任务数 + 需要关注的 Pi 状态点。
+/// 工具栏右上角：未完成任务数。Pi 的状态只在侧栏 Pi 区与项目页 Pi 栏出现，不挂在任务计数旁（会被读成任务出了问题）。
 private struct TasksButton: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var openCount: Int?
 
     var body: some View {
-        let attention = services.pi.sessions.first { $0.state.needsAttention }
         Button {
             workspace.toggle(.tasks)
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "checklist")
                 if let openCount, openCount > 0 { Text("\(openCount)").monospacedDigit() }
-                if let attention { PiDot(state: attention.state, size: 6) }
             }
         }
         .help("任务")
