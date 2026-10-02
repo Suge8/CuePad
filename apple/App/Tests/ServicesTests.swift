@@ -184,6 +184,25 @@ struct PiExtensionConsentTests {
         return rig
     }
 
+    /// 询问卡片读 `needsConsent`：拒绝后它必须作为可观察的变化通知界面，卡片才会立即收起（之前要重启才消失）。
+    @Test func 拒绝后询问的变化能被界面观察到() async throws {
+        let rig = try rigWithPi(version: "0.90.0")
+        let manager = rig.services.piExtension
+        try await manager.refresh()
+        let changed = Flag()
+        withObservationTracking { _ = manager.needsConsent } onChange: { changed.set() }
+
+        manager.decline()
+
+        #expect(changed.value)
+        #expect(!manager.needsConsent)
+    }
+
+    nonisolated private final class Flag: @unchecked Sendable {
+        private(set) var value = false
+        func set() { value = true }
+    }
+
     @Test func 缺扩展时征求同意_拒绝后不再提示也不安装_同意后安装() async throws {
         let rig = try rigWithPi(version: "0.90.0")
         let manager = rig.services.piExtension
