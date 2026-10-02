@@ -18,7 +18,7 @@ public struct PiHistoryIndexer: Sendable {
         self.checkpoint = checkpoint
     }
 
-    /// 结束（取消订阅）时停止后台任务。
+    /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Pi）或被删再建，见 `FSEventsWatcher`。
     public func events() -> AsyncStream<PiHistoryEvent> {
         AsyncStream { continuation in
             let task = Task.detached(priority: .utility) { await run(continuation) }
@@ -27,8 +27,8 @@ public struct PiHistoryIndexer: Sendable {
     }
 
     private func run(_ continuation: AsyncStream<PiHistoryEvent>.Continuation) async {
-        // FSEvents 报告真实路径；统一用真实路径，回填与增量的文件 URL 才一致
-        let root = self.root.resolvingSymlinksInPath()
+        // FSEvents 报告真实路径；统一用真实路径，回填与增量的文件 URL 才一致（目录还不存在时解析其上层）
+        let root = FSEventsWatcher.resolve(self.root)
         let watcher = FSEventsWatcher(root: root) // 先开始监听：回填期间的变化不会丢
         defer { watcher.stop() }
         var live = LiveCache(limit: Self.liveCacheLimit)
