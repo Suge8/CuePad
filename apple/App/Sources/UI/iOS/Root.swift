@@ -13,7 +13,7 @@ struct IOSRoot: View {
     }
 }
 
-/// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / 任务 / 活动 / 搜索），宽 iPad 用分栏。
+/// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / 任务 / 活动；搜索在书架与项目页下拉），宽 iPad 用分栏。
 struct IOSRootView: View {
     @State private var workspace: Workspace
     @State private var navigation = Navigation()
@@ -117,9 +117,6 @@ private struct TabsRoot: View {
                 stack($navigation.activityPath) { ActivityScreen() }
             }
             .badge(waiting ?? 0)
-            Tab(value: Navigation.Tab.search, role: .search) {
-                stack($navigation.searchPath) { SearchScreen() }
-            }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .observing(services.store, [.piSessionStates], into: $waiting) { store in

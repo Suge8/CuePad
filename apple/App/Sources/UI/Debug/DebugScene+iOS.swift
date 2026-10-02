@@ -3,6 +3,7 @@ import CueStore
 import SwiftUI
 
 /// iOS 画面：project、older、today、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 是在侧栏选中），录屏核对进入项目页的首帧。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
 /// iPad 上 tasks、activity 打开右侧面板。演示库另写入 Mac 同步来的 Pi 会话状态与一条发到 Mac 的请求。
@@ -56,13 +57,19 @@ extension DebugScene {
             if let project { open(.project(project)) }
             if split { navigation.panel = .activity } else { navigation.tab = .activity }
         case "search":
-            if split { navigation.select(.search) } else { navigation.tab = .search }
+            // iPhone：书架（给了项目则是该项目页）的下拉搜索在出现时自己聚焦，见 CardSearch
+            if split { navigation.select(.search) } else if let project { open(.project(project)) }
         case "capture":
             if let project { open(.project(project)) }
             navigation.startCapture()
         default:
             if let project, split { open(.project(project)) }
         }
+    }
+
+    /// search 画面里该不该激活这个范围的下拉搜索：给了项目时只激活项目页的，否则只激活书架的。
+    static func activatesSearch(_ scope: CardSearchScope) -> Bool {
+        scene == "search" && (scope == .all) == (defaults.string(forKey: "CuePadProject") == nil)
     }
 
     /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。

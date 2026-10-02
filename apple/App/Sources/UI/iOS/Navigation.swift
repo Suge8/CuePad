@@ -10,7 +10,7 @@ import SwiftUI
 @MainActor @Observable
 final class Navigation {
     enum Tab: Hashable {
-        case projects, tasks, activity, search
+        case projects, tasks, activity
     }
 
     /// iPhone（及窄窗口 iPad）用标签栏；宽 iPad 用分栏。
@@ -70,7 +70,6 @@ final class Navigation {
     var projectsPath: [Route] = []
     var tasksPath: [Route] = []
     var activityPath: [Route] = []
-    var searchPath: [Route] = []
     var capture: Capture?
     var outbox: Outbox?
     var projectForm: ProjectForm?
@@ -102,7 +101,6 @@ final class Navigation {
         case (.tabs, .projects): projectsPath.append(route)
         case (.tabs, .tasks): tasksPath.append(route)
         case (.tabs, .activity): activityPath.append(route)
-        case (.tabs, .search): searchPath.append(route)
         }
     }
 
@@ -146,7 +144,7 @@ final class Navigation {
     func pop(_ project: UUID?) {
         guard let project else { return }
         let gone = Route.project(project)
-        for path in [\Navigation.projectsPath, \.tasksPath, \.activityPath, \.searchPath, \.splitPath] {
+        for path in [\Navigation.projectsPath, \.tasksPath, \.activityPath, \.splitPath] {
             if let index = self[keyPath: path].firstIndex(of: gone) { self[keyPath: path].removeSubrange(index...) }
         }
         if splitRoot == gone { select(.shelf) }

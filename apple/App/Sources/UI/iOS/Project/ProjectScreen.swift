@@ -45,6 +45,7 @@ struct ProjectScreen: View {
         .background(palette.desk)
         .bottomEdgeFade(capturePage: true)
         .captureBar()
+        .cardSearch(.project(projectID), enabled: navigation.layout == .tabs)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }

@@ -58,6 +58,7 @@ struct ShelfScreen: View {
         .background(palette.desk)
         .bottomEdgeFade(capturePage: true)
         .captureBar()
+        .cardSearch(.all, button: true, enabled: navigation.layout == .tabs)
         .navigationTitle("项目")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
