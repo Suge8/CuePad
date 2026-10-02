@@ -4,6 +4,7 @@ import CuePi
 import CueStore
 import CueText
 import Foundation
+import SQLite3
 import Testing
 @testable import CuePad
 
@@ -142,6 +143,21 @@ struct SendTests {
         #expect(record.content == "snapshot text")
         #expect(record.cardID == card.id)
         #expect(record.taskID == task.id)
+    }
+
+    /// 投送已经成功、发送记录没写进去：调用方得到说明这件事的错误（界面据此提示且不当作没发出），而不是只进日志。
+    @Test func 已发出但记录写入失败_抛出未记录错误() async throws {
+        var handle: OpaquePointer?
+        defer { sqlite3_close(handle) }
+        try #require(sqlite3_open(services.location.databaseURL.path, &handle) == SQLITE_OK)
+        try #require(sqlite3_exec(handle, "DROP TABLE sendRecords", nil, nil, nil) == SQLITE_OK)
+
+        await #expect {
+            try await services.send("hi", to: .clipboard)
+        } throws: { error in
+            if case SendError.unrecorded = error { true } else { false }
+        }
+        #expect(channels.calls == [.copy(Payload([.text("hi")]))])
     }
 
     @Test func 图片文件缺失时报错_不发送不记录() async throws {

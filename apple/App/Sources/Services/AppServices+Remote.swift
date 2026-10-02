@@ -52,6 +52,10 @@ extension AppServices {
         do {
             try await send(request.content, to: try destination(for: request), card: request.cardID, task: request.taskID)
             return .succeeded
+        } catch SendError.unrecorded(let reason) {
+            // 已经送达：写回成功，手机才不会重发；没记下发送是这台 Mac 的资料库问题，在这里报
+            reportIssue(.syncUnavailable("处理手机发来的投送请求时读写资料库失败：\(reason)"))
+            return .succeeded
         } catch {
             return .failed(error.localizedDescription)
         }

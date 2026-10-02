@@ -24,9 +24,12 @@ enum RootViews {
     }
 
     /// 面板随 App 常驻：项目目录从创建起就订阅，第一次打开时"记入"已是真实项目。
+    /// 没有视图生命周期可挂 `.task(id:)`，按"重试"（`catalogAttempt` 加一）后在这里重新订阅。
     static func menuBarPad(_ services: AppServices) -> some View {
         let workspace = Workspace(services: services)
-        Task { await workspace.observeCatalog() }
+        Task {
+            for await _ in Observations({ workspace.catalogAttempt }) { await workspace.observeCatalog() }
+        }
         return MenuBarPad()
             .environment(workspace)
             .modifier(PaletteProvider())

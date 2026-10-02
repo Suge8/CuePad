@@ -33,7 +33,7 @@ struct TasksScreen: View {
                     if let tasks = groups[owner] {
                         let project = data.projects.first { $0.id == owner }
                         Section {
-                            ForEach(tasks) { task in row(task, projects: data.projects) }
+                            ForEach(tasks) { task in row(task) }
                         } header: {
                             HStack(spacing: 6) {
                                 if let project { ProjectGlyph(project: project, size: 12) }
@@ -45,7 +45,7 @@ struct TasksScreen: View {
                 }
                 if !data.completed.isEmpty {
                     Section {
-                        if showsCompleted { ForEach(data.completed) { task in row(task, projects: data.projects) } }
+                        if showsCompleted { ForEach(data.completed) { task in row(task) } }
                     } header: {
                         Button {
                             withAnimation(Motion.quick) { showsCompleted.toggle() }
@@ -76,7 +76,7 @@ struct TasksScreen: View {
         }
     }
 
-    private func row(_ task: CueTask, projects: [Project]) -> some View {
+    private func row(_ task: CueTask) -> some View {
         TaskLine(task: task)
             .listRowBackground(palette.paper)
             .swipeActions(edge: .leading) {
@@ -91,7 +91,7 @@ struct TasksScreen: View {
                 // 全局强调色是墨，会盖掉破坏性操作的红色
                 .tint(palette.failure)
             }
-            .contextMenu { TaskActions(task: task, projects: projects) }
+            .contextMenu { TaskActions(task: task) }
     }
 }
 
@@ -159,41 +159,6 @@ struct TaskLine: View {
                 workspace.fail(error)
             }
         }
-    }
-}
-
-private struct TaskActions: View {
-    let task: CueTask
-    let projects: [Project]
-    @Environment(Workspace.self) private var workspace
-
-    @Environment(Navigation.self) private var navigation
-
-    var body: some View {
-        let id = task.id, content = task.content, project = task.projectID
-        Button("发到 Mac", systemImage: "paperplane") {
-            navigation.outbox = Navigation.Outbox(content: content, task: id, project: project)
-        }
-        Button("复制", systemImage: "doc.on.doc") {
-            workspace.attempt {
-                try await workspace.services.send(content, to: .clipboard, task: id)
-                workspace.say("已复制")
-            }
-        }
-        Button("转为卡片", systemImage: "rectangle.on.rectangle") {
-            workspace.attempt {
-                _ = try await workspace.createCard(body: content, in: project)
-                try await workspace.services.store.deleteTask(id)
-            }
-        }
-        Menu("移到项目", systemImage: "folder") {
-            Button("未归属") { workspace.perform { try await $0.updateTask(id) { $0.projectID = nil } } }
-            ForEach(projects) { target in
-                Button(target.name) { workspace.perform { try await $0.updateTask(id) { $0.projectID = target.id } } }
-                    .disabled(target.id == project)
-            }
-        }
-        Button("删除", systemImage: "trash", role: .destructive) { workspace.perform { try await $0.deleteTask(id) } }
     }
 }
 

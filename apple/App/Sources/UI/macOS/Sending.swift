@@ -44,9 +44,13 @@ extension Workspace {
     /// 发送存储格式正文；成功后提示，Pi 忙时转为询问插话或排队。返回是否已发出。
     @discardableResult
     func send(_ stored: String, via choice: AppServices.Destination, card: UUID? = nil, task: UUID? = nil) async -> Bool {
+        let done = choice == .clipboard ? "已复制" : "已发给 \(label(for: choice))"
         do {
             try await services.send(stored, to: choice, card: card, task: task)
-            say(choice == .clipboard ? "已复制" : "已发给 \(label(for: choice))")
+            say(done)
+            return true
+        } catch SendError.unrecorded(let reason) {
+            say("\(done)，但没能记下这次发送：\(reason)", isError: true)
             return true
         } catch SendError.piSessionBusy {
             if case .pi(let id, _) = choice { busySend = BusySend(text: stored, session: id, card: card, task: task) }
