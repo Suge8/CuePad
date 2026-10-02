@@ -8,13 +8,14 @@ nonisolated private struct TasksData: Sendable {
     var projects: [Project]
 }
 
-/// 全部任务：按项目分组（未归属在前），最近完成的收在最后。左滑删除，右滑完成，长按转为卡片或换项目。
+/// 全部任务：按项目分组（未归档在前），最近完成的收在最后。左滑删除，右滑完成，长按编辑、转为卡片或换项目。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var data: TasksData?
     @State private var showsCompleted = false
+    @State private var editing: CueTask?
 
     nonisolated private static let completedLimit = 30
 
@@ -27,7 +28,7 @@ struct TasksScreen: View {
                         .listRowBackground(palette.paper)
                 }
                 let live = Set(data.projects.map(\.id))
-                // 挂在回收站项目上的任务归到"未归属"，否则会从列表里消失
+                // 挂在回收站项目上的任务归到"未归档"，否则会从列表里消失
                 let groups = Dictionary(grouping: data.open) { $0.projectID.flatMap { live.contains($0) ? $0 : nil } }
                 ForEach([nil] + data.projects.map(\.id), id: \.self) { (owner: UUID?) in
                     if let tasks = groups[owner] {
@@ -37,7 +38,7 @@ struct TasksScreen: View {
                         } header: {
                             HStack(spacing: 6) {
                                 if let project { ProjectGlyph(project: project, size: 12) }
-                                Text(project?.name ?? "未归属")
+                                Text(project?.name ?? "未归档")
                                 Text("\(tasks.count)").foregroundStyle(palette.ink3)
                             }
                         }
@@ -68,6 +69,10 @@ struct TasksScreen: View {
         .deskBackground()
         .bottomEdgeFade()
         .navigationTitle("任务")
+        .sheet(item: $editing) { TaskEditSheet(task: $0) }
+        #if DEBUG
+        .onChange(of: data?.open.first?.id) { if DebugScene.scene == "taskedit", editing == nil { editing = data?.open.first } }
+        #endif
         .animation(.easeOut(duration: 0.2), value: data.map { $0.open.map(\.id) + $0.completed.map(\.id) })
         .observing(services.store, [.tasks, .projects], into: $data, onError: workspace.fail) { store in
             TasksData(
@@ -91,7 +96,7 @@ struct TasksScreen: View {
                 // 全局强调色是墨，会盖掉破坏性操作的红色
                 .tint(palette.failure)
             }
-            .contextMenu { TaskActions(task: task) }
+            .contextMenu { TaskActions(task: task) { editing = task } }
     }
 }
 
@@ -183,21 +188,21 @@ struct NewTaskLine: View {
                 .onSubmit(add)
             if let projects, !projects.isEmpty {
                 Menu {
-                    Button("未归属") { chosen = .some(nil) }
+                    Button("未归档") { chosen = .some(nil) }
                     Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
                     let current = projects.first { $0.id == target }
                     HStack(spacing: 4) {
                         ProjectGlyph(project: current, size: 11)
-                        Text(current?.name ?? "未归属").lineLimit(1)
+                        Text(current?.name ?? "未归档").lineLimit(1)
                     }
                     .font(.footnote).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 10).frame(minHeight: 30)
                     .background(palette.fill, in: .capsule)
                     .frame(minHeight: 44).contentShape(.rect)
                 }
-                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未归属")")
+                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未归档")")
             }
         }
     }

@@ -61,9 +61,7 @@ struct CardActions: View {
         #if os(macOS)
         Button("复制", systemImage: "doc.on.doc") { Task { await workspace.send(text, via: .clipboard, card: id) } }
         let choice = workspace.effectiveChoice(for: card.projectID)
-        Button("发给 \(workspace.label(for: choice))", systemImage: "paperplane") {
-            Task { await workspace.send(text, via: choice, card: id) }
-        }
+        workspace.sendButton(choice) { Task { await workspace.send(text, via: choice, card: id) } }
         #else
         Button("复制", systemImage: "doc.on.doc") { workspace.copy(card) }
         Button("发到 Mac", systemImage: "paperplane") {

@@ -66,6 +66,8 @@ private struct MainRoot: View {
             DebugMenuBarStage().environment(workspace)
         } else if DebugScene.scene == "settings" {
             SettingsView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if DebugScene.scene == "projectform" {
+            ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             MainWindow(workspace: workspace)
         }

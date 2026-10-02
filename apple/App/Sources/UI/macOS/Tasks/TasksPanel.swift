@@ -47,7 +47,7 @@ struct TasksPanel: View {
 
     @ViewBuilder
     private func list(_ data: TasksData) -> some View {
-        // 挂在回收站项目上的任务归到"未归属"显示，否则会从面板里消失
+        // 挂在回收站项目上的任务归到"未归档"显示，否则会从面板里消失
         let live = Set(data.projects.map(\.id))
         let groups = Dictionary(grouping: data.open) { $0.projectID.flatMap { live.contains($0) ? $0 : nil } }
         let owners: [UUID?] = [nil] + data.projects.map(\.id)
@@ -62,7 +62,7 @@ struct TasksPanel: View {
                 let project = data.projects.first { $0.id == owner }
                 HStack(spacing: 6) {
                     if project != nil { ProjectGlyph(project: project, size: 11) }
-                    Text(project?.name ?? "未归属")
+                    Text(project?.name ?? "未归档")
                     Text("\(groups[owner]?.count ?? 0)").foregroundStyle(.tertiary)
                 }
                 .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)

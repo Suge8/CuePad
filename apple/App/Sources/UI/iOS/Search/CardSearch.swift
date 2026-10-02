@@ -1,6 +1,7 @@
 #if os(iOS)
 import CueStore
 import SwiftUI
+import UIKit
 
 /// 搜索的范围：全部卡片（书架、iPad 搜索页），或一个项目里的卡片（项目页，nil 是未归档）。
 enum CardSearchScope: Equatable {
@@ -46,14 +47,18 @@ struct CardSearchResults: View {
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var data: SearchData?
+    /// 拿去搜的条件：输入法组字（拼音还没上屏）时不跟着变，上屏后再搜，结果不随每个字母闪"未找到"。
+    @State private var settled: PaletteQuery?
 
     /// 宽屏上结果按可用宽度排成多列。
     private var columns: [GridItem] {
         sizeClass == .regular ? [GridItem(.adaptive(minimum: 320), spacing: 12, alignment: .top)] : [GridItem(.flexible())]
     }
 
+    private var shown: PaletteQuery { settled ?? query }
+
     private var effective: PaletteQuery {
-        var effective = query
+        var effective = shown
         if case .project(let id) = scope { effective.project = .some(id) }
         return effective
     }
@@ -64,8 +69,8 @@ struct CardSearchResults: View {
                 FilterChips(query: $query, projects: scope == .all ? workspace.catalog?.projects ?? [] : nil, targets: data?.targets ?? [])
                     .padding(.horizontal, -16)
                 if let data {
-                    if data.total == 0, !query.text.isEmpty || query.isFiltered {
-                        ContentUnavailableView.search(text: query.text)
+                    if data.total == 0, !shown.text.isEmpty || shown.isFiltered {
+                        ContentUnavailableView.search(text: shown.text)
                     }
                     ForEach(data.groups) { group in
                         if scope == .all {
@@ -76,7 +81,7 @@ struct CardSearchResults: View {
                             .padding(.top, 8)
                         }
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
-                            ForEach(group.cards) { CardRow(entry: $0, highlight: query.text) }
+                            ForEach(group.cards) { CardRow(entry: $0, highlight: shown.text) }
                         }
                     }
                     if data.total > data.shown {
@@ -91,6 +96,8 @@ struct CardSearchResults: View {
         .background(palette.desk)
         .bottomEdgeFade()
         .onChange(of: query.text) { query.pages = 1 }
+        .onAppear { settled = query }
+        .onChange(of: query) { if !TextComposition.isComposing { settled = query } }
         .onChange(of: data?.total) { total.wrappedValue = data?.total }
         .observing(services.store, [.cards, .projects, .sendRecords], id: effective, into: $data, onError: workspace.fail) { [effective] store in
             let found = try store.search(effective.store(), limit: PaletteQuery.pageSize * effective.pages)
@@ -103,21 +110,23 @@ struct CardSearchResults: View {
 
 extension View {
     /// iPhone 书架与项目页的下拉搜索（系统搜索框藏在导航栏下，下拉露出）：搜索时页面换成同一套搜索结果，
-    /// 取消搜索回到原页面。`button` 在导航栏放一个放大镜，点了直接聚焦搜索框。iPad 用侧栏与 ⌘K 的搜索页，这里不挂。
-    func cardSearch(_ scope: CardSearchScope, button: Bool = false, enabled: Bool) -> some View {
-        modifier(CardSearch(scope: scope, button: button, enabled: enabled))
+    /// 取消搜索回到原页面；导航栏另有放大镜，点了直接聚焦搜索框。iPad 用侧栏与 ⌘K 的搜索页，这里不挂。
+    /// `available`：这一页有可搜的卡片（决定放大镜，按同步可得的项目目录判断，进页面第一帧就定）；
+    /// `ready`：页面内容已读到、可以挂搜索框。放大镜在内容读到前点下，读到后再聚焦。
+    func cardSearch(_ scope: CardSearchScope, available: Bool, ready: Bool) -> some View {
+        modifier(CardSearch(scope: scope, available: available, ready: ready))
     }
 }
 
 private struct CardSearch: ViewModifier {
     let scope: CardSearchScope
-    let button: Bool
-    let enabled: Bool
+    let available: Bool
+    let ready: Bool
     @Environment(Navigation.self) private var navigation
     @State private var query = PaletteQuery()
     @FocusState private var focused: Bool
 
-    /// 这一页在导航里的位置：⌘K 指名要聚焦的是不是这一页。
+    /// 这一页在导航里的位置：放大镜与 ⌘K 指名要聚焦的是不是这一页。
     private var route: Navigation.Route {
         switch scope {
         case .all: .shelf
@@ -132,28 +141,30 @@ private struct CardSearch: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        if enabled {
-            SearchSwap(query: $query, scope: scope) { content }
-                .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .automatic), prompt: prompt)
-                .searchFocused($focused)
-                .toolbar {
-                    if button {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button("搜索", systemImage: "magnifyingglass") { focused = true }
-                        }
+        Group {
+            if available && ready {
+                SearchSwap(query: $query, scope: scope) { content }
+                    .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .automatic), prompt: prompt)
+                    .searchFocused($focused)
+                    .onAppear(perform: focusIfRequested)
+                    .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
+                    #if DEBUG
+                    .onAppear {
+                        guard DebugScene.activatesSearch(scope) else { return }
+                        query.text = DebugScene.searchText
+                        focused = true
                     }
+                    #endif
+            } else {
+                content
+            }
+        }
+        .toolbar {
+            if available {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("搜索", systemImage: "magnifyingglass") { navigation.pendingPageSearch = route }
                 }
-                .onAppear(perform: focusIfRequested)
-                .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
-                #if DEBUG
-                .onAppear {
-                    guard DebugScene.activatesSearch(scope) else { return }
-                    query.text = DebugScene.searchText
-                    focused = true
-                }
-                #endif
-        } else {
-            content
+            }
         }
     }
 
@@ -169,6 +180,27 @@ private struct SearchSwap<Content: View>: View {
 
     var body: some View {
         if isSearching { CardSearchResults(query: $query, scope: scope) } else { content }
+    }
+}
+
+/// 当前输入框是否在输入法组字中（有未上屏的拼音等）。SwiftUI 的搜索框不报告这一点，问第一响应者。
+@MainActor
+enum TextComposition {
+    static var isComposing: Bool {
+        let probe = FirstResponderProbe()
+        UIApplication.shared.sendAction(#selector(UIResponder.cuepadReportFirstResponder(_:)), to: nil, from: probe, for: nil)
+        return (probe.responder as? UITextInput)?.markedTextRange != nil
+    }
+}
+
+private final class FirstResponderProbe: NSObject {
+    weak var responder: UIResponder?
+}
+
+extension UIResponder {
+    /// 发给 nil 目标的动作落在第一响应者上：借此拿到它。
+    @objc fileprivate func cuepadReportFirstResponder(_ sender: Any) {
+        (sender as? FirstResponderProbe)?.responder = self
     }
 }
 
