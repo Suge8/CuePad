@@ -94,27 +94,24 @@ private struct PanelButtons: View {
 /// 右侧面板：任务或活动，顶部分段切换。
 private struct SidePanel: View {
     @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch navigation.panel ?? .tasks {
-                case .tasks: TasksScreen()
-                case .activity: ActivityScreen()
-                }
+        // 不套导航栈、不放工具栏：iPadOS 的详情栏只有一条工具栏，面板里的工具栏会并进去
+        VStack(spacing: 0) {
+            Picker("面板", selection: Binding(get: { navigation.panel ?? .tasks }, set: { navigation.panel = $0 })) {
+                Text("任务").tag(Navigation.Panel.tasks)
+                Text("活动").tag(Navigation.Panel.activity)
             }
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("面板", selection: Binding(get: { navigation.panel ?? .tasks }, set: { navigation.panel = $0 })) {
-                        Text("任务").tag(Navigation.Panel.tasks)
-                        Text("活动").tag(Navigation.Panel.activity)
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            .padding(.vertical, 8)
+            switch navigation.panel ?? .tasks {
+            case .tasks: TasksScreen()
+            case .activity: ActivityScreen()
             }
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .background(palette.desk.ignoresSafeArea())
     }
 }
 

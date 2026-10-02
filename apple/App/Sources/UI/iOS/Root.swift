@@ -29,11 +29,14 @@ struct IOSRootView: View {
     var body: some View {
         @Bindable var navigation = navigation
         CatalogGate {
-            if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
+            Group {
+                if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
+            }
+            // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
+            .sheet(item: $navigation.capture) { CaptureSheet(capture: $0) }
+            .sheet(item: $navigation.outbox) { SendToMacSheet(outbox: $0) }
+            .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
         }
-        .sheet(item: $navigation.capture) { CaptureSheet(capture: $0) }
-        .sheet(item: $navigation.outbox) { SendToMacSheet(outbox: $0) }
-        .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
         .overlay(alignment: .top) { NoticeBanner() }
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
         .environment(\.zoomNamespace, zoom)
