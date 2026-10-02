@@ -176,6 +176,7 @@ private struct FocusCard: View {
     let sessions: [PiSessionState]
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
+    @State private var editing: CueTask?
 
     private static let visibleTasks = 3
 
@@ -199,7 +200,7 @@ private struct FocusCard: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(text: data.tasks.isEmpty ? "下一步" : "下一步 · \(data.tasks.count)", systemImage: "checklist")
-                ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskLine(task: task).contextMenu { TaskActions(task: task) } }
+                ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskLine(task: task).contextMenu { TaskActions(task: task) { editing = task } } }
                 if data.tasks.count > Self.visibleTasks {
                     Button("还有 \(data.tasks.count - Self.visibleTasks) 条") {
                         if navigation.layout == .split { navigation.panel = .tasks } else { navigation.tab = .tasks }
@@ -230,6 +231,7 @@ private struct FocusCard: View {
         }
         .padding(16)
         .paper(radius: 18)
+        .sheet(item: $editing) { TaskEditSheet(task: $0) }
     }
 }
 #endif

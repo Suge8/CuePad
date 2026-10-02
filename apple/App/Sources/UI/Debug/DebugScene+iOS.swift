@@ -5,6 +5,7 @@ import SwiftUI
 /// iOS 画面：project、older、today、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
+/// taskedit：任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// searchkey：iPhone 停在任务页，1.5 秒后走 ⌘K（回到书架并聚焦下拉搜索）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
@@ -62,7 +63,7 @@ extension DebugScene {
                let card = try? await workspace.services.store.card(id) {
                 navigation.outbox = Navigation.Outbox(content: Outgoing.text(of: card), card: id, project: project)
             }
-        case "tasks":
+        case "tasks", "taskedit":
             if let project { open(.project(project)) }
             if split { navigation.panel = .tasks } else { navigation.tab = .tasks }
         case "activity":
