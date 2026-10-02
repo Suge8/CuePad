@@ -66,6 +66,8 @@ enum Motion {
     static let quick = Animation.easeOut(duration: 0.16)
     /// 点下要打开的卡：缩到这个比例（Mac 的 `CardOpenStyle`），纸页从这个样子起飞。
     static let pressScale: CGFloat = 0.98
+    /// 点下的那一帧先直接缩到这里，余下的再缓动：动画的第一帧进度为零，全靠缓动的话点下那一帧看不出变化。
+    static let pressKick: CGFloat = 0.99
     /// 按下与松开回弹。
     static let press = Animation.easeOut(duration: 0.1)
 

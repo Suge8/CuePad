@@ -46,7 +46,7 @@ extension DebugScene {
 
     /// 按压连拍用（`-CuePadPressAt x,y`，窗口内左上角为原点的点，指向一张置顶卡）：在该点按下 250ms 后松开（打开卡片），
     /// 收起后再按下、拖到窗口外再松开（应回弹、不打开），最后像键盘那样直接打开这张卡，结束后退出。
-    /// 每个事件打印主机时间（与 ScreenCaptureKit 帧时间同一时钟），连拍时据此对齐。鼠标事件直接发给窗口，不动真实指针、不抢前台。
+    /// 每个事件打印主机时间（与 ScreenCaptureKit 帧时间同一时钟），连拍时据此对齐；第一次按下时在同一轮里亮出一个原生红块作对照。鼠标事件直接发给窗口，不动真实指针、不抢前台。
     private static func benchPress(_ workspace: Workspace) async {
         try? await Task.sleep(for: .seconds(3))
         guard let window = mainWindow, let view = window.contentView,
@@ -63,9 +63,24 @@ extension DebugScene {
             else { return }
             NSApp.postEvent(event, atStart: false)
         }
+        // 合成事件产生不了真实的悬停（来自系统的鼠标跟踪）：替鼠标报一次停在这张卡上，真实点击前鼠标总是先停在卡上
+        let pinned = try? await workspace.services.store.cards(in: workspace.currentProject).first(where: \.isPinned)
+        if let pinned { workspace.hover(pinned.id, inside: true) }
+        // 对照：按下的同一轮里改一个原生图层（随这一轮的隐式提交一起提交，与 SwiftUI 的改动同一时机），标出最早能出现变化的那一帧
+        let marker = CALayer()
+        marker.frame = CGRect(x: point.x - 20, y: point.y - 20, width: 40, height: 40)
+        marker.backgroundColor = NSColor.systemRed.cgColor
+        marker.isHidden = true
+        view.layer?.addSublayer(marker)
+        let reference = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            marker.isHidden = false
+            return event
+        }
         send(.leftMouseDown, at: point)
         try? await Task.sleep(for: .milliseconds(250))
+        reference.map(NSEvent.removeMonitor)
         send(.leftMouseUp, at: point)
+        marker.removeFromSuperlayer()
         try? await Task.sleep(for: .seconds(1.5))
         workspace.openCard = nil
         try? await Task.sleep(for: .seconds(1))
@@ -76,7 +91,6 @@ extension DebugScene {
         send(.leftMouseUp, at: away)
         try? await Task.sleep(for: .seconds(1))
         // 键盘打开（↩、空格）不经过按下，直接打开：原卡片同样立即按下
-        let pinned = try? await workspace.services.store.cards(in: workspace.currentProject).first(where: \.isPinned)
         print(String(format: "PRESS key %.1f", CACurrentMediaTime() * 1000))
         workspace.openCard = pinned?.id
         try? await Task.sleep(for: .seconds(1.5))

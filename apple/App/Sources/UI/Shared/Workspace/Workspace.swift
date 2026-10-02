@@ -60,12 +60,49 @@ final class Workspace {
     var overlay: Overlay?
     var notice: Notice?
     #if os(macOS)
+    /// 鼠标停在哪张卡上、正按着哪张卡（卡片报上来的悬停与 AppKit 的鼠标事件，见 `mouse(down:)`）。不触发界面刷新。
+    @ObservationIgnored private var hoveredCard: UUID?
+    @ObservationIgnored private var pressedCard: UUID?
+    private static let releaseGrace: Duration = .milliseconds(80)
     var busySend: BusySend?
     /// 用户在本窗口选过的发送目标；nil 或已失效时用默认目标。
     var sendChoice: AppServices.Destination?
     /// 活着的 Pi 会话（会话 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由根视图调用 `refreshSessionProjects` 重算。
     private(set) var sessionProjects: [String: UUID] = [:]
+
+    /// 鼠标进出一张卡。拖出卡片也就不再按着它（与按钮拖出即松开一致）。
+    func hover(_ card: UUID, inside: Bool) {
+        if inside {
+            hoveredCard = card
+        } else {
+            if hoveredCard == card { hoveredCard = nil }
+            if pressedCard == card { release() }
+        }
+    }
+
+    /// AppKit 分发鼠标按下、松开时调用（本地事件监听，早于 SwiftUI 按钮识别按下）：按下时鼠标停着的那张卡在这一轮就显出按下，
+    /// 点下的第一帧就有反馈。
+    func mouse(down: Bool) {
+        guard down else {
+            // 松开到"打开中"接上之间隔着一两次更新：这时就放开，卡片会先弹一下再按回去（两段动画叠加还会压得更小）。
+            // 稍等再放开；打开了就由"打开中"接着按住，没打开（取消）这时才回弹
+            let card = pressedCard
+            Task {
+                try? await Task.sleep(for: Self.releaseGrace)
+                if pressedCard == card { release() }
+            }
+            return
+        }
+        guard let card = hoveredCard else { return }
+        pressedCard = card
+        presence(of: card).pressing = true
+    }
+
+    private func release() {
+        if let card = pressedCard { presence(of: card).pressing = false }
+        pressedCard = nil
+    }
 
     /// 重算活着的会话各归哪个项目。
     func refreshSessionProjects() async {
@@ -298,14 +335,16 @@ final class CardPresence {
     }
 
     fileprivate(set) var phase = Phase.idle
+    /// 鼠标正按着这张卡（Mac，见 `Workspace.mouse(down:)`）。
+    fileprivate(set) var pressing = false
     /// 卡在屏幕上的位置（全局坐标），纸页从这里放大、缩回到这里；只在跟踪期间更新，不触发界面刷新。
     @ObservationIgnored var frame: CGRect?
 
     /// 纸页挂着期间才跟踪这张卡的位置：时时跟踪的话，滚动时每一帧都要为每张卡换算一次位置。
     var isTracked: Bool { phase != .idle }
     var covered: Bool { phase == .covered }
-    /// 原卡片保持按下的样子（见 `CardOpenStyle`）。
-    var held: Bool { phase == .opening }
+    /// 原卡片显出按下的样子（见 `CardOpenStyle`）：鼠标按着，或已打开、纸页还在准备。
+    var held: Bool { pressing || phase == .opening }
 
     fileprivate func reset() {
         phase = .idle

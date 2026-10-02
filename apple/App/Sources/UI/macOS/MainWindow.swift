@@ -30,6 +30,7 @@ struct MainWindow: View {
             Button("取消", role: .cancel) { workspace.busySend = nil }
         }
         .background { WorkspaceShortcuts(workspace: workspace) }
+        .modifier(CardPressMonitor(workspace: workspace))
         .modifier(SessionProjectsTracker(workspace: workspace))
     }
 
@@ -96,6 +97,30 @@ struct MainWindow: View {
 
     private var busyBinding: Binding<Bool> {
         Binding(get: { workspace.busySend != nil }, set: { if !$0 { workspace.busySend = nil } })
+    }
+}
+
+/// 鼠标左键按下、松开在 AppKit 分发时就告诉工作区（本地事件监听，早于 SwiftUI 按钮识别按下）：点下的那一帧卡片就显出按下。
+/// 不管 Control 加点击：它弹右键菜单，松开可能被菜单吞掉。
+private struct CardPressMonitor: ViewModifier {
+    let workspace: Workspace
+    @State private var monitor: Any?
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                guard monitor == nil else { return }
+                monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [workspace] event in
+                    if !event.modifierFlags.contains(.control) {
+                        MainActor.assumeIsolated { workspace.mouse(down: event.type == .leftMouseDown) }
+                    }
+                    return event
+                }
+            }
+            .onDisappear {
+                if let monitor { NSEvent.removeMonitor(monitor) }
+                monitor = nil
+            }
     }
 }
 

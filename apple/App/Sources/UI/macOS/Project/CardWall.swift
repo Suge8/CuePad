@@ -104,8 +104,9 @@ private struct ColumnsLayout: Layout {
     }
 }
 
-/// 点开纸页的原卡片（墙上卡片、"更早"的行、目标卡）的按压：点下的同一帧开始缩到 `Motion.pressScale`，
-/// 打开后纸页准备的那几帧保持按下（`cardHeld`，由这张卡的开合阶段派生），纸从这个样子起飞；松开没打开（拖走、取消）就回弹。
+/// 点开纸页的原卡片（墙上卡片、"更早"的行、目标卡）的按压：点下的那一帧直接缩到 `Motion.pressKick`，余下到 `Motion.pressScale`
+/// 缓动；打开后纸页准备的那几帧保持按下，纸从这个样子起飞；松开没打开（拖走、取消）就回弹。按下与否看这张卡的开合状态（`cardHeld`：
+/// 鼠标按着——AppKit 分发按下事件时就记下，早于按钮识别——或已打开、纸页还在准备），按钮自己识别出的按下兜底。
 /// 减弱动态效果时不缩放，只略微变淡。
 struct CardOpenStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -118,16 +119,15 @@ struct CardOpenStyle: ButtonStyle {
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         private static let reducedOpacity = 0.85
-        /// 松开到"打开中"接上之间隔着一两帧（按钮先结束按下，打开在下一次更新才生效）：回弹稍等一下再开始，
-        /// 打开接上了回弹就作废，卡片一直按着，不弹一下；拖走取消时只是晚这么一点回弹。
-        private static let releaseGrace = 0.05
 
         var body: some View {
             let down = configuration.isPressed || held
             configuration.label
-                .scaleEffect(down && !reduceMotion ? Motion.pressScale : 1)
+                .scaleEffect(down && !reduceMotion ? Motion.pressKick : 1)
                 .opacity(down && reduceMotion ? Self.reducedOpacity : 1)
-                .animation(down ? Motion.press : Motion.press.delay(Self.releaseGrace), value: down)
+                .animation(down ? nil : Motion.press, value: down)
+                .scaleEffect(down && !reduceMotion ? Motion.pressScale / Motion.pressKick : 1)
+                .animation(Motion.press, value: down)
         }
     }
 }
