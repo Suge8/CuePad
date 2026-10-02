@@ -117,7 +117,8 @@ struct CardTile: View {
 
     var body: some View {
         let text = CardText(card.body)
-        let isOpen = workspace.openCard == card.id
+        // 纸页画出这张卡的字时才隐去、纸页卸下时才回来（见 `Workspace.coveredCard`）
+        let isOpen = workspace.coveredCard == card.id
         Button(action: open) {
         VStack(alignment: .leading, spacing: 8) {
             if let image = text.images.first {

@@ -25,9 +25,18 @@ extension Workspace {
         switch choice {
         case .pi(let id, let mode): (session(id).map(\.displayName) ?? "Pi") + (mode == .paste ? " 输入框" : "")
         case .app(.bundleID(let bundleID)): services.appName(bundleID: bundleID)
-        case .app(.lastFrontmost): services.lastFrontmostApp()?.name ?? "上一个应用"
+        case .app(.lastFrontmost): services.lastFrontmostApp()?.name ?? "上一个前台应用"
         case .clipboard: "剪贴板"
         }
+    }
+
+    /// 右键菜单里的"发给 …"一项：目标是上一个前台应用、而 CuePad 启动后还没有别的应用到过前台时，
+    /// 写明没有可发的应用并禁用（发了也只会报错）。
+    @ViewBuilder
+    func sendButton(_ choice: AppServices.Destination, action: @escaping () -> Void) -> some View {
+        let missing = choice == .app(.lastFrontmost) && services.lastFrontmostApp() == nil
+        Button(missing ? "发给上一个前台应用（还没有）" : "发给 \(label(for: choice))", systemImage: "paperplane", action: action)
+            .disabled(missing)
     }
 
     func session(_ id: CuePi.PiSession.ID) -> CuePi.PiSession? {

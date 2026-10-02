@@ -207,7 +207,7 @@ private struct WaitingCard: View {
             if let detail = session.detail, !detail.isEmpty {
                 Text(detail).font(.body).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
             }
-            Text([project?.name, "去 Mac 上回应"].compactMap { $0 }.joined(separator: " · "))
+            Text([PiPlace.name(project: project, folder: nil), "去 Mac 上回应"].compactMap { $0 }.joined(separator: " · "))
                 .font(.footnote).foregroundStyle(palette.ink3)
         }
         .padding(16)
@@ -238,7 +238,7 @@ private struct SessionRow: View {
                 }
                 HStack(spacing: 6) {
                     PiDot(state: session.state, size: 6)
-                    PiActivityLine(lead: [project?.name, session.state.label], font: .subheadline)
+                    PiActivityLine(lead: [PiPlace.name(project: project, folder: nil), session.state.label], font: .subheadline)
                         .foregroundStyle(palette.ink2)
                 }
                 if let detail = session.detail, !detail.isEmpty {

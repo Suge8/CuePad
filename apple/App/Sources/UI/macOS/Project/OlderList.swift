@@ -83,7 +83,8 @@ private struct OlderRow: View {
 
     var body: some View {
         let text = CardText(card.body)
-        let isOpen = workspace.openCard == card.id
+        // 纸页画出这张卡的字时才隐去、纸页卸下时才回来（见 `Workspace.coveredCard`）
+        let isOpen = workspace.coveredCard == card.id
         Button(action: open) {
         HStack(spacing: 10) {
             Image(systemName: !text.images.isEmpty ? "photo" : "doc.text")

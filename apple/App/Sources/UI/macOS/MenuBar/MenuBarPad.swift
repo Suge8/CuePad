@@ -22,7 +22,7 @@ struct MenuBarPad: View {
                     ForEach(sessions) { session in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             PiDot(state: session.state, size: 6).frame(width: 12)
-                            PiSessionLabel(session: session, nameFont: .system(size: 13, weight: .medium), lineFont: .system(size: 11.5))
+                            PiSessionLabel(session: session, project: workspace.catalog?.project(workspace.sessionProjects[session.id]), nameFont: .system(size: 13, weight: .medium), lineFont: .system(size: 11.5))
                         }
                     }
                 }

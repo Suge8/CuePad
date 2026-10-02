@@ -55,6 +55,11 @@ final class Workspace {
     }
     /// 纸页挂在屏上的卡：比 `openCard` 晚一步清空，缩回卡片的动画期间仍在。
     private(set) var presentedCard: UUID?
+    /// 纸页已在原卡片上画出这张卡的字（内容读到了）：墙上的原卡片这时才隐去，纸页卸下的同一刻才回来。
+    /// 开合全程屏幕上只有一份这张卡的字，不出现空白纸，也不出现两份字叠在一起。
+    private(set) var coveredCard: UUID?
+    /// 正在整窗编辑框里编辑的任务（见 `TaskEditor`）。
+    var editingTask: CueTask?
     /// 墙上卡片与"更早"各行在屏幕上的位置：纸页从这里放大、缩回到这里。持续更新，不触发界面刷新。
     @ObservationIgnored var cardFrames: [UUID: CGRect] = [:]
     var overlay: Overlay?
@@ -104,12 +109,20 @@ final class Workspace {
 
     /// 纸页缩回动画结束。
     func finishClosingCard() {
-        if openCard == nil { presentedCard = nil }
+        guard openCard == nil else { return }
+        presentedCard = nil
+        coveredCard = nil
+    }
+
+    /// 纸页在原卡片上画出了字。
+    func cover(_ card: UUID) {
+        coveredCard = card
     }
 
     func show(_ page: Page) {
         openCard = nil
         presentedCard = nil
+        coveredCard = nil
         switch page {
         case .project(let id):
             nonProjectPage = nil

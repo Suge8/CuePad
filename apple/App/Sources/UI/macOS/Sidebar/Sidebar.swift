@@ -6,6 +6,8 @@ import SwiftUI
 nonisolated private struct SidebarData: Sendable {
     var trashCount: Int
     var history: [StoredPiSession]
+    /// 历史会话（会话 id）的工作目录绑定的项目，由 Store 判定。
+    var historyProjects: [String: UUID]
 }
 
 struct Sidebar: View {
@@ -41,7 +43,7 @@ struct Sidebar: View {
                         }
                     }
                 }
-                PiSection(history: data.history)
+                PiSection(history: data.history, historyProjects: data.historyProjects)
                 if pages.showsTrash {
                     Section {
                         PageRow(page: .trash, count: data.trashCount, select: select) {
@@ -66,10 +68,14 @@ struct Sidebar: View {
         .safeAreaInset(edge: .bottom) { footer }
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
-        .observing(services.store, [.projects, .cards, .piSessions], into: $data, onError: workspace.fail) { store in
-            SidebarData(
+        .observing(services.store, [.projects, .cards, .piSessions, .projectDirectories], into: $data, onError: workspace.fail) { store in
+            let history = Array(try store.piSessions().prefix(Self.historyLimit))
+            return SidebarData(
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
-                history: Array(try store.piSessions().prefix(Self.historyLimit)))
+                history: history,
+                historyProjects: try Dictionary(uniqueKeysWithValues: history.compactMap { session in
+                    try store.project(containing: URL(filePath: session.cwd)).map { (session.id, $0.id) }
+                }))
         }
     }
 
@@ -105,7 +111,10 @@ struct Sidebar: View {
             if workspace.catalog?.projects.isEmpty == false { ExtensionConsent() }
             StartupIssues()
             HStack {
-                Button("新建项目", systemImage: "plus") { creating = true }.disabled(!workspace.isLibraryReady)
+                // 整排设了次要前景色，系统的禁用变灰显不出来：不可用时自己降一档
+                Button("新建项目", systemImage: "plus") { creating = true }
+                    .disabled(!workspace.isLibraryReady)
+                    .foregroundStyle(workspace.isLibraryReady ? AnyShapeStyle(.secondary) : AnyShapeStyle(.quaternary))
                 Spacer()
                 Button("设置", systemImage: "gearshape") { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
                     .help("设置（⌘,）")
@@ -184,9 +193,11 @@ private struct PageRow<Title: View>: View {
     }
 }
 
-/// 全局 Pi：活着的会话（显示名，下面是工作目录名 · 状态），其下是最近结束的历史会话（显示名，下面是工作目录名 · 最后活动）。
+/// 全局 Pi：活着的会话（显示名，下面是所在 · 状态），其下是最近结束的历史会话（显示名，下面是所在 · 最后活动）。
+/// "所在"按 `PiPlace`：工作目录绑定了项目时是项目名，否则是文件夹名。
 private struct PiSection: View {
     let history: [StoredPiSession]
+    let historyProjects: [String: UUID]
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
 
@@ -200,7 +211,7 @@ private struct PiSection: View {
                     Button { jump(session) } label: {
                         HStack(spacing: 9) {
                             PiDot(state: session.state).frame(width: 16)
-                            PiSessionLabel(session: session)
+                            PiSessionLabel(session: session, project: workspace.catalog?.project(workspace.sessionProjects[session.id]))
                         }
                     }
                     .buttonStyle(PressStyle(scale: 0.98))
@@ -212,7 +223,8 @@ private struct PiSection: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(session.title.isEmpty ? URL(filePath: session.cwd).lastPathComponent : session.title)
                                 .lineLimit(1)
-                            Text([URL(filePath: session.cwd).lastPathComponent, DateLabel.short(session.lastActivityAt)].joined(separator: " · "))
+                            let place = PiPlace.name(project: workspace.catalog?.project(historyProjects[session.id]), folder: URL(filePath: session.cwd).lastPathComponent)
+                            Text([place, DateLabel.short(session.lastActivityAt)].compactMap { $0 }.joined(separator: " · "))
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }

@@ -10,8 +10,9 @@ nonisolated private struct EditorData: Sendable {
 }
 
 /// 打开的卡：纸从墙上那张卡的边框连续放大成居中的纸页，关闭时沿原路缩回那张卡的边框。
-/// 过渡中只动纸的外框（一块实色形状，不重新排字），正文在纸放大后淡入、缩回前先淡出；纸始终在最上层。
-/// 纸上的标题摘要与编辑器两层字位置、字号不同，先退后进、不交叉淡化，否则过渡中两个标题叠在一起。
+/// 过渡中只动纸的外框（一块实色形状，不重新排字），纸上写着原卡片的标题与摘要；纸始终在最上层。
+/// 任何一帧屏幕上只有一份这张卡的字：纸上的摘要与编辑器位置、字号不同，铺满（缩回前）的同一帧互换，
+/// 不淡入淡出（交叉淡化是两份字叠影，先退后进中间是空白纸）；墙上原卡片在纸画出字后才隐去、纸卸下的同一帧回来。
 /// 纸底下的项目页保持挂载，关掉后回到原来的滚动位置。
 struct CardEditorPage: View {
     let cardID: UUID
@@ -27,11 +28,8 @@ struct CardEditorPage: View {
     @State private var saveState = SaveState.idle
     /// 纸是否已铺开（外框在纸页位置）；false 时外框落在原卡片上。
     @State private var expanded = false
-    @State private var contentShown = false
-    /// 过渡中纸上的标题与摘要；编辑器出现前淡完，编辑器退完才出现。
-    @State private var glimpseShown = true
-    /// 缩回的最后一段纸淡出，露出底下已经复原的原卡片（两者同一边框，看起来是纸变回了卡）。
-    @State private var paperFaded = false
+    /// 纸上是编辑器（true）还是原卡片的标题摘要（false）。
+    @State private var editorShown = false
     @State private var pageOrigin: CGPoint = .zero
     @State private var paperFrame: CGRect = .zero
 
@@ -55,15 +53,18 @@ struct CardEditorPage: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 46)
                 .padding(.bottom, Self.barClearance)
-                .opacity(contentShown ? 1 : 0)
+                .opacity(editorShown ? 1 : 0)
             }
         }
         .overlay(alignment: .bottom) {
-            if let data, isOpen, contentShown {
-                // 跟正文同一个事务进出：铺开后随正文淡入，关闭时随正文先退
-                EditorBar(card: data.card, text: liveText, handle: handle).padding(.bottom, 16)
-                    .transition(.opacity)
+            ZStack {
+                // 底栏不在纸上，随编辑器出现后淡入、关闭时先退
+                if let data, isOpen, editorShown {
+                    EditorBar(card: data.card, text: liveText, handle: handle).padding(.bottom, 16)
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeOut(duration: 0.12), value: editorShown)
         }
         .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { pageOrigin = $0 }
         .observing(services.store, [.cards, .projects], id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
@@ -74,6 +75,7 @@ struct CardEditorPage: View {
             guard initialText == nil, let card = data?.card else { return }
             initialText = card.body
             liveText = card.body
+            workspace.cover(cardID)
         }
         .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.openCard = nil } }
         .onChange(of: isOpen) { if !isOpen { collapse() } }
@@ -120,31 +122,30 @@ struct CardEditorPage: View {
                         // 按原卡片的宽度排版、不随纸变宽重新折行：纸放大时字留在原处，只是纸边退开
                         PaperGlimpse(text: CardText(card.body))
                             .frame(width: (source ?? rect).width, alignment: .topLeading)
-                            .opacity(glimpseShown ? 1 : 0)
+                            .opacity(editorShown ? 0 : 1)
                     }
                 }
                 .clipShape(shape)
                 .position(x: rect.midX, y: rect.midY)
-                .opacity(source == nil && !expanded || paperFaded ? 0 : 1)
+                // 读到内容之前不画：空白的纸盖在原卡片上就是一帧没字
+                .opacity(data == nil || source == nil && !expanded ? 0 : 1)
                 .allowsHitTesting(false)
         }
     }
 
     private func expand() {
-        withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) { expanded = true }
-        // 纸快铺满时纸上的摘要先淡完，编辑器接着淡入
-        withAnimation(.easeOut(duration: 0.08).delay(reduceMotion ? 0 : 0.1)) { glimpseShown = false }
-        withAnimation(.easeOut(duration: 0.12).delay(reduceMotion ? 0 : 0.18)) { contentShown = true }
+        withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) {
+            expanded = true
+        } completion: {
+            // 铺满的同一帧换成编辑器；铺开途中已经关了就不换
+            if isOpen { editorShown = true }
+        }
     }
 
-    /// 正文先淡出，外框缩回原卡片，最后一段纸淡出露出原卡片；缩完卸下纸页。
+    /// 同一帧换回原卡片的标题摘要，外框缩回原卡片；缩完卸下纸页，原卡片在同一帧回来。
     private func collapse() {
-        // 正文在铺开的纸上淡完，纸才开始缩：不让字露到纸外
-        let fade = reduceMotion ? 0 : 0.06
-        withAnimation(.easeOut(duration: fade)) { contentShown = false }
-        withAnimation(.easeIn(duration: fade).delay(fade)) { glimpseShown = true }
-        withAnimation(.easeIn(duration: 0.08).delay(fade + Motion.paperCloseDuration - 0.08)) { paperFaded = true }
-        withAnimation(Motion.spatial(Motion.paperClose, reduceMotion: reduceMotion).delay(fade)) {
+        editorShown = false
+        withAnimation(Motion.spatial(Motion.paperClose, reduceMotion: reduceMotion)) {
             expanded = false
         } completion: {
             workspace.finishClosingCard()
