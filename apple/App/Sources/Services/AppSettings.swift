@@ -15,7 +15,7 @@ final class AppSettings {
         static let globalShortcut = "globalShortcut"
         static let autoSubmit = "autoSubmit"
         static let currentProject = "currentProject"
-        static let piExtensionDeclinedVersion = "piExtensionDeclinedVersion"
+        static let piExtensionDeclined = "piExtensionDeclined"
         static let commandLineToolPrompted = "commandLineToolPrompted"
     }
 
@@ -32,10 +32,10 @@ final class AppSettings {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
 
-    /// 用户拒绝安装的 Pi 扩展版本；随包版本更新后会再次征求同意。
-    var piExtensionDeclinedVersion: Int? {
-        get { defaults.object(forKey: Key.piExtensionDeclinedVersion) as? Int }
-        set { defaults.set(newValue, forKey: Key.piExtensionDeclinedVersion) }
+    /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。
+    var piExtensionDeclined: Bool {
+        get { defaults.bool(forKey: Key.piExtensionDeclined) }
+        set { defaults.set(newValue, forKey: Key.piExtensionDeclined) }
     }
 
     /// 启动参数（`-theme dark` 这类）覆盖已存的设置，只在 DEBUG 构建生效：视觉验收要用，发布版不能被命令行参数改设置。

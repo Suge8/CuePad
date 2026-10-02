@@ -24,7 +24,13 @@ extension AppServices {
         }
         tasks = [
             Task { await importLegacyIfNeeded() },
-            Task { await piExtension.refresh() },
+            Task {
+                do {
+                    try await piExtension.refresh()
+                } catch {
+                    reportIssue(.piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\(error.localizedDescription)"))
+                }
+            },
             Task { await consumePiHistory(indexer.events()) },
             Task {
                 do {

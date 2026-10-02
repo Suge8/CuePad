@@ -23,7 +23,7 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   lib="$(mktemp -d /tmp/cuepad-stress.XXXXXX)"; sock="$(mktemp -d /tmp/cps.XXXXXX)"; chmod 700 "$sock"
   start="$(date "+%Y-%m-%d %H:%M:%S")"
   CUEPAD_LIBRARY_DIR="$lib" PI_CODING_AGENT_DIR="$lib/pi-agent" CUEPAD_PI_SOCKET_DIR="$sock" "$app/Contents/MacOS/CuePad" \
-    -CuePadDemo YES -CuePadProject CuePad -piExtensionDeclinedVersion '<integer>99</integer>' ${inject[@]+"${inject[@]}"} "$@" >/dev/null 2>&1 &
+    -CuePadDemo YES -CuePadProject CuePad -piExtensionDeclined YES ${inject[@]+"${inject[@]}"} "$@" >/dev/null 2>&1 &
   pid=$!
   if [ "$mode" = none ]; then
     wait "$pid"
