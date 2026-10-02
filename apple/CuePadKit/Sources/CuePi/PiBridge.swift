@@ -15,6 +15,8 @@ public final class PiBridge {
 
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private var links: [String: Link] = [:]       // socket 文件名（不含 .sock）→ 连接
+    /// 没告别就断开的会话：断开可能先于进程退出被确认（强杀后进程还是僵尸），留着它的退出监视，退出时再删残留 socket
+    @ObservationIgnored private var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
     /// 已经重试过一次的"被拒绝"socket：文件还在时不再排重试，之后只在目录事件/重扫时再看
     @ObservationIgnored private var retried: Set<String> = []
     /// 已报告不兼容的 socket：文件还在时不再重连，避免每次目录事件都重复报告
@@ -63,6 +65,8 @@ public final class PiBridge {
         watcher = nil
         for link in links.values { link.connection.close() }
         links = [:]
+        for watcher in orphanExitWatchers.values { watcher.cancel() }
+        orphanExitWatchers = [:]
         sessions = []
         for continuation in subscribers.values { continuation.finish() }
         subscribers = [:]
@@ -235,21 +239,22 @@ public final class PiBridge {
     private func processExited(_ name: String) {
         let path = directory.appending(path: name + ".sock").path
         if PiSocketDirectory.isOwnSocket(path) { unlink(path) }
+        orphanExitWatchers.removeValue(forKey: name)?.cancel()
     }
 
     private func finish(_ link: Link, name: String) {
-        link.exitWatcher?.cancel()
         links[name] = nil
         for continuation in link.pending.values { continuation.resume(throwing: PiBridgeError.sessionEnded) }
         link.pending = [:]
+        // 没有告别就断开 = 进程被强杀，socket 文件会残留：进程已确认退出就现在删，否则等它的退出通知
+        if link.byeReason == nil, link.session != nil, !removeIfStale(name), let watcher = link.exitWatcher {
+            orphanExitWatchers[name] = watcher
+        } else {
+            link.exitWatcher?.cancel()
+        }
         guard let session = link.session else { return }
         sessions.removeAll { $0.id == session.id }
-        if let reason = link.byeReason {
-            emit(.ended(session, reason: .closed(reason: reason)))
-        } else {
-            emit(.ended(session, reason: .disconnected))
-            removeIfStale(name) // 没有告别就断开 = 进程被强杀，socket 文件会残留
-        }
+        emit(.ended(session, reason: link.byeReason.map { .closed(reason: $0) } ?? .disconnected))
     }
 }
 #endif
