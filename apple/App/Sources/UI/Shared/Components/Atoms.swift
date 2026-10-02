@@ -93,6 +93,10 @@ struct SectionLabel: View {
         }
         .font(Self.font)
         .foregroundStyle(palette.ink3)
+        // 图标是装饰：读屏只读文字（否则会读出"瞄准镜十字线"这类符号名），作为小节标题
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 

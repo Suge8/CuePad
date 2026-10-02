@@ -5,6 +5,7 @@ import SwiftUI
 
 /// 卡片墙：列数随宽度（理想列宽 260），分列由 `WallColumns` 决定并保持稳定——存新卡时新卡进最矮一列的顶部，
 /// 同列的卡往下挪（有动画），别列的卡不动；跨天重新排墙时按新顺序重新分配；窗口跨列数档位时换用该列数的分列。
+/// 减弱动态效果时不挪位：整面墙原地淡入淡出。
 struct WallGrid<Tile: View>: View {
     let ids: [UUID]
     let cards: [UUID: Card]
@@ -15,6 +16,8 @@ struct WallGrid<Tile: View>: View {
     /// 每种列数各自的稳定分列。列数由 ColumnsLayout 按排版时拿到的宽度当场决定，这里不读几何：
     /// 几何读数写回状态再改布局，遇上滚动条出没、工具栏变化这类会反过来改宽度的事，就会来回翻转。
     @State private var arrangements: [Int: WallColumns] = [:]
+    /// 减弱动态效果时，每次带动画的重排换一个身份：整面墙原地淡入淡出，而不是卡片挪位
+    @State private var fadeGeneration = 0
 
     private static var spacing: CGFloat { 16 }
     private static var idealColumnWidth: CGFloat { 260 }
@@ -33,6 +36,8 @@ struct WallGrid<Tile: View>: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .id(fadeGeneration)
+        .transition(.opacity)
         .onChange(of: ids, initial: true) { old, _ in rearrange(animated: old != ids && !arrangements.isEmpty) }
     }
 
@@ -48,8 +53,13 @@ struct WallGrid<Tile: View>: View {
             }
         }
         guard next != arrangements else { return }
-        if animated {
-            withAnimation(Motion.spatial(Motion.move, reduceMotion: reduceMotion)) { arrangements = next }
+        if animated, reduceMotion {
+            withAnimation(Motion.spatial(Motion.move, reduceMotion: true)) {
+                arrangements = next
+                fadeGeneration += 1
+            }
+        } else if animated {
+            withAnimation(Motion.move) { arrangements = next }
         } else {
             arrangements = next
         }

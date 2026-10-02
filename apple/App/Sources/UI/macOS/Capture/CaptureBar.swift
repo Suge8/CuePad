@@ -18,6 +18,7 @@ struct CaptureBar: View {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Image(systemName: "plus").foregroundStyle(.secondary).accessibilityHidden(true)
                     TextField("记下想法…", text: $text, axis: .vertical)
+                .accessibilityLabel("记下想法")
                         .textFieldStyle(.plain)
                         .font(.system(size: 14))
                         .lineLimit(1...6)

@@ -107,8 +107,7 @@ struct Sidebar: View {
 
     private var footer: some View {
         VStack(spacing: 8) {
-            // 空库首次打开先让人建项目，连接 Pi 的提示等有了项目再出现
-            if workspace.catalog?.projects.isEmpty == false { ExtensionConsent() }
+            ExtensionConsent()
             StartupIssues()
             HStack {
                 // 整排设了次要前景色，系统的禁用变灰显不出来：不可用时自己降一档
@@ -194,7 +193,8 @@ private struct PageRow<Title: View>: View {
 }
 
 /// 全局 Pi：活着的会话（显示名，下面是所在 · 状态），其下是最近结束的历史会话（显示名，下面是所在 · 最后活动）。
-/// "所在"按 `PiPlace`：工作目录绑定了项目时是项目名，否则是文件夹名。
+/// "所在"按 `PiPlace`：工作目录绑定了项目时是项目名，否则是文件夹名，与显示名相同时不重复。
+/// 没有活着的会话时分组不消失：一行"在终端运行 pi 开始"，下面照常是历史。没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
 private struct PiSection: View {
     let history: [StoredPiSession]
     let historyProjects: [String: UUID]
@@ -202,11 +202,21 @@ private struct PiSection: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
+        let status = services.piExtension.status
         let live = services.pi.sessions
         let liveIDs = Set(live.map(\.sessionID))
         let ended = history.filter { !liveIDs.contains($0.id) }
-        if !live.isEmpty || !ended.isEmpty {
+        if let installation = status?.pi, !installation.isSupported {
+            Section("Pi") { PiSetupRow(installation: installation) }
+        } else if status != nil || !live.isEmpty || !ended.isEmpty {
             Section("Pi") {
+                if live.isEmpty {
+                    // 拒绝过安装扩展时，会话不会出现在这里：说清去哪装，而不是让人对着"运行 pi"困惑
+                    let declined = status?.file != .current && services.settings.piExtensionDeclined
+                    Label(declined ? "在 设置 › Pi 里安装扩展后显示会话" : "在终端运行 pi 开始", systemImage: "terminal")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        .selectionDisabled()
+                }
                 ForEach(live) { session in
                     Button { jump(session) } label: {
                         HStack(spacing: 9) {
@@ -221,9 +231,10 @@ private struct PiSection: View {
                     HStack(spacing: 9) {
                         PiDot(state: nil).frame(width: 16)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(session.title.isEmpty ? URL(filePath: session.cwd).lastPathComponent : session.title)
-                                .lineLimit(1)
-                            let place = PiPlace.name(project: workspace.catalog?.project(historyProjects[session.id]), folder: URL(filePath: session.cwd).lastPathComponent)
+                            let folder = URL(filePath: session.cwd).lastPathComponent
+                            let title = session.title.isEmpty ? folder : session.title
+                            Text(title).lineLimit(1)
+                            let place = PiPlace.name(project: workspace.catalog?.project(historyProjects[session.id]), folder: folder, besides: title)
                             Text([place, DateLabel.short(session.lastActivityAt)].compactMap { $0 }.joined(separator: " · "))
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
@@ -247,6 +258,29 @@ private struct PiSection: View {
     }
 }
 
+/// 没装 Pi 或版本太低：侧栏 Pi 分组里的一行引导，点开是安装说明（`PiSetupGuide`）。
+private struct PiSetupRow: View {
+    let installation: PiInstallation
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing = true } label: {
+            Label {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(installation == .notFound ? "安装 Pi" : "升级 Pi").foregroundStyle(.primary)
+                    Text("把卡片直接发进 Pi").font(.caption).foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "terminal")
+            }
+        }
+        .buttonStyle(PressStyle(scale: 0.98))
+        .popover(isPresented: $showing, arrowEdge: .trailing) {
+            PiSetupGuide(installation: installation).padding(16).frame(width: 360)
+        }
+    }
+}
+
 /// 首次检测到 Pi 而扩展未装（或已过期）时征求同意；拒绝后同一版本不再询问。
 private struct ExtensionConsent: View {
     @Environment(Workspace.self) private var workspace
@@ -262,7 +296,10 @@ private struct ExtensionConsent: View {
                     .font(.system(size: 11.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    Button("不用了") { services.piExtension.decline() }
+                    Button("不用了") {
+                        withAnimation(.easeOut(duration: 0.15)) { services.piExtension.decline() }
+                        workspace.say("之后可在 设置 › Pi 里安装")
+                    }
                     Button("安装") { install() }.buttonStyle(.borderedProminent).disabled(installing)
                 }
                 .controlSize(.small)
@@ -270,6 +307,7 @@ private struct ExtensionConsent: View {
             .padding(12)
             .paper(radius: 12)
             .padding(.horizontal, 10)
+            .transition(.opacity)
         }
     }
 

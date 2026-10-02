@@ -113,6 +113,8 @@ struct SentMark: View {
 
     var body: some View {
         Label(target, systemImage: "paperplane").labelStyle(.titleAndIcon).lineLimit(1)
+            // 纸飞机是装饰：整体读作一句"已发给 …"
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel("已发给 \(target)")
     }
 }

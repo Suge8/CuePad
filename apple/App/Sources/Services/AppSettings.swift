@@ -32,11 +32,8 @@ final class AppSettings {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
 
-    /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。
-    var piExtensionDeclined: Bool {
-        get { defaults.bool(forKey: Key.piExtensionDeclined) }
-        set { defaults.set(newValue, forKey: Key.piExtensionDeclined) }
-    }
+    /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。存储属性：询问卡片据此在点"不用了"的同一刻收起。
+    var piExtensionDeclined: Bool { didSet { defaults.set(piExtensionDeclined, forKey: Key.piExtensionDeclined) } }
 
     /// 启动参数（`-theme dark` 这类）覆盖已存的设置，只在 DEBUG 构建生效：视觉验收要用，发布版不能被命令行参数改设置。
     /// 标准偏好域自带这层覆盖；隔离模式的套件读不到，所以显式传入。
@@ -64,6 +61,7 @@ final class AppSettings {
         globalShortcut = string(Key.globalShortcut) ?? Self.defaultGlobalShortcut
         autoSubmit = launchArguments[Key.autoSubmit].map(Self.isTrue) ?? defaults.bool(forKey: Key.autoSubmit)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
+        piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
     }
 
     private static func isTrue(_ value: Any) -> Bool {

@@ -128,6 +128,13 @@ struct TaskRow: View {
         .frame(minHeight: compact ? 22 : 28)
         .contentShape(.rect)
         .contextMenu { TaskActions(task: task, edit: beginEditing) }
+        // 读屏：整行一个元素"任务内容，未完成"，默认动作切换完成（文案见 TaskSpeech）；编辑时露出输入框
+        .accessibilityElement(children: editing ? .contain : .ignore)
+        .accessibilityLabel(task.content)
+        .accessibilityValue(TaskSpeech.value(done: done))
+        .accessibilityAction { toggle() }
+        .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
+        .accessibilityAction(named: "编辑", beginEditing)
     }
 
     private func beginEditing() {
@@ -159,6 +166,7 @@ struct NewTaskField: View {
         HStack(spacing: 8) {
             Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
             TextField("添加任务", text: $text).textFieldStyle(.plain).font(.system(size: 13))
+                .accessibilityLabel("添加任务")
                 .onSubmit(add)
         }
         .frame(minHeight: 24)

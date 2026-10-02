@@ -58,6 +58,7 @@ struct MenuBarPad: View {
     @ViewBuilder private var capture: some View {
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         TextField("记下想法…", text: $text, axis: .vertical)
+                .accessibilityLabel("记下想法")
             .textFieldStyle(.plain)
             .font(.system(size: 14))
             .lineSpacing(4)

@@ -154,6 +154,9 @@ private struct PiExtensionRow: View {
                     .foregroundStyle(version >= .minimumSupported ? AnyShapeStyle(.primary) : AnyShapeStyle(.orange))
             }
         }
+        if let installation = status?.pi, !installation.isSupported {
+            PiSetupGuide(installation: installation, showsTitle: false)
+        }
         LabeledContent("CuePad 扩展") {
             HStack {
                 Text(fileLabel(status?.file)).foregroundStyle(.secondary)

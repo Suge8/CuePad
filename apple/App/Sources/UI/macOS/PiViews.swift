@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import CuePi
 import CueStore
 import SwiftUI
@@ -99,11 +100,53 @@ struct PiSessionLabel: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(session.displayName).font(nameFont).lineLimit(1)
             PiActivityLine(
-                lead: [PiPlace.name(project: project, folder: session.cwd.lastPathComponent), state.label],
+                lead: [PiPlace.name(project: project, folder: session.cwd.lastPathComponent, besides: session.displayName), state.label],
                 detail: state.needsAttention ? state.detail : nil,
                 font: lineFont, full: state.fullDetail)
                 .foregroundStyle(state.labelColor(palette))
         }
+    }
+}
+
+/// 没装 Pi 或版本太低时的说明（侧栏 Pi 分组的引导行点开、设置的 Pi 一节）：Pi 是什么、一行可复制的安装命令、官网。
+struct PiSetupGuide: View {
+    let installation: PiInstallation
+    /// 设置里已经有"Pi"小节标题，不再写标题
+    var showsTitle = true
+    @State private var copied = false
+
+    /// 官方安装脚本（macOS 与 Linux），装的是最新版；版本太低时重新运行即升级。
+    static let command = "curl -fsSL https://pi.dev/install.sh | sh"
+    static let site = URL(string: "https://pi.dev")!
+
+    var body: some View {
+        let missing = installation == .notFound
+        VStack(alignment: .leading, spacing: 10) {
+            if showsTitle { Text(missing ? "安装 Pi" : "升级 Pi").font(.headline) }
+            Text("Pi 是在终端里运行的 AI 编程助手。装好后，卡片可以直接发进 Pi 会话。")
+                .fixedSize(horizontal: false, vertical: true)
+            if case .found(_, let version) = installation {
+                Text("现在是 \(version)，需要 \(PiVersion.minimumSupported) 或更新。").foregroundStyle(.secondary)
+            }
+            Text(missing ? "在终端运行：" : "在终端运行，升级到最新版：").foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                // 命令要看得全：放不下就折行，不截断
+                Text(Self.command).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Button(copied ? "已复制" : "复制", action: copy).controlSize(.small)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 8))
+            Link("了解 Pi", destination: Self.site)
+        }
+        .font(.system(size: 13))
+    }
+
+    private func copy() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(Self.command, forType: .string)
+        copied = true
     }
 }
 

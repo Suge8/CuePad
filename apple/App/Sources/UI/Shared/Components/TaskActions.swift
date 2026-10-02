@@ -68,3 +68,9 @@ struct TaskActions: View {
     }
     #endif
 }
+
+/// 任务行给读屏的文案（Mac 与 iOS 同一套）：整行一个元素，标签是任务内容，值是完成状态，默认动作切换完成。
+enum TaskSpeech {
+    static func value(done: Bool) -> String { done ? "已完成" : "未完成" }
+    static func toggle(done: Bool) -> String { done ? "标为未完成" : "标为完成" }
+}
