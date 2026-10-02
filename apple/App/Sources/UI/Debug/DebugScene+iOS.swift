@@ -4,7 +4,7 @@ import SwiftUI
 
 /// iOS 画面：project、older、today、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
-/// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 是在侧栏选中），录屏核对进入项目页的首帧。
+/// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
 /// iPad 上 tasks、activity 打开右侧面板。演示库另写入 Mac 同步来的 Pi 会话状态与一条发到 Mac 的请求。
 extension DebugScene {
@@ -35,8 +35,9 @@ extension DebugScene {
                 navigation.projectsPath.removeLast()
             }
         case "push":
+            if split { navigation.select(.shelf) }
             try? await Task.sleep(for: .seconds(1.5))
-            if let project { if split { navigation.select(.project(project)) } else { navigation.push(.project(project)) } }
+            if let project { navigation.push(.project(project)) }
         case "sidebar":
             if let project { open(.project(project)) }
             navigation.sidebar = .all

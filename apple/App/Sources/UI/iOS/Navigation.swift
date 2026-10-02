@@ -73,6 +73,8 @@ final class Navigation {
     var capture: Capture?
     var outbox: Outbox?
     var projectForm: ProjectForm?
+    /// 卡片纸页在屏幕上（推入途中起、返回开始止）：iPhone 此时隐藏标签栏，纸页独占底部。
+    var showsCardPage = false
     /// 分栏：侧栏选中的页与其上推入的页（打开的卡片纸页盖在项目页上）。
     var splitRoot: Route = .shelf
     var splitPath: [Route] = []

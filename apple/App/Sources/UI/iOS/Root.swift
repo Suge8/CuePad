@@ -128,9 +128,9 @@ private struct TabsRoot: View {
         NavigationStack(path: path) {
             root().navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
         }
-        // 纸页独占底部（编辑工具栏不和标签栏叠在一起）。由路径决定而不是挂在纸页上：返回时路径先变，
-        // 标签栏随返回的转场一起出现，不在转场结束后才冒出来
-        .toolbarVisibility(path.wrappedValue.last?.isCard == true ? .hidden : .visible, for: .tabBar)
+        // 纸页独占底部（编辑工具栏不和标签栏叠在一起）。跟纸页的出现与消失走而不是跟路径：
+        // 手势返回一开始标签栏就回来，松手时页面不再跳
+        .toolbarVisibility(navigation.showsCardPage ? .hidden : .visible, for: .tabBar)
     }
 }
 

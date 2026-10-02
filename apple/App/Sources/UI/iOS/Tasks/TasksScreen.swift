@@ -88,6 +88,8 @@ struct TasksScreen: View {
                     let id = task.id
                     workspace.perform { try await $0.deleteTask(id) }
                 }
+                // 全局强调色是墨，会盖掉破坏性操作的红色
+                .tint(palette.failure)
             }
             .contextMenu { TaskActions(task: task, projects: projects) }
     }

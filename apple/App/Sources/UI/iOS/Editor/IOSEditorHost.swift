@@ -87,3 +87,26 @@ final class KeyboardBar: UIToolbar {
     required init?(coder: NSCoder) { nil }
 }
 #endif
+
+#if os(iOS)
+/// 纸页在屏幕上（含推入、返回途中）的起止，跟 UIKit 的出现回调走：手势返回在手指开始拖时就收到"将消失"，
+/// 取消返回再收到"将出现"。SwiftUI 的导航路径要到松手才变，跟它走标签栏会晚出现。
+struct PageAppearance: UIViewControllerRepresentable {
+    let changed: (Bool) -> Void
+
+    func makeUIViewController(context: Context) -> Probe { Probe() }
+    func updateUIViewController(_ probe: Probe, context: Context) { probe.changed = changed }
+
+    final class Probe: UIViewController {
+        var changed: (Bool) -> Void = { _ in }
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            changed(true)
+        }
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            changed(false)
+        }
+    }
+}
+#endif
