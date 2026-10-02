@@ -6,8 +6,6 @@ import SwiftUI
 nonisolated private struct SidebarData: Sendable {
     var trashCount: Int
     var history: [StoredPiSession]
-    /// 历史会话（会话 id）归属的项目，由 Store 按工作目录判定。
-    var historyProjects: [String: UUID]
 }
 
 struct Sidebar: View {
@@ -43,7 +41,7 @@ struct Sidebar: View {
                         }
                     }
                 }
-                PiSection(history: data.history, historyProjects: data.historyProjects, projects: catalog.projects)
+                PiSection(history: data.history)
                 if pages.showsTrash {
                     Section {
                         PageRow(page: .trash, count: data.trashCount, select: select) {
@@ -68,14 +66,10 @@ struct Sidebar: View {
         .safeAreaInset(edge: .bottom) { footer }
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
-        .observing(services.store, [.projects, .cards, .piSessions, .projectDirectories], into: $data, onError: workspace.fail) { store in
-            let history = Array(try store.piSessions().prefix(Self.historyLimit))
-            return SidebarData(
+        .observing(services.store, [.projects, .cards, .piSessions], into: $data, onError: workspace.fail) { store in
+            SidebarData(
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
-                history: history,
-                historyProjects: try Dictionary(uniqueKeysWithValues: history.compactMap { session in
-                    try store.project(containing: URL(filePath: session.cwd)).map { (session.id, $0.id) }
-                }))
+                history: Array(try store.piSessions().prefix(Self.historyLimit)))
         }
     }
 
@@ -111,7 +105,7 @@ struct Sidebar: View {
             if workspace.catalog?.projects.isEmpty == false { ExtensionConsent() }
             StartupIssues()
             HStack {
-                Button("新建项目", systemImage: "plus") { creating = true }
+                Button("新建项目", systemImage: "plus") { creating = true }.disabled(!workspace.isLibraryReady)
                 Spacer()
                 Button("设置", systemImage: "gearshape") { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
                     .help("设置（⌘,）")
@@ -190,14 +184,11 @@ private struct PageRow<Title: View>: View {
     }
 }
 
-/// 全局 Pi：活着的会话（名称 · 所属项目 · 状态），其下是最近结束的历史会话。
+/// 全局 Pi：活着的会话（显示名，下面是工作目录名 · 状态），其下是最近结束的历史会话（显示名，下面是工作目录名 · 最后活动）。
 private struct PiSection: View {
     let history: [StoredPiSession]
-    let historyProjects: [String: UUID]
-    let projects: [Project]
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
 
     var body: some View {
         let live = services.pi.sessions
@@ -209,15 +200,7 @@ private struct PiSection: View {
                     Button { jump(session) } label: {
                         HStack(spacing: 9) {
                             PiDot(state: session.state).frame(width: 16)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(session.displayName).lineLimit(1)
-                                // 需要处理时（出错、等你确认）接着写原因的开头，悬停看全文
-                                PiActivityLine(
-                                    lead: [projectName(workspace.sessionProjects[session.id]), session.state.label],
-                                    detail: session.state.needsAttention ? session.state.detail : nil,
-                                    font: .caption, full: session.state.fullDetail)
-                                    .foregroundStyle(session.state.labelColor(palette))
-                            }
+                            PiSessionLabel(session: session)
                         }
                     }
                     .buttonStyle(PressStyle(scale: 0.98))
@@ -229,7 +212,7 @@ private struct PiSection: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(session.title.isEmpty ? URL(filePath: session.cwd).lastPathComponent : session.title)
                                 .lineLimit(1)
-                            Text([projectName(historyProjects[session.id]), DateLabel.short(session.lastActivityAt)].compactMap { $0 }.joined(separator: " · "))
+                            Text([URL(filePath: session.cwd).lastPathComponent, DateLabel.short(session.lastActivityAt)].joined(separator: " · "))
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
@@ -238,10 +221,6 @@ private struct PiSection: View {
                 }
             }
         }
-    }
-
-    private func projectName(_ id: UUID?) -> String? {
-        id.flatMap { id in projects.first { $0.id == id }?.name }
     }
 
     private func jump(_ session: CuePi.PiSession) {

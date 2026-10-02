@@ -1,5 +1,4 @@
 #if os(macOS)
-import CuePi
 import CueStore
 import SwiftUI
 
@@ -69,7 +68,7 @@ struct TasksPanel: View {
                 .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                 .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
                 ForEach(groups[owner] ?? []) { task in
-                    TaskRow(task: task, projects: data.projects).padding(.horizontal, 20)
+                    TaskRow(task: task).padding(.horizontal, 20)
                 }
             }
             if !data.completed.isEmpty {
@@ -83,7 +82,7 @@ struct TasksPanel: View {
                 .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4)
                 if showsCompleted {
                     ForEach(data.completed) { task in
-                        TaskRow(task: task, projects: data.projects).padding(.horizontal, 20)
+                        TaskRow(task: task).padding(.horizontal, 20)
                     }
                 }
             }
@@ -92,10 +91,9 @@ struct TasksPanel: View {
     }
 }
 
-/// 一条任务：勾选完成；关联了 Pi 会话时显示其状态点。右键可发给 Pi、转为卡片、换项目、删除。
+/// 一条任务：勾选完成，双击编辑；关联了 Pi 会话时显示其状态点。右键是 `TaskActions`。
 struct TaskRow: View {
     let task: CueTask
-    var projects: [Project] = []
     var compact = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -122,43 +120,19 @@ struct TaskRow: View {
                 Text(task.content)
                     .font(.system(size: 13)).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
                     .lineLimit(1)
-                    .onTapGesture(count: 2) { draft = task.content; editing = true }
+                    .onTapGesture(count: 2, perform: beginEditing)
             }
             Spacer(minLength: 4)
             if task.piSessionID != nil { PiDot(state: session?.state, size: 6).help(session?.state.label ?? "会话已结束") }
         }
         .frame(minHeight: compact ? 22 : 28)
         .contentShape(.rect)
-        .contextMenu { menu }
+        .contextMenu { TaskActions(task: task, edit: beginEditing) }
     }
 
-    @ViewBuilder private var menu: some View {
-        let id = task.id, content = task.content, project = task.projectID
-        Button("编辑") { draft = content; editing = true }
-        if !services.pi.sessions.isEmpty {
-            Menu("发给 Pi") {
-                ForEach(services.pi.sessions) { session in
-                    Button(session.displayName) { sendToPi(session) }
-                }
-            }
-        }
-        Button("转为卡片") {
-            workspace.attempt {
-                _ = try await workspace.createCard(body: content, in: project)
-                try await workspace.services.store.deleteTask(id)
-            }
-        }
-        if !projects.isEmpty {
-            Menu("移到项目") {
-                Button("未归属") { workspace.perform { try await $0.updateTask(id) { $0.projectID = nil } } }
-                ForEach(projects) { target in
-                    Button(target.name) { workspace.perform { try await $0.updateTask(id) { $0.projectID = target.id } } }
-                        .disabled(target.id == project)
-                }
-            }
-        }
-        Divider()
-        Button("删除", role: .destructive) { workspace.perform { try await $0.deleteTask(id) } }
+    private func beginEditing() {
+        draft = task.content
+        editing = true
     }
 
     private func toggle() {
@@ -171,15 +145,6 @@ struct TaskRow: View {
         let id = task.id, content = draft.trimmingCharacters(in: .whitespaces)
         guard !content.isEmpty, content != task.content else { return }
         workspace.perform { try await $0.updateTask(id) { $0.content = content } }
-    }
-
-    /// 发出后把任务关联到该会话，之后显示会话状态。
-    private func sendToPi(_ session: CuePi.PiSession) {
-        let id = task.id, sessionID = session.sessionID
-        Task {
-            guard await workspace.send(task.content, via: .pi(session.id, .send), task: id) else { return }
-            workspace.perform { try await $0.updateTask(id) { $0.piSessionID = sessionID } }
-        }
     }
 }
 

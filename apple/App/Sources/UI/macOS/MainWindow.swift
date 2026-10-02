@@ -37,15 +37,15 @@ struct MainWindow: View {
         ZStack {
             palette.desk.ignoresSafeArea()
             PinnedPage(widths: widths, sidebarHidden: workspace.sidebar == .detailOnly) { page }
-            if let id = workspace.presentedCard {
+            if workspace.isLibraryReady, let id = workspace.presentedCard {
                 CardEditorPage(cardID: id)
                     .id(id)
                     .zIndex(1)
             }
         }
         .overlay(alignment: .bottom) {
-            // 纸页挂着（含缩回途中）时不显示：底栏只有一套，先退后进。项目目录还没读到或读不出来时也不显示：库读不出来不给写入入口
-            if workspace.catalog != nil, workspace.presentedCard == nil, workspace.page != .trash {
+            // 纸页挂着（含缩回途中）时不显示：底栏只有一套，先退后进
+            if workspace.isLibraryReady, workspace.presentedCard == nil, workspace.page != .trash {
                 // ⌘K 打开时只是藏起来（不卸下）：关掉面板的同一帧就回来
                 let searching = workspace.overlay == .search
                 CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
@@ -57,14 +57,14 @@ struct MainWindow: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if workspace.overlay == .tasks {
+            if workspace.isLibraryReady, workspace.overlay == .tasks {
                 TasksPanel()
                     .padding(.trailing, 12).padding(.top, 6)
                     .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
             }
         }
         .overlay {
-            if workspace.overlay == .search {
+            if workspace.isLibraryReady, workspace.overlay == .search {
                 // ⌘K 每天用很多次：直接出现、直接消失，不做动画
                 ZStack {
                     Color.black.opacity(palette.dark ? 0.4 : 0.25).ignoresSafeArea()
@@ -106,9 +106,11 @@ struct MainWindow: View {
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
             SyncAlert()
+            // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
             Button("搜索", systemImage: "magnifyingglass") { workspace.toggle(.search) }
                 .help("搜索（⌘K）")
-            TasksButton()
+                .disabled(!workspace.isLibraryReady)
+            TasksButton().disabled(!workspace.isLibraryReady)
         }
     }
 
@@ -211,10 +213,12 @@ private struct WorkspaceShortcuts: View {
 
     var body: some View {
         ZStack {
-            Button("搜索") { workspace.toggle(.search) }.keyboardShortcut("k")
             Button("侧栏") { workspace.toggleSidebar() }.keyboardShortcut("\\")
-            Button("任务") { workspace.toggle(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
-            Button("新建卡片") { newCard() }.keyboardShortcut("n")
+            if workspace.isLibraryReady {
+                Button("搜索") { workspace.toggle(.search) }.keyboardShortcut("k")
+                Button("任务") { workspace.toggle(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
+                Button("新建卡片") { newCard() }.keyboardShortcut("n")
+            }
             if workspace.overlay != nil {
                 Button("关闭") { workspace.overlay = nil }.keyboardShortcut(.cancelAction)
             }

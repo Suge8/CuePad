@@ -13,6 +13,8 @@ nonisolated enum SendError: Error, Equatable {
     case unsupportedTarget(String)
     /// 本版本不认识的发送方式（来自更新版本的手机）。
     case unsupportedMode(String)
+    /// 已经发出，但发送记录没写进资料库（附原因）；调用方按已发出处理，不能重发。
+    case unrecorded(String)
 }
 
 extension SendError: LocalizedError {
@@ -24,6 +26,7 @@ extension SendError: LocalizedError {
         case .sessionNotOnThisMac(let name): "Pi 会话「\(name)」已经结束，或不在这台 Mac 上"
         case .unsupportedTarget(let name): "这台 Mac 不支持发送到「\(name)」"
         case .unsupportedMode(let raw): "这台 Mac 上的 CuePad 不认识这种发送方式（\(raw)），请更新"
+        case .unrecorded(let reason): "发送已完成，但没能记下这次发送：\(reason)"
         }
     }
 }

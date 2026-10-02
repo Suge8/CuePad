@@ -193,7 +193,7 @@ private struct FocusCard: View {
             }
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(text: data.tasks.isEmpty ? "下一步" : "下一步 · \(data.tasks.count)", systemImage: "checklist")
-                ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskLine(task: task) }
+                ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskLine(task: task).contextMenu { TaskActions(task: task) } }
                 if data.tasks.count > Self.visibleTasks {
                     Button("还有 \(data.tasks.count - Self.visibleTasks) 条") {
                         if navigation.layout == .split { navigation.panel = .tasks } else { navigation.tab = .tasks }

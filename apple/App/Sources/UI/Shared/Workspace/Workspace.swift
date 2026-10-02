@@ -41,6 +41,8 @@ final class Workspace {
     let services: AppServices
     /// 本窗口的项目目录；nil 表示还没读到或读取失败，根视图在读到之前不显示页面。
     private(set) var catalog: ProjectCatalog?
+    /// 资料库读得出来（项目目录已读到）。没读到或读取失败时，凡是会写资料库的入口都不出现或不可用。
+    var isLibraryReady: Bool { catalog != nil }
     /// 项目目录读取失败的原因；根视图据此显示错误与"重试"，不停在空白页上。
     private(set) var catalogFailure: String?
     /// 第几次订阅项目目录：根视图以它为 `.task` 的 id，`retryCatalog` 加一即重新订阅。

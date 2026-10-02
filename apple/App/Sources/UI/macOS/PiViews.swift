@@ -84,6 +84,27 @@ struct PiDot: View {
     }
 }
 
+/// 侧栏与菜单栏里一个会话的文字：主行是会话显示名，副行是工作目录名与状态（"CuePad · 思考中"）；
+/// 需要处理时（出错、等你确认）副行接着写原因的开头，悬停看全文。
+struct PiSessionLabel: View {
+    let session: PiSession
+    var nameFont: Font = .body
+    var lineFont: Font = .caption
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let state = session.state
+        VStack(alignment: .leading, spacing: 1) {
+            Text(session.displayName).font(nameFont).lineLimit(1)
+            PiActivityLine(
+                lead: [session.cwd.lastPathComponent, state.label],
+                detail: state.needsAttention ? state.detail : nil,
+                font: lineFont, full: state.fullDetail)
+                .foregroundStyle(state.labelColor(palette))
+        }
+    }
+}
+
 /// 状态详情的一行文字；没有详情时不占位。
 struct PiDetail: View {
     let state: PiAgentState

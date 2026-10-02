@@ -126,10 +126,10 @@ final class AppServices {
             mode: mode, card: card, task: task)
     }
 
-    /// 发送并写一条发送记录；失败不写记录，错误原样抛给界面展示。
+    /// 发送并写一条发送记录；投送失败不写记录，错误原样抛给界面展示。投送成功而记录没写进去时抛 `SendError.unrecorded`。
     func send(_ storedText: String, to destination: Destination, card: UUID? = nil, task: UUID? = nil) async throws {
         let target = try await deliver(SendContent(stored: storedText), to: destination)
-        await recordSend(storedText, to: target, card: card, task: task)
+        try await recordSend(storedText, to: target, card: card, task: task)
     }
 
     #if os(macOS)

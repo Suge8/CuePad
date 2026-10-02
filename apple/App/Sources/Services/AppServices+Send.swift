@@ -20,12 +20,12 @@ extension AppServices {
         }
     }
 
-    /// 投送已经成功：记录写失败不能让界面以为没发出去而重发，只留日志。
-    func recordSend(_ storedText: String, to target: SendTarget, card: UUID?, task: UUID?) async {
+    /// 投送已经成功：记录写失败时抛 `SendError.unrecorded`，与投送失败区分开，界面按已发出处理（不重发）并提示。
+    func recordSend(_ storedText: String, to target: SendTarget, card: UUID?, task: UUID?) async throws {
         do {
             try await store.recordSend(storedText, to: target, card: card, task: task)
         } catch {
-            Self.log.error("发送记录写入失败：\(String(describing: error), privacy: .public)")
+            throw SendError.unrecorded(error.localizedDescription)
         }
     }
 
