@@ -178,7 +178,7 @@ private struct SplitSidebar: View {
     private func row(_ project: Project, _ catalog: ProjectCatalog) -> some View {
         SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0,
                    pi: data?.pi[project.id])
-            .projectActions(project, radius: 10)
+            .projectActions(project, radius: 10, pi: data?.pi[project.id])
     }
 }
 
@@ -200,7 +200,7 @@ private struct SidebarRow: View {
             Label {
                 HStack(spacing: 6) {
                     Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(1)
-                    if let pi { PiDot(state: pi, size: 6) }
+                    if let pi { PiDot(state: pi, size: 6, announces: true) }
                     Spacer(minLength: 4)
                     if badge > 0 { Text("\(badge)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3) }
                 }
@@ -217,7 +217,6 @@ private struct SidebarRow: View {
                 .fill(selected ? palette.selection : .clear)
                 .padding(.horizontal, 10))
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityValue(pi.map { "Pi \($0.label)" } ?? "")
     }
 
     /// 选中项目同时记为当前项目（与 Mac 同一事实源）。

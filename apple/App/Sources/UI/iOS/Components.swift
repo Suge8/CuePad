@@ -109,20 +109,27 @@ extension View {
     /// iPhone 每页底部都有标签栏；宽 iPad 只有项目页一类（`capturePage`）底部浮着随手记栏，右侧面板里没有玻璃。
     func bottomEdgeFade(capturePage: Bool = false) -> some View { modifier(BottomEdgeFade(capturePage: capturePage)) }
 
-    /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作。nil（未归档）没有菜单。
-    func projectActions(_ project: Project?, radius: CGFloat) -> some View { modifier(ProjectContextMenu(project: project, radius: radius)) }
+    /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作，有 Pi 会话时菜单标题写明它的状态
+    /// （说清旁边那个点是什么意思）。nil（未归档）没有菜单。
+    func projectActions(_ project: Project?, radius: CGFloat, pi: Open<PiWorkState>?) -> some View {
+        modifier(ProjectContextMenu(project: project, radius: radius, pi: pi))
+    }
 }
 
 private struct ProjectContextMenu: ViewModifier {
     let project: Project?
     let radius: CGFloat
+    let pi: Open<PiWorkState>?
     @Environment(Navigation.self) private var navigation
 
     func body(content: Content) -> some View {
         if let project {
             content
                 .contentShape(.contextMenuPreview, .rect(cornerRadius: radius, style: .continuous))
-                .contextMenu { ProjectActions(project: project) { navigation.projectForm = .init(project: project) } }
+                .contextMenu {
+                    let actions = ProjectActions(project: project) { navigation.projectForm = .init(project: project) }
+                    if let pi { Section(pi.presence) { actions } } else { actions }
+                }
         } else {
             content
         }

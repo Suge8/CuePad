@@ -30,6 +30,17 @@ nonisolated extension PiWorkState {
 nonisolated extension Open<PiWorkState> {
     var label: String { known?.label ?? "未知状态" }
     var urgency: Int { known?.urgency ?? 1 }
+
+    /// 项目旁的状态点说的是什么（读屏标签、悬停提示、长按菜单的标题）：只分要你注意的与在忙的。
+    var presence: String {
+        switch known {
+        case .thinking, .outputting, .tool: "Pi 正在工作"
+        case .waitingForUser: "Pi 等你确认"
+        case .error: "Pi 出错"
+        case .settled: "Pi 空闲"
+        case nil: "Pi 状态未知"
+        }
+    }
 }
 
 extension PiWorkState {
@@ -62,21 +73,27 @@ nonisolated extension PiSessionState {
     }
 }
 
-/// 状态点：颜色表示状态，旁边总有文字或读屏标签说明；不做循环动画（常驻多处，循环既耗电也分散注意）。
+/// 状态点：颜色表示状态；不做循环动画（常驻多处，循环既耗电也分散注意）。旁边有状态文字时（活动页、会话行）
+/// 读屏跳过它；`announces` 用在只有一个点的地方（书架、侧栏的项目旁），点自己带读屏标签与悬停提示。
 struct PiDot: View {
     let state: Open<PiWorkState>
     var size: CGFloat = 8
+    var announces = false
     @Environment(\.palette) private var palette
 
     var body: some View {
         let tint = state.tint(palette)
-        Circle()
+        let dot = Circle()
             .fill(tint)
             .frame(width: size, height: size)
             .padding(size * 0.35)
             .background(tint.opacity(0.22), in: .circle)
             .animation(Motion.quick, value: state)
-            .accessibilityHidden(true)
+        if announces {
+            dot.accessibilityLabel(state.presence).help(state.presence)
+        } else {
+            dot.accessibilityHidden(true)
+        }
     }
 }
 #endif
