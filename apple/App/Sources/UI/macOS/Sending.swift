@@ -31,12 +31,19 @@ extension Workspace {
     }
 
     /// 右键菜单里的"发给 …"一项：目标是上一个前台应用、而 CuePad 启动后还没有别的应用到过前台时，
-    /// 写明没有可发的应用并禁用（发了也只会报错）。
+    /// 标题"发给前台应用"、灰色副标题"还没有"，并禁用（发了也只会报错）。
     @ViewBuilder
     func sendButton(_ choice: AppServices.Destination, action: @escaping () -> Void) -> some View {
-        let missing = choice == .app(.lastFrontmost) && services.lastFrontmostApp() == nil
-        Button(missing ? "发给上一个前台应用（还没有）" : "发给 \(label(for: choice))", systemImage: "paperplane", action: action)
-            .disabled(missing)
+        if choice == .app(.lastFrontmost), services.lastFrontmostApp() == nil {
+            // 菜单项标签里的第二行 Text 是 macOS 菜单的副标题
+            Button(action: action) {
+                Text("发给前台应用")
+                Text("还没有")
+            }
+            .disabled(true)
+        } else {
+            Button("发给 \(label(for: choice))", systemImage: "paperplane", action: action)
+        }
     }
 
     func session(_ id: CuePi.PiSession.ID) -> CuePi.PiSession? {
