@@ -32,7 +32,8 @@ struct ProjectFormSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        // 只给大尺寸：半屏放不下名称与全部图标、颜色，小屏 iPhone 上当前的颜色会落在半屏以下
+        .presentationDetents([.large])
         .onAppear {
             guard let project else { return }
             name = project.name
