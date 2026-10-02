@@ -23,6 +23,8 @@ final class AppServices {
     let images: any CueImageStore
     #if os(macOS)
     let pi: PiBridge
+    /// 按 bundle ID 解析出的应用名（运行期间不变）：发送按钮每次绘制都要用，逐次解析要问 LaunchServices 并读应用的 Info.plist。
+    @ObservationIgnored var appNames: [String: String] = [:]
     #endif
 
     /// 设备本地偏好（主题、快捷键、自动发送、当前项目）。

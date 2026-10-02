@@ -113,6 +113,11 @@ final class Workspace {
         presence(of: card).covered = true
     }
 
+    /// 纸页缩回到原卡片、自己隐去的同一帧：原卡片回来（纸页稍后才卸下）。
+    func uncover(_ card: UUID) {
+        presence(of: card).covered = false
+    }
+
     /// 这张卡在纸页开合中的状态；卡片视图只观察自己的那一个。
     func presence(of card: UUID) -> CardPresence {
         if let presence = presences[card] { return presence }

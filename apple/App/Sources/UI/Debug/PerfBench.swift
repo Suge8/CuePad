@@ -174,6 +174,10 @@ private final class FrameRecorder: NSObject {
             "droppedFrames": dropped,
             "hitches": intervals.filter { $0 > refresh * 1.5 }.count,
             "worstFrameMs": ((intervals.max() ?? 0) * 10_000).rounded() / 10,
+            // 每次卡顿：[距开始的毫秒, 这一帧的毫秒]，用来分清卡在哪一刻
+            "hitchesAt": zip(stamps.dropFirst(), intervals).filter { $0.1 > refresh * 1.5 }.map {
+                [(($0.0 - (stamps.first ?? 0)) * 1000).rounded(), ($0.1 * 10_000).rounded() / 10]
+            },
         ]
     }
 }

@@ -132,6 +132,7 @@ public final class CueTextView: UITextView, CueEditorHost {
     /// 单纯 ensureLayout 不会更新 contentSize，要走一次视口布局。
     func layoutDidAdvance() { core.layout.textViewportLayoutController.layoutViewport() }
     func needsRelayout() { setNeedsLayout() }
+    var displayScale: CGFloat { traitCollection.displayScale }
     func blockActionRequested(_ action: CueBlockAction) { onBlockAction?(action) }
 }
 #endif

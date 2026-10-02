@@ -17,6 +17,8 @@ protocol CueEditorHost: AnyObject {
     func layoutDidAdvance()
     /// 附件的绘制内容变了（缩略图解码完成）：让宿主重排刷新。
     func needsRelayout()
+    /// 屏幕像素与点的比例：附件图按像素尺寸预先画好。
+    var displayScale: CGFloat { get }
     func blockActionRequested(_ action: CueBlockAction)
 }
 
@@ -54,6 +56,7 @@ final class EditorCore {
     private var decorationDelegate: DecorationDelegate?
     private(set) lazy var settler = LayoutSettler(core: self)
     private(set) lazy var thumbnails = ThumbnailLoader(core: self)
+    var displayScale: CGFloat { host?.displayScale ?? 2 }
 
     init(host: any CueEditorHost, imageStore: any CueImageStore, style: CueEditorTheme, storage: NSTextStorage, content: NSTextContentStorage, layout: NSTextLayoutManager) {
         self.host = host

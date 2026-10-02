@@ -150,12 +150,16 @@ extension AppServices {
 
     /// 已安装应用的显示名（不要求在运行）；找不到该应用时用 bundle ID 本身。
     func appName(bundleID: String) -> String {
+        if let name = appNames[bundleID] { return name }
+        // 找不到应用时不缓存：之后装上了就能解析出名字
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID), let bundle = Bundle(url: url) else {
             return bundleID
         }
         let name = bundle.localizedInfoDictionary?["CFBundleDisplayName"] ?? bundle.object(forInfoDictionaryKey: "CFBundleDisplayName")
             ?? bundle.object(forInfoDictionaryKey: "CFBundleName")
-        return name as? String ?? url.deletingPathExtension().lastPathComponent
+        let resolved = name as? String ?? url.deletingPathExtension().lastPathComponent
+        appNames[bundleID] = resolved
+        return resolved
     }
 }
 

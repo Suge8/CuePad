@@ -5,12 +5,9 @@ import AppKit
 enum CueImageRendering {
     static let stub = NSImage(size: NSSize(width: 1, height: 1))
 
-    static func thumbnail(_ thumbnail: CGImage, size: CGSize, cornerRadius: CGFloat) -> NSImage {
-        NSImage(size: size, flipped: false) { rect in
-            NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius).addClip()
-            NSGraphicsContext.current?.cgContext.draw(thumbnail, in: rect)
-            return true
-        }
+    /// 已按像素画好的位图（`RoundedThumbnail`）包成图片，按点尺寸显示。
+    static func image(_ pixels: CGImage, size: CGSize) -> NSImage {
+        NSImage(cgImage: pixels, size: size)
     }
 
     static func placeholder(size: CGSize, style: CueEditorTheme, missing: Bool) -> NSImage {

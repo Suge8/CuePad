@@ -3,9 +3,12 @@ import AppKit
 import Synchronization
 
 /// 订阅 NSWorkspace 激活通知追踪上一个前台应用，不轮询。通知在主队列投递，需要主 run loop 在跑。
+/// 运行中应用的目标列表算一次缓存起来，有应用启动、退出或激活时作废：逐个读应用的名称与类型要同步问 launchservicesd，
+/// 几十个应用就是上百次往返，不该在每次绘制发送菜单时重来。
 public final class WorkspaceApps: AppDirectory, @unchecked Sendable {
     private struct State {
         var last: AppInfo?
+        var targets: [AppInfo]?
         var subscribers: [UUID: AsyncStream<pid_t>.Continuation] = [:]
     }
 
@@ -13,7 +16,7 @@ public final class WorkspaceApps: AppDirectory, @unchecked Sendable {
     private let excludedPID: pid_t
     private let excludedBundleID: String?
     private let center: NotificationCenter
-    private var observer: (any NSObjectProtocol)?
+    private var observers: [any NSObjectProtocol] = []
 
     /// `notificationCenter` 默认取 NSWorkspace 的；测试可注入私有中心。
     public init(
@@ -25,15 +28,20 @@ public final class WorkspaceApps: AppDirectory, @unchecked Sendable {
         self.excludedBundleID = excludedBundleID
         self.center = notificationCenter
         if let front = NSWorkspace.shared.frontmostApplication { record(front) }
-        observer = center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: nil) {
+        observers.append(center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: nil) {
             [weak self] note in
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             self?.record(app)
+        })
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            observers.append(center.addObserver(forName: name, object: nil, queue: nil) { [weak self] _ in
+                self?.state.withLock { $0.targets = nil }
+            })
         }
     }
 
     deinit {
-        if let observer { center.removeObserver(observer) }
+        for observer in observers { center.removeObserver(observer) }
     }
 
     public func lastFrontmost() -> AppInfo? { state.withLock { $0.last } }
@@ -63,12 +71,15 @@ public final class WorkspaceApps: AppDirectory, @unchecked Sendable {
 
     /// 目标选择器用的运行中应用：可投送、去重、按名称排序。
     public func runningTargets() -> [AppInfo] {
+        if let cached = state.withLock({ $0.targets }) { return cached }
         var seen = Set<String>()
-        return NSWorkspace.shared.runningApplications
+        let targets = NSWorkspace.shared.runningApplications
             .filter { !$0.isTerminated && isDispatchable($0) }
             .map(AppInfo.init)
             .filter { $0.bundleID.map { seen.insert($0).inserted } == true }
             .sorted { $0.name < $1.name }
+        state.withLock { $0.targets = targets }
+        return targets
     }
 
     /// 上一个前台应用与目标列表共用的口径：普通应用（排除 loginwindow、Dock、Spotlight 等）且不是被排除者。
@@ -84,6 +95,8 @@ public final class WorkspaceApps: AppDirectory, @unchecked Sendable {
         let dispatchable = isDispatchable(app) && info.pid >= 0
         let subscribers = state.withLock { state in
             if dispatchable { state.last = info }
+            // 应用可能在运行中换了类型（菜单栏应用弹出窗口时变成普通应用），激活时也重算目标列表
+            state.targets = nil
             return Array(state.subscribers.values)
         }
         for subscriber in subscribers { subscriber.yield(info.pid) }

@@ -32,7 +32,6 @@ struct EditorHost: NSViewRepresentable {
         view.textView.numbering = numbering
         view.scrollerStyle = .overlay
         handle.view = view
-        DispatchQueue.main.async { handle.focus() }
         return view
     }
 

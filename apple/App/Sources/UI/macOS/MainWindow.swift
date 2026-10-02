@@ -37,25 +37,9 @@ struct MainWindow: View {
         ZStack {
             palette.desk.ignoresSafeArea()
             PinnedPage(widths: widths, sidebarHidden: workspace.sidebar == .detailOnly) { page }
-            if workspace.isLibraryReady, let id = workspace.presentedCard {
-                CardEditorPage(cardID: id)
-                    .id(id)
-                    .zIndex(1)
-            }
+            EditorLayer().zIndex(1)
         }
-        .overlay(alignment: .bottom) {
-            // 纸页挂着（含缩回途中）时不显示：底栏只有一套，先退后进
-            if workspace.isLibraryReady, workspace.presentedCard == nil, workspace.page != .trash {
-                // ⌘K 打开时只是藏起来（不卸下）：关掉面板的同一帧就回来
-                let searching = workspace.overlay == .search
-                CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
-                    .opacity(searching ? 0 : 1)
-                    .allowsHitTesting(!searching)
-                    .accessibilityHidden(searching)
-                    .animation(nil, value: searching)
-                    .transition(.opacity.animation(.easeOut(duration: 0.1)))
-            }
-        }
+        .overlay(alignment: .bottom) { CaptureSlot() }
         .overlay(alignment: .topTrailing) {
             if workspace.isLibraryReady, workspace.overlay == .tasks {
                 TasksPanel()
@@ -96,13 +80,9 @@ struct MainWindow: View {
         ToolbarItem(placement: .navigation) {
             if workspace.sidebar == .detailOnly { ProjectSwitcher() }
         }
-        ToolbarItem(placement: .navigation) {
-            if workspace.openCard != nil {
-                Button("返回", systemImage: "chevron.left") { closeCard() }
-                    .keyboardShortcut(.cancelAction)
-                    .help("返回项目（Esc）")
-            }
-        }
+        // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
+        ToolbarItem(placement: .navigation) { BackButton() }
+            .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
             SyncAlert()
@@ -114,12 +94,64 @@ struct MainWindow: View {
         }
     }
 
-    private func closeCard() {
-        workspace.openCard = nil
-    }
-
     private var busyBinding: Binding<Bool> {
         Binding(get: { workspace.busySend != nil }, set: { if !$0 { workspace.busySend = nil } })
+    }
+}
+
+/// 打开、收起卡片只改动下面三处（返回按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：
+/// 主窗口的视图体不读它，开合时不重算整个窗口、不重建整条工具栏。
+
+/// 工具栏的返回按钮：常驻、不打开卡片时隐去——条目一增一减，打开卡片的那一帧就要重排整条工具栏。
+private struct BackButton: View {
+    @Environment(Workspace.self) private var workspace
+
+    /// 与工具栏自带的圆形按钮同样大小。
+    private static let size: CGFloat = 36
+
+    var body: some View {
+        let open = workspace.openCard != nil
+        Button { workspace.openCard = nil } label: {
+            Image(systemName: "chevron.left").font(.system(size: 15)).foregroundStyle(.secondary)
+                .frame(width: Self.size, height: Self.size)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .circle)
+        .accessibilityLabel("返回")
+        .keyboardShortcut(open ? .cancelAction : nil)
+        .help("返回项目（Esc）")
+        .opacity(open ? 1 : 0)
+        .disabled(!open)
+        .accessibilityHidden(!open)
+    }
+}
+
+/// 打开的卡的纸页（含缩回途中）。
+private struct EditorLayer: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        if workspace.isLibraryReady, let id = workspace.presentedCard {
+            CardEditorPage(cardID: id).id(id)
+        }
+    }
+}
+
+/// 底部输入条：纸页挂着（含缩回途中）时不显示，底栏只有一套，先退后进；⌘K 打开时只是藏起来（不卸下），关掉面板的同一帧就回来。
+private struct CaptureSlot: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        if workspace.isLibraryReady, workspace.presentedCard == nil, workspace.page != .trash {
+            let searching = workspace.overlay == .search
+            CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
+                .opacity(searching ? 0 : 1)
+                .allowsHitTesting(!searching)
+                .accessibilityHidden(searching)
+                .animation(nil, value: searching)
+                .transition(.opacity.animation(.easeOut(duration: 0.1)))
+        }
     }
 }
 

@@ -103,6 +103,7 @@ public final class CueTextView: NSTextView, CueEditorHost {
     func resolvedColor(_ color: CueColor) -> CueColor { color }  // 底色在绘制时按当时的外观解析
     func layoutDidAdvance() { needsLayout = true }
     func needsRelayout() { needsLayout = true }
+    var displayScale: CGFloat { window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2 }
     func blockActionRequested(_ action: CueBlockAction) { onBlockAction?(action) }
 }
 #endif
