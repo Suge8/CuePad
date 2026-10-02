@@ -271,6 +271,31 @@ struct HistoryIndexerTests {
         try await eventually("新文件被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
     }
 
+    /// 新用户常见顺序是先开 CuePad、后装 Pi：开始监听时会话目录还不存在。之后建出目录、写入会话（会话还没结束），
+    /// 历史要跟上；目录被删掉再建也要恢复。
+    @Test(.timeLimit(.minutes(1)))
+    func sessionsDirectoryCreatedAfterStartIsWatchedAndSurvivesRecreation() async throws {
+        let sessions = root.appending(path: "agent/sessions")  // 连上层目录也还不存在
+        let log = HistoryEventLog(PiHistoryIndexer(root: sessions) { _ in nil })
+        try await eventually("回填完成") { log.finishedBackfill }
+
+        let project = sessions.appending(path: "--work-x--")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        var first = SessionFile(directory: project, name: "a.jsonl")
+        try first.append(SessionFile.header(id: "a"), SessionFile.user("u", nil, "after pi was installed", at: 1))
+        try await eventually("后建目录里的会话被索引", timeout: .seconds(5)) {
+            log.updates.contains { $0.history.displayName == "after pi was installed" }
+        }
+
+        try FileManager.default.removeItem(at: sessions)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        var second = SessionFile(directory: project, name: "b.jsonl")
+        try second.append(SessionFile.header(id: "b"), SessionFile.user("u", nil, "after the directory came back", at: 1))
+        try await eventually("删掉再建的目录里的会话被索引", timeout: .seconds(5)) {
+            log.updates.contains { $0.history.displayName == "after the directory came back" }
+        }
+    }
+
     @Test func callerSuppliedCheckpointMeansOnlyNewBytesAreRead() async throws {
         let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
         let checkpoint = try PiHistory.index(file: f.url, from: nil).checkpoint
