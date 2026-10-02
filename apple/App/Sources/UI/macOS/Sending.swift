@@ -15,14 +15,25 @@ extension Workspace {
             .sorted { !$0.state.isBusy && $1.state.isBusy }
     }
 
-    /// 当前生效的目标：用户选过的（指向的 Pi 会话已结束时照样保留，界面写"已结束"，不悄悄换掉；同一个 Pi 会话重新打开了就接回新开的那个），
-    /// 否则本项目的 Pi 会话，否则上一个前台应用。
+    /// 当前生效的目标：用户选过或发过的（指向的 Pi 会话已结束时照样保留，界面写"已结束"，不悄悄换掉；同一个 Pi 会话重新打开了就接回新开的那个），
+    /// 否则本项目的 Pi 会话——在线的优先，都结束了就是刚结束的那个（同样写"已结束"，不退回到应用）——否则上一个前台应用。
     func effectiveChoice(for project: UUID?) -> AppServices.Destination {
         if let sendChoice {
             if let live = current(sendChoice) { return live }
             if case .pi(let id, _) = sendChoice, services.pi.endedSessions[id] != nil { return sendChoice }
         }
-        return liveSessions(in: project).first.map { .pi($0.id, .send) } ?? .app(.lastFrontmost)
+        if let live = liveSessions(in: project).first { return .pi(live.id, .send) }
+        if let ended = endedSessions(in: project).first { return .pi(ended.id, .send) }
+        return .app(.lastFrontmost)
+    }
+
+    /// 本次运行里结束了、也没有重新打开的本项目 Pi 会话，最近结束的在前。
+    private func endedSessions(in project: UUID?) -> [CuePi.PiSession] {
+        guard let project else { return [] }
+        let open = Set(services.pi.sessions.map(\.sessionID))
+        return services.pi.endedSessions.values
+            .filter { sessionProjects[$0.id] == project && !open.contains($0.sessionID) }
+            .sorted { (endedOrder.firstIndex(of: $0.id) ?? -1) > (endedOrder.firstIndex(of: $1.id) ?? -1) }
     }
 
     /// 目标指向的 Pi 会话已结束、也没有重新打开：发不出去，界面写"<会话名> · 已结束"，点开改选。
@@ -92,9 +103,11 @@ extension Workspace {
         let done = choice == .clipboard ? "已复制" : "已" + action(for: choice)
         do {
             try await services.send(stored, to: choice, card: card, task: task)
+            remember(choice)
             say(done)
             return true
         } catch SendError.unrecorded(let reason) {
+            remember(choice)
             say("\(done)，但没能记下这次发送：\(reason)", isError: true)
             return true
         } catch SendError.piSessionBusy {
@@ -106,12 +119,19 @@ extension Workspace {
         }
     }
 
+    /// 发出去过的目标就是用户在用的目标：记住它，会话结束后按钮写"已结束"、重新打开时接回，不再按默认规则悄悄换掉。
+    /// 复制到剪贴板（右键"复制"、分块复制）不算换目标。
+    private func remember(_ choice: AppServices.Destination) {
+        if choice != .clipboard { sendChoice = choice }
+    }
+
     func resolveBusySend(_ mode: DeliveryMode) {
         guard let pending = busySend else { return }
         busySend = nil
         Task {
             do {
                 try await services.send(pending.text, to: .pi(pending.session, mode), card: pending.card, task: pending.task)
+                remember(.pi(pending.session, .send))
                 say(mode == .steer ? "已插话" : "已排队")
             } catch {
                 fail(error)
@@ -120,17 +140,22 @@ extension Workspace {
     }
 }
 
-/// 活着的 Pi 会话或项目目录绑定变化时，重算会话归属的项目。
+/// Pi 会话（在线与本次运行里已结束的）或项目目录绑定变化时，重算会话归属的项目、记下结束的先后。
 struct SessionProjectsTracker: ViewModifier {
     let workspace: Workspace
 
     private struct Key: Equatable {
         var sessions: [String]
+        /// 已结束的单列：会话从在线变成结束时键必须变（混在一起时字符串可能不变，重算就不会触发）
+        var ended: Set<String>
         var directories: [UUID: String]?
     }
 
     func body(content: Content) -> some View {
-        let key = Key(sessions: workspace.services.pi.sessions.map { "\($0.id) \($0.cwd.path)" }, directories: workspace.catalog?.directories)
+        let pi = workspace.services.pi
+        let key = Key(
+            sessions: pi.sessions.map { "\($0.id) \($0.cwd.path)" }, ended: Set(pi.endedSessions.keys),
+            directories: workspace.catalog?.directories)
         content.task(id: key) { await workspace.refreshSessionProjects() }
     }
 }

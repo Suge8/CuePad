@@ -67,9 +67,11 @@ final class Workspace {
     var busySend: BusySend?
     /// 用户在本窗口选过的发送目标；nil 或已失效时用默认目标。
     var sendChoice: AppServices.Destination?
-    /// 活着的 Pi 会话（会话 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
+    /// Pi 会话（会话 id，含本次运行里已结束的）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由根视图调用 `refreshSessionProjects` 重算。
     private(set) var sessionProjects: [String: UUID] = [:]
+    /// 本次运行里已结束的会话（会话 id），按本窗口看到它们结束的先后。可观察：默认发送目标取最后结束的那个。
+    private(set) var endedOrder: [String] = []
 
     /// 鼠标进出一张卡。拖出卡片也就不再按着它（与按钮拖出即松开一致）。
     func hover(_ card: UUID, inside: Bool) {
@@ -106,8 +108,11 @@ final class Workspace {
 
     /// 重算活着的会话各归哪个项目。
     func refreshSessionProjects() async {
+        // 会话变化时都会来到这里：顺带记下结束的先后（桥只给出结束了哪些），默认发送目标取最后结束的那个
+        for id in services.pi.endedSessions.keys where !endedOrder.contains(id) { endedOrder.append(id) }
         var result: [String: UUID] = [:]
-        for session in services.pi.sessions {
+        // 已结束的会话也算：默认发送目标要认出"本项目刚结束的会话"（见 effectiveChoice）
+        for session in services.pi.sessions + services.pi.endedSessions.values {
             do {
                 if let project = try await services.store.project(containing: session.cwd) { result[session.id] = project.id }
             } catch {
