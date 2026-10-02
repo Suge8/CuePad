@@ -159,7 +159,7 @@ final class Workspace {
         catalogFailure = nil
         do {
             #if DEBUG
-            if DebugScene.failsCatalog { throw DebugScene.InjectedFailure() }
+            try DebugScene.injectCatalogFailure(attempt: catalogAttempt)
             #endif
             for try await next in services.store.observe(ProjectCatalog.tables, { try ProjectCatalog.read(from: $0) }) {
                 guard next != catalog else { continue }

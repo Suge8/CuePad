@@ -19,7 +19,8 @@ enum ScrollAnchor {
 /// - `-CuePadWindowOrigin x,y`（仅 Mac）：窗口放到该位置，可在屏幕外；
 /// - `-CuePadImport <cuepad.db 路径>`（仅 Mac）：界面起来后导入一份旧版资料库，复现首次启动边导边变；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
-/// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面。
+/// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
+///   `-CuePadCatalogFailure once`：每个窗口（含菜单栏面板）只有第一次读取报错，按"重试"后恢复，核对重试路径。
 /// 设置项可在参数域覆盖：`-theme dark`；Mac 隔离 Pi 目录下隐藏"连接 Pi"提示：`-piExtensionDeclinedVersion '<integer>N</integer>'`（N 为随包扩展版本）。
 @MainActor
 enum DebugScene {
@@ -28,7 +29,12 @@ enum DebugScene {
     static var searchText: String { defaults.string(forKey: "CuePadSearch") ?? "" }
     /// 挂上刻意的几何回写环（只给布局压力场景的检测器自检用）。
     static var injectsGeometryLoop: Bool { defaults.bool(forKey: "CuePadGeometryLoop") }
-    static var failsCatalog: Bool { defaults.bool(forKey: "CuePadCatalogFailure") }
+
+    /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。
+    static func injectCatalogFailure(attempt: Int) throws {
+        let fails = defaults.string(forKey: "CuePadCatalogFailure") == "once" ? attempt == 0 : defaults.bool(forKey: "CuePadCatalogFailure")
+        if fails { throw InjectedFailure() }
+    }
 
     struct InjectedFailure: LocalizedError {
         var errorDescription: String? { "调试注入的读取失败（-CuePadCatalogFailure）" }
