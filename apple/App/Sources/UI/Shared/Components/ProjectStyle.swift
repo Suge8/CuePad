@@ -2,10 +2,12 @@ import CueStore
 import SwiftUI
 
 /// 项目图标与颜色的选择（Mac 与 iOS 的项目表单共用）。`cell` 是每个格子的边长：Mac 30，触屏 44。
+/// 两组都按拿到的宽度换行排（列数随宽度），窄屏上所有选项与当前选中项都在框内。
 struct ProjectStylePicker: View {
     @Binding var icon: String
     @Binding var color: String
     var cell: CGFloat
+    @Environment(\.palette) private var palette
 
     /// 可选颜色：存储值 → 读屏与提示用的颜色名。
     static let colors: [(hex: String, name: String)] = [
@@ -13,35 +15,44 @@ struct ProjectStylePicker: View {
         ("#6A6FD1", "靛蓝"), ("#A260C4", "紫色"), ("#D0607D", "粉色"), ("#8A8A84", "灰色"),
     ]
 
+    private static let spacing: CGFloat = 6
+
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: cell, maximum: cell), spacing: Self.spacing)]
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: cell, maximum: cell), spacing: 6)], spacing: 6) {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: Self.spacing) {
                 ForEach(ProjectGlyph.choices, id: \.symbol) { choice in
-                    let symbol = choice.symbol
+                    let symbol = choice.symbol, selected = icon == symbol
+                    let shape = RoundedRectangle(cornerRadius: cell / 4, style: .continuous)
                     Button { icon = symbol } label: {
                         Image(systemName: symbol).frame(width: cell, height: cell)
-                            .background(icon == symbol ? AnyShapeStyle(.selection) : AnyShapeStyle(.clear), in: .rect(cornerRadius: cell / 4))
+                            // 选中：墨色描边加浅底，深浅色下都清楚，不靠图标本身的颜色
+                            .background(selected ? palette.selection : .clear, in: shape)
+                            .overlay { if selected { shape.strokeBorder(palette.ink, lineWidth: 2) } }
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Palette.projectTint(color))
                     .accessibilityLabel("图标：\(choice.name)")
-                    .accessibilityAddTraits(icon == symbol ? .isSelected : [])
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                     .help(choice.name)
                 }
             }
-            HStack(spacing: cell / 3) {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: Self.spacing) {
                 ForEach(Self.colors, id: \.hex) { choice in
-                    let hex = choice.hex
+                    let hex = choice.hex, selected = color == hex
                     Button { color = hex } label: {
                         Circle().fill(Palette.projectTint(hex)).frame(width: cell * 0.66, height: cell * 0.66)
-                            .overlay { if color == hex { Circle().stroke(.primary, lineWidth: 2).padding(-3) } }
+                            .overlay { if selected { Circle().strokeBorder(palette.ink, lineWidth: 2).padding(-4) } }
                             .frame(width: cell, height: cell)
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("颜色：\(choice.name)")
-                    .accessibilityAddTraits(color == hex ? .isSelected : [])
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                     .help(choice.name)
                 }
             }

@@ -58,7 +58,8 @@ struct ShelfScreen: View {
         .background(palette.desk)
         .bottomEdgeFade(capturePage: true)
         .captureBar()
-        .cardSearch(.all, button: true, enabled: navigation.layout == .tabs)
+        // 一张卡都没有时没什么可搜，不挂搜索框与放大镜
+        .cardSearch(.all, available: navigation.layout == .tabs && workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true, ready: true)
         .navigationTitle("项目")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
