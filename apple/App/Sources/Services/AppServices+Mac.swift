@@ -31,7 +31,7 @@ extension AppServices {
                     reportIssue(.piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\(error.localizedDescription)"))
                 }
             },
-            Task { await consumePiHistory(indexer.events(alsoIndexing: endedPiSessionFiles)) },
+            Task { await consumePiHistory(indexer.events()) },
             Task {
                 do {
                     try await resetPiState()

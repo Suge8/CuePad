@@ -18,18 +18,17 @@ public struct PiHistoryIndexer: Sendable {
         self.checkpoint = checkpoint
     }
 
-    /// 结束（取消订阅）时停止后台任务。`files` 是调用方另外要求立即索引的会话文件（例如刚结束的会话）：
-    /// 会话目录在开始监听时还不存在（Pi 从没运行过）时，目录监听看不到之后建出来的文件，靠它补上；也不必等下次启动扫描。
-    public func events(alsoIndexing files: AsyncStream<URL> = AsyncStream { $0.finish() }) -> AsyncStream<PiHistoryEvent> {
+    /// 结束（取消订阅）时停止后台任务。会话目录可以还不存在（先装 CuePad、后装 Pi）或被删再建，见 `FSEventsWatcher`。
+    public func events() -> AsyncStream<PiHistoryEvent> {
         AsyncStream { continuation in
-            let task = Task.detached(priority: .utility) { await run(continuation, alsoIndexing: files) }
+            let task = Task.detached(priority: .utility) { await run(continuation) }
             continuation.onTermination = { _ in task.cancel() }
         }
     }
 
-    private func run(_ continuation: AsyncStream<PiHistoryEvent>.Continuation, alsoIndexing files: AsyncStream<URL>) async {
-        // FSEvents 报告真实路径；统一用真实路径，回填与增量的文件 URL 才一致
-        let root = self.root.resolvingSymlinksInPath()
+    private func run(_ continuation: AsyncStream<PiHistoryEvent>.Continuation) async {
+        // FSEvents 报告真实路径；统一用真实路径，回填与增量的文件 URL 才一致（目录还不存在时解析其上层）
+        let root = FSEventsWatcher.resolve(self.root)
         let watcher = FSEventsWatcher(root: root) // 先开始监听：回填期间的变化不会丢
         defer { watcher.stop() }
         var live = LiveCache(limit: Self.liveCacheLimit)
@@ -51,16 +50,7 @@ public struct PiHistoryIndexer: Sendable {
         }
         continuation.yield(.backfillFinished)
 
-        // 目录变化与调用方指定的文件合成一路，按到达顺序逐个索引
-        let (changes, change) = AsyncStream<[String]>.makeStream()
-        let fromDirectory = Task { for await paths in watcher.paths { change.yield(paths) } }
-        let fromCaller = Task { for await file in files { change.yield([file.resolvingSymlinksInPath().path]) } }
-        defer {
-            fromDirectory.cancel()
-            fromCaller.cancel()
-        }
-
-        for await paths in changes {
+        for await paths in watcher.paths {
             if Task.isCancelled { return }
             if paths.contains(root.path) { // 丢事件：整体重扫
                 for file in Self.sessionFiles(under: root) { await index(file, remember: true) }

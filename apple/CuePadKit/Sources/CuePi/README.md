@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`sessions` 直接给界面观察，`changes()` 给通知；`send` / `paste`；`endedSessions` 留着本次运行里已结束会话的最后快照（按 id），界面据此把指向它的发送目标显示成"已结束" |
 | 安装扩展 | `PiExtensionInstaller` | 检测 Pi（≥ 0.84.4）与扩展状态，`install()`（新装/升级）、`uninstall()`；首次写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
-| 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 增量读取，只给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动）；检查点（Codable，不含正文）由 App 存进 Store，再传回来；`events(alsoIndexing:)` 另收调用方要立即索引的会话文件（App 交给它刚结束的会话：会话目录在监听开始时不存在时目录监听看不到新文件，也不必等下次启动扫描） |
+| 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 增量读取，只给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动）；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
 | 错误摘要 | `PiErrorSummary`（`PiAgentState.errorSummary`） | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
 | 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
 

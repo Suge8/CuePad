@@ -87,32 +87,22 @@ struct RealPiTests {
         }
     }
 
-    /// 刚用完的会话要立即进历史，不等下次启动扫描。App 启动时 Pi 的会话目录可能还不存在（Pi 从没运行过），
-    /// 目录监听就看不到之后建出来的会话文件——会话结束时由桥给出的会话文件触发索引。这里让索引器监听一个不存在的目录来固定这种情形。
+    /// 刚用完的会话要立即进历史，不等下次启动扫描（会话目录可能在开始监听后才由 Pi 建出，见 HistoryIndexerTests）。
     /// 结束的会话仍可按 id 查到（界面据此显示"已结束"）。
-    @Test func endedSessionEntersHistoryRightAwayAndStaysLookupable() async throws {
+    @Test func endedSessionIsInHistoryRightAwayAndStaysLookupable() async throws {
         try await withRig { pi, bridge, s in
-            let (endedFiles, endedFile) = AsyncStream<URL>.makeStream()
-            let changes = bridge.changes()
-            let forward = Task {
-                for await change in changes {
-                    if case .ended(let ended, _) = change, let file = ended.sessionFile { endedFile.yield(file) }
-                }
-            }
-            defer { forward.cancel() }
-            let unwatched = pi.paths.agentDirectory.appending(path: "not-created-yet")
-            let history = HistoryEventLog(PiHistoryIndexer(root: unwatched) { _ in nil }, alsoIndexing: endedFiles)
+            let history = HistoryEventLog(PiHistoryIndexer(root: pi.paths.sessionsDirectory) { _ in nil })
             try await eventually("回填完成") { history.finishedBackfill }
 
             try pi.prompt("记进历史")
             try await eventually("回复写入", timeout: .seconds(20)) { !self.replies(of: s).isEmpty }
             pi.kill(SIGTERM)
 
-            try await eventually("退出的会话进入历史", timeout: .seconds(5)) {
+            try await eventually("退出的会话在历史里", timeout: .seconds(5)) {
                 history.updates.contains { $0.history.displayName == "记进历史" }
             }
+            try await eventually("会话结束") { bridge.sessions.isEmpty }
             #expect(bridge.endedSessions[s.id]?.displayName == "记进历史")
-            #expect(bridge.sessions.isEmpty)
         }
     }
 

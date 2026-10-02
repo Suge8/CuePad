@@ -75,9 +75,6 @@ final class AppServices {
     @ObservationIgnored let paths: PiPaths
     @ObservationIgnored let terminal: PiTerminalJumper
     @ObservationIgnored let historyStore: PiHistoryPersistence
-    /// 刚结束的 Pi 会话的会话文件，交给历史索引立即收进历史（不等目录监听或下次启动扫描）。
-    @ObservationIgnored let endedPiSessionFiles: AsyncStream<URL>
-    @ObservationIgnored let endedPiSessionFile: AsyncStream<URL>.Continuation
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
     /// 这台 Mac 的稳定标识：Pi 状态记录与投送请求都靠它区分是哪台 Mac。
     @ObservationIgnored let hostID: String
@@ -156,7 +153,6 @@ final class AppServices {
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: library.store)
-        (endedPiSessionFiles, endedPiSessionFile) = AsyncStream.makeStream()
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) {

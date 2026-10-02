@@ -20,9 +20,7 @@ extension AppServices {
             switch change {
             case .appeared(let session), .stateChanged(let session, _), .displayNameChanged(let session):
                 try await recordPiState(of: session)
-            case .ended(let session, _):
-                if let file = session.sessionFile { endedPiSessionFile.yield(file) }
-                try await piStateRecorder.end(sessionID: session.sessionID)
+            case .ended(let session, _): try await piStateRecorder.end(sessionID: session.sessionID)
             case .incompatible: break
             }
         }
