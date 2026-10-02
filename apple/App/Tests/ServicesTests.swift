@@ -139,6 +139,31 @@ struct PiHistoryPersistenceTests {
     private let firstPrompt = #"{"type":"message","id":"m1","parentId":null,"timestamp":"2026-01-01T00:00:01.000Z","message":{"role":"user","content":"fix the build","timestamp":1}}"#
     private let reply = #"{"type":"message","id":"m2","parentId":"m1","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"assistant","stopReason":"stop","content":[{"type":"text","text":"done"}],"timestamp":2}}"#
 
+    /// 会话一结束就进历史：会话目录还不存在时（Pi 从没运行过）目录监听看不到新文件，由结束的会话把文件交给索引。
+    @Test(.timeLimit(.minutes(1)))
+    func 结束的Pi会话立即进入历史() async throws {
+        let rig = TestApp()
+        let services: AppServices = rig.services
+        let file = try sessionFile(in: rig, lines: [header, firstPrompt])
+        let indexer = PiHistoryIndexer(root: rig.directory.appending(path: "sessions-not-created-yet")) { await services.loadPiCheckpoint(for: $0) }
+        let history = Task { await services.consumePiHistory(indexer.events(alsoIndexing: services.endedPiSessionFiles)) }
+        defer { history.cancel() }
+
+        let session = CuePi.PiSession(
+            id: "sess-1.7", sessionID: "sess-1", sessionFile: file, pid: 7, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
+            mode: "tui", model: nil, terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .idle, stateSince: .now)
+        try await services.consumePiChanges(AsyncStream {
+            $0.yield(.appeared(session))
+            $0.yield(.ended(session, reason: .closed(reason: "quit")))
+            $0.finish()
+        })
+
+        for try await rows in services.store.observe([.piSessions], { try $0.piSessions() }) where !rows.isEmpty {
+            #expect(rows.map(\.title) == ["fix the build"])
+            break
+        }
+    }
+
     @Test func 索引结果与检查点写入本机会话表_重启后可从中断处继续() async throws {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
