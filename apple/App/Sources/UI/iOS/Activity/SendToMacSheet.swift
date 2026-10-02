@@ -101,22 +101,26 @@ struct SendToMacSheet: View {
                     } header: {
                         Text("Pi 会话")
                     }
-                    if let mode, modes.count > 1 {
-                        Section {
-                            Picker("方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
-                                ForEach(modes, id: \.self) { Text($0.label).tag($0) }
-                            }
-                            .pickerStyle(.segmented)
-                            .listRowBackground(Color.clear)
-                            .listRowInsets(EdgeInsets())
-                        } footer: {
-                            if let explanation = mode.explanation { Text(explanation) }
-                        }
-                    }
                 }
             }
             }
             .listRowBackground(palette.paper)
+        }
+        // 发送方式固定在底部：会话一多（或小屏）也不用往下滑就能看到，和右上角的发送按钮在同一屏
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let mode, modes.count > 1 {
+                VStack(spacing: 6) {
+                    Picker("方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
+                        ForEach(modes, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    if let explanation = mode.explanation {
+                        Text(explanation).font(.footnote).foregroundStyle(palette.ink3).frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.horizontal, 20).padding(.vertical, 12)
+                .background(palette.desk)
+            }
         }
     }
 

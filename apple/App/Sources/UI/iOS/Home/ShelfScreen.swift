@@ -154,11 +154,15 @@ private struct PinnedShelfCard: View {
                 HStack(alignment: .top) {
                     ProjectGlyph(project: entry.project, size: 24)
                     Spacer()
-                    if let pi = entry.pi { PiDot(state: pi) }
+                    if let pi = entry.pi { PiDot(state: pi, announces: true) }
                 }
                 Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
                 Group {
-                    if let goal = entry.goal { Text("\(Image(systemName: "scope")) \(goal)") } else { Text("还没有目标") }
+                    if let goal = entry.goal {
+                        Text("\(Image(systemName: "scope")) \(goal)").accessibilityLabel("目标：\(goal)")
+                    } else {
+                        Text("还没有目标")
+                    }
                 }
                 .font(.footnote)
                 .foregroundStyle(entry.goal == nil ? palette.ink3 : palette.ink2)
@@ -171,9 +175,8 @@ private struct PinnedShelfCard: View {
             .paper(radius: 20)
         }
         .buttonStyle(CardPressStyle())
-        .projectActions(entry.project, radius: 20)
+        .projectActions(entry.project, radius: 20, pi: entry.pi)
         .accessibilityElement(children: .combine)
-        .accessibilityValue(entry.pi.map { "Pi \($0.label)" } ?? "")
     }
 }
 
@@ -237,10 +240,14 @@ private struct ShelfRow: View {
                     HStack(spacing: 6) {
                         if stacked { ProjectGlyph(project: entry?.project, size: 17) }
                         Text(entry?.project.name ?? "未归档").font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
-                        if let pi = entry?.pi { PiDot(state: pi, size: 6) }
+                        if let pi = entry?.pi { PiDot(state: pi, size: 6, announces: true) }
                     }
                     Group {
-                        if entry?.goal?.isEmpty == false { Text("\(Image(systemName: "scope")) \(subtitle)") } else { Text(subtitle) }
+                        if entry?.goal?.isEmpty == false {
+                            Text("\(Image(systemName: "scope")) \(subtitle)").accessibilityLabel("目标：\(subtitle)")
+                        } else {
+                            Text(subtitle)
+                        }
                     }
                     .font(.footnote).foregroundStyle(palette.ink3).lineLimit(stacked ? 3 : 1)
                     // 辅助功能大字号下计数换到名称下方，名称不被挤成省略号
@@ -256,9 +263,8 @@ private struct ShelfRow: View {
         }
         .buttonStyle(RowPressStyle())
         .background(palette.paper)
-        .projectActions(entry?.project, radius: 16)
+        .projectActions(entry?.project, radius: 16, pi: entry?.pi)
         .accessibilityElement(children: .combine)
-        .accessibilityValue(entry?.pi.map { "Pi \($0.label)" } ?? "")
     }
 
     private var subtitle: String {
