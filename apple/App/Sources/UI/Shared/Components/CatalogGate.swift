@@ -16,7 +16,13 @@ struct CatalogGate<Content: View>: View {
             } description: {
                 Text(failure)
             } actions: {
-                Button("重试") { workspace.retryCatalog() }
+                let retry = Button("重试") { workspace.retryCatalog() }
+                // iOS 的系统默认按钮没有外形，用与"新建项目"同一个主按钮；Mac 的系统按钮本身有外形
+                #if os(iOS)
+                retry.prominentButton().controlSize(.large).frame(minHeight: 44)
+                #else
+                retry
+                #endif
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(palette.desk)
