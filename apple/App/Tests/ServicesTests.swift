@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueStore
-import CuePi
+@testable import CuePi
 import Foundation
 import Testing
 @testable import CuePad
@@ -184,15 +184,17 @@ struct PiExtensionConsentTests {
         return rig
     }
 
-    @Test func 缺扩展时征求同意_拒绝后不再提示_同意后安装() async throws {
+    @Test func 缺扩展时征求同意_拒绝后不再提示也不安装_同意后安装() async throws {
         let rig = try rigWithPi(version: "0.90.0")
         let manager = rig.services.piExtension
 
-        await manager.refresh()
+        try await manager.refresh()
         #expect(manager.needsConsent)
 
         manager.decline()
+        try await manager.refresh()
         #expect(!manager.needsConsent)
+        #expect(manager.status?.file == .missing)  // 拒绝过首次安装：维持不装
 
         try await manager.install()
         #expect(manager.status?.file == .current)
@@ -201,12 +203,27 @@ struct PiExtensionConsentTests {
 
     @Test func Pi_版本过低或不存在时不征求同意() async throws {
         let tooOld = try rigWithPi(version: "0.80.0")
-        await tooOld.services.piExtension.refresh()
+        try await tooOld.services.piExtension.refresh()
         #expect(!tooOld.services.piExtension.needsConsent)
 
         let absent = TestApp()
-        await absent.services.piExtension.refresh()
+        try await absent.services.piExtension.refresh()
         #expect(!absent.services.piExtension.needsConsent)
+    }
+
+    /// 同意只在首次安装时问一次：已装的是我们的旧版扩展时，启动检查就静默升级到随包版本，不再询问。
+    @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
+        let rig = try rigWithPi(version: "0.90.0")
+        let installed = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
+        try FileManager.default.createDirectory(at: rig.piPaths.extensionsDirectory, withIntermediateDirectories: true)
+        let old = PiExtensionBundle.source.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = 1;")
+        try old.write(to: installed, atomically: true, encoding: .utf8)
+
+        try await rig.services.piExtension.refresh()
+
+        #expect(rig.services.piExtension.status?.file == .current)
+        #expect(try String(contentsOf: installed, encoding: .utf8) == PiExtensionBundle.source)
+        #expect(!rig.services.piExtension.needsConsent)
     }
 }
 #endif
