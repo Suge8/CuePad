@@ -122,6 +122,16 @@ private struct TabsRoot: View {
             .badge(waiting ?? 0)
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的下拉搜索（与宽屏的搜索页同一组快捷键）
+        .background {
+            ZStack {
+                Button("搜索") { navigation.searchCurrentPage() }.keyboardShortcut("k")
+                Button("搜索") { navigation.searchCurrentPage() }.keyboardShortcut("f")
+            }
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+        }
         .observing(services.store, [.piSessionStates], into: $waiting) { store in
             try store.piSessionStates().filter { $0.state == .known(.waitingForUser) }.count
         }

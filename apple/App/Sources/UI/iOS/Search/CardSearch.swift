@@ -113,8 +113,23 @@ private struct CardSearch: ViewModifier {
     let scope: CardSearchScope
     let button: Bool
     let enabled: Bool
+    @Environment(Navigation.self) private var navigation
     @State private var query = PaletteQuery()
     @FocusState private var focused: Bool
+
+    /// 这一页在导航里的位置：⌘K 指名要聚焦的是不是这一页。
+    private var route: Navigation.Route {
+        switch scope {
+        case .all: .shelf
+        case .project(let id): id.map(Navigation.Route.project) ?? .inbox
+        }
+    }
+
+    private func focusIfRequested() {
+        guard navigation.pendingPageSearch == route else { return }
+        navigation.pendingPageSearch = nil
+        focused = true
+    }
 
     func body(content: Content) -> some View {
         if enabled {
@@ -128,6 +143,8 @@ private struct CardSearch: ViewModifier {
                         }
                     }
                 }
+                .onAppear(perform: focusIfRequested)
+                .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
                 #if DEBUG
                 .onAppear {
                     guard DebugScene.activatesSearch(scope) else { return }

@@ -121,6 +121,21 @@ final class Navigation {
 
     /// 每次 ⌘K（或点侧栏的搜索）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
     private(set) var searchFocusRequests = 0
+    /// 标签栏布局下 ⌘K 要聚焦哪一页的下拉搜索（书架或某个项目页）；那一页聚焦后清掉。
+    var pendingPageSearch: Route?
+
+    /// 标签栏布局的 ⌘K：正看着书架或项目页就聚焦它的下拉搜索，其他页面回到书架再聚焦。
+    func searchCurrentPage() {
+        let top = tab == .projects ? projectsPath.last ?? .shelf : nil
+        switch top {
+        case .shelf, .project, .inbox:
+            pendingPageSearch = top
+        default:
+            tab = .projects
+            projectsPath = []
+            pendingPageSearch = .shelf
+        }
+    }
 
     func openSearch() {
         searchFocusRequests += 1
