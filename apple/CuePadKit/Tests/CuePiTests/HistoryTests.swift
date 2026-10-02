@@ -208,8 +208,8 @@ final class HistoryEventLog: @unchecked Sendable {
     private var _events: [PiHistoryEvent] = []
     private var task: Task<Void, Never>?
 
-    init(_ indexer: PiHistoryIndexer) {
-        let stream = indexer.events()
+    init(_ indexer: PiHistoryIndexer, alsoIndexing files: AsyncStream<URL> = AsyncStream { $0.finish() }) {
+        let stream = indexer.events(alsoIndexing: files)
         task = Task { [weak self] in
             for await e in stream { self?.lock.withLock { self?._events.append(e) } }
         }
