@@ -9,8 +9,7 @@ struct CatalogGate<Content: View>: View {
 
     var body: some View {
         if workspace.catalog != nil {
-            // 任务编辑框需要常驻的宿主：任务菜单收起后，菜单所在的行就没了
-            content.modifier(TaskEditor())
+            content
         } else if let failure = workspace.catalogFailure {
             ContentUnavailableView {
                 Label("读不出资料库", systemImage: "exclamationmark.triangle")

@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 任务操作（Mac 右键、iOS 长按共用），顺序与卡片操作一致：编辑、复制与发送、转为卡片、移到项目、删除。
-/// 编辑：行能就地编辑时（Mac）由行提供，否则弹出整窗的编辑框（`Workspace.editingTask`，宿主是 `CatalogGate`）。
+/// 编辑由调用方提供（`edit`）：菜单收起后菜单所在的行就没了，编辑框或就地编辑由行所在的视图持有；不传时没有"编辑"。
 /// 发送是平台各自的：Mac 发给当前目标（发给 Pi 会话时把任务关联到它），iOS 发到 Mac。
 struct TaskActions: View {
     let task: CueTask
@@ -14,10 +14,10 @@ struct TaskActions: View {
 
     var body: some View {
         let id = task.id, content = task.content, project = task.projectID
-        Button("编辑", systemImage: "pencil") {
-            if let edit { edit() } else { workspace.editingTask = task }
+        if let edit {
+            Button("编辑", systemImage: "pencil", action: edit)
+            Divider()
         }
-        Divider()
         sending
         Button("转为卡片", systemImage: "rectangle.on.rectangle") {
             workspace.attempt {
@@ -67,36 +67,4 @@ struct TaskActions: View {
         }
     }
     #endif
-}
-
-/// 整窗的任务编辑框：行不能就地编辑时（iOS），任务菜单的"编辑"在这里改内容。
-struct TaskEditor: ViewModifier {
-    @Environment(Workspace.self) private var workspace
-    /// 打开时记下的任务：弹框关闭会先清空 `editingTask`，保存不能依赖它
-    @State private var target: CueTask?
-    @State private var draft = ""
-
-    func body(content: Content) -> some View {
-        content.alert("编辑任务", isPresented: presented) {
-            TextField("任务", text: $draft)
-            Button("取消", role: .cancel) {}
-            Button("保存", action: save)
-        }
-        .onChange(of: workspace.editingTask?.id) {
-            guard let task = workspace.editingTask else { return }
-            target = task
-            draft = task.content
-        }
-    }
-
-    private var presented: Binding<Bool> {
-        Binding(get: { workspace.editingTask != nil }, set: { if !$0 { workspace.editingTask = nil } })
-    }
-
-    private func save() {
-        guard let task = target else { return }
-        let id = task.id, content = draft.trimmingCharacters(in: .whitespaces)
-        guard !content.isEmpty, content != task.content else { return }
-        workspace.perform { try await $0.updateTask(id) { $0.content = content } }
-    }
 }
