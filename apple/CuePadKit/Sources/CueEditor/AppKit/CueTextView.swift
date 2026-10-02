@@ -92,6 +92,12 @@ public final class CueTextView: NSTextView, CueEditorHost {
         if !isLoading, !hasMarkedText() { onChange?(storedText) }
     }
 
+    /// 换到缩放比例不同的屏：附件图按新比例重画（见 `ThumbnailLoader`）。
+    public override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        core?.redrawImages()
+    }
+
     public override func setFrameSize(_ newSize: NSSize) {
         let widthChanged = newSize.width != frame.width
         super.setFrameSize(newSize)

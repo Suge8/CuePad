@@ -8,7 +8,8 @@ import UIKit
 #endif
 
 /// 按需提供附件要画的图：后台降采样、按显示尺寸画好圆角，主线程只贴现成的位图；没画好之前画占位，好了请求重绘。
-/// 解码只发生在附件被绘制时，视口外的图片不会被读取。尺寸变了（拖窗口）先沿用这张图上一份画好的，新尺寸在后台重画，不闪占位。
+/// 解码只发生在附件被绘制时，视口外的图片不会被读取。尺寸或屏幕缩放比例变了（拖窗口、移到另一块屏）先沿用这张图上一份画好的，
+/// 按新的尺寸与比例在后台重画，不闪占位。
 @MainActor
 final class ThumbnailLoader {
     private unowned let core: EditorCore
@@ -21,15 +22,16 @@ final class ThumbnailLoader {
 
     func image(at url: URL?, size: CGSize) -> CueImage {
         guard let url, !failed.contains(url) else { return CueImageRendering.placeholder(size: size, style: core.style, missing: true) }
-        let key = "\(url.path)@\(Int(size.width))x\(Int(size.height))" as NSString
+        let scale = core.displayScale
+        let key = "\(url.path)@\(Int(size.width))x\(Int(size.height))@\(scale)x" as NSString
         if let cached = rendered.object(forKey: key) { return cached }
-        render(url, size: size, key: key)
+        render(url, size: size, scale: scale, key: key)
         return latest[url] ?? CueImageRendering.placeholder(size: size, style: core.style, missing: false)
     }
 
-    private func render(_ url: URL, size: CGSize, key: NSString) {
+    private func render(_ url: URL, size: CGSize, scale: CGFloat, key: NSString) {
         guard inFlight.insert(key).inserted else { return }
-        let radius = core.style.imageCornerRadius, scale = core.displayScale
+        let radius = core.style.imageCornerRadius
         Task { [weak self] in
             let pixels = await Task.detached(priority: .userInitiated) {
                 Thumbnails.image(at: url, maxPixel: ImageLoading.maxThumbnailPixel)

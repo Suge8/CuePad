@@ -103,7 +103,7 @@ private struct OlderRow: View {
         .background(hovering ? palette.fill : .clear)
         .contentShape(.rect)
         }
-        .buttonStyle(CardPressStyle())
+        .buttonStyle(CardOpenStyle())
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)

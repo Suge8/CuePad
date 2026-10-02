@@ -1,5 +1,6 @@
 #if os(macOS) && DEBUG
 import AppKit
+import QuartzCore
 import SwiftUI
 
 extension DebugScene {
@@ -26,6 +27,7 @@ extension DebugScene {
         case "resize": await benchResizeWhileToggling(workspace)
         case "churn": await benchChurn(workspace)
         case "perf": await PerfBench.run(workspace)
+        case "press": await benchPress(workspace)
         default: break
         }
     }
@@ -39,6 +41,47 @@ extension DebugScene {
         try? await Task.sleep(for: .seconds(2))
         workspace.openCard = nil
         try? await Task.sleep(for: .seconds(2))
+        NSApp.terminate(nil)
+    }
+
+    /// 按压连拍用（`-CuePadPressAt x,y`，窗口内左上角为原点的点，指向一张置顶卡）：在该点按下 250ms 后松开（打开卡片），
+    /// 收起后再按下、拖到窗口外再松开（应回弹、不打开），最后像键盘那样直接打开这张卡，结束后退出。
+    /// 每个事件打印主机时间（与 ScreenCaptureKit 帧时间同一时钟），连拍时据此对齐。鼠标事件直接发给窗口，不动真实指针、不抢前台。
+    private static func benchPress(_ workspace: Workspace) async {
+        try? await Task.sleep(for: .seconds(3))
+        guard let window = mainWindow, let view = window.contentView,
+              let raw = defaults.string(forKey: "CuePadPressAt")?.split(separator: ","), raw.count == 2,
+              let x = Double(raw[0]), let y = Double(raw[1])
+        else { return NSApp.terminate(nil) }
+        let point = NSPoint(x: x, y: view.bounds.height - y)
+        func send(_ type: NSEvent.EventType, at location: NSPoint) {
+            // 与 ScreenCaptureKit 帧时间同一时钟（主机时间），连拍时据此对齐
+            print(String(format: "PRESS %@ %.1f", "\(type.rawValue)", CACurrentMediaTime() * 1000))
+            guard let event = NSEvent.mouseEvent(
+                with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+            else { return }
+            NSApp.postEvent(event, atStart: false)
+        }
+        send(.leftMouseDown, at: point)
+        try? await Task.sleep(for: .milliseconds(250))
+        send(.leftMouseUp, at: point)
+        try? await Task.sleep(for: .seconds(1.5))
+        workspace.openCard = nil
+        try? await Task.sleep(for: .seconds(1))
+        send(.leftMouseDown, at: point)
+        try? await Task.sleep(for: .milliseconds(250))
+        let away = NSPoint(x: point.x, y: -200)
+        send(.leftMouseDragged, at: away)
+        send(.leftMouseUp, at: away)
+        try? await Task.sleep(for: .seconds(1))
+        // 键盘打开（↩、空格）不经过按下，直接打开：原卡片同样立即按下
+        let pinned = try? await workspace.services.store.cards(in: workspace.currentProject).first(where: \.isPinned)
+        print(String(format: "PRESS key %.1f", CACurrentMediaTime() * 1000))
+        workspace.openCard = pinned?.id
+        try? await Task.sleep(for: .seconds(1.5))
+        workspace.openCard = nil
+        try? await Task.sleep(for: .seconds(1))
         NSApp.terminate(nil)
     }
 

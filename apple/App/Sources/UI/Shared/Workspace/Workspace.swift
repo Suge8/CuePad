@@ -108,14 +108,14 @@ final class Workspace {
         dismissPresented()
     }
 
-    /// 纸页在原卡片上画出了字。
+    /// 纸接过原卡片、开始放大。
     func cover(_ card: UUID) {
-        presence(of: card).covered = true
+        presence(of: card).phase = .covered
     }
 
     /// 纸页缩回到原卡片、自己隐去的同一帧：原卡片回来（纸页稍后才卸下）。
     func uncover(_ card: UUID) {
-        presence(of: card).covered = false
+        presence(of: card).phase = .returned
     }
 
     /// 这张卡在纸页开合中的状态；卡片视图只观察自己的那一个。
@@ -130,7 +130,7 @@ final class Workspace {
         guard presentedCard != card else { return }
         dismissPresented()
         presentedCard = card
-        presence(of: card).isTracked = true
+        presence(of: card).phase = .opening
     }
 
     private func dismissPresented() {
@@ -286,16 +286,29 @@ extension SceneContext: CurrentProjectHolder {}
 /// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
 @MainActor @Observable
 final class CardPresence {
-    /// 纸页挂着期间才跟踪这张卡的位置：时时跟踪的话，滚动时每一帧都要为每张卡换算一次位置。
-    fileprivate(set) var isTracked = false
-    /// 纸页已在原卡片上画出字：原卡片此时才隐去，纸页卸下的同一刻才回来，开合全程屏幕上只有一份这张卡的字。
-    fileprivate(set) var covered = false
+    enum Phase {
+        /// 没有打开。
+        case idle
+        /// 刚点开、纸页还在准备：原卡片保持按下的样子，纸从这个样子起飞。
+        case opening
+        /// 纸接过了原卡片（同一帧纸以原卡片按下的样子出现在它的位置上）：原卡片隐去，开合全程屏幕上只有一份这张卡的字。
+        case covered
+        /// 纸缩回原卡片、自己隐去：原卡片回来（不再按下），纸页下一帧卸下。
+        case returned
+    }
+
+    fileprivate(set) var phase = Phase.idle
     /// 卡在屏幕上的位置（全局坐标），纸页从这里放大、缩回到这里；只在跟踪期间更新，不触发界面刷新。
     @ObservationIgnored var frame: CGRect?
 
+    /// 纸页挂着期间才跟踪这张卡的位置：时时跟踪的话，滚动时每一帧都要为每张卡换算一次位置。
+    var isTracked: Bool { phase != .idle }
+    var covered: Bool { phase == .covered }
+    /// 原卡片保持按下的样子（见 `CardOpenStyle`）。
+    var held: Bool { phase == .opening }
+
     fileprivate func reset() {
-        isTracked = false
-        covered = false
+        phase = .idle
         frame = nil
     }
 }

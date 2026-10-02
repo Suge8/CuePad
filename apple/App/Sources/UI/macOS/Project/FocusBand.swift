@@ -56,7 +56,7 @@ struct FocusBand: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(.rect)
         }
-        .buttonStyle(CardPressStyle())
+        .buttonStyle(CardOpenStyle())
         .cardPresence(card.id, in: workspace)
     }
 

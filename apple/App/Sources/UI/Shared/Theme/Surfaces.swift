@@ -64,6 +64,10 @@ enum Motion {
     static let panel = snappy
     /// 颜色、透明度、悬停这类不移动位置的反馈。
     static let quick = Animation.easeOut(duration: 0.16)
+    /// 点下要打开的卡：缩到这个比例（Mac 的 `CardOpenStyle`），纸页从这个样子起飞。
+    static let pressScale: CGFloat = 0.98
+    /// 按下与松开回弹。
+    static let press = Animation.easeOut(duration: 0.1)
 
     /// 减弱动态效果时，空间动画换成短淡入淡出。
     static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation {

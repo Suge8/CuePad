@@ -104,20 +104,45 @@ private struct ColumnsLayout: Layout {
     }
 }
 
-/// 墙上的一张卡：标题、首图、摘要、元信息（时间、块数、发送目标、浮回与置顶标记）。
-struct CardTile: View {
+/// 点开纸页的原卡片（墙上卡片、"更早"的行、目标卡）的按压：点下的同一帧开始缩到 `Motion.pressScale`，
+/// 打开后纸页准备的那几帧保持按下（`cardHeld`，由这张卡的开合阶段派生），纸从这个样子起飞；松开没打开（拖走、取消）就回弹。
+/// 减弱动态效果时不缩放，只略微变淡。
+struct CardOpenStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Pressed(configuration: configuration)
+    }
+
+    private struct Pressed: View {
+        let configuration: Configuration
+        @Environment(\.cardHeld) private var held
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        private static let reducedOpacity = 0.85
+        /// 松开到"打开中"接上之间隔着一两帧（按钮先结束按下，打开在下一次更新才生效）：回弹稍等一下再开始，
+        /// 打开接上了回弹就作废，卡片一直按着，不弹一下；拖走取消时只是晚这么一点回弹。
+        private static let releaseGrace = 0.05
+
+        var body: some View {
+            let down = configuration.isPressed || held
+            configuration.label
+                .scaleEffect(down && !reduceMotion ? Motion.pressScale : 1)
+                .opacity(down && reduceMotion ? Self.reducedOpacity : 1)
+                .animation(down ? Motion.press : Motion.press.delay(Self.releaseGrace), value: down)
+        }
+    }
+}
+
+/// 卡面：首图、标题、摘要、元信息（时间、块数、发送目标、浮回、目标与置顶标记）。墙上的卡与纸页过渡中纸上写的字共用，
+/// 纸盖上原卡片、缩回原卡片的那一帧两者一模一样。
+struct CardFace: View {
     let card: Card
     let lastTarget: String?
     let floated: Bool
     let isGoal: Bool
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hovering = false
 
     var body: some View {
         let text = CardText(card.body)
-        Button(action: open) {
         VStack(alignment: .leading, spacing: 8) {
             if let image = text.images.first {
                 Thumbnail(hash: image, height: 118).padding(-8).padding(.bottom, 6)
@@ -135,11 +160,31 @@ struct CardTile: View {
                 .padding(.top, 2)
         }
         .padding(14)
+    }
+}
+
+/// 墙上的一张卡（卡面见 `CardFace`）。
+struct CardTile: View {
+    /// 卡片的圆角；纸页从这个圆角起飞、缩回到这个圆角。
+    static let radius: CGFloat = 16
+
+    let card: Card
+    let lastTarget: String?
+    let floated: Bool
+    let isGoal: Bool
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: open) {
+        CardFace(card: card, lastTarget: lastTarget, floated: floated, isGoal: isGoal)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: 16, lifted: hovering)
-        .contentShape(.rect(cornerRadius: 16))
+        .paper(radius: Self.radius, lifted: hovering)
+        .contentShape(.rect(cornerRadius: Self.radius))
         }
-        .buttonStyle(CardPressStyle())
+        .buttonStyle(CardOpenStyle())
         .offset(y: hovering && !reduceMotion ? -1 : 0)
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }

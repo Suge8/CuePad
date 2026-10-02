@@ -216,9 +216,10 @@ final class EditorCore {
     // MARK: 图片重绘
 
     /// 缩略图解码完成后重绘引用它的附件：TextKit 缓存了片段的渲染结果，必须让对应片段失效重排。
-    func redrawImages(at url: URL) {
+    /// 重画某张图（`url` 为 nil 时所有图，例如换到缩放比例不同的屏）。
+    func redrawImages(at url: URL? = nil) {
         storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
-            guard let image = value as? CueImageAttachment, image.fileURL == url, let target = textRange(range) else { return }
+            guard let image = value as? CueImageAttachment, url == nil || image.fileURL == url, let target = textRange(range) else { return }
             layout.invalidateLayout(for: target)
         }
         needsRelayout()

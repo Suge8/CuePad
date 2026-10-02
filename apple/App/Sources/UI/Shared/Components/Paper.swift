@@ -200,12 +200,18 @@ extension View {
     }
 }
 
+extension EnvironmentValues {
+    /// 这张卡刚被打开、纸页还在准备：按压样式保持按下（见 `CardOpenStyle`）。
+    @Entry var cardHeld = false
+}
+
 /// 单独的修饰器：只有它读这张卡的开合状态，卡片本身的内容不随开合重算。
 private struct CardPresenceSource: ViewModifier {
     let presence: CardPresence
 
     func body(content: Content) -> some View {
         content
+            .environment(\.cardHeld, presence.held)
             .opacity(presence.covered ? 0 : 1)
             .background {
                 // 只在被打开期间挂上位置读取；放在背景里，增减它不改变卡片本身的身份
