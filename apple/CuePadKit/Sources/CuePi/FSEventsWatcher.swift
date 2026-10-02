@@ -53,8 +53,7 @@ final class FSEventsWatcher: Sendable {
             guard !stopped else { return }
             let wasWaiting = ancestor != nil
             disarm()
-            var isDirectory: ObjCBool = false
-            if FileManager.default.fileExists(atPath: root, isDirectory: &isDirectory), isDirectory.boolValue {
+            if Self.isDirectory(root) {
                 startStream()
                 if wasWaiting { continuation.yield([root]) }
             } else {
@@ -127,10 +126,16 @@ final class FSEventsWatcher: Sendable {
             if nearestExistingAncestor() != directory { arm() }
         }
 
+        /// 只认目录：路径上有同名普通文件时盯它所在的目录，那个文件被换成目录时才收得到通知。
         private func nearestExistingAncestor() -> String {
             var url = URL(filePath: root)
-            while !FileManager.default.fileExists(atPath: url.path), url.pathComponents.count > 1 { url.deleteLastPathComponent() }
+            while !Self.isDirectory(url.path), url.pathComponents.count > 1 { url.deleteLastPathComponent() }
             return url.path
+        }
+
+        private static func isDirectory(_ path: String) -> Bool {
+            var isDirectory: ObjCBool = false
+            return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
         }
     }
 }
