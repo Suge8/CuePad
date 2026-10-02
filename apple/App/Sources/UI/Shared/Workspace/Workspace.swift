@@ -51,15 +51,12 @@ final class Workspace {
     var nonProjectPage: Page?
     /// 打开的卡（编辑纸页）。设成某张卡时纸页立即挂上；清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
     var openCard: UUID? {
-        didSet { if let openCard { presentedCard = openCard } }
+        didSet { if let openCard { present(openCard) } }
     }
     /// 纸页挂在屏上的卡：比 `openCard` 晚一步清空，缩回卡片的动画期间仍在。
     private(set) var presentedCard: UUID?
-    /// 纸页已在原卡片上画出这张卡的字（内容读到了）：墙上的原卡片这时才隐去，纸页卸下的同一刻才回来。
-    /// 开合全程屏幕上只有一份这张卡的字，不出现空白纸，也不出现两份字叠在一起。
-    private(set) var coveredCard: UUID?
-    /// 墙上卡片与"更早"各行在屏幕上的位置：纸页从这里放大、缩回到这里。持续更新，不触发界面刷新。
-    @ObservationIgnored var cardFrames: [UUID: CGRect] = [:]
+    /// 各张卡在纸页开合中的状态，按卡分开（见 `CardPresence`）。
+    @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
     var overlay: Overlay?
     var notice: Notice?
     #if os(macOS)
@@ -108,19 +105,37 @@ final class Workspace {
     /// 纸页缩回动画结束。
     func finishClosingCard() {
         guard openCard == nil else { return }
-        presentedCard = nil
-        coveredCard = nil
+        dismissPresented()
     }
 
     /// 纸页在原卡片上画出了字。
     func cover(_ card: UUID) {
-        coveredCard = card
+        presence(of: card).covered = true
+    }
+
+    /// 这张卡在纸页开合中的状态；卡片视图只观察自己的那一个。
+    func presence(of card: UUID) -> CardPresence {
+        if let presence = presences[card] { return presence }
+        let presence = CardPresence()
+        presences[card] = presence
+        return presence
+    }
+
+    private func present(_ card: UUID) {
+        guard presentedCard != card else { return }
+        dismissPresented()
+        presentedCard = card
+        presence(of: card).isTracked = true
+    }
+
+    private func dismissPresented() {
+        if let card = presentedCard { presence(of: card).reset() }
+        presentedCard = nil
     }
 
     func show(_ page: Page) {
         openCard = nil
-        presentedCard = nil
-        coveredCard = nil
+        dismissPresented()
         switch page {
         case .project(let id):
             nonProjectPage = nil
@@ -261,3 +276,21 @@ extension AppSettings: CurrentProjectHolder {}
 #if os(iOS)
 extension SceneContext: CurrentProjectHolder {}
 #endif
+
+/// 一张卡在纸页开合中的状态。按卡分开、各自可观察：开合时只有被打开的那张卡的视图重算，
+/// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
+@MainActor @Observable
+final class CardPresence {
+    /// 纸页挂着期间才跟踪这张卡的位置：时时跟踪的话，滚动时每一帧都要为每张卡换算一次位置。
+    fileprivate(set) var isTracked = false
+    /// 纸页已在原卡片上画出字：原卡片此时才隐去，纸页卸下的同一刻才回来，开合全程屏幕上只有一份这张卡的字。
+    fileprivate(set) var covered = false
+    /// 卡在屏幕上的位置（全局坐标），纸页从这里放大、缩回到这里；只在跟踪期间更新，不触发界面刷新。
+    @ObservationIgnored var frame: CGRect?
+
+    fileprivate func reset() {
+        isTracked = false
+        covered = false
+        frame = nil
+    }
+}

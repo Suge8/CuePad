@@ -194,8 +194,24 @@ enum OlderGroupTitle {
 }
 
 extension View {
-    /// 把这张卡在屏幕上的位置报给工作区，打开时纸页从这里放大、关闭时缩回这里。
-    func cardFrameSource(_ id: UUID, in workspace: Workspace) -> some View {
-        onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { workspace.cardFrames[id] = $0 }
+    /// 纸页开合的原卡片：被纸盖住时隐去，被打开期间把位置报给纸页（见 `CardPresence`）。
+    func cardPresence(_ id: UUID, in workspace: Workspace) -> some View {
+        modifier(CardPresenceSource(presence: workspace.presence(of: id)))
+    }
+}
+
+/// 单独的修饰器：只有它读这张卡的开合状态，卡片本身的内容不随开合重算。
+private struct CardPresenceSource: ViewModifier {
+    let presence: CardPresence
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(presence.covered ? 0 : 1)
+            .background {
+                // 只在被打开期间挂上位置读取；放在背景里，增减它不改变卡片本身的身份
+                if presence.isTracked {
+                    Color.clear.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { presence.frame = $0 }
+                }
+            }
     }
 }

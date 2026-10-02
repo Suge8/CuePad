@@ -56,7 +56,9 @@ struct OlderList: View {
                 header.accessibilityAddTraits(.isHeader)
             }
             if open {
-                VStack(spacing: 0) {
+                // 懒加载：大项目三个月内按周展开的行可达上千，全建出来时每个滚轮事件的命中测试与每帧布局都按行数增长。
+                // 行高固定，未建出的部分高度估得准，滚动条不跳
+                LazyVStack(spacing: 0) {
                     ForEach(Array(group.cards.compactMap { cards[$0] }.enumerated()), id: \.element.id) { index, card in
                         if index > 0 { Rectangle().fill(palette.hair).frame(height: 1).padding(.leading, 40) }
                         OlderRow(card: card, lastTarget: lastTarget[card.id])
@@ -83,8 +85,6 @@ private struct OlderRow: View {
 
     var body: some View {
         let text = CardText(card.body)
-        // 纸页画出这张卡的字时才隐去、纸页卸下时才回来（见 `Workspace.coveredCard`）
-        let isOpen = workspace.coveredCard == card.id
         Button(action: open) {
         HStack(spacing: 10) {
             Image(systemName: !text.images.isEmpty ? "photo" : "doc.text")
@@ -104,8 +104,7 @@ private struct OlderRow: View {
         .contentShape(.rect)
         }
         .buttonStyle(CardPressStyle())
-        .opacity(isOpen ? 0 : 1)
-        .cardFrameSource(card.id, in: workspace)
+        .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardActions(card: card) }

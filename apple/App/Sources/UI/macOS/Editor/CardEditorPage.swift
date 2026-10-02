@@ -89,7 +89,7 @@ struct CardEditorPage: View {
 
     /// 原卡片在本页里的边框；找不到原卡片（不在墙上）时为 nil。
     private var sourceFrame: CGRect? {
-        workspace.cardFrames[cardID].map { $0.offsetBy(dx: -pageOrigin.x, dy: -pageOrigin.y) }
+        workspace.presence(of: cardID).frame.map { $0.offsetBy(dx: -pageOrigin.x, dy: -pageOrigin.y) }
     }
 
     /// 纸此刻的边框：铺开时是纸页的位置，否则是原卡片的边框。

@@ -9,12 +9,13 @@ enum ScrollAnchor {
 #if DEBUG
 /// 视觉验收用的启动参数（只在 Debug 构建读取，配合 `CUEPAD_LIBRARY_DIR` 使用隔离资料库）：
 /// - `-CuePadDemo YES`：库为空时写入演示数据；
+/// - `-CuePadSeed perf`（仅 Mac）：库为空时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench perf`；
 /// - `-CuePadProject <名称>`：打开该项目；
 /// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor、search、tasks、trash、settings、menubar、projectform；
 ///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；
 /// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；
-/// - `-CuePadBench <sidebar|motion|resize|churn>`（仅 Mac）：开合侧栏 10 次 / 存卡后开合纸页（都在结束后退出，给 Instruments 或连拍取帧）；
+/// - `-CuePadBench <sidebar|motion|resize|churn|perf>`（仅 Mac；perf 见 `PerfBench`）：开合侧栏 10 次 / 存卡后开合纸页（都在结束后退出，给 Instruments 或连拍取帧）；
 ///   resize 在侧栏开合途中拉窄窗口后停住，给截图核对页宽；churn 边加卡边逐点拉宽窗口，查布局反馈环（结束后退出）；
 /// - `-CuePadWindowOrigin x,y`（仅 Mac）：窗口放到该位置，可在屏幕外；
 /// - `-CuePadImport <cuepad.db 路径>`（仅 Mac）：界面起来后导入一份旧版资料库，复现首次启动边导边变；
@@ -43,6 +44,11 @@ enum DebugScene {
     /// 需要时写入演示数据，并按参数选中项目；返回选中的项目。
     static func prepareLibrary(_ workspace: Workspace) async -> UUID? {
         let store = workspace.services.store
+        #if os(macOS)
+        if defaults.string(forKey: "CuePadSeed") == "perf", (try? await store.projects().isEmpty) == true {
+            do { try await PerfLibrary.seed(store) } catch { workspace.fail(error) }
+        }
+        #endif
         if defaults.bool(forKey: "CuePadDemo"), (try? await store.projects().isEmpty) == true {
             do { try await DemoLibrary.seed(store) } catch { workspace.fail(error) }
         }

@@ -11,7 +11,7 @@ import SQLite3
 /// 所以墙、"更早"的周/月分组都有真实分布），再补目标卡、目录绑定、发送记录与 Pi 历史。
 /// 只在 Debug 构建、隔离资料库、`-CuePadDemo YES` 时运行。
 enum DemoLibrary {
-    private struct DemoProject {
+    struct DemoProject {
         var name: String, icon: String, color: String, pinned: Bool, directory: String?
         var cards: [(days: Double, text: String, favorite: Bool)]
     }
@@ -20,7 +20,7 @@ enum DemoLibrary {
         let image = try store.files.store(sampleImage())
         let source = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(UUID().uuidString).db")
         defer { try? FileManager.default.removeItem(at: source) }
-        try writeLegacy(projects(image: image), to: source)
+        try writeLegacy(projects(image: image), tasks: tasks, to: source)
         _ = try await store.importElectronLibrary(from: source)
 
         let catalog = projects(image: image)
@@ -106,7 +106,7 @@ enum DemoLibrary {
         ]
     }
 
-    private static let tasks: [(project: String?, text: String, done: Bool)] = [
+    private static let tasks: [LegacyTask] = [
         ("CuePad", "投送队列超时报错不发键", false),
         ("CuePad", "导入旧数据时保留回收站", false),
         ("CuePad", "菜单栏面板 ⌘↩ 直接发出", false),
@@ -118,7 +118,10 @@ enum DemoLibrary {
         (nil, "续费域名", false),
     ]
 
-    private static func writeLegacy(_ projects: [DemoProject], to url: URL) throws {
+    typealias LegacyTask = (project: String?, text: String, done: Bool)
+
+    /// 写一份 Electron 旧库格式的 SQLite（之后经正式导入流程写入，导入保留原修改时间）。
+    static func writeLegacy(_ projects: [DemoProject], tasks: [LegacyTask], to url: URL) throws {
         let now = Date.now.timeIntervalSince1970 * 1000
         var sql = """
             CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT, icon TEXT, color TEXT NOT NULL, sort_order INTEGER,
@@ -134,9 +137,12 @@ enum DemoLibrary {
             """
         func quoted(_ text: String) -> String { "'" + text.replacingOccurrences(of: "'", with: "''") + "'" }
         var cardID = 1
+        // 名称为空的一组是未归档的卡
         for (index, project) in projects.enumerated() {
-            let projectID = index + 1
-            sql += "INSERT INTO projects VALUES (\(projectID), \(quoted(project.name)), \(quoted(project.icon)), \(quoted(project.color)), \(index), \(project.pinned ? 1 : 0), NULL, \(Int(now)), \(Int(now)));\n"
+            let projectID = project.name.isEmpty ? "NULL" : "\(index + 1)"
+            if !project.name.isEmpty {
+                sql += "INSERT INTO projects VALUES (\(projectID), \(quoted(project.name)), \(quoted(project.icon)), \(quoted(project.color)), \(index), \(project.pinned ? 1 : 0), NULL, \(Int(now)), \(Int(now)));\n"
+            }
             for card in project.cards {
                 let stamp = Int(now - card.days * 86_400_000)
                 sql += "INSERT INTO cards VALUES (\(cardID), \(projectID), NULL, \(quoted(card.text)), \(cardID), \(card.favorite ? 1 : 0), 'none', NULL, \(stamp), \(stamp));\n"
@@ -155,7 +161,7 @@ enum DemoLibrary {
         }
     }
 
-    private struct DemoError: Error { var message: String }
+    struct DemoError: Error { var message: String }
 
     /// 一张像界面截图的示意图：桌面底色上几块纸片。用 CoreGraphics 画，Mac 与 iOS 共用。
     /// 演示用的主目录：Mac 上是真实主目录（截图用的假 Pi 会话按它归到项目），iOS 只作显示。

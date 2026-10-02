@@ -57,7 +57,7 @@ struct FocusBand: View {
             .contentShape(.rect)
         }
         .buttonStyle(CardPressStyle())
-        .cardFrameSource(card.id, in: workspace)
+        .cardPresence(card.id, in: workspace)
     }
 
     @ViewBuilder private var tasks: some View {

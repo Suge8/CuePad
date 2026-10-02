@@ -117,8 +117,6 @@ struct CardTile: View {
 
     var body: some View {
         let text = CardText(card.body)
-        // 纸页画出这张卡的字时才隐去、纸页卸下时才回来（见 `Workspace.coveredCard`）
-        let isOpen = workspace.coveredCard == card.id
         Button(action: open) {
         VStack(alignment: .leading, spacing: 8) {
             if let image = text.images.first {
@@ -143,12 +141,14 @@ struct CardTile: View {
         }
         .buttonStyle(CardPressStyle())
         .offset(y: hovering && !reduceMotion ? -1 : 0)
-        .opacity(isOpen ? 0 : 1)
-        .cardFrameSource(card.id, in: workspace)
+        .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardActions(card: card) }
         .accessibilityElement(children: .combine)
+        #if DEBUG
+        .onAppear { PerfProbe.mark("content") }
+        #endif
     }
 
     private func open() {
