@@ -45,6 +45,8 @@ struct ProjectScreen: View {
         .background(palette.desk)
         .bottomEdgeFade(capturePage: true)
         .captureBar()
+        // 内容读到后才挂搜索框：推入的页面在内容可滚动时把搜索框收在导航栏下，内容晚到会让已露出的搜索框收起、整页上跳
+        .cardSearch(.project(projectID), enabled: navigation.layout == .tabs && page != nil)
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
@@ -100,6 +102,8 @@ struct ProjectScreen: View {
             }
         }
         .padding(.horizontal, 16)
+        // 与导航栏的路径一行隔开：iPad 的导航栏下沿不留空，不能靠它
+        .padding(.top, 12)
         .padding(.bottom, 24)
     }
 

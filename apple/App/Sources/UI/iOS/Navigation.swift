@@ -10,7 +10,7 @@ import SwiftUI
 @MainActor @Observable
 final class Navigation {
     enum Tab: Hashable {
-        case projects, tasks, activity, search
+        case projects, tasks, activity
     }
 
     /// iPhone（及窄窗口 iPad）用标签栏；宽 iPad 用分栏。
@@ -70,10 +70,11 @@ final class Navigation {
     var projectsPath: [Route] = []
     var tasksPath: [Route] = []
     var activityPath: [Route] = []
-    var searchPath: [Route] = []
     var capture: Capture?
     var outbox: Outbox?
     var projectForm: ProjectForm?
+    /// 卡片纸页在屏幕上（推入途中起、返回开始止）：iPhone 此时隐藏标签栏，纸页独占底部。
+    var showsCardPage = false
     /// 分栏：侧栏选中的页与其上推入的页（打开的卡片纸页盖在项目页上）。
     var splitRoot: Route = .shelf
     var splitPath: [Route] = []
@@ -102,7 +103,6 @@ final class Navigation {
         case (.tabs, .projects): projectsPath.append(route)
         case (.tabs, .tasks): tasksPath.append(route)
         case (.tabs, .activity): activityPath.append(route)
-        case (.tabs, .search): searchPath.append(route)
         }
     }
 
@@ -121,6 +121,21 @@ final class Navigation {
 
     /// 每次 ⌘K（或点侧栏的搜索）加一：搜索页据此聚焦搜索框并全选已有文字，已在搜索页时同样生效。
     private(set) var searchFocusRequests = 0
+    /// 标签栏布局下 ⌘K 要聚焦哪一页的下拉搜索（书架或某个项目页）；那一页聚焦后清掉。
+    var pendingPageSearch: Route?
+
+    /// 标签栏布局的 ⌘K：正看着书架或项目页就聚焦它的下拉搜索，其他页面回到书架再聚焦。
+    func searchCurrentPage() {
+        let top = tab == .projects ? projectsPath.last ?? .shelf : nil
+        switch top {
+        case .shelf, .project, .inbox:
+            pendingPageSearch = top
+        default:
+            tab = .projects
+            projectsPath = []
+            pendingPageSearch = .shelf
+        }
+    }
 
     func openSearch() {
         searchFocusRequests += 1
@@ -146,7 +161,7 @@ final class Navigation {
     func pop(_ project: UUID?) {
         guard let project else { return }
         let gone = Route.project(project)
-        for path in [\Navigation.projectsPath, \.tasksPath, \.activityPath, \.searchPath, \.splitPath] {
+        for path in [\Navigation.projectsPath, \.tasksPath, \.activityPath, \.splitPath] {
             if let index = self[keyPath: path].firstIndex(of: gone) { self[keyPath: path].removeSubrange(index...) }
         }
         if splitRoot == gone { select(.shelf) }

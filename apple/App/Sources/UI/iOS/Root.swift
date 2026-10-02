@@ -13,7 +13,7 @@ struct IOSRoot: View {
     }
 }
 
-/// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / 任务 / 活动 / 搜索），宽 iPad 用分栏。
+/// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / 任务 / 活动；搜索在书架与项目页下拉），宽 iPad 用分栏。
 struct IOSRootView: View {
     @State private var workspace: Workspace
     @State private var navigation = Navigation()
@@ -29,11 +29,14 @@ struct IOSRootView: View {
     var body: some View {
         @Bindable var navigation = navigation
         CatalogGate {
-            if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
+            Group {
+                if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
+            }
+            // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
+            .sheet(item: $navigation.capture) { CaptureSheet(capture: $0) }
+            .sheet(item: $navigation.outbox) { SendToMacSheet(outbox: $0) }
+            .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
         }
-        .sheet(item: $navigation.capture) { CaptureSheet(capture: $0) }
-        .sheet(item: $navigation.outbox) { SendToMacSheet(outbox: $0) }
-        .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
         .overlay(alignment: .top) { NoticeBanner() }
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
         .environment(\.zoomNamespace, zoom)
@@ -117,11 +120,18 @@ private struct TabsRoot: View {
                 stack($navigation.activityPath) { ActivityScreen() }
             }
             .badge(waiting ?? 0)
-            Tab(value: Navigation.Tab.search, role: .search) {
-                stack($navigation.searchPath) { SearchScreen() }
-            }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的下拉搜索（与宽屏的搜索页同一组快捷键）
+        .background {
+            ZStack {
+                Button("搜索") { navigation.searchCurrentPage() }.keyboardShortcut("k")
+                Button("搜索") { navigation.searchCurrentPage() }.keyboardShortcut("f")
+            }
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+        }
         .observing(services.store, [.piSessionStates], into: $waiting) { store in
             try store.piSessionStates().filter { $0.state == .known(.waitingForUser) }.count
         }
@@ -131,9 +141,9 @@ private struct TabsRoot: View {
         NavigationStack(path: path) {
             root().navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
         }
-        // 纸页独占底部（编辑工具栏不和标签栏叠在一起）。由路径决定而不是挂在纸页上：返回时路径先变，
-        // 标签栏随返回的转场一起出现，不在转场结束后才冒出来
-        .toolbarVisibility(path.wrappedValue.last?.isCard == true ? .hidden : .visible, for: .tabBar)
+        // 纸页独占底部（编辑工具栏不和标签栏叠在一起）。跟纸页的出现与消失走而不是跟路径：
+        // 手势返回一开始标签栏就回来，松手时页面不再跳
+        .toolbarVisibility(navigation.showsCardPage ? .hidden : .visible, for: .tabBar)
     }
 }
 

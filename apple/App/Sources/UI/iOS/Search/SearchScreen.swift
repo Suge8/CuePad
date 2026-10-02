@@ -2,204 +2,39 @@
 import CueStore
 import SwiftUI
 
-nonisolated private struct SearchData: Sendable {
-    var groups: [Group]
-    var total: Int
-    var shown: Int
-    var projects: [Project]
-    /// iOS 上可选的发送目标：只有本机能产生的（复制到剪贴板）。Pi 与应用投送是 Mac 专有。
-    var targets: [SendTarget]
-
-    /// 结果按项目分组，组按首次出现的顺序（即最相关的在前）。
-    struct Group: Identifiable, Sendable {
-        var project: Project?
-        var cards: [CardEntry]
-        var id: UUID? { project?.id }
-    }
-
-    static func grouped(_ cards: [Card], projects: [Project]) -> [Group] {
-        let byID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
-        var order: [UUID?] = []
-        var buckets: [UUID?: [CardEntry]] = [:]
-        for card in cards {
-            if buckets[card.projectID] == nil { order.append(card.projectID) }
-            buckets[card.projectID, default: []].append(CardEntry(card))
-        }
-        return order.map { Group(project: $0.flatMap { byID[$0] }, cards: buckets[$0] ?? []) }
-    }
-}
-
-/// 搜索：跨项目，多个词都要命中，可按项目、含图片、发送、时间筛选；结果按项目分组。
+/// iPad 的搜索页（侧栏"搜索"与 ⌘K）：搜索框常驻，进入或再按 ⌘K 都聚焦并全选已有文字。结果是共用的 `CardSearchResults`。
 struct SearchScreen: View {
-    @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var query = PaletteQuery()
-    @State private var data: SearchData?
     @FocusState private var searching: Bool
     @State private var selection: TextSelection?
-
-    /// 宽屏上结果按可用宽度排成多列。
-    private var columns: [GridItem] {
-        sizeClass == .regular ? [GridItem(.adaptive(minimum: 320), spacing: 12, alignment: .top)] : [GridItem(.flexible())]
-    }
+    @State private var total: Int?
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                FilterChips(query: $query, projects: data?.projects ?? [], targets: data?.targets ?? [])
-                    .padding(.horizontal, -16)
-                if let data {
-                    if data.total == 0, !query.text.isEmpty || query.isFiltered {
-                        ContentUnavailableView.search(text: query.text)
-                    }
-                    ForEach(data.groups) { group in
-                        HStack(spacing: 6) {
-                            ProjectGlyph(project: group.project, size: 12)
-                            SectionHeader(title: group.project?.name ?? "未归档", count: nil).padding(.horizontal, -4)
-                        }
-                        .padding(.top, 8)
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
-                            ForEach(group.cards) { CardRow(entry: $0, highlight: query.text) }
-                        }
-                    }
-                    if data.total > data.shown {
-                        Button("还有 \(data.total - data.shown) 张") { query.pages += 1 }
-                            .frame(maxWidth: .infinity).padding()
-                    }
-                }
+        CardSearchResults(query: $query, scope: .all, total: $total)
+            .navigationTitle("搜索")
+            // ⌘K 是高频的键盘操作：标题不做大标题收起的动画，直接是一行
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationSubtitle(total.map { !query.text.isEmpty || query.isFiltered ? "\($0) 张" : "" } ?? "")
+            .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索卡片")
+            .searchFocused($searching)
+            .searchSelection($selection)
+            .onAppear {
+                #if DEBUG
+                if query.text.isEmpty { query.text = DebugScene.searchText }
+                #endif
+                focusSearch()
             }
-            .padding(.horizontal, 16).padding(.bottom, 24)
-        }
-        .scrollDismissesKeyboard(.immediately)
-        .background(palette.desk)
-        .bottomEdgeFade()
-        .navigationTitle("搜索")
-        // iPad 上 ⌘K 是高频的键盘操作：标题不做大标题收起的动画，直接是一行
-        .navigationBarTitleDisplayMode(sizeClass == .regular ? .inline : .automatic)
-        .navigationSubtitle(data.map { !query.text.isEmpty || query.isFiltered ? "\($0.total) 张" : "" } ?? "")
-        // 搜索框常驻导航栏下方，进入即聚焦弹出键盘
-        .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索卡片")
-        .searchFocused($searching)
-        .searchSelection($selection)
-        .onChange(of: query.text) { query.pages = 1 }
-        .onAppear {
-            #if DEBUG
-            if query.text.isEmpty { query.text = DebugScene.searchText }
-            #endif
-            focusSearch()
-        }
-        .onChange(of: navigation.searchFocusRequests) { focusSearch() }
-        .observing(services.store, [.cards, .projects, .sendRecords], id: query, into: $data, onError: workspace.fail) { [query] store in
-            let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
-            let projects = try store.projects()
-            return SearchData(
-                groups: SearchData.grouped(found.cards, projects: projects), total: found.totalCards, shown: found.cards.count,
-                projects: projects, targets: try store.sendTargets().filter { $0.kind == .known(.clipboard) })
-        }
+            .onChange(of: navigation.searchFocusRequests) { focusSearch() }
     }
-}
 
-extension SearchScreen {
     /// 聚焦搜索框并全选已有文字（接着打字即替换），不做动画。
     private func focusSearch() {
         var instant = Transaction()
         instant.disablesAnimations = true
-        withTransaction(instant) {
-            searching = true
-            selection = TextSelection(range: query.text.startIndex..<query.text.endIndex)
-        }
-    }
-}
-
-/// 筛选胶囊：项目、含图片、发送、时间；生效的填成实心。
-private struct FilterChips: View {
-    @Binding var query: PaletteQuery
-    let projects: [Project]
-    let targets: [SendTarget]
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Menu {
-                    Button("全部") { query.project = nil }
-                    Button("未归档") { query.project = .some(nil) }
-                    Divider()
-                    ForEach(projects) { project in Button(project.name) { query.project = project.id } }
-                } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil) }
-                Button { query.withImages.toggle() } label: { Chip(name: "含图片", value: nil, on: query.withImages) }
-                    .accessibilityAddTraits(query.withImages ? .isSelected : [])
-                Menu {
-                    Button("任意") { query.sent = .any }
-                    Button("从未发送") { query.sent = .never }
-                    Button("发送或复制过") { query.sent = .sent() }
-                    if !targets.isEmpty {
-                        Divider()
-                        ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
-                            Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
-                        }
-                    }
-                } label: { Chip(name: "发送", value: sentLabel, on: query.sent != .any) }
-                Menu {
-                    ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
-                } label: { Chip(name: "时间", value: query.period.label, on: query.period != .any) }
-            }
-            .padding(.horizontal, 16)
-        }
-        // 延伸到屏幕边缘，右侧 24pt 渐隐：看得出还能横着滑，而不是被页边距切断
-        .mask {
-            HStack(spacing: 0) {
-                Color.black
-                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24)
-            }
-        }
-    }
-
-    private var projectLabel: String {
-        switch query.project {
-        case .none: "全部"
-        case .some(.none): "未归档"
-        case .some(.some(let id)): projects.first { $0.id == id }?.name ?? "全部"
-        }
-    }
-
-    private var sentLabel: String {
-        switch query.sent {
-        case .any: "任意"
-        case .never: "从未发送"
-        case .sent(_, .some(let name)): name
-        case .sent(.known(.clipboard), nil): "剪贴板"
-        case .sent: "发送过"
-        }
-    }
-}
-
-private struct Chip: View {
-    let name: String
-    let value: String?
-    let on: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Text(name).opacity(on ? 0.7 : 1)
-            if let value, on {
-                Text(value).fontWeight(.medium)
-            }
-            if value != nil {
-                Image(systemName: "chevron.down").font(.caption2.weight(.bold)).opacity(0.5).accessibilityHidden(true)
-            }
-        }
-        .font(.subheadline)
-        .foregroundStyle(on ? palette.onAccent : palette.ink)
-        .padding(.horizontal, 12).frame(minHeight: 36)
-        .background(on ? palette.accent : palette.paper, in: .capsule)
-        .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
-        .padding(.vertical, 4)
-        .contentShape(.rect)
-        .animation(Motion.quick, value: on)
+        withTransaction(instant) { searching = true }
+        // 搜索框成为焦点之后再选中：同一刻设置的选区会被获得焦点时放在末尾的光标覆盖
+        Task { @MainActor in selection = TextSelection(range: query.text.startIndex..<query.text.endIndex) }
     }
 }
 #endif

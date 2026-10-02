@@ -10,6 +10,7 @@ struct SplitRoot: View {
     @State private var width: CGFloat = 0
 
     private static let threeColumnWidth: CGFloat = 1100
+    private static let panelWidth: CGFloat = 360
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -17,14 +18,20 @@ struct SplitRoot: View {
             SplitSidebar()
                 .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
         } detail: {
-            NavigationStack(path: $navigation.splitPath) {
-                RouteView(route: navigation.splitRoot)
-                    .navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
-                    .toolbar { ToolbarItemGroup(placement: .primaryAction) { PanelButtons() } }
+            // 右侧面板与详情栏并排（不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区，
+            // 大标题与返回按钮压在内容上；挂进导航栈里又会把面板的工具栏并进详情栏）
+            HStack(spacing: 0) {
+                NavigationStack(path: $navigation.splitPath) {
+                    page(navigation.splitRoot)
+                        .navigationDestination(for: Navigation.Route.self) { page($0) }
+                }
+                if navigation.panel != nil {
+                    Divider().ignoresSafeArea()
+                    SidePanel()
+                        .frame(width: Self.panelWidth)
+                        .transition(.move(edge: .trailing))
+                }
             }
-        }
-        .inspector(isPresented: Binding(get: { navigation.panel != nil }, set: { if !$0 { navigation.panel = nil } })) {
-            SidePanel().inspectorColumnWidth(min: 300, ideal: 360, max: 440)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         // 窄窗口（竖屏、分屏）放不下三栏：打开右侧面板或卡片纸页时收起侧栏，纸页盖住整个右侧
@@ -36,6 +43,15 @@ struct SplitRoot: View {
         }
         .background { SplitShortcuts() }
         .onAppear { navigation.splitRoot = Self.route(for: workspace.page) }
+    }
+
+    /// 右侧页：任务与活动的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
+    @ViewBuilder private func page(_ route: Navigation.Route) -> some View {
+        if route.isCard {
+            RouteView(route: route)
+        } else {
+            RouteView(route: route).toolbar { ToolbarItemGroup(placement: .primaryAction) { PanelButtons() } }
+        }
     }
 
     private func collapseSidebarIfNarrow() {
@@ -78,27 +94,24 @@ private struct PanelButtons: View {
 /// 右侧面板：任务或活动，顶部分段切换。
 private struct SidePanel: View {
     @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch navigation.panel ?? .tasks {
-                case .tasks: TasksScreen()
-                case .activity: ActivityScreen()
-                }
+        // 不套导航栈、不放工具栏：iPadOS 的详情栏只有一条工具栏，面板里的工具栏会并进去
+        VStack(spacing: 0) {
+            Picker("面板", selection: Binding(get: { navigation.panel ?? .tasks }, set: { navigation.panel = $0 })) {
+                Text("任务").tag(Navigation.Panel.tasks)
+                Text("活动").tag(Navigation.Panel.activity)
             }
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("面板", selection: Binding(get: { navigation.panel ?? .tasks }, set: { navigation.panel = $0 })) {
-                        Text("任务").tag(Navigation.Panel.tasks)
-                        Text("活动").tag(Navigation.Panel.activity)
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            .padding(.vertical, 8)
+            switch navigation.panel ?? .tasks {
+            case .tasks: TasksScreen()
+            case .activity: ActivityScreen()
             }
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .background(palette.desk.ignoresSafeArea())
     }
 }
 
