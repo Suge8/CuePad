@@ -1,19 +1,22 @@
 #if os(macOS)
 import Foundation
 
-/// 会话列表要的摘要：会话 id、工作目录、名字、当前分支的首条 prompt（名字为空时作标题）、最后活动时间。
-/// 原文留在会话文件里，这里不复制。
+/// 会话列表要的摘要：会话 id、工作目录、名字、首条用户消息、最后活动时间。原文留在会话文件里，这里不复制。
 public struct PiSessionHistory: Sendable, Equatable {
     public var sessionID: String?
     public var cwd: String?
     public var name: String?
-    /// 当前分支上第一条用户消息的文字（去掉首尾空白，最多 `PiHistory.promptPreviewLimit` 字）。
-    public var firstPrompt: String?
+    /// 文件里第一条有文字的用户消息（文字块用空格连接，最多 `PiSessionName.firstMessageLimit` 字）。
+    public var firstMessage: String?
     public var lastActivity: Date?
+
+    /// 会话的显示名，规则见 `PiSessionName`（与活动会话、Pi 会话列表一致）。
+    public var displayName: String {
+        PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.map { URL(filePath: $0).lastPathComponent } ?? "")
+    }
 }
 
-/// 增量索引的可持久化状态。调用方存起来（Codable），下次传回来就只读新增字节。
-/// 只存得出摘要所需的：每个条目沿分支回溯到的首条 prompt（条目 id → `firstPrompts` 下标），不存正文。
+/// 增量索引的可持久化状态。调用方存起来（Codable），下次传回来就只读新增字节。只存摘要所需的，不存正文。
 public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 已消费到的字节偏移（总在一个换行之后）
     public internal(set) var offset: UInt64 = 0
@@ -23,10 +26,7 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var cwd: String?
     var name: String?
     var lastActivity: Date?
-    var leaf: String?
-    var firstPrompts: [String] = []
-    /// 其分支上已有用户消息的条目；不在表里的条目之前还没有 prompt。
-    var promptOf: [String: Int] = [:]
+    var firstMessage: String?
 }
 
 public struct PiHistoryUpdate: Sendable {
@@ -46,7 +46,6 @@ public enum PiHistoryEvent: Sendable {
 /// Pi 会话文件（JSONL，v3 树结构）的解析。当前分支 = 从文件最后一个条目沿 `parentId` 回溯到根，
 /// 与 Pi 加载会话时确定叶子的规则一致。
 public enum PiHistory {
-    public static let promptPreviewLimit = 80
 
     private static let fingerprintPrefix = 256
     private static let blockSize = 8 * 1024 * 1024
@@ -138,75 +137,42 @@ public enum PiHistory {
         var text: String {
             switch self {
             case .text(let s): s
-            case .blocks(let b): b.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
+            case .blocks(let b): b.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: " ")
             }
         }
     }
 
     private static let timestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
-    /// toolResult 行占会话体积的绝大部分（工具输出、图片），又不含 prompt：只从行首取 id/parentId 挂进树，
-    /// 不做完整 JSON 解码。Pi 写出的键序固定为 type, id, parentId, timestamp, message。
+    /// toolResult 行占会话体积的绝大部分（工具输出、图片），又不含摘要要的东西：认出来就跳过，不做 JSON 解码。
+    /// Pi 写出的键序固定为 type, id, parentId, timestamp, message，角色在行首附近。
     private static let toolResultMarker = Data(#""role":"toolResult""#.utf8)
     private static let headLength = 512
 
-    private static func ingestToolResult(_ raw: Data, into cp: inout PiHistoryCheckpoint) -> Bool {
-        let head = raw.prefix(headLength)
-        guard raw.count > headLength, head.range(of: toolResultMarker) != nil,
-              case .string(let id) = field("id", in: head) else { return false }
-        let parent: String?
-        switch field("parentId", in: head) {
-        case .string(let value): parent = value
-        case .null: parent = nil
-        case .missing: return false
-        }
-        attach(id, to: parent, in: &cp)
-        return true
-    }
-
-    private enum Field { case missing, null, string(String) }
-
-    /// `"key":"value"` 或 `"key":null`
-    private static func field(_ key: String, in head: Data) -> Field {
-        guard let r = head.range(of: Data("\"\(key)\":".utf8)) else { return .missing }
-        let rest = head[r.upperBound...]
-        if rest.starts(with: Data("null".utf8)) { return .null }
-        guard rest.first == 0x22, let end = rest.dropFirst().firstIndex(of: 0x22) else { return .missing }
-        return .string(String(decoding: rest[rest.index(after: rest.startIndex)..<end], as: UTF8.self))
-    }
-
     private static func ingest(_ raw: Data, into cp: inout PiHistoryCheckpoint) {
-        if ingestToolResult(raw, into: &cp) { return }
+        if raw.count > headLength, raw.prefix(headLength).range(of: toolResultMarker) != nil { return }
         guard !raw.isEmpty, let line = try? decoder.decode(Line.self, from: raw) else { return } // 损坏行跳过
         let time = line.timestamp.flatMap { try? Date($0, strategy: timestampStyle) }
         if let time { cp.lastActivity = max(cp.lastActivity ?? time, time) }
-        if line.type == "session" {
+        switch line.type {
+        case "session":
             cp.sessionID = line.id
             cp.cwd = line.cwd
-            return
+        case "session_info":
+            cp.name = line.name
+        case "message" where cp.firstMessage == nil && line.message?.role == "user":
+            let text = line.message?.content?.text ?? ""
+            if !text.isEmpty { cp.firstMessage = String(text.prefix(PiSessionName.firstMessageLimit)) }
+        default:
+            break
         }
-        guard let id = line.id else { return }
-        if line.type == "session_info" { cp.name = line.name }
-        attach(id, to: line.parentId, in: &cp)
-        if cp.promptOf[id] == nil, line.type == "message", let message = line.message, message.role == "user" {
-            let text = (message.content?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            cp.promptOf[id] = cp.firstPrompts.count
-            cp.firstPrompts.append(String(text.prefix(promptPreviewLimit)))
-        }
-    }
-
-    /// 新条目沿用父条目所在分支的首条 prompt，并成为当前叶子（当前分支 = 文件最后一个条目沿 parentId 回溯到根）。
-    private static func attach(_ id: String, to parent: String?, in cp: inout PiHistoryCheckpoint) {
-        if let parent, let prompt = cp.promptOf[parent] { cp.promptOf[id] = prompt }
-        cp.leaf = id
     }
 
     private static let decoder = JSONDecoder()
 
     static func history(of cp: PiHistoryCheckpoint) -> PiSessionHistory {
         PiSessionHistory(
-            sessionID: cp.sessionID, cwd: cp.cwd, name: cp.name,
-            firstPrompt: cp.leaf.flatMap { cp.promptOf[$0] }.map { cp.firstPrompts[$0] }, lastActivity: cp.lastActivity)
+            sessionID: cp.sessionID, cwd: cp.cwd, name: cp.name, firstMessage: cp.firstMessage, lastActivity: cp.lastActivity)
     }
 }
 #endif

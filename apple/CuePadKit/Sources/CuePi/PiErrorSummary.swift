@@ -8,7 +8,7 @@ public struct PiErrorSummary: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
         /// 401/403：密钥无效、登录过期、没有权限
         case authentication
-        /// 402 或额度、账单、用量上限
+        /// 额度、余额、订阅用量用完（按消息内容识别，不论状态码：Anthropic 的用量上限与余额不足都是 400）
         case quota
         /// 429 等限流
         case rateLimited
@@ -41,7 +41,7 @@ public struct PiErrorSummary: Sendable, Equatable {
         let code = status.map { "（\($0)）" } ?? ""
         return switch kind {
         case .authentication: "认证失败，检查 API 密钥或重新登录\(code)"
-        case .quota: "额度不足"
+        case .quota: "额度用完"
         case .rateLimited: "请求太频繁，稍后再试"
         case .rejected: "模型拒绝了请求\(code)"
         case .server: "模型服务繁忙或出错，稍后再试\(code)"
@@ -77,8 +77,11 @@ public struct PiErrorSummary: Sendable, Equatable {
         let type = type?.lowercased() ?? ""
         if status == 401 || status == 403 || ["authentication_error", "permission_error"].contains(type)
             || text.contains(/invalid.?(x-)?api.?key|unauthorized/) { return .authentication }
-        if status == 402 || type == "insufficient_quota"
-            || text.contains(/insufficient_quota|exceeded your current quota|quota exceeded|insufficient credits|credit balance|billing|out of budget|usage limit/) {
+        // 额度类的各家说法：OpenAI `insufficient_quota`、Anthropic "usage limits" / "credit balance is too low"、
+        // Codex/ChatGPT 订阅 `usage_limit_reached` / "usage limit" / `subscription_sharing_usage_limit_exceeded`、
+        // OpenRouter "Insufficient credits"，以及网关常见的 quota / billing / budget 措辞
+        if status == 402
+            || text.contains(/insufficient[_ ]?(quota|credits|funds|balance)|current quota|quota[_ ]?exceeded|credit balance|usage[_ ]?limit|usage_not_included|billing|out of budget/) {
             return .quota
         }
         if status == 429 || type == "rate_limit_error" || text.contains(/rate.?limit|too many requests/) { return .rateLimited }

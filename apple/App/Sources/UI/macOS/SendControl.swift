@@ -83,7 +83,7 @@ struct SendTargetMenu<Label: View>: View {
             if !sessions.isEmpty {
                 Section("Pi") {
                     ForEach(sessions) { session in
-                        let name = Workspace.sessionName(session)
+                        let name = session.displayName
                         Button("\(name) · \(session.state.label)") { choose(.pi(session.id, .send)) }
                         Button("放进 \(name) 的输入框（仅文字）") { choose(.pi(session.id, .paste)) }
                     }

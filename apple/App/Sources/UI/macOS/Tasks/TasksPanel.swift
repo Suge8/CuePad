@@ -138,7 +138,7 @@ struct TaskRow: View {
         if !services.pi.sessions.isEmpty {
             Menu("发给 Pi") {
                 ForEach(services.pi.sessions) { session in
-                    Button(Workspace.sessionName(session)) { sendToPi(session) }
+                    Button(session.displayName) { sendToPi(session) }
                 }
             }
         }

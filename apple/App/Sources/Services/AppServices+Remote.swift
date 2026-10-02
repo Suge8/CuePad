@@ -18,7 +18,8 @@ extension AppServices {
     func consumePiChanges(_ changes: AsyncStream<PiSessionChange>) async throws {
         for await change in changes {
             switch change {
-            case .appeared(let session), .stateChanged(let session, _): try await recordPiState(of: session)
+            case .appeared(let session), .stateChanged(let session, _), .displayNameChanged(let session):
+                try await recordPiState(of: session)
             case .ended(let session, _): try await piStateRecorder.end(sessionID: session.sessionID)
             case .incompatible: break
             }
@@ -28,7 +29,7 @@ extension AppServices {
     private func recordPiState(of session: CuePi.PiSession) async throws {
         let (state, detail) = session.state.syncRepresentation
         try await piStateRecorder.update(
-            sessionID: session.sessionID, state: state, detail: detail, title: session.cwd.lastPathComponent,
+            sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
             projectID: try await store.project(containing: session.cwd)?.id)
     }
 

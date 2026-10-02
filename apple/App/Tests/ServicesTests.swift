@@ -168,7 +168,7 @@ struct PiHistoryPersistenceTests {
         let checkpoint = try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
         let resumed = try PiHistory.index(file: file, from: checkpoint)
         #expect(resumed.bytesRead == reply.utf8.count + 1)
-        #expect(resumed.history.firstPrompt == "fix the build")
+        #expect(resumed.history.displayName == "fix the build")
     }
 }
 

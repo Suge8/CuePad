@@ -23,7 +23,7 @@ struct MenuBarPad: View {
                         VStack(alignment: .leading, spacing: 1) {
                             HStack(spacing: 8) {
                                 PiDot(state: session.state, size: 6).frame(width: 12)
-                                Text(Workspace.sessionName(session)).font(.system(size: 13, weight: .medium))
+                                Text(session.displayName).font(.system(size: 13, weight: .medium))
                                 Spacer()
                                 Text(session.state.label).font(.system(size: 12))
                                     .foregroundStyle(session.state.labelColor(palette))
