@@ -12,6 +12,7 @@ import SwiftUI
 /// iPad 上 tasks、activity 打开右侧面板。演示库另写入 Mac 同步来的 Pi 会话状态与一条发到 Mac 的请求。
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
+        dumpAccessibilityIfAsked()
         let project = await prepareLibrary(workspace)
         if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         let split = navigation.layout == .split
@@ -104,6 +105,46 @@ extension DebugScene {
         }
         if let atlas = try? await store.piSessionStates().first(where: { $0.sessionID == "atlas" }) {
             _ = try? await services.requestMacDelivery("评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: atlas, mode: .followUp)
+        }
+    }
+}
+#endif
+
+#if os(iOS) && DEBUG
+import UIKit
+
+/// `-CuePadAXDump YES`：界面起来 4 秒后把读屏看到的元素（标签、值、特征）按顺序写进资料库目录的
+/// `ax-dump.txt`，给没有 UI 测试目标、没有 Simulator 图形界面时核对无障碍。
+extension DebugScene {
+    static func dumpAccessibilityIfAsked() {
+        guard defaults.bool(forKey: "CuePadAXDump"), let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
+        // 和 XCTest 一样打开"自动化"无障碍：SwiftUI 只在有辅助技术时才建出元素树
+        if let handle = dlopen("/usr/lib/libAccessibility.dylib", RTLD_NOW), let symbol = dlsym(handle, "_AXSSetAutomationEnabled") {
+            unsafeBitCast(symbol, to: (@convention(c) (Int32) -> Void).self)(1)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            var lines: [String] = []
+            for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+                for window in scene.windows where !window.isHidden { collect(window, into: &lines) }
+            }
+            try? lines.joined(separator: "\n").write(toFile: dir + "/ax-dump.txt", atomically: true, encoding: .utf8)
+        }
+    }
+
+    private static func collect(_ node: NSObject, into lines: inout [String]) {
+        if node.isAccessibilityElement {
+            let traits = node.accessibilityTraits
+            let kind = traits.contains(.button) ? "Button" : traits.contains(.header) ? "Header" : traits.contains(.staticText) ? "Text"
+                : traits.contains(.image) ? "Image" : "Element"
+            let value = node.accessibilityValue.map { " = \($0)" } ?? ""
+            lines.append("\(kind) '\(node.accessibilityLabel ?? "")'\(value)")
+            return
+        }
+        if let elements = node.accessibilityElements as? [NSObject] {
+            for element in elements { collect(element, into: &lines) }
+        } else if let view = node as? UIView {
+            for sub in view.subviews where !sub.isHidden && sub.alpha > 0 { collect(sub, into: &lines) }
         }
     }
 }

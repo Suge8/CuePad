@@ -15,6 +15,7 @@ struct SendToMacSheet: View {
     @Environment(AppServices.self) private var services
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var data: OutboxData?
     @State private var chosen: String?
     @State private var chosenMode: DeliveryMode?
@@ -36,6 +37,8 @@ struct SendToMacSheet: View {
             .toolbar { toolbar }
         }
         .presentationDetents([.large])
+        // iPad 上表单面板高度固定；辅助字号下改成整页大小，会话列表与发送方式都放得下（内容本身可滚动）
+        .modifier(AccessibleSheetSizing(page: typeSize.isAccessibilitySize))
         .observing(services.store, [.piSessionStates, .projects], into: $data, onError: workspace.fail) { store in
             let order = try store.piSessionStates().sorted { $0.state.urgency > $1.state.urgency }
             return OutboxData(sessions: order, projects: Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) }))
@@ -113,7 +116,7 @@ struct SendToMacSheet: View {
                     Picker("方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
                         ForEach(modes, id: \.self) { Text($0.label).tag($0) }
                     }
-                    .pickerStyle(.segmented)
+                    .scalingPickerStyle()
                     if let explanation = mode.explanation {
                         Text(explanation).font(.footnote).foregroundStyle(palette.ink3).frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -166,6 +169,14 @@ struct SendToMacSheet: View {
                 workspace.fail(error)
             }
         }
+    }
+}
+
+private struct AccessibleSheetSizing: ViewModifier {
+    let page: Bool
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if page { content.presentationSizing(.page) } else { content.presentationSizing(.form) }
     }
 }
 

@@ -147,19 +147,21 @@ private struct TodayLink: View {
 private struct PinnedShelfCard: View {
     let entry: ShelfData.Entry
     @Environment(\.palette) private var palette
+    /// 项目图标随字号放大。
+    @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 24
 
     var body: some View {
         NavigationLink(value: Navigation.Route.project(entry.project.id)) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top) {
-                    ProjectGlyph(project: entry.project, size: 24)
+                    ProjectGlyph(project: entry.project, size: glyph)
                     Spacer()
                     if let pi = entry.pi { PiDot(state: pi, announces: true) }
                 }
                 Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
                 Group {
                     if let goal = entry.goal {
-                        Text("\(Image(systemName: "scope")) \(goal)").accessibilityLabel("目标：\(goal)")
+                        Text("\(Image(systemName: "scope")) \(goal)").accessibilityLabel(goal)
                     } else {
                         Text("还没有目标")
                     }
@@ -213,6 +215,8 @@ private struct ShelfRow: View {
     var inboxCount = 0
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// 辅助字号下并进名称一行的图标随字号放大；平时在固定大小的图标块里。
+    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 17
 
     private var stacked: Bool { typeSize.isAccessibilitySize }
 
@@ -238,13 +242,13 @@ private struct ShelfRow: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        if stacked { ProjectGlyph(project: entry?.project, size: 17) }
+                        if stacked { ProjectGlyph(project: entry?.project, size: glyph) }
                         Text(entry?.project.name ?? "未归档").font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
                         if let pi = entry?.pi { PiDot(state: pi, size: 6, announces: true) }
                     }
                     Group {
                         if entry?.goal?.isEmpty == false {
-                            Text("\(Image(systemName: "scope")) \(subtitle)").accessibilityLabel("目标：\(subtitle)")
+                            Text("\(Image(systemName: "scope")) \(subtitle)").accessibilityLabel(subtitle)
                         } else {
                             Text(subtitle)
                         }

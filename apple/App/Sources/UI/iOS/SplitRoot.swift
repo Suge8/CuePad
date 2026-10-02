@@ -10,13 +10,18 @@ struct SplitRoot: View {
     @State private var width: CGFloat = 0
 
     private static let threeColumnWidth: CGFloat = 1100
-    private static let panelWidth: CGFloat = 360
+    /// 侧栏与右侧面板随字号加宽（辅助字号下项目名不被截成"…"），各有上限，详情栏总留得下。
+    @ScaledMetric(relativeTo: .body) private var sidebarWidth: CGFloat = 280
+    @ScaledMetric(relativeTo: .body) private var panelWidth: CGFloat = 360
+    private static let maxSidebarWidth: CGFloat = 420
+    private static let maxPanelWidth: CGFloat = 480
 
     var body: some View {
         @Bindable var navigation = navigation
         NavigationSplitView(columnVisibility: $navigation.sidebar) {
             SplitSidebar()
-                .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 340)
+                .navigationSplitViewColumnWidth(
+                    min: 240, ideal: min(sidebarWidth, Self.maxSidebarWidth), max: max(340, min(sidebarWidth, Self.maxSidebarWidth)))
         } detail: {
             // 右侧面板与详情栏并排（不用 .inspector：它包在分栏或导航栈上时，推入的页面拿不到导航栏的安全区，
             // 大标题与返回按钮压在内容上；挂进导航栈里又会把面板的工具栏并进详情栏）
@@ -28,7 +33,7 @@ struct SplitRoot: View {
                 if navigation.panel != nil {
                     Divider().ignoresSafeArea()
                     SidePanel()
-                        .frame(width: Self.panelWidth)
+                        .frame(width: min(panelWidth, Self.maxPanelWidth))
                         .transition(.move(edge: .trailing))
                 }
             }
@@ -103,7 +108,7 @@ private struct SidePanel: View {
                 Text("任务").tag(Navigation.Panel.tasks)
                 Text("活动").tag(Navigation.Panel.activity)
             }
-            .pickerStyle(.segmented)
+            .scalingPickerStyle()
             .fixedSize()
             .padding(.vertical, 8)
             switch navigation.panel ?? .tasks {
@@ -193,19 +198,27 @@ private struct SidebarRow: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// 图标随字号放大（侧栏列表里的符号默认不跟随辅助字号）。
+    @ScaledMetric(relativeTo: .body) private var icon: CGFloat = 16
 
     var body: some View {
         let selected = navigation.splitRoot == route
         Button(action: choose) {
             Label {
-                HStack(spacing: 6) {
-                    Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(1)
-                    if let pi { PiDot(state: pi, size: 6, announces: true) }
-                    Spacer(minLength: 4)
-                    if badge > 0 { Text("\(badge)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3) }
+                // 辅助字号下名称独占一行、可换行，状态点与计数排到下一行：名称不被挤成"…"或从词中间断开
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))
+                layout {
+                    Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+                    HStack(spacing: 6) {
+                        if let pi { PiDot(state: pi, size: 6, announces: true) }
+                        Spacer(minLength: 4)
+                        if badge > 0 { Text("\(badge)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3) }
+                    }
                 }
             } icon: {
-                if let symbol { Image(systemName: symbol) } else { ProjectGlyph(project: project, size: 15) }
+                if let symbol { Image(systemName: symbol).font(.system(size: icon)) } else { ProjectGlyph(project: project, size: icon) }
             }
             .foregroundStyle(palette.ink)
             .frame(minHeight: 44)
