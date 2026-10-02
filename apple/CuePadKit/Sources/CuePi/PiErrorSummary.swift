@@ -77,11 +77,12 @@ public struct PiErrorSummary: Sendable, Equatable {
         let type = type?.lowercased() ?? ""
         if status == 401 || status == 403 || ["authentication_error", "permission_error"].contains(type)
             || text.contains(/invalid.?(x-)?api.?key|unauthorized/) { return .authentication }
-        // 额度类的各家说法：OpenAI `insufficient_quota`、Anthropic "usage limits" / "credit balance is too low"、
-        // Codex/ChatGPT 订阅 `usage_limit_reached` / "usage limit" / `subscription_sharing_usage_limit_exceeded`、
-        // OpenRouter "Insufficient credits"，以及网关常见的 quota / billing / budget 措辞
+        // 额度类的各家说法：OpenAI `insufficient_quota`、Anthropic "usage limits" / "credit balance is too low" /
+        // 订阅的 "extra usage"、Codex/ChatGPT 订阅 `usage_limit_reached` / "usage limit" /
+        // `subscription_sharing_usage_limit_exceeded`、OpenRouter "Insufficient credits"，
+        // 以及 Pi 自己判为不可重试额度上限的说法（packages/ai/src/utils/retry.ts：available balance、quota exceeded、billing、out of budget）
         if status == 402
-            || text.contains(/insufficient[_ ]?(quota|credits|funds|balance)|current quota|quota[_ ]?exceeded|credit balance|usage[_ ]?limit|usage_not_included|billing|out of budget/) {
+            || text.contains(/insufficient[_ ]?(quota|credits|funds|balance)|current quota|quota[_ ]?exceeded|credit balance|extra usage|usage[_ ]?limit|usage_not_included|available balance|billing|out of budget/) {
             return .quota
         }
         if status == 429 || type == "rate_limit_error" || text.contains(/rate.?limit|too many requests/) { return .rateLimited }
