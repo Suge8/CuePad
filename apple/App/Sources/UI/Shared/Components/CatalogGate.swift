@@ -16,7 +16,8 @@ struct CatalogGate<Content: View>: View {
             } description: {
                 Text(failure)
             } actions: {
-                Button("重试") { workspace.retryCatalog() }
+                // 有底色的按钮外形：iOS 上默认是纯文字。不用实心强调样式——深色下墨是浅色，系统的白字会看不见
+                Button("重试") { workspace.retryCatalog() }.buttonStyle(.bordered)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(palette.desk)
