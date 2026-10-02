@@ -19,6 +19,12 @@ struct PiErrorSummaryTests {
          .quota, 400, "额度用完", "You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."),
         (#"400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}"#,
          .quota, 400, "额度用完", "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."),
+        // 挑刺官第 5 轮实际遇到的 Anthropic 订阅额度报错（原文开头与结尾取自记录，中间按 Anthropic 的措辞补全）
+        (#"400 {"type":"error","error":{"type":"invalid_request_error","message":"Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."},"request_id":"req_5"}"#,
+         .quota, 400, "额度用完", "Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."),
+        // Pi 自己判为"不可重试的额度上限"的说法（packages/ai/src/utils/retry.ts）
+        (#"429 {"type":"error","error":{"type":"GoUsageLimitError","message":"Monthly usage limit reached. Enable available balance usage to continue."}}"#,
+         .quota, 429, "额度用完", "Monthly usage limit reached. Enable available balance usage to continue."),
         (#"429 {"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","code":"insufficient_quota"}}"#,
          .quota, 429, "额度用完", "You exceeded your current quota, please check your plan and billing details."),
         ("You have hit your ChatGPT usage limit (plus plan). Try again in ~42 min.", .quota, nil, "额度用完", nil),
