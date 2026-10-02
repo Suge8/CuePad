@@ -109,6 +109,9 @@ extension View {
     /// iPhone 每页底部都有标签栏；宽 iPad 只有项目页一类（`capturePage`）底部浮着随手记栏，右侧面板里没有玻璃。
     func bottomEdgeFade(capturePage: Bool = false) -> some View { modifier(BottomEdgeFade(capturePage: capturePage)) }
 
+    /// 选项少的切换：平时是分段控件；辅助字号下分段控件不随字号放大，改成跟随字号的菜单按钮。
+    func scalingPickerStyle() -> some View { modifier(ScalingPickerStyle()) }
+
     /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作，有 Pi 会话时菜单标题写明它的状态
     /// （说清旁边那个点是什么意思）。nil（未归档）没有菜单。
     func projectActions(_ project: Project?, radius: CGFloat, pi: Open<PiWorkState>?) -> some View {
@@ -133,6 +136,14 @@ private struct ProjectContextMenu: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+private struct ScalingPickerStyle: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if typeSize.isAccessibilitySize { content.pickerStyle(.menu) } else { content.pickerStyle(.segmented) }
     }
 }
 

@@ -103,6 +103,7 @@ struct CaptureSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     TextField("记下想法…", text: $text, axis: .vertical)
+                        .accessibilityLabel("记下想法")
                         .font(.title3)
                         .lineSpacing(4)
                         .foregroundStyle(palette.ink)

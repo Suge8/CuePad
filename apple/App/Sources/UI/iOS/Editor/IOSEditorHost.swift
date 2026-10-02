@@ -34,6 +34,7 @@ struct IOSEditorHost: UIViewRepresentable {
         view.storedText = initialText
         view.numbering = numbering
         view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator)
+        view.accessibilityLabel = "卡片正文"
         handle.view = view
         // 新建的空卡直接进入输入
         if initialText.isEmpty { DispatchQueue.main.async { view.becomeFirstResponder() } }

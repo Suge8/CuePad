@@ -113,8 +113,36 @@ struct TaskLine: View {
     /// 完成后停留多久再移出：够看清对勾、来得及反悔。
     private static let linger: Duration = .milliseconds(900)
 
+    private var done: Bool { task.completedAt != nil || phase != .idle }
+
     var body: some View {
-        let done = task.completedAt != nil || phase != .idle
+        line
+            // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(task.content)
+            .accessibilityValue(TaskSpeech.value(done: done))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(hint)
+            .accessibilityAction { tap() }
+            .animation(.easeOut(duration: 0.12), value: done)
+            .task(id: phase) {
+                guard phase == .pending else { return }
+                try? await Task.sleep(for: Self.linger)
+                guard !Task.isCancelled else { return }
+                commit()
+            }
+            // 移出前就离开了页面：照样写入，不丢这次勾选
+            .onDisappear { if phase == .pending { commit() } }
+            // 完成状态以 Store 为准：写入落地或别处恢复为未完成时，这一行回到普通状态
+            .onChange(of: task.completedAt) { phase = .idle }
+    }
+
+    private var hint: String {
+        if phase == .pending { return "撤销完成" }
+        return TaskSpeech.toggle(done: done)
+    }
+
+    private var line: some View {
         HStack(spacing: 2) {
             Button(action: tap) {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
@@ -125,23 +153,11 @@ struct TaskLine: View {
             }
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: phase) { $0 == .idle && $1 == .pending }
-            .accessibilityLabel(phase == .pending ? "撤销完成" : done ? "标为未完成" : "完成")
             Text(task.content.textGlyphs)
                 .font(.body).strikethrough(done)
                 .foregroundStyle(done ? palette.ink3 : palette.ink)
                 .lineLimit(2)
         }
-        .animation(.easeOut(duration: 0.12), value: done)
-        .task(id: phase) {
-            guard phase == .pending else { return }
-            try? await Task.sleep(for: Self.linger)
-            guard !Task.isCancelled else { return }
-            commit()
-        }
-        // 移出前就离开了页面：照样写入，不丢这次勾选
-        .onDisappear { if phase == .pending { commit() } }
-        // 完成状态以 Store 为准：写入落地或别处恢复为未完成时，这一行回到普通状态
-        .onChange(of: task.completedAt) { phase = .idle }
     }
 
     private func tap() {
@@ -181,6 +197,7 @@ struct NewTaskLine: View {
         HStack(spacing: 2) {
             Image(systemName: "plus").foregroundStyle(palette.ink3).frame(width: 44).accessibilityHidden(true)
             TextField("添加任务", text: $text)
+                .accessibilityLabel("添加任务")
                 .frame(minHeight: 44)
                 .contentShape(.rect)
                 .focused($focused)
