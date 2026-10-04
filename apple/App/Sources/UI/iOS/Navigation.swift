@@ -181,7 +181,7 @@ final class Navigation {
         }
     }
 
-    /// 点开的 Pi 通知：直接打开该会话的近况（iPhone 在活动标签里，iPad 推入详情栏）。
+    /// 点开的 Pi 通知：直接打开该会话的近况（iPhone 在 Pi 标签里，iPad 推入详情栏）。
     func open(alert tap: PiAlertTap?) {
         guard let tap else { return }
         switch layout {

@@ -55,10 +55,12 @@ struct PiSessionDetail: View {
         VStack(spacing: 0) {
             if let session = digest.session {
                 ScrollView {
-                    PiSessionDigest(session: session, project: digest.project, deliveries: digest.deliveries).padding(20)
+                    PiSessionDigest(session: session, project: digest.project).padding(20)
                 }
                 .frame(maxHeight: Self.maxDigestHeight)
                 .fixedSize(horizontal: false, vertical: true)
+                DeliveryStack(deliveries: digest.deliveries, session: session.state == .known(.ended) ? nil : session)
+                    .padding(.horizontal, 14).padding(.bottom, 10)
                 Divider()
                 DetailReply(session: session, live: live).padding(14)
             } else if stored != nil {

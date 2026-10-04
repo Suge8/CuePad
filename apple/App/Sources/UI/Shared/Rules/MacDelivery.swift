@@ -21,12 +21,12 @@ nonisolated extension DeliveryMode {
         }
     }
 
-    /// 不直观的方式才需要一句说明。
+    /// 方式是什么意思，用直白的话（按钮上只写短名）。
     var explanation: String? {
         switch self {
-        case .steer: "打断 Pi 正在进行的这一轮"
-        case .followUp: "等 Pi 这一轮结束后再发"
-        case .paste: "只放进输入框，由你在 Mac 上确认发送"
+        case .steer: "马上说（打断它正在做的）"
+        case .followUp: "等它做完再说"
+        case .paste: "只放进输入框，不发送"
         case .send: nil
         }
     }

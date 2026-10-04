@@ -13,7 +13,7 @@ struct IOSRoot: View {
     }
 }
 
-/// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / 任务 / 活动；搜索在书架与项目页下拉），宽 iPad 用分栏。
+/// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / 任务 / Pi；搜索在书架与项目页下拉），宽 iPad 用分栏。
 struct IOSRootView: View {
     @State private var workspace: Workspace
     @State private var navigation = Navigation()
@@ -117,7 +117,7 @@ private struct TabsRoot: View {
             Tab("任务", systemImage: "checklist", value: Navigation.Tab.tasks) {
                 stack($navigation.tasksPath) { TasksScreen() }
             }
-            Tab("活动", systemImage: "waveform.path.ecg", value: Navigation.Tab.activity) {
+            Tab("Pi", systemImage: "waveform.path.ecg", value: Navigation.Tab.activity) {
                 stack($navigation.activityPath) { ActivityScreen() }
             }
             .badge(waiting ?? 0)

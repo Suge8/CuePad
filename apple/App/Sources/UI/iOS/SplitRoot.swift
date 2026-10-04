@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iPad（宽）：左栏项目，右侧项目页；打开的卡片纸页推在项目页上，任务与活动在右侧面板。
+/// iPad（宽）：左栏项目，右侧项目页；打开的卡片纸页推在项目页上，任务与 Pi 在右侧面板。
 /// 外接键盘与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏、⌘N 新建卡片、⌘⇧N 随手记、⌘⇧T 任务、⌘, 设置。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
@@ -50,7 +50,7 @@ struct SplitRoot: View {
         .onAppear { navigation.splitRoot = Self.route(for: workspace.page) }
     }
 
-    /// 右侧页：任务与活动的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
+    /// 右侧页：任务与 Pi 的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
     @ViewBuilder private func page(_ route: Navigation.Route) -> some View {
         if route.isCard {
             RouteView(route: route)
@@ -74,7 +74,7 @@ struct SplitRoot: View {
     }
 }
 
-/// 右侧面板的开关：任务与活动；活动按钮在有会话等你确认时带橙点。
+/// 右侧面板的开关：任务与 Pi；Pi 按钮在有会话等你确认时带橙点。
 private struct PanelButtons: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
@@ -84,7 +84,7 @@ private struct PanelButtons: View {
     var body: some View {
         Button("任务", systemImage: "checklist") { withAnimation(Motion.panel) { navigation.toggle(.tasks) } }
         Button { withAnimation(Motion.panel) { navigation.toggle(.activity) } } label: {
-            Label("活动", systemImage: "waveform.path.ecg")
+            Label("Pi", systemImage: "waveform.path.ecg")
                 .overlay(alignment: .topTrailing) {
                     if (waiting ?? 0) > 0 { Circle().fill(palette.attention).frame(width: 7, height: 7).offset(x: 3, y: -2) }
                 }
@@ -96,7 +96,7 @@ private struct PanelButtons: View {
     }
 }
 
-/// 右侧面板：任务或活动，顶部分段切换。
+/// 右侧面板：任务或 Pi，顶部分段切换。
 private struct SidePanel: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
@@ -106,7 +106,7 @@ private struct SidePanel: View {
         VStack(spacing: 0) {
             Picker("面板", selection: Binding(get: { navigation.panel ?? .tasks }, set: { navigation.panel = $0 })) {
                 Text("任务").tag(Navigation.Panel.tasks)
-                Text("活动").tag(Navigation.Panel.activity)
+                Text("Pi").tag(Navigation.Panel.activity)
             }
             .scalingPickerStyle()
             .fixedSize()
@@ -140,7 +140,7 @@ private struct SplitSidebar: View {
             Section {
                 SidebarRow(route: .shelf, title: "项目", symbol: "books.vertical")
                 SidebarRow(route: .today, title: "今天", symbol: "sun.max", badge: data?.today ?? 0)
-                SidebarRow(route: .activity, title: "活动", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
+                SidebarRow(route: .activity, title: "Pi", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
             if let catalog = workspace.catalog {

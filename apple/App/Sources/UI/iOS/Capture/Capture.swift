@@ -58,7 +58,7 @@ struct CaptureBar: View {
 }
 
 extension View {
-    /// 内容页（书架、项目、今天）底部浮着的玻璃随手记栏。只挂在这几页上，所以设置、回收站、搜索、任务、活动与打开的卡片上都没有它，
+    /// 内容页（书架、项目、今天）底部浮着的玻璃随手记栏。只挂在这几页上，所以设置、回收站、搜索、任务、Pi 与打开的卡片上都没有它，
     /// 不依赖系统版本（标签栏附件栏要 iOS 26.1 才能按页收起）。
     func captureBar() -> some View {
         safeAreaInset(edge: .bottom, spacing: 0) { FloatingCaptureBar() }
