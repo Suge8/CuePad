@@ -129,6 +129,18 @@ struct MacSyncTests {
         #expect(try await services.store.piSessionStates().map(\.state) == [.known(.ended)])
     }
 
+    @Test func 子代理摘要在会话自己没有说明时写进说明() async throws {
+        var master = session("s1", state: .done(aborted: false))
+        master.subagents = [PiSubagent(name: "ui", kind: "thinking"), PiSubagent(name: "core", kind: "idle")]
+        try await services.consumePiChanges(changes([.appeared(master)]))
+        #expect(try await services.store.piSessionStates().first?.detail == "子代理：ui 工作中 · core 空闲")
+
+        var busy = master
+        busy.state = .tool(name: "bash", running: ["bash"], detail: "swift test")
+        try await services.consumePiChanges(changes([.stateChanged(busy, from: master.state)]))
+        #expect(try await services.store.piSessionStates().first?.detail == "bash · swift test")
+    }
+
     @Test func 会话近况写进同步记录() async throws {
         var asked = session("s1", state: .waitingUser(kind: "select", title: "选哪个？"))
         asked.lastPrompt = "修好登录"

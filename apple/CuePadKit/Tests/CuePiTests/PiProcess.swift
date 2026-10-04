@@ -10,6 +10,10 @@ let realPiAvailable = FileManager.default.isExecutableFile(atPath: realPiURL.pat
 
 private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures")
 
+/// 本机装的 FireCode（用户的 Pi 扩展）源码；只读，测试里软链进临时 agent 目录。
+let firecodeSource = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/extensions/firecode/source").resolvingSymlinksInPath()
+let firecodeAvailable = FileManager.default.fileExists(atPath: firecodeSource.appending(path: "index.ts").path)
+
 struct PiEvent: @unchecked Sendable {
     let json: [String: Any]
     subscript(key: String) -> Any? { json[key] }
@@ -34,8 +38,10 @@ final class PiProcess: @unchecked Sendable {
 
     /// - Parameter installBridge: 先用安装器把桥扩展装进临时 agent 目录，让 Pi 按自己的发现规则加载。
     /// - Parameter oneShotPrompt: 非 nil 时以 print 模式跑这条 prompt 然后退出（否则 RPC 常驻）。
+    /// - Parameter firecode: 把本机 FireCode 与测试配置装进临时 agent 目录。它的子代理是进程内子会话，只加载 agent 目录里的扩展、
+    ///   只认 `models.json` 里的模型，所以假模型也改为装进 agent 目录，并在 `models.json` 里登记。
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
-         oneShotPrompt: String? = nil, env: [String: String] = [:]) async throws {
+         oneShotPrompt: String? = nil, firecode: Bool = false, env: [String: String] = [:]) async throws {
         root = try makeTempDirectory()
         cwd = root.appending(path: "work")
         try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
@@ -45,8 +51,11 @@ final class PiProcess: @unchecked Sendable {
             try await installer.install()
         }
 
+        if firecode { try Self.installFirecode(into: paths.agentDirectory) }
+
         var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes",
-                    "--model", "fake/echo", "--thinking", "off", "-e", fixtures.appending(path: "fake-model.ts").path]
+                    "--model", "fake/echo", "--thinking", "off"]
+        if !firecode { args += ["-e", fixtures.appending(path: "fake-model.ts").path] }
         for e in extraExtensions { args += ["-e", fixtures.appending(path: e).path] }
 
         var environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("HERDR") && !$0.key.hasPrefix("TMUX") }
@@ -71,6 +80,18 @@ final class PiProcess: @unchecked Sendable {
         // 专用线程读到 EOF：readabilityHandler 在句柄被关闭后会抛 ObjC 异常
         Self.drain(out.fileHandleForReading) { [weak self] in self?.ingest($0) }
         Self.drain(errPipe.fileHandleForReading) { [weak self] data in self?.lock.withLock { self?._stderr.append(data) } }
+    }
+
+    private static func installFirecode(into agent: URL) throws {
+        let fm = FileManager.default
+        let extensions = agent.appending(path: "extensions")
+        let firecode = extensions.appending(path: "firecode")
+        try fm.createDirectory(at: firecode, withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: firecode.appending(path: "source"), withDestinationURL: firecodeSource)
+        try #"export { default } from "./source/index.ts";"#.write(to: firecode.appending(path: "index.ts"), atomically: true, encoding: .utf8)
+        try fm.copyItem(at: fixtures.appending(path: "firecode-config.jsonc"), to: firecode.appending(path: "config.jsonc"))
+        try fm.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
+        try fm.copyItem(at: fixtures.appending(path: "fake-models.json"), to: agent.appending(path: "models.json"))
     }
 
     func stop() {

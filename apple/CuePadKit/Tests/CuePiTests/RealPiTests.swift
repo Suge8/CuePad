@@ -213,6 +213,11 @@ struct RealPiTests {
             try await eventually("工具轮的最终回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "TOOL_DONE" }
             #expect(bridge.sessions.first?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
 
+            // 整条只由 `<名字>\n…\n</名字>` 块组成的是扩展投进来的机器消息：不算你说的，它触发的那轮回答照常算
+            try pi.prompt("<some_event>\n子任务完成\n</some_event>\n<other_note>\n两行\n内容\n</other_note>")
+            try await eventually("机器消息那轮的回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.contains("子任务完成") == true }
+            #expect(bridge.sessions.first?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
+
             let long = String(repeating: "长", count: 1300)
             try pi.prompt(long)
             try await eventually("长回答截断", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.hasPrefix("ECHO 长") == true }
