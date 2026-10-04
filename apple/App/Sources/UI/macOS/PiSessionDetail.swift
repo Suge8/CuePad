@@ -3,34 +3,45 @@ import CuePi
 import CueStore
 import SwiftUI
 
+extension PiSessionState {
+    /// 桥上的实时会话写成同步记录的形状（会话行与近况共用；同步记录按节流写，会落后几秒，界面读这个）。
+    static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?) -> PiSessionState {
+        let (state, detail) = session.syncRepresentation
+        return PiSessionState(
+            id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
+            projectID: projectID, state: .known(state), detail: detail, folder: session.cwd.lastPathComponent,
+            lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
+            stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince)
+    }
+
+    /// 历史索引里的会话（同步记录已过期或从没写过）：当作已结束，没有近况，时间是最后活动。
+    nonisolated static func history(_ row: StoredPiSession, hostID: String, projectID: UUID?) -> PiSessionState {
+        let folder = URL(filePath: row.cwd).lastPathComponent
+        return PiSessionState(
+            id: recordID(sessionID: row.id), sessionID: row.id, hostID: hostID, title: row.title.isEmpty ? folder : row.title,
+            projectID: projectID, state: .known(.ended), detail: nil, folder: folder, lastPrompt: nil, lastReply: nil,
+            question: nil, notify: nil, stateSince: row.lastActivityAt, busySince: nil, createdAt: row.lastActivityAt,
+            modifiedAt: row.lastActivityAt)
+    }
+}
+
 extension SessionDigest {
     /// Mac 端按会话 id 读资料库里的部分：这台 Mac 写的同步记录（结束后留 7 天）；没有记录时（结束更久、或从没写过）
     /// 取历史索引里的那一行，当作已结束。在线会话再经 `live(_:hostID:project:)` 换上桥上的实时值。
     static func read(sessionID: String, hostID: String, from store: isolated CueStore) throws -> SessionDigest {
         var digest = try read(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
         guard digest.session == nil, let row = try store.piSessions().first(where: { $0.id == sessionID }) else { return digest }
-        let cwd = URL(filePath: row.cwd)
-        let project = try store.project(containing: cwd)
+        let project = try store.project(containing: URL(filePath: row.cwd))
         digest.project = project
-        digest.session = PiSessionState(
-            id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID,
-            title: row.title.isEmpty ? cwd.lastPathComponent : row.title, projectID: project?.id, state: .known(.ended), detail: nil,
-            folder: cwd.lastPathComponent, lastPrompt: nil, lastReply: nil, question: nil, notify: nil,
-            stateSince: row.lastActivityAt, busySince: nil, createdAt: row.lastActivityAt, modifiedAt: row.lastActivityAt)
+        digest.session = .history(row, hostID: hostID, projectID: project?.id)
         return digest
     }
 
-    /// 会话在线时，状态、详情、名字与近况取桥上的实时值：同步记录按节流写，会落后几秒。
+    /// 会话在线时，状态、详情、名字与近况取桥上的实时值。
     func live(_ session: CuePi.PiSession?, hostID: String, project: Project?) -> SessionDigest {
         guard let session else { return self }
-        let (state, detail) = session.syncRepresentation
         var digest = self
-        digest.session = PiSessionState(
-            id: PiSessionState.recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID,
-            title: session.displayName, projectID: project?.id ?? self.session?.projectID, state: .known(state), detail: detail,
-            folder: session.cwd.lastPathComponent, lastPrompt: session.lastPrompt, lastReply: session.lastReply,
-            question: session.question.map(PiQuestion.init), notify: nil, stateSince: session.stateSince, busySince: session.busySince,
-            createdAt: self.session?.createdAt ?? session.stateSince, modifiedAt: session.stateSince)
+        digest.session = .live(session, hostID: hostID, projectID: project?.id ?? self.session?.projectID)
         if let project { digest.project = project }
         return digest
     }
@@ -55,10 +66,12 @@ struct PiSessionDetail: View {
         VStack(spacing: 0) {
             if let session = digest.session {
                 ScrollView {
-                    PiSessionDigest(session: session, project: digest.project, deliveries: digest.deliveries).padding(20)
+                    PiSessionDigest(session: session, project: digest.project).padding(20)
                 }
                 .frame(maxHeight: Self.maxDigestHeight)
                 .fixedSize(horizontal: false, vertical: true)
+                DeliveryStack(deliveries: digest.deliveries, session: session.state == .known(.ended) ? nil : session)
+                    .padding(.horizontal, 14).padding(.bottom, 10)
                 Divider()
                 DetailReply(session: session, live: live).padding(14)
             } else if stored != nil {
@@ -106,7 +119,6 @@ private struct DetailReply: View {
                         ForEach(modes, id: \.self) { Text($0.label).tag(Optional($0)) }
                     }
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
-                    .help(mode?.explanation ?? "")
                     Button("跳到终端", systemImage: "terminal") { workspace.jumpToTerminal(live.id) }
                         .labelStyle(.iconOnly).buttonStyle(.borderless)
                         .help("跳到这个会话所在的终端")
@@ -117,6 +129,9 @@ private struct DetailReply: View {
                         .disabled(trimmed.isEmpty || sending)
                 }
                 .controlSize(.small)
+                if let explanation = mode?.explanation {
+                    Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
+                }
             }
             .onAppear { focused = true }
         } else {
@@ -185,7 +200,7 @@ private struct SessionDetailRow: ViewModifier {
         Button { host?.open(sessionID) } label: { content.contentShape(.rect) }
             .buttonStyle(PressStyle(scale: 0.98))
             .accessibilityHint("打开会话详情")
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(host?.space ?? "")) } action: { host?.report(sessionID, $0) }
+            .onGeometryChange(for: CGRect.self) { [space = host?.space ?? ""] in $0.frame(in: .named(space)) } action: { host?.report(sessionID, $0) }
     }
 }
 

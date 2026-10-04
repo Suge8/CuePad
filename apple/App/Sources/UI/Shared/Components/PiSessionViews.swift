@@ -16,6 +16,17 @@ nonisolated extension PiWorkState {
         }
     }
 
+    /// 会话列表的先后：等你确认 → 出错 → 工作中 → 空闲 → 已结束。
+    var listRank: Int {
+        switch self {
+        case .waitingForUser: 0
+        case .error: 1
+        case .thinking, .outputting, .tool, .delegating: 2
+        case .settled: 3
+        case .ended: 4
+        }
+    }
+
     /// 同一项目有多个会话时，状态点显示最需要注意的那个。
     var urgency: Int {
         switch self {
@@ -32,6 +43,7 @@ nonisolated extension PiWorkState {
 nonisolated extension Open<PiWorkState> {
     var label: String { known?.label ?? "未知状态" }
     var urgency: Int { known?.urgency ?? 1 }
+    var listRank: Int { known?.listRank ?? 3 }
 
     /// 项目旁的状态点说的是什么（读屏标签、悬停提示、长按菜单的标题）：只分要你注意的与在忙的。
     var presence: String {
@@ -52,7 +64,20 @@ extension PiWorkState {
         case .thinking, .outputting, .tool, .delegating: palette.ink
         case .waitingForUser: palette.attention
         case .error: palette.failure
-        case .settled, .ended: palette.ink3
+        case .settled: palette.ink3
+        case .ended: palette.ink3.opacity(0.6)
+        }
+    }
+
+    /// 状态标的形状，与颜色一起表达状态（色弱也分得出）：等你确认问号、出错叹号、空闲勾、已结束空心圈；
+    /// 工作中是实心点（不用符号），见 `PiStateDot`。
+    var symbol: String? {
+        switch self {
+        case .waitingForUser: "questionmark.circle.fill"
+        case .error: "exclamationmark.circle.fill"
+        case .settled: "checkmark.circle"
+        case .ended: "circle"
+        case .thinking, .outputting, .tool, .delegating: nil
         }
     }
 }
@@ -62,6 +87,13 @@ extension Open<PiWorkState> {
 }
 
 nonisolated extension PiSessionState {
+    /// 会话列表的顺序（Pi 页、Mac 侧栏）：要你注意的在前，同一档保持原来的先后（最近进入当前状态的在前）。
+    static func inListOrder(_ sessions: [PiSessionState]) -> [PiSessionState] {
+        sessions.enumerated()
+            .sorted { ($0.element.state.listRank, $0.offset) < ($1.element.state.listRank, $1.offset) }
+            .map(\.element)
+    }
+
     /// 详情是工具命令（等宽显示）。
     var detailIsCode: Bool { state == .known(.tool) }
 
@@ -76,26 +108,33 @@ nonisolated extension PiSessionState {
     }
 }
 
-/// 状态点：颜色表示状态；不做循环动画（常驻多处，循环既耗电也分散注意）。旁边有状态文字时（活动页、会话行）
-/// 读屏跳过它；`announces` 用在只有一个点的地方（书架、侧栏的项目旁），点自己带读屏标签与悬停提示。
+/// 会话状态标（全 App 只此一份：Pi 页、近况、书架、侧栏、Mac 侧栏与菜单栏）：颜色 + 形状表达状态，
+/// 等你确认橙色问号、出错红色叹号、工作中墨色实心点、空闲灰色勾、已结束更淡的空心圈；不做循环动画（常驻多处，
+/// 循环既耗电也分散注意）。`size` 是点的直径，符号按它放大到同样的视觉分量。
+/// 旁边有状态文字时读屏跳过它；`announces` 用在只有一个标的地方（书架、侧栏的项目旁），标自己带读屏标签与悬停提示。
 struct PiStateDot: View {
     let state: Open<PiWorkState>
     var size: CGFloat = 8
     var announces = false
     @Environment(\.palette) private var palette
 
+    private var box: CGFloat { size * 1.8 }
+
     var body: some View {
-        let tint = state.tint(palette)
-        let dot = Circle()
-            .fill(tint)
-            .frame(width: size, height: size)
-            .padding(size * 0.35)
-            .background(tint.opacity(0.22), in: .circle)
-            .animation(Motion.quick, value: state)
+        let mark = Group {
+            if let symbol = state.known?.symbol ?? (state.known == nil ? "circle.dashed" : nil) {
+                Image(systemName: symbol).font(.system(size: box, weight: .semibold))
+            } else {
+                Circle().frame(width: size, height: size)
+            }
+        }
+        .foregroundStyle(state.tint(palette))
+        .frame(width: box, height: box)
+        .animation(Motion.quick, value: state)
         if announces {
-            dot.accessibilityLabel(state.presence).help(state.presence)
+            mark.accessibilityLabel(state.presence).help(state.presence)
         } else {
-            dot.accessibilityHidden(true)
+            mark.accessibilityHidden(true)
         }
     }
 }

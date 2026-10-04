@@ -97,16 +97,10 @@ private struct PiColumn: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         ForEach(sessions) { session in
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 7) {
-                    PiStateDot(state: session.state.work, size: 5)
-                    Text(session.displayName).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink)
-                    Spacer()
-                    PiElapsed(state: session.state.work, stateSince: session.stateSince, busySince: session.busySince, font: .system(size: 11))
-                }
-                Text(session.state.label).font(.system(size: 12, weight: .medium)).foregroundStyle(session.state.labelColor(palette))
-                PiDetail(state: session.state)
-            }
+            PiSessionRow(
+                session: .live(session, hostID: workspace.services.hostID, projectID: project),
+                project: workspace.catalog?.project(project),
+                nameFont: .system(size: 13, weight: .semibold), lineFont: .system(size: 12), dotSize: 5)
         }
     }
 }
@@ -128,7 +122,7 @@ struct CompactFocus: View {
                 if let session {
                     HStack(spacing: 6) {
                         PiStateDot(state: session.state.work, size: 5)
-                        Text("\(session.displayName) \(session.state.label)")
+                        Text("\(session.displayName) \(session.state.work.label)")
                     }
                     .foregroundStyle(palette.ink2)
                 }

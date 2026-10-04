@@ -3,7 +3,8 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 一个 Pi 会话的近况（活动页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），底部直接回复。
+/// 一个 Pi 会话的近况（Pi 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里）：上面是近况，
+/// 底部是发过去的最新一条请求与回复框。
 /// 会话记录在页面打开期间被删掉（结束 7 天后）时，照样显示最后一次看到的近况，回复框换成说明。
 struct SessionScreen: View {
     let id: UUID
@@ -15,15 +16,11 @@ struct SessionScreen: View {
     /// 最后一次读到的会话记录：记录被删后仍显示它。
     @State private var lastSeen: PiSessionState?
     @State private var draft: Navigation.Outbox?
-    /// 刚发出的请求：它出现在"你发过去的"里时滚过去，长回答下面的送达状态也看得到。
-    @State private var justSent: UUID?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ScrollViewReader { proxy in
         ScrollView {
             if let session = digest?.session ?? lastSeen {
-                PiSessionDigest(session: session, project: digest?.project, deliveries: digest?.deliveries ?? [])
+                PiSessionDigest(session: session, project: digest?.project)
                     .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
             } else if digest != nil {
                 ContentUnavailableView {
@@ -34,22 +31,19 @@ struct SessionScreen: View {
                 .padding(.top, 60)
             }
         }
-        .onChange(of: digest?.deliveries.map(\.id)) { _, ids in
-            guard let target = justSent, ids?.contains(target) == true else { return }
-            justSent = nil
-            // 减弱动态效果时直接跳到那一行
-            withAnimation(reduceMotion ? nil : Motion.quick) { proxy.scrollTo(target, anchor: .bottom) }
-        }
-        }
         .scrollDismissesKeyboard(.interactively)
         .background(palette.desk)
         // 会话名在页面里（读到之前导航栏不先显示一个空标题再换）
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let session = digest?.session ?? lastSeen {
-                ReplyBar(session: session, alive: digest?.session != nil && session.state != .known(.ended), draft: $draft) {
-                    justSent = $0
+                let alive = digest?.session != nil && session.state != .known(.ended)
+                // 发出后最新一条就在回复框上方，长回答下也看得到送达情况
+                VStack(spacing: 8) {
+                    DeliveryStack(deliveries: digest?.deliveries ?? [], session: alive ? session : nil)
+                    ReplyBar(session: session, alive: alive, draft: $draft)
                 }
+                .padding(.horizontal, 8).padding(.bottom, 8)
             }
         }
         .onAppear { if draft == nil { draft = navigation.takeDraft(for: id) } }
@@ -72,8 +66,6 @@ private struct ReplyBar: View {
     let session: PiSessionState
     let alive: Bool
     @Binding var draft: Navigation.Outbox?
-    /// 请求写成后告诉会话页（滚到它）。
-    let sent: (UUID) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -101,12 +93,9 @@ private struct ReplyBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !alive {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("这个会话已结束").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-                    Text("回复发不到它。在 Mac 上重新运行 pi，新的会话会出现在活动里").font(.footnote).foregroundStyle(palette.ink3)
-                }
+                Text("会话已结束，回复发不到它；在 Mac 的终端重新运行 pi 开新会话").font(.footnote).foregroundStyle(palette.ink3)
             } else {
-                if !reachable { SyncBlockedNote(status: services.syncStatus) }
+                if !reachable { SyncHint(status: services.syncStatus) }
                 if let draft { attachment(draft) }
                 HStack(alignment: .bottom, spacing: 10) {
                     TextField(draft == nil ? "回复 \(session.title)" : "补一句（可不填）", text: $text, axis: .vertical)
@@ -126,14 +115,14 @@ private struct ReplyBar: View {
                     .sensoryFeedback(.success, trigger: sentCount)
                 }
                 if let mode, modes.count > 1 {
-                    HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Picker("方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
                             ForEach(modes, id: \.self) { Text($0.label).tag($0) }
                         }
                         .scalingPickerStyle()
                         .fixedSize()
                         if let explanation = mode.explanation {
-                            Text(explanation).font(.footnote).foregroundStyle(palette.ink3).lineLimit(2)
+                            Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
                         }
                     }
                 }
@@ -142,7 +131,6 @@ private struct ReplyBar: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glass(in: .rect(cornerRadius: 24))
-        .padding(.horizontal, 8).padding(.bottom, 8)
     }
 
     /// 带上的卡片或任务：标题、图片数，可移除。
@@ -174,11 +162,10 @@ private struct ReplyBar: View {
         sending = true
         workspace.attempt {
             defer { sending = false }
-            let request = try await services.requestMacDelivery(content, to: session, mode: mode, card: card, task: task)
+            _ = try await services.requestMacDelivery(content, to: session, mode: mode, card: card, task: task)
             text = ""
             draft = nil
             sentCount += 1
-            sent(request.id)
         }
     }
 }

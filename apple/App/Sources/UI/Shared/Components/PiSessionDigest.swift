@@ -21,70 +21,50 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 }
 
-/// 会话近况（iOS 的会话页、Mac 侧栏的会话详情共用）：顶部是会话名、在哪、状态，出错时的原因与等你确认的问题；
-/// 然后是最近一轮（你最后说的、它最后答的），最后是你发过去的请求与送达情况。回复框由各平台放在它下面。
+/// 会话近况（iOS 的会话页、Mac 侧栏的会话详情共用）：状态块（名字、状态、在哪、进度；等你确认的问题最醒目，
+/// 出错写原因），然后是最近一轮——你说的一行（弱化）与 Pi 答的全文（较长时折起）。已结束的整页更淡但可读。
+/// 发过去的请求（`DeliveryStack`）与回复框由各平台放在它下面。
 struct PiSessionDigest: View {
     let session: PiSessionState
     let project: Project?
-    let deliveries: [DeliveryRequest]
-    @Environment(\.palette) private var palette
+    /// 发给这个会话的请求：问题卡据此显示作答的送达情况。
+    var deliveries: [DeliveryRequest] = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            DigestHeader(session: session, project: project, deliveries: deliveries)
+        VStack(alignment: .leading, spacing: 20) {
+            StatusBlock(session: session, project: project, deliveries: deliveries)
             RecentRound(session: session)
-            if !deliveries.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    DigestLabel(text: "你发过去的")
-                    VStack(spacing: 0) {
-                        ForEach(Array(deliveries.enumerated()), id: \.element.id) { index, request in
-                            if index > 0 { Divider().padding(.leading, 16) }
-                            DeliveryRow(request: request, session: session.state == .known(.ended) ? nil : session)
-                                .id(request.id)
-                        }
-                    }
-                    .paper(radius: 16)
-                }
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(Motion.quick, value: deliveries.map(\.id))
-        .animation(Motion.quick, value: deliveries.map(\.status))
+        .opacity(session.state == .known(.ended) ? 0.75 : 1)
     }
 }
 
-/// 小节标题：与项目页的分段标题同一种写法。
-private struct DigestLabel: View {
-    let text: String
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(text).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-            .padding(.horizontal, 4)
-            .accessibilityAddTraits(.isHeader)
-    }
-}
-
-private struct DigestHeader: View {
+/// 状态块：状态是第一视觉变量（状态标 + 带色的状态词），名字与时长其次，在哪与进度再次。
+private struct StatusBlock: View {
     let session: PiSessionState
     let project: Project?
     let deliveries: [DeliveryRequest]
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(session.title).font(.title2.weight(.bold)).foregroundStyle(palette.ink)
-                HStack(spacing: 6) {
-                    PiStateDot(state: session.state, size: 6)
-                    PiActivityLine(lead: [PiPlace.name(of: session, project: project), session.state.label], font: .subheadline)
-                        .foregroundStyle(palette.ink2)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(session.title).font(.title2.weight(.bold)).foregroundStyle(palette.ink).lineLimit(2)
                     Spacer(minLength: 8)
                     PiElapsed(session: session)
                 }
+                HStack(spacing: 6) {
+                    PiStateDot(state: session.state, size: 8)
+                    Text(session.state.label).font(.subheadline.weight(.semibold)).foregroundStyle(session.state.tint(palette))
+                    if let place = PiPlace.name(of: session, project: project) {
+                        Text("· \(place)").font(.subheadline).foregroundStyle(palette.ink3).lineLimit(1)
+                    }
+                }
                 .accessibilityElement(children: .combine)
-                if session.state.isWorking, let detail = session.detail, !detail.isEmpty {
-                    PiActivityLine(detail: detail, detailIsCode: session.detailIsCode).foregroundStyle(palette.ink3)
+                if session.state.isWorking, let action = PiProgress.line(of: session) {
+                    Text(action).font(session.detailIsCode ? .subheadline.monospaced() : .subheadline).foregroundStyle(palette.ink2).lineLimit(2)
                 }
             }
             switch session.state.known {
@@ -93,10 +73,12 @@ private struct DigestHeader: View {
                     QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
                 } else {
                     // 只能在 Pi 里答的问题：原文照抄（含换行与选项），是此刻最需要看的东西
-                    Callout(tint: palette.attention, title: "等你确认", text: session.question?.displayText ?? session.detail ?? "")
+                    Callout(
+                        tint: palette.attention, title: "等你确认", text: session.question?.displayText ?? session.detail ?? "",
+                        prominent: true, note: "这个问题要在 Mac 上回答")
                 }
             case .error:
-                Callout(tint: palette.failure, title: "出错", text: session.detail ?? "Mac 没有说明原因")
+                Callout(tint: palette.failure, title: "出错", text: session.detail ?? "Mac 没有说明原因", prominent: false)
             default:
                 EmptyView()
             }
@@ -104,21 +86,25 @@ private struct DigestHeader: View {
     }
 }
 
-/// 有色调的提示块：等你确认（注意色）、出错（失败色）。
+/// 有色调的提示块：等你确认（注意色，正文放大）、出错（失败色）。
 private struct Callout: View {
     let tint: Color
     let title: String
     let text: String
+    let prominent: Bool
+    /// 正文下的一句说明（如"要在 Mac 上回答"）。
+    var note: String?
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.footnote.weight(.semibold)).foregroundStyle(tint)
             if !text.isEmpty {
-                Text(text).font(.body).foregroundStyle(palette.ink)
+                Text(text).font(prominent ? .title3.weight(.medium) : .body).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
+            if let note { Text(note).font(.footnote).foregroundStyle(palette.ink3) }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -137,24 +123,34 @@ private struct QuestionCard: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var requestID: UUID?
+    /// 点了的那个回答：它的按钮显示送达中。
+    @State private var tapped: PiAnswerValue?
     @State private var writeError: String?
     @State private var text = ""
 
+    @Environment(AppServices.self) private var services
+
     private var sent: DeliveryRequest? { requestID.flatMap { id in deliveries.first { $0.id == id } } }
     private var failed: Bool { sent?.status == .known(.failed) }
-    private var answering: Bool { requestID != nil && !failed }
+    /// 点下即算在答（请求写成前也是），按钮立刻停用，不重复作答。
+    private var answering: Bool { tapped != nil && writeError == nil && !failed }
     private var failure: String? { writeError ?? (failed ? sent?.resultDetail ?? "没能送达" : nil) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("等你确认").font(.footnote.weight(.semibold)).foregroundStyle(palette.attention)
             if !question.text.isEmpty {
-                Text(question.text).font(.body).foregroundStyle(palette.ink)
+                // 这一页最醒目的东西
+                Text(question.text).font(.title3.weight(.medium)).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
-            controls.disabled(answering)
-            if answering {
+            // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
+            controls.disabled(answering || !services.reachesPiHost)
+            if !services.reachesPiHost {
+                Text("\(SyncSummary(services.syncStatus).title)，现在答不了；同步恢复后再答，或在 Mac 上回答")
+                    .font(.footnote).foregroundStyle(palette.ink3)
+            } else if answering, sent?.status == .known(.succeeded) {
                 Text("已答，等 Mac 上的 Pi 继续").font(.footnote).foregroundStyle(palette.ink3)
             } else if let failure {
                 Text(failure).font(.footnote).foregroundStyle(palette.failure)
@@ -172,30 +168,47 @@ private struct QuestionCard: View {
         switch question.kind.known {
         case .confirm:
             HStack(spacing: 10) {
-                Button { answer(.confirmed(true)) } label: { Text("是").frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent).tint(palette.attention)
-                Button { answer(.confirmed(false)) } label: { Text("否").frame(maxWidth: .infinity) }
-                    .buttonStyle(.bordered)
+                choice(.confirmed(false), prominent: false)
+                choice(.confirmed(true), prominent: true)
             }
         case .select:
             VStack(spacing: 8) {
-                ForEach(question.options, id: \.self) { option in
-                    Button { answer(.option(option)) } label: {
-                        Text(option).frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading)
-                    }
-                    .buttonStyle(.bordered)
-                }
+                ForEach(question.options, id: \.self) { option in choice(.option(option), prominent: false, leading: true) }
             }
         case .text:
             HStack(spacing: 8) {
-                TextField("回答", text: $text).textFieldStyle(.roundedBorder).onSubmit(submitText)
-                Button("发送", action: submitText)
-                    .buttonStyle(.borderedProminent).tint(palette.attention)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                TextField("回答", text: $text)
+                    .onSubmit(submitText)
+                    .padding(.horizontal, 12).frame(minHeight: 44)
+                    .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
+                Button(action: submitText) {
+                    if tapped != nil && answering { ProgressView().controlSize(.small) } else { Text("发送") }
+                }
+                .buttonStyle(AnswerButtonStyle(prominent: true))
+                .fixedSize()
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         case nil:
             EmptyView()
         }
+    }
+
+    /// 一个回答按钮：点了的那个转为"送达中"，别的变淡。
+    private func choice(_ value: PiAnswerValue, prominent: Bool, leading: Bool = false) -> some View {
+        let busy = answering && tapped == value
+        return Button { answer(value) } label: {
+            HStack(spacing: 8) {
+                if busy {
+                    ProgressView().controlSize(.small)
+                    Text("送达中")
+                } else {
+                    Text(value.label).multilineTextAlignment(leading ? .leading : .center)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: leading && !busy ? .leading : .center)
+        }
+        .buttonStyle(AnswerButtonStyle(prominent: prominent))
+        .accessibilityLabel(busy ? "\(value.label)，送达中" : value.label)
     }
 
     private func submitText() {
@@ -205,7 +218,10 @@ private struct QuestionCard: View {
 
     /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
     private func answer(_ value: PiAnswerValue) {
+        guard services.reachesPiHost else { return }
         writeError = nil
+        requestID = nil
+        withAnimation(Motion.quick) { tapped = value }
         Task {
             do {
                 requestID = try await workspace.services.answer(value, to: session).id
@@ -216,34 +232,76 @@ private struct QuestionCard: View {
     }
 }
 
-/// 最近一轮：你最后说的、它最后答的。回答较长时先收起（约一屏内），可展开。
+/// 问题卡上的回答按钮：纸面描边或墨色实底，触摸目标 44pt；按下只变淡，不缩放（减弱动态效果下也一样）。
+private struct AnswerButtonStyle: ButtonStyle {
+    let prominent: Bool
+    @Environment(\.palette) private var palette
+    @Environment(\.isEnabled) private var enabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        configuration.label
+            .font(.body.weight(.medium))
+            .foregroundStyle(prominent ? palette.onAccent : palette.ink)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(prominent ? palette.accent : palette.paper, in: shape)
+            .overlay { if !prominent { shape.strokeBorder(palette.hair) } }
+            .contentShape(shape)
+            // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
+            .opacity(enabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
+            .animation(configuration.isPressed ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
+    }
+}
+
+/// 最近一轮：上面一行弱化的"你说"（点开看全句），下面 Pi 答的全文；回答较长时先折起，可展开。
 private struct RecentRound: View {
     let session: PiSessionState
     @Environment(\.palette) private var palette
-    @State private var expanded = false
+    @State private var replyExpanded = false
+    @State private var promptExpanded = false
 
     /// 收起时回答显示的行数；超过这么多行（或字数）才给"展开"。
     private static let collapsedLines = 8
     private static let collapsedCharacters = 320
+    private static let collapsedHeight: CGFloat = 200
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DigestLabel(text: "最近一轮")
-            VStack(alignment: .leading, spacing: 14) {
-                if session.lastPrompt == nil && session.lastReply == nil {
-                    Text("还没有近况。Pi 回答之后，这里会显示你最后问的和它最后答的。")
-                        .font(.subheadline).foregroundStyle(palette.ink3)
-                }
+        if session.lastPrompt == nil && session.lastReply == nil {
+            Text("还没有近况。Pi 回答之后，这里会显示它最后答的。")
+                .font(.subheadline).foregroundStyle(palette.ink3)
+                .padding(.horizontal, 4)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
                 if let prompt = session.lastPrompt {
-                    turn("你说", prompt)
+                    Button { withAnimation(Motion.quick) { promptExpanded.toggle() } } label: {
+                        Text("你说：\(prompt)").font(.footnote).foregroundStyle(palette.ink3)
+                            .lineLimit(promptExpanded ? nil : 1)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(promptExpanded ? "收起" : "展开全句")
                 }
                 if let reply = session.lastReply {
                     let long = reply.count > Self.collapsedCharacters
                         || reply.split(separator: "\n", omittingEmptySubsequences: false).count > Self.collapsedLines
                     VStack(alignment: .leading, spacing: 6) {
-                        turn("Pi 答", reply, lineLimit: long && !expanded ? Self.collapsedLines : nil)
+                        // 折起时截到约八行高，底部淡出，看得出下面还有
+                        MarkdownText(source: reply)
+                            .frame(maxHeight: long && !replyExpanded ? Self.collapsedHeight : nil, alignment: .top)
+                            .clipped()
+                            .mask {
+                                if long && !replyExpanded {
+                                    LinearGradient(stops: [.init(color: .black, location: 0.75), .init(color: .clear, location: 1)],
+                                                   startPoint: .top, endPoint: .bottom)
+                                } else {
+                                    Color.black
+                                }
+                            }
                         if long {
-                            Button(expanded ? "收起" : "展开全文") { withAnimation(Motion.quick) { expanded.toggle() } }
+                            Button(replyExpanded ? "收起" : "展开全文") { withAnimation(Motion.quick) { replyExpanded.toggle() } }
                                 .font(.subheadline.weight(.medium))
                                 .frame(minHeight: 44)
                         }
@@ -255,20 +313,50 @@ private struct RecentRound: View {
             .paper(radius: 16)
         }
     }
+}
 
-    private func turn(_ who: String, _ text: String, lineLimit: Int? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(who).font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
-            Text(text).font(.body).foregroundStyle(palette.ink)
-                .lineLimit(lineLimit)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
+/// 发过去的请求，贴在回复框上方：默认只有最新一条，更早的折成"更早 N 条"，点开在它上方列出。
+struct DeliveryStack: View {
+    let deliveries: [DeliveryRequest]
+    /// 还能发给它的会话；nil 时不给重发。
+    let session: PiSessionState?
+    @Environment(\.palette) private var palette
+    @State private var showsEarlier = false
+
+    private static let earlierMaxHeight: CGFloat = 220
+
+    var body: some View {
+        if let latest = deliveries.last {
+            let earlier = deliveries.dropLast()
+            VStack(alignment: .leading, spacing: 0) {
+                if !earlier.isEmpty {
+                    Button(showsEarlier ? "收起更早的" : "更早 \(earlier.count) 条") { withAnimation(Motion.quick) { showsEarlier.toggle() } }
+                        .buttonStyle(.plain)
+                        .font(.footnote.weight(.medium)).foregroundStyle(palette.ink3)
+                        .padding(.horizontal, 16).frame(minHeight: 36)
+                    if showsEarlier {
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                ForEach(earlier) { request in
+                                    DeliveryRow(request: request, session: session)
+                                    Divider().padding(.leading, 16)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: Self.earlierMaxHeight)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                    }
+                }
+                DeliveryRow(request: latest, session: session)
+            }
+            .paper(radius: 16)
+            .animation(Motion.quick, value: deliveries.map(\.id))
         }
-        .accessibilityElement(children: .combine)
     }
 }
 
-/// 发给会话的一条请求（会话页与活动页共用，送达情况只在这里写）：内容、方式、送达中 / 已送达多久 / 没能送达与原因。
+/// 发给会话的一条请求（会话页里贴在回复框上方的那几条，送达情况只在这里写）：内容、方式、送达中 / 已送达多久 / 没能送达与原因。
 /// 失败时可以重发（会话还在时）或移除。
 struct DeliveryRow: View {
     let request: DeliveryRequest
@@ -305,14 +393,14 @@ struct DeliveryRow: View {
         }
     }
 
-    /// 作答显示答了什么；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）。
+    /// 作答显示答了什么；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）。送不到 Mac 时也不给重发。
     private var title: String {
         if let answer = request.answer { return "答：\(answer.value.label)" }
         let title = CardText(request.content).title
         return title.isEmpty ? "图片" : title
     }
 
-    private var retryable: Bool { session != nil && request.answer == nil }
+    private var retryable: Bool { session != nil && request.answer == nil && workspace.services.reachesPiHost }
 
     /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
     private func retry() {
