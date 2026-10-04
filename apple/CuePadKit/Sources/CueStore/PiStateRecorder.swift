@@ -7,7 +7,7 @@ extension CueStore {
   }
 
   func writePiState(
-    sessionID: String, hostID: String, title: String, projectID: UUID?, state: PiWorkState, detail: String?,
+    sessionID: String, hostID: String, title: String, folder: String?, projectID: UUID?, state: PiWorkState, detail: String?,
     notify: PiAlert?, stateSince: Date
   ) throws {
     try write {
@@ -15,7 +15,7 @@ extension CueStore {
       let id = DeterministicID.uuid("pi-session/\(sessionID)")
       let record = PiSessionState(
         id: id, sessionID: sessionID, hostID: hostID, title: title, projectID: projectID, state: .known(state), detail: detail,
-        notify: notify.map(Open.known), stateSince: stateSince, createdAt: now, modifiedAt: now)
+        folder: folder, notify: notify.map(Open.known), stateSince: stateSince, createdAt: now, modifiedAt: now)
       let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
         .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
@@ -55,12 +55,14 @@ public actor PiStateRecorder {
     var state: PiWorkState
     var detail: String?
     var title: String
+    var folder: String?
     var projectID: UUID?
   }
 
   private struct Session {
     var observed: PiWorkState?
     var title = ""
+    var folder: String?
     var projectID: UUID?
     var written: Content?
     var writtenAt: Date?
@@ -84,22 +86,24 @@ public actor PiStateRecorder {
   }
 
   public func update(
-    sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, projectID: UUID? = nil
+    sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,
+    projectID: UUID? = nil
   ) async throws {
     var session = sessions[sessionID] ?? Session()
     let previous = session.observed
     session.observed = state
     if let title { session.title = title }
+    if let folder { session.folder = folder }
     if let projectID { session.projectID = projectID }
 
-    let content = Content(state: state, detail: detail, title: session.title, projectID: session.projectID)
+    let content = Content(state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID)
     if content == session.written {
       cancelPending(&session)
       sessions[sessionID] = session
       return
     }
     let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
-    let renamed = session.written.map { $0.title != content.title || $0.projectID != content.projectID } ?? true
+    let renamed = session.written.map { $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID } ?? true
     let now = timing.now()
     guard startsOrEndsWork || renamed || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {
       session.pending = (state, detail)
@@ -140,7 +144,8 @@ public actor PiStateRecorder {
     guard var session = sessions[sessionID], let pending = session.pending else { return }
     session.timer = nil
     session.pending = nil
-    let content = Content(state: pending.state, detail: pending.detail, title: session.title, projectID: session.projectID)
+    let content = Content(
+      state: pending.state, detail: pending.detail, title: session.title, folder: session.folder, projectID: session.projectID)
     let write = commit(sessionID, &session, content, at: timing.now())
     sessions[sessionID] = session
     // 定时写入没有调用方可报告；记为未写入，下一次更新会重写
@@ -169,7 +174,8 @@ public actor PiStateRecorder {
     session.stateSince = since
     return { [store, hostID] in
       try await store.writePiState(
-        sessionID: sessionID, hostID: hostID, title: content.title, projectID: content.projectID, state: content.state,
+        sessionID: sessionID, hostID: hostID, title: content.title, folder: content.folder, projectID: content.projectID,
+        state: content.state,
         detail: content.detail, notify: notify, stateSince: since)
     }
   }

@@ -83,6 +83,7 @@ DEFINE SCHEMA
         createdAt     INT64,
         modifiedAt    INT64,
         notify        STRING QUERYABLE,
+        folder        ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

@@ -25,6 +25,11 @@ public actor CueStore {
         try connection.exec(Schema.create)
         try connection.exec("PRAGMA user_version = \(Schema.version)")
       }
+    } else if version < Schema.version {
+      _ = try connection.transaction {
+        for upgrade in Schema.upgrades[(version - 1)...] { try connection.exec(upgrade) }
+        try connection.exec("PRAGMA user_version = \(Schema.version)")
+      }
     } else if version != Schema.version {
       throw CueStoreError.unsupportedSchemaVersion(version)
     }

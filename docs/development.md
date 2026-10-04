@@ -35,7 +35,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 | CuePadKit 模块 | 职责 | 平台 |
 | --- | --- | --- |
 | CueText | 卡片正文的纯文本模型：解析/序列化、分块、变量、光标规范化；只依赖 Foundation | 全部 |
-| CueStore | 系统 SQLite3 直连（零第三方依赖）的唯一事实源：表结构（带版本号，别的版本建的库拒绝打开）、仓储、FTS5 搜索、资料库位置、旧库导入；写事务提交后发布变更，跨进程经 Darwin 通知唤醒其他进程的观察者 | 全部 |
+| CueStore | 系统 SQLite3 直连（零第三方依赖）的唯一事实源：表结构（带版本号：旧结构就地升级，更新版本建的库拒绝打开）、仓储、FTS5 搜索、资料库位置、旧库导入；写事务提交后发布变更，跨进程经 Darwin 通知唤醒其他进程的观察者 | 全部 |
 | CueEditor | TextKit 2 编辑器：内联图片、分块、变量高亮；AppKit/UIKit 各一层宿主 | 全部 |
 | CueSync | 直接用 CKSyncEngine 同步 Store 的记录；图片以 CKAsset 同步；正文用加密字段 | 全部 |
 | CueDispatch | 通用投送：权限预检 → 写剪贴板 → 激活目标 → 定向 `Cmd+V` | macOS |

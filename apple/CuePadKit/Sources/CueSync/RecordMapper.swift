@@ -9,7 +9,7 @@ enum RecordMapper {
     .cards: ["body", "variableValues"],
     .tasks: ["content"],
     .sendRecords: ["content", "targetName", "targetRef"],
-    .piSessionStates: ["title", "detail"],
+    .piSessionStates: ["title", "detail", "folder"],
     .deliveryRequests: ["content", "targetName", "targetRef", "resultDetail"],
   ]
 

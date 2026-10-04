@@ -30,6 +30,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var state: Open<PiWorkState>
   /// 工具名、等待确认的问题、错误信息等。
   public var detail: String?
+  /// 工作目录的最后一段（文件夹名），不含完整路径；手机据此在没有绑定项目时写出会话"在哪"。旧版本写的记录没有。
+  public var folder: String?
   /// 这次写入是否要通知手机；见 `PiAlert`。
   public var notify: Open<PiAlert>?
   /// 进入当前状态的时间。
@@ -81,13 +83,13 @@ public enum DeliveryOutcome: Sendable {
 
 extension PiSessionState: Record {
   static let table = Table.piSessionStates
-  static let columns = ["id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify"]
-  var bindings: [any SQLBindable] { [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue] }
+  static let columns = ["id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder"]
+  var bindings: [any SQLBindable] { [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), sessionID: row.text(1), hostID: row.text(2), title: row.text(3), projectID: row.uuidOrNil(4),
-      state: Open(rawValue: row.text(5)), detail: row.textOrNil(6), notify: row.textOrNil(10).map(Open.init(rawValue:)),
-      stateSince: row.date(7), createdAt: row.date(8), modifiedAt: row.date(9))
+      state: Open(rawValue: row.text(5)), detail: row.textOrNil(6), folder: row.textOrNil(11),
+      notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), createdAt: row.date(8), modifiedAt: row.date(9))
   }
 }
 
