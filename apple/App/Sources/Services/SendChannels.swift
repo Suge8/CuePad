@@ -75,13 +75,8 @@ struct LiveSendChannels: SendChannels {
 }
 
 extension PiAgentState {
-    /// 会话正在处理一轮：此时发消息要么插话要么排队。
-    var isBusy: Bool {
-        switch self {
-        case .thinking, .outputting, .tool, .waitingUser: true
-        case .idle, .done, .error: false
-        }
-    }
+    /// 会话正在处理一轮：此时发消息要么插话要么排队（与手机同一条规则，见 `PiWorkState.isTurnRunning`）。
+    var isBusy: Bool { syncRepresentation.state.isTurnRunning }
 }
 
 /// macOS 专属依赖；`live` 是生产装配，测试逐项替换。

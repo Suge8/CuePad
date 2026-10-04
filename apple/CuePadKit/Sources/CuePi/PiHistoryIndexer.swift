@@ -44,11 +44,12 @@ public struct PiHistoryIndexer: Sendable {
 
         // 回填时记住最近修改的那批文件（正在被 Pi 写入的最可能是它们）：之后的事件（包括 FSEvents
         // 对回填前写入的迟到通知）落到缓存上，不会重读也不会重复发出
-        for (rank, file) in Self.sessionFiles(under: root).enumerated() {
+        let files = Self.sessionFiles(under: root)
+        for (rank, file) in files.enumerated() {
             if Task.isCancelled { return }
             await index(file, remember: rank < Self.liveCacheLimit)
         }
-        continuation.yield(.backfillFinished)
+        continuation.yield(.backfillFinished(sessionFiles: files))
 
         for await paths in watcher.paths {
             if Task.isCancelled { return }
@@ -56,18 +57,30 @@ public struct PiHistoryIndexer: Sendable {
                 for file in Self.sessionFiles(under: root) { await index(file, remember: true) }
                 continue
             }
-            for path in Set(paths) where path.hasSuffix(".jsonl") {
+            for path in Set(paths) where Self.isSessionFile(path, under: root) {
                 await index(URL(filePath: path), remember: true)
             }
         }
     }
 
-    /// `<root>/<项目目录>/*.jsonl`，最近修改的在前。
+    /// 会话文件只有 `<root>/<项目目录>/*.jsonl`，与 Pi 自己的会话列表一致；更深的（如 FireCode 子代理的
+    /// `<项目目录>/subagents/*.jsonl`）不是会话列表里的会话。
+    private static func isSessionFile(_ path: String, under root: URL) -> Bool {
+        let url = URL(filePath: path)
+        // FSEvents 报 /private/var/…，解析符号链接后的 root 是 /var/…：两边都解析再比
+        return url.pathExtension == "jsonl"
+            && url.deletingLastPathComponent().deletingLastPathComponent().resolvingSymlinksInPath().path == root.resolvingSymlinksInPath().path
+    }
+
+    /// 全部会话文件，最近修改的在前。
     private static func sessionFiles(under root: URL) -> [URL] {
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return [] }
         var files: [(URL, Date)] = []
-        for case let url as URL in walker where url.pathExtension == "jsonl" {
+        for case let url as URL in walker {
+            guard walker.level == 2 else { continue }
+            walker.skipDescendants()  // 项目目录里的子目录（如 subagents/）不进
+            guard url.pathExtension == "jsonl" else { continue }
             let values = try? url.resourceValues(forKeys: Set(keys))
             guard values?.isRegularFile == true else { continue }
             files.append((url, values?.contentModificationDate ?? .distantPast))

@@ -144,7 +144,7 @@ struct PiHistoryPersistenceTests {
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
         let events = AsyncStream<PiHistoryEvent> { continuation in
             continuation.yield(.updated(try! PiHistory.index(file: file, from: nil)))
-            continuation.yield(.backfillFinished)
+            continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
         }
 
@@ -169,6 +169,23 @@ struct PiHistoryPersistenceTests {
         let resumed = try PiHistory.index(file: file, from: checkpoint)
         #expect(resumed.bytesRead == reply.utf8.count + 1)
         #expect(resumed.history.displayName == "fix the build")
+    }
+
+    /// 历史与 Pi 自己的会话列表一致：回填没看到的文件（已删除，或子代理会话这类不在会话列表里的）不再留在历史里。
+    @Test func 回填完成后_不在会话列表里的旧行被删除() async throws {
+        let rig = TestApp()
+        let file = try sessionFile(in: rig, lines: [header, firstPrompt])
+        try await rig.services.store.upsertPiSession(StoredPiSession(
+            id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now))
+        let events = AsyncStream<PiHistoryEvent> { continuation in
+            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil)))
+            continuation.yield(.backfillFinished(sessionFiles: [file]))
+            continuation.finish()
+        }
+
+        await rig.services.consumePiHistory(events)
+
+        #expect(try await rig.services.store.piSessions().map(\.id) == ["sess-1"])
     }
 }
 

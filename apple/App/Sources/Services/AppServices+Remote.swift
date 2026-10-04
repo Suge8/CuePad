@@ -27,12 +27,13 @@ extension AppServices {
     }
 
     private func recordPiState(of session: CuePi.PiSession) async throws {
-        let (state, detail) = session.state.syncRepresentation
+        let (state, detail) = session.syncRepresentation
         try await piStateRecorder.update(
             sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
             folder: session.cwd.lastPathComponent,
             projectID: try await store.project(containing: session.cwd)?.id,
-            recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question))
+            recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question),
+            times: PiTimes(stateSince: session.stateSince, busySince: session.busySince))
     }
 
     // MARK: 投送请求（手机发来的与本机界面写的）
@@ -113,6 +114,14 @@ extension AppServices {
     }
 }
 
+extension CuePi.PiSession {
+    /// 写进同步记录（与 Mac 的近况页）的状态与一句话说明：会话自己没有说明时写子代理摘要。
+    var syncRepresentation: (state: PiWorkState, detail: String?) {
+        let (state, detail) = state.syncRepresentation
+        return (state, detail ?? subagentSummary)
+    }
+}
+
 extension PiAgentState {
     /// 写进同步记录的状态与一句话说明。
     var syncRepresentation: (state: PiWorkState, detail: String?) {
@@ -120,6 +129,7 @@ extension PiAgentState {
         case .idle, .done: (.settled, nil)
         case .thinking: (.thinking, nil)
         case .outputting: (.outputting, nil)
+        case .delegating: (.delegating, nil)  // 说明写子代理摘要
         case .tool(let name, _, let detail): (.tool, detail.map { "\(name) · \($0)" } ?? name)
         case .waitingUser(_, let title): (.waitingForUser, title)
         case .error(let message): (.error, PiErrorSummary(message).line)  // 手机上没有悬停看原文

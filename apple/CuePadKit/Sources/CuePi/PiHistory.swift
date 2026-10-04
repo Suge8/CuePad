@@ -39,8 +39,9 @@ public struct PiHistoryUpdate: Sendable {
 
 public enum PiHistoryEvent: Sendable {
     case updated(PiHistoryUpdate)
-    /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`
-    case backfillFinished
+    /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`。
+    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除等）可以丢掉
+    case backfillFinished(sessionFiles: [URL])
 }
 
 /// Pi 会话文件（JSONL，v3 树结构）的解析。当前分支 = 从文件最后一个条目沿 `parentId` 回溯到根，
@@ -63,7 +64,8 @@ public enum PiHistory {
         try handle.seek(toOffset: start)
         var carry = Data()
         var consumed = start
-        var block = [UInt8](repeating: 0, count: blockSize)
+        // 缓冲按剩余字节分配：启动回填时绝大多数文件没有新内容，每个都分配并清零 8 MB 是回填的主要开销
+        var block = [UInt8](repeating: 0, count: Int(min(UInt64(blockSize), size - start)))
         while true {
             let n = read(handle.fileDescriptor, &block, block.count)
             if n < 0 { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }

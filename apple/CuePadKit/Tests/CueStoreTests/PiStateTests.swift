@@ -118,6 +118,23 @@ import Testing
     #expect(try RawDB(fixture.url).count("piSessionStates") == 2)
   }
 
+  /// 计时基准由调用方（扩展）给出、原样写入：同一段连续处理里思考与工具切换时两者都不变。
+  @Test func timesFromTheCallerAreWrittenAsIs() async throws {
+    let recorder = recorder()
+    let start = clock.now.addingTimeInterval(-90)
+    let times = PiTimes(stateSince: start, busySince: start)
+    try await recorder.update(sessionID: "s1", state: .thinking, times: times)
+    clock.advance(.seconds(10))
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, times: PiTimes(stateSince: clock.now, busySince: start))
+    let waiting = try #require(try await states()["s1"])
+    #expect(waiting.stateSince == clock.now && waiting.busySince == start)
+
+    clock.advance(.seconds(10))
+    try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: clock.now, busySince: nil))
+    let idle = try #require(try await states()["s1"])
+    #expect(idle.stateSince == clock.now && idle.busySince == nil)
+  }
+
   @Test func recapChangesAreWrittenImmediatelyAndAClearedQuestionIsWrittenAsNil() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "修好登录"))

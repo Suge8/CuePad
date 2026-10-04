@@ -48,7 +48,7 @@ extension PiAgentState {
 }
 
 /// 侧栏与菜单栏里一个会话的文字：主行是会话显示名，副行是所在（`PiPlace`：项目名或文件夹名）与状态（"CuePad · 思考中"）；
-/// 需要处理时（出错、等你确认）副行接着写原因的开头，悬停看全文。
+/// 需要处理时（出错、等你确认）副行接着写原因的开头，悬停看全文；否则有子代理时接着写子代理摘要。
 struct PiSessionLabel: View {
     let session: CuePi.PiSession
     let project: Project?
@@ -62,7 +62,7 @@ struct PiSessionLabel: View {
             Text(session.displayName).font(nameFont).lineLimit(1)
             PiActivityLine(
                 lead: [PiPlace.name(project: project, folder: session.cwd.lastPathComponent, besides: session.displayName), state.label],
-                detail: state.needsAttention ? state.detail : nil,
+                detail: state.needsAttention ? state.detail : session.subagentSummary,
                 font: lineFont, full: state.fullDetail)
                 .foregroundStyle(state.labelColor(palette))
         }

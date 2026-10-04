@@ -102,7 +102,7 @@ private struct PiColumn: View {
                     PiStateDot(state: session.state.work, size: 5)
                     Text(session.displayName).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink)
                     Spacer()
-                    Text("已持续 \(Text(session.stateSince, style: .timer))").font(.system(size: 11).monospacedDigit()).foregroundStyle(palette.ink3)
+                    PiElapsed(state: session.state.work, stateSince: session.stateSince, busySince: session.busySince, font: .system(size: 11))
                 }
                 Text(session.state.label).font(.system(size: 12, weight: .medium)).foregroundStyle(session.state.labelColor(palette))
                 PiDetail(state: session.state)

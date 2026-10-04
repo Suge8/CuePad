@@ -35,6 +35,8 @@ struct IOSWorkflowTests {
         (.thinking, false, [.steer, .followUp, .paste]),
         (.tool, false, [.steer, .followUp, .paste]),
         (.waitingForUser, false, [.steer, .followUp, .paste]),
+        // 等子代理：算工作中，但 Pi 自己这轮已经歇下，消息直接开始新的一轮（与 Mac 同一条规则）
+        (.delegating, false, [.send, .paste]),
         (.settled, true, [.send]),
         (.outputting, true, [.steer, .followUp]),
     ])

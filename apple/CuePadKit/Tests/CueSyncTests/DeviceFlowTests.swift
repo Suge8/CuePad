@@ -21,14 +21,16 @@ import Testing
   @Test func piSessionStateWrittenOnTheMacIsVisibleOnThePhoneAndKeptAsEndedWhenTheSessionEnds() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", question: "确认写入？\n是\n否")
+    let times = PiTimes(stateSince: Date(timeIntervalSince1970: 2_000), busySince: Date(timeIntervalSince1970: 1_000))
     try await recorder.update(
-      sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad", recap: recap)
+      sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad", recap: recap, times: times)
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.piSessionStates().first)
     #expect(seen.sessionID == "s1" && seen.state == .known(.waitingForUser) && seen.detail == "确认写入？" && seen.title == "fix bug")
     #expect(seen.folder == "cuepad")  // 手机没有工作目录，副行靠它写出文件夹名
     #expect(seen.lastPrompt == recap.lastPrompt && seen.lastReply == recap.lastReply && seen.question == recap.question)
+    #expect(seen.stateSince == times.stateSince && seen.busySince == times.busySince)
 
     try await recorder.update(sessionID: "s1", state: .settled)
     try await cloud.exchange()

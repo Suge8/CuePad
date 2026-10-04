@@ -106,6 +106,27 @@ struct RealPiTests {
         }
     }
 
+    /// 一段连续处理的计时：思考与工具来回切换时 `stateSince`、`busySince` 都不变（都是开始那一刻），歇下来后 `busySince` 为 nil。
+    @Test func aWorkingStretchKeepsOneClockAcrossThinkingAndToolsAndClearsWhenIdle() async throws {
+        try await withRig { pi, bridge, _ in
+            let log = ChangeLog(bridge)
+            try pi.prompt("[[tool:sleep 0.3]]")
+            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
+            let working = log.changes.compactMap { change -> PiSession? in
+                guard case .stateChanged(let session, _) = change else { return nil }
+                switch session.state {
+                case .thinking, .outputting, .tool: return session
+                default: return nil
+                }
+            }
+            #expect(Set(working.map { "\($0.state)" }).count >= 2, "至少经过思考与工具两种细状态")
+            let start = try #require(working.first?.busySince)
+            #expect(working.allSatisfy { $0.busySince == start && $0.stateSince == start })
+            let idle = try #require(bridge.sessions.first)
+            #expect(idle.busySince == nil && idle.stateSince > start)
+        }
+    }
+
     @Test func toolExecutionShowsToolStateWithItsName() async throws {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)
@@ -212,6 +233,17 @@ struct RealPiTests {
             try pi.prompt("[[tool:echo TOOL-OUTPUT-42]]")
             try await eventually("工具轮的最终回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "TOOL_DONE" }
             #expect(bridge.sessions.first?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
+
+            // 整条只由 `<名字>\n…\n</名字>` 块组成的是扩展投进来的机器消息：不算你说的，它触发的那轮回答照常算
+            try pi.prompt("<some_event>\n子任务完成\n</some_event>\n<other_note>\n两行\n内容\n</other_note>")
+            try await eventually("机器消息那轮的回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.contains("子任务完成") == true }
+            #expect(bridge.sessions.first?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
+
+            // 块与块之间夹着真人文字就不是机器消息
+            let mixed = "<some_event>\n机器一\n</some_event>\n请解释这个结果\n<some_event>\n机器二\n</some_event>"
+            try pi.prompt(mixed)
+            try await eventually("夹着真人文字的那轮回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.contains("请解释这个结果") == true }
+            #expect(bridge.sessions.first?.lastPrompt?.contains("请解释这个结果") == true)
 
             let long = String(repeating: "长", count: 1300)
             try pi.prompt(long)

@@ -8,6 +8,8 @@ public enum PiAgentState: Sendable, Equatable {
     case outputting
     /// `name` 是最近开始的工具，`running` 是并行执行中的全部工具名，`detail` 是该工具调用的一句话摘要（可空）
     case tool(name: String, running: [String], detail: String? = nil)
+    /// 自己这轮已经歇下，还有子代理在飞（FireCode 的在飞数）：仍在处理
+    case delegating
     /// 扩展发起的 `ctx.ui` 弹窗（Pi 没有内置工具审批）
     case waitingUser(kind: String?, title: String?)
     /// 一轮结束且 Pi 不会再自动继续（`agent_settled`）
@@ -60,7 +62,11 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// 该会话加载的扩展版本；低于 `PiExtensionBundle.version` 说明需要重启会话才能用上新扩展
     public let extensionVersion: Int
     public internal(set) var state: PiAgentState
+    /// 进入当前粗状态（工作中、等你确认、出错、空闲）的时间：思考、工具、等子代理之间切换不变。扩展 v6 起，旧扩展是细状态的切换时间
     public internal(set) var stateSince: Date
+    /// 这段连续处理开始的时间：离开空闲起，到彻底歇下（自己歇下且没有子代理在飞）为止，中间等你确认也不断；
+    /// 空闲、出错时为 nil。扩展 v6 起，旧扩展为 nil
+    public internal(set) var busySince: Date? = nil
     /// `/name` 设的会话名（扩展 v3 起上报）
     public internal(set) var name: String? = nil
     /// 首条用户消息的开头（扩展 v3 起上报）
@@ -71,12 +77,53 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var lastReply: String? = nil
     /// 正在等用户回答的弹窗文案：标题、说明与各选项，换行分隔（≤500 字符）；不在等待时为 nil
     public internal(set) var question: String? = nil
+    /// 本会话在同一进程里开的子代理（扩展 v5 起；FireCode 的子代理是进程内子会话，不作为独立会话出现）
+    public internal(set) var subagents: [PiSubagent] = []
+
+    /// 子代理的一行摘要，如"子代理：ui 工作中 · core 空闲"；没有子代理时为 nil。
+    public var subagentSummary: String? {
+        subagents.isEmpty ? nil : "子代理：" + subagents.map { "\($0.name) \($0.activity.label)" }.joined(separator: " · ")
+    }
 
     public var hasOutdatedExtension: Bool { extensionVersion < PiExtensionBundle.version }
 
     /// 会话的显示名，规则见 `PiSessionName`。旧扩展不报名字与消息，显示工作目录名。
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
+    }
+}
+
+/// 父会话里的一个子代理：名字与此刻在干什么。
+public struct PiSubagent: Sendable, Equatable, Decodable {
+    public enum Activity: Sendable, Equatable {
+        case working, waitingForUser, idle, error
+
+        public var label: String {
+            switch self {
+            case .working: "工作中"
+            case .waitingForUser: "等你确认"
+            case .idle: "空闲"
+            case .error: "出错"
+            }
+        }
+    }
+
+    public var name: String
+    /// 扩展上报的状态种类（同 `state.kind`）
+    public var kind: String
+
+    public init(name: String, kind: String) {
+        self.name = name
+        self.kind = kind
+    }
+
+    public var activity: Activity {
+        switch kind {
+        case "thinking", "outputting", "tool", "delegating": .working
+        case "waiting_user": .waitingForUser
+        case "error": .error
+        default: .idle
+        }
     }
 }
 

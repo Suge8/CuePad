@@ -249,6 +249,22 @@ struct HistoryIndexerTests {
         if case .backfillFinished = log.events.last! {} else { Issue.record("backfillFinished 应是最后一个事件") }
     }
 
+    /// 与 Pi 的会话列表一致：只认 `<root>/<项目目录>/*.jsonl`。子代理会话（FireCode 写在 `<项目目录>/subagents/`）不是历史会话。
+    @Test func subagentSessionsAreNotHistoryLikePisSessionList() async throws {
+        let top = try makeSession("p1", "a.jsonl", prompt: "top", modified: Date())
+        try makeSession("p1/subagents", "w.jsonl", prompt: "worker", modified: Date())
+        let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in nil })
+        try await eventually("回填完成") { log.finishedBackfill }
+        #expect(log.updates.map { $0.file.lastPathComponent } == ["a.jsonl"])
+        guard case .backfillFinished(let files) = log.events.last! else { Issue.record("backfillFinished 应是最后一个事件"); return }
+        #expect(files.map(\.lastPathComponent) == [top.url.lastPathComponent])
+
+        try makeSession("p1/subagents", "w2.jsonl", prompt: "worker 2", modified: Date())
+        try makeSession("p2", "b.jsonl", prompt: "later", modified: Date())
+        try await eventually("之后的顶层会话被索引") { log.updates.contains { $0.file.lastPathComponent == "b.jsonl" } }
+        #expect(!log.updates.contains { $0.file.path.contains("/subagents/") })
+    }
+
     @Test func liveAppendsAndNewFilesAreIndexedIncrementally() async throws {
         let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
         // 调用方从不返回检查点：索引器自己对回填之后被触碰的文件保留，之后的增量不能退化成重读

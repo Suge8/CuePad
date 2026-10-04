@@ -193,7 +193,7 @@ public final class PiBridge {
                 id: name, sessionID: hello.sessionId, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
                 cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), mode: hello.mode, model: hello.model,
                 terminal: PiTerminal(tty: hello.tty, environment: hello.term), extensionVersion: hello.extensionVersion,
-                state: state, stateSince: hello.state.sinceDate)
+                state: state, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             hello.info.apply(to: &session)
             link.session = session
             link.exitWatcher = ProcessExitWatcher(pid: hello.pid) { [weak self] in
@@ -207,6 +207,7 @@ public final class PiBridge {
             let previous = session.state
             session.state = state
             session.stateSince = wire.sinceDate
+            session.busySince = wire.busySinceDate
             update(session, on: link)
             emit(.stateChanged(session, from: previous))
         case .info(let info):

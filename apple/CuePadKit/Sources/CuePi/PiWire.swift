@@ -15,8 +15,10 @@ enum PiWire {
         var title: String?
         var error: String?
         var aborted: Bool?
-        /// 进入该状态的时间（毫秒）
+        /// 进入当前粗状态的时间（毫秒）
         var since: Double
+        /// 这段连续处理开始的时间（毫秒），空闲、出错时为 nil
+        var busySince: Double?
 
         var agentState: PiAgentState? {
             switch kind {
@@ -24,6 +26,7 @@ enum PiWire {
             case "thinking": .thinking
             case "outputting": .outputting
             case "tool": .tool(name: tool ?? "?", running: tools ?? [], detail: detail)
+            case "delegating": .delegating
             case "waiting_user": .waitingUser(kind: promptKind, title: title)
             case "done": .done(aborted: aborted ?? false)
             case "error": .error(message: error ?? "")
@@ -32,6 +35,7 @@ enum PiWire {
         }
 
         var sinceDate: Date { Date(timeIntervalSince1970: since / 1000) }
+        var busySinceDate: Date? { busySince.map { Date(timeIntervalSince1970: $0 / 1000) } }
     }
 
     struct Hello: Decodable {
@@ -52,25 +56,28 @@ enum PiWire {
         var lastPrompt: String?
         var lastReply: String?
         var question: String?
+        var subagents: [PiSubagent]?
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
             case extensionVersion, sessionId, sessionFile, pid, cwd, mode, model, tty, term, state
-            case name, firstMessage, lastPrompt, lastReply, question
+            case name, firstMessage, lastPrompt, lastReply, question, subagents
         }
 
         var info: Info {
-            Info(name: name, firstMessage: firstMessage, lastPrompt: lastPrompt, lastReply: lastReply, question: question)
+            Info(name: name, firstMessage: firstMessage, lastPrompt: lastPrompt, lastReply: lastReply, question: question,
+                 subagents: subagents)
         }
     }
 
-    /// 会话名、首条用户消息（扩展 v3 起）与近况（v4 起）；旧扩展没有的为 nil。
+    /// 会话名、首条用户消息（扩展 v3 起）、近况（v4 起）与子代理（v5 起）；旧扩展没有的为 nil。
     struct Info: Decodable {
         var name: String?
         var firstMessage: String?
         var lastPrompt: String?
         var lastReply: String?
         var question: String?
+        var subagents: [PiSubagent]?
 
         func apply(to session: inout PiSession) {
             session.name = name
@@ -78,6 +85,7 @@ enum PiWire {
             session.lastPrompt = lastPrompt
             session.lastReply = lastReply
             session.question = question
+            session.subagents = subagents ?? []
         }
     }
 

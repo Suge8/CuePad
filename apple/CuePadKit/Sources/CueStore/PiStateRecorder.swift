@@ -8,14 +8,15 @@ extension CueStore {
 
   func writePiState(
     sessionID: String, hostID: String, title: String, folder: String?, projectID: UUID?, state: PiWorkState, detail: String?,
-    recap: PiRecap, notify: PiAlert?, stateSince: Date
+    recap: PiRecap, notify: PiAlert?, times: PiTimes
   ) throws {
     try write {
       let now = Date.stamp
       let record = PiSessionState(
         id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: title, projectID: projectID,
         state: .known(state), detail: detail, folder: folder, lastPrompt: recap.lastPrompt, lastReply: recap.lastReply,
-        question: recap.question, notify: notify.map(Open.known), stateSince: stateSince, createdAt: now, modifiedAt: now)
+        question: recap.question, notify: notify.map(Open.known), stateSince: times.stateSince, busySince: times.busySince,
+        createdAt: now, modifiedAt: now)
       let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
         .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
@@ -39,7 +40,10 @@ extension CueStore {
   func endPiStates(host: String, sessionID: String?, at now: Date, expiredBefore: Date) throws {
     try write {
       let ended = PiWorkState.ended.rawValue
-      let end = "UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, modifiedAt = ?"
+      let end = """
+        UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, busySince = NULL,
+          modifiedAt = ?
+        """
       if let sessionID {
         try db.run("\(end) WHERE id = ?", [ended, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID)])
       } else {
@@ -67,6 +71,7 @@ public actor PiStateRecorder {
     var folder: String?
     var projectID: UUID?
     var recap: PiRecap
+    var times: PiTimes
   }
 
   private struct Session {
@@ -75,9 +80,10 @@ public actor PiStateRecorder {
     var folder: String?
     var projectID: UUID?
     var recap = PiRecap()
+    /// 调用方给的计时基准；没给过时（测试、演示）用第一次写入的时间，之后不变
+    var times: PiTimes?
     var written: Content?
     var writtenAt: Date?
-    var stateSince: Date?
     var pending: (state: PiWorkState, detail: String?)?
     var timer: Task<Void, Never>?
   }
@@ -101,7 +107,7 @@ public actor PiStateRecorder {
 
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,
-    projectID: UUID? = nil, recap: PiRecap? = nil
+    projectID: UUID? = nil, recap: PiRecap? = nil, times: PiTimes? = nil
   ) async throws {
     var session = sessions[sessionID] ?? Session()
     let previous = session.observed
@@ -110,9 +116,13 @@ public actor PiStateRecorder {
     if let folder { session.folder = folder }
     if let projectID { session.projectID = projectID }
     if let recap { session.recap = recap }
+    let now = timing.now()
+    let times = times ?? session.times ?? PiTimes(stateSince: now, busySince: nil)
+    session.times = times
 
     let content = Content(
-      state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID, recap: session.recap)
+      state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID, recap: session.recap,
+      times: times)
     if content == session.written {
       cancelPending(&session)
       sessions[sessionID] = session
@@ -121,8 +131,8 @@ public actor PiStateRecorder {
     let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
     let renamed = session.written.map {
       $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID || $0.recap != content.recap
+        || $0.times != content.times
     } ?? true
-    let now = timing.now()
     guard startsOrEndsWork || renamed || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {
       session.pending = (state, detail)
       if session.timer == nil, let writtenAt = session.writtenAt {
@@ -167,12 +177,12 @@ public actor PiStateRecorder {
   }
 
   private func flush(_ sessionID: String) async {
-    guard var session = sessions[sessionID], let pending = session.pending else { return }
+    guard var session = sessions[sessionID], let pending = session.pending, let times = session.times else { return }
     session.timer = nil
     session.pending = nil
     let content = Content(
       state: pending.state, detail: pending.detail, title: session.title, folder: session.folder, projectID: session.projectID,
-      recap: session.recap)
+      recap: session.recap, times: times)
     let write = commit(sessionID, &session, content, at: timing.now())
     sessions[sessionID] = session
     // 定时写入没有调用方可报告；记为未写入，下一次更新会重写
@@ -195,14 +205,12 @@ public actor PiStateRecorder {
   private func commit(
     _ sessionID: String, _ session: inout Session, _ content: Content, notify: PiAlert? = nil, at now: Date
   ) -> @Sendable () async throws -> Void {
-    let since = session.written?.state == content.state ? session.stateSince ?? now : now
     session.written = content
     session.writtenAt = now
-    session.stateSince = since
     return { [store, hostID] in
       try await store.writePiState(
         sessionID: sessionID, hostID: hostID, title: content.title, folder: content.folder, projectID: content.projectID,
-        state: content.state, detail: content.detail, recap: content.recap, notify: notify, stateSince: since)
+        state: content.state, detail: content.detail, recap: content.recap, notify: notify, times: content.times)
     }
   }
 

@@ -1,0 +1,12 @@
+// 测试用 FireCode 配置：只开指挥官（子代理），角色用假模型，零网络。
+{
+	"features": {
+		"header": false, "statusbar": false, "tools": false, "presets": false, "rename": false, "stats": false,
+		"claudeSub": false, "openaiNative": false, "bark": false, "review": false, "master": true, "watcher": false
+	},
+	"master": {
+		"autoActivate": true,
+		"workerExcludeExtensions": [],
+		"roles": { "工程师": { "model": "fake/echo/off", "use": "测试", "fallback": [] } }
+	}
+}
