@@ -21,7 +21,7 @@ nonisolated extension PiWorkState {
         switch self {
         case .waitingForUser: 0
         case .error: 1
-        case .thinking, .outputting, .tool: 2
+        case .thinking, .outputting, .tool, .delegating: 2
         case .settled: 3
         case .ended: 4
         }
@@ -77,7 +77,7 @@ extension PiWorkState {
         case .error: "exclamationmark.circle.fill"
         case .settled: "checkmark.circle"
         case .ended: "circle"
-        case .thinking, .outputting, .tool: nil
+        case .thinking, .outputting, .tool, .delegating: nil
         }
     }
 }

@@ -61,7 +61,7 @@ private struct StatusBlock: View {
                 }
                 .accessibilityElement(children: .combine)
                 if session.state.isWorking, let action = PiProgress.line(of: session) {
-                    Text(action).font(.subheadline.monospaced()).foregroundStyle(palette.ink2).lineLimit(2)
+                    Text(action).font(session.detailIsCode ? .subheadline.monospaced() : .subheadline).foregroundStyle(palette.ink2).lineLimit(2)
                 }
             }
             switch session.state.known {
