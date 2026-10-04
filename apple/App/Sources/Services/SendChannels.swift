@@ -79,7 +79,8 @@ extension PiAgentState {
     var isBusy: Bool {
         switch self {
         case .thinking, .outputting, .tool, .waitingUser: true
-        case .idle, .done, .error: false
+        // 等子代理时 Pi 自己已经歇下，消息直接开始新的一轮
+        case .idle, .done, .error, .delegating: false
         }
     }
 }

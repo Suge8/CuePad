@@ -18,7 +18,7 @@ import Foundation
 /// 同步表只能加表或加可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。
 enum Schema {
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；比它旧的按 `upgrades` 就地升级；比它新的是更新版本建的库，不打开。
-  static let version = 3
+  static let version = 4
 
   /// `upgrades[i]` 把结构版本 i + 1 升到 i + 2。新库直接用 `create`（已是最新结构）。
   static let upgrades = [
@@ -29,6 +29,8 @@ enum Schema {
     ALTER TABLE piSessionStates ADD COLUMN lastPrompt TEXT; ALTER TABLE piSessionStates ADD COLUMN lastReply TEXT;
     ALTER TABLE piSessionStates ADD COLUMN question TEXT;
     """,
+    // 连续处理的计时基准：细状态切换不重置"已运行"
+    "ALTER TABLE piSessionStates ADD COLUMN busySince INTEGER;",
   ]
 
   static let create = """
@@ -70,7 +72,7 @@ enum Schema {
     CREATE TABLE piSessionStates (
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
-      lastPrompt TEXT, lastReply TEXT, question TEXT, stateSince INTEGER NOT NULL,
+      lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);

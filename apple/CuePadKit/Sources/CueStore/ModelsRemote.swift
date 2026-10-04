@@ -3,11 +3,13 @@ import Foundation
 /// Pi 会话的工作状态。
 public enum PiWorkState: String, Sendable, CaseIterable {
   case thinking, outputting, tool, waitingForUser, settled, error
+  /// 自己这轮已经歇下，还有子代理在跑：仍在处理
+  case delegating
   /// 会话已结束（Pi 退出、换了会话）：记录留着给手机看近况，过了 `PiStateRecorder.endedRetention` 删除。
   case ended
 
   /// 正在干活（思考、输出、调用工具）。
-  public var isWorking: Bool { self == .thinking || self == .outputting || self == .tool }
+  public var isWorking: Bool { self == .thinking || self == .outputting || self == .tool || self == .delegating }
 }
 
 extension Open<PiWorkState> {
@@ -37,6 +39,19 @@ public struct PiRecap: Sendable, Equatable {
   }
 }
 
+/// 会话的计时基准（扩展给出，原样写入）。
+public struct PiTimes: Sendable, Equatable {
+  /// 进入当前粗状态（工作中、等你确认、出错、空闲、已结束）的时间；细状态（思考、工具、等子代理）之间切换不变。
+  public var stateSince: Date
+  /// 这段连续处理开始的时间：离开空闲起，到彻底歇下为止，中间等你确认也不断；空闲、出错、已结束时为 nil。
+  public var busySince: Date?
+
+  public init(stateSince: Date, busySince: Date?) {
+    self.stateSince = stateSince
+    self.busySince = busySince
+  }
+}
+
 /// 一个 Pi 会话此刻的状态，Mac 写、手机读；每个会话一条，会话结束后标为 `ended` 保留一段时间。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -56,8 +71,10 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var question: String?
   /// 这次写入是否要通知手机；见 `PiAlert`。
   public var notify: Open<PiAlert>?
-  /// 进入当前状态的时间。
+  /// 计时基准，见 `PiTimes`（同名字段）。界面：工作中"已运行"自 `busySince`，等你确认"已等"自 `stateSince`，其余"多久前"自 `stateSince`。
   public var stateSince: Date
+  /// 旧版本写的记录没有。
+  public var busySince: Date?
   public var createdAt: Date
   public var modifiedAt: Date
 
@@ -65,7 +82,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public init(
     id: UUID, sessionID: String, hostID: String, title: String, projectID: UUID?, state: Open<PiWorkState>, detail: String?,
     folder: String?, lastPrompt: String?, lastReply: String?, question: String?, notify: Open<PiAlert>?, stateSince: Date,
-    createdAt: Date, modifiedAt: Date
+    busySince: Date?, createdAt: Date, modifiedAt: Date
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -80,6 +97,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.question = question
     self.notify = notify
     self.stateSince = stateSince
+    self.busySince = busySince
     self.createdAt = createdAt
     self.modifiedAt = modifiedAt
   }
@@ -133,18 +151,19 @@ extension PiSessionState: Record {
   static let table = Table.piSessionStates
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
-    "lastPrompt", "lastReply", "question",
+    "lastPrompt", "lastReply", "question", "busySince",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
-     lastPrompt, lastReply, question]
+     lastPrompt, lastReply, question, busySince]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), sessionID: row.text(1), hostID: row.text(2), title: row.text(3), projectID: row.uuidOrNil(4),
       state: Open(rawValue: row.text(5)), detail: row.textOrNil(6), folder: row.textOrNil(11),
       lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14),
-      notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), createdAt: row.date(8), modifiedAt: row.date(9))
+      notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), busySince: row.dateOrNil(15), createdAt: row.date(8),
+      modifiedAt: row.date(9))
   }
 }
 

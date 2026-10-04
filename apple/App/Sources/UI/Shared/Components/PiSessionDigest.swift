@@ -260,19 +260,29 @@ struct DeliveryStatusLabel: View {
     }
 }
 
-/// 会话在当前状态里待了多久："已运行 0:42"（干活中）或"已等 1:07"（等你确认）；其余状态不显示。
+/// 会话计时，读法见 `PiClock`："已运行 0:42"、"已等 1:07"、"5 分钟前"。
 struct PiElapsed: View {
-    let session: PiSessionState
+    let clock: PiClock
+    var font: Font = .footnote
     @Environment(\.palette) private var palette
 
+    init(session: PiSessionState, font: Font = .footnote) {
+        self.init(state: session.state, stateSince: session.stateSince, busySince: session.busySince, font: font)
+    }
+
+    init(state: Open<PiWorkState>, stateSince: Date, busySince: Date?, font: Font = .footnote) {
+        clock = PiClock.reading(state, stateSince: stateSince, busySince: busySince)
+        self.font = font
+    }
+
     var body: some View {
-        switch session.state.known {
-        case .waitingForUser:
-            Text("已等 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(palette.attention)
-        case .thinking, .outputting, .tool:
-            Text("已运行 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
-        default:
-            EmptyView()
+        switch clock {
+        case .waiting(let since):
+            Text("已等 \(Text(since, style: .timer))").font(font.monospacedDigit()).foregroundStyle(palette.attention)
+        case .running(let since):
+            Text("已运行 \(Text(since, style: .timer))").font(font.monospacedDigit()).foregroundStyle(palette.ink3)
+        case .ago(let date):
+            Text(date, format: .relative(presentation: .named)).font(font).foregroundStyle(palette.ink3)
         }
     }
 }

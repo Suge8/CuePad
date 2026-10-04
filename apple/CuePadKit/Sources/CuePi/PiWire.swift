@@ -15,8 +15,10 @@ enum PiWire {
         var title: String?
         var error: String?
         var aborted: Bool?
-        /// 进入该状态的时间（毫秒）
+        /// 进入当前粗状态的时间（毫秒）
         var since: Double
+        /// 这段连续处理开始的时间（毫秒），空闲、出错时为 nil
+        var busySince: Double?
 
         var agentState: PiAgentState? {
             switch kind {
@@ -24,6 +26,7 @@ enum PiWire {
             case "thinking": .thinking
             case "outputting": .outputting
             case "tool": .tool(name: tool ?? "?", running: tools ?? [], detail: detail)
+            case "delegating": .delegating
             case "waiting_user": .waitingUser(kind: promptKind, title: title)
             case "done": .done(aborted: aborted ?? false)
             case "error": .error(message: error ?? "")
@@ -32,6 +35,7 @@ enum PiWire {
         }
 
         var sinceDate: Date { Date(timeIntervalSince1970: since / 1000) }
+        var busySinceDate: Date? { busySince.map { Date(timeIntervalSince1970: $0 / 1000) } }
     }
 
     struct Hello: Decodable {

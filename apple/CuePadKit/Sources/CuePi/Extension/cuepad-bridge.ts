@@ -11,7 +11,7 @@ import net from "node:net";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
-const EXTENSION_VERSION = 5;
+const EXTENSION_VERSION = 6;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -37,6 +37,9 @@ const SUBAGENTS_DIRECTORY = "subagents";
  * （如 FireCode 的 `<firecode_master_event>`、`<firecode_watcher>`、`<firecode_review>`）。它不是你说的话。
  * 块正文止于第一个同名闭合标签：块与块之间夹着真人文字时整条不匹配 */
 const MACHINE_MESSAGE = /^(?:<([A-Za-z][\w.-]*)>\n(?:(?!\n<\/\1>)[\s\S])*\n<\/\1>\s*)+$/u;
+/** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
+ * 与 FireCode 判断"会话进行中"用同一个事实 */
+const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
 /** FireCode 把子代理名写在子会话系统提示的这个标签上 */
 const WORKER_NAME = /<firecode_worker name="([^"]+)">/u;
 /** 交给 CuePad 用来定位终端的环境变量 */
@@ -50,6 +53,8 @@ type State =
 	| { kind: "thinking" }
 	| { kind: "outputting" }
 	| { kind: "tool"; tool: string; tools: string[]; detail?: string }
+	/** 自己这轮已经歇下，还有子代理在飞：仍在处理 */
+	| { kind: "delegating" }
 	| { kind: "waiting_user"; promptKind: string; title?: string }
 	| { kind: "done"; aborted: boolean }
 	| { kind: "error"; error: string };
@@ -63,6 +68,8 @@ class StateTracker {
 	/** agent_end 记录结果，agent_settled 才生效：重试/压缩/排队消息都可能在 agent_end 之后继续 */
 	outcome: State = { kind: "done", aborted: false };
 	settled: State | null = null;
+	/** 在飞子代理数（FireCode 发布） */
+	inFlight = 0;
 
 	derive(): State {
 		if (this.prompt) return { kind: "waiting_user", promptKind: this.prompt.kind, title: this.prompt.title };
@@ -74,7 +81,20 @@ class StateTracker {
 			}
 			return { kind: this.phase };
 		}
+		if (this.inFlight > 0) return { kind: "delegating" };
 		return this.settled ?? { kind: "idle" };
+	}
+}
+
+type Phase = "working" | "waiting" | "error" | "idle";
+
+/** 粗状态：计时只在它变化时动，思考、工具、等子代理之间切换不算。 */
+function phaseOf(state: State): Phase {
+	switch (state.kind) {
+		case "thinking": case "outputting": case "tool": case "delegating": return "working";
+		case "waiting_user": return "waiting";
+		case "error": return "error";
+		default: return "idle";
 	}
 }
 
@@ -176,7 +196,11 @@ export default function (pi: any) {
 	let tracker = new StateTracker();
 	const clients = new Set<net.Socket>();
 	let lastKey = "";
+	let phase: Phase = "idle";
+	/** 进入当前粗状态的时间 */
 	let since = Date.now();
+	/** 这段连续处理（离开空闲到彻底歇下，中间等你确认也算）开始的时间；空闲、出错时为 null */
+	let busySince: number | null = null;
 	/** 会话名（`/name`）与首条用户消息：CuePad 据此按 Pi 会话列表的规则显示会话；其余是近况 */
 	type Info = {
 		name: string | null; firstMessage: string | null; lastPrompt: string | null; lastReply: string | null; question: string | null;
@@ -193,20 +217,26 @@ export default function (pi: any) {
 		if (!socket.destroyed) socket.write(JSON.stringify(message) + "\n");
 	};
 
-	/** 状态没变就不发；没有客户端时只维护 lastKey/since，不做任何 I/O。 */
+	/** 状态没变就不发；没有客户端时只维护状态与计时，不做任何 I/O。 */
 	function commit() {
 		const state = tracker.derive();
 		const key = JSON.stringify(state);
 		if (key === lastKey) return;
 		lastKey = key;
-		since = Date.now();
+		const next = phaseOf(state);
+		if (next !== phase) {
+			const now = Date.now();
+			since = now;
+			busySince = next === "working" || next === "waiting" ? busySince ?? now : null;
+			phase = next;
+		}
 		const sub = subsessionKey && registry.sessions.get(subsessionKey);
 		if (sub) {
 			sub.kind = state.kind;
 			publishSubsessions();
 		}
 		if (clients.size === 0) return;
-		const message = { t: "state", state: { ...state, since } };
+		const message = { t: "state", state: { ...state, since, busySince } };
 		for (const client of clients) write(client, message);
 	}
 
@@ -233,7 +263,7 @@ export default function (pi: any) {
 			model: ctx.model?.id ?? null,
 			tty: await tty,
 			term: terminalEnv,
-			state: { ...tracker.derive(), since },
+			state: { ...tracker.derive(), since, busySince },
 			...info,
 		};
 	}
@@ -389,7 +419,9 @@ export default function (pi: any) {
 		ctx = context;
 		tracker = new StateTracker();
 		lastKey = JSON.stringify(tracker.derive());
+		phase = "idle";
 		since = Date.now();
+		busySince = null;
 		// print/json 是没有输入框的运行：一次性的 pi -p，或其他扩展在同进程里开的子会话（FireCode 子代理）。
 		// 都不作为会话出现；子代理的状态汇总到父会话
 		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return registerSubsession();
@@ -425,6 +457,14 @@ export default function (pi: any) {
 	});
 
 	// ---- Pi 事件 → 状态 ----
+	// 提交了一条消息（你的提问，或扩展投进来的，如 FireCode 交回子代理结果）：这一轮从这里开始算。
+	// FireCode 交回结果时，在飞数在这之后、agent_start 之前就归零了，从这里接上，连续处理才不会在交接处断开
+	pi.on("input", () => {
+		if (tracker.active) return;
+		tracker.active = true;
+		tracker.phase = "thinking";
+		commit();
+	});
 	pi.on("agent_start", () => {
 		tracker.active = true;
 		tracker.phase = "thinking";
@@ -458,6 +498,10 @@ export default function (pi: any) {
 		updateInfo({ lastReply: replyText(last) });
 		if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
 		else if (last?.stopReason === "aborted") tracker.outcome = { kind: "done", aborted: true };
+	});
+	pi.events?.on(FIRECODE_WORKERS_CHANNEL, (data: any) => {
+		tracker.inFlight = typeof data?.inFlight === "number" ? data.inFlight : 0;
+		commit();
 	});
 	pi.on("agent_settled", () => {
 		tracker.active = false;

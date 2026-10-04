@@ -8,6 +8,7 @@ nonisolated extension PiWorkState {
         case .thinking: "思考中"
         case .outputting: "输出中"
         case .tool: "工具"
+        case .delegating: "子代理工作中"
         case .waitingForUser: "等你确认"
         case .settled: "空闲"
         case .error: "出错"
@@ -20,7 +21,7 @@ nonisolated extension PiWorkState {
         switch self {
         case .waitingForUser: 4
         case .error: 3
-        case .thinking, .outputting, .tool: 2
+        case .thinking, .outputting, .tool, .delegating: 2
         case .settled: 1
         case .ended: 0
         }
@@ -35,7 +36,7 @@ nonisolated extension Open<PiWorkState> {
     /// 项目旁的状态点说的是什么（读屏标签、悬停提示、长按菜单的标题）：只分要你注意的与在忙的。
     var presence: String {
         switch known {
-        case .thinking, .outputting, .tool: "Pi 正在工作"
+        case .thinking, .outputting, .tool, .delegating: "Pi 正在工作"
         case .waitingForUser: "Pi 等你确认"
         case .error: "Pi 出错"
         case .settled: "Pi 空闲"
@@ -48,7 +49,7 @@ nonisolated extension Open<PiWorkState> {
 extension PiWorkState {
     func tint(_ palette: Palette) -> Color {
         switch self {
-        case .thinking, .outputting, .tool: palette.ink
+        case .thinking, .outputting, .tool, .delegating: palette.ink
         case .waitingForUser: palette.attention
         case .error: palette.failure
         case .settled, .ended: palette.ink3

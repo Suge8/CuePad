@@ -16,20 +16,20 @@ extension SessionDigest {
             id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID,
             title: row.title.isEmpty ? cwd.lastPathComponent : row.title, projectID: project?.id, state: .known(.ended), detail: nil,
             folder: cwd.lastPathComponent, lastPrompt: nil, lastReply: nil, question: nil, notify: nil,
-            stateSince: row.lastActivityAt, createdAt: row.lastActivityAt, modifiedAt: row.lastActivityAt)
+            stateSince: row.lastActivityAt, busySince: nil, createdAt: row.lastActivityAt, modifiedAt: row.lastActivityAt)
         return digest
     }
 
     /// 会话在线时，状态、详情、名字与近况取桥上的实时值：同步记录按节流写，会落后几秒。
     func live(_ session: CuePi.PiSession?, hostID: String, project: Project?) -> SessionDigest {
         guard let session else { return self }
-        let (state, detail) = session.state.syncRepresentation
+        let (state, detail) = session.syncRepresentation
         var digest = self
         digest.session = PiSessionState(
             id: PiSessionState.recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID,
             title: session.displayName, projectID: project?.id ?? self.session?.projectID, state: .known(state), detail: detail,
             folder: session.cwd.lastPathComponent, lastPrompt: session.lastPrompt, lastReply: session.lastReply,
-            question: session.question, notify: nil, stateSince: session.stateSince,
+            question: session.question, notify: nil, stateSince: session.stateSince, busySince: session.busySince,
             createdAt: self.session?.createdAt ?? session.stateSince, modifiedAt: session.stateSince)
         if let project { digest.project = project }
         return digest

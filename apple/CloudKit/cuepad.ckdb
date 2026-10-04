@@ -87,6 +87,7 @@ DEFINE SCHEMA
         lastPrompt    ENCRYPTED STRING,
         lastReply     ENCRYPTED STRING,
         question      ENCRYPTED STRING,
+        busySince     INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
