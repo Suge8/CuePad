@@ -7,7 +7,7 @@ import SwiftUI
 nonisolated struct ActivityData: Sendable {
     var waiting: [PiSessionState]
     var running: [PiSessionState]
-    /// 空闲、出错与未知状态。
+    /// 空闲、出错、已结束与未知状态。
     var idle: [PiSessionState]
     var deliveries: [DeliveryRequest]
     var sends: [SendRecord]

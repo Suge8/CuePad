@@ -65,6 +65,12 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var name: String? = nil
     /// 首条用户消息的开头（扩展 v3 起上报）
     public internal(set) var firstMessage: String? = nil
+    /// 近况（扩展 v4 起上报，旧扩展为 nil）：用户最后一条提问（单行，≤500 字符）
+    public internal(set) var lastPrompt: String? = nil
+    /// 助手最后一轮的最终回答文字，不含思考与工具调用，保留换行（≤1200 字符）
+    public internal(set) var lastReply: String? = nil
+    /// 正在等用户回答的弹窗文案：标题、说明与各选项，换行分隔（≤500 字符）；不在等待时为 nil
+    public internal(set) var question: String? = nil
 
     public var hasOutdatedExtension: Bool { extensionVersion < PiExtensionBundle.version }
 
@@ -100,8 +106,8 @@ public enum PiSessionEndReason: Sendable, Equatable {
 public enum PiSessionChange: Sendable, Equatable {
     case appeared(PiSession)
     case stateChanged(PiSession, from: PiAgentState)
-    /// 会话名或首条消息变了，`displayName` 可能随之改变
-    case displayNameChanged(PiSession)
+    /// 会话名、首条消息或近况变了（`displayName` 可能随之改变）
+    case infoChanged(PiSession)
     case ended(PiSession, reason: PiSessionEndReason)
     /// 连上了但协议不兼容（扩展过新/过旧或消息损坏）；连接已关闭，不会出现在 `sessions` 里
     case incompatible(id: String, detail: String)

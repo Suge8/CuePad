@@ -12,6 +12,7 @@ nonisolated extension PiWorkState {
         case .waitingForUser: "等你确认"
         case .settled: "空闲"
         case .error: "出错"
+        case .ended: "已结束"
         }
     }
 
@@ -22,6 +23,7 @@ nonisolated extension PiWorkState {
         case .error: 3
         case .thinking, .outputting, .tool: 2
         case .settled: 1
+        case .ended: 0
         }
     }
 }
@@ -38,6 +40,7 @@ nonisolated extension Open<PiWorkState> {
         case .waitingForUser: "Pi 等你确认"
         case .error: "Pi 出错"
         case .settled: "Pi 空闲"
+        case .ended: "Pi 会话已结束"
         case nil: "Pi 状态未知"
         }
     }
@@ -49,7 +52,7 @@ extension PiWorkState {
         case .thinking, .outputting, .tool: palette.ink
         case .waitingForUser: palette.attention
         case .error: palette.failure
-        case .settled: palette.ink3
+        case .settled, .ended: palette.ink3
         }
     }
 }

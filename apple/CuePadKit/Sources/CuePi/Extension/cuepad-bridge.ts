@@ -2,7 +2,7 @@
 // 由 CuePad 安装到 Pi 扩展目录，升级时整文件覆盖，请勿手改。协议说明见 apple/CuePadKit/Sources/CuePi/README.md。
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
-//   扩展 → CuePad  hello（连接后第一条，含当前状态与会话名快照）/ state（仅状态切换）/ info（会话名、首条消息变化）/ ack / bye
+//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / bye
 //   CuePad → 扩展  send（文字+图片，steer/followUp）/ paste（放进输入框）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
@@ -11,7 +11,7 @@ import net from "node:net";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
-const EXTENSION_VERSION = 3;
+const EXTENSION_VERSION = 4;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -23,6 +23,12 @@ const DETAIL_LIMIT = 120;
 /** 上报首条用户消息的字符数上限：它只用来当单行显示名，界面与 Pi 自己的会话列表都只显示一行，
  * 不必把可能几 MB 的首条消息（贴入的日志、代码）在每次连接与同步时传来传去。与 CuePi 的 `PiSessionName.firstMessageLimit` 相同。 */
 const FIRST_MESSAGE_LIMIT = 200;
+/** 近况的字符数上限（含省略号）：手机打开会话时看的最后提问、最终回答与待确认的问题，不同步完整对话 */
+const PROMPT_LIMIT = 500;
+const REPLY_LIMIT = 1200;
+const QUESTION_LIMIT = 500;
+/** 标记已经包装过的 ui 对象 */
+const CAPTURED = Symbol("cuepad.captured");
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = [
 	"TERM_PROGRAM", "TERM_PROGRAM_VERSION", "__CFBundleIdentifier", "TERM_SESSION_ID", "ITERM_SESSION_ID",
@@ -94,6 +100,31 @@ function preview(text: string): string | null {
 	return text ? Array.from(text).slice(0, FIRST_MESSAGE_LIMIT).join("") : null;
 }
 
+/** 去掉首尾空白后截到 limit 个字符（超出的以省略号结尾）；空文字为 null。 */
+function clip(text: string, limit: number): string | null {
+	const chars = Array.from(text.trim());
+	if (chars.length === 0) return null;
+	return chars.length <= limit ? chars.join("") : chars.slice(0, limit - 1).join("") + "…";
+}
+
+function promptText(message: any): string | null {
+	return clip(messageText(message).replace(/[\s\p{Cc}]+/gu, " "), PROMPT_LIMIT);
+}
+
+/** 助手消息的回答文字：只取文字块（思考与工具调用不算），保留换行。 */
+function replyText(message: any): string | null {
+	const blocks = Array.isArray(message?.content) ? message.content : [];
+	return clip(blocks.filter((block: any) => block?.type === "text").map((block: any) => block.text).join("\n"), REPLY_LIMIT);
+}
+
+/** 当前分支上最后一条某角色的消息（恢复会话时补回近况）。 */
+function lastMessage(entries: any[], role: string): any {
+	for (let i = entries.length - 1; i >= 0; i--) {
+		if (entries[i]?.type === "message" && entries[i].message?.role === role) return entries[i].message;
+	}
+	return undefined;
+}
+
 /** 会话里第一条用户消息（按文件顺序，与 Pi 会话列表一致）。 */
 function firstUserMessage(entries: any[]): string | null {
 	for (const entry of entries) {
@@ -124,8 +155,11 @@ export default function (pi: any) {
 	const clients = new Set<net.Socket>();
 	let lastKey = "";
 	let since = Date.now();
-	/** 会话名（`/name`）与首条用户消息：CuePad 据此按 Pi 会话列表的规则显示会话 */
-	let info: { name: string | null; firstMessage: string | null } = { name: null, firstMessage: null };
+	/** 会话名（`/name`）与首条用户消息：CuePad 据此按 Pi 会话列表的规则显示会话；其余是近况 */
+	type Info = { name: string | null; firstMessage: string | null; lastPrompt: string | null; lastReply: string | null; question: string | null };
+	let info: Info = { name: null, firstMessage: null, lastPrompt: null, lastReply: null, question: null };
+	/** 正在弹出的对话框的文案行（标题、说明、选项）。ui_prompt_start 只带标题，选项与说明要在调用时记下 */
+	let asking: string[] | null = null;
 
 	const write = (socket: net.Socket, message: object) => {
 		if (!socket.destroyed) socket.write(JSON.stringify(message) + "\n");
@@ -143,9 +177,10 @@ export default function (pi: any) {
 		for (const client of clients) write(client, message);
 	}
 
-	/** 会话名或首条消息变了才发。 */
-	function updateInfo(next: { name: string | null; firstMessage: string | null }) {
-		if (next.name === info.name && next.firstMessage === info.firstMessage) return;
+	/** 有变化才发。 */
+	function updateInfo(changes: Partial<Info>) {
+		const next = { ...info, ...changes };
+		if ((Object.keys(next) as (keyof Info)[]).every((key) => next[key] === info[key])) return;
 		info = next;
 		for (const client of clients) write(client, { t: "info", ...info });
 	}
@@ -264,6 +299,25 @@ export default function (pi: any) {
 	}
 	process.on("exit", () => socketPath && fs.rmSync(socketPath, { force: true }));
 
+	/** 包装所有扩展共用的 ui 对象上的对话框方法，记下文案后照常调用（Pi 每次绑定界面都换新对象，session_start 前绑定）。 */
+	function captureDialogs(ui: any) {
+		if (!ui || ui[CAPTURED]) return;
+		ui[CAPTURED] = true;
+		const wrap = (method: string, lines: (...args: any[]) => unknown[]) => {
+			const original = ui[method];
+			if (typeof original !== "function") return;
+			ui[method] = (...args: any[]) => {
+				// 嵌套弹窗只算最外层，与 ui_prompt_start 一致
+				asking ??= lines(...args).filter((line): line is string => typeof line === "string" && line.length > 0);
+				return original.apply(ui, args);
+			};
+		};
+		wrap("select", (title, options) => [title, ...(Array.isArray(options) ? options : [])]);
+		wrap("confirm", (title, message) => [title, message]);
+		wrap("input", (title) => [title]);
+		wrap("editor", (title) => [title]);
+	}
+
 	pi.on("session_start", (_event: any, context: any) => {
 		ctx = context;
 		// print/json 是一次性的无界面运行（脚本、其他工具调用 pi -p），没有输入框也不该出现在会话列表里
@@ -272,7 +326,16 @@ export default function (pi: any) {
 		lastKey = JSON.stringify(tracker.derive());
 		since = Date.now();
 		tty = readTTY();
-		info = { name: pi.getSessionName() ?? null, firstMessage: firstUserMessage(ctx.sessionManager.getEntries()) };
+		const branch = ctx.sessionManager.getBranch();
+		info = {
+			name: pi.getSessionName() ?? null,
+			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
+			lastPrompt: promptText(lastMessage(branch, "user")),
+			lastReply: replyText(lastMessage(branch, "assistant")),
+			question: null,
+		};
+		asking = null;
+		captureDialogs(ctx.ui);
 		try {
 			start();
 		} catch (error: any) {
@@ -280,10 +343,13 @@ export default function (pi: any) {
 		}
 	});
 	pi.on("session_shutdown", (event: any) => stop(event.reason));
-	pi.on("session_info_changed", (event: any) => updateInfo({ ...info, name: event.name ?? null }));
+	pi.on("session_info_changed", (event: any) => updateInfo({ name: event.name ?? null }));
 	pi.on("message_end", (event: any) => {
-		if (info.firstMessage !== null || event.message?.role !== "user") return;
-		updateInfo({ ...info, firstMessage: preview(messageText(event.message)) });
+		if (event.message?.role !== "user") return;
+		updateInfo({
+			lastPrompt: promptText(event.message),
+			firstMessage: info.firstMessage ?? preview(messageText(event.message)),
+		});
 	});
 
 	// ---- Pi 事件 → 状态 ----
@@ -304,10 +370,20 @@ export default function (pi: any) {
 	});
 	pi.on("tool_execution_start", (event: any) => { tracker.tools.set(event.toolCallId, { name: event.toolName, detail: toolDetail(event.args) }); commit(); });
 	pi.on("tool_execution_end", (event: any) => { tracker.tools.delete(event.toolCallId); tracker.phase = "thinking"; commit(); });
-	pi.on("ui_prompt_start", (event: any) => { tracker.prompt = { kind: event.kind, title: event.title }; commit(); });
-	pi.on("ui_prompt_end", () => { tracker.prompt = null; commit(); });
+	pi.on("ui_prompt_start", (event: any) => {
+		tracker.prompt = { kind: event.kind, title: event.title };
+		updateInfo({ question: clip((asking ?? [event.title ?? ""]).join("\n"), QUESTION_LIMIT) });
+		commit();
+	});
+	pi.on("ui_prompt_end", () => {
+		tracker.prompt = null;
+		asking = null;
+		updateInfo({ question: null });
+		commit();
+	});
 	pi.on("agent_end", (event: any) => {
 		const last = [...event.messages].reverse().find((m: any) => m.role === "assistant");
+		updateInfo({ lastReply: replyText(last) });
 		if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
 		else if (last?.stopReason === "aborted") tracker.outcome = { kind: "done", aborted: true };
 	});

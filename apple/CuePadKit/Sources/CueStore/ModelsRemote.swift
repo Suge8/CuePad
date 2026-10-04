@@ -3,6 +3,8 @@ import Foundation
 /// Pi 会话的工作状态。
 public enum PiWorkState: String, Sendable, CaseIterable {
   case thinking, outputting, tool, waitingForUser, settled, error
+  /// 会话已结束（Pi 退出、换了会话）：记录留着给手机看近况，过了 `PiStateRecorder.endedRetention` 删除。
+  case ended
 
   /// 正在干活（思考、输出、调用工具）。
   public var isWorking: Bool { self == .thinking || self == .outputting || self == .tool }
@@ -19,7 +21,23 @@ public enum PiAlert: String, Sendable, CaseIterable {
   case waitingForUser, settled
 }
 
-/// 一个 Pi 会话此刻的状态，Mac 写、手机读；每个会话一条，会话结束即删除。
+/// 会话的近况：手机打开会话时看到的"问了什么、答了什么、在等什么"。来自扩展 v4，旧扩展三项都是 nil。
+public struct PiRecap: Sendable, Equatable {
+  /// 用户最后一条提问，单行，至多 500 字符。
+  public var lastPrompt: String?
+  /// 助手最后一轮的最终回答文字（不含思考与工具调用），保留换行，至多 1200 字符。
+  public var lastReply: String?
+  /// 正在等用户回答的弹窗文案：标题、说明与各选项，换行分隔，至多 500 字符；不在等待时为 nil。
+  public var question: String?
+
+  public init(lastPrompt: String? = nil, lastReply: String? = nil, question: String? = nil) {
+    self.lastPrompt = lastPrompt
+    self.lastReply = lastReply
+    self.question = question
+  }
+}
+
+/// 一个 Pi 会话此刻的状态，Mac 写、手机读；每个会话一条，会话结束后标为 `ended` 保留一段时间。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
@@ -32,6 +50,10 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var detail: String?
   /// 工作目录的最后一段（文件夹名），不含完整路径；手机据此在没有绑定项目时写出会话"在哪"。旧版本写的记录没有。
   public var folder: String?
+  /// 近况，见 `PiRecap`（同名字段）。旧版本写的记录没有。
+  public var lastPrompt: String?
+  public var lastReply: String?
+  public var question: String?
   /// 这次写入是否要通知手机；见 `PiAlert`。
   public var notify: Open<PiAlert>?
   /// 进入当前状态的时间。
@@ -83,12 +105,19 @@ public enum DeliveryOutcome: Sendable {
 
 extension PiSessionState: Record {
   static let table = Table.piSessionStates
-  static let columns = ["id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder"]
-  var bindings: [any SQLBindable] { [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder] }
+  static let columns = [
+    "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
+    "lastPrompt", "lastReply", "question",
+  ]
+  var bindings: [any SQLBindable] {
+    [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
+     lastPrompt, lastReply, question]
+  }
   init(row: Row) {
     self.init(
       id: row.uuid(0), sessionID: row.text(1), hostID: row.text(2), title: row.text(3), projectID: row.uuidOrNil(4),
       state: Open(rawValue: row.text(5)), detail: row.textOrNil(6), folder: row.textOrNil(11),
+      lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14),
       notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), createdAt: row.date(8), modifiedAt: row.date(9))
   }
 }

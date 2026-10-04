@@ -189,11 +189,12 @@ public final class PiBridge {
             guard hello.protocolVersion == PiWire.protocolVersion else { throw HandlingError.unsupportedProtocol(hello.protocolVersion) }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             guard let state = hello.state.agentState else { throw HandlingError.unknownState(hello.state.kind) }
-            let session = PiSession(
+            var session = PiSession(
                 id: name, sessionID: hello.sessionId, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
                 cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), mode: hello.mode, model: hello.model,
                 terminal: PiTerminal(tty: hello.tty, environment: hello.term), extensionVersion: hello.extensionVersion,
-                state: state, stateSince: hello.state.sinceDate, name: hello.name, firstMessage: hello.firstMessage)
+                state: state, stateSince: hello.state.sinceDate)
+            hello.info.apply(to: &session)
             link.session = session
             link.exitWatcher = ProcessExitWatcher(pid: hello.pid) { [weak self] in
                 Task { @MainActor in self?.processExited(name) }
@@ -210,10 +211,9 @@ public final class PiBridge {
             emit(.stateChanged(session, from: previous))
         case .info(let info):
             guard var session = link.session else { throw HandlingError.messageBeforeHello }
-            session.name = info.name
-            session.firstMessage = info.firstMessage
+            info.apply(to: &session)
             update(session, on: link)
-            emit(.displayNameChanged(session))
+            emit(.infoChanged(session))
         case .ack(let ack):
             if let id = ack.id { link.pending.removeValue(forKey: id)?.resume(returning: ack) }
         case .bye(let reason):
