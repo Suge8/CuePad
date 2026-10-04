@@ -40,6 +40,7 @@ struct PiSessionDigest: View {
                         ForEach(Array(deliveries.enumerated()), id: \.element.id) { index, request in
                             if index > 0 { Divider().padding(.leading, 16) }
                             DeliveryRow(request: request, session: session.state == .known(.ended) ? nil : session)
+                                .id(request.id)
                         }
                     }
                     .paper(radius: 16)

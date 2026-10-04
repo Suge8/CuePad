@@ -15,8 +15,12 @@ struct SessionScreen: View {
     /// 最后一次读到的会话记录：记录被删后仍显示它。
     @State private var lastSeen: PiSessionState?
     @State private var draft: Navigation.Outbox?
+    /// 刚发出的请求：它出现在"你发过去的"里时滚过去，长回答下面的送达状态也看得到。
+    @State private var justSent: UUID?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             if let session = digest?.session ?? lastSeen {
                 PiSessionDigest(session: session, project: digest?.project, deliveries: digest?.deliveries ?? [])
@@ -30,13 +34,22 @@ struct SessionScreen: View {
                 .padding(.top, 60)
             }
         }
+        .onChange(of: digest?.deliveries.map(\.id)) { _, ids in
+            guard let target = justSent, ids?.contains(target) == true else { return }
+            justSent = nil
+            // 减弱动态效果时直接跳到那一行
+            withAnimation(reduceMotion ? nil : Motion.quick) { proxy.scrollTo(target, anchor: .bottom) }
+        }
+        }
         .scrollDismissesKeyboard(.interactively)
         .background(palette.desk)
         // 会话名在页面里（读到之前导航栏不先显示一个空标题再换）
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let session = digest?.session ?? lastSeen {
-                ReplyBar(session: session, alive: digest?.session != nil && session.state != .known(.ended), draft: $draft)
+                ReplyBar(session: session, alive: digest?.session != nil && session.state != .known(.ended), draft: $draft) {
+                    justSent = $0
+                }
             }
         }
         .onAppear { if draft == nil { draft = navigation.takeDraft(for: id) } }
@@ -59,13 +72,15 @@ private struct ReplyBar: View {
     let session: PiSessionState
     let alive: Bool
     @Binding var draft: Navigation.Outbox?
+    /// 请求写成后告诉会话页（滚到它）。
+    let sent: (UUID) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var text = ""
     @State private var chosenMode: DeliveryMode?
     @State private var sending = false
-    @State private var sent = 0
+    @State private var sentCount = 0
     @FocusState private var focused: Bool
 
     private var content: String {
@@ -108,7 +123,7 @@ private struct ReplyBar: View {
                     .clipShape(.circle)
                     .disabled(content.isEmpty || mode == nil || !reachable || sending)
                     .accessibilityLabel("发送")
-                    .sensoryFeedback(.success, trigger: sent)
+                    .sensoryFeedback(.success, trigger: sentCount)
                 }
                 if let mode, modes.count > 1 {
                     HStack(spacing: 10) {
@@ -159,10 +174,11 @@ private struct ReplyBar: View {
         sending = true
         workspace.attempt {
             defer { sending = false }
-            _ = try await services.requestMacDelivery(content, to: session, mode: mode, card: card, task: task)
+            let request = try await services.requestMacDelivery(content, to: session, mode: mode, card: card, task: task)
             text = ""
             draft = nil
-            sent += 1
+            sentCount += 1
+            sent(request.id)
         }
     }
 }
