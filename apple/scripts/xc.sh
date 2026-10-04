@@ -47,9 +47,12 @@ mkdir -p "$DERIVED"
 # 所以日常构建覆盖成不带团队与身份、且用不含这些能力的 macOS 权限文件。
 local_signing=(DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS-local.entitlements)
 
+# 退出码即 xcodebuild 的退出码（pipefail）。-quiet 下只有警告的编译步骤会被打成
+# "error: the following command failed with exit code 0 but produced no further output"——不是失败，滤掉这一行免得误读。
 xcb() {
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad \
-    -destination "$destination" -derivedDataPath "$DERIVED" ${asc_auth[@]+"${asc_auth[@]}"} "$@" "${local_signing[@]}"
+    -destination "$destination" -derivedDataPath "$DERIVED" ${asc_auth[@]+"${asc_auth[@]}"} "$@" "${local_signing[@]}" 2>&1 \
+    | { grep -v 'failed with exit code 0 but produced no further output' || true; }
 }
 
 # 在 pid 进程的窗口里找主窗口（layer 0、在屏幕上、面积最大）的 CGWindowID；没有则输出空。

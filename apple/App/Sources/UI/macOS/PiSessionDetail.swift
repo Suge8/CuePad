@@ -187,7 +187,7 @@ private struct SessionDetailRow: ViewModifier {
         Button { host?.open(sessionID) } label: { content.contentShape(.rect) }
             .buttonStyle(PressStyle(scale: 0.98))
             .accessibilityHint("打开会话详情")
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(host?.space ?? "")) } action: { host?.report(sessionID, $0) }
+            .onGeometryChange(for: CGRect.self) { [space = host?.space ?? ""] in $0.frame(in: .named(space)) } action: { host?.report(sessionID, $0) }
     }
 }
 

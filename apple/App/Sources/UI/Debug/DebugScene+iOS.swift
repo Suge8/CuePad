@@ -115,6 +115,9 @@ extension DebugScene {
                 question: PiQuestion(
                     promptID: "demo-prompt", kind: .select, text: "要覆盖 public/feed.xml 吗？", options: ["覆盖", "另存为 feed-full.xml", "取消"]))),
             ("cuepad", .thinking, nil, "CuePad", PiRecap(lastPrompt: "看看投送队列超时的那个 bug")),
+            ("notes-edit", .waitingForUser, "编辑提交说明", nil, PiRecap(
+                lastPrompt: "写一段提交说明",
+                question: PiQuestion(promptID: nil, kind: .unknown("editor"), text: "编辑提交说明\n在编辑器里改好后保存"))),
             ("deploy", .waitingForUser, "部署到生产吗？", nil, PiRecap(
                 lastPrompt: "测试都过了就部署",
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
