@@ -34,8 +34,9 @@ const SUBSESSIONS = Symbol.for("cuepad.bridge.subsessions");
 /** 子代理会话文件所在目录名：`<父会话文件所在目录>/subagents/`（FireCode 的约定） */
 const SUBAGENTS_DIRECTORY = "subagents";
 /** 扩展投进会话的机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成
- * （如 FireCode 的 `<firecode_master_event>`、`<firecode_watcher>`、`<firecode_review>`）。它不是你说的话 */
-const MACHINE_MESSAGE = /^(?:<([A-Za-z][\w.-]*)>\n[\s\S]*?\n<\/\1>\s*)+$/u;
+ * （如 FireCode 的 `<firecode_master_event>`、`<firecode_watcher>`、`<firecode_review>`）。它不是你说的话。
+ * 块正文止于第一个同名闭合标签：块与块之间夹着真人文字时整条不匹配 */
+const MACHINE_MESSAGE = /^(?:<([A-Za-z][\w.-]*)>\n(?:(?!\n<\/\1>)[\s\S])*\n<\/\1>\s*)+$/u;
 /** FireCode 把子代理名写在子会话系统提示的这个标签上 */
 const WORKER_NAME = /<firecode_worker name="([^"]+)">/u;
 /** 交给 CuePad 用来定位终端的环境变量 */
