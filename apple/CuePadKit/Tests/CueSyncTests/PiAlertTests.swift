@@ -84,9 +84,26 @@ import Testing
       #expect(subscription.querySubscriptionOptions == [.firesOnRecordCreation, .firesOnRecordUpdate])  // 删除不通知
       let info = try? #require(subscription.notificationInfo)
       #expect(info?.shouldSendContentAvailable == false)  // 可见通知，不是静默推送
+      #expect(info?.shouldSendMutableContent == true)  // 手机上的通知服务扩展先拿到，改写成会话名与问题
       #expect(info?.alertBody == nil && info?.alertLocalizationArgs == nil && info?.desiredKeys == nil)
     }
     #expect(subscriptions.map { $0.notificationInfo?.alertLocalizationKey } == ["pi_alert_waiting", "pi_alert_settled"])
+  }
+
+  /// 通知服务扩展取回记录、在设备上解密后改写文案：等你确认是"会话名 在等你" + 问题首行，完成是会话名 + "完成了"。
+  @Test func theNotificationExtensionRewritesTheAlertFromTheDecryptedRecord() async throws {
+    let rig = try Rig()
+    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
+    let question = PiQuestion(promptID: "p1", kind: .select, text: "要覆盖 public/feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, title: "homepage", recap: PiRecap(question: question))
+
+    let state = try #require(try await rig.store.piSessionStates().first)
+    let record = RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: state.id.uuidString.lowercased())), zoneID: zone)
+
+    let waiting = try #require(PiAlertText.content(for: record, kind: .waitingForUser))
+    #expect(waiting.title == "homepage 在等你" && waiting.body == "要覆盖 public/feed.xml 吗？")
+    let settled = try #require(PiAlertText.content(for: record, kind: .settled))
+    #expect(settled.title == "homepage" && settled.body == "完成了")
   }
 
   // MARK: 幂等创建与账号切换后重建

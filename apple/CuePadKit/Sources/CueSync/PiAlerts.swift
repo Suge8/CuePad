@@ -41,6 +41,29 @@ public enum PiAlertRoute {
   }
 }
 
+/// 锁屏通知的具体文案：服务端只能发通用句（会话名、问题是加密字段），手机上的通知服务扩展收到后
+/// 取回触发它的记录，在设备上解密，改写成"会话名 + 问题首句（或状态）"。取不到就保持通用句。
+public enum PiAlertText {
+  /// 改写后的标题与正文；记录里读不出会话名时为 nil（保持通用句）。
+  public static func content(for record: CKRecord, kind: PiAlertKind) -> (title: String, body: String)? {
+    let fields = record.encryptedValues
+    guard let title = (fields["title"] as? String).flatMap({ $0.isEmpty ? nil : $0 }) else { return nil }
+    let question = (fields["question"] as? String).map(PiQuestion.init(stored:))?.text
+    return content(title: title, question: question, kind: kind)
+  }
+
+  /// 等你确认：标题"会话名 在等你"，正文是问题首行（没有问题文案时写"去看看它在问什么"）；完成：标题会话名，正文"完成了"。
+  public static func content(title: String, question: String?, kind: PiAlertKind) -> (title: String, body: String) {
+    switch kind {
+    case .waitingForUser:
+      let first = question?.split(whereSeparator: \.isNewline).first.map(String.init)?.trimmingCharacters(in: .whitespaces)
+      return ("\(title) 在等你", first.flatMap { $0.isEmpty ? nil : $0 } ?? "去看看它在问什么")
+    case .settled:
+      return (title, "完成了")
+    }
+  }
+}
+
 /// 一个账号私有数据库里的订阅（真实实现是 CKDatabase）。
 protocol SubscriptionStore: Sendable {
   func subscriptions() async throws -> [CKSubscription.ID: CKSubscription]
@@ -90,6 +113,8 @@ struct PiAlertSubscriptions {
     let info = CKSubscription.NotificationInfo()
     info.alertLocalizationKey = key
     info.soundName = "default"
+    // 让手机上的通知服务扩展先拿到通知，按记录改写成会话名与问题（加密字段只能在设备上读）
+    info.shouldSendMutableContent = true
     subscription.notificationInfo = info
     return subscription
   }
@@ -100,6 +125,7 @@ struct PiAlertSubscriptions {
       && existing.zoneID == wanted.zoneID && existing.querySubscriptionOptions == wanted.querySubscriptionOptions
       && existing.notificationInfo?.alertLocalizationKey == wanted.notificationInfo?.alertLocalizationKey
       && existing.notificationInfo?.shouldSendContentAvailable == wanted.notificationInfo?.shouldSendContentAvailable
+      && existing.notificationInfo?.shouldSendMutableContent == wanted.notificationInfo?.shouldSendMutableContent
   }
 }
 
