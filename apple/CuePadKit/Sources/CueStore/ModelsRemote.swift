@@ -9,10 +9,20 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   case ended
 
   /// 正在干活（思考、输出、调用工具）。
-  public var isWorking: Bool { self == .thinking || self == .outputting || self == .tool || self == .delegating }
+  public var isWorking: Bool {
+    switch self {
+    case .thinking, .outputting, .tool, .delegating: true
+    case .waitingForUser, .settled, .error, .ended: false
+    }
+  }
 
   /// Pi 自己正在跑一轮（含弹窗等你确认）：此时发消息只能插话或排队。等子代理不算——指挥官这轮已经歇下，消息直接开始新的一轮。
-  public var isTurnRunning: Bool { self == .thinking || self == .outputting || self == .tool || self == .waitingForUser }
+  public var isTurnRunning: Bool {
+    switch self {
+    case .thinking, .outputting, .tool, .waitingForUser: true
+    case .delegating, .settled, .error, .ended: false
+    }
+  }
 }
 
 extension Open<PiWorkState> {
