@@ -11,7 +11,7 @@ import net from "node:net";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
-const EXTENSION_VERSION = 4;
+const EXTENSION_VERSION = 5;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -29,6 +29,15 @@ const REPLY_LIMIT = 1200;
 const QUESTION_LIMIT = 500;
 /** 标记已经包装过的 ui 对象 */
 const CAPTURED = Symbol("cuepad.captured");
+/** 进程内子会话的登记表。Pi 的扩展加载器会为每个会话重新求值本模块，所以挂在进程唯一的 globalThis 上 */
+const SUBSESSIONS = Symbol.for("cuepad.bridge.subsessions");
+/** 子代理会话文件所在目录名：`<父会话文件所在目录>/subagents/`（FireCode 的约定） */
+const SUBAGENTS_DIRECTORY = "subagents";
+/** 扩展投进会话的机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成
+ * （如 FireCode 的 `<firecode_master_event>`、`<firecode_watcher>`、`<firecode_review>`）。它不是你说的话 */
+const MACHINE_MESSAGE = /^(?:<([A-Za-z][\w.-]*)>\n[\s\S]*?\n<\/\1>\s*)+$/u;
+/** FireCode 把子代理名写在子会话系统提示的这个标签上 */
+const WORKER_NAME = /<firecode_worker name="([^"]+)">/u;
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = [
 	"TERM_PROGRAM", "TERM_PROGRAM_VERSION", "__CFBundleIdentifier", "TERM_SESSION_ID", "ITERM_SESSION_ID",
@@ -107,6 +116,10 @@ function clip(text: string, limit: number): string | null {
 	return chars.length <= limit ? chars.join("") : chars.slice(0, limit - 1).join("") + "…";
 }
 
+function isMachineMessage(message: any): boolean {
+	return MACHINE_MESSAGE.test(messageText(message).trim());
+}
+
 function promptText(message: any): string | null {
 	return clip(messageText(message).replace(/[\s\p{Cc}]+/gu, " "), PROMPT_LIMIT);
 }
@@ -117,12 +130,20 @@ function replyText(message: any): string | null {
 	return clip(blocks.filter((block: any) => block?.type === "text").map((block: any) => block.text).join("\n"), REPLY_LIMIT);
 }
 
-/** 当前分支上最后一条某角色的消息（恢复会话时补回近况）。 */
-function lastMessage(entries: any[], role: string): any {
+/** 当前分支上最后一条符合条件的消息（恢复会话时补回近况）。 */
+function lastMessage(entries: any[], matches: (message: any) => boolean): any {
 	for (let i = entries.length - 1; i >= 0; i--) {
-		if (entries[i]?.type === "message" && entries[i].message?.role === role) return entries[i].message;
+		if (entries[i]?.type === "message" && matches(entries[i].message)) return entries[i].message;
 	}
 	return undefined;
+}
+
+type Subsession = { directory: string; name: string; kind: string };
+type Registry = { sessions: Map<string, Subsession>; listeners: Set<() => void> };
+const registry: Registry = ((globalThis as any)[SUBSESSIONS] ??= { sessions: new Map(), listeners: new Set() });
+
+function publishSubsessions() {
+	for (const listener of registry.listeners) listener();
 }
 
 /** 会话里第一条用户消息（按文件顺序，与 Pi 会话列表一致）。 */
@@ -156,8 +177,14 @@ export default function (pi: any) {
 	let lastKey = "";
 	let since = Date.now();
 	/** 会话名（`/name`）与首条用户消息：CuePad 据此按 Pi 会话列表的规则显示会话；其余是近况 */
-	type Info = { name: string | null; firstMessage: string | null; lastPrompt: string | null; lastReply: string | null; question: string | null };
-	let info: Info = { name: null, firstMessage: null, lastPrompt: null, lastReply: null, question: null };
+	type Info = {
+		name: string | null; firstMessage: string | null; lastPrompt: string | null; lastReply: string | null; question: string | null;
+		subagents: { name: string; kind: string }[];
+	};
+	let info: Info = { name: null, firstMessage: null, lastPrompt: null, lastReply: null, question: null, subagents: [] };
+	/** 本会话是某个会话的进程内子会话（子代理）时，它在登记表里的键（会话文件路径）：状态只进登记表，不开 socket */
+	let subsessionKey: string | undefined;
+	let stopWatchingSubsessions: (() => void) | undefined;
 	/** 正在弹出的对话框的文案行（标题、说明、选项）。ui_prompt_start 只带标题，选项与说明要在调用时记下 */
 	let asking: string[] | null = null;
 
@@ -172,6 +199,11 @@ export default function (pi: any) {
 		if (key === lastKey) return;
 		lastKey = key;
 		since = Date.now();
+		const sub = subsessionKey && registry.sessions.get(subsessionKey);
+		if (sub) {
+			sub.kind = state.kind;
+			publishSubsessions();
+		}
 		if (clients.size === 0) return;
 		const message = { t: "state", state: { ...state, since } };
 		for (const client of clients) write(client, message);
@@ -180,7 +212,7 @@ export default function (pi: any) {
 	/** 有变化才发。 */
 	function updateInfo(changes: Partial<Info>) {
 		const next = { ...info, ...changes };
-		if ((Object.keys(next) as (keyof Info)[]).every((key) => next[key] === info[key])) return;
+		if (JSON.stringify(next) === JSON.stringify(info)) return;
 		info = next;
 		for (const client of clients) write(client, { t: "info", ...info });
 	}
@@ -286,7 +318,41 @@ export default function (pi: any) {
 		socketPath = file;
 	}
 
+	/** 顶层会话：同进程里会话文件在自己目录的 `subagents/` 下的子会话都是它的子代理，汇总进 info。 */
+	function watchSubsessions(file: string | undefined) {
+		if (!file) return;
+		const directory = path.join(path.dirname(file), SUBAGENTS_DIRECTORY);
+		const refresh = () => updateInfo({
+			subagents: [...registry.sessions.values()]
+				.filter((sub) => sub.directory === directory)
+				.map((sub) => ({ name: sub.name, kind: sub.kind })),
+		});
+		registry.listeners.add(refresh);
+		stopWatchingSubsessions = () => registry.listeners.delete(refresh);
+		refresh();
+	}
+
+	/** print 模式的会话若是子代理（会话文件在 `subagents/` 下）：登记进表，由同进程的顶层会话汇总。 */
+	function registerSubsession() {
+		const file: string | undefined = ctx.sessionManager.getSessionFile();
+		if (!file || path.basename(path.dirname(file)) !== SUBAGENTS_DIRECTORY) return;
+		const firstMessage = firstUserMessage(ctx.sessionManager.getEntries());
+		const name = pi.getSessionName() ?? WORKER_NAME.exec(ctx.getSystemPrompt?.() ?? "")?.[1] ?? firstMessage ?? path.basename(file, ".jsonl");
+		subsessionKey = file;
+		registry.sessions.set(file, { directory: path.dirname(file), name, kind: tracker.derive().kind });
+		publishSubsessions();
+	}
+
+	function unregisterSubsession() {
+		if (!subsessionKey) return;
+		registry.sessions.delete(subsessionKey);
+		subsessionKey = undefined;
+		publishSubsessions();
+	}
+
 	function stop(reason: string) {
+		stopWatchingSubsessions?.();
+		stopWatchingSubsessions = undefined;
 		for (const client of clients) {
 			write(client, { t: "bye", reason });
 			client.end();
@@ -320,36 +386,41 @@ export default function (pi: any) {
 
 	pi.on("session_start", (_event: any, context: any) => {
 		ctx = context;
-		// print/json 是一次性的无界面运行（脚本、其他工具调用 pi -p），没有输入框也不该出现在会话列表里
-		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return;
 		tracker = new StateTracker();
 		lastKey = JSON.stringify(tracker.derive());
 		since = Date.now();
+		// print/json 是没有输入框的运行：一次性的 pi -p，或其他扩展在同进程里开的子会话（FireCode 子代理）。
+		// 都不作为会话出现；子代理的状态汇总到父会话
+		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return registerSubsession();
 		tty = readTTY();
 		const branch = ctx.sessionManager.getBranch();
 		info = {
 			name: pi.getSessionName() ?? null,
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
-			lastPrompt: promptText(lastMessage(branch, "user")),
-			lastReply: replyText(lastMessage(branch, "assistant")),
+			lastPrompt: promptText(lastMessage(branch, (m) => m?.role === "user" && !isMachineMessage(m))),
+			lastReply: replyText(lastMessage(branch, (m) => m?.role === "assistant")),
 			question: null,
+			subagents: [],
 		};
 		asking = null;
 		captureDialogs(ctx.ui);
 		try {
 			start();
+			watchSubsessions(ctx.sessionManager.getSessionFile());
 		} catch (error: any) {
 			ctx.ui.notify(`CuePad bridge disabled: ${error?.message ?? error}`, "warning");
 		}
 	});
-	pi.on("session_shutdown", (event: any) => stop(event.reason));
+	pi.on("session_shutdown", (event: any) => {
+		unregisterSubsession();
+		stop(event.reason);
+	});
 	pi.on("session_info_changed", (event: any) => updateInfo({ name: event.name ?? null }));
 	pi.on("message_end", (event: any) => {
 		if (event.message?.role !== "user") return;
-		updateInfo({
-			lastPrompt: promptText(event.message),
-			firstMessage: info.firstMessage ?? preview(messageText(event.message)),
-		});
+		// 首条消息与 Pi 会话列表一致，不区分机器消息
+		const firstMessage = info.firstMessage ?? preview(messageText(event.message));
+		updateInfo(isMachineMessage(event.message) ? { firstMessage } : { firstMessage, lastPrompt: promptText(event.message) });
 	});
 
 	// ---- Pi 事件 → 状态 ----

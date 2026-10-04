@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`sessions` 直接给界面观察，`changes()` 给通知；`send` / `paste`；`endedSessions` 留着本次运行里已结束会话的最后快照（按 id），界面据此把指向它的发送目标显示成"已结束" |
 | 安装扩展 | `PiExtensionInstaller` | 检测 Pi（≥ 0.84.4）与扩展状态，`install()`（新装/升级）、`uninstall()`；首次写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
-| 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 增量读取，只给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动）；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
+| 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只认 `<会话目录>/<项目目录>/*.jsonl`（与 Pi 自己的会话列表一致，FireCode 子代理的 `subagents/` 不算）；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，只给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动）；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
 | 错误摘要 | `PiErrorSummary`（`PiAgentState.errorSummary`） | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
 | 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
 
@@ -32,9 +32,11 @@
 
 近况（扩展 v4 起，旧扩展为 nil）是手机打开会话时看的"问了什么、答了什么、在等什么"，不同步完整对话，超出上限截断并以省略号结尾：
 
-- `lastPrompt`：用户最后一条消息（`message_end`，`role == "user"`）的文字块，空白与控制字符折成一个空格，≤500 字符；
+- `lastPrompt`：用户最后一条消息（`message_end`，`role == "user"`）的文字块，空白与控制字符折成一个空格，≤500 字符。扩展 v5 起跳过机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的（如 FireCode 空闲时以 `sendUserMessage` 投进来的子代理事件、观察员、审查结果信封），保留上一条真人提问；它触发的那一轮回答照常进 `lastReply`。首条消息（显示名）与 Pi 会话列表一致，不跳过；
 - `lastReply`：`agent_end` 时本轮最后一条助手消息里的文字块（思考与工具调用不算），换行连接、保留换行，≤1200 字符；
 - `question`：正在等用户回答的弹窗文案，标题、说明（`confirm`）、选项（`select`）换行分隔，≤500 字符；`ui_prompt_end` 后为 nil。`ui_prompt_start` 只带标题，说明与选项靠在 `session_start` 时包装共用的 `ctx.ui`（`select`/`confirm`/`input`/`editor`）在调用时记下；`custom` 弹窗没有文案。
+
+子代理（扩展 v5 起）：其他扩展在同一进程里开的子会话（FireCode 用 `createAgentSession`，以 `print` 模式绑定）也会加载本扩展，但 `print` 模式不开 socket，所以不会作为独立会话出现。会话文件在父会话目录的 `subagents/` 下的子会话把名字与状态登记到进程内共享的表里，父会话的 `info.subagents`（`[{name, kind}]`，`kind` 同 `state.kind`）汇总它们；名字依次取会话名、FireCode 写在子会话系统提示里的 `<firecode_worker name="…">`、首条用户消息。`PiSession.subagents` / `subagentSummary`（"子代理：ui 工作中 · core 空闲"）给界面；同步记录里会话自己没有说明时，说明写这句摘要。
 
 `detail` 是扩展 v2 加的可选字段：命令（`command`）或搜索模式（`pattern`）取首个非空行，文件类工具（`path`）取文件名，超过 120 个字符截断（含省略号）；不上报完整参数。旧扩展没有这个字段，客户端得到 `nil`，并被 `hasOutdatedExtension` 标为过期。
 

@@ -59,6 +59,13 @@ actor PiHistoryPersistence {
         idsByPath?[session.path] = session.id
     }
 
+    /// 回填完成：只留下此刻的会话文件。
+    func retain(_ files: [URL]) async throws {
+        let paths = Set(files.map(\.path))
+        try await storage.retainPiSessions(paths: paths)
+        idsByPath = idsByPath?.filter { paths.contains($0.key) }
+    }
+
     private func sessionIDs() async throws -> [String: String] {
         if let idsByPath { return idsByPath }
         let rows = try await storage.piSessions()

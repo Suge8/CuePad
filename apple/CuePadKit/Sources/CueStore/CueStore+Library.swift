@@ -357,6 +357,14 @@ extension CueStore {
         """, session.bindings + [checkpoint])
     }
   }
+
+  /// 只留下这些会话文件的索引，其余（文件已删除、不再算会话的）删除。仅本机。
+  public func retainPiSessions(paths: Set<String>) throws {
+    try write {
+      let stale = try db.query("SELECT id, path FROM piSessions") { ($0.text(0), $0.text(1)) }.filter { !paths.contains($0.1) }
+      for (id, _) in stale { try db.run("DELETE FROM piSessions WHERE id = ?", [id]) }
+    }
+  }
 }
 
 // MARK: 引用校验

@@ -39,8 +39,9 @@ public struct PiHistoryUpdate: Sendable {
 
 public enum PiHistoryEvent: Sendable {
     case updated(PiHistoryUpdate)
-    /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`
-    case backfillFinished
+    /// 首次回填（按修改时间倒序）全部完成；之后只有文件变化触发的 `updated`。
+    /// `sessionFiles` 是此刻全部会话文件：不在其中的旧索引（文件已删除等）可以丢掉
+    case backfillFinished(sessionFiles: [URL])
 }
 
 /// Pi 会话文件（JSONL，v3 树结构）的解析。当前分支 = 从文件最后一个条目沿 `parentId` 回溯到根，

@@ -71,12 +71,53 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var lastReply: String? = nil
     /// 正在等用户回答的弹窗文案：标题、说明与各选项，换行分隔（≤500 字符）；不在等待时为 nil
     public internal(set) var question: String? = nil
+    /// 本会话在同一进程里开的子代理（扩展 v5 起；FireCode 的子代理是进程内子会话，不作为独立会话出现）
+    public internal(set) var subagents: [PiSubagent] = []
+
+    /// 子代理的一行摘要，如"子代理：ui 工作中 · core 空闲"；没有子代理时为 nil。
+    public var subagentSummary: String? {
+        subagents.isEmpty ? nil : "子代理：" + subagents.map { "\($0.name) \($0.activity.label)" }.joined(separator: " · ")
+    }
 
     public var hasOutdatedExtension: Bool { extensionVersion < PiExtensionBundle.version }
 
     /// 会话的显示名，规则见 `PiSessionName`。旧扩展不报名字与消息，显示工作目录名。
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
+    }
+}
+
+/// 父会话里的一个子代理：名字与此刻在干什么。
+public struct PiSubagent: Sendable, Equatable, Decodable {
+    public enum Activity: Sendable, Equatable {
+        case working, waitingForUser, idle, error
+
+        public var label: String {
+            switch self {
+            case .working: "工作中"
+            case .waitingForUser: "等你确认"
+            case .idle: "空闲"
+            case .error: "出错"
+            }
+        }
+    }
+
+    public var name: String
+    /// 扩展上报的状态种类（同 `state.kind`）
+    public var kind: String
+
+    public init(name: String, kind: String) {
+        self.name = name
+        self.kind = kind
+    }
+
+    public var activity: Activity {
+        switch kind {
+        case "thinking", "outputting", "tool": .working
+        case "waiting_user": .waitingForUser
+        case "error": .error
+        default: .idle
+        }
     }
 }
 

@@ -131,8 +131,12 @@ extension AppServices {
                 } catch {
                     reportIssue(.piHistoryUnavailable("写入 \(update.file.path) 失败：\(error)"))
                 }
-            case .backfillFinished:
-                break
+            case .backfillFinished(let files):
+                do {
+                    try await historyStore.retain(files)
+                } catch {
+                    reportIssue(.piHistoryUnavailable("清理已不存在的会话失败：\(error)"))
+                }
             }
         }
     }

@@ -29,7 +29,7 @@ extension AppServices {
     private func recordPiState(of session: CuePi.PiSession) async throws {
         let (state, detail) = session.state.syncRepresentation
         try await piStateRecorder.update(
-            sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
+            sessionID: session.sessionID, state: state, detail: detail ?? session.subagentSummary, title: session.displayName,
             folder: session.cwd.lastPathComponent,
             projectID: try await store.project(containing: session.cwd)?.id,
             recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question))
