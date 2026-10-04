@@ -62,8 +62,12 @@ actor PiHistoryPersistence {
     /// 回填完成：只留下此刻的会话文件。
     func retain(_ files: [URL]) async throws {
         let paths = Set(files.map(\.path))
-        try await storage.retainPiSessions(paths: paths)
+        let started = ContinuousClock.now
+        let removed = try await storage.retainPiSessions(paths: paths)
         idsByPath = idsByPath?.filter { paths.contains($0.key) }
+        if removed > 0 {
+            Self.log.notice("回填完成：删掉 \(removed) 条不在会话列表里的旧索引，用时 \(ContinuousClock.now - started, privacy: .public)")
+        }
     }
 
     private func sessionIDs() async throws -> [String: String] {

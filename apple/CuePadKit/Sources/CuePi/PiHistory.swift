@@ -64,7 +64,8 @@ public enum PiHistory {
         try handle.seek(toOffset: start)
         var carry = Data()
         var consumed = start
-        var block = [UInt8](repeating: 0, count: blockSize)
+        // 缓冲按剩余字节分配：启动回填时绝大多数文件没有新内容，每个都分配并清零 8 MB 是回填的主要开销
+        var block = [UInt8](repeating: 0, count: Int(min(UInt64(blockSize), size - start)))
         while true {
             let n = read(handle.fileDescriptor, &block, block.count)
             if n < 0 { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
