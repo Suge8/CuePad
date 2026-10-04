@@ -252,6 +252,16 @@ private struct PiSection: View {
     }
 }
 
+extension PiSessionState {
+    /// 侧栏 Pi 分组的行：在线的按要你注意的先后（`inListOrder`），其后是已结束（本机同步记录）、再后是历史里的；
+    /// 同一个会话只出现一次（在线 > 已结束 > 历史），已结束与历史合计最多 `pastLimit` 行。
+    static func sidebarRows(
+        live: [PiSessionState], ended: [PiSessionState], history: [PiSessionState], pastLimit: Int
+    ) -> [PiSessionState] {
+        []
+    }
+}
+
 /// 没装 Pi 或版本太低：侧栏 Pi 分组里的一行引导，点开是安装说明（`PiSetupGuide`）。
 private struct PiSetupRow: View {
     let installation: PiInstallation
