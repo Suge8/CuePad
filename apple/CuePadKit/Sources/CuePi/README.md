@@ -20,15 +20,21 @@
 
 | `t` | 内容 |
 | --- | --- |
-| `hello` | 连接后第一条：`protocol`、`extensionVersion`、`sessionId`、`sessionFile`（可空，首条消息落盘前文件不存在）、`pid`、`cwd`、`mode`（tui/rpc）、`model`、`tty`、`term{环境变量子集}`、`state`（当前状态快照）、`name`（`/name` 设的会话名，可空）、`firstMessage`（首条用户消息的前 200 个字符，可空） |
+| `hello` | 连接后第一条：`protocol`、`extensionVersion`、`sessionId`、`sessionFile`（可空，首条消息落盘前文件不存在）、`pid`、`cwd`、`mode`（tui/rpc）、`model`、`tty`、`term{环境变量子集}`、`state`（当前状态快照），以及 `info` 的全部字段（恢复已有会话时近况从会话文件当前分支补回） |
 | `state` | 仅状态切换时发送：`state{kind, since(ms), …}` |
-| `info` | 会话名或首条用户消息变化时（`session_info_changed`、第一条用户消息的 `message_end`）：`name`、`firstMessage` |
+| `info` | 任一字段变化时：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、近况 `lastPrompt`、`lastReply`、`question`；都可空 |
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
 | `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
 `state.kind`：`idle`、`thinking`、`outputting`、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`done`（`aborted`）、`error`（`error`）。只有 `agent_settled` 才进入 `done`/`error`。
 
-会话显示名只有一条规则，在 `PiSessionName`（活动会话的 `PiSession.displayName` 与历史的 `PiSessionHistory.displayName` 都用它）：与 Pi 自己的会话列表一致，`/name` 设的名字 → 首条用户消息 → 工作目录名，控制字符换成空格、去掉首尾空白（单行）。`name`、`firstMessage` 是扩展 v3 加的；旧扩展没有，显示工作目录名。名字或首条消息变化时 `changes()` 给出 `.displayNameChanged`。
+会话显示名只有一条规则，在 `PiSessionName`（活动会话的 `PiSession.displayName` 与历史的 `PiSessionHistory.displayName` 都用它）：与 Pi 自己的会话列表一致，`/name` 设的名字 → 首条用户消息 → 工作目录名，控制字符换成空格、去掉首尾空白（单行）。`name`、`firstMessage` 是扩展 v3 加的；旧扩展没有，显示工作目录名。`info` 的任一字段变化时 `changes()` 给出 `.infoChanged`。
+
+近况（扩展 v4 起，旧扩展为 nil）是手机打开会话时看的"问了什么、答了什么、在等什么"，不同步完整对话，超出上限截断并以省略号结尾：
+
+- `lastPrompt`：用户最后一条消息（`message_end`，`role == "user"`）的文字块，空白与控制字符折成一个空格，≤500 字符；
+- `lastReply`：`agent_end` 时本轮最后一条助手消息里的文字块（思考与工具调用不算），换行连接、保留换行，≤1200 字符；
+- `question`：正在等用户回答的弹窗文案，标题、说明（`confirm`）、选项（`select`）换行分隔，≤500 字符；`ui_prompt_end` 后为 nil。`ui_prompt_start` 只带标题，说明与选项靠在 `session_start` 时包装共用的 `ctx.ui`（`select`/`confirm`/`input`/`editor`）在调用时记下；`custom` 弹窗没有文案。
 
 `detail` 是扩展 v2 加的可选字段：命令（`command`）或搜索模式（`pattern`）取首个非空行，文件类工具（`path`）取文件名，超过 120 个字符截断（含省略号）；不上报完整参数。旧扩展没有这个字段，客户端得到 `nil`，并被 `hasOutdatedExtension` 标为过期。
 

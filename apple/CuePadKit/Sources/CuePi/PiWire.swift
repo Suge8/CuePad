@@ -46,19 +46,39 @@ enum PiWire {
         var tty: String?
         var term: [String: String]
         var state: State
-        /// 扩展 v3 起：会话名与首条用户消息（旧扩展没有，为 nil）
+        /// 与 `info` 消息同样的字段，平铺在 hello 里
         var name: String?
         var firstMessage: String?
+        var lastPrompt: String?
+        var lastReply: String?
+        var question: String?
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, sessionFile, pid, cwd, mode, model, tty, term, state, name, firstMessage
+            case extensionVersion, sessionId, sessionFile, pid, cwd, mode, model, tty, term, state
+            case name, firstMessage, lastPrompt, lastReply, question
+        }
+
+        var info: Info {
+            Info(name: name, firstMessage: firstMessage, lastPrompt: lastPrompt, lastReply: lastReply, question: question)
         }
     }
 
+    /// 会话名、首条用户消息（扩展 v3 起）与近况（v4 起）；旧扩展没有的为 nil。
     struct Info: Decodable {
         var name: String?
         var firstMessage: String?
+        var lastPrompt: String?
+        var lastReply: String?
+        var question: String?
+
+        func apply(to session: inout PiSession) {
+            session.name = name
+            session.firstMessage = firstMessage
+            session.lastPrompt = lastPrompt
+            session.lastReply = lastReply
+            session.question = question
+        }
     }
 
     struct Ack: Decodable {

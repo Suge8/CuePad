@@ -8,14 +8,14 @@ extension CueStore {
 
   func writePiState(
     sessionID: String, hostID: String, title: String, folder: String?, projectID: UUID?, state: PiWorkState, detail: String?,
-    notify: PiAlert?, stateSince: Date
+    recap: PiRecap, notify: PiAlert?, stateSince: Date
   ) throws {
     try write {
       let now = Date.stamp
-      let id = DeterministicID.uuid("pi-session/\(sessionID)")
       let record = PiSessionState(
-        id: id, sessionID: sessionID, hostID: hostID, title: title, projectID: projectID, state: .known(state), detail: detail,
-        folder: folder, notify: notify.map(Open.known), stateSince: stateSince, createdAt: now, modifiedAt: now)
+        id: Self.piStateID(sessionID), sessionID: sessionID, hostID: hostID, title: title, projectID: projectID,
+        state: .known(state), detail: detail, folder: folder, lastPrompt: recap.lastPrompt, lastReply: recap.lastReply,
+        question: recap.question, notify: notify.map(Open.known), stateSince: stateSince, createdAt: now, modifiedAt: now)
       let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
         .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
@@ -34,19 +34,30 @@ extension CueStore {
     }
   }
 
-  func deletePiState(sessionID: String) throws {
-    try write { try db.run("DELETE FROM piSessionStates WHERE id = ?", [DeterministicID.uuid("pi-session/\(sessionID)")]) }
+  /// 把这台 Mac 的会话记为已结束（`sessionID` 为 nil 时是它全部未结束的会话），近况留着；
+  /// 结束于 `expiredBefore` 之前的已结束记录删除。
+  func endPiStates(host: String, sessionID: String?, at now: Date, expiredBefore: Date) throws {
+    try write {
+      let ended = PiWorkState.ended.rawValue
+      let end = "UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, modifiedAt = ?"
+      if let sessionID {
+        try db.run("\(end) WHERE id = ?", [ended, now, Date.stamp, Self.piStateID(sessionID)])
+      } else {
+        try db.run("\(end) WHERE hostID = ? AND state != ?", [ended, now, Date.stamp, host, ended])
+      }
+      try db.run("DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND stateSince < ?", [host, ended, expiredBefore])
+    }
   }
 
-  func deletePiStates(host: String) throws {
-    try write { try db.run("DELETE FROM piSessionStates WHERE hostID = ?", [host]) }
-  }
+  private nonisolated static func piStateID(_ sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
 }
 
 /// 把 Pi 会话的状态变化写成同步记录（每个会话一条）。
 /// - 开始工作、等你确认、完成、出错，以及会话的标题或项目变化：立即写；
 /// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`，期间只保留最新的一次；
-/// - 与已写入内容相同的更新不再写；会话结束时删除记录并丢弃挂起的更新。
+/// - 近况（`PiRecap`）变化：立即写；
+/// - 与已写入内容相同的更新不再写；会话结束时把记录标为已结束（近况留给手机看）并丢弃挂起的更新，
+///   结束超过 `endedRetention` 的记录在下次结束或启动清理时删除。
 ///
 /// actor 在 await 处可重入：会话状态只在 await 之前改完，不跨 await 持有副本；落盘按决定的先后串成一条任务链，
 /// 后决定的写入（含删除）不会被先决定的覆盖。
@@ -57,6 +68,7 @@ public actor PiStateRecorder {
     var title: String
     var folder: String?
     var projectID: UUID?
+    var recap: PiRecap
   }
 
   private struct Session {
@@ -64,12 +76,16 @@ public actor PiStateRecorder {
     var title = ""
     var folder: String?
     var projectID: UUID?
+    var recap = PiRecap()
     var written: Content?
     var writtenAt: Date?
     var stateSince: Date?
     var pending: (state: PiWorkState, detail: String?)?
     var timer: Task<Void, Never>?
   }
+
+  /// 已结束的记录留多久。
+  public static let endedRetention: Duration = .seconds(7 * 24 * 3600)
 
   private let store: CueStore
   private let hostID: String
@@ -87,7 +103,7 @@ public actor PiStateRecorder {
 
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,
-    projectID: UUID? = nil
+    projectID: UUID? = nil, recap: PiRecap? = nil
   ) async throws {
     var session = sessions[sessionID] ?? Session()
     let previous = session.observed
@@ -95,15 +111,19 @@ public actor PiStateRecorder {
     if let title { session.title = title }
     if let folder { session.folder = folder }
     if let projectID { session.projectID = projectID }
+    if let recap { session.recap = recap }
 
-    let content = Content(state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID)
+    let content = Content(
+      state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID, recap: session.recap)
     if content == session.written {
       cancelPending(&session)
       sessions[sessionID] = session
       return
     }
     let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
-    let renamed = session.written.map { $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID } ?? true
+    let renamed = session.written.map {
+      $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID || $0.recap != content.recap
+    } ?? true
     let now = timing.now()
     guard startsOrEndsWork || renamed || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {
       session.pending = (state, detail)
@@ -126,18 +146,26 @@ public actor PiStateRecorder {
     }
   }
 
-  /// 会话结束：删除它的记录。
+  /// 会话结束：记录标为已结束。
   public func end(sessionID: String) async throws {
     if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }
-    try await persist { [store] in try await store.deletePiState(sessionID: sessionID) }
+    try await endRecords(sessionID: sessionID)
   }
 
-  /// 删除这台 Mac 遗留的所有记录（App 启动时清理上次没来得及结束的会话）。
+  /// 这台 Mac 遗留的记录都标为已结束（App 启动时：上次没来得及结束的会话；还活着的会重新登记）。
   public func reset() async throws {
     for id in Array(sessions.keys) {
       if var session = sessions.removeValue(forKey: id) { cancelPending(&session) }
     }
-    try await persist { [store, hostID] in try await store.deletePiStates(host: hostID) }
+    try await endRecords(sessionID: nil)
+  }
+
+  private func endRecords(sessionID: String?) async throws {
+    let now = timing.now()
+    let expiredBefore = now.addingTimeInterval(-Self.endedRetention.seconds)
+    try await persist { [store, hostID] in
+      try await store.endPiStates(host: hostID, sessionID: sessionID, at: now, expiredBefore: expiredBefore)
+    }
   }
 
   private func flush(_ sessionID: String) async {
@@ -145,7 +173,8 @@ public actor PiStateRecorder {
     session.timer = nil
     session.pending = nil
     let content = Content(
-      state: pending.state, detail: pending.detail, title: session.title, folder: session.folder, projectID: session.projectID)
+      state: pending.state, detail: pending.detail, title: session.title, folder: session.folder, projectID: session.projectID,
+      recap: session.recap)
     let write = commit(sessionID, &session, content, at: timing.now())
     sessions[sessionID] = session
     // 定时写入没有调用方可报告；记为未写入，下一次更新会重写
@@ -156,7 +185,7 @@ public actor PiStateRecorder {
   /// 这样重启后重新登记已有会话不会把旧事件再推一遍。
   /// 标志置位后，同一状态下的后续写入（如仍在等、只换了问题文本）在标志上传之前沿用它（见 `writePiState`），
   /// 上传之后的同状态写入不再带标志，订阅不会为同一次等待重复通知。状态一旦前进（如用户答完回到思考中），
-  /// 未上传的标志随之作废——已恢复工作的会话不该再提示"等你确认"。会话结束（`end`）删除记录，未上传的标志也随之丢失。
+  /// 未上传的标志随之作废——已恢复工作的会话不该再提示"等你确认"。会话结束（`end`）清掉标志，未上传的也不再通知。
   private static func alert(entering state: PiWorkState, from previous: PiWorkState?) -> PiAlert? {
     guard let previous else { return nil }
     if state == .waitingForUser, previous != .waitingForUser { return .waitingForUser }
@@ -175,8 +204,7 @@ public actor PiStateRecorder {
     return { [store, hostID] in
       try await store.writePiState(
         sessionID: sessionID, hostID: hostID, title: content.title, folder: content.folder, projectID: content.projectID,
-        state: content.state,
-        detail: content.detail, notify: notify, stateSince: since)
+        state: content.state, detail: content.detail, recap: content.recap, notify: notify, stateSince: since)
     }
   }
 

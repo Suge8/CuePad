@@ -2,7 +2,8 @@ import CueStore
 import Foundation
 import Testing
 
-/// Pi 会话状态记录（Mac 写，按会话一条）：开始工作、等你确认、完成、出错立即写；工作中的细节变化合并且有最短间隔；会话结束删除。
+/// Pi 会话状态记录（Mac 写，按会话一条）：开始工作、等你确认、完成、出错立即写；工作中的细节变化合并且有最短间隔；
+/// 会话结束记为"已结束"并保留近况，过了保留期才删。
 @Suite struct PiStateTests {
   let fixture = try! Fixture()
   let clock = ManualTiming()
@@ -117,29 +118,61 @@ import Testing
     #expect(try RawDB(fixture.url).count("piSessionStates") == 2)
   }
 
-  @Test func endingASessionDeletesItsRecordAndDropsPendingUpdates() async throws {
+  @Test func recapChangesAreWrittenImmediatelyAndAClearedQuestionIsWrittenAsNil() async throws {
     let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await recorder.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "修好登录"))
+    try await recorder.update(sessionID: "s1", state: .tool, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的"))
+    #expect(try await states()["s1"]?.lastReply == "好的")  // 工作中的合并间隔内，近况变化照样立即写
+
+    try await recorder.update(
+      sessionID: "s1", state: .waitingForUser, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的", question: "覆盖？\n是\n否"))
+    #expect(try await states()["s1"]?.question == "覆盖？\n是\n否")
+    try await recorder.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的"))
+    let written = try #require(try await states()["s1"])
+    #expect(written.question == nil && written.lastPrompt == "修好登录" && written.lastReply == "好的")
+
+    try await recorder.update(sessionID: "s1", state: .settled)  // 不带近况：沿用已有的
+    #expect(try await states()["s1"]?.lastReply == "好的")
+  }
+
+  @Test func endingASessionKeepsItsRecordAsEndedWithItsRecapAndDropsPendingUpdates() async throws {
+    let recorder = recorder()
+    try await recorder.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "跑测试", lastReply: "全部通过"))
     try await recorder.update(sessionID: "s1", state: .tool, detail: "pending")
     await clock.waitForSleeper()
 
     try await recorder.end(sessionID: "s1")
-    #expect(try await store.piSessionStates().isEmpty)
+    let ended = try #require(try await states()["s1"])
+    #expect(ended.state == .known(.ended) && ended.lastReply == "全部通过" && ended.lastPrompt == "跑测试" && ended.notify == nil)
 
-    clock.advance(.seconds(30))  // 到点也不会把已结束的会话写回来
+    clock.advance(.seconds(30))  // 到点也不会把挂起的更新写回来
     await Task.yield()
-    #expect(try await store.piSessionStates().isEmpty)
+    #expect(try await states()["s1"]?.state == .known(.ended))
   }
 
-  @Test func resetClearsOnlyThisHostsLeftoverRecords() async throws {
+  @Test func endedRecordsAreDeletedAfterTheRetentionPeriod() async throws {
+    let recorder = recorder()
+    try await recorder.update(sessionID: "old", state: .settled)
+    try await recorder.end(sessionID: "old")
+    clock.advance(PiStateRecorder.endedRetention + .seconds(60))
+
+    try await recorder.update(sessionID: "new", state: .settled)
+    try await recorder.end(sessionID: "new")
+
+    #expect(try await store.piSessionStates().map(\.sessionID) == ["new"])
+  }
+
+  @Test func resetEndsOnlyThisHostsLeftoverRecords() async throws {
     let mine = recorder(host: "mac-a")
     let other = recorder(host: "mac-b")
-    try await mine.update(sessionID: "s1", state: .thinking)
+    try await mine.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "上次的"))
     try await other.update(sessionID: "s2", state: .thinking)
 
     try await mine.reset()
 
-    #expect(try await store.piSessionStates().map(\.sessionID) == ["s2"])
+    let all = try await states()
+    #expect(all["s1"]?.state == .known(.ended) && all["s1"]?.lastPrompt == "上次的")
+    #expect(all["s2"]?.state == .known(.thinking))
   }
 
   @Test func unknownStatesFromNewerVersionsAreKept() async throws {

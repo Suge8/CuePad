@@ -83,7 +83,7 @@ struct RealPiTests {
 
             try pi.send(["type": "set_session_name", "name": "登录修复"])  // 与 /name 同一路径
             try await eventually("改名后显示名跟上", timeout: .seconds(20)) { bridge.sessions.first?.displayName == "登录修复" }
-            #expect(log.changes.contains { if case .displayNameChanged(let renamed) = $0 { renamed.displayName == "登录修复" } else { false } })
+            #expect(log.changes.contains { if case .infoChanged(let renamed) = $0 { renamed.displayName == "登录修复" } else { false } })
         }
     }
 
@@ -181,15 +181,57 @@ struct RealPiTests {
         }
     }
 
-    @Test func extensionDialogShowsWaitingUserThenResumes() async throws {
+    /// 等待用户时 `question` 是弹窗的文案（确认框的标题与说明、选择框的标题与各选项，换行分隔），回答后清空。
+    @Test func extensionDialogShowsWaitingUserWithTheQuestionThenResumes() async throws {
         try await withRig { pi, bridge, _ in
             try pi.prompt("/ask")
             try await eventually("等待用户", timeout: .seconds(20)) {
                 bridge.sessions.first?.state == .waitingUser(kind: "confirm", title: "Proceed?")
             }
+            #expect(bridge.sessions.first?.question == "Proceed?\ntest dialog")
             let dialog = try await pi.waitForEvent("对话框请求") { $0["method"] as? String == "confirm" }
             try pi.send(["type": "extension_ui_response", "id": dialog["id"] as Any, "confirmed": true])
             try await eventually("回到空闲", timeout: .seconds(20)) { bridge.sessions.first?.state == .idle }
+            #expect(bridge.sessions.first?.question == nil)
+
+            try pi.prompt("/pick")
+            try await eventually("选择框的问题带选项", timeout: .seconds(20)) { bridge.sessions.first?.question == "Which one?\nAlpha\nBeta" }
+            let select = try await pi.waitForEvent("选择框请求") { $0["method"] as? String == "select" }
+            try pi.send(["type": "extension_ui_response", "id": select["id"] as Any, "value": "Alpha"])
+            try await eventually("回答后清空", timeout: .seconds(20)) { bridge.sessions.first?.question == nil }
+        }
+    }
+
+    /// 近况：最后一条提问（单行）与助手最后一轮的最终回答（保留换行，不含工具输出）。
+    @Test func recapIsTheLastPromptAndTheFinalReplyWithoutToolOutput() async throws {
+        try await withRig { pi, bridge, _ in
+            try pi.prompt("第一行\n第二行")
+            try await eventually("回答到了", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "ECHO 第一行\n第二行 IMAGES[]" }
+            #expect(bridge.sessions.first?.lastPrompt == "第一行 第二行")
+
+            try pi.prompt("[[tool:echo TOOL-OUTPUT-42]]")
+            try await eventually("工具轮的最终回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "TOOL_DONE" }
+            #expect(bridge.sessions.first?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
+
+            let long = String(repeating: "长", count: 1300)
+            try pi.prompt(long)
+            try await eventually("长回答截断", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.hasPrefix("ECHO 长") == true }
+            let session = try #require(bridge.sessions.first)
+            #expect(session.lastPrompt?.count == 500 && session.lastPrompt?.hasSuffix("…") == true)
+            #expect(session.lastReply?.count == 1200 && session.lastReply?.hasSuffix("…") == true)
+        }
+    }
+
+    /// 接上已有会话（恢复会话文件）时，近况从会话文件里补回来。
+    @Test func recapIsRestoredFromTheSessionFileOnResume() async throws {
+        try await withRig { pi, bridge, s in
+            try pi.prompt("记住这个")
+            try await eventually("回答到了", timeout: .seconds(20)) { bridge.sessions.first?.lastReply != nil }
+            let log = ChangeLog(bridge)
+            try pi.send(["type": "switch_session", "sessionPath": try #require(s.sessionFile).path])
+            try await eventually("重新连上", timeout: .seconds(20)) { log.changes.contains { if case .appeared = $0 { true } else { false } } }
+            let again = try #require(bridge.sessions.first { $0.sessionID == s.sessionID })
+            #expect(again.lastPrompt == "记住这个" && again.lastReply == "ECHO 记住这个 IMAGES[]")
         }
     }
 

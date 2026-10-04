@@ -18,7 +18,7 @@ extension AppServices {
     func consumePiChanges(_ changes: AsyncStream<PiSessionChange>) async throws {
         for await change in changes {
             switch change {
-            case .appeared(let session), .stateChanged(let session, _), .displayNameChanged(let session):
+            case .appeared(let session), .stateChanged(let session, _), .infoChanged(let session):
                 try await recordPiState(of: session)
             case .ended(let session, _): try await piStateRecorder.end(sessionID: session.sessionID)
             case .incompatible: break
@@ -31,7 +31,8 @@ extension AppServices {
         try await piStateRecorder.update(
             sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
             folder: session.cwd.lastPathComponent,
-            projectID: try await store.project(containing: session.cwd)?.id)
+            projectID: try await store.project(containing: session.cwd)?.id,
+            recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question))
     }
 
     // MARK: 手机发来的投送请求

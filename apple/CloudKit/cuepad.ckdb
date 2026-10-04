@@ -84,6 +84,9 @@ DEFINE SCHEMA
         modifiedAt    INT64,
         notify        STRING QUERYABLE,
         folder        ENCRYPTED STRING,
+        lastPrompt    ENCRYPTED STRING,
+        lastReply     ENCRYPTED STRING,
+        question      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

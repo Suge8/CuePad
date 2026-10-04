@@ -230,15 +230,20 @@ import Testing
     #expect(throws: CueStoreError.unsupportedSchemaVersion(6)) { try CueStore(url: url) }
   }
 
-  /// 已经在用的上一版资料库（结构版本 1）打开时升级，数据保留：Pi 会话状态多了文件夹名一列。
+  /// 已经在用的旧资料库（结构版本 1）打开时逐步升级到最新，数据保留：Pi 会话状态多了文件夹名与近况各列。
   @Test func versionOneLibraryUpgradesInPlace() async throws {
     let card = try await store.createCard(in: nil, body: "保留")
-    try RawDB(fixture.url).exec("ALTER TABLE piSessionStates DROP COLUMN folder; PRAGMA user_version = 1;")
+    try RawDB(fixture.url).exec("""
+      ALTER TABLE piSessionStates DROP COLUMN folder; ALTER TABLE piSessionStates DROP COLUMN lastPrompt;
+      ALTER TABLE piSessionStates DROP COLUMN lastReply; ALTER TABLE piSessionStates DROP COLUMN question;
+      PRAGMA user_version = 1;
+      """)
 
     let reopened = try CueStore(url: fixture.url)
 
     #expect(try await reopened.card(card.id)?.body == "保留")
-    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name = 'folder'").count == 1)
-    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["2"]])
+    let added = "('folder', 'lastPrompt', 'lastReply', 'question')"
+    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name IN \(added)").count == 4)
+    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["3"]])
   }
 }
