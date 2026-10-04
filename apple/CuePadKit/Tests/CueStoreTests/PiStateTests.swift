@@ -141,9 +141,10 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .tool, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的"))
     #expect(try await states()["s1"]?.lastReply == "好的")  // 工作中的合并间隔内，近况变化照样立即写
 
+    let question = PiQuestion(promptID: "p-1", kind: .select, text: "覆盖？", options: ["是", "否"])
     try await recorder.update(
-      sessionID: "s1", state: .waitingForUser, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的", question: "覆盖？\n是\n否"))
-    #expect(try await states()["s1"]?.question == "覆盖？\n是\n否")
+      sessionID: "s1", state: .waitingForUser, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的", question: question))
+    #expect(try await states()["s1"]?.question == question)
     try await recorder.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的"))
     let written = try #require(try await states()["s1"])
     #expect(written.question == nil && written.lastPrompt == "修好登录" && written.lastReply == "好的")

@@ -29,6 +29,7 @@ final class FakeChannels: SendChannels {
     enum Call: Equatable {
         case send(PiMessage, String)
         case paste(String, String)
+        case answer(PiPromptAnswer, String, String)
         case preflight(TargetSelector)
         case dispatch(Payload, TargetSelector, submit: Bool)
         case copy(Payload)
@@ -46,6 +47,7 @@ final class FakeChannels: SendChannels {
     func piSessionID(forSession sessionID: String) -> String? { bridgeIDs[sessionID] }
     func send(_ message: PiMessage, to id: String) async throws { calls.append(.send(message, id)) }
     func paste(_ text: String, into id: String) async throws { calls.append(.paste(text, id)) }
+    func answer(_ answer: PiPromptAnswer, to prompt: String, in id: String) async throws { calls.append(.answer(answer, prompt, id)) }
     func runningApps() -> [AppInfo] { [] }
     func lastFrontmost() -> AppInfo? { nil }
 
