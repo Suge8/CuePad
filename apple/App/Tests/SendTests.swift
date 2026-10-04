@@ -131,6 +131,34 @@ struct SendTests {
         #expect(services.appName(bundleID: "com.example.not-installed") == "com.example.not-installed")
     }
 
+    // MARK: Mac 上发给 Pi 会话
+
+    /// 发给 Pi 的东西不论从哪台设备发都只有一种记录：Mac 上发（会话详情、卡片的发送按钮、菜单栏）写一条指定本机的投送请求，
+    /// 由本机执行器照远端请求的流程执行；送达后资料库里只多这条请求与它的发送记录。
+    @Test(.timeLimit(.minutes(1)))
+    func Mac发给Pi会话_写本机投送请求由执行器送达_只多一条请求与一条发送记录() async throws {
+        idleSession()
+        channels.bridgeIDs["sess-1"] = "s1.100"
+        try await services.startDeliveryExecutor()
+        let workspace = Workspace(services: services)
+
+        #expect(await workspace.send("hi", via: .pi("s1.100", .steer)))
+
+        // 发出即有请求（"你发过去的"列表立刻有这一行）
+        let request = try #require(try await services.store.deliveryRequests().first)
+        #expect(request.hostID == TestApp.hostID)
+        #expect(request.target == SendTarget(kind: .piSession, name: "work", ref: "sess-1"))
+        #expect(request.mode == .known(.steer))
+        for try await status in services.store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id)?.status }) {
+            if status == .known(.succeeded) { break }
+        }
+        #expect(channels.calls == [.send(PiMessage(text: "hi", whenBusy: .steer), "s1.100")])
+        #expect(try await services.store.deliveryRequests().count == 1)
+        let record = try #require(try await services.store.sendRecords().first)
+        #expect(try await services.store.sendRecords().count == 1)
+        #expect(record.targetRef == "sess-1")
+    }
+
     // MARK: 记录
 
     @Test func 记录带内容快照与关联的卡片任务() async throws {
