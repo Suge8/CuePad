@@ -18,14 +18,17 @@ import Testing
     cloud = Loopback(a: mac, b: phone)
   }
 
-  @Test func piSessionStateWrittenOnTheMacIsVisibleOnThePhoneAndRemovedWhenTheSessionEnds() async throws {
+  @Test func piSessionStateWrittenOnTheMacIsVisibleOnThePhoneAndKeptAsEndedWhenTheSessionEnds() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad")
+    let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", question: "确认写入？\n是\n否")
+    try await recorder.update(
+      sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad", recap: recap)
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.piSessionStates().first)
     #expect(seen.sessionID == "s1" && seen.state == .known(.waitingForUser) && seen.detail == "确认写入？" && seen.title == "fix bug")
     #expect(seen.folder == "cuepad")  // 手机没有工作目录，副行靠它写出文件夹名
+    #expect(seen.lastPrompt == recap.lastPrompt && seen.lastReply == recap.lastReply && seen.question == recap.question)
 
     try await recorder.update(sessionID: "s1", state: .settled)
     try await cloud.exchange()
@@ -33,7 +36,8 @@ import Testing
 
     try await recorder.end(sessionID: "s1")
     try await cloud.exchange()
-    #expect(try await phone.store.piSessionStates().isEmpty)
+    let ended = try #require(try await phone.store.piSessionStates().first)
+    #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)  // 跑完的结论在手机上还看得到
   }
 
   @Test(.timeLimit(.minutes(1)))
