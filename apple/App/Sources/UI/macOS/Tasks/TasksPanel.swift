@@ -123,7 +123,7 @@ struct TaskRow: View {
                     .onTapGesture(count: 2, perform: beginEditing)
             }
             Spacer(minLength: 4)
-            if task.piSessionID != nil { PiStateDot(state: session?.state.work ?? .known(.ended), size: 5).help(session?.state.label ?? "会话已结束") }
+            if task.piSessionID != nil { PiStateDot(state: session?.state.work ?? .known(.ended), size: 5).help(session?.state.work.label ?? "会话已结束") }
         }
         .frame(minHeight: compact ? 22 : 28)
         .contentShape(.rect)

@@ -5,9 +5,10 @@ import SwiftUI
 
 nonisolated private struct SidebarData: Sendable {
     var trashCount: Int
-    var history: [StoredPiSession]
-    /// 历史会话（会话 id）的工作目录绑定的项目，由 Store 判定。
-    var historyProjects: [String: UUID]
+    /// 这台 Mac 上结束了的会话（同步记录，结束后留 7 天，带近况），最近结束的在前。
+    var ended: [PiSessionState]
+    /// 历史索引里最近的会话（已按工作目录归入项目），在线与已结束的由界面去掉。
+    var history: [PiSessionState]
 }
 
 struct Sidebar: View {
@@ -43,7 +44,7 @@ struct Sidebar: View {
                         }
                     }
                 }
-                PiSection(history: data.history, historyProjects: data.historyProjects)
+                PiSection(ended: data.ended, history: data.history)
                 if pages.showsTrash {
                     Section {
                         PageRow(page: .trash, count: data.trashCount, select: select) {
@@ -69,14 +70,17 @@ struct Sidebar: View {
         .safeAreaInset(edge: .bottom) { footer }
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
-        .observing(services.store, [.projects, .cards, .piSessions, .projectDirectories], into: $data, onError: workspace.fail) { store in
-            let history = Array(try store.piSessions().prefix(Self.historyLimit))
+        .observing(services.store, [.projects, .cards, .piSessions, .piSessionStates, .projectDirectories], into: $data,
+                   onError: workspace.fail) { [hostID = services.hostID] store in
+            let ended = try store.piSessionStates()
+                .filter { $0.hostID == hostID && $0.state == .known(.ended) }
+                .sorted { $0.stateSince > $1.stateSince }
+            let history = try store.piSessions().prefix(Self.historyLimit * 2).map { row in
+                PiSessionState.history(row, hostID: hostID, projectID: try store.project(containing: URL(filePath: row.cwd))?.id)
+            }
             return SidebarData(
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
-                history: history,
-                historyProjects: try Dictionary(uniqueKeysWithValues: history.compactMap { session in
-                    try store.project(containing: URL(filePath: session.cwd)).map { (session.id, $0.id) }
-                }))
+                ended: Array(ended.prefix(Self.historyLimit)), history: history)
         }
     }
 
@@ -193,24 +197,24 @@ private struct PageRow<Title: View>: View {
     }
 }
 
-/// 全局 Pi：活着的会话（显示名，下面是所在 · 状态），其下是最近结束的历史会话（显示名，下面是所在 · 最后活动）。
-/// "所在"按 `PiPlace`：工作目录绑定了项目时是项目名，否则是文件夹名，与显示名相同时不重复。
-/// 点开任一会话是它的详情（近况与回复）；在线会话右键可跳到所在终端。
-/// 没有活着的会话时分组不消失：一行"在终端运行 pi 开始"，下面照常是历史。没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
+/// 全局 Pi：与 iOS 的 Pi 页同一种行（`PiSessionRow`）、同一个顺序——等你确认 → 出错 → 工作中 → 空闲 → 已结束（本机记录，
+/// 带最后的结果）→ 历史（会话索引里更早的）。点开任一会话是它的详情（近况与回复）；在线会话右键可跳到所在终端，悬停看出错原文。
+/// 没有活着的会话时分组不消失：一行"在终端运行 pi 开始"，下面照常是已结束与历史。没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
 private struct PiSection: View {
-    let history: [StoredPiSession]
-    let historyProjects: [String: UUID]
+    let ended: [PiSessionState]
+    let history: [PiSessionState]
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+
+    private static let pastLimit = 5
 
     var body: some View {
         let status = services.piExtension.status
         let live = services.pi.sessions
-        let liveIDs = Set(live.map(\.sessionID))
-        let ended = history.filter { !liveIDs.contains($0.id) }
+        let rows = rows(live: live)
         if let installation = status?.pi, !installation.isSupported {
             Section("Pi") { PiSetupRow(installation: installation) }
-        } else if status != nil || !live.isEmpty || !ended.isEmpty {
+        } else if status != nil || !rows.isEmpty {
             Section("Pi") {
                 if live.isEmpty {
                     // 拒绝过安装扩展时，会话不会出现在这里：说清去哪装，而不是让人对着"运行 pi"困惑
@@ -219,11 +223,15 @@ private struct PiSection: View {
                         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         .selectionDisabled()
                 }
-                ForEach(live.map(PiRow.live) + ended.map(PiRow.ended)) { row in
-                    label(row).sessionDetailRow(row.id).help(row.help ?? "")
+                // 在线与已结束同一个列表、按会话 id 区分：会话结束时详情不被关掉（详情挂在列表上，见 SessionDetailHost）
+                ForEach(rows, id: \.sessionID) { session in
+                    let bridge = live.first { $0.sessionID == session.sessionID }
+                    PiSessionRow(session: session, project: workspace.catalog?.project(session.projectID))
+                        .sessionDetailRow(session.sessionID)
+                        .help(bridge?.state.errorMessage ?? "")
                         .contextMenu {
-                            if case .live(let session) = row {
-                                Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(session.id) }
+                            if let bridge {
+                                Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
                             }
                         }
                 }
@@ -231,44 +239,16 @@ private struct PiSection: View {
         }
     }
 
-    @ViewBuilder private func label(_ row: PiRow) -> some View {
-        switch row {
-        case .live(let session):
-            HStack(spacing: 9) {
-                PiStateDot(state: session.state.work, size: 6).frame(width: 16)
-                PiSessionLabel(session: session, project: workspace.catalog?.project(workspace.sessionProjects[session.id]))
-            }
-        case .ended(let session):
-            HStack(spacing: 9) {
-                PiStateDot(state: .known(.ended), size: 6).frame(width: 16)
-                VStack(alignment: .leading, spacing: 1) {
-                    let folder = URL(filePath: session.cwd).lastPathComponent
-                    let title = session.title.isEmpty ? folder : session.title
-                    Text(title).lineLimit(1)
-                    let place = PiPlace.name(project: workspace.catalog?.project(historyProjects[session.id]), folder: folder, besides: title)
-                    Text([place, DateLabel.short(session.lastActivityAt)].compactMap { $0 }.joined(separator: " · "))
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            .foregroundStyle(.secondary)
+    /// 在线的按要你注意的先后，已结束（本机记录）在后，再后是历史里不重复的；已结束与历史合计最多 `pastLimit` 行。
+    private func rows(live: [CuePi.PiSession]) -> [PiSessionState] {
+        let current = live.map { PiSessionState.live($0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id]) }
+        var seen = Set(current.map(\.sessionID))
+        var past: [PiSessionState] = []
+        for session in ended + history where !seen.contains(session.sessionID) && past.count < Self.pastLimit {
+            seen.insert(session.sessionID)
+            past.append(session)
         }
-    }
-}
-
-/// Pi 分组里的一行：在线会话或历史里已结束的会话；id 是 Pi 的会话 id。
-private enum PiRow: Identifiable {
-    case live(CuePi.PiSession)
-    case ended(StoredPiSession)
-
-    var id: String {
-        switch self {
-        case .live(let session): session.sessionID
-        case .ended(let session): session.id
-        }
-    }
-
-    var help: String? {
-        if case .live(let session) = self { session.state.fullDetail } else { nil }
+        return PiSessionState.inListOrder(current) + past
     }
 }
 

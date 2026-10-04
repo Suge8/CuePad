@@ -113,7 +113,7 @@ struct SendTargetMenu<Label: View>: View {
                 }
                 ForEach(sessions) { session in
                     let name = session.displayName
-                    option("\(name) · \(session.state.label)", .pi(session.id, .send), current: current)
+                    option("\(name) · \(session.state.work.label)", .pi(session.id, .send), current: current)
                     option("放进 \(name) 的输入框（仅文字）", .pi(session.id, .paste), current: current)
                 }
             }

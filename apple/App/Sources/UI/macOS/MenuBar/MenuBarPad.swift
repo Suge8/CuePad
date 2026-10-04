@@ -16,16 +16,16 @@ struct MenuBarPad: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            let sessions = services.pi.sessions.prefix(Self.sessionLimit)
+            let sessions = PiSessionState.inListOrder(services.pi.sessions.map {
+                PiSessionState.live($0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id])
+            }).prefix(Self.sessionLimit)
             if !sessions.isEmpty {
-                VStack(alignment: .leading, spacing: 7) {
-                    ForEach(sessions) { session in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            PiStateDot(state: session.state.work, size: 5).frame(width: 12)
-                            PiSessionLabel(session: session, project: workspace.catalog?.project(workspace.sessionProjects[session.id]), nameFont: .system(size: 13, weight: .medium), lineFont: .system(size: 11.5))
-                            Spacer(minLength: 0)
-                        }
-                        .sessionDetailRow(session.sessionID)
+                VStack(alignment: .leading, spacing: 9) {
+                    ForEach(sessions, id: \.sessionID) { session in
+                        PiSessionRow(
+                            session: session, project: workspace.catalog?.project(session.projectID),
+                            nameFont: .system(size: 13, weight: .medium), lineFont: .system(size: 11.5))
+                            .sessionDetailRow(session.sessionID)
                     }
                 }
             }
