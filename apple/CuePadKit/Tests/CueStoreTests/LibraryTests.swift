@@ -229,4 +229,16 @@ import Testing
     try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 6;")
     #expect(throws: CueStoreError.unsupportedSchemaVersion(6)) { try CueStore(url: url) }
   }
+
+  /// 已经在用的上一版资料库（结构版本 1）打开时升级，数据保留：Pi 会话状态多了文件夹名一列。
+  @Test func versionOneLibraryUpgradesInPlace() async throws {
+    let card = try await store.createCard(in: nil, body: "保留")
+    try RawDB(fixture.url).exec("ALTER TABLE piSessionStates DROP COLUMN folder; PRAGMA user_version = 1;")
+
+    let reopened = try CueStore(url: fixture.url)
+
+    #expect(try await reopened.card(card.id)?.body == "保留")
+    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name = 'folder'").count == 1)
+    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["2"]])
+  }
 }

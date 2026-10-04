@@ -1,3 +1,4 @@
+import CueStore
 import Foundation
 import Testing
 @testable import CuePad
@@ -149,5 +150,22 @@ struct OlderGroupTitleRuleTests {
 
     @Test func 多于一组时显示组标题() {
         #expect(OlderGroup.needsTitles(in: [OlderGroup(period: week, cards: [UUID()]), OlderGroup(period: earlierWeek, cards: [UUID()])]) == true)
+    }
+}
+
+/// Pi 会话副行的"在哪"：绑定了项目写项目名，否则写文件夹名。手机上的会话记录同样带着文件夹名。
+@MainActor
+struct PiPlaceTests {
+    @Test func 同步来的会话没绑定项目时写文件夹名_绑定了写项目名() async throws {
+        let app = TestApp()
+        let store = app.services.store
+        let recorder = PiStateRecorder(store: store, hostID: "mac")
+        try await recorder.update(sessionID: "s1", state: .thinking, title: "修好登录", folder: "cuepad")
+        let state = try #require(try await store.piSessionStates().first)
+        #expect(state.projectID == nil)
+        #expect(PiPlace.name(of: state, project: nil) == "cuepad")
+
+        let project = try await store.createProject(name: "CuePad 项目", color: "#111")
+        #expect(PiPlace.name(of: state, project: project) == "CuePad 项目")
     }
 }
