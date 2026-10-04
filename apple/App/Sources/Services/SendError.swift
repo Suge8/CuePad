@@ -19,6 +19,8 @@ nonisolated enum SendError: Error, Equatable {
     case notDelivered(String)
     /// 本机的投送执行器没在运行，发给 Pi 的请求不会有人执行。
     case executorUnavailable
+    /// 问题只能在 Pi 里回答（多行编辑、自定义界面，或旧版本扩展只给了文案）。
+    case unanswerable
 }
 
 extension SendError: LocalizedError {
@@ -33,6 +35,7 @@ extension SendError: LocalizedError {
         case .unrecorded(let reason): "发送已完成，但没能记下这次发送：\(reason)"
         case .notDelivered(let reason): "没能送达：\(reason)"
         case .executorUnavailable: "这台 Mac 上的投送执行器没有启动，发不到 Pi；请查看启动问题或重启 CuePad"
+        case .unanswerable: "这个问题只能在 Mac 上的 Pi 里回答"
         }
     }
 }

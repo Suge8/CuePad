@@ -18,6 +18,7 @@ nonisolated extension DeliveryMode {
         case .steer: "插话"
         case .followUp: "排队"
         case .paste: "放进输入框"
+        case .answer: "作答"
         }
     }
 
@@ -27,7 +28,7 @@ nonisolated extension DeliveryMode {
         case .steer: "马上说（打断它正在做的）"
         case .followUp: "等它做完再说"
         case .paste: "只放进输入框，不发送"
-        case .send: nil
+        case .send, .answer: nil
         }
     }
 }

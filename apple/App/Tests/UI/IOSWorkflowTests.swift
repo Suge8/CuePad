@@ -17,6 +17,19 @@ struct IOSWorkflowTests {
 
     // MARK: 发到 Mac
 
+    @Test func 作答_请求发给会话所在的Mac_带这次弹窗的标识与答案() async throws {
+        let question = PiQuestion(promptID: "p-7", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
+        try await PiStateRecorder(store: store, hostID: "mac-b").update(
+            sessionID: "atlas", state: .waitingForUser, title: "atlas", recap: PiRecap(question: question))
+        let session = try #require(try await store.piSessionStates().first)
+
+        let request = try await app.services.answer(.option("覆盖"), to: session)
+
+        #expect(request.hostID == "mac-b" && request.mode == .known(.answer))
+        #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
+        #expect(request.answer == PiAnswer(promptID: "p-7", value: .option("覆盖")))
+    }
+
     @Test func 发到Mac_请求指定会话所在的Mac_目标是该会话_方式原样交给Mac() async throws {
         let target = try await session("atlas", .settled, host: "mac-b")
 

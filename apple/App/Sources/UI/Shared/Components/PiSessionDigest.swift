@@ -27,10 +27,12 @@ nonisolated struct SessionDigest: Sendable, Equatable {
 struct PiSessionDigest: View {
     let session: PiSessionState
     let project: Project?
+    /// 发给这个会话的请求：问题卡据此显示作答的送达情况。
+    var deliveries: [DeliveryRequest] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            StatusBlock(session: session, project: project)
+            StatusBlock(session: session, project: project, deliveries: deliveries)
             RecentRound(session: session)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -42,6 +44,7 @@ struct PiSessionDigest: View {
 private struct StatusBlock: View {
     let session: PiSessionState
     let project: Project?
+    let deliveries: [DeliveryRequest]
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -66,12 +69,112 @@ private struct StatusBlock: View {
             }
             switch session.state.known {
             case .waitingForUser:
-                // 问题原文照抄（含换行与选项），是这一页最醒目的东西
-                Callout(tint: palette.attention, title: "等你确认", text: session.question ?? session.detail ?? "", prominent: true)
+                // 问题是这一页最醒目的东西；能作答时选项就是按钮
+                PromptCard(session: session, deliveries: deliveries)
             case .error:
                 Callout(tint: palette.failure, title: "出错", text: session.detail ?? "Mac 没有说明原因", prominent: false)
             default:
                 EmptyView()
+            }
+        }
+    }
+}
+
+/// 等你确认的问题卡：问题文案放大；能从这里作答时，确认是"取消 / 确定"两个按钮，选择是一列选项按钮，点了即答
+/// （写一条作答请求，按钮转为送达中，答上后问题消失、状态回到工作中；没答上时写出原因，可再点）；
+/// 输入型在下面的回复框里答。不能从这里作答的问题（多行编辑、自定义界面、旧版本）只显示文案，说明要在 Mac 上答。
+private struct PromptCard: View {
+    let session: PiSessionState
+    let deliveries: [DeliveryRequest]
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    /// 点了的那个回答与它的请求（请求写成前为 nil）。
+    @State private var answering: (value: PiAnswerValue, request: UUID?)?
+
+    private var request: DeliveryRequest? { answering?.request.flatMap { id in deliveries.first { $0.id == id } } }
+    private var failure: String? {
+        guard request?.status == .known(.failed) else { return nil }
+        return request?.resultDetail ?? "Mac 没能把回答交给 Pi"
+    }
+
+    var body: some View {
+        let question = session.question
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("等你确认").font(.footnote.weight(.semibold)).foregroundStyle(palette.attention)
+                Text(question?.text ?? session.detail ?? "").font(.title3.weight(.medium)).foregroundStyle(palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            if let question, question.isAnswerable {
+                switch question.kind.known {
+                case .confirm:
+                    HStack(spacing: 10) {
+                        option("取消", .confirmed(false), prominent: false)
+                        option("确定", .confirmed(true), prominent: true)
+                    }
+                case .select:
+                    VStack(spacing: 8) {
+                        ForEach(question.options, id: \.self) { option($0, .option($0), prominent: false) }
+                    }
+                default:
+                    Text("在下面的回复框里回答").font(.footnote).foregroundStyle(palette.ink3)
+                }
+                if let failure {
+                    Text(failure).font(.footnote).foregroundStyle(palette.failure)
+                }
+            } else {
+                if let options = question?.options, !options.isEmpty {
+                    Text(options.map { "· \($0)" }.joined(separator: "\n")).font(.body).foregroundStyle(palette.ink2)
+                }
+                Text("这个问题要在 Mac 上回答").font(.footnote).foregroundStyle(palette.ink3)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.attention.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(palette.attention.opacity(palette.highContrast ? 0.8 : 0.3)))
+        // 换了一个问题：上一题的作答状态作废
+        .onChange(of: session.question?.promptID) { answering = nil }
+    }
+
+    private func option(_ label: String, _ value: PiAnswerValue, prominent: Bool) -> some View {
+        let tapped = answering?.value == value
+        let busy = answering != nil && failure == nil
+        return Button { answer(value) } label: {
+            HStack(spacing: 8) {
+                if tapped && busy {
+                    ProgressView().controlSize(.small)
+                    Text("送达中")
+                } else {
+                    Text(label)
+                }
+            }
+            .font(.body.weight(.medium))
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .foregroundStyle(prominent ? palette.onAccent : palette.ink)
+            .background(prominent ? palette.accent : palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
+            .overlay {
+                if !prominent { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(palette.hair) }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .opacity(busy && !tapped ? 0.5 : 1)
+        .accessibilityLabel(tapped && busy ? "\(label)，送达中" : label)
+    }
+
+    private func answer(_ value: PiAnswerValue) {
+        let session = session
+        answering = (value, nil)
+        Task {
+            do {
+                let request = try await workspace.services.answer(value, to: session)
+                answering = (value, request.id)
+            } catch {
+                answering = nil
+                workspace.fail(error)
             }
         }
     }
@@ -112,6 +215,7 @@ private struct RecentRound: View {
     /// 收起时回答显示的行数；超过这么多行（或字数）才给"展开"。
     private static let collapsedLines = 8
     private static let collapsedCharacters = 320
+    private static let collapsedHeight: CGFloat = 200
 
     var body: some View {
         if session.lastPrompt == nil && session.lastReply == nil {
@@ -135,10 +239,18 @@ private struct RecentRound: View {
                     let long = reply.count > Self.collapsedCharacters
                         || reply.split(separator: "\n", omittingEmptySubsequences: false).count > Self.collapsedLines
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(reply).font(.body).foregroundStyle(palette.ink)
-                            .lineLimit(long && !replyExpanded ? Self.collapsedLines : nil)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .textSelection(.enabled)
+                        // 折起时截到约八行高，底部淡出，看得出下面还有
+                        MarkdownText(source: reply)
+                            .frame(maxHeight: long && !replyExpanded ? Self.collapsedHeight : nil, alignment: .top)
+                            .clipped()
+                            .mask {
+                                if long && !replyExpanded {
+                                    LinearGradient(stops: [.init(color: .black, location: 0.75), .init(color: .clear, location: 1)],
+                                                   startPoint: .top, endPoint: .bottom)
+                                } else {
+                                    Color.black
+                                }
+                            }
                         if long {
                             Button(replyExpanded ? "收起" : "展开全文") { withAnimation(Motion.quick) { replyExpanded.toggle() } }
                                 .font(.subheadline.weight(.medium))
@@ -170,6 +282,7 @@ struct DeliveryStack: View {
             VStack(alignment: .leading, spacing: 0) {
                 if !earlier.isEmpty {
                     Button(showsEarlier ? "收起更早的" : "更早 \(earlier.count) 条") { withAnimation(Motion.quick) { showsEarlier.toggle() } }
+                        .buttonStyle(.plain)
                         .font(.footnote.weight(.medium)).foregroundStyle(palette.ink3)
                         .padding(.horizontal, 16).frame(minHeight: 36)
                     if showsEarlier {
@@ -206,8 +319,7 @@ struct DeliveryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                let title = CardText(request.content).title
-                Text(title.isEmpty ? "图片" : title).font(.body).foregroundStyle(palette.ink).lineLimit(2)
+                Text(title).font(.body).foregroundStyle(palette.ink).lineLimit(2)
                 Spacer(minLength: 8)
                 DeliveryStatusLabel(request: request)
             }
@@ -216,7 +328,7 @@ struct DeliveryRow: View {
             if request.status == .known(.failed) {
                 if let reason = request.resultDetail { Text(reason).font(.footnote).foregroundStyle(palette.failure) }
                 HStack(spacing: 10) {
-                    if session != nil { Button("重发", systemImage: "arrow.clockwise", action: retry) }
+                    if canRetry { Button("重发", systemImage: "arrow.clockwise", action: retry) }
                     Button("移除", systemImage: "xmark", role: .destructive, action: remove)
                 }
                 .font(.subheadline.weight(.medium))
@@ -227,10 +339,26 @@ struct DeliveryRow: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
         .transition(.opacity)
         .contextMenu {
-            if session != nil { Button("再发一次", systemImage: "paperplane", action: retry) }
+            if canRetry { Button("再发一次", systemImage: "paperplane", action: retry) }
             Button("移除", systemImage: "xmark", role: .destructive, action: remove)
         }
     }
+
+    /// 作答显示答了什么（"选了：覆盖"）；其余是内容的标题。
+    private var title: String {
+        if let answer = request.answer {
+            return switch answer.value {
+            case .option(let option): "选了：\(option)"
+            case .confirmed(let yes): yes ? "回答：确定" : "回答：取消"
+            case .text(let text): "回答：\(text)"
+            }
+        }
+        let title = CardText(request.content).title
+        return title.isEmpty ? "图片" : title
+    }
+
+    /// 作答对的是那一次弹窗，过去了就不能重发。
+    private var canRetry: Bool { session != nil && request.answer == nil }
 
     /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
     private func retry() {

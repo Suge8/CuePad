@@ -55,7 +55,7 @@ enum PiWire {
         var firstMessage: String?
         var lastPrompt: String?
         var lastReply: String?
-        var question: String?
+        var question: PiPrompt?
         var subagents: [PiSubagent]?
 
         enum CodingKeys: String, CodingKey {
@@ -76,7 +76,7 @@ enum PiWire {
         var firstMessage: String?
         var lastPrompt: String?
         var lastReply: String?
-        var question: String?
+        var question: PiPrompt?
         var subagents: [PiSubagent]?
 
         func apply(to session: inout PiSession) {
@@ -144,8 +144,24 @@ enum PiWire {
         try encode(Command(t: "paste", id: id, text: text))
     }
 
-    private static func encode(_ command: Command) throws -> Data {
+    private struct AnswerCommand<Value: Encodable>: Encodable {
+        var t = "answer"
+        var id: String
+        var promptId: String
+        var value: Value
+    }
+
+    static func answerCommand(id: String, promptID: String, _ answer: PiPromptAnswer) throws -> Data {
+        switch answer {
+        case .option(let value), .text(let value): try encodeLine(AnswerCommand(id: id, promptId: promptID, value: value))
+        case .confirmed(let value): try encodeLine(AnswerCommand(id: id, promptId: promptID, value: value))
+        }
+    }
+
+    private static func encodeLine(_ command: some Encodable) throws -> Data {
         try JSONEncoder().encode(command) + Data([0x0A])
     }
+
+    private static func encode(_ command: Command) throws -> Data { try encodeLine(command) }
 }
 #endif

@@ -20,7 +20,8 @@ import Testing
 
   @Test func piSessionStateWrittenOnTheMacIsVisibleOnThePhoneAndKeptAsEndedWhenTheSessionEnds() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
-    let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", question: "确认写入？\n是\n否")
+    let question = PiQuestion(promptID: "p-1", kind: .select, text: "确认写入？", options: ["是", "否"])
+    let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", question: question)
     let times = PiTimes(stateSince: Date(timeIntervalSince1970: 2_000), busySince: Date(timeIntervalSince1970: 1_000))
     try await recorder.update(
       sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad", recap: recap, times: times)

@@ -108,6 +108,11 @@ public final class PiBridge {
         _ = try await request(to: id) { try PiWire.pasteCommand(id: $0, text: text) }
     }
 
+    /// 回答该会话正在等的弹窗；`promptID` 不是正在等的那个、或答案对不上时抛 `PiBridgeError.rejected`。
+    public func answer(_ answer: PiPromptAnswer, to promptID: String, in id: PiSession.ID) async throws {
+        _ = try await request(to: id) { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
+    }
+
     private func request(to id: PiSession.ID, encode: (String) throws -> Data) async throws -> PiWire.Ack {
         guard let link = links[id], link.session != nil else { throw PiBridgeError.unknownSession(id) }
         link.nextCommand += 1

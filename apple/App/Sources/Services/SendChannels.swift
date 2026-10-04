@@ -18,6 +18,7 @@ protocol SendChannels {
     func piSessionID(forSession sessionID: String) -> CuePi.PiSession.ID?
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws
     func paste(_ text: String, into id: CuePi.PiSession.ID) async throws
+    func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws
     /// 权限与目标检查，不改任何状态；失败时调用方不必动窗口。
     func preflight(_ selector: TargetSelector) async throws
     func dispatch(_ payload: Payload, to selector: TargetSelector, submit: Bool) async throws -> AppInfo
@@ -58,6 +59,10 @@ struct LiveSendChannels: SendChannels {
 
     func paste(_ text: String, into id: CuePi.PiSession.ID) async throws {
         try await pi.paste(text, into: id)
+    }
+
+    func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws {
+        try await pi.answer(answer, to: prompt, in: id)
     }
 
     func preflight(_ selector: TargetSelector) async throws {

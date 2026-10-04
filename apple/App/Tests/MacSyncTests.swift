@@ -154,11 +154,11 @@ struct MacSyncTests {
         var asked = session("s1", state: .waitingUser(kind: "select", title: "选哪个？"))
         asked.lastPrompt = "修好登录"
         asked.lastReply = "改好了"
-        asked.question = "选哪个？\nA\nB"
+        asked.question = PiPrompt(id: "p-1", kind: "select", text: "选哪个？", options: ["A", "B"])
         try await services.consumePiChanges(changes([.appeared(asked), .infoChanged(asked)]))
 
         let stored = try #require(try await services.store.piSessionStates().first)
-        #expect(stored.lastPrompt == "修好登录" && stored.lastReply == "改好了" && stored.question == "选哪个？\nA\nB")
+        #expect(stored.lastPrompt == "修好登录" && stored.lastReply == "改好了" && stored.question == PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"]))
     }
 
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
@@ -207,6 +207,22 @@ struct MacSyncTests {
         #expect(done.status == .known(.succeeded))
         #expect(rig.channels.calls == [.send(PiMessage(text: "做这件事", whenBusy: .steer), "sess-1.100")])
         #expect(done.handledBy == TestApp.hostID)
+    }
+
+    @Test func 手机的作答请求交给扩展作答_不写发送记录() async throws {
+        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
+        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestAnswer(
+            PiAnswer(promptID: "p-1", value: .option("覆盖")), to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"),
+            on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.channels.calls == [.answer(.option("覆盖"), "p-1", "sess-1.100")])
+        #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 手机的放进输入框请求只粘贴文字() async throws {

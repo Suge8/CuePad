@@ -3,15 +3,16 @@
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
 //   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，steer/followUp）/ paste（放进输入框）
+//   CuePad → 扩展  send（文字+图片，steer/followUp）/ paste（放进输入框）/ answer（回答等你确认的弹窗）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 6;
+const EXTENSION_VERSION = 7;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -203,15 +204,17 @@ export default function (pi: any) {
 	let busySince: number | null = null;
 	/** 会话名（`/name`）与首条用户消息：CuePad 据此按 Pi 会话列表的规则显示会话；其余是近况 */
 	type Info = {
-		name: string | null; firstMessage: string | null; lastPrompt: string | null; lastReply: string | null; question: string | null;
+		name: string | null; firstMessage: string | null; lastPrompt: string | null; lastReply: string | null; question: Question | null;
 		subagents: { name: string; kind: string }[];
 	};
+	/** 等你回答的弹窗：`id` 非空的可以从 CuePad 作答（confirm/select/text）；editor 与 custom 只能在 Pi 里答 */
+	type Question = { id: string | null; kind: string; text: string; options: string[] };
 	let info: Info = { name: null, firstMessage: null, lastPrompt: null, lastReply: null, question: null, subagents: [] };
 	/** 本会话是某个会话的进程内子会话（子代理）时，它在登记表里的键（会话文件路径）：状态只进登记表，不开 socket */
 	let subsessionKey: string | undefined;
 	let stopWatchingSubsessions: (() => void) | undefined;
-	/** 正在弹出的对话框的文案行（标题、说明、选项）。ui_prompt_start 只带标题，选项与说明要在调用时记下 */
-	let asking: string[] | null = null;
+	/** 正在弹出的对话框（最外层）。ui_prompt_start 只带标题，说明与选项要在调用时记下；`settle` 从 CuePad 作答 */
+	let asking: (Question & { settle?: (value: unknown) => void }) | null = null;
 
 	const write = (socket: net.Socket, message: object) => {
 		if (!socket.destroyed) socket.write(JSON.stringify(message) + "\n");
@@ -274,6 +277,7 @@ export default function (pi: any) {
 		const reject = (error: string) => ack({ ok: false, error });
 		try {
 			if (command?.t === "send") return handleSend(command, ack, reject);
+			if (command?.t === "answer") return handleAnswer(command, ack, reject);
 			if (command?.t === "paste") {
 				if (typeof command.text !== "string") return reject("bad_request");
 				// RPC 模式下 pasteToEditor 退化为 set_editor_text 请求转给客户端
@@ -303,6 +307,21 @@ export default function (pi: any) {
 		// deliverAs 只在会话正忙时生效；总是带上，避免"检查空闲"与"发送"之间 agent 恰好开始而抛错
 		pi.sendUserMessage(content, { deliverAs });
 		ack({ ok: true, delivered: busy ? deliverAs : "immediate" });
+	}
+
+	/** 回答当前弹窗：标识必须是正在等的那个（答过或换了弹窗就拒绝），答案的类型与选项要对得上。 */
+	function handleAnswer(command: any, ack: (f: object) => void, reject: (e: string) => void) {
+		const pending = asking;
+		if (!pending?.settle) return reject("no_prompt");
+		if (pending.id !== command.promptId) return reject("stale_prompt");
+		const value = command.value;
+		const valid = pending.kind === "confirm" ? typeof value === "boolean"
+			: pending.kind === "select" ? typeof value === "string" && pending.options.includes(value)
+			: typeof value === "string";
+		if (!valid) return reject("bad_answer");
+		pending.settle(value);
+		asking = null;
+		ack({ ok: true });
 	}
 
 	async function onConnection(socket: net.Socket) {
@@ -396,23 +415,44 @@ export default function (pi: any) {
 	}
 	process.on("exit", () => socketPath && fs.rmSync(socketPath, { force: true }));
 
-	/** 包装所有扩展共用的 ui 对象上的对话框方法，记下文案后照常调用（Pi 每次绑定界面都换新对象，session_start 前绑定）。 */
+	/** 包装所有扩展共用的 ui 对象上的对话框方法（Pi 每次绑定界面都换新对象，session_start 前绑定）：记下文案与选项，
+	 * 并给弹窗接上一个由我们控制的 AbortSignal。从 CuePad 作答时先记下答案再 abort：Pi 的界面随之收起
+	 * （TUI 隐藏选择器，RPC 删掉待答请求），原调用按"取消"结束，包装把它换成我们的答案交回调用方。 */
 	function captureDialogs(ui: any) {
 		if (!ui || ui[CAPTURED]) return;
 		ui[CAPTURED] = true;
-		const wrap = (method: string, lines: (...args: any[]) => unknown[]) => {
+		/** `optionsAt`：对话框选项参数（含 signal）的位置；没有的（editor）不能从外面收起，只记文案 */
+		const wrap = (method: string, kind: string, optionsAt: number | null, describe: (...args: any[]) => { lines: unknown[]; options?: unknown }) => {
 			const original = ui[method];
 			if (typeof original !== "function") return;
 			ui[method] = (...args: any[]) => {
 				// 嵌套弹窗只算最外层，与 ui_prompt_start 一致
-				asking ??= lines(...args).filter((line): line is string => typeof line === "string" && line.length > 0);
-				return original.apply(ui, args);
+				if (asking) return original.apply(ui, args);
+				const { lines, options } = describe(...args);
+				const question: Question = {
+					id: optionsAt === null ? null : randomUUID(),
+					kind,
+					text: lines.filter((line): line is string => typeof line === "string" && line.length > 0).join("\n"),
+					options: Array.isArray(options) ? options.filter((option): option is string => typeof option === "string") : [],
+				};
+				if (optionsAt === null) {
+					asking = question;
+					return original.apply(ui, args);
+				}
+				// 调用方自己的 signal 与我们的合在一起：任一触发都收起弹窗
+				const own = new AbortController();
+				const caller: AbortSignal | undefined = args[optionsAt]?.signal;
+				let answer: { value: unknown } | undefined;
+				asking = { ...question, settle: (value) => { answer = { value }; own.abort(); } };
+				const call = [...args];
+				call[optionsAt] = { ...args[optionsAt], signal: caller ? AbortSignal.any([caller, own.signal]) : own.signal };
+				return Promise.resolve(original.apply(ui, call)).then((value: unknown) => (answer ? answer.value : value));
 			};
 		};
-		wrap("select", (title, options) => [title, ...(Array.isArray(options) ? options : [])]);
-		wrap("confirm", (title, message) => [title, message]);
-		wrap("input", (title) => [title]);
-		wrap("editor", (title) => [title]);
+		wrap("select", "select", 2, (title, options) => ({ lines: [title], options }));
+		wrap("confirm", "confirm", 2, (title, message) => ({ lines: [title, message] }));
+		wrap("input", "text", 2, (title) => ({ lines: [title] }));
+		wrap("editor", "editor", null, (title) => ({ lines: [title] }));
 	}
 
 	pi.on("session_start", (_event: any, context: any) => {
@@ -484,7 +524,8 @@ export default function (pi: any) {
 	pi.on("tool_execution_end", (event: any) => { tracker.tools.delete(event.toolCallId); tracker.phase = "thinking"; commit(); });
 	pi.on("ui_prompt_start", (event: any) => {
 		tracker.prompt = { kind: event.kind, title: event.title };
-		updateInfo({ question: clip((asking ?? [event.title ?? ""]).join("\n"), QUESTION_LIMIT) });
+		const question = asking ?? { id: null, kind: event.kind, text: event.title ?? "", options: [] };
+		updateInfo({ question: { id: question.id, kind: question.kind, text: clip(question.text, QUESTION_LIMIT) ?? "", options: question.options } });
 		commit();
 	});
 	pi.on("ui_prompt_end", () => {

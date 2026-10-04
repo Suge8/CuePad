@@ -29,7 +29,7 @@ extension SessionDigest {
             id: PiSessionState.recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID,
             title: session.displayName, projectID: project?.id ?? self.session?.projectID, state: .known(state), detail: detail,
             folder: session.cwd.lastPathComponent, lastPrompt: session.lastPrompt, lastReply: session.lastReply,
-            question: session.question, notify: nil, stateSince: session.stateSince, busySince: session.busySince,
+            question: session.question.map(PiQuestion.init), notify: nil, stateSince: session.stateSince, busySince: session.busySince,
             createdAt: self.session?.createdAt ?? session.stateSince, modifiedAt: session.stateSince)
         if let project { digest.project = project }
         return digest
