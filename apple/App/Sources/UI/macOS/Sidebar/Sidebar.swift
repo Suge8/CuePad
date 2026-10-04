@@ -239,16 +239,10 @@ private struct PiSection: View {
         }
     }
 
-    /// 在线的按要你注意的先后，已结束（本机记录）在后，再后是历史里不重复的；已结束与历史合计最多 `pastLimit` 行。
     private func rows(live: [CuePi.PiSession]) -> [PiSessionState] {
-        let current = live.map { PiSessionState.live($0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id]) }
-        var seen = Set(current.map(\.sessionID))
-        var past: [PiSessionState] = []
-        for session in ended + history where !seen.contains(session.sessionID) && past.count < Self.pastLimit {
-            seen.insert(session.sessionID)
-            past.append(session)
-        }
-        return PiSessionState.inListOrder(current) + past
+        PiSessionState.sidebarRows(
+            live: live.map { PiSessionState.live($0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id]) },
+            ended: ended, history: history, pastLimit: Self.pastLimit)
     }
 }
 
@@ -258,7 +252,13 @@ extension PiSessionState {
     static func sidebarRows(
         live: [PiSessionState], ended: [PiSessionState], history: [PiSessionState], pastLimit: Int
     ) -> [PiSessionState] {
-        []
+        var seen = Set(live.map(\.sessionID))
+        var past: [PiSessionState] = []
+        for session in ended + history where !seen.contains(session.sessionID) && past.count < pastLimit {
+            seen.insert(session.sessionID)
+            past.append(session)
+        }
+        return inListOrder(live) + past
     }
 }
 
