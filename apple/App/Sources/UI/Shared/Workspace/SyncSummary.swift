@@ -53,3 +53,25 @@ struct SyncSummary: Equatable {
         }
     }
 }
+
+nonisolated extension SyncStatus {
+    /// 此刻同步能把请求送到 Mac、把 Mac 上的 Pi 状态带回来：已连上或正在连接。
+    /// 其余状态（没开 iCloud、不可用、暂停、出错、空间不足）都到不了，界面写明原因。
+    var reachesMac: Bool {
+        switch self {
+        case .starting, .idle, .syncing: true
+        default: false
+        }
+    }
+}
+
+extension AppServices {
+    /// 发给 Pi 会话的请求（回复、作答、重发）此刻送得到执行它的 Mac：手机靠同步；Mac 上就是本机执行，总送得到。
+    var reachesPiHost: Bool {
+        #if os(iOS)
+        syncStatus.reachesMac
+        #else
+        true
+        #endif
+    }
+}

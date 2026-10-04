@@ -99,7 +99,7 @@ private struct ReplyBar: View {
         chosenMode.flatMap { modes.contains($0) ? $0 : nil } ?? modes.first
     }
 
-    private var reachable: Bool { services.syncStatus.reachesMac }
+    private var reachable: Bool { services.reachesPiHost }
     private var expanded: Bool { focused || !text.isEmpty || draft != nil }
 
     var body: some View {

@@ -90,17 +90,6 @@ private struct SessionRow: View {
     }
 }
 
-nonisolated extension SyncStatus {
-    /// 此刻同步能把请求送到 Mac、把 Mac 上的 Pi 状态带回来：已连上或正在连接。
-    /// 其余状态（没开 iCloud、不可用、暂停、出错、空间不足）都到不了，界面写明原因。
-    var reachesMac: Bool {
-        switch self {
-        case .starting, .idle, .syncing: true
-        default: false
-        }
-    }
-}
-
 /// 同步到不了 Mac 时的一行轻提示（Pi 页顶部、回复框里）：哪里不通；详情与处理在设置里。
 struct SyncHint: View {
     let status: SyncStatus

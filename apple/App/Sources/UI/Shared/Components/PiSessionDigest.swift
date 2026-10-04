@@ -73,7 +73,9 @@ private struct StatusBlock: View {
                     QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
                 } else {
                     // 只能在 Pi 里答的问题：原文照抄（含换行与选项），是此刻最需要看的东西
-                    Callout(tint: palette.attention, title: "等你确认", text: session.question?.displayText ?? session.detail ?? "", prominent: true)
+                    Callout(
+                        tint: palette.attention, title: "等你确认", text: session.question?.displayText ?? session.detail ?? "",
+                        prominent: true, note: "这个问题要在 Mac 上回答")
                 }
             case .error:
                 Callout(tint: palette.failure, title: "出错", text: session.detail ?? "Mac 没有说明原因", prominent: false)
@@ -90,6 +92,8 @@ private struct Callout: View {
     let title: String
     let text: String
     let prominent: Bool
+    /// 正文下的一句说明（如"要在 Mac 上回答"）。
+    var note: String?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -100,6 +104,7 @@ private struct Callout: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
+            if let note { Text(note).font(.footnote).foregroundStyle(palette.ink3) }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -123,6 +128,8 @@ private struct QuestionCard: View {
     @State private var writeError: String?
     @State private var text = ""
 
+    @Environment(AppServices.self) private var services
+
     private var sent: DeliveryRequest? { requestID.flatMap { id in deliveries.first { $0.id == id } } }
     private var failed: Bool { sent?.status == .known(.failed) }
     /// 点下即算在答（请求写成前也是），按钮立刻停用，不重复作答。
@@ -138,8 +145,12 @@ private struct QuestionCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
-            controls.disabled(answering)
-            if answering, sent?.status == .known(.succeeded) {
+            // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
+            controls.disabled(answering || !services.reachesPiHost)
+            if !services.reachesPiHost {
+                Text("\(SyncSummary(services.syncStatus).title)，现在答不了；同步恢复后再答，或在 Mac 上回答")
+                    .font(.footnote).foregroundStyle(palette.ink3)
+            } else if answering, sent?.status == .known(.succeeded) {
                 Text("已答，等 Mac 上的 Pi 继续").font(.footnote).foregroundStyle(palette.ink3)
             } else if let failure {
                 Text(failure).font(.footnote).foregroundStyle(palette.failure)
@@ -197,7 +208,6 @@ private struct QuestionCard: View {
             .frame(maxWidth: .infinity, alignment: leading && !busy ? .leading : .center)
         }
         .buttonStyle(AnswerButtonStyle(prominent: prominent))
-        .opacity(answering && !busy ? 0.45 : 1)
         .accessibilityLabel(busy ? "\(value.label)，送达中" : value.label)
     }
 
@@ -208,6 +218,7 @@ private struct QuestionCard: View {
 
     /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
     private func answer(_ value: PiAnswerValue) {
+        guard services.reachesPiHost else { return }
         writeError = nil
         requestID = nil
         withAnimation(Motion.quick) { tapped = value }
@@ -237,7 +248,8 @@ private struct AnswerButtonStyle: ButtonStyle {
             .background(prominent ? palette.accent : palette.paper, in: shape)
             .overlay { if !prominent { shape.strokeBorder(palette.hair) } }
             .contentShape(shape)
-            .opacity(configuration.isPressed ? 0.7 : 1)
+            // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
+            .opacity(enabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
             .animation(configuration.isPressed ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
@@ -381,14 +393,14 @@ struct DeliveryRow: View {
         }
     }
 
-    /// 作答显示答了什么；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）。
+    /// 作答显示答了什么；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）。送不到 Mac 时也不给重发。
     private var title: String {
         if let answer = request.answer { return "答：\(answer.value.label)" }
         let title = CardText(request.content).title
         return title.isEmpty ? "图片" : title
     }
 
-    private var retryable: Bool { session != nil && request.answer == nil }
+    private var retryable: Bool { session != nil && request.answer == nil && workspace.services.reachesPiHost }
 
     /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
     private func retry() {
