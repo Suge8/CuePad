@@ -106,6 +106,27 @@ struct RealPiTests {
         }
     }
 
+    /// 一段连续处理的计时：思考与工具来回切换时 `stateSince`、`busySince` 都不变（都是开始那一刻），歇下来后 `busySince` 为 nil。
+    @Test func aWorkingStretchKeepsOneClockAcrossThinkingAndToolsAndClearsWhenIdle() async throws {
+        try await withRig { pi, bridge, _ in
+            let log = ChangeLog(bridge)
+            try pi.prompt("[[tool:sleep 0.3]]")
+            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
+            let working = log.changes.compactMap { change -> PiSession? in
+                guard case .stateChanged(let session, _) = change else { return nil }
+                switch session.state {
+                case .thinking, .outputting, .tool: return session
+                default: return nil
+                }
+            }
+            #expect(Set(working.map { "\($0.state)" }).count >= 2, "至少经过思考与工具两种细状态")
+            let start = try #require(working.first?.busySince)
+            #expect(working.allSatisfy { $0.busySince == start && $0.stateSince == start })
+            let idle = try #require(bridge.sessions.first)
+            #expect(idle.busySince == nil && idle.stateSince > start)
+        }
+    }
+
     @Test func toolExecutionShowsToolStateWithItsName() async throws {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)

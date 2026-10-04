@@ -169,3 +169,23 @@ struct PiPlaceTests {
         #expect(PiPlace.name(of: state, project: project) == "CuePad 项目")
     }
 }
+
+/// 会话计时怎么读：工作中从这段连续处理开始算"已运行"，等你确认从进入等待算"已等"，其余是"多久前"。
+struct PiClockTests {
+    private let start = Date(timeIntervalSince1970: 1_000)
+    private let entered = Date(timeIntervalSince1970: 1_600)
+
+    @Test func 工作中读已运行_自连续处理开始() {
+        #expect(PiClock.reading(.known(.tool), stateSince: entered, busySince: start) == .running(since: start))
+        #expect(PiClock.reading(.known(.delegating), stateSince: entered, busySince: start) == .running(since: start))
+    }
+
+    @Test func 等你确认读已等_自进入等待() {
+        #expect(PiClock.reading(.known(.waitingForUser), stateSince: entered, busySince: start) == .waiting(since: entered))
+    }
+
+    @Test func 空闲与已结束读多久前() {
+        #expect(PiClock.reading(.known(.settled), stateSince: entered, busySince: nil) == .ago(entered))
+        #expect(PiClock.reading(.known(.ended), stateSince: entered, busySince: nil) == .ago(entered))
+    }
+}

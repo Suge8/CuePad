@@ -129,6 +129,15 @@ struct MacSyncTests {
         #expect(try await services.store.piSessionStates().map(\.state) == [.known(.ended)])
     }
 
+    @Test func 会话的计时基准原样写进同步记录() async throws {
+        var working = session("s1", state: .tool(name: "bash", running: ["bash"]))
+        working.stateSince = Date(timeIntervalSince1970: 1_000)
+        working.busySince = Date(timeIntervalSince1970: 1_000)
+        try await services.consumePiChanges(changes([.appeared(working)]))
+        let stored = try #require(try await services.store.piSessionStates().first)
+        #expect(stored.stateSince == working.stateSince && stored.busySince == working.busySince)
+    }
+
     @Test func 子代理摘要在会话自己没有说明时写进说明() async throws {
         var master = session("s1", state: .done(aborted: false))
         master.subagents = [PiSubagent(name: "ui", kind: "thinking"), PiSubagent(name: "core", kind: "idle")]
