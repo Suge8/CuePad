@@ -22,6 +22,11 @@ extension CueStore {
     }
   }
 
+  /// 请 `host` 那台 Mac 回答 `target` 会话正在等的弹窗：与发送共用投送请求与执行器，方式是 `answer`。
+  public func requestAnswer(_ answer: PiAnswer, to target: SendTarget, on host: String) throws -> DeliveryRequest {
+    try requestDelivery(answer.stored, to: target, on: host, mode: .answer)
+  }
+
   /// 所有投送请求，最近的在前。
   public func deliveryRequests() throws -> [DeliveryRequest] {
     try select(DeliveryRequest.self, orderBy: "createdAt DESC, rowid DESC")

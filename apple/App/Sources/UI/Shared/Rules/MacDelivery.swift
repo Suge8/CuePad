@@ -18,6 +18,7 @@ nonisolated extension DeliveryMode {
         case .steer: "插话"
         case .followUp: "排队"
         case .paste: "放进输入框"
+        case .answer: "作答"
         }
     }
 
@@ -27,7 +28,7 @@ nonisolated extension DeliveryMode {
         case .steer: "打断 Pi 正在进行的这一轮"
         case .followUp: "等 Pi 这一轮结束后再发"
         case .paste: "只放进输入框，由你在 Mac 上确认发送"
-        case .send: nil
+        case .send, .answer: nil
         }
     }
 }

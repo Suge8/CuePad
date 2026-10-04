@@ -89,7 +89,7 @@ private struct DigestHeader: View {
             switch session.state.known {
             case .waitingForUser:
                 // 问题原文照抄（含换行与选项），是此刻最需要看的东西
-                Callout(tint: palette.attention, title: "等你确认", text: session.question ?? session.detail ?? "")
+                Callout(tint: palette.attention, title: "等你确认", text: session.question?.displayText ?? session.detail ?? "")
             case .error:
                 Callout(tint: palette.failure, title: "出错", text: session.detail ?? "Mac 没有说明原因")
             default:

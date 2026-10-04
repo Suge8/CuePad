@@ -128,6 +128,17 @@ final class AppServices {
             mode: mode, card: card, task: task)
     }
 
+    /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac（与发送同一条投送通道，Mac 上也走它，由执行器交给扩展）。
+    /// 问题不能从这里作答（没有标识或种类不认识）时抛 `SendError.unanswerable`。
+    func answer(_ value: PiAnswerValue, to session: PiSessionState) async throws -> DeliveryRequest {
+        guard let question = session.question, question.isAnswerable, let promptID = question.promptID else {
+            throw SendError.unanswerable
+        }
+        return try await store.requestAnswer(
+            PiAnswer(promptID: promptID, value: value), to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID),
+            on: session.hostID)
+    }
+
     /// 发送并写一条发送记录；投送失败不写记录，错误原样抛给界面展示。投送成功而记录没写进去时抛 `SendError.unrecorded`。
     /// 发给 Pi 会话不在这里直接发：写本机投送请求、等执行器的结果（见 `sendThroughRequest`）。
     func send(_ storedText: String, to destination: Destination, card: UUID? = nil, task: UUID? = nil) async throws {

@@ -184,7 +184,7 @@ private struct SessionRow: View {
     @Environment(\.palette) private var palette
 
     private var preview: String? {
-        let text = session.question ?? session.lastPrompt ?? (session.state.isWorking ? session.detail : nil)
+        let text = session.question?.displayText ?? session.lastPrompt ?? (session.state.isWorking ? session.detail : nil)
         return text?.split(whereSeparator: \.isNewline).first.map(String.init)
     }
 

@@ -36,7 +36,7 @@
 
 - `lastPrompt`：用户最后一条消息（`message_end`，`role == "user"`）的文字块，空白与控制字符折成一个空格，≤500 字符。扩展 v5 起跳过机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的（如 FireCode 空闲时以 `sendUserMessage` 投进来的子代理事件、观察员、审查结果信封），保留上一条真人提问；它触发的那一轮回答照常进 `lastReply`。首条消息（显示名）与 Pi 会话列表一致，不跳过；
 - `lastReply`：`agent_end` 时本轮最后一条助手消息里的文字块（思考与工具调用不算），换行连接、保留换行，≤1200 字符；
-- `question`：正在等用户回答的弹窗文案，标题、说明（`confirm`）、选项（`select`）换行分隔，≤500 字符；`ui_prompt_end` 后为 nil。`ui_prompt_start` 只带标题，说明与选项靠在 `session_start` 时包装共用的 `ctx.ui`（`select`/`confirm`/`input`/`editor`）在调用时记下；`custom` 弹窗没有文案。
+- `question`（v7 起是对象，v4–v6 是一段文字，客户端读成只有文案的 `PiPrompt`）：正在等你回答的弹窗 `{id, kind, text, options}`。`kind` 是 `confirm`/`select`/`text`（`input`）/`editor`/`custom`；`text` 是标题与说明（`confirm`）换行连接，≤500 字符；`options` 是选择框的选项原文；`id` 是这次弹窗的标识，能从 CuePad 作答的（`confirm`/`select`/`text`）才有，`editor` 没有可收起的接口、`custom` 没有文案，为 null。`ui_prompt_end` 后为 null。`ui_prompt_start` 只带标题，说明与选项靠在 `session_start` 时包装共用的 `ctx.ui` 在调用时记下；包装同时给弹窗接上一个由扩展控制的 AbortSignal（与调用方自己的合并）。
 
 子代理（扩展 v5 起）：其他扩展在同一进程里开的子会话（FireCode 用 `createAgentSession`，以 `print` 模式绑定）也会加载本扩展，但 `print` 模式不开 socket，所以不会作为独立会话出现。会话文件在父会话目录的 `subagents/` 下的子会话把名字与状态登记到进程内共享的表里，父会话的 `info.subagents`（`[{name, kind}]`，`kind` 同 `state.kind`）汇总它们；名字依次取会话名、FireCode 写在子会话系统提示里的 `<firecode_worker name="…">`、首条用户消息。`PiSession.subagents` / `subagentSummary`（"子代理：ui 工作中 · core 空闲"）给界面；同步记录里会话自己没有说明时，说明写这句摘要。
 
@@ -46,6 +46,7 @@ CuePad → 扩展（都带 `id`）：
 
 - `{"t":"send","id","text","images":[{"mimeType","data(base64)"}],"deliverAs":"steer"|"followUp"}`：走 `sendUserMessage`，`deliverAs` 缺省 `followUp`，只在会话正忙时生效；图片发原图，Pi 自行缩放。
 - `{"t":"paste","id","text"}`：走 `pasteToEditor`（在光标处粘贴，不覆盖已输入内容）；RPC 模式下退化为 `set_editor_text` 请求。
+- `{"t":"answer","id","promptId","value"}`（v7 起）：回答正在等的弹窗。`value` 在 `confirm` 是布尔，`select` 是选项原文之一，`text` 是字符串。扩展先记下答案再 abort 自己接上的 signal：Pi 的界面随之收起（TUI 隐藏选择器与确认框，RPC 删掉待答请求并按"取消"结束），原调用的结果被换成这个答案交回发起弹窗的扩展，随后 `ui_prompt_end` 清空 `question`、状态回到工作中。拒绝：`no_prompt`（没有在等、或已经答过）、`stale_prompt`（`promptId` 不是正在等的那个）、`bad_answer`（类型不对或选项不在列表里）。
 
 扩展只在 `tui` 与 `rpc` 模式启用；`print`/`json`（一次性的 `pi -p`）不开 socket，也就不会出现在会话列表里。
 

@@ -99,3 +99,10 @@ struct PiStateDot: View {
         }
     }
 }
+
+nonisolated extension PiQuestion {
+    /// 只读地显示问题：文案，下面每个选项一行。能作答的界面直接用 `options` 做成按钮。
+    var displayText: String {
+        ([text] + options.map { "· \($0)" }).joined(separator: "\n")
+    }
+}

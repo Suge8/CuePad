@@ -42,10 +42,10 @@ public struct PiRecap: Sendable, Equatable {
   public var lastPrompt: String?
   /// 助手最后一轮的最终回答文字（不含思考与工具调用），保留换行，至多 1200 字符。
   public var lastReply: String?
-  /// 正在等用户回答的弹窗文案：标题、说明与各选项，换行分隔，至多 500 字符；不在等待时为 nil。
-  public var question: String?
+  /// 正在等你回答的弹窗；不在等待时为 nil。
+  public var question: PiQuestion?
 
-  public init(lastPrompt: String? = nil, lastReply: String? = nil, question: String? = nil) {
+  public init(lastPrompt: String? = nil, lastReply: String? = nil, question: PiQuestion? = nil) {
     self.lastPrompt = lastPrompt
     self.lastReply = lastReply
     self.question = question
@@ -65,6 +65,114 @@ public struct PiTimes: Sendable, Equatable {
   }
 }
 
+public enum PiQuestionKind: String, Sendable, CaseIterable {
+  /// 是或否
+  case confirm
+  /// 从选项里选一个
+  case select
+  /// 填一段文字
+  case text
+}
+
+/// 等你回答的弹窗。存在同步记录的 `question` 字段里（加密，JSON）。
+public struct PiQuestion: Sendable, Equatable {
+  /// 这次弹窗的标识，作答时带上；nil 表示只能在 Pi 里答（多行编辑、自定义界面，或旧版本写的只有文案）。
+  public var promptID: String?
+  /// 不认识的种类（多行编辑、自定义界面、更新版本的新种类）不能从这里作答。
+  public var kind: Open<PiQuestionKind>
+  /// 标题与说明，换行分隔，至多 500 字符。
+  public var text: String
+  /// 选择框的选项原文，作答时按原文回传。
+  public var options: [String]
+
+  public init(promptID: String?, kind: Open<PiQuestionKind>, text: String, options: [String] = []) {
+    self.promptID = promptID
+    self.kind = kind
+    self.text = text
+    self.options = options
+  }
+
+  public init(promptID: String?, kind: PiQuestionKind, text: String, options: [String] = []) {
+    self.init(promptID: promptID, kind: .known(kind), text: text, options: options)
+  }
+
+  /// 能从 CuePad 作答：有标识，种类认识。
+  public var isAnswerable: Bool { promptID != nil && kind.known != nil }
+
+  private struct Stored: Codable {
+    var promptID: String?
+    var kind: String
+    var text: String
+    var options: [String]
+  }
+
+  var stored: String {
+    let data = try! JSONEncoder().encode(Stored(promptID: promptID, kind: kind.rawValue, text: text, options: options))
+    return String(decoding: data, as: UTF8.self)
+  }
+
+  /// 读不成 JSON 的是旧版本写的一段文字：只有文案、不能作答。
+  init(stored: String) {
+    guard let decoded = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else {
+      self.init(promptID: nil, kind: .unknown(""), text: stored)
+      return
+    }
+    self.init(promptID: decoded.promptID, kind: Open(rawValue: decoded.kind), text: decoded.text, options: decoded.options)
+  }
+}
+
+/// 对弹窗的回答。
+public enum PiAnswerValue: Sendable, Equatable {
+  /// 选择框选中的选项原文
+  case option(String)
+  /// 确认框的是或否
+  case confirmed(Bool)
+  /// 输入框填的文字
+  case text(String)
+}
+
+/// 手机发给 Mac 的作答：哪次弹窗、答什么。存在投送请求（方式 `answer`）的正文里（JSON）。
+public struct PiAnswer: Sendable, Equatable {
+  public var promptID: String
+  public var value: PiAnswerValue
+
+  public init(promptID: String, value: PiAnswerValue) {
+    self.promptID = promptID
+    self.value = value
+  }
+
+  private struct Stored: Codable {
+    var promptID: String
+    var option: String?
+    var confirmed: Bool?
+    var text: String?
+  }
+
+  var stored: String {
+    var form = Stored(promptID: promptID)
+    switch value {
+    case .option(let option): form.option = option
+    case .confirmed(let confirmed): form.confirmed = confirmed
+    case .text(let text): form.text = text
+    }
+    return String(decoding: try! JSONEncoder().encode(form), as: UTF8.self)
+  }
+
+  init?(stored: String) {
+    guard let form = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else { return nil }
+    if let option = form.option {
+      value = .option(option)
+    } else if let confirmed = form.confirmed {
+      value = .confirmed(confirmed)
+    } else if let text = form.text {
+      value = .text(text)
+    } else {
+      return nil
+    }
+    promptID = form.promptID
+  }
+}
+
 /// 一个 Pi 会话此刻的状态，Mac 写、手机读；每个会话一条，会话结束后标为 `ended` 保留一段时间。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -81,7 +189,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 近况，见 `PiRecap`（同名字段）。旧版本写的记录没有。
   public var lastPrompt: String?
   public var lastReply: String?
-  public var question: String?
+  public var question: PiQuestion?
   /// 这次写入是否要通知手机；见 `PiAlert`。
   public var notify: Open<PiAlert>?
   /// 计时基准，见 `PiTimes`（同名字段）。界面：工作中"已运行"自 `busySince`，等你确认"已等"自 `stateSince`，其余"多久前"自 `stateSince`。
@@ -94,7 +202,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 公开给 Mac 端：把桥上的实时会话、历史索引里的会话也写成这种形状，交给同一个近况界面。
   public init(
     id: UUID, sessionID: String, hostID: String, title: String, projectID: UUID?, state: Open<PiWorkState>, detail: String?,
-    folder: String?, lastPrompt: String?, lastReply: String?, question: String?, notify: Open<PiAlert>?, stateSince: Date,
+    folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
     busySince: Date?, createdAt: Date, modifiedAt: Date
   ) {
     self.id = id
@@ -127,6 +235,8 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
   case send, steer, followUp, paste
+  /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
+  case answer
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
@@ -149,6 +259,9 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
 
+  /// 作答请求的答案；其他方式为 nil。
+  public var answer: PiAnswer? { mode == .known(.answer) ? PiAnswer(stored: content) : nil }
+
   /// 往返时间：创建 → 结果回到本机，两端都是发起设备的时钟。执行方与还没收到结果时为 nil。
   public var roundTrip: Duration? {
     resultReceivedAt.map { .milliseconds(Int64(($0.timeIntervalSince(createdAt) * 1000).rounded())) }
@@ -168,13 +281,13 @@ extension PiSessionState: Record {
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
-     lastPrompt, lastReply, question, busySince]
+     lastPrompt, lastReply, question?.stored, busySince]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), sessionID: row.text(1), hostID: row.text(2), title: row.text(3), projectID: row.uuidOrNil(4),
       state: Open(rawValue: row.text(5)), detail: row.textOrNil(6), folder: row.textOrNil(11),
-      lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14),
+      lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14).map(PiQuestion.init(stored:)),
       notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), busySince: row.dateOrNil(15), createdAt: row.date(8),
       modifiedAt: row.date(9))
   }

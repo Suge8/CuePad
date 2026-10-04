@@ -112,7 +112,8 @@ extension DebugScene {
                 lastReply: "上一轮 12 个用例里有 2 个失败：\n\n1. 发言轮次在 5 人以上时，第 6 位的顺序被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序；第二个需要把回调地址换成统一网关。要我先改第一个吗？")),
             ("homepage", .waitingForUser, "要覆盖 public/feed.xml 吗？", "个人网站", PiRecap(
                 lastPrompt: "把 RSS 输出改成全文",
-                question: "要覆盖 public/feed.xml 吗？\n· 覆盖\n· 另存为 feed-full.xml\n· 取消")),
+                question: PiQuestion(
+                    promptID: "demo-prompt", kind: .select, text: "要覆盖 public/feed.xml 吗？", options: ["覆盖", "另存为 feed-full.xml", "取消"]))),
             ("cuepad", .thinking, nil, "CuePad", PiRecap(lastPrompt: "看看投送队列超时的那个 bug")),
             ("piwork", .settled, nil, nil, PiRecap(
                 lastPrompt: "列出 piwork 目录下的文件", lastReply: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md")),

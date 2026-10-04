@@ -32,7 +32,7 @@ extension AppServices {
             sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
             folder: session.cwd.lastPathComponent,
             projectID: try await store.project(containing: session.cwd)?.id,
-            recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question),
+            recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question.map(PiQuestion.init)),
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince))
     }
 
@@ -76,6 +76,12 @@ extension AppServices {
             }
             // 执行器已把不认识的发送方式按失败写回，走到这里的都是已知方式
             guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
+            if mode == .answer {
+                // 作答不是发出去的内容，不记发送记录
+                guard let answer = request.answer else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新答案
+                try await channels.answer(answer.value.prompt, to: answer.promptID, in: id)
+                return
+            }
             sent = try await sendToPi(content, session: id, mode: mode)
         case .known(.app):
             guard let bundleID = target.ref else { throw SendError.unsupportedTarget(target.name) }
@@ -102,6 +108,7 @@ extension AppServices {
             whenBusy = nil
         case .steer: whenBusy = .steer
         case .followUp: whenBusy = .followUp
+        case .answer: throw SendError.unsupportedMode("answer")  // 作答在 perform 里交给扩展，不走发送
         }
         let images = try content.segments.compactMap { segment -> PiImage? in
             guard case .image(let hash) = segment else { return nil }
@@ -111,6 +118,24 @@ extension AppServices {
         }
         try await channels.send(PiMessage(text: content.plainText, images: images, whenBusy: whenBusy), to: id)
         return session.target
+    }
+}
+
+extension PiQuestion {
+    /// 桥上的弹窗写成同步记录里的问题（扩展的种类名与这里同名）。
+    init(_ prompt: PiPrompt) {
+        self.init(promptID: prompt.id, kind: Open(rawValue: prompt.kind), text: prompt.text, options: prompt.options)
+    }
+}
+
+extension PiAnswerValue {
+    /// 交给桥的回答。
+    var prompt: PiPromptAnswer {
+        switch self {
+        case .option(let option): .option(option)
+        case .confirmed(let confirmed): .confirmed(confirmed)
+        case .text(let text): .text(text)
+        }
     }
 }
 

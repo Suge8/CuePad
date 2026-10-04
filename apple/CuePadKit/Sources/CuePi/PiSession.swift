@@ -75,8 +75,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var lastPrompt: String? = nil
     /// 助手最后一轮的最终回答文字，不含思考与工具调用，保留换行（≤1200 字符）
     public internal(set) var lastReply: String? = nil
-    /// 正在等用户回答的弹窗文案：标题、说明与各选项，换行分隔（≤500 字符）；不在等待时为 nil
-    public internal(set) var question: String? = nil
+    /// 正在等你回答的弹窗；不在等待时为 nil
+    public internal(set) var question: PiPrompt? = nil
     /// 本会话在同一进程里开的子代理（扩展 v5 起；FireCode 的子代理是进程内子会话，不作为独立会话出现）
     public internal(set) var subagents: [PiSubagent] = []
 
@@ -91,6 +91,46 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
     }
+}
+
+/// 等你回答的弹窗（扩展 v7 起结构化；旧扩展只有文案，`id` 为 nil、`kind` 为空）。
+public struct PiPrompt: Sendable, Equatable, Decodable {
+    /// 这次弹窗的标识，从 CuePad 作答时带上；nil 表示只能在 Pi 里答（editor、custom 弹窗，或旧扩展）
+    public var id: String?
+    /// `confirm` / `select` / `text`，以及只能在 Pi 里答的 `editor`、`custom`
+    public var kind: String
+    /// 标题与说明（确认框），换行分隔，≤500 字符
+    public var text: String
+    /// 选择框的选项（原文，作答时按原文回传）
+    public var options: [String]
+
+    public init(id: String?, kind: String, text: String, options: [String] = []) {
+        self.id = id
+        self.kind = kind
+        self.text = text
+        self.options = options
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, kind, text, options }
+
+    public init(from decoder: any Decoder) throws {
+        // 扩展 v4–v6 上报的是一段文字
+        if let legacy = try? decoder.singleValueContainer().decode(String.self) {
+            self.init(id: nil, kind: "", text: legacy)
+            return
+        }
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try c.decodeIfPresent(String.self, forKey: .id), kind: try c.decode(String.self, forKey: .kind),
+            text: try c.decode(String.self, forKey: .text), options: try c.decodeIfPresent([String].self, forKey: .options) ?? [])
+    }
+}
+
+/// 对弹窗的回答：选择框选一项（原文）、确认框答是或否、输入框填文字。
+public enum PiPromptAnswer: Sendable, Equatable {
+    case option(String)
+    case confirmed(Bool)
+    case text(String)
 }
 
 /// 父会话里的一个子代理：名字与此刻在干什么。
@@ -202,7 +242,8 @@ public enum PiBridgeError: Error, Equatable {
     /// 等 ack 时连接断了
     case sessionEnded
     case ackTimeout
-    /// 扩展拒绝：`empty` / `bad_request` / `failed: …`
+    /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
+    /// `bad_answer`（答案类型或选项不对）
     case rejected(String)
 }
 
@@ -214,6 +255,8 @@ extension PiBridgeError: LocalizedError {
         case .unknownSession: "这个 Pi 会话已经结束"
         case .sessionEnded: "发送途中 Pi 会话结束了"
         case .ackTimeout: "Pi 没有及时确认收到，请确认会话仍在运行"
+        case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Pi 已经不在等这个问题"
+        case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .rejected(let reason): "Pi 拒绝了这条消息：\(reason)"
         }
     }
