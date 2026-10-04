@@ -35,11 +35,11 @@ extension AppServices {
             recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question))
     }
 
-    // MARK: 手机发来的投送请求
+    // MARK: 投送请求（手机发来的与本机界面写的）
 
     func startDeliveryExecutor() async throws {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [weak self] error in
-            let message = "处理手机发来的投送请求时读写资料库失败：\(error.localizedDescription)"
+            let message = "处理投送请求时读写资料库失败：\(error.localizedDescription)"
             Task { @MainActor in self?.reportIssue(.syncUnavailable(message)) }
         }) { [weak self] request in
             guard let self else { return .failed("这台 Mac 上的 CuePad 正在退出") }
@@ -52,19 +52,22 @@ extension AppServices {
     /// 失败原因写回给手机用户看，取错误自身的说明（各模块的错误都实现了 `LocalizedError`）。
     private func execute(_ request: DeliveryRequest) async -> DeliveryOutcome {
         do {
-            try await send(request.content, to: try destination(for: request), card: request.cardID, task: request.taskID)
+            try await perform(request)
             return .succeeded
         } catch SendError.unrecorded(let reason) {
             // 已经送达：写回成功，手机才不会重发；没记下发送是这台 Mac 的资料库问题，在这里报
-            reportIssue(.syncUnavailable("处理手机发来的投送请求时读写资料库失败：\(reason)"))
+            reportIssue(.syncUnavailable("处理投送请求时读写资料库失败：\(reason)"))
             return .succeeded
         } catch {
             return .failed(error.localizedDescription)
         }
     }
 
-    private func destination(for request: DeliveryRequest) throws -> Destination {
+    /// 执行一条请求：发给 Pi 会话的在这里调用 Pi 桥（全 App 只有这一处），应用与剪贴板交给通用发送；成功后记发送记录。
+    private func perform(_ request: DeliveryRequest) async throws {
         let target = request.target
+        let content = SendContent(stored: request.content)
+        let sent: SendTarget
         switch target.kind {
         case .known(.piSession):
             guard let ref = target.ref, let id = channels.piSessionID(forSession: ref) else {
@@ -72,15 +75,41 @@ extension AppServices {
             }
             // 执行器已把不认识的发送方式按失败写回，走到这里的都是已知方式
             guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
-            return .pi(id, mode)
+            sent = try await sendToPi(content, session: id, mode: mode)
         case .known(.app):
             guard let bundleID = target.ref else { throw SendError.unsupportedTarget(target.name) }
-            return .app(.bundleID(bundleID))
+            sent = try await dispatch(content, to: .bundleID(bundleID), submit: settings.autoSubmit)
         case .known(.clipboard):
-            return .clipboard
+            sent = try copyToClipboard(content)
         case .unknown:
             throw SendError.unsupportedTarget(target.name)
         }
+        try await recordSend(request.content, to: sent, card: request.cardID, task: request.taskID)
+    }
+
+    /// Pi 桥只认插话/排队两种入队方式：发送方式在这里一次性落到桥的消息上。
+    private func sendToPi(_ content: SendContent, session id: CuePi.PiSession.ID, mode: DeliveryMode) async throws -> SendTarget {
+        guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
+        let whenBusy: PiQueueMode?
+        switch mode {
+        case .paste:
+            guard !content.hasImages else { throw SendError.imagesNotSupported }
+            try await channels.paste(content.plainText, into: id)
+            return session.target
+        case .send:
+            guard !session.isBusy else { throw SendError.piSessionBusy }
+            whenBusy = nil
+        case .steer: whenBusy = .steer
+        case .followUp: whenBusy = .followUp
+        }
+        let images = try content.segments.compactMap { segment -> PiImage? in
+            guard case .image(let hash) = segment else { return nil }
+            let data = try imageData(hash)
+            guard let mimeType = ImageFiles.mimeType(of: data) else { throw SendError.imageUnavailable(hash) }
+            return PiImage(mimeType: mimeType, data: data)
+        }
+        try await channels.send(PiMessage(text: content.plainText, images: images, whenBusy: whenBusy), to: id)
+        return session.target
     }
 }
 

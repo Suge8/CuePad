@@ -26,6 +26,13 @@ struct SendTests {
             target: SendTarget(kind: .piSession, name: "work", ref: "sess-1"), isBusy: busy)
     }
 
+    /// 发给 Pi 走本机投送请求：会话要能从 Pi 的会话 id 找回桥上的连接，执行器要在运行。
+    func connectedSession(busy: Bool = false) async throws {
+        idleSession(busy: busy)
+        channels.bridgeIDs["sess-1"] = "s1.100"
+        try await services.startDeliveryExecutor()
+    }
+
     // MARK: 路由
 
     @Test func 剪贴板_文字与图片按原顺序_记录目标为剪贴板() async throws {
@@ -39,8 +46,8 @@ struct SendTests {
         #expect(record.content == body)
     }
 
-    @Test func Pi直发_文字去掉图片标记_图片按序带原图和类型_记录会话id与目录名() async throws {
-        idleSession()
+    @Test func 发给Pi_文字去掉图片标记_图片按序带原图和类型_记录会话id与目录名() async throws {
+        try await connectedSession()
         let body = try await bodyWithImage()
 
         try await services.send(body, to: .pi("s1.100", .send))
@@ -55,7 +62,7 @@ struct SendTests {
     }
 
     @Test func Pi会话忙时_未指定排队方式则报错_指定后按方式发送() async throws {
-        idleSession(busy: true)
+        try await connectedSession(busy: true)
 
         await #expect(throws: SendError.piSessionBusy) {
             try await services.send("hi", to: .pi("s1.100", .send))
@@ -75,12 +82,12 @@ struct SendTests {
     }
 
     @Test func 放进输入框只送文字_含图片则拒绝且什么都不发() async throws {
-        idleSession()
+        try await connectedSession()
         try await services.send("plain", to: .pi("s1.100", .paste))
         #expect(channels.calls == [.paste("plain", "s1.100")])
 
         let body = try await bodyWithImage()
-        await #expect(throws: SendError.imagesNotSupported) {
+        await #expect(throws: SendError.notDelivered(SendError.imagesNotSupported.localizedDescription)) {
             try await services.send(body, to: .pi("s1.100", .paste))
         }
         #expect(channels.calls.count == 1)

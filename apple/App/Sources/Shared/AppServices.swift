@@ -129,8 +129,19 @@ final class AppServices {
     }
 
     /// 发送并写一条发送记录；投送失败不写记录，错误原样抛给界面展示。投送成功而记录没写进去时抛 `SendError.unrecorded`。
+    /// 发给 Pi 会话不在这里直接发：写本机投送请求、等执行器的结果（见 `sendThroughRequest`）。
     func send(_ storedText: String, to destination: Destination, card: UUID? = nil, task: UUID? = nil) async throws {
-        let target = try await deliver(SendContent(stored: storedText), to: destination)
+        let content = SendContent(stored: storedText)
+        let target: SendTarget
+        switch destination {
+        #if os(macOS)
+        case .pi(let id, let mode):
+            try await sendThroughRequest(storedText, to: id, mode: mode, card: card, task: task)
+            return
+        case .app(let selector): target = try await dispatch(content, to: selector, submit: settings.autoSubmit)
+        #endif
+        case .clipboard: target = try copyToClipboard(content)
+        }
         try await recordSend(storedText, to: target, card: card, task: task)
     }
 
