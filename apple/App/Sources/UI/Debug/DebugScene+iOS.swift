@@ -6,6 +6,7 @@ import SwiftUI
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
 /// taskedit：任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
+/// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// searchkey：iPhone 停在任务页，1.5 秒后走 ⌘K（回到书架并聚焦下拉搜索）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
@@ -62,11 +63,24 @@ extension DebugScene {
             await openCard()
             if let id = await card(in: project, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) {
-                navigation.outbox = Navigation.Outbox(content: Outgoing.text(of: card), card: id, project: project)
+                let outbox = Navigation.Outbox(content: Outgoing.text(of: card), card: id, project: project)
+                // 给了 -CuePadSession 就当已选好会话，直接进它的近况页（卡片预填在回复框里）
+                if let title = defaults.string(forKey: "CuePadSession"),
+                   let session = try? await workspace.services.store.piSessionStates().first(where: { $0.title == title }) {
+                    navigation.openSession(session.id, draft: outbox)
+                } else {
+                    navigation.outbox = outbox
+                }
             }
         case "tasks", "taskedit":
             if let project { open(.project(project)) }
             if split { navigation.panel = .tasks } else { navigation.tab = .tasks }
+        case "session":
+            // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在活动标签里
+            let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
+            guard let session = try? await workspace.services.store.piSessionStates().first(where: { $0.title == title }) else { break }
+            if split { navigation.select(.activity) } else { navigation.tab = .activity }
+            navigation.push(.session(session.id))
         case "activity":
             if let project { open(.project(project)) }
             if split { navigation.panel = .activity } else { navigation.tab = .activity }
@@ -92,19 +106,31 @@ extension DebugScene {
         guard (try? await store.piSessionStates().isEmpty) == true, let projects = try? await store.projects() else { return }
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
-        let sessions: [(String, PiWorkState, String?, String)] = [
-            ("atlas", .tool, "bash · pnpm test -- scheduler", "圆桌"),
-            ("homepage", .waitingForUser, "要覆盖 public/feed.xml 吗？", "个人网站"),
-            ("cuepad", .thinking, nil, "CuePad"),
+        let sessions: [(String, PiWorkState, String?, String?, PiRecap)] = [
+            ("atlas", .tool, "bash · pnpm test -- scheduler", "圆桌", PiRecap(
+                lastPrompt: "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因",
+                lastReply: "上一轮 12 个用例里有 2 个失败：\n\n1. 发言轮次在 5 人以上时，第 6 位的顺序被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序；第二个需要把回调地址换成统一网关。要我先改第一个吗？")),
+            ("homepage", .waitingForUser, "要覆盖 public/feed.xml 吗？", "个人网站", PiRecap(
+                lastPrompt: "把 RSS 输出改成全文",
+                question: "要覆盖 public/feed.xml 吗？\n· 覆盖\n· 另存为 feed-full.xml\n· 取消")),
+            ("cuepad", .thinking, nil, "CuePad", PiRecap(lastPrompt: "看看投送队列超时的那个 bug")),
+            ("piwork", .settled, nil, nil, PiRecap(
+                lastPrompt: "列出 piwork 目录下的文件", lastReply: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md")),
         ]
-        for (id, state, detail, name) in sessions {
-            try? await recorder.update(sessionID: id, state: state, detail: detail, title: id, projectID: project(name))
+        for (id, state, detail, name, recap) in sessions {
+            try? await recorder.update(
+                sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), recap: recap)
         }
+        try? await recorder.end(sessionID: "piwork")
         if let table = project("圆桌"), let goal = try? await store.cards(in: table).first(where: { $0.body.hasPrefix("目标") }) {
             try? await store.setGoal(goal.id, for: table)
         }
-        if let atlas = try? await store.piSessionStates().first(where: { $0.sessionID == "atlas" }) {
+        let states = (try? await store.piSessionStates()) ?? []
+        if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
             _ = try? await services.requestMacDelivery("评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: atlas, mode: .followUp)
+        }
+        if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
+            _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)
         }
     }
 }

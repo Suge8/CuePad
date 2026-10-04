@@ -156,7 +156,7 @@ private struct PinnedShelfCard: View {
                 HStack(alignment: .top) {
                     ProjectGlyph(project: entry.project, size: glyph)
                     Spacer()
-                    if let pi = entry.pi { PiDot(state: pi, announces: true) }
+                    if let pi = entry.pi { PiStateDot(state: pi, announces: true) }
                 }
                 Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
                 Group {
@@ -244,7 +244,7 @@ private struct ShelfRow: View {
                     HStack(spacing: 6) {
                         if stacked { ProjectGlyph(project: entry?.project, size: glyph) }
                         Text(entry?.project.name ?? "未归档").font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
-                        if let pi = entry?.pi { PiDot(state: pi, size: 6, announces: true) }
+                        if let pi = entry?.pi { PiStateDot(state: pi, size: 6, announces: true) }
                     }
                     Group {
                         if entry?.goal?.isEmpty == false {

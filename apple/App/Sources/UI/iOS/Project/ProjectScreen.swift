@@ -217,7 +217,7 @@ private struct FocusCard: View {
                     SectionLabel(text: "Pi", systemImage: "terminal")
                     ForEach(sessions) { session in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            PiDot(state: session.state, size: 7)
+                            PiStateDot(state: session.state, size: 7)
                             Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
                             PiActivityLine(lead: [session.state.label], detail: session.detail, detailIsCode: session.detailIsCode, font: .subheadline)
                                 .foregroundStyle(palette.ink2)

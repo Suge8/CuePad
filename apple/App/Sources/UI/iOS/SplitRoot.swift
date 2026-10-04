@@ -212,7 +212,7 @@ private struct SidebarRow: View {
                 layout {
                     Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                     HStack(spacing: 6) {
-                        if let pi { PiDot(state: pi, size: 6, announces: true) }
+                        if let pi { PiStateDot(state: pi, size: 6, announces: true) }
                         Spacer(minLength: 4)
                         if badge > 0 { Text("\(badge)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3) }
                     }

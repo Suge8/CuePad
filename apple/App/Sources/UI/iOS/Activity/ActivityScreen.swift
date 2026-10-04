@@ -7,7 +7,7 @@ import SwiftUI
 nonisolated struct ActivityData: Sendable {
     var waiting: [PiSessionState]
     var running: [PiSessionState]
-    /// 空闲、出错、已结束与未知状态。
+    /// 空闲、出错与未知状态，已结束的排在最后。
     var idle: [PiSessionState]
     var deliveries: [DeliveryRequest]
     var sends: [SendRecord]
@@ -25,26 +25,23 @@ nonisolated struct ActivityData: Sendable {
         return ActivityData(
             waiting: states.filter { $0.state == .known(.waitingForUser) },
             running: states.filter(\.state.isWorking),
-            idle: states.filter { $0.state != .known(.waitingForUser) && !$0.state.isWorking },
+            idle: states.filter { $0.state != .known(.waitingForUser) && !$0.state.isWorking && $0.state != .known(.ended) }
+                + states.filter { $0.state == .known(.ended) },
             deliveries: try store.deliveryRequests(),
             sends: Array(try store.sendRecords().prefix(sendLimit)),
             projects: Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) }))
     }
 }
 
-/// 活动：等你确认置顶，其次运行中与空闲的会话，然后是发到 Mac 的请求与发送记录。Pi 状态只读，回应在 Mac 上。
+/// 活动：等你确认的会话在最前，其次运行中、空闲与出错、已结束（最淡）的会话；点开看近况并回复。
+/// 下面是会话已经不在列表里的请求，与发送记录。
 struct ActivityScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var data: ActivityData?
 
-    /// 通知定位到的会话标出多久。
-    private static let focusDuration: Duration = .seconds(1.6)
-
     var body: some View {
-        ScrollViewReader { proxy in
         ScrollView {
             if let data {
                 VStack(alignment: .leading, spacing: 22) {
@@ -53,30 +50,26 @@ struct ActivityScreen: View {
                         ContentUnavailableView {
                             Label("还没有活动", systemImage: "waveform.path.ecg")
                         } description: {
-                            Text("在 Mac 上用 Pi 干活时，进度会显示在这里")
+                            Text("在 Mac 上用 Pi 干活时，会话会出现在这里，点开能看近况、直接回复")
                         }
                         .padding(.top, 40)
                     }
-                    ForEach(data.waiting) { session in
-                        WaitingCard(session: session, project: session.projectID.flatMap { data.projects[$0] })
-                            .focusRing(session.id == navigation.focusedSession, radius: 18)
-                            .id(session.id)
+                    if !data.waiting.isEmpty {
+                        ActivitySection(title: "等你确认", count: data.waiting.count, tint: palette.attention) {
+                            rows(data.waiting, data)
+                        }
                     }
                     if !data.running.isEmpty || !data.idle.isEmpty {
                         ActivitySection(title: "Pi 会话", count: data.running.count + data.idle.count) {
-                            ForEach(Array((data.running + data.idle).enumerated()), id: \.element.id) { index, session in
-                                if index > 0 { Divider().padding(.leading, 44) }
-                                SessionRow(session: session, project: session.projectID.flatMap { data.projects[$0] })
-                                    .focusRing(session.id == navigation.focusedSession, radius: 16)
-                                    .id(session.id)
-                            }
+                            rows(data.running + data.idle, data)
                         }
                     }
-                    if !data.deliveries.isEmpty {
-                        ActivitySection(title: "发到 Mac", count: data.deliveries.count) {
-                            ForEach(Array(data.deliveries.enumerated()), id: \.element.id) { index, request in
+                    let orphans = data.deliveries.filter { request in !data.sessions.contains { $0.sessionID == request.target.ref } }
+                    if !orphans.isEmpty {
+                        ActivitySection(title: "发到 Mac", count: orphans.count) {
+                            ForEach(Array(orphans.enumerated()), id: \.element.id) { index, request in
                                 if index > 0 { Divider().padding(.leading, 16) }
-                                DeliveryRow(request: request, live: data.sessions.first { $0.sessionID == request.target.ref })
+                                DeliveryRow(request: request, session: nil)
                             }
                         }
                     }
@@ -84,7 +77,7 @@ struct ActivityScreen: View {
                         ActivitySection(title: "发送记录", count: nil) {
                             ForEach(Array(data.sends.enumerated()), id: \.element.id) { index, record in
                                 if index > 0 { Divider().padding(.leading, 16) }
-                                SendRecordRow(record: record, live: data.sessions.first { $0.sessionID == record.targetRef })
+                                SendRecordRow(record: record, live: data.sessions.first { $0.sessionID == record.targetRef && $0.state != .known(.ended) })
                             }
                         }
                     }
@@ -94,19 +87,19 @@ struct ActivityScreen: View {
                 .animation(Motion.quick, value: ActivityShape(data))
             }
         }
-        .task(id: FocusKey(session: navigation.focusedSession, loaded: data != nil)) {
-            guard let id = navigation.focusedSession, data != nil else { return }
-            withAnimation(Motion.quick) { proxy.scrollTo(id, anchor: .top) }
-            try? await Task.sleep(for: Self.focusDuration)
-            withAnimation(Motion.quick) { navigation.focusedSession = nil }
-        }
-        }
         .background(palette.desk)
         .bottomEdgeFade()
         .navigationTitle("活动")
         .refreshable { await services.syncNow() }
         .observing(services.store, [.piSessionStates, .deliveryRequests, .sendRecords, .projects], into: $data, onError: workspace.fail) {
             try ActivityData.read(from: $0)
+        }
+    }
+
+    @ViewBuilder private func rows(_ sessions: [PiSessionState], _ data: ActivityData) -> some View {
+        ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
+            if index > 0 { Divider().padding(.leading, 16) }
+            SessionRow(session: session, project: session.projectID.flatMap { data.projects[$0] })
         }
     }
 }
@@ -125,23 +118,6 @@ private struct ActivityShape: Equatable {
         deliveries = data.deliveries.map(\.id)
         statuses = data.deliveries.map(\.status)
         sends = data.sends.map(\.id)
-    }
-}
-
-private struct FocusKey: Equatable {
-    var session: UUID?
-    var loaded: Bool
-}
-
-extension View {
-    /// 通知定位到的会话：一圈强调色描边，片刻后消失。
-    fileprivate func focusRing(_ on: Bool, radius: CGFloat) -> some View {
-        overlay {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .strokeBorder(.tint, lineWidth: 2)
-                .opacity(on ? 1 : 0)
-                .allowsHitTesting(false)
-        }
     }
 }
 
@@ -180,167 +156,66 @@ struct SyncBlockedNote: View {
 private struct ActivitySection<Content: View>: View {
     let title: String
     let count: Int?
+    var tint: Color?
     @ViewBuilder let content: Content
+    @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader(title: title, count: count)
-            VStack(spacing: 0) { content }.paper(radius: 16)
+            VStack(spacing: 0) { content }
+                .paper(radius: 16)
+                .overlay {
+                    if let tint {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(tint.opacity(palette.highContrast ? 0.8 : 0.35)).allowsHitTesting(false)
+                    }
+                }
         }
     }
 }
 
-/// 等你确认：橙色提示卡，写明问题、等了多久、需要在 Mac 上回应。
-private struct WaitingCard: View {
-    let session: PiSessionState
-    let project: Project?
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                PiDot(state: session.state)
-                Text("\(session.title) 等你确认").font(.headline).foregroundStyle(palette.ink)
-                Spacer(minLength: 8)
-                PiElapsed(session: session)
-            }
-            if let detail = session.detail, !detail.isEmpty {
-                Text(detail).font(.body).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
-            }
-            Text([PiPlace.name(of: session, project: project), "去 Mac 上回应"].compactMap { $0 }.joined(separator: " · "))
-                .font(.footnote).foregroundStyle(palette.ink3)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.attention.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(palette.attention.opacity(palette.highContrast ? 0.8 : 0.35)))
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// 一个会话：状态点、名称、所属项目、状态与细节、进入当前状态多久。点一下进所属项目。
+/// 一个会话：名字与在当前状态里待了多久、在哪 · 状态、一行近况（等你确认时是问题，否则是你最后说的）。
+/// 已结束的整行更淡。点开看近况、回复。
 private struct SessionRow: View {
     let session: PiSessionState
     let project: Project?
-    @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
 
+    private var preview: String? {
+        let text = session.question ?? session.lastPrompt ?? (session.state.isWorking ? session.detail : nil)
+        return text?.split(whereSeparator: \.isNewline).first.map(String.init)
+    }
+
     var body: some View {
-        Button {
-            if let project { navigation.show(project: project.id, workspace: workspace) }
-        } label: {
+        let ended = session.state == .known(.ended)
+        Button { navigation.push(.session(session.id)) } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(session.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 8)
                     PiElapsed(session: session)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
+                        .accessibilityHidden(true)
                 }
                 HStack(spacing: 6) {
-                    PiDot(state: session.state, size: 6)
+                    PiStateDot(state: session.state, size: 6)
                     PiActivityLine(lead: [PiPlace.name(of: session, project: project), session.state.label], font: .subheadline)
-                        .foregroundStyle(palette.ink2)
+                        .foregroundStyle(session.state == .known(.waitingForUser) ? palette.attention : palette.ink2)
                 }
-                if let detail = session.detail, !detail.isEmpty {
-                    PiActivityLine(detail: detail, detailIsCode: session.detailIsCode).foregroundStyle(palette.ink3)
+                if let preview {
+                    Text(preview).font(.subheadline).foregroundStyle(palette.ink3).lineLimit(1)
                 }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(ended ? 0.6 : 1)
             .contentShape(.rect)
         }
         .buttonStyle(RowPressStyle())
-        .disabled(project == nil)
         .accessibilityElement(children: .combine)
-        .accessibilityHint(project == nil ? "" : "打开项目 \(project?.name ?? "")")
-    }
-}
-
-/// 会话在当前状态里待了多久："已运行 0:42"（干活中）或"已等 1:07"（等你确认）；空闲不显示。
-struct PiElapsed: View {
-    let session: PiSessionState
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        switch session.state.known {
-        case .waitingForUser:
-            Text("已等 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(palette.attention)
-        case .thinking, .outputting, .tool:
-            Text("已运行 \(Text(session.stateSince, style: .timer))").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
-        default:
-            EmptyView()
-        }
-    }
-}
-
-/// 一条发到 Mac 的请求：等 Mac 接手 → 正在发送 → 已送达 / 失败（原因、重试）。
-private struct DeliveryRow: View {
-    let request: DeliveryRequest
-    let live: PiSessionState?
-    @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(CardText(request.content).title.nonEmpty ?? "图片").font(.body).foregroundStyle(palette.ink).lineLimit(1)
-                Spacer(minLength: 8)
-                DeliveryStatusLabel(status: request.status)
-            }
-            Text("\(DateLabel.short(request.createdAt)) → \(request.target.name) · \(request.mode.label)")
-                .font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
-            if request.status == .known(.failed) {
-                if let reason = request.resultDetail { Text(reason).font(.footnote).foregroundStyle(palette.failure) }
-                HStack(spacing: 10) {
-                    if live != nil {
-                        Button("重试", systemImage: "arrow.clockwise") { retry() }
-                    }
-                    Button("移除", systemImage: "xmark", role: .destructive) { remove() }
-                }
-                .font(.subheadline.weight(.medium))
-                .buttonStyle(.bordered)
-                .frame(minHeight: 44)
-                .padding(.top, 2)
-            }
-        }
-        .padding(.horizontal, 16).padding(.vertical, 12)
-        .contextMenu {
-            if live != nil { Button("再发一次", systemImage: "paperplane") { retry() } }
-            Button("移除", systemImage: "xmark", role: .destructive) { remove() }
-        }
-    }
-
-    private func retry() {
-        navigation.outbox = Navigation.Outbox(
-            content: request.content, card: request.cardID, task: request.taskID, session: request.target.ref, project: nil)
-    }
-
-    private func remove() {
-        let id = request.id
-        workspace.perform { try await $0.deleteDelivery(id) }
-    }
-}
-
-struct DeliveryStatusLabel: View {
-    let status: Open<DeliveryStatus>
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Group {
-            switch status {
-            case .known(.pending): Label("等 Mac 接手", systemImage: "clock").foregroundStyle(palette.ink2)
-            case .known(.executing):
-                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("正在发送") }.foregroundStyle(palette.ink2)
-            case .known(.succeeded): Label("已送达", systemImage: "checkmark.circle.fill").foregroundStyle(palette.ink2)
-            case .known(.failed): Label("失败", systemImage: "exclamationmark.triangle.fill").foregroundStyle(palette.failure)
-            case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(palette.ink2)
-            }
-        }
-        .font(.footnote.weight(.medium))
-        .id(status)
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        .animation(Motion.quick, value: status)
+        .accessibilityHint("看近况、回复")
     }
 }
 
@@ -385,8 +260,8 @@ private struct SendRecordRow: View {
     }
 
     private func resend() {
-        navigation.outbox = Navigation.Outbox(
-            content: record.content, card: record.cardID, task: record.taskID, session: record.targetRef, project: nil)
+        guard let live else { return }
+        navigation.openSession(live.id, draft: Navigation.Outbox(content: record.content, card: record.cardID, task: record.taskID))
     }
 
     private func copy() {

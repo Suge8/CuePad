@@ -1,4 +1,3 @@
-#if os(iOS)
 import CueStore
 import SwiftUI
 
@@ -78,7 +77,7 @@ nonisolated extension PiSessionState {
 
 /// 状态点：颜色表示状态；不做循环动画（常驻多处，循环既耗电也分散注意）。旁边有状态文字时（活动页、会话行）
 /// 读屏跳过它；`announces` 用在只有一个点的地方（书架、侧栏的项目旁），点自己带读屏标签与悬停提示。
-struct PiDot: View {
+struct PiStateDot: View {
     let state: Open<PiWorkState>
     var size: CGFloat = 8
     var announces = false
@@ -99,4 +98,3 @@ struct PiDot: View {
         }
     }
 }
-#endif

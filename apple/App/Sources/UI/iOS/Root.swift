@@ -34,7 +34,7 @@ struct IOSRootView: View {
             }
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
             .sheet(item: $navigation.capture) { CaptureSheet(capture: $0) }
-            .sheet(item: $navigation.outbox) { SendToMacSheet(outbox: $0) }
+            .sheet(item: $navigation.outbox) { SessionPicker(outbox: $0) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
         }
         .overlay(alignment: .top) { NoticeBanner() }
@@ -90,6 +90,7 @@ struct RouteView: View {
         case .conflicts: ConflictsScreen()
         case .activity: ActivityScreen()
         case .search: SearchScreen()
+        case .session(let id): SessionScreen(id: id)
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))

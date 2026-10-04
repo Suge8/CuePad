@@ -1,4 +1,3 @@
-#if os(iOS)
 import CueStore
 import Foundation
 
@@ -36,4 +35,3 @@ nonisolated extension DeliveryMode {
 nonisolated extension Open<DeliveryMode> {
     var label: String { known?.label ?? rawValue }
 }
-#endif

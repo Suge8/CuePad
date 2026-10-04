@@ -31,6 +31,8 @@ final class Navigation {
         case activity
         case search
         case card(UUID)
+        /// 一个 Pi 会话的近况与回复（`PiSessionState.id`）。
+        case session(UUID)
 
         var isCard: Bool { if case .card = self { true } else { false } }
     }
@@ -44,15 +46,13 @@ final class Navigation {
         var start: Start = .text
     }
 
-    /// 发到 Mac 面板要发的内容（存储格式，变量已填、编号已排）。
+    /// 要发到 Mac 的一张卡或一条任务（存储格式，变量已填、编号已排）：先选会话，再在会话页里选方式发出。
     struct Outbox: Identifiable {
         let id = UUID()
         var content: String
         var card: UUID?
         var task: UUID?
-        /// 预选的 Pi 会话（重发时）。
-        var session: String?
-        /// 预选会话所属项目（卡片所在项目），没有指定会话时优先选它的会话。
+        /// 卡片或任务所在项目：选会话时它的会话排在前面。
         var project: UUID?
     }
 
@@ -81,8 +81,8 @@ final class Navigation {
     var sidebar: NavigationSplitViewVisibility = .automatic
     /// 分栏：右侧面板；nil 为收起。
     var panel: Panel?
-    /// 活动页要定位并标出的会话（`PiSessionState.id`），来自点开的通知；活动页滚到后清掉。
-    var focusedSession: UUID?
+    /// 带进会话页回复框的内容（卡片、任务、重发的记录），会话页出现时取走。
+    private var replyDrafts: [UUID: Outbox] = [:]
 
     /// 随手记记入的位置：正在看的项目页（含其上打开的卡），否则未归档。
     var captureProject: UUID? {
@@ -181,16 +181,28 @@ final class Navigation {
         }
     }
 
-    /// 点开的 Pi 通知：打开活动（iPhone 切到活动标签，iPad 打开右侧活动面板）并定位到该会话。
+    /// 点开的 Pi 通知：直接打开该会话的近况（iPhone 在活动标签里，iPad 推入详情栏）。
     func open(alert tap: PiAlertTap?) {
         guard let tap else { return }
-        focusedSession = tap.sessionState
         switch layout {
         case .tabs:
             tab = .activity
-            activityPath = []
-        case .split: panel = .activity
+            activityPath = [.session(tap.sessionState)]
+        case .split:
+            if splitPath.last != .session(tap.sessionState) { splitPath.append(.session(tap.sessionState)) }
         }
+    }
+
+    /// 在当前位置推入一个会话的近况页；`draft` 预填进它的回复框（发到 Mac 的卡片或任务、要重发的内容）。
+    func openSession(_ id: UUID, draft: Outbox? = nil) {
+        outbox = nil
+        if let draft { replyDrafts[id] = draft }
+        push(.session(id))
+    }
+
+    /// 会话页出现时取走给它的预填内容。
+    func takeDraft(for session: UUID) -> Outbox? {
+        replyDrafts.removeValue(forKey: session)
     }
 
     /// 打开随手记，记入当前位置。
