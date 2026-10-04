@@ -218,6 +218,12 @@ struct RealPiTests {
             try await eventually("机器消息那轮的回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.contains("子任务完成") == true }
             #expect(bridge.sessions.first?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
 
+            // 块与块之间夹着真人文字就不是机器消息
+            let mixed = "<some_event>\n机器一\n</some_event>\n请解释这个结果\n<some_event>\n机器二\n</some_event>"
+            try pi.prompt(mixed)
+            try await eventually("夹着真人文字的那轮回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.contains("请解释这个结果") == true }
+            #expect(bridge.sessions.first?.lastPrompt?.contains("请解释这个结果") == true)
+
             let long = String(repeating: "长", count: 1300)
             try pi.prompt(long)
             try await eventually("长回答截断", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.hasPrefix("ECHO 长") == true }
