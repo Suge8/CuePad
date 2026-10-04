@@ -114,6 +114,7 @@ extension DebugScene {
                 lastPrompt: "把 RSS 输出改成全文",
                 question: "要覆盖 public/feed.xml 吗？\n· 覆盖\n· 另存为 feed-full.xml\n· 取消")),
             ("cuepad", .thinking, nil, "CuePad", PiRecap(lastPrompt: "看看投送队列超时的那个 bug")),
+            ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, PiRecap(lastPrompt: "让子代理分头审查这两个分支")),
             ("billing", .error, "模型拒绝了请求（400）：prompt is too long", nil, PiRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
             ("notes", .settled, nil, nil, PiRecap(
                 lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 notes/2026-W40.md。三件待办：续费域名、评审计费额度、补 scheduler 测试。")),
