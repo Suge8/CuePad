@@ -42,21 +42,18 @@ struct IOSWorkflowTests {
         #expect(MacDelivery.modes(for: .known(state), hasImages: hasImages) == modes)
     }
 
-    // MARK: 活动
+    // MARK: Pi 页
 
-    @Test func 活动页_等你确认在最前_其次运行中_空闲最后_角标只计等你确认() async throws {
+    @Test func Pi页_等你确认_出错_工作中_空闲_已结束依次排() async throws {
+        _ = try await session("done", .ended)
         _ = try await session("idle", .settled)
         _ = try await session("busy", .tool, detail: "bash")
-        _ = try await session("ask1", .waitingForUser, detail: "要覆盖吗？")
+        _ = try await session("ask", .waitingForUser, detail: "要覆盖吗？")
         _ = try await session("broken", .error)
-        _ = try await session("ask2", .waitingForUser)
 
-        let data = try await ActivityData.read(from: store)
+        let ordered = PiSessionState.inListOrder(try await store.piSessionStates())
 
-        #expect(Set(data.waiting.map(\.sessionID)) == ["ask1", "ask2"])
-        #expect(data.running.map(\.sessionID) == ["busy"])
-        #expect(Set(data.idle.map(\.sessionID)) == ["idle", "broken"])
-        #expect(data.badge == 2)
+        #expect(ordered.map(\.sessionID) == ["ask", "broken", "busy", "idle", "done"])
     }
 
     // MARK: 随手记
