@@ -31,7 +31,7 @@ struct PiSessionDigest: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            DigestHeader(session: session, project: project)
+            DigestHeader(session: session, project: project, deliveries: deliveries)
             RecentRound(session: session)
             if !deliveries.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -68,6 +68,7 @@ private struct DigestLabel: View {
 private struct DigestHeader: View {
     let session: PiSessionState
     let project: Project?
+    let deliveries: [DeliveryRequest]
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -88,8 +89,12 @@ private struct DigestHeader: View {
             }
             switch session.state.known {
             case .waitingForUser:
-                // 问题原文照抄（含换行与选项），是此刻最需要看的东西
-                Callout(tint: palette.attention, title: "等你确认", text: session.question?.displayText ?? session.detail ?? "")
+                if let question = session.question, question.isAnswerable {
+                    QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
+                } else {
+                    // 只能在 Pi 里答的问题：原文照抄（含换行与选项），是此刻最需要看的东西
+                    Callout(tint: palette.attention, title: "等你确认", text: session.question?.displayText ?? session.detail ?? "")
+                }
             case .error:
                 Callout(tint: palette.failure, title: "出错", text: session.detail ?? "Mac 没有说明原因")
             default:
@@ -120,6 +125,94 @@ private struct Callout: View {
         .background(tint.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(tint.opacity(palette.highContrast ? 0.8 : 0.3)))
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// 等你确认、能从这里答的问题：确认框是"是 / 否"，选择框每个选项一个按钮，输入框填了发送。
+/// 答出去后按钮停用，等 Mac 那边弹窗收起、问题清空（卡片随之消失）；作答请求没能送达时就地写原因，可以再答。
+private struct QuestionCard: View {
+    let session: PiSessionState
+    let question: PiQuestion
+    let deliveries: [DeliveryRequest]
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @State private var requestID: UUID?
+    @State private var writeError: String?
+    @State private var text = ""
+
+    private var sent: DeliveryRequest? { requestID.flatMap { id in deliveries.first { $0.id == id } } }
+    private var failed: Bool { sent?.status == .known(.failed) }
+    private var answering: Bool { requestID != nil && !failed }
+    private var failure: String? { writeError ?? (failed ? sent?.resultDetail ?? "没能送达" : nil) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("等你确认").font(.footnote.weight(.semibold)).foregroundStyle(palette.attention)
+            if !question.text.isEmpty {
+                Text(question.text).font(.body).foregroundStyle(palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            controls.disabled(answering)
+            if answering {
+                Text("已答，等 Mac 上的 Pi 继续").font(.footnote).foregroundStyle(palette.ink3)
+            } else if let failure {
+                Text(failure).font(.footnote).foregroundStyle(palette.failure)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.attention.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(palette.attention.opacity(palette.highContrast ? 0.8 : 0.3)))
+    }
+
+    @ViewBuilder private var controls: some View {
+        switch question.kind.known {
+        case .confirm:
+            HStack(spacing: 10) {
+                Button { answer(.confirmed(true)) } label: { Text("是").frame(maxWidth: .infinity) }
+                    .buttonStyle(.borderedProminent).tint(palette.attention)
+                Button { answer(.confirmed(false)) } label: { Text("否").frame(maxWidth: .infinity) }
+                    .buttonStyle(.bordered)
+            }
+        case .select:
+            VStack(spacing: 8) {
+                ForEach(question.options, id: \.self) { option in
+                    Button { answer(.option(option)) } label: {
+                        Text(option).frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        case .text:
+            HStack(spacing: 8) {
+                TextField("回答", text: $text).textFieldStyle(.roundedBorder).onSubmit(submitText)
+                Button("发送", action: submitText)
+                    .buttonStyle(.borderedProminent).tint(palette.attention)
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        case nil:
+            EmptyView()
+        }
+    }
+
+    private func submitText() {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        answer(.text(text))
+    }
+
+    /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
+    private func answer(_ value: PiAnswerValue) {
+        writeError = nil
+        Task {
+            do {
+                requestID = try await workspace.services.answer(value, to: session).id
+            } catch {
+                writeError = error.localizedDescription
+            }
+        }
     }
 }
 
@@ -187,8 +280,7 @@ struct DeliveryRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                let title = CardText(request.content).title
-                Text(title.isEmpty ? "图片" : title).font(.body).foregroundStyle(palette.ink).lineLimit(2)
+                Text(title).font(.body).foregroundStyle(palette.ink).lineLimit(2)
                 Spacer(minLength: 8)
                 DeliveryStatusLabel(request: request)
             }
@@ -197,7 +289,7 @@ struct DeliveryRow: View {
             if request.status == .known(.failed) {
                 if let reason = request.resultDetail { Text(reason).font(.footnote).foregroundStyle(palette.failure) }
                 HStack(spacing: 10) {
-                    if session != nil { Button("重发", systemImage: "arrow.clockwise", action: retry) }
+                    if retryable { Button("重发", systemImage: "arrow.clockwise", action: retry) }
                     Button("移除", systemImage: "xmark", role: .destructive, action: remove)
                 }
                 .font(.subheadline.weight(.medium))
@@ -208,10 +300,19 @@ struct DeliveryRow: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
         .transition(.opacity)
         .contextMenu {
-            if session != nil { Button("再发一次", systemImage: "paperplane", action: retry) }
+            if retryable { Button("再发一次", systemImage: "paperplane", action: retry) }
             Button("移除", systemImage: "xmark", role: .destructive, action: remove)
         }
     }
+
+    /// 作答显示答了什么；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）。
+    private var title: String {
+        if let answer = request.answer { return "答：\(answer.value.label)" }
+        let title = CardText(request.content).title
+        return title.isEmpty ? "图片" : title
+    }
+
+    private var retryable: Bool { session != nil && request.answer == nil }
 
     /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
     private func retry() {
