@@ -54,6 +54,7 @@ struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
+        .modifier(SessionDetailHost(arrowEdge: .trailing))
         .focusable()
         .focused($focused)
         // 选中样式本身就标出了位置，不再套系统焦点环
@@ -194,6 +195,7 @@ private struct PageRow<Title: View>: View {
 
 /// 全局 Pi：活着的会话（显示名，下面是所在 · 状态），其下是最近结束的历史会话（显示名，下面是所在 · 最后活动）。
 /// "所在"按 `PiPlace`：工作目录绑定了项目时是项目名，否则是文件夹名，与显示名相同时不重复。
+/// 点开任一会话是它的详情（近况与回复）；在线会话右键可跳到所在终端。
 /// 没有活着的会话时分组不消失：一行"在终端运行 pi 开始"，下面照常是历史。没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
 private struct PiSection: View {
     let history: [StoredPiSession]
@@ -217,44 +219,56 @@ private struct PiSection: View {
                         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         .selectionDisabled()
                 }
-                ForEach(live) { session in
-                    Button { jump(session) } label: {
-                        HStack(spacing: 9) {
-                            PiDot(state: session.state).frame(width: 16)
-                            PiSessionLabel(session: session, project: workspace.catalog?.project(workspace.sessionProjects[session.id]))
+                ForEach(live.map(PiRow.live) + ended.map(PiRow.ended)) { row in
+                    label(row).sessionDetailRow(row.id).help(row.help ?? "")
+                        .contextMenu {
+                            if case .live(let session) = row {
+                                Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(session.id) }
+                            }
                         }
-                    }
-                    .buttonStyle(PressStyle(scale: 0.98))
-                    .help([session.state.fullDetail, "点按跳到所在终端"].compactMap { $0 }.joined(separator: "\n"))
-                }
-                ForEach(ended) { session in
-                    HStack(spacing: 9) {
-                        PiDot(state: nil).frame(width: 16)
-                        VStack(alignment: .leading, spacing: 1) {
-                            let folder = URL(filePath: session.cwd).lastPathComponent
-                            let title = session.title.isEmpty ? folder : session.title
-                            Text(title).lineLimit(1)
-                            let place = PiPlace.name(project: workspace.catalog?.project(historyProjects[session.id]), folder: folder, besides: title)
-                            Text([place, DateLabel.short(session.lastActivityAt)].compactMap { $0 }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                    }
-                    .foregroundStyle(.secondary)
-                    .selectionDisabled()
                 }
             }
         }
     }
 
-    private func jump(_ session: CuePi.PiSession) {
-        Task {
-            do {
-                let result = try await services.jumpToTerminal(session.id)
-                if let note = result.note { workspace.say(note, isError: result.precision == .failed) }
-            } catch {
-                workspace.fail(error)
+    @ViewBuilder private func label(_ row: PiRow) -> some View {
+        switch row {
+        case .live(let session):
+            HStack(spacing: 9) {
+                PiStateDot(state: session.state.work, size: 6).frame(width: 16)
+                PiSessionLabel(session: session, project: workspace.catalog?.project(workspace.sessionProjects[session.id]))
             }
+        case .ended(let session):
+            HStack(spacing: 9) {
+                PiStateDot(state: .known(.ended), size: 6).frame(width: 16)
+                VStack(alignment: .leading, spacing: 1) {
+                    let folder = URL(filePath: session.cwd).lastPathComponent
+                    let title = session.title.isEmpty ? folder : session.title
+                    Text(title).lineLimit(1)
+                    let place = PiPlace.name(project: workspace.catalog?.project(historyProjects[session.id]), folder: folder, besides: title)
+                    Text([place, DateLabel.short(session.lastActivityAt)].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// Pi 分组里的一行：在线会话或历史里已结束的会话；id 是 Pi 的会话 id。
+private enum PiRow: Identifiable {
+    case live(CuePi.PiSession)
+    case ended(StoredPiSession)
+
+    var id: String {
+        switch self {
+        case .live(let session): session.sessionID
+        case .ended(let session): session.id
+        }
+    }
+
+    var help: String? {
+        if case .live(let session) = self { session.state.fullDetail } else { nil }
     }
 }
 

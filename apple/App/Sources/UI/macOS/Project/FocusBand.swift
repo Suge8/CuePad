@@ -99,7 +99,7 @@ private struct PiColumn: View {
         ForEach(sessions) { session in
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
-                    PiDot(state: session.state, size: 6)
+                    PiStateDot(state: session.state.work, size: 5)
                     Text(session.displayName).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink)
                     Spacer()
                     Text("已持续 \(Text(session.stateSince, style: .timer))").font(.system(size: 11).monospacedDigit()).foregroundStyle(palette.ink3)
@@ -127,7 +127,7 @@ struct CompactFocus: View {
                 Label("下一步 \(data.tasks.count)", systemImage: "checklist").foregroundStyle(palette.ink2)
                 if let session {
                     HStack(spacing: 6) {
-                        PiDot(state: session.state, size: 6)
+                        PiStateDot(state: session.state.work, size: 5)
                         Text("\(session.displayName) \(session.state.label)")
                     }
                     .foregroundStyle(palette.ink2)

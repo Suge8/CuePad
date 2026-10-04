@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 菜单栏面板：Pi 状态 + 一张随手记的小稿纸；↩ 存为所选项目的卡片，⌘↩ 直接发出，⌥↩ 换行。
+/// 菜单栏面板：Pi 状态（点开会话是它的详情，与侧栏同一份）+ 一张随手记的小稿纸；↩ 存为所选项目的卡片，⌘↩ 直接发出，⌥↩ 换行。
 /// 资料库读到之前没有稿纸；读不出来时说明原因并给"重试"。
 struct MenuBarPad: View {
     @Environment(Workspace.self) private var workspace
@@ -21,9 +21,11 @@ struct MenuBarPad: View {
                 VStack(alignment: .leading, spacing: 7) {
                     ForEach(sessions) { session in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            PiDot(state: session.state, size: 6).frame(width: 12)
+                            PiStateDot(state: session.state.work, size: 5).frame(width: 12)
                             PiSessionLabel(session: session, project: workspace.catalog?.project(workspace.sessionProjects[session.id]), nameFont: .system(size: 13, weight: .medium), lineFont: .system(size: 11.5))
+                            Spacer(minLength: 0)
                         }
+                        .sessionDetailRow(session.sessionID)
                     }
                 }
             }
@@ -42,6 +44,7 @@ struct MenuBarPad: View {
         .padding(14)
         .frame(width: 360)
         .glass(in: .rect(cornerRadius: 22))
+        .modifier(SessionDetailHost(arrowEdge: .leading))
         .onAppear {
             project = services.settings.currentProject
             focused = true

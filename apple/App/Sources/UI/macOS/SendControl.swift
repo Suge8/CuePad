@@ -19,7 +19,7 @@ struct SendControl: View {
         Group {
             if case .pi(let id, _) = choice, workspace.isEnded(choice) {
                 SendTargetMenu(project: project) {
-                    label(icon: AnyView(PiDot(state: nil, size: 6)), text: "\(name(of: choice)) · 已结束", shortcut: nil)
+                    label(icon: AnyView(PiStateDot(state: .known(.ended), size: 5)), text: "\(name(of: choice)) · 已结束", shortcut: nil)
                         .padding(.trailing, compact ? 12 : 16)
                 }
                 .accessibilityLabel("Pi 会话「\(workspace.sessionName(id))」已结束，选择发送目标")
@@ -88,7 +88,7 @@ struct SendControl: View {
     @ViewBuilder private func icon(_ choice: AppServices.Destination) -> some View {
         switch choice {
         case .pi(_, .paste): Image(systemName: "text.cursor").accessibilityHidden(true)
-        case .pi(let id, _): PiDot(state: workspace.session(id)?.state, size: 6)
+        case .pi(let id, _): PiStateDot(state: workspace.session(id)?.state.work ?? .known(.ended), size: 5)
         case .clipboard: Image(systemName: "doc.on.clipboard").accessibilityHidden(true)
         case .app: Image(systemName: "paperplane.fill").accessibilityHidden(true)
         }

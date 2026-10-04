@@ -7,16 +7,13 @@ import SwiftUI
 // MARK: Pi 状态
 
 extension PiAgentState {
+    /// 归到各端共用的那套状态：颜色、状态点、状态名都按它（Shared 的 `PiWorkState`），这里不另设一份。
+    var work: Open<PiWorkState> { .known(syncRepresentation.state) }
+
+    /// 状态名；工具调用多带上工具名。
     var label: String {
-        switch self {
-        case .idle: "空闲"
-        case .thinking: "思考中"
-        case .outputting: "输出中"
-        case .tool(let name, let running, _): running.count > 1 ? "工具 · \(name) 等 \(running.count) 个" : "工具 · \(name)"
-        case .waitingUser: "等你确认"
-        case .done(let aborted): aborted ? "已中止" : "完成"
-        case .error: "出错"
-        }
+        guard case .tool(let name, let running, _) = self else { return work.label }
+        return running.count > 1 ? "\(work.label) · \(name) 等 \(running.count) 个" : "\(work.label) · \(name)"
     }
 
     /// 此刻在做什么的一句话：工具调用摘要、弹窗标题或出错的人话摘要；旧扩展不带详情时为 nil，界面只显示状态。
@@ -41,48 +38,12 @@ extension PiAgentState {
         if case .tool = self { true } else { false }
     }
 
-    /// 状态色只表达含义：运行中是中性的墨，等你确认用注意色，出错用失败色。
-    func tint(_ palette: Palette) -> Color {
-        switch self {
-        case .idle, .done: palette.ink3
-        case .thinking, .outputting, .tool: palette.ink2
-        case .waitingUser: palette.attention
-        case .error: palette.failure
-        }
-    }
-
-    /// 状态文字的颜色：只有需要处理的才上色。
-    func labelColor(_ palette: Palette) -> Color {
-        needsAttention ? tint(palette) : palette.ink3
-    }
-
     /// 需要用户过去看一眼。
-    var needsAttention: Bool {
-        switch self {
-        case .waitingUser, .error: true
-        default: false
-        }
-    }
-}
+    var needsAttention: Bool { work == .known(.waitingForUser) || work == .known(.error) }
 
-struct PiDot: View {
-    let state: PiAgentState?
-    var size: CGFloat = 7
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let tint = state?.tint(palette) ?? palette.ink3.opacity(0.6)
-        Circle()
-            .fill(tint)
-            .frame(width: size, height: size)
-            .overlay {
-                if state?.isBusy == true {
-                    Circle().stroke(tint.opacity(0.3), lineWidth: 3).scaleEffect(1.6)
-                        .opacity(reduceMotion ? 0 : 1)
-                }
-            }
-            .accessibilityLabel(state?.label ?? "已结束")
+    /// 状态文字的颜色：只有需要处理的才上色（颜色取共用的状态色）。
+    func labelColor(_ palette: Palette) -> Color {
+        needsAttention ? work.tint(palette) : palette.ink3
     }
 }
 

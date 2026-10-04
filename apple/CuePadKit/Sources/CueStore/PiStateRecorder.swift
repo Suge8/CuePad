@@ -13,7 +13,7 @@ extension CueStore {
     try write {
       let now = Date.stamp
       let record = PiSessionState(
-        id: Self.piStateID(sessionID), sessionID: sessionID, hostID: hostID, title: title, projectID: projectID,
+        id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: title, projectID: projectID,
         state: .known(state), detail: detail, folder: folder, lastPrompt: recap.lastPrompt, lastReply: recap.lastReply,
         question: recap.question, notify: notify.map(Open.known), stateSince: stateSince, createdAt: now, modifiedAt: now)
       let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
@@ -41,15 +41,13 @@ extension CueStore {
       let ended = PiWorkState.ended.rawValue
       let end = "UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, modifiedAt = ?"
       if let sessionID {
-        try db.run("\(end) WHERE id = ?", [ended, now, Date.stamp, Self.piStateID(sessionID)])
+        try db.run("\(end) WHERE id = ?", [ended, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID)])
       } else {
         try db.run("\(end) WHERE hostID = ? AND state != ?", [ended, now, Date.stamp, host, ended])
       }
       try db.run("DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND stateSince < ?", [host, ended, expiredBefore])
     }
   }
-
-  private nonisolated static func piStateID(_ sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
 }
 
 /// 把 Pi 会话的状态变化写成同步记录（每个会话一条）。

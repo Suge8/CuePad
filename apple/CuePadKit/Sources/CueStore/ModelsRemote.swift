@@ -60,6 +60,32 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var stateSince: Date
   public var createdAt: Date
   public var modifiedAt: Date
+
+  /// 公开给 Mac 端：把桥上的实时会话、历史索引里的会话也写成这种形状，交给同一个近况界面。
+  public init(
+    id: UUID, sessionID: String, hostID: String, title: String, projectID: UUID?, state: Open<PiWorkState>, detail: String?,
+    folder: String?, lastPrompt: String?, lastReply: String?, question: String?, notify: Open<PiAlert>?, stateSince: Date,
+    createdAt: Date, modifiedAt: Date
+  ) {
+    self.id = id
+    self.sessionID = sessionID
+    self.hostID = hostID
+    self.title = title
+    self.projectID = projectID
+    self.state = state
+    self.detail = detail
+    self.folder = folder
+    self.lastPrompt = lastPrompt
+    self.lastReply = lastReply
+    self.question = question
+    self.notify = notify
+    self.stateSince = stateSince
+    self.createdAt = createdAt
+    self.modifiedAt = modifiedAt
+  }
+
+  /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
+  public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
 }
 
 public enum DeliveryStatus: String, Sendable, CaseIterable {
