@@ -57,14 +57,10 @@ struct TaskActions: View {
     }
 
     #if os(macOS)
-    /// 发给 Pi 会话后把任务关联到该会话，之后任务行显示会话状态。
+    /// 发给 Pi 会话时，执行投送的那台 Mac 记发送记录的同时把任务关联到该会话（之后任务行显示会话状态）。
     private func send(via choice: AppServices.Destination) {
         let id = task.id, content = task.content
-        let sessionID: String? = if case .pi(let session, _) = choice { workspace.session(session)?.sessionID } else { nil }
-        Task {
-            guard await workspace.send(content, via: choice, task: id), let sessionID else { return }
-            workspace.perform { try await $0.updateTask(id) { $0.piSessionID = sessionID } }
-        }
+        Task { await workspace.send(content, via: choice, task: id) }
     }
     #endif
 }

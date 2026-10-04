@@ -59,6 +59,25 @@ extension AppServices {
 
 #if os(macOS)
 extension AppServices {
+    /// Mac 上发给 Pi 会话：写一条指定本机的投送请求，由本机执行器按远端请求的同一流程执行（送达、发送记录、任务关联），
+    /// 发给 Pi 的东西不论来自哪台设备都只有投送请求这一种记录。直接发送而会话正忙时不写请求，抛 `SendError.piSessionBusy`。
+    func requestPiDelivery(
+        _ storedText: String, to id: CuePi.PiSession.ID, mode: DeliveryMode, card: UUID? = nil, task: UUID? = nil
+    ) async throws -> DeliveryRequest {
+        guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
+        if mode == .send, session.isBusy { throw SendError.piSessionBusy }
+        return try await store.requestDelivery(storedText, to: session.target, on: hostID, mode: mode, card: card, task: task)
+    }
+
+    /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
+    func outcome(of request: UUID) async throws -> DeliveryRequest {
+        for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(request) }) {
+            guard let current else { throw CueStoreError.notFound }
+            if current.status != .known(.pending), current.status != .known(.executing) { return current }
+        }
+        throw CancellationError()
+    }
+
     /// Pi 桥只认插话/排队两种入队方式：发送方式在这里一次性落到桥的消息上。
     private func sendToPi(_ content: SendContent, session id: CuePi.PiSession.ID, mode: DeliveryMode) async throws -> SendTarget {
         guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }

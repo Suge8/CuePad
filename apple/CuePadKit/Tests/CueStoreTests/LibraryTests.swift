@@ -188,6 +188,16 @@ import Testing
     #expect(records.first?.targetName == "Ghostty")
   }
 
+  /// 任务发给 Pi 会话后关联到该会话（任务行据此显示会话状态），不论请求来自哪台设备；发给应用或剪贴板不关联。
+  @Test func sendingATaskToAPiSessionLinksTheTaskToThatSession() async throws {
+    let task = try await store.createTask("do it")
+    try await store.recordSend("do it", to: SendTarget(kind: .clipboard, name: "剪贴板"), task: task.id)
+    #expect(try await store.tasks().first?.piSessionID == nil)
+
+    try await store.recordSend("do it", to: SendTarget(kind: .piSession, name: "work", ref: "sess-1"), task: task.id)
+    #expect(try await store.tasks().first?.piSessionID == "sess-1")
+  }
+
   // MARK: 项目目录（本机）
 
   @Test func projectDirectoryIsPerDeviceAndDiesWithTheProject() async throws {

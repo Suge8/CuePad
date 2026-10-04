@@ -324,7 +324,8 @@ extension CueStore {
 // MARK: 发送记录、附件、Pi 会话索引
 
 extension CueStore {
-  /// 记录一次投送或复制：内容快照、目标、时间。
+  /// 记录一次投送或复制：内容快照、目标、时间。发给 Pi 会话且带任务时，任务在同一事务里关联到该会话
+  /// （任务行据此显示会话状态）：执行投送的那台 Mac 记，请求从哪台设备发来都一样。
   @discardableResult
   public func recordSend(
     _ content: String, to target: SendTarget, card: UUID? = nil, task: UUID? = nil
@@ -336,6 +337,9 @@ extension CueStore {
         targetRef: target.ref, cardID: card, taskID: task, sentAt: now, modifiedAt: now)
       try insert(record)
       try registerImages(in: content)
+      if let task, target.kind == .known(.piSession), let session = target.ref {
+        try db.run("UPDATE tasks SET piSessionID = ?, modifiedAt = ? WHERE id = ?", [session, now, task])
+      }
       return record
     }
   }

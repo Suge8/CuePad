@@ -97,9 +97,12 @@ extension Workspace {
         services.pi.sessions.first { $0.id == id }
     }
 
-    /// 发送存储格式正文；成功后提示，Pi 忙时转为询问插话或排队。返回是否已发出。
+    /// 发送存储格式正文；成功后提示，Pi 忙时转为询问插话或排队。返回是否已发出（发给 Pi 时是已送达）。
     @discardableResult
     func send(_ stored: String, via choice: AppServices.Destination, card: UUID? = nil, task: UUID? = nil) async -> Bool {
+        if case .pi(let id, let mode) = choice {
+            return await requestPi(stored, session: id, mode: mode, card: card, task: task, remembering: choice)
+        }
         let done = choice == .clipboard ? "已复制" : "已" + action(for: choice)
         do {
             try await services.send(stored, to: choice, card: card, task: task)
@@ -110,8 +113,34 @@ extension Workspace {
             remember(choice)
             say("\(done)，但没能记下这次发送：\(reason)", isError: true)
             return true
+        } catch {
+            fail(error)
+            return false
+        }
+    }
+
+    /// 发给 Pi 会话：写本机投送请求（"你发过去的"立即有这一行），等执行器给出结果再提示。
+    private func requestPi(
+        _ stored: String, session id: CuePi.PiSession.ID, mode: DeliveryMode, card: UUID?, task: UUID?,
+        remembering choice: AppServices.Destination
+    ) async -> Bool {
+        let done = switch mode {
+        case .steer: "已插话"
+        case .followUp: "已排队"
+        case .send, .paste: "已" + action(for: .pi(id, mode))
+        }
+        do {
+            let request = try await services.requestPiDelivery(stored, to: id, mode: mode, card: card, task: task)
+            remember(choice)
+            let result = try await services.outcome(of: request.id)
+            guard result.status == .known(.succeeded) else {
+                say(result.resultDetail ?? "没能送达", isError: true)
+                return false
+            }
+            say(done)
+            return true
         } catch SendError.piSessionBusy {
-            if case .pi(let id, _) = choice { busySend = BusySend(text: stored, session: id, card: card, task: task) }
+            busySend = BusySend(text: stored, session: id, card: card, task: task)
             return false
         } catch {
             fail(error)
@@ -129,13 +158,9 @@ extension Workspace {
         guard let pending = busySend else { return }
         busySend = nil
         Task {
-            do {
-                try await services.send(pending.text, to: .pi(pending.session, mode), card: pending.card, task: pending.task)
-                remember(.pi(pending.session, .send))
-                say(mode == .steer ? "已插话" : "已排队")
-            } catch {
-                fail(error)
-            }
+            await requestPi(
+                pending.text, session: pending.session, mode: mode, card: pending.card, task: pending.task,
+                remembering: .pi(pending.session, .send))
         }
     }
 }
