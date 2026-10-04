@@ -69,112 +69,16 @@ private struct StatusBlock: View {
             }
             switch session.state.known {
             case .waitingForUser:
-                // 问题是这一页最醒目的东西；能作答时选项就是按钮
-                PromptCard(session: session, deliveries: deliveries)
+                if let question = session.question, question.isAnswerable {
+                    QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
+                } else {
+                    // 只能在 Pi 里答的问题：原文照抄（含换行与选项），是此刻最需要看的东西
+                    Callout(tint: palette.attention, title: "等你确认", text: session.question?.displayText ?? session.detail ?? "", prominent: true)
+                }
             case .error:
                 Callout(tint: palette.failure, title: "出错", text: session.detail ?? "Mac 没有说明原因", prominent: false)
             default:
                 EmptyView()
-            }
-        }
-    }
-}
-
-/// 等你确认的问题卡：问题文案放大；能从这里作答时，确认是"取消 / 确定"两个按钮，选择是一列选项按钮，点了即答
-/// （写一条作答请求，按钮转为送达中，答上后问题消失、状态回到工作中；没答上时写出原因，可再点）；
-/// 输入型在下面的回复框里答。不能从这里作答的问题（多行编辑、自定义界面、旧版本）只显示文案，说明要在 Mac 上答。
-private struct PromptCard: View {
-    let session: PiSessionState
-    let deliveries: [DeliveryRequest]
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    /// 点了的那个回答与它的请求（请求写成前为 nil）。
-    @State private var answering: (value: PiAnswerValue, request: UUID?)?
-
-    private var request: DeliveryRequest? { answering?.request.flatMap { id in deliveries.first { $0.id == id } } }
-    private var failure: String? {
-        guard request?.status == .known(.failed) else { return nil }
-        return request?.resultDetail ?? "Mac 没能把回答交给 Pi"
-    }
-
-    var body: some View {
-        let question = session.question
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("等你确认").font(.footnote.weight(.semibold)).foregroundStyle(palette.attention)
-                Text(question?.text ?? session.detail ?? "").font(.title3.weight(.medium)).foregroundStyle(palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-            }
-            if let question, question.isAnswerable {
-                switch question.kind.known {
-                case .confirm:
-                    HStack(spacing: 10) {
-                        option("取消", .confirmed(false), prominent: false)
-                        option("确定", .confirmed(true), prominent: true)
-                    }
-                case .select:
-                    VStack(spacing: 8) {
-                        ForEach(question.options, id: \.self) { option($0, .option($0), prominent: false) }
-                    }
-                default:
-                    Text("在下面的回复框里回答").font(.footnote).foregroundStyle(palette.ink3)
-                }
-                if let failure {
-                    Text(failure).font(.footnote).foregroundStyle(palette.failure)
-                }
-            } else {
-                if let options = question?.options, !options.isEmpty {
-                    Text(options.map { "· \($0)" }.joined(separator: "\n")).font(.body).foregroundStyle(palette.ink2)
-                }
-                Text("这个问题要在 Mac 上回答").font(.footnote).foregroundStyle(palette.ink3)
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.attention.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(palette.attention.opacity(palette.highContrast ? 0.8 : 0.3)))
-        // 换了一个问题：上一题的作答状态作废
-        .onChange(of: session.question?.promptID) { answering = nil }
-    }
-
-    private func option(_ label: String, _ value: PiAnswerValue, prominent: Bool) -> some View {
-        let tapped = answering?.value == value
-        let busy = answering != nil && failure == nil
-        return Button { answer(value) } label: {
-            HStack(spacing: 8) {
-                if tapped && busy {
-                    ProgressView().controlSize(.small)
-                    Text("送达中")
-                } else {
-                    Text(label)
-                }
-            }
-            .font(.body.weight(.medium))
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .foregroundStyle(prominent ? palette.onAccent : palette.ink)
-            .background(prominent ? palette.accent : palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
-            .overlay {
-                if !prominent { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(palette.hair) }
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .disabled(busy)
-        .opacity(busy && !tapped ? 0.5 : 1)
-        .accessibilityLabel(tapped && busy ? "\(label)，送达中" : label)
-    }
-
-    private func answer(_ value: PiAnswerValue) {
-        let session = session
-        answering = (value, nil)
-        Task {
-            do {
-                let request = try await workspace.services.answer(value, to: session)
-                answering = (value, request.id)
-            } catch {
-                answering = nil
-                workspace.fail(error)
             }
         }
     }
@@ -202,6 +106,139 @@ private struct Callout: View {
         .background(tint.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(tint.opacity(palette.highContrast ? 0.8 : 0.3)))
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// 等你确认、能从这里答的问题：确认框是"是 / 否"，选择框每个选项一个按钮，输入框填了发送。
+/// 答出去后按钮停用，等 Mac 那边弹窗收起、问题清空（卡片随之消失）；作答请求没能送达时就地写原因，可以再答。
+private struct QuestionCard: View {
+    let session: PiSessionState
+    let question: PiQuestion
+    let deliveries: [DeliveryRequest]
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @State private var requestID: UUID?
+    /// 点了的那个回答：它的按钮显示送达中。
+    @State private var tapped: PiAnswerValue?
+    @State private var writeError: String?
+    @State private var text = ""
+
+    private var sent: DeliveryRequest? { requestID.flatMap { id in deliveries.first { $0.id == id } } }
+    private var failed: Bool { sent?.status == .known(.failed) }
+    /// 点下即算在答（请求写成前也是），按钮立刻停用，不重复作答。
+    private var answering: Bool { tapped != nil && writeError == nil && !failed }
+    private var failure: String? { writeError ?? (failed ? sent?.resultDetail ?? "没能送达" : nil) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("等你确认").font(.footnote.weight(.semibold)).foregroundStyle(palette.attention)
+            if !question.text.isEmpty {
+                // 这一页最醒目的东西
+                Text(question.text).font(.title3.weight(.medium)).foregroundStyle(palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            controls.disabled(answering)
+            if answering, sent?.status == .known(.succeeded) {
+                Text("已答，等 Mac 上的 Pi 继续").font(.footnote).foregroundStyle(palette.ink3)
+            } else if let failure {
+                Text(failure).font(.footnote).foregroundStyle(palette.failure)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.attention.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(palette.attention.opacity(palette.highContrast ? 0.8 : 0.3)))
+    }
+
+    @ViewBuilder private var controls: some View {
+        switch question.kind.known {
+        case .confirm:
+            HStack(spacing: 10) {
+                choice(.confirmed(false), prominent: false)
+                choice(.confirmed(true), prominent: true)
+            }
+        case .select:
+            VStack(spacing: 8) {
+                ForEach(question.options, id: \.self) { option in choice(.option(option), prominent: false, leading: true) }
+            }
+        case .text:
+            HStack(spacing: 8) {
+                TextField("回答", text: $text)
+                    .onSubmit(submitText)
+                    .padding(.horizontal, 12).frame(minHeight: 44)
+                    .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
+                Button(action: submitText) {
+                    if tapped != nil && answering { ProgressView().controlSize(.small) } else { Text("发送") }
+                }
+                .buttonStyle(AnswerButtonStyle(prominent: true))
+                .fixedSize()
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        case nil:
+            EmptyView()
+        }
+    }
+
+    /// 一个回答按钮：点了的那个转为"送达中"，别的变淡。
+    private func choice(_ value: PiAnswerValue, prominent: Bool, leading: Bool = false) -> some View {
+        let busy = answering && tapped == value
+        return Button { answer(value) } label: {
+            HStack(spacing: 8) {
+                if busy {
+                    ProgressView().controlSize(.small)
+                    Text("送达中")
+                } else {
+                    Text(value.label).multilineTextAlignment(leading ? .leading : .center)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: leading && !busy ? .leading : .center)
+        }
+        .buttonStyle(AnswerButtonStyle(prominent: prominent))
+        .opacity(answering && !busy ? 0.45 : 1)
+        .accessibilityLabel(busy ? "\(value.label)，送达中" : value.label)
+    }
+
+    private func submitText() {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        answer(.text(text))
+    }
+
+    /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
+    private func answer(_ value: PiAnswerValue) {
+        writeError = nil
+        requestID = nil
+        withAnimation(Motion.quick) { tapped = value }
+        Task {
+            do {
+                requestID = try await workspace.services.answer(value, to: session).id
+            } catch {
+                writeError = error.localizedDescription
+            }
+        }
+    }
+}
+
+/// 问题卡上的回答按钮：纸面描边或墨色实底，触摸目标 44pt；按下只变淡，不缩放（减弱动态效果下也一样）。
+private struct AnswerButtonStyle: ButtonStyle {
+    let prominent: Bool
+    @Environment(\.palette) private var palette
+    @Environment(\.isEnabled) private var enabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        configuration.label
+            .font(.body.weight(.medium))
+            .foregroundStyle(prominent ? palette.onAccent : palette.ink)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(prominent ? palette.accent : palette.paper, in: shape)
+            .overlay { if !prominent { shape.strokeBorder(palette.hair) } }
+            .contentShape(shape)
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(configuration.isPressed ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
 
@@ -328,7 +365,7 @@ struct DeliveryRow: View {
             if request.status == .known(.failed) {
                 if let reason = request.resultDetail { Text(reason).font(.footnote).foregroundStyle(palette.failure) }
                 HStack(spacing: 10) {
-                    if canRetry { Button("重发", systemImage: "arrow.clockwise", action: retry) }
+                    if retryable { Button("重发", systemImage: "arrow.clockwise", action: retry) }
                     Button("移除", systemImage: "xmark", role: .destructive, action: remove)
                 }
                 .font(.subheadline.weight(.medium))
@@ -339,26 +376,19 @@ struct DeliveryRow: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
         .transition(.opacity)
         .contextMenu {
-            if canRetry { Button("再发一次", systemImage: "paperplane", action: retry) }
+            if retryable { Button("再发一次", systemImage: "paperplane", action: retry) }
             Button("移除", systemImage: "xmark", role: .destructive, action: remove)
         }
     }
 
-    /// 作答显示答了什么（"选了：覆盖"）；其余是内容的标题。
+    /// 作答显示答了什么；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）。
     private var title: String {
-        if let answer = request.answer {
-            return switch answer.value {
-            case .option(let option): "选了：\(option)"
-            case .confirmed(let yes): yes ? "回答：确定" : "回答：取消"
-            case .text(let text): "回答：\(text)"
-            }
-        }
+        if let answer = request.answer { return "答：\(answer.value.label)" }
         let title = CardText(request.content).title
         return title.isEmpty ? "图片" : title
     }
 
-    /// 作答对的是那一次弹窗，过去了就不能重发。
-    private var canRetry: Bool { session != nil && request.answer == nil }
+    private var retryable: Bool { session != nil && request.answer == nil }
 
     /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
     private func retry() {

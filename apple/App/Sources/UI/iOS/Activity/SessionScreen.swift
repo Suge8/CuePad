@@ -69,8 +69,8 @@ private struct DigestKey: Equatable {
 }
 
 /// 回复框：平时收成一行（输入 + 当前方式的短名 + 发送），不挡近况；输入框聚焦、有字或带着卡片时展开，
-/// 露出要带上的卡片、发送方式与说明、同步提示。发出后清空，请求马上贴到它上方。会话等你在输入框里回答时，
-/// 发出的就是这个回答。同步到不了 Mac、会话已结束时不能发，写明原因。
+/// 露出要带上的卡片、发送方式与说明、同步提示。发出后清空，请求马上贴到它上方。回答弹窗在问题卡上，不在这里。
+/// 同步到不了 Mac、会话已结束时不能发，写明原因。
 private struct ReplyBar: View {
     let session: PiSessionState
     let alive: Bool
@@ -90,14 +90,8 @@ private struct ReplyBar: View {
         [draft?.content, trimmed.nonEmpty].compactMap { $0 }.joined(separator: "\n\n")
     }
 
-    /// 会话在等一个输入型的回答：发出的文字就是答案。
-    private var answersQuestion: Bool {
-        guard let question = session.question else { return false }
-        return question.isAnswerable && question.kind == .known(.text)
-    }
-
     private var modes: [DeliveryMode] {
-        answersQuestion ? [.answer] : MacDelivery.modes(for: session.state, hasImages: !CardText(content).images.isEmpty)
+        MacDelivery.modes(for: session.state, hasImages: !CardText(content).images.isEmpty)
     }
 
     /// 会话状态变了（比如开始干活）时，原来选的方式可能不再可用：换成当前可用的第一个。
@@ -119,7 +113,7 @@ private struct ReplyBar: View {
                     TextField(placeholder, text: $text, axis: .vertical)
                         .lineLimit(expanded ? 1...5 : 1...1)
                         .focused($focused)
-                        .accessibilityLabel(answersQuestion ? "回答" : "回复")
+                        .accessibilityLabel("回复")
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .background(palette.paper, in: .rect(cornerRadius: 20, style: .continuous))
                     if !expanded, let mode {
@@ -150,7 +144,7 @@ private struct ReplyBar: View {
                             .scalingPickerStyle()
                             .fixedSize()
                         }
-                        if let explanation = answersQuestion ? "回答它在等的问题" : mode.explanation {
+                        if let explanation = mode.explanation {
                             Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
                         }
                     }
@@ -165,8 +159,7 @@ private struct ReplyBar: View {
     }
 
     private var placeholder: String {
-        if answersQuestion { return "回答 \(session.title)" }
-        return draft == nil ? "回复 \(session.title)" : "补一句（可不填）"
+        draft == nil ? "回复 \(session.title)" : "补一句（可不填）"
     }
 
     /// 带上的卡片或任务：标题、图片数，可移除。
@@ -193,16 +186,12 @@ private struct ReplyBar: View {
     }
 
     private func send() {
-        let content = content, card = draft?.card, task = draft?.task, answers = answersQuestion
+        let content = content, card = draft?.card, task = draft?.task
         guard !content.isEmpty, let mode, reachable, !sending else { return }
         sending = true
         workspace.attempt {
             defer { sending = false }
-            if answers {
-                _ = try await services.answer(.text(content), to: session)
-            } else {
-                _ = try await services.requestMacDelivery(content, to: session, mode: mode, card: card, task: task)
-            }
+            _ = try await services.requestMacDelivery(content, to: session, mode: mode, card: card, task: task)
             text = ""
             draft = nil
             focused = false

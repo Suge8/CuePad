@@ -140,8 +140,19 @@ struct PiStateDot: View {
 }
 
 nonisolated extension PiQuestion {
-    /// 只读地显示问题：文案，下面每个选项一行。能作答的界面直接用 `options` 做成按钮。
+    /// 只读地显示问题（只能在 Pi 里答的、或列表里的预览）：文案，下面每个选项一行。能作答的问题卡用 `options` 做成按钮。
     var displayText: String {
         ([text] + options.map { "· \($0)" }).joined(separator: "\n")
+    }
+}
+
+nonisolated extension PiAnswerValue {
+    /// 答了什么，一句话："覆盖"、"是"。
+    var label: String {
+        switch self {
+        case .option(let option): option
+        case .confirmed(let confirmed): confirmed ? "是" : "否"
+        case .text(let text): text
+        }
     }
 }
