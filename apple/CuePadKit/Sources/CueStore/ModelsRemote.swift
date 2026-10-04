@@ -111,8 +111,8 @@ public struct PiQuestion: Sendable, Equatable {
     return String(decoding: data, as: UTF8.self)
   }
 
-  /// 读不成 JSON 的是旧版本写的一段文字：只有文案、不能作答。
-  init(stored: String) {
+  /// 读不成 JSON 的是旧版本写的一段文字：只有文案、不能作答。同步记录里的 `question` 字段即这种存法（通知扩展据此读出问题）。
+  public init(stored: String) {
     guard let decoded = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else {
       self.init(promptID: nil, kind: .unknown(""), text: stored)
       return

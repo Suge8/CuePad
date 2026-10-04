@@ -32,6 +32,7 @@ case "$mode" in
 <key>com.sugeh.cuepad</key><string>CuePad iOS AppStore</string>
 <key>com.sugeh.cuepad.share</key><string>CuePad Share iOS AppStore</string>
 <key>com.sugeh.cuepad.widget</key><string>CuePad Widget iOS AppStore</string>
+<key>com.sugeh.cuepad.notify</key><string>CuePad Notify iOS AppStore</string>
 </dict>
 <key>destination</key><string>export</string>
 </dict></plist>

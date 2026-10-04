@@ -6,7 +6,7 @@ import Foundation
 nonisolated enum PiProgress {
     static func line(of session: PiSessionState) -> String? {
         switch session.state.known {
-        case .waitingForUser: firstLine(session.question ?? session.detail)
+        case .waitingForUser: firstLine(session.question?.text ?? session.detail)
         case .thinking, .outputting, .tool: session.detail.flatMap(action)
         // 等子代理时说明栏是子代理摘要，照原样
         case .delegating: firstLine(session.detail)

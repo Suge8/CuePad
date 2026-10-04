@@ -109,12 +109,19 @@ extension DebugScene {
         let sessions: [(String, PiWorkState, String?, String?, PiRecap)] = [
             ("atlas", .tool, "bash · pnpm test -- scheduler", "圆桌", PiRecap(
                 lastPrompt: "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因",
-                lastReply: "上一轮 12 个用例里有 2 个失败：\n\n1. 发言轮次在 5 人以上时，第 6 位的顺序被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序；第二个需要把回调地址换成统一网关。\n\n另外顺手看了一眼覆盖率：scheduler 目录是 71%，主要缺重连和超时两条路径。两个失败修好后，我可以补上这两条的用例，大概再加 6 个测试。\n\n要我先改第一个吗？")),
+                lastReply: "上一轮 12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位的顺序被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n第二个需要把回调地址换成统一网关。\n\n另外顺手看了一眼覆盖率：scheduler 目录是 71%，主要缺重连和超时两条路径。两个失败修好后，我可以补上这两条的用例，大概再加 6 个测试。\n\n要我先改第一个吗？")),
             ("homepage", .waitingForUser, "要覆盖 public/feed.xml 吗？", "个人网站", PiRecap(
                 lastPrompt: "把 RSS 输出改成全文",
                 question: PiQuestion(
                     promptID: "demo-prompt", kind: .select, text: "要覆盖 public/feed.xml 吗？", options: ["覆盖", "另存为 feed-full.xml", "取消"]))),
             ("cuepad", .thinking, nil, "CuePad", PiRecap(lastPrompt: "看看投送队列超时的那个 bug")),
+            ("notes-edit", .waitingForUser, "编辑提交说明", nil, PiRecap(
+                lastPrompt: "写一段提交说明",
+                question: PiQuestion(promptID: nil, kind: .unknown("editor"), text: "编辑提交说明\n在编辑器里改好后保存"))),
+            ("deploy", .waitingForUser, "部署到生产吗？", nil, PiRecap(
+                lastPrompt: "测试都过了就部署",
+                question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
+            ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, PiRecap(lastPrompt: "让子代理分头审查这两个分支")),
             ("billing", .error, "模型拒绝了请求（400）：prompt is too long", nil, PiRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
             ("notes", .settled, nil, nil, PiRecap(
                 lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 notes/2026-W40.md。三件待办：续费域名、评审计费额度、补 scheduler 测试。")),

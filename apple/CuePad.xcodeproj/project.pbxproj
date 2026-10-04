@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D20000000000000000000003 /* CuePadNotify.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* CuePadNotify.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		D2000000000000000000000E /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D2000000000000000000000D /* CueSync */; };
 		B10000000000000000000003 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000002 /* CueText */; };
 		B10000000000000000000005 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* CueText */; };
 		B10000000000000000000007 /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000006 /* CueStore */; };
@@ -30,6 +32,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		D2000000000000000000000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D20000000000000000000007;
+			remoteInfo = CuePadNotify;
+		};
 		A10000000000000000000060 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A10000000000000000000001 /* Project object */;
@@ -69,6 +78,7 @@
 			files = (
 				C10000000000000000000013 /* CuePadShare.appex in Embed Foundation Extensions */,
 				C10000000000000000000014 /* CuePadWidget.appex in Embed Foundation Extensions */,
+				D20000000000000000000003 /* CuePadNotify.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -87,6 +97,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D20000000000000000000002 /* CuePadNotify.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CuePadNotify.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D2000000000000000000000F /* NotificationService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "NotificationService-Info.plist"; sourceTree = "<group>"; };
+		D20000000000000000000010 /* NotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationService.entitlements; sourceTree = "<group>"; };
 		E10000000000000000000001 /* cuepad */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = cuepad; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000004 /* CuePadShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CuePadShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000005 /* CuePadWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CuePadWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -111,9 +124,18 @@
 		C10000000000000000000002 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/ShareExtension; sourceTree = "<group>"; };
 		C10000000000000000000003 /* Widget */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/Widget; sourceTree = "<group>"; };
 		E10000000000000000000002 /* CueCLI */ = {isa = PBXFileSystemSynchronizedRootGroup; path = CuePadKit/Sources/CueCLI; sourceTree = "<group>"; };
+		D20000000000000000000001 /* NotificationService */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App/NotificationService; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		D20000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D2000000000000000000000E /* CueSync in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A10000000000000000000040 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -178,6 +200,7 @@
 				C10000000000000000000001 /* AppGroup */,
 				C10000000000000000000002 /* ShareExtension */,
 				C10000000000000000000003 /* Widget */,
+				D20000000000000000000001 /* NotificationService */,
 				A10000000000000000000007 /* Config */,
 				B10000000000000000000016 /* CuePadKit */,
 				A10000000000000000000008 /* Products */,
@@ -196,6 +219,8 @@
 				C10000000000000000000007 /* CuePad-iOS-Info.plist */,
 				C10000000000000000000008 /* ShareExtension-Info.plist */,
 				C10000000000000000000009 /* Widget-Info.plist */,
+				D2000000000000000000000F /* NotificationService-Info.plist */,
+				D20000000000000000000010 /* NotificationService.entitlements */,
 			);
 			path = App/Config;
 			sourceTree = "<group>";
@@ -208,6 +233,7 @@
 				E10000000000000000000001 /* cuepad */,
 				C10000000000000000000004 /* CuePadShare.appex */,
 				C10000000000000000000005 /* CuePadWidget.appex */,
+				D20000000000000000000002 /* CuePadNotify.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -215,6 +241,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		D20000000000000000000007 /* CuePadNotify */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D20000000000000000000008 /* Build configuration list for PBXNativeTarget "CuePadNotify" */;
+			buildPhases = (
+				D20000000000000000000004 /* Sources */,
+				D20000000000000000000005 /* Frameworks */,
+				D20000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D20000000000000000000001 /* NotificationService */,
+			);
+			name = CuePadNotify;
+			packageProductDependencies = (
+				D2000000000000000000000D /* CueSync */,
+			);
+			productName = CuePadNotify;
+			productReference = D20000000000000000000002 /* CuePadNotify.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		A10000000000000000000030 /* CuePad */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A10000000000000000000070 /* Build configuration list for PBXNativeTarget "CuePad" */;
@@ -229,6 +278,7 @@
 			);
 			dependencies = (
 				C10000000000000000000017 /* PBXTargetDependency */,
+				D2000000000000000000000C /* PBXTargetDependency */,
 				C10000000000000000000018 /* PBXTargetDependency */,
 				E1000000000000000000000C /* PBXTargetDependency */,
 			);
@@ -381,12 +431,20 @@
 				A10000000000000000000031 /* CuePadTests */,
 				C1000000000000000000000A /* CuePadShare */,
 				C1000000000000000000000B /* CuePadWidget */,
+				D20000000000000000000007 /* CuePadNotify */,
 				E10000000000000000000003 /* CuePadCLI */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		D20000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A10000000000000000000051 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -418,6 +476,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		D20000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A10000000000000000000050 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -456,6 +521,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		D2000000000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilters = (ios, );
+			target = D20000000000000000000007 /* CuePadNotify */;
+			targetProxy = D2000000000000000000000B /* PBXContainerItemProxy */;
+		};
 		A10000000000000000000061 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A10000000000000000000030 /* CuePad */;
@@ -482,6 +553,54 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		D20000000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "CuePad Notify iOS Development";
+				CODE_SIGN_ENTITLEMENTS = App/Config/NotificationService.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "App/Config/NotificationService-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "CuePad 通知";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sugeh.cuepad.notify;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D2000000000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";
+				"CODE_SIGN_STYLE[sdk=iphoneos*]" = Manual;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "CuePad Notify iOS AppStore";
+				CODE_SIGN_ENTITLEMENTS = App/Config/NotificationService.entitlements;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "App/Config/NotificationService-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "CuePad 通知";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sugeh.cuepad.notify;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		A10000000000000000000080 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = A10000000000000000000004 /* Signing.xcconfig */;
@@ -781,6 +900,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		D20000000000000000000008 /* Build configuration list for PBXNativeTarget "CuePadNotify" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D20000000000000000000009 /* Debug */,
+				D2000000000000000000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		A10000000000000000000070 /* Build configuration list for PBXNativeTarget "CuePad" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -849,6 +977,11 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		D2000000000000000000000D /* CueSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueSync;
+		};
 		B10000000000000000000002 /* CueText */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;

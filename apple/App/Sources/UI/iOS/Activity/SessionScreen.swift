@@ -17,11 +17,17 @@ struct SessionScreen: View {
     @State private var lastSeen: PiSessionState?
     @State private var draft: Navigation.Outbox?
 
+    /// 阅读宽度上限：iPad 上长回答一行不超过它。
+    private static let readingWidth: CGFloat = 600
+
     var body: some View {
         ScrollView {
             if let session = digest?.session ?? lastSeen {
-                PiSessionDigest(session: session, project: digest?.project)
+                PiSessionDigest(session: session, project: digest?.project, deliveries: digest?.deliveries ?? [])
                     .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
+                    // iPad 上一行不超过阅读宽度，居中
+                    .frame(maxWidth: Self.readingWidth)
+                    .frame(maxWidth: .infinity)
             } else if digest != nil {
                 ContentUnavailableView {
                     Label("找不到这个会话", systemImage: "terminal")
@@ -44,6 +50,8 @@ struct SessionScreen: View {
                     ReplyBar(session: session, alive: alive, draft: $draft)
                 }
                 .padding(.horizontal, 8).padding(.bottom, 8)
+                .frame(maxWidth: Self.readingWidth)
+                .frame(maxWidth: .infinity)
             }
         }
         .onAppear { if draft == nil { draft = navigation.takeDraft(for: id) } }
@@ -60,7 +68,8 @@ private struct DigestKey: Equatable {
     var sessionID: String?
 }
 
-/// 回复框：要带上的卡片或任务（可移除）、输入、发送方式与发送按钮。发出后清空，请求马上出现在"你发过去的"里；
+/// 回复框：平时收成一行（输入 + 当前方式的短名 + 发送），不挡近况；输入框聚焦、有字或带着卡片时展开，
+/// 露出要带上的卡片、发送方式与说明、同步提示。发出后清空，请求马上贴到它上方。回答弹窗在问题卡上，不在这里。
 /// 同步到不了 Mac、会话已结束时不能发，写明原因。
 private struct ReplyBar: View {
     let session: PiSessionState
@@ -75,8 +84,10 @@ private struct ReplyBar: View {
     @State private var sentCount = 0
     @FocusState private var focused: Bool
 
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     private var content: String {
-        [draft?.content, text.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty].compactMap { $0 }.joined(separator: "\n\n")
+        [draft?.content, trimmed.nonEmpty].compactMap { $0 }.joined(separator: "\n\n")
     }
 
     private var modes: [DeliveryMode] {
@@ -88,22 +99,32 @@ private struct ReplyBar: View {
         chosenMode.flatMap { modes.contains($0) ? $0 : nil } ?? modes.first
     }
 
-    private var reachable: Bool { services.syncStatus.reachesMac }
+    private var reachable: Bool { services.reachesPiHost }
+    private var expanded: Bool { focused || !text.isEmpty || draft != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !alive {
                 Text("会话已结束，回复发不到它；在 Mac 的终端重新运行 pi 开新会话").font(.footnote).foregroundStyle(palette.ink3)
             } else {
-                if !reachable { SyncHint(status: services.syncStatus) }
+                if expanded, !reachable { SyncHint(status: services.syncStatus) }
                 if let draft { attachment(draft) }
-                HStack(alignment: .bottom, spacing: 10) {
-                    TextField(draft == nil ? "回复 \(session.title)" : "补一句（可不填）", text: $text, axis: .vertical)
-                        .lineLimit(1...5)
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField(placeholder, text: $text, axis: .vertical)
+                        .lineLimit(expanded ? 1...5 : 1...1)
                         .focused($focused)
                         .accessibilityLabel("回复")
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .background(palette.paper, in: .rect(cornerRadius: 20, style: .continuous))
+                    if !expanded, let mode {
+                        // 收起时只露当前方式的短名，点它展开
+                        Button(mode.label) { focused = true }
+                            .buttonStyle(.plain)
+                            .font(.footnote.weight(.medium)).foregroundStyle(reachable ? palette.ink2 : palette.ink3)
+                            .padding(.horizontal, 10).frame(minHeight: 40)
+                            .background(palette.fill, in: .capsule)
+                            .accessibilityHint("展开发送方式")
+                    }
                     Button(action: send) {
                         Image(systemName: "arrow.up").font(.body.weight(.semibold))
                             .frame(width: 40, height: 40)
@@ -114,23 +135,31 @@ private struct ReplyBar: View {
                     .accessibilityLabel("发送")
                     .sensoryFeedback(.success, trigger: sentCount)
                 }
-                if let mode, modes.count > 1 {
+                if expanded, let mode {
                     VStack(alignment: .leading, spacing: 4) {
-                        Picker("方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
-                            ForEach(modes, id: \.self) { Text($0.label).tag($0) }
+                        if modes.count > 1 {
+                            Picker("方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
+                                ForEach(modes, id: \.self) { Text($0.label).tag($0) }
+                            }
+                            .scalingPickerStyle()
+                            .fixedSize()
                         }
-                        .scalingPickerStyle()
-                        .fixedSize()
                         if let explanation = mode.explanation {
                             Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
                         }
                     }
+                    .transition(.opacity)
                 }
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glass(in: .rect(cornerRadius: 24))
+        .animation(Motion.quick, value: expanded)
+    }
+
+    private var placeholder: String {
+        draft == nil ? "回复 \(session.title)" : "补一句（可不填）"
     }
 
     /// 带上的卡片或任务：标题、图片数，可移除。
@@ -165,6 +194,7 @@ private struct ReplyBar: View {
             _ = try await services.requestMacDelivery(content, to: session, mode: mode, card: card, task: task)
             text = ""
             draft = nil
+            focused = false
             sentCount += 1
         }
     }

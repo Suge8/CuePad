@@ -31,6 +31,8 @@ BUNDLES = [
     (APP_ID, "CuePad", "UNIVERSAL", "CuePad", ["APP_GROUPS", "PUSH_NOTIFICATIONS", "ICLOUD"]),
     (APP_ID + ".share", "CuePad Share", "IOS", "CuePad Share", ["APP_GROUPS"]),
     (APP_ID + ".widget", "CuePad Widget", "IOS", "CuePad Widget", ["APP_GROUPS"]),
+    # 通知服务扩展：取回 Pi 会话状态记录改写锁屏文案，要 iCloud（容器在网页上挂到这个 App ID）
+    (APP_ID + ".notify", "CuePad Notify", "IOS", "CuePad Notify", ["ICLOUD"]),
 ]
 CERTIFICATES = {  # 种类 → (证书类型, 钥匙串里的身份名前缀, 描述文件类型)
     "distribution": ("DISTRIBUTION", "Apple Distribution", "IOS_APP_STORE"),
