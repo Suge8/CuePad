@@ -5,10 +5,9 @@ import SwiftUI
 
 nonisolated private struct SidebarData: Sendable {
     var trashCount: Int
-    /// 这台 Mac 上结束了的会话（同步记录，结束后留 7 天，带近况），最近结束的在前。
-    var ended: [PiSessionState]
-    /// 历史索引里最近的会话（已按工作目录归入项目），在线与已结束的由界面去掉。
-    var history: [PiSessionState]
+    /// 会话列表查询的第一页（项目已删的会话不再带项目），与全部会话数。
+    var sessions: [PiSessionState]
+    var sessionTotal: Int
 }
 
 struct Sidebar: View {
@@ -21,7 +20,8 @@ struct Sidebar: View {
     /// 点过侧栏里的页后焦点留在侧栏，方向键才有地方去
     @FocusState private var focused: Bool
 
-    nonisolated private static let historyLimit = 5
+    /// 第一页要盖住别的 Mac 上没结束的会话与最近结束的几个。
+    nonisolated private static let sessionPage = 30
     private static let footerFade: CGFloat = 16
 
     var body: some View {
@@ -44,7 +44,7 @@ struct Sidebar: View {
                         }
                     }
                 }
-                PiSection(ended: data.ended, history: data.history)
+                PiSection(recorded: data.sessions, total: data.sessionTotal)
                 if pages.showsTrash {
                     Section {
                         PageRow(page: .trash, count: data.trashCount, select: select) {
@@ -70,17 +70,11 @@ struct Sidebar: View {
         .safeAreaInset(edge: .bottom) { footer }
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
-        .observing(services.store, [.projects, .cards, .piSessions, .piSessionStates, .projectDirectories], into: $data,
-                   onError: workspace.fail) { [hostID = services.hostID] store in
-            let ended = try store.piSessionStates()
-                .filter { $0.hostID == hostID && $0.state == .known(.ended) }
-                .sorted { $0.stateSince > $1.stateSince }
-            let history = try store.piSessions().prefix(Self.historyLimit * 2).map { row in
-                PiSessionState.history(row, hostID: hostID, projectID: try store.project(containing: URL(filePath: row.cwd))?.id)
-            }
+        .observing(services.store, [.projects, .cards, .piSessionStates], into: $data, onError: workspace.fail) { store in
+            let page = try store.piSessionPage(PiSessionQuery(limit: Self.sessionPage))
             return SidebarData(
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
-                ended: Array(ended.prefix(Self.historyLimit)), history: history)
+                sessions: page.items.map(\.listed), sessionTotal: page.total)
         }
     }
 
@@ -197,25 +191,29 @@ private struct PageRow<Title: View>: View {
     }
 }
 
-/// 全局 Pi：与 iOS 的 Pi 页同一种行（`PiSessionRow`）、同一个顺序——等你确认 → 出错 → 工作中 → 空闲 → 已结束（本机记录，
-/// 带最后的结果）→ 历史（会话索引里更早的）。点开任一会话是它的详情（近况与回复）；在线会话右键可跳到所在终端，悬停看出错原文。
-/// 没有活着的会话时分组不消失：一行"在终端运行 pi 开始"，下面照常是已结束与历史。没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
+/// 全局 Pi：与 iOS 的 Pi 页同一种行（`PiSessionRow`）、同一个顺序（`sidebarRows`）。点开任一会话是它的详情（近况与回复），
+/// 在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话；会话比显示的多时底部"全部 N 个"打开 ⌘K 的会话范围。
+/// 没有活着的会话时分组不消失：一行"在终端运行 pi 开始"，下面照常是已结束的。没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
 private struct PiSection: View {
-    let ended: [PiSessionState]
-    let history: [PiSessionState]
+    let recorded: [PiSessionState]
+    let total: Int
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    @Environment(\.openSessionSearch) private var openSessionSearch
+    @State private var startingSession = false
 
     private static let pastLimit = 5
 
     var body: some View {
         let status = services.piExtension.status
         let live = services.pi.sessions
-        let rows = rows(live: live)
+        let rows = PiSessionState.sidebarRows(
+            live: live.map { PiSessionState.live($0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id]) },
+            recorded: recorded, pastLimit: Self.pastLimit)
         if let installation = status?.pi, !installation.isSupported {
             Section("Pi") { PiSetupRow(installation: installation) }
         } else if status != nil || !rows.isEmpty {
-            Section("Pi") {
+            Section {
                 if live.isEmpty {
                     // 拒绝过安装扩展时，会话不会出现在这里：说清去哪装，而不是让人对着"运行 pi"困惑
                     let declined = status?.file != .current && services.settings.piExtensionDeclined
@@ -235,14 +233,23 @@ private struct PiSection: View {
                             }
                         }
                 }
+                if total > rows.count {
+                    Button { openSessionSearch?() } label: {
+                        Label("全部 \(total) 个", systemImage: "rectangle.stack").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(PressStyle(scale: 0.98))
+                    .help("在 ⌘K 里按项目查看、搜索全部会话")
+                }
+            } header: {
+                HStack {
+                    Text("Pi")
+                    Spacer()
+                    NewSessionButton(recent: recorded, showing: $startingSession)
+                }
+                // 系统把分组标题连同 + 合成一个读屏元素，默认动作是收起分组：+ 另给一个具名动作
+                .accessibilityAction(named: "新会话") { startingSession = true }
             }
         }
-    }
-
-    private func rows(live: [CuePi.PiSession]) -> [PiSessionState] {
-        PiSessionState.sidebarRows(
-            live: live.map { PiSessionState.live($0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id]) },
-            recorded: ended + history, pastLimit: Self.pastLimit)
     }
 }
 
@@ -250,7 +257,10 @@ extension PiSessionState {
     /// 侧栏 Pi 分组的行：本机在线的（桥上实时，`live`）与同步记录里没结束的（别的 Mac 上的）一起按要你注意的先后，
     /// 其后是已结束的；同一个会话只出现一次（本机实时优先），已结束的最多 `pastLimit` 行。`recorded` 是会话列表查询的一页。
     static func sidebarRows(live: [PiSessionState], recorded: [PiSessionState], pastLimit: Int) -> [PiSessionState] {
-        []
+        let shown = Set(live.map(\.sessionID))
+        let others = recorded.filter { !shown.contains($0.sessionID) }
+        let past = others.filter { $0.state == .known(.ended) }.prefix(pastLimit)
+        return inListOrder(live + others.filter { $0.state != .known(.ended) }) + past
     }
 }
 

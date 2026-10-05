@@ -10,15 +10,19 @@ nonisolated private struct PaletteData: Sendable {
     var targets: [SendTarget]
 }
 
-/// ⌘K：跨项目搜索卡片，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览。
-/// ↑↓ 选择，↩ 打开，⌘↩ 发送，⌘⇧C 复制。
+/// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
+/// ↑↓ 选择，↩ 打开，⌘↩ 发送，⌘⇧C 复制。会话——全部 Pi 会话（会话列表查询，分页），按项目再按文件夹分组，右侧是它的近况与回复。
 struct SearchPalette: View {
+    @Binding var scope: SearchScope
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var query = PaletteQuery()
     @State private var data: PaletteData?
     @State private var selection: UUID?
+    @State private var sessions: SessionSearchData?
+    @State private var sessionPages = 1
+    @State private var sessionSelection: String?
     @FocusState private var focused: Bool
 
     private static let maxWidth: CGFloat = 840
@@ -28,27 +32,51 @@ struct SearchPalette: View {
     private static let sideBySide: CGFloat = 680
 
     var body: some View {
+        panel
+            .onAppear {
+                focused = true
+                #if DEBUG
+                if query.text.isEmpty { query.text = DebugScene.searchText }
+                #endif
+            }
+            .onChange(of: query.text) {
+                query.pages = 1
+                sessionPages = 1
+            }
+            .background { if scope == .cards { shortcuts } }
+            .observing(services.store, [.cards, .projects, .sendRecords], id: query, into: $data, onError: workspace.fail) { [query] store in
+                let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
+                var lastSends: [UUID: LastSend] = [:]
+                for owner in Set(found.cards.map(\.projectID)) {
+                    lastSends.merge(try store.lastSends(in: owner)) { current, _ in current }
+                }
+                return PaletteData(
+                    cards: found.cards, total: found.totalCards, projects: try store.projects(),
+                    lastSends: lastSends, targets: try store.sendTargets())
+            }
+            #if DEBUG
+            .onChange(of: data?.cards.map(\.id)) { PerfProbe.mark("search") }
+            #endif
+            .onChange(of: data?.cards.map(\.id)) {
+                if let ids = data?.cards.map(\.id), selection.map(ids.contains) != true { selection = ids.first }
+            }
+            .modifier(sessionObservation)
+    }
+
+    /// 会话范围的数据（会话列表查询，分页；第一页很轻，卡片范围里也读着，切过去不闪空），选中项跟着结果走。
+    private var sessionObservation: SessionObservation {
+        SessionObservation(
+            key: SessionKey(text: query.text, pages: sessionPages), data: $sessions,
+            ids: sessionGroups.flatMap { $0.sessions.map(\.sessionID) }, selection: $sessionSelection)
+    }
+
+    private var panel: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-                TextField("搜索卡片", text: $query.text)
-                    .textFieldStyle(.plain).font(.system(size: 18))
-                    .focused($focused)
-                    .onSubmit { selected.map(open) }
-                    .onKeyPress(.downArrow) { move(1); return .handled }
-                    .onKeyPress(.upArrow) { move(-1); return .handled }
-                Keycap(text: "esc")
+            header
+            switch scope {
+            case .cards: cardsContent
+            case .sessions: sessionsContent
             }
-            .padding(.horizontal, 18).frame(height: 52)
-            FilterBar(query: $query, projects: data?.projects ?? [], targets: data?.targets ?? [], total: data?.total)
-                .padding(.horizontal, 14).padding(.bottom, 10)
-            Divider()
-            // 放得下就列表 + 预览并排，否则只留列表（最小窗口下详情区不到 500 宽）
-            ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
-                results
-                preview
-            }
-            .clipped()
         }
         // 宽高都以详情区为上限（外层留边距）：同一窗口里面板尺寸固定，结果多少都不让它长高
         .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
@@ -56,34 +84,67 @@ struct SearchPalette: View {
         .background(palette.paper.opacity(palette.dark ? 0.9 : 0.86), in: .rect(cornerRadius: 26))
         .glass(in: .rect(cornerRadius: 26))
         // 第一份结果读到之前不显示：晚一帧出现，不先露一个空壳再长出内容
-        .opacity(data == nil ? 0 : 1)
-        .onAppear {
-            focused = true
-            #if DEBUG
-            if query.text.isEmpty { query.text = DebugScene.searchText }
-            #endif
-        }
-        .onChange(of: query.text) { query.pages = 1 }
-        .background { shortcuts }
-        .observing(services.store, [.cards, .projects, .sendRecords], id: query, into: $data, onError: workspace.fail) { [query] store in
-            let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
-            var lastSends: [UUID: LastSend] = [:]
-            for owner in Set(found.cards.map(\.projectID)) {
-                lastSends.merge(try store.lastSends(in: owner)) { current, _ in current }
+        .opacity((scope == .cards ? data == nil : sessions == nil) ? 0 : 1)
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+            TextField(scope == .cards ? "搜索卡片" : "搜索会话", text: $query.text)
+                .textFieldStyle(.plain).font(.system(size: 18))
+                .focused($focused)
+                .onSubmit { if scope == .cards { selected.map(open) } }
+                .onKeyPress(.downArrow) { move(1); return .handled }
+                .onKeyPress(.upArrow) { move(-1); return .handled }
+            Picker("范围", selection: $scope) {
+                Text("卡片").tag(SearchScope.cards)
+                Text("会话").tag(SearchScope.sessions)
             }
-            return PaletteData(
-                cards: found.cards, total: found.totalCards, projects: try store.projects(),
-                lastSends: lastSends, targets: try store.sendTargets())
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            Keycap(text: "esc")
         }
-        #if DEBUG
-        .onChange(of: data?.cards.map(\.id)) { PerfProbe.mark("search") }
-        #endif
-        .onChange(of: data?.cards.map(\.id)) {
-            if let ids = data?.cards.map(\.id), selection.map(ids.contains) != true { selection = ids.first }
+        .padding(.horizontal, 18).frame(height: 52)
+    }
+
+    @ViewBuilder private var cardsContent: some View {
+        FilterBar(query: $query, projects: data?.projects ?? [], targets: data?.targets ?? [], total: data?.total)
+            .padding(.horizontal, 14).padding(.bottom, 10)
+        Divider()
+        // 放得下就列表 + 预览并排，否则只留列表（最小窗口下详情区不到 500 宽）
+        ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
+            results
+            preview
         }
+        .clipped()
+    }
+
+    @ViewBuilder private var sessionsContent: some View {
+        Divider()
+        ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
+            SessionResultList(
+                groups: sessionGroups, total: sessions?.total ?? 0, isFiltered: !query.text.isEmpty,
+                selection: $sessionSelection) { sessionPages += 1 }
+            sessionPreview
+        }
+        .clipped()
     }
 
     private var selected: Card? { data?.cards.first { $0.id == selection } }
+
+    /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）。
+    private var sessionGroups: [SessionGroup] {
+        SessionGroup.grouped((sessions?.sessions ?? []).map(workspace.withLiveState))
+    }
+
+    @ViewBuilder private var sessionPreview: some View {
+        if let sessionSelection {
+            PiSessionDetail(sessionID: sessionSelection, embedded: true)
+                .background(palette.desk, in: .rect(cornerRadius: 16))
+                .padding(10)
+        } else {
+            Spacer().frame(maxWidth: .infinity)
+        }
+    }
 
     private var results: some View {
         ScrollViewReader { proxy in
@@ -191,6 +252,13 @@ struct SearchPalette: View {
 
     /// 键盘选择按分组后的显示顺序移动。
     private func move(_ step: Int) {
+        if scope == .sessions {
+            let ids = sessionGroups.flatMap { $0.sessions.map(\.sessionID) }
+            guard !ids.isEmpty else { return }
+            let index = sessionSelection.flatMap(ids.firstIndex) ?? -step
+            sessionSelection = ids[min(max(index + step, 0), ids.count - 1)]
+            return
+        }
         guard let data else { return }
         let ids = groups(data).flatMap { $0.cards.map(\.id) }
         guard !ids.isEmpty else { return }
@@ -204,6 +272,28 @@ struct SearchPalette: View {
             workspace.show(card.projectID.map(Workspace.Page.project) ?? .inbox)
         }
         workspace.openCard = card.id
+    }
+}
+
+private struct SessionKey: Equatable {
+    var text: String
+    var pages: Int
+}
+
+private struct SessionObservation: ViewModifier {
+    let key: SessionKey
+    @Binding var data: SessionSearchData?
+    let ids: [String]
+    @Binding var selection: String?
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+
+    func body(content: Content) -> some View {
+        content
+            .observing(services.store, [.piSessionStates, .projects], id: key, into: $data, onError: workspace.fail) { [key] store in
+                try SessionSearchData.read(text: key.text, pages: key.pages, from: store)
+            }
+            .onChange(of: ids) { if selection.map(ids.contains) != true { selection = ids.first } }
     }
 }
 

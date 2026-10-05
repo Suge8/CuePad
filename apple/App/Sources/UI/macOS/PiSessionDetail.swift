@@ -13,28 +13,12 @@ extension PiSessionState {
             lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince)
     }
-
-    /// 历史索引里的会话（同步记录已过期或从没写过）：当作已结束，没有近况，时间是最后活动。
-    nonisolated static func history(_ row: StoredPiSession, hostID: String, projectID: UUID?) -> PiSessionState {
-        let folder = URL(filePath: row.cwd).lastPathComponent
-        return PiSessionState(
-            id: recordID(sessionID: row.id), sessionID: row.id, hostID: hostID, title: row.title.isEmpty ? folder : row.title,
-            projectID: projectID, state: .known(.ended), detail: nil, folder: folder, lastPrompt: nil, lastReply: nil,
-            question: nil, notify: nil, stateSince: row.lastActivityAt, busySince: nil, createdAt: row.lastActivityAt,
-            modifiedAt: row.lastActivityAt)
-    }
 }
 
 extension SessionDigest {
-    /// Mac 端按会话 id 读资料库里的部分：这台 Mac 写的同步记录（结束后留 7 天）；没有记录时（结束更久、或从没写过）
-    /// 取历史索引里的那一行，当作已结束。在线会话再经 `live(_:hostID:project:)` 换上桥上的实时值。
-    static func read(sessionID: String, hostID: String, from store: isolated CueStore) throws -> SessionDigest {
-        var digest = try read(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
-        guard digest.session == nil, let row = try store.piSessions().first(where: { $0.id == sessionID }) else { return digest }
-        let project = try store.project(containing: URL(filePath: row.cwd))
-        digest.project = project
-        digest.session = .history(row, hostID: hostID, projectID: project?.id)
-        return digest
+    /// Mac 端按会话 id 读：同步记录（在线与已结束是同一条记录）。在线会话再经 `live(_:hostID:project:)` 换上桥上的实时值。
+    static func read(sessionID: String, from store: isolated CueStore) throws -> SessionDigest {
+        try read(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
     }
 
     /// 会话在线时，状态、详情、名字与近况取桥上的实时值。
@@ -47,15 +31,17 @@ extension SessionDigest {
     }
 }
 
-/// 一个 Pi 会话的详情（侧栏、菜单栏面板的会话行点开）：共用的近况（`PiSessionDigest`），下面是发给它的输入。
+/// 一个 Pi 会话的详情（侧栏、菜单栏面板的会话行点开，⌘K 会话范围的右侧）：共用的近况（`PiSessionDigest`），
+/// 下面是发过去的请求与回复框；已结束的会话回复框换成"继续"。
+/// `embedded`：放在 ⌘K 里时高度由面板给，近况在里面滚动；弹出层里按内容长高、到上限才滚动。
 struct PiSessionDetail: View {
     let sessionID: String
+    var embedded = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var stored: SessionDigest?
 
-    private static let width: CGFloat = 440
     private static let maxDigestHeight: CGFloat = 520
 
     var body: some View {
@@ -65,33 +51,39 @@ struct PiSessionDetail: View {
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
         VStack(spacing: 0) {
             if let session = digest.session {
-                ScrollView {
+                let scroll = ScrollView {
                     PiSessionDigest(session: session, project: digest.project).padding(20)
                 }
-                .frame(maxHeight: Self.maxDigestHeight)
-                .fixedSize(horizontal: false, vertical: true)
+                if embedded {
+                    scroll.frame(maxHeight: .infinity)
+                } else {
+                    scroll.frame(maxHeight: Self.maxDigestHeight).fixedSize(horizontal: false, vertical: true)
+                }
                 DeliveryStack(deliveries: digest.deliveries, session: session.state == .known(.ended) ? nil : session)
                     .padding(.horizontal, 14).padding(.bottom, 10)
                 Divider()
-                DetailReply(session: session, live: live).padding(14)
+                let continuing = digest.deliveries.contains { $0.mode == .known(.resume) && $0.isOpen }
+                DetailReply(session: session, live: live, continuing: continuing).padding(14)
             } else if stored != nil {
                 Text("找不到这个会话").foregroundStyle(palette.ink3).padding(24)
             }
         }
-        .frame(width: Self.width)
-        .background(palette.desk)
-        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects, .piSessions], id: sessionID, into: $stored,
-                   onError: workspace.fail) { [sessionID, hostID = services.hostID] store in
-            try SessionDigest.read(sessionID: sessionID, hostID: hostID, from: store)
+        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects], id: sessionID, into: $stored,
+                   onError: workspace.fail) { [sessionID] store in
+            try SessionDigest.read(sessionID: sessionID, from: store)
         }
     }
 }
 
-/// 发给这个会话：走"发给当前目标"同一条通道（`Workspace.send`），方式按共用规则（`MacDelivery`）；会话已结束时写明原因。
+/// 发给这个会话：走"发给当前目标"同一条通道（`Workspace.send`），方式按共用规则（`MacDelivery`）。
+/// 已结束的会话换成"继续"（在它所在的 Mac 的终端里恢复，进度与结果在上面"你发过去的"里）；在别的 Mac 上运行的写明在哪。
 private struct DetailReply: View {
     let session: PiSessionState
     let live: CuePi.PiSession?
+    /// 已经发出、还没有结果的"继续"。
+    let continuing: Bool
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var text = ""
     @State private var chosenMode: DeliveryMode?
@@ -134,10 +126,23 @@ private struct DetailReply: View {
                 }
             }
             .onAppear { focused = true }
+        } else if session.state == .known(.ended) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("这个会话已结束").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
+                    Text(session.hostID == services.hostID ? "用\(services.settings.piTerminal.phrase)接着它" : "在它所在的 Mac 上接着它")
+                        .font(.footnote).foregroundStyle(palette.ink3)
+                }
+                Spacer()
+                Button("继续") { workspace.resume(session) }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(continuing)
+            }
         } else {
             VStack(alignment: .leading, spacing: 2) {
-                Text("这个会话已结束").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-                Text("发不到它了。在终端重新运行 pi，新的会话会出现在侧栏").font(.footnote).foregroundStyle(palette.ink3)
+                Text("在另一台 Mac 上运行").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
+                Text("从这里发不到它；到那台 Mac 上回复").font(.footnote).foregroundStyle(palette.ink3)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -163,6 +168,8 @@ struct SessionDetailHost: ViewModifier {
 
     private struct Opened: Identifiable { let id: String }
     private static let space = "sessionDetailHost"
+    private static let width: CGFloat = 440
+    @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content
@@ -172,7 +179,7 @@ struct SessionDetailHost: ViewModifier {
                 space: Self.space))
             .coordinateSpace(.named(Self.space))
             .popover(item: $opened, attachmentAnchor: .rect(.rect(opened.flatMap { frames[$0.id] } ?? .zero)), arrowEdge: arrowEdge) {
-                PiSessionDetail(sessionID: $0.id)
+                PiSessionDetail(sessionID: $0.id).frame(width: Self.width).background(palette.desk)
             }
     }
 }
@@ -205,6 +212,37 @@ private struct SessionDetailRow: ViewModifier {
 }
 
 extension Workspace {
+    /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
+    func withLiveState(_ session: PiSessionState) -> PiSessionState {
+        guard let live = services.pi.sessions.first(where: { $0.sessionID == session.sessionID }) else { return session }
+        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id] ?? session.projectID)
+    }
+
+    /// 继续一个已结束的会话：请它所在的 Mac 在终端里恢复（本机也走投送请求）；结果在近况的"你发过去的"里。
+    func resume(_ session: PiSessionState) {
+        attempt { _ = try await self.services.launch(.resume(sessionID: session.sessionID), title: session.title, on: session.hostID) }
+    }
+
+    /// 在本机终端里开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能打开时抛出执行端写回的原因。
+    /// 终端已经打开（请求成功）时先调 `launched`：之后等的是 Pi 自己连上，可能要一会儿，也可能因为终端里出错永远等不到。
+    func startSession(at place: PiLaunchPlace, prompt: String?, title: String, launched: @escaping () -> Void) async throws -> String {
+        let token = UUID().uuidString
+        let request = try await services.launch(.start(place, prompt: prompt, token: token), title: title, on: services.hostID)
+        let progress = services.store.observe([.piSessionStates, .deliveryRequests]) { store in
+            (try store.piSessionStates().first { $0.launchToken == token }?.sessionID, try store.deliveryRequest(request.id))
+        }
+        var reported = false
+        for try await (claimed, outcome) in progress {
+            if let claimed { return claimed }
+            if let outcome, outcome.status == .known(.failed) { throw SendError.notDelivered(outcome.resultDetail ?? "没有说明原因") }
+            if !reported, outcome?.status == .known(.succeeded) {
+                reported = true
+                launched()
+            }
+        }
+        throw CancellationError()
+    }
+
     /// 跳到会话所在的终端；只能大致定位或失败时说一句。
     func jumpToTerminal(_ id: CuePi.PiSession.ID) {
         Task {

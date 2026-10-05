@@ -10,6 +10,7 @@ struct MainWindow: View {
     /// 窗口与侧栏宽度的读数。只在这里写、只由 `PinnedPage` 读：本视图带着工具栏，读了它们就会随几何变化重算、
     /// 每次重算都重新提交整条工具栏（AppKit 随之重排窗口），形成布局反馈环。
     @State private var widths = WindowWidths()
+    @State private var searchScope = SearchScope.cards
 
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.sidebar) {
@@ -21,6 +22,11 @@ struct MainWindow: View {
             detail
         }
         .environment(workspace)
+        .environment(\.openSessionSearch) {
+            searchScope = .sessions
+            workspace.overlay = .search
+        }
+        .onChange(of: workspace.overlay) { if $1 == nil { searchScope = .cards } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.window = $0 }
         .confirmationDialog(
             "Pi 正在工作", isPresented: busyBinding, titleVisibility: .visible
@@ -54,7 +60,7 @@ struct MainWindow: View {
                 ZStack {
                     Color.black.opacity(palette.dark ? 0.4 : 0.25).ignoresSafeArea()
                         .onTapGesture { workspace.overlay = nil }
-                    SearchPalette().padding(24)
+                    SearchPalette(scope: $searchScope).padding(24)
                 }
             }
         }
