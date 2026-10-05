@@ -265,7 +265,7 @@ struct MacSyncTests {
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }
 
-    // MARK: 继续会话、开新会话
+    // MARK: 后台恢复、开新会话
 
     private func launched(_ launch: PiLaunch, title: String = "app") async throws -> DeliveryRequest {
         try await services.startDeliveryExecutor()

@@ -15,13 +15,26 @@ extension AppServices {
         try await piStateRecorder.reset()
     }
 
-    /// 把 Pi 桥的会话变化写成同步记录，直到流结束。
+    /// 把 Pi 桥的会话变化写成同步记录，直到流结束。一个会话一条记录：同一会话同时有两个进程（后台托管的那个正在让给
+    /// 用户在终端里打开的那个）时，记录跟着用户的；其中一个结束而另一个还在时，记录不标为结束。
     func consumePiChanges(_ changes: AsyncStream<PiSessionChange>) async throws {
+        var live: [CuePi.PiSession.ID: CuePi.PiSession] = [:]
+        func owner(of sessionID: String) -> CuePi.PiSession? {
+            let processes = live.values.filter { $0.sessionID == sessionID }
+            return processes.first { !$0.hosted } ?? processes.first
+        }
         for await change in changes {
             switch change {
             case .appeared(let session), .stateChanged(let session, _), .infoChanged(let session):
-                try await recordPiState(of: session)
-            case .ended(let session, _): try await piStateRecorder.end(sessionID: session.sessionID)
+                live[session.id] = session
+                if owner(of: session.sessionID)?.id == session.id { try await recordPiState(of: session) }
+            case .ended(let session, _):
+                live[session.id] = nil
+                if let other = owner(of: session.sessionID) {
+                    try await recordPiState(of: other)
+                } else {
+                    try await piStateRecorder.end(sessionID: session.sessionID)
+                }
             case .incompatible: break
             }
         }
@@ -87,16 +100,15 @@ extension AppServices {
         if request.mode == .known(.ping) { return }  // 连接测试：收到即成功，不碰目标、不写发送记录
         if request.mode == .known(.start) {
             guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
-            return try await launchPi(launch)
+            return try await startPi(launch)
         }
         let target = request.target
         let content = SendContent(stored: request.content)
         let sent: SendTarget
         switch target.kind {
         case .known(.piSession):
-            guard let ref = target.ref, let id = channels.piSessionID(forSession: ref) else {
-                throw SendError.sessionNotOnThisMac(target.name)
-            }
+            guard let ref = target.ref else { throw SendError.sessionNotOnThisMac(target.name) }
+            let id = if let live = channels.piSessionID(forSession: ref) { live } else { try await resumeInBackground(ref, name: target.name) }
             // 执行器已把不认识的发送方式按失败写回，走到这里的都是已知方式
             guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
             if mode == .answer {
@@ -117,14 +129,33 @@ extension AppServices {
         try await recordSend(request.content, to: sent, card: request.cardID, task: request.taskID)
     }
 
-    /// 开新会话（不写发送记录）：在后台托管（见 `PiHost`），目录由本机解析：项目绑定的代码目录或某个会话的目录。
-    private func launchPi(_ launch: PiLaunch) async throws {
-        _ = try await directory(for: launch.place)
-        throw SendError.unsupportedMode(DeliveryMode.start.rawValue)  // 后台托管接上前（契约提交）
+    /// 开新会话（不写发送记录）：在后台托管（`PiHost`），目录由本机解析：项目绑定的代码目录或某个会话的目录；
+    /// 带上发起方的认领标识，连上后把开场的话作为第一条消息送进去。
+    private func startPi(_ launch: PiLaunch) async throws {
+        let directory = try await directory(for: launch.place)
+        try requireDirectory(directory)
+        guard let pi = await locatePi() else { throw SendError.piNotInstalled }
+        let id = try await host.open(in: directory, launchToken: launch.token, executable: pi)
+        if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
+            try await channels.send(PiMessage(text: opening), to: id)
+        }
     }
 
-    /// 扩展读这个环境变量拿认领标识（见扩展的 `LAUNCH_TOKEN_ENV`）。
-    static let launchTokenVariable = "CUEPAD_LAUNCH_TOKEN"
+    /// 发给已结束的会话：在后台把它恢复起来（会话索引里的会话文件与工作目录），返回连上桥的会话。
+    private func resumeInBackground(_ sessionID: String, name: String) async throws -> CuePi.PiSession.ID {
+        guard let indexed = try await store.piSession(sessionID) else { throw SendError.sessionNotOnThisMac(name) }
+        let directory = URL(filePath: indexed.cwd, directoryHint: .isDirectory)
+        try requireDirectory(directory)
+        guard let pi = await locatePi() else { throw SendError.piNotInstalled }
+        return try await host.resume(sessionFile: URL(filePath: indexed.path), in: directory, executable: pi)
+    }
+
+    private func requireDirectory(_ directory: URL) throws {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw SendError.directoryMissing(directory.lastPathComponent)
+        }
+    }
 
     private func directory(for place: PiLaunchPlace) async throws -> URL {
         switch place {

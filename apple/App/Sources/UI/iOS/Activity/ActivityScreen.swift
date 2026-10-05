@@ -5,7 +5,7 @@ import SwiftUI
 
 /// Pi：只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。"现在"是没结束的会话，按要你注意的先后排
 /// （等你确认 → 出错 → 工作中 → 空闲）；"历史"是所有已结束的，按结束时间分段（今天、昨天……）、可搜，滑到底才读下一页。
-/// 点开看近况、回复（历史会话看最后一轮、在 Mac 上继续）。右上角开新会话。
+/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。右上角开新会话。
 /// iPad 右侧面板里没有导航栏：搜索与新会话放在列表顶上。
 struct ActivityScreen: View {
     var inPanel = false
@@ -215,7 +215,7 @@ private struct SessionRow: View {
         }
         .buttonStyle(RowPressStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityHint(session.state == .known(.ended) ? "看最后一轮、在 Mac 上继续" : "看近况、回复")
+        .accessibilityHint(session.state == .known(.ended) ? "看最后一轮、回复" : "看近况、回复")
     }
 }
 

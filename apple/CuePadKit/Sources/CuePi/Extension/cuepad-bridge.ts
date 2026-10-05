@@ -12,7 +12,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 8;
+const EXTENSION_VERSION = 9;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -45,6 +45,8 @@ const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
 const WORKER_NAME = /<firecode_worker name="([^"]+)">/u;
 /** CuePad 在终端里开新会话时经这个环境变量交给扩展的认领标识，扩展在 hello 里带回 */
 const LAUNCH_TOKEN_ENV = "CUEPAD_LAUNCH_TOKEN";
+/** CuePad 在后台托管的 Pi（RPC 模式、没有终端界面）启动时带这个环境变量，扩展在 hello 里带回 */
+const HOSTED_ENV = "CUEPAD_HOSTED";
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = [
 	"TERM_PROGRAM", "TERM_PROGRAM_VERSION", "__CFBundleIdentifier", "TERM_SESSION_ID", "ITERM_SESSION_ID",
@@ -273,6 +275,7 @@ export default function (pi: any) {
 			term: terminalEnv,
 			state: { ...tracker.derive(), since, busySince },
 			launchToken,
+			hosted: process.env[HOSTED_ENV] === "1",
 			...info,
 		};
 	}

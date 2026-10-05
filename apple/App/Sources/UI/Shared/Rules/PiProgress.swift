@@ -1,16 +1,14 @@
 import CueStore
 import Foundation
 
-/// 会话"现在到哪了"的一句话（会话列表第三行、近况页状态块）：等你确认时是问题首行，干活时是当前动作（等子代理时是子代理摘要），
+/// 会话"现在到哪了"的一句话（会话列表第三行、近况页状态块）：等你确认时是问题首行，干活时是当前动作，
 /// 出错时是原因首行，空闲或已结束时是最后回答的首句。没有可说的就是 nil（不占行）。
 nonisolated enum PiProgress {
     static func line(of session: PiSessionState) -> String? {
         switch session.state.known {
         case .waitingForUser: firstLine(session.question?.text ?? session.detail)
         case .thinking, .outputting, .tool: session.detail.flatMap(action)
-        // 等子代理时说明栏是子代理摘要，照原样
-        case .delegating: firstLine(session.detail)
-        case .error: firstLine(session.detail)
+        case .delegating, .error: firstLine(session.detail)
         case .settled, .ended, nil: firstSentence(session.lastReply)
         }
     }
