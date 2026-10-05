@@ -94,7 +94,8 @@ extension CueStore {
 /// - 创建后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）；
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
-/// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试。
+/// - 读写 Store 失败交给 `onIssue`（请求停在原状态，手机那边会一直等，必须让人看到），下一次变化时再试；
+/// - 结果写回后调用 `onFinished`（App 用它立即上传这一条，不等同步引擎的调度）。
 public actor DeliveryExecutor {
   private let store: CueStore
   private let hostID: String
@@ -102,6 +103,7 @@ public actor DeliveryExecutor {
   private let retention: Duration
   private let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
+  private let onFinished: @Sendable (DeliveryRequest.ID) async -> Void
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   private var watcher: Task<Void, Never>?
   private var cleanup: Task<Void, Never>?
@@ -111,6 +113,7 @@ public actor DeliveryExecutor {
   public init(
     store: CueStore, hostID: String, maxAge: Duration = .seconds(600), retention: Duration = .seconds(60),
     timing: Timing = .system, onIssue: @escaping @Sendable (any Error) -> Void,
+    onFinished: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
     handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome
   ) {
     self.store = store
@@ -119,6 +122,7 @@ public actor DeliveryExecutor {
     self.retention = retention
     self.timing = timing
     self.onIssue = onIssue
+    self.onFinished = onFinished
     self.handler = handler
   }
 
@@ -183,7 +187,9 @@ public actor DeliveryExecutor {
       case .succeeded: (.succeeded, nil)
       case .failed(let reason): (.failed, reason)
       }
-    await reporting { try await store.finishDelivery(request.id, status: status, detail: detail, at: timing.now()) }
+    if await reporting({ try await store.finishDelivery(request.id, status: status, detail: detail, at: timing.now()) }) != nil {
+      await onFinished(request.id)
+    }
     scheduleCleanup()
   }
 

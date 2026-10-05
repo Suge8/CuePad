@@ -5,7 +5,7 @@ import Synchronization
 /// 有理由等就拉：同步引擎靠静默推送得知别的设备的改动，而这种推送不保证送达与时效，引擎自己也不会在没有推送时
 /// 向服务器拉（见 `ZoneChangePuller`）。手里有正在等的东西时，按条件给出的节奏主动拉一次，推送仍是主通道。
 ///
-/// 条件流给出此刻的节奏（nil：不在等）：在等时每 `interval` 拉一次，不再等即停；节奏带 `limit` 时，
+/// 条件流给出此刻的节奏（nil：不在等）：开始在等时立即拉一次（令牌与最新状态不等第一个间隔），之后每 `interval` 拉一次，不再等即停；节奏带 `limit` 时，
 /// 每次收到"在等"起最多拉这么久（收到新的"在等"重新计）。条件流结束或任务取消时返回。
 public struct SyncPoller: Sendable {
   /// 多久拉一次，以及每次在等最多拉多久（nil：一直拉到不再等）。
@@ -56,9 +56,9 @@ public struct SyncPoller: Sendable {
     }
   }
 
-  /// 按此刻的间隔醒来：还在等就拉，不再等（或过了上限）就结束；判断与标记结束在同一把锁里，不会漏开新循环。
+  /// 先拉一次，再按此刻的间隔醒来：还在等就拉，不再等（或过了上限）就结束；判断与标记结束在同一把锁里，不会漏开新循环。
   private func loop(_ state: State, _ fetch: @Sendable () async -> Void) async {
-    while (try? await timing.sleep(state.value.withLock { $0.interval })) != nil {
+    repeat {
       let now = timing.now()
       let keep = state.value.withLock { s in
         if let until = s.until, now <= until { return true }
@@ -67,7 +67,7 @@ public struct SyncPoller: Sendable {
       }
       guard keep else { return }
       await fetch()
-    }
+    } while (try? await timing.sleep(state.value.withLock { $0.interval })) != nil
     state.value.withLock { $0.looping = false }
   }
 

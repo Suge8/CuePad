@@ -51,7 +51,17 @@ actor ZoneChangePuller {
     }
   }
 
-  private func drain() async throws {
+  /// 还没有令牌就先取（只要 ID，补取在等的表）。手机发连接测试前调用：第一次的取令牌不算进往返。
+  func prepare() async throws {
+    do {
+      try await takeTokenIfNeeded()
+    } catch let error as CKError where error.code == .changeTokenExpired {
+      token = nil
+      try await takeTokenIfNeeded()
+    }
+  }
+
+  private func takeTokenIfNeeded() async throws {
     if token == nil {
       var batch: ZoneChangeBatch
       var awaited: [CKRecord.ID] = []
@@ -65,6 +75,10 @@ actor ZoneChangePuller {
         await coordinator.handle(.fetched(modifications: try await source.records(awaited), deletions: []))
       }
     }
+  }
+
+  private func drain() async throws {
+    try await takeTokenIfNeeded()
     var batch: ZoneChangeBatch
     repeat {
       batch = try await source.changes(since: token, idsOnly: false)

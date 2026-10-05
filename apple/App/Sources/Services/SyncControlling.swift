@@ -10,6 +10,8 @@ nonisolated protocol SyncControlling: Sendable {
     func syncNow() async throws
     /// 直接向服务器拉一次同步区的变化（推送之外的主动拉取，见 `CloudSync.pullChanges`）
     func pullChanges() async throws
+    /// 还没有主动拉取的令牌就先取
+    func preparePull() async throws
     /// 立即上传这一条记录（不等引擎调度）
     func sendNow(recordName: String) async throws
     func resolve(_ resolution: SyncResolution) async throws

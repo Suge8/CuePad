@@ -42,7 +42,7 @@ extension AppServices {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [weak self] error in
             let message = "处理投送请求时读写资料库失败：\(error.localizedDescription)"
             Task { @MainActor in self?.reportIssue(.syncUnavailable(message)) }
-        }) { [weak self] request in
+        }, onFinished: { [weak self] id in await self?.upload(id) }) { [weak self] request in
             guard let self else { return .failed("这台 Mac 上的 CuePad 正在退出") }
             return await self.execute(request)
         }

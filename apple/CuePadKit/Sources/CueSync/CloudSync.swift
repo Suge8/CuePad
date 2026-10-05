@@ -84,6 +84,11 @@ public actor CloudSync {
     try await puller?.pull()
   }
 
+  /// 还没有主动拉取的令牌就先取（见 `ZoneChangePuller.prepare`）。
+  public func preparePull() async throws {
+    try await puller?.prepare()
+  }
+
   /// 立即上传这一条记录（不等引擎的自动调度，几秒）：手机写出投送请求后调用，Mac 才能尽早拉到。
   /// 先把它登记为待办（与协调器随后的登记重复无妨），再只发这一条。
   public func sendNow(recordName: String) async throws {

@@ -135,18 +135,21 @@ final class AppServices {
             mode: mode, card: card, task: task))
     }
 
-    /// 发往别的设备的请求写出后立即上传，不等引擎的自动调度（几秒）；上传失败只记日志，引擎会照常重试。
+    /// 发往别的设备的请求写出后立即上传（不等它完成），见 `upload`。
     private func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
-        guard let sync else { return request }
-        let log = Self.log
-        Task {
-            do {
-                try await sync.sendNow(recordName: request.id.uuidString.lowercased())
-            } catch {
-                log.notice("立即上传投送请求失败，等引擎自动上传：\(String(describing: error), privacy: .public)")
-            }
-        }
+        Task { await upload(request.id) }
         return request
+    }
+
+    /// 立即只上传这一条投送请求，不等引擎的自动调度（几秒到几十秒）：手机写出请求、Mac 写回结果后都调用。
+    /// 失败只记日志，引擎会照常重试。返回时这一条已经传完（或失败）。
+    func upload(_ request: DeliveryRequest.ID) async {
+        guard let sync else { return }
+        do {
+            try await sync.sendNow(recordName: request.uuidString.lowercased())
+        } catch {
+            Self.log.notice("立即上传投送请求失败，等引擎自动上传：\(String(describing: error), privacy: .public)")
+        }
     }
 
     /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac（与发送同一条投送通道，Mac 上也走它，由执行器交给扩展）。
@@ -169,14 +172,45 @@ final class AppServices {
         throw CancellationError()
     }
 
-    /// 连接测试：给 `host` 那台 Mac 发一条 ping（与发送同一套投送请求），等它写回结果，返回往返时间
-    /// （本机时钟，从写出请求到看到结果）。超过 `timeout` 没有结果、或结果是失败时抛 `SendError.notDelivered`。用过的请求删掉。
-    func ping(_ host: String, timeout: Duration = .seconds(60)) async throws -> Duration {
-        let request = uploaded(try await store.requestPing(on: host))
+    /// 连接测试一次往返的分段。`upload` 与 `total` 用本机时钟；`toMac`（上传完成 → Mac 执行完）与 `back`（Mac 执行完 → 本机看到）
+    /// 用 Mac 写回的完成时间，跨设备时钟，有误差（两台设备的时钟一般相差零点几秒，偶尔为负）。
+    struct PingTiming: Sendable {
+        var upload: Duration
+        var toMac: Duration
+        var back: Duration
+        var total: Duration
+    }
+
+    /// 连接测试：给 `host` 那台 Mac 发一条 ping（与发送同一套投送请求），立即上传，等它写回结果，返回分段的往返时间。
+    /// 主动拉取的令牌先取好，第一次的取令牌不算进往返。超过 `timeout` 没有结果、或结果是失败时抛 `SendError.notDelivered`。
+    /// 用过的请求删掉。
+    func ping(_ host: String, timeout: Duration = .seconds(60)) async throws -> PingTiming {
+        try? await sync?.preparePull()
         let started = ContinuousClock.now
+        let request = try await store.requestPing(on: host)
         defer { Task { [store] in try? await store.deleteDelivery(request.id) } }
-        let result = try await withThrowingTaskGroup(of: DeliveryRequest?.self) { group in
-            group.addTask { try await self.outcome(of: request.id) }
+        async let seen = result(of: request.id, within: timeout)
+        await upload(request.id)
+        let uploaded = (instant: ContinuousClock.now, date: Date())
+        guard let (result, seenAt) = try await seen else {
+            throw SendError.notDelivered("\(timeout.components.seconds) 秒内 Mac 没有回应")
+        }
+        guard result.status == .known(.succeeded) else { throw SendError.notDelivered(result.resultDetail ?? "没有说明原因") }
+        let completed = result.completedAt ?? seenAt.date
+        return PingTiming(
+            upload: uploaded.instant - started, toMac: .seconds(completed.timeIntervalSince(uploaded.date)),
+            back: .seconds(seenAt.date.timeIntervalSince(completed)), total: seenAt.instant - started)
+    }
+
+    /// 等请求有结果，最多 `timeout`；超时返回 nil。同时记下本机看到结果的时刻。
+    private func result(
+        of request: DeliveryRequest.ID, within timeout: Duration
+    ) async throws -> (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))? {
+        try await withThrowingTaskGroup(of: (DeliveryRequest, seenAt: (instant: ContinuousClock.Instant, date: Date))?.self) { group in
+            group.addTask {
+                let done = try await self.outcome(of: request)
+                return (done, (ContinuousClock.now, Date()))
+            }
             group.addTask {
                 try await Task.sleep(for: timeout)
                 return nil
@@ -185,9 +219,6 @@ final class AppServices {
             group.cancelAll()
             return first
         }
-        guard let result else { throw SendError.notDelivered("\(timeout.components.seconds) 秒内 Mac 没有回应") }
-        guard result.status == .known(.succeeded) else { throw SendError.notDelivered(result.resultDetail ?? "没有说明原因") }
-        return ContinuousClock.now - started
     }
 
     /// 发送并写一条发送记录；投送失败不写记录，错误原样抛给界面展示。投送成功而记录没写进去时抛 `SendError.unrecorded`。
