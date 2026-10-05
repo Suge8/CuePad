@@ -56,18 +56,20 @@ struct IOSWorkflowTests {
         }
     }
 
+    /// 手机上只有一个发送：空闲直接发；Pi 正在跑一轮时默认等它做完再说（排队），另有马上说（插话）。
+    /// 手机不给"放进输入框"（人不在 Mac 前，没人去按那一下发送）。
     @Test(arguments: [
-        (PiWorkState.settled, false, [DeliveryMode.send, .paste]),
-        (.error, false, [.send, .paste]),
-        (.thinking, false, [.steer, .followUp, .paste]),
-        (.tool, false, [.steer, .followUp, .paste]),
-        (.waitingForUser, false, [.steer, .followUp, .paste]),
+        (PiWorkState.settled, false, [DeliveryMode.send]),
+        (.error, false, [.send]),
+        (.thinking, false, [.followUp, .steer]),
+        (.tool, false, [.followUp, .steer]),
+        (.waitingForUser, false, [.followUp, .steer]),
         // 等子代理：算工作中，但 Pi 自己这轮已经歇下，消息直接开始新的一轮（与 Mac 同一条规则）
-        (.delegating, false, [.send, .paste]),
+        (.delegating, false, [.send]),
         (.settled, true, [.send]),
-        (.outputting, true, [.steer, .followUp]),
+        (.outputting, true, [.followUp, .steer]),
     ])
-    func 发送方式_会话忙时插话或排队_含图片不能放进输入框(state: PiWorkState, hasImages: Bool, modes: [DeliveryMode]) {
+    func 手机发送_空闲直接发_忙时默认排队另有插话_没有放进输入框(state: PiWorkState, hasImages: Bool, modes: [DeliveryMode]) {
         #expect(MacDelivery.modes(for: .known(state), hasImages: hasImages) == modes)
     }
 
