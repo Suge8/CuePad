@@ -321,6 +321,30 @@ struct RealPiTests {
         }
     }
 
+    /// 上次在一轮中途退出（工具还在跑）的会话，接上时近况是之前那一轮做完的问答，不把半截的助手消息当成回答。
+    @Test func resumingAfterAnInterruptedRoundRestoresTheLastCompletedExchange() async throws {
+        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        try await eventually("桥发现会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
+        let file = try #require(bridge.sessions.first?.sessionFile)
+        try pi.prompt("第一问")
+        try await eventually("第一轮做完", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "ECHO 第一问 IMAGES[]" }
+        try pi.prompt("[[tool:sleep 30]]")
+        try await eventually("工具在跑", timeout: .seconds(20)) {
+            if case .tool = bridge.sessions.first?.state { true } else { false }
+        }
+        pi.kill(SIGKILL)
+        try await eventually("会话结束", timeout: .seconds(20)) { bridge.sessions.isEmpty }
+
+        let again = try await PiProcess(alongside: pi, sessionFile: file)
+        defer { again.stop() }
+        try await eventually("接上", timeout: .seconds(20)) { bridge.sessions.contains { $0.pid == again.pid } }
+        let resumed = try #require(bridge.sessions.first { $0.pid == again.pid })
+        #expect(resumed.lastPrompt == "第一问" && resumed.lastReply == "ECHO 第一问 IMAGES[]")
+    }
+
     /// 接上已有会话（恢复会话文件）时，近况从会话文件里补回来。
     @Test func recapIsRestoredFromTheSessionFileOnResume() async throws {
         try await withRig { pi, bridge, s in
