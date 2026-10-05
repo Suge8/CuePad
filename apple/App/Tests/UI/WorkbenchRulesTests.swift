@@ -257,6 +257,10 @@ struct PiReplyRulesTests {
         #expect(MacDelivery.reply(to: session(.waitingForUser), hasImages: false) == .unanswerable)
     }
 
+    @Test func Pi忙时两端默认都是等它做完再说_马上说是次级() {
+        #expect(Array(MacDelivery.modes(for: session(.thinking), hasImages: true).prefix(2)) == [.followUp, .steer])
+    }
+
     @Test func 不在等你确认时照常发消息() {
         #expect(MacDelivery.reply(to: session(.settled), hasImages: false) == .message(MacDelivery.modes(for: session(.settled), hasImages: false)))
         #expect(MacDelivery.reply(to: session(.thinking), hasImages: false) == .message(MacDelivery.modes(for: session(.thinking), hasImages: false)))
