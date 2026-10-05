@@ -19,7 +19,7 @@ import Foundation
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields`，生产环境删不掉字段）。
 enum Schema {
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；比它旧的按 `upgrades` 就地升级；比它新的是更新版本建的库，不打开。
-  static let version = 8
+  static let version = 9
 
   /// `upgrades[i]` 把结构版本 i + 1 升到 i + 2。新库直接用 `create`（已是最新结构）。
   static let upgrades = [
@@ -50,6 +50,8 @@ enum Schema {
     ALTER TABLE tasks ADD COLUMN startedAt INTEGER;
     \(activityIndexes)
     """,
+    // 进行中的提问与最近一轮已做完的问答分开
+    "ALTER TABLE piSessionStates ADD COLUMN pendingPrompt TEXT;",
   ]
 
   /// 项目最近活动（`CueStore.projectOrder`）按项目取各表最晚的时间
@@ -98,7 +100,7 @@ enum Schema {
     CREATE TABLE piSessionStates (
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
-      lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT,
+      lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
       stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;

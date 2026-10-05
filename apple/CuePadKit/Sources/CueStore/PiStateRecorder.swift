@@ -47,7 +47,8 @@ extension CueStore {
         id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: title, projectID: projectID,
         state: .known(state), detail: detail, folder: folder, lastPrompt: recap.lastPrompt, lastReply: recap.lastReply,
         question: recap.question, notify: notify.map(Open.known), stateSince: times.stateSince, busySince: times.busySince,
-        createdAt: now, modifiedAt: now, launchToken: launchToken, hosted: hosted, subagents: subagents)
+        createdAt: now, modifiedAt: now, launchToken: launchToken, hosted: hosted, subagents: subagents,
+        pendingPrompt: recap.pendingPrompt)
       let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
         .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
@@ -72,7 +73,7 @@ extension CueStore {
       let ended = PiWorkState.ended.rawValue
       let end = """
         UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, busySince = NULL,
-          hosted = NULL, subagents = NULL,
+          hosted = NULL, subagents = NULL, pendingPrompt = NULL,
           modifiedAt = ?
         """
       if let sessionID {

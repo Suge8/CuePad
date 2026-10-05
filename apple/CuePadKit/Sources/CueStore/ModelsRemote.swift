@@ -38,16 +38,20 @@ public enum PiAlert: String, Sendable, CaseIterable {
 
 /// 会话的近况：手机打开会话时看到的"问了什么、答了什么、在等什么"。来自扩展 v4，旧扩展三项都是 nil。
 public struct PiRecap: Sendable, Equatable {
-  /// 用户最后一条提问，单行，至多 500 字符。
+  /// 最近一轮已做完的问答里你说的那句（单行，至多 500 字符）；与 `lastReply` 成对，在这一轮做完时一起更新。
   public var lastPrompt: String?
-  /// 助手最后一轮的最终回答文字（不含思考与工具调用），保留换行，至多 1200 字符。
+  /// 最近一轮已做完的问答里助手的最终回答文字（不含思考与工具调用），保留换行，至多 1200 字符。
   public var lastReply: String?
+  /// 进行中的提问：你说了、这一轮还没做完（单行，至多 500 字符）；这一轮做完时移进 `lastPrompt`，没有时为 nil。
+  /// 界面据此写"你说：… · Pi 正在处理"，上一轮的问答另行折叠，不把新提问和旧回答配在一起。
+  public var pendingPrompt: String?
   /// 正在等你回答的弹窗；不在等待时为 nil。
   public var question: PiQuestion?
 
-  public init(lastPrompt: String? = nil, lastReply: String? = nil, question: PiQuestion? = nil) {
+  public init(lastPrompt: String? = nil, lastReply: String? = nil, pendingPrompt: String? = nil, question: PiQuestion? = nil) {
     self.lastPrompt = lastPrompt
     self.lastReply = lastReply
+    self.pendingPrompt = pendingPrompt
     self.question = question
   }
 }
@@ -319,6 +323,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 近况，见 `PiRecap`（同名字段）。旧版本写的记录没有。
   public var lastPrompt: String?
   public var lastReply: String?
+  public var pendingPrompt: String?
   public var question: PiQuestion?
   /// 这次写入是否要通知手机；见 `PiAlert`。
   public var notify: Open<PiAlert>?
@@ -341,7 +346,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     id: UUID, sessionID: String, hostID: String, title: String, projectID: UUID?, state: Open<PiWorkState>, detail: String?,
     folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
-    subagents: [PiSubagentState] = []
+    subagents: [PiSubagentState] = [], pendingPrompt: String? = nil
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -362,6 +367,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.launchToken = launchToken
     self.hosted = hosted
     self.subagents = subagents
+    self.pendingPrompt = pendingPrompt
   }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
@@ -428,11 +434,11 @@ extension PiSessionState: Record {
   static let table = Table.piSessionStates
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
-    "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents",
+    "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
-     lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, PiSubagentState.stored(subagents)]
+     lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, PiSubagentState.stored(subagents), pendingPrompt]
   }
   init(row: Row) {
     self.init(
@@ -441,7 +447,7 @@ extension PiSessionState: Record {
       lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14).map(PiQuestion.init(stored:)),
       notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), busySince: row.dateOrNil(15), createdAt: row.date(8),
       modifiedAt: row.date(9), launchToken: row.textOrNil(16), hosted: row.intOrNil(17) == 1,
-      subagents: PiSubagentState.list(stored: row.textOrNil(18)))
+      subagents: PiSubagentState.list(stored: row.textOrNil(18)), pendingPrompt: row.textOrNil(19))
   }
 }
 

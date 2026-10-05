@@ -71,10 +71,13 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var name: String? = nil
     /// 首条用户消息的开头（扩展 v3 起上报）
     public internal(set) var firstMessage: String? = nil
-    /// 近况（扩展 v4 起上报，旧扩展为 nil）：用户最后一条提问（单行，≤500 字符）
+    /// 近况（扩展 v4 起上报，旧扩展为 nil）：最近一轮已做完的问答里你说的那句（单行，≤500 字符）；
+    /// 扩展 v11 起与 `lastReply` 成对，在这一轮做完时一起更新
     public internal(set) var lastPrompt: String? = nil
-    /// 助手最后一轮的最终回答文字，不含思考与工具调用，保留换行（≤1200 字符）
+    /// 最近一轮已做完的问答里助手的最终回答文字，不含思考与工具调用，保留换行（≤1200 字符）
     public internal(set) var lastReply: String? = nil
+    /// 进行中的提问：你说了、这一轮还没做完（扩展 v11 起；单行，≤500 字符）
+    public internal(set) var pendingPrompt: String? = nil
     /// 正在等你回答的弹窗；不在等待时为 nil
     public internal(set) var question: PiPrompt? = nil
     /// CuePad 开的新会话带着发起方的认领标识（`PiLaunch.start` 的 token，经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展）；

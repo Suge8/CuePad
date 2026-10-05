@@ -92,6 +92,7 @@ DEFINE SCHEMA
         launchToken   ENCRYPTED STRING,
         hosted        INT64,
         subagents     ENCRYPTED STRING,
+        pendingPrompt ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

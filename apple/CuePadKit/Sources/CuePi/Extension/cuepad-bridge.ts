@@ -12,7 +12,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 10;
+const EXTENSION_VERSION = 11;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -170,6 +170,16 @@ function lastMessage(entries: any[], matches: (message: any) => boolean): any {
 	return undefined;
 }
 
+/** 会话文件当前分支上最近一轮已做完的问答：最后一条助手回答，与它之前你说的最后一句（机器消息不算）。
+ * 回答之后还有你说的话（上次没做完就退出了）不算进来——那一轮没有做完。 */
+function lastExchange(entries: any[]): { lastPrompt: string | null; lastReply: string | null } {
+	let end = entries.length - 1;
+	while (end >= 0 && !(entries[end]?.type === "message" && entries[end].message?.role === "assistant")) end--;
+	if (end < 0) return { lastPrompt: null, lastReply: null };
+	const prompt = lastMessage(entries.slice(0, end), (m) => m?.role === "user" && !isMachineMessage(m));
+	return { lastPrompt: promptText(prompt), lastReply: replyText(entries[end].message) };
+}
+
 type Subsession = { directory: string; name: string; kind: string };
 type Registry = { sessions: Map<string, Subsession>; listeners: Set<() => void> };
 const registry: Registry = ((globalThis as any)[SUBSESSIONS] ??= { sessions: new Map(), listeners: new Set() });
@@ -217,14 +227,15 @@ export default function (pi: any) {
 	let busySince: number | null = null;
 	/** 会话名（`/name`）与首条用户消息：CuePad 据此按 Pi 会话列表的规则显示会话；其余是近况 */
 	type Info = {
-		name: string | null; firstMessage: string | null; lastPrompt: string | null; lastReply: string | null; question: Question | null;
+		name: string | null; firstMessage: string | null; lastPrompt: string | null; lastReply: string | null;
+		pendingPrompt: string | null; question: Question | null;
 		subagents: { name: string; kind: string }[];
 	};
 	/** 等你回答的弹窗：`id` 非空的可以从 CuePad 作答（confirm/select/text）；editor 与 custom 只能在 Pi 里答 */
 	type Question = { id: string | null; kind: string; text: string; options: string[] };
 	/** 会话载入时的条目数：之后多出来的是这个进程自己写的 */
 	let loadedEntries = 0;
-	let info: Info = { name: null, firstMessage: null, lastPrompt: null, lastReply: null, question: null, subagents: [] };
+	let info: Info = { name: null, firstMessage: null, lastPrompt: null, lastReply: null, pendingPrompt: null, question: null, subagents: [] };
 	/** 本会话是某个会话的进程内子会话（子代理）时，它在登记表里的键（会话文件路径）：状态只进登记表，不开 socket */
 	let subsessionKey: string | undefined;
 	let stopWatchingSubsessions: (() => void) | undefined;
@@ -514,8 +525,8 @@ export default function (pi: any) {
 		info = {
 			name: pi.getSessionName() ?? null,
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
-			lastPrompt: promptText(lastMessage(branch, (m) => m?.role === "user" && !isMachineMessage(m))),
-			lastReply: replyText(lastMessage(branch, (m) => m?.role === "assistant")),
+			...lastExchange(branch),
+			pendingPrompt: null,
 			question: null,
 			subagents: [],
 		};
@@ -538,7 +549,8 @@ export default function (pi: any) {
 		if (event.message?.role !== "user") return;
 		// 首条消息与 Pi 会话列表一致，不区分机器消息
 		const firstMessage = info.firstMessage ?? preview(messageText(event.message));
-		updateInfo(isMachineMessage(event.message) ? { firstMessage } : { firstMessage, lastPrompt: promptText(event.message) });
+		// 你说的这句在这一轮做完前是进行中的提问，不和上一轮的回答配在一起
+		updateInfo(isMachineMessage(event.message) ? { firstMessage } : { firstMessage, pendingPrompt: promptText(event.message) });
 	});
 
 	// ---- Pi 事件 → 状态 ----
@@ -581,7 +593,8 @@ export default function (pi: any) {
 	});
 	pi.on("agent_end", (event: any) => {
 		const last = [...event.messages].reverse().find((m: any) => m.role === "assistant");
-		updateInfo({ lastReply: replyText(last) });
+		// 这一轮做完：问与答一起更新（机器消息触发的轮没有新的提问，沿用上一句）
+		updateInfo({ lastPrompt: info.pendingPrompt ?? info.lastPrompt, lastReply: replyText(last), pendingPrompt: null });
 		if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
 		else if (last?.stopReason === "aborted") tracker.outcome = { kind: "done", aborted: true };
 	});

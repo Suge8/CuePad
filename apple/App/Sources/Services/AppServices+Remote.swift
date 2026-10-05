@@ -46,7 +46,9 @@ extension AppServices {
             sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
             folder: session.cwd.lastPathComponent,
             projectID: try await store.project(containing: session.cwd)?.id,
-            recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question.map(PiQuestion.init)),
+            recap: PiRecap(
+                lastPrompt: session.lastPrompt, lastReply: session.lastReply, pendingPrompt: session.pendingPrompt,
+                question: session.question.map(PiQuestion.init)),
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
             hosted: session.hosted, subagents: session.subagentStates)
     }

@@ -12,7 +12,8 @@ extension PiSessionState {
             projectID: projectID, state: .known(state), detail: detail, folder: session.cwd.lastPathComponent,
             lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
-            launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagentStates)
+            launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagentStates,
+            pendingPrompt: session.pendingPrompt)
     }
 }
 
