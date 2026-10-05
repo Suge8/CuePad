@@ -97,7 +97,7 @@ extension Workspace {
         services.pi.sessions.first { $0.id == id }
     }
 
-    /// 发送存储格式正文；成功后提示，Pi 忙时转为询问插话或排队。返回是否已发出（发给 Pi 时是已送达）。
+    /// 发送存储格式正文；成功后提示，Pi 忙时转为询问马上说还是等它做完再说。返回是否已发出（发给 Pi 时是已送达）。
     @discardableResult
     func send(_ stored: String, via choice: AppServices.Destination, card: UUID? = nil, task: UUID? = nil) async -> Bool {
         await send(stored, via: choice, card: card, task: task, remembering: choice)
@@ -108,8 +108,8 @@ extension Workspace {
     ) async -> Bool {
         let done = switch choice {
         case .clipboard: "已复制"
-        case .pi(_, .steer): "已插话"
-        case .pi(_, .followUp): "已排队"
+        // 忙时的两种说法与回复框、手机同一套名字（`DeliveryMode.label`）
+        case .pi(_, let mode) where mode == .steer || mode == .followUp: "已\(action(for: choice)) · \(mode.label)"
         default: "已" + action(for: choice)
         }
         do {

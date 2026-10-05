@@ -76,9 +76,10 @@ struct PiSessionDetail: View {
     }
 }
 
-/// 发给这个会话（与手机同一种回复框：发送钮在输入框里）。方式按共用规则（`MacDelivery`）：点发送钮是默认方式——
-/// Pi 忙时是等它做完再说——其余方式（马上说、只放进输入框）按住发送钮出来。
-/// 本机在线的走"发给当前目标"同一条通道（`Workspace.send`）；已结束的与别的 Mac 上的写一条投送请求给它所在的 Mac
+/// 回复框（与手机同一种：发送钮在输入框里），此刻做什么按共用规则（`MacDelivery.reply`）：
+/// 平时发消息——点发送钮是默认方式，其余方式按住发送钮出来；等你确认时，文字型问题它就是作答框，
+/// 选择、确认型收成一行"先在上面作答"，这里答不了的写明要在 Pi 里回答。
+/// 发消息时本机在线的走"发给当前目标"同一条通道（`Workspace.send`）；已结束的与别的 Mac 上的写一条投送请求给它所在的 Mac
 /// （已结束的由那台 Mac 在后台唤醒后再送达），进度在上面"你发过去的"里。
 private struct DetailReply: View {
     let session: PiSessionState
@@ -92,42 +93,56 @@ private struct DetailReply: View {
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var canSend: Bool { !trimmed.isEmpty && !sending }
-
-    /// 点发送钮的方式在前：忙时等它做完再说（排队），与手机一致。
-    private var modes: [DeliveryMode] {
-        let modes = MacDelivery.modes(for: session, hasImages: false)
-        return modes.contains(.followUp) ? [.followUp] + modes.filter { $0 != .followUp } : modes
-    }
+    private var reply: PiReply { MacDelivery.reply(to: session, hasImages: false) }
+    private var jumpable: Bool { live.map { !$0.hosted } ?? false }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            if let live, !live.hosted {
+            if jumpable, let live {
                 Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
                     .buttonStyle(.borderless).font(.footnote).foregroundStyle(palette.ink3)
                     .help("跳到这个会话所在的终端窗口")
             }
-            HStack(alignment: .bottom, spacing: 6) {
-                TextField(placeholder, text: $text, axis: .vertical)
-                    .accessibilityLabel("回复")
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...6)
-                    .focused($focused)
-                    .onSubmit { send(modes.first) }
-                    .padding(.vertical, 8)
-                sendButton
+            switch reply {
+            case .message(let modes): composer(placeholder: placeholder(modes)) { sendButton(modes) }
+            case .answer: composer(placeholder: "在这里回答上面的问题") { answerButton }
+            case .answerAbove: notice("先在上面作答", systemImage: "arrow.up")
+            case .unanswerable: notice("这个问题要在 Pi 里回答", systemImage: "terminal")
             }
-            .padding(.leading, 12).padding(.trailing, 4).padding(.vertical, 2)
-            .paper(radius: 18)
         }
+    }
+
+    private func composer(placeholder: String, @ViewBuilder button: () -> some View) -> some View {
+        HStack(alignment: .bottom, spacing: 6) {
+            TextField(placeholder, text: $text, axis: .vertical)
+                .accessibilityLabel("回复")
+                .textFieldStyle(.plain)
+                .lineLimit(1...6)
+                .focused($focused)
+                .onSubmit(submit)
+                .padding(.vertical, 8)
+            button()
+        }
+        .padding(.leading, 12).padding(.trailing, 4).padding(.vertical, 2)
+        .paper(radius: 18)
         .onAppear { focused = true }
     }
 
-    private var placeholder: String {
-        if session.state == .known(.ended) { return "回复 \(session.title)（会先在后台唤醒它）" }
-        return modes.first == .followUp ? "等它做完再说 · 按住发送钮可马上说" : "回复 \(session.title)"
+    /// 等你确认、不能发自由文本时收成的一行。
+    private func notice(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.subheadline).foregroundStyle(palette.ink2)
+            .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+            .paper(radius: 18)
     }
 
-    @ViewBuilder private var sendButton: some View {
+    private func placeholder(_ modes: [DeliveryMode]) -> String {
+        if session.state == .known(.ended) { return "回复 \(session.title)（会先在后台唤醒它）" }
+        guard let first = modes.first, modes.count > 1, first != .send else { return "回复 \(session.title)" }
+        return "\(first.label) · 按住发送钮可选别的说法"
+    }
+
+    @ViewBuilder private func sendButton(_ modes: [DeliveryMode]) -> some View {
         let others = modes.dropFirst()
         if others.isEmpty {
             Button { send(modes.first) } label: { RoundSendGlyph(enabled: canSend) }
@@ -138,7 +153,10 @@ private struct DetailReply: View {
         } else {
             Menu {
                 ForEach(Array(others), id: \.self) { mode in
-                    Button(mode.explanation ?? mode.label) { send(mode) }
+                    Button { send(mode) } label: {
+                        Text(mode.label)
+                        if let explanation = mode.explanation { Text(explanation) }
+                    }
                 }
             } label: {
                 RoundSendGlyph(enabled: canSend)
@@ -147,9 +165,26 @@ private struct DetailReply: View {
             }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
             .disabled(!canSend)
-            .accessibilityLabel(modes.first == .followUp ? "发送，等它做完再说" : "发送")
-            .accessibilityHint("按住可以选别的发法")
+            .help([modes.first?.label, modes.first?.explanation].compactMap { $0 }.joined(separator: "："))
+            .accessibilityLabel(modes.first.map { "发送，\($0.label)" } ?? "发送")
+            .accessibilityHint("按住可以选别的说法")
             .background { Button("") { send(modes.first) }.keyboardShortcut(.return, modifiers: .command).hidden() }
+        }
+    }
+
+    private var answerButton: some View {
+        Button(action: answer) { RoundSendGlyph(enabled: canSend) }
+            .buttonStyle(.plain)
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(!canSend)
+            .accessibilityLabel("回答")
+    }
+
+    private func submit() {
+        switch reply {
+        case .message(let modes): send(modes.first)
+        case .answer: answer()
+        case .answerAbove, .unanswerable: break
         }
     }
 
@@ -169,6 +204,18 @@ private struct DetailReply: View {
             } catch {
                 workspace.fail(error)
             }
+        }
+    }
+
+    /// 文字型问题的回答：作答请求交给会话所在的 Mac（本机也走它，由执行器交给扩展）。
+    private func answer() {
+        guard canSend else { return }
+        sending = true
+        let value = PiAnswerValue.text(trimmed)
+        workspace.attempt {
+            defer { sending = false }
+            _ = try await services.answer(value, to: session)
+            text = ""
         }
     }
 }

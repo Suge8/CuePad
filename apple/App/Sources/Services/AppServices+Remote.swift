@@ -140,7 +140,7 @@ extension AppServices {
         }
     }
 
-    /// Pi 桥只认插话/排队两种入队方式：发送方式在这里一次性落到桥的消息上。
+    /// Pi 桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说）：发送方式在这里一次性落到桥的消息上。
     private func sendToPi(_ content: SendContent, session id: CuePi.PiSession.ID, mode: DeliveryMode) async throws -> SendTarget {
         guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
         let whenBusy: PiQueueMode?
