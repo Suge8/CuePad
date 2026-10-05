@@ -201,6 +201,7 @@ public final class PiBridge {
                 state: state, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             hello.info.apply(to: &session)
             session.launchToken = hello.launchToken
+            session.hosted = hello.hosted ?? false
             link.session = session
             link.exitWatcher = ProcessExitWatcher(pid: hello.pid) { [weak self] in
                 Task { @MainActor in self?.processExited(name) }

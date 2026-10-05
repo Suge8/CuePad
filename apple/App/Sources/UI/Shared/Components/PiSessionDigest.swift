@@ -393,16 +393,13 @@ struct DeliveryRow: View {
         }
     }
 
-    /// 作答显示答了什么，继续会话、新会话显示是哪种（新会话带开场的话首行），都不露请求原文；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）；继续会话、新会话不重发（再按一次那个按钮）。
+    /// 作答显示答了什么，新会话显示开场的话首行，都不露请求原文；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）；新会话不重发（再按一次那个按钮）。
     /// 送不到 Mac 时也不给重发。
     private var title: String {
         if let answer = request.answer { return "答：\(answer.value.label)" }
-        switch request.launch {
-        case .resume: return DeliveryMode.resume.label
-        case .start(_, let prompt, _):
-            let opening = prompt.flatMap { $0.split(separator: "\n").first.map(String.init) }
+        if let launch = request.launch {
+            let opening = launch.prompt.flatMap { $0.split(separator: "\n").first.map(String.init) }
             return [DeliveryMode.start.label, opening].compactMap { $0 }.joined(separator: " · ")
-        case nil: break
         }
         let title = CardText(request.content).title
         return title.isEmpty ? "图片" : title

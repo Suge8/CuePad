@@ -91,7 +91,7 @@ extension DebugScene {
                let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
                 let token = UUID().uuidString
                 if let request = try? await workspace.services.launch(
-                    .start(.project(table), prompt: "看看 scheduler 的重连问题", token: token), title: "圆桌", on: "demo-mac") {
+                    PiLaunch(place: .project(table), prompt: "看看 scheduler 的重连问题", token: token), title: "圆桌", on: "demo-mac") {
                     sheet.launched = .init(request: request.id, token: token)
                 }
             }
@@ -187,9 +187,6 @@ extension DebugScene {
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
             _ = try? await services.requestMacDelivery("评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: atlas, mode: .followUp)
-        }
-        if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
-            _ = try? await services.launch(.resume(sessionID: landing.sessionID), title: landing.title, on: landing.hostID)
         }
         if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
             _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)

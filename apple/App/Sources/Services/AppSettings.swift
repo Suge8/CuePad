@@ -17,7 +17,6 @@ final class AppSettings {
         static let currentProject = "currentProject"
         static let piExtensionDeclined = "piExtensionDeclined"
         static let commandLineToolPrompted = "commandLineToolPrompted"
-        static let piTerminal = "piTerminal"
     }
 
     private static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
@@ -32,9 +31,6 @@ final class AppSettings {
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
-
-    /// 继续会话、开新会话时在哪个终端里打开（Mac）；可选的是本机装了的，见 `PiTerminalApp.installed`。
-    var piTerminal: PiTerminalApp { didSet { defaults.set(piTerminal.rawValue, forKey: Key.piTerminal) } }
 
     /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。存储属性：询问卡片据此在点"不用了"的同一刻收起。
     var piExtensionDeclined: Bool { didSet { defaults.set(piExtensionDeclined, forKey: Key.piExtensionDeclined) } }
@@ -66,7 +62,6 @@ final class AppSettings {
         autoSubmit = launchArguments[Key.autoSubmit].map(Self.isTrue) ?? defaults.bool(forKey: Key.autoSubmit)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
-        piTerminal = string(Key.piTerminal).flatMap(PiTerminalApp.init(rawValue:)) ?? .terminal
     }
 
     private static func isTrue(_ value: Any) -> Bool {

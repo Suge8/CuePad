@@ -52,6 +52,8 @@ enum PiWire {
         var state: State
         /// CuePad 开的新会话：启动时经环境变量交给扩展的认领标识（扩展 v8 起；其余会话没有）
         var launchToken: String?
+        /// CuePad 在后台托管的 Pi（扩展 v9 起）
+        var hosted: Bool?
         /// 与 `info` 消息同样的字段，平铺在 hello 里
         var name: String?
         var firstMessage: String?
@@ -62,7 +64,7 @@ enum PiWire {
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, sessionFile, pid, cwd, mode, model, tty, term, state, launchToken
+            case extensionVersion, sessionId, sessionFile, pid, cwd, mode, model, tty, term, state, launchToken, hosted
             case name, firstMessage, lastPrompt, lastReply, question, subagents
         }
 

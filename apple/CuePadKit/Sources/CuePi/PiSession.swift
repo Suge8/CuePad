@@ -82,11 +82,8 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var launchToken: String? = nil
     /// 本会话在同一进程里开的子代理（扩展 v5 起；FireCode 的子代理是进程内子会话，不作为独立会话出现）
     public internal(set) var subagents: [PiSubagent] = []
-
-    /// 子代理的一行摘要，如"子代理：ui 工作中 · core 空闲"；没有子代理时为 nil。
-    public var subagentSummary: String? {
-        subagents.isEmpty ? nil : "子代理：" + subagents.map { "\($0.name) \($0.activity.label)" }.joined(separator: " · ")
-    }
+    /// CuePad 在后台托管的 Pi（RPC 模式，没有终端界面）：启动时经环境变量 `CUEPAD_HOSTED` 告诉扩展，扩展在 hello 里带回
+    public internal(set) var hosted = false
 
     public var hasOutdatedExtension: Bool { extensionVersion < PiExtensionBundle.version }
 
@@ -140,15 +137,6 @@ public enum PiPromptAnswer: Sendable, Equatable {
 public struct PiSubagent: Sendable, Equatable, Decodable {
     public enum Activity: Sendable, Equatable {
         case working, waitingForUser, idle, error
-
-        public var label: String {
-            switch self {
-            case .working: "工作中"
-            case .waitingForUser: "等你确认"
-            case .idle: "空闲"
-            case .error: "出错"
-            }
-        }
     }
 
     public var name: String

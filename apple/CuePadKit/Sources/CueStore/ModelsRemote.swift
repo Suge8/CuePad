@@ -179,45 +179,74 @@ public enum PiLaunchPlace: Sendable, Equatable {
   case besideSession(String)
 }
 
-/// 在 Mac 的终端里启动 Pi（投送方式 `resume` / `start` 的正文，存为 JSON）。
-public enum PiLaunch: Sendable, Equatable {
-  /// 恢复这个会话（Pi 自己的会话 id）。会话正在运行时执行器拒绝。
-  case resume(sessionID: String)
-  /// 开新会话；`prompt` 是开场的话（可空）；`token` 由发起方生成，带到新会话的同步记录上（`PiSessionState.launchToken`）。
-  case start(PiLaunchPlace, prompt: String?, token: String)
+/// 在 Mac 上开一个新 Pi 会话（投送方式 `start` 的正文，存为 JSON）：Mac 在后台托管它（Pi 的 RPC 模式，没有终端界面），
+/// 开场的话作为第一条消息送入。`token` 由发起方生成，带到新会话的同步记录上（`PiSessionState.launchToken`），发起方据此认领。
+public struct PiLaunch: Sendable, Equatable {
+  public var place: PiLaunchPlace
+  /// 开场的话（可空）。
+  public var prompt: String?
+  public var token: String
+
+  public init(place: PiLaunchPlace, prompt: String?, token: String) {
+    self.place = place
+    self.prompt = prompt
+    self.token = token
+  }
 
   private struct Stored: Codable {
-    var resume: String?
     var project: UUID?
     var besideSession: String?
     var prompt: String?
-    var token: String?
+    var token: String
   }
 
   var stored: String {
-    var form = Stored()
-    switch self {
-    case .resume(let sessionID): form.resume = sessionID
-    case .start(let place, let prompt, let token):
-      switch place {
-      case .project(let id): form.project = id
-      case .besideSession(let sessionID): form.besideSession = sessionID
-      }
-      form.prompt = prompt
-      form.token = token
+    var form = Stored(prompt: prompt, token: token)
+    switch place {
+    case .project(let id): form.project = id
+    case .besideSession(let sessionID): form.besideSession = sessionID
     }
     return String(decoding: try! JSONEncoder().encode(form), as: UTF8.self)
   }
 
   init?(stored: String) {
-    guard let form = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else { return nil }
-    if let sessionID = form.resume {
-      self = .resume(sessionID: sessionID)
-    } else if let token = form.token, let place = form.project.map(PiLaunchPlace.project) ?? form.besideSession.map(PiLaunchPlace.besideSession) {
-      self = .start(place, prompt: form.prompt, token: token)
-    } else {
-      return nil
-    }
+    guard let form = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)),
+      let place = form.project.map(PiLaunchPlace.project) ?? form.besideSession.map(PiLaunchPlace.besideSession)
+    else { return nil }
+    self.init(place: place, prompt: form.prompt, token: form.token)
+  }
+}
+
+/// 子代理此刻在干什么（同步记录里给手机看的粗状态）。
+public enum PiSubagentActivity: String, Sendable, CaseIterable {
+  case working, waitingForUser, idle, error
+}
+
+/// 会话里的一个子代理：名字与此刻在干什么。
+public struct PiSubagentState: Sendable, Equatable {
+  public var name: String
+  public var activity: Open<PiSubagentActivity>
+
+  public init(name: String, activity: Open<PiSubagentActivity>) {
+    self.name = name
+    self.activity = activity
+  }
+
+  private struct Stored: Codable {
+    var name: String
+    var activity: String
+  }
+
+  /// 同步记录里存为 JSON 数组（加密字段 `subagents`）；读不出的当作没有。
+  static func stored(_ list: [PiSubagentState]) -> String? {
+    guard !list.isEmpty else { return nil }
+    let data = try! JSONEncoder().encode(list.map { Stored(name: $0.name, activity: $0.activity.rawValue) })
+    return String(decoding: data, as: UTF8.self)
+  }
+
+  static func list(stored: String?) -> [PiSubagentState] {
+    guard let stored, let decoded = try? JSONDecoder().decode([Stored].self, from: Data(stored.utf8)) else { return [] }
+    return decoded.map { PiSubagentState(name: $0.name, activity: Open(rawValue: $0.activity)) }
   }
 }
 
@@ -302,12 +331,17 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 由 CuePad 发起的新会话（投送方式 `start`）带着发起方生成的标识（`PiLaunch.start` 的 `token`），
   /// 发起方据此等到并打开"自己开的那个"会话。其余会话为 nil。
   public var launchToken: String?
+  /// Mac 在后台替你托管着它（没有终端界面；给已结束的会话发消息、开新会话时由 Mac 自动启动）。Mac 上据此给出"在终端打开"。
+  public var hosted: Bool
+  /// 会话里的子代理（FireCode 等在同一进程里开的子会话），一行一个。
+  public var subagents: [PiSubagentState]
 
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
   public init(
     id: UUID, sessionID: String, hostID: String, title: String, projectID: UUID?, state: Open<PiWorkState>, detail: String?,
     folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
-    busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil
+    busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
+    subagents: [PiSubagentState] = []
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -326,6 +360,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.createdAt = createdAt
     self.modifiedAt = modifiedAt
     self.launchToken = launchToken
+    self.hosted = hosted
+    self.subagents = subagents
   }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
@@ -344,9 +380,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case answer
   /// 连接测试：执行它的 Mac 收到即按成功写回，不碰 Pi、不写发送记录；往返时间就是手机到 Mac 再回来的延迟
   case ping
-  /// 在 Mac 的终端里恢复一个已结束的会话；正文是 `PiLaunch.resume`
-  case resume
-  /// 在 Mac 的终端里开一个新会话；正文是 `PiLaunch.start`
+  /// 在 Mac 上开一个新会话（后台托管）；正文是 `PiLaunch`
   case start
 }
 
@@ -373,8 +407,8 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 还没有结果（等待执行或执行中）。
   public var isOpen: Bool { status == .known(.pending) || status == .known(.executing) }
 
-  /// 恢复、新会话请求的内容；其他方式为 nil。
-  public var launch: PiLaunch? { mode == .known(.resume) || mode == .known(.start) ? PiLaunch(stored: content) : nil }
+  /// 新会话请求的内容；其他方式为 nil。
+  public var launch: PiLaunch? { mode == .known(.start) ? PiLaunch(stored: content) : nil }
 
   /// 作答请求的答案；其他方式为 nil。
   public var answer: PiAnswer? { mode == .known(.answer) ? PiAnswer(stored: content) : nil }
@@ -394,11 +428,11 @@ extension PiSessionState: Record {
   static let table = Table.piSessionStates
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
-    "lastPrompt", "lastReply", "question", "busySince", "launchToken",
+    "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
-     lastPrompt, lastReply, question?.stored, busySince, launchToken]
+     lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, PiSubagentState.stored(subagents)]
   }
   init(row: Row) {
     self.init(
@@ -406,7 +440,8 @@ extension PiSessionState: Record {
       state: Open(rawValue: row.text(5)), detail: row.textOrNil(6), folder: row.textOrNil(11),
       lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14).map(PiQuestion.init(stored:)),
       notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), busySince: row.dateOrNil(15), createdAt: row.date(8),
-      modifiedAt: row.date(9), launchToken: row.textOrNil(16))
+      modifiedAt: row.date(9), launchToken: row.textOrNil(16), hosted: row.intOrNil(17) == 1,
+      subagents: PiSubagentState.list(stored: row.textOrNil(18)))
   }
 }
 

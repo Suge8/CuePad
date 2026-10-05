@@ -62,8 +62,7 @@ struct PiSessionDetail: View {
                 DeliveryStack(deliveries: digest.deliveries, session: session.state == .known(.ended) ? nil : session)
                     .padding(.horizontal, 14).padding(.bottom, 10)
                 Divider()
-                let continuing = digest.deliveries.contains { $0.mode == .known(.resume) && $0.isOpen }
-                DetailReply(session: session, live: live, continuing: continuing).padding(14)
+                DetailReply(session: session, live: live).padding(14)
             } else if stored != nil {
                 Text("找不到这个会话").foregroundStyle(palette.ink3).padding(24)
             }
@@ -80,8 +79,6 @@ struct PiSessionDetail: View {
 private struct DetailReply: View {
     let session: PiSessionState
     let live: CuePi.PiSession?
-    /// 已经发出、还没有结果的"继续"。
-    let continuing: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -91,7 +88,7 @@ private struct DetailReply: View {
     @FocusState private var focused: Bool
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var modes: [DeliveryMode] { MacDelivery.modes(for: session.state, hasImages: false) }
+    private var modes: [DeliveryMode] { MacDelivery.modes(for: session, hasImages: false) }
     /// 会话状态变了（比如开始干活）时，原来选的方式可能不再可用：换成当前可用的第一个。
     private var mode: DeliveryMode? { chosenMode.flatMap { modes.contains($0) ? $0 : nil } ?? modes.first }
 
@@ -130,14 +127,10 @@ private struct DetailReply: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("这个会话已结束").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-                    Text(session.hostID == services.hostID ? "用\(services.settings.piTerminal.phrase)接着它" : "在它所在的 Mac 上接着它")
+                    Text(session.hostID == services.hostID ? "给它发消息时，Mac 会在后台把它恢复起来" : "在它所在的 Mac 上接着它")
                         .font(.footnote).foregroundStyle(palette.ink3)
                 }
                 Spacer()
-                Button("继续") { workspace.resume(session) }
-                    .buttonStyle(.borderedProminent).controlSize(.small)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(continuing)
             }
         } else {
             VStack(alignment: .leading, spacing: 2) {
@@ -218,16 +211,13 @@ extension Workspace {
         return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id] ?? session.projectID)
     }
 
-    /// 继续一个已结束的会话：请它所在的 Mac 在终端里恢复（本机也走投送请求）；结果在近况的"你发过去的"里。
-    func resume(_ session: PiSessionState) {
-        attempt { _ = try await self.services.launch(.resume(sessionID: session.sessionID), title: session.title, on: session.hostID) }
-    }
+
 
     /// 在本机终端里开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能打开时抛出执行端写回的原因。
     /// 终端已经打开（请求成功）时先调 `launched`：之后等的是 Pi 自己连上，可能要一会儿，也可能因为终端里出错永远等不到。
     func startSession(at place: PiLaunchPlace, prompt: String?, title: String, launched: @escaping () -> Void) async throws -> String {
         let token = UUID().uuidString
-        let request = try await services.launch(.start(place, prompt: prompt, token: token), title: title, on: services.hostID)
+        let request = try await services.launch(PiLaunch(place: place, prompt: prompt, token: token), title: title, on: services.hostID)
         let progress = services.store.observe([.piSessionStates, .deliveryRequests]) { store in
             (try store.piSessionPage(PiSessionQuery(launchToken: token, limit: 1)).items.first?.state.sessionID,
              try store.deliveryRequest(request.id))

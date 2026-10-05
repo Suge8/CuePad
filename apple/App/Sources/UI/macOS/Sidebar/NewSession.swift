@@ -30,11 +30,6 @@ struct NewSessionButton: View {
     }
 }
 
-extension PiTerminalApp {
-    /// 句子里提到它时的写法：中文名直接嵌进句子，英文名两边留空格（"用终端打开"、"用 Ghostty 打开"）。
-    var phrase: String { label.allSatisfy(\.isASCII) ? " \(label) " : label }
-}
-
 /// 新会话开在哪：项目绑定的代码目录，或最近会话用过、没绑项目的目录（与那个会话同一目录）。
 private struct LaunchPlace: Identifiable {
     let id: String
@@ -106,16 +101,15 @@ private struct NewSessionForm: View {
                     .accessibilityLabel("开场的话")
             }
             HStack(spacing: 8) {
-                let terminal = services.settings.piTerminal.phrase
                 switch stage {
                 case .idle:
-                    Text("用\(terminal)打开").font(.footnote).foregroundStyle(palette.ink3)
+                    Text("在后台开，不占终端").font(.footnote).foregroundStyle(palette.ink3)
                 case .opening:
                     ProgressView().controlSize(.small)
-                    Text("正在打开\(terminal)…").font(.footnote).foregroundStyle(palette.ink3)
+                    Text("正在开…").font(.footnote).foregroundStyle(palette.ink3)
                 case .connecting:
                     ProgressView().controlSize(.small)
-                    Text("\(terminal)已打开，等 Pi 连上；终端里报错的话就在那里看").font(.footnote).foregroundStyle(palette.ink3)
+                    Text("等 Pi 连上…").font(.footnote).foregroundStyle(palette.ink3)
                         .fixedSize(horizontal: false, vertical: true)
                 case .failed(let reason):
                     Text(reason).font(.footnote).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)

@@ -19,7 +19,6 @@ struct RealFirecodeTests {
         try await eventually("子代理出现在指挥官会话的摘要里", timeout: .seconds(20)) {
             bridge.sessions.first?.subagents.map(\.name) == ["ui"]
         }
-        #expect(bridge.sessions.first?.subagentSummary?.contains("ui") == true)
 
         // 指挥官自己这轮已经答完，子代理还在跑：仍是工作中，计时从派活那轮开始不重置
         try await eventually("指挥官歇下、等子代理", timeout: .seconds(20)) {

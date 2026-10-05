@@ -139,16 +139,16 @@ struct MacSyncTests {
         #expect(stored.stateSince == working.stateSince && stored.busySince == working.busySince)
     }
 
-    @Test func 子代理摘要在会话自己没有说明时写进说明() async throws {
-        var master = session("s1", state: .done(aborted: false))
-        master.subagents = [PiSubagent(name: "ui", kind: "thinking"), PiSubagent(name: "core", kind: "idle")]
+    /// 子代理写成结构化列表（名字与此刻在干什么），一行一个；说明栏只写会话自己的说明。
+    @Test func 子代理写成结构化列表() async throws {
+        var master = session("s1", state: .delegating)
+        master.subagents = [PiSubagent(name: "ui", kind: "thinking"), PiSubagent(name: "core", kind: "error")]
         try await services.consumePiChanges(changes([.appeared(master)]))
-        #expect(try await services.store.allPiSessionStates().first?.detail == "子代理：ui 工作中 · core 空闲")
-
-        var busy = master
-        busy.state = .tool(name: "bash", running: ["bash"], detail: "swift test")
-        try await services.consumePiChanges(changes([.stateChanged(busy, from: master.state)]))
-        #expect(try await services.store.allPiSessionStates().first?.detail == "bash · swift test")
+        let stored = try #require(try await services.store.allPiSessionStates().first)
+        #expect(stored.subagents == [
+            PiSubagentState(name: "ui", activity: .known(.working)), PiSubagentState(name: "core", activity: .known(.error)),
+        ])
+        #expect(stored.detail == nil)
     }
 
     @Test func 会话近况写进同步记录() async throws {
@@ -289,78 +289,6 @@ struct MacSyncTests {
     /// 从 CuePad 启动的 Pi 用 CuePad 自己用的 Pi 目录与连接目录（测试里都不是默认的），桥才找得到它、它也读写同一份会话。
     private var piEnvironment: [String: String] {
         ["PI_CODING_AGENT_DIR": rig.piPaths.agentDirectory.path, "CUEPAD_PI_SOCKET_DIR": rig.piPaths.socketDirectory.path]
-    }
-
-    @Test func 继续会话_在会话目录的终端里用会话文件恢复() async throws {
-        let app = try folder("app")
-        let session = try await indexed("s1", cwd: app)
-        services.settings.piTerminal = .ghostty
-        defer { services.cancelBackgroundWork() }
-
-        let done = try await launched(.resume(sessionID: "s1"))
-
-        #expect(done.status == .known(.succeeded))
-        let opened = try #require(rig.terminal.opened.first)
-        #expect(opened.app == .ghostty)
-        #expect(opened.command == TerminalCommand(
-            directory: URL(filePath: app.path, directoryHint: .isDirectory), executable: TestApp.piExecutable,
-            arguments: ["--session", session.path], environment: piEnvironment))
-    }
-
-    @Test func 正在运行的会话不能重复打开() async throws {
-        _ = try await indexed("s1", cwd: try folder("app"))
-        rig.channels.bridgeIDs["s1"] = "s1.100"
-        defer { services.cancelBackgroundWork() }
-
-        let done = try await launched(.resume(sessionID: "s1"))
-
-        #expect(done.status == .known(.failed))
-        #expect(done.resultDetail == SendError.piSessionAlreadyRunning.localizedDescription)
-        #expect(rig.terminal.opened.isEmpty)
-    }
-
-    @Test func 新会话_在项目绑定的目录里开_带开场的话与认领标识() async throws {
-        let directory = try folder("proj")
-        let project = try await services.store.createProject(name: "App", color: "#000000")
-        try await services.store.setDirectory(directory.path, for: project.id)
-        defer { services.cancelBackgroundWork() }
-
-        let done = try await launched(.start(.project(project.id), prompt: "看看测试为什么挂", token: "tok-1"), title: "App")
-
-        #expect(done.status == .known(.succeeded))
-        #expect(rig.terminal.opened.first?.command == TerminalCommand(
-            directory: URL(filePath: directory.path, directoryHint: .isDirectory), executable: TestApp.piExecutable,
-            arguments: ["--", "看看测试为什么挂"], environment: piEnvironment.merging(["CUEPAD_LAUNCH_TOKEN": "tok-1"]) { $1 }))
-    }
-
-    @Test func 新会话_与某会话同目录_项目没有目录时失败() async throws {
-        let other = try folder("other")
-        _ = try await indexed("s1", cwd: other)
-        let bare = try await services.store.createProject(name: "无目录", color: "#000000")
-        defer { services.cancelBackgroundWork() }
-
-        let beside = try await launched(.start(.besideSession("s1"), prompt: nil, token: "tok-2"))
-        #expect(beside.status == .known(.succeeded))
-        #expect(rig.terminal.opened.first?.command.directory == URL(filePath: other.path, directoryHint: .isDirectory))
-        #expect(rig.terminal.opened.first?.command.arguments == [])
-
-        let noDirectory = try await launched(.start(.project(bare.id), prompt: nil, token: "tok-3"), title: "无目录")
-        #expect(noDirectory.status == .known(.failed))
-        #expect(noDirectory.resultDetail == SendError.noCodeDirectory("无目录").localizedDescription)
-    }
-
-    /// 目录被删或改名了：不开终端，按失败写回，原因写目录末段名。
-    @Test func 目录不存在时不开终端_按失败写回() async throws {
-        _ = try await indexed("s1", cwd: rig.directory.appending(path: "work/gone", directoryHint: .isDirectory))
-        let project = try await services.store.createProject(name: "App", color: "#000000")
-        try await services.store.setDirectory(rig.directory.appending(path: "work/moved").path, for: project.id)
-        defer { services.cancelBackgroundWork() }
-
-        let resume = try await launched(.resume(sessionID: "s1"))
-        #expect(resume.status == .known(.failed) && resume.resultDetail == "目录不存在：gone")
-        let start = try await launched(.start(.project(project.id), prompt: nil, token: "tok-4"), title: "App")
-        #expect(start.status == .known(.failed) && start.resultDetail == "目录不存在：moved")
-        #expect(rig.terminal.opened.isEmpty)
     }
 
     @Test func 新会话的认领标识写进同步记录() async throws {
