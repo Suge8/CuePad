@@ -137,7 +137,8 @@ public final class PiHost {
             return try await group.next() ?? nil
         } }
         do {
-            guard let session = try await connecting.value else { throw CancellationError() }
+            let value = try await withTaskCancellationHandler { try await connecting.value } onCancel: { connecting.cancel() }
+            guard let session = value else { throw CancellationError() }
             return session
         } catch {
             close(hosted)
