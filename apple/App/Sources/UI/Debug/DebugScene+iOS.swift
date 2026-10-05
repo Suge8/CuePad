@@ -148,13 +148,16 @@ extension DebugScene {
             ("notes-edit", .waitingForUser, "编辑提交说明", nil, PiRecap(
                 lastPrompt: "写一段提交说明",
                 question: PiQuestion(promptID: nil, kind: .unknown("editor"), text: "编辑提交说明\n在编辑器里改好后保存"))),
+            ("rename", .waitingForUser, "新分支叫什么？", "CuePad", PiRecap(
+                lastPrompt: "把这批改动挪到新分支上",
+                question: PiQuestion(promptID: "demo-text", kind: .text, text: "新分支叫什么？"))),
             ("deploy", .waitingForUser, "部署到生产吗？", nil, PiRecap(
                 lastPrompt: "测试都过了就部署",
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
             ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, PiRecap(lastPrompt: "让子代理分头审查这两个分支")),
             ("billing", .error, "模型拒绝了请求（400）：prompt is too long", nil, PiRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
             ("notes", .settled, nil, nil, PiRecap(
-                lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 notes/2026-W40.md。三件待办：续费域名、评审计费额度、补 scheduler 测试。")),
+                lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),
             ("piwork", .settled, nil, nil, PiRecap(
                 lastPrompt: "列出 piwork 目录下的文件", lastReply: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md")),
         ]

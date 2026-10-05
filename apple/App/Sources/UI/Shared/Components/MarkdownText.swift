@@ -46,6 +46,23 @@ nonisolated enum MarkdownBlock: Equatable {
     case item(marker: String, text: String, depth: Int)
     case code(String)
 
+    /// 去掉 Markdown 符号的纯文字，一块一行（列表预览用：先去符号再截断）。行内的强调、代码、链接只留文字。
+    static func plainLines(_ source: String) -> [String] {
+        parse(source).compactMap { block in
+            let text: String = switch block {
+            case .paragraph(let text), .heading(let text), .item(_, let text, _): plainInline(text)
+            case .code(let text): text
+            }
+            let line = text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+            return line.isEmpty ? nil : line
+        }
+    }
+
+    private static func plainInline(_ text: String) -> String {
+        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            .map { String($0.characters) } ?? text
+    }
+
     static func parse(_ source: String) -> [MarkdownBlock] {
         var blocks: [MarkdownBlock] = []
         var paragraph: [String] = []

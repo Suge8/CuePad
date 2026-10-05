@@ -151,7 +151,6 @@ private struct QuestionCard: View {
     /// 点了的那个回答：它的按钮显示送达中。
     @State private var tapped: PiAnswerValue?
     @State private var writeError: String?
-    @State private var text = ""
 
     @Environment(AppServices.self) private var services
 
@@ -201,18 +200,8 @@ private struct QuestionCard: View {
                 ForEach(question.options, id: \.self) { option in choice(.option(option), prominent: false, leading: true) }
             }
         case .text:
-            HStack(spacing: 8) {
-                TextField("回答", text: $text)
-                    .onSubmit(submitText)
-                    .padding(.horizontal, 12).frame(minHeight: 44)
-                    .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
-                Button(action: submitText) {
-                    if tapped != nil && answering { ProgressView().controlSize(.small) } else { Text("发送") }
-                }
-                .buttonStyle(AnswerButtonStyle(prominent: true))
-                .fixedSize()
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
+            // 文字型问题在回复框里答（`MacDelivery.reply`），这里不再放第二个输入框
+            Label("在下面的回复框里回答", systemImage: "arrow.down").font(.subheadline).foregroundStyle(palette.ink2)
         case nil:
             EmptyView()
         }
@@ -234,11 +223,6 @@ private struct QuestionCard: View {
         }
         .buttonStyle(AnswerButtonStyle(prominent: prominent))
         .accessibilityLabel(busy ? "\(value.label)，送达中" : value.label)
-    }
-
-    private func submitText() {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        answer(.text(text))
     }
 
     /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
@@ -340,8 +324,9 @@ private struct RecentRound: View {
     }
 }
 
-/// 发过去的请求，贴在回复框上方：默认只有最新一条，更早的折成"更早 N 条"，点开在它上方列出。
+/// 发过去的、还在途或没能送达的请求，贴在回复框上方：默认只有最新一条，更早的折成"更早 N 条"，点开在它上方列出。
 struct DeliveryStack: View {
+    /// 发给会话的全部请求；只显示在途与失败的（`keeps`），已送达的在对话里已经看得到，不再常驻。
     let deliveries: [DeliveryRequest]
     /// 还能发给它的会话；nil 时不给重发。
     let session: PiSessionState?
@@ -350,9 +335,14 @@ struct DeliveryStack: View {
 
     private static let earlierMaxHeight: CGFloat = 220
 
+    static func keeps(_ status: Open<DeliveryStatus>) -> Bool {
+        status == .known(.pending) || status == .known(.executing) || status == .known(.failed)
+    }
+
     var body: some View {
-        if let latest = deliveries.last {
-            let earlier = deliveries.dropLast()
+        let shown = deliveries.filter { Self.keeps($0.status) }
+        if let latest = shown.last {
+            let earlier = shown.dropLast()
             VStack(alignment: .leading, spacing: 0) {
                 if !earlier.isEmpty {
                     Button(showsEarlier ? "收起更早的" : "更早 \(earlier.count) 条") { withAnimation(Motion.quick) { showsEarlier.toggle() } }
@@ -376,7 +366,7 @@ struct DeliveryStack: View {
                 DeliveryRow(request: latest, session: session)
             }
             .paper(radius: 16)
-            .animation(Motion.quick, value: deliveries.map(\.id))
+            .animation(Motion.quick, value: shown.map(\.id))
         }
     }
 }
@@ -504,7 +494,12 @@ struct PiElapsed: View {
         case .running(let since):
             Text("已运行 \(Text(since, style: .timer))").font(font.monospacedDigit()).foregroundStyle(palette.ink3)
         case .ago(let date):
-            Text(date, format: .relative(presentation: .named)).font(font).foregroundStyle(palette.ink3)
+            // "N 分钟前"按分钟重画（计时用的 .timer 样式自己会走）；不在屏幕上的行不画，也就不刷新
+            TimelineView(.everyMinute) { context in
+                Text(date.formatted(.relative(presentation: .named, unitsStyle: .wide)))
+                    .font(font).foregroundStyle(palette.ink3)
+                    .id(context.date)
+            }
         }
     }
 }

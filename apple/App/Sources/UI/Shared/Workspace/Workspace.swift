@@ -37,7 +37,7 @@ final class Workspace {
     }
 
     #if os(macOS)
-    /// Pi 会话正忙时待用户选择插话或排队的一次发送。
+    /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送。
     struct BusySend {
         var text: String
         var session: CuePi.PiSession.ID
