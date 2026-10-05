@@ -26,10 +26,18 @@ final class Workspace {
         let id = UUID()
         var text: String
         var isError: Bool
+        /// 点提示去哪（如随手记的落点）；nil 时提示只是告知。
+        var link: Link?
+    }
+
+    /// 提示能带去的地方：项目页（nil 是未归档）、任务（nil 是不归项目的任务）。
+    enum Link: Equatable {
+        case project(UUID?)
+        case tasks(UUID?)
     }
 
     #if os(macOS)
-    /// Pi 会话正忙时待用户选择插话或排队的一次发送。
+    /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送。
     struct BusySend {
         var text: String
         var session: CuePi.PiSession.ID
@@ -210,8 +218,8 @@ final class Workspace {
 
     private static let noticeDuration: Duration = .seconds(2.4)
 
-    func say(_ text: String, isError: Bool = false) {
-        let notice = Notice(text: text, isError: isError)
+    func say(_ text: String, isError: Bool = false, link: Link? = nil) {
+        let notice = Notice(text: text, isError: isError, link: link)
         self.notice = notice
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in
@@ -251,16 +259,14 @@ final class Workspace {
         catalogAttempt += 1
     }
 
-    /// 保存的当前项目以 Store 为准：不存在或已进回收站时回落到侧栏第一个有效项目，没有项目则到未归档，并纠正设置。
+    /// 保存的当前项目以 Store 为准：不存在或已进回收站时回落到第一个有效项目（`store.projects()` 的顺序），没有项目则到未归档，并纠正设置。
     /// 根视图在项目表每次变化后调用。
     func reconcileCurrentProject() async {
         guard let saved = holder.currentProject else { return }
         do {
             let projects = try await services.store.projects()
             guard !projects.contains(where: { $0.id == saved }) else { return }
-            let summaries = try await services.store.projectSummaries()
-            let fallback = SidebarOrder.projects(projects, summaries: summaries).first?.id
-            if holder.currentProject == saved { holder.currentProject = fallback }
+            if holder.currentProject == saved { holder.currentProject = projects.first?.id }
         } catch {
             fail(error)
         }

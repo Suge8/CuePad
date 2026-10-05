@@ -45,7 +45,7 @@ nonisolated struct CardEntry: Identifiable, Sendable {
     }
 }
 
-/// 一张卡的纸面行（今天流与搜索结果共用）：可选的项目与时间、标题、摘要、块数，右侧首图。
+/// 一张卡的纸面行（今天流与搜索结果共用）：可选的项目与时间、标题、摘要，右侧首图。
 struct CardRow: View {
     let entry: CardEntry
     /// 标出所属项目（今天流）；nil 不标（搜索已按项目分组）。
@@ -66,7 +66,6 @@ struct CardRow: View {
                                 .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? palette.ink3)
                         }
                         Text(DateLabel.short(card.modifiedAt)).foregroundStyle(palette.ink3)
-                        if text.blockCount > 1 { Text("\(text.blockCount) 块").foregroundStyle(palette.ink3) }
                     }
                     .font(.caption.weight(.medium))
                     Text(marked(text.title.nonEmpty ?? "空白卡片")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)

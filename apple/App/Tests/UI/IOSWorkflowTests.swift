@@ -94,28 +94,41 @@ struct IOSWorkflowTests {
 
     // MARK: 随手记
 
-    @Test func 随手记带图_存为一张卡_文字在前图片按顺序在后_落在指定项目() async throws {
+    @Test func 随手记带图_存为一张卡_文字在前图片按顺序在后_落在指定项目并提示落点() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let workspace = Workspace(services: app.services, holder: SceneContext())
         let first = pngData(shade: 0.1), second = pngData(shade: 0.9)
         let hashes = try [first, second].map { try app.services.images.store($0) }
 
-        let card = try await CaptureDraft(text: "  想法  ", images: [first, second]).save(in: project.id, workspace: workspace)
+        try await CaptureDraft(text: "  想法  ", images: [first, second], kind: .idea).save(in: project.id, workspace: workspace)
 
-        #expect(card.projectID == project.id)
+        let card = try #require(try await store.cards(in: project.id).first)
         #expect(card.body == "想法\n\n![](cuepad://img/\(hashes[0]))\n![](cuepad://img/\(hashes[1]))")
-        #expect(try await store.cards(in: project.id).map(\.id) == [card.id])
+        #expect(workspace.notice?.text == "已记到 圆桌")
+        #expect(workspace.notice?.link == .project(project.id))
     }
 
-    @Test func 随手记只有图片_也能存() async throws {
+    @Test func 随手记只有图片_也能存_没选项目进未归档() async throws {
         let workspace = Workspace(services: app.services, holder: SceneContext())
         let image = pngData()
         let hash = try app.services.images.store(image)
 
-        let card = try await CaptureDraft(text: "", images: [image]).save(in: nil, workspace: workspace)
+        try await CaptureDraft(text: "", images: [image], kind: .idea).save(in: nil, workspace: workspace)
 
-        #expect(card.projectID == nil)
-        #expect(card.body == "![](cuepad://img/\(hash))")
+        #expect(try await store.cards(in: nil).map(\.body) == ["![](cuepad://img/\(hash))"])
+        #expect(workspace.notice?.text == "已记到 未归档")
+        #expect(workspace.notice?.link == .project(nil))
+    }
+
+    @Test func 随手记成任务_存为该项目的一条任务_不存卡片() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let workspace = Workspace(services: app.services, holder: SceneContext())
+
+        try await CaptureDraft(text: "  补测试  ", images: [], kind: .task).save(in: project.id, workspace: workspace)
+
+        #expect(try await store.tasks().filter { $0.projectID == project.id }.map(\.content) == ["补测试"])
+        #expect(try await store.cards(in: project.id).isEmpty)
+        #expect(workspace.notice?.link == .tasks(project.id))
     }
 }
 #endif

@@ -4,161 +4,131 @@ import CueText
 import PhotosUI
 import SwiftUI
 
-/// 随手记的草稿：一段文字加若干图片，存成一张卡（文字在前，图片按顺序各占一行）。
-struct CaptureDraft {
-    var text: String
-    var images: [Data]
-
-    var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty }
-
-    func save(in project: UUID?, workspace: Workspace) async throws -> Card {
-        let files = workspace.services.store.files
-        let hashes = try images.map { try files.store($0) }
-        let body = [
-            text.trimmingCharacters(in: .whitespacesAndNewlines),
-            hashes.map { CueFormat.imageMarkup(id: $0) }.joined(separator: "\n"),
-        ].filter { !$0.isEmpty }.joined(separator: "\n\n")
-        return try await workspace.createCard(body: body, in: project)
-    }
-}
-
-/// 随手记栏：点文字打开随手记，相机与相册直接带图打开；记入当前位置（项目页记入该项目，其余进未归档）。
-struct CaptureBar: View {
-    @Environment(Navigation.self) private var navigation
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Button { navigation.startCapture() } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "square.and.pencil").accessibilityHidden(true)
-                    Text("记下想法…").foregroundStyle(palette.ink2).lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .padding(.leading, 16)
-                .frame(maxHeight: .infinity)
-                .contentShape(.rect)
-            }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
-            .accessibilityLabel("随手记")
-            if CameraPicker.isAvailable {
-                icon("拍照", "camera") { navigation.startCapture(.camera) }
-            }
-            icon("从相册选图", "photo.on.rectangle") { navigation.startCapture(.photos) }.padding(.trailing, 6)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func icon(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).foregroundStyle(palette.ink2).frame(width: 44, height: 44).contentShape(.rect)
-        }
-        .accessibilityLabel(label)
-    }
-}
-
-extension View {
-    /// 内容页（书架、项目、今天）底部浮着的玻璃随手记栏。只挂在这几页上，所以设置、回收站、搜索、任务、Pi 与打开的卡片上都没有它，
-    /// 不依赖系统版本（标签栏附件栏要 iOS 26.1 才能按页收起）。
-    func captureBar() -> some View {
-        safeAreaInset(edge: .bottom, spacing: 0) { FloatingCaptureBar() }
-    }
-}
-
-/// 随手记面板打开时收起，屏幕上任何时候只有一个输入处；也不随键盘上移（键盘是面板的）。
-private struct FloatingCaptureBar: View {
-    @Environment(Navigation.self) private var navigation
-
-    var body: some View {
-        if navigation.capture == nil {
-            CaptureBar()
-                .frame(maxWidth: 560).frame(height: 50)
-                .glass(in: .capsule, interactive: true)
-                .padding(.horizontal, 16).padding(.bottom, 8)
-                .ignoresSafeArea(.keyboard)
-        }
-    }
-}
-
-/// 随手记面板：文字 + 图片（相册、相机）存为卡片。位置默认来自打开它的页面，可以当场换。
-struct CaptureSheet: View {
-    let capture: Navigation.Capture
+/// 随手记输入框（书架、项目、今天页底部浮着的那一个）。平时一行，占位写明记成什么、落到哪；聚焦或有内容时展开：
+/// 想法 | 任务、落点项目、拍照、相册、记下。记下后收起并提示落点（点提示去那里）。文案与存法见 `CaptureCopy`、`CaptureDraft`。
+struct CaptureComposer: View {
+    /// 从外面打开随手记的请求（小组件、快捷键）：接住后定落点、聚焦或拍照选图，再交回 `consume` 清掉。
+    var request: Navigation.Capture?
+    var consume: () -> Void = {}
+    /// 一直展开（随手记面板里）。
+    var pinnedOpen = false
+    var onSaved: () -> Void = {}
     @Environment(Workspace.self) private var workspace
-    @Environment(\.dismiss) private var dismiss
+    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var text = ""
     @State private var images: [PickedImage] = []
-    @State private var project: UUID?
+    @State private var kind = CaptureKind.idea
+    /// 手动换过的落点；nil 时落在正在看的页面（项目页是该项目，其余未归档）。
+    @State private var chosen: UUID??
     @State private var picking: [PhotosPickerItem] = []
     @State private var showsPhotos = false
     @State private var showsCamera = false
     @State private var saving = false
     @FocusState private var focused: Bool
 
-    private var draft: CaptureDraft { CaptureDraft(text: text, images: images.map(\.data)) }
+    private var draft: CaptureDraft { CaptureDraft(text: text, images: images.map(\.data), kind: kind) }
+    private var project: UUID? { chosen ?? navigation.captureProject }
+    private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project), kind: kind) }
+    private var expanded: Bool { pinnedOpen || focused || !text.isEmpty || !images.isEmpty }
 
     var body: some View {
-        NavigationStack {
-            // 面板本身就是一张纸：不再套输入框，正文从顶部写到键盘上沿，记入位置与插图贴在键盘正上方
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    TextField("记下想法…", text: $text, axis: .vertical)
-                        .accessibilityLabel("记下想法")
-                        .font(.title3)
-                        .lineSpacing(4)
-                        .foregroundStyle(palette.ink)
-                        .focused($focused)
-                        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
-                    if !images.isEmpty { imageStrip }
-                }
-                .padding(.horizontal, 24).padding(.top, 8)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                HStack(spacing: 4) {
-                    destination
-                    Spacer(minLength: 0)
-                    if CameraPicker.isAvailable {
-                        Button("拍照", systemImage: "camera") { showsCamera = true }.frame(width: 44, height: 44)
+        VStack(alignment: .leading, spacing: 10) {
+            if expanded {
+                HStack(spacing: 8) {
+                    Picker("记成", selection: $kind) {
+                        ForEach(CaptureKind.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
-                    Button("相册", systemImage: "photo.on.rectangle") { showsPhotos = true }.frame(width: 44, height: 44)
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    Spacer(minLength: 8)
+                    destinationMenu
                 }
-                .labelStyle(.iconOnly)
-                .font(.title3)
-                .foregroundStyle(palette.ink2)
-                .buttonStyle(.borderless)
-                .padding(.horizontal, 16).padding(.vertical, 4)
-                .background(palette.paper)
-                .overlay(alignment: .top) { Rectangle().fill(palette.hair).frame(height: 1) }
+                .transition(.opacity)
+                if kind == .idea, !images.isEmpty { imageStrip }
             }
-            .background(palette.paper)
-            .navigationTitle("随手记")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消", role: .cancel) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("存为卡片", action: save)
-                        .keyboardShortcut(.return, modifiers: .command)
+            HStack(alignment: .bottom, spacing: 4) {
+                if !expanded {
+                    Image(systemName: "square.and.pencil").foregroundStyle(palette.ink2).padding(.leading, 16).padding(.bottom, 15)
+                        .accessibilityHidden(true)
+                }
+                TextField(CaptureCopy.placeholder(kind, to: destination), text: $text, axis: .vertical)
+                    .lineLimit(expanded ? 1...6 : 1...1)
+                    .focused($focused)
+                    .accessibilityLabel("随手记")
+                    .padding(.leading, expanded ? 12 : 4).padding(.vertical, 14)
+                if expanded {
+                    if kind == .idea {
+                        if CameraPicker.isAvailable { icon("拍照", "camera") { showsCamera = true } }
+                        icon("从相册选图", "photo.on.rectangle") { showsPhotos = true }
+                    }
+                    Button(action: save) { SaveGlyph(enabled: !draft.isEmpty && !saving) }
+                        .buttonStyle(.plain)
                         .disabled(draft.isEmpty || saving)
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .accessibilityLabel("记下")
+                        .padding(.trailing, 2)
                 }
             }
+            .background(expanded ? palette.paper : .clear, in: .rect(cornerRadius: 20, style: .continuous))
         }
-        .presentationBackground(palette.paper)
-        .presentationDetents([.large])
-        .interactiveDismissDisabled(!draft.isEmpty)
+        .padding(expanded ? 8 : 0)
+        .glass(in: .rect(cornerRadius: 25), interactive: !expanded)
+        .animation(Motion.quick, value: expanded)
+        .animation(Motion.quick, value: kind)
+        .background {
+            // ⌘⇧N：聚焦随手记
+            Button("随手记") { focused = true }.keyboardShortcut("n", modifiers: [.command, .shift]).hidden()
+        }
         .photosPicker(isPresented: $showsPhotos, selection: $picking, maxSelectionCount: 9, matching: .images)
         .fullScreenCover(isPresented: $showsCamera) {
             CameraPicker { data in images.append(PickedImage(data: data)) }.ignoresSafeArea()
         }
         .onChange(of: picking) { load() }
-        .onAppear {
-            project = capture.project
-            switch capture.start {
-            case .text: focused = true
-            case .camera: showsCamera = CameraPicker.isAvailable
-            case .photos: showsPhotos = true
-            }
+        .onChange(of: request?.id, initial: true) {
+            guard let request else { return }
+            begin(request)
+            consume()
         }
+    }
+
+    /// 从外面打开（小组件、快捷键、相机或相册入口）：定落点，聚焦或直接拍照、选图。
+    private func begin(_ capture: Navigation.Capture) {
+        chosen = .some(capture.project)
+        kind = .idea
+        switch capture.start {
+        // 接住请求时输入框可能还没进视图层级，下一轮再聚焦
+        case .text: Task { focused = true }
+        case .camera: showsCamera = CameraPicker.isAvailable
+        case .photos: showsPhotos = true
+        }
+    }
+
+    private var destinationMenu: some View {
+        Menu {
+            Button(kind == .idea ? CaptureCopy.inbox : "不归项目") { chosen = .some(nil) }
+            Divider()
+            ForEach(workspace.catalog?.projects ?? []) { item in Button(item.name) { chosen = .some(item.id) } }
+        } label: {
+            HStack(spacing: 6) {
+                Text("→").foregroundStyle(palette.ink3)
+                ProjectGlyph(project: workspace.catalog?.project(project), size: 13)
+                Text(destination).foregroundStyle(palette.ink).lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3).accessibilityHidden(true)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 10).frame(minHeight: 36)
+            .background(palette.paper, in: .capsule)
+        }
+        .accessibilityLabel("记到 \(destination)")
+    }
+
+    private func icon(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).foregroundStyle(palette.ink2).frame(width: 40, height: 44).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     private var imageStrip: some View {
@@ -167,14 +137,14 @@ struct CaptureSheet: View {
                 ForEach(images) { image in
                     ZStack(alignment: .topTrailing) {
                         image.preview.resizable().scaledToFill()
-                            .frame(width: 88, height: 88)
+                            .frame(width: 64, height: 64)
                             .clipShape(.rect(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(palette.hair))
                         Button {
                             withAnimation(Motion.quick) { images.removeAll { $0.id == image.id } }
                         } label: {
                             Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, .black.opacity(0.55)).font(.title3)
+                                .foregroundStyle(.white, .black.opacity(0.55)).font(.body)
                                 .frame(width: 44, height: 44, alignment: .topTrailing)
                         }
                         .accessibilityLabel("移除这张图片")
@@ -184,26 +154,6 @@ struct CaptureSheet: View {
             }
         }
     }
-
-    private var destination: some View {
-        Menu {
-            Button("未归档") { project = nil }
-            Divider()
-            ForEach(workspace.catalog?.projects ?? []) { item in Button(item.name) { project = item.id } }
-        } label: {
-            HStack(spacing: 6) {
-                Text("记入").foregroundStyle(palette.ink2)
-                ProjectGlyph(project: current, size: 13)
-                Text(current?.name ?? "未归档").foregroundStyle(palette.ink)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink2).accessibilityHidden(true)
-            }
-            .font(.subheadline)
-            .frame(minHeight: 44)
-        }
-        .accessibilityLabel("记入 \(current?.name ?? "未归档")")
-    }
-
-    private var current: Project? { workspace.catalog?.project(project) }
 
     private func load() {
         let items = picking
@@ -227,10 +177,64 @@ struct CaptureSheet: View {
         let draft = draft, project = project
         workspace.attempt {
             defer { saving = false }
-            _ = try await draft.save(in: project, workspace: workspace)
-            workspace.say(project == nil ? "已存进未归档" : "已存为卡片")
-            dismiss()
+            try await draft.save(in: project, workspace: workspace)
+            text = ""
+            images = []
+            chosen = nil
+            focused = false
+            onSaved()
         }
+    }
+}
+
+/// 记下钮：能记时墨色实心，不能记时淡（与回复框的发送钮同一个样子）。
+private struct SaveGlyph: View {
+    let enabled: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Image(systemName: "arrow.up").font(.callout.weight(.bold))
+            .foregroundStyle(enabled ? palette.paper : palette.ink3)
+            .frame(width: 34, height: 34)
+            .background(enabled ? palette.ink : palette.fill, in: .circle)
+            .frame(width: 44, height: 44)
+            .contentShape(.circle)
+    }
+}
+
+extension View {
+    /// 内容页（书架、项目、今天）底部浮着的随手记。只挂在这几页上，所以设置、回收站、搜索、任务、Pi 与打开的卡片上都没有它。
+    func captureBar() -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) { FloatingCaptureBar() }
+    }
+}
+
+/// 页面底部的随手记：报告自己在屏幕上（从外面打开随手记时就用它，不另弹面板），并接住外面的打开请求。
+private struct FloatingCaptureBar: View {
+    @Environment(Navigation.self) private var navigation
+
+    var body: some View {
+        CaptureComposer(request: navigation.capture) { navigation.capture = nil }
+            .frame(maxWidth: 560)
+            .padding(.horizontal, 16).padding(.bottom, 8)
+            .onAppear { navigation.captureBars += 1 }
+            .onDisappear { navigation.captureBars -= 1 }
+    }
+}
+
+/// 没有页面底部随手记时（在任务、Pi、设置、打开的卡片上从小组件或快捷键打开）弹出的面板，里面是同一个输入框。
+struct CaptureSheet: View {
+    let capture: Navigation.Capture
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack {
+            Spacer(minLength: 0)
+            CaptureComposer(request: capture, pinnedOpen: true) { dismiss() }.padding(16)
+        }
+        .presentationDetents([.medium])
+        .presentationBackground(palette.desk)
     }
 }
 

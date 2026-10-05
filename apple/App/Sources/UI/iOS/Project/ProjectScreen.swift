@@ -15,10 +15,10 @@ nonisolated private struct ProjectPage: Sendable {
     }
 }
 
-/// 项目页（nil = 未归档）：目标与下一步 → 工作集（置顶在前）→ 更早。与 Mac 同一套上墙规则。
+/// 项目页：目标与下一步 → 工作集（置顶在前）→ 更早。与 Mac 同一套上墙规则。
 /// 整页是一个懒加载列表：大项目只创建屏幕内的卡与行。
 struct ProjectScreen: View {
-    let projectID: UUID?
+    let projectID: UUID
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
@@ -28,7 +28,7 @@ struct ProjectScreen: View {
     @State private var page: ProjectPage?
     @State private var expanded: Set<OlderGroup.Period> = []
     @State private var board = WallBoard()
-    @State private var sessions: [PiSessionState]?
+    @State private var pi: PiSessionList?
 
     var body: some View {
         ScrollView {
@@ -55,20 +55,19 @@ struct ProjectScreen: View {
         .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
-        .observing(services.store, [.piSessionStates], id: projectID, into: $sessions) { [projectID] store in
-            guard let projectID else { return [] }
-            return try store.piSessionPage(PiSessionQuery(project: projectID)).items.map(\.state)
+        .observing(services.store, [.piSessionStates, .projects], id: projectID, into: $pi, onError: workspace.fail) { [projectID] store in
+            try PiSessionList.read(text: "", project: projectID, historyLimit: FocusCard.endedShown, from: store)
         }
         .onChange(of: page?.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
-        .onChange(of: project == nil) { _, gone in if gone, projectID != nil { navigation.pop(projectID) } }
+        .onChange(of: project == nil) { _, gone in if gone { navigation.pop(projectID) } }
     }
 
     @ViewBuilder
     private func content(_ page: ProjectPage, _ arrangement: WallArrangement) -> some View {
         let data = page.data, lastTarget = data.lastTarget
         LazyVStack(alignment: .leading, spacing: 12) {
-            if data.project != nil { FocusCard(data: data, sessions: sessions ?? []).padding(.bottom, 12) }
+            if data.project != nil { FocusCard(data: data, pi: pi).padding(.bottom, 12) }
             if data.cards.isEmpty {
                 ContentUnavailableView {
                     Label("还没有卡片", systemImage: "square.on.square.dashed")
@@ -114,12 +113,12 @@ struct ProjectScreen: View {
     private var project: Project? { workspace.catalog?.project(projectID) }
 
     private var title: String {
-        projectID == nil ? "未归档" : project?.name ?? ""
+        project?.name ?? ""
     }
 
     private var subtitle: String {
         let catalog = workspace.catalog
-        let directory = projectID.flatMap { catalog?.directories[$0] }.map(Self.homeRelative)
+        let directory = catalog?.directories[projectID].map(Self.homeRelative)
         let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 张卡片" : nil }
         return [directory, count].compactMap { $0 }.joined(separator: " · ")
     }
@@ -170,16 +169,18 @@ struct ProjectScreen: View {
     }
 }
 
-/// 目标与下一步：目标卡 + 本项目未完成任务（最多 3 条，其余在任务页）+ 本项目的 Pi 会话。
+/// 目标与下一步：目标卡 + 本项目未完成任务（最多 3 条，其余在任务页）+ 本项目的 Pi 会话（在线的全列，
+/// 再加最近结束的几个；更多的点"全部"看这个项目的 Pi 列表）。会话点开看近况、回复。
 /// 没有目标卡时只有下一步；什么都没有时是一行"添加任务"。
 private struct FocusCard: View {
     let data: ProjectPageData
-    let sessions: [PiSessionState]
+    let pi: PiSessionList?
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var editing: CueTask?
 
     private static let visibleTasks = 3
+    static let endedShown = 2
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -212,20 +213,16 @@ private struct FocusCard: View {
                 NewTaskLine(project: data.project?.id)
             }
             .animation(.easeOut(duration: 0.2), value: data.tasks.map(\.id))
-            if !sessions.isEmpty {
+            if let pi, !pi.isEmpty, let project = data.project {
                 Divider()
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(text: "Pi", systemImage: "terminal")
-                    ForEach(sessions) { session in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            PiStateDot(state: session.state, size: 7)
-                            Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
-                            PiActivityLine(lead: [session.state.label], detail: session.detail, detailIsCode: session.detailIsCode, font: .subheadline)
-                                .foregroundStyle(palette.ink2)
-                            Spacer(minLength: 4)
-                            PiElapsed(session: session)
-                        }
-                        .accessibilityElement(children: .combine)
+                VStack(alignment: .leading, spacing: 2) {
+                    SectionLabel(text: "Pi", systemImage: "waveform.path.ecg").padding(.bottom, 6)
+                    ForEach(pi.now + pi.ended) { item in sessionLine(item.state) }
+                    let all = pi.now.count + pi.total
+                    if all > pi.now.count + pi.ended.count {
+                        Button("全部 \(all) 个会话") { navigation.push(.projectSessions(project.id)) }
+                            .font(.subheadline).foregroundStyle(palette.ink3)
+                            .frame(minHeight: 44)
                     }
                 }
             }
@@ -233,6 +230,25 @@ private struct FocusCard: View {
         .padding(16)
         .paper(radius: 18)
         .sheet(item: $editing) { TaskEditSheet(task: $0) }
+    }
+
+    private func sessionLine(_ session: PiSessionState) -> some View {
+        Button { navigation.push(.session(session.id)) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                PiStateDot(state: session.state, size: 7)
+                Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
+                PiActivityLine(lead: [session.state.label], detail: session.detail, detailIsCode: session.detailIsCode, font: .subheadline)
+                    .foregroundStyle(session.state == .known(.waitingForUser) ? palette.attention : palette.ink2)
+                Spacer(minLength: 4)
+                PiElapsed(session: session)
+            }
+            .frame(minHeight: 36)
+            .opacity(session.state == .known(.ended) ? 0.6 : 1)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("看近况、回复")
     }
 }
 #endif

@@ -4,12 +4,14 @@ import CueText
 import SwiftUI
 import UIKit
 
-/// 对编辑器的操作口：插入图片、取当前正文。
+/// 对编辑器的操作口：插入图片、取当前正文与选中部分。
 @MainActor
 final class IOSEditorHandle {
     fileprivate weak var view: CueTextView?
 
     var text: String? { view?.storedText }
+    /// 选中部分的存储格式；没选中为 nil。
+    var selection: String? { view?.selectedStoredText }
     func insertImage(_ data: Data) { view?.insertImage(data: data) }
 }
 
@@ -17,13 +19,12 @@ final class IOSEditorHandle {
 struct IOSEditorHost: UIViewRepresentable {
     let initialText: String
     let theme: CueEditorTheme
-    let numbering: CueNumbering
     let handle: IOSEditorHandle
     let onChange: (String) -> Void
     let onInsertImage: () -> Void
     let onVariables: () -> Void
     let onSend: () -> Void
-    var onBlockAction: (CueBlockAction) -> Void = { _ in }
+    var selectionActions: [CueSelectionAction] = []
     var onError: (any Error) -> Void = { _ in }
     @Environment(AppServices.self) private var services
 
@@ -32,28 +33,34 @@ struct IOSEditorHost: UIViewRepresentable {
     func makeUIView(context: Context) -> CueTextView {
         let view = CueTextView(imageStore: services.images, theme: theme)
         view.storedText = initialText
-        view.numbering = numbering
         view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator)
         view.accessibilityLabel = "卡片正文"
         handle.view = view
         // 新建的空卡直接进入输入
         if initialText.isEmpty { DispatchQueue.main.async { view.becomeFirstResponder() } }
+        #if DEBUG
+        if let range = DebugScene.editorSelection {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                view.becomeFirstResponder()
+                view.selectedRange = range
+            }
+        }
+        #endif
         return view
     }
 
     func updateUIView(_ view: CueTextView, context: Context) {
         view.onChange = onChange
-        view.onBlockAction = onBlockAction
+        view.selectionActions = selectionActions
         view.onError = onError
         context.coordinator.send = onSend
         context.coordinator.insertImage = onInsertImage
         context.coordinator.variables = onVariables
-        if view.numbering != numbering { view.numbering = numbering }
         if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset { view.theme = theme }
     }
 }
 
-/// 键盘上方的工具栏：分块、插图、变量取值、收起键盘、发送。
+/// 键盘上方的工具栏：分割线、插图、变量取值、收起键盘、发送（选中文字时只发选中的部分）。
 final class KeyboardBar: UIToolbar {
     /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）：插图与变量由外部弹出选择器与面板。
     @MainActor final class Actions {
@@ -75,7 +82,7 @@ final class KeyboardBar: UIToolbar {
         let send = item("发到 Mac", "paperplane.fill") { _ in actions.send() }
         send.style = .prominent
         items = [
-            item("分块", "rectangle.split.1x2") { $0.insertSplit() },
+            item("插入分割线", "minus") { $0.insertDivider() },
             item("插入图片", "photo") { _ in actions.insertImage() },
             item("变量取值", "curlybraces") { _ in actions.variables() },
             .flexibleSpace(),

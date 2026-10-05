@@ -131,7 +131,7 @@ extension Workspace {
     }
 
     /// 发出去过的目标就是用户在用的目标：记住它，会话结束后按钮写"已结束"、重新打开时接回，不再按默认规则悄悄换掉。
-    /// 复制到剪贴板（右键"复制"、分块复制）不算换目标。
+    /// 复制到剪贴板（右键"复制"、编辑器里的"复制整张"）不算换目标。
     private func remember(_ choice: AppServices.Destination) {
         if choice != .clipboard { sendChoice = choice }
     }

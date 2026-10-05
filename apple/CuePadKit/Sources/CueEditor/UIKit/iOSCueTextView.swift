@@ -4,17 +4,21 @@ import UIKit
 import UniformTypeIdentifiers
 
 /// TextKit 2 编辑器（iOS/iPadOS 薄宿主）。正文的唯一事实源是 `storedText`（存储格式字符串）：
-/// 图片与分隔线在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化。
+/// 图片与分割线在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化。
 /// 全程不得访问 `UITextView.layoutManager`：一次访问就会把视图永久降级到 TextKit 1。
 @MainActor
 public final class CueTextView: UITextView, CueEditorHost {
     public let imageStore: any CueImageStore
     /// 设计基准样式；字号会按系统字号档位（Dynamic Type）缩放后使用。
     public var theme: CueEditorTheme { didSet { applyTheme() } }
-    public var numbering: CueNumbering = .none { didSet { core.refreshDividerLabels() } }
     /// 用户编辑后的新正文；程序设置 `storedText` 与输入法组合期间不触发。
     public var onChange: ((String) -> Void)?
-    public var onBlockAction: ((CueBlockAction) -> Void)?
+    /// 有没有选中文字变了（编辑器外的"发送选中""转为任务"据此出现）。
+    public var onSelectionChange: ((Bool) -> Void)?
+    /// 选中部分的存储格式；没选中为 nil。
+    public var selectedStoredText: String? { core.stored(in: selectedRange) }
+    /// 选中文字时编辑菜单里排在系统项前面的动作。
+    public var selectionActions: [CueSelectionAction] = []
     /// 图片入库失败（磁盘满、文件不可读）。失败的图片不会插入。
     public var onError: ((any Error) -> Void)?
 
@@ -22,8 +26,11 @@ public final class CueTextView: UITextView, CueEditorHost {
     var pasteboard: UIPasteboard = .general
     private(set) var core: EditorCore!
     private var isLoading = false
+    /// 上次报告的"有没有选区"，只在变化时再报。
+    var reportedSelection = false
     private var observers: [any NSObjectProtocol] = []
     private var transferDelegate: TransferDelegate?
+    private var menuDelegate: MenuDelegate?
 
     public init(imageStore: any CueImageStore, theme: CueEditorTheme = .neutral) {
         self.imageStore = imageStore
@@ -36,6 +43,9 @@ public final class CueTextView: UITextView, CueEditorHost {
         pasteDelegate = transfer
         textDropDelegate = transfer
         textDragDelegate = transfer
+        let menu = MenuDelegate()
+        menuDelegate = menu
+        delegate = menu
         configure()
         applyTheme()
         observe()
@@ -133,6 +143,20 @@ public final class CueTextView: UITextView, CueEditorHost {
     func layoutDidAdvance() { core.layout.textViewportLayoutController.layoutViewport() }
     func needsRelayout() { setNeedsLayout() }
     var displayScale: CGFloat { traitCollection.displayScale }
-    func blockActionRequested(_ action: CueBlockAction) { onBlockAction?(action) }
+}
+
+/// 编辑菜单加上外部提供的选区动作；选区变化（含手势）报告给宿主。
+private final class MenuDelegate: NSObject, UITextViewDelegate {
+    func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        guard let view = textView as? CueTextView, let stored = view.selectedStoredText, !view.selectionActions.isEmpty else { return nil }
+        let custom = view.selectionActions.map { action in
+            UIAction(title: action.title, image: UIImage(systemName: action.systemImage)) { _ in action.perform(stored) }
+        }
+        return UIMenu(children: custom + suggestedActions)
+    }
+
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        (textView as? CueTextView)?.reportSelection()
+    }
 }
 #endif

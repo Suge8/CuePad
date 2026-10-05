@@ -33,7 +33,7 @@ public struct CueLineStyle: Equatable, Sendable {
 /// 一份运行时正文的装饰上下文：标题位置与围栏位置是全文性质，逐行样式据此判定。
 /// 范围：`^#{1,6}\s`、`^\s*-\s`、顶格 ``` 围栏，另加有序列表、行内 code 与标题行。
 public struct CueDecorations: Sendable {
-    /// 标题行（`CueSegments.isTitleLine`）的行首偏移；没有则为 nil。
+    /// 标题行（`CueLines.isTitleLine`）的行首偏移；没有则为 nil。
     public let titleLocation: Int?
     /// 顶格 ``` 围栏行的数量。奇数说明有围栏未闭合，其后的行都是代码。
     public var fenceCount: Int { fences.count }
@@ -61,13 +61,13 @@ public struct CueDecorations: Sendable {
 
     // MARK: 全文性质
 
-    /// 标题行的判定只有一处：`CueSegments.isTitleLine`。
+    /// 标题行的判定只有一处：`CueLines.isTitleLine`。
     private static func titleLocation(in buffer: CueBuffer) -> Int? {
         var location = 0
         while location <= buffer.length {
             let line = buffer.line(at: location)
             let text = buffer.text.substring(with: NSRange(location: line.start, length: line.end - line.start))
-            if CueSegments.isTitleLine(text) { return line.start }
+            if CueLines.isTitleLine(text) { return line.start }
             location = line.end + 1
         }
         return nil

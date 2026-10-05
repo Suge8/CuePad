@@ -45,7 +45,7 @@ extension CueTextView {
                 }
             }
         } else if provider.canLoadObject(ofClass: NSString.self) {
-            // 文本一律按存储格式解析：分隔线行与图片标记还原成控件
+            // 文本一律按存储格式解析：分割线行与图片标记还原成附件
             _ = provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
                 nonisolated(unsafe) let item = item
                 let text = object as? String

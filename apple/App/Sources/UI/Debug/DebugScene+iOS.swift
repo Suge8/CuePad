@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS 画面：project、older、today、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// iOS 画面：project、older、today、inbox、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
 /// taskedit：任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
@@ -59,6 +59,7 @@ extension DebugScene {
             if let project { open(.project(project)) }
             navigation.sidebar = .all
         case "today": open(.today)
+        case "inbox": open(.inbox)
         case "trash": open(.trash)
         case "settings": open(.settings)
         case "editor": await openCard()
@@ -103,7 +104,9 @@ extension DebugScene {
             // iPhone：书架（给了项目则是该项目页）的下拉搜索在出现时自己聚焦，见 CardSearch
             if split { navigation.select(.search) } else if let project { open(.project(project)) }
         case "capture":
+            // 等推入的项目页把它的随手记放上屏幕，再像点了它一样打开
             if let project { open(.project(project)) }
+            try? await Task.sleep(for: .seconds(1))
             navigation.startCapture()
         default:
             if let project, split { open(.project(project)) }
@@ -145,13 +148,16 @@ extension DebugScene {
             ("notes-edit", .waitingForUser, "编辑提交说明", nil, PiRecap(
                 lastPrompt: "写一段提交说明",
                 question: PiQuestion(promptID: nil, kind: .unknown("editor"), text: "编辑提交说明\n在编辑器里改好后保存"))),
+            ("rename", .waitingForUser, "新分支叫什么？", "CuePad", PiRecap(
+                lastPrompt: "把这批改动挪到新分支上",
+                question: PiQuestion(promptID: "demo-text", kind: .text, text: "新分支叫什么？"))),
             ("deploy", .waitingForUser, "部署到生产吗？", nil, PiRecap(
                 lastPrompt: "测试都过了就部署",
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
             ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, PiRecap(lastPrompt: "让子代理分头审查这两个分支")),
             ("billing", .error, "模型拒绝了请求（400）：prompt is too long", nil, PiRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
             ("notes", .settled, nil, nil, PiRecap(
-                lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 notes/2026-W40.md。三件待办：续费域名、评审计费额度、补 scheduler 测试。")),
+                lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),
             ("piwork", .settled, nil, nil, PiRecap(
                 lastPrompt: "列出 piwork 目录下的文件", lastReply: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md")),
         ]
@@ -169,6 +175,16 @@ extension DebugScene {
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), recap: recap)
         }
         try? await recorder.end(sessionID: "piwork")
+        // 没归类的想法：书架顶上提醒去整理
+        for body in ["周末读完《设计心理学》第三章", "菜单栏面板能不能直接拖图进来？", "给落地页换一张首图"] {
+            _ = try? await store.createCard(in: nil, body: body)
+        }
+        // 后台托管、带两个子代理的会话
+        try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
+            PiSubagentState(name: "计费额度", activity: .known(.working)),
+            PiSubagentState(name: "登录回调", activity: .known(.waitingForUser)),
+            PiSubagentState(name: "文档", activity: .known(.idle)),
+        ])
         if let table = project("圆桌"), let goal = try? await store.cards(in: table).first(where: { $0.body.hasPrefix("目标") }) {
             try? await store.setGoal(goal.id, for: table)
         }
@@ -187,6 +203,10 @@ extension DebugScene {
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
             _ = try? await services.requestMacDelivery("评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: atlas, mode: .followUp)
+        }
+        if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
+            // 发给已结束的会话：Mac 先在后台唤醒它
+            _ = try? await services.requestMacDelivery("标题再短一点", to: landing, mode: .send)
         }
         if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
             _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)

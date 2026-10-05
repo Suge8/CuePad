@@ -4,13 +4,15 @@ import CueEditor
 import CueText
 import SwiftUI
 
-/// 对编辑器的操作口：底部操作栏经它切块、取当前正文。
+/// 对编辑器的操作口：底部操作栏经它插分割线、取当前正文与选中部分。
 @MainActor
 final class EditorHandle {
     fileprivate weak var view: CueEditorView?
 
     var text: String? { view?.textView.storedText }
-    func insertSplit() { view?.textView.insertSplit() }
+    /// 选中部分的存储格式；没选中为 nil。
+    var selection: String? { view?.textView.selectedStoredText }
+    func insertDivider() { view?.textView.insertDivider() }
     func focus() { view.map { $0.window?.makeFirstResponder($0.textView) } }
 }
 
@@ -19,28 +21,35 @@ final class EditorHandle {
 struct EditorHost: NSViewRepresentable {
     let initialText: String
     let theme: CueEditorTheme
-    let numbering: CueNumbering
     let handle: EditorHandle
     let onChange: (String) -> Void
-    var onBlockAction: (CueBlockAction) -> Void = { _ in }
+    var onSelectionChange: (Bool) -> Void = { _ in }
+    var selectionActions: [CueSelectionAction] = []
     var onError: (any Error) -> Void = { _ in }
     @Environment(AppServices.self) private var services
 
     func makeNSView(context: Context) -> CueEditorView {
         let view = CueEditorView(imageStore: services.images, theme: theme)
         view.textView.storedText = initialText
-        view.textView.numbering = numbering
         view.scrollerStyle = .overlay
         handle.view = view
+        #if DEBUG
+        if let range = DebugScene.editorSelection {
+            DispatchQueue.main.async {
+                view.window?.makeFirstResponder(view.textView)
+                view.textView.setSelectedRange(range)
+            }
+        }
+        #endif
         return view
     }
 
     func updateNSView(_ view: CueEditorView, context: Context) {
         let textView = view.textView
         textView.onChange = onChange
-        textView.onBlockAction = onBlockAction
+        textView.onSelectionChange = onSelectionChange
+        textView.selectionActions = selectionActions
         textView.onError = onError
-        if textView.numbering != numbering { textView.numbering = numbering }
         if !Self.sameLook(textView.theme, theme) { textView.theme = theme }
     }
 

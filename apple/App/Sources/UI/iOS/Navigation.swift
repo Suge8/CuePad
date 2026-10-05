@@ -29,6 +29,8 @@ final class Navigation {
         case settings
         case conflicts
         case activity
+        /// 一个项目的全部 Pi 会话（同 Pi 页，只列这个项目的）。
+        case projectSessions(UUID)
         case search
         case card(UUID)
         /// 一个 Pi 会话的近况与回复（`PiSessionState.id`）。
@@ -46,7 +48,7 @@ final class Navigation {
         var start: Start = .text
     }
 
-    /// 要发到 Mac 的一张卡或一条任务（存储格式，变量已填、编号已排）：先选会话，再在会话页里选方式发出。
+    /// 要发到 Mac 的一张卡或一条任务（存储格式，变量已填）：先选会话，再在会话页里选方式发出。
     struct Outbox: Identifiable {
         let id = UUID()
         var content: String
@@ -81,7 +83,10 @@ final class Navigation {
     var projectsPath: [Route] = []
     var tasksPath: [Route] = []
     var activityPath: [Route] = []
+    /// 打开随手记的请求：页面底部有随手记时由它接住（见 `captureBars`），否则弹出随手记面板。
     var capture: Capture?
+    /// 屏幕上页面底部随手记的个数。
+    var captureBars = 0
     var outbox: Outbox?
     var projectForm: ProjectForm?
     var newSession: NewSession?
@@ -220,6 +225,11 @@ final class Navigation {
     /// 打开随手记，记入当前位置。
     func startCapture(_ start: Capture.Start = .text) {
         capture = Capture(project: captureProject, start: start)
+    }
+
+    /// 打开未归档（iPhone 推入项目标签，iPad 选中侧栏）。
+    func showInbox() {
+        if layout == .split { select(.inbox) } else { tab = .projects; projectsPath = [.inbox] }
     }
 
     /// 打开项目页（iPhone 推入项目标签，iPad 选中侧栏）。
