@@ -3,7 +3,7 @@ import Foundation
 /// 表分两类。
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、tasks、sendRecords、attachments、piSessionStates、deliveryRequests。约束：
+/// projects、cards、tasks、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -18,7 +18,7 @@ import Foundation
 /// 同步表只能加表或加可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。
 enum Schema {
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；比它旧的按 `upgrades` 就地升级；比它新的是更新版本建的库，不打开。
-  static let version = 5
+  static let version = 6
 
   /// `upgrades[i]` 把结构版本 i + 1 升到 i + 2。新库直接用 `create`（已是最新结构）。
   static let upgrades = [
@@ -33,6 +33,14 @@ enum Schema {
     "ALTER TABLE piSessionStates ADD COLUMN busySince INTEGER;",
     // CuePad 发起的新会话带着发起方的标识，发起方据此认领
     "ALTER TABLE piSessionStates ADD COLUMN launchToken TEXT;",
+    // 历史会话上手机后几千条：界面按范围（在线/已结束）读；项目在哪台 Mac 上绑定了目录同步给手机
+    """
+    CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
+    CREATE TABLE directoryBindings (
+      id TEXT PRIMARY KEY NOT NULL, projectID TEXT NOT NULL, hostID TEXT NOT NULL, hostName TEXT NOT NULL,
+      folder TEXT NOT NULL, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    """,
   ]
 
   static let create = """
@@ -79,6 +87,13 @@ enum Schema {
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
+    CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
+
+    -- 项目在哪台 Mac 上绑定了代码目录：每个 (projectID, hostID) 一条，只有目录末段名（完整路径在本机表 projectDirectories）。
+    CREATE TABLE directoryBindings (
+      id TEXT PRIMARY KEY NOT NULL, projectID TEXT NOT NULL, hostID TEXT NOT NULL, hostName TEXT NOT NULL,
+      folder TEXT NOT NULL, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
 
     CREATE TABLE deliveryRequests (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,

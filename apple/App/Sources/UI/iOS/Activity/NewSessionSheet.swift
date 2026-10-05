@@ -33,7 +33,7 @@ struct NewSessionSheet: View {
                     if places.isEmpty {
                         ContentUnavailableView(
                             "还没有可以开会话的目录", systemImage: "folder",
-                            description: Text("Mac 上跑过 pi，或项目的会话归入项目后，这里就有可选的目录"))
+                            description: Text("在 Mac 上给项目绑定代码目录，或在 Mac 上跑过 pi 后，这里就有可选的目录"))
                             .listRowBackground(Color.clear)
                     } else {
                         form(places)
@@ -52,8 +52,8 @@ struct NewSessionSheet: View {
         }
         .interactiveDismissDisabled(inFlight)
         .onAppear { if launched == nil { launched = start.launched } }
-        .observing(services.store, [.piSessionStates, .projects], into: $places, onError: workspace.fail) { store in
-            LaunchPlace.all(from: try store.piSessionPage(PiSessionQuery(limit: LaunchPlace.scanned)))
+        .observing(services.store, [.directoryBindings, .piSessionStates, .projects], into: $places, onError: workspace.fail) { store in
+            try LaunchPlace.all(from: store)
         }
         .observing(services.store, [.deliveryRequests, .piSessionStates], id: launched, into: $progress, onError: workspace.fail) {
             [launched] store in
@@ -92,7 +92,7 @@ struct NewSessionSheet: View {
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(place.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
-                    Text(place.project == nil ? "最近的会话在这里" : "项目的代码目录").font(.caption).foregroundStyle(palette.ink3)
+                    Text(place.detail).font(.caption).foregroundStyle(palette.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 if chosen?.id == place.id {
@@ -150,35 +150,42 @@ struct NewSessionSheet: View {
     }
 }
 
-/// 新会话可以开在哪：会话归入过的项目（Mac 按项目绑定的代码目录开；归入过说明那台 Mac 上绑定了），
-/// 以及没归入项目的会话最近用过的几个文件夹（与那个会话同一目录开，按文件夹名去重）。都取最近的在前，`hostID` 是那台 Mac。
+/// 新会话可以开在哪：绑定了代码目录的项目（每个项目 + Mac 一项，发给绑定它的那台 Mac；同一项目绑在几台 Mac 上时
+/// 写上 Mac 名让人选），以及没归入项目的会话最近用过的几个文件夹（与那个会话同一目录开、发给那个会话的 Mac，按文件夹名去重）。
 nonisolated struct LaunchPlace: Identifiable, Sendable, Equatable {
-    /// 从最近这么多个会话里找；文件夹最多列这么多个。
-    static let scanned = 100
+    /// 文件夹最多列这么多个，从最近这么多个已结束的会话里找。
     static let folderLimit = 5
+    static let scanned = 100
 
     let id: String
     let name: String
+    /// 名字下的一行：目录名，必要时加 Mac 名。
+    let detail: String
     let project: Project?
     let launch: PiLaunchPlace
     let hostID: String
 
-    static func all(from page: PiSessionPage) -> [LaunchPlace] {
-        let items = page.items.sorted { $0.state.stateSince > $1.state.stateSince }
-        var seen: Set<String> = []
-        var projects: [LaunchPlace] = []
-        var folders: [LaunchPlace] = []
-        for item in items {
-            if let project = item.project {
-                guard seen.insert(project.id.uuidString).inserted else { continue }
-                projects.append(LaunchPlace(
-                    id: project.id.uuidString, name: project.name, project: project, launch: .project(project.id), hostID: item.state.hostID))
-            } else if folders.count < folderLimit, let folder = item.state.folder, seen.insert("folder:" + folder).inserted {
-                folders.append(LaunchPlace(
-                    id: "folder:" + folder, name: folder, project: nil, launch: .besideSession(item.state.sessionID), hostID: item.state.hostID))
+    static func all(from store: isolated CueStore) throws -> [LaunchPlace] {
+        let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
+        let bindings = try store.directoryBindings().filter { projects[$0.projectID] != nil }
+        let macs = Dictionary(grouping: bindings, by: \.projectID).mapValues(\.count)
+        let bound = bindings
+            .sorted { (projects[$0.projectID]?.sortKey ?? "", $0.hostName) < (projects[$1.projectID]?.sortKey ?? "", $1.hostName) }
+            .map { binding in
+                LaunchPlace(
+                    id: binding.id.uuidString, name: projects[binding.projectID]?.name ?? binding.folder,
+                    detail: macs[binding.projectID, default: 0] > 1 ? "\(binding.folder) · \(binding.hostName)" : binding.folder,
+                    project: projects[binding.projectID], launch: .project(binding.projectID), hostID: binding.hostID)
             }
+        var seen: Set<String> = []
+        var folders: [LaunchPlace] = []
+        for item in try store.piSessionPage(PiSessionQuery(limit: scanned)).items where item.project == nil {
+            guard folders.count < folderLimit, let folder = item.state.folder, seen.insert(folder).inserted else { continue }
+            folders.append(LaunchPlace(
+                id: "folder:" + folder, name: folder, detail: "最近的会话在这里", project: nil,
+                launch: .besideSession(item.state.sessionID), hostID: item.state.hostID))
         }
-        return projects + folders
+        return bound + folders
     }
 }
 
@@ -188,11 +195,9 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
     var session: UUID?
 
     static func read(_ launched: Navigation.NewSession.Launched, from store: isolated CueStore) throws -> LaunchProgress {
-        // 新开的会话没结束、进入当前状态最晚，排在第一页最前面
-        let page = try store.piSessionPage(PiSessionQuery(limit: 20))
-        return LaunchProgress(
+        LaunchProgress(
             request: try store.deliveryRequest(launched.request),
-            session: page.items.first { $0.state.launchToken == launched.token }?.id)
+            session: try store.piSessionPage(PiSessionQuery(launchToken: launched.token)).items.first?.id)
     }
 }
 #endif

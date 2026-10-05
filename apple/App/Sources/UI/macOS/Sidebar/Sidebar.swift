@@ -72,9 +72,8 @@ struct Sidebar: View {
         .sheet(item: $renaming) { ProjectForm(project: $0) }
         .observing(services.store, [.projects, .cards, .piSessions, .piSessionStates, .projectDirectories], into: $data,
                    onError: workspace.fail) { [hostID = services.hostID] store in
-            let ended = try store.piSessionStates()
-                .filter { $0.hostID == hostID && $0.state == .known(.ended) }
-                .sorted { $0.stateSince > $1.stateSince }
+            let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, limit: Self.historyLimit * 2)).items.map(\.state)
+                .filter { $0.hostID == hostID }
             let history = try store.piSessions().prefix(Self.historyLimit * 2).map { row in
                 PiSessionState.history(row, hostID: hostID, projectID: try store.project(containing: URL(filePath: row.cwd))?.id)
             }

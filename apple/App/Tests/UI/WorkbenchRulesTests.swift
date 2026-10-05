@@ -161,7 +161,7 @@ struct PiPlaceTests {
         let store = app.services.store
         let recorder = PiStateRecorder(store: store, hostID: "mac")
         try await recorder.update(sessionID: "s1", state: .thinking, title: "修好登录", folder: "cuepad")
-        let state = try #require(try await store.piSessionStates().first)
+        let state = try #require(try await store.allPiSessionStates().first)
         #expect(state.projectID == nil)
         #expect(PiPlace.name(of: state, project: nil) == "cuepad")
 

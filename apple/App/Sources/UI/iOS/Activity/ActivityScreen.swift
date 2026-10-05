@@ -26,7 +26,7 @@ struct ActivityScreen: View {
                 if inPanel { panelHeader.padding(.bottom, 12) }
                 if !services.syncStatus.reachesMac { SyncHint(status: services.syncStatus).padding(.horizontal, 4).padding(.bottom, 12) }
                 if let list {
-                    if list.total == 0 {
+                    if list.isEmpty {
                         empty
                     } else {
                         if !list.now.isEmpty {
@@ -49,9 +49,9 @@ struct ActivityScreen: View {
                             }
                         }
                         if list.loaded < list.total {
-                            // 滑到这里才读下一页
+                            // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上时（下一页加进了上面的分组）接着读
                             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12)
-                                .onAppear { limit = list.loaded + PiSessionList.pageSize }
+                                .task(id: list.loaded) { limit = list.loaded + PiSessionList.pageSize }
                         }
                     }
                 }
@@ -62,6 +62,9 @@ struct ActivityScreen: View {
             .animation(Motion.quick, value: list?.now.map(\.state.state))
         }
         .scrollDismissesKeyboard(.immediately)
+        #if DEBUG
+        .defaultScrollAnchor(DebugScene.scene == "activity" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 ? .bottom : nil)
+        #endif
         .background(palette.desk)
         .bottomEdgeFade()
         .navigationTitle("Pi")
@@ -71,9 +74,9 @@ struct ActivityScreen: View {
         #if DEBUG
         .onAppear { if DebugScene.scene == "activity" { query = DebugScene.searchText } }
         #endif
-        .observing(services.store, [.piSessionStates, .projects], id: PiSessionQuery(text: query, limit: limit), into: $list,
+        .observing(services.store, [.piSessionStates, .projects], id: PiSessionList.Key(text: query, limit: limit), into: $list,
                    onError: workspace.fail) { [query, limit] store in
-            PiSessionList(try store.piSessionPage(PiSessionQuery(text: query, limit: limit)))
+            try PiSessionList.read(text: query, historyLimit: limit, from: store)
         }
     }
 
@@ -151,10 +154,15 @@ private struct SectionTitle: View {
     }
 }
 
-/// Pi 页读到的一段会话：没结束的（"现在"，按要你注意的先后）与已结束的（"历史"，按项目分组，组按最近结束的先后）。
-/// 查询把没结束的排在前面，所以"现在"总在第一页里。
+/// Pi 页读到的会话："现在"是全部在线的（不多，不分页），按要你注意的先后；"历史"是已结束的前 `loaded` 条，
+/// 按项目分组，组按最近结束的先后。两部分用同一个搜索词。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40
+
+    struct Key: Equatable {
+        var text: String
+        var limit: Int
+    }
 
     struct Group: Identifiable, Sendable, Equatable {
         let id: UUID?
@@ -167,13 +175,19 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     var loaded: Int
     var total: Int
 
-    init(_ page: PiSessionPage) {
-        let ended = page.items.filter { $0.state.state == .known(.ended) }
-        let live = page.items.filter { $0.state.state != .known(.ended) }
+    var isEmpty: Bool { now.isEmpty && total == 0 }
+
+    static func read(text: String, historyLimit: Int, from store: isolated CueStore) throws -> PiSessionList {
+        let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max)).items
+        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: historyLimit))
+        return PiSessionList(live: live, ended: ended)
+    }
+
+    init(live: [PiSessionListItem], ended: PiSessionPage) {
         let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state)).enumerated().map { ($1.id, $0) })
         now = live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }
         var groups: [Group] = []
-        for item in ended {
+        for item in ended.items {
             let key = item.project?.id
             if let index = groups.firstIndex(where: { $0.id == key }) {
                 groups[index].items.append(item)
@@ -182,8 +196,8 @@ nonisolated struct PiSessionList: Sendable, Equatable {
             }
         }
         history = groups
-        loaded = page.items.count
-        total = page.total
+        loaded = ended.items.count
+        total = ended.total
     }
 }
 
@@ -242,3 +256,4 @@ struct SyncHint: View {
     }
 }
 #endif
+

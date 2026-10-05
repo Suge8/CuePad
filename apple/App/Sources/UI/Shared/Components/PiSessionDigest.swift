@@ -10,7 +10,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var deliveries: [DeliveryRequest]
 
     static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {
-        let session = try store.piSessionStates().first { $0.id == id }
+        let session = try store.piSessionPage(PiSessionQuery(id: id)).items.first?.state
         let ref = session?.sessionID ?? sessionID
         return SessionDigest(
             session: session,

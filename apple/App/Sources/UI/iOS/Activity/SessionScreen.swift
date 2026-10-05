@@ -259,8 +259,7 @@ struct SessionPicker: View {
         }
         .presentationDetents([.medium, .large])
         .observing(services.store, [.piSessionStates], into: $sessions, onError: workspace.fail) { [project = outbox.project] store in
-            try store.piSessionStates()
-                .filter { $0.state != .known(.ended) }
+            try store.piSessionPage(.live).items.map(\.state)
                 .sorted { ($0.projectID == project && project != nil ? 1 : 0, $0.state.urgency) > ($1.projectID == project && project != nil ? 1 : 0, $1.state.urgency) }
         }
     }

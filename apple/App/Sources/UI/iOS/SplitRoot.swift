@@ -91,7 +91,7 @@ private struct PanelButtons: View {
         }
         .accessibilityValue((waiting ?? 0) > 0 ? "\(waiting ?? 0) 个会话等你确认" : "")
         .observing(services.store, [.piSessionStates], into: $waiting) {
-            try $0.piSessionStates().filter { $0.state == .known(.waitingForUser) }.count
+            try $0.piSessionPage(.live).items.filter { $0.state.state == .known(.waitingForUser) }.count
         }
     }
 }
@@ -170,7 +170,7 @@ private struct SplitSidebar: View {
             Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
         .observing(services.store, [.piSessionStates, .cards], id: today, into: $data, onError: workspace.fail) { [today] store in
-            let states = try store.piSessionStates()
+            let states = try store.piSessionPage(.live).items.map(\.state)
             return SidebarData(
                 pi: PiSessionState.byProject(states), waiting: states.filter { $0.state == .known(.waitingForUser) }.count,
                 today: try store.search(SearchQuery(modifiedIn: today...Date.now), limit: 0).totalCards)

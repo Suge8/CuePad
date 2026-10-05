@@ -18,7 +18,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .thinking, title: "secret title")
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "secret question")
 
-    let state = try #require(try await rig.store.piSessionStates().first)
+    let state = try #require(try await rig.store.allPiSessionStates().first)
     let record = RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: state.id.uuidString.lowercased())), zoneID: zone)
 
     #expect(record["notify"] as? String == "waitingForUser" && record.encryptedValues["notify"] == nil)
@@ -35,7 +35,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .waitingForUser)  // 置位，还没上传
     try await recorder.update(sessionID: "s1", state: .thinking)  // 继续工作
 
-    let id = try #require(try await rig.store.piSessionStates().first).id
+    let id = try #require(try await rig.store.allPiSessionStates().first).id
     let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
     #expect(record["notify"] == nil)
     #expect(record["state"] as? String == "thinking")
@@ -49,7 +49,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "要不要覆盖？")
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "要覆盖 a.txt 吗？")
 
-    let id = try #require(try await rig.store.piSessionStates().first).id
+    let id = try #require(try await rig.store.allPiSessionStates().first).id
     let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
     #expect(record["notify"] as? String == "waitingForUser")
     #expect(record.encryptedValues["detail"] as? String == "要覆盖 a.txt 吗？")
@@ -67,7 +67,7 @@ import Testing
     try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q2")
 
-    let id = try #require(try await rig.store.piSessionStates().first).id
+    let id = try #require(try await rig.store.allPiSessionStates().first).id
     let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
     #expect(record["notify"] == nil && record.encryptedValues["detail"] as? String == "q2")
   }
@@ -97,7 +97,7 @@ import Testing
     let question = PiQuestion(promptID: "p1", kind: .select, text: "要覆盖 public/feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
     try await recorder.update(sessionID: "s1", state: .waitingForUser, title: "homepage", recap: PiRecap(question: question))
 
-    let state = try #require(try await rig.store.piSessionStates().first)
+    let state = try #require(try await rig.store.allPiSessionStates().first)
     let record = RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: state.id.uuidString.lowercased())), zoneID: zone)
 
     let waiting = try #require(PiAlertText.content(for: record, kind: .waitingForUser))

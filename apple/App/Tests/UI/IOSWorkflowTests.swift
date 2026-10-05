@@ -13,7 +13,7 @@ struct IOSWorkflowTests {
 
     private func session(_ id: String, _ state: PiWorkState, host: String = "mac-a", detail: String? = nil) async throws -> PiSessionState {
         try await PiStateRecorder(store: store, hostID: host).update(sessionID: id, state: state, detail: detail, title: id)
-        return try #require(try await store.piSessionStates().first { $0.sessionID == id })
+        return try #require(try await store.allPiSessionStates().first { $0.sessionID == id })
     }
 
     // MARK: 发到 Mac
@@ -35,7 +35,7 @@ struct IOSWorkflowTests {
         let question = PiQuestion(promptID: "p-7", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
         try await PiStateRecorder(store: store, hostID: "mac-b").update(
             sessionID: "atlas", state: .waitingForUser, title: "atlas", recap: PiRecap(question: question))
-        let session = try #require(try await store.piSessionStates().first)
+        let session = try #require(try await store.allPiSessionStates().first)
 
         let request = try await app.services.answer(.option("覆盖"), to: session)
 
@@ -82,7 +82,7 @@ struct IOSWorkflowTests {
         _ = try await session("ask", .waitingForUser, detail: "要覆盖吗？")
         _ = try await session("broken", .error)
 
-        let ordered = PiSessionState.inListOrder(try await store.piSessionStates())
+        let ordered = PiSessionState.inListOrder(try await store.allPiSessionStates())
 
         #expect(ordered.map(\.sessionID) == ["ask", "broken", "busy", "idle", "done"])
     }

@@ -29,6 +29,8 @@ nonisolated enum SendError: Error, Equatable {
     case noCodeDirectory(String)
     /// 这台 Mac 上没有找到 Pi。
     case piNotInstalled
+    /// 要在里面启动 Pi 的目录不在了（被删或改名），附目录末段名。
+    case directoryMissing(String)
     /// 终端没能打开（附终端给的原因）。
     case terminalFailed(String)
 }
@@ -50,6 +52,7 @@ extension SendError: LocalizedError {
         case .piSessionNotOnThisMac: "这台 Mac 上找不到这个会话（会话文件可能已被删除）"
         case .noCodeDirectory(let project): "项目「\(project)」还没有绑定代码目录，不知道在哪开新会话"
         case .piNotInstalled: "这台 Mac 上没有找到 Pi"
+        case .directoryMissing(let folder): "目录不存在：\(folder)"
         case .terminalFailed(let reason): "终端没能打开：\(reason)"
         }
     }
