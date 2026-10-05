@@ -13,7 +13,7 @@ enum ScrollAnchor {
 /// - `-CuePadProject <名称>`：打开该项目；
 /// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor、search、tasks、trash、settings、menubar、projectform；
 ///   iOS 见 `DebugScene+iOS.swift`；
-/// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；
+/// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；`-CuePadSelect <起点:长度>`：编辑器载入后选中这一段（看选区操作）；
 /// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；
 /// - `-CuePadBench <sidebar|motion|resize|churn|perf|press>`（仅 Mac；perf 见 `PerfBench`，press 配 `-CuePadPressAt x,y` 连拍按压）：开合侧栏 10 次 / 存卡后开合纸页（都在结束后退出，给 Instruments 或连拍取帧）；
 ///   resize 在侧栏开合途中拉窄窗口后停住，给截图核对页宽；churn 边加卡边逐点拉宽窗口，查布局反馈环（结束后退出）；
@@ -28,6 +28,11 @@ enum DebugScene {
     static var defaults: UserDefaults { .standard }
     static var scene: String? { defaults.string(forKey: "CuePadScene") }
     static var searchText: String { defaults.string(forKey: "CuePadSearch") ?? "" }
+    /// 截图演示：编辑器载入后选中这一段（`起点:长度`，UTF-16）。
+    static var editorSelection: NSRange? {
+        guard let parts = defaults.string(forKey: "CuePadSelect")?.split(separator: ":").compactMap({ Int($0) }), parts.count == 2 else { return nil }
+        return NSRange(location: parts[0], length: parts[1])
+    }
     /// 挂上刻意的几何回写环（只给布局压力场景的检测器自检用）。
     static var injectsGeometryLoop: Bool { defaults.bool(forKey: "CuePadGeometryLoop") }
 
