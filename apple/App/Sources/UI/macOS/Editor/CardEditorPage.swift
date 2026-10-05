@@ -51,6 +51,8 @@ struct CardEditorPage: View {
     @State private var data: EditorData?
     @State private var initialText: String?
     @State private var liveText = ""
+    /// 编辑器里有没有选中文字：有时底栏的发送只发选中的部分，并多一个"转为任务"。
+    @State private var selecting = false
     @State private var handle = EditorHandle()
     @State private var autosave: Autosave?
     @State private var saveState = SaveState.idle
@@ -92,7 +94,7 @@ struct CardEditorPage: View {
             // 底栏不在纸上：提前挂好、不可见，随编辑器出现后淡入、关闭时先退
             if stage >= .bar, let data {
                 let shown = isOpen && editorShown
-                EditorBar(card: data.card, text: liveText, handle: handle).padding(.bottom, 16)
+                EditorBar(card: data.card, text: liveText, handle: handle, selecting: selecting).padding(.bottom, 16)
                     .opacity(shown ? 1 : 0)
                     .disabled(!shown)
                     .accessibilityHidden(!shown)
@@ -252,13 +254,13 @@ struct CardEditorPage: View {
         EditorHost(
             initialText: text,
             theme: .paper(palette),
-            numbering: data.card.numbering.known ?? .none,
             handle: handle,
             onChange: { next in
                 liveText = next
                 autosave?.changed(next)
             },
-            onBlockAction: blockAction,
+            onSelectionChange: { selecting = $0 },
+            selectionActions: selectionActions(data.card),
             onError: workspace.fail)
         .overlay(alignment: .bottom) {
             LinearGradient(colors: [palette.paper.opacity(0), palette.paper], startPoint: .top, endPoint: .bottom)
@@ -283,12 +285,17 @@ struct CardEditorPage: View {
             })
     }
 
-    /// 分隔线上的复制/发送与 ⌘⇧C：只作用于这一块。
-    private func blockAction(_ action: CueBlockAction) {
-        guard let card = data?.card else { return }
-        let text = CueVariables.fill(CueSegments.trim(action.text), values: card.variableValues)
-        let choice: AppServices.Destination = action.kind == .copy ? .clipboard : workspace.effectiveChoice(for: card.projectID)
-        Task { await workspace.send(text, via: choice, card: card.id) }
+    /// 右键菜单里的选区动作，与底栏同样的两件事。
+    private func selectionActions(_ card: Card) -> [CueSelectionAction] {
+        [
+            CueSelectionAction(title: "发送选中部分", systemImage: "paperplane") { stored in
+                let text = Outgoing.text(body: stored, values: card.variableValues)
+                Task { await workspace.send(text, via: workspace.effectiveChoice(for: card.projectID), card: card.id) }
+            },
+            CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
+                workspace.convertToTasks(stored, in: card.projectID)
+            },
+        ]
     }
 }
 
@@ -315,11 +322,12 @@ private enum SaveState: Equatable {
     }
 }
 
-/// 编辑页底部的玻璃操作栏。
+/// 编辑页底部的玻璃操作栏。选中文字时发送只发选中的部分，并多一个"转为任务"。
 private struct EditorBar: View {
     let card: Card
     let text: String
     let handle: EditorHandle
+    let selecting: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -328,11 +336,17 @@ private struct EditorBar: View {
         GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
                 HStack(spacing: 16) {
-                    Button("复制整张", systemImage: "doc.on.doc") { send(.clipboard) }
-                        .help("复制整张卡（变量已填、编号已排）")
-                    Button("分块", systemImage: "rectangle.split.1x2") { handle.insertSplit() }
-                        .help("在光标处分块（⇧↩）")
-                    NumberingMenu(card: card)
+                    Button("复制整张", systemImage: "doc.on.doc") { send(.clipboard, whole: true) }
+                        .help("复制整张卡（变量已填）")
+                    Button("插入分割线", systemImage: "minus") { handle.insertDivider() }
+                        .help("在光标处插入一条分割线")
+                    if selecting {
+                        Button("转为任务", systemImage: "checklist") {
+                            if let selection = handle.selection { workspace.convertToTasks(selection, in: card.projectID) }
+                        }
+                        .help("选中的每一行成为一个任务")
+                        .transition(.opacity)
+                    }
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(PressStyle(scale: 0.88))
@@ -340,45 +354,22 @@ private struct EditorBar: View {
                 .padding(.horizontal, 16).frame(height: 44)
                 .glass(in: .capsule, interactive: true)
                 if !names.isEmpty { VariablesChip(card: card, names: names) }
-                SendControl(project: card.projectID) { send($0) }
+                if selecting {
+                    Text("选中部分").font(.system(size: 12, weight: .medium)).foregroundStyle(palette.ink3)
+                        .transition(.opacity)
+                }
+                SendControl(project: card.projectID) { send($0, whole: false) }
             }
+            .animation(Motion.quick, value: selecting)
         }
     }
 
-    private func send(_ choice: AppServices.Destination) {
-        let body = handle.text ?? text
-        let outgoing = Outgoing.text(body: body, values: card.variableValues, numbering: card.numbering)
+    /// 发出去的正文：选中了就只发选中的部分（`whole` 时总是整张）。
+    private func send(_ choice: AppServices.Destination, whole: Bool) {
+        let body = (whole ? nil : handle.selection) ?? handle.text ?? text
+        let outgoing = Outgoing.text(body: body, values: card.variableValues)
         let id = card.id
         Task { await workspace.send(outgoing, via: choice, card: id) }
-    }
-}
-
-private struct NumberingMenu: View {
-    let card: Card
-    @Environment(Workspace.self) private var workspace
-
-    private static let options: [(CueNumbering, String)] = [(.none, "不编号"), (.decimal, "1 2 3"), (.alpha, "A B C"), (.cjk, "一 二 三")]
-
-    var body: some View {
-        Menu {
-            Picker("分块编号", selection: binding) {
-                ForEach(Self.options, id: \.0) { Text($0.1).tag($0.0) }
-            }
-            .pickerStyle(.inline)
-        } label: {
-            Image(systemName: card.numbering == .known(.none) ? "list.bullet" : "list.number")
-        }
-        .menuStyle(.button).menuIndicator(.hidden).fixedSize()
-        .help("分块编号：复制与发送时每块前加编号标题")
-        .accessibilityLabel("分块编号")
-        .accessibilityValue(Self.options.first { $0.0 == card.numbering.known }?.1 ?? "")
-    }
-
-    private var binding: Binding<CueNumbering> {
-        Binding(get: { card.numbering.known ?? .none }, set: { value in
-            let id = card.id
-            workspace.perform { try await $0.updateCard(id) { $0.numbering = .known(value) } }
-        })
     }
 }
 

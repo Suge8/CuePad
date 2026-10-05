@@ -37,44 +37,9 @@ struct CueFormatTests {
     }
 }
 
-@Suite("分段与复制排版")
-struct CueSegmentsTests {
-    private func texts(_ stored: String) -> [String] { CueSegments.parse(stored).map(\.text) }
+@Suite("标题与摘要")
+struct CueSummaryTests {
     private let split = CueFormat.splitMarker
-
-    @Test("无分隔线整篇一段并逐字保留；空文本得到一个空段")
-    func single() {
-        let text = "第一行\n\n  缩进行\t\n结尾"
-        #expect(texts(text) == [text])
-        #expect(texts("") == [""])
-    }
-
-    @Test("多个分隔线依次切分，分隔线行带空白仍算分隔")
-    func splitting() {
-        #expect(texts("a\n\(split)\nb\n  \(split)\t \nc") == ["a", "b", "c"])
-        #expect(texts("\(split)\n正文\n\(split)") == ["", "正文", ""])
-    }
-
-    @Test("非独占行、形近的标记不误切；段内空行与行尾空格保留")
-    func notSplit() {
-        let inline = "前缀 \(split)\n\(split) 后缀\nx\(split)x\n----split----\n---SPLIT---"
-        #expect(texts(inline) == [inline])
-        #expect(texts("开头\n\n  中间  \n\n\(split)\n\n结尾") == ["开头\n\n  中间  \n", "\n结尾"])
-    }
-
-    @Test("历史角色标记按分隔线切分")
-    func legacy() {
-        #expect(texts("背景\n---ask---\n问题\n---answer---\n回答") == ["背景", "问题", "回答"])
-        #expect(texts("---system---\n你是助手\n\(split)\n正文") == ["", "你是助手", "正文"])
-    }
-
-    @Test("编号标签", arguments: [
-        (CueNumbering.decimal, 0, "1"), (.alpha, 0, "A"), (.alpha, 25, "Z"), (.alpha, 26, "AA"),
-        (.cjk, 0, "一"), (.cjk, 9, "十"), (.cjk, 11, "十二"), (.cjk, 20, "二十一"), (.cjk, 98, "九十九"), (.cjk, 99, "100"), (.none, 0, ""),
-    ])
-    func labels(numbering: CueNumbering, index: Int, expected: String) {
-        #expect(numbering.label(forSegment: index) == expected)
-    }
 
     @Test("卡片标题只有一条规则：非空、不是分隔线、除图片外还有文字")
     func titleLine() {
@@ -84,7 +49,7 @@ struct CueSegmentsTests {
             ("![](cuepad://img/ab)", false), ("![](cuepad://img/ab) ![](cuepad://img/cd)", false),
             ("![](cuepad://img/ab) 说明", true), ("\u{FFFC}", false), ("\u{FFFC} 说明", true),
         ]
-        for (line, expected) in cases { #expect(CueSegments.isTitleLine(line) == expected, "\(line.debugDescription)") }
+        for (line, expected) in cases { #expect(CueLines.isTitleLine(line) == expected, "\(line.debugDescription)") }
     }
 
     @Test("卡片标题与摘要：标题是首个标题行并去掉 # 前缀，摘要是其后各标题行以空格连接", arguments: [
@@ -108,36 +73,15 @@ struct CueSegmentsTests {
 
     @Test("标题行文字：去掉图片引用，空白折成单个空格，跳过空行、分隔线、只有图片的行")
     func contentLines() {
-        #expect(CueSegments.contentLines("a ![](cuepad://img/ab) b\n\n![](cuepad://img/cd)\n---split---\n  第三行  \n") == ["a b", "第三行"])
-        #expect(CueSegments.contentLines("---ask---\n问题正文") == ["问题正文"])
-        #expect(CueSegments.contentLines("\n\(split)\n\n正文") == ["正文"])
-        #expect(CueSegments.contentLines("![](cuepad://img/ab)\n\n  周报 ![](cuepad://img/cd)  \n正文") == ["周报", "正文"])
-        #expect(CueSegments.contentLines("---ask---\n\n").isEmpty)
-        #expect(CueSegments.contentLines("![](cuepad://img/ab)").isEmpty)
-        #expect(CueSegments.contentLines("").isEmpty)
+        #expect(CueLines.contentLines("a ![](cuepad://img/ab) b\n\n![](cuepad://img/cd)\n---split---\n  第三行  \n") == ["a b", "第三行"])
+        #expect(CueLines.contentLines("---ask---\n问题正文") == ["问题正文"])
+        #expect(CueLines.contentLines("\n\(split)\n\n正文") == ["正文"])
+        #expect(CueLines.contentLines("![](cuepad://img/ab)\n\n  周报 ![](cuepad://img/cd)  \n正文") == ["周报", "正文"])
+        #expect(CueLines.contentLines("---ask---\n\n").isEmpty)
+        #expect(CueLines.contentLines("![](cuepad://img/ab)").isEmpty)
+        #expect(CueLines.contentLines("").isEmpty)
     }
 
-    @Test("trim 去首尾空行，保留段内空行与缩进")
-    func trim() {
-        #expect(CueSegments.trim("\n\n  a\n\n  b  \n\n") == "a\n\n  b")
-    }
-
-    @Test("复制排版", arguments: [
-        ("\n正文\n\n", CueNumbering.decimal, "正文"),
-        ("\n---split---\n  \n", .decimal, ""),
-        ("a\n---split---\nb", .decimal, "## 1\na\n\n## 2\nb"),
-        ("a\n---split---\nb", .alpha, "## A\na\n\n## B\nb"),
-        ("a\n---split---\nb", .none, "a\n\n---\n\nb"),
-        ("---ask---\n问一\n---answer---\n答一", .none, "问一\n\n---\n\n答一"),
-        ("---ask---\n问一\n---answer---\n答一", .decimal, "## 1\n问一\n\n## 2\n答一"),
-    ])
-    func format(stored: String, numbering: CueNumbering, expected: String) {
-        #expect(CueSegments.format(stored, numbering: numbering) == expected)
-    }
-}
-
-@Suite("变量")
-struct CueVariablesTests {
     @Test("提取变量名：去重、保留首次出现顺序；名称不含花括号与换行")
     func names() {
         #expect(CueVariables.names(in: "纯文本").isEmpty)

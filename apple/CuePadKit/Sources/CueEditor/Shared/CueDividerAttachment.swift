@@ -7,11 +7,9 @@ import AppKit
 import UIKit
 #endif
 
-/// 分隔线附件：不可编辑控件，自带编号标签与复制/发送按钮（视图 `CueDividerView` 是平台差异）。
+/// 分割线附件：独占一行、作为整体选中与删除的一条线（视图 `CueDividerView` 是平台差异）。
 final class CueDividerAttachment: NSTextAttachment {
     weak var core: EditorCore?
-    weak var view: CueDividerView?
-    var label = ""
 
     init() { super.init(data: nil, ofType: nil) }
     required init?(coder: NSCoder) { nil }
@@ -29,11 +27,7 @@ final class CueDividerAttachment: NSTextAttachment {
 final class CueDividerViewProvider: NSTextAttachmentViewProvider {
     override func loadView() {
         nonisolated(unsafe) let attachment = textAttachment as! CueDividerAttachment
-        view = MainActor.assumeIsolated {
-            let divider = CueDividerView(attachment: attachment)
-            attachment.view = divider
-            return divider
-        }
+        view = MainActor.assumeIsolated { CueDividerView(attachment: attachment) }
     }
 
     override func attachmentBounds(

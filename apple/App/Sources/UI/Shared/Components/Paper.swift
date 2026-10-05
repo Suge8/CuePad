@@ -61,7 +61,7 @@ struct BottomFade: View {
     }
 }
 
-/// 卡片上的元信息：时间、块数、发送目标，以及目标、浮回、置顶标记。Mac 用固定小字，iOS 随动态字体。
+/// 卡片上的元信息：时间、发送目标，以及目标、浮回、置顶标记。Mac 用固定小字，iOS 随动态字体。
 struct CardMeta: View {
     let card: Card
     let text: CardText
@@ -74,7 +74,6 @@ struct CardMeta: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(DateLabel.short(card.modifiedAt))
-            if text.blockCount > 1 { Text("\(text.blockCount) 块") }
             if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
             if isGoal { Image(systemName: "scope").help("项目目标").accessibilityLabel("项目目标") }

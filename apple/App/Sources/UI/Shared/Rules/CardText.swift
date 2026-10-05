@@ -6,7 +6,6 @@ nonisolated struct CardText: Equatable, Sendable {
     var title: String
     /// 标题之后的文字，供卡片与列表的摘要行。
     var preview: String
-    var blockCount: Int
     /// 正文里的图片哈希，按出现顺序。
     var images: [String]
 
@@ -14,7 +13,6 @@ nonisolated struct CardText: Equatable, Sendable {
         let summary = CueSummary(body)
         title = summary.title
         preview = summary.preview
-        blockCount = CueSegments.parse(body).filter { !CueSegments.trim($0.text).isEmpty }.count
         images = CueFormat.imageHashes(in: body)
     }
 }

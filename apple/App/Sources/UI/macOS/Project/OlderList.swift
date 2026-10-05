@@ -94,7 +94,6 @@ private struct OlderRow: View {
                 .font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(text.preview).font(.system(size: 13)).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)
-            if text.blockCount > 1 { Text("\(text.blockCount) 块") }
             if let lastTarget { SentMark(target: lastTarget) }
             Text(DateLabel.short(card.modifiedAt)).monospacedDigit().frame(width: 64, alignment: .trailing)
         }
