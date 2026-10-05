@@ -3,7 +3,7 @@ import CueText
 import SwiftUI
 
 /// 一个 Pi 会话的近况一次读取的数据：会话记录、它所在的项目、发给它的请求（先发的在前）。
-/// 会话记录没了（结束 7 天后删除）时 `session` 为 nil；`sessionID` 由调用方带上，发给它的请求照样读得到。
+/// 会话记录没了（Mac 上的会话文件被删）时 `session` 为 nil；`sessionID` 由调用方带上，发给它的请求照样读得到。
 nonisolated struct SessionDigest: Sendable, Equatable {
     var session: PiSessionState?
     var project: Project?
@@ -393,14 +393,19 @@ struct DeliveryRow: View {
         }
     }
 
-    /// 作答显示答了什么；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）。送不到 Mac 时也不给重发。
+    /// 作答显示答了什么；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）；继续会话、新会话不重发（再按一次那个按钮）。
+    /// 送不到 Mac 时也不给重发。
     private var title: String {
         if let answer = request.answer { return "答：\(answer.value.label)" }
+        if let launch = request.launch {
+            if case .start(_, let prompt?, _) = launch { return "新会话：\(prompt)" }
+            return request.mode == .known(.resume) ? "请 Mac 接着这个会话" : "开一个新会话"
+        }
         let title = CardText(request.content).title
         return title.isEmpty ? "图片" : title
     }
 
-    private var retryable: Bool { session != nil && request.answer == nil && workspace.services.reachesPiHost }
+    private var retryable: Bool { session != nil && request.answer == nil && request.launch == nil && workspace.services.reachesPiHost }
 
     /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
     private func retry() {

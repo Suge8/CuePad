@@ -4,8 +4,8 @@ import CueText
 import SwiftUI
 
 /// 一个 Pi 会话的近况（Pi 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里）：上面是近况，
-/// 底部是发过去的最新一条请求与回复框。
-/// 会话记录在页面打开期间被删掉（结束 7 天后）时，照样显示最后一次看到的近况，回复框换成说明。
+/// 底部是发过去的最新一条请求与回复框；已结束的会话（历史）底部换成"在 Mac 上继续"。
+/// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的近况，底部换成说明。
 struct SessionScreen: View {
     let id: UUID
     @Environment(Workspace.self) private var workspace
@@ -32,7 +32,7 @@ struct SessionScreen: View {
                 ContentUnavailableView {
                     Label("找不到这个会话", systemImage: "terminal")
                 } description: {
-                    Text("它可能已经结束很久，记录已经清掉了")
+                    Text("Mac 上这个会话的文件可能已经删掉了")
                 }
                 .padding(.top, 60)
             }
@@ -47,7 +47,11 @@ struct SessionScreen: View {
                 // 发出后最新一条就在回复框上方，长回答下也看得到送达情况
                 VStack(spacing: 8) {
                     DeliveryStack(deliveries: digest?.deliveries ?? [], session: alive ? session : nil)
-                    ReplyBar(session: session, alive: alive, draft: $draft)
+                    if alive {
+                        ReplyBar(session: session, draft: $draft)
+                    } else {
+                        ResumeBar(session: digest?.session, deliveries: digest?.deliveries ?? [])
+                    }
                 }
                 .padding(.horizontal, 8).padding(.bottom, 8)
                 .frame(maxWidth: Self.readingWidth)
@@ -70,10 +74,9 @@ private struct DigestKey: Equatable {
 
 /// 回复框：一个发送。Pi 空闲时直接发；正忙时发出的话等它做完再说，旁边一个"马上说"打断它。
 /// 输入框聚焦或带着卡片时露出要带上的卡片与同步提示。发出后清空，请求马上贴到它上方。回答弹窗在问题卡上，不在这里。
-/// 同步到不了 Mac、会话已结束时不能发，写明原因。
+/// 同步到不了 Mac 时不能发，写明原因。
 private struct ReplyBar: View {
     let session: PiSessionState
-    let alive: Bool
     @Binding var draft: Navigation.Outbox?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -99,37 +102,33 @@ private struct ReplyBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !alive {
-                Text("会话已结束，回复发不到它；在 Mac 的终端重新运行 pi 开新会话").font(.footnote).foregroundStyle(palette.ink3)
-            } else {
-                if focused || draft != nil, !reachable { SyncHint(status: services.syncStatus) }
-                if let draft { attachment(draft) }
-                HStack(alignment: .bottom, spacing: 8) {
-                    TextField(placeholder, text: $text, axis: .vertical)
-                        .lineLimit(1...5)
-                        .focused($focused)
-                        .accessibilityLabel("回复")
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(palette.paper, in: .rect(cornerRadius: 20, style: .continuous))
-                    if modes.count > 1, let interrupt = modes.last {
-                        Button("马上说") { send(interrupt) }
-                            .buttonStyle(.plain)
-                            .font(.subheadline.weight(.medium)).foregroundStyle(canSend ? palette.ink : palette.ink3)
-                            .padding(.horizontal, 12).frame(minHeight: 40)
-                            .background(palette.fill, in: .capsule)
-                            .disabled(!canSend)
-                            .accessibilityHint("打断它正在做的")
-                    }
-                    Button { if let mode = modes.first { send(mode) } } label: {
-                        Image(systemName: "arrow.up").font(.body.weight(.semibold))
-                            .frame(width: 40, height: 40)
-                    }
-                    .prominentButton()
-                    .clipShape(.circle)
-                    .disabled(!canSend)
-                    .accessibilityLabel(modes.first == .followUp ? "等它做完再说" : "发送")
-                    .sensoryFeedback(.success, trigger: sentCount)
+            if focused || draft != nil, !reachable { SyncHint(status: services.syncStatus) }
+            if let draft { attachment(draft) }
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .lineLimit(1...5)
+                    .focused($focused)
+                    .accessibilityLabel("回复")
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(palette.paper, in: .rect(cornerRadius: 20, style: .continuous))
+                if modes.count > 1, let interrupt = modes.last {
+                    Button("马上说") { send(interrupt) }
+                        .buttonStyle(.plain)
+                        .font(.subheadline.weight(.medium)).foregroundStyle(canSend ? palette.ink : palette.ink3)
+                        .padding(.horizontal, 12).frame(minHeight: 40)
+                        .background(palette.fill, in: .capsule)
+                        .disabled(!canSend)
+                        .accessibilityHint("打断它正在做的")
                 }
+                Button { if let mode = modes.first { send(mode) } } label: {
+                    Image(systemName: "arrow.up").font(.body.weight(.semibold))
+                        .frame(width: 40, height: 40)
+                }
+                .prominentButton()
+                .clipShape(.circle)
+                .disabled(!canSend)
+                .accessibilityLabel(modes.first == .followUp ? "等它做完再说" : "发送")
+                .sensoryFeedback(.success, trigger: sentCount)
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -178,6 +177,49 @@ private struct ReplyBar: View {
             draft = nil
             focused = false
             sentCount += 1
+        }
+    }
+}
+
+/// 已结束的会话：请 Mac 在终端里接着这个会话（Pi 的恢复会话）。请求与送达情况在上面的请求条里；
+/// Mac 开好后会话回到"现在"，这里换成回复框。记录已经没了时只写明原因。
+private struct ResumeBar: View {
+    let session: PiSessionState?
+    let deliveries: [DeliveryRequest]
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @State private var sending = false
+
+    /// 上一次请 Mac 继续还没结果：不重复发。
+    private var resuming: Bool { sending || deliveries.contains { $0.mode == .known(.resume) && $0.isOpen } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let session {
+                if !services.reachesPiHost { SyncHint(status: services.syncStatus) }
+                Button { resume(session) } label: {
+                    Label(resuming ? "正在请 Mac 继续…" : "在 Mac 上继续", systemImage: "play.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .prominentButton()
+                .disabled(resuming || !services.reachesPiHost)
+                .accessibilityHint("在 Mac 的终端里接着这个会话")
+            } else {
+                Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glass(in: .rect(cornerRadius: 24))
+    }
+
+    private func resume(_ session: PiSessionState) {
+        sending = true
+        workspace.attempt {
+            defer { sending = false }
+            _ = try await services.launch(.resume(sessionID: session.sessionID), title: session.title, on: session.hostID)
         }
     }
 }

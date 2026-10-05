@@ -10,7 +10,8 @@ import SwiftUI
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// searchkey：iPhone 停在任务页，1.5 秒后走 ⌘K（回到书架并聚焦下拉搜索）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
-/// iPad 上 tasks、activity 打开右侧面板。演示库另写入 Mac 同步来的 Pi 会话状态与一条发到 Mac 的请求。
+/// newsession：Pi 页上打开新会话面板；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
+/// iPad 上 tasks、activity 打开右侧面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
         dumpAccessibilityIfAsked()
@@ -81,6 +82,18 @@ extension DebugScene {
             guard let session = try? await workspace.services.store.piSessionStates().first(where: { $0.title == title }) else { break }
             if split { navigation.select(.activity) } else { navigation.tab = .activity }
             navigation.push(.session(session.id))
+        case "newsession":
+            if split { navigation.select(.activity) } else { navigation.tab = .activity }
+            var sheet = Navigation.NewSession()
+            if defaults.bool(forKey: "CuePadLaunch"),
+               let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
+                let token = UUID().uuidString
+                if let request = try? await workspace.services.launch(
+                    .start(.project(table), prompt: "看看 scheduler 的重连问题", token: token), title: "圆桌", on: "demo-mac") {
+                    sheet.launched = .init(request: request.id, token: token)
+                }
+            }
+            navigation.newSession = sheet
         case "activity":
             if let project { open(.project(project)) }
             if split { navigation.panel = .activity } else { navigation.tab = .activity }
@@ -103,7 +116,8 @@ extension DebugScene {
     /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。
     private static func seedRemote(_ services: AppServices) async {
         let store = services.store
-        guard (try? await store.piSessionStates().isEmpty) == true, let projects = try? await store.projects() else { return }
+        // 演示库的会话索引已写成历史；这里补的是在线会话，按其中一个认有没有写过
+        guard (try? await store.piSessionStates().contains { $0.sessionID == "atlas" }) == false, let projects = try? await store.projects() else { return }
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         let sessions: [(String, PiWorkState, String?, String?, PiRecap)] = [
@@ -128,6 +142,15 @@ extension DebugScene {
             ("piwork", .settled, nil, nil, PiRecap(
                 lastPrompt: "列出 piwork 目录下的文件", lastReply: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md")),
         ]
+        // 历史里再加两个带近况的：一个正在请 Mac 继续，一个不在项目里
+        let history: [(String, String?, PiRecap)] = [
+            ("landing-copy", "个人网站", PiRecap(lastPrompt: "把首页标题换成新文案", lastReply: "改好了，首页标题现在是「把想法写成卡片」。")),
+            ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Pi 页。")),
+        ]
+        for (id, name, recap) in history {
+            try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project), recap: recap)
+            try? await recorder.end(sessionID: id)
+        }
         for (id, state, detail, name, recap) in sessions {
             try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), recap: recap)
@@ -139,6 +162,9 @@ extension DebugScene {
         let states = (try? await store.piSessionStates()) ?? []
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
             _ = try? await services.requestMacDelivery("评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: atlas, mode: .followUp)
+        }
+        if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
+            _ = try? await services.launch(.resume(sessionID: landing.sessionID), title: landing.title, on: landing.hostID)
         }
         if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
             _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)
