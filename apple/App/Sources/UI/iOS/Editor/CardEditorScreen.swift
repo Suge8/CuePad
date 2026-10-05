@@ -78,7 +78,6 @@ struct CardEditorScreen: View {
                 IOSEditorHost(
                     initialText: initialText,
                     theme: .paper(palette, horizontalInset: inset),
-                    numbering: data.card.numbering.known ?? .none,
                     handle: handle,
                     onChange: { next in
                         liveText = next
@@ -87,7 +86,7 @@ struct CardEditorScreen: View {
                     onInsertImage: { pickingImage = true },
                     onVariables: { editingVariables = true },
                     onSend: sendToMac,
-                    onBlockAction: blockAction,
+                    selectionActions: selectionActions(data.card),
                     onError: workspace.fail)
             }
         }
@@ -123,7 +122,6 @@ struct CardEditorScreen: View {
             Menu("更多", systemImage: "ellipsis") {
                 if let card {
                     ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
-                    NumberingPicker(card: card)
                     Divider()
                     CardActions(card: card, inEditor: true)
                 }
@@ -132,14 +130,29 @@ struct CardEditorScreen: View {
         }
     }
 
+    /// 发到 Mac：选中了文字就只发选中的部分。
     private func sendToMac() {
         guard let card = data?.card else { return }
-        navigation.outbox = Navigation.Outbox(content: outgoing(card), card: card.id, project: card.projectID)
+        let body = handle.selection.map { Outgoing.text(body: $0, values: card.variableValues) } ?? outgoing(card)
+        navigation.outbox = Navigation.Outbox(content: body, card: card.id, project: card.projectID)
     }
 
-    /// 当前编辑中的正文（未保存的也算），变量已填、编号已排。
+    /// 编辑菜单里的选区动作。
+    private func selectionActions(_ card: Card) -> [CueSelectionAction] {
+        [
+            CueSelectionAction(title: "发到 Mac", systemImage: "paperplane") { stored in
+                let body = Outgoing.text(body: stored, values: card.variableValues)
+                navigation.outbox = Navigation.Outbox(content: body, card: card.id, project: card.projectID)
+            },
+            CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
+                workspace.convertToTasks(stored, in: card.projectID)
+            },
+        ]
+    }
+
+    /// 当前编辑中的整张正文（未保存的也算），变量已填。
     private func outgoing(_ card: Card) -> String {
-        Outgoing.text(body: handle.text ?? liveText, values: card.variableValues, numbering: card.numbering)
+        Outgoing.text(body: handle.text ?? liveText, values: card.variableValues)
     }
 
     private func copy(_ card: Card) {
@@ -147,15 +160,6 @@ struct CardEditorScreen: View {
         workspace.attempt {
             try await services.send(text, to: .clipboard, card: id)
             workspace.say("已复制")
-        }
-    }
-
-    private func blockAction(_ action: CueBlockAction) {
-        guard let card = data?.card else { return }
-        let text = CueVariables.fill(CueSegments.trim(action.text), values: card.variableValues), id = card.id
-        workspace.attempt {
-            try await services.send(text, to: .clipboard, card: id)
-            workspace.say("已复制这一块")
         }
     }
 
@@ -181,26 +185,6 @@ struct CardEditorScreen: View {
         self.autosave = autosave
         // 进入后台时由壳层等它落盘：之后 App 可能被系统结束，离开页面的 onDisappear 不会再来
         flushToken = services.addBackgroundFlush { await autosave.flush() }
-    }
-}
-
-/// 分块编号：复制、分享时每块前加编号标题。
-private struct NumberingPicker: View {
-    let card: Card
-    @Environment(Workspace.self) private var workspace
-
-    private static let options: [(CueNumbering, String)] = [(.none, "不编号"), (.decimal, "1 2 3"), (.alpha, "A B C"), (.cjk, "一 二 三")]
-
-    var body: some View {
-        Picker(selection: Binding(get: { card.numbering.known ?? .none }, set: { value in
-            let id = card.id
-            workspace.perform { try await $0.updateCard(id) { $0.numbering = .known(value) } }
-        })) {
-            ForEach(Self.options, id: \.0) { Text($0.1).tag($0.0) }
-        } label: {
-            Label("分块编号", systemImage: "list.number")
-        }
-        .pickerStyle(.menu)
     }
 }
 

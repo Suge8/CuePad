@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// Pi 分组标题旁的 +：在本机终端里开一个新会话；打开后关掉表单、打开新会话的详情。
+/// Pi 分组标题旁的 +：在本机后台开一个新会话；开好后关掉表单、打开新会话的详情。
 struct NewSessionButton: View {
     /// 侧栏读到的会话（取没绑项目的最近目录）。
     let recent: [PiSessionState]
@@ -15,7 +15,7 @@ struct NewSessionButton: View {
         Button("新会话", systemImage: "plus") { showing = true }
             .labelStyle(.iconOnly).buttonStyle(.borderless)
             .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            .help("在终端里开一个新的 Pi 会话")
+            .help("开一个新的 Pi 会话")
             .popover(isPresented: $showing, arrowEdge: .trailing) {
                 NewSessionForm(recent: recent) { id in
                     guard showing else { return sessionDetail?.open(id) ?? () }
@@ -69,9 +69,9 @@ private struct NewSessionForm: View {
 
     private enum Stage: Equatable {
         case idle
-        /// 请求发出，等这台 Mac 打开终端。
+        /// 请求发出，等这台 Mac 启动 Pi。
         case opening
-        /// 终端已打开，等 Pi 连上（连上后表单关掉、打开新会话）。
+        /// Pi 已启动，等它连上（连上后表单关掉、打开新会话）。
         case connecting
         case failed(String)
     }
@@ -87,7 +87,7 @@ private struct NewSessionForm: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("新会话").font(.headline).foregroundStyle(palette.ink)
             if places.isEmpty {
-                Text("还没有可以开会话的目录：给项目绑定代码目录，或先在终端里运行一次 pi。")
+                Text("还没有可以开会话的目录：给项目绑定代码目录，或先运行一次 pi。")
                     .font(.callout).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
             } else {
                 ScrollView {
@@ -110,7 +110,6 @@ private struct NewSessionForm: View {
                 case .connecting:
                     ProgressView().controlSize(.small)
                     Text("等 Pi 连上…").font(.footnote).foregroundStyle(palette.ink3)
-                        .fixedSize(horizontal: false, vertical: true)
                 case .failed(let reason):
                     Text(reason).font(.footnote).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
                 }

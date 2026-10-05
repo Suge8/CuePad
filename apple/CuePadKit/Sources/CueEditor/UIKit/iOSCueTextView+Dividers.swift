@@ -3,9 +3,9 @@ import CueText
 import UIKit
 
 extension CueTextView {
-    /// 在光标处切块（硬件键盘 Shift+Enter 与外部工具栏的"分块"共用）。
-    public func insertSplit() {
-        apply(core.buffer().splitEdit(selection: selectedRange))
+    /// 在光标处插入一条分割线（外部工具栏的按钮调用）。
+    public func insertDivider() {
+        apply(core.buffer().dividerEdit(selection: selectedRange))
     }
 
     private func apply(_ edit: CueEdit) {
@@ -31,12 +31,12 @@ extension CueTextView {
 
     // MARK: 键盘
 
-    /// 块首 Backspace 整条合并分隔线；其它情况走系统默认删除。
+    /// 分割线下一行的行首 Backspace 整条删掉分割线；其它情况走系统默认删除。
     public override func deleteBackward() {
         if markedTextRange == nil, let edit = core.buffer().mergeBackward(selection: selectedRange) { apply(edit) } else { super.deleteBackward() }
     }
 
-    /// 硬件键盘前向删除：块尾按下时整条合并分隔线，返回 true 表示已处理；其它位置交还系统默认。
+    /// 硬件键盘前向删除：分割线上一行的行尾按下时整条删掉分割线，返回 true 表示已处理；其它位置交还系统默认。
     func handleForwardDelete() -> Bool {
         guard markedTextRange == nil, let edit = core.buffer().mergeForward(selection: selectedRange) else { return false }
         apply(edit)
@@ -48,52 +48,21 @@ extension CueTextView {
         super.pressesBegan(presses, with: event)
     }
 
-    public override var keyCommands: [UIKeyCommand]? {
-        let commands = [
-            UIKeyCommand(title: "分块", action: #selector(splitCommand), input: "\r", modifierFlags: .shift),
-            UIKeyCommand(title: "上一块", action: #selector(previousBlockCommand), input: UIKeyCommand.inputUpArrow, modifierFlags: .command),
-            UIKeyCommand(title: "下一块", action: #selector(nextBlockCommand), input: UIKeyCommand.inputDownArrow, modifierFlags: .command),
-            UIKeyCommand(title: "复制本块", action: #selector(copyBlockCommand), input: "c", modifierFlags: [.command, .shift]),
-        ]
-        // 不加优先级，系统会先把 Shift+Enter 当换行、⌘↑/↓ 当跳文首尾
-        commands.forEach { $0.wantsPriorityOverSystemBehavior = true }
-        return (super.keyCommands ?? []) + commands
-    }
-
-    @objc private func splitCommand(_ sender: UIKeyCommand) {
-        guard markedTextRange == nil else { return }
-        insertSplit()
-    }
-
-    /// ⌘↑/↓：先跳块，无块可跳时回落到文档首尾。
-    @objc private func previousBlockCommand(_ sender: UIKeyCommand) {
-        jump(to: core.buffer().prevBlockStart(from: selectedRange.location) ?? 0)
-    }
-
-    @objc private func nextBlockCommand(_ sender: UIKeyCommand) {
-        jump(to: core.buffer().nextBlockStart(from: selectedRange.location) ?? textStorage.length)
-    }
-
-    @objc private func copyBlockCommand(_ sender: UIKeyCommand) {
-        core.performBlockAction(.copy, blockIndex: core.buffer().blockIndex(at: selectedRange.location))
-    }
-
-    private func jump(to location: Int) {
-        selectedRange = NSRange(location: location, length: 0)
-        scrollRangeToVisible(selectedRange)
-    }
-
     // MARK: 光标
 
-    /// 空光标不落在分隔线行上：程序与键盘导致的选区变化都经这两个入口规范化。
+    /// 空光标不落在分割线行上：程序、键盘与手势导致的选区变化都经这两个入口规范化；有没有选区变了就报告。
     public override var selectedRange: NSRange {
         get { super.selectedRange }
-        set { super.selectedRange = normalized(newValue) }
+        set {
+            super.selectedRange = normalized(newValue)
+            reportSelection()
+        }
     }
 
     public override var selectedTextRange: UITextRange? {
         get { super.selectedTextRange }
         set {
+            defer { reportSelection() }
             guard let newValue, newValue.isEmpty, textStorage.length > 0 else {
                 super.selectedTextRange = newValue
                 return
@@ -112,6 +81,13 @@ extension CueTextView {
         guard range.length == 0, textStorage.length > 0 else { return range }
         let caret = core.buffer().normalizedCaret(from: super.selectedRange.location, to: range.location)
         return NSRange(location: caret, length: 0)
+    }
+
+    func reportSelection() {
+        let selecting = selectedRange.length > 0
+        guard selecting != reportedSelection else { return }
+        reportedSelection = selecting
+        onSelectionChange?(selecting)
     }
 }
 #endif

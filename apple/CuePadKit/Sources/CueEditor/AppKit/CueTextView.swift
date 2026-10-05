@@ -3,21 +3,27 @@ import AppKit
 import CueText
 
 /// TextKit 2 编辑器视图（macOS 薄宿主）。正文的唯一事实源是 `storedText`（存储格式字符串）：
-/// 图片与分隔线在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化，永不归档 RTFD。
+/// 图片与分割线在运行时是 U+FFFC + 附件，所有出口（保存、复制、通知）都经序列化，永不归档 RTFD。
 /// 全程不得访问 `NSTextView.layoutManager`：一次访问就会把视图永久降级到 TextKit 1。
 @MainActor
 public final class CueTextView: NSTextView, CueEditorHost {
     public let imageStore: any CueImageStore
     public var theme: CueEditorTheme { didSet { applyTheme() } }
-    public var numbering: CueNumbering = .none { didSet { core.refreshDividerLabels() } }
     /// 用户编辑后的新正文；程序设置 `storedText` 不触发。
     public var onChange: ((String) -> Void)?
-    public var onBlockAction: ((CueBlockAction) -> Void)?
+    /// 有没有选中文字变了（编辑器外的"发送选中""转为任务"据此出现）。
+    public var onSelectionChange: ((Bool) -> Void)?
+    /// 选中部分的存储格式；没选中为 nil。
+    public var selectedStoredText: String? { core.stored(in: selectedRange()) }
+    /// 选中文字时右键菜单里排在系统项前面的动作。
+    public var selectionActions: [CueSelectionAction] = []
     /// 图片入库失败（磁盘满、文件不可读）。失败的图片不会插入。
     public var onError: ((any Error) -> Void)?
 
     private(set) var core: EditorCore!
     private var isLoading = false
+    /// 上次报告的"有没有选区"，只在变化时再报。
+    var reportedSelection = false
     private var editObserver: (any NSObjectProtocol)?
 
     public init(imageStore: any CueImageStore, theme: CueEditorTheme = .neutral) {
@@ -110,6 +116,27 @@ public final class CueTextView: NSTextView, CueEditorHost {
     func layoutDidAdvance() { needsLayout = true }
     func needsRelayout() { needsLayout = true }
     var displayScale: CGFloat { window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2 }
-    func blockActionRequested(_ action: CueBlockAction) { onBlockAction?(action) }
+}
+
+extension CueTextView {
+    public override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event)
+        guard let menu, let stored = selectedStoredText, !selectionActions.isEmpty else { return menu }
+        for (index, action) in selectionActions.enumerated() {
+            let item = NSMenuItem(title: action.title, action: #selector(performSelectionAction(_:)), keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: action.systemImage, accessibilityDescription: nil)
+            item.target = self
+            item.tag = index
+            item.representedObject = stored
+            menu.insertItem(item, at: index)
+        }
+        menu.insertItem(.separator(), at: selectionActions.count)
+        return menu
+    }
+
+    @objc private func performSelectionAction(_ item: NSMenuItem) {
+        guard selectionActions.indices.contains(item.tag), let stored = item.representedObject as? String else { return }
+        selectionActions[item.tag].perform(stored)
+    }
 }
 #endif

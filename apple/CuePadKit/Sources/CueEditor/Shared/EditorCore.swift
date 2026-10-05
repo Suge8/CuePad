@@ -10,7 +10,6 @@ import UIKit
 /// 平台宿主（NSTextView / UITextView 的薄封装）向共享核心提供的少量能力。
 @MainActor
 protocol CueEditorHost: AnyObject {
-    var numbering: CueNumbering { get }
     /// 动态色按当前外观解析成固定色（绘制到 CGContext 的底色用）。
     func resolvedColor(_ color: CueColor) -> CueColor
     /// 分片预布局每推进一片：让宿主按最新用量重算内容尺寸。
@@ -19,7 +18,6 @@ protocol CueEditorHost: AnyObject {
     func needsRelayout()
     /// 屏幕像素与点的比例：附件图按像素尺寸预先画好。
     var displayScale: CGFloat { get }
-    func blockActionRequested(_ action: CueBlockAction)
 }
 
 enum CueTextStack {
@@ -36,7 +34,7 @@ enum CueTextStack {
     }
 }
 
-/// 编辑器的平台无关核心：存储格式与运行时富文本的互转、变量高亮、轻装饰、分块编号与动作、
+/// 编辑器的平台无关核心：存储格式与运行时富文本的互转、变量高亮、轻装饰、
 /// 图片懒加载与分片预布局。平台宿主只负责视图、输入与系统交互。
 @MainActor
 final class EditorCore {
@@ -125,7 +123,7 @@ final class EditorCore {
         return string
     }
 
-    /// 分块编辑（`CueEdit.insert` 里的 U+FFFC 是分隔控件）对应的富文本。
+    /// 分割线编辑（`CueEdit.insert` 里的 U+FFFC 是一条分割线）对应的富文本。
     func insertion(for edit: CueEdit) -> NSAttributedString {
         let insertion = NSMutableAttributedString()
         for (index, part) in edit.insert.components(separatedBy: String(UnicodeScalar(CueFormat.objectCharacter)!)).enumerated() {
@@ -148,7 +146,6 @@ final class EditorCore {
         pendingEdits = []
         flushedDecorations = decorations
         refreshVariableHighlight(around: nil)
-        refreshDividerLabels()
         settler.restart()
     }
 
@@ -180,7 +177,6 @@ final class EditorCore {
         // 多次编辑累积时新旧坐标混杂，直接全文重扫
         refreshVariableHighlight(around: edits.count == 1 ? edits[0].range : nil)
         restyleAfter(edits)
-        if (host?.numbering ?? .none) != .none { refreshDividerLabels() }
     }
 
     func resolved(_ color: CueColor) -> CueColor { host?.resolvedColor(color) ?? color }
@@ -225,50 +221,13 @@ final class EditorCore {
         needsRelayout()
     }
 
-    // MARK: 分块编号与动作
-
-    func performDividerAction(_ kind: CueBlockActionKind, from attachment: CueDividerAttachment) {
-        guard let location = dividerLocation(of: attachment),
-              let divider = buffer().dividers().first(where: { $0.location == location }) else { return }
-        performBlockAction(kind, blockIndex: divider.blockIndex)
-    }
-
-    func performBlockAction(_ kind: CueBlockActionKind, blockIndex: Int) {
-        let segments = CueSegments.parse(stored())
-        guard segments.indices.contains(blockIndex) else { return }
-        host?.blockActionRequested(CueBlockAction(kind: kind, blockIndex: blockIndex, text: segments[blockIndex].text))
-    }
-
-    private func dividerLocation(of attachment: CueDividerAttachment) -> Int? {
-        var found: Int?
-        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
-            if value as? CueDividerAttachment === attachment { found = range.location; stop.pointee = true }
-        }
-        return found
-    }
-
-    func refreshDividerLabels() {
-        let numbering = host?.numbering ?? .none
-        if numbering != .none {
-            for divider in buffer().dividers() {
-                let attachment = storage.attribute(.attachment, at: divider.location, effectiveRange: nil) as? CueDividerAttachment
-                setLabel(numbering.label(forSegment: divider.sequence), on: attachment)
-            }
-            return
-        }
-        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, _, _ in
-            setLabel("", on: value as? CueDividerAttachment)
-        }
-    }
-
-    private func setLabel(_ label: String, on attachment: CueDividerAttachment?) {
-        guard let attachment, attachment.label != label else { return }
-        attachment.label = label
-        attachment.view?.labelText = label
+    /// 选中部分的存储格式；没选中为 nil。
+    func stored(in range: NSRange) -> String? {
+        range.length > 0 ? CueFormat.serialize(tokens(in: range)) : nil
     }
 }
 
-/// 文本视图树里的全部分隔线视图（主题变化时要求它们重绘）。
+/// 文本视图树里的全部分割线视图（主题变化时要求它们重绘）。
 @MainActor
 func cueDividerViews(in root: CueView) -> [CueDividerView] {
     (root as? CueDividerView).map { [$0] } ?? root.subviews.flatMap(cueDividerViews(in:))

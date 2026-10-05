@@ -66,7 +66,6 @@ struct CardRow: View {
                                 .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? palette.ink3)
                         }
                         Text(DateLabel.short(card.modifiedAt)).foregroundStyle(palette.ink3)
-                        if text.blockCount > 1 { Text("\(text.blockCount) 块").foregroundStyle(palette.ink3) }
                     }
                     .font(.caption.weight(.medium))
                     Text(marked(text.title.nonEmpty ?? "空白卡片")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)

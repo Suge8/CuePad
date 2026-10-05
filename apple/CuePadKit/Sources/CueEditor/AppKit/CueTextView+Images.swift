@@ -20,7 +20,7 @@ extension CueTextView {
             onError?(error)
             return false
         }
-        // 文本一律按存储格式解析：分隔线行与图片标记还原成控件
+        // 文本一律按存储格式解析：分割线行与图片标记还原成附件
         guard let text = pboard.string(forType: .string) else { return false }
         insertText(core.attributed(CueFormat.parse(text)), replacementRange: selectedRange())
         return true

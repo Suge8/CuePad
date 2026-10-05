@@ -324,17 +324,34 @@ private struct NoticeView: View {
     var body: some View {
         ZStack {
             if let notice = workspace.notice {
-                Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                Button { notice.link.map(follow) } label: {
+                    HStack(spacing: 6) {
+                        Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
+                    }
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(notice.isError ? palette.failure : palette.ink)
                     .padding(.horizontal, 14).frame(height: 34)
-                    .glass(in: .capsule)
+                    .contentShape(.capsule)
+                }
+                .buttonStyle(PressStyle())
+                .disabled(notice.link == nil)
+                .glass(in: .capsule, interactive: notice.link != nil)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .id(notice.id)
                     .accessibilityAddTraits(.isStaticText)
             }
         }
         .animation(Motion.quick, value: workspace.notice)
+    }
+
+    /// 点提示去它说的地方（随手记的落点）。
+    private func follow(_ link: Workspace.Link) {
+        switch link {
+        case .project(let id): workspace.show(id.map(Workspace.Page.project) ?? .inbox)
+        case .tasks: workspace.overlay = .tasks
+        }
+        workspace.notice = nil
     }
 }
 #endif

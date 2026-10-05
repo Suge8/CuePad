@@ -40,6 +40,7 @@ struct PiSessionRow: View {
                         Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
                     }
                     Text(session.state.label).fontWeight(.medium).foregroundStyle(session.state.tint(palette))
+                    if session.hosted { Text("· 后台").foregroundStyle(palette.ink3) }
                 }
                 .font(lineFont)
                 if let progress = PiProgress.line(of: session) {

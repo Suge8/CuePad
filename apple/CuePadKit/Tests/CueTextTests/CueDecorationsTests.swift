@@ -64,7 +64,7 @@ struct TitleRuleTests {
         return (text as NSString, splits)
     }
 
-    @Test("编辑器的标题行就是 CueSegments.contentLines 的第一行", arguments: [
+    @Test("编辑器的标题行就是 CueLines.contentLines 的第一行", arguments: [
         "\n\n周报\n正文",
         "![](cuepad://img/ab)\n标题",
         "---split---\n![](cuepad://img/ab) 说明\n后",
@@ -75,7 +75,7 @@ struct TitleRuleTests {
     func sameRule(stored: String) {
         let (text, splits) = runtime(stored)
         let d = CueDecorations(CueBuffer(text: text) { splits.contains($0) })
-        let expected = CueSegments.contentLines(stored).first ?? ""
+        let expected = CueLines.contentLines(stored).first ?? ""
         guard let location = d.titleLocation else { return #expect(expected.isEmpty) }
         let line = text.substring(with: NSRange(location: location, length: text.length - location)).components(separatedBy: "\n")[0]
         #expect(line.replacingOccurrences(of: S, with: "").trimmingCharacters(in: .whitespaces) == expected)
