@@ -36,6 +36,7 @@ struct IOSRootView: View {
             .sheet(item: $navigation.capture) { CaptureSheet(capture: $0) }
             .sheet(item: $navigation.outbox) { SessionPicker(outbox: $0) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
+            .sheet(item: $navigation.newSession) { NewSessionSheet(start: $0) }
         }
         .overlay(alignment: .top) { NoticeBanner() }
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到

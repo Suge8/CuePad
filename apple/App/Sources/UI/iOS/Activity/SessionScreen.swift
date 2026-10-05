@@ -4,8 +4,8 @@ import CueText
 import SwiftUI
 
 /// 一个 Pi 会话的近况（Pi 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里）：上面是近况，
-/// 底部是发过去的最新一条请求与回复框。
-/// 会话记录在页面打开期间被删掉（结束 7 天后）时，照样显示最后一次看到的近况，回复框换成说明。
+/// 底部是发过去的最新一条请求与回复框；已结束的会话（历史）底部换成"在 Mac 上继续"。
+/// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的近况，底部换成说明。
 struct SessionScreen: View {
     let id: UUID
     @Environment(Workspace.self) private var workspace
@@ -32,7 +32,7 @@ struct SessionScreen: View {
                 ContentUnavailableView {
                     Label("找不到这个会话", systemImage: "terminal")
                 } description: {
-                    Text("它可能已经结束很久，记录已经清掉了")
+                    Text("Mac 上这个会话的文件可能已经删掉了")
                 }
                 .padding(.top, 60)
             }
@@ -47,7 +47,11 @@ struct SessionScreen: View {
                 // 发出后最新一条就在回复框上方，长回答下也看得到送达情况
                 VStack(spacing: 8) {
                     DeliveryStack(deliveries: digest?.deliveries ?? [], session: alive ? session : nil)
-                    ReplyBar(session: session, alive: alive, draft: $draft)
+                    if alive {
+                        ReplyBar(session: session, draft: $draft)
+                    } else {
+                        ResumeBar(session: digest?.session, deliveries: digest?.deliveries ?? [])
+                    }
                 }
                 .padding(.horizontal, 8).padding(.bottom, 8)
                 .frame(maxWidth: Self.readingWidth)
@@ -68,18 +72,16 @@ private struct DigestKey: Equatable {
     var sessionID: String?
 }
 
-/// 回复框：平时收成一行（输入 + 当前方式的短名 + 发送），不挡近况；输入框聚焦、有字或带着卡片时展开，
-/// 露出要带上的卡片、发送方式与说明、同步提示。发出后清空，请求马上贴到它上方。回答弹窗在问题卡上，不在这里。
-/// 同步到不了 Mac、会话已结束时不能发，写明原因。
+/// 回复框：一个发送。Pi 空闲时直接发；正忙时发出的话等它做完再说，旁边一个"马上说"打断它。
+/// 输入框聚焦或带着卡片时露出要带上的卡片与同步提示。发出后清空，请求马上贴到它上方。回答弹窗在问题卡上，不在这里。
+/// 同步到不了 Mac 时不能发，写明原因。
 private struct ReplyBar: View {
     let session: PiSessionState
-    let alive: Bool
     @Binding var draft: Navigation.Outbox?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var text = ""
-    @State private var chosenMode: DeliveryMode?
     @State private var sending = false
     @State private var sentCount = 0
     @FocusState private var focused: Bool
@@ -90,76 +92,55 @@ private struct ReplyBar: View {
         [draft?.content, trimmed.nonEmpty].compactMap { $0 }.joined(separator: "\n\n")
     }
 
+    /// 第一个是发送按钮的方式，第二个（忙时的马上说）是次级按钮。
     private var modes: [DeliveryMode] {
         MacDelivery.modes(for: session.state, hasImages: !CardText(content).images.isEmpty)
     }
 
-    /// 会话状态变了（比如开始干活）时，原来选的方式可能不再可用：换成当前可用的第一个。
-    private var mode: DeliveryMode? {
-        chosenMode.flatMap { modes.contains($0) ? $0 : nil } ?? modes.first
-    }
-
     private var reachable: Bool { services.reachesPiHost }
-    private var expanded: Bool { focused || !text.isEmpty || draft != nil }
+    private var canSend: Bool { !content.isEmpty && reachable && !sending }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !alive {
-                Text("会话已结束，回复发不到它；在 Mac 的终端重新运行 pi 开新会话").font(.footnote).foregroundStyle(palette.ink3)
-            } else {
-                if expanded, !reachable { SyncHint(status: services.syncStatus) }
-                if let draft { attachment(draft) }
-                HStack(alignment: .bottom, spacing: 8) {
-                    TextField(placeholder, text: $text, axis: .vertical)
-                        .lineLimit(expanded ? 1...5 : 1...1)
-                        .focused($focused)
-                        .accessibilityLabel("回复")
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(palette.paper, in: .rect(cornerRadius: 20, style: .continuous))
-                    if !expanded, let mode {
-                        // 收起时只露当前方式的短名，点它展开
-                        Button(mode.label) { focused = true }
-                            .buttonStyle(.plain)
-                            .font(.footnote.weight(.medium)).foregroundStyle(reachable ? palette.ink2 : palette.ink3)
-                            .padding(.horizontal, 10).frame(minHeight: 40)
-                            .background(palette.fill, in: .capsule)
-                            .accessibilityHint("展开发送方式")
-                    }
-                    Button(action: send) {
-                        Image(systemName: "arrow.up").font(.body.weight(.semibold))
-                            .frame(width: 40, height: 40)
-                    }
-                    .prominentButton()
-                    .clipShape(.circle)
-                    .disabled(content.isEmpty || mode == nil || !reachable || sending)
-                    .accessibilityLabel("发送")
-                    .sensoryFeedback(.success, trigger: sentCount)
+            if focused || draft != nil, !reachable { SyncHint(status: services.syncStatus) }
+            if let draft { attachment(draft) }
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .lineLimit(1...5)
+                    .focused($focused)
+                    .accessibilityLabel("回复")
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(palette.paper, in: .rect(cornerRadius: 20, style: .continuous))
+                if modes.count > 1, let interrupt = modes.last {
+                    Button("马上说") { send(interrupt) }
+                        .buttonStyle(.plain)
+                        .font(.subheadline.weight(.medium)).foregroundStyle(canSend ? palette.ink : palette.ink3)
+                        .padding(.horizontal, 12).frame(minHeight: 40)
+                        .background(palette.fill, in: .capsule)
+                        .disabled(!canSend)
+                        .accessibilityHint("打断它正在做的")
                 }
-                if expanded, let mode {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if modes.count > 1 {
-                            Picker("方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
-                                ForEach(modes, id: \.self) { Text($0.label).tag($0) }
-                            }
-                            .scalingPickerStyle()
-                            .fixedSize()
-                        }
-                        if let explanation = mode.explanation {
-                            Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
-                        }
-                    }
-                    .transition(.opacity)
+                Button { if let mode = modes.first { send(mode) } } label: {
+                    Image(systemName: "arrow.up").font(.body.weight(.semibold))
+                        .frame(width: 40, height: 40)
                 }
+                .prominentButton()
+                .clipShape(.circle)
+                .disabled(!canSend)
+                .accessibilityLabel(modes.first == .followUp ? "等它做完再说" : "发送")
+                .sensoryFeedback(.success, trigger: sentCount)
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glass(in: .rect(cornerRadius: 24))
-        .animation(Motion.quick, value: expanded)
+        .animation(Motion.quick, value: focused)
     }
 
+    /// 忙时的提示写明发送按钮的默认：等它做完再说。
     private var placeholder: String {
-        draft == nil ? "回复 \(session.title)" : "补一句（可不填）"
+        if draft != nil { return "补一句（可不填）" }
+        return modes.first == .followUp ? "等它做完再说…" : "回复 \(session.title)"
     }
 
     /// 带上的卡片或任务：标题、图片数，可移除。
@@ -185,9 +166,9 @@ private struct ReplyBar: View {
         .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
     }
 
-    private func send() {
+    private func send(_ mode: DeliveryMode) {
         let content = content, card = draft?.card, task = draft?.task
-        guard !content.isEmpty, let mode, reachable, !sending else { return }
+        guard canSend else { return }
         sending = true
         workspace.attempt {
             defer { sending = false }
@@ -196,6 +177,49 @@ private struct ReplyBar: View {
             draft = nil
             focused = false
             sentCount += 1
+        }
+    }
+}
+
+/// 已结束的会话：请 Mac 在终端里接着这个会话（Pi 的恢复会话）。请求与送达情况在上面的请求条里；
+/// Mac 开好后会话回到"现在"，这里换成回复框。记录已经没了时只写明原因。
+private struct ResumeBar: View {
+    let session: PiSessionState?
+    let deliveries: [DeliveryRequest]
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @State private var sending = false
+
+    /// 上一次请 Mac 继续还没结果：不重复发。
+    private var resuming: Bool { sending || deliveries.contains { $0.mode == .known(.resume) && $0.isOpen } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let session {
+                if !services.reachesPiHost { SyncHint(status: services.syncStatus) }
+                Button { resume(session) } label: {
+                    Label(resuming ? "正在请 Mac 继续…" : "在 Mac 上继续", systemImage: "play.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .prominentButton()
+                .disabled(resuming || !services.reachesPiHost)
+                .accessibilityHint("在 Mac 的终端里接着这个会话")
+            } else {
+                Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glass(in: .rect(cornerRadius: 24))
+    }
+
+    private func resume(_ session: PiSessionState) {
+        sending = true
+        workspace.attempt {
+            defer { sending = false }
+            _ = try await services.launch(.resume(sessionID: session.sessionID), title: session.title, on: session.hostID)
         }
     }
 }

@@ -189,3 +189,35 @@ struct PiClockTests {
         #expect(PiClock.reading(.known(.ended), stateSince: entered, busySince: nil) == .ago(entered))
     }
 }
+
+/// Pi 历史按结束时间分段（手机 Pi 页、Mac ⌘K 共用）：今天 / 昨天 / 本周 / 本月 / 更早，周一为一周之始。
+struct PiHistorySectionTests {
+    let calendar = WallTests.calendar
+
+    func section(_ date: Date, now: Date) -> PiHistorySection { PiHistorySection.of(date, now: now, calendar: calendar) }
+
+    @Test func 按结束时间落进今天_昨天_本周_本月_更早() {
+        let now = WallTests.date(2026, 10, 7, hour: 10)  // 周三
+        #expect(section(WallTests.date(2026, 10, 7, hour: 0), now: now) == .today)
+        #expect(section(WallTests.date(2026, 10, 6, hour: 23), now: now) == .yesterday)
+        #expect(section(WallTests.date(2026, 10, 5), now: now) == .thisWeek)  // 周一
+        #expect(section(WallTests.date(2026, 10, 2), now: now) == .thisMonth)
+        #expect(section(WallTests.date(2026, 9, 30), now: now) == .earlier)
+    }
+
+    @Test func 昨天优先于本周与本月的边界() {
+        // 周一的昨天是上周日，月初的昨天是上个月末：都算昨天
+        #expect(section(WallTests.date(2026, 10, 4), now: WallTests.date(2026, 10, 5)) == .yesterday)
+        #expect(section(WallTests.date(2026, 9, 30), now: WallTests.date(2026, 10, 1)) == .yesterday)
+    }
+
+    @Test func 新到旧的会话分成相连的段_下一页只追加在末段之后() {
+        let now = WallTests.date(2026, 10, 7, hour: 10)
+        let ended = [now, WallTests.date(2026, 10, 6), WallTests.date(2026, 10, 6, hour: 8), WallTests.date(2026, 9, 1)]
+        let firstPage = PiHistorySection.split(Array(ended.prefix(2)), date: { $0 }, now: now, calendar: calendar)
+        let both = PiHistorySection.split(ended, date: { $0 }, now: now, calendar: calendar)
+        #expect(both.map(\.section) == [.today, .yesterday, .earlier])
+        #expect(both.map(\.items.count) == [1, 2, 1])
+        #expect(firstPage.map(\.section) == Array(both.map(\.section).prefix(firstPage.count)))
+    }
+}
