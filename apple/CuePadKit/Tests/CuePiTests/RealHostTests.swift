@@ -102,5 +102,81 @@ struct RealHostTests {
         }
         #expect(!bridge.sessions.contains { $0.id == resumed.id })
     }
+
+    private func busy(_ state: PiAgentState?) -> Bool {
+        switch state {
+        case .thinking?, .outputting?, .tool?: true
+        default: false
+        }
+    }
+
+    /// 会话文件里的条目（跳过文件头）：id、上一条、角色、文字。
+    private func entries(in file: URL) -> [(id: String, parent: String?, role: String?, text: String)] {
+        let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        return text.split(separator: "\n").compactMap { line in
+            guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+                  let id = object["id"] as? String, object["type"] as? String != "session" else { return nil }
+            let message = object["message"] as? [String: Any]
+            let blocks = message?["content"] as? [[String: Any]] ?? []
+            let body = (message?["content"] as? String) ?? blocks.compactMap { $0["text"] as? String }.joined()
+            return (id, object["parentId"] as? String, message?["role"] as? String, body)
+        }
+    }
+
+    /// 后台进程正在跑一轮时用户打开了同一会话：后台做完这一轮再退；用户那个进程这期间没写过，就把会话重新载入到最新——
+    /// 接着说的话接在后台那一轮的回答后面，不分支。
+    @Test func aBusyHandoffReloadsTheUsersProcessSoTheSessionDoesNotBranch() async throws {
+        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let (file, sessionID) = try await endedSession(pi, bridge)
+        let host = host(pi, bridge)
+        host.start()
+        defer { host.closeAll() }
+        let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
+        _ = try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
+        try await eventually("后台在忙", timeout: .seconds(10)) { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
+
+        let mine = try await PiProcess(alongside: pi, sessionFile: file)
+        defer { mine.stop() }
+
+        try await eventually("后台做完退出、用户的进程读到后台那一轮", timeout: .seconds(20)) {
+            let live = bridge.sessions.filter { $0.sessionID == sessionID }
+            return live.map(\.pid) == [mine.pid] && live.first?.lastReply?.contains("后台这一轮") == true
+        }
+        try mine.prompt("我接着说")
+        try await eventually("用户这句落盘", timeout: .seconds(20)) { entries(in: file).contains { $0.role == "user" && $0.text == "我接着说" } }
+        let all = entries(in: file)
+        let backgroundReply = try #require(all.last { $0.role == "assistant" && $0.text.contains("后台这一轮") })
+        let mineEntry = try #require(all.first { $0.role == "user" && $0.text == "我接着说" })
+        #expect(mineEntry.parent == backgroundReply.id)
+    }
+
+    /// 同上，但用户那个进程在后台做完之前已经说了话（会话已分出支线）：不重新载入，在用户的会话里提示一句。
+    @Test func aBusyHandoffLeavesTheUsersProcessAloneOnceItHasWrittenAndSaysSo() async throws {
+        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let (file, sessionID) = try await endedSession(pi, bridge)
+        let host = host(pi, bridge)
+        host.start()
+        defer { host.closeAll() }
+        let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
+        _ = try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
+        try await eventually("后台在忙", timeout: .seconds(10)) { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
+
+        let mine = try await PiProcess(alongside: pi, sessionFile: file)
+        defer { mine.stop() }
+        try await eventually("用户的进程连上", timeout: .seconds(20)) { bridge.sessions.contains { $0.pid == mine.pid } }
+        try mine.prompt("我自己的")
+
+        _ = try await mine.waitForEvent("提示会话分出了支线") {
+            $0["method"] as? String == "notify" && ($0["message"] as? String)?.contains("支线") == true
+        }
+        #expect(bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid])
+        #expect(bridge.sessions.first { $0.pid == mine.pid }?.lastReply?.contains("我自己的") == true)
+    }
 }
 #endif
