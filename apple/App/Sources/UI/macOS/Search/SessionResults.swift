@@ -6,28 +6,19 @@ import SwiftUI
 /// ⌘K"会话"范围里的一组结果。
 struct SessionGroup: Equatable {
     enum Key: Hashable {
-        case project(UUID)
-        /// 没绑项目的会话按文件夹归组；nil 是不知道在哪的（旧记录没有文件夹名）。
-        case folder(String?)
-
-        var isProject: Bool {
-            if case .project = self { true } else { false }
-        }
+        /// 在线的会话。
+        case now
+        /// 已结束的，按结束时间分段（`PiHistorySection`）。
+        case ended(PiHistorySection)
     }
 
     let key: Key
     let sessions: [PiSessionState]
 
-    static func grouped(_ sessions: [PiSessionState]) -> [SessionGroup] {
-        var buckets: [Key: [PiSessionState]] = [:]
-        var order: [Key] = []
-        for session in sessions {
-            let key = session.projectID.map(Key.project) ?? .folder(session.folder)
-            if buckets[key] == nil { order.append(key) }
-            buckets[key, default: []].append(session)
-        }
-        let projectsFirst = order.filter(\.isProject) + order.filter { !$0.isProject }
-        return projectsFirst.map { SessionGroup(key: $0, sessions: PiSessionState.inListOrder(buckets[$0] ?? [])) }
+    static func grouped(live: [PiSessionState], ended: [PiSessionState], now: Date, calendar: Calendar = .current) -> [SessionGroup] {
+        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live))]
+        let past = PiHistorySection.split(ended, date: \.stateSince, now: now, calendar: calendar)
+        return current + past.map { SessionGroup(key: .ended($0.section), sessions: $0.items) }
     }
 }
 
@@ -50,26 +41,30 @@ nonisolated extension PiSessionListItem {
     }
 }
 
-/// 会话范围读到的一页：会话（顺序见 `PiSessionPage`）与符合条件的总数。
+/// 会话范围读到的：全部在线的（不多，不分页）与已结束的前若干页（从新到旧），同一个搜索词。
 nonisolated struct SessionSearchData: Sendable, Equatable {
-    var sessions: [PiSessionState]
-    var total: Int
+    var live: [PiSessionState]
+    var ended: [PiSessionState]
+    /// 符合搜索的已结束会话总数（"显示更多"）。
+    var endedTotal: Int
 
     static let pageSize = 40
 
     static func read(text: String, pages: Int, from store: isolated CueStore) throws -> SessionSearchData {
-        let page = try store.piSessionPage(PiSessionQuery(text: text, limit: pageSize * pages))
-        return SessionSearchData(sessions: page.items.map(\.listed), total: page.total)
+        let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max))
+        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: pageSize * pages))
+        return SessionSearchData(live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total)
     }
 }
 
 /// 会话范围的结果列表：按 `SessionGroup` 分组，行是侧栏同一种（`PiSessionRow`）；点一下选中，右边是它的近况。
 struct SessionResultList: View {
     let groups: [SessionGroup]
-    let total: Int
+    /// 还没读到的已结束会话有多少（"显示更多"）。
+    let more: Int
     let isFiltered: Bool
     @Binding var selection: String?
-    let more: () -> Void
+    let loadMore: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -85,9 +80,8 @@ struct SessionResultList: View {
                         header(group)
                         ForEach(group.sessions, id: \.sessionID) { row($0).id($0.sessionID) }
                     }
-                    let shown = groups.reduce(0) { $0 + $1.sessions.count }
-                    if total > shown {
-                        Button("显示更多（还有 \(total - shown) 个）", action: more)
+                    if more > 0 {
+                        Button("显示更多（还有 \(more) 个）", action: loadMore)
                             .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary).padding(10)
                     }
                 }
@@ -100,13 +94,8 @@ struct SessionResultList: View {
     private func header(_ group: SessionGroup) -> some View {
         HStack(spacing: 6) {
             switch group.key {
-            case .project(let id):
-                let project = workspace.catalog?.project(id)
-                ProjectGlyph(project: project, size: 11)
-                Text(project?.name ?? "项目")
-            case .folder(let folder):
-                Image(systemName: "folder").accessibilityHidden(true)
-                Text(folder ?? "其他位置")
+            case .now: Text("现在")
+            case .ended(let section): Text(section.title)
             }
             Text("\(group.sessions.count)").foregroundStyle(.tertiary)
         }

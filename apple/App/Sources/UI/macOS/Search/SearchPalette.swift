@@ -11,7 +11,8 @@ nonisolated private struct PaletteData: Sendable {
 }
 
 /// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
-/// ↑↓ 选择，↩ 打开，⌘↩ 发送，⌘⇧C 复制。会话——全部 Pi 会话（会话列表查询，分页），按项目再按文件夹分组，右侧是它的近况与回复。
+/// ↑↓ 选择，↩ 打开，⌘↩ 发送，⌘⇧C 复制。会话——上面是在线的，下面是已结束的、按结束时间分段（分页，下一页只接在末尾），
+/// 右侧是它的近况与回复。
 struct SearchPalette: View {
     @Binding var scope: SearchScope
     @Environment(Workspace.self) private var workspace
@@ -122,7 +123,7 @@ struct SearchPalette: View {
         Divider()
         ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
             SessionResultList(
-                groups: sessionGroups, total: sessions?.total ?? 0, isFiltered: !query.text.isEmpty,
+                groups: sessionGroups, more: (sessions?.endedTotal ?? 0) - (sessions?.ended.count ?? 0), isFiltered: !query.text.isEmpty,
                 selection: $sessionSelection) { sessionPages += 1 }
             sessionPreview
         }
@@ -133,7 +134,7 @@ struct SearchPalette: View {
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）。
     private var sessionGroups: [SessionGroup] {
-        SessionGroup.grouped((sessions?.sessions ?? []).map(workspace.withLiveState))
+        SessionGroup.grouped(live: (sessions?.live ?? []).map(workspace.withLiveState), ended: sessions?.ended ?? [], now: .now)
     }
 
     @ViewBuilder private var sessionPreview: some View {
