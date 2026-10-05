@@ -250,6 +250,19 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
+    /// 写回结果后立即只上传这一条，不等引擎调度：手机才能尽早拉到结果。
+    @Test(.timeLimit(.minutes(1)))
+    func 执行器写回结果后立即上传这一条() async throws {
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestPing(on: TestApp.hostID)
+        var uploads = rig.sync.uploads.stream.makeAsyncIterator()
+
+        #expect(await uploads.next() == request.id.uuidString.lowercased())
+        #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
+    }
+
     @Test func 手机的放进输入框请求只粘贴文字() async throws {
         rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
         rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: false)

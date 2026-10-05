@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import CueSync
 
-/// "有理由等就拉"：在等时按给定间隔主动拉，不再等即停；给了上限时，每次收到"在等"起最多拉这么久。
+/// "有理由等就拉"：开始在等时立即拉一次，之后按给定间隔拉，不再等即停；给了上限时，每次收到"在等"起最多拉这么久。
 @Suite(.timeLimit(.minutes(1)))
 struct SyncPollerTests {
   let time = ManualTiming()
@@ -54,6 +54,7 @@ struct SyncPollerTests {
 
     await asks.next()
     condition.input.yield(every5)
+    await fetched.next()  // 开始在等：立即拉
     for _ in 0..<3 {
       await time.waitForSleeper()
       time.advance(.seconds(5))
@@ -67,7 +68,7 @@ struct SyncPollerTests {
     time.advance(.seconds(5))
     condition.input.finish()
     await task.value
-    #expect(count.current == 3)
+    #expect(count.current == 4)
   }
 
   @Test func aLimitEndsTheWaitAndANewWaitStartsAgain() async throws {
@@ -79,6 +80,7 @@ struct SyncPollerTests {
 
     await asks.next()
     condition.input.yield(limited)
+    await fetched.next()  // 0 秒：开始在等，立即拉
     for _ in 0..<3 {  // 2、4、6 秒
       await time.waitForSleeper()
       time.advance(.seconds(2))
@@ -88,15 +90,12 @@ struct SyncPollerTests {
     time.advance(.seconds(2))  // 8 秒：超过上限，不再拉
 
     await asks.next()
-    condition.input.yield(limited)  // 新的一次在等
-    await asks.next()
-    await time.waitForSleeper()
-    time.advance(.seconds(2))
+    condition.input.yield(limited)  // 新的一次在等：立即拉
     await fetched.next()
 
     condition.input.finish()
     await task.value
-    #expect(count.current == 4)
+    #expect(count.current == 5)
   }
 
   @Test func nothingIsFetchedWhileNotWaiting() async throws {
