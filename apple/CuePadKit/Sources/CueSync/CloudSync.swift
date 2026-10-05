@@ -77,6 +77,11 @@ public actor CloudSync {
   }
 
   /// 立即拉取并推送（不等引擎的自动调度）。
+  /// 只向服务器拉一次变化（不推送本机改动）：推送之外的主动拉取，见 `SyncPoller`。
+  public func fetchChanges() async throws {
+    try await engine?.fetchChanges()
+  }
+
   public func syncNow() async throws {
     guard let engine else { return }
     try await engine.fetchChanges()

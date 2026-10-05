@@ -63,15 +63,6 @@ extension AppServices {
         if result.status != .known(.succeeded) { throw SendError.notDelivered(result.resultDetail ?? "没有说明原因") }
     }
 
-    /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
-    private func outcome(of request: UUID) async throws -> DeliveryRequest {
-        for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(request) }) {
-            guard let current else { throw CueStoreError.notFound }
-            if current.status != .known(.pending), current.status != .known(.executing) { return current }
-        }
-        throw CancellationError()
-    }
-
     /// 预检失败时窗口不动；预检通过后先隐藏窗口，投送失败再恢复。
     func dispatch(_ content: SendContent, to selector: TargetSelector, submit: Bool) async throws -> SendTarget {
         let payload = try payload(content)

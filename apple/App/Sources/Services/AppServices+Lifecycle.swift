@@ -27,6 +27,7 @@ extension AppServices {
 
     /// 进入后台前调用：等所有登记的落盘完成，并把小组件快照刷到最新（挂起后观察任务就不会再跑了）。
     func prepareForBackground() async {
+        stopPolling()
         for flush in backgroundFlushes.values { await flush() }
         do {
             try await writeSnapshots()
@@ -39,5 +40,6 @@ extension AppServices {
     func cancelBackgroundWork() {
         tasks.forEach { $0.cancel() }
         tasks = []
+        stopPolling()
     }
 }

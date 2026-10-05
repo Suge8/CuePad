@@ -96,6 +96,7 @@ private struct SyncSection: View {
                         }
                     }
                     .disabled(syncing || services.syncStatus == .syncing)
+                    MacConnectionTest()
                 }
                 if !services.syncIssues.isEmpty {
                     DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {

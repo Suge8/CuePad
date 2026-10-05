@@ -52,6 +52,8 @@ final class AppServices {
     private(set) var pendingDeepLink: DeepLink?
 
     @ObservationIgnored var tasks: [Task<Void, Never>] = []
+    /// 有理由等就拉的任务（见 `startPolling`）；iOS 进入后台时取消、回前台再开。
+    @ObservationIgnored var polling: Task<Void, Never>?
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
@@ -137,6 +139,36 @@ final class AppServices {
         return try await store.requestAnswer(
             PiAnswer(promptID: promptID, value: value), to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID),
             on: session.hostID)
+    }
+
+    /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
+    func outcome(of request: UUID) async throws -> DeliveryRequest {
+        for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(request) }) {
+            guard let current else { throw CueStoreError.notFound }
+            if !current.isOpen { return current }
+        }
+        throw CancellationError()
+    }
+
+    /// 连接测试：给 `host` 那台 Mac 发一条 ping（与发送同一套投送请求），等它写回结果，返回往返时间
+    /// （本机时钟，从写出请求到看到结果）。超过 `timeout` 没有结果、或结果是失败时抛 `SendError.notDelivered`。用过的请求删掉。
+    func ping(_ host: String, timeout: Duration = .seconds(60)) async throws -> Duration {
+        let request = try await store.requestPing(on: host)
+        let started = ContinuousClock.now
+        defer { Task { [store] in try? await store.deleteDelivery(request.id) } }
+        let result = try await withThrowingTaskGroup(of: DeliveryRequest?.self) { group in
+            group.addTask { try await self.outcome(of: request.id) }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                return nil
+            }
+            let first = try await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+        guard let result else { throw SendError.notDelivered("\(timeout.components.seconds) 秒内 Mac 没有回应") }
+        guard result.status == .known(.succeeded) else { throw SendError.notDelivered(result.resultDetail ?? "没有说明原因") }
+        return ContinuousClock.now - started
     }
 
     /// 发送并写一条发送记录；投送失败不写记录，错误原样抛给界面展示。投送成功而记录没写进去时抛 `SendError.unrecorded`。

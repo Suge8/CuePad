@@ -8,6 +8,8 @@ nonisolated protocol SyncControlling: Sendable {
     func start() async throws
     func stop() async
     func syncNow() async throws
+    /// 只拉一次服务器的变化（推送之外的主动拉取）
+    func fetchChanges() async throws
     func resolve(_ resolution: SyncResolution) async throws
 }
 

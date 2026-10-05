@@ -237,6 +237,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case send, steer, followUp, paste
   /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
   case answer
+  /// 连接测试：执行它的 Mac 收到即按成功写回，不碰 Pi、不写发送记录；往返时间就是手机到 Mac 再回来的延迟
+  case ping
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
@@ -258,6 +260,9 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
+
+  /// 还没有结果（等待执行或执行中）。
+  public var isOpen: Bool { status == .known(.pending) || status == .known(.executing) }
 
   /// 作答请求的答案；其他方式为 nil。
   public var answer: PiAnswer? { mode == .known(.answer) ? PiAnswer(stored: content) : nil }

@@ -66,6 +66,7 @@ extension AppServices {
 
     /// 执行一条请求：发给 Pi 会话的在这里调用 Pi 桥（全 App 只有这一处），应用与剪贴板交给通用发送；成功后记发送记录。
     private func perform(_ request: DeliveryRequest) async throws {
+        if request.mode == .known(.ping) { return }  // 连接测试：收到即成功，不碰目标、不写发送记录
         let target = request.target
         let content = SendContent(stored: request.content)
         let sent: SendTarget
@@ -108,7 +109,7 @@ extension AppServices {
             whenBusy = nil
         case .steer: whenBusy = .steer
         case .followUp: whenBusy = .followUp
-        case .answer: throw SendError.unsupportedMode("answer")  // 作答在 perform 里交给扩展，不走发送
+        case .answer, .ping: throw SendError.unsupportedMode(mode.rawValue)  // 作答与连接测试在 perform 里处理，不走发送
         }
         let images = try content.segments.compactMap { segment -> PiImage? in
             guard case .image(let hash) = segment else { return nil }
