@@ -225,6 +225,18 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
+    @Test func 连接测试请求立即完成_不碰Pi_不写发送记录() async throws {
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestPing(on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded) && done.mode == .known(.ping))
+        #expect(rig.channels.calls.isEmpty)
+        #expect(try await services.store.sendRecords().isEmpty)
+    }
+
     @Test func 手机的放进输入框请求只粘贴文字() async throws {
         rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
         rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: false)
