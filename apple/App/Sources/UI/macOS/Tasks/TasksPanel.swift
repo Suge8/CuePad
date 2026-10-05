@@ -40,7 +40,7 @@ struct TasksPanel: View {
         .glass(in: .rect(cornerRadius: 26))
         .observing(services.store, [.tasks, .projects], into: $data, onError: workspace.fail) { store in
             TasksData(
-                open: try store.tasks(), completed: Array(try store.completedTasks().prefix(Self.completedLimit)),
+                open: try store.openTasks(), completed: Array(try store.tasks(.done).flatMap(\.tasks).prefix(Self.completedLimit)),
                 projects: try store.projects())
         }
     }

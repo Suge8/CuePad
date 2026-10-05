@@ -56,16 +56,16 @@ import Testing
         try await store.updateTask(task.id) { $0.projectID = project }
       }
     }
-    #expect(try await store.tasks().first?.projectID == doomed.id)  // 报错的写入没有任何效果
+    #expect(try await store.task(task.id)?.projectID == doomed.id)  // 报错的写入没有任何效果
 
     try await store.trashProject(doomed.id)
     try await store.updateTask(task.id) { $0.content = "renamed" }  // 没改归属：不重新校验旧归属
-    #expect(try await store.tasks().first?.content == "renamed")
+    #expect(try await store.task(task.id)?.content == "renamed")
 
     try await store.updateTask(task.id) { $0.projectID = live.id }
-    #expect(try await store.tasks().first?.projectID == live.id)
+    #expect(try await store.task(task.id)?.projectID == live.id)
     try await store.updateTask(task.id) { $0.projectID = nil }
-    #expect(try await store.tasks().first?.projectID == nil)
+    #expect(try await store.task(task.id)?.projectID == nil)
   }
 
   @Test func liveProjectsAndInboxStillWork() async throws {

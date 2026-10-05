@@ -276,7 +276,7 @@ private struct TasksButton: View {
         }
         .help("任务")
         .accessibilityLabel("任务，\(openCount ?? 0) 条未完成")
-        .observing(services.store, [.tasks], into: $openCount) { try $0.tasks().count }
+        .observing(services.store, [.tasks], into: $openCount) { try $0.openTasks().count }
     }
 }
 

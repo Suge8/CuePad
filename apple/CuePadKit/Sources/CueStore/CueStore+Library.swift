@@ -4,22 +4,20 @@ import Foundation
 // MARK: 项目
 
 extension CueStore {
-  /// 新项目追加在末尾。
   public func createProject(
     name: String, color: String, icon: String? = nil
   ) throws -> Project {
     try write {
-      let last = try db.first("SELECT MAX(sortKey) FROM projects") { $0.textOrNil(0) } ?? nil
       let now = Date.stamp
       let project = Project(
         id: UUID(), name: name, icon: icon, color: color,
-        sortKey: SortKey.after(last), isPinned: false, goalCardID: nil, deletedAt: nil, createdAt: now, modifiedAt: now)
+        isPinned: false, goalCardID: nil, deletedAt: nil, createdAt: now, modifiedAt: now)
       try insert(project)
       return project
     }
   }
 
-  /// 改名称、颜色、图标、置顶。排序键、删除状态、目标卡对调用方只读，各有专门的方法（编译期保证）。
+  /// 改名称、颜色、图标、置顶。删除状态、目标卡对调用方只读，各有专门的方法（编译期保证）。
   public func updateProject(_ id: UUID, _ edit: @Sendable (inout Project) -> Void) throws {
     try write {
       guard var project = try find(Project.self, id) else { throw CueStoreError.notFound }
@@ -115,7 +113,7 @@ extension CueStore {
       } ?? nil
       let now = Date.stamp
       let card = Card(
-        id: UUID(), projectID: project, body: body, numbering: .known(.none), isPinned: false,
+        id: UUID(), projectID: project, body: body, isPinned: false,
         variableValues: [:], conflictOf: nil, sortKey: SortKey.before(first), deletedAt: nil, createdAt: now,
         modifiedAt: now)
       try insert(card)
@@ -124,7 +122,7 @@ extension CueStore {
     }
   }
 
-  /// 改正文、编号方式、置顶、变量取值。归属项目、排序键、删除状态对调用方只读，各有专门的方法（编译期保证）。
+  /// 改正文、置顶、变量取值。归属项目、排序键、删除状态对调用方只读，各有专门的方法（编译期保证）。
   public func updateCard(_ id: UUID, _ edit: @Sendable (inout Card) -> Void) throws {
     try write {
       guard var card = try find(Card.self, id) else { throw CueStoreError.notFound }
@@ -291,13 +289,13 @@ extension CueStore {
       let now = Date.stamp
       let task = CueTask(
         id: UUID(), content: content, projectID: project, sortKey: SortKey.before(first),
-        completedAt: nil, piSessionID: nil, createdAt: now, modifiedAt: now)
+        startedAt: nil, completedAt: nil, piSessionID: nil, createdAt: now, modifiedAt: now)
       try insert(task)
       return task
     }
   }
 
-  /// 改内容、勾选完成（`completedAt`）、所属项目、关联 Pi 会话。
+  /// 改内容、状态（`status`）、所属项目、关联 Pi 会话。
   /// 改挂的项目必须存在且未在回收站，否则抛 `invalidProject`。
   public func updateTask(_ id: UUID, _ edit: @Sendable (inout CueTask) -> Void) throws {
     try write {
@@ -337,8 +335,11 @@ extension CueStore {
         targetRef: target.ref, cardID: card, taskID: task, sentAt: now, modifiedAt: now)
       try insert(record)
       try registerImages(in: content)
+      // 交给 Pi 的任务关联到该会话、置为进行中（完成了的也重新打开）
       if let task, target.kind == .known(.piSession), let session = target.ref {
-        try db.run("UPDATE tasks SET piSessionID = ?, modifiedAt = ? WHERE id = ?", [session, now, task])
+        try db.run(
+          "UPDATE tasks SET piSessionID = ?, startedAt = COALESCE(startedAt, ?), completedAt = NULL, modifiedAt = ? WHERE id = ?",
+          [session, now, now, task])
       }
       return record
     }

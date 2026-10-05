@@ -167,11 +167,12 @@ import Testing
 
     let summaries = try await store.projectSummaries()
 
-    #expect(summaries.map(\.projectID) == [a.id, b.id, nil])  // 活动项目按手动顺序，未归档最后
-    #expect(summaries.map(\.cardCount) == [2, 0, 1])
-    #expect(summaries[0].lastModifiedAt == Date(timeIntervalSince1970: 500))
-    #expect(summaries[1].lastModifiedAt == nil)
-    #expect(summaries[2].lastModifiedAt == Date(timeIntervalSince1970: 700))
+    #expect(summaries.map(\.projectID) == (try await store.projects().map(\.id)) + [nil])  // 项目的顺序，未归档最后
+    let by = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0) })
+    #expect([a.id, b.id, nil].map { by[$0]?.cardCount } == [2, 0, 1])
+    #expect(by[a.id]?.lastModifiedAt == Date(timeIntervalSince1970: 500))
+    #expect(by[b.id]?.lastModifiedAt == nil)
+    #expect(by[nil]?.lastModifiedAt == Date(timeIntervalSince1970: 700))
   }
 
   @Test func projectSummariesWakeObserversOnCardChanges() async throws {

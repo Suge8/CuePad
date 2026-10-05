@@ -48,7 +48,6 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var name: String
   public var icon: String?
   public var color: String
-  public internal(set) var sortKey: String
   public var isPinned: Bool
   /// 项目目标卡；必须是本项目里未删除的卡。用 `setGoal` 设置，卡片离开项目或进回收站时自动清空。
   public internal(set) var goalCardID: UUID?
@@ -64,7 +63,6 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var projectID: UUID?
   /// 纯字符串正文：分割线为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
-  public var numbering: Open<CueNumbering>
   public var isPinned: Bool
   public var variableValues: [String: String]
   /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
@@ -77,12 +75,36 @@ public struct Card: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
 }
 
+/// 任务三态。由两个时间推出（唯一事实源）：有完成时间是完成，否则有开始时间是进行中，都没有是待办。
+public enum TaskStatus: String, Sendable, CaseIterable {
+  case todo, inProgress, done
+}
+
+/// 同一项目（nil = 未归档）里某一状态的任务（`CueStore.tasks(_:)`）。
+public struct TaskGroup: Equatable, Sendable {
+  public let projectID: UUID?
+  public internal(set) var tasks: [CueTask]
+}
+
+/// 项目里完成了几个、一共几个任务。
+public struct TaskProgress: Equatable, Sendable {
+  public let done: Int
+  public let total: Int
+
+  public init(done: Int, total: Int) {
+    self.done = done
+    self.total = total
+  }
+}
+
 public struct CueTask: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var content: String
   public var projectID: UUID?
   public internal(set) var sortKey: String
-  public var completedAt: Date?
+  /// 开始做的时间（手动置为进行中、或交给 Pi 时）；回到待办时清空。
+  public internal(set) var startedAt: Date?
+  public internal(set) var completedAt: Date?
   /// 关联的 Pi 会话（Pi 自己的会话 id）。
   public var piSessionID: String?
   public var createdAt: Date
@@ -257,41 +279,56 @@ extension CueStoreError: LocalizedError {
 
 extension Project: Record {
   static let table = Table.projects
-  static let columns = ["id", "name", "icon", "color", "sortKey", "isPinned", "deletedAt", "createdAt", "modifiedAt", "goalCardID"]
-  var bindings: [any SQLBindable] { [id, name, icon, color, sortKey, isPinned, deletedAt, createdAt, modifiedAt, goalCardID] }
+  static let columns = ["id", "name", "icon", "color", "isPinned", "deletedAt", "createdAt", "modifiedAt", "goalCardID"]
+  var bindings: [any SQLBindable] { [id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, goalCardID] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), name: row.text(1), icon: row.textOrNil(2), color: row.text(3),
-      sortKey: row.text(4), isPinned: row.bool(5), goalCardID: row.uuidOrNil(9),
-      deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8))
+      isPinned: row.bool(4), goalCardID: row.uuidOrNil(8),
+      deletedAt: row.dateOrNil(5), createdAt: row.date(6), modifiedAt: row.date(7))
   }
 }
 
 extension Card: Record {
   static let table = Table.cards
-  static let columns = ["id", "projectID", "body", "numbering", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf"]
+  static let columns = ["id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf"]
   var bindings: [any SQLBindable] {
     let variables = try! JSONEncoder.sorted.encode(variableValues)
-    return [id, projectID, body, numbering.rawValue, isPinned, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf]
+    return [id, projectID, body, isPinned, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf]
   }
   init(row: Row) {
     self.init(
-      id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2),
-      numbering: Open(rawValue: row.text(3)), isPinned: row.bool(4),
-      variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(5).utf8))) ?? [:],
-      conflictOf: row.uuidOrNil(10), sortKey: row.text(6), deletedAt: row.dateOrNil(7), createdAt: row.date(8), modifiedAt: row.date(9))
+      id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2), isPinned: row.bool(3),
+      variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(4).utf8))) ?? [:],
+      conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8))
   }
 }
 
 extension CueTask: Record {
   static let table = Table.tasks
-  static let columns = ["id", "content", "projectID", "sortKey", "completedAt", "piSessionID", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, content, projectID, sortKey, completedAt, piSessionID, createdAt, modifiedAt] }
+  static let columns = ["id", "content", "projectID", "sortKey", "startedAt", "completedAt", "piSessionID", "createdAt", "modifiedAt"]
+  var bindings: [any SQLBindable] { [id, content, projectID, sortKey, startedAt, completedAt, piSessionID, createdAt, modifiedAt] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1), projectID: row.uuidOrNil(2), sortKey: row.text(3),
-      completedAt: row.dateOrNil(4), piSessionID: row.textOrNil(5), createdAt: row.date(6),
-      modifiedAt: row.date(7))
+      startedAt: row.dateOrNil(4), completedAt: row.dateOrNil(5), piSessionID: row.textOrNil(6), createdAt: row.date(7),
+      modifiedAt: row.date(8))
+  }
+}
+
+extension CueTask {
+  /// 改状态时记下时间：置为进行中记开始时间（已有的保留），完成记完成时间（保留开始时间），回到待办两个都清空。
+  public var status: TaskStatus {
+    get { completedAt != nil ? .done : startedAt != nil ? .inProgress : .todo }
+    set {
+      guard newValue != status else { return }
+      let now = Date.stamp
+      switch newValue {
+      case .todo: (startedAt, completedAt) = (nil, nil)
+      case .inProgress: (startedAt, completedAt) = (startedAt ?? now, nil)
+      case .done: completedAt = now
+      }
+    }
   }
 }
 

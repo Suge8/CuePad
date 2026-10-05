@@ -5,12 +5,12 @@ DEFINE SCHEMA
         name          ENCRYPTED STRING,
         icon          STRING,
         color         STRING,
-        sortKey       STRING,
         isPinned      INT64,
         deletedAt     INT64,
         createdAt     INT64,
         modifiedAt    INT64,
         goalCardID    STRING,
+        sortKey       STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -19,7 +19,6 @@ DEFINE SCHEMA
         "___recordID"  REFERENCE QUERYABLE,
         projectID      STRING,
         body           ENCRYPTED STRING,
-        numbering      STRING,
         isPinned       INT64,
         variableValues ENCRYPTED STRING,
         sortKey        STRING,
@@ -28,6 +27,7 @@ DEFINE SCHEMA
         modifiedAt     INT64,
         conflictOf     STRING,
         isFavorite     INT64,
+        numbering      STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -37,6 +37,7 @@ DEFINE SCHEMA
         content       ENCRYPTED STRING,
         projectID     STRING,
         sortKey       STRING,
+        startedAt     INT64,
         completedAt   INT64,
         piSessionID   STRING,
         createdAt     INT64,

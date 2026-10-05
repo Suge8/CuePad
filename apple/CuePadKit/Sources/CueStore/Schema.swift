@@ -15,10 +15,11 @@ import Foundation
 ///
 /// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
 ///
-/// 同步表只能加表或加可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。
+/// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段删掉本地列、不再读写，
+/// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields`，生产环境删不掉字段）。
 enum Schema {
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；比它旧的按 `upgrades` 就地升级；比它新的是更新版本建的库，不打开。
-  static let version = 7
+  static let version = 8
 
   /// `upgrades[i]` 把结构版本 i + 1 升到 i + 2。新库直接用 `create`（已是最新结构）。
   static let upgrades = [
@@ -43,18 +44,31 @@ enum Schema {
     """,
     // Mac 在后台托管的会话、结构化的子代理列表
     "ALTER TABLE piSessionStates ADD COLUMN hosted INTEGER; ALTER TABLE piSessionStates ADD COLUMN subagents TEXT;",
+    // 项目只按"置顶、再按最近活动"排（不再有手动排序键）；卡片编号下线；任务多了"开始做"的时间（三态）
+    """
+    ALTER TABLE projects DROP COLUMN sortKey; ALTER TABLE cards DROP COLUMN numbering;
+    ALTER TABLE tasks ADD COLUMN startedAt INTEGER;
+    \(activityIndexes)
+    """,
   ]
+
+  /// 项目最近活动（`CueStore.projectOrder`）按项目取各表最晚的时间
+  private static let activityIndexes = """
+    CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);
+    CREATE INDEX tasks_projectID_modifiedAt ON tasks(projectID, modifiedAt);
+    CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
+    """
 
   static let create = """
     CREATE TABLE projects (
       id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, icon TEXT, color TEXT NOT NULL,
-      sortKey TEXT NOT NULL, isPinned INTEGER NOT NULL, goalCardID TEXT, deletedAt INTEGER,
+      isPinned INTEGER NOT NULL, goalCardID TEXT, deletedAt INTEGER,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
 
     -- conflictOf：冲突副本指向原卡。
     CREATE TABLE cards (
-      id TEXT PRIMARY KEY NOT NULL, projectID TEXT, body TEXT NOT NULL, numbering TEXT NOT NULL,
+      id TEXT PRIMARY KEY NOT NULL, projectID TEXT, body TEXT NOT NULL,
       isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
@@ -62,7 +76,7 @@ enum Schema {
 
     CREATE TABLE tasks (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, projectID TEXT, sortKey TEXT NOT NULL,
-      completedAt INTEGER, piSessionID TEXT, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      completedAt INTEGER, piSessionID TEXT, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, startedAt INTEGER
     ) STRICT;
     CREATE INDEX tasks_projectID ON tasks(projectID);
 
@@ -90,6 +104,7 @@ enum Schema {
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
     CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
+    \(activityIndexes)
 
     -- 项目在哪台 Mac 上绑定了代码目录：每个 (projectID, hostID) 一条，只有目录末段名（完整路径在本机表 projectDirectories）。
     CREATE TABLE directoryBindings (

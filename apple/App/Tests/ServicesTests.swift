@@ -13,14 +13,14 @@ struct LegacyImportTests {
 
         await rig.services.importLegacyIfNeeded()
 
-        #expect(try await rig.services.store.projects().map(\.name) == ["Career", "Flow"])
-        #expect(try await rig.services.store.tasks().map(\.content) == ["first"])
+        #expect(try await rig.services.store.projects().map(\.name) == ["Flow", "Career"])  // 置顶的在前
+        #expect(try await rig.services.store.openTasks().map(\.content) == ["first"])
         #expect(rig.services.settings.theme == .dark)
         #expect(rig.services.settings.globalShortcut == "Alt+KeyZ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 6, modifiers: .option)])
 
         // 用户在新版里永久删除后，再次启动不能把它导回来
-        let career = try await rig.services.store.projects()[0]
+        let career = try await rig.services.store.projects()[1]
         try await rig.services.store.purgeProject(career.id)
         let restarted = rig.relaunch()
         await restarted.importLegacyIfNeeded()

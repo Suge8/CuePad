@@ -10,7 +10,10 @@ import Foundation
 /// 客户端不再读写它们。
 enum CloudKitSchema {
   /// 生产环境里部署过、已不再使用的字段（按记录类型）与记录类型。
-  static let retiredFields: [String: [(name: String, declaration: String)]] = ["cards": [("isFavorite", "INT64")]]
+  static let retiredFields: [String: [(name: String, declaration: String)]] = [
+    "cards": [("isFavorite", "INT64"), ("numbering", "STRING")],
+    "projects": [("sortKey", "STRING")],
+  ]
   static let retiredTypes: [(name: String, fields: [(name: String, declaration: String)])] = [
     ("tags", [("color", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("name", "ENCRYPTED STRING")]),
     ("cardTags", [("cardID", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("tagID", "STRING")]),

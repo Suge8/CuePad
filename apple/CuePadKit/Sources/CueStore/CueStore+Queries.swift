@@ -7,9 +7,20 @@ private let cardVisible = """
   """
 
 extension CueStore {
-  /// 未删除的项目，按手动顺序。
+  /// 未删除的项目，按项目唯一的顺序（`projectOrder`）。所有项目列表与选择器都用它，界面不另排。
   public func projects() throws -> [Project] {
-    try select(Project.self, where: "deletedAt IS NULL", orderBy: "sortKey, id")
+    try select(Project.self, where: "deletedAt IS NULL", orderBy: Self.projectOrder("projects"))
+  }
+
+  /// 项目的顺序：置顶在前，其余按最近活动——项目自身、其下卡片与任务的最近修改、其 Pi 会话最近的状态变化中最晚的——
+  /// 由近到远。`alias` 是查询里项目表的名字。
+  static func projectOrder(_ alias: String) -> String {
+    """
+    \(alias).isPinned DESC, MAX(\(alias).modifiedAt,
+      COALESCE((SELECT MAX(modifiedAt) FROM cards WHERE projectID = \(alias).id), 0),
+      COALESCE((SELECT MAX(modifiedAt) FROM tasks WHERE projectID = \(alias).id), 0),
+      COALESCE((SELECT MAX(stateSince) FROM piSessionStates WHERE projectID = \(alias).id), 0)) DESC, \(alias).id
+    """
   }
 
   /// 回收站中的项目，最近删除的在前。
@@ -27,7 +38,7 @@ extension CueStore {
     let bound = try db.query(
       """
       SELECT p.id, d.directory FROM projectDirectories d JOIN projects p ON p.id = d.projectID
-      WHERE p.deletedAt IS NULL ORDER BY p.sortKey, p.id
+      WHERE p.deletedAt IS NULL ORDER BY \(Self.projectOrder("p"))
       """
     ) { (id: $0.uuid(0), segments: Self.pathSegments($0.text(1))) }
 
@@ -52,14 +63,44 @@ extension CueStore {
 
   public func card(_ id: UUID) throws -> Card? { try find(Card.self, id) }
 
-  /// 未完成任务，按手动顺序。
-  public func tasks() throws -> [CueTask] {
-    try select(CueTask.self, where: "completedAt IS NULL", orderBy: "sortKey, id")
+  public func task(_ id: UUID) throws -> CueTask? { try find(CueTask.self, id) }
+
+  /// 某一状态的任务，按项目分组：项目顺序同 `projects()`，未归档的在最后；组内待办与进行中按手动顺序，完成的最近完成在前。
+  /// 回收站里的项目的任务不列。
+  public func tasks(_ status: TaskStatus) throws -> [TaskGroup] {
+    let condition = switch status {
+    case .todo: "t.completedAt IS NULL AND t.startedAt IS NULL"
+    case .inProgress: "t.completedAt IS NULL AND t.startedAt IS NOT NULL"
+    case .done: "t.completedAt IS NOT NULL"
+    }
+    let within = status == .done ? "t.completedAt DESC, t.id" : "t.sortKey, t.id"
+    let tasks = try db.query(
+      """
+      SELECT \(CueTask.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM tasks t LEFT JOIN projects p ON p.id = t.projectID
+      WHERE (t.projectID IS NULL OR p.deletedAt IS NULL) AND \(condition)
+      ORDER BY t.projectID IS NULL, \(Self.projectOrder("p")), \(within)
+      """
+    ) { CueTask(row: $0) }
+    var groups: [TaskGroup] = []
+    for task in tasks {
+      if groups.last?.projectID == task.projectID, !groups.isEmpty {
+        groups[groups.count - 1].tasks.append(task)
+      } else {
+        groups.append(TaskGroup(projectID: task.projectID, tasks: [task]))
+      }
+    }
+    return groups
   }
 
-  /// 已完成任务，最近完成的在前。
-  public func completedTasks() throws -> [CueTask] {
-    try select(CueTask.self, where: "completedAt IS NOT NULL", orderBy: "completedAt DESC, id")
+  /// 各项目（nil = 未归档）的任务完成数与总数；没有任务的项目不在结果里。回收站里的项目不算。
+  public func taskProgress() throws -> [UUID?: TaskProgress] {
+    let rows = try db.query(
+      """
+      SELECT t.projectID, SUM(t.completedAt IS NOT NULL), COUNT(*) FROM tasks t LEFT JOIN projects p ON p.id = t.projectID
+      WHERE t.projectID IS NULL OR p.deletedAt IS NULL GROUP BY t.projectID
+      """
+    ) { (project: $0.uuidOrNil(0), progress: TaskProgress(done: Int($0.int(1)), total: Int($0.int(2)))) }
+    return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.progress) })
   }
 
   /// 发送记录，最近的在前。
@@ -142,7 +183,7 @@ extension CueStore {
       let named = terms.map { _ in "id IN (\(Self.hit("project")))" }.joined(separator: " AND ")
       projects = try select(
         Project.self, where: "\(named) AND (deletedAt IS NOT NULL) = ?",
-        terms.map(Self.likePattern) + [query.inTrash], orderBy: "sortKey, id", limit: 10)
+        terms.map(Self.likePattern) + [query.inTrash], orderBy: Self.projectOrder("projects"), limit: 10)
     }
     return SearchResults(projects: projects, cards: cards, totalCards: total)
   }

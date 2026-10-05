@@ -149,13 +149,18 @@ import Testing
     let id = try #require(added.string("id"))
     #expect(added.string("content") == "写 文档")
     #expect(added.string("projectId") == alpha.id.uuidString.lowercased())
-    #expect(added["done"] as? Bool == false)
+    #expect(added["done"] as? Bool == false && added.string("status") == "todo")
     _ = try await sb.object("task", "add", "全局的")
 
     #expect(try array(try await sb.json("task", "list")).count == 2)
 
+    // 进行中仍算未完成
+    let started = try await sb.object("task", "start", id)
+    #expect(started.string("status") == "inProgress" && started.string("startedAt") != nil)
+    #expect(try array(try await sb.json("task", "list")).count == 2)
+
     let done = try await sb.object("task", "done", String(id.prefix(8)))
-    #expect(done["done"] as? Bool == true)
+    #expect(done["done"] as? Bool == true && done.string("status") == "done")
     #expect(done.string("completedAt") != nil)
     #expect(try array(try await sb.json("task", "list")).count == 1)
     #expect(try array(try await sb.json("task", "list", "--done")).compactMap { $0.string("id") } == [id])
@@ -163,7 +168,7 @@ import Testing
     #expect(try array(try await sb.json("task", "list", "--project", "Alpha")).isEmpty)
 
     let undone = try await sb.object("task", "undo", id)
-    #expect(undone["done"] as? Bool == false && undone["completedAt"] is NSNull)
+    #expect(undone.string("status") == "todo" && undone["completedAt"] is NSNull && undone["startedAt"] is NSNull)
 
     let edited = try await sb.object("task", "edit", id, "改名", "--global")
     #expect(edited.string("content") == "改名" && edited["projectId"] is NSNull)
@@ -180,7 +185,7 @@ import Testing
     let task = try await sb.store.createTask("a")
     let nothing = await sb.run("task", "edit", task.id.uuidString)
     #expect(nothing.code == 2)
-    #expect(try await sb.store.tasks().map(\.content) == ["a"])
+    #expect(try await sb.store.task(task.id)?.content == "a")
   }
 }
 
@@ -247,7 +252,7 @@ import Testing
 @Suite struct HelpTests {
   private static let commands = [
     "project list", "card list", "card show", "card add", "card edit", "card move", "card trash",
-    "card restore", "task list", "task add", "task done", "task undo", "task edit", "task delete", "search",
+    "card restore", "task list", "task add", "task start", "task done", "task undo", "task edit", "task delete", "search",
     "conflicts list", "conflicts resolve",
   ]
 

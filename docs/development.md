@@ -42,7 +42,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 | CuePi | Pi 桥：扩展（随包资源）、socket 客户端、会话历史索引、终端跳转；协议与边界见 [Sources/CuePi/README.md](../apple/CuePadKit/Sources/CuePi/README.md) | macOS |
 | CueCLI | `cuepad` 命令行：名词-动词（project/card/task/search/conflicts），默认文本、`--json` 给 agent；只经 Store 公开接口读写，`cuepad --help` 与各命令的 `--help` 是其唯一文档 | macOS |
 
-模块边界由 `Package.swift` 声明；CueStore 依赖 CueText（图片引用、编号），测试共用的支撑在 `Tests/CueTestSupport`。
+模块边界由 `Package.swift` 声明；CueStore 依赖 CueText（图片引用），测试共用的支撑在 `Tests/CueTestSupport`。
 
 ## 产品模型
 
@@ -60,7 +60,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 ## 架构约定
 
-- **数据**：ID 用 UUID；排序用分数索引字符串，避免多设备排序冲突；软删除只保留 `deletedAt`，项目删除时其卡片随项目进回收站（由项目推导，不逐卡记录来源）。设备本地偏好（主题、快捷键、自动发送、当前项目）进 UserDefaults，不进同步库。变量上次取值存在卡片上并同步。同步记录里的枚举字段（编号、发送目标种类、Pi 状态、投送方式与状态）读出为 `Open<已知枚举>`：其他版本写入的、本版本不认识的值是 `.unknown`，原样写回，不当成已知值；本机只写已知值。界面据 Store 的观察流重读查询，不在内存复制状态。
+- **数据**：ID 用 UUID；卡片与任务的手动顺序用分数索引字符串，避免多设备排序冲突；项目只有一种顺序（`CueStore.projects()`：置顶在前，其余按最近活动——项目自身、其下卡片与任务的修改、其 Pi 会话的状态变化中最晚的），在 SQL 里一处定义，所有项目列表与选择器都用它；任务三态（待办、进行中、完成）由开始与完成两个时间推出，交给 Pi 时置为进行中；软删除只保留 `deletedAt`，项目删除时其卡片随项目进回收站（由项目推导，不逐卡记录来源）。设备本地偏好（主题、快捷键、自动发送、当前项目）进 UserDefaults，不进同步库。变量上次取值存在卡片上并同步。同步记录里的枚举字段（发送目标种类、Pi 状态、投送方式与状态）读出为 `Open<已知枚举>`：其他版本写入的、本版本不认识的值是 `.unknown`，原样写回，不当成已知值；本机只写已知值。界面据 Store 的观察流重读查询，不在内存复制状态。
 - **界面里的项目**：每个窗口一份项目目录 `ProjectCatalog`（有效项目按 `store.projects()` 的顺序，界面不另排、各项目卡片数、本机代码目录），由 `Workspace.observeCatalog` 订阅；项目名称、图标、计数、目录、⌘1–9 顺序、"移到项目"、随手记落点、新会话目录等所有项目选择器都从它同步取，页面与菜单不各自再读。目录读到前根视图不显示页面，所以进入项目页、切换项目、打开菜单的第一帧就是真实值——导航栏标题与副标题在推入时定下，推入后再改会让整页跳一下，不能等页面数据。项目操作与卡片操作各只有一份定义（`UI/Shared/Components` 的 `ProjectActions`、`CardActions`），Mac 右键、iOS 长按与"更多"共用，平台只补各自的发送与绑定代码目录。
 - **图片**：按内容哈希存文件去重，正文存附件引用。文件经 `CueStore.files` 同步写入（不经 Store actor，编辑器在主线程直接用）；附件记录（同步载体）由引用它的写入（卡片正文、投送请求、发送记录）在同一事务里为本机已有文件登记，没被引用的图片不上传。缩略图只有 CueEditor 的 `Thumbnails` 一套（编辑器与卡片墙共用、按尺寸缓存），是派生数据，不落盘不同步。
 - **冲突**：iCloud 按记录同步。同一卡片离线并发编辑时保留两个版本交给用户选择，不静默覆盖。任务是独立记录而非卡片正文里的清单，勾选只改该条，不与卡片编辑冲突。

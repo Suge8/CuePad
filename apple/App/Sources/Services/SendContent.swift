@@ -1,7 +1,7 @@
 import CueText
 import Foundation
 
-/// 存储格式正文按原顺序切成文字与图片引用。调用方传入的是已经填好变量、排好编号的正文。
+/// 存储格式正文按原顺序切成文字与图片引用。调用方传入的是已经填好变量的正文。
 nonisolated struct SendContent: Equatable, Sendable {
     enum Segment: Equatable, Sendable {
         case text(String)

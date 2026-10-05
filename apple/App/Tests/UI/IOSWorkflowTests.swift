@@ -126,7 +126,7 @@ struct IOSWorkflowTests {
 
         try await CaptureDraft(text: "  补测试  ", images: [], kind: .task).save(in: project.id, workspace: workspace)
 
-        #expect(try await store.tasks().filter { $0.projectID == project.id }.map(\.content) == ["补测试"])
+        #expect(try await store.openTasks().filter { $0.projectID == project.id }.map(\.content) == ["补测试"])
         #expect(try await store.cards(in: project.id).isEmpty)
         #expect(workspace.notice?.link == .tasks(project.id))
     }

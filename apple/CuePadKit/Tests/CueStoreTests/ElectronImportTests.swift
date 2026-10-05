@@ -114,10 +114,10 @@ private func digest(_ url: URL) throws -> String {
     #expect(followsProject == [["NULL", gone.id.uuidString.lowercased()]])
 
     // 任务（标签不导入：产品不做标签）
-    let open = try await store.tasks()
-    #expect(open.map(\.content) == ["first", "second"])
-    #expect(open.first?.projectID == flow.id)
-    let done = try await store.completedTasks()
+    let open = try await store.tasks(.todo).flatMap(\.tasks)
+    #expect(Set(open.map(\.content)) == ["first", "second"])
+    #expect(open.first { $0.content == "first" }?.projectID == flow.id)
+    let done = try await store.tasks(.done).flatMap(\.tasks)
     #expect(done.map(\.content) == ["done"])
     sameInstant(done.first?.completedAt, Date(timeIntervalSince1970: 7))
   }

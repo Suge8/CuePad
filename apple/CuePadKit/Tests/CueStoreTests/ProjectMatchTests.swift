@@ -66,9 +66,10 @@ import Testing
     #expect(try await match("/a/proj/x") == "outer")
   }
 
-  @Test func projectsBoundToTheSameDirectoryResolveByManualOrder() async throws {
+  @Test func projectsBoundToTheSameDirectoryResolveByProjectOrder() async throws {
     let first = try await store.createProject(name: "first", color: "#111")
     let second = try await store.createProject(name: "second", color: "#222")
+    try await store.updateProject(first.id) { $0.isPinned = true }
     try await store.setDirectory("/shared", for: second.id)
     try await store.setDirectory("/shared", for: first.id)
     #expect(try await match("/shared/x") == "first")  // 项目列表里靠前的

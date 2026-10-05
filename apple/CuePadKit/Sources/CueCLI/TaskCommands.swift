@@ -4,7 +4,7 @@ import Foundation
 extension Command {
   static let task: [Command] = [
     Command(
-      path: ["task", "list"], summary: "列出任务（默认只列未完成，按手动顺序）",
+      path: ["task", "list"], summary: "列出任务（默认只列未完成：进行中与待办，按项目分组、组内手动顺序）",
       options: [
         .project("只列该项目的任务"), .global, .allProjects, Opt("done", "只列已完成（最近完成在前）"),
         Opt("all", "未完成与已完成都列"),
@@ -16,8 +16,8 @@ extension Command {
       if args.has("done") && args.has("all") { throw CLIError.usage("--done 与 --all 只能选一个") }
       let scope = try await call.scope(nullFlag: "global")
       var tasks: [CueTask] = []
-      if !args.has("done") { tasks += try await call.store.tasks() }
-      if args.has("done") || args.has("all") { tasks += try await call.store.completedTasks() }
+      if !args.has("done") { tasks += try await call.allTasks([.inProgress, .todo]) }
+      if args.has("done") || args.has("all") { tasks += try await call.allTasks([.done]) }
       tasks = tasks.filter { scope.contains($0.projectID) }
       let views = try await call.taskViews(tasks)
       return listReply(views.map(\.line), json: views.map(\.json))
@@ -33,8 +33,9 @@ extension Command {
       let task = try await call.store.createTask(call.args.positionals.joined(separator: " "), in: scope.target)
       return reply(try await call.taskViews([task])[0])
     },
-    setDone("done", "标记完成", done: true),
-    setDone("undo", "撤销完成", done: false),
+    setStatus("start", "标记进行中", .inProgress),
+    setStatus("done", "标记完成", .done),
+    setStatus("undo", "回到待办（撤销完成或进行中）", .todo),
     Command(
       path: ["task", "edit"], summary: "改任务内容或所属项目", arguments: "<任务> [内容...]",
       options: [.project("改挂到该项目"), Opt("global", "改成全局任务")],
@@ -67,12 +68,11 @@ extension Command {
     },
   ]
 
-  private static func setDone(_ verb: String, _ summary: String, done: Bool) -> Command {
+  private static func setStatus(_ verb: String, _ summary: String, _ status: TaskStatus) -> Command {
     Command(path: ["task", verb], summary: summary, arguments: "<任务>", notes: Schema.output("更新后的 Task", Schema.task)) { call in
       try call.args.expect("任务")
       let task = try await call.task(call.args.positionals[0])
-      let now = Date()
-      try await call.store.updateTask(task.id) { $0.completedAt = done ? ($0.completedAt ?? now) : nil }
+      try await call.store.updateTask(task.id) { $0.status = status }
       return reply(try await fresh(call, task.id))
     }
   }

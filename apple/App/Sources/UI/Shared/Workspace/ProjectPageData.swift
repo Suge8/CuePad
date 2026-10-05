@@ -27,7 +27,7 @@ nonisolated struct ProjectPageData: Sendable {
             project: try project.flatMap { try store.project($0) },
             cards: try store.cards(in: project),
             lastSends: try store.lastSends(in: project),
-            tasks: try store.tasks().filter { $0.projectID == project })
+            tasks: try store.openTasks().filter { $0.projectID == project })
     }
 }
 

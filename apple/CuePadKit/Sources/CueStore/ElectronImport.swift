@@ -24,7 +24,7 @@ public struct ImportReport: Equatable, Sendable {
 extension CueStore {
   /// 导入 Electron 版 SQLite 库。幂等：旧行 id 映射为确定的 UUID，已存在的行跳过。
   /// 只读取源库的副本（含 -wal），源文件从不被打开或修改。
-  /// 映射：整数 id → UUID；sort_order → 分数索引；置顶（旧版卡片叫收藏）/编号/任务完成时间照搬；卡片标题并入正文首行；标签不导入（产品不做标签）；
+  /// 映射：整数 id → UUID；sort_order → 分数索引；置顶（旧版卡片叫收藏）/任务完成时间照搬（项目顺序与卡片编号不导入）；卡片标题并入正文首行；标签不导入（产品不做标签）；
   /// 单独删除的卡保留 deletedAt，随项目删除的卡由项目推导；旧库不存变量取值（原在 localStorage），不导入。
   public func importElectronLibrary(from source: URL) throws -> ImportReport {
     let library = try LegacyLibrary(copyingFrom: source)
@@ -58,10 +58,10 @@ struct LegacyLibrary {
   private mutating func load(_ legacy: SQLite) throws {
     let projectRows = try legacy.query("SELECT * FROM projects ORDER BY sort_order, id", [], LegacyRow.init)
     let trashedProjects = Set(projectRows.filter { $0.deletedAt != nil }.map(\.id))
-    projects = zip(projectRows, SortKey.sequence(count: projectRows.count)).map { row, key in
+    projects = projectRows.map { row in
       Project(
         id: LegacyID.uuid("project", row.id), name: row.name ?? "", icon: row.icon, color: row.color,
-        sortKey: key, isPinned: row.flag, goalCardID: nil, deletedAt: row.deletedAt,
+        isPinned: row.flag, goalCardID: nil, deletedAt: row.deletedAt,
         createdAt: row.createdAt, modifiedAt: row.updatedAt)
     }
 
@@ -72,7 +72,7 @@ struct LegacyLibrary {
       return Card(
         id: LegacyID.uuid("card", row.id), projectID: row.projectID.map { LegacyID.uuid("project", $0) },
         body: [row.title, row.body].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n\n"),
-        numbering: Open(rawValue: row.numbering ?? "none"), isPinned: row.flag,
+        isPinned: row.flag,
         variableValues: [:], conflictOf: nil, sortKey: key, deletedAt: followsProject ? nil : row.deletedAt,
         createdAt: row.createdAt, modifiedAt: row.updatedAt)
     }
@@ -82,7 +82,7 @@ struct LegacyLibrary {
       CueTask(
         id: LegacyID.uuid("task", row.id), content: row.content ?? "",
         projectID: row.projectID.map { LegacyID.uuid("project", $0) }, sortKey: key,
-        completedAt: row.completedAt, piSessionID: nil, createdAt: row.createdAt, modifiedAt: row.updatedAt)
+        startedAt: nil, completedAt: row.completedAt, piSessionID: nil, createdAt: row.createdAt, modifiedAt: row.updatedAt)
     }
 
     for (key, value) in try legacy.query("SELECT key, value FROM app_settings", [], { ($0.text(0), $0.text(1)) }) {
@@ -112,7 +112,6 @@ private struct LegacyRow {
   let content: String?
   let icon: String?
   let color: String
-  let numbering: String?
   let deleteSource: String?
   let flag: Bool
   let deletedAt: Date?
@@ -132,7 +131,6 @@ private struct LegacyRow {
     content = text("content")
     icon = text("icon")
     color = text("color") ?? ""
-    numbering = text("numbering")
     deleteSource = text("delete_source")
     flag = (int("is_pinned") ?? int("is_favorite")) == 1
     deletedAt = date("deleted_at")

@@ -138,12 +138,12 @@ import Testing
     _ = try await store.createTask("a")
     let b = try await store.createTask("b")
     _ = try await store.createTask("c")
-    func active() async throws -> [String] { try await store.tasks().map(\.content) }
+    func active() async throws -> [String] { try await store.tasks(.todo).flatMap(\.tasks).map(\.content) }
     #expect(try await active() == ["c", "b", "a"])
 
-    try await store.updateTask(b.id) { $0.completedAt = Date() }
+    try await store.updateTask(b.id) { $0.status = .done }
     #expect(try await active() == ["c", "a"])
-    #expect(try await store.completedTasks().map(\.content) == ["b"])
+    #expect(try await store.tasks(.done).flatMap(\.tasks).map(\.content) == ["b"])
   }
 
   @Test func blankTaskContentIsRejected() async throws {
@@ -161,8 +161,7 @@ import Testing
     let task = try await store.createTask("t", in: p.id)
     try await store.trashProject(p.id)
     try await store.purgeProject(p.id)
-    #expect(try await store.tasks().map(\.id) == [task.id])
-    #expect(try await store.tasks().first?.projectID == nil)
+    #expect(try await store.task(task.id)?.projectID == nil)
   }
 
   // MARK: 发送记录与 Pi 会话索引
@@ -185,10 +184,10 @@ import Testing
   @Test func sendingATaskToAPiSessionLinksTheTaskToThatSession() async throws {
     let task = try await store.createTask("do it")
     try await store.recordSend("do it", to: SendTarget(kind: .clipboard, name: "剪贴板"), task: task.id)
-    #expect(try await store.tasks().first?.piSessionID == nil)
+    #expect(try await store.task(task.id)?.piSessionID == nil)
 
     try await store.recordSend("do it", to: SendTarget(kind: .piSession, name: "work", ref: "sess-1"), task: task.id)
-    #expect(try await store.tasks().first?.piSessionID == "sess-1")
+    #expect(try await store.task(task.id)?.piSessionID == "sess-1")
   }
 
   // MARK: 项目目录（本机）

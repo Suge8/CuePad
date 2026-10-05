@@ -16,11 +16,11 @@ struct TaskToggleTests {
         let workspace = Workspace(services: services)
 
         try await workspace.toggle(stale)
-        #expect(try await services.store.completedTasks().map(\.id) == [stale.id])
+        #expect(try await services.store.tasks(.done).flatMap(\.tasks).map(\.id) == [stale.id])
 
         try await workspace.toggle(stale)
-        #expect(try await services.store.tasks().map(\.id) == [stale.id])
-        #expect(try await services.store.completedTasks().isEmpty)
+        #expect(try await services.store.openTasks().map(\.id) == [stale.id])
+        #expect(try await services.store.tasks(.done).flatMap(\.tasks).isEmpty)
     }
 }
 #endif

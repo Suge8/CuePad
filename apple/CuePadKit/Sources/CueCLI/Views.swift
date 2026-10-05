@@ -84,16 +84,19 @@ struct TaskView {
   let task: CueTask
   let project: String?
 
+  private static let mark: [TaskStatus: String] = [.todo: " ", .inProgress: "~", .done: "x"]
+
   var json: JSONObject {
     [
       "id": uuid(task.id), "content": task.content, "projectId": uuid(task.projectID), "project": nullable(project),
-      "done": task.completedAt != nil, "completedAt": iso(task.completedAt), "createdAt": iso(task.createdAt),
+      "status": task.status.rawValue, "done": task.status == .done, "startedAt": iso(task.startedAt),
+      "completedAt": iso(task.completedAt), "createdAt": iso(task.createdAt),
       "modifiedAt": iso(task.modifiedAt),
     ]
   }
 
   var line: String {
-    "[\(task.completedAt == nil ? " " : "x")] \(short(task.id))  \(task.content)" + (project.map { "  (\($0))" } ?? "")
+    "[\(Self.mark[task.status]!)] \(short(task.id))  \(task.content)" + (project.map { "  (\($0))" } ?? "")
   }
 }
 

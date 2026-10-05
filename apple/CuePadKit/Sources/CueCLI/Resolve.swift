@@ -36,13 +36,18 @@ extension Call {
       guard let task = try await findTask(id) else { throw CLIError.notFound("找不到任务 \(ref)") }
       return task
     }
-    let all = try await store.tasks() + store.completedTasks()
-    return try unique(ref, in: all, kind: "任务") { $0.content }
+    return try unique(ref, in: try await allTasks(), kind: "任务") { $0.content }
   }
 
   func findTask(_ id: UUID) async throws -> CueTask? {
-    let all = try await store.tasks() + store.completedTasks()
-    return all.first { $0.id == id }
+    try await allTasks().first { $0.id == id }
+  }
+
+  /// 所有可见任务：待办、进行中、完成。
+  func allTasks(_ statuses: [TaskStatus] = TaskStatus.allCases) async throws -> [CueTask] {
+    var all: [CueTask] = []
+    for status in statuses { all += try await store.tasks(status).flatMap(\.tasks) }
+    return all
   }
 
   private func unique<T: Identifiable>(
