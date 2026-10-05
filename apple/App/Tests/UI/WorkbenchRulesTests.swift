@@ -221,3 +221,49 @@ struct PiHistorySectionTests {
         #expect(firstPage.map(\.section) == Array(both.map(\.section).prefix(firstPage.count)))
     }
 }
+
+/// 会话列表第三行与回复框的规则（手机 Pi 页、Mac 侧栏与详情共用）。
+struct PiReplyRulesTests {
+    func session(_ state: PiWorkState, reply: String? = nil, question: PiQuestion? = nil) -> PiSessionState {
+        let now = Date(timeIntervalSince1970: 1_000)
+        return PiSessionState(
+            id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
+            lastPrompt: nil, lastReply: reply, question: question, notify: nil, stateSince: now, busySince: nil, createdAt: now, modifiedAt: now)
+    }
+
+    @Test func 列表预览先去掉Markdown符号再取首句() {
+        let reply = "## 结论\n找到原因了：**取消时没清掉** `retryTimer`，见 [说明](https://x.dev)。后面还有"
+        #expect(PiProgress.line(of: session(.settled, reply: reply)) == "结论")
+        #expect(PiProgress.line(of: session(.settled, reply: "找到原因了：**取消时没清掉** `retryTimer`，见 [说明](https://x.dev)。后面还有"))
+            == "找到原因了：取消时没清掉 retryTimer，见 说明。")
+        #expect(PiProgress.line(of: session(.settled, reply: "- 第一条 **要点**\n- 第二条")) == "第一条 要点")
+    }
+
+    @Test func 等你确认时_文字型问题回复框就是作答框() {
+        let question = PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？")
+        #expect(MacDelivery.reply(to: session(.waitingForUser, question: question), hasImages: false) == .answer(question))
+    }
+
+    @Test func 等你确认时_选择与确认型问题不发自由文本_先在上面作答() {
+        let select = PiQuestion(promptID: "p", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
+        let confirm = PiQuestion(promptID: "p", kind: .confirm, text: "部署吗？")
+        #expect(MacDelivery.reply(to: session(.waitingForUser, question: select), hasImages: false) == .answerAbove)
+        #expect(MacDelivery.reply(to: session(.waitingForUser, question: confirm), hasImages: false) == .answerAbove)
+    }
+
+    @Test func 等你确认时_这里答不了的问题不发自由文本() {
+        let editor = PiQuestion(promptID: nil, kind: .unknown("editor"), text: "编辑提交说明")
+        #expect(MacDelivery.reply(to: session(.waitingForUser, question: editor), hasImages: false) == .unanswerable)
+        #expect(MacDelivery.reply(to: session(.waitingForUser), hasImages: false) == .unanswerable)
+    }
+
+    @Test func 不在等你确认时照常发消息() {
+        #expect(MacDelivery.reply(to: session(.settled), hasImages: false) == .message(MacDelivery.modes(for: session(.settled), hasImages: false)))
+        #expect(MacDelivery.reply(to: session(.thinking), hasImages: false) == .message(MacDelivery.modes(for: session(.thinking), hasImages: false)))
+    }
+
+    @Test func 你发过去的只留在途与失败的_已送达的不常驻() {
+        let statuses: [DeliveryStatus] = [.succeeded, .pending, .executing, .failed]
+        #expect(statuses.filter { DeliveryStack.keeps(.known($0)) } == [.pending, .executing, .failed])
+    }
+}
