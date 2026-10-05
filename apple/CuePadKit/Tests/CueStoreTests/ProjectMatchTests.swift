@@ -74,4 +74,38 @@ import Testing
     try await store.setDirectory("/shared", for: first.id)
     #expect(try await match("/shared/x") == "first")  // 项目列表里靠前的
   }
+
+  // MARK: 同一个目录的不同写法
+
+  /// 磁盘上真实存在的一棵目录：`Repo/Sub`，旁边一个指向 `Repo` 的符号链接 `link`。
+  private func disk() throws -> (repo: URL, link: URL) {
+    let root = fixture.directory.appending(path: "disk", directoryHint: .isDirectory)
+    let repo = root.appending(path: "Repo", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: repo.appending(path: "Sub"), withIntermediateDirectories: true)
+    let link = root.appending(path: "link")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: repo)
+    return (repo, link)
+  }
+
+  @Test func aSymlinkOnEitherSideStillMatches() async throws {
+    let (repo, link) = try disk()
+    let viaLink = try await store.createProject(name: "经链接绑定", color: "#111")
+    try await store.setDirectory(link.path, for: viaLink.id)
+    #expect(try await match(repo.appending(path: "Sub").path) == "经链接绑定")
+
+    try await store.setDirectory(repo.path, for: viaLink.id)
+    #expect(try await match(link.appending(path: "Sub").path) == "经链接绑定")
+  }
+
+  /// 不区分大小写的卷（macOS 默认）上，大小写不同的写法是同一个目录。
+  @Test(.enabled(if: caseInsensitiveTemporaryVolume)) func aDifferentlyCasedPathMatchesOnACaseInsensitiveVolume() async throws {
+    let (repo, _) = try disk()
+    let project = try await store.createProject(name: "小写绑定", color: "#111")
+    try await store.setDirectory(repo.deletingLastPathComponent().appending(path: "repo").path, for: project.id)
+    #expect(try await match(repo.appending(path: "Sub").path) == "小写绑定")
+  }
 }
+
+private let caseInsensitiveTemporaryVolume =
+  (try? FileManager.default.temporaryDirectory.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey]))?
+    .volumeSupportsCaseSensitiveNames == false
