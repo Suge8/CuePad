@@ -22,7 +22,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
 }
 
 /// 会话近况（iOS 的会话页、Mac 侧栏的会话详情共用）：状态块（名字、状态、在哪、进度；等你确认的问题最醒目，
-/// 出错写原因），然后是最近一轮——你说的一行（弱化）与 Pi 答的全文（较长时折起）。已结束的整页更淡但可读。
+/// 出错写原因），然后是最近一轮——你说的一行（弱化）与 Pi 答的全文（较长时折起）；Pi 正在处理新的话时，新的话在上、上一轮折在下。已结束的整页更淡但可读。
 /// 发过去的请求（`DeliveryStack`）与回复框由各平台放在它下面。
 struct PiSessionDigest: View {
     let session: PiSessionState
@@ -263,9 +263,77 @@ private struct AnswerButtonStyle: ButtonStyle {
     }
 }
 
-/// 最近一轮：上面一行弱化的"你说"（点开看全句），下面 Pi 答的全文；回答较长时先折起，可展开。
+/// 近况里的问答：最近一轮已完成的问答成对显示（`lastPrompt` 与 `lastReply`）。Pi 正在处理一句新的话（`pendingPrompt`）时，
+/// 它单独在上面写"你说：… · Pi 正在处理"，上一轮问答折起在下（点开看），不把新的话和旧的回答配成一对。
 private struct RecentRound: View {
     let session: PiSessionState
+    @Environment(\.palette) private var palette
+    @State private var previousShown = false
+
+    private var hasRound: Bool { session.lastPrompt != nil || session.lastReply != nil }
+
+    var body: some View {
+        if let pending = session.pendingPrompt {
+            VStack(alignment: .leading, spacing: 10) {
+                pendingCard(pending)
+                if hasRound { previous }
+            }
+        } else if hasRound {
+            RoundCard(prompt: session.lastPrompt, reply: session.lastReply)
+        } else {
+            Text("还没有近况。Pi 回答之后，这里会显示它最后答的。")
+                .font(.subheadline).foregroundStyle(palette.ink3)
+                .padding(.horizontal, 4)
+        }
+    }
+
+    private func pendingCard(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("你说").font(.footnote).foregroundStyle(palette.ink3)
+            Text(text).font(.body).foregroundStyle(palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            if session.state.isWorking {
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("Pi 正在处理") }
+                    .font(.footnote).foregroundStyle(palette.ink2)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paper(radius: 16)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// 上一轮问答：默认折成一行，点开是完整的一轮。
+    private var previous: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { withAnimation(Motion.quick) { previousShown.toggle() } } label: {
+                HStack(spacing: 6) {
+                    Text("上一轮").font(.footnote.weight(.medium))
+                    if !previousShown, let prompt = session.lastPrompt {
+                        Text("· \(prompt)").font(.footnote).lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(previousShown ? 90 : 0)).accessibilityHidden(true)
+                }
+                .foregroundStyle(palette.ink3)
+                .padding(.horizontal, 4).frame(minHeight: 36)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(previousShown ? "已展开" : "已折叠")
+            if previousShown {
+                RoundCard(prompt: session.lastPrompt, reply: session.lastReply).opacity(0.85).transition(.opacity)
+            }
+        }
+    }
+}
+
+/// 一轮已完成的问答：上面一行弱化的"你说"（点开看全句），下面 Pi 答的全文；回答较长时先折起，可展开。
+private struct RoundCard: View {
+    let prompt: String?
+    let reply: String?
     @Environment(\.palette) private var palette
     @State private var replyExpanded = false
     @State private var promptExpanded = false
@@ -276,13 +344,9 @@ private struct RecentRound: View {
     private static let collapsedHeight: CGFloat = 200
 
     var body: some View {
-        if session.lastPrompt == nil && session.lastReply == nil {
-            Text("还没有近况。Pi 回答之后，这里会显示它最后答的。")
-                .font(.subheadline).foregroundStyle(palette.ink3)
-                .padding(.horizontal, 4)
-        } else {
+        if prompt != nil || reply != nil {
             VStack(alignment: .leading, spacing: 12) {
-                if let prompt = session.lastPrompt {
+                if let prompt {
                     Button { withAnimation(Motion.quick) { promptExpanded.toggle() } } label: {
                         Text("你说：\(prompt)").font(.footnote).foregroundStyle(palette.ink3)
                             .lineLimit(promptExpanded ? nil : 1)
@@ -293,7 +357,7 @@ private struct RecentRound: View {
                     .buttonStyle(.plain)
                     .accessibilityHint(promptExpanded ? "收起" : "展开全句")
                 }
-                if let reply = session.lastReply {
+                if let reply {
                     let long = reply.count > Self.collapsedCharacters
                         || reply.split(separator: "\n", omittingEmptySubsequences: false).count > Self.collapsedLines
                     VStack(alignment: .leading, spacing: 6) {

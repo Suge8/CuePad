@@ -61,7 +61,7 @@ struct SendTests {
         #expect(record.targetRef == "sess-1")
     }
 
-    @Test func Pi会话忙时_未指定排队方式则报错_指定后按方式发送() async throws {
+    @Test func Pi会话忙时_未指定马上说还是等它做完再说则报错_指定后按方式发送() async throws {
         try await connectedSession(busy: true)
 
         await #expect(throws: SendError.piSessionBusy) {

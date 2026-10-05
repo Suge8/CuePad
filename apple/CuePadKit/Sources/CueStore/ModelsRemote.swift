@@ -16,7 +16,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
     }
   }
 
-  /// Pi 自己正在跑一轮（含弹窗等你确认）：此时发消息只能插话或排队。等子代理不算——指挥官这轮已经歇下，消息直接开始新的一轮。
+  /// Pi 自己正在跑一轮（含弹窗等你确认）：此时发消息只能马上说或等它做完再说。等子代理不算——指挥官这轮已经歇下，消息直接开始新的一轮。
   public var isTurnRunning: Bool {
     switch self {
     case .thinking, .outputting, .tool, .waitingForUser: true
