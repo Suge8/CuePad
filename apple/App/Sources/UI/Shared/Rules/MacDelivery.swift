@@ -3,18 +3,16 @@ import Foundation
 
 /// "发到 Mac"的界面规则：会话此刻可用哪些发送方式。请求本身经 `AppServices.requestMacDelivery` 写出。
 nonisolated enum MacDelivery {
-    /// 会话此刻可用的方式，第一个是默认：Pi 正在跑一轮时直接发送会被拒绝，只能马上说或等它做完再说。
+    /// 会话此刻可用的方式，第一个是默认：Pi 正在跑一轮时直接发送会被拒绝，只能等它做完再说（默认，不打断）或马上说（次级，按住发送钮）。
     /// 已结束的会话也能直接发送：Mac 会在后台把它恢复起来再送达。
-    /// Mac 上人就在 Pi 旁边：默认马上说，也可以只放进输入框再自己按发送（只对开在终端里的会话；含图片时不能）。
-    /// 手机上人不在 Mac 前：默认等它做完再说，另有马上说；不给放进输入框（没人去按那一下发送）。
+    /// Mac 上还可以只放进输入框再自己按发送（只对开在终端里的会话；含图片时不能）；手机不给（人不在 Mac 前，没人去按那一下发送）。
     static func modes(for session: PiSessionState, hasImages: Bool) -> [DeliveryMode] {
-        let busy = session.state.known?.isTurnRunning == true
+        let sending: [DeliveryMode] = session.state.known?.isTurnRunning == true ? [.followUp, .steer] : [.send]
         #if os(macOS)
-        let sending: [DeliveryMode] = busy ? [.steer, .followUp] : [.send]
         let inTerminal = !session.hosted && session.state != .known(.ended)
         return hasImages || !inTerminal ? sending : sending + [.paste]
         #else
-        return busy ? [.followUp, .steer] : [.send]
+        return sending
         #endif
     }
 }
