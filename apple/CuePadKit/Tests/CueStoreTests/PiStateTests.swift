@@ -220,6 +220,61 @@ import Testing
     #expect(try await states()["s1"]?.modifiedAt == first)
   }
 
+  /// 升级前已建过索引的会话没有同步记录（那时还不写）：扫描完成时补写，不受"内容没变不写"影响。
+  @Test func indexedSessionsWithoutARecordGetOneWhenScanningFinishes() async throws {
+    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
+    try await store.upsertPiSession(indexed("s2", title: "第二个"), host: "mac-a")
+    try RawDB(fixture.url).exec("DELETE FROM piSessionStates")
+
+    try await store.retainPiSessions(paths: [indexed("s1").path, indexed("s2").path], host: "mac-a")
+
+    #expect(Set(try await store.piSessionStates().map(\.sessionID)) == ["s1", "s2"])
+    #expect(try await states()["s2"]?.title == "第二个")
+  }
+
+  // MARK: 列表查询
+
+  @Test func scopesReturnOnlyTheirStatesAndATokenOrIDPicksOne() async throws {
+    let recorder = recorder()
+    try await recorder.update(sessionID: "live", state: .thinking, launchToken: "tok-1")
+    try await store.upsertPiSession(indexed("old"), host: "mac-a")
+    let project = try await store.createProject(name: "App", color: "#111")
+    try await recorder.update(sessionID: "here", state: .settled, projectID: project.id)
+
+    func ids(_ query: PiSessionQuery) async throws -> Set<String> {
+      Set(try await store.piSessionPage(query).items.map(\.state.sessionID))
+    }
+    #expect(try await ids(PiSessionQuery(scope: .live)) == ["live", "here"])
+    #expect(try await ids(PiSessionQuery(scope: .ended)) == ["old"])
+    #expect(try await ids(PiSessionQuery(scope: .all)) == ["live", "here", "old"])
+    #expect(try await ids(PiSessionQuery(project: project.id)) == ["here"])
+    #expect(try await ids(PiSessionQuery(launchToken: "tok-1")) == ["live"])
+    #expect(try await ids(PiSessionQuery(id: PiSessionState.recordID(sessionID: "old"))) == ["old"])
+    #expect(try await store.piSessionPage(PiSessionQuery(scope: .live)).total == 2)
+  }
+
+  // MARK: 目录绑定
+
+  /// 项目在哪台 Mac 上绑定了目录：只带目录末段名，不同步完整路径；只管这台 Mac 自己的，别的 Mac 的不动。
+  @Test func directoryBindingsFollowThisMacsDirectoriesWithTheFolderNameOnly() async throws {
+    let app = try await store.createProject(name: "App", color: "#111")
+    let site = try await store.createProject(name: "Site", color: "#222")
+    try await store.setDirectory("/Users/someone/work/app", for: app.id)
+    try await store.setDirectory("/Users/someone/work/site", for: site.id)
+    try await store.publishDirectoryBindings(host: "mac-b", hostName: "Other")
+
+    try await store.publishDirectoryBindings(host: "mac-a", hostName: "Studio")
+    let bindings = try await store.directoryBindings().filter { $0.hostID == "mac-a" }
+    #expect(Set(bindings.map(\.folder)) == ["app", "site"] && bindings.allSatisfy { $0.hostName == "Studio" })
+    let stored = try RawDB(fixture.url).rows("SELECT * FROM directoryBindings")
+    #expect(!stored.flatMap { $0 }.contains { $0.contains("/Users/someone") })
+
+    try await store.setDirectory(nil, for: site.id)
+    try await store.publishDirectoryBindings(host: "mac-a", hostName: "Studio")
+    #expect(try await store.directoryBindings().filter { $0.hostID == "mac-a" }.map(\.projectID) == [app.id])
+    #expect(try await store.directoryBindings().filter { $0.hostID == "mac-b" }.count == 2)
+  }
+
   @Test func recordsOfDeletedSessionFilesAreDeleted() async throws {
     try await store.upsertPiSession(indexed("s1"), host: "mac-a")
     try await store.upsertPiSession(indexed("s2"), host: "mac-a")
