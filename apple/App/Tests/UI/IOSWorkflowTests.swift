@@ -68,9 +68,14 @@ struct IOSWorkflowTests {
         (.delegating, false, [.send]),
         (.settled, true, [.send]),
         (.outputting, true, [.followUp, .steer]),
+        // 已结束的也能直接发：Mac 在后台把它恢复起来再送达
+        (.ended, false, [.send]),
     ])
     func 手机发送_空闲直接发_忙时默认排队另有插话_没有放进输入框(state: PiWorkState, hasImages: Bool, modes: [DeliveryMode]) {
-        #expect(MacDelivery.modes(for: .known(state), hasImages: hasImages) == modes)
+        let session = PiSessionState(
+            id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
+            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
+        #expect(MacDelivery.modes(for: session, hasImages: hasImages) == modes)
     }
 
     // MARK: Pi 页

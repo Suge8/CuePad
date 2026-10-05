@@ -115,7 +115,7 @@ struct NewSessionSheet: View {
                     Spacer(minLength: 8)
                     DeliveryStatusLabel(request: request)
                 }
-                if case .start(_, let opening?, _) = request.launch {
+                if let opening = request.launch?.prompt {
                     Text(opening).font(.body).foregroundStyle(palette.ink2)
                 }
                 Text(request.status == .known(.succeeded) ? "Mac 正在开 Pi，会话出现后自动进入" : "等 Mac 收到…")
@@ -144,7 +144,7 @@ struct NewSessionSheet: View {
         sending = true
         workspace.attempt {
             defer { sending = false }
-            let request = try await services.launch(.start(place.launch, prompt: opening, token: token), title: place.name, on: place.hostID)
+            let request = try await services.launch(PiLaunch(place: place.launch, prompt: opening, token: token), title: place.name, on: place.hostID)
             launched = .init(request: request.id, token: token)
         }
     }

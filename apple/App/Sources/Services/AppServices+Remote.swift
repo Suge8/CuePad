@@ -34,7 +34,8 @@ extension AppServices {
             folder: session.cwd.lastPathComponent,
             projectID: try await store.project(containing: session.cwd)?.id,
             recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question.map(PiQuestion.init)),
-            times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken)
+            times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
+            hosted: session.hosted, subagents: session.subagentStates)
     }
 
     // MARK: 投送请求（手机发来的与本机界面写的）
@@ -84,7 +85,7 @@ extension AppServices {
     /// 执行一条请求：发给 Pi 会话的在这里调用 Pi 桥（全 App 只有这一处），应用与剪贴板交给通用发送；成功后记发送记录。
     private func perform(_ request: DeliveryRequest) async throws {
         if request.mode == .known(.ping) { return }  // 连接测试：收到即成功，不碰目标、不写发送记录
-        if request.mode == .known(.resume) || request.mode == .known(.start) {
+        if request.mode == .known(.start) {
             guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
             return try await launchPi(launch)
         }
@@ -116,31 +117,10 @@ extension AppServices {
         try await recordSend(request.content, to: sent, card: request.cardID, task: request.taskID)
     }
 
-    /// 在设置里选的终端里恢复或新开 Pi 会话（不写发送记录）。目录由本机解析：恢复用会话索引里的工作目录与会话文件；
-    /// 新会话用项目绑定的代码目录或某个会话的目录。新会话经环境变量带上发起方的认领标识，扩展在 hello 里带回。
+    /// 开新会话（不写发送记录）：在后台托管（见 `PiHost`），目录由本机解析：项目绑定的代码目录或某个会话的目录。
     private func launchPi(_ launch: PiLaunch) async throws {
-        guard let pi = await locatePi() else { throw SendError.piNotInstalled }
-        let command: TerminalCommand
-        switch launch {
-        case .resume(let sessionID):
-            guard channels.piSessionID(forSession: sessionID) == nil else { throw SendError.piSessionAlreadyRunning }
-            guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
-            command = TerminalCommand(
-                directory: URL(filePath: indexed.cwd, directoryHint: .isDirectory), executable: pi,
-                arguments: ["--session", indexed.path], environment: paths.launchEnvironment)
-        case .start(let place, let prompt, let token):
-            let opening = prompt.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
-            command = TerminalCommand(
-                directory: try await directory(for: place), executable: pi,
-                // `--` 之后都是开场的话，以 - 开头也不会被当成选项
-                arguments: opening.map { ["--", $0] } ?? [],
-                environment: paths.launchEnvironment.merging([Self.launchTokenVariable: token]) { $1 })
-        }
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: command.directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            throw SendError.directoryMissing(command.directory.lastPathComponent)
-        }
-        try await terminalLauncher.open(command, in: settings.piTerminal)
+        _ = try await directory(for: launch.place)
+        throw SendError.unsupportedMode(DeliveryMode.start.rawValue)  // 后台托管接上前（契约提交）
     }
 
     /// 扩展读这个环境变量拿认领标识（见扩展的 `LAUNCH_TOKEN_ENV`）。
@@ -174,7 +154,7 @@ extension AppServices {
             whenBusy = nil
         case .steer: whenBusy = .steer
         case .followUp: whenBusy = .followUp
-        case .answer, .ping, .resume, .start: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
+        case .answer, .ping, .start: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
         }
         let images = try content.segments.compactMap { segment -> PiImage? in
             guard case .image(let hash) = segment else { return nil }
@@ -206,10 +186,21 @@ extension PiAnswerValue {
 }
 
 extension CuePi.PiSession {
-    /// 写进同步记录（与 Mac 的近况页）的状态与一句话说明：会话自己没有说明时写子代理摘要。
-    var syncRepresentation: (state: PiWorkState, detail: String?) {
-        let (state, detail) = state.syncRepresentation
-        return (state, detail ?? subagentSummary)
+    /// 写进同步记录（与 Mac 的近况页）的状态与一句话说明。
+    var syncRepresentation: (state: PiWorkState, detail: String?) { state.syncRepresentation }
+
+    /// 写进同步记录的子代理列表。
+    var subagentStates: [PiSubagentState] {
+        subagents.map { subagent in
+            let activity: PiSubagentActivity =
+                switch subagent.activity {
+                case .working: .working
+                case .waitingForUser: .waitingForUser
+                case .idle: .idle
+                case .error: .error
+                }
+            return PiSubagentState(name: subagent.name, activity: .known(activity))
+        }
     }
 }
 
@@ -220,7 +211,7 @@ extension PiAgentState {
         case .idle, .done: (.settled, nil)
         case .thinking: (.thinking, nil)
         case .outputting: (.outputting, nil)
-        case .delegating: (.delegating, nil)  // 说明写子代理摘要
+        case .delegating: (.delegating, nil)  // 子代理在 `subagents` 里
         case .tool(let name, _, let detail): (.tool, detail.map { "\(name) · \($0)" } ?? name)
         case .waitingUser(_, let title): (.waitingForUser, title)
         case .error(let message): (.error, PiErrorSummary(message).line)  // 手机上没有悬停看原文
