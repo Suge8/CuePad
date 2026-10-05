@@ -12,13 +12,20 @@ import Testing
   actor FakeZone: ZoneChangeSource {
     private(set) var calls: [(token: Data?, idsOnly: Bool)] = []
     private var responses: [Result<ZoneChangeBatch, any Error>]
+    /// 按 ID 取整条记录时的服务器内容。
+    var server: [CKRecord.ID: CKRecord] = [:]
 
-    init(_ responses: [Result<ZoneChangeBatch, any Error>]) { self.responses = responses }
+    init(_ responses: [Result<ZoneChangeBatch, any Error>], server: [CKRecord] = []) {
+      self.responses = responses
+      self.server = Dictionary(uniqueKeysWithValues: server.map { ($0.recordID, $0) })
+    }
 
     func changes(since token: Data?, idsOnly: Bool) async throws -> ZoneChangeBatch {
       calls.append((token, idsOnly))
       return try responses.removeFirst().get()
     }
+
+    func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { ids.compactMap { server[$0] } }
   }
 
   private func batch(_ token: String, _ records: [CKRecord] = []) -> Result<ZoneChangeBatch, any Error> {
@@ -44,6 +51,24 @@ import Testing
     #expect(calls.map { $0.token.map { String(decoding: $0, as: UTF8.self) } } == [nil, "t1", "t2"])
     #expect(try await rig.store.card(new)?.body == "之后的新卡")
     #expect(try await rig.store.card(old) == nil)  // 只要 ID 时拿到的记录没有字段，不交给协调器
+  }
+
+  /// 开始拉之前就已经在服务器上的投送请求（如 Mac 刚连上会话时手机已发出的）：取令牌时看到它就按 ID 取整条交给协调器，
+  /// 不会被令牌跨过。
+  @Test func deliveryRequestsAlreadyOnTheServerWhenTakingTheTokenAreFetchedInFull() async throws {
+    let id = UUID()
+    let full = remoteRecord(.deliveryRequests, id: id, [
+      "content": .text("ping"), "targetKind": .text("app"), "targetName": .text("CuePad"), "targetRef": .null,
+      "hostID": .text("mac-a"), "mode": .text("ping"), "cardID": .null, "taskID": .null, "status": .text("pending"),
+      "resultDetail": .null, "handledBy": .null, "createdAt": .int(1_000), "completedAt": .null, "modifiedAt": .int(1_000),
+    ])
+    let idOnly = CKRecord(recordType: "deliveryRequests", recordID: full.recordID)
+    let zone = FakeZone([batch("t1", [idOnly]), batch("t2")], server: [full])
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
+
+    try await puller.pull()
+
+    #expect(try await rig.store.deliveryRequests().map(\.id) == [id])
   }
 
   @Test func anExpiredTokenIsDroppedAndTakenAgain() async throws {
