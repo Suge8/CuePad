@@ -23,10 +23,15 @@ protocol ZoneChangeSource: Sendable {
 /// 切到前台与"太久没拉"填上；没有推送时手动 fetchChanges（含限定 zone 的写法）不发任何请求。
 ///
 /// 令牌只在内存、不持久化：持久的权威是引擎状态，这里只是"在等时"的加速，重启后重新取即可。
-/// 第一次先只要 ID 把令牌推进到"现在"（不把整个同步区的字段拉一遍）。其间看到的投送请求按 ID 取整条交给协调器：
-/// 它们就是"在等"的对象（如 Mac 刚连上会话时手机已发出的），不能被令牌跨过；数量少（完成后即清理）。其余记录在此之前的变化由引擎负责。
+/// 第一次先只要 ID 把令牌推进到"现在"（不把整个同步区的字段拉一遍）。其间看到的"在等的表"（`awaitedTables`）的记录
+/// 按 ID 取整条交给协调器，不被令牌跨过；其余表（卡片、附件等）只推进令牌，取令牌之前的变化由引擎负责。
 /// 令牌过期时清空重取。同一批变化之后还会经引擎到达，协调器的合并是幂等的。
 actor ZoneChangePuller {
+  /// 主动拉取等的是这些表（理由见 `AppServices.pollingCadence`）：投送请求（Mac 等着执行、手机等着结果）与
+  /// Pi 会话状态（手机看着 Pi 页时要是活的）。都是数量少的记录（请求完成即清理，状态每个会话一条、结束后保留有限天数），
+  /// 取令牌时整条补取的成本小。加新的等待理由时，它等的表要加进来。
+  static let awaitedTables: Set<Table> = [.deliveryRequests, .piSessionStates]
+
   private let source: any ZoneChangeSource
   private let coordinator: SyncCoordinator
   private var token: Data?
@@ -49,14 +54,15 @@ actor ZoneChangePuller {
   private func drain() async throws {
     if token == nil {
       var batch: ZoneChangeBatch
-      var requests: [CKRecord.ID] = []
+      var awaited: [CKRecord.ID] = []
       repeat {
         batch = try await source.changes(since: token, idsOnly: true)
-        requests += batch.modifications.filter { $0.recordType == Table.deliveryRequests.rawValue }.map(\.recordID)
+        awaited += batch.modifications
+          .filter { Table(rawValue: $0.recordType).map(Self.awaitedTables.contains) == true }.map(\.recordID)
         token = batch.token
       } while batch.moreComing
-      if !requests.isEmpty {
-        await coordinator.handle(.fetched(modifications: try await source.records(requests), deletions: []))
+      if !awaited.isEmpty {
+        await coordinator.handle(.fetched(modifications: try await source.records(awaited), deletions: []))
       }
     }
     var batch: ZoneChangeBatch
