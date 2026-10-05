@@ -22,6 +22,8 @@ import Testing
     try await store.recordSend("x", to: SendTarget(kind: .piSession, name: "n", ref: "r"), card: card.id, task: task.id)
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认？", title: "t", projectID: project.id)
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
+    try await store.setDirectory("/work/p", for: project.id)
+    try await store.publishDirectoryBindings(host: "mac", hostName: "Studio")
     return (card, hash)
   }
 

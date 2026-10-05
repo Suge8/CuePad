@@ -56,7 +56,8 @@ struct ProjectScreen: View {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
         .observing(services.store, [.piSessionStates], id: projectID, into: $sessions) { [projectID] store in
-            try store.piSessionStates().filter { $0.projectID != nil && $0.projectID == projectID }
+            guard let projectID else { return [] }
+            return try store.piSessionPage(PiSessionQuery(project: projectID)).items.map(\.state)
         }
         .onChange(of: page?.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }

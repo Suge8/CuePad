@@ -3,6 +3,7 @@ import CueDispatch
 import CuePi
 import CueStore
 import Foundation
+import SystemConfiguration
 
 /// Mac 端的远程职责：把 Pi 会话的状态写成同步记录（手机据此显示 Pi 在干什么），
 /// 并执行手机发来、指定给这台 Mac 的投送请求。
@@ -37,6 +38,22 @@ extension AppServices {
     }
 
     // MARK: 投送请求（手机发来的与本机界面写的）
+
+    /// 本机的目录绑定写成同步的目录绑定记录（手机据此知道哪些项目能在哪台 Mac 上开新会话）：先对一次，
+    /// 之后本机绑定每次变化时跟上，直到后台任务取消。
+    func startDirectoryBindings() async throws {
+        let host = hostID
+        let name = SCDynamicStoreCopyComputerName(nil, nil) as String? ?? "Mac"
+        try await store.publishDirectoryBindings(host: host, hostName: name)
+        let changes = store.observe([.projectDirectories]) { _ in () }
+        tasks.append(Task { [store, weak self] in
+            do {
+                for try await _ in changes { try await store.publishDirectoryBindings(host: host, hostName: name) }
+            } catch {
+                self?.reportIssue(.syncUnavailable("目录绑定没能同步给手机：\(error)"))
+            }
+        })
+    }
 
     func startDeliveryExecutor() async throws {
         let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [weak self] error in
@@ -110,13 +127,18 @@ extension AppServices {
             guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
             command = TerminalCommand(
                 directory: URL(filePath: indexed.cwd, directoryHint: .isDirectory), executable: pi,
-                arguments: ["--session", indexed.path], environment: [:])
+                arguments: ["--session", indexed.path], environment: paths.launchEnvironment)
         case .start(let place, let prompt, let token):
             let opening = prompt.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
             command = TerminalCommand(
                 directory: try await directory(for: place), executable: pi,
                 // `--` 之后都是开场的话，以 - 开头也不会被当成选项
-                arguments: opening.map { ["--", $0] } ?? [], environment: [Self.launchTokenVariable: token])
+                arguments: opening.map { ["--", $0] } ?? [],
+                environment: paths.launchEnvironment.merging([Self.launchTokenVariable: token]) { $1 })
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: command.directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw SendError.directoryMissing(command.directory.lastPathComponent)
         }
         try await terminalLauncher.open(command, in: settings.piTerminal)
     }

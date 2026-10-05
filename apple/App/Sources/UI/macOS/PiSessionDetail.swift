@@ -229,7 +229,8 @@ extension Workspace {
         let token = UUID().uuidString
         let request = try await services.launch(.start(place, prompt: prompt, token: token), title: title, on: services.hostID)
         let progress = services.store.observe([.piSessionStates, .deliveryRequests]) { store in
-            (try store.piSessionStates().first { $0.launchToken == token }?.sessionID, try store.deliveryRequest(request.id))
+            (try store.piSessionPage(PiSessionQuery(launchToken: token, limit: 1)).items.first?.state.sessionID,
+             try store.deliveryRequest(request.id))
         }
         var reported = false
         for try await (claimed, outcome) in progress {

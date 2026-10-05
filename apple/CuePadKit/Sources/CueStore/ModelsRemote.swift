@@ -221,18 +221,42 @@ public enum PiLaunch: Sendable, Equatable {
   }
 }
 
-/// 会话列表的一页（Mac 与手机共用的唯一查询，见 `CueStore.piSessionPage`）。
+/// 会话按状态分的范围：在线的（未结束）、已结束的（含历史）、全部。
+public enum PiSessionScope: Sendable, Equatable {
+  case live, ended, all
+}
+
+/// 会话列表的一页（Mac 与手机共用的唯一查询，见 `CueStore.piSessionPage`）。条件之间是"且"。
+/// 历史会话有几千条：界面只读需要的范围与页，不整表读。
 public struct PiSessionQuery: Sendable, Equatable {
+  public var scope: PiSessionScope
   /// 在会话名、文件夹名、最后的提问里找（不分大小写）；nil 或空白表示全部。
   public var text: String?
+  /// 只要归入这个项目的；nil 表示不限。
+  public var project: UUID?
+  /// 只要带这个认领标识的（新会话认领用，精确取一条）。
+  public var launchToken: String?
+  /// 只要这一条记录（`PiSessionState.id`）。
+  public var id: UUID?
   public var offset: Int
+  /// 一页多少条；`Int.max` 表示不分页（只用于本就不多的范围，如在线的）。
   public var limit: Int
 
-  public init(text: String? = nil, offset: Int = 0, limit: Int = 50) {
+  public init(
+    scope: PiSessionScope = .all, text: String? = nil, project: UUID? = nil, launchToken: String? = nil, id: UUID? = nil,
+    offset: Int = 0, limit: Int = 50
+  ) {
+    self.scope = scope
     self.text = text
+    self.project = project
+    self.launchToken = launchToken
+    self.id = id
     self.offset = offset
     self.limit = limit
   }
+
+  /// 全部在线会话（数量少，不分页）。
+  public static let live = PiSessionQuery(scope: .live, limit: .max)
 }
 
 /// 列表里的一个会话与它所属的项目（没有绑定项目或项目已删为 nil；文件夹名在 `state.folder`）。
@@ -403,5 +427,31 @@ extension DeliveryRequest: Record {
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7), taskID: row.uuidOrNil(8),
       status: Open(rawValue: row.text(9)), resultDetail: row.textOrNil(10), handledBy: row.textOrNil(11),
       createdAt: row.date(12), completedAt: row.dateOrNil(13), modifiedAt: row.date(14), resultReceivedAt: row.dateOrNil(15))
+  }
+}
+
+/// 项目在哪台 Mac 上绑定了代码目录（Mac 写、手机读）：每个 (项目, Mac) 一条，只有目录末段名，完整路径只在那台 Mac 本机。
+/// 手机据此列出能开新会话的项目，并知道发给哪台 Mac。由 Mac 从本机的目录绑定推导（`CueStore.publishDirectoryBindings`）。
+public struct DirectoryBinding: Identifiable, Equatable, Sendable {
+  public let id: UUID
+  public var projectID: UUID
+  public var hostID: String
+  /// 那台 Mac 的名字（给人选 Mac 时看）。
+  public var hostName: String
+  public var folder: String
+  public var createdAt: Date
+  public var modifiedAt: Date
+
+  static func recordID(project: UUID, host: String) -> UUID { DeterministicID.uuid("directory-binding/\(project.uuidString.lowercased())/\(host)") }
+}
+
+extension DirectoryBinding: Record {
+  static let table = Table.directoryBindings
+  static let columns = ["id", "projectID", "hostID", "hostName", "folder", "createdAt", "modifiedAt"]
+  var bindings: [any SQLBindable] { [id, projectID, hostID, hostName, folder, createdAt, modifiedAt] }
+  init(row: Row) {
+    self.init(
+      id: row.uuid(0), projectID: row.uuid(1), hostID: row.text(2), hostName: row.text(3), folder: row.text(4),
+      createdAt: row.date(5), modifiedAt: row.date(6))
   }
 }

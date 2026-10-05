@@ -88,7 +88,7 @@ import Testing
 
     try await puller.pull()
 
-    #expect(try await rig.store.piSessionStates().map(\.state) == [.known(.waitingForUser)])
+    #expect(try await rig.store.allPiSessionStates().map(\.state) == [.known(.waitingForUser)])
     #expect(try await rig.store.card(cardID) == nil)
   }
 

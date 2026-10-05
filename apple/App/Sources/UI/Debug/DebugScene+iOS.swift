@@ -66,7 +66,7 @@ extension DebugScene {
                 let outbox = Navigation.Outbox(content: Outgoing.text(of: card), card: id, project: project)
                 // 给了 -CuePadSession 就当已选好会话，直接进它的近况页（卡片预填在回复框里）
                 if let title = defaults.string(forKey: "CuePadSession"),
-                   let session = try? await workspace.services.store.piSessionStates().first(where: { $0.title == title }) {
+                   let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state {
                     navigation.openSession(session.id, draft: outbox)
                 } else {
                     navigation.outbox = outbox
@@ -78,7 +78,7 @@ extension DebugScene {
         case "session":
             // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在活动标签里
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
-            guard let session = try? await workspace.services.store.piSessionStates().first(where: { $0.title == title }) else { break }
+            guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
             if split { navigation.select(.activity) } else { navigation.tab = .activity }
             navigation.push(.session(session.id))
         case "activity":
@@ -103,7 +103,7 @@ extension DebugScene {
     /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。
     private static func seedRemote(_ services: AppServices) async {
         let store = services.store
-        guard (try? await store.piSessionStates().isEmpty) == true, let projects = try? await store.projects() else { return }
+        guard (try? await store.piSessionPage(PiSessionQuery(limit: 1)).items.isEmpty) == true, let projects = try? await store.projects() else { return }
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
         let sessions: [(String, PiWorkState, String?, String?, PiRecap)] = [
@@ -136,7 +136,7 @@ extension DebugScene {
         if let table = project("圆桌"), let goal = try? await store.cards(in: table).first(where: { $0.body.hasPrefix("目标") }) {
             try? await store.setGoal(goal.id, for: table)
         }
-        let states = (try? await store.piSessionStates()) ?? []
+        let states = (try? await store.piSessionPage(.live).items.map(\.state)) ?? []
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
             _ = try? await services.requestMacDelivery("评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: atlas, mode: .followUp)
         }

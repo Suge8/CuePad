@@ -27,7 +27,7 @@ import Testing
       sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad", recap: recap, times: times)
     try await cloud.exchange()
 
-    let seen = try #require(try await phone.store.piSessionStates().first)
+    let seen = try #require(try await phone.store.allPiSessionStates().first)
     #expect(seen.sessionID == "s1" && seen.state == .known(.waitingForUser) && seen.detail == "确认写入？" && seen.title == "fix bug")
     #expect(seen.folder == "cuepad")  // 手机没有工作目录，副行靠它写出文件夹名
     #expect(seen.lastPrompt == recap.lastPrompt && seen.lastReply == recap.lastReply && seen.question == recap.question)
@@ -35,11 +35,11 @@ import Testing
 
     try await recorder.update(sessionID: "s1", state: .settled)
     try await cloud.exchange()
-    #expect(try await phone.store.piSessionStates().first?.state == .known(.settled))
+    #expect(try await phone.store.allPiSessionStates().first?.state == .known(.settled))
 
     try await recorder.end(sessionID: "s1")
     try await cloud.exchange()
-    let ended = try #require(try await phone.store.piSessionStates().first)
+    let ended = try #require(try await phone.store.allPiSessionStates().first)
     #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)  // 跑完的结论在手机上还看得到
   }
 

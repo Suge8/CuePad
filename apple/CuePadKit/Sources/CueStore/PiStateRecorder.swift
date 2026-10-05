@@ -1,21 +1,34 @@
 import Foundation
 
 extension CueStore {
-  /// 各 Pi 会话此刻的状态（含所有 Mac 写的），最近进入当前状态的在前。手机据此显示"Pi 在干什么"。
-  public func piSessionStates() throws -> [PiSessionState] {
-    try select(PiSessionState.self, orderBy: "stateSince DESC, id")
-  }
-
   /// 会话列表的一页（Mac 与手机共用的唯一查询）。顺序见 `PiSessionPage`。
   public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
-    var condition = "1"
+    var conditions: [String] = []
     var arguments: [any SQLBindable] = []
+    switch query.scope {
+    case .live: conditions.append("state != '\(PiWorkState.ended.rawValue)'")
+    case .ended: conditions.append("state = '\(PiWorkState.ended.rawValue)'")
+    case .all: break
+    }
     if let text = query.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
       let pattern = "%" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
         .replacingOccurrences(of: "_", with: "\\_") + "%"
-      condition = "(title LIKE ?1 ESCAPE '\\' OR folder LIKE ?1 ESCAPE '\\' OR lastPrompt LIKE ?1 ESCAPE '\\')"
-      arguments = [pattern]
+      conditions.append("(title LIKE ? ESCAPE '\\' OR folder LIKE ? ESCAPE '\\' OR lastPrompt LIKE ? ESCAPE '\\')")
+      arguments += [pattern, pattern, pattern]
     }
+    if let project = query.project {
+      conditions.append("projectID = ?")
+      arguments.append(project)
+    }
+    if let token = query.launchToken {
+      conditions.append("launchToken = ?")
+      arguments.append(token)
+    }
+    if let id = query.id {
+      conditions.append("id = ?")
+      arguments.append(id)
+    }
+    let condition = conditions.isEmpty ? "1" : conditions.joined(separator: " AND ")
     let states = try select(
       PiSessionState.self, where: condition, arguments, orderBy: "state = 'ended', stateSince DESC, id",
       limit: query.limit, offset: query.offset)

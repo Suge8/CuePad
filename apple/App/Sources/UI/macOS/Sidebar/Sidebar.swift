@@ -5,8 +5,9 @@ import SwiftUI
 
 nonisolated private struct SidebarData: Sendable {
     var trashCount: Int
-    /// 会话列表查询的第一页（项目已删的会话不再带项目），与全部会话数。
-    var sessions: [PiSessionState]
+    /// 同步记录里在线的会话（含别的 Mac 上的）与最近结束的几个（项目已删的不再带项目），以及全部会话数。
+    var live: [PiSessionState]
+    var ended: [PiSessionState]
     var sessionTotal: Int
 }
 
@@ -20,8 +21,7 @@ struct Sidebar: View {
     /// 点过侧栏里的页后焦点留在侧栏，方向键才有地方去
     @FocusState private var focused: Bool
 
-    /// 第一页要盖住别的 Mac 上没结束的会话与最近结束的几个。
-    nonisolated private static let sessionPage = 30
+    nonisolated private static let endedPage = PiSection.pastLimit * 2
     private static let footerFade: CGFloat = 16
 
     var body: some View {
@@ -44,7 +44,7 @@ struct Sidebar: View {
                         }
                     }
                 }
-                PiSection(recorded: data.sessions, total: data.sessionTotal)
+                PiSection(recorded: data.live + data.ended, total: data.sessionTotal)
                 if pages.showsTrash {
                     Section {
                         PageRow(page: .trash, count: data.trashCount, select: select) {
@@ -71,10 +71,12 @@ struct Sidebar: View {
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
         .observing(services.store, [.projects, .cards, .piSessionStates], into: $data, onError: workspace.fail) { store in
-            let page = try store.piSessionPage(PiSessionQuery(limit: Self.sessionPage))
+            let live = try store.piSessionPage(.live)
+            // 多取几条：本机刚结束、桥上已经重新连上的会话会被在线的那一行顶掉
+            let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, limit: Self.endedPage))
             return SidebarData(
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
-                sessions: page.items.map(\.listed), sessionTotal: page.total)
+                live: live.items.map(\.listed), ended: ended.items.map(\.listed), sessionTotal: live.total + ended.total)
         }
     }
 
@@ -202,7 +204,7 @@ private struct PiSection: View {
     @Environment(\.openSessionSearch) private var openSessionSearch
     @State private var startingSession = false
 
-    private static let pastLimit = 5
+    nonisolated static let pastLimit = 5
 
     var body: some View {
         let status = services.piExtension.status

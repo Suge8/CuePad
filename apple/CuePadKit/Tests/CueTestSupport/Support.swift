@@ -178,3 +178,10 @@ public func eventually<T: Sendable>(
 }
 
 public struct RawError: Error { public let message: String }
+
+extension CueStore {
+  /// 全部会话记录（测试核对用；界面按范围与页读，见 `piSessionPage`）。
+  public func allPiSessionStates() throws -> [PiSessionState] {
+    try piSessionPage(PiSessionQuery(limit: .max)).items.map(\.state)
+  }
+}
