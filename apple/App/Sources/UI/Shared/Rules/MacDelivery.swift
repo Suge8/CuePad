@@ -29,6 +29,16 @@ nonisolated enum PiReply: Equatable {
 }
 
 extension MacDelivery {
+    /// 回复框已按 `reply` 作答文字型问题的平台：问题卡上不再放第二个输入框。Mac 详情的回复框还没接上这条规则，
+    /// 在那之前 Mac 的问题卡自带输入框，文字型问题照样答得了。
+    static var replyBoxAnswersText: Bool {
+        #if os(iOS)
+        true
+        #else
+        false
+        #endif
+    }
+
     static func reply(to session: PiSessionState, hasImages: Bool) -> PiReply {
         guard session.state == .known(.waitingForUser) else { return .message(modes(for: session, hasImages: hasImages)) }
         guard let question = session.question, question.isAnswerable else { return .unanswerable }
