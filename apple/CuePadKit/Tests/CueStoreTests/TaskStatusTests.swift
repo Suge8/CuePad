@@ -76,6 +76,7 @@ import Testing
       ALTER TABLE projects ADD COLUMN sortKey TEXT NOT NULL DEFAULT 'V';
       ALTER TABLE cards ADD COLUMN numbering TEXT NOT NULL DEFAULT 'none';
       DROP INDEX cards_projectID_modifiedAt; DROP INDEX tasks_projectID_modifiedAt; DROP INDEX piSessionStates_projectID;
+      ALTER TABLE piSessionStates DROP COLUMN pendingPrompt;
       PRAGMA user_version = 7;
       """)
 

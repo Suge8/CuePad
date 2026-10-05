@@ -21,7 +21,7 @@ import Testing
   @Test func piSessionStateWrittenOnTheMacIsVisibleOnThePhoneAndKeptAsEndedWhenTheSessionEnds() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let question = PiQuestion(promptID: "p-1", kind: .select, text: "确认写入？", options: ["是", "否"])
-    let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", question: question)
+    let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", pendingPrompt: "再跑一遍测试", question: question)
     let times = PiTimes(stateSince: Date(timeIntervalSince1970: 2_000), busySince: Date(timeIntervalSince1970: 1_000))
     try await recorder.update(
       sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad", recap: recap, times: times)
@@ -31,6 +31,7 @@ import Testing
     #expect(seen.sessionID == "s1" && seen.state == .known(.waitingForUser) && seen.detail == "确认写入？" && seen.title == "fix bug")
     #expect(seen.folder == "cuepad")  // 手机没有工作目录，副行靠它写出文件夹名
     #expect(seen.lastPrompt == recap.lastPrompt && seen.lastReply == recap.lastReply && seen.question == recap.question)
+    #expect(seen.pendingPrompt == recap.pendingPrompt)
     #expect(seen.stateSince == times.stateSince && seen.busySince == times.busySince)
 
     try await recorder.update(sessionID: "s1", state: .settled)

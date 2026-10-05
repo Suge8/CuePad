@@ -303,6 +303,24 @@ struct RealPiTests {
         }
     }
 
+    /// 最近一轮已完成的问答成对更新（这一轮做完时一起写）；新的提问在做的时候是"进行中的提问"，不和上一轮的回答配在一起。
+    @Test func aNewPromptIsPendingUntilItsRoundEndsAndTheLastPairStaysTogether() async throws {
+        try await withRig { pi, bridge, _ in
+            try pi.prompt("第一问")
+            try await eventually("第一轮做完", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "ECHO 第一问 IMAGES[]" }
+            #expect(bridge.sessions.first?.pendingPrompt == nil)
+
+            try pi.prompt("[[slow]] 第二问")
+            try await eventually("第二问在做", timeout: .seconds(20)) { bridge.sessions.first?.pendingPrompt == "[[slow]] 第二问" }
+            let during = try #require(bridge.sessions.first)
+            #expect(during.lastPrompt == "第一问" && during.lastReply == "ECHO 第一问 IMAGES[]")
+
+            try await eventually("第二轮做完", timeout: .seconds(20)) { bridge.sessions.first?.pendingPrompt == nil }
+            let after = try #require(bridge.sessions.first)
+            #expect(after.lastPrompt == "[[slow]] 第二问" && after.lastReply == "ECHO [[slow]] 第二问 IMAGES[]")
+        }
+    }
+
     /// 接上已有会话（恢复会话文件）时，近况从会话文件里补回来。
     @Test func recapIsRestoredFromTheSessionFileOnResume() async throws {
         try await withRig { pi, bridge, s in
