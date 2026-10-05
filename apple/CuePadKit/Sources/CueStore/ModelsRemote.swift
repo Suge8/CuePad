@@ -173,7 +173,84 @@ public struct PiAnswer: Sendable, Equatable {
   }
 }
 
-/// 一个 Pi 会话此刻的状态，Mac 写、手机读；每个会话一条，会话结束后标为 `ended` 保留一段时间。
+/// 新会话开在哪：某个项目绑定的代码目录，或与某个会话同一目录。手机不传路径，Mac 按本机的绑定与会话索引解析。
+public enum PiLaunchPlace: Sendable, Equatable {
+  case project(UUID)
+  case besideSession(String)
+}
+
+/// 在 Mac 的终端里启动 Pi（投送方式 `resume` / `start` 的正文，存为 JSON）。
+public enum PiLaunch: Sendable, Equatable {
+  /// 恢复这个会话（Pi 自己的会话 id）。会话正在运行时执行器拒绝。
+  case resume(sessionID: String)
+  /// 开新会话；`prompt` 是开场的话（可空）；`token` 由发起方生成，带到新会话的同步记录上（`PiSessionState.launchToken`）。
+  case start(PiLaunchPlace, prompt: String?, token: String)
+
+  private struct Stored: Codable {
+    var resume: String?
+    var project: UUID?
+    var besideSession: String?
+    var prompt: String?
+    var token: String?
+  }
+
+  var stored: String {
+    var form = Stored()
+    switch self {
+    case .resume(let sessionID): form.resume = sessionID
+    case .start(let place, let prompt, let token):
+      switch place {
+      case .project(let id): form.project = id
+      case .besideSession(let sessionID): form.besideSession = sessionID
+      }
+      form.prompt = prompt
+      form.token = token
+    }
+    return String(decoding: try! JSONEncoder().encode(form), as: UTF8.self)
+  }
+
+  init?(stored: String) {
+    guard let form = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else { return nil }
+    if let sessionID = form.resume {
+      self = .resume(sessionID: sessionID)
+    } else if let token = form.token, let place = form.project.map(PiLaunchPlace.project) ?? form.besideSession.map(PiLaunchPlace.besideSession) {
+      self = .start(place, prompt: form.prompt, token: token)
+    } else {
+      return nil
+    }
+  }
+}
+
+/// 会话列表的一页（Mac 与手机共用的唯一查询，见 `CueStore.piSessionPage`）。
+public struct PiSessionQuery: Sendable, Equatable {
+  /// 在会话名、文件夹名、最后的提问里找（不分大小写）；nil 或空白表示全部。
+  public var text: String?
+  public var offset: Int
+  public var limit: Int
+
+  public init(text: String? = nil, offset: Int = 0, limit: Int = 50) {
+    self.text = text
+    self.offset = offset
+    self.limit = limit
+  }
+}
+
+/// 列表里的一个会话与它所属的项目（没有绑定项目或项目已删为 nil；文件夹名在 `state.folder`）。
+public struct PiSessionListItem: Identifiable, Sendable, Equatable {
+  public var state: PiSessionState
+  public var project: Project?
+  public var id: UUID { state.id }
+}
+
+/// 一页会话与符合条件的总数。顺序：未结束的在前，各自按进入当前状态的时间从新到旧。
+public struct PiSessionPage: Sendable, Equatable {
+  public var items: [PiSessionListItem]
+  public var total: Int
+}
+
+/// 一个 Pi 会话的同步记录，Mac 写、手机与 Mac 的界面都只读它：每个 Pi 会话一条，记录 id 由 Pi 自己的会话 id 算出
+/// （会话文件头里的 id，Pi 重启、恢复会话后不变），所以在线与历史是同一条记录的不同状态（历史即 `ended`）。
+/// Mac 上在线会话的状态来自 Pi 桥，历史来自本机的会话文件索引；会话文件被删时才删记录。完整路径不同步，只有文件夹名与项目。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
@@ -198,12 +275,15 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var busySince: Date?
   public var createdAt: Date
   public var modifiedAt: Date
+  /// 由 CuePad 发起的新会话（投送方式 `start`）带着发起方生成的标识（`PiLaunch.start` 的 `token`），
+  /// 发起方据此等到并打开"自己开的那个"会话。其余会话为 nil。
+  public var launchToken: String?
 
-  /// 公开给 Mac 端：把桥上的实时会话、历史索引里的会话也写成这种形状，交给同一个近况界面。
+  /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
   public init(
     id: UUID, sessionID: String, hostID: String, title: String, projectID: UUID?, state: Open<PiWorkState>, detail: String?,
     folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
-    busySince: Date?, createdAt: Date, modifiedAt: Date
+    busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -221,6 +301,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.busySince = busySince
     self.createdAt = createdAt
     self.modifiedAt = modifiedAt
+    self.launchToken = launchToken
   }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
@@ -239,6 +320,10 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case answer
   /// 连接测试：执行它的 Mac 收到即按成功写回，不碰 Pi、不写发送记录；往返时间就是手机到 Mac 再回来的延迟
   case ping
+  /// 在 Mac 的终端里恢复一个已结束的会话；正文是 `PiLaunch.resume`
+  case resume
+  /// 在 Mac 的终端里开一个新会话；正文是 `PiLaunch.start`
+  case start
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
@@ -264,6 +349,9 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 还没有结果（等待执行或执行中）。
   public var isOpen: Bool { status == .known(.pending) || status == .known(.executing) }
 
+  /// 恢复、新会话请求的内容；其他方式为 nil。
+  public var launch: PiLaunch? { mode == .known(.resume) || mode == .known(.start) ? PiLaunch(stored: content) : nil }
+
   /// 作答请求的答案；其他方式为 nil。
   public var answer: PiAnswer? { mode == .known(.answer) ? PiAnswer(stored: content) : nil }
 
@@ -282,11 +370,11 @@ extension PiSessionState: Record {
   static let table = Table.piSessionStates
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
-    "lastPrompt", "lastReply", "question", "busySince",
+    "lastPrompt", "lastReply", "question", "busySince", "launchToken",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
-     lastPrompt, lastReply, question?.stored, busySince]
+     lastPrompt, lastReply, question?.stored, busySince, launchToken]
   }
   init(row: Row) {
     self.init(
@@ -294,7 +382,7 @@ extension PiSessionState: Record {
       state: Open(rawValue: row.text(5)), detail: row.textOrNil(6), folder: row.textOrNil(11),
       lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14).map(PiQuestion.init(stored:)),
       notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), busySince: row.dateOrNil(15), createdAt: row.date(8),
-      modifiedAt: row.date(9))
+      modifiedAt: row.date(9), launchToken: row.textOrNil(16))
   }
 }
 

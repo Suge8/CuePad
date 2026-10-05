@@ -246,15 +246,15 @@ import Testing
     try RawDB(fixture.url).exec("""
       ALTER TABLE piSessionStates DROP COLUMN folder; ALTER TABLE piSessionStates DROP COLUMN lastPrompt;
       ALTER TABLE piSessionStates DROP COLUMN lastReply; ALTER TABLE piSessionStates DROP COLUMN question;
-      ALTER TABLE piSessionStates DROP COLUMN busySince;
+      ALTER TABLE piSessionStates DROP COLUMN busySince; ALTER TABLE piSessionStates DROP COLUMN launchToken;
       PRAGMA user_version = 1;
       """)
 
     let reopened = try CueStore(url: fixture.url)
 
     #expect(try await reopened.card(card.id)?.body == "保留")
-    let added = "('folder', 'lastPrompt', 'lastReply', 'question', 'busySince')"
-    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name IN \(added)").count == 5)
-    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["4"]])
+    let added = "('folder', 'lastPrompt', 'lastReply', 'question', 'busySince', 'launchToken')"
+    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name IN \(added)").count == 6)
+    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["5"]])
   }
 }

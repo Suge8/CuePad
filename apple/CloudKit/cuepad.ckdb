@@ -88,6 +88,7 @@ DEFINE SCHEMA
         lastReply     ENCRYPTED STRING,
         question      ENCRYPTED STRING,
         busySince     INT64,
+        launchToken   ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

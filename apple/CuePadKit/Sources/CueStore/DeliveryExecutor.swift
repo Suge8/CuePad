@@ -27,6 +27,16 @@ extension CueStore {
     try requestDelivery(answer.stored, to: target, on: host, mode: .answer)
   }
 
+  /// 请 `host` 那台 Mac 在终端里恢复或新开一个 Pi 会话。`title` 是给人看的目标名（会话名或项目名）。
+  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String) throws -> DeliveryRequest {
+    let (mode, ref): (DeliveryMode, String?) =
+      switch launch {
+      case .resume(let sessionID): (.resume, sessionID)
+      case .start: (.start, nil)
+      }
+    return try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: ref), on: host, mode: mode)
+  }
+
   /// 连接测试：请 `host` 那台 Mac 收到就回。目标写成那台 Mac 上的 CuePad（执行器不看目标）。
   public func requestPing(on host: String) throws -> DeliveryRequest {
     try requestDelivery("ping", to: SendTarget(kind: .app, name: "CuePad", ref: nil), on: host, mode: .ping)

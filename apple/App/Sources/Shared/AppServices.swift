@@ -163,6 +163,13 @@ final class AppServices {
             on: session.hostID))
     }
 
+    /// 在会话所在（或指定）的 Mac 的终端里恢复或新开 Pi 会话：与发送同一条投送通道（Mac 本机也走它），写出后立即上传。
+    /// `title` 是给人看的目标名（会话名或项目名）。新会话用 `PiLaunch.start` 的 `token` 认领：等同步记录上出现同一个
+    /// `launchToken` 的会话。
+    func launch(_ launch: PiLaunch, title: String, on host: String) async throws -> DeliveryRequest {
+        uploaded(try await store.requestLaunch(launch, title: title, on: host))
+    }
+
     /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
     func outcome(of request: UUID) async throws -> DeliveryRequest {
         for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(request) }) {
