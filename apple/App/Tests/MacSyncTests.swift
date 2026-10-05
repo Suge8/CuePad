@@ -225,6 +225,19 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
+    /// Mac 主动拉取的条件看桥上真的连着的会话，不看资料库里的状态记录（记录可能是没来得及标为结束的旧会话）；
+    /// 本机有还没结果的投送请求时也在等。
+    @Test(.timeLimit(.minutes(1)))
+    func 主动拉取的条件_没有连着的会话时不因旧记录而拉_有本机待执行请求时拉() async throws {
+        try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
+        var waiting = services.pollingCondition().makeAsyncIterator()
+        #expect(await waiting.next() == false)
+
+        _ = try await services.store.requestDelivery(
+            "hi", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
+        while let value = await waiting.next(), !value {}
+    }
+
     @Test func 连接测试请求立即完成_不碰Pi_不写发送记录() async throws {
         try await services.startDeliveryExecutor()
         defer { services.cancelBackgroundWork() }
