@@ -136,7 +136,7 @@ final class TestApp {
     let hotkeys = InMemoryHotkeys()
     let terminal = RecordingTerminal()
     /// 测试里的 Pi 可执行文件（执行器启动会话时用；不真运行）
-    static let piExecutable = URL(filePath: "/opt/test/bin/pi")
+    nonisolated static let piExecutable = URL(filePath: "/opt/test/bin/pi")
     let window = RecordingWindow()
     let legacy: URL?
     #else

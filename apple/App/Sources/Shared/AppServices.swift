@@ -82,6 +82,8 @@ final class AppServices {
     @ObservationIgnored let channels: any SendChannels
     @ObservationIgnored let paths: PiPaths
     @ObservationIgnored let terminal: PiTerminalJumper
+    @ObservationIgnored let terminalLauncher: any TerminalLaunching
+    @ObservationIgnored let locatePi: @Sendable () async -> URL?
     @ObservationIgnored let historyStore: PiHistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
     /// 这台 Mac 的稳定标识：Pi 状态记录与投送请求都靠它区分是哪台 Mac。
@@ -262,11 +264,13 @@ final class AppServices {
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
         terminal = mac.terminal
+        terminalLauncher = mac.terminalLauncher
+        locatePi = mac.locatePi
         piExtension = PiExtensionManager(installer: mac.installer, settings: settings)
         accessibility = AccessibilityAccess(isTrusted: mac.isAccessibilityTrusted)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
-        historyStore = PiHistoryPersistence(storage: library.store)
+        historyStore = PiHistoryPersistence(storage: library.store, host: mac.hostID)
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) {

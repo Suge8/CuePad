@@ -68,7 +68,7 @@ enum PerfLibrary {
             try await store.upsertPiSession(PiSession(
                 id: "perf-\(index)", path: "/tmp/perf-\(index).jsonl", cwd: cwd,
                 title: sentence(&random, chinese: index % 2 == 0, words: 3...9),
-                lastActivityAt: .now.addingTimeInterval(-Double(index) * 3_600)))
+                lastActivityAt: .now.addingTimeInterval(-Double(index) * 3_600)), host: "perf-mac")
         }
     }
 

@@ -176,7 +176,7 @@ struct PiHistoryPersistenceTests {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
         try await rig.services.store.upsertPiSession(StoredPiSession(
-            id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now))
+            id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now), host: TestApp.hostID)
         let events = AsyncStream<PiHistoryEvent> { continuation in
             continuation.yield(.updated(try! PiHistory.index(file: file, from: nil)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))

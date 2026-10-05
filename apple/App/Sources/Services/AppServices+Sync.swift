@@ -94,12 +94,12 @@ extension AppServices {
     /// 此刻该按什么节奏主动拉（nil：不拉）。"是否在等"只在这里定义；等的对象所在的表见 `ZoneChangePuller.awaitedTables`，
     /// 加新的等待理由时一并更新：
     /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
-    ///   或有发给本机、还没结果的投送请求时，每 5 秒；
+    ///   或有发给本机、还没结果的投送请求时，每 2 秒；
     /// - 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟；正在看 Pi 页或会话近况时每 3 秒（状态是活的，
     ///   不靠推送），离开即停；两者都有时每 2 秒、不限时。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
-        !pi.sessions.isEmpty || hasOpenDeliveries ? SyncPoller.Cadence(interval: .seconds(5)) : nil
+        !pi.sessions.isEmpty || hasOpenDeliveries ? SyncPoller.Cadence(interval: .seconds(2)) : nil
         #else
         switch (hasOpenDeliveries, piViewers > 0) {
         case (true, true): SyncPoller.Cadence(interval: .seconds(2))

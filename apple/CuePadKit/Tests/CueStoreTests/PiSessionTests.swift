@@ -18,29 +18,29 @@ import Testing
 
   @Test func checkpointRoundTripsByteForByte() async throws {
     let data = blob(seed: 1)
-    try await store.upsertPiSession(session(), checkpoint: data)
+    try await store.upsertPiSession(session(), checkpoint: data, host: "mac-a")
     #expect(try await store.piCheckpoint(of: "s1") == data)
 
-    try await store.upsertPiSession(session(), checkpoint: Data())
+    try await store.upsertPiSession(session(), checkpoint: Data(), host: "mac-a")
     #expect(try await store.piCheckpoint(of: "s1") == Data())
   }
 
   @Test func sessionWithoutCheckpointReadsNil() async throws {
-    try await store.upsertPiSession(session())
+    try await store.upsertPiSession(session(), host: "mac-a")
     #expect(try await store.piCheckpoint(of: "s1") == nil)
     #expect(try await store.piCheckpoint(of: "unknown") == nil)
   }
 
   @Test func metadataUpdatesKeepTheCheckpointAndNewCheckpointsReplaceIt() async throws {
     let first = blob(seed: 1)
-    try await store.upsertPiSession(session(), checkpoint: first)
+    try await store.upsertPiSession(session(), checkpoint: first, host: "mac-a")
 
-    try await store.upsertPiSession(session(title: "renamed"))  // 只更新元数据
+    try await store.upsertPiSession(session(title: "renamed"), host: "mac-a")  // 只更新元数据
     #expect(try await store.piCheckpoint(of: "s1") == first)
     #expect(try await store.piSessions().map(\.title) == ["renamed"])
 
     let second = blob(seed: 2)
-    try await store.upsertPiSession(session(title: "renamed"), checkpoint: second)
+    try await store.upsertPiSession(session(title: "renamed"), checkpoint: second, host: "mac-a")
     #expect(try await store.piCheckpoint(of: "s1") == second)
     #expect(try await store.piSessions().count == 1)
   }
@@ -48,8 +48,8 @@ import Testing
   @Test func sessionListStaysCheapAndOrderedByActivity() async throws {
     let old = PiSession(id: "old", path: "/o", cwd: "/w", lastActivityAt: Date(timeIntervalSince1970: 100))
     let recent = PiSession(id: "new", path: "/n", cwd: "/w", lastActivityAt: Date(timeIntervalSince1970: 200))
-    try await store.upsertPiSession(old, checkpoint: blob(seed: 1))
-    try await store.upsertPiSession(recent, checkpoint: blob(seed: 2))
+    try await store.upsertPiSession(old, checkpoint: blob(seed: 1), host: "mac-a")
+    try await store.upsertPiSession(recent, checkpoint: blob(seed: 2), host: "mac-a")
     #expect(try await store.piSessions().map(\.id) == ["new", "old"])
   }
 }
