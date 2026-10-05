@@ -27,7 +27,7 @@ public struct AttachmentFiles: Sendable {
     return hash
   }
 
-  /// 存入图片文件（拖入、分享）：分块计算哈希后拷贝，整张图不进内存。
+  /// 存入图片文件（拖入、分享）：边读边算哈希再拷贝，整张图不进内存。
   public func store(fileAt source: URL) throws -> String {
     guard let image = CGImageSourceCreateWithURL(source as CFURL, nil), Self.isImage(image) else {
       throw CueStoreError.notAnImage

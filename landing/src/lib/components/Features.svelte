@@ -73,7 +73,7 @@
 			</div>
 			<img
 				class="shot float"
-				src="/assets/shots/segments-light.webp"
+				src="/assets/shots/selection-light.webp"
 				width="1600"
 				height="1013"
 				loading="lazy"
