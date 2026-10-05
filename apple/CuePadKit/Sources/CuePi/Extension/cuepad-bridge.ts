@@ -170,11 +170,12 @@ function lastMessage(entries: any[], matches: (message: any) => boolean): any {
 	return undefined;
 }
 
-/** 会话文件当前分支上最近一轮已做完的问答：最后一条助手回答，与它之前你说的最后一句（机器消息不算）。
- * 回答之后还有你说的话（上次没做完就退出了）不算进来——那一轮没有做完。 */
+/** 会话文件当前分支上最近一轮已做完的问答：最后一条结束了一轮的助手回答（`stopReason` 不是 `toolUse`——那是一轮中途
+ * 调工具，后面还没做完），与它之前你说的最后一句（机器消息不算）。之后没做完的一轮（上次中途退出）不算进来。 */
 function lastExchange(entries: any[]): { lastPrompt: string | null; lastReply: string | null } {
+	const endsRound = (entry: any) => entry?.type === "message" && entry.message?.role === "assistant" && entry.message.stopReason !== "toolUse";
 	let end = entries.length - 1;
-	while (end >= 0 && !(entries[end]?.type === "message" && entries[end].message?.role === "assistant")) end--;
+	while (end >= 0 && !endsRound(entries[end])) end--;
 	if (end < 0) return { lastPrompt: null, lastReply: null };
 	const prompt = lastMessage(entries.slice(0, end), (m) => m?.role === "user" && !isMachineMessage(m));
 	return { lastPrompt: promptText(prompt), lastReply: replyText(entries[end].message) };

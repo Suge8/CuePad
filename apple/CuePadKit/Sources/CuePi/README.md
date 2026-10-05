@@ -36,7 +36,7 @@
 近况（扩展 v4 起，旧扩展为 nil）是手机打开会话时看的"问了什么、答了什么、在等什么"，不同步完整对话，超出上限截断并以省略号结尾：
 
 - `pendingPrompt`（v11 起）：进行中的提问——你说的最后一条消息（`message_end`，`role == "user"`）的文字块，空白与控制字符折成一个空格，≤500 字符；`agent_end` 时移进 `lastPrompt` 并清空。
-- `lastPrompt`：最近一轮已做完的问答里你说的那句，与 `lastReply` 在 `agent_end` 时一起更新（v11 起；之前是你说完就更新，新提问会和上一轮的回答配在一起）。扩展 v5 起跳过机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的（如 FireCode 空闲时以 `sendUserMessage` 投进来的子代理事件、观察员、审查结果信封），保留上一条真人提问；它触发的那一轮回答照常进 `lastReply`。首条消息（显示名）与 Pi 会话列表一致，不跳过。接上已有会话时从当前分支补回：最后一条助手回答与它之前你说的最后一句（回答之后还有你说的话的，是上次没做完的一轮，不算）；
+- `lastPrompt`：最近一轮已做完的问答里你说的那句，与 `lastReply` 在 `agent_end` 时一起更新（v11 起；之前是你说完就更新，新提问会和上一轮的回答配在一起）。扩展 v5 起跳过机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的（如 FireCode 空闲时以 `sendUserMessage` 投进来的子代理事件、观察员、审查结果信封），保留上一条真人提问；它触发的那一轮回答照常进 `lastReply`。首条消息（显示名）与 Pi 会话列表一致，不跳过。接上已有会话时从当前分支补回：最后一条结束了一轮的助手回答（`stopReason` 不是 `toolUse`）与它之前你说的最后一句；之后上次中途退出、没做完的一轮不算。机器消息触发的轮没有新提问，回答照常进 `lastReply`、`lastPrompt` 沿用触发它的那件事里你说的话（如 FireCode 子代理做完后的汇报，是对你那句的答复）；
 - `lastReply`：`agent_end` 时本轮最后一条助手消息里的文字块（思考与工具调用不算），换行连接、保留换行，≤1200 字符；
 - `question`（v7 起是对象，v4–v6 是一段文字，客户端读成只有文案的 `PiPrompt`）：正在等你回答的弹窗 `{id, kind, text, options}`。`kind` 是 `confirm`/`select`/`text`（`input`）/`editor`/`custom`；`text` 是标题与说明（`confirm`）换行连接，≤500 字符；`options` 是选择框的选项原文；`id` 是这次弹窗的标识，能从 CuePad 作答的（`confirm`/`select`/`text`）才有，`editor` 没有可收起的接口、`custom` 没有文案，为 null。`ui_prompt_end` 后为 null。`ui_prompt_start` 只带标题，说明与选项靠在 `session_start` 时包装共用的 `ctx.ui` 在调用时记下；包装同时给弹窗接上一个由扩展控制的 AbortSignal（与调用方自己的合并）。
 
