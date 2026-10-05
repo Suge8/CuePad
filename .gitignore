@@ -4,6 +4,8 @@ Thumbs.db
 
 # Xcode / Swift（apple/.derived 与 CuePadKit/.build 各自带 .gitignore）
 xcuserdata/
+# 在没有 Package.swift 的目录（如 apple/）误跑 swift build/test 时 SwiftPM 也会留下空的 .build
+.build/
 *.xcuserstate
 __pycache__/
 
