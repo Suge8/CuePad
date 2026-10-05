@@ -58,8 +58,8 @@ struct CaptureComposer: View {
                 }
                 field
             }
-            .padding(expanded ? 8 : 0)
-            .glass(in: .rect(cornerRadius: 22), interactive: true)
+            .padding(expanded && !pinnedOpen ? 8 : 0)
+            .modifier(CaptureSurface(pinned: pinnedOpen))
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .strokeBorder(palette.ink3.opacity(focused && !pinnedOpen ? 0.5 : 0), lineWidth: 1)
@@ -173,6 +173,15 @@ struct CaptureComposer: View {
         let body = trimmed
         guard !body.isEmpty else { return }
         Task { if await workspace.send(body, via: choice) { text = "" } }
+    }
+}
+
+/// 随手记的外层：主窗口里是一块玻璃；菜单栏面板本身就是玻璃，里面不再叠一层。
+private struct CaptureSurface: ViewModifier {
+    let pinned: Bool
+
+    func body(content: Content) -> some View {
+        if pinned { content } else { content.glass(in: .rect(cornerRadius: 22), interactive: true) }
     }
 }
 
