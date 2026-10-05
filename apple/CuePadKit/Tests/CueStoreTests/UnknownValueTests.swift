@@ -22,17 +22,7 @@ import Testing
     #expect(try await store.search(SearchQuery(sent: .sent(kind: .known(.app)))).cards.isEmpty)
   }
 
-  @Test func unknownNumberingIsPreservedAcrossOtherEdits() async throws {
-    let card = try await store.createCard(in: nil, body: "x")
-    try RawDB(fixture.url).exec("UPDATE cards SET numbering = 'roman' WHERE id = '\(card.id.uuidString.lowercased())'")
-
-    #expect(try await store.card(card.id)?.numbering == .unknown("roman"))
-    try await store.updateCard(card.id) { $0.isPinned = true }  // 改别的字段
-    #expect(try RawDB(fixture.url).rows("SELECT numbering FROM cards") == [["roman"]])
-  }
-
   @Test func knownValuesRoundTripUnchanged() {
     for kind in SendTargetKind.allCases { #expect(Open<SendTargetKind>(rawValue: kind.rawValue) == .known(kind)) }
-    for numbering in CueNumbering.allCases { #expect(Open<CueNumbering>(rawValue: numbering.rawValue) == .known(numbering)) }
   }
 }

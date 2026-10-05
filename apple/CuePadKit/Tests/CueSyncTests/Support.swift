@@ -97,20 +97,19 @@ func remoteRecord(_ table: Table, id: UUID = UUID(), _ fields: [String: SQLValue
   return RecordMapper.record(from: SyncRow(table: table, fields: all), zoneID: testZone)
 }
 
-func projectFields(name: String, modifiedAt: Int64, sortKey: String = "V") -> [String: SQLValue] {
+func projectFields(name: String, modifiedAt: Int64) -> [String: SQLValue] {
   [
-    "name": .text(name), "icon": .null, "color": .text("#111"), "sortKey": .text(sortKey), "isPinned": .int(0),
+    "name": .text(name), "icon": .null, "color": .text("#111"), "isPinned": .int(0),
     "deletedAt": .null, "createdAt": .int(1_000), "modifiedAt": .int(modifiedAt), "goalCardID": .null,
   ]
 }
 
 func cardFields(
-  project: UUID?, body: String, modifiedAt: Int64, sortKey: String = "V", numbering: String = "none",
-  conflictOf: UUID? = nil
+  project: UUID?, body: String, modifiedAt: Int64, sortKey: String = "V", conflictOf: UUID? = nil
 ) -> [String: SQLValue] {
   [
     "projectID": project.map { .text($0.uuidString.lowercased()) } ?? .null, "body": .text(body),
-    "numbering": .text(numbering), "isPinned": .int(0), "variableValues": .text("{}"),
+    "isPinned": .int(0), "variableValues": .text("{}"),
     "sortKey": .text(sortKey), "deletedAt": .null, "createdAt": .int(1_000), "modifiedAt": .int(modifiedAt),
     "conflictOf": conflictOf.map { .text($0.uuidString.lowercased()) } ?? .null,
   ]

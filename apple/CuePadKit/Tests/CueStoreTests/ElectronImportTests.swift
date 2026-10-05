@@ -82,24 +82,24 @@ private func digest(_ url: URL) throws -> String {
     #expect(report.inserted == report.found)
     #expect(report.legacySettings == ["theme": "\"dark\"", "globalShortcut": "\"Alt+KeyZ\""])
 
-    // 项目：按旧 sort_order 排序，置顶保留，NULL 名称变空串，删除时间保留
+    // 项目：置顶保留（置顶的在前），NULL 名称变空串，删除时间保留
     let active = try await store.projects()
     let trashed = try await store.trashedProjects()
-    #expect(active.map(\.name) == ["Career", "Flow"])
-    #expect(active.map(\.isPinned) == [false, true])
-    #expect(active.last?.icon == "target" && active.last?.color == "#4f8ce8")
+    #expect(active.map(\.name) == ["Flow", "Career"])
+    #expect(active.map(\.isPinned) == [true, false])
+    #expect(active.first?.icon == "target" && active.first?.color == "#4f8ce8")
     #expect(trashed.map(\.name) == [""])
     sameInstant(trashed.first?.deletedAt, Date(timeIntervalSince1970: 5))
-    sameInstant(active.last?.createdAt, Date(timeIntervalSince1970: 1))
+    sameInstant(active.first?.createdAt, Date(timeIntervalSince1970: 1))
 
     // 卡片：标题并入正文首行；随项目删除的卡不再单独记 deletedAt；单独删除的保留
-    let flow = active.last!
-    let career = active.first!
+    let flow = active.first!
+    let career = active.last!
     let flowCards = try await store.cards(in: flow.id)
     #expect(bodies(flowCards) == ["Todo\n\nline one", "Only title"])  // 保持旧 sort_order
-    #expect(flowCards.first?.numbering == .known(.decimal) && flowCards.first?.isPinned == true)
+    #expect(flowCards.first?.isPinned == true)
     let inbox = try await store.cards(in: nil)
-    #expect(bodies(inbox) == ["inbox body"] && inbox.first?.numbering == .known(.alpha))
+    #expect(bodies(inbox) == ["inbox body"])
 
     let trashedCards = try await store.trashedCards()
     #expect(Set(bodies(trashedCards)) == ["trashed before Gone", "trashed alone"])
