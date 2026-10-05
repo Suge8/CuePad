@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 新会话：选在哪开（项目的代码目录、最近会话用过的目录）、可选一句开场的话，请 Mac 在终端里开 Pi。
+/// 新会话：选在哪开（项目的代码目录、最近会话用过的目录）、可选一句开场的话，请 Mac 在后台开 Pi。
 /// 发出后面板换成进度（送达中 → Mac 在开）；Mac 开好、带着这次标识的会话同步过来时自动关掉并进入它；
 /// 没能打开时回到表单，写着 Mac 给的原因，可以再试。
 struct NewSessionSheet: View {
@@ -118,7 +118,7 @@ struct NewSessionSheet: View {
                 if let opening = request.launch?.prompt {
                     Text(opening).font(.body).foregroundStyle(palette.ink2)
                 }
-                Text(request.status == .known(.succeeded) ? "Mac 正在终端里开 Pi，会话出现后自动进入" : "等 Mac 收到…")
+                Text(request.status == .known(.succeeded) ? "Pi 已在 Mac 后台开好，会话出现后自动进入" : "等 Mac 收到…")
                     .font(.footnote).foregroundStyle(palette.ink3)
             }
             .padding(.vertical, 6)
@@ -133,7 +133,7 @@ struct NewSessionSheet: View {
         } else if !services.reachesPiHost {
             SyncHint(status: services.syncStatus)
         } else {
-            Text("在 Mac 的终端里开一个 Pi 会话；开好后自动进入它").foregroundStyle(palette.ink3)
+            Text("Mac 在后台开一个 Pi 会话，不占终端；开好后自动进入它").foregroundStyle(palette.ink3)
         }
     }
 

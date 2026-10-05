@@ -139,7 +139,7 @@ private struct NewSessionButton: View {
 
     var body: some View {
         Button("新会话", systemImage: "plus") { navigation.newSession = .init() }
-            .accessibilityHint("在 Mac 的终端里开一个 Pi 会话")
+            .accessibilityHint("请 Mac 在后台开一个 Pi 会话")
     }
 }
 

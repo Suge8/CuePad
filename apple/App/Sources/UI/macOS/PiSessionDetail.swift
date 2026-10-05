@@ -75,7 +75,7 @@ struct PiSessionDetail: View {
 }
 
 /// 发给这个会话：走"发给当前目标"同一条通道（`Workspace.send`），方式按共用规则（`MacDelivery`）。
-/// 已结束的会话换成"继续"（在它所在的 Mac 的终端里恢复，进度与结果在上面"你发过去的"里）；在别的 Mac 上运行的写明在哪。
+/// 已结束的会话写明发消息时 Mac 会在后台恢复它；在别的 Mac 上运行的写明在哪。后台托管的会话没有终端，不给"跳到终端"。
 private struct DetailReply: View {
     let session: PiSessionState
     let live: CuePi.PiSession?
@@ -108,9 +108,11 @@ private struct DetailReply: View {
                         ForEach(modes, id: \.self) { Text($0.label).tag(Optional($0)) }
                     }
                     .pickerStyle(.segmented).labelsHidden().fixedSize()
-                    Button("跳到终端", systemImage: "terminal") { workspace.jumpToTerminal(live.id) }
-                        .labelStyle(.iconOnly).buttonStyle(.borderless)
-                        .help("跳到这个会话所在的终端")
+                    if !live.hosted {
+                        Button("跳到终端", systemImage: "terminal") { workspace.jumpToTerminal(live.id) }
+                            .labelStyle(.iconOnly).buttonStyle(.borderless)
+                            .help("跳到这个会话所在的终端")
+                    }
                     Spacer()
                     Button("发送", action: send)
                         .buttonStyle(.borderedProminent)
@@ -213,8 +215,8 @@ extension Workspace {
 
 
 
-    /// 在本机终端里开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能打开时抛出执行端写回的原因。
-    /// 终端已经打开（请求成功）时先调 `launched`：之后等的是 Pi 自己连上，可能要一会儿，也可能因为终端里出错永远等不到。
+    /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能打开时抛出执行端写回的原因。
+    /// 请求成功（Pi 已连上）时先调 `launched`：之后等的是它的同步记录写出来。
     func startSession(at place: PiLaunchPlace, prompt: String?, title: String, launched: @escaping () -> Void) async throws -> String {
         let token = UUID().uuidString
         let request = try await services.launch(PiLaunch(place: place, prompt: prompt, token: token), title: title, on: services.hostID)

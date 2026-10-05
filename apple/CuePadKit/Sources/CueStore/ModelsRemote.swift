@@ -331,7 +331,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 由 CuePad 发起的新会话（投送方式 `start`）带着发起方生成的标识（`PiLaunch.start` 的 `token`），
   /// 发起方据此等到并打开"自己开的那个"会话。其余会话为 nil。
   public var launchToken: String?
-  /// Mac 在后台替你托管着它（没有终端界面；给已结束的会话发消息、开新会话时由 Mac 自动启动）。Mac 上据此给出"在终端打开"。
+  /// Mac 在后台替你托管着它（没有终端界面；给已结束的会话发消息、开新会话时由 Mac 自动启动）。这样的会话没有终端可跳。
   public var hosted: Bool
   /// 会话里的子代理（FireCode 等在同一进程里开的子会话），一行一个。
   public var subagents: [PiSubagentState]

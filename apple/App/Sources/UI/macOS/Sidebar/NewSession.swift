@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// Pi 分组标题旁的 +：在本机终端里开一个新会话；打开后关掉表单、打开新会话的详情。
+/// Pi 分组标题旁的 +：在本机后台开一个新会话；打开后关掉表单、打开新会话的详情。
 struct NewSessionButton: View {
     /// 侧栏读到的会话（取没绑项目的最近目录）。
     let recent: [PiSessionState]
@@ -15,7 +15,7 @@ struct NewSessionButton: View {
         Button("新会话", systemImage: "plus") { showing = true }
             .labelStyle(.iconOnly).buttonStyle(.borderless)
             .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            .help("在终端里开一个新的 Pi 会话")
+            .help("在后台开一个新的 Pi 会话")
             .popover(isPresented: $showing, arrowEdge: .trailing) {
                 NewSessionForm(recent: recent) { id in
                     guard showing else { return sessionDetail?.open(id) ?? () }
