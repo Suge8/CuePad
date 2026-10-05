@@ -99,8 +99,6 @@ struct MacDependencies {
     var commandLineTool: CommandLineToolInstaller
     /// 自动更新器；隔离模式与测试为 nil。
     var updater: (any AppUpdater)?
-    /// 继续会话、开新会话时打开终端。
-    var terminalLauncher: any TerminalLaunching
     /// 这台 Mac 上的 Pi 可执行文件；没装为 nil。
     var locatePi: @Sendable () async -> URL?
 
@@ -122,7 +120,6 @@ struct MacDependencies {
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: CommandLineToolInstaller(),
             updater: location.isIsolated ? nil : SparkleUpdater(),
-            terminalLauncher: LiveTerminalLauncher(),
             locatePi: {
                 if case .found(let executable, _) = await installer.status().pi { executable } else { nil }
             })

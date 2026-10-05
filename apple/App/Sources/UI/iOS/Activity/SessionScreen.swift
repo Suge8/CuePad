@@ -4,7 +4,7 @@ import CueText
 import SwiftUI
 
 /// 一个 Pi 会话的近况（Pi 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里）：上面是近况，
-/// 底部是发过去的最新一条请求与回复框；已结束的会话（历史）底部换成"在 Mac 上继续"。
+/// 底部是发过去的最新一条请求与回复框（已结束的会话也能回复，Mac 在后台把它恢复起来再送达）。
 /// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的近况，底部换成说明。
 struct SessionScreen: View {
     let id: UUID
@@ -43,14 +43,15 @@ struct SessionScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let session = digest?.session ?? lastSeen {
-                let alive = digest?.session != nil && session.state != .known(.ended)
+                // 已结束的会话也能回复：Mac 在后台把它恢复起来再送达
+                let alive = digest?.session != nil
                 // 发出后最新一条就在回复框上方，长回答下也看得到送达情况
                 VStack(spacing: 8) {
                     DeliveryStack(deliveries: digest?.deliveries ?? [], session: alive ? session : nil)
                     if alive {
                         ReplyBar(session: session, draft: $draft)
                     } else {
-                        ResumeBar(session: digest?.session, deliveries: digest?.deliveries ?? [])
+                        Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
                     }
                 }
                 .padding(.horizontal, 8).padding(.bottom, 8)
@@ -94,7 +95,7 @@ private struct ReplyBar: View {
 
     /// 第一个是发送按钮的方式，第二个（忙时的马上说）是次级按钮。
     private var modes: [DeliveryMode] {
-        MacDelivery.modes(for: session.state, hasImages: !CardText(content).images.isEmpty)
+        MacDelivery.modes(for: session, hasImages: !CardText(content).images.isEmpty)
     }
 
     private var reachable: Bool { services.reachesPiHost }
@@ -177,49 +178,6 @@ private struct ReplyBar: View {
             draft = nil
             focused = false
             sentCount += 1
-        }
-    }
-}
-
-/// 已结束的会话：请 Mac 在终端里接着这个会话（Pi 的恢复会话）。请求与送达情况在上面的请求条里；
-/// Mac 开好后会话回到"现在"，这里换成回复框。记录已经没了时只写明原因。
-private struct ResumeBar: View {
-    let session: PiSessionState?
-    let deliveries: [DeliveryRequest]
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    @State private var sending = false
-
-    /// 上一次请 Mac 继续还没结果：不重复发。
-    private var resuming: Bool { sending || deliveries.contains { $0.mode == .known(.resume) && $0.isOpen } }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let session {
-                if !services.reachesPiHost { SyncHint(status: services.syncStatus) }
-                Button { resume(session) } label: {
-                    Label(resuming ? "正在请 Mac 继续…" : "在 Mac 上继续", systemImage: "play.fill")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .prominentButton()
-                .disabled(resuming || !services.reachesPiHost)
-                .accessibilityHint("在 Mac 的终端里接着这个会话")
-            } else {
-                Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glass(in: .rect(cornerRadius: 24))
-    }
-
-    private func resume(_ session: PiSessionState) {
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            _ = try await services.launch(.resume(sessionID: session.sessionID), title: session.title, on: session.hostID)
         }
     }
 }

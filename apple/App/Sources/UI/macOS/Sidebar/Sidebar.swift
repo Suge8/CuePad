@@ -230,7 +230,7 @@ private struct PiSection: View {
                         .sessionDetailRow(session.sessionID)
                         .help(bridge?.state.errorMessage ?? "")
                         .contextMenu {
-                            if let bridge {
+                            if let bridge, !bridge.hosted {
                                 Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
                             }
                         }

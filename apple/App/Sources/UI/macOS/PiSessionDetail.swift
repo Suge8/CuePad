@@ -11,7 +11,8 @@ extension PiSessionState {
             id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
             projectID: projectID, state: .known(state), detail: detail, folder: session.cwd.lastPathComponent,
             lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
-            stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince)
+            stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
+            launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagentStates)
     }
 }
 
@@ -88,7 +89,7 @@ private struct DetailReply: View {
     @FocusState private var focused: Bool
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var modes: [DeliveryMode] { MacDelivery.modes(for: session.state, hasImages: false) }
+    private var modes: [DeliveryMode] { MacDelivery.modes(for: session, hasImages: false) }
     /// 会话状态变了（比如开始干活）时，原来选的方式可能不再可用：换成当前可用的第一个。
     private var mode: DeliveryMode? { chosenMode.flatMap { modes.contains($0) ? $0 : nil } ?? modes.first }
 
@@ -107,7 +108,7 @@ private struct DetailReply: View {
                     ForEach(modes, id: \.self) { Text($0.label).tag(Optional($0)) }
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
-                if let live {
+                if let live, !live.hosted {
                     Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
                         .labelStyle(.iconOnly).buttonStyle(.borderless)
                         .help("跳到这个会话所在的终端窗口")
@@ -119,7 +120,9 @@ private struct DetailReply: View {
                     .disabled(trimmed.isEmpty || sending)
             }
             .controlSize(.small)
-            if let explanation = mode?.explanation {
+            if session.state == .known(.ended) {
+                Text("给它发消息时，它所在的 Mac 会在后台把它恢复起来").font(.footnote).foregroundStyle(palette.ink3)
+            } else if let explanation = mode?.explanation {
                 Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
             }
         }
@@ -209,7 +212,7 @@ extension Workspace {
     /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
     func startSession(at place: PiLaunchPlace, prompt: String?, title: String, launched: @escaping () -> Void) async throws -> String {
         let token = UUID().uuidString
-        let request = try await services.launch(.start(place, prompt: prompt, token: token), title: title, on: services.hostID)
+        let request = try await services.launch(PiLaunch(place: place, prompt: prompt, token: token), title: title, on: services.hostID)
         let progress = services.store.observe([.piSessionStates, .deliveryRequests]) { store in
             (try store.piSessionPage(PiSessionQuery(launchToken: token, limit: 1)).items.first?.state.sessionID,
              try store.deliveryRequest(request.id))

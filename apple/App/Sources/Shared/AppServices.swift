@@ -82,7 +82,6 @@ final class AppServices {
     @ObservationIgnored let channels: any SendChannels
     @ObservationIgnored let paths: PiPaths
     @ObservationIgnored let terminal: PiTerminalJumper
-    @ObservationIgnored let terminalLauncher: any TerminalLaunching
     @ObservationIgnored let locatePi: @Sendable () async -> URL?
     @ObservationIgnored let historyStore: PiHistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
@@ -264,7 +263,6 @@ final class AppServices {
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
         terminal = mac.terminal
-        terminalLauncher = mac.terminalLauncher
         locatePi = mac.locatePi
         piExtension = PiExtensionManager(installer: mac.installer, settings: settings)
         accessibility = AccessibilityAccess(isTrusted: mac.isAccessibilityTrusted)

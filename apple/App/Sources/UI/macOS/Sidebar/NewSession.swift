@@ -103,10 +103,13 @@ private struct NewSessionForm: View {
             HStack(spacing: 8) {
                 switch stage {
                 case .idle:
-                    EmptyView()
-                case .opening, .connecting:
+                    Text("在后台开，不占终端").font(.footnote).foregroundStyle(palette.ink3)
+                case .opening:
                     ProgressView().controlSize(.small)
-                    Text("正在开新会话…").font(.footnote).foregroundStyle(palette.ink3)
+                    Text("正在开…").font(.footnote).foregroundStyle(palette.ink3)
+                case .connecting:
+                    ProgressView().controlSize(.small)
+                    Text("等 Pi 连上…").font(.footnote).foregroundStyle(palette.ink3)
                 case .failed(let reason):
                     Text(reason).font(.footnote).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
                 }

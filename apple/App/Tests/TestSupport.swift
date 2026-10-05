@@ -134,7 +134,6 @@ final class TestApp {
     let updater = FakeUpdater()
     let wakeCenter = NotificationCenter()
     let hotkeys = InMemoryHotkeys()
-    let terminal = RecordingTerminal()
     /// 测试里的 Pi 可执行文件（执行器启动会话时用；不真运行）
     nonisolated static let piExecutable = URL(filePath: "/opt/test/bin/pi")
     let window = RecordingWindow()
@@ -206,7 +205,6 @@ final class TestApp {
                 helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                 linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
             updater: updater,
-            terminalLauncher: terminal,
             locatePi: { Self.piExecutable })
         let services = AppServices(location: location(), defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)

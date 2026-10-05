@@ -21,8 +21,6 @@ nonisolated enum SendError: Error, Equatable {
     case executorUnavailable
     /// 问题只能在 Pi 里回答（多行编辑、自定义界面，或旧版本扩展只给了文案）。
     case unanswerable
-    /// 要恢复的会话正在运行（不能重复打开）。
-    case piSessionAlreadyRunning
     /// 这台 Mac 上找不到这个会话的会话文件（被删了，或不是这台 Mac 上的会话）。
     case piSessionNotOnThisMac
     /// 要开新会话的项目没有绑定代码目录。
@@ -48,7 +46,6 @@ extension SendError: LocalizedError {
         case .notDelivered(let reason): "没能送达：\(reason)"
         case .executorUnavailable: "这台 Mac 上的投送执行器没有启动，发不到 Pi；请查看启动问题或重启 CuePad"
         case .unanswerable: "这个问题只能在 Mac 上的 Pi 里回答"
-        case .piSessionAlreadyRunning: "这个会话已经在运行，不能重复打开"
         case .piSessionNotOnThisMac: "这台 Mac 上找不到这个会话（会话文件可能已被删除）"
         case .noCodeDirectory(let project): "项目「\(project)」还没有绑定代码目录，不知道在哪开新会话"
         case .piNotInstalled: "这台 Mac 上没有找到 Pi"
