@@ -10,7 +10,8 @@ import SwiftUI
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// searchkey：iPhone 停在任务页，1.5 秒后走 ⌘K（回到书架并聚焦下拉搜索）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
-/// activity 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话，Pi 页打开就滚到底（看历史滑到底读下一页）。
+/// activity 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话（每隔 8 小时结束一个，分落在今天到更早），
+/// Pi 页打开就滚到底（看历史滑到底读下一页；同时给了 `-CuePadSearch` 时停在顶上）。
 /// newsession：Pi 页上打开新会话面板；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
 /// iPad 上 tasks、activity 打开右侧面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
@@ -176,10 +177,12 @@ extension DebugScene {
         for index in 0..<extra {
             let id = "history-\(index + 1)"
             let name = ["CuePad", "圆桌", nil][index % 3]
-            try? await recorder.update(
+            let ended = Date.now.addingTimeInterval(-Double(index + 1) * 8 * 3600)
+            let past = PiStateRecorder(store: store, hostID: "demo-mac", timing: Timing(now: { ended }, sleep: { _ in }))
+            try? await past.update(
                 sessionID: id, state: .settled, detail: nil, title: "历史会话 \(index + 1)", folder: id, projectID: name.flatMap(project),
                 recap: PiRecap(lastPrompt: "第 \(index + 1) 个", lastReply: "做完了"))
-            try? await recorder.end(sessionID: id)
+            try? await past.end(sessionID: id)
         }
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {

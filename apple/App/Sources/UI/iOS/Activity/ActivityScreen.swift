@@ -4,7 +4,7 @@ import CueSync
 import SwiftUI
 
 /// Pi：只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。"现在"是没结束的会话，按要你注意的先后排
-/// （等你确认 → 出错 → 工作中 → 空闲）；"历史"是所有已结束的，按项目分组、可搜，滑到底才读下一页。
+/// （等你确认 → 出错 → 工作中 → 空闲）；"历史"是所有已结束的，按结束时间分段（今天、昨天……）、可搜，滑到底才读下一页。
 /// 点开看近况、回复（历史会话看最后一轮、在 Mac 上继续）。右上角开新会话。
 /// iPad 右侧面板里没有导航栏：搜索与新会话放在列表顶上。
 struct ActivityScreen: View {
@@ -31,25 +31,25 @@ struct ActivityScreen: View {
                     } else {
                         if !list.now.isEmpty {
                             SectionTitle(text: "现在").padding(.bottom, 8)
-                            rows(list.now, showsPlace: true).padding(.bottom, 24)
+                            rows(list.now).padding(.bottom, 24)
                         }
-                        if !list.history.isEmpty {
+                        if !list.ended.isEmpty {
                             SectionTitle(text: "历史")
-                            // 组内逐行懒加载：每行是 LazyVStack 的一个子项，滑到才画
-                            ForEach(list.history) { group in
-                                Text(group.title).font(.footnote.weight(.medium)).foregroundStyle(palette.ink3)
+                            // 段内逐行懒加载：每行是 LazyVStack 的一个子项，滑到才画
+                            ForEach(PiHistorySection.split(list.ended, date: \.state.stateSince, now: .now), id: \.section) { run in
+                                Text(run.section.title).font(.footnote.weight(.medium)).foregroundStyle(palette.ink3)
                                     .padding(.horizontal, 4).padding(.top, 12).padding(.bottom, 6)
-                                ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
+                                ForEach(Array(run.items.enumerated()), id: \.element.id) { index, item in
                                     VStack(spacing: 0) {
                                         if index > 0 { Divider().padding(.leading, 44) }
-                                        SessionRow(item: item, showsPlace: false)
+                                        SessionRow(item: item)
                                     }
-                                    .paperSlice(first: index == 0, last: index == group.items.count - 1, radius: 16)
+                                    .paperSlice(first: index == 0, last: index == run.items.count - 1, radius: 16)
                                 }
                             }
                         }
                         if list.loaded < list.total {
-                            // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上时（下一页加进了上面的分组）接着读
+                            // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上（一页没填满屏幕）时接着读
                             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12)
                                 .task(id: list.loaded) { limit = list.loaded + PiSessionList.pageSize }
                         }
@@ -63,7 +63,7 @@ struct ActivityScreen: View {
         }
         .scrollDismissesKeyboard(.immediately)
         #if DEBUG
-        .defaultScrollAnchor(DebugScene.scene == "activity" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 ? .bottom : nil)
+        .defaultScrollAnchor(DebugScene.scene == "activity" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
         #endif
         .background(palette.desk)
         .bottomEdgeFade()
@@ -80,11 +80,11 @@ struct ActivityScreen: View {
         }
     }
 
-    private func rows(_ items: [PiSessionListItem], showsPlace: Bool) -> some View {
+    private func rows(_ items: [PiSessionListItem]) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { Divider().padding(.leading, 44) }
-                SessionRow(item: item, showsPlace: showsPlace)
+                SessionRow(item: item)
             }
         }
         .paper(radius: 16)
@@ -155,7 +155,7 @@ private struct SectionTitle: View {
 }
 
 /// Pi 页读到的会话："现在"是全部在线的（不多，不分页），按要你注意的先后；"历史"是已结束的前 `loaded` 条，
-/// 按项目分组，组按最近结束的先后。两部分用同一个搜索词。
+/// 从新到旧（分段见 `PiHistorySection`）。两部分用同一个搜索词。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40
 
@@ -164,55 +164,31 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         var limit: Int
     }
 
-    struct Group: Identifiable, Sendable, Equatable {
-        let id: UUID?
-        let title: String
-        var items: [PiSessionListItem]
-    }
-
     var now: [PiSessionListItem]
-    var history: [Group]
-    var loaded: Int
+    var ended: [PiSessionListItem]
     var total: Int
 
+    var loaded: Int { ended.count }
     var isEmpty: Bool { now.isEmpty && total == 0 }
 
     static func read(text: String, historyLimit: Int, from store: isolated CueStore) throws -> PiSessionList {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max)).items
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: historyLimit))
-        return PiSessionList(live: live, ended: ended)
-    }
-
-    init(live: [PiSessionListItem], ended: PiSessionPage) {
         let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state)).enumerated().map { ($1.id, $0) })
-        now = live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }
-        var groups: [Group] = []
-        for item in ended.items {
-            let key = item.project?.id
-            if let index = groups.firstIndex(where: { $0.id == key }) {
-                groups[index].items.append(item)
-            } else {
-                groups.append(Group(id: key, title: item.project?.name ?? "不在项目里", items: [item]))
-            }
-        }
-        history = groups
-        loaded = ended.items.count
-        total = ended.total
+        return PiSessionList(
+            now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total)
     }
 }
 
-/// 一个会话三层：左边状态标；名字与时长；在哪 · 状态词（带色）；一句进度或结果（没有不占行）。已结束的整行更淡。
-/// 历史分组里项目名已在组头，`showsPlace` 为 false 时只写文件夹。
+/// 一个会话三层：左边状态标；名字与时长；在哪（项目或文件夹） · 状态词（带色）；一句进度或结果（没有不占行）。已结束的整行更淡。
 private struct SessionRow: View {
     let item: PiSessionListItem
-    let showsPlace: Bool
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
 
     var body: some View {
         let session = item.state
-        let place = showsPlace ? PiPlace.name(of: session, project: item.project)
-            : PiPlace.name(project: nil, folder: session.folder, besides: session.title)
+        let place = PiPlace.name(of: session, project: item.project)
         Button { navigation.push(.session(session.id)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 PiStateDot(state: session.state, size: 8)
