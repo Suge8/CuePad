@@ -148,6 +148,13 @@ enum PiWire {
         try encode(Command(t: "paste", id: id, text: text))
     }
 
+    private struct ReloadCommand: Encodable {
+        var t = "reload"
+        var id: String
+    }
+
+    static func reloadCommand(id: String) throws -> Data { try encodeLine(ReloadCommand(id: id)) }
+
     private struct AnswerCommand<Value: Encodable>: Encodable {
         var t = "answer"
         var id: String

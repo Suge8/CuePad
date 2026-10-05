@@ -12,7 +12,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 9;
+const EXTENSION_VERSION = 10;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -45,6 +45,12 @@ const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
 const WORKER_NAME = /<firecode_worker name="([^"]+)">/u;
 /** CuePad 在终端里开新会话时经这个环境变量交给扩展的认领标识，扩展在 hello 里带回 */
 const LAUNCH_TOKEN_ENV = "CUEPAD_LAUNCH_TOKEN";
+/** 从会话文件重新载入当前会话的命令名（见 handleReload） */
+const RELOAD_COMMAND = "cuepad-reload";
+/** 会话文件里的条目数（不算文件头） */
+function entriesOnDisk(file: string): number {
+	return fs.readFileSync(file, "utf8").split("\n").filter((line) => line.trim().length > 0).length - 1;
+}
 /** CuePad 在后台托管的 Pi（RPC 模式、没有终端界面）启动时带这个环境变量，扩展在 hello 里带回 */
 const HOSTED_ENV = "CUEPAD_HOSTED";
 /** 交给 CuePad 用来定位终端的环境变量 */
@@ -216,6 +222,8 @@ export default function (pi: any) {
 	};
 	/** 等你回答的弹窗：`id` 非空的可以从 CuePad 作答（confirm/select/text）；editor 与 custom 只能在 Pi 里答 */
 	type Question = { id: string | null; kind: string; text: string; options: string[] };
+	/** 会话载入时的条目数：之后多出来的是这个进程自己写的 */
+	let loadedEntries = 0;
 	let info: Info = { name: null, firstMessage: null, lastPrompt: null, lastReply: null, question: null, subagents: [] };
 	/** 本会话是某个会话的进程内子会话（子代理）时，它在登记表里的键（会话文件路径）：状态只进登记表，不开 socket */
 	let subsessionKey: string | undefined;
@@ -287,6 +295,7 @@ export default function (pi: any) {
 		try {
 			if (command?.t === "send") return handleSend(command, ack, reject);
 			if (command?.t === "answer") return handleAnswer(command, ack, reject);
+			if (command?.t === "reload") return handleReload(ack);
 			if (command?.t === "paste") {
 				if (typeof command.text !== "string") return reject("bad_request");
 				// RPC 模式下 pasteToEditor 退化为 set_editor_text 请求转给客户端
@@ -317,6 +326,31 @@ export default function (pi: any) {
 		pi.sendUserMessage(content, { deliverAs });
 		ack({ ok: true, delivered: busy ? deliverAs : "immediate" });
 	}
+
+	/**
+	 * CuePad 在后台托管的同一会话刚做完一轮、让出退出：那一轮写进会话文件的内容，这个进程（用户打开时已载入）看不到。
+	 * 这个进程从载入起没写过，就把会话从文件重新载入到最新——之后说的话接在那一轮后面，不分支；写过了（会话已分出支线）
+	 * 就不动，提示一句。Pi 只在命令里给切换会话的能力（`switchSession`），所以经 `sendUserMessage` 触发本扩展的命令。
+	 */
+	function handleReload(ack: (f: object) => void) {
+		const file: string | undefined = ctx.sessionManager.getSessionFile();
+		const inMemory = ctx.sessionManager.getEntries().length;
+		if (!file || entriesOnDisk(file) <= inMemory) return ack({ ok: true, reloaded: false });
+		if (inMemory !== loadedEntries || !ctx.isIdle()) {
+			ctx.ui.notify("CuePad 在后台跑的那一轮在你打开会话后才写完，会话分出了支线；用 /tree 查看", "warning");
+			return ack({ ok: true, reloaded: false });
+		}
+		ack({ ok: true, reloaded: true });
+		pi.sendUserMessage(`/${RELOAD_COMMAND}`, { expandPromptTemplates: true });
+	}
+
+	pi.registerCommand(RELOAD_COMMAND, {
+		description: "从会话文件重新载入当前会话（CuePad 后台托管的会话交接后用）",
+		handler: async (_args: string, command: any) => {
+			const file = command.sessionManager.getSessionFile();
+			if (file) await command.switchSession(file);
+		},
+	});
 
 	/** 回答当前弹窗：标识必须是正在等的那个（答过或换了弹窗就拒绝），答案的类型与选项要对得上。 */
 	function handleAnswer(command: any, ack: (f: object) => void, reject: (e: string) => void) {
@@ -475,6 +509,7 @@ export default function (pi: any) {
 		// 都不作为会话出现；子代理的状态汇总到父会话
 		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return registerSubsession();
 		tty = readTTY();
+		loadedEntries = ctx.sessionManager.getEntries().length;
 		const branch = ctx.sessionManager.getBranch();
 		info = {
 			name: pi.getSessionName() ?? null,

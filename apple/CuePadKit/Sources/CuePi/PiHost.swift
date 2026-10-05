@@ -7,7 +7,8 @@ import Foundation
 ///
 /// - 空闲（这一轮做完、没有等你确认、子代理也歇下）满 `idleLimit` 就退出，会话记录与会话文件都在，下次发消息再恢复；
 /// - 用户在别处（自己的终端、herdr）打开了同一个会话（同一会话 id 的另一个进程连上桥）：后台进程让出——空闲就马上退，
-///   正在跑一轮就等这一轮做完再退。两个进程不能同时写同一个会话文件，所以让出的一方要在这一轮结束后立刻走；
+///   正在跑一轮就等这一轮做完再退（不丢已做的工作）。退出后让接手的进程重新载入会话（`PiBridge.reload`），
+///   它这期间没写过就接上那一轮、不分支，写过就由扩展提示一句；
 /// - 退出靠关掉它的标准输入：RPC 模式读到 EOF 后正常收尾（扩展先发 bye）。App 退出时一并关掉（`closeAll`）。
 @MainActor
 public final class PiHost {
@@ -107,10 +108,7 @@ public final class PiHost {
             let pid = ended.processIdentifier
             exit.yield()
             exit.finish()
-            Task { @MainActor in
-                self?.processes[pid]?.idleTimer?.cancel()
-                self?.processes[pid] = nil
-            }
+            Task { @MainActor in self?.exited(pid) }
         }
         let changes = bridge.changes()  // 先订阅再启动：连上的那一刻不会漏
         try process.run()
@@ -152,6 +150,15 @@ public final class PiHost {
     /// `pi` 是 node 脚本：App 的环境里没有用户 shell 的 PATH，按找 Pi 时的同一组目录补上（node 多半与 pi 装在一起）。
     private static func path(_ executable: URL, _ searchPath: [URL]) -> String {
         ([executable.deletingLastPathComponent()] + searchPath).map(\.path).joined(separator: ":")
+    }
+
+    /// 进程退出：让出的那个退出后，告诉接手的进程把会话重新载入到最新（让出前做完的那一轮它还没看到）。
+    private func exited(_ pid: Int32) {
+        guard let hosted = processes.removeValue(forKey: pid) else { return }
+        hosted.idleTimer?.cancel()
+        guard hosted.yielding, let sessionID = hosted.sessionID,
+              let successor = bridge.sessions.first(where: { $0.sessionID == sessionID && $0.pid != pid }) else { return }
+        Task { try? await bridge.reload(successor.id) }
     }
 
     private func close(_ hosted: Hosted) {
