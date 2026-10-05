@@ -231,11 +231,11 @@ struct MacSyncTests {
     func 主动拉取的条件_没有连着的会话时不因旧记录而拉_有本机待执行请求时拉() async throws {
         try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
         var waiting = services.pollingCondition().makeAsyncIterator()
-        #expect(await waiting.next() == false)
+        #expect(await waiting.next() == .some(nil))
 
         _ = try await services.store.requestDelivery(
             "hi", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
-        while let value = await waiting.next(), !value {}
+        while let cadence = await waiting.next(), cadence == nil {}
     }
 
     @Test func 连接测试请求立即完成_不碰Pi_不写发送记录() async throws {
