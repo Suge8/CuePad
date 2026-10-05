@@ -68,8 +68,8 @@ private struct DigestKey: Equatable {
     var sessionID: String?
 }
 
-/// 回复框：平时收成一行（输入 + 当前方式的短名 + 发送），不挡近况；输入框聚焦、有字或带着卡片时展开，
-/// 露出要带上的卡片、发送方式与说明、同步提示。发出后清空，请求马上贴到它上方。回答弹窗在问题卡上，不在这里。
+/// 回复框：一个发送。Pi 空闲时直接发；正忙时发出的话等它做完再说，旁边一个"马上说"打断它。
+/// 输入框聚焦或带着卡片时露出要带上的卡片与同步提示。发出后清空，请求马上贴到它上方。回答弹窗在问题卡上，不在这里。
 /// 同步到不了 Mac、会话已结束时不能发，写明原因。
 private struct ReplyBar: View {
     let session: PiSessionState
@@ -79,7 +79,6 @@ private struct ReplyBar: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var text = ""
-    @State private var chosenMode: DeliveryMode?
     @State private var sending = false
     @State private var sentCount = 0
     @FocusState private var focused: Bool
@@ -90,76 +89,59 @@ private struct ReplyBar: View {
         [draft?.content, trimmed.nonEmpty].compactMap { $0 }.joined(separator: "\n\n")
     }
 
+    /// 第一个是发送按钮的方式，第二个（忙时的马上说）是次级按钮。
     private var modes: [DeliveryMode] {
         MacDelivery.modes(for: session.state, hasImages: !CardText(content).images.isEmpty)
     }
 
-    /// 会话状态变了（比如开始干活）时，原来选的方式可能不再可用：换成当前可用的第一个。
-    private var mode: DeliveryMode? {
-        chosenMode.flatMap { modes.contains($0) ? $0 : nil } ?? modes.first
-    }
-
     private var reachable: Bool { services.reachesPiHost }
-    private var expanded: Bool { focused || !text.isEmpty || draft != nil }
+    private var canSend: Bool { !content.isEmpty && reachable && !sending }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !alive {
                 Text("会话已结束，回复发不到它；在 Mac 的终端重新运行 pi 开新会话").font(.footnote).foregroundStyle(palette.ink3)
             } else {
-                if expanded, !reachable { SyncHint(status: services.syncStatus) }
+                if focused || draft != nil, !reachable { SyncHint(status: services.syncStatus) }
                 if let draft { attachment(draft) }
                 HStack(alignment: .bottom, spacing: 8) {
                     TextField(placeholder, text: $text, axis: .vertical)
-                        .lineLimit(expanded ? 1...5 : 1...1)
+                        .lineLimit(1...5)
                         .focused($focused)
                         .accessibilityLabel("回复")
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .background(palette.paper, in: .rect(cornerRadius: 20, style: .continuous))
-                    if !expanded, let mode {
-                        // 收起时只露当前方式的短名，点它展开
-                        Button(mode.label) { focused = true }
+                    if modes.count > 1, let interrupt = modes.last {
+                        Button("马上说") { send(interrupt) }
                             .buttonStyle(.plain)
-                            .font(.footnote.weight(.medium)).foregroundStyle(reachable ? palette.ink2 : palette.ink3)
-                            .padding(.horizontal, 10).frame(minHeight: 40)
+                            .font(.subheadline.weight(.medium)).foregroundStyle(canSend ? palette.ink : palette.ink3)
+                            .padding(.horizontal, 12).frame(minHeight: 40)
                             .background(palette.fill, in: .capsule)
-                            .accessibilityHint("展开发送方式")
+                            .disabled(!canSend)
+                            .accessibilityHint("打断它正在做的")
                     }
-                    Button(action: send) {
+                    Button { if let mode = modes.first { send(mode) } } label: {
                         Image(systemName: "arrow.up").font(.body.weight(.semibold))
                             .frame(width: 40, height: 40)
                     }
                     .prominentButton()
                     .clipShape(.circle)
-                    .disabled(content.isEmpty || mode == nil || !reachable || sending)
-                    .accessibilityLabel("发送")
+                    .disabled(!canSend)
+                    .accessibilityLabel(modes.first == .followUp ? "等它做完再说" : "发送")
                     .sensoryFeedback(.success, trigger: sentCount)
-                }
-                if expanded, let mode {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if modes.count > 1 {
-                            Picker("方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
-                                ForEach(modes, id: \.self) { Text($0.label).tag($0) }
-                            }
-                            .scalingPickerStyle()
-                            .fixedSize()
-                        }
-                        if let explanation = mode.explanation {
-                            Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
-                        }
-                    }
-                    .transition(.opacity)
                 }
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glass(in: .rect(cornerRadius: 24))
-        .animation(Motion.quick, value: expanded)
+        .animation(Motion.quick, value: focused)
     }
 
+    /// 忙时的提示写明发送按钮的默认：等它做完再说。
     private var placeholder: String {
-        draft == nil ? "回复 \(session.title)" : "补一句（可不填）"
+        if draft != nil { return "补一句（可不填）" }
+        return modes.first == .followUp ? "等它做完再说…" : "回复 \(session.title)"
     }
 
     /// 带上的卡片或任务：标题、图片数，可移除。
@@ -185,9 +167,9 @@ private struct ReplyBar: View {
         .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
     }
 
-    private func send() {
+    private func send(_ mode: DeliveryMode) {
         let content = content, card = draft?.card, task = draft?.task
-        guard !content.isEmpty, let mode, reachable, !sending else { return }
+        guard canSend else { return }
         sending = true
         workspace.attempt {
             defer { sending = false }

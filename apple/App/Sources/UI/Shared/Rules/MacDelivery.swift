@@ -3,11 +3,17 @@ import Foundation
 
 /// "发到 Mac"的界面规则：会话此刻可用哪些发送方式。请求本身经 `AppServices.requestMacDelivery` 写出。
 nonisolated enum MacDelivery {
-    /// 会话此刻可用的方式：Pi 正在跑一轮时直接发送会被拒绝，只能插话或排队；含图片时不能放进输入框。
+    /// 会话此刻可用的方式，第一个是默认：Pi 正在跑一轮时直接发送会被拒绝，只能插话或排队。
+    /// Mac 上人就在 Pi 旁边：默认插话，也可以只放进输入框再自己按发送（含图片时不能）。
+    /// 手机上人不在 Mac 前：默认等它做完再说，另有马上说；不给放进输入框（没人去按那一下发送）。
     static func modes(for state: Open<PiWorkState>, hasImages: Bool) -> [DeliveryMode] {
         let busy = state.known?.isTurnRunning == true
+        #if os(macOS)
         let sending: [DeliveryMode] = busy ? [.steer, .followUp] : [.send]
         return hasImages ? sending : sending + [.paste]
+        #else
+        return busy ? [.followUp, .steer] : [.send]
+        #endif
     }
 }
 
