@@ -242,23 +242,15 @@ private struct PiSection: View {
     private func rows(live: [CuePi.PiSession]) -> [PiSessionState] {
         PiSessionState.sidebarRows(
             live: live.map { PiSessionState.live($0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id]) },
-            ended: ended, history: history, pastLimit: Self.pastLimit)
+            recorded: ended + history, pastLimit: Self.pastLimit)
     }
 }
 
 extension PiSessionState {
-    /// 侧栏 Pi 分组的行：在线的按要你注意的先后（`inListOrder`），其后是已结束（本机同步记录）、再后是历史里的；
-    /// 同一个会话只出现一次（在线 > 已结束 > 历史），已结束与历史合计最多 `pastLimit` 行。
-    static func sidebarRows(
-        live: [PiSessionState], ended: [PiSessionState], history: [PiSessionState], pastLimit: Int
-    ) -> [PiSessionState] {
-        var seen = Set(live.map(\.sessionID))
-        var past: [PiSessionState] = []
-        for session in ended + history where !seen.contains(session.sessionID) && past.count < pastLimit {
-            seen.insert(session.sessionID)
-            past.append(session)
-        }
-        return inListOrder(live) + past
+    /// 侧栏 Pi 分组的行：本机在线的（桥上实时，`live`）与同步记录里没结束的（别的 Mac 上的）一起按要你注意的先后，
+    /// 其后是已结束的；同一个会话只出现一次（本机实时优先），已结束的最多 `pastLimit` 行。`recorded` 是会话列表查询的一页。
+    static func sidebarRows(live: [PiSessionState], recorded: [PiSessionState], pastLimit: Int) -> [PiSessionState] {
+        []
     }
 }
 
