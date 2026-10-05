@@ -24,6 +24,36 @@ final class InMemoryHotkeys: HotkeyBackend {
     func unregister(_ handle: HotkeyHandle) { handles[handle] = nil }
 }
 
+/// 记下后台托管被要求恢复、开哪个会话，不真启动 Pi：托管的会话随即"连上"发送通道替身。
+final class RecordingHost: PiHosting {
+    enum Call: Equatable {
+        case resume(sessionFile: String, directory: String)
+        case open(directory: String, launchToken: String)
+    }
+
+    private(set) var calls: [Call] = []
+    let channels: FakeChannels
+
+    init(channels: FakeChannels) { self.channels = channels }
+
+    func resume(sessionFile: URL, in directory: URL, executable: URL) async throws -> String {
+        calls.append(.resume(sessionFile: sessionFile.path, directory: directory.path))
+        return connect(sessionFile.deletingPathExtension().lastPathComponent)
+    }
+
+    func open(in directory: URL, launchToken: String, executable: URL) async throws -> String {
+        calls.append(.open(directory: directory.path, launchToken: launchToken))
+        return connect("new-\(launchToken)")
+    }
+
+    private func connect(_ sessionID: String) -> String {
+        let id = "\(sessionID).900"
+        channels.bridgeIDs[sessionID] = id
+        channels.sessions[id] = PiSessionInfo(target: SendTarget(kind: .piSession, name: sessionID, ref: sessionID), isBusy: false)
+        return id
+    }
+}
+
 /// 记录调用的发送通道；不碰真实 Pi、剪贴板和其他应用。
 final class FakeChannels: SendChannels {
     enum Call: Equatable {

@@ -286,9 +286,81 @@ struct MacSyncTests {
         return session
     }
 
-    /// 从 CuePad 启动的 Pi 用 CuePad 自己用的 Pi 目录与连接目录（测试里都不是默认的），桥才找得到它、它也读写同一份会话。
-    private var piEnvironment: [String: String] {
-        ["PI_CODING_AGENT_DIR": rig.piPaths.agentDirectory.path, "CUEPAD_PI_SOCKET_DIR": rig.piPaths.socketDirectory.path]
+    @Test func 给已结束的会话发消息_后台恢复后送达() async throws {
+        let app = try folder("app")
+        let indexed = try await indexed("s1", cwd: app)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestDelivery(
+            "接着做", to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.host.calls == [.resume(sessionFile: indexed.path, directory: app.path)])
+        #expect(rig.channels.calls == [.send(PiMessage(text: "接着做"), "s1.900")])
+    }
+
+    @Test func 新会话_后台开在项目目录_开场的话送入() async throws {
+        let directory = try folder("proj")
+        let project = try await services.store.createProject(name: "App", color: "#000000")
+        try await services.store.setDirectory(directory.path, for: project.id)
+        defer { services.cancelBackgroundWork() }
+
+        let done = try await launched(PiLaunch(place: .project(project.id), prompt: "看看测试为什么挂", token: "tok-1"), title: "App")
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-1")])
+        #expect(rig.channels.calls == [.send(PiMessage(text: "看看测试为什么挂"), "new-tok-1.900")])
+    }
+
+    @Test func 新会话_与某会话同目录_没有开场的话就不发_项目没有目录时失败() async throws {
+        let other = try folder("other")
+        _ = try await indexed("s1", cwd: other)
+        let bare = try await services.store.createProject(name: "无目录", color: "#000000")
+        defer { services.cancelBackgroundWork() }
+
+        let beside = try await launched(PiLaunch(place: .besideSession("s1"), prompt: nil, token: "tok-2"))
+        #expect(beside.status == .known(.succeeded))
+        #expect(rig.host.calls == [.open(directory: other.path, launchToken: "tok-2")])
+        #expect(rig.channels.calls.isEmpty)
+
+        let noDirectory = try await launched(PiLaunch(place: .project(bare.id), prompt: nil, token: "tok-3"), title: "无目录")
+        #expect(noDirectory.status == .known(.failed))
+        #expect(noDirectory.resultDetail == SendError.noCodeDirectory("无目录").localizedDescription)
+    }
+
+    /// 目录被删或改名了：不启动 Pi，按失败写回，原因写目录末段名。
+    @Test func 目录不存在时不启动_按失败写回() async throws {
+        _ = try await indexed("s1", cwd: rig.directory.appending(path: "work/gone", directoryHint: .isDirectory))
+        let project = try await services.store.createProject(name: "App", color: "#000000")
+        try await services.store.setDirectory(rig.directory.appending(path: "work/moved").path, for: project.id)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let send = try await services.store.requestDelivery(
+            "接着做", to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
+        let resumed = try await awaitFinished(send.id)
+        #expect(resumed.status == .known(.failed) && resumed.resultDetail == "目录不存在：gone")
+        let start = try await launched(PiLaunch(place: .project(project.id), prompt: nil, token: "tok-4"), title: "App")
+        #expect(start.status == .known(.failed) && start.resultDetail == "目录不存在：moved")
+        #expect(rig.host.calls.isEmpty)
+    }
+
+    /// 后台托管着时，用户在自己的终端里打开了同一个会话：同步记录跟着用户那个进程（不再标"后台托管"），
+    /// 后台进程随后退出也不把记录标为已结束——始终只有一条。
+    @Test func 同一会话换到用户的终端里_记录跟着新进程_后台进程退出不结束记录() async throws {
+        var hosted = session("s1", pid: 100)
+        hosted.hosted = true
+        var mine = session("s1", pid: 200)
+        mine.state = .tool(name: "bash", running: ["bash"])
+        try await services.consumePiChanges(changes([
+            .appeared(hosted), .appeared(mine), .stateChanged(hosted, from: .thinking), .ended(hosted, reason: .closed(reason: "quit")),
+        ]))
+
+        let records = try await services.store.allPiSessionStates()
+        #expect(records.count == 1)
+        #expect(records.first?.hosted == false && records.first?.state == .known(.tool))
     }
 
     @Test func 新会话的认领标识写进同步记录() async throws {

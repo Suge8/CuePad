@@ -21,6 +21,7 @@ struct PiEvent: @unchecked Sendable {
 
 final class PiProcess: @unchecked Sendable {
     let root: URL
+    private let ownsRoot: Bool
     let paths: PiPaths
     let cwd: URL
     private let process = Process()
@@ -40,22 +41,29 @@ final class PiProcess: @unchecked Sendable {
     /// - Parameter oneShotPrompt: 非 nil 时以 print 模式跑这条 prompt 然后退出（否则 RPC 常驻）。
     /// - Parameter firecode: 把本机 FireCode 与测试配置装进临时 agent 目录。它的子代理是进程内子会话，只加载 agent 目录里的扩展、
     ///   只认 `models.json` 里的模型，所以假模型也改为装进 agent 目录，并在 `models.json` 里登记。
+    /// - Parameter modelInAgentDirectory: 假模型装进 agent 目录（不用 `-e` 加载）：CuePad 在后台托管的 Pi 只加载 agent 目录里的扩展。
+    /// - Parameter alongside: 与它共用同一个临时 agent 目录、连接目录与工作目录（同一会话的第二个进程）；结束时不删共用的目录。
+    /// - Parameter sessionFile: 用 `--session` 打开这个会话文件。
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
-         oneShotPrompt: String? = nil, firecode: Bool = false, env: [String: String] = [:]) async throws {
-        root = try makeTempDirectory()
+         oneShotPrompt: String? = nil, firecode: Bool = false, modelInAgentDirectory: Bool = false,
+         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:]) async throws {
+        ownsRoot = other == nil
+        root = try other?.root ?? makeTempDirectory()
         cwd = root.appending(path: "work")
         try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
-        paths = PiPaths(agentDirectory: root.appending(path: "agent"), socketDirectory: socketDirectory ?? root.appending(path: "s"))
-        if installBridge {
+        paths = other?.paths ?? PiPaths(agentDirectory: root.appending(path: "agent"), socketDirectory: socketDirectory ?? root.appending(path: "s"))
+        if installBridge && other == nil {
             let installer = PiExtensionInstaller(paths: paths, locator: PiExecutableLocator(searchDirectories: [realPiURL.deletingLastPathComponent()]))
             try await installer.install()
         }
 
         if firecode { try Self.installFirecode(into: paths.agentDirectory) }
+        if modelInAgentDirectory { try Self.installFakeModel(into: paths.agentDirectory) }
+        let modelLoaded = firecode || modelInAgentDirectory || other != nil
 
-        var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes",
-                    "--model", "fake/echo", "--thinking", "off"]
-        if !firecode { args += ["-e", fixtures.appending(path: "fake-model.ts").path] }
+        var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + Self.quietArguments
+        if let sessionFile { args += ["--session", sessionFile.path] }
+        if !modelLoaded { args += ["-e", fixtures.appending(path: "fake-model.ts").path] }
         for e in extraExtensions { args += ["-e", fixtures.appending(path: e).path] }
 
         var environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("HERDR") && !$0.key.hasPrefix("TMUX") }
@@ -82,6 +90,20 @@ final class PiProcess: @unchecked Sendable {
         Self.drain(errPipe.fileHandleForReading) { [weak self] data in self?.lock.withLock { self?._stderr.append(data) } }
     }
 
+    /// 不联网、不读用户配置的参数，用假模型（测试里 CuePad 在后台托管的 Pi 也带这些，见 `PiHost` 的 `extraArguments`）。
+    static let quietArguments = [
+        "--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off",
+    ]
+
+    private static func installFakeModel(into agent: URL) throws {
+        let fm = FileManager.default
+        let extensions = agent.appending(path: "extensions")
+        try fm.createDirectory(at: extensions, withIntermediateDirectories: true)
+        if !fm.fileExists(atPath: extensions.appending(path: "fake-model.ts").path) {
+            try fm.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
+        }
+    }
+
     private static func installFirecode(into agent: URL) throws {
         let fm = FileManager.default
         let extensions = agent.appending(path: "extensions")
@@ -96,7 +118,7 @@ final class PiProcess: @unchecked Sendable {
 
     func stop() {
         if process.isRunning { process.terminate() }
-        try? FileManager.default.removeItem(at: root)
+        if ownsRoot { try? FileManager.default.removeItem(at: root) }
     }
 
     deinit { stop() }
