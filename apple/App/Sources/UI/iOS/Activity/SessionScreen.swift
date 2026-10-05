@@ -30,7 +30,7 @@ struct SessionScreen: View {
                     .frame(maxWidth: .infinity)
             } else if digest != nil {
                 ContentUnavailableView {
-                    Label("找不到这个会话", systemImage: "terminal")
+                    Label("找不到这个会话", systemImage: "waveform.path.ecg")
                 } description: {
                     Text("Mac 上这个会话的文件可能已经删掉了")
                 }
@@ -73,7 +73,7 @@ private struct DigestKey: Equatable {
     var sessionID: String?
 }
 
-/// 回复框：一个发送。Pi 空闲时直接发；正忙时发出的话等它做完再说，旁边一个"马上说"打断它。
+/// 回复框：发送是输入框里右下角的圆钮。Pi 空闲时直接发；正忙时点它是等它做完再说，长按选"马上说"打断它。
 /// 输入框聚焦或带着卡片时露出要带上的卡片与同步提示。发出后清空，请求马上贴到它上方。回答弹窗在问题卡上，不在这里。
 /// 同步到不了 Mac 时不能发，写明原因。
 private struct ReplyBar: View {
@@ -93,7 +93,7 @@ private struct ReplyBar: View {
         [draft?.content, trimmed.nonEmpty].compactMap { $0 }.joined(separator: "\n\n")
     }
 
-    /// 第一个是发送按钮的方式，第二个（忙时的马上说）是次级按钮。
+    /// 第一个是点发送的方式，第二个（忙时的马上说）在长按菜单里。
     private var modes: [DeliveryMode] {
         MacDelivery.modes(for: session, hasImages: !CardText(content).images.isEmpty)
     }
@@ -105,43 +105,49 @@ private struct ReplyBar: View {
         VStack(alignment: .leading, spacing: 10) {
             if focused || draft != nil, !reachable { SyncHint(status: services.syncStatus) }
             if let draft { attachment(draft) }
-            HStack(alignment: .bottom, spacing: 8) {
+            HStack(alignment: .bottom, spacing: 4) {
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($focused)
                     .accessibilityLabel("回复")
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(palette.paper, in: .rect(cornerRadius: 20, style: .continuous))
-                if modes.count > 1, let interrupt = modes.last {
-                    Button("马上说") { send(interrupt) }
-                        .buttonStyle(.plain)
-                        .font(.subheadline.weight(.medium)).foregroundStyle(canSend ? palette.ink : palette.ink3)
-                        .padding(.horizontal, 12).frame(minHeight: 40)
-                        .background(palette.fill, in: .capsule)
-                        .disabled(!canSend)
-                        .accessibilityHint("打断它正在做的")
-                }
-                Button { if let mode = modes.first { send(mode) } } label: {
-                    Image(systemName: "arrow.up").font(.body.weight(.semibold))
-                        .frame(width: 40, height: 40)
-                }
-                .prominentButton()
-                .clipShape(.circle)
-                .disabled(!canSend)
-                .accessibilityLabel(modes.first == .followUp ? "等它做完再说" : "发送")
-                .sensoryFeedback(.success, trigger: sentCount)
+                    .padding(.leading, 14).padding(.vertical, 11)
+                sendControl.padding(.trailing, 2)
             }
+            .background(palette.paper, in: .rect(cornerRadius: 22, style: .continuous))
+            .sensoryFeedback(.success, trigger: sentCount)
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glass(in: .rect(cornerRadius: 24))
+        .glass(in: .rect(cornerRadius: 30))
         .animation(Motion.quick, value: focused)
     }
 
-    /// 忙时的提示写明发送按钮的默认：等它做完再说。
+    @ViewBuilder private var sendControl: some View {
+        if modes.count > 1, let queued = modes.first, let interrupt = modes.last {
+            Menu {
+                Button("马上说（打断它正在做的）", systemImage: "bolt") { send(interrupt) }
+            } label: {
+                SendGlyph(enabled: canSend)
+            } primaryAction: {
+                send(queued)
+            }
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .accessibilityLabel("等它做完再说")
+            .accessibilityHint("长按可以马上说，打断它正在做的")
+        } else {
+            Button { if let mode = modes.first { send(mode) } } label: { SendGlyph(enabled: canSend) }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .accessibilityLabel("发送")
+        }
+    }
+
+    /// 忙时的提示写明点发送是什么、长按是什么。
     private var placeholder: String {
         if draft != nil { return "补一句（可不填）" }
-        return modes.first == .followUp ? "等它做完再说…" : "回复 \(session.title)"
+        return modes.first == .followUp ? "等它做完再说 · 长按发送可马上说" : "回复 \(session.title)"
     }
 
     /// 带上的卡片或任务：标题、图片数，可移除。
@@ -182,6 +188,22 @@ private struct ReplyBar: View {
     }
 }
 
+/// 输入框里的圆形发送钮：能发时墨色实心，不能发时淡。
+private struct SendGlyph: View {
+    let enabled: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Image(systemName: "arrow.up").font(.callout.weight(.bold))
+            .foregroundStyle(enabled ? palette.paper : palette.ink3)
+            .frame(width: 34, height: 34)
+            .background(enabled ? palette.ink : palette.fill, in: .circle)
+            .frame(width: 44, height: 44)
+            .contentShape(.circle)
+            .animation(Motion.quick, value: enabled)
+    }
+}
+
 /// "发到 Mac"：先选会话（卡片所在项目的在前，已结束的不列），选好进入会话页，内容预填在回复框里。
 struct SessionPicker: View {
     let outbox: Navigation.Outbox
@@ -198,7 +220,7 @@ struct SessionPicker: View {
                 if let sessions {
                     if sessions.isEmpty {
                         ContentUnavailableView(
-                            "Mac 上没有运行中的 Pi 会话", systemImage: "terminal",
+                            "Mac 上没有运行中的 Pi 会话", systemImage: "waveform.path.ecg",
                             description: Text("在 Mac 上启动 Pi 后再试"))
                             .listRowBackground(Color.clear)
                     } else {

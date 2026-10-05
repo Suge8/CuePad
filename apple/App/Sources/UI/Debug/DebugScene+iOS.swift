@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iOS 画面：project、older、today、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// iOS 画面：project、older、today、inbox、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
 /// taskedit：任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
@@ -59,6 +59,7 @@ extension DebugScene {
             if let project { open(.project(project)) }
             navigation.sidebar = .all
         case "today": open(.today)
+        case "inbox": open(.inbox)
         case "trash": open(.trash)
         case "settings": open(.settings)
         case "editor": await openCard()
@@ -103,7 +104,9 @@ extension DebugScene {
             // iPhone：书架（给了项目则是该项目页）的下拉搜索在出现时自己聚焦，见 CardSearch
             if split { navigation.select(.search) } else if let project { open(.project(project)) }
         case "capture":
+            // 等推入的项目页把它的随手记放上屏幕，再像点了它一样打开
             if let project { open(.project(project)) }
+            try? await Task.sleep(for: .seconds(1))
             navigation.startCapture()
         default:
             if let project, split { open(.project(project)) }
@@ -169,6 +172,16 @@ extension DebugScene {
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), recap: recap)
         }
         try? await recorder.end(sessionID: "piwork")
+        // 没归类的想法：书架顶上提醒去整理
+        for body in ["周末读完《设计心理学》第三章", "菜单栏面板能不能直接拖图进来？", "给落地页换一张首图"] {
+            _ = try? await store.createCard(in: nil, body: body)
+        }
+        // 后台托管、带两个子代理的会话
+        try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
+            PiSubagentState(name: "计费额度", activity: .known(.working)),
+            PiSubagentState(name: "登录回调", activity: .known(.waitingForUser)),
+            PiSubagentState(name: "文档", activity: .known(.idle)),
+        ])
         if let table = project("圆桌"), let goal = try? await store.cards(in: table).first(where: { $0.body.hasPrefix("目标") }) {
             try? await store.setGoal(goal.id, for: table)
         }
@@ -187,6 +200,10 @@ extension DebugScene {
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
             _ = try? await services.requestMacDelivery("评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: atlas, mode: .followUp)
+        }
+        if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
+            // 发给已结束的会话：Mac 先在后台唤醒它
+            _ = try? await services.requestMacDelivery("标题再短一点", to: landing, mode: .send)
         }
         if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
             _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)

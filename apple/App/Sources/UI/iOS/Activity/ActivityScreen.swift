@@ -6,9 +6,10 @@ import SwiftUI
 /// Pi：只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。"现在"是没结束的会话，按要你注意的先后排
 /// （等你确认 → 出错 → 工作中 → 空闲）；"历史"是所有已结束的，按结束时间分段（今天、昨天……）、可搜，滑到底才读下一页。
 /// 点开看近况、回复（历史会话看最后一轮、在 Mac 上继续）。右上角开新会话。
-/// iPad 右侧面板里没有导航栏：搜索与新会话放在列表顶上。
+/// iPad 右侧面板里没有导航栏：搜索与新会话放在列表顶上。给了 `project` 时只列这个项目的（从项目页进来）。
 struct ActivityScreen: View {
     var inPanel = false
+    var project: UUID?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
@@ -67,16 +68,16 @@ struct ActivityScreen: View {
         #endif
         .background(palette.desk)
         .bottomEdgeFade()
-        .navigationTitle("Pi")
+        .navigationTitle(project.flatMap { workspace.catalog?.project($0)?.name } ?? "Pi")
         .modifier(PiPageChrome(enabled: !inPanel, query: $query))
         .refreshable { await services.syncNow() }
         .onChange(of: query) { limit = PiSessionList.pageSize }
         #if DEBUG
         .onAppear { if DebugScene.scene == "activity" { query = DebugScene.searchText } }
         #endif
-        .observing(services.store, [.piSessionStates, .projects], id: PiSessionList.Key(text: query, limit: limit), into: $list,
-                   onError: workspace.fail) { [query, limit] store in
-            try PiSessionList.read(text: query, historyLimit: limit, from: store)
+        .observing(services.store, [.piSessionStates, .projects], id: PiSessionList.Key(text: query, project: project, limit: limit),
+                   into: $list, onError: workspace.fail) { [query, project, limit] store in
+            try PiSessionList.read(text: query, project: project, historyLimit: limit, from: store)
         }
     }
 
@@ -95,9 +96,9 @@ struct ActivityScreen: View {
             ContentUnavailableView.search(text: query).padding(.top, 40)
         } else {
             ContentUnavailableView {
-                Label("还没有 Pi 会话", systemImage: "terminal")
+                Label("还没有 Pi 会话", systemImage: "waveform.path.ecg")
             } description: {
-                Text("在 Mac 的终端运行 pi，或在这里开一个新会话")
+                Text("在 Mac 上运行 pi，或在这里开一个新会话")
             } actions: {
                 Button("新会话") { navigation.newSession = .init() }.buttonStyle(.borderedProminent)
             }
@@ -139,7 +140,7 @@ private struct NewSessionButton: View {
 
     var body: some View {
         Button("新会话", systemImage: "plus") { navigation.newSession = .init() }
-            .accessibilityHint("在 Mac 的终端里开一个 Pi 会话")
+            .accessibilityHint("让 Mac 开一个 Pi 会话")
     }
 }
 
@@ -161,6 +162,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 
     struct Key: Equatable {
         var text: String
+        var project: UUID?
         var limit: Int
     }
 
@@ -171,16 +173,16 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     var loaded: Int { ended.count }
     var isEmpty: Bool { now.isEmpty && total == 0 }
 
-    static func read(text: String, historyLimit: Int, from store: isolated CueStore) throws -> PiSessionList {
-        let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max)).items
-        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: historyLimit))
+    static func read(text: String, project: UUID? = nil, historyLimit: Int, from store: isolated CueStore) throws -> PiSessionList {
+        let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, project: project, limit: .max)).items
+        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
         let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state)).enumerated().map { ($1.id, $0) })
         return PiSessionList(
             now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total)
     }
 }
 
-/// 一个会话三层：左边状态标；名字与时长；在哪（项目或文件夹） · 状态词（带色）；一句进度或结果（没有不占行）。已结束的整行更淡。
+/// 一个会话三层：左边状态标；名字与时长；在哪（项目或文件夹） · 状态词（带色）（Mac 在后台托管的再写"后台"）；一句进度或结果（没有不占行）。已结束的整行更淡。
 private struct SessionRow: View {
     let item: PiSessionListItem
     @Environment(Navigation.self) private var navigation
@@ -201,6 +203,7 @@ private struct SessionRow: View {
                     HStack(spacing: 4) {
                         if let place { Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1) }
                         Text(session.state.label).fontWeight(.medium).foregroundStyle(session.state.tint(palette))
+                        if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
                     }
                     .font(.subheadline)
                     if let progress = PiProgress.line(of: session) {

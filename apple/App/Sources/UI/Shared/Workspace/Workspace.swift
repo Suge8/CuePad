@@ -26,6 +26,14 @@ final class Workspace {
         let id = UUID()
         var text: String
         var isError: Bool
+        /// 点提示去哪（如随手记的落点）；nil 时提示只是告知。
+        var link: Link?
+    }
+
+    /// 提示能带去的地方：项目页（nil 是未归档）、任务（nil 是不归项目的任务）。
+    enum Link: Equatable {
+        case project(UUID?)
+        case tasks(UUID?)
     }
 
     #if os(macOS)
@@ -210,8 +218,8 @@ final class Workspace {
 
     private static let noticeDuration: Duration = .seconds(2.4)
 
-    func say(_ text: String, isError: Bool = false) {
-        let notice = Notice(text: text, isError: isError)
+    func say(_ text: String, isError: Bool = false, link: Link? = nil) {
+        let notice = Notice(text: text, isError: isError, link: link)
         self.notice = notice
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in

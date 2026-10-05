@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 新会话：选在哪开（项目的代码目录、最近会话用过的目录）、可选一句开场的话，请 Mac 在终端里开 Pi。
+/// 新会话：选在哪开（项目的代码目录、最近会话用过的目录）、可选一句开场的话，请 Mac 在后台开 Pi。
 /// 发出后面板换成进度（送达中 → Mac 在开）；Mac 开好、带着这次标识的会话同步过来时自动关掉并进入它；
 /// 没能打开时回到表单，写着 Mac 给的原因，可以再试。
 struct NewSessionSheet: View {
@@ -19,6 +19,8 @@ struct NewSessionSheet: View {
     @State private var progress: LaunchProgress?
     @State private var sending = false
 
+    /// 项目按所有项目选择器的同一个顺序（`ProjectCatalog.projects`）。
+    private var projectOrder: [Project] { workspace.catalog?.projects ?? [] }
     private var chosen: LaunchPlace? { places?.first { $0.id == choice } ?? places?.first }
     /// 发出且还没失败：表单锁住，等它开好。
     private var inFlight: Bool { sending || (launched != nil && progress?.request?.status != .known(.failed)) }
@@ -52,8 +54,8 @@ struct NewSessionSheet: View {
         }
         .interactiveDismissDisabled(inFlight)
         .onAppear { if launched == nil { launched = start.launched } }
-        .observing(services.store, [.directoryBindings, .piSessionStates, .projects], into: $places, onError: workspace.fail) { store in
-            try LaunchPlace.all(from: store)
+        .observing(services.store, [.directoryBindings, .piSessionStates], id: projectOrder, into: $places, onError: workspace.fail) {
+            [projectOrder] store in try LaunchPlace.all(projects: projectOrder, from: store)
         }
         .observing(services.store, [.deliveryRequests, .piSessionStates], id: launched, into: $progress, onError: workspace.fail) {
             [launched] store in
@@ -118,7 +120,7 @@ struct NewSessionSheet: View {
                 if let opening = request.launch?.prompt {
                     Text(opening).font(.body).foregroundStyle(palette.ink2)
                 }
-                Text(request.status == .known(.succeeded) ? "Mac 正在终端里开 Pi，会话出现后自动进入" : "等 Mac 收到…")
+                Text(request.status == .known(.succeeded) ? "Mac 正在开 Pi，会话出现后自动进入" : "等 Mac 收到…")
                     .font(.footnote).foregroundStyle(palette.ink3)
             }
             .padding(.vertical, 6)
@@ -133,7 +135,7 @@ struct NewSessionSheet: View {
         } else if !services.reachesPiHost {
             SyncHint(status: services.syncStatus)
         } else {
-            Text("在 Mac 的终端里开一个 Pi 会话；开好后自动进入它").foregroundStyle(palette.ink3)
+            Text("让 Mac 开一个 Pi 会话；开好后自动进入它").foregroundStyle(palette.ink3)
         }
     }
 
@@ -165,18 +167,18 @@ nonisolated struct LaunchPlace: Identifiable, Sendable, Equatable {
     let launch: PiLaunchPlace
     let hostID: String
 
-    static func all(from store: isolated CueStore) throws -> [LaunchPlace] {
-        let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
-        let bindings = try store.directoryBindings().filter { projects[$0.projectID] != nil }
-        let macs = Dictionary(grouping: bindings, by: \.projectID).mapValues(\.count)
-        let bound = bindings
-            .sorted { (projects[$0.projectID]?.sortKey ?? "", $0.hostName) < (projects[$1.projectID]?.sortKey ?? "", $1.hostName) }
-            .map { binding in
+    /// `projects` 是界面的项目顺序；同一项目的几台 Mac 按查询给的顺序（Mac 名）。
+    static func all(projects: [Project], from store: isolated CueStore) throws -> [LaunchPlace] {
+        let bindings = Dictionary(grouping: try store.directoryBindings(), by: \.projectID)
+        let bound = projects.flatMap { project in
+            let macs = bindings[project.id] ?? []
+            return macs.map { binding in
                 LaunchPlace(
-                    id: binding.id.uuidString, name: projects[binding.projectID]?.name ?? binding.folder,
-                    detail: macs[binding.projectID, default: 0] > 1 ? "\(binding.folder) · \(binding.hostName)" : binding.folder,
-                    project: projects[binding.projectID], launch: .project(binding.projectID), hostID: binding.hostID)
+                    id: binding.id.uuidString, name: project.name,
+                    detail: macs.count > 1 ? "\(binding.folder) · \(binding.hostName)" : binding.folder,
+                    project: project, launch: .project(project.id), hostID: binding.hostID)
             }
+        }
         var seen: Set<String> = []
         var folders: [LaunchPlace] = []
         for item in try store.piSessionPage(PiSessionQuery(limit: scanned)).items where item.project == nil {

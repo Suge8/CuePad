@@ -39,6 +39,21 @@ nonisolated extension PiWorkState {
     }
 }
 
+/// 子代理的粗状态借会话状态的图标、颜色与文字（工作中墨实心点、等你确认橙、空闲灰勾、出错红叹号）。
+nonisolated extension PiSubagentState {
+    var workState: Open<PiWorkState> {
+        switch activity.known {
+        case .working: .known(.thinking)
+        case .waitingForUser: .known(.waitingForUser)
+        case .idle: .known(.settled)
+        case .error: .known(.error)
+        case nil: .unknown(activity.rawValue)
+        }
+    }
+
+    var activityLabel: String { activity.known == .working ? "工作中" : workState.label }
+}
+
 /// 其他版本写入的、本版本不认识的状态：灰色、最低优先。
 nonisolated extension Open<PiWorkState> {
     var label: String { known?.label ?? "未知状态" }
