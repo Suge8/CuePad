@@ -71,6 +71,27 @@ import Testing
     #expect(try await rig.store.deliveryRequests().map(\.id) == [id])
   }
 
+  /// 在等的对象还有 Pi 会话状态（手机看着 Pi 页时主动拉，状态要是活的）：取令牌时看到的也按 ID 取整条；
+  /// 无关的表（卡片）只推进令牌、不补取。
+  @Test func piSessionStatesAlreadyOnTheServerAreFetchedInFullButOtherTablesAreNot() async throws {
+    let state = remoteRecord(.piSessionStates, id: PiSessionState.recordID(sessionID: "s1"), [
+      "sessionID": .text("s1"), "hostID": .text("mac-a"), "title": .text("修好登录"), "projectID": .null,
+      "state": .text("waitingForUser"), "detail": .null, "stateSince": .int(1_000), "createdAt": .int(1_000),
+      "modifiedAt": .int(1_000), "notify": .null, "folder": .null, "lastPrompt": .null, "lastReply": .null,
+      "question": .null, "busySince": .int(1_000),
+    ])
+    let (cardID, card) = card("取令牌时已有的卡")
+    let zone = FakeZone(
+      [batch("t1", [CKRecord(recordType: "piSessionStates", recordID: state.recordID), CKRecord(recordType: "cards", recordID: card.recordID)]), batch("t2")],
+      server: [state, card])
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
+
+    try await puller.pull()
+
+    #expect(try await rig.store.piSessionStates().map(\.state) == [.known(.waitingForUser)])
+    #expect(try await rig.store.card(cardID) == nil)
+  }
+
   @Test func anExpiredTokenIsDroppedAndTakenAgain() async throws {
     let (id, record) = card("令牌过期后拉到的")
     let zone = FakeZone([batch("t1"), .failure(CKError(.changeTokenExpired)), batch("t5"), batch("t6", [record])])
