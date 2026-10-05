@@ -6,6 +6,11 @@ extension View {
         modifier(PaperSurface(radius: radius, lifted: lifted))
     }
 
+    /// 一张纸面里的一行（懒加载列表逐行画，拼起来与 `paper` 一张纸一样）：首行带上圆角与上边，末行带下圆角与下边。
+    func paperSlice(first: Bool, last: Bool, radius: CGFloat = 14) -> some View {
+        modifier(PaperSlice(first: first, last: last, radius: radius))
+    }
+
     /// 控件层玻璃；"降低透明度"开启时退回实底。玻璃不叠玻璃：调用方不在玻璃里再套玻璃。
     func glass<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
         modifier(GlassSurface(shape: shape, interactive: interactive))
@@ -21,9 +26,57 @@ private struct PaperSurface: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
             .background(palette.paper, in: shape)
-            .overlay(shape.strokeBorder(palette.dark ? Color.white.opacity(lifted ? 0.14 : 0.07) : palette.hair))
+            .overlay(shape.strokeBorder(palette.paperEdge(lifted: lifted)))
             // 平放的纸只用描边：每张卡一个模糊阴影，侧栏开合时整面墙每帧都要重画这些阴影
             .shadow(color: .black.opacity(palette.dark || !lifted ? 0 : 0.08), radius: lifted ? 10 : 0, y: lifted ? 6 : 0)
+    }
+}
+
+extension Palette {
+    /// 纸面的描边色。
+    func paperEdge(lifted: Bool = false) -> Color { dark ? Color.white.opacity(lifted ? 0.14 : 0.07) : hair }
+}
+
+private struct PaperSlice: ViewModifier {
+    let first: Bool
+    let last: Bool
+    let radius: CGFloat
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        let top = first ? radius : 0, bottom = last ? radius : 0
+        content
+            .background(palette.paper, in: UnevenRoundedRectangle(
+                topLeadingRadius: top, bottomLeadingRadius: bottom, bottomTrailingRadius: bottom, topTrailingRadius: top, style: .continuous))
+            .overlay(SliceEdge(first: first, last: last, radius: radius).stroke(palette.paperEdge(), lineWidth: 1))
+    }
+}
+
+/// 一行的外沿：左右两边，首行加上沿与上圆角，末行加下沿与下圆角（中间行没有横线，拼起来是一圈完整的描边）。
+nonisolated private struct SliceEdge: Shape {
+    let first: Bool
+    let last: Bool
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: 0.5, dy: 0.5)
+        let top = first ? radius : 0, bottom = last ? radius : 0
+        var path = Path()
+        // 左边从下往上，过上沿，再右边从上往下，过下沿
+        path.move(to: CGPoint(x: r.minX, y: last ? r.maxY - bottom : rect.maxY))
+        path.addLine(to: CGPoint(x: r.minX, y: first ? r.minY + top : rect.minY))
+        if first {
+            path.addArc(tangent1End: CGPoint(x: r.minX, y: r.minY), tangent2End: CGPoint(x: r.minX + top, y: r.minY), radius: top)
+            path.addArc(tangent1End: CGPoint(x: r.maxX, y: r.minY), tangent2End: CGPoint(x: r.maxX, y: r.minY + top), radius: top)
+        } else {
+            path.move(to: CGPoint(x: r.maxX, y: rect.minY))
+        }
+        path.addLine(to: CGPoint(x: r.maxX, y: last ? r.maxY - bottom : rect.maxY))
+        if last {
+            path.addArc(tangent1End: CGPoint(x: r.maxX, y: r.maxY), tangent2End: CGPoint(x: r.maxX - bottom, y: r.maxY), radius: bottom)
+            path.addArc(tangent1End: CGPoint(x: r.minX, y: r.maxY), tangent2End: CGPoint(x: r.minX, y: r.maxY - bottom), radius: bottom)
+        }
+        return path
     }
 }
 

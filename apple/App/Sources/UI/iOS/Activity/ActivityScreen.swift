@@ -21,23 +21,31 @@ struct ActivityScreen: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                if inPanel { panelHeader }
-                if !services.syncStatus.reachesMac { SyncHint(status: services.syncStatus).padding(.horizontal, 4) }
+            // 间距逐项写：历史的行要首尾相接拼成一张纸
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if inPanel { panelHeader.padding(.bottom, 12) }
+                if !services.syncStatus.reachesMac { SyncHint(status: services.syncStatus).padding(.horizontal, 4).padding(.bottom, 12) }
                 if let list {
                     if list.total == 0 {
                         empty
                     } else {
                         if !list.now.isEmpty {
-                            SectionTitle(text: "现在")
-                            rows(list.now, showsPlace: true)
+                            SectionTitle(text: "现在").padding(.bottom, 8)
+                            rows(list.now, showsPlace: true).padding(.bottom, 24)
                         }
                         if !list.history.isEmpty {
-                            SectionTitle(text: "历史").padding(.top, list.now.isEmpty ? 0 : 12)
+                            SectionTitle(text: "历史")
+                            // 组内逐行懒加载：每行是 LazyVStack 的一个子项，滑到才画
                             ForEach(list.history) { group in
                                 Text(group.title).font(.footnote.weight(.medium)).foregroundStyle(palette.ink3)
-                                    .padding(.horizontal, 4).padding(.top, 4)
-                                rows(group.items, showsPlace: false)
+                                    .padding(.horizontal, 4).padding(.top, 12).padding(.bottom, 6)
+                                ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
+                                    VStack(spacing: 0) {
+                                        if index > 0 { Divider().padding(.leading, 44) }
+                                        SessionRow(item: item, showsPlace: false)
+                                    }
+                                    .paperSlice(first: index == 0, last: index == group.items.count - 1, radius: 16)
+                                }
                             }
                         }
                         if list.loaded < list.total {

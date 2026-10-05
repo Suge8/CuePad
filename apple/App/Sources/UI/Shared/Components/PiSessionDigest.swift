@@ -372,7 +372,7 @@ struct DeliveryRow: View {
                 Spacer(minLength: 8)
                 DeliveryStatusLabel(request: request)
             }
-            Text("\(DateLabel.short(request.createdAt)) · \(request.mode.label)")
+            Text(request.launch == nil ? "\(DateLabel.short(request.createdAt)) · \(request.mode.label)" : DateLabel.short(request.createdAt))
                 .font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
             if request.status == .known(.failed) {
                 if let reason = request.resultDetail { Text(reason).font(.footnote).foregroundStyle(palette.failure) }
@@ -393,13 +393,16 @@ struct DeliveryRow: View {
         }
     }
 
-    /// 作答显示答了什么；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）；继续会话、新会话不重发（再按一次那个按钮）。
+    /// 作答显示答了什么，继续会话、新会话显示是哪种（新会话带开场的话首行），都不露请求原文；作答不重发（弹窗多半已经换了，要答就在问题卡上再答）；继续会话、新会话不重发（再按一次那个按钮）。
     /// 送不到 Mac 时也不给重发。
     private var title: String {
         if let answer = request.answer { return "答：\(answer.value.label)" }
-        if let launch = request.launch {
-            if case .start(_, let prompt?, _) = launch { return "新会话：\(prompt)" }
-            return request.mode == .known(.resume) ? "请 Mac 接着这个会话" : "开一个新会话"
+        switch request.launch {
+        case .resume: return DeliveryMode.resume.label
+        case .start(_, let prompt, _):
+            let opening = prompt.flatMap { $0.split(separator: "\n").first.map(String.init) }
+            return [DeliveryMode.start.label, opening].compactMap { $0 }.joined(separator: " · ")
+        case nil: break
         }
         let title = CardText(request.content).title
         return title.isEmpty ? "图片" : title
