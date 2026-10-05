@@ -54,6 +54,10 @@ final class AppServices {
     @ObservationIgnored var tasks: [Task<Void, Never>] = []
     /// 有理由等就拉的任务（见 `startPolling`）；iOS 进入后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
+    /// 有还没结果的投送请求（Mac：发给本机的）。只在主动拉取开着时跟着资料库更新，只给 `pollingCadence` 用。
+    var hasOpenDeliveries = false
+    /// 正在显示的 Pi 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
+    var piViewers = 0
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 进入后台前要落盘的界面状态（如编辑中的草稿）；见 `prepareForBackground()`。
@@ -85,8 +89,7 @@ final class AppServices {
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let piStateRecorder: PiStateRecorder
     @ObservationIgnored var deliveryExecutor: DeliveryExecutor?
-    /// 有发给本机、还没结果的投送请求（主动拉取的条件之一，见 `pollingCondition`）。
-    var hasOpenLocalDeliveries = false
+
     @ObservationIgnored lazy var hotkey = GlobalHotkey(backend: hotkeyBackend) { [weak self] in
         self?.windowShell?.toggleFromHotkey()
     }
@@ -127,9 +130,23 @@ final class AppServices {
     func requestMacDelivery(
         _ storedText: String, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil, task: UUID? = nil
     ) async throws -> DeliveryRequest {
-        try await store.requestDelivery(
+        uploaded(try await store.requestDelivery(
             storedText, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID,
-            mode: mode, card: card, task: task)
+            mode: mode, card: card, task: task))
+    }
+
+    /// 发往别的设备的请求写出后立即上传，不等引擎的自动调度（几秒）；上传失败只记日志，引擎会照常重试。
+    private func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
+        guard let sync else { return request }
+        let log = Self.log
+        Task {
+            do {
+                try await sync.sendNow(recordName: request.id.uuidString.lowercased())
+            } catch {
+                log.notice("立即上传投送请求失败，等引擎自动上传：\(String(describing: error), privacy: .public)")
+            }
+        }
+        return request
     }
 
     /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac（与发送同一条投送通道，Mac 上也走它，由执行器交给扩展）。
@@ -138,9 +155,9 @@ final class AppServices {
         guard let question = session.question, question.isAnswerable, let promptID = question.promptID else {
             throw SendError.unanswerable
         }
-        return try await store.requestAnswer(
+        return uploaded(try await store.requestAnswer(
             PiAnswer(promptID: promptID, value: value), to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID),
-            on: session.hostID)
+            on: session.hostID))
     }
 
     /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
@@ -155,7 +172,7 @@ final class AppServices {
     /// 连接测试：给 `host` 那台 Mac 发一条 ping（与发送同一套投送请求），等它写回结果，返回往返时间
     /// （本机时钟，从写出请求到看到结果）。超过 `timeout` 没有结果、或结果是失败时抛 `SendError.notDelivered`。用过的请求删掉。
     func ping(_ host: String, timeout: Duration = .seconds(60)) async throws -> Duration {
-        let request = try await store.requestPing(on: host)
+        let request = uploaded(try await store.requestPing(on: host))
         let started = ContinuousClock.now
         defer { Task { [store] in try? await store.deleteDelivery(request.id) } }
         let result = try await withThrowingTaskGroup(of: DeliveryRequest?.self) { group in

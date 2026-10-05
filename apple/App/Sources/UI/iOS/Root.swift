@@ -88,9 +88,9 @@ struct RouteView: View {
         case .trash: TrashScreen()
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
-        case .activity: ActivityScreen()
+        case .activity: ActivityScreen().countsAsPiViewer()
         case .search: SearchScreen()
-        case .session(let id): SessionScreen(id: id)
+        case .session(let id): SessionScreen(id: id).countsAsPiViewer()
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))
@@ -118,7 +118,7 @@ private struct TabsRoot: View {
                 stack($navigation.tasksPath) { TasksScreen() }
             }
             Tab("Pi", systemImage: "waveform.path.ecg", value: Navigation.Tab.activity) {
-                stack($navigation.activityPath) { ActivityScreen() }
+                stack($navigation.activityPath) { ActivityScreen().countsAsPiViewer() }
             }
             .badge(waiting ?? 0)
         }

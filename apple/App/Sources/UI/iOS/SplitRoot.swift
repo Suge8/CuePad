@@ -113,7 +113,7 @@ private struct SidePanel: View {
             .padding(.vertical, 8)
             switch navigation.panel ?? .tasks {
             case .tasks: TasksScreen()
-            case .activity: ActivityScreen()
+            case .activity: ActivityScreen().countsAsPiViewer()
             }
         }
         .background(palette.desk.ignoresSafeArea())

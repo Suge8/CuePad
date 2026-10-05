@@ -74,21 +74,16 @@ extension AppServices {
         await syncNow()
     }
 
-    /// 推送不保证送达，手里有正在等的东西时按间隔主动拉（`SyncPoller`，条件见 `pollingCondition`）：
-    /// Mac 每 5 秒；手机每 2 秒、每次在等最多 2 分钟。已经在拉就不重开。
+    /// 推送不保证送达，手里有正在等的东西时按节奏主动拉（`SyncPoller`；节奏见 `pollingCadence`，直接拉同步区变化见
+    /// `CloudSync.pullChanges`）。已经在拉就不重开。
     func startPolling() {
         guard let sync, polling == nil else { return }
-        #if os(macOS)
-        let poller = SyncPoller(interval: .seconds(5))
-        #else
-        let poller = SyncPoller(interval: .seconds(2), limit: .seconds(120))
-        #endif
         let waiting = pollingCondition()
         let log = Self.log
         polling = Task {
-            await poller.run(while: waiting) {
+            await SyncPoller().run(while: waiting) {
                 do {
-                    try await sync.fetchChanges()
+                    try await sync.pullChanges()
                 } catch {
                     log.notice("主动拉取失败：\(String(describing: error), privacy: .public)")
                 }
@@ -96,31 +91,43 @@ extension AppServices {
         }
     }
 
-    #if os(macOS)
-    /// Mac 在等：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
-    /// 或有发给本机、还没结果的投送请求。
-    func pollingCondition() -> AsyncStream<Bool> {
+    /// 此刻该按什么节奏主动拉（nil：不拉）。"是否在等"只在这里定义：
+    /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
+    ///   或有发给本机、还没结果的投送请求时，每 5 秒；
+    /// - 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟；正在看 Pi 页或会话近况时每 3 秒（状态是活的，
+    ///   不靠推送），离开即停；两者都有时每 2 秒、不限时。进入后台整体停掉（见 `stopPolling`）。
+    var pollingCadence: SyncPoller.Cadence? {
+        #if os(macOS)
+        !pi.sessions.isEmpty || hasOpenDeliveries ? SyncPoller.Cadence(interval: .seconds(5)) : nil
+        #else
+        switch (hasOpenDeliveries, piViewers > 0) {
+        case (true, true): SyncPoller.Cadence(interval: .seconds(2))
+        case (true, false): SyncPoller.Cadence(interval: .seconds(2), limit: .seconds(120))
+        case (false, true): SyncPoller.Cadence(interval: .seconds(3))
+        case (false, false): nil
+        }
+        #endif
+    }
+
+    /// `pollingCadence` 随它依赖的状态变化给出新值；期间跟着资料库更新 `hasOpenDeliveries`。
+    func pollingCondition() -> AsyncStream<SyncPoller.Cadence?> {
+        #if os(macOS)
         let host = hostID
         let deliveries = openDeliveries { $0.hostID == host }
+        #else
+        let deliveries = openDeliveries { _ in true }  // 手机的请求都发往某台 Mac
+        #endif
         return AsyncStream { continuation in
             let task = Task { [weak self] in
                 guard let self else { return }
-                let tracking = Task { for await open in deliveries { self.hasOpenLocalDeliveries = open } }
+                let tracking = Task { for await open in deliveries { self.hasOpenDeliveries = open } }
                 defer { tracking.cancel() }
-                for await waiting in Observations({ !self.pi.sessions.isEmpty || self.hasOpenLocalDeliveries }) {
-                    continuation.yield(waiting)
-                }
+                for await cadence in Observations({ self.pollingCadence }) { continuation.yield(cadence) }
                 continuation.finish()
             }
             continuation.onTermination = { _ in task.cancel() }
         }
     }
-    #else
-    /// 手机在等：有发往 Mac 还没结果的投送请求（手机的请求都发往某台 Mac）。
-    func pollingCondition() -> AsyncStream<Bool> {
-        openDeliveries { _ in true }
-    }
-    #endif
 
     /// 有没有符合条件、还没结果的投送请求，请求表变化时重算；读失败时报告并结束（不再主动拉，推送与切前台照常）。
     private func openDeliveries(_ matches: @escaping @Sendable (DeliveryRequest) -> Bool) -> AsyncStream<Bool> {

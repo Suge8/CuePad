@@ -17,6 +17,7 @@ public actor CloudSync {
   nonisolated let engineDelegate: EngineBridge
   private let subscribesToPiAlerts: Bool
   private var engine: CKSyncEngine?
+  private var puller: ZoneChangePuller?
   private var accountWatcher: Task<Void, Never>?
 
   /// `subscribesToPiAlerts`：是否在私有数据库建立"Pi 等你确认 / 完成"的服务端通知订阅。默认只有 iOS 建立
@@ -55,6 +56,7 @@ public actor CloudSync {
     let engine = CKSyncEngine(
       CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: state, delegate: engineDelegate))
     self.engine = engine
+    puller = ZoneChangePuller(source: DatabaseZoneChanges(database: container.privateCloudDatabase, zoneID: zoneID), coordinator: coordinator)
     await queue.attach(engine)
 
     try await coordinator.start()
@@ -74,14 +76,24 @@ public actor CloudSync {
     await coordinator.stop()
     await queue.attach(nil)
     engine = nil
+    puller = nil
+  }
+
+  /// 直接向服务器拉一次同步区的变化（不经引擎、不推送本机改动）：推送之外的主动拉取，见 `SyncPoller`、`ZoneChangePuller`。
+  public func pullChanges() async throws {
+    try await puller?.pull()
+  }
+
+  /// 立即上传这一条记录（不等引擎的自动调度，几秒）：手机写出投送请求后调用，Mac 才能尽早拉到。
+  /// 先把它登记为待办（与协调器随后的登记重复无妨），再只发这一条。
+  public func sendNow(recordName: String) async throws {
+    guard let engine else { return }
+    let id = CKRecord.ID(recordName: recordName, zoneID: zoneID)
+    engine.state.add(pendingRecordZoneChanges: [.saveRecord(id)])
+    try await engine.sendChanges(CKSyncEngine.SendChangesOptions(scope: .recordIDs([id])))
   }
 
   /// 立即拉取并推送（不等引擎的自动调度）。
-  /// 只向服务器拉一次变化（不推送本机改动）：推送之外的主动拉取，见 `SyncPoller`。
-  public func fetchChanges() async throws {
-    try await engine?.fetchChanges()
-  }
-
   public func syncNow() async throws {
     guard let engine else { return }
     try await engine.fetchChanges()
@@ -108,6 +120,7 @@ public actor CloudSync {
 /// 把同步逻辑的登记落到 CKSyncEngine 的待办状态上。
 private actor EngineQueue: ChangeQueue {
   private var engine: CKSyncEngine?
+  private var puller: ZoneChangePuller?
 
   func attach(_ engine: CKSyncEngine?) { self.engine = engine }
 

@@ -268,3 +268,20 @@ struct SessionPicker: View {
     }
 }
 #endif
+
+#if os(iOS)
+extension View {
+    /// Pi 页与会话近况页：显示期间算作"正在看 Pi"，手机按 3 秒主动拉，状态与近况是活的（见 `AppServices.pollingCadence`）。
+    func countsAsPiViewer() -> some View { modifier(PiViewing()) }
+}
+
+private struct PiViewing: ViewModifier {
+    @Environment(AppServices.self) private var services
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { services.piViewers += 1 }
+            .onDisappear { services.piViewers -= 1 }
+    }
+}
+#endif

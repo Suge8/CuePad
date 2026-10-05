@@ -111,7 +111,8 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         if stopHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
     }
     func syncNow() async throws { state.withLock { $0.syncNows += 1 } }
-    func fetchChanges() async throws {}
+    func pullChanges() async throws {}
+    func sendNow(recordName: String) async throws {}
 
     func resolve(_ resolution: SyncResolution) async throws {
         state.withLock { $0.resolutions.append("\(resolution)") }
