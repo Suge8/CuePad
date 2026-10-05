@@ -80,7 +80,7 @@ struct LiveSendChannels: SendChannels {
 }
 
 extension PiAgentState {
-    /// 会话正在处理一轮：此时发消息要么插话要么排队（与手机同一条规则，见 `PiWorkState.isTurnRunning`）。
+    /// 会话正在处理一轮：此时发消息要么马上说、要么等它做完再说（与手机同一条规则，见 `PiWorkState.isTurnRunning`）。
     var isBusy: Bool { syncRepresentation.state.isTurnRunning }
 }
 

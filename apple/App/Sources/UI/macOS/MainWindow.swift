@@ -31,9 +31,12 @@ struct MainWindow: View {
         .confirmationDialog(
             "Pi 正在工作", isPresented: busyBinding, titleVisibility: .visible
         ) {
-            Button("插话（当前工具跑完后送达）") { workspace.resolveBusySend(.steer) }
-            Button("排队（这一轮结束后处理）") { workspace.resolveBusySend(.followUp) }
+            ForEach([DeliveryMode.steer, .followUp], id: \.self) { mode in
+                Button(mode.label) { workspace.resolveBusySend(mode) }
+            }
             Button("取消", role: .cancel) { workspace.busySend = nil }
+        } message: {
+            Text([DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"))
         }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }

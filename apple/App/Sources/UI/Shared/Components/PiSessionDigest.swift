@@ -151,7 +151,6 @@ private struct QuestionCard: View {
     /// 点了的那个回答：它的按钮显示送达中。
     @State private var tapped: PiAnswerValue?
     @State private var writeError: String?
-    @State private var text = ""
 
     @Environment(AppServices.self) private var services
 
@@ -200,21 +199,9 @@ private struct QuestionCard: View {
             VStack(spacing: 8) {
                 ForEach(question.options, id: \.self) { option in choice(.option(option), prominent: false, leading: true) }
             }
-        case .text where MacDelivery.replyBoxAnswersText:
-            Label("在下面的回复框里回答", systemImage: "arrow.down").font(.subheadline).foregroundStyle(palette.ink2)
         case .text:
-            HStack(spacing: 8) {
-                TextField("回答", text: $text)
-                    .onSubmit(submitText)
-                    .padding(.horizontal, 12).frame(minHeight: 44)
-                    .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
-                Button(action: submitText) {
-                    if tapped != nil && answering { ProgressView().controlSize(.small) } else { Text("发送") }
-                }
-                .buttonStyle(AnswerButtonStyle(prominent: true))
-                .fixedSize()
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
+            // 文字型问题在回复框里答（`MacDelivery.reply`），这里不再放第二个输入框
+            Label("在下面的回复框里回答", systemImage: "arrow.down").font(.subheadline).foregroundStyle(palette.ink2)
         case nil:
             EmptyView()
         }
@@ -236,11 +223,6 @@ private struct QuestionCard: View {
         }
         .buttonStyle(AnswerButtonStyle(prominent: prominent))
         .accessibilityLabel(busy ? "\(value.label)，送达中" : value.label)
-    }
-
-    private func submitText() {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        answer(.text(text))
     }
 
     /// 写一条作答请求给会话所在的 Mac；写不进去时就地说明。
