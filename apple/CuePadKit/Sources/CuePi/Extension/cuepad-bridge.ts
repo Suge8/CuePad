@@ -12,7 +12,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 7;
+const EXTENSION_VERSION = 8;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -43,6 +43,8 @@ const MACHINE_MESSAGE = /^(?:<([A-Za-z][\w.-]*)>\n(?:(?!\n<\/\1>)[\s\S])*\n<\/\1
 const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
 /** FireCode 把子代理名写在子会话系统提示的这个标签上 */
 const WORKER_NAME = /<firecode_worker name="([^"]+)">/u;
+/** CuePad 在终端里开新会话时经这个环境变量交给扩展的认领标识，扩展在 hello 里带回 */
+const LAUNCH_TOKEN_ENV = "CUEPAD_LAUNCH_TOKEN";
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = [
 	"TERM_PROGRAM", "TERM_PROGRAM_VERSION", "__CFBundleIdentifier", "TERM_SESSION_ID", "ITERM_SESSION_ID",
@@ -189,6 +191,9 @@ function readTTY(): Promise<string | null> {
 
 export default function (pi: any) {
 	const socketDirectory = process.env.CUEPAD_PI_SOCKET_DIR ?? `/tmp/cuepad-${process.getuid!()}`;
+	/** 只属于这个进程里的第一个会话：读走后清掉，之后 /new 开的会话与进程内子会话都不带 */
+	let launchToken: string | null = process.env[LAUNCH_TOKEN_ENV] || null;
+	delete process.env[LAUNCH_TOKEN_ENV];
 
 	let ctx: any;
 	let server: net.Server | undefined;
@@ -267,6 +272,7 @@ export default function (pi: any) {
 			tty: await tty,
 			term: terminalEnv,
 			state: { ...tracker.derive(), since, busySince },
+			launchToken,
 			...info,
 		};
 	}
@@ -485,6 +491,7 @@ export default function (pi: any) {
 		}
 	});
 	pi.on("session_shutdown", (event: any) => {
+		launchToken = null;
 		unregisterSubsession();
 		stop(event.reason);
 	});

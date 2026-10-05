@@ -5,7 +5,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   case thinking, outputting, tool, waitingForUser, settled, error
   /// 自己这轮已经歇下，还有子代理在跑：仍在处理
   case delegating
-  /// 会话已结束（Pi 退出、换了会话）：记录留着给手机看近况，过了 `PiStateRecorder.endedRetention` 删除。
+  /// 会话已结束（Pi 退出、换了会话），以及本机会话文件索引里的历史会话：记录留着，会话文件被删时才删。
   case ended
 
   /// 正在干活（思考、输出、调用工具）。

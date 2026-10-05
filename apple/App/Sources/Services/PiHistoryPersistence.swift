@@ -13,11 +13,14 @@ actor PiHistoryPersistence {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "pi-history")
 
     private let storage: CueStore
+    /// 这台 Mac：会话文件索引也写成这台 Mac 的会话同步记录（见 `CueStore.upsertPiSession`）。
+    private let host: String
     private var idsByPath: [String: String]?
     private var blocked: Set<String> = []
 
-    init(storage: CueStore) {
+    init(storage: CueStore, host: String) {
         self.storage = storage
+        self.host = host
     }
 
     /// Store 读取失败时抛错，并停止该文件的写回；没有检查点或检查点已失效返回 nil。
@@ -51,7 +54,7 @@ actor PiHistoryPersistence {
             title: history.displayName,
             lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
         do {
-            try await storage.upsertPiSession(session, checkpoint: JSONEncoder().encode(update.checkpoint))
+            try await storage.upsertPiSession(session, checkpoint: JSONEncoder().encode(update.checkpoint), host: host)
         } catch {
             blocked.insert(update.file.path)
             throw error
@@ -63,7 +66,7 @@ actor PiHistoryPersistence {
     func retain(_ files: [URL]) async throws {
         let paths = Set(files.map(\.path))
         let started = ContinuousClock.now
-        let removed = try await storage.retainPiSessions(paths: paths)
+        let removed = try await storage.retainPiSessions(paths: paths, host: host)
         idsByPath = idsByPath?.filter { paths.contains($0.key) }
         if removed > 0 {
             Self.log.notice("回填完成：删掉 \(removed) 条不在会话列表里的旧索引，用时 \(ContinuousClock.now - started, privacy: .public)")

@@ -33,7 +33,7 @@ extension AppServices {
             folder: session.cwd.lastPathComponent,
             projectID: try await store.project(containing: session.cwd)?.id,
             recap: PiRecap(lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question.map(PiQuestion.init)),
-            times: PiTimes(stateSince: session.stateSince, busySince: session.busySince))
+            times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken)
     }
 
     // MARK: 投送请求（手机发来的与本机界面写的）
@@ -67,6 +67,10 @@ extension AppServices {
     /// 执行一条请求：发给 Pi 会话的在这里调用 Pi 桥（全 App 只有这一处），应用与剪贴板交给通用发送；成功后记发送记录。
     private func perform(_ request: DeliveryRequest) async throws {
         if request.mode == .known(.ping) { return }  // 连接测试：收到即成功，不碰目标、不写发送记录
+        if request.mode == .known(.resume) || request.mode == .known(.start) {
+            guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
+            return try await launchPi(launch)
+        }
         let target = request.target
         let content = SendContent(stored: request.content)
         let sent: SendTarget
@@ -93,6 +97,45 @@ extension AppServices {
             throw SendError.unsupportedTarget(target.name)
         }
         try await recordSend(request.content, to: sent, card: request.cardID, task: request.taskID)
+    }
+
+    /// 在设置里选的终端里恢复或新开 Pi 会话（不写发送记录）。目录由本机解析：恢复用会话索引里的工作目录与会话文件；
+    /// 新会话用项目绑定的代码目录或某个会话的目录。新会话经环境变量带上发起方的认领标识，扩展在 hello 里带回。
+    private func launchPi(_ launch: PiLaunch) async throws {
+        guard let pi = await locatePi() else { throw SendError.piNotInstalled }
+        let command: TerminalCommand
+        switch launch {
+        case .resume(let sessionID):
+            guard channels.piSessionID(forSession: sessionID) == nil else { throw SendError.piSessionAlreadyRunning }
+            guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
+            command = TerminalCommand(
+                directory: URL(filePath: indexed.cwd, directoryHint: .isDirectory), executable: pi,
+                arguments: ["--session", indexed.path], environment: [:])
+        case .start(let place, let prompt, let token):
+            let opening = prompt.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+            command = TerminalCommand(
+                directory: try await directory(for: place), executable: pi,
+                // `--` 之后都是开场的话，以 - 开头也不会被当成选项
+                arguments: opening.map { ["--", $0] } ?? [], environment: [Self.launchTokenVariable: token])
+        }
+        try await terminalLauncher.open(command, in: settings.piTerminal)
+    }
+
+    /// 扩展读这个环境变量拿认领标识（见扩展的 `LAUNCH_TOKEN_ENV`）。
+    static let launchTokenVariable = "CUEPAD_LAUNCH_TOKEN"
+
+    private func directory(for place: PiLaunchPlace) async throws -> URL {
+        switch place {
+        case .project(let id):
+            guard let path = try await store.directory(of: id) else {
+                throw SendError.noCodeDirectory(try await store.project(id)?.name ?? "")
+            }
+            return URL(filePath: path, directoryHint: .isDirectory)
+        case .besideSession(let sessionID):
+            if let live = pi.sessions.first(where: { $0.sessionID == sessionID }) { return live.cwd }
+            guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
+            return URL(filePath: indexed.cwd, directoryHint: .isDirectory)
+        }
     }
 
     /// Pi 桥只认插话/排队两种入队方式：发送方式在这里一次性落到桥的消息上。

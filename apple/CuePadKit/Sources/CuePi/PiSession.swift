@@ -77,6 +77,9 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var lastReply: String? = nil
     /// 正在等你回答的弹窗；不在等待时为 nil
     public internal(set) var question: PiPrompt? = nil
+    /// CuePad 开的新会话带着发起方的认领标识（`PiLaunch.start` 的 token，经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展）；
+    /// 其余会话为 nil
+    public internal(set) var launchToken: String? = nil
     /// 本会话在同一进程里开的子代理（扩展 v5 起；FireCode 的子代理是进程内子会话，不作为独立会话出现）
     public internal(set) var subagents: [PiSubagent] = []
 

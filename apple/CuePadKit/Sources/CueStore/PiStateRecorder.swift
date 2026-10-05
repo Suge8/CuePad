@@ -26,7 +26,7 @@ extension CueStore {
 
   func writePiState(
     sessionID: String, hostID: String, title: String, folder: String?, projectID: UUID?, state: PiWorkState, detail: String?,
-    recap: PiRecap, notify: PiAlert?, times: PiTimes
+    recap: PiRecap, notify: PiAlert?, times: PiTimes, launchToken: String?
   ) throws {
     try write {
       let now = Date.stamp
@@ -34,7 +34,7 @@ extension CueStore {
         id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: title, projectID: projectID,
         state: .known(state), detail: detail, folder: folder, lastPrompt: recap.lastPrompt, lastReply: recap.lastReply,
         question: recap.question, notify: notify.map(Open.known), stateSince: times.stateSince, busySince: times.busySince,
-        createdAt: now, modifiedAt: now)
+        createdAt: now, modifiedAt: now, launchToken: launchToken)
       let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
         .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
@@ -53,9 +53,8 @@ extension CueStore {
     }
   }
 
-  /// 把这台 Mac 的会话记为已结束（`sessionID` 为 nil 时是它全部未结束的会话），近况留着；
-  /// 结束于 `expiredBefore` 之前的已结束记录删除。
-  func endPiStates(host: String, sessionID: String?, at now: Date, expiredBefore: Date) throws {
+  /// 把这台 Mac 的会话记为已结束（`sessionID` 为 nil 时是它全部未结束的会话），近况留着。
+  func endPiStates(host: String, sessionID: String?, at now: Date) throws {
     try write {
       let ended = PiWorkState.ended.rawValue
       let end = """
@@ -63,11 +62,10 @@ extension CueStore {
           modifiedAt = ?
         """
       if let sessionID {
-        try db.run("\(end) WHERE id = ?", [ended, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID)])
+        try db.run("\(end) WHERE id = ? AND state != ?", [ended, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID), ended])
       } else {
         try db.run("\(end) WHERE hostID = ? AND state != ?", [ended, now, Date.stamp, host, ended])
       }
-      try db.run("DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND stateSince < ?", [host, ended, expiredBefore])
     }
   }
 }
@@ -76,8 +74,8 @@ extension CueStore {
 /// - 开始工作、等你确认、完成、出错，以及会话的标题或项目变化：立即写；
 /// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`，期间只保留最新的一次；
 /// - 近况（`PiRecap`）变化：立即写；
-/// - 与已写入内容相同的更新不再写；会话结束时把记录标为已结束（近况留给手机看）并丢弃挂起的更新，
-///   结束超过 `endedRetention` 的记录在下次结束或启动清理时删除。
+/// - 与已写入内容相同的更新不再写；会话结束时把记录标为已结束（近况留给手机看，记录与会话文件同存亡，
+///   见 `CueStore.retainPiSessions`）并丢弃挂起的更新。
 ///
 /// actor 在 await 处可重入：会话状态只在 await 之前改完，不跨 await 持有副本；落盘按决定的先后串成一条任务链，
 /// 后决定的写入（含删除）不会被先决定的覆盖。
@@ -90,6 +88,7 @@ public actor PiStateRecorder {
     var projectID: UUID?
     var recap: PiRecap
     var times: PiTimes
+    var launchToken: String?
   }
 
   private struct Session {
@@ -98,6 +97,7 @@ public actor PiStateRecorder {
     var folder: String?
     var projectID: UUID?
     var recap = PiRecap()
+    var launchToken: String?
     /// 调用方给的计时基准；没给过时（测试、演示）用第一次写入的时间，之后不变
     var times: PiTimes?
     var written: Content?
@@ -105,9 +105,6 @@ public actor PiStateRecorder {
     var pending: (state: PiWorkState, detail: String?)?
     var timer: Task<Void, Never>?
   }
-
-  /// 已结束的记录留多久。
-  public static let endedRetention: Duration = .seconds(7 * 24 * 3600)
 
   private let store: CueStore
   private let hostID: String
@@ -125,7 +122,7 @@ public actor PiStateRecorder {
 
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,
-    projectID: UUID? = nil, recap: PiRecap? = nil, times: PiTimes? = nil
+    projectID: UUID? = nil, recap: PiRecap? = nil, times: PiTimes? = nil, launchToken: String? = nil
   ) async throws {
     var session = sessions[sessionID] ?? Session()
     let previous = session.observed
@@ -134,13 +131,14 @@ public actor PiStateRecorder {
     if let folder { session.folder = folder }
     if let projectID { session.projectID = projectID }
     if let recap { session.recap = recap }
+    if let launchToken { session.launchToken = launchToken }
     let now = timing.now()
     let times = times ?? session.times ?? PiTimes(stateSince: now, busySince: nil)
     session.times = times
 
     let content = Content(
       state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID, recap: session.recap,
-      times: times)
+      times: times, launchToken: session.launchToken)
     if content == session.written {
       cancelPending(&session)
       sessions[sessionID] = session
@@ -188,10 +186,7 @@ public actor PiStateRecorder {
 
   private func endRecords(sessionID: String?) async throws {
     let now = timing.now()
-    let expiredBefore = now.addingTimeInterval(-Self.endedRetention.seconds)
-    try await persist { [store, hostID] in
-      try await store.endPiStates(host: hostID, sessionID: sessionID, at: now, expiredBefore: expiredBefore)
-    }
+    try await persist { [store, hostID] in try await store.endPiStates(host: hostID, sessionID: sessionID, at: now) }
   }
 
   private func flush(_ sessionID: String) async {
@@ -200,7 +195,7 @@ public actor PiStateRecorder {
     session.pending = nil
     let content = Content(
       state: pending.state, detail: pending.detail, title: session.title, folder: session.folder, projectID: session.projectID,
-      recap: session.recap, times: times)
+      recap: session.recap, times: times, launchToken: session.launchToken)
     let write = commit(sessionID, &session, content, at: timing.now())
     sessions[sessionID] = session
     // 定时写入没有调用方可报告；记为未写入，下一次更新会重写
@@ -228,7 +223,8 @@ public actor PiStateRecorder {
     return { [store, hostID] in
       try await store.writePiState(
         sessionID: sessionID, hostID: hostID, title: content.title, folder: content.folder, projectID: content.projectID,
-        state: content.state, detail: content.detail, recap: content.recap, notify: notify, times: content.times)
+        state: content.state, detail: content.detail, recap: content.recap, notify: notify, times: content.times,
+        launchToken: content.launchToken)
     }
   }
 
