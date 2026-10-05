@@ -48,7 +48,7 @@ final class Navigation {
         var start: Start = .text
     }
 
-    /// 要发到 Mac 的一张卡或一条任务（存储格式，变量已填、编号已排）：先选会话，再在会话页里选方式发出。
+    /// 要发到 Mac 的一张卡或一条任务（存储格式，变量已填）：先选会话，再在会话页里选方式发出。
     struct Outbox: Identifiable {
         let id = UUID()
         var content: String

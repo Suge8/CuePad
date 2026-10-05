@@ -62,7 +62,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// nil 表示未归档（收件箱）。
   public internal(set) var projectID: UUID?
-  /// 纯字符串正文：分块为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
+  /// 纯字符串正文：分割线为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
   public var numbering: Open<CueNumbering>
   public var isPinned: Bool

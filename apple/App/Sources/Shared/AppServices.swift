@@ -112,7 +112,7 @@ final class AppServices {
         #endif
     }
 
-    /// 发往哪里。正文一律是存储格式（变量已填、编号已排），图片引用由这里解析成真实图片。
+    /// 发往哪里。正文一律是存储格式（变量已填），图片引用由这里解析成真实图片。
     enum Destination: Equatable {
         #if os(macOS)
         /// 发进 Pi 会话：`send` 在会话忙时报 `SendError.piSessionBusy`，`steer`/`followUp` 忙时插话或排队，

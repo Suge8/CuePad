@@ -22,7 +22,7 @@ struct DividerTests {
     @Test("光标整体跨过分割线：左右、上下都不会落在分割线行上")
     func caretCrossing() {
         let h = EditorHarness()
-        h.load("第一块内容\n\(split)\n\n第二块内容")  // 运行时：0…5 首行，6 分割线，8 空行，9 起第二块
+        h.load("第一段内容\n\(split)\n\n第二段内容")  // 运行时：0…5 首行，6 分割线，8 空行，9 起第二段
         h.setCaret(5)
         h.textView.moveRight(nil)
         #expect(h.caret == 8)

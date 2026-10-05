@@ -10,7 +10,7 @@ nonisolated private struct EditorData: Sendable {
     var project: Project?
 }
 
-/// 打开的卡：一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面）。键盘上方是工具栏（分块、插图、变量取值、发送）；
+/// 打开的卡：一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面）。键盘上方是工具栏（分割线、插图、变量取值、发送；选中文字时发送只发选中的部分）；
 /// 导航栏右侧是复制、发到 Mac 与"更多"（分享、编号、置顶、设为目标、移动、移到回收站）。
 struct CardEditorScreen: View {
     let cardID: UUID

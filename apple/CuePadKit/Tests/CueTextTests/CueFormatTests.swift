@@ -8,11 +8,11 @@ struct CueFormatTests {
 
     @Test("分隔线与行内图片解析成 token，序列化后与原文一致")
     func roundTrip() {
-        let stored = "前文 ![](cuepad://img/\(id)) 后文\n---split---\n第二块\n![](cuepad://img/\(id))"
+        let stored = "前文 ![](cuepad://img/\(id)) 后文\n---split---\n第二段\n![](cuepad://img/\(id))"
         let tokens = CueFormat.parse(stored)
         #expect(tokens == [
             .text("前文 "), .image(id), .text(" 后文"), .text("\n"), .split, .text("\n"),
-            .text("第二块"), .text("\n"), .image(id),
+            .text("第二段"), .text("\n"), .image(id),
         ])
         #expect(CueFormat.serialize(tokens) == stored)
     }

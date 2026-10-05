@@ -20,7 +20,7 @@ private final class FakeDragRequest: NSObject, UITextDragRequest {
 struct IOSAlignmentTests {
     private let split = CueFormat.splitMarker
 
-    @Test("硬件键盘前向删除：块尾按下整条合并分割线并可撤销；其它位置交还系统默认")
+    @Test("硬件键盘前向删除：分割线上一行的行尾按下整条删掉分割线并可撤销；其它位置交还系统默认")
     func forwardDelete() {
         let h = EditorHarness()
         let doc = "甲\n\(split)\n乙"

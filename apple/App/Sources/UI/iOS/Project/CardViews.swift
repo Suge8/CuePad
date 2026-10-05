@@ -43,7 +43,7 @@ struct CardTileView: View {
 }
 
 extension Workspace {
-    /// 复制整张卡（变量已填、编号已排），写一条发送记录。
+    /// 复制整张卡（变量已填），写一条发送记录。
     func copy(_ card: Card) {
         let text = Outgoing.text(of: card), id = card.id
         attempt {

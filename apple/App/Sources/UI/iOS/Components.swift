@@ -45,7 +45,7 @@ nonisolated struct CardEntry: Identifiable, Sendable {
     }
 }
 
-/// 一张卡的纸面行（今天流与搜索结果共用）：可选的项目与时间、标题、摘要、块数，右侧首图。
+/// 一张卡的纸面行（今天流与搜索结果共用）：可选的项目与时间、标题、摘要，右侧首图。
 struct CardRow: View {
     let entry: CardEntry
     /// 标出所属项目（今天流）；nil 不标（搜索已按项目分组）。

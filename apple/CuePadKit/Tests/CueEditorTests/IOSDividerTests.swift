@@ -24,7 +24,7 @@ struct IOSDividerTests {
     @Test("光标整体跨过分割线：程序设置选区时也不会落在分割线行上")
     func caretCrossing() throws {
         let h = EditorHarness()
-        h.load("第一块内容\n\(split)\n\n第二块内容")  // 运行时：0…5 首行，6 分割线，8 空行
+        h.load("第一段内容\n\(split)\n\n第二段内容")  // 运行时：0…5 首行，6 分割线，8 空行
         h.setCaret(5)
         h.textView.selectedRange = NSRange(location: 6, length: 0)
         #expect(h.caret == 8)

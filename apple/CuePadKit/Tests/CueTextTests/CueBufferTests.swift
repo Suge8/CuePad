@@ -105,8 +105,8 @@ struct MergeEditTests {
 
 @Suite("光标规范化")
 struct CaretTests {
-    // 位置：第一块 0…5，5 是换行，6 是分割线，7 是换行，8 空行，9… 第二块
-    private let b = buffer("第一块内容\n\(S)\n\n第二块内容")
+    // 位置：第一段 0…5，5 是换行，6 是分割线，7 是换行，8 空行，9… 第二段
+    private let b = buffer("第一段内容\n\(S)\n\n第二段内容")
 
     @Test("向前移动跨过分割线行，向后移动同理")
     func crossesAtomically() {
