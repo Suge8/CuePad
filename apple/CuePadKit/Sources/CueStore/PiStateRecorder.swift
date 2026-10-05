@@ -6,6 +6,24 @@ extension CueStore {
     try select(PiSessionState.self, orderBy: "stateSince DESC, id")
   }
 
+  /// 会话列表的一页（Mac 与手机共用的唯一查询）。顺序见 `PiSessionPage`。
+  public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
+    var condition = "1"
+    var arguments: [any SQLBindable] = []
+    if let text = query.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+      let pattern = "%" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
+        .replacingOccurrences(of: "_", with: "\\_") + "%"
+      condition = "(title LIKE ?1 ESCAPE '\\' OR folder LIKE ?1 ESCAPE '\\' OR lastPrompt LIKE ?1 ESCAPE '\\')"
+      arguments = [pattern]
+    }
+    let states = try select(
+      PiSessionState.self, where: condition, arguments, orderBy: "state = 'ended', stateSince DESC, id",
+      limit: query.limit, offset: query.offset)
+    let total = try db.first("SELECT count(*) FROM piSessionStates WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
+    let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
+    return PiSessionPage(items: states.map { PiSessionListItem(state: $0, project: $0.projectID.flatMap { projects[$0] }) }, total: total)
+  }
+
   func writePiState(
     sessionID: String, hostID: String, title: String, folder: String?, projectID: UUID?, state: PiWorkState, detail: String?,
     recap: PiRecap, notify: PiAlert?, times: PiTimes

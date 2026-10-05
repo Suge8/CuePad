@@ -24,6 +24,12 @@ final class InMemoryHotkeys: HotkeyBackend {
     func unregister(_ handle: HotkeyHandle) { handles[handle] = nil }
 }
 
+/// 记下要在哪个终端里运行什么，不真开终端。
+final class RecordingTerminal: TerminalLaunching {
+    private(set) var opened: [(command: TerminalCommand, app: PiTerminalApp)] = []
+    func open(_ command: TerminalCommand, in app: PiTerminalApp) async throws { opened.append((command, app)) }
+}
+
 /// 记录调用的发送通道；不碰真实 Pi、剪贴板和其他应用。
 final class FakeChannels: SendChannels {
     enum Call: Equatable {

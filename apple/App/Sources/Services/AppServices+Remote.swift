@@ -109,7 +109,7 @@ extension AppServices {
             whenBusy = nil
         case .steer: whenBusy = .steer
         case .followUp: whenBusy = .followUp
-        case .answer, .ping: throw SendError.unsupportedMode(mode.rawValue)  // 作答与连接测试在 perform 里处理，不走发送
+        case .answer, .ping, .resume, .start: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
         }
         let images = try content.segments.compactMap { segment -> PiImage? in
             guard case .image(let hash) = segment else { return nil }
