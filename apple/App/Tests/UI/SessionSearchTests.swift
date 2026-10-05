@@ -4,27 +4,35 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// ⌘K 的"会话"范围：结果按项目分组，没绑项目的按文件夹归组、排在项目之后；组内要你注意的在前。
+/// ⌘K 的"会话"范围：上面"现在"是在线的、要你注意的在前；下面是已结束的，按结束时间分段（与手机 Pi 页同一规则），
+/// 下一页只接在末段之后。需求变更：取代按项目分组（按项目分组时，下一页会插进上面的组）。
 struct SessionSearchTests {
-    private func session(_ id: String, _ state: PiWorkState, project: UUID? = nil, folder: String? = nil) -> PiSessionState {
-        PiSessionState(
-            id: UUID(), sessionID: id, hostID: "mac", title: id, projectID: project, state: .known(state), detail: nil, folder: folder,
-            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now,
-            modifiedAt: .now)
+    let now = WallTests.date(2026, 10, 7, hour: 10)
+
+    private func session(_ id: String, _ state: PiWorkState, at date: Date? = nil) -> PiSessionState {
+        let since = date ?? now
+        return PiSessionState(
+            id: UUID(), sessionID: id, hostID: "mac", title: id, projectID: nil, state: .known(state), detail: nil, folder: nil,
+            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: since, busySince: nil, createdAt: since,
+            modifiedAt: since)
     }
 
-    @Test func 按项目分组_文件夹组在项目之后_组内要你注意的在前() {
-        let app = UUID(), web = UUID()
-        let sessions = [
-            session("s1", .tool, project: app), session("s2", .settled, folder: "scratch"), session("s3", .waitingForUser, project: web),
-            session("s4", .waitingForUser, project: app), session("s5", .ended, project: app), session("s6", .ended, folder: "scratch"),
-            session("s7", .ended),
+    @Test func 现在按要你注意的先后_已结束按结束时间分段() {
+        let live = [session("s1", .tool), session("s2", .waitingForUser)]
+        let ended = [
+            session("e1", .ended, at: WallTests.date(2026, 10, 7, hour: 8)), session("e2", .ended, at: WallTests.date(2026, 10, 6)),
+            session("e3", .ended, at: WallTests.date(2026, 10, 6, hour: 8)), session("e4", .ended, at: WallTests.date(2026, 9, 1)),
         ]
 
-        let groups = SessionGroup.grouped(sessions)
+        let groups = SessionGroup.grouped(live: live, ended: ended, now: now, calendar: WallTests.calendar)
 
-        #expect(groups.map(\.key) == [.project(app), .project(web), .folder("scratch"), .folder(nil)])
-        #expect(groups.map { $0.sessions.map(\.sessionID) } == [["s4", "s1", "s5"], ["s3"], ["s2", "s6"], ["s7"]])
+        #expect(groups.map(\.key) == [.now, .ended(.today), .ended(.yesterday), .ended(.earlier)])
+        #expect(groups.map { $0.sessions.map(\.sessionID) } == [["s2", "s1"], ["e1"], ["e2", "e3"], ["e4"]])
+    }
+
+    @Test func 没有在线会话时不留空的现在() {
+        let groups = SessionGroup.grouped(live: [], ended: [session("e1", .ended)], now: now, calendar: WallTests.calendar)
+        #expect(groups.map(\.key) == [.ended(.today)])
     }
 }
 #endif
