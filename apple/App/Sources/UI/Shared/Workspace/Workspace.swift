@@ -296,10 +296,15 @@ final class Workspace {
         }
     }
 
-    /// 勾选或取消勾选任务完成（取消回到待办）。下一个状态在写事务里按 Store 的当前值决定，不看界面手里的副本：
+    /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态在写事务里按 Store 的当前值决定，不看界面手里的副本：
     /// 副本可能已过时（列表还没刷新就又点了一次），按它推算会把已勾的再勾一次。
     func toggle(_ task: CueTask) async throws {
         try await services.store.updateTask(task.id) { $0.status = $0.status == .done ? .todo : .done }
+    }
+
+    /// 开始做（待办 → 进行中）；`back` 为 true 时停下回到待办。
+    func start(_ task: CueTask, back: Bool = false) async throws {
+        try await services.store.updateTask(task.id) { $0.status = back ? .todo : .inProgress }
     }
 
     /// 执行一个异步操作，失败时提示。

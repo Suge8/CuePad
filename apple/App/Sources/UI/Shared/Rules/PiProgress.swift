@@ -1,13 +1,14 @@
 import CueStore
 import Foundation
 
-/// 会话"现在到哪了"的一句话（会话列表第三行、近况页状态块）：等你确认时是问题首行，干活时是当前动作，
+/// 会话"现在到哪了"的一句话（会话列表第三行、近况页状态块）：等你确认时是问题首行，干活时是当前动作（还没有动作时是正在处理的提问），
 /// 出错时是原因首行，空闲或已结束时是最后回答的首句。先去掉 Markdown 符号再截断。没有可说的就是 nil（不占行）。
 nonisolated enum PiProgress {
     static func line(of session: PiSessionState) -> String? {
         switch session.state.known {
         case .waitingForUser: firstLine(session.question?.text ?? session.detail)
-        case .thinking, .outputting, .tool: session.detail.flatMap(action)
+        // 还没有具体动作时写正在处理的那句提问
+        case .thinking, .outputting, .tool: session.detail.flatMap(action) ?? firstLine(session.pendingPrompt).map { "正在处理：\($0)" }
         case .delegating, .error: firstLine(session.detail)
         case .settled, .ended, nil: firstSentence(session.lastReply)
         }
@@ -26,7 +27,8 @@ nonisolated enum PiProgress {
     ]
 
     static func firstLine(_ text: String?) -> String? {
-        text.flatMap { MarkdownBlock.plainLines($0).first }
+        // 先取原文第一个非空行再去符号：Markdown 会把相连的几行并成一段
+        text?.split(whereSeparator: \.isNewline).lazy.compactMap { MarkdownBlock.plainLines(String($0)).first }.first
     }
 
     /// 首句：到第一个句号、问号、叹号或换行为止。

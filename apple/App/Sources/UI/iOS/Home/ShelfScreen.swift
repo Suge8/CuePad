@@ -24,12 +24,12 @@ nonisolated struct ShelfData: Sendable {
     static func read(from store: isolated CueStore, now: Date = .now, calendar: Calendar = .current) throws -> ShelfData {
         let summaries = try store.projectSummaries()
         let counts = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) })
-        let openTasks = Dictionary(grouping: try store.openTasks(), by: \.projectID).mapValues(\.count)
+        let progress = try store.taskProgress()
         let pi = PiSessionState.byProject(try store.piSessionPage(.live).items.map(\.state))
         let entries = try store.projects().map { project in
             let latest = try store.search(SearchQuery(projects: [project.id]), limit: 1).cards.first
             return Entry(
-                project: project, cardCount: counts[project.id] ?? 0, openTasks: openTasks[project.id] ?? 0,
+                project: project, cardCount: counts[project.id] ?? 0, openTasks: progress[project.id].map { $0.total - $0.done } ?? 0,
                 goal: try project.goalCardID.flatMap { try store.card($0) }.map { CardText($0.body).title.textGlyphs },
                 latest: latest.map { (CardText($0.body).title.textGlyphs, $0.modifiedAt) }, pi: pi[project.id])
         }
