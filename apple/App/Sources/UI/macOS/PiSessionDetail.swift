@@ -32,7 +32,7 @@ extension SessionDigest {
 }
 
 /// 一个 Pi 会话的详情（侧栏、菜单栏面板的会话行点开，⌘K 会话范围的右侧）：共用的近况（`PiSessionDigest`），
-/// 下面是发过去的请求与回复框；已结束的会话回复框换成"继续"。
+/// 下面是发过去的请求与回复框（已结束的会话也能直接回复）。
 /// `embedded`：放在 ⌘K 里时高度由面板给，近况在里面滚动；弹出层里按内容长高、到上限才滚动。
 struct PiSessionDetail: View {
     let sessionID: String
@@ -62,8 +62,7 @@ struct PiSessionDetail: View {
                 DeliveryStack(deliveries: digest.deliveries, session: session.state == .known(.ended) ? nil : session)
                     .padding(.horizontal, 14).padding(.bottom, 10)
                 Divider()
-                let continuing = digest.deliveries.contains { $0.mode == .known(.resume) && $0.isOpen }
-                DetailReply(session: session, live: live, continuing: continuing).padding(14)
+                DetailReply(session: session, live: live).padding(14)
             } else if stored != nil {
                 Text("找不到这个会话").foregroundStyle(palette.ink3).padding(24)
             }
@@ -75,13 +74,11 @@ struct PiSessionDetail: View {
     }
 }
 
-/// 发给这个会话：走"发给当前目标"同一条通道（`Workspace.send`），方式按共用规则（`MacDelivery`）。
-/// 已结束的会话换成"继续"（在它所在的 Mac 的终端里恢复，进度与结果在上面"你发过去的"里）；在别的 Mac 上运行的写明在哪。
+/// 发给这个会话，方式按共用规则（`MacDelivery`）。本机在线的走"发给当前目标"同一条通道（`Workspace.send`）；
+/// 已结束的与别的 Mac 上的写一条投送请求给它所在的 Mac（已结束的由那台 Mac 在后台恢复后再发），进度在上面"你发过去的"里。
 private struct DetailReply: View {
     let session: PiSessionState
     let live: CuePi.PiSession?
-    /// 已经发出、还没有结果的"继续"。
-    let continuing: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -96,65 +93,55 @@ private struct DetailReply: View {
     private var mode: DeliveryMode? { chosenMode.flatMap { modes.contains($0) ? $0 : nil } ?? modes.first }
 
     var body: some View {
-        if let live {
-            VStack(alignment: .leading, spacing: 10) {
-                TextField("回复 \(session.title)", text: $text, axis: .vertical)
-                    .accessibilityLabel("回复")
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...5)
-                    .focused($focused)
-                    .onSubmit(send)
-                    .padding(.horizontal, 10).padding(.vertical, 8)
-                    .paper(radius: 10)
-                HStack(spacing: 8) {
-                    Picker("发送方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
-                        ForEach(modes, id: \.self) { Text($0.label).tag(Optional($0)) }
-                    }
-                    .pickerStyle(.segmented).labelsHidden().fixedSize()
-                    Button("跳到终端", systemImage: "terminal") { workspace.jumpToTerminal(live.id) }
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("回复 \(session.title)", text: $text, axis: .vertical)
+                .accessibilityLabel("回复")
+                .textFieldStyle(.plain)
+                .lineLimit(1...5)
+                .focused($focused)
+                .onSubmit(send)
+                .padding(.horizontal, 10).padding(.vertical, 8)
+                .paper(radius: 10)
+            HStack(spacing: 8) {
+                Picker("发送方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
+                    ForEach(modes, id: \.self) { Text($0.label).tag(Optional($0)) }
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+                if let live {
+                    Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
                         .labelStyle(.iconOnly).buttonStyle(.borderless)
-                        .help("跳到这个会话所在的终端")
-                    Spacer()
-                    Button("发送", action: send)
-                        .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.return, modifiers: .command)
-                        .disabled(trimmed.isEmpty || sending)
-                }
-                .controlSize(.small)
-                if let explanation = mode?.explanation {
-                    Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
-                }
-            }
-            .onAppear { focused = true }
-        } else if session.state == .known(.ended) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("这个会话已结束").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-                    Text(session.hostID == services.hostID ? "用\(services.settings.piTerminal.phrase)接着它" : "在它所在的 Mac 上接着它")
-                        .font(.footnote).foregroundStyle(palette.ink3)
+                        .help("跳到这个会话所在的终端窗口")
                 }
                 Spacer()
-                Button("继续") { workspace.resume(session) }
-                    .buttonStyle(.borderedProminent).controlSize(.small)
+                Button("发送", action: send)
+                    .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(continuing)
+                    .disabled(trimmed.isEmpty || sending)
             }
-        } else {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("在另一台 Mac 上运行").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-                Text("从这里发不到它；到那台 Mac 上回复").font(.footnote).foregroundStyle(palette.ink3)
+            .controlSize(.small)
+            if let explanation = mode?.explanation {
+                Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .onAppear { focused = true }
     }
 
     private func send() {
-        guard let live, let mode, !trimmed.isEmpty, !sending else { return }
+        guard let mode, !trimmed.isEmpty, !sending else { return }
         sending = true
         let body = trimmed
         Task {
-            if await workspace.send(body, via: .pi(live.id, mode)) { text = "" }
-            sending = false
+            defer { sending = false }
+            if let live {
+                if await workspace.send(body, via: .pi(live.id, mode)) { text = "" }
+                return
+            }
+            do {
+                try await services.requestMacDelivery(body, to: session, mode: mode)
+                text = ""
+            } catch {
+                workspace.fail(error)
+            }
         }
     }
 }
@@ -218,13 +205,8 @@ extension Workspace {
         return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id] ?? session.projectID)
     }
 
-    /// 继续一个已结束的会话：请它所在的 Mac 在终端里恢复（本机也走投送请求）；结果在近况的"你发过去的"里。
-    func resume(_ session: PiSessionState) {
-        attempt { _ = try await self.services.launch(.resume(sessionID: session.sessionID), title: session.title, on: session.hostID) }
-    }
-
-    /// 在本机终端里开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能打开时抛出执行端写回的原因。
-    /// 终端已经打开（请求成功）时先调 `launched`：之后等的是 Pi 自己连上，可能要一会儿，也可能因为终端里出错永远等不到。
+    /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
+    /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
     func startSession(at place: PiLaunchPlace, prompt: String?, title: String, launched: @escaping () -> Void) async throws -> String {
         let token = UUID().uuidString
         let request = try await services.launch(.start(place, prompt: prompt, token: token), title: title, on: services.hostID)

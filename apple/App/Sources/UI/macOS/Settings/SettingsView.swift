@@ -35,32 +35,15 @@ struct SettingsView: View {
                 }
                 Section {
                     PiExtensionRow()
-                    Picker("在哪个终端打开", selection: $settings.piTerminal) {
-                        ForEach(PiTerminalApp.installed(), id: \.self) { app in
-                            Label { Text(app.label) } icon: { TerminalIcon(app: app) }.tag(app)
-                        }
-                    }
                 } header: {
                     Text("Pi")
                 } footer: {
-                    Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把卡片（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。继续会话、开新会话时在选定的终端里打开，只列这台 Mac 上装了的。")
+                    Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把卡片（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。")
                 }
             }
         .formStyle(.grouped)
         .frame(width: 520, height: 640)
         .onAppear { services.accessibility.refresh() }
-    }
-}
-
-/// 终端应用的图标（系统给的，与 Finder 里一致）。
-private struct TerminalIcon: View {
-    let app: PiTerminalApp
-    private static let size: CGFloat = 16
-
-    var body: some View {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().frame(width: Self.size, height: Self.size)
-        }
     }
 }
 
