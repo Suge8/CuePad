@@ -22,7 +22,7 @@ struct MacConnectionTest: View {
             VStack(alignment: .leading, spacing: 4) {
                 if !rounds.isEmpty {
                     let sorted = rounds.sorted()
-                    Text("中位数 \(Self.text(sorted[sorted.count / 2])) · 最大 \(Self.text(sorted.last!))")
+                    Text("中位数 \(Self.text(Self.median(sorted))) · 最大 \(Self.text(sorted.last!))")
                         .font(.footnote.weight(.medium)).foregroundStyle(palette.ink)
                     Text(rounds.map(Self.text).joined(separator: "  "))
                         .font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
@@ -47,6 +47,12 @@ struct MacConnectionTest: View {
         } catch {
             failure = error.localizedDescription
         }
+    }
+
+    /// 排好序的往返时间的中位数：偶数个取中间两个的平均。
+    private static func median(_ sorted: [Duration]) -> Duration {
+        let middle = sorted.count / 2
+        return sorted.count.isMultiple(of: 2) ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
     }
 
     /// "0.8 秒"、"12 秒"。
