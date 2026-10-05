@@ -172,7 +172,7 @@ final class AppServices {
         throw CancellationError()
     }
 
-    /// 连接测试一次往返的分段。`upload` 与 `total` 用本机时钟；`toMac`（上传完成 → Mac 执行完）与 `back`（Mac 执行完 → 本机看到）
+    /// 连接测试一次往返的分段。`upload`（写库完成 → 上传完成）与 `total`（开始写库 → 看到结果）用本机时钟；`toMac`（上传完成 → Mac 执行完）与 `back`（Mac 执行完 → 本机看到）
     /// 用 Mac 写回的完成时间，跨设备时钟，有误差（两台设备的时钟一般相差零点几秒，偶尔为负）。
     struct PingTiming: Sendable {
         var upload: Duration
@@ -188,6 +188,7 @@ final class AppServices {
         try? await sync?.preparePull()
         let started = ContinuousClock.now
         let request = try await store.requestPing(on: host)
+        let written = ContinuousClock.now
         defer { Task { [store] in try? await store.deleteDelivery(request.id) } }
         async let seen = result(of: request.id, within: timeout)
         await upload(request.id)
@@ -198,7 +199,7 @@ final class AppServices {
         guard result.status == .known(.succeeded) else { throw SendError.notDelivered(result.resultDetail ?? "没有说明原因") }
         let completed = result.completedAt ?? seenAt.date
         return PingTiming(
-            upload: uploaded.instant - started, toMac: .seconds(completed.timeIntervalSince(uploaded.date)),
+            upload: uploaded.instant - written, toMac: .seconds(completed.timeIntervalSince(uploaded.date)),
             back: .seconds(seenAt.date.timeIntervalSince(completed)), total: seenAt.instant - started)
     }
 
