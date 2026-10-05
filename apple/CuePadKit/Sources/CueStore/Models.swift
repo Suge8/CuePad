@@ -9,13 +9,13 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Sendable, CaseIterable {
   case projects, cards, tasks, sendRecords, attachments, piSessions, projectDirectories
-  case piSessionStates, deliveryRequests
+  case piSessionStates, deliveryRequests, directoryBindings
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
-    .projects, .cards, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests,
+    .projects, .cards, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings,
   ]
 
   /// 同步的列（CKRecord 的字段）；不含本机列。
@@ -30,6 +30,7 @@ extension Table {
     case .projectDirectories: ["projectID", "directory"]
     case .piSessionStates: PiSessionState.columns
     case .deliveryRequests: DeliveryRequest.syncedColumns
+    case .directoryBindings: DirectoryBinding.columns
     }
   }
 }

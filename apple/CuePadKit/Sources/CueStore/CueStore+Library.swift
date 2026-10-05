@@ -361,8 +361,8 @@ extension CueStore {
   }
 
   /// 只留下这些会话文件的索引，其余（文件已删除、不再算会话的）删除，返回删掉的条数。
-  /// 同时删掉这台 Mac 上没有会话文件的已结束会话记录（文件被删的；从没落盘的，如 `--no-session` 或没发过消息的）：
-  /// 已结束的记录与会话文件一一对应，在线的不动。
+  /// 同时让已结束的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的已结束会话记录（文件被删的；从没落盘的，
+  /// 如 `--no-session` 或没发过消息的），补写有会话文件却没有记录的。在线的不动。
   @discardableResult
   public func retainPiSessions(paths: Set<String>, host: String) throws -> Int {
     try write {
@@ -371,7 +371,41 @@ extension CueStore {
       try db.run(
         "DELETE FROM piSessionStates WHERE hostID = ? AND state = ? AND sessionID NOT IN (SELECT id FROM piSessions)",
         [host, PiWorkState.ended.rawValue])
+      // 反过来，有会话文件却还没有记录的（如升级前建的索引）补写
+      let unrecorded = try select(
+        PiSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
+      for session in unrecorded { try writePiHistory(session, host: host) }
       return stale.count
+    }
+  }
+
+  /// 全部目录绑定（各台 Mac 的），按项目、Mac 名排。
+  public func directoryBindings() throws -> [DirectoryBinding] {
+    try select(DirectoryBinding.self, orderBy: "projectID, hostName, hostID")
+  }
+
+  /// 把这台 Mac 本机的目录绑定写成同步的目录绑定记录：有绑定的写（目录末段名或 Mac 名变了才改），没了的删；别的 Mac 的不动。
+  public func publishDirectoryBindings(host: String, hostName: String) throws {
+    try write {
+      let local = try projectDirectories()
+      let mine = Dictionary(
+        uniqueKeysWithValues: try select(DirectoryBinding.self, where: "hostID = ?", [host]).map { ($0.projectID, $0) })
+      let now = Date.stamp
+      for (project, directory) in local {
+        let folder = URL(filePath: directory, directoryHint: .isDirectory).lastPathComponent
+        if let existing = mine[project] {
+          guard existing.folder != folder || existing.hostName != hostName else { continue }
+          try db.run(
+            "UPDATE directoryBindings SET folder = ?, hostName = ?, modifiedAt = ? WHERE id = ?", [folder, hostName, now, existing.id])
+        } else {
+          _ = try insert(DirectoryBinding(
+            id: DirectoryBinding.recordID(project: project, host: host), projectID: project, hostID: host, hostName: hostName,
+            folder: folder, createdAt: now, modifiedAt: now))
+        }
+      }
+      for (project, binding) in mine where local[project] == nil {
+        try db.run("DELETE FROM directoryBindings WHERE id = ?", [binding.id])
+      }
     }
   }
 

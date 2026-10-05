@@ -14,7 +14,7 @@ import Testing
   }
 
   private func states() async throws -> [String: PiSessionState] {
-    Dictionary(uniqueKeysWithValues: try await store.piSessionStates().map { ($0.sessionID, $0) })
+    Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0) })
   }
 
   @Test func startingWorkIsWrittenImmediatelyWithTitleAndProject() async throws {
@@ -42,7 +42,7 @@ import Testing
 
     await clock.waitForSleeper()
     clock.advance(.seconds(5))
-    let merged = try await eventually(store, watching: [.piSessionStates], { try $0.piSessionStates() }) { $0.first?.state == .known(.tool) }
+    let merged = try await eventually(store, watching: [.piSessionStates], { try $0.allPiSessionStates() }) { $0.first?.state == .known(.tool) }
     #expect(merged.count == 1 && merged[0].detail == "edit")  // 只有最新的一次落盘
   }
 
@@ -112,7 +112,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .error, detail: "x")
     try await recorder.update(sessionID: "s2", state: .thinking)
 
-    let all = try await store.piSessionStates()
+    let all = try await store.allPiSessionStates()
     #expect(all.count == 2)
     #expect(try await states()["s1"]?.id == id)
     #expect(try RawDB(fixture.url).count("piSessionStates") == 2)
@@ -177,7 +177,7 @@ import Testing
     try await recorder.update(sessionID: "new", state: .settled)
     try await recorder.end(sessionID: "new")
 
-    #expect(Set(try await store.piSessionStates().map(\.sessionID)) == ["old", "new"])
+    #expect(Set(try await store.allPiSessionStates().map(\.sessionID)) == ["old", "new"])
   }
 
   // MARK: 历史会话
@@ -207,7 +207,7 @@ import Testing
     #expect(try await states()["s1"]?.state == .known(.thinking))
 
     try await recorder.end(sessionID: "s1")
-    #expect(try await store.piSessionStates().count == 1)
+    #expect(try await store.allPiSessionStates().count == 1)
     #expect(try await states()["s1"]?.state == .known(.ended))
   }
 
@@ -228,7 +228,7 @@ import Testing
 
     try await store.retainPiSessions(paths: [indexed("s1").path, indexed("s2").path], host: "mac-a")
 
-    #expect(Set(try await store.piSessionStates().map(\.sessionID)) == ["s1", "s2"])
+    #expect(Set(try await store.allPiSessionStates().map(\.sessionID)) == ["s1", "s2"])
     #expect(try await states()["s2"]?.title == "第二个")
   }
 
@@ -281,7 +281,7 @@ import Testing
 
     try await store.retainPiSessions(paths: [indexed("s1").path], host: "mac-a")
 
-    #expect(try await store.piSessionStates().map(\.sessionID) == ["s1"])
+    #expect(try await store.allPiSessionStates().map(\.sessionID) == ["s1"])
   }
 
   @Test func resetEndsOnlyThisHostsLeftoverRecords() async throws {

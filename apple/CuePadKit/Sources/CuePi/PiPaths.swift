@@ -21,6 +21,15 @@ public struct PiPaths: Sendable, Equatable {
             ?? URL(filePath: environment["CUEPAD_PI_SOCKET_DIR"] ?? "/tmp/cuepad-\(getuid())", directoryHint: .isDirectory)
     }
 
+    /// 由 CuePad 启动的 Pi 要带的环境：连接目录总带（桥在这里找它），Pi 目录不是默认的才带（读写同一份会话与扩展）。
+    public var launchEnvironment: [String: String] {
+        var environment = ["CUEPAD_PI_SOCKET_DIR": socketDirectory.path]
+        if agentDirectory.standardizedFileURL != Self.defaultAgentDirectory([:]).standardizedFileURL {
+            environment["PI_CODING_AGENT_DIR"] = agentDirectory.path
+        }
+        return environment
+    }
+
     private static func defaultAgentDirectory(_ environment: [String: String]) -> URL {
         if let dir = environment["PI_CODING_AGENT_DIR"], !dir.isEmpty {
             return URL(filePath: (dir as NSString).expandingTildeInPath, directoryHint: .isDirectory)

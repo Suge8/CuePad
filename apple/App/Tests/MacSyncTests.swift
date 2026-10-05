@@ -110,7 +110,7 @@ struct MacSyncTests {
     func Pi状态映射成同步记录的状态与说明(agent: PiAgentState, work: PiWorkState, detail: String?) async throws {
         try await services.consumePiChanges(changes([.appeared(session("s1", state: agent))]))
 
-        let stored = try #require(try await services.store.piSessionStates().first)
+        let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.state == .known(work))
         #expect(stored.detail == detail)
         #expect(stored.sessionID == "s1")
@@ -122,12 +122,12 @@ struct MacSyncTests {
         try await services.store.setDirectory("/work", for: project.id)
 
         try await services.consumePiChanges(changes([.appeared(session("s1", cwd: "/work/app"))]))
-        let stored = try #require(try await services.store.piSessionStates().first)
+        let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.projectID == project.id)
         #expect(stored.title == "app")
 
         try await services.consumePiChanges(changes([.ended(session("s1"), reason: .disconnected)]))
-        #expect(try await services.store.piSessionStates().map(\.state) == [.known(.ended)])
+        #expect(try await services.store.allPiSessionStates().map(\.state) == [.known(.ended)])
     }
 
     @Test func 会话的计时基准原样写进同步记录() async throws {
@@ -135,7 +135,7 @@ struct MacSyncTests {
         working.stateSince = Date(timeIntervalSince1970: 1_000)
         working.busySince = Date(timeIntervalSince1970: 1_000)
         try await services.consumePiChanges(changes([.appeared(working)]))
-        let stored = try #require(try await services.store.piSessionStates().first)
+        let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.stateSince == working.stateSince && stored.busySince == working.busySince)
     }
 
@@ -143,12 +143,12 @@ struct MacSyncTests {
         var master = session("s1", state: .done(aborted: false))
         master.subagents = [PiSubagent(name: "ui", kind: "thinking"), PiSubagent(name: "core", kind: "idle")]
         try await services.consumePiChanges(changes([.appeared(master)]))
-        #expect(try await services.store.piSessionStates().first?.detail == "子代理：ui 工作中 · core 空闲")
+        #expect(try await services.store.allPiSessionStates().first?.detail == "子代理：ui 工作中 · core 空闲")
 
         var busy = master
         busy.state = .tool(name: "bash", running: ["bash"], detail: "swift test")
         try await services.consumePiChanges(changes([.stateChanged(busy, from: master.state)]))
-        #expect(try await services.store.piSessionStates().first?.detail == "bash · swift test")
+        #expect(try await services.store.allPiSessionStates().first?.detail == "bash · swift test")
     }
 
     @Test func 会话近况写进同步记录() async throws {
@@ -158,18 +158,18 @@ struct MacSyncTests {
         asked.question = PiPrompt(id: "p-1", kind: "select", text: "选哪个？", options: ["A", "B"])
         try await services.consumePiChanges(changes([.appeared(asked), .infoChanged(asked)]))
 
-        let stored = try #require(try await services.store.piSessionStates().first)
+        let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.lastPrompt == "修好登录" && stored.lastReply == "改好了" && stored.question == PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"]))
     }
 
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
         var named = session("s1", cwd: "/work/app")
         try await services.consumePiChanges(changes([.appeared(named)]))
-        #expect(try await services.store.piSessionStates().first?.title == "app")  // 没有名字和消息时是文件夹名
+        #expect(try await services.store.allPiSessionStates().first?.title == "app")  // 没有名字和消息时是文件夹名
 
         named.name = "登录修复"
         try await services.consumePiChanges(changes([.infoChanged(named)]))
-        #expect(try await services.store.piSessionStates().first?.title == "登录修复")
+        #expect(try await services.store.allPiSessionStates().first?.title == "登录修复")
     }
 
     @Test func 启动时把这台Mac遗留的记录标为已结束_不动别的Mac() async throws {
@@ -180,7 +180,7 @@ struct MacSyncTests {
 
         try await services.resetPiState()
 
-        let states = Dictionary(uniqueKeysWithValues: try await services.store.piSessionStates().map { ($0.sessionID, $0.state) })
+        let states = Dictionary(uniqueKeysWithValues: try await services.store.allPiSessionStates().map { ($0.sessionID, $0.state) })
         #expect(states == ["old": .known(.ended), "theirs": .known(.thinking)])
     }
 

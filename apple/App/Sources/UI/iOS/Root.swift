@@ -134,7 +134,7 @@ private struct TabsRoot: View {
             .accessibilityHidden(true)
         }
         .observing(services.store, [.piSessionStates], into: $waiting) { store in
-            try store.piSessionStates().filter { $0.state == .known(.waitingForUser) }.count
+            try store.piSessionPage(.live).items.filter { $0.state.state == .known(.waitingForUser) }.count
         }
     }
 

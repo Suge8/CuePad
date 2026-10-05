@@ -44,7 +44,7 @@ struct ActivityScreen: View {
         .navigationTitle("Pi")
         .refreshable { await services.syncNow() }
         .observing(services.store, [.piSessionStates], into: $sessions, onError: workspace.fail) {
-            PiSessionState.inListOrder(try $0.piSessionStates())
+            PiSessionState.inListOrder(try $0.piSessionPage(PiSessionQuery()).items.map(\.state))
         }
     }
 }

@@ -113,6 +113,18 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE directoryBindings (
+        "___recordID" REFERENCE QUERYABLE,
+        projectID     STRING,
+        hostID        STRING,
+        hostName      ENCRYPTED STRING,
+        folder        ENCRYPTED STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE tags (
         "___recordID" REFERENCE QUERYABLE,
         color         STRING,

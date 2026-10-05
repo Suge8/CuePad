@@ -236,8 +236,8 @@ import Testing
   @Test func libraryFromAnotherSchemaVersionIsRefused() throws {
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 6;")
-    #expect(throws: CueStoreError.unsupportedSchemaVersion(6)) { try CueStore(url: url) }
+    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 7;")
+    #expect(throws: CueStoreError.unsupportedSchemaVersion(7)) { try CueStore(url: url) }
   }
 
   /// 已经在用的旧资料库（结构版本 1）打开时逐步升级到最新，数据保留：Pi 会话状态多了文件夹名与近况各列。
@@ -247,6 +247,7 @@ import Testing
       ALTER TABLE piSessionStates DROP COLUMN folder; ALTER TABLE piSessionStates DROP COLUMN lastPrompt;
       ALTER TABLE piSessionStates DROP COLUMN lastReply; ALTER TABLE piSessionStates DROP COLUMN question;
       ALTER TABLE piSessionStates DROP COLUMN busySince; ALTER TABLE piSessionStates DROP COLUMN launchToken;
+      DROP INDEX piSessionStates_state; DROP TABLE directoryBindings;
       PRAGMA user_version = 1;
       """)
 
@@ -255,6 +256,7 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "保留")
     let added = "('folder', 'lastPrompt', 'lastReply', 'question', 'busySince', 'launchToken')"
     #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name IN \(added)").count == 6)
-    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["5"]])
+    #expect(try RawDB(fixture.url).rows("SELECT name FROM sqlite_master WHERE name = 'directoryBindings'").count == 1)
+    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["6"]])
   }
 }

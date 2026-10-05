@@ -220,3 +220,10 @@ final class TestApp {
     }
     #endif
 }
+
+extension CueStore {
+    /// 全部会话记录（测试核对用；界面按范围与页读，见 `piSessionPage`）。
+    func allPiSessionStates() throws -> [PiSessionState] {
+        try piSessionPage(PiSessionQuery(limit: .max)).items.map(\.state)
+    }
+}
