@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 /// Pi 会话状态记录（Mac 写，按会话一条）：开始工作、等你确认、完成、出错立即写；工作中的细节变化合并且有最短间隔；
-/// 会话结束记为"已结束"并保留近况，过了保留期才删。
+/// 会话结束记为"已结束"并保留近况；历史会话（本机会话文件索引）写成同一种记录，会话文件被删时才删。
 @Suite struct PiStateTests {
   let fixture = try! Fixture()
   let clock = ManualTiming()
@@ -168,16 +168,65 @@ import Testing
     #expect(try await states()["s1"]?.state == .known(.ended))
   }
 
-  @Test func endedRecordsAreDeletedAfterTheRetentionPeriod() async throws {
+  @Test func endedRecordsAreKept() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "old", state: .settled)
     try await recorder.end(sessionID: "old")
-    clock.advance(PiStateRecorder.endedRetention + .seconds(60))
+    clock.advance(.seconds(90 * 24 * 3600))
 
     try await recorder.update(sessionID: "new", state: .settled)
     try await recorder.end(sessionID: "new")
 
-    #expect(try await store.piSessionStates().map(\.sessionID) == ["new"])
+    #expect(Set(try await store.piSessionStates().map(\.sessionID)) == ["old", "new"])
+  }
+
+  // MARK: 历史会话
+
+  private func indexed(_ id: String, title: String = "修好登录", cwd: String = "/work/app", at seconds: TimeInterval = 1_000) -> PiSession {
+    PiSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd, title: title, lastActivityAt: Date(timeIntervalSince1970: seconds))
+  }
+
+  @Test func anIndexedSessionIsAnEndedSyncRecordKeyedByItsSessionID() async throws {
+    let project = try await store.createProject(name: "App", color: "#111")
+    try await store.setDirectory("/work", for: project.id)
+
+    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
+
+    let state = try #require(try await states()["s1"])
+    #expect(state.id == PiSessionState.recordID(sessionID: "s1") && state.state == .known(.ended) && state.hostID == "mac-a")
+    #expect(state.title == "修好登录" && state.folder == "app" && state.projectID == project.id)
+    #expect(state.stateSince == Date(timeIntervalSince1970: 1_000))
+  }
+
+  /// 同一个会话（Pi 重启、恢复后会话 id 不变）始终是同一条记录：在线时由状态写入方负责，索引不覆盖；结束后仍是它。
+  @Test func aSessionIsOneRecordAcrossHistoryRestartAndEnd() async throws {
+    let recorder = recorder()
+    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
+    try await recorder.update(sessionID: "s1", state: .thinking, title: "修好登录")
+    try await store.upsertPiSession(indexed("s1", title: "改了名", at: 2_000), host: "mac-a")
+    #expect(try await states()["s1"]?.state == .known(.thinking))
+
+    try await recorder.end(sessionID: "s1")
+    #expect(try await store.piSessionStates().count == 1)
+    #expect(try await states()["s1"]?.state == .known(.ended))
+  }
+
+  /// 索引内容没变时不改记录（不然每次启动都会把几千条历史重新上传）。
+  @Test func reindexingAnUnchangedSessionDoesNotTouchItsRecord() async throws {
+    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
+    let first = try #require(try await states()["s1"]).modifiedAt
+    try await Task.sleep(for: .milliseconds(5))
+    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
+    #expect(try await states()["s1"]?.modifiedAt == first)
+  }
+
+  @Test func recordsOfDeletedSessionFilesAreDeleted() async throws {
+    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
+    try await store.upsertPiSession(indexed("s2"), host: "mac-a")
+
+    try await store.retainPiSessions(paths: [indexed("s1").path], host: "mac-a")
+
+    #expect(try await store.piSessionStates().map(\.sessionID) == ["s1"])
   }
 
   @Test func resetEndsOnlyThisHostsLeftoverRecords() async throws {
