@@ -30,17 +30,17 @@ extension CueStore {
 
   public func project(_ id: UUID) throws -> Project? { try find(Project.self, id) }
 
-  /// 工作目录（如 Pi 会话的 cwd）属于哪个项目：项目绑定的目录是该目录本身或其祖先，按路径分段比较
+  /// 工作目录（如 Pi 会话的 cwd）属于哪个项目：两边先换成唯一写法（`canonicalPath`），项目绑定的目录是该目录本身或其祖先，按路径分段比较
   /// （`/a/proj` 不会误配 `/a/project`）；多个命中取绑定目录最深的，同深度取项目列表里靠前的。
   /// 只看未删除的项目，依据本机的目录绑定（`setDirectory`）。界面与命令行共用这唯一一份规则。
   public func project(containing directory: URL) throws -> Project? {
-    let target = Self.pathSegments(directory.standardizedFileURL.path)
+    let target = Self.pathSegments(Self.canonicalPath(directory.path))
     let bound = try db.query(
       """
       SELECT p.id, d.directory FROM projectDirectories d JOIN projects p ON p.id = d.projectID
       WHERE p.deletedAt IS NULL ORDER BY \(Self.projectOrder("p"))
       """
-    ) { (id: $0.uuid(0), segments: Self.pathSegments($0.text(1))) }
+    ) { (id: $0.uuid(0), segments: Self.pathSegments(Self.canonicalPath($0.text(1)))) }
 
     var best: (id: UUID, depth: Int)?
     for candidate in bound where !candidate.segments.isEmpty && target.starts(with: candidate.segments) {
@@ -50,6 +50,14 @@ extension CueStore {
   }
 
   private static func pathSegments(_ path: String) -> [Substring] { path.split(separator: "/") }
+
+  /// 同一个目录的唯一写法：由文件系统解析（`realpath`）——符号链接（含 `/tmp` → `/private/tmp`）换成真实路径，
+  /// 大小写换成磁盘上的（区分大小写的卷上写错大小写就是另一个、不存在的目录）。不存在的路径只做标准化。
+  static func canonicalPath(_ path: String) -> String {
+    guard let resolved = realpath(path, nil) else { return URL(filePath: path).standardizedFileURL.path }
+    defer { free(resolved) }
+    return String(cString: resolved)
+  }
 
   /// 某项目（nil = 未归档）里可见的卡片，按手动顺序。
   public func cards(in project: UUID?) throws -> [Card] {
