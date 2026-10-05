@@ -26,7 +26,7 @@ nonisolated struct ShelfData: Sendable {
         let counts = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) })
         let openTasks = Dictionary(grouping: try store.tasks(), by: \.projectID).mapValues(\.count)
         let pi = PiSessionState.byProject(try store.piSessionPage(.live).items.map(\.state))
-        let entries = try SidebarOrder.projects(store.projects(), summaries: summaries).map { project in
+        let entries = try store.projects().map { project in
             let latest = try store.search(SearchQuery(projects: [project.id]), limit: 1).cards.first
             return Entry(
                 project: project, cardCount: counts[project.id] ?? 0, openTasks: openTasks[project.id] ?? 0,

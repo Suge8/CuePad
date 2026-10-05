@@ -37,7 +37,7 @@ final class Workspace {
     }
 
     #if os(macOS)
-    /// Pi 会话正忙时待用户选择插话或排队的一次发送。
+    /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送。
     struct BusySend {
         var text: String
         var session: CuePi.PiSession.ID
@@ -259,16 +259,14 @@ final class Workspace {
         catalogAttempt += 1
     }
 
-    /// 保存的当前项目以 Store 为准：不存在或已进回收站时回落到侧栏第一个有效项目，没有项目则到未归档，并纠正设置。
+    /// 保存的当前项目以 Store 为准：不存在或已进回收站时回落到第一个有效项目（`store.projects()` 的顺序），没有项目则到未归档，并纠正设置。
     /// 根视图在项目表每次变化后调用。
     func reconcileCurrentProject() async {
         guard let saved = holder.currentProject else { return }
         do {
             let projects = try await services.store.projects()
             guard !projects.contains(where: { $0.id == saved }) else { return }
-            let summaries = try await services.store.projectSummaries()
-            let fallback = SidebarOrder.projects(projects, summaries: summaries).first?.id
-            if holder.currentProject == saved { holder.currentProject = fallback }
+            if holder.currentProject == saved { holder.currentProject = projects.first?.id }
         } catch {
             fail(error)
         }

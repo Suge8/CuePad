@@ -73,9 +73,10 @@ private struct DigestKey: Equatable {
     var sessionID: String?
 }
 
-/// 回复框：发送是输入框里右下角的圆钮。Pi 空闲时直接发；正忙时点它是等它做完再说，长按选"马上说"打断它。
-/// 输入框聚焦或带着卡片时露出要带上的卡片与同步提示。发出后清空，请求马上贴到它上方。回答弹窗在问题卡上，不在这里。
-/// 同步到不了 Mac 时不能发，写明原因。
+/// 回复框：发送是输入框里右下角的圆钮。Pi 空闲时直接发；正忙时点它是等它做完再说，长按选马上说。
+/// 等你确认时按问题类型（`MacDelivery.reply`）：文字型问题它就是作答框；选择、确认型收成一行"先在上面作答"，
+/// 这里答不了的写明要在 Mac 上回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
+/// 输入框聚焦或带着卡片时露出要带上的卡片与同步提示。发出后清空，请求马上贴到它上方。同步到不了 Mac 时不能发，写明原因。
 private struct ReplyBar: View {
     let session: PiSessionState
     @Binding var draft: Navigation.Outbox?
@@ -93,18 +94,40 @@ private struct ReplyBar: View {
         [draft?.content, trimmed.nonEmpty].compactMap { $0 }.joined(separator: "\n\n")
     }
 
-    /// 第一个是点发送的方式，第二个（忙时的马上说）在长按菜单里。
+    private var reply: PiReply { MacDelivery.reply(to: session, hasImages: !CardText(content).images.isEmpty) }
+
+    /// 发消息时可用的方式：第一个是点发送的方式，第二个（忙时的马上说）在长按菜单里。
     private var modes: [DeliveryMode] {
-        MacDelivery.modes(for: session, hasImages: !CardText(content).images.isEmpty)
+        if case .message(let modes) = reply { modes } else { [] }
+    }
+
+    private var answering: PiQuestion? {
+        if case .answer(let question) = reply { question } else { nil }
     }
 
     private var reachable: Bool { services.reachesPiHost }
-    private var canSend: Bool { !content.isEmpty && reachable && !sending }
+    private var canSend: Bool { !(answering == nil ? content : trimmed).isEmpty && reachable && !sending }
 
     var body: some View {
+        switch reply {
+        case .answerAbove: notice("先在上面作答", systemImage: "arrow.up")
+        case .unanswerable: notice("这个问题要在 Mac 上回答", systemImage: "desktopcomputer")
+        case .message, .answer: composer
+        }
+    }
+
+    /// 等你确认、不能发自由文本时收成的一行。
+    private func notice(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.subheadline).foregroundStyle(palette.ink2)
+            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .glass(in: .rect(cornerRadius: 30))
+    }
+
+    private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
             if focused || draft != nil, !reachable { SyncHint(status: services.syncStatus) }
-            if let draft { attachment(draft) }
+            if let draft, answering == nil { attachment(draft) }
             HStack(alignment: .bottom, spacing: 4) {
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(1...5)
@@ -123,9 +146,17 @@ private struct ReplyBar: View {
     }
 
     @ViewBuilder private var sendControl: some View {
-        if modes.count > 1, let queued = modes.first, let interrupt = modes.last {
+        if answering != nil {
+            Button(action: answer) { SendGlyph(enabled: canSend) }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .accessibilityLabel("回答")
+        } else if modes.count > 1, let queued = modes.first, let interrupt = modes.last {
             Menu {
-                Button("马上说（打断它正在做的）", systemImage: "bolt") { send(interrupt) }
+                Button { send(interrupt) } label: {
+                    Label(interrupt.label, systemImage: "bolt")
+                    if let explanation = interrupt.explanation { Text(explanation) }
+                }
             } label: {
                 SendGlyph(enabled: canSend)
             } primaryAction: {
@@ -134,8 +165,8 @@ private struct ReplyBar: View {
             .menuIndicator(.hidden)
             .buttonStyle(.plain)
             .disabled(!canSend)
-            .accessibilityLabel("等它做完再说")
-            .accessibilityHint("长按可以马上说，打断它正在做的")
+            .accessibilityLabel(queued.label)
+            .accessibilityHint("\(queued.explanation ?? "")；长按可以\(interrupt.label)，\(interrupt.explanation ?? "")")
         } else {
             Button { if let mode = modes.first { send(mode) } } label: { SendGlyph(enabled: canSend) }
                 .buttonStyle(.plain)
@@ -144,10 +175,11 @@ private struct ReplyBar: View {
         }
     }
 
-    /// 忙时的提示写明点发送是什么、长按是什么。
+    /// 忙时的提示写明点发送是什么、长按是什么；作答时写明在回答问题。
     private var placeholder: String {
+        if answering != nil { return "在这里回答上面的问题" }
         if draft != nil { return "补一句（可不填）" }
-        return modes.first == .followUp ? "等它做完再说 · 长按发送可马上说" : "回复 \(session.title)"
+        return modes.first == .followUp ? "\(DeliveryMode.followUp.label) · 长按发送可\(DeliveryMode.steer.label)" : "回复 \(session.title)"
     }
 
     /// 带上的卡片或任务：标题、图片数，可移除。
@@ -171,6 +203,19 @@ private struct ReplyBar: View {
         .background(palette.paper, in: .rect(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
+    }
+
+    private func answer() {
+        let value = PiAnswerValue.text(trimmed)
+        guard canSend else { return }
+        sending = true
+        workspace.attempt {
+            defer { sending = false }
+            _ = try await services.answer(value, to: session)
+            text = ""
+            focused = false
+            sentCount += 1
+        }
     }
 
     private func send(_ mode: DeliveryMode) {
