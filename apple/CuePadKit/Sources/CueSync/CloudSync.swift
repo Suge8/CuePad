@@ -120,7 +120,6 @@ public actor CloudSync {
 /// 把同步逻辑的登记落到 CKSyncEngine 的待办状态上。
 private actor EngineQueue: ChangeQueue {
   private var engine: CKSyncEngine?
-  private var puller: ZoneChangePuller?
 
   func attach(_ engine: CKSyncEngine?) { self.engine = engine }
 
