@@ -15,10 +15,10 @@ nonisolated private struct ProjectPage: Sendable {
     }
 }
 
-/// 项目页（nil = 未归档）：目标与下一步 → 工作集（置顶在前）→ 更早。与 Mac 同一套上墙规则。
+/// 项目页：目标与下一步 → 工作集（置顶在前）→ 更早。与 Mac 同一套上墙规则。
 /// 整页是一个懒加载列表：大项目只创建屏幕内的卡与行。
 struct ProjectScreen: View {
-    let projectID: UUID?
+    let projectID: UUID
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
@@ -56,12 +56,11 @@ struct ProjectScreen: View {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
         .observing(services.store, [.piSessionStates, .projects], id: projectID, into: $pi, onError: workspace.fail) { [projectID] store in
-            guard let projectID else { return PiSessionList(now: [], ended: [], total: 0) }
-            return try PiSessionList.read(text: "", project: projectID, historyLimit: FocusCard.endedShown, from: store)
+            try PiSessionList.read(text: "", project: projectID, historyLimit: FocusCard.endedShown, from: store)
         }
         .onChange(of: page?.stamps) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
-        .onChange(of: project == nil) { _, gone in if gone, projectID != nil { navigation.pop(projectID) } }
+        .onChange(of: project == nil) { _, gone in if gone { navigation.pop(projectID) } }
     }
 
     @ViewBuilder
@@ -114,12 +113,12 @@ struct ProjectScreen: View {
     private var project: Project? { workspace.catalog?.project(projectID) }
 
     private var title: String {
-        projectID == nil ? "未归档" : project?.name ?? ""
+        project?.name ?? ""
     }
 
     private var subtitle: String {
         let catalog = workspace.catalog
-        let directory = projectID.flatMap { catalog?.directories[$0] }.map(Self.homeRelative)
+        let directory = catalog?.directories[projectID].map(Self.homeRelative)
         let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 张卡片" : nil }
         return [directory, count].compactMap { $0 }.joined(separator: " · ")
     }

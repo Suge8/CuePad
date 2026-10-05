@@ -182,7 +182,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     }
 }
 
-/// 一个会话三层：左边状态标；名字与时长；在哪（项目或文件夹） · 状态词（带色）；一句进度或结果（没有不占行）。已结束的整行更淡。
+/// 一个会话三层：左边状态标；名字与时长；在哪（项目或文件夹） · 状态词（带色）（Mac 在后台托管的再写"后台"）；一句进度或结果（没有不占行）。已结束的整行更淡。
 private struct SessionRow: View {
     let item: PiSessionListItem
     @Environment(Navigation.self) private var navigation
@@ -203,6 +203,7 @@ private struct SessionRow: View {
                     HStack(spacing: 4) {
                         if let place { Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1) }
                         Text(session.state.label).fontWeight(.medium).foregroundStyle(session.state.tint(palette))
+                        if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
                     }
                     .font(.subheadline)
                     if let progress = PiProgress.line(of: session) {

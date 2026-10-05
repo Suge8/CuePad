@@ -41,7 +41,7 @@ nonisolated struct ShelfData: Sendable {
     }
 }
 
-/// iPhone 首页：项目书架。顶部一行"今天 · N 张"进入今天流；置顶项目是大卡，其余按最近排成行，都带目标、卡片数、任务数与 Pi 状态点。
+/// iPhone 首页：项目书架。有没归类的想法时最上面一行提醒去整理；"今天 · N 张"进入今天流；置顶项目是大卡，其余按最近排成行，都带目标、卡片数、任务数与 Pi 状态点。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -85,7 +85,12 @@ struct ShelfScreen: View {
         let pinned = data.entries.filter(\.project.isPinned)
         let recent = data.entries.filter { !$0.project.isPinned }
         VStack(alignment: .leading, spacing: 22) {
-            if data.todayCount > 0 { TodayLink(count: data.todayCount) }
+            if data.inboxCount > 0 || data.todayCount > 0 {
+                VStack(spacing: 10) {
+                    if data.inboxCount > 0 { InboxReminder(count: data.inboxCount) }
+                    if data.todayCount > 0 { TodayLink(count: data.todayCount) }
+                }
+            }
             if data.entries.isEmpty && data.inboxCount == 0 {
                 EmptyShelf { navigation.projectForm = .init() }
             }
@@ -96,17 +101,13 @@ struct ShelfScreen: View {
                     ForEach(pinned) { PinnedShelfCard(entry: $0) }
                 }
             }
-            if !recent.isEmpty || data.inboxCount > 0 {
+            if !recent.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionHeader(title: "最近")
                     VStack(spacing: 0) {
                         ForEach(Array(recent.enumerated()), id: \.element.id) { index, entry in
                             if index > 0 { Divider().padding(.leading, ShelfRow.dividerInset(typeSize)) }
-                            ShelfRow(route: .project(entry.project.id), entry: entry)
-                        }
-                        if data.inboxCount > 0 {
-                            if !recent.isEmpty { Divider().padding(.leading, ShelfRow.dividerInset(typeSize)) }
-                            ShelfRow(route: .inbox, entry: nil, inboxCount: data.inboxCount)
+                            ShelfRow(entry: entry)
                         }
                     }
                     .clipShape(.rect(cornerRadius: 16, style: .continuous))
@@ -116,6 +117,29 @@ struct ShelfScreen: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
+    }
+}
+
+/// 有没归类的想法时书架最上面的提醒：点它去未归档整理。
+private struct InboxReminder: View {
+    let count: Int
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        NavigationLink(value: Navigation.Route.inbox) {
+            HStack(spacing: 10) {
+                Image(systemName: "tray").foregroundStyle(palette.attention).accessibilityHidden(true)
+                Text("\(count) 条想法还没归类").font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+                Spacer(minLength: 8)
+                Text("去整理").font(.subheadline.weight(.medium)).foregroundStyle(palette.ink2)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 16).frame(minHeight: 52)
+            .contentShape(.rect)
+            .paper(radius: 16)
+        }
+        .buttonStyle(RowPressStyle())
     }
 }
 
@@ -208,11 +232,9 @@ private struct EmptyShelf: View {
     }
 }
 
-/// 书架的一行：项目（副标题是目标，没有目标时是最近一张卡）或未归档。
+/// 书架的一行：项目（副标题是目标，没有目标时是最近一张卡）。
 private struct ShelfRow: View {
-    let route: Navigation.Route
-    let entry: ShelfData.Entry?
-    var inboxCount = 0
+    let entry: ShelfData.Entry
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 辅助字号下并进名称一行的图标随字号放大；平时在固定大小的图标块里。
@@ -228,26 +250,26 @@ private struct ShelfRow: View {
     }
 
     private var counts: some View {
-        ShelfCounts(cards: entry?.cardCount ?? inboxCount, tasks: entry?.openTasks ?? 0)
+        ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
     }
 
     var body: some View {
-        NavigationLink(value: route) {
+        NavigationLink(value: Navigation.Route.project(entry.project.id)) {
             HStack(spacing: 12) {
                 // 辅助功能大字号下图标并进名称一行，文字从行首开始，不空出一列图标宽
                 if !stacked {
-                    ProjectGlyph(project: entry?.project, size: 17)
+                    ProjectGlyph(project: entry.project, size: 17)
                         .frame(width: Self.tile, height: Self.tile)
-                        .background(entry.map { Palette.projectTint($0.project.color).opacity(0.12) } ?? palette.fill, in: .rect(cornerRadius: 10))
+                        .background(Palette.projectTint(entry.project.color).opacity(0.12), in: .rect(cornerRadius: 10))
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        if stacked { ProjectGlyph(project: entry?.project, size: glyph) }
-                        Text(entry?.project.name ?? "未归档").font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
-                        if let pi = entry?.pi { PiStateDot(state: pi, size: 6, announces: true) }
+                        if stacked { ProjectGlyph(project: entry.project, size: glyph) }
+                        Text(entry.project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
+                        if let pi = entry.pi { PiStateDot(state: pi, size: 6, announces: true) }
                     }
                     Group {
-                        if entry?.goal?.isEmpty == false {
+                        if entry.goal?.isEmpty == false {
                             Text("\(Image(systemName: "scope")) \(subtitle)").accessibilityLabel(subtitle)
                         } else {
                             Text(subtitle)
@@ -267,12 +289,11 @@ private struct ShelfRow: View {
         }
         .buttonStyle(RowPressStyle())
         .background(palette.paper)
-        .projectActions(entry?.project, radius: 16, pi: entry?.pi)
+        .projectActions(entry.project, radius: 16, pi: entry.pi)
         .accessibilityElement(children: .combine)
     }
 
     private var subtitle: String {
-        guard let entry else { return "待整理" }
         if let goal = entry.goal, !goal.isEmpty { return goal }
         if let latest = entry.latest { return "\(latest.title.nonEmpty ?? "空白卡片") · \(DateLabel.short(latest.date))" }
         return "还没有卡片"

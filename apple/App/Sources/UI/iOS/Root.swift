@@ -33,7 +33,9 @@ struct IOSRootView: View {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
             }
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
-            .sheet(item: $navigation.capture) { CaptureSheet(capture: $0) }
+            .sheet(item: Binding(get: { navigation.captureBars == 0 ? navigation.capture : nil }, set: { navigation.capture = $0 })) {
+                CaptureSheet(capture: $0)
+            }
             .sheet(item: $navigation.outbox) { SessionPicker(outbox: $0) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
             .sheet(item: $navigation.newSession) { NewSessionSheet(start: $0) }
@@ -84,7 +86,7 @@ struct RouteView: View {
         switch route {
         case .shelf: ShelfScreen()
         case .project(let id): ProjectScreen(projectID: id)
-        case .inbox: ProjectScreen(projectID: nil)
+        case .inbox: InboxScreen()
         case .today: TodayScreen()
         case .trash: TrashScreen()
         case .settings: SettingsScreen()
@@ -151,22 +153,35 @@ private struct TabsRoot: View {
 }
 
 /// 顶部的短提示：操作结果与错误。错误伴随触感。
+/// 顶部的一行提示；带去处的（如随手记的落点）点它过去。
 private struct NoticeBanner: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
             if let notice = workspace.notice {
-                Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                Button { if let link = notice.link { go(link) } } label: {
+                    HStack(spacing: 6) {
+                        Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        if notice.link != nil {
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+                                .accessibilityHidden(true)
+                        }
+                    }
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(notice.isError ? AnyShapeStyle(palette.failure) : AnyShapeStyle(palette.ink))
                     .padding(.horizontal, 16).padding(.vertical, 10)
-                    .glass(in: .capsule)
-                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-                    .id(notice.id)
-                    .accessibilityAddTraits(.updatesFrequently)
+                    .glass(in: .capsule, interactive: notice.link != nil)
+                }
+                .buttonStyle(.plain)
+                .disabled(notice.link == nil)
+                .accessibilityHint(notice.link == nil ? "" : "去那里看看")
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                .id(notice.id)
+                .accessibilityAddTraits(.updatesFrequently)
             }
         }
         .animation(Motion.quick, value: workspace.notice)
@@ -176,6 +191,15 @@ private struct NoticeBanner: View {
         }
         .onChange(of: workspace.notice) { _, notice in
             if let notice { AccessibilityNotification.Announcement(notice.text).post() }
+        }
+    }
+
+    private func go(_ link: Workspace.Link) {
+        workspace.notice = nil
+        switch link {
+        case .project(let id?): navigation.show(project: id, workspace: workspace)
+        case .project(nil): navigation.showInbox()
+        case .tasks: if navigation.layout == .split { navigation.panel = .tasks } else { navigation.tab = .tasks }
         }
     }
 }

@@ -19,6 +19,8 @@ struct NewSessionSheet: View {
     @State private var progress: LaunchProgress?
     @State private var sending = false
 
+    /// 项目按所有项目选择器的同一个顺序（`ProjectCatalog.projects`）。
+    private var projectOrder: [Project] { workspace.catalog?.projects ?? [] }
     private var chosen: LaunchPlace? { places?.first { $0.id == choice } ?? places?.first }
     /// 发出且还没失败：表单锁住，等它开好。
     private var inFlight: Bool { sending || (launched != nil && progress?.request?.status != .known(.failed)) }
@@ -52,8 +54,8 @@ struct NewSessionSheet: View {
         }
         .interactiveDismissDisabled(inFlight)
         .onAppear { if launched == nil { launched = start.launched } }
-        .observing(services.store, [.directoryBindings, .piSessionStates, .projects], into: $places, onError: workspace.fail) { store in
-            try LaunchPlace.all(from: store)
+        .observing(services.store, [.directoryBindings, .piSessionStates], id: projectOrder, into: $places, onError: workspace.fail) {
+            [projectOrder] store in try LaunchPlace.all(projects: projectOrder, from: store)
         }
         .observing(services.store, [.deliveryRequests, .piSessionStates], id: launched, into: $progress, onError: workspace.fail) {
             [launched] store in
@@ -165,18 +167,18 @@ nonisolated struct LaunchPlace: Identifiable, Sendable, Equatable {
     let launch: PiLaunchPlace
     let hostID: String
 
-    static func all(from store: isolated CueStore) throws -> [LaunchPlace] {
-        let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
-        let bindings = try store.directoryBindings().filter { projects[$0.projectID] != nil }
-        let macs = Dictionary(grouping: bindings, by: \.projectID).mapValues(\.count)
-        let bound = bindings
-            .sorted { (projects[$0.projectID]?.sortKey ?? "", $0.hostName) < (projects[$1.projectID]?.sortKey ?? "", $1.hostName) }
-            .map { binding in
+    /// `projects` 是界面的项目顺序；同一项目的几台 Mac 按查询给的顺序（Mac 名）。
+    static func all(projects: [Project], from store: isolated CueStore) throws -> [LaunchPlace] {
+        let bindings = Dictionary(grouping: try store.directoryBindings(), by: \.projectID)
+        let bound = projects.flatMap { project in
+            let macs = bindings[project.id] ?? []
+            return macs.map { binding in
                 LaunchPlace(
-                    id: binding.id.uuidString, name: projects[binding.projectID]?.name ?? binding.folder,
-                    detail: macs[binding.projectID, default: 0] > 1 ? "\(binding.folder) · \(binding.hostName)" : binding.folder,
-                    project: projects[binding.projectID], launch: .project(binding.projectID), hostID: binding.hostID)
+                    id: binding.id.uuidString, name: project.name,
+                    detail: macs.count > 1 ? "\(binding.folder) · \(binding.hostName)" : binding.folder,
+                    project: project, launch: .project(project.id), hostID: binding.hostID)
             }
+        }
         var seen: Set<String> = []
         var folders: [LaunchPlace] = []
         for item in try store.piSessionPage(PiSessionQuery(limit: scanned)).items where item.project == nil {

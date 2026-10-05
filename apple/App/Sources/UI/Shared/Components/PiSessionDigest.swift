@@ -61,11 +61,15 @@ private struct StatusBlock: View {
                     if let place = PiPlace.name(of: session, project: project) {
                         Text("· \(place)").font(.subheadline).foregroundStyle(palette.ink3).lineLimit(1)
                     }
+                    if session.hosted, session.state != .known(.ended) {
+                        Text("· 后台").font(.subheadline).foregroundStyle(palette.ink3)
+                    }
                 }
                 .accessibilityElement(children: .combine)
                 if session.state.isWorking, let action = PiProgress.line(of: session) {
                     Text(action).font(session.detailIsCode ? .subheadline.monospaced() : .subheadline).foregroundStyle(palette.ink2).lineLimit(2)
                 }
+                if !session.subagents.isEmpty { SubagentList(subagents: session.subagents) }
             }
             switch session.state.known {
             case .waitingForUser:
@@ -83,6 +87,27 @@ private struct StatusBlock: View {
                 EmptyView()
             }
         }
+    }
+}
+
+/// 子代理一行一个：状态标 + 名字 + 在干什么（带色），与会话状态同一套图标与颜色。
+private struct SubagentList: View {
+    let subagents: [PiSubagentState]
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(subagents.enumerated()), id: \.offset) { _, agent in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    PiStateDot(state: agent.workState, size: 7)
+                    Text(agent.name).font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(agent.activityLabel).font(.footnote.weight(.medium)).foregroundStyle(agent.workState.tint(palette))
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.leading, 2).padding(.top, 2)
     }
 }
 
@@ -370,7 +395,8 @@ struct DeliveryRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title).font(.body).foregroundStyle(palette.ink).lineLimit(2)
                 Spacer(minLength: 8)
-                DeliveryStatusLabel(request: request)
+                // 发给已结束的会话：Mac 先在后台把它唤醒再送达
+                DeliveryStatusLabel(request: request, waking: session?.state == .known(.ended))
             }
             Text(request.launch == nil ? "\(DateLabel.short(request.createdAt)) · \(request.mode.label)" : DateLabel.short(request.createdAt))
                 .font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
@@ -427,13 +453,15 @@ struct DeliveryRow: View {
 /// 请求的送达情况：送达中（等 Mac 接手与正在发送都算）、已送达（往返多久）、没能送达。
 struct DeliveryStatusLabel: View {
     let request: DeliveryRequest
+    /// 目标会话已结束：在途时写"正在唤醒…"。
+    var waking = false
     @Environment(\.palette) private var palette
 
     var body: some View {
         Group {
             switch request.status {
             case .known(.pending), .known(.executing):
-                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text("送达中") }.foregroundStyle(palette.ink2)
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(waking ? "正在唤醒…" : "送达中") }.foregroundStyle(palette.ink2)
             case .known(.succeeded):
                 Label(request.roundTrip.map { "已送达 · \(Self.text($0))" } ?? "已送达", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(palette.ink2)
