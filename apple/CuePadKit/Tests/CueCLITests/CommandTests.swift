@@ -11,6 +11,7 @@ import Testing
     let alpha = try await sb.project("Alpha")
     _ = try await sb.project("Beta")
     _ = try await sb.store.createCard(in: alpha.id, body: "x")
+    try await sb.store.updateProject(alpha.id) { $0.isPinned = true }  // 置顶的在前
 
     let projects = try array(try await sb.json("project", "list"))
     #expect(projects.compactMap { $0.string("name") } == ["Alpha", "Beta"])

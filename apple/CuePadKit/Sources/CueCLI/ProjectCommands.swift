@@ -3,7 +3,7 @@ import CueStore
 extension Command {
   static let project: [Command] = [
     Command(
-      path: ["project", "list"], summary: "列出项目（手动顺序）",
+      path: ["project", "list"], summary: "列出项目（置顶在前，其余按最近活动）",
       notes: Schema.output("[Project]", Schema.project) + "\n未归档的卡片用 cuepad card list --inbox 查看。"
     ) { call in
       try call.args.expect()
