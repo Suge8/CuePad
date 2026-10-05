@@ -60,7 +60,8 @@ struct PiSessionDetail: View {
                 } else {
                     scroll.frame(maxHeight: Self.maxDigestHeight).fixedSize(horizontal: false, vertical: true)
                 }
-                DeliveryStack(deliveries: digest.deliveries, session: session.state == .known(.ended) ? nil : session)
+                // 已结束的也照常传：在途时写"正在唤醒…"，失败了也能重发（Mac 会在后台把它恢复起来）
+                DeliveryStack(deliveries: digest.deliveries, session: session)
                     .padding(.horizontal, 14).padding(.bottom, 10)
                 Divider()
                 DetailReply(session: session, live: live).padding(14)
@@ -75,8 +76,10 @@ struct PiSessionDetail: View {
     }
 }
 
-/// 发给这个会话，方式按共用规则（`MacDelivery`）。本机在线的走"发给当前目标"同一条通道（`Workspace.send`）；
-/// 已结束的与别的 Mac 上的写一条投送请求给它所在的 Mac（已结束的由那台 Mac 在后台恢复后再发），进度在上面"你发过去的"里。
+/// 发给这个会话（与手机同一种回复框：发送钮在输入框里）。方式按共用规则（`MacDelivery`）：点发送钮是默认方式——
+/// Pi 忙时是等它做完再说——其余方式（马上说、只放进输入框）按住发送钮出来。
+/// 本机在线的走"发给当前目标"同一条通道（`Workspace.send`）；已结束的与别的 Mac 上的写一条投送请求给它所在的 Mac
+/// （已结束的由那台 Mac 在后台唤醒后再送达），进度在上面"你发过去的"里。
 private struct DetailReply: View {
     let session: PiSessionState
     let live: CuePi.PiSession?
@@ -84,53 +87,74 @@ private struct DetailReply: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var text = ""
-    @State private var chosenMode: DeliveryMode?
     @State private var sending = false
     @FocusState private var focused: Bool
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var modes: [DeliveryMode] { MacDelivery.modes(for: session, hasImages: false) }
-    /// 会话状态变了（比如开始干活）时，原来选的方式可能不再可用：换成当前可用的第一个。
-    private var mode: DeliveryMode? { chosenMode.flatMap { modes.contains($0) ? $0 : nil } ?? modes.first }
+    private var canSend: Bool { !trimmed.isEmpty && !sending }
+
+    /// 点发送钮的方式在前：忙时等它做完再说（排队），与手机一致。
+    private var modes: [DeliveryMode] {
+        let modes = MacDelivery.modes(for: session, hasImages: false)
+        return modes.contains(.followUp) ? [.followUp] + modes.filter { $0 != .followUp } : modes
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField("回复 \(session.title)", text: $text, axis: .vertical)
-                .accessibilityLabel("回复")
-                .textFieldStyle(.plain)
-                .lineLimit(1...5)
-                .focused($focused)
-                .onSubmit(send)
-                .padding(.horizontal, 10).padding(.vertical, 8)
-                .paper(radius: 10)
-            HStack(spacing: 8) {
-                Picker("发送方式", selection: Binding(get: { mode }, set: { chosenMode = $0 })) {
-                    ForEach(modes, id: \.self) { Text($0.label).tag(Optional($0)) }
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                if let live, !live.hosted {
-                    Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
-                        .labelStyle(.iconOnly).buttonStyle(.borderless)
-                        .help("跳到这个会话所在的终端窗口")
-                }
-                Spacer()
-                Button("发送", action: send)
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(trimmed.isEmpty || sending)
+        VStack(alignment: .trailing, spacing: 6) {
+            if let live, !live.hosted {
+                Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
+                    .buttonStyle(.borderless).font(.footnote).foregroundStyle(palette.ink3)
+                    .help("跳到这个会话所在的终端窗口")
             }
-            .controlSize(.small)
-            if session.state == .known(.ended) {
-                Text("给它发消息时，它所在的 Mac 会在后台把它恢复起来").font(.footnote).foregroundStyle(palette.ink3)
-            } else if let explanation = mode?.explanation {
-                Text(explanation).font(.footnote).foregroundStyle(palette.ink3)
+            HStack(alignment: .bottom, spacing: 6) {
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .accessibilityLabel("回复")
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...6)
+                    .focused($focused)
+                    .onSubmit { send(modes.first) }
+                    .padding(.vertical, 8)
+                sendButton
             }
+            .padding(.leading, 12).padding(.trailing, 4).padding(.vertical, 2)
+            .paper(radius: 18)
         }
         .onAppear { focused = true }
     }
 
-    private func send() {
-        guard let mode, !trimmed.isEmpty, !sending else { return }
+    private var placeholder: String {
+        if session.state == .known(.ended) { return "回复 \(session.title)（会先在后台唤醒它）" }
+        return modes.first == .followUp ? "等它做完再说 · 按住发送钮可马上说" : "回复 \(session.title)"
+    }
+
+    @ViewBuilder private var sendButton: some View {
+        let others = modes.dropFirst()
+        if others.isEmpty {
+            Button { send(modes.first) } label: { RoundSendGlyph(enabled: canSend) }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(!canSend)
+                .accessibilityLabel("发送")
+        } else {
+            Menu {
+                ForEach(Array(others), id: \.self) { mode in
+                    Button(mode.explanation ?? mode.label) { send(mode) }
+                }
+            } label: {
+                RoundSendGlyph(enabled: canSend)
+            } primaryAction: {
+                send(modes.first)
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            .disabled(!canSend)
+            .accessibilityLabel(modes.first == .followUp ? "发送，等它做完再说" : "发送")
+            .accessibilityHint("按住可以选别的发法")
+            .background { Button("") { send(modes.first) }.keyboardShortcut(.return, modifiers: .command).hidden() }
+        }
+    }
+
+    private func send(_ mode: DeliveryMode?) {
+        guard let mode, canSend else { return }
         sending = true
         let body = trimmed
         Task {
