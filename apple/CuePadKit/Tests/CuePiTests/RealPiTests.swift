@@ -127,6 +127,16 @@ struct RealPiTests {
         }
     }
 
+    /// CuePad 开的新会话：Mac 经环境变量把发起方的认领标识交给 Pi，扩展在 hello 里带回。
+    @Test func aLaunchTokenFromTheEnvironmentComesBackInHello() async throws {
+        let pi = try await PiProcess(env: ["CUEPAD_LAUNCH_TOKEN": "tok-1"])
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        try await eventually("桥发现会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
+        #expect(bridge.sessions.first?.launchToken == "tok-1")
+    }
+
     @Test func toolExecutionShowsToolStateWithItsName() async throws {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)

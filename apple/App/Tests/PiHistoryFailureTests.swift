@@ -72,7 +72,7 @@ struct PiHistoryFailureTests {
         let file = try sessionFile("stale")
         let garbage = Data("not a checkpoint".utf8)
         try await services.store.upsertPiSession(
-            StoredPiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage)
+            StoredPiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
 
         #expect(await services.loadPiCheckpoint(for: file) == nil)
         await services.consumePiHistory(events(for: [file]))

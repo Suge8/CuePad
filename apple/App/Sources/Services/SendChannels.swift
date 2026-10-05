@@ -99,24 +99,33 @@ struct MacDependencies {
     var commandLineTool: CommandLineToolInstaller
     /// 自动更新器；隔离模式与测试为 nil。
     var updater: (any AppUpdater)?
+    /// 继续会话、开新会话时打开终端。
+    var terminalLauncher: any TerminalLaunching
+    /// 这台 Mac 上的 Pi 可执行文件；没装为 nil。
+    var locatePi: @Sendable () async -> URL?
 
     /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
     @MainActor
     static func live(bundleID: String, location: LibraryLocation) -> MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)
+        let installer = PiExtensionInstaller(paths: paths)
         return MacDependencies(
             pi: pi,
             channels: LiveSendChannels(pi: pi, bundleID: bundleID),
             hotkeys: CarbonHotkeyBackend(),
             paths: paths,
-            installer: PiExtensionInstaller(paths: paths),
+            installer: installer,
             terminal: PiTerminalJumper(),
             isAccessibilityTrusted: Accessibility.isTrusted,
             hostID: HostIdentity.current(),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: CommandLineToolInstaller(),
-            updater: location.isIsolated ? nil : SparkleUpdater())
+            updater: location.isIsolated ? nil : SparkleUpdater(),
+            terminalLauncher: LiveTerminalLauncher(),
+            locatePi: {
+                if case .found(let executable, _) = await installer.status().pi { executable } else { nil }
+            })
     }
 }
 #endif
