@@ -85,6 +85,8 @@ final class AppServices {
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let piStateRecorder: PiStateRecorder
     @ObservationIgnored var deliveryExecutor: DeliveryExecutor?
+    /// 有发给本机、还没结果的投送请求（主动拉取的条件之一，见 `pollingCondition`）。
+    var hasOpenLocalDeliveries = false
     @ObservationIgnored lazy var hotkey = GlobalHotkey(backend: hotkeyBackend) { [weak self] in
         self?.windowShell?.toggleFromHotkey()
     }
