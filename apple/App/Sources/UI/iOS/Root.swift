@@ -90,6 +90,7 @@ struct RouteView: View {
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
         case .activity: ActivityScreen().countsAsPiViewer()
+        case .projectSessions(let id): ActivityScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
         case .session(let id): SessionScreen(id: id).countsAsPiViewer()
         case .card(let id):

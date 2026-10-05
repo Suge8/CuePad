@@ -29,6 +29,8 @@ final class Navigation {
         case settings
         case conflicts
         case activity
+        /// 一个项目的全部 Pi 会话（同 Pi 页，只列这个项目的）。
+        case projectSessions(UUID)
         case search
         case card(UUID)
         /// 一个 Pi 会话的近况与回复（`PiSessionState.id`）。
