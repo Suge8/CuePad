@@ -4,7 +4,7 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面：project、older、today、inbox、editor、tasks、agent、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// iOS 画面：project、older、inbox、editor、tasks、agent、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
 /// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；taskedit 在任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
@@ -15,6 +15,7 @@ import UIKit
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
 /// agent 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话（每隔 8 小时结束一个，分落在今天到更早），
 /// Agent 页打开就滚到底（看历史滑到底读下一页；同时给了 `-CuePadSearch` 时停在顶上）。
+/// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
 /// newsession：Agent 页上打开新会话面板；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
 /// iPad 上 agent 打开右侧 Agent 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
@@ -61,7 +62,6 @@ extension DebugScene {
         case "sidebar":
             if let project { open(.project(project)) }
             navigation.sidebar = .all
-        case "today": open(.today)
         case "inbox": open(.inbox)
         case "trash": open(.trash)
         case "settings": open(.settings)
@@ -105,6 +105,9 @@ extension DebugScene {
                 }
             }
             navigation.newSession = sheet
+        case "projectagent":
+            // 从项目页的"全部 N 个会话"进来的 Agent 页：先筛着这个项目
+            if let project { open(.project(project)); navigation.push(.projectSessions(project)) }
         case "agent":
             if let project { open(.project(project)) }
             if split { navigation.agentPanel = true } else { navigation.tab = .agent }

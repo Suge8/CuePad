@@ -22,7 +22,9 @@ struct NewSessionSheet: View {
 
     /// 项目按所有项目选择器的同一个顺序（`ProjectCatalog.projects`）。
     private var projectOrder: [Project] { workspace.catalog?.projects ?? [] }
-    private var chosen: LaunchPlace? { places?.first { $0.id == choice } ?? places?.first }
+    private var chosen: LaunchPlace? {
+        places?.first { $0.id == choice } ?? places?.first { $0.project?.id == start.project } ?? places?.first
+    }
     /// 发出且还没失败：表单锁住，等它开好。
     private var inFlight: Bool { sending || (launched != nil && progress?.request?.status != .known(.failed)) }
     private var canStart: Bool { chosen != nil && services.reachesPiHost && !inFlight }

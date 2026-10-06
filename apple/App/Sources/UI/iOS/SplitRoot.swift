@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iPad（宽）：左栏项目（含今天、任务、Agent 等入口），右侧项目页；打开的卡片纸页推在项目页上，Agent 可在右侧面板并排看。
+/// iPad（宽）：左栏项目（含任务、Agent 等入口），右侧项目页；打开的卡片纸页推在项目页上，Agent 可在右侧面板并排看。
 /// 外接键盘与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏、⌘N 新建卡片、⌘⇧N 随手记、⌘⇧T 任务、⌘, 设置。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
@@ -109,7 +109,6 @@ private struct AgentPanel: View {
 nonisolated private struct SidebarData: Sendable {
     var live: [PiSessionState]
     var waiting: Int
-    var today: Int
 }
 
 private struct SplitSidebar: View {
@@ -118,14 +117,11 @@ private struct SplitSidebar: View {
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var data: SidebarData?
-    /// 今天的起点：跨过午夜时重读"今天"的张数。
-    @State private var today = Calendar.current.startOfDay(for: .now)
 
     var body: some View {
         List {
             Section {
                 SidebarRow(route: .shelf, title: "项目", symbol: "books.vertical")
-                SidebarRow(route: .today, title: "今天", symbol: "sun.max", badge: data?.today ?? 0)
                 SidebarRow(route: .tasks, title: "任务", symbol: "checklist")
                 SidebarRow(route: .agent, title: "Agent", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
@@ -156,14 +152,9 @@ private struct SplitSidebar: View {
         .toolbar {
             Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
-        .observing(services.store, [.piSessionStates, .cards], id: today, into: $data, onError: workspace.fail) { [today] store in
+        .observing(services.store, [.piSessionStates], into: $data, onError: workspace.fail) { store in
             let states = try store.piSessionPage(.live).items.map(\.state)
-            return SidebarData(
-                live: states, waiting: states.filter { $0.state == .known(.waitingForUser) }.count,
-                today: try store.search(SearchQuery(modifiedIn: today...Date.now), limit: 0).totalCards)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
-            today = Calendar.current.startOfDay(for: .now)
+            return SidebarData(live: states, waiting: states.filter { $0.state == .known(.waitingForUser) }.count)
         }
     }
 
@@ -236,7 +227,7 @@ private struct SplitShortcuts: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
 
-    /// 新卡放进正在看的项目（搜索、今天等页面上放进当前项目），随即打开。
+    /// 新卡放进正在看的项目（搜索等页面上放进当前项目），随即打开。
     private func newCard() {
         let project = navigation.captureProject ?? workspace.currentProject
         workspace.attempt {

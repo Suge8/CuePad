@@ -23,7 +23,7 @@ struct PiAlertRoutingTests {
         let alerts = PiAlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.layout = layout
-        navigation.projectsPath = [.today]
+        navigation.projectsPath = [.inbox]
 
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session))
         navigation.open(alert: alerts.consumeTap())

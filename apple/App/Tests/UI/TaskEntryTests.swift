@@ -29,7 +29,7 @@ struct TaskEntryTests {
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.layout = layout
         navigation.tab = .agent
-        navigation.projectsPath = [.today]
+        navigation.projectsPath = [.inbox]
 
         navigation.showTasks()
 

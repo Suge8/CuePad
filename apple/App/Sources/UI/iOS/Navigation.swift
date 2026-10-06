@@ -24,7 +24,6 @@ final class Navigation {
         case shelf
         case project(UUID)
         case inbox
-        case today
         case trash
         case settings
         case conflicts
@@ -67,7 +66,7 @@ final class Navigation {
         var project: Project?
     }
 
-    /// 新会话面板；`launched` 是已经发出的那一次（再打开时接着看它的进度）。
+    /// 新会话面板；`project` 是先选中的项目（Agent 页筛着的），`launched` 是已经发出的那一次（再打开时接着看它的进度）。
     struct NewSession: Identifiable {
         struct Launched: Equatable, Sendable {
             var request: UUID
@@ -75,6 +74,7 @@ final class Navigation {
         }
 
         let id = UUID()
+        var project: UUID?
         var launched: Launched?
     }
 

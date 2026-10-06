@@ -88,7 +88,6 @@ struct RouteView: View {
         case .shelf: ShelfScreen()
         case .project(let id): ProjectScreen(projectID: id)
         case .inbox: InboxScreen()
-        case .today: TodayScreen()
         case .trash: TrashScreen()
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
