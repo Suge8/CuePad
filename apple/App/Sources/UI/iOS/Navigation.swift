@@ -96,8 +96,6 @@ final class Navigation {
     var sidebar: NavigationSplitViewVisibility = .automatic
     /// 分栏：右侧的 Agent 面板是否展开。
     var agentPanel = false
-    /// Agent 页上次选的项目筛选（本窗口；nil 是全部）：切到别处再回来还是它。
-    var agentProject: UUID?
     /// 各会话回复框的草稿（按会话记录 id），回复框的唯一事实源：离开会话再回来还在；文字另存在本机偏好、跨退出保留，
     /// 带上的卡片与图片只留在这次运行。"发到 Mac"带来的卡片或任务也写进这里。
     private var replyDrafts: [UUID: ComposerDraft] = [:]
