@@ -54,31 +54,49 @@ actor PiHistoryPersistence {
         }
     }
 
-    /// 一批更新在同一事务里写入（会话行、检查点与对话）：中途失败时下次从旧检查点重读，不会漏掉内容；失败时这批文件都不再写回。
-    func persist(_ updates: [PiHistoryUpdate]) async throws {
+    /// 一批更新在同一事务里写入（会话行、检查点与对话）：中途失败时下次从旧检查点重读，不会漏掉内容。
+    /// 整批写不进去时逐个重写，只有真正写不进去的文件不再写回；返回它们与原因。
+    func persist(_ updates: [PiHistoryUpdate]) async -> [(file: URL, error: any Error)] {
         let updates = updates.filter { !blocked.contains($0.file.path) }
-        guard !updates.isEmpty else { return }
+        guard !updates.isEmpty else { return [] }
         do {
-            var batch: [PiSessionUpsert] = []
-            for update in updates {
-                let history = update.history
-                let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-                let session = StoredPiSession(
-                    id: history.sessionID ?? update.file.deletingPathExtension().lastPathComponent,
-                    path: update.file.path,
-                    cwd: history.cwd ?? "",
-                    title: history.displayName,
-                    lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
-                batch.append(PiSessionUpsert(
-                    session: session, checkpoint: try JSONEncoder().encode(update.checkpoint),
-                    transcript: try await transcript(of: update, sessionID: session.id)))
-            }
-            try await storage.upsertPiSessions(batch, host: host)
-            for item in batch { idsByPath?[item.session.path] = item.session.id }
+            try await write(updates)
+            return []
         } catch {
-            for update in updates { blocked.insert(update.file.path) }
-            throw error
+            guard updates.count > 1 else {
+                blocked.insert(updates[0].file.path)
+                return [(updates[0].file, error)]
+            }
+            var failures: [(file: URL, error: any Error)] = []
+            for update in updates where !blocked.contains(update.file.path) {
+                do {
+                    try await write([update])
+                } catch {
+                    blocked.insert(update.file.path)
+                    failures.append((update.file, error))
+                }
+            }
+            return failures
         }
+    }
+
+    private func write(_ updates: [PiHistoryUpdate]) async throws {
+        var batch: [PiSessionUpsert] = []
+        for update in updates {
+            let history = update.history
+            let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+            let session = StoredPiSession(
+                id: history.sessionID ?? update.file.deletingPathExtension().lastPathComponent,
+                path: update.file.path,
+                cwd: history.cwd ?? "",
+                title: history.displayName,
+                lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
+            batch.append(PiSessionUpsert(
+                session: session, checkpoint: try JSONEncoder().encode(update.checkpoint),
+                transcript: try await transcript(of: update, sessionID: session.id)))
+        }
+        try await storage.upsertPiSessions(batch, host: host)
+        for item in batch { idsByPath?[item.session.path] = item.session.id }
     }
 
     /// 这次读到的对话与摘要。在不在范围内只看读文件时的判定（索引器按文件修改时间，`includesTranscript`），这里不另判：

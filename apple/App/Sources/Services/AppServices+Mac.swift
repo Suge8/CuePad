@@ -146,10 +146,8 @@ extension AppServices {
         var backfilling = true
         func flush() async {
             guard !pending.isEmpty else { return }
-            do {
-                try await historyStore.persist(pending)
-            } catch {
-                reportIssue(.piHistoryUnavailable("写入 \(pending.map(\.file.path).joined(separator: "、")) 失败：\(error)"))
+            for failure in await historyStore.persist(pending) {
+                reportIssue(.piHistoryUnavailable("写入 \(failure.file.path) 失败：\(failure.error)"))
             }
             pending.removeAll()
         }
