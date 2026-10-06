@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 一个 Pi 会话的对话（Agent 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），聊天式：
-/// 顶上一行会话名，下面一行小字"所在 · 状态 · 计时"；中间是对话（`PiConversation`，子代理列在末尾的进展下），打开停在最新；
+/// 顶上与返回钮同排的一块玻璃：会话名，下面一行小字"所在 · 状态 · 计时"；中间是对话（`PiConversation`，子代理列在末尾的进展下），打开停在最新；
 /// 底部是回复框（标签栏收起，回复框独占底部），等你确认时问题卡固定在它上方。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
 /// 很久以前的会话没有对话时请 Mac 补写，补写中写一句"正在从 Mac 取对话…"。
 /// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的内容，底部换成说明。
@@ -20,6 +20,8 @@ struct SessionScreen: View {
 
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
     private static let readingWidth: CGFloat = 640
+    /// 顶栏玻璃钮的高度（系统返回钮）。
+    private static let barHeight: CGFloat = 44
 
     private var session: PiSessionState? { digest?.session ?? lastSeen }
     /// 回复框的草稿在 `Navigation`（离开会话再回来还在）。
@@ -53,22 +55,28 @@ struct SessionScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(palette.desk)
+        // 页底色铺在导航容器上：对话要等读库（异步）才有，推入的第一帧只有它；铺在滚动区上时那一帧整页透明，露出系统的黑
+        .containerBackground(palette.desk, for: .navigation)
         .navigationTitle(session?.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let session {
+                // 会话名与状态是浮在对话上的一块玻璃，与返回钮同排同高
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 1) {
                         Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                         PiSessionSubtitle(session: session, project: digest?.project)
                     }
+                    .padding(.horizontal, 16)
+                    .frame(height: Self.barHeight)
+                    .glass(in: .capsule)
                 }
             }
         }
-        // 回复框算作底栏（safeAreaBar），对话从顶栏与底栏下面滚过，两头都是 soft（只淡出，不铺实底带）：
-        // 顶栏悬浮在对话上；问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏
-        .scrollEdgeEffectStyle(.soft, for: .all)
+        // 顶上不模糊：除了返回钮与标题那块玻璃，对话直接可见。回复框算作底栏（safeAreaBar），底边 soft 只淡出、
+        // 不铺实底带：问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏
+        .scrollEdgeEffectHidden(true, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {

@@ -11,30 +11,12 @@ struct PiConversation: View {
     let messages: [PiChatMessage]
     var deliveries: [DeliveryRequest] = []
     @Environment(\.palette) private var palette
-    /// 排出来的最近几条；点"更早的对话"再接一页。
-    @State private var shown = Self.pageSize
-
-    private static let pageSize = 40
 
     var body: some View {
-        // 不用 LazyVStack：对话贴底打开，懒加载按估计高度定初始偏移，回答高矮差得远（一行、表格、长代码块）时
-        // 偏移落在内容之外，推入后整页空白、要滑一下才排出来。整段排开高度是准的，打开即停在最新；
-        // 只排最近一页，长对话打开也不卡；更早的点顶上一行接上一页（往顶上加，贴底的滚动锚点保持离底的距离，读到的位置不跳）
-        let entries = PiChat.entries(messages)
-        ScrollViewReader { proxy in
-        VStack(alignment: .leading, spacing: 18) {
-            if entries.count > shown {
-                Button("更早的对话", systemImage: "arrow.up") {
-                    let first = entries.suffix(shown).first?.id
-                    shown += Self.pageSize
-                    // 加在顶上的一页会把视野推到新的开头：排好后把原来的第一条放回顶上
-                    if let first { Task { proxy.scrollTo(first, anchor: .top) } }
-                }
-                    .font(.footnote.weight(.medium)).foregroundStyle(palette.ink3)
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            ForEach(entries.suffix(shown)) { entry in
+        // 懒加载：贴底打开时只排看得见的几条。整段排开时，长对话的每条回答（表格、长代码块）都在推入那一刻
+        // 排版、栅格化，转场的前一百多毫秒这一页画不出来（深色下就是黑屏）
+        LazyVStack(alignment: .leading, spacing: 18) {
+            ForEach(PiChat.entries(messages)) { entry in
                 if entry.isUser { UserBubble(text: entry.text) } else { ReplyBlock(text: entry.text, meta: entry.meta, session: session) }
             }
             ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
@@ -44,7 +26,6 @@ struct PiConversation: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        }
         .animation(Motion.quick, value: messages.map(\.id))
         .animation(Motion.quick, value: deliveries.map(\.status))
         .animation(Motion.quick, value: session.state)
