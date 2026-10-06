@@ -25,12 +25,12 @@ struct AgentScreen: View {
 
     /// 此刻的项目筛选；记下的项目进了回收站时是全部。
     private var filter: UUID? {
-        (picked ?? project ?? services.settings.agentProject).flatMap { workspace.catalog?.project($0)?.id }
+        (picked ?? project ?? navigation.agentProject).flatMap { workspace.catalog?.project($0)?.id }
     }
 
     private func pick(_ id: UUID?) {
         picked = .some(id)
-        if project == nil { services.settings.agentProject = id }
+        if project == nil { navigation.agentProject = id }
     }
 
     var body: some View {

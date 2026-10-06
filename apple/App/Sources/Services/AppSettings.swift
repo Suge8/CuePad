@@ -21,7 +21,6 @@ final class AppSettings {
         static let replyTexts = "replyTexts"
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
-        static let agentProject = "agentProject"
     }
 
     private static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
@@ -54,12 +53,6 @@ final class AppSettings {
     var commandLineToolPrompted: Bool {
         get { defaults.bool(forKey: Key.commandLineToolPrompted) }
         set { defaults.set(newValue, forKey: Key.commandLineToolPrompted) }
-    }
-
-    /// iOS Agent 页上次选的项目筛选；nil 是全部。
-    var agentProject: UUID? {
-        get { defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:)) }
-        set { defaults.set(newValue?.uuidString, forKey: Key.agentProject) }
     }
 
     /// 本机最后一次看每个 Pi 会话的时间（按 sessionID），判断"有新回复"（`PiUnread`）；只留最近看的 `seenLimit` 个。
