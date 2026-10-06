@@ -59,6 +59,24 @@ struct PiHistoryFailureTests {
         #expect(second.contains(healthy.path))
     }
 
+    /// 首次回填按批写：一批里一个文件写不进去，同批其余的照常写进去，只挡住写不进去的那个，问题只报它。
+    @Test func 一批里一个文件写失败_其余照常写入_只挡住失败的那个() async throws {
+        let bad = try sessionFile("bad")
+        let good = try sessionFile("good")
+        var handle: OpaquePointer?
+        defer { sqlite3_close(handle) }
+        guard sqlite3_open(services.location.databaseURL.path, &handle) == SQLITE_OK, sqlite3_exec(handle, """
+            CREATE TRIGGER rejectBad BEFORE INSERT ON piSessions WHEN NEW.id = 'bad' BEGIN SELECT RAISE(ABORT, 'boom'); END;
+            """, nil, nil, nil) == SQLITE_OK else { throw BreakFailed() }
+
+        await services.consumePiHistory(events(for: [bad, good]))
+
+        #expect(try await services.store.piSessions().map(\.id) == ["good"])
+        #expect(services.startupIssues.count == 1)
+        guard case .piHistoryUnavailable(let message)? = services.startupIssues.first else { return }
+        #expect(message.contains(bad.path) && !message.contains(good.path))
+    }
+
     @Test func 写入失败同样报告并停止该文件写回() async throws {
         let file = try sessionFile("s")
         try breakPiSessionTable()
