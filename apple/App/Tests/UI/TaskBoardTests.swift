@@ -28,6 +28,21 @@ struct TaskBoardTests {
         #expect(board.done.first?.project == nil)
     }
 
+    @Test func 最近完成按完成时间统一排序_不按项目分组() async throws {
+        // 按项目分组时未归档总排在最后；最新完成的放在未归档里，只有按完成时间统一排才会排第一
+        let site = try await store.createProject(name: "个人网站", color: "#000000")
+        let older = try await store.createTask("写首页文案", in: site.id)
+        let newer = try await store.createTask("续费域名")
+        for task in [older, newer] {
+            try await store.updateTask(task.id) { $0.status = .done }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        let board = try await TaskBoard.read(from: store)
+
+        #expect(board.done.map(\.task.id) == [newer.id, older.id])
+    }
+
     @Test func 点圆圈_待办与进行中都变完成_完成的回到待办_开始把待办置为进行中() async throws {
         let workspace = Workspace(services: app.services)
         let todo = try await store.createTask("写首页文案")
