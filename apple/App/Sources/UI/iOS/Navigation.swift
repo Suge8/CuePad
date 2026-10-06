@@ -46,6 +46,7 @@ final class Navigation {
 
     /// 会话页的路由：身份只是记录 id（`PiSessionState.id`）。`seed` 是推入时调用方已持有的会话状态，只作首帧占位
     /// （标题与状态那块玻璃推入第一帧就在，对话按会话 id 第一次就读），之后一律以 Store 的观察流为准；不参与相等。
+    /// 从路由栈恢复（返回到它、再次显示）时种子可能已是旧状态，首帧标题可能短暂过时，读到 Store 后即替换。
     struct SessionRoute: Hashable {
         let id: UUID
         var seed: PiSessionState?
