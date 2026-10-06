@@ -3,9 +3,11 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 一个 Pi 会话的近况（Pi 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里）：上面是近况，
-/// 底部是发过去的最新一条请求与回复框（已结束的会话也能回复，Mac 在后台把它恢复起来再送达）。
-/// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的近况，底部换成说明。
+/// 一个 Pi 会话的对话（Pi 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），聊天式：
+/// 顶上一行会话名，下面一行小字"所在 · 状态 · 计时"，有子代理时再一行小标签；中间是对话（`PiConversation`），打开停在最新；
+/// 底部是回复框，等你确认时问题卡固定在它上方。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
+/// 很久以前的会话没有对话时请 Mac 补写，补写中写一句"正在从 Mac 取对话…"。
+/// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的内容，底部换成说明。
 struct SessionScreen: View {
     let id: UUID
     @Environment(Workspace.self) private var workspace
@@ -16,18 +18,29 @@ struct SessionScreen: View {
     /// 最后一次读到的会话记录：记录被删后仍显示它。
     @State private var lastSeen: PiSessionState?
     @State private var draft: Navigation.Outbox?
+    @State private var askedForTranscript = false
 
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
-    private static let readingWidth: CGFloat = 600
+    private static let readingWidth: CGFloat = 640
+
+    private var session: PiSessionState? { digest?.session ?? lastSeen }
+    private var fetchingTranscript: Bool {
+        digest?.deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } == true
+    }
 
     var body: some View {
         ScrollView {
-            if let session = digest?.session ?? lastSeen {
-                PiSessionDigest(session: session, project: digest?.project, deliveries: digest?.deliveries ?? [])
-                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
-                    // iPad 上一行不超过阅读宽度，居中
-                    .frame(maxWidth: Self.readingWidth)
-                    .frame(maxWidth: .infinity)
+            if let session {
+                VStack(spacing: 14) {
+                    if fetchingTranscript {
+                        Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
+                    }
+                    PiConversation(session: session, messages: digest?.messages ?? [], deliveries: digest?.deliveries ?? [])
+                }
+                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 16)
+                // iPad 上一行不超过阅读宽度，居中
+                .frame(maxWidth: Self.readingWidth)
+                .frame(maxWidth: .infinity)
             } else if digest != nil {
                 ContentUnavailableView {
                     Label("找不到这个会话", systemImage: "waveform.path.ecg")
@@ -37,18 +50,37 @@ struct SessionScreen: View {
                 .padding(.top, 60)
             }
         }
+        // 打开停在最新；内容变长时跟着最新
+        .defaultScrollAnchor(.bottom)
+        .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .scrollDismissesKeyboard(.interactively)
         .background(palette.desk)
-        // 会话名在页面里（读到之前导航栏不先显示一个空标题再换）
+        .navigationTitle(session?.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let session {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                        PiSessionSubtitle(session: session, project: digest?.project)
+                    }
+                }
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let subagents = session?.subagents, !subagents.isEmpty {
+                PiSubagentChips(subagents: subagents)
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                    .frame(maxWidth: Self.readingWidth)
+                    .frame(maxWidth: .infinity)
+                    .background(palette.desk.opacity(0.94))
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let session = digest?.session ?? lastSeen {
-                // 已结束的会话也能回复：Mac 在后台把它恢复起来再送达
-                let alive = digest?.session != nil
-                // 发出后最新一条就在回复框上方，长回答下也看得到送达情况
+            if let session {
                 VStack(spacing: 8) {
-                    DeliveryStack(deliveries: digest?.deliveries ?? [], session: alive ? session : nil)
-                    if alive {
+                    PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
+                    if digest?.session != nil {
                         ReplyBar(session: session, draft: $draft)
                     } else {
                         Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
@@ -57,14 +89,26 @@ struct SessionScreen: View {
                 .padding(.horizontal, 8).padding(.bottom, 8)
                 .frame(maxWidth: Self.readingWidth)
                 .frame(maxWidth: .infinity)
+                .animation(Motion.quick, value: session.question)
             }
         }
         .onAppear { if draft == nil { draft = navigation.takeDraft(for: id) } }
-        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects], id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
+        .observing(services.store, SessionDigest.tables, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)
         }
-        .onChange(of: digest?.session) { _, session in if let session { lastSeen = session } }
+        .onChange(of: digest) { _, digest in
+            if let session = digest?.session { lastSeen = session }
+            askForTranscriptIfNeeded()
+        }
+    }
+
+    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说）。
+    private func askForTranscriptIfNeeded() {
+        guard !askedForTranscript, let digest, let session = digest.session, services.reachesPiHost,
+              PiChat.needsTranscript(session, messages: digest.messages), !fetchingTranscript else { return }
+        askedForTranscript = true
+        workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }
 }
 
