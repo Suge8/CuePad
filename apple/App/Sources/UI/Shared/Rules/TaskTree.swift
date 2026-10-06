@@ -140,6 +140,12 @@ nonisolated struct TaskTree: Equatable, Sendable {
         }
         let previous = gap > 0 ? candidates[gap - 1] : nil
         let next = gap < candidates.count ? candidates[gap] : nil
+        // 落回原处（上下邻居与层级都没变）不动：顶层的上一行可能属于别的项目，按"落在它后面"算会悄悄换项目
+        if let index = rows.firstIndex(where: { $0.id == dragged }) {
+            let before = rows[..<index].last { !excluded.contains($0.id) }
+            let after = rows[index...].first { !excluded.contains($0.id) }
+            if before?.id == previous?.id, after?.id == next?.id, depthShift == 0 { return nil }
+        }
         let lowest = next?.depth ?? 0
         let highest = min(previous.map { $0.depth + 1 } ?? 0, Self.deepest - height + 1)
         guard lowest <= highest else { return nil }
