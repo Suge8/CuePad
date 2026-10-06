@@ -2,6 +2,7 @@
 import CueStore
 @testable import CuePi
 import Foundation
+import Synchronization
 import Testing
 @testable import CuePad
 
@@ -155,6 +156,42 @@ struct PiTranscriptTests {
         let seen = (try? await watch.value) ?? false
         deadline.cancel()
         #expect(seen, "追加后 \(ContinuousClock.now - appended) 仍没读到")
+    }
+
+    /// Mac 重启：启动时把上次遗留的记录标为已结束，会话重新连上后，正在处理的提问照样在——不必等文件再追加。
+    @Test func 重启后会话重新连上_正在处理的提问仍在() async throws {
+        let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data((line("u3", "a2", at: .now, user: "第三问") + "\n").utf8))
+        try handle.close()
+        _ = try await live("s1", file: file)
+        await consume([file])
+        #expect(try await record("s1").pendingPrompt == "第三问")
+
+        try await services.resetPiState()  // 重启：上次的会话都标为已结束
+        #expect(try await record("s1").pendingPrompt == nil)
+        _ = try await live("s1", file: file)  // 桥重新发现它；文件没有新内容，不会再读
+
+        #expect(try await record("s1").pendingPrompt == "第三问")
+    }
+
+    /// 一直开着的 Mac 也按天清理安静了的会话的对话，不只在启动时。
+    @Test func 一直开着的Mac每天清理一次对话() async throws {
+        let old = try sessionFile("old", at: .now.addingTimeInterval(-30 * 86_400))
+        await consume([old])
+        try await store.writePiTranscript(PiTranscript(try PiHistory.index(file: old, from: nil), sessionID: "old"))
+        #expect(try await store.piMessages(of: "old").count == 4)
+
+        let days = Mutex(0)
+        let timing = Timing(now: { Date.now.addingTimeInterval(Double(days.withLock { $0 }) * 86_400) }) { _ in
+            days.withLock { $0 += 8 }  // 睡一觉醒来已过了 8 天
+            if days.withLock({ $0 }) > 8 { try await Task.sleep(for: .seconds(3_600)) }
+        }
+        let pruning = Task { await services.historyStore.keepPruned(timing: timing) }
+        defer { pruning.cancel() }
+
+        for try await count in store.observe([.piMessages], { try $0.piMessages(of: "old").count }) where count == 0 { break }
     }
 }
 #endif
