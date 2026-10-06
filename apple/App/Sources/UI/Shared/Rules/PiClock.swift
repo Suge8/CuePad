@@ -15,15 +15,16 @@ nonisolated enum PiClock: Equatable {
         return .ago(stateSince)
     }
 
-    /// 全 App 唯一的时长写法，不跳秒："42 秒"、"4 分"、"2 时 5 分"（处理中的活跃感交给转圈）。
+    /// 全 App 唯一的时长写法，不跳秒："42 秒"、"4 分"、"2 时 5 分"、整小时"3 时"（处理中的活跃感交给转圈）。
     static func duration(_ seconds: TimeInterval) -> String {
         let total = max(Int(seconds), 1)
         if total < 60 { return "\(total) 秒" }
         if total < 3600 { return "\(total / 60) 分" }
-        return "\(total / 3600) 时 \((total % 3600) / 60) 分"
+        let minutes = (total % 3600) / 60
+        return minutes == 0 ? "\(total / 3600) 时" : "\(total / 3600) 时 \(minutes) 分"
     }
 
-    /// 超过这么久的"多久前"改用日历说法（"昨天"、"3 天前"），不写成几十个小时。
+    /// 超过这么久的"多久前"按日历天写（"昨天"、"4 天前"），不写成几十个小时。
     private static let calendarAfter: TimeInterval = 86_400
 
     var since: Date {
@@ -32,13 +33,16 @@ nonisolated enum PiClock: Equatable {
         }
     }
 
-    func text(now: Date) -> String {
+    func text(now: Date, calendar: Calendar = .current) -> String {
         let elapsed = now.timeIntervalSince(since)
         switch self {
         case .running: return "已运行 \(Self.duration(elapsed))"
         case .waiting: return "已等 \(Self.duration(elapsed))"
         case .ago(let date):
-            if elapsed >= Self.calendarAfter { return date.formatted(.relative(presentation: .named, unitsStyle: .wide)) }
+            if elapsed >= Self.calendarAfter {
+                let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 1
+                return days <= 1 ? "昨天" : "\(days) 天前"
+            }
             return "\(Self.duration(elapsed))前"
         }
     }
