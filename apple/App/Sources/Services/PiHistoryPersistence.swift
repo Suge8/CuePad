@@ -71,7 +71,7 @@ actor PiHistoryPersistence {
                     lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
                 batch.append(PiSessionUpsert(
                     session: session, checkpoint: try JSONEncoder().encode(update.checkpoint),
-                    transcript: try await transcript(of: update, sessionID: session.id, lastActivity: session.lastActivityAt)))
+                    transcript: try await transcript(of: update, sessionID: session.id)))
             }
             try await storage.upsertPiSessions(batch, host: host)
             for item in batch { idsByPath?[item.session.path] = item.session.id }
@@ -81,12 +81,11 @@ actor PiHistoryPersistence {
         }
     }
 
-    /// 这次读到的对话与摘要。会话在范围外时只写摘要；刚进入范围（本机还没有它的对话，而这次是增量读）时从头再读一遍，
-    /// 补齐全部消息——"范围内的会话有全部消息"不靠读到的那一段碰巧完整。
-    private func transcript(of update: PiHistoryUpdate, sessionID: String, lastActivity: Date) async throws -> PiTranscript {
-        guard lastActivity > Date.now.addingTimeInterval(-Self.transcriptWindow) else {
-            return PiTranscript(update, sessionID: sessionID, messages: false)
-        }
+    /// 这次读到的对话与摘要。在不在范围内只看读文件时的判定（索引器按文件修改时间，`includesTranscript`），这里不另判：
+    /// 范围外只写摘要；刚进入范围（本机还没有它的对话，而这次是增量读）时从头再读一遍，补齐全部消息——
+    /// "范围内的会话有全部消息"不靠读到的那一段碰巧完整。
+    private func transcript(of update: PiHistoryUpdate, sessionID: String) async throws -> PiTranscript {
+        guard update.includesTranscript else { return PiTranscript(update, sessionID: sessionID, messages: false) }
         let incremental = update.checkpoint.offset > UInt64(update.bytesRead)
         if incremental, try await storage.piMessages(of: sessionID).isEmpty {
             return PiTranscript(try PiHistory.index(file: update.file, from: nil), sessionID: sessionID)

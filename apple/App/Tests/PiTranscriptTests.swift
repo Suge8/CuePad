@@ -37,12 +37,18 @@ struct PiTranscriptTests {
             line("a2", "u2", at: at.addingTimeInterval(3), reply: "第二答"),
         ]
         try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.modificationDate: at.addingTimeInterval(3)], ofItemAtPath: url.path)
         return url
     }
 
+    /// 像索引器那样读：最近 7 天修改过的文件要对话，更早的只读摘要。
     private func consume(_ files: [URL]) async {
         let events = AsyncStream<PiHistoryEvent> { continuation in
-            for file in files { continuation.yield(.updated(try! PiHistory.index(file: file, from: nil))) }
+            for file in files {
+                let modified = try! file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
+                let recent = modified > .now.addingTimeInterval(-PiHistoryPersistence.transcriptWindow)
+                continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, transcript: recent)))
+            }
             continuation.yield(.backfillFinished(sessionFiles: files))
             continuation.finish()
         }

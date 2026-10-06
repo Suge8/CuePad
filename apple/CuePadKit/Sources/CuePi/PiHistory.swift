@@ -76,8 +76,10 @@ public struct PiHistoryUpdate: Sendable {
     public var file: URL
     public var checkpoint: PiHistoryCheckpoint
     public var history: PiSessionHistory
-    /// 这次新读到的对话（从头读时是全部）
+    /// 这次新读到的对话（从头读时是全部）；`includesTranscript` 为 false 时（只读了摘要）为空
     public var transcript: [PiTranscriptEntry]
+    /// 这次读的时候要不要对话（调用方——索引器按文件修改时间——的判定）：写不写对话以它为准
+    public var includesTranscript: Bool
     public var recap: PiTranscriptRecap { checkpoint.recap }
     /// 这次新消费的字节数（半行不算）
     public var bytesRead: Int
@@ -123,7 +125,8 @@ public enum PiHistory {
         state.offset = consumed
         try refreshFingerprint(&state, handle: handle)
         return PiHistoryUpdate(
-            file: file, checkpoint: state, history: history(of: state), transcript: transcript, bytesRead: Int(consumed - start))
+            file: file, checkpoint: state, history: history(of: state), transcript: transcript, includesTranscript: wanted,
+            bytesRead: Int(consumed - start))
     }
 
     /// 逐个完整行（不含换行）交给 `body`，带行首偏移；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。
