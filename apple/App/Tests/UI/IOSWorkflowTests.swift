@@ -56,7 +56,7 @@ struct IOSWorkflowTests {
         }
     }
 
-    /// 手机上只有一个发送：空闲直接发；Pi 正在跑一轮时默认等它做完再说（排队），另有马上说（插话）。
+    /// 手机上只有一个发送：空闲直接发；Pi 正在跑一轮时默认等它做完再说，另有马上说。
     /// 手机不给"放进输入框"（人不在 Mac 前，没人去按那一下发送）。
     @Test(arguments: [
         (PiWorkState.settled, false, [DeliveryMode.send]),
@@ -71,7 +71,7 @@ struct IOSWorkflowTests {
         // 已结束的也能直接发：Mac 在后台把它恢复起来再送达
         (.ended, false, [.send]),
     ])
-    func 手机发送_空闲直接发_忙时默认排队另有插话_没有放进输入框(state: PiWorkState, hasImages: Bool, modes: [DeliveryMode]) {
+    func 手机发送_空闲直接发_忙时默认等它做完再说另有马上说_没有放进输入框(state: PiWorkState, hasImages: Bool, modes: [DeliveryMode]) {
         let session = PiSessionState(
             id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
             lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
@@ -126,7 +126,7 @@ struct IOSWorkflowTests {
 
         try await CaptureDraft(text: "  补测试  ", images: [], kind: .task).save(in: project.id, workspace: workspace)
 
-        #expect(try await store.openTasks().filter { $0.projectID == project.id }.map(\.content) == ["补测试"])
+        #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.content) == ["补测试"])
         #expect(try await store.cards(in: project.id).isEmpty)
         #expect(workspace.notice?.link == .tasks(project.id))
     }

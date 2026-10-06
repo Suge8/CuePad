@@ -169,9 +169,9 @@ struct ProjectScreen: View {
     }
 }
 
-/// 目标与下一步：目标卡 + 本项目未完成任务（最多 3 条，其余在任务页）+ 本项目的 Pi 会话（在线的全列，
+/// 目标与任务：目标卡 + 本项目任务（"任务 完成数/总数"，没完成的进行中在前，最多 3 条，其余在任务页）+ 本项目的 Pi 会话（在线的全列，
 /// 再加最近结束的几个；更多的点"全部"看这个项目的 Pi 列表）。会话点开看近况、回复。
-/// 没有目标卡时只有下一步；什么都没有时是一行"添加任务"。
+/// 没有目标卡时只有任务；什么都没有时是一行"添加任务"。
 private struct FocusCard: View {
     let data: ProjectPageData
     let pi: PiSessionList?
@@ -201,7 +201,7 @@ private struct FocusCard: View {
                 Divider()
             }
             VStack(alignment: .leading, spacing: 8) {
-                SectionLabel(text: data.tasks.isEmpty ? "下一步" : "下一步 · \(data.tasks.count)", systemImage: "checklist")
+                SectionLabel(text: data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist")
                 ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskLine(task: task).contextMenu { TaskActions(task: task) { editing = task } } }
                 if data.tasks.count > Self.visibleTasks {
                     Button("还有 \(data.tasks.count - Self.visibleTasks) 条") {

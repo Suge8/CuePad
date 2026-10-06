@@ -7,8 +7,10 @@ nonisolated struct ProjectPageData: Sendable {
     var cards: [Card]
     /// 卡片最近一次发送（时间与目标）；从未发送的卡不在里面。
     var lastSends: [UUID: LastSend]
-    /// 本项目未完成的任务。
+    /// 本项目没完成的任务：进行中在前，再是待办。
     var tasks: [CueTask]
+    /// 本项目任务的完成数与总数（没有任务时为 nil）。
+    var taskProgress: TaskProgress?
 
     /// 卡片最近一次发送的目标名。
     var lastTarget: [UUID: String] { lastSends.mapValues(\.target.name) }
@@ -27,7 +29,8 @@ nonisolated struct ProjectPageData: Sendable {
             project: try project.flatMap { try store.project($0) },
             cards: try store.cards(in: project),
             lastSends: try store.lastSends(in: project),
-            tasks: try store.openTasks().filter { $0.projectID == project })
+            tasks: try (store.tasks(.inProgress) + store.tasks(.todo)).filter { $0.projectID == project }.flatMap(\.tasks),
+            taskProgress: try store.taskProgress()[project])
     }
 }
 

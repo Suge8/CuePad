@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 任务操作（Mac 右键、iOS 长按共用），顺序与卡片操作一致：编辑、复制与发送、转为卡片、移到项目、删除。
+/// 任务操作（Mac 右键、iOS 长按共用）：编辑、开始（进行中的是回到待办）、交给 Pi 与复制、转为卡片、移到项目、删除。
 /// 编辑由调用方提供（`edit`）：菜单收起后菜单所在的行就没了，编辑框或就地编辑由行所在的视图持有；不传时没有"编辑"。
 /// 发送是平台各自的：Mac 发给当前目标（发给 Pi 会话时把任务关联到它），iOS 发到 Mac。
 struct TaskActions: View {
@@ -17,6 +17,11 @@ struct TaskActions: View {
         if let edit {
             Button("编辑", systemImage: "pencil", action: edit)
             Divider()
+        }
+        switch task.status {
+        case .todo: Button("开始", systemImage: "play") { workspace.attempt { try await workspace.start(task) } }
+        case .inProgress: Button("回到待办", systemImage: "pause") { workspace.attempt { try await workspace.start(task, back: true) } }
+        case .done: EmptyView()
         }
         sending
         Button("转为卡片", systemImage: "rectangle.on.rectangle") {
@@ -50,7 +55,7 @@ struct TaskActions: View {
                 workspace.say("已复制")
             }
         }
-        Button("发到 Mac", systemImage: "paperplane") {
+        Button("交给 Pi", systemImage: "paperplane") {
             navigation.outbox = Navigation.Outbox(content: content, task: id, project: task.projectID)
         }
         #endif
@@ -65,8 +70,16 @@ struct TaskActions: View {
     #endif
 }
 
-/// 任务行给读屏的文案（Mac 与 iOS 同一套）：整行一个元素，标签是任务内容，值是完成状态，默认动作切换完成。
+/// 任务行给读屏的文案（Mac 与 iOS 同一套）：整行一个元素，标签是任务内容，值是状态，默认动作切换完成。
 enum TaskSpeech {
+    static func value(_ status: TaskStatus) -> String {
+        switch status {
+        case .todo: "待办"
+        case .inProgress: "进行中"
+        case .done: "已完成"
+        }
+    }
+
     static func value(done: Bool) -> String { done ? "已完成" : "未完成" }
     static func toggle(done: Bool) -> String { done ? "标为未完成" : "标为完成" }
 }
