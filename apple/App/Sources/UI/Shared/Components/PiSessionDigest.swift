@@ -191,7 +191,7 @@ struct DeliveryStatusLabel: View {
             case .known(.pending), .known(.executing):
                 HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(waking ? "正在唤醒…" : "送达中") }.foregroundStyle(palette.ink2)
             case .known(.succeeded):
-                Label(request.roundTrip.map { "已送达 · \(Self.text($0))" } ?? "已送达", systemImage: "checkmark.circle.fill")
+                Label(request.roundTrip.map { "已送达 · \(PiClock.duration(Double($0.components.seconds)))" } ?? "已送达", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(palette.ink2)
             case .known(.failed): Label("没能送达", systemImage: "exclamationmark.triangle.fill").foregroundStyle(palette.failure)
             case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(palette.ink2)
@@ -202,15 +202,9 @@ struct DeliveryStatusLabel: View {
         .transition(.opacity)
         .animation(Motion.quick, value: request.status)
     }
-
-    /// 往返时间："3 秒"、"2 分"。
-    static func text(_ duration: Duration) -> String {
-        let seconds = Int(duration.components.seconds)
-        return seconds < 60 ? "\(max(seconds, 1)) 秒" : "\(seconds / 60) 分"
-    }
 }
 
-/// 会话计时，读法见 `PiClock`："已运行 0:42"、"已等 1:07"、"5 分钟前"。
+/// 会话计时，读法与写法见 `PiClock`："已运行 4 分"、"已等 30 秒"、"1 时 2 分前"。
 struct PiElapsed: View {
     let clock: PiClock
     var font: Font = .footnote
@@ -226,18 +220,24 @@ struct PiElapsed: View {
     }
 
     var body: some View {
-        switch clock {
-        case .waiting(let since):
-            Text("已等 \(Text(since, style: .timer))").font(font.monospacedDigit()).foregroundStyle(palette.attention)
-        case .running(let since):
-            Text("已运行 \(Text(since, style: .timer))").font(font.monospacedDigit()).foregroundStyle(palette.ink3)
-        case .ago(let date):
-            // "N 分钟前"按分钟重画（计时用的 .timer 样式自己会走）；不在屏幕上的行不画，也就不刷新
-            TimelineView(.everyMinute) { context in
-                Text(date.formatted(.relative(presentation: .named, unitsStyle: .wide)))
-                    .font(font).foregroundStyle(palette.ink3)
-                    .id(context.date)
-            }
+        // 只在文字会变的时刻重画；不在屏幕上的行不画，也就不刷新
+        TimelineView(PiClockSchedule(clock: clock)) { context in
+            Text(clock.text(now: context.date))
+                .font(font.monospacedDigit())
+                .foregroundStyle(clock.isWaiting ? palette.attention : palette.ink3)
         }
     }
+}
+
+/// `PiClock` 的文字在哪些时刻会变（见 `nextChange`）。
+private struct PiClockSchedule: TimelineSchedule {
+    let clock: PiClock
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> some Sequence<Date> {
+        sequence(first: startDate) { clock.nextChange(after: $0) }
+    }
+}
+
+private extension PiClock {
+    var isWaiting: Bool { if case .waiting = self { true } else { false } }
 }

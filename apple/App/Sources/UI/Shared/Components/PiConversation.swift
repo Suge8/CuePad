@@ -52,10 +52,11 @@ struct PiSessionSubtitle: View {
     var body: some View {
         HStack(spacing: 4) {
             PiStateDot(state: session.state, size: 6)
+            // 所在太长时截断（最宽 `placeWidth`），状态与计时不截；整行按内容宽，不被导航栏挤
             if let place = PiPlace.name(of: session, project: project) {
                 Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
+                    .frame(maxWidth: Self.placeWidth, alignment: .leading)
             }
-            // 窄时先截所在，状态与计时不截
             Group {
                 Text(session.state.label).fontWeight(.medium).foregroundStyle(session.state.tint(palette))
                 if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
@@ -65,8 +66,11 @@ struct PiSessionSubtitle: View {
             .fixedSize()
         }
         .font(.caption)
+        .fixedSize()
         .accessibilityElement(children: .combine)
     }
+
+    private static let placeWidth: CGFloat = 140
 }
 
 /// 子代理一行小标签：状态标 + 名字 + 在干什么，图标与颜色同会话状态那一套。

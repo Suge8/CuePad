@@ -19,20 +19,11 @@ nonisolated enum PiChat {
         }
     }
 
-    /// Pi 回答上方的一行："运行了 5 个工具 · 2 分钟"；没调工具时"用时 8 秒"。你的话没有。
+    /// Pi 回答上方的一行："运行了 5 个工具 · 2 分"；没调工具时"用时 8 秒"（时长写法见 `PiClock.duration`）。你的话没有。
     static func meta(_ message: PiChatMessage) -> String? {
         guard message.role == .known(.pi), let started = message.roundStartedAt else { return nil }
-        let took = duration(message.at.timeIntervalSince(started))
+        let took = PiClock.duration(message.at.timeIntervalSince(started))
         return message.toolCount > 0 ? "运行了 \(message.toolCount) 个工具 · \(took)" : "用时 \(took)"
-    }
-
-    /// 做了多久："40 秒"、"2 分钟"、"1 小时 5 分"。
-    static func duration(_ seconds: TimeInterval) -> String {
-        let total = max(Int(seconds.rounded()), 1)
-        if total < 60 { return "\(total) 秒" }
-        if total < 3600 { return "\(total / 60) 分钟" }
-        let minutes = (total % 3600) / 60
-        return minutes == 0 ? "\(total / 3600) 小时" : "\(total / 3600) 小时 \(minutes) 分"
     }
 
     /// 你发出、还没出现在对话里的话（对话里还没有 `deliveryID` 等于它的消息）：作为你的气泡接在末尾，写送达情况。
