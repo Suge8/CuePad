@@ -179,6 +179,20 @@ import Testing
     #expect(try array(try await sb.json("task", "list", "--all")).count == 1)
   }
 
+  @Test func addSubtaskUnderAParent() async throws {
+    let sb = try Sandbox()
+    let alpha = try await sb.project("Alpha")
+    let parent = try await sb.store.createTask("上线", in: alpha.id)
+
+    let child = try await sb.object("task", "add", "备份", "--parent", String(parent.id.uuidString.lowercased().prefix(8)))
+    #expect(child.string("parentId") == parent.id.uuidString.lowercased())
+    #expect(child.string("projectId") == alpha.id.uuidString.lowercased())
+
+    let conflicting = await sb.run("task", "add", "x", "--parent", parent.id.uuidString, "--global")
+    #expect(conflicting.code == 2)
+    #expect(await sb.run("task", "add", "--help").out.contains("--parent"))
+  }
+
   @Test func taskErrors() async throws {
     let sb = try Sandbox()
     let blank = await sb.run("task", "add", "  ")
