@@ -18,6 +18,12 @@ struct SessionScreen: View {
     @State private var lastSeen: PiSessionState?
     @State private var askedForTranscript = false
 
+    /// `seed`：推入方手里的会话状态，作首帧的"最后一次看到"，读到 Store 后即被替换。
+    init(id: UUID, seed: PiSessionState? = nil) {
+        self.id = id
+        _lastSeen = State(initialValue: seed)
+    }
+
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
     private static let readingWidth: CGFloat = 640
     /// 顶栏玻璃钮的高度（系统返回钮）。
@@ -283,7 +289,7 @@ struct SessionPicker: View {
     private func row(_ session: PiSessionState) -> some View {
         let project = workspace.catalog?.project(session.projectID)
         let shown = services.settings.shown(session)
-        return Button { navigation.openSession(session.id, draft: outbox) } label: {
+        return Button { navigation.openSession(session.id, seed: session, draft: outbox) } label: {
             HStack(spacing: 12) {
                 PiStateDot(shown: shown)
                 VStack(alignment: .leading, spacing: 2) {

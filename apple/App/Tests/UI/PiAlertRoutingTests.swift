@@ -1,4 +1,5 @@
 #if os(iOS)
+import CueStore
 import CueSync
 import Foundation
 import Testing
@@ -36,6 +37,23 @@ struct PiAlertRoutingTests {
             #expect(navigation.splitPath.last == .session(session))
         }
         #expect(alerts.consumeTap() == nil)
+    }
+
+    /// 会话页带着列表给的首帧状态推入后，点同一个会话的通知不再叠一页（路由身份只看会话 id）。
+    @Test func 已在看的会话_点它的通知不重复推入() {
+        let id = UUID()
+        let seed = PiSessionState(
+            id: id, sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(.waitingForUser), detail: nil, folder: nil,
+            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
+        let alerts = PiAlertCenter()
+        let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
+        navigation.layout = .split
+        navigation.splitPath = [.session(id, seed: seed)]
+
+        alerts.receive(payload(subscription: "cuepad.pi.waiting", record: id))
+        navigation.open(alert: alerts.consumeTap())
+
+        #expect(navigation.splitPath.count == 1)
     }
 
     @Test func 别的通知_不改导航() {

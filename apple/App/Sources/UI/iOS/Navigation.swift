@@ -35,10 +35,23 @@ final class Navigation {
         case projectSessions(UUID)
         case search
         case card(UUID)
-        /// 一个 Pi 会话的近况与回复（`PiSessionState.id`）。
-        case session(UUID)
+        /// 一个 Pi 会话的近况与回复。
+        case session(SessionRoute)
 
         var isCard: Bool { if case .card = self { true } else { false } }
+
+        /// 会话页；手里有列表里的会话状态时带上作首帧（通知跳转等只有 id 的入口不带）。
+        static func session(_ id: UUID, seed: PiSessionState? = nil) -> Route { .session(SessionRoute(id: id, seed: seed)) }
+    }
+
+    /// 会话页的路由：身份只是记录 id（`PiSessionState.id`）。`seed` 是推入时调用方已持有的会话状态，只作首帧占位
+    /// （标题与状态那块玻璃推入第一帧就在，对话按会话 id 第一次就读），之后一律以 Store 的观察流为准；不参与相等。
+    struct SessionRoute: Hashable {
+        let id: UUID
+        var seed: PiSessionState?
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+        func hash(into hasher: inout Hasher) { hasher.combine(id) }
     }
 
     /// 随手记面板：记入的位置与打开时先做什么。
@@ -210,14 +223,14 @@ final class Navigation {
     }
 
     /// 在当前位置推入一个会话的近况页；`draft` 带进它的回复框（发到 Mac 的卡片或任务），已经写的字留着。
-    func openSession(_ id: UUID, draft: Outbox? = nil) {
+    func openSession(_ id: UUID, seed: PiSessionState? = nil, draft: Outbox? = nil) {
         outbox = nil
         if let draft {
             var reply = replyDraft(for: id)
             reply.attachment = draft
             setReplyDraft(reply, for: id)
         }
-        push(.session(id))
+        push(.session(id, seed: seed))
     }
 
     /// Agent 页的项目筛选：从项目页进来（`entered`）是该项目，否则是在 Agent 页上次选的（本机偏好）；

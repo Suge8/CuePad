@@ -229,7 +229,7 @@ private struct FocusCard: View {
 
     private func sessionLine(_ session: PiSessionState) -> some View {
         let shown = services.settings.shown(session)
-        return Button { navigation.push(.session(session.id)) } label: {
+        return Button { navigation.push(.session(session.id, seed: session)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 PiStateDot(shown: shown, size: 7)
                 Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
