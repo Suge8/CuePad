@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
-  <img src="https://img.shields.io/badge/platform-macOS%2026%20%7C%20iOS%2026-111111.svg" alt="Platform: macOS 26, iOS 26" />
+  <img src="https://img.shields.io/badge/platform-macOS%2026%20%7C%20iOS%2026.1-111111.svg" alt="Platform: macOS 26, iOS/iPadOS 26.1" />
 </p>
 
 **CuePad is a thinking space for working with coding agents.** Write prompts, jot down ideas and goals, see what your agents are doing, and hand text to them in one tap. A calm, paper-like notebook, native on Mac, iPhone and iPad, synced through iCloud.

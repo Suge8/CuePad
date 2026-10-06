@@ -1,6 +1,6 @@
 # CuePad 开发文档
 
-CuePad 是 Swift 原生应用：macOS 26+、iOS/iPadOS 26+，iCloud 同步，Pi 深度集成。Swift 6 严格并发，界面 SwiftUI，编辑器与菜单栏面板用 AppKit/UIKit。产品定位与功能见 [README.md](../README.md)；模块索引见 [AGENTS.md](../AGENTS.md)。
+CuePad 是 Swift 原生应用：macOS 26+、iOS/iPadOS 26.1+，iCloud 同步，Pi 深度集成。Swift 6 严格并发，界面 SwiftUI，编辑器与菜单栏面板用 AppKit/UIKit。产品定位与功能见 [README.md](../README.md)；模块索引见 [AGENTS.md](../AGENTS.md)。
 
 ## 环境与命令
 

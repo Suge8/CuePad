@@ -126,7 +126,8 @@ private struct TabsRoot: View {
             .badge(waiting ?? 0)
         }
         // 随手记是底部附件：平时在标签栏上方一行，下滑时标签栏收小、它并进同一行，底部只剩一行玻璃
-        .modifier(CaptureAccessory(enabled: navigation.bottomPages == 0))
+        // 纸页与会话页收起标签栏时附件跟着收起
+        .tabViewBottomAccessory(isEnabled: navigation.bottomPages == 0) { CaptureEntry() }
         .tabBarMinimizeBehavior(.onScrollDown)
         // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的下拉搜索（与宽屏的搜索页同一组快捷键）
         .background {
@@ -150,19 +151,6 @@ private struct TabsRoot: View {
         }
         // 纸页与会话页独占底部。跟页面的出现与消失走而不是跟路径：手势返回一开始标签栏就回来，松手时页面不再跳
         .toolbarVisibility(navigation.bottomPages > 0 ? .hidden : .visible, for: .tabBar)
-    }
-}
-
-/// 标签栏的底部附件放随手记入口。纸页与会话页收起标签栏时附件跟着收起（iOS 26.1 起才能按页关掉；26.0 上一直在）。
-private struct CaptureAccessory: ViewModifier {
-    let enabled: Bool
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.1, *) {
-            content.tabViewBottomAccessory(isEnabled: enabled) { CaptureEntry() }
-        } else {
-            content.tabViewBottomAccessory { CaptureEntry() }
-        }
     }
 }
 

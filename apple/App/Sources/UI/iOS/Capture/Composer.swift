@@ -341,15 +341,19 @@ struct CameraPicker: UIViewControllerRepresentable {
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
     }
 }
-/// 带上的卡片或任务的全文：文字、图片按原来的顺序，分割线是一条细线。
+/// 带上的卡片或任务的全文：文字、图片按原来的顺序，分割线是一条细线。`omitsTitle`：标题已写在面板顶上时正文从标题之后开始。
+/// `height` 报出内容的高度，面板按它定高。
 private struct AttachmentBody: View {
     let content: String
+    var omitsTitle = false
+    var height: Binding<CGFloat>?
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let blocks = Self.blocks(content, omitsTitle: omitsTitle)
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                ForEach(Array(Self.blocks(content).enumerated()), id: \.offset) { _, block in
+                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
                     case .text(let text): Text(text).font(.body).foregroundStyle(palette.ink).textSelection(.enabled)
                     case .image(let hash): Thumbnail(hash: hash, height: 220, radius: 12)
@@ -357,20 +361,30 @@ private struct AttachmentBody: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(blocks.isEmpty ? 0 : 20)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height?.wrappedValue = $0 }
         }
         .background(palette.paper)
     }
 
-    /// 相邻的文字并成一段，图片与分割线各成一块。
-    private static func blocks(_ content: String) -> [CueToken] {
+    /// 相邻的文字并成一段，图片与分割线各成一块；去掉标题时删掉正文开头的标题那一行。
+    private static func blocks(_ content: String, omitsTitle: Bool) -> [CueToken] {
         var blocks: [CueToken] = []
         for token in CueFormat.parse(content) {
             if case .text(let text) = token, case .text(let previous)? = blocks.last {
                 blocks[blocks.count - 1] = .text(previous + text)
             } else {
                 blocks.append(token)
+            }
+        }
+        if omitsTitle, case .text(let first)? = blocks.first {
+            let title = CardText(content).title
+            var lines = first.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            if let index = lines.firstIndex(where: { !$0.allSatisfy(\.isWhitespace) }),
+               lines[index].trimmingCharacters(in: .whitespaces) == title {
+                lines.remove(at: index)
+                blocks[0] = .text(lines.joined(separator: "\n"))
             }
         }
         return blocks.compactMap { block in
@@ -381,15 +395,22 @@ private struct AttachmentBody: View {
     }
 }
 
-/// 点开带上的卡片：全文，"展开编辑"把它变成这次要发的文字（只对卡片）。
+/// 点开带上的卡片：标题在顶栏、正文在下（不重复标题），"展开编辑"把它变成这次要发的文字（只对卡片）。
+/// 面板按内容定高：短卡片是一张小面板，长的到顶后可拉满屏。
 private struct AttachmentSheet: View {
     let outbox: Navigation.Outbox
     let expand: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @State private var contentHeight: CGFloat = 0
+    @State private var detent = PresentationDetent.height(barHeight)
+
+    /// 顶栏的高度，加到内容高度上就是面板高度（只有标题的卡片就只剩顶栏）。
+    private static let barHeight: CGFloat = 64
+    private var fitted: PresentationDetent { .height(contentHeight + Self.barHeight) }
 
     var body: some View {
         NavigationStack {
-            AttachmentBody(content: outbox.content)
+            AttachmentBody(content: outbox.content, omitsTitle: true, height: $contentHeight)
                 .navigationTitle(CardText(outbox.content).title.nonEmpty ?? "卡片")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -399,7 +420,9 @@ private struct AttachmentSheet: View {
                     }
                 }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([fitted, .large], selection: $detent)
+        // 内容量出来后贴合它；用户拉到满屏后不再缩回
+        .onChange(of: contentHeight) { if detent != .large { detent = fitted } }
     }
 }
 #endif
