@@ -163,4 +163,34 @@ import Testing
     #expect(Set(fetches.joined()) == Set((newer + missingLive).map(\.recordID)))
     #expect(try await rig.store.allPiSessionStates().count == 2_000 + 450)
   }
+
+  private func request(_ status: String, modifiedAt: Int64) -> CKRecord {
+    remoteRecord(.deliveryRequests, id: UUID(), [
+      "content": .text("x"), "targetKind": .text("app"), "targetName": .text("CuePad"), "targetRef": .null,
+      "hostID": .text("mac-a"), "mode": .text("send"), "cardID": .null, "taskID": .null, "status": .text(status),
+      "resultDetail": .null, "handledBy": .null, "createdAt": .int(1_000), "completedAt": .null, "modifiedAt": .int(modifiedAt),
+    ])
+  }
+
+  /// 投送请求同理：本机没有的、已经有结果的（别的设备发的、早已执行完）不追；本机发出、在等结果的那条服务器上更新了就取。
+  @Test func takingATokenSkipsFinishedRequestsThisDeviceNeverHadButFetchesResultsItIsWaitingFor() async throws {
+    let mine = request("pending", modifiedAt: 1_000)
+    await rig.coordinator.handle(.fetched(modifications: [mine], deletions: []))
+    let result = remoteRecord(.deliveryRequests, id: UUID(uuidString: mine.recordID.recordName)!, [
+      "content": .text("x"), "targetKind": .text("app"), "targetName": .text("CuePad"), "targetRef": .null,
+      "hostID": .text("mac-a"), "mode": .text("send"), "cardID": .null, "taskID": .null, "status": .text("succeeded"),
+      "resultDetail": .null, "handledBy": .null, "createdAt": .int(1_000), "completedAt": .int(2_000), "modifiedAt": .int(2_000),
+    ])
+    let othersDone = [request("succeeded", modifiedAt: 3_000), request("failed", modifiedAt: 3_000)]
+    let othersPending = request("pending", modifiedAt: 3_000)
+    let seen = ([result, othersPending] + othersDone).map(versionOnly)
+    let zone = FakeZone(
+      [.success(ZoneChangeBatch(modifications: seen, deletions: [], token: Data("t1".utf8), moreComing: false)), batch("t2")],
+      server: [result, othersPending] + othersDone)
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
+
+    try await puller.pull()
+
+    #expect(Set(await zone.fetches.joined()) == [result.recordID, othersPending.recordID])
+  }
 }
