@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// Pi 会话状态的颜色与文字：工作中绿、等你确认橙、出错红，空闲与已结束是灰。
+/// Pi 会话状态的颜色与文字：只有要你注意的有颜色（等你确认橙、出错红）；工作中是墨色，空闲与已结束是灰，靠形状分开。
 nonisolated extension PiWorkState {
     var label: String {
         switch self {
@@ -39,7 +39,7 @@ nonisolated extension PiWorkState {
     }
 }
 
-/// 子代理的粗状态借会话状态的图标、颜色与文字（工作中绿实心点、等你确认橙、空闲灰勾、出错红叹号）。
+/// 子代理的粗状态借会话状态的图标、颜色与文字（工作中墨色圈点、等你确认橙、空闲灰勾、出错红叹号）。
 nonisolated extension PiSubagentState {
     var workState: Open<PiWorkState> {
         switch activity.known {
@@ -76,7 +76,7 @@ nonisolated extension Open<PiWorkState> {
 extension PiWorkState {
     func tint(_ palette: Palette) -> Color {
         switch self {
-        case .thinking, .outputting, .tool, .delegating: palette.live
+        case .thinking, .outputting, .tool, .delegating: palette.ink
         case .waitingForUser: palette.attention
         case .error: palette.failure
         case .settled: palette.ink3
@@ -84,15 +84,14 @@ extension PiWorkState {
         }
     }
 
-    /// 状态标的形状，与颜色一起表达状态（色弱也分得出）：等你确认问号、出错叹号、空闲勾、已结束空心圈；
-    /// 工作中是实心点（不用符号），见 `PiStateDot`。
-    var symbol: String? {
+    /// 状态标的形状，与颜色一起表达状态（色弱也分得出）：等你确认问号、出错叹号、工作中圈里一个实心点、空闲勾、已结束空心圈。
+    var symbol: String {
         switch self {
         case .waitingForUser: "questionmark.circle.fill"
         case .error: "exclamationmark.circle.fill"
+        case .thinking, .outputting, .tool, .delegating: "smallcircle.filled.circle"
         case .settled: "checkmark.circle"
         case .ended: "circle"
-        case .thinking, .outputting, .tool, .delegating: nil
         }
     }
 }
@@ -124,7 +123,7 @@ nonisolated extension PiSessionState {
 }
 
 /// 会话状态标（全 App 只此一份：Pi 页、近况、书架、侧栏、Mac 侧栏与菜单栏）：颜色 + 形状表达状态，
-/// 等你确认橙色问号、出错红色叹号、工作中绿色实心点、空闲灰色勾、已结束更淡的空心圈；不做循环动画（常驻多处，
+/// 等你确认橙色问号、出错红色叹号、工作中墨色圈点、空闲灰色勾、已结束更淡的空心圈；不做循环动画（常驻多处，
 /// 循环既耗电也分散注意）。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 旁边有状态文字时读屏跳过它；`announces` 用在只有一个标的地方（书架、侧栏的项目旁），标自己带读屏标签与悬停提示。
 struct PiStateDot: View {
@@ -138,16 +137,10 @@ struct PiStateDot: View {
     private var box: CGFloat { size * 1.8 * scale }
 
     var body: some View {
-        let mark = Group {
-            if let symbol = state.known?.symbol ?? (state.known == nil ? "circle.dashed" : nil) {
-                Image(systemName: symbol).font(.system(size: box, weight: .semibold))
-            } else {
-                Circle().frame(width: size * scale, height: size * scale)
-            }
-        }
-        .foregroundStyle(state.tint(palette))
-        .frame(width: box, height: box)
-        .animation(Motion.quick, value: state)
+        let mark = Image(systemName: state.known?.symbol ?? "circle.dashed").font(.system(size: box, weight: .semibold))
+            .foregroundStyle(state.tint(palette))
+            .frame(width: box, height: box)
+            .animation(Motion.quick, value: state)
         if announces {
             mark.accessibilityLabel(state.presence).help(state.presence)
         } else {
