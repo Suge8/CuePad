@@ -32,7 +32,7 @@ struct TasksScreen: View {
         #endif
         }
         .listStyle(.insetGrouped)
-        .deskBackground()
+        .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .top, spacing: 0) {
             NewTaskLine(project: workspace.currentProject, projects: workspace.catalog?.projects)
                 .padding(.horizontal, 6)

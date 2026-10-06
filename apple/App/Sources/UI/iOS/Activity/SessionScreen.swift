@@ -61,8 +61,6 @@ struct SessionScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        // 页底色铺在导航容器上：对话要等读库（异步）才有，推入的第一帧只有它；铺在滚动区上时那一帧整页透明，露出系统的黑
-        .containerBackground(palette.desk, for: .navigation)
         .navigationTitle(session?.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
