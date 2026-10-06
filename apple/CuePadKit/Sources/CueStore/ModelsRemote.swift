@@ -36,9 +36,9 @@ public enum PiAlert: String, Sendable, CaseIterable {
   case waitingForUser, settled
 }
 
-/// 会话记录上的摘要（列表预览、通知、会话页顶部用）：对话（`PiChatMessage`）的投影，由同一个写者（Mac 读会话文件）
-/// 在写对话的同一事务里写（`CueStore.writePiTranscript`），界面直接读、不和对话对账。`question` 例外：它是 Pi 此刻弹出的
-/// 对话框，不在对话里，来自 Pi 桥。
+/// 会话记录上的摘要（列表预览、会话页顶部用）：对话（`PiChatMessage`）的投影，由同一个写者（Mac 读会话文件）
+/// 在写对话的同一事务里写（`CueStore.writePiTranscript`），界面直接读、不和对话对账。等你回答的弹窗（`question`）
+/// 不在对话里，来自 Pi 桥，由状态记录器写。
 public struct PiRecap: Sendable, Equatable {
   /// 最近一轮已做完的问答里你说的那句（单行，至多 500 字符）；与 `lastReply` 成对，在这一轮做完时一起更新。
   public var lastPrompt: String?
@@ -47,14 +47,11 @@ public struct PiRecap: Sendable, Equatable {
   /// 进行中的提问：你说了、这一轮还没做完（单行，至多 500 字符）；这一轮做完时移进 `lastPrompt`，没有时为 nil。
   /// 界面据此写"你说：… · Pi 正在处理"，上一轮的问答另行折叠，不把新提问和旧回答配在一起。
   public var pendingPrompt: String?
-  /// 正在等你回答的弹窗；不在等待时为 nil。
-  public var question: PiQuestion?
 
-  public init(lastPrompt: String? = nil, lastReply: String? = nil, pendingPrompt: String? = nil, question: PiQuestion? = nil) {
+  public init(lastPrompt: String? = nil, lastReply: String? = nil, pendingPrompt: String? = nil) {
     self.lastPrompt = lastPrompt
     self.lastReply = lastReply
     self.pendingPrompt = pendingPrompt
-    self.question = question
   }
 }
 
@@ -322,7 +319,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var detail: String?
   /// 工作目录的最后一段（文件夹名），不含完整路径；手机据此在没有绑定项目时写出会话"在哪"。旧版本写的记录没有。
   public var folder: String?
-  /// 近况，见 `PiRecap`（同名字段）。旧版本写的记录没有。
+  /// 摘要，见 `PiRecap`（同名字段）；`question` 是 Pi 此刻弹出、等你回答的对话框。旧版本写的记录没有。
   public var lastPrompt: String?
   public var lastReply: String?
   public var pendingPrompt: String?
@@ -371,6 +368,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.subagents = subagents
     self.pendingPrompt = pendingPrompt
   }
+
+  /// 记录上的摘要（对话的投影）。
+  public var recap: PiRecap { PiRecap(lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt) }
 
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
@@ -436,6 +436,8 @@ public enum DeliveryOutcome: Sendable {
 
 extension PiSessionState: Record {
   static let table = Table.piSessionStates
+  /// 对话的投影（见 `PiRecap`），只由 `writePiTranscript` 写
+  static let recapColumns: Set<String> = ["lastPrompt", "lastReply", "pendingPrompt"]
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",

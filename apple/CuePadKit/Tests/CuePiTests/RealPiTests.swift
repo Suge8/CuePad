@@ -272,89 +272,51 @@ struct RealPiTests {
         }
     }
 
-    /// 近况：最后一条提问（单行）与助手最后一轮的最终回答（保留换行，不含工具输出）。
+    /// 摘要（读会话文件）：你说的话单行、回答保留换行且不含工具输出；机器消息不算你说的，它触发的那轮回答照常算；超长截断。
     @Test func recapIsTheLastPromptAndTheFinalReplyWithoutToolOutput() async throws {
-        try await withRig { pi, bridge, _ in
+        try await withRig { pi, bridge, s in
             try pi.prompt("第一行\n第二行")
-            try await eventually("回答到了", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "ECHO 第一行\n第二行 IMAGES[]" }
-            #expect(bridge.sessions.first?.lastPrompt == "第一行 第二行")
+            try await eventually("回答到了", timeout: .seconds(20)) { recap(of: s)?.lastReply == "ECHO 第一行\n第二行 IMAGES[]" }
+            #expect(recap(of: s)?.lastPrompt == "第一行 第二行")
 
             try pi.prompt("[[tool:echo TOOL-OUTPUT-42]]")
-            try await eventually("工具轮的最终回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "TOOL_DONE" }
-            #expect(bridge.sessions.first?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
+            try await eventually("工具轮的最终回答", timeout: .seconds(20)) { recap(of: s)?.lastReply == "TOOL_DONE" }
+            #expect(recap(of: s)?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
 
             // 整条只由 `<名字>\n…\n</名字>` 块组成的是扩展投进来的机器消息：不算你说的，它触发的那轮回答照常算
             try pi.prompt("<some_event>\n子任务完成\n</some_event>\n<other_note>\n两行\n内容\n</other_note>")
-            try await eventually("机器消息那轮的回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.contains("子任务完成") == true }
-            #expect(bridge.sessions.first?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
+            try await eventually("机器消息那轮的回答", timeout: .seconds(20)) { recap(of: s)?.lastReply?.contains("子任务完成") == true }
+            #expect(recap(of: s)?.lastPrompt == "[[tool:echo TOOL-OUTPUT-42]]")
 
             // 块与块之间夹着真人文字就不是机器消息
             let mixed = "<some_event>\n机器一\n</some_event>\n请解释这个结果\n<some_event>\n机器二\n</some_event>"
             try pi.prompt(mixed)
-            try await eventually("夹着真人文字的那轮回答", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.contains("请解释这个结果") == true }
-            #expect(bridge.sessions.first?.lastPrompt?.contains("请解释这个结果") == true)
+            try await eventually("夹着真人文字的那轮回答", timeout: .seconds(20)) { recap(of: s)?.lastReply?.contains("请解释这个结果") == true }
+            #expect(recap(of: s)?.lastPrompt?.contains("请解释这个结果") == true)
 
             let long = String(repeating: "长", count: 1300)
             try pi.prompt(long)
-            try await eventually("长回答截断", timeout: .seconds(20)) { bridge.sessions.first?.lastReply?.hasPrefix("ECHO 长") == true }
-            let session = try #require(bridge.sessions.first)
-            #expect(session.lastPrompt?.count == 500 && session.lastPrompt?.hasSuffix("…") == true)
-            #expect(session.lastReply?.count == 1200 && session.lastReply?.hasSuffix("…") == true)
+            try await eventually("长回答截断", timeout: .seconds(20)) { recap(of: s)?.lastReply?.hasPrefix("ECHO 长") == true }
+            let summary = try #require(recap(of: s))
+            #expect(summary.lastPrompt?.count == 500 && summary.lastPrompt?.hasSuffix("…") == true)
+            #expect(summary.lastReply?.count == 1200 && summary.lastReply?.hasSuffix("…") == true)
         }
     }
 
-    /// 最近一轮已完成的问答成对更新（这一轮做完时一起写）；新的提问在做的时候是"进行中的提问"，不和上一轮的回答配在一起。
-    @Test func aNewPromptIsPendingUntilItsRoundEndsAndTheLastPairStaysTogether() async throws {
-        try await withRig { pi, bridge, _ in
-            try pi.prompt("第一问")
-            try await eventually("第一轮做完", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "ECHO 第一问 IMAGES[]" }
-            #expect(bridge.sessions.first?.pendingPrompt == nil)
-
-            try pi.prompt("[[slow]] 第二问")
-            try await eventually("第二问在做", timeout: .seconds(20)) { bridge.sessions.first?.pendingPrompt == "[[slow]] 第二问" }
-            let during = try #require(bridge.sessions.first)
-            #expect(during.lastPrompt == "第一问" && during.lastReply == "ECHO 第一问 IMAGES[]")
-
-            try await eventually("第二轮做完", timeout: .seconds(20)) { bridge.sessions.first?.pendingPrompt == nil }
-            let after = try #require(bridge.sessions.first)
-            #expect(after.lastPrompt == "[[slow]] 第二问" && after.lastReply == "ECHO [[slow]] 第二问 IMAGES[]")
-        }
-    }
-
-    /// 上次在一轮中途退出（工具还在跑）的会话，接上时近况是之前那一轮做完的问答，不把半截的助手消息当成回答。
-    @Test func resumingAfterAnInterruptedRoundRestoresTheLastCompletedExchange() async throws {
-        let pi = try await PiProcess(modelInAgentDirectory: true)
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
-        defer { bridge.stop(); pi.stop() }
-        try bridge.start()
-        try await eventually("桥发现会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
-        let file = try #require(bridge.sessions.first?.sessionFile)
-        try pi.prompt("第一问")
-        try await eventually("第一轮做完", timeout: .seconds(20)) { bridge.sessions.first?.lastReply == "ECHO 第一问 IMAGES[]" }
-        try pi.prompt("[[tool:sleep 30]]")
-        try await eventually("工具在跑", timeout: .seconds(20)) {
-            if case .tool = bridge.sessions.first?.state { true } else { false }
-        }
-        pi.kill(SIGKILL)
-        try await eventually("会话结束", timeout: .seconds(20)) { bridge.sessions.isEmpty }
-
-        let again = try await PiProcess(alongside: pi, sessionFile: file)
-        defer { again.stop() }
-        try await eventually("接上", timeout: .seconds(20)) { bridge.sessions.contains { $0.pid == again.pid } }
-        let resumed = try #require(bridge.sessions.first { $0.pid == again.pid })
-        #expect(resumed.lastPrompt == "第一问" && resumed.lastReply == "ECHO 第一问 IMAGES[]")
-    }
-
-    /// 接上已有会话（恢复会话文件）时，近况从会话文件里补回来。
-    @Test func recapIsRestoredFromTheSessionFileOnResume() async throws {
+    /// 上次在一轮中途退出（工具还在跑）的会话：摘要仍是之前那一轮做完的问答，不把半截的助手消息当成回答。
+    @Test func anInterruptedRoundLeavesTheLastCompletedExchangeInTheRecap() async throws {
         try await withRig { pi, bridge, s in
-            try pi.prompt("记住这个")
-            try await eventually("回答到了", timeout: .seconds(20)) { bridge.sessions.first?.lastReply != nil }
-            let log = ChangeLog(bridge)
-            try pi.send(["type": "switch_session", "sessionPath": try #require(s.sessionFile).path])
-            try await eventually("重新连上", timeout: .seconds(20)) { log.changes.contains { if case .appeared = $0 { true } else { false } } }
-            let again = try #require(bridge.sessions.first { $0.sessionID == s.sessionID })
-            #expect(again.lastPrompt == "记住这个" && again.lastReply == "ECHO 记住这个 IMAGES[]")
+            try pi.prompt("第一问")
+            try await eventually("第一轮做完", timeout: .seconds(20)) { recap(of: s)?.lastReply == "ECHO 第一问 IMAGES[]" }
+            try pi.prompt("[[tool:sleep 30]]")
+            try await eventually("工具在跑", timeout: .seconds(20)) {
+                if case .tool = bridge.sessions.first?.state { true } else { false }
+            }
+            pi.kill(SIGKILL)
+            try await eventually("会话结束", timeout: .seconds(20)) { bridge.sessions.isEmpty }
+
+            let summary = try #require(recap(of: s))
+            #expect(summary.lastPrompt == "第一问" && summary.lastReply == "ECHO 第一问 IMAGES[]")
         }
     }
 

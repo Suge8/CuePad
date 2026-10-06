@@ -12,7 +12,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 11;
+const EXTENSION_VERSION = 12;
 const PROTOCOL_VERSION = 1;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -24,9 +24,7 @@ const DETAIL_LIMIT = 120;
 /** 上报首条用户消息的字符数上限：它只用来当单行显示名，界面与 Pi 自己的会话列表都只显示一行，
  * 不必把可能几 MB 的首条消息（贴入的日志、代码）在每次连接与同步时传来传去。与 CuePi 的 `PiSessionName.firstMessageLimit` 相同。 */
 const FIRST_MESSAGE_LIMIT = 200;
-/** 近况的字符数上限（含省略号）：手机打开会话时看的最后提问、最终回答与待确认的问题，不同步完整对话 */
-const PROMPT_LIMIT = 500;
-const REPLY_LIMIT = 1200;
+/** 等你回答的弹窗文案的字符数上限（含省略号） */
 const QUESTION_LIMIT = 500;
 /** 标记已经包装过的 ui 对象 */
 const CAPTURED = Symbol("cuepad.captured");
@@ -34,10 +32,6 @@ const CAPTURED = Symbol("cuepad.captured");
 const SUBSESSIONS = Symbol.for("cuepad.bridge.subsessions");
 /** 子代理会话文件所在目录名：`<父会话文件所在目录>/subagents/`（FireCode 的约定） */
 const SUBAGENTS_DIRECTORY = "subagents";
-/** 扩展投进会话的机器消息：整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成
- * （如 FireCode 的 `<firecode_master_event>`、`<firecode_watcher>`、`<firecode_review>`）。它不是你说的话。
- * 块正文止于第一个同名闭合标签：块与块之间夹着真人文字时整条不匹配 */
-const MACHINE_MESSAGE = /^(?:<([A-Za-z][\w.-]*)>\n(?:(?!\n<\/\1>)[\s\S])*\n<\/\1>\s*)+$/u;
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
 const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
@@ -148,39 +142,6 @@ function clip(text: string, limit: number): string | null {
 	return chars.length <= limit ? chars.join("") : chars.slice(0, limit - 1).join("") + "…";
 }
 
-function isMachineMessage(message: any): boolean {
-	return MACHINE_MESSAGE.test(messageText(message).trim());
-}
-
-function promptText(message: any): string | null {
-	return clip(messageText(message).replace(/[\s\p{Cc}]+/gu, " "), PROMPT_LIMIT);
-}
-
-/** 助手消息的回答文字：只取文字块（思考与工具调用不算），保留换行。 */
-function replyText(message: any): string | null {
-	const blocks = Array.isArray(message?.content) ? message.content : [];
-	return clip(blocks.filter((block: any) => block?.type === "text").map((block: any) => block.text).join("\n"), REPLY_LIMIT);
-}
-
-/** 当前分支上最后一条符合条件的消息（恢复会话时补回近况）。 */
-function lastMessage(entries: any[], matches: (message: any) => boolean): any {
-	for (let i = entries.length - 1; i >= 0; i--) {
-		if (entries[i]?.type === "message" && matches(entries[i].message)) return entries[i].message;
-	}
-	return undefined;
-}
-
-/** 会话文件当前分支上最近一轮已做完的问答：最后一条结束了一轮的助手回答（`stopReason` 不是 `toolUse`——那是一轮中途
- * 调工具，后面还没做完），与它之前你说的最后一句（机器消息不算）。之后没做完的一轮（上次中途退出）不算进来。 */
-function lastExchange(entries: any[]): { lastPrompt: string | null; lastReply: string | null } {
-	const endsRound = (entry: any) => entry?.type === "message" && entry.message?.role === "assistant" && entry.message.stopReason !== "toolUse";
-	let end = entries.length - 1;
-	while (end >= 0 && !endsRound(entries[end])) end--;
-	if (end < 0) return { lastPrompt: null, lastReply: null };
-	const prompt = lastMessage(entries.slice(0, end), (m) => m?.role === "user" && !isMachineMessage(m));
-	return { lastPrompt: promptText(prompt), lastReply: replyText(entries[end].message) };
-}
-
 type Subsession = { directory: string; name: string; kind: string };
 type Registry = { sessions: Map<string, Subsession>; listeners: Set<() => void> };
 const registry: Registry = ((globalThis as any)[SUBSESSIONS] ??= { sessions: new Map(), listeners: new Set() });
@@ -228,15 +189,16 @@ export default function (pi: any) {
 	let busySince: number | null = null;
 	/** 会话名（`/name`）与首条用户消息：CuePad 据此按 Pi 会话列表的规则显示会话；其余是近况 */
 	type Info = {
-		name: string | null; firstMessage: string | null; lastPrompt: string | null; lastReply: string | null;
-		pendingPrompt: string | null; question: Question | null;
+		name: string | null; firstMessage: string | null; question: Question | null;
 		subagents: { name: string; kind: string }[];
 	};
 	/** 等你回答的弹窗：`id` 非空的可以从 CuePad 作答（confirm/select/text）；editor 与 custom 只能在 Pi 里答 */
 	type Question = { id: string | null; kind: string; text: string; options: string[] };
 	/** 会话载入时的条目数：之后多出来的是这个进程自己写的 */
 	let loadedEntries = 0;
-	let info: Info = { name: null, firstMessage: null, lastPrompt: null, lastReply: null, pendingPrompt: null, question: null, subagents: [] };
+	let info: Info = { name: null, firstMessage: null, question: null, subagents: [] };
+	/** CuePad 送进来、还没落成会话里一条消息的投送请求：文字 → 请求 id，按发出的先后（同一文字发了两次时先发的先认领） */
+	const deliveries: { text: string; id: string }[] = [];
 	/** 本会话是某个会话的进程内子会话（子代理）时，它在登记表里的键（会话文件路径）：状态只进登记表，不开 socket */
 	let subsessionKey: string | undefined;
 	let stopWatchingSubsessions: (() => void) | undefined;
@@ -334,6 +296,7 @@ export default function (pi: any) {
 			? text
 			: [{ type: "text", text }, ...images.map((i) => ({ type: "image", data: i.data, mimeType: i.mimeType }))];
 		const busy = !ctx.isIdle();
+		if (typeof command.deliveryId === "string") deliveries.push({ text, id: command.deliveryId });
 		// deliverAs 只在会话正忙时生效；总是带上，避免"检查空闲"与"发送"之间 agent 恰好开始而抛错
 		pi.sendUserMessage(content, { deliverAs });
 		ack({ ok: true, delivered: busy ? deliverAs : "immediate" });
@@ -522,12 +485,9 @@ export default function (pi: any) {
 		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return registerSubsession();
 		tty = readTTY();
 		loadedEntries = ctx.sessionManager.getEntries().length;
-		const branch = ctx.sessionManager.getBranch();
 		info = {
 			name: pi.getSessionName() ?? null,
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
-			...lastExchange(branch),
-			pendingPrompt: null,
 			question: null,
 			subagents: [],
 		};
@@ -549,9 +509,11 @@ export default function (pi: any) {
 	pi.on("message_end", (event: any) => {
 		if (event.message?.role !== "user") return;
 		// 首条消息与 Pi 会话列表一致，不区分机器消息
-		const firstMessage = info.firstMessage ?? preview(messageText(event.message));
-		// 你说的这句在这一轮做完前是进行中的提问，不和上一轮的回答配在一起
-		updateInfo(isMachineMessage(event.message) ? { firstMessage } : { firstMessage, pendingPrompt: promptText(event.message) });
+		updateInfo({ firstMessage: info.firstMessage ?? preview(messageText(event.message)) });
+		// CuePad 送进来的：把投送请求 id 写到这条消息上。扩展先收到 message_end、Pi 再把同一个消息对象写进会话文件，
+		// 所以 id 随消息落盘，对话（读会话文件）据此认出它
+		const index = deliveries.findIndex((d) => d.text === messageText(event.message));
+		if (index >= 0) event.message.cuepadDelivery = deliveries.splice(index, 1)[0].id;
 	});
 
 	// ---- Pi 事件 → 状态 ----
@@ -594,8 +556,6 @@ export default function (pi: any) {
 	});
 	pi.on("agent_end", (event: any) => {
 		const last = [...event.messages].reverse().find((m: any) => m.role === "assistant");
-		// 这一轮做完：问与答一起更新（机器消息触发的轮没有新的提问，沿用上一句）
-		updateInfo({ lastPrompt: info.pendingPrompt ?? info.lastPrompt, lastReply: replyText(last), pendingPrompt: null });
 		if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
 		else if (last?.stopReason === "aborted") tracker.outcome = { kind: "done", aborted: true };
 	});

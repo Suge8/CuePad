@@ -163,7 +163,9 @@ struct SessionProjectsTracker: ViewModifier {
         let key = Key(
             sessions: pi.sessions.map { "\($0.id) \($0.cwd.path)" }, ended: Set(pi.endedSessions.keys),
             directories: workspace.catalog?.directories)
-        content.task(id: key) { await workspace.refreshSessionProjects() }
+        content
+            .task(id: key) { await workspace.refreshSessionProjects() }
+            .task { await workspace.observeSessionRecaps() }
     }
 }
 #endif

@@ -95,7 +95,7 @@ import Testing
     let rig = try Rig()
     let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
     let question = PiQuestion(promptID: "p1", kind: .select, text: "要覆盖 public/feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, title: "homepage", recap: PiRecap(question: question))
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, title: "homepage", question: question)
 
     let state = try #require(try await rig.store.allPiSessionStates().first)
     let record = RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: state.id.uuidString.lowercased())), zoneID: zone)

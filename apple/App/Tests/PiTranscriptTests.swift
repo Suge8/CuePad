@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueStore
-import CuePi
+@testable import CuePi
 import Foundation
 import Testing
 @testable import CuePad
@@ -46,6 +46,18 @@ struct PiTranscriptTests {
             continuation.finish()
         }
         await services.consumePiHistory(events)
+    }
+
+    /// 桥上看到这个会话在线（状态记录器写出未结束的记录；不结束）。
+    private func live(_ sessionID: String, file: URL) async throws -> CuePi.PiSession {
+        let session = CuePi.PiSession(
+            id: "\(sessionID).100", sessionID: sessionID, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
+            mode: "tui", model: nil, terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .thinking, stateSince: .now)
+        try await services.consumePiChanges(AsyncStream { continuation in
+            continuation.yield(.appeared(session))
+            continuation.finish()
+        })
+        return session
     }
 
     private func record(_ sessionID: String) async throws -> PiSessionState {
@@ -101,15 +113,13 @@ struct PiTranscriptTests {
             #"{"type":"session","version":3,"id":"s1","timestamp":"\#(now.formatted(Self.iso))","cwd":"/work/x"}"#,
             line("u1", nil, at: now, user: "做到一半"),
         ].joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
+        let session = try await live("s1", file: file)
         await consume([file])
         #expect(try await record("s1").pendingPrompt == "做到一半")
 
-        let live = CuePi.PiSession(
-            id: "s1.100", sessionID: "s1", sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
-            mode: "tui", model: nil, terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .thinking, stateSince: .now)
         try await services.consumePiChanges(AsyncStream { continuation in
-            continuation.yield(.appeared(live))
-            continuation.yield(.ended(live, reason: .closed(reason: "quit")))
+            continuation.yield(.stateChanged(session, from: .idle))
+            continuation.yield(.ended(session, reason: .closed(reason: "quit")))
             continuation.finish()
         })
         #expect(try await record("s1").pendingPrompt == nil)
@@ -122,6 +132,7 @@ struct PiTranscriptTests {
     /// 文件一追加就写：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
     @Test func 文件追加一条用户消息后_摘要与消息在1秒内可读() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
+        _ = try await live("s1", file: file)
         let indexer = PiHistoryIndexer(root: rig.piPaths.sessionsDirectory) { _ in nil }
         let consuming = Task { await services.consumePiHistory(indexer.events()) }
         defer { consuming.cancel() }
@@ -133,20 +144,16 @@ struct PiTranscriptTests {
         try handle.write(contentsOf: Data((line("u3", "a2", at: .now, user: "第三问") + "\n").utf8))
         try handle.close()
 
-        let seen = try await withThrowingTaskGroup(of: Bool.self) { group in
-            group.addTask { @MainActor in
-                for try await state in store.observe([.piMessages, .piSessionStates], {
-                    (try $0.piMessages(of: "s1").last?.text, try $0.allPiSessionStates().first?.pendingPrompt)
-                }) where state.0 == "第三问" && state.1 == "第三问" { return true }
-                return false
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(1))
-                return false
-            }
-            defer { group.cancelAll() }
-            return try await group.next() ?? false
+        let deadline = Task { try await Task.sleep(for: .seconds(1)) }
+        let watch = Task { @MainActor in
+            for try await state in store.observe([.piMessages, .piSessionStates], {
+                (try $0.piMessages(of: "s1").last?.text, try $0.allPiSessionStates().first?.pendingPrompt)
+            }) where state.0 == "第三问" && state.1 == "第三问" { return true }
+            return false
         }
+        Task { try? await deadline.value; watch.cancel() }
+        let seen = (try? await watch.value) ?? false
+        deadline.cancel()
         #expect(seen, "追加后 \(ContinuousClock.now - appended) 仍没读到")
     }
 }

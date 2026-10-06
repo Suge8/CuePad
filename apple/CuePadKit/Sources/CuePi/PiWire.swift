@@ -57,40 +57,31 @@ enum PiWire {
         /// 与 `info` 消息同样的字段，平铺在 hello 里
         var name: String?
         var firstMessage: String?
-        var lastPrompt: String?
-        var lastReply: String?
-        var pendingPrompt: String?
         var question: PiPrompt?
         var subagents: [PiSubagent]?
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
             case extensionVersion, sessionId, sessionFile, pid, cwd, mode, model, tty, term, state, launchToken, hosted
-            case name, firstMessage, lastPrompt, lastReply, pendingPrompt, question, subagents
+            case name, firstMessage, question, subagents
         }
 
         var info: Info {
-            Info(name: name, firstMessage: firstMessage, lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt,
-                 question: question, subagents: subagents)
+            Info(name: name, firstMessage: firstMessage, question: question, subagents: subagents)
         }
     }
 
-    /// 会话名、首条用户消息（扩展 v3 起）、近况（v4 起）、子代理（v5 起）与进行中的提问（v11 起）；旧扩展没有的为 nil。
+    /// 会话名、首条用户消息（扩展 v3 起）、等你回答的弹窗（v4 起）与子代理（v5 起）；旧扩展没有的为 nil。
+    /// 问答近况不走这里：对话与摘要只来自会话文件（`PiHistory`）。
     struct Info: Decodable {
         var name: String?
         var firstMessage: String?
-        var lastPrompt: String?
-        var lastReply: String?
-        var pendingPrompt: String?
         var question: PiPrompt?
         var subagents: [PiSubagent]?
 
         func apply(to session: inout PiSession) {
             session.name = name
             session.firstMessage = firstMessage
-            session.lastPrompt = lastPrompt
-            session.lastReply = lastReply
-            session.pendingPrompt = pendingPrompt
             session.question = question
             session.subagents = subagents ?? []
         }
@@ -138,13 +129,14 @@ enum PiWire {
         var text: String
         var images: [Image]?
         var deliverAs: String?
+        var deliveryId: String?
     }
 
     static func sendCommand(id: String, _ message: PiMessage) throws -> Data {
         try encode(Command(
             t: "send", id: id, text: message.text,
             images: message.images.isEmpty ? nil : message.images.map { .init(mimeType: $0.mimeType, data: $0.data.base64EncodedString()) },
-            deliverAs: message.whenBusy?.rawValue))
+            deliverAs: message.whenBusy?.rawValue, deliveryId: message.deliveryID))
     }
 
     static func pasteCommand(id: String, text: String) throws -> Data {

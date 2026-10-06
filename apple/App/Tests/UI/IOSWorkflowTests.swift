@@ -34,7 +34,7 @@ struct IOSWorkflowTests {
     @Test func 作答_请求发给会话所在的Mac_带这次弹窗的标识与答案() async throws {
         let question = PiQuestion(promptID: "p-7", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
         try await PiStateRecorder(store: store, hostID: "mac-b").update(
-            sessionID: "atlas", state: .waitingForUser, title: "atlas", recap: PiRecap(question: question))
+            sessionID: "atlas", state: .waitingForUser, title: "atlas", question: question)
         let session = try #require(try await store.allPiSessionStates().first)
 
         let request = try await app.services.answer(.option("覆盖"), to: session)

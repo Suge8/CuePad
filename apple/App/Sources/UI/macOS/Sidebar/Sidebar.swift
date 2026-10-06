@@ -210,7 +210,10 @@ private struct PiSection: View {
         let status = services.piExtension.status
         let live = services.pi.sessions
         let rows = PiSessionState.sidebarRows(
-            live: live.map { PiSessionState.live($0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id]) },
+            live: live.map {
+                PiSessionState.live(
+                    $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: workspace.sessionRecaps[$0.sessionID])
+            },
             recorded: recorded, pastLimit: Self.pastLimit)
         if let installation = status?.pi, !installation.isSupported {
             Section("Pi") { PiSetupRow(installation: installation) }

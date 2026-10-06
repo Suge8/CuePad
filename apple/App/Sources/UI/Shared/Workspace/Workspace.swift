@@ -78,6 +78,9 @@ final class Workspace {
     /// Pi 会话（会话 id，含本次运行里已结束的）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由根视图调用 `refreshSessionProjects` 重算。
     private(set) var sessionProjects: [String: UUID] = [:]
+    /// 本机在线会话的摘要（Pi 自己的会话 id → 同步记录上的问与答）：桥上没有，界面把它配到桥上的实时状态上。
+    /// 由 `observeSessionRecaps` 跟随同步记录。
+    private(set) var sessionRecaps: [String: PiRecap] = [:]
     /// 本次运行里已结束的会话（会话 id），按本窗口看到它们结束的先后。可观察：默认发送目标取最后结束的那个。
     private(set) var endedOrder: [String] = []
 
@@ -112,6 +115,20 @@ final class Workspace {
     private func release() {
         if let card = pressedCard { presence(of: card).pressing = false }
         pressedCard = nil
+    }
+
+    /// 跟随同步记录里在线会话的摘要，直到任务取消。
+    func observeSessionRecaps() async {
+        do {
+            for try await recaps in services.store.observe([.piSessionStates], {
+                Dictionary(try $0.piSessionPage(.live).items.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first }
+            }) where recaps != sessionRecaps {
+                sessionRecaps = recaps
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
     }
 
     /// 重算活着的会话各归哪个项目。

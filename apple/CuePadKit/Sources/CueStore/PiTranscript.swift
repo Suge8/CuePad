@@ -113,19 +113,23 @@ extension CueStore {
   }
 
   /// 写一段对话，并在同一事务里把摘要写到会话记录上：摘要只有这一个写者，界面不必和对话对账。
-  /// 会话记录还不存在时只写消息（记录随后由状态或历史写出时摘要再补上）。
   public func writePiTranscript(_ transcript: PiTranscript) throws {
-    try write {
-      for message in transcript.messages { try insert(message, ignoringExisting: true) }
-      try db.run(
-        """
-        UPDATE piSessionStates SET lastPrompt = ?, lastReply = ?, pendingPrompt = ?, modifiedAt = ?
-        WHERE id = ? AND (lastPrompt IS NOT ? OR lastReply IS NOT ? OR pendingPrompt IS NOT ?)
-        """,
-        [transcript.recap.lastPrompt, transcript.recap.lastReply, transcript.recap.pendingPrompt, Date.stamp,
-         PiSessionState.recordID(sessionID: transcript.sessionID),
-         transcript.recap.lastPrompt, transcript.recap.lastReply, transcript.recap.pendingPrompt])
-    }
+    try write { try applyTranscript(transcript) }
+  }
+
+  /// 在调用方的写事务里写对话与摘要。会话记录还不存在时只写消息。已结束的会话没有进行中的提问：
+  /// 文件里最后一句没等到回答（上次中途退出）时，那句不算"正在处理"。
+  func applyTranscript(_ transcript: PiTranscript) throws {
+    for message in transcript.messages { try insert(message, ignoringExisting: true) }
+    let recap = transcript.recap
+    let ended = PiWorkState.ended.rawValue
+    try db.run(
+      """
+      UPDATE piSessionStates SET lastPrompt = ?1, lastReply = ?2, pendingPrompt = CASE WHEN state = ?3 THEN NULL ELSE ?4 END,
+        modifiedAt = ?5
+      WHERE id = ?6 AND (lastPrompt IS NOT ?1 OR lastReply IS NOT ?2 OR pendingPrompt IS NOT (CASE WHEN state = ?3 THEN NULL ELSE ?4 END))
+      """,
+      [recap.lastPrompt, recap.lastReply, ended, recap.pendingPrompt, Date.stamp, PiSessionState.recordID(sessionID: transcript.sessionID)])
   }
 
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动、对话也是 `window` 之前写出的（按需补写的留够 `window`）。

@@ -12,7 +12,7 @@ struct RealHostTests {
         try await eventually("桥发现会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
         let session = bridge.sessions[0]
         try pi.prompt("第一轮")
-        try await eventually("回答落盘", timeout: .seconds(20)) { bridge.sessions.first?.lastReply != nil }
+        try await eventually("回答落盘", timeout: .seconds(20)) { recap(of: session)?.lastReply != nil }
         pi.kill(SIGTERM)
         try await eventually("会话结束", timeout: .seconds(20)) { bridge.sessions.isEmpty }
         return (try #require(session.sessionFile), session.sessionID)
@@ -63,7 +63,7 @@ struct RealHostTests {
         #expect(opened.launchToken == "tok-1" && opened.hosted)
         _ = try await bridge.send(PiMessage(text: "开场的话"), to: opened.id)
         try await eventually("回答了开场的话", timeout: .seconds(20)) {
-            bridge.sessions.first { $0.id == opened.id }?.lastReply == "ECHO 开场的话 IMAGES[]"
+            recap(of: bridge.sessions.first { $0.id == opened.id })?.lastReply == "ECHO 开场的话 IMAGES[]"
         }
     }
 
@@ -138,12 +138,14 @@ struct RealHostTests {
         _ = try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
         try await eventually("后台在忙", timeout: .seconds(10)) { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
 
+        let log = ChangeLog(bridge)
         let mine = try await PiProcess(alongside: pi, sessionFile: file)
         defer { mine.stop() }
 
-        try await eventually("后台做完退出、用户的进程读到后台那一轮", timeout: .seconds(20)) {
-            let live = bridge.sessions.filter { $0.sessionID == sessionID }
-            return live.map(\.pid) == [mine.pid] && live.first?.lastReply?.contains("后台这一轮") == true
+        // 重新载入时用户那个进程的会话先结束再出现：第二次出现就是读到了后台那一轮
+        try await eventually("后台做完退出、用户的进程重新载入", timeout: .seconds(20)) {
+            bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid]
+                && log.changes.count { if case .appeared(let s) = $0 { s.pid == mine.pid } else { false } } >= 2
         }
         try mine.prompt("我接着说")
         try await eventually("用户这句落盘", timeout: .seconds(20)) { entries(in: file).contains { $0.role == "user" && $0.text == "我接着说" } }
@@ -176,7 +178,6 @@ struct RealHostTests {
             $0["method"] as? String == "notify" && ($0["message"] as? String)?.contains("支线") == true
         }
         #expect(bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid])
-        #expect(bridge.sessions.first { $0.pid == mine.pid }?.lastReply?.contains("我自己的") == true)
     }
 }
 #endif

@@ -21,17 +21,21 @@ import Testing
   @Test func piSessionStateWrittenOnTheMacIsVisibleOnThePhoneAndKeptAsEndedWhenTheSessionEnds() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
     let question = PiQuestion(promptID: "p-1", kind: .select, text: "确认写入？", options: ["是", "否"])
-    let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", pendingPrompt: "再跑一遍测试", question: question)
+    let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", pendingPrompt: "再跑一遍测试")
     let times = PiTimes(stateSince: Date(timeIntervalSince1970: 2_000), busySince: Date(timeIntervalSince1970: 1_000))
     try await recorder.update(
-      sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad", recap: recap, times: times)
+      sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", folder: "cuepad", question: question, times: times)
+    let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 2, role: .user, text: "再跑一遍测试", at: Date(timeIntervalSince1970: 3_000), deliveryID: UUID())
+    try await mac.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said], recap: recap))
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.allPiSessionStates().first)
     #expect(seen.sessionID == "s1" && seen.state == .known(.waitingForUser) && seen.detail == "确认写入？" && seen.title == "fix bug")
     #expect(seen.folder == "cuepad")  // 手机没有工作目录，副行靠它写出文件夹名
-    #expect(seen.lastPrompt == recap.lastPrompt && seen.lastReply == recap.lastReply && seen.question == recap.question)
+    #expect(seen.lastPrompt == recap.lastPrompt && seen.lastReply == recap.lastReply && seen.question == question)
     #expect(seen.pendingPrompt == recap.pendingPrompt)
+    // 对话经同步到手机，按先后排、带着送进来的投送请求 id
+    #expect(try await phone.store.piMessages(of: "s1").map { [$0.text, $0.deliveryID?.uuidString] } == [[said.text, said.deliveryID?.uuidString]])
     #expect(seen.stateSince == times.stateSince && seen.busySince == times.busySince)
 
     try await recorder.update(sessionID: "s1", state: .settled)

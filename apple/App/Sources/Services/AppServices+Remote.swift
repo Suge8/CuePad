@@ -46,9 +46,7 @@ extension AppServices {
             sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
             folder: session.cwd.lastPathComponent,
             projectID: try await store.project(containing: session.cwd)?.id,
-            recap: PiRecap(
-                lastPrompt: session.lastPrompt, lastReply: session.lastReply, pendingPrompt: session.pendingPrompt,
-                question: session.question.map(PiQuestion.init)),
+            question: session.question.map(PiQuestion.init),
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
             hosted: session.hosted, subagents: session.subagentStates)
     }
@@ -102,8 +100,9 @@ extension AppServices {
         if request.mode == .known(.ping) { return }  // 连接测试：收到即成功，不碰目标、不写发送记录
         if request.mode == .known(.start) {
             guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
-            return try await startPi(launch)
+            return try await startPi(launch, request: request.id)
         }
+        if request.mode == .known(.transcript) { return try await writeTranscript(of: request.content) }
         let target = request.target
         let content = SendContent(stored: request.content)
         let sent: SendTarget
@@ -119,7 +118,7 @@ extension AppServices {
                 try await channels.answer(answer.value.prompt, to: answer.promptID, in: id)
                 return
             }
-            sent = try await sendToPi(content, session: id, mode: mode)
+            sent = try await sendToPi(content, session: id, mode: mode, request: request.id)
         case .known(.app):
             guard let bundleID = target.ref else { throw SendError.unsupportedTarget(target.name) }
             sent = try await dispatch(content, to: .bundleID(bundleID), submit: settings.autoSubmit)
@@ -132,15 +131,22 @@ extension AppServices {
     }
 
     /// 开新会话（不写发送记录）：在后台托管（`PiHost`），目录由本机解析：项目绑定的代码目录或某个会话的目录；
-    /// 带上发起方的认领标识，连上后把开场的话作为第一条消息送进去。
-    private func startPi(_ launch: PiLaunch) async throws {
+    /// 带上发起方的认领标识，连上后把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它）。
+    private func startPi(_ launch: PiLaunch, request: UUID) async throws {
         let directory = try await directory(for: launch.place)
         try requireDirectory(directory)
         guard let pi = await locatePi() else { throw SendError.piNotInstalled }
         let id = try await host.open(in: directory, launchToken: launch.token, executable: pi)
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
-            try await channels.send(PiMessage(text: opening), to: id)
+            try await channels.send(PiMessage(text: opening, deliveryID: request.uuidString), to: id)
         }
+    }
+
+    /// 补写一个会话的对话（不写发送记录）：从本机的会话文件从头读出，与摘要一起写。
+    private func writeTranscript(of sessionID: String) async throws {
+        guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
+        let update = try PiHistory.index(file: URL(filePath: indexed.path), from: nil)
+        try await store.writePiTranscript(PiTranscript(update, sessionID: sessionID))
     }
 
     /// 发给已结束的会话：在后台把它恢复起来（会话索引里的会话文件与工作目录），返回连上桥的会话。
@@ -174,7 +180,9 @@ extension AppServices {
     }
 
     /// Pi 桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说）：发送方式在这里一次性落到桥的消息上。
-    private func sendToPi(_ content: SendContent, session id: CuePi.PiSession.ID, mode: DeliveryMode) async throws -> SendTarget {
+    private func sendToPi(
+        _ content: SendContent, session id: CuePi.PiSession.ID, mode: DeliveryMode, request: UUID
+    ) async throws -> SendTarget {
         guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
         let whenBusy: PiQueueMode?
         switch mode {
@@ -195,7 +203,8 @@ extension AppServices {
             guard let mimeType = ImageFiles.mimeType(of: data) else { throw SendError.imageUnavailable(hash) }
             return PiImage(mimeType: mimeType, data: data)
         }
-        try await channels.send(PiMessage(text: content.plainText, images: images, whenBusy: whenBusy), to: id)
+        try await channels.send(
+            PiMessage(text: content.plainText, images: images, whenBusy: whenBusy, deliveryID: request.uuidString), to: id)
         return session.target
     }
 }

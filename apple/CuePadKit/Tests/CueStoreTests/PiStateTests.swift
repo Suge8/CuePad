@@ -135,27 +135,24 @@ import Testing
     #expect(idle.stateSince == clock.now && idle.busySince == nil)
   }
 
-  @Test func recapChangesAreWrittenImmediatelyAndAClearedQuestionIsWrittenAsNil() async throws {
+  /// 等你回答的弹窗立即写、答完写回 nil；摘要不归记录器写（是对话的投影），状态变化不改它。
+  @Test func questionChangesAreWrittenImmediatelyAndTheRecapIsLeftToTheTranscript() async throws {
     let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "修好登录"))
-    try await recorder.update(sessionID: "s1", state: .tool, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的"))
-    #expect(try await states()["s1"]?.lastReply == "好的")  // 工作中的合并间隔内，近况变化照样立即写
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的")))
 
     let question = PiQuestion(promptID: "p-1", kind: .select, text: "覆盖？", options: ["是", "否"])
-    try await recorder.update(
-      sessionID: "s1", state: .waitingForUser, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的", question: question))
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
     #expect(try await states()["s1"]?.question == question)
-    try await recorder.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的"))
+    try await recorder.update(sessionID: "s1", state: .thinking)
     let written = try #require(try await states()["s1"])
     #expect(written.question == nil && written.lastPrompt == "修好登录" && written.lastReply == "好的")
-
-    try await recorder.update(sessionID: "s1", state: .settled)  // 不带近况：沿用已有的
-    #expect(try await states()["s1"]?.lastReply == "好的")
   }
 
   @Test func endingASessionKeepsItsRecordAsEndedWithItsRecapAndDropsPendingUpdates() async throws {
     let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "跑测试", lastReply: "全部通过"))
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "跑测试", lastReply: "全部通过")))
     try await recorder.update(sessionID: "s1", state: .tool, detail: "pending")
     await clock.waitForSleeper()
 
@@ -287,7 +284,8 @@ import Testing
   @Test func resetEndsOnlyThisHostsLeftoverRecords() async throws {
     let mine = recorder(host: "mac-a")
     let other = recorder(host: "mac-b")
-    try await mine.update(sessionID: "s1", state: .thinking, recap: PiRecap(lastPrompt: "上次的"))
+    try await mine.update(sessionID: "s1", state: .thinking)
+    try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "上次的")))
     try await other.update(sessionID: "s2", state: .thinking)
 
     try await mine.reset()

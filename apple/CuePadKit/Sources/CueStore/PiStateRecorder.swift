@@ -39,17 +39,18 @@ extension CueStore {
 
   func writePiState(
     sessionID: String, hostID: String, title: String, folder: String?, projectID: UUID?, state: PiWorkState, detail: String?,
-    recap: PiRecap, notify: PiAlert?, times: PiTimes, launchToken: String?, hosted: Bool, subagents: [PiSubagentState]
+    question: PiQuestion?, notify: PiAlert?, times: PiTimes, launchToken: String?, hosted: Bool, subagents: [PiSubagentState]
   ) throws {
     try write {
       let now = Date.stamp
       let record = PiSessionState(
         id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: title, projectID: projectID,
-        state: .known(state), detail: detail, folder: folder, lastPrompt: recap.lastPrompt, lastReply: recap.lastReply,
-        question: recap.question, notify: notify.map(Open.known), stateSince: times.stateSince, busySince: times.busySince,
-        createdAt: now, modifiedAt: now, launchToken: launchToken, hosted: hosted, subagents: subagents,
-        pendingPrompt: recap.pendingPrompt)
-      let assignments = PiSessionState.columns.dropFirst().filter { $0 != "createdAt" && $0 != "notify" }
+        state: .known(state), detail: detail, folder: folder, lastPrompt: nil, lastReply: nil,
+        question: question, notify: notify.map(Open.known), stateSince: times.stateSince, busySince: times.busySince,
+        createdAt: now, modifiedAt: now, launchToken: launchToken, hosted: hosted, subagents: subagents)
+      // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
+      let assignments = PiSessionState.columns.dropFirst()
+        .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }
         .map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
       let placeholders = PiSessionState.columns.map { _ in "?" }.joined(separator: ", ")
       try db.run(
@@ -101,7 +102,7 @@ public actor PiStateRecorder {
     var title: String
     var folder: String?
     var projectID: UUID?
-    var recap: PiRecap
+    var question: PiQuestion?
     var times: PiTimes
     var launchToken: String?
     var hosted: Bool
@@ -113,7 +114,7 @@ public actor PiStateRecorder {
     var title = ""
     var folder: String?
     var projectID: UUID?
-    var recap = PiRecap()
+    var question: PiQuestion?
     var launchToken: String?
     var hosted = false
     var subagents: [PiSubagentState] = []
@@ -141,7 +142,7 @@ public actor PiStateRecorder {
 
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,
-    projectID: UUID? = nil, recap: PiRecap? = nil, times: PiTimes? = nil, launchToken: String? = nil, hosted: Bool? = nil,
+    projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, launchToken: String? = nil, hosted: Bool? = nil,
     subagents: [PiSubagentState]? = nil
   ) async throws {
     var session = sessions[sessionID] ?? Session()
@@ -150,7 +151,7 @@ public actor PiStateRecorder {
     if let title { session.title = title }
     if let folder { session.folder = folder }
     if let projectID { session.projectID = projectID }
-    if let recap { session.recap = recap }
+    session.question = question
     if let launchToken { session.launchToken = launchToken }
     if let hosted { session.hosted = hosted }
     if let subagents { session.subagents = subagents }
@@ -159,7 +160,7 @@ public actor PiStateRecorder {
     session.times = times
 
     let content = Content(
-      state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID, recap: session.recap,
+      state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID, question: session.question,
       times: times, launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents)
     if content == session.written {
       cancelPending(&session)
@@ -168,7 +169,7 @@ public actor PiStateRecorder {
     }
     let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
     let renamed = session.written.map {
-      $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID || $0.recap != content.recap
+      $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID || $0.question != content.question
         || $0.hosted != content.hosted || $0.subagents != content.subagents
         || $0.times != content.times
     } ?? true
@@ -218,7 +219,7 @@ public actor PiStateRecorder {
     session.pending = nil
     let content = Content(
       state: pending.state, detail: pending.detail, title: session.title, folder: session.folder, projectID: session.projectID,
-      recap: session.recap, times: times, launchToken: session.launchToken, hosted: session.hosted,
+      question: session.question, times: times, launchToken: session.launchToken, hosted: session.hosted,
       subagents: session.subagents)
     let write = commit(sessionID, &session, content, at: timing.now())
     sessions[sessionID] = session
@@ -247,7 +248,7 @@ public actor PiStateRecorder {
     return { [store, hostID] in
       try await store.writePiState(
         sessionID: sessionID, hostID: hostID, title: content.title, folder: content.folder, projectID: content.projectID,
-        state: content.state, detail: content.detail, recap: content.recap, notify: notify, times: content.times,
+        state: content.state, detail: content.detail, question: content.question, notify: notify, times: content.times,
         launchToken: content.launchToken, hosted: content.hosted, subagents: content.subagents)
     }
   }

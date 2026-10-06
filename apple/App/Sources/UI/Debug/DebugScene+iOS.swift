@@ -147,6 +147,14 @@ extension DebugScene {
         }
     }
 
+    /// 演示会话的摘要与弹窗：摘要写成对话的投影，弹窗交给状态记录器（与真实来源一致）。
+    private struct DemoRecap {
+        var lastPrompt: String?
+        var lastReply: String?
+        var pendingPrompt: String?
+        var question: PiQuestion?
+    }
+
     /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。
     private static func seedRemote(_ services: AppServices) async {
         let store = services.store
@@ -154,32 +162,32 @@ extension DebugScene {
         guard (try? await store.piSessionPage(.live).items.isEmpty) == true, let projects = try? await store.projects() else { return }
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
-        let sessions: [(String, PiWorkState, String?, String?, PiRecap)] = [
+        let sessions: [(String, PiWorkState, String?, String?, DemoRecap)] = [
             // 在跑的会话：新的话在 pendingPrompt，上一轮问答成对
-            ("atlas", .tool, "bash · pnpm test -- scheduler", "圆桌", PiRecap(
+            ("atlas", .tool, "bash · pnpm test -- scheduler", "圆桌", DemoRecap(
                 lastPrompt: "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因",
                 lastReply: "上一轮 12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位的顺序被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n第二个需要把回调地址换成统一网关。\n\n另外顺手看了一眼覆盖率：scheduler 目录是 71%，主要缺重连和超时两条路径。两个失败修好后，我可以补上这两条的用例，大概再加 6 个测试。\n\n要我先改第一个吗？",
                 pendingPrompt: "按你说的改成首次加入时间排序，把断言也改了，再跑一遍")),
-            ("homepage", .waitingForUser, "要覆盖 public/feed.xml 吗？", "个人网站", PiRecap(
+            ("homepage", .waitingForUser, "要覆盖 public/feed.xml 吗？", "个人网站", DemoRecap(
                 lastPrompt: "把 RSS 输出改成全文",
                 question: PiQuestion(
                     promptID: "demo-prompt", kind: .select, text: "要覆盖 public/feed.xml 吗？", options: ["覆盖", "另存为 feed-full.xml", "取消"]))),
-            ("cuepad", .thinking, nil, "CuePad", PiRecap(
+            ("cuepad", .thinking, nil, "CuePad", DemoRecap(
                 lastPrompt: "先跑一遍全部测试", lastReply: "全部通过，共 214 个。", pendingPrompt: "看看投送队列超时的那个 bug")),
-            ("notes-edit", .waitingForUser, "编辑提交说明", nil, PiRecap(
+            ("notes-edit", .waitingForUser, "编辑提交说明", nil, DemoRecap(
                 lastPrompt: "写一段提交说明",
                 question: PiQuestion(promptID: nil, kind: .unknown("editor"), text: "编辑提交说明\n在编辑器里改好后保存"))),
-            ("rename", .waitingForUser, "新分支叫什么？", "CuePad", PiRecap(
+            ("rename", .waitingForUser, "新分支叫什么？", "CuePad", DemoRecap(
                 lastPrompt: "把这批改动挪到新分支上",
                 question: PiQuestion(promptID: "demo-text", kind: .text, text: "新分支叫什么？"))),
-            ("deploy", .waitingForUser, "部署到生产吗？", nil, PiRecap(
+            ("deploy", .waitingForUser, "部署到生产吗？", nil, DemoRecap(
                 lastPrompt: "测试都过了就部署",
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
-            ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, PiRecap(lastPrompt: "让子代理分头审查这两个分支")),
-            ("billing", .error, "模型拒绝了请求（400）：prompt is too long", nil, PiRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
-            ("notes", .settled, nil, nil, PiRecap(
+            ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, DemoRecap(lastPrompt: "让子代理分头审查这两个分支")),
+            ("billing", .error, "模型拒绝了请求（400）：prompt is too long", nil, DemoRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
+            ("notes", .settled, nil, nil, DemoRecap(
                 lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),
-            ("piwork", .settled, nil, nil, PiRecap(
+            ("piwork", .settled, nil, nil, DemoRecap(
                 lastPrompt: "列出 piwork 目录下的文件", lastReply: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md")),
         ]
         // 历史里再加两个带近况的：一个正在请 Mac 继续，一个不在项目里
@@ -188,12 +196,16 @@ extension DebugScene {
             ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Pi 页。")),
         ]
         for (id, name, recap) in history {
-            try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project), recap: recap)
+            try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project))
+            try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
             try? await recorder.end(sessionID: id)
         }
         for (id, state, detail, name, recap) in sessions {
             try? await recorder.update(
-                sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), recap: recap)
+                sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question)
+            try? await store.writePiTranscript(PiTranscript(
+                sessionID: id, messages: [],
+                recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
         }
         try? await recorder.end(sessionID: "piwork")
         // 没归类的想法：书架顶上提醒去整理
@@ -217,8 +229,9 @@ extension DebugScene {
             let ended = Date.now.addingTimeInterval(-Double(index + 1) * 8 * 3600)
             let past = PiStateRecorder(store: store, hostID: "demo-mac", timing: Timing(now: { ended }, sleep: { _ in }))
             try? await past.update(
-                sessionID: id, state: .settled, detail: nil, title: "历史会话 \(index + 1)", folder: id, projectID: name.flatMap(project),
-                recap: PiRecap(lastPrompt: "第 \(index + 1) 个", lastReply: "做完了"))
+                sessionID: id, state: .settled, detail: nil, title: "历史会话 \(index + 1)", folder: id, projectID: name.flatMap(project))
+            try? await store.writePiTranscript(PiTranscript(
+                sessionID: id, messages: [], recap: PiRecap(lastPrompt: "第 \(index + 1) 个", lastReply: "做完了")))
             try? await past.end(sessionID: id)
         }
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []

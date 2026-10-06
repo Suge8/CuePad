@@ -52,8 +52,9 @@ struct SendTests {
 
         try await services.send(body, to: .pi("s1.100", .send))
 
+        let request = try #require(try await services.store.deliveryRequests().first)
         #expect(channels.calls == [
-            .send(PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)]), "s1.100")
+            .send(PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString), "s1.100")
         ])
         let record = try #require(try await services.store.sendRecords().first)
         #expect(record.targetKind == .known(.piSession))
@@ -71,7 +72,8 @@ struct SendTests {
         #expect(try await services.store.sendRecords().isEmpty)
 
         try await services.send("hi", to: .pi("s1.100", .steer))
-        #expect(channels.calls == [.send(PiMessage(text: "hi", whenBusy: .steer), "s1.100")])
+        let request = try #require(try await services.store.deliveryRequests().first)
+        #expect(channels.calls == [.send(PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString), "s1.100")])
     }
 
     @Test func 未知Pi会话报错且不写记录() async throws {

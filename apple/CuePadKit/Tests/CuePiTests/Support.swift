@@ -61,6 +61,11 @@ func deadPid() throws -> Int32 {
     return p.processIdentifier
 }
 
+/// 会话文件此刻的摘要（对话的投影，见 `PiHistory`）；文件还没落盘时为 nil。
+func recap(of session: PiSession?) -> PiTranscriptRecap? {
+    session?.sessionFile.flatMap { try? PiHistory.index(file: $0, from: nil).recap }
+}
+
 /// 订阅 `changes()` 并记录，供测试断言事件顺序。
 @MainActor
 final class ChangeLog {

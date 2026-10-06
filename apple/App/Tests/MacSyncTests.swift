@@ -151,15 +151,13 @@ struct MacSyncTests {
         #expect(stored.detail == nil)
     }
 
-    @Test func 会话近况写进同步记录() async throws {
+    @Test func 等你回答的弹窗写进同步记录() async throws {
         var asked = session("s1", state: .waitingUser(kind: "select", title: "选哪个？"))
-        asked.lastPrompt = "修好登录"
-        asked.lastReply = "改好了"
         asked.question = PiPrompt(id: "p-1", kind: "select", text: "选哪个？", options: ["A", "B"])
         try await services.consumePiChanges(changes([.appeared(asked), .infoChanged(asked)]))
 
         let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.lastPrompt == "修好登录" && stored.lastReply == "改好了" && stored.question == PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"]))
+        #expect(stored.question == PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"]))
     }
 
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {

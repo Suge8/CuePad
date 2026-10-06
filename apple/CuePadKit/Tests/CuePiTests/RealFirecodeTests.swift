@@ -22,15 +22,15 @@ struct RealFirecodeTests {
 
         // 指挥官自己这轮已经答完，子代理还在跑：仍是工作中，计时从派活那轮开始不重置
         try await eventually("指挥官歇下、等子代理", timeout: .seconds(20)) {
-            bridge.sessions.first?.lastReply == "TOOL_DONE" && bridge.sessions.first?.state == .delegating
+            recap(of: bridge.sessions.first)?.lastReply == "TOOL_DONE" && bridge.sessions.first?.state == .delegating
         }
         let start = try #require(bridge.sessions.first?.busySince)
 
         // 子代理停下后 FireCode 把事件信封作为用户消息投回：指挥官对它的回应照常是最终回答，提问不变
         try await eventually("指挥官回应了子代理事件", timeout: .seconds(30)) {
-            bridge.sessions.first?.lastReply?.contains("firecode_master_event") == true
+            recap(of: bridge.sessions.first)?.lastReply?.contains("firecode_master_event") == true
         }
-        #expect(bridge.sessions.first?.lastPrompt == "[[subagent:ui]]")
+        #expect(recap(of: bridge.sessions.first)?.lastPrompt == "[[subagent:ui]]")
         // 子代理结束、事件交给指挥官、指挥官回应完才歇下：中间计时一直是同一段
         try await eventually("全部歇下", timeout: .seconds(20)) { bridge.sessions.first?.state == .done(aborted: false) }
         #expect(bridge.sessions.first?.busySince == nil)

@@ -4,16 +4,17 @@ import CueStore
 import SwiftUI
 
 extension PiSessionState {
-    /// 桥上的实时会话写成同步记录的形状（会话行与近况共用；同步记录按节流写，会落后几秒，界面读这个）。
-    static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?) -> PiSessionState {
+    /// 桥上的实时会话写成同步记录的形状（会话行与近况共用；状态记录按节流写，会落后几秒，界面读这个）。
+    /// 摘要（问与答）不在桥上：取同步记录里的（`recap`，对话的投影，文件一变就写）。
+    static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?, recap: PiRecap?) -> PiSessionState {
         let (state, detail) = session.syncRepresentation
         return PiSessionState(
             id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
             projectID: projectID, state: .known(state), detail: detail, folder: session.cwd.lastPathComponent,
-            lastPrompt: session.lastPrompt, lastReply: session.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
+            lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagentStates,
-            pendingPrompt: session.pendingPrompt)
+            pendingPrompt: recap?.pendingPrompt)
     }
 }
 
@@ -27,7 +28,8 @@ extension SessionDigest {
     func live(_ session: CuePi.PiSession?, hostID: String, project: Project?) -> SessionDigest {
         guard let session else { return self }
         var digest = self
-        digest.session = .live(session, hostID: hostID, projectID: project?.id ?? self.session?.projectID)
+        digest.session = .live(
+            session, hostID: hostID, projectID: project?.id ?? self.session?.projectID, recap: self.session.map(\.recap))
         if let project { digest.project = project }
         return digest
     }
@@ -277,13 +279,13 @@ extension Workspace {
     /// 本机桥上在线的这个 Pi 会话（`sessionID` 是 Pi 自己的会话 id）此刻的状态；不在线为 nil。
     func liveState(ofSession sessionID: String?) -> PiSessionState? {
         guard let sessionID, let live = services.pi.sessions.first(where: { $0.sessionID == sessionID }) else { return nil }
-        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id])
+        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id], recap: sessionRecaps[sessionID])
     }
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
     func withLiveState(_ session: PiSessionState) -> PiSessionState {
         guard let live = services.pi.sessions.first(where: { $0.sessionID == session.sessionID }) else { return session }
-        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id] ?? session.projectID)
+        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id] ?? session.projectID, recap: session.recap)
     }
 
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
