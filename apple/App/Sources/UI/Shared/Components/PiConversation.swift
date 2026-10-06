@@ -30,6 +30,19 @@ struct PiConversation: View {
     }
 }
 
+extension PiConversation {
+    /// 对话里"有新内容"的标志（滚动跟随用，见 `ChatScroll`）：多了消息、发出的话或它的送达情况变了、开始或结束处理、出错。
+    struct FollowKey: Equatable {
+        var messages: Int
+        var outgoing: [Open<DeliveryStatus>]
+        var state: Open<PiWorkState>?
+    }
+
+    static func followKey(session: PiSessionState?, messages: [PiChatMessage], deliveries: [DeliveryRequest]) -> FollowKey {
+        FollowKey(messages: messages.count, outgoing: PiChat.outgoing(deliveries, messages: messages).map(\.status), state: session?.state)
+    }
+}
+
 /// 会话名下的一行小字：状态标、所在、状态词（带色）、计时；Mac 后台托管的再写"后台"。
 struct PiSessionSubtitle: View {
     let session: PiSessionState

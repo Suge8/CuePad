@@ -29,7 +29,7 @@ struct SessionScreen: View {
     }
 
     var body: some View {
-        ScrollView {
+        ChatScroll(followKey: PiConversation.followKey(session: session, messages: digest?.messages ?? [], deliveries: digest?.deliveries ?? [])) {
             if let session {
                 VStack(spacing: 14) {
                     if fetchingTranscript {
@@ -50,9 +50,6 @@ struct SessionScreen: View {
                 .padding(.top, 60)
             }
         }
-        // 打开停在最新；内容变长时跟着最新
-        .defaultScrollAnchor(.bottom)
-        .defaultScrollAnchor(.bottom, for: .sizeChanges)
         .scrollDismissesKeyboard(.interactively)
         .background(palette.desk)
         .navigationTitle(session?.title ?? "")
