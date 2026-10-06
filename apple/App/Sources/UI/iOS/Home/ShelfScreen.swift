@@ -16,7 +16,14 @@ nonisolated struct ShelfData: Sendable {
         var id: UUID { project.id }
     }
 
+    /// 跨项目的未完成任务数（书架的"任务"一行）；一条任务都没有时为 nil，不显示这一行。
+    struct TaskCounts: Sendable, Equatable {
+        var inProgress: Int
+        var todo: Int
+    }
+
     var entries: [Entry]
+    var tasks: TaskCounts?
     var inboxCount: Int
     var todayCount: Int
     var trashCount: Int
@@ -34,14 +41,20 @@ nonisolated struct ShelfData: Sendable {
                 latest: latest.map { (CardText($0.body).title.textGlyphs, $0.modifiedAt) }, pi: pi[project.id])
         }
         let today = calendar.startOfDay(for: now)...now
+        let hasTasks = progress.values.contains { $0.total > 0 }
         return ShelfData(
-            entries: entries, inboxCount: counts[nil] ?? 0,
+            entries: entries,
+            tasks: hasTasks
+                ? TaskCounts(inProgress: try store.tasks(.inProgress).flatMap(\.tasks).count, todo: try store.tasks(.todo).flatMap(\.tasks).count)
+                : nil,
+            inboxCount: counts[nil] ?? 0,
             todayCount: try store.search(SearchQuery(modifiedIn: today), limit: 0).totalCards,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
     }
 }
 
-/// iPhone 首页：项目书架。有没归类的想法时最上面一行提醒去整理；"今天 · N 张"进入今天流；置顶项目是大卡，其余按最近排成行，都带目标、卡片数、任务数与 Pi 状态点。
+/// iPhone 首页：项目书架。有没归类的想法时最上面一行提醒去整理；"今天 · N 张"进入今天流；有任务时"任务 · N 进行中 · N 待办"进入跨项目任务页；
+/// 置顶项目是大卡，其余按最近排成行，都带目标、卡片数、任务数与 Pi 状态点。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -84,10 +97,11 @@ struct ShelfScreen: View {
         let pinned = data.entries.filter(\.project.isPinned)
         let recent = data.entries.filter { !$0.project.isPinned }
         VStack(alignment: .leading, spacing: 22) {
-            if data.inboxCount > 0 || data.todayCount > 0 {
+            if data.inboxCount > 0 || data.todayCount > 0 || data.tasks != nil {
                 VStack(spacing: 10) {
                     if data.inboxCount > 0 { InboxReminder(count: data.inboxCount) }
-                    if data.todayCount > 0 { TodayLink(count: data.todayCount) }
+                    if data.todayCount > 0 { ShelfLink(route: .today, symbol: "sun.max", title: "今天", detail: "\(data.todayCount) 张") }
+                    if let tasks = data.tasks { ShelfLink(route: .tasks, symbol: "checklist", title: "任务", detail: tasks.summary) }
                 }
             }
             if data.entries.isEmpty && data.inboxCount == 0 {
@@ -142,17 +156,28 @@ private struct InboxReminder: View {
     }
 }
 
-/// "今天 · N 张"：进入今天编辑过的卡的时间流。
-private struct TodayLink: View {
-    let count: Int
+private extension ShelfData.TaskCounts {
+    /// "2 进行中 · 3 待办"；都做完了是"全部完成"。
+    var summary: String {
+        let parts = [inProgress > 0 ? "\(inProgress) 进行中" : nil, todo > 0 ? "\(todo) 待办" : nil].compactMap { $0 }
+        return parts.isEmpty ? "全部完成" : parts.joined(separator: " · ")
+    }
+}
+
+/// 书架顶上通往一页的一行："今天 · N 张"、"任务 · N 进行中 · N 待办"。
+private struct ShelfLink: View {
+    let route: Navigation.Route
+    let symbol: String
+    let title: String
+    let detail: String
     @Environment(\.palette) private var palette
 
     var body: some View {
-        NavigationLink(value: Navigation.Route.today) {
+        NavigationLink(value: route) {
             HStack(spacing: 10) {
-                Image(systemName: "sun.max").foregroundStyle(palette.ink2).accessibilityHidden(true)
-                Text("今天").font(.body.weight(.semibold)).foregroundStyle(palette.ink)
-                Text("\(count) 张").font(.body.monospacedDigit()).foregroundStyle(palette.ink3)
+                Image(systemName: symbol).foregroundStyle(palette.ink2).frame(width: 22).accessibilityHidden(true)
+                Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+                Text(detail).font(.body.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
                 Spacer()
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
@@ -162,7 +187,7 @@ private struct TodayLink: View {
             .paper(radius: 16)
         }
         .buttonStyle(CardPressStyle())
-        .accessibilityLabel("今天 \(count) 张卡片")
+        .accessibilityElement(children: .combine)
     }
 }
 

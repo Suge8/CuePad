@@ -3,11 +3,11 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// Pi：只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。"现在"是没结束的会话，按要你注意的先后排
+/// Agent 页：只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。"现在"是没结束的会话，按要你注意的先后排
 /// （等你确认 → 出错 → 工作中 → 空闲）；"历史"是所有已结束的，按结束时间分段（今天、昨天……）、可搜，滑到底才读下一页。
 /// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。右上角开新会话。
 /// iPad 右侧面板里没有导航栏：搜索与新会话放在列表顶上。给了 `project` 时只列这个项目的（从项目页进来）。
-struct ActivityScreen: View {
+struct AgentScreen: View {
     var inPanel = false
     var project: UUID?
     @Environment(Workspace.self) private var workspace
@@ -64,15 +64,15 @@ struct ActivityScreen: View {
         }
         .scrollDismissesKeyboard(.immediately)
         #if DEBUG
-        .defaultScrollAnchor(DebugScene.scene == "activity" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
+        .defaultScrollAnchor(DebugScene.scene == "agent" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
         #endif
         .background(palette.desk)
-        .navigationTitle(project.flatMap { workspace.catalog?.project($0)?.name } ?? "Pi")
+        .navigationTitle(project.flatMap { workspace.catalog?.project($0)?.name } ?? "Agent")
         .modifier(PiPageChrome(enabled: !inPanel, query: $query))
         .refreshable { await services.syncNow() }
         .onChange(of: query) { limit = PiSessionList.pageSize }
         #if DEBUG
-        .onAppear { if DebugScene.scene == "activity" { query = DebugScene.searchText } }
+        .onAppear { if DebugScene.scene == "agent" { query = DebugScene.searchText } }
         #endif
         .observing(services.store, [.piSessionStates, .projects], id: PiSessionList.Key(text: query, project: project, limit: limit),
                    into: $list, onError: workspace.fail) { [query, project, limit] store in

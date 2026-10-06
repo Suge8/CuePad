@@ -13,7 +13,7 @@ struct IOSRoot: View {
     }
 }
 
-/// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / 任务 / Pi；搜索在书架与项目页下拉），宽 iPad 用分栏。
+/// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / Agent；任务从书架一行进入，搜索在书架与项目页下拉），宽 iPad 用分栏。
 struct IOSRootView: View {
     @State private var workspace: Workspace
     @State private var navigation = Navigation()
@@ -93,8 +93,9 @@ struct RouteView: View {
         case .trash: TrashScreen()
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
-        case .activity: ActivityScreen().countsAsPiViewer()
-        case .projectSessions(let id): ActivityScreen(project: id).countsAsPiViewer()
+        case .tasks: TasksScreen()
+        case .agent: AgentScreen().countsAsPiViewer()
+        case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
         case .session(let id): SessionScreen(id: id).countsAsPiViewer()
         case .card(let id):
@@ -111,7 +112,7 @@ struct RouteView: View {
 private struct TabsRoot: View {
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
-    /// 活动标签的角标：等你确认的 Pi 会话数（未完成任务不紧急，不挂角标）。
+    /// Agent 标签的角标：等你确认的 Pi 会话数。
     @State private var waiting: Int?
 
     var body: some View {
@@ -120,11 +121,8 @@ private struct TabsRoot: View {
             Tab("项目", systemImage: "books.vertical", value: Navigation.Tab.projects) {
                 stack($navigation.projectsPath) { ShelfScreen() }
             }
-            Tab("任务", systemImage: "checklist", value: Navigation.Tab.tasks) {
-                stack($navigation.tasksPath) { TasksScreen() }
-            }
-            Tab("Pi", systemImage: "waveform.path.ecg", value: Navigation.Tab.activity) {
-                stack($navigation.activityPath) { ActivityScreen().countsAsPiViewer() }
+            Tab("Agent", systemImage: "waveform.path.ecg", value: Navigation.Tab.agent) {
+                stack($navigation.agentPath) { AgentScreen().countsAsPiViewer() }
             }
             .badge(waiting ?? 0)
         }
@@ -200,7 +198,7 @@ private struct NoticeBanner: View {
         switch link {
         case .project(let id?): navigation.show(project: id, workspace: workspace)
         case .project(nil): navigation.showInbox()
-        case .tasks: if navigation.layout == .split { navigation.panel = .tasks } else { navigation.tab = .tasks }
+        case .tasks: navigation.showTasks()
         }
     }
 }

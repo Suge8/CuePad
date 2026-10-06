@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iPad（宽）：左栏项目，右侧项目页；打开的卡片纸页推在项目页上，任务与 Pi 在右侧面板。
+/// iPad（宽）：左栏项目（含今天、任务、Agent 等入口），右侧项目页；打开的卡片纸页推在项目页上，Agent 可在右侧面板并排看。
 /// 外接键盘与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏、⌘N 新建卡片、⌘⇧N 随手记、⌘⇧T 任务、⌘, 设置。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
@@ -30,9 +30,9 @@ struct SplitRoot: View {
                     page(navigation.splitRoot)
                         .navigationDestination(for: Navigation.Route.self) { page($0) }
                 }
-                if navigation.panel != nil {
+                if navigation.agentPanel {
                     Divider().ignoresSafeArea()
-                    SidePanel()
+                    AgentPanel()
                         .frame(width: min(panelWidth, Self.maxPanelWidth))
                         .transition(.move(edge: .trailing))
                 }
@@ -40,8 +40,8 @@ struct SplitRoot: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         // 窄窗口（竖屏、分屏）放不下三栏：打开右侧面板或卡片纸页时收起侧栏，纸页盖住整个右侧
-        .onChange(of: navigation.panel) { _, panel in
-            if panel != nil { collapseSidebarIfNarrow() }
+        .onChange(of: navigation.agentPanel) { _, shown in
+            if shown { collapseSidebarIfNarrow() }
         }
         .onChange(of: navigation.splitPath) { _, path in
             if case .card = path.last { collapseSidebarIfNarrow() }
@@ -50,12 +50,12 @@ struct SplitRoot: View {
         .onAppear { navigation.splitRoot = Self.route(for: workspace.page) }
     }
 
-    /// 右侧页：任务与 Pi 的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
+    /// 右侧页：Agent 面板的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
     @ViewBuilder private func page(_ route: Navigation.Route) -> some View {
         if route.isCard {
             RouteView(route: route)
         } else {
-            RouteView(route: route).toolbar { ToolbarItemGroup(placement: .primaryAction) { PanelButtons() } }
+            RouteView(route: route).toolbar { ToolbarItem(placement: .primaryAction) { AgentPanelButton() } }
         }
     }
 
@@ -74,17 +74,16 @@ struct SplitRoot: View {
     }
 }
 
-/// 右侧面板的开关：任务与 Pi；Pi 按钮在有会话等你确认时带橙点。
-private struct PanelButtons: View {
+/// 右侧 Agent 面板的开关；有会话等你确认时带橙点。
+private struct AgentPanelButton: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var waiting: Int?
 
     var body: some View {
-        Button("任务", systemImage: "checklist") { withAnimation(Motion.panel) { navigation.toggle(.tasks) } }
-        Button { withAnimation(Motion.panel) { navigation.toggle(.activity) } } label: {
-            Label("Pi", systemImage: "waveform.path.ecg")
+        Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
+            Label("Agent", systemImage: "waveform.path.ecg")
                 .overlay(alignment: .topTrailing) {
                     if (waiting ?? 0) > 0 { Circle().fill(palette.attention).frame(width: 7, height: 7).offset(x: 3, y: -2) }
                 }
@@ -96,27 +95,14 @@ private struct PanelButtons: View {
     }
 }
 
-/// 右侧面板：任务或 Pi，顶部分段切换。
-private struct SidePanel: View {
-    @Environment(Navigation.self) private var navigation
+/// 右侧 Agent 面板。不套导航栈、不放工具栏：iPadOS 的详情栏只有一条工具栏，面板里的工具栏会并进去。
+private struct AgentPanel: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 不套导航栈、不放工具栏：iPadOS 的详情栏只有一条工具栏，面板里的工具栏会并进去
-        VStack(spacing: 0) {
-            Picker("面板", selection: Binding(get: { navigation.panel ?? .tasks }, set: { navigation.panel = $0 })) {
-                Text("任务").tag(Navigation.Panel.tasks)
-                Text("Pi").tag(Navigation.Panel.activity)
-            }
-            .scalingPickerStyle()
-            .fixedSize()
-            .padding(.vertical, 8)
-            switch navigation.panel ?? .tasks {
-            case .tasks: TasksScreen()
-            case .activity: ActivityScreen(inPanel: true).countsAsPiViewer()
-            }
-        }
-        .background(palette.desk.ignoresSafeArea())
+        AgentScreen(inPanel: true).countsAsPiViewer()
+            .padding(.top, 8)
+            .background(palette.desk.ignoresSafeArea())
     }
 }
 
@@ -140,7 +126,8 @@ private struct SplitSidebar: View {
             Section {
                 SidebarRow(route: .shelf, title: "项目", symbol: "books.vertical")
                 SidebarRow(route: .today, title: "今天", symbol: "sun.max", badge: data?.today ?? 0)
-                SidebarRow(route: .activity, title: "Pi", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
+                SidebarRow(route: .tasks, title: "任务", symbol: "checklist")
+                SidebarRow(route: .agent, title: "Agent", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
             if let catalog = workspace.catalog {
@@ -273,8 +260,7 @@ private struct SplitShortcuts: View {
                 withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
             }
             .keyboardShortcut("\\")
-            Button("任务") { withAnimation(Motion.panel) { navigation.toggle(.tasks) } }
-                .keyboardShortcut("t", modifiers: [.command, .shift])
+            Button("任务") { navigation.showTasks() }.keyboardShortcut("t", modifiers: [.command, .shift])
             ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
                 Button("项目 \(index + 1)") { navigation.show(project: project.id, workspace: workspace) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))

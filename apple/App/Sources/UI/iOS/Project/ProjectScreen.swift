@@ -182,7 +182,8 @@ private struct FocusCard: View {
     static let endedShown = 2
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // 三段靠段标题与段间距分组，不画分割线
+        VStack(alignment: .leading, spacing: 20) {
             if let goal = data.goalCard {
                 let text = CardEntry(goal).text
                 Button { navigation.open(card: goal.id) } label: {
@@ -197,15 +198,12 @@ private struct FocusCard: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                Divider()
             }
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(text: data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist")
                 ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskLine(task: task).contextMenu { TaskActions(task: task) { editing = task } } }
                 if data.tasks.count > Self.visibleTasks {
-                    Button("还有 \(data.tasks.count - Self.visibleTasks) 条") {
-                        if navigation.layout == .split { navigation.panel = .tasks } else { navigation.tab = .tasks }
-                    }
+                    Button("还有 \(data.tasks.count - Self.visibleTasks) 条") { navigation.push(.tasks) }
                     .font(.subheadline).foregroundStyle(palette.ink3)
                     .frame(minHeight: 44)
                 }
@@ -213,7 +211,6 @@ private struct FocusCard: View {
             }
             .animation(.easeOut(duration: 0.2), value: data.tasks.map(\.id))
             if let pi, !pi.isEmpty, let project = data.project {
-                Divider()
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "Pi", systemImage: "waveform.path.ecg").padding(.bottom, 6)
                     ForEach(pi.now + pi.ended) { item in sessionLine(item.state) }

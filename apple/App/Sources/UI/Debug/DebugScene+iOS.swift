@@ -1,20 +1,21 @@
 #if os(iOS) && DEBUG
 import CueStore
 import SwiftUI
+import UIKit
 
-/// iOS 画面：project、older、today、inbox、editor、tasks、activity、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// iOS 画面：project、older、today、inbox、editor、tasks、agent、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
-/// taskedit：任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
+/// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；taskedit 在任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
 /// （核对往上翻后出"新消息"、贴底时跟到底）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
-/// searchkey：iPhone 停在任务页，1.5 秒后走 ⌘K（回到书架并聚焦下拉搜索）。
+/// searchkey：iPhone 停在 Agent 标签，1.5 秒后走 ⌘K（回到书架并聚焦下拉搜索）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
-/// activity 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话（每隔 8 小时结束一个，分落在今天到更早），
-/// Pi 页打开就滚到底（看历史滑到底读下一页；同时给了 `-CuePadSearch` 时停在顶上）。
-/// newsession：Pi 页上打开新会话面板；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
-/// iPad 上 tasks、activity 打开右侧面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
+/// agent 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话（每隔 8 小时结束一个，分落在今天到更早），
+/// Agent 页打开就滚到底（看历史滑到底读下一页；同时给了 `-CuePadSearch` 时停在顶上）。
+/// newsession：Agent 页上打开新会话面板；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
+/// iPad 上 agent 打开右侧 Agent 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
         dumpAccessibilityIfAsked()
@@ -48,8 +49,8 @@ extension DebugScene {
             let existing = if let project { try? await workspace.services.store.project(project) } else { Project?.none }
             navigation.projectForm = .init(project: existing)
         case "searchkey":
-            // 标签栏布局按 ⌘K：在任务页按，应回到书架并聚焦下拉搜索
-            navigation.tab = .tasks
+            // 标签栏布局按 ⌘K：在 Agent 标签按，应回到书架并聚焦下拉搜索
+            navigation.tab = .agent
             try? await Task.sleep(for: .seconds(1.5))
             navigation.searchCurrentPage()
         case "push":
@@ -78,17 +79,16 @@ extension DebugScene {
                 }
             }
         case "tasks", "taskedit":
-            if let project { open(.project(project)) }
-            if split { navigation.panel = .tasks } else { navigation.tab = .tasks }
+            navigation.showTasks()
         case "session":
-            // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在活动标签里
+            // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在 Agent 标签里
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
-            if split { navigation.select(.activity) } else { navigation.tab = .activity }
+            if split { navigation.select(.agent) } else { navigation.tab = .agent }
             navigation.push(.session(session.id))
             if defaults.bool(forKey: "CuePadChatGrow") { Task { await growChat(session.sessionID, store: workspace.services.store) } }
         case "newsession":
-            if split { navigation.select(.activity) } else { navigation.tab = .activity }
+            if split { navigation.select(.agent) } else { navigation.tab = .agent }
             var sheet = Navigation.NewSession()
             if defaults.bool(forKey: "CuePadLaunch"),
                let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
@@ -99,9 +99,9 @@ extension DebugScene {
                 }
             }
             navigation.newSession = sheet
-        case "activity":
+        case "agent":
             if let project { open(.project(project)) }
-            if split { navigation.panel = .activity } else { navigation.tab = .activity }
+            if split { navigation.agentPanel = true } else { navigation.tab = .agent }
         case "search":
             // iPhone：书架（给了项目则是该项目页）的下拉搜索在出现时自己聚焦，见 CardSearch
             if split { navigation.select(.search) } else if let project { open(.project(project)) }
@@ -112,6 +112,34 @@ extension DebugScene {
             navigation.startCapture()
         default:
             if let project, split { open(.project(project)) }
+        }
+    }
+
+    /// `-CuePadComposer <cards|attachments>`（配 session、newsession 画面）：输入框出现时 cards 打开选卡片面板，
+    /// attachments 带上一张卡片（`-CuePadCard` 挑哪张）并放进两张演示图片。＋ 菜单是系统菜单、不能代为展开：
+    /// 截图时按一下 ＋（iPhone 17 Pro 回复框：`axe touch -x 37 -y 810 --down --up --delay 0.15`；axe 的 tap 太快，菜单不开）。
+    static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
+        switch defaults.string(forKey: "CuePadComposer") {
+        case "cards":
+            // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉
+            try? await Task.sleep(for: .seconds(1))
+            source.wrappedValue = .cards
+        case "attachments":
+            // 先挑未归档里的，没有再挑第一个项目里的
+            var id = await card(in: nil, store: store)
+            if id == nil, let project = try? await store.projects().first { id = await card(in: project.id, store: store) }
+            if let id, let card = try? await store.card(id) {
+                draft.wrappedValue.attachment = Navigation.Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID)
+            }
+            draft.wrappedValue.images = [UIColor(red: 0.85, green: 0.47, blue: 0.29, alpha: 1), UIColor(red: 0.25, green: 0.56, blue: 0.72, alpha: 1)]
+                .map { color in
+                    PickedImage(data: UIGraphicsImageRenderer(size: CGSize(width: 240, height: 180)).pngData { context in
+                        color.setFill()
+                        context.fill(CGRect(x: 0, y: 0, width: 240, height: 180))
+                    })
+                }
+        default:
+            break
         }
     }
 

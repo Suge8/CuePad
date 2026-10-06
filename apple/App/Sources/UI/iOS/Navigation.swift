@@ -5,12 +5,12 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// iOS 的导航状态：标签、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧面板。
+/// iOS 的导航状态：标签（项目 / Agent）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
 /// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、当前项目）在 `Workspace`。
 @MainActor @Observable
 final class Navigation {
     enum Tab: Hashable {
-        case projects, tasks, activity
+        case projects, agent
     }
 
     /// iPhone（及窄窗口 iPad）用标签栏；宽 iPad 用分栏。
@@ -28,8 +28,11 @@ final class Navigation {
         case trash
         case settings
         case conflicts
-        case activity
-        /// 一个项目的全部 Pi 会话（同 Pi 页，只列这个项目的）。
+        /// 跨项目的任务看板（书架上一行入口、iPad 侧栏进入）。
+        case tasks
+        /// Agent 页：全部 Pi 会话。
+        case agent
+        /// 一个项目的全部 Pi 会话（同 Agent 页，只列这个项目的）。
         case projectSessions(UUID)
         case search
         case card(UUID)
@@ -75,14 +78,10 @@ final class Navigation {
         var launched: Launched?
     }
 
-    /// 宽 iPad 右侧面板。
-    enum Panel: Hashable { case tasks, activity }
-
     var layout: Layout = .tabs
     var tab: Tab = .projects
     var projectsPath: [Route] = []
-    var tasksPath: [Route] = []
-    var activityPath: [Route] = []
+    var agentPath: [Route] = []
     /// 打开随手记的请求：页面底部有随手记时由它接住（见 `captureBars`），否则弹出随手记面板。
     var capture: Capture?
     /// 屏幕上页面底部随手记的个数。
@@ -97,8 +96,8 @@ final class Navigation {
     var splitRoot: Route = .shelf
     var splitPath: [Route] = []
     var sidebar: NavigationSplitViewVisibility = .automatic
-    /// 分栏：右侧面板；nil 为收起。
-    var panel: Panel?
+    /// 分栏：右侧的 Agent 面板是否展开。
+    var agentPanel = false
     /// 带进会话页回复框的内容（卡片、任务、重发的记录），会话页出现时取走。
     private var replyDrafts: [UUID: Outbox] = [:]
 
@@ -119,8 +118,7 @@ final class Navigation {
         switch (layout, tab) {
         case (.split, _): splitPath.append(route)
         case (.tabs, .projects): projectsPath.append(route)
-        case (.tabs, .tasks): tasksPath.append(route)
-        case (.tabs, .activity): activityPath.append(route)
+        case (.tabs, .agent): agentPath.append(route)
         }
     }
 
@@ -171,15 +169,11 @@ final class Navigation {
         splitPath = back.path
     }
 
-    func toggle(_ panel: Panel) {
-        self.panel = self.panel == panel ? nil : panel
-    }
-
     /// 项目进了回收站：从所有路径里移除它的页面。
     func pop(_ project: UUID?) {
         guard let project else { return }
         let gone = Route.project(project)
-        for path in [\Navigation.projectsPath, \.tasksPath, \.activityPath, \.splitPath] {
+        for path in [\Navigation.projectsPath, \.agentPath, \.splitPath] {
             if let index = self[keyPath: path].firstIndex(of: gone) { self[keyPath: path].removeSubrange(index...) }
         }
         if splitRoot == gone { select(.shelf) }
@@ -199,13 +193,13 @@ final class Navigation {
         }
     }
 
-    /// 点开的 Pi 通知：直接打开该会话的近况（iPhone 在 Pi 标签里，iPad 推入详情栏）。
+    /// 点开的 Pi 通知：直接打开该会话的近况（iPhone 在 Agent 标签里，iPad 推入详情栏）。
     func open(alert tap: PiAlertTap?) {
         guard let tap else { return }
         switch layout {
         case .tabs:
-            tab = .activity
-            activityPath = [.session(tap.sessionState)]
+            tab = .agent
+            agentPath = [.session(tap.sessionState)]
         case .split:
             if splitPath.last != .session(tap.sessionState) { splitPath.append(.session(tap.sessionState)) }
         }
@@ -231,6 +225,11 @@ final class Navigation {
     /// 打开未归档（iPhone 推入项目标签，iPad 选中侧栏）。
     func showInbox() {
         if layout == .split { select(.inbox) } else { tab = .projects; projectsPath = [.inbox] }
+    }
+
+    /// 打开任务页（iPhone 推入项目标签，iPad 选中侧栏）。在项目页里要能返回项目时用 `push(.tasks)`。
+    func showTasks() {
+        if layout == .split { select(.tasks) } else { tab = .projects; projectsPath = [.tasks] }
     }
 
     /// 打开项目页（iPhone 推入项目标签，iPad 选中侧栏）。
