@@ -24,14 +24,16 @@ struct PiSessionRow: View {
     var nameFont: Font = .body
     var lineFont: Font = .caption
     var dotSize: CGFloat = 6
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let shown = services.settings.shown(session)
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            PiStateDot(state: session.state, size: dotSize)
+            PiStateDot(shown: shown, size: dotSize)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(session.title).font(nameFont).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(session.title).font(nameFont).fontWeight(shown.unread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 4)
                     PiElapsed(session: session, font: lineFont)
                 }
@@ -39,7 +41,7 @@ struct PiSessionRow: View {
                     if let place = PiPlace.name(of: session, project: project) {
                         Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
                     }
-                    Text(session.state.label).fontWeight(.medium).foregroundStyle(session.state.tint(palette))
+                    Text(shown.label).fontWeight(.medium).foregroundStyle(shown.tint(palette))
                     if session.hosted { Text("· 后台").foregroundStyle(palette.ink3) }
                 }
                 .font(lineFont)

@@ -112,6 +112,7 @@ struct TaskLine: View {
     /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况）。
     var session: PiSessionState?
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     private enum Phase { case idle, pending, committed }
@@ -187,9 +188,10 @@ struct TaskLine: View {
             }
             if let session, !done {
                 Button { navigation.push(.session(session.id)) } label: {
+                    let shown = services.settings.shown(session)
                     HStack(spacing: 4) {
-                        PiStateDot(state: session.state, size: 6)
-                        Text(session.state.presence).foregroundStyle(session.state.tint(palette))
+                        PiStateDot(shown: shown, size: 6)
+                        Text(shown.presence).foregroundStyle(shown.tint(palette))
                         PiElapsed(session: session, font: .caption)
                     }
                 }

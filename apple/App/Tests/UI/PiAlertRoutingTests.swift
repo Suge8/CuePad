@@ -21,7 +21,7 @@ struct PiAlertRoutingTests {
     func 点Pi通知_打开该会话的近况(layout: Navigation.Layout) {
         let session = UUID()
         let alerts = PiAlertCenter()
-        let navigation = Navigation()
+        let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.layout = layout
         navigation.projectsPath = [.today]
 
@@ -40,7 +40,7 @@ struct PiAlertRoutingTests {
 
     @Test func 别的通知_不改导航() {
         let alerts = PiAlertCenter()
-        let navigation = Navigation()
+        let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
 
         alerts.receive(payload(subscription: "somebody.else", record: UUID()))
         navigation.open(alert: alerts.consumeTap())

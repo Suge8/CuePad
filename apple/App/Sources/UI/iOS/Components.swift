@@ -121,7 +121,7 @@ extension View {
 
     /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作，有 Pi 会话时菜单标题写明它的状态
     /// （说清旁边那个点是什么意思）。nil（未归档）没有菜单。
-    func projectActions(_ project: Project?, radius: CGFloat, pi: Open<PiWorkState>?) -> some View {
+    func projectActions(_ project: Project?, radius: CGFloat, pi: PiShown?) -> some View {
         modifier(ProjectContextMenu(project: project, radius: radius, pi: pi))
     }
 }
@@ -129,7 +129,7 @@ extension View {
 private struct ProjectContextMenu: ViewModifier {
     let project: Project?
     let radius: CGFloat
-    let pi: Open<PiWorkState>?
+    let pi: PiShown?
     @Environment(Navigation.self) private var navigation
 
     func body(content: Content) -> some View {

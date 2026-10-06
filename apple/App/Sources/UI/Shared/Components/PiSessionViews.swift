@@ -2,6 +2,7 @@ import CueStore
 import SwiftUI
 
 /// Pi 会话状态的颜色与文字：只有要你注意的有颜色（等你确认橙、出错红）；工作中是墨色，空闲与已结束是灰，靠形状分开。
+/// 空闲叫"待你回复"：Pi 做完这一轮、在等你的下一句；与弹窗问题的"等你确认"是两回事。做完了你还没看的另有"有新回复"（`PiShown`）。
 nonisolated extension PiWorkState {
     var label: String {
         switch self {
@@ -10,7 +11,7 @@ nonisolated extension PiWorkState {
         case .tool: "运行工具"
         case .delegating: "子代理工作中"
         case .waitingForUser: "等你确认"
-        case .settled: "空闲"
+        case .settled: "待你回复"
         case .error: "出错"
         case .ended: "已结束"
         }
@@ -51,7 +52,13 @@ nonisolated extension PiSubagentState {
         }
     }
 
-    var activityLabel: String { activity.known == .working ? "工作中" : workState.label }
+    var activityLabel: String {
+        switch activity.known {
+        case .working: "工作中"
+        case .idle: "空闲"
+        default: workState.label
+        }
+    }
 }
 
 /// 其他版本写入的、本版本不认识的状态：灰色、最低优先。
@@ -66,7 +73,7 @@ nonisolated extension Open<PiWorkState> {
         case .thinking, .outputting, .tool, .delegating: "Pi 正在工作"
         case .waitingForUser: "Pi 等你确认"
         case .error: "Pi 出错"
-        case .settled: "Pi 空闲"
+        case .settled: "Pi 待你回复"
         case .ended: "Pi 会话已结束"
         case nil: "Pi 状态未知"
         }
@@ -111,23 +118,53 @@ nonisolated extension PiSessionState {
     /// 详情是工具命令（等宽显示）。
     var detailIsCode: Bool { state == .known(.tool) }
 
-    /// 每个项目最需要注意的会话状态（书架与侧栏的状态点）。
-    static func byProject(_ sessions: [PiSessionState]) -> [UUID: Open<PiWorkState>] {
-        var result: [UUID: Open<PiWorkState>] = [:]
+    /// 每个项目最需要注意的会话状态（书架与侧栏的状态点）：等你确认 → 出错 → 有新回复 → 工作中 → 待你回复。
+    static func byProject(_ sessions: [PiSessionState], unread: (PiSessionState) -> Bool) -> [UUID: PiShown] {
+        var result: [UUID: PiShown] = [:]
         for session in sessions {
             guard let project = session.projectID else { continue }
-            if (result[project]?.urgency ?? 0) < session.state.urgency { result[project] = session.state }
+            let shown = PiShown(state: session.state, unread: unread(session))
+            if (result[project]?.urgency ?? -1) < shown.urgency { result[project] = shown }
         }
         return result
     }
 }
 
+/// 做完了但你还没看：Pi 停在空闲（这一轮做完了），且停下的时间晚于本机最后一次看这个会话；
+/// 没看过的从 `since`（启用这条规则的时刻）起算，之前就停下的不算。看的时刻记在本机偏好（`AppSettings.markSeen`）。
+nonisolated enum PiUnread {
+    static func isUnread(_ session: PiSessionState, seen: Date?, since: Date) -> Bool {
+        session.state == .known(.settled) && session.stateSince > max(seen ?? since, since)
+    }
+}
+
+extension AppSettings {
+    /// 这个会话在本机界面上显示的状态。
+    func shown(_ session: PiSessionState) -> PiShown { PiShown(state: session.state, unread: isUnread(session)) }
+}
+
+/// 界面上一个会话（或一个项目）显示的状态：Pi 报的状态，停在空闲时再分你看没看过（`PiUnread`）。
+/// 有新回复：墨色实心点、"有新回复"、名字加粗；看过是灰勾"待你回复"。全 App 的会话行、项目状态点、Mac 侧栏都经它。
+nonisolated struct PiShown: Equatable, Sendable {
+    var state: Open<PiWorkState>
+    var unread = false
+
+    var label: String { unread ? "有新回复" : state.label }
+    var presence: String { unread ? "Pi 有新回复" : state.presence }
+    /// 有新回复排在出错之后、工作中之前。
+    var urgency: Int { state.urgency * 2 + (unread ? 3 : 0) }
+}
+
+extension PiShown {
+    func tint(_ palette: Palette) -> Color { unread ? palette.ink : state.tint(palette) }
+}
+
 /// 会话状态标（全 App 只此一份：Agent 页、近况、书架、侧栏、Mac 侧栏与菜单栏）：颜色 + 形状表达状态，
-/// 等你确认橙色问号、出错红色叹号、工作中墨色圈点、空闲灰色勾、已结束更淡的空心圈；不做循环动画（常驻多处，
+/// 等你确认橙色问号、出错红色叹号、工作中墨色圈点、有新回复墨色实心点、待你回复灰色勾、已结束更淡的空心圈；不做循环动画（常驻多处，
 /// 循环既耗电也分散注意）。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 旁边有状态文字时读屏跳过它；`announces` 用在只有一个标的地方（书架、侧栏的项目旁），标自己带读屏标签与悬停提示。
 struct PiStateDot: View {
-    let state: Open<PiWorkState>
+    let shown: PiShown
     var size: CGFloat = 8
     var announces = false
     @Environment(\.palette) private var palette
@@ -136,13 +173,29 @@ struct PiStateDot: View {
 
     private var box: CGFloat { size * 1.8 * scale }
 
+    init(state: Open<PiWorkState>, unread: Bool = false, size: CGFloat = 8, announces: Bool = false) {
+        self.init(shown: PiShown(state: state, unread: unread), size: size, announces: announces)
+    }
+
+    init(shown: PiShown, size: CGFloat = 8, announces: Bool = false) {
+        self.shown = shown
+        self.size = size
+        self.announces = announces
+    }
+
     var body: some View {
-        let mark = Image(systemName: state.known?.symbol ?? "circle.dashed").font(.system(size: box, weight: .semibold))
-            .foregroundStyle(state.tint(palette))
-            .frame(width: box, height: box)
-            .animation(Motion.quick, value: state)
+        let mark = Group {
+            if shown.unread {
+                Circle().frame(width: size * scale, height: size * scale)
+            } else {
+                Image(systemName: shown.state.known?.symbol ?? "circle.dashed").font(.system(size: box, weight: .semibold))
+            }
+        }
+        .foregroundStyle(shown.tint(palette))
+        .frame(width: box, height: box)
+        .animation(Motion.quick, value: shown)
         if announces {
-            mark.accessibilityLabel(state.presence).help(state.presence)
+            mark.accessibilityLabel(shown.presence).help(shown.presence)
         } else {
             mark.accessibilityHidden(true)
         }

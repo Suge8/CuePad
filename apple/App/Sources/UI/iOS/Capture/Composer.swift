@@ -44,8 +44,9 @@ struct ComposerKinds: OptionSet {
 /// 左边"＋"能打开的三个来源；外面也可以直接打开其中一个（小组件的"拍照"入口）。
 enum ComposerSource { case cards, photos, camera }
 
-/// 随手记与 Pi 会话回复框共用的输入框：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条，
-/// 底下一行 ＋（选卡片、相册、拍照）、输入框、有内容才出现的发送钮；聚焦或有内容时展开头部。
+/// 随手记与 Pi 会话回复框共用的输入框（同 iOS 信息 App）：左边一颗独立的圆形玻璃"＋"（选卡片、相册、拍照），
+/// 与输入框的底行同高、垂直居中；右边一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条、输入框与有内容才出现的发送钮；
+/// 聚焦或有内容时展开头部。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和发送钮，草稿怎么处理由它们决定。
 struct Composer<Header: View, Send: View>: View {
     @Binding var draft: ComposerDraft
@@ -64,6 +65,7 @@ struct Composer<Header: View, Send: View>: View {
     @Environment(\.palette) private var palette
     @State private var ownSource: ComposerSource?
     @State private var picked: [PhotosPickerItem] = []
+    @State private var previewing: Navigation.Outbox?
 
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
@@ -82,38 +84,26 @@ struct Composer<Header: View, Send: View>: View {
         self.send = send()
     }
 
+    /// 单行时输入框高 50（字行 + 上下各 14），圆角取一半成胶囊；＋ 是同高的圆。
     private static var radius: CGFloat { 25 }
     private static var inset: CGFloat { 8 }
+    private static var gap: CGFloat { 8 }
 
     private var source: Binding<ComposerSource?> { outerSource ?? $ownSource }
     private var expanded: Bool { pinnedOpen || focus.wrappedValue || !draft.isEmpty(accepting: [.images, .cards]) }
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if expanded { header.transition(.opacity) }
-            if accepts.contains(.cards), let attachment = draft.attachment {
-                chip(attachment).padding([.horizontal, .top], Self.inset).transition(.opacity)
-            }
-            if accepts.contains(.images), !draft.images.isEmpty {
-                imageStrip.padding([.horizontal, .top], Self.inset).transition(.opacity)
-            }
-            HStack(alignment: .bottom, spacing: 0) {
-                if !accepts.isEmpty { plus.padding(.leading, 3) }
-                TextField(prompt, text: $draft.text, axis: .vertical)
-                    .lineLimit(expanded ? 1...6 : 1...1)
-                    .focused(focus)
-                    .accessibilityLabel(label)
-                    .padding(.leading, accepts.isEmpty ? 18 : 4).padding(.trailing, 8).padding(.vertical, 14)
-                if hasContent {
-                    send.padding(3).transition(.scale(scale: 0.6).combined(with: .opacity))
-                }
+        // 两块玻璃放进同一个容器：一起取样背景，靠近时按系统规则融合
+        GlassEffectContainer(spacing: Self.gap) {
+            HStack(alignment: .bottom, spacing: Self.gap) {
+                if !accepts.isEmpty { plus.transition(.scale(scale: 0.6).combined(with: .opacity)) }
+                field
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded)
         .animation(Motion.quick, value: expanded)
         .animation(Motion.quick, value: hasContent)
+        .animation(Motion.quick, value: accepts.isEmpty)
         .animation(Motion.quick, value: draft.attachment?.id)
         .animation(Motion.quick, value: draft.images.map(\.id))
         .photosPicker(isPresented: showing(.photos), selection: $picked, maxSelectionCount: 9, matching: .images)
@@ -125,10 +115,37 @@ struct Composer<Header: View, Send: View>: View {
                 draft.attachment = Navigation.Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID)
             }
         }
+        .sheet(item: $previewing) { outbox in
+            AttachmentSheet(outbox: outbox, expand: outbox.task == nil ? { expand(outbox) } : nil)
+        }
         .onChange(of: picked) { load() }
 #if DEBUG
         .task { await DebugScene.presetComposer($draft, source: source, store: workspace.services.store) }
 #endif
+    }
+
+    private var field: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if expanded { header.transition(.opacity) }
+            if accepts.contains(.cards), let attachment = draft.attachment {
+                chip(attachment).padding([.horizontal, .top], Self.inset).transition(.opacity)
+            }
+            if accepts.contains(.images), !draft.images.isEmpty {
+                imageStrip.padding([.horizontal, .top], Self.inset).transition(.opacity)
+            }
+            HStack(alignment: .bottom, spacing: 0) {
+                TextField(prompt, text: $draft.text, axis: .vertical)
+                    .lineLimit(expanded ? 1...6 : 1...1)
+                    .focused(focus)
+                    .accessibilityLabel(label)
+                    .padding(.leading, 18).padding(.trailing, 8).padding(.vertical, 14)
+                if hasContent {
+                    send.padding(3).transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded)
     }
 
     private func showing(_ target: ComposerSource) -> Binding<Bool> {
@@ -145,10 +162,9 @@ struct Composer<Header: View, Send: View>: View {
                 if CameraPicker.isAvailable { Button("拍照", systemImage: "camera") { source.wrappedValue = .camera } }
             }
         } label: {
-            Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(palette.ink2)
-                .frame(width: 36, height: 36)
-                .background(palette.fill, in: .circle)
-                .frame(width: 44, height: 44)
+            Image(systemName: "plus").font(.title3.weight(.medium)).foregroundStyle(palette.ink)
+                .frame(width: 2 * Self.radius, height: 2 * Self.radius)
+                .glass(in: .circle, interactive: true)
                 .contentShape(.circle)
         }
         .menuIndicator(.hidden)
@@ -156,27 +172,63 @@ struct Composer<Header: View, Send: View>: View {
         .accessibilityLabel("添加")
     }
 
-    /// 带上的卡片或任务：标题、图片数，可移除。
+    /// 带上的卡片或任务：标题、图片数，可移除；点一下看全文，长按是预览与"展开编辑"。
     private func chip(_ outbox: Navigation.Outbox) -> some View {
         let card = CardText(outbox.content)
-        return HStack(spacing: 10) {
-            Image(systemName: outbox.task == nil ? "rectangle.on.rectangle" : "checklist").foregroundStyle(palette.ink3)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(card.title.nonEmpty ?? "图片").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                if !card.images.isEmpty {
-                    Text("\(card.images.count) 张图片").font(.caption).foregroundStyle(palette.ink3)
+        let shape = RoundedRectangle(cornerRadius: Self.radius - Self.inset, style: .continuous)
+        return HStack(spacing: 0) {
+            Button { previewing = outbox } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: outbox.task == nil ? "rectangle.on.rectangle" : "checklist").foregroundStyle(palette.ink3)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(card.title.nonEmpty ?? "图片").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                        if !card.images.isEmpty {
+                            Text("\(card.images.count) 张图片").font(.caption).foregroundStyle(palette.ink3)
+                        }
+                    }
+                    Spacer(minLength: 8)
                 }
+                .padding(.leading, 12).frame(minHeight: 44)
+                .contentShape(.rect)
             }
-            Spacer(minLength: 8)
+            .buttonStyle(.plain)
+            .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
+            .accessibilityHint("看全文")
             Button("不带了", systemImage: "xmark") { draft.attachment = nil }
                 .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
                 .frame(width: 44, height: 44).contentShape(.rect)
         }
-        .padding(.leading, 12)
-        .background(palette.fill, in: .rect(cornerRadius: Self.radius - Self.inset, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
+        .background(palette.fill, in: shape)
+        .contentShape(.contextMenuPreview, shape)
+        .contextMenu {
+            if outbox.task == nil { Button("展开编辑", systemImage: "text.cursor") { expand(outbox) } }
+            Button("不带了", systemImage: "xmark", role: .destructive) { draft.attachment = nil }
+        } preview: {
+            AttachmentBody(content: outbox.content).frame(width: 340).frame(maxHeight: 460)
+        }
+    }
+
+    /// 展开编辑：卡片的文字放进输入框（接在已写的字前面）、图片放进图片条，不再作为整张卡带上，原卡片不动。
+    private func expand(_ outbox: Navigation.Outbox) {
+        let text = CueFormat.parse(outbox.content).map { token in
+            switch token {
+            case .text(let text): text
+            case .split: "---"
+            case .image: ""
+            }
+        }
+        .joined()
+        .replacing(/\n{3,}/, with: "\n\n")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        let images = CardText(outbox.content).images.compactMap { hash in
+            workspace.services.store.files.fileURL(for: hash).flatMap { try? Data(contentsOf: $0) }.map(PickedImage.init(data:))
+        }
+        draft.text = [text, draft.text].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
+        draft.images = images + draft.images
+        draft.attachment = nil
+        previewing = nil
+        focus.wrappedValue = true
     }
 
     private var imageStrip: some View {
@@ -287,6 +339,67 @@ struct CameraPicker: UIViewControllerRepresentable {
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
+    }
+}
+/// 带上的卡片或任务的全文：文字、图片按原来的顺序，分割线是一条细线。
+private struct AttachmentBody: View {
+    let content: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(Self.blocks(content).enumerated()), id: \.offset) { _, block in
+                    switch block {
+                    case .text(let text): Text(text).font(.body).foregroundStyle(palette.ink).textSelection(.enabled)
+                    case .image(let hash): Thumbnail(hash: hash, height: 220, radius: 12)
+                    case .split: Rectangle().fill(palette.hair).frame(height: 1)
+                    }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(palette.paper)
+    }
+
+    /// 相邻的文字并成一段，图片与分割线各成一块。
+    private static func blocks(_ content: String) -> [CueToken] {
+        var blocks: [CueToken] = []
+        for token in CueFormat.parse(content) {
+            if case .text(let text) = token, case .text(let previous)? = blocks.last {
+                blocks[blocks.count - 1] = .text(previous + text)
+            } else {
+                blocks.append(token)
+            }
+        }
+        return blocks.compactMap { block in
+            guard case .text(let text) = block else { return block }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : .text(trimmed)
+        }
+    }
+}
+
+/// 点开带上的卡片：全文，"展开编辑"把它变成这次要发的文字（只对卡片）。
+private struct AttachmentSheet: View {
+    let outbox: Navigation.Outbox
+    let expand: (() -> Void)?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            AttachmentBody(content: outbox.content)
+                .navigationTitle(CardText(outbox.content).title.nonEmpty ?? "卡片")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
+                    if let expand {
+                        ToolbarItem(placement: .confirmationAction) { Button("展开编辑", action: expand) }
+                    }
+                }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 #endif

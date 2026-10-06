@@ -16,13 +16,16 @@ struct SessionScreen: View {
     @State private var digest: SessionDigest?
     /// 最后一次读到的会话记录：记录被删后仍显示它。
     @State private var lastSeen: PiSessionState?
-    @State private var draft = ComposerDraft()
     @State private var askedForTranscript = false
 
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
     private static let readingWidth: CGFloat = 640
 
     private var session: PiSessionState? { digest?.session ?? lastSeen }
+    /// 回复框的草稿在 `Navigation`（离开会话再回来还在）。
+    private var draft: Binding<ComposerDraft> {
+        Binding(get: { navigation.replyDraft(for: id) }, set: { navigation.setReplyDraft($0, for: id) })
+    }
     private var fetchingTranscript: Bool {
         digest?.deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } == true
     }
@@ -63,15 +66,15 @@ struct SessionScreen: View {
                 }
             }
         }
-        // 回复框算作底栏（safeAreaBar），滚到它下面的对话有系统边缘效果。这页用 soft 而不是全 App 的 hard：
-        // 问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏，在对话中间画出一道线
-        .scrollEdgeEffectStyle(.soft, for: .bottom)
+        // 回复框算作底栏（safeAreaBar），对话从顶栏与底栏下面滚过，两头都是 soft（只淡出，不铺实底带）：
+        // 顶栏悬浮在对话上；底部若用全 App 的 hard，问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏
+        .scrollEdgeEffectStyle(.soft, for: .all)
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
                     if digest?.session != nil {
-                        ReplyBar(session: session, draft: $draft)
+                        ReplyBar(session: session, draft: draft)
                     } else {
                         Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
                     }
@@ -83,7 +86,6 @@ struct SessionScreen: View {
             }
         }
         .ownsBottomEdge()
-        .onAppear { if draft.attachment == nil { draft.attachment = navigation.takeDraft(for: id) } }
         .observing(services.store, SessionDigest.tables, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)
@@ -92,6 +94,9 @@ struct SessionScreen: View {
             if let session = digest?.session { lastSeen = session }
             askForTranscriptIfNeeded()
         }
+        // 开着这页就算看过：进来、Pi 每次换状态、离开时都记一下（列表里的"有新回复"据此消失）
+        .task(id: session?.stateSince) { if let session { services.settings.markSeen(session) } }
+        .onDisappear { if let session { services.settings.markSeen(session) } }
     }
 
     /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说）。
@@ -269,9 +274,10 @@ struct SessionPicker: View {
 
     private func row(_ session: PiSessionState) -> some View {
         let project = workspace.catalog?.project(session.projectID)
+        let shown = services.settings.shown(session)
         return Button { navigation.openSession(session.id, draft: outbox) } label: {
             HStack(spacing: 12) {
-                PiStateDot(state: session.state)
+                PiStateDot(shown: shown)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(session.title).font(.body.weight(.medium)).foregroundStyle(palette.ink)
@@ -280,7 +286,7 @@ struct SessionPicker: View {
                                 .padding(.horizontal, 6).padding(.vertical, 2).background(palette.fill, in: .capsule)
                         }
                     }
-                    PiActivityLine(lead: [PiPlace.name(of: session, project: project), session.state.label])
+                    PiActivityLine(lead: [PiPlace.name(of: session, project: project), shown.label])
                         .foregroundStyle(session.state == .known(.waitingForUser) ? palette.attention : palette.ink3)
                 }
                 Spacer(minLength: 8)

@@ -174,6 +174,7 @@ struct ProjectScreen: View {
 private struct FocusCard: View {
     let data: ProjectPageData
     let pi: PiSessionList?
+    @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var editing: CueTask?
@@ -229,12 +230,13 @@ private struct FocusCard: View {
     }
 
     private func sessionLine(_ session: PiSessionState) -> some View {
-        Button { navigation.push(.session(session.id)) } label: {
+        let shown = services.settings.shown(session)
+        return Button { navigation.push(.session(session.id)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                PiStateDot(state: session.state, size: 7)
+                PiStateDot(shown: shown, size: 7)
                 Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
-                PiActivityLine(lead: [session.state.label], detail: session.detail, detailIsCode: session.detailIsCode, font: .subheadline)
-                    .foregroundStyle(session.state == .known(.waitingForUser) ? palette.attention : palette.ink2)
+                PiActivityLine(lead: [shown.label], detail: session.detail, detailIsCode: session.detailIsCode, font: .subheadline)
+                    .foregroundStyle(session.state == .known(.waitingForUser) ? palette.attention : shown.unread ? palette.ink : palette.ink2)
                 Spacer(minLength: 4)
                 PiElapsed(session: session)
             }

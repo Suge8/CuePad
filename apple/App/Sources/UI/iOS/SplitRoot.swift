@@ -107,7 +107,7 @@ private struct AgentPanel: View {
 }
 
 nonisolated private struct SidebarData: Sendable {
-    var pi: [UUID: Open<PiWorkState>]
+    var live: [PiSessionState]
     var waiting: Int
     var today: Int
 }
@@ -159,7 +159,7 @@ private struct SplitSidebar: View {
         .observing(services.store, [.piSessionStates, .cards], id: today, into: $data, onError: workspace.fail) { [today] store in
             let states = try store.piSessionPage(.live).items.map(\.state)
             return SidebarData(
-                pi: PiSessionState.byProject(states), waiting: states.filter { $0.state == .known(.waitingForUser) }.count,
+                live: states, waiting: states.filter { $0.state == .known(.waitingForUser) }.count,
                 today: try store.search(SearchQuery(modifiedIn: today...Date.now), limit: 0).totalCards)
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
@@ -168,9 +168,9 @@ private struct SplitSidebar: View {
     }
 
     private func row(_ project: Project, _ catalog: ProjectCatalog) -> some View {
-        SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0,
-                   pi: data?.pi[project.id])
-            .projectActions(project, radius: 10, pi: data?.pi[project.id])
+        let pi = PiSessionState.byProject(data?.live ?? [], unread: services.settings.isUnread)[project.id]
+        return SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0, pi: pi)
+            .projectActions(project, radius: 10, pi: pi)
     }
 }
 
@@ -181,7 +181,7 @@ private struct SidebarRow: View {
     var symbol: String?
     var project: Project?
     var badge = 0
-    var pi: Open<PiWorkState>?
+    var pi: PiShown?
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
@@ -199,7 +199,7 @@ private struct SidebarRow: View {
                 layout {
                     Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                     HStack(spacing: 6) {
-                        if let pi { PiStateDot(state: pi, size: 6, announces: true) }
+                        if let pi { PiStateDot(shown: pi, size: 6, announces: true) }
                         Spacer(minLength: 4)
                         if badge > 0 { Text("\(badge)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3) }
                     }

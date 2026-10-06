@@ -11,8 +11,6 @@ nonisolated struct ShelfData: Sendable {
         var goal: String?
         /// 最近修改的一张卡的标题与时间。
         var latest: (title: String, date: Date)?
-        /// 该项目最需要注意的 Pi 会话状态；没有会话为 nil。
-        var pi: Open<PiWorkState>?
         var id: UUID { project.id }
     }
 
@@ -23,6 +21,8 @@ nonisolated struct ShelfData: Sendable {
     }
 
     var entries: [Entry]
+    /// 在线的 Pi 会话：项目的状态点在界面上按本机看没看过再算（`PiSessionState.byProject`）。
+    var live: [PiSessionState]
     var tasks: TaskCounts?
     var inboxCount: Int
     var todayCount: Int
@@ -32,18 +32,17 @@ nonisolated struct ShelfData: Sendable {
         let summaries = try store.projectSummaries()
         let counts = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) })
         let progress = try store.taskProgress()
-        let pi = PiSessionState.byProject(try store.piSessionPage(.live).items.map(\.state))
         let entries = try store.projects().map { project in
             let latest = try store.search(SearchQuery(projects: [project.id]), limit: 1).cards.first
             return Entry(
                 project: project, cardCount: counts[project.id] ?? 0, openTasks: progress[project.id].map { $0.total - $0.done } ?? 0,
                 goal: try project.goalCardID.flatMap { try store.card($0) }.map { CardText($0.body).title.textGlyphs },
-                latest: latest.map { (CardText($0.body).title.textGlyphs, $0.modifiedAt) }, pi: pi[project.id])
+                latest: latest.map { (CardText($0.body).title.textGlyphs, $0.modifiedAt) })
         }
         let today = calendar.startOfDay(for: now)...now
         let hasTasks = progress.values.contains { $0.total > 0 }
         return ShelfData(
-            entries: entries,
+            entries: entries, live: try store.piSessionPage(.live).items.map(\.state),
             tasks: hasTasks
                 ? TaskCounts(inProgress: try store.tasks(.inProgress).flatMap(\.tasks).count, todo: try store.tasks(.todo).flatMap(\.tasks).count)
                 : nil,
@@ -96,6 +95,7 @@ struct ShelfScreen: View {
     private func content(_ data: ShelfData) -> some View {
         let pinned = data.entries.filter(\.project.isPinned)
         let recent = data.entries.filter { !$0.project.isPinned }
+        let pi = PiSessionState.byProject(data.live, unread: services.settings.isUnread)
         VStack(alignment: .leading, spacing: 22) {
             if data.inboxCount > 0 || data.todayCount > 0 || data.tasks != nil {
                 VStack(spacing: 10) {
@@ -111,7 +111,7 @@ struct ShelfScreen: View {
                 // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
                 let columns = min(pinned.count, sizeClass == .regular ? 4 : 2)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
-                    ForEach(pinned) { PinnedShelfCard(entry: $0) }
+                    ForEach(pinned) { PinnedShelfCard(entry: $0, pi: pi[$0.id]) }
                 }
             }
             if !recent.isEmpty {
@@ -120,7 +120,7 @@ struct ShelfScreen: View {
                     VStack(spacing: 0) {
                         ForEach(Array(recent.enumerated()), id: \.element.id) { index, entry in
                             if index > 0 { Divider().padding(.leading, ShelfRow.dividerInset(typeSize)) }
-                            ShelfRow(entry: entry)
+                            ShelfRow(entry: entry, pi: pi[entry.id])
                         }
                     }
                     .clipShape(.rect(cornerRadius: 16, style: .continuous))
@@ -194,6 +194,7 @@ private struct ShelfLink: View {
 /// 置顶项目的大卡：图标、名称、目标、卡片数与未完成任务数、Pi 状态点。
 private struct PinnedShelfCard: View {
     let entry: ShelfData.Entry
+    let pi: PiShown?
     @Environment(\.palette) private var palette
     /// 项目图标随字号放大。
     @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 24
@@ -204,7 +205,7 @@ private struct PinnedShelfCard: View {
                 HStack(alignment: .top) {
                     ProjectGlyph(project: entry.project, size: glyph)
                     Spacer()
-                    if let pi = entry.pi { PiStateDot(state: pi, announces: true) }
+                    if let pi { PiStateDot(shown: pi, announces: true) }
                 }
                 Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
                 Group {
@@ -225,7 +226,7 @@ private struct PinnedShelfCard: View {
             .paper(radius: 20)
         }
         .buttonStyle(CardPressStyle())
-        .projectActions(entry.project, radius: 20, pi: entry.pi)
+        .projectActions(entry.project, radius: 20, pi: pi)
         .accessibilityElement(children: .combine)
     }
 }
@@ -259,6 +260,7 @@ private struct EmptyShelf: View {
 /// 书架的一行：项目（副标题是目标，没有目标时是最近一张卡）。
 private struct ShelfRow: View {
     let entry: ShelfData.Entry
+    let pi: PiShown?
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 辅助字号下并进名称一行的图标随字号放大；平时在固定大小的图标块里。
@@ -290,7 +292,7 @@ private struct ShelfRow: View {
                     HStack(spacing: 6) {
                         if stacked { ProjectGlyph(project: entry.project, size: glyph) }
                         Text(entry.project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
-                        if let pi = entry.pi { PiStateDot(state: pi, size: 6, announces: true) }
+                        if let pi { PiStateDot(shown: pi, size: 6, announces: true) }
                     }
                     Group {
                         if entry.goal?.isEmpty == false {
@@ -313,7 +315,7 @@ private struct ShelfRow: View {
         }
         .buttonStyle(RowPressStyle())
         .background(palette.paper)
-        .projectActions(entry.project, radius: 16, pi: entry.pi)
+        .projectActions(entry.project, radius: 16, pi: pi)
         .accessibilityElement(children: .combine)
     }
 

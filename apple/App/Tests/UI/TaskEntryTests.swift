@@ -26,7 +26,7 @@ struct TaskEntryTests {
 
     @Test(arguments: [Navigation.Layout.tabs, .split])
     func 去任务页_iPhone在项目标签里推入_iPad选中侧栏(layout: Navigation.Layout) {
-        let navigation = Navigation()
+        let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.layout = layout
         navigation.tab = .agent
         navigation.projectsPath = [.today]

@@ -83,7 +83,7 @@ struct CaptureComposer: View {
             }
             .font(.subheadline)
             .padding(.horizontal, 10).frame(minHeight: 36)
-            .background(palette.paper, in: .capsule)
+            .background(palette.fill, in: .capsule)
         }
         .accessibilityLabel("记到 \(destination)")
     }

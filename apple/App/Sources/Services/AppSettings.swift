@@ -1,3 +1,4 @@
+import CueStore
 import Foundation
 import Observation
 
@@ -17,6 +18,9 @@ final class AppSettings {
         static let currentProject = "currentProject"
         static let piExtensionDeclined = "piExtensionDeclined"
         static let commandLineToolPrompted = "commandLineToolPrompted"
+        static let replyTexts = "replyTexts"
+        static let sessionSeen = "sessionSeen"
+        static let unreadSince = "unreadSince"
     }
 
     private static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
@@ -51,6 +55,37 @@ final class AppSettings {
         set { defaults.set(newValue, forKey: Key.commandLineToolPrompted) }
     }
 
+    /// 本机最后一次看每个 Pi 会话的时间（按 sessionID），判断"有新回复"（`PiUnread`）；只留最近看的 `seenLimit` 个。
+    private(set) var sessionSeen: [String: Date] { didSet { defaults.set(sessionSeen, forKey: Key.sessionSeen) } }
+    /// "有新回复"从什么时候起算：第一次启动这个版本时记下，之前就停下的会话不算。
+    let unreadSince: Date
+
+    private static let seenLimit = 500
+
+    func isUnread(_ session: PiSessionState) -> Bool {
+        PiUnread.isUnread(session, seen: sessionSeen[session.sessionID], since: unreadSince)
+    }
+
+    func markSeen(_ session: PiSessionState, at date: Date = .now) {
+        var seen = sessionSeen
+        seen[session.sessionID] = date
+        if seen.count > Self.seenLimit {
+            for (key, _) in seen.sorted(by: { $0.value < $1.value }).prefix(seen.count - Self.seenLimit) { seen[key] = nil }
+        }
+        sessionSeen = seen
+    }
+
+    /// 会话回复框里写了还没发的字（按会话记录 id），跨退出保留；草稿本身在 `Navigation`。
+    func replyText(for session: UUID) -> String {
+        (defaults.dictionary(forKey: Key.replyTexts) as? [String: String])?[session.uuidString] ?? ""
+    }
+
+    func setReplyText(_ text: String, for session: UUID) {
+        var texts = defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]
+        texts[session.uuidString] = text.allSatisfy(\.isWhitespace) ? nil : text
+        defaults.set(texts, forKey: Key.replyTexts)
+    }
+
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
         #if !DEBUG
         if defaults === UserDefaults.standard { defaults.removeVolatileDomain(forName: UserDefaults.argumentDomain) }
@@ -62,6 +97,16 @@ final class AppSettings {
         autoSubmit = launchArguments[Key.autoSubmit].map(Self.isTrue) ?? defaults.bool(forKey: Key.autoSubmit)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
+        sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
+        // 启动参数（演示截图）可以把起点挪到很早，让演示库里停下的会话都算有新回复
+        if let seconds = launchArguments[Key.unreadSince].flatMap({ Double(String(describing: $0)) }) {
+            unreadSince = Date(timeIntervalSince1970: seconds)
+        } else if let since = defaults.object(forKey: Key.unreadSince) as? Date {
+            unreadSince = since
+        } else {
+            unreadSince = .now
+            defaults.set(unreadSince, forKey: Key.unreadSince)
+        }
     }
 
     private static func isTrue(_ value: Any) -> Bool {

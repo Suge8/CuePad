@@ -7,8 +7,8 @@ import UIKit
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
 /// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；taskedit 在任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
-/// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
-/// （核对往上翻后出"新消息"、贴底时跟到底）；send 是从卡片"发到 Mac"先选会话。
+/// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（给了 `-CuePadPushAfter <秒>` 时先停在 Agent 页，到时再推入）；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
+/// （核对往上翻后出"新消息"、贴底时跟到底），给了 `-CuePadChatBulk <N>` 时推入后整批进来 N 轮长对话（核对整批到达时停在最新）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// searchkey：iPhone 停在 Agent 标签，1.5 秒后走 ⌘K（回到书架并聚焦下拉搜索）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
@@ -85,8 +85,13 @@ extension DebugScene {
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
             if split { navigation.select(.agent) } else { navigation.tab = .agent }
+            // -CuePadPushAfter <秒>：先停在 Agent 页，过一会儿再像点了会话行一样推入（录屏核对推入的首帧）
+            let delay = defaults.double(forKey: "CuePadPushAfter")
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
             navigation.push(.session(session.id))
             if defaults.bool(forKey: "CuePadChatGrow") { Task { await growChat(session.sessionID, store: workspace.services.store) } }
+            let bulk = defaults.integer(forKey: "CuePadChatBulk")
+            if bulk > 0 { Task { await bulkChat(session.sessionID, count: bulk, store: workspace.services.store) } }
         case "newsession":
             if split { navigation.select(.agent) } else { navigation.tab = .agent }
             var sheet = Navigation.NewSession()

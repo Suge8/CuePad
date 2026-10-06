@@ -185,14 +185,16 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 private struct SessionRow: View {
     let item: PiSessionListItem
     @Environment(Navigation.self) private var navigation
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
         let session = item.state
+        let shown = services.settings.shown(session)
         let place = PiPlace.name(of: session, project: item.project)
         Button { navigation.push(.session(session.id)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                PiStateDot(state: session.state, size: 8)
+                PiStateDot(shown: shown, size: 8)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(session.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
@@ -201,7 +203,7 @@ private struct SessionRow: View {
                     }
                     HStack(spacing: 4) {
                         if let place { Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1) }
-                        Text(session.state.label).fontWeight(.medium).foregroundStyle(session.state.tint(palette))
+                        Text(shown.label).fontWeight(shown.unread ? .semibold : .medium).foregroundStyle(shown.tint(palette))
                         if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
                     }
                     .font(.subheadline)

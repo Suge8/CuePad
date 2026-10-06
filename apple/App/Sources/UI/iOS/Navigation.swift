@@ -98,8 +98,14 @@ final class Navigation {
     var sidebar: NavigationSplitViewVisibility = .automatic
     /// 分栏：右侧的 Agent 面板是否展开。
     var agentPanel = false
-    /// 带进会话页回复框的内容（卡片、任务、重发的记录），会话页出现时取走。
-    private var replyDrafts: [UUID: Outbox] = [:]
+    /// 各会话回复框的草稿（按会话记录 id），回复框的唯一事实源：离开会话再回来还在；文字另存在本机偏好、跨退出保留，
+    /// 带上的卡片与图片只留在这次运行。"发到 Mac"带来的卡片或任务也写进这里。
+    private var replyDrafts: [UUID: ComposerDraft] = [:]
+    @ObservationIgnored private let settings: AppSettings
+
+    init(settings: AppSettings) {
+        self.settings = settings
+    }
 
     /// 随手记记入的位置：正在看的项目页（含其上打开的卡），否则未归档。
     var captureProject: UUID? {
@@ -205,16 +211,25 @@ final class Navigation {
         }
     }
 
-    /// 在当前位置推入一个会话的近况页；`draft` 预填进它的回复框（发到 Mac 的卡片或任务、要重发的内容）。
+    /// 在当前位置推入一个会话的近况页；`draft` 带进它的回复框（发到 Mac 的卡片或任务），已经写的字留着。
     func openSession(_ id: UUID, draft: Outbox? = nil) {
         outbox = nil
-        if let draft { replyDrafts[id] = draft }
+        if let draft {
+            var reply = replyDraft(for: id)
+            reply.attachment = draft
+            setReplyDraft(reply, for: id)
+        }
         push(.session(id))
     }
 
-    /// 会话页出现时取走给它的预填内容。
-    func takeDraft(for session: UUID) -> Outbox? {
-        replyDrafts.removeValue(forKey: session)
+    func replyDraft(for session: UUID) -> ComposerDraft {
+        replyDrafts[session] ?? ComposerDraft(text: settings.replyText(for: session))
+    }
+
+    /// 发出后传空草稿：文字一并从本机偏好里清掉。
+    func setReplyDraft(_ draft: ComposerDraft, for session: UUID) {
+        replyDrafts[session] = draft
+        settings.setReplyText(draft.text, for: session)
     }
 
     /// 打开随手记，记入当前位置。

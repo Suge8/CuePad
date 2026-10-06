@@ -16,13 +16,14 @@ struct IOSRoot: View {
 /// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / Agent；任务从书架一行进入，搜索在书架与项目页下拉），宽 iPad 用分栏。
 struct IOSRootView: View {
     @State private var workspace: Workspace
-    @State private var navigation = Navigation()
+    @State private var navigation: Navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
     let alerts: PiAlertCenter
 
     init(services: AppServices, scene: SceneContext, alerts: PiAlertCenter) {
         _workspace = State(initialValue: Workspace(services: services, holder: scene))
+        _navigation = State(initialValue: Navigation(settings: services.settings))
         self.alerts = alerts
     }
 

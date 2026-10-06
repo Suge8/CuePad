@@ -16,6 +16,27 @@ extension DebugScene {
         }
     }
 
+    /// 1.5 秒后一次写进 `count` 轮长对话（像 Mac 补写一个老会话的对话那样整批到达），核对整批到达时停在最新。
+    static func bulkChat(_ sessionID: String, count: Int, store: CueStore) async {
+        try? await Task.sleep(for: .seconds(1.5))
+        let start = Int64(Date.now.timeIntervalSince1970) * 100
+        let table = "\n\n| 项 | 结果 |\n|:--|--:|\n| 用例 | 12 |\n| 失败 | 2 |"
+        let messages = (0..<count * 2).map { index in
+            let pi = index % 2 == 1
+            // 高度差得很远的回答（一行、长段落、表格、长代码块），懒加载按估计高度排时误差最大
+            let round = index / 2 + 1
+            let body = switch round % 4 {
+            case 0: "好的。"
+            case 1: String(repeating: "整批到达的长回答，用来撑出很高的对话。", count: 12)
+            case 2: "结果如下：" + table
+            default: "改动如下：\n\n```swift\n" + (1...30).map { "let value\($0) = compute(\($0))" }.joined(separator: "\n") + "\n```"
+            }
+            let text = pi ? "第 \(round) 轮回答：" + body : "第 \(round) 个问题"
+            return PiChatMessage(sessionID: sessionID, entryID: "bulk-\(start)-\(index)", seq: start + Int64(index), role: pi ? .pi : .user, text: text, at: .now)
+        }
+        try? await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: PiRecap(lastReply: messages.last?.text)))
+    }
+
     /// 两台 Mac 的项目目录绑定：工作室的 Mac 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
     /// 绑定由本机目录推导，所以先只留 CuePad 的目录发布第二台，再把目录放回去。
     private static func seedBindings(_ store: CueStore, projects: [Project]) async {

@@ -95,6 +95,7 @@ struct TaskRow: View {
     var session: PiSessionState?
     var compact = false
     @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.sessionDetail) private var sessionDetail
     @State private var editing = false
@@ -151,9 +152,10 @@ struct TaskRow: View {
                 .foregroundStyle(palette.ink3)
             }
             if let session, !done {
+                let shown = services.settings.shown(session)
                 HStack(spacing: 4) {
-                    PiStateDot(state: session.state, size: 5)
-                    Text(session.state.presence).foregroundStyle(session.state.tint(palette))
+                    PiStateDot(shown: shown, size: 5)
+                    Text(shown.presence).foregroundStyle(shown.tint(palette))
                     PiElapsed(session: session, font: .system(size: 11))
                 }
                 .sessionDetailRow(session.sessionID)

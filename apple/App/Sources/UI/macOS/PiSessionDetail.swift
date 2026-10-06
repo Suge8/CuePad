@@ -76,6 +76,8 @@ struct PiSessionDetail: View {
             try SessionDigest.read(sessionID: sessionID, from: store)
         }
         .onChange(of: stored) { askForTranscriptIfNeeded() }
+        // 开着详情就算看过：侧栏与菜单栏里的"有新回复"据此消失
+        .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
     private func header(_ session: PiSessionState, project: Project?, live: CuePi.PiSession?) -> some View {
