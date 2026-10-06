@@ -188,6 +188,19 @@ struct PiClockTests {
         #expect(PiClock.reading(.known(.settled), stateSince: entered, busySince: nil) == .ago(entered))
         #expect(PiClock.reading(.known(.ended), stateSince: entered, busySince: nil) == .ago(entered))
     }
+
+    @Test func 时长不跳秒_一分钟内写秒_一小时内写分_以上写时与分() {
+        #expect(PiClock.duration(42) == "42 秒")
+        #expect(PiClock.duration(4 * 60 + 59) == "4 分")
+        #expect(PiClock.duration(2 * 3600 + 5 * 60 + 30) == "2 时 5 分")
+    }
+
+    @Test func 计时文字_已运行_已等_多久前用同一个时长格式() {
+        let now = start.addingTimeInterval(4 * 60 + 10)
+        #expect(PiClock.running(since: start).text(now: now) == "已运行 4 分")
+        #expect(PiClock.waiting(since: start).text(now: start.addingTimeInterval(30)) == "已等 30 秒")
+        #expect(PiClock.ago(start).text(now: start.addingTimeInterval(3600 + 120)) == "1 时 2 分前")
+    }
 }
 
 /// Pi 历史按结束时间分段（手机 Pi 页、Mac ⌘K 共用）：今天 / 昨天 / 本周 / 本月 / 更早，周一为一周之始。
