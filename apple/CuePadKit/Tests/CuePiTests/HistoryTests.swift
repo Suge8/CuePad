@@ -200,6 +200,58 @@ struct HistoryTests {
     }
 }
 
+// MARK: - 只读摘要：首次回填 7 天外的会话不解析对话
+
+struct HistorySummaryOnlyTests {
+    let dir: URL
+    init() throws { dir = try makeTempDirectory() }
+
+    /// 各种会话形状：做完的几轮、中途改名、机器消息触发的轮、在跑的一轮（已调工具、你说的话还在等）、上次中途退出的一轮。
+    private func shapes() throws -> [SessionFile] {
+        var done = SessionFile(directory: dir, name: "done.jsonl")
+        try done.append(
+            SessionFile.header(id: "done"), SessionFile.user("u1", nil, "第一问", at: 1),
+            SessionFile.assistant("t1", "u1", text: "先看看", stop: "toolUse", at: 2), SessionFile.toolResult("r1", "t1", at: 3),
+            SessionFile.assistant("a1", "r1", text: "第一答", at: 4), SessionFile.info("i1", "a1", name: "改过的名字", at: 5),
+            SessionFile.user("u2", "i1", "<some_event>\n子任务完成\n</some_event>", at: 6), SessionFile.assistant("a2", "u2", text: "汇报", at: 7),
+            SessionFile.info("i2", "a2", name: "最后的名字", at: 8))
+        var running = SessionFile(directory: dir, name: "running.jsonl")
+        try running.append(
+            SessionFile.header(id: "running"), SessionFile.user("u1", nil, "第一问", at: 1), SessionFile.assistant("a1", "u1", text: "第一答", at: 2),
+            SessionFile.user("u2", "a1", "第二问", at: 3), SessionFile.assistant("t2", "u2", text: nil, stop: "toolUse", at: 4),
+            SessionFile.toolResult("r2", "t2", at: 5), SessionFile.user("u3", "r2", "顺便再看下日志", at: 6),
+            SessionFile.assistant("t3", "u3", text: nil, stop: "toolUse", at: 7))
+        var empty = SessionFile(directory: dir, name: "empty.jsonl")
+        try empty.append(SessionFile.header(id: "empty"))
+        var errored = SessionFile(directory: dir, name: "errored.jsonl")
+        try errored.append(
+            SessionFile.header(id: "errored"), SessionFile.user("u1", nil, [["type": "text", "text": "两块"], ["type": "text", "text": "文字"]], at: 1),
+            SessionFile.assistant("a1", "u1", text: nil, stop: "error", error: "429", at: 2))
+        return [done, running, empty, errored]
+    }
+
+    /// 只读摘要得到的检查点与逐行全读完全一样（之后增量读接得上），只是不给出对话。
+    @Test func aSummaryOnlyReadEqualsAFullReadWithoutTheTranscript() throws {
+        for file in try shapes() {
+            let full = try PiHistory.index(file: file.url, from: nil)
+            let summary = try PiHistory.index(file: file.url, from: nil, transcript: false)
+            #expect(summary.checkpoint == full.checkpoint, "\(file.url.lastPathComponent)")
+            #expect(summary.history == full.history && summary.transcript.isEmpty)
+        }
+    }
+
+    @Test func aSessionReadForItsSummaryContinuesIncrementallyLikeAFullRead() throws {
+        var file = try shapes()[1]
+        let summary = try PiHistory.index(file: file.url, from: nil, transcript: false)
+        try file.append(SessionFile.assistant("a3", "t3", text: "日志里没有异常", at: 8))
+
+        let next = try PiHistory.index(file: file.url, from: summary.checkpoint)
+        #expect(next.checkpoint == (try PiHistory.index(file: file.url, from: nil)).checkpoint)
+        #expect(next.recap == PiTranscriptRecap(lastPrompt: "顺便再看下日志", lastReply: "日志里没有异常", pendingPrompt: nil))
+        #expect(next.transcript.map(\.toolCount) == [2])
+    }
+}
+
 // MARK: - 后台索引器：首次按修改时间倒序，之后跟随文件变化
 
 /// 订阅索引器事件流并记录。
@@ -263,6 +315,21 @@ struct HistoryIndexerTests {
         try makeSession("p2", "b.jsonl", prompt: "later", modified: Date())
         try await eventually("之后的顶层会话被索引") { log.updates.contains { $0.file.lastPathComponent == "b.jsonl" } }
         #expect(!log.updates.contains { $0.file.path.contains("/subagents/") })
+    }
+
+    /// 首次回填只为最近修改过（`transcriptWindow` 内）的会话解析对话；更早的只读摘要（按修改时间判断，不读内容）。
+    @Test func backfillParsesTranscriptsOnlyForRecentlyModifiedSessions() async throws {
+        let now = Date()
+        try makeSession("p1", "recent.jsonl", prompt: "近的", modified: now.addingTimeInterval(-86_400))
+        try makeSession("p1", "old.jsonl", prompt: "远的", modified: now.addingTimeInterval(-10 * 86_400))
+
+        let log = HistoryEventLog(PiHistoryIndexer(root: root, transcriptWindow: 7 * 86_400) { _ in nil })
+        try await eventually("回填完成") { log.finishedBackfill }
+
+        let byName = Dictionary(uniqueKeysWithValues: log.updates.map { ($0.file.lastPathComponent, $0) })
+        #expect(byName["recent.jsonl"]?.transcript.map(\.text) == ["近的", "r-近的"])
+        #expect(byName["old.jsonl"]?.transcript.isEmpty == true)
+        #expect(byName["old.jsonl"]?.recap == PiTranscriptRecap(lastPrompt: "远的", lastReply: "r-远的", pendingPrompt: nil))
     }
 
     @Test func liveAppendsAndNewFilesAreIndexedIncrementally() async throws {
