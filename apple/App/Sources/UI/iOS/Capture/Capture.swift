@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 随手记输入框（书架、项目、今天页底部浮着的那一个）：共用的 `Composer`，去处是存成卡片或任务。
+/// 随手记输入框（书架、项目、未归档页底部浮着的那一个）：共用的 `Composer`，去处是存成卡片或任务。
 /// 平时一行，占位写明记成什么、落到哪；聚焦或有内容时展开头部：想法 | 任务、落点项目。
 /// 记下后收起并提示落点（点提示去那里）。文案与存法见 `CaptureCopy`、`CaptureDraft`。
 struct CaptureComposer: View {
@@ -108,7 +108,7 @@ struct CaptureComposer: View {
 }
 
 extension View {
-    /// iPad 内容页（书架、项目、今天、未归档）底部浮着的随手记入口；iPhone 的入口是标签栏的底部附件（见 `TabsRoot`），这里不挂。
+    /// iPad 内容页（书架、项目、未归档）底部浮着的随手记入口；iPhone 的入口是标签栏的底部附件（见 `TabsRoot`），这里不挂。
     func captureBar() -> some View { modifier(SplitCaptureBar()) }
 }
 
