@@ -10,7 +10,7 @@ import os
 /// 索引器按文件查检查点，所以这里维护"文件路径 → 会话 id"。
 ///
 /// Store 读写失败时，该文件的索引不再写回：库异常时反复重写只会放大问题。失败作为错误抛给调用方报告。
-/// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：记日志后当作没有检查点。
+/// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：当作没有检查点，回填完成时汇总记一行。
 actor PiHistoryPersistence {
     private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "pi-history")
     /// 自动同步对话的范围：这么久之内活跃过的会话；对话也在会话安静这么久之后清理
@@ -21,6 +21,9 @@ actor PiHistoryPersistence {
     private let host: String
     private var idsByPath: [String: String]?
     private var blocked: Set<String> = []
+    /// 回填期间检查点格式已过期（CuePi 升级）、从头重读的文件数与回填开始的时刻：回填完成时汇总记一行
+    private var outdated = 0
+    private var backfillStarted: ContinuousClock.Instant?
 
     init(storage: CueStore, host: String) {
         self.storage = storage
@@ -29,6 +32,7 @@ actor PiHistoryPersistence {
 
     /// Store 读取失败时抛错，并停止该文件的写回；没有检查点或检查点已失效返回 nil。
     func checkpoint(for file: URL) async throws -> PiHistoryCheckpoint? {
+        if backfillStarted == nil { backfillStarted = .now }
         let data: Data?
         do {
             guard let id = try await sessionIDs()[file.path] else { return nil }
@@ -41,7 +45,7 @@ actor PiHistoryPersistence {
         do {
             return try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
         } catch {
-            Self.log.notice("检查点无法解码，从头重读 \(file.path, privacy: .public)：\(String(describing: error), privacy: .public)")
+            outdated += 1
             return nil
         }
     }
@@ -94,6 +98,12 @@ actor PiHistoryPersistence {
 
     /// 回填完成：只留下此刻的会话文件。
     func retain(_ files: [URL]) async throws {
+        if let backfillStarted {
+            Self.log.notice(
+                "回填完成：\(files.count) 个会话文件，其中 \(self.outdated) 个检查点格式已过期、从头重读，用时 \(ContinuousClock.now - backfillStarted, privacy: .public)")
+            self.backfillStarted = nil
+            outdated = 0
+        }
         let paths = Set(files.map(\.path))
         let started = ContinuousClock.now
         let removed = try await storage.retainPiSessions(paths: paths, host: host)

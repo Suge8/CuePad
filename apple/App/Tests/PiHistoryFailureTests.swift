@@ -75,15 +75,21 @@ struct PiHistoryFailureTests {
             StoredPiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
 
         #expect(await services.loadPiCheckpoint(for: file) == nil)
-        await services.consumePiHistory(events(for: [file]))
+        await services.consumePiHistory(AsyncStream { continuation in
+            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil)))
+            continuation.yield(.backfillFinished(sessionFiles: [file]))
+            continuation.finish()
+        })
 
         #expect(services.startupIssues.isEmpty)
         #expect(try await services.store.piCheckpoint(of: "stale") != garbage)
-        // 测试输出里的那行"检查点无法解码，从头重读"就是这里预期的诊断日志
-        let logged = try OSLogStore(scope: .currentProcessIdentifier).getEntries()
+        // 格式升级后成千上万个文件都要重读：不逐个记，回填完成时汇总一行（条数与用时）
+        let lines = try OSLogStore(scope: .currentProcessIdentifier).getEntries()
             .compactMap { $0 as? OSLogEntryLog }
-            .contains { $0.subsystem == "com.sugeh.cuepad" && $0.category == "pi-history" && $0.composedMessage.contains(file.path) }
-        #expect(logged, "检查点解码失败要留下诊断日志")
+            .filter { $0.subsystem == "com.sugeh.cuepad" && $0.category == "pi-history" }
+            .map(\.composedMessage)
+        #expect(lines.contains { $0.contains("其中 1 个检查点格式已过期") })
+        #expect(!lines.contains { $0.contains(file.path) })
     }
 }
 #endif

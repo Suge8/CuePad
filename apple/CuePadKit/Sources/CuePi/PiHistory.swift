@@ -99,37 +99,70 @@ public enum PiHistory {
 
     /// 从检查点继续索引 `file`（没有检查点或检查点已失效则从头）。文件不存在时抛错——
     /// 会话文件在第一条消息落盘前并不存在，调用方等文件出现再来。
-    public static func index(file: URL, from checkpoint: PiHistoryCheckpoint?) throws -> PiHistoryUpdate {
+    ///
+    /// `transcript` 为 false 时不要对话（7 天外的会话）：从头读时只读摘要——逐行只找换行，只解码文件头、改名与第一条你的消息，
+    /// 最近一轮的问答从文件尾往回解码到够用为止；得到的检查点与逐行全读一样，之后增量读接得上。
+    public static func index(file: URL, from checkpoint: PiHistoryCheckpoint?, transcript wanted: Bool = true) throws -> PiHistoryUpdate {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
         let size = try handle.seekToEnd()
 
-        var state = try checkpoint.flatMap { try isResumable($0, handle: handle, size: size) ? $0 : nil } ?? PiHistoryCheckpoint()
+        let resumed = try checkpoint.flatMap { try isResumable($0, handle: handle, size: size) ? $0 : nil }
+        var state = resumed ?? PiHistoryCheckpoint()
         let start = state.offset
-
-        try handle.seek(toOffset: start)
-        var carry = Data()
-        var consumed = start
         var transcript: [PiTranscriptEntry] = []
-        // 缓冲按剩余字节分配：启动回填时绝大多数文件没有新内容，每个都分配并清零 8 MB 是回填的主要开销
-        var block = [UInt8](repeating: 0, count: Int(min(UInt64(blockSize), size - start)))
-        while true {
-            let n = read(handle.fileDescriptor, &block, block.count)
-            if n < 0 { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
-            if n == 0 { break }
-            carry.append(contentsOf: block[0..<n])
-            var lineStart = carry.startIndex
-            while let newline = carry[lineStart...].firstIndex(of: 0x0A) {
-                ingest(carry[lineStart..<newline], into: &state, transcript: &transcript)
-                lineStart = carry.index(after: newline)
-            }
-            consumed += UInt64(carry.distance(from: carry.startIndex, to: lineStart))
-            carry = Data(carry[lineStart...])
+        let consumed: UInt64
+        if wanted || resumed != nil {
+            consumed = try forEachLine(handle, from: start, size: size) { line, _ in ingest(line, into: &state, transcript: &transcript) }
+            if !wanted { transcript = [] }
+        } else {
+            var lines: [Skimmed] = []
+            consumed = try forEachLine(handle, from: start, size: size) { line, offset in skim(line, at: offset, into: &state, lines: &lines) }
+            try settle(&state, lines: lines, handle: handle)
         }
         state.offset = consumed
         try refreshFingerprint(&state, handle: handle)
         return PiHistoryUpdate(
             file: file, checkpoint: state, history: history(of: state), transcript: transcript, bytesRead: Int(consumed - start))
+    }
+
+    /// 逐个完整行（不含换行）交给 `body`，带行首偏移；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。
+    private static func forEachLine(
+        _ handle: FileHandle, from start: UInt64, size: UInt64, _ body: (UnsafeRawBufferPointer, UInt64) throws -> Void
+    ) throws -> UInt64 {
+        try handle.seek(toOffset: start)
+        // 缓冲按剩余字节分配：启动回填时绝大多数文件没有新内容，每个都分配并清零 8 MB 是回填的主要开销
+        var block = [UInt8](repeating: 0, count: Int(min(UInt64(blockSize), size - start)))
+        guard !block.isEmpty else { return start }
+        var carry: [UInt8] = []
+        var consumed = start
+        while true {
+            let n = block.withUnsafeMutableBytes { read(handle.fileDescriptor, $0.baseAddress, $0.count) }
+            if n < 0 { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            if n == 0 { break }
+            try block.withUnsafeBytes { raw in
+                let base = raw.baseAddress!
+                var position = 0
+                while position < n {
+                    guard let hit = memchr(base + position, 0x0A, n - position) else {
+                        carry.append(contentsOf: UnsafeRawBufferPointer(start: base + position, count: n - position))
+                        break
+                    }
+                    let end = base.distance(to: UnsafeRawPointer(hit))
+                    let piece = UnsafeRawBufferPointer(start: base + position, count: end - position)
+                    if carry.isEmpty {
+                        try body(piece, consumed)
+                    } else {
+                        carry.append(contentsOf: piece)
+                        try carry.withUnsafeBytes { try body($0, consumed) }
+                    }
+                    consumed += UInt64((carry.isEmpty ? piece.count : carry.count) + 1)
+                    carry.removeAll(keepingCapacity: true)
+                    position = end + 1
+                }
+            }
+        }
+        return consumed
     }
 
     // MARK: 检查点有效性
@@ -166,6 +199,8 @@ public enum PiHistory {
         var cwd: String?
         var name: String?
         var message: Message?
+
+        var time: Date? { timestamp.flatMap { try? Date($0, strategy: PiHistory.timestampStyle) } }
     }
 
     private struct Message: Decodable {
@@ -209,12 +244,13 @@ public enum PiHistory {
     private static let toolResultMarker = Data(#""role":"toolResult""#.utf8)
     private static let headLength = 512
 
-    private static func ingest(_ raw: Data, into cp: inout PiHistoryCheckpoint, transcript: inout [PiTranscriptEntry]) {
+    private static func ingest(_ raw: UnsafeRawBufferPointer, into cp: inout PiHistoryCheckpoint, transcript: inout [PiTranscriptEntry]) {
         cp.seq += 1
-        if raw.count > headLength, raw.prefix(headLength).range(of: toolResultMarker) != nil { return }
-        guard !raw.isEmpty, let line = try? decoder.decode(Line.self, from: raw) else { return } // 损坏行跳过
-        let time = line.timestamp.flatMap { try? Date($0, strategy: timestampStyle) }
-        if let time { cp.lastActivity = max(cp.lastActivity ?? time, time) }
+        if isToolResult(raw) { return }
+        guard let line = decode(raw) else { return } // 损坏行跳过
+        let time = line.time
+        // 最后活动：最后一行的时间（Pi 按时间追加）
+        if let time { cp.lastActivity = time }
         switch line.type {
         case "session":
             cp.sessionID = line.id
@@ -242,7 +278,7 @@ public enum PiHistory {
 
     /// 你说的一句：进对话、成为进行中的提问。机器消息（扩展投进来的信封）不进对话，只开始一轮。
     private static func userMessage(_ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout [PiTranscriptEntry]) {
-        if cp.round == nil { cp.round = .init(startedAt: entry.at) }
+        if cp.round?.startedAt == nil { cp.round = .init(startedAt: entry.at, tools: cp.round?.tools ?? 0) }
         let text = message.content?.joined("\n") ?? ""
         guard !isMachineMessage(text) else { return }
         transcript.append(PiTranscriptEntry(
@@ -292,6 +328,108 @@ public enum PiHistory {
     }
 
     private static let decoder = JSONDecoder()
+
+    private static func decode(_ raw: UnsafeRawBufferPointer) -> Line? {
+        guard let base = raw.baseAddress, !raw.isEmpty else { return nil }
+        return try? decoder.decode(Line.self, from: Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base), count: raw.count, deallocator: .none))
+    }
+
+    private static func contains(_ raw: UnsafeRawBufferPointer, _ marker: Data) -> Bool {
+        guard let base = raw.baseAddress, !raw.isEmpty else { return false }
+        return marker.withUnsafeBytes { memmem(base, raw.count, $0.baseAddress, $0.count) != nil }
+    }
+
+    private static func head(_ raw: UnsafeRawBufferPointer) -> UnsafeRawBufferPointer {
+        UnsafeRawBufferPointer(rebasing: raw.prefix(headLength))
+    }
+
+    private static func isToolResult(_ raw: UnsafeRawBufferPointer) -> Bool {
+        raw.count > headLength && contains(head(raw), toolResultMarker)
+    }
+
+    // MARK: 只读摘要
+
+    /// 只读摘要时记下的一行：行首偏移、长度；元信息行（文件头、改名）已当场读过。
+    private struct Skimmed {
+        var offset: UInt64
+        var length: Int
+        var kind: Kind
+        enum Kind { case meta, toolResult, other }
+    }
+
+    private static let sessionInfoMarker = Data(#""type":"session_info""#.utf8)
+    private static let userMarker = Data(#""role":"user""#.utf8)
+    private static let roleMarker = Data(#""role":"#.utf8)
+
+    /// 只找换行时的一行：文件头与改名当场解码；第一条你的消息找到之前解码像是你说的行（取标题）；其余只记位置。
+    private static func skim(_ raw: UnsafeRawBufferPointer, at offset: UInt64, into cp: inout PiHistoryCheckpoint, lines: inout [Skimmed]) {
+        cp.seq += 1
+        guard !raw.isEmpty else { return }
+        let head = head(raw)
+        if offset == 0 || contains(head, sessionInfoMarker) {
+            if let line = decode(raw), line.type == "session" || line.type == "session_info" {
+                switch line.type {
+                case "session": (cp.sessionID, cp.cwd) = (line.id, line.cwd)
+                default: cp.name = line.name
+                }
+                lines.append(Skimmed(offset: offset, length: raw.count, kind: .meta))
+                return
+            }
+        }
+        if isToolResult(raw) {
+            lines.append(Skimmed(offset: offset, length: raw.count, kind: .toolResult))
+            return
+        }
+        if cp.firstMessage == nil, contains(head, userMarker) || !contains(head, roleMarker),
+           let line = decode(raw), line.type == "message", line.message?.role == "user" {
+            let text = line.message?.content?.text ?? ""
+            if !text.isEmpty { cp.firstMessage = String(text.prefix(PiSessionName.firstMessageLimit)) }
+        }
+        lines.append(Skimmed(offset: offset, length: raw.count, kind: .other))
+    }
+
+    /// 从文件尾往回解码：最后活动（最后一行的时间）、最近一轮做完的问答、还没做完的那一轮——与逐行全读得到的一样。
+    private static func settle(_ cp: inout PiHistoryCheckpoint, lines: [Skimmed], handle: FileHandle) throws {
+        func read(_ line: Skimmed) throws -> Line? {
+            try handle.seek(toOffset: line.offset)
+            guard let data = try handle.read(upToCount: line.length) else { return nil }
+            return data.withUnsafeBytes { decode($0) }
+        }
+        for line in lines.reversed() where line.kind != .toolResult {
+            if let time = try read(line)?.time {
+                cp.lastActivity = time
+                break
+            }
+        }
+        var final: String?
+        var lastPrompt: String?
+        var pending: String?
+        var round: PiHistoryCheckpoint.Round?
+        for skimmed in lines.reversed() where skimmed.kind == .other {
+            guard let line = try read(skimmed), line.type == "message", let message = line.message else { continue }
+            let text = message.content?.joined("\n") ?? ""
+            if final == nil {
+                switch message.role {
+                case "assistant" where message.stopReason != "toolUse":
+                    final = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                case "assistant":
+                    round = .init(startedAt: round?.startedAt, tools: (round?.tools ?? 0) + (message.content?.toolCalls ?? 0))
+                case "user":
+                    round = .init(startedAt: line.time ?? round?.startedAt, tools: round?.tools ?? 0)
+                    if pending == nil, !isMachineMessage(text) { pending = clip(collapsed(text), PiTranscriptRecap.promptLimit) }
+                default:
+                    break
+                }
+            } else if message.role == "user", !isMachineMessage(text) {
+                lastPrompt = clip(collapsed(text), PiTranscriptRecap.promptLimit)
+                break
+            }
+        }
+        cp.round = round
+        cp.recap = PiTranscriptRecap(
+            lastPrompt: final == nil ? nil : lastPrompt, lastReply: final.flatMap { clip($0, PiTranscriptRecap.replyLimit) },
+            pendingPrompt: pending)
+    }
 
     static func history(of cp: PiHistoryCheckpoint) -> PiSessionHistory {
         PiSessionHistory(

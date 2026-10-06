@@ -9,12 +9,19 @@ import Foundation
 /// 这样调用方持久化滞后时增量也不会退化成重读。
 public struct PiHistoryIndexer: Sendable {
     private let root: URL
+    private let transcriptWindow: TimeInterval
     private let checkpoint: @Sendable (URL) async -> PiHistoryCheckpoint?
 
     private static let liveCacheLimit = 64
 
-    public init(root: URL = PiPaths().sessionsDirectory, checkpoint: @escaping @Sendable (URL) async -> PiHistoryCheckpoint?) {
+    /// - Parameter transcriptWindow: 首次读（没有检查点）时只为这么久之内修改过的会话文件解析对话（按修改时间，不读内容），
+    ///   更早的只读摘要（见 `PiHistory.index(file:from:transcript:)`）。
+    public init(
+        root: URL = PiPaths().sessionsDirectory, transcriptWindow: TimeInterval = .infinity,
+        checkpoint: @escaping @Sendable (URL) async -> PiHistoryCheckpoint?
+    ) {
         self.root = root
+        self.transcriptWindow = transcriptWindow
         self.checkpoint = checkpoint
     }
 
@@ -33,11 +40,12 @@ public struct PiHistoryIndexer: Sendable {
         defer { watcher.stop() }
         var live = LiveCache(limit: Self.liveCacheLimit)
 
-        func index(_ file: URL, remember: Bool) async {
+        func index(_ file: URL, modified: Date?, remember: Bool) async {
             let base: PiHistoryCheckpoint?
             if let cached = live[file] { base = cached } else { base = await checkpoint(file) }
+            let recent = (modified ?? Self.modified(file)).map { $0 > Date.now.addingTimeInterval(-transcriptWindow) } ?? true
             // 文件已被删除/尚未落盘等：跳过，等下一次变化
-            guard let update = try? PiHistory.index(file: file, from: base) else { return }
+            guard let update = try? PiHistory.index(file: file, from: base, transcript: recent) else { return }
             if remember { live[file] = update.checkpoint }
             if update.bytesRead > 0 || base == nil { continuation.yield(.updated(update)) }
         }
@@ -47,18 +55,18 @@ public struct PiHistoryIndexer: Sendable {
         let files = Self.sessionFiles(under: root)
         for (rank, file) in files.enumerated() {
             if Task.isCancelled { return }
-            await index(file, remember: rank < Self.liveCacheLimit)
+            await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit)
         }
-        continuation.yield(.backfillFinished(sessionFiles: files))
+        continuation.yield(.backfillFinished(sessionFiles: files.map(\.url)))
 
         for await paths in watcher.paths {
             if Task.isCancelled { return }
             if paths.contains(root.path) { // 丢事件：整体重扫
-                for file in Self.sessionFiles(under: root) { await index(file, remember: true) }
+                for file in Self.sessionFiles(under: root) { await index(file.url, modified: file.modified, remember: true) }
                 continue
             }
             for path in Set(paths) where Self.isSessionFile(path, under: root) {
-                await index(URL(filePath: path), remember: true)
+                await index(URL(filePath: path), modified: nil, remember: true)
             }
         }
     }
@@ -72,8 +80,12 @@ public struct PiHistoryIndexer: Sendable {
             && url.deletingLastPathComponent().deletingLastPathComponent().resolvingSymlinksInPath().path == root.resolvingSymlinksInPath().path
     }
 
-    /// 全部会话文件，最近修改的在前。
-    private static func sessionFiles(under root: URL) -> [URL] {
+    private static func modified(_ file: URL) -> Date? {
+        try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    }
+
+    /// 全部会话文件与修改时间，最近修改的在前。
+    private static func sessionFiles(under root: URL) -> [(url: URL, modified: Date)] {
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return [] }
         var files: [(URL, Date)] = []
@@ -85,7 +97,7 @@ public struct PiHistoryIndexer: Sendable {
             guard values?.isRegularFile == true else { continue }
             files.append((url, values?.contentModificationDate ?? .distantPast))
         }
-        return files.sorted { $0.1 > $1.1 }.map(\.0)
+        return files.sorted { $0.1 > $1.1 }.map { (url: $0.0, modified: $0.1) }
     }
 
     /// 最近使用的若干文件的检查点。

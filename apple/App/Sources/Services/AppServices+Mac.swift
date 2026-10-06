@@ -20,7 +20,7 @@ extension AppServices {
         } catch {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
-        let indexer = PiHistoryIndexer(root: paths.sessionsDirectory) { [weak self] file in
+        let indexer = PiHistoryIndexer(root: paths.sessionsDirectory, transcriptWindow: PiHistoryPersistence.transcriptWindow) { [weak self] file in
             await self?.loadPiCheckpoint(for: file)
         }
         tasks = [
