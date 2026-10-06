@@ -319,6 +319,11 @@ final class Workspace {
         try await services.store.updateTask(task.id) { $0.status = $0.status == .done ? .todo : .done }
     }
 
+    /// 挪动任务（拖放、缩进、反缩进）；子任务随它走。
+    func move(_ id: UUID, _ move: TaskMove) {
+        perform { try await $0.moveTask(id, to: move.slot, after: move.after) }
+    }
+
     /// 开始做（待办 → 进行中）；`back` 为 true 时停下回到待办。
     func start(_ task: CueTask, back: Bool = false) async throws {
         try await services.store.updateTask(task.id) { $0.status = back ? .todo : .inProgress }

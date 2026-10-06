@@ -73,20 +73,16 @@ extension CueStore {
 
   public func task(_ id: UUID) throws -> CueTask? { try find(CueTask.self, id) }
 
-  /// 某一状态的任务，按项目分组：项目顺序同 `projects()`，未归档的在最后；组内待办与进行中按手动顺序，完成的最近完成在前。
-  /// 回收站里的项目的任务不列。
-  public func tasks(_ status: TaskStatus) throws -> [TaskGroup] {
-    let condition = switch status {
-    case .todo: "t.completedAt IS NULL AND t.startedAt IS NULL"
-    case .inProgress: "t.completedAt IS NULL AND t.startedAt IS NOT NULL"
-    case .done: "t.completedAt IS NOT NULL"
-    }
-    let within = status == .done ? "t.completedAt DESC, t.id" : "t.sortKey, t.id"
+  /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`，未归档的在最后。组内是整棵任务树的先序（同级按手动顺序，
+  /// 子任务紧跟上级）再按状态筛：上级被筛掉的子任务就排在上级原来的位置。只要完成的时不按树，最近完成在前。回收站里的项目的任务不列。
+  public func tasks(_ statuses: TaskStatus...) throws -> [TaskGroup] {
+    let wanted = Set(statuses)
+    let doneOnly = wanted == [.done]
     let tasks = try db.query(
       """
       SELECT \(CueTask.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM tasks t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE (t.projectID IS NULL OR p.deletedAt IS NULL) AND \(condition)
-      ORDER BY t.projectID IS NULL, \(Self.projectOrder("p")), \(within)
+      WHERE (t.projectID IS NULL OR p.deletedAt IS NULL)\(doneOnly ? " AND t.completedAt IS NOT NULL" : "")
+      ORDER BY t.projectID IS NULL, \(Self.projectOrder("p")), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
       """
     ) { CueTask(row: $0) }
     var groups: [TaskGroup] = []
@@ -97,7 +93,26 @@ extension CueStore {
         groups.append(TaskGroup(projectID: task.projectID, tasks: [task]))
       }
     }
-    return groups
+    return groups.compactMap { group in
+      let ordered = doneOnly ? group.tasks : Self.preorder(group.tasks).filter { wanted.contains($0.status) }
+      return ordered.isEmpty ? nil : TaskGroup(projectID: group.projectID, tasks: ordered)
+    }
+  }
+
+  /// 按手动顺序排好的一组任务的先序：上级不在这组里的当顶层；环里的（远端并发、还没收敛）接在最后。
+  private static func preorder(_ tasks: [CueTask]) -> [CueTask] {
+    let ids = Set(tasks.map(\.id))
+    var children: [UUID: [CueTask]] = [:]
+    for task in tasks { if let parent = task.parentID, ids.contains(parent) { children[parent, default: []].append(task) } }
+    var ordered: [CueTask] = [], seen: Set<UUID> = []
+    func visit(_ task: CueTask) {
+      guard seen.insert(task.id).inserted else { return }
+      ordered.append(task)
+      for child in children[task.id] ?? [] { visit(child) }
+    }
+    for task in tasks where task.parentID.map({ !ids.contains($0) }) ?? true { visit(task) }
+    for task in tasks { visit(task) }
+    return ordered
   }
 
   /// 各项目（nil = 未归档）的任务完成数与总数；没有任务的项目不在结果里。回收站里的项目不算。
@@ -109,6 +124,14 @@ extension CueStore {
       """
     ) { (project: $0.uuidOrNil(0), progress: TaskProgress(done: Int($0.int(1)), total: Int($0.int(2)))) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.progress) })
+  }
+
+  /// 各上级任务的直接子任务完成数与总数；没有子任务的不在结果里。
+  public func subtaskProgress() throws -> [UUID: TaskProgress] {
+    let rows = try db.query(
+      "SELECT parentID, SUM(completedAt IS NOT NULL), COUNT(*) FROM tasks WHERE parentID IS NOT NULL GROUP BY parentID"
+    ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(1)), total: Int($0.int(2)))) }
+    return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
 
   /// 发送记录，最近的在前。

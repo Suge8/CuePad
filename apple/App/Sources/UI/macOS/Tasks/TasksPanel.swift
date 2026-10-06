@@ -3,7 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中、待办、最近完成（折起），跨项目，
-/// 每条写所在项目，交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），右键是 `TaskActions`。
+/// 子任务缩进跟在上级下（`TaskOutline`：按住拖动排序、拖到一条上成为它的子任务、横向拖改层级），顶层写所在项目，
+/// 交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），右键是 `TaskActions`（含缩进、反缩进）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -46,8 +47,8 @@ struct TasksPanel: View {
                 Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").font(.system(size: 13)).foregroundStyle(.secondary)
                     .padding(.horizontal, 20).padding(.vertical, 12)
             }
-            section("进行中", board.inProgress)
-            section("待办", board.todo)
+            section("进行中", board.inProgress, in: board)
+            section("待办", board.todo, in: board)
             if !board.done.isEmpty {
                 Button {
                     withAnimation(Motion.quick) { showsCompleted.toggle() }
@@ -65,7 +66,7 @@ struct TasksPanel: View {
         .animation(Motion.quick, value: [board.inProgress, board.todo, board.done].flatMap { $0.map(\.id) })
     }
 
-    @ViewBuilder private func section(_ title: String, _ items: [TaskBoard.Row]) -> some View {
+    @ViewBuilder private func section(_ title: String, _ items: [TaskBoard.Row], in board: TaskBoard) -> some View {
         if !items.isEmpty {
             HStack(spacing: 6) {
                 Text(title)
@@ -74,7 +75,13 @@ struct TasksPanel: View {
             .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
             .accessibilityAddTraits(.isHeader)
-            rows(items)
+            TaskOutline(tree: board.tree, roots: items.map(\.id)) { row in
+                let info = board.rows[row.id]
+                TaskRow(
+                    task: row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session.map(workspace.withLiveState),
+                    subtasks: board.subtasks[row.id])
+            }
+            .padding(.horizontal, 20)
         }
     }
 
@@ -85,7 +92,7 @@ struct TasksPanel: View {
     }
 }
 
-/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办），双击文字编辑；
+/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办；还有没完成的子任务时先问，确认后一起完成），双击文字编辑；
 /// 第二行写所在项目（面板里跨项目时）与交给 Pi 的会话此刻的状态，点状态打开那个会话的详情（外层要有 `SessionDetailHost`）。右键是 `TaskActions`。
 struct TaskRow: View {
     let task: CueTask
@@ -93,7 +100,11 @@ struct TaskRow: View {
     var project: Project?
     /// 交给 Pi 的任务：那个会话此刻的状态。
     var session: PiSessionState?
+    /// 直接子任务的完成数与总数（没有子任务时为 nil）。
+    var subtasks: TaskProgress?
     var compact = false
+    @Environment(\.taskStructure) private var structure
+    @State private var confirmsSubtasks = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -123,7 +134,7 @@ struct TaskRow: View {
                         .lineLimit(2)
                         .onTapGesture(count: 2, perform: beginEditing)
                 }
-                if project != nil || (session != nil && !done) { detail }
+                if project != nil || (!done && (session != nil || subtasks != nil)) { detail }
             }
             Spacer(minLength: 4)
         }
@@ -139,6 +150,13 @@ struct TaskRow: View {
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
         .accessibilityAction(named: "编辑", beginEditing)
         .accessibilityAction(named: "看 Pi 的近况") { if let session { sessionDetail?.open(session.sessionID) } }
+        .accessibilityActions {
+            if let indent = structure?.indent { Button("缩进", action: indent) }
+            if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
+        }
+        .confirmationDialog(TaskCopy.openSubtasks(subtasks), isPresented: $confirmsSubtasks) {
+            Button("全部完成", action: commitToggle)
+        }
     }
 
     /// 第二行：所在项目、交给 Pi 的会话此刻的状态（"Pi 正在工作 · 已运行 4:02"）。
@@ -150,6 +168,9 @@ struct TaskRow: View {
                     Text(project.name).lineLimit(1)
                 }
                 .foregroundStyle(palette.ink3)
+            }
+            if let subtasks, !done {
+                Text(TaskCopy.progress(subtasks)).monospacedDigit().foregroundStyle(palette.ink3)
             }
             if let session, !done {
                 let shown = services.settings.shown(session)
@@ -171,6 +192,10 @@ struct TaskRow: View {
     }
 
     private func toggle() {
+        if !done, TaskCopy.hasOpen(subtasks) { confirmsSubtasks = true } else { commitToggle() }
+    }
+
+    private func commitToggle() {
         let task = task
         workspace.attempt { try await workspace.toggle(task) }
     }

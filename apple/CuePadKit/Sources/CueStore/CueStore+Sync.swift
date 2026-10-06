@@ -181,12 +181,20 @@ extension CueStore {
         }
       }
       try clearInvalidGoals()
+      if changes.contains(where: \.touchesTasks) { try repairTaskTree() }
     }
     return failures + (try removeFiles(of: removedHashes))
   }
 }
 
 extension RemoteChange {
+  fileprivate var touchesTasks: Bool {
+    switch self {
+    case .save(let row, _): row.table == .tasks
+    case .delete(let key): key.table == .tasks
+    }
+  }
+
   fileprivate var recordName: String {
     switch self {
     case .save(let row, _): row.id
@@ -321,6 +329,16 @@ extension CueStore {
         SELECT 1 FROM cards c
         WHERE c.id = projects.goalCardID AND (c.deletedAt IS NOT NULL OR c.projectID IS NOT projects.id))
       """, [Date.stamp])
+  }
+
+  /// 任务层级在远端变更之后仍要成立（见 `TaskLinks.repairs`）；改写的任务会再推送，让各设备收敛。
+  /// 修改时间至少比现有的晚一毫秒：刚收下的远端版本可能带着比本机时钟更晚的时间，改写要算作更新的版本。
+  private func repairTaskTree() throws {
+    let now = Date.stamp
+    for (id, link) in try TaskLinks(db).repairs() {
+      try db.run(
+        "UPDATE tasks SET parentID = ?, projectID = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ?", [link.parent, link.project, now, id])
+    }
   }
 
   /// 被淘汰的卡片版本存成一张新卡（和留下的版本同项目、放在项目最前），指回原卡。

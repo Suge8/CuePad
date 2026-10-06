@@ -42,7 +42,7 @@ enum Help {
 enum Schema {
   static let project = "Project {id, name, icon, color, pinned, goalCardId, directory, cardCount, createdAt, modifiedAt}"
   static let card = "Card {id, projectId, project, body, pinned, conflictOf, deletedAt, createdAt, modifiedAt}"
-  static let task = "Task {id, content, projectId, project, status, done, startedAt, completedAt, createdAt, modifiedAt}（status：todo 待办、inProgress 进行中、done 完成）"
+  static let task = "Task {id, content, projectId, project, parentId, status, done, startedAt, completedAt, createdAt, modifiedAt}（status：todo 待办、inProgress 进行中、done 完成；parentId 是上级任务，顶层为 null）"
   static let search = "Search {total, projects, cards}"
   static let conflict = "Conflict {original, copy}"
 

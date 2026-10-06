@@ -89,6 +89,7 @@ struct TaskView {
   var json: JSONObject {
     [
       "id": uuid(task.id), "content": task.content, "projectId": uuid(task.projectID), "project": nullable(project),
+      "parentId": uuid(task.parentID),
       "status": task.status.rawValue, "done": task.status == .done, "startedAt": iso(task.startedAt),
       "completedAt": iso(task.completedAt), "createdAt": iso(task.createdAt),
       "modifiedAt": iso(task.modifiedAt),
@@ -97,6 +98,7 @@ struct TaskView {
 
   var line: String {
     "[\(Self.mark[task.status]!)] \(short(task.id))  \(task.content)" + (project.map { "  (\($0))" } ?? "")
+      + (task.parentID.map { "  ↳ \(short($0))" } ?? "")
   }
 }
 

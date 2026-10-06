@@ -110,6 +110,18 @@ public struct CueTask: Identifiable, Equatable, Sendable {
   public var piSessionID: String?
   public var createdAt: Date
   public var modifiedAt: Date
+  /// 上级任务；nil 是顶层。最多 `maxDepth` 级，只经 `createTask(_:under:)`、`moveTask` 改（Store 在写入时校验）。
+  /// 上级不在库里时（远端乱序还没到）按顶层看待。
+  public internal(set) var parentID: UUID?
+
+  /// 任务 → 子任务 → 子任务。
+  public static let maxDepth = 3
+}
+
+/// 任务挂在哪：某项目（nil = 未归档）的顶层，或某条任务下面（项目随它）。
+public enum TaskSlot: Hashable, Sendable {
+  case top(project: UUID?)
+  case under(UUID)
 }
 
 public struct SendRecord: Identifiable, Equatable, Sendable {
@@ -270,6 +282,10 @@ public enum CueStoreError: Error, Equatable {
   case attachmentFilesNotRemoved([String])
   /// 库文件的结构版本不是本版本建的（开发期旧结构或更新版本的库），不打开。
   case unsupportedSchemaVersion(Int)
+  /// 任务不能挂到自己或自己的子任务下，上级必须存在。
+  case invalidParent
+  /// 挂上去后会超过 `CueTask.maxDepth` 级。
+  case taskTooDeep
 }
 
 extension CueStoreError: LocalizedError {
@@ -285,6 +301,8 @@ extension CueStoreError: LocalizedError {
     case .blankDeliveryContent: "发送内容不能为空"
     case .attachmentFilesNotRemoved(let hashes): "已永久删除，但有 \(hashes.count) 个图片文件没能删掉"
     case .unsupportedSchemaVersion(let version): "资料库由另一个版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
+    case .invalidParent: "不能挂到自己或自己的子任务下"
+    case .taskTooDeep: "子任务最多 \(CueTask.maxDepth) 级"
     }
   }
 }
@@ -320,13 +338,15 @@ extension Card: Record {
 
 extension CueTask: Record {
   static let table = Table.tasks
-  static let columns = ["id", "content", "projectID", "sortKey", "startedAt", "completedAt", "piSessionID", "createdAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, content, projectID, sortKey, startedAt, completedAt, piSessionID, createdAt, modifiedAt] }
+  static let columns = [
+    "id", "content", "projectID", "sortKey", "startedAt", "completedAt", "piSessionID", "createdAt", "modifiedAt", "parentID",
+  ]
+  var bindings: [any SQLBindable] { [id, content, projectID, sortKey, startedAt, completedAt, piSessionID, createdAt, modifiedAt, parentID] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1), projectID: row.uuidOrNil(2), sortKey: row.text(3),
       startedAt: row.dateOrNil(4), completedAt: row.dateOrNil(5), piSessionID: row.textOrNil(6), createdAt: row.date(7),
-      modifiedAt: row.date(8))
+      modifiedAt: row.date(8), parentID: row.uuidOrNil(9))
   }
 }
 

@@ -72,7 +72,7 @@ import Testing
     let open = try await store.createTask("open")
     try await store.updateTask(done.id) { $0.status = .done }
     try RawDB(fixture.url).exec("""
-      ALTER TABLE tasks DROP COLUMN startedAt;
+      ALTER TABLE tasks DROP COLUMN startedAt; DROP INDEX tasks_parentID; ALTER TABLE tasks DROP COLUMN parentID;
       ALTER TABLE projects ADD COLUMN sortKey TEXT NOT NULL DEFAULT 'V';
       ALTER TABLE cards ADD COLUMN numbering TEXT NOT NULL DEFAULT 'none';
       DROP INDEX cards_projectID_modifiedAt; DROP INDEX tasks_projectID_modifiedAt; DROP INDEX piSessionStates_projectID;

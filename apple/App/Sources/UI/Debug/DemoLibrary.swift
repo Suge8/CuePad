@@ -22,6 +22,7 @@ enum DemoLibrary {
         defer { try? FileManager.default.removeItem(at: source) }
         try writeLegacy(projects(image: image), tasks: tasks, to: source)
         _ = try await store.importElectronLibrary(from: source)
+        try await seedSubtasks(store)
 
         let catalog = projects(image: image)
         for project in try await store.projects() {
@@ -119,6 +120,15 @@ enum DemoLibrary {
     ]
 
     typealias LegacyTask = (project: String?, text: String, done: Bool)
+
+    /// 三级任务：圆桌的"乱序"下两条子任务（一条已完成），其中一条再带两条（第三级默认折起）。
+    private static func seedSubtasks(_ store: CueStore) async throws {
+        guard let order = try await store.tasks(.todo).flatMap(\.tasks).first(where: { $0.content.hasPrefix("发言轮次") }) else { return }
+        let reproduce = try await store.createTask("复现乱序", under: order.id)
+        try await store.updateTask(reproduce.id) { $0.status = .done }
+        let sort = try await store.createTask("改成按首次加入时间排序", under: order.id)
+        for content in ["补 3 个重连用例", "跑一遍 16 人压测"] { _ = try await store.createTask(content, under: sort.id) }
+    }
 
     /// 写一份 Electron 旧库格式的 SQLite（之后经正式导入流程写入，导入保留原修改时间）。
     static func writeLegacy(_ projects: [DemoProject], tasks: [LegacyTask], to url: URL) throws {

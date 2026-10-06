@@ -276,46 +276,132 @@ extension CueStore {
 // MARK: 任务
 
 extension CueStore {
-  /// 新任务放在未完成任务的最前。项目（可省略）必须存在且未在回收站，否则抛 `invalidProject`。
+  /// 新的顶层任务放在未完成任务的最前。项目（可省略）必须存在且未在回收站，否则抛 `invalidProject`。
   public func createTask(_ content: String, in project: UUID? = nil) throws -> CueTask {
-    guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-      throw CueStoreError.blankTaskContent
-    }
+    try requireContent(content)
     return try write {
       try requireLiveProject(project)
-      let first = try db.first("SELECT MIN(sortKey) FROM tasks WHERE completedAt IS NULL") {
-        $0.textOrNil(0)
-      } ?? nil
-      let now = Date.stamp
-      let task = CueTask(
-        id: UUID(), content: content, projectID: project, sortKey: SortKey.before(first),
-        startedAt: nil, completedAt: nil, piSessionID: nil, createdAt: now, modifiedAt: now)
-      try insert(task)
-      return task
+      let first = try db.first("SELECT MIN(sortKey) FROM tasks WHERE completedAt IS NULL") { $0.textOrNil(0) } ?? nil
+      return try insertTask(content, project: project, parent: nil, sortKey: SortKey.before(first))
     }
   }
 
-  /// 改内容、状态（`status`）、所属项目、关联 Pi 会话。
-  /// 改挂的项目必须存在且未在回收站，否则抛 `invalidProject`。
+  /// 新的子任务放在 `parent` 的子任务最后，项目随它。上级已在第 `CueTask.maxDepth` 级时抛 `taskTooDeep`。
+  public func createTask(_ content: String, under parent: UUID) throws -> CueTask {
+    try requireContent(content)
+    return try write {
+      let tree = try TaskLinks(db)
+      guard let link = tree.links[parent] else { throw CueStoreError.invalidParent }
+      guard tree.level(of: parent) < CueTask.maxDepth else { throw CueStoreError.taskTooDeep }
+      let last = try db.first("SELECT MAX(sortKey) FROM tasks WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
+      return try insertTask(content, project: link.project, parent: parent, sortKey: SortKey.after(last))
+    }
+  }
+
+  /// 挪到 `slot` 里 `previous` 之后（nil = 最前），子任务随它走、项目随新位置。
+  /// 挂到自己或自己的子任务下抛 `invalidParent`，整棵子树超过 `CueTask.maxDepth` 级抛 `taskTooDeep`。
+  public func moveTask(_ id: UUID, to slot: TaskSlot, after previous: UUID?) throws {
+    try write {
+      let tree = try TaskLinks(db)
+      guard let current = tree.links[id] else { throw CueStoreError.notFound }
+      let destination: TaskLinks.Link
+      switch slot {
+      case .top(let project):
+        try requireLiveProject(project)
+        destination = TaskLinks.Link(parent: nil, project: project)
+      case .under(let parent):
+        guard let target = tree.links[parent], parent != id, !tree.ancestors(of: parent).contains(id) else {
+          throw CueStoreError.invalidParent
+        }
+        guard tree.level(of: parent) + tree.height(of: id) <= CueTask.maxDepth else { throw CueStoreError.taskTooDeep }
+        destination = TaskLinks.Link(parent: parent, project: target.project)
+      }
+      let now = Date.stamp
+      try db.run("UPDATE tasks SET parentID = ?, modifiedAt = ? WHERE id = ?", [destination.parent, now, id])
+      if destination.project != current.project {
+        try setProject(destination.project, of: [id] + tree.descendants(of: id), at: now)
+      }
+      try place(.tasks, scope: Self.siblingScope(destination), [Self.siblingKey(destination)], id: id, after: previous)
+    }
+  }
+
+  /// 改内容、状态（`status`）、所属项目、关联 Pi 会话。改挂的项目必须存在且未在回收站，否则抛 `invalidProject`。
+  /// 改了项目的子任务离开上级、成为新项目的顶层，它的子任务跟着换项目；完成时没完成的子任务一起完成。
   public func updateTask(_ id: UUID, _ edit: @Sendable (inout CueTask) -> Void) throws {
     try write {
       guard var task = try find(CueTask.self, id) else { throw CueStoreError.notFound }
-      let originalProject = task.projectID
+      let original = task
       edit(&task)
-      if task.projectID != originalProject { try requireLiveProject(task.projectID) }
-      guard !task.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-        throw CueStoreError.blankTaskContent
+      try requireContent(task.content)
+      let now = Date.stamp
+      task.modifiedAt = now
+      let movesProject = task.projectID != original.projectID
+      let completes = task.completedAt != nil && original.completedAt == nil
+      if movesProject {
+        try requireLiveProject(task.projectID)
+        task.parentID = nil
       }
-      task.modifiedAt = Date.stamp
       try update(task)
+      guard movesProject || completes else { return }
+      let descendants = try TaskLinks(db).descendants(of: id)
+      if movesProject { try setProject(task.projectID, of: descendants, at: now) }
+      if completes {
+        try db.run(
+          "UPDATE tasks SET completedAt = ?1, modifiedAt = ?1 WHERE completedAt IS NULL AND id IN (SELECT value FROM json_each(?2))",
+          [now, Self.idList(descendants)])
+      }
     }
   }
 
+  /// 永久删除；它的子任务按原顺序提到它的位置（挂到它的上级下）。
   public func deleteTask(_ id: UUID) throws {
     try write {
-      try db.run("UPDATE sendRecords SET taskID = NULL, modifiedAt = ? WHERE taskID = ?", [Date.stamp, id])
+      let now = Date.stamp
+      if let task = try find(CueTask.self, id) {
+        let link = TaskLinks.Link(parent: task.parentID, project: task.projectID)
+        let children = try db.query("SELECT id FROM tasks WHERE parentID = ? ORDER BY sortKey, id", [id]) { $0.uuid(0) }
+        let upper = try db.first(
+          "SELECT MIN(sortKey) FROM tasks WHERE (\(Self.siblingScope(link))) AND sortKey > ?", [Self.siblingKey(link), task.sortKey]
+        ) { $0.textOrNil(0) } ?? nil
+        var lower = task.sortKey
+        for child in children {
+          let key = SortKey.between(lower, upper) ?? SortKey.after(lower)
+          try db.run("UPDATE tasks SET parentID = ?, sortKey = ?, modifiedAt = ? WHERE id = ?", [task.parentID, key, now, child])
+          lower = key
+        }
+      }
+      try db.run("UPDATE sendRecords SET taskID = NULL, modifiedAt = ? WHERE taskID = ?", [now, id])
       try db.run("DELETE FROM tasks WHERE id = ?", [id])
     }
+  }
+
+  private func requireContent(_ content: String) throws {
+    guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankTaskContent }
+  }
+
+  private func insertTask(_ content: String, project: UUID?, parent: UUID?, sortKey: String) throws -> CueTask {
+    let now = Date.stamp
+    let task = CueTask(
+      id: UUID(), content: content, projectID: project, sortKey: sortKey, startedAt: nil, completedAt: nil, piSessionID: nil,
+      createdAt: now, modifiedAt: now, parentID: parent)
+    try insert(task)
+    return task
+  }
+
+  private func setProject(_ project: UUID?, of ids: [UUID], at now: Date) throws {
+    try db.run(
+      "UPDATE tasks SET projectID = ?, modifiedAt = ? WHERE id IN (SELECT value FROM json_each(?))", [project, now, Self.idList(ids)])
+  }
+
+  /// 同级的范围：同一上级下，或同一项目的顶层。
+  private static func siblingScope(_ link: TaskLinks.Link) -> String {
+    link.parent == nil ? "parentID IS NULL AND projectID IS ?" : "parentID = ?"
+  }
+
+  private static func siblingKey(_ link: TaskLinks.Link) -> UUID? { link.parent ?? link.project }
+
+  private static func idList(_ ids: [UUID]) -> String {
+    "[" + ids.map { "\"\($0.uuidString.lowercased())\"" }.joined(separator: ",") + "]"
   }
 }
 

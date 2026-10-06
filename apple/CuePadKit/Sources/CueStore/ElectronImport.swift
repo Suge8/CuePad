@@ -82,7 +82,8 @@ struct LegacyLibrary {
       CueTask(
         id: LegacyID.uuid("task", row.id), content: row.content ?? "",
         projectID: row.projectID.map { LegacyID.uuid("project", $0) }, sortKey: key,
-        startedAt: nil, completedAt: row.completedAt, piSessionID: nil, createdAt: row.createdAt, modifiedAt: row.updatedAt)
+        startedAt: nil, completedAt: row.completedAt, piSessionID: nil, createdAt: row.createdAt, modifiedAt: row.updatedAt,
+        parentID: nil)
     }
 
     for (key, value) in try legacy.query("SELECT key, value FROM app_settings", [], { ($0.text(0), $0.text(1)) }) {

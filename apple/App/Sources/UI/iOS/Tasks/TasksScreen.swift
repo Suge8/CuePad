@@ -3,7 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 任务页（书架上的"任务"一行、iPad 侧栏、项目页"还有 N 条"进入）：顶上常驻一行快速添加（↩ 即一条，落当前项目或未归档，可换）；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
-/// 每条写所在项目，交给 Pi 的写那个会话此刻在做什么。点圆圈完成（完成的点了回到待办），左滑完成，长按是开始、交给 Pi、移到项目、编辑、删除。
+/// 子任务缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的子任务、右滑缩进左滑反缩进），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
+/// 点圆圈完成（完成的点了回到待办），长按是编辑、缩进、开始、交给 Pi、移到项目、删除。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -14,25 +15,16 @@ struct TasksScreen: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-        List {
-            if let board {
-                if board.inProgress.isEmpty && board.todo.isEmpty {
-                    Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").foregroundStyle(palette.ink2)
-                        .listRowBackground(palette.paper)
-                }
-                section("进行中", board.inProgress)
-                section("待办", board.todo)
-                if !board.done.isEmpty { completed(board.done) }
+            ScrollView {
+                if let board { content(board) }
             }
+            #if DEBUG
+            .onChange(of: board?.done.last?.id) {
+                if DebugScene.defaults.bool(forKey: "CuePadShowsDone"), let last = board?.done.last?.id { proxy.scrollTo(last, anchor: .bottom) }
+            }
+            #endif
         }
-        #if DEBUG
-        .onChange(of: board?.done.last?.id) {
-            if DebugScene.defaults.bool(forKey: "CuePadShowsDone"), let last = board?.done.last?.id { proxy.scrollTo(last, anchor: .bottom) }
-        }
-        #endif
-        }
-        .listStyle(.insetGrouped)
-        .deskBackground()
+        .background(palette.desk)
         .safeAreaInset(edge: .top, spacing: 0) {
             NewTaskLine(project: workspace.currentProject, projects: workspace.catalog?.projects)
                 .padding(.horizontal, 6)
@@ -51,23 +43,46 @@ struct TasksScreen: View {
         }
     }
 
-    @ViewBuilder private func section(_ title: String, _ rows: [TaskBoard.Row]) -> some View {
-        if !rows.isEmpty {
-            Section {
-                ForEach(rows) { row($0) }
-            } header: {
-                HStack(spacing: 6) {
-                    Text(title)
-                    Text("\(rows.count)").foregroundStyle(palette.ink3)
+    private func content(_ board: TaskBoard) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if board.inProgress.isEmpty && board.todo.isEmpty {
+                Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").foregroundStyle(palette.ink2)
+                    .padding(.horizontal, 4).padding(.top, 8)
+            }
+            group("进行中", board.inProgress, in: board)
+            group("待办", board.todo, in: board)
+            if !board.done.isEmpty { completed(board.done) }
+        }
+        .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
+    }
+
+    @ViewBuilder private func group(_ title: String, _ roots: [TaskBoard.Row], in board: TaskBoard) -> some View {
+        if !roots.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                header(title, count: roots.count)
+                TaskOutline(tree: board.tree, roots: roots.map(\.id)) { row in
+                    let info = board.rows[row.id]
+                    line(row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session, subtasks: board.subtasks[row.id])
                 }
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
             }
         }
     }
 
+    private func header(_ title: String, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+            Text("\(count)").foregroundStyle(palette.ink3)
+        }
+        .font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
     private func completed(_ rows: [TaskBoard.Row]) -> some View {
-        Section {
-            if showsCompleted { ForEach(rows) { row($0) } }
-        } header: {
+        VStack(alignment: .leading, spacing: 6) {
             Button {
                 withAnimation(Motion.quick) { showsCompleted.toggle() }
             } label: {
@@ -77,40 +92,40 @@ struct TasksScreen: View {
                         .rotationEffect(.degrees(showsCompleted ? 90 : 0)).accessibilityHidden(true)
                     Spacer()
                 }
+                .font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
+                .padding(.horizontal, 4)
                 .frame(minHeight: 44).contentShape(.rect)
             }
             .buttonStyle(.plain)
             .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
+            if showsCompleted {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows) { line($0.task, project: $0.project, session: $0.session, subtasks: nil).id($0.id) }
+                }
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
+            }
         }
     }
 
-    private func row(_ row: TaskBoard.Row) -> some View {
-        let task = row.task
-        return TaskLine(task: task, project: row.project, session: row.session)
-            .listRowBackground(palette.paper)
-            .swipeActions(edge: .trailing) {
-                Button(task.status == .done ? "回到待办" : "完成", systemImage: task.status == .done ? "arrow.uturn.backward" : "checkmark") {
-                    workspace.attempt { try await workspace.toggle(task) }
-                }
-                .tint(palette.accent)
-            }
-            .swipeActions(edge: .leading) {
-                if task.status == .todo {
-                    Button("开始", systemImage: "play") { workspace.attempt { try await workspace.start(task) } }.tint(palette.ink2)
-                }
-            }
+    private func line(_ task: CueTask, project: Project?, session: PiSessionState?, subtasks: TaskProgress?) -> some View {
+        TaskLine(task: task, project: project, session: session, subtasks: subtasks)
             .contextMenu { TaskActions(task: task) { editing = task } }
     }
 }
 
 /// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾）。点圆圈立即显示完成（对勾、删除线、成功触感），停留片刻再从列表移出；
-/// 这段时间里再点一下就撤销。已完成的任务点一下立即回到待办。
+/// 这段时间里再点一下就撤销。还有没完成的子任务时先问一句，确认后连子任务一起完成。已完成的任务点一下立即回到待办。
 struct TaskLine: View {
     let task: CueTask
     /// 任务页跨项目列着，写上所在项目；项目页里不写。
     var project: Project?
     /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况）。
     var session: PiSessionState?
+    /// 直接子任务的完成数与总数（没有子任务时为 nil）。
+    var subtasks: TaskProgress?
+    @Environment(\.taskStructure) private var structure
+    @State private var confirmsSubtasks = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
@@ -135,6 +150,13 @@ struct TaskLine: View {
             .accessibilityAction { tap() }
             .accessibilityActions {
                 if let session { Button("看 Pi 的近况") { navigation.push(.session(session.id)) } }
+                if let indent = structure?.indent { Button("缩进", action: indent) }
+                if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
+            }
+            .confirmationDialog(
+                TaskCopy.openSubtasks(subtasks), isPresented: $confirmsSubtasks, titleVisibility: .visible
+            ) {
+                Button("全部完成") { phase = .pending }
             }
             .animation(.easeOut(duration: 0.12), value: done)
             .task(id: phase) {
@@ -170,21 +192,28 @@ struct TaskLine: View {
                     .font(.body).strikethrough(done)
                     .foregroundStyle(done ? palette.ink3 : palette.ink)
                     .lineLimit(2)
-                if project != nil || (session != nil && !done) { detail }
+                if hasDetail { detail }
             }
-            .padding(.vertical, project != nil || session != nil ? 6 : 0)
+            .padding(.vertical, hasDetail ? 6 : 0)
         }
     }
 
-    /// 第二行：所在项目、交给 Pi 的会话此刻的状态（"Pi 正在工作 · 已运行 4:02"）。
+    private var hasDetail: Bool { project != nil || (!done && (session != nil || subtasks != nil)) }
+
+    /// 第二行：所在项目、子任务进度、交给 Pi 的会话此刻的状态（"Pi 正在工作 · 已运行 4:02"）。
     private var detail: some View {
         HStack(spacing: 10) {
+            if let subtasks, !done {
+                Text(TaskCopy.progress(subtasks)).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
+            }
             if let project {
+                // 一行放不下时先截项目名，进度与会话状态不截
                 HStack(spacing: 4) {
                     ProjectGlyph(project: project, size: 10)
-                    Text(project.name).lineLimit(1)
+                    Text(project.name)
                 }
                 .foregroundStyle(palette.ink3)
+                .layoutPriority(-1)
             }
             if let session, !done {
                 Button { navigation.push(.session(session.id)) } label: {
@@ -194,18 +223,20 @@ struct TaskLine: View {
                         Text(shown.presence).foregroundStyle(shown.tint(palette))
                         PiElapsed(session: session, font: .caption)
                     }
+                    .fixedSize()
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("看 Pi 的近况")
             }
         }
         .font(.caption)
+        .lineLimit(1)
     }
 
     private func tap() {
         switch (task.status == .done, phase) {
         case (true, _): workspace.attempt { try await workspace.toggle(task) }
-        case (false, .idle): phase = .pending
+        case (false, .idle): if TaskCopy.hasOpen(subtasks) { confirmsSubtasks = true } else { phase = .pending }
         case (false, .pending): phase = .idle
         case (false, .committed): break
         }

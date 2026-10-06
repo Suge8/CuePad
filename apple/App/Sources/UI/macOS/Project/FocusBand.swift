@@ -3,7 +3,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 目标与任务：目标卡 + 本项目任务（"任务 完成数/总数"，没完成的进行中在前）+ 本项目的 Pi 会话。没有目标卡时不显示目标一栏。
+/// 目标与任务：目标卡 + 本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Pi 会话。没有目标卡时不显示目标一栏。
 struct FocusBand: View {
     let data: ProjectPageData
     @Environment(Workspace.self) private var workspace
@@ -64,14 +64,19 @@ struct FocusBand: View {
 
     @ViewBuilder private var tasks: some View {
         SectionLabel(text: data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist")
-        ForEach(data.tasks.prefix(Self.visibleTasks)) { task in
-            TaskRow(task: task, session: workspace.liveState(ofSession: task.piSessionID), compact: true)
+        let roots = data.tasks.roots
+        // 与任务面板同一节奏：任务行、"还有 N 条"、添加任务之间不再加栏内间距
+        VStack(alignment: .leading, spacing: 2) {
+            TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
+                TaskRow(
+                    task: row.task, session: workspace.liveState(ofSession: row.task.piSessionID), subtasks: data.subtasks[row.id], compact: true)
+            }
+            if roots.count > Self.visibleTasks {
+                Button("还有 \(roots.count - Self.visibleTasks) 条") { workspace.overlay = .tasks }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(palette.ink3)
+            }
+            NewTaskField(project: data.project?.id)
         }
-        if data.tasks.count > Self.visibleTasks {
-            Button("还有 \(data.tasks.count - Self.visibleTasks) 条") { workspace.overlay = .tasks }
-                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(palette.ink3)
-        }
-        NewTaskField(project: data.project?.id)
     }
 
     private var divider: some View {

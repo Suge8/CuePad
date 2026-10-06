@@ -19,7 +19,7 @@ import Foundation
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields`，生产环境删不掉字段）。
 enum Schema {
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；比它旧的按 `upgrades` 就地升级；比它新的是更新版本建的库，不打开。
-  static let version = 10
+  static let version = 11
 
   /// `upgrades[i]` 把结构版本 i + 1 升到 i + 2。新库直接用 `create`（已是最新结构）。
   static let upgrades = [
@@ -54,7 +54,11 @@ enum Schema {
     "ALTER TABLE piSessionStates ADD COLUMN pendingPrompt TEXT;",
     // 会话的完整对话：一条消息一条记录
     piMessagesTable,
+    // 子任务：任务挂在上级任务下（最多三级）
+    "ALTER TABLE tasks ADD COLUMN parentID TEXT; \(tasksParentIndex)",
   ]
+
+  private static let tasksParentIndex = "CREATE INDEX tasks_parentID ON tasks(parentID);"
 
   private static let piMessagesTable = """
     CREATE TABLE piMessages (
@@ -89,9 +93,11 @@ enum Schema {
 
     CREATE TABLE tasks (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, projectID TEXT, sortKey TEXT NOT NULL,
-      completedAt INTEGER, piSessionID TEXT, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, startedAt INTEGER
+      completedAt INTEGER, piSessionID TEXT, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, startedAt INTEGER,
+      parentID TEXT
     ) STRICT;
     CREATE INDEX tasks_projectID ON tasks(projectID);
+    \(tasksParentIndex)
 
     CREATE TABLE sendRecords (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL,

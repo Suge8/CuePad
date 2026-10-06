@@ -168,7 +168,7 @@ struct ProjectScreen: View {
     }
 }
 
-/// 目标与任务：目标卡 + 本项目任务（"任务 完成数/总数"，没完成的进行中在前，最多 3 条，其余在任务页）+ 本项目的 Pi 会话（在线的全列，
+/// 目标与任务：目标卡 + 本项目任务（"任务 完成数/总数"，前 3 条顶层任务连同子任务，可拖动、缩进，同任务页；其余在任务页）+ 本项目的 Pi 会话（在线的全列，
 /// 再加最近结束的几个；更多的点"全部"看这个项目的 Pi 列表）。会话点开看近况、回复。
 /// 没有目标卡时只有任务；什么都没有时是一行"添加任务"。
 private struct FocusCard: View {
@@ -200,17 +200,22 @@ private struct FocusCard: View {
                 }
                 .buttonStyle(.plain)
             }
-            VStack(alignment: .leading, spacing: 8) {
+            // 与任务页同一节奏：行自带 44pt 命中高度，行间不再加间距
+            VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist")
-                ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskLine(task: task).contextMenu { TaskActions(task: task) { editing = task } } }
-                if data.tasks.count > Self.visibleTasks {
-                    Button("还有 \(data.tasks.count - Self.visibleTasks) 条") { navigation.push(.tasks) }
+                    .padding(.bottom, 4)
+                let roots = data.tasks.roots
+                TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
+                    TaskLine(task: row.task, subtasks: data.subtasks[row.id]).contextMenu { TaskActions(task: row.task) { editing = row.task } }
+                }
+                if roots.count > Self.visibleTasks {
+                    Button("还有 \(roots.count - Self.visibleTasks) 条") { navigation.push(.tasks) }
                     .font(.subheadline).foregroundStyle(palette.ink3)
                     .frame(minHeight: 44)
                 }
                 NewTaskLine(project: data.project?.id)
             }
-            .animation(.easeOut(duration: 0.2), value: data.tasks.map(\.id))
+
             if let pi, !pi.isEmpty, let project = data.project {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "Pi", systemImage: "waveform.path.ecg").padding(.bottom, 6)

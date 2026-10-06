@@ -60,7 +60,7 @@ struct TaskBoardTests {
         #expect(try await store.task(todo.id)?.status == .todo)
     }
 
-    @Test func 项目页写本项目任务完成数与总数_列出本项目没完成的() async throws {
+    @Test func 项目页写本项目任务完成数与总数_按手动顺序列出本项目没完成的() async throws {
         let site = try await store.createProject(name: "个人网站", color: "#000000")
         let a = try await store.createTask("写首页文案", in: site.id)
         let b = try await store.createTask("换首图", in: site.id)
@@ -72,7 +72,8 @@ struct TaskBoardTests {
         let page = try await ProjectPageData.read(site.id, from: store)
 
         #expect(page.taskProgress == TaskProgress(done: 1, total: 3))
-        #expect(page.tasks.map(\.id) == [b.id, c.id])
+        // 新任务在最前；进行中不再提前（手动排过的顺序不被状态打乱）
+        #expect(page.tasks.rows(toggled: []).map(\.id) == [c.id, b.id])
     }
 
     @Test func 交给Pi的任务自动进行中_任务行带着那个会话的实时状态() async throws {

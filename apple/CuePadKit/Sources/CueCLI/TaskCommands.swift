@@ -23,14 +23,24 @@ extension Command {
       return listReply(views.map(\.line), json: views.map(\.json))
     },
     Command(
-      path: ["task", "add"], summary: "新建任务（放在未完成任务最前）", arguments: "<内容...>",
-      options: [.project("挂到该项目"), .global],
-      notes: Schema.defaultProject(otherwise: "是全局任务") + "\n内容取所有位置参数，以空格连接。\n"
+      path: ["task", "add"], summary: "新建任务（顶层的放在未完成任务最前，子任务放在上级的子任务最后）", arguments: "<内容...>",
+      options: [
+        .project("挂到该项目"), .global,
+        Opt("parent", "作为该任务的子任务（项目随它；任务 → 子任务 → 子任务，最多 \(CueTask.maxDepth) 级）", value: "任务"),
+      ],
+      notes: Schema.defaultProject(otherwise: "是全局任务") + "；给了 --parent 时不能再给 --project / --global。\n内容取所有位置参数，以空格连接。\n"
         + Schema.output("新建的 Task", Schema.task)
     ) { call in
-      guard !call.args.positionals.isEmpty else { throw CLIError.usage("需要 <内容...>") }
-      let scope = try await call.scope(nullFlag: "global")
-      let task = try await call.store.createTask(call.args.positionals.joined(separator: " "), in: scope.target)
+      let args = call.args
+      guard !args.positionals.isEmpty else { throw CLIError.usage("需要 <内容...>") }
+      let content = args.positionals.joined(separator: " ")
+      let task: CueTask
+      if let ref = args.value("parent") {
+        if args.has("global") || args.value("project") != nil { throw CLIError.usage("--parent 与 --project / --global 只能选一个") }
+        task = try await call.store.createTask(content, under: try await call.task(ref).id)
+      } else {
+        task = try await call.store.createTask(content, in: try await call.scope(nullFlag: "global").target)
+      }
       return reply(try await call.taskViews([task])[0])
     },
     setStatus("start", "标记进行中", .inProgress),
