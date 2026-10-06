@@ -5,7 +5,7 @@ import Foundation
 import os
 
 /// Pi 历史索引的落盘：会话行与检查点都存在 Store（本机表），检查点按会话 id 存放；同一次读出的对话与摘要在同一事务里写
-/// （对话只写最近 `transcriptWindow` 内活跃过的会话，更早的按需补写，见投送方式 `transcript`）。文件一变化就写，不节流：
+/// （对话只写最近 `transcriptWindow` 内活跃过的会话，更早的按需补写，见投送方式 `transcript`）。首次回填按批写（`AppServices.backfillBatch`），之后文件一变化就写，不节流：
 /// Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
 /// 索引器按文件查检查点，所以这里维护"文件路径 → 会话 id"。
 ///
@@ -31,8 +31,12 @@ actor PiHistoryPersistence {
     }
 
     /// Store 读取失败时抛错，并停止该文件的写回；没有检查点或检查点已失效返回 nil。
-    func checkpoint(for file: URL) async throws -> PiHistoryCheckpoint? {
+    /// 回填开始（列目录、取修改时间之前）：汇总日志的用时从这里算。已经开始的不重设。
+    func beginBackfill() {
         if backfillStarted == nil { backfillStarted = .now }
+    }
+
+    func checkpoint(for file: URL) async throws -> PiHistoryCheckpoint? {
         let data: Data?
         do {
             guard let id = try await sessionIDs()[file.path] else { return nil }
@@ -50,26 +54,31 @@ actor PiHistoryPersistence {
         }
     }
 
-    /// 会话行与检查点在同一事务里写入：中途失败时下次从旧检查点重读，不会漏掉内容。
-    func persist(_ update: PiHistoryUpdate) async throws {
-        guard !blocked.contains(update.file.path) else { return }
-        let history = update.history
-        let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-        let session = StoredPiSession(
-            id: history.sessionID ?? update.file.deletingPathExtension().lastPathComponent,
-            path: update.file.path,
-            cwd: history.cwd ?? "",
-            title: history.displayName,
-            lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
+    /// 一批更新在同一事务里写入（会话行、检查点与对话）：中途失败时下次从旧检查点重读，不会漏掉内容；失败时这批文件都不再写回。
+    func persist(_ updates: [PiHistoryUpdate]) async throws {
+        let updates = updates.filter { !blocked.contains($0.file.path) }
+        guard !updates.isEmpty else { return }
         do {
-            let transcript = try await transcript(of: update, sessionID: session.id, lastActivity: session.lastActivityAt)
-            try await storage.upsertPiSession(
-                session, checkpoint: JSONEncoder().encode(update.checkpoint), host: host, transcript: transcript)
+            var batch: [PiSessionUpsert] = []
+            for update in updates {
+                let history = update.history
+                let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+                let session = StoredPiSession(
+                    id: history.sessionID ?? update.file.deletingPathExtension().lastPathComponent,
+                    path: update.file.path,
+                    cwd: history.cwd ?? "",
+                    title: history.displayName,
+                    lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
+                batch.append(PiSessionUpsert(
+                    session: session, checkpoint: try JSONEncoder().encode(update.checkpoint),
+                    transcript: try await transcript(of: update, sessionID: session.id, lastActivity: session.lastActivityAt)))
+            }
+            try await storage.upsertPiSessions(batch, host: host)
+            for item in batch { idsByPath?[item.session.path] = item.session.id }
         } catch {
-            blocked.insert(update.file.path)
+            for update in updates { blocked.insert(update.file.path) }
             throw error
         }
-        idsByPath?[session.path] = session.id
     }
 
     /// 这次读到的对话与摘要。会话在范围外时只写摘要；刚进入范围（本机还没有它的对话，而这次是增量读）时从头再读一遍，

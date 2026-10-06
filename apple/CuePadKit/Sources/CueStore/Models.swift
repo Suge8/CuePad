@@ -136,6 +136,19 @@ public struct Attachment: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
 }
 
+/// 一个会话索引的写入：索引、检查点（nil：保留已存的）与同一次读会话文件得到的对话（见 `CueStore.upsertPiSessions`）。
+public struct PiSessionUpsert: Sendable {
+  public var session: PiSession
+  public var checkpoint: Data?
+  public var transcript: PiTranscript?
+
+  public init(session: PiSession, checkpoint: Data?, transcript: PiTranscript?) {
+    self.session = session
+    self.checkpoint = checkpoint
+    self.transcript = transcript
+  }
+}
+
 /// 仅本机：Pi 会话历史索引的元数据。检查点（含读取偏移）另存，用 `piCheckpoint(of:)` 读取。不同步。
 public struct PiSession: Identifiable, Equatable, Sendable {
   public let id: String

@@ -349,17 +349,24 @@ extension CueStore {
   /// 同一事务里把它写成这个会话的同步记录（见 `writePiHistory`），`host` 是这台 Mac。
   /// `transcript` 是同一次读会话文件得到的对话与摘要，在同一事务里写（见 `writePiTranscript`）。
   public func upsertPiSession(_ session: PiSession, checkpoint: Data? = nil, host: String, transcript: PiTranscript? = nil) throws {
+    try upsertPiSessions([PiSessionUpsert(session: session, checkpoint: checkpoint, transcript: transcript)], host: host)
+  }
+
+  /// 一批会话索引在同一个事务里写（首次回填几千个文件时：一次提交、一次变更通知，界面不为每个文件重读重画）。
+  public func upsertPiSessions(_ batch: [PiSessionUpsert], host: String) throws {
+    let assignments = PiSession.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
+    let placeholders = (PiSession.columns + ["checkpoint"]).map { _ in "?" }.joined(separator: ", ")
     try write {
-      try writePiHistory(session, host: host)
-      if let transcript { try applyTranscript(transcript) }
-      let assignments = PiSession.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
-      let placeholders = (PiSession.columns + ["checkpoint"]).map { _ in "?" }.joined(separator: ", ")
-      try db.run(
-        """
-        INSERT INTO piSessions (\(PiSession.columns.joined(separator: ", ")), checkpoint) VALUES (\(placeholders))
-        ON CONFLICT(id) DO UPDATE SET \(assignments),
-          checkpoint = COALESCE(excluded.checkpoint, piSessions.checkpoint)
-        """, session.bindings + [checkpoint])
+      for item in batch {
+        try writePiHistory(item.session, host: host)
+        if let transcript = item.transcript { try applyTranscript(transcript) }
+        try db.run(
+          """
+          INSERT INTO piSessions (\(PiSession.columns.joined(separator: ", ")), checkpoint) VALUES (\(placeholders))
+          ON CONFLICT(id) DO UPDATE SET \(assignments),
+            checkpoint = COALESCE(excluded.checkpoint, piSessions.checkpoint)
+          """, item.session.bindings + [item.checkpoint])
+      }
     }
   }
 

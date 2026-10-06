@@ -32,7 +32,10 @@ extension AppServices {
                     reportIssue(.piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\(error.localizedDescription)"))
                 }
             },
-            Task { await consumePiHistory(indexer.events()) },
+            Task { [historyStore] in
+                await historyStore.beginBackfill()  // 在索引器开始列目录之前
+                await consumePiHistory(indexer.events())
+            },
             Task { await historyStore.keepPruned() },
             Task {
                 do {
@@ -123,26 +126,41 @@ extension AppServices {
     // MARK: Pi
 
     /// 索引器取检查点：Store 读失败要报告（该文件不再写回）并从头读；没有或失效的检查点也是从头读。
-    func loadPiCheckpoint(for file: URL) async -> PiHistoryCheckpoint? {
+    /// 不经主线程：回填时每个文件都来取一次，主线程同时在画界面。
+    nonisolated func loadPiCheckpoint(for file: URL) async -> PiHistoryCheckpoint? {
         do {
             return try await historyStore.checkpoint(for: file)
         } catch {
-            reportIssue(.piHistoryUnavailable("读取 \(file.path) 的检查点失败：\(error)"))
+            await reportIssue(.piHistoryUnavailable("读取 \(file.path) 的检查点失败：\(error)"))
             return nil
         }
     }
 
+    /// 首次回填时攒够这么多个文件写一次（一个事务、一次变更通知）；回填完成后文件一变就写。
+    static let backfillBatch = 200
+
     /// 消费历史索引事件：先落检查点再写会话行。
     func consumePiHistory(_ events: AsyncStream<PiHistoryEvent>) async {
+        await historyStore.beginBackfill()
+        var pending: [PiHistoryUpdate] = []
+        var backfilling = true
+        func flush() async {
+            guard !pending.isEmpty else { return }
+            do {
+                try await historyStore.persist(pending)
+            } catch {
+                reportIssue(.piHistoryUnavailable("写入 \(pending.map(\.file.path).joined(separator: "、")) 失败：\(error)"))
+            }
+            pending.removeAll()
+        }
         for await event in events {
             switch event {
             case .updated(let update):
-                do {
-                    try await historyStore.persist(update)
-                } catch {
-                    reportIssue(.piHistoryUnavailable("写入 \(update.file.path) 失败：\(error)"))
-                }
+                pending.append(update)
+                if !backfilling || pending.count >= Self.backfillBatch { await flush() }
             case .backfillFinished(let files):
+                await flush()
+                backfilling = false
                 do {
                     try await historyStore.retain(files)
                 } catch {
@@ -150,6 +168,7 @@ extension AppServices {
                 }
             }
         }
+        await flush()
     }
 
     /// 激活会话所在终端，尽量精确到标签页；精度与原因见返回值。
