@@ -132,15 +132,17 @@ struct PiStateDot: View {
     var size: CGFloat = 8
     var announces = false
     @Environment(\.palette) private var palette
+    /// 跟着旁边的字随辅助字号放大
+    @ScaledMetric private var scale: CGFloat = 1
 
-    private var box: CGFloat { size * 1.8 }
+    private var box: CGFloat { size * 1.8 * scale }
 
     var body: some View {
         let mark = Group {
             if let symbol = state.known?.symbol ?? (state.known == nil ? "circle.dashed" : nil) {
                 Image(systemName: symbol).font(.system(size: box, weight: .semibold))
             } else {
-                Circle().frame(width: size, height: size)
+                Circle().frame(width: size * scale, height: size * scale)
             }
         }
         .foregroundStyle(state.tint(palette))

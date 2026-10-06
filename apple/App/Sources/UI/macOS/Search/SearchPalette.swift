@@ -38,6 +38,10 @@ struct SearchPalette: View {
                 focused = true
                 #if DEBUG
                 if query.text.isEmpty { query.text = DebugScene.searchText }
+                if let session = DebugScene.sessionToOpen {
+                    scope = .sessions
+                    sessionSelection = session
+                }
                 #endif
             }
             .onChange(of: query.text) {

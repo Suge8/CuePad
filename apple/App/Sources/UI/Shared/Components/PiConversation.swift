@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 会话页的对话（iOS 会话页、Mac 会话详情共用）：你的话右侧墨色气泡，Pi 的回答左侧全宽 Markdown（不折叠），
 /// 每轮回答上方一行这一轮的经过；你发出还没进对话的话接在末尾，气泡下写送达情况，失败的可重发；
-/// Pi 在处理时末尾一行流光的进展（当前动作与计时），有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
+/// Pi 在处理时末尾一行流光的进展（当前动作；计时在顶上一行），有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
 /// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
     let session: PiSessionState
@@ -85,9 +85,8 @@ struct PiQuestionDock: View {
             if let question = session.question, question.isAnswerable {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
-                Callout(
-                    tint: palette.attention, title: "等你确认", text: session.question?.displayText ?? session.detail ?? "",
-                    prominent: true, note: "这个问题要在 Mac 上回答")
+                // 去哪答写在回复框的位置上（各平台不同），这里只放问题
+                Callout(tint: palette.attention, text: session.question?.displayText ?? session.detail ?? "", prominent: true)
             }
         }
     }
@@ -181,7 +180,7 @@ private struct OutgoingBubble: View {
     }
 }
 
-/// Pi 此刻在做什么，接在对话末尾、与回答同一列、不加底框：一行进展（动作或状态词，干活时文字有一道流光扫过）与计时，
+/// Pi 此刻在做什么，接在对话末尾、与回答同一列、不加底框：一行进展（动作或状态词，干活时文字有一道流光扫过；计时已在顶上一行），
 /// 有子代理时下面每个一行：状态标、名字、状态词。回答到了它就被回答替换。
 private struct LiveStatus: View {
     let session: PiSessionState
@@ -190,14 +189,10 @@ private struct LiveStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if session.state.isWorking {
-                HStack(spacing: 6) {
-                    Text(session.detail.flatMap(PiProgress.action) ?? session.state.label)
-                        .lineLimit(1).truncationMode(.middle)
-                        .shimmering()
-                    Text("·").foregroundStyle(palette.ink3)
-                    PiElapsed(session: session, font: .subheadline)
-                }
-                .font(.subheadline.weight(.medium))
+                Text(session.detail.flatMap(PiProgress.action) ?? session.state.label)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1).truncationMode(.middle)
+                    .shimmering()
             }
             ForEach(Array(session.subagents.enumerated()), id: \.offset) { _, agent in
                 HStack(spacing: 6) {

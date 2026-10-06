@@ -19,6 +19,13 @@ extension DebugScene {
         case "tasks": workspace.overlay = .tasks
         case "trash": workspace.show(.trash)
         case "editor": workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)
+        case "session":
+            // ⌘K 会话范围选中 -CuePadSession（见 SearchPalette）；-CuePadChatGrow YES 时之后每 4 秒进来一条回答
+            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+            workspace.overlay = .search
+            if defaults.bool(forKey: "CuePadChatGrow"), let id = sessionToOpen {
+                Task { await growChat(id, store: workspace.services.store) }
+            }
         default: break
         }
         switch defaults.string(forKey: "CuePadBench") {

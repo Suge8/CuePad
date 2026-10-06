@@ -17,10 +17,13 @@ struct SettingsScreen: View {
         Form {
             Group {
                 Section {
-                    Picker("外观", selection: $settings.theme) {
+                    // 与下面的同步状态一样带图标，两节的行首对齐
+                    Picker(selection: $settings.theme) {
                         Text("跟随系统").tag(AppSettings.Theme.system)
                         Text("浅色").tag(AppSettings.Theme.light)
                         Text("深色").tag(AppSettings.Theme.dark)
+                    } label: {
+                        Label("外观", systemImage: "circle.lefthalf.filled")
                     }
                 }
                 SyncSection()

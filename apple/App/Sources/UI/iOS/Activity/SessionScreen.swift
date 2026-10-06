@@ -64,7 +64,8 @@ struct SessionScreen: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // safeAreaBar 而不是 safeAreaInset：对话滚到回复框下面时有系统的边缘模糊渐隐
+        .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
@@ -142,8 +143,9 @@ private struct ReplyBar: View {
     private var hasContent: Bool { !(answering == nil ? content : trimmed).isEmpty }
     private var canSend: Bool { hasContent && reachable && !sending }
 
-    /// 一层玻璃、单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中，内外圆角同心（18 + 7 = 25）。
+    /// 一层玻璃、单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中；带上的卡片与玻璃同心（`ConcentricRectangle`）。
     private static let radius: CGFloat = 25
+    private static let inset: CGFloat = 6
 
     var body: some View {
         switch reply {
@@ -167,7 +169,7 @@ private struct ReplyBar: View {
             if focused || draft != nil, !reachable {
                 SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12)
             }
-            if let draft, answering == nil { attachment(draft).padding([.horizontal, .top], 6) }
+            if let draft, answering == nil { attachment(draft).padding([.horizontal, .top], Self.inset) }
             HStack(alignment: .bottom, spacing: 0) {
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(1...5)
@@ -180,6 +182,7 @@ private struct ReplyBar: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .containerShape(.rect(cornerRadius: Self.radius, style: .continuous))
         .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
         .sensoryFeedback(.success, trigger: sentCount)
         .animation(Motion.quick, value: focused)
@@ -241,7 +244,7 @@ private struct ReplyBar: View {
                 .frame(width: 44, height: 44).contentShape(.rect)
         }
         .padding(.leading, 12)
-        .background(palette.fill, in: .rect(cornerRadius: Self.radius - 6, style: .continuous))
+        .background(palette.fill, in: ConcentricRectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
     }

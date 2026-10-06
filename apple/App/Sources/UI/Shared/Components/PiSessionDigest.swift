@@ -29,22 +29,20 @@ nonisolated struct SessionDigest: Sendable, Equatable {
 /// 有色调的提示块：等你确认（注意色，正文放大）、出错（失败色）。
 struct Callout: View {
     let tint: Color
-    let title: String
+    /// 标题行；顶上一行已写着同一个状态时不给。
+    var title: String?
     let text: String
     let prominent: Bool
-    /// 正文下的一句说明（如"要在 Mac 上回答"）。
-    var note: String?
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.footnote.weight(.semibold)).foregroundStyle(tint)
+            if let title { Text(title).font(.footnote.weight(.semibold)).foregroundStyle(tint) }
             if !text.isEmpty {
                 Text(text).font(prominent ? .title3.weight(.medium) : .body).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
-            if let note { Text(note).font(.footnote).foregroundStyle(palette.ink3) }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -77,7 +75,6 @@ struct QuestionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("等你确认").font(.footnote.weight(.semibold)).foregroundStyle(palette.attention)
             if !question.text.isEmpty {
                 // 这一页最醒目的东西
                 Text(question.text).font(.title3.weight(.medium)).foregroundStyle(palette.ink)
@@ -114,10 +111,8 @@ struct QuestionCard: View {
             VStack(spacing: 8) {
                 ForEach(question.options, id: \.self) { option in choice(.option(option), prominent: false, leading: true) }
             }
-        case .text:
-            // 文字型问题在回复框里答（`MacDelivery.reply`），这里不再放第二个输入框
-            Label("在下面的回复框里回答", systemImage: "arrow.down").font(.subheadline).foregroundStyle(palette.ink2)
-        case nil:
+        case .text, nil:
+            // 文字型问题在回复框里答（`MacDelivery.reply`），回复框的占位写着
             EmptyView()
         }
     }

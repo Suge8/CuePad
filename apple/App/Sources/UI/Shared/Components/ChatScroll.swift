@@ -1,33 +1,23 @@
 import SwiftUI
 
-/// 对话的滚动跟随：停在底部时新内容到来跟着到底；往上翻离开底部后不跟，新内容到来时出"新消息"按钮；
-/// 点它（`jumped`）或自己翻回底部恢复跟随。
+/// "新消息"按钮的状态：往上翻离开底部后来了新内容才出现，回到底部消失。跟随到底不在这里——
+/// 滚动视图的底部锚点（`defaultScrollAnchor(.bottom)`）在底部时随内容长高贴底，离开底部时保持阅读位置；内容不满一屏时贴着底部。
 nonisolated struct ChatFollow: Equatable {
-    private(set) var atBottom = true
-    private(set) var unseen = false
-
-    var showsJump: Bool { !atBottom && unseen }
+    private var atBottom = true
+    private(set) var showsJump = false
 
     mutating func scrolled(atBottom: Bool) {
         self.atBottom = atBottom
-        if atBottom { unseen = false }
+        if atBottom { showsJump = false }
     }
 
-    /// 内容变了：返回要不要滚到底。
-    mutating func contentChanged() -> Bool {
-        if atBottom { return true }
-        unseen = true
-        return false
-    }
-
-    mutating func jumped() {
-        atBottom = true
-        unseen = false
+    mutating func contentChanged() {
+        if !atBottom { showsJump = true }
     }
 }
 
-/// 聊天式的滚动区（iOS 会话页、Mac 会话详情共用）：打开停在最新，跟随规则见 `ChatFollow`，
-/// "新消息"按钮浮在可见区底部（输入框上方）。`followKey` 变了就算有新内容。减弱动态效果下滚动不做动画。
+/// 聊天式的滚动区（iOS 会话页、Mac 会话详情共用）：打开停在最新，停在底部时跟着新内容，往上翻后保持位置，
+/// 来了新内容时可见区底部（输入框上方）浮出"新消息"，点它滚回底部。`followKey` 变了就算有新内容。减弱动态效果下滚动不做动画。
 struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
     @ViewBuilder let content: Content
@@ -50,15 +40,10 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             } action: { _, atBottom in
                 follow.scrolled(atBottom: atBottom)
             }
-            .onChange(of: followKey) {
-                if follow.contentChanged() { toBottom() }
-            }
+            .onChange(of: followKey) { follow.contentChanged() }
             .overlay(alignment: .bottom) {
                 if follow.showsJump {
-                    Button {
-                        follow.jumped()
-                        toBottom()
-                    } label: {
+                    Button(action: toBottom) {
                         Label("新消息", systemImage: "arrow.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink)
                             .padding(.horizontal, 14).frame(minHeight: 36)
                             .glass(in: .capsule, interactive: true)

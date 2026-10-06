@@ -58,40 +58,22 @@ struct PiChatTests {
     }
 }
 
-/// 对话的滚动跟随（iOS 会话页、Mac 会话详情共用）：停在底部时新内容到来跟着到底；往上翻离开底部后不跟，
-/// 出现"新消息"按钮；点它或自己翻回底部恢复跟随。
+/// "新消息"按钮（iOS 会话页、Mac 会话详情共用）：跟随到底交给滚动视图的底部锚点；往上翻离开底部后来了新内容才出按钮，
+/// 回到底部（自己翻回或点按钮滚回）按钮消失。
 struct ChatFollowTests {
-    @Test func 停在底部时新内容到来跟着到底_不出按钮() {
+    @Test func 停在底部时来了新内容不出按钮() {
         var follow = ChatFollow()
-        #expect(follow.contentChanged() == true)
+        follow.contentChanged()
         #expect(!follow.showsJump)
     }
 
-    @Test func 往上翻离开底部后新内容不跟_出现新消息按钮() {
+    @Test func 离开底部后来了新内容出按钮_回到底部消失() {
         var follow = ChatFollow()
         follow.scrolled(atBottom: false)
-        #expect(follow.contentChanged() == false)
+        #expect(!follow.showsJump)
+        follow.contentChanged()
         #expect(follow.showsJump)
-    }
-
-    @Test func 点按钮或自己翻回底部_恢复跟随_按钮消失() {
-        var follow = ChatFollow()
-        follow.scrolled(atBottom: false)
-        _ = follow.contentChanged()
-        follow.jumped()
-        #expect(!follow.showsJump)
-        #expect(follow.contentChanged() == true)
-
-        follow.scrolled(atBottom: false)
-        _ = follow.contentChanged()
         follow.scrolled(atBottom: true)
-        #expect(!follow.showsJump)
-        #expect(follow.contentChanged() == true)
-    }
-
-    @Test func 离开底部但没有新内容时不出按钮() {
-        var follow = ChatFollow()
-        follow.scrolled(atBottom: false)
         #expect(!follow.showsJump)
     }
 }

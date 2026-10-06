@@ -6,7 +6,8 @@ import SwiftUI
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
 /// taskedit：任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
-/// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页；send 是从卡片"发到 Mac"先选会话。
+/// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
+/// （核对往上翻后出"新消息"、贴底时跟到底）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// searchkey：iPhone 停在任务页，1.5 秒后走 ⌘K（回到书架并聚焦下拉搜索）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
@@ -85,6 +86,7 @@ extension DebugScene {
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
             if split { navigation.select(.activity) } else { navigation.tab = .activity }
             navigation.push(.session(session.id))
+            if defaults.bool(forKey: "CuePadChatGrow") { Task { await growChat(session.sessionID, store: workspace.services.store) } }
         case "newsession":
             if split { navigation.select(.activity) } else { navigation.tab = .activity }
             var sheet = Navigation.NewSession()
@@ -116,192 +118,6 @@ extension DebugScene {
     /// search 画面里该不该激活这个范围的下拉搜索：给了项目时只激活项目页的，否则只激活书架的。
     static func activatesSearch(_ scope: CardSearchScope) -> Bool {
         scene == "search" && (scope == .all) == (defaults.string(forKey: "CuePadProject") == nil)
-    }
-
-    /// 两台 Mac 的项目目录绑定：工作室的 Mac 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
-    /// 绑定由本机目录推导，所以先只留 CuePad 的目录发布第二台，再把目录放回去。
-    private static func seedBindings(_ store: CueStore, projects: [Project]) async {
-        try? await store.publishDirectoryBindings(host: "demo-mac", hostName: "工作室的 Mac Studio")
-        guard let directories = try? await store.projectDirectories() else { return }
-        let others = projects.filter { $0.name != "CuePad" }.map(\.id)
-        for id in others { try? await store.setDirectory(nil, for: id) }
-        try? await store.publishDirectoryBindings(host: "demo-air", hostName: "MacBook Air")
-        for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
-    }
-
-    /// 任务三态：圆桌的一条交给了 atlas（进行中、带会话状态），CuePad 的一条手动开始；CuePad、Flow、圆桌各完成一条（先后完成）。
-    private static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
-        guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }
-        func first(in name: String) -> CueTask? { tasks.first { $0.projectID == projects.first { $0.name == name }?.id } }
-        if let task = first(in: "圆桌") {
-            _ = try? await store.recordSend(task.content, to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), task: task.id)
-        }
-        let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id }
-        if let started = cuepad.first { try? await store.updateTask(started.id) { $0.status = .inProgress } }
-        if cuepad.count > 1 { try? await store.updateTask(cuepad[1].id) { $0.status = .done } }
-        // 再完成两个别的项目的，最近完成那组跨项目、按完成时间排
-        for name in ["Flow", "圆桌"] {
-            guard let task = tasks.last(where: { $0.projectID == projects.first { $0.name == name }?.id }) else { continue }
-            try? await Task.sleep(for: .milliseconds(5))
-            try? await store.updateTask(task.id) { $0.status = .done }
-        }
-    }
-
-    /// 演示会话的摘要与弹窗：摘要写成对话的投影，弹窗交给状态记录器（与真实来源一致）。
-    private struct DemoRecap {
-        var lastPrompt: String?
-        var lastReply: String?
-        var pendingPrompt: String?
-        var question: PiQuestion?
-    }
-
-    /// 演示对话的另一台 Mac 的执行器（留住它，结果写回后照常显示）。
-    private static var relayExecutor: DeliveryExecutor?
-
-    /// 演示对话：notes 是几轮做完的对话（带工具数与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
-    /// relay 在另一台 Mac 上（发过去的一条已送达还没进对话、一条没能送达）。
-    private static func seedChats(_ store: CueStore) async {
-        let now = Date.now
-        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: Int, minutes: Double)], startedMinutesAgo: Double) async {
-            var messages: [PiChatMessage] = []
-            var clock = now.addingTimeInterval(-startedMinutesAgo * 60)
-            for (index, turn) in turns.enumerated() {
-                let asked = clock
-                messages.append(PiChatMessage(sessionID: sessionID, entryID: "u\(index)", seq: Int64(index * 2), role: .user, text: turn.you, at: asked))
-                clock = asked.addingTimeInterval(turn.minutes * 60)
-                if let reply = turn.pi {
-                    messages.append(PiChatMessage(
-                        sessionID: sessionID, entryID: "p\(index)", seq: Int64(index * 2 + 1), role: .pi, text: reply, at: clock,
-                        toolCount: turn.tools, roundStartedAt: asked))
-                }
-                clock = clock.addingTimeInterval(120)
-            }
-            let done = turns.last { $0.pi != nil }
-            let pending = turns.last.flatMap { $0.pi == nil ? $0.you : nil }
-            try? await store.writePiTranscript(PiTranscript(
-                sessionID: sessionID, messages: messages,
-                recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending)))
-        }
-        await chat("notes", [
-            ("整理一下这周的会议记录", "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", 4, 1.5),
-            ("续费域名那条加上负责人和链接", "加好了：负责人写的是你，链接指向注册商的续费页。", 1, 0.4),
-            ("再把评审计费额度拆成两步", "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", 2, 0.8),
-        ], startedMinutesAgo: 20)
-        await chat("atlas", [
-            ("跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", 5, 2),
-            ("按你说的改成首次加入时间排序，把断言也改了，再跑一遍", nil, 0, 0),
-        ], startedMinutesAgo: 6)
-        await chat("homepage", [
-            ("把 RSS 输出改成全文", nil, 0, 0),
-        ], startedMinutesAgo: 3)
-        await chat("relay", [
-            ("看一下线上库的迁移有没有卡住", "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", 3, 1.2),
-        ], startedMinutesAgo: 10)
-    }
-
-    /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。
-    private static func seedRemote(_ services: AppServices) async {
-        let store = services.store
-        // 演示库的会话索引已写成历史；这里补的是在线会话，有在线的就是写过了
-        guard (try? await store.piSessionPage(.live).items.isEmpty) == true, let projects = try? await store.projects() else { return }
-        func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
-        let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
-        let sessions: [(String, PiWorkState, String?, String?, DemoRecap)] = [
-            // 在跑的会话：新的话在 pendingPrompt，上一轮问答成对
-            ("atlas", .tool, "bash · pnpm test -- scheduler", "圆桌", DemoRecap(
-                lastPrompt: "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因",
-                lastReply: "上一轮 12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位的顺序被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n第二个需要把回调地址换成统一网关。\n\n另外顺手看了一眼覆盖率：scheduler 目录是 71%，主要缺重连和超时两条路径。两个失败修好后，我可以补上这两条的用例，大概再加 6 个测试。\n\n要我先改第一个吗？",
-                pendingPrompt: "按你说的改成首次加入时间排序，把断言也改了，再跑一遍")),
-            ("homepage", .waitingForUser, "要覆盖 public/feed.xml 吗？", "个人网站", DemoRecap(
-                lastPrompt: "把 RSS 输出改成全文",
-                question: PiQuestion(
-                    promptID: "demo-prompt", kind: .select, text: "要覆盖 public/feed.xml 吗？", options: ["覆盖", "另存为 feed-full.xml", "取消"]))),
-            ("cuepad", .thinking, nil, "CuePad", DemoRecap(
-                lastPrompt: "先跑一遍全部测试", lastReply: "全部通过，共 214 个。", pendingPrompt: "看看投送队列超时的那个 bug")),
-            ("notes-edit", .waitingForUser, "编辑提交说明", nil, DemoRecap(
-                lastPrompt: "写一段提交说明",
-                question: PiQuestion(promptID: nil, kind: .unknown("editor"), text: "编辑提交说明\n在编辑器里改好后保存"))),
-            ("rename", .waitingForUser, "新分支叫什么？", "CuePad", DemoRecap(
-                lastPrompt: "把这批改动挪到新分支上",
-                question: PiQuestion(promptID: "demo-text", kind: .text, text: "新分支叫什么？"))),
-            ("deploy", .waitingForUser, "部署到生产吗？", nil, DemoRecap(
-                lastPrompt: "测试都过了就部署",
-                question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
-            ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, DemoRecap(lastPrompt: "让子代理分头审查这两个分支")),
-            ("billing", .error, "模型拒绝了请求（400）：prompt is too long", nil, DemoRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
-            ("notes", .settled, nil, nil, DemoRecap(
-                lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),
-            ("piwork", .settled, nil, nil, DemoRecap(
-                lastPrompt: "列出 piwork 目录下的文件", lastReply: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md")),
-        ]
-        // 历史里再加两个带近况的：一个正在请 Mac 继续，一个不在项目里
-        let history: [(String, String?, PiRecap)] = [
-            ("landing-copy", "个人网站", PiRecap(lastPrompt: "把首页标题换成新文案", lastReply: "改好了，首页标题现在是「把想法写成卡片」。")),
-            ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Pi 页。")),
-        ]
-        for (id, name, recap) in history {
-            try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project))
-            try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
-            try? await recorder.end(sessionID: id)
-        }
-        for (id, state, detail, name, recap) in sessions {
-            try? await recorder.update(
-                sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question)
-            try? await store.writePiTranscript(PiTranscript(
-                sessionID: id, messages: [],
-                recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
-        }
-        try? await recorder.end(sessionID: "piwork")
-        // 没归类的想法：书架顶上提醒去整理
-        for body in ["周末读完《设计心理学》第三章", "菜单栏面板能不能直接拖图进来？", "给落地页换一张首图"] {
-            _ = try? await store.createCard(in: nil, body: body)
-        }
-        // 后台托管、带两个子代理的会话
-        try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
-            PiSubagentState(name: "计费额度", activity: .known(.working)),
-            PiSubagentState(name: "登录回调", activity: .known(.waitingForUser)),
-            PiSubagentState(name: "文档", activity: .known(.idle)),
-        ])
-        if let table = project("圆桌"), let goal = try? await store.cards(in: table).first(where: { $0.body.hasPrefix("目标") }) {
-            try? await store.setGoal(goal.id, for: table)
-        }
-        await seedBindings(store, projects: projects)
-        let extra = defaults.integer(forKey: "CuePadHistory")
-        for index in 0..<extra {
-            let id = "history-\(index + 1)"
-            let name = ["CuePad", "圆桌", nil][index % 3]
-            let ended = Date.now.addingTimeInterval(-Double(index + 1) * 8 * 3600)
-            let past = PiStateRecorder(store: store, hostID: "demo-mac", timing: Timing(now: { ended }, sleep: { _ in }))
-            try? await past.update(
-                sessionID: id, state: .settled, detail: nil, title: "历史会话 \(index + 1)", folder: id, projectID: name.flatMap(project))
-            try? await store.writePiTranscript(PiTranscript(
-                sessionID: id, messages: [], recap: PiRecap(lastPrompt: "第 \(index + 1) 个", lastReply: "做完了")))
-            try? await past.end(sessionID: id)
-        }
-        // 另一台 Mac 上的会话（演示发过去的话送达与失败）
-        try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", folder: "relay")
-        await seedChats(store)
-        let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
-        await seedTaskStates(store, projects: projects)
-        if let relay = states.first(where: { $0.sessionID == "relay" }) {
-            // 一条已送达还没进对话、一条没能送达：由一个只认这台演示 Mac 的执行器给出结果
-            _ = try? await services.requestMacDelivery("先把迁移脚本在测试库上跑一遍", to: relay, mode: .send)
-            _ = try? await services.requestMacDelivery("顺便备份一下线上数据库", to: relay, mode: .send)
-            relayExecutor = DeliveryExecutor(store: store, hostID: relay.hostID, onIssue: { _ in }) { request in
-                request.content.contains("备份") ? .failed("那台 Mac 上的 Pi 已经退出，没能送进去") : .succeeded
-            }
-            try? await relayExecutor?.start()
-        }
-        if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
-            _ = try? await services.requestMacDelivery("改完再看看登录回调那个超时", to: atlas, mode: .followUp)
-        }
-        if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
-            // 发给已结束的会话：Mac 先在后台唤醒它
-            _ = try? await services.requestMacDelivery("标题再短一点", to: landing, mode: .send)
-        }
-        if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
-            _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)
-        }
     }
 }
 #endif
