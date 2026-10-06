@@ -33,6 +33,7 @@ extension AppServices {
                 }
             },
             Task { await consumePiHistory(indexer.events()) },
+            Task { await historyStore.keepPruned() },
             Task {
                 do {
                     try await resetPiState()

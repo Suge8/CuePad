@@ -117,29 +117,29 @@ extension CueStore {
     try write { try applyTranscript(transcript) }
   }
 
-  /// 在调用方的写事务里写对话与摘要。会话记录还不存在时只写消息。已结束的会话没有进行中的提问：
-  /// 文件里最后一句没等到回答（上次中途退出）时，那句不算"正在处理"。
+  /// 在调用方的写事务里写对话与摘要（原样写会话文件的投影；"已结束的会话没有进行中的提问"在读出时定，见
+  /// `PiSessionState.pendingPrompt`）。会话记录还不存在时只写消息。
   func applyTranscript(_ transcript: PiTranscript) throws {
     for message in transcript.messages { try insert(message, ignoringExisting: true) }
     let recap = transcript.recap
-    let ended = PiWorkState.ended.rawValue
     try db.run(
       """
-      UPDATE piSessionStates SET lastPrompt = ?1, lastReply = ?2, pendingPrompt = CASE WHEN state = ?3 THEN NULL ELSE ?4 END,
-        modifiedAt = ?5
-      WHERE id = ?6 AND (lastPrompt IS NOT ?1 OR lastReply IS NOT ?2 OR pendingPrompt IS NOT (CASE WHEN state = ?3 THEN NULL ELSE ?4 END))
+      UPDATE piSessionStates SET lastPrompt = ?1, lastReply = ?2, pendingPrompt = ?3, modifiedAt = ?4
+      WHERE id = ?5 AND (lastPrompt IS NOT ?1 OR lastReply IS NOT ?2 OR pendingPrompt IS NOT ?3)
       """,
-      [recap.lastPrompt, recap.lastReply, ended, recap.pendingPrompt, Date.stamp, PiSessionState.recordID(sessionID: transcript.sessionID)])
+      [recap.lastPrompt, recap.lastReply, recap.pendingPrompt, Date.stamp, PiSessionState.recordID(sessionID: transcript.sessionID)])
   }
 
-  /// 删掉不再需要同步的对话：会话 `window` 内没有活动、对话也是 `window` 之前写出的（按需补写的留够 `window`）。
+  /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、
+  /// 对话也是 `window` 之前写出的（按需补写的留够 `window`）。在写对话的那台 Mac 上调用。
   public func prunePiMessages(olderThan window: TimeInterval, now: Date = .now) throws {
     let cutoff = now.addingTimeInterval(-window)
     try write {
       try db.run(
         """
         DELETE FROM piMessages WHERE sessionID IN (
-          SELECT sessionID FROM piMessages GROUP BY sessionID HAVING MAX(at) < ? AND MAX(createdAt) < ?)
+          SELECT m.sessionID FROM piMessages m LEFT JOIN piSessions s ON s.id = m.sessionID GROUP BY m.sessionID
+          HAVING COALESCE(MAX(s.lastActivityAt), MAX(m.at)) < ? AND MAX(m.createdAt) < ?)
         """, [cutoff, cutoff])
     }
   }

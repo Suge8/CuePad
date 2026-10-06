@@ -81,9 +81,19 @@ actor PiHistoryPersistence {
         return PiTranscript(update, sessionID: sessionID)
     }
 
-    /// 回填完成：只留下此刻的会话文件，清理安静了的会话的对话。
+    /// 清理安静了的会话的对话：现在一次，之后每天一次，直到任务取消。清理失败记日志，下次再来。
+    func keepPruned(timing: Timing = .system) async {
+        repeat {
+            do {
+                try await storage.prunePiMessages(olderThan: Self.transcriptWindow, now: timing.now())
+            } catch {
+                Self.log.error("清理对话失败：\(String(describing: error), privacy: .public)")
+            }
+        } while (try? await timing.sleep(.seconds(86_400))) != nil
+    }
+
+    /// 回填完成：只留下此刻的会话文件。
     func retain(_ files: [URL]) async throws {
-        try await storage.prunePiMessages(olderThan: Self.transcriptWindow)
         let paths = Set(files.map(\.path))
         let started = ContinuousClock.now
         let removed = try await storage.retainPiSessions(paths: paths, host: host)

@@ -74,7 +74,7 @@ extension CueStore {
       let ended = PiWorkState.ended.rawValue
       let end = """
         UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, busySince = NULL,
-          hosted = NULL, subagents = NULL, pendingPrompt = NULL,
+          hosted = NULL, subagents = NULL,
           modifiedAt = ?
         """
       if let sessionID {

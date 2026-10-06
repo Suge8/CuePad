@@ -453,7 +453,10 @@ extension PiSessionState: Record {
       lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14).map(PiQuestion.init(stored:)),
       notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), busySince: row.dateOrNil(15), createdAt: row.date(8),
       modifiedAt: row.date(9), launchToken: row.textOrNil(16), hosted: row.intOrNil(17) == 1,
-      subagents: PiSubagentState.list(stored: row.textOrNil(18)), pendingPrompt: row.textOrNil(19))
+      subagents: PiSubagentState.list(stored: row.textOrNil(18)),
+      // 列里是会话文件的投影原样（最后一句可能是上次中途退出、没等到回答的）；已结束的会话没有正在处理的提问，
+      // 会话重新连上时又是它——不必等文件再追加
+      pendingPrompt: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(19))
   }
 }
 
