@@ -98,7 +98,9 @@ struct PiSessionDetail: View {
     }
 
     @ViewBuilder private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
-        let scroll = ScrollView {
+        let follow = PiConversation.followKey(session: session, messages: digest.messages, deliveries: digest.deliveries)
+        // 打开停在最新；在底部时跟着新内容，往上翻后暂停并出"新消息"按钮（`ChatScroll`）
+        let scroll = ChatScroll(followKey: follow) {
             VStack(spacing: 14) {
                 if fetchingTranscript(digest) {
                     Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
@@ -107,9 +109,6 @@ struct PiSessionDetail: View {
             }
             .padding(16)
         }
-        // 打开停在最新；内容变长时跟着最新
-        .defaultScrollAnchor(.bottom)
-        .defaultScrollAnchor(.bottom, for: .sizeChanges)
         if embedded {
             scroll.frame(maxHeight: .infinity)
         } else {
