@@ -6,7 +6,7 @@ import Foundation
 actor SyncCoordinator {
   private static let issueLimit = 50
 
-  private let store: CueStore
+  let store: CueStore
   private let queue: any ChangeQueue
   private let zoneID: CKRecordZone.ID
   private var watcher: Task<Void, Never>?

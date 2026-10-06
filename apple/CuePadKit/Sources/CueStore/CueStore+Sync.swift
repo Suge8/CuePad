@@ -105,6 +105,11 @@ extension CueStore {
     ) { $0.text(0) }
   }
 
+  /// 一张同步表里本机每条记录的修改时间（记录 id → `modifiedAt` 毫秒）：与服务器上的版本比较，看哪些本机还没有或较旧。
+  package func modifiedAts(in table: Table) throws -> [String: Int64] {
+    Dictionary(uniqueKeysWithValues: try db.query("SELECT id, modifiedAt FROM \(table.rawValue)") { ($0.text(0), $0.int(1)) })
+  }
+
   package func systemFields(of recordName: String) throws -> Data? {
     try db.first("SELECT systemFields FROM syncRecords WHERE recordName = ?", [recordName]) { $0.blobOrNil(0) } ?? nil
   }

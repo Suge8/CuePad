@@ -54,7 +54,7 @@ import Testing
     #expect(calls.map { $0.keys == nil } == [false, true, true])
     #expect(calls.map { $0.token.map { String(decoding: $0, as: UTF8.self) } } == [nil, "t1", "t2"])
     #expect(try await rig.store.card(new)?.body == "之后的新卡")
-    #expect(try await rig.store.card(old) == nil)  // 只要 ID 时拿到的记录没有字段，不交给协调器
+    #expect(try await rig.store.card(old) == nil)  // 取令牌那一遍只带版本，卡片不补取、不交给协调器
   }
 
   /// 开始拉之前就已经在服务器上的投送请求（如 Mac 刚连上会话时手机已发出的）：取令牌时看到它就按 ID 取整条交给协调器，
