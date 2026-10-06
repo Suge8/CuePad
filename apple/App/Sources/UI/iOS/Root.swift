@@ -33,10 +33,8 @@ struct IOSRootView: View {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
             }
-            // 底部玻璃（标签栏、随手记、回复框）下的内容一律由系统边缘效果盖住：默认的 soft 只淡一点，字仍从玻璃边上透出来
-            .scrollEdgeEffectStyle(.hard, for: .bottom)
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
-            .sheet(item: Binding(get: { navigation.captureBars == 0 ? navigation.capture : nil }, set: { navigation.capture = $0 })) {
+            .sheet(item: $navigation.capture) {
                 CaptureSheet(capture: $0)
             }
             .sheet(item: $navigation.outbox) { SessionPicker(outbox: $0) }
@@ -127,12 +125,15 @@ private struct TabsRoot: View {
             }
             .badge(waiting ?? 0)
         }
+        // 随手记是底部附件：平时在标签栏上方一行，下滑时标签栏收小、它并进同一行，底部只剩一行玻璃
+        .modifier(CaptureAccessory(enabled: navigation.bottomPages == 0))
         .tabBarMinimizeBehavior(.onScrollDown)
         // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的下拉搜索（与宽屏的搜索页同一组快捷键）
         .background {
             ZStack {
                 Button("搜索") { navigation.searchCurrentPage() }.keyboardShortcut("k")
                 Button("搜索") { navigation.searchCurrentPage() }.keyboardShortcut("f")
+                Button("随手记") { navigation.startCapture() }.keyboardShortcut("n", modifiers: [.command, .shift])
             }
             .opacity(0)
             .frame(width: 0, height: 0)
@@ -149,6 +150,19 @@ private struct TabsRoot: View {
         }
         // 纸页与会话页独占底部。跟页面的出现与消失走而不是跟路径：手势返回一开始标签栏就回来，松手时页面不再跳
         .toolbarVisibility(navigation.bottomPages > 0 ? .hidden : .visible, for: .tabBar)
+    }
+}
+
+/// 标签栏的底部附件放随手记入口。纸页与会话页收起标签栏时附件跟着收起（iOS 26.1 起才能按页关掉；26.0 上一直在）。
+private struct CaptureAccessory: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.1, *) {
+            content.tabViewBottomAccessory(isEnabled: enabled) { CaptureEntry() }
+        } else {
+            content.tabViewBottomAccessory { CaptureEntry() }
+        }
     }
 }
 

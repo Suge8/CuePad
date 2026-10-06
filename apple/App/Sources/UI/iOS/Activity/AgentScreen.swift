@@ -68,6 +68,9 @@ struct AgentScreen: View {
         #endif
         .background(palette.desk)
         .navigationTitle(project.flatMap { workspace.catalog?.project($0)?.name } ?? "Agent")
+        // 全部会话的 Agent 页不显示标题（同书架）；从项目进来的只列这个项目，留着项目名
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(removing: project == nil ? .title : nil)
         .modifier(PiPageChrome(enabled: !inPanel, query: $query))
         .refreshable { await services.syncNow() }
         .onChange(of: query) { limit = PiSessionList.pageSize }

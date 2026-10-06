@@ -255,6 +255,7 @@ private struct SplitShortcuts: View {
                 Button("退出搜索") { navigation.closeSearch() }.keyboardShortcut(.escape, modifiers: [])
             }
             Button("新建卡片", action: newCard).keyboardShortcut("n")
+            Button("随手记") { navigation.startCapture() }.keyboardShortcut("n", modifiers: [.command, .shift])
             Button("设置") { navigation.select(.settings) }.keyboardShortcut(",")
             Button("侧栏") {
                 withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }

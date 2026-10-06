@@ -32,10 +32,6 @@ struct CaptureComposer: View {
             accepts: kind == .idea ? .images : [], pinnedOpen: pinnedOpen, source: $source,
             header: { header }, send: { sendButton }
         )
-        .background {
-            // ⌘⇧N：聚焦随手记
-            Button("随手记") { focused = true }.keyboardShortcut("n", modifiers: [.command, .shift]).hidden()
-        }
         .animation(Motion.quick, value: kind)
         .onChange(of: request?.id, initial: true) {
             guard let request else { return }
@@ -112,27 +108,56 @@ struct CaptureComposer: View {
 }
 
 extension View {
-    /// 内容页（书架、项目、今天）底部浮着的随手记。只挂在这几页上，所以设置、回收站、搜索、任务、Pi 与打开的卡片上都没有它。
-    func captureBar() -> some View {
-        // safeAreaBar：随手记算作底栏，滚到它下面的内容由系统的边缘效果盖住（见 IOSRootView）
-        safeAreaBar(edge: .bottom, spacing: 0) { FloatingCaptureBar() }
-    }
+    /// iPad 内容页（书架、项目、今天、未归档）底部浮着的随手记入口；iPhone 的入口是标签栏的底部附件（见 `TabsRoot`），这里不挂。
+    func captureBar() -> some View { modifier(SplitCaptureBar()) }
 }
 
-/// 页面底部的随手记：报告自己在屏幕上（从外面打开随手记时就用它，不另弹面板），并接住外面的打开请求。
-private struct FloatingCaptureBar: View {
+private struct SplitCaptureBar: ViewModifier {
     @Environment(Navigation.self) private var navigation
 
-    var body: some View {
-        CaptureComposer(request: navigation.capture) { navigation.capture = nil }
-            .frame(maxWidth: 560)
-            .padding(.horizontal, 16).padding(.bottom, 8)
-            .onAppear { navigation.captureBars += 1 }
-            .onDisappear { navigation.captureBars -= 1 }
+    @ViewBuilder func body(content: Content) -> some View {
+        if navigation.layout == .split {
+            content.safeAreaBar(edge: .bottom, spacing: 0) {
+                CaptureEntry()
+                    .frame(height: 50)
+                    .glass(in: .capsule, interactive: true)
+                    .frame(maxWidth: 420)
+                    .padding(.horizontal, 16).padding(.bottom, 8)
+            }
+        } else {
+            content
+        }
     }
 }
 
-/// 没有页面底部随手记时（在任务、Pi、设置、打开的卡片上从小组件或快捷键打开）弹出的面板，里面是同一个输入框。
+/// 随手记的入口：一行"记下想法 → 落点"，点开是随手记面板。不常驻输入框，底部只留一行玻璃，内容多露出来。
+/// iPhone 放在标签栏的底部附件里：下滑时标签栏收小、它并进同一行（这时只写"记一笔"）。
+struct CaptureEntry: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+
+    var body: some View {
+        let destination = CaptureCopy.destination(workspace.catalog?.project(navigation.captureProject), kind: .idea)
+        Button { navigation.startCapture() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "square.and.pencil").foregroundStyle(palette.ink2).accessibilityHidden(true)
+                Text(placement == .inline ? "记一笔" : CaptureCopy.placeholder(.idea, to: destination))
+                    .foregroundStyle(palette.ink3).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("随手记")
+        .accessibilityValue(destination)
+    }
+}
+
+/// 随手记面板（底部入口、小组件、快捷键都打开它），里面是共用的输入框。
 struct CaptureSheet: View {
     let capture: Navigation.Capture
     @Environment(\.dismiss) private var dismiss

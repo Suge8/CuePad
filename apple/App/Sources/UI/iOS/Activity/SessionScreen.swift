@@ -67,7 +67,7 @@ struct SessionScreen: View {
             }
         }
         // 回复框算作底栏（safeAreaBar），对话从顶栏与底栏下面滚过，两头都是 soft（只淡出，不铺实底带）：
-        // 顶栏悬浮在对话上；底部若用全 App 的 hard，问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏
+        // 顶栏悬浮在对话上；问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏
         .scrollEdgeEffectStyle(.soft, for: .all)
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
