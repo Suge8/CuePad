@@ -44,9 +44,9 @@ struct ComposerKinds: OptionSet {
 /// 左边"＋"能打开的三个来源；外面也可以直接打开其中一个（小组件的"拍照"入口）。
 enum ComposerSource { case cards, photos, camera }
 
-/// 随手记与 Pi 会话回复框共用的输入框（同 iOS 信息 App）：左边一颗独立的圆形玻璃"＋"（选卡片、相册、拍照），
-/// 与输入框的底行同高、垂直居中；右边一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条、输入框与有内容才出现的发送钮；
-/// 聚焦或有内容时展开头部。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
+/// 随手记与 Pi 会话回复框共用的输入框：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条，以及底行：
+/// 左下"＋"（选卡片、相册、拍照）、文字区、右下发送钮；两个圆钮同尺寸、同心，多行时也在底角。
+/// 发送钮的位置一直留着、有内容才显出来，文字宽度不随它变。聚焦或有内容时展开头部。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和发送钮，草稿怎么处理由它们决定。
 struct Composer<Header: View, Send: View>: View {
     @Binding var draft: ComposerDraft
@@ -131,11 +131,9 @@ struct Composer<Header: View, Send: View>: View {
             }
             HStack(alignment: .bottom, spacing: 0) {
                 if !accepts.isEmpty { plus }
-                // 高度变化跟着文字一起走动画：输入法组合期拼音换行、定字后收回，每次都差一整行
-                TextField(prompt, text: Binding(get: { draft.text }, set: { text in withAnimation(Motion.snappy) { draft.text = text } }), axis: .vertical)
-                    .lineLimit(expanded ? 1...6 : 1...1)
+                ComposerField(
+                    text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink)
                     .focused(focus)
-                    .accessibilityLabel(label)
                     .padding(.leading, accepts.isEmpty ? 18 : 2).padding(.trailing, reservesSend ? 2 : 18).padding(.vertical, 14)
                     .frame(minHeight: Self.slot)
                 if reservesSend { sendSlot }
@@ -151,14 +149,12 @@ struct Composer<Header: View, Send: View>: View {
             set: { if !$0, source.wrappedValue == target { source.wrappedValue = nil } })
     }
 
-    /// 发送钮的位置一直留着：有内容才显出来，输入框的宽度不随它变，文字不会因此重排。
+    /// 发送钮的位置一直留着：有内容才放进来，输入框的宽度不随它变，文字不会因此重排。
     private var sendSlot: some View {
-        send
-            .frame(width: Self.slot, height: Self.slot)
-            .opacity(hasContent ? 1 : 0)
-            .scaleEffect(hasContent ? 1 : 0.6)
-            .disabled(!hasContent)
-            .accessibilityHidden(!hasContent)
+        ZStack {
+            if hasContent { send.transition(.scale(scale: 0.6).combined(with: .opacity)) }
+        }
+        .frame(width: Self.slot, height: Self.slot)
     }
 
     private var plus: some View {
