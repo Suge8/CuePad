@@ -224,7 +224,8 @@ struct PiElapsed: View {
         TimelineView(PiClockSchedule(clock: clock)) { context in
             Text(clock.text(now: context.date))
                 .font(font.monospacedDigit())
-                .foregroundStyle(clock.isWaiting ? palette.attention : palette.ink3)
+                // 状态标与状态词已带色，计时保持中性，一行里只有一处彩色
+                .foregroundStyle(palette.ink3)
         }
     }
 }
@@ -238,6 +239,3 @@ private struct PiClockSchedule: TimelineSchedule {
     }
 }
 
-private extension PiClock {
-    var isWaiting: Bool { if case .waiting = self { true } else { false } }
-}

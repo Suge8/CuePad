@@ -3,7 +3,7 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// 设置：外观、iCloud 同步（状态、需要你决定的情况、问题明细）、冲突副本、启动时没完成的事。
+/// 设置：外观、iCloud 同步（状态、需要你决定的情况、问题明细）、冲突副本、启动时没完成的事；版本写在最底下。
 struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -16,37 +16,35 @@ struct SettingsScreen: View {
         @Bindable var settings = services.settings
         Form {
             Group {
-            Section("外观") {
-                Picker("主题", selection: $settings.theme) {
-                    Text("跟随系统").tag(AppSettings.Theme.system)
-                    Text("浅色").tag(AppSettings.Theme.light)
-                    Text("深色").tag(AppSettings.Theme.dark)
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-            }
-            SyncSection()
-            if !services.conflicts.isEmpty {
                 Section {
-                    NavigationLink(value: Navigation.Route.conflicts) {
-                        Label("\(services.conflicts.count) 张卡片有两个版本", systemImage: "square.on.square")
-                            .foregroundStyle(palette.attention)
+                    Picker("外观", selection: $settings.theme) {
+                        Text("跟随系统").tag(AppSettings.Theme.system)
+                        Text("浅色").tag(AppSettings.Theme.light)
+                        Text("深色").tag(AppSettings.Theme.dark)
                     }
                 }
-            }
-            if !services.startupIssues.isEmpty {
-                Section("没能完成的事") {
-                    ForEach(Array(services.startupIssues.enumerated()), id: \.offset) { _, issue in
-                        Label(issue.text, systemImage: "exclamationmark.triangle").font(.footnote)
+                SyncSection()
+                if !services.conflicts.isEmpty {
+                    Section {
+                        NavigationLink(value: Navigation.Route.conflicts) {
+                            Label("\(services.conflicts.count) 张卡片有两个版本", systemImage: "square.on.square")
+                                .foregroundStyle(palette.attention)
+                        }
                     }
                 }
-            }
-            Section {
-                LabeledContent("版本", value: Self.version)
-            }
+                if !services.startupIssues.isEmpty {
+                    Section("没能完成的事") {
+                        ForEach(Array(services.startupIssues.enumerated()), id: \.offset) { _, issue in
+                            Label(issue.text, systemImage: "exclamationmark.triangle").font(.footnote)
+                        }
+                    }
+                }
             }
             .listRowBackground(palette.paper)
+            Section {} footer: {
+                Text("CuePad \(Self.version)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .frame(maxWidth: sizeClass == .regular ? Self.readableWidth : .infinity)
         .frame(maxWidth: .infinity)

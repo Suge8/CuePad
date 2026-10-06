@@ -36,7 +36,7 @@ extension SessionDigest {
 }
 
 /// 一个 Pi 会话的详情（侧栏、菜单栏面板的会话行、任务上的会话状态点开，⌘K 会话范围的右侧），聊天式，与手机的会话页同一套：
-/// 顶上一行会话名，下面一行"所在 · 状态 · 计时"（`PiSessionSubtitle`），有子代理时再一行小标签；中间是对话（`PiConversation`），
+/// 顶上一行会话名，下面一行"所在 · 状态 · 计时"（`PiSessionSubtitle`）；中间是对话（`PiConversation`，子代理列在末尾的进展下），
 /// 打开停在最新；底部是回复框，等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
 /// `embedded`：放在 ⌘K 里时高度由面板给；弹出层里对话区按内容长高，到上限后在里面滚动。
 struct PiSessionDetail: View {
@@ -79,20 +79,17 @@ struct PiSessionDetail: View {
     }
 
     private func header(_ session: PiSessionState, project: Project?, live: CuePi.PiSession?) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(session.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
-                    PiSessionSubtitle(session: session, project: project)
-                }
-                Spacer(minLength: 8)
-                if let live, !live.hosted {
-                    Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
-                        .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink3)
-                        .help("跳到这个会话所在的终端窗口")
-                }
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(session.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                PiSessionSubtitle(session: session, project: project)
             }
-            if !session.subagents.isEmpty { PiSubagentChips(subagents: session.subagents) }
+            Spacer(minLength: 8)
+            if let live, !live.hosted {
+                Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
+                    .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink3)
+                    .help("跳到这个会话所在的终端窗口")
+            }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }

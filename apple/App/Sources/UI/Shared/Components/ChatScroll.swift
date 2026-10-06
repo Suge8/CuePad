@@ -44,7 +44,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             .scrollPosition($position)
             .defaultScrollAnchor(.bottom)
             .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.containerSize.height - geometry.contentInsets.bottom
+                // containerSize 已扣掉上下 inset（导航栏、回复框）：可见区底边 = 偏移 + 顶部 inset + 容器高
+                geometry.contentOffset.y + geometry.contentInsets.top + geometry.containerSize.height
                     >= geometry.contentSize.height - Self.bottomSlack
             } action: { _, atBottom in
                 follow.scrolled(atBottom: atBottom)

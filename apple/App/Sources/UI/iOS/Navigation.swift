@@ -90,8 +90,9 @@ final class Navigation {
     var outbox: Outbox?
     var projectForm: ProjectForm?
     var newSession: NewSession?
-    /// 卡片纸页在屏幕上（推入途中起、返回开始止）：iPhone 此时隐藏标签栏，纸页独占底部。
-    var showsCardPage = false
+    /// 屏幕上独占底部的页（卡片纸页、Pi 会话页，推入途中起、返回开始止）的个数：iPhone 此时隐藏标签栏，
+    /// 编辑工具栏与回复框不和标签栏叠在一起。计数而不是开关：从一页切到另一页时两边的出现与消失先后不定。
+    var bottomPages = 0
     /// 分栏：侧栏选中的页与其上推入的页（打开的卡片纸页盖在项目页上）。
     var splitRoot: Route = .shelf
     var splitPath: [Route] = []

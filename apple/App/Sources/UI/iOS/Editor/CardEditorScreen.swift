@@ -43,7 +43,7 @@ struct CardEditorScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(wide ? palette.desk : palette.paper)
             .navigationBarTitleDisplayMode(.inline)
-            .background { PageAppearance { navigation.showsCardPage = $0 } }
+            .ownsBottomEdge()
             .toolbar { toolbar }
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
             .onChange(of: pickedImage) { insertPicked() }

@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 会话页的对话（iOS 会话页、Mac 会话详情共用）：你的话右侧墨色气泡，Pi 的回答左侧全宽 Markdown（不折叠），
 /// 每轮回答上方一行这一轮的经过；你发出还没进对话的话接在末尾，气泡下写送达情况，失败的可重发；
-/// Pi 在处理时末尾一个"Pi 正在处理…"小气泡（当前动作与计时），出错时末尾写原因。滚动与输入框由平台放。
+/// Pi 在处理时末尾一行流光的进展（当前动作与计时），有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
 /// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
     let session: PiSessionState
@@ -18,7 +18,7 @@ struct PiConversation: View {
                 if entry.isUser { UserBubble(text: entry.text) } else { ReplyBlock(text: entry.text, meta: entry.meta) }
             }
             ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
-            if session.state.isWorking { WorkingBubble(session: session) }
+            if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
             if session.state == .known(.error) {
                 Callout(tint: palette.failure, title: "出错", text: session.detail ?? "Mac 没有说明原因", prominent: false)
             }
@@ -71,28 +71,6 @@ struct PiSessionSubtitle: View {
     }
 
     private static let placeWidth: CGFloat = 140
-}
-
-/// 子代理一行小标签：状态标 + 名字 + 在干什么，图标与颜色同会话状态那一套。
-struct PiSubagentChips: View {
-    let subagents: [PiSubagentState]
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(Array(subagents.enumerated()), id: \.offset) { _, agent in
-                    HStack(spacing: 4) {
-                        PiStateDot(state: agent.workState, size: 6)
-                        Text(agent.name).foregroundStyle(palette.ink)
-                        Text(agent.activityLabel).foregroundStyle(agent.workState.tint(palette))
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            .font(.caption)
-        }
-    }
 }
 
 /// 等你确认时固定在输入框上方的问题：能从这里答的是问题卡（选项一点即答，答完随问题清空而消失），
@@ -203,30 +181,68 @@ private struct OutgoingBubble: View {
     }
 }
 
-/// Pi 在处理：左侧一个小气泡，写当前动作与这段处理的计时；回答到了它就被回答替换。
-private struct WorkingBubble: View {
+/// Pi 此刻在做什么，接在对话末尾、与回答同一列、不加底框：一行进展（动作或状态词，干活时文字有一道流光扫过）与计时，
+/// 有子代理时下面每个一行：状态标、名字、状态词。回答到了它就被回答替换。
+private struct LiveStatus: View {
     let session: PiSessionState
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.mini)
-                Text("Pi 正在处理…").font(.subheadline.weight(.medium)).foregroundStyle(palette.ink2)
-            }
-            HStack(spacing: 4) {
-                if let action = session.detail.flatMap(PiProgress.action) {
-                    Text(action).font(session.detailIsCode ? .caption.monospaced() : .caption).lineLimit(1)
-                    Text("·")
+        VStack(alignment: .leading, spacing: 8) {
+            if session.state.isWorking {
+                HStack(spacing: 6) {
+                    Text(session.detail.flatMap(PiProgress.action) ?? session.state.label)
+                        .lineLimit(1).truncationMode(.middle)
+                        .shimmering()
+                    Text("·").foregroundStyle(palette.ink3)
+                    PiElapsed(session: session, font: .subheadline)
                 }
-                PiElapsed(session: session, font: .caption)
+                .font(.subheadline.weight(.medium))
             }
-            .font(.caption).foregroundStyle(palette.ink3)
+            ForEach(Array(session.subagents.enumerated()), id: \.offset) { _, agent in
+                HStack(spacing: 6) {
+                    PiStateDot(state: agent.workState, size: 7)
+                    Text(agent.name).foregroundStyle(palette.ink2).lineLimit(1)
+                    Text(agent.activityLabel).foregroundStyle(agent.workState.tint(palette))
+                }
+                .font(.subheadline)
+                .accessibilityElement(children: .combine)
+            }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(palette.paper, in: .rect(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(palette.hair))
-        .accessibilityElement(children: .combine)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
         .transition(.opacity)
+    }
+}
+
+private extension View {
+    /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过；减弱动态效果时是静止的次要色。
+    func shimmering() -> some View { modifier(Shimmer()) }
+}
+
+private struct Shimmer: ViewModifier {
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var swept = false
+
+    func body(content: Content) -> some View {
+        if reduceMotion {
+            content.foregroundStyle(palette.ink2)
+        } else {
+            content
+                .foregroundStyle(palette.ink3)
+                .overlay {
+                    content.foregroundStyle(palette.ink).mask {
+                        GeometryReader { proxy in
+                            let band = max(proxy.size.width * 0.4, 48)
+                            LinearGradient(colors: [.clear, .black, .clear], startPoint: .leading, endPoint: .trailing)
+                                .frame(width: band)
+                                .offset(x: swept ? proxy.size.width : -band)
+                        }
+                    }
+                }
+                // 渲染端插值：整段循环不触发重算视图
+                .onAppear { withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) { swept = true } }
+        }
     }
 }

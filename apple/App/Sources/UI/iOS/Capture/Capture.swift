@@ -62,20 +62,24 @@ struct CaptureComposer: View {
                         if CameraPicker.isAvailable { icon("拍照", "camera") { showsCamera = true } }
                         icon("从相册选图", "photo.on.rectangle") { showsPhotos = true }
                     }
-                    Button(action: save) { SaveGlyph(enabled: !draft.isEmpty && !saving) }
-                        .buttonStyle(.plain)
-                        .disabled(draft.isEmpty || saving)
-                        .keyboardShortcut(.return, modifiers: .command)
-                        .accessibilityLabel("记下")
-                        .padding(.trailing, 2)
+                    // 与回复框一样，有内容才出现
+                    if !draft.isEmpty {
+                        Button(action: save) { SendGlyph(enabled: !saving) }
+                            .buttonStyle(.plain)
+                            .disabled(saving)
+                            .keyboardShortcut(.return, modifiers: .command)
+                            .accessibilityLabel("记下")
+                            .padding(.trailing, 2)
+                            .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    }
                 }
             }
-            .background(expanded ? palette.paper : .clear, in: .rect(cornerRadius: 20, style: .continuous))
         }
         .padding(expanded ? 8 : 0)
         .glass(in: .rect(cornerRadius: 25), interactive: !expanded)
         .animation(Motion.quick, value: expanded)
         .animation(Motion.quick, value: kind)
+        .animation(Motion.quick, value: draft.isEmpty)
         .background {
             // ⌘⇧N：聚焦随手记
             Button("随手记") { focused = true }.keyboardShortcut("n", modifiers: [.command, .shift]).hidden()
@@ -187,20 +191,6 @@ struct CaptureComposer: View {
     }
 }
 
-/// 记下钮：能记时墨色实心，不能记时淡（与回复框的发送钮同一个样子）。
-private struct SaveGlyph: View {
-    let enabled: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Image(systemName: "arrow.up").font(.callout.weight(.bold))
-            .foregroundStyle(enabled ? palette.paper : palette.ink3)
-            .frame(width: 34, height: 34)
-            .background(enabled ? palette.ink : palette.fill, in: .circle)
-            .frame(width: 44, height: 44)
-            .contentShape(.circle)
-    }
-}
 
 extension View {
     /// 内容页（书架、项目、今天）底部浮着的随手记。只挂在这几页上，所以设置、回收站、搜索、任务、Pi 与打开的卡片上都没有它。

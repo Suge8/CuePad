@@ -1,6 +1,7 @@
 #if os(iOS)
 import CueStore
 import SwiftUI
+import UIKit
 
 /// 列表行的按下反馈：铺一层底色（整卡用共用的 `CardPressStyle`）。按下即出现，松开 160ms 淡去。
 struct RowPressStyle: ButtonStyle {
@@ -10,6 +11,22 @@ struct RowPressStyle: ButtonStyle {
         configuration.label
             .background { if configuration.isPressed { palette.fill } }
             .animation(configuration.isPressed ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
+    }
+}
+
+/// 输入框里的圆形发送钮（会话回复框、随手记）（看得见的 36，点得到的 44）：能发时墨色实心，发不出（同步不通、发送中）时淡。
+struct SendGlyph: View {
+    let enabled: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Image(systemName: "arrow.up").font(.body.weight(.semibold))
+            .foregroundStyle(enabled ? palette.onAccent : palette.ink3)
+            .frame(width: 36, height: 36)
+            .background(enabled ? palette.accent : palette.fill, in: .circle)
+            .frame(width: 44, height: 44)
+            .contentShape(.circle)
+            .animation(Motion.quick, value: enabled)
     }
 }
 
@@ -108,6 +125,9 @@ extension View {
     /// iPhone 每页底部都有标签栏；宽 iPad 只有项目页一类（`capturePage`）底部浮着随手记栏，右侧面板里没有玻璃。
     func bottomEdgeFade(capturePage: Bool = false) -> some View { modifier(BottomEdgeFade(capturePage: capturePage)) }
 
+    /// 独占底部的页（卡片纸页、Pi 会话页）：在屏幕上时 iPhone 收起标签栏（见 `Navigation.bottomPages`）。
+    func ownsBottomEdge() -> some View { modifier(BottomEdgeOwner()) }
+
     /// 选项少的切换：平时是分段控件；辅助字号下分段控件不随字号放大，改成跟随字号的菜单按钮。
     func scalingPickerStyle() -> some View { modifier(ScalingPickerStyle()) }
 
@@ -134,6 +154,42 @@ private struct ProjectContextMenu: ViewModifier {
                 }
         } else {
             content
+        }
+    }
+}
+
+private struct BottomEdgeOwner: ViewModifier {
+    @Environment(Navigation.self) private var navigation
+    @State private var counted = false
+
+    func body(content: Content) -> some View {
+        content.background {
+            PageAppearance { visible in
+                guard visible != counted else { return }
+                counted = visible
+                navigation.bottomPages += visible ? 1 : -1
+            }
+        }
+    }
+}
+
+/// 页面在屏幕上（含推入、返回途中）的起止，跟 UIKit 的出现回调走：手势返回在手指开始拖时就收到"将消失"，
+/// 取消返回再收到"将出现"。SwiftUI 的导航路径要到松手才变，跟它走标签栏会晚出现。
+private struct PageAppearance: UIViewControllerRepresentable {
+    let changed: (Bool) -> Void
+
+    func makeUIViewController(context: Context) -> Probe { Probe() }
+    func updateUIViewController(_ probe: Probe, context: Context) { probe.changed = changed }
+
+    final class Probe: UIViewController {
+        var changed: (Bool) -> Void = { _ in }
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            changed(true)
+        }
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            changed(false)
         }
     }
 }

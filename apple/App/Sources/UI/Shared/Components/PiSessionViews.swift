@@ -1,13 +1,13 @@
 import CueStore
 import SwiftUI
 
-/// Pi 会话状态的颜色与文字。只有要你注意的状态有颜色：等你确认橙、出错红；干活中是中性实心点，空闲浅灰。
+/// Pi 会话状态的颜色与文字：工作中绿、等你确认橙、出错红，空闲与已结束是灰。
 nonisolated extension PiWorkState {
     var label: String {
         switch self {
         case .thinking: "思考中"
         case .outputting: "输出中"
-        case .tool: "工具"
+        case .tool: "运行工具"
         case .delegating: "子代理工作中"
         case .waitingForUser: "等你确认"
         case .settled: "空闲"
@@ -39,7 +39,7 @@ nonisolated extension PiWorkState {
     }
 }
 
-/// 子代理的粗状态借会话状态的图标、颜色与文字（工作中墨实心点、等你确认橙、空闲灰勾、出错红叹号）。
+/// 子代理的粗状态借会话状态的图标、颜色与文字（工作中绿实心点、等你确认橙、空闲灰勾、出错红叹号）。
 nonisolated extension PiSubagentState {
     var workState: Open<PiWorkState> {
         switch activity.known {
@@ -76,7 +76,7 @@ nonisolated extension Open<PiWorkState> {
 extension PiWorkState {
     func tint(_ palette: Palette) -> Color {
         switch self {
-        case .thinking, .outputting, .tool, .delegating: palette.ink
+        case .thinking, .outputting, .tool, .delegating: palette.live
         case .waitingForUser: palette.attention
         case .error: palette.failure
         case .settled: palette.ink3
@@ -124,7 +124,7 @@ nonisolated extension PiSessionState {
 }
 
 /// 会话状态标（全 App 只此一份：Pi 页、近况、书架、侧栏、Mac 侧栏与菜单栏）：颜色 + 形状表达状态，
-/// 等你确认橙色问号、出错红色叹号、工作中墨色实心点、空闲灰色勾、已结束更淡的空心圈；不做循环动画（常驻多处，
+/// 等你确认橙色问号、出错红色叹号、工作中绿色实心点、空闲灰色勾、已结束更淡的空心圈；不做循环动画（常驻多处，
 /// 循环既耗电也分散注意）。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 旁边有状态文字时读屏跳过它；`announces` 用在只有一个标的地方（书架、侧栏的项目旁），标自己带读屏标签与悬停提示。
 struct PiStateDot: View {

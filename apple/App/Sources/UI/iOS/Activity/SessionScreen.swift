@@ -4,8 +4,8 @@ import CueText
 import SwiftUI
 
 /// 一个 Pi 会话的对话（Pi 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），聊天式：
-/// 顶上一行会话名，下面一行小字"所在 · 状态 · 计时"，有子代理时再一行小标签；中间是对话（`PiConversation`），打开停在最新；
-/// 底部是回复框，等你确认时问题卡固定在它上方。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
+/// 顶上一行会话名，下面一行小字"所在 · 状态 · 计时"；中间是对话（`PiConversation`，子代理列在末尾的进展下），打开停在最新；
+/// 底部是回复框（标签栏收起，回复框独占底部），等你确认时问题卡固定在它上方。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
 /// 很久以前的会话没有对话时请 Mac 补写，补写中写一句"正在从 Mac 取对话…"。
 /// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的内容，底部换成说明。
 struct SessionScreen: View {
@@ -64,15 +64,6 @@ struct SessionScreen: View {
                 }
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if let subagents = session?.subagents, !subagents.isEmpty {
-                PiSubagentChips(subagents: subagents)
-                    .padding(.horizontal, 16).padding(.vertical, 6)
-                    .frame(maxWidth: Self.readingWidth)
-                    .frame(maxWidth: .infinity)
-                    .background(palette.desk.opacity(0.94))
-            }
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {
@@ -83,12 +74,13 @@ struct SessionScreen: View {
                         Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
                     }
                 }
-                .padding(.horizontal, 8).padding(.bottom, 8)
+                .padding(.horizontal, 12).padding(.bottom, 8)
                 .frame(maxWidth: Self.readingWidth)
                 .frame(maxWidth: .infinity)
                 .animation(Motion.quick, value: session.question)
             }
         }
+        .ownsBottomEdge()
         .onAppear { if draft == nil { draft = navigation.takeDraft(for: id) } }
         .observing(services.store, SessionDigest.tables, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
@@ -114,7 +106,7 @@ private struct DigestKey: Equatable {
     var sessionID: String?
 }
 
-/// 回复框：发送是输入框里右下角的圆钮。Pi 空闲时直接发；正忙时点它是等它做完再说，长按选马上说。
+/// 回复框：一层玻璃，有内容时右下角出现圆形发送钮。Pi 空闲时直接发；正忙时点它是等它做完再说，长按选马上说。
 /// 等你确认时按问题类型（`MacDelivery.reply`）：文字型问题它就是作答框；选择、确认型收成一行"先在上面作答"，
 /// 这里答不了的写明要在 Mac 上回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
 /// 输入框聚焦或带着卡片时露出要带上的卡片与同步提示。发出后清空，请求马上贴到它上方。同步到不了 Mac 时不能发，写明原因。
@@ -147,7 +139,11 @@ private struct ReplyBar: View {
     }
 
     private var reachable: Bool { services.reachesPiHost }
-    private var canSend: Bool { !(answering == nil ? content : trimmed).isEmpty && reachable && !sending }
+    private var hasContent: Bool { !(answering == nil ? content : trimmed).isEmpty }
+    private var canSend: Bool { hasContent && reachable && !sending }
+
+    /// 一层玻璃、单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中，内外圆角同心（18 + 7 = 25）。
+    private static let radius: CGFloat = 25
 
     var body: some View {
         switch reply {
@@ -161,29 +157,33 @@ private struct ReplyBar: View {
     private func notice(_ text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
             .font(.subheadline).foregroundStyle(palette.ink2)
-            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .glass(in: .rect(cornerRadius: 30))
+            .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Self.radius, alignment: .leading)
+            .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
     }
 
+    /// 输入框直接写在玻璃上（不再垫一层纸）；发送钮只在有内容时出现。
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if focused || draft != nil, !reachable { SyncHint(status: services.syncStatus) }
-            if let draft, answering == nil { attachment(draft) }
-            HStack(alignment: .bottom, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
+            if focused || draft != nil, !reachable {
+                SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12)
+            }
+            if let draft, answering == nil { attachment(draft).padding([.horizontal, .top], 6) }
+            HStack(alignment: .bottom, spacing: 0) {
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($focused)
                     .accessibilityLabel("回复")
-                    .padding(.leading, 14).padding(.vertical, 11)
-                sendControl.padding(.trailing, 2)
+                    .padding(.leading, 18).padding(.trailing, 8).padding(.vertical, 14)
+                if hasContent {
+                    sendControl.padding(3).transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
             }
-            .background(palette.paper, in: .rect(cornerRadius: 22, style: .continuous))
-            .sensoryFeedback(.success, trigger: sentCount)
         }
-        .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glass(in: .rect(cornerRadius: 30))
+        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
+        .sensoryFeedback(.success, trigger: sentCount)
         .animation(Motion.quick, value: focused)
+        .animation(Motion.quick, value: hasContent)
     }
 
     @ViewBuilder private var sendControl: some View {
@@ -241,7 +241,7 @@ private struct ReplyBar: View {
                 .frame(width: 44, height: 44).contentShape(.rect)
         }
         .padding(.leading, 12)
-        .background(palette.paper, in: .rect(cornerRadius: 14, style: .continuous))
+        .background(palette.fill, in: .rect(cornerRadius: Self.radius - 6, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
     }
@@ -271,22 +271,6 @@ private struct ReplyBar: View {
             focused = false
             sentCount += 1
         }
-    }
-}
-
-/// 输入框里的圆形发送钮：能发时墨色实心，不能发时淡。
-private struct SendGlyph: View {
-    let enabled: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Image(systemName: "arrow.up").font(.callout.weight(.bold))
-            .foregroundStyle(enabled ? palette.paper : palette.ink3)
-            .frame(width: 34, height: 34)
-            .background(enabled ? palette.ink : palette.fill, in: .circle)
-            .frame(width: 44, height: 44)
-            .contentShape(.circle)
-            .animation(Motion.quick, value: enabled)
     }
 }
 
