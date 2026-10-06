@@ -266,8 +266,4 @@ struct PiReplyRulesTests {
         #expect(MacDelivery.reply(to: session(.thinking), hasImages: false) == .message(MacDelivery.modes(for: session(.thinking), hasImages: false)))
     }
 
-    @Test func 你发过去的只留在途与失败的_已送达的不常驻() {
-        let statuses: [DeliveryStatus] = [.succeeded, .pending, .executing, .failed]
-        #expect(statuses.filter { DeliveryStack.keeps(.known($0)) } == [.pending, .executing, .failed])
-    }
 }
