@@ -129,7 +129,7 @@ extension DebugScene {
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 
-    /// 任务三态：圆桌的一条交给了 atlas（进行中、带会话状态），CuePad 的一条手动开始、一条已完成。
+    /// 任务三态：圆桌的一条交给了 atlas（进行中、带会话状态），CuePad 的一条手动开始；CuePad、Flow、圆桌各完成一条（先后完成）。
     private static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
         guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }
         func first(in name: String) -> CueTask? { tasks.first { $0.projectID == projects.first { $0.name == name }?.id } }
@@ -139,6 +139,12 @@ extension DebugScene {
         let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id }
         if let started = cuepad.first { try? await store.updateTask(started.id) { $0.status = .inProgress } }
         if cuepad.count > 1 { try? await store.updateTask(cuepad[1].id) { $0.status = .done } }
+        // 再完成两个别的项目的，最近完成那组跨项目、按完成时间排
+        for name in ["Flow", "圆桌"] {
+            guard let task = tasks.last(where: { $0.projectID == projects.first { $0.name == name }?.id }) else { continue }
+            try? await Task.sleep(for: .milliseconds(5))
+            try? await store.updateTask(task.id) { $0.status = .done }
+        }
     }
 
     /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。

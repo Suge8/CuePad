@@ -13,6 +13,7 @@ struct TasksScreen: View {
     @State private var editing: CueTask?
 
     var body: some View {
+        ScrollViewReader { proxy in
         List {
             if let board {
                 if board.inProgress.isEmpty && board.todo.isEmpty {
@@ -23,6 +24,12 @@ struct TasksScreen: View {
                 section("待办", board.todo)
                 if !board.done.isEmpty { completed(board.done) }
             }
+        }
+        #if DEBUG
+        .onChange(of: board?.done.last?.id) {
+            if DebugScene.defaults.bool(forKey: "CuePadShowsDone"), let last = board?.done.last?.id { proxy.scrollTo(last, anchor: .bottom) }
+        }
+        #endif
         }
         .listStyle(.insetGrouped)
         .deskBackground()
@@ -36,6 +43,7 @@ struct TasksScreen: View {
         .navigationTitle("任务")
         .sheet(item: $editing) { TaskEditSheet(task: $0) }
         #if DEBUG
+        .onAppear { if DebugScene.defaults.bool(forKey: "CuePadShowsDone") { showsCompleted = true } }
         .onChange(of: board?.todo.first?.id) { if DebugScene.scene == "taskedit", editing == nil { editing = board?.todo.first?.task } }
         #endif
         .animation(.easeOut(duration: 0.2), value: board.map { [$0.inProgress, $0.todo, $0.done].flatMap { $0.map(\.id) } })
