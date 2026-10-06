@@ -84,6 +84,30 @@ extension DebugScene {
             ("整理一下这周的会议记录", "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", 4, 1.5),
             ("续费域名那条加上负责人和链接", "加好了：负责人写的是你，链接指向注册商的续费页。", 1, 0.4),
             ("再把评审计费额度拆成两步", "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", 2, 0.8),
+            // 最坏的 Markdown：宽表（对齐语法、代码单元格、中英混排长单元格）、引用、嵌套列表、标题、链接、长代码行
+            ("把三个排序方案的对比做成表格", """
+            ## 对比结果
+
+            | 方案 | 延迟 (p95) | 内存 | 说明 |
+            |:---|---:|:---:|---|
+            | `queue.sort` 按首次加入 | 12 ms | 38 MB | 改动最小，重连的人不会插队 |
+            | 按 rejoinAt 排序并去重 | 9 ms | 41 MB | 需要迁移旧数据；**不建议**本周上 |
+            | LinkedHashMap + lazy eviction of stale participants | 7 ms | 52 MB | 最快，但最复杂，出错时很难查 |
+
+            > 注意：p95 是在 8 人房间里测的，16 人以上还没测。
+
+            ### 下一步
+            1. 先合第一个方案
+               - 补 3 个重连用例
+               - 跑一遍压测
+            2. 再评估第三个
+
+            详见 [调度设计说明](https://example.com/scheduler)。
+
+            ```ts
+            export function sortQueue(queue: Participant[]): Participant[] { return [...queue].sort((a, b) => a.firstJoinedAt - b.firstJoinedAt) }
+            ```
+            """, 3, 1.0),
         ], startedMinutesAgo: 20)
         await chat("atlas", [
             ("跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", 5, 2),
