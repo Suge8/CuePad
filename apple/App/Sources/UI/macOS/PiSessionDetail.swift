@@ -35,9 +35,10 @@ extension SessionDigest {
     }
 }
 
-/// 一个 Pi 会话的详情（侧栏、菜单栏面板的会话行点开，⌘K 会话范围的右侧）：共用的对话（`PiConversation`），
-/// 下面是发过去的请求与回复框（已结束的会话也能直接回复）。
-/// `embedded`：放在 ⌘K 里时高度由面板给，近况在里面滚动；弹出层里按内容长高、到上限才滚动。
+/// 一个 Pi 会话的详情（侧栏、菜单栏面板的会话行、任务上的会话状态点开，⌘K 会话范围的右侧），聊天式，与手机的会话页同一套：
+/// 顶上一行会话名，下面一行"所在 · 状态 · 计时"（`PiSessionSubtitle`），有子代理时再一行小标签；中间是对话（`PiConversation`），
+/// 打开停在最新；底部是回复框，等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
+/// `embedded`：放在 ⌘K 里时高度由面板给；弹出层里对话区按内容长高，到上限后在里面滚动。
 struct PiSessionDetail: View {
     let sessionID: String
     var embedded = false
@@ -45,8 +46,10 @@ struct PiSessionDetail: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var stored: SessionDigest?
+    @State private var askedForTranscript = false
 
-    private static let maxDigestHeight: CGFloat = 520
+    /// 弹出层里对话区最高多少：按读对话调高，再长就在里面滚动。
+    private static let maxConversationHeight: CGFloat = 620
 
     var body: some View {
         let live = services.pi.sessions.first { $0.sessionID == sessionID }
@@ -55,16 +58,15 @@ struct PiSessionDetail: View {
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
         VStack(spacing: 0) {
             if let session = digest.session {
-                let scroll = ScrollView {
-                    PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries).padding(20)
-                }
-                if embedded {
-                    scroll.frame(maxHeight: .infinity)
-                } else {
-                    scroll.frame(maxHeight: Self.maxDigestHeight).fixedSize(horizontal: false, vertical: true)
-                }
+                header(session, project: digest.project, live: live)
                 Divider()
-                DetailReply(session: session, live: live).padding(14)
+                conversation(session, digest)
+                VStack(spacing: 8) {
+                    PiQuestionDock(session: session, deliveries: digest.deliveries)
+                    DetailReply(session: session, live: live)
+                }
+                .padding(12)
+                .animation(Motion.quick, value: session.question)
             } else if stored != nil {
                 Text("找不到这个会话").foregroundStyle(palette.ink3).padding(24)
             }
@@ -73,12 +75,64 @@ struct PiSessionDetail: View {
                    onError: workspace.fail) { [sessionID] store in
             try SessionDigest.read(sessionID: sessionID, from: store)
         }
+        .onChange(of: stored) { askForTranscriptIfNeeded() }
+    }
+
+    private func header(_ session: PiSessionState, project: Project?, live: CuePi.PiSession?) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                    PiSessionSubtitle(session: session, project: project)
+                }
+                Spacer(minLength: 8)
+                if let live, !live.hosted {
+                    Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
+                        .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink3)
+                        .help("跳到这个会话所在的终端窗口")
+                }
+            }
+            if !session.subagents.isEmpty { PiSubagentChips(subagents: session.subagents) }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    @ViewBuilder private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
+        let scroll = ScrollView {
+            VStack(spacing: 14) {
+                if fetchingTranscript(digest) {
+                    Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
+                }
+                PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries)
+            }
+            .padding(16)
+        }
+        // 打开停在最新；内容变长时跟着最新
+        .defaultScrollAnchor(.bottom)
+        .defaultScrollAnchor(.bottom, for: .sizeChanges)
+        if embedded {
+            scroll.frame(maxHeight: .infinity)
+        } else {
+            scroll.frame(maxHeight: Self.maxConversationHeight).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func fetchingTranscript(_ digest: SessionDigest) -> Bool {
+        digest.deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen }
+    }
+
+    /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（本机的也走同一条路）。
+    private func askForTranscriptIfNeeded() {
+        guard !askedForTranscript, let stored, let session = stored.session, services.reachesPiHost,
+              PiChat.needsTranscript(session, messages: stored.messages), !fetchingTranscript(stored) else { return }
+        askedForTranscript = true
+        workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }
 }
 
 /// 回复框（与手机同一种：发送钮在输入框里），此刻做什么按共用规则（`MacDelivery.reply`）：
 /// 平时发消息——点发送钮是默认方式，其余方式按住发送钮出来；等你确认时，文字型问题它就是作答框，
-/// 选择、确认型收成一行"先在上面作答"，这里答不了的写明要在 Pi 里回答。
+/// 选择、确认型收成一行"先在上面作答"（问题卡固定在回复框上方），这里答不了的写明要在 Pi 里回答。
 /// 发消息时本机在线的走"发给当前目标"同一条通道（`Workspace.send`）；已结束的与别的 Mac 上的写一条投送请求给它所在的 Mac
 /// （已结束的由那台 Mac 在后台唤醒后再送达），送达情况写在对话末尾你的气泡下。
 private struct DetailReply: View {
@@ -94,15 +148,9 @@ private struct DetailReply: View {
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var canSend: Bool { !trimmed.isEmpty && !sending }
     private var reply: PiReply { MacDelivery.reply(to: session, hasImages: false) }
-    private var jumpable: Bool { live.map { !$0.hosted } ?? false }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            if jumpable, let live {
-                Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
-                    .buttonStyle(.borderless).font(.footnote).foregroundStyle(palette.ink3)
-                    .help("跳到这个会话所在的终端窗口")
-            }
             switch reply {
             case .message(let modes): composer(placeholder: placeholder(modes)) { sendButton(modes) }
             case .answer: composer(placeholder: "在这里回答上面的问题") { answerButton }
@@ -229,7 +277,8 @@ struct SessionDetailHost: ViewModifier {
 
     private struct Opened: Identifiable { let id: String }
     private static let space = "sessionDetailHost"
-    private static let width: CGFloat = 440
+    /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
+    private static let width: CGFloat = 480
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
