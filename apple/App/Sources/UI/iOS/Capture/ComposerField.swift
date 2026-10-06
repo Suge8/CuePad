@@ -10,6 +10,7 @@ struct ComposerField: UIViewRepresentable {
     let label: String
     let maxLines: Int
     let ink: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -35,6 +36,7 @@ struct ComposerField: UIViewRepresentable {
         view.textColor = UIColor(ink)
         view.accessibilityLabel = label
         view.maxLines = maxLines
+        view.animatesScroll = !reduceMotion
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: GrowingTextView, context: Context) -> CGSize? {
@@ -50,7 +52,7 @@ struct ComposerField: UIViewRepresentable {
         func textViewDidChange(_ view: UITextView) {
             (view as? GrowingTextView)?.placeholder.isHidden = !view.text.isEmpty
             // 高度跟着文字一起走动画：拼音换行、定字收回每次都差一整行
-            withAnimation(Motion.snappy) { parent.text = view.text }
+            withAnimation(parent.reduceMotion ? nil : Motion.snappy) { parent.text = view.text }
         }
     }
 }
@@ -58,18 +60,23 @@ struct ComposerField: UIViewRepresentable {
 final class GrowingTextView: UITextView {
     let placeholder = UILabel()
     var maxLines = 1
+    var animatesScroll = true
 
     /// 最大高度：同一字体下排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），
-    /// 撑满时最后一行不被切一半。
+    /// 撑满时最后一行不被切一半；字号大到放不下时少排几行。
     var maxHeight: CGFloat {
         let key = "\(maxLines)|\(font?.pointSize ?? 0)"
         if key != rulerKey {
             ruler.font = font
             ruler.text = Array(repeating: "国", count: maxLines).joined(separator: "\n")
-            rulerHeight = ruler.sizeThatFits(CGSize(width: 100, height: CGFloat.greatestFiniteMagnitude)).height
+            rulerHeight = ruler.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)).height
             rulerKey = key
         }
-        return rulerHeight
+        // 大字号档位下 6 行会高过键盘上方放得下的空间（头部叠到文字上、最后一行被玻璃边切掉）：按整行数收到窗口高度的 3 成以内
+        let pitch = rulerHeight / CGFloat(maxLines)
+        let limit = (window?.bounds.height ?? .greatestFiniteMagnitude) * 0.3
+        let lines = max(1, min(maxLines, Int(min(limit / pitch, CGFloat(maxLines)))))
+        return lines == maxLines ? rulerHeight : ceil(pitch * CGFloat(lines))
     }
 
     private let ruler: UITextView = {
@@ -101,7 +108,7 @@ final class GrowingTextView: UITextView {
     override var contentOffset: CGPoint {
         get { super.contentOffset }
         set {
-            guard window != nil, !isTracking, !isDragging, !isDecelerating, abs(newValue.y - super.contentOffset.y) > 8 else {
+            guard animatesScroll, window != nil, !isTracking, !isDragging, !isDecelerating, abs(newValue.y - super.contentOffset.y) > 8 else {
                 super.contentOffset = newValue
                 return
             }
