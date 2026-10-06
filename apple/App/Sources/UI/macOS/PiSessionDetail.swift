@@ -33,7 +33,7 @@ extension SessionDigest {
     }
 }
 
-/// 一个 Pi 会话的详情（侧栏、菜单栏面板的会话行点开，⌘K 会话范围的右侧）：共用的近况（`PiSessionDigest`），
+/// 一个 Pi 会话的详情（侧栏、菜单栏面板的会话行点开，⌘K 会话范围的右侧）：共用的对话（`PiConversation`），
 /// 下面是发过去的请求与回复框（已结束的会话也能直接回复）。
 /// `embedded`：放在 ⌘K 里时高度由面板给，近况在里面滚动；弹出层里按内容长高、到上限才滚动。
 struct PiSessionDetail: View {
@@ -54,23 +54,20 @@ struct PiSessionDetail: View {
         VStack(spacing: 0) {
             if let session = digest.session {
                 let scroll = ScrollView {
-                    PiSessionDigest(session: session, project: digest.project).padding(20)
+                    PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries).padding(20)
                 }
                 if embedded {
                     scroll.frame(maxHeight: .infinity)
                 } else {
                     scroll.frame(maxHeight: Self.maxDigestHeight).fixedSize(horizontal: false, vertical: true)
                 }
-                // 已结束的也照常传：在途时写"正在唤醒…"，失败了也能重发（Mac 会在后台把它恢复起来）
-                DeliveryStack(deliveries: digest.deliveries, session: session)
-                    .padding(.horizontal, 14).padding(.bottom, 10)
                 Divider()
                 DetailReply(session: session, live: live).padding(14)
             } else if stored != nil {
                 Text("找不到这个会话").foregroundStyle(palette.ink3).padding(24)
             }
         }
-        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects], id: sessionID, into: $stored,
+        .observing(services.store, SessionDigest.tables, id: sessionID, into: $stored,
                    onError: workspace.fail) { [sessionID] store in
             try SessionDigest.read(sessionID: sessionID, from: store)
         }
@@ -81,7 +78,7 @@ struct PiSessionDetail: View {
 /// 平时发消息——点发送钮是默认方式，其余方式按住发送钮出来；等你确认时，文字型问题它就是作答框，
 /// 选择、确认型收成一行"先在上面作答"，这里答不了的写明要在 Pi 里回答。
 /// 发消息时本机在线的走"发给当前目标"同一条通道（`Workspace.send`）；已结束的与别的 Mac 上的写一条投送请求给它所在的 Mac
-/// （已结束的由那台 Mac 在后台唤醒后再送达），进度在上面"你发过去的"里。
+/// （已结束的由那台 Mac 在后台唤醒后再送达），送达情况写在对话末尾你的气泡下。
 private struct DetailReply: View {
     let session: PiSessionState
     let live: CuePi.PiSession?

@@ -147,6 +147,50 @@ extension DebugScene {
         }
     }
 
+    /// 演示对话的另一台 Mac 的执行器（留住它，结果写回后照常显示）。
+    private static var relayExecutor: DeliveryExecutor?
+
+    /// 演示对话：notes 是几轮做完的对话（带工具数与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
+    /// relay 在另一台 Mac 上（发过去的一条已送达还没进对话、一条没能送达）。
+    private static func seedChats(_ store: CueStore) async {
+        let now = Date.now
+        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: Int, minutes: Double)], startedMinutesAgo: Double) async {
+            var messages: [PiChatMessage] = []
+            var clock = now.addingTimeInterval(-startedMinutesAgo * 60)
+            for (index, turn) in turns.enumerated() {
+                let asked = clock
+                messages.append(PiChatMessage(sessionID: sessionID, entryID: "u\(index)", seq: Int64(index * 2), role: .user, text: turn.you, at: asked))
+                clock = asked.addingTimeInterval(turn.minutes * 60)
+                if let reply = turn.pi {
+                    messages.append(PiChatMessage(
+                        sessionID: sessionID, entryID: "p\(index)", seq: Int64(index * 2 + 1), role: .pi, text: reply, at: clock,
+                        toolCount: turn.tools, roundStartedAt: asked))
+                }
+                clock = clock.addingTimeInterval(120)
+            }
+            let done = turns.last { $0.pi != nil }
+            let pending = turns.last.flatMap { $0.pi == nil ? $0.you : nil }
+            try? await store.writePiTranscript(PiTranscript(
+                sessionID: sessionID, messages: messages,
+                recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending)))
+        }
+        await chat("notes", [
+            ("整理一下这周的会议记录", "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", 4, 1.5),
+            ("续费域名那条加上负责人和链接", "加好了：负责人写的是你，链接指向注册商的续费页。", 1, 0.4),
+            ("再把评审计费额度拆成两步", "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", 2, 0.8),
+        ], startedMinutesAgo: 20)
+        await chat("atlas", [
+            ("跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", 5, 2),
+            ("按你说的改成首次加入时间排序，把断言也改了，再跑一遍", nil, 0, 0),
+        ], startedMinutesAgo: 6)
+        await chat("homepage", [
+            ("把 RSS 输出改成全文", nil, 0, 0),
+        ], startedMinutesAgo: 3)
+        await chat("relay", [
+            ("看一下线上库的迁移有没有卡住", "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", 3, 1.2),
+        ], startedMinutesAgo: 10)
+    }
+
     /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。
     private static func seedRemote(_ services: AppServices) async {
         let store = services.store
@@ -221,10 +265,22 @@ extension DebugScene {
                 recap: PiRecap(lastPrompt: "第 \(index + 1) 个", lastReply: "做完了"))
             try? await past.end(sessionID: id)
         }
+        // 另一台 Mac 上的会话（演示发过去的话送达与失败）
+        try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", folder: "relay")
+        await seedChats(store)
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
         await seedTaskStates(store, projects: projects)
+        if let relay = states.first(where: { $0.sessionID == "relay" }) {
+            // 一条已送达还没进对话、一条没能送达：由一个只认这台演示 Mac 的执行器给出结果
+            _ = try? await services.requestMacDelivery("先把迁移脚本在测试库上跑一遍", to: relay, mode: .send)
+            _ = try? await services.requestMacDelivery("顺便备份一下线上数据库", to: relay, mode: .send)
+            relayExecutor = DeliveryExecutor(store: store, hostID: relay.hostID, onIssue: { _ in }) { request in
+                request.content.contains("备份") ? .failed("那台 Mac 上的 Pi 已经退出，没能送进去") : .succeeded
+            }
+            try? await relayExecutor?.start()
+        }
         if let atlas = states.first(where: { $0.sessionID == "atlas" }) {
-            _ = try? await services.requestMacDelivery("评审：计费额度\n审查 {{分支}} 中计费额度相关改动。", to: atlas, mode: .followUp)
+            _ = try? await services.requestMacDelivery("改完再看看登录回调那个超时", to: atlas, mode: .followUp)
         }
         if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
             // 发给已结束的会话：Mac 先在后台唤醒它
