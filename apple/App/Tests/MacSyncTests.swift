@@ -206,7 +206,8 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.channels.calls == [.send(PiMessage(text: "做这件事", whenBusy: .steer), "sess-1.100")])
+        // 带上请求 id：扩展写进会话文件里那条消息，对话据此把请求气泡换成它
+        #expect(rig.channels.calls == [.send(PiMessage(text: "做这件事", whenBusy: .steer, deliveryID: request.id.uuidString), "sess-1.100")])
         #expect(done.handledBy == TestApp.hostID)
     }
 
@@ -298,7 +299,7 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls == [.resume(sessionFile: indexed.path, directory: app.path)])
-        #expect(rig.channels.calls == [.send(PiMessage(text: "接着做"), "s1.900")])
+        #expect(rig.channels.calls == [.send(PiMessage(text: "接着做", deliveryID: request.id.uuidString), "s1.900")])
     }
 
     @Test func 新会话_后台开在项目目录_开场的话送入() async throws {
@@ -311,7 +312,7 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-1")])
-        #expect(rig.channels.calls == [.send(PiMessage(text: "看看测试为什么挂"), "new-tok-1.900")])
+        #expect(rig.channels.calls == [.send(PiMessage(text: "看看测试为什么挂", deliveryID: done.id.uuidString), "new-tok-1.900")])
     }
 
     @Test func 新会话_与某会话同目录_没有开场的话就不发_项目没有目录时失败() async throws {

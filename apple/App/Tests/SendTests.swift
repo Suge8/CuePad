@@ -159,7 +159,7 @@ struct SendTests {
         for try await status in services.store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id)?.status }) {
             if status == .known(.succeeded) { break }
         }
-        #expect(channels.calls == [.send(PiMessage(text: "hi", whenBusy: .steer), "s1.100")])
+        #expect(channels.calls == [.send(PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString), "s1.100")])
         #expect(try await services.store.deliveryRequests().count == 1)
         let record = try #require(try await services.store.sendRecords().first)
         #expect(try await services.store.sendRecords().count == 1)

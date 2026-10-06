@@ -1,0 +1,153 @@
+#if os(macOS)
+import CueStore
+import CuePi
+import Foundation
+import Testing
+@testable import CuePad
+
+/// 会话对话：Mac 从会话文件写出——近 7 天活跃的会话自动写全部消息，更早的按需补写；会话记录上的摘要是同一次写入的投影；
+/// 文件一变就写（不经状态记录器的节流）。
+@MainActor
+struct PiTranscriptTests {
+    let rig = TestApp()
+    var services: AppServices { rig.services }
+    var store: CueStore { services.store }
+
+    private static let iso = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+
+    private func line(_ id: String, _ parent: String?, at: Date, user text: String) -> String {
+        #"{"type":"message","id":"\#(id)","parentId":\#(parent.map { "\"\($0)\"" } ?? "null"),"timestamp":"\#(at.formatted(Self.iso))","message":{"role":"user","content":"\#(text)","timestamp":1}}"#
+    }
+
+    private func line(_ id: String, _ parent: String, at: Date, reply text: String) -> String {
+        #"{"type":"message","id":"\#(id)","parentId":"\#(parent)","timestamp":"\#(at.formatted(Self.iso))","message":{"role":"assistant","stopReason":"stop","content":[{"type":"text","text":"\#(text)"}],"timestamp":2}}"#
+    }
+
+    /// 一个会话文件：两轮问答，时间在 `at`。
+    private func sessionFile(_ sessionID: String, at: Date) throws -> URL {
+        let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "\(sessionID).jsonl")
+        let lines = [
+            #"{"type":"session","version":3,"id":"\#(sessionID)","timestamp":"\#(at.formatted(Self.iso))","cwd":"/work/x"}"#,
+            line("u1", nil, at: at, user: "第一问"),
+            line("a1", "u1", at: at.addingTimeInterval(1), reply: "第一答"),
+            line("u2", "a1", at: at.addingTimeInterval(2), user: "第二问"),
+            line("a2", "u2", at: at.addingTimeInterval(3), reply: "第二答"),
+        ]
+        try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    private func consume(_ files: [URL]) async {
+        let events = AsyncStream<PiHistoryEvent> { continuation in
+            for file in files { continuation.yield(.updated(try! PiHistory.index(file: file, from: nil))) }
+            continuation.yield(.backfillFinished(sessionFiles: files))
+            continuation.finish()
+        }
+        await services.consumePiHistory(events)
+    }
+
+    private func record(_ sessionID: String) async throws -> PiSessionState {
+        try #require(try await store.allPiSessionStates().first { $0.sessionID == sessionID })
+    }
+
+    @Test func 近7天活跃的会话写出全部消息_更早的只写摘要_摘要与对话一致() async throws {
+        let recent = try sessionFile("recent", at: .now.addingTimeInterval(-3_600))
+        let old = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
+
+        await consume([recent, old])
+
+        let messages = try await store.piMessages(of: "recent")
+        #expect(messages.map(\.text) == ["第一问", "第一答", "第二问", "第二答"])
+        #expect(messages.map(\.role) == [.known(.user), .known(.pi), .known(.user), .known(.pi)])
+        #expect(try await store.piMessages(of: "old").isEmpty)
+        for sessionID in ["recent", "old"] {
+            let state = try await record(sessionID)
+            #expect(state.lastPrompt == "第二问" && state.lastReply == "第二答" && state.pendingPrompt == nil)
+        }
+        let lastPi = try #require(messages.last { $0.role == .known(.pi) })
+        let lastUser = try #require(messages.last { $0.role == .known(.user) })
+        #expect(try await record("recent").lastReply == lastPi.text)
+        #expect(try await record("recent").lastPrompt == lastUser.text)
+    }
+
+    @Test func 七天外的会话按需补写_手机打开时发的请求由这台Mac从会话文件写出对话() async throws {
+        let old = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
+        await consume([old])
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await store.requestTranscript(of: try await record("old"))
+        for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id) }) {
+            if current?.status == .known(.succeeded) || current?.status == .known(.failed) {
+                #expect(current?.status == .known(.succeeded))
+                break
+            }
+        }
+
+        #expect(try await store.piMessages(of: "old").map(\.text) == ["第一问", "第一答", "第二问", "第二答"])
+        #expect(try await store.sendRecords().isEmpty)
+    }
+
+    /// 摘要只有对话这一个写者：Pi 桥上的状态变化不改它；会话结束后没有进行中的提问。
+    @Test func 状态变化不改摘要_会话结束后没有进行中的提问() async throws {
+        let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
+        try FileManager.default.removeItem(at: file)
+        let directory = file.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let now = Date.now
+        try ([
+            #"{"type":"session","version":3,"id":"s1","timestamp":"\#(now.formatted(Self.iso))","cwd":"/work/x"}"#,
+            line("u1", nil, at: now, user: "做到一半"),
+        ].joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
+        await consume([file])
+        #expect(try await record("s1").pendingPrompt == "做到一半")
+
+        let live = CuePi.PiSession(
+            id: "s1.100", sessionID: "s1", sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
+            mode: "tui", model: nil, terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .thinking, stateSince: .now)
+        try await services.consumePiChanges(AsyncStream { continuation in
+            continuation.yield(.appeared(live))
+            continuation.yield(.ended(live, reason: .closed(reason: "quit")))
+            continuation.finish()
+        })
+        #expect(try await record("s1").pendingPrompt == nil)
+
+        await consume([file])  // 文件再读一遍：已结束的会话不会重新有进行中的提问
+        let ended = try await record("s1")
+        #expect(ended.pendingPrompt == nil && ended.state == .known(.ended))
+    }
+
+    /// 文件一追加就写：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
+    @Test func 文件追加一条用户消息后_摘要与消息在1秒内可读() async throws {
+        let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
+        let indexer = PiHistoryIndexer(root: rig.piPaths.sessionsDirectory) { _ in nil }
+        let consuming = Task { await services.consumePiHistory(indexer.events()) }
+        defer { consuming.cancel() }
+        for try await count in store.observe([.piMessages], { try $0.piMessages(of: "s1").count }) where count == 4 { break }
+
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        let appended = ContinuousClock.now
+        try handle.write(contentsOf: Data((line("u3", "a2", at: .now, user: "第三问") + "\n").utf8))
+        try handle.close()
+
+        let seen = try await withThrowingTaskGroup(of: Bool.self) { group in
+            group.addTask { @MainActor in
+                for try await state in store.observe([.piMessages, .piSessionStates], {
+                    (try $0.piMessages(of: "s1").last?.text, try $0.allPiSessionStates().first?.pendingPrompt)
+                }) where state.0 == "第三问" && state.1 == "第三问" { return true }
+                return false
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(1))
+                return false
+            }
+            defer { group.cancelAll() }
+            return try await group.next() ?? false
+        }
+        #expect(seen, "追加后 \(ContinuousClock.now - appended) 仍没读到")
+    }
+}
+#endif
