@@ -188,6 +188,27 @@ struct PiClockTests {
         #expect(PiClock.reading(.known(.settled), stateSince: entered, busySince: nil) == .ago(entered))
         #expect(PiClock.reading(.known(.ended), stateSince: entered, busySince: nil) == .ago(entered))
     }
+
+    @Test func 时长不跳秒_一分钟内写秒_一小时内写分_以上写时与分() {
+        #expect(PiClock.duration(42) == "42 秒")
+        #expect(PiClock.duration(4 * 60 + 59) == "4 分")
+        #expect(PiClock.duration(2 * 3600 + 5 * 60 + 30) == "2 时 5 分")
+        #expect(PiClock.duration(3 * 3600 + 40) == "3 时")
+    }
+
+    @Test func 超过一天的多久前写昨天或N天前() {
+        let calendar = WallTests.calendar
+        let ended = WallTests.date(2026, 10, 5, hour: 22)
+        #expect(PiClock.ago(ended).text(now: WallTests.date(2026, 10, 6, hour: 23), calendar: calendar) == "昨天")
+        #expect(PiClock.ago(ended).text(now: WallTests.date(2026, 10, 9, hour: 9), calendar: calendar) == "4 天前")
+    }
+
+    @Test func 计时文字_已运行_已等_多久前用同一个时长格式() {
+        let now = start.addingTimeInterval(4 * 60 + 10)
+        #expect(PiClock.running(since: start).text(now: now) == "已运行 4 分")
+        #expect(PiClock.waiting(since: start).text(now: start.addingTimeInterval(30)) == "已等 30 秒")
+        #expect(PiClock.ago(start).text(now: start.addingTimeInterval(3600 + 120)) == "1 时 2 分前")
+    }
 }
 
 /// Pi 历史按结束时间分段（手机 Pi 页、Mac ⌘K 共用）：今天 / 昨天 / 本周 / 本月 / 更早，周一为一周之始。
@@ -266,8 +287,4 @@ struct PiReplyRulesTests {
         #expect(MacDelivery.reply(to: session(.thinking), hasImages: false) == .message(MacDelivery.modes(for: session(.thinking), hasImages: false)))
     }
 
-    @Test func 你发过去的只留在途与失败的_已送达的不常驻() {
-        let statuses: [DeliveryStatus] = [.succeeded, .pending, .executing, .failed]
-        #expect(statuses.filter { DeliveryStack.keeps(.known($0)) } == [.pending, .executing, .failed])
-    }
 }
