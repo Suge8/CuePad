@@ -126,6 +126,9 @@ struct Composer<Header: View, Send: View>: View {
             }
         }
         .onChange(of: picked) { load() }
+#if DEBUG
+        .task { await DebugScene.presetComposer($draft, source: source, store: workspace.services.store) }
+#endif
     }
 
     private func showing(_ target: ComposerSource) -> Binding<Bool> {

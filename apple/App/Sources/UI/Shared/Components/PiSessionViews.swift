@@ -101,7 +101,7 @@ extension Open<PiWorkState> {
 }
 
 nonisolated extension PiSessionState {
-    /// 会话列表的顺序（Pi 页、Mac 侧栏）：要你注意的在前，同一档保持原来的先后（最近进入当前状态的在前）。
+    /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前，同一档保持原来的先后（最近进入当前状态的在前）。
     static func inListOrder(_ sessions: [PiSessionState]) -> [PiSessionState] {
         sessions.enumerated()
             .sorted { ($0.element.state.listRank, $0.offset) < ($1.element.state.listRank, $1.offset) }
@@ -122,7 +122,7 @@ nonisolated extension PiSessionState {
     }
 }
 
-/// 会话状态标（全 App 只此一份：Pi 页、近况、书架、侧栏、Mac 侧栏与菜单栏）：颜色 + 形状表达状态，
+/// 会话状态标（全 App 只此一份：Agent 页、近况、书架、侧栏、Mac 侧栏与菜单栏）：颜色 + 形状表达状态，
 /// 等你确认橙色问号、出错红色叹号、工作中墨色圈点、空闲灰色勾、已结束更淡的空心圈；不做循环动画（常驻多处，
 /// 循环既耗电也分散注意）。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 旁边有状态文字时读屏跳过它；`announces` 用在只有一个标的地方（书架、侧栏的项目旁），标自己带读屏标签与悬停提示。

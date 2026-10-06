@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 一个 Pi 会话的对话（Pi 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），聊天式：
+/// 一个 Pi 会话的对话（Agent 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），聊天式：
 /// 顶上一行会话名，下面一行小字"所在 · 状态 · 计时"；中间是对话（`PiConversation`，子代理列在末尾的进展下），打开停在最新；
 /// 底部是回复框（标签栏收起，回复框独占底部），等你确认时问题卡固定在它上方。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
 /// 很久以前的会话没有对话时请 Mac 补写，补写中写一句"正在从 Mac 取对话…"。
@@ -297,7 +297,7 @@ struct SessionPicker: View {
 
 #if os(iOS)
 extension View {
-    /// Pi 页与会话近况页：显示期间算作"正在看 Pi"，手机按 3 秒主动拉，状态与近况是活的（见 `AppServices.pollingCadence`）。
+    /// Agent 页与会话近况页：显示期间算作"正在看 Pi"，手机按 3 秒主动拉，状态与近况是活的（见 `AppServices.pollingCadence`）。
     func countsAsPiViewer() -> some View { modifier(PiViewing()) }
 }
 

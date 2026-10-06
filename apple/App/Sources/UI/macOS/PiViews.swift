@@ -16,7 +16,7 @@ extension PiAgentState {
     }
 }
 
-/// Mac 上一个 Pi 会话的行（侧栏、菜单栏面板、项目页的 Pi 栏），三层与 iOS 的 Pi 页一致：状态标；名字与时长（`PiElapsed`）；
+/// Mac 上一个 Pi 会话的行（侧栏、菜单栏面板、项目页的 Pi 栏），三层与 iOS 的 Agent 页一致：状态标；名字与时长（`PiElapsed`）；
 /// 在哪 · 状态词（带色）；一句进度或结果（`PiProgress`，没有不占行）。已结束的整行更淡。
 struct PiSessionRow: View {
     let session: PiSessionState

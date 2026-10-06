@@ -154,7 +154,7 @@ private struct SectionTitle: View {
     }
 }
 
-/// Pi 页读到的会话："现在"是全部在线的（不多，不分页），按要你注意的先后；"历史"是已结束的前 `loaded` 条，
+/// Agent 页读到的会话："现在"是全部在线的（不多，不分页），按要你注意的先后；"历史"是已结束的前 `loaded` 条，
 /// 从新到旧（分段见 `PiHistorySection`）。两部分用同一个搜索词。
 nonisolated struct PiSessionList: Sendable, Equatable {
     static let pageSize = 40
@@ -221,7 +221,7 @@ private struct SessionRow: View {
     }
 }
 
-/// 同步到不了 Mac 时的一行轻提示（Pi 页顶部、回复框里）：哪里不通；详情与处理在设置里。
+/// 同步到不了 Mac 时的一行轻提示（Agent 页顶部、回复框里）：哪里不通；详情与处理在设置里。
 struct SyncHint: View {
     let status: SyncStatus
     @Environment(\.palette) private var palette

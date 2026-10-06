@@ -193,7 +193,7 @@ private struct PageRow<Title: View>: View {
     }
 }
 
-/// 全局 Pi：与 iOS 的 Pi 页同一种行（`PiSessionRow`）、同一个顺序（`sidebarRows`）。点开任一会话是它的详情（近况与回复），
+/// 全局 Pi：与 iOS 的 Agent 页同一种行（`PiSessionRow`）、同一个顺序（`sidebarRows`）。点开任一会话是它的详情（近况与回复），
 /// 在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话；会话比显示的多时底部"全部 N 个"打开 ⌘K 的会话范围。
 /// 没有活着的会话时分组不消失：一行"在终端运行 pi 开始"，下面照常是已结束的。没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
 private struct PiSection: View {

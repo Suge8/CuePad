@@ -75,7 +75,7 @@ import Testing
     #expect(try await rig.store.deliveryRequests().map(\.id) == [id])
   }
 
-  /// 在等的对象还有 Pi 会话状态（手机看着 Pi 页时主动拉，状态要是活的）：取令牌时看到的也按 ID 取整条；
+  /// 在等的对象还有 Pi 会话状态（手机看着 Agent 页时主动拉，状态要是活的）：取令牌时看到的也按 ID 取整条；
   /// 无关的表（卡片）只推进令牌、不补取。
   @Test func piSessionStatesAlreadyOnTheServerAreFetchedInFullButOtherTablesAreNot() async throws {
     let state = remoteRecord(.piSessionStates, id: PiSessionState.recordID(sessionID: "s1"), [

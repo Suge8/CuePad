@@ -18,9 +18,9 @@ struct IOSWorkflowTests {
 
     // MARK: 发到 Mac
 
-    /// 手机主动拉取的节奏：有发往 Mac 还没结果的请求时 2 秒、每次在等最多 2 分钟；正在看 Pi 页或会话近况时 3 秒、不限时；
+    /// 手机主动拉取的节奏：有发往 Mac 还没结果的请求时 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时 3 秒、不限时；
     /// 两者都有时 2 秒、不限时。
-    @Test func 主动拉取的节奏_等结果与看着Pi页() {
+    @Test func 主动拉取的节奏_等结果与看着Agent页() {
         let services: AppServices = app.services
         #expect(services.pollingCadence == nil)
         services.piViewers = 1
@@ -78,9 +78,9 @@ struct IOSWorkflowTests {
         #expect(MacDelivery.modes(for: session, hasImages: hasImages) == modes)
     }
 
-    // MARK: Pi 页
+    // MARK: Agent 页
 
-    @Test func Pi页_等你确认_出错_工作中_空闲_已结束依次排() async throws {
+    @Test func Agent页_等你确认_出错_工作中_空闲_已结束依次排() async throws {
         _ = try await session("done", .ended)
         _ = try await session("idle", .settled)
         _ = try await session("busy", .tool, detail: "bash")

@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Mac 侧栏 Pi 分组的会话顺序：与 iOS 的 Pi 页同序，已结束的接在后面、不重复、有上限。
+/// Mac 侧栏 Pi 分组的会话顺序：与 iOS 的 Agent 页同序，已结束的接在后面、不重复、有上限。
 struct PiSidebarTests {
     private func session(_ id: String, _ state: PiWorkState) -> PiSessionState {
         PiSessionState(

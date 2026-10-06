@@ -56,7 +56,7 @@ final class AppServices {
     @ObservationIgnored var polling: Task<Void, Never>?
     /// 有还没结果的投送请求（Mac：发给本机的）。只在主动拉取开着时跟着资料库更新，只给 `pollingCadence` 用。
     var hasOpenDeliveries = false
-    /// 正在显示的 Pi 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
+    /// 正在显示的 Agent 页与会话近况页数（iPad 可能多个窗口）；大于 0 时主动拉，见 `pollingCadence`。
     var piViewers = 0
     /// 上次写进共享容器的快照；内容没变就不重写、不刷新小组件。
     @ObservationIgnored var publishedSnapshots: WidgetSnapshots?

@@ -211,7 +211,7 @@ struct PiClockTests {
     }
 }
 
-/// Pi 历史按结束时间分段（手机 Pi 页、Mac ⌘K 共用）：今天 / 昨天 / 本周 / 本月 / 更早，周一为一周之始。
+/// Pi 历史按结束时间分段（手机 Agent 页、Mac ⌘K 共用）：今天 / 昨天 / 本周 / 本月 / 更早，周一为一周之始。
 struct PiHistorySectionTests {
     let calendar = WallTests.calendar
 
@@ -243,7 +243,7 @@ struct PiHistorySectionTests {
     }
 }
 
-/// 会话列表第三行与回复框的规则（手机 Pi 页、Mac 侧栏与详情共用）。
+/// 会话列表第三行与回复框的规则（手机 Agent 页、Mac 侧栏与详情共用）。
 struct PiReplyRulesTests {
     func session(_ state: PiWorkState, reply: String? = nil, question: PiQuestion? = nil) -> PiSessionState {
         let now = Date(timeIntervalSince1970: 1_000)

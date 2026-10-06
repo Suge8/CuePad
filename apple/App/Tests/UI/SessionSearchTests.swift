@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// ⌘K 的"会话"范围：上面"现在"是在线的、要你注意的在前；下面是已结束的，按结束时间分段（与手机 Pi 页同一规则），
+/// ⌘K 的"会话"范围：上面"现在"是在线的、要你注意的在前；下面是已结束的，按结束时间分段（与手机 Agent 页同一规则），
 /// 下一页只接在末段之后。需求变更：取代按项目分组（按项目分组时，下一页会插进上面的组）。
 struct SessionSearchTests {
     let now = WallTests.date(2026, 10, 7, hour: 10)
