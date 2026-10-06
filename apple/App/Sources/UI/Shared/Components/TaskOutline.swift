@@ -23,6 +23,9 @@ extension EnvironmentValues {
 /// 横向挪动改层级（插入线的起点跟着缩进）。手机上向右轻扫缩进、向左反缩进（过阈值有触感，松手生效）。落点规则全在 `TaskTree`，这里只管手势与画。
 /// 行之间不让位（同提醒事项的插入线）：拖动期间不重排，也就不会每帧重算布局。
 struct TaskOutline<Line: View>: View {
+    /// 整个看板（或项目页）的层级：拖放落点按它算，所以能从别的组拖进来。
+    private let whole: TaskTree
+    /// 这个大纲显示的范围：行、缩进与反缩进按它算。
     private let tree: TaskTree
     private let line: (TaskTree.Row) -> Line
     @Environment(Workspace.self) private var workspace
@@ -33,6 +36,7 @@ struct TaskOutline<Line: View>: View {
 
     /// `roots`：只显示这些顶层任务及其子树（看板的一组、项目页的前几条），结构操作也只在里面算；nil 是全部。
     init(tree: TaskTree, roots: [UUID]? = nil, @ViewBuilder line: @escaping (TaskTree.Row) -> Line) {
+        whole = tree
         self.tree = roots.map(tree.scoped(to:)) ?? tree
         self.line = line
     }
@@ -53,9 +57,9 @@ struct TaskOutline<Line: View>: View {
         .coordinateSpace(.named(outlineSpace))
         .overlay(alignment: .topLeading) { InsertionLine(drag: drag, first: rows.first?.id, indent: Self.indentWidth) }
         .onDrop(of: [.utf8PlainText], delegate: OutlineDrop(
-            accepts: { drag.dragged != nil },
+            accepts: { TaskDragSession.shared.dragged.flatMap(whole.task) != nil },
             update: { update($0, rows: rows) },
-            exit: { drag.set(nil) },
+            exit: { drag.end() },
             perform: perform))
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: rows.map(\.id))
         .sensoryFeedback(.impact(weight: .medium), trigger: commits)
@@ -75,7 +79,7 @@ struct TaskOutline<Line: View>: View {
         .environment(\.taskStructure, structure)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(outlineSpace)) } action: { drag.frames[row.id] = $0 }
         .onDrag {
-            drag.begin(row.id)
+            TaskDragSession.shared.dragged = row.id
             return NSItemProvider(object: row.id.uuidString as NSString)
         }
         #if os(iOS)
@@ -84,16 +88,17 @@ struct TaskOutline<Line: View>: View {
     }
 
     private func update(_ point: CGPoint, rows: [TaskTree.Row]) {
-        guard let dragged = drag.dragged else { return }
+        guard let dragged = TaskDragSession.shared.dragged else { return }
         let start = drag.startX ?? point.x
         drag.startX = start
         let shift = Int(((point.x - start) / Self.indentWidth).rounded())
-        drag.set(tree.drop(dragged, rows: rows, frames: drag.frames, at: point, depthShift: shift))
+        drag.set(whole.drop(dragged, rows: rows, frames: drag.frames, at: point, depthShift: shift))
     }
 
     /// 只落自己大纲里拖出来的那一条：拖进来的内容与它不符（比如别处拖来的文字）就不动。
     private func perform(_ info: DropInfo) -> Bool {
-        let dragged = drag.dragged, move = drag.drop?.move
+        let dragged = TaskDragSession.shared.dragged, move = drag.drop?.move
+        TaskDragSession.shared.dragged = nil
         drag.end()
         guard let dragged, let move, let provider = info.itemProviders(for: [.utf8PlainText]).first else { return false }
         let expected = dragged.uuidString
@@ -111,27 +116,28 @@ struct TaskOutline<Line: View>: View {
     }
 }
 
-/// 一次拖动的状态。被拖的那条、起点与行的位置不参与排版（不观察）；落点只由高亮与插入线读，且只在变了时才写。
+/// 正被拖着的任务：一次只有一条，同一页上的几个大纲（看板的进行中与待办）都认它，所以能跨组拖。
+/// 拖到页外取消时系统不通知，留着的旧值只会让下一次拖进来的外部内容被`perform`核对后拒绝。
+@MainActor
+final class TaskDragSession {
+    static let shared = TaskDragSession()
+    var dragged: UUID?
+}
+
+/// 一个大纲里的落点状态。起点与行的位置不参与排版（不观察）；落点只由高亮与插入线读，且只在变了时才写。
 @Observable @MainActor
 private final class OutlineDrag {
     private(set) var drop: TaskDrop?
-    @ObservationIgnored private(set) var dragged: UUID?
-    /// 第一次落在大纲上时的横坐标：横移从这里量。
+    /// 拖进这个大纲时的横坐标：横移从这里量。
     @ObservationIgnored var startX: CGFloat?
     @ObservationIgnored var frames: [UUID: CGRect] = [:]
-
-    func begin(_ id: UUID) {
-        dragged = id
-        startX = nil
-        set(nil)
-    }
 
     func set(_ next: TaskDrop?) {
         if drop != next { drop = next }
     }
 
     func end() {
-        dragged = nil
+        startX = nil
         set(nil)
     }
 }
@@ -266,8 +272,9 @@ private struct IndentSwipe: ViewModifier {
             .animation(Motion.quick, value: armed)
     }
 
-    private func end() {
-        if armed { action?() }
+    /// `commits`：手指正常松开才生效；系统取消手势（来电、被别的手势接走）只回位。
+    private func end(commits: Bool) {
+        if commits, armed { action?() }
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { translation = 0 }
     }
 }
@@ -275,7 +282,7 @@ private struct IndentSwipe: ViewModifier {
 /// 只接横向的拖：开始时横向速度明显大于纵向、且不在屏幕左缘（那里是返回手势）才开始。
 private struct HorizontalPan: UIGestureRecognizerRepresentable {
     let changed: (CGFloat) -> Void
-    let ended: () -> Void
+    let ended: (_ commits: Bool) -> Void
 
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
 
@@ -288,7 +295,8 @@ private struct HorizontalPan: UIGestureRecognizerRepresentable {
     func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
         switch pan.state {
         case .began, .changed: changed(pan.translation(in: pan.view).x)
-        case .ended, .cancelled, .failed: ended()
+        case .ended: ended(true)
+        case .cancelled, .failed: ended(false)
         default: break
         }
     }

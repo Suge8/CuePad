@@ -37,8 +37,9 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             }
             return Row(task: task, project: task.projectID.flatMap { projects[$0] }, session: session)
         }
-        let open = try store.tasks(.inProgress, .todo).flatMap(\.tasks)
-        let tree = TaskTree(open)
+        let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
+        let open = all.filter { $0.status != .done }
+        let tree = TaskTree(open, all: all)
         let rows = Dictionary(uniqueKeysWithValues: try open.map { ($0.id, try row($0)) })
         let roots = tree.roots.compactMap { rows[$0] }
         let done = try store.tasks(.done).flatMap(\.tasks).sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }

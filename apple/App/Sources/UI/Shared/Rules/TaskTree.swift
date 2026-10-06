@@ -38,11 +38,17 @@ nonisolated struct TaskTree: Equatable, Sendable {
     private var parents: [UUID: UUID] = [:]
     private var tasks: [UUID: CueTask] = [:]
     private var order: [CueTask] = []
+    /// 层级限制按库里的整棵树算（含已完成、不显示的子任务）：与 Store 写入时的校验同一口径。
+    private var everything: [CueTask] = []
+    private var structure = Structure([])
 
     private static let deepest = CueTask.maxDepth - 1
 
-    init(_ ordered: [CueTask]) {
+    /// `ordered` 是要显示的任务（同级手动顺序）；`all` 是同一范围里库中的全部任务（含已完成），省略时同 `ordered`。
+    init(_ ordered: [CueTask], all: [CueTask]? = nil) {
         order = ordered
+        everything = all ?? ordered
+        structure = Structure(everything)
         tasks = Dictionary(ordered.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for task in ordered {
             if let parent = task.parentID, tasks[parent] != nil, parent != task.id {
@@ -65,7 +71,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
     /// 只留这些顶层任务和它们的子树（看板的一组、项目页显示的前几条）：缩进、反缩进与拖放都只在里面算。
     func scoped(to roots: [UUID]) -> TaskTree {
         let kept = Set(roots.flatMap { [$0] + descendants(of: $0) })
-        return TaskTree(order.filter { kept.contains($0.id) })
+        return TaskTree(order.filter { kept.contains($0.id) }, all: everything)
     }
     func task(_ id: UUID) -> CueTask? { tasks[id] }
     func children(of id: UUID) -> [UUID] { children[id] ?? [] }
@@ -75,9 +81,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         while let parent = cursor { depth += 1; cursor = parents[parent] }
         return depth
     }
-
-    /// 连自己在内往下有几级。
-    func height(of id: UUID) -> Int { 1 + (children(of: id).map(height(of:)).max() ?? 0) }
 
     func descendants(of id: UUID) -> [UUID] { children(of: id).flatMap { [$0] + descendants(of: $0) } }
 
@@ -104,7 +107,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
         let siblings = parents[id].map(children(of:)) ?? roots
         guard let index = siblings.firstIndex(of: id), index > 0 else { return nil }
         let parent = siblings[index - 1]
-        guard depth(of: parent) + height(of: id) <= Self.deepest else { return nil }
+        guard fits(id, under: parent) else { return nil }
         return TaskMove(slot: .under(parent), after: children(of: parent).last)
     }
 
@@ -122,12 +125,12 @@ nonisolated struct TaskTree: Equatable, Sendable {
     func drop(_ dragged: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint, depthShift: Int) -> TaskDrop? {
         let excluded = Set([dragged] + descendants(of: dragged))
         let candidates = rows.filter { !excluded.contains($0.id) && frames[$0.id] != nil }
-        let height = height(of: dragged)
+        let height = structure.height(of: dragged)
         var gap: Int
         if let index = candidates.firstIndex(where: { frames[$0.id]!.minY <= point.y && point.y < frames[$0.id]!.maxY }) {
             let row = candidates[index], frame = frames[row.id]!
             let fraction = (point.y - frame.minY) / frame.height
-            if (0.25..<0.75).contains(fraction), row.depth + height <= Self.deepest {
+            if (0.25..<0.75).contains(fraction), fits(dragged, under: row.id) {
                 let move = TaskMove(slot: .under(row.id), after: children(of: row.id).filter { $0 != dragged }.last)
                 return TaskDrop(move: move, mark: .onto(row.id))
             }
@@ -140,18 +143,27 @@ nonisolated struct TaskTree: Equatable, Sendable {
         let lowest = next?.depth ?? 0
         let highest = min(previous.map { $0.depth + 1 } ?? 0, Self.deepest - height + 1)
         guard lowest <= highest else { return nil }
-        let depth = min(max(depth(of: dragged) + depthShift, lowest), highest)
-        let move: TaskMove
-        if let previous, depth == previous.depth + 1 {
-            move = TaskMove(slot: .under(previous.id), after: nil)
-        } else {
-            // 上一行在这一级（或更深处）的祖先就是新的上一个同级
-            let sibling = previous.map { ancestor(of: $0.id, atDepth: depth) }
-            let project = (sibling ?? next.map { ancestor(of: $0.id, atDepth: 0) }).flatMap { tasks[$0]?.projectID } ?? tasks[dragged]?.projectID
-            move = TaskMove(slot: slot(under: sibling.flatMap { parents[$0] }, project: project), after: sibling)
+        // 想要的层级放不下（上级在库里比看上去深，或带着已完成的深层子任务）时往浅里退
+        for depth in stride(from: min(max(depth(of: dragged) + depthShift, lowest), highest), through: lowest, by: -1) {
+            let move = gapMove(dragged, depth: depth, previous: previous, next: next)
+            if case .under(let parent) = move.slot, !fits(dragged, under: parent) { continue }
+            guard move != current(dragged) else { return nil }
+            return TaskDrop(move: move, mark: .gap(after: previous?.id, depth: depth))
         }
-        guard move != current(dragged) else { return nil }
-        return TaskDrop(move: move, mark: .gap(after: previous?.id, depth: depth))
+        return nil
+    }
+
+    private func gapMove(_ dragged: UUID, depth: Int, previous: Row?, next: Row?) -> TaskMove {
+        if let previous, depth == previous.depth + 1 { return TaskMove(slot: .under(previous.id), after: nil) }
+        // 上一行在这一级（或更深处）的祖先就是新的上一个同级
+        let sibling = previous.map { ancestor(of: $0.id, atDepth: depth) }
+        let project = (sibling ?? next.map { ancestor(of: $0.id, atDepth: 0) }).flatMap { tasks[$0]?.projectID } ?? tasks[dragged]?.projectID
+        return TaskMove(slot: slot(under: sibling.flatMap { parents[$0] }, project: project), after: sibling)
+    }
+
+    /// 挂到 `parent` 下整棵子树不超过最深一级（按库里的整棵树）。
+    private func fits(_ id: UUID, under parent: UUID) -> Bool {
+        structure.depth(of: parent) + structure.height(of: id) <= Self.deepest
     }
 
     private func ancestor(of id: UUID, atDepth target: Int) -> UUID {
@@ -170,5 +182,33 @@ nonisolated struct TaskTree: Equatable, Sendable {
         let siblings = parents[id].map(children(of:)) ?? roots.filter { tasks[$0]?.projectID == project }
         let index = siblings.firstIndex(of: id) ?? 0
         return TaskMove(slot: slot(under: parents[id], project: project), after: index > 0 ? siblings[index - 1] : nil)
+    }
+}
+
+/// 库里的层级（含不显示的任务）：只用来量深度与高度。
+nonisolated private struct Structure: Equatable, Sendable {
+    private var parents: [UUID: UUID] = [:]
+    private var children: [UUID: [UUID]] = [:]
+
+    init(_ tasks: [CueTask]) {
+        let ids = Set(tasks.map(\.id))
+        for task in tasks {
+            guard let parent = task.parentID, ids.contains(parent), parent != task.id else { continue }
+            parents[task.id] = parent
+            children[parent, default: []].append(task.id)
+        }
+    }
+
+    /// 0 起；远端并发留下的环走到重复处为止。
+    func depth(of id: UUID) -> Int {
+        var seen: Set<UUID> = [id], cursor = parents[id]
+        while let parent = cursor, seen.insert(parent).inserted { cursor = parents[parent] }
+        return seen.count - 1
+    }
+
+    /// 连自己在内往下有几级。
+    func height(of id: UUID, seen: Set<UUID> = []) -> Int {
+        guard !seen.contains(id) else { return 0 }
+        return 1 + ((children[id] ?? []).map { height(of: $0, seen: seen.union([id])) }.max() ?? 0)
     }
 }

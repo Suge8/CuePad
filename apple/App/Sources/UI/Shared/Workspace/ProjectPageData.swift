@@ -26,12 +26,18 @@ nonisolated struct ProjectPageData: Sendable {
         cards.filter { $0.id != project?.goalCardID }.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) }
     }
 
+    /// 没完成的任务的层级；层级限制按本项目全部任务（含已完成）算。
+    private static func tree(_ project: UUID?, from store: isolated CueStore) throws -> TaskTree {
+        let all = try store.tasks(.inProgress, .todo, .done).filter { $0.projectID == project }.flatMap(\.tasks)
+        return TaskTree(all.filter { $0.status != .done }, all: all)
+    }
+
     static func read(_ project: UUID?, from store: isolated CueStore) throws -> ProjectPageData {
         ProjectPageData(
             project: try project.flatMap { try store.project($0) },
             cards: try store.cards(in: project),
             lastSends: try store.lastSends(in: project),
-            tasks: TaskTree(try store.tasks(.inProgress, .todo).filter { $0.projectID == project }.flatMap(\.tasks)),
+            tasks: try Self.tree(project, from: store),
             taskProgress: try store.taskProgress()[project],
             subtasks: try store.subtaskProgress())
     }
