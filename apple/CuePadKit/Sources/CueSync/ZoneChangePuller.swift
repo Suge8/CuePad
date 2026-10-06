@@ -37,8 +37,8 @@ actor ZoneChangePuller {
   /// 加新的等待理由时，它等的表要加进来。
   static let awaitedTables: Set<Table> = [.deliveryRequests, .piSessionStates]
 
-  /// 取令牌那一遍带回的字段：版本（`modifiedAt`）与 Pi 会话的状态（明文），据此判断要不要补取，不带正文。
-  static let versionKeys = ["modifiedAt", "state"]
+  /// 取令牌那一遍带回的字段：版本（`modifiedAt`）、Pi 会话的状态与投送请求的状态（都是明文），据此判断要不要补取，不带正文。
+  static let versionKeys = ["modifiedAt", "state", "status"]
 
   private let source: any ZoneChangeSource
   private let coordinator: SyncCoordinator
@@ -84,7 +84,8 @@ actor ZoneChangePuller {
     token = next
   }
 
-  /// 本机还没有的、或服务器上较新的，才补取；本机没有的 Pi 会话已结束就不追（历史由引擎带来）。
+  /// 本机已有、服务器上较新的才补取（如手机在等的请求有了结果）；本机没有的只补取还没完的——
+  /// 已结束的 Pi 会话（几千条历史）与已有结果的投送请求（别的设备发的、早已执行完）由引擎带来。
   private func catchUp(_ seen: [CKRecord]) async throws {
     var local: [Table: [String: Int64]] = [:]
     for table in Self.awaitedTables { local[table] = try await coordinator.store.modifiedAts(in: table) }
@@ -100,10 +101,16 @@ actor ZoneChangePuller {
 
   private static func needsCatchUp(_ record: CKRecord, table: Table, localModifiedAt: Int64?) -> Bool {
     let serverModifiedAt = (record["modifiedAt"] as? NSNumber)?.int64Value
-    guard let localModifiedAt else {
-      return !(table == .piSessionStates && record["state"] as? String == PiWorkState.ended.rawValue)
-    }
+    guard let localModifiedAt else { return !isFinished(record, table: table) }
     return serverModifiedAt.map { $0 > localModifiedAt } ?? true
+  }
+
+  private static func isFinished(_ record: CKRecord, table: Table) -> Bool {
+    switch table {
+    case .piSessionStates: record["state"] as? String == PiWorkState.ended.rawValue
+    case .deliveryRequests: [DeliveryStatus.succeeded.rawValue, DeliveryStatus.failed.rawValue].contains(record["status"] as? String)
+    default: false
+    }
   }
 
   private func drain() async throws {
