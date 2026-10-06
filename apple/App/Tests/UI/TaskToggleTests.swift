@@ -19,7 +19,7 @@ struct TaskToggleTests {
         #expect(try await services.store.tasks(.done).flatMap(\.tasks).map(\.id) == [stale.id])
 
         try await workspace.toggle(stale)
-        #expect(try await services.store.openTasks().map(\.id) == [stale.id])
+        #expect(try await services.store.tasks(.todo).flatMap(\.tasks).map(\.id) == [stale.id])
         #expect(try await services.store.tasks(.done).flatMap(\.tasks).isEmpty)
     }
 }

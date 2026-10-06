@@ -274,6 +274,12 @@ private struct SessionDetailRow: ViewModifier {
 }
 
 extension Workspace {
+    /// 本机桥上在线的这个 Pi 会话（`sessionID` 是 Pi 自己的会话 id）此刻的状态；不在线为 nil。
+    func liveState(ofSession sessionID: String?) -> PiSessionState? {
+        guard let sessionID, let live = services.pi.sessions.first(where: { $0.sessionID == sessionID }) else { return nil }
+        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id])
+    }
+
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
     func withLiveState(_ session: PiSessionState) -> PiSessionState {
         guard let live = services.pi.sessions.first(where: { $0.sessionID == session.sessionID }) else { return session }
