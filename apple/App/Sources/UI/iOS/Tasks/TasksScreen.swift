@@ -39,7 +39,6 @@ struct TasksScreen: View {
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
                 .padding(.horizontal, 16).padding(.vertical, 8)
         }
-        .bottomEdgeFade()
         .navigationTitle("任务")
         .sheet(item: $editing) { TaskEditSheet(task: $0) }
         #if DEBUG

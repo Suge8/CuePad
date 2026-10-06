@@ -46,7 +46,6 @@ struct TrashScreen: View {
             .listRowBackground(palette.paper)
         }
         .deskBackground()
-        .bottomEdgeFade()
         .navigationTitle("回收站")
         .toolbar {
             if let data, !(data.projects.isEmpty && data.cards.isEmpty) {

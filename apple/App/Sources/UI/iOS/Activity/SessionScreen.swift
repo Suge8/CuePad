@@ -64,7 +64,9 @@ struct SessionScreen: View {
                 }
             }
         }
-        // safeAreaBar 而不是 safeAreaInset：对话滚到回复框下面时有系统的边缘模糊渐隐
+        // 回复框算作底栏（safeAreaBar），滚到它下面的对话有系统边缘效果。这页用 soft 而不是全 App 的 hard：
+        // 问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏，在对话中间画出一道线
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {

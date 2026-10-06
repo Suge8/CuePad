@@ -20,7 +20,7 @@ struct PiConversation: View {
             ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
             if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
             if session.state == .known(.error) {
-                Callout(tint: palette.failure, title: "出错", text: session.detail ?? "Mac 没有说明原因", prominent: false)
+                Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -86,7 +86,7 @@ struct PiQuestionDock: View {
                 QuestionCard(session: session, question: question, deliveries: deliveries).id(question.promptID)
             } else {
                 // 去哪答写在回复框的位置上（各平台不同），这里只放问题
-                Callout(tint: palette.attention, text: session.question?.displayText ?? session.detail ?? "", prominent: true)
+                Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: session.question?.displayText ?? session.detail ?? "", prominent: true)
             }
         }
     }

@@ -32,6 +32,8 @@ struct IOSRootView: View {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
             }
+            // 底部玻璃（标签栏、随手记、回复框）下的内容一律由系统边缘效果盖住：默认的 soft 只淡一点，字仍从玻璃边上透出来
+            .scrollEdgeEffectStyle(.hard, for: .bottom)
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
             .sheet(item: Binding(get: { navigation.captureBars == 0 ? navigation.capture : nil }, set: { navigation.capture = $0 })) {
                 CaptureSheet(capture: $0)

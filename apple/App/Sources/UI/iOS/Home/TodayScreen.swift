@@ -37,7 +37,6 @@ struct TodayScreen: View {
             .animation(Motion.quick, value: data?.cards.map(\.id))
         }
         .background(palette.desk)
-        .bottomEdgeFade(capturePage: true)
         .captureBar()
         // 不带张数副标题：数据晚于推入到达，导航栏在推入后再加一行副标题会让整页跳一下；张数在书架的入口上
         .navigationTitle("今天")

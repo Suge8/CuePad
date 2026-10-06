@@ -67,7 +67,6 @@ struct ActivityScreen: View {
         .defaultScrollAnchor(DebugScene.scene == "activity" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
         #endif
         .background(palette.desk)
-        .bottomEdgeFade()
         .navigationTitle(project.flatMap { workspace.catalog?.project($0)?.name } ?? "Pi")
         .modifier(PiPageChrome(enabled: !inPanel, query: $query))
         .refreshable { await services.syncNow() }

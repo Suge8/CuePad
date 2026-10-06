@@ -191,11 +191,11 @@ struct CaptureComposer: View {
     }
 }
 
-
 extension View {
     /// 内容页（书架、项目、今天）底部浮着的随手记。只挂在这几页上，所以设置、回收站、搜索、任务、Pi 与打开的卡片上都没有它。
     func captureBar() -> some View {
-        safeAreaInset(edge: .bottom, spacing: 0) { FloatingCaptureBar() }
+        // safeAreaBar：随手记算作底栏，滚到它下面的内容由系统的边缘效果盖住（见 IOSRootView）
+        safeAreaBar(edge: .bottom, spacing: 0) { FloatingCaptureBar() }
     }
 }
 

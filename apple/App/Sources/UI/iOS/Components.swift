@@ -121,10 +121,6 @@ extension View {
     /// 主按钮：实心墨色玻璃，字用与墨色相反的颜色（深色模式下墨色是浅的，系统默认的白字会看不见）。
     func prominentButton() -> some View { modifier(ProminentButton()) }
 
-    /// 底部玻璃（标签栏、随手记栏）之下铺实底，之上 48pt 渐隐到桌面色：滚动内容在碰到玻璃前就淡出，玻璃下不叠字。
-    /// iPhone 每页底部都有标签栏；宽 iPad 只有项目页一类（`capturePage`）底部浮着随手记栏，右侧面板里没有玻璃。
-    func bottomEdgeFade(capturePage: Bool = false) -> some View { modifier(BottomEdgeFade(capturePage: capturePage)) }
-
     /// 独占底部的页（卡片纸页、Pi 会话页）：在屏幕上时 iPhone 收起标签栏（见 `Navigation.bottomPages`）。
     func ownsBottomEdge() -> some View { modifier(BottomEdgeOwner()) }
 
@@ -199,35 +195,6 @@ private struct ScalingPickerStyle: ViewModifier {
 
     @ViewBuilder func body(content: Content) -> some View {
         if typeSize.isAccessibilitySize { content.pickerStyle(.menu) } else { content.pickerStyle(.segmented) }
-    }
-}
-
-private struct BottomEdgeFade: ViewModifier {
-    let capturePage: Bool
-    @Environment(Navigation.self) private var navigation
-    @Environment(\.palette) private var palette
-    private static let fade: CGFloat = 48
-
-    @ViewBuilder func body(content: Content) -> some View {
-        if navigation.layout == .tabs || capturePage { faded(content) } else { content }
-    }
-
-    private func faded(_ content: Content) -> some View {
-        content
-            .contentMargins(.bottom, Self.fade, for: .scrollContent)
-            .overlay(alignment: .bottom) {
-                GeometryReader { proxy in
-                    VStack(spacing: 0) {
-                        Spacer(minLength: 0)
-                        LinearGradient(colors: [palette.desk.opacity(0), palette.desk], startPoint: .top, endPoint: .bottom)
-                            .frame(height: Self.fade)
-                        palette.desk.frame(height: proxy.safeAreaInsets.bottom)
-                    }
-                    .ignoresSafeArea(edges: .bottom)
-                }
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
     }
 }
 

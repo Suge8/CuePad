@@ -20,7 +20,6 @@ struct ConflictsScreen: View {
             .animation(Motion.quick, value: services.conflicts.map(\.copy.id))
         }
         .background(palette.desk)
-        .bottomEdgeFade()
         .navigationTitle("两个版本")
     }
 }

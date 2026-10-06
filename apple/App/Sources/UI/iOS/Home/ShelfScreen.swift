@@ -56,7 +56,6 @@ struct ShelfScreen: View {
             if let data { content(data) }
         }
         .background(palette.desk)
-        .bottomEdgeFade(capturePage: true)
         .captureBar()
         // 一张卡都没有时没什么可搜，不挂搜索框与放大镜
         .cardSearch(.all, available: navigation.layout == .tabs && workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true, ready: true)

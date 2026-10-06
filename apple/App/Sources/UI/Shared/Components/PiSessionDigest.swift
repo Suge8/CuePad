@@ -26,29 +26,37 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 }
 
-/// 有色调的提示块：等你确认（注意色，正文放大）、出错（失败色）。
-struct Callout: View {
+/// 对话里的提示块（等你确认的问题、出错）：一张纸，彩色只在行首的状态符号上（等你确认橙色问号、出错红色叹号），
+/// 正文中性；`prominent` 时正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
+struct Callout<Accessory: View>: View {
     let tint: Color
-    /// 标题行；顶上一行已写着同一个状态时不给。
-    var title: String?
+    let symbol: String
     let text: String
-    let prominent: Bool
+    var prominent = false
+    @ViewBuilder var accessory: Accessory
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let title { Text(title).font(.footnote.weight(.semibold)).foregroundStyle(tint) }
-            if !text.isEmpty {
-                Text(text).font(prominent ? .title3.weight(.medium) : .body).foregroundStyle(palette.ink)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: symbol).foregroundStyle(tint).accessibilityHidden(true)
+                Text(text).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
+            .font(prominent ? .title3.weight(.medium) : .body)
+            accessory
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(tint.opacity(palette.highContrast ? 0.8 : 0.3)))
-        .accessibilityElement(children: .combine)
+        .paper(radius: 16)
+        .accessibilityElement(children: Accessory.self == EmptyView.self ? .combine : .contain)
+    }
+}
+
+extension Callout where Accessory == EmptyView {
+    init(tint: Color, symbol: String, text: String, prominent: Bool = false) {
+        self.init(tint: tint, symbol: symbol, text: text, prominent: prominent) { EmptyView() }
     }
 }
 
@@ -74,13 +82,7 @@ struct QuestionCard: View {
     private var failure: String? { writeError ?? (failed ? sent?.resultDetail ?? "没能送达" : nil) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !question.text.isEmpty {
-                // 这一页最醒目的东西
-                Text(question.text).font(.title3.weight(.medium)).foregroundStyle(palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-            }
+        Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: question.text, prominent: true) {
             // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
             controls.disabled(answering || !services.reachesPiHost)
             if !services.reachesPiHost {
@@ -92,12 +94,6 @@ struct QuestionCard: View {
                 Text(failure).font(.footnote).foregroundStyle(palette.failure)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.attention.opacity(palette.dark ? 0.16 : 0.1), in: .rect(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(palette.attention.opacity(palette.highContrast ? 0.8 : 0.3)))
     }
 
     @ViewBuilder private var controls: some View {
@@ -164,8 +160,8 @@ private struct AnswerButtonStyle: ButtonStyle {
             .foregroundStyle(prominent ? palette.onAccent : palette.ink)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            .background(prominent ? palette.accent : palette.paper, in: shape)
-            .overlay { if !prominent { shape.strokeBorder(palette.hair) } }
+            // 纸面卡里的中性按钮：淡底不描边；主选项（确认的"是"）墨色实心
+            .background(prominent ? palette.accent : palette.fill, in: shape)
             .contentShape(shape)
             // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
             .opacity(enabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)

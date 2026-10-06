@@ -52,7 +52,6 @@ struct SettingsScreen: View {
         .frame(maxWidth: sizeClass == .regular ? Self.readableWidth : .infinity)
         .frame(maxWidth: .infinity)
         .deskBackground()
-        .bottomEdgeFade()
         .navigationTitle("设置")
     }
 
