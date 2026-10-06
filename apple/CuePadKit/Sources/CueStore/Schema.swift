@@ -3,7 +3,7 @@ import Foundation
 /// 表分两类。
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、tasks、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings。约束：
+/// projects、cards、tasks、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -19,7 +19,7 @@ import Foundation
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields`，生产环境删不掉字段）。
 enum Schema {
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；比它旧的按 `upgrades` 就地升级；比它新的是更新版本建的库，不打开。
-  static let version = 9
+  static let version = 10
 
   /// `upgrades[i]` 把结构版本 i + 1 升到 i + 2。新库直接用 `create`（已是最新结构）。
   static let upgrades = [
@@ -52,7 +52,18 @@ enum Schema {
     """,
     // 进行中的提问与最近一轮已做完的问答分开
     "ALTER TABLE piSessionStates ADD COLUMN pendingPrompt TEXT;",
+    // 会话的完整对话：一条消息一条记录
+    piMessagesTable,
   ]
+
+  private static let piMessagesTable = """
+    CREATE TABLE piMessages (
+      id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
+      at INTEGER NOT NULL, toolCount INTEGER NOT NULL, roundStartedAt INTEGER, deliveryID TEXT,
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
+    """
 
   /// 项目最近活动（`CueStore.projectOrder`）按项目取各表最晚的时间
   private static let activityIndexes = """
@@ -107,6 +118,8 @@ enum Schema {
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
     CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
     \(activityIndexes)
+
+    \(piMessagesTable)
 
     -- 项目在哪台 Mac 上绑定了代码目录：每个 (projectID, hostID) 一条，只有目录末段名（完整路径在本机表 projectDirectories）。
     CREATE TABLE directoryBindings (

@@ -36,7 +36,9 @@ public enum PiAlert: String, Sendable, CaseIterable {
   case waitingForUser, settled
 }
 
-/// 会话的近况：手机打开会话时看到的"问了什么、答了什么、在等什么"。来自扩展 v4，旧扩展三项都是 nil。
+/// 会话记录上的摘要（列表预览、通知、会话页顶部用）：对话（`PiChatMessage`）的投影，由同一个写者（Mac 读会话文件）
+/// 在写对话的同一事务里写（`CueStore.writePiTranscript`），界面直接读、不和对话对账。`question` 例外：它是 Pi 此刻弹出的
+/// 对话框，不在对话里，来自 Pi 桥。
 public struct PiRecap: Sendable, Equatable {
   /// 最近一轮已做完的问答里你说的那句（单行，至多 500 字符）；与 `lastReply` 成对，在这一轮做完时一起更新。
   public var lastPrompt: String?
@@ -388,6 +390,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case ping
   /// 在 Mac 上开一个新会话（后台托管）；正文是 `PiLaunch`
   case start
+  /// 请 Mac 从会话文件把这个会话的对话补写进来（7 天前活跃过的会话，手机打开时发）；正文是会话 id，不写发送记录
+  case transcript
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。

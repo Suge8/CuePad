@@ -228,8 +228,8 @@ import Testing
   @Test func libraryFromAnotherSchemaVersionIsRefused() throws {
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 10;")
-    #expect(throws: CueStoreError.unsupportedSchemaVersion(10)) { try CueStore(url: url) }
+    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 11;")
+    #expect(throws: CueStoreError.unsupportedSchemaVersion(11)) { try CueStore(url: url) }
   }
 
   /// 已经在用的旧资料库（结构版本 1）打开时逐步升级到最新，数据保留：Pi 会话状态多了文件夹名与近况各列。
@@ -240,7 +240,7 @@ import Testing
       ALTER TABLE piSessionStates DROP COLUMN lastReply; ALTER TABLE piSessionStates DROP COLUMN question;
       ALTER TABLE piSessionStates DROP COLUMN busySince; ALTER TABLE piSessionStates DROP COLUMN launchToken;
       ALTER TABLE piSessionStates DROP COLUMN hosted; ALTER TABLE piSessionStates DROP COLUMN subagents;
-      ALTER TABLE piSessionStates DROP COLUMN pendingPrompt;
+      ALTER TABLE piSessionStates DROP COLUMN pendingPrompt; DROP TABLE piMessages;
       DROP INDEX piSessionStates_state; DROP TABLE directoryBindings;
       ALTER TABLE tasks DROP COLUMN startedAt;
       ALTER TABLE projects ADD COLUMN sortKey TEXT NOT NULL DEFAULT 'V';
@@ -256,6 +256,6 @@ import Testing
     #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name IN \(added)").count == 9)
     #expect(try RawDB(fixture.url).rows("SELECT name FROM sqlite_master WHERE name = 'directoryBindings'").count == 1)
     #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('cards') WHERE name = 'numbering'").isEmpty)
-    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["9"]])
+    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["10"]])
   }
 }

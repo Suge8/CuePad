@@ -172,6 +172,11 @@ final class AppServices {
         uploaded(try await store.requestLaunch(launch, title: title, on: host))
     }
 
+    /// 请会话所在的 Mac 把这个会话的对话补写进来（7 天前活跃过、还没有对话的会话打开时调用），写出后立即上传。
+    func requestTranscript(of session: PiSessionState) async throws -> DeliveryRequest {
+        uploaded(try await store.requestTranscript(of: session))
+    }
+
     /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
     func outcome(of request: UUID) async throws -> DeliveryRequest {
         for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(request) }) {

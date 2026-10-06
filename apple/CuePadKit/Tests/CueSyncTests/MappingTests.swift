@@ -23,6 +23,9 @@ import Testing
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
     try await store.setDirectory("/work/p", for: project.id)
     try await store.publishDirectoryBindings(host: "mac", hostName: "Studio")
+    try await store.writePiTranscript(PiTranscript(
+      sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "e1", seq: 1, role: .user, text: "修好登录", at: .now)],
+      recap: PiRecap(pendingPrompt: "修好登录")))
     return (card, hash)
   }
 

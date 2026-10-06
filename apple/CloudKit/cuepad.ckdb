@@ -129,6 +129,22 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE piMessages (
+        "___recordID"  REFERENCE QUERYABLE,
+        sessionID      STRING,
+        seq            INT64,
+        role           STRING,
+        text           ENCRYPTED STRING,
+        at             INT64,
+        toolCount      INT64,
+        roundStartedAt INT64,
+        deliveryID     STRING,
+        createdAt      INT64,
+        modifiedAt     INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE tags (
         "___recordID" REFERENCE QUERYABLE,
         color         STRING,
