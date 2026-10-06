@@ -220,6 +220,17 @@ final class Navigation {
         push(.session(id))
     }
 
+    /// Agent 页的项目筛选：从项目页进来（`entered`）是该项目，否则是在 Agent 页上次选的（本机偏好）；
+    /// 选中的项目不在项目目录里（进了回收站）时是全部。
+    func agentFilter(entered: UUID?, catalog: ProjectCatalog?) -> UUID? {
+        (entered ?? settings.agentProject).flatMap { catalog?.project($0)?.id }
+    }
+
+    /// 在 Agent 页选了筛选：记下来；从项目页进来的那一页上换的不记。
+    func chooseAgentFilter(_ project: UUID?, entered: UUID?) {
+        if entered == nil { settings.agentProject = project }
+    }
+
     func replyDraft(for session: UUID) -> ComposerDraft {
         replyDrafts[session] ?? ComposerDraft(text: settings.replyText(for: session))
     }

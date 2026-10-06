@@ -23,14 +23,15 @@ struct AgentScreen: View {
 
     private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    /// 此刻的项目筛选；记下的项目进了回收站时是全部。
+    /// 此刻的项目筛选：这一页上点过的，否则按 `Navigation.agentFilter`；项目进了回收站时是全部。
     private var filter: UUID? {
-        (picked ?? project ?? services.settings.agentProject).flatMap { workspace.catalog?.project($0)?.id }
+        guard let picked else { return navigation.agentFilter(entered: project, catalog: workspace.catalog) }
+        return picked.flatMap { workspace.catalog?.project($0)?.id }
     }
 
     private func pick(_ id: UUID?) {
         picked = .some(id)
-        if project == nil { services.settings.agentProject = id }
+        navigation.chooseAgentFilter(id, entered: project)
     }
 
     var body: some View {
