@@ -64,12 +64,29 @@ import Testing
     try await rig.coordinator.reconcile()
     try await rig.simulatePush()  // 带标志的记录已被服务端接受
 
-    try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q2")
 
     let id = try #require(try await rig.store.allPiSessionStates().first).id
     let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
     #expect(record["notify"] == nil && record.encryptedValues["detail"] as? String == "q2")
+  }
+
+  /// 标志上传之后，同一条记录的任何别的改动（如对话摘要在本轮结束时更新）都不能把它再带上去：
+  /// 服务端把每次"仍然匹配"的更新都当成一次新通知。
+  @Test func anUnrelatedWriteAfterUploadDoesNotAlertAgain() async throws {
+    let rig = try Rig()
+    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
+    try await recorder.update(sessionID: "s1", state: .thinking)
+    try await recorder.update(sessionID: "s1", state: .settled)
+    try await rig.coordinator.reconcile()
+    try await rig.simulatePush()  // 带标志的记录已被服务端接受
+
+    try await rig.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "跑测试", lastReply: "全部通过")))
+
+    let id = try #require(try await rig.store.allPiSessionStates().first).id
+    let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
+    #expect(record.encryptedValues["lastReply"] as? String == "全部通过")
+    #expect(record["notify"] == nil)
   }
 
   // MARK: 订阅的形状
@@ -114,13 +131,26 @@ import Testing
     let fake = store()
     let manager = PiAlertSubscriptions(zoneID: zone)
 
-    try await manager.ensure(in: fake)
+    #expect(await manager.ensure(in: fake) == .active)
     #expect(await fake.saved.sorted() == ["cuepad.pi.settled", "cuepad.pi.waiting"])
 
     await fake.resetCounters()
-    try await manager.ensure(in: fake)
+    #expect(await manager.ensure(in: fake) == .active)
     #expect(await fake.saved.isEmpty)
     #expect(await fake.deleted.isEmpty)
+  }
+
+  /// 建立失败不能吞掉：状态带着原因交给界面；之后重试成功即恢复。
+  @Test func aFailedEnsureIsReportedAndTheNextOneRecovers() async {
+    let fake = store()
+    let manager = PiAlertSubscriptions(zoneID: zone)
+
+    await fake.failSaves(with: Boom())
+    #expect(await manager.ensure(in: fake) == .failed("没有网络"))
+
+    await fake.failSaves(with: nil)
+    #expect(await manager.ensure(in: fake) == .active)
+    #expect(await fake.saved.sorted() == ["cuepad.pi.settled", "cuepad.pi.waiting"])
   }
 
   @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAreRemovedButForeignOnesAreLeftAlone() async throws {
@@ -131,7 +161,7 @@ import Testing
     let foreign = CKQuerySubscription(recordType: "other", predicate: NSPredicate(value: true), subscriptionID: "somebody.else", options: [.firesOnRecordCreation])
     let fake = store(preloaded: [drifted, stale, foreign])
 
-    try await manager.ensure(in: fake)
+    #expect(await manager.ensure(in: fake) == .active)
 
     #expect(await fake.saved.sorted() == ["cuepad.pi.settled", "cuepad.pi.waiting"])
     #expect(await fake.deleted == ["cuepad.pi.old"])
@@ -141,10 +171,10 @@ import Testing
   @Test func aNewAccountsEmptyDatabaseGetsTheSubscriptionsAgain() async throws {
     let manager = PiAlertSubscriptions(zoneID: zone)
     let firstAccount = store()
-    try await manager.ensure(in: firstAccount)
+    _ = await manager.ensure(in: firstAccount)
 
     let secondAccount = store()  // 账号切换：新账号的数据库里什么都没有
-    try await manager.ensure(in: secondAccount)
+    _ = await manager.ensure(in: secondAccount)
 
     #expect(await secondAccount.saved.sorted() == ["cuepad.pi.settled", "cuepad.pi.waiting"])
   }
@@ -174,9 +204,12 @@ import Testing
   }
 }
 
+struct Boom: LocalizedError { var errorDescription: String? { "没有网络" } }
+
 /// 记录保存与删除了哪些订阅；模拟一个账号的私有数据库。
 actor FakeSubscriptions: SubscriptionStore {
   private var current: [CKSubscription.ID: CKSubscription]
+  private var saveFailure: (any Error)?
   private(set) var saved: [String] = []
   private(set) var deleted: [String] = []
   var ids: Set<String> { Set(current.keys) }
@@ -184,7 +217,9 @@ actor FakeSubscriptions: SubscriptionStore {
   init(_ preloaded: [CKSubscription]) { current = Dictionary(uniqueKeysWithValues: preloaded.map { ($0.subscriptionID, $0) }) }
 
   func subscriptions() -> [CKSubscription.ID: CKSubscription] { current }
-  func save(_ subscription: CKSubscription) {
+  func failSaves(with error: (any Error)?) { saveFailure = error }
+  func save(_ subscription: CKSubscription) throws {
+    if let saveFailure { throw saveFailure }
     current[subscription.subscriptionID] = subscription
     saved.append(subscription.subscriptionID)
   }

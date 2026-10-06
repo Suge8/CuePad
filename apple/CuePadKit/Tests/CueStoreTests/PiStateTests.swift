@@ -334,6 +334,16 @@ import Testing
     #expect(try await alert() == nil)
   }
 
+  /// 置位的那次写入把标志交还调用方：Mac 据此立即上传这一条，不等引擎几十秒后的自动调度。
+  @Test func theWriteThatFlagsReportsTheAlert() async throws {
+    let recorder = recorder()
+    #expect(try await recorder.update(sessionID: "s1", state: .thinking) == nil)
+    #expect(try await recorder.update(sessionID: "s1", state: .tool, detail: "bash") == nil)  // 合并挂起
+    #expect(try await recorder.update(sessionID: "s1", state: .settled) == .settled)
+    #expect(try await recorder.update(sessionID: "s1", state: .settled, detail: nil, title: "改名") == nil)  // 同状态的后续写入不再报告
+    #expect(try await recorder.update(sessionID: "s1", state: .waitingForUser) == .waitingForUser)
+  }
+
   @Test func settledAfterWaitingOrErrorIsNotFlagged() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking)

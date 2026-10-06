@@ -30,6 +30,10 @@ struct SyncWiringTests {
         await wait { services.syncIssues == [issue] }
         #expect(services.syncIssues == [issue])
 
+        app.sync.emit(SyncState(status: .syncing, issues: [], alerts: .failed("没有网络")))
+        await wait { services.alertSubscription == .failed("没有网络") }
+        #expect(services.alertSubscription == .failed("没有网络"))
+
         app.sync.emit(SyncState(status: .needsDecision(.accountSwitched), issues: [issue]))
         await wait { services.syncStatus == .needsDecision(.accountSwitched) }
         #expect(services.syncStatus == .needsDecision(.accountSwitched))

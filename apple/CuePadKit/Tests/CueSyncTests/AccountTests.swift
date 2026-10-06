@@ -149,9 +149,14 @@ import Testing
     await rig.coordinator.handle(.accountStatus(.noAccount))
     #expect(await updates.next()?.status == .noAccount)
 
+    await rig.coordinator.setAlerts(.failed("没有网络"))
+    #expect(await updates.next()?.alerts == .failed("没有网络"))  // 通知订阅的结果与同步状态走同一条流
+
     // 不改状态的事项与重复的同一失败也要送达：界面据此显示"N 条没能同步的记录"
-    await rig.coordinator.note("订阅没能建立")
-    #expect(await updates.next() == SyncState(status: .noAccount, issues: [SyncIssue(message: "订阅没能建立")]))
+    let future = CKRecord(recordType: "futureType", recordID: CKRecord.ID(recordName: "x", zoneID: testZone))
+    await rig.coordinator.handle(.fetched(modifications: [future], deletions: []))
+    let skipped = try #require(await updates.next())
+    #expect(skipped.status == .noAccount && skipped.issues.count == 1)
     await rig.coordinator.handle(.accountStatus(.available))
     _ = await updates.next()
     await rig.coordinator.handle(.zoneSaveFailed(CKError(.internalError)))
