@@ -1,6 +1,5 @@
 #if os(iOS)
 import CueStore
-import CueText
 import SwiftUI
 
 /// 一个 Pi 会话的对话（Pi 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），聊天式：
@@ -17,7 +16,7 @@ struct SessionScreen: View {
     @State private var digest: SessionDigest?
     /// 最后一次读到的会话记录：记录被删后仍显示它。
     @State private var lastSeen: PiSessionState?
-    @State private var draft: Navigation.Outbox?
+    @State private var draft = ComposerDraft()
     @State private var askedForTranscript = false
 
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
@@ -84,7 +83,7 @@ struct SessionScreen: View {
             }
         }
         .ownsBottomEdge()
-        .onAppear { if draft == nil { draft = navigation.takeDraft(for: id) } }
+        .onAppear { if draft.attachment == nil { draft.attachment = navigation.takeDraft(for: id) } }
         .observing(services.store, SessionDigest.tables, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)
@@ -109,28 +108,22 @@ private struct DigestKey: Equatable {
     var sessionID: String?
 }
 
-/// 回复框：一层玻璃，有内容时右下角出现圆形发送钮。Pi 空闲时直接发；正忙时点它是等它做完再说，长按选马上说。
-/// 等你确认时按问题类型（`MacDelivery.reply`）：文字型问题它就是作答框；选择、确认型收成一行"先在上面作答"，
+/// 回复框：共用的 `Composer`，去处是这个 Pi 会话（＋ 选卡片、相册、拍照；有内容时右下角出现圆形发送钮）。
+/// Pi 空闲时直接发；正忙时点发送钮是等它做完再说，长按选马上说。含图片时也只有这两种（`MacDelivery.reply`）。
+/// 等你确认时按问题类型：文字型问题它就是作答框（只收文字）；选择、确认型收成一行"先在上面作答"，
 /// 这里答不了的写明要在 Mac 上回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
-/// 输入框聚焦或带着卡片时露出要带上的卡片与同步提示。发出后清空，请求马上贴到它上方。同步到不了 Mac 时不能发，写明原因。
+/// 同步到不了 Mac 时不能发，聚焦后写明原因。发出后清空，请求马上贴到对话末尾。
 private struct ReplyBar: View {
     let session: PiSessionState
-    @Binding var draft: Navigation.Outbox?
+    @Binding var draft: ComposerDraft
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var text = ""
     @State private var sending = false
     @State private var sentCount = 0
     @FocusState private var focused: Bool
 
-    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-    private var content: String {
-        [draft?.content, trimmed.nonEmpty].compactMap { $0 }.joined(separator: "\n\n")
-    }
-
-    private var reply: PiReply { MacDelivery.reply(to: session, hasImages: !CardText(content).images.isEmpty) }
+    private var reply: PiReply { MacDelivery.reply(to: session, hasImages: draft.hasImages) }
 
     /// 发消息时可用的方式：第一个是点发送的方式，第二个（忙时的马上说）在长按菜单里。
     private var modes: [DeliveryMode] {
@@ -141,19 +134,24 @@ private struct ReplyBar: View {
         if case .answer(let question) = reply { question } else { nil }
     }
 
+    private var accepts: ComposerKinds { answering == nil ? [.images, .cards] : [] }
     private var reachable: Bool { services.reachesPiHost }
-    private var hasContent: Bool { !(answering == nil ? content : trimmed).isEmpty }
-    private var canSend: Bool { hasContent && reachable && !sending }
+    private var canSend: Bool { !draft.isEmpty(accepting: accepts) && reachable && !sending }
 
-    /// 一层玻璃、单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中；带上的卡片与玻璃同心（`ConcentricRectangle`）。
+    /// 单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中。
     private static let radius: CGFloat = 25
-    private static let inset: CGFloat = 6
 
     var body: some View {
         switch reply {
         case .answerAbove: notice("先在上面作答", systemImage: "arrow.up")
         case .unanswerable: notice("这个问题要在 Mac 上回答", systemImage: "desktopcomputer")
-        case .message, .answer: composer
+        case .message, .answer:
+            Composer(
+                draft: $draft, prompt: placeholder, label: "回复", focus: $focused, accepts: accepts, cardsFrom: session.projectID,
+                header: { if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) } },
+                send: { sendControl }
+            )
+            .sensoryFeedback(.success, trigger: sentCount)
         }
     }
 
@@ -163,32 +161,6 @@ private struct ReplyBar: View {
             .font(.subheadline).foregroundStyle(palette.ink2)
             .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Self.radius, alignment: .leading)
             .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
-    }
-
-    /// 输入框直接写在玻璃上（不再垫一层纸）；发送钮只在有内容时出现。
-    private var composer: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if focused || draft != nil, !reachable {
-                SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12)
-            }
-            if let draft, answering == nil { attachment(draft).padding([.horizontal, .top], Self.inset) }
-            HStack(alignment: .bottom, spacing: 0) {
-                TextField(placeholder, text: $text, axis: .vertical)
-                    .lineLimit(1...5)
-                    .focused($focused)
-                    .accessibilityLabel("回复")
-                    .padding(.leading, 18).padding(.trailing, 8).padding(.vertical, 14)
-                if hasContent {
-                    sendControl.padding(3).transition(.scale(scale: 0.6).combined(with: .opacity))
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .containerShape(.rect(cornerRadius: Self.radius, style: .continuous))
-        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
-        .sensoryFeedback(.success, trigger: sentCount)
-        .animation(Motion.quick, value: focused)
-        .animation(Motion.quick, value: hasContent)
     }
 
     @ViewBuilder private var sendControl: some View {
@@ -224,55 +196,31 @@ private struct ReplyBar: View {
     /// 忙时的提示写明点发送是什么、长按是什么；作答时写明在回答问题。
     private var placeholder: String {
         if answering != nil { return "在这里回答上面的问题" }
-        if draft != nil { return "补一句（可不填）" }
+        if draft.attachment != nil || !draft.images.isEmpty { return "补一句（可不填）" }
         return modes.first == .followUp ? "\(DeliveryMode.followUp.label) · 长按发送可\(DeliveryMode.steer.label)" : "回复 \(session.title)"
     }
 
-    /// 带上的卡片或任务：标题、图片数，可移除。
-    private func attachment(_ outbox: Navigation.Outbox) -> some View {
-        let card = CardText(outbox.content)
-        return HStack(spacing: 10) {
-            Image(systemName: outbox.task == nil ? "rectangle.on.rectangle" : "checklist").foregroundStyle(palette.ink3)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(card.title.nonEmpty ?? "图片").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                if !card.images.isEmpty {
-                    Text("\(card.images.count) 张图片").font(.caption).foregroundStyle(palette.ink3)
-                }
-            }
-            Spacer(minLength: 8)
-            Button("不带了", systemImage: "xmark") { withAnimation(Motion.quick) { draft = nil } }
-                .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
-                .frame(width: 44, height: 44).contentShape(.rect)
-        }
-        .padding(.leading, 12)
-        .background(palette.fill, in: ConcentricRectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
-    }
-
     private func answer() {
-        let value = PiAnswerValue.text(trimmed)
+        let value = PiAnswerValue.text(draft.text.trimmingCharacters(in: .whitespacesAndNewlines))
         guard canSend else { return }
         sending = true
         workspace.attempt {
             defer { sending = false }
             _ = try await services.answer(value, to: session)
-            text = ""
+            draft.text = ""
             focused = false
             sentCount += 1
         }
     }
 
     private func send(_ mode: DeliveryMode) {
-        let content = content, card = draft?.card, task = draft?.task
+        let sent = draft
         guard canSend else { return }
         sending = true
         workspace.attempt {
             defer { sending = false }
-            _ = try await services.requestMacDelivery(content, to: session, mode: mode, card: card, task: task)
-            text = ""
-            draft = nil
+            _ = try await services.requestMacDelivery(sent, to: session, mode: mode)
+            draft = ComposerDraft()
             focused = false
             sentCount += 1
         }

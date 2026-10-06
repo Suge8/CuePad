@@ -14,22 +14,6 @@ struct RowPressStyle: ButtonStyle {
     }
 }
 
-/// 输入框里的圆形发送钮（会话回复框、随手记）（看得见的 36，点得到的 44）：能发时墨色实心，发不出（同步不通、发送中）时淡。
-struct SendGlyph: View {
-    let enabled: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Image(systemName: "arrow.up").font(.body.weight(.semibold))
-            .foregroundStyle(enabled ? palette.onAccent : palette.ink3)
-            .frame(width: 36, height: 36)
-            .background(enabled ? palette.accent : palette.fill, in: .circle)
-            .frame(width: 44, height: 44)
-            .contentShape(.circle)
-            .animation(Motion.quick, value: enabled)
-    }
-}
-
 /// 分段标题：名称 + 可选计数；读屏作为一个标题。
 struct SectionHeader: View {
     let title: String
@@ -62,48 +46,56 @@ nonisolated struct CardEntry: Identifiable, Sendable {
     }
 }
 
-/// 一张卡的纸面行（今天流与搜索结果共用）：可选的项目与时间、标题、摘要，右侧首图。
+/// 一张卡的纸面行（今天流、搜索结果与输入框的卡片选择共用）：可选的项目与时间、标题、摘要，右侧首图。
 struct CardRow: View {
     let entry: CardEntry
     /// 标出所属项目（今天流）；nil 不标（搜索已按项目分组）。
     var project: Project??
     /// 命中的词（空格分隔），每个都标底色。
     var highlight = ""
+    /// 点一下选中这张卡（卡片选择）；nil 时点开卡片，长按是卡片操作。
+    var pick: ((Card) -> Void)?
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
 
     var body: some View {
+        if let pick {
+            Button { pick(entry.card) } label: { row }.buttonStyle(CardPressStyle())
+        } else {
+            NavigationLink(value: Navigation.Route.card(entry.card.id)) { row }
+                .buttonStyle(CardPressStyle())
+                .zoomSource(entry.card.id, in: zoom)
+                .contextMenu { CardActions(card: entry.card) }
+        }
+    }
+
+    private var row: some View {
         let card = entry.card, text = entry.text
-        NavigationLink(value: Navigation.Route.card(card.id)) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 6) {
-                        if let project {
-                            Text(project?.name ?? "未归档")
-                                .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? palette.ink3)
-                        }
-                        Text(DateLabel.short(card.modifiedAt)).foregroundStyle(palette.ink3)
+        return HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    if let project {
+                        Text(project?.name ?? "未归档")
+                            .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? palette.ink3)
                     }
-                    .font(.caption.weight(.medium))
-                    Text(marked(text.title.nonEmpty ?? "空白卡片")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
-                    if !text.preview.isEmpty {
-                        Text(marked(text.preview)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
-                    }
+                    Text(DateLabel.short(card.modifiedAt)).foregroundStyle(palette.ink3)
                 }
-                .multilineTextAlignment(.leading)
-                Spacer(minLength: 0)
-                if let image = text.images.first {
-                    Thumbnail(hash: image, height: 64, radius: 8).frame(width: 80)
+                .font(.caption.weight(.medium))
+                Text(marked(text.title.nonEmpty ?? "空白卡片")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
+                if !text.preview.isEmpty {
+                    Text(marked(text.preview)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
                 }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .paper(radius: 16)
-            .contentShape(.rect(cornerRadius: 16))
+            .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+            if let image = text.images.first {
+                Thumbnail(hash: image, height: 64, radius: 8).frame(width: 80)
+            }
         }
-        .buttonStyle(CardPressStyle())
-        .zoomSource(card.id, in: zoom)
-        .contextMenu { CardActions(card: card) }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paper(radius: 16)
+        .contentShape(.rect(cornerRadius: 16))
     }
 
     /// 变量照常标色，搜索词再叠一层命中底色。

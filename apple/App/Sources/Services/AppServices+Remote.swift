@@ -138,7 +138,10 @@ extension AppServices {
         guard let pi = await locatePi() else { throw SendError.piNotInstalled }
         let id = try await host.open(in: directory, launchToken: launch.token, executable: pi)
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
-            try await channels.send(PiMessage(text: opening, deliveryID: request.uuidString), to: id)
+            // 开场的话是存储格式（可带卡片里的图片）
+            let content = SendContent(stored: opening)
+            let text = content.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+            try await channels.send(PiMessage(text: text, images: try piImages(in: content), deliveryID: request.uuidString), to: id)
         }
     }
 
@@ -197,15 +200,19 @@ extension AppServices {
         case .followUp: whenBusy = .followUp
         case .answer, .ping, .start, .transcript: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
         }
-        let images = try content.segments.compactMap { segment -> PiImage? in
+        try await channels.send(
+            PiMessage(text: content.plainText, images: try piImages(in: content), whenBusy: whenBusy, deliveryID: request.uuidString), to: id)
+        return session.target
+    }
+
+    /// 正文里的图片按原顺序取原图与类型，交给 Pi 自行缩放。
+    private func piImages(in content: SendContent) throws -> [PiImage] {
+        try content.segments.compactMap { segment -> PiImage? in
             guard case .image(let hash) = segment else { return nil }
             let data = try imageData(hash)
             guard let mimeType = ImageFiles.mimeType(of: data) else { throw SendError.imageUnavailable(hash) }
             return PiImage(mimeType: mimeType, data: data)
         }
-        try await channels.send(
-            PiMessage(text: content.plainText, images: images, whenBusy: whenBusy, deliveryID: request.uuidString), to: id)
-        return session.target
     }
 }
 

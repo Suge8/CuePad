@@ -14,10 +14,11 @@ struct NewSessionSheet: View {
     @Environment(\.palette) private var palette
     @State private var places: [LaunchPlace]?
     @State private var choice: LaunchPlace.ID?
-    @State private var prompt = ""
+    @State private var draft = ComposerDraft()
     @State private var launched: Navigation.NewSession.Launched?
     @State private var progress: LaunchProgress?
     @State private var sending = false
+    @FocusState private var focused: Bool
 
     /// 项目按所有项目选择器的同一个顺序（`ProjectCatalog.projects`）。
     private var projectOrder: [Project] { workspace.catalog?.projects ?? [] }
@@ -25,6 +26,7 @@ struct NewSessionSheet: View {
     /// 发出且还没失败：表单锁住，等它开好。
     private var inFlight: Bool { sending || (launched != nil && progress?.request?.status != .known(.failed)) }
     private var canStart: Bool { chosen != nil && services.reachesPiHost && !inFlight }
+    private var showsComposer: Bool { !inFlight && places?.isEmpty == false }
 
     var body: some View {
         NavigationStack {
@@ -52,6 +54,15 @@ struct NewSessionSheet: View {
                 }
             }
         }
+        .safeAreaBar(edge: .bottom, spacing: 0) {
+            if showsComposer {
+                // 开场的话与回复框是同一个输入框：只是没有发送钮，开始在右上角
+                Composer(draft: $draft, prompt: "开场的话（可不填）", label: "开场的话", focus: $focused, cardsFrom: chosen?.project?.id) {
+                    EmptyView()
+                }
+                .padding(.horizontal, 12).padding(.bottom, 8)
+            }
+        }
         .interactiveDismissDisabled(inFlight)
         .onAppear { if launched == nil { launched = start.launched } }
         .observing(services.store, [.directoryBindings, .piSessionStates], id: projectOrder, into: $places, onError: workspace.fail) {
@@ -70,18 +81,14 @@ struct NewSessionSheet: View {
     }
 
     @ViewBuilder private func form(_ places: [LaunchPlace]) -> some View {
-        Section("在哪开") {
-            ForEach(places) { place in row(place) }
-        }
-        .disabled(inFlight)
         Section {
-            TextField("开场的话（可不填）", text: $prompt, axis: .vertical)
-                .lineLimit(2...6)
-                .disabled(inFlight)
-                .listRowBackground(palette.paper)
+            ForEach(places) { place in row(place) }
+        } header: {
+            Text("在哪开")
         } footer: {
             footer
         }
+        .disabled(inFlight)
     }
 
     private func row(_ place: LaunchPlace) -> some View {
@@ -118,7 +125,8 @@ struct NewSessionSheet: View {
                     DeliveryStatusLabel(request: request)
                 }
                 if let opening = request.launch?.prompt {
-                    Text(opening).font(.body).foregroundStyle(palette.ink2)
+                    Text(SendContent(stored: opening).plainText.trimmingCharacters(in: .whitespacesAndNewlines))
+                        .font(.body).foregroundStyle(palette.ink2).lineLimit(4)
                 }
                 Text(request.status == .known(.succeeded) ? "Mac 正在开 Pi，会话出现后自动进入" : "等 Mac 收到…")
                     .font(.footnote).foregroundStyle(palette.ink3)
@@ -142,10 +150,11 @@ struct NewSessionSheet: View {
     private func launch() {
         guard let place = chosen, canStart else { return }
         let token = UUID().uuidString
-        let opening = prompt.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        let draft = draft
         sending = true
         workspace.attempt {
             defer { sending = false }
+            let opening = try draft.stored(in: services.store.files).nonEmpty
             let request = try await services.launch(PiLaunch(place: place.launch, prompt: opening, token: token), title: place.name, on: place.hostID)
             launched = .init(request: request.id, token: token)
         }

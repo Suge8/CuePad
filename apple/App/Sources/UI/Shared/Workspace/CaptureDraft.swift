@@ -51,15 +51,20 @@ struct CaptureDraft {
         }
         switch kind {
         case .idea:
-            let files = workspace.services.store.files
-            let hashes = try images.map { try files.store($0) }
-            let body = [trimmed, hashes.map { CueFormat.imageMarkup(id: $0) }.joined(separator: "\n")]
-                .filter { !$0.isEmpty }.joined(separator: "\n\n")
+            let files = store.files
+            let body = StoredBody.make(text: text, imageHashes: try images.map { try files.store($0) })
             let card = try await workspace.createCard(body: body, in: project)
             workspace.say(CaptureCopy.saved(to: try await destination(card.projectID)), link: .project(card.projectID))
         case .task:
             let task = try await workspace.createTask(trimmed, in: project)
             workspace.say(CaptureCopy.saved(to: try await destination(task.projectID)), link: .tasks(task.projectID))
         }
+    }
+}
+
+extension Workspace {
+    /// Pi 的一条回答存为卡片：进该会话所属项目，没有项目进未归档；提示落点，点它过去。
+    func saveReply(_ text: String, of session: PiSessionState) async throws {
+        try await CaptureDraft(text: text, images: [], kind: .idea).save(in: session.projectID, workspace: self)
     }
 }

@@ -15,7 +15,7 @@ struct PiConversation: View {
     var body: some View {
         LazyVStack(alignment: .leading, spacing: 18) {
             ForEach(PiChat.entries(messages)) { entry in
-                if entry.isUser { UserBubble(text: entry.text) } else { ReplyBlock(text: entry.text, meta: entry.meta) }
+                if entry.isUser { UserBubble(text: entry.text) } else { ReplyBlock(text: entry.text, meta: entry.meta, session: session) }
             }
             ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
             if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
@@ -110,10 +110,12 @@ private struct UserBubble: View {
     }
 }
 
-/// Pi 的一轮回答：上方一行弱化的经过，下面全宽 Markdown，长也直接全显。
+/// Pi 的一轮回答：上方一行弱化的经过，下面全宽 Markdown，长也直接全显；长按（Mac 右键）可以存为卡片，进会话所属的项目。
 private struct ReplyBlock: View {
     let text: String
     let meta: String?
+    let session: PiSessionState
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -122,6 +124,9 @@ private struct ReplyBlock: View {
             MarkdownText(source: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contextMenu {
+            Button("存为卡片", systemImage: "square.and.arrow.down") { workspace.attempt { try await workspace.saveReply(text, of: session) } }
+        }
         .transition(.opacity)
     }
 }
