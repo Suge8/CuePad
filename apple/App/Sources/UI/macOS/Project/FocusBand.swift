@@ -3,7 +3,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 目标与下一步：目标卡 + 本项目未完成任务 + 本项目的 Pi 会话。没有目标卡时不显示目标一栏。
+/// 目标与任务：目标卡 + 本项目任务（"任务 完成数/总数"，没完成的进行中在前）+ 本项目的 Pi 会话。没有目标卡时不显示目标一栏。
 struct FocusBand: View {
     let data: ProjectPageData
     @Environment(Workspace.self) private var workspace
@@ -61,8 +61,10 @@ struct FocusBand: View {
     }
 
     @ViewBuilder private var tasks: some View {
-        SectionLabel(text: "下一步 · \(data.tasks.count)", systemImage: "checklist")
-        ForEach(data.tasks.prefix(Self.visibleTasks)) { task in TaskRow(task: task, compact: true) }
+        SectionLabel(text: data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist")
+        ForEach(data.tasks.prefix(Self.visibleTasks)) { task in
+            TaskRow(task: task, session: workspace.liveState(ofSession: task.piSessionID), compact: true)
+        }
         if data.tasks.count > Self.visibleTasks {
             Button("还有 \(data.tasks.count - Self.visibleTasks) 条") { workspace.overlay = .tasks }
                 .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(palette.ink3)
@@ -105,7 +107,7 @@ private struct PiColumn: View {
     }
 }
 
-/// 下滚后收成的一行：目标（有才显示）· 下一步数 · Pi 状态；点一下回到顶部。
+/// 下滚后收成的一行：目标（有才显示）· 任务完成数/总数 · Pi 状态；点一下回到顶部。
 struct CompactFocus: View {
     let data: ProjectPageData
     let scrollToTop: () -> Void
@@ -118,7 +120,7 @@ struct CompactFocus: View {
         Button(action: scrollToTop) {
             HStack(spacing: 14) {
                 if let goal { Label(goal, systemImage: "scope").lineLimit(1) }
-                Label("下一步 \(data.tasks.count)", systemImage: "checklist").foregroundStyle(palette.ink2)
+                Label(data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist").foregroundStyle(palette.ink2)
                 if let session {
                     HStack(spacing: 6) {
                         PiStateDot(state: session.state.work, size: 5)

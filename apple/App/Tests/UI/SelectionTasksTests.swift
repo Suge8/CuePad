@@ -15,7 +15,7 @@ struct SelectionTasksTests {
         let count = try await workspace.addTasks(fromSelection: "- 写发布说明\n\n- 更新截图", in: project.id)
 
         #expect(count == 2)
-        let tasks = try await rig.services.store.openTasks()
+        let tasks = try await rig.services.store.tasks(.todo).flatMap(\.tasks)
         #expect(tasks.map(\.content) == ["写发布说明", "更新截图"])
         #expect(tasks.allSatisfy { $0.projectID == project.id })
     }
