@@ -193,6 +193,14 @@ struct PiClockTests {
         #expect(PiClock.duration(42) == "42 秒")
         #expect(PiClock.duration(4 * 60 + 59) == "4 分")
         #expect(PiClock.duration(2 * 3600 + 5 * 60 + 30) == "2 时 5 分")
+        #expect(PiClock.duration(3 * 3600 + 40) == "3 时")
+    }
+
+    @Test func 超过一天的多久前写昨天或N天前() {
+        let calendar = WallTests.calendar
+        let ended = WallTests.date(2026, 10, 5, hour: 22)
+        #expect(PiClock.ago(ended).text(now: WallTests.date(2026, 10, 6, hour: 23), calendar: calendar) == "昨天")
+        #expect(PiClock.ago(ended).text(now: WallTests.date(2026, 10, 9, hour: 9), calendar: calendar) == "4 天前")
     }
 
     @Test func 计时文字_已运行_已等_多久前用同一个时长格式() {
