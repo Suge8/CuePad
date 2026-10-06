@@ -96,7 +96,7 @@ struct RouteView: View {
         case .agent: AgentScreen().countsAsPiViewer()
         case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
-        case .session(let id): SessionScreen(id: id).countsAsPiViewer()
+        case .session(let id): SessionScreen(id: id).countsAsPiViewer(session: id)
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))

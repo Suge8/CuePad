@@ -1,5 +1,6 @@
 #if os(iOS) && DEBUG
 import CueStore
+import CueSync
 import SwiftUI
 import UIKit
 
@@ -145,6 +146,20 @@ extension DebugScene {
                 }
         default:
             break
+        }
+    }
+
+    /// `-CuePadAlertStatus <on|pending|denied|undetermined|registerFailed|subscribeFailed>`：设置页"Pi 通知"一行按这个状态显示
+    /// （演示模式没有同步引擎、真实状态出不来）。
+    static var alertStatus: PiAlertStatus? {
+        switch defaults.string(forKey: "CuePadAlertStatus") {
+        case "on": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .active)
+        case "pending": PiAlertStatus(authorization: .authorized, registration: .pending, subscription: .off)
+        case "denied": PiAlertStatus(authorization: .denied, registration: .pending, subscription: .off)
+        case "undetermined": PiAlertStatus(authorization: .notDetermined, registration: .pending, subscription: .off)
+        case "registerFailed": PiAlertStatus(authorization: .authorized, registration: .failed("没有连接到 Apple 推送服务"), subscription: .off)
+        case "subscribeFailed": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .failed("iCloud 账号不可用"))
+        default: nil
         }
     }
 

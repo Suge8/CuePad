@@ -27,7 +27,7 @@ struct SettingsScreen: View {
                     }
                 }
                 SyncSection()
-                if services.sync != nil { AlertSection() }
+                if services.sync != nil || Self.previewsAlerts { AlertSection() }
                 if !services.conflicts.isEmpty {
                     Section {
                         NavigationLink(value: Navigation.Route.conflicts) {
@@ -56,6 +56,15 @@ struct SettingsScreen: View {
         .navigationTitle("设置")
     }
 
+    /// 演示模式没有同步引擎：调试参数要看"Pi 通知"各状态时照样显示这一节。
+    private static var previewsAlerts: Bool {
+        #if DEBUG
+        DebugScene.alertStatus != nil
+        #else
+        false
+        #endif
+    }
+
     private static var version: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "?"
@@ -72,8 +81,13 @@ private struct AlertSection: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        let status = PiAlertStatus(
+        let live = PiAlertStatus(
             authorization: alerts.authorization, registration: alerts.registration, subscription: services.alertSubscription)
+        #if DEBUG
+        let status = DebugScene.alertStatus ?? live
+        #else
+        let status = live
+        #endif
         Section {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
@@ -81,7 +95,7 @@ private struct AlertSection: View {
                     if let detail = status.detail { Text(detail).font(.footnote).foregroundStyle(palette.ink3) }
                 }
             } icon: {
-                Image(systemName: status.state == .on ? "bell.badge" : "bell.slash")
+                Image(systemName: status.state == .on ? "bell.badge" : status.state == .pending ? "bell" : "bell.slash")
                     .foregroundStyle(status.state == .problem ? palette.attention : palette.ink2)
             }
             switch status.action {
