@@ -313,6 +313,24 @@ struct MacSyncTests {
         #expect(rig.channels.calls == [.send(PiMessage(text: "看看测试为什么挂", deliveryID: done.id.uuidString), "new-tok-1.900")])
     }
 
+    /// 开场的话里挑了带图片的卡片：图片按原图随第一条消息送达，不把存储格式的引用当文字发出去。
+    @Test func 新会话_开场的话带卡片里的图片_原图随第一条消息送入() async throws {
+        let directory = try folder("proj")
+        let project = try await services.store.createProject(name: "App", color: "#000000")
+        try await services.store.setDirectory(directory.path, for: project.id)
+        let png = pngData()
+        let hash = try services.store.files.store(png)
+        defer { services.cancelBackgroundWork() }
+
+        let done = try await launched(
+            PiLaunch(place: .project(project.id), prompt: "看这张设计稿\n\n![](cuepad://img/\(hash))", token: "tok-5"), title: "App")
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.channels.calls == [
+            .send(PiMessage(text: "看这张设计稿", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: done.id.uuidString), "new-tok-5.900")
+        ])
+    }
+
     @Test func 新会话_与某会话同目录_没有开场的话就不发_项目没有目录时失败() async throws {
         let other = try folder("other")
         _ = try await indexed("s1", cwd: other)
