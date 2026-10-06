@@ -8,9 +8,10 @@ import Testing
 @Suite struct ZoneChangePullerTests {
   let rig = try! Rig()
 
-  /// 按顺序回放的数据库替身：记下每次被要的令牌与是否只要 ID。
+  /// 按顺序回放的数据库替身：记下每次被要的令牌与要哪些字段（nil：整条），以及每次按 ID 取了哪些记录。
   actor FakeZone: ZoneChangeSource {
-    private(set) var calls: [(token: Data?, idsOnly: Bool)] = []
+    private(set) var calls: [(token: Data?, keys: [String]?)] = []
+    private(set) var fetches: [[CKRecord.ID]] = []
     private var responses: [Result<ZoneChangeBatch, any Error>]
     /// 按 ID 取整条记录时的服务器内容。
     var server: [CKRecord.ID: CKRecord] = [:]
@@ -20,12 +21,15 @@ import Testing
       self.server = Dictionary(uniqueKeysWithValues: server.map { ($0.recordID, $0) })
     }
 
-    func changes(since token: Data?, idsOnly: Bool) async throws -> ZoneChangeBatch {
-      calls.append((token, idsOnly))
+    func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+      calls.append((token, keys))
       return try responses.removeFirst().get()
     }
 
-    func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { ids.compactMap { server[$0] } }
+    func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] {
+      fetches.append(ids)
+      return ids.compactMap { server[$0] }
+    }
   }
 
   private func batch(_ token: String, _ records: [CKRecord] = []) -> Result<ZoneChangeBatch, any Error> {
@@ -47,7 +51,7 @@ import Testing
     try await puller.pull()
 
     let calls = await zone.calls
-    #expect(calls.map(\.idsOnly) == [true, false, false])
+    #expect(calls.map { $0.keys == nil } == [false, true, true])
     #expect(calls.map { $0.token.map { String(decoding: $0, as: UTF8.self) } } == [nil, "t1", "t2"])
     #expect(try await rig.store.card(new)?.body == "之后的新卡")
     #expect(try await rig.store.card(old) == nil)  // 只要 ID 时拿到的记录没有字段，不交给协调器
@@ -100,7 +104,7 @@ import Testing
     try await puller.pull()
 
     let calls = await zone.calls
-    #expect(calls.map(\.idsOnly) == [true, false, true, false])
+    #expect(calls.map { $0.keys == nil } == [false, true, false, true])
     #expect(calls.last?.token.map { String(decoding: $0, as: UTF8.self) } == "t5")
     #expect(try await rig.store.card(id)?.body == "令牌过期后拉到的")
   }
@@ -117,5 +121,46 @@ import Testing
     #expect(try await rig.store.card(id) == once)
     #expect(try await rig.store.conflicts().isEmpty)
     #expect(await rig.queue.saves == pending)
+  }
+
+  // MARK: 取令牌时只补取要追的
+
+  private func piState(_ sessionID: String, state: String, modifiedAt: Int64) -> CKRecord {
+    remoteRecord(.piSessionStates, id: PiSessionState.recordID(sessionID: sessionID), [
+      "sessionID": .text(sessionID), "hostID": .text("mac-a"), "title": .text(sessionID), "projectID": .null,
+      "state": .text(state), "detail": .null, "stateSince": .int(1_000), "createdAt": .int(1_000),
+      "modifiedAt": .int(modifiedAt), "notify": .null, "folder": .null, "lastPrompt": .null, "lastReply": .null,
+      "question": .null, "busySince": .null,
+    ])
+  }
+
+  /// 取令牌时那一遍只带版本与状态（`modifiedAt`、`state`），不带正文。
+  private func versionOnly(_ full: CKRecord) -> CKRecord {
+    let record = CKRecord(recordType: full.recordType, recordID: full.recordID)
+    for key in ZoneChangePuller.versionKeys { record[key] = full[key] }
+    return record
+  }
+
+  /// 几千条 Pi 会话（大多是已同步的历史）时取令牌：已同步且没变的不重取，本地没有的已结束会话不追（引擎会带来），
+  /// 只补取本地没有的未结束会话与服务器上更新了的；按 ID 取每次不超过 400 条（CloudKit 单次请求上限）。
+  @Test func takingATokenFetchesOnlyMissingLiveOrNewerRecordsInRequestsOfAtMost400() async throws {
+    let synced = (0..<2_000).map { piState("synced-\($0)", state: "ended", modifiedAt: 1_000) }
+    await rig.coordinator.handle(.fetched(modifications: synced, deletions: []))
+    let unchanged = synced[10...].map(versionOnly)
+    let newer = synced[..<10].map { piState($0["sessionID"] as! String, state: "thinking", modifiedAt: 2_000) }
+    let missingLive = (0..<450).map { piState("live-\($0)", state: "thinking", modifiedAt: 3_000) }
+    let missingEnded = (0..<600).map { piState("ended-\($0)", state: "ended", modifiedAt: 3_000) }
+    let seen = unchanged + (newer + missingLive + missingEnded).map(versionOnly)
+    let zone = FakeZone(
+      [.success(ZoneChangeBatch(modifications: seen, deletions: [], token: Data("t1".utf8), moreComing: false)), batch("t2")],
+      server: newer + missingLive + missingEnded)
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
+
+    try await puller.pull()
+
+    let fetches = await zone.fetches
+    #expect(fetches.allSatisfy { $0.count <= 400 })
+    #expect(Set(fetches.joined()) == Set((newer + missingLive).map(\.recordID)))
+    #expect(try await rig.store.allPiSessionStates().count == 2_000 + 450)
   }
 }
