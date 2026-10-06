@@ -45,6 +45,8 @@ final class AppServices {
     @ObservationIgnored let sync: (any SyncControlling)?
     private(set) var syncStatus: SyncStatus
     private(set) var syncIssues: [SyncIssue] = []
+    /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）；设置页与权限、注册状态一起显示。
+    private(set) var alertSubscription: PiAlertSubscriptionStatus = .off
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
     private(set) var conflicts: [CardConflict] = []
 
@@ -143,14 +145,14 @@ final class AppServices {
         return request
     }
 
-    /// 立即只上传这一条投送请求，不等引擎的自动调度（几秒到几十秒）：手机写出请求、Mac 写回结果后都调用。
-    /// 失败只记日志，引擎会照常重试。返回时这一条已经传完（或失败）。
-    func upload(_ request: DeliveryRequest.ID) async {
+    /// 立即只上传这一条记录，不等引擎的自动调度（几秒到几十秒）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的
+    /// 会话状态后都调用。失败只记日志，引擎会照常重试。返回时这一条已经传完（或失败）。
+    func upload(_ record: UUID) async {
         guard let sync else { return }
         do {
-            try await sync.sendNow(recordName: request.uuidString.lowercased())
+            try await sync.sendNow(recordName: record.uuidString.lowercased())
         } catch {
-            Self.log.notice("立即上传投送请求失败，等引擎自动上传：\(String(describing: error), privacy: .public)")
+            Self.log.notice("立即上传记录失败，等引擎自动上传：\(String(describing: error), privacy: .public)")
         }
     }
 
@@ -309,6 +311,7 @@ final class AppServices {
     func setSyncState(_ state: SyncState) {
         syncStatus = state.status
         syncIssues = state.issues
+        alertSubscription = state.alerts
     }
 
     func setConflicts(_ conflicts: [CardConflict]) {

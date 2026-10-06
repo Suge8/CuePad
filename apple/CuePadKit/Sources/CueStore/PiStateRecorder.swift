@@ -59,10 +59,7 @@ extension CueStore {
         ON CONFLICT(id) DO UPDATE SET \(assignments),
           notify = CASE
             WHEN excluded.notify IS NOT NULL THEN excluded.notify
-            WHEN piSessionStates.notify IS NOT NULL AND piSessionStates.state = excluded.state AND (
-              NOT EXISTS (SELECT 1 FROM syncRecords s WHERE s.recordName = piSessionStates.id)
-              OR piSessionStates.modifiedAt > (SELECT s.pushedModifiedAt FROM syncRecords s WHERE s.recordName = piSessionStates.id))
-            THEN piSessionStates.notify
+            WHEN piSessionStates.notify IS NOT NULL AND piSessionStates.state = excluded.state THEN piSessionStates.notify
           END
         """, record.bindings)
     }
@@ -140,11 +137,13 @@ public actor PiStateRecorder {
     self.timing = timing
   }
 
+  /// 返回这次写入置位的通知标志（没有置位为 nil）：调用方据此立即上传这一条，通知不等引擎的自动调度。
+  @discardableResult
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,
     projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, launchToken: String? = nil, hosted: Bool? = nil,
     subagents: [PiSubagentState]? = nil
-  ) async throws {
+  ) async throws -> PiAlert? {
     var session = sessions[sessionID] ?? Session()
     let previous = session.observed
     session.observed = state
@@ -165,7 +164,7 @@ public actor PiStateRecorder {
     if content == session.written {
       cancelPending(&session)
       sessions[sessionID] = session
-      return
+      return nil
     }
     let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
     let renamed = session.written.map {
@@ -183,15 +182,17 @@ public actor PiStateRecorder {
         }
       }
       sessions[sessionID] = session
-      return
+      return nil
     }
     cancelPending(&session)
-    let write = commit(sessionID, &session, content, notify: Self.alert(entering: state, from: previous), at: now)
+    let alert = Self.alert(entering: state, from: previous)
+    let write = commit(sessionID, &session, content, notify: alert, at: now)
     sessions[sessionID] = session
     do { try await persist(write) } catch {
       forgetWritten(sessionID, content)
       throw error
     }
+    return alert
   }
 
   /// 会话结束：记录标为已结束。
@@ -229,9 +230,10 @@ public actor PiStateRecorder {
 
   /// 手机通知只发两种转换：进入等你确认；从工作中进入完成。首次看到的会话（没有上一个状态）不通知，
   /// 这样重启后重新登记已有会话不会把旧事件再推一遍。
-  /// 标志置位后，同一状态下的后续写入（如仍在等、只换了问题文本）在标志上传之前沿用它（见 `writePiState`），
-  /// 上传之后的同状态写入不再带标志，订阅不会为同一次等待重复通知。状态一旦前进（如用户答完回到思考中），
-  /// 未上传的标志随之作废——已恢复工作的会话不该再提示"等你确认"。会话结束（`end`）清掉标志，未上传的也不再通知。
+  /// 标志是一次性事件，只存在于未上传的版本上：置位后，同一状态下的后续写入（如仍在等、只换了问题文本）在上传之前
+  /// 沿用它（见 `writePiState`）；服务端接受上传即清掉（`CueStore.markPushed`），此后本机的任何改动都不会再带上，
+  /// 订阅不会为同一次等待重复通知。状态一旦前进（如用户答完回到思考中），未上传的标志随之作废——已恢复工作的会话
+  /// 不该再提示"等你确认"。会话结束（`end`）清掉标志，未上传的也不再通知。
   private static func alert(entering state: PiWorkState, from previous: PiWorkState?) -> PiAlert? {
     guard let previous else { return nil }
     if state == .waitingForUser, previous != .waitingForUser { return .waitingForUser }

@@ -42,13 +42,18 @@ extension AppServices {
 
     private func recordPiState(of session: CuePi.PiSession) async throws {
         let (state, detail) = session.syncRepresentation
-        try await piStateRecorder.update(
+        let alert = try await piStateRecorder.update(
             sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
             folder: session.cwd.lastPathComponent,
             projectID: try await store.project(containing: session.cwd)?.id,
             question: session.question.map(PiQuestion.init),
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
             hosted: session.hosted, subagents: session.subagentStates)
+        // 带通知标志的写入立即上传（不阻塞后面的会话变化）：通知等引擎自动调度要几十秒，期间状态还可能前进而把它作废
+        if alert != nil {
+            let record = PiSessionState.recordID(sessionID: session.sessionID)
+            Task { await upload(record) }
+        }
     }
 
     // MARK: 投送请求（手机发来的与本机界面写的）

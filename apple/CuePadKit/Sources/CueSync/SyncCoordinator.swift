@@ -108,8 +108,8 @@ actor SyncCoordinator {
     }
   }
 
-  /// 记一条不影响状态的事项（如订阅创建失败，下次启动或账号变化时会重试）。
-  func note(_ message: String) { report(message, recordType: nil, recordName: nil) }
+  var alertSubscription: PiAlertSubscriptionStatus { state.alerts }
+  func setAlerts(_ alerts: PiAlertSubscriptionStatus) { state.alerts = alerts }
 
   func savedEngineState() async throws -> Data? { try await store.engineState() }
 

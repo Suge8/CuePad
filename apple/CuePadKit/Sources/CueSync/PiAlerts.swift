@@ -94,14 +94,19 @@ struct PiAlertSubscriptions {
   }
 
   /// 幂等：缺的创建，与期望不一致的替换，本前缀下多余的删除，别人的订阅不碰。
-  /// 账号切换后新账号的数据库里没有这些订阅，再调用一次即重建。
-  func ensure(in store: any SubscriptionStore) async throws {
-    let existing = try await store.subscriptions()
-    let wanted = desired()
-    let wantedIDs = Set(wanted.map(\.subscriptionID))
-    for id in existing.keys where id.hasPrefix(Self.prefix) && !wantedIDs.contains(id) { try await store.delete(id) }
-    for subscription in wanted where !Self.matches(existing[subscription.subscriptionID], subscription) {
-      try await store.save(subscription)
+  /// 账号切换后新账号的数据库里没有这些订阅，再调用一次即重建。失败不抛：结果就是状态，原因交给界面。
+  func ensure(in store: any SubscriptionStore) async -> PiAlertSubscriptionStatus {
+    do {
+      let existing = try await store.subscriptions()
+      let wanted = desired()
+      let wantedIDs = Set(wanted.map(\.subscriptionID))
+      for id in existing.keys where id.hasPrefix(Self.prefix) && !wantedIDs.contains(id) { try await store.delete(id) }
+      for subscription in wanted where !Self.matches(existing[subscription.subscriptionID], subscription) {
+        try await store.save(subscription)
+      }
+      return .active
+    } catch {
+      return .failed(error.localizedDescription)
     }
   }
 

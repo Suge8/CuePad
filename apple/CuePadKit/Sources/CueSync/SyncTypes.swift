@@ -66,14 +66,25 @@ public struct SyncIssue: Equatable, Sendable {
   }
 }
 
+/// Pi 锁屏通知的服务端订阅（只有 iOS 建立）是否就绪。
+public enum PiAlertSubscriptionStatus: Equatable, Sendable {
+  /// 这台设备不建立订阅（Mac），或还没尝试。
+  case off
+  case active
+  /// 没能建立（原因给用户看）；每次回到前台、账号变化时重试。
+  case failed(String)
+}
+
 /// 界面订阅的同步快照：状态与最近的问题一起给出，任一变化都送达。
 public struct SyncState: Equatable, Sendable {
   public var status: SyncStatus
   public var issues: [SyncIssue]
+  public var alerts: PiAlertSubscriptionStatus
 
-  public init(status: SyncStatus, issues: [SyncIssue]) {
+  public init(status: SyncStatus, issues: [SyncIssue], alerts: PiAlertSubscriptionStatus = .off) {
     self.status = status
     self.issues = issues
+    self.alerts = alerts
   }
 }
 

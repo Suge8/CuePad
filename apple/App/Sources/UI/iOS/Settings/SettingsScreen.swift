@@ -27,6 +27,7 @@ struct SettingsScreen: View {
                     }
                 }
                 SyncSection()
+                if services.sync != nil { AlertSection() }
                 if !services.conflicts.isEmpty {
                     Section {
                         NavigationLink(value: Navigation.Route.conflicts) {
@@ -60,6 +61,42 @@ struct SettingsScreen: View {
         let short = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
         return "\(short)（\(build)）"
+    }
+}
+
+/// Pi 通知：一行状态（权限、推送注册、服务端订阅哪一步不通就写哪一步），能在这里解决的给按钮。
+private struct AlertSection: View {
+    @Environment(AppServices.self) private var services
+    @Environment(PiAlertCenter.self) private var alerts
+    @Environment(\.palette) private var palette
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        let status = PiAlertStatus(
+            authorization: alerts.authorization, registration: alerts.registration, subscription: services.alertSubscription)
+        Section {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(status.title)
+                    if let detail = status.detail { Text(detail).font(.footnote).foregroundStyle(palette.ink3) }
+                }
+            } icon: {
+                Image(systemName: status.state == .on ? "bell.badge" : "bell.slash")
+                    .foregroundStyle(status.state == .problem ? palette.attention : palette.ink2)
+            }
+            switch status.action {
+            case .openSettings:
+                Button("打开系统通知设置", systemImage: "gearshape") {
+                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                }
+            case .allow:
+                Button("开启通知", systemImage: "bell") { Task { await alerts.requestAuthorization() } }
+            case nil:
+                EmptyView()
+            }
+        } header: {
+            Text("Pi 通知")
+        }
     }
 }
 

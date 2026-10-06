@@ -21,6 +21,7 @@ struct SceneRoot: View {
             .onChange(of: phase) { _, phase in
                 switch phase {
                 case .active: Task {
+                    await alerts.refresh()
                     await services.drainCaptures()
                     await services.handleActivation()
                 }

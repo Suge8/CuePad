@@ -119,6 +119,10 @@ extension CueStore {
   package func markPushed(_ row: SyncRow, systemFields: Data) throws -> Bool {
     try write {
       try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
+      // 通知标志随这次上传送出，之后不能再被本机别的改动带上去（见 `PiStateRecorder`）；不动修改时间，不会让记录重新待推送
+      if row.table == .piSessionStates, let sent = row.fields["notify"], sent != .null {
+        try db.run("UPDATE piSessionStates SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])
+      }
       return try readSyncRow(row.table, row.id).map { $0.modifiedAt > row.modifiedAt } ?? false
     }
   }
@@ -267,6 +271,9 @@ extension CueStore {
   }
 
   private func applyVersion(_ remote: SyncRow, _ systemFields: Data) throws {
+    var remote = remote
+    // 通知标志只由写会话状态的那台 Mac 置位、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
+    if remote.table == .piSessionStates { remote.fields["notify"] = .null }
     let table = remote.table
     let pushed = try db.first("SELECT pushedModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) { $0.int(0) }
     guard let local = try readSyncRow(table, remote.id) else {

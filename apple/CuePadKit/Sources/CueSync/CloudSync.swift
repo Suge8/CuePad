@@ -98,20 +98,20 @@ public actor CloudSync {
     try await engine.sendChanges(CKSyncEngine.SendChangesOptions(scope: .recordIDs([id])))
   }
 
-  /// 立即拉取并推送（不等引擎的自动调度）。
+  /// 立即拉取并推送（不等引擎的自动调度）。通知订阅没建成的话顺便重试（回到前台时调用）。
   public func syncNow() async throws {
     guard let engine else { return }
+    if subscribesToPiAlerts, await coordinator.alertSubscription != .active {
+      await ensurePiAlertSubscriptions(CKContainer(identifier: containerIdentifier))
+    }
     try await engine.fetchChanges()
     try await engine.sendChanges()
   }
 
   private func ensurePiAlertSubscriptions(_ container: CKContainer) async {
     guard subscribesToPiAlerts else { return }
-    do {
-      try await PiAlertSubscriptions(zoneID: zoneID).ensure(in: DatabaseSubscriptions(database: container.privateCloudDatabase))
-    } catch {
-      await coordinator.note("Pi 通知订阅没能建立，下次启动或账号变化时重试：\(error.localizedDescription)")
-    }
+    let status = await PiAlertSubscriptions(zoneID: zoneID).ensure(in: DatabaseSubscriptions(database: container.privateCloudDatabase))
+    await coordinator.setAlerts(status)
   }
 
   /// 处理 `.needsDecision`：随后用全新的引擎状态重新开始同步。
