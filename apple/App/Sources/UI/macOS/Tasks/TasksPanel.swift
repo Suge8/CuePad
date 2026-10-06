@@ -31,6 +31,8 @@ struct TasksPanel: View {
         .frame(maxHeight: 640)
         .fixedSize(horizontal: false, vertical: true)
         .glass(in: .rect(cornerRadius: 26))
+        // 点任务上的会话状态打开它的详情：与侧栏、⌘K 同一个详情弹出层
+        .modifier(SessionDetailHost(arrowEdge: .leading))
         .observing(services.store, [.tasks, .projects, .piSessionStates], into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
         }
@@ -84,7 +86,7 @@ struct TasksPanel: View {
 }
 
 /// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办），双击文字编辑；
-/// 第二行写所在项目（面板里跨项目时）与交给 Pi 的会话此刻的状态。右键是 `TaskActions`。
+/// 第二行写所在项目（面板里跨项目时）与交给 Pi 的会话此刻的状态，点状态打开那个会话的详情（外层要有 `SessionDetailHost`）。右键是 `TaskActions`。
 struct TaskRow: View {
     let task: CueTask
     /// 跨项目列着时写上所在项目；项目页里不写。
@@ -94,6 +96,7 @@ struct TaskRow: View {
     var compact = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @Environment(\.sessionDetail) private var sessionDetail
     @State private var editing = false
     @State private var draft = ""
 
@@ -134,6 +137,7 @@ struct TaskRow: View {
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
         .accessibilityAction(named: "编辑", beginEditing)
+        .accessibilityAction(named: "看 Pi 的近况") { if let session { sessionDetail?.open(session.sessionID) } }
     }
 
     /// 第二行：所在项目、交给 Pi 的会话此刻的状态（"Pi 正在工作 · 已运行 4:02"）。
@@ -152,7 +156,8 @@ struct TaskRow: View {
                     Text(session.state.presence).foregroundStyle(session.state.tint(palette))
                     PiElapsed(session: session, font: .system(size: 11))
                 }
-                .help("交给了 Pi 会话「\(session.title)」")
+                .sessionDetailRow(session.sessionID)
+                .help("交给了 Pi 会话「\(session.title)」，点开看近况")
             }
         }
         .font(.system(size: 11))

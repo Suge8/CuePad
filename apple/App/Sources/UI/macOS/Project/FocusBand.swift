@@ -38,6 +38,8 @@ struct FocusBand: View {
             }
         }
         .paper(radius: 18)
+        // 任务上的会话状态点开是它的详情（与侧栏、⌘K、任务面板同一个详情弹出层）
+        .modifier(SessionDetailHost(arrowEdge: .bottom))
     }
 
     @ViewBuilder private func goal(_ card: Card) -> some View {
