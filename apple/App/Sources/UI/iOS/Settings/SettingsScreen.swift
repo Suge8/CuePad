@@ -52,7 +52,7 @@ struct SettingsScreen: View {
         }
         .frame(maxWidth: sizeClass == .regular ? Self.readableWidth : .infinity)
         .frame(maxWidth: .infinity)
-        .deskBackground()
+        .scrollContentBackground(.hidden)
         .navigationTitle("设置")
     }
 

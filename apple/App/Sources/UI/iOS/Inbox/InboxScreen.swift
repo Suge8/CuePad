@@ -26,7 +26,7 @@ struct InboxScreen: View {
                 }
             }
         }
-        .deskBackground()
+        .scrollContentBackground(.hidden)
         .animation(Motion.quick, value: cards?.map(\.id))
         .captureBar()
         .navigationTitle(CaptureCopy.inbox)

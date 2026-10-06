@@ -42,7 +42,7 @@ struct TrashScreen: View {
                 }
             }
         }
-        .deskBackground()
+        .scrollContentBackground(.hidden)
         .navigationTitle("回收站")
         .toolbar {
             if let data, !(data.projects.isEmpty && data.cards.isEmpty) {

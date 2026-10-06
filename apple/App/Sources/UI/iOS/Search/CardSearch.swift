@@ -93,7 +93,6 @@ struct CardSearchResults: View {
             .padding(.horizontal, 16).padding(.bottom, 24)
         }
         .scrollDismissesKeyboard(.immediately)
-        .background(palette.desk)
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear { settled = query }
         .onChange(of: query) { if !TextComposition.isComposing { settled = query } }

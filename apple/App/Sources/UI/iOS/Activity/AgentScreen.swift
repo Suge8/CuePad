@@ -48,7 +48,6 @@ struct AgentScreen: View {
         #if DEBUG
         .defaultScrollAnchor(DebugScene.scene == "agent" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
         #endif
-        .background(palette.desk)
         // 标题只作读屏、切换器与返回菜单里的名字：导航栏那一排是搜索框
         .navigationTitle("Agent")
         .navigationBarTitleDisplayMode(.inline)

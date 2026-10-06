@@ -6,7 +6,8 @@ import UIKit
 
 /// iOS 画面：project、older、inbox、editor、tasks、agent、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
-/// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
+/// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对推入的首帧；
+/// 给了 `-CuePadPush <tasks|settings|trash|inbox|card>` 时推入的是那一页（card 是该项目里的一张卡）。
 /// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；taskedit 在任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（给了 `-CuePadPushAfter <秒>` 时先停在 Agent 页，到时再推入）；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
 /// （核对往上翻后出"新消息"、贴底时跟到底），给了 `-CuePadChatBulk <N>` 时推入后整批进来 N 轮长对话（核对整批到达时停在最新）；send 是从卡片"发到 Mac"先选会话。
@@ -58,7 +59,14 @@ extension DebugScene {
         case "push":
             if split { navigation.select(.shelf) }
             try? await Task.sleep(for: .seconds(1.5))
-            if let project { navigation.push(.project(project)) }
+            switch defaults.string(forKey: "CuePadPush") {
+            case "tasks": navigation.push(.tasks)
+            case "settings": navigation.push(.settings)
+            case "trash": navigation.push(.trash)
+            case "inbox": navigation.push(.inbox)
+            case "card": if let card = await card(in: project, store: workspace.services.store) { navigation.push(.card(card)) }
+            default: if let project { navigation.push(.project(project)) }
+            }
         case "sidebar":
             if let project { open(.project(project)) }
             navigation.sidebar = .all

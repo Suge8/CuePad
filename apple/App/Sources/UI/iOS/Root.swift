@@ -78,12 +78,24 @@ private struct InkTint: ViewModifier {
     func body(content: Content) -> some View { content.tint(palette.accent) }
 }
 
-/// 推入页面的内容（iPhone 各标签的栈与 iPad 分栏共用）。
+/// 推入页面的内容（iPhone 各标签的栈与 iPad 分栏共用，标签的根页也经这里）。页底色在这里一处铺在导航容器上：
+/// 各页的内容要等读库（异步）才有，铺在滚动区上时数据没到的几帧整页透明、露出系统的黑。
 struct RouteView: View {
     let route: Navigation.Route
     @Environment(\.zoomNamespace) private var zoom
+    @Environment(\.palette) private var palette
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
+        page.containerBackground(background, for: .navigation)
+    }
+
+    /// 卡片纸页在窄屏是整页的纸，宽屏是桌面上的一张纸；其余页是桌面。
+    private var background: Color {
+        route.isCard && sizeClass != .regular ? palette.paper : palette.desk
+    }
+
+    @ViewBuilder private var page: some View {
         switch route {
         case .shelf: ShelfScreen()
         case .project(let id): ProjectScreen(projectID: id)
@@ -117,10 +129,10 @@ private struct TabsRoot: View {
         @Bindable var navigation = navigation
         TabView(selection: $navigation.tab) {
             Tab("项目", systemImage: "books.vertical", value: Navigation.Tab.projects) {
-                stack($navigation.projectsPath) { ShelfScreen() }
+                stack($navigation.projectsPath) { RouteView(route: .shelf) }
             }
             Tab("Agent", systemImage: "waveform.path.ecg", value: Navigation.Tab.agent) {
-                stack($navigation.agentPath) { AgentScreen().countsAsPiViewer() }
+                stack($navigation.agentPath) { RouteView(route: .agent) }
             }
             .badge(waiting ?? 0)
         }

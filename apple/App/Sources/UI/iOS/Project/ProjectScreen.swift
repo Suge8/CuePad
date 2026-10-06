@@ -22,7 +22,6 @@ struct ProjectScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page: ProjectPage?
@@ -42,7 +41,6 @@ struct ProjectScreen: View {
                 #endif
             }
         }
-        .background(palette.desk)
         .captureBar()
         // 内容读到后才挂搜索框：推入的页面在内容可滚动时把搜索框收在导航栏下，内容晚到会让已露出的搜索框收起、整页上跳
         .cardSearch(

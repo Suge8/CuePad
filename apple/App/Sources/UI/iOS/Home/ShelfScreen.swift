@@ -55,7 +55,6 @@ struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var data: ShelfData?
@@ -64,7 +63,6 @@ struct ShelfScreen: View {
         ScrollView {
             if let data { content(data) }
         }
-        .background(palette.desk)
         .captureBar()
         // 一张卡都没有时没什么可搜，不挂搜索框与放大镜
         .cardSearch(.all, available: navigation.layout == .tabs && workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true, ready: true)
