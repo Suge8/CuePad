@@ -55,7 +55,7 @@ struct Composer<Header: View, Send: View>: View {
     let accepts: ComposerKinds
     /// 选卡片时排在前面的项目（回复框是会话所属的项目）。
     let cardsFrom: UUID?
-    /// 一直展开（随手记面板里）。
+    /// 一直展开（浮起的随手记）。
     let pinnedOpen: Bool
     let focus: FocusState<Bool>.Binding
     private let header: Header
