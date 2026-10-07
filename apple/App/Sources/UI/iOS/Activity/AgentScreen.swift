@@ -66,7 +66,7 @@ struct AgentScreen: View {
         #if DEBUG
         .onAppear { if DebugScene.scene == "agent" { query = DebugScene.searchText } }
         #endif
-        .observing(services.store, [.piSessionStates, .projects, .directoryBindings],
+        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects, .directoryBindings],
                    id: PiSessionList.Key(filter: .init(text: query, project: filter), limit: limit),
                    into: $list, onError: workspace.fail) { [query, filter, limit] store in
             try PiSessionList.read(text: query, project: filter, historyLimit: limit, from: store)
@@ -114,6 +114,7 @@ struct AgentScreen: View {
         }
         .animation(Motion.quick, value: list.now.map(\.id))
         .animation(Motion.quick, value: list.now.map(\.state.state))
+        .animation(Motion.quick, value: (list.now + list.ended).map(\.delivery?.status))
         .id(list.filter)
     }
 
@@ -277,7 +278,8 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     static func read(text: String, project: UUID? = nil, historyLimit: Int, from store: isolated CueStore) throws -> PiSessionList {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, project: project, limit: .max)).items
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
-        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state)).enumerated().map { ($1.id, $0) })
+        let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
+        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries).enumerated().map { ($1.id, $0) })
         return PiSessionList(
             filter: Filter(text: text, project: project), now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total,
             projects: Set(try store.directoryBindings().map(\.projectID)))
@@ -295,7 +297,7 @@ private struct SessionRow: View {
 
     var body: some View {
         let session = item.state
-        let shown = services.settings.shown(session)
+        let shown = services.settings.shown(item)
         let place = filtered ? nil : PiPlace.name(of: session, project: item.project)
         Button { navigation.push(.session(session.id, seed: session)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {

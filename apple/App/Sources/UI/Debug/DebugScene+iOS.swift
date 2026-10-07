@@ -17,13 +17,16 @@ import UIKit
 /// agent 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话（每隔 8 小时结束一个，分落在今天到更早），
 /// Agent 页打开就滚到底（看历史滑到底读下一页；同时给了 `-CuePadSearch` 时停在顶上）。
 /// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
+/// sendflow：打开 `-CuePadSession`（默认 notes）的会话页，2 秒后写出一句话、随即返回 Agent 列表（配 `-CuePadDemoMac YES` 看状态流转）。
 /// newsession：Agent 页上打开新会话面板；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
+/// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态（见 `runDemoMac`）。
 /// iPad 上 agent 打开右侧 Agent 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
         dumpAccessibilityIfAsked()
         let project = await prepareLibrary(workspace)
         if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+        if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services.store) } }
         let split = navigation.layout == .split
         func open(_ route: Navigation.Route) {
             if split { navigation.select(route) } else { navigation.projectsPath = [route] }
@@ -101,6 +104,16 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadChatGrow") { Task { await growChat(session.sessionID, store: workspace.services.store) } }
             let bulk = defaults.integer(forKey: "CuePadChatBulk")
             if bulk > 0 { Task { await bulkChat(session.sessionID, count: bulk, store: workspace.services.store) } }
+        case "sendflow":
+            // 停在会话页 → 像点了发送一样写出请求（隔离模式没有同步、发送钮不可用）→ 返回 Agent 列表看状态流转；配 -CuePadDemoMac YES
+            let title = defaults.string(forKey: "CuePadSession") ?? "notes"
+            guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
+            if split { navigation.select(.agent) } else { navigation.tab = .agent }
+            navigation.push(.session(session.id, seed: session))
+            try? await Task.sleep(for: .seconds(2))
+            _ = try? await workspace.services.requestMacDelivery("看一下这周的待办", to: session, mode: .send)
+            try? await Task.sleep(for: .seconds(0.4))
+            if split { navigation.splitPath.removeLast() } else { navigation.agentPath.removeLast() }
         case "newsession":
             if split { navigation.select(.agent) } else { navigation.tab = .agent }
             var sheet = Navigation.NewSession()

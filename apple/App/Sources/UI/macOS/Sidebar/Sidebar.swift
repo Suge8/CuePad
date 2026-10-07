@@ -9,6 +9,8 @@ nonisolated private struct SidebarData: Sendable {
     var live: [PiSessionState]
     var ended: [PiSessionState]
     var sessionTotal: Int
+    /// 发给这些会话的最近一条投送请求（Pi 的会话 id →）。
+    var deliveries: [String: DeliveryRequest]
 }
 
 struct Sidebar: View {
@@ -44,7 +46,7 @@ struct Sidebar: View {
                         }
                     }
                 }
-                PiSection(recorded: data.live + data.ended, total: data.sessionTotal)
+                PiSection(recorded: data.live + data.ended, deliveries: data.deliveries, total: data.sessionTotal)
                 if pages.showsTrash {
                     Section {
                         PageRow(page: .trash, count: data.trashCount, select: select) {
@@ -70,13 +72,14 @@ struct Sidebar: View {
         .safeAreaInset(edge: .bottom) { footer }
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
-        .observing(services.store, [.projects, .cards, .piSessionStates], into: $data, onError: workspace.fail) { store in
+        .observing(services.store, [.projects, .cards, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) { store in
             let live = try store.piSessionPage(.live)
             // 多取几条：本机刚结束、桥上已经重新连上的会话会被在线的那一行顶掉
             let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, limit: Self.endedPage))
             return SidebarData(
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
-                live: live.items.map(\.listed), ended: ended.items.map(\.listed), sessionTotal: live.total + ended.total)
+                live: live.items.map(\.listed), ended: ended.items.map(\.listed), sessionTotal: live.total + ended.total,
+                deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
         }
     }
 
@@ -198,6 +201,7 @@ private struct PageRow<Title: View>: View {
 /// 没有活着的会话时分组不消失：一行"在终端运行 pi 开始"，下面照常是已结束的。没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
 private struct PiSection: View {
     let recorded: [PiSessionState]
+    let deliveries: [String: DeliveryRequest]
     let total: Int
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -214,7 +218,7 @@ private struct PiSection: View {
                 PiSessionState.live(
                     $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: workspace.sessionRecaps[$0.sessionID])
             },
-            recorded: recorded, pastLimit: Self.pastLimit)
+            recorded: recorded, deliveries: deliveries, pastLimit: Self.pastLimit)
         if let installation = status?.pi, !installation.isSupported {
             Section("Pi") { PiSetupRow(installation: installation) }
         } else if status != nil || !rows.isEmpty {
@@ -229,7 +233,7 @@ private struct PiSection: View {
                 // 在线与已结束同一个列表、按会话 id 区分：会话结束时详情不被关掉（详情挂在列表上，见 SessionDetailHost）
                 ForEach(rows, id: \.sessionID) { session in
                     let bridge = live.first { $0.sessionID == session.sessionID }
-                    PiSessionRow(session: session, project: workspace.catalog?.project(session.projectID))
+                    PiSessionRow(session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID])
                         .sessionDetailRow(session.sessionID)
                         .help(bridge?.state.errorMessage ?? "")
                         .contextMenu {
@@ -261,11 +265,13 @@ private struct PiSection: View {
 extension PiSessionState {
     /// 侧栏 Pi 分组的行：本机在线的（桥上实时，`live`）与同步记录里没结束的（别的 Mac 上的）一起按要你注意的先后，
     /// 其后是已结束的；同一个会话只出现一次（本机实时优先），已结束的最多 `pastLimit` 行。`recorded` 是会话列表查询的一页。
-    static func sidebarRows(live: [PiSessionState], recorded: [PiSessionState], pastLimit: Int) -> [PiSessionState] {
+    static func sidebarRows(
+        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], pastLimit: Int
+    ) -> [PiSessionState] {
         let shown = Set(live.map(\.sessionID))
         let others = recorded.filter { !shown.contains($0.sessionID) }
         let past = others.filter { $0.state == .known(.ended) }.prefix(pastLimit)
-        return inListOrder(live + others.filter { $0.state != .known(.ended) }) + past
+        return inListOrder(live + others.filter { $0.state != .known(.ended) }, deliveries: deliveries) + past
     }
 }
 

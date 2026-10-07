@@ -47,19 +47,24 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
     var ended: [PiSessionState]
     /// 符合搜索的已结束会话总数（"显示更多"）。
     var endedTotal: Int
+    /// 发给这些会话的最近一条投送请求（Pi 的会话 id →）。
+    var deliveries: [String: DeliveryRequest]
 
     static let pageSize = 40
 
     static func read(text: String, pages: Int, from store: isolated CueStore) throws -> SessionSearchData {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max))
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: pageSize * pages))
-        return SessionSearchData(live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total)
+        return SessionSearchData(
+            live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total,
+            deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
     }
 }
 
 /// 会话范围的结果列表：按 `SessionGroup` 分组，行是侧栏同一种（`PiSessionRow`）；点一下选中，右边是它的近况。
 struct SessionResultList: View {
     let groups: [SessionGroup]
+    let deliveries: [String: DeliveryRequest]
     /// 还没读到的已结束会话有多少（"显示更多"）。
     let more: Int
     let isFiltered: Bool
@@ -107,7 +112,7 @@ struct SessionResultList: View {
     private func row(_ session: PiSessionState) -> some View {
         let isSelected = session.sessionID == selection
         return PiSessionRow(
-            session: session, project: workspace.catalog?.project(session.projectID),
+            session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
             nameFont: .system(size: 13.5), lineFont: .system(size: 11.5))
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))

@@ -21,8 +21,8 @@ nonisolated struct ShelfData: Sendable {
     }
 
     var entries: [Entry]
-    /// 在线的 Pi 会话：项目的状态点在界面上按本机看没看过再算（`PiSessionState.byProject`）。
-    var live: [PiSessionState]
+    /// 在线的 Pi 会话（带发给它的最近一条投送请求）：项目的状态点在界面上再按本机的规则算（`PiSessionListItem.byProject`）。
+    var live: [PiSessionListItem]
     var tasks: TaskCounts?
     var inboxCount: Int
     var trashCount: Int
@@ -40,7 +40,7 @@ nonisolated struct ShelfData: Sendable {
         }
         let hasTasks = progress.values.contains { $0.total > 0 }
         return ShelfData(
-            entries: entries, live: try store.piSessionPage(.live).items.map(\.state),
+            entries: entries, live: try store.piSessionPage(.live).items,
             tasks: hasTasks
                 ? TaskCounts(inProgress: try store.tasks(.inProgress).flatMap(\.tasks).count, todo: try store.tasks(.todo).flatMap(\.tasks).count)
                 : nil,
@@ -84,7 +84,7 @@ struct ShelfScreen: View {
             }
         }
         .refreshable { await services.syncNow() }
-        .observing(services.store, [.projects, .cards, .tasks, .piSessionStates], into: $data, onError: workspace.fail) {
+        .observing(services.store, [.projects, .cards, .tasks, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }
     }
@@ -93,7 +93,7 @@ struct ShelfScreen: View {
     private func content(_ data: ShelfData) -> some View {
         let pinned = data.entries.filter(\.project.isPinned)
         let recent = data.entries.filter { !$0.project.isPinned }
-        let pi = PiSessionState.byProject(data.live, unread: services.settings.isUnread)
+        let pi = PiSessionListItem.byProject(data.live, shown: services.settings.shown)
         VStack(alignment: .leading, spacing: 22) {
             if data.inboxCount > 0 || data.tasks != nil {
                 VStack(spacing: 0) {

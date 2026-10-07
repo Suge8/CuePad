@@ -44,6 +44,13 @@ extension CueStore {
 
   public func deliveryRequest(_ id: UUID) throws -> DeliveryRequest? { try find(DeliveryRequest.self, id) }
 
+  /// 发给一个 Pi 会话（按 Pi 的会话 id）的所有投送请求，先发的在前。
+  public func deliveryRequests(toSession sessionID: String) throws -> [DeliveryRequest] {
+    try select(
+      DeliveryRequest.self, where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND targetRef = ?", [sessionID],
+      orderBy: "createdAt, rowid")
+  }
+
   public func deleteDelivery(_ id: UUID) throws {
     try write { try db.run("DELETE FROM deliveryRequests WHERE id = ?", [id]) }
   }

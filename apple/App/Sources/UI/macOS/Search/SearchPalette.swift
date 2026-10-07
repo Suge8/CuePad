@@ -127,7 +127,8 @@ struct SearchPalette: View {
         Divider()
         ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
             SessionResultList(
-                groups: sessionGroups, more: (sessions?.endedTotal ?? 0) - (sessions?.ended.count ?? 0), isFiltered: !query.text.isEmpty,
+                groups: sessionGroups, deliveries: sessions?.deliveries ?? [:],
+                more: (sessions?.endedTotal ?? 0) - (sessions?.ended.count ?? 0), isFiltered: !query.text.isEmpty,
                 selection: $sessionSelection) { sessionPages += 1 }
             sessionPreview
         }
@@ -295,7 +296,7 @@ private struct SessionObservation: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .observing(services.store, [.piSessionStates, .projects], id: key, into: $data, onError: workspace.fail) { [key] store in
+            .observing(services.store, [.piSessionStates, .deliveryRequests, .projects], id: key, into: $data, onError: workspace.fail) { [key] store in
                 try SessionSearchData.read(text: key.text, pages: key.pages, from: store)
             }
             .onChange(of: ids) { if selection.map(ids.contains) != true { selection = ids.first } }

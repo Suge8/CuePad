@@ -81,6 +81,8 @@ final class Workspace {
     /// 本机在线会话的摘要（Pi 自己的会话 id → 同步记录上的问与答）：桥上没有，界面把它配到桥上的实时状态上。
     /// 由 `observeSessionRecaps` 跟随同步记录。
     private(set) var sessionRecaps: [String: PiRecap] = [:]
+    /// 发给在线会话的最近一条投送请求（Pi 的会话 id →），同一次观察带来：Mac 上配到桥的实时状态上算显示状态（`PiDelivery`）。
+    private(set) var sessionDeliveries: [String: DeliveryRequest] = [:]
     /// 本次运行里已结束的会话（会话 id），按本窗口看到它们结束的先后。可观察：默认发送目标取最后结束的那个。
     private(set) var endedOrder: [String] = []
 
@@ -117,13 +119,14 @@ final class Workspace {
         pressedCard = nil
     }
 
-    /// 跟随同步记录里在线会话的摘要，直到任务取消。
+    /// 跟随同步记录里在线会话的摘要与发给它们的最近一条投送请求，直到任务取消。
     func observeSessionRecaps() async {
         do {
-            for try await recaps in services.store.observe([.piSessionStates], {
-                Dictionary(try $0.piSessionPage(.live).items.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first }
-            }) where recaps != sessionRecaps {
-                sessionRecaps = recaps
+            for try await items in services.store.observe([.piSessionStates, .deliveryRequests], { try $0.piSessionPage(.live).items }) {
+                let recaps = Dictionary(items.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first }
+                let deliveries = Dictionary(items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
+                if recaps != sessionRecaps { sessionRecaps = recaps }
+                if deliveries != sessionDeliveries { sessionDeliveries = deliveries }
             }
         } catch is CancellationError {
         } catch {

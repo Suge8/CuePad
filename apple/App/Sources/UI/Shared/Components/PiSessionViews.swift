@@ -109,24 +109,97 @@ extension Open<PiWorkState> {
 
 nonisolated extension PiSessionState {
     /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前，同一档保持原来的先后（最近进入当前状态的在前）。
-    static func inListOrder(_ sessions: [PiSessionState]) -> [PiSessionState] {
-        sessions.enumerated()
-            .sorted { ($0.element.state.listRank, $0.offset) < ($1.element.state.listRank, $1.offset) }
+    /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位，
+    /// 之后会话进入处理中不再挪；没能送达与出错同档。
+    static func inListOrder(_ sessions: [PiSessionState], deliveries: [String: DeliveryRequest] = [:]) -> [PiSessionState] {
+        func rank(_ session: PiSessionState) -> Int {
+            switch PiDelivery.phase(of: deliveries[session.sessionID], for: session) {
+            case .failed: PiWorkState.error.listRank
+            case .some: PiWorkState.thinking.listRank
+            case nil: session.state.listRank
+            }
+        }
+        return sessions.enumerated()
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
             .map(\.element)
     }
 
     /// 详情是工具命令（等宽显示）。
     var detailIsCode: Bool { state == .known(.tool) }
 
-    /// 每个项目最需要注意的会话状态（书架与侧栏的状态点）：等你确认 → 出错 → 有新回复 → 工作中 → 待你回复。
-    static func byProject(_ sessions: [PiSessionState], unread: (PiSessionState) -> Bool) -> [UUID: PiShown] {
+    /// 在处理中（思考、输出、运行工具、子代理）。
+    var isWorking: Bool {
+        switch state.known {
+        case .thinking, .outputting, .tool, .delegating: true
+        default: false
+        }
+    }
+}
+
+nonisolated extension PiSessionListItem {
+    /// 每个项目最需要注意的会话状态（书架与侧栏的状态点）：没能送达与等你确认、出错 → 有新回复 → 工作中与发送中 → 待你回复。
+    static func byProject(_ items: [PiSessionListItem], shown: (PiSessionListItem) -> PiShown) -> [UUID: PiShown] {
         var result: [UUID: PiShown] = [:]
-        for session in sessions {
-            guard let project = session.projectID else { continue }
-            let shown = PiShown(state: session.state, unread: unread(session))
+        for item in items {
+            guard let project = item.state.projectID else { continue }
+            let shown = shown(item)
             if (result[project]?.urgency ?? -1) < shown.urgency { result[project] = shown }
         }
         return result
+    }
+}
+
+/// 发给会话、还没被它的状态吸收的那条投送请求此刻在哪一步。会话状态只来自 Mac 同步回来的记录，发出后要等 Mac 执行、写回、
+/// 再同步过来才变；投送请求是本机当场写出的，所以显示状态把它算进去：发出即"发送中"，会话进入处理中后让位给会话状态。
+nonisolated enum PiDelivery: Equatable, Sendable {
+    /// 写出了，Mac 还没接手。
+    case sending
+    /// Mac 正在送达。
+    case delivering
+    /// 发给已结束的会话：Mac 先在后台唤醒它。
+    case waking
+    /// 送到了，会话状态还没跟上。
+    case delivered
+    case failed
+
+    /// `request` 是发给 `session` 的最近一条（`DeliveryMode.toSession` 的方式）。会话状态的时间（`stateSince`）与送达时间
+    /// （`completedAt`）都是 Mac 的钟；发出时间是发起设备的钟，只拿来判断"发出之后会话动起来了"，跨设备的钟差最多让"发送中"早一点让位。
+    /// 完成的请求过一会儿就被执行它的 Mac 清理，所以"已送达""没能送达"不会一直挂着。
+    static func phase(of request: DeliveryRequest?, for session: PiSessionState) -> PiDelivery? {
+        guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
+        let ended = session.state == .known(.ended)
+        switch request.status.known {
+        case .pending, .executing:
+            if session.isWorking && session.stateSince >= request.createdAt { return nil }
+            if ended { return .waking }
+            return request.status == .known(.pending) ? .sending : .delivering
+        case .succeeded:
+            // 放进输入框不会让 Pi 动起来；其余等会话状态跟上（进入处理中，或在送达之后变过）就让位
+            let caughtUp = session.isWorking || session.stateSince >= (request.completedAt ?? request.createdAt)
+            return mode == .paste || caughtUp ? nil : .delivered
+        case .failed:
+            return session.stateSince >= (request.completedAt ?? request.modifiedAt) ? nil : .failed
+        case nil:
+            return nil
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .sending: "发送中"
+        case .delivering: "送达中"
+        case .waking: "正在唤醒"
+        case .delivered: "已送达"
+        case .failed: "没能送达"
+        }
+    }
+
+    var presence: String {
+        switch self {
+        case .sending, .delivering, .delivered: "正在发给 Pi"
+        case .waking: "正在唤醒 Pi"
+        case .failed: "没能送达 Pi"
+        }
     }
 }
 
@@ -139,28 +212,56 @@ nonisolated enum PiUnread {
 }
 
 extension AppSettings {
-    /// 这个会话在本机界面上显示的状态。
-    func shown(_ session: PiSessionState) -> PiShown { PiShown(state: session.state, unread: isUnread(session)) }
+    /// 这个会话在本机界面上显示的状态；`delivery` 是发给它的最近一条投送请求（`PiSessionListItem.delivery`）。
+    func shown(_ session: PiSessionState, delivery: DeliveryRequest?) -> PiShown {
+        PiShown(state: session.state, unread: isUnread(session), delivery: PiDelivery.phase(of: delivery, for: session))
+    }
+
+    func shown(_ item: PiSessionListItem) -> PiShown { shown(item.state, delivery: item.delivery) }
 }
 
-/// 界面上一个会话（或一个项目）显示的状态：Pi 报的状态，停在空闲时再分你看没看过（`PiUnread`）。
-/// 有新回复：墨色实心点、"有新回复"、名字加粗；看过是灰勾"待你回复"。全 App 的会话行、项目状态点、Mac 侧栏都经它。
+/// 界面上一个会话（或一个项目）显示的状态：Pi 报的状态，停在空闲时再分你看没看过（`PiUnread`），发给它的话还在路上时
+/// 先说路上到哪了（`PiDelivery`）。有新回复：墨色实心点、"有新回复"、名字加粗；看过是灰勾"待你回复"。
+/// 全 App 的会话行、项目状态点、会话页顶栏、Mac 侧栏都经它。
 nonisolated struct PiShown: Equatable, Sendable {
     var state: Open<PiWorkState>
     var unread = false
+    var delivery: PiDelivery?
 
-    var label: String { unread ? "有新回复" : state.label }
-    var presence: String { unread ? "Pi 有新回复" : state.presence }
-    /// 有新回复排在出错之后、工作中之前。
-    var urgency: Int { state.urgency * 2 + (unread ? 3 : 0) }
+    var label: String { delivery?.label ?? (unread ? "有新回复" : state.label) }
+    var presence: String { delivery?.presence ?? (unread ? "Pi 有新回复" : state.presence) }
+    /// 有新回复排在出错之后、工作中之前；没能送达与出错同级，路上的与工作中同级。
+    var urgency: Int {
+        switch delivery {
+        case .failed: PiWorkState.error.urgency * 2
+        case .some: PiWorkState.thinking.urgency * 2
+        case nil: state.urgency * 2 + (unread ? 3 : 0)
+        }
+    }
 }
 
 extension PiShown {
-    func tint(_ palette: Palette) -> Color { unread ? palette.ink : state.tint(palette) }
+    func tint(_ palette: Palette) -> Color {
+        switch delivery {
+        case .failed: palette.failure
+        case .some: palette.ink
+        case nil: unread ? palette.ink : state.tint(palette)
+        }
+    }
+
+    /// 状态标的形状：路上的是向上的箭头，没能送达同出错的叹号，其余按会话状态。
+    var symbol: String {
+        switch delivery {
+        case .failed: PiWorkState.error.symbol
+        case .some: "arrow.up.circle"
+        case nil: state.known?.symbol ?? "circle.dashed"
+        }
+    }
 }
 
 /// 会话状态标（全 App 只此一份：Agent 页、近况、书架、侧栏、Mac 侧栏与菜单栏）：颜色 + 形状表达状态，
-/// 等你确认橙色问号、出错红色叹号、工作中墨色圈点、有新回复墨色实心点、待你回复灰色勾、已结束更淡的空心圈；不做循环动画（常驻多处，
+/// 等你确认橙色问号、出错红色叹号、工作中墨色圈点、有新回复墨色实心点、待你回复灰色勾、已结束更淡的空心圈、话在路上墨色向上箭头、
+/// 没能送达红色叹号；不做循环动画（常驻多处，
 /// 循环既耗电也分散注意）。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 旁边有状态文字时读屏跳过它；`announces` 用在只有一个标的地方（书架、侧栏的项目旁），标自己带读屏标签与悬停提示。
 struct PiStateDot: View {
@@ -185,10 +286,10 @@ struct PiStateDot: View {
 
     var body: some View {
         let mark = Group {
-            if shown.unread {
+            if shown.unread && shown.delivery == nil {
                 Circle().frame(width: size * scale, height: size * scale)
             } else {
-                Image(systemName: shown.state.known?.symbol ?? "circle.dashed").font(.system(size: box, weight: .semibold))
+                Image(systemName: shown.symbol).font(.system(size: box, weight: .semibold))
             }
         }
         .foregroundStyle(shown.tint(palette))

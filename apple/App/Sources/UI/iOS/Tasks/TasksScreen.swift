@@ -46,7 +46,7 @@ struct TasksScreen: View {
         .onChange(of: board?.todo.first?.id) { if DebugScene.scene == "taskedit", editing == nil { editing = board?.todo.first?.task } }
         #endif
         .animation(.easeOut(duration: 0.2), value: board.map { [$0.inProgress, $0.todo, $0.done].flatMap { $0.map(\.id) } })
-        .observing(services.store, [.tasks, .projects, .piSessionStates], into: $board, onError: workspace.fail) {
+        .observing(services.store, TaskBoard.tables, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
         }
     }
@@ -86,7 +86,7 @@ struct TasksScreen: View {
 
     private func row(_ row: TaskBoard.Row) -> some View {
         let task = row.task
-        return TaskLine(task: task, project: row.project, session: row.session)
+        return TaskLine(task: task, project: row.project, session: row.session, delivery: row.delivery)
             .listRowBackground(palette.paper)
             .swipeActions(edge: .trailing) {
                 Button(task.status == .done ? "回到待办" : "完成", systemImage: task.status == .done ? "arrow.uturn.backward" : "checkmark") {
@@ -109,8 +109,9 @@ struct TaskLine: View {
     let task: CueTask
     /// 任务页跨项目列着，写上所在项目；项目页里不写。
     var project: Project?
-    /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况）。
+    /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况），以及发给它的最近一条投送请求。
     var session: PiSessionState?
+    var delivery: DeliveryRequest?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
@@ -188,7 +189,7 @@ struct TaskLine: View {
             }
             if let session, !done {
                 Button { navigation.push(.session(session.id, seed: session)) } label: {
-                    let shown = services.settings.shown(session)
+                    let shown = services.settings.shown(session, delivery: delivery)
                     HStack(spacing: 4) {
                         PiStateDot(shown: shown, size: 6)
                         Text(shown.presence).foregroundStyle(shown.tint(palette))

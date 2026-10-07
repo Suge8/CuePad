@@ -34,7 +34,29 @@ extension CueStore {
       limit: query.limit, offset: query.offset)
     let total = try db.first("SELECT count(*) FROM piSessionStates WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
-    return PiSessionPage(items: states.map { PiSessionListItem(state: $0, project: $0.projectID.flatMap { projects[$0] }) }, total: total)
+    let deliveries = try latestDeliveries(to: states.map(\.sessionID))
+    return PiSessionPage(
+      items: states.map {
+        PiSessionListItem(state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID])
+      },
+      total: total)
+  }
+
+  /// 发给这些会话的最近一条投送请求（只算 `DeliveryMode.toSession` 的方式），按 Pi 的会话 id。
+  /// 一次查询按会话聚合；投送请求完成后不久就被执行它的 Mac 清理，表一直很小。
+  func latestDeliveries(to sessionIDs: [String]) throws -> [String: DeliveryRequest] {
+    guard !sessionIDs.isEmpty else { return [:] }
+    let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
+    let modes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+    let requests = try select(
+      DeliveryRequest.self,
+      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(modes)) AND targetRef IN (\(refs))",
+      sessionIDs, orderBy: "createdAt DESC, rowid DESC")
+    var latest: [String: DeliveryRequest] = [:]
+    for request in requests {
+      if let ref = request.target.ref, latest[ref] == nil { latest[ref] = request }
+    }
+    return latest
   }
 
   func writePiState(

@@ -22,6 +22,7 @@ struct MenuBarPad: View {
                     ForEach(sessions, id: \.sessionID) { session in
                         PiSessionRow(
                             session: session, project: workspace.catalog?.project(session.projectID),
+                            delivery: workspace.sessionDeliveries[session.sessionID],
                             nameFont: .system(size: 13, weight: .medium), lineFont: .system(size: 11.5))
                             .sessionDetailRow(session.sessionID)
                     }

@@ -142,6 +142,46 @@ extension DebugScene {
         ], startedMinutesAgo: 10)
     }
 
+    /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"。发给它的会话的话，像真的经同步那样慢慢走完：
+    /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（待你回复），
+    /// 录"发出 → 返回列表 → 状态流转"用。
+    static func runDemoMac(_ store: CueStore) async {
+        let host = "demo-mac"
+        do {
+            for try await pending in store.observe([.deliveryRequests], { store in
+                try store.deliveryRequests().filter { $0.hostID == host && $0.status == .known(.pending) }.map(\.id)
+            }) where !pending.isEmpty {
+                try await Task.sleep(for: .seconds(1.2))
+                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { _ in
+                    try? await Task.sleep(for: .seconds(1))
+                    return .succeeded
+                }
+                try await executor.start()
+                for try await open in store.observe([.deliveryRequests], { store in
+                    try store.deliveryRequests().contains { pending.contains($0.id) && $0.isOpen }
+                }) where !open { break }
+                await executor.stop()
+                for id in pending { await playRound(for: id, store: store, host: host) }
+            }
+        } catch {}
+    }
+
+    /// 会话状态晚于送达结果同步过来：先进入思考，过一会儿做完。
+    private static func playRound(for request: UUID, store: CueStore, host: String) async {
+        guard let ref = try? await store.deliveryRequest(request)?.target.ref,
+              let session = try? await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: ref))).items.first?.state
+        else { return }
+        let recorder = PiStateRecorder(store: store, hostID: host)
+        func set(_ state: PiWorkState) async {
+            try? await recorder.update(
+                sessionID: ref, state: state, title: session.title, folder: session.folder, projectID: session.projectID)
+        }
+        try? await Task.sleep(for: .seconds(0.8))
+        await set(.thinking)
+        try? await Task.sleep(for: .seconds(2.5))
+        await set(.settled)
+    }
+
     /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store

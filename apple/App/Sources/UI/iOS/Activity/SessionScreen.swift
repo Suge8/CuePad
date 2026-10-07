@@ -69,7 +69,7 @@ struct SessionScreen: View {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 1) {
                         Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                        PiSessionSubtitle(session: session, project: digest?.project)
+                        PiSessionSubtitle(session: session, project: digest?.project, delivery: digest?.latestDelivery)
                     }
                     .padding(.horizontal, 16)
                     .frame(height: Self.barHeight)
@@ -253,7 +253,7 @@ struct SessionPicker: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
-    @State private var sessions: [PiSessionState]?
+    @State private var sessions: [PiSessionListItem]?
 
     var body: some View {
         NavigationStack {
@@ -279,15 +279,16 @@ struct SessionPicker: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .observing(services.store, [.piSessionStates], into: $sessions, onError: workspace.fail) { [project = outbox.project] store in
-            try store.piSessionPage(.live).items.map(\.state)
-                .sorted { ($0.projectID == project && project != nil ? 1 : 0, $0.state.urgency) > ($1.projectID == project && project != nil ? 1 : 0, $1.state.urgency) }
+        .observing(services.store, [.piSessionStates, .deliveryRequests], into: $sessions, onError: workspace.fail) { [project = outbox.project] store in
+            try store.piSessionPage(.live).items
+                .sorted { ($0.state.projectID == project && project != nil ? 1 : 0, $0.state.state.urgency) > ($1.state.projectID == project && project != nil ? 1 : 0, $1.state.state.urgency) }
         }
     }
 
-    private func row(_ session: PiSessionState) -> some View {
+    private func row(_ item: PiSessionListItem) -> some View {
+        let session = item.state
         let project = workspace.catalog?.project(session.projectID)
-        let shown = services.settings.shown(session)
+        let shown = services.settings.shown(item)
         return Button { navigation.openSession(session.id, seed: session, draft: outbox) } label: {
             HStack(spacing: 12) {
                 PiStateDot(shown: shown)

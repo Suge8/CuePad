@@ -58,7 +58,7 @@ struct PiSessionDetail: View {
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
         VStack(spacing: 0) {
             if let session = digest.session {
-                header(session, project: digest.project, live: live)
+                header(session, project: digest.project, delivery: digest.latestDelivery, live: live)
                 Divider()
                 conversation(session, digest)
                 VStack(spacing: 8) {
@@ -80,11 +80,11 @@ struct PiSessionDetail: View {
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
-    private func header(_ session: PiSessionState, project: Project?, live: CuePi.PiSession?) -> some View {
+    private func header(_ session: PiSessionState, project: Project?, delivery: DeliveryRequest?, live: CuePi.PiSession?) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
-                PiSessionSubtitle(session: session, project: project)
+                PiSessionSubtitle(session: session, project: project, delivery: delivery)
             }
             Spacer(minLength: 8)
             if let live, !live.hosted {

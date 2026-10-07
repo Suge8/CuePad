@@ -291,11 +291,19 @@ public struct PiSessionQuery: Sendable, Equatable {
   public static let live = PiSessionQuery(scope: .live, limit: .max)
 }
 
-/// 列表里的一个会话与它所属的项目（没有绑定项目或项目已删为 nil；文件夹名在 `state.folder`）。
+/// 列表里的一个会话、它所属的项目（没有绑定项目或项目已删为 nil；文件夹名在 `state.folder`），
+/// 以及发给它的最近一条投送请求（界面据此在 Mac 吸收它之前就显示"发送中"等）。
 public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var state: PiSessionState
   public var project: Project?
+  public var delivery: DeliveryRequest?
   public var id: UUID { state.id }
+
+  public init(state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil) {
+    self.state = state
+    self.project = project
+    self.delivery = delivery
+  }
 }
 
 /// 一页会话与符合条件的总数。顺序：未结束的在前，各自按进入当前状态的时间从新到旧。
@@ -392,6 +400,9 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case start
   /// 请 Mac 从会话文件把这个会话的对话补写进来（7 天前活跃过的会话，手机打开时发）；正文是会话 id，不写发送记录
   case transcript
+
+  /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。
+  public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .paste, .answer]
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。

@@ -107,7 +107,7 @@ private struct AgentPanel: View {
 }
 
 nonisolated private struct SidebarData: Sendable {
-    var live: [PiSessionState]
+    var live: [PiSessionListItem]
     var waiting: Int
 }
 
@@ -152,14 +152,14 @@ private struct SplitSidebar: View {
         .toolbar {
             Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
-        .observing(services.store, [.piSessionStates], into: $data, onError: workspace.fail) { store in
-            let states = try store.piSessionPage(.live).items.map(\.state)
-            return SidebarData(live: states, waiting: states.filter { $0.state == .known(.waitingForUser) }.count)
+        .observing(services.store, [.piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) { store in
+            let live = try store.piSessionPage(.live).items
+            return SidebarData(live: live, waiting: live.filter { $0.state.state == .known(.waitingForUser) }.count)
         }
     }
 
     private func row(_ project: Project, _ catalog: ProjectCatalog) -> some View {
-        let pi = PiSessionState.byProject(data?.live ?? [], unread: services.settings.isUnread)[project.id]
+        let pi = PiSessionListItem.byProject(data?.live ?? [], shown: services.settings.shown)[project.id]
         return SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0, pi: pi)
             .projectActions(project, radius: 10, pi: pi)
     }

@@ -49,18 +49,24 @@ extension PiConversation {
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     let project: Project?
+    /// 发给它的最近一条投送请求：话还在路上时状态先写路上到哪了（`PiDelivery`）。
+    let delivery: DeliveryRequest?
     @Environment(\.palette) private var palette
 
     var body: some View {
+        // 正在看的会话没有"有新回复"
+        let shown = PiShown(state: session.state, delivery: PiDelivery.phase(of: delivery, for: session))
         HStack(spacing: 4) {
-            PiStateDot(state: session.state, size: 6)
+            PiStateDot(shown: shown, size: 6)
             // 所在太长时截断（最宽 `placeWidth`），状态与计时不截；整行按内容宽，不被导航栏挤
             if let place = PiPlace.name(of: session, project: project) {
                 Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
                     .frame(maxWidth: Self.placeWidth, alignment: .leading)
             }
             Group {
-                Text(session.state.label).fontWeight(.medium).foregroundStyle(session.state.tint(palette))
+                Text(shown.label).fontWeight(.medium).foregroundStyle(shown.tint(palette))
+                    .contentTransition(.opacity)
+                    .animation(Motion.quick, value: shown)
                 if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
                 Text("·").foregroundStyle(palette.ink3)
                 PiElapsed(session: session, font: .caption)
