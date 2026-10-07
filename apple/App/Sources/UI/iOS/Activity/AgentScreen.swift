@@ -22,8 +22,6 @@ struct AgentScreen: View {
     /// 这一页上点过的筛选（`.some(nil)` 是全部）；没点过时用进来的项目或上次记下的。
     @State private var picked: UUID??
     @FocusState private var searchFocused: Bool
-    /// 正在结束、没能结束的会话（按记录 id）；结束成功后它进了"历史"，这里清掉。
-    @State private var ending: [UUID: Ending] = [:]
     @State private var confirmingEnd: PiSessionState?
 
     private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -58,7 +56,7 @@ struct AgentScreen: View {
         .scrollDismissesKeyboard(.immediately)
         .confirmationDialog("结束这个会话？", isPresented: Binding { confirmingEnd != nil } set: { if !$0 { confirmingEnd = nil } },
                             titleVisibility: .visible, presenting: confirmingEnd) { session in
-            Button("结束会话", role: .destructive) { end(session) }
+            Button("结束会话", role: .destructive) { Task { await workspace.end(session) } }
         } message: { _ in
             Text("对话会保留，再给它发消息会在后台恢复")
         }
@@ -99,13 +97,13 @@ struct AgentScreen: View {
             Group {
                 if !list.now.isEmpty {
                     Section {
-                        ForEach(list.now) { row($0, filtered: filtered) }
+                        ForEach(list.now) { row($0, filtered: filtered, end: list.ends[$0.id]) }
                     } header: { SectionTitle(text: "现在").listRowInsets(Self.headerInsets) }
                 }
                 let runs = PiHistorySection.split(list.ended, date: \.state.stateSince, now: .now)
                 ForEach(Array(runs.enumerated()), id: \.element.section) { index, run in
                     Section {
-                        ForEach(run.items) { row($0, filtered: filtered) }
+                        ForEach(run.items) { row($0, filtered: filtered, end: list.ends[$0.id]) }
                     } header: {
                         VStack(alignment: .leading, spacing: 10) {
                             if index == 0 { SectionTitle(text: "历史") }
@@ -124,7 +122,7 @@ struct AgentScreen: View {
             .animation(Motion.quick, value: list.now.map(\.id))
             .animation(Motion.quick, value: list.now.map(\.state.state))
             .animation(Motion.quick, value: (list.now + list.ended).map(\.delivery?.status))
-            .animation(Motion.quick, value: ending)
+            .animation(Motion.quick, value: list.ends.mapValues(\.status))
         }
     }
 
@@ -132,41 +130,24 @@ struct AgentScreen: View {
     private static let headerInsets = EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
 
     /// 一行：纸底，分隔线从名字起；在线的会话长按与左滑都有"结束会话"。
-    private func row(_ item: PiSessionListItem, filtered: Bool) -> some View {
-        let live = item.state.state != .known(.ended)
-        return SessionRow(item: item, filtered: filtered, ending: ending[item.id])
+    private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
+        let endable = item.state.state != .known(.ended) && end?.isOpen != true
+        return SessionRow(item: item, filtered: filtered, end: end)
             .listRowInsets(.init())
             .listRowBackground(palette.paper)
             .alignmentGuide(.listRowSeparatorLeading) { _ in 44 }
             .swipeActions(edge: .trailing) {
-                if live, ending[item.id] != .running {
+                if endable {
                     Button("结束会话", systemImage: "stop.circle") { confirmingEnd = item.state }.tint(palette.failure)
                 }
             }
             .contextMenu {
-                if live, ending[item.id] != .running {
+                if endable {
                     Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = item.state }
                 }
             }
     }
 
-    /// 请会话所在的 Mac 结束它，等到结果：成功后它进"历史"（不留提示），没能结束就在那一行写原因。
-    private func end(_ session: PiSessionState) {
-        ending[session.id] = .running
-        Task {
-            do {
-                let request = try await services.end(session)
-                let outcome = try await services.outcome(of: request.id)
-                if outcome.status == .known(.failed) {
-                    ending[session.id] = .failed(outcome.resultDetail ?? "没能结束")
-                } else {
-                    ending[session.id] = nil
-                }
-            } catch {
-                ending[session.id] = .failed(error.localizedDescription)
-            }
-        }
-    }
 
     @ViewBuilder private var empty: some View {
         if searching {
@@ -334,12 +315,6 @@ private struct ProjectChips: View {
     }
 }
 
-/// 结束会话的进行中与失败（成功后会话进"历史"，不留状态）。
-private enum Ending: Equatable {
-    case running
-    case failed(String)
-}
-
 private struct SectionTitle: View {
     let text: String
     @Environment(\.palette) private var palette
@@ -373,6 +348,8 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     var total: Int
     /// 能按它筛的项目：在 Mac 上绑了代码目录的（会话按工作目录归入项目，没绑的不会有会话）。
     var projects: Set<UUID>
+    /// 在线会话此刻要显示的结束请求（按记录 id，`DeliveryRequest.shownEnd`）：正在结束、没能结束。会话页读同一条规则。
+    var ends: [UUID: DeliveryRequest] = [:]
 
     var loaded: Int { ended.count }
     var isEmpty: Bool { now.isEmpty && total == 0 }
@@ -384,7 +361,10 @@ nonisolated struct PiSessionList: Sendable, Equatable {
         let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries).enumerated().map { ($1.id, $0) })
         return PiSessionList(
             filter: Filter(text: text, project: project), now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total,
-            projects: Set(try store.directoryBindings().map(\.projectID)))
+            projects: Set(try store.directoryBindings().map(\.projectID)),
+            ends: try live.reduce(into: [:]) { ends, item in
+                ends[item.id] = DeliveryRequest.shownEnd(in: try store.deliveryRequests(toSession: item.state.sessionID))
+            })
     }
 }
 
@@ -393,7 +373,8 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 private struct SessionRow: View {
     let item: PiSessionListItem
     let filtered: Bool
-    var ending: Ending?
+    /// 此刻要显示的结束请求（`DeliveryRequest.shownEnd`）：在路上写"正在结束…"，没能结束写原因。
+    var end: DeliveryRequest?
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -417,15 +398,12 @@ private struct SessionRow: View {
                         if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
                     }
                     .font(.subheadline)
-                    switch ending {
-                    case .running:
+                    if end?.isOpen == true {
                         Text("正在结束…").font(.subheadline).foregroundStyle(palette.ink3)
-                    case .failed(let reason):
+                    } else if let reason = end?.failure {
                         Text(reason).font(.subheadline).foregroundStyle(palette.failure).lineLimit(2)
-                    case nil:
-                        if let progress = PiProgress.line(of: session) {
-                            Text(progress).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
-                        }
+                    } else if let progress = PiProgress.line(of: session) {
+                        Text(progress).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
                     }
                 }
             }

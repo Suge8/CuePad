@@ -33,8 +33,12 @@ extension CueStore {
   }
 
   /// 请 `host` 那台 Mac 结束 `target` 会话：与发送共用投送请求与执行器，方式是 `end`。
+  /// 已有一条还在路上的结束请求时返回它，不再写第二条（连点、两个界面同时点都只发一次）。
   public func requestEnd(of target: SendTarget, on host: String) throws -> DeliveryRequest {
-    try requestDelivery("end", to: target, on: host, mode: .end)
+    if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(.end) && $0.isOpen }) {
+      return open
+    }
+    return try requestDelivery("end", to: target, on: host, mode: .end)
   }
 
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或会话名）。
@@ -83,7 +87,13 @@ extension CueStore {
     }
   }
 
-  fileprivate func finishDelivery(_ id: UUID, status: DeliveryStatus, detail: String?, at completed: Date) throws {
+  /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。
+  fileprivate func finishDelivery(_ id: UUID, _ outcome: DeliveryOutcome, at completed: Date) throws {
+    let (status, detail): (DeliveryStatus, String?) =
+      switch outcome {
+      case .succeeded: (.succeeded, nil)
+      case .failed(let reason): (.failed, reason)
+      }
     try write {
       try db.run(
         "UPDATE deliveryRequests SET status = ?, resultDetail = ?, completedAt = ?, modifiedAt = ? WHERE id = ?",
@@ -204,12 +214,7 @@ public actor DeliveryExecutor {
   }
 
   private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome) async {
-    let (status, detail): (DeliveryStatus, String?) =
-      switch outcome {
-      case .succeeded: (.succeeded, nil)
-      case .failed(let reason): (.failed, reason)
-      }
-    if await reporting({ try await store.finishDelivery(request.id, status: status, detail: detail, at: timing.now()) }) != nil {
+    if await reporting({ try await store.finishDelivery(request.id, outcome, at: timing.now()) }) != nil {
       await onFinished(request.id)
     }
     scheduleCleanup()

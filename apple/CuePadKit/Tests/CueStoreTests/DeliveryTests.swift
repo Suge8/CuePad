@@ -92,8 +92,16 @@ import Testing
     _ = try await store.requestDelivery("x", to: pi, on: "mac-a")
 
     let done = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.first?.status == .known(.failed) }
-    #expect(done[0].resultDetail == "会话已结束")
+    #expect(done[0].failure == "会话已结束")
     await executor.stop()
+  }
+
+  /// 失败一定读得出原因：别的版本写来的失败没带原因时，读出的是唯一那句兜底，界面不再各自补一句。
+  @Test func aFailureWrittenWithoutAReasonStillReadsWithOne() async throws {
+    let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'failed', resultDetail = NULL")
+
+    #expect(try await request(made.id)?.failure == DeliveryRequest.unexplainedFailure)
   }
 
   /// 请求必须指定执行的 Mac，执行器只领取发给本机的：跨设备重复在结构上不会发生。
