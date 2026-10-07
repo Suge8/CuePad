@@ -159,7 +159,8 @@ struct CardEditorScreen: View {
     private func handToAgent(with parts: [Card]) {
         guard let card = data?.card else { return }
         let body = handle.selection.map { Outgoing.text(body: $0, values: card.variableValues) } ?? outgoing(card)
-        navigation.outbox = Navigation.Outbox(content: TaskBundle.text(task: body, parts: parts), card: card.id, project: card.projectID)
+        navigation.outbox = Navigation.Outbox(
+            content: TaskBundle.text(task: body, parts: parts), card: card.id, project: card.projectID, parts: parts.map(\.id))
     }
 
     /// 编辑菜单里的选区动作。

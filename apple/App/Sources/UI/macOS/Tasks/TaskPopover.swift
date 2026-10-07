@@ -113,8 +113,8 @@ private struct TaskPopoverPage: View {
                     SendControl(project: card.projectID, compact: true) { choice in
                         let parts = card.isTask ? BundlePicker.parts(detail, left: left, withResources: withResources) : []
                         let body = Outgoing.text(body: handle.text ?? liveText, values: card.variableValues)
-                        let text = TaskBundle.text(task: body, parts: parts), id = card.id
-                        Task { await workspace.send(text, via: choice, card: id) }
+                        let text = TaskBundle.text(task: body, parts: parts), id = card.id, partIDs = parts.map(\.id)
+                        Task { await workspace.send(text, via: choice, card: id, parts: partIDs) }
                     }
                 }
             }

@@ -77,6 +77,8 @@ enum Schema {
     Upgrade(unifyCardsAndTasks),
     // 迁移来的任务卡片沿用了任务的 id，服务器上同名的 tasks 记录不能改类型，永远上传不了：换成由旧 id 算出的新 id
     Upgrade(renameMigratedTasks),
+    // 交给 Agent 时一并带上的灵感：发送记录与投送请求明确记下它们（任务完成圈里灵感那一段只看这个）
+    "ALTER TABLE sendRecords ADD COLUMN partIDs TEXT; ALTER TABLE deliveryRequests ADD COLUMN partIDs TEXT;",
   ]
 
   private static let cardsTreeIndex = "CREATE INDEX cards_parentID ON cards(parentID);"
@@ -171,7 +173,7 @@ enum Schema {
     CREATE TABLE sendRecords (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL,
       targetName TEXT NOT NULL, targetRef TEXT, cardID TEXT,
-      sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, partIDs TEXT
     ) STRICT;
     CREATE INDEX sendRecords_sentAt ON sendRecords(sentAt);
     CREATE INDEX sendRecords_cardID_sentAt ON sendRecords(cardID, sentAt);
@@ -207,7 +209,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER
+      resultReceivedAt INTEGER, partIDs TEXT
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 

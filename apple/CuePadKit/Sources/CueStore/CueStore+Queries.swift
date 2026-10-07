@@ -147,6 +147,7 @@ extension CueStore {
 
   /// 各上级任务的直接子任务（不含素材）完成数与总数；没有子任务的不在结果里。
   /// 每条任务的直接下级，同级手动顺序：任务行的分段完成圈与"子任务 n/m"都由它推出，见 `ChildMark`。给了 `parent` 只读它的。
+  /// 灵感"交给过 Agent"只看发送记录里明确记下的：它自己的（cardID），或某次发送带上了它（partIDs）。
   public func childMarks(of parent: UUID? = nil) throws -> [UUID: [ChildMark]] {
     let scope = parent == nil ? "" : "AND c.parentID = ?"
     let rows = try db.query(
@@ -154,7 +155,7 @@ extension CueStore {
       SELECT c.parentID, c.todoAt IS NOT NULL,
         CASE WHEN c.todoAt IS NOT NULL THEN c.completedAt IS NOT NULL
         ELSE EXISTS (SELECT 1 FROM sendRecords s WHERE s.cardID = c.id)
-          OR (c.body <> '' AND EXISTS (SELECT 1 FROM sendRecords s WHERE s.cardID = c.parentID AND instr(s.content, c.body) > 0))
+          OR EXISTS (SELECT 1 FROM sendRecords s, json_each(s.partIDs) part WHERE part.value = c.id)
         END
       FROM cards c
       WHERE c.parentID IS NOT NULL AND c.deletedAt IS NULL \(scope)

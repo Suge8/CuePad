@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// 任务以完成圈为主角：每个子任务、每条挂着的灵感各占一段——子任务完成、灵感交给过 Agent（它自己的发送记录，
-/// 或上级任务某次连同它一起发出）那一段就满；没有下级是普通圆圈；太多时按比例画。交给 Agent 时可一并带上挂着的灵感与本项目资料。
+/// 或某次发送明确记着带上了它）那一段就满；没有下级是普通圆圈；太多时按比例画。交给 Agent 时可一并带上挂着的灵感与本项目资料。
 @MainActor
 struct TaskRingTests {
     let rig = TestApp()
@@ -26,10 +26,35 @@ struct TaskRingTests {
 
         try await store.setStatus(sub.id, .done)
         try await store.recordSend(log.body, to: atlas, card: log.id)
-        // 任务连同 note 一起发出：note 的那一段也满
-        try await store.recordSend(TaskBundle.text(task: "修乱序", parts: [note]), to: atlas, card: task.id)
+        // 任务连同 note 一起发出：这次发送记着带上了 note，它那一段也满
+        try await store.recordSend(TaskBundle.text(task: "修乱序", parts: [note]), to: atlas, card: task.id, parts: [note.id])
         #expect(TaskRing(try await store.childMarks()[task.id]) == .segments([true, false, true, true]))
         #expect(TaskProgress.subtasks(in: try await store.childMarks()[task.id]) == TaskProgress(done: 1, total: 2))
+    }
+
+    @Test func 带变量的灵感一起发出后那段填满_只看发送记下的关联不看正文像不像() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let branch = try await workspaceAttach("审查 {{分支}} 的改动\n---split---\n只报错误行为", to: task)
+        try await store.updateCard(branch.id) { $0.variableValues = ["分支": "fix/queue"] }
+        let quoted = try await workspaceAttach("日志在 logs/0918.txt", to: task)
+        let filled = try #require(try await store.card(branch.id))
+
+        // 正文里恰好引了 quoted 的原文，但这次没带上它：不算交给过
+        let text = TaskBundle.text(task: "修乱序\n\n参考：日志在 logs/0918.txt", parts: [filled])
+        try await store.recordSend(text, to: atlas, card: task.id, parts: [filled.id])
+
+        #expect(TaskRing(try await store.childMarks()[task.id]) == .segments([true, false]))
+        _ = quoted
+    }
+
+    @Test func 手机发到Mac的请求记着带上的灵感_Mac执行后那段填满() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let note = try await workspaceAttach("第 6 位重连后排到最前", to: task)
+        let request = try await store.requestDelivery("修乱序", to: atlas, on: "mac-a", card: task.id, parts: [note.id])
+        #expect(try await store.deliveryRequest(request.id)?.partIDs == [note.id])
+
+        try await store.recordSend(request.content, to: request.target, card: request.cardID, parts: request.partIDs)
+        #expect(TaskRing(try await store.childMarks()[task.id]) == .segments([true]))
     }
 
     @Test func 下级超过上限时按比例画() async throws {

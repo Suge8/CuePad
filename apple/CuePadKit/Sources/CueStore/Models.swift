@@ -149,7 +149,7 @@ public struct TaskProgress: Equatable, Sendable {
 }
 
 /// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；素材（挂着的灵感）交给过 Agent 算做完——
-/// 它自己有发送记录，或上级任务某次发出的原文里含着它的正文（连同任务一起发出）。见 `CueStore.childMarks`。
+/// 它自己有发送记录，或某次发送明确记着带上了它（`SendRecord.partIDs`）。见 `CueStore.childMarks`。
 public struct ChildMark: Equatable, Sendable {
   public let isTask: Bool
   public let isDone: Bool
@@ -177,6 +177,20 @@ public struct SendRecord: Identifiable, Equatable, Sendable {
   public var cardID: UUID?
   public var sentAt: Date
   public var modifiedAt: Date
+  /// 这次一并带上的灵感（任务连同挂着的灵感、资料一起交给 Agent）；它们"交给过 Agent"只看这里与它们自己的发送记录。
+  public var partIDs: [UUID] = []
+}
+
+/// `partIDs` 列：JSON 数组（小写 UUID，与 id 列同一写法，SQL 里可用 json_each 对上）；没有时为 NULL。
+enum PartIDs {
+  static func encode(_ ids: [UUID]) -> String? {
+    ids.isEmpty ? nil : String(decoding: try! JSONEncoder().encode(ids.map { $0.uuidString.lowercased() }), as: UTF8.self)
+  }
+
+  static func decode(_ text: String?) -> [UUID] {
+    guard let data = text?.data(using: .utf8), let strings = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+    return strings.compactMap(UUID.init(uuidString:))
+  }
 }
 
 /// 图片附件元数据；文件按内容哈希存在磁盘，缩略图是派生缓存不入库。
@@ -387,14 +401,14 @@ extension Card: Record {
 
 extension SendRecord: Record {
   static let table = Table.sendRecords
-  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt] }
+  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt", "partIDs"]
+  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt, PartIDs.encode(partIDs)] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       targetKind: Open(rawValue: row.text(2)), targetName: row.text(3),
       targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5),
-      sentAt: row.date(6), modifiedAt: row.date(7))
+      sentAt: row.date(6), modifiedAt: row.date(7), partIDs: PartIDs.decode(row.textOrNil(8)))
   }
 }
 

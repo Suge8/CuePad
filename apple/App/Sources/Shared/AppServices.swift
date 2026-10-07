@@ -132,11 +132,11 @@ final class AppServices {
     /// 那台 Mac 执行后写回结果并记发送记录，这里不记。
     @discardableResult
     func requestMacDelivery(
-        _ storedText: String, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
+        _ storedText: String, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil, parts: [UUID] = []
     ) async throws -> DeliveryRequest {
         uploaded(try await store.requestDelivery(
             storedText, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID,
-            mode: mode, card: card))
+            mode: mode, card: card, parts: parts))
     }
 
     /// 发往别的设备的请求写出后立即上传（不等它完成），见 `upload`。
@@ -254,19 +254,20 @@ final class AppServices {
 
     /// 发送并写一条发送记录；投送失败不写记录，错误原样抛给界面展示。投送成功而记录没写进去时抛 `SendError.unrecorded`。
     /// 发给 Pi 会话不在这里直接发：写本机投送请求、等执行器的结果（见 `sendThroughRequest`）。
-    func send(_ storedText: String, to destination: Destination, card: UUID? = nil) async throws {
+    /// `parts`：一并带上的灵感，记在同一条发送记录（或投送请求）里。
+    func send(_ storedText: String, to destination: Destination, card: UUID? = nil, parts: [UUID] = []) async throws {
         let content = SendContent(stored: storedText)
         let target: SendTarget
         switch destination {
         #if os(macOS)
         case .pi(let id, let mode):
-            try await sendThroughRequest(storedText, to: id, mode: mode, card: card)
+            try await sendThroughRequest(storedText, to: id, mode: mode, card: card, parts: parts)
             return
         case .app(let selector): target = try await dispatch(content, to: selector, submit: settings.autoSubmit)
         #endif
         case .clipboard: target = try copyToClipboard(content)
         }
-        try await recordSend(storedText, to: target, card: card)
+        try await recordSend(storedText, to: target, card: card, parts: parts)
     }
 
     #if os(macOS)

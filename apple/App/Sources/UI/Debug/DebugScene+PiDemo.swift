@@ -157,7 +157,7 @@ extension DebugScene {
                 let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
                     try? await Task.sleep(for: .seconds(1))
                     if let mode = request.mode.known, DeliveryMode.toSession.contains(mode), mode != .answer {
-                        try? await store.recordSend(request.content, to: request.target, card: request.cardID)
+                        try? await store.recordSend(request.content, to: request.target, card: request.cardID, parts: request.partIDs)
                     }
                     return .succeeded
                 }
