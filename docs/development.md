@@ -100,7 +100,7 @@ xcrun cktool import-schema $C --validate --file apple/CloudKit/cuepad.ckdb
 xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端把字段按字母序排列并补系统字段，逐类型核对字段与权限
 ```
 
-开发环境的结构已导入并回读核对。生产环境已部署到 `piSessionStates` 新增 `model`、`thinking`、`models` 之前的结构，这三个字段还待在控制台部署。生产环境的结构只能增不能删，开发环境导入的结构也不能删去生产已有的字段与类型：已下线的记录类型 `tags`、`cardTags`、`probes` 与字段 `cards.isFavorite` 在生成器里（`CloudKitSchema.retiredTypes` / `retiredFields`）照原样声明，客户端不再读写。生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构，所以映射再改时需重复"生成 → 导入开发环境 → 控制台部署"。
+开发环境的结构已导入并回读核对，生产环境已部署（含 `piSessionStates` 的 `model`、`thinking`、`models`，回读与开发环境一致）。生产环境的结构只能增不能删，开发环境导入的结构也不能删去生产已有的字段与类型：已下线的记录类型 `tags`、`cardTags`、`probes` 与字段 `cards.isFavorite` 在生成器里（`CloudKitSchema.retiredTypes` / `retiredFields`）照原样声明，客户端不再读写。生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构，所以映射再改时需重复"生成 → 导入开发环境 → 控制台部署"。
 
 ## 平台
 
