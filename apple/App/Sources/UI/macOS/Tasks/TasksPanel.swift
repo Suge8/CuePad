@@ -16,7 +16,7 @@ struct TasksPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("任务").font(.system(size: 15, weight: .semibold))
-                if let board { Text("\(board.inProgress.count + board.todo.count)").font(.system(size: 13).monospacedDigit()).foregroundStyle(.secondary) }
+                if let board { Text("\(board.counts.inProgress + board.counts.todo)").font(.system(size: 13).monospacedDigit()).foregroundStyle(.secondary) }
                 Spacer()
                 Button("关闭", systemImage: "xmark") { workspace.overlay = nil }
                     .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(.secondary)
@@ -47,8 +47,8 @@ struct TasksPanel: View {
                 Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").font(.system(size: 13)).foregroundStyle(.secondary)
                     .padding(.horizontal, 20).padding(.vertical, 12)
             }
-            section("进行中", board.inProgress, in: board)
-            section("待办", board.todo, in: board)
+            section("进行中", board.inProgress, count: board.counts.inProgress, in: board)
+            section("待办", board.todo, count: board.counts.todo, in: board)
             if !board.done.isEmpty {
                 Button {
                     withAnimation(Motion.quick) { showsCompleted.toggle() }
@@ -66,11 +66,11 @@ struct TasksPanel: View {
         .animation(Motion.quick, value: [board.inProgress, board.todo, board.done].flatMap { $0.map(\.id) })
     }
 
-    @ViewBuilder private func section(_ title: String, _ items: [TaskBoard.Row], in board: TaskBoard) -> some View {
+    @ViewBuilder private func section(_ title: String, _ items: [TaskBoard.Row], count: Int, in board: TaskBoard) -> some View {
         if !items.isEmpty {
             HStack(spacing: 6) {
                 Text(title)
-                Text("\(items.count)").foregroundStyle(.tertiary)
+                Text("\(count)").foregroundStyle(.tertiary)
             }
             .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)

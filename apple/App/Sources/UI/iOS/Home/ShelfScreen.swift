@@ -14,16 +14,11 @@ nonisolated struct ShelfData: Sendable {
         var id: UUID { project.id }
     }
 
-    /// 跨项目的未完成任务数（书架的"任务"一行）；一条任务都没有时为 nil，不显示这一行。
-    struct TaskCounts: Sendable, Equatable {
-        var inProgress: Int
-        var todo: Int
-    }
-
     var entries: [Entry]
     /// 在线的 Pi 会话（带发给它的最近一条投送请求）：项目的状态点在界面上再按本机的规则算（`PiSessionListItem.byProject`）。
     var live: [PiSessionListItem]
-    var tasks: TaskCounts?
+    /// 书架的"任务"一行：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，不显示这一行。
+    var tasks: TaskBoard.Counts?
     var inboxCount: Int
     var trashCount: Int
 
@@ -41,9 +36,7 @@ nonisolated struct ShelfData: Sendable {
         let hasTasks = progress.values.contains { $0.total > 0 }
         return ShelfData(
             entries: entries, live: try store.piSessionPage(.live).items,
-            tasks: hasTasks
-                ? TaskCounts(inProgress: try store.tasks(.inProgress).flatMap(\.tasks).count, todo: try store.tasks(.todo).flatMap(\.tasks).count)
-                : nil,
+            tasks: hasTasks ? try TaskBoard.counts(from: store) : nil,
             inboxCount: counts[nil] ?? 0,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
     }
@@ -179,18 +172,10 @@ private struct InboxReminder: View {
 
 /// 跨项目的任务："任务 2 进行中 · 3 待办"。
 private struct TasksLine: View {
-    let tasks: ShelfData.TaskCounts
+    let tasks: TaskBoard.Counts
 
     var body: some View {
         ShelfLine(route: .tasks, symbol: "checklist", title: "任务", detail: tasks.summary)
-    }
-}
-
-private extension ShelfData.TaskCounts {
-    /// "2 进行中 · 3 待办"；都做完了是"全部完成"。
-    var summary: String {
-        let parts = [inProgress > 0 ? "\(inProgress) 进行中" : nil, todo > 0 ? "\(todo) 待办" : nil].compactMap { $0 }
-        return parts.isEmpty ? "全部完成" : parts.joined(separator: " · ")
     }
 }
 

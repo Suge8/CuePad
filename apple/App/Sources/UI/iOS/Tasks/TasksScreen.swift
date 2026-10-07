@@ -48,17 +48,17 @@ struct TasksScreen: View {
                 Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").foregroundStyle(palette.ink2)
                     .padding(.horizontal, 4).padding(.top, 8)
             }
-            group("进行中", board.inProgress, in: board)
-            group("待办", board.todo, in: board)
+            group("进行中", board.inProgress, count: board.counts.inProgress, in: board)
+            group("待办", board.todo, count: board.counts.todo, in: board)
             if !board.done.isEmpty { completed(board.done) }
         }
         .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
     }
 
-    @ViewBuilder private func group(_ title: String, _ roots: [TaskBoard.Row], in board: TaskBoard) -> some View {
+    @ViewBuilder private func group(_ title: String, _ roots: [TaskBoard.Row], count: Int, in board: TaskBoard) -> some View {
         if !roots.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                header(title, count: roots.count)
+                header(title, count: count)
                 TaskOutline(tree: board.tree, roots: roots.map(\.id)) { row in
                     let info = board.rows[row.id]
                     line(

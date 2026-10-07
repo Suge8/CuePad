@@ -29,6 +29,21 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 上级任务的直接子任务完成数与总数。
     var subtasks: [UUID: TaskProgress]
 
+    /// 进行中、待办两组各有几条顶层任务：子任务不另计（进度写在上级那一行）。任务页与面板的分组标题、书架的"任务"一行、
+    /// Mac 工具栏任务钮上的数都是它。
+    struct Counts: Sendable, Equatable {
+        var inProgress: Int
+        var todo: Int
+
+        /// "2 进行中 · 3 待办"；都做完了是"全部完成"。
+        var summary: String {
+            let parts = [inProgress > 0 ? "\(inProgress) 进行中" : nil, todo > 0 ? "\(todo) 待办" : nil].compactMap { $0 }
+            return parts.isEmpty ? "全部完成" : parts.joined(separator: " · ")
+        }
+    }
+
+    var counts: Counts { Counts(inProgress: inProgress.count, todo: todo.count) }
+
     var isEmpty: Bool { inProgress.isEmpty && todo.isEmpty && done.isEmpty }
 
     /// 看板要观察的表。
@@ -42,14 +57,25 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             }
             return Row(task: task, project: task.projectID.flatMap { projects[$0] }, session: item?.state, delivery: item?.delivery)
         }
-        let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
-        let open = all.filter { $0.status != .done }
-        let tree = TaskTree(open, all: all)
-        let rows = Dictionary(uniqueKeysWithValues: try open.map { ($0.id, try row($0)) })
+        let tree = try openTree(from: store)
+        let rows = Dictionary(uniqueKeysWithValues: try tree.ordered.map { ($0.id, try row($0)) })
         let roots = tree.roots.compactMap { rows[$0] }
         let done = try store.tasks(.done).flatMap(\.tasks).sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
         return TaskBoard(
             tree: tree, inProgress: roots.filter { $0.task.status == .inProgress }, todo: roots.filter { $0.task.status == .todo },
             done: try done.prefix(doneLimit).map(row), rows: rows, subtasks: try store.subtaskProgress())
+    }
+
+    /// 只要计数时（书架、Mac 工具栏）：与 `read` 同一棵树、同一分组，不读会话与已完成列表。
+    static func counts(from store: isolated CueStore) throws -> Counts {
+        let tree = try openTree(from: store)
+        let roots = tree.roots.compactMap(tree.task)
+        return Counts(inProgress: roots.filter { $0.status == .inProgress }.count, todo: roots.filter { $0.status == .todo }.count)
+    }
+
+    /// 没完成的任务的层级；层级限制按库里全部任务（含已完成）算。
+    private static func openTree(from store: isolated CueStore) throws -> TaskTree {
+        let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
+        return TaskTree(all.filter { $0.status != .done }, all: all)
     }
 }

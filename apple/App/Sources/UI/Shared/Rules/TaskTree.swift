@@ -67,6 +67,8 @@ nonisolated struct TaskTree: Equatable, Sendable {
     }
 
     var isEmpty: Bool { tasks.isEmpty }
+    /// 要显示的任务，按输入顺序。
+    var ordered: [CueTask] { order }
 
     /// 只留这些顶层任务和它们的子树（看板的一组、项目页显示的前几条）：缩进、反缩进与拖放都只在里面算。
     func scoped(to roots: [UUID]) -> TaskTree {
