@@ -11,7 +11,7 @@ extension DebugScene {
             let text = "第 \(index) 条新回答：" + String(repeating: "这一段用来把对话撑长，看滚动跟随。", count: 4)
             try? await store.writePiTranscript(PiTranscript(
                 sessionID: sessionID,
-                messages: [PiChatMessage(sessionID: sessionID, entryID: UUID().uuidString, seq: Int64(Date.now.timeIntervalSince1970), role: .pi, text: text, at: .now)],
+                messages: [PiChatMessage(sessionID: sessionID, entryID: UUID().uuidString, seq: Int64(Date.now.timeIntervalSince1970 * 1000), role: .pi, text: text, at: .now)],
                 recap: PiRecap(lastReply: text)))
         }
     }
@@ -23,13 +23,14 @@ extension DebugScene {
         let table = "\n\n| 项 | 结果 |\n|:--|--:|\n| 用例 | 12 |\n| 失败 | 2 |"
         let messages = (0..<count * 2).map { index in
             let pi = index % 2 == 1
-            // 高度差得很远的回答（一行、长段落、表格、长代码块），懒加载按估计高度排时误差最大
+            // 高度差得很远的回答（一行、长段落、表格、长代码块），懒加载按估计高度排时误差最大；代码块末行很宽，核对横向滚动
             let round = index / 2 + 1
             let body = switch round % 4 {
             case 0: "好的。"
             case 1: String(repeating: "整批到达的长回答，用来撑出很高的对话。", count: 12)
             case 2: "结果如下：" + table
-            default: "改动如下：\n\n```swift\n" + (1...30).map { "let value\($0) = compute(\($0))" }.joined(separator: "\n") + "\n```"
+            default: "改动如下：\n\n```swift\n" + (1...30).map { "let value\($0) = compute(\($0))" }.joined(separator: "\n")
+                + "\nlet all = [" + (1...30).map { "value\($0)" }.joined(separator: ", ") + "]\n```"
             }
             let text = pi ? "第 \(round) 轮回答：" + body : "第 \(round) 个问题"
             return PiChatMessage(sessionID: sessionID, entryID: "bulk-\(start)-\(index)", seq: start + Int64(index), role: pi ? .pi : .user, text: text, at: .now)

@@ -85,7 +85,7 @@ extension DebugScene {
                 // 给了 -CuePadSession 就当已选好会话，直接进它的近况页（卡片预填在回复框里）
                 if let title = defaults.string(forKey: "CuePadSession"),
                    let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state {
-                    navigation.openSession(session.id, seed: session, draft: outbox)
+                    navigation.openSession(session.id, sessionID: session.sessionID, draft: outbox, store: workspace.services.store)
                 } else {
                     navigation.outbox = outbox
                 }
@@ -100,7 +100,7 @@ extension DebugScene {
             // -CuePadPushAfter <秒>：先停在 Agent 页，过一会儿再像点了会话行一样推入（录屏核对推入的首帧）
             let delay = defaults.double(forKey: "CuePadPushAfter")
             if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
-            navigation.push(.session(session.id, seed: session))
+            navigation.openSession(session.id, sessionID: session.sessionID, store: workspace.services.store)
             if defaults.bool(forKey: "CuePadChatGrow") { Task { await growChat(session.sessionID, store: workspace.services.store) } }
             let bulk = defaults.integer(forKey: "CuePadChatBulk")
             if bulk > 0 { Task { await bulkChat(session.sessionID, count: bulk, store: workspace.services.store) } }
@@ -109,7 +109,7 @@ extension DebugScene {
             let title = defaults.string(forKey: "CuePadSession") ?? "notes"
             guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
             if split { navigation.select(.agent) } else { navigation.tab = .agent }
-            navigation.push(.session(session.id, seed: session))
+            navigation.openSession(session.id, sessionID: session.sessionID, store: workspace.services.store)
             try? await Task.sleep(for: .seconds(2))
             _ = try? await workspace.services.requestMacDelivery("看一下这周的待办", to: session, mode: .send)
             try? await Task.sleep(for: .seconds(0.4))

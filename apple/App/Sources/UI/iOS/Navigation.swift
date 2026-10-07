@@ -40,16 +40,15 @@ final class Navigation {
 
         var isCard: Bool { if case .card = self { true } else { false } }
 
-        /// 会话页；手里有列表里的会话状态时带上作首帧（通知跳转等只有 id 的入口不带）。
-        static func session(_ id: UUID, seed: PiSessionState? = nil) -> Route { .session(SessionRoute(id: id, seed: seed)) }
+        /// 会话页；`seed` 是推入前读好的这一页（`openSession`），通知跳转等只有 id 的入口不带。
+        static func session(_ id: UUID, seed: SessionDigest? = nil) -> Route { .session(SessionRoute(id: id, seed: seed)) }
     }
 
-    /// 会话页的路由：身份只是记录 id（`PiSessionState.id`）。`seed` 是推入时调用方已持有的会话状态，只作首帧占位
-    /// （标题与状态那块玻璃推入第一帧就在，对话按会话 id 第一次就读），之后一律以 Store 的观察流为准；不参与相等。
-    /// 从路由栈恢复（返回到它、再次显示）时种子可能已是旧状态，首帧标题可能短暂过时，读到 Store 后即替换。
+    /// 会话页的路由：身份只是记录 id（`PiSessionState.id`）。`seed` 是推入前读好的这一页，只作首帧
+    /// （标题、状态与最新的对话推入第一帧就在），之后一律以 Store 的观察流为准；不参与相等。
     struct SessionRoute: Hashable {
         let id: UUID
-        var seed: PiSessionState?
+        var seed: SessionDigest?
 
         static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
         func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -223,15 +222,20 @@ final class Navigation {
         }
     }
 
-    /// 在当前位置推入一个会话的近况页；`draft` 带进它的回复框（发到 Mac 的卡片或任务），已经写的字留着。
-    func openSession(_ id: UUID, seed: PiSessionState? = nil, draft: Outbox? = nil) {
+    /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id，记录已被删时用它读对话）；`draft` 带进它的回复框
+    /// （发到 Mac 的卡片或任务），已经写的字留着。先读出这一页再推入：读库只要几毫秒，推入的第一帧就是标题与最新的对话；
+    /// 先推入再读时，结果要等转场开始、主线程空出来才到，滑进来的前几帧是一张空页。读不出来时照常推入，由页面报错。
+    func openSession(_ id: UUID, sessionID: String? = nil, draft: Outbox? = nil, store: CueStore) {
         outbox = nil
         if let draft {
             var reply = replyDraft(for: id)
             reply.attachment = draft
             setReplyDraft(reply, for: id)
         }
-        push(.session(id, seed: seed))
+        Task {
+            let seed = try? await SessionDigest.read(id, sessionID: sessionID, from: store)
+            push(.session(id, seed: seed))
+        }
     }
 
     /// Agent 页的项目筛选：从项目页进来（`entered`）是该项目，否则是在 Agent 页上次选的（本机偏好）；

@@ -35,7 +35,7 @@ struct ReplyDraftTests {
         draft.text = "补一句"
         navigation.setReplyDraft(draft, for: session)
 
-        navigation.openSession(session, draft: Navigation.Outbox(content: "接口约定", card: UUID()))
+        navigation.openSession(session, draft: Navigation.Outbox(content: "接口约定", card: UUID()), store: TestApp().services.store)
 
         #expect(navigation.replyDraft(for: session).text == "补一句")
         #expect(navigation.replyDraft(for: session).attachment?.content == "接口约定")

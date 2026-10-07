@@ -299,7 +299,7 @@ private struct SessionRow: View {
         let session = item.state
         let shown = services.settings.shown(item)
         let place = filtered ? nil : PiPlace.name(of: session, project: item.project)
-        Button { navigation.push(.session(session.id, seed: session)) } label: {
+        Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 PiStateDot(shown: shown, size: 8)
                 VStack(alignment: .leading, spacing: 3) {

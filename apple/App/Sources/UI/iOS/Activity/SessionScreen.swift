@@ -18,10 +18,11 @@ struct SessionScreen: View {
     @State private var lastSeen: PiSessionState?
     @State private var askedForTranscript = false
 
-    /// `seed`：推入方手里的会话状态，作首帧的"最后一次看到"，读到 Store 后即被替换。
-    init(id: UUID, seed: PiSessionState? = nil) {
+    /// `seed`：推入前读好的这一页（`Navigation.openSession`），首帧即用，之后以 Store 的观察流为准。
+    init(id: UUID, seed: SessionDigest? = nil) {
         self.id = id
-        _lastSeen = State(initialValue: seed)
+        _digest = State(initialValue: seed)
+        _lastSeen = State(initialValue: seed?.session)
     }
 
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
@@ -40,27 +41,31 @@ struct SessionScreen: View {
 
     var body: some View {
         ChatScroll(followKey: PiConversation.followKey(session: session, messages: digest?.messages ?? [], deliveries: digest?.deliveries ?? [])) {
-            if let session {
-                VStack(spacing: 14) {
-                    if fetchingTranscript {
-                        Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
+            // 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入
+            if let digest {
+                if let session {
+                    PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries)
+                        .padding(.horizontal, 16).padding(.vertical, 14)
+                        // iPad 上一行不超过阅读宽度，居中
+                        .frame(maxWidth: Self.readingWidth)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    ContentUnavailableView {
+                        Label("找不到这个会话", systemImage: "waveform.path.ecg")
+                    } description: {
+                        Text("Mac 上这个会话的文件可能已经删掉了")
                     }
-                    PiConversation(session: session, messages: digest?.messages ?? [], deliveries: digest?.deliveries ?? [])
+                    .padding(.top, 60)
+                    .chatRow()
                 }
-                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 16)
-                // iPad 上一行不超过阅读宽度，居中
-                .frame(maxWidth: Self.readingWidth)
-                .frame(maxWidth: .infinity)
-            } else if digest != nil {
-                ContentUnavailableView {
-                    Label("找不到这个会话", systemImage: "waveform.path.ecg")
-                } description: {
-                    Text("Mac 上这个会话的文件可能已经删掉了")
-                }
-                .padding(.top, 60)
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .overlay {
+            if fetchingTranscript {
+                Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
+            }
+        }
         .navigationTitle(session?.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -77,10 +82,6 @@ struct SessionScreen: View {
                 }
             }
         }
-        // 顶上不模糊：除了返回钮与标题那块玻璃，对话直接可见。回复框算作底栏（safeAreaBar），底边 soft 只淡出、
-        // 不铺实底带：问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏
-        .scrollEdgeEffectHidden(true, for: .top)
-        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {
@@ -103,7 +104,7 @@ struct SessionScreen: View {
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)
         }
-        .onChange(of: digest) { _, digest in
+        .onChange(of: digest, initial: true) { _, digest in
             if let session = digest?.session { lastSeen = session }
             askForTranscriptIfNeeded()
         }
@@ -289,7 +290,7 @@ struct SessionPicker: View {
         let session = item.state
         let project = workspace.catalog?.project(session.projectID)
         let shown = services.settings.shown(item)
-        return Button { navigation.openSession(session.id, seed: session, draft: outbox) } label: {
+        return Button { navigation.openSession(session.id, sessionID: session.sessionID, draft: outbox, store: services.store) } label: {
             HStack(spacing: 12) {
                 PiStateDot(shown: shown)
                 VStack(alignment: .leading, spacing: 2) {

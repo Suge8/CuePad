@@ -11,24 +11,42 @@ struct PiConversation: View {
     let messages: [PiChatMessage]
     var deliveries: [DeliveryRequest] = []
     @Environment(\.palette) private var palette
+    @Environment(\.chatInverted) private var inverted
 
     var body: some View {
-        // 懒加载：贴底打开时只排看得见的几条。整段排开时，长对话的每条回答（表格、长代码块）都在推入那一刻
-        // 排版、栅格化，转场的前一百多毫秒这一页画不出来（深色下就是黑屏）
+        // 懒加载：只排看得见的几条（整段排开时，长对话的每条回答都在推入那一刻排版、栅格化，转场的前一百多毫秒画不出来）。
+        // 在倒置的滚动区里（iOS）按新到旧给出，懒加载从最新那条起排
+        let entries = PiChat.entries(messages)
+        let outgoing = PiChat.outgoing(deliveries, messages: messages)
         LazyVStack(alignment: .leading, spacing: 18) {
-            ForEach(PiChat.entries(messages)) { entry in
-                if entry.isUser { UserBubble(text: entry.text) } else { ReplyBlock(text: entry.text, meta: entry.meta, session: session) }
-            }
-            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
-            if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
-            if session.state == .known(.error) {
-                Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
+            if inverted {
+                // 读屏仍按先后读：越早的越先
+                ending.chatRow().accessibilitySortPriority(-Double(entries.count + outgoing.count))
+                ForEach(Array(outgoing.enumerated()).reversed(), id: \.element.id) { index, request in
+                    OutgoingBubble(request: request, session: session).chatRow().accessibilitySortPriority(-Double(entries.count + index))
+                }
+                ForEach(Array(entries.enumerated()).reversed(), id: \.element.id) { index, entry in
+                    row(entry).chatRow().accessibilitySortPriority(-Double(index))
+                }
+            } else {
+                ForEach(entries) { entry in row(entry) }
+                ForEach(outgoing) { request in OutgoingBubble(request: request, session: session) }
+                ending
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(Motion.quick, value: messages.map(\.id))
-        .animation(Motion.quick, value: deliveries.map(\.status))
-        .animation(Motion.quick, value: session.state)
+    }
+
+    @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
+        if entry.isUser { UserBubble(text: entry.text) } else { ReplyBlock(text: entry.text, meta: entry.meta, session: session) }
+    }
+
+    /// 对话末尾：处理中的进展（带子代理）、出错的原因。
+    @ViewBuilder private var ending: some View {
+        if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
+        if session.state == .known(.error) {
+            Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
+        }
     }
 }
 
@@ -100,6 +118,12 @@ struct PiQuestionDock: View {
     }
 }
 
+private extension AnyTransition {
+    /// 对话里一条出现或消失：只淡入淡出，动画随过渡自带。不给整段对话挂动画：倒置的滚动区里新的一条加在逻辑顶端，
+    /// 其余各行的位移若也跟着动画，正在读的那段会先被推走再滑回来
+    static let entry = AnyTransition.opacity.animation(Motion.quick)
+}
+
 /// 你的一句话：右侧墨色气泡，最宽到四分之三。
 private struct UserBubble: View {
     let text: String
@@ -114,7 +138,7 @@ private struct UserBubble: View {
             .background(palette.accent.opacity(dimmed ? 0.7 : 1), in: .rect(cornerRadius: 18, style: .continuous))
             .containerRelativeFrame(.horizontal, alignment: .trailing) { width, _ in width * 0.78 }
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .transition(.opacity)
+            .transition(.entry)
     }
 }
 
@@ -135,7 +159,7 @@ private struct ReplyBlock: View {
         .contextMenu {
             Button("存为卡片", systemImage: "square.and.arrow.down") { workspace.attempt { try await workspace.saveReply(text, of: session) } }
         }
-        .transition(.opacity)
+        .transition(.entry)
     }
 }
 
@@ -167,7 +191,7 @@ private struct OutgoingBubble: View {
             if failed { Button("重发", systemImage: "arrow.clockwise", action: retry).disabled(!workspace.services.reachesPiHost) }
             Button("移除", systemImage: "xmark", role: .destructive, action: remove)
         }
-        .transition(.opacity)
+        .transition(.entry)
     }
 
     /// 带卡片的话写卡片标题与图片数，不露存储格式。
@@ -219,7 +243,7 @@ private struct LiveStatus: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
-        .transition(.opacity)
+        .transition(.entry)
     }
 }
 
