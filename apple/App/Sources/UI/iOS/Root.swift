@@ -290,6 +290,7 @@ private struct BottomBar: View {
     let select: (Navigation.Tab) -> Void
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let height: CGFloat = 64
     static let bottomGap: CGFloat = 4
@@ -321,10 +322,13 @@ private struct BottomBar: View {
                 Capsule().fill(.clear)
                     .frame(width: Self.tabWidth * 2 + Self.inset * 2, height: Self.height)
                     .glassEffect(.regular, in: .capsule)
+                // 减弱动态效果时换成每格各一滴：换标签是旧滴淡出、新滴淡入（随 `Motion.spatial` 的短淡入淡出），不滑过去
                 Capsule().fill(.clear)
                     .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
                     .glassEffect(.regular.tint(palette.selection), in: .capsule)
                     .padding(Self.inset)
+                    .id(reduceMotion ? navigation.tab : nil)
+                    .transition(.opacity)
             }
         }
         .overlay {
