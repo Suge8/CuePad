@@ -94,6 +94,13 @@ struct SessionScreen: View {
             } else if let session {
                 PiSessionSubtitle(session: session, project: digest?.project, delivery: digest?.latestDelivery)
             }
+        } collapsedDetail: {
+            if let session {
+                HStack(spacing: 4) {
+                    PiStateDot(shown: PiShown(state: session.state, delivery: PiDelivery.phase(of: digest?.latestDelivery, for: session)), size: 6)
+                    PiElapsed(session: session, font: .caption)
+                }
+            }
         } trailing: {
             if let session, session.state != .known(.ended) {
                 Menu {
