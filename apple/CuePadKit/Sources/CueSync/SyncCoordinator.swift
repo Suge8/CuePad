@@ -256,7 +256,7 @@ actor SyncCoordinator {
         try await store.dropSyncMetadata(record.recordID.recordName)
         resend.append(record.recordID)
       default:
-        blocked = classify(error, recordName: record.recordID.recordName) || blocked
+        blocked = classify(error, recordType: record.recordType, recordName: record.recordID.recordName) || blocked
       }
     }
     for (id, error) in failedDeletes {
@@ -275,7 +275,7 @@ actor SyncCoordinator {
 
   /// 把 CloudKit 错误映射到状态。返回 true 表示这类失败不应立刻重试。瞬时网络类错误交给引擎自己重试。
   @discardableResult
-  private func classify(_ error: CKError, recordName: String?) -> Bool {
+  private func classify(_ error: CKError, recordType: String? = nil, recordName: String?) -> Bool {
     switch error.code {
     case .quotaExceeded:
       status = .quotaExceeded
@@ -287,15 +287,15 @@ actor SyncCoordinator {
       .batchRequestFailed, .operationCancelled:
       return false
     default:
-      report(error, recordName: recordName)
+      report(error, recordType: recordType, recordName: recordName)
       return true
     }
   }
 
   // MARK: 报告
 
-  private func report(_ error: Error, recordName: String?) {
-    report(error.diagnosis, recordType: nil, recordName: recordName, failed: true)
+  private func report(_ error: Error, recordType: String? = nil, recordName: String?) {
+    report(error.diagnosis, recordType: recordType, recordName: recordName, failed: true)
   }
 
   private func report(_ message: String, recordType: String?, recordName: String?, failed: Bool = false) {

@@ -73,15 +73,17 @@ enum Schema {
     ALTER TABLE piSessionStates ADD COLUMN model TEXT; ALTER TABLE piSessionStates ADD COLUMN thinking TEXT;
     ALTER TABLE piSessionStates ADD COLUMN models TEXT;
     """,
-    // 灵感与任务合成一种记录：任务并进 cards（id 不变），目标卡改为项目的一句话介绍
+    // 灵感与任务合成一种记录：任务并进 cards（id 暂时不变，见下一步），目标卡改为项目的一句话介绍
     Upgrade(unifyCardsAndTasks),
+    // 迁移来的任务卡片沿用了任务的 id，服务器上同名的 tasks 记录不能改类型，永远上传不了：换成由旧 id 算出的新 id
+    Upgrade(renameMigratedTasks),
   ]
 
   private static let cardsTreeIndex = "CREATE INDEX cards_parentID ON cards(parentID);"
 
   /// 任务原样插成"要做"的卡片（要做时间取任务的创建时间）；发送记录与投送请求的任务引用并进卡片引用（id 相同）；
   /// 目标卡第一行（去掉"目标："）成为项目介绍、目标卡留作普通灵感；去掉 tasks 表与它的同步元数据——服务器上的旧任务记录
-  /// 不删（退役类型，客户端跳过），这样还没升级的设备之间照常同步，升级后各自把本机那份迁成同 id 的卡片、在服务器上收敛。
+  /// 不删（退役类型，客户端跳过），这样还没升级的设备之间照常同步。
   private static func unifyCardsAndTasks(_ db: SQLite) throws {
     try db.exec("""
       ALTER TABLE cards ADD COLUMN parentID TEXT; ALTER TABLE cards ADD COLUMN todoAt INTEGER;
@@ -106,6 +108,22 @@ enum Schema {
       try db.run("UPDATE projects SET intro = ? WHERE id = ?", [intro.isEmpty ? nil : intro, project])
     }
     try db.exec("ALTER TABLE projects DROP COLUMN goalCardID;")
+  }
+
+  /// 还没上传过的"要做"卡片（上一步从任务迁来的，没有同步元数据）换新 id：指向它们的上级、冲突原卡、发送记录与投送请求跟着改。
+  /// 新 id 只由旧 id 算出，不论各设备先后升级都得到同一个；改了引用的行顺带登记为待上传，别的设备才跟上。
+  /// 没迁移过的库里没有这样的卡，什么都不做。
+  private static func renameMigratedTasks(_ db: SQLite) throws {
+    let stale = try db.query("SELECT id FROM cards WHERE todoAt IS NOT NULL AND id NOT IN (SELECT recordName FROM syncRecords)") { $0.text(0) }
+    let now = Date.stamp
+    for old in stale {
+      let new = DeterministicID.uuid("task-card/\(old)").uuidString.lowercased()
+      try db.run("UPDATE cards SET id = ? WHERE id = ?", [new, old])
+      try db.run(#"UPDATE searchIndex SET refID = ? WHERE searchIndex MATCH 'refID: "' || ? || '"'"#, [new, old])
+      for (table, column) in [("cards", "parentID"), ("cards", "conflictOf"), ("sendRecords", "cardID"), ("deliveryRequests", "cardID")] {
+        try db.run("UPDATE \(table) SET \(column) = ?, modifiedAt = ? WHERE \(column) = ?", [new, now, old])
+      }
+    }
   }
 
   private static let piMessagesTable = """
