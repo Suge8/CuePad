@@ -35,6 +35,24 @@ import Testing
     #expect(delta.saves == [rig.id(card.id)])
   }
 
+  /// "待推送"只有一个定义：单条判定（失败后决定要不要重新登记）与全量对账认同一批记录。
+  @Test func theSingleRecordCheckAgreesWithTheFullReconcile() async throws {
+    let clean = try await store.createCard(in: nil, body: "clean")
+    let edited = try await store.createCard(in: nil, body: "edited")
+    try await rig.coordinator.reconcile()
+    try await rig.simulatePush()
+    try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒
+    try await store.updateCard(edited.id) { $0.body = "edited again" }
+    let neverPushed = try await store.createCard(in: nil, body: "new")
+
+    let batch = Set(try await store.pendingSync().saves.map(\.id))
+    #expect(batch == [rig.id(edited.id), rig.id(neverPushed.id)])
+    for card in [clean, edited, neverPushed] {
+      #expect(try await store.isPending(rig.id(card.id)) == batch.contains(rig.id(card.id)))
+    }
+    #expect(try await store.isPending("no-such-record") == false)
+  }
+
   @Test func permanentDeletionEnqueuesDeletesWithoutATombstoneTable() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: project.id, body: "x")

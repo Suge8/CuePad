@@ -69,9 +69,8 @@ extension CueStore {
 
   /// 这条记录此刻是不是待推送（从未推送过，或推送后又改过）；本机没有这条记录时不是。
   package func isPending(_ recordName: String) throws -> Bool {
-    guard let row = try syncRow(recordName: recordName) else { return false }
-    let pushed = try db.first("SELECT pushedModifiedAt FROM syncRecords WHERE recordName = ?", [recordName]) { $0.int(0) }
-    return pushed.map { row.modifiedAt > $0 } ?? true
+    for table in Table.synced where try !pendingSaves(table, where: "t.id = ?", [recordName]).isEmpty { return true }
+    return false
   }
 
   /// 全量对账：所有同步表里待推送的记录。
@@ -96,12 +95,13 @@ extension CueStore {
     return pending
   }
 
-  private func pendingSaves(_ table: Table, where condition: String) throws -> [SyncKey] {
+  /// "待推送"的唯一定义（全量、增量与单条判定都从这里来）：从未推送过，或推送后又改过。
+  private func pendingSaves(_ table: Table, where condition: String, _ arguments: [any SQLBindable] = []) throws -> [SyncKey] {
     try db.query(
       """
       SELECT t.id FROM \(table.rawValue) t LEFT JOIN syncRecords s ON s.recordName = t.id
       WHERE (\(condition)) AND (s.recordName IS NULL OR t.modifiedAt > s.pushedModifiedAt) ORDER BY t.rowid
-      """
+      """, arguments
     ) { SyncKey(table: table, id: $0.text(0)) }
   }
 
