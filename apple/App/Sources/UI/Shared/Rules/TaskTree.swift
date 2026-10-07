@@ -129,13 +129,9 @@ nonisolated struct TaskTree: Equatable, Sendable {
         let candidates = rows.filter { !excluded.contains($0.id) && frames[$0.id] != nil }
         let height = structure.height(of: dragged)
         var gap: Int
-        if let index = candidates.firstIndex(where: { frames[$0.id]!.minY <= point.y && point.y < frames[$0.id]!.maxY }) {
-            let row = candidates[index], frame = frames[row.id]!
-            let fraction = (point.y - frame.minY) / frame.height
-            if (0.25..<0.75).contains(fraction), fits(dragged, under: row.id) {
-                let move = TaskMove(slot: .under(row.id), after: children(of: row.id).filter { $0 != dragged }.last)
-                return TaskDrop(move: move, mark: .onto(row.id))
-            }
+        if let (index, fraction) = hit(point, in: candidates, frames: frames) {
+            let row = candidates[index]
+            if (0.25..<0.75).contains(fraction), fits(dragged, under: row.id) { return onto(row.id, dragged: dragged) }
             gap = fraction < 0.5 ? index : index + 1
         } else {
             gap = candidates.filter { frames[$0.id]!.midY < point.y }.count
@@ -159,6 +155,24 @@ nonisolated struct TaskTree: Equatable, Sendable {
             return TaskDrop(move: move, mark: .gap(after: previous?.id, depth: depth))
         }
         return nil
+    }
+
+    /// 灵感拖到任务上成为素材：落在哪一行就挂到它下面（整行都算，没有插入线——灵感不进任务的层级），排在它的下级之后；行外不接。
+    /// 命中哪一行与任务拖放同一套（`hit`）。
+    func drop(idea: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint) -> TaskDrop? {
+        let candidates = rows.filter { frames[$0.id] != nil }
+        return hit(point, in: candidates, frames: frames).map { onto(candidates[$0.index].id, dragged: idea) }
+    }
+
+    /// 点落在哪一行、在这一行的上下哪个位置（0 上沿，1 下沿）。
+    private func hit(_ point: CGPoint, in rows: [Row], frames: [UUID: CGRect]) -> (index: Int, fraction: CGFloat)? {
+        guard let index = rows.firstIndex(where: { frames[$0.id]!.minY <= point.y && point.y < frames[$0.id]!.maxY }) else { return nil }
+        let frame = frames[rows[index].id]!
+        return (index, (point.y - frame.minY) / frame.height)
+    }
+
+    private func onto(_ row: UUID, dragged: UUID) -> TaskDrop {
+        TaskDrop(move: TaskMove(slot: .under(row), after: children(of: row).filter { $0 != dragged }.last), mark: .onto(row))
     }
 
     private func gapMove(_ dragged: UUID, depth: Int, previous: Row?, next: Row?) -> TaskMove {

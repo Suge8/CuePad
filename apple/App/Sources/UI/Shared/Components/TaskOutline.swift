@@ -5,6 +5,13 @@ import UniformTypeIdentifiers
 import UIKit
 #endif
 
+extension View {
+    /// 灵感可以拖到任务大纲的任务行上，松手挂为它的素材（iOS 长按抬起，Mac 按住拖）。
+    func ideaDrag(_ id: UUID) -> some View {
+        onDrag { TaskDragSession.shared.begin(id, isTask: false) }
+    }
+}
+
 /// 大纲自己的坐标系：行的位置与拖放的落点都在这里量。
 private nonisolated let outlineSpace = "TaskOutline"
 
@@ -57,7 +64,7 @@ struct TaskOutline<Line: View>: View {
         .coordinateSpace(.named(outlineSpace))
         .overlay(alignment: .topLeading) { InsertionLine(drag: drag, first: rows.first?.id, indent: Self.indentWidth) }
         .onDrop(of: [.utf8PlainText], delegate: OutlineDrop(
-            accepts: { TaskDragSession.shared.dragged.flatMap(whole.task) != nil },
+            accepts: { TaskDragSession.shared.dragged.map { !$0.isTask || whole.task($0.id) != nil } ?? false },
             update: { update($0, rows: rows) },
             exit: { drag.end() },
             perform: perform))
@@ -78,10 +85,7 @@ struct TaskOutline<Line: View>: View {
         .contentShape(.rect)
         .environment(\.taskStructure, structure)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(outlineSpace)) } action: { drag.frames[row.id] = $0 }
-        .onDrag {
-            TaskDragSession.shared.dragged = row.id
-            return NSItemProvider(object: row.id.uuidString as NSString)
-        }
+        .onDrag { TaskDragSession.shared.begin(row.id, isTask: true) }
         #if os(iOS)
         .rowSwipe(
             right: structure.indent.map { SwipeAction(symbol: "increase.indent", run: $0) },
@@ -91,10 +95,11 @@ struct TaskOutline<Line: View>: View {
 
     private func update(_ point: CGPoint, rows: [TaskTree.Row]) {
         guard let dragged = TaskDragSession.shared.dragged else { return }
+        guard dragged.isTask else { return drag.set(whole.drop(idea: dragged.id, rows: rows, frames: drag.frames, at: point)) }
         let start = drag.startX ?? point.x
         drag.startX = start
         let shift = Int(((point.x - start) / Self.indentWidth).rounded())
-        drag.set(whole.drop(dragged, rows: rows, frames: drag.frames, at: point, depthShift: shift))
+        drag.set(whole.drop(dragged.id, rows: rows, frames: drag.frames, at: point, depthShift: shift))
     }
 
     /// 只落自己大纲里拖出来的那一条：拖进来的内容与它不符（比如别处拖来的文字）就不动。
@@ -103,7 +108,7 @@ struct TaskOutline<Line: View>: View {
         TaskDragSession.shared.dragged = nil
         drag.end()
         guard let dragged, let move, let provider = info.itemProviders(for: [.utf8PlainText]).first else { return false }
-        let expected = dragged.uuidString
+        let expected = dragged.id.uuidString
         let apply: @MainActor @Sendable () -> Void = { commit(dragged, move) }
         _ = provider.loadObject(ofClass: NSString.self) { object, _ in
             let matches = (object as? NSString).map(String.init) == expected
@@ -113,17 +118,36 @@ struct TaskOutline<Line: View>: View {
     }
 
     private func commit(_ id: UUID, _ move: TaskMove) {
+        commit(TaskDragSession.Dragged(id: id, isTask: true), move)
+    }
+
+    /// 任务挪到新位置；灵感挂为素材（提示里可撤销）。
+    private func commit(_ dragged: TaskDragSession.Dragged, _ move: TaskMove) {
         commits += 1
-        workspace.move(id, move)
+        if dragged.isTask {
+            workspace.move(dragged.id, move)
+        } else {
+            workspace.attempt { try await workspace.attach(dragged.id, move) }
+        }
     }
 }
 
-/// 正被拖着的任务：一次只有一条，同一页上的几个大纲（看板的进行中与待办）都认它，所以能跨组拖。
-/// 拖到页外取消时系统不通知，留着的旧值只会让下一次拖进来的外部内容被`perform`核对后拒绝。
+/// 正被拖着的任务或灵感：一次只有一条，同一页上的几个大纲（看板的进行中与待办、项目页的任务区）都认它，所以能跨组拖，
+/// 灵感能从墙上拖到任务上。拖到页外取消时系统不通知，留着的旧值只会让下一次拖进来的外部内容被`perform`核对后拒绝。
 @MainActor
 final class TaskDragSession {
+    struct Dragged {
+        let id: UUID
+        let isTask: Bool
+    }
+
     static let shared = TaskDragSession()
-    var dragged: UUID?
+
+    func begin(_ id: UUID, isTask: Bool) -> NSItemProvider {
+        dragged = Dragged(id: id, isTask: isTask)
+        return NSItemProvider(object: id.uuidString as NSString)
+    }
+    var dragged: Dragged?
 }
 
 /// 一个大纲里的落点状态。起点与行的位置不参与排版（不观察）；落点只由高亮与插入线读，且只在变了时才写。

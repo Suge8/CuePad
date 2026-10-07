@@ -95,4 +95,14 @@ struct TaskTreeRulesTests {
         let afterB = s.tree.drop(s.a.id, rows: rows, frames: frames(rows), at: CGPoint(x: 100, y: 174), depthShift: 0)
         #expect(afterB?.move == TaskMove(slot: .top(project: nil), after: s.b.id))
     }
+
+    @Test func 灵感拖到任务行上_整行都算落在它上面_挂为素材排在最后_行外不接() async throws {
+        let s = try await sample()
+        let idea = try await store.createCard(in: nil, body: "日志")
+        let rows = s.tree.rows(toggled: [])
+        // a1 的上沿附近（任务拖到这里是插入线），灵感照样落在 a1 上
+        let drop = s.tree.drop(idea: idea.id, rows: rows, frames: frames(rows), at: CGPoint(x: 100, y: 46))
+        #expect(drop == TaskDrop(move: TaskMove(slot: .under(s.a1.id), after: s.a1x.id), mark: .onto(s.a1.id)))
+        #expect(s.tree.drop(idea: idea.id, rows: rows, frames: frames(rows), at: CGPoint(x: 100, y: 400)) == nil)
+    }
 }

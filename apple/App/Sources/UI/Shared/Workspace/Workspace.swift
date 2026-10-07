@@ -347,11 +347,20 @@ final class Workspace {
         say(on ? "已设为任务" : "已回到灵感", undo: { try await store.setTodo(id, !on) })
     }
 
-    /// 挂素材：一条灵感挂到任务下，排在已有下级之后。
+    /// 挂素材（添加素材菜单）：一条灵感挂到任务下，排在已有下级之后。
     func attach(_ idea: UUID, to task: UUID) async throws {
+        let last = try await services.store.children(of: task).last?.id
+        try await attach(idea, TaskMove(slot: .under(task), after: last))
+    }
+
+    /// 挂素材（菜单或把灵感拖到任务上）：提示里的撤销把它放回原来所在的项目、原来的位置。
+    func attach(_ idea: UUID, _ move: TaskMove) async throws {
         let store = services.store
-        let last = try await store.children(of: task).last?.id
-        try await store.moveCard(idea, to: .under(task), after: last)
+        guard let card = try await store.card(idea) else { throw CueStoreError.notFound }
+        let siblings = try await store.cards(in: card.projectID).map(\.id)
+        let before = siblings.firstIndex(of: idea).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
+        try await store.moveCard(idea, to: move.slot, after: move.after)
+        say("已挂为素材", undo: { try await store.moveCard(idea, to: .top(project: card.projectID), after: before) })
     }
 
     /// 图片（相册、拍照、选文件）存成一条灵感，挂到任务下作素材。

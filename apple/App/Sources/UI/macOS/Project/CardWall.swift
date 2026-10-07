@@ -198,6 +198,7 @@ struct CardTile: View {
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
         .contextMenu { CardActions(card: card) }
+        .ideaDrag(card.id)
         .accessibilityElement(children: .combine)
         #if DEBUG
         .onAppear { PerfProbe.mark("content") }
