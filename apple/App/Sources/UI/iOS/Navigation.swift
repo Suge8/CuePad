@@ -78,7 +78,7 @@ final class Navigation {
         var project: Project?
     }
 
-    /// 新会话面板；`project` 是先选中的项目（Agent 页筛着的），`launched` 是已经发出的那一次（再打开时接着看它的进度）。
+    /// 新会话输入框（`NewSessionInput`）；`project` 是先选中的项目（Agent 页筛着的），`launched` 是已经发出的那一次（再打开时接着看它的进度）。
     struct NewSession: Identifiable {
         struct Launched: Equatable, Sendable {
             var request: UUID

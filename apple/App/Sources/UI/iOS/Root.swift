@@ -38,7 +38,7 @@ struct IOSRootView: View {
             .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) { CaptureComposer() } }
             .overlay {
                 FloatingInput(isPresented: navigation.newSession != nil, close: { navigation.newSession = nil }) {
-                    if let start = navigation.newSession { NewSessionSheet(start: start).id(start.id) }
+                    if let start = navigation.newSession { NewSessionInput(start: start).id(start.id) }
                 }
             }
             .sheet(item: $navigation.outbox) { SessionPicker(outbox: $0) }

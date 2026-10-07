@@ -6,7 +6,7 @@ import SwiftUI
 /// （默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时菜单里写上 Mac 名）。发送钮就是开始：
 /// 发出后头部写进度（送达中 → Mac 在开），Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；没能打开时头部写原因，可以再发。
 /// 没有能开的地方时输入框换成一句说明。
-struct NewSessionSheet: View {
+struct NewSessionInput: View {
     let start: Navigation.NewSession
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
