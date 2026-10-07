@@ -179,7 +179,7 @@ private struct FocusCard: View {
                     .padding(.bottom, 4)
                 let roots = data.tasks.roots
                 TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
-                    TaskLine(task: row.task, subtasks: data.subtasks[row.id]).contextMenu { TaskActions(task: row.task) { navigation.openTask(row.id) } }
+                    TaskLine(task: row.task, subtasks: data.subtasks[row.id]).contextMenu { CardActions(card: row.task) }
                 }
                 if roots.count > Self.visibleTasks {
                     Button("还有 \(roots.count - Self.visibleTasks) 条") { navigation.push(.tasks) }

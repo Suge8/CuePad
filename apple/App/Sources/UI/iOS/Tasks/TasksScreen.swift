@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 任务页（书架上的"任务"一行、iPad 侧栏、项目页"还有 N 条"进入）：顶上常驻一行快速添加（↩ 即一条，落当前项目或未归档，可换）；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
 /// 子任务缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的子任务、右滑缩进左滑反缩进），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
-/// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `TaskActions`。
+/// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `CardActions`。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -109,7 +109,7 @@ struct TasksScreen: View {
 
     private func line(_ task: Card, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?, subtasks: TaskProgress?) -> some View {
         TaskLine(task: task, project: project, session: session, delivery: delivery, subtasks: subtasks)
-            .contextMenu { TaskActions(task: task) { navigation.openTask(task.id) } }
+            .contextMenu { CardActions(card: task) }
     }
 }
 
@@ -143,7 +143,7 @@ struct TaskLine: View {
         line
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, PromptMark(task).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
@@ -189,10 +189,13 @@ struct TaskLine: View {
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: phase) { $0 == .idle && $1 == .pending }
             VStack(alignment: .leading, spacing: 3) {
-                Text(task.title.textGlyphs)
-                    .font(.body).strikethrough(done)
-                    .foregroundStyle(done ? palette.ink3 : palette.ink)
-                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(task.title.textGlyphs)
+                        .font(.body).strikethrough(done)
+                        .foregroundStyle(done ? palette.ink3 : palette.ink)
+                        .lineLimit(2)
+                    if !done { PromptMarkIcon(mark: PromptMark(task), showsSession: session != nil) }
+                }
                 if hasDetail { detail }
             }
             .padding(.vertical, hasDetail ? 6 : 0)

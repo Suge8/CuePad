@@ -13,6 +13,14 @@ final class IOSEditorHandle {
     /// 选中部分的存储格式；没选中为 nil。
     var selection: String? { view?.selectedStoredText }
     func insertImage(_ data: Data) { view?.insertImage(data: data) }
+
+    /// 从正文末尾另起一行接着写（任务只有标题时的"写下要 Agent 做什么…"）。
+    func continueAtEnd() {
+        guard let view else { return }
+        view.becomeFirstResponder()
+        view.selectedRange = NSRange(location: (view.text as NSString).length, length: 0)
+        if !view.text.hasSuffix("\n") { view.insertText("\n") }
+    }
 }
 
 /// iOS CueTextView 的 SwiftUI 宿主。正文只在创建时载入一次，之后编辑器是这张卡正文的唯一写者。

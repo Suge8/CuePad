@@ -156,9 +156,11 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
 
-  /// 发送记录，最近的在前。
-  public func sendRecords() throws -> [SendRecord] {
-    try select(SendRecord.self, orderBy: "sentAt DESC, id")
+  /// 发送记录，最近的在前（同一毫秒按写入先后）；给了 `card` 只要发出这条灵感或任务的那些（任务浮窗的发出记录）。
+  public func sendRecords(card: UUID? = nil) throws -> [SendRecord] {
+    let order = "sentAt DESC, rowid DESC"
+    guard let card else { return try select(SendRecord.self, orderBy: order) }
+    return try select(SendRecord.self, where: "cardID = ?", [card], orderBy: order)
   }
 
   /// 项目（nil = 未归档）里可见卡片的最近一次发送（时间与目标）：卡片 id → `LastSend`；从未发送的卡不在结果里。

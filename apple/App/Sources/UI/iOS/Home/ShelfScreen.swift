@@ -358,7 +358,7 @@ private struct ActiveTasks: View {
                 ForEach(rows) { row in
                     Button { navigation.openTask(row.id) } label: { card(row) }
                         .buttonStyle(CardPressStyle())
-                        .contextMenu { TaskActions(task: row.task) }
+                        .contextMenu { CardActions(card: row.task) }
                 }
             }
         }

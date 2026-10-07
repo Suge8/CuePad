@@ -15,7 +15,7 @@ extension View {
 /// 大纲自己的坐标系：行的位置与拖放的落点都在这里量。
 private nonisolated let outlineSpace = "TaskOutline"
 
-/// 一行任务在大纲里能做的结构操作；做不了的为 nil。行的长按/右键菜单（`TaskActions`）与读屏动作从环境里取。
+/// 一行任务在大纲里能做的结构操作；做不了的为 nil。读屏动作从环境里取（长按与右键菜单不放缩进，手势已覆盖）。
 struct TaskStructure {
     var indent: (() -> Void)?
     var outdent: (() -> Void)?

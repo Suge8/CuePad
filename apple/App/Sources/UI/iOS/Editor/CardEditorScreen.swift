@@ -10,11 +10,13 @@ nonisolated private struct EditorData: Sendable {
     var project: Project?
 }
 
-/// 打开的卡：一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面）。键盘上方是工具栏（分割线、插图、变量取值、发送；选中文字时发送只发选中的部分）；
-/// 顶栏是共用的悬浮顶栏：中间写所属项目与"时间 · 状态 · 置顶"，右边"⋯"里是发送（⌘↩；任务写"交给 Agent"）、复制、分享与卡片操作。
-/// 任务在正文上方多一块状态、会话与下级（`TaskPanel`）。
+/// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值、发送；选中文字时发送只发选中的部分）与自动保存在这里，
+/// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目与"时间 · 置顶"，
+/// 右边"⋯"里是发到 Mac（⌘↩）、复制、分享与灵感操作；任务是 `TaskPage`（正文是给 Agent 的话，周围是状态、Agent 与下级）。
 struct CardEditorScreen: View {
     let cardID: UUID
+    /// 还没读到卡时先按哪种外框排（任务浮窗里是任务），读到后以卡为准。
+    var expectsTask = false
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
@@ -34,16 +36,8 @@ struct CardEditorScreen: View {
     private static let pageWidth: CGFloat = 760
 
     var body: some View {
-        page
-            .frame(maxWidth: wide ? Self.pageWidth : .infinity, maxHeight: .infinity, alignment: .top)
-            .background(palette.paper, in: .rect(cornerRadius: wide ? 22 : 0, style: .continuous))
-            .overlay {
-                if wide { RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(palette.hair).allowsHitTesting(false) }
-            }
-            .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        frame
             .ownsBottomEdge()
-            .floatingHeader(data.map { $0.project?.name ?? "未归档" } ?? "", detail: data.map(Self.detail) ?? "") { actions }
             // 菜单项上的快捷键要等菜单打开才生效：⌘↩ 另挂一个不占位的按钮
             .background {
                 Button(sendTitle, action: sendToMac).keyboardShortcut(.return, modifiers: .command)
@@ -72,14 +66,40 @@ struct CardEditorScreen: View {
     }
 
     private var wide: Bool { sizeClass == .regular }
+    private var isTask: Bool { data?.card.isTask ?? expectsTask }
 
-    @ViewBuilder private var page: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let data, data.card.isTask {
-                TaskPanel(task: data.card)
-                    .padding(.horizontal, inset).padding(.top, 8).padding(.bottom, 4)
-                Divider().overlay(palette.hair).padding(.horizontal, inset)
+    @ViewBuilder private var frame: some View {
+        if isTask {
+            if let data {
+                TaskPage(
+                    card: data.card, project: data.project, written: TaskPrompt.isWritten(liveText), hand: sendToMac,
+                    continuePrompt: handle.continueAtEnd
+                ) {
+                    editor
+                } actions: {
+                    Button("复制", systemImage: "doc.on.doc") { copy(data.card) }
+                    ShareLink(item: outgoing(data.card)) { Label("分享", systemImage: "square.and.arrow.up") }
+                    Divider()
+                    CardActions(card: data.card, inEditor: true)
+                }
+            } else {
+                palette.paper
             }
+        } else {
+            editor
+                .frame(maxWidth: wide ? Self.pageWidth : .infinity, maxHeight: .infinity, alignment: .top)
+                .background(palette.paper, in: .rect(cornerRadius: wide ? 22 : 0, style: .continuous))
+                .overlay {
+                    if wide { RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(palette.hair).allowsHitTesting(false) }
+                }
+                .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .floatingHeader(data.map { $0.project?.name ?? "未归档" } ?? "", detail: data.map(Self.detail) ?? "") { actions }
+        }
+    }
+
+    @ViewBuilder private var editor: some View {
+        VStack(alignment: .leading, spacing: 0) {
             if let data, let initialText {
                 IOSEditorHost(
                     initialText: initialText,
@@ -98,11 +118,11 @@ struct CardEditorScreen: View {
         }
     }
 
-    private var inset: CGFloat { wide ? 44 : 20 }
+    private var inset: CGFloat { wide && !isTask ? 44 : 20 }
 
-    /// 顶栏的一行："03:36 · 任务 · 置顶"。
+    /// 顶栏的一行："03:36 · 置顶"。
     private static func detail(_ data: EditorData) -> String {
-        let marks = [data.card.isTask ? "任务" : nil, data.card.isPinned ? "置顶" : nil].compactMap { $0 }
+        let marks = [data.card.isPinned ? "置顶" : nil].compactMap { $0 }
         return ([DateLabel.short(data.card.modifiedAt)] + marks).joined(separator: " · ")
     }
 

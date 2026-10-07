@@ -82,7 +82,11 @@ struct CardEditorPage: View {
                 VStack(alignment: .leading, spacing: 10) {
                     meta(data)
                     if data.card.isTask {
-                        TaskPanel(task: data.card).padding(.horizontal, 64)
+                        VStack(alignment: .leading, spacing: 4) {
+                            TaskStatusMenu(task: data.card)
+                            TaskSections(task: data.card)
+                        }
+                        .padding(.horizontal, 64)
                         Divider().overlay(palette.hair).padding(.horizontal, 64)
                     }
                     editor(data, initialText)

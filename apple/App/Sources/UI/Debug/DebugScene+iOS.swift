@@ -8,7 +8,7 @@ import UIKit
 /// search 在 iPhone 上是书架顶上的搜索框（给了 `-CuePadProject` 则是该项目页的下拉搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对推入的首帧；
 /// 给了 `-CuePadPush <tasks|settings|trash|inbox|card>` 时推入的是那一页（card 是该项目里的一张卡）。
-/// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；task 停在书架并在浮窗里打开"正在推进"的第一条（没有就是第一条待办）。
+/// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；task 停在书架并在浮窗里打开"正在推进"的第一条（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// taskflow：书架上走一遍任务的后半程（配 `-CuePadDemoMac YES`）：圆桌的"补重连用例"在浮窗里打开 → 交给演示 Mac 的 notes 会话、收起浮窗 →
 /// 送达后"正在推进"出现这条并带会话状态 → 再打开浮窗标为完成。前半程（随手记、轻扫要做、浮窗里改正文）用真实手势录。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（给了 `-CuePadPushAfter <秒>` 时先停在 Agent 页，到时再推入）；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
@@ -97,7 +97,9 @@ extension DebugScene {
         case "task":
             let store = workspace.services.store
             let tasks = (try? await store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
-            if let task = tasks.first(where: { $0.status == .inProgress }) ?? tasks.first { navigation.openTask(task.id) }
+            // 给了 -CuePadTask <标题开头> 打开那一条，否则进行中的第一条
+            let named = defaults.string(forKey: "CuePadTask").flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
+            if let task = named ?? tasks.first(where: { $0.status == .inProgress }) ?? tasks.first { navigation.openTask(task.id) }
         case "taskflow": await taskFlow(workspace, navigation)
         case "session":
             // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在 Agent 标签里

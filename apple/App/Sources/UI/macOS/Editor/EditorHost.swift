@@ -14,6 +14,16 @@ final class EditorHandle {
     var selection: String? { view?.textView.selectedStoredText }
     func insertDivider() { view?.textView.insertDivider() }
     func focus() { view.map { $0.window?.makeFirstResponder($0.textView) } }
+
+    /// 从正文末尾另起一行接着写（任务只有标题时的"写下要 Agent 做什么…"）。
+    func continueAtEnd() {
+        guard let view else { return }
+        let textView = view.textView
+        view.window?.makeFirstResponder(textView)
+        let end = (textView.string as NSString).length
+        textView.setSelectedRange(NSRange(location: end, length: 0))
+        if !textView.string.hasSuffix("\n") { textView.insertText("\n", replacementRange: NSRange(location: end, length: 0)) }
+    }
 }
 
 /// CueEditorView 的 SwiftUI 宿主。正文只在创建时载入一次：之后编辑器是这张卡正文的唯一写者，
