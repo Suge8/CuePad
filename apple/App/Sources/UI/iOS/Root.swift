@@ -13,7 +13,7 @@ struct IOSRoot: View {
     }
 }
 
-/// iOS/iPadOS 的根视图：窄宽用标签栏（灵感 / Agent 与"写"；任务从书架一行进入，搜索在书架与项目页下拉），宽 iPad 用分栏。
+/// iOS/iPadOS 的根视图：窄宽是两个标签（灵感 / Agent）加底部一行（标签与"写"；任务从书架一行进入），宽 iPad 用分栏。
 struct IOSRootView: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
@@ -116,15 +116,9 @@ struct RouteView: View {
     }
 }
 
-/// iPhone：底部一行，左边标签（灵感 / Agent），右边一颗独立的圆形"写"（系统标签栏的突出标签）。
-/// 点"写"不切标签，只浮起随手记：在 UIKit 选中它之前拦下（`WriteTabGate`）。让它选中再在 SwiftUI 里改回来虽不闪白，
-/// 但当前页会经历一次消失与出现，书架的下拉搜索框随之收起、整页上跳。
+/// iPhone（及窄窗口 iPad）：两个标签的内容 + 底部自绘的一行（`BottomBar`）。系统标签栏隐藏，TabView 只管切内容
+/// （保留各标签的导航栈与页面的出现/消失）；底部那一行不随滚动收小，进纸页、会话页时随页收起。
 private struct TabsRoot: View {
-    private enum Slot: Hashable {
-        case tab(Navigation.Tab)
-        case write
-    }
-
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     /// Agent 标签的角标：等你确认的 Pi 会话数。
@@ -132,18 +126,23 @@ private struct TabsRoot: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        TabView(selection: selection) {
-            Tab("灵感", systemImage: "lightbulb", value: Slot.tab(.projects)) {
-                stack($navigation.projectsPath) { RouteView(route: .shelf) }
-            }
-            Tab("Agent", systemImage: "waveform.path.ecg", value: Slot.tab(.agent)) {
-                stack($navigation.agentPath) { RouteView(route: .agent) }
-            }
-            .badge(waiting ?? 0)
-            Tab(WriteEntry.title, systemImage: WriteEntry.symbol, value: Slot.write, role: .prominent) { EmptyView() }
+        TabView(selection: $navigation.tab) {
+            Tab(value: Navigation.Tab.projects) { stack($navigation.projectsPath) { RouteView(route: .shelf) } }
+            Tab(value: Navigation.Tab.agent) { stack($navigation.agentPath) { RouteView(route: .agent) } }
         }
-        .tabBarMinimizeBehavior(.onScrollDown)
-        // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的下拉搜索（与宽屏的搜索页同一组快捷键）
+        // 内容让出底部一行的高度（滚动到它下面的内容渐隐）；那一行本身浮在上面、不随键盘升起，键盘出来时被盖住
+        .safeAreaBar(edge: .bottom) {
+            if navigation.bottomPages == 0 { Color.clear.frame(height: BottomBar.height + BottomBar.bottomGap) }
+        }
+        .overlay(alignment: .bottom) {
+            if navigation.bottomPages == 0 {
+                BottomBar(waiting: waiting ?? 0)
+                    .ignoresSafeArea(.keyboard, edges: .bottom)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(Motion.panel, value: navigation.bottomPages == 0)
+        // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的搜索（与宽屏的搜索页同一组快捷键）
         .background {
             ZStack {
                 Button("搜索") { navigation.searchCurrentPage() }.keyboardShortcut("k")
@@ -159,65 +158,99 @@ private struct TabsRoot: View {
         }
     }
 
-    /// "写"在 UIKit 那一层就被拦下，从不进到这里。
-    private var selection: Binding<Slot> {
-        Binding { .tab(navigation.tab) } set: { if case .tab(let tab) = $0 { navigation.tab = tab } }
-    }
-
     private func stack(_ path: Binding<[Navigation.Route]>, @ViewBuilder root: () -> some View) -> some View {
         NavigationStack(path: path) {
             root().navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
         }
-        // 纸页与会话页独占底部。跟页面的出现与消失走而不是跟路径：手势返回一开始标签栏就回来，松手时页面不再跳
-        .toolbarVisibility(navigation.bottomPages > 0 ? .hidden : .visible, for: .tabBar)
-        // 挂在标签页里才找得到标签栏控制器；每个标签都挂，从哪个标签启动（通知直达 Agent）都装得上
-        .background { WriteTabGate { navigation.startCapture() } }
+        .toolbarVisibility(.hidden, for: .tabBar)
     }
 }
 
-/// 拦下标签栏上的"写"：选中前问一句委托（`shouldSelectTab`），是它就做动作并拒绝选中。SwiftUI 的标签栏委托没实现这一问，
-/// 所以在它前面套一层，其余消息原样转给它。
-private struct WriteTabGate: UIViewControllerRepresentable {
-    let action: () -> Void
+/// 底部一行，整体居中：贴在一起的玻璃 [灵感 | Agent] 与一颗圆形"写"；位置与大小始终不变，不随滚动收小。
+private struct BottomBar: View {
+    let waiting: Int
+    @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    func makeUIViewController(context: Context) -> Probe {
-        let probe = Probe()
-        probe.gate.action = action
-        return probe
+    static let height: CGFloat = 62
+    static let bottomGap: CGFloat = 4
+    private static let inset: CGFloat = 4
+    private static let tabWidth: CGFloat = 92
+
+    var body: some View {
+        HStack(spacing: 12) {
+            tabs
+            Button { navigation.startCapture() } label: {
+                Image(systemName: WriteEntry.symbol).font(.title2.weight(.medium)).foregroundStyle(palette.ink)
+                    .frame(width: Self.height, height: Self.height)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(PressStyle(scale: 0.9))
+            .glass(in: .circle, interactive: true)
+            .accessibilityLabel(WriteEntry.title)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, Self.bottomGap)
     }
 
-    func updateUIViewController(_ probe: Probe, context: Context) {}
-
-    final class Probe: UIViewController {
-        let gate = Gate()
-
-        /// 先出现的那个标签装上，之后的看到已经装过就不再套一层。
-        override func viewIsAppearing(_ animated: Bool) {
-            super.viewIsAppearing(animated)
-            guard let tabs = tabBarController, !(tabs.delegate is Gate) else { return }
-            gate.inner = tabs.delegate
-            tabs.delegate = gate
+    /// 两格标签：底下一块玻璃，选中的那一格上一滴着色的玻璃（同一个玻璃容器里，换标签时滑过去、途中与底板相融）；
+    /// 字与图标叠在玻璃之上（放进容器里会被玻璃盖住）。
+    private var tabs: some View {
+        GlassEffectContainer {
+            ZStack(alignment: navigation.tab == .projects ? .leading : .trailing) {
+                Capsule().fill(.clear)
+                    .frame(width: Self.tabWidth * 2 + Self.inset * 2, height: Self.height)
+                    .glassEffect(.regular, in: .capsule)
+                Capsule().fill(.clear)
+                    .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
+                    .glassEffect(.regular.tint(palette.selection), in: .capsule)
+                    .padding(Self.inset)
+            }
+        }
+        .overlay {
+            HStack(spacing: 0) {
+                tab(.projects, title: "灵感", symbol: "lightbulb")
+                tab(.agent, title: "Agent", symbol: "waveform.path.ecg", badge: waiting)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isTabBar)
         }
     }
 
-    final class Gate: NSObject, UITabBarControllerDelegate {
-        var action: () -> Void = {}
-        /// 只在主线程上设置与转发（UIKit 的委托消息都在主线程）。
-        nonisolated(unsafe) weak var inner: UITabBarControllerDelegate?
-
-        func tabBarController(_ controller: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
-            guard tab.title == WriteEntry.title else { return true }
-            action()
-            return false
+    private func tab(_ tab: Navigation.Tab, title: String, symbol: String, badge: Int = 0) -> some View {
+        let selected = navigation.tab == tab
+        return Button {
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.tab = tab }
+        } label: {
+            VStack(spacing: 2) {
+                Image(systemName: symbol).font(.title3.weight(selected ? .semibold : .regular))
+                    .frame(height: 26)
+                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).offset(x: 12, y: -6) } }
+                Text(title).font(.caption2.weight(selected ? .semibold : .medium))
+            }
+            .foregroundStyle(palette.ink)
+            .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
+            .contentShape(.capsule)
         }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(badge > 0 ? "\(badge) 个会话等你确认" : "")
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}
 
-        nonisolated override func responds(to selector: Selector!) -> Bool {
-            super.responds(to: selector) || inner?.responds(to: selector) == true
-        }
+/// 角标：注意色的小胶囊（等你确认数），跟随字号。
+private struct Badge: View {
+    let count: Int
+    @Environment(\.palette) private var palette
 
-        nonisolated override func forwardingTarget(for selector: Selector!) -> Any? {
-            inner?.responds(to: selector) == true ? inner : super.forwardingTarget(for: selector)
-        }
+    var body: some View {
+        Text("\(count)").font(.caption2.weight(.bold).monospacedDigit()).foregroundStyle(.white)
+            .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18)
+            .background(palette.attention, in: .capsule)
+            .accessibilityHidden(true)
     }
 }
 

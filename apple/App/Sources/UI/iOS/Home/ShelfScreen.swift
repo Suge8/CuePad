@@ -42,8 +42,9 @@ nonisolated struct ShelfData: Sendable {
     }
 }
 
-/// iPhone 首页：项目书架。最上面一张纸：有没归类的想法时一行提醒去整理，有任务时一行"任务 · N 进行中 · N 待办"进入跨项目任务页；
-/// 置顶项目是大卡，其余按最近排成行，都带目标、卡片数、任务数与 Pi 状态点。
+/// iPhone 首页：项目书架。顶上一排：搜索全部卡片（占满左边，输入时页面换成搜索结果）与"⋯"（新建项目、未归档、回收站、设置）；
+/// iPad 分栏里这些都在侧栏，顶上不放。最上面一张纸：有没归类的想法时一行提醒去整理，有任务时一行"任务 · N 进行中 · N 待办"进入
+/// 跨项目任务页；置顶项目是大卡，其余按最近排成行，都带目标、卡片数、任务数与 Pi 状态点。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -51,31 +52,41 @@ struct ShelfScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var data: ShelfData?
+    @State private var query = PaletteQuery()
+    @FocusState private var searchFocused: Bool
+
+    /// 一张卡都没有时没什么可搜，不放搜索框。
+    private var searchable: Bool { workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true }
+    private var searching: Bool { searchFocused || !query.text.isEmpty }
 
     var body: some View {
-        ScrollView {
-            if let data { content(data) }
+        Group {
+            if searching {
+                CardSearchResults(query: $query, scope: .all)
+            } else {
+                ScrollView {
+                    if let data { content(data) }
+                }
+                .refreshable { await services.syncNow() }
+            }
         }
-        // 一张卡都没有时没什么可搜，不挂搜索框与放大镜
-        .cardSearch(.all, available: navigation.layout == .tabs && workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true, ready: true)
-        // 不显示大标题：顶上只留浮着的玻璃按钮与搜索，内容多露出来；标题仍是读屏与多任务切换器里的名字
+        // 不显示标题：顶上只有那一排，内容多露出来；标题仍是读屏与多任务切换器里的名字
         .navigationTitle("灵感")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(removing: .title)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
-            }
-            ToolbarItem(placement: .secondaryAction) {
-                NavigationLink(value: Navigation.Route.settings) { Label("设置", systemImage: "gearshape") }
-            }
-            ToolbarItem(placement: .secondaryAction) {
-                NavigationLink(value: Navigation.Route.trash) {
-                    Label(data.map { $0.trashCount > 0 ? "回收站 · \($0.trashCount)" : "回收站" } ?? "回收站", systemImage: "trash")
-                }
-            }
+        .safeAreaBar(edge: .top) {
+            if navigation.layout == .tabs { row }
         }
-        .refreshable { await services.syncNow() }
+        .toolbarVisibility(navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
+        .onAppear(perform: focusIfRequested)
+        .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
+        #if DEBUG
+        .onAppear {
+            guard DebugScene.activatesSearch(.all) else { return }
+            query.text = DebugScene.searchText
+            searchFocused = true
+        }
+        #endif
         .observing(services.store, [.projects, .cards, .tasks, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }
@@ -128,6 +139,34 @@ struct ShelfScreen: View {
     }
 
     private static let readableWidth: CGFloat = 760
+
+    /// 搜索框（一张卡都没有时没什么可搜，只留右边的"⋯"）与"⋯"。
+    private var row: some View {
+        SearchRow(search: searchable ? SearchCapsule(prompt: "搜索全部卡片", query: $query.text, focus: $searchFocused) : nil) { menu }
+    }
+
+    private var menu: some View {
+        Menu {
+            Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
+            Button(count("未归档", data?.inboxCount), systemImage: "tray") { navigation.push(.inbox) }
+            Button(count("回收站", data?.trashCount), systemImage: "trash") { navigation.push(.trash) }
+            Button("设置", systemImage: "gearshape") { navigation.push(.settings) }
+        } label: {
+            Label("更多", systemImage: "ellipsis")
+        }
+    }
+
+    private func count(_ title: String, _ n: Int?) -> String {
+        guard let n, n > 0 else { return title }
+        return "\(title) · \(n)"
+    }
+
+    /// ⌘K 指名书架时聚焦搜索框（标签栏布局，见 `Navigation.searchCurrentPage`）。
+    private func focusIfRequested() {
+        guard navigation.pendingPageSearch == .shelf else { return }
+        navigation.pendingPageSearch = nil
+        searchFocused = true
+    }
 }
 
 /// 书架顶上的一行：图标、标题、说明，点进一页。
