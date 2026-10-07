@@ -66,6 +66,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var projectID: UUID?
   /// 纯字符串正文：分割线为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
+  /// 资料：项目里长期参考的灵感（项目页顶部一组，交给 Agent 时可一并带上）。字段名沿用同步记录里的 isPinned。
   public var isPinned: Bool
   public var variableValues: [String: String]
   /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
@@ -138,6 +139,24 @@ public struct TaskProgress: Equatable, Sendable {
   public init(done: Int, total: Int) {
     self.done = done
     self.total = total
+  }
+
+  /// 直接子任务的完成数与总数；没有子任务时为 nil。
+  public static func subtasks(in marks: [ChildMark]?) -> TaskProgress? {
+    let subtasks = (marks ?? []).filter(\.isTask)
+    return subtasks.isEmpty ? nil : TaskProgress(done: subtasks.filter(\.isDone).count, total: subtasks.count)
+  }
+}
+
+/// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；素材（挂着的灵感）交给过 Agent 算做完——
+/// 它自己有发送记录，或上级任务某次发出的原文里含着它的正文（连同任务一起发出）。见 `CueStore.childMarks`。
+public struct ChildMark: Equatable, Sendable {
+  public let isTask: Bool
+  public let isDone: Bool
+
+  public init(isTask: Bool, isDone: Bool) {
+    self.isTask = isTask
+    self.isDone = isDone
   }
 }
 

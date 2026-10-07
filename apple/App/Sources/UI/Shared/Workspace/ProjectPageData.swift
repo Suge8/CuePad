@@ -12,8 +12,8 @@ nonisolated struct ProjectPageData: Sendable {
     var tasks: TaskTree
     /// 本项目顶层任务的完成数与总数（`CueStore.taskCounts`；没有任务时为 nil）。
     var taskProgress: TaskProgress?
-    /// 上级任务的直接子任务完成数与总数。
-    var subtasks: [UUID: TaskProgress]
+    /// 任务的直接下级（子任务与挂着的灵感），完成圈与子任务进度由它推出。
+    var children: [UUID: [ChildMark]]
 
     /// 卡片最近一次发送的目标名。
     var lastTarget: [UUID: String] { lastSends.mapValues(\.target.name) }
@@ -35,7 +35,7 @@ nonisolated struct ProjectPageData: Sendable {
             lastSends: try store.lastSends(in: project),
             tasks: try Self.tree(project, from: store),
             taskProgress: try store.taskCounts()[project]?.progress,
-            subtasks: try store.subtaskProgress())
+            children: try store.childMarks())
     }
 }
 

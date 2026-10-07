@@ -34,6 +34,9 @@ private struct TaskPopoverPage: View {
     @State private var liveText = ""
     @State private var handle = EditorHandle()
     @State private var autosave: Autosave?
+    @State private var detail: TaskDetail?
+    @State private var left: Set<UUID> = []
+    @State private var withResources = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -53,10 +56,13 @@ private struct TaskPopoverPage: View {
             promptBar
             if let card, card.isTask {
                 Divider().overlay(palette.hair)
-                TaskSections(task: card, openChild: openChild)
+                TaskSections(task: card, detail: detail, openChild: openChild)
             }
         }
         .padding(16)
+        .observing(services.store, TaskDetail.tables, id: cardID, into: $detail, onError: workspace.fail) { [cardID] in
+            try TaskDetail.read(cardID, from: $0)
+        }
         .observing(services.store, [.cards], id: cardID, into: $card, onError: workspace.fail) { [cardID] store in
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return card
@@ -76,11 +82,15 @@ private struct TaskPopoverPage: View {
                 Button("回到上级", systemImage: "chevron.left", action: back)
                     .labelStyle(.iconOnly).buttonStyle(.borderless)
             }
-            if let card, card.isTask { TaskStatusMenu(task: card) }
             let project = workspace.catalog?.project(card?.projectID)
-            ProjectGlyph(project: project, size: 12)
-            Text(project?.name ?? "未归档").foregroundStyle(palette.ink3)
-            if card?.isTask == false { Text("· 素材").foregroundStyle(palette.ink3) }
+            if let card, card.isTask {
+                TaskStatusMenu(task: card, marks: detail?.marks)
+                TaskProjectMenu(task: card, project: project)
+            } else {
+                ProjectGlyph(project: project, size: 12)
+                Text(project?.name ?? CaptureCopy.inbox).foregroundStyle(palette.ink3)
+                if card?.parentID != nil { Text("· 素材").foregroundStyle(palette.ink3) }
+            }
             Spacer()
             Button("整页打开", systemImage: "arrow.up.left.and.arrow.down.right") {
                 workspace.overlay = nil
@@ -92,15 +102,20 @@ private struct TaskPopoverPage: View {
         .font(.system(size: 12))
     }
 
-    /// 贴着正文的底边：任务只有标题时的引导，右边是交给 Agent。
+    /// 贴着正文的底边：任务只有标题时的引导，右边是交给 Agent；任务有挂着的灵感或本项目资料时，上面一行选一并带上哪些。
     private var promptBar: some View {
-        HStack(spacing: 8) {
-            if card?.isTask == true, !TaskPrompt.isWritten(liveText) { PromptHint(action: handle.continueAtEnd) }
-            Spacer()
-            if let card {
-                SendControl(project: card.projectID, compact: true) { choice in
-                    let text = Outgoing.text(body: handle.text ?? liveText, values: card.variableValues), id = card.id
-                    Task { await workspace.send(text, via: choice, card: id) }
+        VStack(alignment: .leading, spacing: 6) {
+            if card?.isTask == true { BundlePicker(detail: detail, left: $left, withResources: $withResources) }
+            HStack(spacing: 8) {
+                if card?.isTask == true, !TaskPrompt.isWritten(liveText) { PromptHint(action: handle.continueAtEnd) }
+                Spacer()
+                if let card {
+                    SendControl(project: card.projectID, compact: true) { choice in
+                        let parts = card.isTask ? BundlePicker.parts(detail, left: left, withResources: withResources) : []
+                        let body = Outgoing.text(body: handle.text ?? liveText, values: card.variableValues)
+                        let text = TaskBundle.text(task: body, parts: parts), id = card.id
+                        Task { await workspace.send(text, via: choice, card: id) }
+                    }
                 }
             }
         }
@@ -118,11 +133,8 @@ private struct TaskPopoverPage: View {
 /// 任务浮窗放在正文下面，纸页放在正文上面。
 struct TaskSections: View {
     let task: Card
+    let detail: TaskDetail?
     var openChild: ((UUID) -> Void)?
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    @State private var detail: TaskDetail?
     @State private var showsSends = false
     @State private var showsChildren = false
 
@@ -134,15 +146,34 @@ struct TaskSections: View {
             if showsChildren { scrolling { TaskChildrenList(task: task, detail: detail, openChild: openChild) } }
         }
         .modifier(SessionDetailHost(arrowEdge: .bottom))
-        .observing(services.store, TaskDetail.tables, id: task.id, into: $detail, onError: workspace.fail) { [id = task.id] in
-            try TaskDetail.read(id, from: $0)
-        }
     }
 
     private func scrolling(@ViewBuilder _ content: () -> some View) -> some View {
         ScrollView { VStack(alignment: .leading, spacing: 0, content: content).padding(.leading, TaskMetrics.labelWidth + 10) }
             .frame(maxHeight: 150)
             .transition(.opacity)
+    }
+}
+
+/// Mac 纸页上任务正文上方的一块：状态与项目一行，下面是 Agent 与下级（`TaskSections`）。
+struct TaskPageHeader: View {
+    let task: Card
+    let project: Project?
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @State private var detail: TaskDetail?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                TaskStatusMenu(task: task, marks: detail?.marks)
+                TaskProjectMenu(task: task, project: project).font(.system(size: 12))
+            }
+            TaskSections(task: task, detail: detail)
+        }
+        .observing(services.store, TaskDetail.tables, id: task.id, into: $detail, onError: workspace.fail) { [id = task.id] in
+            try TaskDetail.read(id, from: $0)
+        }
     }
 }
 #endif

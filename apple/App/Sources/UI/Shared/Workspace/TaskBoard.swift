@@ -33,8 +33,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     var done: [Row]
     /// 没完成的任务（含子任务）各自的项目与会话。
     var rows: [UUID: Row]
-    /// 上级任务的直接子任务完成数与总数。
-    var subtasks: [UUID: TaskProgress]
+    /// 任务的直接下级（子任务与挂着的灵感），完成圈与子任务进度由它推出。
+    var children: [UUID: [ChildMark]]
 
     /// 两组的计数（顶层任务数，`CueStore.taskCounts` 一处定义）：任务页与面板的分组标题、书架的"任务"一行、Mac 工具栏任务钮都读它。
     var counts: TaskCounts
@@ -53,7 +53,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let done = try store.tasks(.done).flatMap(\.tasks).sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
         return TaskBoard(
             tree: tree, inProgress: roots.filter { $0.task.status == .inProgress }, todo: roots.filter { $0.task.status == .todo },
-            done: try done.prefix(doneLimit).map(row), rows: rows, subtasks: try store.subtaskProgress(), counts: try counts(from: store))
+            done: try done.prefix(doneLimit).map(row), rows: rows, children: try store.childMarks(), counts: try counts(from: store))
     }
 
     /// 正在推进的任务（书架顶上）：进行中的，不分层级，最近开始的在前。

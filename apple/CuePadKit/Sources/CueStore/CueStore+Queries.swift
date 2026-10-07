@@ -129,7 +129,7 @@ extension CueStore {
   private static let liveTask = "u.deletedAt IS NULL AND u.todoAt IS NOT NULL"
 
   /// 各项目（nil = 未归档）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
-  /// 没有上级、上级不在（没到、在回收站），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `subtaskProgress`。
+  /// 没有上级、上级不在（没到、在回收站），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `childMarks`。
   /// 灵感（含素材）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
   public func taskCounts() throws -> [UUID?: TaskCounts] {
     let rows = try db.query(
@@ -146,14 +146,22 @@ extension CueStore {
   }
 
   /// 各上级任务的直接子任务（不含素材）完成数与总数；没有子任务的不在结果里。
-  public func subtaskProgress() throws -> [UUID: TaskProgress] {
+  /// 每条任务的直接下级，同级手动顺序：任务行的分段完成圈与"子任务 n/m"都由它推出，见 `ChildMark`。给了 `parent` 只读它的。
+  public func childMarks(of parent: UUID? = nil) throws -> [UUID: [ChildMark]] {
+    let scope = parent == nil ? "" : "AND c.parentID = ?"
     let rows = try db.query(
       """
-      SELECT parentID, SUM(completedAt IS NOT NULL), COUNT(*) FROM cards
-      WHERE parentID IS NOT NULL AND todoAt IS NOT NULL AND deletedAt IS NULL GROUP BY parentID
-      """
-    ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(1)), total: Int($0.int(2)))) }
-    return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
+      SELECT c.parentID, c.todoAt IS NOT NULL,
+        CASE WHEN c.todoAt IS NOT NULL THEN c.completedAt IS NOT NULL
+        ELSE EXISTS (SELECT 1 FROM sendRecords s WHERE s.cardID = c.id)
+          OR (c.body <> '' AND EXISTS (SELECT 1 FROM sendRecords s WHERE s.cardID = c.parentID AND instr(s.content, c.body) > 0))
+        END
+      FROM cards c
+      WHERE c.parentID IS NOT NULL AND c.deletedAt IS NULL \(scope)
+      ORDER BY c.parentID, c.sortKey, c.id
+      """, parent.map { [$0] } ?? []
+    ) { (parent: $0.uuid(0), mark: ChildMark(isTask: $0.int(1) != 0, isDone: $0.int(2) != 0)) }
+    return Dictionary(grouping: rows, by: \.parent).mapValues { $0.map(\.mark) }
   }
 
   /// 发送记录，最近的在前（同一毫秒按写入先后）；给了 `card` 只要发出这条灵感或任务的那些（任务浮窗的发出记录）。

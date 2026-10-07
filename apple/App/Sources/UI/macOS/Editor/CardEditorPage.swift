@@ -83,8 +83,7 @@ struct CardEditorPage: View {
                     meta(data)
                     if data.card.isTask {
                         VStack(alignment: .leading, spacing: 4) {
-                            TaskStatusMenu(task: data.card)
-                            TaskSections(task: data.card)
+                            TaskPageHeader(task: data.card, project: data.project)
                         }
                         .padding(.horizontal, 64)
                         Divider().overlay(palette.hair).padding(.horizontal, 64)
@@ -242,7 +241,7 @@ struct CardEditorPage: View {
                 Text(status).foregroundStyle(saveState == .failed ? palette.failure : palette.ink3)
                     .transition(.opacity)
             }
-            if data.card.isPinned { Image(systemName: "pin.fill").help("置顶") }
+            if data.card.isPinned { Image(systemName: "books.vertical.fill").help("资料") }
             if data.card.isTask { Label("任务", systemImage: "checklist") }
         }
         .font(.system(size: 12))

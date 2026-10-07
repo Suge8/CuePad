@@ -21,11 +21,13 @@ struct CaptureDraft {
     var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty }
 
     /// 存下并提示实际的落点（点提示去那里）；项目已失效时 `Workspace` 回落到未归档，提示照实写。
-    func save(in project: UUID?, workspace: Workspace) async throws {
+    /// 给了 `parent`（在任务下记）就挂成那条任务的素材，提示里可撤销。
+    func save(in project: UUID?, under parent: UUID? = nil, workspace: Workspace) async throws {
         let store = workspace.services.store
         let files = store.files
         let body = StoredBody.make(text: text, imageHashes: try images.map { try files.store($0) })
         let card = try await workspace.createCard(body: body, in: project)
+        if let parent { return try await workspace.attach(card.id, to: parent) }
         let destination = try await card.projectID.asyncFlatMap { try await store.project($0) }
         workspace.say(CaptureCopy.saved(to: CaptureCopy.destination(destination)), link: .project(card.projectID))
     }

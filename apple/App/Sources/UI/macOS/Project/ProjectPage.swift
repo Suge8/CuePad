@@ -72,9 +72,7 @@ struct ProjectPage: View {
         if data.cards.isEmpty {
             EmptyProject()
         } else {
-            if !arrangement.pinned.isEmpty {
-                wallSection(title: "置顶", count: arrangement.pinned.count, ids: arrangement.pinned, byID: byID, data: data, lastTarget: lastTarget)
-            }
+            if !arrangement.pinned.isEmpty { resources(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }
             if !arrangement.wall.isEmpty {
                 wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, data: data, lastTarget: lastTarget)
             }
@@ -83,6 +81,23 @@ struct ProjectPage: View {
                     groups: data.olderGroups(arrangement),
                     cards: byID, lastTarget: lastTarget)
             }
+        }
+    }
+
+    /// 资料：长期参考的灵感，一行一条压在任务区下面；交给 Agent 时可一并带上。
+    private func resources(_ cards: [Card], lastTarget: [UUID: String]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .bottom, spacing: 6) {
+                Text("资料").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
+                Text("\(cards.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                    if index > 0 { Rectangle().fill(palette.hair).frame(height: 1).padding(.leading, 40) }
+                    OlderRow(card: card, lastTarget: lastTarget[card.id])
+                }
+            }
+            .paper(radius: 12)
         }
     }
 

@@ -61,7 +61,7 @@ struct BottomFade: View {
     }
 }
 
-/// 卡片上的元信息：时间、发送目标，以及任务、浮回、置顶标记。Mac 用固定小字，iOS 随动态字体。
+/// 卡片上的元信息：时间、发送目标，以及任务、浮回、资料标记。Mac 用固定小字，iOS 随动态字体。
 struct CardMeta: View {
     let card: Card
     let text: CardText
@@ -77,7 +77,7 @@ struct CardMeta: View {
             Spacer(minLength: 0)
             if card.isTask { Image(systemName: "checklist").help("任务").accessibilityLabel("任务") }
             if floated { Image(systemName: "arrow.up").help("刚从更早的灵感里拿回来").accessibilityLabel("刚从更早的灵感里拿回来") }
-            if card.isPinned { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
+            if card.isPinned { Image(systemName: "books.vertical.fill").help("资料").accessibilityLabel("资料") }
         }
         .font(font)
         .foregroundStyle(palette.ink3)

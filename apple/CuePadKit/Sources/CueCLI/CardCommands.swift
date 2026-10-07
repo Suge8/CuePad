@@ -6,7 +6,7 @@ extension Command {
     Command(
       path: ["card", "list"], summary: "列出灵感（散放的，不含任务与素材；默认所有项目，项目内按手动顺序）",
       options: [
-        .project("只列该项目"), .inbox, .allProjects, Opt("pinned", "只列置顶"),
+        .project("只列该项目"), .inbox, .allProjects, Opt("pinned", "只列资料（长期参考的灵感）"),
         Opt("trash", "列回收站里单独删除的灵感与任务"),
       ],
       notes: Schema.defaultProject(otherwise: "列所有项目") + "\n" + Schema.output("[Card]", Schema.card)

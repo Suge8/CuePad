@@ -27,9 +27,10 @@ struct CardActions: View {
         case .backToTodo: Button("回到待办", systemImage: "pause") { workspace.attempt { try await workspace.start(card, back: true) } }
         case .todo: Button("要做", systemImage: "checklist") { workspace.toggleTodo(id, true) }
         case .untodo: Button("取消要做", systemImage: "lightbulb") { workspace.toggleTodo(id, false) }
-        case .pin, .unpin:
-            Button(item == .pin ? "置顶" : "取消置顶", systemImage: item == .pin ? "pin" : "pin.slash") {
-                workspace.perform { try await $0.updateCard(id) { $0.isPinned = item == .pin } }
+        case .newIdea: Button("创建灵感", systemImage: "lightbulb.max") { newIdea() }
+        case .resource, .unresource:
+            Button(item == .resource ? "设为资料" : "不再是资料", systemImage: item == .resource ? "books.vertical" : "books.vertical.fill") {
+                workspace.perform { try await $0.updateCard(id) { $0.isPinned = item == .resource } }
             }
         case .move: moveMenu
         case .trash:
@@ -38,6 +39,20 @@ struct CardActions: View {
                 workspace.perform { try await $0.trashCard(id) }
             }
         }
+    }
+
+    /// 在这条任务下记一条灵感：手机浮起随手记（落点写着这条任务），Mac 新建一条挂上去并打开它。
+    private func newIdea() {
+        #if os(iOS)
+        navigation.startCapture(under: card)
+        #else
+        let task = card
+        workspace.attempt {
+            let idea = try await workspace.createCard(in: task.projectID)
+            try await workspace.services.store.moveCard(idea.id, to: .under(task.id), after: nil)
+            workspace.openCard = idea.id
+        }
+        #endif
     }
 
     private var moveMenu: some View {
