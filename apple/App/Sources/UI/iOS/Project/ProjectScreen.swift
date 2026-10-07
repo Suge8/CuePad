@@ -63,11 +63,7 @@ struct ProjectScreen: View {
         LazyVStack(alignment: .leading, spacing: 12) {
             if data.project != nil { FocusCard(data: data, pi: pi).padding(.bottom, 12) }
             if data.cards.isEmpty {
-                ContentUnavailableView {
-                    Label("还没有灵感", systemImage: "square.on.square.dashed")
-                } description: {
-                    Text("写一条，或者在下方随手记一条")
-                } actions: {
+                EmptyState(mascot: .empty, title: "还没有灵感", message: "写一条，或者在下方随手记一条") {
                     Button("记一条灵感", action: newCard).prominentButton().controlSize(.large)
                 }
                 .padding(.top, 24)

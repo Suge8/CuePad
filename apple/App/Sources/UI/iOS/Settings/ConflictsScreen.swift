@@ -10,7 +10,7 @@ struct ConflictsScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 if services.conflicts.isEmpty {
-                    ContentUnavailableView("没有待处理的冲突", systemImage: "checkmark.circle")
+                    EmptyState(mascot: .clean, title: "没有待处理的冲突")
                         .padding(.top, 60)
                 }
                 ForEach(services.conflicts, id: \.copy.id) { ConflictPair(conflict: $0) }

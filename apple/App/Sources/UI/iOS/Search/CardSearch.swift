@@ -70,7 +70,7 @@ struct CardSearchResults: View {
                     .padding(.horizontal, -16)
                 if let data {
                     if data.total == 0, !shown.text.isEmpty || shown.isFiltered {
-                        ContentUnavailableView.search(text: shown.text)
+                        EmptyState.noMatch(shown.text).padding(.top, 24)
                     }
                     ForEach(data.groups) { group in
                         if scope == .all {
@@ -289,10 +289,12 @@ struct FilterChip<Label: View>: View {
     var body: some View {
         label
             .font(.subheadline)
-            .foregroundStyle(on ? palette.onAccent : palette.ink)
+            .fontWeight(on ? .semibold : nil)
+            .foregroundStyle(palette.ink)
             .padding(.horizontal, 12).frame(minHeight: 36)
-            .background(on ? palette.accent : palette.paper, in: .capsule)
-            .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
+            // 选中：朱砂浅底 + 朱砂描边（选中一律用签名色），字仍是墨
+            .background(on ? palette.selection : palette.paper, in: .capsule)
+            .overlay { Capsule().strokeBorder(on ? palette.signature.opacity(0.55) : palette.hair) }
             .padding(.vertical, 4)
             .contentShape(.rect)
             .animation(Motion.quick, value: on)

@@ -9,27 +9,24 @@ struct UnreadableLibraryView: View {
     @State private var copied = false
 
     var body: some View {
-        ContentUnavailableView {
-            Label("读不出资料库", systemImage: "exclamationmark.triangle")
-        } description: {
-            VStack(spacing: 12) {
-                Text(failure.summary)
+        EmptyState(mascot: .error, title: "读不出资料库", message: failure.summary) {
+            VStack(spacing: 16) {
                 DisclosureGroup("详情") {
                     Text(failure.reason).font(.caption.monospaced()).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .font(.footnote)
+                .font(.footnote).frame(maxWidth: 420)
+                // iOS 的系统默认按钮没有外形，用与"新建项目"同一个主按钮；Mac 的系统按钮本身有外形
+                #if os(iOS)
+                Button("重试", action: retry).prominentButton().controlSize(.large).frame(minHeight: 44)
+                Button(copied ? "已复制" : "导出诊断", action: copyDiagnostics).controlSize(.large).frame(minHeight: 44)
+                #else
+                HStack {
+                    Button("重试", action: retry)
+                    Button(copied ? "已复制" : "导出诊断", action: copyDiagnostics)
+                }
+                #endif
             }
-            .frame(maxWidth: 420)
-        } actions: {
-            // iOS 的系统默认按钮没有外形，用与"新建项目"同一个主按钮；Mac 的系统按钮本身有外形
-            #if os(iOS)
-            Button("重试", action: retry).prominentButton().controlSize(.large).frame(minHeight: 44)
-            Button(copied ? "已复制" : "导出诊断", action: copyDiagnostics).controlSize(.large).frame(minHeight: 44)
-            #else
-            Button("重试", action: retry)
-            Button(copied ? "已复制" : "导出诊断", action: copyDiagnostics)
-            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)

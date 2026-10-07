@@ -56,11 +56,7 @@ struct SessionScreen: View {
                         .frame(maxWidth: Self.readingWidth)
                         .frame(maxWidth: .infinity)
                 } else {
-                    ContentUnavailableView {
-                        Label("找不到这个会话", systemImage: "waveform.path.ecg")
-                    } description: {
-                        Text("Mac 上这个会话的文件可能已经删掉了")
-                    }
+                    EmptyState(mascot: .search, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
                     .padding(.top, 60)
                     .chatRow()
                 }
@@ -387,9 +383,7 @@ struct SessionPicker: View {
             List {
                 if let sessions {
                     if sessions.isEmpty {
-                        ContentUnavailableView(
-                            "Mac 上没有运行中的 Agent 会话", systemImage: "waveform.path.ecg",
-                            description: Text("在 Mac 的终端运行 pi 后再试"))
+                        EmptyState(mascot: .empty, title: "Mac 上没有运行中的 Agent 会话", message: "在 Mac 的终端运行 pi 后再试")
                             .listRowBackground(Color.clear)
                     } else {
                         Section("发给哪个会话") {

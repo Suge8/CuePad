@@ -36,6 +36,9 @@ struct IOSRootView: View {
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
             // 随手记与新会话都是浮在键盘上方的输入框
             .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) { CaptureComposer() } }
+            #if DEBUG
+            .overlay { if DebugScene.scene == "style" { StyleBoard() } }
+            #endif
             .overlay {
                 FloatingInput(isPresented: navigation.newSession != nil, close: { navigation.newSession = nil }) {
                     if let start = navigation.newSession { NewSessionInput(start: start).id(start.id) }
@@ -51,7 +54,6 @@ struct IOSRootView: View {
         .overlay(alignment: .top) { NoticeBanner() }
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
         .environment(\.zoomNamespace, zoom)
-        .modifier(InkTint())
         .modifier(PaletteProvider())
         .environment(workspace)
         .environment(navigation)
@@ -77,12 +79,6 @@ struct IOSRootView: View {
         case .dark: .dark
         }
     }
-}
-
-/// 全局强调色用墨色（黑白品牌），不用系统蓝。
-private struct InkTint: ViewModifier {
-    @Environment(\.palette) private var palette
-    func body(content: Content) -> some View { content.tint(palette.accent) }
 }
 
 /// 推入页面的内容（iPhone 各标签的栈与 iPad 分栏共用，标签的根页也经这里）。页底色在这里一处铺在导航容器上：

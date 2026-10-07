@@ -180,8 +180,7 @@ struct TaskLine: View {
     private var line: some View {
         HStack(spacing: 2) {
             Button(action: tap) {
-                Image(systemName: done ? "checkmark.circle.fill" : task.status == .inProgress ? "circle.lefthalf.filled" : "circle")
-                    .foregroundStyle(done ? palette.accent : task.status == .inProgress ? palette.ink2 : palette.ink3)
+                Image(systemName: TaskGlyph.symbol(done ? .done : task.status)).foregroundStyle(TaskGlyph.tint(done ? .done : task.status, palette))
                     .contentTransition(.symbolEffect(.replace))
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)

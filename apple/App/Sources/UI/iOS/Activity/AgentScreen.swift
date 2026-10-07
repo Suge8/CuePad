@@ -135,7 +135,7 @@ struct AgentScreen: View {
                 }
             }
             .transaction(value: list.filter) { $0.animation = nil }
-            .animation(Motion.quick, value: list.now.map(\.id))
+            .animation(Motion.snappy, value: list.now.map(\.id))
             .animation(Motion.quick, value: list.now.map(\.state.state))
             .animation(Motion.quick, value: (list.now + list.ended).map(\.delivery?.status))
             .animation(Motion.quick, value: list.ends.mapValues(\.status))
@@ -167,21 +167,15 @@ struct AgentScreen: View {
 
     @ViewBuilder private var empty: some View {
         if searching {
-            ContentUnavailableView.search(text: query).padding(.top, 40)
+            EmptyState.noMatch(query).padding(.top, 40)
         } else if let filter {
-            ContentUnavailableView {
-                Label("这个项目还没有 Agent 会话", systemImage: "waveform.path.ecg")
-            } actions: {
-                Button("新会话") { navigation.newSession = .init(project: filter) }.buttonStyle(.borderedProminent)
+            EmptyState(mascot: .empty, title: "这个项目还没有 Agent 会话") {
+                Button("新会话") { navigation.newSession = .init(project: filter) }.prominentButton().controlSize(.large)
             }
             .padding(.top, 40)
         } else {
-            ContentUnavailableView {
-                Label("还没有 Agent 会话", systemImage: "waveform.path.ecg")
-            } description: {
-                Text("在 Mac 上运行 pi，或在这里开一个新会话")
-            } actions: {
-                Button("新会话") { navigation.newSession = .init() }.buttonStyle(.borderedProminent)
+            EmptyState(mascot: .empty, title: "还没有 Agent 会话", message: "在 Mac 上运行 pi，或在这里开一个新会话") {
+                Button("新会话") { navigation.newSession = .init() }.prominentButton().controlSize(.large)
             }
             .padding(.top, 40)
         }

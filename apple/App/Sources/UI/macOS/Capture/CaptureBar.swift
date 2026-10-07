@@ -177,16 +177,16 @@ private struct CaptureSurface: ViewModifier {
     }
 }
 
-/// 输入框里的圆形钮（随手记的记下、会话详情的发送，与手机同一种）：能按时墨色实心，不能时淡。
+/// 输入框里的圆形钮（随手记的记下、会话详情的发送，与手机同一种）：能按时朱砂实心，不能时淡。
 struct RoundSendGlyph: View {
     let enabled: Bool
     @Environment(\.palette) private var palette
 
     var body: some View {
         Image(systemName: "arrow.up").font(.system(size: 13, weight: .bold))
-            .foregroundStyle(enabled ? palette.paper : palette.ink3)
+            .foregroundStyle(enabled ? palette.onSignature : palette.ink3)
             .frame(width: 28, height: 28)
-            .background(enabled ? palette.ink : palette.fill, in: .circle)
+            .background(enabled ? palette.signature : palette.fill, in: .circle)
             .padding(6)
             .contentShape(.circle)
             .animation(Motion.quick, value: enabled)

@@ -214,9 +214,9 @@ private struct Welcome: View {
         EmptyLibrary {
             Button { creating = true } label: {
                 Text("新建项目").font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(palette.onAccent)
+                    .foregroundStyle(palette.onSignature)
                     .padding(.horizontal, 20).frame(height: 36)
-                    .background(palette.accent, in: .capsule)
+                    .background(palette.signature, in: .capsule)
             }
             .buttonStyle(PressStyle())
             .keyboardShortcut(.defaultAction)

@@ -24,7 +24,7 @@ struct CardPicker: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let data {
-                        if data.shown == 0, !settled.isEmpty { ContentUnavailableView.search(text: settled) }
+                        if data.shown == 0, !settled.isEmpty { EmptyState.noMatch(settled) }
                         if !data.pinned.isEmpty {
                             header(workspace.catalog?.project(project)?.name ?? "本项目", project: workspace.catalog?.project(project))
                             rows(data.pinned)

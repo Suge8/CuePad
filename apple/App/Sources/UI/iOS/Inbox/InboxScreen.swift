@@ -15,7 +15,7 @@ struct InboxScreen: View {
         List {
             if let cards {
                 if cards.isEmpty {
-                    ContentUnavailableView("都归类好了", systemImage: "tray", description: Text("在书架或这里随手记下的灵感，没选项目时先放在这里"))
+                    EmptyState(mascot: .clean, title: "都归类好了", message: "在书架或这里随手记下的灵感，没选项目时先放在这里")
                         .listRowBackground(Color.clear)
                 } else {
                     Section {

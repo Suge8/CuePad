@@ -118,9 +118,9 @@ struct TaskRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: compact ? 8 : 10) {
             Button { toggle() } label: {
-                Image(systemName: done ? "checkmark.circle.fill" : task.status == .inProgress ? "circle.lefthalf.filled" : "circle")
+                Image(systemName: TaskGlyph.symbol(task.status))
                     .font(.system(size: compact ? 12 : 14))
-                    .foregroundStyle(done ? palette.accent : task.status == .inProgress ? palette.ink2 : palette.ink3)
+                    .foregroundStyle(TaskGlyph.tint(task.status, palette))
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(PressStyle(scale: 0.85))

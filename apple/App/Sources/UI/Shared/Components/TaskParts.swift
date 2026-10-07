@@ -65,7 +65,7 @@ struct TaskStatusMenu: View {
             Button("取消要做", systemImage: "lightbulb") { workspace.toggleTodo(id, false) }
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: TaskGlyph.symbol(task.status)).foregroundStyle(task.status == .done ? palette.accent : palette.ink2)
+                Image(systemName: TaskGlyph.symbol(task.status)).foregroundStyle(TaskGlyph.tint(task.status, palette))
                     .contentTransition(.symbolEffect(.replace))
                 Text(TaskSpeech.value(task.status)).foregroundStyle(palette.ink)
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
@@ -347,7 +347,7 @@ struct TaskChildrenList: View {
                     workspace.attempt { try await workspace.toggle(child) }
                 } label: {
                     Image(systemName: TaskGlyph.symbol(child.status))
-                        .foregroundStyle(child.status == .done ? palette.accent : palette.ink3)
+                        .foregroundStyle(TaskGlyph.tint(child.status, palette))
                         .contentTransition(.symbolEffect(.replace))
                         .frame(width: Self.icon, height: Self.rowHeight).contentShape(.rect)
                 }
@@ -420,8 +420,16 @@ enum TaskMetrics {
     #endif
 }
 
-/// 任务的状态圆圈：待办空心、进行中半满、完成对勾。
+/// 任务的状态圆圈：待办淡墨空心、进行中朱砂半满、完成墨色对勾。
 enum TaskGlyph {
+    static func tint(_ status: TaskStatus?, _ palette: Palette) -> Color {
+        switch status {
+        case .done: palette.ink
+        case .inProgress: palette.working
+        case .todo, nil: palette.ink3
+        }
+    }
+
     static func symbol(_ status: TaskStatus?) -> String {
         switch status {
         case .done: "checkmark.circle.fill"

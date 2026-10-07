@@ -64,7 +64,7 @@ nonisolated struct PiConfigShown: Equatable {
     var failure: String?
 }
 
-/// 对话里的提示块（等你确认的问题、出错）：一张纸，彩色只在行首的状态符号上（等你确认橙色问号、出错红色叹号），
+/// 对话里的提示块（等你确认的问题、出错）：一张纸，彩色只在行首的状态符号上（等你确认赭黄问号、出错胭脂叹号），
 /// 正文中性；`prominent` 时正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
 struct Callout<Accessory: View>: View {
     let tint: Color
@@ -185,7 +185,7 @@ struct QuestionCard: View {
     }
 }
 
-/// 问题卡上的回答按钮：纸面描边或墨色实底，触摸目标 44pt；按下只变淡，不缩放（减弱动态效果下也一样）。
+/// 问题卡上的回答按钮：淡底或朱砂实底（主选项），触摸目标 44pt；按下缩一点、松开回弹（\`Motion.pressDown/pressUp\`）。
 private struct AnswerButtonStyle: ButtonStyle {
     let prominent: Bool
     @Environment(\.palette) private var palette
@@ -195,15 +195,16 @@ private struct AnswerButtonStyle: ButtonStyle {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         configuration.label
             .font(.body.weight(.medium))
-            .foregroundStyle(prominent ? palette.onAccent : palette.ink)
+            .foregroundStyle(prominent ? palette.onSignature : palette.ink)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            // 纸面卡里的中性按钮：淡底不描边；主选项（确认的"是"）墨色实心
-            .background(prominent ? palette.accent : palette.fill, in: shape)
+            // 纸面卡里的中性按钮：淡底不描边；主选项（确认的"是"）朱砂实心
+            .background(prominent ? palette.signature : palette.fill, in: shape)
             .contentShape(shape)
+            .scaleEffect(configuration.isPressed ? Press.control : 1)
             // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
-            .opacity(enabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
-            .animation(configuration.isPressed ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
+            .opacity(enabled ? 1 : 0.45)
+            .animation(configuration.isPressed ? Motion.pressDown : Motion.pressUp, value: configuration.isPressed)
     }
 }
 

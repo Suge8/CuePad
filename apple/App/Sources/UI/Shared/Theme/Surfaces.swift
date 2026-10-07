@@ -1,7 +1,7 @@
 import SwiftUI
 
 extension View {
-    /// 纸面：实底 + 1px 半透明描边 + 浅色下两层柔光（深色只留描边）。
+    /// 纸面：从上沿极轻地亮到纸色的实底 + 上沿一线高光 + 1px 半透明描边；抬起的纸浅色下多一层柔影（深色只留描边）。
     func paper(radius: CGFloat = 14, lifted: Bool = false) -> some View {
         modifier(PaperSurface(radius: radius, lifted: lifted))
     }
@@ -9,6 +9,11 @@ extension View {
     /// 一张纸面里的一行（懒加载列表逐行画，拼起来与 `paper` 一张纸一样）：首行带上圆角与上边，末行带下圆角与下边。
     func paperSlice(first: Bool, last: Bool, radius: CGFloat = 14) -> some View {
         modifier(PaperSlice(first: first, last: last, radius: radius))
+    }
+
+    /// 计数变化时数字滚动过去（增大往上滚、减小往下滚），不整块换字。
+    func counting(_ value: Int) -> some View {
+        contentTransition(.numericText(value: Double(value))).animation(Motion.snappy, value: value)
     }
 
     /// 控件层玻璃；"降低透明度"开启时退回实底。玻璃不叠玻璃：调用方不在玻璃里再套玻璃。
@@ -25,8 +30,11 @@ private struct PaperSurface: ViewModifier {
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         content
-            .background(palette.paper, in: shape)
+            .background(LinearGradient(colors: [palette.paperLit, palette.paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35)), in: shape)
             .overlay(shape.strokeBorder(palette.paperEdge(lifted: lifted)))
+            // 上沿一线高光：纸边像被光擦过，与玻璃同一种光；只是一条描边，不加模糊
+            .overlay(shape.inset(by: 1).strokeBorder(
+                LinearGradient(colors: [palette.sheen, .clear], startPoint: .top, endPoint: .init(x: 0.5, y: 0.12)), lineWidth: 1))
             // 平放的纸只用描边：每张卡一个模糊阴影，侧栏开合时整面墙每帧都要重画这些阴影
             .shadow(color: .black.opacity(palette.dark || !lifted ? 0 : 0.08), radius: lifted ? 10 : 0, y: lifted ? 6 : 0)
     }
@@ -102,7 +110,8 @@ private struct GlassSurface<S: Shape>: ViewModifier {
 }
 
 /// 动效：只有卡片 ↔ 纸是大幅空间过渡；其余为短淡入淡出。减弱动态效果时一律直接到终态或只淡入淡出。
-/// 动效 token（Mac 与 iOS 共用）：一律不回弹的临界阻尼弹簧，都在 300ms 以内；弹簧从当前呈现值继续，天然可打断。
+/// 动效 token（Mac 与 iOS 共用）：位置与尺寸用不回弹的临界阻尼弹簧，都在 300ms 以内；弹簧从当前呈现值继续，天然可打断。
+/// 只有按压松开带一点回弹（`pressUp`），给手感；常驻的循环动效只给 Agent 在工作（`PiStateDot`），离屏即停。
 enum Motion {
     /// 短动效：列表里挪位置、面板、浮层、切换。
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)
@@ -121,8 +130,14 @@ enum Motion {
     static let pressScale: CGFloat = 0.98
     /// 点下的那一帧先直接缩到这里，余下的再缓动：动画的第一帧进度为零，全靠缓动的话点下那一帧看不出变化。
     static let pressKick: CGFloat = 0.99
-    /// 按下与松开回弹。
+    /// Mac 点开卡片（`CardOpenStyle`）的按下与回弹。
     static let press = Animation.easeOut(duration: 0.1)
+    /// 按下：快、不回弹，手指一落就到位。
+    static let pressDown = Animation.spring(duration: 0.14, bounce: 0)
+    /// 松开：稍慢、带一点回弹，像纸被放开时弹回来。
+    static let pressUp = Animation.spring(duration: 0.34, bounce: 0.32)
+    /// 列表里一行出现、消失：淡入并从 96% 放大到位，消失反过来；位置由列表自己的动画挪。
+    static let item = AnyTransition.opacity.combined(with: .scale(scale: 0.96))
 
     /// 减弱动态效果时，空间动画换成短淡入淡出。
     static func spatial(_ animation: Animation, reduceMotion: Bool) -> Animation {
@@ -130,37 +145,48 @@ enum Motion {
     }
 }
 
-/// 按下反馈：按下 80ms 缩小（尺寸越小缩得越多，每边约 1.5–2px），松开 160ms 回弹，都是缓出；
-/// 减弱动态效果时只降透明度。`scale`：图标按钮 0.9，标准按钮 0.96，宽按钮 0.98。
+/// 按压反馈只有这几类（`PressStyle`、`CardPressStyle`、`RowPressStyle`、系统的主按钮），按下快、松开带一点回弹；
+/// 圆钮与卡片按下有一下轻触感，行只亮底不缩放（一屏几十行，缩放会让列表显得软）。减弱动态效果时只降透明度。
+enum Press {
+    /// 圆钮、图标按钮。
+    static let button: CGFloat = 0.88
+    /// 标准按钮、胶囊。
+    static let control: CGFloat = 0.95
+    /// 整张卡片：大面积只缩一点，不然文字发虚。
+    static let card: CGFloat = 0.97
+}
+
+/// 圆钮、图标按钮与胶囊的按下反馈：弹簧缩放 + 一下轻触感。`scale` 见 `Press`。
 struct PressStyle: ButtonStyle {
-    var scale: CGFloat = 0.96
+    var scale: CGFloat = Press.control
 
     func makeBody(configuration: Configuration) -> some View {
-        PressBody(configuration: configuration, scale: scale)
-    }
-
-    private struct PressBody: View {
-        let configuration: Configuration
-        let scale: CGFloat
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-        @Environment(\.isEnabled) private var isEnabled
-
-        var body: some View {
-            let pressed = configuration.isPressed && isEnabled
-            configuration.label
-                .scaleEffect(pressed && !reduceMotion ? scale : 1)
-                .opacity(pressed ? 0.8 : 1)
-                .animation(pressed ? .easeOut(duration: 0.08) : .easeOut(duration: 0.16), value: pressed)
-        }
+        PressBody(configuration: configuration, scale: scale, haptic: true)
     }
 }
 
-/// 整张卡片的按下反馈：不缩放（大面积缩放会让文字发虚），下沉 1px。
+/// 整张卡片的按下反馈：缩到 97%、略压暗，松开弹回，按下一下轻触感。
 struct CardPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
+        PressBody(configuration: configuration, scale: Press.card, haptic: true, darken: true)
+    }
+}
+
+private struct PressBody: View {
+    let configuration: ButtonStyleConfiguration
+    let scale: CGFloat
+    var haptic = false
+    var darken = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        let pressed = configuration.isPressed && isEnabled
         configuration.label
-            .offset(y: configuration.isPressed ? 1 : 0)
-            .brightness(configuration.isPressed ? -0.015 : 0)
-            .animation(configuration.isPressed ? .easeOut(duration: 0.08) : .easeOut(duration: 0.16), value: configuration.isPressed)
+            .scaleEffect(pressed && !reduceMotion ? scale : 1)
+            .brightness(pressed && darken ? -0.02 : 0)
+            .opacity(pressed && (reduceMotion || !darken) ? 0.82 : 1)
+            .animation(pressed ? Motion.pressDown : Motion.pressUp, value: pressed)
+            .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: pressed) { _, now in haptic && now }
     }
 }

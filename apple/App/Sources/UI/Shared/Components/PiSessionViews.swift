@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// Pi 会话状态的颜色与文字：只有要你注意的有颜色（等你确认橙、出错红）；工作中是墨色，空闲与已结束是灰，靠形状分开。
+/// Pi 会话状态的颜色与文字：要你注意的用状态色（等你确认赭黄、出错胭脂），工作中是签名色朱砂，空闲与已结束是灰，再靠形状分开。
 /// 空闲叫"待你回复"：Pi 做完这一轮、在等你的下一句；与弹窗问题的"等你确认"是两回事。做完了你还没看的另有"有新回复"（`PiShown`）。
 nonisolated extension PiWorkState {
     var label: String {
@@ -40,7 +40,7 @@ nonisolated extension PiWorkState {
     }
 }
 
-/// 子代理的粗状态借会话状态的图标、颜色与文字（工作中墨色圈点、等你确认橙、空闲灰勾、出错红叹号）。
+/// 子代理的粗状态借会话状态的图标、颜色与文字（工作中朱砂圈点、等你确认赭黄、空闲灰勾、出错胭脂叹号）。
 nonisolated extension PiSubagentState {
     var workState: Open<PiWorkState> {
         switch activity.known {
@@ -83,7 +83,7 @@ nonisolated extension Open<PiWorkState> {
 extension PiWorkState {
     func tint(_ palette: Palette) -> Color {
         switch self {
-        case .thinking, .outputting, .tool, .delegating: palette.ink
+        case .thinking, .outputting, .tool, .delegating: palette.working
         case .waitingForUser: palette.attention
         case .error: palette.failure
         case .settled: palette.ink3
@@ -128,12 +128,7 @@ nonisolated extension PiSessionState {
     var detailIsCode: Bool { state == .known(.tool) }
 
     /// 在处理中（思考、输出、运行工具、子代理）。
-    var isWorking: Bool {
-        switch state.known {
-        case .thinking, .outputting, .tool, .delegating: true
-        default: false
-        }
-    }
+    var isWorking: Bool { state.isWorking }
 }
 
 nonisolated extension PiSessionListItem {
@@ -245,7 +240,7 @@ extension PiShown {
     func tint(_ palette: Palette) -> Color {
         switch delivery {
         case .failed: palette.failure
-        case .some: palette.ink
+        case .some: palette.working
         case nil: unread ? palette.ink : state.tint(palette)
         }
     }
@@ -260,18 +255,22 @@ extension PiShown {
     }
 }
 
-/// 会话状态标（全 App 只此一份：Agent 页、近况、书架、侧栏、Mac 侧栏与菜单栏）：颜色 + 形状表达状态，
-/// 等你确认橙色问号、出错红色叹号、工作中墨色圈点、有新回复墨色实心点、待你回复灰色勾、已结束更淡的空心圈、话在路上墨色向上箭头、
-/// 没能送达红色叹号；不做循环动画（常驻多处，
-/// 循环既耗电也分散注意）。`size` 是点的直径，符号按它放大到同样的视觉分量。
+/// 会话状态标（全 App 只此一份：Agent 页、近况、书架、侧栏、Mac 侧栏与菜单栏）：颜色 + 形状表达状态——
+/// 等你确认赭黄问号、出错胭脂叹号、工作中朱砂圈点、有新回复墨色实心点、待你回复灰勾、已结束更淡的空心圈、话在路上朱砂向上箭头、
+/// 没能送达胭脂叹号。`size` 是点的直径，符号按它放大到同样的视觉分量。
+/// 工作中（与话在路上）的标在呼吸——全 App 唯一常驻的循环动效：只动缩放与透明度，标不在屏幕上时随视图一起停；
+/// 一轮做完（工作中 → 停下）时放一圈朱砂涟漪、点弹一下，只这一次。减弱动态效果时都不做。
 /// 旁边有状态文字时读屏跳过它；`announces` 用在只有一个标的地方（书架、侧栏的项目旁），标自己带读屏标签与悬停提示。
 struct PiStateDot: View {
     let shown: PiShown
     var size: CGFloat = 8
     var announces = false
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 跟着旁边的字随辅助字号放大
     @ScaledMetric private var scale: CGFloat = 1
+    /// 每做完一轮加一：放一次涟漪。
+    @State private var finished = 0
 
     private var box: CGFloat { size * 1.8 * scale }
 
@@ -285,7 +284,17 @@ struct PiStateDot: View {
         self.announces = announces
     }
 
+    /// 在工作或话在路上：身后呼吸。
+    private var live: Bool {
+        switch shown.delivery {
+        case .failed: false
+        case .some: true
+        case nil: shown.state.known?.isWorking == true
+        }
+    }
+
     var body: some View {
+        let tint = shown.tint(palette)
         let mark = Group {
             if shown.unread && shown.delivery == nil {
                 Circle().frame(width: size * scale, height: size * scale)
@@ -293,16 +302,126 @@ struct PiStateDot: View {
                 Image(systemName: shown.symbol).font(.system(size: box, weight: .semibold))
             }
         }
-        .foregroundStyle(shown.tint(palette))
+        .foregroundStyle(tint)
         .frame(width: box, height: box)
+        .background { if live && !reduceMotion { Halo(color: tint) } }
+        .keyframeAnimator(initialValue: Ripple(), trigger: finished) { content, ripple in
+            content
+                .scaleEffect(ripple.pop)
+                .background { Circle().stroke(palette.working, lineWidth: 1.5).scaleEffect(ripple.ring).opacity(ripple.ringOpacity) }
+        } keyframes: { _ in
+            KeyframeTrack(\.pop) {
+                SpringKeyframe(1.35, duration: 0.14, spring: .snappy)
+                SpringKeyframe(1, duration: 0.4, spring: .bouncy)
+            }
+            KeyframeTrack(\.ring) { CubicKeyframe(2.6, duration: 0.6) }
+            KeyframeTrack(\.ringOpacity) {
+                LinearKeyframe(0.9, duration: 0.05)
+                CubicKeyframe(0, duration: 0.55)
+            }
+        }
         .animation(Motion.quick, value: shown)
+        .onChange(of: shown.state) { old, new in
+            if !reduceMotion, old.known?.isWorking == true, new == .known(.settled) { finished += 1 }
+        }
         if announces {
             mark.accessibilityLabel(shown.presence).help(shown.presence)
         } else {
             mark.accessibilityHidden(true)
         }
     }
+
+    private struct Ripple {
+        var pop: CGFloat = 1
+        var ring: CGFloat = 1
+        var ringOpacity: Double = 0
+    }
 }
+
+/// 状态标身后呼吸的一圈：从 0.7 倍呼到 1.6 倍、淡到看不见，再回来，一呼一吸 2.4s。
+/// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
+/// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
+private struct Halo {
+    let color: Color
+
+    private static func makeLayer() -> CAShapeLayer {
+        let layer = CAShapeLayer()
+        let grow = CABasicAnimation(keyPath: "transform.scale")
+        grow.fromValue = 0.7
+        grow.toValue = 1.6
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        let breath = CAAnimationGroup()
+        breath.animations = [grow, fade]
+        breath.duration = 1.2
+        breath.autoreverses = true
+        breath.repeatCount = .infinity
+        breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        // 退到后台再回来时不被系统摘掉
+        breath.isRemovedOnCompletion = false
+        layer.add(breath, forKey: "breath")
+        return layer
+    }
+
+    fileprivate static func update(_ layer: CAShapeLayer, bounds: CGRect, color: CGColor?) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.frame = bounds
+        layer.path = CGPath(ellipseIn: bounds, transform: nil)
+        layer.fillColor = color
+        CATransaction.commit()
+    }
+
+    final class HaloView: PlatformView {
+        let halo = Halo.makeLayer()
+        var color: CGColor? { didSet { layoutHalo() } }
+
+        #if os(iOS)
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            layer.addSublayer(halo)
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            layoutHalo()
+        }
+        #else
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            layer?.addSublayer(halo)
+        }
+
+        override func layout() {
+            super.layout()
+            layoutHalo()
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        #endif
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        private func layoutHalo() { Halo.update(halo, bounds: bounds, color: color) }
+    }
+}
+
+#if os(iOS)
+private typealias PlatformView = UIView
+extension Halo: UIViewRepresentable {
+    func makeUIView(context: Context) -> HaloView { HaloView(frame: .zero) }
+    func updateUIView(_ view: HaloView, context: Context) { view.color = color.opacity(0.28).resolve(in: context.environment).cgColor }
+}
+#else
+private typealias PlatformView = NSView
+extension Halo: NSViewRepresentable {
+    func makeNSView(context: Context) -> HaloView { HaloView(frame: .zero) }
+    func updateNSView(_ view: HaloView, context: Context) { view.color = color.opacity(0.28).resolve(in: context.environment).cgColor }
+}
+#endif
 
 nonisolated extension PiQuestion {
     /// 只读地显示问题（只能在 Pi 里答的、或列表里的预览）：文案，下面每个选项一行。能作答的问题卡用 `options` 做成按钮。

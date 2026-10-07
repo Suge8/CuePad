@@ -144,7 +144,7 @@ private struct UserBubble: View {
             .textSelection(.enabled)
             .padding(.horizontal, 14).padding(.vertical, 10)
             .background(palette.bubble, in: shape)
-            .overlay(shape.strokeBorder(highlighted ? palette.accent : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1))
+            .overlay(shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1))
             .animation(Motion.quick, value: highlighted)
             .opacity(dimmed ? 0.7 : 1)
             .containerRelativeFrame(.horizontal, alignment: .trailing) { width, _ in width * 0.78 }

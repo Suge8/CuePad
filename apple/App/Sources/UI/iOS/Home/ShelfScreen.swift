@@ -105,7 +105,7 @@ struct ShelfScreen: View {
         let recent = data.entries.filter { !$0.project.isPinned }
         let pi = PiSessionListItem.byProject(data.live, shown: services.settings.shown)
         VStack(alignment: .leading, spacing: 22) {
-            if !data.active.isEmpty { ActiveTasks(rows: data.active) }
+            if !data.active.isEmpty { ActiveTasks(rows: data.active).transition(Motion.item) }
             if data.inboxCount > 0 || data.tasks != nil {
                 VStack(spacing: 0) {
                     if let tasks = data.tasks { TasksLine(tasks: tasks) }
@@ -141,6 +141,8 @@ struct ShelfScreen: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
+        // 任务开始、做完时"正在推进"一张张进出，下面的内容跟着挪
+        .animation(Motion.snappy, value: data.active.map(\.id))
         // 宽屏不把一行项目拉满整屏：名字与计数隔太远读不成一行
         .frame(maxWidth: Self.readableWidth)
         .frame(maxWidth: .infinity)
@@ -200,6 +202,7 @@ private struct ShelfLine: View {
                 Image(systemName: symbol).foregroundStyle(tint ?? palette.ink2).frame(width: 22).accessibilityHidden(true)
                 Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
                 Text(detail).font(.body.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
+                    .contentTransition(.numericText()).animation(Motion.snappy, value: detail)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
@@ -274,7 +277,7 @@ private struct ShelfCounts: View {
 
     var body: some View {
         Text(tasks > 0 ? "\(cards) 条灵感 · \(tasks) 项任务" : "\(cards) 条灵感")
-            .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
+            .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).counting(cards + tasks)
             .lineLimit(1)
     }
 }
@@ -369,6 +372,7 @@ private struct ActiveTasks: View {
                     Button { navigation.openTask(row.id) } label: { card(row) }
                         .buttonStyle(CardPressStyle())
                         .contextMenu { CardActions(card: row.task) }
+                        .transition(Motion.item)
                 }
             }
         }
@@ -377,7 +381,7 @@ private struct ActiveTasks: View {
     private func card(_ row: TaskBoard.Row) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "circle.lefthalf.filled").foregroundStyle(palette.accent).accessibilityHidden(true)
+                Image(systemName: TaskGlyph.symbol(.inProgress)).foregroundStyle(palette.working).accessibilityHidden(true)
                 Text(row.task.title.textGlyphs).font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
                     .lineLimit(2).multilineTextAlignment(.leading)
             }

@@ -19,7 +19,7 @@ struct TrashScreen: View {
         List {
             if let data {
                 if data.projects.isEmpty && data.cards.isEmpty {
-                    ContentUnavailableView("回收站是空的", systemImage: "trash").listRowBackground(Color.clear)
+                    EmptyState(mascot: .trash, title: "回收站是空的").listRowBackground(Color.clear)
                 }
                 if !data.projects.isEmpty {
                     Section("项目") {

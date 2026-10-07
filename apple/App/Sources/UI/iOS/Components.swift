@@ -5,12 +5,20 @@ import UIKit
 
 /// 列表行的按下反馈：铺一层底色（整卡用共用的 `CardPressStyle`）。按下即出现，松开 160ms 淡去。
 struct RowPressStyle: ButtonStyle {
-    @Environment(\.palette) private var palette
-
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background { if configuration.isPressed { palette.fill } }
-            .animation(configuration.isPressed ? nil : .easeOut(duration: 0.16), value: configuration.isPressed)
+        RowPress(configuration: configuration)
+    }
+
+    /// 一行的按下反馈：底亮一层（不缩放，一屏几十行缩放会让列表显得软），按下即亮、松开慢慢退。
+    private struct RowPress: View {
+        let configuration: Configuration
+        @Environment(\.palette) private var palette
+
+        var body: some View {
+            configuration.label
+                .background { palette.fill.opacity(configuration.isPressed ? 1.6 : 0) }
+                .animation(configuration.isPressed ? nil : Motion.quick, value: configuration.isPressed)
+        }
     }
 }
 
@@ -23,7 +31,7 @@ struct SectionHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
-            if let count { Text("\(count)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3) }
+            if let count { Text("\(count)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).counting(count) }
         }
         .padding(.horizontal, 4)
         .accessibilityElement(children: .combine)
@@ -110,7 +118,7 @@ extension View {
     /// 列表与表单铺在桌面色上，与书架、项目页同一底色。
     func deskBackground() -> some View { modifier(DeskBackground()) }
 
-    /// 主按钮：实心墨色玻璃，字用与墨色相反的颜色（深色模式下墨色是浅的，系统默认的白字会看不见）。
+    /// 主按钮：朱砂色的实心玻璃（签名色只在这种焦点上），字用朱砂上的字色；按下由系统玻璃自己回弹。
     func prominentButton() -> some View { modifier(ProminentButton()) }
 
     /// 独占底部的页（卡片纸页、Pi 会话页）：在屏幕上时 iPhone 收起标签栏（见 `Navigation.bottomPages`）。
@@ -192,7 +200,9 @@ private struct ScalingPickerStyle: ViewModifier {
 
 private struct ProminentButton: ViewModifier {
     @Environment(\.palette) private var palette
-    func body(content: Content) -> some View { content.buttonStyle(.glassProminent).foregroundStyle(palette.onAccent) }
+    func body(content: Content) -> some View {
+        content.buttonStyle(.glassProminent).tint(palette.signature).foregroundStyle(palette.onSignature)
+    }
 }
 
 private struct DeskBackground: ViewModifier {
