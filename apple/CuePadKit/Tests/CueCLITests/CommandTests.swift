@@ -179,6 +179,21 @@ import Testing
     #expect(try array(try await sb.json("task", "list", "--all")).count == 1)
   }
 
+  @Test func ideaBecomesATaskAndBack() async throws {
+    let sb = try Sandbox()
+    let idea = try await sb.object("card", "add", "--inbox", "--body", "修重连")
+    let id = try #require(idea.string("id"))
+    #expect(idea.string("kind") == "idea" && idea["status"] is NSNull)
+
+    let task = try await sb.object("card", "todo", id)
+    #expect(task.string("kind") == "task" && task.string("status") == "todo")
+    #expect(try array(try await sb.json("task", "list")).compactMap { $0.string("id") } == [id])
+
+    let back = try await sb.object("card", "todo", id, "--off")
+    #expect(back.string("kind") == "idea")
+    #expect(try array(try await sb.json("task", "list")).isEmpty)
+  }
+
   @Test func addSubtaskUnderAParent() async throws {
     let sb = try Sandbox()
     let alpha = try await sb.project("Alpha")

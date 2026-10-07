@@ -34,7 +34,7 @@ let package = Package(
         .executableTarget(name: "CueCLI", dependencies: ["CueStore", "CueText"]),
         .testTarget(name: "CueCLITests", dependencies: ["CueCLI", "CueTestSupport"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
-        .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"]),
+        .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"], exclude: ["Fixtures"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor"]),
         .testTarget(name: "CueDispatchTests", dependencies: ["CueDispatch"]),
         .testTarget(name: "CuePiTests", dependencies: ["CuePi"], exclude: ["Fixtures"]),
