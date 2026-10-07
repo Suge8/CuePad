@@ -16,12 +16,14 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 
     /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因。
+    /// 思考强度按显示的模型夹取（`PiThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
     var config: PiConfigShown {
         let current = PiConfigShown(model: session?.model, thinking: session?.thinking?.known, pending: false, failure: nil)
         guard let request = deliveries.last(where: { $0.config != nil }), let wanted = request.config else { return current }
         if request.isOpen {
             let model = wanted.model.flatMap { key in session?.models.first { $0.key == key } } ?? current.model
-            return PiConfigShown(model: model, thinking: wanted.thinking ?? current.thinking, pending: true, failure: nil)
+            let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
+            return PiConfigShown(model: model, thinking: thinking, pending: true, failure: nil)
         }
         guard let failure = request.failure else { return current }
         return PiConfigShown(model: current.model, thinking: current.thinking, pending: false, failure: failure)
@@ -38,6 +40,17 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             project: try session?.projectID.flatMap { try store.project($0) },
             deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
             messages: try ref.map { try store.piMessages(of: $0) } ?? [])
+    }
+}
+
+extension PiThinkingLevel {
+    /// 夹到 `supported` 里（与 Pi 的 clampThinkingLevel 同规则）：支持就是它，否则先往高找最近的一档，没有再往低找；
+    /// 不知道支持哪些时原样。
+    nonisolated func clamped(to supported: [PiThinkingLevel]) -> PiThinkingLevel {
+        guard !supported.isEmpty, !supported.contains(self) else { return self }
+        let all = Self.allCases
+        let index = all.firstIndex(of: self) ?? 0
+        return all[index...].first(where: supported.contains) ?? all[..<index].last(where: supported.contains) ?? supported[0]
     }
 }
 
