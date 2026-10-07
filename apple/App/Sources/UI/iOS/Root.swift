@@ -357,7 +357,7 @@ private struct BottomBar: View {
             VStack(spacing: 1) {
                 Image(systemName: symbol).font(.system(size: 17, weight: selected ? .semibold : .regular))
                     .frame(height: 21)
-                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).offset(x: 12, y: -5) } }
+                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).dynamicTypeSize(...DynamicTypeSize.xLarge).offset(x: 12, y: -5) } }
                 Text(title).font(.system(size: 10, weight: selected ? .semibold : .medium))
             }
             .foregroundStyle(selected ? palette.ink : palette.ink2)
@@ -392,18 +392,18 @@ private struct TabPress: ButtonStyle {
     }
 }
 
-/// 角标：注意色的小胶囊（等你确认数）。比标签字小一档起步、跟随字号放大，到 xxxLarge 封顶：再大就盖住图标。
+/// 角标：注意色的小胶囊（等你确认数）。比标签字（10）小一档、9 起步，跟随字号放大；上限 xLarge 加在调用处——
+/// `@ScaledMetric` 读的是角标外面的字号，加在 body 里限不住它；再大就盖住图标。
 private struct Badge: View {
     let count: Int
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .caption2) private var size: CGFloat = 10
+    @ScaledMetric(relativeTo: .caption2) private var size: CGFloat = 9
     @ScaledMetric(relativeTo: .caption2) private var diameter: CGFloat = 16
 
     var body: some View {
         Text("\(count)").font(.system(size: size, weight: .bold).monospacedDigit()).foregroundStyle(.white)
             .padding(.horizontal, 4).frame(minWidth: diameter, minHeight: diameter)
             .background(palette.attention, in: .capsule)
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             .accessibilityHidden(true)
     }
 }
