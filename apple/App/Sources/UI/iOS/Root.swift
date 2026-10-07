@@ -285,7 +285,8 @@ extension EnvironmentValues {
 
 /// 底部一行，整体居中：一条玻璃轨道里的两个标签 [灵感 | Agent]，右边一颗与轨道同高、同一玻璃的圆形"写"；
 /// 位置与大小始终不变，不随滚动收小。比例对着系统悬浮标签栏（照片：高 62、滴四周留 5、每格 94）略收：高 56、滴四周留 4（同心）、
-/// 每格 80，图标与字更紧。轨道本身看得见：玻璃上一层低对比底（浅色压暗一点，深色提亮一点）；选中滴在轨道里再深（浅色）
+/// 每格 80，图标与字更紧。字号固定、不随动态字体放大，辅助字号下长按任一格或"写"弹出大内容查看器——系统标签栏同款取舍：
+/// 栏高固定，字放大只会挤掉图标。轨道本身看得见：玻璃上一层低对比底（浅色压暗一点，深色提亮一点）；选中滴在轨道里再深（浅色）
 /// 或再亮（深色）一层，同心内缩。
 /// 按住选中的那一格时滴轻轻一压，按住另一格时手指下亮出一层淡按压底，都给一下轻触感；换标签时滴在轨道里滑过去
 /// （减弱动态效果时淡出淡入、不压）。
@@ -320,6 +321,7 @@ private struct BottomBar: View {
             .buttonStyle(PressStyle(scale: 0.92))
             .glass(in: .circle, interactive: true)
             .accessibilityLabel(WriteEntry.title)
+            .accessibilityShowsLargeContentViewer { Label(WriteEntry.title, systemImage: WriteEntry.symbol) }
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, Self.bottomGap)
@@ -374,6 +376,7 @@ private struct BottomBar: View {
         }
         .buttonStyle(TabPress(tab: tab, pressed: $pressed))
         .accessibilityElement(children: .ignore)
+        .accessibilityShowsLargeContentViewer { Label(title, systemImage: symbol) }
         .accessibilityLabel(title)
         .accessibilityValue(badge > 0 ? "\(badge) 个会话等你确认" : "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
