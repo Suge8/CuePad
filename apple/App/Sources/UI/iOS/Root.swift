@@ -287,7 +287,8 @@ extension EnvironmentValues {
 /// 位置与大小始终不变，不随滚动收小。比例对着系统悬浮标签栏（照片：高 62、滴四周留 5、每格 94）略收：高 56、滴四周留 4（同心）、
 /// 每格 80，图标与字更紧。轨道本身看得见：玻璃上一层低对比底（浅色压暗一点，深色提亮一点）；选中滴在轨道里再深（浅色）
 /// 或再亮（深色）一层，同心内缩。
-/// 按住一格时滴轻轻一压、给一下轻触感；换标签时滴在轨道里滑过去（减弱动态效果时淡出淡入、不压）。
+/// 按住选中的那一格时滴轻轻一压，按住另一格时手指下亮出一层淡按压底，都给一下轻触感；换标签时滴在轨道里滑过去
+/// （减弱动态效果时淡出淡入、不压）。
 private struct BottomBar: View {
     let waiting: Int
     let select: (Navigation.Tab) -> Void
@@ -332,7 +333,7 @@ private struct BottomBar: View {
             // 减弱动态效果时换成每格各一滴：换标签是旧滴淡出、新滴淡入（随 `Motion.spatial` 的短淡入淡出），不滑过去
             Capsule().fill(drop)
                 .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
-                .scaleEffect(pressed != nil && !reduceMotion ? 0.94 : 1)
+                .scaleEffect(pressed == navigation.tab && !reduceMotion ? 0.94 : 1)
                 .animation(Motion.press, value: pressed)
                 .padding(Self.inset)
                 .id(reduceMotion ? navigation.tab : nil)
@@ -362,6 +363,13 @@ private struct BottomBar: View {
             .foregroundStyle(selected ? palette.ink : palette.ink2)
             // 一格占轨道的一半，四周的边也算它的：点在滴外面一点也算点中
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                // 按住没选中的这一格：手指下亮出一层比选中滴淡一半的底，与滴同大同心
+                if pressed == tab, !selected {
+                    Capsule().fill(drop.opacity(0.5)).padding(Self.inset).transition(.opacity)
+                }
+            }
+            .animation(Motion.press, value: pressed)
             .contentShape(.rect)
         }
         .buttonStyle(TabPress(tab: tab, pressed: $pressed))
@@ -384,15 +392,18 @@ private struct TabPress: ButtonStyle {
     }
 }
 
-/// 角标：注意色的小胶囊（等你确认数），跟随字号。
+/// 角标：注意色的小胶囊（等你确认数）。比标签字小一档起步、跟随字号放大，到 xxxLarge 封顶：再大就盖住图标。
 private struct Badge: View {
     let count: Int
     @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .caption2) private var size: CGFloat = 10
+    @ScaledMetric(relativeTo: .caption2) private var diameter: CGFloat = 16
 
     var body: some View {
-        Text("\(count)").font(.system(size: 10, weight: .bold).monospacedDigit()).foregroundStyle(.white)
-            .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16)
+        Text("\(count)").font(.system(size: size, weight: .bold).monospacedDigit()).foregroundStyle(.white)
+            .padding(.horizontal, 4).frame(minWidth: diameter, minHeight: diameter)
             .background(palette.attention, in: .capsule)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             .accessibilityHidden(true)
     }
 }
