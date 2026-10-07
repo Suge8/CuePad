@@ -228,8 +228,8 @@ import Testing
   @Test func libraryFromAnotherSchemaVersionIsRefused() throws {
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 12;")
-    #expect(throws: CueStoreError.unsupportedSchemaVersion(12)) { try CueStore(url: url) }
+    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 13;")
+    #expect(throws: CueStoreError.unsupportedSchemaVersion(13)) { try CueStore(url: url) }
   }
 
   /// 已经在用的旧资料库（结构版本 1）打开时逐步升级到最新，数据保留：Pi 会话状态多了文件夹名与近况各列。
@@ -241,6 +241,7 @@ import Testing
       ALTER TABLE piSessionStates DROP COLUMN busySince; ALTER TABLE piSessionStates DROP COLUMN launchToken;
       ALTER TABLE piSessionStates DROP COLUMN hosted; ALTER TABLE piSessionStates DROP COLUMN subagents;
       ALTER TABLE piSessionStates DROP COLUMN pendingPrompt; DROP TABLE piMessages;
+      ALTER TABLE piSessionStates DROP COLUMN model; ALTER TABLE piSessionStates DROP COLUMN thinking; ALTER TABLE piSessionStates DROP COLUMN models;
       DROP INDEX piSessionStates_state; DROP TABLE directoryBindings;
       ALTER TABLE tasks DROP COLUMN startedAt; DROP INDEX tasks_parentID; ALTER TABLE tasks DROP COLUMN parentID;
       ALTER TABLE projects ADD COLUMN sortKey TEXT NOT NULL DEFAULT 'V';
@@ -252,10 +253,10 @@ import Testing
     let reopened = try CueStore(url: fixture.url)
 
     #expect(try await reopened.card(card.id)?.body == "保留")
-    let added = "('folder', 'lastPrompt', 'lastReply', 'question', 'busySince', 'launchToken', 'hosted', 'subagents', 'pendingPrompt')"
-    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name IN \(added)").count == 9)
+    let added = "('folder', 'lastPrompt', 'lastReply', 'question', 'busySince', 'launchToken', 'hosted', 'subagents', 'pendingPrompt', 'model', 'thinking', 'models')"
+    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name IN \(added)").count == 12)
     #expect(try RawDB(fixture.url).rows("SELECT name FROM sqlite_master WHERE name = 'directoryBindings'").count == 1)
     #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('cards') WHERE name = 'numbering'").isEmpty)
-    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["11"]])
+    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["12"]])
   }
 }

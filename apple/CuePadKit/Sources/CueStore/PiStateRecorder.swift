@@ -61,7 +61,8 @@ extension CueStore {
 
   func writePiState(
     sessionID: String, hostID: String, title: String, folder: String?, projectID: UUID?, state: PiWorkState, detail: String?,
-    question: PiQuestion?, notify: PiAlert?, times: PiTimes, launchToken: String?, hosted: Bool, subagents: [PiSubagentState]
+    question: PiQuestion?, notify: PiAlert?, times: PiTimes, launchToken: String?, hosted: Bool, subagents: [PiSubagentState],
+    modelState: PiModelState
   ) throws {
     try write {
       let now = Date.stamp
@@ -69,7 +70,8 @@ extension CueStore {
         id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: title, projectID: projectID,
         state: .known(state), detail: detail, folder: folder, lastPrompt: nil, lastReply: nil,
         question: question, notify: notify.map(Open.known), stateSince: times.stateSince, busySince: times.busySince,
-        createdAt: now, modifiedAt: now, launchToken: launchToken, hosted: hosted, subagents: subagents)
+        createdAt: now, modifiedAt: now, launchToken: launchToken, hosted: hosted, subagents: subagents,
+        model: modelState.model, thinking: modelState.thinking, models: modelState.models)
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       let assignments = PiSessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }
@@ -93,7 +95,7 @@ extension CueStore {
       let ended = PiWorkState.ended.rawValue
       let end = """
         UPDATE piSessionStates SET state = ?, detail = NULL, question = NULL, notify = NULL, stateSince = ?, busySince = NULL,
-          hosted = NULL, subagents = NULL,
+          hosted = NULL, subagents = NULL, models = NULL,
           modifiedAt = ?
         """
       if let sessionID {
@@ -126,6 +128,7 @@ public actor PiStateRecorder {
     var launchToken: String?
     var hosted: Bool
     var subagents: [PiSubagentState]
+    var modelState: PiModelState
   }
 
   private struct Session {
@@ -137,6 +140,7 @@ public actor PiStateRecorder {
     var launchToken: String?
     var hosted = false
     var subagents: [PiSubagentState] = []
+    var modelState = PiModelState()
     /// 调用方给的计时基准；没给过时（测试、演示）用第一次写入的时间，之后不变
     var times: PiTimes?
     var written: Content?
@@ -164,7 +168,7 @@ public actor PiStateRecorder {
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, title: String? = nil, folder: String? = nil,
     projectID: UUID? = nil, question: PiQuestion? = nil, times: PiTimes? = nil, launchToken: String? = nil, hosted: Bool? = nil,
-    subagents: [PiSubagentState]? = nil
+    subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil
   ) async throws -> PiAlert? {
     var session = sessions[sessionID] ?? Session()
     let previous = session.observed
@@ -176,13 +180,15 @@ public actor PiStateRecorder {
     if let launchToken { session.launchToken = launchToken }
     if let hosted { session.hosted = hosted }
     if let subagents { session.subagents = subagents }
+    if let modelState { session.modelState = modelState }
     let now = timing.now()
     let times = times ?? session.times ?? PiTimes(stateSince: now, busySince: nil)
     session.times = times
 
     let content = Content(
       state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID, question: session.question,
-      times: times, launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents)
+      times: times, launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
+      modelState: session.modelState)
     if content == session.written {
       cancelPending(&session)
       sessions[sessionID] = session
@@ -191,7 +197,7 @@ public actor PiStateRecorder {
     let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
     let renamed = session.written.map {
       $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID || $0.question != content.question
-        || $0.hosted != content.hosted || $0.subagents != content.subagents
+        || $0.hosted != content.hosted || $0.subagents != content.subagents || $0.modelState != content.modelState
         || $0.times != content.times
     } ?? true
     guard startsOrEndsWork || renamed || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {
@@ -243,7 +249,7 @@ public actor PiStateRecorder {
     let content = Content(
       state: pending.state, detail: pending.detail, title: session.title, folder: session.folder, projectID: session.projectID,
       question: session.question, times: times, launchToken: session.launchToken, hosted: session.hosted,
-      subagents: session.subagents)
+      subagents: session.subagents, modelState: session.modelState)
     let write = commit(sessionID, &session, content, at: timing.now())
     sessions[sessionID] = session
     // 定时写入没有调用方可报告；记为未写入，下一次更新会重写
@@ -273,7 +279,8 @@ public actor PiStateRecorder {
       try await store.writePiState(
         sessionID: sessionID, hostID: hostID, title: content.title, folder: content.folder, projectID: content.projectID,
         state: content.state, detail: content.detail, question: content.question, notify: notify, times: content.times,
-        launchToken: content.launchToken, hosted: content.hosted, subagents: content.subagents)
+        launchToken: content.launchToken, hosted: content.hosted, subagents: content.subagents,
+        modelState: content.modelState)
     }
   }
 

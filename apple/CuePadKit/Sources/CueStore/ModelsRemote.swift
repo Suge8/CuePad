@@ -176,6 +176,112 @@ public struct PiAnswer: Sendable, Equatable {
   }
 }
 
+/// Pi 的思考强度（Pi 的 `ThinkingLevel`，含关闭）。
+public enum PiThinkingLevel: String, Sendable, CaseIterable {
+  case off, minimal, low, medium, high, xhigh, max
+}
+
+/// 一个模型的标识：提供方加模型 id（同一个 id 可以出自不同提供方）。
+public struct PiModelKey: Sendable, Hashable, Codable {
+  public var provider: String
+  public var id: String
+
+  public init(provider: String, id: String) {
+    self.provider = provider
+    self.id = id
+  }
+}
+
+/// 会话可选的一个模型：标识、显示名，以及它支持的思考强度（不支持思考的只有 `off`；不认识的新强度读出时丢掉）。
+public struct PiModelOption: Sendable, Equatable, Identifiable {
+  public var key: PiModelKey
+  public var name: String
+  public var thinkingLevels: [PiThinkingLevel]
+  public var id: PiModelKey { key }
+
+  public init(key: PiModelKey, name: String, thinkingLevels: [PiThinkingLevel]) {
+    self.key = key
+    self.name = name
+    self.thinkingLevels = thinkingLevels
+  }
+
+  private struct Stored: Codable {
+    var provider: String
+    var id: String
+    var name: String
+    var thinking: [String]
+  }
+
+  private init(_ stored: Stored) {
+    self.init(
+      key: PiModelKey(provider: stored.provider, id: stored.id), name: stored.name,
+      thinkingLevels: stored.thinking.compactMap(PiThinkingLevel.init(rawValue:)))
+  }
+
+  private var form: Stored {
+    Stored(provider: key.provider, id: key.id, name: name, thinking: thinkingLevels.map(\.rawValue))
+  }
+
+  /// 同步记录里存为 JSON（加密字段 `model`、`models`）；读不出的当作没有。
+  static func stored(_ option: PiModelOption?) -> String? {
+    option.map { String(decoding: try! JSONEncoder().encode($0.form), as: UTF8.self) }
+  }
+
+  static func stored(_ list: [PiModelOption]) -> String? {
+    list.isEmpty ? nil : String(decoding: try! JSONEncoder().encode(list.map(\.form)), as: UTF8.self)
+  }
+
+  static func option(stored: String?) -> PiModelOption? {
+    stored.flatMap { try? JSONDecoder().decode(Stored.self, from: Data($0.utf8)) }.map(PiModelOption.init)
+  }
+
+  static func list(stored: String?) -> [PiModelOption] {
+    stored.flatMap { try? JSONDecoder().decode([Stored].self, from: Data($0.utf8)) }.map { $0.map(PiModelOption.init) } ?? []
+  }
+}
+
+/// 一个会话此刻的模型配置：当前模型与思考强度、可以换成的模型。Pi 桥上报，状态记录器整体写入。
+public struct PiModelState: Sendable, Equatable {
+  public var model: PiModelOption?
+  public var thinking: Open<PiThinkingLevel>?
+  public var models: [PiModelOption]
+
+  public init(model: PiModelOption? = nil, thinking: Open<PiThinkingLevel>? = nil, models: [PiModelOption] = []) {
+    self.model = model
+    self.thinking = thinking
+    self.models = models
+  }
+}
+
+/// 手机发给 Mac 的会话配置：换模型、改思考强度，至少改一项。存在投送请求（方式 `config`）的正文里（JSON）。
+/// 先换模型再设思考强度：强度按新模型支持的范围取。
+public struct PiConfig: Sendable, Equatable {
+  public var model: PiModelKey?
+  public var thinking: PiThinkingLevel?
+
+  public init(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil) {
+    self.model = model
+    self.thinking = thinking
+  }
+
+  private struct Stored: Codable {
+    var model: PiModelKey?
+    var thinking: String?
+  }
+
+  var stored: String {
+    String(decoding: try! JSONEncoder().encode(Stored(model: model, thinking: thinking?.rawValue)), as: UTF8.self)
+  }
+
+  /// 什么都不改、或强度是更新版本的新值（本版本不认识）时为 nil。
+  init?(stored: String) {
+    guard let form = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else { return nil }
+    let thinking = form.thinking.map(PiThinkingLevel.init(rawValue:))
+    guard thinking != .some(nil), form.model != nil || thinking != nil else { return nil }
+    self.init(model: form.model, thinking: thinking ?? nil)
+  }
+}
+
 /// 新会话开在哪：某个项目绑定的代码目录，或与某个会话同一目录。手机不传路径，Mac 按本机的绑定与会话索引解析。
 public enum PiLaunchPlace: Sendable, Equatable {
   case project(UUID)
@@ -347,13 +453,18 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var hosted: Bool
   /// 会话里的子代理（FireCode 等在同一进程里开的子会话），一行一个。
   public var subagents: [PiSubagentState]
+  /// 会话当前的模型与思考强度、可以换成的模型（Pi 桥上报；已结束的会话留着最后的模型与强度，可选列表清空）。旧版本写的记录没有。
+  public var model: PiModelOption?
+  public var thinking: Open<PiThinkingLevel>?
+  public var models: [PiModelOption]
 
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
   public init(
     id: UUID, sessionID: String, hostID: String, title: String, projectID: UUID?, state: Open<PiWorkState>, detail: String?,
     folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
-    subagents: [PiSubagentState] = [], pendingPrompt: String? = nil
+    subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, model: PiModelOption? = nil,
+    thinking: Open<PiThinkingLevel>? = nil, models: [PiModelOption] = []
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -375,6 +486,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.hosted = hosted
     self.subagents = subagents
     self.pendingPrompt = pendingPrompt
+    self.model = model
+    self.thinking = thinking
+    self.models = models
   }
 
   /// 记录上的摘要（对话的投影）。
@@ -400,6 +514,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case start
   /// 请 Mac 从会话文件把这个会话的对话补写进来（7 天前活跃过的会话，手机打开时发）；正文是会话 id，不写发送记录
   case transcript
+  /// 换会话的模型与思考强度；正文是 `PiConfig`（见 `DeliveryRequest.config`），不写发送记录
+  case config
 
   /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。
   public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .paste, .answer]
@@ -434,6 +550,9 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 作答请求的答案；其他方式为 nil。
   public var answer: PiAnswer? { mode == .known(.answer) ? PiAnswer(stored: content) : nil }
 
+  /// 配置请求的内容；其他方式为 nil。
+  public var config: PiConfig? { mode == .known(.config) ? PiConfig(stored: content) : nil }
+
   /// 往返时间：创建 → 结果回到本机，两端都是发起设备的时钟。执行方与还没收到结果时为 nil。
   public var roundTrip: Duration? {
     resultReceivedAt.map { .milliseconds(Int64(($0.timeIntervalSince(createdAt) * 1000).rounded())) }
@@ -452,10 +571,12 @@ extension PiSessionState: Record {
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
+    "model", "thinking", "models",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
-     lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, PiSubagentState.stored(subagents), pendingPrompt]
+     lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, PiSubagentState.stored(subagents), pendingPrompt,
+     PiModelOption.stored(model), thinking?.rawValue, PiModelOption.stored(models)]
   }
   init(row: Row) {
     self.init(
@@ -467,7 +588,9 @@ extension PiSessionState: Record {
       subagents: PiSubagentState.list(stored: row.textOrNil(18)),
       // 列里是会话文件的投影原样（最后一句可能是上次中途退出、没等到回答的）；已结束的会话没有正在处理的提问，
       // 会话重新连上时又是它——不必等文件再追加
-      pendingPrompt: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(19))
+      pendingPrompt: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(19),
+      model: PiModelOption.option(stored: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
+      models: PiModelOption.list(stored: row.textOrNil(22)))
   }
 }
 

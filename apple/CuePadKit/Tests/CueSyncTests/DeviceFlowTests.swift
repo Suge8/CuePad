@@ -59,6 +59,25 @@ import Testing
     #expect(seen.subagents == subagents && seen.hosted)
   }
 
+  /// 会话的模型、思考强度与可选模型（Mac 写）经同步到手机；手机的配置请求（手机写）到 Mac，读出同一个配置。
+  @Test func modelChoicesTravelToThePhoneAndTheConfigRequestTravelsBackToTheMac() async throws {
+    let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
+    let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low, .medium])
+    let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high])
+    try await recorder.update(
+      sessionID: "s1", state: .settled, title: "t", modelState: PiModelState(model: sonnet, thinking: .known(.low), models: [sonnet, opus]))
+    try await cloud.exchange()
+
+    let seen = try #require(try await phone.store.allPiSessionStates().first)
+    #expect(seen.model == sonnet && seen.thinking == .known(.low) && seen.models == [sonnet, opus])
+
+    let config = PiConfig(model: opus.key, thinking: .high)
+    let target = SendTarget(kind: .piSession, name: "t", ref: "s1")
+    let made = try await phone.store.requestConfig(config, to: target, on: "mac")
+    try await cloud.exchange()
+    #expect(try await mac.store.deliveryRequest(made.id)?.config == config)
+  }
+
   @Test(.timeLimit(.minutes(1)))
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
     let executor = DeliveryExecutor(

@@ -130,6 +130,7 @@ import Testing
     let task = try await store.createTask("旧任务")
     try RawDB(fixture.url).exec("""
       DROP INDEX tasks_parentID; ALTER TABLE tasks DROP COLUMN parentID;
+      ALTER TABLE piSessionStates DROP COLUMN model; ALTER TABLE piSessionStates DROP COLUMN thinking; ALTER TABLE piSessionStates DROP COLUMN models;
       PRAGMA user_version = 10;
       """)
 

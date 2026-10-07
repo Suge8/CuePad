@@ -167,6 +167,13 @@ final class AppServices {
             on: session.hostID))
     }
 
+    /// 换会话的模型或思考强度：写一条配置请求给会话所在的 Mac（与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
+    /// 当前值与可选项读会话状态的 `model`、`thinking`、`models`；结果用 `outcome(of:)` 等。
+    func configure(_ config: PiConfig, for session: PiSessionState) async throws -> DeliveryRequest {
+        uploaded(try await store.requestConfig(
+            config, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID))
+    }
+
     /// 请指定的 Mac 在后台开一个 Pi 新会话：与发送同一条投送通道（Mac 本机也走它），写出后立即上传。
     /// `title` 是给人看的目标名（会话名或项目名）。新会话用 `PiLaunch` 的 `token` 认领：等同步记录上出现同一个
     /// `launchToken` 的会话。

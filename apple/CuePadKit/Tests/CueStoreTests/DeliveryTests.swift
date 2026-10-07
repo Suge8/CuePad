@@ -273,4 +273,17 @@ import Testing
     try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'queuedRemotely'")
     #expect(try await request(made.id)?.status == .unknown("queuedRemotely"))
   }
+
+  /// 配置请求（换模型、改思考强度）与发送同一条投送通道：正文是 JSON，读回来是同一个配置；什么都不改或强度不认识的读不出。
+  @Test func configRequestCarriesTheModelAndThinkingToTheMacAndIsNotAMessageToTheSession() async throws {
+    let config = PiConfig(model: PiModelKey(provider: "anthropic", id: "opus"), thinking: .high)
+    let made = try await store.requestConfig(config, to: pi, on: "mac-a")
+
+    let stored = try #require(try await request(made.id))
+    #expect(stored.mode == .known(.config) && stored.hostID == "mac-a" && stored.config == config)
+    #expect(DeliveryMode.config.rawValue == "config")
+    #expect(try await store.requestDelivery(#"{"thinking":"ultra"}"#, to: pi, on: "mac-a", mode: .config).config == nil)
+    #expect(try await store.requestDelivery("{}", to: pi, on: "mac-a", mode: .config).config == nil)
+    #expect(!DeliveryMode.toSession.contains(.config))  // 不是对会话说的话：会话页不把它当最近一条消息
+  }
 }

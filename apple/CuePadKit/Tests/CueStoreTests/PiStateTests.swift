@@ -381,4 +381,24 @@ import Testing
     try RawDB(fixture.url).exec("UPDATE piSessionStates SET notify = 'somethingNew'")
     #expect(try await alert() == .unknown("somethingNew"))
   }
+
+  /// 当前模型、思考强度与可选模型随状态记录一起写下；会话结束留着最后的模型与强度，可选列表清空（同步记录别带着过期的大列表）。
+  @Test func modelThinkingAndChoicesAreRecordedAndTheChoicesGoWhenTheSessionEnds() async throws {
+    let fast = PiModelOption(key: PiModelKey(provider: "anthropic", id: "haiku"), name: "Haiku", thinkingLevels: [.off])
+    let deep = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .low, .high])
+    let recorder = recorder()
+
+    try await recorder.update(
+      sessionID: "s1", state: .settled, title: "t",
+      modelState: PiModelState(model: deep, thinking: .known(.high), models: [fast, deep]))
+    let live = try #require(try await states()["s1"])
+    #expect(live.model == deep && live.thinking == .known(.high) && live.models == [fast, deep])
+
+    try await recorder.update(sessionID: "s1", state: .settled, modelState: PiModelState(model: fast, thinking: .known(.off), models: [fast, deep]))
+    #expect(try await states()["s1"]?.model == fast)  // 只是换了模型：立即写
+
+    try await recorder.end(sessionID: "s1")
+    let ended = try #require(try await states()["s1"])
+    #expect(ended.state == .known(.ended) && ended.model == fast && ended.thinking == .known(.off) && ended.models.isEmpty)
+  }
 }

@@ -45,6 +45,7 @@ nonisolated extension DeliveryMode {
         case .ping: "连接测试"
         case .start: "新会话"
         case .transcript: "补写对话"
+        case .config: "模型与思考强度"
         }
     }
 
@@ -54,7 +55,7 @@ nonisolated extension DeliveryMode {
         case .steer: "它做完手上这一步就会看到"
         case .followUp: "这一轮结束后再送达"
         case .paste: "只放进输入框，不发送"
-        case .send, .answer, .ping, .start, .transcript: nil
+        case .send, .answer, .ping, .start, .transcript, .config: nil
         }
     }
 }

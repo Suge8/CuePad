@@ -77,6 +77,7 @@ import Testing
       ALTER TABLE cards ADD COLUMN numbering TEXT NOT NULL DEFAULT 'none';
       DROP INDEX cards_projectID_modifiedAt; DROP INDEX tasks_projectID_modifiedAt; DROP INDEX piSessionStates_projectID;
       ALTER TABLE piSessionStates DROP COLUMN pendingPrompt; DROP TABLE piMessages;
+      ALTER TABLE piSessionStates DROP COLUMN model; ALTER TABLE piSessionStates DROP COLUMN thinking; ALTER TABLE piSessionStates DROP COLUMN models;
       PRAGMA user_version = 7;
       """)
 

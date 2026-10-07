@@ -94,6 +94,9 @@ DEFINE SCHEMA
         hosted        INT64,
         subagents     ENCRYPTED STRING,
         pendingPrompt ENCRYPTED STRING,
+        model         ENCRYPTED STRING,
+        thinking      ENCRYPTED STRING,
+        models        ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
