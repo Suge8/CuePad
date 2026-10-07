@@ -98,7 +98,7 @@ struct PiSessionDetail: View {
 
     @ViewBuilder private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
         let follow = PiConversation.followKey(session: session, messages: digest.messages, deliveries: digest.deliveries)
-        // 打开停在最新；在底部时跟着新内容，往上翻后暂停并出"新消息"按钮（`ChatScroll`）
+        // 打开停在最新；在底部时跟着新内容，往上翻后暂停，离最新超过一屏出"回到最新"圆钮、来过新内容时带点（`ChatScroll`）
         let scroll = ChatScroll(followKey: follow) {
             VStack(spacing: 14) {
                 if fetchingTranscript(digest) {

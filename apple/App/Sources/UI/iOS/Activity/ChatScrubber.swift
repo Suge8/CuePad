@@ -41,7 +41,6 @@ struct ChatScrubber: View {
     static let width: CGFloat = 28
     /// 刻度区在可见区里的上下边：上沿在三成高处（避开顶栏，进拇指够得着的区），下沿让开回复框右上方的"回到最新"圆钮。
     private static let bandTop: CGFloat = 0.3
-    private static let bandBottomGap: CGFloat = 64
     private static let linger: Duration = .milliseconds(900)
 
     private var visible: Bool { finger != nil || scrolling || lingering }
@@ -150,7 +149,7 @@ struct ChatScrubber: View {
 
         init(height: CGFloat, count: Int) {
             top = height * ChatScrubber.bandTop
-            bottom = max(top, height - ChatScrubber.bandBottomGap)
+            bottom = max(top, height - JumpToNewest.clearance)
             self.count = count
             let shown = min(count, ChatScrubber.visibleTicks)
             let pitch = min(ChatScrubber.maxPitch, (bottom - top) / CGFloat(max(shown - 1, 1)))

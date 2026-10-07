@@ -125,7 +125,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             .overlay(alignment: .bottomTrailing) {
                 if follow.wrappedValue.showsJump {
                     JumpToNewest(unseen: follow.wrappedValue.hasUnseen) { follow.wrappedValue.jumpToNewest() }
-                        .padding(.trailing, 16).padding(.bottom, 10)
+                        .padding(.trailing, JumpToNewest.inset).padding(.bottom, JumpToNewest.inset)
                         .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
@@ -194,10 +194,16 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
 }
 
 /// "回到最新"：回复框右上方一颗圆形玻璃钮，向下的箭头；离开后来过新内容时右上角带一个墨色的点。
-private struct JumpToNewest: View {
+struct JumpToNewest: View {
     let unseen: Bool
     let action: () -> Void
     @Environment(\.palette) private var palette
+
+    /// 点按区的边长与离可见区右、下边的距离。
+    static let size: CGFloat = 44
+    static let inset: CGFloat = 10
+    /// 它在可见区底部占的高（含上下留白）：右缘刻度区的下沿让到这之上。
+    static var clearance: CGFloat { size + 2 * inset }
 
     var body: some View {
         Button(action: action) {
@@ -212,7 +218,7 @@ private struct JumpToNewest: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: Self.size, height: Self.size)
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
