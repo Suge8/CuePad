@@ -26,7 +26,8 @@ struct SyncSummary: Equatable {
             (title, detail, symbol, tone) = ("iCloud 空间不足", "本机改动都已保留，空间释放后自动上传", "exclamationmark.icloud", .attention)
         case .needsDecision(let decision):
             (title, detail, symbol, tone) = ("同步已暂停，需要你决定", Self.describe(decision), "pause.circle", .attention)
-        case .failed(let message): (title, detail, symbol, tone) = ("同步出错", message, "xmark.icloud", .failure)
+        // 底层原因（错误码、服务端说明）在设置的「没能同步」明细里按记录列出，状态这里只说人话
+        case .failed: (title, detail, symbol, tone) = ("同步出错", Self.failedDetail, "xmark.icloud", .failure)
         }
     }
 
@@ -37,6 +38,12 @@ struct SyncSummary: Equatable {
         case .failure: palette.failure
         }
     }
+
+    #if os(macOS)
+    static let failedDetail = "有记录没能上传，本机的内容都在，会自动重试"
+    #else
+    static let failedDetail = "有记录没能上传，本机的内容都在。回到前台会自动重试，也可以点立即同步"
+    #endif
 
     /// 没登录 iCloud 或关掉了本 App 的 iCloud 时，去哪开。
     #if os(macOS)
@@ -50,6 +57,22 @@ struct SyncSummary: Equatable {
         case .accountSwitched: "iCloud 账号换了，本机数据属于上一个账号"
         case .cloudDataDeleted: "iCloud 里的 CuePad 数据被删除了"
         case .cloudDataReset: "iCloud 里的 CuePad 数据被重置了"
+        }
+    }
+}
+
+extension SyncIssue {
+    /// "没能同步"明细里一条的人话：哪一类记录没能同步；底层原因（`message`）折在它下面。
+    var summary: String {
+        switch recordType {
+        case "cards": "一张灵感或任务没能同步"
+        case "projects": "一个项目没能同步"
+        case "sendRecords": "一条发送记录没能同步"
+        case "attachments": "一张图片没能同步"
+        case "piSessionStates", "piMessages": "Agent 会话的内容没能同步"
+        case "deliveryRequests": "一条发给 Mac 的请求没能同步"
+        case "directoryBindings": "项目的代码目录没能同步"
+        default: "同步遇到一个问题"
         }
     }
 }

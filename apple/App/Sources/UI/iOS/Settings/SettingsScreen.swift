@@ -124,22 +124,6 @@ private struct AlertSection: View {
     }
 }
 
-private extension SyncIssue {
-    /// 给人看的一句：哪一类记录没能同步；原因（`message`）折在它下面。
-    var summary: String {
-        switch recordType {
-        case "cards": "一张灵感或任务没能同步"
-        case "projects": "一个项目没能同步"
-        case "sendRecords": "一条发送记录没能同步"
-        case "attachments": "一张图片没能同步"
-        case "piSessionStates", "piMessages": "Agent 会话的内容没能同步"
-        case "deliveryRequests": "一条发给 Mac 的请求没能同步"
-        case "directoryBindings": "项目的代码目录没能同步"
-        default: "同步遇到一个问题"
-        }
-    }
-}
-
 /// iCloud 同步：一行状态，需要决定时给出两个选择，问题明细可展开。
 private struct SyncSection: View {
     @Environment(AppServices.self) private var services
@@ -151,12 +135,10 @@ private struct SyncSection: View {
     var body: some View {
         Section {
             let summary = SyncSummary(services.syncStatus)
-            let failed = if case .failed = services.syncStatus { true } else { false }
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(summary.title)
-                    // 底层原因（错误码、服务端说明）在下面「没能同步」的明细里，这里只说人话
-                    if let detail = failed ? "有记录没能上传，本机的内容都在。回到前台会自动重试，也可以点立即同步。" : summary.detail {
+                    if let detail = summary.detail {
                         Text(detail).font(.footnote).foregroundStyle(palette.ink3)
                     }
                 }

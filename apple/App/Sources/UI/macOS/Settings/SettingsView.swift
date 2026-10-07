@@ -248,7 +248,10 @@ private struct SyncSection: View {
                 if !services.syncIssues.isEmpty {
                     DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
                         ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
-                            Text(issue.message).font(.caption).foregroundStyle(palette.ink3).textSelection(.enabled)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(issue.summary).font(.caption)
+                                Text(issue.message).font(.caption2.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
+                            }
                         }
                     }
                 }
