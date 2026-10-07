@@ -88,18 +88,11 @@ struct SessionScreen: View {
             }
         }
         // 往历史里翻时顶栏让开，往最新那边回滑一小段或回到最新就回来（同 Safari 的阅读，`ChatFollow.showsHeader`）
-        .floatingHeader(session?.title ?? "", collapsed: !follow.showsHeader, expand: { follow.jumpToNewest() }) {
+        .floatingHeader(session?.title ?? "", hidden: !follow.showsHeader) {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
                 PiSessionSubtitle(session: session, project: digest?.project, delivery: digest?.latestDelivery)
-            }
-        } collapsedDetail: {
-            if let session {
-                HStack(spacing: 4) {
-                    PiStateDot(shown: PiShown(state: session.state, delivery: PiDelivery.phase(of: digest?.latestDelivery, for: session)), size: 6)
-                    PiElapsed(session: session, font: .caption)
-                }
             }
         } trailing: {
             if let session, session.state != .known(.ended) {
