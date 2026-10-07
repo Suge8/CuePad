@@ -146,7 +146,7 @@ struct ShelfScreen: View {
 
     /// 搜索框（一张卡都没有时没什么可搜，只留右边的"⋯"）与"⋯"。
     private var row: some View {
-        SearchRow(search: searchable ? SearchCapsule(prompt: "搜索全部卡片", query: $query.text, focus: $searchFocused) : nil) { menu }
+        SearchRow(search: searchable ? SearchCapsule(prompt: "搜索灵感与任务", query: $query.text, focus: $searchFocused) : nil) { menu }
     }
 
     private var menu: some View {
@@ -263,7 +263,7 @@ private struct ShelfCounts: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text(tasks > 0 ? "\(cards) 张 · \(tasks) 项任务" : "\(cards) 张")
+        Text(tasks > 0 ? "\(cards) 条灵感 · \(tasks) 项任务" : "\(cards) 条灵感")
             .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
             .lineLimit(1)
     }
@@ -339,7 +339,7 @@ private struct ShelfRow: View {
 
     private var subtitle: String {
         if let intro = entry.project.intro { return intro }
-        if let latest = entry.latest { return "\(latest.title.nonEmpty ?? "空白卡片") · \(DateLabel.short(latest.date))" }
+        if let latest = entry.latest { return "\(latest.title.nonEmpty ?? "无标题") · \(DateLabel.short(latest.date))" }
         return "还没有灵感"
     }
 }

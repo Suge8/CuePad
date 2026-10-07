@@ -81,7 +81,7 @@ struct CardRow: View {
                     Text(DateLabel.short(card.modifiedAt)).foregroundStyle(palette.ink3)
                 }
                 .font(.caption.weight(.medium))
-                Text(marked(text.title.nonEmpty ?? "空白卡片")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
+                Text(marked(text.title.nonEmpty ?? "无标题")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
                 if !text.preview.isEmpty {
                     Text(marked(text.preview)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
                 }

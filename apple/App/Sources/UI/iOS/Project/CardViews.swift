@@ -18,7 +18,7 @@ struct CardTileView: View {
                 if let image = text.images.first {
                     Thumbnail(hash: image, height: 96, radius: 9).padding(.bottom, 4)
                 }
-                Text(text.title.nonEmpty ?? "空白卡片")
+                Text(text.title.nonEmpty ?? "无标题")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                     .lineLimit(3)
@@ -82,7 +82,7 @@ struct OlderGroupHeader: View {
                 }
                 Text(OlderGroupTitle.text(group.period)).font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
                 Spacer()
-                if collapsible && !open { Text("\(group.cards.count) 张").font(.caption).foregroundStyle(palette.ink3) }
+                if collapsible && !open { Text("\(group.cards.count) 条").font(.caption).foregroundStyle(palette.ink3) }
             }
             .padding(.horizontal, 4)
             .frame(minHeight: 44)
@@ -113,7 +113,7 @@ struct OlderRow: View {
         NavigationLink(value: Navigation.Route.card(card.id)) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(text.title.nonEmpty ?? "空白卡片").font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(text.title.nonEmpty ?? "无标题").font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                     if !text.preview.isEmpty {
                         Text(text.preview).font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
                     }

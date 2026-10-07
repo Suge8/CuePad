@@ -39,7 +39,7 @@ struct OlderList: View {
             }
             Text(OlderGroupTitle.text(group.period)).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2)
             Spacer()
-            Text("\(group.cards.count) 张").font(.system(size: 11)).foregroundStyle(palette.ink3)
+            Text("\(group.cards.count) 条").font(.system(size: 11)).foregroundStyle(palette.ink3)
         }
         .padding(.horizontal, 4)
         .contentShape(.rect)
@@ -89,8 +89,8 @@ private struct OlderRow: View {
         HStack(spacing: 10) {
             Image(systemName: !text.images.isEmpty ? "photo" : "doc.text")
                 .font(.system(size: 12)).foregroundStyle(palette.ink3).frame(width: 18)
-                .accessibilityLabel(text.images.isEmpty ? "卡片" : "含图片的卡片")
-            Text(text.title.isEmpty ? "空白卡片" : text.title)
+                .accessibilityLabel(text.images.isEmpty ? "灵感" : "含图片的灵感")
+            Text(text.title.isEmpty ? "无标题" : text.title)
                 .font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(text.preview).font(.system(size: 13)).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)

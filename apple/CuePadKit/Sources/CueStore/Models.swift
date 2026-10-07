@@ -317,7 +317,7 @@ extension CueStoreError: LocalizedError {
     case .blankTaskContent: "任务内容不能为空"
     case .notAnImage: "不是可识别的图片"
     case .invalidProject: "目标项目已不存在或在回收站"
-    case .notAConflictCopy: "这张卡片不是冲突副本"
+    case .notAConflictCopy: "这条不是冲突副本"
     case .attachmentHashMismatch: "附件内容与其哈希不符"
     case .blankDeliveryContent: "发送内容不能为空"
     case .attachmentFilesNotRemoved(let hashes): "已永久删除，但有 \(hashes.count) 个图片文件没能删掉"

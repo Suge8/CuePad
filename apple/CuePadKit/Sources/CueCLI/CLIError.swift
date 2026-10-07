@@ -22,13 +22,13 @@ struct CLIError: Error {
     case let error as CLIError:
       self = error
     case CueStoreError.notFound:
-      self = .notFound("对象不存在或已被永久删除（move 的 --after 须是目标项目里的卡片）")
+      self = .notFound("对象不存在或已被永久删除（move 的 --after 须是目标项目里的一条）")
     case CueStoreError.blankTaskContent:
       self = .invalid("任务内容不能为空")
     case CueStoreError.invalidProject:
       self = .invalid("项目不存在或在回收站里（cuepad project list 查看可用项目）")
     case CueStoreError.notAConflictCopy:
-      self = .invalid("该卡片不是冲突副本（cuepad conflicts list 查看副本 id）")
+      self = .invalid("这条不是冲突副本（cuepad conflicts list 查看副本 id）")
     default:
       self = CLIError(kind: .store, message: "\(error)")
     }

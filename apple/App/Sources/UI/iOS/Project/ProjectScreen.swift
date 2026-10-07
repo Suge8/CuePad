@@ -64,11 +64,11 @@ struct ProjectScreen: View {
             if data.project != nil { FocusCard(data: data, pi: pi).padding(.bottom, 12) }
             if data.cards.isEmpty {
                 ContentUnavailableView {
-                    Label("还没有卡片", systemImage: "square.on.square.dashed")
+                    Label("还没有灵感", systemImage: "square.on.square.dashed")
                 } description: {
-                    Text("写一张，或者在下方随手记一条")
+                    Text("写一条，或者在下方随手记一条")
                 } actions: {
-                    Button("新建卡片", action: newCard).prominentButton().controlSize(.large)
+                    Button("记一条灵感", action: newCard).prominentButton().controlSize(.large)
                 }
                 .padding(.top, 24)
             }
@@ -109,7 +109,7 @@ struct ProjectScreen: View {
     /// 顶栏的一行："25 张卡片 · cuepad"（绑定的代码目录只写末段）。
     private var detail: String {
         let catalog = workspace.catalog
-        let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 张卡片" : nil } ?? "还没有卡片"
+        let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 条灵感" : nil } ?? "还没有灵感"
         let folder = catalog?.directories[projectID].map { URL(filePath: $0).lastPathComponent }
         return [count, folder].compactMap { $0 }.joined(separator: " · ")
     }
@@ -125,7 +125,7 @@ struct ProjectScreen: View {
     /// 顶栏右边的"⋯"：新建卡片在前，其后是共用的项目操作。
     private var actions: some View {
         Menu("更多", systemImage: "ellipsis") {
-            Button("新建卡片", systemImage: "square.and.pencil", action: newCard)
+            Button("记一条灵感", systemImage: "square.and.pencil", action: newCard)
             if let project {
                 Divider()
                 ProjectActions(project: project) { navigation.projectForm = .init(project: project) }

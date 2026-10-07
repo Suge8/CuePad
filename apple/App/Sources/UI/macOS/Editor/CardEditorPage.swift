@@ -339,8 +339,8 @@ private struct EditorBar: View {
         GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
                 HStack(spacing: 16) {
-                    Button("复制整张", systemImage: "doc.on.doc") { send(.clipboard, whole: true) }
-                        .help("复制整张卡（变量已填）")
+                    Button("复制全文", systemImage: "doc.on.doc") { send(.clipboard, whole: true) }
+                        .help("复制全文（变量已填）")
                     Button("插入分割线", systemImage: "minus") { handle.insertDivider() }
                         .help("在光标处插入一条分割线")
                     if selecting {

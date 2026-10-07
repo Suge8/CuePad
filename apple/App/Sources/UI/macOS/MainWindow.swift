@@ -296,7 +296,7 @@ private struct WorkspaceShortcuts: View {
             if workspace.isLibraryReady {
                 Button("搜索") { workspace.toggle(.search) }.keyboardShortcut("k")
                 Button("任务") { workspace.toggle(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
-                Button("新建卡片") { newCard() }.keyboardShortcut("n")
+                Button("记一条灵感") { newCard() }.keyboardShortcut("n")
             }
             if workspace.overlay != nil {
                 Button("关闭") { workspace.overlay = nil }.keyboardShortcut(.cancelAction)

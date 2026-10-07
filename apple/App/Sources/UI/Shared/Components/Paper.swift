@@ -76,7 +76,7 @@ struct CardMeta: View {
             if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
             if card.isTask { Image(systemName: "checklist").help("任务").accessibilityLabel("任务") }
-            if floated { Image(systemName: "arrow.up").help("刚从更早的卡里拿回来").accessibilityLabel("刚从更早的卡里拿回来") }
+            if floated { Image(systemName: "arrow.up").help("刚从更早的灵感里拿回来").accessibilityLabel("刚从更早的灵感里拿回来") }
             if card.isPinned { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
         }
         .font(font)

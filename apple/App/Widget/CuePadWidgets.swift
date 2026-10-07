@@ -45,7 +45,7 @@ struct InboxWidget: Widget {
             WidgetViews.inbox(entry)
         }
         .configurationDisplayName("收件箱")
-        .description("最近记下的想法，点一下就能随手记。")
+        .description("最近记下的灵感，点一下就能随手记。")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

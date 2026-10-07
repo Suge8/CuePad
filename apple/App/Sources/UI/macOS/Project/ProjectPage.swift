@@ -134,7 +134,7 @@ private struct ProjectHeader: View {
                         }
                         if cardCount > 0 { Text("·") }
                     }
-                    if cardCount > 0 { Text("\(cardCount) 张卡片").monospacedDigit() }
+                    if cardCount > 0 { Text("\(cardCount) 条灵感").monospacedDigit() }
                 }
                 .font(.system(size: 12)).foregroundStyle(palette.ink3)
             }
@@ -156,13 +156,13 @@ struct NewCardButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("新建卡片", systemImage: "plus") {
+        Button("记一条灵感", systemImage: "plus") {
             let project = project
             workspace.attempt { workspace.openCard = try await workspace.createCard(in: project).id }
         }
         .buttonStyle(.glass)
         .controlSize(.large)
-        .help("新建卡片（⌘N）")
+        .help("记一条灵感（⌘N）")
     }
 }
 
@@ -197,7 +197,7 @@ private struct EmptyProject: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Text("还没有卡片").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink2)
+            Text("还没有灵感").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink2)
             Text("在下方记一条，或按 ⌘N 新建").font(.system(size: 13)).foregroundStyle(palette.ink3)
         }
         .frame(maxWidth: .infinity)

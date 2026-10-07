@@ -12,8 +12,8 @@ struct SearchScreen: View {
 
     var body: some View {
         CardSearchResults(query: $query, scope: .all, total: $total)
-            .floatingHeader("搜索", detail: total.map { !query.text.isEmpty || query.isFiltered ? "\($0) 张" : "" } ?? "")
-            .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索卡片")
+            .floatingHeader("搜索", detail: total.map { !query.text.isEmpty || query.isFiltered ? "\($0) 条" : "" } ?? "")
+            .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索灵感与任务")
             .searchFocused($searching)
             .searchSelection($selection)
             .onAppear {

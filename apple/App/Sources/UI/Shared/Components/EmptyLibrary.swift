@@ -10,7 +10,7 @@ struct EmptyLibrary<Action: View>: View {
             Image(systemName: "books.vertical").font(.system(size: 40, weight: .light)).foregroundStyle(palette.ink3)
                 .accessibilityHidden(true)
             Text("还没有项目").font(.title3.weight(.semibold)).foregroundStyle(palette.ink).padding(.top, 16)
-            Text("建一个项目放卡片，或者先在下方随手记一条").font(.subheadline).foregroundStyle(palette.ink2)
+            Text("建一个项目放灵感，或者先在下方随手记一条").font(.subheadline).foregroundStyle(palette.ink2)
                 .multilineTextAlignment(.center).padding(.top, 8)
             action.padding(.top, 20)
         }

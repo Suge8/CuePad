@@ -65,19 +65,19 @@ struct TrashPage: View {
                 ForEach(data.projects) { project in
                     TrashRow(
                         icon: AnyView(ProjectGlyph(project: project)), title: project.name,
-                        detail: "\(data.projectCardCounts[project.id] ?? 0) 张卡片", deletedAt: project.deletedAt,
+                        detail: "\(data.projectCardCounts[project.id] ?? 0) 条灵感与任务", deletedAt: project.deletedAt,
                         restore: { workspace.perform { try await $0.restoreProject(project.id) } },
                         purge: { workspace.perform { try await $0.purgeProject(project.id) } })
                 }
             }
         }
         if !data.cards.isEmpty {
-            group("卡片") {
+            group("灵感与任务") {
                 ForEach(data.cards) { card in
                     let text = CardText(card.body)
                     TrashRow(
                         icon: AnyView(Image(systemName: "doc.text").foregroundStyle(palette.ink3).accessibilityHidden(true)),
-                        title: text.title.isEmpty ? "空白卡片" : text.title, detail: text.preview, deletedAt: card.deletedAt,
+                        title: text.title.isEmpty ? "无标题" : text.title, detail: text.preview, deletedAt: card.deletedAt,
                         restore: { workspace.perform { try await $0.restoreCard(card.id) } },
                         purge: { workspace.perform { try await $0.purgeCard(card.id) } })
                 }

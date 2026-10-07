@@ -1,12 +1,12 @@
 /// 帮助是命令行的唯一文档：根帮助只教常用任务；选项与 JSON 字段在各命令的 --help 里。
 enum Help {
   static let root = """
-    cuepad — 读写本机 CuePad 资料库（项目、卡片、任务）
+    cuepad — 读写本机 CuePad 资料库（项目、灵感、任务）
 
     常用：
-      cuepad search 部署 脚本            查卡片（每个词都要命中）
-      cuepad card list                   列卡片
-      printf '正文' | cuepad card add    记一张卡片（正文也可用 --body）
+      cuepad search 部署 脚本            查灵感与任务（每个词都要命中）
+      cuepad card list                   列灵感
+      printf '正文' | cuepad card add    记一条灵感（正文也可用 --body）
       cuepad task add 写发布说明          加任务
       cuepad task list                   看未完成任务
       cuepad task done <id>              完成任务
@@ -31,7 +31,7 @@ enum Help {
     let rows = zip(labels, options).map { "  \($0.padded(to: width))  \($1.help)" }.joined(separator: "\n")
     let usage = ["cuepad", command.name, command.arguments, command.options.isEmpty ? "" : "[选项]"]
       .filter { !$0.isEmpty }.joined(separator: " ")
-    let reference = command.arguments.contains("<卡片>") || command.arguments.contains("<任务>") || command.arguments.contains("<副本>")
+    let reference = command.arguments.contains("<灵感或任务>") || command.arguments.contains("<任务>") || command.arguments.contains("<副本>")
       ? "\n对象参数写 id 或至少 4 位的唯一前缀（文本输出里的 8 位短 id 可直接用）。\n" : ""
     return "\(command.summary)\n\n用法：\(usage)\n\n选项：\n\(rows)\n\(reference)"
       + (command.notes.isEmpty ? "" : "\n\(command.notes)\n")

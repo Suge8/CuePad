@@ -168,7 +168,7 @@ private struct ReplyBlock: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contextMenu {
-            Button("存为卡片", systemImage: "square.and.arrow.down") { workspace.attempt { try await workspace.saveReply(text, of: session) } }
+            Button("存为灵感", systemImage: "square.and.arrow.down") { workspace.attempt { try await workspace.saveReply(text, of: session) } }
         }
         .transition(.entry)
     }

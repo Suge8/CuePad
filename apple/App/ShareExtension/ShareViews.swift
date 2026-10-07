@@ -28,7 +28,7 @@ private struct ShareForm: View {
                     ForEach(model.projects, id: \.id) { Text($0.name).tag(UUID?.some($0.id)) }
                 }
             }
-            .navigationTitle("存为卡片")
+            .navigationTitle("存为灵感")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消", action: cancel) }
                 ToolbarItem(placement: .confirmationAction) {

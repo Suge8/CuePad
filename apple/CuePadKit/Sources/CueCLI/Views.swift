@@ -79,7 +79,7 @@ struct CardView {
     if let status = card.status { rows.append("任务: \(status.rawValue)") }
     if let parent = card.parentID { rows.append("上级: \(parent.uuidString.lowercased())") }
     if card.isPinned { rows.append("置顶: 是") }
-    if let original = card.conflictOf { rows.append("冲突副本，原卡: \(original.uuidString.lowercased())") }
+    if let original = card.conflictOf { rows.append("冲突副本，原来那条: \(original.uuidString.lowercased())") }
     if let deleted = card.deletedAt { rows.append("已删除: \(minutes(deleted))") }
     rows.append("修改: \(minutes(card.modifiedAt))")
     return rows.joined(separator: "\n") + "\n\n" + card.body

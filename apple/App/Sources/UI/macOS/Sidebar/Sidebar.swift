@@ -285,7 +285,7 @@ private struct PiSetupRow: View {
             Label {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(installation == .notFound ? "安装 Pi" : "升级 Pi").foregroundStyle(.primary)
-                    Text("把卡片直接发进 Pi").font(.caption).foregroundStyle(.secondary)
+                    Text("把灵感和任务直接发进 Pi").font(.caption).foregroundStyle(.secondary)
                 }
             } icon: {
                 Image(systemName: "terminal")
@@ -309,7 +309,7 @@ private struct ExtensionConsent: View {
         if services.piExtension.needsConsent {
             VStack(alignment: .leading, spacing: 8) {
                 Label("连接 Pi", systemImage: "terminal").font(.system(size: 12, weight: .semibold))
-                Text("安装 CuePad 扩展后，这里能看到 Pi 会话的实时状态，并能把卡片直接发进会话。会写入 Pi 的扩展目录。")
+                Text("安装 CuePad 扩展后，这里能看到 Pi 会话的实时状态，并能把灵感和任务直接发进会话。会写入 Pi 的扩展目录。")
                     .font(.system(size: 11.5)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {

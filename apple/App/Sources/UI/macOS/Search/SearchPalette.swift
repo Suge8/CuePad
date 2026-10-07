@@ -95,14 +95,14 @@ struct SearchPalette: View {
     private var header: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
-            TextField(scope == .cards ? "搜索卡片" : "搜索会话", text: $query.text)
+            TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text)
                 .textFieldStyle(.plain).font(.system(size: 18))
                 .focused($focused)
                 .onSubmit { if scope == .cards { selected.map(open) } }
                 .onKeyPress(.downArrow) { move(1); return .handled }
                 .onKeyPress(.upArrow) { move(-1); return .handled }
             Picker("范围", selection: $scope) {
-                Text("卡片").tag(SearchScope.cards)
+                Text("灵感与任务").tag(SearchScope.cards)
                 Text("会话").tag(SearchScope.sessions)
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
@@ -158,7 +158,7 @@ struct SearchPalette: View {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if let data {
                         if data.cards.isEmpty {
-                            Text(query.text.isEmpty && !query.isFiltered ? "输入关键词，或用上面的筛选" : "没有找到卡片")
+                            Text(query.text.isEmpty && !query.isFiltered ? "输入关键词，或用上面的筛选" : "没有找到灵感或任务")
                                 .font(.system(size: 13)).foregroundStyle(.secondary)
                                 .padding(16)
                         }
@@ -174,7 +174,7 @@ struct SearchPalette: View {
                             ForEach(group.cards) { card in row(card).id(card.id) }
                         }
                         if data.total > data.cards.count {
-                            Button("显示更多（还有 \(data.total - data.cards.count) 张）") { query.pages += 1 }
+                            Button("显示更多（还有 \(data.total - data.cards.count) 条）") { query.pages += 1 }
                                 .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
                                 .padding(10)
                         }
@@ -191,8 +191,8 @@ struct SearchPalette: View {
         let isSelected = card.id == selection
         return HStack(spacing: 10) {
             Image(systemName: text.images.isEmpty ? "doc.text" : "photo").frame(width: 16).foregroundStyle(.secondary)
-                .accessibilityLabel(text.images.isEmpty ? "卡片" : "含图片的卡片")
-            Text(Highlight.matches(text.title.isEmpty ? "空白卡片" : text.title, query.text)).font(.system(size: 13.5)).lineLimit(1)
+                .accessibilityLabel((card.isTask ? "任务" : "灵感") + (text.images.isEmpty ? "" : "，含图片"))
+            Text(Highlight.matches(text.title.isEmpty ? "无标题" : text.title, query.text)).font(.system(size: 13.5)).lineLimit(1)
             Spacer()
             Text(DateLabel.short(card.modifiedAt)).font(.system(size: 11)).foregroundStyle(.secondary)
         }
@@ -208,7 +208,7 @@ struct SearchPalette: View {
             let text = CardText(card.body)
             let project = data.projects.first { $0.id == card.projectID }
             VStack(alignment: .leading, spacing: 10) {
-                Text(text.title.isEmpty ? "空白卡片" : text.title).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
+                Text(text.title.isEmpty ? "无标题" : text.title).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
                     Text("\(project?.name ?? "未归档") · \(DateLabel.short(card.modifiedAt))")
                     if let send = data.lastSends[card.id] { SentMark(target: send.target.name) }

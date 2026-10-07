@@ -5,20 +5,20 @@ private let defaultLimit = 20
 
 extension Command {
   static let search = Command(
-    path: ["search"], summary: "搜索卡片（多个词都要命中，子串，不分大小写；命中正文）", arguments: "[词...]",
+    path: ["search"], summary: "搜索灵感与任务（多个词都要命中，子串，不分大小写；命中正文）", arguments: "[词...]",
     options: [
       .project("限定项目，可重复"), .inbox, .allProjects,
-      Opt("images", "只要含图片的卡"), Opt("no-images", "只要不含图片的卡"),
-      Opt("sent", "只要发送过的卡"), Opt("unsent", "只要从未发送过的卡"),
-      Opt("to", "只要发送到该目标的卡：pi | app | clipboard，可加 :名称（如 app:Cursor）", value: "目标"),
-      Opt("days", "只要最近 N 天内修改过的卡", value: "N"),
+      Opt("images", "只要含图片的"), Opt("no-images", "只要不含图片的"),
+      Opt("sent", "只要发送过的"), Opt("unsent", "只要从未发送过的"),
+      Opt("to", "只要发送到该目标的：pi | app | clipboard，可加 :名称（如 app:Cursor）", value: "目标"),
+      Opt("days", "只要最近 N 天内修改过的", value: "N"),
       Opt("trash", "搜回收站里的内容"),
-      Opt("limit", "最多返回几张卡（默认 \(defaultLimit)）", value: "N"),
-      Opt("offset", "跳过前几张卡", value: "N"),
+      Opt("limit", "最多返回几条（默认 \(defaultLimit)）", value: "N"),
+      Opt("offset", "跳过前几条", value: "N"),
     ],
     notes: Schema.defaultProject(otherwise: "搜所有项目") + """
 
-      没有词也没有筛选时列出全部卡片（最近修改在前）。项目名命中的项目在 projects 里（仅第一页、有词、无筛选时）；
+      没有词也没有筛选时列出全部灵感与任务（最近修改在前）。项目名命中的项目在 projects 里（仅第一页、有词、无筛选时）；
       total 是命中总数，不受 --limit 影响。
 
       """ + Schema.output(Schema.search, Schema.card, Schema.project)
@@ -44,7 +44,7 @@ extension Command {
     var lines = projects.map { "项目  \($0.line)" } + cards.map(\.line)
     if lines.isEmpty { lines = ["（无匹配）"] }
     if results.totalCards > offset + cards.count {
-      lines.append("共 \(results.totalCards) 张，已显示 \(offset + 1)–\(offset + cards.count)（--offset 翻页）")
+      lines.append("共 \(results.totalCards) 条，已显示 \(offset + 1)–\(offset + cards.count)（--offset 翻页）")
     }
     let json: JSONObject = [
       "total": results.totalCards, "projects": projects.map(\.json), "cards": cards.map(\.json),

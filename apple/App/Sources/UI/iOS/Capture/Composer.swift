@@ -165,7 +165,7 @@ struct Composer<Header: View, Send: View>: View {
 
     private var plus: some View {
         Menu {
-            if accepts.contains(.cards) { Button("选卡片", systemImage: "rectangle.on.rectangle") { source = .cards } }
+            if accepts.contains(.cards) { Button("选灵感或任务", systemImage: "rectangle.on.rectangle") { source = .cards } }
             if accepts.contains(.images) {
                 Button("相册", systemImage: "photo.on.rectangle") { source = .photos }
                 if CameraPicker.isAvailable { Button("拍照", systemImage: "camera") { source = .camera } }
@@ -430,7 +430,7 @@ private struct AttachmentSheet: View {
     var body: some View {
         NavigationStack {
             AttachmentBody(content: outbox.content, omitsTitle: true, height: $contentHeight)
-                .navigationTitle(CardText(outbox.content).title.nonEmpty ?? "卡片")
+                .navigationTitle(CardText(outbox.content).title.nonEmpty ?? "无标题")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }

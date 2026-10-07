@@ -85,7 +85,7 @@ struct CardSearchResults: View {
                         }
                     }
                     if data.total > data.shown {
-                        Button("还有 \(data.total - data.shown) 张") { query.pages += 1 }
+                        Button("还有 \(data.total - data.shown) 条") { query.pages += 1 }
                             .frame(maxWidth: .infinity).padding()
                     }
                 }

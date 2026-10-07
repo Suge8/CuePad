@@ -23,12 +23,12 @@ extension Call {
   /// 含回收站里的卡片，也含随项目进回收站的卡片。
   func card(_ ref: String) async throws -> Card {
     if let id = UUID(uuidString: ref) {
-      guard let card = try await store.card(id) else { throw CLIError.notFound("找不到卡片 \(ref)") }
+      guard let card = try await store.card(id) else { throw CLIError.notFound("找不到灵感或任务 \(ref)") }
       return card
     }
     let everything = try await store.search(SearchQuery(), limit: .max).cards
       + store.search(SearchQuery(inTrash: true), limit: .max).cards
-    return try unique(ref, in: everything, kind: "卡片") { $0.body }
+    return try unique(ref, in: everything, kind: "灵感或任务") { $0.body }
   }
 
   /// 任务（要做的卡片）：id 或唯一前缀，只在可见任务里找。

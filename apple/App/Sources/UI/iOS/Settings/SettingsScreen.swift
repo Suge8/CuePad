@@ -31,7 +31,7 @@ struct SettingsScreen: View {
                 if !services.conflicts.isEmpty {
                     Section {
                         NavigationLink(value: Navigation.Route.conflicts) {
-                            Label("\(services.conflicts.count) 张卡片有两个版本", systemImage: "square.on.square")
+                            Label("\(services.conflicts.count) 条灵感或任务有两个版本", systemImage: "square.on.square")
                                 .foregroundStyle(palette.attention)
                         }
                     }
@@ -171,13 +171,13 @@ private struct SyncSection: View {
             Text("iCloud 同步")
         } footer: {
             if case .needsDecision = services.syncStatus {
-                Text("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的卡片、项目、任务与图片，从当前账号的云端重新下载。")
+                Text("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载。")
             }
         }
         .confirmationDialog("丢弃本机数据，改用云端的？", isPresented: $confirmErase, titleVisibility: .visible) {
             Button("用云端数据替换本机", role: .destructive) { resolve(.eraseLocal) }
         } message: {
-            Text("本机的卡片、项目、任务与图片会被删除，无法撤销。")
+            Text("本机的灵感、任务、项目与图片会被删除，无法撤销。")
         }
     }
 

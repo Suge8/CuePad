@@ -38,7 +38,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Pi")
                 } footer: {
-                    Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把卡片（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。")
+                    Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把灵感和任务（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。")
                 }
             }
         .formStyle(.grouped)
@@ -258,13 +258,13 @@ private struct SyncSection: View {
             Text("iCloud 同步")
         } footer: {
             if case .needsDecision = services.syncStatus {
-                Text("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的卡片、项目、任务与图片，从当前账号的云端重新下载。")
+                Text("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载。")
             }
         }
         .confirmationDialog("丢弃本机数据，改用云端的？", isPresented: $confirmErase, titleVisibility: .visible) {
             Button("用云端数据替换本机", role: .destructive) { resolve(.eraseLocal) }
         } message: {
-            Text("本机的卡片、项目、任务与图片会被删除，无法撤销。")
+            Text("本机的灵感、任务、项目与图片会被删除，无法撤销。")
         }
     }
 
@@ -289,7 +289,7 @@ private struct ConflictsSection: View {
             Section {
                 ForEach(services.conflicts, id: \.copy.id) { conflict in
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(CardText(conflict.original.body).title.isEmpty ? "空白卡片" : CardText(conflict.original.body).title)
+                        Text(CardText(conflict.original.body).title.isEmpty ? "无标题" : CardText(conflict.original.body).title)
                             .font(.headline)
                         version("这台设备的版本", conflict.original, keep: .original, copy: conflict.copy.id)
                         version("另一台设备的版本", conflict.copy, keep: .copy, copy: conflict.copy.id)
@@ -298,7 +298,7 @@ private struct ConflictsSection: View {
                 }
                 if let failure { Text(failure).font(.caption).foregroundStyle(palette.failure) }
             } header: {
-                Text("\(services.conflicts.count) 张卡片有两个版本")
+                Text("\(services.conflicts.count) 条灵感或任务有两个版本")
             }
         }
     }

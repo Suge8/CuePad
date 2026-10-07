@@ -32,7 +32,7 @@ struct CardPicker: View {
                         }
                         rows(data.rest, showsProject: true)
                         if data.total > data.shown {
-                            Button("还有 \(data.total - data.shown) 张") { pages += 1 }.frame(maxWidth: .infinity).padding()
+                            Button("还有 \(data.total - data.shown) 条") { pages += 1 }.frame(maxWidth: .infinity).padding()
                         }
                     }
                 }
@@ -40,9 +40,9 @@ struct CardPicker: View {
             }
             .scrollDismissesKeyboard(.immediately)
             .background(palette.desk)
-            .navigationTitle("选一张卡片")
+            .navigationTitle("选一条灵感或任务")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索卡片")
+            .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索灵感与任务")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
             }

@@ -34,7 +34,7 @@ struct IOSEditorHost: UIViewRepresentable {
         let view = CueTextView(imageStore: services.images, theme: theme)
         view.storedText = initialText
         view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator)
-        view.accessibilityLabel = "卡片正文"
+        view.accessibilityLabel = "正文"
         handle.view = view
         // 新建的空卡直接进入输入
         if initialText.isEmpty { DispatchQueue.main.async { view.becomeFirstResponder() } }

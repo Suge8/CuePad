@@ -15,7 +15,7 @@ struct InboxScreen: View {
         List {
             if let cards {
                 if cards.isEmpty {
-                    ContentUnavailableView("都归类好了", systemImage: "tray", description: Text("在书架或这里随手记下的想法，没选项目时先放在这里"))
+                    ContentUnavailableView("都归类好了", systemImage: "tray", description: Text("在书架或这里随手记下的灵感，没选项目时先放在这里"))
                         .listRowBackground(Color.clear)
                 } else {
                     Section {
@@ -39,7 +39,7 @@ struct InboxScreen: View {
         let text = CardText(card.body)
         return Button { navigation.open(card: card.id) } label: {
             VStack(alignment: .leading, spacing: 3) {
-                Text(text.title.nonEmpty ?? (text.images.isEmpty ? "空白卡片" : "图片")).font(.body.weight(.medium))
+                Text(text.title.nonEmpty ?? (text.images.isEmpty ? "无标题" : "图片")).font(.body.weight(.medium))
                     .foregroundStyle(palette.ink).lineLimit(2)
                 if !text.preview.isEmpty {
                     Text(text.preview).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)

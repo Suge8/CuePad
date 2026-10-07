@@ -156,7 +156,7 @@ struct CardFace: View {
             if let image = text.images.first {
                 Thumbnail(hash: image, height: 118).padding(-8).padding(.bottom, 6)
             }
-            Text(text.title.isEmpty ? "空白卡片" : text.title)
+            Text(text.title.isEmpty ? "无标题" : text.title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                 .lineLimit(2)
