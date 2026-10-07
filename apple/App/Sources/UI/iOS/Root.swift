@@ -34,10 +34,15 @@ struct IOSRootView: View {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
             }
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
-            .overlay { CaptureLayer() }
+            // 随手记与新会话都是浮在键盘上方的输入框
+            .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) { CaptureComposer() } }
+            .overlay {
+                FloatingInput(isPresented: navigation.newSession != nil, close: { navigation.newSession = nil }) {
+                    if let start = navigation.newSession { NewSessionSheet(start: start).id(start.id) }
+                }
+            }
             .sheet(item: $navigation.outbox) { SessionPicker(outbox: $0) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
-            .sheet(item: $navigation.newSession) { NewSessionSheet(start: $0) }
         }
         .overlay(alignment: .top) { NoticeBanner() }
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到

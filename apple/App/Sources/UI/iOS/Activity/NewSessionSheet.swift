@@ -11,7 +11,6 @@ struct NewSessionSheet: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var places: [LaunchPlace]?
     @State private var choice: LaunchPlace.ID?
@@ -19,7 +18,6 @@ struct NewSessionSheet: View {
     @State private var launched: Navigation.NewSession.Launched?
     @State private var progress: LaunchProgress?
     @State private var sending = false
-    @State private var height: CGFloat = 0
     @FocusState private var focused: Bool
 
     /// 项目按所有项目选择器的同一个顺序（`ProjectCatalog.projects`，最近活跃的在前）。
@@ -50,13 +48,8 @@ struct NewSessionSheet: View {
                 .disabled(inFlight)
             }
         }
-        .padding(.horizontal, 12).padding(.bottom, 8)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
-        // 面板只有输入框这么高、底色透明：看上去就是浮在键盘上方的输入框（与随手记一样）
-        .presentationDetents([.height(max(height, 1))])
-        .presentationBackground(.clear)
-        .presentationDragIndicator(.hidden)
-        .interactiveDismissDisabled(inFlight)
+        // 浮在 `FloatingInput` 里（与随手记同一种）；发出后等它开好时不让收起
+        .floatingInputLocked(inFlight)
         .onAppear {
             if launched == nil { launched = start.launched }
             focused = true
@@ -71,7 +64,7 @@ struct NewSessionSheet: View {
         }
         .onChange(of: progress?.session) { _, session in
             guard let session else { return }
-            dismiss()
+            navigation.newSession = nil
             navigation.openSession(session, store: services.store)
         }
     }
