@@ -2,9 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 新会话：选在哪开（项目的代码目录、最近会话用过的目录）、可选一句开场的话，请 Mac 在后台开 Pi。
-/// 发出后面板换成进度（送达中 → Mac 在开）；Mac 开好、带着这次标识的会话同步过来时自动关掉并进入它；
-/// 没能打开时回到表单，写着 Mac 给的原因，可以再试。
+/// 新会话：只有一个浮在键盘上方的输入框，写的就是给 Pi 的第一句话；头部一颗落点胶囊"新会话 · 项目名"，点开换在哪开
+/// （默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时菜单里写上 Mac 名）。发送钮就是开始：
+/// 发出后头部写进度（送达中 → Mac 在开），Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；没能打开时头部写原因，可以再发。
+/// 没有能开的地方时输入框换成一句说明。
 struct NewSessionSheet: View {
     let start: Navigation.NewSession
     @Environment(Workspace.self) private var workspace
@@ -18,55 +19,48 @@ struct NewSessionSheet: View {
     @State private var launched: Navigation.NewSession.Launched?
     @State private var progress: LaunchProgress?
     @State private var sending = false
+    @State private var height: CGFloat = 0
     @FocusState private var focused: Bool
 
-    /// 项目按所有项目选择器的同一个顺序（`ProjectCatalog.projects`）。
+    /// 项目按所有项目选择器的同一个顺序（`ProjectCatalog.projects`，最近活跃的在前）。
     private var projectOrder: [Project] { workspace.catalog?.projects ?? [] }
     private var chosen: LaunchPlace? {
-        places?.first { $0.id == choice } ?? places?.first { $0.project?.id == start.project } ?? places?.first
+        places?.first { $0.id == choice } ?? start.project.flatMap { project in places?.first { $0.project?.id == project } } ?? places?.first
     }
-    /// 发出且还没失败：表单锁住，等它开好。
+    /// 发出且还没失败：输入框锁住，等它开好。
     private var inFlight: Bool { sending || (launched != nil && progress?.request?.status != .known(.failed)) }
     private var canStart: Bool { chosen != nil && services.reachesPiHost && !inFlight }
-    private var showsComposer: Bool { !inFlight && places?.isEmpty == false }
 
     var body: some View {
-        NavigationStack {
-            List {
-                if inFlight, let request = progress?.request {
-                    status(request)
-                } else if let places {
-                    if places.isEmpty {
-                        ContentUnavailableView(
-                            "还没有可以开会话的目录", systemImage: "folder",
-                            description: Text("在 Mac 上给项目绑定代码目录，或在 Mac 上跑过 pi 后，这里就有可选的目录"))
-                            .listRowBackground(Color.clear)
-                    } else {
-                        form(places)
-                    }
-                }
-            }
-            .deskBackground()
-            .navigationTitle("新会话")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("开始", systemImage: "arrow.up", action: launch).disabled(!canStart)
-                }
+        Group {
+            if places?.isEmpty == true {
+                Label("在 Mac 上给项目绑定代码目录，或在 Mac 上跑过 pi 后就能在这里开会话", systemImage: "folder")
+                    .font(.subheadline).foregroundStyle(palette.ink2)
+                    .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+                    .glass(in: .rect(cornerRadius: 25, style: .continuous))
+            } else {
+                Composer(
+                    draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
+                    cardsFrom: chosen?.project?.id, pinnedOpen: true,
+                    header: { header.padding(.horizontal, 12).padding(.top, 10) },
+                    send: {
+                        Button(action: launch) { SendGlyph(enabled: canStart) }
+                            .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
+                    })
+                .disabled(inFlight)
             }
         }
-        .safeAreaBar(edge: .bottom, spacing: 0) {
-            if showsComposer {
-                // 开场的话与回复框是同一个输入框：只是没有发送钮，开始在右上角
-                Composer(draft: $draft, prompt: "开场的话（可不填）", label: "开场的话", focus: $focused, cardsFrom: chosen?.project?.id) {
-                    EmptyView()
-                }
-                .padding(.horizontal, 12).padding(.bottom, 8)
-            }
-        }
+        .padding(.horizontal, 12).padding(.bottom, 8)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        // 面板只有输入框这么高、底色透明：看上去就是浮在键盘上方的输入框（与随手记一样）
+        .presentationDetents([.height(max(height, 1))])
+        .presentationBackground(.clear)
+        .presentationDragIndicator(.hidden)
         .interactiveDismissDisabled(inFlight)
-        .onAppear { if launched == nil { launched = start.launched } }
+        .onAppear {
+            if launched == nil { launched = start.launched }
+            focused = true
+        }
         .observing(services.store, [.directoryBindings, .piSessionStates], id: projectOrder, into: $places, onError: workspace.fail) {
             [projectOrder] store in try LaunchPlace.all(projects: projectOrder, from: store)
         }
@@ -82,70 +76,44 @@ struct NewSessionSheet: View {
         }
     }
 
-    @ViewBuilder private func form(_ places: [LaunchPlace]) -> some View {
-        Section {
-            ForEach(places) { place in row(place) }
-        } header: {
-            Text("在哪开")
-        } footer: {
-            footer
-        }
-        .disabled(inFlight)
-    }
-
-    private func row(_ place: LaunchPlace) -> some View {
-        Button { choice = place.id } label: {
-            HStack(spacing: 12) {
-                if let project = place.project {
-                    ProjectGlyph(project: project, size: 15)
-                } else {
-                    Image(systemName: "folder").foregroundStyle(palette.ink3).frame(width: 21).accessibilityHidden(true)
+    /// 头部：落点胶囊，右边一行进度或原因。
+    private var header: some View {
+        HStack(spacing: 8) {
+            Menu {
+                Picker("在哪开", selection: Binding(get: { chosen?.id }, set: { choice = $0 })) {
+                    ForEach(places ?? []) { place in
+                        Text(place.detail.isEmpty ? place.name : "\(place.name) · \(place.detail)").tag(Optional(place.id))
+                    }
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(place.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
-                    Text(place.detail).font(.caption).foregroundStyle(palette.ink3).lineLimit(1)
+            } label: {
+                HStack(spacing: 5) {
+                    if let project = chosen?.project { ProjectGlyph(project: project, size: 12) }
+                    Text("新会话 · \(chosen?.name ?? "选在哪开")").lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3)
                 }
-                Spacer(minLength: 8)
-                if chosen?.id == place.id {
-                    Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(palette.ink)
-                }
+                .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink)
+                .padding(.horizontal, 12).frame(height: 32)
+                .background(palette.fill, in: .capsule)
             }
-            .contentShape(.rect)
+            .disabled(inFlight)
+            .accessibilityLabel("在哪开：\(chosen?.name ?? "没选")")
+            Spacer(minLength: 4)
+            status.font(.caption).lineLimit(2).multilineTextAlignment(.trailing)
         }
-        .buttonStyle(.plain)
-        .listRowBackground(palette.paper)
-        .accessibilityAddTraits(chosen?.id == place.id ? .isSelected : [])
     }
 
-    /// 发出后：开在哪、开场的话、送达情况（送达中 → Mac 在开，会话出现后自动进入）。
-    private func status(_ request: DeliveryRequest) -> some View {
-        Section {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(request.target.name).font(.headline).foregroundStyle(palette.ink)
-                    Spacer(minLength: 8)
-                    DeliveryStatusLabel(request: request)
-                }
-                if let opening = request.launch?.prompt {
-                    Text(SendContent(stored: opening).plainText.trimmingCharacters(in: .whitespacesAndNewlines))
-                        .font(.body).foregroundStyle(palette.ink2).lineLimit(4)
-                }
-                Text(request.status == .known(.succeeded) ? "Mac 正在开 Pi，会话出现后自动进入" : "等 Mac 收到…")
-                    .font(.footnote).foregroundStyle(palette.ink3)
+    /// 发出后的进度，上一次没能打开的原因，或送不到 Mac 的原因。
+    @ViewBuilder private var status: some View {
+        if let request = progress?.request {
+            if let failure = request.failure {
+                Text(failure).foregroundStyle(palette.failure)
+            } else if request.status == .known(.succeeded) {
+                Text("Mac 正在开 Pi…").foregroundStyle(palette.ink3)
+            } else {
+                DeliveryStatusLabel(request: request)
             }
-            .padding(.vertical, 6)
-            .listRowBackground(palette.paper)
-        }
-    }
-
-    /// 上一次没能打开的原因（Mac 给的），或送不到 Mac 的原因。
-    @ViewBuilder private var footer: some View {
-        if let request = progress?.request, request.status == .known(.failed) {
-            Text(request.resultDetail ?? "没能打开").foregroundStyle(palette.failure)
         } else if !services.reachesPiHost {
             SyncHint(status: services.syncStatus)
-        } else {
-            Text("让 Mac 开一个 Pi 会话；开好后自动进入它").foregroundStyle(palette.ink3)
         }
     }
 

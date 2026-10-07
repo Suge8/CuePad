@@ -15,6 +15,18 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         deliveries.last { $0.mode.known.map(DeliveryMode.toSession.contains) == true }
     }
 
+    /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因。
+    var config: PiConfigShown {
+        let current = PiConfigShown(model: session?.model, thinking: session?.thinking?.known, pending: false, failure: nil)
+        guard let request = deliveries.last(where: { $0.config != nil }), let wanted = request.config else { return current }
+        if request.isOpen {
+            let model = wanted.model.flatMap { key in session?.models.first { $0.key == key } } ?? current.model
+            return PiConfigShown(model: model, thinking: wanted.thinking ?? current.thinking, pending: true, failure: nil)
+        }
+        guard let failure = request.failure else { return current }
+        return PiConfigShown(model: current.model, thinking: current.thinking, pending: false, failure: failure)
+    }
+
     /// 会话页要观察的表。
     static let tables: Set<StoreTable> = [.piSessionStates, .piMessages, .deliveryRequests, .projects]
 
@@ -27,6 +39,16 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
             messages: try ref.map { try store.piMessages(of: $0) } ?? [])
     }
+}
+
+/// 会话页回复框上方模型与思考强度的显示值（`SessionDigest.config`）。
+nonisolated struct PiConfigShown: Equatable {
+    var model: PiModelOption?
+    var thinking: PiThinkingLevel?
+    /// 换的请求还在路上。
+    var pending: Bool
+    /// 最近一次没换成的原因。
+    var failure: String?
 }
 
 /// 对话里的提示块（等你确认的问题、出错）：一张纸，彩色只在行首的状态符号上（等你确认橙色问号、出错红色叹号），
@@ -79,10 +101,10 @@ struct QuestionCard: View {
     @Environment(AppServices.self) private var services
 
     private var sent: DeliveryRequest? { requestID.flatMap { id in deliveries.first { $0.id == id } } }
-    private var failed: Bool { sent?.status == .known(.failed) }
+    private var failed: Bool { sent?.failure != nil }
     /// 点下即算在答（请求写成前也是），按钮立刻停用，不重复作答。
     private var answering: Bool { tapped != nil && writeError == nil && !failed }
-    private var failure: String? { writeError ?? (failed ? sent?.resultDetail ?? "没能送达" : nil) }
+    private var failure: String? { writeError ?? sent?.failure }
 
     var body: some View {
         Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: question.text, prominent: true) {

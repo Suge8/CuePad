@@ -12,14 +12,18 @@ struct PiConversation: View {
     var deliveries: [DeliveryRequest] = []
     @Environment(\.palette) private var palette
     @Environment(\.chatInverted) private var inverted
+    @Environment(\.chatBottomSpace) private var bottomSpace
+    @Environment(\.chatHighlight) private var highlight
 
     var body: some View {
         // 懒加载：只排看得见的几条（整段排开时，长对话的每条回答都在推入那一刻排版、栅格化，转场的前一百多毫秒画不出来）。
         // 在倒置的滚动区里（iOS）按新到旧给出，懒加载从最新那条起排
         let entries = PiChat.entries(messages)
         let outgoing = PiChat.outgoing(deliveries, messages: messages)
-        LazyVStack(alignment: .leading, spacing: 18) {
+        LazyVStack(alignment: .leading, spacing: Self.spacing) {
             if inverted {
+                // 让出底下回复框与键盘占的高（`ChatScroll`）；它和第一条之间本有一份行距，扣掉
+                Color.clear.frame(height: max(0, bottomSpace - Self.spacing)).accessibilityHidden(true)
                 // 读屏仍按先后读：越早的越先
                 ending.chatRow().accessibilitySortPriority(-Double(entries.count + outgoing.count))
                 ForEach(Array(outgoing.enumerated()).reversed(), id: \.element.id) { index, request in
@@ -37,8 +41,10 @@ struct PiConversation: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private static var spacing: CGFloat { 18 }
+
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
-        if entry.isUser { UserBubble(text: entry.text) } else { ReplyBlock(text: entry.text, meta: entry.meta, session: session) }
+        if entry.isUser { UserBubble(text: entry.text, highlighted: entry.id == highlight) } else { ReplyBlock(text: entry.text, meta: entry.meta, session: session) }
     }
 
     /// 对话末尾：处理中的进展（带子代理）、出错的原因。
@@ -124,18 +130,23 @@ private extension AnyTransition {
     static let entry = AnyTransition.opacity.animation(Motion.quick)
 }
 
-/// 你的一句话：右侧墨色气泡，最宽到四分之三。
+/// 你的一句话：右侧气泡（颜色是 `Palette.bubble`），最宽到四分之三；还在路上的整颗变淡。
 private struct UserBubble: View {
     let text: String
     var dimmed = false
+    var highlighted = false
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
         Text(text)
-            .font(.body).foregroundStyle(palette.onAccent)
+            .font(.body).foregroundStyle(palette.onBubble)
             .textSelection(.enabled)
             .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(palette.accent.opacity(dimmed ? 0.7 : 1), in: .rect(cornerRadius: 18, style: .continuous))
+            .background(palette.bubble, in: shape)
+            .overlay(shape.strokeBorder(highlighted ? palette.accent : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1))
+            .animation(Motion.quick, value: highlighted)
+            .opacity(dimmed ? 0.7 : 1)
             .containerRelativeFrame(.horizontal, alignment: .trailing) { width, _ in width * 0.78 }
             .frame(maxWidth: .infinity, alignment: .trailing)
             .transition(.entry)
@@ -177,7 +188,7 @@ private struct OutgoingBubble: View {
             UserBubble(text: text, dimmed: !failed)
             HStack(spacing: 10) {
                 if failed {
-                    if let reason = request.resultDetail { Text(reason).font(.caption).foregroundStyle(palette.failure).lineLimit(2) }
+                    if let reason = request.failure { Text(reason).font(.caption).foregroundStyle(palette.failure).lineLimit(2) }
                     // 送不到 Mac 时也露出来（停用），看得出能重发
                     Button("重发", action: retry).font(.caption.weight(.semibold)).disabled(!workspace.services.reachesPiHost)
                 } else {
