@@ -1,10 +1,10 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.4
 import PackageDescription
 
 // 模块边界见 docs/development.md「代码地图」。
 let package = Package(
     name: "CuePadKit",
-    platforms: [.macOS(.v26), .iOS(.v26)],
+    platforms: [.macOS(.v26), .iOS(.v27)],
     products: [
         .library(name: "CueText", targets: ["CueText"]),
         .library(name: "CueStore", targets: ["CueStore"]),

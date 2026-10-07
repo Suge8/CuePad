@@ -116,7 +116,7 @@ struct RouteView: View {
     }
 }
 
-/// iPhone：底部一行，左边标签（灵感 / Agent），右边一颗独立的圆形"写"（系统标签栏的突出标签，iOS 26 借搜索标签的位置）。
+/// iPhone：底部一行，左边标签（灵感 / Agent），右边一颗独立的圆形"写"（系统标签栏的突出标签）。
 /// 点"写"不切标签，只浮起随手记：在 UIKit 选中它之前拦下（`WriteTabGate`）。让它选中再在 SwiftUI 里改回来虽不闪白，
 /// 但当前页会经历一次消失与出现，书架的下拉搜索框随之收起、整页上跳。
 private struct TabsRoot: View {
@@ -140,7 +140,7 @@ private struct TabsRoot: View {
                 stack($navigation.agentPath) { RouteView(route: .agent) }
             }
             .badge(waiting ?? 0)
-            Tab(WriteEntry.title, systemImage: WriteEntry.symbol, value: Slot.write, role: Self.writeRole) { EmptyView() }
+            Tab(WriteEntry.title, systemImage: WriteEntry.symbol, value: Slot.write, role: .prominent) { EmptyView() }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的下拉搜索（与宽屏的搜索页同一组快捷键）
@@ -162,10 +162,6 @@ private struct TabsRoot: View {
     /// "写"在 UIKit 那一层就被拦下，从不进到这里。
     private var selection: Binding<Slot> {
         Binding { .tab(navigation.tab) } set: { if case .tab(let tab) = $0 { navigation.tab = tab } }
-    }
-
-    private static var writeRole: TabRole {
-        if #available(iOS 27, *) { .prominent } else { .search }
     }
 
     private func stack(_ path: Binding<[Navigation.Route]>, @ViewBuilder root: () -> some View) -> some View {

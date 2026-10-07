@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
-  <img src="https://img.shields.io/badge/platform-macOS%2026%20%7C%20iOS%2026.1-111111.svg" alt="Platform: macOS 26, iOS/iPadOS 26.1" />
+  <img src="https://img.shields.io/badge/platform-macOS%2026%20%7C%20iOS%2027-111111.svg" alt="Platform: macOS 26, iOS/iPadOS 27" />
 </p>
 
 **CuePad 是与 coding agents 协作时的思考空间。** 写提示词、记想法与目标、看 agent 在做什么、把文字一键交给它。一本安静的纸感笔记本，Mac、iPhone、iPad 原生，经 iCloud 同步。
@@ -50,7 +50,7 @@ Mac 版见 [GitHub Releases](https://github.com/Suge8/CuePad/releases/latest)（
 
 ## 从源码构建
 
-需要 Xcode 26。本机构建用 ad-hoc 签名，不需要开发者账号。
+需要 Xcode 27。本机构建用 ad-hoc 签名，不需要开发者账号。
 
 ```bash
 git clone https://github.com/Suge8/CuePad.git

@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
-  <img src="https://img.shields.io/badge/platform-macOS%2026%20%7C%20iOS%2026.1-111111.svg" alt="Platform: macOS 26, iOS/iPadOS 26.1" />
+  <img src="https://img.shields.io/badge/platform-macOS%2026%20%7C%20iOS%2027-111111.svg" alt="Platform: macOS 26, iOS/iPadOS 27" />
 </p>
 
 **CuePad is a thinking space for working with coding agents.** Write prompts, jot down ideas and goals, see what your agents are doing, and hand text to them in one tap. A calm, paper-like notebook, native on Mac, iPhone and iPad, synced through iCloud.
@@ -50,7 +50,7 @@ Get the latest Mac build from [GitHub Releases](https://github.com/Suge8/CuePad/
 
 ## Build from source
 
-Requires Xcode 26. Local builds are ad-hoc signed, so no developer account is needed.
+Requires Xcode 27. Local builds are ad-hoc signed, so no developer account is needed.
 
 ```bash
 git clone https://github.com/Suge8/CuePad.git
