@@ -66,12 +66,17 @@ public struct SyncIssue: Equatable, Sendable {
   }
 }
 
+extension Error {
+  /// 给人排查用的完整原因：CloudKit 被服务端拒绝时 `localizedDescription` 常只剩"错误 N"，服务端说明与底层错误在 `description` 里。
+  var diagnosis: String { "\(localizedDescription)（\(self)）" }
+}
+
 /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）是否就绪。
 public enum PiAlertSubscriptionStatus: Equatable, Sendable {
   /// 这台设备不建立订阅（Mac），或还没尝试。
   case off
   case active
-  /// 没能建立（原因给用户看）；每次回到前台、账号变化时重试。
+  /// 没能建立（完整原因，见 `Error.diagnosis`）；每次回到前台、账号变化时重试。
   case failed(String)
 }
 

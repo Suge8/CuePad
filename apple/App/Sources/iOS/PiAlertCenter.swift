@@ -48,6 +48,13 @@ final class PiAlertCenter: NSObject, UNUserNotificationCenterDelegate {
 
     func registered() { registration = .registered }
 
+    /// 设置页的"重试"：重新向系统注册推送（订阅由同步引擎重试，见 `AppServices.syncNow`）。
+    func retryRegistration() {
+        guard registration != .registered else { return }
+        registration = .pending
+        UIApplication.shared.registerForRemoteNotifications()
+    }
+
     func registrationFailed(_ error: any Error) {
         AppServices.log.error("远程通知注册失败：\(String(describing: error), privacy: .public)")
         registration = .failed(error.localizedDescription)

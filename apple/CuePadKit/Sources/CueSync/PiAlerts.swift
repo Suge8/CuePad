@@ -106,7 +106,7 @@ struct PiAlertSubscriptions {
       }
       return .active
     } catch {
-      return .failed(error.localizedDescription)
+      return .failed(error.diagnosis)
     }
   }
 

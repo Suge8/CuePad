@@ -295,7 +295,7 @@ actor SyncCoordinator {
   // MARK: 报告
 
   private func report(_ error: Error, recordName: String?) {
-    report("\(error.localizedDescription)（\(error)）", recordType: nil, recordName: recordName, failed: true)
+    report(error.diagnosis, recordType: nil, recordName: recordName, failed: true)
   }
 
   private func report(_ message: String, recordType: String?, recordName: String?, failed: Bool = false) {
