@@ -10,6 +10,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var project: Project?
         /// 交给 Pi 的任务关联的会话（同步记录）；没交给 Pi 或记录已没有时为 nil。
         var session: PiSessionState?
+        /// 发给那个会话的最近一条投送请求（显示状态见 `PiDelivery`）。
+        var delivery: DeliveryRequest?
         var id: UUID { task.id }
     }
 
@@ -29,13 +31,16 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
     var isEmpty: Bool { inProgress.isEmpty && todo.isEmpty && done.isEmpty }
 
+    /// 看板要观察的表。
+    static let tables: Set<StoreTable> = [.tasks, .projects, .piSessionStates, .deliveryRequests]
+
     static func read(from store: isolated CueStore) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         func row(_ task: CueTask) throws -> Row {
-            let session = try task.piSessionID.flatMap {
-                try store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: $0))).items.first?.state
+            let item = try task.piSessionID.flatMap {
+                try store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: $0))).items.first
             }
-            return Row(task: task, project: task.projectID.flatMap { projects[$0] }, session: session)
+            return Row(task: task, project: task.projectID.flatMap { projects[$0] }, session: item?.state, delivery: item?.delivery)
         }
         let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
         let open = all.filter { $0.status != .done }

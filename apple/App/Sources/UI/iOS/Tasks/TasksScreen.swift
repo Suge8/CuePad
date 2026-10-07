@@ -24,7 +24,6 @@ struct TasksScreen: View {
             }
             #endif
         }
-        .background(palette.desk)
         .safeAreaInset(edge: .top, spacing: 0) {
             NewTaskLine(project: workspace.currentProject, projects: workspace.catalog?.projects)
                 .padding(.horizontal, 6)
@@ -38,7 +37,7 @@ struct TasksScreen: View {
         .onChange(of: board?.todo.first?.id) { if DebugScene.scene == "taskedit", editing == nil { editing = board?.todo.first?.task } }
         #endif
         .animation(.easeOut(duration: 0.2), value: board.map { [$0.inProgress, $0.todo, $0.done].flatMap { $0.map(\.id) } })
-        .observing(services.store, [.tasks, .projects, .piSessionStates], into: $board, onError: workspace.fail) {
+        .observing(services.store, TaskBoard.tables, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
         }
     }
@@ -62,7 +61,9 @@ struct TasksScreen: View {
                 header(title, count: roots.count)
                 TaskOutline(tree: board.tree, roots: roots.map(\.id)) { row in
                     let info = board.rows[row.id]
-                    line(row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session, subtasks: board.subtasks[row.id])
+                    line(
+                        row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session, delivery: info?.delivery,
+                        subtasks: board.subtasks[row.id])
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
@@ -100,7 +101,7 @@ struct TasksScreen: View {
             .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
             if showsCompleted {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { line($0.task, project: $0.project, session: $0.session, subtasks: nil).id($0.id) }
+                    ForEach(rows) { line($0.task, project: $0.project, session: $0.session, delivery: $0.delivery, subtasks: nil).id($0.id) }
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
@@ -108,8 +109,8 @@ struct TasksScreen: View {
         }
     }
 
-    private func line(_ task: CueTask, project: Project?, session: PiSessionState?, subtasks: TaskProgress?) -> some View {
-        TaskLine(task: task, project: project, session: session, subtasks: subtasks)
+    private func line(_ task: CueTask, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?, subtasks: TaskProgress?) -> some View {
+        TaskLine(task: task, project: project, session: session, delivery: delivery, subtasks: subtasks)
             .contextMenu { TaskActions(task: task) { editing = task } }
     }
 }
@@ -120,8 +121,9 @@ struct TaskLine: View {
     let task: CueTask
     /// 任务页跨项目列着，写上所在项目；项目页里不写。
     var project: Project?
-    /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况）。
+    /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况），以及发给它的最近一条投送请求。
     var session: PiSessionState?
+    var delivery: DeliveryRequest?
     /// 直接子任务的完成数与总数（没有子任务时为 nil）。
     var subtasks: TaskProgress?
     @Environment(\.taskStructure) private var structure
@@ -149,7 +151,7 @@ struct TaskLine: View {
             .accessibilityHint(hint)
             .accessibilityAction { tap() }
             .accessibilityActions {
-                if let session { Button("看 Pi 的近况") { navigation.push(.session(session.id)) } }
+                if let session { Button("看 Pi 的近况") { navigation.push(.session(session.id, seed: session)) } }
                 if let indent = structure?.indent { Button("缩进", action: indent) }
                 if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
             }
@@ -216,8 +218,8 @@ struct TaskLine: View {
                 .layoutPriority(-1)
             }
             if let session, !done {
-                Button { navigation.push(.session(session.id)) } label: {
-                    let shown = services.settings.shown(session)
+                Button { navigation.push(.session(session.id, seed: session)) } label: {
+                    let shown = services.settings.shown(session, delivery: delivery)
                     HStack(spacing: 4) {
                         PiStateDot(shown: shown, size: 6)
                         Text(shown.presence).foregroundStyle(shown.tint(palette))

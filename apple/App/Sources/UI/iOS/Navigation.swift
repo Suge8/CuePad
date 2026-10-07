@@ -5,7 +5,7 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// iOS 的导航状态：标签（项目 / Agent）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
+/// iOS 的导航状态：标签（灵感 / Agent）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
 /// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、当前项目）在 `Workspace`。
 @MainActor @Observable
 final class Navigation {
@@ -20,11 +20,10 @@ final class Navigation {
 
     /// 可推入的页面。
     enum Route: Hashable {
-        /// 项目书架（iPhone 项目标签的根；iPad 侧栏的"项目"）。
+        /// 项目书架（iPhone 灵感标签的根；iPad 侧栏的"灵感"）。
         case shelf
         case project(UUID)
         case inbox
-        case today
         case trash
         case settings
         case conflicts
@@ -36,19 +35,32 @@ final class Navigation {
         case projectSessions(UUID)
         case search
         case card(UUID)
-        /// 一个 Pi 会话的近况与回复（`PiSessionState.id`）。
-        case session(UUID)
+        /// 一个 Pi 会话的近况与回复。
+        case session(SessionRoute)
 
         var isCard: Bool { if case .card = self { true } else { false } }
+
+        /// 会话页；手里有列表里的会话状态时带上作首帧（通知跳转等只有 id 的入口不带）。
+        static func session(_ id: UUID, seed: PiSessionState? = nil) -> Route { .session(SessionRoute(id: id, seed: seed)) }
     }
 
-    /// 随手记面板：记入的位置与打开时先做什么。
-    struct Capture: Identifiable {
-        enum Start { case text, camera, photos }
-        let id = UUID()
-        /// nil 表示未归档。
-        var project: UUID?
-        var start: Start = .text
+    /// 会话页的路由：身份只是记录 id（`PiSessionState.id`）。`seed` 是推入时调用方已持有的会话状态，只作首帧占位
+    /// （标题与状态那块玻璃推入第一帧就在，对话按会话 id 第一次就读），之后一律以 Store 的观察流为准；不参与相等。
+    /// 从路由栈恢复（返回到它、再次显示）时种子可能已是旧状态，首帧标题可能短暂过时，读到 Store 后即替换。
+    struct SessionRoute: Hashable {
+        let id: UUID
+        var seed: PiSessionState?
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+        func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    }
+
+    /// 随手记里正在写的这一条（输入框收起后仍留着，见 `endCapture`）。
+    struct Capture {
+        var draft = ComposerDraft()
+        var kind = CaptureKind.idea
+        /// 手动换过的落点（`.some(nil)` 是未归档）；nil 时落在正在看的页面（`captureProject`）。
+        var project: UUID??
     }
 
     /// 要发到 Mac 的一张卡或一条任务（存储格式，变量已填）：先选会话，再在会话页里选方式发出。
@@ -67,7 +79,7 @@ final class Navigation {
         var project: Project?
     }
 
-    /// 新会话面板；`launched` 是已经发出的那一次（再打开时接着看它的进度）。
+    /// 新会话面板；`project` 是先选中的项目（Agent 页筛着的），`launched` 是已经发出的那一次（再打开时接着看它的进度）。
     struct NewSession: Identifiable {
         struct Launched: Equatable, Sendable {
             var request: UUID
@@ -75,6 +87,7 @@ final class Navigation {
         }
 
         let id = UUID()
+        var project: UUID?
         var launched: Launched?
     }
 
@@ -82,8 +95,9 @@ final class Navigation {
     var tab: Tab = .projects
     var projectsPath: [Route] = []
     var agentPath: [Route] = []
-    /// 打开随手记的请求：弹出随手记面板。
-    var capture: Capture?
+    var capture = Capture()
+    /// 随手记输入框浮在键盘上方。
+    private(set) var capturing = false
     var outbox: Outbox?
     var projectForm: ProjectForm?
     var newSession: NewSession?
@@ -187,7 +201,7 @@ final class Navigation {
     func open(_ link: DeepLink, workspace: Workspace) {
         switch link {
         case .capture(let project):
-            capture = Capture(project: project)
+            startCapture(project: .some(project))
         case .project(let id):
             workspace.show(.project(id))
             if layout == .split { select(.project(id)) } else { tab = .projects; projectsPath = [.project(id)] }
@@ -210,14 +224,25 @@ final class Navigation {
     }
 
     /// 在当前位置推入一个会话的近况页；`draft` 带进它的回复框（发到 Mac 的卡片或任务），已经写的字留着。
-    func openSession(_ id: UUID, draft: Outbox? = nil) {
+    func openSession(_ id: UUID, seed: PiSessionState? = nil, draft: Outbox? = nil) {
         outbox = nil
         if let draft {
             var reply = replyDraft(for: id)
             reply.attachment = draft
             setReplyDraft(reply, for: id)
         }
-        push(.session(id))
+        push(.session(id, seed: seed))
+    }
+
+    /// Agent 页的项目筛选：从项目页进来（`entered`）是该项目，否则是在 Agent 页上次选的（本机偏好）；
+    /// 选中的项目不在项目目录里（进了回收站）时是全部。
+    func agentFilter(entered: UUID?, catalog: ProjectCatalog?) -> UUID? {
+        (entered ?? settings.agentProject).flatMap { catalog?.project($0)?.id }
+    }
+
+    /// 在 Agent 页选了筛选：记下来；从项目页进来的那一页上换的不记。
+    func chooseAgentFilter(_ project: UUID?, entered: UUID?) {
+        if entered == nil { settings.agentProject = project }
     }
 
     func replyDraft(for session: UUID) -> ComposerDraft {
@@ -230,9 +255,22 @@ final class Navigation {
         settings.setReplyText(draft.text, for: session)
     }
 
-    /// 打开随手记，记入当前位置。
-    func startCapture(_ start: Capture.Start = .text) {
-        capture = Capture(project: captureProject, start: start)
+    /// 浮起随手记输入框；`project` 是入口指定的落点（小组件），不给时接着上次留下的草稿与落点。
+    func startCapture(project: UUID?? = nil) {
+        if let project { capture.project = project }
+        capturing = true
+    }
+
+    /// 收起随手记：写了东西就留着下次接着写，空的连同换过的种类与落点一起丢掉。
+    func endCapture() {
+        capturing = false
+        if capture.draft.isEmpty(accepting: .images) { capture = Capture() }
+    }
+
+    /// 记下了：清空并收起。
+    func finishCapture() {
+        capture = Capture()
+        capturing = false
     }
 
     /// 打开未归档（iPhone 推入项目标签，iPad 选中侧栏）。

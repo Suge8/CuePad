@@ -34,7 +34,7 @@ struct TasksPanel: View {
         .glass(in: .rect(cornerRadius: 26))
         // 点任务上的会话状态打开它的详情：与侧栏、⌘K 同一个详情弹出层
         .modifier(SessionDetailHost(arrowEdge: .leading))
-        .observing(services.store, [.tasks, .projects, .piSessionStates], into: $board, onError: workspace.fail) {
+        .observing(services.store, TaskBoard.tables, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
         }
     }
@@ -79,7 +79,7 @@ struct TasksPanel: View {
                 let info = board.rows[row.id]
                 TaskRow(
                     task: row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session.map(workspace.withLiveState),
-                    subtasks: board.subtasks[row.id])
+                    delivery: info?.delivery, subtasks: board.subtasks[row.id])
             }
             .padding(.horizontal, 20)
         }
@@ -87,7 +87,8 @@ struct TasksPanel: View {
 
     private func rows(_ items: [TaskBoard.Row]) -> some View {
         ForEach(items) { row in
-            TaskRow(task: row.task, project: row.project, session: row.session.map(workspace.withLiveState)).padding(.horizontal, 20)
+            TaskRow(task: row.task, project: row.project, session: row.session.map(workspace.withLiveState), delivery: row.delivery)
+                .padding(.horizontal, 20)
         }
     }
 }
@@ -98,8 +99,9 @@ struct TaskRow: View {
     let task: CueTask
     /// 跨项目列着时写上所在项目；项目页里不写。
     var project: Project?
-    /// 交给 Pi 的任务：那个会话此刻的状态。
+    /// 交给 Pi 的任务：那个会话此刻的状态，以及发给它的最近一条投送请求。
     var session: PiSessionState?
+    var delivery: DeliveryRequest?
     /// 直接子任务的完成数与总数（没有子任务时为 nil）。
     var subtasks: TaskProgress?
     var compact = false
@@ -173,7 +175,7 @@ struct TaskRow: View {
                 Text(TaskCopy.progress(subtasks)).monospacedDigit().foregroundStyle(palette.ink3)
             }
             if let session, !done {
-                let shown = services.settings.shown(session)
+                let shown = services.settings.shown(session, delivery: delivery)
                 HStack(spacing: 4) {
                     PiStateDot(shown: shown, size: 5)
                     Text(shown.presence).foregroundStyle(shown.tint(palette))

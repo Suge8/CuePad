@@ -4,9 +4,10 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面：project、older、today、inbox、editor、tasks、agent、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// iOS 画面：project、older、inbox、editor、tasks、agent、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
-/// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对进入项目页的首帧。
+/// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对推入的首帧；
+/// 给了 `-CuePadPush <tasks|settings|trash|inbox|card>` 时推入的是那一页（card 是该项目里的一张卡）。
 /// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；taskedit 在任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（给了 `-CuePadPushAfter <秒>` 时先停在 Agent 页，到时再推入）；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
 /// （核对往上翻后出"新消息"、贴底时跟到底），给了 `-CuePadChatBulk <N>` 时推入后整批进来 N 轮长对话（核对整批到达时停在最新）；send 是从卡片"发到 Mac"先选会话。
@@ -15,13 +16,17 @@ import UIKit
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
 /// agent 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话（每隔 8 小时结束一个，分落在今天到更早），
 /// Agent 页打开就滚到底（看历史滑到底读下一页；同时给了 `-CuePadSearch` 时停在顶上）。
+/// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
+/// sendflow：打开 `-CuePadSession`（默认 notes）的会话页，2 秒后写出一句话、随即返回 Agent 列表（配 `-CuePadDemoMac YES` 看状态流转）。
 /// newsession：Agent 页上打开新会话面板；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
+/// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态（见 `runDemoMac`）。
 /// iPad 上 agent 打开右侧 Agent 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
     static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
         dumpAccessibilityIfAsked()
         let project = await prepareLibrary(workspace)
         if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+        if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services.store) } }
         let split = navigation.layout == .split
         func open(_ route: Navigation.Route) {
             if split { navigation.select(route) } else { navigation.projectsPath = [route] }
@@ -57,11 +62,17 @@ extension DebugScene {
         case "push":
             if split { navigation.select(.shelf) }
             try? await Task.sleep(for: .seconds(1.5))
-            if let project { navigation.push(.project(project)) }
+            switch defaults.string(forKey: "CuePadPush") {
+            case "tasks": navigation.push(.tasks)
+            case "settings": navigation.push(.settings)
+            case "trash": navigation.push(.trash)
+            case "inbox": navigation.push(.inbox)
+            case "card": if let card = await card(in: project, store: workspace.services.store) { navigation.push(.card(card)) }
+            default: if let project { navigation.push(.project(project)) }
+            }
         case "sidebar":
             if let project { open(.project(project)) }
             navigation.sidebar = .all
-        case "today": open(.today)
         case "inbox": open(.inbox)
         case "trash": open(.trash)
         case "settings": open(.settings)
@@ -74,7 +85,7 @@ extension DebugScene {
                 // 给了 -CuePadSession 就当已选好会话，直接进它的近况页（卡片预填在回复框里）
                 if let title = defaults.string(forKey: "CuePadSession"),
                    let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state {
-                    navigation.openSession(session.id, draft: outbox)
+                    navigation.openSession(session.id, seed: session, draft: outbox)
                 } else {
                     navigation.outbox = outbox
                 }
@@ -89,10 +100,20 @@ extension DebugScene {
             // -CuePadPushAfter <秒>：先停在 Agent 页，过一会儿再像点了会话行一样推入（录屏核对推入的首帧）
             let delay = defaults.double(forKey: "CuePadPushAfter")
             if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
-            navigation.push(.session(session.id))
+            navigation.push(.session(session.id, seed: session))
             if defaults.bool(forKey: "CuePadChatGrow") { Task { await growChat(session.sessionID, store: workspace.services.store) } }
             let bulk = defaults.integer(forKey: "CuePadChatBulk")
             if bulk > 0 { Task { await bulkChat(session.sessionID, count: bulk, store: workspace.services.store) } }
+        case "sendflow":
+            // 停在会话页 → 像点了发送一样写出请求（隔离模式没有同步、发送钮不可用）→ 返回 Agent 列表看状态流转；配 -CuePadDemoMac YES
+            let title = defaults.string(forKey: "CuePadSession") ?? "notes"
+            guard let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { break }
+            if split { navigation.select(.agent) } else { navigation.tab = .agent }
+            navigation.push(.session(session.id, seed: session))
+            try? await Task.sleep(for: .seconds(2))
+            _ = try? await workspace.services.requestMacDelivery("看一下这周的待办", to: session, mode: .send)
+            try? await Task.sleep(for: .seconds(0.4))
+            if split { navigation.splitPath.removeLast() } else { navigation.agentPath.removeLast() }
         case "newsession":
             if split { navigation.select(.agent) } else { navigation.tab = .agent }
             var sheet = Navigation.NewSession()
@@ -105,6 +126,9 @@ extension DebugScene {
                 }
             }
             navigation.newSession = sheet
+        case "projectagent":
+            // 从项目页的"全部 N 个会话"进来的 Agent 页：先筛着这个项目
+            if let project { open(.project(project)); navigation.push(.projectSessions(project)) }
         case "agent":
             if let project { open(.project(project)) }
             if split { navigation.agentPanel = true } else { navigation.tab = .agent }
@@ -112,9 +136,7 @@ extension DebugScene {
             // iPhone：书架（给了项目则是该项目页）的下拉搜索在出现时自己聚焦，见 CardSearch
             if split { navigation.select(.search) } else if let project { open(.project(project)) }
         case "capture":
-            // 等推入的项目页把它的随手记放上屏幕，再像点了它一样打开
             if let project { open(.project(project)) }
-            try? await Task.sleep(for: .seconds(1))
             navigation.startCapture()
         default:
             if let project, split { open(.project(project)) }

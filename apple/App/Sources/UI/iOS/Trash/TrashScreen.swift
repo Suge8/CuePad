@@ -17,10 +17,9 @@ struct TrashScreen: View {
 
     var body: some View {
         List {
-            Group {
             if let data {
                 if data.projects.isEmpty && data.cards.isEmpty {
-                    ContentUnavailableView("回收站是空的", systemImage: "trash")
+                    ContentUnavailableView("回收站是空的", systemImage: "trash").listRowBackground(Color.clear)
                 }
                 if !data.projects.isEmpty {
                     Section("项目") {
@@ -42,10 +41,8 @@ struct TrashScreen: View {
                     }
                 }
             }
-            }
-            .listRowBackground(palette.paper)
         }
-        .deskBackground()
+        .scrollContentBackground(.hidden)
         .navigationTitle("回收站")
         .toolbar {
             if let data, !(data.projects.isEmpty && data.cards.isEmpty) {
@@ -70,11 +67,18 @@ struct TrashScreen: View {
         title: String, detail: String, deletedAt: Date?,
         restore: @escaping @Sendable (CueStore) async throws -> Void, purge: @escaping @Sendable (CueStore) async throws -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).lineLimit(1)
-            Text([detail, deletedAt.map { "\(DateLabel.short($0)) 删除" }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.footnote).foregroundStyle(palette.ink2).lineLimit(1)
+        // 删除时间单独靠右：摘要再长也不把它挤出去
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).foregroundStyle(palette.ink).lineLimit(1)
+                if !detail.isEmpty { Text(detail).font(.footnote).foregroundStyle(palette.ink2).lineLimit(1) }
+            }
+            Spacer(minLength: 0)
+            if let deletedAt {
+                Text("\(DateLabel.short(deletedAt)) 删除").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
+            }
         }
+        .listRowBackground(palette.paper)
         .swipeActions(edge: .leading) {
             Button("恢复", systemImage: "arrow.uturn.backward") { workspace.perform(restore) }.tint(palette.accent)
         }

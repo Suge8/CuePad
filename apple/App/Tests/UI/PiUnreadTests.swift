@@ -39,11 +39,13 @@ struct PiUnreadTests {
         let project = UUID()
         let working = session(.thinking, since: 100, id: "w", project: project)
         let done = session(.settled, since: 100, id: "d", project: project)
-        let shown = PiSessionState.byProject([working, done]) { $0.sessionID == "d" }
-        #expect(shown[project] == PiShown(state: .known(.settled), unread: true))
+        func byProject(_ sessions: [PiSessionState]) -> [UUID: PiShown] {
+            PiSessionListItem.byProject(sessions.map { PiSessionListItem(state: $0) }) { PiShown(state: $0.state.state, unread: $0.state.sessionID == "d") }
+        }
+        #expect(byProject([working, done])[project] == PiShown(state: .known(.settled), unread: true))
 
         let asking = session(.waitingForUser, since: 100, id: "q", project: project)
-        #expect(PiSessionState.byProject([working, done, asking]) { $0.sessionID == "d" }[project]?.state == .known(.waitingForUser))
+        #expect(byProject([working, done, asking])[project]?.state == .known(.waitingForUser))
     }
 
     @Test func 看过记在本机偏好_退出再回来还算看过() {

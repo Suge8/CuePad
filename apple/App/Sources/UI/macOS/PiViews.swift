@@ -21,6 +21,8 @@ extension PiAgentState {
 struct PiSessionRow: View {
     let session: PiSessionState
     let project: Project?
+    /// 发给它的最近一条投送请求（显示状态见 `PiDelivery`）。
+    let delivery: DeliveryRequest?
     var nameFont: Font = .body
     var lineFont: Font = .caption
     var dotSize: CGFloat = 6
@@ -28,7 +30,7 @@ struct PiSessionRow: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let shown = services.settings.shown(session)
+        let shown = services.settings.shown(session, delivery: delivery)
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             PiStateDot(shown: shown, size: dotSize)
             VStack(alignment: .leading, spacing: 1) {
@@ -42,6 +44,8 @@ struct PiSessionRow: View {
                         Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
                     }
                     Text(shown.label).fontWeight(.medium).foregroundStyle(shown.tint(palette))
+                        .contentTransition(.opacity)
+                        .animation(Motion.quick, value: shown)
                     if session.hosted { Text("· 后台").foregroundStyle(palette.ink3) }
                 }
                 .font(lineFont)

@@ -22,10 +22,7 @@ struct TrashPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     HStack(alignment: .lastTextBaseline) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("回收站").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
-                            Text("删除的项目连同其卡片一起放在这里").font(.system(size: 12)).foregroundStyle(palette.ink3)
-                        }
+                        Text("回收站").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
                         Spacer()
                         if let data, !(data.projects.isEmpty && data.cards.isEmpty) {
                             Button("清空回收站", role: .destructive) { confirmEmpty = true }

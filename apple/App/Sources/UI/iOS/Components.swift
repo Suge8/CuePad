@@ -46,10 +46,10 @@ nonisolated struct CardEntry: Identifiable, Sendable {
     }
 }
 
-/// 一张卡的纸面行（今天流、搜索结果与输入框的卡片选择共用）：可选的项目与时间、标题、摘要，右侧首图。
+/// 一张卡的纸面行（搜索结果与输入框的卡片选择共用）：可选的项目与时间、标题、摘要，右侧首图。
 struct CardRow: View {
     let entry: CardEntry
-    /// 标出所属项目（今天流）；nil 不标（搜索已按项目分组）。
+    /// 标出所属项目（卡片选择里不属于本项目的那组）；nil 不标（搜索已按项目分组）。
     var project: Project??
     /// 命中的词（空格分隔），每个都标底色。
     var highlight = ""

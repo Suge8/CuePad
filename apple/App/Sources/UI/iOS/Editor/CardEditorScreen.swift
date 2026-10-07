@@ -41,7 +41,6 @@ struct CardEditorScreen: View {
             }
             .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(wide ? palette.desk : palette.paper)
             .navigationBarTitleDisplayMode(.inline)
             .ownsBottomEdge()
             .toolbar { toolbar }

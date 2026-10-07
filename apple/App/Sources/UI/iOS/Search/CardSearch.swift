@@ -93,7 +93,6 @@ struct CardSearchResults: View {
             .padding(.horizontal, 16).padding(.bottom, 24)
         }
         .scrollDismissesKeyboard(.immediately)
-        .background(palette.desk)
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear { settled = query }
         .onChange(of: query) { if !TextComposition.isComposing { settled = query } }
@@ -108,10 +107,9 @@ struct CardSearchResults: View {
 }
 
 extension View {
-    /// iPhone 书架与项目页的下拉搜索（系统搜索框藏在导航栏下，下拉露出）：搜索时页面换成同一套搜索结果，
-    /// 取消搜索回到原页面；导航栏另有放大镜，点了直接聚焦搜索框。iPad 用侧栏与 ⌘K 的搜索页，这里不挂。
-    /// `available`：这一页有可搜的卡片（决定放大镜，按同步可得的项目目录判断，进页面第一帧就定）；
-    /// `ready`：页面内容已读到、可以挂搜索框。放大镜在内容读到前点下，读到后再聚焦。
+    /// iPhone 书架与项目页的下拉搜索（系统搜索框在导航栏下，页面在顶上时露出，下滑收起）：搜索时页面换成同一套搜索结果，
+    /// 取消搜索回到原页面。iPad 用侧栏与 ⌘K 的搜索页，这里不挂。
+    /// `available`：这一页有可搜的卡片（按同步可得的项目目录判断）；`ready`：页面内容已读到、可以挂搜索框。
     func cardSearch(_ scope: CardSearchScope, available: Bool, ready: Bool) -> some View {
         modifier(CardSearch(scope: scope, available: available, ready: ready))
     }
@@ -125,7 +123,7 @@ private struct CardSearch: ViewModifier {
     @State private var query = PaletteQuery()
     @FocusState private var focused: Bool
 
-    /// 这一页在导航里的位置：放大镜与 ⌘K 指名要聚焦的是不是这一页。
+    /// 这一页在导航里的位置：⌘K 指名要聚焦的是不是这一页。
     private var route: Navigation.Route {
         switch scope {
         case .all: .shelf
@@ -156,13 +154,6 @@ private struct CardSearch: ViewModifier {
                     #endif
             } else {
                 content
-            }
-        }
-        .toolbar {
-            if available {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("搜索", systemImage: "magnifyingglass") { navigation.pendingPageSearch = route }
-                }
             }
         }
     }
@@ -211,41 +202,31 @@ private struct FilterChips: View {
     let targets: [SendTarget]
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if let projects {
-                    Menu {
-                        Button("全部") { query.project = nil }
-                        Button("未归档") { query.project = .some(nil) }
-                        Divider()
-                        ForEach(projects) { project in Button(project.name) { query.project = project.id } }
-                    } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil) }
-                }
-                Button { query.withImages.toggle() } label: { Chip(name: "含图片", value: nil, on: query.withImages) }
-                    .accessibilityAddTraits(query.withImages ? .isSelected : [])
+        ChipRow {
+            if let projects {
                 Menu {
-                    Button("任意") { query.sent = .any }
-                    Button("从未发送") { query.sent = .never }
-                    Button("发送或复制过") { query.sent = .sent() }
-                    if !targets.isEmpty {
-                        Divider()
-                        ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
-                            Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
-                        }
+                    Button("全部") { query.project = nil }
+                    Button("未归档") { query.project = .some(nil) }
+                    Divider()
+                    ForEach(projects) { project in Button(project.name) { query.project = project.id } }
+                } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil) }
+            }
+            Button { query.withImages.toggle() } label: { Chip(name: "含图片", value: nil, on: query.withImages) }
+                .accessibilityAddTraits(query.withImages ? .isSelected : [])
+            Menu {
+                Button("任意") { query.sent = .any }
+                Button("从未发送") { query.sent = .never }
+                Button("发送或复制过") { query.sent = .sent() }
+                if !targets.isEmpty {
+                    Divider()
+                    ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
+                        Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
                     }
-                } label: { Chip(name: "发送", value: sentLabel, on: query.sent != .any) }
-                Menu {
-                    ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
-                } label: { Chip(name: "时间", value: query.period.label, on: query.period != .any) }
-            }
-            .padding(.horizontal, 16)
-        }
-        // 延伸到屏幕边缘，右侧 24pt 渐隐：看得出还能横着滑，而不是被页边距切断
-        .mask {
-            HStack(spacing: 0) {
-                Color.black
-                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24)
-            }
+                }
+            } label: { Chip(name: "发送", value: sentLabel, on: query.sent != .any) }
+            Menu {
+                ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
+            } label: { Chip(name: "时间", value: query.period.label, on: query.period != .any) }
         }
     }
 
@@ -268,30 +249,61 @@ private struct FilterChips: View {
     }
 }
 
+/// 搜索的筛选胶囊：名称，生效时加上取值；有菜单的带下拉箭头。
 private struct Chip: View {
     let name: String
     let value: String?
     let on: Bool
+
+    var body: some View {
+        FilterChip(on: on) {
+            HStack(spacing: 4) {
+                Text(name).opacity(on ? 0.7 : 1)
+                if let value, on {
+                    Text(value).fontWeight(.medium)
+                }
+                if value != nil {
+                    Image(systemName: "chevron.down").font(.caption2.weight(.bold)).opacity(0.5).accessibilityHidden(true)
+                }
+            }
+        }
+    }
+}
+
+/// 一排横向滑动的筛选胶囊。调用方给它让出页边距（`.padding(.horizontal, -16)`），它延伸到边缘、右侧 24pt 渐隐：
+/// 看得出还能横着滑，而不是被页边距切断。
+struct ChipRow<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) { content }.padding(.horizontal, 16)
+        }
+        .mask {
+            HStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 24)
+            }
+        }
+    }
+}
+
+/// 一颗筛选胶囊（搜索的筛选、Agent 页的项目）：生效的是墨色实心，其余是纸底细边。
+struct FilterChip<Label: View>: View {
+    let on: Bool
+    @ViewBuilder let label: Label
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(name).opacity(on ? 0.7 : 1)
-            if let value, on {
-                Text(value).fontWeight(.medium)
-            }
-            if value != nil {
-                Image(systemName: "chevron.down").font(.caption2.weight(.bold)).opacity(0.5).accessibilityHidden(true)
-            }
-        }
-        .font(.subheadline)
-        .foregroundStyle(on ? palette.onAccent : palette.ink)
-        .padding(.horizontal, 12).frame(minHeight: 36)
-        .background(on ? palette.accent : palette.paper, in: .capsule)
-        .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
-        .padding(.vertical, 4)
-        .contentShape(.rect)
-        .animation(Motion.quick, value: on)
+        label
+            .font(.subheadline)
+            .foregroundStyle(on ? palette.onAccent : palette.ink)
+            .padding(.horizontal, 12).frame(minHeight: 36)
+            .background(on ? palette.accent : palette.paper, in: .capsule)
+            .overlay { if !on { Capsule().strokeBorder(palette.hair) } }
+            .padding(.vertical, 4)
+            .contentShape(.rect)
+            .animation(Motion.quick, value: on)
     }
 }
 #endif

@@ -4,7 +4,7 @@ Thanks for your interest in CuePad. This guide covers how to set up the project,
 
 ## Prerequisites
 
-- macOS with Xcode 26 (the app targets macOS 26 and iOS/iPadOS 26)
+- macOS with Xcode 27 (the app targets macOS 26 and iOS/iPadOS 27)
 - No developer account is needed: local builds and tests are ad-hoc signed. Only the release commands need App Store Connect credentials (see [docs/development.md](../docs/development.md)).
 
 ## Setup and common commands

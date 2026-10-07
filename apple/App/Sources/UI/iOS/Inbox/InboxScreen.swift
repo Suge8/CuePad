@@ -26,9 +26,8 @@ struct InboxScreen: View {
                 }
             }
         }
-        .deskBackground()
+        .scrollContentBackground(.hidden)
         .animation(Motion.quick, value: cards?.map(\.id))
-        .captureBar()
         .navigationTitle(CaptureCopy.inbox)
         .sheet(item: $moving) { MoveToProjectSheet(card: $0) }
         .observing(services.store, [.cards], into: $cards, onError: workspace.fail) { store in

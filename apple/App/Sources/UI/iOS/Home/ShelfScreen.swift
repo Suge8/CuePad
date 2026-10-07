@@ -21,14 +21,13 @@ nonisolated struct ShelfData: Sendable {
     }
 
     var entries: [Entry]
-    /// 在线的 Pi 会话：项目的状态点在界面上按本机看没看过再算（`PiSessionState.byProject`）。
-    var live: [PiSessionState]
+    /// 在线的 Pi 会话（带发给它的最近一条投送请求）：项目的状态点在界面上再按本机的规则算（`PiSessionListItem.byProject`）。
+    var live: [PiSessionListItem]
     var tasks: TaskCounts?
     var inboxCount: Int
-    var todayCount: Int
     var trashCount: Int
 
-    static func read(from store: isolated CueStore, now: Date = .now, calendar: Calendar = .current) throws -> ShelfData {
+    static func read(from store: isolated CueStore) throws -> ShelfData {
         let summaries = try store.projectSummaries()
         let counts = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) })
         let progress = try store.taskProgress()
@@ -39,26 +38,23 @@ nonisolated struct ShelfData: Sendable {
                 goal: try project.goalCardID.flatMap { try store.card($0) }.map { CardText($0.body).title.textGlyphs },
                 latest: latest.map { (CardText($0.body).title.textGlyphs, $0.modifiedAt) })
         }
-        let today = calendar.startOfDay(for: now)...now
         let hasTasks = progress.values.contains { $0.total > 0 }
         return ShelfData(
-            entries: entries, live: try store.piSessionPage(.live).items.map(\.state),
+            entries: entries, live: try store.piSessionPage(.live).items,
             tasks: hasTasks
                 ? TaskCounts(inProgress: try store.tasks(.inProgress).flatMap(\.tasks).count, todo: try store.tasks(.todo).flatMap(\.tasks).count)
                 : nil,
             inboxCount: counts[nil] ?? 0,
-            todayCount: try store.search(SearchQuery(modifiedIn: today), limit: 0).totalCards,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
     }
 }
 
-/// iPhone 首页：项目书架。有没归类的想法时最上面一行提醒去整理；"今天 · N 张"进入今天流；有任务时"任务 · N 进行中 · N 待办"进入跨项目任务页；
+/// iPhone 首页：项目书架。最上面一张纸：有没归类的想法时一行提醒去整理，有任务时一行"任务 · N 进行中 · N 待办"进入跨项目任务页；
 /// 置顶项目是大卡，其余按最近排成行，都带目标、卡片数、任务数与 Pi 状态点。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var data: ShelfData?
@@ -67,12 +63,10 @@ struct ShelfScreen: View {
         ScrollView {
             if let data { content(data) }
         }
-        .background(palette.desk)
-        .captureBar()
         // 一张卡都没有时没什么可搜，不挂搜索框与放大镜
         .cardSearch(.all, available: navigation.layout == .tabs && workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true, ready: true)
         // 不显示大标题：顶上只留浮着的玻璃按钮与搜索，内容多露出来；标题仍是读屏与多任务切换器里的名字
-        .navigationTitle("项目")
+        .navigationTitle("灵感")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(removing: .title)
         .toolbar {
@@ -89,7 +83,7 @@ struct ShelfScreen: View {
             }
         }
         .refreshable { await services.syncNow() }
-        .observing(services.store, [.projects, .cards, .tasks, .piSessionStates], into: $data, onError: workspace.fail) {
+        .observing(services.store, [.projects, .cards, .tasks, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }
     }
@@ -98,14 +92,16 @@ struct ShelfScreen: View {
     private func content(_ data: ShelfData) -> some View {
         let pinned = data.entries.filter(\.project.isPinned)
         let recent = data.entries.filter { !$0.project.isPinned }
-        let pi = PiSessionState.byProject(data.live, unread: services.settings.isUnread)
+        let pi = PiSessionListItem.byProject(data.live, shown: services.settings.shown)
         VStack(alignment: .leading, spacing: 22) {
-            if data.inboxCount > 0 || data.todayCount > 0 || data.tasks != nil {
-                VStack(spacing: 10) {
+            if data.inboxCount > 0 || data.tasks != nil {
+                VStack(spacing: 0) {
                     if data.inboxCount > 0 { InboxReminder(count: data.inboxCount) }
-                    if data.todayCount > 0 { ShelfLink(route: .today, symbol: "sun.max", title: "今天", detail: "\(data.todayCount) 张") }
-                    if let tasks = data.tasks { ShelfLink(route: .tasks, symbol: "checklist", title: "任务", detail: tasks.summary) }
+                    if data.inboxCount > 0, data.tasks != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
+                    if let tasks = data.tasks { TasksLine(tasks: tasks) }
                 }
+                .clipShape(.rect(cornerRadius: 16, style: .continuous))
+                .paper(radius: 16)
             }
             if data.entries.isEmpty && data.inboxCount == 0 {
                 EmptyShelf { navigation.projectForm = .init() }
@@ -133,29 +129,60 @@ struct ShelfScreen: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 24)
+        // 宽屏不把一行项目拉满整屏：名字与计数隔太远读不成一行
+        .frame(maxWidth: Self.readableWidth)
+        .frame(maxWidth: .infinity)
     }
+
+    private static let readableWidth: CGFloat = 760
 }
 
-/// 有没归类的想法时书架最上面的提醒：点它去未归档整理。
-private struct InboxReminder: View {
-    let count: Int
+/// 书架顶上的一行：图标、标题、说明，点进一页。
+private struct ShelfLine: View {
+    let route: Navigation.Route
+    let symbol: String
+    var tint: Color?
+    let title: String
+    let detail: String
     @Environment(\.palette) private var palette
 
+    static let dividerInset: CGFloat = 48
+
     var body: some View {
-        NavigationLink(value: Navigation.Route.inbox) {
+        NavigationLink(value: route) {
             HStack(spacing: 10) {
-                Image(systemName: "tray").foregroundStyle(palette.attention).accessibilityHidden(true)
-                Text("\(count) 条想法还没归类").font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+                Image(systemName: symbol).foregroundStyle(tint ?? palette.ink2).frame(width: 22).accessibilityHidden(true)
+                Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+                Text(detail).font(.body.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
                 Spacer(minLength: 8)
-                Text("去整理").font(.subheadline.weight(.medium)).foregroundStyle(palette.ink2)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 16).frame(minHeight: 52)
             .contentShape(.rect)
-            .paper(radius: 16)
         }
         .buttonStyle(RowPressStyle())
+        .background(palette.paper)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// 有没归类的想法时的提醒（注意色的图标）：点它去未归档整理。
+private struct InboxReminder: View {
+    let count: Int
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ShelfLine(route: .inbox, symbol: "tray", tint: palette.attention, title: "未归档", detail: "\(count) 条待整理")
+    }
+}
+
+/// 跨项目的任务："任务 2 进行中 · 3 待办"。
+private struct TasksLine: View {
+    let tasks: ShelfData.TaskCounts
+
+    var body: some View {
+        ShelfLine(route: .tasks, symbol: "checklist", title: "任务", detail: tasks.summary)
     }
 }
 
@@ -164,33 +191,6 @@ private extension ShelfData.TaskCounts {
     var summary: String {
         let parts = [inProgress > 0 ? "\(inProgress) 进行中" : nil, todo > 0 ? "\(todo) 待办" : nil].compactMap { $0 }
         return parts.isEmpty ? "全部完成" : parts.joined(separator: " · ")
-    }
-}
-
-/// 书架顶上通往一页的一行："今天 · N 张"、"任务 · N 进行中 · N 待办"。
-private struct ShelfLink: View {
-    let route: Navigation.Route
-    let symbol: String
-    let title: String
-    let detail: String
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        NavigationLink(value: route) {
-            HStack(spacing: 10) {
-                Image(systemName: symbol).foregroundStyle(palette.ink2).frame(width: 22).accessibilityHidden(true)
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
-                Text(detail).font(.body.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
-                Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 16).frame(minHeight: 52)
-            .contentShape(.rect)
-            .paper(radius: 16)
-        }
-        .buttonStyle(CardPressStyle())
-        .accessibilityElement(children: .combine)
     }
 }
 

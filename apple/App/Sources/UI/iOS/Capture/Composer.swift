@@ -41,12 +41,12 @@ struct ComposerKinds: OptionSet {
     static let cards = ComposerKinds(rawValue: 2)
 }
 
-/// 左边"＋"能打开的三个来源；外面也可以直接打开其中一个（小组件的"拍照"入口）。
+/// 左边"＋"能打开的三个来源。
 enum ComposerSource { case cards, photos, camera }
 
-/// 随手记与 Pi 会话回复框共用的输入框（同 iOS 信息 App）：左边一颗独立的圆形玻璃"＋"（选卡片、相册、拍照），
-/// 与输入框的底行同高、垂直居中；右边一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条、输入框与有内容才出现的发送钮；
-/// 聚焦或有内容时展开头部。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
+/// 随手记与 Pi 会话回复框共用的输入框：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条，以及底行：
+/// 左下"＋"（选卡片、相册、拍照）、文字区、右下发送钮；两个圆钮同尺寸、同心，多行时也在底角。
+/// 发送钮的位置一直留着、有内容才显出来，文字宽度不随它变。聚焦或有内容时展开头部。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和发送钮，草稿怎么处理由它们决定。
 struct Composer<Header: View, Send: View>: View {
     @Binding var draft: ComposerDraft
@@ -55,22 +55,21 @@ struct Composer<Header: View, Send: View>: View {
     let accepts: ComposerKinds
     /// 选卡片时排在前面的项目（回复框是会话所属的项目）。
     let cardsFrom: UUID?
-    /// 一直展开（随手记面板里）。
+    /// 一直展开（浮起的随手记）。
     let pinnedOpen: Bool
     let focus: FocusState<Bool>.Binding
-    private let outerSource: Binding<ComposerSource?>?
     private let header: Header
     private let send: Send
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var ownSource: ComposerSource?
+    @State private var source: ComposerSource?
     @State private var picked: [PhotosPickerItem] = []
     @State private var previewing: Navigation.Outbox?
 
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false,
-        source: Binding<ComposerSource?>? = nil, @ViewBuilder header: () -> Header, @ViewBuilder send: () -> Send
+        @ViewBuilder header: () -> Header, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
         self.prompt = prompt
@@ -79,31 +78,25 @@ struct Composer<Header: View, Send: View>: View {
         self.accepts = accepts
         self.cardsFrom = cardsFrom
         self.pinnedOpen = pinnedOpen
-        outerSource = source
         self.header = header()
         self.send = send()
     }
 
-    /// 单行时输入框高 50（字行 + 上下各 14），圆角取一半成胶囊；＋ 是同高的圆。
+    /// 单行时输入框高 50（字行 + 上下各 14），圆角取一半成胶囊；左下的 ＋ 与右下的发送钮同是 36 的圆，
+    /// 离边 7（= 圆角 25 − 圆半径 18），与外框同心。
     private static var radius: CGFloat { 25 }
     private static var inset: CGFloat { 8 }
-    private static var gap: CGFloat { 8 }
+    /// 一个圆钮占的一格：36 的圆 + 四周的点按区与边距。
+    static var slot: CGFloat { 50 }
 
-    private var source: Binding<ComposerSource?> { outerSource ?? $ownSource }
     private var expanded: Bool { pinnedOpen || focus.wrappedValue || !draft.isEmpty(accepting: [.images, .cards]) }
+    private var reservesSend: Bool { Send.self != EmptyView.self }
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
 
     var body: some View {
-        // 两块玻璃放进同一个容器：一起取样背景，靠近时按系统规则融合
-        GlassEffectContainer(spacing: Self.gap) {
-            HStack(alignment: .bottom, spacing: Self.gap) {
-                if !accepts.isEmpty { plus.transition(.scale(scale: 0.6).combined(with: .opacity)) }
-                field
-            }
-        }
+        field
         .animation(Motion.quick, value: expanded)
         .animation(Motion.quick, value: hasContent)
-        .animation(Motion.quick, value: accepts.isEmpty)
         .animation(Motion.quick, value: draft.attachment?.id)
         .animation(Motion.quick, value: draft.images.map(\.id))
         .photosPicker(isPresented: showing(.photos), selection: $picked, maxSelectionCount: 9, matching: .images)
@@ -120,7 +113,7 @@ struct Composer<Header: View, Send: View>: View {
         }
         .onChange(of: picked) { load() }
 #if DEBUG
-        .task { await DebugScene.presetComposer($draft, source: source, store: workspace.services.store) }
+        .task { await DebugScene.presetComposer($draft, source: $source, store: workspace.services.store) }
 #endif
     }
 
@@ -134,14 +127,13 @@ struct Composer<Header: View, Send: View>: View {
                 imageStrip.padding([.horizontal, .top], Self.inset).transition(.opacity)
             }
             HStack(alignment: .bottom, spacing: 0) {
-                TextField(prompt, text: $draft.text, axis: .vertical)
-                    .lineLimit(expanded ? 1...6 : 1...1)
+                if !accepts.isEmpty { plus }
+                ComposerField(
+                    text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink)
                     .focused(focus)
-                    .accessibilityLabel(label)
-                    .padding(.leading, 18).padding(.trailing, 8).padding(.vertical, 14)
-                if hasContent {
-                    send.padding(3).transition(.scale(scale: 0.6).combined(with: .opacity))
-                }
+                    .padding(.leading, accepts.isEmpty ? 18 : 2).padding(.trailing, reservesSend ? 2 : 18).padding(.vertical, 14)
+                    .frame(minHeight: Self.slot)
+                if reservesSend { sendSlot }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -150,22 +142,28 @@ struct Composer<Header: View, Send: View>: View {
 
     private func showing(_ target: ComposerSource) -> Binding<Bool> {
         Binding(
-            get: { source.wrappedValue == target },
-            set: { if !$0, source.wrappedValue == target { source.wrappedValue = nil } })
+            get: { source == target },
+            set: { if !$0, source == target { source = nil } })
+    }
+
+    /// 发送钮的位置一直留着：有内容才放进来，输入框的宽度不随它变，文字不会因此重排。
+    private var sendSlot: some View {
+        ZStack {
+            if hasContent { send.transition(.scale(scale: 0.6).combined(with: .opacity)) }
+        }
+        .frame(width: Self.slot, height: Self.slot)
     }
 
     private var plus: some View {
         Menu {
-            if accepts.contains(.cards) { Button("选卡片", systemImage: "rectangle.on.rectangle") { source.wrappedValue = .cards } }
+            if accepts.contains(.cards) { Button("选卡片", systemImage: "rectangle.on.rectangle") { source = .cards } }
             if accepts.contains(.images) {
-                Button("相册", systemImage: "photo.on.rectangle") { source.wrappedValue = .photos }
-                if CameraPicker.isAvailable { Button("拍照", systemImage: "camera") { source.wrappedValue = .camera } }
+                Button("相册", systemImage: "photo.on.rectangle") { source = .photos }
+                if CameraPicker.isAvailable { Button("拍照", systemImage: "camera") { source = .camera } }
             }
         } label: {
-            Image(systemName: "plus").font(.title3.weight(.medium)).foregroundStyle(palette.ink)
-                .frame(width: 2 * Self.radius, height: 2 * Self.radius)
-                .glass(in: .circle, interactive: true)
-                .contentShape(.circle)
+            CircleGlyph(systemImage: "plus", ink: palette.ink, fill: palette.fill)
+                .frame(width: Self.slot, height: Self.slot)
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
@@ -279,18 +277,30 @@ extension Composer where Header == EmptyView {
     }
 }
 
-/// 输入框里的圆形发送钮（看得见的 36，点得到的 44）：能发时墨色实心，发不出（同步不通、发送中）时淡。
+/// 输入框里两个角上的圆钮（看得见的 36，点得到的 44）：＋ 与发送钮同一个。
+private struct CircleGlyph: View {
+    let systemImage: String
+    let ink: Color
+    let fill: Color
+
+    var body: some View {
+        Image(systemName: systemImage).font(.body.weight(.semibold))
+            .foregroundStyle(ink)
+            .frame(width: 36, height: 36)
+            .background(fill, in: .circle)
+            .frame(width: 44, height: 44)
+            .contentShape(.circle)
+    }
+}
+
+/// 输入框右下角的圆形发送钮：能发时墨色实心，发不出（同步不通、发送中）时淡。
 struct SendGlyph: View {
     let enabled: Bool
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Image(systemName: "arrow.up").font(.body.weight(.semibold))
-            .foregroundStyle(enabled ? palette.onAccent : palette.ink3)
-            .frame(width: 36, height: 36)
-            .background(enabled ? palette.accent : palette.fill, in: .circle)
-            .frame(width: 44, height: 44)
-            .contentShape(.circle)
+        CircleGlyph(
+            systemImage: "arrow.up", ink: enabled ? palette.onAccent : palette.ink3, fill: enabled ? palette.accent : palette.fill)
             .animation(Motion.quick, value: enabled)
     }
 }

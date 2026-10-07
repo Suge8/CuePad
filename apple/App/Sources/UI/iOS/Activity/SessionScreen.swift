@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 一个 Pi 会话的对话（Agent 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），聊天式：
-/// 顶上一行会话名，下面一行小字"所在 · 状态 · 计时"；中间是对话（`PiConversation`，子代理列在末尾的进展下），打开停在最新；
+/// 顶上与返回钮同排的一块玻璃：会话名，下面一行小字"所在 · 状态 · 计时"；中间是对话（`PiConversation`，子代理列在末尾的进展下），打开停在最新；
 /// 底部是回复框（标签栏收起，回复框独占底部），等你确认时问题卡固定在它上方。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
 /// 很久以前的会话没有对话时请 Mac 补写，补写中写一句"正在从 Mac 取对话…"。
 /// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的内容，底部换成说明。
@@ -18,8 +18,16 @@ struct SessionScreen: View {
     @State private var lastSeen: PiSessionState?
     @State private var askedForTranscript = false
 
+    /// `seed`：推入方手里的会话状态，作首帧的"最后一次看到"，读到 Store 后即被替换。
+    init(id: UUID, seed: PiSessionState? = nil) {
+        self.id = id
+        _lastSeen = State(initialValue: seed)
+    }
+
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
     private static let readingWidth: CGFloat = 640
+    /// 顶栏玻璃钮的高度（系统返回钮）。
+    private static let barHeight: CGFloat = 44
 
     private var session: PiSessionState? { digest?.session ?? lastSeen }
     /// 回复框的草稿在 `Navigation`（离开会话再回来还在）。
@@ -53,30 +61,35 @@ struct SessionScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(palette.desk)
         .navigationTitle(session?.title ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let session {
+                // 会话名与状态是浮在对话上的一块玻璃，与返回钮同排同高
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 1) {
                         Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                        PiSessionSubtitle(session: session, project: digest?.project)
+                        PiSessionSubtitle(session: session, project: digest?.project, delivery: digest?.latestDelivery)
                     }
+                    .padding(.horizontal, 16)
+                    .frame(height: Self.barHeight)
+                    .glass(in: .capsule)
                 }
             }
         }
-        // 回复框算作底栏（safeAreaBar），对话从顶栏与底栏下面滚过，两头都是 soft（只淡出，不铺实底带）：
-        // 顶栏悬浮在对话上；问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏
-        .scrollEdgeEffectStyle(.soft, for: .all)
+        // 顶上不模糊：除了返回钮与标题那块玻璃，对话直接可见。回复框算作底栏（safeAreaBar），底边 soft 只淡出、
+        // 不铺实底带：问题卡也在底栏里，hard 的底会从问题卡上沿横切整屏
+        .scrollEdgeEffectHidden(true, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
-                    if digest?.session != nil {
-                        ReplyBar(session: session, draft: draft)
-                    } else {
+                    // 读库完成、确认记录不在了才换成说明；推入时带着首帧状态、还没读到时照常是回复框
+                    if digest != nil, digest?.session == nil {
                         Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
+                    } else {
+                        ReplyBar(session: session, draft: draft)
                     }
                 }
                 .padding(.horizontal, 12).padding(.bottom, 8)
@@ -240,7 +253,7 @@ struct SessionPicker: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
-    @State private var sessions: [PiSessionState]?
+    @State private var sessions: [PiSessionListItem]?
 
     var body: some View {
         NavigationStack {
@@ -266,16 +279,17 @@ struct SessionPicker: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .observing(services.store, [.piSessionStates], into: $sessions, onError: workspace.fail) { [project = outbox.project] store in
-            try store.piSessionPage(.live).items.map(\.state)
-                .sorted { ($0.projectID == project && project != nil ? 1 : 0, $0.state.urgency) > ($1.projectID == project && project != nil ? 1 : 0, $1.state.urgency) }
+        .observing(services.store, [.piSessionStates, .deliveryRequests], into: $sessions, onError: workspace.fail) { [project = outbox.project] store in
+            try store.piSessionPage(.live).items
+                .sorted { ($0.state.projectID == project && project != nil ? 1 : 0, $0.state.state.urgency) > ($1.state.projectID == project && project != nil ? 1 : 0, $1.state.state.urgency) }
         }
     }
 
-    private func row(_ session: PiSessionState) -> some View {
+    private func row(_ item: PiSessionListItem) -> some View {
+        let session = item.state
         let project = workspace.catalog?.project(session.projectID)
-        let shown = services.settings.shown(session)
-        return Button { navigation.openSession(session.id, draft: outbox) } label: {
+        let shown = services.settings.shown(item)
+        return Button { navigation.openSession(session.id, seed: session, draft: outbox) } label: {
             HStack(spacing: 12) {
                 PiStateDot(shown: shown)
                 VStack(alignment: .leading, spacing: 2) {

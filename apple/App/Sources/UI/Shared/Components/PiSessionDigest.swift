@@ -10,6 +10,11 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var deliveries: [DeliveryRequest]
     var messages: [PiChatMessage] = []
 
+    /// 发给它的最近一条（说话与作答）：顶栏的状态把它算进去（`PiDelivery`）。
+    var latestDelivery: DeliveryRequest? {
+        deliveries.last { $0.mode.known.map(DeliveryMode.toSession.contains) == true }
+    }
+
     /// 会话页要观察的表。
     static let tables: Set<StoreTable> = [.piSessionStates, .piMessages, .deliveryRequests, .projects]
 
@@ -19,9 +24,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         return SessionDigest(
             session: session,
             project: try session?.projectID.flatMap { try store.project($0) },
-            deliveries: try store.deliveryRequests()
-                .filter { $0.target.kind == .known(.piSession) && $0.target.ref == ref }
-                .sorted { $0.createdAt < $1.createdAt },
+            deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
             messages: try ref.map { try store.piMessages(of: $0) } ?? [])
     }
 }

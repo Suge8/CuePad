@@ -22,7 +22,6 @@ struct ProjectScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page: ProjectPage?
@@ -42,8 +41,6 @@ struct ProjectScreen: View {
                 #endif
             }
         }
-        .background(palette.desk)
-        .captureBar()
         // 内容读到后才挂搜索框：推入的页面在内容可滚动时把搜索框收在导航栏下，内容晚到会让已露出的搜索框收起、整页上跳
         .cardSearch(
             .project(projectID), available: navigation.layout == .tabs && (workspace.catalog?.cardCounts[projectID] ?? 0) > 0,
@@ -54,7 +51,7 @@ struct ProjectScreen: View {
         .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
-        .observing(services.store, [.piSessionStates, .projects], id: projectID, into: $pi, onError: workspace.fail) { [projectID] store in
+        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects], id: projectID, into: $pi, onError: workspace.fail) { [projectID] store in
             try PiSessionList.read(text: "", project: projectID, historyLimit: FocusCard.endedShown, from: store)
         }
         .onChange(of: page?.stamps) { rearrange() }
@@ -215,11 +212,10 @@ private struct FocusCard: View {
                 }
                 NewTaskLine(project: data.project?.id)
             }
-
             if let pi, !pi.isEmpty, let project = data.project {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "Pi", systemImage: "waveform.path.ecg").padding(.bottom, 6)
-                    ForEach(pi.now + pi.ended) { item in sessionLine(item.state) }
+                    ForEach(pi.now + pi.ended) { item in sessionLine(item) }
                     let all = pi.now.count + pi.total
                     if all > pi.now.count + pi.ended.count {
                         Button("全部 \(all) 个会话") { navigation.push(.projectSessions(project.id)) }
@@ -234,9 +230,10 @@ private struct FocusCard: View {
         .sheet(item: $editing) { TaskEditSheet(task: $0) }
     }
 
-    private func sessionLine(_ session: PiSessionState) -> some View {
-        let shown = services.settings.shown(session)
-        return Button { navigation.push(.session(session.id)) } label: {
+    private func sessionLine(_ item: PiSessionListItem) -> some View {
+        let session = item.state
+        let shown = services.settings.shown(item)
+        return Button { navigation.push(.session(session.id, seed: session)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 PiStateDot(shown: shown, size: 7)
                 Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
