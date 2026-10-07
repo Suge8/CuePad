@@ -6,6 +6,7 @@ import SwiftUI
 struct TaskSheet: View {
     let id: UUID
     @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -16,6 +17,8 @@ struct TaskSheet: View {
                 }
         }
         .presentationDetents([.medium, .large])
+        // 整张浮窗是一张纸：顶栏与底边不露出系统的灰底
+        .presentationBackground(palette.paper)
         .sheet(item: $navigation.outbox) { SessionPicker(outbox: $0) }
     }
 }

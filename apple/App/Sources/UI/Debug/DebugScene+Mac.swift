@@ -17,6 +17,10 @@ extension DebugScene {
         case "collapsed": workspace.sidebar = .detailOnly
         case "search": workspace.overlay = .search
         case "tasks": workspace.overlay = .tasks
+        case "task":
+            // 本项目第一条没完成的顶层任务在纸页里打开（状态、会话与下级在正文上方）
+            let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
+            workspace.openCard = tasks.first { $0.parentID == nil && $0.projectID == workspace.currentProject }?.id ?? tasks.first?.id
         case "trash": workspace.show(.trash)
         case "editor": workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)
         case "session":

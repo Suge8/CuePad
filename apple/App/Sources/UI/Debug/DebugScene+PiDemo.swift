@@ -153,8 +153,12 @@ extension DebugScene {
                 try store.deliveryRequests().filter { $0.hostID == host && $0.status == .known(.pending) }.map(\.id)
             }) where !pending.isEmpty {
                 try await Task.sleep(for: .seconds(1.2))
-                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { _ in
+                // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
+                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
                     try? await Task.sleep(for: .seconds(1))
+                    if let mode = request.mode.known, DeliveryMode.toSession.contains(mode), mode != .answer {
+                        try? await store.recordSend(request.content, to: request.target, card: request.cardID)
+                    }
                     return .succeeded
                 }
                 try await executor.start()
@@ -183,7 +187,7 @@ extension DebugScene {
         await set(.settled)
     }
 
-    /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求；圆桌设好目标卡。只在库里还没有时写。
+    /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store
         // 演示库的会话索引已写成历史；这里补的是在线会话，有在线的就是写过了

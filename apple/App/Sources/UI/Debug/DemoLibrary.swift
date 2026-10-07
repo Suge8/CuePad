@@ -8,7 +8,7 @@ import Foundation
 import SQLite3
 
 /// 视觉验收的演示资料库：生成一份 Electron 旧库格式的 SQLite，经正式的导入流程写入（导入保留原修改时间，
-/// 所以墙、"更早"的周/月分组都有真实分布），再补目标卡、目录绑定、发送记录与 Pi 历史。
+/// 所以墙、"更早"的周/月分组都有真实分布），再补项目介绍、目录绑定、发送记录与 Pi 历史。
 /// 只在 Debug 构建、隔离资料库、`-CuePadDemo YES` 时运行。
 enum DemoLibrary {
     struct DemoProject {
