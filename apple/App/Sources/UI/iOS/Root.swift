@@ -13,7 +13,7 @@ struct IOSRoot: View {
     }
 }
 
-/// iOS/iPadOS 的根视图：窄宽用标签栏（项目 / Agent；任务从书架一行进入，搜索在书架与项目页下拉），宽 iPad 用分栏。
+/// iOS/iPadOS 的根视图：窄宽用标签栏（灵感 / Agent 与"写"；任务从书架一行进入，搜索在书架与项目页下拉），宽 iPad 用分栏。
 struct IOSRootView: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
@@ -34,9 +34,7 @@ struct IOSRootView: View {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
             }
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
-            .sheet(item: $navigation.capture) {
-                CaptureSheet(capture: $0)
-            }
+            .overlay { CaptureLayer() }
             .sheet(item: $navigation.outbox) { SessionPicker(outbox: $0) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
             .sheet(item: $navigation.newSession) { NewSessionSheet(start: $0) }
@@ -118,8 +116,15 @@ struct RouteView: View {
     }
 }
 
-/// iPhone：标签栏，标签栏上方常驻随手记。
+/// iPhone：底部一行，左边标签（灵感 / Agent），右边一颗独立的圆形"写"（系统标签栏的突出标签，iOS 26 借搜索标签的位置）。
+/// 点"写"不切标签，只浮起随手记：在 UIKit 选中它之前拦下（`WriteTabGate`）。让它选中再在 SwiftUI 里改回来虽不闪白，
+/// 但当前页会经历一次消失与出现，书架的下拉搜索框随之收起、整页上跳。
 private struct TabsRoot: View {
+    private enum Slot: Hashable {
+        case tab(Navigation.Tab)
+        case write
+    }
+
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     /// Agent 标签的角标：等你确认的 Pi 会话数。
@@ -127,18 +132,16 @@ private struct TabsRoot: View {
 
     var body: some View {
         @Bindable var navigation = navigation
-        TabView(selection: $navigation.tab) {
-            Tab("项目", systemImage: "books.vertical", value: Navigation.Tab.projects) {
+        TabView(selection: selection) {
+            Tab("灵感", systemImage: "lightbulb", value: Slot.tab(.projects)) {
                 stack($navigation.projectsPath) { RouteView(route: .shelf) }
             }
-            Tab("Agent", systemImage: "waveform.path.ecg", value: Navigation.Tab.agent) {
+            Tab("Agent", systemImage: "waveform.path.ecg", value: Slot.tab(.agent)) {
                 stack($navigation.agentPath) { RouteView(route: .agent) }
             }
             .badge(waiting ?? 0)
+            Tab(WriteEntry.title, systemImage: WriteEntry.symbol, value: Slot.write, role: Self.writeRole) { EmptyView() }
         }
-        // 随手记是底部附件：平时在标签栏上方一行，下滑时标签栏收小、它并进同一行，底部只剩一行玻璃
-        // 纸页与会话页收起标签栏时附件跟着收起
-        .tabViewBottomAccessory(isEnabled: navigation.bottomPages == 0) { CaptureEntry() }
         .tabBarMinimizeBehavior(.onScrollDown)
         // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的下拉搜索（与宽屏的搜索页同一组快捷键）
         .background {
@@ -156,12 +159,69 @@ private struct TabsRoot: View {
         }
     }
 
+    /// "写"在 UIKit 那一层就被拦下，从不进到这里。
+    private var selection: Binding<Slot> {
+        Binding { .tab(navigation.tab) } set: { if case .tab(let tab) = $0 { navigation.tab = tab } }
+    }
+
+    private static var writeRole: TabRole {
+        if #available(iOS 27, *) { .prominent } else { .search }
+    }
+
     private func stack(_ path: Binding<[Navigation.Route]>, @ViewBuilder root: () -> some View) -> some View {
         NavigationStack(path: path) {
             root().navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
         }
         // 纸页与会话页独占底部。跟页面的出现与消失走而不是跟路径：手势返回一开始标签栏就回来，松手时页面不再跳
         .toolbarVisibility(navigation.bottomPages > 0 ? .hidden : .visible, for: .tabBar)
+        // 挂在标签页里才找得到标签栏控制器；每个标签都挂，从哪个标签启动（通知直达 Agent）都装得上
+        .background { WriteTabGate { navigation.startCapture() } }
+    }
+}
+
+/// 拦下标签栏上的"写"：选中前问一句委托（`shouldSelectTab`），是它就做动作并拒绝选中。SwiftUI 的标签栏委托没实现这一问，
+/// 所以在它前面套一层，其余消息原样转给它。
+private struct WriteTabGate: UIViewControllerRepresentable {
+    let action: () -> Void
+
+    func makeUIViewController(context: Context) -> Probe {
+        let probe = Probe()
+        probe.gate.action = action
+        return probe
+    }
+
+    func updateUIViewController(_ probe: Probe, context: Context) {}
+
+    final class Probe: UIViewController {
+        let gate = Gate()
+
+        /// 先出现的那个标签装上，之后的看到已经装过就不再套一层。
+        override func viewIsAppearing(_ animated: Bool) {
+            super.viewIsAppearing(animated)
+            guard let tabs = tabBarController, !(tabs.delegate is Gate) else { return }
+            gate.inner = tabs.delegate
+            tabs.delegate = gate
+        }
+    }
+
+    final class Gate: NSObject, UITabBarControllerDelegate {
+        var action: () -> Void = {}
+        /// 只在主线程上设置与转发（UIKit 的委托消息都在主线程）。
+        nonisolated(unsafe) weak var inner: UITabBarControllerDelegate?
+
+        func tabBarController(_ controller: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
+            guard tab.title == WriteEntry.title else { return true }
+            action()
+            return false
+        }
+
+        nonisolated override func responds(to selector: Selector!) -> Bool {
+            super.responds(to: selector) || inner?.responds(to: selector) == true
+        }
+
+        nonisolated override func forwardingTarget(for selector: Selector!) -> Any? {
+            inner?.responds(to: selector) == true ? inner : super.forwardingTarget(for: selector)
+        }
     }
 }
 

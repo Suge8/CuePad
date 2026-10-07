@@ -63,11 +63,10 @@ struct ShelfScreen: View {
         ScrollView {
             if let data { content(data) }
         }
-        .captureBar()
         // 一张卡都没有时没什么可搜，不挂搜索框与放大镜
         .cardSearch(.all, available: navigation.layout == .tabs && workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true, ready: true)
         // 不显示大标题：顶上只留浮着的玻璃按钮与搜索，内容多露出来；标题仍是读屏与多任务切换器里的名字
-        .navigationTitle("项目")
+        .navigationTitle("灵感")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(removing: .title)
         .toolbar {

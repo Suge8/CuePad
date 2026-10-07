@@ -136,9 +136,7 @@ extension DebugScene {
             // iPhone：书架（给了项目则是该项目页）的下拉搜索在出现时自己聚焦，见 CardSearch
             if split { navigation.select(.search) } else if let project { open(.project(project)) }
         case "capture":
-            // 等推入的项目页把它的随手记放上屏幕，再像点了它一样打开
             if let project { open(.project(project)) }
-            try? await Task.sleep(for: .seconds(1))
             navigation.startCapture()
         default:
             if let project, split { open(.project(project)) }

@@ -5,7 +5,7 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// iOS 的导航状态：标签（项目 / Agent）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
+/// iOS 的导航状态：标签（灵感 / Agent）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
 /// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、当前项目）在 `Workspace`。
 @MainActor @Observable
 final class Navigation {
@@ -20,7 +20,7 @@ final class Navigation {
 
     /// 可推入的页面。
     enum Route: Hashable {
-        /// 项目书架（iPhone 项目标签的根；iPad 侧栏的"项目"）。
+        /// 项目书架（iPhone 灵感标签的根；iPad 侧栏的"灵感"）。
         case shelf
         case project(UUID)
         case inbox
@@ -55,13 +55,12 @@ final class Navigation {
         func hash(into hasher: inout Hasher) { hasher.combine(id) }
     }
 
-    /// 随手记面板：记入的位置与打开时先做什么。
-    struct Capture: Identifiable {
-        enum Start { case text, camera, photos }
-        let id = UUID()
-        /// nil 表示未归档。
-        var project: UUID?
-        var start: Start = .text
+    /// 随手记里正在写的这一条（输入框收起后仍留着，见 `endCapture`）。
+    struct Capture {
+        var draft = ComposerDraft()
+        var kind = CaptureKind.idea
+        /// 手动换过的落点（`.some(nil)` 是未归档）；nil 时落在正在看的页面（`captureProject`）。
+        var project: UUID??
     }
 
     /// 要发到 Mac 的一张卡或一条任务（存储格式，变量已填）：先选会话，再在会话页里选方式发出。
@@ -96,8 +95,9 @@ final class Navigation {
     var tab: Tab = .projects
     var projectsPath: [Route] = []
     var agentPath: [Route] = []
-    /// 打开随手记的请求：弹出随手记面板。
-    var capture: Capture?
+    var capture = Capture()
+    /// 随手记输入框浮在键盘上方。
+    private(set) var capturing = false
     var outbox: Outbox?
     var projectForm: ProjectForm?
     var newSession: NewSession?
@@ -201,7 +201,7 @@ final class Navigation {
     func open(_ link: DeepLink, workspace: Workspace) {
         switch link {
         case .capture(let project):
-            capture = Capture(project: project)
+            startCapture(project: .some(project))
         case .project(let id):
             workspace.show(.project(id))
             if layout == .split { select(.project(id)) } else { tab = .projects; projectsPath = [.project(id)] }
@@ -255,9 +255,22 @@ final class Navigation {
         settings.setReplyText(draft.text, for: session)
     }
 
-    /// 打开随手记，记入当前位置。
-    func startCapture(_ start: Capture.Start = .text) {
-        capture = Capture(project: captureProject, start: start)
+    /// 浮起随手记输入框；`project` 是入口指定的落点（小组件），不给时接着上次留下的草稿与落点。
+    func startCapture(project: UUID?? = nil) {
+        if let project { capture.project = project }
+        capturing = true
+    }
+
+    /// 收起随手记：写了东西就留着下次接着写，空的连同换过的种类与落点一起丢掉。
+    func endCapture() {
+        capturing = false
+        if capture.draft.isEmpty(accepting: .images) { capture = Capture() }
+    }
+
+    /// 记下了：清空并收起。
+    func finishCapture() {
+        capture = Capture()
+        capturing = false
     }
 
     /// 打开未归档（iPhone 推入项目标签，iPad 选中侧栏）。

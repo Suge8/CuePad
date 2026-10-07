@@ -50,12 +50,17 @@ struct SplitRoot: View {
         .onAppear { navigation.splitRoot = Self.route(for: workspace.page) }
     }
 
-    /// 右侧页：Agent 面板的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
+    /// 右侧页："写"（浮起随手记）与 Agent 面板的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
     @ViewBuilder private func page(_ route: Navigation.Route) -> some View {
         if route.isCard {
             RouteView(route: route)
         } else {
-            RouteView(route: route).toolbar { ToolbarItem(placement: .primaryAction) { AgentPanelButton() } }
+            RouteView(route: route).toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(WriteEntry.title, systemImage: WriteEntry.symbol) { navigation.startCapture() }
+                }
+                ToolbarItem(placement: .primaryAction) { AgentPanelButton() }
+            }
         }
     }
 
@@ -121,7 +126,7 @@ private struct SplitSidebar: View {
     var body: some View {
         List {
             Section {
-                SidebarRow(route: .shelf, title: "项目", symbol: "books.vertical")
+                SidebarRow(route: .shelf, title: "灵感", symbol: "lightbulb")
                 SidebarRow(route: .tasks, title: "任务", symbol: "checklist")
                 SidebarRow(route: .agent, title: "Agent", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")

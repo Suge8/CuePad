@@ -41,7 +41,6 @@ struct ProjectScreen: View {
                 #endif
             }
         }
-        .captureBar()
         // 内容读到后才挂搜索框：推入的页面在内容可滚动时把搜索框收在导航栏下，内容晚到会让已露出的搜索框收起、整页上跳
         .cardSearch(
             .project(projectID), available: navigation.layout == .tabs && (workspace.catalog?.cardCounts[projectID] ?? 0) > 0,
