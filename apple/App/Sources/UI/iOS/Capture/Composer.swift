@@ -41,7 +41,7 @@ struct ComposerKinds: OptionSet {
     static let cards = ComposerKinds(rawValue: 2)
 }
 
-/// 左边"＋"能打开的三个来源；外面也可以直接打开其中一个（小组件的"拍照"入口）。
+/// 左边"＋"能打开的三个来源。
 enum ComposerSource { case cards, photos, camera }
 
 /// 随手记与 Pi 会话回复框共用的输入框：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条，以及底行：
@@ -58,19 +58,18 @@ struct Composer<Header: View, Send: View>: View {
     /// 一直展开（随手记面板里）。
     let pinnedOpen: Bool
     let focus: FocusState<Bool>.Binding
-    private let outerSource: Binding<ComposerSource?>?
     private let header: Header
     private let send: Send
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var ownSource: ComposerSource?
+    @State private var source: ComposerSource?
     @State private var picked: [PhotosPickerItem] = []
     @State private var previewing: Navigation.Outbox?
 
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false,
-        source: Binding<ComposerSource?>? = nil, @ViewBuilder header: () -> Header, @ViewBuilder send: () -> Send
+        @ViewBuilder header: () -> Header, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
         self.prompt = prompt
@@ -79,7 +78,6 @@ struct Composer<Header: View, Send: View>: View {
         self.accepts = accepts
         self.cardsFrom = cardsFrom
         self.pinnedOpen = pinnedOpen
-        outerSource = source
         self.header = header()
         self.send = send()
     }
@@ -91,7 +89,6 @@ struct Composer<Header: View, Send: View>: View {
     /// 一个圆钮占的一格：36 的圆 + 四周的点按区与边距。
     static var slot: CGFloat { 50 }
 
-    private var source: Binding<ComposerSource?> { outerSource ?? $ownSource }
     private var expanded: Bool { pinnedOpen || focus.wrappedValue || !draft.isEmpty(accepting: [.images, .cards]) }
     private var reservesSend: Bool { Send.self != EmptyView.self }
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
@@ -116,7 +113,7 @@ struct Composer<Header: View, Send: View>: View {
         }
         .onChange(of: picked) { load() }
 #if DEBUG
-        .task { await DebugScene.presetComposer($draft, source: source, store: workspace.services.store) }
+        .task { await DebugScene.presetComposer($draft, source: $source, store: workspace.services.store) }
 #endif
     }
 
@@ -145,8 +142,8 @@ struct Composer<Header: View, Send: View>: View {
 
     private func showing(_ target: ComposerSource) -> Binding<Bool> {
         Binding(
-            get: { source.wrappedValue == target },
-            set: { if !$0, source.wrappedValue == target { source.wrappedValue = nil } })
+            get: { source == target },
+            set: { if !$0, source == target { source = nil } })
     }
 
     /// 发送钮的位置一直留着：有内容才放进来，输入框的宽度不随它变，文字不会因此重排。
@@ -159,10 +156,10 @@ struct Composer<Header: View, Send: View>: View {
 
     private var plus: some View {
         Menu {
-            if accepts.contains(.cards) { Button("选卡片", systemImage: "rectangle.on.rectangle") { source.wrappedValue = .cards } }
+            if accepts.contains(.cards) { Button("选卡片", systemImage: "rectangle.on.rectangle") { source = .cards } }
             if accepts.contains(.images) {
-                Button("相册", systemImage: "photo.on.rectangle") { source.wrappedValue = .photos }
-                if CameraPicker.isAvailable { Button("拍照", systemImage: "camera") { source.wrappedValue = .camera } }
+                Button("相册", systemImage: "photo.on.rectangle") { source = .photos }
+                if CameraPicker.isAvailable { Button("拍照", systemImage: "camera") { source = .camera } }
             }
         } label: {
             CircleGlyph(systemImage: "plus", ink: palette.ink, fill: palette.fill)
