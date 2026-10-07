@@ -251,7 +251,7 @@ private struct PiSection: View {
                 }
             } header: {
                 HStack {
-                    Text("Pi")
+                    Text("Agent")
                     Spacer()
                     NewSessionButton(recent: recorded, showing: $startingSession)
                 }

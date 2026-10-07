@@ -85,7 +85,7 @@ private struct PiColumn: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        SectionLabel(text: "Pi", systemImage: "terminal")
+        SectionLabel(text: "Agent", systemImage: "terminal")
         let sessions = workspace.liveSessions(in: project)
         if sessions.isEmpty {
             Text(hasDirectory ? "没有运行中的会话" : "还没绑定代码目录")

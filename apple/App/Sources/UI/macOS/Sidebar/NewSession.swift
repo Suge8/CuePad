@@ -15,7 +15,7 @@ struct NewSessionButton: View {
         Button("新会话", systemImage: "plus") { showing = true }
             .labelStyle(.iconOnly).buttonStyle(.borderless)
             .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            .help("开一个新的 Pi 会话")
+            .help("开一个新的 Agent 会话")
             .popover(isPresented: $showing, arrowEdge: .trailing) {
                 NewSessionForm(recent: recent) { id in
                     guard showing else { return sessionDetail?.open(id) ?? () }
@@ -109,7 +109,7 @@ private struct NewSessionForm: View {
                     Text("正在开…").font(.footnote).foregroundStyle(palette.ink3)
                 case .connecting:
                     ProgressView().controlSize(.small)
-                    Text("等 Pi 连上…").font(.footnote).foregroundStyle(palette.ink3)
+                    Text("等 Agent 连上…").font(.footnote).foregroundStyle(palette.ink3)
                 case .failed(let reason):
                     Text(reason).font(.footnote).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
                 }

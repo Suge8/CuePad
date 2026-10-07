@@ -150,7 +150,7 @@ struct TaskLine: View {
             .accessibilityAction { tap() }
             .accessibilityActions {
                 Button("打开") { navigation.openTask(task.id) }
-                if let session { Button("看 Pi 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
+                if let session { Button("看 Agent 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
                 if let indent = structure?.indent { Button("缩进", action: indent) }
                 if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
             }
@@ -233,7 +233,7 @@ struct TaskLine: View {
                     .fixedSize()
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint("看 Pi 的近况")
+                .accessibilityHint("看 Agent 的近况")
             }
         }
         .font(.caption)

@@ -152,7 +152,7 @@ struct TaskRow: View {
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
         .accessibilityAction(named: "打开", open)
-        .accessibilityAction(named: "看 Pi 的近况") { if let session { sessionDetail?.open(session.sessionID) } }
+        .accessibilityAction(named: "看 Agent 的近况") { if let session { sessionDetail?.open(session.sessionID) } }
         .accessibilityActions {
             if let indent = structure?.indent { Button("缩进", action: indent) }
             if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
@@ -183,7 +183,7 @@ struct TaskRow: View {
                     PiElapsed(session: session, font: .system(size: 11))
                 }
                 .sessionDetailRow(session.sessionID)
-                .help("交给了 Pi 会话「\(session.title)」，点开看近况")
+                .help("交给了 Agent 会话「\(session.title)」，点开看近况")
             }
         }
         .font(.system(size: 11))

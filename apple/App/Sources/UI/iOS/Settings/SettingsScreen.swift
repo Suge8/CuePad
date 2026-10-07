@@ -119,7 +119,7 @@ private struct AlertSection: View {
                 EmptyView()
             }
         } header: {
-            Text("Pi 通知")
+            Text("Agent 通知")
         }
     }
 }

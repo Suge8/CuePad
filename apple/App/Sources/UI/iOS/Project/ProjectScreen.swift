@@ -190,7 +190,7 @@ private struct FocusCard: View {
             }
             if let pi, !pi.isEmpty, let project = data.project {
                 VStack(alignment: .leading, spacing: 2) {
-                    SectionLabel(text: "Pi", systemImage: "waveform.path.ecg").padding(.bottom, 6)
+                    SectionLabel(text: "Agent", systemImage: "waveform.path.ecg").padding(.bottom, 6)
                     ForEach(pi.now + pi.ended) { item in sessionLine(item) }
                     let all = pi.now.count + pi.total
                     if all > pi.now.count + pi.ended.count {

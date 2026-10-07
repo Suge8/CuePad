@@ -23,7 +23,7 @@ enum ProjectDirectory {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.prompt = "绑定"
-        panel.message = "选择这个项目的代码目录，在其中运行的 Pi 会话会归到这个项目"
+        panel.message = "选择这个项目的代码目录，在其中运行的 Agent 会话会归到这个项目"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let path = url.path(percentEncoded: false)
         workspace.perform { try await $0.setDirectory(path, for: project) }

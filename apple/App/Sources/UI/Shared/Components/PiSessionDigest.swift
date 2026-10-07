@@ -127,7 +127,7 @@ struct QuestionCard: View {
                 Text("\(SyncSummary(services.syncStatus).title)，现在答不了；同步恢复后再答，或在 Mac 上回答")
                     .font(.footnote).foregroundStyle(palette.ink3)
             } else if answering, sent?.status == .known(.succeeded) {
-                Text("已答，等 Mac 上的 Pi 继续").font(.footnote).foregroundStyle(palette.ink3)
+                Text("已答，等 Mac 上的 Agent 继续").font(.footnote).foregroundStyle(palette.ink3)
             } else if let failure {
                 Text(failure).font(.footnote).foregroundStyle(palette.failure)
             }

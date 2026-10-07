@@ -70,12 +70,12 @@ nonisolated extension Open<PiWorkState> {
     /// 项目旁的状态点说的是什么（读屏标签、悬停提示、长按菜单的标题）：只分要你注意的与在忙的。
     var presence: String {
         switch known {
-        case .thinking, .outputting, .tool, .delegating: "Pi 正在工作"
-        case .waitingForUser: "Pi 等你确认"
-        case .error: "Pi 出错"
-        case .settled: "Pi 待你回复"
-        case .ended: "Pi 会话已结束"
-        case nil: "Pi 状态未知"
+        case .thinking, .outputting, .tool, .delegating: "Agent 正在工作"
+        case .waitingForUser: "Agent 等你确认"
+        case .error: "Agent 出错"
+        case .settled: "Agent 待你回复"
+        case .ended: "Agent 会话已结束"
+        case nil: "Agent 状态未知"
         }
     }
 }
@@ -197,9 +197,9 @@ nonisolated enum PiDelivery: Equatable, Sendable {
 
     var presence: String {
         switch self {
-        case .sending, .delivering, .delivered: "正在发给 Pi"
-        case .waking: "正在唤醒 Pi"
-        case .failed: "没能送达 Pi"
+        case .sending, .delivering, .delivered: "正在发给 Agent"
+        case .waking: "正在唤醒 Agent"
+        case .failed: "没能送达 Agent"
         }
     }
 }
@@ -230,7 +230,7 @@ nonisolated struct PiShown: Equatable, Sendable {
     var delivery: PiDelivery?
 
     var label: String { delivery?.label ?? (unread ? "有新回复" : state.label) }
-    var presence: String { delivery?.presence ?? (unread ? "Pi 有新回复" : state.presence) }
+    var presence: String { delivery?.presence ?? (unread ? "Agent 有新回复" : state.presence) }
     /// 有新回复排在出错之后、工作中之前；没能送达与出错同级，路上的与工作中同级。
     var urgency: Int {
         switch delivery {

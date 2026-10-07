@@ -153,7 +153,7 @@ private struct DetailReply: View {
             case .message(let modes): composer(placeholder: placeholder(modes)) { sendButton(modes) }
             case .answer: composer(placeholder: "在这里回答上面的问题") { answerButton }
             case .answerAbove: notice("先在上面作答", systemImage: "arrow.up")
-            case .unanswerable: notice("这个问题要在 Pi 里回答", systemImage: "terminal")
+            case .unanswerable: notice("这个问题要在终端里的 Agent 那边回答", systemImage: "terminal")
             }
         }
     }

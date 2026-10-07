@@ -101,7 +101,7 @@ struct NewSessionInput: View {
             if let failure = request.failure {
                 Text(failure).foregroundStyle(palette.failure)
             } else if request.status == .known(.succeeded) {
-                Text("Mac 正在开 Pi…").foregroundStyle(palette.ink3)
+                Text("Mac 正在开 Agent 会话…").foregroundStyle(palette.ink3)
             } else {
                 DeliveryStatusLabel(request: request)
             }

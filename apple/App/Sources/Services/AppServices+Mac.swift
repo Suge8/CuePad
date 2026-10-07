@@ -42,7 +42,7 @@ extension AppServices {
                     try await resetPiState()
                     try await consumePiChanges(piChanges)
                 } catch {
-                    reportIssue(.syncUnavailable("Pi 状态没能写入同步记录：\(error)"))
+                    reportIssue(.syncUnavailable("Agent 状态没能写入同步记录：\(error)"))
                 }
             },
             Task {

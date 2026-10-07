@@ -22,13 +22,13 @@ Local-first: everything lives in a SQLite database on your device; iCloud sync u
 ## Features
 
 - **Idea → task → agent.** Ideas hold any amount of text with inline images, `{{variables}}` and dividers; mark one "to do" and it becomes a task whose body is what you hand to the agent, with subtasks and materials. Projects are just containers with a one-line intro. Everything autosaves.
-- **Send to agents.** Deliver an idea or task to a running [Pi](https://pi.dev) session (text and images, no Accessibility permission needed) or to any app via clipboard and a targeted `Cmd+V`. Every send is logged with a snapshot and can be resent.
-- **See your agents.** Pi sessions show live state (thinking, running a tool, waiting for you, done) and history; sessions file under the project bound to their working directory.
-- **Projects that know your code.** Bind a project to a code directory: Pi sessions and the `cuepad` command line pick the right project from where they run.
+- **Send to agents.** Deliver an idea or task to a running agent session (currently [Pi](https://pi.dev); text and images, no Accessibility permission needed) or to any app via clipboard and a targeted `Cmd+V`. Every send is logged with a snapshot and can be resent.
+- **See your agents.** Agent sessions show live state (thinking, running a tool, waiting for you, done) and history; sessions file under the project bound to their working directory.
+- **Projects that know your code.** Bind a project to a code directory: agent sessions and the `cuepad` command line pick the right project from where they run.
 - **Selections and variables.** Send the whole thing or just the selected part, or turn selected lines into tasks; fill `{{variables}}` right before sending, each one remembers its last values.
 - **Search everywhere.** `⌘K` searches projects, ideas and tasks, filtered by project, images, send target or time.
 - **Mac.** Glass sidebar, a menu bar scratch pad that sends with `⌘↩`, and a global shortcut (`Option + Space` by default) to bring CuePad up from anywhere.
-- **iPhone and iPad.** A project bookshelf, quick capture bar, share extension and widgets. Ideas written on the phone are on the Mac a moment later, and the phone can send text to a Pi session on your Mac.
+- **iPhone and iPad.** A project bookshelf, quick capture bar, share extension and widgets. Ideas written on the phone are on the Mac a moment later, and the phone can send text to an agent session on your Mac.
 - **iCloud sync.** Per-record sync; if the same idea or task is edited offline on two devices, both versions are kept for you to choose from.
 
 ## `cuepad`: memory for your agents

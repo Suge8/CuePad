@@ -22,7 +22,7 @@ struct SendControl: View {
                     label(icon: AnyView(PiStateDot(state: .known(.ended), size: 5)), text: "\(name(of: choice)) · 已结束", shortcut: nil)
                         .padding(.trailing, compact ? 12 : 16)
                 }
-                .accessibilityLabel("Pi 会话「\(workspace.sessionName(id))」已结束，选择发送目标")
+                .accessibilityLabel("Agent 会话「\(workspace.sessionName(id))」已结束，选择发送目标")
             } else if choice == .app(.lastFrontmost), services.lastFrontmostApp() == nil {
                 SendTargetMenu(project: project) {
                     label(icon: AnyView(Image(systemName: "paperplane.fill").accessibilityHidden(true)), text: "发送…", shortcut: nil)
@@ -68,7 +68,7 @@ struct SendControl: View {
     private func title(_ choice: AppServices.Destination) -> String {
         switch choice {
         case .pi(_, .paste): "放进输入框 · \(name(of: choice))"
-        case .pi: "发给 Pi · \(name(of: choice))"
+        case .pi: "发给 Agent · \(name(of: choice))"
         default: "发给 \(name(of: choice))"
         }
     }
@@ -106,10 +106,10 @@ struct SendTargetMenu<Label: View>: View {
     var body: some View {
         let current = workspace.effectiveChoice(for: project)
         Menu {
-            Section("Pi") {
+            Section("Agent") {
                 let sessions = services.pi.sessions
                 if sessions.isEmpty {
-                    Button("没有运行中的 Pi 会话 · 在终端运行 pi 开始") {}.disabled(true)
+                    Button("没有运行中的 Agent 会话 · 在终端运行 pi 开始") {}.disabled(true)
                 }
                 ForEach(sessions) { session in
                     let name = session.displayName

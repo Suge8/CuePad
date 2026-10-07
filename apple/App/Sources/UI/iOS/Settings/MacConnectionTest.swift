@@ -45,7 +45,7 @@ struct MacConnectionTest: View {
             let bound = try await services.store.directoryBindings().max { $0.modifiedAt < $1.modifiedAt }?.hostID
             let recent = try await services.store.piSessionPage(PiSessionQuery(limit: 1)).items.first?.state.hostID
             guard let host = bound ?? recent else {
-                failure = "还没有 Mac 同步来的 Pi 会话，不知道发给哪台 Mac"
+                failure = "还没有 Mac 同步来的 Agent 会话，不知道发给哪台 Mac"
                 return
             }
             for _ in 0..<Self.count { rounds.append(try await services.ping(host)) }

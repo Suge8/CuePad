@@ -8,8 +8,8 @@ extension AppServices.StartupIssue {
         case .widgetDataUnavailable(let detail): "小组件数据没能更新：\(detail)"
         case .syncUnavailable(let detail): "iCloud 同步出了问题：\(detail)"
         #if os(macOS)
-        case .piBridgeUnavailable(let detail): "Pi 连接不可用：\(detail)"
-        case .piHistoryUnavailable(let detail): "Pi 历史索引出错：\(detail)"
+        case .piBridgeUnavailable(let detail): "Agent 连接不可用：\(detail)"
+        case .piHistoryUnavailable(let detail): "Agent 历史索引出错：\(detail)"
         #endif
         }
     }

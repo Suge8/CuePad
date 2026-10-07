@@ -132,7 +132,7 @@ struct TaskAgentStrip: View {
             .buttonStyle(.plain)
             .accessibilityHint("看 Agent 的近况")
         #else
-        label.sessionDetailRow(session.sessionID).help("交给了 Pi 会话「\(session.title)」，点开看近况")
+        label.sessionDetailRow(session.sessionID).help("交给了 Agent 会话「\(session.title)」，点开看近况")
         #endif
     }
 }

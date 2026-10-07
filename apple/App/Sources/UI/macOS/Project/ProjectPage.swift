@@ -188,7 +188,7 @@ private struct DirectoryLink: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .pointerStyle(.link)
-        .help(path == nil ? "选一个目录：在里面运行的 Pi 会出现在这个项目页" : "更换代码目录")
+        .help(path == nil ? "选一个目录：在里面运行的 Agent 会出现在这个项目页" : "更换代码目录")
     }
 }
 

@@ -78,7 +78,7 @@ struct SessionResultList: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if groups.isEmpty {
-                        Text(isFiltered ? "没有找到会话" : "还没有 Pi 会话。在终端运行 pi，会话就会出现在这里")
+                        Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端运行 pi，会话就会出现在这里")
                             .font(.system(size: 13)).foregroundStyle(.secondary).padding(16)
                     }
                     ForEach(groups, id: \.key) { group in

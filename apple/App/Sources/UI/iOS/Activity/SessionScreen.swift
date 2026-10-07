@@ -388,8 +388,8 @@ struct SessionPicker: View {
                 if let sessions {
                     if sessions.isEmpty {
                         ContentUnavailableView(
-                            "Mac 上没有运行中的 Pi 会话", systemImage: "waveform.path.ecg",
-                            description: Text("在 Mac 上启动 Pi 后再试"))
+                            "Mac 上没有运行中的 Agent 会话", systemImage: "waveform.path.ecg",
+                            description: Text("在 Mac 的终端运行 pi 后再试"))
                             .listRowBackground(Color.clear)
                     } else {
                         Section("发给哪个会话") {

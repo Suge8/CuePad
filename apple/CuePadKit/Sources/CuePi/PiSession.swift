@@ -278,14 +278,14 @@ extension PiBridgeError: LocalizedError {
         switch self {
         case .insecureSocketDirectory(let path): "Pi 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
         case .socketDirectoryTooLong: "Pi 连接目录的路径太长"
-        case .unknownSession: "这个 Pi 会话已经结束"
-        case .sessionEnded: "发送途中 Pi 会话结束了"
-        case .ackTimeout: "Pi 没有及时确认收到，请确认会话仍在运行"
-        case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Pi 已经不在等这个问题"
+        case .unknownSession: "这个 Agent 会话已经结束"
+        case .sessionEnded: "发送途中 Agent 会话结束了"
+        case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
+        case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
     case .rejected("unknown_model"): "这台 Mac 上的 Pi 里找不到这个模型"
     case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
-        case .rejected(let reason): "Pi 拒绝了这条消息：\(reason)"
+        case .rejected(let reason): "Agent 拒绝了这条消息：\(reason)"
         }
     }
 }

@@ -170,14 +170,14 @@ struct AgentScreen: View {
             ContentUnavailableView.search(text: query).padding(.top, 40)
         } else if let filter {
             ContentUnavailableView {
-                Label("这个项目还没有 Pi 会话", systemImage: "waveform.path.ecg")
+                Label("这个项目还没有 Agent 会话", systemImage: "waveform.path.ecg")
             } actions: {
                 Button("新会话") { navigation.newSession = .init(project: filter) }.buttonStyle(.borderedProminent)
             }
             .padding(.top, 40)
         } else {
             ContentUnavailableView {
-                Label("还没有 Pi 会话", systemImage: "waveform.path.ecg")
+                Label("还没有 Agent 会话", systemImage: "waveform.path.ecg")
             } description: {
                 Text("在 Mac 上运行 pi，或在这里开一个新会话")
             } actions: {
@@ -319,7 +319,7 @@ private struct NewSessionButton: View {
 
     var body: some View {
         Button("新会话", systemImage: "plus") { navigation.newSession = .init(project: project) }
-            .accessibilityHint("让 Mac 开一个 Pi 会话")
+            .accessibilityHint("让 Mac 开一个 Agent 会话")
     }
 }
 

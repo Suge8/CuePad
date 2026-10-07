@@ -29,7 +29,7 @@ struct MainWindow: View {
         .onChange(of: workspace.overlay) { if $1 == nil { searchScope = .cards } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.window = $0 }
         .confirmationDialog(
-            "Pi 正在工作", isPresented: busyBinding, titleVisibility: .visible
+            "Agent 正在工作", isPresented: busyBinding, titleVisibility: .visible
         ) {
             ForEach([DeliveryMode.steer, .followUp], id: \.self) { mode in
                 Button(mode.label) { workspace.resolveBusySend(mode) }

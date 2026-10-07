@@ -53,7 +53,7 @@ extension Workspace {
 
     /// Pi 会话的显示名：活着的会话，或本次运行里已结束的会话最后的样子。
     func sessionName(_ id: CuePi.PiSession.ID) -> String {
-        (session(id) ?? services.pi.endedSessions[id]).map(\.displayName) ?? "Pi"
+        (session(id) ?? services.pi.endedSessions[id]).map(\.displayName) ?? "Agent"
     }
 
     /// 方式加目标的完整说法："发给 …" / "放进 Pi 会话「…」的输入框"，用在菜单项、提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
@@ -64,7 +64,7 @@ extension Workspace {
     /// 目标的完整说法。
     func label(for choice: AppServices.Destination) -> String {
         switch choice {
-        case .pi(let id, let mode): "Pi 会话「\(sessionName(id))」" + (mode == .paste ? "的输入框" : "")
+        case .pi(let id, let mode): "Agent 会话「\(sessionName(id))」" + (mode == .paste ? "的输入框" : "")
         case .app(.bundleID(let bundleID)): services.appName(bundleID: bundleID)
         case .app(.lastFrontmost): services.lastFrontmostApp()?.name ?? "上一个前台应用"
         case .clipboard: "剪贴板"
