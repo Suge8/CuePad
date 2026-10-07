@@ -92,8 +92,16 @@ import Testing
     _ = try await store.requestDelivery("x", to: pi, on: "mac-a")
 
     let done = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.first?.status == .known(.failed) }
-    #expect(done[0].resultDetail == "会话已结束")
+    #expect(done[0].failure == "会话已结束")
     await executor.stop()
+  }
+
+  /// 失败一定读得出原因：别的版本写来的失败没带原因时，读出的是唯一那句兜底，界面不再各自补一句。
+  @Test func aFailureWrittenWithoutAReasonStillReadsWithOne() async throws {
+    let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'failed', resultDetail = NULL")
+
+    #expect(try await request(made.id)?.failure == DeliveryRequest.unexplainedFailure)
   }
 
   /// 请求必须指定执行的 Mac，执行器只领取发给本机的：跨设备重复在结构上不会发生。
@@ -272,6 +280,8 @@ import Testing
     let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
     try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'queuedRemotely'")
     #expect(try await request(made.id)?.status == .unknown("queuedRemotely"))
+    // 本版本不认识的状态不是送达：读作没送达（等结果的调用方据此报错，不当成成功），原因同样只有那一句兜底
+    #expect(try await request(made.id)?.failure == DeliveryRequest.unexplainedFailure)
   }
 
   /// 配置请求（换模型、改思考强度）与发送同一条投送通道：正文是 JSON，读回来是同一个配置；什么都不改或强度不认识的读不出。
@@ -285,5 +295,15 @@ import Testing
     #expect(try await store.requestDelivery(#"{"thinking":"ultra"}"#, to: pi, on: "mac-a", mode: .config).config == nil)
     #expect(try await store.requestDelivery("{}", to: pi, on: "mac-a", mode: .config).config == nil)
     #expect(!DeliveryMode.toSession.contains(.config))  // 不是对会话说的话：会话页不把它当最近一条消息
+  }
+
+  /// 结束会话请求与发送同一条投送通道；它让会话停下，不是对会话说的话。
+  @Test func endRequestIsAddressedToTheSessionsMacAndIsNotAMessageToIt() async throws {
+    let made = try await store.requestEnd(of: pi, on: "mac-a")
+
+    let stored = try #require(try await request(made.id))
+    #expect(stored.mode == .known(.end) && stored.hostID == "mac-a" && stored.target == pi && stored.isOpen)
+    #expect(DeliveryMode.end.rawValue == "end")
+    #expect(!DeliveryMode.toSession.contains(.end))
   }
 }

@@ -146,11 +146,35 @@ import Testing
     let manager = PiAlertSubscriptions(zoneID: zone)
 
     await fake.failSaves(with: Boom())
-    #expect(await manager.ensure(in: fake) == .failed("没有网络"))
+    guard case .failed(let reason) = await manager.ensure(in: fake) else {
+      Issue.record("没有报告失败")
+      return
+    }
+    #expect(reason.contains("没有网络"))
 
     await fake.failSaves(with: nil)
     #expect(await manager.ensure(in: fake) == .active)
     #expect(await fake.saved.sorted() == ["cuepad.pi.settled", "cuepad.pi.waiting"])
+  }
+
+  /// 服务端拒绝时 localizedDescription 往往只剩"未能完成操作（错误 4）"，真正的原因在服务端说明与底层错误里：
+  /// 状态必须带着它们，否则只能靠猜（生产环境拒绝创建查询订阅就是这样被藏起来的）。
+  @Test func aServerRejectionKeepsTheServersReason() async {
+    let fake = store()
+    let rejection = CKError(
+      .invalidArguments,
+      userInfo: [
+        "ServerErrorDescription": "attempting to create a subscription in a production container",
+        NSUnderlyingErrorKey: NSError(domain: "CKInternalErrorDomain", code: 2006),
+      ])
+    await fake.failSaves(with: rejection)
+
+    guard case .failed(let reason) = await PiAlertSubscriptions(zoneID: zone).ensure(in: fake) else {
+      Issue.record("没有报告失败")
+      return
+    }
+    #expect(reason.contains("attempting to create a subscription in a production container"))
+    #expect(reason.contains("2006"))
   }
 
   @Test func driftedSubscriptionsAreReplacedAndStaleOnesOfOursAreRemovedButForeignOnesAreLeftAlone() async throws {

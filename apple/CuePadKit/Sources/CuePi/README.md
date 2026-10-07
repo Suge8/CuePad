@@ -8,12 +8,12 @@
 | 安装扩展 | `PiExtensionInstaller` | 检测 Pi（≥ 0.84.4）与扩展状态，`install()`（新装/升级）、`uninstall()`；首次写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
 | 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只认 `<会话目录>/<项目目录>/*.jsonl`（与 Pi 自己的会话列表一致，FireCode 子代理的 `subagents/` 不算）；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`），规则见下文"对话与摘要"；首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话，更早的只读摘要：逐行只找换行，只解码文件头、改名与第一条你的消息，最近一轮问答从文件尾往回解码到够用为止，得到的检查点与全读一样；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
 | 错误摘要 | `PiErrorSummary`（`PiAgentState.errorSummary`） | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
-| 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话，连上桥后返回；空闲满时限退出；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退）；让出的进程退出后对接手的进程发 `reload`；`closeAll()` 关掉全部（关标准输入，RPC 模式读到 EOF 正常收尾） |
+| 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话，连上桥后返回；空闲满时限退出；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退）；让出的进程退出后对接手的进程发 `reload`；`closeAll()` 关掉全部（关标准输入，RPC 模式读到 EOF 正常收尾）；`end(id)` 结束一个在线会话并等它退出（托管的关标准输入，终端里的走扩展的 `end` 命令） |
 | 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
 
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录）。测试一律用临时目录，绝不碰真实 `~/.pi`。
 
-## 协议（v2）
+## 协议（v3）
 
 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，不用 `$TMPDIR`），目录 0700、socket 0600；扩展与客户端都校验"是目录、属于当前用户、0700"，客户端还校验每个 socket 文件（属主、且只有属主可读写 0600）与连接对端的 uid。`CUEPAD_PI_SOCKET_DIR` 可覆盖目录（测试与高级用法）。
 
@@ -53,6 +53,7 @@ CuePad → 扩展（都带 `id`）：
 - `{"t":"paste","id","text"}`：走 `pasteToEditor`（在光标处粘贴，不覆盖已输入内容）；RPC 模式下退化为 `set_editor_text` 请求。
 - `{"t":"reload","id"}`（v10 起）：同一会话的另一个进程（CuePad 后台托管、让出前做完一轮）刚写过会话文件，这个进程看不到那些内容。从载入起没写过、且空闲时，经 `sendUserMessage("/cuepad-reload", {expandPromptTemplates: true})` 触发本扩展注册的命令，命令里 `switchSession(当前会话文件)` 重新载入（Pi 只在命令上下文给切换会话的能力），`ack` 带 `reloaded: true`；文件没有多出内容就什么都不做；写过了（会话已分出支线）就不动，`ctx.ui.notify` 提示一句。重新载入时扩展照常收到 `session_shutdown`/`session_start`，同一 pid 的会话先结束再出现。
 - `{"t":"config","id","model":{"provider","id"},"thinking"}`（协议 v2 起）：换该会话的模型、思考强度，二者至少给一项。先 `pi.setModel`（模型取自 `ctx.modelRegistry.find`）再 `pi.setThinkingLevel`，所以强度按新模型支持的范围由 Pi 夹取；只作用于这个会话，不改 Pi 的默认设置。成功后 `info` 里的模型配置已是新值。拒绝：`bad_request`（缺项、强度不在 `off`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max` 里）、`unknown_model`（模型表里没有）、`no_auth`（该提供方没配好密钥，`setModel` 返回 false）。
+- `{"t":"end","id"}`（协议 v3 起）：结束会话，走用户在 Pi 里退出的同一条路（`ctx.shutdown()`）：先 `ack`，再取消正在等的弹窗、中止正在跑的一轮（否则 Pi 要等它们结束才退出），然后 TUI 恢复终端、提示怎么恢复这个会话，扩展发 `bye quit` 后连接断开。RPC 模式只在读到下一条命令或这一轮结束时检查退出请求，所以后台托管的进程不靠它，`PiHost.end` 直接关它的标准输入（RPC 读到 EOF 就收尾，不论这一轮在不在跑）。`PiBridge.end` 只发命令；要等到真的退出用 `PiHost.end`（超时抛 `PiHostError.notEnded`，多半是非托管的 RPC 进程或卡在别处）。
 - `{"t":"answer","id","promptId","value"}`（v7 起）：回答正在等的弹窗。`value` 在 `confirm` 是布尔，`select` 是选项原文之一，`text` 是字符串。扩展先记下答案再 abort 自己接上的 signal：Pi 的界面随之收起（TUI 隐藏选择器与确认框，RPC 删掉待答请求并按"取消"结束），原调用的结果被换成这个答案交回发起弹窗的扩展，随后 `ui_prompt_end` 清空 `question`、状态回到工作中。拒绝：`no_prompt`（没有在等、或已经答过）、`stale_prompt`（`promptId` 不是正在等的那个）、`bad_answer`（类型不对或选项不在列表里）。
 
 扩展只在 `tui` 与 `rpc` 模式启用；`print`/`json`（一次性的 `pi -p`）不开 socket，也就不会出现在会话列表里。

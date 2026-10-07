@@ -5,7 +5,7 @@ import SwiftUI
 import UIKit
 
 /// iOS 画面：project、older、inbox、editor、tasks、agent、send、search、trash、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
-/// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
+/// search 在 iPhone 上是书架顶上的搜索框（给了 `-CuePadProject` 则是该项目页的下拉搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对推入的首帧；
 /// 给了 `-CuePadPush <tasks|settings|trash|inbox|card>` 时推入的是那一页（card 是该项目里的一张卡）。
 /// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；task 停在书架并在浮窗里打开"正在推进"的第一条（没有就是第一条待办）。
@@ -14,13 +14,13 @@ import UIKit
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（给了 `-CuePadPushAfter <秒>` 时先停在 Agent 页，到时再推入）；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
 /// （核对往上翻后出"新消息"、贴底时跟到底），给了 `-CuePadChatBulk <N>` 时推入后整批进来 N 轮长对话（核对整批到达时停在最新）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
-/// searchkey：iPhone 停在 Agent 标签，1.5 秒后走 ⌘K（回到书架并聚焦下拉搜索）。
+/// searchkey：iPhone 停在 Agent 标签，1.5 秒后走 ⌘K（回到书架并聚焦顶上的搜索框）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
 /// agent 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话（每隔 8 小时结束一个，分落在今天到更早），
 /// Agent 页打开就滚到底（看历史滑到底读下一页；同时给了 `-CuePadSearch` 时停在顶上）。
 /// projectagent：在 `-CuePadProject` 的项目页上推入它的 Agent 页（筛着这个项目）。
 /// sendflow：打开 `-CuePadSession`（默认 notes）的会话页，2 秒后写出一句话、随即返回 Agent 列表（配 `-CuePadDemoMac YES` 看状态流转）。
-/// newsession：Agent 页上打开新会话面板；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
+/// newsession：Agent 页上浮起新会话输入框；给了 `-CuePadLaunch YES` 则已经替你在圆桌发出（看送达中）。
 /// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态（见 `runDemoMac`）。
 /// iPad 上 agent 打开右侧 Agent 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
@@ -192,7 +192,7 @@ extension DebugScene {
         }
     }
 
-    /// search 画面里该不该激活这个范围的下拉搜索：给了项目时只激活项目页的，否则只激活书架的。
+    /// search 画面里该不该激活这个范围的搜索：给了项目时只激活项目页的，否则只激活书架的。
     static func activatesSearch(_ scope: CardSearchScope) -> Bool {
         scene == "search" && (scope == .all) == (defaults.string(forKey: "CuePadProject") == nil)
     }

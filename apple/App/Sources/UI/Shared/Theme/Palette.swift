@@ -39,6 +39,15 @@ struct Palette {
     /// 选中底色：侧栏与列表的当前项用它垫一层墨色浅底，文字保持墨色并加粗；Mac 与 iOS 共用，不用系统灰胶囊。
     var selection: Color { ink.opacity(dark ? 0.14 : 0.09) }
 
+    // MARK: 你的话（会话里你发出的气泡，iOS 与 Mac 共用）
+
+    /// 气泡底：浅色是墨底纸字；深色的墨是浅奶油，整块实底在暗处刺眼，改用比纸略抬升的暖深色、字仍是墨。
+    var bubble: Color { dark ? Color(hex: 0x3A352F) : ink }
+    /// 气泡上的字。
+    var onBubble: Color { dark ? ink : paper }
+    /// 气泡的描边：深色下气泡与纸、桌面明度接近，加一圈低对比的线把边界提出来；浅色不用。
+    var bubbleEdge: Color { dark ? Color.white.opacity(highContrast ? 0.22 : 0.08) : .clear }
+
     // MARK: 状态（只表达含义，不给文字大面积上色）
 
     /// 等你确认、需要处理。

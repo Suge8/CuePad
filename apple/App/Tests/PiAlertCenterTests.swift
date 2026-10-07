@@ -39,23 +39,26 @@ struct PiAlertCenterTests {
         #expect(alerts.presentation(of: tap(session)) == [])
     }
 
-    typealias Case = (UNAuthorizationStatus, PiAlertCenter.Registration, PiAlertSubscriptionStatus, PiAlertStatus.State, PiAlertStatus.Action?)
+    typealias Case = (
+        UNAuthorizationStatus, PiAlertCenter.Registration, PiAlertSubscriptionStatus, PiAlertStatus.State, PiAlertStatus.Action?, String?
+    )
 
     @Test(arguments: [
-        (UNAuthorizationStatus.denied, PiAlertCenter.Registration.registered, PiAlertSubscriptionStatus.active, PiAlertStatus.State.problem, PiAlertStatus.Action.openSettings),
-        (.notDetermined, .pending, .off, .problem, .allow),
-        (.authorized, .registered, .active, .on, nil),
-        (.provisional, .registered, .active, .on, nil),
-        (.authorized, .pending, .off, .pending, nil),
-        (.authorized, .failed("没有 aps-environment"), .off, .problem, nil),
-        (.authorized, .registered, .failed("没有网络"), .problem, nil),
+        (UNAuthorizationStatus.denied, PiAlertCenter.Registration.registered, PiAlertSubscriptionStatus.active, PiAlertStatus.State.problem, PiAlertStatus.Action.openSettings, nil),
+        (.notDetermined, .pending, .off, .problem, .allow, nil),
+        (.authorized, .registered, .active, .on, nil, nil),
+        (.provisional, .registered, .active, .on, nil, nil),
+        (.authorized, .pending, .off, .pending, nil, nil),
+        (.authorized, .failed("没有 aps-environment"), .off, .problem, .retry, "没有 aps-environment"),
+        (.authorized, .registered, .failed("CKErrorDomain 错误 4"), .problem, .retry, "CKErrorDomain 错误 4"),
     ] as [Case])
     func 通知状态一行_写明卡在哪一步(_ c: Case) {
         let status = PiAlertStatus(authorization: c.0, registration: c.1, subscription: c.2)
         #expect(status.state == c.3)
         #expect(status.action == c.4)
-        if case .failed(let reason) = c.1 { #expect(status.detail?.contains(reason) == true) }
-        if case .failed(let reason) = c.2 { #expect(status.detail?.contains(reason) == true) }
+        #expect(status.diagnostics == c.5)
+        // 底层原因只放进可展开的详情，不混进给人看的说明
+        if let reason = c.5 { #expect(status.detail?.contains(reason) != true && !status.title.contains(reason)) }
     }
 }
 #endif

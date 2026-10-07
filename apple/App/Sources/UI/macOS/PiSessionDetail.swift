@@ -344,7 +344,7 @@ extension Workspace {
         var reported = false
         for try await (claimed, outcome) in progress {
             if let claimed { return claimed }
-            if let outcome, outcome.status == .known(.failed) { throw SendError.notDelivered(outcome.resultDetail ?? "没有说明原因") }
+            if let reason = outcome?.failure { throw SendError.notDelivered(reason) }
             if !reported, outcome?.status == .known(.succeeded) {
                 reported = true
                 launched()

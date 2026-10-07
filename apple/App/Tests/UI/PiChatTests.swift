@@ -58,22 +58,33 @@ struct PiChatTests {
     }
 }
 
-/// "新消息"按钮（iOS 会话页、Mac 会话详情共用）：跟随到底交给滚动视图的底部锚点；往上翻离开底部后来了新内容才出按钮，
-/// 回到底部（自己翻回或点按钮滚回）按钮消失。
+/// 贴着最新（iOS 会话页、Mac 会话详情共用，规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处重新贴上；
+/// 解除后来了新内容才出"新消息"按钮。输入框长高、键盘弹出这类不是用户滚动的位移不解除贴底。
 struct ChatFollowTests {
-    @Test func 停在底部时来了新内容不出按钮() {
+    @Test func 贴着最新时来了新内容不出按钮() {
         var follow = ChatFollow()
         follow.contentChanged()
+        #expect(follow.atNewest)
         #expect(!follow.showsJump)
     }
 
-    @Test func 离开底部后来了新内容出按钮_回到底部消失() {
+    @Test func 用户滚走后来了新内容出按钮_回到最新消失() {
         var follow = ChatFollow()
-        follow.scrolled(atBottom: false)
+        follow.scrolled(nearNewest: false, byUser: true)
+        #expect(!follow.atNewest)
         #expect(!follow.showsJump)
         follow.contentChanged()
         #expect(follow.showsJump)
-        follow.scrolled(atBottom: true)
+        follow.scrolled(nearNewest: true, byUser: true)
+        #expect(follow.atNewest)
+        #expect(!follow.showsJump)
+    }
+
+    @Test func 输入框长高或键盘弹出带来的位移_不解除贴底() {
+        var follow = ChatFollow()
+        follow.scrolled(nearNewest: false, byUser: false)
+        follow.contentChanged()
+        #expect(follow.atNewest)
         #expect(!follow.showsJump)
     }
 }

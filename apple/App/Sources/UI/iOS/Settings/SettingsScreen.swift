@@ -98,7 +98,17 @@ private struct AlertSection: View {
                 Image(systemName: status.state == .on ? "bell.badge" : status.state == .pending ? "bell" : "bell.slash")
                     .foregroundStyle(status.state == .problem ? palette.attention : palette.ink2)
             }
+            if let diagnostics = status.diagnostics {
+                DisclosureGroup("详情") {
+                    Text(diagnostics).font(.caption.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
+                }
+            }
             switch status.action {
+            case .retry:
+                Button("重试", systemImage: "arrow.clockwise") {
+                    alerts.retryRegistration()
+                    Task { await services.syncNow() }
+                }
             case .openSettings:
                 Button("打开系统通知设置", systemImage: "gearshape") {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }

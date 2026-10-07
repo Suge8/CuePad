@@ -174,6 +174,13 @@ final class AppServices {
             config, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID))
     }
 
+    /// 结束会话：请会话所在的 Mac 让它的 Pi 进程正常退出（与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
+    /// 会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。结果用 `outcome(of:)` 等。
+    func end(_ session: PiSessionState) async throws -> DeliveryRequest {
+        uploaded(try await store.requestEnd(
+            of: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID))
+    }
+
     /// 请指定的 Mac 在后台开一个 Pi 新会话：与发送同一条投送通道（Mac 本机也走它），写出后立即上传。
     /// `title` 是给人看的目标名（会话名或项目名）。新会话用 `PiLaunch` 的 `token` 认领：等同步记录上出现同一个
     /// `launchToken` 的会话。
@@ -219,7 +226,7 @@ final class AppServices {
         guard let (result, seenAt) = try await seen else {
             throw SendError.notDelivered("\(timeout.components.seconds) 秒内 Mac 没有回应")
         }
-        guard result.status == .known(.succeeded) else { throw SendError.notDelivered(result.resultDetail ?? "没有说明原因") }
+        if let reason = result.failure { throw SendError.notDelivered(reason) }
         let completed = result.completedAt ?? seenAt.date
         return PingTiming(
             upload: uploaded.instant - written, toMac: .seconds(completed.timeIntervalSince(uploaded.date)),

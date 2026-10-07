@@ -57,6 +57,8 @@ struct Composer<Header: View, Send: View>: View {
     let cardsFrom: UUID?
     /// 一直展开（浮起的随手记）。
     let pinnedOpen: Bool
+    /// 没聚焦、没内容时收成短胶囊（＋ 与一行提示），点它照常聚焦展开（会话页在看历史时）。
+    let compact: Bool
     let focus: FocusState<Bool>.Binding
     private let header: Header
     private let send: Send
@@ -68,7 +70,7 @@ struct Composer<Header: View, Send: View>: View {
 
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
-        accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false,
+        accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
         @ViewBuilder header: () -> Header, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
@@ -78,6 +80,7 @@ struct Composer<Header: View, Send: View>: View {
         self.accepts = accepts
         self.cardsFrom = cardsFrom
         self.pinnedOpen = pinnedOpen
+        self.compact = compact
         self.header = header()
         self.send = send()
     }
@@ -90,11 +93,16 @@ struct Composer<Header: View, Send: View>: View {
     static var slot: CGFloat { 50 }
 
     private var expanded: Bool { pinnedOpen || focus.wrappedValue || !draft.isEmpty(accepting: [.images, .cards]) }
+    /// 收成短胶囊：同一个输入框只是变窄、不留发送钮的位置，点它照常聚焦展开。
+    private var shrunk: Bool { compact && !expanded }
+    /// 短胶囊的宽：＋ 加一行短提示。
+    private static var compactWidth: CGFloat { 220 }
     private var reservesSend: Bool { Send.self != EmptyView.self }
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
 
     var body: some View {
         field
+        .animation(Motion.quick, value: shrunk)
         .animation(Motion.quick, value: expanded)
         .animation(Motion.quick, value: hasContent)
         .animation(Motion.quick, value: draft.attachment?.id)
@@ -131,13 +139,14 @@ struct Composer<Header: View, Send: View>: View {
                 ComposerField(
                     text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink)
                     .focused(focus)
-                    .padding(.leading, accepts.isEmpty ? 18 : 2).padding(.trailing, reservesSend ? 2 : 18).padding(.vertical, 14)
+                    .padding(.leading, accepts.isEmpty ? 18 : 2).padding(.trailing, reservesSend && !shrunk ? 2 : 18).padding(.vertical, 14)
                     .frame(minHeight: Self.slot)
-                if reservesSend { sendSlot }
+                if reservesSend, !shrunk { sendSlot }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
         .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func showing(_ target: ComposerSource) -> Binding<Bool> {

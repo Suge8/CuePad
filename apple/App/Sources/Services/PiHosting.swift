@@ -10,6 +10,8 @@ protocol PiHosting: AnyObject {
     func closeAll() -> @concurrent @Sendable () async -> Void
     func resume(sessionFile: URL, in directory: URL, executable: URL) async throws -> CuePi.PiSession.ID
     func open(in directory: URL, launchToken: String, executable: URL) async throws -> CuePi.PiSession.ID
+    /// 结束一个在线会话，等它真的退出。
+    func end(_ id: CuePi.PiSession.ID) async throws
 }
 
 extension PiHost: PiHosting {

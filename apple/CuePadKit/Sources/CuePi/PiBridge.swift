@@ -113,6 +113,11 @@ public final class PiBridge {
         _ = try await request(to: id) { try PiWire.reloadCommand(id: $0) }
     }
 
+    /// 请该会话的扩展让 Pi 正常退出（`ack` 即已受理，退出随后发生，会话结束以 `.ended` 报告）。托管的进程用 `PiHost.end`，它等到真的退出。
+    public func end(_ id: PiSession.ID) async throws {
+        _ = try await request(to: id) { try PiWire.endCommand(id: $0) }
+    }
+
     /// 回答该会话正在等的弹窗；`promptID` 不是正在等的那个、或答案对不上时抛 `PiBridgeError.rejected`。
     public func answer(_ answer: PiPromptAnswer, to promptID: String, in id: PiSession.ID) async throws {
         _ = try await request(to: id) { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }

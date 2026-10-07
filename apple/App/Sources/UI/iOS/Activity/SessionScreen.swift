@@ -17,6 +17,10 @@ struct SessionScreen: View {
     /// 最后一次读到的会话记录：记录被删后仍显示它。
     @State private var lastSeen: PiSessionState?
     @State private var askedForTranscript = false
+    @State private var follow = ChatFollow()
+    @State private var confirmingEnd = false
+    /// 刚从刻度滑条跳到的那条你的话，短暂描一圈。
+    @State private var highlight: UUID?
 
     /// `seed`：推入前读好的这一页（`Navigation.openSession`），首帧即用，之后以 Store 的观察流为准。
     init(id: UUID, seed: SessionDigest? = nil) {
@@ -27,20 +31,22 @@ struct SessionScreen: View {
 
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
     private static let readingWidth: CGFloat = 640
-    /// 顶栏玻璃钮的高度（系统返回钮）。
-    private static let barHeight: CGFloat = 44
-
     private var session: PiSessionState? { digest?.session ?? lastSeen }
     /// 回复框的草稿在 `Navigation`（离开会话再回来还在）。
     private var draft: Binding<ComposerDraft> {
         Binding(get: { navigation.replyDraft(for: id) }, set: { navigation.setReplyDraft($0, for: id) })
     }
+    /// 此刻要显示的结束（还在路上的，或没能结束、之后没再发过别的），与 Agent 页同一条规则。
+    private var shownEnd: DeliveryRequest? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? []) }
     private var fetchingTranscript: Bool {
         digest?.deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } == true
     }
 
     var body: some View {
-        ChatScroll(followKey: PiConversation.followKey(session: session, messages: digest?.messages ?? [], deliveries: digest?.deliveries ?? [])) {
+        ChatScroll(
+            followKey: PiConversation.followKey(session: session, messages: digest?.messages ?? [], deliveries: digest?.deliveries ?? []),
+            follow: $follow
+        ) {
             // 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入
             if let digest {
                 if let session {
@@ -61,36 +67,69 @@ struct SessionScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .environment(\.chatHighlight, highlight)
+        .overlay(alignment: .trailing) {
+            let marks = ChatScrubber.marks(PiChat.entries(digest?.messages ?? []))
+            if !marks.isEmpty {
+                ChatScrubber(marks: marks, scrolling: follow.scrolling) { id in
+                    follow.jump(to: id)
+                    highlight = id
+                }
+            }
+        }
+        .task(id: highlight) {
+            guard highlight != nil else { return }
+            try? await Task.sleep(for: .seconds(1.2))
+            highlight = nil
+        }
         .overlay {
             if fetchingTranscript {
                 Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
             }
         }
-        .navigationTitle(session?.title ?? "")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        // 往上翻历史时顶栏收成右上角的小胶囊，点它回到最新；回到最新自动展开
+        .floatingHeader(session?.title ?? "", collapsed: !follow.atNewest, expand: { follow.jumpToNewest() }) {
+            if shownEnd?.isOpen == true {
+                Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
+            } else if let session {
+                PiSessionSubtitle(session: session, project: digest?.project, delivery: digest?.latestDelivery)
+            }
+        } collapsedDetail: {
             if let session {
-                // 会话名与状态是浮在对话上的一块玻璃，与返回钮同排同高
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                        PiSessionSubtitle(session: session, project: digest?.project, delivery: digest?.latestDelivery)
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(height: Self.barHeight)
-                    .glass(in: .capsule)
+                HStack(spacing: 4) {
+                    PiStateDot(shown: PiShown(state: session.state, delivery: PiDelivery.phase(of: digest?.latestDelivery, for: session)), size: 6)
+                    PiElapsed(session: session, font: .caption)
                 }
             }
+        } trailing: {
+            if let session, session.state != .known(.ended) {
+                Menu {
+                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = true }
+                        .disabled(shownEnd?.isOpen == true)
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .accessibilityLabel("更多")
+            }
+        }
+        .confirmationDialog("结束这个会话？", isPresented: $confirmingEnd, titleVisibility: .visible) {
+            Button("结束会话", role: .destructive, action: end)
+        } message: {
+            Text("对话会保留，再给它发消息会在后台恢复")
         }
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
+                    if let reason = shownEnd?.failure, session.state != .known(.ended) {
+                        Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)")
+                    }
                     // 读库完成、确认记录不在了才换成说明；推入时带着首帧状态、还没读到时照常是回复框
                     if digest != nil, digest?.session == nil {
                         Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
                     } else {
-                        ReplyBar(session: session, draft: draft)
+                        // 在看历史时收成短胶囊，点它展开（不挪正在读的内容）
+                        ReplyBar(session: session, config: digest?.config, draft: draft, compact: !follow.atNewest)
                     }
                 }
                 .padding(.horizontal, 12).padding(.bottom, 8)
@@ -111,6 +150,12 @@ struct SessionScreen: View {
         // 开着这页就算看过：进来、Pi 每次换状态、离开时都记一下（列表里的"有新回复"据此消失）
         .task(id: session?.stateSince) { if let session { services.settings.markSeen(session) } }
         .onDisappear { if let session { services.settings.markSeen(session) } }
+    }
+
+    /// 请会话所在的 Mac 结束它；进度与失败都从发给它的结束请求推出（`shownEnd`）。
+    private func end() {
+        guard let session else { return }
+        Task { await workspace.end(session) }
     }
 
     /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说）。
@@ -134,7 +179,11 @@ private struct DigestKey: Equatable {
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。发出后清空，请求马上贴到对话末尾。
 private struct ReplyBar: View {
     let session: PiSessionState
+    /// 模型与思考强度的显示值（在线会话聚焦时放在输入框头部）。
+    let config: PiConfigShown?
     @Binding var draft: ComposerDraft
+    /// 在看历史：收成短胶囊。
+    let compact: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -166,8 +215,15 @@ private struct ReplyBar: View {
         case .unanswerable: notice("这个问题要在 Mac 上回答", systemImage: "desktopcomputer")
         case .message, .answer:
             Composer(
-                draft: $draft, prompt: placeholder, label: "回复", focus: $focused, accepts: accepts, cardsFrom: session.projectID,
-                header: { if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) } },
+                draft: $draft, prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
+                cardsFrom: session.projectID, compact: compact,
+                header: {
+                    if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
+                    // 只给在线会话：已结束的不为换模型去唤醒 Pi
+                    if focused, let config, session.state != .known(.ended), !session.models.isEmpty {
+                        PiConfigBar(session: session, shown: config).padding(.horizontal, 12).padding(.top, 10)
+                    }
+                },
                 send: { sendControl }
             )
             .sensoryFeedback(.success, trigger: sentCount)
@@ -242,6 +298,73 @@ private struct ReplyBar: View {
             draft = ComposerDraft()
             focused = false
             sentCount += 1
+        }
+    }
+}
+
+/// 输入框头部的一行：「模型」「思考强度」两颗小胶囊，写会话当前的值，点开是菜单；思考强度只列当前模型支持的。
+/// 换了之后立即显示新值并转个小圈，没换成回到原值并写原因（`SessionDigest.config`）。
+private struct PiConfigBar: View {
+    let session: PiSessionState
+    let shown: PiConfigShown
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Menu {
+                    Picker("模型", selection: Binding(get: { shown.model?.key }, set: { if let key = $0 { configure(PiConfig(model: key)) } })) {
+                        ForEach(session.models) { model in Text(model.name).tag(Optional(model.key)) }
+                    }
+                } label: {
+                    chip(shown.model?.name ?? "模型", systemImage: "cpu")
+                }
+                .accessibilityLabel("模型：\(shown.model?.name ?? "未知")")
+                if let levels = shown.model?.thinkingLevels, !levels.isEmpty {
+                    Menu {
+                        Picker("思考强度", selection: Binding(get: { shown.thinking }, set: { if let level = $0 { configure(PiConfig(thinking: level)) } })) {
+                            ForEach(levels, id: \.self) { level in Text(level.label).tag(Optional(level)) }
+                        }
+                    } label: {
+                        chip(shown.thinking?.label ?? "思考强度", systemImage: "brain")
+                    }
+                    .accessibilityLabel("思考强度：\(shown.thinking?.label ?? "未知")")
+                }
+                if shown.pending { ProgressView().controlSize(.mini).accessibilityLabel("正在换") }
+            }
+            .animation(Motion.quick, value: shown)
+            if let failure = shown.failure {
+                Text("没换成：\(failure)").font(.caption).foregroundStyle(palette.failure).lineLimit(2)
+            }
+        }
+    }
+
+    private func chip(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption.weight(.medium)).foregroundStyle(palette.ink2).lineLimit(1)
+            .padding(.horizontal, 10).frame(height: 28)
+            .background(palette.fill, in: .capsule)
+            .contentTransition(.opacity)
+    }
+
+    private func configure(_ config: PiConfig) {
+        workspace.attempt { _ = try await services.configure(config, for: session) }
+    }
+}
+
+extension PiThinkingLevel {
+    /// 思考强度给人看的名字。
+    var label: String {
+        switch self {
+        case .off: "关"
+        case .minimal: "最低"
+        case .low: "低"
+        case .medium: "中"
+        case .high: "高"
+        case .xhigh: "很高"
+        case .max: "最高"
         }
     }
 }

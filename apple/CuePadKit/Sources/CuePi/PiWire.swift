@@ -4,7 +4,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端支持的协议版本；hello 不同版本一律拒绝
-    static let protocolVersion = 2
+    static let protocolVersion = 3
 
     struct State: Decodable {
         var kind: String
@@ -157,6 +157,13 @@ enum PiWire {
     }
 
     static func reloadCommand(id: String) throws -> Data { try encodeLine(ReloadCommand(id: id)) }
+
+    private struct EndCommand: Encodable {
+        var t = "end"
+        var id: String
+    }
+
+    static func endCommand(id: String) throws -> Data { try encodeLine(EndCommand(id: id)) }
 
     private struct ConfigCommand: Encodable {
         struct Model: Encodable { var provider: String; var id: String }

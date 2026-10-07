@@ -3,13 +3,13 @@ import CueStore
 import SwiftUI
 
 /// 随手记：共用的 `Composer`，去处是存成一条灵感；头部是落点。草稿是 `Navigation.capture`，
-/// 收起后留着。记下后收起并提示落点（点提示去那里）。文案与存法见 `CaptureCopy`、`CaptureDraft`。
-private struct CaptureComposer: View {
-    let focus: FocusState<Bool>.Binding
+/// 收起后留着。记下后收起并提示落点（点提示去那里）。文案与存法见 `CaptureCopy`、`CaptureDraft`。浮在 `FloatingInput` 里。
+struct CaptureComposer: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var saving = false
+    @FocusState private var focused: Bool
 
     private var project: UUID? { navigation.capture.project ?? navigation.captureProject }
     private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project)) }
@@ -17,12 +17,12 @@ private struct CaptureComposer: View {
     var body: some View {
         @Bindable var navigation = navigation
         Composer(
-            draft: $navigation.capture.draft, prompt: CaptureCopy.placeholder(to: destination), label: "随手记", focus: focus,
+            draft: $navigation.capture.draft, prompt: CaptureCopy.placeholder(to: destination), label: "随手记", focus: $focused,
             accepts: .images, pinnedOpen: true,
             header: { header }, send: { sendButton }
         )
         // 浮起的同一刻聚焦：键盘与输入框一起上来
-        .onAppear { focus.wrappedValue = true }
+        .onAppear { focused = true }
     }
 
     private var header: some View {
@@ -68,7 +68,7 @@ private struct CaptureComposer: View {
         workspace.attempt {
             defer { saving = false }
             try await note.save(in: project, workspace: workspace)
-            focus.wrappedValue = false
+            focused = false
             navigation.finishCapture()
         }
     }
@@ -81,50 +81,64 @@ enum WriteEntry {
     static let symbol = "pencil.line"
 }
 
-/// 浮起的随手记（"写"、⌘⇧N、小组件都打开它）：只有输入框贴在键盘上方，不铺底、不弹面板。
-/// 点空白处或往下拖收起（`Navigation.endCapture`）；输入框跟手往下走，没拖够就回位。
-struct CaptureLayer: View {
-    @Environment(Navigation.self) private var navigation
+/// 浮在键盘上方的输入框（随手记、新会话共用）：只有输入框，不铺底、不弹面板，浮起时随键盘升上来。
+/// 点空白处或往下拖收起（输入框跟手往下走，没拖够就回位）；里面在忙时（内容标了 `floatingInputLocked`）不收起。
+struct FloatingInput<Content: View>: View {
+    let isPresented: Bool
+    let close: () -> Void
+    @ViewBuilder let content: () -> Content
+    @State private var locked = false
     /// 没拖够松手时弹回原位。
     @GestureState(resetTransaction: Transaction(animation: Motion.snappy)) private var drag: CGFloat = 0
-    /// 收起时先放下键盘再移走输入框：要是等它移走后才失去焦点，键盘在它淡出之后才开始下落。
-    @FocusState private var focused: Bool
 
     /// 往下拖过这么多（或甩出去会过）就收起。
-    private static let dismissDistance: CGFloat = 60
-    private static let maxWidth: CGFloat = 600
+    private static var dismissDistance: CGFloat { 60 }
+    private static var maxWidth: CGFloat { 600 }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            if navigation.capturing {
+            if isPresented {
                 Color.clear.contentShape(.rect).ignoresSafeArea()
-                    .gesture(DragGesture(minimumDistance: 0).onEnded { _ in close() })
+                    .gesture(DragGesture(minimumDistance: 0).onEnded { _ in dismiss() })
                     .accessibilityHidden(true)
-                CaptureComposer(focus: $focused)
+                content()
                     .frame(maxWidth: Self.maxWidth)
                     .padding(.horizontal, 12).padding(.bottom, 8)
                     .offset(y: drag)
                     .gesture(swipeDown)
                     .transition(.opacity)
+                    .onPreferenceChange(FloatingInputLock.self) { locked = $0 }
                     .accessibilityAddTraits(.isModal)
-                    .accessibilityAction(.escape, close)
+                    .accessibilityAction(.escape, dismiss)
             }
         }
-        // 只淡入淡出：位置跟着键盘走（浮起时随键盘升上来），自己不再加位移
-        .animation(Motion.quick, value: navigation.capturing)
+        // 只淡入淡出：位置跟着键盘走，自己不再加位移
+        .animation(Motion.quick, value: isPresented)
     }
 
     private var swipeDown: some Gesture {
         DragGesture(minimumDistance: 8)
-            .updating($drag) { value, drag, _ in drag = max(0, value.translation.height) }
+            .updating($drag) { value, drag, _ in if !locked { drag = max(0, value.translation.height) } }
             .onEnded { value in
-                if max(value.translation.height, value.predictedEndTranslation.height) > Self.dismissDistance { close() }
+                if max(value.translation.height, value.predictedEndTranslation.height) > Self.dismissDistance { dismiss() }
             }
     }
 
-    private func close() {
-        focused = false
-        navigation.endCapture()
+    private func dismiss() {
+        guard !locked else { return }
+        // 先放下键盘再移走输入框：等它移走后才失去焦点的话，键盘在它淡出之后才开始下落
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        close()
     }
+}
+
+private struct FloatingInputLock: PreferenceKey {
+    static let defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+
+extension View {
+    /// 浮起的输入框里在忙（如新会话已发出、等 Mac 开好）：点空白处与下拖不收起。
+    func floatingInputLocked(_ locked: Bool) -> some View { preference(key: FloatingInputLock.self, value: locked) }
 }
 #endif

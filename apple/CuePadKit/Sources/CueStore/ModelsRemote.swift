@@ -516,6 +516,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case transcript
   /// 换会话的模型与思考强度；正文是 `PiConfig`（见 `DeliveryRequest.config`），不写发送记录
   case config
+  /// 结束会话（Pi 进程正常收尾退出，会话记录与会话文件都留着）；正文固定为 `end`，不写发送记录
+  case end
 
   /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。
   public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .paste, .answer]
@@ -531,7 +533,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
   public var status: Open<DeliveryStatus>
-  /// 失败原因等。
+  /// 失败原因（存储列）；给人看的读 `failure`。
   public var resultDetail: String?
   public var handledBy: String?
   public var createdAt: Date
@@ -542,6 +544,22 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   /// 还没有结果（等待执行或执行中）。
   public var isOpen: Bool { status == .known(.pending) || status == .known(.executing) }
+
+  /// 没能送达的原因；成功或还在路上是 nil。本机执行器写回的失败总带原因（`DeliveryOutcome.failed`），只有别的版本写来、
+  /// 没带原因的记录（含本版本不认识的状态，它不是送达）落到 `unexplainedFailure`——失败说法只在这里兜底，界面与服务不再各写一句。
+  public var failure: String? {
+    guard !isOpen, status != .known(.succeeded) else { return nil }
+    guard let reason = resultDetail, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
+    return reason
+  }
+
+  public static let unexplainedFailure = "Mac 没有说明原因"
+
+  /// 发给一个会话的请求（先发的在前）里此刻要显示的那次结束：还在路上的，或没能结束、之后也没再发过别的；结束成功或没请求过是 nil。
+  public static func shownEnd(in requests: [DeliveryRequest]) -> DeliveryRequest? {
+    guard let end = requests.last(where: { $0.mode == .known(.end) }) else { return nil }
+    return end.isOpen || (end.failure != nil && end.id == requests.last?.id) ? end : nil
+  }
 
   /// 新会话请求的内容；其他方式为 nil。
   public var launch: PiLaunch? { mode == .known(.start) ? PiLaunch(stored: content) : nil }
