@@ -175,10 +175,11 @@ nonisolated enum PiDelivery: Equatable, Sendable {
             return request.status == .known(.pending) ? .sending : .delivering
         case .succeeded:
             // 放进输入框不会让 Pi 动起来；其余等会话状态跟上（进入处理中，或在送达之后变过）就让位
-            let caughtUp = session.isWorking || session.stateSince >= (request.completedAt ?? request.createdAt)
+            let caughtUp = session.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
             return mode == .paste || caughtUp ? nil : .delivered
         case .failed:
-            return session.stateSince >= (request.completedAt ?? request.modifiedAt) ? nil : .failed
+            // "之后变过"取严格晚于：时间存到毫秒，会话状态与结果同一毫秒写下是常事，同刻算作没变，结果照样显示
+            return session.stateSince > (request.completedAt ?? request.modifiedAt) ? nil : .failed
         case nil:
             return nil
         }
