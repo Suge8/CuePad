@@ -151,7 +151,7 @@ struct TaskLine: View {
             .accessibilityHint(hint)
             .accessibilityAction { tap() }
             .accessibilityActions {
-                if let session { Button("看 Pi 的近况") { navigation.push(.session(session.id, seed: session)) } }
+                if let session { Button("看 Pi 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
                 if let indent = structure?.indent { Button("缩进", action: indent) }
                 if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
             }
@@ -218,7 +218,7 @@ struct TaskLine: View {
                 .layoutPriority(-1)
             }
             if let session, !done {
-                Button { navigation.push(.session(session.id, seed: session)) } label: {
+                Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
                     let shown = services.settings.shown(session, delivery: delivery)
                     HStack(spacing: 4) {
                         PiStateDot(shown: shown, size: 6)

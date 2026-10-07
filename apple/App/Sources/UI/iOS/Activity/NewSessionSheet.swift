@@ -78,7 +78,7 @@ struct NewSessionSheet: View {
         .onChange(of: progress?.session) { _, session in
             guard let session else { return }
             dismiss()
-            navigation.openSession(session)
+            navigation.openSession(session, store: services.store)
         }
     }
 

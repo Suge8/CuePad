@@ -39,7 +39,7 @@ struct PiAlertRoutingTests {
         #expect(alerts.consumeTap() == nil)
     }
 
-    /// 会话页带着列表给的首帧状态推入后，点同一个会话的通知不再叠一页（路由身份只看会话 id）。
+    /// 会话页带着推入前读好的首帧推入后，点同一个会话的通知不再叠一页（路由身份只看会话 id）。
     @Test func 已在看的会话_点它的通知不重复推入() {
         let id = UUID()
         let seed = PiSessionState(
@@ -48,7 +48,7 @@ struct PiAlertRoutingTests {
         let alerts = PiAlertCenter()
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.layout = .split
-        navigation.splitPath = [.session(id, seed: seed)]
+        navigation.splitPath = [.session(id, seed: SessionDigest(session: seed, project: nil, deliveries: []))]
 
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: id))
         navigation.open(alert: alerts.consumeTap())
