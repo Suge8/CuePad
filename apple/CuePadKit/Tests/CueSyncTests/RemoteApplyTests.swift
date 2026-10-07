@@ -193,6 +193,39 @@ import Testing
     #expect(try await rig.reconcileDelta().saves.isEmpty)
   }
 
+  /// 一批是整体提交的：其中一条被拒，同批没被拒的也以 batchRequestFailed 失败，引擎不会替它们重试。
+  /// 它们仍是待推送，必须立刻重新登记；被拒的那条不立刻重试（会空转），等下一次本机改动时对账。
+  @Test func recordsThatOnlyFailedBecauseTheirBatchFailedAreQueuedAgain() async throws {
+    let rejected = try await store.createCard(in: nil, body: "a")
+    let collateral = try await store.createCard(in: nil, body: "b")
+    try await rig.coordinator.reconcile()
+    let rejectedRecord = try #require(await rig.coordinator.record(for: rig.recordID(rejected.id)))
+    let collateralRecord = try #require(await rig.coordinator.record(for: rig.recordID(collateral.id)))
+    await rig.queue.clear()
+
+    await rig.coordinator.handle(.sent(
+      saved: [], failedSaves: [(rejectedRecord, CKError(.permissionFailure)), (collateralRecord, CKError(.batchRequestFailed))],
+      deleted: [], failedDeletes: []))
+
+    #expect(await rig.queue.saves == [rig.id(collateral.id)])
+  }
+
+  /// 服务器上的版本更旧、本机版本胜出：记录仍是待推送，要重新登记，否则要等到它下一次被改。
+  @Test func aLocalVersionThatWinsAServerConflictIsQueuedAgain() async throws {
+    let card = try await pushedCard(body: "base")
+    let local = try await editCard(card, pinned: true)
+    let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
+    let server = remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "base", modifiedAt: local - 1_000))
+    await rig.queue.clear()
+
+    await rig.coordinator.handle(.sent(
+      saved: [], failedSaves: [(client, CKError(.serverRecordChanged, userInfo: [CKRecordChangedErrorServerRecordKey: server]))],
+      deleted: [], failedDeletes: []))
+
+    #expect(try await store.card(card.id)?.isPinned == true)
+    #expect(await rig.queue.saves == [rig.id(card.id)])
+  }
+
   @Test func unknownItemOnSaveResurrectsTheRecord() async throws {
     let card = try await pushedCard()
     let client = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
