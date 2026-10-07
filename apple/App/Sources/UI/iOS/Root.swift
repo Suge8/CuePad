@@ -177,63 +177,89 @@ private struct TabsRoot: View {
     /// 点底部换标签：选中滴滑过去，页面同向推移。
     private func select(_ tab: Navigation.Tab) {
         guard tab != navigation.tab else { return }
-        slide.leave(forward: tab == .agent, reduceMotion: reduceMotion)
-        withAnimation(TabSlide.animation(reduceMotion: reduceMotion)) { navigation.tab = tab }
+        slide.leave(to: tab, reduceMotion: reduceMotion)
+        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.tab = tab }
     }
 
-    /// 一个标签的导航栈。没选中时停在它那一侧一屏宽之外：选中时从那一侧推入（灵感在左、Agent 在右）。
     private func stack(_ tab: Navigation.Tab, _ path: Binding<[Navigation.Route]>, @ViewBuilder root: () -> some View) -> some View {
-        let side: CGFloat = navigation.tab == tab || reduceMotion ? 0 : tab == .agent ? 1 : -1
-        return NavigationStack(path: path) {
+        NavigationStack(path: path) {
             root().navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
         }
         .toolbarVisibility(.hidden, for: .tabBar)
-        .visualEffect { content, geometry in content.offset(x: side * geometry.size.width) }
-        .background { TabSlide.Probe(slide: slide) }
+        .environment(\.tabPageReady) { [slide] in slide.ready(tab) }
+        .background { TabSlide.Probe(slide: slide, tab: tab) }
     }
 }
 
-/// 换标签的推移：新的一页由 SwiftUI 从它那一侧推入（`TabsRoot.stack` 的偏移），要离开的那一页 TabView 会立刻收起，
-/// 所以先拍下它、盖在上面往另一边推出。页面本身照常由 TabView 切换：出现/消失、导航栈与滚动位置都不变，动的只是视图层。
-/// 减弱动态效果时新页直接在位，旧页的快照淡出。
+/// 换标签的推移：拍下要离开的那一页盖在上面，照常切标签（页面不重建，出现/消失、导航栈与滚动位置都由 TabView 管），
+/// 等新的一页有了内容（标签根页读到数据时报 `tabPageReady`）再一起推：新页从选中滴去的那一侧推入，旧页的快照往另一边推出。
+/// 第一次切到某一页时它要现建、现读，旧页就多停那几十毫秒，不露出空白；减弱动态效果时新页直接在位，旧页的快照淡出。
+/// 动的只是两张视图层，不碰页面的状态。
 @MainActor
 private final class TabSlide {
     private static let duration = 0.28
+    /// 新页迟迟没报有内容（读库出错）时最多等这么久，不让快照一直盖着。
+    private static let readyTimeout = 0.3
+
+    private var pending: (tab: Navigation.Tab, reduceMotion: Bool, snapshot: UIView)?
+    private var pages: [Navigation.Tab: UIView] = [:]
+    private var filled: Set<Navigation.Tab> = []
     private var animator: UIViewPropertyAnimator?
-    fileprivate weak var tabs: UITabBarController?
+    private weak var tabs: UITabBarController?
 
-    /// 两页同一条曲线：不回弹，≤300ms。
-    static func animation(reduceMotion: Bool) -> Animation {
-        reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: duration, bounce: 0)
-    }
-
-    /// 切标签之前：拍下此刻的页面盖在上面，往另一边推出（减弱动态效果时淡出）。
-    func leave(forward: Bool, reduceMotion: Bool) {
+    /// 切标签之前：完成上一次推移，拍下此刻的页面盖在上面；新页已有内容就立刻推，否则等它。
+    func leave(to tab: Navigation.Tab, reduceMotion: Bool) {
         animator?.stopAnimation(false)
         animator?.finishAnimation(at: .end)
         guard let container = tabs?.view, let snapshot = container.snapshotView(afterScreenUpdates: false) else { return }
         container.addSubview(snapshot)
-        let shift = container.bounds.width * (forward ? -1 : 1)
+        pending = (tab, reduceMotion, snapshot)
+        start()
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.readyTimeout) { [weak self] in self?.start(force: true) }
+    }
+
+    /// 一个标签根页有了内容。
+    func ready(_ tab: Navigation.Tab) {
+        filled.insert(tab)
+        start()
+    }
+
+    private func start(force: Bool = false) {
+        guard let (tab, reduceMotion, snapshot) = pending, let page = pages[tab], force || filled.contains(tab) else { return }
+        pending = nil
+        let width = page.bounds.width * (tab == .agent ? 1 : -1)
+        if !reduceMotion { page.transform = CGAffineTransform(translationX: width, y: 0) }
         let animator = UIViewPropertyAnimator(duration: reduceMotion ? 0.2 : Self.duration, dampingRatio: 1) {
-            if reduceMotion { snapshot.alpha = 0 } else { snapshot.transform = CGAffineTransform(translationX: shift, y: 0) }
+            if reduceMotion {
+                snapshot.alpha = 0
+            } else {
+                page.transform = .identity
+                snapshot.transform = CGAffineTransform(translationX: -width, y: 0)
+            }
         }
-        animator.addCompletion { _ in snapshot.removeFromSuperview() }
+        animator.addCompletion { _ in
+            page.transform = .identity
+            snapshot.removeFromSuperview()
+        }
         animator.startAnimation()
         self.animator = animator
     }
 
-    /// 挂在每个标签页里：认出标签控制器（快照拍它的视图）。
+    /// 挂在每个标签页里：认出标签控制器（快照拍它的视图）与这一页在标签控制器里的那一层（推它）。
     struct Probe: UIViewControllerRepresentable {
         let slide: TabSlide
+        let tab: Navigation.Tab
 
-        func makeUIViewController(context: Context) -> Controller { Controller(slide: slide) }
+        func makeUIViewController(context: Context) -> Controller { Controller(slide: slide, page: tab) }
         func updateUIViewController(_ controller: Controller, context: Context) {}
 
         final class Controller: UIViewController {
             let slide: TabSlide
+            let page: Navigation.Tab
 
-            init(slide: TabSlide) {
+            init(slide: TabSlide, page: Navigation.Tab) {
                 self.slide = slide
+                self.page = page
                 super.init(nibName: nil, bundle: nil)
             }
 
@@ -241,10 +267,20 @@ private final class TabSlide {
 
             override func viewIsAppearing(_ animated: Bool) {
                 super.viewIsAppearing(animated)
-                slide.tabs = tabBarController
+                guard let tabs = tabBarController else { return }
+                var root: UIViewController = self
+                while let parent = root.parent, parent !== tabs { root = parent }
+                slide.tabs = tabs
+                slide.pages[page] = root.view
+                slide.start()
             }
         }
     }
+}
+
+extension EnvironmentValues {
+    /// 标签根页读到数据时调用（换标签的推移等它，见 `TabSlide`）；不在标签栏布局里时什么都不做。
+    @Entry var tabPageReady: () -> Void = {}
 }
 
 /// 底部一行，整体居中：贴在一起的玻璃 [灵感 | Agent] 与同高的一颗圆形"写"；位置与大小始终不变，不随滚动收小。

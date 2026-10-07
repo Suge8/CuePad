@@ -58,6 +58,7 @@ struct ShelfScreen: View {
     @State private var query = PaletteQuery()
     @FocusState private var searchFocused: Bool
     @State private var searchHidden = false
+    @Environment(\.tabPageReady) private var tabPageReady
 
     /// 一张卡都没有时没什么可搜，不放搜索框。
     private var searchable: Bool { workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true }
@@ -92,6 +93,7 @@ struct ShelfScreen: View {
             searchFocused = true
         }
         #endif
+        .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
         .observing(services.store, [.projects, .cards, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }

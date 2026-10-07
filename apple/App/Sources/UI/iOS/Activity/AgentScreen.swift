@@ -24,6 +24,7 @@ struct AgentScreen: View {
     @FocusState private var searchFocused: Bool
     @State private var confirmingEnd: PiSessionState?
     @State private var searchHidden = false
+    @Environment(\.tabPageReady) private var tabPageReady
 
     private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -66,6 +67,7 @@ struct AgentScreen: View {
         // 标签页的根：系统导航栏收起，只留这一排（iPad 分栏里导航栏放着分栏自己的按钮，留着）
         .toolbarVisibility(project == nil && navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
         .refreshable { await services.syncNow() }
+        .onChange(of: list != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
         .onChange(of: query) { limit = PiSessionList.pageSize }
         .onChange(of: filter) { limit = PiSessionList.pageSize }
         #if DEBUG
