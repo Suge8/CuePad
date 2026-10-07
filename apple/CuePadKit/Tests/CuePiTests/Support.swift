@@ -104,7 +104,7 @@ final class FakeExtension: @unchecked Sendable {
     }
 
     struct Options: Sendable {
-        var protocolVersion = 2
+        var protocolVersion = 3
         var extensionVersion = 1
         var cwd = "/work/project"
         var mode = "tui"

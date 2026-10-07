@@ -29,6 +29,7 @@ final class RecordingHost: PiHosting {
     enum Call: Equatable {
         case resume(sessionFile: String, directory: String)
         case open(directory: String, launchToken: String)
+        case end(String)
     }
 
     private(set) var calls: [Call] = []
@@ -43,6 +44,8 @@ final class RecordingHost: PiHosting {
         calls.append(.resume(sessionFile: sessionFile.path, directory: directory.path))
         return connect(sessionFile.deletingPathExtension().lastPathComponent)
     }
+
+    func end(_ id: String) async throws { calls.append(.end(id)) }
 
     func open(in directory: URL, launchToken: String, executable: URL) async throws -> String {
         calls.append(.open(directory: directory.path, launchToken: launchToken))

@@ -49,6 +49,40 @@ struct RealHostTests {
         try await eventually("后台进程回答了", timeout: .seconds(20)) { replies(in: file).last == "ECHO 后台接着说 IMAGES[]" }
     }
 
+    /// 结束会话：托管的进程被关掉（空闲时与正在跑一轮时一样），会话从桥上消失，是正常退出（bye quit）。
+    @Test(arguments: ["", "[[slow]] 正在跑的一轮"])
+    func endingAHostedSessionClosesItsProcessEvenMidTurn(prompt: String) async throws {
+        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let (file, _) = try await endedSession(pi, bridge)
+        let host = host(pi, bridge)
+        host.start()
+        defer { host.closeAll() }
+        let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
+        if !prompt.isEmpty {
+            _ = try await bridge.send(PiMessage(text: prompt), to: resumed.id)
+            try await eventually("后台在忙", timeout: .seconds(10)) { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
+        }
+        let log = ChangeLog(bridge)
+
+        try await host.end(resumed.id)
+
+        #expect(bridge.sessions.isEmpty)
+        try await eventually("会话结束的通知到了", timeout: .seconds(5)) { log.ended.count == 1 }
+        #expect(log.ended[0].1 == .closed(reason: "quit"))
+    }
+
+    @Test func endingASessionThatIsAlreadyGoneSucceeds() async throws {
+        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let host = host(pi, bridge)
+        try await host.end("gone.1")
+    }
+
     @Test func aNewSessionStartsInTheBackgroundAndIsClaimedByItsToken() async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)

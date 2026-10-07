@@ -32,6 +32,11 @@ extension CueStore {
     try requestDelivery(config.stored, to: target, on: host, mode: .config)
   }
 
+  /// 请 `host` 那台 Mac 结束 `target` 会话：与发送共用投送请求与执行器，方式是 `end`。
+  public func requestEnd(of target: SendTarget, on host: String) throws -> DeliveryRequest {
+    try requestDelivery("end", to: target, on: host, mode: .end)
+  }
+
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或会话名）。
   public func requestLaunch(_ launch: PiLaunch, title: String, on host: String) throws -> DeliveryRequest {
     try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start)

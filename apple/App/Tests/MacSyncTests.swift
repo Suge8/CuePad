@@ -261,6 +261,45 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
+    @Test func 手机的结束请求让会话收尾_不写发送记录() async throws {
+        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
+        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestEnd(of: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.host.calls == [.end("sess-1.100")])
+        #expect(try await services.store.sendRecords().isEmpty)
+    }
+
+    /// 已经结束的会话（不在这台 Mac 的桥上）：目标达成，按成功写回，不能为了结束它而把它恢复起来。
+    @Test func 结束已经结束的会话直接成功_不恢复() async throws {
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestEnd(of: SendTarget(kind: .piSession, name: "app", ref: "old"), on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.host.calls.isEmpty)
+    }
+
+    /// 手机上结束会话：请求发给会话所在的 Mac，写出后立即上传。
+    @Test(.timeLimit(.minutes(1)))
+    func 请求结束会话写给会话所在的Mac并立即上传() async throws {
+        try await PiStateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .settled, title: "远处")
+        let session = try #require(try await services.store.allPiSessionStates().first)
+        var uploads = rig.sync.uploads.stream.makeAsyncIterator()
+
+        let request = try await services.end(session)
+
+        #expect(request.hostID == "mac-other" && request.mode == .known(.end) && request.target.ref == "far")
+        #expect(await uploads.next() == request.id.uuidString.lowercased())
+    }
+
     /// 手机上改配置：请求发给会话所在的那台 Mac，写出后立即上传（与发送、作答同一条通路）。
     @Test(.timeLimit(.minutes(1)))
     func 请求改配置写给会话所在的Mac并立即上传() async throws {

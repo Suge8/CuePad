@@ -286,4 +286,14 @@ import Testing
     #expect(try await store.requestDelivery("{}", to: pi, on: "mac-a", mode: .config).config == nil)
     #expect(!DeliveryMode.toSession.contains(.config))  // 不是对会话说的话：会话页不把它当最近一条消息
   }
+
+  /// 结束会话请求与发送同一条投送通道；它让会话停下，不是对会话说的话。
+  @Test func endRequestIsAddressedToTheSessionsMacAndIsNotAMessageToIt() async throws {
+    let made = try await store.requestEnd(of: pi, on: "mac-a")
+
+    let stored = try #require(try await request(made.id))
+    #expect(stored.mode == .known(.end) && stored.hostID == "mac-a" && stored.target == pi && stored.isOpen)
+    #expect(DeliveryMode.end.rawValue == "end")
+    #expect(!DeliveryMode.toSession.contains(.end))
+  }
 }

@@ -516,6 +516,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case transcript
   /// 换会话的模型与思考强度；正文是 `PiConfig`（见 `DeliveryRequest.config`），不写发送记录
   case config
+  /// 结束会话（Pi 进程正常收尾退出，会话记录与会话文件都留着）；正文固定为 `end`，不写发送记录
+  case end
 
   /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。
   public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .paste, .answer]

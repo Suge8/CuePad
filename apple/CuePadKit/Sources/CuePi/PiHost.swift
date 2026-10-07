@@ -16,6 +16,7 @@ public final class PiHost {
     private let paths: PiPaths
     private let idleLimit: Duration
     private let connectTimeout: Duration
+    private let endTimeout: Duration
     private let searchPath: [URL]
     private let extraArguments: [String]
     private var processes: [Int32: Hosted] = [:]
@@ -40,12 +41,13 @@ public final class PiHost {
     /// - Parameter extraArguments: 加在 `pi --mode rpc` 后面的参数（测试用来指定假模型、不联网）。
     public init(
         bridge: PiBridge, paths: PiPaths, idleLimit: Duration = .seconds(30 * 60), connectTimeout: Duration = .seconds(30),
-        searchPath: [URL] = PiExecutableLocator.standard.searchDirectories, extraArguments: [String] = []
+        endTimeout: Duration = .seconds(10), searchPath: [URL] = PiExecutableLocator.standard.searchDirectories, extraArguments: [String] = []
     ) {
         self.bridge = bridge
         self.paths = paths
         self.idleLimit = idleLimit
         self.connectTimeout = connectTimeout
+        self.endTimeout = endTimeout
         self.searchPath = searchPath
         self.extraArguments = extraArguments
     }
@@ -67,6 +69,34 @@ public final class PiHost {
     /// 在后台于 `directory` 开一个新会话，带上发起方的认领标识；等它连上桥后返回。
     public func open(in directory: URL, launchToken: String, executable: URL) async throws -> PiSession {
         try await launch(executable, [], in: directory, environment: ["CUEPAD_LAUNCH_TOKEN": launchToken])
+    }
+
+    /// 结束一个在线会话，等它真的退出（已经不在线就什么都不做）：托管的进程关掉标准输入，RPC 模式读到 EOF 就收尾，
+    /// 不论这一轮在不在跑；终端里开的会话由扩展走 Pi 的正常退出（终端恢复原样、提示怎么恢复这个会话）。
+    /// 没有在 `endTimeout` 内退出抛 `PiHostError.notEnded`。
+    public func end(_ id: PiSession.ID) async throws {
+        guard let session = bridge.sessions.first(where: { $0.id == id }) else { return }
+        let changes = bridge.changes()  // 先订阅再动手：退出的那一刻不会漏
+        if let hosted = processes[session.pid] {
+            close(hosted)
+        } else {
+            try await bridge.end(id)
+        }
+        let timeout = endTimeout
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                for await change in changes {
+                    if case .ended(let ended, _) = change, ended.id == id { return }
+                }
+                throw CancellationError()
+            }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                throw PiHostError.notEnded
+            }
+            defer { group.cancelAll() }
+            try await group.next()
+        }
     }
 
     /// 关掉所有托管进程（App 退出时）：返回的等待在所有进程退出后结束，不需要主线程。
@@ -216,6 +246,8 @@ public enum PiHostError: Error, Equatable {
     case exited
     /// 等了很久 Pi 都没连上（已让它退出）
     case notConnected
+    /// 请它结束后一直没退出（多半还卡在需要你在终端里处理的地方）
+    case notEnded
 }
 
 extension PiHostError: LocalizedError {
@@ -223,6 +255,7 @@ extension PiHostError: LocalizedError {
         switch self {
         case .exited: "在后台启动的 Pi 没连上就退出了"
         case .notConnected: "在后台启动的 Pi 一直没连上"
+        case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
         }
     }
 }
