@@ -226,7 +226,7 @@ final class AppServices {
         guard let (result, seenAt) = try await seen else {
             throw SendError.notDelivered("\(timeout.components.seconds) 秒内 Mac 没有回应")
         }
-        guard result.status == .known(.succeeded) else { throw SendError.notDelivered(result.resultDetail ?? "没有说明原因") }
+        if let reason = result.failure { throw SendError.notDelivered(reason) }
         let completed = result.completedAt ?? seenAt.date
         return PingTiming(
             upload: uploaded.instant - written, toMac: .seconds(completed.timeIntervalSince(uploaded.date)),

@@ -546,10 +546,10 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 还没有结果（等待执行或执行中）。
   public var isOpen: Bool { status == .known(.pending) || status == .known(.executing) }
 
-  /// 没能送达的原因；没失败是 nil。本机执行器写回的失败总带原因（`DeliveryOutcome.failed`），只有别的版本写来、
-  /// 没带原因的记录落到 `unexplainedFailure`——失败说法只在这里兜底，界面不再各写一句。
+  /// 没能送达的原因；成功或还在路上是 nil。本机执行器写回的失败总带原因（`DeliveryOutcome.failed`），只有别的版本写来、
+  /// 没带原因的记录（含本版本不认识的状态，它不是送达）落到 `unexplainedFailure`——失败说法只在这里兜底，界面与服务不再各写一句。
   public var failure: String? {
-    guard status == .known(.failed) else { return nil }
+    guard !isOpen, status != .known(.succeeded) else { return nil }
     guard let reason = resultDetail, !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return Self.unexplainedFailure }
     return reason
   }

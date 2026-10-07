@@ -60,7 +60,7 @@ extension AppServices {
         guard deliveryExecutor != nil else { throw SendError.executorUnavailable }
         let request = try await store.requestDelivery(storedText, to: session.target, on: hostID, mode: mode, card: card, task: task)
         let result = try await outcome(of: request.id)
-        if result.status != .known(.succeeded) { throw SendError.notDelivered(result.resultDetail ?? "没有说明原因") }
+        if let reason = result.failure { throw SendError.notDelivered(reason) }
     }
 
     /// 预检失败时窗口不动；预检通过后先隐藏窗口，投送失败再恢复。

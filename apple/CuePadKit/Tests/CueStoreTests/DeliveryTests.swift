@@ -280,6 +280,8 @@ import Testing
     let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
     try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'queuedRemotely'")
     #expect(try await request(made.id)?.status == .unknown("queuedRemotely"))
+    // 本版本不认识的状态不是送达：读作没送达（等结果的调用方据此报错，不当成成功），原因同样只有那一句兜底
+    #expect(try await request(made.id)?.failure == DeliveryRequest.unexplainedFailure)
   }
 
   /// 配置请求（换模型、改思考强度）与发送同一条投送通道：正文是 JSON，读回来是同一个配置；什么都不改或强度不认识的读不出。
