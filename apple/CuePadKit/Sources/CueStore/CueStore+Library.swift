@@ -364,12 +364,13 @@ extension CueStore {
   /// 记录一次投送或复制：内容快照、目标、时间。发给 Pi 会话的是任务时，任务在同一事务里关联到该会话、置为进行中
   /// （完成了的也重新打开；任务行据此显示会话状态）：执行投送的那台 Mac 记，请求从哪台设备发来都一样。灵感发出去不变成任务。
   @discardableResult
-  public func recordSend(_ content: String, to target: SendTarget, card: UUID? = nil) throws -> SendRecord {
+  /// `parts`：一并带上的灵感（同一条记录里记下关联，不另存正文）。
+  public func recordSend(_ content: String, to target: SendTarget, card: UUID? = nil, parts: [UUID] = []) throws -> SendRecord {
     try write {
       let now = Date.stamp
       let record = SendRecord(
         id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
-        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now)
+        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now, partIDs: parts)
       try insert(record)
       try registerImages(in: content)
       if let card, target.kind == .known(.piSession), let session = target.ref {

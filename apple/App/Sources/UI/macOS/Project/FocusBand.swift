@@ -56,7 +56,7 @@ struct FocusBand: View {
         VStack(alignment: .leading, spacing: 2) {
             TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
                 TaskRow(
-                    task: row.task, session: workspace.liveState(ofSession: row.task.piSessionID), subtasks: data.subtasks[row.id], compact: true)
+                    task: row.task, session: workspace.liveState(ofSession: row.task.piSessionID), marks: data.children[row.id], compact: true)
             }
             if roots.count > Self.visibleTasks {
                 Button("还有 \(roots.count - Self.visibleTasks) 条") { workspace.overlay = .tasks }

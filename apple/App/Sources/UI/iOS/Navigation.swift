@@ -59,6 +59,8 @@ final class Navigation {
         var draft = ComposerDraft()
         /// 手动换过的落点（`.some(nil)` 是未归档）；nil 时落在正在看的页面（`captureProject`）。
         var project: UUID??
+        /// 在这条任务下记（长按任务的"创建灵感"）：记下的灵感挂成它的素材，落在它的项目。
+        var parent: Card?
     }
 
     /// 要发到 Mac 的一张卡或一条任务（存储格式，变量已填）：先选会话，再在会话页里选方式发出。
@@ -68,6 +70,8 @@ final class Navigation {
         var card: UUID?
         /// 卡片所在项目：选会话时它的会话排在前面。
         var project: UUID?
+        /// 一并带上的灵感（任务连同挂着的灵感、资料一起交出）：记进投送请求，Mac 执行后记进发送记录。
+        var parts: [UUID] = []
     }
 
     struct OpenTask: Identifiable {
@@ -270,6 +274,13 @@ final class Navigation {
     /// 浮起随手记输入框；`project` 是入口指定的落点（小组件），不给时接着上次留下的草稿与落点。
     func startCapture(project: UUID?? = nil) {
         if let project { capture.project = project }
+        capturing = true
+    }
+
+    /// 在任务下记一条灵感：任务浮窗开着时先收起它（随手记浮在浮窗下面会被挡住）。
+    func startCapture(under task: Card) {
+        self.task = nil
+        capture.parent = task
         capturing = true
     }
 

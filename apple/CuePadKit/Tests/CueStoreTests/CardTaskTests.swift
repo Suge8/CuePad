@@ -83,7 +83,7 @@ import Testing
     _ = try await store.createCard(in: project.id, body: "灵感")
 
     #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 0, todo: 1, done: 0))
-    #expect(try await store.subtaskProgress()[top.id] == TaskProgress(done: 0, total: 1))
+    #expect(TaskProgress.subtasks(in: try await store.childMarks()[top.id]) == TaskProgress(done: 0, total: 1))
     #expect(try await store.tasks(.todo).flatMap(\.tasks).map(\.body) == ["上线", "备份"])
   }
 

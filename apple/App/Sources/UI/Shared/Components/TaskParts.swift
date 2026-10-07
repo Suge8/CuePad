@@ -19,6 +19,10 @@ nonisolated struct TaskDetail: Sendable, Equatable {
     var delivery: DeliveryRequest?
     /// 每一次发出去的原文，最近的在前。
     var sends: [SendRecord]
+    /// 下级各自做完没有（与 `children` 同序），完成圈按它分段。
+    var marks: [ChildMark]
+    /// 本项目的资料（长期参考的灵感），交给 Agent 时可一并带上。
+    var resources: [Card]
 
     static let tables: Set<StoreTable> = [.cards, .piSessionStates, .deliveryRequests, .sendRecords]
 
@@ -31,8 +35,9 @@ nonisolated struct TaskDetail: Sendable, Equatable {
         }
         let ideas = try store.cards(in: task?.projectID).sorted { $0.modifiedAt > $1.modifiedAt }.prefix(ideaLimit)
         return TaskDetail(
-            children: try store.children(of: id), ideas: Array(ideas), session: item?.state, delivery: item?.delivery,
-            sends: try store.sendRecords(card: id))
+            children: try store.children(of: id), ideas: Array(ideas.filter { !$0.isPinned }), session: item?.state, delivery: item?.delivery,
+            sends: try store.sendRecords(card: id), marks: try store.childMarks(of: id)[id] ?? [],
+            resources: try store.cards(in: task?.projectID).filter(\.isPinned))
     }
 
     var subtasks: [Card] { children.filter(\.isTask) }
@@ -48,9 +53,105 @@ nonisolated struct TaskDetail: Sendable, Equatable {
     }
 }
 
-/// 状态：点开换成待办 / 进行中 / 已完成，或取消要做。
+/// 任务所在的项目：顶层任务点开换项目（子任务跟着上级走，只写着不能换）。
+struct TaskProjectMenu: View {
+    let task: Card
+    let project: Project?
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if task.parentID == nil {
+            Menu {
+                let id = task.id
+                ForEach(workspace.catalog?.projects ?? []) { target in
+                    Button(target.name) { workspace.perform { try await $0.moveCard(id, to: .top(project: target.id), after: nil) } }
+                        .disabled(target.id == task.projectID)
+                }
+                Divider()
+                Button(CaptureCopy.inbox) { workspace.perform { try await $0.moveCard(id, to: .top(project: nil), after: nil) } }
+                    .disabled(task.projectID == nil)
+            } label: {
+                label(chevron: true)
+            }
+            .buttonStyle(.plain)
+            #if os(macOS)
+            .menuStyle(.button).menuIndicator(.hidden).fixedSize()
+            #endif
+            .accessibilityLabel("项目 \(project?.name ?? CaptureCopy.inbox)，点开换项目")
+        } else {
+            label(chevron: false)
+        }
+    }
+
+    private func label(chevron: Bool) -> some View {
+        HStack(spacing: 4) {
+            ProjectGlyph(project: project, size: 12)
+            Text(project?.name ?? CaptureCopy.inbox).lineLimit(1)
+            if chevron { Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).accessibilityHidden(true) }
+        }
+        .foregroundStyle(palette.ink3)
+        .contentShape(.rect)
+    }
+}
+
+/// 交给 Agent 时一并带上什么：挂着的灵感默认都带（点一下取消），本项目资料默认不带（点一下带上）。
+/// 选择只活在这一次打开的浮窗里，带上的内容见 `TaskBundle`。
+struct BundlePicker: View {
+    let detail: TaskDetail?
+    @Binding var left: Set<UUID>
+    @Binding var withResources: Bool
+    @Environment(\.palette) private var palette
+
+    static func parts(_ detail: TaskDetail?, left: Set<UUID>, withResources: Bool) -> [Card] {
+        guard let detail else { return [] }
+        return detail.materials.filter { !left.contains($0.id) } + (withResources ? detail.resources : [])
+    }
+
+    var body: some View {
+        let materials = detail?.materials ?? [], resources = detail?.resources ?? []
+        if !materials.isEmpty || !resources.isEmpty {
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    Text("带上").font(TaskMetrics.caption).foregroundStyle(palette.ink3)
+                    ForEach(materials) { idea in
+                        chip(idea.title, systemImage: "lightbulb", on: !left.contains(idea.id)) {
+                            if left.contains(idea.id) { left.remove(idea.id) } else { left.insert(idea.id) }
+                        }
+                    }
+                    if !resources.isEmpty {
+                        chip("资料 \(resources.count)", systemImage: "books.vertical", on: withResources) { withResources.toggle() }
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            .sensoryFeedback(.selection, trigger: left.count + (withResources ? 1 : 0))
+        }
+    }
+
+    private func chip(_ title: String, systemImage: String, on: Bool, toggle: @escaping () -> Void) -> some View {
+        Button(action: toggle) {
+            Label {
+                Text(title).lineLimit(1)
+            } icon: {
+                Image(systemName: on ? "checkmark" : systemImage).font(TaskMetrics.caption.weight(.semibold))
+            }
+            .font(TaskMetrics.caption)
+            .foregroundStyle(on ? palette.paper : palette.ink2)
+            .padding(.horizontal, 10).frame(height: TaskMetrics.chipHeight)
+            .background(on ? AnyShapeStyle(palette.ink) : AnyShapeStyle(palette.fill), in: .capsule)
+            .frame(minHeight: TaskMetrics.chipTarget).contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .animation(.easeOut(duration: 0.15), value: on)
+    }
+}
+
+/// 状态：点开换成待办 / 进行中 / 已完成，或取消要做。圈按下级分段（`TaskRing`）。
 struct TaskStatusMenu: View {
     let task: Card
+    var marks: [ChildMark]?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -65,8 +166,7 @@ struct TaskStatusMenu: View {
             Button("取消要做", systemImage: "lightbulb") { workspace.toggleTodo(id, false) }
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: TaskGlyph.symbol(task.status)).foregroundStyle(TaskGlyph.tint(task.status, palette))
-                    .contentTransition(.symbolEffect(.replace))
+                TaskRingView(status: task.status, ring: TaskRing(marks), done: task.status == .done, size: TaskMetrics.ringSize)
                 Text(TaskSpeech.value(task.status)).foregroundStyle(palette.ink)
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
@@ -412,12 +512,79 @@ enum TaskMetrics {
     static let icon: CGFloat = 28
     static let rowHeight: CGFloat = 44
     static let labelWidth: CGFloat = 44
+    static let caption = Font.footnote
+    static let chipHeight: CGFloat = 30
+    static let chipTarget: CGFloat = 44
+    static let ringSize: CGFloat = 17
     #else
     static let font = Font.system(size: 13)
     static let icon: CGFloat = 16
     static let rowHeight: CGFloat = 26
     static let labelWidth: CGFloat = 38
+    static let caption = Font.system(size: 11.5)
+    static let chipHeight: CGFloat = 22
+    static let chipTarget: CGFloat = 22
+    static let ringSize: CGFloat = 13
     #endif
+}
+
+/// 任务的完成圈（`TaskRing`）：完成是对勾；没有下级是普通圆圈（进行中半满）；有下级时一段一段，做完的段满上墨色（颜色同 `TaskGlyph.tint`），
+/// 太多时是一道按比例的弧；进行中在圈心点一个点。段的变化有短过渡。
+struct TaskRingView: View {
+    let status: TaskStatus?
+    let ring: TaskRing
+    /// 界面上已经显示完成（勾了还没写入时也算）。
+    let done: Bool
+    let size: CGFloat
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Group {
+            if done || ring == .plain {
+                Image(systemName: done ? "checkmark.circle.fill" : TaskGlyph.symbol(status))
+                    .font(.system(size: size))
+                    .foregroundStyle(TaskGlyph.tint(done ? .done : status, palette))
+                    .contentTransition(.symbolEffect(.replace))
+            } else {
+                arcs
+                    .frame(width: size, height: size)
+                    .overlay { if status == .inProgress { Circle().fill(TaskGlyph.tint(.inProgress, palette)).frame(width: size * 0.3) } }
+                    .padding(size * 0.06)
+            }
+        }
+        .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
+        .animation(Motion.spatial(Motion.quick, reduceMotion: reduceMotion), value: ring)
+        .accessibilityHidden(true)
+    }
+
+    private var line: CGFloat { max(1.6, size * 0.13) }
+
+    @ViewBuilder private var arcs: some View {
+        switch ring {
+        case .segments(let filled):
+            // 段间留一点缝：一段时是整圈
+            let count = filled.count, gap = count > 1 ? min(0.035, 0.3 / Double(count)) : 0
+            ZStack {
+                ForEach(filled.indices, id: \.self) { index in
+                    let start = Double(index) / Double(count)
+                    Circle()
+                        .trim(from: start + gap / 2, to: start + 1 / Double(count) - gap / 2)
+                        .stroke(filled[index] ? TaskGlyph.tint(.done, palette) : TaskGlyph.tint(.todo, palette).opacity(0.55), style: StrokeStyle(lineWidth: line, lineCap: .butt))
+                }
+            }
+            .rotationEffect(.degrees(-90))
+        case .fraction(let done, let total):
+            ZStack {
+                Circle().stroke(TaskGlyph.tint(.todo, palette).opacity(0.55), lineWidth: line)
+                Circle().trim(from: 0, to: Double(done) / Double(max(total, 1)))
+                    .stroke(TaskGlyph.tint(.done, palette), style: StrokeStyle(lineWidth: line, lineCap: .round))
+            }
+            .rotationEffect(.degrees(-90))
+        case .plain:
+            EmptyView()
+        }
+    }
 }
 
 /// 任务的状态圆圈：待办淡墨空心、进行中朱砂半满、完成墨色对勾。

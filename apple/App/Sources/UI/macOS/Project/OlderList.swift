@@ -75,7 +75,7 @@ struct OlderList: View {
     }
 }
 
-private struct OlderRow: View {
+struct OlderRow: View {
     let card: Card
     let lastTarget: String?
     @Environment(Workspace.self) private var workspace

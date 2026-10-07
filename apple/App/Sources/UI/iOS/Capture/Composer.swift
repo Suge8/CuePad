@@ -30,7 +30,7 @@ extension AppServices {
     @discardableResult
     func requestMacDelivery(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode) async throws -> DeliveryRequest {
         try await requestMacDelivery(
-            draft.stored(in: store.files), to: session, mode: mode, card: draft.attachment?.card)
+            draft.stored(in: store.files), to: session, mode: mode, card: draft.attachment?.card, parts: draft.attachment?.parts ?? [])
     }
 }
 

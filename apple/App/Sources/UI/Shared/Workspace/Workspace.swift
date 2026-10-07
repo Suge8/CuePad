@@ -49,6 +49,7 @@ final class Workspace {
         var text: String
         var session: CuePi.PiSession.ID
         var card: UUID?
+        var parts: [UUID]
     }
     #endif
 

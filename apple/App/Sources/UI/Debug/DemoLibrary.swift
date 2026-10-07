@@ -91,7 +91,7 @@ enum DemoLibrary {
             DemoProject(name: "圆桌", icon: "messages-square", color: "#D9774B", pinned: true, directory: "\(home)Project/atlas", cards: [
                 (0.3, "目标：多 Agent 调度本月可上线\n\n能在真实数据上跑完一整天；调度、主持人提示词、发言轮次都有验收记录。", false),
                 (1.0, "产品决策\n\n先列出现状和约束，再给出下一步。", false),
-                (2.5, "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。", false),
+                (2.5, "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。", true),
                 (40.0, "主持人提示词\n\n\(pic)\n提示词写好，一键投送。", false),
             ]),
             DemoProject(name: "Flow", icon: "layers", color: "#6A6FD1", pinned: true, directory: nil, cards: [

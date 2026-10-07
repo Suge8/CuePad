@@ -11,7 +11,8 @@ struct TaskPage<Editor: View, Actions: View>: View {
     let project: Project?
     /// 正文（含还没存下的）除了标题还有没有要求。
     let written: Bool
-    let hand: () -> Void
+    /// 交给 Agent：带上选中的挂着的灵感与资料（`BundlePicker`）。
+    let hand: (_ parts: [Card]) -> Void
     let continuePrompt: () -> Void
     @ViewBuilder let editor: Editor
     @ViewBuilder let actions: Actions
@@ -23,6 +24,8 @@ struct TaskPage<Editor: View, Actions: View>: View {
     @State private var typing = false
     @State private var showsSends = false
     @State private var showsChildren = false
+    @State private var left: Set<UUID> = []
+    @State private var withResources = false
 
     private static var inset: CGFloat { 20 }
 
@@ -59,12 +62,8 @@ struct TaskPage<Editor: View, Actions: View>: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            TaskStatusMenu(task: card)
-            HStack(spacing: 4) {
-                ProjectGlyph(project: project, size: 12)
-                Text(project?.name ?? "未归档").lineLimit(1)
-            }
-            .font(.subheadline).foregroundStyle(palette.ink3)
+            TaskStatusMenu(task: card, marks: detail?.marks)
+            TaskProjectMenu(task: card, project: project).font(.subheadline)
             Spacer(minLength: 8)
             Menu("更多", systemImage: "ellipsis") { actions }
                 .labelStyle(.iconOnly)
@@ -74,23 +73,24 @@ struct TaskPage<Editor: View, Actions: View>: View {
         .padding(.leading, Self.inset).padding(.trailing, 8).padding(.top, 14)
     }
 
-    /// 贴着正文的底边：只有标题时的引导，右边是交给 Agent。
+    /// 贴着正文的底边：只有标题时的引导，右边是交给 Agent；有挂着的灵感或本项目资料时，上面一行选一并带上哪些。
     private var promptBar: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            BundlePicker(detail: detail, left: $left, withResources: $withResources)
+                .padding(.leading, Self.inset)
+            handRow
+        }
+        .padding(.bottom, 12)
+    }
+
+    private var handRow: some View {
         HStack(spacing: 8) {
             if !written { PromptHint(action: continuePrompt) }
             Spacer(minLength: 8)
-            Button(action: hand) {
-                Label("交给 Agent", systemImage: "paperplane.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(palette.paper)
-                    .padding(.horizontal, 16).frame(height: 40)
-                    .background(palette.ink, in: .capsule)
-                    .contentShape(.capsule)
-            }
-            .buttonStyle(PressStyle())
-            .accessibilityHint(written ? "把这段话发给 Mac 上的 Agent 会话" : "还只有标题，也可以先发出去")
+            AgentHandButton { hand(BundlePicker.parts(detail, left: left, withResources: withResources)) }
+                .accessibilityHint(written ? "把这段话发给 Mac 上的 Agent 会话" : "还只有标题，也可以先发出去")
         }
-        .padding(.leading, Self.inset).padding(.trailing, 16).padding(.bottom, 12)
+        .padding(.leading, Self.inset).padding(.trailing, 16)
     }
 
     private var sendsPage: some View {
@@ -113,6 +113,24 @@ struct TaskPage<Editor: View, Actions: View>: View {
         .deskBackground()
         .navigationTitle(detail?.subitemsSummary ?? "下级")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// 交给 Agent 的主按钮：朱砂胶囊（签名色只落在主动作上），贴着正文右下（任务浮窗与灵感纸页同一颗）。
+struct AgentHandButton: View {
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: action) {
+            Label("交给 Agent", systemImage: "paperplane.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(palette.onSignature)
+                .padding(.horizontal, 16).frame(height: 40)
+                .background(palette.signature, in: .capsule)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(PressStyle())
     }
 }
 #endif

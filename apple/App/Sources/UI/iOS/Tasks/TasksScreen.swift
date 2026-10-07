@@ -61,7 +61,7 @@ struct TasksScreen: View {
                     let info = board.rows[row.id]
                     line(
                         row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session, delivery: info?.delivery,
-                        subtasks: board.subtasks[row.id])
+                        marks: board.children[row.id])
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
@@ -99,7 +99,7 @@ struct TasksScreen: View {
             .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
             if showsCompleted {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { line($0.task, project: $0.project, session: $0.session, delivery: $0.delivery, subtasks: nil).id($0.id) }
+                    ForEach(rows) { line($0.task, project: $0.project, session: $0.session, delivery: $0.delivery, marks: nil).id($0.id) }
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
@@ -107,8 +107,8 @@ struct TasksScreen: View {
         }
     }
 
-    private func line(_ task: Card, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?, subtasks: TaskProgress?) -> some View {
-        TaskLine(task: task, project: project, session: session, delivery: delivery, subtasks: subtasks)
+    private func line(_ task: Card, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?, marks: [ChildMark]?) -> some View {
+        TaskLine(task: task, project: project, session: session, delivery: delivery, marks: marks)
             .contextMenu { CardActions(card: task) }
     }
 }
@@ -122,8 +122,9 @@ struct TaskLine: View {
     /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况），以及发给它的最近一条投送请求。
     var session: PiSessionState?
     var delivery: DeliveryRequest?
-    /// 直接子任务的完成数与总数（没有子任务时为 nil）。
-    var subtasks: TaskProgress?
+    /// 直接下级（子任务与挂着的灵感）；完成圈分段与子任务进度由它推出。
+    var marks: [ChildMark]?
+    private var subtasks: TaskProgress? { .subtasks(in: marks) }
     @Environment(\.taskStructure) private var structure
     @State private var confirmsSubtasks = false
     @Environment(Workspace.self) private var workspace
@@ -143,7 +144,7 @@ struct TaskLine: View {
         line
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, PromptMark(task).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, PromptMark(task).speech, TaskRing(marks).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
@@ -180,8 +181,7 @@ struct TaskLine: View {
     private var line: some View {
         HStack(spacing: 2) {
             Button(action: tap) {
-                Image(systemName: TaskGlyph.symbol(done ? .done : task.status)).foregroundStyle(TaskGlyph.tint(done ? .done : task.status, palette))
-                    .contentTransition(.symbolEffect(.replace))
+                TaskRingView(status: task.status, ring: TaskRing(marks), done: done, size: 20)
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }

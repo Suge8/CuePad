@@ -32,6 +32,7 @@ struct CardEditorScreen: View {
     @State private var pickedImage: PhotosPickerItem?
     @State private var editingVariables = false
     @State private var flushToken: UUID?
+    @State private var typing = false
 
     private static let pageWidth: CGFloat = 760
 
@@ -72,7 +73,7 @@ struct CardEditorScreen: View {
         if isTask {
             if let data {
                 TaskPage(
-                    card: data.card, project: data.project, written: TaskPrompt.isWritten(liveText), hand: sendToMac,
+                    card: data.card, project: data.project, written: TaskPrompt.isWritten(liveText), hand: { handToAgent(with: $0) },
                     continuePrompt: handle.continueAtEnd
                 ) {
                     editor
@@ -87,6 +88,11 @@ struct CardEditorScreen: View {
             }
         } else {
             editor
+                // 灵感最常做的是交给 Agent：贴着正文右下一颗主按钮，写字时让给键盘上方的工具栏
+                .overlay(alignment: .bottomTrailing) { if !typing, data != nil { ideaHand.transition(.opacity) } }
+                .animation(Motion.quick, value: typing)
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
                 .frame(maxWidth: wide ? Self.pageWidth : .infinity, maxHeight: .infinity, alignment: .top)
                 .background(palette.paper, in: .rect(cornerRadius: wide ? 22 : 0, style: .continuous))
                 .overlay {
@@ -120,9 +126,9 @@ struct CardEditorScreen: View {
 
     private var inset: CGFloat { wide && !isTask ? 44 : 20 }
 
-    /// 顶栏的一行："03:36 · 置顶"。
+    /// 顶栏的一行："03:36 · 资料"。
     private static func detail(_ data: EditorData) -> String {
-        let marks = [data.card.isPinned ? "置顶" : nil].compactMap { $0 }
+        let marks = [data.card.isPinned ? "资料" : nil].compactMap { $0 }
         return ([DateLabel.short(data.card.modifiedAt)] + marks).joined(separator: " · ")
     }
 
@@ -140,13 +146,21 @@ struct CardEditorScreen: View {
         .disabled(data == nil)
     }
 
-    private var sendTitle: String { data?.card.isTask == true ? "交给 Agent" : "发到 Mac" }
+    private var sendTitle: String { "交给 Agent" }
 
     /// 发到 Mac：选中了文字就只发选中的部分。
-    private func sendToMac() {
+    private func sendToMac() { handToAgent(with: []) }
+
+    private var ideaHand: some View {
+        AgentHandButton(action: sendToMac).padding(.trailing, 16).padding(.bottom, 16)
+    }
+
+    /// 交给 Agent（先选会话）：选中了文字就只发选中的部分；任务可一并带上挂着的灵感与资料（`TaskBundle`）。
+    private func handToAgent(with parts: [Card]) {
         guard let card = data?.card else { return }
         let body = handle.selection.map { Outgoing.text(body: $0, values: card.variableValues) } ?? outgoing(card)
-        navigation.outbox = Navigation.Outbox(content: body, card: card.id, project: card.projectID)
+        navigation.outbox = Navigation.Outbox(
+            content: TaskBundle.text(task: body, parts: parts), card: card.id, project: card.projectID, parts: parts.map(\.id))
     }
 
     /// 编辑菜单里的选区动作。

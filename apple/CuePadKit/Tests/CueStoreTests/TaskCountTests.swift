@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 给用户看的任务数与完成数只按顶层任务计（子任务的进度在上级那一行，见 `subtaskProgress`）：
+/// 给用户看的任务数与完成数只按顶层任务计（子任务的进度在上级那一行，见 `childMarks`）：
 /// 顶层是显示在顶层的任务——没有上级、上级不在库里，或自己没完成而上级已完成（看板上它就在顶层）。
 @Suite struct TaskCountTests {
   let fixture = try! Fixture()

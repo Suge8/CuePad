@@ -79,7 +79,7 @@ struct TasksPanel: View {
                 let info = board.rows[row.id]
                 TaskRow(
                     task: row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session.map(workspace.withLiveState),
-                    delivery: info?.delivery, subtasks: board.subtasks[row.id])
+                    delivery: info?.delivery, marks: board.children[row.id])
             }
             .padding(.horizontal, 20)
         }
@@ -102,8 +102,9 @@ struct TaskRow: View {
     /// 交给 Pi 的任务：那个会话此刻的状态，以及发给它的最近一条投送请求。
     var session: PiSessionState?
     var delivery: DeliveryRequest?
-    /// 直接子任务的完成数与总数（没有子任务时为 nil）。
-    var subtasks: TaskProgress?
+    /// 直接下级（子任务与挂着的灵感）；完成圈分段与子任务进度由它推出。
+    var marks: [ChildMark]?
+    private var subtasks: TaskProgress? { .subtasks(in: marks) }
     var compact = false
     @Environment(\.taskStructure) private var structure
     @State private var confirmsSubtasks = false
@@ -118,10 +119,7 @@ struct TaskRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: compact ? 8 : 10) {
             Button { toggle() } label: {
-                Image(systemName: TaskGlyph.symbol(task.status))
-                    .font(.system(size: compact ? 12 : 14))
-                    .foregroundStyle(TaskGlyph.tint(task.status, palette))
-                    .contentTransition(.symbolEffect(.replace))
+                TaskRingView(status: task.status, ring: TaskRing(marks), done: done, size: compact ? 12 : 14)
             }
             .buttonStyle(PressStyle(scale: 0.85))
             .accessibilityLabel(done ? "回到待办" : "完成")
@@ -147,7 +145,7 @@ struct TaskRow: View {
         .contextMenu { CardActions(card: task) }
         // 读屏：整行一个元素"任务内容，项目，Pi 在做什么"，值是状态，默认动作切换完成（文案见 TaskSpeech）
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([task.title, PromptMark(task).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([task.title, PromptMark(task).speech, TaskRing(marks).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
         .accessibilityValue(TaskSpeech.value(task.status))
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)

@@ -8,18 +8,19 @@ nonisolated struct CardStamp: Equatable, Sendable {
     var isPinned: Bool
 }
 
-/// 项目页的卡片分区：置顶单列、工作集卡片墙、更早。
+/// 项目页的灵感分区：资料（`isPinned`，长期参考，一行一条）、工作集卡片墙、更早。
 ///
 /// 墙只在打开另一个项目或跨天时重排；同一次打开里，墙上的卡编辑后原地不动（保住"它在左上角"的空间记忆），
 /// 排好之后新建或再次编辑的卡插到墙首，删除的卡离开；没有新编辑却新出现的卡按规则补到墙尾或进更早。
 nonisolated struct WallArrangement: Equatable, Sendable {
     static let recentDays = 14.0
     static let unsentDays = 30.0
-    /// 墙上最多几张（不含置顶）。
+    /// 墙上最多几张（不含资料）。
     static let capacity = 14
 
     var project: UUID?
     var arrangedAt: Date
+    /// 资料（`Card.isPinned`）。
     var pinned: [UUID]
     var wall: [UUID]
     var older: [UUID]
@@ -47,9 +48,12 @@ nonisolated struct WallArrangement: Equatable, Sendable {
         // 排墙之后才出现、却没有新编辑的卡（旧库导入、同步下来、别处移入）按上墙规则补到墙尾，不打乱已有位置
         let arrived = cards.filter { $0.modifiedAt <= arrangedAt && !known.contains($0.id) }.sorted(by: Self.newestFirst)
 
-        let pinnedNow = touched.filter(\.isPinned).map(\.id) + pinned.filter { byID[$0]?.isPinned == true }
-            + arrived.filter(\.isPinned).map(\.id)
-        var wallNow = touched.filter { !$0.isPinned }.map(\.id) + wall.filter { byID[$0].map { !$0.isPinned } ?? false }
+        // 资料不靠修改时间：设为资料或取消都不改正文，当场进出这一组（新设的在前，取消的回到墙首）
+        let wasPinned = Set(pinned)
+        let pinnedNow = cards.filter { $0.isPinned && !wasPinned.contains($0.id) }.sorted(by: Self.newestFirst).map(\.id)
+            + pinned.filter { byID[$0]?.isPinned == true }
+        let unpinned = pinned.filter { byID[$0]?.isPinned == false }
+        var wallNow = touched.filter { !$0.isPinned }.map(\.id) + unpinned + wall.filter { byID[$0].map { !$0.isPinned } ?? false }
         let room = max(0, Self.capacity - wallNow.count)
         wallNow += arrived.filter { !$0.isPinned && Self.onWall($0, now: now) }.prefix(room).map(\.id)
         let kept = Set(pinnedNow + wallNow)

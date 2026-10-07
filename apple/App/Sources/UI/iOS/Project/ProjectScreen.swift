@@ -69,8 +69,15 @@ struct ProjectScreen: View {
                 .padding(.top, 24)
             }
             if !arrangement.pinned.isEmpty {
-                SectionHeader(title: "置顶", count: arrangement.pinned.count)
-                wall(arrangement.pinned, page: page, lastTarget: lastTarget).padding(.bottom, 12)
+                // 资料：长期参考的灵感，一行一条压在任务区下面；交给 Agent 时可一并带上
+                SectionHeader(title: "资料", count: arrangement.pinned.count)
+                let ids = arrangement.pinned
+                VStack(spacing: 0) {
+                    ForEach(ids.compactMap { page.entries[$0] }) { entry in
+                        OlderRow(entry: entry, lastTarget: lastTarget[entry.id], isFirst: entry.id == ids.first, isLast: entry.id == ids.last)
+                    }
+                }
+                .padding(.bottom, 12)
             }
             if !arrangement.wall.isEmpty {
                 SectionHeader(title: "最近", count: arrangement.wall.count)
@@ -175,7 +182,7 @@ private struct FocusCard: View {
                     .padding(.bottom, 4)
                 let roots = data.tasks.roots
                 TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
-                    TaskLine(task: row.task, subtasks: data.subtasks[row.id]).contextMenu { CardActions(card: row.task) }
+                    TaskLine(task: row.task, marks: data.children[row.id]).contextMenu { CardActions(card: row.task) }
                 }
                 if roots.count > Self.visibleTasks {
                     Button("还有 \(roots.count - Self.visibleTasks) 条") { navigation.push(.tasks) }

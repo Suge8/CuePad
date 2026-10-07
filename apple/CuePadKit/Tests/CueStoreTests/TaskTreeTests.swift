@@ -107,8 +107,8 @@ import Testing
     _ = try await store.createTask("导出", under: a.id)
     try await store.setStatus(a.id, .done)
 
-    let progress = try await store.subtaskProgress()
-    #expect(progress[top.id] == TaskProgress(done: 1, total: 2))
-    #expect(progress[a.id] == TaskProgress(done: 1, total: 1))  // 完成 a 时它的子任务一起完成
+    let marks = try await store.childMarks()
+    #expect(TaskProgress.subtasks(in: marks[top.id]) == TaskProgress(done: 1, total: 2))
+    #expect(TaskProgress.subtasks(in: marks[a.id]) == TaskProgress(done: 1, total: 1))  // 完成 a 时它的子任务一起完成
   }
 }

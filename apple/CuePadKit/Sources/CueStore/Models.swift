@@ -66,6 +66,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var projectID: UUID?
   /// 纯字符串正文：分割线为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
+  /// 资料：项目里长期参考的灵感（项目页顶部一组，交给 Agent 时可一并带上）。字段名沿用同步记录里的 isPinned。
   public var isPinned: Bool
   public var variableValues: [String: String]
   /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
@@ -139,6 +140,24 @@ public struct TaskProgress: Equatable, Sendable {
     self.done = done
     self.total = total
   }
+
+  /// 直接子任务的完成数与总数；没有子任务时为 nil。
+  public static func subtasks(in marks: [ChildMark]?) -> TaskProgress? {
+    let subtasks = (marks ?? []).filter(\.isTask)
+    return subtasks.isEmpty ? nil : TaskProgress(done: subtasks.filter(\.isDone).count, total: subtasks.count)
+  }
+}
+
+/// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；素材（挂着的灵感）交给过 Agent 算做完——
+/// 它自己有发送记录，或某次发送明确记着带上了它（`SendRecord.partIDs`）。见 `CueStore.childMarks`。
+public struct ChildMark: Equatable, Sendable {
+  public let isTask: Bool
+  public let isDone: Bool
+
+  public init(isTask: Bool, isDone: Bool) {
+    self.isTask = isTask
+    self.isDone = isDone
+  }
 }
 
 /// 卡片挂在哪：某项目（nil = 未归档）的顶层，或某条任务下面（项目随它）。
@@ -158,6 +177,20 @@ public struct SendRecord: Identifiable, Equatable, Sendable {
   public var cardID: UUID?
   public var sentAt: Date
   public var modifiedAt: Date
+  /// 这次一并带上的灵感（任务连同挂着的灵感、资料一起交给 Agent）；它们"交给过 Agent"只看这里与它们自己的发送记录。
+  public var partIDs: [UUID] = []
+}
+
+/// `partIDs` 列：JSON 数组（小写 UUID，与 id 列同一写法，SQL 里可用 json_each 对上）；没有时为 NULL。
+enum PartIDs {
+  static func encode(_ ids: [UUID]) -> String? {
+    ids.isEmpty ? nil : String(decoding: try! JSONEncoder().encode(ids.map { $0.uuidString.lowercased() }), as: UTF8.self)
+  }
+
+  static func decode(_ text: String?) -> [UUID] {
+    guard let data = text?.data(using: .utf8), let strings = try? JSONDecoder().decode([String].self, from: data) else { return [] }
+    return strings.compactMap(UUID.init(uuidString:))
+  }
 }
 
 /// 图片附件元数据；文件按内容哈希存在磁盘，缩略图是派生缓存不入库。
@@ -368,14 +401,14 @@ extension Card: Record {
 
 extension SendRecord: Record {
   static let table = Table.sendRecords
-  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt] }
+  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt", "partIDs"]
+  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt, PartIDs.encode(partIDs)] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       targetKind: Open(rawValue: row.text(2)), targetName: row.text(3),
       targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5),
-      sentAt: row.date(6), modifiedAt: row.date(7))
+      sentAt: row.date(6), modifiedAt: row.date(7), partIDs: PartIDs.decode(row.textOrNil(8)))
   }
 }
 
