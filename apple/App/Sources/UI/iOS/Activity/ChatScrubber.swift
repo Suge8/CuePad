@@ -1,9 +1,9 @@
 #if os(iOS)
 import SwiftUI
 
-/// 会话右缘的刻度滑条：一条你发的话一个刻度，按先后均匀排在右缘（只看序号，不看还没排版的行有多高——倒置的懒加载里
-/// 那些高度是估的）。平时看不见，滚动时或手指按到右缘时淡入，停手后淡出；拖着走逐个刻度轻触一下，旁边浮出那条的第一行，
-/// 松手（或点一下）跳过去。手势只在右缘这一窄条里，不碰代码块、表格的横向滚动与左缘的返回手势。读屏上是一个可调节的元素：
+/// 会话右缘的刻度滑条：一条你发的话一个刻度，按先后以固定的小间距从上往下排（只看序号，不看还没排版的行有多高——倒置的
+/// 懒加载里那些高度是估的；条数多到排不下时间距收紧到正好排满）。平时看不见，滚动时或手指按到右缘时淡入，停手后淡出；
+/// 拖着走时手指附近的刻度像程序坞那样放大，逐个刻度轻触一下，旁边浮出那条的第一行，松手（或点一下）跳过去。手势只在右缘这一窄条里，不碰代码块、表格的横向滚动与左缘的返回手势。读屏上是一个可调节的元素：
 /// 上下轻扫跳到上一条、下一条你的话。
 struct ChatScrubber: View {
     let marks: [ChatMark]
@@ -12,8 +12,8 @@ struct ChatScrubber: View {
     let jump: (UUID) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 手指按着时指到的刻度。
-    @State private var pointed: Int?
+    /// 手指按着时的高度。
+    @State private var finger: CGFloat?
     /// 停手后还留一会儿再淡出。
     @State private var lingering = false
     /// 读屏上一次跳到的（上一条、下一条从它算）。
@@ -30,19 +30,27 @@ struct ChatScrubber: View {
     static let width: CGFloat = 24
     /// 刻度区上下留的边。
     private static let inset: CGFloat = 16
+    /// 相邻刻度的间距。
+    private static let pitch: CGFloat = 7
+    /// 放大波及的范围（离手指多远的刻度还跟着放大）。
+    private static let reach: CGFloat = 44
     private static let linger: Duration = .milliseconds(900)
 
-    private var visible: Bool { pointed != nil || scrolling || lingering }
+    private var visible: Bool { finger != nil || scrolling || lingering }
 
     var body: some View {
         GeometryReader { proxy in
             let height = proxy.size.height
+            let pointed = finger.map { index(at: $0, height) }
             Canvas { context, size in
                 for index in marks.indices {
-                    let wide = index == pointed
-                    let length: CGFloat = wide ? 14 : 7
-                    let rect = CGRect(x: size.width - length - 4, y: y(index, height) - 1, width: length, height: 2)
-                    context.fill(Path(roundedRect: rect, cornerRadius: 1), with: .color(wide ? palette.ink : palette.ink3))
+                    // 离手指越近越长越粗越深（平时 7×1.5 的淡色短线，手指正下方 18×3 的墨色）
+                    let near = finger.map { max(0, 1 - abs(y(index, height) - $0) / Self.reach) } ?? 0
+                    let swell = near * near
+                    let length = 7 + 11 * swell, thickness = 1.5 + 1.5 * swell
+                    let rect = CGRect(x: size.width - length - 4, y: y(index, height) - thickness / 2, width: length, height: thickness)
+                    let color = index == pointed ? palette.ink : swell > 0 ? palette.ink.opacity(0.45 + 0.4 * swell) : palette.ink3
+                    context.fill(Path(roundedRect: rect, cornerRadius: thickness / 2), with: .color(color))
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -62,18 +70,17 @@ struct ChatScrubber: View {
             .contentShape(.rect)
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { value in pointed = index(at: value.location.y, height) }
+                    .onChanged { value in finger = value.location.y }
                     .onEnded { value in
-                        let target = index(at: value.location.y, height)
-                        pointed = nil
-                        go(to: target)
+                        finger = nil
+                        go(to: index(at: value.location.y, height))
                     })
+            .sensoryFeedback(.selection, trigger: pointed) { _, new in new != nil }
         }
         .frame(width: Self.width)
-        .sensoryFeedback(.selection, trigger: pointed) { _, new in new != nil }
-        .task(id: scrolling || pointed != nil) {
+        .task(id: scrolling || finger != nil) {
             // 停手后留一会儿再淡出
-            guard !scrolling, pointed == nil else { lingering = true; return }
+            guard !scrolling, finger == nil else { lingering = true; return }
             try? await Task.sleep(for: Self.linger)
             lingering = false
         }
@@ -99,16 +106,19 @@ struct ChatScrubber: View {
         jump(marks[index].id)
     }
 
-    /// 第 `index` 个刻度的高度：按序号均匀分布，最早的在上。
+    /// 相邻刻度的间距：固定的小间距，排不下时收紧到正好排满。
+    private func spacing(_ height: CGFloat) -> CGFloat {
+        min(Self.pitch, max(height - 2 * Self.inset, 0) / CGFloat(max(marks.count - 1, 1)))
+    }
+
+    /// 第 `index` 个刻度的高度：最早的在最上。
     private func y(_ index: Int, _ height: CGFloat) -> CGFloat {
-        let span = max(height - 2 * Self.inset, 0)
-        return Self.inset + (marks.count > 1 ? span * CGFloat(index) / CGFloat(marks.count - 1) : span / 2)
+        Self.inset + spacing(height) * CGFloat(index)
     }
 
     private func index(at y: CGFloat, _ height: CGFloat) -> Int {
-        let span = max(height - 2 * Self.inset, 1)
-        let fraction = min(max((y - Self.inset) / span, 0), 1)
-        return Int((fraction * CGFloat(marks.count - 1)).rounded())
+        let step = max(spacing(height), 1)
+        return min(max(Int(((y - Self.inset) / step).rounded()), 0), marks.count - 1)
     }
 
     private static func firstLine(_ text: String) -> String {

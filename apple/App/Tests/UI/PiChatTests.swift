@@ -80,6 +80,22 @@ struct ChatFollowTests {
         #expect(!follow.showsJump)
     }
 
+    /// 顶栏跟阅读走（同 Safari）：往历史里翻就让开，往最新那边回滑一小段就回来，再往历史翻又让开；回到最新一直在。
+    @Test func 看历史时顶栏让开_往最新回滑一点就回来() {
+        var follow = ChatFollow()
+        #expect(follow.showsHeader)
+        follow.scrolled(nearNewest: false, byUser: true)
+        #expect(!follow.showsHeader)
+        follow.moved(towardNewest: 10)
+        #expect(!follow.showsHeader)
+        follow.moved(towardNewest: 20)
+        #expect(follow.showsHeader)
+        follow.moved(towardNewest: -40)
+        #expect(!follow.showsHeader)
+        follow.scrolled(nearNewest: true, byUser: true)
+        #expect(follow.showsHeader)
+    }
+
     @Test func 输入框长高或键盘弹出带来的位移_不解除贴底() {
         var follow = ChatFollow()
         follow.scrolled(nearNewest: false, byUser: false)

@@ -48,7 +48,7 @@ enum ComposerSource { case cards, photos, camera }
 /// 左下"＋"（选卡片、相册、拍照）、文字区、右下发送钮；两个圆钮同尺寸、同心，多行时也在底角。
 /// 发送钮的位置一直留着、有内容才显出来，文字宽度不随它变。聚焦或有内容时展开头部。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和发送钮，草稿怎么处理由它们决定。
-struct Composer<Header: View, Send: View>: View {
+struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
     let prompt: String
     let label: String
@@ -61,9 +61,14 @@ struct Composer<Header: View, Send: View>: View {
     let compact: Bool
     let focus: FocusState<Bool>.Binding
     private let header: Header
+    /// 左列"＋"上方的小圆钮（会话回复框的模型与思考强度），只在聚焦时出现。
+    private let tools: Tools
     private let send: Send
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 跟着焦点、带动画：UIKit 文字区拿到焦点时的那次更新不带动画，直接读焦点时展开会一帧跳到位
+    @State private var focused = false
     @State private var source: ComposerSource?
     @State private var picked: [PhotosPickerItem] = []
     @State private var previewing: Navigation.Outbox?
@@ -71,7 +76,7 @@ struct Composer<Header: View, Send: View>: View {
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
-        @ViewBuilder header: () -> Header, @ViewBuilder send: () -> Send
+        @ViewBuilder header: () -> Header, @ViewBuilder tools: () -> Tools, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
         self.prompt = prompt
@@ -82,6 +87,7 @@ struct Composer<Header: View, Send: View>: View {
         self.pinnedOpen = pinnedOpen
         self.compact = compact
         self.header = header()
+        self.tools = tools()
         self.send = send()
     }
 
@@ -92,7 +98,7 @@ struct Composer<Header: View, Send: View>: View {
     /// 一个圆钮占的一格：36 的圆 + 四周的点按区与边距。
     static var slot: CGFloat { 50 }
 
-    private var expanded: Bool { pinnedOpen || focus.wrappedValue || !draft.isEmpty(accepting: [.images, .cards]) }
+    private var expanded: Bool { pinnedOpen || focused || !draft.isEmpty(accepting: [.images, .cards]) }
     /// 收成短胶囊：同一个输入框只是变窄、不留发送钮的位置，点它照常聚焦展开。
     private var shrunk: Bool { compact && !expanded }
     /// 短胶囊的宽：＋ 加一行短提示。
@@ -102,8 +108,12 @@ struct Composer<Header: View, Send: View>: View {
 
     var body: some View {
         field
-        .animation(Motion.quick, value: shrunk)
-        .animation(Motion.quick, value: expanded)
+        // 变形（短胶囊 ↔ 全宽、"＋"上方的小圆钮出现）是空间动画：无回弹弹簧，减弱动态效果时退为短淡入淡出
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
+        .onChange(of: focus.wrappedValue, initial: true) { _, now in
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now }
+        }
         .animation(Motion.quick, value: hasContent)
         .animation(Motion.quick, value: draft.attachment?.id)
         .animation(Motion.quick, value: draft.images.map(\.id))
@@ -135,7 +145,12 @@ struct Composer<Header: View, Send: View>: View {
                 imageStrip.padding([.horizontal, .top], Self.inset).transition(.opacity)
             }
             HStack(alignment: .bottom, spacing: 0) {
-                if !accepts.isEmpty { plus }
+                if !accepts.isEmpty {
+                    VStack(spacing: 0) {
+                        if focused { tools.transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity)) }
+                        plus
+                    }
+                }
                 ComposerField(
                     text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink)
                     .focused(focus)
@@ -144,9 +159,10 @@ struct Composer<Header: View, Send: View>: View {
                 if reservesSend, !shrunk { sendSlot }
             }
         }
+        // 收成短胶囊时居中；展开是同一块玻璃从中间向两边长到全宽
         .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
         .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
     }
 
     private func showing(_ target: ComposerSource) -> Binding<Bool> {
@@ -275,7 +291,19 @@ struct Composer<Header: View, Send: View>: View {
     }
 }
 
-extension Composer where Header == EmptyView {
+extension Composer where Tools == EmptyView {
+    init(
+        draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
+        accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
+        @ViewBuilder header: () -> Header, @ViewBuilder send: () -> Send
+    ) {
+        self.init(
+            draft: draft, prompt: prompt, label: label, focus: focus, accepts: accepts, cardsFrom: cardsFrom, pinnedOpen: pinnedOpen,
+            compact: compact, header: header, tools: { EmptyView() }, send: send)
+    }
+}
+
+extension Composer where Header == EmptyView, Tools == EmptyView {
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, @ViewBuilder send: () -> Send

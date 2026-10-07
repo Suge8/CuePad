@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// 贴着最新（规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处（自己滚回、点"新消息"、点顶栏）重新贴上；
+/// 贴着最新（规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处（自己滚回、点"新消息"）重新贴上；
 /// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。解除后来了新内容才出"新消息"。
+/// 顶栏跟阅读走（同 Safari）：往历史里翻就让开，往最新那边回滑一小段（`revealDistance`）就回来，回到最新一直在。
 nonisolated struct ChatFollow: Equatable {
     private(set) var atNewest = true
     private(set) var showsJump = false
@@ -11,6 +12,14 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var target: Target?
     /// 用户正拖着或甩着滚动区（滚动区写入）。
     var scrolling = false
+    /// 在看历史时往最新那边回滑过一小段：顶栏回来。
+    private var revealed = false
+    /// 这一趟往同一个方向滑了多远（往最新为正），换方向从零算。
+    private var travel: CGFloat = 0
+
+    private static let revealDistance: CGFloat = 24
+
+    var showsHeader: Bool { atNewest || revealed }
 
     struct Target: Equatable {
         let id: UUID
@@ -21,9 +30,16 @@ nonisolated struct ChatFollow: Equatable {
         if nearNewest {
             atNewest = true
             showsJump = false
+            revealed = false
         } else if byUser {
             atNewest = false
         }
+    }
+
+    /// 用户滚动带来的一段位移（往最新为正）：同一方向攒够 `revealDistance` 时顶栏回来或让开。
+    mutating func moved(towardNewest delta: CGFloat) {
+        travel = (travel >= 0) == (delta >= 0) ? travel + delta : delta
+        if travel >= Self.revealDistance { revealed = true } else if travel <= -Self.revealDistance { revealed = false }
     }
 
     mutating func contentChanged() {
@@ -35,6 +51,7 @@ nonisolated struct ChatFollow: Equatable {
     /// 跳到某一条去读：不再贴着最新（跳到的就在最新处时，滚到后会重新贴上）。
     mutating func jump(to id: UUID) {
         atNewest = false
+        revealed = false
         target = Target(id: id)
     }
 }
@@ -147,6 +164,11 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     >= geometry.contentSize.height - Self.slack
             } action: { _, near in
                 follow.wrappedValue.scrolled(nearNewest: near, byUser: follow.wrappedValue.scrolling)
+            }
+            // 用户滚动的方向（顶栏回来或让开）：倒置时偏移变小是往最新走
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
+                guard follow.wrappedValue.scrolling else { return }
+                follow.wrappedValue.moved(towardNewest: Self.inverted ? old - new : new - old)
             }
             .onChange(of: followKey) {
                 // 倒置时贴着最新就跟上去，没贴着就保持位置、亮出按钮（正着排时由底部锚点贴底）
