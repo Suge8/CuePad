@@ -16,11 +16,11 @@ import Testing
     loose: UUID(uuidString: "8B4DF51B-0BD4-479E-BA46-3D957E30FB39")!)
   private static let oldTaskIDs = [ids.top, ids.sub, ids.leaf, ids.loose]
 
-  private func upgraded() throws -> (CueStore, URL) {
+  private func upgraded(_ fixtureName: String = "library-v12") throws -> (CueStore, URL) {
     let directory = FileManager.default.temporaryDirectory.appending(path: "unify-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let url = directory.appending(path: "cuepad.db")
-    let fixture = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/library-v12.sqlite")
+    let fixture = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/\(fixtureName).sqlite")
     try FileManager.default.copyItem(at: fixture, to: url)
     return (try CueStore(url: url), url)
   }
@@ -79,5 +79,25 @@ import Testing
     let taskCards = try await tasks(store).values.map { $0.id.uuidString.lowercased() }
     #expect(Set(pending.saves.map(\.id)).isSuperset(of: taskCards))
     #expect(pending.deletes.isEmpty)
+  }
+
+  /// 手机停在结构 13、任务卡片还是旧 id 时，别的设备已经升级并把同一个任务以新 id 同步了过来：升级不能因为新 id 已存在而失败
+  /// （启动即崩溃），同一个任务留较新的一份，指向它的引用跟着，本机较新的那份仍待上传。
+  /// 夹具：结构 13，两个任务已有新 id 的同步版本——"修 scheduler 重连排序"的远端更新，"续费域名"的远端更旧。
+  @Test func 新id已同步到本机时升级照样成功_同一个任务留较新的一份() async throws {
+    let (store, _) = try upgraded("library-v13-synced")
+    let tasks = try await tasks(store)
+
+    #expect(tasks.count == 4)
+    let top = try #require(tasks["修 scheduler 重连排序（远端新版）"])
+    #expect(tasks["修 scheduler 重连排序"] == nil && top.status == .inProgress)  // 远端较新：留远端的内容，状态仍是本机照搬来的
+    let loose = try #require(tasks["续费域名"])
+    #expect(tasks["续费域名（远端旧版）"] == nil)  // 本机较新：内容用本机的
+    for old in Self.oldTaskIDs { #expect(try await store.card(old) == nil) }
+    #expect(Set(try await store.sendRecords().compactMap(\.cardID)) == [top.id, Self.ids.note])
+    #expect(try await store.deliveryRequest(UUID(uuidString: "d0000000-0000-0000-0000-000000000001")!)?.cardID == loose.id)
+
+    let pending = Set(try await store.pendingSync().saves.map(\.id))
+    #expect(pending.contains(loose.id.uuidString.lowercased()) && !pending.contains(top.id.uuidString.lowercased()))
   }
 }
