@@ -2,13 +2,14 @@
 import CueStore
 import SwiftUI
 
-/// 新建或编辑项目：名称、图标、颜色。
+/// 新建或编辑项目：名称、一句话介绍、图标、颜色。
 struct ProjectFormSheet: View {
     let project: Project?
     @Environment(Workspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var name = ""
+    @State private var intro = ""
     @State private var icon = "folder"
     @State private var color = ProjectStylePicker.colors[0].hex
 
@@ -16,7 +17,10 @@ struct ProjectFormSheet: View {
         NavigationStack {
             Form {
                 Group {
-                    TextField("名称", text: $name).submitLabel(.done).onSubmit(save)
+                    Section {
+                        TextField("名称", text: $name).submitLabel(.done).onSubmit(save)
+                        TextField("一句话介绍（可不填）", text: $intro, axis: .vertical).lineLimit(1...3)
+                    }
                     Section("图标与颜色") { ProjectStylePicker(icon: $icon, color: $color, cell: 44) }
                 }
                 .listRowBackground(palette.paper)
@@ -37,6 +41,7 @@ struct ProjectFormSheet: View {
         .onAppear {
             guard let project else { return }
             name = project.name
+            intro = project.intro ?? ""
             icon = ProjectGlyph.symbol(project.icon)
             color = project.color
         }
@@ -45,8 +50,8 @@ struct ProjectFormSheet: View {
     private func save() {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let project = project, icon = icon, color = color
-        workspace.attempt { _ = try await workspace.saveProject(project, name: name, icon: icon, color: color) }
+        let project = project, intro = intro, icon = icon, color = color
+        workspace.attempt { _ = try await workspace.saveProject(project, name: name, intro: intro, icon: icon, color: color) }
         dismiss()
     }
 }

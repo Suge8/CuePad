@@ -30,8 +30,11 @@ enum DemoLibrary {
                 try await store.setDirectory(directory, for: project.id)
             }
             let cards = try await store.cards(in: project.id)
+            // 演示库里写成"目标："开头的卡变成项目的一句话介绍（与升级迁移同一规则）
             if let goal = cards.first(where: { $0.body.hasPrefix("目标：") }) {
-                try await store.setGoal(goal.id, for: project.id)
+                let intro = CueSummary(goal.body).title.replacing(/^目标\s*[:：]\s*/, with: "")
+                try await store.updateProject(project.id) { $0.intro = intro }
+                try await store.purgeCard(goal.id)
             }
             for card in cards.filter({ $0.body.contains("发给 Pi") || $0.body.hasPrefix("评审") }).prefix(4) {
                 try await store.recordSend(card.body, to: SendTarget(kind: .piSession, name: project.name.lowercased()), card: card.id)
@@ -121,11 +124,17 @@ enum DemoLibrary {
 
     typealias LegacyTask = (project: String?, text: String, done: Bool)
 
-    /// 三级任务：圆桌的"乱序"下两条子任务（一条已完成），其中一条再带两条（第三级默认折起）。
+    /// 三级任务：圆桌的"乱序"下两条子任务（一条已完成），其中一条再带两条（第三级默认折起），另挂一条素材；
+    /// 正文是给 Agent 的话（标题行之后是要求）。
     private static func seedSubtasks(_ store: CueStore) async throws {
-        guard let order = try await store.tasks(.todo).flatMap(\.tasks).first(where: { $0.content.hasPrefix("发言轮次") }) else { return }
+        guard let order = try await store.tasks(.todo).flatMap(\.tasks).first(where: { $0.body.hasPrefix("发言轮次") }) else { return }
+        try await store.updateCard(order.id) {
+            $0.body += "\n\n跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前；先别改代码，告诉我原因和改法。"
+        }
+        let material = try await store.createCard(in: order.projectID, body: "复现记录\n第 6 位重连后排到了最前；日志在 logs/scheduler-0918.txt")
+        try await store.moveCard(material.id, to: .under(order.id), after: nil)
         let reproduce = try await store.createTask("复现乱序", under: order.id)
-        try await store.updateTask(reproduce.id) { $0.status = .done }
+        try await store.setStatus(reproduce.id, .done)
         let sort = try await store.createTask("改成按首次加入时间排序", under: order.id)
         for content in ["补 3 个重连用例", "跑一遍 16 人压测"] { _ = try await store.createTask(content, under: sort.id) }
     }

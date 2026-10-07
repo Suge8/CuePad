@@ -11,10 +11,10 @@ struct TaskTreeRulesTests {
     var store: CueStore { app.services.store }
 
     /// a（a1（a1x）、a2）、b：按 Store 的顺序读出来建树。
-    private func sample() async throws -> (tree: TaskTree, a: CueTask, a1: CueTask, a1x: CueTask, a2: CueTask, b: CueTask) {
-        let a = try await store.createTask("a")
-        let b = try await store.createTask("b")
-        try await store.moveTask(a.id, to: .top(project: nil), after: nil)
+    private func sample() async throws -> (tree: TaskTree, a: Card, a1: Card, a1x: Card, a2: Card, b: Card) {
+        let a = try await store.createTask("a", in: nil)
+        let b = try await store.createTask("b", in: nil)
+        try await store.moveCard(a.id, to: .top(project: nil), after: nil)
         let a1 = try await store.createTask("a1", under: a.id)
         let a1x = try await store.createTask("a1x", under: a1.id)
         let a2 = try await store.createTask("a2", under: a.id)

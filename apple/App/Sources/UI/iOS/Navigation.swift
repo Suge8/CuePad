@@ -57,7 +57,6 @@ final class Navigation {
     /// 随手记里正在写的这一条（输入框收起后仍留着，见 `endCapture`）。
     struct Capture {
         var draft = ComposerDraft()
-        var kind = CaptureKind.idea
         /// 手动换过的落点（`.some(nil)` 是未归档）；nil 时落在正在看的页面（`captureProject`）。
         var project: UUID??
     }
@@ -67,9 +66,12 @@ final class Navigation {
         let id = UUID()
         var content: String
         var card: UUID?
-        var task: UUID?
-        /// 卡片或任务所在项目：选会话时它的会话排在前面。
+        /// 卡片所在项目：选会话时它的会话排在前面。
         var project: UUID?
+    }
+
+    struct OpenTask: Identifiable {
+        let id: UUID
     }
 
     /// 新建（`project` 为 nil）或编辑项目的表单；书架、侧栏与项目页的入口都经这里，在根视图弹出。
@@ -98,6 +100,8 @@ final class Navigation {
     /// 随手记输入框浮在键盘上方。
     private(set) var capturing = false
     var outbox: Outbox?
+    /// 半屏浮起的任务（`TaskSheet`）。
+    var task: OpenTask?
     var projectForm: ProjectForm?
     var newSession: NewSession?
     /// 屏幕上独占底部的页（卡片纸页、Pi 会话页，推入途中起、返回开始止）的个数：iPhone 此时隐藏标签栏，
@@ -141,6 +145,11 @@ final class Navigation {
 
     func open(card id: UUID) {
         push(.card(id))
+    }
+
+    /// 任务在半屏浮窗里打开（书架"正在推进"、任务页、项目页的任务行）；灵感照旧推入整页纸。
+    func openTask(_ id: UUID) {
+        task = OpenTask(id: id)
     }
 
     /// 分栏：侧栏选中一页，清掉其上推入的页。
@@ -227,6 +236,7 @@ final class Navigation {
     /// 先推入再读时，结果要等转场开始、主线程空出来才到，滑进来的前几帧是一张空页。读不出来时照常推入，由页面报错。
     func openSession(_ id: UUID, sessionID: String? = nil, draft: Outbox? = nil, store: CueStore) {
         outbox = nil
+        task = nil
         if let draft {
             var reply = replyDraft(for: id)
             reply.attachment = draft

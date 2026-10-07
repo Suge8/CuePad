@@ -18,7 +18,7 @@ struct CaptureBar: View {
 }
 
 /// Mac 的随手记（底部输入栏与菜单栏面板共用），结构与文案同手机（`CaptureCopy`、`CaptureDraft`）：
-/// 想法 | 任务、落点项目、附图；↩ 记下（⌥↩ 换行），记下后提示落点、点提示去那里；想法另可 ⌘↩ 直接发出（不存卡）。
+/// 落点项目、附图；↩ 记成灵感（⌥↩ 换行），记下后提示落点、点提示去那里；另可 ⌘↩ 直接发出（不存卡）。
 struct CaptureComposer: View {
     /// 没手动换过落点时落在哪（主窗口是正在看的项目，菜单栏面板是当前项目）。
     let defaultProject: UUID?
@@ -29,15 +29,14 @@ struct CaptureComposer: View {
     @Environment(\.palette) private var palette
     @State private var text = ""
     @State private var images: [Data] = []
-    @State private var kind = CaptureKind.idea
     /// 手动换过的落点；nil 时用 `defaultProject`。
     @State private var chosen: UUID??
     @State private var saving = false
     @FocusState private var focused: Bool
 
-    private var draft: CaptureDraft { CaptureDraft(text: text, images: images, kind: kind) }
+    private var draft: CaptureDraft { CaptureDraft(text: text, images: images) }
     private var project: UUID? { chosen ?? defaultProject }
-    private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project), kind: kind) }
+    private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project)) }
     private var expanded: Bool { pinnedOpen || focused || !text.isEmpty || !images.isEmpty }
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -46,15 +45,11 @@ struct CaptureComposer: View {
             VStack(alignment: .leading, spacing: 8) {
                 if expanded {
                     HStack(spacing: 8) {
-                        Picker("记成", selection: $kind) {
-                            ForEach(CaptureKind.allCases, id: \.self) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.segmented).labelsHidden().fixedSize()
                         Spacer(minLength: 8)
                         destinationMenu
                     }
                     .transition(.opacity)
-                    if kind == .idea, !images.isEmpty { imageStrip }
+                    if !images.isEmpty { imageStrip }
                 }
                 field
             }
@@ -65,13 +60,12 @@ struct CaptureComposer: View {
                     .strokeBorder(palette.ink3.opacity(focused && !pinnedOpen ? 0.5 : 0), lineWidth: 1)
                     .allowsHitTesting(false)
             }
-            if kind == .idea, !trimmed.isEmpty, images.isEmpty {
+            if !trimmed.isEmpty, images.isEmpty {
                 SendControl(project: project, compact: pinnedOpen) { send($0) }
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
             }
         }
         .animation(Motion.quick, value: expanded)
-        .animation(Motion.quick, value: kind)
         .animation(Motion.snappy, value: trimmed.isEmpty)
         .onAppear { if pinnedOpen { focused = true } }
     }
@@ -82,7 +76,7 @@ struct CaptureComposer: View {
                 Image(systemName: "square.and.pencil").foregroundStyle(palette.ink2).padding(.leading, 16).padding(.bottom, 13)
                     .accessibilityHidden(true)
             }
-            TextField(CaptureCopy.placeholder(kind, to: destination), text: $text, axis: .vertical)
+            TextField(CaptureCopy.placeholder(to: destination), text: $text, axis: .vertical)
                 .accessibilityLabel("随手记")
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
@@ -92,11 +86,9 @@ struct CaptureComposer: View {
                 .padding(.leading, expanded ? 12 : 4).padding(.vertical, 12)
                 .frame(minHeight: expanded ? minHeight : 0, alignment: .topLeading)
             if expanded {
-                if kind == .idea {
-                    Button("添加图片", systemImage: "photo.on.rectangle") { pickImages() }
-                        .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink2)
-                        .frame(width: 32, height: 40)
-                }
+                Button("添加图片", systemImage: "photo.on.rectangle") { pickImages() }
+                    .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink2)
+                    .frame(width: 32, height: 40)
                 Button(action: save) { RoundSendGlyph(enabled: !draft.isEmpty && !saving) }
                     .buttonStyle(.plain)
                     .disabled(draft.isEmpty || saving)
@@ -112,7 +104,7 @@ struct CaptureComposer: View {
 
     private var destinationMenu: some View {
         Menu {
-            Button(kind == .idea ? CaptureCopy.inbox : "不归项目") { chosen = .some(nil) }
+            Button(CaptureCopy.inbox) { chosen = .some(nil) }
             Divider()
             ForEach(workspace.catalog?.projects ?? []) { item in Button(item.name) { chosen = .some(item.id) } }
         } label: {

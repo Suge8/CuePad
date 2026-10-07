@@ -11,7 +11,8 @@ nonisolated private struct EditorData: Sendable {
 }
 
 /// 打开的卡：一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面）。键盘上方是工具栏（分割线、插图、变量取值、发送；选中文字时发送只发选中的部分）；
-/// 顶栏是共用的悬浮顶栏：中间写所属项目与"时间 · 目标 · 置顶"，右边"⋯"里是发到 Mac（⌘↩）、复制、分享与卡片操作。
+/// 顶栏是共用的悬浮顶栏：中间写所属项目与"时间 · 状态 · 置顶"，右边"⋯"里是发送（⌘↩；任务写"交给 Agent"）、复制、分享与卡片操作。
+/// 任务在正文上方多一块状态、会话与下级（`TaskPanel`）。
 struct CardEditorScreen: View {
     let cardID: UUID
     @Environment(Workspace.self) private var workspace
@@ -45,7 +46,7 @@ struct CardEditorScreen: View {
             .floatingHeader(data.map { $0.project?.name ?? "未归档" } ?? "", detail: data.map(Self.detail) ?? "") { actions }
             // 菜单项上的快捷键要等菜单打开才生效：⌘↩ 另挂一个不占位的按钮
             .background {
-                Button("发到 Mac", action: sendToMac).keyboardShortcut(.return, modifiers: .command)
+                Button(sendTitle, action: sendToMac).keyboardShortcut(.return, modifiers: .command)
                     .disabled(data == nil).opacity(0).accessibilityHidden(true)
             }
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
@@ -74,6 +75,11 @@ struct CardEditorScreen: View {
 
     @ViewBuilder private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let data, data.card.isTask {
+                TaskPanel(task: data.card)
+                    .padding(.horizontal, inset).padding(.top, 8).padding(.bottom, 4)
+                Divider().overlay(palette.hair).padding(.horizontal, inset)
+            }
             if let data, let initialText {
                 IOSEditorHost(
                     initialText: initialText,
@@ -94,9 +100,9 @@ struct CardEditorScreen: View {
 
     private var inset: CGFloat { wide ? 44 : 20 }
 
-    /// 顶栏的一行："03:36 · 目标 · 置顶"。
+    /// 顶栏的一行："03:36 · 任务 · 置顶"。
     private static func detail(_ data: EditorData) -> String {
-        let marks = [data.project?.goalCardID == data.card.id ? "目标" : nil, data.card.isPinned ? "置顶" : nil].compactMap { $0 }
+        let marks = [data.card.isTask ? "任务" : nil, data.card.isPinned ? "置顶" : nil].compactMap { $0 }
         return ([DateLabel.short(data.card.modifiedAt)] + marks).joined(separator: " · ")
     }
 
@@ -104,7 +110,7 @@ struct CardEditorScreen: View {
     private var actions: some View {
         Menu("更多", systemImage: "ellipsis") {
             if let card = data?.card {
-                Button("发到 Mac", systemImage: "paperplane", action: sendToMac)
+                Button(sendTitle, systemImage: "paperplane", action: sendToMac)
                 Button("复制", systemImage: "doc.on.doc") { copy(card) }
                 ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
                 Divider()
@@ -113,6 +119,8 @@ struct CardEditorScreen: View {
         }
         .disabled(data == nil)
     }
+
+    private var sendTitle: String { data?.card.isTask == true ? "交给 Agent" : "发到 Mac" }
 
     /// 发到 Mac：选中了文字就只发选中的部分。
     private func sendToMac() {

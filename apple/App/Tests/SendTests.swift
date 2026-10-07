@@ -170,16 +170,14 @@ struct SendTests {
 
     // MARK: 记录
 
-    @Test func 记录带内容快照与关联的卡片任务() async throws {
-        let card = try await services.store.createCard(in: nil, body: "card body")
-        let task = try await services.store.createTask("do it")
+    @Test func 记录带内容快照与关联的卡片() async throws {
+        let task = try await services.store.createTask("do it", in: nil)
 
-        try await services.send("snapshot text", to: .clipboard, card: card.id, task: task.id)
+        try await services.send("snapshot text", to: .clipboard, card: task.id)
 
         let record = try #require(try await services.store.sendRecords().first)
         #expect(record.content == "snapshot text")
-        #expect(record.cardID == card.id)
-        #expect(record.taskID == task.id)
+        #expect(record.cardID == task.id)
     }
 
     /// 投送已经成功、发送记录没写进去：调用方得到说明这件事的错误（界面据此提示且不当作没发出），而不是只进日志。

@@ -35,7 +35,11 @@ struct IOSRootView: View {
             }
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
             .overlay { CaptureLayer() }
-            .sheet(item: $navigation.outbox) { SessionPicker(outbox: $0) }
+            // 任务浮窗开着时选会话的面板由浮窗自己弹（同一视图上两个 sheet 不能叠着出）
+            .sheet(item: Binding(get: { navigation.task == nil ? navigation.outbox : nil }, set: { navigation.outbox = $0 })) {
+                SessionPicker(outbox: $0)
+            }
+            .sheet(item: $navigation.task) { TaskSheet(id: $0.id) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
             .sheet(item: $navigation.newSession) { NewSessionSheet(start: $0) }
         }
@@ -232,21 +236,30 @@ private struct NoticeBanner: View {
     var body: some View {
         ZStack {
             if let notice = workspace.notice {
-                Button { if let link = notice.link { go(link) } } label: {
-                    HStack(spacing: 6) {
-                        Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        if notice.link != nil {
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
-                                .accessibilityHidden(true)
+                HStack(spacing: 0) {
+                    Button { if let link = notice.link { go(link) } } label: {
+                        HStack(spacing: 6) {
+                            Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            if notice.link != nil {
+                                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+                                    .accessibilityHidden(true)
+                            }
                         }
+                        .foregroundStyle(notice.isError ? AnyShapeStyle(palette.failure) : AnyShapeStyle(palette.ink))
+                        .padding(.leading, 16).padding(.trailing, notice.undo == nil ? 16 : 8).padding(.vertical, 10)
                     }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(notice.isError ? AnyShapeStyle(palette.failure) : AnyShapeStyle(palette.ink))
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                    .glass(in: .capsule, interactive: notice.link != nil)
+                    .buttonStyle(.plain)
+                    .disabled(notice.link == nil)
+                    // 撤销：点了把刚才那一下拨回去（"要做"开关）
+                    if let undo = notice.undo {
+                        Button("撤销") { workspace.undo(undo) }
+                        .fontWeight(.semibold).foregroundStyle(palette.accent)
+                        .padding(.trailing, 16).padding(.leading, 8).frame(minHeight: 44)
+                        .contentShape(.rect)
+                    }
                 }
-                .buttonStyle(.plain)
-                .disabled(notice.link == nil)
+                .font(.subheadline.weight(.medium))
+                .glass(in: .capsule, interactive: notice.link != nil || notice.undo != nil)
                 .accessibilityHint(notice.link == nil ? "" : "去那里看看")
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 .id(notice.id)
@@ -268,7 +281,6 @@ private struct NoticeBanner: View {
         switch link {
         case .project(let id?): navigation.show(project: id, workspace: workspace)
         case .project(nil): navigation.showInbox()
-        case .tasks: navigation.showTasks()
         }
     }
 }

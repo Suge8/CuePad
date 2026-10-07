@@ -46,7 +46,7 @@ struct ProjectScreen: View {
             .project(projectID), available: navigation.layout == .tabs && (workspace.catalog?.cardCounts[projectID] ?? 0) > 0,
             ready: page != nil)
         .floatingHeader(project?.name ?? "", detail: detail) { actions }
-        .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $page, onError: workspace.fail) {
+        .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
         .observing(services.store, [.piSessionStates, .deliveryRequests, .projects], id: projectID, into: $pi, onError: workspace.fail) { [projectID] store in
@@ -117,8 +117,7 @@ struct ProjectScreen: View {
     private func wall(_ ids: [UUID], page: ProjectPage, lastTarget: [UUID: String]) -> some View {
         MasonryLayout(minColumnWidth: sizeClass == .regular ? 220 : 150, maxColumns: 4, spacing: 12) {
             ForEach(ids.compactMap { page.entries[$0] }) { entry in
-                CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id),
-                             isGoal: page.data.project?.goalCardID == entry.id)
+                CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
             }
         }
     }
@@ -153,16 +152,15 @@ struct ProjectScreen: View {
     }
 }
 
-/// 目标与任务：目标卡 + 本项目任务（"任务 完成数/总数"，前 3 条顶层任务连同子任务，可拖动、缩进，同任务页；其余在任务页）+ 本项目的 Pi 会话（在线的全列，
+/// 介绍与任务：项目的一句话介绍 + 本项目任务（"任务 完成数/总数"，前 3 条顶层任务连同子任务，可拖动、缩进，同任务页；其余在任务页）+ 本项目的 Pi 会话（在线的全列，
 /// 再加最近结束的几个；更多的点"全部"看这个项目的 Pi 列表）。会话点开看近况、回复。
-/// 没有目标卡时只有任务；什么都没有时是一行"添加任务"。
+/// 没写介绍时只有任务；什么都没有时是一行"添加任务"。
 private struct FocusCard: View {
     let data: ProjectPageData
     let pi: PiSessionList?
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
-    @State private var editing: CueTask?
 
     private static let visibleTasks = 3
     static let endedShown = 2
@@ -170,20 +168,10 @@ private struct FocusCard: View {
     var body: some View {
         // 三段靠段标题与段间距分组，不画分割线
         VStack(alignment: .leading, spacing: 20) {
-            if let goal = data.goalCard {
-                let text = CardEntry(goal).text
-                Button { navigation.open(card: goal.id) } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        SectionLabel(text: "目标", systemImage: "scope")
-                        Text(text.title.nonEmpty ?? "空白卡片").font(.headline).foregroundStyle(palette.ink).multilineTextAlignment(.leading)
-                        if !text.preview.isEmpty {
-                            Text(VariableText.styled(text.preview, palette)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
-                        }
-                    }
+            if let intro = data.project?.intro {
+                Text(intro).font(.headline).foregroundStyle(palette.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
+                    .textSelection(.enabled)
             }
             // 与任务页同一节奏：行自带 44pt 命中高度，行间不再加间距
             VStack(alignment: .leading, spacing: 0) {
@@ -191,7 +179,7 @@ private struct FocusCard: View {
                     .padding(.bottom, 4)
                 let roots = data.tasks.roots
                 TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
-                    TaskLine(task: row.task, subtasks: data.subtasks[row.id]).contextMenu { TaskActions(task: row.task) { editing = row.task } }
+                    TaskLine(task: row.task, subtasks: data.subtasks[row.id]).contextMenu { TaskActions(task: row.task) { navigation.openTask(row.id) } }
                 }
                 if roots.count > Self.visibleTasks {
                     Button("还有 \(roots.count - Self.visibleTasks) 条") { navigation.push(.tasks) }
@@ -215,7 +203,6 @@ private struct FocusCard: View {
         }
         .padding(16)
         .paper(radius: 18)
-        .sheet(item: $editing) { TaskEditSheet(task: $0) }
     }
 
     private func sessionLine(_ item: PiSessionListItem) -> some View {

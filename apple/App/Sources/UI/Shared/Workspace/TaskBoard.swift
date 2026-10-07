@@ -6,13 +6,20 @@ import Foundation
 /// 最近完成不分项目、不分层，按完成时间从新到旧取前 `doneLimit` 条。每条带所在项目；交给 Pi 的带那个会话此刻的状态。
 nonisolated struct TaskBoard: Sendable, Equatable {
     struct Row: Identifiable, Sendable, Equatable {
-        var task: CueTask
+        var task: Card
         var project: Project?
         /// 交给 Pi 的任务关联的会话（同步记录）；没交给 Pi 或记录已没有时为 nil。
         var session: PiSessionState?
         /// 发给那个会话的最近一条投送请求（显示状态见 `PiDelivery`）。
         var delivery: DeliveryRequest?
         var id: UUID { task.id }
+
+        static func read(_ task: Card, projects: [UUID: Project], from store: isolated CueStore) throws -> Row {
+            let item = try task.piSessionID.flatMap {
+                try store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: $0))).items.first
+            }
+            return Row(task: task, project: task.projectID.flatMap { projects[$0] }, session: item?.state, delivery: item?.delivery)
+        }
     }
 
     /// 最近完成列多少条。
@@ -35,16 +42,11 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     var isEmpty: Bool { inProgress.isEmpty && todo.isEmpty && done.isEmpty }
 
     /// 看板要观察的表。
-    static let tables: Set<StoreTable> = [.tasks, .projects, .piSessionStates, .deliveryRequests]
+    static let tables: Set<StoreTable> = [.cards, .projects, .piSessionStates, .deliveryRequests]
 
     static func read(from store: isolated CueStore) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
-        func row(_ task: CueTask) throws -> Row {
-            let item = try task.piSessionID.flatMap {
-                try store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: $0))).items.first
-            }
-            return Row(task: task, project: task.projectID.flatMap { projects[$0] }, session: item?.state, delivery: item?.delivery)
-        }
+        func row(_ task: Card) throws -> Row { try Row.read(task, projects: projects, from: store) }
         let tree = try openTree(from: store)
         let rows = Dictionary(uniqueKeysWithValues: try tree.ordered.map { ($0.id, try row($0)) })
         let roots = tree.roots.compactMap { rows[$0] }
@@ -52,6 +54,13 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return TaskBoard(
             tree: tree, inProgress: roots.filter { $0.task.status == .inProgress }, todo: roots.filter { $0.task.status == .todo },
             done: try done.prefix(doneLimit).map(row), rows: rows, subtasks: try store.subtaskProgress(), counts: try counts(from: store))
+    }
+
+    /// 正在推进的任务（书架顶上）：进行中的，不分层级，最近开始的在前。
+    static func active(limit: Int, from store: isolated CueStore) throws -> [Row] {
+        let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
+        let started = try store.tasks(.inProgress).flatMap(\.tasks).sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
+        return try started.prefix(limit).map { try Row.read($0, projects: projects, from: store) }
     }
 
     /// 全部项目的顶层任务计数（回收站里的项目不算）。

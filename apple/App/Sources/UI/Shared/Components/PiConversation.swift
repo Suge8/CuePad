@@ -206,7 +206,7 @@ private struct OutgoingBubble: View {
         let old = request, session = session
         workspace.attempt {
             _ = try await workspace.services.requestMacDelivery(
-                old.content, to: session, mode: old.mode.known ?? .followUp, card: old.cardID, task: old.taskID)
+                old.content, to: session, mode: old.mode.known ?? .followUp, card: old.cardID)
             try await workspace.services.store.deleteDelivery(old.id)
         }
     }

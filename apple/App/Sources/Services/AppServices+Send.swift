@@ -11,9 +11,9 @@ import UIKit
 /// 发送：正文解析 → 按目标落地 → 成功后记一条发送记录。
 extension AppServices {
     /// 投送已经成功：记录写失败时抛 `SendError.unrecorded`，与投送失败区分开，界面按已发出处理（不重发）并提示。
-    func recordSend(_ storedText: String, to target: SendTarget, card: UUID?, task: UUID?) async throws {
+    func recordSend(_ storedText: String, to target: SendTarget, card: UUID?) async throws {
         do {
-            try await store.recordSend(storedText, to: target, card: card, task: task)
+            try await store.recordSend(storedText, to: target, card: card)
         } catch {
             throw SendError.unrecorded(error.localizedDescription)
         }
@@ -53,12 +53,12 @@ extension AppServices {
     /// 后返回；发给 Pi 的东西不论来自哪台设备都只有投送请求这一种记录，真正调用 Pi 桥的只有执行器。
     /// 直接发送而会话正忙时不写请求，抛 `SendError.piSessionBusy`；执行器没在运行时不写请求（写了也没人执行）。
     func sendThroughRequest(
-        _ storedText: String, to id: CuePi.PiSession.ID, mode: DeliveryMode, card: UUID?, task: UUID?
+        _ storedText: String, to id: CuePi.PiSession.ID, mode: DeliveryMode, card: UUID?
     ) async throws {
         guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
         if mode == .send, session.isBusy { throw SendError.piSessionBusy }
         guard deliveryExecutor != nil else { throw SendError.executorUnavailable }
-        let request = try await store.requestDelivery(storedText, to: session.target, on: hostID, mode: mode, card: card, task: task)
+        let request = try await store.requestDelivery(storedText, to: session.target, on: hostID, mode: mode, card: card)
         let result = try await outcome(of: request.id)
         if result.status != .known(.succeeded) { throw SendError.notDelivered(result.resultDetail ?? "没有说明原因") }
     }

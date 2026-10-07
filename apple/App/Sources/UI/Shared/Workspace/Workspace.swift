@@ -28,12 +28,19 @@ final class Workspace {
         var isError: Bool
         /// 点提示去哪（如随手记的落点）；nil 时提示只是告知。
         var link: Link?
+        /// 提示里的"撤销"：把刚才那一下拨回去（如"要做"开关）。
+        var undo: Undo?
     }
 
-    /// 提示能带去的地方：项目页（nil 是未归档）、任务（nil 是不归项目的任务）。
+    struct Undo: Equatable {
+        let id = UUID()
+        let run: @MainActor () async throws -> Void
+        static func == (lhs: Undo, rhs: Undo) -> Bool { lhs.id == rhs.id }
+    }
+
+    /// 提示能带去的地方：项目页（nil 是未归档）。
     enum Link: Equatable {
         case project(UUID?)
-        case tasks(UUID?)
     }
 
     #if os(macOS)
@@ -42,7 +49,6 @@ final class Workspace {
         var text: String
         var session: CuePi.PiSession.ID
         var card: UUID?
-        var task: UUID?
     }
     #endif
 
@@ -238,8 +244,8 @@ final class Workspace {
 
     private static let noticeDuration: Duration = .seconds(2.4)
 
-    func say(_ text: String, isError: Bool = false, link: Link? = nil) {
-        let notice = Notice(text: text, isError: isError, link: link)
+    func say(_ text: String, isError: Bool = false, link: Link? = nil, undo: (@MainActor () async throws -> Void)? = nil) {
+        let notice = Notice(text: text, isError: isError, link: link, undo: undo.map(Undo.init(run:)))
         self.notice = notice
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in
@@ -299,10 +305,10 @@ final class Workspace {
         return try await fallingBack(from: project) { try await store.createCard(in: $0, body: body) }
     }
 
-    /// 新建任务；项目失效时同样回落，任务归为全局并提示。
-    func createTask(_ content: String, in project: UUID?) async throws -> CueTask {
+    /// 新建任务；项目失效时同样回落，任务归为未归档并提示。
+    func createTask(_ body: String, in project: UUID?) async throws -> Card {
         let store = services.store
-        return try await fallingBack(from: project) { try await store.createTask(content, in: $0) }
+        return try await fallingBack(from: project) { try await store.createTask(body, in: $0) }
     }
 
     private func fallingBack<T>(from project: UUID?, _ write: (UUID?) async throws -> T) async throws -> T {
@@ -316,20 +322,40 @@ final class Workspace {
         }
     }
 
-    /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态在写事务里按 Store 的当前值决定，不看界面手里的副本：
+    /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态按 Store 的当前值决定，不看界面手里的副本：
     /// 副本可能已过时（列表还没刷新就又点了一次），按它推算会把已勾的再勾一次。
-    func toggle(_ task: CueTask) async throws {
-        try await services.store.updateTask(task.id) { $0.status = $0.status == .done ? .todo : .done }
+    func toggle(_ task: Card) async throws {
+        let store = services.store
+        let current = try await store.card(task.id)?.status
+        try await store.setStatus(task.id, current == .done ? .todo : .done)
     }
 
-    /// 挪动任务（拖放、缩进、反缩进）；子任务随它走。
+    /// 挪动卡片（拖放、缩进、反缩进、挂成素材）；下级随它走。
     func move(_ id: UUID, _ move: TaskMove) {
-        perform { try await $0.moveTask(id, to: move.slot, after: move.after) }
+        perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
     }
 
     /// 开始做（待办 → 进行中）；`back` 为 true 时停下回到待办。
-    func start(_ task: CueTask, back: Bool = false) async throws {
-        try await services.store.updateTask(task.id) { $0.status = back ? .todo : .inProgress }
+    func start(_ task: Card, back: Bool = false) async throws {
+        try await services.store.setStatus(task.id, back ? .todo : .inProgress)
+    }
+
+    /// "要做"开关：灵感成为任务，或任务回到灵感（下级提到它的位置）。提示里带"撤销"，点了就拨回去。
+    func setTodo(_ id: UUID, _ on: Bool) async throws {
+        let store = services.store
+        try await store.setTodo(id, on)
+        say(on ? "已设为任务" : "已回到灵感", undo: { try await store.setTodo(id, !on) })
+    }
+
+    /// 界面上的"要做"开关：失败时提示。
+    func toggleTodo(_ id: UUID, _ on: Bool) {
+        attempt { try await self.setTodo(id, on) }
+    }
+
+    /// 点提示里的"撤销"：收起提示，把刚才那一下拨回去。
+    func undo(_ undo: Undo) {
+        notice = nil
+        attempt { try await undo.run() }
     }
 
     /// 执行一个异步操作，失败时提示。

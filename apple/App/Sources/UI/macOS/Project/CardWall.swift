@@ -148,7 +148,6 @@ struct CardFace: View {
     let card: Card
     let lastTarget: String?
     let floated: Bool
-    let isGoal: Bool
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -166,7 +165,7 @@ struct CardFace: View {
                     .font(.system(size: 13)).lineSpacing(3).foregroundStyle(palette.ink2)
                     .lineLimit(text.images.isEmpty ? 4 : 2)
             }
-            CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated, isGoal: isGoal)
+            CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
                 .padding(.top, 2)
         }
         .padding(14)
@@ -181,7 +180,6 @@ struct CardTile: View {
     let card: Card
     let lastTarget: String?
     let floated: Bool
-    let isGoal: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -189,7 +187,7 @@ struct CardTile: View {
 
     var body: some View {
         Button(action: open) {
-        CardFace(card: card, lastTarget: lastTarget, floated: floated, isGoal: isGoal)
+        CardFace(card: card, lastTarget: lastTarget, floated: floated)
         .frame(maxWidth: .infinity, alignment: .leading)
         .paper(radius: Self.radius, lifted: hovering)
         .contentShape(.rect(cornerRadius: Self.radius))

@@ -41,7 +41,7 @@ struct ProjectPage: View {
             .onChange(of: board.arrangement != nil) { DebugScene.scrollIfNeeded(proxy) }
             #endif
         }
-        .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
+        .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
         .onChange(of: data?.stamps()) { rearrange() }
@@ -94,15 +94,14 @@ struct ProjectPage: View {
             }
             WallGrid(ids: ids, cards: byID, arrangedAt: board.arrangement?.arrangedAt) { card in
                 CardTile(
-                    card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id),
-                    isGoal: data.project?.goalCardID == card.id)
+                    card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id))
             }
         }
     }
 
     /// 有目标卡、未完成任务或本项目的 Pi 会话之一就显示；缺的那一栏各自隐藏。
     private func showsFocus(_ data: ProjectPageData) -> Bool {
-        data.goalCard != nil || !data.tasks.isEmpty || !workspace.liveSessions(in: projectID).isEmpty
+        data.project?.intro != nil || !data.tasks.isEmpty || !workspace.liveSessions(in: projectID).isEmpty
     }
 
     private func rearrange() {

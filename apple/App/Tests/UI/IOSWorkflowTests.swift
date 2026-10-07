@@ -100,7 +100,7 @@ struct IOSWorkflowTests {
         let first = pngData(shade: 0.1), second = pngData(shade: 0.9)
         let hashes = try [first, second].map { try app.services.images.store($0) }
 
-        try await CaptureDraft(text: "  想法  ", images: [first, second], kind: .idea).save(in: project.id, workspace: workspace)
+        try await CaptureDraft(text: "  想法  ", images: [first, second]).save(in: project.id, workspace: workspace)
 
         let card = try #require(try await store.cards(in: project.id).first)
         #expect(card.body == "想法\n\n![](cuepad://img/\(hashes[0]))\n![](cuepad://img/\(hashes[1]))")
@@ -113,22 +113,11 @@ struct IOSWorkflowTests {
         let image = pngData()
         let hash = try app.services.images.store(image)
 
-        try await CaptureDraft(text: "", images: [image], kind: .idea).save(in: nil, workspace: workspace)
+        try await CaptureDraft(text: "", images: [image]).save(in: nil, workspace: workspace)
 
         #expect(try await store.cards(in: nil).map(\.body) == ["![](cuepad://img/\(hash))"])
         #expect(workspace.notice?.text == "已记到 未归档")
         #expect(workspace.notice?.link == .project(nil))
-    }
-
-    @Test func 随手记成任务_存为该项目的一条任务_不存卡片() async throws {
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let workspace = Workspace(services: app.services, holder: SceneContext())
-
-        try await CaptureDraft(text: "  补测试  ", images: [], kind: .task).save(in: project.id, workspace: workspace)
-
-        #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.content) == ["补测试"])
-        #expect(try await store.cards(in: project.id).isEmpty)
-        #expect(workspace.notice?.link == .tasks(project.id))
     }
 }
 #endif

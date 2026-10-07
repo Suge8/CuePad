@@ -4,14 +4,14 @@ import SwiftUI
 
 /// 任务页（书架上的"任务"一行、iPad 侧栏、项目页"还有 N 条"进入）：顶上常驻一行快速添加（↩ 即一条，落当前项目或未归档，可换）；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
 /// 子任务缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的子任务、右滑缩进左滑反缩进），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
-/// 点圆圈完成（完成的点了回到待办），长按是编辑、缩进、开始、交给 Pi、移到项目、删除。
+/// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `TaskActions`。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var board: TaskBoard?
     @State private var showsCompleted = false
-    @State private var editing: CueTask?
+    @Environment(Navigation.self) private var navigation
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -31,10 +31,8 @@ struct TasksScreen: View {
                 .padding(.horizontal, 16).padding(.vertical, 8)
         }
         .floatingHeader("任务", detail: board?.counts.summary ?? "")
-        .sheet(item: $editing) { TaskEditSheet(task: $0) }
         #if DEBUG
         .onAppear { if DebugScene.defaults.bool(forKey: "CuePadShowsDone") { showsCompleted = true } }
-        .onChange(of: board?.todo.first?.id) { if DebugScene.scene == "taskedit", editing == nil { editing = board?.todo.first?.task } }
         #endif
         .animation(.easeOut(duration: 0.2), value: board.map { [$0.inProgress, $0.todo, $0.done].flatMap { $0.map(\.id) } })
         .observing(services.store, TaskBoard.tables, into: $board, onError: workspace.fail) {
@@ -109,16 +107,16 @@ struct TasksScreen: View {
         }
     }
 
-    private func line(_ task: CueTask, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?, subtasks: TaskProgress?) -> some View {
+    private func line(_ task: Card, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?, subtasks: TaskProgress?) -> some View {
         TaskLine(task: task, project: project, session: session, delivery: delivery, subtasks: subtasks)
-            .contextMenu { TaskActions(task: task) { editing = task } }
+            .contextMenu { TaskActions(task: task) { navigation.openTask(task.id) } }
     }
 }
 
-/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾）。点圆圈立即显示完成（对勾、删除线、成功触感），停留片刻再从列表移出；
+/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点文字在浮窗里打开。点圆圈立即显示完成（对勾、删除线、成功触感），停留片刻再从列表移出；
 /// 这段时间里再点一下就撤销。还有没完成的子任务时先问一句，确认后连子任务一起完成。已完成的任务点一下立即回到待办。
 struct TaskLine: View {
-    let task: CueTask
+    let task: Card
     /// 任务页跨项目列着，写上所在项目；项目页里不写。
     var project: Project?
     /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况），以及发给它的最近一条投送请求。
@@ -145,12 +143,13 @@ struct TaskLine: View {
         line
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.content, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
             .accessibilityAction { tap() }
             .accessibilityActions {
+                Button("打开") { navigation.openTask(task.id) }
                 if let session { Button("看 Pi 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
                 if let indent = structure?.indent { Button("缩进", action: indent) }
                 if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
@@ -190,13 +189,16 @@ struct TaskLine: View {
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: phase) { $0 == .idle && $1 == .pending }
             VStack(alignment: .leading, spacing: 3) {
-                Text(task.content.textGlyphs)
+                Text(task.title.textGlyphs)
                     .font(.body).strikethrough(done)
                     .foregroundStyle(done ? palette.ink3 : palette.ink)
                     .lineLimit(2)
                 if hasDetail { detail }
             }
             .padding(.vertical, hasDetail ? 6 : 0)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+            .onTapGesture { navigation.openTask(task.id) }
         }
     }
 

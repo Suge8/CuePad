@@ -127,7 +127,7 @@ extension AppServices {
         case .unknown:
             throw SendError.unsupportedTarget(target.name)
         }
-        try await recordSend(request.content, to: sent, card: request.cardID, task: request.taskID)
+        try await recordSend(request.content, to: sent, card: request.cardID)
     }
 
     /// 作答与改配置交给扩展，不是发出去的内容，不记发送记录；其他方式返回 false。

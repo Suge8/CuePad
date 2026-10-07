@@ -8,7 +8,6 @@ nonisolated struct ShelfData: Sendable {
         var project: Project
         var cardCount: Int
         var openTasks: Int
-        var goal: String?
         /// 最近修改的一张卡的标题与时间。
         var latest: (title: String, date: Date)?
         var id: UUID { project.id }
@@ -19,8 +18,12 @@ nonisolated struct ShelfData: Sendable {
     var live: [PiSessionListItem]
     /// 书架的"任务"一行：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，不显示这一行。
     var tasks: TaskCounts?
+    /// 正在推进的任务（进行中，最近开始的在前），书架最上面。
+    var active: [TaskBoard.Row]
     var inboxCount: Int
     var trashCount: Int
+
+    static let activeLimit = 3
 
     static func read(from store: isolated CueStore) throws -> ShelfData {
         let summaries = try store.projectSummaries()
@@ -30,20 +33,20 @@ nonisolated struct ShelfData: Sendable {
             let latest = try store.search(SearchQuery(projects: [project.id]), limit: 1).cards.first
             return Entry(
                 project: project, cardCount: counts[project.id] ?? 0, openTasks: tasks[project.id]?.open ?? 0,
-                goal: try project.goalCardID.flatMap { try store.card($0) }.map { CardText($0.body).title.textGlyphs },
                 latest: latest.map { (CardText($0.body).title.textGlyphs, $0.modifiedAt) })
         }
         let hasTasks = tasks.values.contains { $0.total > 0 }
         return ShelfData(
             entries: entries, live: try store.piSessionPage(.live).items,
             tasks: hasTasks ? try TaskBoard.counts(from: store) : nil,
+            active: try TaskBoard.active(limit: activeLimit, from: store),
             inboxCount: counts[nil] ?? 0,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
     }
 }
 
-/// iPhone 首页：项目书架。最上面一张纸：有没归类的想法时一行提醒去整理，有任务时一行"任务 · N 进行中 · N 待办"进入跨项目任务页；
-/// 置顶项目是大卡，其余按最近排成行，都带目标、卡片数、任务数与 Pi 状态点。
+/// iPhone 首页：项目书架。最上面是"正在推进"（进行中的任务，点开是任务浮窗）；下面一张纸：有任务时一行"任务 · N 进行中 · N 待办"
+/// 进入跨项目任务页，有没归类的灵感时一行提醒去整理；置顶项目是大卡，其余按最近排成行，都带介绍、灵感数、任务数与 Pi 状态点。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -76,7 +79,7 @@ struct ShelfScreen: View {
             }
         }
         .refreshable { await services.syncNow() }
-        .observing(services.store, [.projects, .cards, .tasks, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) {
+        .observing(services.store, [.projects, .cards, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }
     }
@@ -87,11 +90,12 @@ struct ShelfScreen: View {
         let recent = data.entries.filter { !$0.project.isPinned }
         let pi = PiSessionListItem.byProject(data.live, shown: services.settings.shown)
         VStack(alignment: .leading, spacing: 22) {
+            if !data.active.isEmpty { ActiveTasks(rows: data.active) }
             if data.inboxCount > 0 || data.tasks != nil {
                 VStack(spacing: 0) {
-                    if data.inboxCount > 0 { InboxReminder(count: data.inboxCount) }
-                    if data.inboxCount > 0, data.tasks != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
                     if let tasks = data.tasks { TasksLine(tasks: tasks) }
+                    if data.inboxCount > 0, data.tasks != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
+                    if data.inboxCount > 0 { InboxReminder(count: data.inboxCount) }
                 }
                 .clipShape(.rect(cornerRadius: 16, style: .continuous))
                 .paper(radius: 16)
@@ -160,7 +164,7 @@ private struct ShelfLine: View {
     }
 }
 
-/// 有没归类的想法时的提醒（注意色的图标）：点它去未归档整理。
+/// 有没归类的灵感时的提醒（注意色的图标）：点它去未归档整理。
 private struct InboxReminder: View {
     let count: Int
     @Environment(\.palette) private var palette
@@ -179,7 +183,7 @@ private struct TasksLine: View {
     }
 }
 
-/// 置顶项目的大卡：图标、名称、目标、卡片数与未完成任务数、Pi 状态点。
+/// 置顶项目的大卡：图标、名称、介绍、灵感数与未完成任务数、Pi 状态点。
 private struct PinnedShelfCard: View {
     let entry: ShelfData.Entry
     let pi: PiShown?
@@ -196,15 +200,9 @@ private struct PinnedShelfCard: View {
                     if let pi { PiStateDot(shown: pi, announces: true) }
                 }
                 Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
-                Group {
-                    if let goal = entry.goal {
-                        Text("\(Image(systemName: "scope")) \(goal)").accessibilityLabel(goal)
-                    } else {
-                        Text("还没有目标")
-                    }
-                }
-                .font(.footnote)
-                .foregroundStyle(entry.goal == nil ? palette.ink3 : palette.ink2)
+                Text(entry.project.intro ?? "还没写介绍")
+                    .font(.footnote)
+                    .foregroundStyle(entry.project.intro == nil ? palette.ink3 : palette.ink2)
                     .lineLimit(3).multilineTextAlignment(.leading)
                 Spacer(minLength: 4)
                 ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
@@ -219,8 +217,7 @@ private struct PinnedShelfCard: View {
     }
 }
 
-/// 卡片数与未完成任务数。
-/// 卡片数与未完成任务数，书架大卡与行里同一种写法："25 张 · 3 项任务"。
+/// 灵感数与未完成任务数，书架大卡与行里同一种写法："25 张 · 3 项任务"。
 private struct ShelfCounts: View {
     let cards: Int
     var tasks = 0
@@ -245,7 +242,7 @@ private struct EmptyShelf: View {
     }
 }
 
-/// 书架的一行：项目（副标题是目标，没有目标时是最近一张卡）。
+/// 书架的一行：项目（副标题是介绍，没写介绍时是最近一条灵感）。
 private struct ShelfRow: View {
     let entry: ShelfData.Entry
     let pi: PiShown?
@@ -282,13 +279,7 @@ private struct ShelfRow: View {
                         Text(entry.project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
                         if let pi { PiStateDot(shown: pi, size: 6, announces: true) }
                     }
-                    Group {
-                        if entry.goal?.isEmpty == false {
-                            Text("\(Image(systemName: "scope")) \(subtitle)").accessibilityLabel(subtitle)
-                        } else {
-                            Text(subtitle)
-                        }
-                    }
+                    Text(subtitle)
                     .font(.footnote).foregroundStyle(palette.ink3).lineLimit(stacked ? 3 : 1)
                     // 辅助功能大字号下计数换到名称下方，名称不被挤成省略号
                     if stacked { counts }
@@ -308,9 +299,66 @@ private struct ShelfRow: View {
     }
 
     private var subtitle: String {
-        if let goal = entry.goal, !goal.isEmpty { return goal }
+        if let intro = entry.project.intro { return intro }
         if let latest = entry.latest { return "\(latest.title.nonEmpty ?? "空白卡片") · \(DateLabel.short(latest.date))" }
-        return "还没有卡片"
+        return "还没有灵感"
+    }
+}
+
+/// 正在推进：进行中的任务各一张纸——标题、所在项目、交给 Agent 的会话此刻在做什么；点开是任务浮窗。
+private struct ActiveTasks: View {
+    let rows: [TaskBoard.Row]
+    @Environment(Navigation.self) private var navigation
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(title: "正在推进")
+            VStack(spacing: 8) {
+                ForEach(rows) { row in
+                    Button { navigation.openTask(row.id) } label: { card(row) }
+                        .buttonStyle(CardPressStyle())
+                        .contextMenu { TaskActions(task: row.task) }
+                }
+            }
+        }
+    }
+
+    private func card(_ row: TaskBoard.Row) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "circle.lefthalf.filled").foregroundStyle(palette.accent).accessibilityHidden(true)
+                Text(row.task.title.textGlyphs).font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
+                    .lineLimit(2).multilineTextAlignment(.leading)
+            }
+            HStack(spacing: 12) {
+                if let project = row.project {
+                    HStack(spacing: 4) {
+                        ProjectGlyph(project: project, size: 11)
+                        Text(project.name)
+                    }
+                    .foregroundStyle(palette.ink3)
+                    .layoutPriority(-1)
+                }
+                if let session = row.session {
+                    let shown = services.settings.shown(session, delivery: row.delivery)
+                    HStack(spacing: 4) {
+                        PiStateDot(shown: shown, size: 6)
+                        Text(shown.presence).foregroundStyle(shown.tint(palette))
+                        PiElapsed(session: session, font: .footnote)
+                    }
+                    .fixedSize()
+                }
+            }
+            .font(.footnote).lineLimit(1)
+            .padding(.leading, 28)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paper(radius: 18)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("打开任务")
     }
 }
 #endif

@@ -279,7 +279,7 @@ private struct TasksButton: View {
         }
         .help("任务")
         .accessibilityLabel("任务，\(openCount ?? 0) 条未完成")
-        .observing(services.store, [.tasks, .projects], into: $openCount) { store in
+        .observing(services.store, [.cards, .projects], into: $openCount) { store in
             try TaskBoard.counts(from: store).open
         }
     }
@@ -321,7 +321,22 @@ private struct WorkspaceShortcuts: View {
     }
 }
 
-/// 顶部居中的短提示：操作结果与错误。
+/// 提示里的"撤销"：点了拨回去并收起提示。
+struct UndoButton: View {
+    let undo: Workspace.Undo
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button("撤销") { workspace.undo(undo) }
+        .font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.accent)
+        .buttonStyle(PressStyle())
+        .padding(.horizontal, 10).frame(height: 28)
+        .keyboardShortcut("z", modifiers: .command)
+    }
+}
+
+/// 顶部居中的短提示：操作结果与错误；带撤销的（"要做"开关）右边一个"撤销"（⌘Z）。
 private struct NoticeView: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -329,19 +344,22 @@ private struct NoticeView: View {
     var body: some View {
         ZStack {
             if let notice = workspace.notice {
-                Button { notice.link.map(follow) } label: {
-                    HStack(spacing: 6) {
-                        Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                        if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
+                HStack(spacing: 0) {
+                    Button { notice.link.map(follow) } label: {
+                        HStack(spacing: 6) {
+                            Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
+                        }
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(notice.isError ? palette.failure : palette.ink)
+                        .padding(.leading, 14).padding(.trailing, notice.undo == nil ? 14 : 4).frame(height: 34)
+                        .contentShape(.capsule)
                     }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(notice.isError ? palette.failure : palette.ink)
-                    .padding(.horizontal, 14).frame(height: 34)
-                    .contentShape(.capsule)
+                    .buttonStyle(PressStyle())
+                    .disabled(notice.link == nil)
+                    if let undo = notice.undo { UndoButton(undo: undo).padding(.trailing, 4) }
                 }
-                .buttonStyle(PressStyle())
-                .disabled(notice.link == nil)
-                .glass(in: .capsule, interactive: notice.link != nil)
+                .glass(in: .capsule, interactive: notice.link != nil || notice.undo != nil)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .id(notice.id)
                     .accessibilityAddTraits(.isStaticText)
@@ -354,7 +372,6 @@ private struct NoticeView: View {
     private func follow(_ link: Workspace.Link) {
         switch link {
         case .project(let id): workspace.show(id.map(Workspace.Page.project) ?? .inbox)
-        case .tasks: workspace.overlay = .tasks
         }
         workspace.notice = nil
     }

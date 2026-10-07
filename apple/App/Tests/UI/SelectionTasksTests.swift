@@ -16,7 +16,7 @@ struct SelectionTasksTests {
 
         #expect(count == 2)
         let tasks = try await rig.services.store.tasks(.todo).flatMap(\.tasks)
-        #expect(tasks.map(\.content) == ["写发布说明", "更新截图"])
+        #expect(tasks.map(\.body) == ["写发布说明", "更新截图"])
         #expect(tasks.allSatisfy { $0.projectID == project.id })
     }
 }

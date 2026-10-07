@@ -2,12 +2,12 @@
 import CueStore
 import SwiftUI
 
-/// 墙上的一张卡。点开用系统缩放过渡放大成纸页；长按是卡片操作。
+/// 墙上的一张卡。点开用系统缩放过渡放大成纸页；向右轻扫是"要做"；长按是卡片操作。
 struct CardTileView: View {
     let entry: CardEntry
     let lastTarget: String?
     let floated: Bool
-    let isGoal: Bool
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
 
@@ -27,7 +27,7 @@ struct CardTileView: View {
                         .font(.footnote).foregroundStyle(palette.ink2)
                         .lineLimit(text.images.isEmpty ? 5 : 2)
                 }
-                CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated, isGoal: isGoal, font: .caption2)
+                CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
                     .padding(.top, 2)
             }
             .multilineTextAlignment(.leading)
@@ -38,7 +38,15 @@ struct CardTileView: View {
         }
         .buttonStyle(CardPressStyle())
         .zoomSource(card.id, in: zoom)
+        .rowSwipe(right: .todo(card.id, in: workspace))
         .contextMenu { CardActions(card: card) }
+    }
+}
+
+extension SwipeAction {
+    /// 灵感上向右轻扫：设为任务（提示里可撤销）。
+    @MainActor static func todo(_ id: UUID, in workspace: Workspace) -> SwipeAction {
+        SwipeAction(symbol: "checklist") { workspace.toggleTodo(id, true) }
     }
 }
 
@@ -94,6 +102,7 @@ struct OlderRow: View {
     let lastTarget: String?
     let isFirst: Bool
     let isLast: Bool
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
 
@@ -123,6 +132,7 @@ struct OlderRow: View {
             topLeadingRadius: isFirst ? Self.radius : 0, bottomLeadingRadius: isLast ? Self.radius : 0,
             bottomTrailingRadius: isLast ? Self.radius : 0, topTrailingRadius: isFirst ? Self.radius : 0, style: .continuous))
         .zoomSource(card.id, in: zoom)
+        .rowSwipe(right: .todo(card.id, in: workspace))
         .contextMenu { CardActions(card: card) }
     }
 }

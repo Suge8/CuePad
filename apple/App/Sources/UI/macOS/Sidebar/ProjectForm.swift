@@ -30,12 +30,13 @@ enum ProjectDirectory {
     }
 }
 
-/// 新建或编辑项目：名称、图标、颜色。
+/// 新建或编辑项目：名称、一句话介绍、图标、颜色。
 struct ProjectForm: View {
     let project: Project?
     @Environment(Workspace.self) private var workspace
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
+    @State private var intro = ""
     @State private var icon = "folder"
     @State private var color = ProjectStylePicker.colors[0].hex
 
@@ -43,6 +44,7 @@ struct ProjectForm: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(project == nil ? "新建项目" : "编辑项目").font(.headline)
             TextField("名称", text: $name).textFieldStyle(.roundedBorder).onSubmit(save)
+            TextField("一句话介绍（可不填）", text: $intro).textFieldStyle(.roundedBorder).onSubmit(save)
             ProjectStylePicker(icon: $icon, color: $color, cell: 30)
             HStack {
                 Spacer()
@@ -57,6 +59,7 @@ struct ProjectForm: View {
         .onAppear {
             guard let project else { return }
             name = project.name
+            intro = project.intro ?? ""
             icon = ProjectGlyph.symbol(project.icon)
             color = project.color
         }
@@ -65,9 +68,9 @@ struct ProjectForm: View {
     private func save() {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let project = project, icon = icon, color = color
+        let project = project, intro = intro, icon = icon, color = color
         workspace.attempt {
-            let id = try await workspace.saveProject(project, name: name, icon: icon, color: color)
+            let id = try await workspace.saveProject(project, name: name, intro: intro, icon: icon, color: color)
             if project == nil { workspace.show(.project(id)) }
         }
         dismiss()

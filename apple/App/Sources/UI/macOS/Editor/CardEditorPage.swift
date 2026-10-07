@@ -81,6 +81,10 @@ struct CardEditorPage: View {
             if stage >= .editor, let data, let initialText {
                 VStack(alignment: .leading, spacing: 10) {
                     meta(data)
+                    if data.card.isTask {
+                        TaskPanel(task: data.card).padding(.horizontal, 64)
+                        Divider().overlay(palette.hair).padding(.horizontal, 64)
+                    }
                     editor(data, initialText)
                 }
                 .frame(maxWidth: Self.paperWidth)
@@ -159,8 +163,7 @@ struct CardEditorPage: View {
                     if let data {
                         // 按原卡片的宽度排版、不随纸变宽重新折行：纸放大时字留在原处，只是纸边退开
                         CardFace(
-                            card: data.card, lastTarget: data.lastTarget, floated: false,
-                            isGoal: data.project?.goalCardID == data.card.id)
+                            card: data.card, lastTarget: data.lastTarget, floated: false)
                             .frame(width: (source ?? rect).width, alignment: .topLeading)
                             .opacity(editorShown ? 0 : 1)
                             .accessibilityHidden(true)
@@ -236,7 +239,7 @@ struct CardEditorPage: View {
                     .transition(.opacity)
             }
             if data.card.isPinned { Image(systemName: "pin.fill").help("置顶") }
-            if data.project?.goalCardID == data.card.id { Label("项目目标", systemImage: "scope") }
+            if data.card.isTask { Label("任务", systemImage: "checklist") }
         }
         .font(.system(size: 12))
         .foregroundStyle(palette.ink3)

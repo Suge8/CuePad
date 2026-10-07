@@ -3,7 +3,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 目标与任务：目标卡 + 本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Pi 会话。没有目标卡时不显示目标一栏。
+/// 介绍与任务：项目的一句话介绍 + 本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Pi 会话。没写介绍时不显示介绍一栏。
 struct FocusBand: View {
     let data: ProjectPageData
     @Environment(Workspace.self) private var workspace
@@ -17,8 +17,8 @@ struct FocusBand: View {
         // 由排版当场选：横排的理想宽度钉在 stackedBelow，放得下就横排，否则上下排。不读几何、不写状态
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 0) {
-                if let card = data.goalCard {
-                    column { goal(card) }
+                if let intro = data.project?.intro {
+                    column { introColumn(intro) }
                     divider
                 }
                 column { tasks }
@@ -28,8 +28,8 @@ struct FocusBand: View {
             }
             .frame(minWidth: Self.stackedBelow, idealWidth: Self.stackedBelow, maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 0) {
-                if let card = data.goalCard {
-                    column { goal(card) }
+                if let intro = data.project?.intro {
+                    column { introColumn(intro) }
                     Divider().overlay(palette.hair).padding(.horizontal, 18)
                 }
                 column { tasks }
@@ -42,24 +42,11 @@ struct FocusBand: View {
         .modifier(SessionDetailHost(arrowEdge: .bottom))
     }
 
-    @ViewBuilder private func goal(_ card: Card) -> some View {
-        SectionLabel(text: "目标", systemImage: "scope")
-        let text = CardText(card.body)
-        Button {
-            workspace.openCard = card.id
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(text.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
-                if !text.preview.isEmpty {
-                    Text(VariableText.styled(text.preview, palette)).font(.system(size: 13)).lineSpacing(3)
-                        .foregroundStyle(palette.ink2).lineLimit(3)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(.rect)
-        }
-        .buttonStyle(CardOpenStyle())
-        .cardPresence(card.id, in: workspace)
+    @ViewBuilder private func introColumn(_ intro: String) -> some View {
+        SectionLabel(text: "介绍", systemImage: "text.quote")
+        Text(intro).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
     }
 
     @ViewBuilder private var tasks: some View {
@@ -114,7 +101,7 @@ private struct PiColumn: View {
     }
 }
 
-/// 下滚后收成的一行：目标（有才显示）· 任务完成数/总数 · Pi 状态；点一下回到顶部。
+/// 下滚后收成的一行：介绍（有才显示）· 任务完成数/总数 · Pi 状态；点一下回到顶部。
 struct CompactFocus: View {
     let data: ProjectPageData
     let scrollToTop: () -> Void
@@ -122,11 +109,11 @@ struct CompactFocus: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let goal = data.goalCard.map { CardText($0.body).title }
+        let intro = data.project?.intro
         let session = workspace.liveSessions(in: data.project?.id).first
         Button(action: scrollToTop) {
             HStack(spacing: 14) {
-                if let goal { Label(goal, systemImage: "scope").lineLimit(1) }
+                if let intro { Label(intro, systemImage: "text.quote").lineLimit(1) }
                 Label(data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist").foregroundStyle(palette.ink2)
                 if let session {
                     HStack(spacing: 6) {

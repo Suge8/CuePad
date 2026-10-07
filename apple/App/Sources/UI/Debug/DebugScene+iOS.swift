@@ -8,7 +8,7 @@ import UIKit
 /// search 在 iPhone 上是书架的下拉搜索（给了 `-CuePadProject` 则是该项目页内的搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// push：停在书架，1.5 秒后像点按一样推入 `-CuePadProject` 的项目页（iPad 也是在书架上推入），录屏核对推入的首帧；
 /// 给了 `-CuePadPush <tasks|settings|trash|inbox|card>` 时推入的是那一页（card 是该项目里的一张卡）。
-/// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；taskedit 在任务页打开第一条未完成任务的编辑框（与长按"编辑"同一个）。
+/// tasks：跨项目任务页（iPhone 在项目标签里推入，iPad 选中侧栏）；task 停在书架并在浮窗里打开"正在推进"的第一条（没有就是第一条待办）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（给了 `-CuePadPushAfter <秒>` 时先停在 Agent 页，到时再推入）；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
 /// （核对往上翻后出"新消息"、贴底时跟到底），给了 `-CuePadChatBulk <N>` 时推入后整批进来 N 轮长对话（核对整批到达时停在最新）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
@@ -90,8 +90,12 @@ extension DebugScene {
                     navigation.outbox = outbox
                 }
             }
-        case "tasks", "taskedit":
+        case "tasks":
             navigation.showTasks()
+        case "task":
+            let store = workspace.services.store
+            let tasks = (try? await store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
+            if let task = tasks.first(where: { $0.status == .inProgress }) ?? tasks.first { navigation.openTask(task.id) }
         case "session":
             // 打开 -CuePadSession（会话名，默认 homepage）的近况页，iPhone 在 Agent 标签里
             let title = defaults.string(forKey: "CuePadSession") ?? "homepage"

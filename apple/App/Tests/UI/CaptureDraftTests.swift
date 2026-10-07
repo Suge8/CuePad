@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 随手记是浮在键盘上方的输入框：收起时写了东西就留着、下次打开接着写，空的收起即丢（连同换过的种类与落点）。
+/// 随手记是浮在键盘上方的输入框：收起时写了东西就留着、下次打开接着写，空的收起即丢（连同换过的落点）。
 @MainActor
 struct CaptureDraftTests {
     private func navigation() -> Navigation {
@@ -24,11 +24,9 @@ struct CaptureDraftTests {
         #expect(navigation.capture.project == .some(project))
 
         navigation.capture.draft.text = "  "
-        navigation.capture.kind = .task
         navigation.endCapture()
         navigation.startCapture()
         #expect(navigation.capture.draft.text.isEmpty)
-        #expect(navigation.capture.kind == .idea)
         #expect(navigation.capture.project == nil)
     }
 

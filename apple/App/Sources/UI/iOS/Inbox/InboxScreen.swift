@@ -51,6 +51,9 @@ struct InboxScreen: View {
         }
         .buttonStyle(.plain)
         .listRowBackground(palette.paper)
+        .swipeActions(edge: .leading) {
+            Button("要做", systemImage: "checklist") { workspace.toggleTodo(card.id, true) }.tint(palette.accent)
+        }
         .swipeActions(edge: .trailing) {
             Button("移到项目", systemImage: "folder") { moving = card }.tint(palette.ink)
         }
@@ -94,7 +97,7 @@ private struct MoveToProjectSheet: View {
     private func move(to project: Project) {
         let id = card.id
         dismiss()
-        workspace.perform { try await $0.moveCard(id, to: project.id, after: nil) }
+        workspace.perform { try await $0.moveCard(id, to: .top(project: project.id), after: nil) }
         workspace.say("已移到 \(project.name)", link: .project(project.id))
     }
 }

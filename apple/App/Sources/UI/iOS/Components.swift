@@ -201,9 +201,6 @@ private struct DeskBackground: ViewModifier {
 }
 
 nonisolated extension String {
-    /// 空串为 nil，便于 `?? 占位`。
-    var nonEmpty: String? { isEmpty ? nil : self }
-
     /// ↩ ↪ 这类箭头在 iOS 上默认画成彩色 emoji 按键：加文字样式选择符，按普通字形显示。
     var textGlyphs: String {
         guard contains(where: { Self.emojiDefaulted.contains($0) }) else { return self }

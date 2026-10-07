@@ -1,3 +1,4 @@
+import CueStore
 import CueText
 import Foundation
 
@@ -15,4 +16,14 @@ nonisolated struct CardText: Equatable, Sendable {
         preview = summary.preview
         images = CueFormat.imageHashes(in: body)
     }
+}
+
+extension Card {
+    /// 列表与看板里的一行：正文第一行；正文还空着时写"无标题"。
+    var title: String { CueSummary(body).title.nonEmpty ?? "无标题" }
+}
+
+nonisolated extension String {
+    /// 空串为 nil，便于 `?? 占位`。
+    var nonEmpty: String? { isEmpty ? nil : self }
 }

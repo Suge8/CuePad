@@ -14,7 +14,7 @@ struct LegacyImportTests {
         await rig.services.importLegacyIfNeeded()
 
         #expect(try await rig.services.store.projects().map(\.name) == ["Flow", "Career"])  // 置顶的在前
-        #expect(try await rig.services.store.tasks(.todo).flatMap(\.tasks).map(\.content) == ["first"])
+        #expect(try await rig.services.store.tasks(.todo).flatMap(\.tasks).map(\.body) == ["first"])
         #expect(rig.services.settings.theme == .dark)
         #expect(rig.services.settings.globalShortcut == "Alt+KeyZ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 6, modifiers: .option)])

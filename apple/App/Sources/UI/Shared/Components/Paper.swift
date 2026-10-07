@@ -61,13 +61,12 @@ struct BottomFade: View {
     }
 }
 
-/// 卡片上的元信息：时间、发送目标，以及目标、浮回、置顶标记。Mac 用固定小字，iOS 随动态字体。
+/// 卡片上的元信息：时间、发送目标，以及任务、浮回、置顶标记。Mac 用固定小字，iOS 随动态字体。
 struct CardMeta: View {
     let card: Card
     let text: CardText
     let lastTarget: String?
     let floated: Bool
-    let isGoal: Bool
     var font: Font = .system(size: 11)
     @Environment(\.palette) private var palette
 
@@ -76,7 +75,7 @@ struct CardMeta: View {
             Text(DateLabel.short(card.modifiedAt))
             if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
-            if isGoal { Image(systemName: "scope").help("项目目标").accessibilityLabel("项目目标") }
+            if card.isTask { Image(systemName: "checklist").help("任务").accessibilityLabel("任务") }
             if floated { Image(systemName: "arrow.up").help("刚从更早的卡里拿回来").accessibilityLabel("刚从更早的卡里拿回来") }
             if card.isPinned { Image(systemName: "pin.fill").help("置顶").accessibilityLabel("置顶") }
         }

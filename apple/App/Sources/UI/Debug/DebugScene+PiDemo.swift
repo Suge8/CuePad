@@ -52,18 +52,18 @@ extension DebugScene {
     /// 任务三态：圆桌的一条交给了 atlas（进行中、带会话状态），CuePad 的一条手动开始；CuePad、Flow、圆桌各完成一条（先后完成）。
     private static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
         guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }
-        func first(in name: String) -> CueTask? { tasks.first { $0.projectID == projects.first { $0.name == name }?.id } }
+        func first(in name: String) -> Card? { tasks.first { $0.projectID == projects.first { $0.name == name }?.id } }
         if let task = first(in: "圆桌") {
-            _ = try? await store.recordSend(task.content, to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), task: task.id)
+            _ = try? await store.recordSend(task.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), card: task.id)
         }
         let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id }
-        if let started = cuepad.first { try? await store.updateTask(started.id) { $0.status = .inProgress } }
-        if cuepad.count > 1 { try? await store.updateTask(cuepad[1].id) { $0.status = .done } }
+        if let started = cuepad.first { try? await store.setStatus(started.id, .inProgress) }
+        if cuepad.count > 1 { try? await store.setStatus(cuepad[1].id, .done) }
         // 再完成两个别的项目的，最近完成那组跨项目、按完成时间排
         for name in ["Flow", "圆桌"] {
             guard let task = tasks.last(where: { $0.projectID == projects.first { $0.name == name }?.id }) else { continue }
             try? await Task.sleep(for: .milliseconds(5))
-            try? await store.updateTask(task.id) { $0.status = .done }
+            try? await store.setStatus(task.id, .done)
         }
     }
 
@@ -246,9 +246,6 @@ extension DebugScene {
             PiSubagentState(name: "登录回调", activity: .known(.waitingForUser)),
             PiSubagentState(name: "文档", activity: .known(.idle)),
         ])
-        if let table = project("圆桌"), let goal = try? await store.cards(in: table).first(where: { $0.body.hasPrefix("目标") }) {
-            try? await store.setGoal(goal.id, for: table)
-        }
         await seedBindings(store, projects: projects)
         let extra = defaults.integer(forKey: "CuePadHistory")
         for index in 0..<extra {

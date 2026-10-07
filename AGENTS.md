@@ -2,6 +2,10 @@
 
 Swift 原生应用（macOS / iOS / iPadOS）。产品说明见 [README.md](README.md)；开发命令、架构约定、验收环境与发布见 [docs/development.md](docs/development.md)，改动前先读。并行的 agent 各用独立的 `CUEPAD_DERIVED` 产物目录，否则构建与测试会互相覆盖。
 
+## 术语
+
+界面只有三个词：**灵感**、**任务**、**Agent**。代码里灵感与任务是同一种记录 `Card`（一张 `cards` 表、一种同步记录）：`todoAt` 为空是灵感，非空是任务（"要做"开关只翻它，取消要做时下级提到它的位置）；状态由 `startedAt`/`completedAt` 推出。挂在任务下的任务是**子任务**、挂在任务下的灵感是**素材**（同一个 `parentID`；只有任务能当上级，最多三级）。项目只是容器，带一句可选的 `intro`（介绍）；没有目标卡。
+
 | 路径 | 职责 |
 | --- | --- |
 | `apple/CuePad.xcodeproj` | 多平台 App 工程：macOS 与 iOS/iPadOS 主 App、分享扩展、小组件、命令行目标；签名事实源 `apple/App/Config/Signing.xcconfig` |

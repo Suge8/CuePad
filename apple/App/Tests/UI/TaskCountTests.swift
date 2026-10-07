@@ -12,12 +12,12 @@ struct TaskCountTests {
     var store: CueStore { app.services.store }
 
     @Test func 书架的任务一行与任务页分组同一个数_子任务不重复计() async throws {
-        let release = try await store.createTask("上线")
+        let release = try await store.createTask("上线", in: nil)
         let backup = try await store.createTask("备份", under: release.id)
         _ = try await store.createTask("发布", under: release.id)
-        try await store.updateTask(backup.id) { $0.status = .inProgress }
-        let fix = try await store.createTask("修重连")
-        try await store.updateTask(fix.id) { $0.status = .inProgress }
+        try await store.setStatus(backup.id, .inProgress)
+        let fix = try await store.createTask("修重连", in: nil)
+        try await store.setStatus(fix.id, .inProgress)
         _ = try await store.createTask("补用例", under: fix.id)
 
         let shelf = try await ShelfData.read(from: store)

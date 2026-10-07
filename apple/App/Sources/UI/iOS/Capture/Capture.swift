@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 随手记：共用的 `Composer`，去处是存成卡片或任务；头部是 想法 | 任务 与落点。草稿是 `Navigation.capture`，
+/// 随手记：共用的 `Composer`，去处是存成一条灵感；头部是落点。草稿是 `Navigation.capture`，
 /// 收起后留着。记下后收起并提示落点（点提示去那里）。文案与存法见 `CaptureCopy`、`CaptureDraft`。
 private struct CaptureComposer: View {
     let focus: FocusState<Bool>.Binding
@@ -11,29 +11,22 @@ private struct CaptureComposer: View {
     @Environment(\.palette) private var palette
     @State private var saving = false
 
-    private var kind: CaptureKind { navigation.capture.kind }
     private var project: UUID? { navigation.capture.project ?? navigation.captureProject }
-    private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project), kind: kind) }
+    private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project)) }
 
     var body: some View {
         @Bindable var navigation = navigation
         Composer(
-            draft: $navigation.capture.draft, prompt: CaptureCopy.placeholder(kind, to: destination), label: "随手记", focus: focus,
-            accepts: kind == .idea ? .images : [], pinnedOpen: true,
+            draft: $navigation.capture.draft, prompt: CaptureCopy.placeholder(to: destination), label: "随手记", focus: focus,
+            accepts: .images, pinnedOpen: true,
             header: { header }, send: { sendButton }
         )
-        .animation(Motion.quick, value: kind)
         // 浮起的同一刻聚焦：键盘与输入框一起上来
         .onAppear { focus.wrappedValue = true }
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Picker("记成", selection: Bindable(navigation).capture.kind) {
-                ForEach(CaptureKind.allCases, id: \.self) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .fixedSize()
             Spacer(minLength: 8)
             destinationMenu
         }
@@ -42,7 +35,7 @@ private struct CaptureComposer: View {
 
     private var destinationMenu: some View {
         Menu {
-            Button(kind == .idea ? CaptureCopy.inbox : "不归项目") { navigation.capture.project = .some(nil) }
+            Button(CaptureCopy.inbox) { navigation.capture.project = .some(nil) }
             Divider()
             ForEach(workspace.catalog?.projects ?? []) { item in Button(item.name) { navigation.capture.project = .some(item.id) } }
         } label: {
@@ -71,7 +64,7 @@ private struct CaptureComposer: View {
         guard !saving else { return }
         saving = true
         let draft = navigation.capture.draft
-        let note = CaptureDraft(text: draft.text, images: draft.images.map(\.data), kind: kind), project = project
+        let note = CaptureDraft(text: draft.text, images: draft.images.map(\.data)), project = project
         workspace.attempt {
             defer { saving = false }
             try await note.save(in: project, workspace: workspace)

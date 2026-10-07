@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中、待办、最近完成（折起），跨项目，
 /// 子任务缩进跟在上级下（`TaskOutline`：按住拖动排序、拖到一条上成为它的子任务、横向拖改层级），顶层写所在项目，
-/// 交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），右键是 `TaskActions`（含缩进、反缩进）。
+/// 交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），点文字打开它的纸页，右键是 `TaskActions`（含缩进、反缩进）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -93,10 +93,10 @@ struct TasksPanel: View {
     }
 }
 
-/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办；还有没完成的子任务时先问，确认后一起完成），双击文字编辑；
+/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办；还有没完成的子任务时先问，确认后一起完成），点文字打开纸页；
 /// 第二行写所在项目（面板里跨项目时）与交给 Pi 的会话此刻的状态，点状态打开那个会话的详情（外层要有 `SessionDetailHost`）。右键是 `TaskActions`。
 struct TaskRow: View {
-    let task: CueTask
+    let task: Card
     /// 跨项目列着时写上所在项目；项目页里不写。
     var project: Project?
     /// 交给 Pi 的任务：那个会话此刻的状态，以及发给它的最近一条投送请求。
@@ -111,8 +111,6 @@ struct TaskRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.sessionDetail) private var sessionDetail
-    @State private var editing = false
-    @State private var draft = ""
 
     private var done: Bool { task.status == .done }
 
@@ -127,15 +125,10 @@ struct TaskRow: View {
             .buttonStyle(PressStyle(scale: 0.85))
             .accessibilityLabel(done ? "回到待办" : "完成")
             VStack(alignment: .leading, spacing: 2) {
-                if editing {
-                    TextField("任务", text: $draft).textFieldStyle(.plain).onSubmit(commit)
-                        .onExitCommand { editing = false }
-                } else {
-                    Text(task.content)
-                        .font(.system(size: 13)).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
-                        .lineLimit(2)
-                        .onTapGesture(count: 2, perform: beginEditing)
-                }
+                Text(task.title)
+                    .font(.system(size: 13)).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
+                    .lineLimit(2)
+                    .onTapGesture(perform: open)
                 if project != nil || (!done && (session != nil || subtasks != nil)) { detail }
             }
             Spacer(minLength: 4)
@@ -143,14 +136,14 @@ struct TaskRow: View {
         .padding(.vertical, compact ? 1 : 3)
         .frame(minHeight: compact ? 22 : 28)
         .contentShape(.rect)
-        .contextMenu { TaskActions(task: task, edit: beginEditing) }
-        // 读屏：整行一个元素"任务内容，项目，Pi 在做什么"，值是状态，默认动作切换完成（文案见 TaskSpeech）；编辑时露出输入框
-        .accessibilityElement(children: editing ? .contain : .ignore)
-        .accessibilityLabel([task.content, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
+        .contextMenu { TaskActions(task: task, open: open) }
+        // 读屏：整行一个元素"任务内容，项目，Pi 在做什么"，值是状态，默认动作切换完成（文案见 TaskSpeech）
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([task.title, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
         .accessibilityValue(TaskSpeech.value(task.status))
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
-        .accessibilityAction(named: "编辑", beginEditing)
+        .accessibilityAction(named: "打开", open)
         .accessibilityAction(named: "看 Pi 的近况") { if let session { sessionDetail?.open(session.sessionID) } }
         .accessibilityActions {
             if let indent = structure?.indent { Button("缩进", action: indent) }
@@ -188,9 +181,9 @@ struct TaskRow: View {
         .font(.system(size: 11))
     }
 
-    private func beginEditing() {
-        draft = task.content
-        editing = true
+    private func open() {
+        workspace.overlay = nil
+        workspace.openCard = task.id
     }
 
     private func toggle() {
@@ -200,13 +193,6 @@ struct TaskRow: View {
     private func commitToggle() {
         let task = task
         workspace.attempt { try await workspace.toggle(task) }
-    }
-
-    private func commit() {
-        editing = false
-        let id = task.id, content = draft.trimmingCharacters(in: .whitespaces)
-        guard !content.isEmpty, content != task.content else { return }
-        workspace.perform { try await $0.updateTask(id) { $0.content = content } }
     }
 }
 

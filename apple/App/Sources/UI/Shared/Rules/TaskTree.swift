@@ -4,7 +4,7 @@ import Foundation
 
 /// 一次结构上的移动：挂到哪、排在哪条同级之后（nil = 最前）。交给 `CueStore.moveTask`。
 nonisolated struct TaskMove: Hashable, Sendable {
-    var slot: TaskSlot
+    var slot: CardSlot
     var after: UUID?
 }
 
@@ -21,10 +21,10 @@ nonisolated struct TaskDrop: Equatable, Sendable {
 }
 
 /// 一组任务的层级（手机任务页与项目页、Mac 任务面板与项目页共用）：按输入顺序（同级的手动顺序）建树，上级不在这组里的当顶层；
-/// 排出可见的行（第三级默认折起），算缩进、反缩进与拖放落点各是哪一次移动。层级数只在 `CueTask.maxDepth`。
+/// 排出可见的行（第三级默认折起），算缩进、反缩进与拖放落点各是哪一次移动。层级数只在 `Card.maxDepth`。
 nonisolated struct TaskTree: Equatable, Sendable {
     struct Row: Identifiable, Equatable, Sendable {
-        var task: CueTask
+        var task: Card
         /// 0 起。
         var depth: Int
         /// 这组里的直接子任务数。
@@ -36,16 +36,16 @@ nonisolated struct TaskTree: Equatable, Sendable {
     private(set) var roots: [UUID] = []
     private var children: [UUID: [UUID]] = [:]
     private var parents: [UUID: UUID] = [:]
-    private var tasks: [UUID: CueTask] = [:]
-    private var order: [CueTask] = []
+    private var tasks: [UUID: Card] = [:]
+    private var order: [Card] = []
     /// 层级限制按库里的整棵树算（含已完成、不显示的子任务）：与 Store 写入时的校验同一口径。
-    private var everything: [CueTask] = []
+    private var everything: [Card] = []
     private var structure = Structure([])
 
-    private static let deepest = CueTask.maxDepth - 1
+    private static let deepest = Card.maxDepth - 1
 
     /// `ordered` 是要显示的任务（同级手动顺序）；`all` 是同一范围里库中的全部任务（含已完成），省略时同 `ordered`。
-    init(_ ordered: [CueTask], all: [CueTask]? = nil) {
+    init(_ ordered: [Card], all: [Card]? = nil) {
         order = ordered
         everything = all ?? ordered
         structure = Structure(everything)
@@ -68,14 +68,14 @@ nonisolated struct TaskTree: Equatable, Sendable {
 
     var isEmpty: Bool { tasks.isEmpty }
     /// 要显示的任务，按输入顺序。
-    var ordered: [CueTask] { order }
+    var ordered: [Card] { order }
 
     /// 只留这些顶层任务和它们的子树（看板的一组、项目页显示的前几条）：缩进、反缩进与拖放都只在里面算。
     func scoped(to roots: [UUID]) -> TaskTree {
         let kept = Set(roots.flatMap { [$0] + descendants(of: $0) })
         return TaskTree(order.filter { kept.contains($0.id) }, all: everything)
     }
-    func task(_ id: UUID) -> CueTask? { tasks[id] }
+    func task(_ id: UUID) -> Card? { tasks[id] }
     func children(of id: UUID) -> [UUID] { children[id] ?? [] }
 
     func depth(of id: UUID) -> Int {
@@ -180,8 +180,8 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return cursor
     }
 
-    private func slot(under parent: UUID?, project: UUID?) -> TaskSlot {
-        parent.map(TaskSlot.under) ?? .top(project: project)
+    private func slot(under parent: UUID?, project: UUID?) -> CardSlot {
+        parent.map(CardSlot.under) ?? .top(project: project)
     }
 
     /// 原位置：同级（顶层按同一项目算，与 Store 的同级范围一致）里的上一条。
@@ -198,7 +198,7 @@ nonisolated private struct Structure: Equatable, Sendable {
     private var parents: [UUID: UUID] = [:]
     private var children: [UUID: [UUID]] = [:]
 
-    init(_ tasks: [CueTask]) {
+    init(_ tasks: [Card]) {
         let ids = Set(tasks.map(\.id))
         for task in tasks {
             guard let parent = task.parentID, ids.contains(parent), parent != task.id else { continue }

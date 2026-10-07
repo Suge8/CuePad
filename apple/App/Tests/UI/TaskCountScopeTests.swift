@@ -15,9 +15,9 @@ struct TaskCountScopeTests {
         let release = try await store.createTask("上线", in: project.id)
         let backup = try await store.createTask("备份", under: release.id)
         _ = try await store.createTask("发布", under: release.id)
-        try await store.updateTask(backup.id) { $0.status = .done }
+        try await store.setStatus(backup.id, .done)
         let fix = try await store.createTask("修重连", in: project.id)
-        try await store.updateTask(fix.id) { $0.status = .done }
+        try await store.setStatus(fix.id, .done)
 
         let page = try await ProjectPageData.read(project.id, from: store)
         let shelf = try await ShelfData.read(from: store)

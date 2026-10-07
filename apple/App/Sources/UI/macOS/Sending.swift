@@ -99,12 +99,12 @@ extension Workspace {
 
     /// 发送存储格式正文；成功后提示，Pi 忙时转为询问马上说还是等它做完再说。返回是否已发出（发给 Pi 时是已送达）。
     @discardableResult
-    func send(_ stored: String, via choice: AppServices.Destination, card: UUID? = nil, task: UUID? = nil) async -> Bool {
-        await send(stored, via: choice, card: card, task: task, remembering: choice)
+    func send(_ stored: String, via choice: AppServices.Destination, card: UUID? = nil) async -> Bool {
+        await send(stored, via: choice, card: card, remembering: choice)
     }
 
     private func send(
-        _ stored: String, via choice: AppServices.Destination, card: UUID?, task: UUID?, remembering: AppServices.Destination
+        _ stored: String, via choice: AppServices.Destination, card: UUID?, remembering: AppServices.Destination
     ) async -> Bool {
         let done = switch choice {
         case .clipboard: "已复制"
@@ -113,7 +113,7 @@ extension Workspace {
         default: "已" + action(for: choice)
         }
         do {
-            try await services.send(stored, to: choice, card: card, task: task)
+            try await services.send(stored, to: choice, card: card)
             remember(remembering)
             say(done)
             return true
@@ -122,7 +122,7 @@ extension Workspace {
             say("\(done)，但没能记下这次发送：\(reason)", isError: true)
             return true
         } catch SendError.piSessionBusy {
-            if case .pi(let id, _) = choice { busySend = BusySend(text: stored, session: id, card: card, task: task) }
+            if case .pi(let id, _) = choice { busySend = BusySend(text: stored, session: id, card: card) }
             return false
         } catch {
             fail(error)
@@ -141,7 +141,7 @@ extension Workspace {
         busySend = nil
         Task {
             await send(
-                pending.text, via: .pi(pending.session, mode), card: pending.card, task: pending.task,
+                pending.text, via: .pi(pending.session, mode), card: pending.card,
                 remembering: .pi(pending.session, .send))
         }
     }

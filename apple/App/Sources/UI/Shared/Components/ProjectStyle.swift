@@ -62,11 +62,11 @@ struct ProjectStylePicker: View {
 
 extension Workspace {
     /// 新建（`project` 为 nil）或更新项目的名称、图标与颜色；返回项目 id。
-    func saveProject(_ project: Project?, name: String, icon: String, color: String) async throws -> UUID {
-        if let id = project?.id {
-            try await services.store.updateProject(id) { $0.name = name; $0.icon = icon; $0.color = color }
-            return id
-        }
-        return try await services.store.createProject(name: name, color: color, icon: icon).id
+    /// `intro` 是项目的一句话介绍，空白即没有。
+    func saveProject(_ project: Project?, name: String, intro: String, icon: String, color: String) async throws -> UUID {
+        let store = services.store, intro = intro.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+        let id = if let existing = project?.id { existing } else { try await store.createProject(name: name, color: color, icon: icon).id }
+        try await store.updateProject(id) { $0.name = name; $0.intro = intro; $0.icon = icon; $0.color = color }
+        return id
     }
 }

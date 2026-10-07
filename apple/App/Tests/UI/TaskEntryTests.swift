@@ -12,11 +12,11 @@ struct TaskEntryTests {
 
     @Test func 书架的任务入口_写进行中与待办数_没有任务时没有() async throws {
         #expect(try await ShelfData.read(from: store).tasks == nil)
-        let started = try await store.createTask("补 scheduler 测试")
-        _ = try await store.createTask("续费域名")
-        let finished = try await store.createTask("写首页文案")
-        try await store.updateTask(started.id) { $0.status = .inProgress }
-        try await store.updateTask(finished.id) { $0.status = .done }
+        let started = try await store.createTask("补 scheduler 测试", in: nil)
+        _ = try await store.createTask("续费域名", in: nil)
+        let finished = try await store.createTask("写首页文案", in: nil)
+        try await store.setStatus(started.id, .inProgress)
+        try await store.setStatus(finished.id, .done)
 
         let tasks = try #require(try await ShelfData.read(from: store).tasks)
 

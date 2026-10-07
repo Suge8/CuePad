@@ -12,7 +12,7 @@ struct TaskToggleTests {
     var services: AppServices { rig.services }
 
     @Test func 连续两次勾选同一任务_完成后又回到未完成_即使手里的副本已过时() async throws {
-        let stale = try await services.store.createTask("续费域名")
+        let stale = try await services.store.createTask("续费域名", in: nil)
         let workspace = Workspace(services: services)
 
         try await workspace.toggle(stale)

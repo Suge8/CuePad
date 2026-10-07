@@ -30,7 +30,7 @@ extension AppServices {
     @discardableResult
     func requestMacDelivery(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode) async throws -> DeliveryRequest {
         try await requestMacDelivery(
-            draft.stored(in: store.files), to: session, mode: mode, card: draft.attachment?.card, task: draft.attachment?.task)
+            draft.stored(in: store.files), to: session, mode: mode, card: draft.attachment?.card)
     }
 }
 
@@ -109,7 +109,7 @@ struct Composer<Header: View, Send: View>: View {
             }
         }
         .sheet(item: $previewing) { outbox in
-            AttachmentSheet(outbox: outbox, expand: outbox.task == nil ? { expand(outbox) } : nil)
+            AttachmentSheet(outbox: outbox, expand: { expand(outbox) })
         }
         .onChange(of: picked) { load() }
 #if DEBUG
@@ -177,7 +177,7 @@ struct Composer<Header: View, Send: View>: View {
         return HStack(spacing: 0) {
             Button { previewing = outbox } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: outbox.task == nil ? "rectangle.on.rectangle" : "checklist").foregroundStyle(palette.ink3)
+                    Image(systemName: "rectangle.on.rectangle").foregroundStyle(palette.ink3)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(card.title.nonEmpty ?? "图片").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
@@ -200,7 +200,7 @@ struct Composer<Header: View, Send: View>: View {
         .background(palette.fill, in: shape)
         .contentShape(.contextMenuPreview, shape)
         .contextMenu {
-            if outbox.task == nil { Button("展开编辑", systemImage: "text.cursor") { expand(outbox) } }
+            Button("展开编辑", systemImage: "text.cursor") { expand(outbox) }
             Button("不带了", systemImage: "xmark", role: .destructive) { draft.attachment = nil }
         } preview: {
             AttachmentBody(content: outbox.content).frame(width: 340).frame(maxHeight: 460)
