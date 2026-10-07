@@ -68,6 +68,7 @@ struct SessionControlsTests {
 
 }
 
+#if os(iOS)
 /// 会话右缘的刻度滑条：每条你发的话一个刻度（按先后），预览是它的第一行；你发的不到 6 条时不显示。
 struct ChatScrubberMarksTests {
     private func entry(_ user: Bool, _ text: String) -> PiChatEntry { PiChatEntry(id: UUID(), isUser: user, text: text, meta: nil) }
@@ -86,3 +87,4 @@ struct ChatScrubberMarksTests {
         #expect(ChatScrubber.marks(entries).isEmpty)
     }
 }
+#endif

@@ -347,6 +347,22 @@ final class Workspace {
         say(on ? "已设为任务" : "已回到灵感", undo: { try await store.setTodo(id, !on) })
     }
 
+    /// 挂素材：一条灵感挂到任务下，排在已有下级之后。
+    func attach(_ idea: UUID, to task: UUID) async throws {
+        let store = services.store
+        let last = try await store.children(of: task).last?.id
+        try await store.moveCard(idea, to: .under(task), after: last)
+    }
+
+    /// 图片（相册、拍照、选文件）存成一条灵感，挂到任务下作素材。
+    func attachImages(_ images: [Data], to task: Card) async throws {
+        guard !images.isEmpty else { return }
+        let files = services.store.files
+        let body = StoredBody.make(text: "", imageHashes: try images.map { try files.store($0) })
+        let material = try await createCard(body: body, in: task.projectID)
+        try await attach(material.id, to: task.id)
+    }
+
     /// 界面上的"要做"开关：失败时提示。
     func toggleTodo(_ id: UUID, _ on: Bool) {
         attempt { try await self.setTodo(id, on) }

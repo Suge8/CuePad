@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中、待办、最近完成（折起），跨项目，
 /// 子任务缩进跟在上级下（`TaskOutline`：按住拖动排序、拖到一条上成为它的子任务、横向拖改层级），顶层写所在项目，
-/// 交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），点文字打开它的纸页，右键是 `TaskActions`（含缩进、反缩进）。
+/// 交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），点文字弹出任务浮窗（`TaskPopover`），右键是 `TaskActions`（含缩进、反缩进）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -93,7 +93,7 @@ struct TasksPanel: View {
     }
 }
 
-/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办；还有没完成的子任务时先问，确认后一起完成），点文字打开纸页；
+/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办；还有没完成的子任务时先问，确认后一起完成），点文字弹出任务浮窗；
 /// 第二行写所在项目（面板里跨项目时）与交给 Pi 的会话此刻的状态，点状态打开那个会话的详情（外层要有 `SessionDetailHost`）。右键是 `TaskActions`。
 struct TaskRow: View {
     let task: Card
@@ -111,6 +111,7 @@ struct TaskRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.sessionDetail) private var sessionDetail
+    @State private var opened = false
 
     private var done: Bool { task.status == .done }
 
@@ -136,6 +137,10 @@ struct TaskRow: View {
         .padding(.vertical, compact ? 1 : 3)
         .frame(minHeight: compact ? 22 : 28)
         .contentShape(.rect)
+        .popover(isPresented: $opened, arrowEdge: .trailing) { TaskPopover(taskID: task.id) }
+        #if DEBUG
+        .task(id: DebugScene.popoverTask) { if DebugScene.popoverTask == task.id { opened = true } }
+        #endif
         .contextMenu { TaskActions(task: task, open: open) }
         // 读屏：整行一个元素"任务内容，项目，Pi 在做什么"，值是状态，默认动作切换完成（文案见 TaskSpeech）
         .accessibilityElement(children: .ignore)
@@ -181,10 +186,7 @@ struct TaskRow: View {
         .font(.system(size: 11))
     }
 
-    private func open() {
-        workspace.overlay = nil
-        workspace.openCard = task.id
-    }
+    private func open() { opened = true }
 
     private func toggle() {
         if !done, TaskCopy.hasOpen(subtasks) { confirmsSubtasks = true } else { commitToggle() }
