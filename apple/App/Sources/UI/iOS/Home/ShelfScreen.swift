@@ -45,7 +45,7 @@ nonisolated struct ShelfData: Sendable {
     }
 }
 
-/// iPhone 首页：项目书架。顶上一排：搜索全部卡片（占满左边，输入时页面换成搜索结果）与"⋯"（新建项目、未归档、回收站、设置）；
+/// iPhone 首页：项目书架。顶上一排：左"⋯"（未归档、回收站、设置），中间搜索灵感与任务（输入时页面换成搜索结果，往下滑时藏起），右"新建项目"；
 /// iPad 分栏里这些都在侧栏，顶上不放。下面是"正在推进"（进行中的任务，点开是任务浮窗）；再下一张纸：有任务时一行"任务 · N 进行中 · N 待办"
 /// 进入跨项目任务页，有没归类的灵感时一行提醒去整理；置顶项目是大卡，其余按最近排成行，都带介绍、灵感数、任务数与 Pi 状态点。
 struct ShelfScreen: View {
@@ -57,6 +57,7 @@ struct ShelfScreen: View {
     @State private var data: ShelfData?
     @State private var query = PaletteQuery()
     @FocusState private var searchFocused: Bool
+    @State private var searchHidden = false
 
     /// 一张卡都没有时没什么可搜，不放搜索框。
     private var searchable: Bool { workspace.catalog?.cardCounts.values.contains { $0 > 0 } == true }
@@ -71,6 +72,7 @@ struct ShelfScreen: View {
                     if let data { content(data) }
                 }
                 .refreshable { await services.syncNow() }
+                .hidingSearch($searchHidden, searching: searching)
             }
         }
         // 不显示标题：顶上只有那一排，内容多露出来；标题仍是读屏与多任务切换器里的名字
@@ -144,14 +146,20 @@ struct ShelfScreen: View {
 
     private static let readableWidth: CGFloat = 760
 
-    /// 搜索框（一张卡都没有时没什么可搜，只留右边的"⋯"）与"⋯"。
+    /// 左"⋯"（未归档、回收站、设置），中间搜索（什么都没有时没什么可搜，不放），右"新建项目"。
     private var row: some View {
-        SearchRow(search: searchable ? SearchCapsule(prompt: "搜索灵感与任务", query: $query.text, focus: $searchFocused) : nil) { menu }
+        SearchRow(
+            search: searchable ? SearchCapsule(prompt: "搜索灵感与任务", query: $query.text, focus: $searchFocused) : nil,
+            searchHidden: searchHidden
+        ) {
+            menu
+        } trailing: {
+            Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
+        }
     }
 
     private var menu: some View {
         Menu {
-            Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
             Button(count("未归档", data?.inboxCount), systemImage: "tray") { navigation.push(.inbox) }
             Button(count("回收站", data?.trashCount), systemImage: "trash") { navigation.push(.trash) }
             Button("设置", systemImage: "gearshape") { navigation.push(.settings) }

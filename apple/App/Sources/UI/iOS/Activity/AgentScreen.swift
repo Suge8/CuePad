@@ -5,9 +5,9 @@ import SwiftUI
 
 /// Agent 页：只回答"每个会话在做什么、现在到哪了、结果或卡点是什么"。"现在"是没结束的会话，按要你注意的先后排
 /// （等你确认 → 出错 → 工作中 → 空闲）；"历史"是所有已结束的，按结束时间分段（今天、昨天……）、可搜，滑到底才读下一页。
-/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。顶上一排是搜索与新会话（`SearchRow`），同步到不了 Mac 时
-/// 同一排多一颗同步图标；从项目页"全部 N 个会话"推入的那一页用推入页的悬浮顶栏（项目名、会话数、新会话），搜索在它下面一排。
-/// 列表顶上的项目胶囊按项目筛"现在"与"历史"。在线会话长按或左滑可结束（确认后发给它所在的 Mac，对话留着）。
+/// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。顶上一排（`SearchRow`）：左边按项目筛，中间搜索，
+/// 右边新会话（同步到不了 Mac 时多一颗同步图标）；从项目页"全部 N 个会话"推入的那一页用推入页的悬浮顶栏（项目名、会话数、新会话），
+/// 筛选与搜索在它下面一排。在线会话长按或左滑可结束（确认后发给它所在的 Mac，对话留着）。
 struct AgentScreen: View {
     var inPanel = false
     /// 从项目页进来：先筛这个项目，在这里换的筛选不记下。
@@ -23,6 +23,7 @@ struct AgentScreen: View {
     @State private var picked: UUID??
     @FocusState private var searchFocused: Bool
     @State private var confirmingEnd: PiSessionState?
+    @State private var searchHidden = false
 
     private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -39,13 +40,7 @@ struct AgentScreen: View {
 
     var body: some View {
         List {
-            if let list {
-                if let chips = chips(list) {
-                    chips.listRowInsets(.init())
-                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
-                }
-                sessions(list)
-            }
+            if let list { sessions(list) }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
@@ -63,8 +58,9 @@ struct AgentScreen: View {
         #if DEBUG
         .defaultScrollAnchor(DebugScene.scene == "agent" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
         #endif
+        .hidingSearch($searchHidden, searching: searchFocused || !query.isEmpty)
         .safeAreaBar(edge: .top) {
-            SearchRow(search: search) { if project == nil { actions } }
+            SearchRow(search: search, searchHidden: searchHidden) { filterMenu } trailing: { if project == nil { actions } }
         }
         .modifier(Header(pushed: project != nil, count: list.map { $0.now.count + $0.total }, filter: filter))
         // 标签页的根：系统导航栏收起，只留这一排（iPad 分栏里导航栏放着分栏自己的按钮，留着）
@@ -82,10 +78,28 @@ struct AgentScreen: View {
         }
     }
 
-    /// 项目胶囊：全部 + 能筛的项目（项目目录的顺序）；一个项目都没有时不出现。
-    private func chips(_ list: PiSessionList) -> ProjectChips? {
-        let projects = (workspace.catalog?.projects ?? []).filter { list.projects.contains($0.id) || $0.id == filter }
-        return projects.isEmpty ? nil : ProjectChips(projects: projects, selected: filter, pick: pick)
+    /// 左边的圆钮：按项目筛"现在"与"历史"（全部 + 在 Mac 上绑了代码目录的项目，项目目录的顺序）；筛着项目时圆钮里是那个项目的图标。
+    /// 一个能筛的项目都没有时不出现。
+    @ViewBuilder private var filterMenu: some View {
+        let projects = (workspace.catalog?.projects ?? []).filter { list?.projects.contains($0.id) == true || $0.id == filter }
+        if !projects.isEmpty {
+            let current = workspace.catalog?.project(filter)
+            Menu {
+                Picker("按项目看", selection: Binding { filter } set: { pick($0) }) {
+                    Label("全部", systemImage: "square.stack").tag(UUID?.none)
+                    ForEach(projects) { project in
+                        Label { Text(project.name) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
+                    }
+                }
+            } label: {
+                Label {
+                    Text(current.map { "按项目看：\($0.name)" } ?? "按项目看")
+                } icon: {
+                    if let current { ProjectGlyph(project: current, size: 15) } else { Image(systemName: "line.3.horizontal.decrease") }
+                }
+            }
+            .sensoryFeedback(.selection, trigger: filter)
+        }
     }
 
     /// 会话列表。换搜索词或项目时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。
@@ -172,7 +186,7 @@ struct AgentScreen: View {
     }
 
     private var search: SearchCapsule {
-        SearchCapsule(prompt: "搜会话、目录、说过的话", query: $query, focus: $searchFocused)
+        SearchCapsule(prompt: workspace.catalog?.project(filter).map { "搜 \($0.name) 的会话" } ?? "搜会话、目录、说过的话", query: $query, focus: $searchFocused)
     }
 
     @ViewBuilder private var actions: some View {
@@ -181,20 +195,60 @@ struct AgentScreen: View {
     }
 }
 
-/// 标签根页（灵感、Agent）与 iPad 右侧面板的顶上一排：搜索框占满左边，右边圆钮。浮在内容上（滚动到它下面的内容渐隐），
-/// 不放进导航栏：导航栏中间那一格按内容宽度居中，占不满。
-/// 没有可搜的东西时 `search` 为 nil，圆钮仍靠右。
-struct SearchRow<Trailing: View>: View {
+/// 标签根页（灵感、Agent）与 iPad 右侧面板的顶上一排：左右各一颗圆钮，中间搜索框占满。浮在内容上（滚动到它下面的内容渐隐），
+/// 不放进导航栏：导航栏中间那一格按内容宽度居中，占不满。往下滑时搜索框藏起、两颗圆钮留着（主控件不跟着滚动来回跳），
+/// 往上滑或回到顶上再出现（`hidesSearch`）；只淡出、不改这一排的高度，免得内容跟着挪、滚动位置反过来又改它。
+/// 没有可搜的东西时 `search` 为 nil，两颗圆钮仍各在两端。
+struct SearchRow<Leading: View, Trailing: View>: View {
     let search: SearchCapsule?
+    var searchHidden = false
+    @ViewBuilder let leading: Leading
     @ViewBuilder let trailing: Trailing
 
     var body: some View {
         HStack(spacing: 8) {
-            if let search { search } else { Spacer() }
+            leading
+            ZStack {
+                if let search {
+                    search
+                        .opacity(searchHidden ? 0 : 1)
+                        .scaleEffect(searchHidden ? 0.94 : 1)
+                        .allowsHitTesting(!searchHidden)
+                        .accessibilityHidden(searchHidden)
+                }
+            }
+            .frame(maxWidth: .infinity)
             trailing
         }
         .buttonStyle(CircleGlass()).menuStyle(.button).labelStyle(.iconOnly)
         .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 8)
+        .animation(Motion.quick, value: searchHidden)
+    }
+}
+
+extension SearchRow where Leading == EmptyView, Trailing == EmptyView {
+    /// 离顶这么近时总是露出搜索框：刚开始滑、下拉回弹时不闪。
+    static var revealZone: CGFloat { 24 }
+
+    /// 滚动从 `old` 到 `new`（内容偏移，0 是顶）之后搜索框藏不藏。
+    static func hidesSearch(_ hidden: Bool, from old: CGFloat, to new: CGFloat, searching: Bool) -> Bool {
+        if searching || new <= revealZone { return false }
+        return new == old ? hidden : new > old
+    }
+}
+
+extension View {
+    /// 跟着滚动藏起、露出顶上那一排的搜索框（`SearchRow.hidesSearch`）。
+    func hidingSearch(_ hidden: Binding<Bool>, searching: Bool) -> some View {
+        // 偏移夹在能滚到的范围里：滚到底回弹的那一下不算往上滑
+        onScrollGeometryChange(for: CGFloat.self, of: { geometry in
+            let top = geometry.contentInsets.top
+            let end = geometry.contentSize.height - geometry.containerSize.height
+            return min(max(geometry.contentOffset.y + top, 0), max(end, 0))
+        }) { old, new in
+            let next = SearchRow.hidesSearch(hidden.wrappedValue, from: old, to: new, searching: searching)
+            if next != hidden.wrappedValue { hidden.wrappedValue = next }
+        }
     }
 }
 
@@ -285,35 +339,6 @@ private struct SyncBadge: View {
     }
 }
 
-/// 按项目筛的一排胶囊，横向滑动；选中的是墨色实心（同搜索的筛选胶囊）。
-private struct ProjectChips: View {
-    let projects: [Project]
-    let selected: UUID?
-    let pick: (UUID?) -> Void
-
-    var body: some View {
-        ChipRow {
-            chip(nil) { Text("全部") }
-            ForEach(projects) { project in
-                chip(project.id) {
-                    HStack(spacing: 6) {
-                        ProjectGlyph(project: project, size: 13)
-                        Text(project.name).lineLimit(1)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, -16)
-        .sensoryFeedback(.selection, trigger: selected)
-    }
-
-    private func chip(_ id: UUID?, @ViewBuilder label: () -> some View) -> some View {
-        let on = selected == id
-        return Button { pick(id) } label: { FilterChip(on: on, label: label) }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(on ? .isSelected : [])
-    }
-}
 
 private struct SectionTitle: View {
     let text: String

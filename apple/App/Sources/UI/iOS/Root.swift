@@ -89,12 +89,19 @@ private struct InkTint: ViewModifier {
 /// 各页的内容要等读库（异步）才有，铺在滚动区上时数据没到的几帧整页透明、露出系统的黑。
 struct RouteView: View {
     let route: Navigation.Route
+    @Environment(Navigation.self) private var navigation
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         page.containerBackground(background, for: .navigation)
+            // 标签栏布局：内容让出底部那一行的高度，滚动到它下面的内容渐隐。挂在每一页上：TabView 外面的安全区传不进标签页
+            .safeAreaBar(edge: .bottom) {
+                if navigation.layout == .tabs, navigation.bottomPages == 0 {
+                    Color.clear.frame(height: BottomBar.height + BottomBar.bottomGap)
+                }
+            }
     }
 
     /// 卡片纸页在窄屏是整页的纸，宽屏是桌面上的一张纸；其余页是桌面。
@@ -126,26 +133,26 @@ struct RouteView: View {
 }
 
 /// iPhone（及窄窗口 iPad）：两个标签的内容 + 底部自绘的一行（`BottomBar`）。系统标签栏隐藏，TabView 只管切内容
-/// （保留各标签的导航栈与页面的出现/消失）；底部那一行不随滚动收小，进纸页、会话页时随页收起。
+/// （保留各标签的导航栈、滚动位置与页面的出现/消失）；点底部换标签时页面按标签顺序推移（`TabSlide`）。
+/// 底部那一行不随滚动收小，进纸页、会话页时随页收起。
 private struct TabsRoot: View {
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Agent 标签的角标：等你确认的 Pi 会话数。
     @State private var waiting: Int?
+    @State private var slide = TabSlide()
 
     var body: some View {
         @Bindable var navigation = navigation
         TabView(selection: $navigation.tab) {
-            Tab(value: Navigation.Tab.projects) { stack($navigation.projectsPath) { RouteView(route: .shelf) } }
-            Tab(value: Navigation.Tab.agent) { stack($navigation.agentPath) { RouteView(route: .agent) } }
+            Tab(value: Navigation.Tab.projects) { stack(.projects, $navigation.projectsPath) { RouteView(route: .shelf) } }
+            Tab(value: Navigation.Tab.agent) { stack(.agent, $navigation.agentPath) { RouteView(route: .agent) } }
         }
-        // 内容让出底部一行的高度（滚动到它下面的内容渐隐）；那一行本身浮在上面、不随键盘升起，键盘出来时被盖住
-        .safeAreaBar(edge: .bottom) {
-            if navigation.bottomPages == 0 { Color.clear.frame(height: BottomBar.height + BottomBar.bottomGap) }
-        }
+        // 底部那一行浮在上面、不随键盘升起，键盘出来时被盖住；内容给它让出的高度在每一页上（`RouteView`）
         .overlay(alignment: .bottom) {
             if navigation.bottomPages == 0 {
-                BottomBar(waiting: waiting ?? 0)
+                BottomBar(waiting: waiting ?? 0, select: select)
                     .ignoresSafeArea(.keyboard, edges: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -167,31 +174,98 @@ private struct TabsRoot: View {
         }
     }
 
-    private func stack(_ path: Binding<[Navigation.Route]>, @ViewBuilder root: () -> some View) -> some View {
-        NavigationStack(path: path) {
+    /// 点底部换标签：选中滴滑过去，页面同向推移。
+    private func select(_ tab: Navigation.Tab) {
+        guard tab != navigation.tab else { return }
+        slide.leave(forward: tab == .agent, reduceMotion: reduceMotion)
+        withAnimation(TabSlide.animation(reduceMotion: reduceMotion)) { navigation.tab = tab }
+    }
+
+    /// 一个标签的导航栈。没选中时停在它那一侧一屏宽之外：选中时从那一侧推入（灵感在左、Agent 在右）。
+    private func stack(_ tab: Navigation.Tab, _ path: Binding<[Navigation.Route]>, @ViewBuilder root: () -> some View) -> some View {
+        let side: CGFloat = navigation.tab == tab || reduceMotion ? 0 : tab == .agent ? 1 : -1
+        return NavigationStack(path: path) {
             root().navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
         }
         .toolbarVisibility(.hidden, for: .tabBar)
+        .visualEffect { content, geometry in content.offset(x: side * geometry.size.width) }
+        .background { TabSlide.Probe(slide: slide) }
     }
 }
 
-/// 底部一行，整体居中：贴在一起的玻璃 [灵感 | Agent] 与一颗圆形"写"；位置与大小始终不变，不随滚动收小。
+/// 换标签的推移：新的一页由 SwiftUI 从它那一侧推入（`TabsRoot.stack` 的偏移），要离开的那一页 TabView 会立刻收起，
+/// 所以先拍下它、盖在上面往另一边推出。页面本身照常由 TabView 切换：出现/消失、导航栈与滚动位置都不变，动的只是视图层。
+/// 减弱动态效果时新页直接在位，旧页的快照淡出。
+@MainActor
+private final class TabSlide {
+    private static let duration = 0.28
+    private var animator: UIViewPropertyAnimator?
+    fileprivate weak var tabs: UITabBarController?
+
+    /// 两页同一条曲线：不回弹，≤300ms。
+    static func animation(reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: duration, bounce: 0)
+    }
+
+    /// 切标签之前：拍下此刻的页面盖在上面，往另一边推出（减弱动态效果时淡出）。
+    func leave(forward: Bool, reduceMotion: Bool) {
+        animator?.stopAnimation(false)
+        animator?.finishAnimation(at: .end)
+        guard let container = tabs?.view, let snapshot = container.snapshotView(afterScreenUpdates: false) else { return }
+        container.addSubview(snapshot)
+        let shift = container.bounds.width * (forward ? -1 : 1)
+        let animator = UIViewPropertyAnimator(duration: reduceMotion ? 0.2 : Self.duration, dampingRatio: 1) {
+            if reduceMotion { snapshot.alpha = 0 } else { snapshot.transform = CGAffineTransform(translationX: shift, y: 0) }
+        }
+        animator.addCompletion { _ in snapshot.removeFromSuperview() }
+        animator.startAnimation()
+        self.animator = animator
+    }
+
+    /// 挂在每个标签页里：认出标签控制器（快照拍它的视图）。
+    struct Probe: UIViewControllerRepresentable {
+        let slide: TabSlide
+
+        func makeUIViewController(context: Context) -> Controller { Controller(slide: slide) }
+        func updateUIViewController(_ controller: Controller, context: Context) {}
+
+        final class Controller: UIViewController {
+            let slide: TabSlide
+
+            init(slide: TabSlide) {
+                self.slide = slide
+                super.init(nibName: nil, bundle: nil)
+            }
+
+            required init?(coder: NSCoder) { nil }
+
+            override func viewIsAppearing(_ animated: Bool) {
+                super.viewIsAppearing(animated)
+                slide.tabs = tabBarController
+            }
+        }
+    }
+}
+
+/// 底部一行，整体居中：贴在一起的玻璃 [灵感 | Agent] 与同高的一颗圆形"写"；位置与大小始终不变，不随滚动收小。
+/// 比例照系统标签栏：选中滴与底板四周留同样的边，每一格整块都能点。
 private struct BottomBar: View {
     let waiting: Int
+    let select: (Navigation.Tab) -> Void
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static let height: CGFloat = 62
+    static let height: CGFloat = 64
     static let bottomGap: CGFloat = 4
-    private static let inset: CGFloat = 4
-    private static let tabWidth: CGFloat = 92
+    /// 选中滴离底板的边。
+    private static let inset: CGFloat = 5
+    private static let tabWidth: CGFloat = 100
 
     var body: some View {
         HStack(spacing: 12) {
             tabs
             Button { navigation.startCapture() } label: {
-                Image(systemName: WriteEntry.symbol).font(.title2.weight(.medium)).foregroundStyle(palette.ink)
+                Image(systemName: WriteEntry.symbol).font(.system(size: 22, weight: .medium)).foregroundStyle(palette.ink)
                     .frame(width: Self.height, height: Self.height)
                     .contentShape(.circle)
             }
@@ -229,18 +303,17 @@ private struct BottomBar: View {
 
     private func tab(_ tab: Navigation.Tab, title: String, symbol: String, badge: Int = 0) -> some View {
         let selected = navigation.tab == tab
-        return Button {
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.tab = tab }
-        } label: {
-            VStack(spacing: 2) {
-                Image(systemName: symbol).font(.title3.weight(selected ? .semibold : .regular))
-                    .frame(height: 26)
-                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).offset(x: 12, y: -6) } }
-                Text(title).font(.caption2.weight(selected ? .semibold : .medium))
+        return Button { select(tab) } label: {
+            VStack(spacing: 3) {
+                Image(systemName: symbol).font(.system(size: 20, weight: selected ? .semibold : .regular))
+                    .frame(height: 24)
+                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).offset(x: 13, y: -7) } }
+                Text(title).font(.system(size: 11, weight: selected ? .semibold : .medium))
             }
             .foregroundStyle(palette.ink)
-            .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
-            .contentShape(.capsule)
+            // 一格占底板的一半，四周的边也算它的：点在滴外面一点也算点中
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
