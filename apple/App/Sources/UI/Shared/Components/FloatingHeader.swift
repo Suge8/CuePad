@@ -44,8 +44,10 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
             // 收起时中间什么都不放：系统会把标题当普通文字摆回中间
             .toolbar(removing: collapsed ? .title : nil)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    if !collapsed {
+                if !collapsed {
+                    // 这一项一直在，标题与信息只在它里面换：推入转场期间系统不重建工具栏项，换项要等转场结束才显示。
+                    // 标题要等读库才有的页（卡片纸页）先透明，读到后淡入
+                    ToolbarItem(placement: .principal) {
                         VStack(spacing: 1) {
                             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                             detail
@@ -53,9 +55,10 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
                         .padding(.horizontal, 16)
                         .frame(height: Self.height)
                         .glass(in: .capsule)
+                        .opacity(title.isEmpty ? 0 : 1)
+                        .animation(Motion.quick, value: title.isEmpty)
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.isHeader)
-                        .transition(.opacity)
                     }
                 }
                 if collapsed {

@@ -12,10 +12,7 @@ struct SearchScreen: View {
 
     var body: some View {
         CardSearchResults(query: $query, scope: .all, total: $total)
-            .navigationTitle("搜索")
-            // ⌘K 是高频的键盘操作：标题不做大标题收起的动画，直接是一行
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationSubtitle(total.map { !query.text.isEmpty || query.isFiltered ? "\($0) 张" : "" } ?? "")
+            .floatingHeader("搜索", detail: total.map { !query.text.isEmpty || query.isFiltered ? "\($0) 张" : "" } ?? "")
             .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索卡片")
             .searchFocused($searching)
             .searchSelection($selection)

@@ -11,7 +11,7 @@ nonisolated private struct EditorData: Sendable {
 }
 
 /// 打开的卡：一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面）。键盘上方是工具栏（分割线、插图、变量取值、发送；选中文字时发送只发选中的部分）；
-/// 导航栏右侧是复制、发到 Mac 与"更多"（分享、置顶、设为目标、移动、移到回收站）。
+/// 顶栏是共用的悬浮顶栏：中间写所属项目与"时间 · 目标 · 置顶"，右边"⋯"里是发到 Mac（⌘↩）、复制、分享与卡片操作。
 struct CardEditorScreen: View {
     let cardID: UUID
     @Environment(Workspace.self) private var workspace
@@ -41,9 +41,13 @@ struct CardEditorScreen: View {
             }
             .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationBarTitleDisplayMode(.inline)
             .ownsBottomEdge()
-            .toolbar { toolbar }
+            .floatingHeader(data.map { $0.project?.name ?? "未归档" } ?? "", detail: data.map(Self.detail) ?? "") { actions }
+            // 菜单项上的快捷键要等菜单打开才生效：⌘↩ 另挂一个不占位的按钮
+            .background {
+                Button("发到 Mac", action: sendToMac).keyboardShortcut(.return, modifiers: .command)
+                    .disabled(data == nil).opacity(0).accessibilityHidden(true)
+            }
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
             .onChange(of: pickedImage) { insertPicked() }
             .sheet(isPresented: $editingVariables) {
@@ -70,9 +74,6 @@ struct CardEditorScreen: View {
 
     @ViewBuilder private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let data {
-                meta(data).padding(.horizontal, inset).padding(.top, wide ? 20 : 4).padding(.bottom, 6)
-            }
             if let data, let initialText {
                 IOSEditorHost(
                     initialText: initialText,
@@ -93,40 +94,24 @@ struct CardEditorScreen: View {
 
     private var inset: CGFloat { wide ? 44 : 20 }
 
-    private func meta(_ data: EditorData) -> some View {
-        HStack(spacing: 6) {
-            ProjectGlyph(project: data.project, size: 12)
-            Text(data.project?.name ?? "未归档").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
-            Text("·")
-            Text(DateLabel.short(data.card.modifiedAt))
-            if data.project?.goalCardID == data.card.id { Image(systemName: "scope").accessibilityLabel("项目目标") }
-            if data.card.isPinned { Image(systemName: "pin.fill").accessibilityLabel("置顶") }
-        }
-        .font(.caption)
-        .foregroundStyle(palette.ink3)
-        .accessibilityElement(children: .combine)
+    /// 顶栏的一行："03:36 · 目标 · 置顶"。
+    private static func detail(_ data: EditorData) -> String {
+        let marks = [data.project?.goalCardID == data.card.id ? "目标" : nil, data.card.isPinned ? "置顶" : nil].compactMap { $0 }
+        return ([DateLabel.short(data.card.modifiedAt)] + marks).joined(separator: " · ")
     }
 
-    /// 按钮从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        let card = data?.card
-        ToolbarItemGroup(placement: .primaryAction) {
-            Button("复制", systemImage: "doc.on.doc") { if let card { copy(card) } }
-                .disabled(card == nil)
-            Button("发到 Mac", systemImage: "paperplane", action: sendToMac)
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(card == nil)
-        }
-        ToolbarItem(placement: .secondaryAction) {
-            Menu("更多", systemImage: "ellipsis") {
-                if let card {
-                    ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
-                    Divider()
-                    CardActions(card: card, inEditor: true)
-                }
+    /// 顶栏右边的"⋯"：从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
+    private var actions: some View {
+        Menu("更多", systemImage: "ellipsis") {
+            if let card = data?.card {
+                Button("发到 Mac", systemImage: "paperplane", action: sendToMac)
+                Button("复制", systemImage: "doc.on.doc") { copy(card) }
+                ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
+                Divider()
+                CardActions(card: card, inEditor: true)
             }
-            .disabled(card == nil)
         }
+        .disabled(data == nil)
     }
 
     /// 发到 Mac：选中了文字就只发选中的部分。

@@ -45,9 +45,7 @@ struct ProjectScreen: View {
         .cardSearch(
             .project(projectID), available: navigation.layout == .tabs && (workspace.catalog?.cardCounts[projectID] ?? 0) > 0,
             ready: page != nil)
-        .navigationTitle(title)
-        .navigationSubtitle(subtitle)
-        .toolbar { toolbar }
+        .floatingHeader(project?.name ?? "", detail: detail) { actions }
         .observing(services.store, [.cards, .projects, .sendRecords, .tasks], id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
@@ -108,22 +106,12 @@ struct ProjectScreen: View {
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
 
-    private var title: String {
-        project?.name ?? ""
-    }
-
-    private var subtitle: String {
+    /// 顶栏的一行："25 张卡片 · cuepad"（绑定的代码目录只写末段）。
+    private var detail: String {
         let catalog = workspace.catalog
-        let directory = catalog?.directories[projectID].map(Self.homeRelative)
-        let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 张卡片" : nil }
-        return [directory, count].compactMap { $0 }.joined(separator: " · ")
-    }
-
-    /// 绑定的目录是 Mac 上的路径：`/Users/<name>/…` 显示成 `~/…`。
-    private static func homeRelative(_ path: String) -> String {
-        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
-        guard parts.count > 3, parts[1] == "Users" else { return path }
-        return "~/" + parts.dropFirst(3).joined(separator: "/")
+        let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 张卡片" : nil } ?? "还没有卡片"
+        let folder = catalog?.directories[projectID].map { URL(filePath: $0).lastPathComponent }
+        return [count, folder].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func wall(_ ids: [UUID], page: ProjectPage, lastTarget: [UUID: String]) -> some View {
@@ -135,12 +123,12 @@ struct ProjectScreen: View {
         }
     }
 
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button("新建卡片", systemImage: "square.and.pencil") { newCard() }
-        }
-        if let project {
-            ToolbarItem(placement: .secondaryAction) {
+    /// 顶栏右边的"⋯"：新建卡片在前，其后是共用的项目操作。
+    private var actions: some View {
+        Menu("更多", systemImage: "ellipsis") {
+            Button("新建卡片", systemImage: "square.and.pencil", action: newCard)
+            if let project {
+                Divider()
                 ProjectActions(project: project) { navigation.projectForm = .init(project: project) }
             }
         }

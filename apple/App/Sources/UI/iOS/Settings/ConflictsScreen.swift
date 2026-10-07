@@ -18,7 +18,7 @@ struct ConflictsScreen: View {
             .padding(16)
             .animation(Motion.quick, value: services.conflicts.map(\.copy.id))
         }
-        .navigationTitle("两个版本")
+        .floatingHeader("两个版本", detail: services.conflicts.isEmpty ? nil : "\(services.conflicts.count) 处")
     }
 }
 

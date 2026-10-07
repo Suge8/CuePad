@@ -30,7 +30,7 @@ struct TasksScreen: View {
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
                 .padding(.horizontal, 16).padding(.vertical, 8)
         }
-        .navigationTitle("任务")
+        .floatingHeader("任务", detail: board?.counts.summary ?? "")
         .sheet(item: $editing) { TaskEditSheet(task: $0) }
         #if DEBUG
         .onAppear { if DebugScene.defaults.bool(forKey: "CuePadShowsDone") { showsCompleted = true } }

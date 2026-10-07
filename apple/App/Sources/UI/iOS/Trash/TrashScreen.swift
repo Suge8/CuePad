@@ -43,11 +43,10 @@ struct TrashScreen: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .navigationTitle("回收站")
-        .toolbar {
-            if let data, !(data.projects.isEmpty && data.cards.isEmpty) {
-                Button("清空", role: .destructive) { confirmEmpty = true }
-            }
+        .floatingHeader("回收站", detail: data.map { $0.projects.isEmpty && $0.cards.isEmpty ? "空的" : "\($0.projects.count + $0.cards.count) 项" } ?? "") {
+            // 圆钮一直在、没东西时置灰：顶栏的控件不随数据出现消失
+            Button("清空", systemImage: "trash", role: .destructive) { confirmEmpty = true }
+                .disabled(data.map { $0.projects.isEmpty && $0.cards.isEmpty } ?? true)
         }
         .confirmationDialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty, titleVisibility: .visible) {
             Button("清空回收站", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }

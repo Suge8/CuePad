@@ -53,7 +53,7 @@ struct SettingsScreen: View {
         .frame(maxWidth: sizeClass == .regular ? Self.readableWidth : .infinity)
         .frame(maxWidth: .infinity)
         .scrollContentBackground(.hidden)
-        .navigationTitle("设置")
+        .floatingHeader("设置")
     }
 
     /// 演示模式没有同步引擎：调试参数要看"Pi 通知"各状态时照样显示这一节。
