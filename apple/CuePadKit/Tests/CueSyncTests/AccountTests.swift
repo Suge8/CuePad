@@ -134,6 +134,19 @@ import Testing
     #expect(await rig.coordinator.status == .noAccount)
   }
 
+  /// 服务端拒绝某条记录（如同名的旧类型记录不能改类型）：问题带着记录类型、名字与服务端原因，界面才说得清是哪一张。
+  @Test func aRejectedRecordIsReportedWithItsTypeNameAndServerReason() async throws {
+    let card = try await store.createCard(in: nil, body: "x")
+    let record = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
+    let rejection = CKError(
+      .invalidArguments, userInfo: ["ServerErrorDescription": "invalid attempt to update record from type 'tasks' to 'cards'"])
+    await rig.coordinator.handle(.sent(saved: [], failedSaves: [(record, rejection)], deleted: [], failedDeletes: []))
+
+    let issue = try #require(await rig.coordinator.issues.last)
+    #expect(issue.recordType == "cards" && issue.recordName == rig.id(card.id))
+    #expect(issue.message.contains("from type 'tasks' to 'cards'"))
+  }
+
   @Test func syncingFlagShowsWhileTheEngineIsBusy() async throws {
     await rig.coordinator.handle(.accountStatus(.available))
     await rig.coordinator.handle(.syncing(true))
