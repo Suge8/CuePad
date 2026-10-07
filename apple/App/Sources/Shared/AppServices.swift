@@ -270,8 +270,8 @@ final class AppServices {
     }
 
     #if os(macOS)
-    init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) {
-        let library = Self.openLibrary(at: location)
+    init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
+        let library = try Self.openLibrary(at: location)
         store = library.store
         images = library.images
         settings = AppSettings(defaults: defaults)
@@ -294,8 +294,8 @@ final class AppServices {
         historyStore = PiHistoryPersistence(storage: library.store, host: mac.hostID)
     }
     #else
-    init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) {
-        let library = Self.openLibrary(at: location)
+    init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {
+        let library = try Self.openLibrary(at: location)
         store = library.store
         images = library.images
         settings = AppSettings(defaults: defaults)
@@ -305,14 +305,11 @@ final class AppServices {
     }
     #endif
 
-    /// 资料库是唯一事实源：打不开时不能悄悄换一个空库，直接终止并说明原因。
-    private static func openLibrary(at location: LibraryLocation) -> (store: CueStore, images: any CueImageStore) {
-        do {
-            let store = try CueStore(url: location.databaseURL)
-            return (store, store.files)
-        } catch {
-            preconditionFailure("无法打开资料库 \(location.databaseURL.path)：\(error)")
-        }
+    /// 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
+    /// （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
+    static func openLibrary(at location: LibraryLocation) throws -> (store: CueStore, images: any CueImageStore) {
+        let store = try CueStore(url: location.databaseURL)
+        return (store, store.files)
     }
 
     /// 引擎没能启动：状态写明原因（与启动问题一起），不停在"正在连接"。

@@ -43,6 +43,15 @@ public actor CueStore {
     }
   }
 
+  /// 这个版本能打开的库结构版本（`PRAGMA user_version`）；失败页据此区分"库是更新版本建的"与"升级失败"。
+  public static var supportedSchemaVersion: Int { Schema.version }
+
+  /// 库文件现在的结构版本，不改库；文件不存在或读不出来为 nil。
+  public static func schemaVersion(of url: URL) -> Int? {
+    guard FileManager.default.fileExists(atPath: url.path), let connection = try? SQLite(path: url.path) else { return nil }
+    return (try? connection.first("PRAGMA user_version") { Int($0.int(0)) }) ?? nil
+  }
+
   /// 按资料库位置打开。
   public init(location: LibraryLocation) throws {
     try self.init(url: location.databaseURL)

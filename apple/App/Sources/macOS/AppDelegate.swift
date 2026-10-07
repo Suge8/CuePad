@@ -13,9 +13,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var settingsWindow: SettingsWindowController?
     private var mainFrameKeeper: WindowFrameKeeper?
     private var sigterm: DispatchSourceSignal?
+    /// 资料库打不开时的失败页；重试成功即关掉。
+    private var failureWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         sigterm = TerminationSignal.install()
+        MainMenu.install()
+        launch()
+    }
+
+    /// 解析资料库位置、打开资料库、建出主窗口与菜单栏部件。位置有误时说明原因后退出（不能带着错误的位置去读写）；
+    /// 资料库打不开时不终止：显示失败页，"重试"重新走这里。
+    private func launch() {
         let location: LibraryLocation
         do {
             location = try LibraryLocation.resolve()
@@ -23,10 +32,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             abortLaunch(error)
             return
         }
-        MainMenu.install()
-        let services = AppServices(
-            location: location, defaults: location.makeDefaults(), sync: .iCloud,
-            mac: .live(bundleID: AppServices.bundleID, location: location))
+        let services: AppServices
+        do {
+            services = try AppServices(
+                location: location, defaults: location.makeDefaults(), sync: .iCloud,
+                mac: .live(bundleID: AppServices.bundleID, location: location))
+        } catch {
+            showLibraryFailure(LibraryFailure(error, location: location))
+            return
+        }
+        failureWindow?.close()
+        failureWindow = nil
         let window = makeMainWindow(services)
         let shell = WindowShell(window: window)
         let windowDelegate = MainWindowDelegate(shell: shell)
@@ -88,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         services?.windowShell?.show()
+        failureWindow?.makeKeyAndOrderFront(nil)
         return true
     }
 
@@ -113,6 +130,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationWillTerminate(_ notification: Notification) {
         statusItem?.remove()
+    }
+
+    private func showLibraryFailure(_ failure: LibraryFailure) {
+        Logger(subsystem: AppServices.bundleID, category: "launch").error("资料库没能打开：\(failure.reason, privacy: .public)")
+        let window = failureWindow ?? NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.title = "CuePad"
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: UnreadableLibraryView(failure: failure) { [weak self] in self?.launch() }.modifier(PaletteProvider()))
+        if failureWindow == nil { window.center() }
+        failureWindow = window
+        NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
     }
 
     /// 配置有误时不能带着错误的位置去读写数据：说明原因后退出。

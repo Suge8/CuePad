@@ -115,6 +115,7 @@ enum Schema {
   /// 没迁移过的库里没有这样的卡，什么都不做。
   /// 别的设备可能已经升级、把同一个任务以新 id 同步到了本机（本机还停在上一步）：新 id 已存在时不能再改名（主键冲突会让升级失败、
   /// App 启动即崩溃），同一个任务留较新的一份——本机较新就把内容并到新 id 那条上（它的同步元数据留着，改动自然待上传）。
+  /// 整行"较新者胜"，不做字段级合并：与同步里同一条记录的冲突规则一致（正文冲突才另存副本，迁来的任务没有这种情形）。
   private static func renameMigratedTasks(_ db: SQLite) throws {
     let stale = try db.query("SELECT id FROM cards WHERE todoAt IS NOT NULL AND id NOT IN (SELECT recordName FROM syncRecords)") { $0.text(0) }
     let now = Date.stamp

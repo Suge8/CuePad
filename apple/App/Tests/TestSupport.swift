@@ -208,7 +208,7 @@ final class TestApp {
             updater: updater,
             host: host,
             locatePi: { Self.piExecutable })
-        let services = AppServices(location: location(), defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
+        let services = try! AppServices(location: location(), defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services
     }
@@ -216,7 +216,7 @@ final class TestApp {
     var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }
 
     private func makeServices() -> AppServices {
-        AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard)
+        try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard)
     }
     #endif
 }
