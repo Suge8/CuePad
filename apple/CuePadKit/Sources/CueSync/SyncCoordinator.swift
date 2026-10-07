@@ -239,6 +239,7 @@ actor SyncCoordinator {
       if try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record)) { changedSince.append(record.recordID) }
     }
     var resend = changedSince
+    var resendDeletes: [CKRecord.ID] = []
     for id in deleted { try await store.dropSyncMetadata(id.recordName) }
 
     var blocked = false
@@ -247,9 +248,14 @@ actor SyncCoordinator {
       case .serverRecordChanged:
         if let server = error.serverRecord {
           try await applyFetched([server], [])
+          // 本机版本胜出时它仍是待推送，引擎已移除它的待办
+          if try await store.isPending(record.recordID.recordName) { resend.append(record.recordID) }
         } else {
           report("保存冲突但没有服务器版本：\(error)", recordType: record.recordType, recordName: record.recordID.recordName)
         }
+      case .batchRequestFailed:
+        // 同批里别的记录被拒，这条自己没问题；引擎不会替它重试
+        resend.append(record.recordID)
       case .unknownItem, .zoneNotFound:
         // 服务器上没有这条记录（或整个同步区没了）：忘掉旧系统字段，作为新记录重新上传。
         if error.code == .zoneNotFound { await queue.ensureZone(zoneID) }
@@ -262,6 +268,8 @@ actor SyncCoordinator {
     for (id, error) in failedDeletes {
       if error.code == .unknownItem {
         try await store.dropSyncMetadata(id.recordName)
+      } else if error.code == .batchRequestFailed {
+        resendDeletes.append(id)
       } else {
         blocked = classify(error, recordName: id.recordName) || blocked
       }
@@ -270,7 +278,7 @@ actor SyncCoordinator {
     if !saved.isEmpty, failedSaves.isEmpty, failedDeletes.isEmpty, needsDecision == nil { status = .idle }
     // 停在配额或未预期失败时不立刻重新登记（会空转）；下一次本机写入时全量对账重试。
     if blocked { needsFullReconcile = true }
-    if !resend.isEmpty { await queue.enqueue(saves: resend, deletes: []) }
+    if !resend.isEmpty || !resendDeletes.isEmpty { await queue.enqueue(saves: resend, deletes: resendDeletes) }
   }
 
   /// 把 CloudKit 错误映射到状态。返回 true 表示这类失败不应立刻重试。瞬时网络类错误交给引擎自己重试。
@@ -283,8 +291,7 @@ actor SyncCoordinator {
     case .notAuthenticated:
       status = .noAccount
       return true
-    case .networkFailure, .networkUnavailable, .serviceUnavailable, .zoneBusy, .requestRateLimited,
-      .batchRequestFailed, .operationCancelled:
+    case .networkFailure, .networkUnavailable, .serviceUnavailable, .zoneBusy, .requestRateLimited, .operationCancelled:
       return false
     default:
       report(error, recordType: recordType, recordName: recordName)

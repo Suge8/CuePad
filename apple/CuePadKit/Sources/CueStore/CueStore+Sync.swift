@@ -67,6 +67,13 @@ extension CueStore {
     return nil
   }
 
+  /// 这条记录此刻是不是待推送（从未推送过，或推送后又改过）；本机没有这条记录时不是。
+  package func isPending(_ recordName: String) throws -> Bool {
+    guard let row = try syncRow(recordName: recordName) else { return false }
+    let pushed = try db.first("SELECT pushedModifiedAt FROM syncRecords WHERE recordName = ?", [recordName]) { $0.int(0) }
+    return pushed.map { row.modifiedAt > $0 } ?? true
+  }
+
   /// 全量对账：所有同步表里待推送的记录。
   package func pendingSync() throws -> PendingSync {
     var pending = PendingSync(saves: [], deletes: [])

@@ -98,13 +98,14 @@ public actor CloudSync {
     try await engine.sendChanges(CKSyncEngine.SendChangesOptions(scope: .recordIDs([id])))
   }
 
-  /// 立即拉取并推送（不等引擎的自动调度）。通知订阅没建成的话顺便重试（回到前台时调用）。
+  /// 立即拉取并推送（不等引擎的自动调度）。通知订阅没建成的话顺便重试，并按数据库重新登记待推送（回到前台时调用）。
   public func syncNow() async throws {
     guard let engine else { return }
     if subscribesToPiAlerts, await coordinator.alertSubscription != .active {
       await ensurePiAlertSubscriptions(CKContainer(identifier: containerIdentifier))
     }
     try await engine.fetchChanges()
+    try await coordinator.reconcile()  // 待推送以数据库为准：引擎对失败的记录不一定重试，丢了的在这里补登记
     try await engine.sendChanges()
   }
 
