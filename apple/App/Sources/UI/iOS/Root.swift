@@ -283,54 +283,63 @@ extension EnvironmentValues {
     @Entry var tabPageReady: () -> Void = {}
 }
 
-/// 底部一行，整体居中：贴在一起的玻璃 [灵感 | Agent] 与同高的一颗圆形"写"；位置与大小始终不变，不随滚动收小。
-/// 比例照系统标签栏：选中滴与底板四周留同样的边，每一格整块都能点。
+/// 底部一行，整体居中：一条玻璃轨道里的两个标签 [灵感 | Agent]，右边一颗与轨道同高、同一玻璃的圆形"写"；
+/// 位置与大小始终不变，不随滚动收小。比例对着系统悬浮标签栏（照片：高 62、滴四周留 5、每格 94）略收：高 56、滴四周留 4（同心）、
+/// 每格 80，图标与字更紧。轨道本身看得见：玻璃上一层低对比底（浅色压暗一点，深色提亮一点）；选中滴在轨道里再深（浅色）
+/// 或再亮（深色）一层，同心内缩。
+/// 按住一格时滴轻轻一压、给一下轻触感；换标签时滴在轨道里滑过去（减弱动态效果时淡出淡入、不压）。
 private struct BottomBar: View {
     let waiting: Int
     let select: (Navigation.Tab) -> Void
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 正按着的那一格。
+    @State private var pressed: Navigation.Tab?
 
-    static let height: CGFloat = 64
-    static let bottomGap: CGFloat = 4
-    /// 选中滴离底板的边。
-    private static let inset: CGFloat = 5
-    private static let tabWidth: CGFloat = 100
+    static let height: CGFloat = 56
+    static let bottomGap: CGFloat = 0
+    /// 选中滴离轨道的边。
+    private static let inset: CGFloat = 4
+    private static let tabWidth: CGFloat = 80
+
+    /// 轨道的底与选中滴：都是墨色的一层薄底，滴比轨道再重一层（深色下墨是浅的，所以是提亮）。
+    private var track: Color { palette.ink.opacity(palette.dark ? 0.08 : 0.045) }
+    private var drop: Color { palette.ink.opacity(palette.dark ? 0.16 : 0.1) }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             tabs
             Button { navigation.startCapture() } label: {
-                Image(systemName: WriteEntry.symbol).font(.system(size: 22, weight: .medium)).foregroundStyle(palette.ink)
+                Image(systemName: WriteEntry.symbol).font(.system(size: 19, weight: .medium)).foregroundStyle(palette.ink)
                     .frame(width: Self.height, height: Self.height)
+                    .background(track, in: .circle)
                     .contentShape(.circle)
             }
-            .buttonStyle(PressStyle(scale: 0.9))
+            .buttonStyle(PressStyle(scale: 0.92))
             .glass(in: .circle, interactive: true)
             .accessibilityLabel(WriteEntry.title)
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, Self.bottomGap)
+        .sensoryFeedback(.impact(weight: .light, intensity: 0.6), trigger: pressed) { _, now in now != nil }
     }
 
-    /// 两格标签：底下一块玻璃，选中的那一格上一滴着色的玻璃（同一个玻璃容器里，换标签时滑过去、途中与底板相融）；
-    /// 字与图标叠在玻璃之上（放进容器里会被玻璃盖住）。
+    /// 一块玻璃是轨道，选中滴是轨道里的一层底（玻璃不叠玻璃）；字与图标在最上面。
     private var tabs: some View {
-        GlassEffectContainer {
-            ZStack(alignment: navigation.tab == .projects ? .leading : .trailing) {
-                Capsule().fill(.clear)
-                    .frame(width: Self.tabWidth * 2 + Self.inset * 2, height: Self.height)
-                    .glassEffect(.regular, in: .capsule)
-                // 减弱动态效果时换成每格各一滴：换标签是旧滴淡出、新滴淡入（随 `Motion.spatial` 的短淡入淡出），不滑过去
-                Capsule().fill(.clear)
-                    .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
-                    .glassEffect(.regular.tint(palette.selection), in: .capsule)
-                    .padding(Self.inset)
-                    .id(reduceMotion ? navigation.tab : nil)
-                    .transition(.opacity)
-            }
+        ZStack(alignment: navigation.tab == .projects ? .leading : .trailing) {
+            Capsule().fill(track)
+            // 减弱动态效果时换成每格各一滴：换标签是旧滴淡出、新滴淡入（随 `Motion.spatial` 的短淡入淡出），不滑过去
+            Capsule().fill(drop)
+                .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
+                .scaleEffect(pressed != nil && !reduceMotion ? 0.94 : 1)
+                .animation(Motion.press, value: pressed)
+                .padding(Self.inset)
+                .id(reduceMotion ? navigation.tab : nil)
+                .transition(.opacity)
         }
+        .frame(width: Self.tabWidth * 2 + Self.inset * 2, height: Self.height)
+        .glass(in: .capsule, interactive: true)
         .overlay {
             HStack(spacing: 0) {
                 tab(.projects, title: "灵感", symbol: "lightbulb")
@@ -344,22 +353,34 @@ private struct BottomBar: View {
     private func tab(_ tab: Navigation.Tab, title: String, symbol: String, badge: Int = 0) -> some View {
         let selected = navigation.tab == tab
         return Button { select(tab) } label: {
-            VStack(spacing: 3) {
-                Image(systemName: symbol).font(.system(size: 20, weight: selected ? .semibold : .regular))
-                    .frame(height: 24)
-                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).offset(x: 13, y: -7) } }
-                Text(title).font(.system(size: 11, weight: selected ? .semibold : .medium))
+            VStack(spacing: 1) {
+                Image(systemName: symbol).font(.system(size: 17, weight: selected ? .semibold : .regular))
+                    .frame(height: 21)
+                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).offset(x: 12, y: -5) } }
+                Text(title).font(.system(size: 10, weight: selected ? .semibold : .medium))
             }
-            .foregroundStyle(palette.ink)
-            // 一格占底板的一半，四周的边也算它的：点在滴外面一点也算点中
+            .foregroundStyle(selected ? palette.ink : palette.ink2)
+            // 一格占轨道的一半，四周的边也算它的：点在滴外面一点也算点中
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TabPress(tab: tab, pressed: $pressed))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(badge > 0 ? "\(badge) 个会话等你确认" : "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// 标签的按下：字不缩（缩的是选中滴，见 `BottomBar`），只把"正按着哪一格"报上去。
+private struct TabPress: ButtonStyle {
+    let tab: Navigation.Tab
+    @Binding var pressed: Navigation.Tab?
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.onChange(of: configuration.isPressed) { _, down in
+            if down { pressed = tab } else if pressed == tab { pressed = nil }
+        }
     }
 }
 
@@ -369,8 +390,8 @@ private struct Badge: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text("\(count)").font(.caption2.weight(.bold).monospacedDigit()).foregroundStyle(.white)
-            .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18)
+        Text("\(count)").font(.system(size: 10, weight: .bold).monospacedDigit()).foregroundStyle(.white)
+            .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16)
             .background(palette.attention, in: .capsule)
             .accessibilityHidden(true)
     }
