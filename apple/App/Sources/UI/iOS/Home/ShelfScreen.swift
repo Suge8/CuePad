@@ -18,22 +18,22 @@ nonisolated struct ShelfData: Sendable {
     /// 在线的 Pi 会话（带发给它的最近一条投送请求）：项目的状态点在界面上再按本机的规则算（`PiSessionListItem.byProject`）。
     var live: [PiSessionListItem]
     /// 书架的"任务"一行：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，不显示这一行。
-    var tasks: TaskBoard.Counts?
+    var tasks: TaskCounts?
     var inboxCount: Int
     var trashCount: Int
 
     static func read(from store: isolated CueStore) throws -> ShelfData {
         let summaries = try store.projectSummaries()
         let counts = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) })
-        let progress = try store.taskProgress()
+        let tasks = try store.taskCounts()
         let entries = try store.projects().map { project in
             let latest = try store.search(SearchQuery(projects: [project.id]), limit: 1).cards.first
             return Entry(
-                project: project, cardCount: counts[project.id] ?? 0, openTasks: progress[project.id].map { $0.total - $0.done } ?? 0,
+                project: project, cardCount: counts[project.id] ?? 0, openTasks: tasks[project.id]?.open ?? 0,
                 goal: try project.goalCardID.flatMap { try store.card($0) }.map { CardText($0.body).title.textGlyphs },
                 latest: latest.map { (CardText($0.body).title.textGlyphs, $0.modifiedAt) })
         }
-        let hasTasks = progress.values.contains { $0.total > 0 }
+        let hasTasks = tasks.values.contains { $0.total > 0 }
         return ShelfData(
             entries: entries, live: try store.piSessionPage(.live).items,
             tasks: hasTasks ? try TaskBoard.counts(from: store) : nil,
@@ -172,7 +172,7 @@ private struct InboxReminder: View {
 
 /// 跨项目的任务："任务 2 进行中 · 3 待办"。
 private struct TasksLine: View {
-    let tasks: TaskBoard.Counts
+    let tasks: TaskCounts
 
     var body: some View {
         ShelfLine(route: .tasks, symbol: "checklist", title: "任务", detail: tasks.summary)

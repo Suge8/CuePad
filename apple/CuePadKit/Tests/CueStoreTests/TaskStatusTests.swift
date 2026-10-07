@@ -61,9 +61,9 @@ import Testing
     try await store.updateTask(one.id) { $0.status = .done }
     try await store.updateTask(three.id) { $0.status = .inProgress }
 
-    let progress = try await store.taskProgress()
-    #expect(progress[project.id] == TaskProgress(done: 1, total: 3))
-    #expect(progress[nil] == TaskProgress(done: 0, total: 1))
+    let counts = try await store.taskCounts()
+    #expect(counts[project.id] == TaskCounts(inProgress: 1, todo: 1, done: 1))
+    #expect(counts[nil] == TaskCounts(inProgress: 0, todo: 1, done: 0))
   }
 
   /// 旧库（结构版本 7）升级：已完成的任务仍是完成，其余是待办。

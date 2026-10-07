@@ -9,7 +9,7 @@ nonisolated struct ProjectPageData: Sendable {
     var lastSends: [UUID: LastSend]
     /// 本项目没完成的任务的层级，同级按手动顺序。
     var tasks: TaskTree
-    /// 本项目任务的完成数与总数（没有任务时为 nil）。
+    /// 本项目顶层任务的完成数与总数（`CueStore.taskCounts`；没有任务时为 nil）。
     var taskProgress: TaskProgress?
     /// 上级任务的直接子任务完成数与总数。
     var subtasks: [UUID: TaskProgress]
@@ -38,7 +38,7 @@ nonisolated struct ProjectPageData: Sendable {
             cards: try store.cards(in: project),
             lastSends: try store.lastSends(in: project),
             tasks: try Self.tree(project, from: store),
-            taskProgress: try store.taskProgress()[project],
+            taskProgress: try store.taskCounts()[project]?.progress,
             subtasks: try store.subtaskProgress())
     }
 }

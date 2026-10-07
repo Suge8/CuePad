@@ -87,7 +87,28 @@ public struct TaskGroup: Equatable, Sendable {
   public internal(set) var tasks: [CueTask]
 }
 
-/// 项目里完成了几个、一共几个任务。
+/// 一组顶层任务按状态的个数（`CueStore.taskCounts`）：给用户看的任务数与完成数都是它。
+public struct TaskCounts: Equatable, Sendable {
+  public var inProgress: Int
+  public var todo: Int
+  public var done: Int
+
+  public init(inProgress: Int, todo: Int, done: Int) {
+    self.inProgress = inProgress
+    self.todo = todo
+    self.done = done
+  }
+
+  public var open: Int { inProgress + todo }
+  public var total: Int { open + done }
+  public var progress: TaskProgress { TaskProgress(done: done, total: total) }
+
+  public static func + (lhs: TaskCounts, rhs: TaskCounts) -> TaskCounts {
+    TaskCounts(inProgress: lhs.inProgress + rhs.inProgress, todo: lhs.todo + rhs.todo, done: lhs.done + rhs.done)
+  }
+}
+
+/// 完成了几个、一共几个（项目的顶层任务、上级的直接子任务）。
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int

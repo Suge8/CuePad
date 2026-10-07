@@ -115,15 +115,20 @@ extension CueStore {
     return ordered
   }
 
-  /// 各项目（nil = 未归档）的任务完成数与总数；没有任务的项目不在结果里。回收站里的项目不算。
-  public func taskProgress() throws -> [UUID?: TaskProgress] {
+  /// 各项目（nil = 未归档）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
+  /// 没有上级、上级不在库里，或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `subtaskProgress`。
+  /// 没有任务的项目不在结果里；回收站里的项目不算。
+  public func taskCounts() throws -> [UUID?: TaskCounts] {
     let rows = try db.query(
       """
-      SELECT t.projectID, SUM(t.completedAt IS NOT NULL), COUNT(*) FROM tasks t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE t.projectID IS NULL OR p.deletedAt IS NULL GROUP BY t.projectID
+      SELECT t.projectID, SUM(t.completedAt IS NULL AND t.startedAt IS NOT NULL), SUM(t.completedAt IS NULL AND t.startedAt IS NULL),
+        SUM(t.completedAt IS NOT NULL)
+      FROM tasks t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN tasks u ON u.id = t.parentID
+      WHERE (t.projectID IS NULL OR p.deletedAt IS NULL) AND (u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))
+      GROUP BY t.projectID
       """
-    ) { (project: $0.uuidOrNil(0), progress: TaskProgress(done: Int($0.int(1)), total: Int($0.int(2)))) }
-    return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.progress) })
+    ) { (project: $0.uuidOrNil(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
+    return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
   /// 各上级任务的直接子任务完成数与总数；没有子任务的不在结果里。

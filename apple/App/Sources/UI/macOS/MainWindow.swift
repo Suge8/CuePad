@@ -280,8 +280,7 @@ private struct TasksButton: View {
         .help("任务")
         .accessibilityLabel("任务，\(openCount ?? 0) 条未完成")
         .observing(services.store, [.tasks, .projects], into: $openCount) { store in
-            let counts = try TaskBoard.counts(from: store)
-            return counts.inProgress + counts.todo
+            try TaskBoard.counts(from: store).open
         }
     }
 }
