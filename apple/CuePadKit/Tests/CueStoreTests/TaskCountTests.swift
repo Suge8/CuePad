@@ -14,10 +14,10 @@ import Testing
     let release = try await store.createTask("上线", in: project.id)
     let backup = try await store.createTask("备份", under: release.id)
     _ = try await store.createTask("发布", under: release.id)
-    try await store.updateTask(backup.id) { $0.status = .inProgress }
+    try await store.setStatus(backup.id, .inProgress)
     let fix = try await store.createTask("修重连", in: project.id)
-    try await store.updateTask(fix.id) { $0.status = .done }
-    _ = try await store.createTask("散的")
+    try await store.setStatus(fix.id, .done)
+    _ = try await store.createTask("散的", in: nil)
 
     let counts = try await store.taskCounts()
 
@@ -26,10 +26,10 @@ import Testing
   }
 
   @Test func 上级已完成而自己重新打开的子任务_算顶层() async throws {
-    let release = try await store.createTask("上线")
+    let release = try await store.createTask("上线", in: nil)
     let backup = try await store.createTask("备份", under: release.id)
-    try await store.updateTask(release.id) { $0.status = .done }
-    try await store.updateTask(backup.id) { $0.status = .todo }
+    try await store.setStatus(release.id, .done)
+    try await store.setStatus(backup.id, .todo)
 
     #expect(try await store.taskCounts()[nil] == TaskCounts(inProgress: 0, todo: 1, done: 1))
   }

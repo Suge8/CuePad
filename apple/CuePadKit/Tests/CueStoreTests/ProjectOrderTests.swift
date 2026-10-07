@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 项目只有一种顺序：置顶在前，其余按最近活动——项目自身、其下卡片与任务的最近修改、其 Pi 会话最近的状态变化中最晚的。
+/// 项目只有一种顺序：置顶在前，其余按最近活动——项目自身、其下卡片（灵感与任务）的最近修改、其 Pi 会话最近的状态变化中最晚的。
 @Suite struct ProjectOrderTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -25,7 +25,7 @@ import Testing
     for project in [byCard, byTask, byPi, quiet, pinned] { try at("projects", project.id, 1_000) }
     try at("projects", quiet.id, 2_000)
     try at("cards", card.id, 5_000)
-    try at("tasks", task.id, 4_000)
+    try at("cards", task.id, 4_000)
     let state = try #require(try await store.piSessionPage(PiSessionQuery()).items.first)
     try at("piSessionStates", state.id, 1_000)
     try at("piSessionStates", state.id, 6_000, column: "stateSince")

@@ -30,7 +30,7 @@ extension Command {
       return Reply(text: call.args.has("body") ? card.body : view.detail + "\n", json: view.json)
     },
     Command(
-      path: ["card", "add"], summary: "新建卡片（放在项目最前）",
+      path: ["card", "add"], summary: "新建灵感（放在项目最前）",
       options: [.project("放进该项目"), .inbox, .body],
       notes: Schema.defaultProject(otherwise: "进未归档") + "\n"
         + "分割线是独占一行的 ---split---，图片是 ![](cuepad://img/<哈希>)。例：printf '第一段\\n---split---\\n第二段' | cuepad card add\n"
@@ -64,11 +64,21 @@ extension Command {
       if case .any = scope { throw CLIError.usage("需要 --project <项目> 或 --inbox") }
       let card = try await call.card(call.args.positionals[0])
       let previous = try await call.args.value("after").asyncMap { try await call.card($0).id }
-      try await call.store.moveCard(card.id, to: scope.target, after: previous)
+      try await call.store.moveCard(card.id, to: .top(project: scope.target), after: previous)
       return reply(try await fresh(call, card.id))
     },
     Command(
-      path: ["card", "trash"], summary: "移进回收站", arguments: "<卡片>",
+      path: ["card", "todo"], summary: "要做：灵感变成任务（待办）；--off 回到灵感", arguments: "<卡片>",
+      options: [Opt("off", "取消要做：回到灵感，状态与会话关联清掉，它的下级提到它的位置")],
+      notes: Schema.output("更新后的 Card", Schema.card)
+    ) { call in
+      try call.args.expect("卡片")
+      let card = try await call.card(call.args.positionals[0])
+      try await call.store.setTodo(card.id, !call.args.has("off"))
+      return reply(try await fresh(call, card.id))
+    },
+    Command(
+      path: ["card", "trash"], summary: "移进回收站（它的下级提到它的位置）", arguments: "<卡片>",
       notes: Schema.output("Card（deletedAt 有值）", Schema.card)
     ) { call in
       try call.args.expect("卡片")

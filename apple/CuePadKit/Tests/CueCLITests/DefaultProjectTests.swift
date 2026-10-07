@@ -26,7 +26,7 @@ import Testing
       inBeta = try await sb.store.createCard(in: beta.id, body: "共同词 beta")
       inInbox = try await sb.store.createCard(in: nil, body: "共同词 inbox")
       _ = try await sb.store.createTask("alpha 任务", in: alpha.id)
-      _ = try await sb.store.createTask("全局任务")
+      _ = try await sb.store.createTask("全局任务", in: nil)
     }
 
     func cards(_ command: [String], cwd: String? = Self.inside) async throws -> Set<String> {
@@ -36,7 +36,7 @@ import Testing
     }
 
     func tasks(_ extra: [String], cwd: String? = Self.inside) async throws -> Set<String> {
-      Set(try array(try await sb.jsonValue(["task", "list"] + extra, cwd: cwd)).compactMap { $0.string("content") })
+      Set(try array(try await sb.jsonValue(["task", "list"] + extra, cwd: cwd)).compactMap { $0.string("body") })
     }
   }
 

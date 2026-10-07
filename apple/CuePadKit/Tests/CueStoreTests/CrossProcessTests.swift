@@ -11,8 +11,8 @@ import Testing
   func anotherConnectionsCommitWakesObserversOfAnyTable() async throws {
     let app = fixture.store
     let cli = try CueStore(url: fixture.url)
-    // 观察的是任务表；外部变更"不猜表"，整体重读，所以卡片写入也会唤醒它
-    var values = app.observe([.tasks]) { try $0.cards(in: nil).map(\.body) }.makeAsyncIterator()
+    // 观察的是项目表；外部变更"不猜表"，整体重读，所以卡片写入也会唤醒它
+    var values = app.observe([.projects]) { try $0.cards(in: nil).map(\.body) }.makeAsyncIterator()
     #expect(try await values.next() == [])
 
     _ = try await cli.createCard(in: nil, body: "from the other process")

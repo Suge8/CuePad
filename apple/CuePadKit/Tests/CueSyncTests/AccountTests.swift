@@ -89,7 +89,7 @@ import Testing
     try await rig.coordinator.resolve(.eraseLocal)
 
     let raw = RawDB(rig.fixture.url)
-    for table in ["projects", "cards", "tasks", "sendRecords", "attachments", "syncRecords"] {
+    for table in ["projects", "cards", "sendRecords", "attachments", "syncRecords"] {
       #expect(try raw.count(table) == 0, "\(table) should be empty")
     }
     #expect(try await store.piSessions().map(\.id) == ["s1"])  // 本机的 Pi 索引与账号无关

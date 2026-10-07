@@ -17,8 +17,7 @@ import Testing
       $0.isPinned = true
       $0.variableValues = ["k": "v"]
     }
-    let task = try await store.createTask("t", in: project.id)
-    try await store.recordSend("x", to: SendTarget(kind: .piSession, name: "n", ref: "r"), card: card.id, task: task.id)
+    try await store.recordSend("x", to: SendTarget(kind: .piSession, name: "n", ref: "r"), card: card.id)
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认？", title: "t", projectID: project.id)
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
     try await store.setDirectory("/work/p", for: project.id)
@@ -55,7 +54,7 @@ import Testing
     #expect(record["sortKey"] as? String == card.sortKey)
     #expect(record["modifiedAt"] as? Int64 != nil && record.encryptedValues["modifiedAt"] == nil)
 
-    let names = ["projects": "name", "tasks": "content", "sendRecords": "content"]
+    let names = ["projects": "name", "sendRecords": "content"]
     for key in try await store.pendingSync().saves {
       guard let field = names[key.table.rawValue] else { continue }
       let other = RecordMapper.record(from: try #require(try await store.syncRow(recordName: key.id)), zoneID: testZone)
@@ -66,7 +65,7 @@ import Testing
   @Test func nilFieldsAreAbsentFromTheRecord() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     let record = RecordMapper.record(from: try #require(try await store.syncRow(recordName: project.id.uuidString.lowercased())), zoneID: testZone)
-    #expect(record["icon"] == nil && record["goalCardID"] == nil && record["deletedAt"] == nil)
+    #expect(record["icon"] == nil && record["intro"] == nil && record["deletedAt"] == nil)
   }
 
   /// 已下线的字段（卡片编号、项目的手动排序键）不再写进同步记录；别的设备送来的同名字段忽略。

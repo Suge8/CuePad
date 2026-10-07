@@ -115,10 +115,10 @@ private func digest(_ url: URL) throws -> String {
 
     // 任务（标签不导入：产品不做标签）
     let open = try await store.tasks(.todo).flatMap(\.tasks)
-    #expect(Set(open.map(\.content)) == ["first", "second"])
-    #expect(open.first { $0.content == "first" }?.projectID == flow.id)
+    #expect(Set(open.map(\.body)) == ["first", "second"])
+    #expect(open.first { $0.body == "first" }?.projectID == flow.id)
     let done = try await store.tasks(.done).flatMap(\.tasks)
-    #expect(done.map(\.content) == ["done"])
+    #expect(done.map(\.body) == ["done"])
     sameInstant(done.first?.completedAt, Date(timeIntervalSince1970: 7))
   }
 
@@ -127,12 +127,12 @@ private func digest(_ url: URL) throws -> String {
     let card = try await store.cards(in: nil)[0]
     try await store.updateCard(card.id) { $0.body = "edited in Swift" }
     let raw = RawDB(fixture.url)
-    let before = try ["projects", "cards", "tasks"].map(raw.count)
+    let before = try ["projects", "cards"].map(raw.count)
 
     let again = try await store.importElectronLibrary(from: legacy)
 
     #expect(again.found.cards == 6 && again.inserted == ImportCounts())
-    #expect(try ["projects", "cards", "tasks"].map(raw.count) == before)
+    #expect(try ["projects", "cards"].map(raw.count) == before)
     #expect(try await store.card(card.id)?.body == "edited in Swift")
   }
 

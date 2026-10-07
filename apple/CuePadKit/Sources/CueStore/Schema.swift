@@ -1,9 +1,10 @@
+import CueText
 import Foundation
 
 /// 表分两类。
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、tasks、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages。约束：
+/// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -15,14 +16,23 @@ import Foundation
 ///
 /// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
 ///
-/// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段删掉本地列、不再读写，
-/// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields`，生产环境删不掉字段）。
+/// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
+/// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields` / `retiredTypes`，生产环境删不掉）。
 enum Schema {
+  /// 一步结构升级：多数是 SQL；要用 Swift 算的（如按正文规则取标题）给一个闭包。都在同一个事务里执行。
+  struct Upgrade: ExpressibleByStringInterpolation, Sendable {
+    let run: @Sendable (SQLite) throws -> Void
+
+    init(stringLiteral sql: String) { run = { try $0.exec(sql) } }
+    init(stringInterpolation: DefaultStringInterpolation) { self.init(stringLiteral: String(stringInterpolation: stringInterpolation)) }
+    init(_ run: @escaping @Sendable (SQLite) throws -> Void) { self.run = run }
+  }
+
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；比它旧的按 `upgrades` 就地升级；比它新的是更新版本建的库，不打开。
   static let version = upgrades.count + 1
 
   /// `upgrades[i]` 把结构版本 i + 1 升到 i + 2。新库直接用 `create`（已是最新结构）。
-  static let upgrades = [
+  static let upgrades: [Upgrade] = [
     // Pi 会话状态带上工作目录的文件夹名：手机上没有工作目录，副行靠它写出"在哪"
     "ALTER TABLE piSessionStates ADD COLUMN folder TEXT;",
     // 会话近况：手机打开会话时看最后的提问、回答与待确认的问题
@@ -48,22 +58,55 @@ enum Schema {
     """
     ALTER TABLE projects DROP COLUMN sortKey; ALTER TABLE cards DROP COLUMN numbering;
     ALTER TABLE tasks ADD COLUMN startedAt INTEGER;
-    \(activityIndexes)
+    CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);
+    CREATE INDEX tasks_projectID_modifiedAt ON tasks(projectID, modifiedAt);
+    CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
     """,
     // 进行中的提问与最近一轮已做完的问答分开
     "ALTER TABLE piSessionStates ADD COLUMN pendingPrompt TEXT;",
     // 会话的完整对话：一条消息一条记录
-    piMessagesTable,
+    "\(piMessagesTable)",
     // 子任务：任务挂在上级任务下（最多三级）
-    "ALTER TABLE tasks ADD COLUMN parentID TEXT; \(tasksParentIndex)",
+    "ALTER TABLE tasks ADD COLUMN parentID TEXT; CREATE INDEX tasks_parentID ON tasks(parentID);",
     // 会话当前的模型、思考强度与可选模型（手机上选）
     """
     ALTER TABLE piSessionStates ADD COLUMN model TEXT; ALTER TABLE piSessionStates ADD COLUMN thinking TEXT;
     ALTER TABLE piSessionStates ADD COLUMN models TEXT;
     """,
+    // 灵感与任务合成一种记录：任务并进 cards（id 不变），目标卡改为项目的一句话介绍
+    Upgrade(unifyCardsAndTasks),
   ]
 
-  private static let tasksParentIndex = "CREATE INDEX tasks_parentID ON tasks(parentID);"
+  private static let cardsTreeIndex = "CREATE INDEX cards_parentID ON cards(parentID);"
+
+  /// 任务原样插成"要做"的卡片（要做时间取任务的创建时间）；发送记录与投送请求的任务引用并进卡片引用（id 相同）；
+  /// 目标卡第一行（去掉"目标："）成为项目介绍、目标卡留作普通灵感；去掉 tasks 表与它的同步元数据——服务器上的旧任务记录
+  /// 不删（退役类型，客户端跳过），这样还没升级的设备之间照常同步，升级后各自把本机那份迁成同 id 的卡片、在服务器上收敛。
+  private static func unifyCardsAndTasks(_ db: SQLite) throws {
+    try db.exec("""
+      ALTER TABLE cards ADD COLUMN parentID TEXT; ALTER TABLE cards ADD COLUMN todoAt INTEGER;
+      ALTER TABLE cards ADD COLUMN startedAt INTEGER; ALTER TABLE cards ADD COLUMN completedAt INTEGER;
+      ALTER TABLE cards ADD COLUMN piSessionID TEXT;
+      \(cardsTreeIndex)
+      INSERT INTO cards (id, projectID, body, isPinned, variableValues, sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
+        parentID, todoAt, startedAt, completedAt, piSessionID)
+      SELECT id, projectID, content, 0, '{}', sortKey, NULL, createdAt, modifiedAt, NULL,
+        parentID, createdAt, startedAt, completedAt, piSessionID FROM tasks;
+      UPDATE sendRecords SET cardID = taskID WHERE cardID IS NULL AND taskID IS NOT NULL;
+      ALTER TABLE sendRecords DROP COLUMN taskID;
+      UPDATE deliveryRequests SET cardID = taskID WHERE cardID IS NULL AND taskID IS NOT NULL;
+      ALTER TABLE deliveryRequests DROP COLUMN taskID;
+      ALTER TABLE projects ADD COLUMN intro TEXT;
+      DELETE FROM syncRecords WHERE recordType = 'tasks';
+      DROP TABLE tasks;
+      """)
+    let goals = try db.query("SELECT p.id, c.body FROM projects p JOIN cards c ON c.id = p.goalCardID") { ($0.text(0), $0.text(1)) }
+    for (project, body) in goals {
+      let intro = CueSummary(body).title.replacing(/^(目标|Goal)\s*[:：]\s*/.ignoresCase(), with: "")
+      try db.run("UPDATE projects SET intro = ? WHERE id = ?", [intro.isEmpty ? nil : intro, project])
+    }
+    try db.exec("ALTER TABLE projects DROP COLUMN goalCardID;")
+  }
 
   private static let piMessagesTable = """
     CREATE TABLE piMessages (
@@ -74,39 +117,28 @@ enum Schema {
     CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
     """
 
-  /// 项目最近活动（`CueStore.projectOrder`）按项目取各表最晚的时间
-  private static let activityIndexes = """
-    CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);
-    CREATE INDEX tasks_projectID_modifiedAt ON tasks(projectID, modifiedAt);
-    CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
-    """
 
   static let create = """
     CREATE TABLE projects (
       id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, icon TEXT, color TEXT NOT NULL,
-      isPinned INTEGER NOT NULL, goalCardID TEXT, deletedAt INTEGER,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      isPinned INTEGER NOT NULL, deletedAt INTEGER,
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, intro TEXT
     ) STRICT;
 
-    -- conflictOf：冲突副本指向原卡。
+    -- conflictOf：冲突副本指向原卡。todoAt 有值是任务（灵感为 NULL），parentID 是上级任务。
     CREATE TABLE cards (
       id TEXT PRIMARY KEY NOT NULL, projectID TEXT, body TEXT NOT NULL,
       isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
-      deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
+      parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
-
-    CREATE TABLE tasks (
-      id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, projectID TEXT, sortKey TEXT NOT NULL,
-      completedAt INTEGER, piSessionID TEXT, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, startedAt INTEGER,
-      parentID TEXT
-    ) STRICT;
-    CREATE INDEX tasks_projectID ON tasks(projectID);
-    \(tasksParentIndex)
+    CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);
+    \(cardsTreeIndex)
 
     CREATE TABLE sendRecords (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL,
-      targetName TEXT NOT NULL, targetRef TEXT, cardID TEXT, taskID TEXT,
+      targetName TEXT NOT NULL, targetRef TEXT, cardID TEXT,
       sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX sendRecords_sentAt ON sendRecords(sentAt);
@@ -129,7 +161,7 @@ enum Schema {
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
     CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
-    \(activityIndexes)
+    CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
 
     \(piMessagesTable)
 
@@ -141,7 +173,7 @@ enum Schema {
 
     CREATE TABLE deliveryRequests (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
-      targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, taskID TEXT, status TEXT NOT NULL,
+      targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
       resultReceivedAt INTEGER
     ) STRICT;

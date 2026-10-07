@@ -180,18 +180,17 @@ extension CueStore {
           failures.append(RemoteFailure(recordName: change.recordName, message: "\(error)"))
         }
       }
-      try clearInvalidGoals()
-      if changes.contains(where: \.touchesTasks) { try repairTaskTree() }
+      if changes.contains(where: \.touchesCards) { try repairCardTree() }
     }
     return failures + (try removeFiles(of: removedHashes))
   }
 }
 
 extension RemoteChange {
-  fileprivate var touchesTasks: Bool {
+  fileprivate var touchesCards: Bool {
     switch self {
-    case .save(let row, _): row.table == .tasks
-    case .delete(let key): key.table == .tasks
+    case .save(let row, _): row.table == .cards
+    case .delete(let key): key.table == .cards
     }
   }
 
@@ -244,15 +243,11 @@ extension CueStore {
       }
       try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
-      if key.table == .cards {
-        try db.run("UPDATE projects SET goalCardID = NULL, modifiedAt = ? WHERE goalCardID = ?", [Date.stamp, key.id])
-      }
       if key.table == .projects {
-        // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的）和任务，
-        // 与本地 purgeProject 一致地释放到未归档 / 全局，内容保留，不悬空隐藏。
+        // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的），
+        // 与本地 purgeProject 一致地释放到未归档，内容保留，不悬空隐藏。
         let now = Date.stamp
         try db.run("UPDATE cards SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, key.id])
-        try db.run("UPDATE tasks SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, key.id])
         try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [key.id])
       }
       return hash
@@ -318,30 +313,18 @@ extension CueStore {
       "SELECT 1 FROM deliveryRequests WHERE id = ? AND status IN ('pending', 'executing')", [id]) { _ in true } != nil
   }
 
-  /// 目标卡不变量在远端变更之后仍要成立：目标卡已回收、或已不属于该项目的，清空（并因此重新推送，让各设备收敛）。
-  /// 离线并发下较新的本机项目版本可能仍指着一张已被别处回收的卡。目标卡"还没到"（本机没有这张卡）不算失效：
-  /// 记录乱序到达是常态，提前清掉会丢掉目标。
-  private func clearInvalidGoals() throws {
-    try db.run(
-      """
-      UPDATE projects SET goalCardID = NULL, modifiedAt = ?
-      WHERE goalCardID IS NOT NULL AND EXISTS (
-        SELECT 1 FROM cards c
-        WHERE c.id = projects.goalCardID AND (c.deletedAt IS NOT NULL OR c.projectID IS NOT projects.id))
-      """, [Date.stamp])
-  }
-
-  /// 任务层级在远端变更之后仍要成立（见 `TaskLinks.repairs`）；改写的任务会再推送，让各设备收敛。
+  /// 卡片层级在远端变更之后仍要成立（见 `CardLinks.repairs`）；改写的卡片会再推送，让各设备收敛。
   /// 修改时间至少比现有的晚一毫秒：刚收下的远端版本可能带着比本机时钟更晚的时间，改写要算作更新的版本。
-  private func repairTaskTree() throws {
+  private func repairCardTree() throws {
     let now = Date.stamp
-    for (id, link) in try TaskLinks(db).repairs() {
+    for (id, link) in try CardLinks(db).repairs() {
       try db.run(
-        "UPDATE tasks SET parentID = ?, projectID = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ?", [link.parent, link.project, now, id])
+        "UPDATE cards SET parentID = ?, projectID = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ?", [link.parent, link.project, now, id])
     }
   }
 
-  /// 被淘汰的卡片版本存成一张新卡（和留下的版本同项目、放在项目最前），指回原卡。
+  /// 被淘汰的卡片版本存成一张新卡（和留下的版本同项目、放在项目最前），指回原卡。副本是灵感（不带状态、上级与会话），
+  /// 不会在看板上多出一条任务。
   private func insertConflictCopy(of loser: SyncRow, keeping winner: SyncRow) throws {
     let projectID = winner.text("projectID").flatMap(UUID.init(uuidString:))
     let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID IS ?", [projectID]) { $0.textOrNil(0) } ?? nil
@@ -353,6 +336,7 @@ extension CueStore {
     fields["sortKey"] = .text(SortKey.before(first))
     fields["deletedAt"] = .null
     fields["isPinned"] = .int(0)
+    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID"] { fields[column] = .null }
     fields["createdAt"] = now.sqlValue
     fields["modifiedAt"] = now.sqlValue
     try overwrite(SyncRow(table: .cards, fields: fields))

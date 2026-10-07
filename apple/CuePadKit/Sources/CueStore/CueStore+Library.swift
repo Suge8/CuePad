@@ -11,32 +11,19 @@ extension CueStore {
       let now = Date.stamp
       let project = Project(
         id: UUID(), name: name, icon: icon, color: color,
-        isPinned: false, goalCardID: nil, deletedAt: nil, createdAt: now, modifiedAt: now)
+        isPinned: false, intro: nil, deletedAt: nil, createdAt: now, modifiedAt: now)
       try insert(project)
       return project
     }
   }
 
-  /// 改名称、颜色、图标、置顶。删除状态、目标卡对调用方只读，各有专门的方法（编译期保证）。
+  /// 改名称、介绍、颜色、图标、置顶。删除状态对调用方只读，有专门的方法（编译期保证）。
   public func updateProject(_ id: UUID, _ edit: @Sendable (inout Project) -> Void) throws {
     try write {
       guard var project = try find(Project.self, id) else { throw CueStoreError.notFound }
       edit(&project)
       project.modifiedAt = Date.stamp
       try update(project)
-    }
-  }
-
-  /// 设置项目目标卡（nil = 取消）。目标必须是该项目里未删除的卡。
-  public func setGoal(_ card: UUID?, for project: UUID) throws {
-    try write {
-      if let card {
-        let valid = try db.first(
-          "SELECT 1 FROM cards WHERE id = ? AND projectID = ? AND deletedAt IS NULL", [card, project]) { _ in true }
-        guard valid != nil else { throw CueStoreError.invalidGoal }
-      }
-      try db.run("UPDATE projects SET goalCardID = ?, modifiedAt = ? WHERE id = ?", [card, Date.stamp, project])
-      guard db.changes > 0 else { throw CueStoreError.notFound }
     }
   }
 
@@ -55,14 +42,12 @@ extension CueStore {
     }
   }
 
-  /// 永久删除：连同随项目进回收站的卡片；更早单独进回收站的卡片留在回收站（归入未归档）；
-  /// 任务归为全局。
+  /// 永久删除：连同随项目进回收站的卡片；更早单独进回收站的卡片留在回收站（归入未归档）。
   public func purgeProject(_ id: UUID) throws {
     try reportingFileFailures { try write {
       let now = Date.stamp
       let orphaned = try purgeCards(where: "projectID = ? AND deletedAt IS NULL", [id])
       try db.run("UPDATE cards SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, id])
-      try db.run("UPDATE tasks SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, id])
       try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [id])
       try db.run("DELETE FROM projects WHERE id = ?", [id])
       return try reclaimAttachments(orphaned)
@@ -101,28 +86,39 @@ extension CueStore {
   }
 }
 
-// MARK: 卡片
+// MARK: 卡片（灵感与任务）
 
 extension CueStore {
-  /// 新卡片放在所在项目（nil = 未归档）的最前。项目必须存在且未在回收站，否则抛 `invalidProject`。
+  /// 新灵感放在所在项目（nil = 未归档）的最前。项目必须存在且未在回收站，否则抛 `invalidProject`。
   public func createCard(in project: UUID?, body: String = "") throws -> Card {
     try write {
       try requireLiveProject(project)
-      let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID IS ?", [project]) {
-        $0.textOrNil(0)
-      } ?? nil
-      let now = Date.stamp
-      let card = Card(
-        id: UUID(), projectID: project, body: body, isPinned: false,
-        variableValues: [:], conflictOf: nil, sortKey: SortKey.before(first), deletedAt: nil, createdAt: now,
-        modifiedAt: now)
-      try insert(card)
-      try registerImages(in: body)
-      return card
+      return try insertCard(body, project: project, parent: nil, todo: false, sortKey: SortKey.before(firstTopKey(in: project)))
     }
   }
 
-  /// 改正文、置顶、变量取值。归属项目、排序键、删除状态对调用方只读，各有专门的方法（编译期保证）。
+  /// 新任务（要做的卡片）放在所在项目顶层的最前。正文不能为空，否则抛 `blankTaskContent`。
+  public func createTask(_ body: String, in project: UUID?) throws -> Card {
+    try requireContent(body)
+    return try write {
+      try requireLiveProject(project)
+      return try insertCard(body, project: project, parent: nil, todo: true, sortKey: SortKey.before(firstTopKey(in: project)))
+    }
+  }
+
+  /// 新子任务放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxDepth` 级抛 `taskTooDeep`。
+  public func createTask(_ body: String, under parent: UUID) throws -> Card {
+    try requireContent(body)
+    return try write {
+      let tree = try CardLinks(db)
+      guard let link = tree.links[parent], link.isTask else { throw CueStoreError.invalidParent }
+      guard tree.level(of: parent) < Card.maxDepth else { throw CueStoreError.taskTooDeep }
+      let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
+      return try insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last))
+    }
+  }
+
+  /// 改正文、置顶、变量取值。归属、结构、状态、删除对调用方只读，各有专门的方法（编译期保证）。
   public func updateCard(_ id: UUID, _ edit: @Sendable (inout Card) -> Void) throws {
     try write {
       guard var card = try find(Card.self, id) else { throw CueStoreError.notFound }
@@ -133,22 +129,81 @@ extension CueStore {
     }
   }
 
-  /// 移到 `project`（nil = 未归档）里 `previous` 之后（nil = 最前）。项目必须存在且未在回收站，否则抛 `invalidProject`。
-  public func moveCard(_ id: UUID, to project: UUID?, after previous: UUID?) throws {
+  /// "要做"开关。打开：成为待办的任务。关掉：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。
+  public func setTodo(_ id: UUID, _ on: Bool) throws {
     try write {
-      try requireLiveProject(project)
-      try db.run("UPDATE cards SET projectID = ? WHERE id = ?", [project, id])
-      guard db.changes > 0 else { throw CueStoreError.notFound }
-      try clearGoal(where: "id = ?", [id], exceptProject: project)
-      try place(.cards, scope: "deletedAt IS NULL AND projectID IS ?", [project], id: id, after: previous)
+      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
+      guard card.isTask != on else { return }
+      let now = Date.stamp
+      if on {
+        try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
+      } else {
+        try liftChildren(of: card, at: now)
+        try db.run(
+          "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, modifiedAt = ? WHERE id = ?", [now, id])
+      }
     }
   }
 
+  /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
+  /// 灵感没有状态，抛 `notATask`。
+  public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
+    try write {
+      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
+      guard let current = card.status else { throw CueStoreError.notATask }
+      guard current != status else { return }
+      let now = Date.stamp
+      switch status {
+      case .todo: try db.run("UPDATE cards SET startedAt = NULL, completedAt = NULL, modifiedAt = ? WHERE id = ?", [now, id])
+      case .inProgress:
+        try db.run("UPDATE cards SET startedAt = COALESCE(startedAt, ?1), completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
+      case .done:
+        let subtree = [id] + (try CardLinks(db).descendants(of: id))
+        try db.run(
+          """
+          UPDATE cards SET completedAt = ?1, modifiedAt = ?1
+          WHERE completedAt IS NULL AND todoAt IS NOT NULL AND id IN (SELECT value FROM json_each(?2))
+          """, [now, Self.idList(subtree)])
+      }
+    }
+  }
+
+  /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、
+  /// 挂成子任务或素材都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），整棵子树超过 `Card.maxDepth` 级抛 `taskTooDeep`。
+  public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws {
+    try write {
+      let tree = try CardLinks(db)
+      guard let current = tree.links[id] else { throw CueStoreError.notFound }
+      let destination: CardLinks.Link
+      switch slot {
+      case .top(let project):
+        try requireLiveProject(project)
+        destination = CardLinks.Link(parent: nil, project: project, isTask: current.isTask)
+      case .under(let parent):
+        guard let target = tree.links[parent], target.isTask, parent != id, !tree.ancestors(of: parent).contains(id) else {
+          throw CueStoreError.invalidParent
+        }
+        guard tree.level(of: parent) + tree.height(of: id) <= Card.maxDepth else { throw CueStoreError.taskTooDeep }
+        destination = CardLinks.Link(parent: parent, project: target.project, isTask: current.isTask)
+      }
+      let now = Date.stamp
+      try db.run("UPDATE cards SET parentID = ?, modifiedAt = ? WHERE id = ?", [destination.parent, now, id])
+      if destination.project != current.project {
+        try db.run(
+          "UPDATE cards SET projectID = ?, modifiedAt = ? WHERE id IN (SELECT value FROM json_each(?))",
+          [destination.project, now, Self.idList([id] + tree.descendants(of: id))])
+      }
+      try place(.cards, scope: Self.siblingScope(destination), [destination.parent ?? destination.project], id: id, after: previous)
+    }
+  }
+
+  /// 进回收站；它的下级按原顺序提到它的位置（不连带进回收站）。
   public func trashCard(_ id: UUID) throws {
     try write {
-      try clearGoal(where: "id = ?", [id])
-      try db.run(
-        "UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND deletedAt IS NULL", [Date.stamp, id])
+      guard let card = try find(Card.self, id), card.deletedAt == nil else { return }
+      let now = Date.stamp
+      try liftChildren(of: card, at: now)
+      try db.run("UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, id])
     }
   }
 
@@ -180,24 +235,10 @@ extension CueStore {
     } }
   }
 
-  /// 目标卡离开（进回收站、删除、移出项目）时，在同一事务里清空指向它的项目目标。
-  /// 清空而不是读时推导：存下的值始终真实，整行读改写（updateProject）不会丢它，
-  /// 同步时也只是一次普通字段变更。代价：卡片恢复后不自动变回目标。
-  private func clearGoal(
-    where condition: String, _ arguments: [any SQLBindable], exceptProject keep: UUID? = nil
-  ) throws {
-    try db.run(
-      """
-      UPDATE projects SET goalCardID = NULL, modifiedAt = ?
-      WHERE goalCardID IN (SELECT id FROM cards WHERE \(condition)) AND id IS NOT ?
-      """, [Date.stamp] + arguments + [keep])
-  }
-
   /// 删卡并在同一事务里清理引用它的记录（同步表没有外键级联）。返回这些卡正文引用过的图片哈希，
   /// 由调用方在同一事务里交给 `reclaimAttachments` 判断是否已无人引用。
   private func purgeCards(where condition: String, _ arguments: [any SQLBindable] = []) throws -> Set<String> {
     let ids = "SELECT id FROM cards WHERE \(condition)"
-    try clearGoal(where: condition, arguments)
     let bodies = try db.query("SELECT body FROM cards WHERE \(condition)", arguments) { $0.text(0) }
     let referenced = Set(bodies.flatMap(CueFormat.imageHashes(in:)))
     try db.run("UPDATE sendRecords SET cardID = NULL, modifiedAt = ? WHERE cardID IN (\(ids))", [Date.stamp] + arguments)
@@ -234,6 +275,50 @@ extension CueStore {
   private func reportingFileFailures(_ body: () throws -> [String]) throws {
     let failed = try body()
     if !failed.isEmpty { throw CueStoreError.attachmentFilesNotRemoved(failed) }
+  }
+
+  private func requireContent(_ content: String) throws {
+    guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankTaskContent }
+  }
+
+  /// 项目顶层（灵感与任务共用一个手动顺序）最前面的排序键。
+  private func firstTopKey(in project: UUID?) throws -> String? {
+    try db.first("SELECT MIN(sortKey) FROM cards WHERE projectID IS ? AND parentID IS NULL", [project]) { $0.textOrNil(0) } ?? nil
+  }
+
+  private func insertCard(_ body: String, project: UUID?, parent: UUID?, todo: Bool, sortKey: String) throws -> Card {
+    let now = Date.stamp
+    let card = Card(
+      id: UUID(), projectID: project, body: body, isPinned: false, variableValues: [:], conflictOf: nil, sortKey: sortKey,
+      deletedAt: nil, createdAt: now, modifiedAt: now, parentID: parent, todoAt: todo ? now : nil)
+    try insert(card)
+    try registerImages(in: body)
+    return card
+  }
+
+  /// 下级按原顺序提到 `card` 的位置（挂到它的上级下、排在它之后）：去掉要做、进回收站时用。
+  private func liftChildren(of card: Card, at now: Date) throws {
+    let children = try db.query("SELECT id FROM cards WHERE parentID = ? ORDER BY sortKey, id", [card.id]) { $0.uuid(0) }
+    guard !children.isEmpty else { return }
+    let link = CardLinks.Link(parent: card.parentID, project: card.projectID, isTask: card.isTask)
+    let upper = try db.first(
+      "SELECT MIN(sortKey) FROM cards WHERE (\(Self.siblingScope(link))) AND sortKey > ?", [card.parentID ?? card.projectID, card.sortKey]
+    ) { $0.textOrNil(0) } ?? nil
+    var lower = card.sortKey
+    for child in children {
+      let key = SortKey.between(lower, upper) ?? SortKey.after(lower)
+      try db.run("UPDATE cards SET parentID = ?, sortKey = ?, modifiedAt = ? WHERE id = ?", [card.parentID, key, now, child])
+      lower = key
+    }
+  }
+
+  /// 同级的范围：同一上级下，或同一项目的顶层。
+  private static func siblingScope(_ link: CardLinks.Link) -> String {
+    link.parent == nil ? "parentID IS NULL AND projectID IS ?" : "parentID = ?"
+  }
+
+  private static func idList(_ ids: [UUID]) -> String {
+    "[" + ids.map { "\"\($0.uuidString.lowercased())\"" }.joined(separator: ",") + "]"
   }
 }
 
@@ -273,159 +358,26 @@ extension CueStore {
   }
 }
 
-// MARK: 任务
-
-extension CueStore {
-  /// 新的顶层任务放在未完成任务的最前。项目（可省略）必须存在且未在回收站，否则抛 `invalidProject`。
-  public func createTask(_ content: String, in project: UUID? = nil) throws -> CueTask {
-    try requireContent(content)
-    return try write {
-      try requireLiveProject(project)
-      let first = try db.first("SELECT MIN(sortKey) FROM tasks WHERE completedAt IS NULL") { $0.textOrNil(0) } ?? nil
-      return try insertTask(content, project: project, parent: nil, sortKey: SortKey.before(first))
-    }
-  }
-
-  /// 新的子任务放在 `parent` 的子任务最后，项目随它。上级已在第 `CueTask.maxDepth` 级时抛 `taskTooDeep`。
-  public func createTask(_ content: String, under parent: UUID) throws -> CueTask {
-    try requireContent(content)
-    return try write {
-      let tree = try TaskLinks(db)
-      guard let link = tree.links[parent] else { throw CueStoreError.invalidParent }
-      guard tree.level(of: parent) < CueTask.maxDepth else { throw CueStoreError.taskTooDeep }
-      let last = try db.first("SELECT MAX(sortKey) FROM tasks WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
-      return try insertTask(content, project: link.project, parent: parent, sortKey: SortKey.after(last))
-    }
-  }
-
-  /// 挪到 `slot` 里 `previous` 之后（nil = 最前），子任务随它走、项目随新位置。
-  /// 挂到自己或自己的子任务下抛 `invalidParent`，整棵子树超过 `CueTask.maxDepth` 级抛 `taskTooDeep`。
-  public func moveTask(_ id: UUID, to slot: TaskSlot, after previous: UUID?) throws {
-    try write {
-      let tree = try TaskLinks(db)
-      guard let current = tree.links[id] else { throw CueStoreError.notFound }
-      let destination: TaskLinks.Link
-      switch slot {
-      case .top(let project):
-        try requireLiveProject(project)
-        destination = TaskLinks.Link(parent: nil, project: project)
-      case .under(let parent):
-        guard let target = tree.links[parent], parent != id, !tree.ancestors(of: parent).contains(id) else {
-          throw CueStoreError.invalidParent
-        }
-        guard tree.level(of: parent) + tree.height(of: id) <= CueTask.maxDepth else { throw CueStoreError.taskTooDeep }
-        destination = TaskLinks.Link(parent: parent, project: target.project)
-      }
-      let now = Date.stamp
-      try db.run("UPDATE tasks SET parentID = ?, modifiedAt = ? WHERE id = ?", [destination.parent, now, id])
-      if destination.project != current.project {
-        try setProject(destination.project, of: [id] + tree.descendants(of: id), at: now)
-      }
-      try place(.tasks, scope: Self.siblingScope(destination), [Self.siblingKey(destination)], id: id, after: previous)
-    }
-  }
-
-  /// 改内容、状态（`status`）、所属项目、关联 Pi 会话。改挂的项目必须存在且未在回收站，否则抛 `invalidProject`。
-  /// 改了项目的子任务离开上级、成为新项目的顶层，它的子任务跟着换项目；完成时没完成的子任务一起完成。
-  public func updateTask(_ id: UUID, _ edit: @Sendable (inout CueTask) -> Void) throws {
-    try write {
-      guard var task = try find(CueTask.self, id) else { throw CueStoreError.notFound }
-      let original = task
-      edit(&task)
-      try requireContent(task.content)
-      let now = Date.stamp
-      task.modifiedAt = now
-      let movesProject = task.projectID != original.projectID
-      let completes = task.completedAt != nil && original.completedAt == nil
-      if movesProject {
-        try requireLiveProject(task.projectID)
-        task.parentID = nil
-      }
-      try update(task)
-      guard movesProject || completes else { return }
-      let descendants = try TaskLinks(db).descendants(of: id)
-      if movesProject { try setProject(task.projectID, of: descendants, at: now) }
-      if completes {
-        try db.run(
-          "UPDATE tasks SET completedAt = ?1, modifiedAt = ?1 WHERE completedAt IS NULL AND id IN (SELECT value FROM json_each(?2))",
-          [now, Self.idList(descendants)])
-      }
-    }
-  }
-
-  /// 永久删除；它的子任务按原顺序提到它的位置（挂到它的上级下）。
-  public func deleteTask(_ id: UUID) throws {
-    try write {
-      let now = Date.stamp
-      if let task = try find(CueTask.self, id) {
-        let link = TaskLinks.Link(parent: task.parentID, project: task.projectID)
-        let children = try db.query("SELECT id FROM tasks WHERE parentID = ? ORDER BY sortKey, id", [id]) { $0.uuid(0) }
-        let upper = try db.first(
-          "SELECT MIN(sortKey) FROM tasks WHERE (\(Self.siblingScope(link))) AND sortKey > ?", [Self.siblingKey(link), task.sortKey]
-        ) { $0.textOrNil(0) } ?? nil
-        var lower = task.sortKey
-        for child in children {
-          let key = SortKey.between(lower, upper) ?? SortKey.after(lower)
-          try db.run("UPDATE tasks SET parentID = ?, sortKey = ?, modifiedAt = ? WHERE id = ?", [task.parentID, key, now, child])
-          lower = key
-        }
-      }
-      try db.run("UPDATE sendRecords SET taskID = NULL, modifiedAt = ? WHERE taskID = ?", [now, id])
-      try db.run("DELETE FROM tasks WHERE id = ?", [id])
-    }
-  }
-
-  private func requireContent(_ content: String) throws {
-    guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankTaskContent }
-  }
-
-  private func insertTask(_ content: String, project: UUID?, parent: UUID?, sortKey: String) throws -> CueTask {
-    let now = Date.stamp
-    let task = CueTask(
-      id: UUID(), content: content, projectID: project, sortKey: sortKey, startedAt: nil, completedAt: nil, piSessionID: nil,
-      createdAt: now, modifiedAt: now, parentID: parent)
-    try insert(task)
-    return task
-  }
-
-  private func setProject(_ project: UUID?, of ids: [UUID], at now: Date) throws {
-    try db.run(
-      "UPDATE tasks SET projectID = ?, modifiedAt = ? WHERE id IN (SELECT value FROM json_each(?))", [project, now, Self.idList(ids)])
-  }
-
-  /// 同级的范围：同一上级下，或同一项目的顶层。
-  private static func siblingScope(_ link: TaskLinks.Link) -> String {
-    link.parent == nil ? "parentID IS NULL AND projectID IS ?" : "parentID = ?"
-  }
-
-  private static func siblingKey(_ link: TaskLinks.Link) -> UUID? { link.parent ?? link.project }
-
-  private static func idList(_ ids: [UUID]) -> String {
-    "[" + ids.map { "\"\($0.uuidString.lowercased())\"" }.joined(separator: ",") + "]"
-  }
-}
-
 // MARK: 发送记录、附件、Pi 会话索引
 
 extension CueStore {
-  /// 记录一次投送或复制：内容快照、目标、时间。发给 Pi 会话且带任务时，任务在同一事务里关联到该会话
-  /// （任务行据此显示会话状态）：执行投送的那台 Mac 记，请求从哪台设备发来都一样。
+  /// 记录一次投送或复制：内容快照、目标、时间。发给 Pi 会话的是任务时，任务在同一事务里关联到该会话、置为进行中
+  /// （完成了的也重新打开；任务行据此显示会话状态）：执行投送的那台 Mac 记，请求从哪台设备发来都一样。灵感发出去不变成任务。
   @discardableResult
-  public func recordSend(
-    _ content: String, to target: SendTarget, card: UUID? = nil, task: UUID? = nil
-  ) throws -> SendRecord {
+  public func recordSend(_ content: String, to target: SendTarget, card: UUID? = nil) throws -> SendRecord {
     try write {
       let now = Date.stamp
       let record = SendRecord(
         id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
-        targetRef: target.ref, cardID: card, taskID: task, sentAt: now, modifiedAt: now)
+        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now)
       try insert(record)
       try registerImages(in: content)
-      // 交给 Pi 的任务关联到该会话、置为进行中（完成了的也重新打开）
-      if let task, target.kind == .known(.piSession), let session = target.ref {
+      if let card, target.kind == .known(.piSession), let session = target.ref {
         try db.run(
-          "UPDATE tasks SET piSessionID = ?, startedAt = COALESCE(startedAt, ?), completedAt = NULL, modifiedAt = ? WHERE id = ?",
-          [session, now, now, task])
+          """
+          UPDATE cards SET piSessionID = ?1, startedAt = COALESCE(startedAt, ?2), completedAt = NULL, modifiedAt = ?2
+          WHERE id = ?3 AND todoAt IS NOT NULL
+          """, [session, now, card])
       }
       return record
     }
@@ -537,7 +489,7 @@ extension CueStore {
 // MARK: 引用校验
 
 extension CueStore {
-  /// 卡片和任务只能归属存在且未在回收站的项目（或不归属）。必须在写事务内调用，
+  /// 卡片只能归属存在且未在回收站的项目（或不归属）。必须在写事务内调用，
   /// 与随后的写入之间没有别的写入可以插进来。失效时报错，不静默改成未归档。
   fileprivate func requireLiveProject(_ project: UUID?) throws {
     guard let project else { return }

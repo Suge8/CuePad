@@ -12,7 +12,9 @@ enum CloudKitSchema {
   /// 生产环境里部署过、已不再使用的字段（按记录类型）与记录类型。
   static let retiredFields: [String: [(name: String, declaration: String)]] = [
     "cards": [("isFavorite", "INT64"), ("numbering", "STRING")],
-    "projects": [("sortKey", "STRING")],
+    "projects": [("goalCardID", "STRING"), ("sortKey", "STRING")],
+    "sendRecords": [("taskID", "STRING")],
+    "deliveryRequests": [("taskID", "STRING")],
   ]
   static let retiredTypes: [(name: String, fields: [(name: String, declaration: String)])] = [
     ("tags", [("color", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("name", "ENCRYPTED STRING")]),
@@ -24,7 +26,18 @@ enum CloudKitSchema {
         ("peerFetchStartedAt", "INT64"), ("run", "STRING"), ("sentAt", "INT64"), ("seq", "INT64"),
       ]
     ),
+    // 任务并进了卡片（要做的卡片）；还没升级的设备仍会写它，客户端跳过
+    (
+      "tasks",
+      [
+        ("content", "ENCRYPTED STRING"), ("projectID", "STRING"), ("sortKey", "STRING"), ("startedAt", "INT64"),
+        ("completedAt", "INT64"), ("piSessionID", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("parentID", "STRING"),
+      ]
+    ),
   ]
+
+  /// 已下线的记录类型：服务器上可能还有（旧版本的设备仍会写），拉到时直接跳过、不算问题。
+  static let retiredTypeNames = Set(retiredTypes.map(\.name))
 
   static func generate() async throws -> String {
     let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-schema-\(UUID().uuidString)", directoryHint: .isDirectory)

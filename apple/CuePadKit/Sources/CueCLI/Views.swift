@@ -42,13 +42,13 @@ struct ProjectView {
   var json: JSONObject {
     [
       "id": uuid(project.id), "name": project.name, "icon": nullable(project.icon), "color": project.color,
-      "pinned": project.isPinned, "goalCardId": uuid(project.goalCardID), "directory": nullable(directory),
+      "pinned": project.isPinned, "intro": nullable(project.intro), "directory": nullable(directory),
       "cardCount": cardCount, "createdAt": iso(project.createdAt), "modifiedAt": iso(project.modifiedAt),
     ]
   }
 
   var line: String {
-    "\(short(project.id))  \(project.isPinned ? "★ " : "")\(project.name)  \(cardCount) 张卡片"
+    "\(short(project.id))  \(project.isPinned ? "★ " : "")\(project.name)  \(cardCount) 条灵感"
       + (directory.map { "  \($0)" } ?? "")
   }
 }
@@ -57,48 +57,32 @@ struct CardView {
   let card: Card
   let project: String?
 
+  private static let mark: [TaskStatus: String] = [.todo: "[ ] ", .inProgress: "[~] ", .done: "[x] "]
+
   var json: JSONObject {
     [
-      "id": uuid(card.id), "projectId": uuid(card.projectID), "project": nullable(project), "body": card.body,
-      "pinned": card.isPinned, "conflictOf": uuid(card.conflictOf),
+      "id": uuid(card.id), "kind": card.isTask ? "task" : "idea", "status": nullable(card.status?.rawValue),
+      "projectId": uuid(card.projectID), "project": nullable(project), "parentId": uuid(card.parentID), "body": card.body,
+      "pinned": card.isPinned, "conflictOf": uuid(card.conflictOf), "startedAt": iso(card.startedAt), "completedAt": iso(card.completedAt),
       "deletedAt": iso(card.deletedAt), "createdAt": iso(card.createdAt), "modifiedAt": iso(card.modifiedAt),
     ]
   }
 
   var line: String {
-    "\(short(card.id))  \(project ?? "未归档")  \(card.isPinned ? "★ " : "")\(title(card.body))"
+    "\(card.status.flatMap { Self.mark[$0] } ?? "")\(short(card.id))  \(project ?? "未归档")  \(card.isPinned ? "★ " : "")\(title(card.body))"
+      + (card.parentID.map { "  ↳ \(short($0))" } ?? "")
   }
 
   /// `card show` 的文本：元信息，空行，正文原样。
   var detail: String {
     var rows = ["id: \(card.id.uuidString.lowercased())", "项目: \(project ?? "未归档")"]
+    if let status = card.status { rows.append("任务: \(status.rawValue)") }
+    if let parent = card.parentID { rows.append("上级: \(parent.uuidString.lowercased())") }
     if card.isPinned { rows.append("置顶: 是") }
     if let original = card.conflictOf { rows.append("冲突副本，原卡: \(original.uuidString.lowercased())") }
     if let deleted = card.deletedAt { rows.append("已删除: \(minutes(deleted))") }
     rows.append("修改: \(minutes(card.modifiedAt))")
     return rows.joined(separator: "\n") + "\n\n" + card.body
-  }
-}
-
-struct TaskView {
-  let task: CueTask
-  let project: String?
-
-  private static let mark: [TaskStatus: String] = [.todo: " ", .inProgress: "~", .done: "x"]
-
-  var json: JSONObject {
-    [
-      "id": uuid(task.id), "content": task.content, "projectId": uuid(task.projectID), "project": nullable(project),
-      "parentId": uuid(task.parentID),
-      "status": task.status.rawValue, "done": task.status == .done, "startedAt": iso(task.startedAt),
-      "completedAt": iso(task.completedAt), "createdAt": iso(task.createdAt),
-      "modifiedAt": iso(task.modifiedAt),
-    ]
-  }
-
-  var line: String {
-    "[\(Self.mark[task.status]!)] \(short(task.id))  \(task.content)" + (project.map { "  (\($0))" } ?? "")
-      + (task.parentID.map { "  ↳ \(short($0))" } ?? "")
   }
 }
 
@@ -114,11 +98,6 @@ extension Call {
     let names = try await projectNames()
     return cards.map { CardView(card: $0, project: $0.projectID.flatMap { names[$0] }) }
   }
-
-  func taskViews(_ tasks: [CueTask]) async throws -> [TaskView] {
-    let names = try await projectNames()
-    return tasks.map { TaskView(task: $0, project: $0.projectID.flatMap { names[$0] }) }
-  }
 }
 
 func listReply(_ lines: [String], json: [JSONObject]) -> Reply {
@@ -126,4 +105,3 @@ func listReply(_ lines: [String], json: [JSONObject]) -> Reply {
 }
 
 func reply(_ view: CardView) -> Reply { Reply(text: view.line + "\n", json: view.json) }
-func reply(_ view: TaskView) -> Reply { Reply(text: view.line + "\n", json: view.json) }

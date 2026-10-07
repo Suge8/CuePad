@@ -530,7 +530,6 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var hostID: String
   public var mode: Open<DeliveryMode>
   public var cardID: UUID?
-  public var taskID: UUID?
   public var status: Open<DeliveryStatus>
   /// 失败原因等。
   public var resultDetail: String?
@@ -597,20 +596,20 @@ extension PiSessionState: Record {
 extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
-    "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "taskID", "status",
+    "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
     "resultDetail", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt",
   ]
   static let syncedColumns = columns.filter { $0 != "resultReceivedAt" }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, taskID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
-      hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7), taskID: row.uuidOrNil(8),
-      status: Open(rawValue: row.text(9)), resultDetail: row.textOrNil(10), handledBy: row.textOrNil(11),
-      createdAt: row.date(12), completedAt: row.dateOrNil(13), modifiedAt: row.date(14), resultReceivedAt: row.dateOrNil(15))
+      hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
+      status: Open(rawValue: row.text(8)), resultDetail: row.textOrNil(9), handledBy: row.textOrNil(10),
+      createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14))
   }
 }
 

@@ -9,6 +9,7 @@ DEFINE SCHEMA
         deletedAt     INT64,
         createdAt     INT64,
         modifiedAt    INT64,
+        intro         STRING,
         goalCardID    STRING,
         sortKey       STRING,
         GRANT WRITE TO "_creator",
@@ -26,23 +27,13 @@ DEFINE SCHEMA
         createdAt      INT64,
         modifiedAt     INT64,
         conflictOf     STRING,
+        parentID       STRING,
+        todoAt         INT64,
+        startedAt      INT64,
+        completedAt    INT64,
+        piSessionID    STRING,
         isFavorite     INT64,
         numbering      STRING,
-        GRANT WRITE TO "_creator",
-        GRANT CREATE TO "_icloud"
-    );
-
-    RECORD TYPE tasks (
-        "___recordID" REFERENCE QUERYABLE,
-        content       ENCRYPTED STRING,
-        projectID     STRING,
-        sortKey       STRING,
-        startedAt     INT64,
-        completedAt   INT64,
-        piSessionID   STRING,
-        createdAt     INT64,
-        modifiedAt    INT64,
-        parentID      STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -54,9 +45,9 @@ DEFINE SCHEMA
         targetName    ENCRYPTED STRING,
         targetRef     ENCRYPTED STRING,
         cardID        STRING,
-        taskID        STRING,
         sentAt        INT64,
         modifiedAt    INT64,
+        taskID        STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -110,13 +101,13 @@ DEFINE SCHEMA
         hostID        STRING,
         mode          STRING,
         cardID        STRING,
-        taskID        STRING,
         status        STRING,
         resultDetail  ENCRYPTED STRING,
         handledBy     STRING,
         createdAt     INT64,
         completedAt   INT64,
         modifiedAt    INT64,
+        taskID        STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -179,6 +170,21 @@ DEFINE SCHEMA
         run                STRING,
         sentAt             INT64,
         seq                INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE tasks (
+        "___recordID" REFERENCE QUERYABLE,
+        content       ENCRYPTED STRING,
+        projectID     STRING,
+        sortKey       STRING,
+        startedAt     INT64,
+        completedAt   INT64,
+        piSessionID   STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        parentID      STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

@@ -6,19 +6,23 @@ private let cardVisible = """
   deletedAt IS NULL AND (projectID IS NULL OR projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL))
   """
 
+/// 散放的灵感：不是任务，也没挂在一个看得见的任务下（上级没到、在回收站的按散放看待）。
+private let looseIdea = """
+  todoAt IS NULL AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE deletedAt IS NULL AND todoAt IS NOT NULL))
+  """
+
 extension CueStore {
   /// 未删除的项目，按项目唯一的顺序（`projectOrder`）。所有项目列表与选择器都用它，界面不另排。
   public func projects() throws -> [Project] {
     try select(Project.self, where: "deletedAt IS NULL", orderBy: Self.projectOrder("projects"))
   }
 
-  /// 项目的顺序：置顶在前，其余按最近活动——项目自身、其下卡片与任务的最近修改、其 Pi 会话最近的状态变化中最晚的——
+  /// 项目的顺序：置顶在前，其余按最近活动——项目自身、其下卡片（灵感与任务）的最近修改、其 Pi 会话最近的状态变化中最晚的——
   /// 由近到远。`alias` 是查询里项目表的名字。
   static func projectOrder(_ alias: String) -> String {
     """
     \(alias).isPinned DESC, MAX(\(alias).modifiedAt,
       COALESCE((SELECT MAX(modifiedAt) FROM cards WHERE projectID = \(alias).id), 0),
-      COALESCE((SELECT MAX(modifiedAt) FROM tasks WHERE projectID = \(alias).id), 0),
       COALESCE((SELECT MAX(stateSince) FROM piSessionStates WHERE projectID = \(alias).id), 0)) DESC, \(alias).id
     """
   }
@@ -59,9 +63,10 @@ extension CueStore {
     return String(cString: resolved)
   }
 
-  /// 某项目（nil = 未归档）里可见的卡片，按手动顺序。
+  /// 某项目（nil = 未归档）里可见的灵感（不含任务，也不含挂在任务下的素材），按手动顺序：卡片墙、未归档与 `card list` 列的就是它们。
+  /// 任务见 `tasks(_:)`，素材见 `children(of:)`。
   public func cards(in project: UUID?) throws -> [Card] {
-    try select(Card.self, where: "(\(cardVisible)) AND projectID IS ?", [project], orderBy: "sortKey, id")
+    try select(Card.self, where: "(\(cardVisible)) AND (\(looseIdea)) AND projectID IS ?", [project], orderBy: "sortKey, id")
   }
 
   /// 回收站里单独删除的卡片，最近删除的在前；随项目删除的卡归在该项目名下，不在这里。
@@ -71,20 +76,25 @@ extension CueStore {
 
   public func card(_ id: UUID) throws -> Card? { try find(Card.self, id) }
 
-  public func task(_ id: UUID) throws -> CueTask? { try find(CueTask.self, id) }
+  /// 一张任务的下级（子任务与素材），按手动顺序；在回收站的不列。
+  public func children(of parent: UUID) throws -> [Card] {
+    try select(Card.self, where: "parentID = ? AND deletedAt IS NULL", [parent], orderBy: "sortKey, id")
+  }
 
   /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`，未归档的在最后。组内是整棵任务树的先序（同级按手动顺序，
-  /// 子任务紧跟上级）再按状态筛：上级被筛掉的子任务就排在上级原来的位置。只要完成的时不按树，最近完成在前。回收站里的项目的任务不列。
+  /// 子任务紧跟上级）再按状态筛：上级被筛掉的子任务就排在上级原来的位置。只要完成的时不按树，最近完成在前。
+  /// 回收站里的任务与回收站项目的任务不列。
   public func tasks(_ statuses: TaskStatus...) throws -> [TaskGroup] {
     let wanted = Set(statuses)
     let doneOnly = wanted == [.done]
     let tasks = try db.query(
       """
-      SELECT \(CueTask.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM tasks t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE (t.projectID IS NULL OR p.deletedAt IS NULL)\(doneOnly ? " AND t.completedAt IS NOT NULL" : "")
+      SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
+      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
+        \(doneOnly ? " AND t.completedAt IS NOT NULL" : "")
       ORDER BY t.projectID IS NULL, \(Self.projectOrder("p")), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
       """
-    ) { CueTask(row: $0) }
+    ) { Card(row: $0) }
     var groups: [TaskGroup] = []
     for task in tasks {
       if groups.last?.projectID == task.projectID, !groups.isEmpty {
@@ -94,18 +104,18 @@ extension CueStore {
       }
     }
     return groups.compactMap { group in
-      let ordered = doneOnly ? group.tasks : Self.preorder(group.tasks).filter { wanted.contains($0.status) }
+      let ordered = doneOnly ? group.tasks : Self.preorder(group.tasks).filter { $0.status.map(wanted.contains) ?? false }
       return ordered.isEmpty ? nil : TaskGroup(projectID: group.projectID, tasks: ordered)
     }
   }
 
   /// 按手动顺序排好的一组任务的先序：上级不在这组里的当顶层；环里的（远端并发、还没收敛）接在最后。
-  private static func preorder(_ tasks: [CueTask]) -> [CueTask] {
+  private static func preorder(_ tasks: [Card]) -> [Card] {
     let ids = Set(tasks.map(\.id))
-    var children: [UUID: [CueTask]] = [:]
+    var children: [UUID: [Card]] = [:]
     for task in tasks { if let parent = task.parentID, ids.contains(parent) { children[parent, default: []].append(task) } }
-    var ordered: [CueTask] = [], seen: Set<UUID> = []
-    func visit(_ task: CueTask) {
+    var ordered: [Card] = [], seen: Set<UUID> = []
+    func visit(_ task: Card) {
       guard seen.insert(task.id).inserted else { return }
       ordered.append(task)
       for child in children[task.id] ?? [] { visit(child) }
@@ -115,26 +125,33 @@ extension CueStore {
     return ordered
   }
 
+  /// 可当上级的任务：未删除的要做卡片。
+  private static let liveTask = "u.deletedAt IS NULL AND u.todoAt IS NOT NULL"
+
   /// 各项目（nil = 未归档）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
-  /// 没有上级、上级不在库里，或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `subtaskProgress`。
-  /// 没有任务的项目不在结果里；回收站里的项目不算。
+  /// 没有上级、上级不在（没到、在回收站），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `subtaskProgress`。
+  /// 灵感（含素材）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
   public func taskCounts() throws -> [UUID?: TaskCounts] {
     let rows = try db.query(
       """
       SELECT t.projectID, SUM(t.completedAt IS NULL AND t.startedAt IS NOT NULL), SUM(t.completedAt IS NULL AND t.startedAt IS NULL),
         SUM(t.completedAt IS NOT NULL)
-      FROM tasks t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN tasks u ON u.id = t.parentID
-      WHERE (t.projectID IS NULL OR p.deletedAt IS NULL) AND (u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))
+      FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(Self.liveTask)
+      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
+        AND (u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))
       GROUP BY t.projectID
       """
     ) { (project: $0.uuidOrNil(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
-  /// 各上级任务的直接子任务完成数与总数；没有子任务的不在结果里。
+  /// 各上级任务的直接子任务（不含素材）完成数与总数；没有子任务的不在结果里。
   public func subtaskProgress() throws -> [UUID: TaskProgress] {
     let rows = try db.query(
-      "SELECT parentID, SUM(completedAt IS NOT NULL), COUNT(*) FROM tasks WHERE parentID IS NOT NULL GROUP BY parentID"
+      """
+      SELECT parentID, SUM(completedAt IS NOT NULL), COUNT(*) FROM cards
+      WHERE parentID IS NOT NULL AND todoAt IS NOT NULL AND deletedAt IS NULL GROUP BY parentID
+      """
     ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(1)), total: Int($0.int(2)))) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
@@ -194,7 +211,7 @@ extension CueStore {
   /// 每个活动项目（按手动顺序）和未归档（最后）的可见卡片数、最近修改时间。一次查询，侧栏不必读全部卡片。
   public func projectSummaries() throws -> [ProjectSummary] {
     let groups = try db.query(
-      "SELECT projectID, COUNT(*), MAX(modifiedAt) FROM cards WHERE \(cardVisible) GROUP BY projectID"
+      "SELECT projectID, SUM(\(looseIdea)), MAX(modifiedAt) FROM cards WHERE \(cardVisible) GROUP BY projectID"
     ) { (id: $0.uuidOrNil(0), count: Int($0.int(1)), last: $0.dateOrNil(2)) }
     let byProject = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
     let owners: [UUID?] = try projects().map(\.id) + [nil]

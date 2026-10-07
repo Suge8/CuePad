@@ -46,7 +46,7 @@ import Testing
   @Test func everySyncedTableIsARecordTypeAndOnlyRetiredOnesAreExtra() async throws {
     let schema = try await CloudKitSchema.generate()
     let types = lines(schema).filter { $0.hasPrefix("RECORD TYPE ") }.map { $0.dropFirst("RECORD TYPE ".count).dropLast(2) }
-    #expect(types.map(String.init) == Table.synced.map(\.rawValue) + ["tags", "cardTags", "probes"])
+    #expect(types.map(String.init) == Table.synced.map(\.rawValue) + ["tags", "cardTags", "probes", "tasks"])
     #expect(fields(of: "cards", in: schema).contains("isFavorite INT64"))  // 生产里已有，只声明不读写
   }
 

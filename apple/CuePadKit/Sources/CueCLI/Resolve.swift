@@ -31,23 +31,14 @@ extension Call {
     return try unique(ref, in: everything, kind: "卡片") { $0.body }
   }
 
-  func task(_ ref: String) async throws -> CueTask {
+  /// 任务（要做的卡片）：id 或唯一前缀，只在可见任务里找。
+  func task(_ ref: String) async throws -> Card {
+    let all = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
     if let id = UUID(uuidString: ref) {
-      guard let task = try await findTask(id) else { throw CLIError.notFound("找不到任务 \(ref)") }
+      guard let task = all.first(where: { $0.id == id }) else { throw CLIError.notFound("找不到任务 \(ref)（灵感先 cuepad card todo）") }
       return task
     }
-    return try unique(ref, in: try await allTasks(), kind: "任务") { $0.content }
-  }
-
-  func findTask(_ id: UUID) async throws -> CueTask? {
-    try await allTasks().first { $0.id == id }
-  }
-
-  /// 所有可见任务：待办、进行中、完成。
-  func allTasks(_ statuses: [TaskStatus] = TaskStatus.allCases) async throws -> [CueTask] {
-    var all: [CueTask] = []
-    for status in statuses { all += try await store.tasks(status).flatMap(\.tasks) }
-    return all
+    return try unique(ref, in: all, kind: "任务") { $0.body }
   }
 
   private func unique<T: Identifiable>(

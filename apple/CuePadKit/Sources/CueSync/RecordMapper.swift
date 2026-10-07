@@ -2,12 +2,11 @@ import CloudKit
 import Foundation
 
 /// 同步表行 ↔ CKRecord。recordType = 表名，recordName = 行 id；列名即字段名。
-/// 用户内容（正文、变量取值、名称、任务与发送内容）放 `encryptedValues`，结构性字段（排序键、时间、引用、标志）保持明文。
+/// 用户内容（正文、变量取值、名称、发送内容）放 `encryptedValues`，结构性字段（排序键、时间、引用、标志）保持明文。
 enum RecordMapper {
   static let encryptedColumns: [Table: Set<String>] = [
     .projects: ["name"],
     .cards: ["body", "variableValues"],
-    .tasks: ["content"],
     .sendRecords: ["content", "targetName", "targetRef"],
     .piSessionStates: ["title", "detail", "folder", "lastPrompt", "lastReply", "question", "launchToken", "subagents", "pendingPrompt", "model", "thinking", "models"],
     .deliveryRequests: ["content", "targetName", "targetRef", "resultDetail"],

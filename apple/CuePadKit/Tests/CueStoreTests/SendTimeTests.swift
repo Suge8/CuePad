@@ -2,87 +2,9 @@ import CueStore
 import Foundation
 import Testing
 
-@Suite struct GoalAndSendTimeTests {
+@Suite struct SendTimeTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
-
-  private func goal(of project: Project) async throws -> UUID? {
-    try await store.project(project.id)?.goalCardID
-  }
-
-  // MARK: 项目目标卡
-
-  @Test func goalCardIsSetAndClearedExplicitly() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: p.id, body: "goal")
-    #expect(try await goal(of: p) == nil)
-
-    try await store.setGoal(card.id, for: p.id)
-    #expect(try await goal(of: p) == card.id)
-
-    try await store.setGoal(nil, for: p.id)
-    #expect(try await goal(of: p) == nil)
-  }
-
-  @Test func editingOtherProjectFieldsKeepsTheGoal() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: p.id, body: "goal")
-    try await store.setGoal(card.id, for: p.id)
-
-    try await store.updateProject(p.id) { $0.name = "Renamed" }
-
-    #expect(try await goal(of: p) == card.id)
-  }
-
-  @Test func goalMustBeALiveCardOfThatProject() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let q = try await store.createProject(name: "Q", color: "#222")
-    let foreign = try await store.createCard(in: q.id, body: "foreign")
-    let inbox = try await store.createCard(in: nil, body: "inbox")
-    let trashed = try await store.createCard(in: p.id, body: "trashed")
-    try await store.trashCard(trashed.id)
-
-    for card in [foreign, inbox, trashed] {
-      await #expect(throws: CueStoreError.invalidGoal) { try await store.setGoal(card.id, for: p.id) }
-    }
-    await #expect(throws: CueStoreError.invalidGoal) { try await store.setGoal(UUID(), for: p.id) }
-    #expect(try await goal(of: p) == nil)
-  }
-
-  @Test func goalIsClearedWhenItsCardIsTrashedPurgedOrMovedAway() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let other = try await store.createProject(name: "Other", color: "#222")
-    let untouched = try await store.createCard(in: other.id, body: "other goal")
-    try await store.setGoal(untouched.id, for: other.id)
-
-    func newGoal() async throws -> Card {
-      let card = try await store.createCard(in: p.id, body: "goal")
-      try await store.setGoal(card.id, for: p.id)
-      return card
-    }
-
-    try await store.trashCard(try await newGoal().id)
-    #expect(try await goal(of: p) == nil)
-
-    try await store.purgeCard(try await newGoal().id)
-    #expect(try await goal(of: p) == nil)
-
-    try await store.moveCard(try await newGoal().id, to: nil, after: nil)
-    #expect(try await goal(of: p) == nil)
-
-    #expect(try await store.project(other.id)?.goalCardID == untouched.id)
-  }
-
-  @Test func goalSurvivesMovingWithinTheSameProject() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let first = try await store.createCard(in: p.id, body: "1")
-    let second = try await store.createCard(in: p.id, body: "2")
-    try await store.setGoal(second.id, for: p.id)
-
-    try await store.moveCard(second.id, to: p.id, after: first.id)
-
-    #expect(try await goal(of: p) == second.id)
-  }
 
   // MARK: 最近发送时间
 

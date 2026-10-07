@@ -36,7 +36,7 @@ extension CueStore {
 struct LegacyLibrary {
   var projects: [Project] = []
   var cards: [Card] = []
-  var tasks: [CueTask] = []
+  var tasks: [Card] = []
   var settings: [String: String] = [:]
 
   init(copyingFrom source: URL) throws {
@@ -61,7 +61,7 @@ struct LegacyLibrary {
     projects = projectRows.map { row in
       Project(
         id: LegacyID.uuid("project", row.id), name: row.name ?? "", icon: row.icon, color: row.color,
-        isPinned: row.flag, goalCardID: nil, deletedAt: row.deletedAt,
+        isPinned: row.flag, intro: nil, deletedAt: row.deletedAt,
         createdAt: row.createdAt, modifiedAt: row.updatedAt)
     }
 
@@ -79,11 +79,10 @@ struct LegacyLibrary {
 
     let taskRows = try legacy.query("SELECT * FROM tasks ORDER BY sort_order, id", [], LegacyRow.init)
     tasks = zip(taskRows, SortKey.sequence(count: taskRows.count)).map { row, key in
-      CueTask(
-        id: LegacyID.uuid("task", row.id), content: row.content ?? "",
-        projectID: row.projectID.map { LegacyID.uuid("project", $0) }, sortKey: key,
-        startedAt: nil, completedAt: row.completedAt, piSessionID: nil, createdAt: row.createdAt, modifiedAt: row.updatedAt,
-        parentID: nil)
+      Card(
+        id: LegacyID.uuid("task", row.id), projectID: row.projectID.map { LegacyID.uuid("project", $0) }, body: row.content ?? "",
+        isPinned: false, variableValues: [:], conflictOf: nil, sortKey: key, deletedAt: nil, createdAt: row.createdAt,
+        modifiedAt: row.updatedAt, todoAt: row.createdAt, completedAt: row.completedAt)
     }
 
     for (key, value) in try legacy.query("SELECT key, value FROM app_settings", [], { ($0.text(0), $0.text(1)) }) {

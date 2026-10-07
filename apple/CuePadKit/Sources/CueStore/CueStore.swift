@@ -27,7 +27,7 @@ public actor CueStore {
       }
     } else if version < Schema.version {
       _ = try connection.transaction {
-        for upgrade in Schema.upgrades[(version - 1)...] { try connection.exec(upgrade) }
+        for upgrade in Schema.upgrades[(version - 1)...] { try upgrade.run(connection) }
         try connection.exec("PRAGMA user_version = \(Schema.version)")
       }
     } else if version != Schema.version {

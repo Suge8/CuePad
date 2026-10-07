@@ -18,7 +18,7 @@ import Testing
     #expect(projects[0].string("id") == alpha.id.uuidString.lowercased())
     #expect(projects[0]["cardCount"] as? Int == 1)
     #expect(projects[1]["cardCount"] as? Int == 0)
-    #expect(projects[0]["goalCardId"] is NSNull)
+    #expect(projects[0]["intro"] is NSNull)
 
     let text = await sb.run("project", "list")
     #expect(text.code == 0)
@@ -148,9 +148,9 @@ import Testing
 
     let added = try await sb.object("task", "add", "写", "文档", "--project", "Alpha")
     let id = try #require(added.string("id"))
-    #expect(added.string("content") == "写 文档")
+    #expect(added.string("body") == "写 文档" && added.string("kind") == "task")
     #expect(added.string("projectId") == alpha.id.uuidString.lowercased())
-    #expect(added["done"] as? Bool == false && added.string("status") == "todo")
+    #expect(added.string("status") == "todo")
     _ = try await sb.object("task", "add", "全局的")
 
     #expect(try array(try await sb.json("task", "list")).count == 2)
@@ -161,7 +161,7 @@ import Testing
     #expect(try array(try await sb.json("task", "list")).count == 2)
 
     let done = try await sb.object("task", "done", String(id.prefix(8)))
-    #expect(done["done"] as? Bool == true && done.string("status") == "done")
+    #expect(done.string("status") == "done")
     #expect(done.string("completedAt") != nil)
     #expect(try array(try await sb.json("task", "list")).count == 1)
     #expect(try array(try await sb.json("task", "list", "--done")).compactMap { $0.string("id") } == [id])
@@ -171,11 +171,9 @@ import Testing
     let undone = try await sb.object("task", "undo", id)
     #expect(undone.string("status") == "todo" && undone["completedAt"] is NSNull && undone["startedAt"] is NSNull)
 
-    let edited = try await sb.object("task", "edit", id, "改名", "--global")
-    #expect(edited.string("content") == "改名" && edited["projectId"] is NSNull)
-
-    let deleted = try await sb.object("task", "delete", id)
-    #expect(deleted.string("id") == id && deleted["deleted"] as? Bool == true)
+    // 正文、换项目、回收站与灵感共用 card 命令
+    let trashed = try await sb.object("card", "trash", id)
+    #expect(trashed.string("id") == id && trashed["deletedAt"] != nil)
     #expect(try array(try await sb.json("task", "list", "--all")).count == 1)
   }
 
@@ -212,10 +210,9 @@ import Testing
     let sb = try Sandbox()
     let blank = await sb.run("task", "add", "  ")
     #expect(blank.code != 0 && blank.err.contains("内容"))
-    let task = try await sb.store.createTask("a")
-    let nothing = await sb.run("task", "edit", task.id.uuidString)
-    #expect(nothing.code == 2)
-    #expect(try await sb.store.task(task.id)?.content == "a")
+    let idea = try await sb.store.createCard(in: nil, body: "只是灵感")
+    let notATask = await sb.run("task", "done", idea.id.uuidString)
+    #expect(notATask.code != 0 && notATask.err.contains("card todo"))
   }
 }
 
@@ -282,7 +279,7 @@ import Testing
 @Suite struct HelpTests {
   private static let commands = [
     "project list", "card list", "card show", "card add", "card edit", "card move", "card trash",
-    "card restore", "task list", "task add", "task start", "task done", "task undo", "task edit", "task delete", "search",
+    "card restore", "card todo", "task list", "task add", "task start", "task done", "task undo", "search",
     "conflicts list", "conflicts resolve",
   ]
 
@@ -296,7 +293,7 @@ import Testing
     }
     #expect(help.out.contains("--json") && help.out.contains("退出码"))
     #expect(help.out.contains("CUEPAD_LIBRARY_DIR"))
-    #expect(!help.out.contains("goalCardId"), "字段说明属于各命令的 --help")
+    #expect(!help.out.contains("conflictOf"), "字段说明属于各命令的 --help")
   }
 
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
@@ -332,7 +329,7 @@ import Testing
     let projects = try array(try await sb.json("project", "list"))
     #expect(Set(projects[0].keys) == (try await documented("Project", in: ["project", "list"])))
     #expect(Set(try await sb.object("card", "show", card.id.uuidString).keys) == (try await documented("Card", in: ["card", "show"])))
-    #expect(Set(try await sb.object("task", "done", task.id.uuidString).keys) == (try await documented("Task", in: ["task", "done"])))
+    #expect(Set(try await sb.object("task", "done", task.id.uuidString).keys) == (try await documented("Card", in: ["task", "done"])))
     #expect(Set(try await sb.object("search", "x").keys) == (try await documented("Search", in: ["search"])))
     let conflicts = try array(try await sb.json("conflicts", "list"))
     #expect(Set(conflicts[0].keys) == (try await documented("Conflict", in: ["conflicts", "list"])))

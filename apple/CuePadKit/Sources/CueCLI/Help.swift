@@ -40,9 +40,8 @@ enum Help {
 
 /// 各命令 --help 里的输出说明：字段名的唯一定义处（测试比对它与实际 JSON 的键）。
 enum Schema {
-  static let project = "Project {id, name, icon, color, pinned, goalCardId, directory, cardCount, createdAt, modifiedAt}"
-  static let card = "Card {id, projectId, project, body, pinned, conflictOf, deletedAt, createdAt, modifiedAt}"
-  static let task = "Task {id, content, projectId, project, parentId, status, done, startedAt, completedAt, createdAt, modifiedAt}（status：todo 待办、inProgress 进行中、done 完成；parentId 是上级任务，顶层为 null）"
+  static let project = "Project {id, name, intro, icon, color, pinned, directory, cardCount, createdAt, modifiedAt}（cardCount 是顶层灵感数）"
+  static let card = "Card {id, kind, status, projectId, project, parentId, body, pinned, conflictOf, startedAt, completedAt, deletedAt, createdAt, modifiedAt}（kind：idea 灵感、task 任务；status 只有任务有：todo 待办、inProgress 进行中、done 完成；parentId 是上级任务，顶层为 null——挂在任务下的灵感是素材，任务是子任务）"
   static let search = "Search {total, projects, cards}"
   static let conflict = "Conflict {original, copy}"
 

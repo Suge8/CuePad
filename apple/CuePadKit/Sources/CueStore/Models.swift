@@ -8,14 +8,14 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Sendable, CaseIterable {
-  case projects, cards, tasks, sendRecords, attachments, piSessions, projectDirectories
+  case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, deliveryRequests, directoryBindings, piMessages
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
-    .projects, .cards, .tasks, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings, .piMessages,
+    .projects, .cards, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings, .piMessages,
   ]
 
   /// 同步的列（CKRecord 的字段）；不含本机列。
@@ -23,7 +23,6 @@ extension Table {
     switch self {
     case .projects: Project.columns
     case .cards: Card.columns
-    case .tasks: CueTask.columns
     case .sendRecords: SendRecord.columns
     case .attachments: Attachment.columns
     case .piSessions: PiSession.columns
@@ -50,14 +49,17 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var icon: String?
   public var color: String
   public var isPinned: Bool
-  /// 项目目标卡；必须是本项目里未删除的卡。用 `setGoal` 设置，卡片离开项目或进回收站时自动清空。
-  public internal(set) var goalCardID: UUID?
+  /// 可选的一句话介绍（项目页顶栏、书架项目卡）。
+  public var intro: String?
   /// 回收站中的项目；其卡片随之进回收站（由项目推导，卡片自身不记）。
   public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
 }
 
+/// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是"要做"（`todoAt`）。
+/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与素材（灵感），正文就是给 Agent 的话。
+/// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// nil 表示未归档（收件箱）。
@@ -74,6 +76,26 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
+  /// 上级任务；nil 是顶层。只有任务能当上级，层级最多 `maxDepth`；上级不在库里或不可见时按顶层看待。
+  public internal(set) var parentID: UUID?
+  /// 点"要做"的时间：有值是任务，nil 是灵感。
+  public internal(set) var todoAt: Date?
+  /// 开始做的时间（手动置为进行中、或交给 Agent 时）；回到待办时清空。
+  public internal(set) var startedAt: Date?
+  public internal(set) var completedAt: Date?
+  /// 交给 Agent 的会话（Pi 自己的会话 id），任务行据此显示会话此刻的状态。
+  public internal(set) var piSessionID: String?
+
+  /// 任务 → 子任务 → 子任务（素材挂在哪一级都算在它下面一级）。
+  public static let maxDepth = 3
+
+  public var isTask: Bool { todoAt != nil }
+
+  /// 任务的三态；灵感为 nil。
+  public var status: TaskStatus? {
+    guard isTask else { return nil }
+    return completedAt != nil ? .done : startedAt != nil ? .inProgress : .todo
+  }
 }
 
 /// 任务三态。由两个时间推出（唯一事实源）：有完成时间是完成，否则有开始时间是进行中，都没有是待办。
@@ -84,7 +106,7 @@ public enum TaskStatus: String, Sendable, CaseIterable {
 /// 同一项目（nil = 未归档）里某一状态的任务（`CueStore.tasks(_:)`）。
 public struct TaskGroup: Equatable, Sendable {
   public let projectID: UUID?
-  public internal(set) var tasks: [CueTask]
+  public internal(set) var tasks: [Card]
 }
 
 /// 一组顶层任务按状态的个数（`CueStore.taskCounts`）：给用户看的任务数与完成数都是它。
@@ -119,28 +141,8 @@ public struct TaskProgress: Equatable, Sendable {
   }
 }
 
-public struct CueTask: Identifiable, Equatable, Sendable {
-  public let id: UUID
-  public var content: String
-  public var projectID: UUID?
-  public internal(set) var sortKey: String
-  /// 开始做的时间（手动置为进行中、或交给 Pi 时）；回到待办时清空。
-  public internal(set) var startedAt: Date?
-  public internal(set) var completedAt: Date?
-  /// 关联的 Pi 会话（Pi 自己的会话 id）。
-  public var piSessionID: String?
-  public var createdAt: Date
-  public var modifiedAt: Date
-  /// 上级任务；nil 是顶层。最多 `maxDepth` 级，只经 `createTask(_:under:)`、`moveTask` 改（Store 在写入时校验）。
-  /// 上级不在库里时（远端乱序还没到）按顶层看待。
-  public internal(set) var parentID: UUID?
-
-  /// 任务 → 子任务 → 子任务。
-  public static let maxDepth = 3
-}
-
-/// 任务挂在哪：某项目（nil = 未归档）的顶层，或某条任务下面（项目随它）。
-public enum TaskSlot: Hashable, Sendable {
+/// 卡片挂在哪：某项目（nil = 未归档）的顶层，或某条任务下面（项目随它）。
+public enum CardSlot: Hashable, Sendable {
   case top(project: UUID?)
   case under(UUID)
 }
@@ -154,7 +156,6 @@ public struct SendRecord: Identifiable, Equatable, Sendable {
   /// Pi 会话 id 或应用 bundle id。
   public var targetRef: String?
   public var cardID: UUID?
-  public var taskID: UUID?
   public var sentAt: Date
   public var modifiedAt: Date
 }
@@ -279,7 +280,7 @@ public struct SearchResults: Sendable {
   public var totalCards: Int
 }
 
-/// 侧栏用：项目（nil = 未归档）的可见卡片数与最近修改时间；没有卡片时 `lastModifiedAt` 为 nil。
+/// 侧栏用：项目（nil = 未归档）的灵感数（顶层的，不含任务与素材）与卡片最近修改时间；没有卡片时 `lastModifiedAt` 为 nil。
 public struct ProjectSummary: Equatable, Sendable {
   public var projectID: UUID?
   public var cardCount: Int
@@ -290,8 +291,6 @@ public enum CueStoreError: Error, Equatable {
   case notFound
   case blankTaskContent
   case notAnImage
-  /// 目标卡必须是该项目里未删除的卡。
-  case invalidGoal
   /// 卡片或任务只能归属存在且未在回收站的项目（或不归属任何项目）。
   case invalidProject
   /// `resolveConflict` 的目标不是冲突副本。
@@ -303,10 +302,12 @@ public enum CueStoreError: Error, Equatable {
   case attachmentFilesNotRemoved([String])
   /// 库文件的结构版本不是本版本建的（开发期旧结构或更新版本的库），不打开。
   case unsupportedSchemaVersion(Int)
-  /// 任务不能挂到自己或自己的子任务下，上级必须存在。
+  /// 只能挂到存在的任务下，不能挂到自己或自己的下级下。
   case invalidParent
-  /// 挂上去后会超过 `CueTask.maxDepth` 级。
+  /// 挂上去后会超过 `Card.maxDepth` 级。
   case taskTooDeep
+  /// 灵感没有状态：先"要做"。
+  case notATask
 }
 
 extension CueStoreError: LocalizedError {
@@ -315,15 +316,15 @@ extension CueStoreError: LocalizedError {
     case .notFound: "找不到这条记录，可能已被删除"
     case .blankTaskContent: "任务内容不能为空"
     case .notAnImage: "不是可识别的图片"
-    case .invalidGoal: "目标卡必须是这个项目里未删除的卡片"
     case .invalidProject: "目标项目已不存在或在回收站"
     case .notAConflictCopy: "这张卡片不是冲突副本"
     case .attachmentHashMismatch: "附件内容与其哈希不符"
     case .blankDeliveryContent: "发送内容不能为空"
     case .attachmentFilesNotRemoved(let hashes): "已永久删除，但有 \(hashes.count) 个图片文件没能删掉"
     case .unsupportedSchemaVersion(let version): "资料库由另一个版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
-    case .invalidParent: "不能挂到自己或自己的子任务下"
-    case .taskTooDeep: "子任务最多 \(CueTask.maxDepth) 级"
+    case .invalidParent: "只能挂到任务下，不能挂到自己或自己的下级下"
+    case .taskTooDeep: "子任务最多 \(Card.maxDepth) 级"
+    case .notATask: "这是灵感，先点「要做」再改状态"
     }
   }
 }
@@ -332,71 +333,49 @@ extension CueStoreError: LocalizedError {
 
 extension Project: Record {
   static let table = Table.projects
-  static let columns = ["id", "name", "icon", "color", "isPinned", "deletedAt", "createdAt", "modifiedAt", "goalCardID"]
-  var bindings: [any SQLBindable] { [id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, goalCardID] }
+  static let columns = ["id", "name", "icon", "color", "isPinned", "deletedAt", "createdAt", "modifiedAt", "intro"]
+  var bindings: [any SQLBindable] { [id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), name: row.text(1), icon: row.textOrNil(2), color: row.text(3),
-      isPinned: row.bool(4), goalCardID: row.uuidOrNil(8),
+      isPinned: row.bool(4), intro: row.textOrNil(8),
       deletedAt: row.dateOrNil(5), createdAt: row.date(6), modifiedAt: row.date(7))
   }
 }
 
 extension Card: Record {
   static let table = Table.cards
-  static let columns = ["id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf"]
+  static let columns = [
+    "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
+    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID",
+  ]
   var bindings: [any SQLBindable] {
     let variables = try! JSONEncoder.sorted.encode(variableValues)
-    return [id, projectID, body, isPinned, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf]
+    return [
+      id, projectID, body, isPinned, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
+      parentID, todoAt, startedAt, completedAt, piSessionID,
+    ]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2), isPinned: row.bool(3),
       variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(4).utf8))) ?? [:],
-      conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8))
-  }
-}
-
-extension CueTask: Record {
-  static let table = Table.tasks
-  static let columns = [
-    "id", "content", "projectID", "sortKey", "startedAt", "completedAt", "piSessionID", "createdAt", "modifiedAt", "parentID",
-  ]
-  var bindings: [any SQLBindable] { [id, content, projectID, sortKey, startedAt, completedAt, piSessionID, createdAt, modifiedAt, parentID] }
-  init(row: Row) {
-    self.init(
-      id: row.uuid(0), content: row.text(1), projectID: row.uuidOrNil(2), sortKey: row.text(3),
-      startedAt: row.dateOrNil(4), completedAt: row.dateOrNil(5), piSessionID: row.textOrNil(6), createdAt: row.date(7),
-      modifiedAt: row.date(8), parentID: row.uuidOrNil(9))
-  }
-}
-
-extension CueTask {
-  /// 改状态时记下时间：置为进行中记开始时间（已有的保留），完成记完成时间（保留开始时间），回到待办两个都清空。
-  public var status: TaskStatus {
-    get { completedAt != nil ? .done : startedAt != nil ? .inProgress : .todo }
-    set {
-      guard newValue != status else { return }
-      let now = Date.stamp
-      switch newValue {
-      case .todo: (startedAt, completedAt) = (nil, nil)
-      case .inProgress: (startedAt, completedAt) = (startedAt ?? now, nil)
-      case .done: completedAt = now
-      }
-    }
+      conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
+      parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
+      piSessionID: row.textOrNil(14))
   }
 }
 
 extension SendRecord: Record {
   static let table = Table.sendRecords
-  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "taskID", "sentAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, taskID, sentAt, modifiedAt] }
+  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt"]
+  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       targetKind: Open(rawValue: row.text(2)), targetName: row.text(3),
-      targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5), taskID: row.uuidOrNil(6),
-      sentAt: row.date(7), modifiedAt: row.date(8))
+      targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5),
+      sentAt: row.date(6), modifiedAt: row.date(7))
   }
 }
 

@@ -13,7 +13,8 @@ import Testing
 
   @Test func 灵感点要做成为任务_三态由开始与完成时间推出_取消要做回到灵感() async throws {
     let idea = try await store.createCard(in: nil, body: "把发言轮次修好\n重连的人不再插队")
-    #expect(try await card(idea.id).isTask == false && card(idea.id).status == nil)
+    let fresh = try await card(idea.id)
+    #expect(fresh.isTask == false && fresh.status == nil)
 
     try await store.setTodo(idea.id, true)
     #expect(try await card(idea.id).status == .todo)
@@ -57,7 +58,7 @@ import Testing
     try await store.setTodo(parent.id, true)
     try await store.moveCard(sub.id, to: .under(parent.id), after: nil)
     try await store.trashCard(parent.id)
-    #expect(try await store.children(of: top.id).map(\.id) == [before.id, material.id, sub.id, after.id])
+    #expect(try await store.children(of: top.id).map(\.id) == [before.id, sub.id, material.id, after.id])
     #expect(try await card(parent.id).deletedAt != nil)
   }
 
@@ -69,7 +70,8 @@ import Testing
 
     let sent = try await card(task.id)
     #expect(sent.status == .inProgress && sent.piSessionID == "s1")
-    #expect(try await card(idea.id).isTask == false && card(idea.id).piSessionID == nil)
+    let unsent = try await card(idea.id)
+    #expect(unsent.isTask == false && unsent.piSessionID == nil)
   }
 
   @Test func 计数只算顶层任务_素材与灵感不算() async throws {

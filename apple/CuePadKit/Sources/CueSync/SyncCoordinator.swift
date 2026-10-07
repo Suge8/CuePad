@@ -190,7 +190,7 @@ actor SyncCoordinator {
 
   private func applyFetched(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
     var changes: [RemoteChange] = []
-    for record in modifications {
+    for record in modifications where !CloudKitSchema.retiredTypeNames.contains(record.recordType) {
       guard let row = RecordMapper.row(from: record) else {
         report("未知的记录类型「\(record.recordType)」，已跳过（可能来自更新版本的 CuePad）", recordType: record.recordType, recordName: record.recordID.recordName)
         continue
@@ -198,7 +198,7 @@ actor SyncCoordinator {
       if row.table == .attachments, !adoptAsset(of: record, row) { continue }
       changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record)))
     }
-    for (id, recordType) in deletions {
+    for (id, recordType) in deletions where !CloudKitSchema.retiredTypeNames.contains(recordType) {
       guard let table = RecordMapper.table(named: recordType) else {
         report("未知的记录类型「\(recordType)」的删除，已跳过", recordType: recordType, recordName: id.recordName)
         continue
