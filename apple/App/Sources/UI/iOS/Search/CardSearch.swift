@@ -107,32 +107,26 @@ struct CardSearchResults: View {
 }
 
 extension View {
-    /// iPhone 书架与项目页的下拉搜索（系统搜索框在导航栏下，页面在顶上时露出，下滑收起）：搜索时页面换成同一套搜索结果，
-    /// 取消搜索回到原页面。iPad 用侧栏与 ⌘K 的搜索页，这里不挂。
-    /// `available`：这一页有可搜的卡片（按同步可得的项目目录判断）；`ready`：页面内容已读到、可以挂搜索框。
-    func cardSearch(_ scope: CardSearchScope, available: Bool, ready: Bool) -> some View {
-        modifier(CardSearch(scope: scope, available: available, ready: ready))
+    /// iPhone 项目页的下拉搜索（系统搜索框在顶栏下，页面在顶上时露出，下滑收起）：只搜本项目，搜索时页面换成同一套搜索结果，
+    /// 取消搜索回到项目页；⌘K 指名这一页时聚焦它。iPad 用侧栏与 ⌘K 的搜索页，这里不挂。
+    /// `available`：这个项目有卡片（按同步可得的项目目录判断）；`ready`：页面内容已读到、可以挂搜索框。
+    func cardSearch(project: UUID, available: Bool, ready: Bool) -> some View {
+        modifier(CardSearch(project: project, available: available, ready: ready))
     }
 }
 
 private struct CardSearch: ViewModifier {
-    let scope: CardSearchScope
+    let project: UUID
     let available: Bool
     let ready: Bool
     @Environment(Navigation.self) private var navigation
     @State private var query = PaletteQuery()
     @FocusState private var focused: Bool
 
-    /// 这一页在导航里的位置：⌘K 指名要聚焦的是不是这一页。
-    private var route: Navigation.Route {
-        switch scope {
-        case .all: .shelf
-        case .project(let id): id.map(Navigation.Route.project) ?? .inbox
-        }
-    }
+    private var scope: CardSearchScope { .project(project) }
 
     private func focusIfRequested() {
-        guard navigation.pendingPageSearch == route else { return }
+        guard navigation.pendingPageSearch == .project(project) else { return }
         navigation.pendingPageSearch = nil
         focused = true
     }
@@ -141,7 +135,7 @@ private struct CardSearch: ViewModifier {
         Group {
             if available && ready {
                 SearchSwap(query: $query, scope: scope) { content }
-                    .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .automatic), prompt: prompt)
+                    .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索本项目")
                     .searchFocused($focused)
                     .onAppear(perform: focusIfRequested)
                     .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
@@ -157,8 +151,6 @@ private struct CardSearch: ViewModifier {
             }
         }
     }
-
-    private var prompt: String { scope == .all ? "搜索全部卡片" : "搜索本项目" }
 }
 
 /// 搜索框激活时换成结果；`isSearching` 只在 `.searchable` 之内可读，所以单独成一个视图。
