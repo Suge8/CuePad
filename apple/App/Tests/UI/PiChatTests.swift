@@ -59,32 +59,46 @@ struct PiChatTests {
 }
 
 /// 贴着最新（iOS 会话页、Mac 会话详情共用，规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处重新贴上；
-/// 解除后来了新内容才出"新消息"按钮。输入框长高、键盘弹出这类不是用户滚动的位移不解除贴底。
+/// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。离最新处超过一屏出"回到最新"圆钮，离开后来了新内容圆钮带一个点。
 struct ChatFollowTests {
-    @Test func 贴着最新时来了新内容不出按钮() {
+    /// 一屏的高。
+    private let screen: CGFloat = 700
+
+    @Test func 贴着最新时来了新内容_没有圆钮也没有点() {
         var follow = ChatFollow()
         follow.contentChanged()
+        #expect(follow.atNewest)
+        #expect(!follow.showsJump)
+        #expect(!follow.hasUnseen)
+    }
+
+    @Test func 离开不到一屏没有圆钮_超过一屏才有() {
+        var follow = ChatFollow()
+        follow.scrolled(distance: 300, screen: screen, byUser: true)
+        #expect(!follow.atNewest)
+        #expect(!follow.showsJump)
+        follow.scrolled(distance: 900, screen: screen, byUser: true)
+        #expect(follow.showsJump)
+        follow.scrolled(distance: 10, screen: screen, byUser: true)
         #expect(follow.atNewest)
         #expect(!follow.showsJump)
     }
 
-    @Test func 用户滚走后来了新内容出按钮_回到最新消失() {
+    @Test func 离开后来了新内容圆钮带点_回到最新点就没了() {
         var follow = ChatFollow()
-        follow.scrolled(nearNewest: false, byUser: true)
-        #expect(!follow.atNewest)
-        #expect(!follow.showsJump)
+        follow.scrolled(distance: 900, screen: screen, byUser: true)
+        #expect(!follow.hasUnseen)
         follow.contentChanged()
-        #expect(follow.showsJump)
-        follow.scrolled(nearNewest: true, byUser: true)
-        #expect(follow.atNewest)
-        #expect(!follow.showsJump)
+        #expect(follow.hasUnseen)
+        follow.scrolled(distance: 0, screen: screen, byUser: true)
+        #expect(!follow.hasUnseen)
     }
 
     /// 顶栏跟阅读走（同 Safari）：往历史里翻就让开，往最新那边回滑一小段就回来，再往历史翻又让开；回到最新一直在。
     @Test func 看历史时顶栏让开_往最新回滑一点就回来() {
         var follow = ChatFollow()
         #expect(follow.showsHeader)
-        follow.scrolled(nearNewest: false, byUser: true)
+        follow.scrolled(distance: 300, screen: screen, byUser: true)
         #expect(!follow.showsHeader)
         follow.moved(towardNewest: 10)
         #expect(!follow.showsHeader)
@@ -92,15 +106,33 @@ struct ChatFollowTests {
         #expect(follow.showsHeader)
         follow.moved(towardNewest: -40)
         #expect(!follow.showsHeader)
-        follow.scrolled(nearNewest: true, byUser: true)
+        follow.scrolled(distance: 0, screen: screen, byUser: true)
         #expect(follow.showsHeader)
     }
 
     @Test func 输入框长高或键盘弹出带来的位移_不解除贴底() {
         var follow = ChatFollow()
-        follow.scrolled(nearNewest: false, byUser: false)
+        follow.scrolled(distance: 300, screen: screen, byUser: false)
         follow.contentChanged()
         #expect(follow.atNewest)
-        #expect(!follow.showsJump)
+        #expect(!follow.hasUnseen)
+    }
+}
+
+/// 对话末尾的子代理只有一行汇总：几个在跑、共几个，状态点按最需要注意的那个。
+struct SubagentSummaryTests {
+    @Test func 汇总在跑数与总数_状态点按最需要注意的那个() {
+        let agents = [
+            PiSubagentState(name: "研究", activity: .known(.working)),
+            PiSubagentState(name: "审计", activity: .known(.waitingForUser)),
+            PiSubagentState(name: "写测试", activity: .known(.working)),
+        ]
+
+        let summary = PiSubagentSummary(agents)
+
+        #expect(summary?.running == 2)
+        #expect(summary?.total == 3)
+        #expect(summary?.lead == .known(.waitingForUser))
+        #expect(PiSubagentSummary([]) == nil)
     }
 }

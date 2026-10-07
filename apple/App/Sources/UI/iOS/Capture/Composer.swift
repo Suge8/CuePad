@@ -44,9 +44,10 @@ struct ComposerKinds: OptionSet {
 /// 左边"＋"能打开的三个来源。
 enum ComposerSource { case cards, photos, camera }
 
-/// 随手记与 Pi 会话回复框共用的输入框：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条，以及底行：
-/// 左下"＋"（选卡片、相册、拍照）、文字区、右下发送钮；两个圆钮同尺寸、同心，多行时也在底角。
-/// 发送钮的位置一直留着、有内容才显出来，文字宽度不随它变。聚焦或有内容时展开头部。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
+/// 随手记、新会话与 Pi 会话回复框共用的输入框（同 ChatGPT、Claude 的"文字在上、工具在下"）：一层玻璃，里面是
+/// （调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：左"＋"（选卡片、相册、拍照）、调用方的小圆钮
+/// （会话回复框的模型与思考强度，只在聚焦时有），右发送钮。空着又没聚焦时收成一行：＋、一行文字区（发送钮不占位）；
+/// 聚焦或有内容时展开成两层，＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和发送钮，草稿怎么处理由它们决定。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
@@ -61,7 +62,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     let compact: Bool
     let focus: FocusState<Bool>.Binding
     private let header: Header
-    /// 左列"＋"上方的小圆钮（会话回复框的模型与思考强度），只在聚焦时出现。
+    /// 工具排里"＋"右边的小圆钮（会话回复框的模型与思考强度），只在聚焦时出现。
     private let tools: Tools
     private let send: Send
     @Environment(Workspace.self) private var workspace
@@ -72,6 +73,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @State private var source: ComposerSource?
     @State private var picked: [PhotosPickerItem] = []
     @State private var previewing: Navigation.Outbox?
+    /// "＋"在一行与两层之间挪位时是同一颗（连续移动）。
+    @Namespace private var layout
 
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
@@ -99,7 +102,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     static var slot: CGFloat { 50 }
 
     private var expanded: Bool { pinnedOpen || focused || !draft.isEmpty(accepting: [.images, .cards]) }
-    /// 收成短胶囊：同一个输入框只是变窄、不留发送钮的位置，点它照常聚焦展开。
+    /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。
     private var shrunk: Bool { compact && !expanded }
     /// 短胶囊的宽：＋ 加一行短提示。
     private static var compactWidth: CGFloat { 220 }
@@ -108,7 +111,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     var body: some View {
         field
-        // 变形（短胶囊 ↔ 全宽、"＋"上方的小圆钮出现）是空间动画：无回弹弹簧，减弱动态效果时退为短淡入淡出
+        // 变形（一行 ↔ 两层、短胶囊 ↔ 全宽、工具排的小圆钮出现）是空间动画：无回弹弹簧，减弱动态效果时退为短淡入淡出
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .onChange(of: focus.wrappedValue, initial: true) { _, now in
@@ -144,19 +147,24 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if accepts.contains(.images), !draft.images.isEmpty {
                 imageStrip.padding([.horizontal, .top], Self.inset).transition(.opacity)
             }
+            // 文字区一直是这一个（换形态时不重建，焦点与输入法组合都不断）；一行时"＋"在它左边
             HStack(alignment: .bottom, spacing: 0) {
-                if !accepts.isEmpty {
-                    VStack(spacing: 0) {
-                        if focused { tools.transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity)) }
-                        plus
-                    }
-                }
+                if !expanded, !accepts.isEmpty { plus }
                 ComposerField(
                     text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink)
                     .focused(focus)
-                    .padding(.leading, accepts.isEmpty ? 18 : 2).padding(.trailing, reservesSend && !shrunk ? 2 : 18).padding(.vertical, 14)
-                    .frame(minHeight: Self.slot)
-                if reservesSend, !shrunk { sendSlot }
+                    .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, 18)
+                    .padding(.top, 14).padding(.bottom, expanded ? 4 : 14)
+                    .frame(minHeight: expanded ? nil : Self.slot)
+            }
+            if expanded {
+                HStack(spacing: 0) {
+                    if !accepts.isEmpty { plus }
+                    if focused { tools.transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity)) }
+                    Spacer(minLength: 0)
+                    if reservesSend { sendSlot }
+                }
+                .transition(.opacity)
             }
         }
         // 收成短胶囊时居中；展开是同一块玻璃从中间向两边长到全宽
@@ -189,6 +197,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         } label: {
             CircleGlyph(systemImage: "plus", ink: palette.ink, fill: palette.fill)
                 .frame(width: Self.slot, height: Self.slot)
+                .matchedGeometryEffect(id: "plus", in: layout)
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
