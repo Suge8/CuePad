@@ -63,6 +63,7 @@ final class FakeChannels: SendChannels {
         case send(PiMessage, String)
         case paste(String, String)
         case answer(PiPromptAnswer, String, String)
+        case configure(PiModelRef?, String?, String)
         case preflight(TargetSelector)
         case dispatch(Payload, TargetSelector, submit: Bool)
         case copy(Payload)
@@ -81,6 +82,7 @@ final class FakeChannels: SendChannels {
     func send(_ message: PiMessage, to id: String) async throws { calls.append(.send(message, id)) }
     func paste(_ text: String, into id: String) async throws { calls.append(.paste(text, id)) }
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: String) async throws { calls.append(.answer(answer, prompt, id)) }
+    func configure(model: PiModelRef?, thinking: String?, in id: String) async throws { calls.append(.configure(model, thinking, id)) }
     func runningApps() -> [AppInfo] { [] }
     func lastFrontmost() -> AppInfo? { nil }
 

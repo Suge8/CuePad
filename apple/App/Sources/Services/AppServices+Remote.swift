@@ -48,7 +48,7 @@ extension AppServices {
             projectID: try await store.project(containing: session.cwd)?.id,
             question: session.question.map(PiQuestion.init),
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
-            hosted: session.hosted, subagents: session.subagentStates)
+            hosted: session.hosted, subagents: session.subagentStates, modelState: session.modelState)
         // 带通知标志的写入立即上传（不阻塞后面的会话变化）：通知等引擎自动调度要几十秒，期间状态还可能前进而把它作废
         if alert != nil {
             let record = PiSessionState.recordID(sessionID: session.sessionID)
@@ -117,12 +117,7 @@ extension AppServices {
             let id = if let live = channels.piSessionID(forSession: ref) { live } else { try await resumeInBackground(ref, name: target.name) }
             // 执行器已把不认识的发送方式按失败写回，走到这里的都是已知方式
             guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
-            if mode == .answer {
-                // 作答不是发出去的内容，不记发送记录
-                guard let answer = request.answer else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新答案
-                try await channels.answer(answer.value.prompt, to: answer.promptID, in: id)
-                return
-            }
+            if try await control(request, mode: mode, in: id) { return }
             sent = try await sendToPi(content, session: id, mode: mode, request: request.id)
         case .known(.app):
             guard let bundleID = target.ref else { throw SendError.unsupportedTarget(target.name) }
@@ -133,6 +128,22 @@ extension AppServices {
             throw SendError.unsupportedTarget(target.name)
         }
         try await recordSend(request.content, to: sent, card: request.cardID, task: request.taskID)
+    }
+
+    /// 作答与改配置交给扩展，不是发出去的内容，不记发送记录；其他方式返回 false。
+    private func control(_ request: DeliveryRequest, mode: DeliveryMode, in id: CuePi.PiSession.ID) async throws -> Bool {
+        switch mode {
+        case .answer:
+            guard let answer = request.answer else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新答案
+            try await channels.answer(answer.value.prompt, to: answer.promptID, in: id)
+        case .config:
+            guard let config = request.config else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新强度，或什么都不改
+            let model = config.model.map { PiModelRef(provider: $0.provider, id: $0.id) }
+            try await channels.configure(model: model, thinking: config.thinking?.rawValue, in: id)
+        default:
+            return false
+        }
+        return true
     }
 
     /// 开新会话（不写发送记录）：在后台托管（`PiHost`），目录由本机解析：项目绑定的代码目录或某个会话的目录；
@@ -228,6 +239,15 @@ extension PiQuestion {
     }
 }
 
+extension PiModelOption {
+    /// 桥上的模型写成同步记录里的可选项；Pi 报的本版本不认识的强度不写（手机端选不到）。
+    init(_ model: PiModel) {
+        self.init(
+            key: PiModelKey(provider: model.provider, id: model.id), name: model.name,
+            thinkingLevels: model.thinkingLevels.compactMap(PiThinkingLevel.init(rawValue:)))
+    }
+}
+
 extension PiAnswerValue {
     /// 交给桥的回答。
     var prompt: PiPromptAnswer {
@@ -242,6 +262,11 @@ extension PiAnswerValue {
 extension CuePi.PiSession {
     /// 写进同步记录（与 Mac 的近况页）的状态与一句话说明。
     var syncRepresentation: (state: PiWorkState, detail: String?) { state.syncRepresentation }
+
+    /// 写进同步记录的模型配置。
+    var modelState: PiModelState {
+        PiModelState(model: model.map(PiModelOption.init), thinking: thinking.map { Open(rawValue: $0) }, models: availableModels.map(PiModelOption.init))
+    }
 
     /// 写进同步记录的子代理列表。
     var subagentStates: [PiSubagentState] {

@@ -118,6 +118,12 @@ public final class PiBridge {
         _ = try await request(to: id) { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
     }
 
+    /// 换该会话的模型、思考强度（至少给一项）：先换模型再设强度，强度按新模型支持的范围夹取。
+    /// 模型不在 Pi 的模型表里抛 `rejected("unknown_model")`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
+    public func configure(model: PiModelRef? = nil, thinking: String? = nil, in id: PiSession.ID) async throws {
+        _ = try await request(to: id) { try PiWire.configCommand(id: $0, model: model, thinking: thinking) }
+    }
+
     private func request(to id: PiSession.ID, encode: (String) throws -> Data) async throws -> PiWire.Ack {
         guard let link = links[id], link.session != nil else { throw PiBridgeError.unknownSession(id) }
         link.nextCommand += 1
@@ -201,7 +207,7 @@ public final class PiBridge {
             guard let state = hello.state.agentState else { throw HandlingError.unknownState(hello.state.kind) }
             var session = PiSession(
                 id: name, sessionID: hello.sessionId, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
-                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), mode: hello.mode, model: hello.model,
+                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), mode: hello.mode,
                 terminal: PiTerminal(tty: hello.tty, environment: hello.term), extensionVersion: hello.extensionVersion,
                 state: state, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             hello.info.apply(to: &session)

@@ -3,7 +3,7 @@
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
 //   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，steer/followUp）/ paste（放进输入框）/ answer（回答等你确认的弹窗）
+//   CuePad → 扩展  send（文字+图片，steer/followUp）/ paste（放进输入框）/ answer（回答等你确认的弹窗）/ config（换模型、思考强度）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
 import fs from "node:fs";
@@ -12,8 +12,8 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 12;
-const PROTOCOL_VERSION = 1;
+const EXTENSION_VERSION = 13;
+const PROTOCOL_VERSION = 2;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
@@ -47,6 +47,8 @@ function entriesOnDisk(file: string): number {
 }
 /** CuePad 在后台托管的 Pi（RPC 模式、没有终端界面）启动时带这个环境变量，扩展在 hello 里带回 */
 const HOSTED_ENV = "CUEPAD_HOSTED";
+/** Pi 的思考强度，由弱到强（pi-ai 的 `ModelThinkingLevel`） */
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 /** 交给 CuePad 用来定位终端的环境变量 */
 const TERMINAL_ENV_KEYS = [
 	"TERM_PROGRAM", "TERM_PROGRAM_VERSION", "__CFBundleIdentifier", "TERM_SESSION_ID", "ITERM_SESSION_ID",
@@ -160,6 +162,21 @@ function firstUserMessage(entries: any[]): string | null {
 	return null;
 }
 
+/** 模型支持的思考强度，与 pi-ai 的 `getSupportedThinkingLevels` 同一规则（只读模型的公开字段，不引入对 pi-ai 的依赖）：
+ * 不支持思考的只有 off，`thinkingLevelMap` 里为 null 的不支持，xhigh、max 要模型显式声明。设置时 Pi 本来就会按模型夹取，这里只决定给手机列哪些。 */
+function thinkingLevels(model: any): string[] {
+	if (!model.reasoning) return ["off"];
+	return THINKING_LEVELS.filter((level) => {
+		const mapped = model.thinkingLevelMap?.[level];
+		if (mapped === null) return false;
+		return level === "xhigh" || level === "max" ? mapped !== undefined : true;
+	});
+}
+
+function describeModel(model: any) {
+	return { provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model) };
+}
+
 function readTTY(): Promise<string | null> {
 	return new Promise((resolve) => {
 		execFile("ps", ["-o", "tty=", "-p", String(process.pid)], { encoding: "utf8" }, (error, stdout) => {
@@ -191,12 +208,14 @@ export default function (pi: any) {
 	type Info = {
 		name: string | null; firstMessage: string | null; question: Question | null;
 		subagents: { name: string; kind: string }[];
+		/** 当前模型、思考强度与可换的模型（Pi 里已配好密钥的）：手机据此选 */
+		model: ReturnType<typeof describeModel> | null; thinking: string | null; models: ReturnType<typeof describeModel>[];
 	};
 	/** 等你回答的弹窗：`id` 非空的可以从 CuePad 作答（confirm/select/text）；editor 与 custom 只能在 Pi 里答 */
 	type Question = { id: string | null; kind: string; text: string; options: string[] };
 	/** 会话载入时的条目数：之后多出来的是这个进程自己写的 */
 	let loadedEntries = 0;
-	let info: Info = { name: null, firstMessage: null, question: null, subagents: [] };
+	let info: Info = { name: null, firstMessage: null, question: null, subagents: [], model: null, thinking: null, models: [] };
 	/** CuePad 送进来、还没落成会话里一条消息的投送请求：文字 → 请求 id，按发出的先后（同一文字发了两次时先发的先认领） */
 	const deliveries: { text: string; id: string }[] = [];
 	/** 本会话是某个会话的进程内子会话（子代理）时，它在登记表里的键（会话文件路径）：状态只进登记表，不开 socket */
@@ -240,6 +259,20 @@ export default function (pi: any) {
 		for (const client of clients) write(client, { t: "info", ...info });
 	}
 
+	/** 此刻的模型配置；Pi 里换了模型、强度后重新取。可选的模型与 Pi 的 /model 一致：配了范围（`--models`、`enabledModels`）就是范围内的，
+	 * 否则是已配好密钥的全部；当前模型总在其中。 */
+	function modelInfo(): Pick<Info, "model" | "thinking" | "models"> {
+		const scoped: any[] = (ctx.scopedModels ?? []).map((entry: any) => entry.model);
+		const choices: any[] = scoped.length > 0 ? scoped : ctx.modelRegistry.getAvailable();
+		const current = ctx.model;
+		const listed = current && !choices.some((m) => m.provider === current.provider && m.id === current.id) ? [...choices, current] : choices;
+		return {
+			model: current ? describeModel(current) : null,
+			thinking: current ? pi.getThinkingLevel() : null,
+			models: listed.map(describeModel),
+		};
+	}
+
 	async function hello() {
 		const terminalEnv: Record<string, string> = {};
 		for (const key of TERMINAL_ENV_KEYS) if (process.env[key]) terminalEnv[key] = process.env[key]!;
@@ -252,7 +285,6 @@ export default function (pi: any) {
 			pid: process.pid,
 			cwd: ctx.cwd,
 			mode: ctx.mode,
-			model: ctx.model?.id ?? null,
 			tty: await tty,
 			term: terminalEnv,
 			state: { ...tracker.derive(), since, busySince },
@@ -270,6 +302,7 @@ export default function (pi: any) {
 			if (command?.t === "send") return handleSend(command, ack, reject);
 			if (command?.t === "answer") return handleAnswer(command, ack, reject);
 			if (command?.t === "reload") return handleReload(ack);
+			if (command?.t === "config") return void handleConfig(command, ack, reject).catch((error: any) => reject(`failed: ${error?.message ?? error}`));
 			if (command?.t === "paste") {
 				if (typeof command.text !== "string") return reject("bad_request");
 				// RPC 模式下 pasteToEditor 退化为 set_editor_text 请求转给客户端
@@ -326,6 +359,22 @@ export default function (pi: any) {
 			if (file) await command.switchSession(file);
 		},
 	});
+
+	/** 换模型、思考强度：先换模型（需要该提供方已配好密钥）再设强度，强度由 Pi 按新模型支持的范围夹取。 */
+	async function handleConfig(command: any, ack: (f: object) => void, reject: (e: string) => void) {
+		const { model, thinking } = command;
+		const validModel = model === undefined || (typeof model?.provider === "string" && typeof model?.id === "string");
+		const validThinking = thinking === undefined || THINKING_LEVELS.includes(thinking);
+		if (!validModel || !validThinking || (model === undefined && thinking === undefined)) return reject("bad_request");
+		if (model) {
+			const target = ctx.modelRegistry.find(model.provider, model.id);
+			if (!target) return reject("unknown_model");
+			if (!(await pi.setModel(target))) return reject("no_auth");
+		}
+		if (thinking) pi.setThinkingLevel(thinking);
+		updateInfo(modelInfo());
+		ack({ ok: true });
+	}
 
 	/** 回答当前弹窗：标识必须是正在等的那个（答过或换了弹窗就拒绝），答案的类型与选项要对得上。 */
 	function handleAnswer(command: any, ack: (f: object) => void, reject: (e: string) => void) {
@@ -490,6 +539,7 @@ export default function (pi: any) {
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
 			question: null,
 			subagents: [],
+			...modelInfo(),
 		};
 		asking = null;
 		captureDialogs(ctx.ui);
@@ -505,6 +555,8 @@ export default function (pi: any) {
 		unregisterSubsession();
 		stop(event.reason);
 	});
+	pi.on("model_select", () => updateInfo(modelInfo()));
+	pi.on("thinking_level_select", () => updateInfo(modelInfo()));
 	pi.on("session_info_changed", (event: any) => updateInfo({ name: event.name ?? null }));
 	pi.on("message_end", (event: any) => {
 		if (event.message?.role !== "user") return;

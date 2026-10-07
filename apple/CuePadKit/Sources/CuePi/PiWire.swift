@@ -4,7 +4,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端支持的协议版本；hello 不同版本一律拒绝
-    static let protocolVersion = 1
+    static let protocolVersion = 2
 
     struct State: Decodable {
         var kind: String
@@ -46,7 +46,6 @@ enum PiWire {
         var pid: Int32
         var cwd: String
         var mode: String
-        var model: String?
         var tty: String?
         var term: [String: String]
         var state: State
@@ -59,31 +58,40 @@ enum PiWire {
         var firstMessage: String?
         var question: PiPrompt?
         var subagents: [PiSubagent]?
+        var model: PiModel?
+        var thinking: String?
+        var models: [PiModel]?
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, sessionFile, pid, cwd, mode, model, tty, term, state, launchToken, hosted
-            case name, firstMessage, question, subagents
+            case extensionVersion, sessionId, sessionFile, pid, cwd, mode, tty, term, state, launchToken, hosted
+            case name, firstMessage, question, subagents, model, thinking, models
         }
 
         var info: Info {
-            Info(name: name, firstMessage: firstMessage, question: question, subagents: subagents)
+            Info(name: name, firstMessage: firstMessage, question: question, subagents: subagents, model: model, thinking: thinking, models: models)
         }
     }
 
-    /// 会话名、首条用户消息（扩展 v3 起）、等你回答的弹窗（v4 起）与子代理（v5 起）；旧扩展没有的为 nil。
+    /// 会话名、首条用户消息（扩展 v3 起）、等你回答的弹窗（v4 起）、子代理（v5 起）与模型配置（协议 v2 起）；没有的为 nil。
     /// 问答近况不走这里：对话与摘要只来自会话文件（`PiHistory`）。
     struct Info: Decodable {
         var name: String?
         var firstMessage: String?
         var question: PiPrompt?
         var subagents: [PiSubagent]?
+        var model: PiModel?
+        var thinking: String?
+        var models: [PiModel]?
 
         func apply(to session: inout PiSession) {
             session.name = name
             session.firstMessage = firstMessage
             session.question = question
             session.subagents = subagents ?? []
+            session.model = model
+            session.thinking = thinking
+            session.availableModels = models ?? []
         }
     }
 
@@ -149,6 +157,18 @@ enum PiWire {
     }
 
     static func reloadCommand(id: String) throws -> Data { try encodeLine(ReloadCommand(id: id)) }
+
+    private struct ConfigCommand: Encodable {
+        struct Model: Encodable { var provider: String; var id: String }
+        var t = "config"
+        var id: String
+        var model: Model?
+        var thinking: String?
+    }
+
+    static func configCommand(id: String, model: PiModelRef?, thinking: String?) throws -> Data {
+        try encodeLine(ConfigCommand(id: id, model: model.map { .init(provider: $0.provider, id: $0.id) }, thinking: thinking))
+    }
 
     private struct AnswerCommand<Value: Encodable>: Encodable {
         var t = "answer"

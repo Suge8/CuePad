@@ -19,7 +19,7 @@ struct MacSyncTests {
     ) -> CuePi.PiSession {
         CuePi.PiSession(
             id: "\(sessionID).\(pid)", sessionID: sessionID, sessionFile: nil, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
-            mode: "tui", model: nil, terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
+            mode: "tui", terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
     }
 
     private func changes(_ items: [PiSessionChange]) -> AsyncStream<PiSessionChange> {
@@ -151,6 +151,26 @@ struct MacSyncTests {
         #expect(stored.detail == nil)
     }
 
+    /// 当前模型、思考强度与可选模型写成同步记录里的结构化字段；Pi 报的新强度（本版本不认识）原样留着。
+    @Test func 会话的模型与思考强度和可选模型写进同步记录() async throws {
+        let sonnet = PiModel(provider: "anthropic", id: "sonnet", name: "Sonnet", thinkingLevels: ["off", "low"])
+        let opus = PiModel(provider: "anthropic", id: "opus", name: "Opus", thinkingLevels: ["off", "high", "ultra"])
+        var configured = session("s1")
+        configured.model = opus
+        configured.thinking = "high"
+        configured.availableModels = [sonnet, opus]
+        try await services.consumePiChanges(changes([.appeared(configured)]))
+
+        let stored = try #require(try await services.store.allPiSessionStates().first)
+        #expect(stored.model == PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high]))
+        #expect(stored.thinking == .known(.high))
+        #expect(stored.models.map(\.key.id) == ["sonnet", "opus"])
+
+        configured.thinking = "ultra"
+        try await services.consumePiChanges(changes([.infoChanged(configured)]))
+        #expect(try await services.store.allPiSessionStates().first?.thinking == .unknown("ultra"))
+    }
+
     @Test func 等你回答的弹窗写进同步记录() async throws {
         var asked = session("s1", state: .waitingUser(kind: "select", title: "选哪个？"))
         asked.question = PiPrompt(id: "p-1", kind: "select", text: "选哪个？", options: ["A", "B"])
@@ -223,6 +243,35 @@ struct MacSyncTests {
         #expect(done.status == .known(.succeeded))
         #expect(rig.channels.calls == [.answer(.option("覆盖"), "p-1", "sess-1.100")])
         #expect(try await services.store.sendRecords().isEmpty)
+    }
+
+    @Test func 手机的配置请求交给桥改模型与思考强度_不写发送记录() async throws {
+        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
+        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestConfig(
+            PiConfig(model: PiModelKey(provider: "anthropic", id: "opus"), thinking: .high),
+            to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.channels.calls == [.configure(PiModelRef(provider: "anthropic", id: "opus"), "high", "sess-1.100")])
+        #expect(try await services.store.sendRecords().isEmpty)
+    }
+
+    /// 手机上改配置：请求发给会话所在的那台 Mac，写出后立即上传（与发送、作答同一条通路）。
+    @Test(.timeLimit(.minutes(1)))
+    func 请求改配置写给会话所在的Mac并立即上传() async throws {
+        try await PiStateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .settled, title: "远处")
+        let session = try #require(try await services.store.allPiSessionStates().first)
+        var uploads = rig.sync.uploads.stream.makeAsyncIterator()
+
+        let request = try await services.configure(PiConfig(thinking: .low), for: session)
+
+        #expect(request.hostID == "mac-other" && request.config == PiConfig(thinking: .low) && request.target.ref == "far")
+        #expect(await uploads.next() == request.id.uuidString.lowercased())
     }
 
     /// Mac 主动拉取的条件看桥上真的连着的会话，不看资料库里的状态记录（记录可能是没来得及标为结束的旧会话）；

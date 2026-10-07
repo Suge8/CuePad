@@ -33,7 +33,7 @@ struct BridgeClientTests {
         #expect(s.pid == getpid())
         #expect(s.cwd.path == "/work/project")
         #expect(s.mode == "tui")
-        #expect(s.model == "test-model")
+        #expect(s.model?.id == "test-model" && s.thinking == "off")
         #expect(s.sessionFile?.path == "/work/session.jsonl")
         #expect(s.state == .idle)
         #expect(s.terminal == PiTerminal(tty: "ttys009", program: "ghostty", bundleID: "com.mitchellh.ghostty",
@@ -42,6 +42,50 @@ struct BridgeClientTests {
 
         let l = try #require(session(late.id))
         #expect(l.sessionFile == nil && l.model == nil && l.terminal == PiTerminal())
+    }
+
+    // MARK: 模型与思考强度
+
+    private let sonnet = FakeExtension.WireModel(provider: "anthropic", id: "sonnet", name: "Sonnet", thinking: ["off", "low", "medium"])
+    private let opus = FakeExtension.WireModel(provider: "anthropic", id: "opus", name: "Opus", thinking: ["off", "high", "max"])
+
+    @Test func modelThinkingAndChoicesComeFromHelloAndFollowInfoUpdates() async throws {
+        let ext = FakeExtension(directory: dir, options: .init(model: sonnet, thinking: "low", models: [sonnet, opus]))
+        try ext.start()
+        try bridge.start()
+        let log = ChangeLog(bridge)
+        try await eventually("hello 带模型") { session(ext.id) != nil }
+
+        let first = try #require(session(ext.id))
+        #expect(first.model == PiModel(provider: "anthropic", id: "sonnet", name: "Sonnet", thinkingLevels: ["off", "low", "medium"]))
+        #expect(first.thinking == "low" && first.availableModels.map(\.id) == ["sonnet", "opus"])
+
+        ext.setModel(opus, thinking: "high", models: [sonnet, opus])
+        try await eventually("info 换了模型与强度") { session(ext.id)?.model?.id == "opus" && session(ext.id)?.thinking == "high" }
+        #expect(log.changes.contains { if case .infoChanged(let s) = $0 { s.model?.id == "opus" } else { false } })
+    }
+
+    @Test func configureSendsTheCommandAndAShutOutModelIsRejected() async throws {
+        let ext = FakeExtension(directory: dir)
+        ext.onCommand = { _, command in
+            (command["model"] as? [String: String])?["id"] == "gone" ? ["ok": false, "error": "unknown_model"] : ["ok": true]
+        }
+        try ext.start()
+        try bridge.start()
+        try await eventually("发现") { session(ext.id) != nil }
+
+        try await bridge.configure(model: PiModelRef(provider: "anthropic", id: "opus"), thinking: "high", in: ext.id)
+        let sent = try #require(ext.commands.last?.json)
+        #expect(sent["t"] as? String == "config" && sent["thinking"] as? String == "high")
+        #expect(sent["model"] as? [String: String] == ["provider": "anthropic", "id": "opus"])
+
+        try await bridge.configure(thinking: "off", in: ext.id)
+        #expect(ext.commands.last?.json["model"] == nil)
+
+        await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+            try await bridge.configure(model: PiModelRef(provider: "anthropic", id: "gone"), in: ext.id)
+        }
+        #expect(PiBridgeError.rejected("unknown_model").errorDescription?.contains("找不到") == true)
     }
 
     @Test func hellosSnapshotReflectsStateAtConnectTime() async throws {

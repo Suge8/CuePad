@@ -57,7 +57,6 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public let cwd: URL
     /// Pi 运行模式：`tui` / `rpc` / …
     public let mode: String
-    public let model: String?
     public let terminal: PiTerminal
     /// 该会话加载的扩展版本；低于 `PiExtensionBundle.version` 说明需要重启会话才能用上新扩展
     public let extensionVersion: Int
@@ -80,12 +79,49 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var subagents: [PiSubagent] = []
     /// CuePad 在后台托管的 Pi（RPC 模式，没有终端界面）：启动时经环境变量 `CUEPAD_HOSTED` 告诉扩展，扩展在 hello 里带回
     public internal(set) var hosted = false
+    /// 当前模型、思考强度（`off` … `max`）与可以换成的模型（协议 v2、扩展 v13 起）；未选模型时 `model` 与 `thinking` 为 nil
+    public internal(set) var model: PiModel? = nil
+    public internal(set) var thinking: String? = nil
+    public internal(set) var availableModels: [PiModel] = []
 
     public var hasOutdatedExtension: Bool { extensionVersion < PiExtensionBundle.version }
 
     /// 会话的显示名，规则见 `PiSessionName`。旧扩展不报名字与消息，显示工作目录名。
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
+    }
+}
+
+/// 一个模型的标识：提供方加模型 id（同一个 id 可以出自不同提供方）。
+public struct PiModelRef: Sendable, Hashable, Equatable {
+    public var provider: String
+    public var id: String
+
+    public init(provider: String, id: String) {
+        self.provider = provider
+        self.id = id
+    }
+}
+
+/// 会话可用的一个模型：显示名与它支持的思考强度（Pi 的 `getSupportedThinkingLevels`：不支持思考的只有 `off`）。
+public struct PiModel: Sendable, Equatable, Decodable {
+    public var provider: String
+    public var id: String
+    public var name: String
+    public var thinkingLevels: [String]
+
+    public var ref: PiModelRef { PiModelRef(provider: provider, id: id) }
+
+    public init(provider: String, id: String, name: String, thinkingLevels: [String]) {
+        self.provider = provider
+        self.id = id
+        self.name = name
+        self.thinkingLevels = thinkingLevels
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case provider, id, name
+        case thinkingLevels = "thinking"
     }
 }
 
@@ -233,7 +269,7 @@ public enum PiBridgeError: Error, Equatable {
     case sessionEnded
     case ackTimeout
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
-    /// `bad_answer`（答案类型或选项不对）
+    /// `bad_answer`（答案类型或选项不对）；配置时还有 `unknown_model`（模型不在 Pi 的模型表里）、`no_auth`（该提供方没配好密钥）
     case rejected(String)
 }
 
@@ -247,6 +283,8 @@ extension PiBridgeError: LocalizedError {
         case .ackTimeout: "Pi 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Pi 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
+    case .rejected("unknown_model"): "这台 Mac 上的 Pi 里找不到这个模型"
+    case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
         case .rejected(let reason): "Pi 拒绝了这条消息：\(reason)"
         }
     }

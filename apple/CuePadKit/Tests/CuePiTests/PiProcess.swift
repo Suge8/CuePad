@@ -46,7 +46,7 @@ final class PiProcess: @unchecked Sendable {
     /// - Parameter sessionFile: 用 `--session` 打开这个会话文件。
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
          oneShotPrompt: String? = nil, firecode: Bool = false, modelInAgentDirectory: Bool = false,
-         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:]) async throws {
+         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = []) async throws {
         ownsRoot = other == nil
         root = try other?.root ?? makeTempDirectory()
         cwd = root.appending(path: "work")
@@ -62,6 +62,7 @@ final class PiProcess: @unchecked Sendable {
         let modelLoaded = firecode || modelInAgentDirectory || other != nil
 
         var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + Self.quietArguments
+        args += extraArguments
         if let sessionFile { args += ["--session", sessionFile.path] }
         if !modelLoaded { args += ["-e", fixtures.appending(path: "fake-model.ts").path] }
         for e in extraExtensions { args += ["-e", fixtures.appending(path: e).path] }

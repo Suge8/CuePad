@@ -94,12 +94,23 @@ final class ChangeLog {
 
 /// 扮演 Pi 里的桥扩展，让客户端测试不依赖 Pi。字节协议见 CuePi 的 README 与 `PiWire`。
 final class FakeExtension: @unchecked Sendable {
+    /// 线上的模型对象（`provider`、`id`、`name`、支持的思考强度 `thinking`）
+    struct WireModel: Sendable {
+        var provider = "test"
+        var id: String
+        var name = "Test"
+        var thinking: [String] = ["off"]
+        var json: [String: Any] { ["provider": provider, "id": id, "name": name, "thinking": thinking] }
+    }
+
     struct Options: Sendable {
-        var protocolVersion = 1
+        var protocolVersion = 2
         var extensionVersion = 1
         var cwd = "/work/project"
         var mode = "tui"
-        var model: String? = "test-model"
+        var model: WireModel? = WireModel(id: "test-model")
+        var thinking: String? = "off"
+        var models: [WireModel] = []
         var sessionFile: String? = "/work/session.jsonl"
         var tty: String? = "ttys009"
         var socketMode: mode_t = 0o600
@@ -212,7 +223,9 @@ final class FakeExtension: @unchecked Sendable {
             "state": lock.withLock { currentState }.merging(["since": Self.nowMillis]) { a, _ in a },
         ]
         msg["sessionFile"] = options.sessionFile ?? NSNull()
-        msg["model"] = options.model ?? NSNull()
+        msg["model"] = options.model?.json ?? NSNull()
+        msg["thinking"] = options.thinking ?? NSNull()
+        msg["models"] = options.models.map(\.json)
         msg["tty"] = options.tty ?? NSNull()
         return msg
     }
@@ -234,6 +247,11 @@ final class FakeExtension: @unchecked Sendable {
 
     private func broadcast(_ object: [String: Any]) {
         for conn in lock.withLock({ connections }) { write(object, to: conn) }
+    }
+
+    /// 发 `info`：整条替换（与真扩展一样总是带全部字段）。
+    func setModel(_ model: WireModel?, thinking: String?, models: [WireModel]) {
+        broadcast(["t": "info", "model": model?.json ?? NSNull(), "thinking": thinking ?? NSNull(), "models": models.map(\.json)])
     }
 
     /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。

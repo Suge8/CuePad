@@ -44,7 +44,7 @@ struct RealPiTests {
             #expect(s.pid == pi.pid)
             #expect(s.cwd.resolvingSymlinksInPath().path == pi.cwd.resolvingSymlinksInPath().path)
             #expect(s.mode == "rpc")
-            #expect(s.model == "echo")
+            #expect(s.model?.id == "echo" && s.thinking == "off")
             #expect(s.extensionVersion == PiExtensionBundle.version && !s.hasOutdatedExtension)
             #expect(s.state == .idle)
             #expect(s.terminal.program == "test-term" && s.terminal.bundleID == "com.example.term")
@@ -52,6 +52,39 @@ struct RealPiTests {
             #expect(s.sessionFile?.path.hasPrefix(pi.paths.sessionsDirectory.resolvingSymlinksInPath().path) == true
                     || s.sessionFile?.path.hasPrefix(pi.paths.sessionsDirectory.path) == true)
         }
+    }
+
+    /// 换模型与思考强度走真实 Pi 的扩展接口：会话上报的模型、强度与可选列表随之更新；模型不支持的强度被 Pi 夹取，找不到的模型被拒绝。
+    @Test func configureSwitchesTheRealSessionsModelAndThinking() async throws {
+        try await withRig { _, bridge, s in
+            #expect(s.availableModels.map(\.id).sorted() == ["echo", "echo-b", "echo-think"])
+            #expect(s.availableModels.first { $0.id == "echo" }?.thinkingLevels == ["off"])
+            #expect(s.availableModels.first { $0.id == "echo-think" }?.thinkingLevels == ["off", "minimal", "low", "medium", "high"])
+
+            try await bridge.configure(model: PiModelRef(provider: "fake", id: "echo-think"), thinking: "high", in: s.id)
+            try await eventually("上报跟上") { bridge.sessions.first?.model?.id == "echo-think" && bridge.sessions.first?.thinking == "high" }
+
+            try await bridge.configure(thinking: "low", in: s.id)
+            try await eventually("只改强度") { bridge.sessions.first?.thinking == "low" }
+
+            try await bridge.configure(model: PiModelRef(provider: "fake", id: "echo"), thinking: "high", in: s.id)
+            try await eventually("不支持思考的模型把强度夹到 off") { bridge.sessions.first?.model?.id == "echo" && bridge.sessions.first?.thinking == "off" }
+
+            await #expect(throws: PiBridgeError.rejected("unknown_model")) {
+                try await bridge.configure(model: PiModelRef(provider: "fake", id: "nope"), in: s.id)
+            }
+            await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.configure(thinking: "ultra", in: s.id) }
+        }
+    }
+
+    /// 配了模型范围（`--models`）时，手机可选的就是范围内的（与 Pi 的 /model 一致）；当前模型总在其中。
+    @Test func choicesFollowPisModelScopeAndAlwaysIncludeTheCurrentModel() async throws {
+        let pi = try await PiProcess(extraArguments: ["--models", "fake/echo-think"])
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        try await eventually("桥发现真实 Pi 会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
+        #expect(bridge.sessions[0].availableModels.map(\.id).sorted() == ["echo", "echo-think"])  // echo 是当前模型，不在范围内也列出
     }
 
     @Test func aPromptRunReportsStatesInOrderAndHistoryShowsTheTurn() async throws {
