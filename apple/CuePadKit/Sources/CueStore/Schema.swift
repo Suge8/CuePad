@@ -113,13 +113,26 @@ enum Schema {
   /// 还没上传过的"要做"卡片（上一步从任务迁来的，没有同步元数据）换新 id：指向它们的上级、冲突原卡、发送记录与投送请求跟着改。
   /// 新 id 只由旧 id 算出，不论各设备先后升级都得到同一个；改了引用的行顺带登记为待上传，别的设备才跟上。
   /// 没迁移过的库里没有这样的卡，什么都不做。
+  /// 别的设备可能已经升级、把同一个任务以新 id 同步到了本机（本机还停在上一步）：新 id 已存在时不能再改名（主键冲突会让升级失败、
+  /// App 启动即崩溃），同一个任务留较新的一份——本机较新就把内容并到新 id 那条上（它的同步元数据留着，改动自然待上传）。
   private static func renameMigratedTasks(_ db: SQLite) throws {
     let stale = try db.query("SELECT id FROM cards WHERE todoAt IS NOT NULL AND id NOT IN (SELECT recordName FROM syncRecords)") { $0.text(0) }
     let now = Date.stamp
     for old in stale {
       let new = DeterministicID.uuid("task-card/\(old)").uuidString.lowercased()
-      try db.run("UPDATE cards SET id = ? WHERE id = ?", [new, old])
-      try db.run(#"UPDATE searchIndex SET refID = ? WHERE searchIndex MATCH 'refID: "' || ? || '"'"#, [new, old])
+      if try db.first("SELECT 1 FROM cards WHERE id = ?", [new], { _ in true }) == true {
+        try db.run(
+          """
+          UPDATE cards SET projectID = o.projectID, body = o.body, isPinned = o.isPinned, variableValues = o.variableValues,
+            sortKey = o.sortKey, conflictOf = o.conflictOf, deletedAt = o.deletedAt, createdAt = o.createdAt, modifiedAt = o.modifiedAt,
+            parentID = o.parentID, todoAt = o.todoAt, startedAt = o.startedAt, completedAt = o.completedAt, piSessionID = o.piSessionID
+          FROM cards o WHERE o.id = ?1 AND cards.id = ?2 AND o.modifiedAt > cards.modifiedAt
+          """, [old, new])
+        try db.run("DELETE FROM cards WHERE id = ?", [old])
+      } else {
+        try db.run("UPDATE cards SET id = ? WHERE id = ?", [new, old])
+        try db.run(#"UPDATE searchIndex SET refID = ? WHERE searchIndex MATCH 'refID: "' || ? || '"'"#, [new, old])
+      }
       for (table, column) in [("cards", "parentID"), ("cards", "conflictOf"), ("sendRecords", "cardID"), ("deliveryRequests", "cardID")] {
         try db.run("UPDATE \(table) SET \(column) = ?, modifiedAt = ? WHERE \(column) = ?", [new, now, old])
       }
