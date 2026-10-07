@@ -233,6 +233,9 @@ private struct OutgoingBubble: View {
 private struct LiveStatus: View {
     let session: PiSessionState
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 子代理列表就地展开着。
+    @State private var showsSubagents = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -242,19 +245,59 @@ private struct LiveStatus: View {
                     .lineLimit(1).truncationMode(.middle)
                     .shimmering()
             }
-            ForEach(Array(session.subagents.enumerated()), id: \.offset) { _, agent in
-                HStack(spacing: 6) {
-                    PiStateDot(state: agent.workState, size: 7)
-                    Text(agent.name).foregroundStyle(palette.ink2).lineLimit(1)
-                    Text(agent.activityLabel).foregroundStyle(agent.workState.tint(palette))
-                }
-                .font(.subheadline)
-                .accessibilityElement(children: .combine)
-            }
+            if let summary = PiSubagentSummary(session.subagents) { subagents(summary) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .transition(.entry)
+    }
+
+    /// 一行汇总"子代理 2/3 在跑"，点它就地展开每个子代理（状态点、名字、状态词），再点收起。
+    private func subagents(_ summary: PiSubagentSummary) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button { showsSubagents.toggle() } label: {
+                HStack(spacing: 6) {
+                    PiStateDot(state: summary.lead, size: 7)
+                    Text("子代理 \(summary.running)/\(summary.total) 在跑").foregroundStyle(palette.ink2).monospacedDigit()
+                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                        .rotationEffect(.degrees(showsSubagents ? 180 : 0))
+                        .accessibilityHidden(true)
+                }
+                .font(.subheadline)
+                .frame(minHeight: 32)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(showsSubagents ? "已展开" : "已收起")
+            if showsSubagents {
+                ForEach(Array(session.subagents.enumerated()), id: \.offset) { _, agent in
+                    HStack(spacing: 6) {
+                        PiStateDot(state: agent.workState, size: 7)
+                        Text(agent.name).foregroundStyle(palette.ink2).lineLimit(1)
+                        Text(agent.activityLabel).foregroundStyle(agent.workState.tint(palette))
+                    }
+                    .font(.subheadline)
+                    .padding(.leading, 13)
+                    .accessibilityElement(children: .combine)
+                    .transition(.opacity)
+                }
+            }
+        }
+        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: showsSubagents)
+    }
+}
+
+/// 子代理的一行汇总：几个在跑、共几个，状态点按最需要注意的那个（等你确认 → 出错 → 工作中 → 空闲）。没有子代理是 nil。
+nonisolated struct PiSubagentSummary: Equatable {
+    let running: Int
+    let total: Int
+    let lead: Open<PiWorkState>
+
+    init?(_ agents: [PiSubagentState]) {
+        guard let lead = agents.max(by: { $0.workState.urgency < $1.workState.urgency }) else { return nil }
+        running = agents.filter { $0.activity == .known(.working) }.count
+        total = agents.count
+        self.lead = lead.workState
     }
 }
 

@@ -168,7 +168,7 @@ private struct DigestKey: Equatable {
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。发出后清空，请求马上贴到对话末尾。
 private struct ReplyBar: View {
     let session: PiSessionState
-    /// 模型与思考强度的显示值（在线会话聚焦时放在"＋"上方）。
+    /// 模型与思考强度的显示值（在线会话聚焦时放在工具排"＋"的右边）。
     let config: PiConfigShown?
     @Binding var draft: ComposerDraft
     /// 在看历史：收成短胶囊。
@@ -297,7 +297,7 @@ private struct ReplyBar: View {
     }
 }
 
-/// 回复框左列"＋"上方的两颗小圆钮：模型（芯片）、思考强度（灯泡），点开是菜单，菜单头写当前值；思考强度只列当前模型支持的。
+/// 回复框工具排里"＋"右边的两颗小圆钮：模型（芯片）、思考强度（灯泡），点开是菜单，菜单头写当前值；思考强度只列当前模型支持的。
 /// 换了之后图标轻轻跳动直到送达，显示值由会话记录与配置请求推出（`SessionDigest.config`），没换成的原因写在输入框头部。
 private struct PiConfigTools: View {
     let session: PiSessionState
@@ -307,7 +307,7 @@ private struct PiConfigTools: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(spacing: 0) {
+        HStack(spacing: 0) {
             Menu {
                 Section("模型 · \(shown.model?.name ?? "未知")") {
                     Picker("模型", selection: Binding(get: { shown.model?.key }, set: { if let key = $0 { configure(PiConfig(model: key)) } })) {
@@ -337,14 +337,14 @@ private struct PiConfigTools: View {
         .buttonStyle(.plain)
     }
 
-    /// 比"＋"小一号的圆：看得见的 30，点得到的 44，与"＋"同一列居中。
+    /// 比"＋"小一号的圆：看得见的 30，点得到的 44，与"＋"同一排居中。
     private func glyph(_ systemImage: String) -> some View {
         Image(systemName: systemImage).font(.footnote.weight(.semibold))
             .foregroundStyle(palette.ink2)
             .symbolEffect(.pulse, isActive: shown.pending)
             .frame(width: 30, height: 30)
             .background(palette.fill, in: .circle)
-            .frame(width: 50, height: 44)
+            .frame(width: 44, height: Composer<EmptyView, EmptyView, EmptyView>.slot)
             .contentShape(.circle)
     }
 

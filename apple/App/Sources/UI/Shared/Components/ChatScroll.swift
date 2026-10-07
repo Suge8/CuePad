@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// 贴着最新（规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处（自己滚回、点"新消息"）重新贴上；
-/// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。解除后来了新内容才出"新消息"。
+/// 贴着最新（规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处（自己滚回、点"回到最新"）重新贴上；
+/// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。离最新处超过一屏出"回到最新"圆钮，离开后来了新内容圆钮带一个点。
 /// 顶栏跟阅读走（同 Safari）：往历史里翻就让开，往最新那边回滑一小段（`revealDistance`）就回来，回到最新一直在。
 nonisolated struct ChatFollow: Equatable {
     private(set) var atNewest = true
+    /// 离最新处超过一屏：出"回到最新"圆钮。
     private(set) var showsJump = false
+    /// 离开最新处后来过新内容：圆钮上带一个点。
+    private(set) var hasUnseen = false
     /// 请滚动区回到最新的次数（`jumpToNewest`）：滚动区看到它变了就滚过去。
     private(set) var jumps = 0
     /// 请滚动区跳到的那一条（`jump(to:)`）。
@@ -18,6 +21,8 @@ nonisolated struct ChatFollow: Equatable {
     private var travel: CGFloat = 0
 
     private static let revealDistance: CGFloat = 24
+    /// 离最新处这么近算"在最新处"。
+    static let slack: CGFloat = 24
 
     var showsHeader: Bool { atNewest || revealed }
 
@@ -26,10 +31,12 @@ nonisolated struct ChatFollow: Equatable {
         let request = UUID()
     }
 
-    mutating func scrolled(nearNewest: Bool, byUser: Bool) {
-        if nearNewest {
+    /// 滚动区此刻离最新处 `distance`（一屏高 `screen`）；`byUser`：是用户拖着或甩着带来的。
+    mutating func scrolled(distance: CGFloat, screen: CGFloat, byUser: Bool) {
+        showsJump = distance > screen
+        if distance <= Self.slack {
             atNewest = true
-            showsJump = false
+            hasUnseen = false
             revealed = false
         } else if byUser {
             atNewest = false
@@ -43,7 +50,7 @@ nonisolated struct ChatFollow: Equatable {
     }
 
     mutating func contentChanged() {
-        if !atNewest { showsJump = true }
+        if !atNewest { hasUnseen = true }
     }
 
     mutating func jumpToNewest() { jumps += 1 }
@@ -76,7 +83,8 @@ private struct ChatRow: ViewModifier {
 }
 
 /// 聊天式的滚动区（iOS 会话页、Mac 会话详情共用）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，
-/// 用户滚走后这些都不再挪动正在读的内容，来了新内容时可见区底部（输入框上方）浮出"新消息"，点它回到最新（`ChatFollow`）。
+/// 用户滚走后这些都不再挪动正在读的内容；离最新处超过一屏时可见区右下角（回复框右上方）浮出圆形"回到最新"，
+/// 离开后来过新内容时带一个点，点它回到最新（`ChatFollow`）。
 /// `followKey` 变了就算有新内容。减弱动态效果下滚动不做动画。
 ///
 /// iOS 上整个滚动区倒过来（转 180°，最新在偏移 0 处），内容按新到旧给出：打开、跟随、回到最新都是滚到偏移 0，
@@ -110,26 +118,19 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     #endif
     private static var newestEdge: Edge { inverted ? .top : .bottom }
 
-    /// 离最新处这么近算"在最新处"。
-    private static var slack: CGFloat { 24 }
-
     var body: some View {
-        // 滚动区自己铺到屏幕底（见 `scroll`），外框仍是两条栏之间：浮在上面的"新消息"与页面叠的东西都按可见区摆
+        // 滚动区自己铺到屏幕底（见 `scroll`），外框仍是两条栏之间：浮在上面的"回到最新"与页面叠的东西都按可见区摆
         Color.clear
             .background { scroll }
-            .overlay(alignment: .bottom) {
+            .overlay(alignment: .bottomTrailing) {
                 if follow.wrappedValue.showsJump {
-                    Button { follow.wrappedValue.jumpToNewest() } label: {
-                        Label("新消息", systemImage: "arrow.down").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink)
-                            .padding(.horizontal, 14).frame(minHeight: 36)
-                            .glass(in: .capsule, interactive: true)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.bottom, 10)
-                    .transition(.opacity)
+                    JumpToNewest(unseen: follow.wrappedValue.hasUnseen) { follow.wrappedValue.jumpToNewest() }
+                        .padding(.trailing, JumpToNewest.inset).padding(.bottom, JumpToNewest.inset)
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
-            .animation(Motion.quick, value: follow.wrappedValue.showsJump)
+            .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: follow.wrappedValue.showsJump)
+            .animation(Motion.quick, value: follow.wrappedValue.hasUnseen)
             .onChange(of: follow.wrappedValue.jumps) { toNewest() }
             .onChange(of: follow.wrappedValue.target) { _, target in
                 guard let target else { return }
@@ -157,13 +158,13 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         scroll
             .scrollPosition($position)
             .onScrollPhaseChange { _, phase in follow.wrappedValue.scrolling = phase == .interacting || phase == .decelerating }
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                if Self.inverted { return geometry.contentOffset.y + geometry.contentInsets.top <= Self.slack }
-                // containerSize 已扣掉上下 inset：可见区底边 = 偏移 + 顶部 inset + 容器高
-                return geometry.contentOffset.y + geometry.contentInsets.top + geometry.containerSize.height
-                    >= geometry.contentSize.height - Self.slack
-            } action: { _, near in
-                follow.wrappedValue.scrolled(nearNewest: near, byUser: follow.wrappedValue.scrolling)
+            .onScrollGeometryChange(for: Reading.self) { geometry in
+                // containerSize 已扣掉上下 inset：倒置时最新在偏移 0 处；正着排时可见区底边 = 偏移 + 顶部 inset + 容器高
+                let read = geometry.contentOffset.y + geometry.contentInsets.top
+                let distance = Self.inverted ? read : geometry.contentSize.height - read - geometry.containerSize.height
+                return Reading(distance: max(0, distance.rounded()), screen: geometry.containerSize.height.rounded())
+            } action: { _, reading in
+                follow.wrappedValue.scrolled(distance: reading.distance, screen: reading.screen, byUser: follow.wrappedValue.scrolling)
             }
             // 用户滚动的方向（顶栏回来或让开）：倒置时偏移变小是往最新走
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
@@ -177,12 +178,51 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             }
     }
 
+    /// 离最新处多远、一屏多高（取整：亚像素的抖动不触发更新）。
+    private struct Reading: Equatable {
+        var distance: CGFloat
+        var screen: CGFloat
+    }
+
     private func toNewest() {
         if reduceMotion {
             position.scrollTo(edge: Self.newestEdge)
         } else {
             withAnimation(Motion.quick) { position.scrollTo(edge: Self.newestEdge) }
         }
+    }
+}
+
+/// "回到最新"：回复框右上方一颗圆形玻璃钮，向下的箭头；离开后来过新内容时右上角带一个墨色的点。
+struct JumpToNewest: View {
+    let unseen: Bool
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    /// 点按区的边长与离可见区右、下边的距离。
+    static let size: CGFloat = 44
+    static let inset: CGFloat = 10
+    /// 它在可见区底部占的高（含上下留白）：右缘刻度区的下沿让到这之上。
+    static var clearance: CGFloat { size + 2 * inset }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.down").font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+                .frame(width: 40, height: 40)
+                .glass(in: .circle, interactive: true)
+                .overlay(alignment: .topTrailing) {
+                    if unseen {
+                        Circle().fill(palette.accent).frame(width: 10, height: 10)
+                            .overlay(Circle().strokeBorder(palette.desk, lineWidth: 2))
+                            .offset(x: -3, y: 3)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .frame(width: Self.size, height: Self.size)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(unseen ? "回到最新，有新内容" : "回到最新")
     }
 }
 
