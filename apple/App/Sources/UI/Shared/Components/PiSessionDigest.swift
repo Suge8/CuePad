@@ -64,6 +64,20 @@ nonisolated struct PiConfigShown: Equatable {
     var failure: String?
 }
 
+/// 会话页顶上固定的一句（不随对话滚走）：旧版扩展的会话怎么接上。
+struct PiRestartNotice: View {
+    let session: PiSessionState
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if session.state == .known(.incompatible) {
+            Callout(
+                tint: palette.attention, symbol: "arrow.clockwise.circle.fill",
+                text: "这个会话还在运行升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里退出 pi，再用 pi -c 接着这个会话。")
+        }
+    }
+}
+
 /// 对话里的提示块（等你确认的问题、出错）：一张纸，彩色只在行首的状态符号上（等你确认赭黄问号、出错胭脂叹号），
 /// 正文中性；`prominent` 时正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
 struct Callout<Accessory: View>: View {

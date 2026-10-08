@@ -58,9 +58,7 @@ struct PiConversation: View {
         if session.state == .known(.error) {
             Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
         }
-        if session.state == .known(.incompatible) {
-            Callout(tint: palette.attention, symbol: "arrow.clockwise.circle.fill", text: "这个会话还在运行升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里退出 pi，再用 pi -c 接着这个会话。")
-        }
+
     }
 }
 

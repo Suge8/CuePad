@@ -67,6 +67,7 @@ struct SessionPage: View {
         let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries)
         VStack(spacing: 0) {
             if let session = digest.session {
+                PiRestartNotice(session: session).padding(.horizontal, 24).padding(.top, 8).frame(maxWidth: Self.readingWidth)
                 conversation(session, digest)
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest.deliveries)
