@@ -157,18 +157,22 @@ struct CardRow: View {
     private var row: some View {
         let card = entry.card, text = entry.text
         return HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    if let project {
-                        Text(project?.name ?? "未分类")
-                            .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? palette.ink3)
-                    }
-                    Text(DateLabel.short(card.modifiedAt)).foregroundStyle(palette.ink3)
+            VStack(alignment: .leading, spacing: 4) {
+                // 标题在前、时间靠右，与其余列表同一种读法
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(marked(text.title.nonEmpty ?? "无标题")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
+                    Spacer(minLength: 0)
+                    Text(DateLabel.short(card.modifiedAt)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
                 }
-                .font(.caption.weight(.medium))
-                Text(marked(text.title.nonEmpty ?? "无标题")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
                 if !text.preview.isEmpty {
                     Text(marked(text.preview)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
+                }
+                if let project {
+                    HStack(spacing: 4) {
+                        ProjectGlyph(project: project, size: 10)
+                        Text(project?.name ?? "未分类")
+                    }
+                    .font(.caption).foregroundStyle(palette.ink3).padding(.top, 2)
                 }
             }
             .multilineTextAlignment(.leading)

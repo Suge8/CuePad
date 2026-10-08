@@ -50,7 +50,7 @@ extension DebugScene {
     }
 
     /// 任务三态与提示词：圆桌"乱序"的第一条提示词交给 notes 已回复、第二条交给 atlas 在处理、第三条没发（任务进行中）；
-    /// CuePad"投送超时"的提示词交给 notes 已回复（行上问要不要标记完成）；CuePad、Flow、圆桌各完成一条（先后完成）。
+    /// CuePad"投送超时"的提示词交给 notes 已回复（行尾出现"完成"）；CuePad、Flow、圆桌各完成一条（先后完成）。
     private static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
         guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }
         func prompts(_ prefix: String) async -> [Card] {
@@ -208,6 +208,31 @@ extension DebugScene {
         return PiModelState(model: opus, thinking: .known(.medium), models: [opus, luna])
     }()
 
+    /// 演示会话的斜杠命令清单：内置、扩展、提示词模板、技能各有几条（回复框输入 "/" 弹出的面板）。
+    private static let demoCommands = [
+        PiSlashCommand(name: "compact", summary: "压缩当前上下文，可附上说明", source: .known(.builtin), hint: "[说明]"),
+        PiSlashCommand(name: "name", summary: "设置会话名", source: .known(.builtin), hint: "<名字>"),
+        PiSlashCommand(name: "model", summary: "换模型", source: .known(.builtin), hint: "<提供方/模型>"),
+        PiSlashCommand(name: "thinking", summary: "设置思考强度", source: .known(.builtin), hint: "<强度>"),
+        PiSlashCommand(name: "new", summary: "开一个新会话", source: .known(.builtin)),
+        PiSlashCommand(name: "clone", summary: "在当前位置复制出一个新会话", source: .known(.builtin)),
+        PiSlashCommand(name: "reload", summary: "重新载入扩展、skill、提示词模板与上下文文件", source: .known(.builtin)),
+        PiSlashCommand(name: "plan", summary: "先列计划，确认后再动手", source: .known(.extension)),
+        PiSlashCommand(name: "review", summary: "审查当前分支的改动", source: .known(.prompt)),
+        PiSlashCommand(name: "changelog", summary: "按提交记录写更新说明", source: .known(.prompt)),
+        PiSlashCommand(name: "skill:deploy", summary: "按清单检查并部署到生产", source: .known(.skill)),
+        PiSlashCommand(name: "skill:frontend-design", summary: "做界面时先定视觉方向与密度", source: .known(.skill)),
+    ]
+
+    /// 演示会话的上下文用量（窗口 20 万 token）：多数宽裕，atlas 用到八成多（圆环变赭黄、说明里建议压缩），billing 刚压缩过。
+    private static let demoContexts: [String: PiContextUsage] = [
+        "atlas": PiContextUsage(tokens: 172_000, window: 200_000),
+        "homepage": PiContextUsage(tokens: 31_000, window: 200_000),
+        "cuepad": PiContextUsage(tokens: 96_000, window: 200_000),
+        "rename": PiContextUsage(tokens: 188_000, window: 200_000),
+        "billing": PiContextUsage(tokens: nil, window: 200_000),
+    ]
+
     /// 演示用的 Mac 端状态：各种状态的 Pi 会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store
@@ -258,7 +283,7 @@ extension DebugScene {
         for (id, state, detail, name, recap) in sessions {
             try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question,
-                modelState: demoModels)
+                modelState: demoModels, context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands)
             try? await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: [],
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))

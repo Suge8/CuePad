@@ -8,43 +8,58 @@ import SwiftUI
 /// 设置窗口的内容：外观、iCloud 同步与冲突副本、全局快捷键、投送、Pi 扩展。操作结果就地显示在对应行下。
 struct SettingsView: View {
     @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        @Bindable var settings = services.settings
-        Form {
-                Section("外观") {
-                    Picker("主题", selection: $settings.theme) {
-                        Text("跟随系统").tag(AppSettings.Theme.system)
-                        Text("浅色").tag(AppSettings.Theme.light)
-                        Text("深色").tag(AppSettings.Theme.dark)
-                    }
-                    .pickerStyle(.segmented)
-                }
-                SyncSection()
-                ConflictsSection()
-                Section("快捷键") {
-                    LabeledContent("显示或隐藏 CuePad") { ShortcutRecorder() }
-                }
-                Section {
-                    Toggle("投送到其他应用后按回车", isOn: $settings.autoSubmit)
-                    AccessibilityRow()
-                } header: {
-                    Text("投送")
-                } footer: {
-                    Text("投送到其他应用会写入剪贴板并在目标应用里粘贴，需要辅助功能授权；发给 Agent 会话不需要。")
-                }
-                if services.diagnostics.latest != nil { Section("诊断") { LastCrashRow() } }
-                Section {
-                    PiExtensionRow()
-                } header: {
-                    Text("Pi")
-                } footer: {
-                    Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把灵感和任务（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。")
-                }
-            }
-        .formStyle(.grouped)
-        .frame(width: 520, height: 640)
+        VStack(spacing: 0) {
+            form
+            Divider()
+            CommandLineToolBar()
+            Divider()
+            UpdateBar()
+        }
+        .frame(width: 520)
+        // 与主窗口同一种桌面色，不用系统的白底
+        .background(palette.desk)
         .onAppear { services.accessibility.refresh() }
+    }
+
+    private var form: some View {
+        @Bindable var settings = services.settings
+        return Form {
+            Section("外观") {
+                Picker("主题", selection: $settings.theme) {
+                    Text("跟随系统").tag(AppSettings.Theme.system)
+                    Text("浅色").tag(AppSettings.Theme.light)
+                    Text("深色").tag(AppSettings.Theme.dark)
+                }
+                .pickerStyle(.segmented)
+            }
+            SyncSection()
+            ConflictsSection()
+            Section("快捷键") {
+                LabeledContent("显示或隐藏 CuePad") { ShortcutRecorder() }
+            }
+            Section {
+                Toggle("投送到其他应用后按回车", isOn: $settings.autoSubmit)
+                AccessibilityRow()
+            } header: {
+                Text("投送")
+            } footer: {
+                Text("投送到其他应用会写入剪贴板并在目标应用里粘贴，需要辅助功能授权；发给 Agent 会话不需要。")
+            }
+            if services.diagnostics.latest != nil { Section("诊断") { LastCrashRow() } }
+            Section {
+                PiExtensionRow()
+            } header: {
+                Text("Pi")
+            } footer: {
+                Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把灵感和任务（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。")
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .frame(height: 640)
     }
 }
 

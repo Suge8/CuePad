@@ -128,10 +128,10 @@ struct CardEditorScreen: View {
         data.task?.title ?? data.project?.name ?? "未分类"
     }
 
-    /// 顶栏的一行："03:36 · 资料"；提示词是"提示词 · 03:36"。
+    /// 顶栏的一行："改于 03:36 · 资料"；提示词是"提示词 · 改于 03:36"。
     private static func detail(_ data: EditorData) -> String {
         let marks = [data.card.isPinned ? "资料" : nil].compactMap { $0 }
-        return ((data.task != nil ? ["提示词"] : []) + [DateLabel.short(data.card.modifiedAt)] + marks).joined(separator: " · ")
+        return ((data.task != nil ? ["提示词"] : []) + ["改于 \(DateLabel.short(data.card.modifiedAt))"] + marks).joined(separator: " · ")
     }
 
     /// 顶栏右边的"⋯"：从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
@@ -199,7 +199,7 @@ struct CardEditorScreen: View {
     }
 }
 
-/// 交给 Agent 的主按钮：朱砂胶囊（签名色只落在主动作上），在灵感纸页右下。
+/// 交给 Agent 的主按钮：靛青胶囊（签名色只落在主动作上），在灵感纸页右下。
 struct AgentHandButton: View {
     let action: () -> Void
     @Environment(\.palette) private var palette

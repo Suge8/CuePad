@@ -78,6 +78,20 @@ import Testing
     #expect(try await mac.store.deliveryRequest(made.id)?.config == config)
   }
 
+  /// 上下文余量与命令清单（Mac 写）经同步到手机；手机据此画圆环、弹斜杠面板。
+  @Test func contextUsageAndCommandsTravelToThePhone() async throws {
+    let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
+    let commands = [
+      PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]"),
+      PiSlashCommand(name: "skill:review", summary: "审查改动", source: .known(.skill)),
+    ]
+    try await recorder.update(sessionID: "s1", state: .settled, title: "t", context: PiContextUsage(tokens: 150_000, window: 200_000), commands: commands)
+    try await cloud.exchange()
+
+    let seen = try #require(try await phone.store.allPiSessionStates().first)
+    #expect(seen.context == PiContextUsage(tokens: 150_000, window: 200_000) && seen.commands == commands)
+  }
+
   @Test(.timeLimit(.minutes(1)))
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
     let executor = DeliveryExecutor(

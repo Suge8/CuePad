@@ -24,6 +24,7 @@ struct PiConfigControls: View {
                     configure(PiConfig(thinking: $0))
                 }
             }
+            if let context = shown.context { PiContextRing(session: session, usage: context) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }

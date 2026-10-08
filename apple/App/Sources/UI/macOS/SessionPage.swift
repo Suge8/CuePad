@@ -15,7 +15,8 @@ extension PiSessionState {
             lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagentStates,
-            pendingPrompt: recap?.pendingPrompt, model: config.model, thinking: config.thinking, models: config.models)
+            pendingPrompt: recap?.pendingPrompt, model: config.model, thinking: config.thinking, models: config.models,
+            context: session.contextUsage, commands: session.slashCommands)
     }
 }
 

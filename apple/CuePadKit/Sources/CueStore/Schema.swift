@@ -31,7 +31,10 @@ enum Schema {
   static let baseVersion = 17
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`。
-  static let upgrades: [Upgrade] = []
+  static let upgrades: [Upgrade] = [
+    // 18：会话记录加上下文余量与斜杠命令清单
+    "ALTER TABLE piSessionStates ADD COLUMN context TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;"
+  ]
 
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；旧于 `baseVersion` 的拒绝打开；其余旧的按 `upgrades` 就地升级；
   /// 比它新的是更新版本建的库，不打开。
@@ -74,7 +77,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hostID TEXT NOT NULL, title TEXT NOT NULL,
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
-      model TEXT, thinking TEXT, models TEXT,
+      model TEXT, thinking TEXT, models TEXT, context TEXT, commands TEXT,
       stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;

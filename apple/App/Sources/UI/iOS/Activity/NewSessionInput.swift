@@ -40,7 +40,10 @@ struct NewSessionInput: View {
                 Composer(
                     draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
                     cardsFrom: chosen?.project?.id, pinnedOpen: true,
-                    header: { header.padding(.horizontal, 12).padding(.top, 10) },
+                    header: {
+                        header.padding(.horizontal, 12).padding(.top, 10)
+                        status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)
+                    },
                     send: {
                         Button(action: launch) { SendGlyph(enabled: canStart) }
                             .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
@@ -70,7 +73,7 @@ struct NewSessionInput: View {
         }
     }
 
-    /// 头部：落点胶囊，右边一行进度或原因。
+    /// 头部：落点胶囊；进度或原因在它下面单独一行（放在右边会挤成两行、和胶囊对不齐）。
     private var header: some View {
         HStack(spacing: 8) {
             Menu {
@@ -91,8 +94,7 @@ struct NewSessionInput: View {
             }
             .disabled(inFlight)
             .accessibilityLabel("在哪开：\(chosen?.name ?? "没选")")
-            Spacer(minLength: 4)
-            status.font(.caption).lineLimit(2).multilineTextAlignment(.trailing)
+            Spacer(minLength: 0)
         }
     }
 
@@ -107,7 +109,7 @@ struct NewSessionInput: View {
                 DeliveryStatusLabel(request: request)
             }
         } else if !services.reachesPiHost {
-            SyncHint(status: services.syncStatus)
+            SyncHint(status: services.syncStatus, consequence: "发不到 Mac")
         }
     }
 

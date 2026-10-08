@@ -30,6 +30,7 @@ struct MenuBarPad: View {
                             .accessibilityAction { openSession(session.sessionID) }
                     }
                 }
+                .padding([.horizontal, .top], 6)
             }
             if workspace.isLibraryReady {
                 capture
@@ -41,9 +42,11 @@ struct MenuBarPad: View {
                 }
                 .foregroundStyle(palette.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(6)
             }
         }
-        .padding(14)
+        // 内边距 8：里面稿纸的圆角 14 + 8 = 外框 22，同心
+        .padding(8)
         .frame(width: 360)
         .glass(in: .rect(cornerRadius: 22))
         .modifier(SessionProjectsTracker(workspace: workspace))

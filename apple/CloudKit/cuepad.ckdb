@@ -90,6 +90,8 @@ DEFINE SCHEMA
         model         ENCRYPTED STRING,
         thinking      ENCRYPTED STRING,
         models        ENCRYPTED STRING,
+        context       ENCRYPTED STRING,
+        commands      ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

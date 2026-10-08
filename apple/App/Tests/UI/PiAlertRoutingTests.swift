@@ -2,7 +2,9 @@
 import CueStore
 import CueSync
 import Foundation
+import ObjectiveC
 import Testing
+import UserNotifications
 @testable import CuePad
 
 /// 点开锁屏上的 Pi 通知：直接打开触发它的那个会话的近况页；别的通知不改导航。
@@ -66,6 +68,36 @@ struct PiAlertRoutingTests {
         #expect(navigation.tab == .projects)
         #expect(navigation.agentPath.isEmpty)
         #expect(navigation.splitPath.isEmpty)
+    }
+
+    /// 系统（UIKit）交来的完成块只能在主线程调用，否则抛异常崩溃（真机点锁屏通知进 App 的崩溃）。
+    /// 像系统一样经 Objective-C 选择器调用代理：完成块必须在主线程执行，点开的通知也已记下。
+    @Test func 系统回调的完成块在主线程调用() async {
+        nonisolated final class Response: NSObject {
+            @objc let notification: NSObject
+            init(_ userInfo: [AnyHashable: Any]) { notification = Delivered(userInfo) }
+        }
+        nonisolated final class Delivered: NSObject {
+            @objc let request: UNNotificationRequest
+            init(_ userInfo: [AnyHashable: Any]) {
+                let content = UNMutableNotificationContent()
+                content.userInfo = userInfo
+                request = UNNotificationRequest(identifier: "t", content: content, trigger: nil)
+            }
+        }
+        typealias Entry = @convention(c) (AnyObject, Selector, UNUserNotificationCenter, UNNotificationResponse, @convention(block) () -> Void) -> Void
+        let selector = NSSelectorFromString("userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:")
+        let alerts = PiAlertCenter()
+        let entry = unsafeBitCast(class_getMethodImplementation(PiAlertCenter.self, selector), to: Entry.self)
+        let response = unsafeBitCast(Response(payload(subscription: "cuepad.pi.waiting", record: UUID())), to: UNNotificationResponse.self)
+
+        let onMain = await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
+            let handler: @convention(block) () -> Void = { done.resume(returning: Thread.isMainThread) }
+            entry(alerts, selector, .current(), response, handler)
+        }
+
+        #expect(onMain)
+        #expect(alerts.pendingTap != nil)
     }
 }
 #endif

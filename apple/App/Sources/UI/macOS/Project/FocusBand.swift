@@ -3,24 +3,20 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 介绍与任务：项目的一句话介绍 + 本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Pi 会话。没写介绍时不显示介绍一栏。
+/// 任务与 Agent：本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Agent 会话。介绍在页头。
 struct FocusBand: View {
     let data: ProjectPageData
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     private static let visibleTasks = 4
-    /// 窄于这个宽度时三栏改成上下排，每栏都能放下一整行任务。
-    private static let stackedBelow: CGFloat = 820
+    /// 窄于这个宽度时两栏改成上下排，每栏都能放下一整行任务。
+    private static let stackedBelow: CGFloat = 640
 
     var body: some View {
         // 由排版当场选：横排的理想宽度钉在 stackedBelow，放得下就横排，否则上下排。不读几何、不写状态
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 0) {
-                if let intro = data.project?.intro {
-                    column { introColumn(intro) }
-                    divider
-                }
                 column { tasks }
                 divider
                 column { PiColumn(project: data.project?.id, hasDirectory: data.project.flatMap { workspace.catalog?.directories[$0.id] } != nil) }
@@ -28,10 +24,6 @@ struct FocusBand: View {
             }
             .frame(minWidth: Self.stackedBelow, idealWidth: Self.stackedBelow, maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 0) {
-                if let intro = data.project?.intro {
-                    column { introColumn(intro) }
-                    Divider().overlay(palette.hair).padding(.horizontal, 18)
-                }
                 column { tasks }
                 Divider().overlay(palette.hair).padding(.horizontal, 18)
                 column { PiColumn(project: data.project?.id, hasDirectory: data.project.flatMap { workspace.catalog?.directories[$0.id] } != nil) }
@@ -39,13 +31,6 @@ struct FocusBand: View {
         }
         .paper(radius: 18)
         // 任务上的会话状态点开是它的详情（与侧栏、⌘K、任务面板同一个详情弹出层）
-    }
-
-    @ViewBuilder private func introColumn(_ intro: String) -> some View {
-        SectionLabel(text: "介绍", systemImage: "text.quote")
-        Text(intro).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
-            .fixedSize(horizontal: false, vertical: true)
-            .textSelection(.enabled)
     }
 
     @ViewBuilder private var tasks: some View {

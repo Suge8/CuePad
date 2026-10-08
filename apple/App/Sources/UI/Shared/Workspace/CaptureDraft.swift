@@ -1,13 +1,15 @@
 import CueStore
 import Foundation
 
-/// 随手记的文案（iOS 底部输入框、Mac 菜单栏面板共用）：记下的都是灵感；占位写明落到哪，记下后的提示写明落点，点它去那里。
+/// 随手记的文案（iOS 浮起的输入框、Mac 底部输入栏与菜单栏面板共用）：记下的都是灵感；落点写在头部的胶囊上，占位只写"记下灵感"，
+/// 只有 Mac 底部输入栏收成一行（没有胶囊）时占位带上落点；记下后的提示写明落点，点它去那里。
 nonisolated enum CaptureCopy {
     static let inbox = "未分类"
+    static let prompt = "记下灵感"
 
     static func destination(_ project: Project?) -> String { project?.name ?? inbox }
 
-    static func placeholder(to destination: String) -> String { "记下灵感 → \(destination)" }
+    static func placeholder(to destination: String) -> String { "\(prompt) → \(destination)" }
 
     static func saved(to destination: String) -> String { "已记到 \(destination)" }
 }

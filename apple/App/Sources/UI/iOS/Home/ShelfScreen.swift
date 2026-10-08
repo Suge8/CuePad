@@ -11,12 +11,18 @@ nonisolated struct ShelfData: Sendable {
         /// 最近修改的一张卡的标题与时间。
         var latest: (title: String, date: Date)?
         var id: UUID { project.id }
+
+        /// 介绍；没写介绍时是最近一条灵感。
+        @MainActor var summary: String? {
+            if let intro = project.intro { return intro }
+            return latest.map { "\($0.title.nonEmpty ?? "无标题") · \(DateLabel.short($0.date))" }
+        }
     }
 
     var entries: [Entry]
     /// 在线的 Pi 会话（带发给它的最近一条投送请求）：项目的状态点在界面上再按本机的规则算（`PiSessionListItem.byProject`）。
     var live: [PiSessionListItem]
-    /// 书架的"任务"一行：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，不显示这一行。
+    /// 进任务页的入口上写的数：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，没有入口。
     var tasks: TaskCounts?
     /// 正在推进的任务（进行中，最近开始的在前），书架最上面。
     var active: [TaskBoard.Row]
@@ -46,8 +52,8 @@ nonisolated struct ShelfData: Sendable {
 }
 
 /// iPhone 首页：项目书架。顶上一排：左"⋯"（未分类、回收站、设置），中间搜索灵感与任务（输入时页面换成搜索结果，往下滑时藏起），右"新建项目"；
-/// iPad 分栏里这些都在侧栏，顶上不放。下面是"正在推进"（进行中的任务，点开是任务浮窗）；再下一张纸：有任务时一行"任务 · N 进行中 · N 待办"
-/// 进入跨项目任务页，有没归类的灵感时一行提醒去整理；置顶项目是大卡，其余按最近排成行，都带介绍、灵感数、任务数与 Pi 状态点。
+/// iPad 分栏里这些都在侧栏，顶上不放。一屏的重点是"正在推进"：进行中的任务排在一张纸上（点开是任务浮窗），标题右边是全部任务的计数、点它进任务页；
+/// 没有进行中的任务时，只剩一行"任务 · N 待办"做入口。有没归类的灵感时一行提醒去整理；置顶项目是大卡，其余按最近排成行，都带介绍、灵感数、任务数与 Agent 状态点。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -104,12 +110,13 @@ struct ShelfScreen: View {
         let pinned = data.entries.filter(\.project.isPinned)
         let recent = data.entries.filter { !$0.project.isPinned }
         let pi = PiSessionListItem.byProject(data.live, shown: services.settings.shown)
-        VStack(alignment: .leading, spacing: 22) {
-            if !data.active.isEmpty { ActiveTasks(rows: data.active).transition(Motion.item) }
-            if data.inboxCount > 0 || data.tasks != nil {
+        let tasksLine = data.active.isEmpty ? data.tasks : nil
+        LazyVStack(alignment: .leading, spacing: 22) {
+            if !data.active.isEmpty { ActiveTasks(rows: data.active, counts: data.tasks).transition(Motion.item) }
+            if data.inboxCount > 0 || tasksLine != nil {
                 VStack(spacing: 0) {
-                    if let tasks = data.tasks { TasksLine(tasks: tasks) }
-                    if data.inboxCount > 0, data.tasks != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
+                    if let tasksLine { TasksLine(tasks: tasksLine) }
+                    if data.inboxCount > 0, tasksLine != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
                     if data.inboxCount > 0 { InboxReminder(count: data.inboxCount) }
                 }
                 .clipShape(.rect(cornerRadius: 16, style: .continuous))
@@ -120,7 +127,7 @@ struct ShelfScreen: View {
             }
             if !pinned.isEmpty {
                 // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
-                let columns = min(pinned.count, sizeClass == .regular ? 4 : 2)
+                let columns = typeSize.isAccessibilitySize ? 1 : min(pinned.count, sizeClass == .regular ? 4 : 2)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
                     ForEach(pinned) { PinnedShelfCard(entry: $0, pi: pi[$0.id]) }
                 }
@@ -128,7 +135,7 @@ struct ShelfScreen: View {
             if !recent.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionHeader(title: "最近")
-                    VStack(spacing: 0) {
+                    LazyVStack(spacing: 0) {
                         ForEach(Array(recent.enumerated()), id: \.element.id) { index, entry in
                             if index > 0 { Divider().padding(.leading, ShelfRow.dividerInset(typeSize)) }
                             ShelfRow(entry: entry, pi: pi[entry.id])
@@ -194,16 +201,20 @@ private struct ShelfLine: View {
     let title: String
     let detail: String
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     static let dividerInset: CGFloat = 48
 
     var body: some View {
         NavigationLink(value: route) {
             HStack(spacing: 10) {
-                Image(systemName: symbol).foregroundStyle(tint ?? palette.ink2).frame(width: 22).accessibilityHidden(true)
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
-                Text(detail).font(.body.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
-                    .contentTransition(.numericText()).animation(Motion.snappy, value: detail)
+                Image(systemName: symbol).foregroundStyle(tint ?? palette.ink2).frame(minWidth: 22).accessibilityHidden(true)
+                // 辅助字号下说明换到标题下面，不被截成省略号
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(spacing: 10))) {
+                    Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+                    Text(detail).font(.body.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
+                        .contentTransition(.numericText()).animation(Motion.snappy, value: detail)
+                }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
@@ -236,36 +247,44 @@ private struct TasksLine: View {
     }
 }
 
-/// 置顶项目的大卡：图标、名称、介绍、灵感数与未完成任务数、Pi 状态点。
+/// 置顶项目的大卡：项目色从上沿淡下来的一层底、图标、名称、介绍（没写时是最近一条灵感）、灵感数与未完成任务数、Agent 状态点。
 private struct PinnedShelfCard: View {
     let entry: ShelfData.Entry
     let pi: PiShown?
     @Environment(\.palette) private var palette
     /// 项目图标随字号放大。
-    @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 24
+    @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 22
+
+    private static let radius: CGFloat = 20
 
     var body: some View {
+        let tint = Palette.projectTint(entry.project.color)
         NavigationLink(value: Navigation.Route.project(entry.project.id)) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top) {
                     ProjectGlyph(project: entry.project, size: glyph)
                     Spacer()
                     if let pi { PiStateDot(shown: pi, announces: true) }
                 }
+                .padding(.bottom, 6)
                 Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
-                Text(entry.project.intro ?? "还没写介绍")
-                    .font(.footnote)
-                    .foregroundStyle(entry.project.intro == nil ? palette.ink3 : palette.ink2)
-                    .lineLimit(3).multilineTextAlignment(.leading)
-                Spacer(minLength: 4)
+                if let summary = entry.summary {
+                    Text(summary).font(.footnote).foregroundStyle(palette.ink2)
+                        .lineLimit(2).multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 10)
                 ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
             }
             .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
-            .paper(radius: 20)
+            .frame(maxWidth: .infinity, minHeight: 156, alignment: .topLeading)
+            // 渐变只铺在填充上（不用渐变描边，见文档「视觉验收 · 性能测量」）
+            .background(
+                LinearGradient(colors: [tint.opacity(palette.dark ? 0.16 : 0.1), tint.opacity(0)], startPoint: .top, endPoint: .center),
+                in: .rect(cornerRadius: Self.radius, style: .continuous))
+            .paper(radius: Self.radius)
         }
         .buttonStyle(CardPressStyle())
-        .projectActions(entry.project, radius: 20, pi: pi)
+        .projectActions(entry.project, radius: Self.radius, pi: pi)
         .accessibilityElement(children: .combine)
     }
 }
@@ -351,69 +370,129 @@ private struct ShelfRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var subtitle: String {
-        if let intro = entry.project.intro { return intro }
-        if let latest = entry.latest { return "\(latest.title.nonEmpty ?? "无标题") · \(DateLabel.short(latest.date))" }
-        return "还没有灵感"
+    private var subtitle: String { entry.summary ?? "还没有灵感" }
+}
+
+/// 正在推进：一屏的重点。进行中的任务排在一张纸上，每行是标题、所在项目、交给 Agent 的会话此刻在做什么，点开是任务浮窗；
+/// 标题右边是全部任务的计数，点它进任务页——单独一行"任务 · N 进行中"会与下面这几行重复报进行中，所以并进标题。
+private struct ActiveTasks: View {
+    let rows: [TaskBoard.Row]
+    let counts: TaskCounts?
+    @Environment(\.palette) private var palette
+
+    static let radius: CGFloat = 20
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // 放不下一行（辅助功能大字号）时计数换到标题下面，不把标题挤成两行
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    title
+                    Spacer(minLength: 8)
+                    if let counts { allTasks(counts) }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    title
+                    if let counts { allTasks(counts) }
+                }
+            }
+            .padding(.horizontal, 4)
+            VStack(spacing: 0) {
+                ForEach(rows) { row in
+                    ActiveTaskRow(row: row, divided: row.id != rows.first?.id).transition(Motion.item)
+                }
+            }
+            .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
+            .paper(radius: Self.radius)
+        }
+    }
+
+    private var title: some View {
+        Text("正在推进").font(.title3.weight(.bold)).foregroundStyle(palette.ink)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func allTasks(_ counts: TaskCounts) -> some View {
+        NavigationLink(value: Navigation.Route.tasks) {
+            HStack(spacing: 3) {
+                Text(counts.summary).contentTransition(.numericText()).animation(Motion.snappy, value: counts.summary)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).accessibilityHidden(true)
+            }
+            .font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink2)
+            .frame(minHeight: 44).contentShape(.rect)
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityLabel("全部任务，\(counts.summary)")
     }
 }
 
-/// 正在推进：进行中的任务各一张纸——标题、所在项目、交给 Agent 的会话此刻在做什么；点开是任务浮窗。
-private struct ActiveTasks: View {
-    let rows: [TaskBoard.Row]
+/// 正在推进的一行：签名色的进行中圆圈、标题，下面是所在项目与会话状态。
+private struct ActiveTaskRow: View {
+    let row: TaskBoard.Row
+    let divided: Bool
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .headline) private var scaledRing: CGFloat = 20
+
+    /// 圆圈随字号放大，到辅助字号封顶：再大只会把标题往右挤。
+    private var ring: CGFloat { min(scaledRing, 28) }
+    private var stacked: Bool { typeSize.isAccessibilitySize }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "正在推进")
-            VStack(spacing: 8) {
-                ForEach(rows) { row in
-                    Button { navigation.openTask(row.id) } label: { card(row) }
-                        .buttonStyle(CardPressStyle())
-                        .contextMenu { CardActions(card: row.task) }
-                        .transition(Motion.item)
+        Button { navigation.openTask(row.id) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Image(systemName: TaskGlyph.symbol(.inProgress)).font(.system(size: ring))
+                    .foregroundStyle(palette.working).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(row.task.title.textGlyphs).font(.headline).foregroundStyle(palette.ink)
+                        .lineLimit(stacked ? 4 : 2).multilineTextAlignment(.leading)
+                    meta
                 }
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(.rect)
         }
+        .buttonStyle(RowPressStyle())
+        .background(palette.paper)
+        .overlay(alignment: .top) {
+            if divided { palette.hair.frame(height: 1).padding(.leading, 16 + ring + 12) }
+        }
+        .contextMenu { CardActions(card: row.task) }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("打开任务")
     }
 
-    private func card(_ row: TaskBoard.Row) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: TaskGlyph.symbol(.inProgress)).foregroundStyle(palette.working).accessibilityHidden(true)
-                Text(row.task.title.textGlyphs).font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
-                    .lineLimit(2).multilineTextAlignment(.leading)
-            }
-            HStack(spacing: 12) {
-                if let project = row.project {
-                    HStack(spacing: 4) {
-                        ProjectGlyph(project: project, size: 11)
-                        Text(project.name)
-                    }
-                    .foregroundStyle(palette.ink3)
-                    .layoutPriority(-1)
+    /// 项目与会话状态平时排成一行；辅助字号下上下排、可换行，不撑出纸外。
+    private var meta: some View {
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
+            if let project = row.project {
+                HStack(spacing: 4) {
+                    ProjectGlyph(project: project, size: 11)
+                    Text(project.name)
                 }
-                if let session = row.session {
-                    let shown = services.settings.shown(session, delivery: row.delivery)
+                .foregroundStyle(palette.ink3)
+                .layoutPriority(-1)
+            }
+            if let session = row.session {
+                let shown = services.settings.shown(session, delivery: row.delivery)
+                // 辅助字号下计时另起一行，状态词不被截断
+                (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))) {
                     HStack(spacing: 4) {
                         PiStateDot(shown: shown, size: 6)
                         Text(shown.presence).foregroundStyle(shown.labelTint(palette))
-                        Text("·").foregroundStyle(palette.ink3)
-                        PiElapsed(shown: shown, font: .footnote)
+                        if !stacked { Text("·").foregroundStyle(palette.ink3) }
                     }
-                    .fixedSize()
+                    PiElapsed(shown: shown, font: .footnote)
                 }
+                .fixedSize(horizontal: !stacked, vertical: false)
             }
-            .font(.footnote).lineLimit(1)
-            .padding(.leading, 28)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: 18)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("打开任务")
+        .font(.footnote).lineLimit(stacked ? 2 : 1)
     }
 }
 #endif

@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目页：目标与下一步 → 工作集卡片墙（置顶单列在前）→ 更早。
+/// 项目页：页头（名称、介绍、目录与计数）→ 任务与 Agent → 资料 → 工作集卡片墙 → 更早。
 struct ProjectPage: View {
     let projectID: UUID?
     @Environment(Workspace.self) private var workspace
@@ -118,9 +118,9 @@ struct ProjectPage: View {
         }
     }
 
-    /// 有目标卡、未完成任务或本项目的 Pi 会话之一就显示；缺的那一栏各自隐藏。
+    /// 项目页总有任务与 Agent 一栏（添加任务、绑定目录的入口都在里面）；未分类只在有任务或会话时显示。
     private func showsFocus(_ data: ProjectPageData) -> Bool {
-        data.project?.intro != nil || !data.tasks.isEmpty || !workspace.liveSessions(in: projectID).isEmpty
+        projectID != nil || !data.tasks.isEmpty || !workspace.liveSessions(in: projectID).isEmpty
     }
 
     private func rearrange() {
@@ -140,12 +140,18 @@ private struct ProjectHeader: View {
 
     var body: some View {
         HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
                     ProjectGlyph(project: project, size: 20)
                     Text(projectID == nil ? "未分类" : project?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
                 }
                 .contextMenu { if let project { ProjectMenu(project: project) { renaming = project } } }
+                // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏
+                if let intro = project?.intro {
+                    Text(intro).font(.system(size: 15)).foregroundStyle(palette.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
                 HStack(spacing: 4) {
                     if let project {
                         DirectoryLink(path: directory.map(Self.abbreviated)) {

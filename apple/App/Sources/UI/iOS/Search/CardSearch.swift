@@ -292,7 +292,7 @@ struct FilterChip<Label: View>: View {
             .fontWeight(on ? .semibold : nil)
             .foregroundStyle(palette.ink)
             .padding(.horizontal, 12).frame(minHeight: 36)
-            // 选中：朱砂浅底 + 朱砂描边（选中一律用签名色），字仍是墨
+            // 选中：靛青浅底 + 靛青描边（选中一律用签名色），字仍是墨
             .background(on ? palette.selection : palette.paper, in: .capsule)
             .overlay { Capsule().strokeBorder(on ? palette.signature.opacity(0.55) : palette.hair) }
             .padding(.vertical, 4)
