@@ -287,6 +287,45 @@ struct MacSyncTests {
         #expect(rig.host.calls.isEmpty)
     }
 
+    @Test func 手机的停止请求让桥中止这一轮_不写发送记录() async throws {
+        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
+        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestStop(of: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.channels.calls == [.abort("sess-1.100")])
+        #expect(try await services.store.sendRecords().isEmpty)
+    }
+
+    /// 已经结束的会话没有这一轮可停：按成功写回，不恢复它、不碰桥。
+    @Test func 停止已经结束的会话直接成功_不恢复() async throws {
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestStop(of: SendTarget(kind: .piSession, name: "app", ref: "old"), on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.host.calls.isEmpty && rig.channels.calls.isEmpty)
+    }
+
+    /// 停止这一轮：请求发给会话所在的 Mac，写出后立即上传。
+    @Test(.timeLimit(.minutes(1)))
+    func 请求停止写给会话所在的Mac并立即上传() async throws {
+        try await PiStateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .thinking, title: "远处")
+        let session = try #require(try await services.store.allPiSessionStates().first)
+        var uploads = rig.sync.uploads.stream.makeAsyncIterator()
+
+        let request = try await services.stop(session)
+
+        #expect(request.hostID == "mac-other" && request.mode == .known(.stop) && request.target.ref == "far")
+        #expect(await uploads.next() == request.id.uuidString.lowercased())
+    }
+
     /// 手机上结束会话：请求发给会话所在的 Mac，写出后立即上传。
     @Test(.timeLimit(.minutes(1)))
     func 请求结束会话写给会话所在的Mac并立即上传() async throws {

@@ -101,6 +101,35 @@ struct RealPiTests {
         }
     }
 
+    /// 停止这一轮：正在跑的一轮被中止、会话回到空闲等下一句（终态是"被中止"），会话还在、能接着说；空闲时停止直接成功、什么也不发生。
+    @Test func abortStopsTheRunningTurnAndTheSessionTakesTheNextMessage() async throws {
+        try await withRig { pi, bridge, s in
+            try await bridge.abort(s.id)  // 空闲：成功，不改状态
+            #expect(bridge.sessions.first?.state == .idle)
+
+            try pi.prompt("[[slow]] 很长的一轮")
+            try await eventually("在跑", timeout: .seconds(10)) { bridge.sessions.first?.state == .thinking }
+            try await bridge.abort(s.id)
+            try await eventually("回到等下一句", timeout: .seconds(10)) { bridge.sessions.first?.state == .done(aborted: true) }
+
+            try pi.prompt("接着说")
+            try await eventually("还能接着说", timeout: .seconds(20)) { recap(of: bridge.sessions.first)?.lastReply == "ECHO 接着说 IMAGES[]" }
+        }
+    }
+
+    /// 正在等你确认时停止：弹窗取消、这一轮中止，不会卡在等你。
+    @Test func abortWhileWaitingForYouCancelsTheDialogAndStopsTheTurn() async throws {
+        try await withRig { pi, bridge, s in
+            try pi.prompt("/ask")
+            try await eventually("确认框", timeout: .seconds(20)) { bridge.sessions.first?.question?.kind == "confirm" }
+
+            try await bridge.abort(s.id)
+
+            _ = try await pi.waitForEvent("扩展拿到取消") { $0["method"] as? String == "notify" && $0["message"] as? String == "confirmed:false" }
+            try await eventually("弹窗收起", timeout: .seconds(10)) { bridge.sessions.first?.question == nil }
+        }
+    }
+
     @Test func aPromptRunReportsStatesInOrderAndHistoryShowsTheTurn() async throws {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)

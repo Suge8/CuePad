@@ -115,6 +115,7 @@ extension AppServices {
         case .known(.piSession):
             guard let ref = target.ref else { throw SendError.sessionNotOnThisMac(target.name) }
             if request.mode == .known(.end) { return try await endSession(ref) }
+            if request.mode == .known(.stop) { return try await stopTurn(ref) }
             let id = if let live = channels.piSessionID(forSession: ref) { live } else { try await resumeInBackground(ref, name: target.name) }
             // 执行器已把不认识的发送方式按失败写回，走到这里的都是已知方式
             guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
@@ -151,6 +152,12 @@ extension AppServices {
     private func endSession(_ sessionID: String) async throws {
         guard let id = channels.piSessionID(forSession: sessionID) else { return }
         try await host.end(id)
+    }
+
+    /// 停止这一轮（不写发送记录）：不在这台 Mac 的桥上的已经没有这一轮，目标达成，不恢复它。
+    private func stopTurn(_ sessionID: String) async throws {
+        guard let id = channels.piSessionID(forSession: sessionID) else { return }
+        try await channels.abort(in: id)
     }
 
     /// 开新会话（不写发送记录）：在后台托管（`PiHost`），目录由本机解析：项目绑定的代码目录或某个会话的目录；
@@ -221,7 +228,7 @@ extension AppServices {
             whenBusy = nil
         case .steer: whenBusy = .steer
         case .followUp: whenBusy = .followUp
-        case .answer, .ping, .start, .transcript, .config, .end: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
+        case .answer, .ping, .start, .transcript, .config, .end, .stop: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
         }
         try await channels.send(
             PiMessage(text: content.plainText, images: try piImages(in: content), whenBusy: whenBusy, deliveryID: request.uuidString), to: id)

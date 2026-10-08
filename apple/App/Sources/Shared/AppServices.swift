@@ -33,6 +33,8 @@ final class AppServices {
     private(set) var startupIssues: [StartupIssue] = []
 
     @ObservationIgnored let location: LibraryLocation
+    /// 崩溃诊断（MetricKit）：设置页的"上次崩溃"。
+    let diagnostics: Diagnostics
 
     /// iCloud 同步引擎从哪来：正式启动按位置与本构建的 iCloud 权限决定（`makeSync`），测试注入替身。
     /// 没有默认值：入口必须写明，不能悄悄没有引擎。
@@ -185,6 +187,14 @@ final class AppServices {
             of: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID))
     }
 
+    /// 停止这一轮：请会话所在的 Mac 中止它正在跑的回合（相当于在 Pi 里按 Esc；与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
+    /// 会话随后回到等你下一句（状态记录里是"完成"，被中止）；只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。
+    /// 结果用 `outcome(of:)` 等；界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
+    func stop(_ session: PiSessionState) async throws -> DeliveryRequest {
+        uploaded(try await store.requestStop(
+            of: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID))
+    }
+
     /// 请指定的 Mac 在后台开一个 Pi 新会话：与发送同一条投送通道（Mac 本机也走它），写出后立即上传。
     /// `title` 是给人看的目标名（会话名或项目名）。新会话用 `PiLaunch` 的 `token` 认领：等同步记录上出现同一个
     /// `launchToken` 的会话。
@@ -281,6 +291,7 @@ final class AppServices {
         images = library.images
         settings = AppSettings(defaults: defaults)
         self.location = location
+        diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         (self.sync, syncStatus) = Self.makeSync(sync, store: library.store, location: location)
         hostID = mac.hostID
         wakeNotifications = mac.wakeNotifications
@@ -305,6 +316,7 @@ final class AppServices {
         images = library.images
         settings = AppSettings(defaults: defaults)
         self.location = location
+        diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         (self.sync, syncStatus) = Self.makeSync(sync, store: library.store, location: location)
         self.pasteboard = pasteboard
     }

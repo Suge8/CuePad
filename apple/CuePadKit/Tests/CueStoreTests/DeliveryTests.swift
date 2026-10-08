@@ -306,4 +306,16 @@ import Testing
     #expect(DeliveryMode.end.rawValue == "end")
     #expect(!DeliveryMode.toSession.contains(.end))
   }
+
+  /// 停止这一轮与结束同一条投送通道：不是对会话说的话；连点只发一次（在路上的停止请求被复用）。
+  @Test func stopRequestIsAddressedToTheSessionsMacIsNotAMessageAndIsNotWrittenTwiceWhileOpen() async throws {
+    let made = try await store.requestStop(of: pi, on: "mac-a")
+
+    let stored = try #require(try await request(made.id))
+    #expect(stored.mode == .known(.stop) && stored.hostID == "mac-a" && stored.target == pi && stored.isOpen)
+    #expect(DeliveryMode.stop.rawValue == "stop")
+    #expect(!DeliveryMode.toSession.contains(.stop))
+    #expect(try await store.requestStop(of: pi, on: "mac-a").id == made.id)
+    #expect(try await store.requestEnd(of: pi, on: "mac-a").id != made.id)  // 与结束互不复用
+  }
 }

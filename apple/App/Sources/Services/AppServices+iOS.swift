@@ -12,6 +12,7 @@ extension AppServices {
         startSnapshots()
         startSync()
         startSessionAlerts()
+        if !location.isIsolated { diagnostics.start() }
     }
 
     /// 前台提示：本机已同步来的在线会话每次变化，由 `SessionAlertTracker` 认出"等你确认"、"做完了"的转换，交给界面。

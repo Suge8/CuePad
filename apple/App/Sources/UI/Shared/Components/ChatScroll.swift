@@ -2,7 +2,8 @@ import SwiftUI
 
 /// 贴着最新（规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处（自己滚回、点"回到最新"）重新贴上；
 /// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。离最新处超过一屏出"回到最新"圆钮，离开后来了新内容圆钮带一个点。
-/// 顶栏跟阅读走（同 Safari）：往历史里翻就让开，往最新那边回滑一小段（`revealDistance`）就回来，回到最新一直在。
+/// 顶栏：离开最新就让开，看历史期间怎么滑都不出现（往回滑也不出来，免得读的时候顶栏一闪一闪）；点屏幕顶部唤出（`reveal`），
+/// 再滑又让开；回到最新（滑到底、点"回到最新"、发出消息）自动出现。
 nonisolated struct ChatFollow: Equatable {
     private(set) var atNewest = true
     /// 离最新处超过一屏：出"回到最新"圆钮。
@@ -15,12 +16,8 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var target: Target?
     /// 用户正拖着或甩着滚动区（滚动区写入）。
     var scrolling = false
-    /// 在看历史时往最新那边回滑过一小段：顶栏回来。
+    /// 在看历史时点顶部唤出了顶栏。
     private var revealed = false
-    /// 这一趟往同一个方向滑了多远（往最新为正），换方向从零算。
-    private var travel: CGFloat = 0
-
-    private static let revealDistance: CGFloat = 24
     /// 离最新处这么近算"在最新处"。
     static let slack: CGFloat = 24
 
@@ -40,13 +37,13 @@ nonisolated struct ChatFollow: Equatable {
             revealed = false
         } else if byUser {
             atNewest = false
+            revealed = false
         }
     }
 
-    /// 用户滚动带来的一段位移（往最新为正）：同一方向攒够 `revealDistance` 时顶栏回来或让开。
-    mutating func moved(towardNewest delta: CGFloat) {
-        travel = (travel >= 0) == (delta >= 0) ? travel + delta : delta
-        if travel >= Self.revealDistance { revealed = true } else if travel <= -Self.revealDistance { revealed = false }
+    /// 看历史时点屏幕顶部：顶栏出来，直到再滑或回到最新。
+    mutating func reveal() {
+        if !atNewest { revealed = true }
     }
 
     mutating func contentChanged() {
@@ -75,6 +72,28 @@ extension EnvironmentValues {
 extension View {
     /// 聊天滚动区里的一行：滚动区倒置时把它转回正向。
     func chatRow() -> some View { modifier(ChatRow()) }
+
+    /// 聊天里一条消息的长按菜单（Mac 右键），`preview` 是抬起后的预览。倒置的滚动区里（iOS）按下与抬起用的是这条消息的快照，
+    /// 系统按挂菜单那一层的坐标去拍，算不进滚动区那层 180° 翻转，快照倒着出现、再转正。菜单挂在一层反向翻转里，
+    /// 快照就是正的；屏幕上两层翻转相抵，消息本身不动。
+    func chatContextMenu<Menu: View, Preview: View>(
+        @ViewBuilder menu: @escaping () -> Menu, @ViewBuilder preview: @escaping () -> Preview
+    ) -> some View {
+        modifier(ChatContextMenu(menu: menu, preview: preview))
+    }
+}
+
+private struct ChatContextMenu<Menu: View, Preview: View>: ViewModifier {
+    let menu: () -> Menu
+    let preview: () -> Preview
+    @Environment(\.chatInverted) private var inverted
+
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(inverted ? 180 : 0))
+            .contextMenu(menuItems: menu, preview: preview)
+            .rotationEffect(.degrees(inverted ? 180 : 0))
+    }
 }
 
 private struct ChatRow: ViewModifier {
@@ -172,11 +191,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                 if !Self.inverted, reading.distance > 0, follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
                     position.scrollTo(y: reading.end)
                 }
-            }
-            // 用户滚动的方向（顶栏回来或让开）：倒置时偏移变小是往最新走
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
-                guard follow.wrappedValue.scrolling else { return }
-                follow.wrappedValue.moved(towardNewest: Self.inverted ? old - new : new - old)
             }
             .onChange(of: followKey) {
                 // 倒置时贴着最新就跟上去，没贴着就保持位置、亮出按钮（正着排时由底部锚点贴底）

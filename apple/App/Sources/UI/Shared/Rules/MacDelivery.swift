@@ -27,6 +27,20 @@ nonisolated enum PiReply: Equatable {
 }
 
 extension MacDelivery {
+    /// 回复框给不给"停止"：指挥官自己在跑一轮时（含弹窗等你确认）；等子代理时这一轮已经歇下，没有可停的。
+    static func canStop(_ session: PiSessionState) -> Bool { session.state.known?.isTurnRunning == true }
+
+    /// 正在停止：这一轮开始后发过停止请求，它还在路上或 Mac 已受理，而这一轮还没歇下（受理只表示收到，歇下看状态）。
+    /// 进度只读投送请求，界面不另存。
+    static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest]) -> Bool {
+        guard canStop(session) else { return false }
+        let turnStart = session.busySince ?? session.stateSince
+        return deliveries.contains { request in
+            request.mode == .known(.stop) && request.createdAt >= turnStart
+                && (request.isOpen || request.status == .known(.succeeded))
+        }
+    }
+
     static func reply(to session: PiSessionState, hasImages: Bool) -> PiReply {
         guard session.state == .known(.waitingForUser) else { return .message(modes(for: session, hasImages: hasImages)) }
         guard let question = session.question, question.isAnswerable else { return .unanswerable }
@@ -47,6 +61,7 @@ nonisolated extension DeliveryMode {
         case .transcript: "补写对话"
         case .config: "模型与思考强度"
         case .end: "结束会话"
+        case .stop: "停止这一轮"
         }
     }
 
@@ -56,7 +71,7 @@ nonisolated extension DeliveryMode {
         case .steer: "它做完手上这一步就会看到"
         case .followUp: "这一轮结束后再送达"
         case .paste: "只放进输入框，不发送"
-        case .send, .answer, .ping, .start, .transcript, .config, .end: nil
+        case .send, .answer, .ping, .start, .transcript, .config, .end, .stop: nil
         }
     }
 }

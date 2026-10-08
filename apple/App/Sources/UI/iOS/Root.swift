@@ -75,7 +75,7 @@ struct IOSRootView: View {
             workspace.say(alert.text, symbol: alert.symbol, link: .session(alert.session), duration: .seconds(5))
         }
         #if DEBUG
-        .task { await DebugScene.prepare(workspace, navigation) }
+        .task { await DebugScene.prepare(workspace, navigation, alerts) }
         #endif
     }
 
@@ -96,14 +96,13 @@ struct RouteView: View {
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.bottomBarReserve) private var bottomBarReserve
 
     var body: some View {
         page.containerBackground(background, for: .navigation)
             // 标签栏布局：内容让出底部那一行的高度，滚动到它下面的内容渐隐。挂在每一页上：TabView 外面的安全区传不进标签页
             .safeAreaBar(edge: .bottom) {
-                if navigation.layout == .tabs, navigation.bottomPages == 0 {
-                    Color.clear.frame(height: BottomBar.height + BottomBar.bottomGap)
-                }
+                if bottomBarReserve > 0, navigation.bottomPages == 0 { Color.clear.frame(height: bottomBarReserve) }
             }
     }
 
@@ -146,6 +145,8 @@ private struct TabsRoot: View {
     /// Agent 标签的角标：等你确认的 Pi 会话数。
     @State private var waiting: Int?
     @State private var slide = TabSlide()
+    /// 安全区底边离屏幕底边的距离（键盘弹出时是键盘高）：底部栏按屏幕底边摆，内容在安全区之上再让到栏顶。
+    @State private var safeBottom: CGFloat = 0
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -153,11 +154,13 @@ private struct TabsRoot: View {
             Tab(value: Navigation.Tab.projects) { stack(.projects, $navigation.projectsPath) { RouteView(route: .shelf) } }
             Tab(value: Navigation.Tab.agent) { stack(.agent, $navigation.agentPath) { RouteView(route: .agent) } }
         }
-        // 底部那一行浮在上面、不随键盘升起，键盘出来时被盖住；内容给它让出的高度在每一页上（`RouteView`）
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { safeBottom = $0 }
+        .environment(\.bottomBarReserve, BottomBar.reserve(above: safeBottom))
+        // 底部那一行浮在上面、离屏幕底边固定距离（不随键盘升起，键盘出来时被盖住）；内容给它让出的高度在每一页上（`RouteView`）
         .overlay(alignment: .bottom) {
             if navigation.bottomPages == 0 {
                 BottomBar(waiting: waiting ?? 0, select: select)
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
+                    .ignoresSafeArea(edges: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -283,15 +286,16 @@ private final class TabSlide {
 }
 
 extension EnvironmentValues {
+    /// 内容给 iPhone 底部栏让出的高度（`BottomBar.reserve`）；分栏布局为 0。
+    @Entry var bottomBarReserve: CGFloat = 0
     /// 标签根页读到数据时调用（换标签的推移等它，见 `TabSlide`）；不在标签栏布局里时什么都不做。
     @Entry var tabPageReady: () -> Void = {}
 }
 
-/// 底部一行，整体居中：一条玻璃轨道里的两个标签 [灵感 | Agent]，右边一颗与轨道同高、同一玻璃的圆形"写"；
-/// 位置与大小始终不变，不随滚动收小。比例对着系统悬浮标签栏（照片：高 62、滴四周留 5、每格 94）略收：高 56、滴四周留 4（同心）、
-/// 每格 80，图标与字更紧。字号固定、不随动态字体放大，辅助字号下长按任一格或"写"弹出大内容查看器——系统标签栏同款取舍：
-/// 栏高固定，字放大只会挤掉图标。轨道本身看得见：玻璃上一层低对比底（浅色压暗一点，深色提亮一点）；选中滴在轨道里再深（浅色）
-/// 或再亮（深色）一层，同心内缩。
+/// 底部一行：左边一块玻璃里的两个标签 [灵感 | Agent]，右边一颗同高同玻璃的圆形"写"，与系统悬浮标签栏（照片、音乐：标签组靠左、
+/// 搜索圆钮靠右）同一几何——高 62、离屏幕左右与底边都是 21（与屏幕圆角同心），选中滴同心内缩 4；不随滚动收小。
+/// 玻璃上不另铺底；选中那一格是一层中性的滴（浅色压暗、深色更暗，同系统）加朱砂的图标与字，未选中的是墨色。
+/// 字号固定、不随动态字体放大，辅助字号下长按任一格或"写"弹出大内容查看器——系统标签栏同款取舍：栏高固定，字放大只会挤掉图标。
 /// 按住选中的那一格时滴轻轻一压，按住另一格时手指下亮出一层淡按压底，都给一下轻触感；换标签时滴在轨道里滑过去
 /// （减弱动态效果时淡出淡入、不压）。
 private struct BottomBar: View {
@@ -303,23 +307,25 @@ private struct BottomBar: View {
     /// 正按着的那一格。
     @State private var pressed: Navigation.Tab?
 
-    static let height: CGFloat = 56
-    static let bottomGap: CGFloat = 0
+    private static let height: CGFloat = 62
+    private static let margin: CGFloat = 21
     /// 选中滴离轨道的边。
     private static let inset: CGFloat = 4
-    private static let tabWidth: CGFloat = 80
+    private static let tabWidth: CGFloat = 90
+    private static let icon: CGFloat = 20
 
-    /// 轨道的底与选中滴：都是墨色的一层薄底，滴比轨道再重一层（深色下墨是浅的，所以是提亮）。
-    private var track: Color { palette.ink.opacity(palette.dark ? 0.08 : 0.045) }
-    private var drop: Color { palette.ink.opacity(palette.dark ? 0.16 : 0.1) }
+    /// 内容在安全区之上还要给底部栏让出的高度（栏顶到安全区底边）；键盘盖住底部栏时为 0。
+    static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin - safeBottom) }
+
+    private var drop: Color { palette.dark ? Color.black.opacity(0.3) : palette.ink.opacity(0.07) }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             tabs
+            Spacer(minLength: 0)
             Button { navigation.startCapture() } label: {
-                Image(systemName: WriteEntry.symbol).font(.system(size: 19, weight: .medium)).foregroundStyle(palette.ink)
+                Image(systemName: WriteEntry.symbol).font(.system(size: Self.icon, weight: .medium)).foregroundStyle(palette.ink)
                     .frame(width: Self.height, height: Self.height)
-                    .background(track, in: .circle)
                     .contentShape(.circle)
             }
             .buttonStyle(PressStyle(scale: 0.92))
@@ -327,46 +333,43 @@ private struct BottomBar: View {
             .accessibilityLabel(WriteEntry.title)
             .accessibilityShowsLargeContentViewer { Label(WriteEntry.title, systemImage: WriteEntry.symbol) }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.bottom, Self.bottomGap)
+        .padding(.horizontal, Self.margin)
+        .padding(.bottom, Self.margin)
         .sensoryFeedback(.impact(weight: .light, intensity: 0.6), trigger: pressed) { _, now in now != nil }
     }
 
     /// 一块玻璃是轨道，选中滴是轨道里的一层底（玻璃不叠玻璃）；字与图标在最上面。
     private var tabs: some View {
-        ZStack(alignment: navigation.tab == .projects ? .leading : .trailing) {
-            Capsule().fill(track)
-            // 减弱动态效果时换成每格各一滴：换标签是旧滴淡出、新滴淡入（随 `Motion.spatial` 的短淡入淡出），不滑过去
-            Capsule().fill(drop)
-                .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
-                .scaleEffect(pressed == navigation.tab && !reduceMotion ? 0.94 : 1)
-                .animation(Motion.press, value: pressed)
-                .padding(Self.inset)
-                .id(reduceMotion ? navigation.tab : nil)
-                .transition(.opacity)
-        }
-        .frame(width: Self.tabWidth * 2 + Self.inset * 2, height: Self.height)
-        .glass(in: .capsule, interactive: true)
-        .overlay {
-            HStack(spacing: 0) {
-                tab(.projects, title: "灵感", symbol: "lightbulb")
-                tab(.agent, title: "Agent", symbol: "waveform.path.ecg", badge: waiting)
+        // 减弱动态效果时换成每格各一滴：换标签是旧滴淡出、新滴淡入（随 `Motion.spatial` 的短淡入淡出），不滑过去
+        Capsule().fill(drop)
+            .frame(width: Self.tabWidth, height: Self.height - Self.inset * 2)
+            .scaleEffect(pressed == navigation.tab && !reduceMotion ? 0.94 : 1)
+            .animation(Motion.press, value: pressed)
+            .padding(Self.inset)
+            .id(reduceMotion ? navigation.tab : nil)
+            .transition(.opacity)
+            .frame(width: Self.tabWidth * 2 + Self.inset * 2, alignment: navigation.tab == .projects ? .leading : .trailing)
+            .glass(in: .capsule, interactive: true)
+            .overlay {
+                HStack(spacing: 0) {
+                    tab(.projects, title: "灵感", symbol: "lightbulb")
+                    tab(.agent, title: "Agent", symbol: "waveform.path.ecg", badge: waiting)
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.isTabBar)
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityAddTraits(.isTabBar)
-        }
     }
 
     private func tab(_ tab: Navigation.Tab, title: String, symbol: String, badge: Int = 0) -> some View {
         let selected = navigation.tab == tab
         return Button { select(tab) } label: {
-            VStack(spacing: 1) {
-                Image(systemName: symbol).font(.system(size: 17, weight: selected ? .semibold : .regular))
-                    .frame(height: 21)
-                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).dynamicTypeSize(...DynamicTypeSize.xLarge).offset(x: 12, y: -5) } }
+            VStack(spacing: 2) {
+                Image(systemName: symbol).font(.system(size: Self.icon, weight: selected ? .semibold : .medium))
+                    .frame(height: Self.icon + 4)
+                    .overlay(alignment: .topTrailing) { if badge > 0 { Badge(count: badge).dynamicTypeSize(...DynamicTypeSize.xLarge).offset(x: 13, y: -5) } }
                 Text(title).font(.system(size: 10, weight: selected ? .semibold : .medium))
             }
-            .foregroundStyle(selected ? palette.ink : palette.ink2)
+            .foregroundStyle(selected ? palette.signature : palette.ink)
             // 一格占轨道的一半，四周的边也算它的：点在滴外面一点也算点中
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {

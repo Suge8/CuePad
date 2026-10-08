@@ -118,6 +118,12 @@ public final class PiBridge {
         _ = try await request(to: id) { try PiWire.endCommand(id: $0) }
     }
 
+    /// 停止该会话正在跑的这一轮（相当于在 Pi 里按 Esc）：`ack` 即已受理，会话随后以"被中止"歇下（`.done(aborted: true)`），能接着说。
+    /// 指挥官已经空闲时什么也不发生（也成功）；只停指挥官自己这一轮，它派出的子代理照常跑。
+    public func abort(_ id: PiSession.ID) async throws {
+        _ = try await request(to: id) { try PiWire.abortCommand(id: $0) }
+    }
+
     /// 回答该会话正在等的弹窗；`promptID` 不是正在等的那个、或答案对不上时抛 `PiBridgeError.rejected`。
     public func answer(_ answer: PiPromptAnswer, to promptID: String, in id: PiSession.ID) async throws {
         _ = try await request(to: id) { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }

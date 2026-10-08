@@ -243,6 +243,36 @@ struct PiHistorySectionTests {
     }
 }
 
+/// 回复框的"停止"：只在指挥官自己在跑一轮时给（等子代理时没有这一轮）；停止请求发出后、这一轮歇下前是"正在停止"
+/// （Mac 受理只表示收到，真正歇下看状态）；停止没成、或已经是下一轮了，就又能停。
+@MainActor
+struct StopRulesTests {
+    let app = TestApp()
+
+    private func session(_ state: PiWorkState, busySince: Date?) -> PiSessionState {
+        PiSessionState(
+            id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
+            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: busySince, createdAt: .now, modifiedAt: .now)
+    }
+
+    @Test func 只在跑一轮时能停_发出后到歇下前是正在停止_没停成或下一轮又能停() async throws {
+        let running = session(.tool, busySince: .now.addingTimeInterval(-60))
+        #expect(MacDelivery.canStop(running))
+        #expect(!MacDelivery.canStop(session(.delegating, busySince: .now)))
+        #expect(!MacDelivery.canStop(session(.settled, busySince: nil)))
+
+        let stop = try await app.services.store.requestStop(of: SendTarget(kind: .piSession, name: "s", ref: "s"), on: "mac")
+        #expect(MacDelivery.stopping(running, deliveries: [stop]))
+        var accepted = stop
+        accepted.status = .known(.succeeded)
+        #expect(MacDelivery.stopping(running, deliveries: [accepted]))
+        var failed = stop
+        failed.status = .known(.failed)
+        #expect(!MacDelivery.stopping(running, deliveries: [failed]))
+        #expect(!MacDelivery.stopping(session(.tool, busySince: .now.addingTimeInterval(60)), deliveries: [accepted]))
+    }
+}
+
 /// 会话列表第三行与回复框的规则（手机 Agent 页、Mac 侧栏与详情共用）。
 struct PiReplyRulesTests {
     func session(_ state: PiWorkState, reply: String? = nil, question: PiQuestion? = nil) -> PiSessionState {

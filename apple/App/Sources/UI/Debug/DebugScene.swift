@@ -55,6 +55,8 @@ enum DebugScene {
     /// 需要时写入演示数据，并按参数选中项目；返回选中的项目。
     static func prepareLibrary(_ workspace: Workspace) async -> UUID? {
         let store = workspace.services.store
+        // -CuePadSampleCrash YES：存一份样例崩溃诊断，设置里出现"上次崩溃"（配 -CuePadCrashSheet YES 直接打开摘要）
+        if defaults.bool(forKey: "CuePadSampleCrash") { workspace.services.diagnostics.record([sampleCrash]) }
         #if os(macOS)
         if defaults.string(forKey: "CuePadSeed") == "perf", (try? await store.projects().isEmpty) == true {
             do { try await PerfLibrary.seed(store) } catch { workspace.fail(error) }

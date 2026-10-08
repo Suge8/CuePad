@@ -1,5 +1,5 @@
 // 测试用假模型：真实 Pi + 真实桥扩展，零网络、结果确定。
-// 最后一条 user 文字里的标记决定行为：
+// 最后一条 user 文字里的标记决定行为（请求被中止时以 aborted 结束）：
 //   [[slow]]      流式输出前等 1.5 秒（制造"正忙"窗口）
 //   [[fail]]      以 error 结束
 //   [[tool:CMD]]  先发起 bash 工具调用（CMD 里的字面 \n 会变成换行），收到工具结果后回复 TOOL_DONE
@@ -21,7 +21,7 @@ export default function (pi: any) {
 			{ id: "echo-think", name: "Echo Think", reasoning: true, input: ["text", "image"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100000, maxTokens: 4096 },
 			{ id: "echo-b", name: "Echo B", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100000, maxTokens: 4096 },
 		],
-		streamSimple(model: any, context: any) {
+		streamSimple(model: any, context: any, options?: any) {
 			const stream = createAssistantMessageEventStream();
 			(async () => {
 				const msg: any = { role: "assistant", content: [], api: model.api, provider: model.provider, model: model.id, usage, stopReason: "stop", timestamp: Date.now() };
@@ -33,6 +33,15 @@ export default function (pi: any) {
 
 				if (text.includes("[[slow]]")) await sleep(1500);
 				stream.push({ type: "start", partial: msg });
+
+				// 与真实提供方一样：被中止（Esc、CuePad 的停止）就以 aborted 结束这次请求
+				if (options?.signal?.aborted) {
+					msg.stopReason = "aborted";
+					msg.errorMessage = "Request was aborted";
+					stream.push({ type: "error", reason: "aborted", error: msg });
+					stream.end();
+					return;
+				}
 
 				if (text.includes("[[fail]]")) {
 					msg.stopReason = "error";
