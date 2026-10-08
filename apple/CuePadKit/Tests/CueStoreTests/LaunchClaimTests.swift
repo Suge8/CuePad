@@ -44,7 +44,7 @@ import Testing
   }
 
   /// Mac 上的会话记录晚到（Pi 120 秒后才连上、记下）：开新会话的请求早已完成、过了保留期，
-  /// 但它在被认领前不清理，记录到了照样关联；同一轮里别的已完成请求照常清理。
+  /// 但它在被认领前不清理，记录到了照样关联；同一轮里别的已完成请求照常清理；认领后下一轮清理带走它。
   @Test(.timeLimit(.minutes(1)))
   func 会话记录120秒后才到_开新会话的请求留着_仍能关联() async throws {
     let clock = ManualTiming()
@@ -67,6 +67,33 @@ import Testing
 
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-late", state: .thinking, title: "圆桌", launchToken: "t-late")
     #expect(try await store.card(idea.id)?.piSessionID == "s-late")
+
+    await clock.waitForSleeper()
+    clock.advance(.seconds(61))
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id) }) { $0 == nil }
+    await executor.stop()
+  }
+
+  /// 会话记录始终没到（Pi 记下前就崩了）：等认领有上限——过了请求的最长有效期（`maxAge`）照常清理，不永久留着。
+  @Test(.timeLimit(.minutes(1)))
+  func 会话记录始终没到_过了最长有效期照常清理() async throws {
+    let clock = ManualTiming()
+    let project = try await store.createProject(name: "圆桌", color: "#111")
+    let idea = try await store.createCard(in: project.id, body: "看一下重连")
+    let executor = DeliveryExecutor(
+      store: store, hostID: "mac-a", maxAge: .seconds(600), retention: .seconds(60), timing: clock.timing,
+      onIssue: { Issue.record("\($0)") }
+    ) { _ in .succeeded }
+    try await executor.start()
+    let launch = try await store.requestLaunch(
+      PiLaunch(place: .project(project.id), prompt: idea.body, token: "t-lost"), title: "圆桌", on: "mac-a", card: idea.id)
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }
+
+    for _ in 0..<11 {
+      await clock.waitForSleeper()
+      clock.advance(.seconds(61))
+    }
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id) }) { $0 == nil }
     await executor.stop()
   }
 }
