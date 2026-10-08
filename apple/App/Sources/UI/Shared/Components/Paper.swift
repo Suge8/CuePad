@@ -84,25 +84,52 @@ struct CardMeta: View {
     }
 }
 
-/// 滚到工具栏下的内容先淡到桌面色，工具栏按钮后面不叠字。各滚动页用它作滚动视图的兄弟层：
-/// 挂成滚动视图自己的 overlay 盖不住滚进工具栏区域的那段内容（macOS 把那段放在更上层）。
+/// 滚到顶栏下的内容淡到桌面色，顶栏后面不叠字（Mac 的工具栏；iOS 的状态栏与悬浮顶栏，由 `floatingHeader` 挂上）。
+/// 盖住顶栏那一段（iOS 是上边安全区）：上部是实底，往下淡开；`below` 大于 0 时再往下淡出这么高（iOS 的悬浮顶栏是玻璃，
+/// 底下的字要淡到它下沿以外才不叠）。Mac 上用它作滚动视图的兄弟层：挂成滚动视图自己的 overlay 盖不住滚进工具栏区域的那段内容
+/// （macOS 把那段放在更上层）。
 struct TopFade: View {
+    var below: CGFloat = 0
     @Environment(\.palette) private var palette
+    @Environment(\.pageBackground) private var pageBackground
 
-    // 合起来等于工具栏高度：页面停在顶部时标题不被淡掉
-    private static let solid: CGFloat = 22
-    private static let fade: CGFloat = 30
+    /// 顶栏那一段里实底占的比例：Mac 是工具栏的上 22pt，iOS 大约是状态栏。
+    private static let solid = 0.42
 
     var body: some View {
-        VStack(spacing: 0) {
-            palette.desk.frame(height: Self.solid)
-            LinearGradient(colors: [palette.desk, palette.desk.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: Self.fade)
-            Spacer(minLength: 0)
+        let ground = pageBackground ?? palette.desk
+        #if os(macOS)
+        // Mac 的工具栏高度固定：不读几何，侧栏开合时不跟着每帧重算
+        fade(ground, height: Self.toolbar).frame(maxHeight: .infinity, alignment: .top).ignoresSafeArea()
+        #else
+        GeometryReader { proxy in
+            let top = proxy.safeAreaInsets.top
+            fade(ground, height: top + below).offset(y: -top)
         }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        #endif
     }
+
+    #if os(macOS)
+    private static let toolbar: CGFloat = 52
+    #endif
+
+    /// 上部实底，到安全区下沿淡到 `below > 0` 时的七成（再往下淡出）或全透。
+    private func fade(_ ground: Color, height: CGFloat) -> some View {
+        let edge = height - below
+        let stops: [Gradient.Stop] = [
+            .init(color: ground, location: 0), .init(color: ground, location: Self.solid * edge / max(height, 1)),
+            .init(color: ground.opacity(below > 0 ? 0.7 : 0), location: edge / max(height, 1)), .init(color: ground.opacity(0), location: 1),
+        ]
+        return LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+            .frame(height: height)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+extension EnvironmentValues {
+    /// 页面的底色（iOS 推入页由 `RouteView` 给出：纸页是纸，其余是桌面）；`TopFade` 淡到它。没给时是桌面。
+    @Entry var pageBackground: Color?
 }
 
 /// 发过的卡的标记：浅灰小纸飞机 + 目标名。没发过是默认状态，什么都不显示。卡片与列表共用这一种。
@@ -133,6 +160,8 @@ struct Thumbnail: View {
             .overlay {
                 if let image {
                     Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                        // 深色下截图多是亮底，原样放在暗纸上刺眼：压暗一层
+                        .overlay { if palette.dark { Color.black.opacity(0.14) } }
                 }
             }
             .frame(height: height)
@@ -147,7 +176,7 @@ struct Thumbnail: View {
     }
 }
 
-/// 预览文字里的 `{{变量}}` 染成墨色标注。
+/// 预览文字里的 `{{变量}}` 染成琥珀色标注（`Palette.variable`）。
 enum VariableText {
     static func styled(_ text: String, _ palette: Palette) -> AttributedString {
         var result = AttributedString(text)
@@ -187,6 +216,8 @@ enum OlderGroupTitle {
             let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
             let day = Date.FormatStyle.dateTime.month(.defaultDigits).day().locale(chinese)
             return "\(start.formatted(day)) – \(end.formatted(day))"
+        case .sparseMonth(let start):
+            return start.formatted(.dateTime.month(.wide).locale(chinese))
         case .month(let start):
             return start.formatted(.dateTime.year().month(.wide).locale(chinese))
         }

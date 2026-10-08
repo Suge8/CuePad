@@ -129,7 +129,7 @@ struct SectionHeader: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
+            Text(title).font(.headline).foregroundStyle(palette.ink)
             if let count { Text("\(count)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).counting(count) }
         }
         .padding(.horizontal, 4)

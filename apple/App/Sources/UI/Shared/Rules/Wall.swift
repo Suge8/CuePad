@@ -75,6 +75,8 @@ nonisolated struct WallArrangement: Equatable, Sendable {
 nonisolated struct OlderGroup: Equatable, Sendable {
     enum Period: Hashable, Sendable {
         case week(start: Date)
+        /// 三个月内、每周都只有一条的月份并成的一组：一周一个标题时标题比内容还多。常开，不折叠。
+        case sparseMonth(start: Date)
         case month(start: Date)
     }
 
@@ -104,7 +106,37 @@ nonisolated struct OlderGroup: Equatable, Sendable {
                 groups.append(OlderGroup(period: period, cards: [card.id]))
             }
         }
-        return groups
+        return mergingSparseMonths(groups, calendar: calendar)
+    }
+
+    /// 按周的组按所在月份（周一所在的月）归拢；某个月的各周都只有一条时并成 `sparseMonth`。组本来就新的在前、同月相邻。
+    private static func mergingSparseMonths(_ groups: [OlderGroup], calendar: Calendar) -> [OlderGroup] {
+        var result: [OlderGroup] = []
+        var run: [OlderGroup] = []
+        var runMonth: Date?
+        func flush() {
+            guard !run.isEmpty else { return }
+            if let runMonth, run.allSatisfy({ $0.cards.count == 1 }) {
+                result.append(OlderGroup(period: .sparseMonth(start: runMonth), cards: run.flatMap(\.cards)))
+            } else {
+                result += run
+            }
+            run = []
+        }
+        for group in groups {
+            guard case .week(let start) = group.period else {
+                flush()
+                runMonth = nil
+                result.append(group)
+                continue
+            }
+            let month = calendar.dateInterval(of: .month, for: start)?.start ?? start
+            if month != runMonth { flush() }
+            runMonth = month
+            run.append(group)
+        }
+        flush()
+        return result
     }
 
     private static func period(of date: Date, weekly: Bool, calendar: Calendar) -> Period {

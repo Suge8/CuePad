@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// "更早"：墙以外的卡，三个月内按周分组，更久按月分组且默认折叠。点开的卡被编辑后回到墙首。
+/// "更早"：墙以外的卡，三个月内按周分组（每周只有一条的月份并成一组），更久按月分组且默认折叠。点开的卡被编辑后回到墙首。
 struct OlderList: View {
     let groups: [OlderGroup]
     let cards: [UUID: Card]
@@ -13,15 +13,11 @@ struct OlderList: View {
     var body: some View {
         let total = groups.reduce(0) { $0 + $1.cards.count }
         VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 12) {
-                PaperStack()
-                HStack(alignment: .bottom, spacing: 6) {
-                    Text("更早").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
-                    Text("\(total)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
-                }
-                Rectangle().fill(palette.hair).frame(height: 1)
+            // 与"资料""最近"同一种分组标题
+            HStack(alignment: .bottom, spacing: 6) {
+                Text("更早").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
+                Text("\(total)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
             }
-            .padding(.top, 8)
             .id(ScrollAnchor.older)
             let titled = OlderGroup.needsTitles(in: groups)
             ForEach(groups, id: \.period) { group in
@@ -115,24 +111,6 @@ struct OlderRow: View {
 extension OlderRow {
     fileprivate func open() {
         workspace.openCard = card.id
-    }
-}
-
-/// 三张错位的纸边：墙上的卡片"压"成列表的过渡记号。
-private struct PaperStack: View {
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<3) { index in
-                RoundedRectangle(cornerRadius: 4).fill(palette.paper)
-                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(palette.ink3.opacity(0.5), lineWidth: 1))
-                    .frame(width: 22, height: 16)
-                    .offset(x: CGFloat(index) * 3, y: CGFloat(-index) * 3)
-            }
-        }
-        .frame(width: 30, height: 26)
-        .accessibilityHidden(true)
     }
 }
 #endif

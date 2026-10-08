@@ -388,13 +388,18 @@ final class Workspace {
         catalogAttempt += 1
     }
 
-    /// 保存的当前项目以 Store 为准：不存在或已进回收站时回落到第一个有效项目（`store.projects()` 的顺序），没有项目则到未分类，并纠正设置。
+    /// 保存的当前项目以 Store 为准：不存在或已进回收站时回落到第一个有效项目（`store.projects()` 的顺序），没有项目则到未分类，并纠正设置；
+    /// Mac 上没保存过（第一次打开）也落到第一个项目，首屏不是空的未分类。
     /// 根视图在项目表每次变化后调用。
     func reconcileCurrentProject() async {
-        guard let saved = holder.currentProject else { return }
+        let saved = holder.currentProject
+        #if os(iOS)
+        // iPhone/iPad 的首屏是书架，没有当前项目是常态（随手记默认进未分类）
+        guard saved != nil else { return }
+        #endif
         do {
             let projects = try await services.store.projects()
-            guard !projects.contains(where: { $0.id == saved }) else { return }
+            if let saved, projects.contains(where: { $0.id == saved }) { return }
             if holder.currentProject == saved { holder.currentProject = projects.first?.id }
         } catch {
             fail(error)
