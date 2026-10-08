@@ -61,6 +61,29 @@ struct ComposerTests {
         #expect(try await store.cards(in: project.id).filter(\.isPinned).map(\.id) == [reference.id])
     }
 
+    /// 交给 Agent 的输入框是为某条提示词打开的：请求始终关联这条提示词（打开时定下，不随附件增删），
+    /// 即使附件里只剩资料，状态点也在提示词上、资料行不出现。
+    @Test func 交给Agent时附件里没有那条提示词_请求仍关联它_状态点在提示词不在资料() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let target = try await session(project: project.id)
+        let task = try await store.createTask("修乱序", in: project.id)
+        let prompt = try await store.createCard(body: "先复现", under: task.id)
+        let reference = try await store.createCard(in: project.id, body: "接口约定")
+        try await store.updateCard(reference.id) { $0.isPinned = true }
+
+        var draft = ComposerDraft()
+        draft.attach(try #require(try await store.card(reference.id)))
+        let request = try await app.services.requestMacDelivery(draft, to: target, mode: .send, card: prompt.id)
+        #expect(request.cardID == prompt.id)
+        var handed = try await store.handedSessions()
+        #expect(handed[prompt.id] == .session("atlas") && handed[reference.id] == nil)
+
+        try await store.recordSend(request.content, to: request.target, card: request.cardID)  // Mac 执行
+        handed = try await store.handedSessions()
+        #expect(handed[prompt.id] == .session("atlas") && handed[reference.id] == nil)
+        #expect(try await store.card(reference.id)?.piSessionID == nil)
+    }
+
     @Test func 草稿只有一张图片也能发_什么都没有的不能发() async throws {
         let target = try await session()
 
