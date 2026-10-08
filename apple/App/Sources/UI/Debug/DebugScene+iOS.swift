@@ -234,12 +234,13 @@ extension DebugScene {
         let store = workspace.services.store
         guard let table = try? await store.projects().first(where: { $0.name == "圆桌" }),
               let task = try? await store.createTask("补重连用例\n\n给 scheduler 补 3 个重连用例：第 6 位断线重连后仍排在原位。", in: table.id),
+              let prompt = try? await store.children(of: task.id).first,
               let notes = try? await store.piSessionPage(PiSessionQuery(text: "notes")).items.first(where: { $0.state.title == "notes" })?.state
         else { return }
         try? await Task.sleep(for: .seconds(1.5))
         navigation.openTask(task.id)
         try? await Task.sleep(for: .seconds(2.5))
-        _ = try? await workspace.services.requestMacDelivery(Outgoing.text(of: task), to: notes, mode: .send, card: task.id)
+        _ = try? await workspace.services.requestMacDelivery(Outgoing.text(of: prompt), to: notes, mode: .send, card: prompt.id)
         navigation.task = nil
         try? await Task.sleep(for: .seconds(9))
         navigation.openTask(task.id)

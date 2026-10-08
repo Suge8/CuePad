@@ -67,7 +67,6 @@ final class Workspace {
         var text: String
         var session: CuePi.PiSession.ID
         var card: UUID?
-        var parts: [UUID]
     }
     #endif
 
@@ -436,7 +435,7 @@ final class Workspace {
         if current != .done { say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) }) }
     }
 
-    /// 挪动卡片（拖放、缩进、反缩进、挂成相关灵感）；下级随它走。
+    /// 挪动卡片（拖放、缩进、反缩进、挂成提示词）；下级随它走。
     func move(_ id: UUID, _ move: TaskMove) {
         perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
     }
@@ -446,11 +445,31 @@ final class Workspace {
         try await services.store.setStatus(task.id, back ? .todo : .inProgress)
     }
 
-    /// 设为任务 / 改回灵感（改回时下级提到它的位置）。提示里带"撤销"，点了就拨回去。
+    /// 设为任务 / 改回灵感（改回时下级提到它的位置）。提示里带"撤销"，点了就拨回去：多行的灵感设为任务时拆出的那条提示词
+    /// 原样合回正文。
     func setTodo(_ id: UUID, _ on: Bool) async throws {
         let store = services.store
-        try await store.setTodo(id, on)
-        say(on ? "已设为任务" : "已改回灵感", undo: { try await store.setTodo(id, !on) })
+        let body = try await store.card(id)?.body
+        let prompt = try await store.setTodo(id, on)
+        say(on ? "已设为任务" : "已改回灵感", undo: {
+            if let prompt, let body {
+                try await store.purgeCard(prompt.id)
+                try await store.updateCard(id) { $0.body = body }
+            }
+            try await store.setTodo(id, !on)
+        })
+    }
+
+    /// 任务下写一条提示词：先建一条空的接在下级最后，调用方随即打开它的编辑；离开时还是空的由 `dropIfEmpty` 删掉。
+    func createPrompt(under task: UUID) async throws -> Card {
+        try await services.store.createCard(body: "", under: task)
+    }
+
+    /// 离开提示词的编辑时：什么都没写（没有文字也没有图片）就不留下这条。
+    func dropIfEmpty(_ id: UUID) async throws {
+        guard let card = try await services.store.card(id), card.parentID != nil, !card.isTask,
+              CardText(card.body).title.isEmpty, CardText(card.body).images.isEmpty else { return }
+        try await services.store.purgeCard(id)
     }
 
     /// 归档（连同下级）：不占列表、仍可搜；提示里可撤销。
@@ -467,29 +486,20 @@ final class Workspace {
         if count > 0 { say("已归档 \(count) 项任务") }
     }
 
-    /// 挂相关灵感（添加相关灵感菜单）：一条灵感挂到任务下，排在已有下级之后。
+    /// 从灵感里挑一条挂到任务下（成为它的提示词），排在已有下级之后。
     func attach(_ idea: UUID, to task: UUID) async throws {
         let last = try await services.store.children(of: task).last?.id
         try await attach(idea, TaskMove(slot: .under(task), after: last))
     }
 
-    /// 挂相关灵感（菜单或把灵感拖到任务上）：提示里的撤销把它放回原来所在的项目、原来的位置。
+    /// 灵感挂到任务下成为提示词（挑一条或拖到任务上）：提示里的撤销把它放回原来所在的项目、原来的位置。
     func attach(_ idea: UUID, _ move: TaskMove) async throws {
         let store = services.store
         guard let card = try await store.card(idea) else { throw CueStoreError.notFound }
         let siblings = try await store.cards(in: card.projectID).map(\.id)
         let before = siblings.firstIndex(of: idea).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
         try await store.moveCard(idea, to: move.slot, after: move.after)
-        say("已挂到任务", undo: { try await store.moveCard(idea, to: .top(project: card.projectID), after: before) })
-    }
-
-    /// 图片（相册、拍照、选文件）存成一条灵感，挂到任务下作相关灵感。
-    func attachImages(_ images: [Data], to task: Card) async throws {
-        guard !images.isEmpty else { return }
-        let files = services.store.files
-        let body = StoredBody.make(text: "", imageHashes: try images.map { try files.store($0) })
-        let material = try await createCard(body: body, in: task.projectID)
-        try await attach(material.id, to: task.id)
+        say("已成为任务的提示词", undo: { try await store.moveCard(idea, to: .top(project: card.projectID), after: before) })
     }
 
     /// 界面上的设为任务 / 改回灵感：失败时提示。

@@ -88,7 +88,7 @@ struct ProjectPage: View {
         }
     }
 
-    /// 资料：长期参考的灵感，一行一条压在任务区下面；交给 Agent 时可一并带上。
+    /// 资料：长期参考的灵感，一行一条压在任务区下面。
     private func resources(_ cards: [Card], lastTarget: [UUID: String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .bottom, spacing: 6) {

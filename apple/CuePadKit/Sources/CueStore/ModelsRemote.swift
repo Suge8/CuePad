@@ -561,8 +561,6 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 本机（发起请求的设备）第一次看到执行结果的时刻，本机时钟；只在本机，不同步。
   public internal(set) var resultReceivedAt: Date?
-  /// 一并带上的灵感：执行成功后原样记进发送记录（`SendRecord.partIDs`）。
-  public var partIDs: [UUID] = []
 
   /// 还没有结果（等待执行或执行中）。
   public var isOpen: Bool { status == .known(.pending) || status == .known(.executing) }
@@ -637,11 +635,11 @@ extension DeliveryRequest: Record {
   static let table = Table.deliveryRequests
   static let columns = [
     "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "resultDetail", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "partIDs",
+    "resultDetail", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt",
   ]
   static let syncedColumns = columns.filter { $0 != "resultReceivedAt" }
   var bindings: [any SQLBindable] {
-    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, PartIDs.encode(partIDs)]
+    [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, resultDetail, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt]
   }
   init(row: Row) {
     self.init(
@@ -649,8 +647,7 @@ extension DeliveryRequest: Record {
       target: SendTarget(kind: Open(rawValue: row.text(2)), name: row.text(3), ref: row.textOrNil(4)),
       hostID: row.text(5), mode: Open(rawValue: row.text(6)), cardID: row.uuidOrNil(7),
       status: Open(rawValue: row.text(8)), resultDetail: row.textOrNil(9), handledBy: row.textOrNil(10),
-      createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14),
-      partIDs: PartIDs.decode(row.textOrNil(15)))
+      createdAt: row.date(11), completedAt: row.dateOrNil(12), modifiedAt: row.date(13), resultReceivedAt: row.dateOrNil(14))
   }
 }
 

@@ -26,10 +26,11 @@ struct TaskRingTests {
         try await store.setStatus(sub.id, .done)
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
-        _ = try await recorder.update(sessionID: "s1", state: .thinking, title: "atlas")
+        try await Task.sleep(for: .milliseconds(5))  // 会话状态的时刻晚于发出（按毫秒比先后）
+        _ = try await recorder.update(sessionID: "s1", state: .thinking, title: "atlas", times: PiTimes(stateSince: .now, busySince: .now))
         #expect(TaskRing(try await store.childMarks()[task.id]) == .segments([false, false, true]))  // 交出去了还没回复：不满
         try await Task.sleep(for: .milliseconds(5))
-        _ = try await recorder.update(sessionID: "s1", state: .settled)
+        _ = try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: .now, busySince: nil))
         #expect(TaskRing(try await store.childMarks()[task.id]) == .segments([true, false, true]))
         #expect(TaskProgress.subtasks(in: try await store.childMarks()[task.id]) == TaskProgress(done: 1, total: 1))
     }

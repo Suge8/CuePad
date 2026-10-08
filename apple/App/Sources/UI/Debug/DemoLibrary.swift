@@ -124,15 +124,22 @@ enum DemoLibrary {
 
     typealias LegacyTask = (project: String?, text: String, done: Bool)
 
-    /// 三级任务：圆桌的"乱序"下两条子任务（一条已完成），其中一条再带两条（第三级默认折起），另挂一条相关灵感；
-    /// 正文是给 Agent 的话（标题行之后是要求）。
+    /// 三级任务：圆桌的"乱序"一句说明、三条提示词（交给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
+    /// 其中一条再带两条（第三级默认折起）；CuePad 的"投送超时"一条提示词（会是已回复，行上问要不要标记完成）。
     private static func seedSubtasks(_ store: CueStore) async throws {
-        guard let order = try await store.tasks(.todo).flatMap(\.tasks).first(where: { $0.body.hasPrefix("发言轮次") }) else { return }
-        try await store.updateCard(order.id) {
-            $0.body += "\n\n跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前；先别改代码，告诉我原因和改法。"
+        let tasks = try await store.tasks(.todo).flatMap(\.tasks)
+        if let timeout = tasks.first(where: { $0.body.hasPrefix("投送队列") }) {
+            _ = try await store.createCard(body: "投送超时时先重试一次，还失败再报错，并在提示里写明原因", under: timeout.id)
         }
-        let material = try await store.createCard(in: order.projectID, body: "复现记录\n第 6 位重连后排到了最前；日志在 logs/scheduler-0918.txt")
-        try await store.moveCard(material.id, to: .under(order.id), after: nil)
+        guard let order = tasks.first(where: { $0.body.hasPrefix("发言轮次") }) else { return }
+        try await store.updateCard(order.id) { $0.body += "\n第 6 位重连后会排到最前" }
+        for body in [
+            "跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码，告诉我原因和改法",
+            "按首次加入时间排序，把断言也改了，再跑一遍",
+            "改完补 3 个重连用例，覆盖断线、超时、换设备",
+        ] {
+            _ = try await store.createCard(body: body, under: order.id)
+        }
         let reproduce = try await store.createTask("复现乱序", under: order.id)
         try await store.setStatus(reproduce.id, .done)
         let sort = try await store.createTask("改成按首次加入时间排序", under: order.id)

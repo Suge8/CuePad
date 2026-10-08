@@ -66,8 +66,8 @@ extension CueStore {
     return String(cString: resolved)
   }
 
-  /// 某项目（nil = 未分类）里可见的灵感（不含任务，也不含挂在任务下的相关灵感），按手动顺序：卡片墙、未分类与 `card list` 列的就是它们。
-  /// 任务见 `tasks(_:)`，相关灵感见 `children(of:)`。
+  /// 某项目（nil = 未分类）里可见的灵感（不含任务，也不含挂在任务下的提示词），按手动顺序：卡片墙、未分类与 `card list` 列的就是它们。
+  /// 任务见 `tasks(_:)`，提示词见 `children(of:)`。
   public func cards(in project: UUID?) throws -> [Card] {
     try select(Card.self, where: "(\(cardActive)) AND (\(looseIdea)) AND projectID IS ?", [project], orderBy: "sortKey, id")
   }
@@ -107,7 +107,7 @@ extension CueStore {
     return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
   }
 
-  /// 一张任务的下级（子任务与相关灵感），按手动顺序；在回收站的不列。
+  /// 一张任务的下级（子任务与提示词），按手动顺序；在回收站的不列。
   public func children(of parent: UUID) throws -> [Card] {
     try select(Card.self, where: "parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL", [parent], orderBy: "sortKey, id")
   }
@@ -161,7 +161,7 @@ extension CueStore {
 
   /// 各项目（nil = 未分类）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
   /// 没有上级、上级不在（没到、在回收站），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `childMarks`。
-  /// 灵感（含相关灵感）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
+  /// 灵感（含提示词）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
   public func taskCounts() throws -> [UUID?: TaskCounts] {
     let rows = try db.query(
       """
@@ -176,17 +176,22 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
-  /// 各上级任务的直接子任务（不含相关灵感）完成数与总数；没有子任务的不在结果里。
+  /// 各上级任务的直接子任务（不含提示词）完成数与总数；没有子任务的不在结果里。
   /// 每条任务的直接下级，同级手动顺序：任务行的分段完成圈与"子任务 n/m"都由它推出，见 `ChildMark`。给了 `parent` 只读它的。
-  /// 灵感"交给过 Agent"只看发送记录里明确记下的：它自己的（cardID），或某次发送带上了它（partIDs）。
+  /// 提示词（任务下的灵感）"已回复"：它最近一次交给 Pi 会话之后，那个会话歇下了（这一轮做完）或已结束——
+  /// 会话状态从那之后才开始（`stateSince` 晚于发出时刻）。复制、发到应用不算交给 Agent。
   public func childMarks(of parent: UUID? = nil) throws -> [UUID: [ChildMark]] {
     let scope = parent == nil ? "" : "AND c.parentID = ?"
+    let session = SendTargetKind.piSession.rawValue
     let rows = try db.query(
       """
       SELECT c.parentID, c.todoAt IS NOT NULL,
         CASE WHEN c.todoAt IS NOT NULL THEN c.completedAt IS NOT NULL
-        ELSE EXISTS (SELECT 1 FROM sendRecords s WHERE s.cardID = c.id)
-          OR EXISTS (SELECT 1 FROM sendRecords s, json_each(s.partIDs) part WHERE part.value = c.id)
+        ELSE EXISTS (
+          SELECT 1 FROM sendRecords s JOIN piSessionStates p ON p.sessionID = s.targetRef
+          WHERE s.cardID = c.id AND s.targetKind = '\(session)'
+            AND s.sentAt = (SELECT MAX(q.sentAt) FROM sendRecords q WHERE q.cardID = c.id AND q.targetKind = '\(session)')
+            AND p.state IN ('\(PiWorkState.settled.rawValue)', '\(PiWorkState.ended.rawValue)') AND p.stateSince > s.sentAt)
         END
       FROM cards c
       WHERE c.parentID IS NOT NULL AND c.deletedAt IS NULL AND c.archivedAt IS NULL \(scope)
@@ -196,11 +201,9 @@ extension CueStore {
     return Dictionary(grouping: rows, by: \.parent).mapValues { $0.map(\.mark) }
   }
 
-  /// 发送记录，最近的在前（同一毫秒按写入先后）；给了 `card` 只要发出这条灵感或任务的那些（任务浮窗的发出记录）。
-  public func sendRecords(card: UUID? = nil) throws -> [SendRecord] {
-    let order = "sentAt DESC, rowid DESC"
-    guard let card else { return try select(SendRecord.self, orderBy: order) }
-    return try select(SendRecord.self, where: "cardID = ?", [card], orderBy: order)
+  /// 发送记录，最近的在前（同一毫秒按写入先后）。
+  public func sendRecords() throws -> [SendRecord] {
+    try select(SendRecord.self, orderBy: "sentAt DESC, rowid DESC")
   }
 
   /// 项目（nil = 未分类）里可见卡片的最近一次发送（时间与目标）：卡片 id → `LastSend`；从未发送的卡不在结果里。

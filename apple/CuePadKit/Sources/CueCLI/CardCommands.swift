@@ -4,7 +4,7 @@ import Foundation
 extension Command {
   static let card: [Command] = [
     Command(
-      path: ["card", "list"], summary: "列出灵感（散放的，不含任务与相关灵感；默认所有项目，项目内按手动顺序）",
+      path: ["card", "list"], summary: "列出灵感（散放的，不含任务与提示词；默认所有项目，项目内按手动顺序）",
       options: [
         .project("只列该项目"), .inbox, .allProjects, Opt("pinned", "只列资料（长期参考的灵感）"),
         Opt("archived", "列归档的灵感与任务"), Opt("trash", "列回收站里单独删除的灵感与任务"),

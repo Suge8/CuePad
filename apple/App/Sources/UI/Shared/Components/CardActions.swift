@@ -1,14 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 灵感与任务的菜单（长按 / Mac 右键，或浮窗与纸页的"⋯"），iOS 与 Mac 共用：有哪几项、什么顺序只在 `CardMenu`，这里只画。
+/// 灵感与任务的菜单（长按 / Mac 右键，或任务页与纸页的"⋯"），iOS 与 Mac 共用：有哪几项、什么顺序只在 `CardMenu`，这里只画。
 /// 交给 Agent 是平台各自的：Mac 发给当前目标（发给 Pi 会话时把灵感或任务关联到它），iOS 浮起交给 Agent 的输入框。
 struct CardActions: View {
     let card: Card
     /// "⋯"里的那一份（`CardMenu.more`）；false 是长按菜单。
     var more = false
-    /// "发出记录"在哪打开（任务浮窗推入一页）。
-    var showSends: (() -> Void)?
     @Environment(Workspace.self) private var workspace
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
@@ -39,7 +37,6 @@ struct CardActions: View {
                 workspace.perform { try await $0.updateCard(id) { $0.isPinned = item == .resource } }
             }
         case .move: moveMenu
-        case .sends: if let showSends { Button("发出记录", systemImage: "clock.arrow.circlepath", action: showSends) }
         case .copy: copy
         case .trash:
             Button("删除", systemImage: "trash", role: .destructive) {

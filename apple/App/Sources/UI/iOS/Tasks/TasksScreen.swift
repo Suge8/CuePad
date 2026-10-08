@@ -129,9 +129,10 @@ struct TaskLine: View {
     /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况），以及发给它的最近一条投送请求。
     var session: PiSessionState?
     var delivery: DeliveryRequest?
-    /// 直接下级（子任务与挂着的灵感）；完成圈分段与子任务进度由它推出。
+    /// 直接下级（提示词与子任务）；完成圈分段、提示词计数与子任务进度由它推出。
     var marks: [ChildMark]?
     private var subtasks: TaskProgress? { .subtasks(in: marks) }
+    private var tally: PromptTally { PromptTally(marks) }
     @Environment(\.taskStructure) private var structure
     @State private var confirmsSubtasks = false
     @Environment(Workspace.self) private var workspace
@@ -151,7 +152,7 @@ struct TaskLine: View {
         line
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, PromptMark(task).speech, TaskRing(marks).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, tally.text, TaskRing(marks).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
@@ -195,32 +196,32 @@ struct TaskLine: View {
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: phase) { $0 == .idle && $1 == .pending }
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(task.title.textGlyphs)
-                        .font(.body).strikethrough(done)
-                        .foregroundStyle(done ? palette.ink3 : palette.ink)
-                        .lineLimit(2)
-                    if !done { PromptMarkIcon(mark: PromptMark(task), showsSession: session != nil) }
-                }
+                Text(task.title.textGlyphs)
+                    .font(.body).strikethrough(done)
+                    .foregroundStyle(done ? palette.ink3 : palette.ink)
+                    .lineLimit(2)
                 if hasDetail { detail }
             }
             .padding(.vertical, hasDetail ? 6 : 0)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(.rect)
             .onTapGesture { navigation.openTask(task.id) }
+            if !done, tally.suggestsDone(task) { MarkDoneChip(action: tap).transition(.opacity) }
         }
+        .animation(Motion.quick, value: tally)
     }
 
-    private var hasDetail: Bool { project != nil || (!done && (session != nil || subtasks != nil)) }
+    private var hasDetail: Bool { project != nil || (!done && (session != nil || counts != nil)) }
 
-    /// 第二行：所在项目、子任务进度、交给 Pi 的会话此刻的状态（"Pi 正在工作 · 已运行 4:02"）。
+    /// "3 条提示词 · 1 已回复 · 子任务 1/2"。
+    private var counts: String? { [tally.text, subtasks.map(TaskCopy.progress)].compactMap { $0 }.joined(separator: " · ").nonEmpty }
+
+    /// 第二行：提示词计数、子任务进度、所在项目、交给的会话此刻的状态（"正在工作 · 已运行 4:02"）。
     private var detail: some View {
         HStack(spacing: 10) {
-            if let subtasks, !done {
-                Text(TaskCopy.progress(subtasks)).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
-            }
+            // 计数不截；放不下时先截项目名，再截会话状态
+            if !done, let counts = counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3).fixedSize() }
             if let project {
-                // 一行放不下时先截项目名，进度与会话状态不截
                 HStack(spacing: 4) {
                     ProjectGlyph(project: project, size: 10)
                     Text(project.name)
@@ -231,13 +232,21 @@ struct TaskLine: View {
             if let session, !done {
                 Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
                     let shown = services.settings.shown(session, delivery: delivery)
-                    HStack(spacing: 4) {
-                        PiStateDot(shown: shown, size: 6)
-                        Text(shown.presence).foregroundStyle(shown.tint(palette))
-                        PiElapsed(session: session, font: .caption)
+                    // 放不下时先省掉用时，再只留状态点
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 4) {
+                            PiStateDot(shown: shown, size: 6)
+                            Text(shown.presence).foregroundStyle(shown.tint(palette))
+                            PiElapsed(session: session, font: .caption)
+                        }
+                        HStack(spacing: 4) {
+                            PiStateDot(shown: shown, size: 6)
+                            Text(shown.presence).foregroundStyle(shown.tint(palette))
+                        }
+                        PiStateDot(shown: shown, size: 6).accessibilityLabel(shown.presence)
                     }
-                    .fixedSize()
                 }
+                .layoutPriority(-0.5)
                 .buttonStyle(.plain)
                 .accessibilityHint("看 Agent 的近况")
             }

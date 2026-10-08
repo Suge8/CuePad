@@ -58,7 +58,7 @@ public struct Project: Identifiable, Equatable, Sendable {
 }
 
 /// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
-/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与相关灵感（灵感），正文就是给 Agent 的话。
+/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与提示词（挂在任务下的灵感，要交给 Agent 的话）；任务的正文只是标题与一句说明（`CueTask`）。
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -66,7 +66,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var projectID: UUID?
   /// 纯字符串正文：分割线为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
-  /// 资料：项目里长期参考的灵感（项目页顶部一组，交给 Agent 时可一并带上）。字段名沿用同步记录里的 isPinned。
+  /// 资料：项目里长期参考的灵感（项目页任务区下面一组）。字段名沿用同步记录里的 isPinned。
   public var isPinned: Bool
   public var variableValues: [String: String]
   /// 冲突副本指向的原卡：同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡，
@@ -89,7 +89,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
 
-  /// 任务 → 子任务 → 子任务（相关灵感挂在哪一级都算在它下面一级）。
+  /// 任务 → 子任务 → 子任务（提示词挂在哪一级都算在它下面一级）。
   public static let maxDepth = 3
 
   public var isTask: Bool { todoAt != nil }
@@ -156,8 +156,8 @@ public enum AgentHandoff: Hashable, Sendable {
   case launching
 }
 
-/// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；相关灵感（挂着的灵感）交给过 Agent 算做完——
-/// 它自己有发送记录，或某次发送明确记着带上了它（`SendRecord.partIDs`）。见 `CueStore.childMarks`。
+/// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；提示词（挂着的灵感）交给 Agent 后那一轮做完（已回复）算做完。
+/// 见 `CueStore.childMarks`。
 public struct ChildMark: Equatable, Sendable {
   public let isTask: Bool
   public let isDone: Bool
@@ -185,20 +185,6 @@ public struct SendRecord: Identifiable, Equatable, Sendable {
   public var cardID: UUID?
   public var sentAt: Date
   public var modifiedAt: Date
-  /// 这次一并带上的灵感（任务连同挂着的灵感、资料一起交给 Agent）；它们"交给过 Agent"只看这里与它们自己的发送记录。
-  public var partIDs: [UUID] = []
-}
-
-/// `partIDs` 列：JSON 数组（小写 UUID，与 id 列同一写法，SQL 里可用 json_each 对上）；没有时为 NULL。
-enum PartIDs {
-  static func encode(_ ids: [UUID]) -> String? {
-    ids.isEmpty ? nil : String(decoding: try! JSONEncoder().encode(ids.map { $0.uuidString.lowercased() }), as: UTF8.self)
-  }
-
-  static func decode(_ text: String?) -> [UUID] {
-    guard let data = text?.data(using: .utf8), let strings = try? JSONDecoder().decode([String].self, from: data) else { return [] }
-    return strings.compactMap(UUID.init(uuidString:))
-  }
 }
 
 /// 图片附件元数据；文件按内容哈希存在磁盘，缩略图是派生缓存不入库。
@@ -321,7 +307,7 @@ public struct SearchResults: Sendable {
   public var totalCards: Int
 }
 
-/// 侧栏用：项目（nil = 未分类）的灵感数（顶层的，不含任务与相关灵感）与卡片最近修改时间；没有卡片时 `lastModifiedAt` 为 nil。
+/// 侧栏用：项目（nil = 未分类）的灵感数（顶层的，不含任务与提示词）与卡片最近修改时间；没有卡片时 `lastModifiedAt` 为 nil。
 public struct ProjectSummary: Equatable, Sendable {
   public var projectID: UUID?
   public var cardCount: Int
@@ -409,14 +395,14 @@ extension Card: Record {
 
 extension SendRecord: Record {
   static let table = Table.sendRecords
-  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt", "partIDs"]
-  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt, PartIDs.encode(partIDs)] }
+  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt"]
+  var bindings: [any SQLBindable] { [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt] }
   init(row: Row) {
     self.init(
       id: row.uuid(0), content: row.text(1),
       targetKind: Open(rawValue: row.text(2)), targetName: row.text(3),
       targetRef: row.textOrNil(4), cardID: row.uuidOrNil(5),
-      sentAt: row.date(6), modifiedAt: row.date(7), partIDs: PartIDs.decode(row.textOrNil(8)))
+      sentAt: row.date(6), modifiedAt: row.date(7))
   }
 }
 

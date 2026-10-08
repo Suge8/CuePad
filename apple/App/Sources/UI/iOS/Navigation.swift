@@ -142,10 +142,9 @@ final class Navigation {
         push(.card(id))
     }
 
-    /// 交给 Agent：浮起交给 Agent 的输入框，正文带在里面（`HandOffInput`）。`parts`：任务一并带上的相关灵感与资料。
-    func handToAgent(_ card: Card, text: String? = nil, parts: [Card] = []) {
-        let body = TaskBundle.text(task: text ?? Outgoing.text(of: card), parts: parts)
-        outbox = Outbox(content: body, card: card.id, project: card.projectID, parts: parts.map(\.id))
+    /// 交给 Agent：浮起交给 Agent 的输入框，正文带在里面（`HandOffInput`）。
+    func handToAgent(_ card: Card, text: String? = nil) {
+        outbox = Outbox(content: text ?? Outgoing.text(of: card), card: card.id, project: card.projectID)
     }
 
     /// 交给 Agent 时选了新会话：收起交给 Agent 的输入框，换成新会话的，草稿带过去。

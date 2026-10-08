@@ -84,11 +84,10 @@ struct TaskPromptTests {
 
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
-        _ = try await recorder.update(sessionID: "s1", state: .thinking, title: "atlas")
+        try await enter(.thinking, recorder)
         #expect(try await state(of: prompt, in: task) == "working atlas")
 
-        try await Task.sleep(for: .milliseconds(5))
-        _ = try await recorder.update(sessionID: "s1", state: .settled)
+        try await enter(.settled, recorder)
         #expect(try await state(of: prompt, in: task) == "replied atlas")
     }
 
@@ -119,9 +118,14 @@ struct TaskPromptTests {
     private func reply(to prompt: Card) async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
-        _ = try await recorder.update(sessionID: "s1", state: .thinking, title: "atlas")
+        try await enter(.thinking, recorder)
+        try await enter(.settled, recorder)
+    }
+
+    /// 会话 atlas 进入 `state`（时刻晚于刚才的发出：按毫秒比先后）。
+    private func enter(_ state: PiWorkState, _ recorder: PiStateRecorder) async throws {
         try await Task.sleep(for: .milliseconds(5))
-        _ = try await recorder.update(sessionID: "s1", state: .settled)
+        _ = try await recorder.update(sessionID: "s1", state: state, title: "atlas", times: PiTimes(stateSince: .now, busySince: nil))
     }
 
     private func state(of prompt: Card, in task: Card) async throws -> String {

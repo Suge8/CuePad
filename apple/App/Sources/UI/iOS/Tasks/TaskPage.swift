@@ -1,109 +1,52 @@
 #if os(iOS)
 import CueStore
 import SwiftUI
-import UIKit
 
-/// 任务浮窗里的一页，三块：
-/// ① 标题行：左边完成圈（点它完成），正文第一行就是标题，右上"⋯"（项目、发出记录、复制、改回灵感、归档、删除）；
-/// ② 给 Agent 的话：正文是焦点，只有标题时贴着它一句"写下要 Agent 做什么…"；底部唯一主按钮"交给 Agent"，
-///    有相关灵感或本项目资料时按钮上面一行可勾的小胶囊（`BundlePicker`），没有就不出现；
-/// ③ 进展：交给的会话与子任务、相关灵感合成一个清单，"＋"加子任务或灵感（`TaskProgressList`）。
-/// 写字时（键盘出来）只留正文，键盘上方的工具栏也能交给 Agent。
-struct TaskPage<Editor: View>: View {
+/// 任务页（任务浮窗里、或整页推入）：顶上是完成圈与任务的标题、一句说明（`TaskHeading`），右上"⋯"；
+/// 主体是提示词卡片（`PromptList`）——点开是灵感的大编辑区，卡上就地交给 Agent，末尾写一条新的并直接进入编辑；
+/// 子任务在提示词之后（`SubtaskList`）。提示词与子任务都在这一页的导航里推进去。
+struct TaskPage: View {
     let card: Card
-    /// 正文（含还没存下的）除了标题还有没有要求。
-    let written: Bool
-    /// 交给 Agent：带上选中的相关灵感与资料。
-    let hand: (_ parts: [Card]) -> Void
-    let continuePrompt: () -> Void
-    @ViewBuilder let editor: Editor
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var detail: TaskDetail?
-    @State private var typing = false
-    @State private var showsSends = false
-    @State private var bundle = TaskBundleChoice()
-
-    private static var inset: CGFloat { 20 }
-    /// 进展一块最多占这么高，多了在块里滚。
-    private static var progressHeight: CGFloat { 190 }
+    @State private var opened: UUID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 0) {
-                TaskRingButton(task: card, marks: detail?.marks).padding(.leading, 6).padding(.top, 14)
-                editor
-            }
-            .overlay(alignment: .topTrailing) { more.padding(.top, 10).padding(.trailing, 8) }
-            .overlay(alignment: .bottomLeading) {
-                if !typing, !written { PromptHint(action: continuePrompt).padding(.leading, Self.inset + 30).padding(.bottom, 4) }
-            }
-            if !typing {
-                VStack(alignment: .leading, spacing: 8) {
-                    BundlePicker(detail: detail, choice: $bundle)
-                    AgentHandButton { hand(bundle.parts(detail)) }
-                        .accessibilityHint(written ? "把这段话交给 Mac 上的 Agent 会话" : "还只有标题，也可以先交出去")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                HStack(alignment: .top, spacing: 4) {
+                    TaskRingButton(task: card, marks: detail?.marks).offset(y: -8)
+                    TaskHeading(task: card).padding(.top, 2)
+                    more.offset(y: -8)
                 }
-                .padding(.horizontal, Self.inset).padding(.vertical, 10)
-                .transition(.opacity)
-                Divider().overlay(palette.hair)
-                ScrollView {
-                    TaskProgressList(task: card, detail: detail).padding(.horizontal, Self.inset).padding(.vertical, 6)
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(maxHeight: Self.progressHeight)
-                .fixedSize(horizontal: false, vertical: true)
-                .transition(.opacity)
+                PromptList(task: card, detail: detail, open: { opened = $0.id }, hand: { navigation.handToAgent($0) }, write: write)
+                SubtaskList(task: card, detail: detail, open: { opened = $0.id })
             }
+            .padding(.leading, 8).padding(.trailing, 12).padding(.top, 20).padding(.bottom, 40)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(palette.paper)
         .toolbar(.hidden, for: .navigationBar)
-        .animation(Motion.spatial(Motion.quick, reduceMotion: reduceMotion), value: typing)
-        .navigationDestination(isPresented: $showsSends) { sendsPage }
+        .navigationDestination(item: $opened) { CardEditorScreen(cardID: $0) }
         .observing(services.store, TaskDetail.tables, id: card.id, into: $detail, onError: workspace.fail) { [id = card.id] in
             try TaskDetail.read(id, from: $0)
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
     }
 
     private var more: some View {
-        Menu("更多", systemImage: "ellipsis") { CardActions(card: card, more: true) { showsSends = true } }
+        Menu("更多", systemImage: "ellipsis") { CardActions(card: card, more: true) }
             .labelStyle(.iconOnly)
             .font(.body.weight(.semibold)).foregroundStyle(palette.ink2)
             .frame(width: 44, height: 44).contentShape(.rect)
     }
 
-    private var sendsPage: some View {
-        List {
-            SendRecordList(records: detail?.sends ?? [])
-                .listRowBackground(palette.paper)
-        }
-        .deskBackground()
-        .navigationTitle("发出记录")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-/// 交给 Agent 的主按钮：一整条朱砂胶囊（签名色只落在主动作上），在任务浮窗正文下面、灵感纸页右下。
-struct AgentHandButton: View {
-    var fullWidth = true
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: action) {
-            Label("交给 Agent", systemImage: "paperplane.fill")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(palette.onSignature)
-                .padding(.horizontal, 18).frame(maxWidth: fullWidth ? .infinity : nil).frame(height: 48)
-                .background(palette.signature, in: .capsule)
-                .contentShape(.capsule)
-        }
-        .buttonStyle(PressStyle())
-        .sensoryFeedback(.impact(weight: .light), trigger: 0)
+    /// 写一条提示词：先建好，直接进入它的编辑。
+    private func write() {
+        let task = card.id
+        workspace.attempt { opened = try await workspace.createPrompt(under: task).id }
     }
 }
 #endif

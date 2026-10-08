@@ -10,6 +10,8 @@ nonisolated private struct EditorData: Sendable {
     var project: Project?
     /// 这张卡最近一次发给谁：过渡中纸上的卡面与墙上那张一模一样（见 `CardFace`）。
     var lastTarget: String?
+    /// 提示词所在的任务（挂在任务下的灵感）。
+    var task: Card?
 }
 
 /// 等到屏幕下一次刷新：分几帧做的事，每一步的改动落在自己那一帧里（上一步已经提交）。
@@ -66,10 +68,8 @@ struct CardEditorPage: View {
     @State private var paperGone = false
     @State private var pageOrigin: CGPoint = .zero
     @State private var paperFrame: CGRect = .zero
-    /// 任务才有：进展、发出记录与"带上"读它（与手机任务浮窗同一份 `TaskDetail`）。
+    /// 任务才有：提示词与子任务（与手机任务页同一份 `TaskDetail`）。
     @State private var taskDetail: TaskDetail?
-    @State private var bundle = TaskBundleChoice()
-    @State private var showsSends = false
 
     private static let paperWidth: CGFloat = 760
     private static let barClearance: CGFloat = 84
@@ -85,19 +85,7 @@ struct CardEditorPage: View {
             if stage >= .editor, let data, let initialText {
                 VStack(alignment: .leading, spacing: 10) {
                     meta(data)
-                    if data.card.isTask {
-                        VStack(alignment: .leading, spacing: 4) {
-                            TaskPageHeader(task: data.card, detail: taskDetail)
-                            if showsSends {
-                                ScrollView { VStack(alignment: .leading, spacing: 0) { SendRecordList(records: taskDetail?.sends ?? []) } }
-                                    .frame(maxHeight: 160).fixedSize(horizontal: false, vertical: true)
-                                    .transition(.opacity)
-                            }
-                        }
-                        .padding(.horizontal, 64)
-                        Divider().overlay(palette.hair).padding(.horizontal, 64)
-                    }
-                    editor(data, initialText)
+                    if data.card.isTask { taskContent(data.card) } else { editor(data, initialText) }
                 }
                 .frame(maxWidth: Self.paperWidth)
                 .padding(.horizontal, 24)
@@ -108,10 +96,9 @@ struct CardEditorPage: View {
         }
         .overlay(alignment: .bottom) {
             // 底栏不在纸上：提前挂好、不可见，随编辑器出现后淡入、关闭时先退
-            if stage >= .bar, let data {
+            if stage >= .bar, let data, !data.card.isTask {
                 let shown = isOpen && editorShown
-                EditorBar(card: data.card, text: liveText, handle: handle, selecting: selecting,
-                          detail: data.card.isTask ? taskDetail : nil, bundle: $bundle)
+                EditorBar(card: data.card, text: liveText, handle: handle, selecting: selecting)
                     .padding(.bottom, 16)
                     .opacity(shown ? 1 : 0)
                     .disabled(!shown)
@@ -131,7 +118,8 @@ struct CardEditorPage: View {
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(
                 card: card, project: try card.projectID.flatMap { try store.project($0) },
-                lastTarget: try store.lastSends(in: card.projectID)[card.id]?.target.name)
+                lastTarget: try store.lastSends(in: card.projectID)[card.id]?.target.name,
+                task: try card.isTask ? nil : card.parentID.flatMap { try store.card($0) })
         }
         .onChange(of: data?.card.id, initial: true) {
             guard initialText == nil, let card = data?.card else { return }
@@ -145,7 +133,43 @@ struct CardEditorPage: View {
         .onChange(of: paperFrame.isEmpty || initialText == nil, initial: true) { _, waiting in
             if !waiting, isOpen, stage == .paper { prepare() }
         }
-        .onDisappear { if let autosave { Task { await autosave.flush() } } }
+        .onDisappear {
+            // 提示词什么都没写就离开：不留下这条
+            let id = cardID, isPrompt = data?.task != nil
+            if let autosave {
+                Task {
+                    await autosave.flush()
+                    if isPrompt { try? await workspace.dropIfEmpty(id) }
+                }
+            }
+        }
+    }
+
+    /// 任务的纸页：完成圈与标题、一句说明，下面是提示词卡片与子任务（与手机任务页同一组件）。打开提示词或子任务是换一页。
+    private func taskContent(_ task: Card) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(alignment: .top, spacing: 6) {
+                    TaskRingButton(task: task, marks: taskDetail?.marks).padding(.top, 3)
+                    TaskHeading(task: task)
+                }
+                PromptList(
+                    task: task, detail: taskDetail, open: { workspace.openCard = $0.id }, hand: hand,
+                    write: {
+                        let id = task.id
+                        workspace.attempt { workspace.openCard = try await workspace.createPrompt(under: id).id }
+                    })
+                SubtaskList(task: task, detail: taskDetail, open: { workspace.openCard = $0.id })
+            }
+            .padding(.horizontal, 64).padding(.vertical, 8)
+        }
+        .scrollIndicators(.automatic)
+    }
+
+    /// 提示词卡上的"交给 Agent"：发给当前目标（与底部输入栏、灵感纸页同一个），发给 Pi 会话时提示词关联到它。
+    private func hand(_ prompt: Card) {
+        let choice = workspace.effectiveChoice(for: prompt.projectID), text = Outgoing.text(of: prompt), id = prompt.id
+        Task { await workspace.send(text, via: choice, card: id) }
     }
 
     /// 原卡片在本页里的边框；找不到原卡片（不在墙上）时为 nil。
@@ -253,6 +277,10 @@ struct CardEditorPage: View {
         HStack(spacing: 8) {
             ProjectGlyph(project: data.project, size: 12)
             Text(data.project?.name ?? "未分类").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
+            if let task = data.task {
+                Text("·")
+                Label(task.title, systemImage: "checklist").lineLimit(1).help("这条任务的提示词")
+            }
             Text("·")
             Text(DateLabel.short(data.card.modifiedAt))
             if let status = saveState.text {
@@ -263,7 +291,7 @@ struct CardEditorPage: View {
             if data.card.isTask { Label("任务", systemImage: "checklist") }
             Spacer(minLength: 0)
             Menu("更多", systemImage: "ellipsis") {
-                CardActions(card: data.card, more: true) { withAnimation(Motion.quick) { showsSends.toggle() } }
+                CardActions(card: data.card, more: true)
             }
             .labelStyle(.iconOnly).menuStyle(.button).menuIndicator(.hidden).buttonStyle(.borderless).fixedSize()
         }
@@ -357,24 +385,10 @@ private struct EditorBar: View {
     let text: String
     let handle: EditorHandle
     let selecting: Bool
-    /// 任务的下级与资料（灵感是 nil）：发送钮上面一行"带上"，与手机任务浮窗同一组件。
-    let detail: TaskDetail?
-    @Binding var bundle: TaskBundleChoice
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    private static let pickerWidth: CGFloat = 560
-
     var body: some View {
-        VStack(spacing: 8) {
-            if !selecting {
-                BundlePicker(detail: detail, choice: $bundle).frame(maxWidth: Self.pickerWidth).fixedSize()
-            }
-            controls
-        }
-    }
-
-    private var controls: some View {
         let names = CueVariables.names(in: text)
         return GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
@@ -402,27 +416,16 @@ private struct EditorBar: View {
                         .transition(.opacity)
                 }
                 let start = workspace.newSessionHandOff(for: card)
-                SendControl(project: card.projectID, newSession: start.map { start in { start(newSessionText) } }) { send($0, whole: false) }
+                SendControl(project: card.projectID, newSession: start.map { start in { start(outgoing(whole: false)) } }) { send($0, whole: false) }
             }
             .animation(Motion.quick, value: selecting)
         }
     }
 
-    /// 发出去的正文：选中了就只发选中的部分（`whole` 时总是整张）；交给 Agent 整张时连同"带上"的一起。
+    /// 发出去的正文：选中了就只发选中的部分（`whole` 时总是整张）。
     private func send(_ choice: AppServices.Destination, whole: Bool) {
         let outgoing = outgoing(whole: whole), id = card.id
-        if whole || handle.selection != nil {
-            Task { await workspace.send(outgoing, via: choice, card: id) }
-        } else {
-            let detail = detail, bundle = bundle
-            Task { await workspace.handOff(id, body: outgoing, detail: detail, bundle: bundle, via: choice) }
-        }
-    }
-
-    /// 开新会话带过去的话：选中了是选中的部分，否则正文连同"带上"的。
-    private var newSessionText: String {
-        let body = outgoing(whole: false)
-        return handle.selection != nil ? body : TaskBundle.text(task: body, parts: bundle.parts(detail))
+        Task { await workspace.send(outgoing, via: choice, card: id) }
     }
 
     private func outgoing(whole: Bool) -> String {
@@ -487,16 +490,4 @@ private struct VariablesForm: View {
     }
 }
 
-/// Mac 纸页上任务正文上方的一块：完成圈与进展（`TaskProgressList`）。
-private struct TaskPageHeader: View {
-    let task: Card
-    let detail: TaskDetail?
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            TaskRingButton(task: task, marks: detail?.marks)
-            TaskProgressList(task: task, detail: detail)
-        }
-    }
-}
 #endif

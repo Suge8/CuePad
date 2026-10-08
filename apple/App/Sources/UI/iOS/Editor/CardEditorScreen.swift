@@ -8,11 +8,14 @@ import SwiftUI
 nonisolated private struct EditorData: Sendable {
     var card: Card
     var project: Project?
+    /// 提示词所在的任务（挂在任务下的灵感）。
+    var task: Card?
 }
 
 /// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值、发送；选中文字时发送只发选中的部分）与自动保存在这里，
-/// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目与"时间 · 资料"，
-/// 右下一颗"交给 Agent"（⌘↩），右边"⋯"里是分享与 `CardMenu.more`；任务是 `TaskPage`（标题行、给 Agent 的话、进展三块）。
+/// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目（提示词写它的任务）
+/// 与"时间 · 资料"，右下一颗"交给 Agent"（⌘↩），右边"⋯"里是分享与 `CardMenu.more`；任务是 `TaskPage`（标题、提示词、子任务）。
+/// 提示词离开时什么都没写就不留下（`Workspace.dropIfEmpty`）。
 struct CardEditorScreen: View {
     let cardID: UUID
     /// 还没读到卡时先按哪种外框排（任务浮窗里是任务），读到后以卡为准。
@@ -51,7 +54,9 @@ struct CardEditorScreen: View {
             }
             .observing(services.store, [.cards, .projects], id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
-                return EditorData(card: card, project: try card.projectID.flatMap { try store.project($0) })
+                return EditorData(
+                    card: card, project: try card.projectID.flatMap { try store.project($0) },
+                    task: try card.isTask ? nil : card.parentID.flatMap { try store.card($0) })
             }
             .onChange(of: data?.card.id, initial: true) {
                 guard initialText == nil, let card = data?.card else { return }
@@ -61,7 +66,13 @@ struct CardEditorScreen: View {
             .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { dismiss() } }
             .onAppear(perform: makeAutosave)
             .onDisappear {
-                if let autosave { Task { await autosave.flush() } }
+                let id = cardID, isPrompt = data?.task != nil
+                if let autosave {
+                    Task {
+                        await autosave.flush()
+                        if isPrompt { try? await workspace.dropIfEmpty(id) }
+                    }
+                }
                 if let flushToken { services.removeBackgroundFlush(flushToken) }
             }
     }
@@ -71,17 +82,7 @@ struct CardEditorScreen: View {
 
     @ViewBuilder private var frame: some View {
         if isTask {
-            if let data {
-                TaskPage(
-                    card: data.card, written: TaskPrompt.isWritten(liveText), hand: { handToAgent(with: $0) },
-                    continuePrompt: handle.continueAtEnd
-                ) {
-                    // 右边让出"⋯"的位置
-                    editor.padding(.trailing, 36)
-                }
-            } else {
-                palette.paper
-            }
+            if let data { TaskPage(card: data.card) } else { palette.paper }
         } else {
             editor
                 // 灵感最常做的是交给 Agent：贴着正文右下一颗主按钮，写字时让给键盘上方的工具栏
@@ -96,7 +97,7 @@ struct CardEditorScreen: View {
                 }
                 .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .floatingHeader(data.map { $0.project?.name ?? "未分类" } ?? "", detail: data.map(Self.detail) ?? "") { actions }
+                .floatingHeader(data.map(Self.place) ?? "", detail: data.map(Self.detail) ?? "") { actions }
         }
     }
 
@@ -120,13 +121,17 @@ struct CardEditorScreen: View {
         }
     }
 
-    /// 任务的正文左边紧挨着完成圈。
-    private var inset: CGFloat { isTask ? 6 : wide ? 44 : 20 }
+    private var inset: CGFloat { wide ? 44 : 20 }
 
-    /// 顶栏的一行："03:36 · 资料"。
+    /// 顶栏中间：提示词写它的任务，其余写所属项目。
+    private static func place(_ data: EditorData) -> String {
+        data.task?.title ?? data.project?.name ?? "未分类"
+    }
+
+    /// 顶栏的一行："03:36 · 资料"；提示词是"提示词 · 03:36"。
     private static func detail(_ data: EditorData) -> String {
         let marks = [data.card.isPinned ? "资料" : nil].compactMap { $0 }
-        return ([DateLabel.short(data.card.modifiedAt)] + marks).joined(separator: " · ")
+        return ((data.task != nil ? ["提示词"] : []) + [DateLabel.short(data.card.modifiedAt)] + marks).joined(separator: " · ")
     }
 
     /// 顶栏右边的"⋯"：从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
@@ -141,17 +146,15 @@ struct CardEditorScreen: View {
         .disabled(data == nil)
     }
 
-    private func sendToMac() { handToAgent(with: []) }
-
     private var ideaHand: some View {
-        AgentHandButton(fullWidth: false, action: sendToMac).padding(.trailing, 16).padding(.bottom, 16)
+        AgentHandButton(action: sendToMac).padding(.trailing, 16).padding(.bottom, 16)
     }
 
-    /// 交给 Agent（浮起交给 Agent 的输入框）：选中了文字就只发选中的部分；任务可一并带上相关灵感与资料（`TaskBundle`）。
-    private func handToAgent(with parts: [Card]) {
+    /// 交给 Agent（浮起交给 Agent 的输入框）：选中了文字就只发选中的部分。
+    private func sendToMac() {
         guard let card = data?.card else { return }
         let body = handle.selection.map { Outgoing.text(body: $0, values: card.variableValues) } ?? outgoing(card)
-        navigation.handToAgent(card, text: body, parts: parts)
+        navigation.handToAgent(card, text: body)
     }
 
     /// 编辑菜单里的选区动作。
@@ -193,6 +196,25 @@ struct CardEditorScreen: View {
         self.autosave = autosave
         // 进入后台时由壳层等它落盘：之后 App 可能被系统结束，离开页面的 onDisappear 不会再来
         flushToken = services.addBackgroundFlush { await autosave.flush() }
+    }
+}
+
+/// 交给 Agent 的主按钮：朱砂胶囊（签名色只落在主动作上），在灵感纸页右下。
+struct AgentHandButton: View {
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: action) {
+            Label("交给 Agent", systemImage: "paperplane.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(palette.onSignature)
+                .padding(.horizontal, 18).frame(height: 48)
+                .background(palette.signature, in: .capsule)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(PressStyle())
+        .sensoryFeedback(.impact(weight: .light), trigger: 0)
     }
 }
 

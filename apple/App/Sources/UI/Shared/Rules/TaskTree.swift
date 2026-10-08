@@ -157,7 +157,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
         return nil
     }
 
-    /// 灵感拖到任务上成为相关灵感：落在哪一行就挂到它下面（整行都算，没有插入线——灵感不进任务的层级），排在它的下级之后；行外不接。
+    /// 灵感拖到任务上成为提示词：落在哪一行就挂到它下面（整行都算，没有插入线——灵感不进任务的层级），排在它的下级之后；行外不接。
     /// 命中哪一行与任务拖放同一套（`hit`）。
     func drop(idea: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint) -> TaskDrop? {
         let candidates = rows.filter { frames[$0.id] != nil }

@@ -99,18 +99,12 @@ extension Workspace {
 
     /// 发送存储格式正文；成功后提示，Pi 忙时转为询问马上说还是等它做完再说。返回是否已发出（发给 Pi 时是已送达）。
     @discardableResult
-    /// 交给 Agent 一张卡：正文连同"带上"选中的相关灵感与资料（灵感没有可带的，就是正文），发送记录记下带上了哪些。
-    func handOff(_ card: UUID, body: String, detail: TaskDetail?, bundle: TaskBundleChoice, via choice: AppServices.Destination) async -> Bool {
-        let parts = bundle.parts(detail)
-        return await send(TaskBundle.text(task: body, parts: parts), via: choice, card: card, parts: parts.map(\.id))
-    }
-
-    func send(_ stored: String, via choice: AppServices.Destination, card: UUID? = nil, parts: [UUID] = []) async -> Bool {
-        await send(stored, via: choice, card: card, parts: parts, remembering: choice)
+    func send(_ stored: String, via choice: AppServices.Destination, card: UUID? = nil) async -> Bool {
+        await send(stored, via: choice, card: card, remembering: choice)
     }
 
     private func send(
-        _ stored: String, via choice: AppServices.Destination, card: UUID?, parts: [UUID], remembering: AppServices.Destination
+        _ stored: String, via choice: AppServices.Destination, card: UUID?, remembering: AppServices.Destination
     ) async -> Bool {
         let done = switch choice {
         case .clipboard: "已复制"
@@ -119,7 +113,7 @@ extension Workspace {
         default: "已" + action(for: choice)
         }
         do {
-            try await services.send(stored, to: choice, card: card, parts: parts)
+            try await services.send(stored, to: choice, card: card)
             remember(remembering)
             say(done)
             return true
@@ -128,7 +122,7 @@ extension Workspace {
             say("\(done)，但没能记下这次发送：\(reason)", isError: true)
             return true
         } catch SendError.piSessionBusy {
-            if case .pi(let id, _) = choice { busySend = BusySend(text: stored, session: id, card: card, parts: parts) }
+            if case .pi(let id, _) = choice { busySend = BusySend(text: stored, session: id, card: card) }
             return false
         } catch {
             fail(error)
@@ -147,7 +141,7 @@ extension Workspace {
         busySend = nil
         Task {
             await send(
-                pending.text, via: .pi(pending.session, mode), card: pending.card, parts: pending.parts,
+                pending.text, via: .pi(pending.session, mode), card: pending.card,
                 remembering: .pi(pending.session, .send))
         }
     }

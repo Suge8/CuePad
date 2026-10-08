@@ -48,8 +48,8 @@ DEFINE SCHEMA
         cardID        STRING,
         sentAt        INT64,
         modifiedAt    INT64,
-        partIDs       STRING,
         taskID        STRING,
+        partIDs       STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -109,8 +109,8 @@ DEFINE SCHEMA
         createdAt     INT64,
         completedAt   INT64,
         modifiedAt    INT64,
-        partIDs       STRING,
         taskID        STRING,
+        partIDs       STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

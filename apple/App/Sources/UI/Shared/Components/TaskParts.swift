@@ -1,28 +1,20 @@
 import CueStore
+import CueText
 import SwiftUI
-#if os(iOS)
-import PhotosUI
-#else
-import AppKit
-#endif
 
-// 任务浮窗（手机半屏）与 Mac 纸页共用的几块：任务就是给 Agent 的话，正文是焦点；
-// 这里是正文周围的次要信息——状态、Agent（交给的会话与发出记录）、下级（子任务与相关灵感）。
+// 任务页（手机浮窗、Mac 整页）的几块：任务是一件要做成的事——标题与一句说明（`TaskHeading`）；
+// 要交给 Agent 的话是挂在它下面的提示词，一张一张卡（`PromptList`），是这一页的主体；子任务是次要的一组（`SubtaskList`）。
 
-/// 一条任务的下级、交给的会话与发出记录：浮窗与纸页一次读出，各块只画。
+/// 一条任务的下级、各自做完没有、交给的会话：任务页一次读出，各块只画。
 nonisolated struct TaskDetail: Sendable, Equatable {
-    /// 子任务与相关灵感，同级手动顺序（任务与灵感混排，按用户放的位置）。
+    /// 提示词与子任务，同级手动顺序。
     var children: [Card]
-    /// 能挑来作相关灵感的：本项目散放的灵感，最近改过的在前。
-    var ideas: [Card]
-    var session: PiSessionState?
-    var delivery: DeliveryRequest?
-    /// 每一次发出去的原文，最近的在前。
-    var sends: [SendRecord]
-    /// 下级各自做完没有（与 `children` 同序），完成圈按它分段。
+    /// 下级各自做完没有（与 `children` 同序）：提示词已回复、子任务完成。完成圈按它分段。
     var marks: [ChildMark]
-    /// 本项目的资料（长期参考的灵感），交给 Agent 时可一并带上。
-    var resources: [Card]
+    /// 提示词交给的会话（含手机发出还没执行的、正在开的新会话）。
+    var agents: AgentLinks
+    /// 能挑来作提示词的：本项目散放的灵感，最近改过的在前。
+    var ideas: [Card]
 
     static let tables: Set<StoreTable> = [.cards, .piSessionStates, .deliveryRequests, .sendRecords]
 
@@ -30,82 +22,301 @@ nonisolated struct TaskDetail: Sendable, Equatable {
 
     static func read(_ id: UUID, from store: isolated CueStore) throws -> TaskDetail {
         let task = try store.card(id)
-        let item = try task?.piSessionID.flatMap {
-            try store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: $0))).items.first
-        }
-        let ideas = try store.cards(in: task?.projectID).sorted { $0.modifiedAt > $1.modifiedAt }.prefix(ideaLimit)
+        let ideas = try store.cards(in: task?.projectID).filter { !$0.isTask && !$0.isPinned }.sorted { $0.modifiedAt > $1.modifiedAt }
         return TaskDetail(
-            children: try store.children(of: id), ideas: Array(ideas.filter { !$0.isPinned }), session: item?.state, delivery: item?.delivery,
-            sends: try store.sendRecords(card: id), marks: try store.childMarks(of: id)[id] ?? [],
-            resources: try store.cards(in: task?.projectID).filter(\.isPinned))
+            children: try store.children(of: id), marks: try store.childMarks(of: id)[id] ?? [],
+            agents: try AgentLinks.read(from: store), ideas: Array(ideas.prefix(ideaLimit)))
     }
 
+    var prompts: [Card] { children.filter { !$0.isTask } }
     var subtasks: [Card] { children.filter(\.isTask) }
-    var related: [Card] { children.filter { !$0.isTask } }
 
-}
-
-/// 交给 Agent 时一并带上什么：挂着的灵感默认都带（点一下取消），本项目资料默认不带（点一下带上）。
-/// 选择只活在这一次打开的浮窗或纸页里，带上的内容见 `TaskBundle`。
-struct TaskBundleChoice: Equatable {
-    /// 点掉不带的相关灵感。
-    var left: Set<UUID> = []
-    var withResources = false
-
-    func parts(_ detail: TaskDetail?) -> [Card] {
-        guard let detail else { return [] }
-        return detail.related.filter { !left.contains($0.id) } + (withResources ? detail.resources : [])
+    func state(of prompt: Card) -> PromptState {
+        let replied = zip(children, marks).first { $0.0.id == prompt.id }?.1.isDone ?? false
+        return PromptState(isReplied: replied, handoff: agents.items[prompt.id], launching: agents.launching.contains(prompt.id))
     }
 }
 
-/// "带上"一行可勾的小胶囊（`TaskBundleChoice`）；没有相关灵感与资料时不出现。
-struct BundlePicker: View {
+/// 任务的标题（单行）与可选的一句说明，就地改、自动保存（存成两行，见 `CueTask`）。标题里按回车跳到说明。
+struct TaskHeading: View {
+    let task: Card
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @State private var title = ""
+    @State private var note = ""
+    @State private var autosave: Autosave?
+    @FocusState private var focus: Field?
+    private enum Field { case title, note }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TextField("这件事是…", text: $title, axis: .vertical)
+                .font(TaskMetrics.title).foregroundStyle(task.status == .done ? palette.ink3 : palette.ink)
+                .lineLimit(1...3).focused($focus, equals: .title)
+                .onChange(of: title) { _, next in
+                    // 标题只有一行：回车去写说明
+                    if next.contains("\n") { title = next.replacingOccurrences(of: "\n", with: ""); focus = .note }
+                    save()
+                }
+            TextField("加一句说明（可不填）", text: $note, axis: .vertical)
+                .font(TaskMetrics.font).foregroundStyle(palette.ink2)
+                .lineLimit(1...3).focused($focus, equals: .note)
+                .onChange(of: note) { save() }
+        }
+        .textFieldStyle(.plain)
+        .onAppear {
+            let text = CueTask(task.body)
+            title = text.title
+            note = text.note
+            let store = services.store, id = task.id
+            autosave = Autosave(save: { body in try await store.updateCard(id) { $0.body = body } }, onError: workspace.fail)
+        }
+        .onDisappear { if let autosave { Task { await autosave.flush() } } }
+    }
+
+    private func save() {
+        let stored = CueTask(title: title, note: note).stored
+        guard stored != CueTask(task.body).stored else { return }
+        autosave?.changed(stored)
+    }
+}
+
+/// 任务的提示词：一张一张卡（内容预览与此刻怎样），点开是大编辑区，卡上就地"交给 Agent"；末尾"写一条提示词"新建并进入编辑。
+/// 右上可从本项目的灵感里挑一条挂上来。
+struct PromptList: View {
+    let task: Card
     let detail: TaskDetail?
-    @Binding var choice: TaskBundleChoice
+    let open: (Card) -> Void
+    let hand: (Card) -> Void
+    let write: () -> Void
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let related = detail?.related ?? [], resources = detail?.resources ?? []
-        let left = choice.left
-        if !related.isEmpty || !resources.isEmpty {
-            ScrollView(.horizontal) {
-                HStack(spacing: 6) {
-                    Text("带上").font(TaskMetrics.caption).foregroundStyle(palette.ink3)
-                    ForEach(related) { idea in
-                        chip(idea.title, systemImage: "lightbulb", on: !left.contains(idea.id)) {
-                            if left.contains(idea.id) { choice.left.remove(idea.id) } else { choice.left.insert(idea.id) }
-                        }
-                    }
-                    if !resources.isEmpty {
-                        chip("资料 \(resources.count)", systemImage: "books.vertical", on: choice.withResources) { choice.withResources.toggle() }
-                    }
-                }
+        let prompts = detail?.prompts ?? []
+        VStack(alignment: .leading, spacing: TaskMetrics.cardGap) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("提示词").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+                if let text = PromptTally(detail?.marks).text { Text(text).font(TaskMetrics.caption).foregroundStyle(palette.ink3) }
+                Spacer()
+                pick
             }
-            .scrollIndicators(.hidden)
-            .sensoryFeedback(.selection, trigger: choice)
+            ForEach(prompts) { prompt in
+                PromptCard(prompt: prompt, state: detail?.state(of: prompt) ?? .unsent, open: { open(prompt) }, hand: { hand(prompt) })
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+            Button(action: write) {
+                Label(prompts.isEmpty ? "写一条提示词：要 Agent 做什么" : "写一条提示词", systemImage: "plus")
+                    .font(TaskMetrics.font.weight(.medium)).foregroundStyle(palette.ink2)
+                    .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading)
+                    .padding(.horizontal, TaskMetrics.cardPadding)
+                    .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous)
+                        .strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                    .contentShape(.rect)
+            }
+            .buttonStyle(PressStyle(scale: 0.98))
         }
+        .animation(Motion.quick, value: prompts.map(\.id))
     }
 
-    private func chip(_ title: String, systemImage: String, on: Bool, toggle: @escaping () -> Void) -> some View {
-        Button(action: toggle) {
-            Label {
-                Text(title).lineLimit(1)
-            } icon: {
-                Image(systemName: on ? "checkmark" : systemImage).font(TaskMetrics.caption.weight(.semibold))
+    /// 从本项目的灵感里挑一条挂上来；没有可挑的不出现。
+    @ViewBuilder private var pick: some View {
+        let ideas = detail?.ideas ?? []
+        if !ideas.isEmpty {
+            Menu {
+                ForEach(ideas) { idea in
+                    Button(idea.title) {
+                        let id = idea.id, task = task.id
+                        workspace.attempt { try await workspace.attach(id, to: task) }
+                    }
+                }
+            } label: {
+                Label("从灵感里挑", systemImage: "tray.and.arrow.down").font(TaskMetrics.caption).foregroundStyle(palette.ink2)
+                    .frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
             }
-            .font(TaskMetrics.caption)
-            .foregroundStyle(on ? palette.paper : palette.ink2)
-            .padding(.horizontal, 10).frame(height: TaskMetrics.chipHeight)
-            .background(on ? AnyShapeStyle(palette.ink) : AnyShapeStyle(palette.fill), in: .capsule)
-            .frame(minHeight: TaskMetrics.chipTarget).contentShape(.capsule)
+            .buttonStyle(.plain)
+            #if os(macOS)
+            .menuStyle(.button).menuIndicator(.hidden).fixedSize()
+            #endif
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
-        .animation(.easeOut(duration: 0.15), value: on)
     }
 }
 
-/// 任务浮窗标题行左边的完成圈：点它完成（完成的回到待办）；还有没完成的子任务时先问一句，确认后一起完成。
+/// 一条提示词：内容预览，下面一行是它此刻怎样（未发 / 交给某会话·处理中 / 已回复，点它看会话）与"交给 Agent"。
+/// 点卡打开大编辑区；长按是灵感的菜单。
+struct PromptCard: View {
+    let prompt: Card
+    let state: PromptState
+    let open: () -> Void
+    let hand: () -> Void
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(Navigation.self) private var navigation
+    #endif
+
+    var body: some View {
+        let text = CardText(prompt.body)
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(text.title.nonEmpty ?? (text.images.isEmpty ? "还没写" : "\(text.images.count) 张图"))
+                    .font(TaskMetrics.font.weight(.medium)).foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
+                    .lineLimit(2)
+                if !text.preview.isEmpty {
+                    Text(text.preview).font(TaskMetrics.caption).foregroundStyle(palette.ink2).lineLimit(2)
+                }
+            }
+            HStack(spacing: 8) {
+                status
+                Spacer(minLength: 8)
+                Button(action: hand) {
+                    Label("交给 Agent", systemImage: "paperplane.fill")
+                        .font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.signature)
+                        .padding(.horizontal, 12).frame(height: TaskMetrics.chipHeight)
+                        .background(palette.signature.opacity(0.12), in: .capsule)
+                        .frame(minHeight: TaskMetrics.chipTarget).contentShape(.capsule)
+                }
+                .buttonStyle(PressStyle())
+                .disabled(text.title.isEmpty && text.images.isEmpty)
+            }
+        }
+        .padding(TaskMetrics.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.fill, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+        .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
+        .onTapGesture(perform: open)
+        .contextMenu { CardActions(card: prompt) }
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(named: "打开", open)
+    }
+
+    @ViewBuilder private var status: some View {
+        switch state {
+        case .unsent:
+            Label("未发", systemImage: "circle.dashed").foregroundStyle(palette.ink3).font(TaskMetrics.caption)
+        case .launching:
+            HStack(spacing: 6) {
+                Circle().strokeBorder(palette.signature, lineWidth: 1.5).frame(width: 8, height: 8)
+                Text("正在开会话").foregroundStyle(palette.ink2)
+            }
+            .font(TaskMetrics.caption)
+        case .working(let item):
+            let shown = services.settings.shown(item)
+            sessionLink(item) {
+                HStack(spacing: 6) {
+                    PiStateDot(shown: shown, size: 7)
+                    Text(item.state.title).foregroundStyle(palette.ink2).lineLimit(1)
+                    Text(shown.presence).foregroundStyle(shown.tint(palette)).lineLimit(1)
+                }
+            }
+        case .replied(let item):
+            sessionLink(item) {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.ink)
+                    Text("Agent 已回复").foregroundStyle(palette.ink)
+                    if let item { Text(item.state.title).foregroundStyle(palette.ink3).lineLimit(1) }
+                }
+            }
+        }
+    }
+
+    /// 点状态看那个会话。
+    @ViewBuilder private func sessionLink(_ item: PiSessionListItem?, @ViewBuilder label: () -> some View) -> some View {
+        let content = label().font(TaskMetrics.caption).frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
+        if let item {
+            #if os(iOS)
+            Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: { content }
+                .buttonStyle(.plain)
+                .accessibilityHint("看 Agent 的会话")
+            #else
+            content.sessionLink(item.state.sessionID).help("交给了 Agent 会话「\(item.state.title)」，点开看")
+            #endif
+        } else {
+            content
+        }
+    }
+}
+
+/// 子任务：在提示词之后的次要一组，可勾的圈与标题（点标题打开），末尾一行就地加一个。
+struct SubtaskList: View {
+    let task: Card
+    let detail: TaskDetail?
+    let open: (Card) -> Void
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @State private var adding = false
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let subtasks = detail?.subtasks ?? []
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("子任务").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+                if let progress = TaskProgress.subtasks(in: detail?.marks) {
+                    Text("\(progress.done)/\(progress.total)").monospacedDigit().font(TaskMetrics.caption).foregroundStyle(palette.ink3)
+                }
+            }
+            ForEach(subtasks) { row($0) }
+            if adding {
+                HStack(spacing: 8) {
+                    Image(systemName: "circle").foregroundStyle(palette.ink3).frame(width: TaskMetrics.icon).accessibilityHidden(true)
+                    TextField("子任务", text: $text).textFieldStyle(.plain).focused($focused).onSubmit(add)
+                }
+                .frame(minHeight: TaskMetrics.rowHeight)
+                .onChange(of: focused) { if !focused, text.isEmpty { adding = false } }
+            } else {
+                Button {
+                    adding = true
+                    focused = true
+                } label: {
+                    Label("加一个子任务", systemImage: "plus").foregroundStyle(palette.ink3)
+                        .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading).contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .font(TaskMetrics.font)
+        .animation(Motion.quick, value: subtasks.map(\.id))
+    }
+
+    private func row(_ child: Card) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                workspace.attempt { try await workspace.toggle(child) }
+            } label: {
+                Image(systemName: TaskGlyph.symbol(child.status))
+                    .foregroundStyle(TaskGlyph.tint(child.status, palette))
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: TaskMetrics.icon, height: TaskMetrics.rowHeight).contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(TaskSpeech.toggle(done: child.status == .done))
+            Button { open(child) } label: {
+                Text(child.title)
+                    .strikethrough(child.status == .done)
+                    .foregroundStyle(child.status == .done ? palette.ink3 : palette.ink)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+        }
+        .sensoryFeedback(.success, trigger: child.status) { $1 == .done }
+    }
+
+    /// ↩ 加一个并留在输入里，接着写下一个。
+    private func add() {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines), task = task
+        guard !body.isEmpty else { return adding = false }
+        text = ""
+        focused = true
+        workspace.perform { _ = try await $0.createTask(body, under: task.id) }
+    }
+}
+
+/// 任务页标题左边的完成圈：点它完成（完成的回到待办）；还有没完成的子任务时先问一句，确认后一起完成。
 struct TaskRingButton: View {
     let task: Card
     let marks: [ChildMark]?
@@ -135,294 +346,21 @@ struct TaskRingButton: View {
     }
 }
 
-/// 给 Agent 的话还只有标题时，贴着正文的一句引导；点它从标题下面接着写。
-struct PromptHint: View {
+/// 任务行上的轻提示：提示词都已回复、任务还没完成时问一句"标记完成？"，点了才完成（任务不自动完成）。
+struct MarkDoneChip: View {
     let action: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
         Button(action: action) {
-            Label("写下要 Agent 做什么…", systemImage: "text.cursor")
-                .font(TaskMetrics.font).foregroundStyle(palette.ink3)
-                .frame(minHeight: TaskMetrics.rowHeight).contentShape(.rect)
+            Label("标记完成？", systemImage: "checkmark")
+                .font(TaskMetrics.caption.weight(.medium)).foregroundStyle(palette.ink)
+                .padding(.horizontal, 10).frame(height: TaskMetrics.chipHeight)
+                .background(palette.fill, in: .capsule)
+                .frame(minHeight: TaskMetrics.chipTarget).contentShape(.capsule)
         }
-        .buttonStyle(.plain)
-    }
-}
-
-/// 发出记录：每一次发出去的那一版原文（发出时的快照，之后改正文不影响），最近的在前；点一条看全文。
-struct SendRecordList: View {
-    let records: [SendRecord]
-    @Environment(\.palette) private var palette
-    #if os(macOS)
-    @State private var opened: UUID?
-    #endif
-
-    var body: some View {
-        ForEach(records) { record in
-            #if os(iOS)
-            NavigationLink { SendRecordText(record: record) } label: { row(record) }
-            #else
-            Button { opened = opened == record.id ? nil : record.id } label: { row(record) }
-                .buttonStyle(.plain)
-            if opened == record.id {
-                Text(record.content).font(.system(size: 12.5)).foregroundStyle(palette.ink2).textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10).background(palette.fill, in: .rect(cornerRadius: 8))
-            }
-            #endif
-        }
-    }
-
-    private func row(_ record: SendRecord) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(DateLabel.short(record.sentAt)).monospacedDigit().foregroundStyle(palette.ink3)
-            SentMark(target: record.targetName).foregroundStyle(palette.ink2)
-            Text(CardText(record.content).title).foregroundStyle(palette.ink).lineLimit(1)
-            Spacer(minLength: 0)
-        }
-        .font(TaskMetrics.font)
-        .frame(minHeight: TaskMetrics.rowHeight)
-        .contentShape(.rect)
-    }
-}
-
-#if os(iOS)
-/// 一次发出的全文。
-struct SendRecordText: View {
-    let record: SendRecord
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        ScrollView {
-            Text(record.content).textSelection(.enabled).foregroundStyle(palette.ink)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(20)
-        }
-        .background(palette.paper)
-        .navigationTitle("\(DateLabel.short(record.sentAt)) 发给 \(record.targetName)")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-#endif
-
-/// 任务的"进展"：交给的 Agent 会话此刻在做什么（点开看会话），子任务与相关灵感合成一个清单（子任务是可勾的圈、
-/// 相关灵感是灯泡；点一条打开它），右上"＋"加子任务或灵感（写一句、从本项目的灵感里挑、图片）。
-/// 什么都还没有时一句话说明这里会出现什么。
-struct TaskProgressList: View {
-    let task: Card
-    let detail: TaskDetail?
-    /// Mac 上点一条下级打开它（纸页里换一张纸）；手机经导航推进。
-    var openChild: ((UUID) -> Void)?
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    #if os(iOS)
-    @Environment(Navigation.self) private var navigation
-    @State private var pickingPhotos = false
-    @State private var picked: [PhotosPickerItem] = []
-    @State private var takingPhoto = false
-    #endif
-    private enum Adding { case subtask, idea }
-    @State private var adding: Adding?
-    @State private var text = ""
-    @FocusState private var focused: Bool
-
-    private static var icon: CGFloat { TaskMetrics.icon }
-    private static var rowHeight: CGFloat { TaskMetrics.rowHeight }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("进展").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-                Spacer()
-                addMenu
-            }
-            if let session = detail?.session { sessionRow(session) }
-            ForEach(detail?.children ?? []) { child in childRow(child) }
-            if let adding { addField(adding) }
-            if detail?.session == nil, detail?.children.isEmpty != false, adding == nil {
-                Text("交给 Agent 后，会话的进度在这里；也可以拆成子任务、挂上相关灵感")
-                    .font(TaskMetrics.caption).foregroundStyle(palette.ink3)
-                    .padding(.vertical, 6)
-            }
-        }
-        .font(TaskMetrics.font)
-        .animation(Motion.quick, value: detail?.children.map(\.id))
-        #if os(iOS)
-        .photosPicker(isPresented: $pickingPhotos, selection: $picked, maxSelectionCount: 9, matching: .images)
-        .onChange(of: picked) { attachPicked() }
-        .fullScreenCover(isPresented: $takingPhoto) {
-            CameraPicker { data in attach([data]) }.ignoresSafeArea()
-        }
-        #endif
-    }
-
-    private var addMenu: some View {
-        Menu {
-            Button("子任务", systemImage: "checklist") { begin(.subtask) }
-            Button("灵感", systemImage: "lightbulb") { begin(.idea) }
-            let ideas = detail?.ideas ?? []
-            if !ideas.isEmpty {
-                Menu("从灵感里挑", systemImage: "tray.and.arrow.down") {
-                    ForEach(ideas) { idea in
-                        Button(idea.title) {
-                            let id = idea.id, task = task.id
-                            workspace.attempt { try await workspace.attach(id, to: task) }
-                        }
-                    }
-                }
-            }
-            #if os(iOS)
-            Button("相册", systemImage: "photo.on.rectangle") { pickingPhotos = true }
-            if CameraPicker.isAvailable { Button("拍照", systemImage: "camera") { takingPhoto = true } }
-            #else
-            Button("选图片…", systemImage: "photo.on.rectangle") { chooseImages() }
-            #endif
-        } label: {
-            Image(systemName: "plus").font(TaskMetrics.font.weight(.semibold)).foregroundStyle(palette.ink2)
-                .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        #if os(macOS)
-        .menuStyle(.button).menuIndicator(.hidden).fixedSize()
-        #endif
-        .accessibilityLabel("加子任务或灵感")
-    }
-
-    private func begin(_ kind: Adding) {
-        adding = kind
-        text = ""
-        focused = true
-    }
-
-    private func addField(_ kind: Adding) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: kind == .subtask ? "circle" : "lightbulb").foregroundStyle(palette.ink3).frame(width: Self.icon)
-                .accessibilityHidden(true)
-            TextField(kind == .subtask ? "子任务" : "灵感", text: $text).textFieldStyle(.plain).focused($focused)
-                .onSubmit { add(kind) }
-        }
-        .frame(minHeight: Self.rowHeight)
-        .onChange(of: focused) { if !focused, text.isEmpty { adding = nil } }
-    }
-
-    /// ↩ 加一条并留在输入里，接着写下一条。
-    private func add(_ kind: Adding) {
-        let body = text.trimmingCharacters(in: .whitespacesAndNewlines), task = task
-        guard !body.isEmpty else { return adding = nil }
-        text = ""
-        focused = true
-        switch kind {
-        case .subtask: workspace.perform { _ = try await $0.createTask(body, under: task.id) }
-        case .idea:
-            workspace.attempt {
-                let idea = try await workspace.createCard(body: body, in: task.projectID)
-                try await workspace.attach(idea.id, to: task.id)
-            }
-        }
-    }
-
-    private func attach(_ images: [Data]) {
-        let task = task
-        workspace.attempt { try await workspace.attachImages(images, to: task) }
-    }
-
-    #if os(iOS)
-    private func attachPicked() {
-        let items = picked
-        guard !items.isEmpty else { return }
-        picked = []
-        workspace.attempt {
-            var images: [Data] = []
-            for item in items { if let data = try await item.loadTransferable(type: Data.self) { images.append(data) } }
-            attach(images)
-        }
-    }
-    #else
-    private func chooseImages() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = true
-        guard panel.runModal() == .OK else { return }
-        attach(panel.urls.compactMap { try? Data(contentsOf: $0) })
-    }
-    #endif
-
-    /// 交给的会话：状态点（有新回复是墨色实心点）、会话名、此刻在做什么与用时；点开看会话。
-    @ViewBuilder private func sessionRow(_ session: PiSessionState) -> some View {
-        let shown = services.settings.shown(session, delivery: detail?.delivery)
-        let label = HStack(spacing: 8) {
-            PiStateDot(shown: shown, size: 8).frame(width: Self.icon)
-            Text(session.title).foregroundStyle(palette.ink).lineLimit(1)
-            Text(shown.presence).foregroundStyle(shown.tint(palette)).lineLimit(1)
-            Spacer(minLength: 4)
-            PiElapsed(session: session, font: TaskMetrics.caption)
-        }
-        .frame(minHeight: Self.rowHeight)
-        .contentShape(.rect)
-        #if os(iOS)
-        Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: { label }
-            .buttonStyle(.plain)
-            .accessibilityHint("看 Agent 的会话")
-        #else
-        label.sessionLink(session.sessionID).help("交给了 Agent 会话「\(session.title)」，点开看近况")
-        #endif
-    }
-
-    private func childRow(_ child: Card) -> some View {
-        HStack(spacing: 8) {
-            if child.isTask {
-                Button {
-                    workspace.attempt { try await workspace.toggle(child) }
-                } label: {
-                    Image(systemName: TaskGlyph.symbol(child.status))
-                        .foregroundStyle(TaskGlyph.tint(child.status, palette))
-                        .contentTransition(.symbolEffect(.replace))
-                        .frame(width: Self.icon, height: Self.rowHeight).contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(TaskSpeech.toggle(done: child.status == .done))
-            } else {
-                Image(systemName: "lightbulb").foregroundStyle(palette.ink3).frame(width: Self.icon).accessibilityLabel("相关灵感")
-            }
-            open(child) {
-                Text(child.title)
-                    .strikethrough(child.status == .done)
-                    .foregroundStyle(child.status == .done ? palette.ink3 : palette.ink)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
-                    .contentShape(.rect)
-            }
-        }
-        .sensoryFeedback(.success, trigger: child.status) { $1 == .done }
-    }
-
-    /// 打开一条下级：手机推进浮窗里（浮窗与主栈都认 `.card`），Mac 交给 `openChild`（没给时换一张纸）。
-    @ViewBuilder private func open(_ child: Card, @ViewBuilder label: () -> some View) -> some View {
-        #if os(iOS)
-        NavigationLink(value: Navigation.Route.card(child.id), label: label).buttonStyle(.plain)
-        #else
-        Button(action: { if let openChild { openChild(child.id) } else { workspace.openCard = child.id } }, label: label).buttonStyle(.plain)
-        #endif
-    }
-}
-
-/// 任务行标题后的小记号：给 Agent 的话写了要求是一行字的图标，交给过 Agent 是纸飞机（行上已经写着会话状态时不重复）。
-/// 只有标题时什么都不画。
-struct PromptMarkIcon: View {
-    let mark: PromptMark
-    /// 这一行已经写着交给的会话此刻的状态。
-    var showsSession = false
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        switch mark {
-        case .written, .handedOff where !showsSession:
-            Image(systemName: mark == .written ? "text.alignleft" : "paperplane")
-                .font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-                .accessibilityLabel(mark.speech ?? "")
-        case .handedOff, .none: EmptyView()
-        }
+        .buttonStyle(PressStyle())
+        .accessibilityHint("提示词都已回复")
     }
 }
 
@@ -432,22 +370,28 @@ enum TaskMetrics {
     static let font = Font.subheadline
     static let icon: CGFloat = 28
     static let rowHeight: CGFloat = 44
-    static let labelWidth: CGFloat = 44
     static let caption = Font.footnote
     static let chipHeight: CGFloat = 30
     static let chipTarget: CGFloat = 44
     static let ringSize: CGFloat = 17
     static let titleRing: CGFloat = 24
+    static let title = Font.title3.weight(.semibold)
+    static let cardPadding: CGFloat = 14
+    static let cardRadius: CGFloat = 14
+    static let cardGap: CGFloat = 10
     #else
     static let font = Font.system(size: 13)
     static let icon: CGFloat = 16
     static let rowHeight: CGFloat = 26
-    static let labelWidth: CGFloat = 38
     static let caption = Font.system(size: 11.5)
     static let chipHeight: CGFloat = 22
     static let chipTarget: CGFloat = 22
     static let ringSize: CGFloat = 13
     static let titleRing: CGFloat = 18
+    static let title = Font.system(size: 20, weight: .semibold)
+    static let cardPadding: CGFloat = 12
+    static let cardRadius: CGFloat = 10
+    static let cardGap: CGFloat = 8
     #endif
 }
 

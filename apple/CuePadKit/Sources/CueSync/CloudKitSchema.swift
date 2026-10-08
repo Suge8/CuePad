@@ -13,8 +13,8 @@ enum CloudKitSchema {
   static let retiredFields: [String: [(name: String, declaration: String)]] = [
     "cards": [("isFavorite", "INT64"), ("numbering", "STRING")],
     "projects": [("goalCardID", "STRING"), ("sortKey", "STRING")],
-    "sendRecords": [("taskID", "STRING")],
-    "deliveryRequests": [("taskID", "STRING")],
+    "sendRecords": [("taskID", "STRING"), ("partIDs", "STRING")],
+    "deliveryRequests": [("taskID", "STRING"), ("partIDs", "STRING")],
   ]
   static let retiredTypes: [(name: String, fields: [(name: String, declaration: String)])] = [
     ("tags", [("color", "STRING"), ("createdAt", "INT64"), ("modifiedAt", "INT64"), ("name", "ENCRYPTED STRING")]),

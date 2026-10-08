@@ -6,7 +6,7 @@ extension CueStore {
   /// 所以同一请求不会被多台 Mac 各执行一次。`host` 取自该目标 Pi 会话的 `PiSessionState.hostID`。
   @discardableResult
   public func requestDelivery(
-    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil, parts: [UUID] = []
+    _ content: String, to target: SendTarget, on host: String, mode: DeliveryMode = .send, card: UUID? = nil
   ) throws -> DeliveryRequest {
     guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankDeliveryContent }
     return try write {
@@ -14,7 +14,7 @@ extension CueStore {
       let request = DeliveryRequest(
         id: UUID(), content: content, target: target, hostID: host, mode: .known(mode), cardID: card,
         status: .known(.pending), resultDetail: nil, handledBy: nil, createdAt: now, completedAt: nil, modifiedAt: now,
-        resultReceivedAt: nil, partIDs: parts)
+        resultReceivedAt: nil)
       try insert(request)
       try registerImages(in: content)
       return request

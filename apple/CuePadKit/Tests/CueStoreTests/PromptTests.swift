@@ -91,14 +91,14 @@ import Testing
     let task = try await store.createTask("修重连排序", in: nil)
     let prompt = try await store.createCard(body: "先复现", under: task.id)
     let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-    _ = try await recorder.update(sessionID: "s1", state: .settled, title: "atlas")
+    _ = try await recorder.update(sessionID: "s1", state: .settled, title: "atlas", times: PiTimes(stateSince: .now, busySince: nil))
     try await Task.sleep(for: .milliseconds(5))  // 发出晚于会话上一次歇下（时刻按毫秒比先后）
 
     try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
     #expect(try await replied(task.id) == [false])  // 会话还停在发出之前的那次"歇下"
-    _ = try await recorder.update(sessionID: "s1", state: .thinking)
+    _ = try await recorder.update(sessionID: "s1", state: .thinking, times: PiTimes(stateSince: .now, busySince: .now))
     try await Task.sleep(for: .milliseconds(5))
-    _ = try await recorder.update(sessionID: "s1", state: .settled)
+    _ = try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: .now, busySince: nil))
     #expect(try await replied(task.id) == [true])
 
     try await Task.sleep(for: .milliseconds(5))

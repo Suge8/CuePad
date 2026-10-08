@@ -49,14 +49,27 @@ extension DebugScene {
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 
-    /// 任务三态：圆桌的一条交给了 atlas（进行中、带会话状态），CuePad 的一条手动开始；CuePad、Flow、圆桌各完成一条（先后完成）。
+    /// 任务三态与提示词：圆桌"乱序"的第一条提示词交给 notes 已回复、第二条交给 atlas 在处理、第三条没发（任务进行中）；
+    /// CuePad"投送超时"的提示词交给 notes 已回复（行上问要不要标记完成）；CuePad、Flow、圆桌各完成一条（先后完成）。
     private static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
         guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }
-        func first(in name: String) -> Card? { tasks.first { $0.projectID == projects.first { $0.name == name }?.id } }
-        if let task = first(in: "圆桌") {
-            _ = try? await store.recordSend(task.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), card: task.id)
+        func prompts(_ prefix: String) async -> [Card] {
+            guard let task = tasks.first(where: { $0.body.hasPrefix(prefix) }) else { return [] }
+            return ((try? await store.children(of: task.id)) ?? []).filter { !$0.isTask }
         }
-        let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id }
+        func send(_ prompt: Card?, to session: String) async {
+            guard let prompt else { return }
+            _ = try? await store.recordSend(prompt.body, to: SendTarget(kind: .piSession, name: session, ref: session), card: prompt.id)
+        }
+        let order = await prompts("发言轮次"), timeout = await prompts("投送队列")
+        await send(order.first, to: "notes")
+        await send(timeout.first, to: "notes")
+        await send(order.dropFirst().first, to: "atlas")
+        // notes 这一轮做完：交给它的两条提示词已回复
+        try? await Task.sleep(for: .milliseconds(5))
+        _ = try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
+            sessionID: "notes", state: .settled, title: "notes", folder: "notes", times: PiTimes(stateSince: .now, busySince: nil), modelState: demoModels)
+        let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id && !$0.body.hasPrefix("投送队列") }
         if let started = cuepad.first { try? await store.setStatus(started.id, .inProgress) }
         if cuepad.count > 1 { try? await store.setStatus(cuepad[1].id, .done) }
         // 再完成两个别的项目的，最近完成那组跨项目、按完成时间排
@@ -157,7 +170,7 @@ extension DebugScene {
                 let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
                     try? await Task.sleep(for: .seconds(1))
                     if let mode = request.mode.known, DeliveryMode.toSession.contains(mode), mode != .answer {
-                        try? await store.recordSend(request.content, to: request.target, card: request.cardID, parts: request.partIDs)
+                        try? await store.recordSend(request.content, to: request.target, card: request.cardID)
                     }
                     return .succeeded
                 }

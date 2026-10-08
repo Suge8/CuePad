@@ -77,11 +77,25 @@ enum Schema {
     Upgrade(unifyCardsAndTasks),
     // 迁移来的任务卡片沿用了任务的 id，服务器上同名的 tasks 记录不能改类型，永远上传不了：换成由旧 id 算出的新 id
     Upgrade(renameMigratedTasks),
-    // 交给 Agent 时一并带上的灵感：发送记录与投送请求明确记下它们（任务完成圈里灵感那一段只看这个）
+    // 交给 Agent 时一并带上的灵感：发送记录与投送请求明确记下它们（下一步随"带上"下线）
     "ALTER TABLE sendRecords ADD COLUMN partIDs TEXT; ALTER TABLE deliveryRequests ADD COLUMN partIDs TEXT;",
     // 归档：做完或不再需要的灵感与任务，留着可搜、不占列表
     "ALTER TABLE cards ADD COLUMN archivedAt INTEGER;",
+    // 任务只是一件要做成的事，要交给 Agent 的话挂在它下面（提示词）：正文里的要求拆成第一条提示词；"带上"下线，partIDs 去掉
+    Upgrade(splitTaskPrompts),
   ]
+
+  /// 没在回收站的任务正文除标题外还有话的，其余拆成它下面的第一条提示词（`CueStore.splitPrompt`）。提示词的 id 只由任务 id 算出，
+  /// 各设备各自升级得到同一条（别的设备先升级、已同步过来时只更新正文）。新行与改了的行 modifiedAt 是现在，都会上传。
+  /// 回收站里的不动：恢复后照样能看到全部文字（标题下的说明）。
+  private static func splitTaskPrompts(_ db: SQLite) throws {
+    try db.exec("ALTER TABLE sendRecords DROP COLUMN partIDs; ALTER TABLE deliveryRequests DROP COLUMN partIDs;")
+    let tasks = try db.query("SELECT id FROM cards WHERE todoAt IS NOT NULL AND deletedAt IS NULL") { $0.uuid(0) }
+    let now = Date.stamp
+    for task in tasks {
+      _ = try CueStore.splitPrompt(db, task: task, promptID: DeterministicID.uuid("task-prompt/\(task.uuidString.lowercased())"), at: now)
+    }
+  }
 
   private static let cardsTreeIndex = "CREATE INDEX cards_parentID ON cards(parentID);"
 
@@ -175,7 +189,7 @@ enum Schema {
     CREATE TABLE sendRecords (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL,
       targetName TEXT NOT NULL, targetRef TEXT, cardID TEXT,
-      sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, partIDs TEXT
+      sentAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX sendRecords_sentAt ON sendRecords(sentAt);
     CREATE INDEX sendRecords_cardID_sentAt ON sendRecords(cardID, sentAt);
@@ -211,7 +225,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       resultDetail TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER, partIDs TEXT
+      resultReceivedAt INTEGER
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 

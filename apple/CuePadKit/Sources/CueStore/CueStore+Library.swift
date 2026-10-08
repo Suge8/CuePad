@@ -97,12 +97,12 @@ extension CueStore {
     }
   }
 
-  /// 新任务（要做的卡片）放在所在项目顶层的最前。正文不能为空，否则抛 `blankTaskContent`。
+  /// 新任务（要做的卡片）放在所在项目顶层的最前。正文不能为空，否则抛 `blankTaskContent`；多行的第一行是任务、其余成为它的提示词。
   public func createTask(_ body: String, in project: UUID?) throws -> Card {
     try requireContent(body)
     return try write {
       try requireLiveProject(project)
-      return try insertCard(body, project: project, parent: nil, todo: true, sortKey: SortKey.before(firstTopKey(in: project)))
+      return try splittingPrompt(insertCard(body, project: project, parent: nil, todo: true, sortKey: SortKey.before(firstTopKey(in: project))))
     }
   }
 
@@ -114,7 +114,24 @@ extension CueStore {
       guard let link = tree.links[parent], link.isTask else { throw CueStoreError.invalidParent }
       guard tree.level(of: parent) < Card.maxDepth else { throw CueStoreError.taskTooDeep }
       let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
-      return try insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last))
+      return try splittingPrompt(insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last)))
+    }
+  }
+
+  /// 刚建好的任务：正文多行时拆出提示词，返回拆过的任务。
+  private func splittingPrompt(_ task: Card) throws -> Card {
+    guard try Self.splitPrompt(db, task: task.id, promptID: UUID(), at: task.modifiedAt) != nil else { return task }
+    return try find(Card.self, task.id) ?? task
+  }
+
+  /// 任务下新写一条提示词（挂在任务下的灵感），接在下级最后，项目随任务。上级不是任务抛 `invalidParent`。可以是空的：
+  /// 写一条时先建好再进编辑，离开时还是空的就删掉（`Workspace.dropIfEmpty`）。
+  public func createCard(body: String, under parent: UUID) throws -> Card {
+    try write {
+      let tree = try CardLinks(db)
+      guard let link = tree.links[parent], link.isTask else { throw CueStoreError.invalidParent }
+      let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
+      return try insertCard(body, project: link.project, parent: parent, todo: false, sortKey: SortKey.after(last))
     }
   }
 
@@ -129,20 +146,47 @@ extension CueStore {
     }
   }
 
-  /// 设为任务 / 改回灵感。设为任务：成为待办的任务。改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。
-  public func setTodo(_ id: UUID, _ on: Bool) throws {
+  /// 设为任务 / 改回灵感。设为任务：成为待办的任务；多行的话第一行留作任务，其余成为它的第一条提示词（`CueTask.split`），
+  /// 返回那条提示词。改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。
+  @discardableResult
+  public func setTodo(_ id: UUID, _ on: Bool) throws -> Card? {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
-      guard card.isTask != on else { return }
+      guard card.isTask != on else { return nil }
       let now = Date.stamp
       if on {
         try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
+        return try Self.splitPrompt(db, task: id, promptID: UUID(), at: now).flatMap { try find(Card.self, $0) }
       } else {
         try liftChildren(of: card, at: now)
         try db.run(
           "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, modifiedAt = ? WHERE id = ?", [now, id])
+        return nil
       }
     }
+  }
+
+  /// 任务正文除标题外还有话时拆出来（`CueTask.split`）：其余成为排在它下级最前的一条提示词（id 为 `promptID`，已有这条时只改正文），
+  /// 带着任务的变量取值与会话；交给 Agent 的记录（发送记录、投送请求）跟到提示词上。返回提示词的 id，没有可拆的为 nil。
+  /// 设为任务与结构升级共用。
+  static func splitPrompt(_ db: SQLite, task: UUID, promptID: UUID, at now: Date) throws -> UUID? {
+    guard let body = try db.first("SELECT body FROM cards WHERE id = ?", [task], { $0.text(0) }) else { return nil }
+    let (heading, prompt) = CueTask.split(body)
+    guard let prompt else { return nil }
+    let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE parentID = ?", [task]) { $0.textOrNil(0) } ?? nil
+    try db.run(
+      """
+      INSERT INTO cards (id, projectID, body, isPinned, variableValues, sortKey, conflictOf, deletedAt, createdAt, modifiedAt,
+        parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt)
+      SELECT ?1, projectID, ?2, 0, variableValues, ?3, NULL, NULL, createdAt, ?4, id, NULL, NULL, NULL, piSessionID, archivedAt
+      FROM cards WHERE id = ?5
+      ON CONFLICT(id) DO UPDATE SET body = excluded.body, modifiedAt = excluded.modifiedAt
+      """, [promptID, prompt, SortKey.before(first), now, task])
+    try db.run("UPDATE cards SET body = ?, variableValues = '{}', modifiedAt = ? WHERE id = ?", [heading, now, task])
+    for table in ["sendRecords", "deliveryRequests"] {
+      try db.run("UPDATE \(table) SET cardID = ?, modifiedAt = ? WHERE cardID = ?", [promptID, now, task])
+    }
+    return promptID
   }
 
   /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
@@ -211,7 +255,7 @@ extension CueStore {
   }
 
   /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、
-  /// 挂成子任务或相关灵感都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），整棵子树超过 `Card.maxDepth` 级抛 `taskTooDeep`。
+  /// 挂成子任务或提示词都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），整棵子树超过 `Card.maxDepth` 级抛 `taskTooDeep`。
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws {
     try write {
       let tree = try CardLinks(db)
@@ -403,26 +447,25 @@ extension CueStore {
 // MARK: 发送记录、附件、Pi 会话索引
 
 extension CueStore {
-  /// 记录一次投送或复制：内容快照、目标、时间。发给 Pi 会话的是任务时，任务在同一事务里关联到该会话、置为进行中
-  /// （完成了的也重新打开；任务行据此显示会话状态）：执行投送的那台 Mac 记，请求从哪台设备发来都一样。灵感发出去不变成任务。
+  /// 记录一次投送或复制：内容快照、目标、时间。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话；任务置为进行中
+  /// （完成了的也重新打开；任务行据此显示会话状态），提示词（任务下的灵感）连带它的任务也一样。执行投送的那台 Mac 记，
+  /// 请求从哪台设备发来都一样。灵感发出去不变成任务。
   @discardableResult
-  /// `parts`：一并带上的灵感（同一条记录里记下关联，不另存正文）。
-  public func recordSend(_ content: String, to target: SendTarget, card: UUID? = nil, parts: [UUID] = []) throws -> SendRecord {
+  public func recordSend(_ content: String, to target: SendTarget, card: UUID? = nil) throws -> SendRecord {
     try write {
       let now = Date.stamp
       let record = SendRecord(
         id: UUID(), content: content, targetKind: target.kind, targetName: target.name,
-        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now, partIDs: parts)
+        targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now)
       try insert(record)
       try registerImages(in: content)
       if let card, target.kind == .known(.piSession), let session = target.ref {
-        // 灵感与任务都记下交给了哪个会话；任务另外进行中
         try db.run(
           """
           UPDATE cards SET piSessionID = ?1, modifiedAt = ?2,
             startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END,
             completedAt = CASE WHEN todoAt IS NOT NULL THEN NULL END
-          WHERE id = ?3
+          WHERE id = ?3 OR id = (SELECT parentID FROM cards WHERE id = ?3 AND todoAt IS NULL)
           """, [session, now, card])
       }
       return record

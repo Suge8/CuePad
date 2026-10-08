@@ -6,7 +6,7 @@ import UIKit
 #endif
 
 extension View {
-    /// 灵感可以拖到任务大纲的任务行上，松手挂为它的相关灵感（iOS 长按抬起，Mac 按住拖）。
+    /// 灵感可以拖到任务大纲的任务行上，松手成为它的提示词（iOS 长按抬起，Mac 按住拖）。
     func ideaDrag(_ id: UUID) -> some View {
         onDrag { TaskDragSession.shared.begin(id, isTask: false) }
     }
@@ -121,7 +121,7 @@ struct TaskOutline<Line: View>: View {
         commit(TaskDragSession.Dragged(id: id, isTask: true), move)
     }
 
-    /// 任务挪到新位置；灵感挂为相关灵感（提示里可撤销）。
+    /// 任务挪到新位置；灵感成为提示词（提示里可撤销）。
     private func commit(_ dragged: TaskDragSession.Dragged, _ move: TaskMove) {
         commits += 1
         if dragged.isTask {

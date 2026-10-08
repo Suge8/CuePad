@@ -106,9 +106,10 @@ struct TaskRow: View {
     /// 交给 Pi 的任务：那个会话此刻的状态，以及发给它的最近一条投送请求。
     var session: PiSessionState?
     var delivery: DeliveryRequest?
-    /// 直接下级（子任务与挂着的灵感）；完成圈分段与子任务进度由它推出。
+    /// 直接下级（提示词与子任务）；完成圈分段、提示词计数与子任务进度由它推出。
     var marks: [ChildMark]?
     private var subtasks: TaskProgress? { .subtasks(in: marks) }
+    private var tally: PromptTally { PromptTally(marks) }
     var compact = false
     @Environment(\.taskStructure) private var structure
     @State private var confirmsSubtasks = false
@@ -126,24 +127,23 @@ struct TaskRow: View {
             .buttonStyle(PressStyle(scale: 0.85))
             .accessibilityLabel(done ? "回到待办" : "完成")
             VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text(task.title)
-                        .font(.system(size: 13)).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
-                        .lineLimit(2)
-                    if !done { PromptMarkIcon(mark: PromptMark(task), showsSession: session != nil) }
-                }
-                .onTapGesture(perform: open)
-                if project != nil || (!done && (session != nil || subtasks != nil)) { detail }
+                Text(task.title)
+                    .font(.system(size: 13)).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
+                    .lineLimit(2)
+                    .onTapGesture(perform: open)
+                if project != nil || (!done && (session != nil || subtasks != nil || tally.text != nil)) { detail }
             }
             Spacer(minLength: 4)
+            if !done, tally.suggestsDone(task) { MarkDoneChip(action: toggle).transition(.opacity) }
         }
+        .animation(Motion.quick, value: tally)
         .padding(.vertical, compact ? 1 : 3)
         .frame(minHeight: compact ? 22 : 28)
         .contentShape(.rect)
         .contextMenu { CardActions(card: task) }
         // 读屏：整行一个元素"任务内容，项目，Pi 在做什么"，值是状态，默认动作切换完成（文案见 TaskSpeech）
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([task.title, PromptMark(task).speech, TaskRing(marks).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([task.title, tally.text, TaskRing(marks).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
         .accessibilityValue(TaskSpeech.value(task.status))
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
@@ -168,8 +168,8 @@ struct TaskRow: View {
                 }
                 .foregroundStyle(palette.ink3)
             }
-            if let subtasks, !done {
-                Text(TaskCopy.progress(subtasks)).monospacedDigit().foregroundStyle(palette.ink3)
+            if !done, let counts = [tally.text, subtasks.map(TaskCopy.progress)].compactMap({ $0 }).joined(separator: " · ").nonEmpty {
+                Text(counts).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1)
             }
             if let session, !done {
                 let shown = services.settings.shown(session, delivery: delivery)

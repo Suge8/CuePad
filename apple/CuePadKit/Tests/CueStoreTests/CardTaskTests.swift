@@ -3,8 +3,8 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 灵感与任务是同一种记录（Card）：差别只是"要做"（`todoAt`）。任务有三态、可有子任务与相关灵感（挂在任务下的灵感），
-/// 正文就是给 Agent 的话；交给 Agent 的会话回写到任务。只有任务能当上级；去掉"要做"或进回收站时，下级按原顺序提到它的位置。
+/// 灵感与任务是同一种记录（Card）：差别只是"要做"（`todoAt`）。任务有三态、可有子任务与提示词（挂在任务下的灵感），
+/// 交给 Agent 的会话回写到提示词与它的任务。只有任务能当上级；去掉"要做"或进回收站时，下级按原顺序提到它的位置。
 @Suite struct CardTaskTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -12,7 +12,7 @@ import Testing
   private func card(_ id: UUID) async throws -> Card { try #require(try await store.card(id)) }
 
   @Test func 灵感点要做成为任务_三态由开始与完成时间推出_取消要做回到灵感() async throws {
-    let idea = try await store.createCard(in: nil, body: "把发言轮次修好\n重连的人不再插队")
+    let idea = try await store.createCard(in: nil, body: "把发言轮次修好")
     let fresh = try await card(idea.id)
     #expect(fresh.isTask == false && fresh.status == nil)
 
@@ -26,10 +26,10 @@ import Testing
     try await store.setTodo(idea.id, false)
     let back = try await card(idea.id)
     #expect(back.isTask == false && back.status == nil && back.startedAt == nil && back.completedAt == nil)
-    #expect(back.body == "把发言轮次修好\n重连的人不再插队")
+    #expect(back.body == "把发言轮次修好")
   }
 
-  @Test func 只有任务能当上级_灵感挂在任务下是相关灵感_挂到灵感下拒绝() async throws {
+  @Test func 只有任务能当上级_灵感挂在任务下是提示词_挂到灵感下拒绝() async throws {
     let task = try await store.createTask("换首图", in: nil)
     let shot = try await store.createCard(in: nil, body: "候选图截图")
     let other = try await store.createCard(in: nil, body: "别的灵感")
@@ -74,7 +74,7 @@ import Testing
     #expect(handed.isTask == false && handed.status == nil && handed.piSessionID == "s1")
   }
 
-  @Test func 计数只算顶层任务_相关灵感与灵感不算() async throws {
+  @Test func 计数只算顶层任务_提示词与灵感不算() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let top = try await store.createTask("上线", in: project.id)
     let material = try await store.createCard(in: project.id, body: "截图")

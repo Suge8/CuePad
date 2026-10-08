@@ -21,7 +21,7 @@ Local-first: everything lives in a SQLite database on your device; iCloud sync u
 
 ## Features
 
-- **Idea → task → agent.** Ideas hold any amount of text with inline images, `{{variables}}` and dividers; mark one "to do" and it becomes a task whose body is what you hand to the agent, with subtasks and materials. Projects are just containers with a one-line intro. Everything autosaves.
+- **Idea → task → agent.** Ideas hold any amount of text with inline images, `{{variables}}` and dividers; make one a task and write prompts under it — each is what you hand to the agent, sent in one tap, showing whether the agent has replied — plus subtasks if needed. Projects are just containers with a one-line intro. Everything autosaves.
 - **Send to agents.** Deliver an idea or task to a running agent session (currently [Pi](https://pi.dev); text and images, no Accessibility permission needed) or to any app via clipboard and a targeted `Cmd+V`. Every send is logged with a snapshot and can be resent.
 - **See your agents.** Agent sessions show live state (thinking, running a tool, waiting for you, done) and history; sessions file under the project bound to their working directory.
 - **Projects that know your code.** Bind a project to a code directory: agent sessions and the `cuepad` command line pick the right project from where they run.

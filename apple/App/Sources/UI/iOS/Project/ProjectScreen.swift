@@ -72,7 +72,7 @@ struct ProjectScreen: View {
                 .padding(.top, 24)
             }
             if !arrangement.pinned.isEmpty {
-                // 资料：长期参考的灵感，一行一条压在任务区下面；交给 Agent 时可一并带上
+                // 资料：长期参考的灵感，一行一条压在任务区下面
                 SectionHeader(title: "资料", count: arrangement.pinned.count)
                 let ids = arrangement.pinned
                 VStack(spacing: 0) {

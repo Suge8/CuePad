@@ -4,7 +4,7 @@ import Foundation
 /// 项目页的内容（灵感、发送、任务）一次读取；项目的名称、图标、目录、计数在 `ProjectCatalog`。
 nonisolated struct ProjectPageData: Sendable {
     var project: Project?
-    /// 散放的灵感（不含任务与相关灵感）：卡片墙与"更早"。
+    /// 散放的灵感（不含任务与提示词）：卡片墙与"更早"。
     var cards: [Card]
     /// 卡片最近一次发送（时间与目标）；从未发送的卡不在里面。
     var lastSends: [UUID: LastSend]
