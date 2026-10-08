@@ -471,7 +471,7 @@ private struct ActiveTasks: View {
     }
 }
 
-/// 正在推进的一行：进行中圆圈、标题，下面是所在项目与会话状态。圆圈用墨色：签名色只留给一屏的焦点。
+/// 正在推进的一行：进行中圆圈（颜色同 `TaskGlyph`）、标题，下面是所在项目与会话状态。
 private struct ActiveTaskRow: View {
     let row: TaskBoard.Row
     let divided: Bool
@@ -489,7 +489,7 @@ private struct ActiveTaskRow: View {
         Button { navigation.openTask(row.id) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Image(systemName: TaskGlyph.symbol(.inProgress)).font(.system(size: ring))
-                    .foregroundStyle(palette.ink).accessibilityHidden(true)
+                    .foregroundStyle(TaskGlyph.tint(.inProgress, palette)).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(row.task.title.textGlyphs).font(.headline).foregroundStyle(palette.ink)
                         .lineLimit(stacked ? 4 : 2).multilineTextAlignment(.leading)

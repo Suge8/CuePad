@@ -72,7 +72,7 @@ struct Palette {
     var attention: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0xA8740A) }
     /// 出错：胭脂。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
-    /// 在工作（Agent 在跑、任务进行中）：签名色。
+    /// Agent 在跑。任务进行中不用它（`TaskGlyph` 是墨色）。
     var working: Color { signature }
 
     // MARK: 正文里的变量（琥珀色标注）
