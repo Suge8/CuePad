@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 任务看板（手机任务页、Mac 任务面板共用）：进行中、待办、最近完成，各自跨项目。进行中与待办按顶层任务的状态分组，
-/// 子任务（没完成的，不论自己的状态）跟在它的顶层任务下（`tree`）；顺序同 `store.tasks(_:)`（项目顺序、未归档在后，同级手动顺序）。
+/// 子任务（没完成的，不论自己的状态）跟在它的顶层任务下（`tree`）；顺序同 `store.tasks(_:)`（项目顺序、未分类在后，同级手动顺序）。
 /// 最近完成不分项目、不分层，按完成时间从新到旧取前 `doneLimit` 条。每条带所在项目；交给 Pi 的带那个会话此刻的状态。
 nonisolated struct TaskBoard: Sendable, Equatable {
     struct Row: Identifiable, Sendable, Equatable {

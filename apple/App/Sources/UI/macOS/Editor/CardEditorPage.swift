@@ -83,7 +83,7 @@ struct CardEditorPage: View {
                     meta(data)
                     if data.card.isTask {
                         VStack(alignment: .leading, spacing: 4) {
-                            TaskPageHeader(task: data.card, project: data.project)
+                            TaskPageHeader(task: data.card)
                         }
                         .padding(.horizontal, 64)
                         Divider().overlay(palette.hair).padding(.horizontal, 64)
@@ -234,7 +234,7 @@ struct CardEditorPage: View {
     private func meta(_ data: EditorData) -> some View {
         HStack(spacing: 8) {
             ProjectGlyph(project: data.project, size: 12)
-            Text(data.project?.name ?? "未归档").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
+            Text(data.project?.name ?? "未分类").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
             Text("·")
             Text(DateLabel.short(data.card.modifiedAt))
             if let status = saveState.text {

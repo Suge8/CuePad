@@ -26,7 +26,7 @@ nonisolated enum TaskRing: Equatable, Sendable {
     }
 }
 
-/// 交给 Agent 的正文：任务的话在前，选中的灵感（挂着的素材、本项目资料）各自变量已填，依次接在后面，用分隔线隔开。
+/// 交给 Agent 的正文：任务的话在前，选中的灵感（挂着的相关灵感、本项目资料）各自变量已填，依次接在后面，用分隔线隔开。
 nonisolated enum TaskBundle {
     static let separator = "\n\n---\n\n"
 

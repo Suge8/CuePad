@@ -2,7 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 未归档：还没归进项目的想法，一条一行，最近的在前。点开看全文；左滑"移到项目"直接选项目归类，归完就离开这里。
+/// 未分类：还没归进项目的灵感，一条一行，最近的在前。点开看全文；右滑交给 Agent，左滑设为任务或移到项目（归完就离开这里）；
+/// 交给过 Agent 的行尾是那个会话的状态点。
 struct InboxScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
@@ -10,6 +11,7 @@ struct InboxScreen: View {
     @Environment(\.palette) private var palette
     @State private var cards: [Card]?
     @State private var moving: Card?
+    @State private var agents: AgentLinks?
 
     var body: some View {
         List {
@@ -21,7 +23,7 @@ struct InboxScreen: View {
                     Section {
                         ForEach(cards) { card in row(card) }
                     } footer: {
-                        Text("左滑一条，移到项目").foregroundStyle(palette.ink3)
+                        Text("右滑交给 Agent，左滑设为任务或移到项目").foregroundStyle(palette.ink3)
                     }
                 }
             }
@@ -30,17 +32,23 @@ struct InboxScreen: View {
         .animation(Motion.quick, value: cards?.map(\.id))
         .floatingHeader(CaptureCopy.inbox, detail: cards.map { $0.isEmpty ? "" : "\($0.count) 条" } ?? "")
         .sheet(item: $moving) { MoveToProjectSheet(card: $0) }
+        .environment(\.cardAgents, agents?.items ?? [:])
         .observing(services.store, [.cards], into: $cards, onError: workspace.fail) { store in
             try store.cards(in: nil).sorted { $0.modifiedAt > $1.modifiedAt }
         }
+        .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
     }
 
     private func row(_ card: Card) -> some View {
         let text = CardText(card.body)
         return Button { navigation.open(card: card.id) } label: {
             VStack(alignment: .leading, spacing: 3) {
-                Text(text.title.nonEmpty ?? (text.images.isEmpty ? "无标题" : "图片")).font(.body.weight(.medium))
-                    .foregroundStyle(palette.ink).lineLimit(2)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(text.title.nonEmpty ?? (text.images.isEmpty ? "无标题" : "图片")).font(.body.weight(.medium))
+                        .foregroundStyle(palette.ink).lineLimit(2)
+                    Spacer(minLength: 4)
+                    AgentDot(card: card.id).padding(.vertical, -8)
+                }
                 if !text.preview.isEmpty {
                     Text(text.preview).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
                 }
@@ -52,10 +60,11 @@ struct InboxScreen: View {
         .buttonStyle(.plain)
         .listRowBackground(palette.paper)
         .swipeActions(edge: .leading) {
-            Button("要做", systemImage: "checklist") { workspace.toggleTodo(card.id, true) }.tint(palette.accent)
+            Button("交给 Agent", systemImage: "paperplane.fill") { navigation.handToAgent(card) }.tint(palette.signature)
         }
         .swipeActions(edge: .trailing) {
-            Button("移到项目", systemImage: "folder") { moving = card }.tint(palette.ink)
+            Button("设为任务", systemImage: "checklist") { workspace.toggleTodo(card.id, true) }.tint(palette.ink)
+            Button("移到项目", systemImage: "folder") { moving = card }.tint(palette.ink2)
         }
         .contextMenu { CardActions(card: card) }
     }

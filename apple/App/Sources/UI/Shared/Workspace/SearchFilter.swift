@@ -18,7 +18,7 @@ nonisolated struct PaletteQuery: Equatable {
 
 
     var text = ""
-    /// nil 不限；`.some(nil)` 是未归档。
+    /// nil 不限；`.some(nil)` 是未分类。
     var project: UUID??
     var withImages = false
     var sent: SendCondition = .any

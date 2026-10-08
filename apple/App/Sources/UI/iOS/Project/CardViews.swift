@@ -2,12 +2,13 @@
 import CueStore
 import SwiftUI
 
-/// 墙上的一张卡。点开用系统缩放过渡放大成纸页；向右轻扫是"要做"；长按是卡片操作。
+/// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；右滑交给 Agent、左滑设为任务；交给过 Agent 时右上角是那个会话的状态点；长按是菜单。
 struct CardTileView: View {
     let entry: CardEntry
     let lastTarget: String?
     let floated: Bool
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
 
@@ -18,10 +19,14 @@ struct CardTileView: View {
                 if let image = text.images.first {
                     Thumbnail(hash: image, height: 96, radius: 9).padding(.bottom, 4)
                 }
-                Text(text.title.nonEmpty ?? "无标题")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
-                    .lineLimit(3)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(text.title.nonEmpty ?? "无标题")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
+                        .lineLimit(3)
+                    Spacer(minLength: 0)
+                    AgentDot(card: card.id).padding(.vertical, -8).padding(.trailing, -6)
+                }
                 if !text.preview.isEmpty {
                     Text(VariableText.styled(text.preview, palette))
                         .font(.footnote).foregroundStyle(palette.ink2)
@@ -38,15 +43,20 @@ struct CardTileView: View {
         }
         .buttonStyle(CardPressStyle())
         .zoomSource(card.id, in: zoom)
-        .rowSwipe(right: .todo(card.id, in: workspace))
+        .rowSwipe(right: .handToAgent(card, in: navigation), left: .makeTask(card.id, in: workspace))
         .contextMenu { CardActions(card: card) }
         .ideaDrag(card.id)
     }
 }
 
 extension SwipeAction {
-    /// 灵感上向右轻扫：设为任务（提示里可撤销）。
-    @MainActor static func todo(_ id: UUID, in workspace: Workspace) -> SwipeAction {
+    /// 灵感上右滑：交给 Agent（主动作，浮起交给 Agent 的输入框）。
+    @MainActor static func handToAgent(_ card: Card, in navigation: Navigation) -> SwipeAction {
+        SwipeAction(symbol: "paperplane.fill") { navigation.handToAgent(card) }
+    }
+
+    /// 灵感上左滑：设为任务（提示里可撤销）。
+    @MainActor static func makeTask(_ id: UUID, in workspace: Workspace) -> SwipeAction {
         SwipeAction(symbol: "checklist") { workspace.toggleTodo(id, true) }
     }
 }
@@ -104,6 +114,7 @@ struct OlderRow: View {
     let isFirst: Bool
     let isLast: Bool
     @Environment(Workspace.self) private var workspace
+    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
 
@@ -120,6 +131,7 @@ struct OlderRow: View {
                     }
                 }
                 Spacer(minLength: 8)
+                AgentDot(card: card.id).padding(.vertical, -8)
                 if let lastTarget { Text("→ \(lastTarget)").font(.caption2).foregroundStyle(palette.ink3).lineLimit(1) }
                 Text(DateLabel.short(card.modifiedAt)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
             }
@@ -133,7 +145,7 @@ struct OlderRow: View {
             topLeadingRadius: isFirst ? Self.radius : 0, bottomLeadingRadius: isLast ? Self.radius : 0,
             bottomTrailingRadius: isLast ? Self.radius : 0, topTrailingRadius: isFirst ? Self.radius : 0, style: .continuous))
         .zoomSource(card.id, in: zoom)
-        .rowSwipe(right: .todo(card.id, in: workspace))
+        .rowSwipe(right: .handToAgent(card, in: navigation), left: .makeTask(card.id, in: workspace))
         .contextMenu { CardActions(card: card) }
         .ideaDrag(card.id)
     }

@@ -28,6 +28,7 @@ struct ProjectScreen: View {
     @State private var expanded: Set<OlderGroup.Period> = []
     @State private var board = WallBoard()
     @State private var pi: PiSessionList?
+    @State private var agents: AgentLinks?
 
     var body: some View {
         ScrollView {
@@ -46,6 +47,8 @@ struct ProjectScreen: View {
             project: projectID, available: navigation.layout == .tabs && (workspace.catalog?.cardCounts[projectID] ?? 0) > 0,
             ready: page != nil)
         .floatingHeader(project?.name ?? "", detail: detail) { actions }
+        .environment(\.cardAgents, agents?.items ?? [:])
+        .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
         .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }

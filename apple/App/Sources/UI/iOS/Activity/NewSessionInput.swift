@@ -52,6 +52,7 @@ struct NewSessionInput: View {
         .floatingInputLocked(inFlight)
         .onAppear {
             if launched == nil { launched = start.launched }
+            if let seed = start.draft, draft.isEmpty(accepting: [.images, .cards]) { draft = seed }
             focused = true
         }
         .observing(services.store, [.directoryBindings, .piSessionStates], id: projectOrder, into: $places, onError: workspace.fail) {

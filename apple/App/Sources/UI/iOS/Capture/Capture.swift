@@ -11,9 +11,8 @@ struct CaptureComposer: View {
     @State private var saving = false
     @FocusState private var focused: Bool
 
-    private var parent: Card? { navigation.capture.parent }
-    private var project: UUID? { parent.map(\.projectID) ?? navigation.capture.project ?? navigation.captureProject }
-    private var destination: String { parent?.title ?? CaptureCopy.destination(workspace.catalog?.project(project)) }
+    private var project: UUID? { navigation.capture.project ?? navigation.captureProject }
+    private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project)) }
 
     var body: some View {
         @Bindable var navigation = navigation
@@ -29,23 +28,9 @@ struct CaptureComposer: View {
     private var header: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 8)
-            if let parent { parentLabel(parent) } else { destinationMenu }
+            destinationMenu
         }
         .padding([.horizontal, .top], 8)
-    }
-
-    /// 在任务下记：落点就是那条任务，不能换。
-    private func parentLabel(_ task: Card) -> some View {
-        HStack(spacing: 6) {
-            Text("→").foregroundStyle(palette.ink3)
-            Image(systemName: "checklist").foregroundStyle(palette.ink2).accessibilityHidden(true)
-            Text(task.title).foregroundStyle(palette.ink).lineLimit(1)
-        }
-        .font(.subheadline)
-        .padding(.horizontal, 10).frame(minHeight: 36)
-        .background(palette.fill, in: .capsule)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("挂到任务 \(task.title)")
     }
 
     private var destinationMenu: some View {
@@ -79,10 +64,10 @@ struct CaptureComposer: View {
         guard !saving else { return }
         saving = true
         let draft = navigation.capture.draft
-        let note = CaptureDraft(text: draft.text, images: draft.images.map(\.data)), project = project, parent = parent?.id
+        let note = CaptureDraft(text: draft.text, images: draft.images.map(\.data)), project = project
         workspace.attempt {
             defer { saving = false }
-            try await note.save(in: project, under: parent, workspace: workspace)
+            try await note.save(in: project, workspace: workspace)
             focused = false
             navigation.finishCapture()
         }

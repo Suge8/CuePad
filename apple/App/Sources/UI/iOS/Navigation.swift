@@ -24,6 +24,8 @@ final class Navigation {
         case shelf
         case project(UUID)
         case inbox
+        /// 归档的灵感与任务。
+        case archive
         case trash
         case settings
         case conflicts
@@ -57,13 +59,11 @@ final class Navigation {
     /// 随手记里正在写的这一条（输入框收起后仍留着，见 `endCapture`）。
     struct Capture {
         var draft = ComposerDraft()
-        /// 手动换过的落点（`.some(nil)` 是未归档）；nil 时落在正在看的页面（`captureProject`）。
+        /// 手动换过的落点（`.some(nil)` 是未分类）；nil 时落在正在看的页面（`captureProject`）。
         var project: UUID??
-        /// 在这条任务下记（长按任务的"创建灵感"）：记下的灵感挂成它的素材，落在它的项目。
-        var parent: Card?
     }
 
-    /// 要发到 Mac 的一张卡或一条任务（存储格式，变量已填）：先选会话，再在会话页里选方式发出。
+    /// 要交给 Agent 的一条灵感或任务（存储格式，变量已填）：浮起交给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
     struct Outbox: Identifiable {
         let id = UUID()
         var content: String
@@ -94,6 +94,8 @@ final class Navigation {
         let id = UUID()
         var project: UUID?
         var launched: Launched?
+        /// 从"交给 Agent"选了新会话：灵感或任务的正文与补的话带过来作开场。
+        var draft: ComposerDraft?
     }
 
     var layout: Layout = .tabs
@@ -126,7 +128,7 @@ final class Navigation {
         self.settings = settings
     }
 
-    /// 随手记记入的位置：正在看的项目页（含其上打开的卡），否则未归档。
+    /// 随手记记入的位置：正在看的项目页（含其上打开的卡），否则未分类。
     var captureProject: UUID? {
         let visible: [Route] = switch layout {
         case .split: [splitRoot] + splitPath
@@ -149,6 +151,20 @@ final class Navigation {
 
     func open(card id: UUID) {
         push(.card(id))
+    }
+
+    /// 交给 Agent：浮起交给 Agent 的输入框，正文带在里面（`HandOffInput`）。`parts`：任务一并带上的相关灵感与资料。
+    func handToAgent(_ card: Card, text: String? = nil, parts: [Card] = []) {
+        let body = TaskBundle.text(task: text ?? Outgoing.text(of: card), parts: parts)
+        outbox = Outbox(content: body, card: card.id, project: card.projectID, parts: parts.map(\.id))
+    }
+
+    /// 交给 Agent 时选了新会话：收起交给 Agent 的输入框，换成新会话的，草稿带过去。
+    func handOffToNewSession(_ draft: ComposerDraft) {
+        let project = outbox?.project
+        outbox = nil
+        task = nil
+        newSession = NewSession(project: project, draft: draft)
     }
 
     /// 任务在半屏浮窗里打开（书架"正在推进"、任务页、项目页的任务行）；灵感照旧推入整页纸。
@@ -277,12 +293,6 @@ final class Navigation {
         capturing = true
     }
 
-    /// 在任务下记一条灵感：任务浮窗开着时先收起它（随手记浮在浮窗下面会被挡住）。
-    func startCapture(under task: Card) {
-        self.task = nil
-        capture.parent = task
-        capturing = true
-    }
 
     /// 收起随手记：写了东西就留着下次接着写，空的连同换过的种类与落点一起丢掉。
     func endCapture() {
@@ -296,7 +306,7 @@ final class Navigation {
         capturing = false
     }
 
-    /// 打开未归档（iPhone 推入项目标签，iPad 选中侧栏）。
+    /// 打开未分类（iPhone 推入项目标签，iPad 选中侧栏）。
     func showInbox() {
         if layout == .split { select(.inbox) } else { tab = .projects; projectsPath = [.inbox] }
     }

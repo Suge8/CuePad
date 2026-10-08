@@ -46,7 +46,7 @@ struct ComposerTests {
         }
     }
 
-    @Test func 回答存为卡片_进会话所属项目_没有项目进未归档_提示落点并可点过去() async throws {
+    @Test func 回答存为卡片_进会话所属项目_没有项目进未分类_提示落点并可点过去() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let workspace = Workspace(services: app.services, holder: SceneContext())
 
@@ -59,7 +59,7 @@ struct ComposerTests {
             return try #require(try await store.allPiSessionStates().first { $0.sessionID == "loose" })
         }())
         #expect(try await store.cards(in: nil).map(\.body) == ["没归属的"])
-        #expect(workspace.notice?.text == "已记到 未归档" && workspace.notice?.link == .project(nil))
+        #expect(workspace.notice?.text == "已记到 未分类" && workspace.notice?.link == .project(nil))
     }
 }
 #endif

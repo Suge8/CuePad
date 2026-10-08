@@ -29,7 +29,7 @@ struct TaskBoardTests {
     }
 
     @Test func 最近完成按完成时间统一排序_不按项目分组() async throws {
-        // 按项目分组时未归档总排在最后；最新完成的放在未归档里，只有按完成时间统一排才会排第一
+        // 按项目分组时未分类总排在最后；最新完成的放在未分类里，只有按完成时间统一排才会排第一
         let site = try await store.createProject(name: "个人网站", color: "#000000")
         let older = try await store.createTask("写首页文案", in: site.id)
         let newer = try await store.createTask("续费域名", in: nil)

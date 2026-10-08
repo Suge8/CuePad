@@ -124,7 +124,7 @@ enum DemoLibrary {
 
     typealias LegacyTask = (project: String?, text: String, done: Bool)
 
-    /// 三级任务：圆桌的"乱序"下两条子任务（一条已完成），其中一条再带两条（第三级默认折起），另挂一条素材；
+    /// 三级任务：圆桌的"乱序"下两条子任务（一条已完成），其中一条再带两条（第三级默认折起），另挂一条相关灵感；
     /// 正文是给 Agent 的话（标题行之后是要求）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         guard let order = try await store.tasks(.todo).flatMap(\.tasks).first(where: { $0.body.hasPrefix("发言轮次") }) else { return }
@@ -156,7 +156,7 @@ enum DemoLibrary {
             """
         func quoted(_ text: String) -> String { "'" + text.replacingOccurrences(of: "'", with: "''") + "'" }
         var cardID = 1
-        // 名称为空的一组是未归档的卡
+        // 名称为空的一组是未分类的卡
         for (index, project) in projects.enumerated() {
             let projectID = project.name.isEmpty ? "NULL" : "\(index + 1)"
             if !project.name.isEmpty {

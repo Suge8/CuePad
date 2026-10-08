@@ -79,6 +79,8 @@ enum Schema {
     Upgrade(renameMigratedTasks),
     // 交给 Agent 时一并带上的灵感：发送记录与投送请求明确记下它们（任务完成圈里灵感那一段只看这个）
     "ALTER TABLE sendRecords ADD COLUMN partIDs TEXT; ALTER TABLE deliveryRequests ADD COLUMN partIDs TEXT;",
+    // 归档：做完或不再需要的灵感与任务，留着可搜、不占列表
+    "ALTER TABLE cards ADD COLUMN archivedAt INTEGER;",
   ]
 
   private static let cardsTreeIndex = "CREATE INDEX cards_parentID ON cards(parentID);"
@@ -164,7 +166,7 @@ enum Schema {
       id TEXT PRIMARY KEY NOT NULL, projectID TEXT, body TEXT NOT NULL,
       isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT
+      parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
     CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);

@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 任务三态：待办、进行中、完成。按状态查询时跨项目分组（项目顺序同 `projects()`，未归档的在最后）。
+/// 任务三态：待办、进行中、完成。按状态查询时跨项目分组（项目顺序同 `projects()`，未分类的在最后）。
 @Suite struct TaskStatusTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }

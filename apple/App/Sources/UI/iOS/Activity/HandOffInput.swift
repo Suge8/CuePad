@@ -1,0 +1,97 @@
+#if os(iOS)
+import CueStore
+import SwiftUI
+
+/// 交给 Agent：浮在键盘上方的输入框（与随手记、新会话同一种），灵感或任务的正文已经带在里面，可以补一句；
+/// 头部一颗胶囊选交给哪个会话（本项目的在前，最近要你注意的在前），菜单最后是"新会话"。发出即收起，
+/// 灵感或任务的行上随即出现那个会话的状态点（发送中 → 工作中 → 有新回复）。没有在线会话时发送就是开新会话。
+struct HandOffInput: View {
+    let outbox: Navigation.Outbox
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(Navigation.self) private var navigation
+    @Environment(\.palette) private var palette
+    @State private var draft = ComposerDraft()
+    @State private var sessions: [PiSessionListItem]?
+    @State private var choice: UUID?
+    @State private var sending = false
+    @FocusState private var focused: Bool
+
+    private var chosen: PiSessionListItem? { sessions?.first { $0.state.id == choice } ?? sessions?.first }
+    private var canSend: Bool { services.reachesPiHost && !sending && sessions != nil }
+
+    var body: some View {
+        Composer(
+            draft: $draft, prompt: "补一句（可不填）", label: "交给 Agent", focus: $focused,
+            accepts: [.images, .cards], cardsFrom: outbox.project, pinnedOpen: true,
+            header: { header.padding(.horizontal, 12).padding(.top, 10) },
+            send: {
+                Button(action: send) { SendGlyph(enabled: canSend) }
+                    .buttonStyle(.plain).disabled(!canSend)
+                    .accessibilityLabel(chosen.map { "交给 \($0.state.title)" } ?? "开新会话交给它")
+            })
+        .floatingInputLocked(sending)
+        .onAppear {
+            draft.attachment = outbox
+            focused = true
+        }
+        .observing(services.store, [.piSessionStates, .deliveryRequests], into: $sessions, onError: workspace.fail) { [project = outbox.project] store in
+            try store.piSessionPage(.live).items.sorted {
+                ($0.state.projectID == project && project != nil ? 1 : 0, $0.state.state.urgency)
+                    > ($1.state.projectID == project && project != nil ? 1 : 0, $1.state.state.urgency)
+            }
+        }
+    }
+
+    /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"），右边送不到 Mac 时的原因。
+    private var header: some View {
+        HStack(spacing: 8) {
+            Menu {
+                ForEach(sessions ?? []) { item in
+                    Button { choice = item.state.id } label: {
+                        Label(title(item), systemImage: item.state.id == chosen?.state.id ? "checkmark" : "")
+                    }
+                }
+                Divider()
+                Button("新会话…", systemImage: "plus", action: newSession)
+            } label: {
+                HStack(spacing: 6) {
+                    if let chosen { PiStateDot(shown: services.settings.shown(chosen), size: 7) }
+                    Text(chosen.map { "交给 \($0.state.title)" } ?? "交给 新会话").lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3)
+                }
+                .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink)
+                .padding(.horizontal, 12).frame(height: 32)
+                .background(palette.fill, in: .capsule)
+            }
+            .accessibilityLabel(chosen.map { "交给 \($0.state.title)，点开换会话" } ?? "交给新会话")
+            Spacer(minLength: 4)
+            if !services.reachesPiHost { SyncHint(status: services.syncStatus).font(.caption).lineLimit(2) }
+        }
+    }
+
+    private func title(_ item: PiSessionListItem) -> String {
+        let place = PiPlace.name(of: item.state, project: workspace.catalog?.project(item.state.projectID))
+        return [item.state.title, place, services.settings.shown(item).label].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private func send() {
+        guard canSend else { return }
+        guard let session = chosen?.state else { return newSession() }
+        let sent = draft, mode = MacDelivery.modes(for: session, hasImages: sent.hasImages).first ?? .send
+        sending = true
+        workspace.attempt {
+            defer { sending = false }
+            _ = try await services.requestMacDelivery(sent, to: session, mode: mode)
+            focused = false
+            navigation.outbox = nil
+            workspace.say("已交给 \(session.title)")
+        }
+    }
+
+    /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。
+    private func newSession() {
+        navigation.handOffToNewSession(draft)
+    }
+}
+#endif

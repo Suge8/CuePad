@@ -87,7 +87,7 @@ final class KeyboardBar: UIToolbar {
             item.accessibilityLabel = label
             return item
         }
-        let send = item("发到 Mac", "paperplane.fill") { _ in actions.send() }
+        let send = item("交给 Agent", "paperplane.fill") { _ in actions.send() }
         send.style = .prominent
         items = [
             item("插入分割线", "minus") { $0.insertDivider() },

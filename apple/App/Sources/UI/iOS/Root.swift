@@ -44,9 +44,11 @@ struct IOSRootView: View {
                     if let start = navigation.newSession { NewSessionInput(start: start).id(start.id) }
                 }
             }
-            // 任务浮窗开着时选会话的面板由浮窗自己弹（同一视图上两个 sheet 不能叠着出）
-            .sheet(item: Binding(get: { navigation.task == nil ? navigation.outbox : nil }, set: { navigation.outbox = $0 })) {
-                SessionPicker(outbox: $0)
+            // 交给 Agent 的输入框；任务浮窗开着时由浮窗自己浮起（浮在浮窗下面会被挡住）
+            .overlay {
+                FloatingInput(isPresented: navigation.task == nil && navigation.outbox != nil, close: { navigation.outbox = nil }) {
+                    if let outbox = navigation.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
+                }
             }
             .sheet(item: $navigation.task) { TaskSheet(id: $0.id) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
@@ -110,6 +112,7 @@ struct RouteView: View {
         case .shelf: ShelfScreen()
         case .project(let id): ProjectScreen(projectID: id)
         case .inbox: InboxScreen()
+        case .archive: ArchiveList().floatingHeader("归档")
         case .trash: TrashScreen()
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
@@ -428,20 +431,20 @@ private struct NoticeBanner: View {
                             }
                         }
                         .foregroundStyle(notice.isError ? AnyShapeStyle(palette.failure) : AnyShapeStyle(palette.ink))
-                        .padding(.leading, 16).padding(.trailing, notice.undo == nil ? 16 : 8).padding(.vertical, 10)
+                        .padding(.leading, 16).padding(.trailing, notice.action == nil ? 16 : 8).padding(.vertical, 10)
                     }
                     .buttonStyle(.plain)
                     .disabled(notice.link == nil)
-                    // 撤销：点了把刚才那一下拨回去（"要做"开关）
-                    if let undo = notice.undo {
-                        Button("撤销") { workspace.undo(undo) }
+                    // 提示里的动作：撤销刚才那一下，或完成任务后的归档
+                    if let action = notice.action {
+                        Button(action.title) { workspace.run(action) }
                         .fontWeight(.semibold).foregroundStyle(palette.accent)
                         .padding(.trailing, 16).padding(.leading, 8).frame(minHeight: 44)
                         .contentShape(.rect)
                     }
                 }
                 .font(.subheadline.weight(.medium))
-                .glass(in: .capsule, interactive: notice.link != nil || notice.undo != nil)
+                .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil)
                 .accessibilityHint(notice.link == nil ? "" : "去那里看看")
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 .id(notice.id)

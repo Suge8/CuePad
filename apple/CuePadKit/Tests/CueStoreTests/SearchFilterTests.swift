@@ -12,7 +12,7 @@ import Testing
 
   private func bodies(_ results: SearchResults) -> [String] { results.cards.map(\.body) }
 
-  /// P: c1（含图）c2；Q: c3（发给 Pi 会话 s1）c5（很久以前修改）；未归档: c4（发给 Ghostty）。
+  /// P: c1（含图）c2；Q: c3（发给 Pi 会话 s1）c5（很久以前修改）；未分类: c4（发给 Ghostty）。
   private struct World {
     let p: Project, q: Project
     let c1: Card, c2: Card, c3: Card, c4: Card, c5: Card
@@ -167,7 +167,7 @@ import Testing
 
     let summaries = try await store.projectSummaries()
 
-    #expect(summaries.map(\.projectID) == (try await store.projects().map(\.id)) + [nil])  // 项目的顺序，未归档最后
+    #expect(summaries.map(\.projectID) == (try await store.projects().map(\.id)) + [nil])  // 项目的顺序，未分类最后
     let by = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0) })
     #expect([a.id, b.id, nil].map { by[$0]?.cardCount } == [2, 0, 1])
     #expect(by[a.id]?.lastModifiedAt == Date(timeIntervalSince1970: 500))

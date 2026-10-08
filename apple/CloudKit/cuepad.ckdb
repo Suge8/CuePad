@@ -32,6 +32,7 @@ DEFINE SCHEMA
         startedAt      INT64,
         completedAt    INT64,
         piSessionID    STRING,
+        archivedAt     INT64,
         isFavorite     INT64,
         numbering      STRING,
         GRANT WRITE TO "_creator",

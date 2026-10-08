@@ -8,7 +8,7 @@ import Synchronization
 import UniformTypeIdentifiers
 
 /// 性能测量用的大资料库（`-CuePadSeed perf`，只在 Debug 构建、隔离资料库、库为空时写入）：
-/// 50 个项目、5000 张卡（一个大项目 1200 张、未归档 300 张，其余分给 49 个项目），其中 300 张带 4032×3024 的 JPEG；
+/// 50 个项目、5000 张卡（一个大项目 1200 张、未分类 300 张，其余分给 49 个项目），其中 300 张带 4032×3024 的 JPEG；
 /// 修改时间分布在一年内；另有 200 条任务、500 条发送记录、200 个 Pi 历史会话。内容由固定种子生成，每次一样。
 enum PerfLibrary {
     static let projectCount = 50

@@ -252,7 +252,7 @@ extension CueStore {
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
       if key.table == .projects {
         // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的），
-        // 与本地 purgeProject 一致地释放到未归档，内容保留，不悬空隐藏。
+        // 与本地 purgeProject 一致地释放到未分类，内容保留，不悬空隐藏。
         let now = Date.stamp
         try db.run("UPDATE cards SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, key.id])
         try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [key.id])

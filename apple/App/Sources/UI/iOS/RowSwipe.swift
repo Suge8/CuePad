@@ -10,7 +10,7 @@ struct SwipeAction {
 
 extension View {
     /// 向右、向左轻扫：跟着手指走，露出那一边的图标，过阈值有触感、图标变实，松手生效后回位。
-    /// 任务大纲里是缩进与反缩进，灵感卡上向右是"要做"。没有动作的方向只给一点阻力、不露图标。
+    /// 任务大纲里是缩进与反缩进，灵感上右滑交给 Agent、左滑设为任务。没有动作的方向只给一点阻力、不露图标。
     func rowSwipe(right: SwipeAction?, left: SwipeAction? = nil) -> some View {
         modifier(RowSwipe(right: right, left: left))
     }
