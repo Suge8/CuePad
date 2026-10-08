@@ -25,9 +25,11 @@ public actor CueStore {
         try connection.exec(Schema.create)
         try connection.exec("PRAGMA user_version = \(Schema.version)")
       }
+    } else if version < Schema.baseVersion {
+      throw CueStoreError.schemaTooOld(version)
     } else if version < Schema.version {
       _ = try connection.transaction {
-        for upgrade in Schema.upgrades[(version - 1)...] { try upgrade.run(connection) }
+        for upgrade in Schema.upgrades[(version - Schema.baseVersion)...] { try upgrade.run(connection) }
         try connection.exec("PRAGMA user_version = \(Schema.version)")
       }
     } else if version != Schema.version {
@@ -43,8 +45,8 @@ public actor CueStore {
     }
   }
 
-  /// 这个版本能打开的库结构版本（`PRAGMA user_version`）；失败页据此区分"库是更新版本建的"与"升级失败"。
-  public static var supportedSchemaVersion: Int { Schema.version }
+  /// 这个版本能打开的库结构版本范围（`PRAGMA user_version`）；失败页据此区分"库是更新版本建的""库是更早版本建的"与别的失败。
+  public static var supportedSchemaVersions: ClosedRange<Int> { Schema.baseVersion...Schema.version }
 
   /// 库文件现在的结构版本，不改库；文件不存在或读不出来为 nil。
   public static func schemaVersion(of url: URL) -> Int? {

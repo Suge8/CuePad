@@ -326,8 +326,10 @@ public enum CueStoreError: Error, Equatable {
   case blankDeliveryContent
   /// 永久删除已完成，但这些哈希的图片文件没能删掉（记录与文件保留）。
   case attachmentFilesNotRemoved([String])
-  /// 库文件的结构版本不是本版本建的（开发期旧结构或更新版本的库），不打开。
+  /// 库文件是更新版本建的，不打开。
   case unsupportedSchemaVersion(Int)
+  /// 库文件是更早版本建的，这个版本不再升级旧结构，不打开。
+  case schemaTooOld(Int)
   /// 只能挂到存在的任务下，不能挂到自己或自己的下级下。
   case invalidParent
   /// 挂上去后会超过 `Card.maxDepth` 级。
@@ -347,7 +349,8 @@ extension CueStoreError: LocalizedError {
     case .attachmentHashMismatch: "附件内容与其哈希不符"
     case .blankDeliveryContent: "发送内容不能为空"
     case .attachmentFilesNotRemoved(let hashes): "已永久删除，但有 \(hashes.count) 个图片文件没能删掉"
-    case .unsupportedSchemaVersion(let version): "资料库由另一个版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
+    case .unsupportedSchemaVersion(let version): "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
+    case .schemaTooOld(let version): "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它"
     case .invalidParent: "只能挂到任务下，不能挂到自己或自己的下级下"
     case .taskTooDeep: "子任务最多 \(Card.maxDepth) 级"
     case .notATask: "这是灵感，先「设为任务」再改状态"

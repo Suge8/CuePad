@@ -202,50 +202,12 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 库的结构版本不是本版本建的（开发期的旧结构、或更新版本的库）：拒绝打开，不在错位的表结构上读写。
-  @Test func libraryFromAnotherSchemaVersionIsRefused() throws {
+  /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
+  @Test(arguments: [(18, CueStoreError.unsupportedSchemaVersion(18)), (16, .schemaTooOld(16))])
+  func libraryFromAnotherSchemaVersionIsRefused(version: Int, error: CueStoreError) throws {
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = 18;")
-    #expect(throws: CueStoreError.unsupportedSchemaVersion(18)) { try CueStore(url: url) }
-  }
-
-  /// 已经在用的旧资料库（结构版本 1）打开时逐步升级到最新，数据保留：Pi 会话状态多了文件夹名与近况各列，任务成了要做的卡片。
-  @Test func versionOneLibraryUpgradesInPlace() async throws {
-    let card = try await store.createCard(in: nil, body: "保留")
-    try RawDB(fixture.url).exec("""
-      ALTER TABLE piSessionStates DROP COLUMN folder; ALTER TABLE piSessionStates DROP COLUMN lastPrompt;
-      ALTER TABLE piSessionStates DROP COLUMN lastReply; ALTER TABLE piSessionStates DROP COLUMN question;
-      ALTER TABLE piSessionStates DROP COLUMN busySince; ALTER TABLE piSessionStates DROP COLUMN launchToken;
-      ALTER TABLE piSessionStates DROP COLUMN hosted; ALTER TABLE piSessionStates DROP COLUMN subagents;
-      ALTER TABLE piSessionStates DROP COLUMN pendingPrompt; DROP TABLE piMessages;
-      ALTER TABLE piSessionStates DROP COLUMN model; ALTER TABLE piSessionStates DROP COLUMN thinking; ALTER TABLE piSessionStates DROP COLUMN models;
-      DROP INDEX piSessionStates_state; DROP TABLE directoryBindings;
-      DROP INDEX cards_parentID; ALTER TABLE cards DROP COLUMN parentID; ALTER TABLE cards DROP COLUMN todoAt;
-      ALTER TABLE cards DROP COLUMN startedAt; ALTER TABLE cards DROP COLUMN completedAt; ALTER TABLE cards DROP COLUMN piSessionID;
-      CREATE TABLE tasks (
-        id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, projectID TEXT, sortKey TEXT NOT NULL,
-        completedAt INTEGER, piSessionID TEXT, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
-      ) STRICT;
-      CREATE INDEX tasks_projectID ON tasks(projectID);
-      INSERT INTO tasks VALUES ('00000000-0000-0000-0000-00000000000a', '老任务', NULL, 'V', NULL, NULL, 1000, 1000);
-      ALTER TABLE projects DROP COLUMN intro; ALTER TABLE projects ADD COLUMN goalCardID TEXT;
-      ALTER TABLE sendRecords ADD COLUMN taskID TEXT; ALTER TABLE deliveryRequests ADD COLUMN taskID TEXT;
-      ALTER TABLE cards DROP COLUMN archivedAt;
-      ALTER TABLE projects ADD COLUMN sortKey TEXT NOT NULL DEFAULT 'V';
-      ALTER TABLE cards ADD COLUMN numbering TEXT NOT NULL DEFAULT 'none';
-      DROP INDEX cards_projectID_modifiedAt; DROP INDEX piSessionStates_projectID;
-      PRAGMA user_version = 1;
-      """)
-
-    let reopened = try CueStore(url: fixture.url)
-
-    #expect(try await reopened.card(card.id)?.body == "保留")
-    let added = "('folder', 'lastPrompt', 'lastReply', 'question', 'busySince', 'launchToken', 'hosted', 'subagents', 'pendingPrompt', 'model', 'thinking', 'models')"
-    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('piSessionStates') WHERE name IN \(added)").count == 12)
-    #expect(try RawDB(fixture.url).rows("SELECT name FROM sqlite_master WHERE name = 'directoryBindings'").count == 1)
-    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('cards') WHERE name = 'numbering'").isEmpty)
-    #expect(try await reopened.tasks(.todo).flatMap(\.tasks).map(\.body) == ["老任务"])
-    #expect(try RawDB(fixture.url).rows("PRAGMA user_version") == [["17"]])
+    try RawDB(url).exec("CREATE TABLE cards (id TEXT PRIMARY KEY NOT NULL) STRICT; PRAGMA user_version = \(version);")
+    #expect(throws: error) { try CueStore(url: url) }
   }
 }

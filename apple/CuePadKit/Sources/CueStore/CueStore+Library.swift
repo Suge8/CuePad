@@ -120,7 +120,7 @@ extension CueStore {
 
   /// 刚建好的任务：正文多行时拆出提示词，返回拆过的任务。
   private func splittingPrompt(_ task: Card) throws -> Card {
-    guard try Self.splitPrompt(db, task: task.id, promptID: UUID(), at: task.modifiedAt) != nil else { return task }
+    guard try Self.splitPrompt(db, task: task.id, at: task.modifiedAt) != nil else { return task }
     return try find(Card.self, task.id) ?? task
   }
 
@@ -156,7 +156,7 @@ extension CueStore {
       let now = Date.stamp
       if on {
         try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
-        return try Self.splitPrompt(db, task: id, promptID: UUID(), at: now).flatMap { try find(Card.self, $0) }
+        return try Self.splitPrompt(db, task: id, at: now).flatMap { try find(Card.self, $0) }
       } else {
         try liftChildren(of: card, at: now)
         try db.run(
@@ -166,21 +166,21 @@ extension CueStore {
     }
   }
 
-  /// 任务正文除标题外还有话时拆出来（`CueTask.split`）：其余成为排在它下级最前的一条提示词（id 为 `promptID`，已有这条时只改正文），
+  /// 任务正文除标题外还有话时拆出来（`CueTask.split`）：其余成为排在它下级最前的一条提示词，
   /// 带着任务的变量取值与会话；交给 Agent 的记录（发送记录、投送请求）跟到提示词上。返回提示词的 id，没有可拆的为 nil。
-  /// 设为任务与结构升级共用。
-  static func splitPrompt(_ db: SQLite, task: UUID, promptID: UUID, at now: Date) throws -> UUID? {
+  /// 设为任务与新建任务共用。
+  static func splitPrompt(_ db: SQLite, task: UUID, at now: Date) throws -> UUID? {
     guard let body = try db.first("SELECT body FROM cards WHERE id = ?", [task], { $0.text(0) }) else { return nil }
     let (heading, prompt) = CueTask.split(body)
     guard let prompt else { return nil }
     let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE parentID = ?", [task]) { $0.textOrNil(0) } ?? nil
+    let promptID = UUID()
     try db.run(
       """
       INSERT INTO cards (id, projectID, body, isPinned, variableValues, sortKey, conflictOf, deletedAt, createdAt, modifiedAt,
         parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt)
       SELECT ?1, projectID, ?2, 0, variableValues, ?3, NULL, NULL, createdAt, ?4, id, NULL, NULL, NULL, piSessionID, archivedAt
       FROM cards WHERE id = ?5
-      ON CONFLICT(id) DO UPDATE SET body = excluded.body, modifiedAt = excluded.modifiedAt
       """, [promptID, prompt, SortKey.before(first), now, task])
     try db.run("UPDATE cards SET body = ?, variableValues = '{}', modifiedAt = ? WHERE id = ?", [heading, now, task])
     for table in ["sendRecords", "deliveryRequests"] {

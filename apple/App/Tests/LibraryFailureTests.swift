@@ -4,7 +4,7 @@ import SQLite3
 import Testing
 @testable import CuePad
 
-/// 资料库打不开（迁移失败、更新版本建的库）时进程不能终止：失败交给界面，带原文与库版本，界面据此写人话、可重试、可导出诊断。
+/// 资料库打不开（更早或更新版本建的库）时进程不能终止：失败交给界面，带原文与库版本，界面据此写人话、可重试、可导出诊断。
 @MainActor
 struct LibraryFailureTests {
     /// 一个隔离位置，库文件是 `setup` 造出来的、结构版本为 `version` 的样子。
@@ -28,22 +28,21 @@ struct LibraryFailureTests {
 
     private enum Unexpected: Error { case opened }
 
-    @Test func 迁移失败的库_打不开但不终止_失败带原文与库版本() throws {
+    @Test func 更早版本建的库_打不开但不终止_失败带原文与库版本() throws {
         let failure = try failure(of: library(version: 13, setup: "CREATE TABLE cards (id TEXT)"))
 
-        #expect(failure.version == 13 && failure.newerLibrary == false)
+        #expect(failure.version == 13 && failure.olderLibrary && !failure.newerLibrary)
         #expect(failure.diagnostics.contains(failure.reason) && failure.diagnostics.contains("13"))
         // 给人看的说明不夹原文（原文折叠在详情里）
         #expect(!failure.summary.contains(failure.reason))
     }
 
-    @Test func 更新版本建的库_说明要更新_而不是库坏了() throws {
-        let location = try library(version: 99, setup: "CREATE TABLE cards (id TEXT)")
-        let newer = try failure(of: location)
-        let broken = try failure(of: library(version: 13, setup: "CREATE TABLE cards (id TEXT)"))
+    @Test func 更新版本建的库_说明要更新_而不是不再升级() throws {
+        let newer = try failure(of: library(version: 99, setup: "CREATE TABLE cards (id TEXT)"))
+        let older = try failure(of: library(version: 13, setup: "CREATE TABLE cards (id TEXT)"))
 
-        #expect(newer.version == 99 && newer.newerLibrary)
-        #expect(newer.summary != broken.summary)
+        #expect(newer.version == 99 && newer.newerLibrary && !newer.olderLibrary)
+        #expect(newer.summary != older.summary)
     }
 
     @Test func 正常的库照常打开() throws {

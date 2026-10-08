@@ -1,6 +1,5 @@
 import CueStore
 import CueTestSupport
-import CueText
 import Foundation
 import Testing
 
@@ -10,55 +9,6 @@ import Testing
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
   private let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
-
-  // MARK: 结构 16 的库升级
-
-  private func upgraded() throws -> (CueStore, URL) {
-    let directory = FileManager.default.temporaryDirectory.appending(path: "prompt-\(UUID().uuidString)", directoryHint: .isDirectory)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let url = directory.appending(path: "cuepad.db")
-    let source = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/library-v16.sqlite")
-    try FileManager.default.copyItem(at: source, to: url)
-    return (try CueStore(url: url), url)
-  }
-
-  private func findTask(_ title: String, in store: CueStore) async throws -> Card {
-    try #require(try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks).first { CueSummary($0.body).title == title })
-  }
-
-  /// 夹具（结构 16）：任务"修重连排序"正文三行、交给过 atlas（发送记录与一条投送请求）、下面挂着一条灵感与一个子任务；
-  /// "续费域名"只有标题；回收站里的"旧任务"正文两行。
-  @Test func 升级后任务正文的要求成为它的第一条提示词_标题留给任务() async throws {
-    let (store, _) = try upgraded()
-    let task = try await findTask("修重连排序", in: store)
-    #expect(task.body == "修重连排序")
-    let children = try await store.children(of: task.id)
-    #expect(children.map(\.body) == ["跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码", "复现记录", "补重连用例"])
-    let prompt = children[0]
-    #expect(!prompt.isTask && prompt.projectID == task.projectID)
-    #expect(try await findTask("续费域名", in: store).body == "续费域名")
-    #expect(try await store.children(of: try await findTask("续费域名", in: store).id).isEmpty)
-  }
-
-  @Test func 升级后发送记录投送请求与会话跟到那条提示词_任务仍在进行中() async throws {
-    let (store, _) = try upgraded()
-    let task = try await findTask("修重连排序", in: store)
-    let prompt = try #require(try await store.children(of: task.id).first)
-    #expect(try await store.sendRecords().compactMap(\.cardID) == [prompt.id])
-    #expect(try await store.deliveryRequests().compactMap(\.cardID) == [prompt.id])
-    #expect(prompt.piSessionID == "s1")
-    #expect(task.status == .inProgress && task.piSessionID == "s1")
-  }
-
-  @Test func 两台设备各自升级得到同一条提示词_待上传() async throws {
-    let (store, _) = try upgraded()
-    let (other, _) = try upgraded()
-    let prompt = try #require(try await store.children(of: try await findTask("修重连排序", in: store).id).first)
-    let same = try #require(try await other.children(of: try await findTask("修重连排序", in: other).id).first)
-    #expect(prompt.id == same.id)
-    let pending = Set(try await store.pendingSync().saves.map(\.id))
-    #expect(pending.contains(prompt.id.uuidString.lowercased()))
-  }
 
   // MARK: 设为任务
 
