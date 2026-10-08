@@ -83,7 +83,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 ### 排查与真机验证
 
-**崩溃诊断**：`Diagnostics`（iOS 与 Mac 启动时开始）订阅 MetricKit，系统交来崩溃、卡死、CPU 与磁盘写入异常的诊断（一般在下次启动或隔天）时，把原始 JSON 按时间命名存进资料库目录下的 `Diagnostics/`（`DiagnosticArchive`，只留最近 10 份，同一份重复送达只存一份；一个包同时带多类诊断时按 崩溃→卡死→CPU→磁盘 取第一种命名与显示），不联网、不上传。设置里有诊断时多一行"上次崩溃 · 时间"（`LastCrashRow`），点开看摘要（异常类型、信号、终止原因、崩溃线程顶部的帧，未符号化、靠 dSYM 还原）并"导出诊断"（复制到剪贴板，与"读不出资料库"页同一个 `ExportDiagnosticsButton`）——真机崩溃拿不到栈时，请用户从这里导出发来。隔离库（`CUEPAD_LIBRARY_DIR`）不订阅。验收：`-CuePadSampleCrash YES` 存一份样例（配 `-CuePadCrashSheet YES` 直接打开摘要）；复现点通知的崩溃用 `-CuePadScene notifytap` 与 `-CuePadColdTap`（见 `DebugScene+iOS` 注释）。
+**崩溃诊断**：`Diagnostics`（iOS 与 Mac 启动时开始）订阅 MetricKit，系统交来崩溃、卡死、CPU 与磁盘写入异常的诊断（一般在下次启动或隔天）时，把原始 JSON 按时间命名存进资料库目录下的 `Diagnostics/`（`DiagnosticArchive`，只留最近 10 份，同一份重复送达只存一份；一个包同时带多类诊断时按 崩溃→卡死→CPU→磁盘 取第一种命名与显示），不联网、不上传。设置里有诊断时多一行"上次崩溃 · 时间"（`LastCrashRow`），点开看摘要（异常类型、信号、终止原因、崩溃线程顶部的帧，未符号化、靠 dSYM 还原）并"导出诊断"（复制到剪贴板，与"读不出资料库"页同一个 `ExportDiagnosticsButton`）——真机崩溃拿不到栈时，请用户从这里导出发来。隔离库（`CUEPAD_LIBRARY_DIR`）不订阅。验收：`-CuePadSampleCrash YES` 存一份样例（配 `-CuePadCrashSheet YES` 直接打开摘要）；点通知后的路由用 `-CuePadScene notifytap` 与 `-CuePadColdTap` 看（见 `DebugScene+iOS` 注释，它们绕过了系统的代理回调）。系统回调约束：带完成块的 async 代理方法（`UNUserNotificationCenterDelegate` 等）必须留在主 actor、不标 `nonisolated`——编译器生成的转接在方法所属的 executor 上调系统交来的完成块，后台线程调用时 UIKit 在块里断言主线程而崩溃（真机点锁屏通知进 App 的崩溃，由 `PiAlertRoutingTests` 经 Objective-C 选择器像系统一样调用来守）；回调里只做取值与记下，不 await 别的。
 
 App 自己的日志都在 subsystem `com.sugeh.cuepad`（类别 `services`、`launch`、`shutdown`、`pi-history`）；CloudKit 与 CKSyncEngine 的日志在 `com.apple.cloudkit`：
 
