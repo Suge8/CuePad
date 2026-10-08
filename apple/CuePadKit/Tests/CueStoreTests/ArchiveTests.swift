@@ -31,8 +31,8 @@ import Testing
   @Test func 归档任务连同下级一起_一键全部归档只动已完成的顶层任务() async throws {
     let done = try await store.createTask("上线", in: nil)
     let sub = try await store.createTask("备份", under: done.id)
-    let related = try await store.createCard(in: nil, body: "日志")
-    try await store.moveCard(related.id, to: .under(done.id), after: nil)
+    let prompt = try await store.createCard(in: nil, body: "日志")
+    try await store.moveCard(prompt.id, to: .under(done.id), after: nil)
     try await store.setStatus(done.id, .done)
     let open = try await store.createTask("还在做", in: nil)
     // 没做完的任务下已完成的子任务算在上级的进度里，不单独归档
@@ -42,13 +42,13 @@ import Testing
     #expect(try await store.archiveCompletedTasks() == 1)
     #expect(try await store.card(doneStep.id)?.archivedAt == nil)
 
-    for id in [done.id, sub.id, related.id] { #expect(try await store.card(id)?.archivedAt != nil) }
+    for id in [done.id, sub.id, prompt.id] { #expect(try await store.card(id)?.archivedAt != nil) }
     #expect(try await store.card(open.id)?.archivedAt == nil)
     #expect(try await store.archived().map(\.id) == [done.id])
     #expect(try await store.tasks(.done).flatMap(\.tasks).map(\.id) == [doneStep.id])
 
     try await store.unarchive(done.id)
-    for id in [done.id, sub.id, related.id] { #expect(try await store.card(id)?.archivedAt == nil) }
+    for id in [done.id, sub.id, prompt.id] { #expect(try await store.card(id)?.archivedAt == nil) }
   }
 
   @Test func 灵感交给Agent也记下那个会话_手机发出还没执行时按请求认出() async throws {

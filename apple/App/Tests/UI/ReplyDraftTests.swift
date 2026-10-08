@@ -16,11 +16,11 @@ struct ReplyDraftTests {
         let settings = settings(suite)
         var draft = settings.replyDraft(for: session)
         draft.text = "改完再跑一遍"
-        draft.attachments = [Outbox(content: "目标卡", card: UUID())]
+        draft.attachments = [Outbox(content: "接口约定", card: UUID())]
         settings.setReplyDraft(draft, for: session)
 
         #expect(settings.replyDraft(for: session).text == "改完再跑一遍")
-        #expect(settings.replyDraft(for: session).attachments.first?.content == "目标卡")
+        #expect(settings.replyDraft(for: session).attachments.first?.content == "接口约定")
 
         let relaunched = self.settings(suite)
         #expect(relaunched.replyDraft(for: session).text == "改完再跑一遍")

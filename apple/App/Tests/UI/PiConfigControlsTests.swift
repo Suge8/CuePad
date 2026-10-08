@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 回复框下方的模型胶囊与思考强度条（iOS 与 Mac 共用）的显示规则：模型写短名、胶囊宽度随可用宽度有上下限；
+/// 回复框下方的模型胶囊与思考强度条（iOS 与 Mac 共用）的显示规则：模型写短名；
 /// 强度条的格数是当前模型支持的档位（"关"不占格，关着时格全空），拖到哪就是哪一档。
 struct PiConfigControlsTests {
     private func model(_ name: String, provider: String = "anthropic", id: String = "m") -> PiModelOption {
@@ -24,11 +24,6 @@ struct PiConfigControlsTests {
 
     @Test func 没有名字时用模型id() {
         #expect(PiModelLabel.short(model("", id: "luna-mini")) == "luna-mini")
-    }
-
-    @Test(arguments: [(150, 96), (300, 150), (1000, 240)] as [(CGFloat, CGFloat)])
-    func 胶囊最宽是这一排的一半_有上下限(available: CGFloat, width: CGFloat) {
-        #expect(PiModelLabel.capsuleWidth(available: available) == width)
     }
 
     @Test func 强度条_格数是支持的档位_关不占格() {

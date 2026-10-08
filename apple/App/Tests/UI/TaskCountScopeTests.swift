@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 项目页标题"任务 n/m"、书架项目卡"N 项任务"都按顶层任务计，与看板分组同一个数；子任务进度只在上级那一行。
+/// 项目页标题"任务 n/m"、书架项目卡"N 项任务"与"任务"一行都按顶层任务计，与看板分组同一个数；子任务进度只在上级那一行。
 @MainActor
 struct TaskCountScopeTests {
     let app = TestApp()
@@ -26,6 +26,7 @@ struct TaskCountScopeTests {
         #expect(page.taskProgress == TaskProgress(done: 1, total: 2))
         #expect(shelf.entries.first { $0.project.id == project.id }?.openTasks == 1)
         #expect(board.counts.inProgress + board.counts.todo == 1)
+        #expect(shelf.tasks?.inProgress == board.inProgress.count && shelf.tasks?.todo == board.todo.count)  // 书架的"任务"一行
     }
 }
 #endif

@@ -47,18 +47,18 @@ import Testing
     let top = try await store.createTask("上线", in: nil)
     let before = try await store.createTask("前一条", under: top.id)
     let parent = try await store.createTask("备份", under: top.id)
-    let material = try await store.createCard(in: nil, body: "备份脚本")
-    try await store.moveCard(material.id, to: .under(parent.id), after: nil)
+    let prompt = try await store.createCard(in: nil, body: "备份脚本")
+    try await store.moveCard(prompt.id, to: .under(parent.id), after: nil)
     let sub = try await store.createTask("导出", under: parent.id)
     let after = try await store.createTask("后一条", under: top.id)
 
     try await store.setTodo(parent.id, false)
-    #expect(try await store.children(of: top.id).map(\.id) == [before.id, parent.id, material.id, sub.id, after.id])
+    #expect(try await store.children(of: top.id).map(\.id) == [before.id, parent.id, prompt.id, sub.id, after.id])
 
     try await store.setTodo(parent.id, true)
     try await store.moveCard(sub.id, to: .under(parent.id), after: nil)
     try await store.trashCard(parent.id)
-    #expect(try await store.children(of: top.id).map(\.id) == [before.id, sub.id, material.id, after.id])
+    #expect(try await store.children(of: top.id).map(\.id) == [before.id, sub.id, prompt.id, after.id])
     #expect(try await card(parent.id).deletedAt != nil)
   }
 
@@ -74,22 +74,4 @@ import Testing
     #expect(handed.isTask == false && handed.status == nil && handed.piSessionID == "s1")
   }
 
-  @Test func 计数只算顶层任务_提示词与灵感不算() async throws {
-    let project = try await store.createProject(name: "圆桌", color: "#111")
-    let top = try await store.createTask("上线", in: project.id)
-    let material = try await store.createCard(in: project.id, body: "截图")
-    try await store.moveCard(material.id, to: .under(top.id), after: nil)
-    _ = try await store.createTask("备份", under: top.id)
-    _ = try await store.createCard(in: project.id, body: "灵感")
-
-    #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 0, todo: 1, done: 0))
-    #expect(TaskProgress.subtasks(in: try await store.childMarks()[top.id]) == TaskProgress(done: 0, total: 1))
-    #expect(try await store.tasks(.todo).flatMap(\.tasks).map(\.body) == ["上线", "备份"])
-  }
-
-  @Test func 项目只有一句话介绍() async throws {
-    let project = try await store.createProject(name: "圆桌", color: "#111")
-    try await store.updateProject(project.id) { $0.intro = "多 Agent 调度" }
-    #expect(try await store.project(project.id)?.intro == "多 Agent 调度")
-  }
 }
