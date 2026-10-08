@@ -23,7 +23,7 @@ struct ComposerTests {
         let card = try await store.createCard(in: nil, body: "接口约定\n\n![](cuepad://img/\(hash))")
         let draft = ComposerDraft(
             text: "  照这个改  ", images: [PickedImage(data: photo)],
-            attachment: Outbox(content: card.body, card: card.id, project: nil))
+            attachments: [Outbox(content: card.body, card: card.id, project: nil)])
 
         let request = try await app.services.requestMacDelivery(draft, to: target, mode: .send)
 
@@ -32,6 +32,33 @@ struct ComposerTests {
         #expect(app.services.images.fileURL(for: photoHash) != nil)
         #expect(request.cardID == card.id)
         #expect(request.hostID == "mac-a" && request.mode == .known(.send))
+    }
+
+    /// 交给 Agent 时用"＋ 选灵感"带上本项目的资料：卡片作为这次消息的附件跟着发出（提示词在前、资料在后），
+    /// 卡片本身不动——仍在原项目的资料组里；请求关联的仍是那条提示词。选卡片的面板里本项目资料排在最前。
+    @Test func 交给Agent时带上资料作附件_正文含它_资料原地不动_面板里资料在最前() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let target = try await session(project: project.id)
+        let task = try await store.createTask("修乱序", in: project.id)
+        let prompt = try await store.createCard(body: "先复现", under: task.id)
+        let reference = try await store.createCard(in: project.id, body: "接口约定\n队列按首次加入时间排")
+        try await store.updateCard(reference.id) { $0.isPinned = true }
+        _ = try await store.createCard(in: project.id, body: "随手一条")
+
+        let page = try await CardPicker.Page.read(text: "", project: project.id, limit: 30, from: store)
+        #expect(page.resources.map(\.id) == [reference.id])
+        #expect(!page.pinned.contains { $0.id == reference.id })
+
+        var draft = ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: prompt), card: prompt.id, project: project.id)])
+        draft.attach(try #require(try await store.card(reference.id)))
+        draft.attach(try #require(try await store.card(reference.id)))  // 同一张不重复带
+        let request = try await app.services.requestMacDelivery(draft, to: target, mode: .send)
+
+        #expect(request.content == "先复现\n\n接口约定\n队列按首次加入时间排")
+        #expect(request.cardID == prompt.id)
+        let after = try #require(try await store.card(reference.id))
+        #expect(after.isPinned && after.projectID == project.id && after.parentID == nil)
+        #expect(try await store.cards(in: project.id).filter(\.isPinned).map(\.id) == [reference.id])
     }
 
     @Test func 草稿只有一张图片也能发_什么都没有的不能发() async throws {

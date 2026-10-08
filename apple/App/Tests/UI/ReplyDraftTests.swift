@@ -16,15 +16,15 @@ struct ReplyDraftTests {
         let settings = settings(suite)
         var draft = settings.replyDraft(for: session)
         draft.text = "改完再跑一遍"
-        draft.attachment = Outbox(content: "目标卡", card: UUID())
+        draft.attachments = [Outbox(content: "目标卡", card: UUID())]
         settings.setReplyDraft(draft, for: session)
 
         #expect(settings.replyDraft(for: session).text == "改完再跑一遍")
-        #expect(settings.replyDraft(for: session).attachment?.content == "目标卡")
+        #expect(settings.replyDraft(for: session).attachments.first?.content == "目标卡")
 
         let relaunched = self.settings(suite)
         #expect(relaunched.replyDraft(for: session).text == "改完再跑一遍")
-        #expect(relaunched.replyDraft(for: session).attachment == nil)
+        #expect(relaunched.replyDraft(for: session).attachments.isEmpty)
     }
 
     @Test func 发出后清空_退出再回来也没有() {
@@ -51,7 +51,7 @@ struct ReplyDraftTests {
         Navigation(settings: settings).openSession(session, draft: Outbox(content: "接口约定", card: UUID()), store: TestApp().services.store)
 
         #expect(settings.replyDraft(for: session).text == "补一句")
-        #expect(settings.replyDraft(for: session).attachment?.content == "接口约定")
+        #expect(settings.replyDraft(for: session).attachments.first?.content == "接口约定")
     }
     #endif
 }
