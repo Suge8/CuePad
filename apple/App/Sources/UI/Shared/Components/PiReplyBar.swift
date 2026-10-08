@@ -206,11 +206,13 @@ struct PiReplyBar: View {
 /// 同步到不了 Mac 时的一句提示（Agent 页同步图标点开、会话回复框上、新会话）：哪里不通；详情与处理在设置里。
 struct SyncHint: View {
     let status: SyncStatus
+    /// 这对眼前的事意味着什么：浮起的输入框里只关心发不发得出去。
+    var consequence = "看到的可能不是最新，也发不到 Mac"
     @Environment(\.palette) private var palette
 
     var body: some View {
         let summary = SyncSummary(status)
-        Label("\(summary.title) · 看到的可能不是最新，也发不到 Mac", systemImage: summary.symbol)
+        Label("\(summary.title) · \(consequence)", systemImage: summary.symbol)
             .font(.footnote).foregroundStyle(palette.ink3)
             .lineLimit(2)
     }
