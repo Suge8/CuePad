@@ -1,7 +1,7 @@
 import CueStore
 
 /// 任务行上的提示词计数："3 条提示词 · 1 已回复"（全部回复了写"全部已回复"）；没有提示词时不写。
-/// 全部提示词都已回复、任务还没完成时，行上轻轻问一句要不要标记完成——任务不自动完成，由用户确认。
+/// 全部提示词都已回复、任务还没完成时，行尾给一颗"完成"——任务不自动完成，由用户确认。
 nonisolated struct PromptTally: Equatable, Sendable {
     let prompts: Int
     let replied: Int
@@ -14,8 +14,13 @@ nonisolated struct PromptTally: Equatable, Sendable {
 
     var text: String? {
         guard prompts > 0 else { return nil }
-        guard replied > 0 else { return "\(prompts) 条提示词" }
-        return "\(prompts) 条提示词 · \(replied == prompts ? "全部" : "\(replied) ")已回复"
+        return (["\(prompts) 条提示词"] + [replies].compactMap { $0 }).joined(separator: " · ")
+    }
+
+    /// "1 已回复" / "全部已回复"；还没有回复的不写。任务页"提示词"标题旁只写它与条数，不再重复"提示词"。
+    var replies: String? {
+        guard replied > 0 else { return nil }
+        return replied == prompts ? "全部已回复" : "\(replied) 已回复"
     }
 
     func suggestsDone(_ task: Card) -> Bool {
