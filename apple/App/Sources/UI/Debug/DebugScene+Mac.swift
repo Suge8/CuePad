@@ -115,13 +115,13 @@ extension DebugScene {
         NSApp.terminate(nil)
     }
 
-    /// 帧耗时测量用的固定负载：等界面稳定后开合侧栏若干次，结束后退出，由外部录制（Instruments 动画卡顿模板）。
+    /// 帧耗时测量用的固定负载：等界面稳定后开合侧栏 10 次（`PerfBench.sidebar`），打一行 `SIDEBAR {json}` 后退出；同时可由外部录制（Instruments 动画卡顿模板）。
     private static func benchSidebar(_ workspace: Workspace) async {
         try? await Task.sleep(for: .seconds(3))
-        for _ in 0..<10 {
-            workspace.toggleSidebar()
-            try? await Task.sleep(for: .milliseconds(800))
-        }
+        guard let view = mainWindow?.contentView else { return NSApp.terminate(nil) }
+        let result = await PerfBench.sidebar(workspace, view: view)
+        let data = try! JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+        print("SIDEBAR " + String(decoding: data, as: UTF8.self))
         NSApp.terminate(nil)
     }
 

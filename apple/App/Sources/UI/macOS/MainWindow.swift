@@ -46,7 +46,7 @@ struct MainWindow: View {
     private var detail: some View {
         ZStack {
             palette.desk.ignoresSafeArea()
-            PinnedPage(widths: widths, sidebarHidden: workspace.sidebar == .detailOnly) { page }
+            PinnedPage(widths: widths) { page }
             EditorLayer().zIndex(1)
         }
         .overlay(alignment: .bottom) { CaptureSlot() }
@@ -88,9 +88,7 @@ struct MainWindow: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         // 工具栏项常驻、只换里面的内容：增删工具栏项会让 AppKit 在开合侧栏的那一帧重建整条工具栏
-        ToolbarItem(placement: .navigation) {
-            if workspace.sidebar == .detailOnly { ProjectSwitcher() }
-        }
+        ToolbarItem(placement: .navigation) { SwitcherSlot() }
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { BackButton() }
             .sharedBackgroundVisibility(.hidden)
@@ -142,6 +140,15 @@ private struct CardPressMonitor: NSViewRepresentable {
                 return event
             }
         }
+    }
+}
+
+/// 侧栏收起时工具栏左边的项目切换。单独一个视图读侧栏开合：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
+private struct SwitcherSlot: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        if workspace.sidebar == .detailOnly { ProjectSwitcher() }
     }
 }
 
@@ -209,13 +216,15 @@ private final class WindowWidths {
 
 /// 页面按侧栏开合的终点宽度排版、贴左摆放：开合动画中详情区每帧变宽变窄，页面只排一次，
 /// 随详情区左缘被侧栏推着走，超出的只会是窗口右缘之外（窗口自己裁掉）。不这样做时整页（卡片墙、目标栏、更早）每帧重排，是开合卡顿的主要来源。
+/// 开合状态在这里读、不在主窗口读：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
 private struct PinnedPage<Page: View>: View {
     let widths: WindowWidths
-    let sidebarHidden: Bool
     @ViewBuilder let page: Page
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let width: CGFloat? = widths.window > 0 ? (sidebarHidden ? widths.window : widths.window - widths.sidebar) : nil
+        let hidden = workspace.sidebar == .detailOnly
+        let width: CGFloat? = widths.window > 0 ? (hidden ? widths.window : widths.window - widths.sidebar) : nil
         PinnedWidth(width: width) { page }
             // 页宽一步到终点：开合侧栏的动画事务若带进来，页面会按插值宽度逐帧重排
             .transaction(value: width) { $0.animation = nil }

@@ -42,6 +42,7 @@ enum PerfBench {
         result["scroll"] = await scroll(in: window, view: view)
         result["memoryAfterScrollMB"] = footprintMB()
         result["openCard"] = await openAndClose(workspace, view: view)
+        result["sidebar"] = await sidebar(workspace, view: view)
         result["search"] = await search(workspace)
         result["memoryEndMB"] = footprintMB()
         let data = try! JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
@@ -83,6 +84,17 @@ enum PerfBench {
         let close = recorder.stop()
         try? await Task.sleep(for: .milliseconds(300))
         return ["open": open, "close": close]
+    }
+
+    /// 开合侧栏 times 次、每次 0.6 秒，记下这期间的帧间隔（全部开合合在一起）。
+    static func sidebar(_ workspace: Workspace, view: NSView, times: Int = 10) async -> [String: Any] {
+        let recorder = FrameRecorder()
+        recorder.start(in: view)
+        for _ in 0..<times {
+            workspace.toggleSidebar()
+            try? await Task.sleep(for: .milliseconds(600))
+        }
+        return recorder.stop()
     }
 
     /// 每个关键词两段：Store 查询本身（5 次取中位数），以及打开 ⌘K 到结果读到（含面板出现）。
