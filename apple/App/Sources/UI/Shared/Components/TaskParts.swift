@@ -98,10 +98,8 @@ struct PromptList: View {
         VStack(alignment: .leading, spacing: TaskMetrics.cardGap) {
             HStack(alignment: .firstTextBaseline) {
                 Text("提示词").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-                if !prompts.isEmpty {
-                    let tally = PromptTally(detail?.marks)
-                    Text(([String(tally.prompts)] + [tally.replies].compactMap { $0 }).joined(separator: " · "))
-                        .monospacedDigit().font(TaskMetrics.caption).foregroundStyle(palette.ink3)
+                if let heading = PromptTally(detail?.marks).heading {
+                    Text(heading).monospacedDigit().font(TaskMetrics.caption).foregroundStyle(palette.ink3)
                 }
                 Spacer()
                 pick

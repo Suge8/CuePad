@@ -12,15 +12,16 @@ nonisolated struct PromptTally: Equatable, Sendable {
         replied = prompts.filter(\.isDone).count
     }
 
-    var text: String? {
-        guard prompts > 0 else { return nil }
-        return (["\(prompts) 条提示词"] + [replies].compactMap { $0 }).joined(separator: " · ")
-    }
+    var text: String? { line(count: "\(prompts) 条提示词") }
 
-    /// "1 已回复" / "全部已回复"；还没有回复的不写。任务页"提示词"标题旁只写它与条数，不再重复"提示词"。
-    var replies: String? {
-        guard replied > 0 else { return nil }
-        return replied == prompts ? "全部已回复" : "\(replied) 已回复"
+    /// 任务页"提示词"标题旁的写法："3 · 1 已回复"，不再重复"提示词"。
+    var heading: String? { line(count: "\(prompts)") }
+
+    /// 条数在前，有回复时接"1 已回复" / "全部已回复"；没有提示词时不写。
+    private func line(count: String) -> String? {
+        guard prompts > 0 else { return nil }
+        guard replied > 0 else { return count }
+        return "\(count) · \(replied == prompts ? "全部已回复" : "\(replied) 已回复")"
     }
 
     func suggestsDone(_ task: Card) -> Bool {
