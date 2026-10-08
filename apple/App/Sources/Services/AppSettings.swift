@@ -27,7 +27,8 @@ final class AppSettings {
     private static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
 
     @ObservationIgnored private let defaults: UserDefaults
-    private var replyDrafts: [UUID: ComposerDraft] = [:]
+    /// 每个会话的草稿各是一个可观察的格子：打字只让读这个会话草稿的视图（它的回复框、它在列表里那一行）重算，别的行不动。
+    @ObservationIgnored private var replyDrafts: [UUID: ReplyDraftSlot] = [:]
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
     /// W3C code 形式的加速键（如 `Alt+Space`）。
@@ -86,13 +87,20 @@ final class AppSettings {
     /// 会话回复框的草稿（按会话记录 id，iOS 与 Mac 同一份）：离开会话再回来还在；文字另存本机偏好、跨退出保留，
     /// 带上的卡片与图片只留在这次运行。
     func replyDraft(for session: UUID) -> ComposerDraft {
-        replyDrafts[session] ?? ComposerDraft()
+        slot(session).draft
+    }
+
+    private func slot(_ session: UUID) -> ReplyDraftSlot {
+        if let slot = replyDrafts[session] { return slot }
+        let slot = ReplyDraftSlot()
+        replyDrafts[session] = slot
+        return slot
     }
 
     /// 发出后传空草稿：文字一并从本机偏好里清掉。
     func setReplyDraft(_ draft: ComposerDraft, for session: UUID) {
-        replyDrafts[session] = draft
-        defaults.set(replyDrafts.compactMapValues { $0.text.allSatisfy(\.isWhitespace) ? nil : $0.text }
+        slot(session).draft = draft
+        defaults.set(replyDrafts.compactMapValues { $0.draft.text.allSatisfy(\.isWhitespace) ? nil : $0.draft.text }
             .reduce(into: [String: String]()) { $0[$1.key.uuidString] = $1.value }, forKey: Key.replyTexts)
     }
 
@@ -123,7 +131,7 @@ final class AppSettings {
         piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]).reduce(into: [:]) { drafts, entry in
-            if let id = UUID(uuidString: entry.key) { drafts[id] = ComposerDraft(text: entry.value) }
+            if let id = UUID(uuidString: entry.key) { drafts[id] = ReplyDraftSlot(ComposerDraft(text: entry.value)) }
         }
         // 启动参数（演示截图）可以把起点挪到很早，让演示库里停下的会话都算有新回复
         if let seconds = launchArguments[Key.unreadSince].flatMap({ Double(String(describing: $0)) }) {
@@ -149,4 +157,12 @@ final class AppSettings {
     func setWindowFrame(_ descriptor: String, for name: String) {
         defaults.set(descriptor, forKey: Self.frameKeyPrefix + name)
     }
+}
+
+/// 一个会话回复框的草稿（`AppSettings.replyDraft`）。
+@MainActor @Observable
+private final class ReplyDraftSlot {
+    var draft: ComposerDraft
+
+    init(_ draft: ComposerDraft = ComposerDraft()) { self.draft = draft }
 }
