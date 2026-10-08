@@ -219,7 +219,7 @@ private struct FocusCard: View {
                 PiStateDot(shown: shown, size: 7)
                 Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
                 PiActivityLine(lead: [shown.label], detail: session.detail, detailIsCode: session.detailIsCode, font: .subheadline)
-                    .foregroundStyle(session.state == .known(.waitingForUser) ? palette.attention : shown.unread ? palette.ink : palette.ink2)
+                    .foregroundStyle(shown.status == .asking ? palette.attention : shown.isUnread ? palette.ink : palette.ink2)
                 Spacer(minLength: 4)
                 PiElapsed(session: session)
             }

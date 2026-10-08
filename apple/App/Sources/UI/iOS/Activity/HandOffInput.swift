@@ -56,10 +56,11 @@ struct HandOffInput: View {
             focused = true
         }
         .observing(services.store, [.piSessionStates, .deliveryRequests], into: $live, onError: workspace.fail) { [project = outbox.project] store in
-            let sessions = try store.piSessionPage(.live).items.sorted {
-                ($0.state.projectID == project && project != nil ? 1 : 0, $0.state.state.urgency)
-                    > ($1.state.projectID == project && project != nil ? 1 : 0, $1.state.state.urgency)
+            // 本项目的在前，再按要你注意的先后
+            func key(_ item: PiSessionListItem) -> (Int, Int) {
+                (item.state.projectID == project && project != nil ? 1 : 0, PiShown(item.state, delivery: item.delivery).urgency)
             }
+            let sessions = try store.piSessionPage(.live).items.sorted { key($0) > key($1) }
             var configs: [UUID: PiConfigShown] = [:]
             for item in sessions {
                 let deliveries = try store.deliveryRequests(toSession: item.state.sessionID)

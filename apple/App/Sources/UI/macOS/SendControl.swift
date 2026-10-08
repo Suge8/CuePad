@@ -21,7 +21,7 @@ struct SendControl: View {
         Group {
             if case .pi(let id, _) = choice, workspace.isEnded(choice) {
                 SendTargetMenu(project: project, newSession: newSession) {
-                    label(icon: AnyView(PiStateDot(state: .known(.ended), size: 5)), text: "\(name(of: choice)) · 已结束", shortcut: nil)
+                    label(icon: AnyView(PiStateDot(shown: PiShown(state: .known(.ended)), size: 5)), text: "\(name(of: choice)) · 已结束", shortcut: nil)
                         .padding(.trailing, compact ? 12 : 16)
                 }
                 .accessibilityLabel("Agent 会话「\(workspace.sessionName(id))」已结束，选择发送目标")
@@ -90,7 +90,7 @@ struct SendControl: View {
     @ViewBuilder private func icon(_ choice: AppServices.Destination) -> some View {
         switch choice {
         case .pi(_, .paste): Image(systemName: "text.cursor").accessibilityHidden(true)
-        case .pi(let id, _): PiStateDot(state: workspace.session(id)?.state.work ?? .known(.ended), size: 5)
+        case .pi(let id, _): PiStateDot(shown: workspace.session(id).map(workspace.shown) ?? PiShown(state: .known(.ended)), size: 5)
         case .clipboard: Image(systemName: "doc.on.clipboard").accessibilityHidden(true)
         case .app: Image(systemName: "paperplane.fill").accessibilityHidden(true)
         }
@@ -117,7 +117,7 @@ struct SendTargetMenu<Label: View>: View {
                 }
                 ForEach(sessions) { session in
                     let name = session.displayName
-                    option("\(name) · \(session.state.work.label)", .pi(session.id, .send), current: current)
+                    option("\(name) · \(workspace.shown(session).label)", .pi(session.id, .send), current: current)
                     option("放进 \(name) 的输入框（仅文字）", .pi(session.id, .paste), current: current)
                 }
             }

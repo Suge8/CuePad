@@ -1,0 +1,163 @@
+import QuartzCore
+import SwiftUI
+
+/// 常驻循环动效的唯一宿主：工作中的转圈（`orbit`）、话在路上的呼吸（`breath`）、进行中文字与最高思考强度上扫过的光（`sheen`）。
+/// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
+/// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
+/// 减弱动态效果时由调用方不放它（或换成静止的样子）。
+struct LoopLayer {
+    enum Kind: Equatable {
+        /// 铺满的圆从 0.7 倍呼到 1.6 倍、淡到看不见，再回来，一呼一吸 2.4s。
+        case breath
+        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
+        case orbit
+        /// 一道横向的光带（宽是整体的一半）从左外扫到右外，1.8s 一趟。
+        case sheen
+    }
+
+    let kind: Kind
+    let color: Color
+
+    final class Host: LoopHostBase {
+        private(set) var kind: Kind?
+        private var color: CGColor?
+
+        #if os(iOS)
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            layoutLoop()
+        }
+
+        private var root: CALayer { layer }
+        #else
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+        }
+
+        override func layout() {
+            super.layout()
+            layoutLoop()
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        private var root: CALayer { layer! }
+        #endif
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        func show(_ kind: Kind, color: CGColor?) {
+            if kind != self.kind {
+                self.kind = kind
+                root.sublayers?.forEach { $0.removeFromSuperlayer() }
+                root.addSublayer(Self.make(kind))
+            }
+            self.color = color
+            layoutLoop()
+        }
+
+        private func layoutLoop() {
+            guard let loop = root.sublayers?.first, let kind else { return }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            let bounds = root.bounds
+            switch kind {
+            case .breath:
+                loop.frame = bounds
+                (loop as? CAShapeLayer)?.path = CGPath(ellipseIn: CGRect(origin: .zero, size: bounds.size), transform: nil)
+                (loop as? CAShapeLayer)?.fillColor = color
+            case .orbit:
+                loop.frame = bounds
+                let width = min(bounds.width, bounds.height) * 0.14
+                let ring = CGPath(ellipseIn: CGRect(origin: .zero, size: bounds.size).insetBy(dx: width / 2, dy: width / 2), transform: nil)
+                for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
+                    shape.frame = loop.bounds
+                    shape.path = ring
+                    shape.lineWidth = width
+                    shape.strokeColor = index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.22) : color
+                }
+            case .sheen:
+                let band = bounds.width * 0.5
+                loop.bounds = CGRect(x: 0, y: 0, width: band, height: bounds.height)
+                loop.position = CGPoint(x: -band / 2, y: bounds.midY)
+                (loop as? CAGradientLayer)?.colors = [color?.copy(alpha: 0), color, color?.copy(alpha: 0)].compactMap { $0 }
+                if let sweep = loop.animation(forKey: "loop")?.copy() as? CABasicAnimation {
+                    sweep.toValue = bounds.width + band
+                    loop.add(sweep, forKey: "loop")
+                }
+            }
+            CATransaction.commit()
+        }
+
+        private static func make(_ kind: Kind) -> CALayer {
+            switch kind {
+            case .breath:
+                let layer = CAShapeLayer()
+                let grow = CABasicAnimation(keyPath: "transform.scale")
+                grow.fromValue = 0.7
+                grow.toValue = 1.6
+                let fade = CABasicAnimation(keyPath: "opacity")
+                fade.fromValue = 1
+                fade.toValue = 0
+                let breath = CAAnimationGroup()
+                breath.animations = [grow, fade]
+                breath.duration = 1.2
+                breath.autoreverses = true
+                breath.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                return loop(breath, on: layer)
+            case .orbit:
+                let layer = CALayer()
+                let track = CAShapeLayer(), arc = CAShapeLayer()
+                for shape in [track, arc] {
+                    shape.fillColor = nil
+                    shape.lineCap = .round
+                    layer.addSublayer(shape)
+                }
+                arc.strokeEnd = 0.3
+                let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+                spin.byValue = Double.pi * 2
+                spin.duration = 1.1
+                return loop(spin, on: layer)
+            case .sheen:
+                let layer = CAGradientLayer()
+                layer.startPoint = CGPoint(x: 0, y: 0.5)
+                layer.endPoint = CGPoint(x: 1, y: 0.5)
+                let sweep = CABasicAnimation(keyPath: "position.x")
+                sweep.fromValue = 0
+                sweep.toValue = 0
+                sweep.duration = 1.8
+                sweep.isAdditive = true
+                sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                return loop(sweep, on: layer)
+            }
+        }
+
+        private static func loop(_ animation: CAAnimation, on layer: CALayer) -> CALayer {
+            animation.repeatCount = .infinity
+            // 退到后台再回来时不被系统摘掉
+            animation.isRemovedOnCompletion = false
+            layer.add(animation, forKey: "loop")
+            return layer
+        }
+    }
+}
+
+#if os(iOS)
+typealias LoopHostBase = UIView
+extension LoopLayer: UIViewRepresentable {
+    func makeUIView(context: Context) -> Host { Host(frame: .zero) }
+    func updateUIView(_ host: Host, context: Context) { host.show(kind, color: color.resolve(in: context.environment).cgColor) }
+}
+#else
+typealias LoopHostBase = NSView
+extension LoopLayer: NSViewRepresentable {
+    func makeNSView(context: Context) -> Host { Host(frame: .zero) }
+    func updateNSView(_ host: Host, context: Context) { host.show(kind, color: color.resolve(in: context.environment).cgColor) }
+}
+#endif

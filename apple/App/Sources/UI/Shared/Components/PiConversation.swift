@@ -83,7 +83,7 @@ struct PiSessionSubtitle: View {
 
     var body: some View {
         // 正在看的会话没有"有新回复"
-        let shown = PiShown(state: session.state, delivery: PiDelivery.phase(of: delivery, for: session))
+        let shown = PiShown(session, delivery: delivery)
         HStack(spacing: 4) {
             PiStateDot(shown: shown, size: 6)
             // 所在太长时截断（最宽 `placeWidth`），状态与计时不截；整行按内容宽，不被导航栏挤
@@ -312,7 +312,7 @@ private struct LiveStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if session.state.isWorking {
-                Text(session.detail.flatMap(PiProgress.action) ?? session.state.label)
+                Text(session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
                     .font(.subheadline.weight(.medium))
                     .lineLimit(1).truncationMode(.middle)
                     .shimmering()
@@ -329,7 +329,7 @@ private struct LiveStatus: View {
         VStack(alignment: .leading, spacing: 6) {
             Button { showsSubagents.toggle() } label: {
                 HStack(spacing: 6) {
-                    PiStateDot(state: summary.lead, size: 7)
+                    PiStateDot(shown: summary.lead, size: 7)
                     Text("子代理 \(summary.running)/\(summary.total) 在跑").foregroundStyle(palette.ink2).monospacedDigit()
                     Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
                         .rotationEffect(.degrees(showsSubagents ? 180 : 0))
@@ -344,9 +344,9 @@ private struct LiveStatus: View {
             if showsSubagents {
                 ForEach(Array(session.subagents.enumerated()), id: \.offset) { _, agent in
                     HStack(spacing: 6) {
-                        PiStateDot(state: agent.workState, size: 7)
+                        PiStateDot(shown: agent.shown, size: 7)
                         Text(agent.name).foregroundStyle(palette.ink2).lineLimit(1)
-                        Text(agent.activityLabel).foregroundStyle(agent.workState.tint(palette))
+                        Text(agent.activityLabel).foregroundStyle(agent.shown.tint(palette))
                     }
                     .font(.subheadline)
                     .padding(.leading, 13)
@@ -363,25 +363,24 @@ private struct LiveStatus: View {
 nonisolated struct PiSubagentSummary: Equatable {
     let running: Int
     let total: Int
-    let lead: Open<PiWorkState>
+    let lead: PiShown
 
     init?(_ agents: [PiSubagentState]) {
-        guard let lead = agents.max(by: { $0.workState.urgency < $1.workState.urgency }) else { return nil }
+        guard let lead = agents.max(by: { $0.shown.urgency < $1.shown.urgency }) else { return nil }
         running = agents.filter { $0.activity == .known(.working) }.count
         total = agents.count
-        self.lead = lead.workState
+        self.lead = lead.shown
     }
 }
 
 private extension View {
-    /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过；减弱动态效果时是静止的次要色。
+    /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过（`LoopLayer`）；减弱动态效果时是静止的次要色。
     func shimmering() -> some View { modifier(Shimmer()) }
 }
 
 private struct Shimmer: ViewModifier {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var swept = false
 
     func body(content: Content) -> some View {
         if reduceMotion {
@@ -389,18 +388,7 @@ private struct Shimmer: ViewModifier {
         } else {
             content
                 .foregroundStyle(palette.ink3)
-                .overlay {
-                    content.foregroundStyle(palette.ink).mask {
-                        GeometryReader { proxy in
-                            let band = max(proxy.size.width * 0.4, 48)
-                            LinearGradient(colors: [.clear, .black, .clear], startPoint: .leading, endPoint: .trailing)
-                                .frame(width: band)
-                                .offset(x: swept ? proxy.size.width : -band)
-                        }
-                    }
-                }
-                // 渲染端插值：整段循环不触发重算视图
-                .onAppear { withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) { swept = true } }
+                .overlay { LoopLayer(kind: .sheen, color: palette.ink).mask { content } }
         }
     }
 }

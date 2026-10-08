@@ -134,7 +134,7 @@ struct SubagentSummaryTests {
 
         #expect(summary?.running == 2)
         #expect(summary?.total == 3)
-        #expect(summary?.lead == .known(.waitingForUser))
+        #expect(summary?.lead.label == "等你确认")
         #expect(PiSubagentSummary([]) == nil)
     }
 }

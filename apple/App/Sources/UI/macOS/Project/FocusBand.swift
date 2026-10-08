@@ -115,9 +115,10 @@ struct CompactFocus: View {
                 if let intro { Label(intro, systemImage: "text.quote").lineLimit(1) }
                 Label(data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist").foregroundStyle(palette.ink2)
                 if let session {
+                    let shown = workspace.shown(session)
                     HStack(spacing: 6) {
-                        PiStateDot(state: session.state.work, size: 5)
-                        Text("\(session.displayName) \(session.state.work.label)")
+                        PiStateDot(shown: shown, size: 5)
+                        Text("\(session.displayName) \(shown.label)")
                     }
                     .foregroundStyle(palette.ink2)
                 }

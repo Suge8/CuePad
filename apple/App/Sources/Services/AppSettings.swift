@@ -86,15 +86,28 @@ final class AppSettings {
     /// 会话回复框的草稿（按会话记录 id，iOS 与 Mac 同一份）：离开会话再回来还在；文字另存本机偏好、跨退出保留，
     /// 带上的卡片与图片只留在这次运行。
     func replyDraft(for session: UUID) -> ComposerDraft {
-        replyDrafts[session] ?? ComposerDraft(text: (defaults.dictionary(forKey: Key.replyTexts) as? [String: String])?[session.uuidString] ?? "")
+        replyDrafts[session] ?? ComposerDraft()
     }
 
     /// 发出后传空草稿：文字一并从本机偏好里清掉。
     func setReplyDraft(_ draft: ComposerDraft, for session: UUID) {
         replyDrafts[session] = draft
-        var texts = defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]
-        texts[session.uuidString] = draft.text.allSatisfy(\.isWhitespace) ? nil : draft.text
-        defaults.set(texts, forKey: Key.replyTexts)
+        defaults.set(replyDrafts.compactMapValues { $0.text.allSatisfy(\.isWhitespace) ? nil : $0.text }
+            .reduce(into: [String: String]()) { $0[$1.key.uuidString] = $1.value }, forKey: Key.replyTexts)
+    }
+
+    /// 会话行上的草稿（`PiRowLine.draft`）：回复框里没发的文字的第一行；只带了灵感或图片时说带了什么。没有草稿是 nil。
+    func draftPreview(for session: UUID) -> String? {
+        let draft = replyDraft(for: session)
+        if let line = draft.text.split(whereSeparator: \.isNewline).lazy
+            .map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) {
+            return line
+        }
+        let parts = [
+            draft.attachments.isEmpty ? nil : "\(draft.attachments.count) 条灵感",
+            draft.images.isEmpty ? nil : "\(draft.images.count) 张图片",
+        ].compactMap { $0 }
+        return parts.isEmpty ? nil : "带了 " + parts.joined(separator: "、")
     }
 
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
@@ -109,6 +122,9 @@ final class AppSettings {
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
+        replyDrafts = (defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]).reduce(into: [:]) { drafts, entry in
+            if let id = UUID(uuidString: entry.key) { drafts[id] = ComposerDraft(text: entry.value) }
+        }
         // 启动参数（演示截图）可以把起点挪到很早，让演示库里停下的会话都算有新回复
         if let seconds = launchArguments[Key.unreadSince].flatMap({ Double(String(describing: $0)) }) {
             unreadSince = Date(timeIntervalSince1970: seconds)

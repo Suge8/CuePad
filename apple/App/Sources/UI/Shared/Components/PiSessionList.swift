@@ -44,8 +44,9 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 }
 
 /// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、侧栏、菜单栏面板、项目页的 Agent 栏、⌘K 同一种）：
-/// 左边状态标；名字与时长（`PiElapsed`）；在哪（项目或文件夹，按项目筛着时调用方不给项目） · 状态词（带色，有新回复加粗；
-/// 后台托管的再写"后台"）；一句进度或结果（`PiProgress`，没有不占行），结束请求在路上写"正在结束…"、没能结束写原因。已结束的整行更淡。
+/// 左边状态标（`PiStateDot`）；名字与时长（`PiElapsed`）；在哪（项目或文件夹，按项目筛着时调用方不给项目） · 状态词（带色，有新回复加粗；
+/// 后台托管的再写"后台"）；第三行（`PiRowLine`：结束进度、草稿、到哪了）。三行各一行、什么都没有也留着高度，
+/// 状态怎么变行高都不变；文字换时淡入淡出、不挪位置。已结束的整行更淡。
 struct PiSessionRow: View {
     let session: PiSessionState
     let project: Project?
@@ -73,7 +74,7 @@ struct PiSessionRow: View {
             PiStateDot(shown: shown, size: style.dot)
             VStack(alignment: .leading, spacing: style.spacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(session.title).font(style.name).fontWeight(shown.unread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(session.title).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 4)
                     PiElapsed(session: session, font: style.line)
                 }
@@ -81,25 +82,33 @@ struct PiSessionRow: View {
                     if let place = PiPlace.name(of: session, project: project) {
                         Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
                     }
-                    Text(shown.label).fontWeight(shown.unread ? .semibold : .medium).foregroundStyle(shown.tint(palette))
+                    Text(shown.label).fontWeight(shown.isUnread ? .semibold : .medium).foregroundStyle(shown.tint(palette))
+                        .fixedSize()
                         .contentTransition(.opacity)
-                        .animation(Motion.quick, value: shown)
-                    if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
+                    if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3).fixedSize() }
                 }
+                .lineLimit(1)
                 .font(style.line)
-                Group {
-                    if end?.isOpen == true {
-                        Text("正在结束…").foregroundStyle(palette.ink3)
-                    } else if let reason = end?.failure {
-                        Text(reason).foregroundStyle(palette.failure).lineLimit(2)
-                    } else if let progress = PiProgress.line(of: session) {
-                        Text(progress).foregroundStyle(palette.ink2).lineLimit(1)
-                    }
-                }
-                .font(style.line)
+                rowLine(PiRowLine.of(session, draft: services.settings.draftPreview(for: session.id), end: end))
+                    .font(style.line)
+                    .lineLimit(1)
             }
+            .animation(Motion.quick, value: shown)
         }
         .opacity(session.state == .known(.ended) ? 0.6 : 1)
         .accessibilityElement(children: .combine)
+    }
+
+    /// 第三行：总是同一个 Text（没有内容时是一个空格），一直占着一行；换内容时原地淡入淡出。
+    private func rowLine(_ line: PiRowLine?) -> some View {
+        let text: Text = switch line {
+        case .ending: Text("正在结束…").foregroundStyle(palette.ink3)
+        case .endFailed(let reason): Text(reason).foregroundStyle(palette.failure)
+        case .draft(let draft): Text("\(Text("草稿").fontWeight(.semibold).foregroundStyle(palette.signature))  \(Text(draft).foregroundStyle(palette.ink2))")
+        case .progress(let progress): Text(progress).foregroundStyle(palette.ink2)
+        case .hint(let hint): Text(hint).foregroundStyle(palette.ink3)
+        case nil: Text(verbatim: " ")
+        }
+        return text.contentTransition(.opacity).animation(Motion.quick, value: line)
     }
 }
