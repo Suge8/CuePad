@@ -3,7 +3,7 @@
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
 //   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，steer/followUp）/ paste（放进输入框）/ answer（回答等你确认的弹窗）/ config（换模型、思考强度）/ end（结束会话）/ abort（停止这一轮）
+//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ paste（放进输入框）/ answer（回答等你确认的弹窗）/ config（换模型、思考强度）/ end（结束会话）/ abort（停止这一轮）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
 import fs from "node:fs";
@@ -12,8 +12,8 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 15;
-const PROTOCOL_VERSION = 4;
+const EXTENSION_VERSION = 16;
+const PROTOCOL_VERSION = 5;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
@@ -39,8 +39,26 @@ const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
 const WORKER_NAME = /<firecode_worker name="([^"]+)">/u;
 /** CuePad 在终端里开新会话时经这个环境变量交给扩展的认领标识，扩展在 hello 里带回 */
 const LAUNCH_TOKEN_ENV = "CUEPAD_LAUNCH_TOKEN";
-/** 从会话文件重新载入当前会话的命令名（见 handleReload） */
-const RELOAD_COMMAND = "cuepad-reload";
+/** 需要"命令上下文"（切换会话、新会话、重载、克隆）的操作只能在命令处理函数里做：本扩展注册这一条内部命令，
+ * 经 `sendUserMessage("/cuepad <动作>", { expandPromptTemplates: true })` 触发，不列进给手机的命令清单。 */
+const INTERNAL_COMMAND = "cuepad";
+/** 压缩命令受理后等多久：这段时间内失败算命令失败，之后只提示在 Pi 里 */
+const COMPACT_FAILURE_WINDOW_MS = 1500;
+/** 命令清单里每条说明的字符数上限（含省略号）：skill 的说明可以很长，清单随会话记录同步，只要够选命令用 */
+const COMMAND_DESCRIPTION_LIMIT = 120;
+/** Pi 内置斜杠命令里能在非 TUI 下执行的（其余是终端里的选择器、弹窗或只往终端打印，没有对应接口，不列）。
+ * `hint` 有值表示带参数（`required` 为必填）。名字、说明与 Pi 的 `/` 菜单一致。
+ * 内置命令在 Pi 的终端里先于扩展命令匹配，这里同样先匹配。 */
+const BUILTIN_COMMANDS = [
+	{ name: "compact", description: "压缩当前上下文，可附上说明", hint: "[说明]" },
+	{ name: "name", description: "设置会话名", hint: "<名字>", required: true },
+	{ name: "model", description: "换模型", hint: "<提供方/模型>", required: true },
+	{ name: "thinking", description: "设置思考强度", hint: "<强度>", required: true },
+	{ name: "new", description: "开一个新会话" },
+	{ name: "clone", description: "在当前位置复制出一个新会话" },
+	{ name: "reload", description: "重新载入扩展、skill、提示词模板与上下文文件" },
+] as const;
+type BuiltinCommand = (typeof BUILTIN_COMMANDS)[number];
 /** 会话文件里的条目数（不算文件头） */
 function entriesOnDisk(file: string): number {
 	return fs.readFileSync(file, "utf8").split("\n").filter((line) => line.trim().length > 0).length - 1;
@@ -210,12 +228,17 @@ export default function (pi: any) {
 		subagents: { name: string; kind: string }[];
 		/** 当前模型、思考强度与可换的模型（Pi 里已配好密钥的）：手机据此选 */
 		model: ReturnType<typeof describeModel> | null; thinking: string | null; models: ReturnType<typeof describeModel>[];
+		/** 上下文余量：已用 token（压缩后到下一次回答前未知，为 null）与当前模型的窗口；没有模型为 null */
+		context: { tokens: number | null; window: number } | null;
+		/** 此刻能用的斜杠命令：能执行的内置命令 + 扩展命令 + 提示词模板 + skill */
+		commands: CommandInfo[];
 	};
+	type CommandInfo = { name: string; description: string | null; source: "builtin" | "extension" | "prompt" | "skill"; hint: string | null };
 	/** 等你回答的弹窗：`id` 非空的可以从 CuePad 作答（confirm/select/text）；editor 与 custom 只能在 Pi 里答 */
 	type Question = { id: string | null; kind: string; text: string; options: string[] };
 	/** 会话载入时的条目数：之后多出来的是这个进程自己写的 */
 	let loadedEntries = 0;
-	let info: Info = { name: null, firstMessage: null, question: null, subagents: [], model: null, thinking: null, models: [] };
+	let info: Info = { name: null, firstMessage: null, question: null, subagents: [], model: null, thinking: null, models: [], context: null, commands: [] };
 	/** CuePad 送进来、还没落成会话里一条消息的投送请求：文字 → 请求 id，按发出的先后（同一文字发了两次时先发的先认领） */
 	const deliveries: { text: string; id: string }[] = [];
 	/** 本会话是某个会话的进程内子会话（子代理）时，它在登记表里的键（会话文件路径）：状态只进登记表，不开 socket */
@@ -261,16 +284,43 @@ export default function (pi: any) {
 
 	/** 此刻的模型配置；Pi 里换了模型、强度后重新取。可选的模型与 Pi 的 /model 一致：配了范围（`--models`、`enabledModels`）就是范围内的，
 	 * 否则是已配好密钥的全部；当前模型总在其中。 */
-	function modelInfo(): Pick<Info, "model" | "thinking" | "models"> {
+	function modelChoices(): any[] {
 		const scoped: any[] = (ctx.scopedModels ?? []).map((entry: any) => entry.model);
 		const choices: any[] = scoped.length > 0 ? scoped : ctx.modelRegistry.getAvailable();
 		const current = ctx.model;
-		const listed = current && !choices.some((m) => m.provider === current.provider && m.id === current.id) ? [...choices, current] : choices;
+		return current && !choices.some((m) => m.provider === current.provider && m.id === current.id) ? [...choices, current] : choices;
+	}
+
+	function modelInfo(): Pick<Info, "model" | "thinking" | "models"> {
+		const current = ctx.model;
 		return {
 			model: current ? describeModel(current) : null,
 			thinking: current ? pi.getThinkingLevel() : null,
-			models: listed.map(describeModel),
+			models: modelChoices().map(describeModel),
 		};
+	}
+
+	/** 上下文余量：Pi 估算的已用 token 与当前模型的窗口（压缩后到下一次回答前 tokens 为 null）。 */
+	function contextInfo(): Pick<Info, "context"> {
+		const usage = ctx.getContextUsage();
+		return { context: usage ? { tokens: usage.tokens, window: usage.contextWindow } : null };
+	}
+
+	/** 此刻的命令清单。扩展命令与内置同名时内置先匹配（与 Pi 的终端一致），同名的扩展命令用不到，不列。 */
+	function commandInfo(): Pick<Info, "commands"> {
+		const builtin: CommandInfo[] = BUILTIN_COMMANDS.map((c) => ({
+			name: c.name, description: c.description, source: "builtin", hint: "hint" in c ? c.hint : null,
+		}));
+		const taken = new Set<string>([INTERNAL_COMMAND, ...BUILTIN_COMMANDS.map((c) => c.name)]);
+		const resources: CommandInfo[] = pi.getCommands().filter((c: any) => !taken.has(c.name)).map((c: any) => ({
+			name: c.name, description: clip(String(c.description ?? "").replace(/\s+/g, " "), COMMAND_DESCRIPTION_LIMIT), source: c.source, hint: null,
+		}));
+		return { commands: [...builtin, ...resources] };
+	}
+
+	/** 上下文与命令清单会随每一轮、压缩、换模型、重载变化；有变化才发。 */
+	function refreshUsage() {
+		if (server) updateInfo({ ...contextInfo(), ...commandInfo() });
 	}
 
 	async function hello() {
@@ -300,6 +350,7 @@ export default function (pi: any) {
 		const reject = (error: string) => ack({ ok: false, error });
 		try {
 			if (command?.t === "send") return handleSend(command, ack, reject);
+			if (command?.t === "command") return void handleSlash(command, ack, reject).catch((error: any) => reject(`failed: ${error?.message ?? error}`));
 			if (command?.t === "answer") return handleAnswer(command, ack, reject);
 			if (command?.t === "reload") return handleReload(ack);
 			if (command?.t === "end") return handleEnd(ack);
@@ -351,16 +402,110 @@ export default function (pi: any) {
 			return ack({ ok: true, reloaded: false });
 		}
 		ack({ ok: true, reloaded: true });
-		pi.sendUserMessage(`/${RELOAD_COMMAND}`, { expandPromptTemplates: true });
+		runInternal("reload-session");
 	}
 
-	pi.registerCommand(RELOAD_COMMAND, {
-		description: "从会话文件重新载入当前会话（CuePad 后台托管的会话交接后用）",
-		handler: async (_args: string, command: any) => {
-			const file = command.sessionManager.getSessionFile();
-			if (file) await command.switchSession(file);
+	/** 下一轮事件循环再触发：重载、新会话会拆掉本扩展实例并关掉连接，`ack` 要先写出去。 */
+	function runInternal(action: string) {
+		setImmediate(() => pi.sendUserMessage(`/${INTERNAL_COMMAND} ${action}`, { expandPromptTemplates: true }));
+	}
+
+	pi.registerCommand(INTERNAL_COMMAND, {
+		description: "CuePad 内部使用：需要命令上下文的会话操作（重新载入会话文件、新会话、重载、克隆）",
+		handler: async (action: string, command: any) => {
+			switch (action.trim()) {
+				case "reload-session": {
+					const file = command.sessionManager.getSessionFile();
+					if (file) await command.switchSession(file);
+					break;
+				}
+				case "new": await command.newSession(); break;
+				case "reload": await command.reload(); break;
+				case "clone": {
+					const leaf = command.sessionManager.getLeafId();
+					if (leaf) await command.fork(leaf, { position: "at" });
+					break;
+				}
+			}
 		},
 	});
+
+	/**
+	 * 斜杠命令：内置的（能在非 TUI 下执行的）由本扩展调 Pi 的接口做，其余（扩展命令、提示词模板、skill）经
+	 * `sendUserMessage(…, { expandPromptTemplates: true })` 交给 Pi 派发——扩展命令执行（会话正忙也立即执行）、模板与 skill 展开成这一轮的提示词；
+	 * 不带这个选项的 `sendUserMessage` 只把它当普通文字。清单里没有的名字拒绝，不当文字发出去。
+	 * `ack` 表示已受理：扩展命令的执行结果与报错只出现在 Pi 自己的界面（`ctx.ui`），这里看不到。
+	 */
+	async function handleSlash(command: any, ack: (f: object) => void, reject: (e: string) => void) {
+		const text = command.text;
+		const deliverAs = command.deliverAs ?? "followUp";
+		if (typeof text !== "string" || !text.startsWith("/") || (deliverAs !== "steer" && deliverAs !== "followUp")) return reject("bad_request");
+		const space = text.search(/\s/);
+		const name = text.slice(1, space < 0 ? undefined : space);
+		const args = space < 0 ? "" : text.slice(space + 1).trim();
+		const builtin = BUILTIN_COMMANDS.find((c) => c.name === name);
+		if (builtin) {
+			const error = await runBuiltin(builtin, args);
+			return error ? reject(error) : ack({ ok: true });
+		}
+		if (name === INTERNAL_COMMAND || !pi.getCommands().some((c: any) => c.name === name)) return reject("unknown_command");
+		pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: true });
+		ack({ ok: true });
+	}
+
+	/** 执行一条内置命令；返回拒绝原因，成功返回 undefined。 */
+	async function runBuiltin(builtin: BuiltinCommand, args: string): Promise<string | undefined> {
+		if ("required" in builtin && !args) return "missing_argument";
+		switch (builtin.name) {
+			case "compact": return compact(args);
+			case "name": pi.setSessionName(args); return;
+			case "thinking":
+				if (!THINKING_LEVELS.includes(args)) return "bad_request";
+				pi.setThinkingLevel(args);
+				break;
+			case "model": {
+				const target = findModel(args);
+				if (!target) return "unknown_model";
+				if (!(await pi.setModel(target))) return "no_auth";
+				break;
+			}
+			case "clone":
+				if (!ctx.sessionManager.getLeafId()) return "failed: nothing to clone";
+				runInternal("clone");
+				return;
+			case "new":
+			case "reload":
+				runInternal(builtin.name);
+				return;
+		}
+		updateInfo({ ...modelInfo(), ...contextInfo() });
+	}
+
+	/** 压缩不等完成就返回；开头一小段时间内的失败（没有可压缩的内容、没有模型）当作拒绝报给手机，之后的失败只能提示在 Pi 里。 */
+	function compact(instructions: string): Promise<string | undefined> {
+		return new Promise((resolve) => {
+			const early = setTimeout(() => resolve(undefined), COMPACT_FAILURE_WINDOW_MS);
+			ctx.compact({
+				customInstructions: instructions || undefined,
+				onComplete: () => { clearTimeout(early); resolve(undefined); },
+				onError: (error: Error) => {
+					clearTimeout(early);
+					ctx.ui.notify(`压缩失败：${error.message}`, "error");
+					resolve(`failed: ${error.message}`);
+				},
+			});
+		});
+	}
+
+	/** `provider/id` 精确匹配，或模型 id 在可选模型里唯一（与 Pi 的 /model 同一份候选）。 */
+	function findModel(reference: string): any {
+		const models = modelChoices();
+		const slash = reference.indexOf("/");
+		const exact = slash > 0 ? models.find((m) => m.provider === reference.slice(0, slash) && m.id === reference.slice(slash + 1)) : undefined;
+		if (exact) return exact;
+		const byId = models.filter((m) => m.id === reference);
+		return byId.length === 1 ? byId[0] : undefined;
+	}
 
 	/**
 	 * 结束会话：与用户在 Pi 里退出同一条路（`ctx.shutdown`——TUI 恢复终端并提示怎么恢复会话，退出时发 `bye quit`）。
@@ -565,6 +710,8 @@ export default function (pi: any) {
 			question: null,
 			subagents: [],
 			...modelInfo(),
+			...contextInfo(),
+			...commandInfo(),
 		};
 		asking = null;
 		captureDialogs(ctx.ui);
@@ -580,8 +727,9 @@ export default function (pi: any) {
 		unregisterSubsession();
 		stop(event.reason);
 	});
-	pi.on("model_select", () => updateInfo(modelInfo()));
+	pi.on("model_select", () => { updateInfo(modelInfo()); refreshUsage(); });
 	pi.on("thinking_level_select", () => updateInfo(modelInfo()));
+	for (const event of ["turn_end", "agent_settled", "session_compact", "session_tree"]) pi.on(event, refreshUsage);
 	pi.on("session_info_changed", (event: any) => updateInfo({ name: event.name ?? null }));
 	pi.on("message_end", (event: any) => {
 		if (event.message?.role !== "user") return;

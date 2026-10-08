@@ -85,6 +85,10 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var model: PiModel? = nil
     public internal(set) var thinking: String? = nil
     public internal(set) var availableModels: [PiModel] = []
+    /// 上下文余量（协议 v5 起）：没有模型时为 nil
+    public internal(set) var context: PiContext? = nil
+    /// 此刻能用的斜杠命令（协议 v5 起）
+    public internal(set) var commands: [PiCommand] = []
 
     /// 会话的显示名，规则见 `PiSessionName`。旧扩展不报名字与消息，显示工作目录名。
     public var displayName: String {
@@ -120,6 +124,33 @@ public struct PiModel: Sendable, Equatable, Decodable {
     private enum CodingKeys: String, CodingKey {
         case provider, id, name
         case thinkingLevels = "thinking"
+    }
+}
+
+/// 上下文余量：Pi 估算的已用 token（压缩后到下一次回答前未知，为 nil）与当前模型的上下文窗口。
+public struct PiContext: Sendable, Equatable, Decodable {
+    public var tokens: Int?
+    public var window: Int
+
+    public init(tokens: Int?, window: Int) {
+        self.tokens = tokens
+        self.window = window
+    }
+}
+
+/// 一条能在这个会话里用的斜杠命令。`source` 是 `builtin`（Pi 内置里能在非 TUI 下执行的）、`extension`、`prompt`（提示词模板）、`skill`；
+/// 名字不带斜杠（skill 是 `skill:名字`）；`hint` 是参数提示，nil 表示不带参数。
+public struct PiCommand: Sendable, Equatable, Decodable {
+    public var name: String
+    public var description: String?
+    public var source: String
+    public var hint: String?
+
+    public init(name: String, description: String?, source: String, hint: String?) {
+        self.name = name
+        self.description = description
+        self.source = source
+        self.hint = hint
     }
 }
 
@@ -261,7 +292,7 @@ public enum PiBridgeError: Error, Equatable {
     /// 等 ack 时连接断了
     case sessionEnded
     case ackTimeout
-    /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
+    /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；斜杠命令还有 `unknown_command`（清单里没有的名字）、`missing_argument`（必填参数没给）；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
     /// `bad_answer`（答案类型或选项不对）；配置时还有 `unknown_model`（模型不在 Pi 的模型表里）、`no_auth`（该提供方没配好密钥）
     case rejected(String)
     /// 会话的扩展协议版本与 CuePad 不同（见 `PiAgentState.incompatible`），不发命令
@@ -279,8 +310,10 @@ extension PiBridgeError: LocalizedError {
         case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
-    case .rejected("unknown_model"): "这台 Mac 上的 Pi 里找不到这个模型"
-    case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
+        case .rejected("unknown_model"): "这台 Mac 上的 Pi 里找不到这个模型"
+        case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
+        case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
+        case .rejected("missing_argument"): "这个命令需要带上参数"
         case .rejected(let reason): "Agent 拒绝了这条消息：\(reason)"
         }
     }

@@ -4,7 +4,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要重开 Pi"（`OtherProtocolHello`）
-    static let protocolVersion = 4
+    static let protocolVersion = 5
 
     struct State: Decodable {
         var kind: String
@@ -61,15 +61,19 @@ enum PiWire {
         var model: PiModel?
         var thinking: String?
         var models: [PiModel]?
+        var context: PiContext?
+        var commands: [PiCommand]?
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
             case extensionVersion, sessionId, sessionFile, pid, cwd, mode, tty, term, state, launchToken, hosted
-            case name, firstMessage, question, subagents, model, thinking, models
+            case name, firstMessage, question, subagents, model, thinking, models, context, commands
         }
 
         var info: Info {
-            Info(name: name, firstMessage: firstMessage, question: question, subagents: subagents, model: model, thinking: thinking, models: models)
+            Info(
+                name: name, firstMessage: firstMessage, question: question, subagents: subagents, model: model, thinking: thinking, models: models,
+                context: context, commands: commands)
         }
     }
 
@@ -100,7 +104,7 @@ enum PiWire {
         }
     }
 
-    /// 会话名、首条用户消息（扩展 v3 起）、等你回答的弹窗（v4 起）、子代理（v5 起）与模型配置（协议 v2 起）；没有的为 nil。
+    /// 会话名、首条用户消息（扩展 v3 起）、等你回答的弹窗（v4 起）、子代理（v5 起）、模型配置（协议 v2 起）、上下文余量与命令清单（协议 v5 起）；没有的为 nil。
     /// 问答近况不走这里：对话与摘要只来自会话文件（`PiHistory`）。
     struct Info: Decodable {
         var name: String?
@@ -110,6 +114,8 @@ enum PiWire {
         var model: PiModel?
         var thinking: String?
         var models: [PiModel]?
+        var context: PiContext?
+        var commands: [PiCommand]?
 
         func apply(to session: inout PiSession) {
             session.name = name
@@ -119,6 +125,8 @@ enum PiWire {
             session.model = model
             session.thinking = thinking
             session.availableModels = models ?? []
+            session.context = context
+            session.commands = commands ?? []
         }
     }
 
@@ -175,6 +183,13 @@ enum PiWire {
             t: "send", id: id, text: message.text,
             images: message.images.isEmpty ? nil : message.images.map { .init(mimeType: $0.mimeType, data: $0.data.base64EncodedString()) },
             deliverAs: message.whenBusy?.rawValue, deliveryId: message.deliveryID))
+    }
+
+    /// 斜杠命令：`text` 是以 / 开头的整行；`deliverAs` 只对会被展开成这一轮提示词的模板与 skill 在会话正忙时生效。
+    static func slashCommand(id: String, line: String, whenBusy: PiQueueMode?) throws -> Data {
+        var command = Command(t: "command", id: id, text: line)
+        command.deliverAs = whenBusy?.rawValue
+        return try encode(command)
     }
 
     static func pasteCommand(id: String, text: String) throws -> Data {

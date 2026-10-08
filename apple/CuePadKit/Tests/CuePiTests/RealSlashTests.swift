@@ -42,8 +42,17 @@ struct RealSlashTests {
     @Test func contextUsageIsReportedPerTurnAndUnknownRightAfterCompaction() async throws {
         try await withRig { pi, bridge, s in
             #expect(s.context?.window == 100_000)
-            try pi.prompt("hello")
-            try await eventually("一轮之后有已用量", timeout: .seconds(20)) { (bridge.sessions.first?.context?.tokens ?? 0) > 0 }
+            await #expect(throws: PiBridgeError.self) { try await bridge.command("/compact", in: s.id) }  // 太短没有可压缩的：失败报给发起方，不静默
+
+            // 压缩要有足够多的历史：留下最近约 2 万 token，更早的才压成摘要
+            for round in 1...2 {
+                try pi.prompt("第 \(round) 轮 " + String(repeating: "上下文填充 ", count: 12_000))
+                try await eventually("第 \(round) 轮做完", timeout: .seconds(30)) {
+                    self.userTexts(of: s).count == round && bridge.sessions.first?.state == .done(aborted: false)
+                }
+            }
+            let used = try #require(bridge.sessions.first?.context?.tokens)
+            #expect(used > 40_000 && used < 100_000)
 
             try await bridge.command("/compact", in: s.id)
             try await eventually("压缩后已用量未知", timeout: .seconds(30)) {
