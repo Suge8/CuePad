@@ -77,9 +77,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     let accepts: ComposerKinds
     /// 选卡片时排在前面的项目（回复框是会话所属的项目）。
     let cardsFrom: UUID?
-    /// 一直展开（浮起的随手记）。
     /// 这张带上的卡片不能拿掉（交给 Agent 的输入框是为它打开的）。
     let keeps: UUID?
+    /// 一直展开（浮起的随手记）。
     let pinnedOpen: Bool
     /// 没聚焦、没内容时收成短胶囊（＋ 与一行提示），点它照常聚焦展开（会话页在看历史时）。
     let compact: Bool
