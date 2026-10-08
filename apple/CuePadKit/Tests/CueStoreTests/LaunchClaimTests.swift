@@ -28,4 +28,18 @@ import Testing
     #expect(started.piSessionID == "s-task" && started.status == .inProgress)
     #expect(try await store.handedSessions() == [idea.id: .session("s-idea"), task.id: .session("s-task")])
   }
+
+  /// 开新会话后又把它交给了别的会话：以后一次为准，新会话开好时不把它抢回去（行上的点跟最后一次交给的走）。
+  @Test func 之后又交给了别的会话_新会话开好时不抢回() async throws {
+    let project = try await store.createProject(name: "圆桌", color: "#111")
+    let idea = try await store.createCard(in: project.id, body: "看一下重连")
+    _ = try await store.requestLaunch(PiLaunch(place: .project(project.id), prompt: idea.body, token: "t-old"), title: "圆桌", on: "mac-a", card: idea.id)
+    try await Task.sleep(for: .milliseconds(5))  // 两次交给落在不同的毫秒（请求按 createdAt 排先后）
+    _ = try await store.requestDelivery(idea.body, to: SendTarget(kind: .piSession, name: "notes", ref: "s2"), on: "mac-a", card: idea.id)
+
+    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-old", state: .thinking, title: "圆桌", launchToken: "t-old")
+
+    #expect(try await store.card(idea.id)?.piSessionID == nil)
+    #expect(try await store.handedSessions() == [idea.id: .session("s2")])
+  }
 }
