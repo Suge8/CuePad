@@ -147,7 +147,7 @@ struct AgentScreen: View {
 
     /// 一行：纸底，分隔线从名字起；在线的会话长按与左滑都有"结束会话"。
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
-        let endable = item.state.state != .known(.ended) && end?.isOpen != true
+        let endable = MacDelivery.canEnd(item.state) && end?.isOpen != true
         return SessionRow(item: item, filtered: filtered, end: end)
             .listRowInsets(.init())
             .listRowBackground(palette.paper)

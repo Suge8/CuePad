@@ -308,6 +308,7 @@ extension PiAgentState {
         case .tool(let name, _, let detail): (.tool, detail.map { "\(name) · \($0)" } ?? name)
         case .waitingUser(_, let title): (.waitingForUser, title)
         case .error(let message): (.error, PiErrorSummary(message).line)  // 手机上没有悬停看原文
+        case .incompatible: (.incompatible, nil)
         }
     }
 }

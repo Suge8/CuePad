@@ -15,6 +15,8 @@ public enum PiAgentState: Sendable, Equatable {
     /// 一轮结束且 Pi 不会再自动继续（`agent_settled`）
     case done(aborted: Bool)
     case error(message: String)
+    /// 扩展的协议版本与 CuePad 不同（升级前开的 Pi 还在跑旧扩展）：进程在、会话没死，但读不到状态、也不能发命令，要重开 Pi
+    case incompatible
 }
 
 /// 终端信息，来自扩展 hello 里的环境变量；供"跳到该会话所在终端"使用。
@@ -219,7 +221,7 @@ public enum PiSessionChange: Sendable, Equatable {
     /// 会话名、首条消息或近况变了（`displayName` 可能随之改变）
     case infoChanged(PiSession)
     case ended(PiSession, reason: PiSessionEndReason)
-    /// 连上了但协议不兼容（扩展过新/过旧或消息损坏）；连接已关闭，不会出现在 `sessions` 里
+    /// 消息损坏（读不出会话或之后的消息格式不对）；连接已关闭，不会出现在 `sessions` 里。协议版本不同的会话不在此列，它以 `.incompatible` 状态出现
     case incompatible(id: String, detail: String)
 }
 
@@ -271,6 +273,8 @@ public enum PiBridgeError: Error, Equatable {
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
     /// `bad_answer`（答案类型或选项不对）；配置时还有 `unknown_model`（模型不在 Pi 的模型表里）、`no_auth`（该提供方没配好密钥）
     case rejected(String)
+    /// 会话的扩展协议版本与 CuePad 不同（见 `PiAgentState.incompatible`），不发命令
+    case incompatibleExtension
 }
 
 extension PiBridgeError: LocalizedError {
@@ -279,6 +283,7 @@ extension PiBridgeError: LocalizedError {
         case .insecureSocketDirectory(let path): "Pi 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
         case .socketDirectoryTooLong: "Pi 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
+        case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，重开 Pi 后再发"
         case .sessionEnded: "发送途中 Agent 会话结束了"
         case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"

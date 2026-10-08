@@ -88,7 +88,7 @@ struct SessionScreen: View {
                 PiSessionSubtitle(session: session, project: digest?.project, delivery: digest?.latestDelivery)
             }
         } trailing: {
-            if let session, session.state != .known(.ended) {
+            if let session, MacDelivery.canEnd(session) {
                 Menu {
                     Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = true }
                         .disabled(shownEnd?.isOpen == true)

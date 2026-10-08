@@ -14,6 +14,7 @@ nonisolated extension PiWorkState {
         case .settled: "待你回复"
         case .error: "出错"
         case .ended: "已结束"
+        case .incompatible: "在线 · 需要重开 Pi"
         }
     }
 
@@ -21,7 +22,7 @@ nonisolated extension PiWorkState {
     var listRank: Int {
         switch self {
         case .waitingForUser: 0
-        case .error: 1
+        case .error, .incompatible: 1
         case .thinking, .outputting, .tool, .delegating: 2
         case .settled: 3
         case .ended: 4
@@ -32,7 +33,7 @@ nonisolated extension PiWorkState {
     var urgency: Int {
         switch self {
         case .waitingForUser: 4
-        case .error: 3
+        case .error, .incompatible: 3
         case .thinking, .outputting, .tool, .delegating: 2
         case .settled: 1
         case .ended: 0
@@ -75,6 +76,7 @@ nonisolated extension Open<PiWorkState> {
         case .error: "Agent 出错"
         case .settled: "Agent 待你回复"
         case .ended: "Agent 会话已结束"
+        case .incompatible: "Agent 在线，需要重开 Pi"
         case nil: "Agent 状态未知"
         }
     }
@@ -84,7 +86,7 @@ extension PiWorkState {
     func tint(_ palette: Palette) -> Color {
         switch self {
         case .thinking, .outputting, .tool, .delegating: palette.working
-        case .waitingForUser: palette.attention
+        case .waitingForUser, .incompatible: palette.attention
         case .error: palette.failure
         case .settled: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
@@ -99,6 +101,7 @@ extension PiWorkState {
         case .thinking, .outputting, .tool, .delegating: "smallcircle.filled.circle"
         case .settled: "checkmark.circle"
         case .ended: "circle"
+        case .incompatible: "arrow.clockwise.circle.fill"
         }
     }
 }

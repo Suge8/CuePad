@@ -7,12 +7,15 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   case delegating
   /// 会话已结束（Pi 退出、换了会话），以及本机会话文件索引里的历史会话：记录留着，会话文件被删时才删。
   case ended
+  /// 会话还在跑，但它加载的扩展协议版本与 Mac 上的 CuePad 不同（升级前开的 Pi）：读不到状态、发不了命令，要在终端里退出 Pi 再接着这个会话。
+  /// 它不是"已结束"，不进历史。
+  case incompatible
 
   /// 正在干活（思考、输出、调用工具）。
   public var isWorking: Bool {
     switch self {
     case .thinking, .outputting, .tool, .delegating: true
-    case .waitingForUser, .settled, .error, .ended: false
+    case .waitingForUser, .settled, .error, .ended, .incompatible: false
     }
   }
 
@@ -20,7 +23,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   public var isTurnRunning: Bool {
     switch self {
     case .thinking, .outputting, .tool, .waitingForUser: true
-    case .delegating, .settled, .error, .ended: false
+    case .delegating, .settled, .error, .ended, .incompatible: false
     }
   }
 }

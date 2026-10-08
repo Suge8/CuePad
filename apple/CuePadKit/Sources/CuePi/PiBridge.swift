@@ -136,7 +136,8 @@ public final class PiBridge {
     }
 
     private func request(to id: PiSession.ID, encode: (String) throws -> Data) async throws -> PiWire.Ack {
-        guard let link = links[id], link.session != nil else { throw PiBridgeError.unknownSession(id) }
+        guard let link = links[id], let session = link.session else { throw PiBridgeError.unknownSession(id) }
+        guard session.state != .incompatible else { throw PiBridgeError.incompatibleExtension }
         link.nextCommand += 1
         let commandID = "c\(link.nextCommand)"
         let data = try encode(commandID)
@@ -199,6 +200,8 @@ public final class PiBridge {
 
     private func consume(_ link: Link, name: String) async {
         for await line in link.connection.lines {
+            // 协议版本不同的会话：之后的消息格式不可知，只等连接断开
+            if link.session?.state == .incompatible { continue }
             do {
                 try handle(try PiWire.decode(line), on: link, name: name)
             } catch {
@@ -213,7 +216,6 @@ public final class PiBridge {
         switch message {
         case .hello(let hello):
             guard link.session == nil else { throw HandlingError.duplicateHello }
-            guard hello.protocolVersion == PiWire.protocolVersion else { throw HandlingError.unsupportedProtocol(hello.protocolVersion) }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             guard let state = hello.state.agentState else { throw HandlingError.unknownState(hello.state.kind) }
             var session = PiSession(
@@ -224,12 +226,16 @@ public final class PiBridge {
             hello.info.apply(to: &session)
             session.launchToken = hello.launchToken
             session.hosted = hello.hosted ?? false
-            link.session = session
-            link.exitWatcher = ProcessExitWatcher(pid: hello.pid) { [weak self] in
-                Task { @MainActor in self?.processExited(name) }
-            }
-            sessions.append(session)
-            emit(.appeared(session))
+            appear(session, on: link)
+        case .otherProtocol(let hello):
+            guard link.session == nil else { throw HandlingError.duplicateHello }
+            guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
+            var session = PiSession(
+                id: name, sessionID: hello.sessionId, sessionFile: nil, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
+                mode: "", terminal: PiTerminal(), extensionVersion: hello.extensionVersion, state: .incompatible, stateSince: Date())
+            session.name = hello.name
+            session.firstMessage = hello.firstMessage
+            appear(session, on: link)
         case .state(let wire):
             guard var session = link.session else { throw HandlingError.messageBeforeHello }
             guard let state = wire.agentState else { throw HandlingError.unknownState(wire.kind) }
@@ -252,7 +258,16 @@ public final class PiBridge {
     }
 
     private enum HandlingError: Error {
-        case duplicateHello, unsupportedProtocol(Int), nameMismatch, unknownState(String), messageBeforeHello
+        case duplicateHello, nameMismatch, unknownState(String), messageBeforeHello
+    }
+
+    private func appear(_ session: PiSession, on link: Link) {
+        link.session = session
+        link.exitWatcher = ProcessExitWatcher(pid: session.pid) { [weak self] in
+            Task { @MainActor in self?.processExited(session.id) }
+        }
+        sessions.append(session)
+        emit(.appeared(session))
     }
 
     private func update(_ session: PiSession, on link: Link) {

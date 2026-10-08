@@ -145,7 +145,7 @@ struct SessionPage: View {
     /// 工具栏右边的"⋯"：跳到终端（开在终端里的在线会话）、结束会话；两样都没有时不出现。
     @ViewBuilder private func menu(_ session: PiSessionState, live: CuePi.PiSession?, ending: Bool) -> some View {
         let canJump = live.map { !$0.hosted } ?? false
-        let canEnd = session.state != .known(.ended)
+        let canEnd = MacDelivery.canEnd(session)
         if canJump || canEnd {
             Menu("更多", systemImage: "ellipsis") {
                 if let live, canJump {

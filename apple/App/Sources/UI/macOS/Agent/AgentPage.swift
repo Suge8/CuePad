@@ -135,7 +135,7 @@ struct AgentPage: View {
 
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
         let session = item.state
-        let endable = session.state != .known(.ended) && end?.isOpen != true
+        let endable = MacDelivery.canEnd(session) && end?.isOpen != true
         return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, style: .page)
             .padding(.horizontal, 12).padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)

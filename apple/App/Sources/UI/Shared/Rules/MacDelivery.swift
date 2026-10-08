@@ -24,9 +24,14 @@ nonisolated enum PiReply: Equatable {
     case answer(PiQuestion)
     case answerAbove
     case unanswerable
+    /// 会话在跑旧版扩展（`PiWorkState.incompatible`），发不进去
+    case restartPi
 }
 
 extension MacDelivery {
+    /// 能结束：在线，且读得到（旧版扩展的会话收不到结束命令，要在终端里退出 Pi）。
+    static func canEnd(_ session: PiSessionState) -> Bool { session.state != .known(.ended) && session.state != .known(.incompatible) }
+
     /// 回复框给不给"停止"：指挥官自己在跑一轮时（含弹窗等你确认）；等子代理时这一轮已经歇下，没有可停的。
     static func canStop(_ session: PiSessionState) -> Bool { session.state.known?.isTurnRunning == true }
 
@@ -42,6 +47,7 @@ extension MacDelivery {
     }
 
     static func reply(to session: PiSessionState, hasImages: Bool) -> PiReply {
+        guard session.state != .known(.incompatible) else { return .restartPi }
         guard session.state == .known(.waitingForUser) else { return .message(modes(for: session, hasImages: hasImages)) }
         guard let question = session.question, question.isAnswerable else { return .unanswerable }
         return question.kind == .known(.text) ? .answer(question) : .answerAbove
