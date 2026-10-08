@@ -225,13 +225,28 @@ struct MacSyncTests {
 
     // MARK: 手机发来的投送请求
 
+    /// 等请求有结果；10 秒没有就失败并说明（观察流不会自己结束，没有上限会无声挂住整个测试宿主）。
     private func awaitFinished(_ id: UUID) async throws -> DeliveryRequest {
-        let watchdog = Task { try await Task.sleep(for: .seconds(10)); throw CancellationError() }
-        defer { watchdog.cancel() }
-        for try await request in services.store.observe([.deliveryRequests], { try $0.deliveryRequest(id) }) {
-            if let request, request.status == .known(.succeeded) || request.status == .known(.failed) { return request }
+        let store = services.store
+        return try await withThrowingTaskGroup(of: DeliveryRequest.self) { group in
+            group.addTask {
+                for try await request in store.observe([.deliveryRequests], { try $0.deliveryRequest(id) }) {
+                    if let request, request.status == .known(.succeeded) || request.status == .known(.failed) { return request }
+                }
+                throw CancellationError()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(10))
+                throw TimedOut(what: "投送请求 \(id) 没有在 10 秒内出结果")
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
         }
-        throw CancellationError()
+    }
+
+    private struct TimedOut: Error, CustomStringConvertible {
+        let what: String
+        var description: String { what }
     }
 
     @Test func 手机的Pi直发请求在这台Mac执行并写回结果() async throws {
@@ -272,8 +287,10 @@ struct MacSyncTests {
         try await services.startDeliveryExecutor()
         defer { services.cancelBackgroundWork() }
 
+        // 图片文件在本机（没到的图片执行器会等它同步过来，那是另一条路径）
+        let hash = try services.store.files.store(pngData(shade: 0.3))
         let request = try await services.store.requestDelivery(
-            "/greet\n\n![](cuepad://img/abc)", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .command)
+            "/greet\n\n![](cuepad://img/\(hash))", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .command)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.failed))

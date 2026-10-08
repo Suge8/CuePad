@@ -48,7 +48,8 @@ extension AppServices {
             projectID: try await store.project(containing: session.cwd)?.id,
             question: session.question.map(PiQuestion.init),
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
-            hosted: session.hosted, subagents: session.subagentStates, modelState: session.modelState)
+            hosted: session.hosted, subagents: session.subagentStates, modelState: session.modelState, context: session.contextUsage,
+            commands: session.slashCommands)
         // 带通知标志的写入立即上传（不阻塞后面的会话变化）：通知等引擎自动调度要几十秒，期间状态还可能前进而把它作废
         if alert != nil {
             let record = PiSessionState.recordID(sessionID: session.sessionID)
@@ -226,6 +227,10 @@ extension AppServices {
         case .send:
             guard !session.isBusy else { throw SendError.piSessionBusy }
             whenBusy = nil
+        case .command:
+            guard !content.hasImages else { throw SendError.imagesNotSupported }
+            try await channels.command(content.plainText.trimmingCharacters(in: .whitespacesAndNewlines), whenBusy: .followUp, in: id)
+            return session.target
         case .steer: whenBusy = .steer
         case .followUp: whenBusy = .followUp
         case .answer, .ping, .start, .transcript, .config, .end, .stop: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
@@ -262,6 +267,13 @@ extension PiModelOption {
     }
 }
 
+extension PiSlashCommand {
+    /// 桥上的斜杠命令写成同步记录里的一条；Pi 报的本版本不认识的来源原样留着。
+    init(_ command: PiCommand) {
+        self.init(name: command.name, summary: command.description, source: Open(rawValue: command.source), hint: command.hint)
+    }
+}
+
 extension PiAnswerValue {
     /// 交给桥的回答。
     var prompt: PiPromptAnswer {
@@ -281,6 +293,10 @@ extension CuePi.PiSession {
     var modelState: PiModelState {
         PiModelState(model: model.map(PiModelOption.init), thinking: thinking.map { Open(rawValue: $0) }, models: availableModels.map(PiModelOption.init))
     }
+
+    /// 写进同步记录的上下文余量与命令清单。
+    var contextUsage: PiContextUsage? { context.map { PiContextUsage(tokens: $0.tokens, window: $0.window) } }
+    var slashCommands: [PiSlashCommand] { commands.map(PiSlashCommand.init) }
 
     /// 写进同步记录的子代理列表。
     var subagentStates: [PiSubagentState] {

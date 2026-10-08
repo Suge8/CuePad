@@ -86,6 +86,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 空着也露出发送钮的位置（见上）。
     let showsSend: Bool
     let focus: FocusState<Bool>.Binding
+    /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
+    let commands: [PiSlashCommand]
     private let header: Header
     /// 工具排里"＋"右边的小圆钮（会话回复框的模型与思考强度），只在聚焦时出现。
     private let tools: Tools
@@ -98,17 +100,21 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @State private var focused = false
     @State private var source: ComposerSource?
     @State private var previewing: Outbox?
+    /// 斜杠命令面板里高亮的那一行，与按过 Esc 收起面板时的那段文字（文字再变就又弹出）。
+    @State private var highlighted = 0
+    @State private var dismissedPalette: String?
     /// "＋"在一行与两层之间挪位时是同一颗（连续移动）。
     @Namespace private var layout
 
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
-        keeps: UUID? = nil, showsSend: Bool = false, submit: (() -> Void)? = nil,
+        keeps: UUID? = nil, showsSend: Bool = false, commands: [PiSlashCommand] = [], submit: (() -> Void)? = nil,
         @ViewBuilder header: () -> Header, @ViewBuilder tools: () -> Tools, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
         self.keeps = keeps
+        self.commands = commands
         self.showsSend = showsSend
         self.submit = submit
         self.prompt = prompt
@@ -139,6 +145,31 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
     private var sendVisible: Bool { reservesSend && (hasContent || showsSend) }
 
+    /// 面板此刻列的命令；不弹时为空。
+    private var paletteCommands: [PiSlashCommand] {
+        guard expanded, dismissedPalette != draft.text else { return [] }
+        return PiSlash.matches(draft.text, in: commands) ?? []
+    }
+
+    /// 面板打开时文字区交来的按键；返回是否已处理（没处理的照常输入）。
+    private func handle(_ key: ComposerKey) -> Bool {
+        let list = paletteCommands
+        guard !list.isEmpty else { return false }
+        let current = min(highlighted, list.count - 1)
+        switch key {
+        case .up: highlighted = (current + list.count - 1) % list.count
+        case .down: highlighted = (current + 1) % list.count
+        case .accept: pick(list[current])
+        case .dismiss: dismissedPalette = draft.text
+        }
+        return true
+    }
+
+    private func pick(_ command: PiSlashCommand) {
+        draft.text = PiSlash.insertion(for: command)
+        focus.wrappedValue = true
+    }
+
     var body: some View {
         field
         // 变形（一行 ↔ 两层、短胶囊 ↔ 全宽、工具排的小圆钮出现）是空间动画：无回弹弹簧，减弱动态效果时退为短淡入淡出
@@ -148,6 +179,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now }
         }
         .animation(Motion.quick, value: sendVisible)
+        .animation(Motion.quick, value: paletteCommands.isEmpty)
+        .onChange(of: draft.text) { highlighted = 0 }
         .animation(Motion.quick, value: draft.attachments.map(\.id))
         .animation(Motion.quick, value: draft.images.map(\.id))
         .modifier(ImageSources(source: $source, images: $draft.images))
@@ -168,6 +201,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var field: some View {
         VStack(alignment: .leading, spacing: 0) {
             if expanded { header.transition(.opacity) }
+            if !paletteCommands.isEmpty {
+                PiSlashPalette(commands: paletteCommands, highlighted: min(highlighted, paletteCommands.count - 1), pick: pick)
+                    .transition(.opacity)
+                Divider().padding(.horizontal, 12)
+            }
             if accepts.contains(.cards) {
                 ForEach(draft.attachments) { chip($0).padding([.horizontal, .top], Self.inset).transition(.opacity) }
             }
@@ -178,7 +216,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             HStack(alignment: .bottom, spacing: 0) {
                 if !expanded, !accepts.isEmpty { plus }
                 ComposerField(
-                    text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus)
+                    text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle)
                     .focused(focus)
                     .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, !expanded && sendVisible ? 2 : 18)
                     .padding(.top, 14).padding(.bottom, expanded ? 4 : 14)

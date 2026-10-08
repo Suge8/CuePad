@@ -32,7 +32,7 @@ struct HandOffInput: View {
     var body: some View {
         Composer(
             draft: $draft, prompt: "补一句（可不填）", label: "交给 Agent", focus: $focused,
-            accepts: [.images, .cards], cardsFrom: outbox.project, pinnedOpen: true, keeps: outbox.card,
+            accepts: [.images, .cards], cardsFrom: outbox.project, pinnedOpen: true, keeps: outbox.card, commands: chosen?.state.commands ?? [],
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)
                 if let failure = config?.failure {
@@ -106,10 +106,15 @@ struct HandOffInput: View {
         guard canSend else { return }
         guard let session = chosen?.state else { return newSession() }
         let sent = draft, mode = MacDelivery.modes(for: session, hasImages: sent.hasImages).first ?? .send
+        let line = PiSlash.line(of: sent, in: session.commands)
         sending = true
         workspace.attempt {
             defer { sending = false }
-            _ = try await services.requestMacDelivery(sent, to: session, mode: mode, card: outbox.card)
+            if let line {
+                _ = try await services.requestMacDelivery(line, to: session, mode: .command, card: outbox.card)
+            } else {
+                _ = try await services.requestMacDelivery(sent, to: session, mode: mode, card: outbox.card)
+            }
             focused = false
             navigation.outbox = nil
             workspace.say("已交给 \(session.title)")

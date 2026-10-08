@@ -5,6 +5,7 @@ import Testing
 
 /// 回复框里的斜杠命令：输入 "/" 弹出的面板列哪些（过滤与排序）、输入框里的内容算不算一条命令、
 /// 命令带上的卡片怎么并进参数；上下文圆环的读数。
+@MainActor
 struct PiSlashTests {
     private func command(_ name: String, _ source: PiCommandSource, summary: String? = nil, hint: String? = nil) -> PiSlashCommand {
         PiSlashCommand(name: name, summary: summary, source: .known(source), hint: hint)
@@ -26,7 +27,7 @@ struct PiSlashTests {
     }
 
     @Test func 过滤_名字开头的在前_名字里含有的其次_说明里含有的最后() {
-        #expect(PiSlash.matches("/re", in: commands)?.map(\.name) == ["reload", "review", "skill:review"])
+        #expect(PiSlash.matches("/re", in: commands)?.map(\.name) == ["reload", "review", "greet", "skill:review"])
         #expect(PiSlash.matches("/skill:de", in: commands)?.map(\.name) == ["skill:deploy"])
         #expect(PiSlash.matches("/压缩", in: commands)?.map(\.name) == ["compact"])  // 说明里含有
         #expect(PiSlash.matches("/COMP", in: commands)?.map(\.name) == ["compact"])  // 不分大小写

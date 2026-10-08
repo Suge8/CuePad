@@ -61,6 +61,7 @@ nonisolated extension DeliveryMode {
         case .steer: "马上说"
         case .followUp: "等它做完再说"
         case .paste: "放进输入框"
+        case .command: "斜杠命令"
         case .answer: "作答"
         case .ping: "连接测试"
         case .start: "新会话"
@@ -77,7 +78,7 @@ nonisolated extension DeliveryMode {
         case .steer: "它做完手上这一步就会看到"
         case .followUp: "这一轮结束后再送达"
         case .paste: "只放进输入框，不发送"
-        case .send, .answer, .ping, .start, .transcript, .config, .end, .stop: nil
+        case .send, .command, .answer, .ping, .start, .transcript, .config, .end, .stop: nil
         }
     }
 }
