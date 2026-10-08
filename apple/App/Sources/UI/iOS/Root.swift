@@ -75,7 +75,7 @@ struct IOSRootView: View {
             workspace.say(alert.text, symbol: alert.symbol, link: .session(alert.session), duration: .seconds(5))
         }
         #if DEBUG
-        .task { await DebugScene.prepare(workspace, navigation) }
+        .task { await DebugScene.prepare(workspace, navigation, alerts) }
         #endif
     }
 
