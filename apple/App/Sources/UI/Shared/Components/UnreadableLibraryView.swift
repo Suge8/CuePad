@@ -6,7 +6,6 @@ struct UnreadableLibraryView: View {
     let failure: LibraryFailure
     let retry: () -> Void
     @Environment(\.palette) private var palette
-    @State private var copied = false
 
     var body: some View {
         EmptyState(mascot: .error, title: "读不出资料库", message: failure.summary) {
@@ -19,21 +18,16 @@ struct UnreadableLibraryView: View {
                 // iOS 的系统默认按钮没有外形，用与"新建项目"同一个主按钮；Mac 的系统按钮本身有外形
                 #if os(iOS)
                 Button("重试", action: retry).prominentButton().controlSize(.large).frame(minHeight: 44)
-                Button(copied ? "已复制" : "导出诊断", action: copyDiagnostics).controlSize(.large).frame(minHeight: 44)
+                ExportDiagnosticsButton(text: failure.diagnostics).controlSize(.large).frame(minHeight: 44)
                 #else
                 HStack {
                     Button("重试", action: retry)
-                    Button(copied ? "已复制" : "导出诊断", action: copyDiagnostics)
+                    ExportDiagnosticsButton(text: failure.diagnostics)
                 }
                 #endif
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
-    }
-
-    private func copyDiagnostics() {
-        Clipboard.copy(failure.diagnostics)
-        copied = true
     }
 }

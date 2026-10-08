@@ -16,6 +16,8 @@ import UIKit
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
 /// alert：停在书架（配 `-CuePadDemo YES`），2.5 秒后 atlas 从工作中做完、9 秒后 cuepad 进入等你确认——Mac 同步来的状态转换，核对 App 内的前台提示横幅；
 /// 给了 `-CuePadSession <会话名>` 时先打开那个会话页（核对正看着的会话不弹）。
+/// notifytap：复现点通知——经 `PiAlertCenter.receive` 交付与生产同形的通知 userInfo，走与点锁屏通知同一条路由代码：先打开 `-CuePadSession` 的会话页
+/// （或 `-CuePadNotifyFromCard YES` 先打开一张卡），再按 `-CuePadNotifyTaps "会话名@秒,…"` 依次点。冷启动被通知拉起用 `-CuePadColdTap <会话记录 id>`（在界面出现前交付）。
 /// searchkey：iPhone 停在 Agent 标签，1.5 秒后走 ⌘K（回到书架并聚焦顶上的搜索框）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
 /// agent 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话（每隔 8 小时结束一个，分落在今天到更早），
@@ -27,7 +29,16 @@ import UIKit
 /// `-CuePadDemoMac YES`：发给演示 Mac（demo-mac）上会话的话由它慢慢接手、送达、再回状态（见 `runDemoMac`）。
 /// iPad 上 agent 打开右侧 Agent 面板。演示库另写入 Mac 同步来的 Pi 会话状态（含历史）与几条发到 Mac 的请求。
 extension DebugScene {
-    static func prepare(_ workspace: Workspace, _ navigation: Navigation) async {
+    /// 与生产同形的 CloudKit 查询订阅通知的 userInfo（记录 id 是会话记录 id）。
+    static func notification(session: String) -> [AnyHashable: Any] {
+        [
+            "aps": ["alert": ["loc-key": "pi_alert_settled"]],
+            "ck": ["ce": 2, "cid": "iCloud.com.sugeh.cuepad", "nid": UUID().uuidString,
+                   "qry": ["dbs": 1, "fo": 1, "rid": session.lowercased(), "sid": "cuepad.pi.settled", "zid": "CuePad", "zoid": "__defaultOwner__"]],
+        ]
+    }
+
+    static func prepare(_ workspace: Workspace, _ navigation: Navigation, _ alerts: PiAlertCenter) async {
         dumpAccessibilityIfAsked()
         let project = await prepareLibrary(workspace)
         if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
@@ -72,6 +83,26 @@ extension DebugScene {
             try? await Task.sleep(for: .seconds(6.5))
             let question = PiQuestion(promptID: "demo-alert", kind: .select, text: "要重跑全部测试吗？", options: ["重跑", "跳过"])
             try? await recorder.update(sessionID: "cuepad", state: .waitingForUser, title: "cuepad", folder: "CuePad", question: question)
+        case "notifytap":
+            // 复现点通知：先打开 -CuePadSession 的会话页（没给就留在书架），再按 -CuePadNotifyTaps "会话名@秒,…" 依次投递与生产同形的通知点击
+            let store = workspace.services.store
+            func session(_ title: String) async -> PiSessionState? {
+                try? await store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state
+            }
+            if let title = defaults.string(forKey: "CuePadSession"), let opened = await session(title) {
+                if split { navigation.select(.agent) } else { navigation.tab = .agent }
+                navigation.openSession(opened.id, sessionID: opened.sessionID, store: store)
+            } else if defaults.bool(forKey: "CuePadNotifyFromCard") {
+                await openCard()
+            }
+            var elapsed = 0.0
+            for spec in (defaults.string(forKey: "CuePadNotifyTaps") ?? "").split(separator: ",") {
+                let parts = spec.split(separator: "@")
+                guard parts.count == 2, let at = Double(parts[1]), let target = await session(String(parts[0])) else { continue }
+                try? await Task.sleep(for: .seconds(max(0, at - elapsed)))
+                elapsed = max(elapsed, at)
+                alerts.receive(notification(session: target.id.uuidString))
+            }
         case "searchkey":
             // 标签栏布局按 ⌘K：在 Agent 标签按，应回到书架并聚焦下拉搜索
             navigation.tab = .agent

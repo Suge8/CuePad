@@ -88,6 +88,10 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = alerts
+        #if DEBUG
+        // 复现冷启动被通知拉起：-CuePadColdTap <会话记录 id>，在界面出现之前就交给通知中心
+        if let id = UserDefaults.standard.string(forKey: "CuePadColdTap") { alerts.receive(DebugScene.notification(session: id)) }
+        #endif
         return true
     }
 

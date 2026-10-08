@@ -33,6 +33,8 @@ final class AppServices {
     private(set) var startupIssues: [StartupIssue] = []
 
     @ObservationIgnored let location: LibraryLocation
+    /// 崩溃诊断（MetricKit）：设置页的"上次崩溃"。
+    let diagnostics: Diagnostics
 
     /// iCloud 同步引擎从哪来：正式启动按位置与本构建的 iCloud 权限决定（`makeSync`），测试注入替身。
     /// 没有默认值：入口必须写明，不能悄悄没有引擎。
@@ -290,6 +292,7 @@ final class AppServices {
         images = library.images
         settings = AppSettings(defaults: defaults)
         self.location = location
+        diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         (self.sync, syncStatus) = Self.makeSync(sync, store: library.store, location: location)
         hostID = mac.hostID
         wakeNotifications = mac.wakeNotifications
@@ -314,6 +317,7 @@ final class AppServices {
         images = library.images
         settings = AppSettings(defaults: defaults)
         self.location = location
+        diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         (self.sync, syncStatus) = Self.makeSync(sync, store: library.store, location: location)
         self.pasteboard = pasteboard
     }

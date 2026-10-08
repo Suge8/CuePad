@@ -33,6 +33,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("投送到其他应用会写入剪贴板并在目标应用里粘贴，需要辅助功能授权；发给 Agent 会话不需要。")
                 }
+                if services.diagnostics.latest != nil { Section("诊断") { LastCrashRow() } }
                 Section {
                     PiExtensionRow()
                 } header: {
