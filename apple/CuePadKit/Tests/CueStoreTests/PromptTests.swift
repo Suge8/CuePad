@@ -106,6 +106,50 @@ import Testing
     #expect(try await replied(task.id) == [false])
   }
 
+  /// 交给 atlas，它这一轮做完（发出之后歇下）。
+  private func reply(_ prompt: Card, _ recorder: PiStateRecorder) async throws {
+    try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+    try await enter(.thinking, recorder)
+    try await enter(.settled, recorder)
+  }
+
+  private func enter(_ state: PiWorkState, _ recorder: PiStateRecorder) async throws {
+    try await Task.sleep(for: .milliseconds(5))
+    _ = try await recorder.update(sessionID: "s1", state: state, title: "atlas", times: PiTimes(stateSince: .now, busySince: nil))
+  }
+
+  @Test func 手机重发后Mac还没执行_在路上的请求优先_不算已回复_状态点跟着那个会话() async throws {
+    let task = try await store.createTask("修重连排序", in: nil)
+    let prompt = try await store.createCard(body: "先复现", under: task.id)
+    try await reply(prompt, PiStateRecorder(store: store, hostID: "mac-a"))
+    #expect(try await replied(task.id) == [true])
+
+    let request = try await store.requestDelivery("先复现，这次带上日志", to: SendTarget(kind: .piSession, name: "notes", ref: "s2"), on: "mac-a", card: prompt.id)
+    #expect(try await replied(task.id) == [false])
+    #expect(try await store.handedSessions()[prompt.id] == .session("s2"))
+
+    // Mac 执行了、记下发送，那个会话还没做完：仍不算
+    try await store.recordSend(request.content, to: request.target, card: prompt.id)
+    #expect(try await replied(task.id) == [false])
+  }
+
+  @Test func 会话没回复就结束了_不算已回复_回复过再结束仍算() async throws {
+    let task = try await store.createTask("修重连排序", in: nil)
+    let prompt = try await store.createCard(body: "先复现", under: task.id)
+    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+    try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+    try await enter(.thinking, recorder)
+    try await Task.sleep(for: .milliseconds(5))
+    try await recorder.end(sessionID: "s1")
+    #expect(try await replied(task.id) == [false])
+
+    // 对话里有它在发出之后的一条回答：回复过了，结束不影响
+    try await store.writePiTranscript(PiTranscript(
+      sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "p1", seq: 1, role: .pi, text: "复现了", at: .now)],
+      recap: PiRecap(lastPrompt: nil, lastReply: "复现了", pendingPrompt: nil)))
+    #expect(try await replied(task.id) == [true])
+  }
+
   @Test func 只复制或发到应用不算交给Agent() async throws {
     let task = try await store.createTask("修重连排序", in: nil)
     let prompt = try await store.createCard(body: "先复现", under: task.id)

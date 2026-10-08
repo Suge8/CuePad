@@ -91,6 +91,34 @@ struct TaskPromptTests {
         #expect(try await state(of: prompt, in: task) == "replied atlas")
     }
 
+    @Test func 手机重发还在路上_卡片是正在发给Agent而不是已回复() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let prompt = try await store.createCard(body: "先复现", under: task.id)
+        try await reply(to: prompt)
+        #expect(try await state(of: prompt, in: task) == "replied atlas")
+
+        _ = try await store.requestDelivery("先复现，这次带上日志", to: atlas, on: "mac-a", card: prompt.id)
+        #expect(try await state(of: prompt, in: task) == "working atlas")
+        let detail = try await TaskDetail.read(task.id, from: store)
+        guard case .working(let item) = detail.state(of: prompt) else { return }
+        #expect(rig.services.settings.shown(item).presence == "正在发给 Agent")
+    }
+
+    @Test func 会话没回复就结束了_卡片是会话已结束_不算全部已回复() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let prompt = try await store.createCard(body: "先复现", under: task.id)
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+        try await enter(.thinking, recorder)
+        try await Task.sleep(for: .milliseconds(5))
+        try await recorder.end(sessionID: "s1")
+
+        #expect(try await state(of: prompt, in: task) == "ended atlas")
+        let tally = PromptTally(try await store.childMarks()[task.id])
+        #expect(tally.text == "1 条提示词")
+        #expect(!tally.suggestsDone(try #require(try await store.card(task.id))))
+    }
+
     @Test func 任务页读到提示词与子任务_各自按放的顺序() async throws {
         let task = try await store.createTask("修乱序", in: nil)
         let first = try await store.createCard(body: "先复现", under: task.id)
@@ -134,6 +162,7 @@ struct TaskPromptTests {
         case .unsent: return "unsent"
         case .launching: return "launching"
         case .working(let item): return "working \(item.state.title)"
+        case .ended(let item): return "ended \(item.state.title)"
         case .replied(let item): return "replied \(item?.state.title ?? "")"
         }
     }
