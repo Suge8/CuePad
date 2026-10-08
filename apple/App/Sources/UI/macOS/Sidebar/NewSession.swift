@@ -2,14 +2,12 @@
 import CueStore
 import SwiftUI
 
-/// Pi 分组标题旁的 +：在本机后台开一个新会话；开好后关掉表单、打开新会话的详情。
+/// Agent 分组标题旁的 +：在本机后台开一个新会话；开好后关掉表单、在内容区打开新会话的整页。
 struct NewSessionButton: View {
     /// 侧栏读到的会话（取没绑项目的最近目录）。
     let recent: [PiSessionState]
     @Binding var showing: Bool
-    @Environment(\.sessionDetail) private var sessionDetail
-    /// 新会话出现后先关表单，表单真正消失后再打开详情（两个弹出层不同时出现）。
-    @State private var opened: String?
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         Button("新会话", systemImage: "plus") { showing = true }
@@ -18,13 +16,8 @@ struct NewSessionButton: View {
             .help("开一个新的 Agent 会话")
             .popover(isPresented: $showing, arrowEdge: .trailing) {
                 NewSessionForm(recent: recent) { id in
-                    guard showing else { return sessionDetail?.open(id) ?? () }
-                    opened = id
                     showing = false
-                }
-                .onDisappear {
-                    if let opened { sessionDetail?.open(opened) }
-                    opened = nil
+                    workspace.openSession(id)
                 }
             }
     }

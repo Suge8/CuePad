@@ -27,10 +27,6 @@ enum SearchScope: Hashable {
     case cards, sessions
 }
 
-extension EnvironmentValues {
-    /// 打开 ⌘K 并停在会话范围（侧栏"全部 N 个"）；主窗口提供。
-    @Entry var openSessionSearch: (() -> Void)?
-}
 
 nonisolated extension PiSessionListItem {
     /// 列表里的会话；所属项目已删的不再带项目（按文件夹归组、写文件夹名）。
@@ -61,7 +57,7 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
     }
 }
 
-/// 会话范围的结果列表：按 `SessionGroup` 分组，行是侧栏同一种（`PiSessionRow`）；点一下选中，右边是它的近况。
+/// 会话范围的结果列表：按 `SessionGroup` 分组，行是侧栏同一种（`PiSessionRow`）；方向键移动选中，点一下或 ↩ 打开它的整页（`open`）。
 struct SessionResultList: View {
     let groups: [SessionGroup]
     let deliveries: [String: DeliveryRequest]
@@ -69,6 +65,7 @@ struct SessionResultList: View {
     let more: Int
     let isFiltered: Bool
     @Binding var selection: String?
+    let open: (String) -> Void
     let loadMore: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -113,13 +110,13 @@ struct SessionResultList: View {
         let isSelected = session.sessionID == selection
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-            nameFont: .system(size: 13.5), lineFont: .system(size: 11.5))
+            style: .init(name: .system(size: 13.5), line: .system(size: 11.5), dot: 6, spacing: 1))
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
             .contentShape(.rect)
-            .onTapGesture { selection = session.sessionID }
+            .onTapGesture { open(session.sessionID) }
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-            .accessibilityAction { selection = session.sessionID }
+            .accessibilityAction { open(session.sessionID) }
     }
 }
 #endif

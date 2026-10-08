@@ -1,6 +1,6 @@
 import Foundation
 
-/// Pi 回答的 Markdown 块（iOS 会话页、Mac 会话详情共用）。只认回答里常见的几种，其余按段落；块内的行内语法
+/// Pi 回答的 Markdown 块（iOS 会话页、Mac 会话页共用）。只认回答里常见的几种，其余按段落；块内的行内语法
 /// （加粗、斜体、行内代码、链接）原样留在文字里，由渲染时交给系统的行内 Markdown。
 nonisolated enum MarkdownBlock: Equatable, Sendable {
     case paragraph(String)

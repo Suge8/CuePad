@@ -55,7 +55,7 @@ struct AgentDot: View {
             .accessibilityHint("看 Agent 的会话")
             #else
             PiStateDot(shown: shown, size: 7)
-                .sessionDetailRow(item.state.sessionID)
+                .sessionLink(item.state.sessionID)
                 .help("交给了 Agent 会话「\(item.state.title)」：\(shown.presence)，点开看近况")
             #endif
         }

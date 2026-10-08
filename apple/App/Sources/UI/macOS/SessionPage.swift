@@ -36,84 +36,111 @@ extension SessionDigest {
     }
 }
 
-/// 一个 Pi 会话的详情（侧栏、菜单栏面板的会话行、任务上的会话状态点开，⌘K 会话范围的右侧），聊天式，与手机的会话页同一套：
-/// 顶上一行会话名，下面一行"所在 · 状态 · 计时"（`PiSessionSubtitle`）；中间是对话（`PiConversation`，子代理列在末尾的进展下），
-/// 打开停在最新；底部是回复框，等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
-/// `embedded`：放在 ⌘K 里时高度由面板给；弹出层里对话区按内容长高，到上限后在里面滚动。
-struct PiSessionDetail: View {
+/// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），与手机的会话页同一套：
+/// 顶上会话名，下面一行"所在 · 状态 · 计时"（`PiSessionSubtitle`），右边"⋯"（跳到终端、结束会话）；中间是对话
+/// （`PiConversation`，子代理在末尾收成一行汇总），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
+/// 底部是回复框，等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。推在根页上，返回回到原来那页。
+struct SessionPage: View {
     let sessionID: String
-    var embedded = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var stored: SessionDigest?
     @State private var askedForTranscript = false
+    @State private var confirmingEnd = false
 
-    /// 弹出层里对话区最高多少：按读对话调高，再长就在里面滚动。
-    private static let maxConversationHeight: CGFloat = 620
+    /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
+    private static let readingWidth: CGFloat = 760
 
     var body: some View {
         let live = services.pi.sessions.first { $0.sessionID == sessionID }
         let project = live.flatMap { workspace.catalog?.project(workspace.sessionProjects[$0.id]) }
         // 在线会话不等资料库读完就能显示
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
+        let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries)
         VStack(spacing: 0) {
             if let session = digest.session {
-                header(session, project: digest.project, delivery: digest.latestDelivery, live: live)
-                Divider()
+                header(session, digest: digest, live: live, ending: shownEnd?.isOpen == true)
                 conversation(session, digest)
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest.deliveries)
+                    if let reason = shownEnd?.failure, session.state != .known(.ended) {
+                        Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)")
+                    }
                     DetailReply(session: session, live: live, config: digest.config)
                 }
-                .padding(12)
+                .padding(.horizontal, 24).padding(.bottom, 16)
+                .frame(maxWidth: Self.readingWidth)
                 .animation(Motion.quick, value: session.question)
+                .confirmationDialog("结束这个会话？", isPresented: $confirmingEnd, titleVisibility: .visible) {
+                    Button("结束会话", role: .destructive) { Task { await workspace.end(session) } }
+                } message: {
+                    Text("对话会保留，再给它发消息会在后台恢复")
+                }
             } else if stored != nil {
-                Text("找不到这个会话").foregroundStyle(palette.ink3).padding(24)
+                EmptyState(mascot: .empty, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
+                    .frame(maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(palette.desk)
         .observing(services.store, SessionDigest.tables, id: sessionID, into: $stored,
                    onError: workspace.fail) { [sessionID] store in
             try SessionDigest.read(sessionID: sessionID, from: store)
         }
         .onChange(of: stored) { askForTranscriptIfNeeded() }
-        // 开着详情就算看过：侧栏与菜单栏里的"有新回复"据此消失
+        // 开着这页就算看过：侧栏与菜单栏里的"有新回复"据此消失
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
-    private func header(_ session: PiSessionState, project: Project?, delivery: DeliveryRequest?, live: CuePi.PiSession?) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(session.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
-                PiSessionSubtitle(session: session, project: project, delivery: delivery)
+    private func header(_ session: PiSessionState, digest: SessionDigest, live: CuePi.PiSession?, ending: Bool) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(session.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                if ending {
+                    Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
+                } else {
+                    PiSessionSubtitle(session: session, project: digest.project, delivery: digest.latestDelivery)
+                }
             }
             Spacer(minLength: 8)
-            if let live, !live.hosted {
-                Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
-                    .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink3)
-                    .help("跳到这个会话所在的终端窗口")
+            let canJump = live.map { !$0.hosted } ?? false
+            if canJump || session.state != .known(.ended) {
+                Menu {
+                    if let live, canJump {
+                        Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
+                    }
+                    if session.state != .known(.ended) {
+                        Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = true }
+                            .disabled(ending)
+                    }
+                } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.ink2)
+                        .frame(width: 32, height: 32).contentShape(.circle)
+                }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .glassEffect(.regular.interactive(), in: .circle)
+                .accessibilityLabel("更多")
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, 24).padding(.top, 4).padding(.bottom, 10)
+        .frame(maxWidth: Self.readingWidth)
     }
 
-    @ViewBuilder private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
+    private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
         let follow = PiConversation.followKey(session: session, messages: digest.messages, deliveries: digest.deliveries)
-        // 打开停在最新；在底部时跟着新内容，往上翻后暂停，离最新超过一屏出"回到最新"圆钮、来过新内容时带点（`ChatScroll`）
-        let scroll = ChatScroll(followKey: follow) {
+        return ChatScroll(followKey: follow) {
             VStack(spacing: 14) {
                 if fetchingTranscript(digest) {
                     Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
                 }
                 PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries)
             }
-            .padding(16)
+            .padding(.horizontal, 24).padding(.vertical, 16)
+            .frame(maxWidth: Self.readingWidth)
+            .frame(maxWidth: .infinity)
         }
-        if embedded {
-            scroll.frame(maxHeight: .infinity)
-        } else {
-            scroll.frame(maxHeight: Self.maxConversationHeight).fixedSize(horizontal: false, vertical: true)
-        }
+        .frame(maxHeight: .infinity)
     }
 
     private func fetchingTranscript(_ digest: SessionDigest) -> Bool {
@@ -175,6 +202,7 @@ private struct DetailReply: View {
                     .lineLimit(1...6)
                     .focused($focused)
                     .onSubmit(submit)
+                    .onExitCommand { focused = false }
                     .padding(.vertical, 8)
                 if !tools { button() }
             }
@@ -282,56 +310,28 @@ private struct DetailReply: View {
     }
 }
 
-/// 会话详情的弹出层挂在稳定的容器上（侧栏列表、菜单栏面板），箭头指向点开的那一行：列表里的行会随会话结束、
-/// 排序变化被重建甚至消失，挂在行上的弹出层会跟着被关掉。行经 `sessionDetailRow(_:)` 报位置、点开。
-struct SessionDetailHost: ViewModifier {
-    let arrowEdge: Edge
-    @State private var opened: Opened?
-    @State private var frames: [String: CGRect] = [:]
+extension View {
+    /// 会话行：点按在内容区打开这个会话的整页（推在当前页上）；正打开着的那个垫选中底。
+    func sessionLink(_ sessionID: String) -> some View { modifier(SessionLink(sessionID: sessionID)) }
+}
 
-    private struct Opened: Identifiable { let id: String }
-    private static let space = "sessionDetailHost"
-    /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
-    private static let width: CGFloat = 480
+private struct SessionLink: ViewModifier {
+    let sessionID: String
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        content
-            .environment(\.sessionDetail, SessionDetailAction(
-                open: { opened = Opened(id: $0) },
-                report: { id, frame in frames[id] = frame },
-                space: Self.space))
-            .coordinateSpace(.named(Self.space))
-            .popover(item: $opened, attachmentAnchor: .rect(.rect(opened.flatMap { frames[$0.id] } ?? .zero)), arrowEdge: arrowEdge) {
-                PiSessionDetail(sessionID: $0.id).frame(width: Self.width).background(palette.desk)
-            }
-    }
-}
-
-struct SessionDetailAction {
-    let open: (String) -> Void
-    let report: (String, CGRect) -> Void
-    let space: String
-}
-
-extension EnvironmentValues {
-    @Entry var sessionDetail: SessionDetailAction?
-}
-
-extension View {
-    /// 会话行：点按打开它的详情（由外层的 `SessionDetailHost` 弹出）。
-    func sessionDetailRow(_ sessionID: String) -> some View { modifier(SessionDetailRow(sessionID: sessionID)) }
-}
-
-private struct SessionDetailRow: ViewModifier {
-    let sessionID: String
-    @Environment(\.sessionDetail) private var host
-
-    func body(content: Content) -> some View {
-        Button { host?.open(sessionID) } label: { content.contentShape(.rect) }
-            .buttonStyle(PressStyle(scale: 0.98))
-            .accessibilityHint("打开会话详情")
-            .onGeometryChange(for: CGRect.self) { [space = host?.space ?? ""] in $0.frame(in: .named(space)) } action: { host?.report(sessionID, $0) }
+        let opened = workspace.openedSession == sessionID
+        Button {
+            workspace.overlay = nil
+            workspace.openSession(sessionID)
+        } label: {
+            content.contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(scale: 0.98))
+        .background(opened ? palette.selection : .clear, in: .rect(cornerRadius: 8))
+        .accessibilityAddTraits(opened ? .isSelected : [])
+        .accessibilityHint("打开会话")
     }
 }
 

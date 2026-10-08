@@ -6,7 +6,7 @@ import PhotosUI
 import AppKit
 #endif
 
-// 任务浮窗（手机半屏、Mac 弹出）与 Mac 纸页共用的几块：任务就是给 Agent 的话，正文是焦点；
+// 任务浮窗（手机半屏）与 Mac 纸页共用的几块：任务就是给 Agent 的话，正文是焦点；
 // 这里是正文周围的次要信息——状态、Agent（交给的会话与发出记录）、下级（子任务与相关灵感）。
 
 /// 一条任务的下级、交给的会话与发出记录：浮窗与纸页一次读出，各块只画。
@@ -204,7 +204,7 @@ struct SendRecordText: View {
 struct TaskProgressList: View {
     let task: Card
     let detail: TaskDetail?
-    /// Mac 上点一条下级打开它（任务浮窗里换成它，纸页里换一张纸）；手机经导航推进。
+    /// Mac 上点一条下级打开它（纸页里换一张纸）；手机经导航推进。
     var openChild: ((UUID) -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -358,7 +358,7 @@ struct TaskProgressList: View {
             .buttonStyle(.plain)
             .accessibilityHint("看 Agent 的会话")
         #else
-        label.sessionDetailRow(session.sessionID).help("交给了 Agent 会话「\(session.title)」，点开看近况")
+        label.sessionLink(session.sessionID).help("交给了 Agent 会话「\(session.title)」，点开看近况")
         #endif
     }
 

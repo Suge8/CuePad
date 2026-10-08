@@ -2,7 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 主窗口：玻璃侧栏 + 当前页；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
+/// 主窗口：玻璃侧栏 + 当前页（与手机同一个导航模型：侧栏点项目、Agent、会话，任务与灵感都在内容区整页切换，
+/// 工具栏左上返回与前进、⌘[ ⌘]）；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -22,10 +23,6 @@ struct MainWindow: View {
             detail
         }
         .environment(workspace)
-        .environment(\.openSessionSearch) {
-            searchScope = .sessions
-            workspace.overlay = .search
-        }
         .onChange(of: workspace.overlay) { if $1 == nil { searchScope = .cards } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.window = $0 }
         .confirmationDialog(
@@ -74,16 +71,7 @@ struct MainWindow: View {
     }
 
     private var page: some View {
-        CatalogGate { currentPage }
-    }
-
-    @ViewBuilder private var currentPage: some View {
-        switch workspace.page {
-        case .project(let id): ProjectPage(projectID: id).id(id)
-        case .inbox: ProjectPage(projectID: nil)
-        case .archive: ArchivePage()
-        case .trash: TrashPage()
-        }
+        CatalogGate { RoutedPage() }
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -92,7 +80,7 @@ struct MainWindow: View {
             if workspace.sidebar == .detailOnly { ProjectSwitcher() }
         }
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
-        ToolbarItem(placement: .navigation) { BackButton() }
+        ToolbarItem(placement: .navigation) { HistoryButtons() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
@@ -145,31 +133,72 @@ private struct CardPressMonitor: NSViewRepresentable {
     }
 }
 
+/// 内容区此刻的页：根页一直挂着，推在上面的会话页盖住它（返回时根页回到原来的滚动位置）。
+/// 读页面与会话的只有这里，主窗口的视图体不读它们，切页时不重建整条工具栏。
+private struct RoutedPage: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let covered = workspace.openedSession != nil
+        ZStack {
+            root
+                .opacity(covered ? 0 : 1)
+                .allowsHitTesting(!covered)
+                .accessibilityHidden(covered)
+            if let id = workspace.openedSession { SessionPage(sessionID: id).id(id) }
+        }
+    }
+
+    @ViewBuilder private var root: some View {
+        switch workspace.page {
+        case .project(let id): ProjectPage(projectID: id).id(id)
+        case .inbox: ProjectPage(projectID: nil)
+        case .archive: ArchivePage()
+        case .trash: TrashPage()
+        case .agent: AgentPage()
+        }
+    }
+}
+
 /// 打开、收起卡片只改动下面三处（返回按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：
 /// 主窗口的视图体不读它，开合时不重算整个窗口、不重建整条工具栏。
 
-/// 工具栏的返回按钮：常驻、不打开卡片时隐去——条目一增一减，打开卡片的那一帧就要重排整条工具栏。
-private struct BackButton: View {
+/// 工具栏左上的返回与前进（一块玻璃里两颗）：常驻，走不了时淡掉——条目一增一减，那一帧就要重排整条工具栏。
+/// 返回：开着灵感或任务的纸页时先收起它（Esc 也行），否则回到上一页；快捷键 ⌘[ ⌘]。
+private struct HistoryButtons: View {
     @Environment(Workspace.self) private var workspace
 
-    /// 与工具栏自带的圆形按钮同样大小。
+    /// 与工具栏自带的圆形按钮同样高。
     private static let size: CGFloat = 36
 
     var body: some View {
-        let open = workspace.openCard != nil
-        Button { workspace.openCard = nil } label: {
-            Image(systemName: "chevron.left").font(.system(size: 15)).foregroundStyle(.secondary)
+        let back = workspace.canGoBack, forward = workspace.canGoForward
+        HStack(spacing: 0) {
+            button("返回", systemImage: "chevron.left", enabled: back, action: workspace.goBack)
+                .keyboardShortcut("[", modifiers: .command)
+                .background { if workspace.openCard != nil { Button("收起", action: workspace.goBack).keyboardShortcut(.cancelAction).hidden() } }
+            if forward {
+                button("前进", systemImage: "chevron.right", enabled: true, action: workspace.goForward)
+                    .keyboardShortcut("]", modifiers: .command)
+                    .transition(.opacity)
+            }
+        }
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .opacity(back || forward ? 1 : 0)
+        .accessibilityHidden(!back && !forward)
+        .animation(Motion.quick, value: forward)
+    }
+
+    private func button(_ title: String, systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage).font(.system(size: 15)).foregroundStyle(.secondary)
                 .frame(width: Self.size, height: Self.size)
-                .contentShape(.circle)
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
-        .accessibilityLabel("返回")
-        .keyboardShortcut(open ? .cancelAction : nil)
-        .help("返回项目（Esc）")
-        .opacity(open ? 1 : 0)
-        .disabled(!open)
-        .accessibilityHidden(!open)
+        .disabled(!enabled)
+        .accessibilityLabel(title)
+        .help("\(title)（⌘\(title == "返回" ? "[" : "]")）")
     }
 }
 
@@ -189,7 +218,7 @@ private struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.isLibraryReady, workspace.presentedCard == nil, workspace.page != .trash {
+        if workspace.isLibraryReady, workspace.presentedCard == nil, workspace.page != .trash, workspace.openedSession == nil {
             let searching = workspace.overlay == .search
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)

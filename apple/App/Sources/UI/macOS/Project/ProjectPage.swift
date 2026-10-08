@@ -43,7 +43,6 @@ struct ProjectPage: View {
             #endif
         }
         .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
-        .modifier(SessionDetailHost(arrowEdge: .bottom))
         .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
         .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)

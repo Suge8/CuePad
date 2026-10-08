@@ -60,7 +60,6 @@ struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
-        .modifier(SessionDetailHost(arrowEdge: .trailing))
         .focusable()
         .focused($focused)
         // 选中样式本身就标出了位置，不再套系统焦点环
@@ -199,8 +198,8 @@ private struct PageRow<Title: View>: View {
     }
 }
 
-/// 全局 Pi：与 iOS 的 Agent 页同一种行（`PiSessionRow`）、同一个顺序（`sidebarRows`）。点开任一会话是它的详情（近况与回复），
-/// 在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话；会话比显示的多时底部"全部 N 个"打开 ⌘K 的会话范围。
+/// 全局 Agent：与 iOS 的 Agent 页同一种行（`PiSessionRow`）、同一个顺序（`sidebarRows`）。点任一会话在内容区打开它的整页（近况与回复），
+/// 在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话；底部"全部会话"打开 Agent 整页列表（`AgentPage`）。
 /// 没有活着的会话时分组不消失：一行"在终端运行 pi 开始"，下面照常是已结束的。没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
 private struct PiSection: View {
     let recorded: [PiSessionState]
@@ -208,7 +207,6 @@ private struct PiSection: View {
     let total: Int
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.openSessionSearch) private var openSessionSearch
     @State private var startingSession = false
 
     nonisolated static let pastLimit = 5
@@ -233,11 +231,11 @@ private struct PiSection: View {
                         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         .selectionDisabled()
                 }
-                // 在线与已结束同一个列表、按会话 id 区分：会话结束时详情不被关掉（详情挂在列表上，见 SessionDetailHost）
+                // 在线与已结束同一个列表、按会话 id 区分：会话结束时那一行不被重建
                 ForEach(rows, id: \.sessionID) { session in
                     let bridge = live.first { $0.sessionID == session.sessionID }
                     PiSessionRow(session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID])
-                        .sessionDetailRow(session.sessionID)
+                        .sessionLink(session.sessionID)
                         .help(bridge?.state.errorMessage ?? "")
                         .contextMenu {
                             if let bridge, !bridge.hosted {
@@ -245,12 +243,11 @@ private struct PiSection: View {
                             }
                         }
                 }
-                if total > rows.count {
-                    Button { openSessionSearch?() } label: {
-                        Label("全部 \(total) 个", systemImage: "rectangle.stack").font(.caption).foregroundStyle(.secondary)
+                if total > 0 {
+                    PageRow(page: .agent, count: total, select: { workspace.show($0) }) {
+                        Label("全部会话", systemImage: "rectangle.stack")
                     }
-                    .buttonStyle(PressStyle(scale: 0.98))
-                    .help("在 ⌘K 里按项目查看、搜索全部会话")
+                    .help("按项目查看、搜索全部会话")
                 }
             } header: {
                 HStack {

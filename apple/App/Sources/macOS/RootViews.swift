@@ -6,8 +6,8 @@ import SwiftUI
 /// 视图通过环境取得 `AppServices`（`@Environment(AppServices.self)`）与本窗口的 `Workspace`。
 @MainActor
 enum RootViews {
-    static func mainWindow(_ services: AppServices) -> some View {
-        MainRoot(workspace: Workspace(services: services)).environment(services)
+    static func mainWindow(_ services: AppServices, workspace: Workspace) -> some View {
+        MainRoot(workspace: workspace).environment(services)
     }
 
     /// 设置窗口（⌘, 与菜单"设置…"）的内容。
@@ -25,12 +25,13 @@ enum RootViews {
 
     /// 面板随 App 常驻：项目目录从创建起就订阅，第一次打开时"记入"已是真实项目。
     /// 没有视图生命周期可挂 `.task(id:)`，按"重试"（`catalogAttempt` 加一）后在这里重新订阅。
-    static func menuBarPad(_ services: AppServices) -> some View {
+    /// `openSession`：在主窗口里打开一个会话的整页（面板自己不弹详情）。
+    static func menuBarPad(_ services: AppServices, openSession: @escaping (String) -> Void) -> some View {
         let workspace = Workspace(services: services)
         Task {
             for await _ in Observations({ workspace.catalogAttempt }) { await workspace.observeCatalog() }
         }
-        return MenuBarPad()
+        return MenuBarPad(openSession: openSession)
             .environment(workspace)
             .modifier(PaletteProvider())
             .environment(services)

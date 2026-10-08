@@ -16,49 +16,6 @@ extension PiAgentState {
     }
 }
 
-/// Mac 上一个 Pi 会话的行（侧栏、菜单栏面板、项目页的 Pi 栏），三层与 iOS 的 Agent 页一致：状态标；名字与时长（`PiElapsed`）；
-/// 在哪 · 状态词（带色）；一句进度或结果（`PiProgress`，没有不占行）。已结束的整行更淡。
-struct PiSessionRow: View {
-    let session: PiSessionState
-    let project: Project?
-    /// 发给它的最近一条投送请求（显示状态见 `PiDelivery`）。
-    let delivery: DeliveryRequest?
-    var nameFont: Font = .body
-    var lineFont: Font = .caption
-    var dotSize: CGFloat = 6
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let shown = services.settings.shown(session, delivery: delivery)
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            PiStateDot(shown: shown, size: dotSize)
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(session.title).font(nameFont).fontWeight(shown.unread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
-                    Spacer(minLength: 4)
-                    PiElapsed(session: session, font: lineFont)
-                }
-                HStack(spacing: 3) {
-                    if let place = PiPlace.name(of: session, project: project) {
-                        Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
-                    }
-                    Text(shown.label).fontWeight(.medium).foregroundStyle(shown.tint(palette))
-                        .contentTransition(.opacity)
-                        .animation(Motion.quick, value: shown)
-                    if session.hosted { Text("· 后台").foregroundStyle(palette.ink3) }
-                }
-                .font(lineFont)
-                if let progress = PiProgress.line(of: session) {
-                    Text(progress).font(lineFont).foregroundStyle(palette.ink2).lineLimit(1)
-                }
-            }
-        }
-        .opacity(session.state == .known(.ended) ? 0.6 : 1)
-        .accessibilityElement(children: .combine)
-    }
-}
-
 /// 没装 Pi 或版本太低时的说明（侧栏 Pi 分组的引导行点开、设置的 Pi 一节）：Pi 是什么、一行可复制的命令（没装是安装命令，
 /// 版本太低是 Pi 自带的升级命令）、官网。
 struct PiSetupGuide: View {

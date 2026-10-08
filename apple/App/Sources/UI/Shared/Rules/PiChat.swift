@@ -9,7 +9,7 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     let meta: String?
 }
 
-/// 会话页对话的规则（iOS 会话页、Mac 会话详情共用）。
+/// 会话页对话的规则（iOS 会话页、Mac 会话页共用）。
 nonisolated enum PiChat {
     /// 对话按先后（消息已按 seq 升序）：你的话与 Pi 的回答各成一条，回答带这一轮的经过。认不出说话人的不显示。
     static func entries(_ messages: [PiChatMessage]) -> [PiChatEntry] {

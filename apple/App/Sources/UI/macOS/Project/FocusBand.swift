@@ -39,7 +39,6 @@ struct FocusBand: View {
         }
         .paper(radius: 18)
         // 任务上的会话状态点开是它的详情（与侧栏、⌘K、任务面板同一个详情弹出层）
-        .modifier(SessionDetailHost(arrowEdge: .bottom))
     }
 
     @ViewBuilder private func introColumn(_ intro: String) -> some View {
@@ -96,7 +95,7 @@ private struct PiColumn: View {
             PiSessionRow(
                 session: .live(session, hostID: workspace.services.hostID, projectID: project, recap: workspace.sessionRecaps[session.sessionID]),
                 project: workspace.catalog?.project(project), delivery: workspace.sessionDeliveries[session.sessionID],
-                nameFont: .system(size: 13, weight: .semibold), lineFont: .system(size: 12), dotSize: 5)
+                style: .init(name: .system(size: 13, weight: .semibold), line: .system(size: 12), dot: 5, spacing: 1))
         }
     }
 }

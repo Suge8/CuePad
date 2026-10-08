@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中、待办、最近完成（折起），跨项目，
 /// 子任务缩进跟在上级下（`TaskOutline`：按住拖动排序、拖到一条上成为它的子任务、横向拖改层级），顶层写所在项目，
-/// 交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），点文字弹出任务浮窗（`TaskPopover`），右键是 `CardActions`（缩进与反缩进靠拖放，读屏另有动作）。
+/// 交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），点文字整页打开（与灵感同一个纸页），右键是 `CardActions`（缩进与反缩进靠拖放，读屏另有动作）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -33,7 +33,6 @@ struct TasksPanel: View {
         .fixedSize(horizontal: false, vertical: true)
         .glass(in: .rect(cornerRadius: 26))
         // 点任务上的会话状态打开它的详情：与侧栏、⌘K 同一个详情弹出层
-        .modifier(SessionDetailHost(arrowEdge: .leading))
         .observing(services.store, TaskBoard.tables, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
         }
@@ -98,8 +97,8 @@ struct TasksPanel: View {
     }
 }
 
-/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办；还有没完成的子任务时先问，确认后一起完成），点文字弹出任务浮窗；
-/// 第二行写所在项目（面板里跨项目时）与交给 Pi 的会话此刻的状态，点状态打开那个会话的详情（外层要有 `SessionDetailHost`）。右键是 `CardActions`。
+/// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办；还有没完成的子任务时先问，确认后一起完成），点文字整页打开；
+/// 第二行写所在项目（面板里跨项目时）与交给 Pi 的会话此刻的状态，点状态在内容区打开那个会话的整页。点任务文字整页打开它。右键是 `CardActions`。
 struct TaskRow: View {
     let task: Card
     /// 跨项目列着时写上所在项目；项目页里不写。
@@ -116,8 +115,6 @@ struct TaskRow: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @Environment(\.sessionDetail) private var sessionDetail
-    @State private var opened = false
 
     private var done: Bool { task.status == .done }
 
@@ -143,10 +140,6 @@ struct TaskRow: View {
         .padding(.vertical, compact ? 1 : 3)
         .frame(minHeight: compact ? 22 : 28)
         .contentShape(.rect)
-        .popover(isPresented: $opened, arrowEdge: .trailing) { TaskPopover(taskID: task.id) }
-        #if DEBUG
-        .task(id: DebugScene.popoverTask) { if DebugScene.popoverTask == task.id { opened = true } }
-        #endif
         .contextMenu { CardActions(card: task) }
         // 读屏：整行一个元素"任务内容，项目，Pi 在做什么"，值是状态，默认动作切换完成（文案见 TaskSpeech）
         .accessibilityElement(children: .ignore)
@@ -155,7 +148,7 @@ struct TaskRow: View {
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
         .accessibilityAction(named: "打开", open)
-        .accessibilityAction(named: "看 Agent 的近况") { if let session { sessionDetail?.open(session.sessionID) } }
+        .accessibilityAction(named: "看 Agent 的近况") { if let session { workspace.openSession(session.sessionID) } }
         .accessibilityActions {
             if let indent = structure?.indent { Button("缩进", action: indent) }
             if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
@@ -185,14 +178,18 @@ struct TaskRow: View {
                     Text(shown.presence).foregroundStyle(shown.tint(palette))
                     PiElapsed(session: session, font: .system(size: 11))
                 }
-                .sessionDetailRow(session.sessionID)
+                .sessionLink(session.sessionID)
                 .help("交给了 Agent 会话「\(session.title)」，点开看近况")
             }
         }
         .font(.system(size: 11))
     }
 
-    private func open() { opened = true }
+    /// 整页打开这条任务（与灵感同一个纸页）：收起任务面板。
+    private func open() {
+        workspace.overlay = nil
+        workspace.openCard = task.id
+    }
 
     private func toggle() {
         if !done, TaskCopy.hasOpen(subtasks) { confirmsSubtasks = true } else { commitToggle() }

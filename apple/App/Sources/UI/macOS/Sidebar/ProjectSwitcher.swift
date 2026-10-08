@@ -66,6 +66,9 @@ struct ProjectSwitcher: View {
         case .trash:
             Image(systemName: "trash").accessibilityHidden(true)
             Text("回收站")
+        case .agent:
+            Image(systemName: "sparkles").accessibilityHidden(true)
+            Text("Agent")
         }
     }
 }

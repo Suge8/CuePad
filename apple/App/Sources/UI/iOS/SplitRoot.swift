@@ -76,6 +76,7 @@ struct SplitRoot: View {
         case .inbox: .shelf
         case .archive: .archive
         case .trash: .trash
+        case .agent: .agent
         }
     }
 }

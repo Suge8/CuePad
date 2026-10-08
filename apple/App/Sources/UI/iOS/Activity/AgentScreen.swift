@@ -347,94 +347,24 @@ private struct SectionTitle: View {
     }
 }
 
-/// Agent 页读到的会话："现在"是全部在线的（不多，不分页），按要你注意的先后；"历史"是已结束的前 `loaded` 条，
-/// 从新到旧（分段见 `PiHistorySection`）。两部分用同一个搜索词与项目筛选。
-nonisolated struct PiSessionList: Sendable, Equatable {
-    static let pageSize = 40
-
-    /// 搜索词与项目筛选：两部分共用。
-    struct Filter: Hashable, Sendable {
-        var text: String
-        var project: UUID?
-    }
-
-    struct Key: Equatable {
-        var filter: Filter
-        var limit: Int
-    }
-
-    var filter: Filter
-    var now: [PiSessionListItem]
-    var ended: [PiSessionListItem]
-    var total: Int
-    /// 能按它筛的项目：在 Mac 上绑了代码目录的（会话按工作目录归入项目，没绑的不会有会话）。
-    var projects: Set<UUID>
-    /// 在线会话此刻要显示的结束请求（按记录 id，`DeliveryRequest.shownEnd`）：正在结束、没能结束。会话页读同一条规则。
-    var ends: [UUID: DeliveryRequest] = [:]
-
-    var loaded: Int { ended.count }
-    var isEmpty: Bool { now.isEmpty && total == 0 }
-
-    static func read(text: String, project: UUID? = nil, historyLimit: Int, from store: isolated CueStore) throws -> PiSessionList {
-        let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, project: project, limit: .max)).items
-        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, project: project, limit: historyLimit))
-        let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
-        let order = Dictionary(uniqueKeysWithValues: PiSessionState.inListOrder(live.map(\.state), deliveries: deliveries).enumerated().map { ($1.id, $0) })
-        return PiSessionList(
-            filter: Filter(text: text, project: project), now: live.sorted { order[$0.id, default: 0] < order[$1.id, default: 0] }, ended: ended.items, total: ended.total,
-            projects: Set(try store.directoryBindings().map(\.projectID)),
-            ends: try live.reduce(into: [:]) { ends, item in
-                ends[item.id] = DeliveryRequest.shownEnd(in: try store.deliveryRequests(toSession: item.state.sessionID))
-            })
-    }
-}
-
-/// 一个会话三层：左边状态标；名字与时长；在哪（项目或文件夹；按项目筛着时不写） · 状态词（带色）（Mac 在后台托管的再写"后台"）；
-/// 一句进度或结果（没有不占行）。已结束的整行更淡。
+/// 一个会话（`PiSessionRow`）点开它的会话页；已结束的整行更淡。
 private struct SessionRow: View {
     let item: PiSessionListItem
     let filtered: Bool
-    /// 此刻要显示的结束请求（`DeliveryRequest.shownEnd`）：在路上写"正在结束…"，没能结束写原因。
+    /// 此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
     var end: DeliveryRequest?
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
 
     var body: some View {
         let session = item.state
-        let shown = services.settings.shown(item)
-        let place = filtered ? nil : PiPlace.name(of: session, project: item.project)
         Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                PiStateDot(shown: shown, size: 8)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(session.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
-                        Spacer(minLength: 8)
-                        PiElapsed(session: session)
-                    }
-                    HStack(spacing: 4) {
-                        if let place { Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1) }
-                        Text(shown.label).fontWeight(shown.unread ? .semibold : .medium).foregroundStyle(shown.tint(palette))
-                        if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
-                    }
-                    .font(.subheadline)
-                    if end?.isOpen == true {
-                        Text("正在结束…").font(.subheadline).foregroundStyle(palette.ink3)
-                    } else if let reason = end?.failure {
-                        Text(reason).font(.subheadline).foregroundStyle(palette.failure).lineLimit(2)
-                    } else if let progress = PiProgress.line(of: session) {
-                        Text(progress).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
-                    }
-                }
-            }
-            .padding(.horizontal, 16).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .opacity(session.state == .known(.ended) ? 0.6 : 1)
-            .contentShape(.rect)
+            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, style: .page)
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
         }
         .buttonStyle(RowPressStyle())
-        .accessibilityElement(children: .combine)
         .accessibilityHint(session.state == .known(.ended) ? "看最后一轮、回复" : "看近况、回复")
     }
 }

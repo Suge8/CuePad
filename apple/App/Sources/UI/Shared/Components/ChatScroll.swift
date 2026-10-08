@@ -82,7 +82,7 @@ private struct ChatRow: ViewModifier {
     func body(content: Content) -> some View { content.rotationEffect(.degrees(inverted ? 180 : 0)) }
 }
 
-/// 聊天式的滚动区（iOS 会话页、Mac 会话详情共用）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，
+/// 聊天式的滚动区（iOS 会话页、Mac 会话页共用）：打开停在最新，贴着最新时跟着新内容与底下输入框的长高、键盘的弹出，
 /// 用户滚走后这些都不再挪动正在读的内容；离最新处超过一屏时可见区右下角（回复框右上方）浮出圆形"回到最新"，
 /// 离开后来过新内容时带一个点，点它回到最新（`ChatFollow`）。
 /// `followKey` 变了就算有新内容。减弱动态效果下滚动不做动画。

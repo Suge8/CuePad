@@ -43,7 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         failureWindow?.close()
         failureWindow = nil
-        let window = makeMainWindow(services)
+        let workspace = Workspace(services: services)
+        let window = makeMainWindow(services, workspace: workspace)
         let shell = WindowShell(window: window)
         let windowDelegate = MainWindowDelegate(shell: shell)
         window.delegate = windowDelegate
@@ -52,7 +53,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         self.windowDelegate = windowDelegate
 
         let panel = MenuBarPanel()
-        panel.setContent(RootViews.menuBarPad(services))
+        // 菜单栏面板点会话：收起面板、把主窗口叫到前面，在它的内容区打开那个会话的整页（与侧栏同一处）
+        panel.setContent(RootViews.menuBarPad(services) { [weak panel] id in
+            panel?.hide()
+            shell.show()
+            workspace.openSession(id)
+        })
         menuBarPanel = panel
         statusItem = StatusItemController(
             togglePanel: { panel.toggle(below: $0) },
@@ -155,8 +161,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSApp.terminate(nil)
     }
 
-    private func makeMainWindow(_ services: AppServices) -> NSWindow {
-        let window = MainWindowFactory.make(content: RootViews.mainWindow(services))
+    private func makeMainWindow(_ services: AppServices, workspace: Workspace) -> NSWindow {
+        let window = MainWindowFactory.make(content: RootViews.mainWindow(services, workspace: workspace))
         let keeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
         if !keeper.restore() { window.center() }
         mainFrameKeeper = keeper

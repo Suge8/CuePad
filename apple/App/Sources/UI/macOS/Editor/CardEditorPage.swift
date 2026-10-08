@@ -439,6 +439,21 @@ private struct VariablesForm: View {
     }
 }
 
+/// Mac 纸页上任务正文上方的一块：完成圈与进展（`TaskProgressList`）。
+struct TaskPageHeader: View {
+    let task: Card
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @State private var detail: TaskDetail?
 
-
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            TaskRingButton(task: task, marks: detail?.marks)
+            TaskProgressList(task: task, detail: detail)
+        }
+        .observing(services.store, TaskDetail.tables, id: task.id, into: $detail, onError: workspace.fail) { [id = task.id] in
+            try TaskDetail.read(id, from: $0)
+        }
+    }
+}
 #endif

@@ -38,10 +38,6 @@ struct SearchPalette: View {
                 focused = true
                 #if DEBUG
                 if query.text.isEmpty { query.text = DebugScene.searchText }
-                if let session = DebugScene.sessionToOpen {
-                    scope = .sessions
-                    sessionSelection = session
-                }
                 #endif
             }
             .onChange(of: query.text) {
@@ -98,7 +94,12 @@ struct SearchPalette: View {
             TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text)
                 .textFieldStyle(.plain).font(.system(size: 18))
                 .focused($focused)
-                .onSubmit { if scope == .cards { selected.map(open) } }
+                .onSubmit {
+                    switch scope {
+                    case .cards: selected.map(open)
+                    case .sessions: sessionSelection.map(openSession)
+                    }
+                }
                 .onKeyPress(.downArrow) { move(1); return .handled }
                 .onKeyPress(.upArrow) { move(-1); return .handled }
             Picker("范围", selection: $scope) {
@@ -123,16 +124,18 @@ struct SearchPalette: View {
         .clipped()
     }
 
+    /// 会话范围：只有列表，方向键选、↩ 或点一下在内容区打开那个会话的整页（与侧栏、Agent 页同一处）。
     @ViewBuilder private var sessionsContent: some View {
         Divider()
-        ListWithPreview(listWidth: Self.listWidth, minimumWidth: Self.sideBySide) {
-            SessionResultList(
-                groups: sessionGroups, deliveries: sessions?.deliveries ?? [:],
-                more: (sessions?.endedTotal ?? 0) - (sessions?.ended.count ?? 0), isFiltered: !query.text.isEmpty,
-                selection: $sessionSelection) { sessionPages += 1 }
-            sessionPreview
-        }
-        .clipped()
+        SessionResultList(
+            groups: sessionGroups, deliveries: sessions?.deliveries ?? [:],
+            more: (sessions?.endedTotal ?? 0) - (sessions?.ended.count ?? 0), isFiltered: !query.text.isEmpty,
+            selection: $sessionSelection, open: openSession) { sessionPages += 1 }
+    }
+
+    private func openSession(_ sessionID: String) {
+        workspace.overlay = nil
+        workspace.openSession(sessionID)
     }
 
     private var selected: Card? { data?.cards.first { $0.id == selection } }
@@ -140,16 +143,6 @@ struct SearchPalette: View {
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）。
     private var sessionGroups: [SessionGroup] {
         SessionGroup.grouped(live: (sessions?.live ?? []).map(workspace.withLiveState), ended: sessions?.ended ?? [], now: .now)
-    }
-
-    @ViewBuilder private var sessionPreview: some View {
-        if let sessionSelection {
-            PiSessionDetail(sessionID: sessionSelection, embedded: true)
-                .background(palette.desk, in: .rect(cornerRadius: 16))
-                .padding(10)
-        } else {
-            Spacer().frame(maxWidth: .infinity)
-        }
     }
 
     private var results: some View {

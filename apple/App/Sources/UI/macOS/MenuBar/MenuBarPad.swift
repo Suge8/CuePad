@@ -2,9 +2,10 @@
 import CueStore
 import SwiftUI
 
-/// 菜单栏面板：Pi 状态（点开会话是它的详情，与侧栏同一份）+ 随手记（与主窗口底部同一个 `CaptureComposer`，一直展开）。
+/// 菜单栏面板：Pi 状态（点会话在主窗口里打开它的整页：面板只是一瞥，读与回复在主窗口，与手机一致）+ 随手记（与主窗口底部同一个 `CaptureComposer`，一直展开）。
 /// 资料库读到之前没有稿纸；读不出来时说明原因并给"重试"。
 struct MenuBarPad: View {
+    var openSession: (String) -> Void = { _ in }
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -23,8 +24,11 @@ struct MenuBarPad: View {
                         PiSessionRow(
                             session: session, project: workspace.catalog?.project(session.projectID),
                             delivery: workspace.sessionDeliveries[session.sessionID],
-                            nameFont: .system(size: 13, weight: .medium), lineFont: .system(size: 11.5))
-                            .sessionDetailRow(session.sessionID)
+                            style: .init(name: .system(size: 13, weight: .medium), line: .system(size: 11.5), dot: 6, spacing: 1))
+                            .contentShape(.rect)
+                            .onTapGesture { openSession(session.sessionID) }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityAction { openSession(session.sessionID) }
                     }
                 }
             }
@@ -43,7 +47,6 @@ struct MenuBarPad: View {
         .padding(14)
         .frame(width: 360)
         .glass(in: .rect(cornerRadius: 22))
-        .modifier(SessionDetailHost(arrowEdge: .leading))
         .modifier(SessionProjectsTracker(workspace: workspace))
     }
 

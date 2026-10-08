@@ -7,7 +7,7 @@ struct CardActions: View {
     let card: Card
     /// "⋯"里的那一份（`CardMenu.more`）；false 是长按菜单。
     var more = false
-    /// "发出记录"在哪打开（任务浮窗推入一页，Mac 浮窗就地展开）。
+    /// "发出记录"在哪打开（任务浮窗推入一页）。
     var showSends: (() -> Void)?
     @Environment(Workspace.self) private var workspace
     #if os(iOS)

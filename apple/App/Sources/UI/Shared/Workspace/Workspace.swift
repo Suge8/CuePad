@@ -16,6 +16,14 @@ final class Workspace {
         case inbox
         case archive
         case trash
+        /// Agent：全部会话的整页列表（Mac 侧栏的"Agent"）。
+        case agent
+    }
+
+    /// 内容区此刻是哪一页：根页，及（Mac）推在它上面的会话页。返回、前进在这些位置之间走。
+    struct Location: Hashable {
+        var page: Page
+        var session: String?
     }
 
     enum Overlay: Equatable {
@@ -74,6 +82,13 @@ final class Workspace {
     private(set) var catalogAttempt = 0
     var sidebar: NavigationSplitViewVisibility = .all
     var nonProjectPage: Page?
+    /// 推在根页上的会话页（Pi 的会话 id；Mac）。根页一直挂着，返回时回到原来的滚动位置。
+    private(set) var openedSession: String?
+    /// 走过的位置（返回往这里退）与退回去的位置（前进往这里走）；新的跳转清掉前进。
+    private var backStack: [Location] = []
+    private var forwardStack: [Location] = []
+    /// 记多少步：够来回翻，不无限长。
+    private static let historyLimit = 50
     /// 打开的卡（编辑纸页）。设成某张卡时纸页立即挂上；清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
     var openCard: UUID? {
         didSet { if let openCard { present(openCard) } }
@@ -226,14 +241,57 @@ final class Workspace {
     }
 
     func show(_ page: Page) {
+        go(to: Location(page: page, session: nil))
+    }
+
+    /// 在当前根页上推入一个会话页（Mac）。
+    func openSession(_ sessionID: String) {
+        go(to: Location(page: page, session: sessionID))
+    }
+
+    var location: Location { Location(page: page, session: openedSession) }
+    var canGoBack: Bool { openCard != nil || !backStack.isEmpty }
+    var canGoForward: Bool { !forwardStack.isEmpty }
+
+    /// 返回：开着灵感纸页时先收起纸页，否则回到上一个位置。
+    func goBack() {
+        if openCard != nil {
+            openCard = nil
+            return
+        }
+        guard let previous = backStack.popLast() else { return }
+        forwardStack.append(location)
+        apply(previous)
+    }
+
+    func goForward() {
+        guard let next = forwardStack.popLast() else { return }
+        backStack.append(location)
+        apply(next)
+    }
+
+    private func go(to target: Location) {
+        guard target != location else {
+            openCard = nil
+            dismissPresented()
+            return
+        }
+        backStack.append(location)
+        if backStack.count > Self.historyLimit { backStack.removeFirst() }
+        forwardStack.removeAll()
+        apply(target)
+    }
+
+    private func apply(_ target: Location) {
         openCard = nil
         dismissPresented()
-        switch page {
+        openedSession = target.session
+        switch target.page {
         case .project(let id):
             nonProjectPage = nil
             holder.currentProject = id
-        case .inbox, .archive, .trash:
-            nonProjectPage = page
+        case .inbox, .archive, .trash, .agent:
+            nonProjectPage = target.page
         }
     }
 

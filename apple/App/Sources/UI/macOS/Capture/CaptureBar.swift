@@ -177,7 +177,7 @@ private struct CaptureSurface: ViewModifier {
     }
 }
 
-/// 输入框里的圆形钮（随手记的记下、会话详情的发送，与手机同一种）：能按时朱砂实心，不能时淡。
+/// 输入框里的圆形钮（随手记的记下、会话页的发送，与手机同一种）：能按时朱砂实心，不能时淡。
 struct RoundSendGlyph: View {
     let enabled: Bool
     @Environment(\.palette) private var palette
