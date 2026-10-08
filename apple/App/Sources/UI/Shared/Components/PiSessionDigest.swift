@@ -185,7 +185,7 @@ struct QuestionCard: View {
     }
 }
 
-/// 问题卡上的回答按钮：淡底或朱砂实底（主选项），触摸目标 44pt；按下缩一点、松开回弹（\`Motion.pressDown/pressUp\`）。
+/// 问题卡上的回答按钮：淡底或朱砂实底（主选项），触摸目标 44pt；按下缩一点、松开回弹（`Motion.pressDown/pressUp`）。
 private struct AnswerButtonStyle: ButtonStyle {
     let prominent: Bool
     @Environment(\.palette) private var palette
