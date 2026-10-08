@@ -221,7 +221,7 @@ private struct AnswerButtonStyle: ButtonStyle {
     }
 }
 
-/// 请求的送达情况：送达中（等 Mac 接手与正在发送都算）、已送达（往返多久）、没能送达。
+/// 请求的送达情况，说法同会话行（`PiShown` 的话在路上）：发送中（等 Mac 接手）、送达中、正在唤醒、已送达（往返多久）、没能送达。
 struct DeliveryStatusLabel: View {
     let request: DeliveryRequest
     /// 目标会话已结束：在途时写"正在唤醒…"。
@@ -232,7 +232,7 @@ struct DeliveryStatusLabel: View {
         Group {
             switch request.status {
             case .known(.pending), .known(.executing):
-                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(waking ? "正在唤醒…" : "送达中") }.foregroundStyle(palette.ink2)
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(waking ? "正在唤醒…" : request.status == .known(.pending) ? "发送中" : "送达中") }.foregroundStyle(palette.ink2)
             case .known(.succeeded):
                 Label(request.roundTrip.map { "已送达 · \(PiClock.duration(Double($0.components.seconds)))" } ?? "已送达", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(palette.ink2)
