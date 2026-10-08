@@ -200,7 +200,7 @@ struct QuestionCard: View {
     }
 }
 
-/// 问题卡上的回答按钮：淡底或朱砂实底（主选项），触摸目标 44pt；按下缩一点、松开回弹（`Motion.pressDown/pressUp`）。
+/// 问题卡上的回答按钮：淡底或靛青实底（主选项），触摸目标 44pt；按下缩一点、松开回弹（`Motion.pressDown/pressUp`）。
 private struct AnswerButtonStyle: ButtonStyle {
     let prominent: Bool
     @Environment(\.palette) private var palette
@@ -213,7 +213,7 @@ private struct AnswerButtonStyle: ButtonStyle {
             .foregroundStyle(prominent ? palette.onSignature : palette.ink)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            // 纸面卡里的中性按钮：淡底不描边；主选项（确认的"是"）朱砂实心
+            // 纸面卡里的中性按钮：淡底不描边；主选项（确认的"是"）靛青实心
             .background(prominent ? palette.signature : palette.fill, in: shape)
             .contentShape(shape)
             .scaleEffect(configuration.isPressed ? Press.control : 1)

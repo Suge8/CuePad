@@ -47,6 +47,12 @@ struct MainWindow: View {
             EditorLayer().zIndex(1)
         }
         .overlay(alignment: .bottom) { CaptureSlot() }
+        .overlay {
+            // 任务面板开着时页面轻轻压暗：玻璃底下透出来的卡片不和面板里的字抢；不拦点按，页面照常可用
+            if workspace.isLibraryReady, workspace.overlay == .tasks {
+                Color.black.opacity(palette.dark ? 0.22 : 0.06).ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
+            }
+        }
         .overlay(alignment: .topTrailing) {
             if workspace.isLibraryReady, workspace.overlay == .tasks {
                 TasksPanel()

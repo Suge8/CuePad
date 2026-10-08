@@ -26,7 +26,7 @@ extension View {
     /// 列表与表单铺在桌面色上，与书架、项目页同一底色。
     func deskBackground() -> some View { modifier(DeskBackground()) }
 
-    /// 主按钮：朱砂色的实心玻璃（签名色只在这种焦点上），字用朱砂上的字色；按下由系统玻璃自己回弹。
+    /// 主按钮：靛青色的实心玻璃（签名色只在这种焦点上），字用靛青上的字色；按下由系统玻璃自己回弹。
     func prominentButton() -> some View { modifier(ProminentButton()) }
 
     /// 独占底部的页（卡片纸页、Pi 会话页）：在屏幕上时 iPhone 收起标签栏（见 `Navigation.bottomPages`）。

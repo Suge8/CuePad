@@ -22,8 +22,6 @@ struct InboxScreen: View {
                 } else {
                     Section {
                         ForEach(cards) { card in row(card) }
-                    } footer: {
-                        Text("右滑交给 Agent，左滑设为任务或移到项目").foregroundStyle(palette.ink3)
                     }
                 }
             }

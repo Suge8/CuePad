@@ -114,7 +114,7 @@ private struct TrashRow: View {
             // 操作在悬停时出现（右键菜单里也有），平时只看得到删除时间
             ZStack(alignment: .trailing) {
                 if let deletedAt {
-                    Text("\(DateLabel.short(deletedAt)) 删除").font(.system(size: 12)).foregroundStyle(palette.ink3)
+                    Text("删于 \(DateLabel.short(deletedAt))").font(.system(size: 12)).foregroundStyle(palette.ink3)
                         .opacity(hovering ? 0 : 1)
                 }
                 HStack(spacing: 6) {
