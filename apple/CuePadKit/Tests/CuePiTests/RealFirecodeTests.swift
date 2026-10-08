@@ -27,6 +27,10 @@ struct RealFirecodeTests {
         }
         let start = try #require(bridge.sessions.first?.busySince)
 
+        // 停止只停指挥官自己这一轮（Esc 的同一能力）：指挥官已歇下，停止成功但不动子代理，会话仍在等子代理
+        try await bridge.abort(try #require(bridge.sessions.first?.id))
+        #expect(bridge.sessions.first?.state == .delegating)
+
         // 子代理停下后 FireCode 把事件信封作为用户消息投回：指挥官对它的回应照常是最终回答，提问不变
         try await eventually("指挥官回应了子代理事件", timeout: .seconds(30)) {
             recap(of: bridge.sessions.first)?.lastReply?.contains("firecode_master_event") == true

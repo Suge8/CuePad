@@ -20,6 +20,7 @@ protocol SendChannels {
     func paste(_ text: String, into id: CuePi.PiSession.ID) async throws
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws
     func configure(model: PiModelRef?, thinking: String?, in id: CuePi.PiSession.ID) async throws
+    func abort(in id: CuePi.PiSession.ID) async throws
     /// 权限与目标检查，不改任何状态；失败时调用方不必动窗口。
     func preflight(_ selector: TargetSelector) async throws
     func dispatch(_ payload: Payload, to selector: TargetSelector, submit: Bool) async throws -> AppInfo
@@ -68,6 +69,10 @@ struct LiveSendChannels: SendChannels {
 
     func configure(model: PiModelRef?, thinking: String?, in id: CuePi.PiSession.ID) async throws {
         try await pi.configure(model: model, thinking: thinking, in: id)
+    }
+
+    func abort(in id: CuePi.PiSession.ID) async throws {
+        try await pi.abort(id)
     }
 
     func preflight(_ selector: TargetSelector) async throws {

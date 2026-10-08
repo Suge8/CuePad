@@ -101,6 +101,19 @@ struct BridgeClientTests {
         await #expect(throws: PiBridgeError.rejected("failed: boom")) { try await bridge.end(ext.id) }
     }
 
+    @Test func abortSendsTheCommandAndARefusalSurfaces() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        try await eventually("发现") { session(ext.id) != nil }
+
+        try await bridge.abort(ext.id)
+        #expect(ext.commands.last?.json["t"] as? String == "abort")
+
+        ext.onCommand = { _, _ in ["ok": false, "error": "failed: boom"] }
+        await #expect(throws: PiBridgeError.rejected("failed: boom")) { try await bridge.abort(ext.id) }
+    }
+
     @Test func hellosSnapshotReflectsStateAtConnectTime() async throws {
         let ext = FakeExtension(directory: dir)
         try ext.start()

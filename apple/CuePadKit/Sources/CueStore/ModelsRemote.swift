@@ -538,6 +538,9 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case config
   /// 结束会话（Pi 进程正常收尾退出，会话记录与会话文件都留着）；正文固定为 `end`，不写发送记录
   case end
+  /// 停止会话正在跑的这一轮（相当于在 Pi 里按 Esc：只停指挥官自己这一轮，子代理不动），会话回到等你下一句；
+  /// 正文固定为 `stop`，不写发送记录
+  case stop
 
   /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。
   public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .paste, .answer]

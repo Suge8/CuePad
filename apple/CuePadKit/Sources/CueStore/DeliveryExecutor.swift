@@ -34,10 +34,20 @@ extension CueStore {
   /// 请 `host` 那台 Mac 结束 `target` 会话：与发送共用投送请求与执行器，方式是 `end`。
   /// 已有一条还在路上的结束请求时返回它，不再写第二条（连点、两个界面同时点都只发一次）。
   public func requestEnd(of target: SendTarget, on host: String) throws -> DeliveryRequest {
-    if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(.end) && $0.isOpen }) {
+    try requestControl(.end, of: target, on: host)
+  }
+
+  /// 请 `host` 那台 Mac 停止 `target` 会话正在跑的这一轮：方式是 `stop`；同样复用还在路上的那一条。
+  public func requestStop(of target: SendTarget, on host: String) throws -> DeliveryRequest {
+    try requestControl(.stop, of: target, on: host)
+  }
+
+  /// 正文就是方式名的控制类请求（结束、停止）：同一会话同一种方式在路上只有一条。
+  private func requestControl(_ mode: DeliveryMode, of target: SendTarget, on host: String) throws -> DeliveryRequest {
+    if let ref = target.ref, let open = try deliveryRequests(toSession: ref).last(where: { $0.mode == .known(mode) && $0.isOpen }) {
       return open
     }
-    return try requestDelivery("end", to: target, on: host, mode: .end)
+    return try requestDelivery(mode.rawValue, to: target, on: host, mode: mode)
   }
 
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或会话名）。

@@ -3,7 +3,7 @@
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
 //   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，steer/followUp）/ paste（放进输入框）/ answer（回答等你确认的弹窗）/ config（换模型、思考强度）/ end（结束会话）
+//   CuePad → 扩展  send（文字+图片，steer/followUp）/ paste（放进输入框）/ answer（回答等你确认的弹窗）/ config（换模型、思考强度）/ end（结束会话）/ abort（停止这一轮）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
 import fs from "node:fs";
@@ -12,8 +12,8 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 14;
-const PROTOCOL_VERSION = 3;
+const EXTENSION_VERSION = 15;
+const PROTOCOL_VERSION = 4;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
@@ -303,6 +303,7 @@ export default function (pi: any) {
 			if (command?.t === "answer") return handleAnswer(command, ack, reject);
 			if (command?.t === "reload") return handleReload(ack);
 			if (command?.t === "end") return handleEnd(ack);
+			if (command?.t === "abort") return handleAbort(ack);
 			if (command?.t === "config") return void handleConfig(command, ack, reject).catch((error: any) => reject(`failed: ${error?.message ?? error}`));
 			if (command?.t === "paste") {
 				if (typeof command.text !== "string") return reject("bad_request");
@@ -371,6 +372,17 @@ export default function (pi: any) {
 		asking?.dismiss?.();
 		if (!ctx.isIdle()) ctx.abort();
 		ctx.shutdown();
+	}
+
+	/**
+	 * 停止这一轮：Pi 的 `ctx.abort()`，与用户在 Pi 里按 Esc 同一能力，只中止指挥官自己正在跑的回合，会话随后以"被中止"歇下、等下一句。
+	 * 等你回答的弹窗先取消（否则这一轮会一直卡在等你）。已经空闲就什么都不做；FireCode 的子代理是独立会话，不受影响，
+	 * 它们落定后照常把结果投回来开始新的一轮。
+	 */
+	function handleAbort(ack: (f: object) => void) {
+		asking?.dismiss?.();
+		if (!ctx.isIdle()) ctx.abort();
+		ack({ ok: true });
 	}
 
 	/** 换模型、思考强度：先换模型（需要该提供方已配好密钥）再设强度，强度由 Pi 按新模型支持的范围夹取。 */
