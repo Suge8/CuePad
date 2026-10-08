@@ -84,9 +84,18 @@ final class Workspace {
     var nonProjectPage: Page?
     /// 推在根页上的会话页（Pi 的会话 id；Mac）。根页一直挂着，返回时回到原来的滚动位置。
     private(set) var openedSession: String?
-    /// 走过的位置（返回往这里退）与退回去的位置（前进往这里走）；新的跳转清掉前进。
-    private var backStack: [Location] = []
-    private var forwardStack: [Location] = []
+    /// 走过的位置（返回往这里退）与退回去的位置（前进往这里走），各带离开那一页时的滚动位置；新的跳转清掉前进。
+    private var backStack: [Visit] = []
+    private var forwardStack: [Visit] = []
+    /// 当前根页此刻滚到哪（页面滚动时报上来，`scrolled(to:)`）：离开时记进历史。只记一个数，不触发界面刷新。
+    @ObservationIgnored private var liveScroll: CGFloat?
+    /// 返回、前进到的那一页该滚回哪（页面出现后取走，`takeRestoredScroll`）。
+    @ObservationIgnored private var restoredScroll: CGFloat?
+
+    private struct Visit {
+        var location: Location
+        var scroll: CGFloat?
+    }
     /// 记多少步：够来回翻，不无限长。
     private static let historyLimit = 50
     /// 打开的卡（编辑纸页）。设成某张卡时纸页立即挂上；清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
@@ -253,21 +262,30 @@ final class Workspace {
     var canGoBack: Bool { openCard != nil || !backStack.isEmpty }
     var canGoForward: Bool { !forwardStack.isEmpty }
 
-    /// 返回：开着灵感纸页时先收起纸页，否则回到上一个位置。
+    /// 返回：开着灵感纸页时先收起纸页，否则回到上一个位置（及它离开时的滚动位置）。
     func goBack() {
         if openCard != nil {
             openCard = nil
             return
         }
         guard let previous = backStack.popLast() else { return }
-        forwardStack.append(location)
-        apply(previous)
+        forwardStack.append(Visit(location: location, scroll: liveScroll))
+        apply(previous.location, scroll: previous.scroll)
     }
 
     func goForward() {
         guard let next = forwardStack.popLast() else { return }
-        backStack.append(location)
-        apply(next)
+        backStack.append(Visit(location: location, scroll: liveScroll))
+        apply(next.location, scroll: next.scroll)
+    }
+
+    /// 根页报它此刻的滚动位置（`remembersScroll`）。
+    func scrolled(to y: CGFloat) { liveScroll = y }
+
+    /// 页面出现时取走"该滚回哪"：返回、前进到这一页时是它离开时的位置；新打开的页是 nil（从顶上开始）。
+    func takeRestoredScroll() -> CGFloat? {
+        defer { restoredScroll = nil }
+        return restoredScroll
     }
 
     private func go(to target: Location) {
@@ -276,15 +294,20 @@ final class Workspace {
             dismissPresented()
             return
         }
-        backStack.append(location)
+        backStack.append(Visit(location: location, scroll: liveScroll))
         if backStack.count > Self.historyLimit { backStack.removeFirst() }
         forwardStack.removeAll()
-        apply(target)
+        apply(target, scroll: nil)
     }
 
-    private func apply(_ target: Location) {
+    private func apply(_ target: Location, scroll: CGFloat?) {
         openCard = nil
         dismissPresented()
+        // 根页没换（只是推入、退出会话页）时它一直挂着，滚动位置本来就在
+        if target.page != page {
+            liveScroll = nil
+            restoredScroll = scroll
+        }
         openedSession = target.session
         switch target.page {
         case .project(let id):

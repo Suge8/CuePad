@@ -17,7 +17,7 @@ struct ReplyDraftTests {
         let navigation = Navigation(settings: settings(suite))
         var draft = navigation.replyDraft(for: session)
         draft.text = "改完再跑一遍"
-        draft.attachment = Navigation.Outbox(content: "目标卡", card: UUID())
+        draft.attachment = Outbox(content: "目标卡", card: UUID())
         navigation.setReplyDraft(draft, for: session)
 
         #expect(navigation.replyDraft(for: session).text == "改完再跑一遍")
@@ -35,7 +35,7 @@ struct ReplyDraftTests {
         draft.text = "补一句"
         navigation.setReplyDraft(draft, for: session)
 
-        navigation.openSession(session, draft: Navigation.Outbox(content: "接口约定", card: UUID()), store: TestApp().services.store)
+        navigation.openSession(session, draft: Outbox(content: "接口约定", card: UUID()), store: TestApp().services.store)
 
         #expect(navigation.replyDraft(for: session).text == "补一句")
         #expect(navigation.replyDraft(for: session).attachment?.content == "接口约定")

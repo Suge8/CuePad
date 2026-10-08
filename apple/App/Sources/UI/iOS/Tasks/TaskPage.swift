@@ -24,8 +24,7 @@ struct TaskPage<Editor: View>: View {
     @State private var detail: TaskDetail?
     @State private var typing = false
     @State private var showsSends = false
-    @State private var left: Set<UUID> = []
-    @State private var withResources = false
+    @State private var bundle = TaskBundleChoice()
 
     private static var inset: CGFloat { 20 }
     /// 进展一块最多占这么高，多了在块里滚。
@@ -43,8 +42,8 @@ struct TaskPage<Editor: View>: View {
             }
             if !typing {
                 VStack(alignment: .leading, spacing: 8) {
-                    BundlePicker(detail: detail, left: $left, withResources: $withResources)
-                    AgentHandButton { hand(BundlePicker.parts(detail, left: left, withResources: withResources)) }
+                    BundlePicker(detail: detail, choice: $bundle)
+                    AgentHandButton { hand(bundle.parts(detail)) }
                         .accessibilityHint(written ? "把这段话交给 Mac 上的 Agent 会话" : "还只有标题，也可以先交出去")
                 }
                 .padding(.horizontal, Self.inset).padding(.vertical, 10)

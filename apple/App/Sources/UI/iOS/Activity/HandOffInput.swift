@@ -7,7 +7,7 @@ import SwiftUI
 /// 灵感或任务的行上随即出现那个会话的状态点（发送中 → 工作中 → 有新回复；开新会话时先是"正在开会话"，开好后同样关联）。
 /// 没有在线会话时发送就是开新会话。工具排里是选中会话的模型与思考强度（与会话页回复框同一组件 `PiConfigControls`）。
 struct HandOffInput: View {
-    let outbox: Navigation.Outbox
+    let outbox: Outbox
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation

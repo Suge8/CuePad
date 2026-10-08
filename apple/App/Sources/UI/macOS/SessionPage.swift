@@ -37,9 +37,11 @@ extension SessionDigest {
 }
 
 /// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），与手机的会话页同一套：
-/// 顶上会话名，下面一行"所在 · 状态 · 计时"（`PiSessionSubtitle`），右边"⋯"（跳到终端、结束会话）；中间是对话
+/// 会话名与"所在 · 状态 · 计时"（`PiSessionSubtitle`）在窗口工具栏的标题位、紧跟返回与前进，"⋯"（跳到终端、结束会话）在工具栏右边——
+/// Mac 的窗口本来就有一条工具栏，手机那种浮在内容上的顶栏放在它下面就是两层页头；中间是对话
 /// （`PiConversation`，子代理在末尾收成一行汇总），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
-/// 底部是回复框，等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。推在根页上，返回回到原来那页。
+/// 底部是与手机同一个回复框（`PiReplyBar`），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
+/// 推在根页上，返回回到原来那页。
 struct SessionPage: View {
     let sessionID: String
     @Environment(Workspace.self) private var workspace
@@ -48,9 +50,13 @@ struct SessionPage: View {
     @State private var stored: SessionDigest?
     @State private var askedForTranscript = false
     @State private var confirmingEnd = false
+    /// 回复框的草稿：只活在这次打开的页里。
+    @State private var draft = ComposerDraft()
 
     /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
     private static let readingWidth: CGFloat = 760
+    /// 工具栏里标题一块最宽多少：名字长时截断，不把右边的按钮挤走。
+    private static let titleWidth: CGFloat = 420
 
     var body: some View {
         let live = services.pi.sessions.first { $0.sessionID == sessionID }
@@ -60,14 +66,13 @@ struct SessionPage: View {
         let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries)
         VStack(spacing: 0) {
             if let session = digest.session {
-                header(session, digest: digest, live: live, ending: shownEnd?.isOpen == true)
                 conversation(session, digest)
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest.deliveries)
                     if let reason = shownEnd?.failure, session.state != .known(.ended) {
                         Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)")
                     }
-                    DetailReply(session: session, live: live, config: digest.config)
+                    PiReplyBar(session: session, config: digest.config, draft: $draft, compact: false)
                 }
                 .padding(.horizontal, 24).padding(.bottom, 16)
                 .frame(maxWidth: Self.readingWidth)
@@ -83,7 +88,16 @@ struct SessionPage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // 对话滚到工具栏底下时淡掉，不和标题、按钮叠在一起
+        .overlay(alignment: .top) { TopFade() }
         .background(palette.desk)
+        .toolbar {
+            if let session = digest.session {
+                ToolbarItem(placement: .navigation) { title(session, digest: digest, ending: shownEnd?.isOpen == true) }
+                    .sharedBackgroundVisibility(.hidden)
+                ToolbarItem(placement: .primaryAction) { menu(session, live: live, ending: shownEnd?.isOpen == true) }
+            }
+        }
         .observing(services.store, SessionDigest.tables, id: sessionID, into: $stored,
                    onError: workspace.fail) { [sessionID] store in
             try SessionDigest.read(sessionID: sessionID, from: store)
@@ -93,38 +107,39 @@ struct SessionPage: View {
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
-    private func header(_ session: PiSessionState, digest: SessionDigest, live: CuePi.PiSession?, ending: Bool) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(session.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                if ending {
-                    Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
-                } else {
-                    PiSessionSubtitle(session: session, project: digest.project, delivery: digest.latestDelivery)
-                }
-            }
-            Spacer(minLength: 8)
-            let canJump = live.map { !$0.hosted } ?? false
-            if canJump || session.state != .known(.ended) {
-                Menu {
-                    if let live, canJump {
-                        Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
-                    }
-                    if session.state != .known(.ended) {
-                        Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = true }
-                            .disabled(ending)
-                    }
-                } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 14, weight: .semibold)).foregroundStyle(palette.ink2)
-                        .frame(width: 32, height: 32).contentShape(.circle)
-                }
-                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-                .glassEffect(.regular.interactive(), in: .circle)
-                .accessibilityLabel("更多")
+    /// 工具栏标题位：会话名，下面一行"所在 · 状态 · 计时"。
+    private func title(_ session: PiSessionState, digest: SessionDigest, ending: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(session.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink).lineLimit(1)
+            if ending {
+                Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
+            } else {
+                PiSessionSubtitle(session: session, project: digest.project, delivery: digest.latestDelivery)
             }
         }
-        .padding(.horizontal, 24).padding(.top, 4).padding(.bottom, 10)
-        .frame(maxWidth: Self.readingWidth)
+        .padding(.horizontal, 6)
+        .frame(maxWidth: Self.titleWidth, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    /// 工具栏右边的"⋯"：跳到终端（开在终端里的在线会话）、结束会话；两样都没有时不出现。
+    @ViewBuilder private func menu(_ session: PiSessionState, live: CuePi.PiSession?, ending: Bool) -> some View {
+        let canJump = live.map { !$0.hosted } ?? false
+        let canEnd = session.state != .known(.ended)
+        if canJump || canEnd {
+            Menu("更多", systemImage: "ellipsis") {
+                if let live, canJump {
+                    Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
+                }
+                if canEnd {
+                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = true }
+                        .disabled(ending)
+                }
+            }
+            .menuIndicator(.hidden)
+            .help("跳到终端、结束会话")
+        }
     }
 
     private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
@@ -153,160 +168,6 @@ struct SessionPage: View {
               PiChat.needsTranscript(session, messages: stored.messages), !fetchingTranscript(stored) else { return }
         askedForTranscript = true
         workspace.attempt { _ = try await services.requestTranscript(of: session) }
-    }
-}
-
-/// 回复框（与手机同一种：发送钮在输入框里），此刻做什么按共用规则（`MacDelivery.reply`）：
-/// 平时发消息——点发送钮是默认方式，其余方式按住发送钮出来；等你确认时，文字型问题它就是作答框，
-/// 选择、确认型收成一行"先在上面作答"（问题卡固定在回复框上方），这里答不了的写明要在 Pi 里回答。
-/// 发消息时本机在线的走"发给当前目标"同一条通道（`Workspace.send`）；已结束的与别的 Mac 上的写一条投送请求给它所在的 Mac
-/// （已结束的由那台 Mac 在后台唤醒后再送达），送达情况写在对话末尾你的气泡下。
-private struct DetailReply: View {
-    let session: PiSessionState
-    let live: CuePi.PiSession?
-    /// 模型与思考强度的显示值：在线会话放在输入框下面一排（与手机同一组件 `PiConfigControls`）。
-    let config: PiConfigShown
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    @State private var text = ""
-    @State private var sending = false
-    @FocusState private var focused: Bool
-
-    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var canSend: Bool { !trimmed.isEmpty && !sending }
-    private var reply: PiReply { MacDelivery.reply(to: session, hasImages: false) }
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            switch reply {
-            case .message(let modes): composer(placeholder: placeholder(modes)) { sendButton(modes) }
-            case .answer: composer(placeholder: "在这里回答上面的问题") { answerButton }
-            case .answerAbove: notice("先在上面作答", systemImage: "arrow.up")
-            case .unanswerable: notice("这个问题要在终端里的 Agent 那边回答", systemImage: "terminal")
-            }
-        }
-    }
-
-    /// 输入框：文字在上；在线会话下面一排模型与思考强度，右边发送钮（没有那一排时发送钮跟在文字右边）。
-    private func composer(placeholder: String, @ViewBuilder button: () -> some View) -> some View {
-        let tools = session.state != .known(.ended) && !session.models.isEmpty
-        return VStack(alignment: .leading, spacing: 0) {
-            if let failure = config.failure {
-                Text("没换成：\(failure)").font(.caption).foregroundStyle(palette.failure).lineLimit(2).padding(.top, 8)
-            }
-            HStack(alignment: .bottom, spacing: 6) {
-                TextField(placeholder, text: $text, axis: .vertical)
-                    .accessibilityLabel("回复")
-                    .textFieldStyle(.plain)
-                    .lineLimit(1...6)
-                    .focused($focused)
-                    .onSubmit(submit)
-                    .onExitCommand { focused = false }
-                    .padding(.vertical, 8)
-                if !tools { button() }
-            }
-            if tools {
-                HStack(spacing: 6) {
-                    PiConfigControls(session: session, shown: config)
-                    button()
-                }
-            }
-        }
-        .padding(.leading, 12).padding(.trailing, 4).padding(.vertical, 2)
-        .paper(radius: 18)
-        .onAppear { focused = true }
-    }
-
-    /// 等你确认、不能发自由文本时收成的一行。
-    private func notice(_ text: String, systemImage: String) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.subheadline).foregroundStyle(palette.ink2)
-            .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-            .paper(radius: 18)
-    }
-
-    private func placeholder(_ modes: [DeliveryMode]) -> String {
-        if session.state == .known(.ended) { return "回复 \(session.title)（会先在后台唤醒它）" }
-        guard let first = modes.first, modes.count > 1, first != .send else { return "回复 \(session.title)" }
-        return "\(first.label) · 按住发送钮可选别的说法"
-    }
-
-    @ViewBuilder private func sendButton(_ modes: [DeliveryMode]) -> some View {
-        let others = modes.dropFirst()
-        if others.isEmpty {
-            Button { send(modes.first) } label: { RoundSendGlyph(enabled: canSend) }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(!canSend)
-                .accessibilityLabel("发送")
-        } else {
-            Menu {
-                ForEach(Array(others), id: \.self) { mode in
-                    Button { send(mode) } label: {
-                        Text(mode.label)
-                        if let explanation = mode.explanation { Text(explanation) }
-                    }
-                }
-            } label: {
-                RoundSendGlyph(enabled: canSend)
-            } primaryAction: {
-                send(modes.first)
-            }
-            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-            .disabled(!canSend)
-            .help([modes.first?.label, modes.first?.explanation].compactMap { $0 }.joined(separator: "："))
-            .accessibilityLabel(modes.first.map { "发送，\($0.label)" } ?? "发送")
-            .accessibilityHint("按住可以选别的说法")
-            .background { Button("") { send(modes.first) }.keyboardShortcut(.return, modifiers: .command).hidden() }
-        }
-    }
-
-    private var answerButton: some View {
-        Button(action: answer) { RoundSendGlyph(enabled: canSend) }
-            .buttonStyle(.plain)
-            .keyboardShortcut(.return, modifiers: .command)
-            .disabled(!canSend)
-            .accessibilityLabel("回答")
-    }
-
-    private func submit() {
-        switch reply {
-        case .message(let modes): send(modes.first)
-        case .answer: answer()
-        case .answerAbove, .unanswerable: break
-        }
-    }
-
-    private func send(_ mode: DeliveryMode?) {
-        guard let mode, canSend else { return }
-        sending = true
-        let body = trimmed
-        Task {
-            defer { sending = false }
-            if let live {
-                if await workspace.send(body, via: .pi(live.id, mode)) { text = "" }
-                return
-            }
-            do {
-                try await services.requestMacDelivery(body, to: session, mode: mode)
-                text = ""
-            } catch {
-                workspace.fail(error)
-            }
-        }
-    }
-
-    /// 文字型问题的回答：作答请求交给会话所在的 Mac（本机也走它，由执行器交给扩展）。
-    private func answer() {
-        guard canSend else { return }
-        sending = true
-        let value = PiAnswerValue.text(trimmed)
-        workspace.attempt {
-            defer { sending = false }
-            _ = try await services.answer(value, to: session)
-            text = ""
-        }
     }
 }
 

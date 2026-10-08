@@ -187,6 +187,14 @@ extension DebugScene {
         await set(.settled)
     }
 
+    /// 演示会话的模型配置：两家各一个模型，思考强度档位不同（回复框下的模型胶囊与强度条有东西可换）。
+    private static let demoModels: PiModelState = {
+        let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "claude-opus-5-5-20260901"), name: "Claude Opus 5.5",
+                                 thinkingLevels: [.low, .medium, .high, .max])
+        let luna = PiModelOption(key: PiModelKey(provider: "openai", id: "gpt-6-luna"), name: "GPT-6 Luna", thinkingLevels: [.off, .low, .high])
+        return PiModelState(model: opus, thinking: .known(.medium), models: [opus, luna])
+    }()
+
     /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store
@@ -234,7 +242,8 @@ extension DebugScene {
         }
         for (id, state, detail, name, recap) in sessions {
             try? await recorder.update(
-                sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question)
+                sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question,
+                modelState: demoModels)
             try? await store.writePiTranscript(PiTranscript(
                 sessionID: id, messages: [],
                 recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))

@@ -29,6 +29,7 @@ struct AgentPage: View {
             .frame(maxWidth: Self.width)
             .frame(maxWidth: .infinity)
         }
+        .remembersScroll()
         .background(palette.desk)
         .onChange(of: query) { limit = PiSessionList.pageSize }
         .onChange(of: filter) { limit = PiSessionList.pageSize }

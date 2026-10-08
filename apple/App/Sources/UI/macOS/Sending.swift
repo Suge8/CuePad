@@ -99,6 +99,12 @@ extension Workspace {
 
     /// 发送存储格式正文；成功后提示，Pi 忙时转为询问马上说还是等它做完再说。返回是否已发出（发给 Pi 时是已送达）。
     @discardableResult
+    /// 交给 Agent 一张卡：正文连同"带上"选中的相关灵感与资料（灵感没有可带的，就是正文），发送记录记下带上了哪些。
+    func handOff(_ card: UUID, body: String, detail: TaskDetail?, bundle: TaskBundleChoice, via choice: AppServices.Destination) async -> Bool {
+        let parts = bundle.parts(detail)
+        return await send(TaskBundle.text(task: body, parts: parts), via: choice, card: card, parts: parts.map(\.id))
+    }
+
     func send(_ stored: String, via choice: AppServices.Destination, card: UUID? = nil, parts: [UUID] = []) async -> Bool {
         await send(stored, via: choice, card: card, parts: parts, remembering: choice)
     }

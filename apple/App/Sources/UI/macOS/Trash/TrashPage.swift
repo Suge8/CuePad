@@ -33,6 +33,7 @@ struct TrashPage: View {
                 }
                 .padding(.horizontal, 32).padding(.top, 6).padding(.bottom, 40)
             }
+            .remembersScroll()
             TopFade()
         }
         .confirmationDialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty) {

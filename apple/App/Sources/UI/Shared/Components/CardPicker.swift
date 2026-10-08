@@ -1,4 +1,3 @@
-#if os(iOS)
 import CueStore
 import SwiftUI
 
@@ -18,6 +17,7 @@ struct CardPicker: View {
     @State private var data: Page?
 
     private nonisolated static let pageSize = 30
+    private static let macSize = CGSize(width: 560, height: 620)
 
     var body: some View {
         NavigationStack {
@@ -41,13 +41,21 @@ struct CardPicker: View {
             .scrollDismissesKeyboard(.immediately)
             .background(palette.desk)
             .navigationTitle("选一条灵感或任务")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索灵感与任务")
+            #else
+            .searchable(text: $text, prompt: "搜索灵感与任务")
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
             }
         }
+        #if os(iOS)
         .presentationDetents([.medium, .large])
+        #else
+        .frame(width: Self.macSize.width, height: Self.macSize.height)
+        #endif
         .onChange(of: text) { if !TextComposition.isComposing { settled = text } }
         .onChange(of: settled) { pages = 1 }
         .observing(services.store, [.cards, .projects], id: Key(text: settled, pages: pages), into: $data, onError: workspace.fail) {
@@ -96,4 +104,92 @@ struct CardPicker: View {
         }
     }
 }
-#endif
+
+/// 卡片与它的摘要。摘要在读数据时算好（Store 的执行体上），渲染与滚动时不在主线程解析正文。
+nonisolated struct CardEntry: Identifiable, Sendable {
+    let card: Card
+    let text: CardText
+    var id: UUID { card.id }
+
+    init(_ card: Card) {
+        self.card = card
+        var text = CardText(card.body)
+        text.title = text.title.textGlyphs
+        text.preview = text.preview.textGlyphs
+        self.text = text
+    }
+}
+
+/// 一张卡的纸面行（搜索结果与输入框的卡片选择共用）：可选的项目与时间、标题、摘要，右侧首图。
+struct CardRow: View {
+    let entry: CardEntry
+    /// 标出所属项目（卡片选择里不属于本项目的那组）；nil 不标（搜索已按项目分组）。
+    var project: Project??
+    /// 命中的词（空格分隔），每个都标底色。
+    var highlight = ""
+    /// 点一下选中这张卡（卡片选择）；nil 时点开卡片，长按是卡片操作。
+    var pick: ((Card) -> Void)?
+    @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(\.zoomNamespace) private var zoom
+    #endif
+
+    var body: some View {
+        if let pick {
+            Button { pick(entry.card) } label: { row }.buttonStyle(CardPressStyle())
+        } else {
+            #if os(iOS)
+            NavigationLink(value: Navigation.Route.card(entry.card.id)) { row }
+                .buttonStyle(CardPressStyle())
+                .zoomSource(entry.card.id, in: zoom)
+                .contextMenu { CardActions(card: entry.card) }
+            #endif
+        }
+    }
+
+    private var row: some View {
+        let card = entry.card, text = entry.text
+        return HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    if let project {
+                        Text(project?.name ?? "未分类")
+                            .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? palette.ink3)
+                    }
+                    Text(DateLabel.short(card.modifiedAt)).foregroundStyle(palette.ink3)
+                }
+                .font(.caption.weight(.medium))
+                Text(marked(text.title.nonEmpty ?? "无标题")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
+                if !text.preview.isEmpty {
+                    Text(marked(text.preview)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+            if let image = text.images.first {
+                Thumbnail(hash: image, height: 64, radius: 8).frame(width: 80)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paper(radius: 16)
+        .contentShape(.rect(cornerRadius: 16))
+    }
+
+    /// 变量照常标色，搜索词再叠一层命中底色。
+    private func marked(_ string: String) -> AttributedString {
+        highlight.split(whereSeparator: \.isWhitespace).reduce(VariableText.styled(string, palette)) { result, word in
+            Highlight.matches(string, String(word), base: result)
+        }
+    }
+}
+
+nonisolated extension String {
+    /// ↩ ↪ 这类箭头在 iOS 上默认画成彩色 emoji 按键：加文字样式选择符，按普通字形显示。
+    var textGlyphs: String {
+        guard contains(where: { Self.emojiDefaulted.contains($0) }) else { return self }
+        return String(flatMap { Self.emojiDefaulted.contains($0) ? [$0, "\u{FE0E}"] : [$0] })
+    }
+
+    private static let emojiDefaulted: Set<Character> = ["↩", "↪", "⤴", "⤵", "↔", "↕"]
+}

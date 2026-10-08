@@ -22,6 +22,7 @@ struct ProjectPage: View {
                 ScrollView {
                     content.id("top")
                 }
+                .remembersScroll()
                 .overlay { BottomFade() }
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.quick) { collapsed = isCollapsed }

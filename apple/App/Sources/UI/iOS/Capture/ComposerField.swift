@@ -10,6 +10,8 @@ struct ComposerField: UIViewRepresentable {
     let label: String
     let maxLines: Int
     let ink: Color
+    /// 焦点由调用方的 `.focused` 管（UIKit 文字区接得住 SwiftUI 的焦点）；Mac 的那份还要把 AppKit 侧的变化报回来。
+    let focus: FocusState<Bool>.Binding
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

@@ -1,5 +1,7 @@
 import CueStore
+import ImageIO
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 滚动定位锚点。
 enum ScrollAnchor {
@@ -66,6 +68,45 @@ enum DebugScene {
         else { return nil }
         workspace.show(.project(project.id))
         return project.id
+    }
+
+    /// `-CuePadComposer <cards|attachments|lines>`（配 session、newsession 画面，iOS 与 Mac）：输入框出现时 cards 打开选卡片面板，
+    /// attachments 带上一张卡片（`-CuePadCard` 挑哪张）并放进两张演示图片，lines 写进 9 行文字（看文字区长到 6 行后在里面滚）。
+    /// ＋ 菜单是系统菜单、不能代为展开：截图时按一下 ＋（iPhone 17 Pro 回复框：`axe touch -x 37 -y 810 --down --up --delay 0.15`；axe 的 tap 太快，菜单不开）。
+    static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
+        switch defaults.string(forKey: "CuePadComposer") {
+        case "cards":
+            // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉
+            try? await Task.sleep(for: .seconds(1))
+            source.wrappedValue = .cards
+        case "attachments":
+            // 先挑未分类里的，没有再挑第一个项目里的
+            var id = await card(in: nil, store: store)
+            if id == nil, let project = try? await store.projects().first { id = await card(in: project.id, store: store) }
+            if let id, let card = try? await store.card(id) {
+                draft.wrappedValue.attachment = Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID)
+            }
+            draft.wrappedValue.images = [(0.85, 0.47, 0.29), (0.25, 0.56, 0.72)].map { PickedImage(data: swatch(red: $0.0, green: $0.1, blue: $0.2)) }
+        case "lines":
+            draft.wrappedValue.text = (1...9).map { "第 \($0) 行" }.joined(separator: "\n")
+        default:
+            break
+        }
+    }
+
+    /// 一块纯色的 PNG（演示图片）。
+    private static func swatch(red: CGFloat, green: CGFloat, blue: CGFloat) -> Data {
+        let size = CGSize(width: 240, height: 180)
+        let context = CGContext(
+            data: nil, width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(red: red, green: green, blue: blue, alpha: 1)
+        context.fill(CGRect(origin: .zero, size: size))
+        let data = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, context.makeImage()!, nil)
+        CGImageDestinationFinalize(destination)
+        return data as Data
     }
 
     /// `-CuePadCard` 指定（或最近修改）的一张卡。

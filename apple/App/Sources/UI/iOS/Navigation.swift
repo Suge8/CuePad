@@ -64,16 +64,6 @@ final class Navigation {
     }
 
     /// 要交给 Agent 的一条灵感或任务（存储格式，变量已填）：浮起交给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
-    struct Outbox: Identifiable {
-        let id = UUID()
-        var content: String
-        var card: UUID?
-        /// 卡片所在项目：选会话时它的会话排在前面。
-        var project: UUID?
-        /// 一并带上的灵感（任务连同挂着的灵感、资料一起交出）：记进投送请求，Mac 执行后记进发送记录。
-        var parts: [UUID] = []
-    }
-
     struct OpenTask: Identifiable {
         let id: UUID
     }

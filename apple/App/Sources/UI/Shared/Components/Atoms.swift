@@ -120,3 +120,20 @@ enum DateLabel {
         return date.formatted(.dateTime.year().month(.defaultDigits).day().locale(chinese))
     }
 }
+
+/// 分段标题：名称 + 可选计数；读屏作为一个标题。
+struct SectionHeader: View {
+    let title: String
+    var count: Int?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
+            if let count { Text("\(count)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).counting(count) }
+        }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}

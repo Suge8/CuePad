@@ -368,18 +368,5 @@ private struct SessionRow: View {
         .accessibilityHint(session.state == .known(.ended) ? "看最后一轮、回复" : "看近况、回复")
     }
 }
-
-/// 同步到不了 Mac 时的一句提示（Agent 页同步图标点开、会话回复框上、新会话）：哪里不通；详情与处理在设置里。
-struct SyncHint: View {
-    let status: SyncStatus
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let summary = SyncSummary(status)
-        Label("\(summary.title) · 看到的可能不是最新，也发不到 Mac", systemImage: summary.symbol)
-            .font(.footnote).foregroundStyle(palette.ink3)
-            .lineLimit(2)
-    }
-}
 #endif
 

@@ -46,36 +46,43 @@ nonisolated struct TaskDetail: Sendable, Equatable {
 }
 
 /// 交给 Agent 时一并带上什么：挂着的灵感默认都带（点一下取消），本项目资料默认不带（点一下带上）。
-/// 选择只活在这一次打开的浮窗里，带上的内容见 `TaskBundle`。
-struct BundlePicker: View {
-    let detail: TaskDetail?
-    @Binding var left: Set<UUID>
-    @Binding var withResources: Bool
-    @Environment(\.palette) private var palette
+/// 选择只活在这一次打开的浮窗或纸页里，带上的内容见 `TaskBundle`。
+struct TaskBundleChoice: Equatable {
+    /// 点掉不带的相关灵感。
+    var left: Set<UUID> = []
+    var withResources = false
 
-    static func parts(_ detail: TaskDetail?, left: Set<UUID>, withResources: Bool) -> [Card] {
+    func parts(_ detail: TaskDetail?) -> [Card] {
         guard let detail else { return [] }
         return detail.related.filter { !left.contains($0.id) } + (withResources ? detail.resources : [])
     }
+}
+
+/// "带上"一行可勾的小胶囊（`TaskBundleChoice`）；没有相关灵感与资料时不出现。
+struct BundlePicker: View {
+    let detail: TaskDetail?
+    @Binding var choice: TaskBundleChoice
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let related = detail?.related ?? [], resources = detail?.resources ?? []
+        let left = choice.left
         if !related.isEmpty || !resources.isEmpty {
             ScrollView(.horizontal) {
                 HStack(spacing: 6) {
                     Text("带上").font(TaskMetrics.caption).foregroundStyle(palette.ink3)
                     ForEach(related) { idea in
                         chip(idea.title, systemImage: "lightbulb", on: !left.contains(idea.id)) {
-                            if left.contains(idea.id) { left.remove(idea.id) } else { left.insert(idea.id) }
+                            if left.contains(idea.id) { choice.left.remove(idea.id) } else { choice.left.insert(idea.id) }
                         }
                     }
                     if !resources.isEmpty {
-                        chip("资料 \(resources.count)", systemImage: "books.vertical", on: withResources) { withResources.toggle() }
+                        chip("资料 \(resources.count)", systemImage: "books.vertical", on: choice.withResources) { choice.withResources.toggle() }
                     }
                 }
             }
             .scrollIndicators(.hidden)
-            .sensoryFeedback(.selection, trigger: left.count + (withResources ? 1 : 0))
+            .sensoryFeedback(.selection, trigger: choice)
         }
     }
 

@@ -100,7 +100,7 @@ extension DebugScene {
             await openCard()
             if let id = await card(in: project, store: workspace.services.store),
                let card = try? await workspace.services.store.card(id) {
-                let outbox = Navigation.Outbox(content: Outgoing.text(of: card), card: id, project: project)
+                let outbox = Outbox(content: Outgoing.text(of: card), card: id, project: project)
                 // 给了 -CuePadSession 就当已选好会话，直接进它的近况页（卡片预填在回复框里）
                 if let title = defaults.string(forKey: "CuePadSession"),
                    let session = try? await workspace.services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state {
@@ -166,34 +166,6 @@ extension DebugScene {
             navigation.startCapture()
         default:
             if let project, split { open(.project(project)) }
-        }
-    }
-
-    /// `-CuePadComposer <cards|attachments>`（配 session、newsession 画面）：输入框出现时 cards 打开选卡片面板，
-    /// attachments 带上一张卡片（`-CuePadCard` 挑哪张）并放进两张演示图片。＋ 菜单是系统菜单、不能代为展开：
-    /// 截图时按一下 ＋（iPhone 17 Pro 回复框：`axe touch -x 37 -y 810 --down --up --delay 0.15`；axe 的 tap 太快，菜单不开）。
-    static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
-        switch defaults.string(forKey: "CuePadComposer") {
-        case "cards":
-            // 等推入页面的转场走完再弹，转场中弹出的面板会被系统丢掉
-            try? await Task.sleep(for: .seconds(1))
-            source.wrappedValue = .cards
-        case "attachments":
-            // 先挑未分类里的，没有再挑第一个项目里的
-            var id = await card(in: nil, store: store)
-            if id == nil, let project = try? await store.projects().first { id = await card(in: project.id, store: store) }
-            if let id, let card = try? await store.card(id) {
-                draft.wrappedValue.attachment = Navigation.Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID)
-            }
-            draft.wrappedValue.images = [UIColor(red: 0.85, green: 0.47, blue: 0.29, alpha: 1), UIColor(red: 0.25, green: 0.56, blue: 0.72, alpha: 1)]
-                .map { color in
-                    PickedImage(data: UIGraphicsImageRenderer(size: CGSize(width: 240, height: 180)).pngData { context in
-                        color.setFill()
-                        context.fill(CGRect(x: 0, y: 0, width: 240, height: 180))
-                    })
-                }
-        default:
-            break
         }
     }
 

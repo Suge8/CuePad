@@ -1,15 +1,30 @@
-#if os(iOS)
 import CueStore
 import CueText
-import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
+#if os(iOS)
+import PhotosUI
+#else
+import AppKit
+#endif
+
+/// 带上的一张卡片或任务（输入框里的，或 iOS 交给 Agent 时浮起的那一份）。
+struct Outbox: Identifiable {
+    let id = UUID()
+    var content: String
+    var card: UUID?
+    /// 卡片所在项目：选会话时它的会话排在前面。
+    var project: UUID?
+    /// 一并带上的灵感（任务连同挂着的灵感、资料一起交出）：记进投送请求，Mac 执行后记进发送记录。
+    var parts: [UUID] = []
+}
 
 /// 输入框里的东西：文字、图片、带上的一张卡片或任务。存成卡片（随手记）、发给 Pi（回复）、开场的话（新会话）都是它，
 /// 去处只决定怎么处理这份草稿。
 struct ComposerDraft {
     var text = ""
     var images: [PickedImage] = []
-    var attachment: Navigation.Outbox?
+    var attachment: Outbox?
 
     /// 带的内容里有没有图片：自己选的，或带上的卡片里的。
     var hasImages: Bool { !images.isEmpty || !CardText(attachment?.content ?? "").images.isEmpty }
@@ -41,14 +56,14 @@ struct ComposerKinds: OptionSet {
     static let cards = ComposerKinds(rawValue: 2)
 }
 
-/// 左边"＋"能打开的三个来源。
-enum ComposerSource { case cards, photos, camera }
+/// 左边"＋"能打开的来源：卡片两端都有；图片 iOS 是相册与拍照，Mac 是图片文件。
+enum ComposerSource { case cards, photos, camera, files }
 
-/// 随手记、新会话与 Pi 会话回复框共用的输入框（同 ChatGPT、Claude 的"文字在上、工具在下"）：一层玻璃，里面是
+/// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份，文字区各用平台的文本视图包装，见 `ComposerField`）（同 ChatGPT、Claude 的"文字在上、工具在下"）：一层玻璃，里面是
 /// （调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：左"＋"（选卡片、相册、拍照）、调用方的小圆钮
 /// （会话回复框的模型与思考强度，只在聚焦时有），右发送钮。空着又没聚焦时收成一行：＋、一行文字区（发送钮不占位）；
 /// 聚焦或有内容时展开成两层，＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
-/// 调用方给草稿、占位、接受的种类和发送钮，草稿怎么处理由它们决定。
+/// 调用方给草稿、占位、接受的种类和发送钮，草稿怎么处理由它们决定；给了 `submit` 时 ⌘↩ 发送（iPad 外接键盘同样）。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
     let prompt: String
@@ -65,23 +80,25 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 工具排里"＋"右边的小圆钮（会话回复框的模型与思考强度），只在聚焦时出现。
     private let tools: Tools
     private let send: Send
+    private let submit: (() -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 跟着焦点、带动画：UIKit 文字区拿到焦点时的那次更新不带动画，直接读焦点时展开会一帧跳到位
     @State private var focused = false
     @State private var source: ComposerSource?
-    @State private var picked: [PhotosPickerItem] = []
-    @State private var previewing: Navigation.Outbox?
+    @State private var previewing: Outbox?
     /// "＋"在一行与两层之间挪位时是同一颗（连续移动）。
     @Namespace private var layout
 
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
+        submit: (() -> Void)? = nil,
         @ViewBuilder header: () -> Header, @ViewBuilder tools: () -> Tools, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
+        self.submit = submit
         self.prompt = prompt
         self.label = label
         self.focus = focus
@@ -120,19 +137,18 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .animation(Motion.quick, value: hasContent)
         .animation(Motion.quick, value: draft.attachment?.id)
         .animation(Motion.quick, value: draft.images.map(\.id))
-        .photosPicker(isPresented: showing(.photos), selection: $picked, maxSelectionCount: 9, matching: .images)
-        .fullScreenCover(isPresented: showing(.camera)) {
-            CameraPicker { data in draft.images.append(PickedImage(data: data)) }.ignoresSafeArea()
-        }
+        .modifier(ImageSources(source: $source, images: $draft.images))
         .sheet(isPresented: showing(.cards)) {
             CardPicker(project: cardsFrom) { card in
-                draft.attachment = Navigation.Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID)
+                draft.attachment = Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID)
             }
         }
         .sheet(item: $previewing) { outbox in
             AttachmentSheet(outbox: outbox, expand: { expand(outbox) })
         }
-        .onChange(of: picked) { load() }
+        .background {
+            if let submit, hasContent { Button("发送", action: submit).keyboardShortcut(.return, modifiers: .command).hidden() }
+        }
 #if DEBUG
         .task { await DebugScene.presetComposer($draft, source: $source, store: workspace.services.store) }
 #endif
@@ -151,7 +167,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             HStack(alignment: .bottom, spacing: 0) {
                 if !expanded, !accepts.isEmpty { plus }
                 ComposerField(
-                    text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink)
+                    text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus)
                     .focused(focus)
                     .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, 18)
                     .padding(.top, 14).padding(.bottom, expanded ? 4 : 14)
@@ -191,21 +207,26 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         Menu {
             if accepts.contains(.cards) { Button("选灵感或任务", systemImage: "rectangle.on.rectangle") { source = .cards } }
             if accepts.contains(.images) {
+                #if os(iOS)
                 Button("相册", systemImage: "photo.on.rectangle") { source = .photos }
                 if CameraPicker.isAvailable { Button("拍照", systemImage: "camera") { source = .camera } }
+                #else
+                Button("图片文件…", systemImage: "photo") { source = .files }
+                #endif
             }
         } label: {
             CircleGlyph(systemImage: "plus", ink: palette.ink, fill: palette.fill)
                 .frame(width: Self.slot, height: Self.slot)
                 .matchedGeometryEffect(id: "plus", in: layout)
         }
-        .menuIndicator(.hidden)
+        .menuStyle(.button).menuIndicator(.hidden)
         .buttonStyle(.plain)
+        .fixedSize()
         .accessibilityLabel("添加")
     }
 
     /// 带上的卡片或任务：标题、图片数，可移除；点一下看全文，长按是预览与"展开编辑"。
-    private func chip(_ outbox: Navigation.Outbox) -> some View {
+    private func chip(_ outbox: Outbox) -> some View {
         let card = CardText(outbox.content)
         let shape = RoundedRectangle(cornerRadius: Self.radius - Self.inset, style: .continuous)
         return HStack(spacing: 0) {
@@ -230,19 +251,28 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             Button("不带了", systemImage: "xmark") { draft.attachment = nil }
                 .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
                 .frame(width: 44, height: 44).contentShape(.rect)
+                .buttonStyle(.plain)
         }
         .background(palette.fill, in: shape)
+        #if os(iOS)
         .contentShape(.contextMenuPreview, shape)
         .contextMenu {
-            Button("展开编辑", systemImage: "text.cursor") { expand(outbox) }
-            Button("不带了", systemImage: "xmark", role: .destructive) { draft.attachment = nil }
+            menu(outbox)
         } preview: {
             AttachmentBody(content: outbox.content).frame(width: 340).frame(maxHeight: 460)
         }
+        #else
+        .contextMenu { menu(outbox) }
+        #endif
+    }
+
+    @ViewBuilder private func menu(_ outbox: Outbox) -> some View {
+        Button("展开编辑", systemImage: "text.cursor") { expand(outbox) }
+        Button("不带了", systemImage: "xmark", role: .destructive) { draft.attachment = nil }
     }
 
     /// 展开编辑：卡片的文字放进输入框（接在已写的字前面）、图片放进图片条，不再作为整张卡带上，原卡片不动。
-    private func expand(_ outbox: Navigation.Outbox) {
+    private func expand(_ outbox: Outbox) {
         let text = CueFormat.parse(outbox.content).map { token in
             switch token {
             case .text(let text): text
@@ -277,23 +307,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                                 .foregroundStyle(.white, .black.opacity(0.55)).font(.body)
                                 .frame(width: 44, height: 44, alignment: .topTrailing)
                         }
+                        .buttonStyle(.plain)
                         .accessibilityLabel("移除这张图片")
                     }
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
-                }
-            }
-        }
-    }
-
-    private func load() {
-        let items = picked
-        picked = []
-        Task {
-            for item in items {
-                do {
-                    if let data = try await item.loadTransferable(type: Data.self) { draft.images.append(PickedImage(data: data)) }
-                } catch {
-                    workspace.fail(error)
                 }
             }
         }
@@ -360,13 +377,80 @@ struct PickedImage: Identifiable {
     private static let quality = 0.85
 
     init(data: Data) {
-        let image = UIImage(data: data)
         let keep = data.starts(with: [0x89, 0x50, 0x4E, 0x47]) || data.starts(with: [0xFF, 0xD8, 0xFF])
+        #if os(iOS)
+        let image = UIImage(data: data)
         self.data = keep ? data : image?.jpegData(compressionQuality: Self.quality) ?? data
         preview = image.map(Image.init(uiImage:)) ?? Image(systemName: "photo")
+        #else
+        let image = NSImage(data: data)
+        let jpeg = keep ? nil : NSBitmapImageRep(data: data)?.representation(using: .jpeg, properties: [.compressionFactor: Self.quality])
+        self.data = jpeg ?? data
+        preview = image.map(Image.init(nsImage:)) ?? Image(systemName: "photo")
+        #endif
     }
 }
 
+/// "＋"里图片的来源，各平台系统自带的选取界面：iOS 相册与相机，Mac 选图片文件。选好的追加到图片条。
+private struct ImageSources: ViewModifier {
+    @Binding var source: ComposerSource?
+    @Binding var images: [PickedImage]
+    @Environment(Workspace.self) private var workspace
+    #if os(iOS)
+    @State private var picked: [PhotosPickerItem] = []
+    #endif
+
+    private static let photoLimit = 9
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content
+            .photosPicker(isPresented: showing(.photos), selection: $picked, maxSelectionCount: Self.photoLimit, matching: .images)
+            .fullScreenCover(isPresented: showing(.camera)) {
+                CameraPicker { data in images.append(PickedImage(data: data)) }.ignoresSafeArea()
+            }
+            .onChange(of: picked) { load() }
+        #else
+        content
+            .fileImporter(isPresented: showing(.files), allowedContentTypes: [.image], allowsMultipleSelection: true) { result in
+                do {
+                    for url in try result.get() { images.append(PickedImage(data: try Self.read(url))) }
+                } catch {
+                    workspace.fail(error)
+                }
+            }
+        #endif
+    }
+
+    private func showing(_ target: ComposerSource) -> Binding<Bool> {
+        Binding(get: { source == target }, set: { if !$0, source == target { source = nil } })
+    }
+
+    #if os(iOS)
+    private func load() {
+        let items = picked
+        picked = []
+        Task {
+            for item in items {
+                do {
+                    if let data = try await item.loadTransferable(type: Data.self) { images.append(PickedImage(data: data)) }
+                } catch {
+                    workspace.fail(error)
+                }
+            }
+        }
+    }
+    #else
+    /// 选文件面板给的是沙盒外的地址：读之前先拿访问权。
+    private static func read(_ url: URL) throws -> Data {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        return try Data(contentsOf: url)
+    }
+    #endif
+}
+
+#if os(iOS)
 /// 系统相机：拍一张交回 JPEG。
 struct CameraPicker: UIViewControllerRepresentable {
     let onPick: (Data) -> Void
@@ -397,6 +481,8 @@ struct CameraPicker: UIViewControllerRepresentable {
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.dismiss() }
     }
 }
+#endif
+
 /// 带上的卡片或任务的全文：文字、图片按原来的顺序，分割线是一条细线。`omitsTitle`：标题已写在面板顶上时正文从标题之后开始。
 /// `height` 报出内容的高度，面板按它定高。
 private struct AttachmentBody: View {
@@ -454,12 +540,14 @@ private struct AttachmentBody: View {
 /// 点开带上的卡片：标题在顶栏、正文在下（不重复标题），"展开编辑"把它变成这次要发的文字（只对卡片）。
 /// 面板按内容定高：短卡片是一张小面板，长的到顶后可拉满屏。
 private struct AttachmentSheet: View {
-    let outbox: Navigation.Outbox
+    let outbox: Outbox
     let expand: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var contentHeight: CGFloat = 0
     @State private var detent = PresentationDetent.height(barHeight)
 
+    /// Mac 的面板不随内容定高：给一个读得下的大小。
+    private static let macSize = CGSize(width: 520, height: 480)
     /// 顶栏的高度，加到内容高度上就是面板高度（只有标题的卡片就只剩顶栏）。
     private static let barHeight: CGFloat = 64
     private var fitted: PresentationDetent { .height(contentHeight + Self.barHeight) }
@@ -468,7 +556,9 @@ private struct AttachmentSheet: View {
         NavigationStack {
             AttachmentBody(content: outbox.content, omitsTitle: true, height: $contentHeight)
                 .navigationTitle(CardText(outbox.content).title.nonEmpty ?? "无标题")
+                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
                     if let expand {
@@ -476,9 +566,12 @@ private struct AttachmentSheet: View {
                     }
                 }
         }
+        #if os(iOS)
         .presentationDetents([fitted, .large], selection: $detent)
         // 内容量出来后贴合它；用户拉到满屏后不再缩回
         .onChange(of: contentHeight) { if detent != .large { detent = fitted } }
+        #else
+        .frame(width: Self.macSize.width, height: Self.macSize.height)
+        #endif
     }
 }
-#endif

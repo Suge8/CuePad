@@ -66,6 +66,10 @@ struct CardEditorPage: View {
     @State private var paperGone = false
     @State private var pageOrigin: CGPoint = .zero
     @State private var paperFrame: CGRect = .zero
+    /// 任务才有：进展、发出记录与"带上"读它（与手机任务浮窗同一份 `TaskDetail`）。
+    @State private var taskDetail: TaskDetail?
+    @State private var bundle = TaskBundleChoice()
+    @State private var showsSends = false
 
     private static let paperWidth: CGFloat = 760
     private static let barClearance: CGFloat = 84
@@ -83,7 +87,12 @@ struct CardEditorPage: View {
                     meta(data)
                     if data.card.isTask {
                         VStack(alignment: .leading, spacing: 4) {
-                            TaskPageHeader(task: data.card)
+                            TaskPageHeader(task: data.card, detail: taskDetail)
+                            if showsSends {
+                                ScrollView { VStack(alignment: .leading, spacing: 0) { SendRecordList(records: taskDetail?.sends ?? []) } }
+                                    .frame(maxHeight: 160).fixedSize(horizontal: false, vertical: true)
+                                    .transition(.opacity)
+                            }
                         }
                         .padding(.horizontal, 64)
                         Divider().overlay(palette.hair).padding(.horizontal, 64)
@@ -101,7 +110,9 @@ struct CardEditorPage: View {
             // 底栏不在纸上：提前挂好、不可见，随编辑器出现后淡入、关闭时先退
             if stage >= .bar, let data {
                 let shown = isOpen && editorShown
-                EditorBar(card: data.card, text: liveText, handle: handle, selecting: selecting).padding(.bottom, 16)
+                EditorBar(card: data.card, text: liveText, handle: handle, selecting: selecting,
+                          detail: data.card.isTask ? taskDetail : nil, bundle: $bundle)
+                    .padding(.bottom, 16)
                     .opacity(shown ? 1 : 0)
                     .disabled(!shown)
                     .accessibilityHidden(!shown)
@@ -109,6 +120,13 @@ struct CardEditorPage: View {
             }
         }
         .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { pageOrigin = $0 }
+        .background {
+            if data?.card.isTask == true {
+                Color.clear.observing(services.store, TaskDetail.tables, id: cardID, into: $taskDetail, onError: workspace.fail) { [cardID] in
+                    try TaskDetail.read(cardID, from: $0)
+                }
+            }
+        }
         .observing(services.store, [.cards, .projects], id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(
@@ -243,6 +261,11 @@ struct CardEditorPage: View {
             }
             if data.card.isPinned { Image(systemName: "books.vertical.fill").help("资料") }
             if data.card.isTask { Label("任务", systemImage: "checklist") }
+            Spacer(minLength: 0)
+            Menu("更多", systemImage: "ellipsis") {
+                CardActions(card: data.card, more: true) { withAnimation(Motion.quick) { showsSends.toggle() } }
+            }
+            .labelStyle(.iconOnly).menuStyle(.button).menuIndicator(.hidden).buttonStyle(.borderless).fixedSize()
         }
         .font(.system(size: 12))
         .foregroundStyle(palette.ink3)
@@ -334,12 +357,26 @@ private struct EditorBar: View {
     let text: String
     let handle: EditorHandle
     let selecting: Bool
+    /// 任务的下级与资料（灵感是 nil）：发送钮上面一行"带上"，与手机任务浮窗同一组件。
+    let detail: TaskDetail?
+    @Binding var bundle: TaskBundleChoice
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
+    private static let pickerWidth: CGFloat = 560
+
     var body: some View {
+        VStack(spacing: 8) {
+            if !selecting {
+                BundlePicker(detail: detail, choice: $bundle).frame(maxWidth: Self.pickerWidth).fixedSize()
+            }
+            controls
+        }
+    }
+
+    private var controls: some View {
         let names = CueVariables.names(in: text)
-        GlassEffectContainer(spacing: 10) {
+        return GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
                 HStack(spacing: 16) {
                     Button("复制全文", systemImage: "doc.on.doc") { send(.clipboard, whole: true) }
@@ -365,16 +402,27 @@ private struct EditorBar: View {
                         .transition(.opacity)
                 }
                 let start = workspace.newSessionHandOff(for: card)
-                SendControl(project: card.projectID, newSession: start.map { start in { start(outgoing(whole: false)) } }) { send($0, whole: false) }
+                SendControl(project: card.projectID, newSession: start.map { start in { start(newSessionText) } }) { send($0, whole: false) }
             }
             .animation(Motion.quick, value: selecting)
         }
     }
 
-    /// 发出去的正文：选中了就只发选中的部分（`whole` 时总是整张）。
+    /// 发出去的正文：选中了就只发选中的部分（`whole` 时总是整张）；交给 Agent 整张时连同"带上"的一起。
     private func send(_ choice: AppServices.Destination, whole: Bool) {
         let outgoing = outgoing(whole: whole), id = card.id
-        Task { await workspace.send(outgoing, via: choice, card: id) }
+        if whole || handle.selection != nil {
+            Task { await workspace.send(outgoing, via: choice, card: id) }
+        } else {
+            let detail = detail, bundle = bundle
+            Task { await workspace.handOff(id, body: outgoing, detail: detail, bundle: bundle, via: choice) }
+        }
+    }
+
+    /// 开新会话带过去的话：选中了是选中的部分，否则正文连同"带上"的。
+    private var newSessionText: String {
+        let body = outgoing(whole: false)
+        return handle.selection != nil ? body : TaskBundle.text(task: body, parts: bundle.parts(detail))
     }
 
     private func outgoing(whole: Bool) -> String {
@@ -440,19 +488,14 @@ private struct VariablesForm: View {
 }
 
 /// Mac 纸页上任务正文上方的一块：完成圈与进展（`TaskProgressList`）。
-struct TaskPageHeader: View {
+private struct TaskPageHeader: View {
     let task: Card
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @State private var detail: TaskDetail?
+    let detail: TaskDetail?
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             TaskRingButton(task: task, marks: detail?.marks)
             TaskProgressList(task: task, detail: detail)
-        }
-        .observing(services.store, TaskDetail.tables, id: task.id, into: $detail, onError: workspace.fail) { [id = task.id] in
-            try TaskDetail.read(id, from: $0)
         }
     }
 }

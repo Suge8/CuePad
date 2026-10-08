@@ -23,7 +23,7 @@ struct ComposerTests {
         let card = try await store.createCard(in: nil, body: "接口约定\n\n![](cuepad://img/\(hash))")
         let draft = ComposerDraft(
             text: "  照这个改  ", images: [PickedImage(data: photo)],
-            attachment: Navigation.Outbox(content: card.body, card: card.id, project: nil))
+            attachment: Outbox(content: card.body, card: card.id, project: nil))
 
         let request = try await app.services.requestMacDelivery(draft, to: target, mode: .send)
 
