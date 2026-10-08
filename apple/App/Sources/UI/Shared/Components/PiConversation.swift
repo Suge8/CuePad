@@ -130,8 +130,10 @@ private extension AnyTransition {
     static let entry = AnyTransition.opacity.animation(Motion.quick)
 }
 
-/// 你的一句话：右侧气泡（颜色是 `Palette.bubble`），最宽到四分之三；还在路上的整颗变淡。
+/// 你的一句话：右侧气泡（颜色是 `Palette.bubble`），最宽到所在一栏的四分之三；还在路上的整颗变淡。
 private struct UserBubble: View {
+    private static let widthFraction: CGFloat = 0.78
+
     let text: String
     var dimmed = false
     var highlighted = false
@@ -139,17 +141,35 @@ private struct UserBubble: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-        Text(text)
-            .font(.body).foregroundStyle(palette.onBubble)
-            .textSelection(.enabled)
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(palette.bubble, in: shape)
-            .overlay(shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1))
-            .animation(Motion.quick, value: highlighted)
-            .opacity(dimmed ? 0.7 : 1)
-            .containerRelativeFrame(.horizontal, alignment: .trailing) { width, _ in width * 0.78 }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .transition(.entry)
+        TrailingFraction(fraction: Self.widthFraction) {
+            Text(text)
+                .font(.body).foregroundStyle(palette.onBubble)
+                .textSelection(.enabled)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(palette.bubble, in: shape)
+                .overlay(shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1))
+                .animation(Motion.quick, value: highlighted)
+                .opacity(dimmed ? 0.7 : 1)
+        }
+        .transition(.entry)
+    }
+}
+
+/// 占满给它的宽，里面那一个按"给的宽 × `fraction`"排、靠右。不用 `containerRelativeFrame`：它量的是滚动区，
+/// 不是对话所在的阅读栏——宽窗口里阅读栏比滚动区窄得多，气泡的框比栏宽，靠右就伸出栏外、贴到窗口右缘。
+private struct TrailingFraction: Layout {
+    let fraction: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width.map { $0 * fraction }, height: nil))
+        return CGSize(width: proposal.width ?? size.width, height: size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let child = subviews.first else { return }
+        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width * fraction, height: nil))
+        child.place(at: CGPoint(x: bounds.maxX, y: bounds.minY), anchor: .topTrailing, proposal: ProposedViewSize(size))
     }
 }
 

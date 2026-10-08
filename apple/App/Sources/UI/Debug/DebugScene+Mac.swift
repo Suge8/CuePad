@@ -13,6 +13,7 @@ extension DebugScene {
         if let path = defaults.string(forKey: "CuePadImport") {
             do { _ = try await workspace.services.store.importElectronLibrary(from: URL(filePath: path)) } catch { workspace.fail(error) }
         }
+        if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.sidebar = .detailOnly }
         switch scene {
         case "collapsed": workspace.sidebar = .detailOnly
         case "search": workspace.overlay = .search
