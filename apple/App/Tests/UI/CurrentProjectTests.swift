@@ -24,6 +24,19 @@ struct CurrentProjectTests {
         #expect(services.settings.currentProject == pinned.id)
     }
 
+    /// 第一次打开（没保存过当前项目）时首屏是项目，不是空的未分类。
+    @Test func 没有保存的项目时_首屏落到侧栏第一个项目() async throws {
+        _ = try await store.createProject(name: "A", color: "#000000")
+        let pinned = try await store.createProject(name: "B", color: "#000000")
+        try await store.updateProject(pinned.id) { $0.isPinned = true }
+        services.settings.currentProject = nil
+        let workspace = Workspace(services: services)
+
+        await workspace.reconcileCurrentProject()
+
+        #expect(workspace.page == .project(pinned.id))
+    }
+
     @Test func 当前项目进了回收站_回落到其余项目_没有项目时回落到未分类() async throws {
         let only = try await store.createProject(name: "A", color: "#000000")
         services.settings.currentProject = only.id
