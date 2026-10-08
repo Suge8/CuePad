@@ -117,6 +117,17 @@ final class PiProcess: @unchecked Sendable {
         try fm.copyItem(at: fixtures.appending(path: "fake-models.json"), to: agent.appending(path: "models.json"))
     }
 
+    struct FirecodeConfigRejected: Error, CustomStringConvertible {
+        let description: String
+    }
+
+    /// FireCode 对配置挑剔：开关名对不上（它增删过开关）就拒绝整份配置、什么功能都不加载（没有 `subagents` 工具），
+    /// Pi 只在启动时发一条通知。看到这条就直接带原文失败，不让测试等到超时才说"子代理没出现"。
+    func requireFirecodeConfigAccepted() throws {
+        let problem = events.compactMap { $0["message"] as? String }.first { $0.hasPrefix("FireCode 配置有问题") }
+        if let problem { throw FirecodeConfigRejected(description: "本机 FireCode 拒绝了测试配置（Fixtures/firecode-config.jsonc 要跟上它的开关名单）：\(problem)") }
+    }
+
     func stop() {
         if process.isRunning { process.terminate() }
         if ownsRoot { try? FileManager.default.removeItem(at: root) }
