@@ -189,6 +189,15 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 .transition(.opacity)
             }
         }
+        // 整块玻璃都是输入框：点在文字区以外（边距、两个圆钮之间的空处）也聚焦，不落空（文字区只占中间一条，
+        // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与发送钮在它上面，照旧自己接
+        .background {
+            if !focused {
+                Color.clear.contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
+                    .onTapGesture { focus.wrappedValue = true }
+                    .accessibilityHidden(true)
+            }
+        }
         // 收成短胶囊时居中；展开是同一块玻璃从中间向两边长到全宽
         .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
         .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded)
