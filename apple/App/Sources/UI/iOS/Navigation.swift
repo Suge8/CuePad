@@ -111,7 +111,6 @@ final class Navigation {
     var agentPanel = false
     /// 各会话回复框的草稿（按会话记录 id），回复框的唯一事实源：离开会话再回来还在；文字另存在本机偏好、跨退出保留，
     /// 带上的卡片与图片只留在这次运行。"发到 Mac"带来的卡片或任务也写进这里。
-    private var replyDrafts: [UUID: ComposerDraft] = [:]
     @ObservationIgnored private let settings: AppSettings
 
     init(settings: AppSettings) {
@@ -259,9 +258,9 @@ final class Navigation {
         outbox = nil
         task = nil
         if let draft {
-            var reply = replyDraft(for: id)
+            var reply = settings.replyDraft(for: id)
             reply.attachment = draft
-            setReplyDraft(reply, for: id)
+            settings.setReplyDraft(reply, for: id)
         }
         Task {
             let seed = try? await SessionDigest.read(id, sessionID: sessionID, from: store)
@@ -278,16 +277,6 @@ final class Navigation {
     /// 在 Agent 页选了筛选：记下来；从项目页进来的那一页上换的不记。
     func chooseAgentFilter(_ project: UUID?, entered: UUID?) {
         if entered == nil { settings.agentProject = project }
-    }
-
-    func replyDraft(for session: UUID) -> ComposerDraft {
-        replyDrafts[session] ?? ComposerDraft(text: settings.replyText(for: session))
-    }
-
-    /// 发出后传空草稿：文字一并从本机偏好里清掉。
-    func setReplyDraft(_ draft: ComposerDraft, for session: UUID) {
-        replyDrafts[session] = draft
-        settings.setReplyText(draft.text, for: session)
     }
 
     /// 浮起随手记输入框；`project` 是入口指定的落点（小组件），不给时接着上次留下的草稿与落点。

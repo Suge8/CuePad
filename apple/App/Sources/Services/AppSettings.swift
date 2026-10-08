@@ -27,6 +27,7 @@ final class AppSettings {
     private static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
 
     @ObservationIgnored private let defaults: UserDefaults
+    private var replyDrafts: [UUID: ComposerDraft] = [:]
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
     /// W3C code 形式的加速键（如 `Alt+Space`），与 Electron 版存储格式一致。
@@ -82,14 +83,17 @@ final class AppSettings {
         sessionSeen = seen
     }
 
-    /// 会话回复框里写了还没发的字（按会话记录 id），跨退出保留；草稿本身在 `Navigation`。
-    func replyText(for session: UUID) -> String {
-        (defaults.dictionary(forKey: Key.replyTexts) as? [String: String])?[session.uuidString] ?? ""
+    /// 会话回复框的草稿（按会话记录 id，iOS 与 Mac 同一份）：离开会话再回来还在；文字另存本机偏好、跨退出保留，
+    /// 带上的卡片与图片只留在这次运行。
+    func replyDraft(for session: UUID) -> ComposerDraft {
+        replyDrafts[session] ?? ComposerDraft(text: (defaults.dictionary(forKey: Key.replyTexts) as? [String: String])?[session.uuidString] ?? "")
     }
 
-    func setReplyText(_ text: String, for session: UUID) {
+    /// 发出后传空草稿：文字一并从本机偏好里清掉。
+    func setReplyDraft(_ draft: ComposerDraft, for session: UUID) {
+        replyDrafts[session] = draft
         var texts = defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]
-        texts[session.uuidString] = text.allSatisfy(\.isWhitespace) ? nil : text
+        texts[session.uuidString] = draft.text.allSatisfy(\.isWhitespace) ? nil : draft.text
         defaults.set(texts, forKey: Key.replyTexts)
     }
 

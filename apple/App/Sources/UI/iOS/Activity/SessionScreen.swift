@@ -32,10 +32,7 @@ struct SessionScreen: View {
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
     private static let readingWidth: CGFloat = 640
     private var session: PiSessionState? { digest?.session ?? lastSeen }
-    /// 回复框的草稿在 `Navigation`（离开会话再回来还在）。
-    private var draft: Binding<ComposerDraft> {
-        Binding(get: { navigation.replyDraft(for: id) }, set: { navigation.setReplyDraft($0, for: id) })
-    }
+    private var draft: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: id) }
     /// 此刻要显示的结束（还在路上的，或没能结束、之后没再发过别的），与 Agent 页同一条规则。
     private var shownEnd: DeliveryRequest? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? []) }
     private var fetchingTranscript: Bool {

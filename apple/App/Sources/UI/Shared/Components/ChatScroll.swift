@@ -162,9 +162,16 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                 // containerSize 已扣掉上下 inset：倒置时最新在偏移 0 处；正着排时可见区底边 = 偏移 + 顶部 inset + 容器高
                 let read = geometry.contentOffset.y + geometry.contentInsets.top
                 let distance = Self.inverted ? read : geometry.contentSize.height - read - geometry.containerSize.height
-                return Reading(distance: max(0, distance.rounded()), screen: geometry.containerSize.height.rounded())
+                return Reading(
+                    distance: max(0, distance.rounded()), screen: geometry.containerSize.height.rounded(),
+                    end: (geometry.contentSize.height - geometry.containerSize.height).rounded())
             } action: { _, reading in
                 follow.wrappedValue.scrolled(distance: reading.distance, screen: reading.screen, byUser: follow.wrappedValue.scrolling)
+                // 正着排时底锚只管内容变高；底下回复框长高（多一行、带上卡片）是滚动区变矮，滚动区按顶边留住偏移、离开了底：
+                // 贴着最新就补滚到底。在读数里补（布局定下来之后），按偏移给（`scrollTo(edge:)` 与上次相同时不再生效，y 已含顶部 inset）
+                if !Self.inverted, reading.distance > 0, follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
+                    position.scrollTo(y: reading.end)
+                }
             }
             // 用户滚动的方向（顶栏回来或让开）：倒置时偏移变小是往最新走
             .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
@@ -182,6 +189,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     private struct Reading: Equatable {
         var distance: CGFloat
         var screen: CGFloat
+        /// 滚到最新处的偏移（正着排时）。
+        var end: CGFloat
     }
 
     private func toNewest() {

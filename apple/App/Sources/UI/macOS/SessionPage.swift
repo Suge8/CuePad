@@ -50,8 +50,6 @@ struct SessionPage: View {
     @State private var stored: SessionDigest?
     @State private var askedForTranscript = false
     @State private var confirmingEnd = false
-    /// 回复框的草稿：只活在这次打开的页里。
-    @State private var draft = ComposerDraft()
 
     /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
     private static let readingWidth: CGFloat = 760
@@ -72,7 +70,7 @@ struct SessionPage: View {
                     if let reason = shownEnd?.failure, session.state != .known(.ended) {
                         Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)")
                     }
-                    PiReplyBar(session: session, config: digest.config, draft: $draft, compact: false)
+                    PiReplyBar(session: session, config: digest.config, draft: services.settings.replyDraftBinding(for: session.id), compact: false)
                 }
                 .padding(.horizontal, 24).padding(.bottom, 16)
                 .frame(maxWidth: Self.readingWidth)

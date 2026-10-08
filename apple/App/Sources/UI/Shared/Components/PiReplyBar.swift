@@ -186,3 +186,10 @@ struct SyncHint: View {
             .lineLimit(2)
     }
 }
+
+extension AppSettings {
+    /// 回复框绑定的草稿（`replyDraft`，离开会话再回来还在）。
+    func replyDraftBinding(for session: UUID) -> Binding<ComposerDraft> {
+        Binding(get: { self.replyDraft(for: session) }, set: { self.setReplyDraft($0, for: session) })
+    }
+}
