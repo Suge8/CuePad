@@ -86,6 +86,8 @@ final class Navigation {
         var launched: Launched?
         /// 从"交给 Agent"选了新会话：灵感或任务的正文与补的话带过来作开场。
         var draft: ComposerDraft?
+        /// 为哪条灵感或提示词开的（交给 Agent 时定下）：开好后关联它。
+        var card: UUID?
     }
 
     var layout: Layout = .tabs
@@ -148,11 +150,11 @@ final class Navigation {
     }
 
     /// 交给 Agent 时选了新会话：收起交给 Agent 的输入框，换成新会话的，草稿带过去。
-    func handOffToNewSession(_ draft: ComposerDraft) {
+    func handOffToNewSession(_ draft: ComposerDraft, card: UUID?) {
         let project = outbox?.project
         outbox = nil
         task = nil
-        newSession = NewSession(project: project, draft: draft)
+        newSession = NewSession(project: project, draft: draft, card: card)
     }
 
     /// 任务在半屏浮窗里打开（书架"正在推进"、任务页、项目页的任务行）；灵感照旧推入整页纸。

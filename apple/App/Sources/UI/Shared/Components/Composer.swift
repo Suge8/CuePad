@@ -45,10 +45,12 @@ struct ComposerDraft {
 }
 
 extension AppServices {
-    /// 把草稿发给一个 Pi 会话（写投送请求）：带上的第一张卡片或任务关联到这条请求。
+    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（交给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
     @discardableResult
-    func requestMacDelivery(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode) async throws -> DeliveryRequest {
-        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: draft.attachments.first?.card)
+    func requestMacDelivery(
+        _ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
+    ) async throws -> DeliveryRequest {
+        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: card ?? draft.attachments.first?.card)
     }
 }
 
@@ -75,6 +77,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 选卡片时排在前面的项目（回复框是会话所属的项目）。
     let cardsFrom: UUID?
     /// 一直展开（浮起的随手记）。
+    /// 这张带上的卡片不能拿掉（交给 Agent 的输入框是为它打开的）。
+    let keeps: UUID?
     let pinnedOpen: Bool
     /// 没聚焦、没内容时收成短胶囊（＋ 与一行提示），点它照常聚焦展开（会话页在看历史时）。
     let compact: Bool
@@ -97,10 +101,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
-        submit: (() -> Void)? = nil,
+        keeps: UUID? = nil, submit: (() -> Void)? = nil,
         @ViewBuilder header: () -> Header, @ViewBuilder tools: () -> Tools, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
+        self.keeps = keeps
         self.submit = submit
         self.prompt = prompt
         self.label = label
@@ -249,10 +254,12 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             .buttonStyle(.plain)
             .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
             .accessibilityHint("看全文")
-            Button("不带了", systemImage: "xmark") { drop(outbox) }
-                .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
-                .frame(width: 44, height: 44).contentShape(.rect)
-                .buttonStyle(.plain)
+            if outbox.card != keeps {
+                Button("不带了", systemImage: "xmark") { drop(outbox) }
+                    .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
+                    .frame(width: 44, height: 44).contentShape(.rect)
+                    .buttonStyle(.plain)
+            }
         }
         .background(palette.fill, in: shape)
         #if os(iOS)
@@ -268,8 +275,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     }
 
     @ViewBuilder private func menu(_ outbox: Outbox) -> some View {
-        Button("展开编辑", systemImage: "text.cursor") { expand(outbox) }
-        Button("不带了", systemImage: "xmark", role: .destructive) { drop(outbox) }
+        if outbox.card != keeps {
+            Button("展开编辑", systemImage: "text.cursor") { expand(outbox) }
+            Button("不带了", systemImage: "xmark", role: .destructive) { drop(outbox) }
+        }
     }
 
     private func drop(_ outbox: Outbox) { draft.attachments.removeAll { $0.id == outbox.id } }

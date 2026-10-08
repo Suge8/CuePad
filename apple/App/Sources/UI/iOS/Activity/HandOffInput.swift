@@ -32,7 +32,7 @@ struct HandOffInput: View {
     var body: some View {
         Composer(
             draft: $draft, prompt: "补一句（可不填）", label: "交给 Agent", focus: $focused,
-            accepts: [.images, .cards], cardsFrom: outbox.project, pinnedOpen: true,
+            accepts: [.images, .cards], cardsFrom: outbox.project, pinnedOpen: true, keeps: outbox.card,
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)
                 if let failure = config?.failure {
@@ -109,7 +109,7 @@ struct HandOffInput: View {
         sending = true
         workspace.attempt {
             defer { sending = false }
-            _ = try await services.requestMacDelivery(sent, to: session, mode: mode)
+            _ = try await services.requestMacDelivery(sent, to: session, mode: mode, card: outbox.card)
             focused = false
             navigation.outbox = nil
             workspace.say("已交给 \(session.title)")
@@ -118,7 +118,7 @@ struct HandOffInput: View {
 
     /// 开新会话交给它：换成新会话的输入框，正文与补的话带过去。
     private func newSession() {
-        navigation.handOffToNewSession(draft)
+        navigation.handOffToNewSession(draft, card: outbox.card)
     }
 }
 #endif
