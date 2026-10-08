@@ -12,6 +12,8 @@ struct ComposerField: NSViewRepresentable {
     let maxLines: Int
     let ink: Color
     let focus: FocusState<Bool>.Binding
+    /// 方向键、↩/Tab、Esc 先交给调用方（斜杠命令面板打开时用）；返回 true 表示已处理，不再按文本视图的默认行为走。
+    var keys: (ComposerKey) -> Bool = { _ in false }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -76,6 +78,16 @@ struct ComposerField: NSViewRepresentable {
         }
 
         func textView(_ view: NSTextView, doCommandBy selector: Selector) -> Bool {
+            let key: ComposerKey? =
+                switch selector {
+                case #selector(NSResponder.moveUp(_:)): .up
+                case #selector(NSResponder.moveDown(_:)): .down
+                case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)): .accept
+                case #selector(NSResponder.cancelOperation(_:)): .dismiss
+                default: nil
+                }
+            // 输入法组字期间的按键属于输入法
+            if let key, !view.hasMarkedText(), parent.keys(key) { return true }
             guard selector == #selector(NSResponder.cancelOperation(_:)) else { return false }
             view.window?.makeFirstResponder(nil)
             return true

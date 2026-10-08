@@ -45,6 +45,8 @@ struct PiReplyBar: View {
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft && reachable && !sending }
     private var canStop: Bool { MacDelivery.canStop(session) }
+    /// 输入框里是一条已知的斜杠命令时要发出的整行（`PiSlash.line`）。
+    private var commandLine: String? { answering == nil ? PiSlash.line(of: draft, in: session.commands) : nil }
 
     /// 单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中。
     private static let radius: CGFloat = 25
@@ -57,7 +59,7 @@ struct PiReplyBar: View {
         case .message, .answer:
             Composer(
                 draft: $draft, prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, compact: compact, showsSend: canStop, submit: submit,
+                cardsFrom: session.projectID, compact: compact, showsSend: canStop, commands: answering == nil ? session.commands : [], submit: submit,
                 header: {
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if focused, let failure = config?.failure {
@@ -121,7 +123,7 @@ struct PiReplyBar: View {
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .accessibilityLabel("回答")
-        } else if let first = modes.first, modes.count > 1 {
+        } else if let first = modes.first, modes.count > 1, commandLine == nil {
             let others = modes.dropFirst()
             Menu {
                 ForEach(Array(others), id: \.self) { mode in
@@ -190,13 +192,18 @@ struct PiReplyBar: View {
         }
     }
 
+    /// 斜杠命令走投送方式 `command`（由 Pi 展开执行），不分马上说还是等它做完再说。
     private func send(_ mode: DeliveryMode) {
-        let outgoing = draft
+        let outgoing = draft, line = commandLine
         guard canSend else { return }
         sending = true
         workspace.attempt {
             defer { sending = false }
-            _ = try await services.requestMacDelivery(outgoing, to: session, mode: mode)
+            if let line {
+                _ = try await services.requestMacDelivery(line, to: session, mode: .command, card: outgoing.attachments.first?.card)
+            } else {
+                _ = try await services.requestMacDelivery(outgoing, to: session, mode: mode)
+            }
             draft = ComposerDraft()
             didSend()
         }

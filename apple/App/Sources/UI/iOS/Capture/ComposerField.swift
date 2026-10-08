@@ -12,6 +12,8 @@ struct ComposerField: UIViewRepresentable {
     let ink: Color
     /// 焦点由调用方的 `.focused` 管（UIKit 文字区接得住 SwiftUI 的焦点）；Mac 的那份还要把 AppKit 侧的变化报回来。
     let focus: FocusState<Bool>.Binding
+    /// 外接键盘的方向键、↩/Tab、Esc 先交给调用方（斜杠命令面板打开时用）；返回 true 表示已处理。
+    var keys: (ComposerKey) -> Bool = { _ in false }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -45,6 +47,7 @@ struct ComposerField: UIViewRepresentable {
         view.accessibilityLabel = label
         view.maxLines = maxLines
         view.animatesScroll = !reduceMotion
+        view.keys = keys
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: GrowingTextView, context: Context) -> CGSize? {
@@ -69,6 +72,7 @@ final class GrowingTextView: UITextView {
     let placeholder = UILabel()
     var maxLines = 1
     var animatesScroll = true
+    var keys: (ComposerKey) -> Bool = { _ in false }
     /// 外部刚写进文字：下一次排版后滚到末尾。
     var revealsEnd = false
 
@@ -117,6 +121,21 @@ final class GrowingTextView: UITextView {
             revealsEnd = false
             super.contentOffset = CGPoint(x: 0, y: max(0, contentSize.height - bounds.height))
         }
+    }
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        // 输入法组合期间的按键属于输入法
+        let handled = markedTextRange == nil && presses.allSatisfy { press in
+            guard let key = press.key, !key.modifierFlags.contains(.command) else { return false }
+            return switch key.keyCode {
+            case .keyboardUpArrow: keys(.up)
+            case .keyboardDownArrow: keys(.down)
+            case .keyboardReturnOrEnter, .keyboardTab: keys(.accept)
+            case .keyboardEscape: keys(.dismiss)
+            default: false
+            }
+        }
+        if !handled { super.pressesBegan(presses, with: event) }
     }
 
     /// 光标跟随造成的滚动（不是用户在拖）走短动画，不再瞬间跳一行。

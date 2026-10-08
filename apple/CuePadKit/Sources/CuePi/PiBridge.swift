@@ -103,6 +103,13 @@ public final class PiBridge {
         }
     }
 
+    /// 执行一条斜杠命令（整行，以 / 开头）：内置命令由扩展调 Pi 的接口做，扩展命令、提示词模板与 skill 由 Pi 派发（模板与 skill 展开成这一轮的提示词，
+    /// 会话正忙时按 `whenBusy` 入队，缺省等它做完再说）。`ack` 只表示已受理，扩展命令自己的输出只出现在 Pi 的界面里；
+    /// 清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
+    public func command(_ line: String, whenBusy: PiQueueMode? = nil, in id: PiSession.ID) async throws {
+        _ = try await request(to: id) { try PiWire.slashCommand(id: $0, line: line, whenBusy: whenBusy) }
+    }
+
     /// 把文字粘贴进该会话的输入框（不发送）。
     public func paste(_ text: String, into id: PiSession.ID) async throws {
         _ = try await request(to: id) { try PiWire.pasteCommand(id: $0, text: text) }
