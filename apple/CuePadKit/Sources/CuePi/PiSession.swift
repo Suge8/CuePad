@@ -121,9 +121,9 @@ public struct PiModel: Sendable, Equatable, Decodable {
     }
 }
 
-/// 等你回答的弹窗（扩展 v7 起结构化；旧扩展只有文案，`id` 为 nil、`kind` 为空）。
+/// 等你回答的弹窗。
 public struct PiPrompt: Sendable, Equatable, Decodable {
-    /// 这次弹窗的标识，从 CuePad 作答时带上；nil 表示只能在 Pi 里答（editor、custom 弹窗，或旧扩展）
+    /// 这次弹窗的标识，从 CuePad 作答时带上；nil 表示只能在 Pi 里答（editor、custom 弹窗）
     public var id: String?
     /// `confirm` / `select` / `text`，以及只能在 Pi 里答的 `editor`、`custom`
     public var kind: String
@@ -142,11 +142,6 @@ public struct PiPrompt: Sendable, Equatable, Decodable {
     private enum CodingKeys: String, CodingKey { case id, kind, text, options }
 
     public init(from decoder: any Decoder) throws {
-        // 扩展 v4–v6 上报的是一段文字
-        if let legacy = try? decoder.singleValueContainer().decode(String.self) {
-            self.init(id: nil, kind: "", text: legacy)
-            return
-        }
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             id: try c.decodeIfPresent(String.self, forKey: .id), kind: try c.decode(String.self, forKey: .kind),

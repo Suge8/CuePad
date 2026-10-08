@@ -17,13 +17,6 @@ struct CueFormatTests {
         #expect(CueFormat.serialize(tokens) == stored)
     }
 
-    @Test("历史角色标记按分隔线解析，保存时归一化为 ---split---")
-    func legacyMarkers() {
-        let tokens = CueFormat.parse("背景\n---ask---\n问题\n  ---answer---\t\n回答\n---system---")
-        #expect(tokens.filter { $0 == .split }.count == 3)
-        #expect(CueFormat.serialize(tokens) == "背景\n---split---\n问题\n---split---\n回答\n---split---")
-    }
-
     @Test("非独占行或形近的分隔标记、残缺的图片标记都是普通文字")
     func lookalikesStayText() {
         let stored = "前缀 ---split---\n---split--- 后缀\n----split----\n![](cuepad://img/)\n![](cuepad://img/xyz)\n![](cuepad://img/ab"
@@ -45,7 +38,7 @@ struct CueSummaryTests {
     func titleLine() {
         let cases: [(String, Bool)] = [
             ("周报", true), ("  周报  ", true), ("", false), ("   ", false),
-            ("---split---", false), ("---ask---", false),
+            ("---split---", false),
             ("![](cuepad://img/ab)", false), ("![](cuepad://img/ab) ![](cuepad://img/cd)", false),
             ("![](cuepad://img/ab) 说明", true), ("\u{FFFC}", false), ("\u{FFFC} 说明", true),
         ]
@@ -74,10 +67,8 @@ struct CueSummaryTests {
     @Test("标题行文字：去掉图片引用，空白折成单个空格，跳过空行、分隔线、只有图片的行")
     func contentLines() {
         #expect(CueLines.contentLines("a ![](cuepad://img/ab) b\n\n![](cuepad://img/cd)\n---split---\n  第三行  \n") == ["a b", "第三行"])
-        #expect(CueLines.contentLines("---ask---\n问题正文") == ["问题正文"])
         #expect(CueLines.contentLines("\n\(split)\n\n正文") == ["正文"])
         #expect(CueLines.contentLines("![](cuepad://img/ab)\n\n  周报 ![](cuepad://img/cd)  \n正文") == ["周报", "正文"])
-        #expect(CueLines.contentLines("---ask---\n\n").isEmpty)
         #expect(CueLines.contentLines("![](cuepad://img/ab)").isEmpty)
         #expect(CueLines.contentLines("").isEmpty)
     }

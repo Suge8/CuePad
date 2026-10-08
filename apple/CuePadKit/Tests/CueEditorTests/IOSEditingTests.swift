@@ -35,15 +35,13 @@ private func attachments(in string: NSAttributedString?) -> [NSTextAttachment] {
 struct IOSEditingTests {
     private let split = CueFormat.splitMarker
 
-    @Test("存储格式往返：文字、图片、分隔线；旧角色标记归一化；缺失图片保留引用")
+    @Test("存储格式往返：文字、图片、分隔线；缺失图片保留引用")
     func roundTrip() throws {
         let h = EditorHarness()
         let id = try h.store.store(makePNG(width: 40, height: 30))
         let stored = "前\n![](cuepad://img/\(id))\n\(split)\n后 ![](cuepad://img/00000000deadbeef)"
         h.load(stored)
         #expect(h.stored == stored)
-        h.load("a\n---ask---\nb")
-        #expect(h.stored == "a\n\(split)\nb")
     }
 
     @Test("粘贴/拖入图片文件：委托给出带图片附件的结果，图片经注入的库存入")

@@ -10,21 +10,20 @@ public enum CueToken: Equatable, Sendable {
 }
 
 /// 存储格式（纯字符串，唯一事实源）：
-/// 分割线是独占一行的 `---split---`（历史角色标记宽容解析为分割线，保存时归一化）；
+/// 分割线是独占一行的 `---split---`；
 /// 图片是行内 `![](cuepad://img/<hash>)`。
 public enum CueFormat {
     public static let splitMarker = "---split---"
     /// 运行时正文里分割线与图片各占的一个占位字符（NSTextAttachment 用的 U+FFFC）。
     public static let objectCharacter: UniChar = 0xFFFC
 
-    private static let legacyMarkers: Set<String> = ["---ask---", "---answer---", "---system---"]
     /// 图片引用的开头；其后是内容哈希（小写十六进制）与 `)`。
     public static let imagePrefix = "![](cuepad://img/"
 
-    /// 独占一行且 trim 后是分割标记（含历史角色标记）时为分割线行。
+    /// 独占一行且 trim 后是分割标记时为分割线行。
     public static func isMarkerLine(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed == splitMarker || legacyMarkers.contains(trimmed)
+        return trimmed == splitMarker
     }
 
     public static func imageMarkup(id: String) -> String { imagePrefix + id + ")" }

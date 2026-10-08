@@ -68,7 +68,7 @@ struct TitleRuleTests {
         "\n\n周报\n正文",
         "![](cuepad://img/ab)\n标题",
         "---split---\n![](cuepad://img/ab) 说明\n后",
-        "---ask---\n \n![](cuepad://img/ab)![](cuepad://img/cd)\n真标题",
+        "---split---\n \n![](cuepad://img/ab)![](cuepad://img/cd)\n真标题",
         "![](cuepad://img/ab)\n---split---\n",
         "",
     ])
