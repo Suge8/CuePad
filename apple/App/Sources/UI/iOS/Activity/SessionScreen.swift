@@ -79,8 +79,9 @@ struct SessionScreen: View {
                 Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
             }
         }
-        // 往历史里翻时顶栏让开，往最新那边回滑一小段或回到最新就回来（同 Safari 的阅读，`ChatFollow.showsHeader`）
-        .floatingHeader(session?.title ?? "", hidden: !follow.showsHeader) {
+        // 看历史时顶栏让开，点它原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）；点状态栏是系统的回到顶端，
+        // 倒置的对话里顶端就是最新处，所以也会出现
+        .floatingHeader(session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
@@ -114,7 +115,10 @@ struct SessionScreen: View {
                         Text("这个会话已经不在了，发不到它").font(.footnote).foregroundStyle(palette.ink3)
                     } else {
                         // 在看历史时收成短胶囊，点它展开（不挪正在读的内容）
-                        PiReplyBar(session: session, config: digest?.config, draft: draft, compact: !follow.atNewest)
+                        PiReplyBar(
+                            session: session, config: digest?.config, draft: draft, compact: !follow.atNewest,
+                            stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? [])
+                        ) { follow.jumpToNewest() }
                     }
                 }
                 .padding(.horizontal, 12).padding(.bottom, 8)

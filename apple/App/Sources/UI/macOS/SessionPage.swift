@@ -38,7 +38,9 @@ extension SessionDigest {
 
 /// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），与手机的会话页同一套：
 /// 会话名与"所在 · 状态 · 计时"（`PiSessionSubtitle`）在窗口工具栏的标题位、紧跟返回与前进，"⋯"（跳到终端、结束会话）在工具栏右边——
-/// Mac 的窗口本来就有一条工具栏，手机那种浮在内容上的顶栏放在它下面就是两层页头；中间是对话
+/// Mac 的窗口本来就有一条工具栏，手机那种浮在内容上的顶栏放在它下面就是两层页头。顶栏规则与手机同一份（`ChatFollow.showsHeader`）：
+/// 看历史时标题与"⋯"让开，回到最新自动出现；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出——顶栏就在那里，
+/// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
 /// （`PiConversation`，子代理在末尾收成一行汇总），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
 /// 底部是与手机同一个回复框（`PiReplyBar`），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
 /// 推在根页上，返回回到原来那页。
@@ -50,6 +52,7 @@ struct SessionPage: View {
     @State private var stored: SessionDigest?
     @State private var askedForTranscript = false
     @State private var confirmingEnd = false
+    @State private var follow = ChatFollow()
 
     /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
     private static let readingWidth: CGFloat = 760
@@ -70,7 +73,12 @@ struct SessionPage: View {
                     if let reason = shownEnd?.failure, session.state != .known(.ended) {
                         Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)")
                     }
-                    PiReplyBar(session: session, config: digest.config, draft: services.settings.replyDraftBinding(for: session.id), compact: false)
+                    PiReplyBar(
+                        session: session, config: digest.config, draft: services.settings.replyDraftBinding(for: session.id), compact: false,
+                        stopping: MacDelivery.stopping(session, deliveries: digest.deliveries)
+                    ) {
+                        follow.jumpToNewest()
+                    }
                 }
                 .padding(.horizontal, 24).padding(.bottom, 16)
                 .frame(maxWidth: Self.readingWidth)
@@ -93,7 +101,11 @@ struct SessionPage: View {
             if let session = digest.session {
                 ToolbarItem(placement: .navigation) { title(session, digest: digest, ending: shownEnd?.isOpen == true) }
                     .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .primaryAction) { menu(session, live: live, ending: shownEnd?.isOpen == true) }
+                ToolbarItem(placement: .primaryAction) {
+                    menu(session, live: live, ending: shownEnd?.isOpen == true).headerVisibility(follow.showsHeader)
+                }
+                // 让开时连系统给圆钮画的玻璃一起不画
+                .sharedBackgroundVisibility(follow.showsHeader ? .automatic : .hidden)
             }
         }
         .observing(services.store, SessionDigest.tables, id: sessionID, into: $stored,
@@ -119,6 +131,15 @@ struct SessionPage: View {
         .frame(maxWidth: Self.titleWidth, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+        .headerVisibility(follow.showsHeader)
+        // 让开时这一块仍接指针：移上去或点一下唤出
+        .background {
+            if !follow.showsHeader {
+                Color.clear.contentShape(.rect)
+                    .onHover { if $0 { follow.reveal() } }
+                    .onTapGesture { follow.reveal() }
+            }
+        }
     }
 
     /// 工具栏右边的"⋯"：跳到终端（开在终端里的在线会话）、结束会话；两样都没有时不出现。
@@ -141,8 +162,8 @@ struct SessionPage: View {
     }
 
     private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
-        let follow = PiConversation.followKey(session: session, messages: digest.messages, deliveries: digest.deliveries)
-        return ChatScroll(followKey: follow) {
+        let followKey = PiConversation.followKey(session: session, messages: digest.messages, deliveries: digest.deliveries)
+        return ChatScroll(followKey: followKey, follow: $follow) {
             VStack(spacing: 14) {
                 if fetchingTranscript(digest) {
                     Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
@@ -250,6 +271,16 @@ extension Workspace {
                 fail(error)
             }
         }
+    }
+}
+
+private extension View {
+    /// 顶栏让开：淡到透明、不可点、读屏跳过（位置留着，工具栏不重排）。
+    func headerVisibility(_ shown: Bool) -> some View {
+        opacity(shown ? 1 : 0)
+            .animation(Motion.quick, value: shown)
+            .allowsHitTesting(shown)
+            .accessibilityHidden(!shown)
     }
 }
 #endif

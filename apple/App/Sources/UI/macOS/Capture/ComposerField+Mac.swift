@@ -16,7 +16,7 @@ struct ComposerField: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> ComposerScrollView {
         let view = GrowingTextView(usingTextLayoutManager: false)
         view.delegate = context.coordinator
         view.font = GrowingTextView.bodyFont
@@ -30,7 +30,7 @@ struct ComposerField: NSViewRepresentable {
         view.isHorizontallyResizable = false
         view.autoresizingMask = [.width]
         view.focusChanged = { [weak coordinator = context.coordinator] in coordinator?.focusChanged($0) }
-        let scroll = NSScrollView()
+        let scroll = ComposerScrollView()
         scroll.documentView = view
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
@@ -41,11 +41,17 @@ struct ComposerField: NSViewRepresentable {
         return scroll
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
+    func updateNSView(_ scroll: ComposerScrollView, context: Context) {
         context.coordinator.parent = self
         guard let view = scroll.documentView as? GrowingTextView else { return }
-        // 组字期的文字已经在 `text` 里；只在外部改写（发送后清空、展开编辑）时才写回，免得打断输入法
-        if view.string != text, !view.hasMarkedText() { view.string = text }
+        // 组字期的文字已经在 `text` 里；只在外部改写（回到会话恢复草稿、发送后清空、展开编辑、编辑后重发）时才写回，免得打断输入法。
+        // 外部写进来的光标放到末尾、排好后让末尾露出来（同 iOS 那份）
+        if view.string != text, !view.hasMarkedText() {
+            view.string = text
+            view.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+            view.revealsEnd = true
+            scroll.needsLayout = true
+        }
         view.placeholder = prompt
         view.textColor = NSColor(ink)
         view.insertionPointColor = NSColor(ink)
@@ -54,7 +60,7 @@ struct ComposerField: NSViewRepresentable {
         view.needsDisplay = true
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView scroll: NSScrollView, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView scroll: ComposerScrollView, context: Context) -> CGSize? {
         guard let width = proposal.width, let view = scroll.documentView as? GrowingTextView else { return nil }
         return CGSize(width: width, height: min(view.contentHeight(width: width), view.maxHeight))
     }
@@ -81,11 +87,24 @@ struct ComposerField: NSViewRepresentable {
     }
 }
 
+/// 文字区的滚动框：外部写进文字后，高度定下来的那次排版里滚到末尾。
+final class ComposerScrollView: NSScrollView {
+    override func layout() {
+        super.layout()
+        guard let view = documentView as? GrowingTextView, view.revealsEnd, window != nil, contentView.bounds.height > 0 else { return }
+        view.revealsEnd = false
+        contentView.scroll(to: NSPoint(x: 0, y: max(0, view.frame.height - contentView.bounds.height)))
+        reflectScrolledClipView(contentView)
+    }
+}
+
 final class GrowingTextView: NSTextView {
     static let bodyFont = NSFont.preferredFont(forTextStyle: .body)
     var placeholder = ""
     var maxLines = 1
     var focusChanged: ((Bool) -> Void)?
+    /// 外部刚写进文字：滚动区下一次排版后滚到末尾。
+    var revealsEnd = false
     /// 最大高度：排满 `maxLines` 行中文量出来的高度（中文行比西文行高），撑满时最后一行不被切一半。
     var maxHeight: CGFloat { Self.height(of: Array(repeating: "国", count: maxLines).joined(separator: "\n"), width: .greatestFiniteMagnitude) }
 

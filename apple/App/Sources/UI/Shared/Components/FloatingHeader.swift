@@ -7,12 +7,13 @@ extension View {
     /// （多个操作时调用方给一个"⋯"`Menu`）。顶上不做滚动模糊，内容从玻璃之间透出来。
     /// `hidden` 时返回钮、中间那块与右边的圆钮都让开（淡到透明、不可点、读屏跳过），导航栏本身留着：
     /// 顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，见 `ChatFollow.showsHeader`）；
-    /// 左缘右滑返回始终可用（`EdgeBackKeeper`）。
+    /// 左缘右滑返回始终可用（`EdgeBackKeeper`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出顶栏。
     /// 标题同时是读屏、返回菜单与多任务切换器里的名字。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: String, hidden: Bool = false, @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
+        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil,
+        @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        modifier(FloatingHeader(title: title, hidden: hidden, detail: detail(), trailing: trailing()))
+        modifier(FloatingHeader(title: title, hidden: hidden, reveal: reveal, detail: detail(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -35,6 +36,7 @@ enum FloatingHeaderLayout {
 private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     let title: String
     let hidden: Bool
+    let reveal: (() -> Void)?
     let detail: Detail
     let trailing: Trailing
     @Environment(\.palette) private var palette
@@ -65,6 +67,11 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
                     .accessibilityHidden(hidden)
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isHeader)
+                    .background {
+                        if hidden, let reveal {
+                            Color.clear.contentShape(.capsule).onTapGesture(perform: reveal).accessibilityHidden(true)
+                        }
+                    }
                 }
                 if Trailing.self != EmptyView.self {
                     ToolbarItem(placement: .primaryAction) {

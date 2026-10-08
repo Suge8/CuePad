@@ -6,6 +6,9 @@ import SwiftUI
 /// Pi 空闲时直接发；正忙时点发送钮是等它做完再说，长按选马上说；Mac 上开在终端里的还可只放进输入框（按住选）。可用的说法见 `MacDelivery.reply`。
 /// 等你确认时按问题类型：文字型问题它就是作答框（只收文字）；选择、确认型收成一行"先在上面作答"，
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
+/// Agent 自己在跑一轮时（`MacDelivery.canStop`）空着的回复框右边是"停止"——这时最可能想做的就是叫停（同 ChatGPT、Claude）；
+/// 写了字就还是发送（想补充或改方向时停止反而打断），停止仍在按住发送钮的菜单里。停止发出后到这一轮歇下前转圈"正在停止"，
+/// 进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都写一条投送请求给会话所在的 Mac（本机的由本机执行器送达），
 /// 发出后清空，请求马上贴到对话末尾。Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
 struct PiReplyBar: View {
@@ -15,6 +18,10 @@ struct PiReplyBar: View {
     @Binding var draft: ComposerDraft
     /// 在看历史：收成短胶囊。
     let compact: Bool
+    /// 停止请求已发出、这一轮还没歇下（`MacDelivery.stopping`）。
+    let stopping: Bool
+    /// 发出之后（会话页回到最新）。
+    let sent: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -35,7 +42,9 @@ struct PiReplyBar: View {
 
     private var accepts: ComposerKinds { answering == nil ? [.images, .cards] : [] }
     private var reachable: Bool { services.reachesPiHost }
-    private var canSend: Bool { !draft.isEmpty(accepting: accepts) && reachable && !sending }
+    private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
+    private var canSend: Bool { hasDraft && reachable && !sending }
+    private var canStop: Bool { MacDelivery.canStop(session) }
 
     /// 单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中。
     private static let radius: CGFloat = 25
@@ -47,7 +56,7 @@ struct PiReplyBar: View {
         case .message, .answer:
             Composer(
                 draft: $draft, prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, compact: compact, submit: submit,
+                cardsFrom: session.projectID, compact: compact, showsSend: canStop, submit: submit,
                 header: {
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if focused, let failure = config?.failure {
@@ -84,11 +93,12 @@ struct PiReplyBar: View {
     }
 
     /// 发出后焦点去哪，两端只在这里分：手机收起键盘看对话；Mac 焦点留在回复框接着写。
-    private func sent() {
+    private func didSend() {
         #if os(iOS)
         focused = false
         #endif
         sentCount += 1
+        sent()
     }
 
     /// 等你确认、不能发自由文本时收成的一行。
@@ -100,7 +110,12 @@ struct PiReplyBar: View {
     }
 
     @ViewBuilder private var sendControl: some View {
-        if answering != nil {
+        if canStop, !hasDraft {
+            Button(action: stop) { StopGlyph(stopping: stopping) }
+                .buttonStyle(.plain)
+                .disabled(stopping || !reachable)
+                .accessibilityLabel(stopping ? "正在停止" : DeliveryMode.stop.label)
+        } else if answering != nil {
             Button(action: answer) { SendGlyph(enabled: canSend) }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
@@ -113,6 +128,10 @@ struct PiReplyBar: View {
                         Label(mode.label, systemImage: Self.symbol(mode))
                         if let explanation = mode.explanation { Text(explanation) }
                     }
+                }
+                if canStop, !stopping {
+                    Divider()
+                    Button(DeliveryMode.stop.label, systemImage: "stop.circle", role: .destructive, action: stop)
                 }
             } label: {
                 SendGlyph(enabled: canSend)
@@ -157,7 +176,16 @@ struct PiReplyBar: View {
             defer { sending = false }
             _ = try await services.answer(value, to: session)
             draft.text = ""
-            sent()
+            didSend()
+        }
+    }
+
+    /// 停止这一轮：写一条停止请求，等 Mac 受理；没受理（不在线、出错）时提示原因。受理之后转圈到这一轮歇下（看状态）。
+    private func stop() {
+        let session = session
+        workspace.attempt {
+            let request = try await services.stop(session)
+            if let failure = try await services.outcome(of: request.id).failure { throw SendError.notDelivered(failure) }
         }
     }
 
@@ -169,7 +197,7 @@ struct PiReplyBar: View {
             defer { sending = false }
             _ = try await services.requestMacDelivery(outgoing, to: session, mode: mode)
             draft = ComposerDraft()
-            sent()
+            didSend()
         }
     }
 }

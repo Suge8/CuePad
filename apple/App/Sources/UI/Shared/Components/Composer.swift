@@ -64,6 +64,7 @@ enum ComposerSource { case cards, photos, camera, files }
 /// （会话回复框的模型与思考强度，只在聚焦时有），右发送钮。空着又没聚焦时收成一行：＋、一行文字区（发送钮不占位）；
 /// 聚焦或有内容时展开成两层，＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和发送钮，草稿怎么处理由它们决定；给了 `submit` 时 ⌘↩ 发送（iPad 外接键盘同样）。
+/// 发送钮平时有内容才出现；`showsSend` 时空着也在（收成一行时在文字区右边）——会话回复框在 Agent 跑一轮时那里是"停止"。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
     let prompt: String
@@ -75,6 +76,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     let pinnedOpen: Bool
     /// 没聚焦、没内容时收成短胶囊（＋ 与一行提示），点它照常聚焦展开（会话页在看历史时）。
     let compact: Bool
+    /// 空着也露出发送钮的位置（见上）。
+    let showsSend: Bool
     let focus: FocusState<Bool>.Binding
     private let header: Header
     /// 工具排里"＋"右边的小圆钮（会话回复框的模型与思考强度），只在聚焦时出现。
@@ -94,10 +97,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
-        submit: (() -> Void)? = nil,
+        showsSend: Bool = false, submit: (() -> Void)? = nil,
         @ViewBuilder header: () -> Header, @ViewBuilder tools: () -> Tools, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
+        self.showsSend = showsSend
         self.submit = submit
         self.prompt = prompt
         self.label = label
@@ -120,11 +124,12 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private var expanded: Bool { pinnedOpen || focused || !draft.isEmpty(accepting: [.images, .cards]) }
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。
-    private var shrunk: Bool { compact && !expanded }
+    private var shrunk: Bool { compact && !expanded && !showsSend }
     /// 短胶囊的宽：＋ 加一行短提示。
     private static var compactWidth: CGFloat { 220 }
     private var reservesSend: Bool { Send.self != EmptyView.self }
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
+    private var sendVisible: Bool { reservesSend && (hasContent || showsSend) }
 
     var body: some View {
         field
@@ -134,7 +139,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .onChange(of: focus.wrappedValue, initial: true) { _, now in
             withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now }
         }
-        .animation(Motion.quick, value: hasContent)
+        .animation(Motion.quick, value: sendVisible)
         .animation(Motion.quick, value: draft.attachment?.id)
         .animation(Motion.quick, value: draft.images.map(\.id))
         .modifier(ImageSources(source: $source, images: $draft.images))
@@ -169,9 +174,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 ComposerField(
                     text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus)
                     .focused(focus)
-                    .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, 18)
+                    .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, !expanded && sendVisible ? 2 : 18)
                     .padding(.top, 14).padding(.bottom, expanded ? 4 : 14)
                     .frame(minHeight: expanded ? nil : Self.slot)
+                if !expanded, sendVisible { sendSlot }
             }
             if expanded {
                 HStack(spacing: 0) {
@@ -181,6 +187,15 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     if reservesSend { sendSlot }
                 }
                 .transition(.opacity)
+            }
+        }
+        // 整块玻璃都是输入框：点在文字区以外（边距、两个圆钮之间的空处）也聚焦，不落空（文字区只占中间一条，
+        // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与发送钮在它上面，照旧自己接
+        .background {
+            if !focused {
+                Color.clear.contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
+                    .onTapGesture { focus.wrappedValue = true }
+                    .accessibilityHidden(true)
             }
         }
         // 收成短胶囊时居中；展开是同一块玻璃从中间向两边长到全宽
@@ -198,7 +213,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 发送钮的位置一直留着：有内容才放进来，输入框的宽度不随它变，文字不会因此重排。
     private var sendSlot: some View {
         ZStack {
-            if hasContent { send.transition(.scale(scale: 0.6).combined(with: .opacity)) }
+            if sendVisible { send.transition(.scale(scale: 0.6).combined(with: .opacity)) }
         }
         .frame(width: Self.slot, height: Self.slot)
     }
@@ -365,6 +380,26 @@ struct SendGlyph: View {
         CircleGlyph(
             systemImage: "arrow.up", ink: enabled ? palette.onSignature : palette.ink3, fill: enabled ? palette.signature : palette.fill)
             .animation(Motion.quick, value: enabled)
+    }
+}
+
+/// 输入框右下角的停止钮（Agent 跑一轮时代替发送钮）：墨色实心方块；停止请求已发出、这一轮还没歇下时换成转圈，不能再点。
+struct StopGlyph: View {
+    let stopping: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ZStack {
+            if stopping {
+                ProgressView().controlSize(.small).tint(palette.ink2).frame(width: 36, height: 36).background(palette.fill, in: .circle)
+            } else {
+                Image(systemName: "stop.fill").font(.caption.weight(.bold)).foregroundStyle(palette.paper)
+                    .frame(width: 36, height: 36).background(palette.ink, in: .circle)
+            }
+        }
+        .frame(width: 44, height: 44)
+        .contentShape(.circle)
+        .animation(Motion.quick, value: stopping)
     }
 }
 

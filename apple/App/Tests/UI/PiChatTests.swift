@@ -94,17 +94,19 @@ struct ChatFollowTests {
         #expect(!follow.hasUnseen)
     }
 
-    /// 顶栏跟阅读走（同 Safari）：往历史里翻就让开，往最新那边回滑一小段就回来，再往历史翻又让开；回到最新一直在。
-    @Test func 看历史时顶栏让开_往最新回滑一点就回来() {
+    /// 顶栏：离开最新就让开，看历史期间怎么滑都不出现；点顶部唤出，再滑又让开；回到最新自动出现。
+    @Test func 看历史时顶栏一直让开_点顶部唤出_再滑又让开_回到最新自动出现() {
         var follow = ChatFollow()
         #expect(follow.showsHeader)
         follow.scrolled(distance: 300, screen: screen, byUser: true)
         #expect(!follow.showsHeader)
-        follow.moved(towardNewest: 10)
-        #expect(!follow.showsHeader)
-        follow.moved(towardNewest: 20)
+        for distance in stride(from: 290.0, through: 40, by: -10) {
+            follow.scrolled(distance: distance, screen: screen, byUser: true)
+            #expect(!follow.showsHeader)
+        }
+        follow.reveal()
         #expect(follow.showsHeader)
-        follow.moved(towardNewest: -40)
+        follow.scrolled(distance: 120, screen: screen, byUser: true)
         #expect(!follow.showsHeader)
         follow.scrolled(distance: 0, screen: screen, byUser: true)
         #expect(follow.showsHeader)

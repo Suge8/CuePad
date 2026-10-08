@@ -31,8 +31,14 @@ struct ComposerField: UIViewRepresentable {
 
     func updateUIView(_ view: GrowingTextView, context: Context) {
         context.coordinator.parent = self
-        // 组合期的文字已经在 `text` 里；只在外部改写（发送后清空、展开编辑）时才写回，免得打断输入法
-        if view.text != text, view.markedTextRange == nil { view.text = text }
+        // 组合期的文字已经在 `text` 里；只在外部改写（回到会话恢复草稿、发送后清空、展开编辑、编辑后重发）时才写回，免得打断输入法。
+        // 外部写进来的光标放到末尾、排好后让末尾露出来：接着写的地方在末尾，撑满行数时看见的是最后几行而不是开头
+        if view.text != text, view.markedTextRange == nil {
+            view.text = text
+            view.selectedRange = NSRange(location: (text as NSString).length, length: 0)
+            view.revealsEnd = true
+            view.setNeedsLayout()
+        }
         view.placeholder.text = prompt
         view.placeholder.isHidden = !view.text.isEmpty
         view.textColor = UIColor(ink)
@@ -63,6 +69,8 @@ final class GrowingTextView: UITextView {
     let placeholder = UILabel()
     var maxLines = 1
     var animatesScroll = true
+    /// 外部刚写进文字：下一次排版后滚到末尾。
+    var revealsEnd = false
 
     /// 最大高度：同一字体下排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），
     /// 撑满时最后一行不被切一半；字号大到放不下时少排几行。
@@ -104,6 +112,11 @@ final class GrowingTextView: UITextView {
     override func layoutSubviews() {
         super.layoutSubviews()
         placeholder.frame = CGRect(x: 0, y: 0, width: bounds.width, height: placeholder.font.lineHeight)
+        // 高度定下来之后才知道末尾在哪；还没有窗口（未上屏）时等上屏后的那次排版
+        if revealsEnd, window != nil, bounds.height > 0 {
+            revealsEnd = false
+            super.contentOffset = CGPoint(x: 0, y: max(0, contentSize.height - bounds.height))
+        }
     }
 
     /// 光标跟随造成的滚动（不是用户在拖）走短动画，不再瞬间跳一行。

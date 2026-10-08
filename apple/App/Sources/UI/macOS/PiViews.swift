@@ -56,8 +56,7 @@ struct PiSetupGuide: View {
     }
 
     private func copy(_ command: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(command, forType: .string)
+        Clipboard.copy(command)
         copied = true
     }
 }
