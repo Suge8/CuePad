@@ -172,6 +172,26 @@ struct MacSyncTests {
         #expect(try await services.store.allPiSessionStates().first?.thinking == .unknown("ultra"))
     }
 
+    /// 上下文余量与斜杠命令清单写成同步记录里的结构化字段（手机据此画圆环、弹命令面板）；Pi 报的本版本不认识的来源原样留着。
+    @Test func 会话的上下文余量与命令清单写进同步记录() async throws {
+        var reporting = session("s1")
+        reporting.context = PiContext(tokens: 42_000, window: 200_000)
+        reporting.commands = [
+            PiCommand(name: "compact", description: "压缩上下文", source: "builtin", hint: "[说明]"),
+            PiCommand(name: "skill:review", description: nil, source: "skill", hint: nil),
+            PiCommand(name: "x", description: nil, source: "plugin", hint: nil),
+        ]
+        try await services.consumePiChanges(changes([.appeared(reporting)]))
+
+        let stored = try #require(try await services.store.allPiSessionStates().first)
+        #expect(stored.context == PiContextUsage(tokens: 42_000, window: 200_000))
+        #expect(stored.commands == [
+            PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]"),
+            PiSlashCommand(name: "skill:review", summary: nil, source: .known(.skill)),
+            PiSlashCommand(name: "x", summary: nil, source: .unknown("plugin")),
+        ])
+    }
+
     @Test func 等你回答的弹窗写进同步记录() async throws {
         var asked = session("s1", state: .waitingUser(kind: "select", title: "选哪个？"))
         asked.question = PiPrompt(id: "p-1", kind: "select", text: "选哪个？", options: ["A", "B"])
@@ -205,13 +225,28 @@ struct MacSyncTests {
 
     // MARK: 手机发来的投送请求
 
+    /// 等请求有结果；10 秒没有就失败并说明（观察流不会自己结束，没有上限会无声挂住整个测试宿主）。
     private func awaitFinished(_ id: UUID) async throws -> DeliveryRequest {
-        let watchdog = Task { try await Task.sleep(for: .seconds(10)); throw CancellationError() }
-        defer { watchdog.cancel() }
-        for try await request in services.store.observe([.deliveryRequests], { try $0.deliveryRequest(id) }) {
-            if let request, request.status == .known(.succeeded) || request.status == .known(.failed) { return request }
+        let store = services.store
+        return try await withThrowingTaskGroup(of: DeliveryRequest.self) { group in
+            group.addTask {
+                for try await request in store.observe([.deliveryRequests], { try $0.deliveryRequest(id) }) {
+                    if let request, request.status == .known(.succeeded) || request.status == .known(.failed) { return request }
+                }
+                throw CancellationError()
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(10))
+                throw TimedOut(what: "投送请求 \(id) 没有在 10 秒内出结果")
+            }
+            defer { group.cancelAll() }
+            return try await group.next()!
         }
-        throw CancellationError()
+    }
+
+    private struct TimedOut: Error, CustomStringConvertible {
+        let what: String
+        var description: String { what }
     }
 
     @Test func 手机的Pi直发请求在这台Mac执行并写回结果() async throws {
@@ -228,6 +263,38 @@ struct MacSyncTests {
         // 带上请求 id：扩展写进会话文件里那条消息，对话据此把请求气泡换成它
         #expect(rig.channels.calls == [.send(PiMessage(text: "做这件事", whenBusy: .steer, deliveryID: request.id.uuidString), "sess-1.100")])
         #expect(done.handledBy == TestApp.hostID)
+    }
+
+    /// 斜杠命令走桥的命令通道（由 Pi 展开执行，不是当文字发出）；忙时按"等它做完再说"排队，和发出去的话一样记发送记录。
+    @Test func 手机的斜杠命令请求交给桥按命令执行() async throws {
+        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
+        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestDelivery(
+            "/greet world", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .command)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.channels.calls == [.command("/greet world", .followUp, "sess-1.100")])
+        #expect(try await services.store.sendRecords().map(\.content) == ["/greet world"])
+    }
+
+    @Test func 斜杠命令里带图片按失败写回() async throws {
+        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
+        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: false)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        // 图片文件在本机（没到的图片执行器会等它同步过来，那是另一条路径）
+        let hash = try services.store.files.store(pngData(shade: 0.3))
+        let request = try await services.store.requestDelivery(
+            "/greet\n\n![](cuepad://img/\(hash))", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .command)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.failed))
+        #expect(rig.channels.calls.isEmpty)
     }
 
     @Test func 手机的作答请求交给扩展作答_不写发送记录() async throws {

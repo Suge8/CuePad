@@ -65,6 +65,46 @@ struct BridgeClientTests {
         #expect(log.changes.contains { if case .infoChanged(let s) = $0 { s.model?.id == "opus" } else { false } })
     }
 
+    // MARK: 上下文余量与斜杠命令
+
+    @Test func contextAndCommandsComeFromHelloAndFollowInfoUpdates() async throws {
+        let compact = FakeExtension.WireCommand(name: "compact", description: "压缩上下文", source: "builtin", hint: "[说明]")
+        let ext = FakeExtension(directory: dir, options: .init(context: (tokens: 42_000, window: 200_000), commands: [compact]))
+        try ext.start()
+        try bridge.start()
+        try await eventually("hello 带上下文与命令") { session(ext.id) != nil }
+
+        let first = try #require(session(ext.id))
+        #expect(first.context == PiContext(tokens: 42_000, window: 200_000))
+        #expect(first.commands == [PiCommand(name: "compact", description: "压缩上下文", source: "builtin", hint: "[说明]")])
+
+        ext.setUsage(context: (tokens: nil, window: 200_000), commands: [compact, .init(name: "skill:review", description: nil, source: "skill")])
+        try await eventually("压缩后未知，清单随之更新") { session(ext.id)?.commands.count == 2 }
+        #expect(session(ext.id)?.context == PiContext(tokens: nil, window: 200_000))
+        #expect(session(ext.id)?.commands.last == PiCommand(name: "skill:review", description: nil, source: "skill", hint: nil))
+
+        ext.setUsage(context: nil, commands: [])
+        try await eventually("没有模型就没有上下文") { session(ext.id)?.context == nil && session(ext.id)?.commands.isEmpty == true }
+    }
+
+    @Test func commandSendsTheLineWithTheQueueModeAndARefusalSurfaces() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        try await eventually("发现") { session(ext.id) != nil }
+
+        try await bridge.command("/review src", whenBusy: .steer, in: ext.id)
+        let sent = try #require(ext.commands.last?.json)
+        #expect(sent["t"] as? String == "command" && sent["text"] as? String == "/review src" && sent["deliverAs"] as? String == "steer")
+
+        try await bridge.command("/new", in: ext.id)
+        #expect(ext.commands.last?.json["deliverAs"] == nil)
+
+        ext.onCommand = { _, _ in ["ok": false, "error": "unknown_command"] }
+        await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/nope", in: ext.id) }
+        #expect(PiBridgeError.rejected("unknown_command").errorDescription?.contains("没有这个命令") == true)
+    }
+
     @Test func configureSendsTheCommandAndAShutOutModelIsRejected() async throws {
         let ext = FakeExtension(directory: dir)
         ext.onCommand = { _, command in

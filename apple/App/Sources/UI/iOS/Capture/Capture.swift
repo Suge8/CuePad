@@ -17,7 +17,7 @@ struct CaptureComposer: View {
     var body: some View {
         @Bindable var navigation = navigation
         Composer(
-            draft: $navigation.capture.draft, prompt: CaptureCopy.placeholder(to: destination), label: "随手记", focus: $focused,
+            draft: $navigation.capture.draft, prompt: CaptureCopy.prompt, label: "随手记", focus: $focused,
             accepts: .images, pinnedOpen: true,
             header: { header }, send: { sendButton }
         )
@@ -26,11 +26,12 @@ struct CaptureComposer: View {
     }
 
     private var header: some View {
+        // 先看去哪、再写：落点在左上
         HStack(spacing: 8) {
-            Spacer(minLength: 8)
             destinationMenu
+            Spacer(minLength: 8)
         }
-        .padding([.horizontal, .top], 8)
+        .padding(.horizontal, 12).padding(.top, 10)
     }
 
     private var destinationMenu: some View {
@@ -45,8 +46,8 @@ struct CaptureComposer: View {
                 Text(destination).foregroundStyle(palette.ink).lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
-            .font(.subheadline)
-            .padding(.horizontal, 10).frame(minHeight: 36)
+            .font(.subheadline.weight(.medium))
+            .padding(.horizontal, 12).frame(height: 32)
             .background(palette.fill, in: .capsule)
         }
         .accessibilityLabel("记到 \(destination)")
@@ -81,13 +82,14 @@ enum WriteEntry {
     static let symbol = "pencil.line"
 }
 
-/// 浮在键盘上方的输入框（随手记、新会话共用）：只有输入框，不铺底、不弹面板，浮起时随键盘升上来。
+/// 浮在键盘上方的输入框（随手记、新会话、交给 Agent 共用）：不弹面板，背后薄薄压一层桌面色（玻璃底下的卡片不透出来抢字），浮起时随键盘升上来。
 /// 点空白处或往下拖收起（输入框跟手往下走，没拖够就回位）；里面在忙时（内容标了 `floatingInputLocked`）不收起。
 struct FloatingInput<Content: View>: View {
     let isPresented: Bool
     let close: () -> Void
     @ViewBuilder let content: () -> Content
     @State private var locked = false
+    @Environment(\.palette) private var palette
     /// 没拖够松手时弹回原位。
     @GestureState(resetTransaction: Transaction(animation: Motion.snappy)) private var drag: CGFloat = 0
 
@@ -98,7 +100,7 @@ struct FloatingInput<Content: View>: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             if isPresented {
-                Color.clear.contentShape(.rect).ignoresSafeArea()
+                palette.desk.opacity(0.5).contentShape(.rect).ignoresSafeArea()
                     .gesture(DragGesture(minimumDistance: 0).onEnded { _ in dismiss() })
                     .accessibilityHidden(true)
                 content()

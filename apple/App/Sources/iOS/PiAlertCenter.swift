@@ -69,13 +69,14 @@ final class PiAlertCenter: NSObject, UNUserNotificationCenterDelegate {
         return pendingTap
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard let tap = PiAlertRoute.tap(from: response.notification.request.content.userInfo) else { return }
-        await MainActor.run { pendingTap = tap }
+    /// 系统回调：必须留在主 actor。async 的 @objc 代理方法由编译器生成转接，在方法所属的 executor 上调系统交来的完成块；
+    /// 标成 nonisolated 时完成块在后台线程执行，UIKit 在里面断言主线程，点锁屏通知进 App 即崩溃。
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        receive(response.notification.request.content.userInfo)
     }
 
     /// 前台收到的通知不展示：同一件事由 App 内横幅提示（正看着那个会话时连横幅也不弹）。
-    nonisolated func userNotificationCenter(
+    func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions { [] }
 }

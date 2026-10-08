@@ -115,7 +115,7 @@ enum DemoLibrary {
     typealias DemoTask = (project: String?, text: String, done: Bool)
 
     /// 三级任务：圆桌的"乱序"一句说明、三条提示词（交给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
-    /// 其中一条再带两条（第三级默认折起）；CuePad 的"投送超时"一条提示词（会是已回复，行上问要不要标记完成）。
+    /// 其中一条再带两条（第三级默认折起）；CuePad 的"投送超时"一条提示词（会是已回复，行尾出现"完成"）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         if let timeout = tasks.first(where: { $0.body.hasPrefix("投送队列") }) {

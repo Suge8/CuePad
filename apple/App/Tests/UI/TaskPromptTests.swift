@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// 任务是一件要做成的事，要交给 Agent 的话是挂在它下面的提示词：长按菜单最多四项加删除（共用一处定义），
-/// 任务本身没有话可交，交给 Agent 在每条提示词上；任务行看得出有几条提示词、几条已回复，全部回复后轻轻问一句要不要标记完成。
+/// 任务本身没有话可交，交给 Agent 在每条提示词上；任务行看得出有几条提示词、几条已回复，全部回复后行尾出现"完成"。
 @MainActor
 struct TaskPromptTests {
     let rig = TestApp()
@@ -51,7 +51,7 @@ struct TaskPromptTests {
         #expect(try await store.card(task.id)?.archivedAt != nil)
     }
 
-    @Test func 任务行写着几条提示词几条已回复_全部回复后问要不要标记完成() async throws {
+    @Test func 任务行写着几条提示词几条已回复_全部回复后出现完成() async throws {
         let task = try await store.createTask("修乱序", in: nil)
         #expect(PromptTally(try await store.childMarks()[task.id]).text == nil)
 
@@ -65,6 +65,7 @@ struct TaskPromptTests {
         try await reply(to: first)
         tally = PromptTally(try await store.childMarks()[task.id])
         #expect(tally.text == "2 条提示词 · 1 已回复")
+        #expect(tally.heading == "2 · 1 已回复")
         #expect(!tally.suggestsDone(task))
 
         try await reply(to: second)

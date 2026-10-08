@@ -18,7 +18,9 @@ import Testing
       $0.variableValues = ["k": "v"]
     }
     try await store.recordSend("x", to: SendTarget(kind: .piSession, name: "n", ref: "r"), card: card.id)
-    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认？", title: "t", projectID: project.id)
+    try await PiStateRecorder(store: store, hostID: "mac").update(
+      sessionID: "s1", state: .waitingForUser, detail: "确认？", title: "t", projectID: project.id,
+      context: PiContextUsage(tokens: 1_000, window: 200_000), commands: [PiSlashCommand(name: "compact", summary: "压缩", source: .known(.builtin))])
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
     try await store.setDirectory("/work/p", for: project.id)
     try await store.publishDirectoryBindings(host: "mac", hostName: "Studio")

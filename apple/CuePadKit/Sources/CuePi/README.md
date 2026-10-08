@@ -4,7 +4,7 @@
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
-| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`sessions` 直接给界面观察，`changes()` 给通知；`send` / `paste` / `configure`（换模型与思考强度）/ `abort`（停止这一轮）；`endedSessions` 留着本次运行里已结束会话的最后快照（按 id），界面据此把指向它的发送目标显示成"已结束" |
+| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`sessions` 直接给界面观察，`changes()` 给通知；`send` / `command`（斜杠命令）/ `paste` / `configure`（换模型与思考强度）/ `abort`（停止这一轮）；`endedSessions` 留着本次运行里已结束会话的最后快照（按 id），界面据此把指向它的发送目标显示成"已结束" |
 | 安装扩展 | `PiExtensionInstaller` | 检测 Pi（≥ 0.84.4）与扩展状态，`install()`（新装/升级）；首次写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
 | 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只认 `<会话目录>/<项目目录>/*.jsonl`（与 Pi 自己的会话列表一致，FireCode 子代理的 `subagents/` 不算）；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`），规则见下文"对话与摘要"；首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话，更早的只读摘要：逐行只找换行，只解码文件头、改名与第一条你的消息，最近一轮问答从文件尾往回解码到够用为止，得到的检查点与全读一样；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
 | 错误摘要 | `PiErrorSummary` | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
@@ -13,7 +13,7 @@
 
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录）。测试一律用临时目录，绝不碰真实 `~/.pi`。
 
-## 协议（v4）
+## 协议（v5）
 
 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，不用 `$TMPDIR`），目录 0700、socket 0600；扩展与客户端都校验"是目录、属于当前用户、0700"，客户端还校验每个 socket 文件（属主、且只有属主可读写 0600）与连接对端的 uid。`CUEPAD_PI_SOCKET_DIR` 可覆盖目录（测试与高级用法）。
 
@@ -23,7 +23,7 @@
 | --- | --- |
 | `hello` | 连接后第一条：`protocol`、`extensionVersion`、`sessionId`、`sessionFile`（可空，首条消息落盘前文件不存在）、`pid`、`cwd`、`mode`（tui/rpc）、`tty`、`term{环境变量子集}`、`state`（当前状态快照）、`launchToken`（v8 起：CuePad 开的新会话经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展的认领标识，只属于进程里的第一个会话，其余为 null）、`hosted`（v9 起：进程由 CuePad 在后台托管，即环境变量 `CUEPAD_HOSTED=1`），以及 `info` 的全部字段（恢复已有会话时近况从会话文件当前分支补回） |
 | `state` | 仅状态切换时发送：`state{kind, since(ms), busySince(ms 或 null), …}` |
-| `info` | 任一字段变化时：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理 `subagents`、模型配置 `model`/`thinking`/`models`（v2 起，见下）；都可空 |
+| `info` | 任一字段变化时：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理 `subagents`、模型配置 `model`/`thinking`/`models`（v2 起，见下）、上下文余量 `context` 与命令清单 `commands`（v5 起，见下）；都可空 |
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
 | `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
@@ -43,6 +43,20 @@
 
 模型配置（协议 v2、扩展 v13 起；v1 的 hello 里 `model` 只是模型 id 字符串，v2 并入 info）：`model` 是当前模型 `{provider, id, name, thinking}`（`thinking` 是它支持的思考强度，规则同 pi-ai 的 `getSupportedThinkingLevels`：不支持思考的只有 `off`，`xhigh`/`max` 要模型显式声明），没选模型为 null；`thinking` 是当前强度（`pi.getThinkingLevel()`）；`models` 是可换的模型，与 Pi 的 `/model` 一致——配了范围（`--models`、`enabledModels`，即 `ctx.scopedModels`）就是范围内的，否则是已配好密钥的全部（`ctx.modelRegistry.getAvailable()`，可能几百个），当前模型总在其中。Pi 里换了模型或强度（`model_select`、`thinking_level_select` 事件）时重新上报。`PiSession.model`/`thinking`/`availableModels`，换用 `PiBridge.configure`。
 
+上下文余量（协议 v5、扩展 v16 起）：`context` 是 `{tokens, window}`——`ctx.getContextUsage()` 的已用 token（Pi 的估算）与当前模型的上下文窗口；压缩后到下一次回答前 Pi 不知道已用多少，`tokens` 为 null（窗口仍在）；没有模型为 null。上报时机：会话载入（`session_start`，含新会话、重载、恢复）、每个回合结束（`turn_end`）、一轮彻底歇下（`agent_settled`）、压缩后（`session_compact`）、换模型（`model_select`）、切换树分支（`session_tree`），内容没变不发。
+
+命令清单（协议 v5、扩展 v16 起）：`commands` 是 `[{name, description, source, hint}]`，名字不带斜杠（skill 是 `skill:名字`），`source` 是 `builtin` / `extension` / `prompt`（提示词模板）/ `skill`，说明截到 120 字符，`hint` 是内置命令的参数提示。内置之外的来自 `pi.getCommands()`，与载入的资源一致，随上面同样的时机刷新（重载会重新载入扩展，等于重新上报）；内置只列能在非 TUI 下执行的：
+
+| 内置命令 | 怎么做 |
+| --- | --- |
+| `/compact [说明]` | `ctx.compact`，受理后 1.5 秒内失败（没有可压缩的内容、没有模型）按拒绝报给发起方，之后的失败只提示在 Pi 里 |
+| `/name <名字>` | `pi.setSessionName` |
+| `/model <提供方/模型>` | 与 `config` 同一条路（`pi.setModel`）；模型 id 在可选模型里唯一时可省提供方 |
+| `/thinking <强度>` | `pi.setThinkingLevel` |
+| `/new`、`/clone`、`/reload` | 需要命令上下文，经扩展自己注册的内部命令 `/cuepad <动作>`（`newSession` / `fork(叶子, at)` / `reload`）；这三个照常列在清单里，只有内部命令 `cuepad` 本身不列 |
+
+做不到、不列的内置命令：`/settings`、`/scoped-models`、`/login`、`/logout`、`/resume`、`/tree`、`/fork`、`/trust`、`/llama`、`/bug`（终端里的选择器或弹窗，没有对应接口）；`/session`、`/hotkeys`、`/changelog`、`/copy`（只往终端打印或写 Mac 剪贴板，手机看不到）；`/export`、`/share`、`/import`（没有扩展接口，且涉及 Mac 上的文件与外发）；`/quit`（已有"结束会话"，托管进程要关标准输入才退得掉）。
+
 子代理（扩展 v5 起）：其他扩展在同一进程里开的子会话（FireCode 用 `createAgentSession`，以 `print` 模式绑定）也会加载本扩展，但 `print` 模式不开 socket，所以不会作为独立会话出现。会话文件在父会话目录的 `subagents/` 下的子会话把名字与状态登记到进程内共享的表里，父会话的 `info.subagents`（`[{name, kind}]`，`kind` 同 `state.kind`）汇总它们；名字依次取会话名、FireCode 写在子会话系统提示里的 `<firecode_worker name="…">`、首条用户消息。`PiSession.subagents`（名字与 `activity`）给界面，同步记录里是结构化的子代理列表（`PiSubagentState`）。
 
 `detail` 是扩展 v2 加的可选字段：命令（`command`）或搜索模式（`pattern`）取首个非空行，文件类工具（`path`）取文件名，超过 120 个字符截断（含省略号）；不上报完整参数。旧扩展没有这个字段，客户端得到 `nil`。
@@ -50,8 +64,9 @@
 CuePad → 扩展（都带 `id`）：
 
 - `{"t":"send","id","text","images":[{"mimeType","data(base64)"}],"deliverAs":"steer"|"followUp","deliveryId"}`：走 `sendUserMessage`，`deliverAs` 缺省 `followUp`，只在会话正忙时生效；图片发原图，Pi 自行缩放。`deliveryId`（v12 起，可选）是 CuePad 投送请求的 id：扩展按文字先进先出认领，在这条用户消息的 `message_end` 里写到消息对象上（`cuepadDelivery`）——扩展先收到 `message_end`、Pi 再把同一个对象写进会话文件，所以 id 随消息落盘。
+- `{"t":"command","id","text","deliverAs"}`（协议 v5 起）：斜杠命令，`text` 是以 `/` 开头的整行（命令加参数），`deliverAs`（`steer` / `followUp`，缺省 `followUp`）只对会被展开成这一轮提示词的模板与 skill 在会话正忙时生效。内置命令（先于扩展命令匹配，与 Pi 的终端一致）由扩展调上表的接口做；其余必须是 `pi.getCommands()` 里有的名字，经 `pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: true })` 交给 Pi 派发——扩展命令照常执行（会话正忙也立即执行）、模板与 skill 展开成这一轮的提示词。**不带 `expandPromptTemplates` 的 `sendUserMessage` 只把斜杠开头的话当普通文字发给模型**（`send` 就是这样），所以斜杠命令必须走 `command`。`ack` 只表示受理：扩展命令自己的输出（`ctx.ui.notify` 等）只出现在 Pi 的界面里，桥看不到；拒绝：`bad_request`（不是斜杠开头）、`unknown_command`（清单里没有，含纯终端交互的内置命令与内部命令）、`missing_argument`（必填参数没给）、`unknown_model` / `no_auth`（`/model`，同 `config`）、`failed: …`。
 - `{"t":"paste","id","text"}`：走 `pasteToEditor`（在光标处粘贴，不覆盖已输入内容）；RPC 模式下退化为 `set_editor_text` 请求。
-- `{"t":"reload","id"}`（v10 起）：同一会话的另一个进程（CuePad 后台托管、让出前做完一轮）刚写过会话文件，这个进程看不到那些内容。从载入起没写过、且空闲时，经 `sendUserMessage("/cuepad-reload", {expandPromptTemplates: true})` 触发本扩展注册的命令，命令里 `switchSession(当前会话文件)` 重新载入（Pi 只在命令上下文给切换会话的能力），`ack` 带 `reloaded: true`；文件没有多出内容就什么都不做；写过了（会话已分出支线）就不动，`ctx.ui.notify` 提示一句。重新载入时扩展照常收到 `session_shutdown`/`session_start`，同一 pid 的会话先结束再出现。
+- `{"t":"reload","id"}`（v10 起）：同一会话的另一个进程（CuePad 后台托管、让出前做完一轮）刚写过会话文件，这个进程看不到那些内容。从载入起没写过、且空闲时，经 `sendUserMessage("/cuepad reload-session", {expandPromptTemplates: true})` 触发本扩展注册的内部命令，命令里 `switchSession(当前会话文件)` 重新载入（Pi 只在命令上下文给切换会话的能力），`ack` 带 `reloaded: true`；文件没有多出内容就什么都不做；写过了（会话已分出支线）就不动，`ctx.ui.notify` 提示一句。重新载入时扩展照常收到 `session_shutdown`/`session_start`，同一 pid 的会话先结束再出现。
 - `{"t":"config","id","model":{"provider","id"},"thinking"}`（协议 v2 起）：换该会话的模型、思考强度，二者至少给一项。先 `pi.setModel`（模型取自 `ctx.modelRegistry.find`）再 `pi.setThinkingLevel`，所以强度按新模型支持的范围由 Pi 夹取；只作用于这个会话，不改 Pi 的默认设置。成功后 `info` 里的模型配置已是新值。拒绝：`bad_request`（缺项、强度不在 `off`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max` 里）、`unknown_model`（模型表里没有）、`no_auth`（该提供方没配好密钥，`setModel` 返回 false）。
 - `{"t":"abort","id"}`（协议 v4 起）：停止这一轮，走 Pi 的 `ctx.abort()`（与用户在 Pi 里按 Esc 同一能力）。先取消正在等的弹窗（否则这一轮卡在等你），再中止指挥官正在跑的回合，`ack` 立即回（`ok` 只表示已受理，不等歇下）；随后会话以"被中止"歇下（`state` 为 `done`、`aborted: true`），不退出，能接着说。已经空闲就什么都不做，也 `ack ok`。**只停指挥官自己这一轮**：FireCode 的子代理是独立会话，不受影响，指挥官已歇下、在等子代理（`delegating`）时没有这一轮可停，成功但状态不变；子代理落定后照常把结果投回来开始新的一轮。要连子代理一起停得在 Pi 里让指挥官 `interrupt`（FireCode 的 subagents 工具），CuePad 不做。
 - `{"t":"end","id"}`（协议 v3 起）：结束会话，走用户在 Pi 里退出的同一条路（`ctx.shutdown()`）：先 `ack`，再取消正在等的弹窗、中止正在跑的一轮（否则 Pi 要等它们结束才退出），然后 TUI 恢复终端、提示怎么恢复这个会话，扩展发 `bye quit` 后连接断开。RPC 模式只在读到下一条命令或这一轮结束时检查退出请求，所以后台托管的进程不靠它，`PiHost.end` 直接关它的标准输入（RPC 读到 EOF 就收尾，不论这一轮在不在跑）。`PiBridge.end` 只发命令；要等到真的退出用 `PiHost.end`（超时抛 `PiHostError.notEnded`，多半是非托管的 RPC 进程或卡在别处）。

@@ -98,7 +98,9 @@ struct PromptList: View {
         VStack(alignment: .leading, spacing: TaskMetrics.cardGap) {
             HStack(alignment: .firstTextBaseline) {
                 Text("提示词").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-                if let text = PromptTally(detail?.marks).text { Text(text).font(TaskMetrics.caption).foregroundStyle(palette.ink3) }
+                if let heading = PromptTally(detail?.marks).heading {
+                    Text(heading).monospacedDigit().font(TaskMetrics.caption).foregroundStyle(palette.ink3)
+                }
                 Spacer()
                 pick
             }
@@ -143,8 +145,8 @@ struct PromptList: View {
     }
 }
 
-/// 一条提示词：内容预览，下面一行是它此刻怎样（未发 / 交给某会话·处理中 / 会话已结束 / 已回复，点它看会话）与"交给 Agent"。
-/// 点卡打开大编辑区；长按是灵感的菜单。
+/// 一条提示词：内容预览，下面一行是它此刻怎样（未发 / 交给某会话·处理中 / 会话已结束 / 已回复，点它看会话）与交给 Agent 的钮：
+/// 还没发的是靛青的"交给 Agent"（一页的焦点），交出去过的退成墨色文字"再交一次"。点卡打开大编辑区；长按是灵感的菜单。
 struct PromptCard: View {
     let prompt: Card
     let state: PromptState
@@ -170,11 +172,13 @@ struct PromptCard: View {
             HStack(spacing: 8) {
                 status
                 Spacer(minLength: 8)
+                let fresh = state == .unsent
                 Button(action: hand) {
-                    Label("交给 Agent", systemImage: "paperplane.fill")
-                        .font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.signature)
-                        .padding(.horizontal, 12).frame(height: TaskMetrics.chipHeight)
-                        .background(palette.signature.opacity(0.12), in: .capsule)
+                    Label(fresh ? "交给 Agent" : "再交一次", systemImage: fresh ? "paperplane.fill" : "paperplane")
+                        .font(TaskMetrics.caption.weight(fresh ? .semibold : .medium))
+                        .foregroundStyle(fresh ? palette.signature : palette.ink2)
+                        .padding(.horizontal, fresh ? 12 : 4).frame(height: TaskMetrics.chipHeight)
+                        .background(fresh ? palette.signature.opacity(0.12) : .clear, in: .capsule)
                         .frame(minHeight: TaskMetrics.chipTarget).contentShape(.capsule)
                 }
                 .buttonStyle(PressStyle())
@@ -354,17 +358,17 @@ struct TaskRingButton: View {
     }
 }
 
-/// 任务行上的轻提示：提示词都已回复、任务还没完成时问一句"标记完成？"，点了才完成（任务不自动完成）。
+/// 任务行尾的"完成"：提示词都已回复、任务还没完成时出现，点了才完成（任务不自动完成）。行上已写着"全部已回复"，钮只写动作。
 struct MarkDoneChip: View {
     let action: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
         Button(action: action) {
-            Label("标记完成？", systemImage: "checkmark")
-                .font(TaskMetrics.caption.weight(.medium)).foregroundStyle(palette.ink)
+            Text("完成")
+                .font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink)
                 .padding(.horizontal, 10).frame(height: TaskMetrics.chipHeight)
-                .background(palette.fill, in: .capsule)
+                .overlay(Capsule().strokeBorder(palette.hair))
                 .frame(minHeight: TaskMetrics.chipTarget).contentShape(.capsule)
         }
         .buttonStyle(PressStyle())
@@ -401,8 +405,8 @@ enum TaskMetrics {
     #endif
 }
 
-/// 任务的完成圈（`TaskRing`）：完成是对勾；没有下级是普通圆圈（进行中半满）；有下级时一段一段，做完的段满上墨色（颜色同 `TaskGlyph.tint`），
-/// 太多时是一道按比例的弧；进行中在圈心点一个点。段的变化有短过渡。
+/// 任务的完成圈（`TaskRing`）：完成是对勾；待办空心、进行中左半满（与 `TaskGlyph.symbol` 同一种图形）；有下级时圈线本身是进度：
+/// 淡的整圈上按比例描一道实线弧。全 App 的任务只有这一种图形，弧的变化有短过渡。
 struct TaskRingView: View {
     let status: TaskStatus?
     let ring: TaskRing
@@ -414,16 +418,13 @@ struct TaskRingView: View {
 
     var body: some View {
         Group {
-            if done || ring == .plain {
+            if case .progress(let finished, let total) = ring, !done {
+                progress(Double(finished) / Double(max(total, 1)))
+            } else {
                 Image(systemName: done ? "checkmark.circle.fill" : TaskGlyph.symbol(status))
                     .font(.system(size: size))
                     .foregroundStyle(TaskGlyph.tint(done ? .done : status, palette))
                     .contentTransition(.symbolEffect(.replace))
-            } else {
-                arcs
-                    .frame(width: size, height: size)
-                    .overlay { if status == .inProgress { Circle().fill(TaskGlyph.tint(.inProgress, palette)).frame(width: size * 0.3) } }
-                    .padding(size * 0.06)
             }
         }
         .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
@@ -431,32 +432,21 @@ struct TaskRingView: View {
         .accessibilityHidden(true)
     }
 
-    private var line: CGFloat { max(1.6, size * 0.13) }
-
-    @ViewBuilder private var arcs: some View {
-        switch ring {
-        case .segments(let filled):
-            // 段间留一点缝：一段时是整圈
-            let count = filled.count, gap = count > 1 ? min(0.035, 0.3 / Double(count)) : 0
-            ZStack {
-                ForEach(filled.indices, id: \.self) { index in
-                    let start = Double(index) / Double(count)
-                    Circle()
-                        .trim(from: start + gap / 2, to: start + 1 / Double(count) - gap / 2)
-                        .stroke(filled[index] ? TaskGlyph.tint(.done, palette) : TaskGlyph.tint(.todo, palette).opacity(0.55), style: StrokeStyle(lineWidth: line, lineCap: .butt))
-                }
+    /// 与 SF 的 circle / circle.lefthalf.filled 同尺寸同线宽：圈线淡、做完的比例描实，进行中照样左半满。
+    private func progress(_ fraction: Double) -> some View {
+        let tint = TaskGlyph.tint(status, palette), line = max(1.4, size * 0.095), diameter = size * 0.88
+        return ZStack {
+            Circle().stroke(tint.opacity(status == .inProgress ? 0.3 : 0.6), lineWidth: line)
+            Circle().trim(from: 0, to: fraction)
+                .stroke(status == .inProgress ? tint : palette.ink, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            if status == .inProgress {
+                // 与描线之间留一线缝：圈线是进度，贴住半圆就读不出左半边描到了哪
+                Circle().trim(from: 0.25, to: 0.75).fill(tint).padding(line * 1.1)
             }
-            .rotationEffect(.degrees(-90))
-        case .fraction(let done, let total):
-            ZStack {
-                Circle().stroke(TaskGlyph.tint(.todo, palette).opacity(0.55), lineWidth: line)
-                Circle().trim(from: 0, to: Double(done) / Double(max(total, 1)))
-                    .stroke(TaskGlyph.tint(.done, palette), style: StrokeStyle(lineWidth: line, lineCap: .round))
-            }
-            .rotationEffect(.degrees(-90))
-        case .plain:
-            EmptyView()
         }
+        .frame(width: diameter, height: diameter)
+        .frame(width: size * 1.02, height: size * 1.02)
     }
 }
 

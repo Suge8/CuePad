@@ -273,6 +273,77 @@ public struct PiModelState: Sendable, Equatable {
   }
 }
 
+/// 会话的上下文余量：已用 token 与当前模型的上下文窗口（Pi 桥上报；Pi 在压缩后到下一次回答前不知道已用多少，`tokens` 为 nil）。
+public struct PiContextUsage: Sendable, Equatable {
+  public var tokens: Int?
+  public var window: Int
+
+  public init(tokens: Int?, window: Int) {
+    self.tokens = tokens
+    self.window = window
+  }
+
+  /// 已用比例（0 到 1，超出窗口夹到 1）；未知为 nil。
+  public var fraction: Double? {
+    guard let tokens, window > 0 else { return nil }
+    return min(1, Double(tokens) / Double(window))
+  }
+
+  private struct Stored: Codable {
+    var tokens: Int?
+    var window: Int
+  }
+
+  /// 同步记录里存为 JSON（加密字段 `context`）；读不出的当作没有。
+  static func stored(_ usage: PiContextUsage?) -> String? {
+    usage.map { String(decoding: try! JSONEncoder().encode(Stored(tokens: $0.tokens, window: $0.window)), as: UTF8.self) }
+  }
+
+  static func usage(stored: String?) -> PiContextUsage? {
+    stored.flatMap { try? JSONDecoder().decode(Stored.self, from: Data($0.utf8)) }.map { PiContextUsage(tokens: $0.tokens, window: $0.window) }
+  }
+}
+
+/// 斜杠命令的来源：Pi 内置里能在非 TUI 下执行的、扩展命令、提示词模板、skill。
+public enum PiCommandSource: String, Sendable, CaseIterable {
+  case builtin, `extension`, prompt, skill
+}
+
+/// 会话此刻能用的一条斜杠命令（Pi 桥上报，随会话记录同步）。`name` 不带斜杠（skill 是 `skill:名字`）；`hint` 是参数提示，nil 表示不带参数。
+public struct PiSlashCommand: Sendable, Equatable, Identifiable {
+  public var name: String
+  public var summary: String?
+  public var source: Open<PiCommandSource>
+  public var hint: String?
+  public var id: String { name }
+
+  public init(name: String, summary: String?, source: Open<PiCommandSource>, hint: String? = nil) {
+    self.name = name
+    self.summary = summary
+    self.source = source
+    self.hint = hint
+  }
+
+  private struct Stored: Codable {
+    var name: String
+    var summary: String?
+    var source: String
+    var hint: String?
+  }
+
+  /// 同步记录里存为 JSON 数组（加密字段 `commands`）；读不出的当作没有。
+  static func stored(_ list: [PiSlashCommand]) -> String? {
+    guard !list.isEmpty else { return nil }
+    let data = try! JSONEncoder().encode(list.map { Stored(name: $0.name, summary: $0.summary, source: $0.source.rawValue, hint: $0.hint) })
+    return String(decoding: data, as: UTF8.self)
+  }
+
+  static func list(stored: String?) -> [PiSlashCommand] {
+    guard let stored, let decoded = try? JSONDecoder().decode([Stored].self, from: Data(stored.utf8)) else { return [] }
+    return decoded.map { PiSlashCommand(name: $0.name, summary: $0.summary, source: Open(rawValue: $0.source), hint: $0.hint) }
+  }
+}
+
 /// 手机发给 Mac 的会话配置：换模型、改思考强度，至少改一项。存在投送请求（方式 `config`）的正文里（JSON）。
 /// 先换模型再设思考强度：强度按新模型支持的范围取。
 public struct PiConfig: Sendable, Equatable {
@@ -477,6 +548,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   public var model: PiModelOption?
   public var thinking: Open<PiThinkingLevel>?
   public var models: [PiModelOption]
+  /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）与此刻能用的斜杠命令（已结束的会话清空）。旧版本写的记录没有。
+  public var context: PiContextUsage?
+  public var commands: [PiSlashCommand]
 
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
   public init(
@@ -484,7 +558,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     folder: String?, lastPrompt: String?, lastReply: String?, question: PiQuestion?, notify: Open<PiAlert>?, stateSince: Date,
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, model: PiModelOption? = nil,
-    thinking: Open<PiThinkingLevel>? = nil, models: [PiModelOption] = []
+    thinking: Open<PiThinkingLevel>? = nil, models: [PiModelOption] = [], context: PiContextUsage? = nil,
+    commands: [PiSlashCommand] = []
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -509,6 +584,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.model = model
     self.thinking = thinking
     self.models = models
+    self.context = context
+    self.commands = commands
   }
 
   /// 记录上的摘要（对话的投影）。
@@ -544,9 +621,12 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 停止会话正在跑的这一轮（相当于在 Pi 里按 Esc：只停指挥官自己这一轮，子代理不动），会话回到等你下一句；
   /// 正文固定为 `stop`，不写发送记录
   case stop
+  /// 斜杠命令：正文是以 / 开头的整行（命令加参数，可接着带上的卡片文字），由 Pi 派发——内置命令（压缩、命名、换模型……）、扩展命令照常执行，
+  /// 提示词模板与 skill 展开成一轮提示词（会话正忙时等它做完再说）；与说话一样记发送记录、会话在忙就排队
+  case command
 
-  /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。
-  public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .paste, .answer]
+  /// 发给会话本身、会改变它状态的方式（说话、命令与作答）；会话的显示状态只把这几种算进去。
+  public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .paste, .command, .answer]
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。
@@ -614,12 +694,12 @@ extension PiSessionState: Record {
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "models",
+    "model", "thinking", "models", "context", "commands",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, PiSubagentState.stored(subagents), pendingPrompt,
-     PiModelOption.stored(model), thinking?.rawValue, PiModelOption.stored(models)]
+     PiModelOption.stored(model), thinking?.rawValue, PiModelOption.stored(models), PiContextUsage.stored(context), PiSlashCommand.stored(commands)]
   }
   init(row: Row) {
     self.init(
@@ -633,7 +713,8 @@ extension PiSessionState: Record {
       // 会话重新连上时又是它——不必等文件再追加
       pendingPrompt: row.text(5) == PiWorkState.ended.rawValue ? nil : row.textOrNil(19),
       model: PiModelOption.option(stored: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
-      models: PiModelOption.list(stored: row.textOrNil(22)))
+      models: PiModelOption.list(stored: row.textOrNil(22)), context: PiContextUsage.usage(stored: row.textOrNil(23)),
+      commands: PiSlashCommand.list(stored: row.textOrNil(24)))
   }
 }
 

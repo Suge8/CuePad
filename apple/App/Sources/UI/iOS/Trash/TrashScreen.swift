@@ -74,7 +74,7 @@ struct TrashScreen: View {
             }
             Spacer(minLength: 0)
             if let deletedAt {
-                Text("\(DateLabel.short(deletedAt)) 删除").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
+                Text("删于 \(DateLabel.short(deletedAt))").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
             }
         }
         .listRowBackground(palette.paper)

@@ -32,9 +32,13 @@ struct HandOffInput: View {
     var body: some View {
         Composer(
             draft: $draft, prompt: "补一句（可不填）", label: "交给 Agent", focus: $focused,
-            accepts: [.images, .cards], cardsFrom: outbox.project, pinnedOpen: true, keeps: outbox.card,
+            accepts: [.images, .cards], cardsFrom: outbox.project, pinnedOpen: true, keeps: outbox.card, commands: chosen?.state.commands ?? [],
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)
+                if !services.reachesPiHost {
+                    SyncHint(status: services.syncStatus, consequence: "发不到 Mac").font(.caption).lineLimit(1)
+                        .padding(.horizontal, 18).padding(.top, 8)
+                }
                 if let failure = config?.failure {
                     Text("没换成：\(failure)").font(.caption).foregroundStyle(palette.failure).lineLimit(2)
                         .padding(.horizontal, 18).padding(.top, 6)
@@ -69,7 +73,7 @@ struct HandOffInput: View {
         }
     }
 
-    /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"），右边送不到 Mac 时的原因。
+    /// 头部：交给谁的胶囊（菜单里是在线会话与"新会话"）；送不到 Mac 时的原因在它下面单独一行。
     private var header: some View {
         HStack(spacing: 8) {
             Menu {
@@ -92,8 +96,7 @@ struct HandOffInput: View {
                 .background(palette.fill, in: .capsule)
             }
             .accessibilityLabel(chosen.map { "交给 \($0.state.title)，点开换会话" } ?? "交给新会话")
-            Spacer(minLength: 4)
-            if !services.reachesPiHost { SyncHint(status: services.syncStatus).font(.caption).lineLimit(2) }
+            Spacer(minLength: 0)
         }
     }
 
@@ -106,10 +109,15 @@ struct HandOffInput: View {
         guard canSend else { return }
         guard let session = chosen?.state else { return newSession() }
         let sent = draft, mode = MacDelivery.modes(for: session, hasImages: sent.hasImages).first ?? .send
+        let line = PiSlash.line(of: sent, in: session.commands)
         sending = true
         workspace.attempt {
             defer { sending = false }
-            _ = try await services.requestMacDelivery(sent, to: session, mode: mode, card: outbox.card)
+            if let line {
+                _ = try await services.requestMacDelivery(line, to: session, mode: .command, card: outbox.card)
+            } else {
+                _ = try await services.requestMacDelivery(sent, to: session, mode: mode, card: outbox.card)
+            }
             focused = false
             navigation.outbox = nil
             workspace.say("已交给 \(session.title)")

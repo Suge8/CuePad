@@ -71,7 +71,7 @@ enum DebugScene {
         return project.id
     }
 
-    /// `-CuePadComposer <cards|attachments|lines>`（配 session、newsession 画面，iOS 与 Mac）：输入框出现时 cards 打开选卡片面板，
+    /// `-CuePadComposer <cards|attachments|lines|slash>`（配 session、newsession 画面，iOS 与 Mac）：输入框出现时 cards 打开选卡片面板，slash 写进 "/re" 弹出斜杠命令面板，
     /// attachments 带上一张卡片（`-CuePadCard` 挑哪张）并放进两张演示图片，lines 写进 9 行文字（看文字区长到 6 行后在里面滚）。
     /// ＋ 菜单是系统菜单、不能代为展开：截图时按一下 ＋（iPhone 17 Pro 回复框：`axe touch -x 37 -y 810 --down --up --delay 0.15`；axe 的 tap 太快，菜单不开）。
     static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
@@ -90,6 +90,8 @@ enum DebugScene {
             draft.wrappedValue.images = [(0.85, 0.47, 0.29), (0.25, 0.56, 0.72)].map { PickedImage(data: swatch(red: $0.0, green: $0.1, blue: $0.2)) }
         case "lines":
             draft.wrappedValue.text = (1...9).map { "第 \($0) 行" }.joined(separator: "\n")
+        case "slash":
+            draft.wrappedValue.text = "/re"
         default:
             break
         }

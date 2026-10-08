@@ -103,14 +103,27 @@ final class FakeExtension: @unchecked Sendable {
         var json: [String: Any] { ["provider": provider, "id": id, "name": name, "thinking": thinking] }
     }
 
+    struct WireCommand: Sendable {
+        var name: String
+        var description: String?
+        var source = "extension"
+        var hint: String?
+        var json: [String: Any] {
+            ["name": name, "description": description ?? NSNull(), "source": source, "hint": hint ?? NSNull()]
+        }
+    }
+
     struct Options: Sendable {
-        var protocolVersion = 4
+        var protocolVersion = 5
         var extensionVersion = 1
         var cwd = "/work/project"
         var mode = "tui"
         var model: WireModel? = WireModel(id: "test-model")
         var thinking: String? = "off"
         var models: [WireModel] = []
+        /// 上下文：已用 token（nil 为未知）与窗口；nil 表示没有模型
+        var context: (tokens: Int?, window: Int)?
+        var commands: [WireCommand] = []
         var sessionFile: String? = "/work/session.jsonl"
         var tty: String? = "ttys009"
         var socketMode: mode_t = 0o600
@@ -226,8 +239,15 @@ final class FakeExtension: @unchecked Sendable {
         msg["model"] = options.model?.json ?? NSNull()
         msg["thinking"] = options.thinking ?? NSNull()
         msg["models"] = options.models.map(\.json)
+        msg["context"] = Self.contextJSON(options.context)
+        msg["commands"] = options.commands.map(\.json)
         msg["tty"] = options.tty ?? NSNull()
         return msg
+    }
+
+    private static func contextJSON(_ context: (tokens: Int?, window: Int)?) -> Any {
+        guard let context else { return NSNull() }
+        return ["tokens": context.tokens.map { $0 as Any } ?? NSNull(), "window": context.window] as [String: Any]
     }
 
     static var nowMillis: Int { Int(Date().timeIntervalSince1970 * 1000) }
@@ -252,6 +272,14 @@ final class FakeExtension: @unchecked Sendable {
     /// 发 `info`：整条替换（与真扩展一样总是带全部字段）。
     func setModel(_ model: WireModel?, thinking: String?, models: [WireModel]) {
         broadcast(["t": "info", "model": model?.json ?? NSNull(), "thinking": thinking ?? NSNull(), "models": models.map(\.json)])
+    }
+
+    /// 发 `info`：上下文余量与命令清单（整条替换）。
+    func setUsage(context: (tokens: Int?, window: Int)?, commands: [WireCommand]) {
+        broadcast([
+            "t": "info", "context": Self.contextJSON(context),
+            "commands": commands.map(\.json),
+        ])
     }
 
     /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。

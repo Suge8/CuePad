@@ -17,15 +17,15 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因。
     /// 思考强度按显示的模型夹取（`PiThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
     var config: PiConfigShown {
-        let current = PiConfigShown(model: session?.model, thinking: session?.thinking?.known, pending: false, failure: nil)
+        let current = PiConfigShown(model: session?.model, thinking: session?.thinking?.known, context: session?.context, pending: false, failure: nil)
         guard let request = deliveries.last(where: { $0.config != nil }), let wanted = request.config else { return current }
         if request.isOpen {
             let model = wanted.model.flatMap { key in session?.models.first { $0.key == key } } ?? current.model
             let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
-            return PiConfigShown(model: model, thinking: thinking, pending: true, failure: nil)
+            return PiConfigShown(model: model, thinking: thinking, context: current.context, pending: true, failure: nil)
         }
         guard let failure = request.failure else { return current }
-        return PiConfigShown(model: current.model, thinking: current.thinking, pending: false, failure: failure)
+        return PiConfigShown(model: current.model, thinking: current.thinking, context: current.context, pending: false, failure: failure)
     }
 
     /// 会话页要观察的表。
@@ -57,6 +57,8 @@ extension PiThinkingLevel {
 nonisolated struct PiConfigShown: Equatable {
     var model: PiModelOption?
     var thinking: PiThinkingLevel?
+    /// 上下文余量（会话记录上的，圆环显示；没有模型时为 nil）。
+    var context: PiContextUsage?
     /// 换的请求还在路上。
     var pending: Bool
     /// 最近一次没换成的原因。
