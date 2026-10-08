@@ -1,14 +1,9 @@
-// 测试用 FireCode 配置：只开指挥官（子代理），角色用假模型，零网络。
-// features 逐项写出，名单以本机 FireCode 的 config.ts 里的 FEATURES 为准：它删了某个开关（如 bark）就会拒绝整份配置、
-// 什么都不加载，`PiProcess.requireFirecodeConfigAccepted` 会带着它的原文报出来。
+// 测试用 FireCode 配置：只写指挥官必需的一节（至少一个角色，用假模型，零网络），其余一律用 FireCode 的缺省。
+// 不逐项列它的开关与字段：它删改过的名字会让整份配置被拒、指挥官不加载；缺省不随它的版本变。
+// 指挥官没加载时 `subagents` 工具报错，`PiProcess.requireSubagentsTool` 带着它的提示原文失败。
 {
-	"features": {
-		"header": false, "statusbar": false, "tools": false, "presets": false, "rename": false, "stats": false,
-		"claudeSub": false, "openaiNative": false, "review": false, "master": true, "watcher": false
-	},
 	"master": {
 		"autoActivate": true,
-		"workerExcludeExtensions": [],
 		"roles": { "工程师": { "model": "fake/echo/off", "use": "测试", "fallback": [] } }
 	}
 }

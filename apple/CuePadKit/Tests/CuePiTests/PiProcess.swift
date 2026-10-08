@@ -117,15 +117,22 @@ final class PiProcess: @unchecked Sendable {
         try fm.copyItem(at: fixtures.appending(path: "fake-models.json"), to: agent.appending(path: "models.json"))
     }
 
-    struct FirecodeConfigRejected: Error, CustomStringConvertible {
+    struct FirecodeUnavailable: Error, CustomStringConvertible {
         let description: String
     }
 
-    /// FireCode 对配置挑剔：开关名对不上（它增删过开关）就拒绝整份配置、什么功能都不加载（没有 `subagents` 工具），
-    /// Pi 只在启动时发一条通知。测试超时后先查有没有这条，有就带原文报出，不只说"子代理没出现"。
-    func requireFirecodeConfigAccepted() throws {
-        let problem = events.compactMap { $0["message"] as? String }.first { $0.hasPrefix("FireCode 配置有问题") }
-        if let problem { throw FirecodeConfigRejected(description: "本机 FireCode 拒绝了测试配置（Fixtures/firecode-config.jsonc 要跟上它的开关名单）：\(problem)") }
+    /// 指挥官的 `subagents` 工具调用报了错：FireCode 没把指挥官加载起来（配置被它拒绝、开关或字段名跟不上它的版本……）。
+    /// 只看 Pi 事件的结构化字段，与 FireCode 的文案和语言无关。
+    var subagentsToolFailed: Bool {
+        events.contains { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "subagents" && $0["isError"] as? Bool == true }
+    }
+
+    /// 工具报错时带着 FireCode 启动时发的全部提示原文失败（拒绝原因就在其中），不让测试只说"子代理没出现"。
+    func requireSubagentsTool() throws {
+        guard subagentsToolFailed else { return }
+        let notices = events.filter { $0["type"] as? String == "extension_ui_request" && $0["method"] as? String == "notify" }
+            .compactMap { $0["message"] as? String }
+        throw FirecodeUnavailable(description: "本机 FireCode 没有加载指挥官（subagents 工具不可用）。FireCode 的提示原文：\(notices.isEmpty ? "（没有）" : notices.joined(separator: " | "))；测试配置见 Fixtures/firecode-config.jsonc")
     }
 
     func stop() {
