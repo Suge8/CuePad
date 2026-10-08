@@ -1,12 +1,12 @@
 import CueEditor
 import SwiftUI
 
-/// 纸、墨与朱砂：内容层（卡片、编辑页、列表）的实色与全部颜色 token。控件层用系统玻璃，不在这里。
+/// 纸、墨与靛青：内容层（卡片、编辑页、列表）的实色与全部颜色 token。控件层用系统玻璃，不在这里。
 ///
-/// 底子是纸与墨（logo、吉祥物的两种颜色）：文字、图标、系统控件的 tint 都是墨。**签名色是朱砂**（印章、批注的红），
+/// 底子是纸与墨（logo、吉祥物的两种颜色）：文字、图标、系统控件的 tint 都是墨。**签名色是靛青**（蓝染与花青墨的冷蓝，比系统蓝沉），
 /// 只落在焦点上——选中、主按钮、Agent 在工作、焦点环——一屏里通常只有一两处，所以它一出现就是"这里"。
 /// 其余彩色只表达要你注意的状态（等你确认是赭黄、出错是胭脂）与项目身份（项目图标）；三种状态色色相拉开
-/// （朱砂偏橙红、赭黄、胭脂偏玫红），再配上状态标的形状，色弱也分得出。
+/// （靛青是冷蓝，赭黄、胭脂偏玫红都是暖色），再配上状态标的形状，色弱也分得出。
 /// 深色是"夜里的纸"：暖黑的桌面、同一色温略亮的纸、更深一档的侧栏，三层靠明度分开，不用中性灰或冷蓝；
 /// 彩色在深色下提亮一档，保持同样的对比。增强对比度时加深次要文字与描边。
 struct Palette {
@@ -42,11 +42,19 @@ struct Palette {
     var accent: Color { ink }
     /// 墨底上的字。
     var onAccent: Color { paper }
-    /// 签名色朱砂：主按钮、Agent 在工作、焦点环；选中的底（`selection`）也由它调出。只用在焦点上。
-    var signature: Color { dark ? Color(hex: 0xF0805F) : Color(hex: 0xC9452A) }
-    /// 朱砂底上的字。
-    var onSignature: Color { dark ? Color(hex: 0x1F1310) : Color(hex: 0xFFF8F3) }
-    /// 选中底色：侧栏与列表的当前项垫一层朱砂浅底，文字保持墨色并加粗；Mac 与 iOS 共用，不用系统灰胶囊。
+    /// 签名色靛青：主按钮、Agent 在工作、焦点环；选中的底（`selection`）也由它调出。只用在焦点上。
+    /// 对比度（WCAG）：标准在纸、桌面、侧栏上都 ≥ 6.2，增强对比度时 ≥ 8，主按钮上的字 ≥ 7.6。
+    var signature: Color {
+        switch (dark, highContrast) {
+        case (false, false): Color(hex: 0x2F4A9E)
+        case (false, true): Color(hex: 0x243A80)
+        case (true, false): Color(hex: 0x8FA8E2)
+        case (true, true): Color(hex: 0xB3C4F0)
+        }
+    }
+    /// 靛青底上的字。
+    var onSignature: Color { dark ? Color(hex: 0x0E1526) : Color(hex: 0xF6F8FF) }
+    /// 选中底色：侧栏与列表的当前项垫一层靛青浅底，文字保持墨色并加粗；Mac 与 iOS 共用，不用系统灰胶囊。
     var selection: Color { signature.opacity(highContrast ? 0.28 : (dark ? 0.2 : 0.12)) }
 
     // MARK: 你的话（会话里你发出的气泡，iOS 与 Mac 共用）
@@ -67,7 +75,7 @@ struct Palette {
     /// 在工作（Agent 在跑、任务进行中）：签名色。
     var working: Color { signature }
 
-    // MARK: 正文里的变量（朱砂色标注）
+    // MARK: 正文里的变量（琥珀色标注）
 
     var variable: Color { dark ? Color(hex: 0xE9B872) : Color(hex: 0x98560F) }
     var variableBackground: Color { variable.opacity(dark ? 0.16 : 0.11) }

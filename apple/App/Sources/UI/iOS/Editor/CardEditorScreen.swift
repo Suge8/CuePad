@@ -199,7 +199,7 @@ struct CardEditorScreen: View {
     }
 }
 
-/// 交给 Agent 的主按钮：朱砂胶囊（签名色只落在主动作上），在灵感纸页右下。
+/// 交给 Agent 的主按钮：靛青胶囊（签名色只落在主动作上），在灵感纸页右下。
 struct AgentHandButton: View {
     let action: () -> Void
     @Environment(\.palette) private var palette

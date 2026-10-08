@@ -460,7 +460,7 @@ struct TaskRingView: View {
     }
 }
 
-/// 任务的状态圆圈：待办淡墨空心、进行中朱砂半满、完成墨色对勾。
+/// 任务的状态圆圈：待办淡墨空心、进行中靛青半满、完成墨色对勾。
 enum TaskGlyph {
     static func tint(_ status: TaskStatus?, _ palette: Palette) -> Color {
         switch status {

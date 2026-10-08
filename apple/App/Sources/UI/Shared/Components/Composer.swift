@@ -372,7 +372,7 @@ private struct CircleGlyph: View {
     }
 }
 
-/// 输入框右下角的圆形发送钮：能发时朱砂实心（主动作），发不出（同步不通、发送中）时淡。
+/// 输入框右下角的圆形发送钮：能发时靛青实心（主动作），发不出（同步不通、发送中）时淡。
 struct SendGlyph: View {
     let enabled: Bool
     @Environment(\.palette) private var palette
