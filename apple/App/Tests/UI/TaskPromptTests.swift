@@ -3,33 +3,34 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 任务就是给 Agent 的话：长按菜单最多四项加删除（共用一处定义），低频的在浮窗与纸页的"⋯"里；
-/// 任务行看得出话写没写、交没交出去，任务浮窗读得到每一次发出去的原文。
+/// 任务是一件要做成的事，要交给 Agent 的话是挂在它下面的提示词：长按菜单最多四项加删除（共用一处定义），
+/// 任务本身没有话可交，交给 Agent 在每条提示词上；任务行看得出有几条提示词、几条已回复，全部回复后轻轻问一句要不要标记完成。
 @MainActor
 struct TaskPromptTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
+    private let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
 
     @Test func 长按菜单_灵感是交给Agent设为任务移到项目归档_删除单独在最后() async throws {
         let idea = try await store.createCard(in: nil, body: "想法")
         #expect(CardMenu.sections(for: idea) == [[.handToAgent, .makeTask, .move, .archive], [.trash]])
     }
 
-    @Test func 长按菜单_任务是交给Agent完成或重新打开归档_删除单独在最后() async throws {
+    @Test func 长按菜单_任务是完成或重新打开与归档_删除单独在最后() async throws {
         let task = try await store.createTask("修乱序", in: nil)
-        #expect(CardMenu.sections(for: task) == [[.handToAgent, .complete, .archive], [.trash]])
+        #expect(CardMenu.sections(for: task) == [[.complete, .archive], [.trash]])
 
         try await store.setStatus(task.id, .done)
         let done = try #require(try await store.card(task.id))
-        #expect(CardMenu.sections(for: done) == [[.handToAgent, .reopen, .archive], [.trash]])
+        #expect(CardMenu.sections(for: done) == [[.reopen, .archive], [.trash]])
     }
 
-    @Test func 更多菜单_低频操作在浮窗与纸页的更多里() async throws {
+    @Test func 更多菜单_低频操作在任务页与纸页的更多里() async throws {
         let task = try await store.createTask("修乱序", in: nil)
         let sub = try await store.createTask("复现", under: task.id)
-        #expect(CardMenu.more(for: task) == [[.move, .sends, .copy], [.makeIdea, .archive], [.trash]])
+        #expect(CardMenu.more(for: task) == [[.move, .copy], [.makeIdea, .archive], [.trash]])
         // 子任务跟着上级走，不单独换项目
-        #expect(CardMenu.more(for: sub) == [[.sends, .copy], [.makeIdea, .archive], [.trash]])
+        #expect(CardMenu.more(for: sub) == [[.copy], [.makeIdea, .archive], [.trash]])
 
         let idea = try await store.createCard(in: nil, body: "想法")
         #expect(CardMenu.more(for: idea) == [[.makeTask, .resource, .move, .copy], [.archive], [.trash]])
@@ -50,24 +51,86 @@ struct TaskPromptTests {
         #expect(try await store.card(task.id)?.archivedAt != nil)
     }
 
-    @Test func 任务行的提示_只有标题是没写_写了要求是已写_交给过Agent是已交出() async throws {
-        let bare = try await store.createTask("修乱序", in: nil)
-        let written = try await store.createTask("修乱序\n\n跑 scheduler 测试，先别改代码", in: nil)
-        #expect(PromptMark(bare) == .none)
-        #expect(PromptMark(written) == .written)
+    @Test func 任务行写着几条提示词几条已回复_全部回复后问要不要标记完成() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        #expect(PromptTally(try await store.childMarks()[task.id]).text == nil)
 
-        try await store.recordSend(written.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: written.id)
-        #expect(PromptMark(try #require(try await store.card(written.id))) == .handedOff)
+        let first = try await store.createCard(body: "先复现", under: task.id)
+        let second = try await store.createCard(body: "再改排序", under: task.id)
+        _ = try await store.createTask("补用例", under: task.id)
+        var tally = PromptTally(try await store.childMarks()[task.id])
+        #expect(tally.text == "2 条提示词")
+        #expect(!tally.suggestsDone(task))
+
+        try await reply(to: first)
+        tally = PromptTally(try await store.childMarks()[task.id])
+        #expect(tally.text == "2 条提示词 · 1 已回复")
+        #expect(!tally.suggestsDone(task))
+
+        try await reply(to: second)
+        tally = PromptTally(try await store.childMarks()[task.id])
+        #expect(tally.text == "2 条提示词 · 全部已回复")
+        #expect(tally.suggestsDone(task))
+        // 任务不自动完成：由用户确认
+        #expect(try await store.card(task.id)?.status == .inProgress)
+        try await store.setStatus(task.id, .done)
+        #expect(!tally.suggestsDone(try #require(try await store.card(task.id))))
     }
 
-    @Test func 任务浮窗读到这条任务每次发出的原文_最近的在前() async throws {
-        let task = try await store.createTask("修乱序\n\n第一版", in: nil)
-        let other = try await store.createTask("别的", in: nil)
-        try await store.recordSend("第一版", to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: task.id)
-        try await store.recordSend("别的", to: SendTarget(kind: .clipboard, name: "剪贴板"), card: other.id)
-        try await store.recordSend("第二版", to: SendTarget(kind: .clipboard, name: "剪贴板"), card: task.id)
+    @Test func 提示词卡片_没发是未发_交给会话后处理中_那一轮做完是已回复() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let prompt = try await store.createCard(body: "先复现", under: task.id)
+        #expect(try await state(of: prompt, in: task) == "unsent")
+
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+        _ = try await recorder.update(sessionID: "s1", state: .thinking, title: "atlas")
+        #expect(try await state(of: prompt, in: task) == "working atlas")
+
+        try await Task.sleep(for: .milliseconds(5))
+        _ = try await recorder.update(sessionID: "s1", state: .settled)
+        #expect(try await state(of: prompt, in: task) == "replied atlas")
+    }
+
+    @Test func 任务页读到提示词与子任务_各自按放的顺序() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let first = try await store.createCard(body: "先复现", under: task.id)
+        let sub = try await store.createTask("补用例", under: task.id)
+        let second = try await store.createCard(body: "再改排序", under: task.id)
 
         let detail = try await TaskDetail.read(task.id, from: store)
-        #expect(detail.sends.map(\.content) == ["第二版", "第一版"])
+        #expect(detail.prompts.map(\.id) == [first.id, second.id])
+        #expect(detail.subtasks.map(\.id) == [sub.id])
+    }
+
+    @Test func 写一条提示词后什么都没写就离开_那条空的不留下() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let workspace = Workspace(services: rig.services)
+        let blank = try await workspace.createPrompt(under: task.id)
+        let kept = try await workspace.createPrompt(under: task.id)
+        try await store.updateCard(kept.id) { $0.body = "先复现" }
+
+        try await workspace.dropIfEmpty(blank.id)
+        try await workspace.dropIfEmpty(kept.id)
+        #expect(try await store.children(of: task.id).map(\.id) == [kept.id])
+    }
+
+    /// 交给 atlas，它这一轮做完。
+    private func reply(to prompt: Card) async throws {
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+        _ = try await recorder.update(sessionID: "s1", state: .thinking, title: "atlas")
+        try await Task.sleep(for: .milliseconds(5))
+        _ = try await recorder.update(sessionID: "s1", state: .settled)
+    }
+
+    private func state(of prompt: Card, in task: Card) async throws -> String {
+        let detail = try await TaskDetail.read(task.id, from: store)
+        switch detail.state(of: prompt) {
+        case .unsent: return "unsent"
+        case .launching: return "launching"
+        case .working(let item): return "working \(item.state.title)"
+        case .replied(let item): return "replied \(item?.state.title ?? "")"
+        }
     }
 }

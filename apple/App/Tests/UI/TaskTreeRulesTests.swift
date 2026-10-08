@@ -96,7 +96,7 @@ struct TaskTreeRulesTests {
         #expect(afterB?.move == TaskMove(slot: .top(project: nil), after: s.b.id))
     }
 
-    @Test func 灵感拖到任务行上_整行都算落在它上面_挂为相关灵感排在最后_行外不接() async throws {
+    @Test func 灵感拖到任务行上_整行都算落在它上面_成为提示词排在最后_行外不接() async throws {
         let s = try await sample()
         let idea = try await store.createCard(in: nil, body: "日志")
         let rows = s.tree.rows(toggled: [])
