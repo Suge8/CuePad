@@ -12,6 +12,7 @@ extension AppServices {
     func start() {
         guard tasks.isEmpty else { return }
         applySavedShortcut()
+        if !location.isIsolated { diagnostics.start() }
         accessibility.refresh()
         let piChanges = pi.changes() // 先订阅再启动桥：启动时扫到的会话不能漏
         host.start()

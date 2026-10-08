@@ -43,6 +43,7 @@ struct SettingsScreen: View {
                         }
                     }
                 }
+                if services.diagnostics.latest != nil { Section { LastCrashRow() } }
             }
             .listRowBackground(palette.paper)
             Section {} footer: {
