@@ -412,4 +412,32 @@ import Testing
     let ended = try #require(try await states()["s1"])
     #expect(ended.state == .known(.ended) && ended.model == fast && ended.thinking == .known(.off) && ended.models.isEmpty)
   }
+
+  /// 上下文余量与命令清单随状态记录写下；上下文留着最后一次的值，命令清单与可选模型一样在会话结束时清空。
+  @Test func contextUsageAndCommandsAreRecordedAndTheCommandsGoWhenTheSessionEnds() async throws {
+    let compact = PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]")
+    let review = PiSlashCommand(name: "skill:review", summary: nil, source: .known(.skill))
+    let recorder = recorder()
+
+    try await recorder.update(
+      sessionID: "s1", state: .settled, title: "t", context: PiContextUsage(tokens: 42_000, window: 200_000), commands: [compact, review])
+    let live = try #require(try await states()["s1"])
+    #expect(live.context == PiContextUsage(tokens: 42_000, window: 200_000) && live.commands == [compact, review])
+    #expect(live.context?.fraction == 0.21)
+
+    try await recorder.update(sessionID: "s1", state: .settled, context: PiContextUsage(tokens: nil, window: 200_000), commands: [compact])
+    let compacted = try #require(try await states()["s1"])
+    #expect(compacted.context == PiContextUsage(tokens: nil, window: 200_000) && compacted.context?.fraction == nil)  // 压缩后未知
+    #expect(compacted.commands == [compact])  // 清单变了：立即写
+
+    try await recorder.end(sessionID: "s1")
+    let ended = try #require(try await states()["s1"])
+    #expect(ended.context == PiContextUsage(tokens: nil, window: 200_000) && ended.commands.isEmpty)
+  }
+
+  /// 其他版本写来的命令来源读成未知值、原样写回，不当作已知来源。
+  @Test func unknownCommandSourcesFromNewerVersionsAreKept() async throws {
+    try await recorder().update(sessionID: "s1", state: .settled, commands: [PiSlashCommand(name: "x", summary: nil, source: .unknown("plugin"))])
+    #expect(try await states()["s1"]?.commands.first?.source == .unknown("plugin"))
+  }
 }
