@@ -89,10 +89,8 @@ import Testing
       PiLaunch(place: .project(project.id), prompt: idea.body, token: "t-lost"), title: "圆桌", on: "mac-a", card: idea.id)
     _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }
 
-    for _ in 0..<11 {
-      await clock.waitForSleeper()
-      clock.advance(.seconds(61))
-    }
+    await clock.waitForSleeper()
+    clock.advance(.seconds(601))
     _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id) }) { $0 == nil }
     await executor.stop()
   }
