@@ -5,9 +5,9 @@
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
 | 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`sessions` 直接给界面观察，`changes()` 给通知；`send` / `paste` / `configure`（换模型与思考强度）/ `abort`（停止这一轮）；`endedSessions` 留着本次运行里已结束会话的最后快照（按 id），界面据此把指向它的发送目标显示成"已结束" |
-| 安装扩展 | `PiExtensionInstaller` | 检测 Pi（≥ 0.84.4）与扩展状态，`install()`（新装/升级）、`uninstall()`；首次写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
+| 安装扩展 | `PiExtensionInstaller` | 检测 Pi（≥ 0.84.4）与扩展状态，`install()`（新装/升级）；首次写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
 | 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只认 `<会话目录>/<项目目录>/*.jsonl`（与 Pi 自己的会话列表一致，FireCode 子代理的 `subagents/` 不算）；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`），规则见下文"对话与摘要"；首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话，更早的只读摘要：逐行只找换行，只解码文件头、改名与第一条你的消息，最近一轮问答从文件尾往回解码到够用为止，得到的检查点与全读一样；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
-| 错误摘要 | `PiErrorSummary`（`PiAgentState.errorSummary`） | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
+| 错误摘要 | `PiErrorSummary` | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
 | 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话，连上桥后返回；空闲满时限退出；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退）；让出的进程退出后对接手的进程发 `reload`；`closeAll()` 关掉全部（关标准输入，RPC 模式读到 EOF 正常收尾）；`end(id)` 结束一个在线会话并等它退出（托管的关标准输入，终端里的走扩展的 `end` 命令） |
 | 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
 
@@ -45,7 +45,7 @@
 
 子代理（扩展 v5 起）：其他扩展在同一进程里开的子会话（FireCode 用 `createAgentSession`，以 `print` 模式绑定）也会加载本扩展，但 `print` 模式不开 socket，所以不会作为独立会话出现。会话文件在父会话目录的 `subagents/` 下的子会话把名字与状态登记到进程内共享的表里，父会话的 `info.subagents`（`[{name, kind}]`，`kind` 同 `state.kind`）汇总它们；名字依次取会话名、FireCode 写在子会话系统提示里的 `<firecode_worker name="…">`、首条用户消息。`PiSession.subagents`（名字与 `activity`）给界面，同步记录里是结构化的子代理列表（`PiSubagentState`）。
 
-`detail` 是扩展 v2 加的可选字段：命令（`command`）或搜索模式（`pattern`）取首个非空行，文件类工具（`path`）取文件名，超过 120 个字符截断（含省略号）；不上报完整参数。旧扩展没有这个字段，客户端得到 `nil`，并被 `hasOutdatedExtension` 标为过期。
+`detail` 是扩展 v2 加的可选字段：命令（`command`）或搜索模式（`pattern`）取首个非空行，文件类工具（`path`）取文件名，超过 120 个字符截断（含省略号）；不上报完整参数。旧扩展没有这个字段，客户端得到 `nil`。
 
 CuePad → 扩展（都带 `id`）：
 
@@ -67,7 +67,7 @@ CuePad → 扩展（都带 `id`）：
 
 ## 版本
 
-扩展文件里的 `EXTENSION_VERSION` 是唯一版本来源，`PiExtensionBundle.version` 由它解析。`PiExtensionInstaller.status().file` 报告已安装文件是否过期；`PiSession.hasOutdatedExtension` 报告某个运行中的会话加载的是不是旧扩展（升级文件后需重启该会话）。协议版本不同的 hello 会被拒绝并以 `.incompatible` 报告。
+扩展文件里的 `EXTENSION_VERSION` 是唯一版本来源，`PiExtensionBundle.version` 由它解析。`PiExtensionInstaller.status().file` 报告已安装文件是否过期；升级文件后，已在运行的会话需重启才加载新扩展。协议版本不同的 hello 会被拒绝并以 `.incompatible` 报告。
 
 ## 已知边界
 
