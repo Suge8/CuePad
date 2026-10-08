@@ -143,7 +143,7 @@ struct PromptList: View {
     }
 }
 
-/// 一条提示词：内容预览，下面一行是它此刻怎样（未发 / 交给某会话·处理中 / 已回复，点它看会话）与"交给 Agent"。
+/// 一条提示词：内容预览，下面一行是它此刻怎样（未发 / 交给某会话·处理中 / 会话已结束 / 已回复，点它看会话）与"交给 Agent"。
 /// 点卡打开大编辑区；长按是灵感的菜单。
 struct PromptCard: View {
     let prompt: Card
@@ -208,6 +208,14 @@ struct PromptCard: View {
                     PiStateDot(shown: shown, size: 7)
                     Text(item.state.title).foregroundStyle(palette.ink2).lineLimit(1)
                     Text(shown.presence).foregroundStyle(shown.tint(palette)).lineLimit(1)
+                }
+            }
+        case .ended(let item):
+            sessionLink(item) {
+                HStack(spacing: 6) {
+                    Image(systemName: "stop.circle").foregroundStyle(palette.ink3)
+                    Text("会话已结束").foregroundStyle(palette.ink2)
+                    Text(item.state.title).foregroundStyle(palette.ink3).lineLimit(1)
                 }
             }
         case .replied(let item):

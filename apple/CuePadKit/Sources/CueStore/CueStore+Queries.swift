@@ -92,20 +92,28 @@ extension CueStore {
 
   /// 交给了 Agent 的哪里：执行过或认领过的读灵感与任务上记的会话；还没执行的读最近一条投送请求——发给已有会话的是它的目标，
   /// 开新会话的是"正在开"（开好后由 `claimLaunchedCards` 记到卡上）。灵感与任务的行据此显示状态点（含"发送中""有新回复"）。
+  /// 在路上的（还没执行完的）最近一条发给已有会话的请求优先于卡上记的会话：手机重发后状态点跟着那个会话（发送中），
+  /// 不停在旧的回复上。开新会话的请求不抢：开好时由认领记到卡上（`claimLaunchedCards`）。
   public func handedSessions() throws -> [UUID: AgentHandoff] {
-    let modes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+    let handOff = "r.cardID IS NOT NULL AND (r.mode = 'start' OR (r.targetRef IS NOT NULL AND r.mode IN (\(Self.toSessionModes))))"
+      + " AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = r.cardID)"
     let rows = try db.query(
       """
-      SELECT id, piSessionID, 0 FROM cards WHERE piSessionID IS NOT NULL AND deletedAt IS NULL
+      SELECT r.cardID, r.targetRef, 0, 0 AS rank FROM deliveryRequests r WHERE \(handOff) AND r.mode != 'start' AND \(Self.openRequest)
       UNION ALL
-      SELECT r.cardID, r.targetRef, r.mode = 'start' FROM deliveryRequests r
-      WHERE r.cardID IS NOT NULL AND (r.mode = 'start' OR (r.targetRef IS NOT NULL AND r.mode IN (\(modes))))
-        AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = r.cardID)
-        AND r.cardID NOT IN (SELECT id FROM cards WHERE piSessionID IS NOT NULL)
+      SELECT id, piSessionID, 0, 1 FROM cards WHERE piSessionID IS NOT NULL AND deletedAt IS NULL
+      UNION ALL
+      SELECT r.cardID, r.targetRef, r.mode = 'start', 2 FROM deliveryRequests r
+      WHERE \(handOff) AND r.cardID NOT IN (SELECT id FROM cards WHERE piSessionID IS NOT NULL)
+      ORDER BY rank
       """
     ) { (card: $0.uuid(0), handoff: $0.int(2) != 0 ? AgentHandoff.launching : .session($0.text(1))) }
     return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
   }
+
+  private static let toSessionModes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+  /// 还没执行完的请求（`r`）。
+  private static let openRequest = "r.status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.executing.rawValue)')"
 
   /// 一张任务的下级（子任务与提示词），按手动顺序；在回收站的不列。
   public func children(of parent: UUID) throws -> [Card] {
@@ -178,8 +186,8 @@ extension CueStore {
 
   /// 各上级任务的直接子任务（不含提示词）完成数与总数；没有子任务的不在结果里。
   /// 每条任务的直接下级，同级手动顺序：任务行的分段完成圈与"子任务 n/m"都由它推出，见 `ChildMark`。给了 `parent` 只读它的。
-  /// 提示词（任务下的灵感）"已回复"：它最近一次交给 Pi 会话之后，那个会话歇下了（这一轮做完）或已结束——
-  /// 会话状态从那之后才开始（`stateSince` 晚于发出时刻）。复制、发到应用不算交给 Agent。
+  /// 提示词（任务下的灵感）"已回复"：没有交给 Agent 的请求还在路上（手机重发、Mac 还没执行），且它最近一次交给 Pi 会话之后，
+  /// 那个会话歇下了（`stateSince` 晚于发出时刻）或对话里有之后的一条回答——没回答就结束的不算。复制、发到应用不算交给 Agent。
   public func childMarks(of parent: UUID? = nil) throws -> [UUID: [ChildMark]] {
     let scope = parent == nil ? "" : "AND c.parentID = ?"
     let session = SendTargetKind.piSession.rawValue
@@ -187,11 +195,17 @@ extension CueStore {
       """
       SELECT c.parentID, c.todoAt IS NOT NULL,
         CASE WHEN c.todoAt IS NOT NULL THEN c.completedAt IS NOT NULL
-        ELSE EXISTS (
-          SELECT 1 FROM sendRecords s JOIN piSessionStates p ON p.sessionID = s.targetRef
+        ELSE NOT EXISTS (
+          SELECT 1 FROM deliveryRequests r
+          WHERE r.cardID = c.id AND (r.mode = 'start' OR r.mode IN (\(Self.toSessionModes))) AND \(Self.openRequest))
+        AND EXISTS (
+          SELECT 1 FROM sendRecords s
           WHERE s.cardID = c.id AND s.targetKind = '\(session)'
             AND s.sentAt = (SELECT MAX(q.sentAt) FROM sendRecords q WHERE q.cardID = c.id AND q.targetKind = '\(session)')
-            AND p.state IN ('\(PiWorkState.settled.rawValue)', '\(PiWorkState.ended.rawValue)') AND p.stateSince > s.sentAt)
+            AND (EXISTS (SELECT 1 FROM piSessionStates p WHERE p.sessionID = s.targetRef
+                   AND p.state = '\(PiWorkState.settled.rawValue)' AND p.stateSince > s.sentAt)
+              OR EXISTS (SELECT 1 FROM piMessages m WHERE m.sessionID = s.targetRef
+                   AND m.role = '\(PiChatRole.pi.rawValue)' AND m.at > s.sentAt)))
         END
       FROM cards c
       WHERE c.parentID IS NOT NULL AND c.deletedAt IS NULL AND c.archivedAt IS NULL \(scope)

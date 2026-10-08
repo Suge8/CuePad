@@ -23,12 +23,14 @@ nonisolated struct PromptTally: Equatable, Sendable {
     }
 }
 
-/// 一条提示词此刻怎样：没交出去、正在开会话、交给的会话在处理、那一轮做完了（已回复，见 `CueStore.childMarks`）。
-/// 会话读 `AgentLinks`（执行过的记在提示词上，手机发出还没执行的读投送请求）。
+/// 一条提示词此刻怎样：没交出去、正在开会话、交给的会话在处理（含话还在路上）、会话没回复就结束了、那一轮做完了
+/// （已回复，见 `CueStore.childMarks`）。会话读 `AgentLinks`（在路上的请求优先，其次记在提示词上的会话）。
 nonisolated enum PromptState: Equatable, Sendable {
     case unsent
     case launching
     case working(PiSessionListItem)
+    /// 会话没回复就结束了：可以重新交给 Agent。
+    case ended(PiSessionListItem)
     /// 会话记录读不到时（如已从 Mac 删掉）也算回复过。
     case replied(PiSessionListItem?)
 
@@ -36,7 +38,8 @@ nonisolated enum PromptState: Equatable, Sendable {
         if isReplied {
             self = .replied(handoff)
         } else if let handoff {
-            self = .working(handoff)
+            let ended = handoff.state.state == .known(.ended) && handoff.delivery?.isOpen != true
+            self = ended ? .ended(handoff) : .working(handoff)
         } else {
             self = launching ? .launching : .unsent
         }
