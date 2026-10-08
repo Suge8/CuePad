@@ -236,7 +236,7 @@ public final class PiHost {
     private static func isBusy(_ state: PiAgentState) -> Bool {
         switch state {
         case .thinking, .outputting, .tool, .waitingUser, .delegating: true
-        case .idle, .done, .error: false
+        case .idle, .done, .error, .incompatible: false
         }
     }
 }

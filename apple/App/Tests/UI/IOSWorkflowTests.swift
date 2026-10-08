@@ -78,6 +78,15 @@ struct IOSWorkflowTests {
         #expect(MacDelivery.modes(for: session, hasImages: hasImages) == modes)
     }
 
+    /// 旧协议的会话在线但发不了：回复框不给输入，写原因。
+    @Test func 回复框_旧协议的会话要重开Pi() {
+        let session = PiSessionState(
+            id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(.incompatible), detail: nil, folder: nil,
+            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
+        #expect(MacDelivery.reply(to: session, hasImages: false) == .restartPi)
+        #expect(!MacDelivery.canStop(session))
+    }
+
     // MARK: Agent 页
 
     @Test func Agent页_等你确认_出错_工作中_空闲_已结束依次排() async throws {

@@ -3,7 +3,7 @@ import Foundation
 
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
-    /// 客户端支持的协议版本；hello 不同版本一律拒绝
+    /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要重开 Pi"（`OtherProtocolHello`）
     static let protocolVersion = 4
 
     struct State: Decodable {
@@ -73,6 +73,33 @@ enum PiWire {
         }
     }
 
+    /// 协议版本不同的 hello：格式可能已变，只读认得出会话的几项（其余字段读不出就当没有）。
+    struct OtherProtocolHello: Decodable {
+        var protocolVersion: Int
+        var extensionVersion: Int
+        var sessionId: String
+        var pid: Int32
+        var cwd: String
+        var name: String?
+        var firstMessage: String?
+
+        enum CodingKeys: String, CodingKey {
+            case protocolVersion = "protocol"
+            case extensionVersion, sessionId, pid, cwd, name, firstMessage
+        }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
+            extensionVersion = (try? c.decode(Int.self, forKey: .extensionVersion)) ?? 0
+            sessionId = try c.decode(String.self, forKey: .sessionId)
+            pid = try c.decode(Int32.self, forKey: .pid)
+            cwd = try c.decode(String.self, forKey: .cwd)
+            name = try? c.decode(String.self, forKey: .name)
+            firstMessage = try? c.decode(String.self, forKey: .firstMessage)
+        }
+    }
+
     /// 会话名、首条用户消息（扩展 v3 起）、等你回答的弹窗（v4 起）、子代理（v5 起）与模型配置（协议 v2 起）；没有的为 nil。
     /// 问答近况不走这里：对话与摘要只来自会话文件（`PiHistory`）。
     struct Info: Decodable {
@@ -107,6 +134,7 @@ enum PiWire {
 
     enum Message {
         case hello(Hello)
+        case otherProtocol(OtherProtocolHello)
         case state(State)
         case info(Info)
         case ack(Ack)
@@ -119,7 +147,9 @@ enum PiWire {
         struct Envelope: Decodable { var t: String }
         let decoder = JSONDecoder()
         switch try decoder.decode(Envelope.self, from: line).t {
-        case "hello": return .hello(try decoder.decode(Hello.self, from: line))
+        case "hello":
+            let other = try decoder.decode(OtherProtocolHello.self, from: line)
+            return other.protocolVersion == protocolVersion ? .hello(try decoder.decode(Hello.self, from: line)) : .otherProtocol(other)
         case "state": return .state(try decoder.decode(StateMessage.self, from: line).state)
         case "info": return .info(try decoder.decode(Info.self, from: line))
         case "ack": return .ack(try decoder.decode(Ack.self, from: line))

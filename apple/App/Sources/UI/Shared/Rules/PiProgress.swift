@@ -10,7 +10,7 @@ nonisolated enum PiProgress {
         // 还没有具体动作时写正在处理的那句提问
         case .thinking, .outputting, .tool: session.detail.flatMap(action) ?? firstLine(session.pendingPrompt).map { "正在处理：\($0)" }
         case .delegating, .error: firstLine(session.detail)
-        case .settled, .ended, nil: firstSentence(session.lastReply)
+        case .settled, .ended, .incompatible, nil: firstSentence(session.lastReply)
         }
     }
 

@@ -59,6 +59,9 @@ struct SessionScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let session { PiRestartNotice(session: session).padding(.horizontal, 12).frame(maxWidth: Self.readingWidth) }
+        }
         .environment(\.chatHighlight, highlight)
         .overlay(alignment: .trailing) {
             let marks = ChatScrubber.marks(PiChat.entries(digest?.messages ?? []))
@@ -88,7 +91,7 @@ struct SessionScreen: View {
                 PiSessionSubtitle(session: session, project: digest?.project, delivery: digest?.latestDelivery)
             }
         } trailing: {
-            if let session, session.state != .known(.ended) {
+            if let session, MacDelivery.canEnd(session) {
                 Menu {
                     Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = true }
                         .disabled(shownEnd?.isOpen == true)
