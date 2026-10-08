@@ -5,40 +5,9 @@ import Testing
 import UserNotifications
 @testable import CuePad
 
-/// Pi 通知到不了锁屏时，用户要能在设置里看到卡在哪一步、点一下去解决；App 在前台时照样提示，除非正看着那个会话。
+/// Pi 通知到不了锁屏时，用户要能在设置里看到卡在哪一步、点一下去解决。前台的提示是 App 内横幅（见 `SessionNoticeTests`）。
 @MainActor
 struct PiAlertCenterTests {
-    private func tap(_ session: UUID) -> PiAlertTap? {
-        PiAlertRoute.tap(from: [
-            "aps": ["alert": ["loc-key": "pi_alert_settled"]],
-            "ck": ["ce": 2, "cid": "iCloud.com.sugeh.cuepad", "nid": "n",
-                   "qry": ["dbs": 1, "fo": 1, "rid": session.uuidString.lowercased(), "sid": "cuepad.pi.settled", "zid": "CuePad",
-                           "zoid": "__defaultOwner__"]],
-        ])
-    }
-
-    @Test func 前台照样横幅_正看着那个会话时不提示() {
-        let alerts = PiAlertCenter()
-        let open = UUID()
-        let other = UUID()
-        alerts.beginViewing(open)
-
-        #expect(alerts.presentation(of: tap(open)) == [])
-        #expect(alerts.presentation(of: tap(other)).isSuperset(of: [.banner, .sound]))
-
-        alerts.endViewing(open)
-        #expect(alerts.presentation(of: tap(open)).contains(.banner))
-    }
-
-    @Test func 两个窗口都在看同一会话_关掉一个仍不提示() {
-        let alerts = PiAlertCenter()
-        let session = UUID()
-        alerts.beginViewing(session)
-        alerts.beginViewing(session)
-        alerts.endViewing(session)
-        #expect(alerts.presentation(of: tap(session)) == [])
-    }
-
     typealias Case = (
         UNAuthorizationStatus, PiAlertCenter.Registration, PiAlertSubscriptionStatus, PiAlertStatus.State, PiAlertStatus.Action?, String?
     )
