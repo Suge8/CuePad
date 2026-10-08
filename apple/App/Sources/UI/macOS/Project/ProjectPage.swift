@@ -78,7 +78,7 @@ struct ProjectPage: View {
         } else {
             if !arrangement.pinned.isEmpty { resources(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }
             if !arrangement.wall.isEmpty {
-                wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, data: data, lastTarget: lastTarget)
+                wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, lastTarget: lastTarget)
             }
             if !arrangement.older.isEmpty {
                 OlderList(
@@ -105,7 +105,7 @@ struct ProjectPage: View {
         }
     }
 
-    private func wallSection(title: String, count: Int, ids: [UUID], byID: [UUID: Card], data: ProjectPageData, lastTarget: [UUID: String]) -> some View {
+    private func wallSection(title: String, count: Int, ids: [UUID], byID: [UUID: Card], lastTarget: [UUID: String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .bottom, spacing: 6) {
                 Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)

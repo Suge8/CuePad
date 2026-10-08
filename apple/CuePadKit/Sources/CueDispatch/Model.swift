@@ -18,8 +18,6 @@ public enum TargetSelector: Sendable, Equatable {
     case bundleID(String)
 
     public static let terminal = bundleID("com.apple.Terminal")
-    public static let ghostty = bundleID("com.mitchellh.ghostty")
-    public static let cursor = bundleID("com.todesktop.230313mzl4w4u92")
 }
 
 /// 错误码是稳定的字符串，界面层据此映射文案。

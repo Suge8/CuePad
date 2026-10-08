@@ -54,7 +54,6 @@ private struct NewSessionForm: View {
     let recent: [PiSessionState]
     let opened: (String) -> Void
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var chosen: String?
     @State private var prompt = ""

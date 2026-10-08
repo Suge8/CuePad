@@ -8,7 +8,6 @@ import SwiftUI
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
     @State private var board: TaskBoard?
     @State private var showsCompleted = false
 

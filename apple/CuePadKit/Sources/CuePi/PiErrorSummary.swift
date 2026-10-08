@@ -103,11 +103,4 @@ public struct PiErrorSummary: Sendable, Equatable {
         return text.count > firstLineLimit ? text.prefix(firstLineLimit - 1) + "…" : text
     }
 }
-
-extension PiAgentState {
-    /// 出错时的人话摘要；其他状态为 nil。
-    public var errorSummary: PiErrorSummary? {
-        if case .error(let message) = self { PiErrorSummary(message) } else { nil }
-    }
-}
 #endif

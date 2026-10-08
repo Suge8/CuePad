@@ -7,7 +7,6 @@ import Foundation
 /// 状态为 `.needsDecision` 时让用户选择后调用 `resolve(_:)`。冲突副本由 `CueStore.conflicts()` 提供。
 /// 需要 App 带 iCloud（CloudKit）entitlement 与容器；没有 entitlement 的进程（命令行测试）不能调用 `start()`。
 public actor CloudSync {
-  private let store: CueStore
   private let containerIdentifier: String
   private let zoneID: CKRecordZone.ID
   private let queue = EngineQueue()
@@ -27,7 +26,6 @@ public actor CloudSync {
     subscribesToPiAlerts: Bool = CloudSync.subscribesToPiAlertsByDefault
   ) {
     self.subscribesToPiAlerts = subscribesToPiAlerts
-    self.store = store
     self.containerIdentifier = containerIdentifier
     zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
     coordinator = SyncCoordinator(store: store, queue: queue, zoneID: zoneID)

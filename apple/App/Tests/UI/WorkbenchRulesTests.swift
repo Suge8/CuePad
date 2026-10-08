@@ -26,7 +26,7 @@ struct WallTests {
     }
 
     func arrange(_ cards: [CardStamp], at time: Date? = nil) -> WallArrangement {
-        WallArrangement.arrange(cards, project: project, now: time ?? now, calendar: Self.calendar)
+        WallArrangement.arrange(cards, project: project, now: time ?? now)
     }
 
     // MARK: 上墙

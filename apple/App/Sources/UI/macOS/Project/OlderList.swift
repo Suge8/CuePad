@@ -80,7 +80,6 @@ struct OlderRow: View {
     let lastTarget: String?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     var body: some View {

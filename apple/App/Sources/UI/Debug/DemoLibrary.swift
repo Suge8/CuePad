@@ -12,7 +12,7 @@ import SQLite3
 /// 只在 Debug 构建、隔离资料库、`-CuePadDemo YES` 时运行。
 enum DemoLibrary {
     struct DemoProject {
-        var name: String, icon: String, color: String, pinned: Bool, directory: String?
+        var name: String, icon: String, color: String, pinned: Bool, directory: String?, intro: String? = nil
         var cards: [(days: Double, text: String, favorite: Bool)]
     }
 
@@ -29,14 +29,10 @@ enum DemoLibrary {
             if let directory = catalog.first(where: { $0.name == project.name })?.directory {
                 try await store.setDirectory(directory, for: project.id)
             }
-            let cards = try await store.cards(in: project.id)
-            // 演示库里写成"目标："开头的卡变成项目的一句话介绍（与升级迁移同一规则）
-            if let goal = cards.first(where: { $0.body.hasPrefix("目标：") }) {
-                let intro = CueSummary(goal.body).title.replacing(/^目标\s*[:：]\s*/, with: "")
+            if let intro = catalog.first(where: { $0.name == project.name })?.intro {
                 try await store.updateProject(project.id) { $0.intro = intro }
-                try await store.purgeCard(goal.id)
             }
-            for card in cards.filter({ $0.body.contains("发给 Pi") || $0.body.hasPrefix("评审") }).prefix(4) {
+            for card in try await store.cards(in: project.id).filter({ $0.body.contains("发给 Pi") || $0.body.hasPrefix("评审") }).prefix(4) {
                 try await store.recordSend(card.body, to: SendTarget(kind: .piSession, name: project.name.lowercased()), card: card.id)
             }
         }
@@ -60,8 +56,7 @@ enum DemoLibrary {
         let home = demoHome
         let pic = CueFormat.imageMarkup(id: image)
         return [
-            DemoProject(name: "CuePad", icon: "sparkles", color: "#A260C4", pinned: false, directory: "\(home)Project/cuepad", cards: [
-                (0.1, "目标：投送队列本月可上线\n\n能在真实数据上跑完一整天；投送队列、TextKit 编辑器、变量模板都有验收记录，发布说明写好。", false),
+            DemoProject(name: "CuePad", icon: "sparkles", color: "#A260C4", pinned: false, directory: "\(home)Project/cuepad", intro: "投送队列本月可上线", cards: [
                 (0.2, "修复 TextKit 编辑器\n\nTextKit 编辑器偶发失败。先稳定复现，定位根因后再改，不要加重试掩盖。", false),
                 (0.6, "设计 iCloud 同步\n\n给 iCloud 同步出三个方案，比较代价，推荐一个并说明理由。\n---split---\n约束：离线并发编辑保留两个版本，不静默覆盖。", false),
                 (1.2, "变量模板文档\n\n\(pic)\n更新变量模板的开发文档，删掉过时的说明。", false),
@@ -88,8 +83,7 @@ enum DemoLibrary {
                 (170.0, "原型：三个视觉方向\n\n桌面、看板、流。", false),
                 (200.0, "常用提示：代码评审\n\n只报告会导致错误行为的问题，按严重程度排序。", true),
             ]),
-            DemoProject(name: "圆桌", icon: "messages-square", color: "#D9774B", pinned: true, directory: "\(home)Project/atlas", cards: [
-                (0.3, "目标：多 Agent 调度本月可上线\n\n能在真实数据上跑完一整天；调度、主持人提示词、发言轮次都有验收记录。", false),
+            DemoProject(name: "圆桌", icon: "messages-square", color: "#D9774B", pinned: true, directory: "\(home)Project/atlas", intro: "多 Agent 调度本月可上线", cards: [
                 (1.0, "产品决策\n\n先列出现状和约束，再给出下一步。", false),
                 (2.5, "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。", true),
                 (40.0, "主持人提示词\n\n\(pic)\n提示词写好，一键投送。", false),

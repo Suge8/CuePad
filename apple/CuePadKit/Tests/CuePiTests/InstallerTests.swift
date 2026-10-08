@@ -105,9 +105,6 @@ struct InstallerTests {
 
         await #expect(throws: PiInstallError.foreignFile) { try await installer().install() }
         #expect(try String(contentsOf: installedFile, encoding: .utf8) == "export default function () { /* mine */ }\n")
-
-        try installer().uninstall()
-        #expect(FileManager.default.fileExists(atPath: installedFile.path))
     }
 
     @Test func installRefusesWithoutSupportedPiAndWritesNothing() async throws {
@@ -115,14 +112,6 @@ struct InstallerTests {
         try fakePi(printing: "0.84.3")
         await #expect(throws: PiInstallError.piTooOld(found: PiVersion(0, 84, 3))) { try await installer().install() }
         #expect(!FileManager.default.fileExists(atPath: paths.extensionsDirectory.path))
-    }
-
-    @Test func uninstallRemovesOurFileAndIsIdempotent() async throws {
-        try fakePi(printing: "0.87.1")
-        try await installer().install()
-        try installer().uninstall()
-        #expect(!FileManager.default.fileExists(atPath: installedFile.path))
-        try installer().uninstall()
     }
 }
 #endif

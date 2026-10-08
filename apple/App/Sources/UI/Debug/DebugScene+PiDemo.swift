@@ -246,7 +246,7 @@ extension DebugScene {
         // 历史里再加两个带近况的：一个正在请 Mac 继续，一个不在项目里
         let history: [(String, String?, PiRecap)] = [
             ("landing-copy", "个人网站", PiRecap(lastPrompt: "把首页标题换成新文案", lastReply: "改好了，首页标题现在是「把想法写成卡片」。")),
-            ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Pi 页。")),
+            ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Agent 页。")),
         ]
         for (id, name, recap) in history {
             try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project))

@@ -20,6 +20,5 @@ enum TaskSpeech {
         }
     }
 
-    static func value(done: Bool) -> String { done ? "已完成" : "未完成" }
     static func toggle(done: Bool) -> String { done ? "标为未完成" : "标为完成" }
 }

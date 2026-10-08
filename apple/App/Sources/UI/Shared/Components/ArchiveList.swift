@@ -27,8 +27,6 @@ struct ArchiveList: View {
         .observing(services.store, [.cards, .projects], into: $cards, onError: workspace.fail) { try $0.archived() }
     }
 
-    static func count(_ cards: [Card]?) -> String { cards.map { $0.isEmpty ? "空的" : "\($0.count) 条" } ?? "" }
-
     private func row(_ card: Card) -> some View {
         let project = workspace.catalog?.project(card.projectID)
         return Button { open(card) } label: {

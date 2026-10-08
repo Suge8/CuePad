@@ -45,7 +45,7 @@ struct RealPiTests {
             #expect(s.cwd.resolvingSymlinksInPath().path == pi.cwd.resolvingSymlinksInPath().path)
             #expect(s.mode == "rpc")
             #expect(s.model?.id == "echo" && s.thinking == "off")
-            #expect(s.extensionVersion == PiExtensionBundle.version && !s.hasOutdatedExtension)
+            #expect(s.extensionVersion == PiExtensionBundle.version)
             #expect(s.state == .idle)
             #expect(s.terminal.program == "test-term" && s.terminal.bundleID == "com.example.term")
             #expect(s.terminal.tmuxPane == "%9" && s.terminal.tmuxSocketPath == "/tmp/tmux-test/default")

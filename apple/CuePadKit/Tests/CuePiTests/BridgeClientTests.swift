@@ -164,8 +164,6 @@ struct BridgeClientTests {
             session(old.id)?.state == .tool(name: "bash", running: ["bash"], detail: nil)
                 && session(current.id)?.state == .tool(name: "bash", running: ["bash", "read"], detail: "ls -la")
         }
-        #expect(session(old.id)?.hasOutdatedExtension == true)
-        #expect(session(current.id)?.hasOutdatedExtension == false)
     }
 
     // MARK: 结束与残留清理

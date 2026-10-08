@@ -49,7 +49,7 @@ nonisolated struct WallBoard: Equatable, Sendable {
     mutating func refresh(with data: ProjectPageData, project: UUID?, now: Date = .now, calendar: Calendar = .current) -> Bool {
         let stamps = data.stamps()
         guard let previous = arrangement else {
-            arrangement = WallArrangement.arrange(stamps, project: project, now: now, calendar: calendar)
+            arrangement = WallArrangement.arrange(stamps, project: project, now: now)
             return true
         }
         let next = previous.refreshed(with: stamps, project: project, now: now, calendar: calendar)

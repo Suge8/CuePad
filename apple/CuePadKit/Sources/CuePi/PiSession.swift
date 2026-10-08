@@ -84,8 +84,6 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     public internal(set) var thinking: String? = nil
     public internal(set) var availableModels: [PiModel] = []
 
-    public var hasOutdatedExtension: Bool { extensionVersion < PiExtensionBundle.version }
-
     /// 会话的显示名，规则见 `PiSessionName`。旧扩展不报名字与消息，显示工作目录名。
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
@@ -109,8 +107,6 @@ public struct PiModel: Sendable, Equatable, Decodable {
     public var id: String
     public var name: String
     public var thinkingLevels: [String]
-
-    public var ref: PiModelRef { PiModelRef(provider: provider, id: id) }
 
     public init(provider: String, id: String, name: String, thinkingLevels: [String]) {
         self.provider = provider

@@ -39,8 +39,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 两组的计数（顶层任务数，`CueStore.taskCounts` 一处定义）：任务页与面板的分组标题、书架的"任务"一行、Mac 工具栏任务钮都读它。
     var counts: TaskCounts
 
-    var isEmpty: Bool { inProgress.isEmpty && todo.isEmpty && done.isEmpty }
-
     /// 看板要观察的表。
     static let tables: Set<StoreTable> = [.cards, .projects, .piSessionStates, .deliveryRequests]
 

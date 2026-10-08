@@ -185,7 +185,6 @@ struct CardTile: View {
     let lastTarget: String?
     let floated: Bool
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 

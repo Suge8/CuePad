@@ -302,7 +302,6 @@ private struct PiSetupRow: View {
 private struct ExtensionConsent: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
     @State private var installing = false
 
     var body: some View {

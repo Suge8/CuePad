@@ -114,7 +114,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
     private let external: Binding<ChatFollow>?
     private let content: Content
-    @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var position = ScrollPosition(edge: Self.newestEdge)
     @State private var own = ChatFollow()

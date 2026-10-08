@@ -9,7 +9,7 @@ struct WallArrivalTests {
         let now = WallTests.date(2026, 9, 30, hour: 15)
         let project = UUID()
         let existing = CardStamp(id: UUID(), modifiedAt: now.addingTimeInterval(-3_600), lastSentAt: nil, isPinned: false)
-        let first = WallArrangement.arrange([existing], project: project, now: now, calendar: calendar)
+        let first = WallArrangement.arrange([existing], project: project, now: now)
         let importedRecent = CardStamp(id: UUID(), modifiedAt: now.addingTimeInterval(-2 * 86_400), lastSentAt: nil, isPinned: false)
         let importedStale = CardStamp(id: UUID(), modifiedAt: now.addingTimeInterval(-90 * 86_400), lastSentAt: nil, isPinned: false)
         let importedPinned = CardStamp(id: UUID(), modifiedAt: now.addingTimeInterval(-90 * 86_400), lastSentAt: nil, isPinned: true)
@@ -29,7 +29,7 @@ struct WallArrivalTests {
         let now = WallTests.date(2026, 9, 30, hour: 15)
         let project = UUID()
         let card = CardStamp(id: UUID(), modifiedAt: now.addingTimeInterval(-3_600), lastSentAt: nil, isPinned: false)
-        let first = WallArrangement.arrange([card], project: project, now: now, calendar: calendar)
+        let first = WallArrangement.arrange([card], project: project, now: now)
 
         var marked = card
         marked.isPinned = true

@@ -356,17 +356,6 @@ extension Composer where Tools == EmptyView {
     }
 }
 
-extension Composer where Header == EmptyView, Tools == EmptyView {
-    init(
-        draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
-        accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, @ViewBuilder send: () -> Send
-    ) {
-        self.init(
-            draft: draft, prompt: prompt, label: label, focus: focus, accepts: accepts, cardsFrom: cardsFrom,
-            header: { EmptyView() }, send: send)
-    }
-}
-
 /// 输入框里两个角上的圆钮（看得见的 36，点得到的 44）：＋ 与发送钮同一个。
 private struct CircleGlyph: View {
     let systemImage: String

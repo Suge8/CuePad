@@ -126,14 +126,6 @@ public struct PiExtensionInstaller: Sendable {
         try Data(PiExtensionBundle.source.utf8).write(to: installedFile, options: .atomic)
     }
 
-    /// 只删 CuePad 写的文件；同名的用户文件保持不动。
-    public func uninstall() throws {
-        switch currentFile() {
-        case .missing, .foreign: return
-        case .current, .outdated: try FileManager.default.removeItem(at: installedFile)
-        }
-    }
-
     private func currentFile() -> PiExtensionFile {
         guard let data = try? Data(contentsOf: installedFile), let text = String(data: data, encoding: .utf8) else { return .missing }
         if text == PiExtensionBundle.source { return .current }
