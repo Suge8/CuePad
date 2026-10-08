@@ -162,11 +162,11 @@ struct PiReplyBar: View {
         }
     }
 
-    /// 忙时的提示写明点发送是什么、长按是什么；作答时写明在回答问题。
+    /// 占位只说这里写什么；忙时点发送与长按各是什么由发送钮自己说（读屏标签与长按菜单）。
     private var placeholder: String {
-        if answering != nil { return "在这里回答上面的问题" }
+        if answering != nil { return "回答上面的问题" }
         if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
-        return modes.first == .followUp ? "\(DeliveryMode.followUp.label) · \(Self.hold)发送可\(DeliveryMode.steer.label)" : "回复 \(session.title)"
+        return "回复 \(session.title)"
     }
 
     private func answer() {

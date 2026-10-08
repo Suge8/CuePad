@@ -213,19 +213,12 @@ private struct FocusCard: View {
 
     private func sessionLine(_ item: PiSessionListItem) -> some View {
         let session = item.state
-        let shown = services.settings.shown(item)
+        // 项目卡里已经是这个项目：不再写所在
         return Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                PiStateDot(shown: shown, size: 7)
-                Text(session.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
-                PiActivityLine(lead: [shown.label], detail: session.detail, detailIsCode: session.detailIsCode, font: .subheadline)
-                    .foregroundStyle(shown.status == .asking ? palette.attention : shown.isUnread ? palette.ink : palette.ink2)
-                Spacer(minLength: 4)
-                PiElapsed(session: session)
-            }
-            .frame(minHeight: 36)
-            .opacity(session.state == .known(.ended) ? 0.6 : 1)
-            .contentShape(.rect)
+            PiSessionRow(session: session, project: nil, delivery: item.delivery)
+                .padding(.vertical, 6)
+                .frame(minHeight: 44)
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)

@@ -13,7 +13,8 @@ struct SyncSummary: Equatable {
     init(_ status: SyncStatus) {
         switch status {
         case .starting: (title, detail, symbol, tone) = ("正在连接 iCloud…", nil, "icloud", .normal)
-        case .unavailable(let reason): (title, detail, symbol, tone) = ("没有在同步", reason, "icloud.slash", .failure)
+        // 没有在同步是这台设备的情况（没有 iCloud 权限、隔离库），不是出错
+        case .unavailable(let reason): (title, detail, symbol, tone) = ("没有在同步", reason, "icloud.slash", .attention)
         case .idle: (title, detail, symbol, tone) = ("已同步", nil, "checkmark.icloud", .normal)
         case .syncing: (title, detail, symbol, tone) = ("正在同步…", nil, "arrow.triangle.2.circlepath.icloud", .normal)
         case .noAccount:

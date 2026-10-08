@@ -93,7 +93,7 @@ struct StyleBoard: View {
                     let shown = PiShown(status: status)
                     HStack(spacing: 6) {
                         PiStateDot(shown: shown, size: 8)
-                        Text(shown.label).font(.subheadline.weight(shown.isUnread ? .semibold : .medium)).foregroundStyle(shown.tint(palette))
+                        Text(shown.label).font(.subheadline.weight(shown.isUnread ? .semibold : .medium)).foregroundStyle(shown.labelTint(palette))
                             .lineLimit(1)
                     }
                 }

@@ -399,8 +399,9 @@ private struct ActiveTasks: View {
                     let shown = services.settings.shown(session, delivery: row.delivery)
                     HStack(spacing: 4) {
                         PiStateDot(shown: shown, size: 6)
-                        Text(shown.presence).foregroundStyle(shown.tint(palette))
-                        PiElapsed(session: session, font: .footnote)
+                        Text(shown.presence).foregroundStyle(shown.labelTint(palette))
+                        Text("·").foregroundStyle(palette.ink3)
+                        PiElapsed(shown: shown, font: .footnote)
                     }
                     .fixedSize()
                 }

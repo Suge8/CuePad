@@ -174,8 +174,9 @@ struct TaskRow: View {
                 let shown = services.settings.shown(session, delivery: delivery)
                 HStack(spacing: 4) {
                     PiStateDot(shown: shown, size: 5)
-                    Text(shown.presence).foregroundStyle(shown.tint(palette))
-                    PiElapsed(session: session, font: .system(size: 11))
+                    Text(shown.presence).foregroundStyle(shown.labelTint(palette))
+                    Text("·").foregroundStyle(palette.ink3)
+                    PiElapsed(shown: shown, font: .system(size: 11))
                 }
                 .sessionLink(session.sessionID)
                 .help("交给了 Agent 会话「\(session.title)」，点开看近况")

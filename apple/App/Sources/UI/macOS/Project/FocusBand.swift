@@ -94,8 +94,7 @@ private struct PiColumn: View {
         ForEach(sessions) { session in
             PiSessionRow(
                 session: .live(session, hostID: workspace.services.hostID, projectID: project, recap: workspace.sessionRecaps[session.sessionID]),
-                project: workspace.catalog?.project(project), delivery: workspace.sessionDeliveries[session.sessionID],
-                style: .init(name: .system(size: 13, weight: .semibold), line: .system(size: 12), dot: 5, spacing: 1))
+                project: workspace.catalog?.project(project), delivery: workspace.sessionDeliveries[session.sessionID])
         }
     }
 }

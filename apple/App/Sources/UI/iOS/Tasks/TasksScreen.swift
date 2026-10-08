@@ -236,12 +236,13 @@ struct TaskLine: View {
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 4) {
                             PiStateDot(shown: shown, size: 6)
-                            Text(shown.presence).foregroundStyle(shown.tint(palette))
-                            PiElapsed(session: session, font: .caption)
+                            Text(shown.presence).foregroundStyle(shown.labelTint(palette))
+                            Text("·").foregroundStyle(palette.ink3)
+                            PiElapsed(shown: shown, font: .caption)
                         }
                         HStack(spacing: 4) {
                             PiStateDot(shown: shown, size: 6)
-                            Text(shown.presence).foregroundStyle(shown.tint(palette))
+                            Text(shown.presence).foregroundStyle(shown.labelTint(palette))
                         }
                         PiStateDot(shown: shown, size: 6).accessibilityLabel(shown.presence)
                     }

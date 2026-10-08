@@ -88,7 +88,7 @@ struct SessionScreen: View {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                PiSessionSubtitle(session: session, project: digest?.project, delivery: digest?.latestDelivery)
+                PiSessionSubtitle(session: session, project: digest?.project)
             }
         } trailing: {
             if let session, MacDelivery.canEnd(session) {

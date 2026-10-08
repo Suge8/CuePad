@@ -9,11 +9,6 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var deliveries: [DeliveryRequest]
     var messages: [PiChatMessage] = []
 
-    /// 发给它的最近一条（说话与作答）：顶栏的状态把它算进去（`PiDelivery`）。
-    var latestDelivery: DeliveryRequest? {
-        deliveries.last { $0.mode.known.map(DeliveryMode.toSession.contains) == true }
-    }
-
     /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因。
     /// 思考强度按显示的模型夹取（`PiThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
     var config: PiConfigShown {
@@ -198,7 +193,8 @@ struct QuestionCard: View {
     }
 }
 
-/// 问题卡上的回答按钮：淡底或朱砂实底（主选项），触摸目标 44pt；按下缩一点、松开回弹（`Motion.pressDown/pressUp`）。
+/// 问题卡上的回答按钮：淡底加细边，或墨色实底（确认的"是"），触摸目标 44pt；按下缩一点、松开回弹（`Motion.pressDown/pressUp`）。
+/// 不用签名色：确认的常是部署、覆盖这类收不回的事，品牌色不该推着人点"是"。
 private struct AnswerButtonStyle: ButtonStyle {
     let prominent: Bool
     @Environment(\.palette) private var palette
@@ -208,11 +204,11 @@ private struct AnswerButtonStyle: ButtonStyle {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         configuration.label
             .font(.body.weight(.medium))
-            .foregroundStyle(prominent ? palette.onSignature : palette.ink)
+            .foregroundStyle(prominent ? palette.onAccent : palette.ink)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            // 纸面卡里的中性按钮：淡底不描边；主选项（确认的"是"）朱砂实心
-            .background(prominent ? palette.signature : palette.fill, in: shape)
+            .background(prominent ? palette.accent : palette.fill, in: shape)
+            .overlay { if !prominent { shape.strokeBorder(palette.ink3.opacity(0.5), lineWidth: 1) } }
             .contentShape(shape)
             .scaleEffect(configuration.isPressed ? Press.control : 1)
             // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
@@ -221,18 +217,21 @@ private struct AnswerButtonStyle: ButtonStyle {
     }
 }
 
-/// 请求的送达情况，说法同会话行（`PiShown` 的话在路上）：发送中（等 Mac 接手）、送达中、正在唤醒、已送达（往返多久）、没能送达。
+/// 请求的送达情况，说法同会话行（`PiDelivery.transit`）：发送中、排队中、送达中、正在唤醒、已送达（往返多久）、没能送达。
 struct DeliveryStatusLabel: View {
     let request: DeliveryRequest
-    /// 目标会话已结束：在途时写"正在唤醒…"。
-    var waking = false
+    /// 发给哪个会话；开新会话的请求没有。
+    var session: PiSessionState?
     @Environment(\.palette) private var palette
 
     var body: some View {
         Group {
             switch request.status {
             case .known(.pending), .known(.executing):
-                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(waking ? "正在唤醒…" : request.status == .known(.pending) ? "发送中" : "送达中") }.foregroundStyle(palette.ink2)
+                // 发给已结束的会话：Mac 先在后台把它唤醒再送达
+                let busy = session.map { $0.isWorking || $0.state == .known(.waitingForUser) } ?? false
+                let text = session?.state == .known(.ended) ? "正在唤醒" : PiDelivery.transit(request, busy: busy)
+                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(text) }.foregroundStyle(palette.ink2)
             case .known(.succeeded):
                 Label(request.roundTrip.map { "已送达 · \(PiClock.duration(Double($0.components.seconds)))" } ?? "已送达", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(palette.ink2)
@@ -247,22 +246,17 @@ struct DeliveryStatusLabel: View {
     }
 }
 
-/// 会话计时，读法与写法见 `PiClock`："已运行 4 分"、"已等 30 秒"、"1 时 2 分前"。
+/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："已运行 4 分"、"已等 30 秒"、"已发出 3 秒"、"1 小时 2 分前"。
 struct PiElapsed: View {
-    let clock: PiClock
+    let shown: PiShown
     var font: Font = .footnote
     @Environment(\.palette) private var palette
 
-    init(session: PiSessionState, font: Font = .footnote) {
-        self.init(state: session.state, stateSince: session.stateSince, busySince: session.busySince, font: font)
-    }
-
-    init(state: Open<PiWorkState>, stateSince: Date, busySince: Date?, font: Font = .footnote) {
-        clock = PiClock.reading(state, stateSince: stateSince, busySince: busySince)
-        self.font = font
-    }
-
     var body: some View {
+        if let clock = shown.clock { label(clock) }
+    }
+
+    private func label(_ clock: PiClock) -> some View {
         // 只在文字会变的时刻重画；不在屏幕上的行不画，也就不刷新
         TimelineView(PiClockSchedule(clock: clock)) { context in
             Text(clock.text(now: context.date))

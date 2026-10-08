@@ -207,7 +207,7 @@ struct PromptCard: View {
                 HStack(spacing: 6) {
                     PiStateDot(shown: shown, size: 7)
                     Text(item.state.title).foregroundStyle(palette.ink2).lineLimit(1)
-                    Text(shown.presence).foregroundStyle(shown.tint(palette)).lineLimit(1)
+                    Text(shown.presence).foregroundStyle(shown.labelTint(palette)).lineLimit(1)
                 }
             }
         case .ended(let item):

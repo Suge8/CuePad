@@ -17,6 +17,7 @@ nonisolated enum PiRowLine: Equatable {
         if let draft { return .draft(draft) }
         if let progress = PiProgress.line(of: session) { return .progress(progress) }
         if session.state == .known(.settled), !session.hasStarted { return .hint("等你说第一句") }
+        if session.state == .known(.incompatible) { return .hint("在终端里退出，再用 pi -c 接着") }
         return nil
     }
 }

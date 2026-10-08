@@ -107,8 +107,7 @@ struct SessionResultList: View {
     private func row(_ session: PiSessionState) -> some View {
         let isSelected = session.sessionID == selection
         return PiSessionRow(
-            session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-            style: .init(name: .system(size: 13.5), line: .system(size: 11.5), dot: 6, spacing: 1))
+            session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID])
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
             .contentShape(.rect)

@@ -33,9 +33,6 @@ nonisolated extension PiSessionState {
             .map(\.session)
     }
 
-    /// 详情是工具命令（等宽显示）。
-    var detailIsCode: Bool { state == .known(.tool) }
-
     /// 在处理中（思考、输出、运行工具、子代理）。
     var isWorking: Bool { state.isWorking }
 
@@ -69,15 +66,24 @@ nonisolated enum PiDelivery: Hashable, Sendable {
     case delivered
     case failed
 
+    /// 还没送到的话此刻怎么说（会话行的小标记、会话页气泡下面同一套）：会话在跑时"等它做完再说"的话是"排队中"，
+    /// 其余 Mac 还没接手是"发送中"、接手了是"送达中"。
+    static func transit(_ request: DeliveryRequest, busy: Bool) -> String {
+        if busy, request.mode == .known(.followUp) { return "排队中" }
+        return request.status == .known(.pending) ? "发送中" : "送达中"
+    }
+
     /// `request` 是发给 `session` 的最近一条（`DeliveryMode.toSession` 的方式）。会话状态的时间（`stateSince`）与送达时间
     /// （`completedAt`）都是 Mac 的钟；发出时间是发起设备的钟，只拿来判断"发出之后会话动起来了"，跨设备的钟差最多让"发送中"早一点让位。
-    /// 完成的请求过一会儿就被执行它的 Mac 清理，所以"已送达""没能送达"不会一直挂着。
-    static func phase(of request: DeliveryRequest?, for session: PiSessionState) -> PiDelivery? {
+    /// 送到了的请求过一会儿就被执行它的 Mac 清理，"已送达"不会一直挂着；没能送达的留着（等你重发或移除），
+    /// 在你看过这个会话（`seen`，本机最后一次看它）之前一直显示，会话之后动过也不算数。
+    static func phase(of request: DeliveryRequest?, for session: PiSessionState, seen: Date? = nil) -> PiDelivery? {
         guard let request, let mode = request.mode.known, DeliveryMode.toSession.contains(mode) else { return nil }
         let ended = session.state == .known(.ended)
         switch request.status.known {
         case .pending, .executing:
-            if session.isWorking && session.stateSince >= request.createdAt { return nil }
+            // 发出之后才进入处理中，才算它在处理这句话；时间存到毫秒，同刻算作发出前就在跑（这句还在排队）
+            if session.isWorking && session.stateSince > request.createdAt { return nil }
             if ended { return .waking }
             return request.status == .known(.pending) ? .sending : .delivering
         case .succeeded:
@@ -85,8 +91,7 @@ nonisolated enum PiDelivery: Hashable, Sendable {
             let caughtUp = session.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
             return mode == .paste || caughtUp ? nil : .delivered
         case .failed:
-            // "之后变过"取严格晚于：时间存到毫秒，会话状态与结果同一毫秒写下是常事，同刻算作没变，结果照样显示
-            return session.stateSince > (request.completedAt ?? request.modifiedAt) ? nil : .failed
+            return (seen ?? .distantPast) > (request.completedAt ?? request.modifiedAt) ? nil : .failed
         case nil:
             return nil
         }
@@ -104,7 +109,7 @@ nonisolated enum PiUnread {
 extension AppSettings {
     /// 这个会话在本机界面上显示的状态；`delivery` 是发给它的最近一条投送请求（`PiSessionListItem.delivery`）。
     func shown(_ session: PiSessionState, delivery: DeliveryRequest?) -> PiShown {
-        PiShown(session, delivery: delivery, unread: isUnread(session))
+        PiShown(session, delivery: delivery, unread: isUnread(session), seen: sessionSeen[session.sessionID])
     }
 
     func shown(_ item: PiSessionListItem) -> PiShown { shown(item.state, delivery: item.delivery) }
@@ -112,8 +117,9 @@ extension AppSettings {
 
 /// 界面上一个会话（或一个项目）显示的状态，全 App 只在这里判定：会话行、项目状态点、会话页顶栏、任务上的会话状态、
 /// Mac 侧栏与菜单栏、发送目标都经它。说法、颜色、状态标、动效、排序也都只按 `status` 分。
-/// 判定的先后：发给它的话还在路上时先说路上到哪了（`PiDelivery`）；其余按 Pi 报的状态，停在空闲时再分——
-/// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"待你回复"。
+/// 判定的先后：没能送达（你没看过）在最前；会话自己在跑或在等你确认时就是它的状态，发给它的话还在路上只是一个小标记（`note`）；
+/// 会话停着时话在路上就说路上到哪了（`PiDelivery`）；其余按 Pi 报的状态，停在空闲时再分——
+/// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"待你回复"。计时读哪一种（`clock`）也在这里定。
 nonisolated struct PiShown: Hashable, Sendable {
     enum Status: Hashable, Sendable {
         case delivery(PiDelivery)
@@ -132,16 +138,28 @@ nonisolated struct PiShown: Hashable, Sendable {
     }
 
     let status: Status
+    /// 会话在跑时还在路上的话："你的话排队中"（等这一轮做完再送）、"你的话发送中"。
+    var note: String?
+    /// 计时；只有状态、没有会话的（子代理、样板）没有。
+    var clock: PiClock?
 }
 
 nonisolated extension PiShown {
-    init(_ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false) {
-        if let phase = PiDelivery.phase(of: delivery, for: session) {
-            status = .delivery(phase)
-        } else if session.state == .known(.settled) {
-            status = unread ? .unread : session.hasStarted ? .idle : .fresh
-        } else {
-            status = Self.status(of: session.state)
+    init(_ session: PiSessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil) {
+        let own = PiClock.reading(session.state, stateSince: session.stateSince, busySince: session.busySince)
+        let busy = session.isWorking || session.state == .known(.waitingForUser)
+        switch PiDelivery.phase(of: delivery, for: session, seen: seen) {
+        case .failed:
+            self.init(status: .delivery(.failed), clock: own)
+        case let phase? where busy:
+            let transit = delivery.map { PiDelivery.transit($0, busy: true) }
+            self.init(status: Self.status(of: session.state), note: phase == .delivered ? nil : transit.map { "你的话\($0)" }, clock: own)
+        case let phase?:
+            self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) })
+        case nil where session.state == .known(.settled):
+            self.init(status: unread ? .unread : session.hasStarted ? .idle : .fresh, clock: own)
+        case nil:
+            self.init(status: Self.status(of: session.state), clock: own)
         }
     }
 
@@ -238,23 +256,37 @@ nonisolated extension PiShown {
 }
 
 extension PiShown {
-    /// 颜色只表达含义：要你处理的赭黄、出错胭脂、在动的签名色、有新回复墨色，其余是灰。
+    /// 要你动手：等你确认、出错、没能送达、需要重开 Pi。只有它们带彩色。
+    var needsYou: Bool {
+        switch status {
+        case .asking, .restart, .failed, .delivery(.failed): true
+        default: false
+        }
+    }
+
+    /// 状态标的颜色只回答"要不要你管"：要你确认的赭黄、出错与没能送达胭脂；在动的（工作中、话在路上）是墨色、靠动效表达，
+    /// 不占签名色；有新回复墨色；其余是灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
         case .asking, .restart: palette.attention
         case .failed, .delivery(.failed): palette.failure
-        case .working, .delivery: palette.working
-        case .unread: palette.ink
+        case .working, .delivery, .unread: palette.ink
         case .idle, .fresh, .unknown: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
         }
+    }
+
+    /// 状态词的颜色：只有要你动手的那几个字带色，其余是次要墨色（有新回复是墨色，由调用方加粗）。整句不上色。
+    func labelTint(_ palette: Palette) -> Color {
+        needsYou ? tint(palette) : isUnread ? palette.ink : palette.ink2
     }
 
     /// 状态标的形状，与颜色一起表达状态（色弱也分得出）。工作中与有新回复是自绘的（`PiStateDot`），这里是它们静止时的样子。
     var symbol: String {
         switch status {
         case .asking: "questionmark.circle.fill"
-        case .failed, .delivery(.failed): "exclamationmark.circle.fill"
+        case .failed: "exclamationmark.circle.fill"
+        case .delivery(.failed): "arrow.uturn.backward.circle.fill"
         case .restart: "arrow.clockwise.circle.fill"
         case .delivery(.waking): "sunrise.circle"
         case .delivery: "arrow.up.circle"
@@ -269,7 +301,7 @@ extension PiShown {
 }
 
 /// 会话状态标（全 App 只此一份：Agent 页、书架、侧栏、Mac 侧栏与菜单栏、会话页顶栏、任务上的会话状态）：颜色 + 形状表达状态——
-/// 等你确认赭黄问号、出错与没能送达胭脂叹号、工作中签名色转圈、话在路上签名色向上箭头（唤醒是日出）在呼吸、
+/// 等你确认赭黄问号、出错胭脂叹号、没能送达胭脂折回箭头、工作中墨色转圈、话在路上墨色向上箭头（唤醒是日出）在呼吸、
 /// 有新回复墨色实心点、待你回复灰勾、新会话灰虚线圈、已结束更淡的空心圈。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 转圈与呼吸是常驻的循环动效，交给 Core Animation（`LoopLayer`），标不在屏幕上时不画；换状态时符号淡入替换，
 /// 一轮做完（工作中 → 停下）时放一圈涟漪、点弹一下，只这一次。减弱动态效果时转圈换成静止的圈点，没有呼吸与涟漪。

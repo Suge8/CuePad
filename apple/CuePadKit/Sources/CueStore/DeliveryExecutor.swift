@@ -142,8 +142,11 @@ extension CueStore {
   /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
   /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
   /// 留着的算"还剩"：清理一轮轮排下去，认领后的那一轮就带走它。
-  fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date) throws -> Bool {
+  /// 没能送达的话（说话的几种方式）在对话里留着等用户重发或移除（重发写成后移除它），只在完成早于 `undeliveredCutoff` 时清理。
+  fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, undeliveredCutoff: Date) throws -> Bool {
     let done = "status IN ('succeeded', 'failed')"
+    let talk = [DeliveryMode.send, .steer, .followUp, .paste].map { "'\($0.rawValue)'" }.joined(separator: ", ")
+    let undelivered = "status = 'failed' AND mode IN (\(talk)) AND completedAt >= ?"
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?
         AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
@@ -152,8 +155,10 @@ extension CueStore {
           WHERE s.launchToken = CASE WHEN json_valid(deliveryRequests.content) THEN json_extract(deliveryRequests.content, '$.token') END)
       """
     return try write {
-      try db.run("DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ? AND NOT (\(awaitingClaim))", [cutoff, claimCutoff])
-      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done)") { _ in true } != nil
+      try db.run(
+        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ? AND NOT (\(awaitingClaim)) AND NOT (\(undelivered))",
+        [cutoff, claimCutoff, undeliveredCutoff])
+      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(undelivered))", [undeliveredCutoff]) { _ in true } != nil
     }
   }
 }
@@ -270,6 +275,9 @@ public actor DeliveryExecutor {
     CueFormat.imageHashes(in: request.content).contains { store.files.fileURL(for: $0) == nil }
   }
 
+  /// 没能送达的话最多留多久（与对话的保留期一样是 7 天）。
+  private static let undeliveredRetention: TimeInterval = 7 * 86_400
+
   private func scheduleCleanup() {
     guard cleanup == nil else { return }
     cleanup = Task { [timing, retention] in
@@ -283,7 +291,8 @@ public actor DeliveryExecutor {
   private func deleteExpired() async throws -> Bool {
     let now = timing.now()
     return try await store.deleteCompletedDeliveries(
-      before: now.addingTimeInterval(-retention.seconds), claimCutoff: now.addingTimeInterval(-maxAge.seconds))
+      before: now.addingTimeInterval(-retention.seconds), claimCutoff: now.addingTimeInterval(-maxAge.seconds),
+      undeliveredCutoff: now.addingTimeInterval(-Self.undeliveredRetention))
   }
 
   private func cleanupFinished(rescheduling: Bool) {

@@ -45,13 +45,16 @@ struct MarkdownText: View {
             }
             .scrollIndicatorsFlash(onAppear: true)
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+            .modifier(MoreToTheRight())
             .background(palette.fill, in: .rect(cornerRadius: 10, style: .continuous))
         case .table(let table):
             // 表格带着自己的边框整张滚；阅读栏贴着屏幕边（手机）时滚动可以越过页边距滑到屏幕边，栏两边有空白时收在栏内
+            // 贴着屏幕边时被屏幕边切开的那一列本身就看得出还有；收在栏内时右缘淡出
             ScrollView(.horizontal) { MarkdownTableView(table: table) }
                 .scrollIndicatorsFlash(onAppear: true)
                 .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                 .scrollClipDisabled(columnBleeds)
+                .modifier(MoreToTheRight(enabled: !columnBleeds))
         case .rule:
             Rectangle().fill(palette.hair).frame(height: 1).padding(.vertical, 4)
         }
@@ -152,3 +155,31 @@ private struct CappedWidth: Layout {
     }
 }
 
+/// 横向滚动的块右边还有内容时，右缘 24pt 淡出，看得出能往右滑；滑到头就不淡。只改遮罩，不影响排版。
+private struct MoreToTheRight: ViewModifier {
+    var enabled = true
+    @State private var more = false
+
+    private static let width: CGFloat = 24
+
+    func body(content: Content) -> some View {
+        // 不淡时连遮罩也不挂：遮罩会切掉越过栏边的内容
+        if enabled { faded(content) } else { content }
+    }
+
+    private func faded(_ content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.x + geometry.containerSize.width < geometry.contentSize.width - 1
+            } action: { _, more in
+                self.more = more
+            }
+            .mask {
+                HStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(colors: [.black, .black.opacity(more ? 0 : 1)], startPoint: .leading, endPoint: .trailing)
+                        .frame(width: Self.width)
+                }
+            }
+    }
+}
