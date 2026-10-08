@@ -67,6 +67,11 @@ struct IOSRootView: View {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link, workspace: workspace) }
         }
         .onChange(of: alerts.pendingTap, initial: true) { navigation.open(alert: alerts.consumeTap()) }
+        // 前台时会话"等你确认"、"做完了"的提示：正看着那个会话的窗口不弹；后台走系统推送
+        .onChange(of: workspace.services.sessionAlert) { _, alert in
+            guard let alert, !navigation.isViewing(session: alert.session) else { return }
+            workspace.say(alert.text, symbol: alert.symbol, link: .session(alert.session), duration: .seconds(5))
+        }
         #if DEBUG
         .task { await DebugScene.prepare(workspace, navigation) }
         #endif
@@ -117,7 +122,7 @@ struct RouteView: View {
         case .agent: AgentScreen().countsAsPiViewer()
         case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
-        case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer(session: route.id)
+        case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))
@@ -421,7 +426,7 @@ private struct NoticeBanner: View {
                 HStack(spacing: 0) {
                     Button { if let link = notice.link { go(link) } } label: {
                         HStack(spacing: 6) {
-                            Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            Label(notice.text, systemImage: notice.symbol ?? (notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"))
                             if notice.link != nil {
                                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
                                     .accessibilityHidden(true)
@@ -448,6 +453,8 @@ private struct NoticeBanner: View {
                 .accessibilityAddTraits(.updatesFrequently)
             }
         }
+        // 让到顶上那一排（推入页的悬浮顶栏、标签根页自己画的搜索与按钮行）下面：返回钮、标题与按钮不被遮住
+        .padding(.top, FloatingHeaderLayout.height + 6)
         .animation(Motion.quick, value: workspace.notice)
         .sensoryFeedback(trigger: workspace.notice) { _, notice in
             guard let notice else { return nil }
@@ -463,6 +470,7 @@ private struct NoticeBanner: View {
         switch link {
         case .project(let id?): navigation.show(project: id, workspace: workspace)
         case .project(nil): navigation.showInbox()
+        case .session(let id): navigation.show(session: id)
         }
     }
 }

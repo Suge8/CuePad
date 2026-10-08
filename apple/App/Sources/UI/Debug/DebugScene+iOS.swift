@@ -14,6 +14,8 @@ import UIKit
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页（给了 `-CuePadPushAfter <秒>` 时先停在 Agent 页，到时再推入）；给了 `-CuePadChatGrow YES` 时之后每 4 秒进来一条 Pi 的回答
 /// （核对往上翻远后"回到最新"圆钮带点、贴底时跟到底），给了 `-CuePadChatBulk <N>` 时推入后整批进来 N 轮长对话（核对整批到达时停在最新）；send 是从卡片"发到 Mac"先选会话。
 /// projectform：项目表单（给了 `-CuePadProject` 是编辑该项目，否则新建）。
+/// alert：停在书架（配 `-CuePadDemo YES`），2.5 秒后 atlas 从工作中做完、9 秒后 cuepad 进入等你确认——Mac 同步来的状态转换，核对 App 内的前台提示横幅；
+/// 给了 `-CuePadSession <会话名>` 时先打开那个会话页（核对正看着的会话不弹）。
 /// searchkey：iPhone 停在 Agent 标签，1.5 秒后走 ⌘K（回到书架并聚焦顶上的搜索框）。
 /// roundtrip：iPhone 在该项目页上打开一张卡、2.5 秒后返回（核对标签栏随转场隐藏与出现）；iPad 进入搜索、2 秒后退出（核对来回不闪空白页）。
 /// agent 给了 `-CuePadHistory <N>`：演示库再写 N 个已结束会话（每隔 8 小时结束一个，分落在今天到更早），
@@ -57,6 +59,19 @@ extension DebugScene {
             // 给了项目是编辑它，否则新建
             let existing = if let project { try? await workspace.services.store.project(project) } else { Project?.none }
             navigation.projectForm = .init(project: existing)
+        case "alert":
+            let store = workspace.services.store
+            if let title = defaults.string(forKey: "CuePadSession"),
+               let session = try? await store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state {
+                if split { navigation.select(.agent) } else { navigation.tab = .agent }
+                navigation.openSession(session.id, sessionID: session.sessionID, store: store)
+            }
+            let recorder = PiStateRecorder(store: store, hostID: "demo-mac")
+            try? await Task.sleep(for: .seconds(2.5))
+            try? await recorder.update(sessionID: "atlas", state: .settled, title: "atlas", folder: "圆桌")
+            try? await Task.sleep(for: .seconds(6.5))
+            let question = PiQuestion(promptID: "demo-alert", kind: .select, text: "要重跑全部测试吗？", options: ["重跑", "跳过"])
+            try? await recorder.update(sessionID: "cuepad", state: .waitingForUser, title: "cuepad", folder: "CuePad", question: question)
         case "searchkey":
             // 标签栏布局按 ⌘K：在 Agent 标签按，应回到书架并聚焦下拉搜索
             navigation.tab = .agent

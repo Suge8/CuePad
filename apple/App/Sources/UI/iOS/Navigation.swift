@@ -221,16 +221,29 @@ final class Navigation {
         }
     }
 
-    /// 点开的 Pi 通知：直接打开该会话的近况（iPhone 在 Agent 标签里，iPad 推入详情栏）。
+    /// 点开的 Pi 通知：直接打开该会话的近况。
     func open(alert tap: PiAlertTap?) {
-        guard let tap else { return }
+        if let tap { show(session: tap.sessionState) }
+    }
+
+    /// 打开一个会话的近况（iPhone 在 Agent 标签里，iPad 推入详情栏）；通知与前台提示的去处。
+    func show(session id: UUID) {
         switch layout {
         case .tabs:
             tab = .agent
-            agentPath = [.session(tap.sessionState)]
+            agentPath = [.session(id)]
         case .split:
-            if splitPath.last != .session(tap.sessionState) { splitPath.append(.session(tap.sessionState)) }
+            if splitPath.last != .session(id) { splitPath.append(.session(id)) }
         }
+    }
+
+    /// 这个会话的近况页此刻正在屏幕上：它是当前标签（iPad：详情栏）最上面的一页。
+    func isViewing(session id: UUID) -> Bool {
+        let top = switch layout {
+        case .tabs: (tab == .agent ? agentPath : projectsPath).last
+        case .split: splitPath.last
+        }
+        return top == .session(id)
     }
 
     /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id，记录已被删时用它读对话）；`draft` 带进它的回复框

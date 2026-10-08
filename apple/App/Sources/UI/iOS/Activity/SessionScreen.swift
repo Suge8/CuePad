@@ -438,26 +438,17 @@ struct SessionPicker: View {
 
 #if os(iOS)
 extension View {
-    /// Agent 页与会话近况页：显示期间算作"正在看 Pi"，手机按 3 秒主动拉，状态与近况是活的（见 `AppServices.pollingCadence`）；
-    /// 给了 `session`（会话页）时也告诉通知中心正看着它，这个会话的通知在前台不弹横幅。
-    func countsAsPiViewer(session: UUID? = nil) -> some View { modifier(PiViewing(session: session)) }
+    /// Agent 页与会话近况页：显示期间算作"正在看 Pi"，手机按 3 秒主动拉，状态与近况是活的（见 `AppServices.pollingCadence`）。
+    func countsAsPiViewer() -> some View { modifier(PiViewing()) }
 }
 
 private struct PiViewing: ViewModifier {
-    let session: UUID?
     @Environment(AppServices.self) private var services
-    @Environment(PiAlertCenter.self) private var alerts
 
     func body(content: Content) -> some View {
         content
-            .onAppear {
-                services.piViewers += 1
-                if let session { alerts.beginViewing(session) }
-            }
-            .onDisappear {
-                services.piViewers -= 1
-                if let session { alerts.endViewing(session) }
-            }
+            .onAppear { services.piViewers += 1 }
+            .onDisappear { services.piViewers -= 1 }
     }
 }
 #endif

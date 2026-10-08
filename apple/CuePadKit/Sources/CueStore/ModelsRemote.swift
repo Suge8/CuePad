@@ -34,6 +34,26 @@ extension Open<PiWorkState> {
 /// 服务端订阅据此触发一次通知（同一状态下的重复写入不会再通知）。
 public enum PiAlert: String, Sendable, CaseIterable {
   case waitingForUser, settled
+
+  /// 要不要提示的唯一规则（Mac 置位通知标志、手机在前台读同步来的记录做 App 内提示都用它）：进入等你确认；从工作中进入完成。
+  /// 首次看到的会话（没有上一个状态）不提示，重启或重新读取时不会把旧事件再提示一遍。
+  public static func entering(_ state: PiWorkState, from previous: PiWorkState?) -> PiAlert? {
+    guard let previous else { return nil }
+    if state == .waitingForUser, previous != .waitingForUser { return .waitingForUser }
+    if state == .settled, previous.isWorking { return .settled }
+    return nil
+  }
+}
+
+extension PiSessionState {
+  /// 相对上一次读到的版本（nil：第一次读到），这个版本是不是一次要提示的转换。手机读到的是同步合并后的版本：状态没变而
+  /// 状态起点往后走了，说明中间又经过了一轮工作（没读到），按"刚从工作中来"算。
+  public func alert(since previous: PiSessionState?) -> PiAlert? {
+    guard let previous, let state = state.known else { return nil }
+    let before = previous.state.known
+    let missedRound = before == state && stateSince > previous.stateSince
+    return PiAlert.entering(state, from: missedRound ? .thinking : before)
+  }
 }
 
 /// 会话记录上的摘要（列表预览、会话页顶部用）：对话（`PiChatMessage`）的投影，由同一个写者（Mac 读会话文件）
