@@ -149,9 +149,8 @@ struct SessionPage: View {
                 }
                 PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries)
             }
-            .padding(.horizontal, 24).padding(.vertical, 16)
-            .frame(maxWidth: Self.readingWidth)
-            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .readingColumn(maxWidth: Self.readingWidth, inset: 24)
         }
         .frame(maxHeight: .infinity)
     }

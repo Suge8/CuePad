@@ -48,10 +48,9 @@ struct SessionScreen: View {
             if let digest {
                 if let session {
                     PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries)
-                        .padding(.horizontal, 16).padding(.vertical, 14)
+                        .padding(.vertical, 14)
                         // iPad 上一行不超过阅读宽度，居中
-                        .frame(maxWidth: Self.readingWidth)
-                        .frame(maxWidth: .infinity)
+                        .readingColumn(maxWidth: Self.readingWidth, inset: 16)
                 } else {
                     EmptyState(mascot: .search, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
                     .padding(.top, 60)

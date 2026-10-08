@@ -6,6 +6,7 @@ import SwiftUI
 struct MarkdownText: View {
     let source: String
     @Environment(\.palette) private var palette
+    @Environment(\.readingColumnBleeds) private var columnBleeds
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -46,13 +47,11 @@ struct MarkdownText: View {
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .background(palette.fill, in: .rect(cornerRadius: 10, style: .continuous))
         case .table(let table):
-            // 表格带着自己的边框整张滚；手机上滚动时可以越过正文的页边距滑到屏幕边，不在页边距处被切
+            // 表格带着自己的边框整张滚；阅读栏贴着屏幕边（手机）时滚动可以越过页边距滑到屏幕边，栏两边有空白时收在栏内
             ScrollView(.horizontal) { MarkdownTableView(table: table) }
                 .scrollIndicatorsFlash(onAppear: true)
                 .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-                #if os(iOS)
-                .scrollClipDisabled()
-                #endif
+                .scrollClipDisabled(columnBleeds)
         case .rule:
             Rectangle().fill(palette.hair).frame(height: 1).padding(.vertical, 4)
         }

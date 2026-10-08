@@ -155,24 +155,6 @@ private struct UserBubble: View {
     }
 }
 
-/// 占满给它的宽，里面那一个按"给的宽 × `fraction`"排、靠右。不用 `containerRelativeFrame`：它量的是滚动区，
-/// 不是对话所在的阅读栏——宽窗口里阅读栏比滚动区窄得多，气泡的框比栏宽，靠右就伸出栏外、贴到窗口右缘。
-private struct TrailingFraction: Layout {
-    let fraction: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard let child = subviews.first else { return .zero }
-        let size = child.sizeThatFits(ProposedViewSize(width: proposal.width.map { $0 * fraction }, height: nil))
-        return CGSize(width: proposal.width ?? size.width, height: size.height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard let child = subviews.first else { return }
-        let size = child.sizeThatFits(ProposedViewSize(width: bounds.width * fraction, height: nil))
-        child.place(at: CGPoint(x: bounds.maxX, y: bounds.minY), anchor: .topTrailing, proposal: ProposedViewSize(size))
-    }
-}
-
 /// Pi 的一轮回答：上方一行弱化的经过，下面全宽 Markdown，长也直接全显；长按（Mac 右键）可以存为卡片，进会话所属的项目。
 private struct ReplyBlock: View {
     let text: String
