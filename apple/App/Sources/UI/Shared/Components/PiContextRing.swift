@@ -60,6 +60,7 @@ struct PiContextRing: View {
             Text(meter.summary).font(.footnote.monospacedDigit()).foregroundStyle(palette.ink2)
             if meter.suggestsCompact {
                 Text("快满了。Agent 会在到顶前自动压缩，也可以现在压缩。").font(.footnote).foregroundStyle(palette.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button("压缩上下文", systemImage: "arrow.down.right.and.arrow.up.left", action: compact)
                     .buttonStyle(.glass).controlSize(.small)
             }

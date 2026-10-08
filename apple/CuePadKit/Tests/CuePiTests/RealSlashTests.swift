@@ -45,13 +45,15 @@ struct RealSlashTests {
             await #expect(throws: PiBridgeError.self) { try await bridge.command("/compact", in: s.id) }  // 太短没有可压缩的：失败报给发起方，不静默
 
             // 压缩要有足够多的历史：留下最近约 2 万 token，更早的才压成摘要
+            var used = 0
             for round in 1...2 {
                 try pi.prompt("第 \(round) 轮 " + String(repeating: "上下文填充 ", count: 12_000))
-                try await eventually("第 \(round) 轮做完", timeout: .seconds(30)) {
-                    self.userTexts(of: s).count == round && bridge.sessions.first?.state == .done(aborted: false)
+                // 以已用量涨上去为准：上一轮的"歇下"状态在新一轮开始前还留着，单看状态会提前放行
+                try await eventually("第 \(round) 轮之后已用量涨了", timeout: .seconds(30)) {
+                    (bridge.sessions.first?.context?.tokens ?? 0) > used + 10_000 && bridge.sessions.first?.state == .done(aborted: false)
                 }
+                used = bridge.sessions.first?.context?.tokens ?? 0
             }
-            let used = try #require(bridge.sessions.first?.context?.tokens)
             #expect(used > 40_000 && used < 100_000)
 
             try await bridge.command("/compact", in: s.id)

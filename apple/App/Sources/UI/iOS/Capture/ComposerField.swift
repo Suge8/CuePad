@@ -127,7 +127,7 @@ final class GrowingTextView: UITextView {
         // 输入法组合期间的按键属于输入法
         let handled = markedTextRange == nil && presses.allSatisfy { press in
             guard let key = press.key, !key.modifierFlags.contains(.command) else { return false }
-            switch key.keyCode {
+            return switch key.keyCode {
             case .keyboardUpArrow: keys(.up)
             case .keyboardDownArrow: keys(.down)
             case .keyboardReturnOrEnter, .keyboardTab: keys(.accept)
