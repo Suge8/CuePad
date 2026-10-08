@@ -39,8 +39,9 @@ const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
 const WORKER_NAME = /<firecode_worker name="([^"]+)">/u;
 /** CuePad 在终端里开新会话时经这个环境变量交给扩展的认领标识，扩展在 hello 里带回 */
 const LAUNCH_TOKEN_ENV = "CUEPAD_LAUNCH_TOKEN";
-/** 需要"命令上下文"（切换会话、新会话、重载、克隆）的操作只能在命令处理函数里做：本扩展注册这一条内部命令，
- * 经 `sendUserMessage("/cuepad <动作>", { expandPromptTemplates: true })` 触发，不列进给手机的命令清单。 */
+/** 需要"命令上下文"（切换会话、新会话、重载、克隆）的操作只能在命令处理函数里做：本扩展注册这一条内部命令 `/cuepad <动作>`，
+ * 经 `sendUserMessage("/cuepad <动作>", { expandPromptTemplates: true })` 触发。只有这条内部命令本身不列进给手机的清单；
+ * 内置的 /new、/clone、/reload 照常在清单里（`BUILTIN_COMMANDS`），执行时才转到它。 */
 const INTERNAL_COMMAND = "cuepad";
 /** 压缩命令受理后等多久：这段时间内失败算命令失败，之后只提示在 Pi 里 */
 const COMPACT_FAILURE_WINDOW_MS = 1500;
