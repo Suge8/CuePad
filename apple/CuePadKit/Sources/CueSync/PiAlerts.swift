@@ -1,11 +1,9 @@
 import CloudKit
+import CueStore
 import Foundation
 
-/// 手机锁屏上的 Pi 通知种类。
-public enum PiAlertKind: Sendable, Equatable {
-  case waitingForUser
-  case settled
-
+extension PiAlert {
+  /// 哪个订阅触发的通知（锁屏通知种类就是 `PiAlert`）。
   init?(subscriptionID: String) {
     switch subscriptionID {
     case PiAlertSubscriptions.waitingID: self = .waitingForUser
@@ -17,10 +15,10 @@ public enum PiAlertKind: Sendable, Equatable {
 
 /// 点通知得到的路由信息：哪种通知、对应的 Pi 会话状态记录（`PiSessionState.id`）。
 public struct PiAlertTap: Equatable, Sendable {
-  public var kind: PiAlertKind
+  public var kind: PiAlert
   public var sessionState: UUID
 
-  public init(kind: PiAlertKind, sessionState: UUID) {
+  public init(kind: PiAlert, sessionState: UUID) {
     self.kind = kind
     self.sessionState = sessionState
   }
@@ -34,7 +32,7 @@ public enum PiAlertRoute {
   /// 从点开的通知的 userInfo 里取出路由信息（CloudKit 通知自带触发它的记录 id 与订阅 id）；不是 Pi 通知返回 nil。
   public static func tap(from userInfo: [AnyHashable: Any]) -> PiAlertTap? {
     guard let notification = CKNotification(fromRemoteNotificationDictionary: userInfo) as? CKQueryNotification,
-      let subscriptionID = notification.subscriptionID, let kind = PiAlertKind(subscriptionID: subscriptionID),
+      let subscriptionID = notification.subscriptionID, let kind = PiAlert(subscriptionID: subscriptionID),
       let name = notification.recordID?.recordName, let id = UUID(uuidString: name)
     else { return nil }
     return PiAlertTap(kind: kind, sessionState: id)
@@ -45,7 +43,7 @@ public enum PiAlertRoute {
 /// 取回触发它的记录，在设备上解密，改写成"会话名 + 问题首句（或状态）"。取不到就保持通用句。
 public enum PiAlertText {
   /// 改写后的标题与正文；记录里读不出会话名时为 nil（保持通用句）。
-  public static func content(for record: CKRecord, kind: PiAlertKind) -> (title: String, body: String)? {
+  public static func content(for record: CKRecord, kind: PiAlert) -> (title: String, body: String)? {
     let fields = record.encryptedValues
     guard let title = (fields["title"] as? String).flatMap({ $0.isEmpty ? nil : $0 }) else { return nil }
     let question = (fields["question"] as? String).map(PiQuestion.init(stored:))?.text
@@ -53,7 +51,7 @@ public enum PiAlertText {
   }
 
   /// 等你确认：标题"会话名 在等你"，正文是问题首行（没有问题文案时写"去看看它在问什么"）；完成：标题会话名，正文"完成了"。
-  public static func content(title: String, question: String?, kind: PiAlertKind) -> (title: String, body: String) {
+  public static func content(title: String, question: String?, kind: PiAlert) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
       let first = question?.split(whereSeparator: \.isNewline).first.map(String.init)?.trimmingCharacters(in: .whitespaces)

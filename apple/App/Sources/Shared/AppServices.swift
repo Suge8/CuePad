@@ -47,6 +47,10 @@ final class AppServices {
     private(set) var syncIssues: [SyncIssue] = []
     /// Pi 锁屏通知的服务端订阅（只有 iOS 建立）；设置页与权限、注册状态一起显示。
     private(set) var alertSubscription: PiAlertSubscriptionStatus = .off
+    #if os(iOS)
+    /// 最近一次要在前台提示的会话转换（见 `startSessionAlerts`）；每个窗口自己决定弹不弹。
+    private(set) var sessionAlert: SessionAlert?
+    #endif
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
     private(set) var conflicts: [CardConflict] = []
 
@@ -319,6 +323,10 @@ final class AppServices {
         syncStatus = .unavailable(reason)
         reportIssue(.syncUnavailable(reason))
     }
+
+    #if os(iOS)
+    func post(_ alert: SessionAlert) { sessionAlert = alert }
+    #endif
 
     func setSyncState(_ state: SyncState) {
         syncStatus = state.status

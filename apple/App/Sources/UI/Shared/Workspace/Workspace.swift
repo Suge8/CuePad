@@ -26,6 +26,8 @@ final class Workspace {
         let id = UUID()
         var text: String
         var isError: Bool
+        /// 图标；nil 时按成功/错误用默认的。
+        var symbol: String?
         /// 点提示去哪（如随手记的落点）；nil 时提示只是告知。
         var link: Link?
         /// 提示里的"撤销"：把刚才那一下拨回去（如"要做"开关）。
@@ -41,6 +43,10 @@ final class Workspace {
     /// 提示能带去的地方：项目页（nil 是未归档）。
     enum Link: Equatable {
         case project(UUID?)
+        #if os(iOS)
+        /// 一个 Pi 会话的近况页（会话记录 id）。
+        case session(UUID)
+        #endif
     }
 
     #if os(macOS)
@@ -243,14 +249,17 @@ final class Workspace {
 
     // MARK: 提示
 
-    private static let noticeDuration: Duration = .seconds(2.4)
+    static let noticeDuration: Duration = .seconds(2.4)
 
-    func say(_ text: String, isError: Bool = false, link: Link? = nil, undo: (@MainActor () async throws -> Void)? = nil) {
-        let notice = Notice(text: text, isError: isError, link: link, undo: undo.map(Undo.init(run:)))
+    func say(
+        _ text: String, isError: Bool = false, symbol: String? = nil, link: Link? = nil, duration: Duration = Workspace.noticeDuration,
+        undo: (@MainActor () async throws -> Void)? = nil
+    ) {
+        let notice = Notice(text: text, isError: isError, symbol: symbol, link: link, undo: undo.map(Undo.init(run:)))
         self.notice = notice
         noticeTask?.cancel()
         noticeTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.noticeDuration)
+            try? await Task.sleep(for: duration)
             if self?.notice == notice { self?.notice = nil }
         }
     }
