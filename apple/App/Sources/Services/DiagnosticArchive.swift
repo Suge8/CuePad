@@ -29,8 +29,8 @@ nonisolated struct DiagnosticArchive: Sendable {
         return files.filter { $0.hasSuffix(".json") }.sorted(by: >)
     }
 
-    /// MetricKit 的时间是 UTC 的 "yyyy-MM-dd HH:mm:ss"。
-    private static func parse(_ text: String) -> Date? {
+    /// MetricKit 的时间是 UTC 的 "yyyy-MM-dd HH:mm:ss"；存档文件名与摘要里的时间都从这里来。
+    fileprivate static func parse(_ text: String) -> Date? {
         try? Date(text.replacing(" ", with: "T") + "Z", strategy: .iso8601)
     }
 
@@ -45,7 +45,7 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     enum Kind: String, Sendable {
         case crash, hang, cpu, disk
 
-        /// 包里的诊断数组键，同时有多种时按这里的顺序取第一种。
+        /// 包里的诊断数组键；一个包同时带多种时按这里的顺序（崩溃、卡死、CPU、磁盘）取第一种，文件名与设置页那一行都按它。
         fileprivate static let keys: [(Kind, String)] = [
             (.crash, "crashDiagnostics"), (.hang, "hangDiagnostics"), (.cpu, "cpuExceptionDiagnostics"), (.disk, "diskWriteExceptionDiagnostics"),
         ]
@@ -92,7 +92,7 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         let meta = diagnostic["diagnosticMetaData"] as? [String: Any] ?? [:]
         self.id = id
         self.kind = kind
-        date = ((root["timeStampEnd"] as? String).flatMap { try? Date($0.replacing(" ", with: "T") + "Z", strategy: .iso8601) }) ?? .distantPast
+        date = (root["timeStampEnd"] as? String).flatMap(DiagnosticArchive.parse) ?? .distantPast
         exception = (meta["exceptionType"] as? Int).map(Self.exceptionName)
         signal = (meta["signal"] as? Int).map(Self.signalName)
         reason = meta["terminationReason"] as? String
