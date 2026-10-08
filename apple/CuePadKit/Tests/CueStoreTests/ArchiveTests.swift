@@ -61,6 +61,6 @@ import Testing
 
     let sent = try #require(try await store.card(idea.id))
     #expect(sent.piSessionID == "s1" && sent.status == nil)
-    #expect(try await store.handedSessions() == [idea.id: "s1", queued.id: "s2"])
+    #expect(try await store.handedSessions() == [idea.id: .session("s1"), queued.id: .session("s2")])
   }
 }
