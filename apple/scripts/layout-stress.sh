@@ -9,6 +9,7 @@
 # 判定依据是该进程的系统日志："Geometry action is cycling"（SwiftUI 几何回调来回翻转）与
 # "has continued for 300 iterations"（AppKit 布局迭代超限，随后抛异常退出）。需要 DEBUG 条件编译的构建（调试场景参数）。
 # 用法：scripts/layout-stress.sh [--inject-loop] [CuePad.app]（缺省 $CUEPAD_DERIVED/Build/Products/Debug/CuePad.app）
+# 某组进程中途退出时报出退出码或终止信号，并保留它的隔离库目录（资料库、Pi 目录、这段进程的系统日志 process.log），打印路径不删。
 # --inject-loop：每组都挂上刻意的几何回写环（-CuePadGeometryLoop YES），检测器有效时脚本必须以 1 退出——用来证明它抓得到这类环。
 set -u
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,7 +35,9 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
     sleep 3
     python3 "$APPLE_DIR/scripts/pi-churn.py" "$sock" "$rounds" "$mode"
   fi
-  if kill -0 "$pid" 2>/dev/null; then alive=1; kill -TERM "$pid"; sleep 2; kill -9 "$pid" 2>/dev/null; else alive=0; fi
+  # 中途退出时 wait 拿到它自己的退出码：大于 128 是被信号结束（减 128 是信号号）
+  local status=""
+  if kill -0 "$pid" 2>/dev/null; then alive=1; kill -TERM "$pid"; sleep 2; kill -9 "$pid" 2>/dev/null; else alive=0; wait "$pid"; status=$?; fi
   sleep 1
   local log cycles iterations
   log="$(log show --start "$start" --predicate "processID == $pid" --style compact 2>/dev/null)"
@@ -50,10 +53,21 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
     coverage="  Pi 会话文件 $files  应用历史 $rows"
     if [ "$files" -lt $((rounds / 2)) ] || [ "$rows" -lt 1 ]; then coverage="${coverage}（没覆盖到）"; failed=1; fi
   fi
-  echo "${name}：几何循环 $cycles  布局迭代超限 $iterations  $([ $crashed = 1 ] && echo 进程中途退出 || echo 进程正常)$coverage"
+  local ending=进程正常
+  if [ "$crashed" = 1 ]; then
+    if [ "$status" -gt 128 ]; then ending="进程中途退出（信号 SIG$(kill -l $((status - 128)))）"; else ending="进程中途退出（退出码 $status）"; fi
+  fi
+  echo "${name}：几何循环 $cycles  布局迭代超限 $iterations  $ending$coverage"
   if [ "$cycles" -gt 0 ] || [ "$iterations" -gt 0 ] || [ "$crashed" = 1 ]; then failed=1; fi
   [ -f "$lib/pi-agent/pi-stderr.log" ] && cp "$lib/pi-agent/pi-stderr.log" "/tmp/layout-stress-pi-$(date +%s).log"
-  rm -rf "$lib" "$sock"
+  if [ "$crashed" = 1 ]; then
+    # 留证：隔离库（资料库、Pi 目录）原样不删，这段进程的系统日志写进去
+    printf '%s\n' "$log" > "$lib/process.log"
+    echo "  证据留在 ${lib}（资料库与 Pi 目录；进程日志 process.log）"
+    rm -rf "$sock"
+  else
+    rm -rf "$lib" "$sock"
+  fi
 }
 
 run "Pi 轮换·屏幕外最小窗口" error 40 -CuePadWindowSize 720x520 -CuePadOffscreen YES
