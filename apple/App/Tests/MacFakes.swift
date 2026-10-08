@@ -76,6 +76,7 @@ final class FakeChannels: SendChannels {
     var calls: [Call] = []
     var sessions: [String: PiSessionInfo] = [:]
     var preflightError: (any Error)?
+    var sendError: (any Error)?
     var dispatchError: (any Error)?
     var app = AppInfo(pid: 42, bundleID: "com.example.editor", name: "Editor")
 
@@ -83,7 +84,10 @@ final class FakeChannels: SendChannels {
     /// Pi 自己的会话 id → 桥上的会话 id
     var bridgeIDs: [String: String] = [:]
     func piSessionID(forSession sessionID: String) -> String? { bridgeIDs[sessionID] }
-    func send(_ message: PiMessage, to id: String) async throws { calls.append(.send(message, id)) }
+    func send(_ message: PiMessage, to id: String) async throws {
+        if let sendError { throw sendError }
+        calls.append(.send(message, id))
+    }
     func paste(_ text: String, into id: String) async throws { calls.append(.paste(text, id)) }
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: String) async throws { calls.append(.answer(answer, prompt, id)) }
     func configure(model: PiModelRef?, thinking: String?, in id: String) async throws { calls.append(.configure(model, thinking, id)) }

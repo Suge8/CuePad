@@ -105,6 +105,7 @@ struct MacSyncTests {
         (.tool(name: "read", running: ["read"], detail: "README.md"), .tool, "read · README.md"),
         (.waitingUser(kind: "confirm", title: "覆盖文件？"), .waitingForUser, "覆盖文件？"),
         (.done(aborted: false), .settled, nil),
+        (.incompatible, .incompatible, nil),
         (.error(message: #"429 {"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#), .error, "请求太频繁，稍后再试：slow down"),
     ])
     func Pi状态映射成同步记录的状态与说明(agent: PiAgentState, work: PiWorkState, detail: String?) async throws {
@@ -544,6 +545,24 @@ struct MacSyncTests {
         _ = try await awaitFinished(request.id)
 
         #expect(rig.channels.calls == [.paste("草稿", "sess-1.100")])
+    }
+
+    /// 升级前开的旧协议会话没死：桥上有它，就不能当成已结束去后台唤醒（唤醒只会再起一个进程、永远"正在唤醒"）；按桥给的原因失败写回。
+    @Test func 旧协议的会话还在运行_请求不唤醒_带原因失败() async throws {
+        rig.channels.bridgeIDs["sess-old"] = "sess-old.100"
+        rig.channels.sessions["sess-old.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "old", ref: "sess-old"), isBusy: false)
+        rig.channels.sendError = PiBridgeError.incompatibleExtension
+        _ = try await indexed("sess-old", cwd: try folder("old"))
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestDelivery(
+            "hi", to: SendTarget(kind: .piSession, name: "old", ref: "sess-old"), on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.failed))
+        #expect(done.resultDetail == "这个会话正在终端里运行旧版扩展，重开 Pi 后再发")
+        #expect(rig.host.calls.isEmpty)
     }
 
     @Test func 目标会话已结束时请求失败并说明原因() async throws {
