@@ -33,12 +33,7 @@ struct UnreadableLibraryView: View {
     }
 
     private func copyDiagnostics() {
-        #if os(iOS)
-        UIPasteboard.general.string = failure.diagnostics
-        #else
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(failure.diagnostics, forType: .string)
-        #endif
+        Clipboard.copy(failure.diagnostics)
         copied = true
     }
 }

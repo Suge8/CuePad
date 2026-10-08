@@ -44,7 +44,12 @@ struct PiConversation: View {
     private static var spacing: CGFloat { 18 }
 
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
-        if entry.isUser { UserBubble(text: entry.text, highlighted: entry.id == highlight) } else { ReplyBlock(text: entry.text, meta: entry.meta, session: session) }
+        if entry.isUser {
+            UserBubble(text: entry.text, highlighted: entry.id == highlight)
+                .chatContextMenu { MessageMenu(text: entry.text, kind: .mine, session: session) } preview: { BubbleText(text: entry.text).padding(4) }
+        } else {
+            ReplyBlock(text: entry.text, meta: entry.meta, session: session)
+        }
     }
 
     /// 对话末尾：处理中的进展（带子代理）、出错的原因。
@@ -130,38 +135,89 @@ private extension AnyTransition {
     static let entry = AnyTransition.opacity.animation(Motion.quick)
 }
 
-/// 你的一句话：右侧气泡（颜色是 `Palette.bubble`），最宽到所在一栏的四分之三；还在路上的整颗变淡。
+/// 你的一句话：右侧气泡，最宽到所在一栏的四分之三；还在路上的整颗变淡。
 private struct UserBubble: View {
     private static let widthFraction: CGFloat = 0.78
 
     let text: String
     var dimmed = false
     var highlighted = false
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
         TrailingFraction(fraction: Self.widthFraction) {
-            Text(text)
-                .font(.body).foregroundStyle(palette.onBubble)
-                .textSelection(.enabled)
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(palette.bubble, in: shape)
-                .overlay(shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1))
-                .animation(Motion.quick, value: highlighted)
-                .opacity(dimmed ? 0.7 : 1)
+            BubbleText(text: text, highlighted: highlighted).opacity(dimmed ? 0.7 : 1)
         }
         .transition(.entry)
     }
 }
 
-/// Pi 的一轮回答：上方一行弱化的经过，下面全宽 Markdown，长也直接全显；长按（Mac 右键）可以存为卡片，进会话所属的项目。
+/// 气泡本身（颜色是 `Palette.bubble`），长按的预览也是它。Mac 上可以直接拖选文字。
+private struct BubbleText: View {
+    let text: String
+    var highlighted = false
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        Text(text)
+            .font(.body).foregroundStyle(palette.onBubble)
+            .textSelection(.enabled)
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(palette.bubble, in: shape)
+            .overlay(shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1))
+            .animation(Motion.quick, value: highlighted)
+    }
+}
+
+/// 一条消息的长按菜单（Mac 右键）只在这里定义。Pi 的回答：复制、选择文本（手机上打开可自由选择的全文；Mac 直接拖选）、
+/// 分享、存为灵感；你的话：复制、编辑后重发（放回输入框，接在已写的字后面）、存为灵感。存为灵感进会话所属的项目。
+private struct MessageMenu: View {
+    enum Kind { case reply, mine }
+
+    let text: String
+    let kind: Kind
+    let session: PiSessionState
+    var selectText: (() -> Void)?
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        Button("复制", systemImage: "doc.on.doc") {
+            Clipboard.copy(text)
+            workspace.say("已复制")
+        }
+        switch kind {
+        case .reply:
+            if let selectText { Button("选择文本", systemImage: "selection.pin.in.out", action: selectText) }
+            ShareLink(item: text) { Label("分享", systemImage: "square.and.arrow.up") }
+        case .mine:
+            Button("编辑后重发", systemImage: "square.and.pencil", action: editAgain)
+        }
+        Button("存为灵感", systemImage: "square.and.arrow.down") {
+            let text = text, session = session
+            workspace.attempt { try await workspace.saveReply(text, of: session) }
+        }
+    }
+
+    /// 放回这个会话的回复框（草稿只有一份，见 `AppSettings.replyDraft`）：已经写了字就接在后面，不覆盖。
+    private func editAgain() {
+        let settings = workspace.services.settings
+        var draft = settings.replyDraft(for: session.id)
+        draft.text = [draft.text, text].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
+        settings.setReplyDraft(draft, for: session.id)
+    }
+}
+
+/// Pi 的一轮回答：上方一行弱化的经过，下面全宽 Markdown，长也直接全显；长按（Mac 右键）是消息菜单（`MessageMenu`）。
 private struct ReplyBlock: View {
     let text: String
     let meta: String?
     let session: PiSessionState
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @State private var selecting = false
+
+    /// 长按预览的大小：长回答只露开头，不撑满屏。
+    private static let previewWidth: CGFloat = 360
+    private static let previewHeight: CGFloat = 420
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -169,9 +225,22 @@ private struct ReplyBlock: View {
             MarkdownText(source: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contextMenu {
-            Button("存为灵感", systemImage: "square.and.arrow.down") { workspace.attempt { try await workspace.saveReply(text, of: session) } }
+        .chatContextMenu {
+            #if os(iOS)
+            MessageMenu(text: text, kind: .reply, session: session) { selecting = true }
+            #else
+            MessageMenu(text: text, kind: .reply, session: session)
+            #endif
+        } preview: {
+            MarkdownText(source: text).padding(16)
+                .frame(width: Self.previewWidth, alignment: .leading)
+                .frame(maxHeight: Self.previewHeight, alignment: .top)
+                .clipped()
+                .background(palette.paper)
         }
+        #if os(iOS)
+        .sheet(isPresented: $selecting) { SelectableTextSheet(text: text) }
+        #endif
         .transition(.entry)
     }
 }
@@ -200,9 +269,11 @@ private struct OutgoingBubble: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .contextMenu {
+        .chatContextMenu {
             if failed { Button("重发", systemImage: "arrow.clockwise", action: retry).disabled(!workspace.services.reachesPiHost) }
             Button("移除", systemImage: "xmark", role: .destructive, action: remove)
+        } preview: {
+            BubbleText(text: text).padding(4)
         }
         .transition(.entry)
     }
