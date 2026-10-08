@@ -127,7 +127,7 @@ struct ShelfScreen: View {
             }
             if !pinned.isEmpty {
                 // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
-                let columns = min(pinned.count, sizeClass == .regular ? 4 : 2)
+                let columns = typeSize.isAccessibilitySize ? 1 : min(pinned.count, sizeClass == .regular ? 4 : 2)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
                     ForEach(pinned) { PinnedShelfCard(entry: $0, pi: pi[$0.id]) }
                 }
@@ -201,16 +201,20 @@ private struct ShelfLine: View {
     let title: String
     let detail: String
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     static let dividerInset: CGFloat = 48
 
     var body: some View {
         NavigationLink(value: route) {
             HStack(spacing: 10) {
-                Image(systemName: symbol).foregroundStyle(tint ?? palette.ink2).frame(width: 22).accessibilityHidden(true)
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
-                Text(detail).font(.body.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
-                    .contentTransition(.numericText()).animation(Motion.snappy, value: detail)
+                Image(systemName: symbol).foregroundStyle(tint ?? palette.ink2).frame(minWidth: 22).accessibilityHidden(true)
+                // 辅助字号下说明换到标题下面，不被截成省略号
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(spacing: 10))) {
+                    Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
+                    Text(detail).font(.body.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
+                        .contentTransition(.numericText()).animation(Motion.snappy, value: detail)
+                }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
@@ -380,11 +384,17 @@ private struct ActiveTasks: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("正在推进").font(.title3.weight(.bold)).foregroundStyle(palette.ink)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
-                if let counts { allTasks(counts) }
+            // 放不下一行（辅助功能大字号）时计数换到标题下面，不把标题挤成两行
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    title
+                    Spacer(minLength: 8)
+                    if let counts { allTasks(counts) }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    title
+                    if let counts { allTasks(counts) }
+                }
             }
             .padding(.horizontal, 4)
             VStack(spacing: 0) {
@@ -395,6 +405,11 @@ private struct ActiveTasks: View {
             .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
             .paper(radius: Self.radius)
         }
+    }
+
+    private var title: some View {
+        Text("正在推进").font(.title3.weight(.bold)).foregroundStyle(palette.ink)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func allTasks(_ counts: TaskCounts) -> some View {
@@ -418,7 +433,12 @@ private struct ActiveTaskRow: View {
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .headline) private var ring: CGFloat = 20
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .headline) private var scaledRing: CGFloat = 20
+
+    /// 圆圈随字号放大，到辅助字号封顶：再大只会把标题往右挤。
+    private var ring: CGFloat { min(scaledRing, 28) }
+    private var stacked: Bool { typeSize.isAccessibilitySize }
 
     var body: some View {
         Button { navigation.openTask(row.id) } label: {
@@ -427,7 +447,7 @@ private struct ActiveTaskRow: View {
                     .foregroundStyle(palette.working).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(row.task.title.textGlyphs).font(.headline).foregroundStyle(palette.ink)
-                        .lineLimit(2).multilineTextAlignment(.leading)
+                        .lineLimit(stacked ? 4 : 2).multilineTextAlignment(.leading)
                     meta
                 }
                 Spacer(minLength: 0)
@@ -446,8 +466,10 @@ private struct ActiveTaskRow: View {
         .accessibilityHint("打开任务")
     }
 
+    /// 项目与会话状态平时排成一行；辅助字号下上下排、可换行，不撑出纸外。
     private var meta: some View {
-        HStack(spacing: 10) {
+        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
             if let project = row.project {
                 HStack(spacing: 4) {
                     ProjectGlyph(project: project, size: 11)
@@ -458,15 +480,18 @@ private struct ActiveTaskRow: View {
             }
             if let session = row.session {
                 let shown = services.settings.shown(session, delivery: row.delivery)
-                HStack(spacing: 4) {
-                    PiStateDot(shown: shown, size: 6)
-                    Text(shown.presence).foregroundStyle(shown.tint(palette))
+                // 辅助字号下计时另起一行，状态词不被截断
+                (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))) {
+                    HStack(spacing: 4) {
+                        PiStateDot(shown: shown, size: 6)
+                        Text(shown.presence).foregroundStyle(shown.tint(palette))
+                    }
                     PiElapsed(session: session, font: .footnote)
                 }
-                .fixedSize()
+                .fixedSize(horizontal: !stacked, vertical: false)
             }
         }
-        .font(.footnote).lineLimit(1)
+        .font(.footnote).lineLimit(stacked ? 2 : 1)
     }
 }
 #endif
