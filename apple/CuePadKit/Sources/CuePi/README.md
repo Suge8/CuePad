@@ -53,7 +53,7 @@
 | `/name <名字>` | `pi.setSessionName` |
 | `/model <提供方/模型>` | 与 `config` 同一条路（`pi.setModel`）；模型 id 在可选模型里唯一时可省提供方 |
 | `/thinking <强度>` | `pi.setThinkingLevel` |
-| `/new`、`/clone`、`/reload` | 需要命令上下文，经扩展自己注册的内部命令 `/cuepad <动作>`（`newSession` / `fork(叶子, at)` / `reload`）；不列进清单 |
+| `/new`、`/clone`、`/reload` | 需要命令上下文，经扩展自己注册的内部命令 `/cuepad <动作>`（`newSession` / `fork(叶子, at)` / `reload`）；这三个照常列在清单里，只有内部命令 `cuepad` 本身不列 |
 
 做不到、不列的内置命令：`/settings`、`/scoped-models`、`/login`、`/logout`、`/resume`、`/tree`、`/fork`、`/trust`、`/llama`、`/bug`（终端里的选择器或弹窗，没有对应接口）；`/session`、`/hotkeys`、`/changelog`、`/copy`（只往终端打印或写 Mac 剪贴板，手机看不到）；`/export`、`/share`、`/import`（没有扩展接口，且涉及 Mac 上的文件与外发）；`/quit`（已有"结束会话"，托管进程要关标准输入才退得掉）。
 
