@@ -32,7 +32,7 @@ struct InboxScreen: View {
         .animation(Motion.quick, value: cards?.map(\.id))
         .floatingHeader(CaptureCopy.inbox, detail: cards.map { $0.isEmpty ? "" : "\($0.count) 条" } ?? "")
         .sheet(item: $moving) { MoveToProjectSheet(card: $0) }
-        .environment(\.cardAgents, agents?.items ?? [:])
+        .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
         .observing(services.store, [.cards], into: $cards, onError: workspace.fail) { store in
             try store.cards(in: nil).sorted { $0.modifiedAt > $1.modifiedAt }
         }

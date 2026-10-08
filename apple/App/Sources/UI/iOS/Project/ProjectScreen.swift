@@ -47,7 +47,7 @@ struct ProjectScreen: View {
             project: projectID, available: navigation.layout == .tabs && (workspace.catalog?.cardCounts[projectID] ?? 0) > 0,
             ready: page != nil)
         .floatingHeader(project?.name ?? "", detail: detail) { actions }
-        .environment(\.cardAgents, agents?.items ?? [:])
+        .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
         .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
         .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))

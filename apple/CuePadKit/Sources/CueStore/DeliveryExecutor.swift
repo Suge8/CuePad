@@ -41,8 +41,25 @@ extension CueStore {
   }
 
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或会话名）。
-  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String) throws -> DeliveryRequest {
-    try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start)
+  /// 给了 `card`（从灵感或任务"新会话"交给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）。
+  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil) throws -> DeliveryRequest {
+    try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card)
+  }
+
+  /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
+  /// 关联到它，任务同时进行中——与发给已有会话后 `recordSend` 的结果一样。会话记录在本机写下（Mac 的记录器）或同步过来时都在这里认领。
+  func claimLaunchedCards() throws {
+    try db.run(
+      """
+      UPDATE cards SET piSessionID = s.sessionID, modifiedAt = ?1,
+        startedAt = CASE WHEN cards.todoAt IS NOT NULL THEN COALESCE(cards.startedAt, ?1) END,
+        completedAt = CASE WHEN cards.todoAt IS NOT NULL THEN NULL END
+      FROM deliveryRequests r JOIN piSessionStates s
+        ON s.launchToken = CASE WHEN json_valid(r.content) THEN json_extract(r.content, '$.token') END
+      WHERE r.cardID = cards.id AND r.mode = 'start'
+        AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = cards.id)
+        AND cards.piSessionID IS NOT s.sessionID
+      """, [Date.stamp])
   }
 
   /// 连接测试：请 `host` 那台 Mac 收到就回。目标写成那台 Mac 上的 CuePad（执行器不看目标）。

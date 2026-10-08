@@ -150,6 +150,12 @@ public struct TaskProgress: Equatable, Sendable {
   }
 }
 
+/// 灵感或任务交给了 Agent 的哪里：一个会话（Pi 会话 id），或正在开的新会话（还没开好、没认领到）。见 `CueStore.handedSessions`。
+public enum AgentHandoff: Hashable, Sendable {
+  case session(String)
+  case launching
+}
+
 /// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；相关灵感（挂着的灵感）交给过 Agent 算做完——
 /// 它自己有发送记录，或某次发送明确记着带上了它（`SendRecord.partIDs`）。见 `CueStore.childMarks`。
 public struct ChildMark: Equatable, Sendable {

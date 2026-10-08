@@ -9,6 +9,8 @@ import SwiftUI
 struct SendControl: View {
     let project: UUID?
     var compact = false
+    /// 给了时目标菜单的 Agent 区多一项"新会话"（从灵感或任务交给 Agent，见 `Workspace.newSessionHandOff`）。
+    var newSession: (() -> Void)? = nil
     let send: (AppServices.Destination) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -18,13 +20,13 @@ struct SendControl: View {
         let choice = workspace.effectiveChoice(for: project)
         Group {
             if case .pi(let id, _) = choice, workspace.isEnded(choice) {
-                SendTargetMenu(project: project) {
+                SendTargetMenu(project: project, newSession: newSession) {
                     label(icon: AnyView(PiStateDot(state: .known(.ended), size: 5)), text: "\(name(of: choice)) · 已结束", shortcut: nil)
                         .padding(.trailing, compact ? 12 : 16)
                 }
                 .accessibilityLabel("Agent 会话「\(workspace.sessionName(id))」已结束，选择发送目标")
             } else if choice == .app(.lastFrontmost), services.lastFrontmostApp() == nil {
-                SendTargetMenu(project: project) {
+                SendTargetMenu(project: project, newSession: newSession) {
                     label(icon: AnyView(Image(systemName: "paperplane.fill").accessibilityHidden(true)), text: "发送…", shortcut: nil)
                         .padding(.trailing, compact ? 12 : 16)
                 }
@@ -37,7 +39,7 @@ struct SendControl: View {
                     .buttonStyle(PressStyle())
                     .keyboardShortcut(.return, modifiers: .command)
                     .accessibilityLabel(spoken(choice))
-                    SendTargetMenu(project: project) {
+                    SendTargetMenu(project: project, newSession: newSession) {
                         Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
                             .padding(.trailing, compact ? 10 : 14).padding(.leading, 4)
                             .frame(height: compact ? 28 : 44)
@@ -99,6 +101,7 @@ struct SendControl: View {
 /// 没有运行中的 Pi 会话时，Pi 区留一行说明怎么开始。
 struct SendTargetMenu<Label: View>: View {
     let project: UUID?
+    var newSession: (() -> Void)? = nil
     @ViewBuilder let label: () -> Label
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -108,7 +111,8 @@ struct SendTargetMenu<Label: View>: View {
         Menu {
             Section("Agent") {
                 let sessions = services.pi.sessions
-                if sessions.isEmpty {
+                if let newSession { Button("新会话", systemImage: "plus", action: newSession) }
+                if sessions.isEmpty, newSession == nil {
                     Button("没有运行中的 Agent 会话 · 在终端运行 pi 开始") {}.disabled(true)
                 }
                 ForEach(sessions) { session in

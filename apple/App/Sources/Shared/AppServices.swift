@@ -184,8 +184,9 @@ final class AppServices {
     /// 请指定的 Mac 在后台开一个 Pi 新会话：与发送同一条投送通道（Mac 本机也走它），写出后立即上传。
     /// `title` 是给人看的目标名（会话名或项目名）。新会话用 `PiLaunch` 的 `token` 认领：等同步记录上出现同一个
     /// `launchToken` 的会话。
-    func launch(_ launch: PiLaunch, title: String, on host: String) async throws -> DeliveryRequest {
-        uploaded(try await store.requestLaunch(launch, title: title, on: host))
+    /// `card`：从这条灵感或任务开的（开好后它关联到新会话，见 `CueStore.claimLaunchedCards`）。
+    func launch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil) async throws -> DeliveryRequest {
+        uploaded(try await store.requestLaunch(launch, title: title, on: host, card: card))
     }
 
     /// 请会话所在的 Mac 把这个会话的对话补写进来（7 天前活跃过、还没有对话的会话打开时调用），写出后立即上传。

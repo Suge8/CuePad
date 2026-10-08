@@ -111,15 +111,21 @@ private struct TaskPopoverPage: View {
         HStack {
             Spacer()
             if let card {
-                SendControl(project: card.projectID, compact: true) { choice in
-                    let parts = card.isTask ? BundlePicker.parts(detail, left: left, withResources: withResources) : []
-                    let body = Outgoing.text(body: handle.text ?? liveText, values: card.variableValues)
-                    let text = TaskBundle.text(task: body, parts: parts), id = card.id, partIDs = parts.map(\.id)
+                let start = workspace.newSessionHandOff(for: card)
+                SendControl(project: card.projectID, compact: true, newSession: start.map { start in { start(bundle(card).text) } }) { choice in
+                    let (text, partIDs) = bundle(card), id = card.id
                     Task { await workspace.send(text, via: choice, card: id, parts: partIDs) }
                 }
             }
         }
         .font(.system(size: 12))
+    }
+
+    /// 交给 Agent 的话：正文（变量已填）连同选中的相关灵感与资料。
+    private func bundle(_ card: Card) -> (text: String, partIDs: [UUID]) {
+        let parts = card.isTask ? BundlePicker.parts(detail, left: left, withResources: withResources) : []
+        let body = Outgoing.text(body: handle.text ?? liveText, values: card.variableValues)
+        return (TaskBundle.text(task: body, parts: parts), parts.map(\.id))
     }
 
     private func makeAutosave() {

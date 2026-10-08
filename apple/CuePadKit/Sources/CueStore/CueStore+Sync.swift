@@ -188,12 +188,21 @@ extension CueStore {
         }
       }
       if changes.contains(where: \.touchesCards) { try repairCardTree() }
+      if changes.contains(where: \.touchesLaunches) { try claimLaunchedCards() }
     }
     return failures + (try removeFiles(of: removedHashes))
   }
 }
 
 extension RemoteChange {
+  /// 可能让一次"开新会话"被认领：会话记录、投送请求或卡片到了（同步乱序，哪个先到都要认）。
+  fileprivate var touchesLaunches: Bool {
+    switch self {
+    case .save(let row, _): [.piSessionStates, .deliveryRequests, .cards].contains(row.table)
+    case .delete: false
+    }
+  }
+
   fileprivate var touchesCards: Bool {
     switch self {
     case .save(let row, _): row.table == .cards

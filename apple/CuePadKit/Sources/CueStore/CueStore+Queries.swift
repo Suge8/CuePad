@@ -90,21 +90,21 @@ extension CueStore {
       orderBy: "archivedAt DESC, id")
   }
 
-  /// 交给了哪个 Agent 会话（Pi 会话 id）：执行过的读灵感或任务上记的会话；手机发出、Mac 还没执行的读最近一条投送请求的目标。
-  /// 灵感与任务的行据此显示那个会话此刻的状态（含"发送中""有新回复"）。
-  public func handedSessions() throws -> [UUID: String] {
+  /// 交给了 Agent 的哪里：执行过或认领过的读灵感与任务上记的会话；还没执行的读最近一条投送请求——发给已有会话的是它的目标，
+  /// 开新会话的是"正在开"（开好后由 `claimLaunchedCards` 记到卡上）。灵感与任务的行据此显示状态点（含"发送中""有新回复"）。
+  public func handedSessions() throws -> [UUID: AgentHandoff] {
     let modes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
     let rows = try db.query(
       """
-      SELECT id, piSessionID FROM cards WHERE piSessionID IS NOT NULL AND deletedAt IS NULL
+      SELECT id, piSessionID, 0 FROM cards WHERE piSessionID IS NOT NULL AND deletedAt IS NULL
       UNION ALL
-      SELECT r.cardID, r.targetRef FROM deliveryRequests r
-      WHERE r.cardID IS NOT NULL AND r.targetRef IS NOT NULL AND r.mode IN (\(modes))
+      SELECT r.cardID, r.targetRef, r.mode = 'start' FROM deliveryRequests r
+      WHERE r.cardID IS NOT NULL AND (r.mode = 'start' OR (r.targetRef IS NOT NULL AND r.mode IN (\(modes))))
         AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = r.cardID)
         AND r.cardID NOT IN (SELECT id FROM cards WHERE piSessionID IS NOT NULL)
       """
-    ) { (card: $0.uuid(0), session: $0.text(1)) }
-    return Dictionary(rows.map { ($0.card, $0.session) }, uniquingKeysWith: { first, _ in first })
+    ) { (card: $0.uuid(0), handoff: $0.int(2) != 0 ? AgentHandoff.launching : .session($0.text(1))) }
+    return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
   }
 
   /// 一张任务的下级（子任务与相关灵感），按手动顺序；在回收站的不列。
