@@ -9,10 +9,10 @@ struct ProjectStylePicker: View {
     var cell: CGFloat
     @Environment(\.palette) private var palette
 
-    /// 可选颜色：存储值 → 读屏与提示用的颜色名。
+    /// 可选颜色：存储值 → 读屏与提示用的颜色名。没有靛蓝一路：与签名色靛青色相太近，项目会被读成焦点。
     static let colors: [(hex: String, name: String)] = [
         ("#D9774B", "橙色"), ("#C9A227", "黄色"), ("#5E9E5A", "绿色"), ("#3F8FB8", "蓝色"),
-        ("#6A6FD1", "靛蓝"), ("#A260C4", "紫色"), ("#D0607D", "粉色"), ("#8A8A84", "灰色"),
+        ("#3AA088", "青绿"), ("#A260C4", "紫色"), ("#D0607D", "粉色"), ("#8A8A84", "灰色"),
     ]
 
     private static let spacing: CGFloat = 6

@@ -143,7 +143,7 @@ enum PerfLibrary {
 
     private static let projectWords = ["发布", "增长", "研究", "运营", "客户端", "后端", "设计系统", "数据", "招聘", "文档"]
     private static let icons = ["folder", "sparkles", "globe", "hammer", "book", "target", "briefcase", "lightbulb"]
-    private static let colors = ["#A260C4", "#D9774B", "#6A6FD1", "#3F8FB8", "#C9A227", "#5E9E5A", "#C25A6E", "#8A8A84"]
+    private static let colors = ["#A260C4", "#D9774B", "#3AA088", "#3F8FB8", "#C9A227", "#5E9E5A", "#C25A6E", "#8A8A84"]
     private static let chineseWords = [
         "投送", "队列", "重试", "边界", "编辑器", "变量", "模板", "同步", "冲突", "附件", "搜索", "索引", "性能", "内存", "首屏",
         "卡片", "项目", "任务", "会话", "终端", "发布", "验收", "数据", "迁移", "回收站", "缓存", "布局", "动画", "滚动", "预览",

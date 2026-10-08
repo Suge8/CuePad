@@ -591,6 +591,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 记录上的摘要（对话的投影）。
   public var recap: PiRecap { PiRecap(lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt) }
 
+  /// 在等你确认（弹了问题等你回答）：Agent 角标、推送与书架的"等你"都只数这一种。
+  public var waitsForYou: Bool { state == .known(.waitingForUser) }
+
   /// 一个 Pi 会话对应的记录 id（每个会话一条，任何设备上算出来都一样）。
   public static func recordID(sessionID: String) -> UUID { DeterministicID.uuid("pi-session/\(sessionID)") }
 }

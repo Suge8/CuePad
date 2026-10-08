@@ -450,12 +450,12 @@ struct TaskRingView: View {
     }
 }
 
-/// 任务的状态圆圈：待办淡墨空心、进行中靛青半满、完成墨色对勾。
+/// 任务的状态圆圈（全 App 的任务图形只按这里着色）：待办淡墨空心、进行中墨色半满、完成墨色对勾。
+/// 进行中不用签名色：在动的状态靠形状区分，签名色只给一屏的焦点。
 enum TaskGlyph {
     static func tint(_ status: TaskStatus?, _ palette: Palette) -> Color {
         switch status {
-        case .done: palette.ink
-        case .inProgress: palette.working
+        case .done, .inProgress: palette.ink
         case .todo, nil: palette.ink3
         }
     }

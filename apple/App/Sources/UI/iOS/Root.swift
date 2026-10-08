@@ -100,6 +100,7 @@ struct RouteView: View {
 
     var body: some View {
         page.containerBackground(background, for: .navigation)
+            .environment(\.pageBackground, background)
             // 标签栏布局：内容让出底部那一行的高度，滚动到它下面的内容渐隐。挂在每一页上：TabView 外面的安全区传不进标签页
             .safeAreaBar(edge: .bottom) {
                 if bottomBarReserve > 0, navigation.bottomPages == 0 { Color.clear.frame(height: bottomBarReserve) }
@@ -177,7 +178,7 @@ private struct TabsRoot: View {
             .accessibilityHidden(true)
         }
         .observing(services.store, [.piSessionStates], into: $waiting) { store in
-            try store.piSessionPage(.live).items.filter { $0.state.state == .known(.waitingForUser) }.count
+            try store.piSessionPage(.live).items.filter(\.state.waitsForYou).count
         }
     }
 
@@ -453,6 +454,8 @@ private struct NoticeBanner: View {
                 }
                 .font(.subheadline.weight(.medium))
                 .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil)
+                // 浮在内容之上：一点投影把它和底下的纸分开
+                .shadow(color: .black.opacity(palette.dark ? 0.3 : 0.12), radius: 12, y: 4)
                 .accessibilityHint(notice.link == nil ? "" : "去那里看看")
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 .id(notice.id)
@@ -460,7 +463,7 @@ private struct NoticeBanner: View {
             }
         }
         // 让到顶上那一排（推入页的悬浮顶栏、标签根页自己画的搜索与按钮行）下面：返回钮、标题与按钮不被遮住
-        .padding(.top, FloatingHeaderLayout.height + 6)
+        .padding(.top, FloatingHeaderLayout.height + 12)
         .animation(Motion.quick, value: workspace.notice)
         .sensoryFeedback(trigger: workspace.notice) { _, notice in
             guard let notice else { return nil }

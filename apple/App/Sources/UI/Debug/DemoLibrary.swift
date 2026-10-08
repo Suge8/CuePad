@@ -84,7 +84,7 @@ enum DemoLibrary {
                 (2.5, "评审：计费额度\n\n审查 {{分支}} 中计费额度相关改动。", true),
                 (40.0, "主持人提示词\n\n\(pic)\n提示词写好，一键投送。", false),
             ]),
-            DemoProject(name: "Flow", icon: "layers", color: "#6A6FD1", pinned: true, directory: nil, cards: [
+            DemoProject(name: "Flow", icon: "layers", color: "#3AA088", pinned: true, directory: nil, cards: [
                 (1.0, "撤销栈合并连续拖拽\n\n连续拖拽只记一步撤销。", false),
                 (15.0, "画布缩放\n\n双指缩放锚点跟随指针。", false),
             ]),

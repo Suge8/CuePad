@@ -101,6 +101,18 @@ struct IOSWorkflowTests {
         #expect(ordered.map(\.sessionID) == ["ask", "broken", "busy", "idle", "done"])
     }
 
+    /// 书架最上面的"等你"只列等你确认的在线会话，个数与 Agent 角标同一个数。
+    @Test func 书架的等你_只列等你确认的会话() async throws {
+        _ = try await session("busy", .tool, detail: "bash")
+        _ = try await session("ask", .waitingForUser, detail: "要覆盖吗？")
+        _ = try await session("broken", .error)
+        _ = try await session("rename", .waitingForUser, detail: "新分支叫什么？")
+
+        let shelf = try await ShelfData.read(from: store)
+
+        #expect(Set(shelf.waiting.map(\.state.sessionID)) == ["ask", "rename"])
+    }
+
     // MARK: 随手记
 
     @Test func 随手记带图_存为一张卡_文字在前图片按顺序在后_落在指定项目并提示落点() async throws {

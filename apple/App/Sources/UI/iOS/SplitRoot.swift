@@ -97,7 +97,7 @@ private struct AgentPanelButton: View {
         }
         .accessibilityValue((waiting ?? 0) > 0 ? "\(waiting ?? 0) 个会话等你确认" : "")
         .observing(services.store, [.piSessionStates], into: $waiting) {
-            try $0.piSessionPage(.live).items.filter { $0.state.state == .known(.waitingForUser) }.count
+            try $0.piSessionPage(.live).items.filter(\.state.waitsForYou).count
         }
     }
 }
@@ -162,7 +162,7 @@ private struct SplitSidebar: View {
         }
         .observing(services.store, [.piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) { store in
             let live = try store.piSessionPage(.live).items
-            return SidebarData(live: live, waiting: live.filter { $0.state.state == .known(.waitingForUser) }.count)
+            return SidebarData(live: live, waiting: live.filter(\.state.waitsForYou).count)
         }
     }
 

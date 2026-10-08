@@ -132,6 +132,24 @@ struct WallTests {
             OlderGroup(period: .month(start: Self.date(2026, 4, 1, hour: 0)), cards: [april.id]),
         ])
     }
+
+    /// 三个月内，一个月里每周都只有一条时不再一周一个标题（标题比内容还多），这个月并成一组、常开。
+    @Test func 更早_每周只有一条的月份并成一组() {
+        let sep16 = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 9, 16), lastSentAt: nil, isPinned: false)
+        let sep8 = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 9, 8), lastSentAt: nil, isPinned: false)
+        let aug13 = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 8, 13), lastSentAt: nil, isPinned: false)
+        let aug12 = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 8, 12), lastSentAt: nil, isPinned: false)
+        let jul15 = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 7, 15), lastSentAt: nil, isPinned: false)
+
+        let groups = OlderGroup.group([jul15, aug12, sep8, aug13, sep16], now: now, calendar: Self.calendar)
+
+        #expect(groups == [
+            OlderGroup(period: .sparseMonth(start: Self.date(2026, 9, 1, hour: 0)), cards: [sep16.id, sep8.id]),
+            OlderGroup(period: .week(start: Self.date(2026, 8, 10, hour: 0)), cards: [aug13.id, aug12.id]),
+            OlderGroup(period: .sparseMonth(start: Self.date(2026, 7, 1, hour: 0)), cards: [jul15.id]),
+        ])
+        #expect(groups.allSatisfy { !$0.isMonth })
+    }
 }
 
 /// "更早"的组标题：只有一组按周的卡时不再套一层日期标题（每行自带日期）；按月的组要标题来折叠。Mac 与 iOS 同一条规则。

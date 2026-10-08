@@ -163,8 +163,8 @@ private struct ProjectHeader: View {
                 }
                 .font(.system(size: 12)).foregroundStyle(palette.ink3)
             }
+            // 不再放"记一条灵感"：底部的输入栏与 ⌘N 就是入口
             Spacer()
-            NewCardButton(project: projectID)
         }
         .sheet(item: $renaming) { ProjectForm(project: $0) }
     }
@@ -173,21 +173,6 @@ private struct ProjectHeader: View {
         let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
         let trimmed = home.hasSuffix("/") ? String(home.dropLast()) : home
         return path.hasPrefix(trimmed) ? "~" + path.dropFirst(trimmed.count) : path
-    }
-}
-
-struct NewCardButton: View {
-    let project: UUID?
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        Button("记一条灵感", systemImage: "plus") {
-            let project = project
-            workspace.attempt { workspace.openCard = try await workspace.createCard(in: project).id }
-        }
-        .buttonStyle(.glass)
-        .controlSize(.large)
-        .help("记一条灵感（⌘N）")
     }
 }
 
@@ -218,15 +203,8 @@ private struct DirectoryLink: View {
 }
 
 private struct EmptyProject: View {
-    @Environment(\.palette) private var palette
-
     var body: some View {
-        VStack(spacing: 8) {
-            Text("还没有灵感").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink2)
-            Text("在下方记一条，或按 ⌘N 新建").font(.system(size: 13)).foregroundStyle(palette.ink3)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 80)
+        EmptyState(mascot: .empty, title: "还没有灵感", message: "在下方记一条，或按 ⌘N 新建").padding(.top, 48)
     }
 }
 

@@ -204,7 +204,17 @@ final class Workspace {
 
     var page: Page {
         if let nonProjectPage { return nonProjectPage }
-        return holder.currentProject.map(Page.project) ?? .inbox
+        return (holder.currentProject ?? defaultProject).map(Page.project) ?? .inbox
+    }
+
+    /// Mac 上没打开过项目（第一次打开、打开过的进了回收站）时首屏是项目目录顺序的第一个：由目录当场推出、不写进"上次打开"，
+    /// 项目陆续同步进来时跟着目录走；只有用户切换项目才记下（`apply`）。iPhone/iPad 首屏是书架，没有当前项目是常态。
+    private var defaultProject: UUID? {
+        #if os(macOS)
+        catalog?.projects.first?.id
+        #else
+        nil
+        #endif
     }
 
     /// 当前项目（未分类为 nil）。回收站页没有项目。
@@ -388,14 +398,20 @@ final class Workspace {
         catalogAttempt += 1
     }
 
-    /// 保存的当前项目以 Store 为准：不存在或已进回收站时回落到第一个有效项目（`store.projects()` 的顺序），没有项目则到未分类，并纠正设置。
+    /// 保存的当前项目以 Store 为准：不存在或已进回收站时纠正设置——Mac 清掉（首屏由目录推出，见 `defaultProject`），
+    /// iPhone/iPad 回落到第一个有效项目（`store.projects()` 的顺序；它是分栏的选中项），没有项目则到未分类。
     /// 根视图在项目表每次变化后调用。
     func reconcileCurrentProject() async {
         guard let saved = holder.currentProject else { return }
         do {
             let projects = try await services.store.projects()
             guard !projects.contains(where: { $0.id == saved }) else { return }
-            if holder.currentProject == saved { holder.currentProject = projects.first?.id }
+            #if os(macOS)
+            let fallback: UUID? = nil
+            #else
+            let fallback = projects.first?.id
+            #endif
+            if holder.currentProject == saved { holder.currentProject = fallback }
         } catch {
             fail(error)
         }

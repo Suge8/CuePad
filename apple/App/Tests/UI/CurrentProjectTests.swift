@@ -11,17 +11,46 @@ struct CurrentProjectTests {
     var services: AppServices { rig.services }
     var store: CueStore { services.store }
 
-    @Test func 保存的项目不存在时_回落到侧栏第一个有效项目并纠正设置() async throws {
+    /// 订阅项目目录（根视图的 `.task` 同一条路），等目录里有这些项目。
+    private func observing(_ workspace: Workspace) -> Task<Void, Never> {
+        Task { await workspace.observeCatalog() }
+    }
+
+    @Test func 保存的项目不存在时_首屏是侧栏第一个有效项目_清掉失效的设置() async throws {
         _ = try await store.createProject(name: "A", color: "#000000")
         let pinned = try await store.createProject(name: "B", color: "#000000")
         try await store.updateProject(pinned.id) { $0.isPinned = true }
         services.settings.currentProject = UUID()
         let workspace = Workspace(services: services)
+        let catalog = observing(workspace)
+        defer { catalog.cancel() }
 
-        await workspace.reconcileCurrentProject()
+        await eventually { workspace.catalog?.projects.count == 2 && services.settings.currentProject == nil }
 
         #expect(workspace.page == .project(pinned.id))
-        #expect(services.settings.currentProject == pinned.id)
+        #expect(services.settings.currentProject == nil)
+    }
+
+    /// 第一次打开（没打开过项目）：首屏是项目目录顺序的第一个，由目录当场推出；项目陆续同步进来时跟着目录走，
+    /// 不把最先到达的那个记成"上次打开"。只有用户切换项目才记下。
+    @Test func 没打开过项目时_首屏跟着目录顺序走_不记下_用户切换才记() async throws {
+        services.settings.currentProject = nil
+        let workspace = Workspace(services: services)
+        let catalog = observing(workspace)
+        defer { catalog.cancel() }
+
+        let first = try await store.createProject(name: "A", color: "#000000")
+        await eventually { workspace.catalog?.projects.count == 1 }
+        #expect(workspace.page == .project(first.id))
+
+        let pinned = try await store.createProject(name: "B", color: "#000000")
+        try await store.updateProject(pinned.id) { $0.isPinned = true }
+        await eventually { workspace.catalog?.projects.first?.id == pinned.id }
+        #expect(workspace.page == .project(pinned.id))
+        #expect(services.settings.currentProject == nil)
+
+        workspace.show(.project(first.id))
+        #expect(services.settings.currentProject == first.id)
     }
 
     @Test func 当前项目进了回收站_回落到其余项目_没有项目时回落到未分类() async throws {
