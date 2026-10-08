@@ -52,7 +52,7 @@ struct HandOffInput: View {
             })
         .floatingInputLocked(sending)
         .onAppear {
-            draft.attachment = outbox
+            draft.attachments = [outbox]
             focused = true
         }
         .observing(services.store, [.piSessionStates, .deliveryRequests], into: $live, onError: workspace.fail) { [project = outbox.project] store in

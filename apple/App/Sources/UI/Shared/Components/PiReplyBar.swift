@@ -145,7 +145,7 @@ struct PiReplyBar: View {
     /// 忙时的提示写明点发送是什么、长按是什么；作答时写明在回答问题。
     private var placeholder: String {
         if answering != nil { return "在这里回答上面的问题" }
-        if draft.attachment != nil || !draft.images.isEmpty { return "补一句（可不填）" }
+        if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
         return modes.first == .followUp ? "\(DeliveryMode.followUp.label) · \(Self.hold)发送可\(DeliveryMode.steer.label)" : "回复 \(session.title)"
     }
 

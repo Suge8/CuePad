@@ -1,7 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 给输入框选一张卡片带上：可搜；当前会话所属项目的卡片在前，其余按最近修改。点一张即选中并收起。
+/// 给输入框选一张卡片带上（作为这次消息的附件，卡片不动）：可搜；所属项目的资料在最前（长期参考，交给 Agent 时常要带上），
+/// 再是本项目的其余卡片，其余按最近修改。点一张即选中并收起。
 struct CardPicker: View {
     /// 排在前面的项目；nil 不分组。
     let project: UUID?
@@ -25,6 +26,10 @@ struct CardPicker: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let data {
                         if data.shown == 0, !settled.isEmpty { EmptyState.noMatch(settled) }
+                        if !data.resources.isEmpty {
+                            header("资料", project: nil)
+                            rows(data.resources)
+                        }
                         if !data.pinned.isEmpty {
                             header(workspace.catalog?.project(project)?.name ?? "本项目", project: workspace.catalog?.project(project))
                             rows(data.pinned)
@@ -88,19 +93,22 @@ struct CardPicker: View {
         var pages: Int
     }
 
-    /// 一次读到的结果：所属项目的卡片在前（项目只在不分组时为 nil），其余在后；每张卡只出现一次。
+    /// 一次读到的结果：所属项目的资料最前、本项目其余卡片其次（项目只在不分组时为 nil），其余在后；每张卡只出现一次。
     nonisolated struct Page: Sendable {
+        var resources: [CardEntry] = []
         var pinned: [CardEntry]
         var rest: [CardEntry]
         var total: Int
-        var shown: Int { pinned.count + rest.count }
+        var shown: Int { resources.count + pinned.count + rest.count }
 
         static func read(text: String, project: UUID?, limit: Int, from store: isolated CueStore) throws -> Page {
             let all = try store.search(SearchQuery(text: text), limit: limit)
             guard let project else { return Page(pinned: [], rest: all.cards.map(CardEntry.init), total: all.totalCards) }
-            let own = try store.search(SearchQuery(text: text, projects: [project]), limit: limit)
+            let own = try store.search(SearchQuery(text: text, projects: [project]), limit: limit).cards
             let rest = all.cards.filter { $0.projectID != project }
-            return Page(pinned: own.cards.map(CardEntry.init), rest: rest.map(CardEntry.init), total: all.totalCards)
+            return Page(
+                resources: own.filter(\.isPinned).map(CardEntry.init), pinned: own.filter { !$0.isPinned }.map(CardEntry.init),
+                rest: rest.map(CardEntry.init), total: all.totalCards)
         }
     }
 }

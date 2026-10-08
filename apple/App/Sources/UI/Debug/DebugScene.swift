@@ -84,7 +84,7 @@ enum DebugScene {
             var id = await card(in: nil, store: store)
             if id == nil, let project = try? await store.projects().first { id = await card(in: project.id, store: store) }
             if let id, let card = try? await store.card(id) {
-                draft.wrappedValue.attachment = Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID)
+                draft.wrappedValue.attach(card)
             }
             draft.wrappedValue.images = [(0.85, 0.47, 0.29), (0.25, 0.56, 0.72)].map { PickedImage(data: swatch(red: $0.0, green: $0.1, blue: $0.2)) }
         case "lines":

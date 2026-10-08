@@ -258,7 +258,7 @@ final class Navigation {
         task = nil
         if let draft {
             var reply = settings.replyDraft(for: id)
-            reply.attachment = draft
+            reply.attachments = [draft]
             settings.setReplyDraft(reply, for: id)
         }
         Task {

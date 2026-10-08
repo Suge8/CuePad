@@ -17,32 +17,38 @@ struct Outbox: Identifiable {
     var project: UUID?
 }
 
-/// 输入框里的东西：文字、图片、带上的一张卡片或任务。存成卡片（随手记）、发给 Pi（回复）、开场的话（新会话）都是它，
+/// 输入框里的东西：文字、图片、带上的灵感或任务（可带几张，按带上的顺序；第一张是这次关联的那条——交给 Agent 时是那条提示词）。存成卡片（随手记）、发给 Pi（回复）、开场的话（新会话）都是它，
 /// 去处只决定怎么处理这份草稿。
 struct ComposerDraft {
     var text = ""
     var images: [PickedImage] = []
-    var attachment: Outbox?
+    var attachments: [Outbox] = []
 
     /// 带的内容里有没有图片：自己选的，或带上的卡片里的。
-    var hasImages: Bool { !images.isEmpty || !CardText(attachment?.content ?? "").images.isEmpty }
+    var hasImages: Bool { !images.isEmpty || attachments.contains { !CardText($0.content).images.isEmpty } }
+
+    /// "＋ 选灵感"带上一张（作为这次消息的附件，卡片本身不动）；已带着的不重复。
+    mutating func attach(_ card: Card) {
+        guard !attachments.contains(where: { $0.card == card.id }) else { return }
+        attachments.append(Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID))
+    }
 
     /// 按去处接受的种类，有没有可发的东西（不接受的种类不算）。
     func isEmpty(accepting kinds: ComposerKinds) -> Bool {
-        text.allSatisfy(\.isWhitespace) && (!kinds.contains(.images) || images.isEmpty) && (!kinds.contains(.cards) || attachment == nil)
+        text.allSatisfy(\.isWhitespace) && (!kinds.contains(.images) || images.isEmpty) && (!kinds.contains(.cards) || attachments.isEmpty)
     }
 
     /// 存储格式正文：图片文件在这里写入图片库。
     func stored(in files: AttachmentFiles) throws -> String {
-        StoredBody.make(attachment: attachment?.content, text: text, imageHashes: try images.map { try files.store($0.data) })
+        StoredBody.make(attachments: attachments.map(\.content), text: text, imageHashes: try images.map { try files.store($0.data) })
     }
 }
 
 extension AppServices {
-    /// 把草稿发给一个 Pi 会话（写投送请求）：带上的卡片或任务关联到这条请求。
+    /// 把草稿发给一个 Pi 会话（写投送请求）：带上的第一张卡片或任务关联到这条请求。
     @discardableResult
     func requestMacDelivery(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode) async throws -> DeliveryRequest {
-        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: draft.attachment?.card)
+        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: draft.attachments.first?.card)
     }
 }
 
@@ -132,13 +138,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now }
         }
         .animation(Motion.quick, value: hasContent)
-        .animation(Motion.quick, value: draft.attachment?.id)
+        .animation(Motion.quick, value: draft.attachments.map(\.id))
         .animation(Motion.quick, value: draft.images.map(\.id))
         .modifier(ImageSources(source: $source, images: $draft.images))
         .sheet(isPresented: showing(.cards)) {
-            CardPicker(project: cardsFrom) { card in
-                draft.attachment = Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID)
-            }
+            CardPicker(project: cardsFrom) { draft.attach($0) }
         }
         .sheet(item: $previewing) { outbox in
             AttachmentSheet(outbox: outbox, expand: { expand(outbox) })
@@ -154,8 +158,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var field: some View {
         VStack(alignment: .leading, spacing: 0) {
             if expanded { header.transition(.opacity) }
-            if accepts.contains(.cards), let attachment = draft.attachment {
-                chip(attachment).padding([.horizontal, .top], Self.inset).transition(.opacity)
+            if accepts.contains(.cards) {
+                ForEach(draft.attachments) { chip($0).padding([.horizontal, .top], Self.inset).transition(.opacity) }
             }
             if accepts.contains(.images), !draft.images.isEmpty {
                 imageStrip.padding([.horizontal, .top], Self.inset).transition(.opacity)
@@ -245,7 +249,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             .buttonStyle(.plain)
             .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
             .accessibilityHint("看全文")
-            Button("不带了", systemImage: "xmark") { draft.attachment = nil }
+            Button("不带了", systemImage: "xmark") { drop(outbox) }
                 .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
                 .frame(width: 44, height: 44).contentShape(.rect)
                 .buttonStyle(.plain)
@@ -265,8 +269,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     @ViewBuilder private func menu(_ outbox: Outbox) -> some View {
         Button("展开编辑", systemImage: "text.cursor") { expand(outbox) }
-        Button("不带了", systemImage: "xmark", role: .destructive) { draft.attachment = nil }
+        Button("不带了", systemImage: "xmark", role: .destructive) { drop(outbox) }
     }
+
+    private func drop(_ outbox: Outbox) { draft.attachments.removeAll { $0.id == outbox.id } }
 
     /// 展开编辑：卡片的文字放进输入框（接在已写的字前面）、图片放进图片条，不再作为整张卡带上，原卡片不动。
     private func expand(_ outbox: Outbox) {
@@ -285,7 +291,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         }
         draft.text = [text, draft.text].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
         draft.images = images + draft.images
-        draft.attachment = nil
+        drop(outbox)
         previewing = nil
         focus.wrappedValue = true
     }
