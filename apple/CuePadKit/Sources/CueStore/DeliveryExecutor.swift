@@ -129,11 +129,20 @@ extension CueStore {
   }
 
   /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成但未到期的。
+  /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到很久，认领靠它，见 `claimLaunchedCards`）；
+  /// 认领了、失败了、或之后又交给了别处（不会再被认领）才按保留期清理。留着的不算"还剩"：认领后由下一轮清理带走。
   fileprivate func deleteCompletedDeliveries(before cutoff: Date) throws -> Bool {
-    try write {
-      try db.run(
-        "DELETE FROM deliveryRequests WHERE status IN ('succeeded', 'failed') AND completedAt < ?", [cutoff])
-      return try db.first("SELECT 1 FROM deliveryRequests WHERE status IN ('succeeded', 'failed')") { _ in true } != nil
+    let done = "status IN ('succeeded', 'failed')"
+    let awaitingClaim = """
+      mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL
+        AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
+        AND NOT EXISTS (
+          SELECT 1 FROM piSessionStates s
+          WHERE s.launchToken = CASE WHEN json_valid(deliveryRequests.content) THEN json_extract(deliveryRequests.content, '$.token') END)
+      """
+    return try write {
+      try db.run("DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ? AND NOT (\(awaitingClaim))", [cutoff])
+      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(awaitingClaim))") { _ in true } != nil
     }
   }
 }
