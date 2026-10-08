@@ -28,13 +28,12 @@ struct SessionAlert: Equatable, Identifiable {
 }
 
 /// 把读到的在线会话变成要提示的转换：与上一次读到的版本比（`PiSessionState.alert(since:)`，Mac 置位推送标志同一条规则）。
-/// 第一次读到只记基线：App 刚打开时已有的状态不提示。同一个版本读两遍不重复。
+/// 第一次读到某个会话只记下它（规则里没有上一版本就不提示）：App 刚打开时已有的状态不提示。同一个版本读两遍不重复。
 struct SessionAlertTracker {
-    private var seen: [UUID: PiSessionState]?
+    private var seen: [UUID: PiSessionState] = [:]
 
     mutating func alerts(for live: [PiSessionState]) -> [SessionAlert] {
         defer { seen = Dictionary(live.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last }) }
-        guard let seen else { return [] }
         return live.compactMap { state in state.alert(since: seen[state.id]).map { SessionAlert(state, $0) } }
     }
 }

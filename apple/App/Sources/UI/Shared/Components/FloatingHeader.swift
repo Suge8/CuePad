@@ -27,15 +27,17 @@ extension View {
     }
 }
 
+enum FloatingHeaderLayout {
+    /// 与系统返回钮、工具栏圆钮同高；顶部的提示横幅让到它下面（`NoticeBanner`）。
+    static let height: CGFloat = 44
+}
+
 private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     let title: String
     let hidden: Bool
     let detail: Detail
     let trailing: Trailing
     @Environment(\.palette) private var palette
-
-    /// 与系统返回钮、工具栏圆钮同高。
-    static var height: CGFloat { 44 }
 
     func body(content: Content) -> some View {
         content
@@ -55,7 +57,7 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
                         detail
                     }
                     .padding(.horizontal, 16)
-                    .frame(height: Self.height)
+                    .frame(height: FloatingHeaderLayout.height)
                     .glass(in: .capsule)
                     .opacity(title.isEmpty || hidden ? 0 : 1)
                     .animation(Motion.quick, value: title.isEmpty || hidden)

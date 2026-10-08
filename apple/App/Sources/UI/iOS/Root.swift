@@ -453,6 +453,8 @@ private struct NoticeBanner: View {
                 .accessibilityAddTraits(.updatesFrequently)
             }
         }
+        // 让到顶上那一排（推入页的悬浮顶栏、标签根页自己画的搜索与按钮行）下面：返回钮、标题与按钮不被遮住
+        .padding(.top, FloatingHeaderLayout.height + 6)
         .animation(Motion.quick, value: workspace.notice)
         .sensoryFeedback(trigger: workspace.notice) { _, notice in
             guard let notice else { return nil }
