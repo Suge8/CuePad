@@ -114,13 +114,13 @@ extension DebugScene {
         NSApp.terminate(nil)
     }
 
-    /// 帧耗时测量用的固定负载：等界面稳定后开合侧栏若干次，结束后退出，由外部录制（Instruments 动画卡顿模板）。
+    /// 帧耗时测量用的固定负载：等界面稳定后开合侧栏 10 次（`PerfBench.sidebar`），打一行 `SIDEBAR {json}` 后退出；同时可由外部录制（Instruments 动画卡顿模板）。
     private static func benchSidebar(_ workspace: Workspace) async {
         try? await Task.sleep(for: .seconds(3))
-        for _ in 0..<10 {
-            workspace.toggleSidebar()
-            try? await Task.sleep(for: .milliseconds(800))
-        }
+        guard let view = mainWindow?.contentView else { return NSApp.terminate(nil) }
+        let result = await PerfBench.sidebar(workspace, view: view)
+        let data = try! JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+        print("SIDEBAR " + String(decoding: data, as: UTF8.self))
         NSApp.terminate(nil)
     }
 
@@ -165,10 +165,23 @@ extension DebugScene {
         let parts = value.split(separator: "x").compactMap { Double($0) }
         guard parts.count == 2, let window = mainWindow else { return }
         window.setContentSize(NSSize(width: parts[0], height: parts[1]))
-        window.center()
-        // 窗口放到给定位置（可以在屏幕外），复现窗口不可见时的布局
-        let origin = (defaults.string(forKey: "CuePadWindowOrigin") ?? "").split(separator: ",").compactMap { Double($0) }
-        if origin.count == 2 { window.setFrameOrigin(NSPoint(x: origin[0], y: origin[1])) }
+        if offscreen { placeOffscreen(window) } else { window.center() }
+    }
+
+    /// `-CuePadOffscreen YES`：主窗口放在所有屏幕之外，复现窗口不可见时的布局，测量时也不挡、不露在桌面上。
+    static var offscreen: Bool { defaults.bool(forKey: "CuePadOffscreen") }
+
+    /// 放到所有屏幕的左下方之外。要在窗口第一次显示之前调用，否则会先在屏幕中央闪一下。
+    static func placeOffscreen(_ window: NSWindow) {
+        let screens = NSScreen.screens.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        window.setFrameOrigin(NSPoint(x: screens.minX - window.frame.width - 1000, y: screens.minY - window.frame.height - 1000))
+    }
+}
+
+/// Debug 构建的主窗口：`-CuePadOffscreen` 时不让系统把窗口夹回屏幕内（默认会留一截在屏幕边上）。
+final class DebugWindow: NSWindow {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        DebugScene.offscreen ? frameRect : super.constrainFrameRect(frameRect, to: screen)
     }
 }
 

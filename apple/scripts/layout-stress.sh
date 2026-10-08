@@ -56,11 +56,11 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   rm -rf "$lib" "$sock"
 }
 
-run "Pi 轮换·屏幕外最小窗口" error 40 -CuePadWindowSize 720x520 -CuePadWindowOrigin -3000,-3000
+run "Pi 轮换·屏幕外最小窗口" error 40 -CuePadWindowSize 720x520 -CuePadOffscreen YES
 run "Pi 轮换·1280×907" all 40 -CuePadWindowSize 1280x907
 run "边加卡边拉宽·常驻滚动条" none 0 -CuePadWindowSize 1000x800 -AppleShowScrollBars Always -CuePadBench churn
 if [ -x ~/.local/bin/pi ]; then
-  run "真实 Pi 结束/新建·屏幕外" real 24 -CuePadWindowSize 1280x907 -CuePadWindowOrigin -3000,-3000
+  run "真实 Pi 结束/新建·屏幕外" real 24 -CuePadWindowSize 1280x907 -CuePadOffscreen YES
   run "真实 Pi 结束/新建·最小窗口" real 24 -CuePadWindowSize 720x520
 else
   echo "本机没有 ~/.local/bin/pi，跳过真实 Pi 组"

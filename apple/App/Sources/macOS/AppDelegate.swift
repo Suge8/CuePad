@@ -163,6 +163,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func makeMainWindow(_ services: AppServices, workspace: Workspace) -> NSWindow {
         let window = MainWindowFactory.make(content: RootViews.mainWindow(services, workspace: workspace))
+        #if DEBUG
+        // 屏幕外测量不记窗口位置：记下的屏幕外位置会让之后正常打开时窗口不见
+        if DebugScene.offscreen {
+            DebugScene.placeOffscreen(window)
+            return window
+        }
+        #endif
         let keeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
         if !keeper.restore() { window.center() }
         mainFrameKeeper = keeper

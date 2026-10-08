@@ -32,9 +32,9 @@ private struct PaperSurface: ViewModifier {
         content
             .background(LinearGradient(colors: [palette.paperLit, palette.paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35)), in: shape)
             .overlay(shape.strokeBorder(palette.paperEdge(lifted: lifted)))
-            // 上沿一线高光：纸边像被光擦过，与玻璃同一种光；只是一条描边，不加模糊
-            .overlay(shape.inset(by: 1).strokeBorder(
-                LinearGradient(colors: [palette.sheen, .clear], startPoint: .top, endPoint: .init(x: 0.5, y: 0.12)), lineWidth: 1))
+            // 上沿一线高光：纸边像被光擦过，与玻璃同一种光。只画上沿一条实色细线：渐变描边由 CPU 按整张卡的面积铺渐变，
+            // 卡片一变宽（侧栏开合、拉窗口）整面墙每张都要重画，大库里开合侧栏的第一帧因此卡上百毫秒
+            .overlay(alignment: .top) { palette.sheen.frame(height: 1).padding(.horizontal, radius).padding(.top, 1) }
             // 平放的纸只用描边：每张卡一个模糊阴影，侧栏开合时整面墙每帧都要重画这些阴影
             .shadow(color: .black.opacity(palette.dark || !lifted ? 0 : 0.08), radius: lifted ? 10 : 0, y: lifted ? 6 : 0)
     }
