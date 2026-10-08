@@ -8,13 +8,14 @@ extension PiSessionState {
     /// 摘要（问与答）不在桥上：取同步记录里的（`recap`，对话的投影，文件一变就写）。
     static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?, recap: PiRecap?) -> PiSessionState {
         let (state, detail) = session.syncRepresentation
+        let config = session.modelState
         return PiSessionState(
             id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
             projectID: projectID, state: .known(state), detail: detail, folder: session.cwd.lastPathComponent,
             lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
             launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagentStates,
-            pendingPrompt: recap?.pendingPrompt)
+            pendingPrompt: recap?.pendingPrompt, model: config.model, thinking: config.thinking, models: config.models)
     }
 }
 
@@ -63,7 +64,7 @@ struct PiSessionDetail: View {
                 conversation(session, digest)
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest.deliveries)
-                    DetailReply(session: session, live: live)
+                    DetailReply(session: session, live: live, config: digest.config)
                 }
                 .padding(12)
                 .animation(Motion.quick, value: session.question)
@@ -136,6 +137,8 @@ struct PiSessionDetail: View {
 private struct DetailReply: View {
     let session: PiSessionState
     let live: CuePi.PiSession?
+    /// 模型与思考强度的显示值：在线会话放在输入框下面一排（与手机同一组件 `PiConfigControls`）。
+    let config: PiConfigShown
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -158,16 +161,29 @@ private struct DetailReply: View {
         }
     }
 
+    /// 输入框：文字在上；在线会话下面一排模型与思考强度，右边发送钮（没有那一排时发送钮跟在文字右边）。
     private func composer(placeholder: String, @ViewBuilder button: () -> some View) -> some View {
-        HStack(alignment: .bottom, spacing: 6) {
-            TextField(placeholder, text: $text, axis: .vertical)
-                .accessibilityLabel("回复")
-                .textFieldStyle(.plain)
-                .lineLimit(1...6)
-                .focused($focused)
-                .onSubmit(submit)
-                .padding(.vertical, 8)
-            button()
+        let tools = session.state != .known(.ended) && !session.models.isEmpty
+        return VStack(alignment: .leading, spacing: 0) {
+            if let failure = config.failure {
+                Text("没换成：\(failure)").font(.caption).foregroundStyle(palette.failure).lineLimit(2).padding(.top, 8)
+            }
+            HStack(alignment: .bottom, spacing: 6) {
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .accessibilityLabel("回复")
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...6)
+                    .focused($focused)
+                    .onSubmit(submit)
+                    .padding(.vertical, 8)
+                if !tools { button() }
+            }
+            if tools {
+                HStack(spacing: 6) {
+                    PiConfigControls(session: session, shown: config)
+                    button()
+                }
+            }
         }
         .padding(.leading, 12).padding(.trailing, 4).padding(.vertical, 2)
         .paper(radius: 18)
