@@ -216,7 +216,7 @@ private struct ReplyBar: View {
                 tools: {
                     // 只给在线会话：已结束的不为换模型去唤醒 Pi
                     if let config, session.state != .known(.ended), !session.models.isEmpty {
-                        PiConfigTools(session: session, shown: config)
+                        PiConfigControls(session: session, shown: config)
                     }
                 },
                 send: { sendControl }
@@ -293,77 +293,6 @@ private struct ReplyBar: View {
             draft = ComposerDraft()
             focused = false
             sentCount += 1
-        }
-    }
-}
-
-/// 回复框工具排里"＋"右边的两颗小圆钮：模型（芯片）、思考强度（灯泡），点开是菜单，菜单头写当前值；思考强度只列当前模型支持的。
-/// 换了之后图标轻轻跳动直到送达，显示值由会话记录与配置请求推出（`SessionDigest.config`），没换成的原因写在输入框头部。
-private struct PiConfigTools: View {
-    let session: PiSessionState
-    let shown: PiConfigShown
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Menu {
-                Section("模型 · \(shown.model?.name ?? "未知")") {
-                    Picker("模型", selection: Binding(get: { shown.model?.key }, set: { if let key = $0 { configure(PiConfig(model: key)) } })) {
-                        ForEach(session.models) { model in Text(model.name).tag(Optional(model.key)) }
-                    }
-                }
-            } label: {
-                glyph("cpu")
-            }
-            .accessibilityLabel("模型")
-            .accessibilityValue(shown.model?.name ?? "未知")
-            if let levels = shown.model?.thinkingLevels, !levels.isEmpty {
-                Menu {
-                    Section("思考强度 · \(shown.thinking?.label ?? "未知")") {
-                        Picker("思考强度", selection: Binding(get: { shown.thinking }, set: { if let level = $0 { configure(PiConfig(thinking: level)) } })) {
-                            ForEach(levels, id: \.self) { level in Text(level.label).tag(Optional(level)) }
-                        }
-                    }
-                } label: {
-                    glyph("lightbulb.max")
-                }
-                .accessibilityLabel("思考强度")
-                .accessibilityValue(shown.thinking?.label ?? "未知")
-            }
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-    }
-
-    /// 比"＋"小一号的圆：看得见的 30，点得到的 44，与"＋"同一排居中。
-    private func glyph(_ systemImage: String) -> some View {
-        Image(systemName: systemImage).font(.footnote.weight(.semibold))
-            .foregroundStyle(palette.ink2)
-            .symbolEffect(.pulse, isActive: shown.pending)
-            .frame(width: 30, height: 30)
-            .background(palette.fill, in: .circle)
-            .frame(width: 44, height: Composer<EmptyView, EmptyView, EmptyView>.slot)
-            .contentShape(.circle)
-    }
-
-    private func configure(_ config: PiConfig) {
-        workspace.attempt { _ = try await services.configure(config, for: session) }
-    }
-}
-
-extension PiThinkingLevel {
-    /// 思考强度给人看的名字。
-    var label: String {
-        switch self {
-        case .off: "关"
-        case .minimal: "最低"
-        case .low: "低"
-        case .medium: "中"
-        case .high: "高"
-        case .xhigh: "很高"
-        case .max: "最高"
         }
     }
 }
