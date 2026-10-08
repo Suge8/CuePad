@@ -3,13 +3,11 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// Mac 的任务浮窗：点任务行弹出，与手机的任务浮窗同一个层级——顶上一行是状态与所在项目（右边"整页打开"）；正文是给 Agent 的话
-/// （边写边存），贴着它右下是交给 Agent（发送目标同底部输入栏），只有标题时左边一句"写下要 Agent 做什么…"；下面是 Agent 与下级
-/// 两行（`TaskSections`），点开就地展开。点下级在浮窗里换成它，左上角回到上级。
+/// Mac 的任务浮窗：点任务行弹出，与手机的任务浮窗同样三块——① 标题行（完成圈、正文第一行就是标题、"⋯"与"整页打开"）；
+/// ② 给 Agent 的话（边写边存）与它下面唯一的主按钮交给 Agent（发送目标同底部输入栏），有相关灵感或资料时上面一行可勾的小胶囊；
+/// ③ 进展（`TaskProgressList`）。点下级在浮窗里换成它，左上角回到上级；"⋯"里的发出记录就地展开。
 struct TaskPopover: View {
     let taskID: UUID
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var shown: UUID?
 
@@ -37,29 +35,43 @@ private struct TaskPopoverPage: View {
     @State private var detail: TaskDetail?
     @State private var left: Set<UUID> = []
     @State private var withResources = false
+    @State private var showsSends = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            header
-            if card?.isTask == true {
-                Text("给 Agent 的话").font(.system(size: 11, weight: .medium)).foregroundStyle(palette.ink3).padding(.top, 4)
+            if let back {
+                Button("回到上级", systemImage: "chevron.left", action: back)
+                    .labelStyle(.titleAndIcon).buttonStyle(.borderless).font(.system(size: 12)).foregroundStyle(palette.ink3)
             }
-            if let initialText {
-                EditorHost(
-                    initialText: initialText, theme: .paper(palette, horizontalInset: 0), handle: handle,
-                    onChange: { next in
-                        liveText = next
-                        autosave?.changed(next)
-                    },
-                    onError: workspace.fail)
+            HStack(alignment: .top, spacing: 4) {
+                if let card, card.isTask { TaskRingButton(task: card, marks: detail?.marks).padding(.top, 2) }
+                if let initialText {
+                    EditorHost(
+                        initialText: initialText, theme: .paper(palette, horizontalInset: 0), handle: handle,
+                        onChange: { next in
+                            liveText = next
+                            autosave?.changed(next)
+                        },
+                        onError: workspace.fail)
+                }
+                corner
             }
-            promptBar
+            if card?.isTask == true, !TaskPrompt.isWritten(liveText) { PromptHint(action: handle.continueAtEnd) }
+            if card?.isTask == true { BundlePicker(detail: detail, left: $left, withResources: $withResources) }
+            handBar
             if let card, card.isTask {
+                if showsSends {
+                    ScrollView { VStack(alignment: .leading, spacing: 0) { SendRecordList(records: detail?.sends ?? []) } }
+                        .frame(maxHeight: 120)
+                }
                 Divider().overlay(palette.hair)
-                TaskSections(task: card, detail: detail, openChild: openChild)
+                ScrollView { TaskProgressList(task: card, detail: detail, openChild: openChild) }
+                    .frame(maxHeight: 170)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(16)
+        .modifier(SessionDetailHost(arrowEdge: .bottom))
         .observing(services.store, TaskDetail.tables, id: cardID, into: $detail, onError: workspace.fail) { [cardID] in
             try TaskDetail.read(cardID, from: $0)
         }
@@ -76,50 +88,44 @@ private struct TaskPopoverPage: View {
         .onDisappear { if let autosave { Task { await autosave.flush() } } }
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            if let back {
-                Button("回到上级", systemImage: "chevron.left", action: back)
-                    .labelStyle(.iconOnly).buttonStyle(.borderless)
+    /// 右上："⋯"（`CardMenu.more`）与整页打开。
+    private var corner: some View {
+        HStack(spacing: 2) {
+            if let card {
+                Menu("更多", systemImage: "ellipsis") {
+                    CardActions(card: card, more: true) { withAnimation(Motion.quick) { showsSends.toggle() } }
+                }
+                .labelStyle(.iconOnly).menuStyle(.button).menuIndicator(.hidden).buttonStyle(.borderless).fixedSize()
             }
-            let project = workspace.catalog?.project(card?.projectID)
-            if let card, card.isTask {
-                TaskStatusMenu(task: card, marks: detail?.marks)
-                TaskProjectMenu(task: card, project: project)
-            } else {
-                ProjectGlyph(project: project, size: 12)
-                Text(project?.name ?? CaptureCopy.inbox).foregroundStyle(palette.ink3)
-                if card?.parentID != nil { Text("· 素材").foregroundStyle(palette.ink3) }
-            }
-            Spacer()
             Button("整页打开", systemImage: "arrow.up.left.and.arrow.down.right") {
                 workspace.overlay = nil
                 workspace.openCard = cardID
             }
-            .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink3)
-            .help("整页打开")
+            .labelStyle(.iconOnly).buttonStyle(.borderless).help("整页打开")
         }
-        .font(.system(size: 12))
+        .foregroundStyle(palette.ink3)
     }
 
-    /// 贴着正文的底边：任务只有标题时的引导，右边是交给 Agent；任务有挂着的灵感或本项目资料时，上面一行选一并带上哪些。
-    private var promptBar: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if card?.isTask == true { BundlePicker(detail: detail, left: $left, withResources: $withResources) }
-            HStack(spacing: 8) {
-                if card?.isTask == true, !TaskPrompt.isWritten(liveText) { PromptHint(action: handle.continueAtEnd) }
-                Spacer()
-                if let card {
-                    SendControl(project: card.projectID, compact: true) { choice in
-                        let parts = card.isTask ? BundlePicker.parts(detail, left: left, withResources: withResources) : []
-                        let body = Outgoing.text(body: handle.text ?? liveText, values: card.variableValues)
-                        let text = TaskBundle.text(task: body, parts: parts), id = card.id, partIDs = parts.map(\.id)
-                        Task { await workspace.send(text, via: choice, card: id, parts: partIDs) }
-                    }
+    /// 唯一的主按钮：交给 Agent（目标同底部输入栏，带上选中的相关灵感与资料）。
+    private var handBar: some View {
+        HStack {
+            Spacer()
+            if let card {
+                let start = workspace.newSessionHandOff(for: card)
+                SendControl(project: card.projectID, compact: true, newSession: start.map { start in { start(bundle(card).text) } }) { choice in
+                    let (text, partIDs) = bundle(card), id = card.id
+                    Task { await workspace.send(text, via: choice, card: id, parts: partIDs) }
                 }
             }
         }
         .font(.system(size: 12))
+    }
+
+    /// 交给 Agent 的话：正文（变量已填）连同选中的相关灵感与资料。
+    private func bundle(_ card: Card) -> (text: String, partIDs: [UUID]) {
+        let parts = card.isTask ? BundlePicker.parts(detail, left: left, withResources: withResources) : []
+        let body = Outgoing.text(body: handle.text ?? liveText, values: card.variableValues)
+        return (TaskBundle.text(task: body, parts: parts), parts.map(\.id))
     }
 
     private func makeAutosave() {
@@ -129,48 +135,19 @@ private struct TaskPopoverPage: View {
     }
 }
 
-/// Mac 上任务正文周围的次要两行：Agent（交给的会话此刻在做什么、发出过几次）与下级（子任务与素材），点开就地展开。
-/// 任务浮窗放在正文下面，纸页放在正文上面。
-struct TaskSections: View {
-    let task: Card
-    let detail: TaskDetail?
-    var openChild: ((UUID) -> Void)?
-    @State private var showsSends = false
-    @State private var showsChildren = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            TaskAgentStrip(detail: detail) { withAnimation(Motion.quick) { showsSends.toggle() } }
-            if showsSends { scrolling { SendRecordList(records: detail?.sends ?? []) } }
-            TaskSubitemsRow(detail: detail, expanded: showsChildren) { withAnimation(Motion.quick) { showsChildren.toggle() } }
-            if showsChildren { scrolling { TaskChildrenList(task: task, detail: detail, openChild: openChild) } }
-        }
-        .modifier(SessionDetailHost(arrowEdge: .bottom))
-    }
-
-    private func scrolling(@ViewBuilder _ content: () -> some View) -> some View {
-        ScrollView { VStack(alignment: .leading, spacing: 0, content: content).padding(.leading, TaskMetrics.labelWidth + 10) }
-            .frame(maxHeight: 150)
-            .transition(.opacity)
-    }
-}
-
-/// Mac 纸页上任务正文上方的一块：状态与项目一行，下面是 Agent 与下级（`TaskSections`）。
+/// Mac 纸页上任务正文上方的一块：完成圈与进展（`TaskProgressList`）。
 struct TaskPageHeader: View {
     let task: Card
-    let project: Project?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var detail: TaskDetail?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
-                TaskStatusMenu(task: task, marks: detail?.marks)
-                TaskProjectMenu(task: task, project: project).font(.system(size: 12))
-            }
-            TaskSections(task: task, detail: detail)
+        HStack(alignment: .top, spacing: 8) {
+            TaskRingButton(task: task, marks: detail?.marks)
+            TaskProgressList(task: task, detail: detail)
         }
+        .modifier(SessionDetailHost(arrowEdge: .bottom))
         .observing(services.store, TaskDetail.tables, id: task.id, into: $detail, onError: workspace.fail) { [id = task.id] in
             try TaskDetail.read(id, from: $0)
         }

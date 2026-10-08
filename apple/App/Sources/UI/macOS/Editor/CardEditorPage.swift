@@ -83,7 +83,7 @@ struct CardEditorPage: View {
                     meta(data)
                     if data.card.isTask {
                         VStack(alignment: .leading, spacing: 4) {
-                            TaskPageHeader(task: data.card, project: data.project)
+                            TaskPageHeader(task: data.card)
                         }
                         .padding(.horizontal, 64)
                         Divider().overlay(palette.hair).padding(.horizontal, 64)
@@ -234,7 +234,7 @@ struct CardEditorPage: View {
     private func meta(_ data: EditorData) -> some View {
         HStack(spacing: 8) {
             ProjectGlyph(project: data.project, size: 12)
-            Text(data.project?.name ?? "未归档").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
+            Text(data.project?.name ?? "未分类").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
             Text("·")
             Text(DateLabel.short(data.card.modifiedAt))
             if let status = saveState.text {
@@ -364,7 +364,8 @@ private struct EditorBar: View {
                     Text("选中部分").font(.system(size: 12, weight: .medium)).foregroundStyle(palette.ink3)
                         .transition(.opacity)
                 }
-                SendControl(project: card.projectID) { send($0, whole: false) }
+                let start = workspace.newSessionHandOff(for: card)
+                SendControl(project: card.projectID, newSession: start.map { start in { start(outgoing(whole: false)) } }) { send($0, whole: false) }
             }
             .animation(Motion.quick, value: selecting)
         }
@@ -372,10 +373,12 @@ private struct EditorBar: View {
 
     /// 发出去的正文：选中了就只发选中的部分（`whole` 时总是整张）。
     private func send(_ choice: AppServices.Destination, whole: Bool) {
-        let body = (whole ? nil : handle.selection) ?? handle.text ?? text
-        let outgoing = Outgoing.text(body: body, values: card.variableValues)
-        let id = card.id
+        let outgoing = outgoing(whole: whole), id = card.id
         Task { await workspace.send(outgoing, via: choice, card: id) }
+    }
+
+    private func outgoing(whole: Bool) -> String {
+        Outgoing.text(body: (whole ? nil : handle.selection) ?? handle.text ?? text, values: card.variableValues)
     }
 }
 

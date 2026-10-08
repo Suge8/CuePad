@@ -74,6 +74,7 @@ struct SplitRoot: View {
         switch page {
         case .project(let id): .project(id)
         case .inbox: .shelf
+        case .archive: .archive
         case .trash: .trash
         }
     }
@@ -141,11 +142,12 @@ private struct SplitSidebar: View {
                 if !recent.isEmpty || inbox > 0 {
                     Section("最近") {
                         ForEach(recent) { row($0, catalog) }
-                        if inbox > 0 { SidebarRow(route: .inbox, title: "未归档", symbol: "tray", badge: inbox) }
+                        if inbox > 0 { SidebarRow(route: .inbox, title: "未分类", symbol: "tray", badge: inbox) }
                     }
                 }
             }
             Section {
+                SidebarRow(route: .archive, title: "归档", symbol: "archivebox")
                 SidebarRow(route: .trash, title: "回收站", symbol: "trash")
                 SidebarRow(route: .settings, title: "设置", symbol: "gearshape")
             }

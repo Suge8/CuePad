@@ -108,7 +108,7 @@ struct IOSWorkflowTests {
         #expect(workspace.notice?.link == .project(project.id))
     }
 
-    @Test func 随手记只有图片_也能存_没选项目进未归档() async throws {
+    @Test func 随手记只有图片_也能存_没选项目进未分类() async throws {
         let workspace = Workspace(services: app.services, holder: SceneContext())
         let image = pngData()
         let hash = try app.services.images.store(image)
@@ -116,7 +116,7 @@ struct IOSWorkflowTests {
         try await CaptureDraft(text: "", images: [image]).save(in: nil, workspace: workspace)
 
         #expect(try await store.cards(in: nil).map(\.body) == ["![](cuepad://img/\(hash))"])
-        #expect(workspace.notice?.text == "已记到 未归档")
+        #expect(workspace.notice?.text == "已记到 未分类")
         #expect(workspace.notice?.link == .project(nil))
     }
 }

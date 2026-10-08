@@ -10,6 +10,7 @@ struct ProjectPage: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var data: ProjectPageData?
+    @State private var agents: AgentLinks?
     @State private var board = WallBoard()
     @State private var collapsed = false
 
@@ -41,6 +42,9 @@ struct ProjectPage: View {
             .onChange(of: board.arrangement != nil) { DebugScene.scrollIfNeeded(proxy) }
             #endif
         }
+        .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
+        .modifier(SessionDetailHost(arrowEdge: .bottom))
+        .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
         .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
@@ -139,7 +143,7 @@ private struct ProjectHeader: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 10) {
                     ProjectGlyph(project: project, size: 20)
-                    Text(projectID == nil ? "未归档" : project?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
+                    Text(projectID == nil ? "未分类" : project?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
                 }
                 .contextMenu { if let project { ProjectMenu(project: project) { renaming = project } } }
                 HStack(spacing: 4) {

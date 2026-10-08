@@ -6,6 +6,9 @@ private let cardVisible = """
   deletedAt IS NULL AND (projectID IS NULL OR projectID IN (SELECT id FROM projects WHERE deletedAt IS NULL))
   """
 
+/// 在列表里：可见且没归档（归档的只在"归档"里，搜索照样搜得到）。
+private let cardActive = "(\(cardVisible)) AND archivedAt IS NULL"
+
 /// 散放的灵感：不是任务，也没挂在一个看得见的任务下（上级没到、在回收站的按散放看待）。
 private let looseIdea = """
   todoAt IS NULL AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE deletedAt IS NULL AND todoAt IS NOT NULL))
@@ -63,10 +66,10 @@ extension CueStore {
     return String(cString: resolved)
   }
 
-  /// 某项目（nil = 未归档）里可见的灵感（不含任务，也不含挂在任务下的素材），按手动顺序：卡片墙、未归档与 `card list` 列的就是它们。
-  /// 任务见 `tasks(_:)`，素材见 `children(of:)`。
+  /// 某项目（nil = 未分类）里可见的灵感（不含任务，也不含挂在任务下的相关灵感），按手动顺序：卡片墙、未分类与 `card list` 列的就是它们。
+  /// 任务见 `tasks(_:)`，相关灵感见 `children(of:)`。
   public func cards(in project: UUID?) throws -> [Card] {
-    try select(Card.self, where: "(\(cardVisible)) AND (\(looseIdea)) AND projectID IS ?", [project], orderBy: "sortKey, id")
+    try select(Card.self, where: "(\(cardActive)) AND (\(looseIdea)) AND projectID IS ?", [project], orderBy: "sortKey, id")
   }
 
   /// 回收站里单独删除的卡片，最近删除的在前；随项目删除的卡归在该项目名下，不在这里。
@@ -76,12 +79,40 @@ extension CueStore {
 
   public func card(_ id: UUID) throws -> Card? { try find(Card.self, id) }
 
-  /// 一张任务的下级（子任务与素材），按手动顺序；在回收站的不列。
-  public func children(of parent: UUID) throws -> [Card] {
-    try select(Card.self, where: "parentID = ? AND deletedAt IS NULL", [parent], orderBy: "sortKey, id")
+  /// 归档的灵感与任务（只列归档时的那一条，不列随它一起归档的下级），最近归档的在前；回收站里的不列。
+  public func archived() throws -> [Card] {
+    try select(
+      Card.self,
+      where: """
+        (\(cardVisible)) AND archivedAt IS NOT NULL
+        AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE archivedAt IS NOT NULL AND deletedAt IS NULL))
+        """,
+      orderBy: "archivedAt DESC, id")
   }
 
-  /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`，未归档的在最后。组内是整棵任务树的先序（同级按手动顺序，
+  /// 交给了 Agent 的哪里：执行过或认领过的读灵感与任务上记的会话；还没执行的读最近一条投送请求——发给已有会话的是它的目标，
+  /// 开新会话的是"正在开"（开好后由 `claimLaunchedCards` 记到卡上）。灵感与任务的行据此显示状态点（含"发送中""有新回复"）。
+  public func handedSessions() throws -> [UUID: AgentHandoff] {
+    let modes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+    let rows = try db.query(
+      """
+      SELECT id, piSessionID, 0 FROM cards WHERE piSessionID IS NOT NULL AND deletedAt IS NULL
+      UNION ALL
+      SELECT r.cardID, r.targetRef, r.mode = 'start' FROM deliveryRequests r
+      WHERE r.cardID IS NOT NULL AND (r.mode = 'start' OR (r.targetRef IS NOT NULL AND r.mode IN (\(modes))))
+        AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = r.cardID)
+        AND r.cardID NOT IN (SELECT id FROM cards WHERE piSessionID IS NOT NULL)
+      """
+    ) { (card: $0.uuid(0), handoff: $0.int(2) != 0 ? AgentHandoff.launching : .session($0.text(1))) }
+    return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
+  }
+
+  /// 一张任务的下级（子任务与相关灵感），按手动顺序；在回收站的不列。
+  public func children(of parent: UUID) throws -> [Card] {
+    try select(Card.self, where: "parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL", [parent], orderBy: "sortKey, id")
+  }
+
+  /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`，未分类的在最后。组内是整棵任务树的先序（同级按手动顺序，
   /// 子任务紧跟上级）再按状态筛：上级被筛掉的子任务就排在上级原来的位置。只要完成的时不按树，最近完成在前。
   /// 回收站里的任务与回收站项目的任务不列。
   public func tasks(_ statuses: TaskStatus...) throws -> [TaskGroup] {
@@ -90,7 +121,7 @@ extension CueStore {
     let tasks = try db.query(
       """
       SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
+      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
         \(doneOnly ? " AND t.completedAt IS NOT NULL" : "")
       ORDER BY t.projectID IS NULL, \(Self.projectOrder("p")), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
       """
@@ -128,16 +159,16 @@ extension CueStore {
   /// 可当上级的任务：未删除的要做卡片。
   private static let liveTask = "u.deletedAt IS NULL AND u.todoAt IS NOT NULL"
 
-  /// 各项目（nil = 未归档）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
+  /// 各项目（nil = 未分类）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
   /// 没有上级、上级不在（没到、在回收站），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `childMarks`。
-  /// 灵感（含素材）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
+  /// 灵感（含相关灵感）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
   public func taskCounts() throws -> [UUID?: TaskCounts] {
     let rows = try db.query(
       """
       SELECT t.projectID, SUM(t.completedAt IS NULL AND t.startedAt IS NOT NULL), SUM(t.completedAt IS NULL AND t.startedAt IS NULL),
         SUM(t.completedAt IS NOT NULL)
       FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(Self.liveTask)
-      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
+      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
         AND (u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))
       GROUP BY t.projectID
       """
@@ -145,7 +176,7 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
-  /// 各上级任务的直接子任务（不含素材）完成数与总数；没有子任务的不在结果里。
+  /// 各上级任务的直接子任务（不含相关灵感）完成数与总数；没有子任务的不在结果里。
   /// 每条任务的直接下级，同级手动顺序：任务行的分段完成圈与"子任务 n/m"都由它推出，见 `ChildMark`。给了 `parent` 只读它的。
   /// 灵感"交给过 Agent"只看发送记录里明确记下的：它自己的（cardID），或某次发送带上了它（partIDs）。
   public func childMarks(of parent: UUID? = nil) throws -> [UUID: [ChildMark]] {
@@ -158,7 +189,7 @@ extension CueStore {
           OR EXISTS (SELECT 1 FROM sendRecords s, json_each(s.partIDs) part WHERE part.value = c.id)
         END
       FROM cards c
-      WHERE c.parentID IS NOT NULL AND c.deletedAt IS NULL \(scope)
+      WHERE c.parentID IS NOT NULL AND c.deletedAt IS NULL AND c.archivedAt IS NULL \(scope)
       ORDER BY c.parentID, c.sortKey, c.id
       """, parent.map { [$0] } ?? []
     ) { (parent: $0.uuid(0), mark: ChildMark(isTask: $0.int(1) != 0, isDone: $0.int(2) != 0)) }
@@ -172,7 +203,7 @@ extension CueStore {
     return try select(SendRecord.self, where: "cardID = ?", [card], orderBy: order)
   }
 
-  /// 项目（nil = 未归档）里可见卡片的最近一次发送（时间与目标）：卡片 id → `LastSend`；从未发送的卡不在结果里。
+  /// 项目（nil = 未分类）里可见卡片的最近一次发送（时间与目标）：卡片 id → `LastSend`；从未发送的卡不在结果里。
   /// 一次查询覆盖整个项目，界面据此判断"未发送"和工作集，不必逐卡查询。
   public func lastSends(in project: UUID?) throws -> [UUID: LastSend] {
     Dictionary(
@@ -219,10 +250,10 @@ extension CueStore {
 
   // MARK: 汇总与搜索
 
-  /// 每个活动项目（按手动顺序）和未归档（最后）的可见卡片数、最近修改时间。一次查询，侧栏不必读全部卡片。
+  /// 每个活动项目（按手动顺序）和未分类（最后）的可见卡片数、最近修改时间。一次查询，侧栏不必读全部卡片。
   public func projectSummaries() throws -> [ProjectSummary] {
     let groups = try db.query(
-      "SELECT projectID, SUM(\(looseIdea)), MAX(modifiedAt) FROM cards WHERE \(cardVisible) GROUP BY projectID"
+      "SELECT projectID, SUM(\(looseIdea) AND archivedAt IS NULL), MAX(modifiedAt) FROM cards WHERE \(cardVisible) GROUP BY projectID"
     ) { (id: $0.uuidOrNil(0), count: Int($0.int(1)), last: $0.dateOrNil(2)) }
     let byProject = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
     let owners: [UUID?] = try projects().map(\.id) + [nil]

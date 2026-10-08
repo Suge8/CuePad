@@ -11,8 +11,8 @@ nonisolated private struct EditorData: Sendable {
 }
 
 /// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值、发送；选中文字时发送只发选中的部分）与自动保存在这里，
-/// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目与"时间 · 置顶"，
-/// 右边"⋯"里是发到 Mac（⌘↩）、复制、分享与灵感操作；任务是 `TaskPage`（正文是给 Agent 的话，周围是状态、Agent 与下级）。
+/// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目与"时间 · 资料"，
+/// 右下一颗"交给 Agent"（⌘↩），右边"⋯"里是分享与 `CardMenu.more`；任务是 `TaskPage`（标题行、给 Agent 的话、进展三块）。
 struct CardEditorScreen: View {
     let cardID: UUID
     /// 还没读到卡时先按哪种外框排（任务浮窗里是任务），读到后以卡为准。
@@ -41,7 +41,7 @@ struct CardEditorScreen: View {
             .ownsBottomEdge()
             // 菜单项上的快捷键要等菜单打开才生效：⌘↩ 另挂一个不占位的按钮
             .background {
-                Button(sendTitle, action: sendToMac).keyboardShortcut(.return, modifiers: .command)
+                Button("交给 Agent", action: sendToMac).keyboardShortcut(.return, modifiers: .command)
                     .disabled(data == nil).opacity(0).accessibilityHidden(true)
             }
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
@@ -73,15 +73,11 @@ struct CardEditorScreen: View {
         if isTask {
             if let data {
                 TaskPage(
-                    card: data.card, project: data.project, written: TaskPrompt.isWritten(liveText), hand: { handToAgent(with: $0) },
+                    card: data.card, written: TaskPrompt.isWritten(liveText), hand: { handToAgent(with: $0) },
                     continuePrompt: handle.continueAtEnd
                 ) {
-                    editor
-                } actions: {
-                    Button("复制", systemImage: "doc.on.doc") { copy(data.card) }
-                    ShareLink(item: outgoing(data.card)) { Label("分享", systemImage: "square.and.arrow.up") }
-                    Divider()
-                    CardActions(card: data.card, inEditor: true)
+                    // 右边让出"⋯"的位置
+                    editor.padding(.trailing, 36)
                 }
             } else {
                 palette.paper
@@ -100,7 +96,7 @@ struct CardEditorScreen: View {
                 }
                 .padding(wide ? EdgeInsets(top: 8, leading: 24, bottom: 0, trailing: 24) : EdgeInsets())
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .floatingHeader(data.map { $0.project?.name ?? "未归档" } ?? "", detail: data.map(Self.detail) ?? "") { actions }
+                .floatingHeader(data.map { $0.project?.name ?? "未分类" } ?? "", detail: data.map(Self.detail) ?? "") { actions }
         }
     }
 
@@ -124,7 +120,8 @@ struct CardEditorScreen: View {
         }
     }
 
-    private var inset: CGFloat { wide && !isTask ? 44 : 20 }
+    /// 任务的正文左边紧挨着完成圈。
+    private var inset: CGFloat { isTask ? 6 : wide ? 44 : 20 }
 
     /// 顶栏的一行："03:36 · 资料"。
     private static func detail(_ data: EditorData) -> String {
@@ -136,39 +133,32 @@ struct CardEditorScreen: View {
     private var actions: some View {
         Menu("更多", systemImage: "ellipsis") {
             if let card = data?.card {
-                Button(sendTitle, systemImage: "paperplane", action: sendToMac)
-                Button("复制", systemImage: "doc.on.doc") { copy(card) }
                 ShareLink(item: outgoing(card)) { Label("分享", systemImage: "square.and.arrow.up") }
                 Divider()
-                CardActions(card: card, inEditor: true)
+                CardActions(card: card, more: true)
             }
         }
         .disabled(data == nil)
     }
 
-    private var sendTitle: String { "交给 Agent" }
-
-    /// 发到 Mac：选中了文字就只发选中的部分。
     private func sendToMac() { handToAgent(with: []) }
 
     private var ideaHand: some View {
-        AgentHandButton(action: sendToMac).padding(.trailing, 16).padding(.bottom, 16)
+        AgentHandButton(fullWidth: false, action: sendToMac).padding(.trailing, 16).padding(.bottom, 16)
     }
 
-    /// 交给 Agent（先选会话）：选中了文字就只发选中的部分；任务可一并带上挂着的灵感与资料（`TaskBundle`）。
+    /// 交给 Agent（浮起交给 Agent 的输入框）：选中了文字就只发选中的部分；任务可一并带上相关灵感与资料（`TaskBundle`）。
     private func handToAgent(with parts: [Card]) {
         guard let card = data?.card else { return }
         let body = handle.selection.map { Outgoing.text(body: $0, values: card.variableValues) } ?? outgoing(card)
-        navigation.outbox = Navigation.Outbox(
-            content: TaskBundle.text(task: body, parts: parts), card: card.id, project: card.projectID, parts: parts.map(\.id))
+        navigation.handToAgent(card, text: body, parts: parts)
     }
 
     /// 编辑菜单里的选区动作。
     private func selectionActions(_ card: Card) -> [CueSelectionAction] {
         [
-            CueSelectionAction(title: "发到 Mac", systemImage: "paperplane") { stored in
-                let body = Outgoing.text(body: stored, values: card.variableValues)
-                navigation.outbox = Navigation.Outbox(content: body, card: card.id, project: card.projectID)
+            CueSelectionAction(title: "交给 Agent", systemImage: "paperplane") { stored in
+                navigation.handToAgent(card, text: Outgoing.text(body: stored, values: card.variableValues))
             },
             CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
                 workspace.convertToTasks(stored, in: card.projectID)
@@ -179,14 +169,6 @@ struct CardEditorScreen: View {
     /// 当前编辑中的整张正文（未保存的也算），变量已填。
     private func outgoing(_ card: Card) -> String {
         Outgoing.text(body: handle.text ?? liveText, values: card.variableValues)
-    }
-
-    private func copy(_ card: Card) {
-        let text = outgoing(card), id = card.id
-        workspace.attempt {
-            try await services.send(text, to: .clipboard, card: id)
-            workspace.say("已复制")
-        }
     }
 
     private func insertPicked() {

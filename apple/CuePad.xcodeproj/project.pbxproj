@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		D20000000000000000000003 /* CuePadNotify.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* CuePadNotify.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D2000000000000000000000E /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D2000000000000000000000D /* CueSync */; };
+		D20000000000000000000102 /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = D20000000000000000000101 /* CueStore */; };
 		B10000000000000000000003 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000002 /* CueText */; };
 		B10000000000000000000005 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* CueText */; };
 		B10000000000000000000007 /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000006 /* CueStore */; };
@@ -133,6 +134,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D2000000000000000000000E /* CueSync in Frameworks */,
+				D20000000000000000000102 /* CueStore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -259,6 +261,7 @@
 			name = CuePadNotify;
 			packageProductDependencies = (
 				D2000000000000000000000D /* CueSync */,
+				D20000000000000000000101 /* CueStore */,
 			);
 			productName = CuePadNotify;
 			productReference = D20000000000000000000002 /* CuePadNotify.appex */;
@@ -977,6 +980,11 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		D20000000000000000000101 /* CueStore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueStore;
+		};
 		D2000000000000000000000D /* CueSync */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;

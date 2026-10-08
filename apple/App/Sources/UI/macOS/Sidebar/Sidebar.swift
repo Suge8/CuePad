@@ -41,7 +41,7 @@ struct Sidebar: View {
                         ForEach(pages.recent) { row($0, catalog) }
                         if pages.inboxCount > 0 {
                             PageRow(page: .inbox, count: pages.inboxCount, select: select) {
-                                Label("未归档", systemImage: "tray")
+                                Label("未分类", systemImage: "tray")
                             }
                         }
                     }
@@ -49,6 +49,9 @@ struct Sidebar: View {
                 PiSection(recorded: data.live + data.ended, deliveries: data.deliveries, total: data.sessionTotal)
                 if pages.showsTrash {
                     Section {
+                        PageRow(page: .archive, count: 0, select: select) {
+                            Label("归档", systemImage: "archivebox")
+                        }
                         PageRow(page: .trash, count: data.trashCount, select: select) {
                             Label("回收站", systemImage: "trash")
                         }
@@ -142,7 +145,7 @@ struct Sidebar: View {
     }
 }
 
-/// 侧栏里能去的页，按显示顺序：置顶项目 → 最近项目 → 未归档 → 回收站。分组显示与方向键共用这一份顺序。
+/// 侧栏里能去的页，按显示顺序：置顶项目 → 最近项目 → 未分类 → 回收站。分组显示与方向键共用这一份顺序。
 private struct SidebarPages {
     let pinned: [Project]
     let recent: [Project]
@@ -157,7 +160,7 @@ private struct SidebarPages {
     }
 
     var order: [Workspace.Page] {
-        (pinned + recent).map { .project($0.id) } + (inboxCount > 0 ? [.inbox] : []) + (showsTrash ? [.trash] : [])
+        (pinned + recent).map { .project($0.id) } + (inboxCount > 0 ? [.inbox] : []) + (showsTrash ? [.archive, .trash] : [])
     }
 }
 

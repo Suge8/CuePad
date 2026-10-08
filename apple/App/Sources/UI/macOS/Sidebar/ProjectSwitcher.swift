@@ -24,7 +24,7 @@ struct ProjectSwitcher: View {
             }
             Divider()
             if (workspace.catalog?.cardCounts[nil] ?? 0) > 0 {
-                Button { workspace.show(.inbox) } label: { Label("未归档", systemImage: "tray").labelStyle(.titleAndIcon) }
+                Button { workspace.show(.inbox) } label: { Label("未分类", systemImage: "tray").labelStyle(.titleAndIcon) }
             }
             Button { workspace.show(.trash) } label: { Label("回收站", systemImage: "trash").labelStyle(.titleAndIcon) }
         } label: {
@@ -59,7 +59,10 @@ struct ProjectSwitcher: View {
             Text(project?.name ?? "")
         case .inbox:
             Image(systemName: "tray").accessibilityHidden(true)
-            Text("未归档")
+            Text("未分类")
+        case .archive:
+            Image(systemName: "archivebox").accessibilityHidden(true)
+            Text("归档")
         case .trash:
             Image(systemName: "trash").accessibilityHidden(true)
             Text("回收站")

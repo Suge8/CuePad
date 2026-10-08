@@ -83,21 +83,8 @@ struct TaskRingTests {
         _ = try await store.createCard(in: project.id, body: "随手一条")
 
         let detail = try await TaskDetail.read(task.id, from: store)
-        #expect(detail.materials.map(\.id) == [material.id])
+        #expect(detail.related.map(\.id) == [material.id])
         #expect(detail.resources.map(\.id) == [reference.id])
-    }
-
-    @Test func 在任务下记一条灵感_直接挂成它的素材() async throws {
-        let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let task = try await store.createTask("修乱序", in: project.id)
-        let workspace = Workspace(services: rig.services)
-
-        try await CaptureDraft(text: "  日志在 logs  ", images: []).save(in: project.id, under: task.id, workspace: workspace)
-
-        let children = try await store.children(of: task.id)
-        #expect(children.map(\.body) == ["日志在 logs"])
-        #expect(children.first?.isTask == false && children.first?.projectID == project.id)
-        #expect(workspace.notice?.undo != nil)
     }
 
     private func workspaceAttach(_ body: String, to task: Card) async throws -> Card {

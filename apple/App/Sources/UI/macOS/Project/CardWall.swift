@@ -156,10 +156,14 @@ struct CardFace: View {
             if let image = text.images.first {
                 Thumbnail(hash: image, height: 118).padding(-8).padding(.bottom, 6)
             }
-            Text(text.title.isEmpty ? "无标题" : text.title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
-                .lineLimit(2)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(text.title.isEmpty ? "无标题" : text.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+                AgentDot(card: card.id)
+            }
             if !text.preview.isEmpty {
                 Text(VariableText.styled(text.preview, palette))
                     .font(.system(size: 13)).lineSpacing(3).foregroundStyle(palette.ink2)

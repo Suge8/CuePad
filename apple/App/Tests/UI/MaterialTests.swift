@@ -3,13 +3,13 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 任务浮窗里加素材：挑一条灵感挂到任务下，或把图片存成一条灵感挂上；素材排在已有下级之后，不改变"灵感 / 任务"。
+/// 任务浮窗里加相关灵感：挑一条灵感挂到任务下，或把图片存成一条灵感挂上；相关灵感排在已有下级之后，不改变"灵感 / 任务"。
 @MainActor
 struct MaterialTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
-    @Test func 挑一条灵感_挂成任务的素材_排在最后() async throws {
+    @Test func 挑一条灵感_挂成任务的相关灵感_排在最后() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let task = try await store.createTask("修乱序", in: project.id)
         let sub = try await store.createTask("复现", under: task.id)
@@ -36,7 +36,7 @@ struct MaterialTests {
         #expect(material.projectID == project.id && !material.isTask)
     }
 
-    @Test func 拖上去挂为素材_提示可撤销_撤销后回到原来的位置() async throws {
+    @Test func 拖上去挂为相关灵感_提示可撤销_撤销后回到原来的位置() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let task = try await store.createTask("修乱序", in: project.id)
         let first = try await store.createCard(in: project.id, body: "后记")
@@ -46,9 +46,9 @@ struct MaterialTests {
 
         try await workspace.attach(idea.id, TaskMove(slot: .under(task.id), after: nil))
         #expect(try await store.children(of: task.id).map(\.id) == [idea.id])
-        #expect(workspace.notice?.text == "已挂为素材")
+        #expect(workspace.notice?.text == "已挂到任务")
 
-        try await #require(workspace.notice?.undo).run()
+        try await #require(workspace.notice?.action).run()
         #expect(try await store.children(of: task.id).isEmpty)
         #expect(try await store.cards(in: project.id).map(\.id) == before)
         #expect(before.contains(first.id))

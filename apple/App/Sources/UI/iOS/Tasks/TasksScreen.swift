@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 任务页（书架上的"任务"一行、iPad 侧栏、项目页"还有 N 条"进入）：顶上常驻一行快速添加（↩ 即一条，落当前项目或未归档，可换）；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
+/// 任务页（书架上的"任务"一行、iPad 侧栏、项目页"还有 N 条"进入）：顶上常驻一行快速添加（↩ 即一条，落当前项目或未分类，可换）；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
 /// 子任务缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的子任务、右滑缩进左滑反缩进），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
 /// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `CardActions`。
 struct TasksScreen: View {
@@ -82,21 +82,28 @@ struct TasksScreen: View {
 
     private func completed(_ rows: [TaskBoard.Row]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button {
-                withAnimation(Motion.quick) { showsCompleted.toggle() }
-            } label: {
-                HStack(spacing: 6) {
-                    Text("最近完成 \(rows.count)")
-                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                        .rotationEffect(.degrees(showsCompleted ? 90 : 0)).accessibilityHidden(true)
-                    Spacer()
+            HStack {
+                Button {
+                    withAnimation(Motion.quick) { showsCompleted.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("最近完成 \(rows.count)")
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                            .rotationEffect(.degrees(showsCompleted ? 90 : 0)).accessibilityHidden(true)
+                        Spacer()
+                    }
+                    .font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
+                    .padding(.horizontal, 4)
+                    .frame(minHeight: 44).contentShape(.rect)
                 }
-                .font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
-                .padding(.horizontal, 4)
-                .frame(minHeight: 44).contentShape(.rect)
+                .buttonStyle(.plain)
+                .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
+                // 做完的一键收走：归档后不占列表，照样搜得到
+                Button("全部归档", systemImage: "archivebox") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
+                    .font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
+                    .padding(.horizontal, 4).frame(minHeight: 44).contentShape(.rect)
+                    .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
             if showsCompleted {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(rows) { line($0.task, project: $0.project, session: $0.session, delivery: $0.delivery, marks: nil).id($0.id) }
@@ -284,21 +291,21 @@ struct NewTaskLine: View {
                 .onSubmit(add)
             if let projects, !projects.isEmpty {
                 Menu {
-                    Button("未归档") { chosen = .some(nil) }
+                    Button("未分类") { chosen = .some(nil) }
                     Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
                     let current = projects.first { $0.id == target }
                     HStack(spacing: 4) {
                         ProjectGlyph(project: current, size: 11)
-                        Text(current?.name ?? "未归档").lineLimit(1)
+                        Text(current?.name ?? "未分类").lineLimit(1)
                     }
                     .font(.footnote).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 10).frame(minHeight: 30)
                     .background(palette.fill, in: .capsule)
                     .frame(minHeight: 44).contentShape(.rect)
                 }
-                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未归档")")
+                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未分类")")
             }
         }
     }

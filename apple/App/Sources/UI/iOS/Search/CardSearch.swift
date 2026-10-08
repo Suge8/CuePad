@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 import UIKit
 
-/// 搜索的范围：全部卡片（书架、iPad 搜索页），或一个项目里的卡片（项目页，nil 是未归档）。
+/// 搜索的范围：全部卡片（书架、iPad 搜索页），或一个项目里的卡片（项目页，nil 是未分类）。
 enum CardSearchScope: Equatable {
     case all
     case project(UUID?)
@@ -76,7 +76,7 @@ struct CardSearchResults: View {
                         if scope == .all {
                             HStack(spacing: 6) {
                                 ProjectGlyph(project: group.project, size: 12)
-                                SectionHeader(title: group.project?.name ?? "未归档", count: nil).padding(.horizontal, -4)
+                                SectionHeader(title: group.project?.name ?? "未分类", count: nil).padding(.horizontal, -4)
                             }
                             .padding(.top, 8)
                         }
@@ -198,7 +198,7 @@ private struct FilterChips: View {
             if let projects {
                 Menu {
                     Button("全部") { query.project = nil }
-                    Button("未归档") { query.project = .some(nil) }
+                    Button("未分类") { query.project = .some(nil) }
                     Divider()
                     ForEach(projects) { project in Button(project.name) { query.project = project.id } }
                 } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil) }
@@ -225,7 +225,7 @@ private struct FilterChips: View {
     private var projectLabel: String {
         switch query.project {
         case .none: "全部"
-        case .some(.none): "未归档"
+        case .some(.none): "未分类"
         case .some(.some(let id)): projects?.first { $0.id == id }?.name ?? "全部"
         }
     }

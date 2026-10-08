@@ -52,6 +52,7 @@ struct NewSessionInput: View {
         .floatingInputLocked(inFlight)
         .onAppear {
             if launched == nil { launched = start.launched }
+            if let seed = start.draft, draft.isEmpty(accepting: [.images, .cards]) { draft = seed }
             focused = true
         }
         .observing(services.store, [.directoryBindings, .piSessionStates], id: projectOrder, into: $places, onError: workspace.fail) {
@@ -118,7 +119,9 @@ struct NewSessionInput: View {
         workspace.attempt {
             defer { sending = false }
             let opening = try draft.stored(in: services.store.files).nonEmpty
-            let request = try await services.launch(PiLaunch(place: place.launch, prompt: opening, token: token), title: place.name, on: place.hostID)
+            // 从灵感或任务"新会话"交给 Agent：开好后它关联到这个会话（带着的那一条）
+            let request = try await services.launch(
+                PiLaunch(place: place.launch, prompt: opening, token: token), title: place.name, on: place.hostID, card: draft.attachment?.card)
             launched = .init(request: request.id, token: token)
         }
     }

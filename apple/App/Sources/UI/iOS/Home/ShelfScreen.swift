@@ -45,7 +45,7 @@ nonisolated struct ShelfData: Sendable {
     }
 }
 
-/// iPhone 首页：项目书架。顶上一排：左"⋯"（未归档、回收站、设置），中间搜索灵感与任务（输入时页面换成搜索结果，往下滑时藏起），右"新建项目"；
+/// iPhone 首页：项目书架。顶上一排：左"⋯"（未分类、回收站、设置），中间搜索灵感与任务（输入时页面换成搜索结果，往下滑时藏起），右"新建项目"；
 /// iPad 分栏里这些都在侧栏，顶上不放。下面是"正在推进"（进行中的任务，点开是任务浮窗）；再下一张纸：有任务时一行"任务 · N 进行中 · N 待办"
 /// 进入跨项目任务页，有没归类的灵感时一行提醒去整理；置顶项目是大卡，其余按最近排成行，都带介绍、灵感数、任务数与 Pi 状态点。
 struct ShelfScreen: View {
@@ -150,7 +150,7 @@ struct ShelfScreen: View {
 
     private static let readableWidth: CGFloat = 760
 
-    /// 左"⋯"（未归档、回收站、设置），中间搜索（什么都没有时没什么可搜，不放），右"新建项目"。
+    /// 左"⋯"（未分类、回收站、设置），中间搜索（什么都没有时没什么可搜，不放），右"新建项目"。
     private var row: some View {
         SearchRow(
             search: searchable ? SearchCapsule(prompt: "搜索灵感与任务", query: $query.text, focus: $searchFocused) : nil,
@@ -164,7 +164,8 @@ struct ShelfScreen: View {
 
     private var menu: some View {
         Menu {
-            Button(count("未归档", data?.inboxCount), systemImage: "tray") { navigation.push(.inbox) }
+            Button(count("未分类", data?.inboxCount), systemImage: "tray") { navigation.push(.inbox) }
+            Button("归档", systemImage: "archivebox") { navigation.push(.archive) }
             Button(count("回收站", data?.trashCount), systemImage: "trash") { navigation.push(.trash) }
             Button("设置", systemImage: "gearshape") { navigation.push(.settings) }
         } label: {
@@ -216,13 +217,13 @@ private struct ShelfLine: View {
     }
 }
 
-/// 有没归类的灵感时的提醒（注意色的图标）：点它去未归档整理。
+/// 有没归类的灵感时的提醒（注意色的图标）：点它去未分类整理。
 private struct InboxReminder: View {
     let count: Int
     @Environment(\.palette) private var palette
 
     var body: some View {
-        ShelfLine(route: .inbox, symbol: "tray", tint: palette.attention, title: "未归档", detail: "\(count) 条待整理")
+        ShelfLine(route: .inbox, symbol: "tray", tint: palette.attention, title: "未分类", detail: "\(count) 条待整理")
     }
 }
 

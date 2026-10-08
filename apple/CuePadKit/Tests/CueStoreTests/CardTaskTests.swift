@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 灵感与任务是同一种记录（Card）：差别只是"要做"（`todoAt`）。任务有三态、可有子任务与素材（挂在任务下的灵感），
+/// 灵感与任务是同一种记录（Card）：差别只是"要做"（`todoAt`）。任务有三态、可有子任务与相关灵感（挂在任务下的灵感），
 /// 正文就是给 Agent 的话；交给 Agent 的会话回写到任务。只有任务能当上级；去掉"要做"或进回收站时，下级按原顺序提到它的位置。
 @Suite struct CardTaskTests {
   let fixture = try! Fixture()
@@ -29,7 +29,7 @@ import Testing
     #expect(back.body == "把发言轮次修好\n重连的人不再插队")
   }
 
-  @Test func 只有任务能当上级_灵感挂在任务下是素材_挂到灵感下拒绝() async throws {
+  @Test func 只有任务能当上级_灵感挂在任务下是相关灵感_挂到灵感下拒绝() async throws {
     let task = try await store.createTask("换首图", in: nil)
     let shot = try await store.createCard(in: nil, body: "候选图截图")
     let other = try await store.createCard(in: nil, body: "别的灵感")
@@ -62,7 +62,7 @@ import Testing
     #expect(try await card(parent.id).deletedAt != nil)
   }
 
-  @Test func 交给Agent的任务关联会话并进行中_灵感发出去不变成任务() async throws {
+  @Test func 交给Agent的任务关联会话并进行中_灵感也记下会话但不变成任务() async throws {
     let task = try await store.createTask("修重连", in: nil)
     let idea = try await store.createCard(in: nil, body: "随便问问")
     try await store.recordSend("修重连", to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: task.id)
@@ -70,11 +70,11 @@ import Testing
 
     let sent = try await card(task.id)
     #expect(sent.status == .inProgress && sent.piSessionID == "s1")
-    let unsent = try await card(idea.id)
-    #expect(unsent.isTask == false && unsent.piSessionID == nil)
+    let handed = try await card(idea.id)
+    #expect(handed.isTask == false && handed.status == nil && handed.piSessionID == "s1")
   }
 
-  @Test func 计数只算顶层任务_素材与灵感不算() async throws {
+  @Test func 计数只算顶层任务_相关灵感与灵感不算() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let top = try await store.createTask("上线", in: project.id)
     let material = try await store.createCard(in: project.id, body: "截图")

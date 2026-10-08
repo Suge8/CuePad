@@ -57,12 +57,12 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
 }
 
-/// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是"要做"（`todoAt`）。
-/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与素材（灵感），正文就是给 Agent 的话。
+/// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
+/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与相关灵感（灵感），正文就是给 Agent 的话。
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// nil 表示未归档（收件箱）。
+  /// nil 表示未分类（收件箱）。
   public internal(set) var projectID: UUID?
   /// 纯字符串正文：分割线为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String
@@ -79,15 +79,17 @@ public struct Card: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 上级任务；nil 是顶层。只有任务能当上级，层级最多 `maxDepth`；上级不在库里或不可见时按顶层看待。
   public internal(set) var parentID: UUID?
-  /// 点"要做"的时间：有值是任务，nil 是灵感。
+  /// "设为任务"的时间：有值是任务，nil 是灵感。
   public internal(set) var todoAt: Date?
   /// 开始做的时间（手动置为进行中、或交给 Agent 时）；回到待办时清空。
   public internal(set) var startedAt: Date?
   public internal(set) var completedAt: Date?
-  /// 交给 Agent 的会话（Pi 自己的会话 id），任务行据此显示会话此刻的状态。
+  /// 交给 Agent 的会话（Pi 自己的会话 id），灵感与任务的行据此显示会话此刻的状态。
   public internal(set) var piSessionID: String?
+  /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
+  public internal(set) var archivedAt: Date?
 
-  /// 任务 → 子任务 → 子任务（素材挂在哪一级都算在它下面一级）。
+  /// 任务 → 子任务 → 子任务（相关灵感挂在哪一级都算在它下面一级）。
   public static let maxDepth = 3
 
   public var isTask: Bool { todoAt != nil }
@@ -104,7 +106,7 @@ public enum TaskStatus: String, Sendable, CaseIterable {
   case todo, inProgress, done
 }
 
-/// 同一项目（nil = 未归档）里某一状态的任务（`CueStore.tasks(_:)`）。
+/// 同一项目（nil = 未分类）里某一状态的任务（`CueStore.tasks(_:)`）。
 public struct TaskGroup: Equatable, Sendable {
   public let projectID: UUID?
   public internal(set) var tasks: [Card]
@@ -148,7 +150,13 @@ public struct TaskProgress: Equatable, Sendable {
   }
 }
 
-/// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；素材（挂着的灵感）交给过 Agent 算做完——
+/// 灵感或任务交给了 Agent 的哪里：一个会话（Pi 会话 id），或正在开的新会话（还没开好、没认领到）。见 `CueStore.handedSessions`。
+public enum AgentHandoff: Hashable, Sendable {
+  case session(String)
+  case launching
+}
+
+/// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；相关灵感（挂着的灵感）交给过 Agent 算做完——
 /// 它自己有发送记录，或某次发送明确记着带上了它（`SendRecord.partIDs`）。见 `CueStore.childMarks`。
 public struct ChildMark: Equatable, Sendable {
   public let isTask: Bool
@@ -160,7 +168,7 @@ public struct ChildMark: Equatable, Sendable {
   }
 }
 
-/// 卡片挂在哪：某项目（nil = 未归档）的顶层，或某条任务下面（项目随它）。
+/// 卡片挂在哪：某项目（nil = 未分类）的顶层，或某条任务下面（项目随它）。
 public enum CardSlot: Hashable, Sendable {
   case top(project: UUID?)
   case under(UUID)
@@ -255,7 +263,7 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
   /// 按空白拆成多个词，每个词都要命中（子串，大小写不敏感）。卡片按正文命中；项目名只用于单列的项目结果。
   /// 空表示不按文字过滤。
   public var text: String
-  /// 限定所属项目；nil 元素表示未归档；nil 表示不限；空集合无结果。
+  /// 限定所属项目；nil 元素表示未分类；nil 表示不限；空集合无结果。
   public var projects: Set<UUID?>?
   /// true 只要含图片的卡，false 只要不含图片的卡，nil 不限。
   public var hasImages: Bool?
@@ -313,7 +321,7 @@ public struct SearchResults: Sendable {
   public var totalCards: Int
 }
 
-/// 侧栏用：项目（nil = 未归档）的灵感数（顶层的，不含任务与素材）与卡片最近修改时间；没有卡片时 `lastModifiedAt` 为 nil。
+/// 侧栏用：项目（nil = 未分类）的灵感数（顶层的，不含任务与相关灵感）与卡片最近修改时间；没有卡片时 `lastModifiedAt` 为 nil。
 public struct ProjectSummary: Equatable, Sendable {
   public var projectID: UUID?
   public var cardCount: Int
@@ -339,7 +347,7 @@ public enum CueStoreError: Error, Equatable {
   case invalidParent
   /// 挂上去后会超过 `Card.maxDepth` 级。
   case taskTooDeep
-  /// 灵感没有状态：先"要做"。
+  /// 灵感没有状态：先"设为任务"。
   case notATask
 }
 
@@ -357,7 +365,7 @@ extension CueStoreError: LocalizedError {
     case .unsupportedSchemaVersion(let version): "资料库由另一个版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
     case .invalidParent: "只能挂到任务下，不能挂到自己或自己的下级下"
     case .taskTooDeep: "子任务最多 \(Card.maxDepth) 级"
-    case .notATask: "这是灵感，先点「要做」再改状态"
+    case .notATask: "这是灵感，先「设为任务」再改状态"
     }
   }
 }
@@ -380,13 +388,13 @@ extension Card: Record {
   static let table = Table.cards
   static let columns = [
     "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
-    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID",
+    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt",
   ]
   var bindings: [any SQLBindable] {
     let variables = try! JSONEncoder.sorted.encode(variableValues)
     return [
       id, projectID, body, isPinned, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
-      parentID, todoAt, startedAt, completedAt, piSessionID,
+      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt,
     ]
   }
   init(row: Row) {
@@ -395,7 +403,7 @@ extension Card: Record {
       variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(4).utf8))) ?? [:],
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
-      piSessionID: row.textOrNil(14))
+      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15))
   }
 }
 

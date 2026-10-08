@@ -93,6 +93,7 @@ extension DebugScene {
             navigation.sidebar = .all
         case "inbox": open(.inbox)
         case "trash": open(.trash)
+        case "archive": open(.archive)
         case "settings": open(.settings)
         case "editor": await openCard()
         case "send":
@@ -178,7 +179,7 @@ extension DebugScene {
             try? await Task.sleep(for: .seconds(1))
             source.wrappedValue = .cards
         case "attachments":
-            // 先挑未归档里的，没有再挑第一个项目里的
+            // 先挑未分类里的，没有再挑第一个项目里的
             var id = await card(in: nil, store: store)
             if id == nil, let project = try? await store.projects().first { id = await card(in: project.id, store: store) }
             if let id, let card = try? await store.card(id) {

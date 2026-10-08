@@ -4,10 +4,10 @@ import Foundation
 extension Command {
   static let card: [Command] = [
     Command(
-      path: ["card", "list"], summary: "列出灵感（散放的，不含任务与素材；默认所有项目，项目内按手动顺序）",
+      path: ["card", "list"], summary: "列出灵感（散放的，不含任务与相关灵感；默认所有项目，项目内按手动顺序）",
       options: [
         .project("只列该项目"), .inbox, .allProjects, Opt("pinned", "只列资料（长期参考的灵感）"),
-        Opt("trash", "列回收站里单独删除的灵感与任务"),
+        Opt("archived", "列归档的灵感与任务"), Opt("trash", "列回收站里单独删除的灵感与任务"),
       ],
       notes: Schema.defaultProject(otherwise: "列所有项目") + "\n" + Schema.output("[Card]", Schema.card)
     ) { call in
@@ -32,7 +32,7 @@ extension Command {
     Command(
       path: ["card", "add"], summary: "新建灵感（放在项目最前）",
       options: [.project("放进该项目"), .inbox, .body],
-      notes: Schema.defaultProject(otherwise: "进未归档") + "\n"
+      notes: Schema.defaultProject(otherwise: "进未分类") + "\n"
         + "分割线是独占一行的 ---split---，图片是 ![](cuepad://img/<哈希>)。例：printf '第一段\\n---split---\\n第二段' | cuepad card add\n"
         + Schema.output("新建的 Card", Schema.card)
     ) { call in
@@ -53,7 +53,7 @@ extension Command {
       return reply(try await fresh(call, card.id))
     },
     Command(
-      path: ["card", "move"], summary: "把灵感或任务移到另一个项目或未归档", arguments: "<灵感或任务>",
+      path: ["card", "move"], summary: "把灵感或任务移到另一个项目或未分类", arguments: "<灵感或任务>",
       options: [
         .project("目标项目"), .inbox, Opt("after", "放在这一条之后（须在目标项目里）；省略则放最前", value: "灵感或任务"),
       ],
@@ -68,13 +68,23 @@ extension Command {
       return reply(try await fresh(call, card.id))
     },
     Command(
-      path: ["card", "todo"], summary: "要做：灵感变成任务（待办）；--off 回到灵感", arguments: "<灵感或任务>",
-      options: [Opt("off", "取消要做：回到灵感，状态与会话关联清掉，它的下级提到它的位置")],
+      path: ["card", "todo"], summary: "设为任务（待办）；--off 改回灵感", arguments: "<灵感或任务>",
+      options: [Opt("off", "改回灵感：状态与会话关联清掉，它的下级提到它的位置")],
       notes: Schema.output("更新后的 Card", Schema.card)
     ) { call in
       try call.args.expect("灵感或任务")
       let card = try await call.card(call.args.positionals[0])
       try await call.store.setTodo(card.id, !call.args.has("off"))
+      return reply(try await fresh(call, card.id))
+    },
+    Command(
+      path: ["card", "archive"], summary: "归档（连同下级）：不占列表、仍可搜；--off 取回", arguments: "<灵感或任务>",
+      options: [Opt("off", "从归档取回，连同下级回到原处")],
+      notes: Schema.output("更新后的 Card（archivedAt 有值是已归档）", Schema.card)
+    ) { call in
+      try call.args.expect("灵感或任务")
+      let card = try await call.card(call.args.positionals[0])
+      if call.args.has("off") { try await call.store.unarchive(card.id) } else { try await call.store.archive(card.id) }
       return reply(try await fresh(call, card.id))
     },
     Command(
@@ -87,7 +97,7 @@ extension Command {
       return reply(try await fresh(call, card.id))
     },
     Command(
-      path: ["card", "restore"], summary: "从回收站恢复（原项目仍在回收站时回到未归档）", arguments: "<灵感或任务>",
+      path: ["card", "restore"], summary: "从回收站恢复（原项目仍在回收站时回到未分类）", arguments: "<灵感或任务>",
       notes: Schema.output("恢复后的 Card", Schema.card)
     ) { call in
       try call.args.expect("灵感或任务")
@@ -99,6 +109,7 @@ extension Command {
 
   private static func listedCards(_ call: Call) async throws -> [Card] {
     if call.args.has("trash") { return try await call.store.trashedCards() }
+    if call.args.has("archived") { return try await call.store.archived() }
     var cards: [Card] = []
     for project in try await call.store.projects() { cards += try await call.store.cards(in: project.id) }
     return cards + (try await call.store.cards(in: nil))

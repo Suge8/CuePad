@@ -81,6 +81,7 @@ struct MainWindow: View {
         switch workspace.page {
         case .project(let id): ProjectPage(projectID: id).id(id)
         case .inbox: ProjectPage(projectID: nil)
+        case .archive: ArchivePage()
         case .trash: TrashPage()
         }
     }
@@ -321,22 +322,22 @@ private struct WorkspaceShortcuts: View {
     }
 }
 
-/// 提示里的"撤销"：点了拨回去并收起提示。
-struct UndoButton: View {
-    let undo: Workspace.Undo
+/// 提示里的动作（撤销、归档）：点了收起提示并做那件事；撤销另有 ⌘Z。
+struct NoticeActionButton: View {
+    let action: Workspace.NoticeAction
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Button("撤销") { workspace.undo(undo) }
+        Button(action.title) { workspace.run(action) }
         .font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.accent)
         .buttonStyle(PressStyle())
         .padding(.horizontal, 10).frame(height: 28)
-        .keyboardShortcut("z", modifiers: .command)
+        .keyboardShortcut(action.isUndo ? KeyboardShortcut("z", modifiers: .command) : nil)
     }
 }
 
-/// 顶部居中的短提示：操作结果与错误；带撤销的（"要做"开关）右边一个"撤销"（⌘Z）。
+/// 顶部居中的短提示：操作结果与错误；带动作的（撤销、完成后的归档）右边一个按钮，撤销另有 ⌘Z。
 private struct NoticeView: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -352,14 +353,14 @@ private struct NoticeView: View {
                         }
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(notice.isError ? palette.failure : palette.ink)
-                        .padding(.leading, 14).padding(.trailing, notice.undo == nil ? 14 : 4).frame(height: 34)
+                        .padding(.leading, 14).padding(.trailing, notice.action == nil ? 14 : 4).frame(height: 34)
                         .contentShape(.capsule)
                     }
                     .buttonStyle(PressStyle())
                     .disabled(notice.link == nil)
-                    if let undo = notice.undo { UndoButton(undo: undo).padding(.trailing, 4) }
+                    if let action = notice.action { NoticeActionButton(action: action).padding(.trailing, 4) }
                 }
-                .glass(in: .capsule, interactive: notice.link != nil || notice.undo != nil)
+                .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .id(notice.id)
                     .accessibilityAddTraits(.isStaticText)

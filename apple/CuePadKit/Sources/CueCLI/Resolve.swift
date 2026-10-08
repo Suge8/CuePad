@@ -60,7 +60,7 @@ extension Call {
 enum Scope {
   case any, inbox, project(Project)
 
-  /// 新建与移动的落点：未指定等同未归档。
+  /// 新建与移动的落点：未指定等同未分类。
   var target: UUID? {
     if case .project(let project) = self { return project.id }
     return nil
@@ -76,7 +76,7 @@ enum Scope {
 }
 
 extension Call {
-  /// `--project 项目`、`--<nullFlag>`（未归档 / 全局）、`--all-projects` 三选一；都没给时，
+  /// `--project 项目`、`--<nullFlag>`（未分类 / 全局）、`--all-projects` 三选一；都没给时，
   /// `implicit` 为真则用绑定了当前目录的项目，没有就不限。
   func scope(nullFlag: String = "inbox", implicit: Bool = true) async throws -> Scope {
     let ref = args.value("project")

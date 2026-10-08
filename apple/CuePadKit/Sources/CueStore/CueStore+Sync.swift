@@ -188,12 +188,21 @@ extension CueStore {
         }
       }
       if changes.contains(where: \.touchesCards) { try repairCardTree() }
+      if changes.contains(where: \.touchesLaunches) { try claimLaunchedCards() }
     }
     return failures + (try removeFiles(of: removedHashes))
   }
 }
 
 extension RemoteChange {
+  /// 可能让一次"开新会话"被认领：会话记录、投送请求或卡片到了（同步乱序，哪个先到都要认）。
+  fileprivate var touchesLaunches: Bool {
+    switch self {
+    case .save(let row, _): [.piSessionStates, .deliveryRequests, .cards].contains(row.table)
+    case .delete: false
+    }
+  }
+
   fileprivate var touchesCards: Bool {
     switch self {
     case .save(let row, _): row.table == .cards
@@ -252,7 +261,7 @@ extension CueStore {
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
       if key.table == .projects {
         // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的），
-        // 与本地 purgeProject 一致地释放到未归档，内容保留，不悬空隐藏。
+        // 与本地 purgeProject 一致地释放到未分类，内容保留，不悬空隐藏。
         let now = Date.stamp
         try db.run("UPDATE cards SET projectID = NULL, modifiedAt = ? WHERE projectID = ?", [now, key.id])
         try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [key.id])

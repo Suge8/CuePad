@@ -41,8 +41,26 @@ extension CueStore {
   }
 
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或会话名）。
-  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String) throws -> DeliveryRequest {
-    try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start)
+  /// 给了 `card`（从灵感或任务"新会话"交给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）。
+  public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil) throws -> DeliveryRequest {
+    try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card)
+  }
+
+  /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
+  /// 关联到它，任务同时进行中——与发给已有会话后 `recordSend` 的结果一样。会话记录在本机写下（Mac 的记录器）或同步过来时都在这里认领。
+  /// 只认最近一次：带 `cardID` 的请求都是交给 Agent，之后又交给了别处就以那次为准，旧的新会话开好也不抢回（同 `handedSessions`）。
+  func claimLaunchedCards() throws {
+    try db.run(
+      """
+      UPDATE cards SET piSessionID = s.sessionID, modifiedAt = ?1,
+        startedAt = CASE WHEN cards.todoAt IS NOT NULL THEN COALESCE(cards.startedAt, ?1) END,
+        completedAt = CASE WHEN cards.todoAt IS NOT NULL THEN NULL END
+      FROM deliveryRequests r JOIN piSessionStates s
+        ON s.launchToken = CASE WHEN json_valid(r.content) THEN json_extract(r.content, '$.token') END
+      WHERE r.cardID = cards.id AND r.mode = 'start'
+        AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = cards.id)
+        AND cards.piSessionID IS NOT s.sessionID
+      """, [Date.stamp])
   }
 
   /// 连接测试：请 `host` 那台 Mac 收到就回。目标写成那台 Mac 上的 CuePad（执行器不看目标）。
@@ -110,18 +128,28 @@ extension CueStore {
     }
   }
 
-  /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成但未到期的。
-  fileprivate func deleteCompletedDeliveries(before cutoff: Date) throws -> Bool {
-    try write {
-      try db.run(
-        "DELETE FROM deliveryRequests WHERE status IN ('succeeded', 'failed') AND completedAt < ?", [cutoff])
-      return try db.first("SELECT 1 FROM deliveryRequests WHERE status IN ('succeeded', 'failed')") { _ in true } != nil
+  /// 删除完成时间早于 `cutoff` 的请求；返回是否还剩已完成的（还剩就再排一轮）。
+  /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
+  /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
+  /// 留着的算"还剩"：清理一轮轮排下去，认领后的那一轮就带走它。
+  fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date) throws -> Bool {
+    let done = "status IN ('succeeded', 'failed')"
+    let awaitingClaim = """
+      mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?
+        AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
+        AND NOT EXISTS (
+          SELECT 1 FROM piSessionStates s
+          WHERE s.launchToken = CASE WHEN json_valid(deliveryRequests.content) THEN json_extract(deliveryRequests.content, '$.token') END)
+      """
+    return try write {
+      try db.run("DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ? AND NOT (\(awaitingClaim))", [cutoff, claimCutoff])
+      return try db.first("SELECT 1 FROM deliveryRequests WHERE \(done)") { _ in true } != nil
     }
   }
 }
 
 /// Mac 端的投送执行器：只领取发给本机（`hostID` 等于本机）的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，
-/// 把结果写回请求；完成的请求保留 `retention` 后清理。
+/// 把结果写回请求；完成的请求保留 `retention` 后清理（等认领的开新会话请求最多留到 `maxAge`，见 `deleteCompletedDeliveries`）。
 /// - 创建后超过 `maxAge` 还没执行的请求直接判失败（Mac 离线太久后不再突然发出旧内容）；
 /// - 请求引用的图片还没同步到本机时先等着，图片到达（观察到附件变化）后再执行；
 /// - 启动时，上次执行到一半的请求判失败且不重试（可能已经发出）；
@@ -160,7 +188,7 @@ public actor DeliveryExecutor {
   public func start() async throws {
     guard watcher == nil else { return }
     try await store.failInterruptedDeliveries(host: hostID, at: timing.now())
-    _ = try await store.deleteCompletedDeliveries(before: timing.now().addingTimeInterval(-retention.seconds))
+    if try await deleteExpired() { scheduleCleanup() }
     watcher = Task { [store, onIssue] in
       // 附件也要观察：等图片的请求在图片到达时才能继续
       do {
@@ -234,13 +262,18 @@ public actor DeliveryExecutor {
 
   private func scheduleCleanup() {
     guard cleanup == nil else { return }
-    cleanup = Task { [timing, retention, store] in
+    cleanup = Task { [timing, retention] in
       guard (try? await timing.sleep(retention)) != nil else { return }
-      let remaining = await self.reporting {
-        try await store.deleteCompletedDeliveries(before: timing.now().addingTimeInterval(-retention.seconds))
-      }
+      let remaining = await self.reporting { try await self.deleteExpired() }
       self.cleanupFinished(rescheduling: remaining ?? true)
     }
+  }
+
+  /// 清理一轮；返回是否还剩已完成的。
+  private func deleteExpired() async throws -> Bool {
+    let now = timing.now()
+    return try await store.deleteCompletedDeliveries(
+      before: now.addingTimeInterval(-retention.seconds), claimCutoff: now.addingTimeInterval(-maxAge.seconds))
   }
 
   private func cleanupFinished(rescheduling: Bool) {

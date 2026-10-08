@@ -42,7 +42,7 @@ extension CueStore {
     }
   }
 
-  /// 永久删除：连同随项目进回收站的卡片；更早单独进回收站的卡片留在回收站（归入未归档）。
+  /// 永久删除：连同随项目进回收站的卡片；更早单独进回收站的卡片留在回收站（归入未分类）。
   public func purgeProject(_ id: UUID) throws {
     try reportingFileFailures { try write {
       let now = Date.stamp
@@ -89,7 +89,7 @@ extension CueStore {
 // MARK: 卡片（灵感与任务）
 
 extension CueStore {
-  /// 新灵感放在所在项目（nil = 未归档）的最前。项目必须存在且未在回收站，否则抛 `invalidProject`。
+  /// 新灵感放在所在项目（nil = 未分类）的最前。项目必须存在且未在回收站，否则抛 `invalidProject`。
   public func createCard(in project: UUID?, body: String = "") throws -> Card {
     try write {
       try requireLiveProject(project)
@@ -129,7 +129,7 @@ extension CueStore {
     }
   }
 
-  /// "要做"开关。打开：成为待办的任务。关掉：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。
+  /// 设为任务 / 改回灵感。设为任务：成为待办的任务。改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。
   public func setTodo(_ id: UUID, _ on: Bool) throws {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
@@ -147,6 +147,48 @@ extension CueStore {
 
   /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
   /// 灵感没有状态，抛 `notATask`。
+  /// 归档：连同下级一起（已归档的保留原时刻）。
+  public func archive(_ id: UUID) throws {
+    try write {
+      guard try find(Card.self, id) != nil else { throw CueStoreError.notFound }
+      try setArchived([id] + (try CardLinks(db).descendants(of: id)), at: Date.stamp)
+    }
+  }
+
+  /// 从归档取回：连同下级一起回到原处。
+  public func unarchive(_ id: UUID) throws {
+    try write {
+      guard try find(Card.self, id) != nil else { throw CueStoreError.notFound }
+      try setArchived([id] + (try CardLinks(db).descendants(of: id)), at: nil)
+    }
+  }
+
+  /// 任务页"最近完成"的一键归档：已完成的顶层任务（及其下级）全部归档，返回归档了几条任务。
+  /// 没做完的任务下已完成的子任务算在上级的进度里，不单独归档。
+  public func archiveCompletedTasks() throws -> Int {
+    try write {
+      let done = try db.query(
+        """
+        SELECT t.id FROM cards t
+        WHERE t.todoAt IS NOT NULL AND t.completedAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL
+          AND (t.parentID IS NULL OR t.parentID NOT IN (SELECT id FROM cards WHERE todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL))
+        """
+      ) { $0.uuid(0) }
+      let links = try CardLinks(db), now = Date.stamp
+      for id in done { try setArchived([id] + links.descendants(of: id), at: now) }
+      return done.count
+    }
+  }
+
+  private func setArchived(_ ids: [UUID], at time: Date?) throws {
+    let now = Date.stamp
+    try db.run(
+      """
+      UPDATE cards SET archivedAt = ?1, modifiedAt = ?2
+      WHERE id IN (SELECT value FROM json_each(?3)) AND (archivedAt IS NULL) = (?1 IS NOT NULL)
+      """, [time, now, Self.idList(ids)])
+  }
+
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
@@ -169,7 +211,7 @@ extension CueStore {
   }
 
   /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、
-  /// 挂成子任务或素材都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），整棵子树超过 `Card.maxDepth` 级抛 `taskTooDeep`。
+  /// 挂成子任务或相关灵感都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），整棵子树超过 `Card.maxDepth` 级抛 `taskTooDeep`。
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws {
     try write {
       let tree = try CardLinks(db)
@@ -207,7 +249,7 @@ extension CueStore {
     }
   }
 
-  /// 恢复；如果所属项目仍在回收站，卡片回到未归档，否则会不可见。
+  /// 恢复；如果所属项目仍在回收站，卡片回到未分类，否则会不可见。
   public func restoreCard(_ id: UUID) throws {
     try write {
       try db.run(
@@ -374,10 +416,13 @@ extension CueStore {
       try insert(record)
       try registerImages(in: content)
       if let card, target.kind == .known(.piSession), let session = target.ref {
+        // 灵感与任务都记下交给了哪个会话；任务另外进行中
         try db.run(
           """
-          UPDATE cards SET piSessionID = ?1, startedAt = COALESCE(startedAt, ?2), completedAt = NULL, modifiedAt = ?2
-          WHERE id = ?3 AND todoAt IS NOT NULL
+          UPDATE cards SET piSessionID = ?1, modifiedAt = ?2,
+            startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END,
+            completedAt = CASE WHEN todoAt IS NOT NULL THEN NULL END
+          WHERE id = ?3
           """, [session, now, card])
       }
       return record
@@ -491,7 +536,7 @@ extension CueStore {
 
 extension CueStore {
   /// 卡片只能归属存在且未在回收站的项目（或不归属）。必须在写事务内调用，
-  /// 与随后的写入之间没有别的写入可以插进来。失效时报错，不静默改成未归档。
+  /// 与随后的写入之间没有别的写入可以插进来。失效时报错，不静默改成未分类。
   fileprivate func requireLiveProject(_ project: UUID?) throws {
     guard let project else { return }
     let live = try db.first("SELECT 1 FROM projects WHERE id = ? AND deletedAt IS NULL", [project]) { _ in true }

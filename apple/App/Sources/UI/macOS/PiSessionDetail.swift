@@ -348,11 +348,24 @@ extension Workspace {
         return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id] ?? session.projectID, recap: session.recap)
     }
 
+    /// 从灵感或任务交给 Agent 的新会话（开在它所在项目绑定的目录）：行上先是"正在开会话"，开好后它关联到新会话。
+    /// 项目没绑目录时为 nil（菜单里不给这一项）。
+    func newSessionHandOff(for card: Card) -> ((String) -> Void)? {
+        guard let project = card.projectID, catalog?.directories[project] != nil else { return nil }
+        let title = catalog?.projects.first { $0.id == project }?.name ?? "新会话", id = card.id
+        return { [self] text in
+            attempt { _ = try await self.startSession(at: .project(project), prompt: text.nonEmpty, title: title, card: id) {} }
+        }
+    }
+
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
     /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
-    func startSession(at place: PiLaunchPlace, prompt: String?, title: String, launched: @escaping () -> Void) async throws -> String {
+    /// `card`：从这条灵感或任务开的，开好后它关联到新会话。
+    func startSession(
+        at place: PiLaunchPlace, prompt: String?, title: String, card: UUID? = nil, launched: @escaping () -> Void
+    ) async throws -> String {
         let token = UUID().uuidString
-        let request = try await services.launch(PiLaunch(place: place, prompt: prompt, token: token), title: title, on: services.hostID)
+        let request = try await services.launch(PiLaunch(place: place, prompt: prompt, token: token), title: title, on: services.hostID, card: card)
         let progress = services.store.observe([.piSessionStates, .deliveryRequests]) { store in
             (try store.piSessionPage(PiSessionQuery(launchToken: token, limit: 1)).items.first?.state.sessionID,
              try store.deliveryRequest(request.id))

@@ -166,7 +166,7 @@ struct SearchPalette: View {
                             let project = data.projects.first { $0.id == group.owner }
                             HStack(spacing: 6) {
                                 ProjectGlyph(project: project, size: 11)
-                                Text(project?.name ?? "未归档")
+                                Text(project?.name ?? "未分类")
                                 Text("\(group.cards.count)").foregroundStyle(.tertiary)
                             }
                             .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
@@ -210,7 +210,7 @@ struct SearchPalette: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(text.title.isEmpty ? "无标题" : text.title).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
-                    Text("\(project?.name ?? "未归档") · \(DateLabel.short(card.modifiedAt))")
+                    Text("\(project?.name ?? "未分类") · \(DateLabel.short(card.modifiedAt))")
                     if let send = data.lastSends[card.id] { SentMark(target: send.target.name) }
                 }
                 .font(.system(size: 11)).foregroundStyle(palette.ink3)
@@ -343,7 +343,7 @@ private struct FilterBar: View {
     @ViewBuilder private var chips: some View {
         FilterToken(name: "项目", value: projectLabel, on: query.project != nil) {
             Button("全部") { query.project = nil }
-            Button("未归档") { query.project = .some(nil) }
+            Button("未分类") { query.project = .some(nil) }
             Divider()
             ForEach(projects) { project in Button(project.name) { query.project = project.id } }
         }
@@ -374,7 +374,7 @@ private struct FilterBar: View {
     private var projectLabel: String {
         switch query.project {
         case .none: "全部"
-        case .some(.none): "未归档"
+        case .some(.none): "未分类"
         case .some(.some(let id)): projects.first { $0.id == id }?.name ?? "全部"
         }
     }

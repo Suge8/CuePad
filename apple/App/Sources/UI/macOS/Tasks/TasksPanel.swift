@@ -50,15 +50,20 @@ struct TasksPanel: View {
             section("进行中", board.inProgress, count: board.counts.inProgress, in: board)
             section("待办", board.todo, count: board.counts.todo, in: board)
             if !board.done.isEmpty {
-                Button {
-                    withAnimation(Motion.quick) { showsCompleted.toggle() }
-                } label: {
-                    Label("最近完成 \(board.done.count)", systemImage: showsCompleted ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                HStack {
+                    Button {
+                        withAnimation(Motion.quick) { showsCompleted.toggle() }
+                    } label: {
+                        Label("最近完成 \(board.done.count)", systemImage: showsCompleted ? "chevron.down" : "chevron.right")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
+                    Spacer()
+                    Button("全部归档") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
+                        .buttonStyle(.plain).help("把最近完成的任务全部归档：不占列表，照样搜得到")
                 }
-                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                 .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4)
-                .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
                 if showsCompleted { rows(board.done) }
             }
         }
@@ -218,14 +223,14 @@ struct NewTaskField: View {
                 .onSubmit(add)
             if choosesProject, let projects = workspace.catalog?.projects, !projects.isEmpty {
                 Menu {
-                    Button("未归档") { chosen = .some(nil) }
+                    Button("未分类") { chosen = .some(nil) }
                     Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
                     let current = projects.first { $0.id == target }
                     HStack(spacing: 4) {
                         ProjectGlyph(project: current, size: 10)
-                        Text(current?.name ?? "未归档").lineLimit(1)
+                        Text(current?.name ?? "未分类").lineLimit(1)
                     }
                     .font(.system(size: 11)).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 8).frame(height: 22)
@@ -233,7 +238,7 @@ struct NewTaskField: View {
                     .contentShape(.capsule)
                 }
                 .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
-                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未归档")")
+                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未分类")")
             }
         }
         .frame(minHeight: 24)

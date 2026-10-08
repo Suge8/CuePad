@@ -64,18 +64,18 @@ struct CardView {
       "id": uuid(card.id), "kind": card.isTask ? "task" : "idea", "status": nullable(card.status?.rawValue),
       "projectId": uuid(card.projectID), "project": nullable(project), "parentId": uuid(card.parentID), "body": card.body,
       "pinned": card.isPinned, "conflictOf": uuid(card.conflictOf), "startedAt": iso(card.startedAt), "completedAt": iso(card.completedAt),
-      "deletedAt": iso(card.deletedAt), "createdAt": iso(card.createdAt), "modifiedAt": iso(card.modifiedAt),
+      "archivedAt": iso(card.archivedAt), "deletedAt": iso(card.deletedAt), "createdAt": iso(card.createdAt), "modifiedAt": iso(card.modifiedAt),
     ]
   }
 
   var line: String {
-    "\(card.status.flatMap { Self.mark[$0] } ?? "")\(short(card.id))  \(project ?? "未归档")  \(card.isPinned ? "★ " : "")\(title(card.body))"
+    "\(card.status.flatMap { Self.mark[$0] } ?? "")\(short(card.id))  \(project ?? "未分类")  \(card.isPinned ? "★ " : "")\(title(card.body))"
       + (card.parentID.map { "  ↳ \(short($0))" } ?? "")
   }
 
   /// `card show` 的文本：元信息，空行，正文原样。
   var detail: String {
-    var rows = ["id: \(card.id.uuidString.lowercased())", "项目: \(project ?? "未归档")"]
+    var rows = ["id: \(card.id.uuidString.lowercased())", "项目: \(project ?? "未分类")"]
     if let status = card.status { rows.append("任务: \(status.rawValue)") }
     if let parent = card.parentID { rows.append("上级: \(parent.uuidString.lowercased())") }
     if card.isPinned { rows.append("资料: 是") }

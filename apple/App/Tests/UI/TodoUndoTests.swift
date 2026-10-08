@@ -17,7 +17,7 @@ struct TodoUndoTests {
         #expect(workspace.notice?.text == "已设为任务")
         #expect(try await store.card(idea.id)?.isTask == true)
 
-        let undo = try #require(workspace.notice?.undo)
+        let undo = try #require(workspace.notice?.action)
         try await undo.run()
         #expect(try await store.card(idea.id)?.isTask == false)
         #expect(try await store.cards(in: nil).map(\.id) == [idea.id])

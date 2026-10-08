@@ -24,7 +24,7 @@ struct CurrentProjectTests {
         #expect(services.settings.currentProject == pinned.id)
     }
 
-    @Test func 当前项目进了回收站_回落到其余项目_没有项目时回落到未归档() async throws {
+    @Test func 当前项目进了回收站_回落到其余项目_没有项目时回落到未分类() async throws {
         let only = try await store.createProject(name: "A", color: "#000000")
         services.settings.currentProject = only.id
         let workspace = Workspace(services: services)
@@ -36,7 +36,7 @@ struct CurrentProjectTests {
         #expect(services.settings.currentProject == nil)
     }
 
-    @Test func 往失效项目存卡_卡落到未归档且可见() async throws {
+    @Test func 往失效项目存卡_卡落到未分类且可见() async throws {
         let trashed = try await store.createProject(name: "A", color: "#000000")
         try await store.trashProject(trashed.id)
         let workspace = Workspace(services: services)
@@ -74,7 +74,7 @@ struct CurrentProjectRaceTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
 
-    @Test func 写入时项目已被删_卡片落到未归档_纠正当前项目并提示() async throws {
+    @Test func 写入时项目已被删_卡片落到未分类_纠正当前项目并提示() async throws {
         let project = try await services.store.createProject(name: "A", color: "#000000")
         services.settings.currentProject = project.id
         let workspace = Workspace(services: services)

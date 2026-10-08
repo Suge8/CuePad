@@ -3,30 +3,51 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 任务就是给 Agent 的话：长按菜单只留没有手势的几项（共用一处定义），任务行看得出话写没写、交没交出去，
-/// 任务浮窗读得到每一次发出去的原文。
+/// 任务就是给 Agent 的话：长按菜单最多四项加删除（共用一处定义），低频的在浮窗与纸页的"⋯"里；
+/// 任务行看得出话写没写、交没交出去，任务浮窗读得到每一次发出去的原文。
 @MainActor
 struct TaskPromptTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
 
-    @Test func 长按菜单_任务按频率排_能在它下面记灵感_换项目不在菜单里_危险项单独在最后() async throws {
-        let task = try await store.createTask("修乱序", in: nil)
-        #expect(CardMenu.sections(for: task) == [[.handToAgent, .start, .newIdea, .untodo], [.trash]])
-
-        try await store.setStatus(task.id, .inProgress)
-        let started = try #require(try await store.card(task.id))
-        #expect(CardMenu.sections(for: started) == [[.handToAgent, .backToTodo, .newIdea, .untodo], [.trash]])
+    @Test func 长按菜单_灵感是交给Agent设为任务移到项目归档_删除单独在最后() async throws {
+        let idea = try await store.createCard(in: nil, body: "想法")
+        #expect(CardMenu.sections(for: idea) == [[.handToAgent, .makeTask, .move, .archive], [.trash]])
     }
 
-    @Test func 长按菜单_灵感以交给Agent打头_资料可设可取消_编辑页里不重复交给Agent() async throws {
-        let idea = try await store.createCard(in: nil, body: "想法")
-        #expect(CardMenu.sections(for: idea) == [[.handToAgent, .todo, .resource, .move], [.trash]])
-        #expect(CardMenu.sections(for: idea, inEditor: true) == [[.todo, .resource, .move], [.trash]])
+    @Test func 长按菜单_任务是交给Agent完成或重新打开归档_删除单独在最后() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        #expect(CardMenu.sections(for: task) == [[.handToAgent, .complete, .archive], [.trash]])
 
+        try await store.setStatus(task.id, .done)
+        let done = try #require(try await store.card(task.id))
+        #expect(CardMenu.sections(for: done) == [[.handToAgent, .reopen, .archive], [.trash]])
+    }
+
+    @Test func 更多菜单_低频操作在浮窗与纸页的更多里() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let sub = try await store.createTask("复现", under: task.id)
+        #expect(CardMenu.more(for: task) == [[.move, .sends, .copy], [.makeIdea, .archive], [.trash]])
+        // 子任务跟着上级走，不单独换项目
+        #expect(CardMenu.more(for: sub) == [[.sends, .copy], [.makeIdea, .archive], [.trash]])
+
+        let idea = try await store.createCard(in: nil, body: "想法")
+        #expect(CardMenu.more(for: idea) == [[.makeTask, .resource, .move, .copy], [.archive], [.trash]])
         try await store.updateCard(idea.id) { $0.isPinned = true }
-        let reference = try #require(try await store.card(idea.id))
-        #expect(CardMenu.sections(for: reference) == [[.handToAgent, .todo, .unresource, .move], [.trash]])
+        #expect(CardMenu.more(for: try #require(try await store.card(idea.id)))[0] == [.makeTask, .unresource, .move, .copy])
+    }
+
+    @Test func 完成任务后提示里给归档_点了就归档() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let workspace = Workspace(services: rig.services)
+
+        try await workspace.toggle(task)
+        #expect(workspace.notice?.text == "已完成")
+        let action = try #require(workspace.notice?.action)
+        #expect(action.title == "归档")
+
+        try await action.run()
+        #expect(try await store.card(task.id)?.archivedAt != nil)
     }
 
     @Test func 任务行的提示_只有标题是没写_写了要求是已写_交给过Agent是已交出() async throws {

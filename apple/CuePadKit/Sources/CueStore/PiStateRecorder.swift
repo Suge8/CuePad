@@ -86,6 +86,7 @@ extension CueStore {
             WHEN piSessionStates.notify IS NOT NULL AND piSessionStates.state = excluded.state THEN piSessionStates.notify
           END
         """, record.bindings)
+      if launchToken != nil { try claimLaunchedCards() }
     }
   }
 

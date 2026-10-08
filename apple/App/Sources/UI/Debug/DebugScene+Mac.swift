@@ -26,6 +26,7 @@ extension DebugScene {
             let first = tasks.first { $0.parentID == nil && $0.projectID == workspace.currentProject }?.id ?? tasks.first?.id
             if scene == "task" { workspace.openCard = first } else { popoverTask = first }
         case "trash": workspace.show(.trash)
+        case "archive": workspace.show(.archive)
         case "editor": workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)
         case "session":
             // ⌘K 会话范围选中 -CuePadSession（见 SearchPalette）；-CuePadChatGrow YES 时之后每 4 秒进来一条回答

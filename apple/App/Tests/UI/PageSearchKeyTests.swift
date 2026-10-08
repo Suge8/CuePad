@@ -10,7 +10,7 @@ struct PageSearchKeyTests {
         Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: "search-key-\(UUID())")!, launchArguments: [:]))
     }
 
-    @Test func 项目页聚焦它自己的搜索_未归档与Agent页回到灵感根页() {
+    @Test func 项目页聚焦它自己的搜索_未分类与Agent页回到灵感根页() {
         let project = UUID()
         let navigation = navigation()
         navigation.projectsPath = [.project(project)]
