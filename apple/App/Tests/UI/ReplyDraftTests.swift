@@ -40,6 +40,14 @@ struct ReplyDraftTests {
         #expect(self.settings(suite).replyDraft(for: session).text.isEmpty)
     }
 
+    @Test func 发出后焦点_Mac留在回复框接着写_手机收起键盘() {
+        #if os(macOS)
+        #expect(PiReplyBar.keepsFocusAfterSend)
+        #else
+        #expect(!PiReplyBar.keepsFocusAfterSend)
+        #endif
+    }
+
     #if os(iOS)
     @Test func 发到Mac带来的卡片写进同一份草稿_已经写的字还在() {
         let session = UUID()

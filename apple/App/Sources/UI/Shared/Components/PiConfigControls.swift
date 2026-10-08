@@ -137,8 +137,10 @@ private struct PiModelCapsule: View {
             }
         } label: {
             HStack(spacing: 5) {
+                // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
                 Image(systemName: "cpu").font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
                     .symbolEffect(.pulse, isActive: pending)
+                    .accessibilityHidden(true)
                 Text(current.map(PiModelLabel.short) ?? "模型").lineLimit(1).truncationMode(.tail)
                     .contentTransition(.opacity)
             }

@@ -83,11 +83,15 @@ struct PiReplyBar: View {
         if answering != nil { answer() } else if let mode = modes.first { send(mode) }
     }
 
-    /// 发出后：手机收起键盘看对话；Mac 焦点留着接着写。
+    /// 发出后焦点去哪，两端只在这里分：手机收起键盘看对话；Mac 焦点留在回复框接着写。
+    #if os(iOS)
+    static let keepsFocusAfterSend = false
+    #else
+    static let keepsFocusAfterSend = true
+    #endif
+
     private func sent() {
-        #if os(iOS)
-        focused = false
-        #endif
+        if !Self.keepsFocusAfterSend { focused = false }
         sentCount += 1
     }
 
