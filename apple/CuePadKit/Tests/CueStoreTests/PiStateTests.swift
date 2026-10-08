@@ -136,6 +136,17 @@ import Testing
   }
 
   /// 等你回答的弹窗立即写、答完写回 nil；摘要不归记录器写（是对话的投影），状态变化不改它。
+  /// 同步来的 question 不是本版本写的 JSON：按没有提问读，记录的其余字段照常，不让整条记录读不出来。
+  @Test func aQuestionThatIsNotJSONReadsAsNoQuestionAndTheRestOfTheRecordSurvives() async throws {
+    try await recorder().update(sessionID: "s1", state: .waitingForUser, title: "fix the bug", question: PiQuestion(promptID: "p-1", kind: .confirm, text: "覆盖？"))
+    try RawDB(fixture.url).exec("UPDATE piSessionStates SET question = '覆盖？'")
+
+    let state = try #require(try await states()["s1"])
+
+    #expect(state.question == nil)
+    #expect(state.state == .known(.waitingForUser) && state.title == "fix the bug")
+  }
+
   @Test func questionChangesAreWrittenImmediatelyAndTheRecapIsLeftToTheTranscript() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking)

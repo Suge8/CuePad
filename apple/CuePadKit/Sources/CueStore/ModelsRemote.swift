@@ -99,7 +99,7 @@ public enum PiQuestionKind: String, Sendable, CaseIterable {
 
 /// 等你回答的弹窗。存在同步记录的 `question` 字段里（加密，JSON）。
 public struct PiQuestion: Sendable, Equatable {
-  /// 这次弹窗的标识，作答时带上；nil 表示只能在 Pi 里答（多行编辑、自定义界面，或旧版本写的只有文案）。
+  /// 这次弹窗的标识，作答时带上；nil 表示只能在 Pi 里答（多行编辑、自定义界面）。
   public var promptID: String?
   /// 不认识的种类（多行编辑、自定义界面、更新版本的新种类）不能从这里作答。
   public var kind: Open<PiQuestionKind>
@@ -134,12 +134,9 @@ public struct PiQuestion: Sendable, Equatable {
     return String(decoding: data, as: UTF8.self)
   }
 
-  /// 读不成 JSON 的是旧版本写的一段文字：只有文案、不能作答。同步记录里的 `question` 字段即这种存法（通知扩展据此读出问题）。
-  public init(stored: String) {
-    guard let decoded = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else {
-      self.init(promptID: nil, kind: .unknown(""), text: stored)
-      return
-    }
+  /// 同步记录里的 `question` 字段（通知扩展也读它）；读不成 JSON 按没有提问处理，不让整条记录解码失败。
+  public init?(stored: String) {
+    guard let decoded = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else { return nil }
     self.init(promptID: decoded.promptID, kind: Open(rawValue: decoded.kind), text: decoded.text, options: decoded.options)
   }
 }
@@ -622,7 +619,7 @@ extension PiSessionState: Record {
     self.init(
       id: row.uuid(0), sessionID: row.text(1), hostID: row.text(2), title: row.text(3), projectID: row.uuidOrNil(4),
       state: Open(rawValue: row.text(5)), detail: row.textOrNil(6), folder: row.textOrNil(11),
-      lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14).map(PiQuestion.init(stored:)),
+      lastPrompt: row.textOrNil(12), lastReply: row.textOrNil(13), question: row.textOrNil(14).flatMap(PiQuestion.init(stored:)),
       notify: row.textOrNil(10).map(Open.init(rawValue:)), stateSince: row.date(7), busySince: row.dateOrNil(15), createdAt: row.date(8),
       modifiedAt: row.date(9), launchToken: row.textOrNil(16), hosted: row.intOrNil(17) == 1,
       subagents: PiSubagentState.list(stored: row.textOrNil(18)),

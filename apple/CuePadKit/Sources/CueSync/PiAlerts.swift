@@ -46,7 +46,7 @@ public enum PiAlertText {
   public static func content(for record: CKRecord, kind: PiAlert) -> (title: String, body: String)? {
     let fields = record.encryptedValues
     guard let title = (fields["title"] as? String).flatMap({ $0.isEmpty ? nil : $0 }) else { return nil }
-    let question = (fields["question"] as? String).map(PiQuestion.init(stored:))?.text
+    let question = (fields["question"] as? String).flatMap(PiQuestion.init(stored:))?.text
     return content(title: title, question: question, kind: kind)
   }
 
