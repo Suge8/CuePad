@@ -1,4 +1,3 @@
-import CueText
 import Foundation
 
 /// 发送目标种类。

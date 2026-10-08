@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧墨色气泡，Pi 的回答左侧全宽 Markdown（不折叠），

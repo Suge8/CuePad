@@ -50,6 +50,7 @@ struct SettingsView: View {
 
 /// 点击后按下新的组合键；Esc 取消。注册失败时保留原快捷键并显示原因。
 private struct ShortcutRecorder: View {
+    @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var recording = false
     @State private var monitor: Any?
@@ -61,7 +62,7 @@ private struct ShortcutRecorder: View {
                 recording ? stop() : start()
             }
             .monospaced()
-            if let error { Text(error).font(.caption).foregroundStyle(.orange) }
+            if let error { Text(error).font(.caption).foregroundStyle(palette.attention) }
         }
         .onDisappear(perform: stop)
     }
@@ -120,12 +121,13 @@ enum ShortcutText {
 }
 
 private struct AccessibilityRow: View {
+    @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
 
     var body: some View {
         LabeledContent("辅助功能") {
             if services.accessibility.isTrusted {
-                Label("已授权", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                Label("已授权", systemImage: "checkmark.circle.fill").foregroundStyle(palette.ink2)
             } else {
                 HStack {
                     Text("未授权").foregroundStyle(.secondary)
@@ -140,6 +142,7 @@ private struct AccessibilityRow: View {
 }
 
 private struct PiExtensionRow: View {
+    @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var working = false
     @State private var result: (text: String, failed: Bool)?
@@ -152,7 +155,7 @@ private struct PiExtensionRow: View {
             case .notFound: Text("没有找到 pi 命令").foregroundStyle(.secondary)
             case .found(_, let version):
                 Text(version >= .minimumSupported ? "\(version)" : "\(version)（需要 \(PiVersion.minimumSupported) 或更新）")
-                    .foregroundStyle(version >= .minimumSupported ? AnyShapeStyle(.primary) : AnyShapeStyle(.orange))
+                    .foregroundStyle(version >= .minimumSupported ? AnyShapeStyle(.primary) : AnyShapeStyle(palette.attention))
             }
         }
         if let installation = status?.pi, !installation.isSupported {
@@ -167,7 +170,7 @@ private struct PiExtensionRow: View {
             }
         }
         if let result {
-            Text(result.text).font(.caption).foregroundStyle(result.failed ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+            Text(result.text).font(.caption).foregroundStyle(result.failed ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
         }
     }
 

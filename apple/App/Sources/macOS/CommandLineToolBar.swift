@@ -3,6 +3,7 @@ import SwiftUI
 
 /// 设置窗口底部一行：把 `cuepad` 命令行工具装进 PATH（agent 在 bash 里直接调用）。
 struct CommandLineToolBar: View {
+    @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var error: String?
 
@@ -17,8 +18,8 @@ struct CommandLineToolBar: View {
                 if tool.state == .stale { Button("修复链接") { apply(true) } }
             }
             let detail = Self.detail(state: tool.state, pathIncludesLinkDirectory: tool.pathIncludesLinkDirectory)
-            Text(detail.text).font(.caption).foregroundStyle(detail.isWarning ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
-            if let error { Text(error).font(.caption).foregroundStyle(.orange) }
+            Text(detail.text).font(.caption).foregroundStyle(detail.isWarning ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
+            if let error { Text(error).font(.caption).foregroundStyle(palette.attention) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24).padding(.vertical, 12)

@@ -17,7 +17,6 @@ struct CardPicker: View {
     @State private var pages = 1
     @State private var data: Page?
 
-    private nonisolated static let pageSize = 30
     private static let macSize = CGSize(width: 560, height: 620)
 
     var body: some View {
@@ -65,7 +64,7 @@ struct CardPicker: View {
         .onChange(of: settled) { pages = 1 }
         .observing(services.store, [.cards, .projects], id: Key(text: settled, pages: pages), into: $data, onError: workspace.fail) {
             [project, settled, pages] store in
-            try Page.read(text: settled, project: project, limit: Self.pageSize * pages, from: store)
+            try Page.read(text: settled, project: project, limit: PaletteQuery.pageSize * pages, from: store)
         }
     }
 

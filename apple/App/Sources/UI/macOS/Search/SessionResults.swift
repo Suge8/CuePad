@@ -46,11 +46,9 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
     /// 发给这些会话的最近一条投送请求（Pi 的会话 id →）。
     var deliveries: [String: DeliveryRequest]
 
-    static let pageSize = 40
-
     static func read(text: String, pages: Int, from store: isolated CueStore) throws -> SessionSearchData {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max))
-        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: pageSize * pages))
+        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: PiSessionList.pageSize * pages))
         return SessionSearchData(
             live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total,
             deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })

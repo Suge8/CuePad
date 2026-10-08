@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import Foundation
 
 /// 随手记的文案（iOS 底部输入框、Mac 菜单栏面板共用）：记下的都是灵感；占位写明落到哪，记下后的提示写明落点，点它去那里。

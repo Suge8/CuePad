@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 
 /// 灵感与任务的菜单有哪几项、按什么顺序（iOS 与 Mac 同一份，`CardActions` 照着画）。
 /// 长按（Mac 右键）最多四项加删除：主动线是 记下 → 交给 Agent → 完成并归档，所以灵感的交给 Agent 排第一，删除单独在最后。

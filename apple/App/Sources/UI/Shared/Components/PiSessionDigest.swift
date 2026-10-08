@@ -1,5 +1,4 @@
 import CueStore
-import CueText
 import SwiftUI
 
 /// 一个 Pi 会话页一次读取的数据：会话记录、它所在的项目、对话（从早到晚）、发给它的请求（先发的在前）。
