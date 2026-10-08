@@ -1,8 +1,10 @@
 // 测试用 FireCode 配置：只开指挥官（子代理），角色用假模型，零网络。
+// features 逐项写出，名单以本机 FireCode 的 config.ts 里的 FEATURES 为准：它删了某个开关（如 bark）就会拒绝整份配置、
+// 什么都不加载，`PiProcess.requireFirecodeConfigAccepted` 会带着它的原文报出来。
 {
 	"features": {
 		"header": false, "statusbar": false, "tools": false, "presets": false, "rename": false, "stats": false,
-		"claudeSub": false, "openaiNative": false, "bark": false, "review": false, "master": true, "watcher": false
+		"claudeSub": false, "openaiNative": false, "review": false, "master": true, "watcher": false
 	},
 	"master": {
 		"autoActivate": true,

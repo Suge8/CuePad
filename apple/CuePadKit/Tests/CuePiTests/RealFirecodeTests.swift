@@ -16,8 +16,13 @@ struct RealFirecodeTests {
         try await eventually("桥发现指挥官会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
 
         try pi.prompt("[[subagent:ui]]")
-        try await eventually("子代理出现在指挥官会话的摘要里", timeout: .seconds(20)) {
-            bridge.sessions.first?.subagents.map(\.name) == ["ui"]
+        do {
+            try await eventually("子代理出现在指挥官会话的摘要里", timeout: .seconds(20)) {
+                bridge.sessions.first?.subagents.map(\.name) == ["ui"]
+            }
+        } catch {
+            try pi.requireFirecodeConfigAccepted()  // 配置被拒时说原因，不只报"子代理没出现"
+            throw error
         }
 
         // 指挥官自己这轮已经答完，子代理还在跑：仍是工作中，计时从派活那轮开始不重置
