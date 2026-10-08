@@ -3,7 +3,6 @@ import CueDispatch
 import CuePi
 import CueStore
 import Foundation
-import SQLite3
 @testable import CuePad
 
 // MARK: 替身
@@ -113,41 +112,4 @@ final class RecordingWindow: ShellWindow {
     func show() { events.append("show"); isVisible = true; isFocused = true }
     func hide() { events.append("hide"); isVisible = false; isFocused = false }
 }
-
-// MARK: 夹具
-
-/// Electron 版旧库（schema 取其迁移最终状态的必要列）。
-func makeLegacyDatabase(settings: [String: String] = [:], at url: URL? = nil) throws -> URL {
-    let url = url ?? FileManager.default.temporaryDirectory.appending(path: "cuepad-legacy-\(UUID().uuidString).db")
-    let settingRows = settings.map { "INSERT INTO app_settings VALUES ('\($0.key)','\($0.value)',1,2);" }.joined()
-    let sql = """
-        CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT, icon TEXT, color TEXT NOT NULL,
-          sort_order INTEGER NOT NULL DEFAULT 0, is_pinned INTEGER NOT NULL DEFAULT 0, deleted_at INTEGER,
-          delete_source TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-        CREATE TABLE cards (id INTEGER PRIMARY KEY, project_id INTEGER, title TEXT, body TEXT,
-          sort_order INTEGER NOT NULL DEFAULT 0, is_favorite INTEGER NOT NULL DEFAULT 0,
-          numbering TEXT NOT NULL DEFAULT 'none', deleted_at INTEGER, delete_source TEXT,
-          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-        CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT NOT NULL, color TEXT, deleted_at INTEGER,
-          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-        CREATE TABLE card_tags (card_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, created_at INTEGER NOT NULL);
-        CREATE TABLE tasks (id INTEGER PRIMARY KEY, content TEXT NOT NULL, project_id INTEGER,
-          sort_order INTEGER NOT NULL DEFAULT 0, completed_at INTEGER,
-          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-        CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-        INSERT INTO projects VALUES (1,'Flow','target','#4f8ce8',2,1,NULL,NULL,1000,2000);
-        INSERT INTO projects VALUES (2,'Career','book','#e2679c',1,0,NULL,NULL,1100,2100);
-        INSERT INTO cards VALUES (10,1,'Todo','line one',1,0,'none',NULL,NULL,3000,4000);
-        INSERT INTO tasks VALUES (20,'first',1,1,NULL,6000,6000);
-        \(settingRows)
-        """
-    var handle: OpaquePointer?
-    defer { sqlite3_close(handle) }
-    guard sqlite3_open(url.path, &handle) == SQLITE_OK, sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else {
-        throw FixtureError()
-    }
-    return url
-}
-
-struct FixtureError: Error {}
 #endif

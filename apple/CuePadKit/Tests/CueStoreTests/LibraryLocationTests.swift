@@ -16,12 +16,11 @@ import Testing
     }
   }
 
-  @Test func absoluteOverrideIsUsedVerbatimAndDisablesLegacyImport() throws {
+  @Test func absoluteOverrideIsUsedVerbatim() throws {
     let location = try LibraryLocation.resolve(
       environment: ["CUEPAD_LIBRARY_DIR": "/tmp/cuepad-isolated"], base: .applicationSupport(URL(filePath: "/x")))
     #expect(location.directory.path == "/tmp/cuepad-isolated")
     #expect(location.isIsolated)
-    #expect(location.electronDatabase == nil)
     #expect(location.databaseURL.path == "/tmp/cuepad-isolated/cuepad.db")
   }
 
@@ -30,17 +29,15 @@ import Testing
     #expect(location.directory.path == "/support/CuePad/Library" && !location.isIsolated)
   }
 
-  @Test func macLibraryLivesInApplicationSupportAndPointsAtTheElectronDatabase() throws {
+  @Test func macLibraryLivesInApplicationSupport() throws {
     let location = try LibraryLocation.resolve(environment: [:], base: .applicationSupport(URL(filePath: "/support")))
     #expect(location.directory.path == "/support/CuePad/Library")
     #expect(location.databaseURL.path == "/support/CuePad/Library/cuepad.db")
-    #expect(location.electronDatabase?.path == "/support/CuePad/cuepad.db")
   }
 
   @Test func iOSLibraryLivesInTheAppGroupContainer() throws {
     let location = try LibraryLocation.resolve(environment: [:], base: .appGroup(container: URL(filePath: "/group")))
     #expect(location.directory.path == "/group/Library")
-    #expect(location.electronDatabase == nil)
   }
 
   @Test func missingAppGroupEntitlementIsAReadableError() {

@@ -2,7 +2,6 @@
 extension AppServices.StartupIssue {
     var text: String {
         switch self {
-        case .legacyImportFailed(let detail): "导入旧版数据失败，下次启动会重试：\(detail)"
         case .globalShortcutUnavailable(let detail): "全局快捷键没能注册，可在设置里换一个：\(detail)"
         case .captureImportFailed(let detail): "分享进来的内容没能存成灵感，下次会重试：\(detail)"
         case .widgetDataUnavailable(let detail): "小组件数据没能更新：\(detail)"

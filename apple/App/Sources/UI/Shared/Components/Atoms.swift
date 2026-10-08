@@ -37,7 +37,7 @@ struct ProjectGlyph: View {
             .accessibilityHidden(true) // 项目名总在旁边，图标只是装饰
     }
 
-    /// Electron 版的图标名（lucide）映射到 SF Symbols；认不出的用文件夹。
+    /// 项目图标存的是 lucide 图标名，映射到 SF Symbols；认不出的用文件夹。
     static func symbol(_ name: String?) -> String {
         guard let name else { return "tray" }
         if isSymbol(name) { return name }

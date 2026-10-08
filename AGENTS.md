@@ -15,7 +15,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。产品说明见 [README.md](READM
 | `apple/App/Sources/UI` | 界面：`Shared/` 组件、主题、规则、工作区状态；`macOS/`、`iOS/` 各平台界面；`Debug/` 视觉验收场景与演示数据 |
 | `apple/App/Tests` | 以 App 为宿主的服务与界面规则测试 |
 | `apple/CuePadKit/Sources/CueText` | 卡片正文纯文本模型：解析/序列化、标题与按行规则（转为任务）、分割线、变量、光标规范化（仅 Foundation） |
-| `apple/CuePadKit/Sources/CueStore` | SQLite 唯一事实源：表结构、仓储、搜索、资料库位置、跨进程变更通知、旧库导入 |
+| `apple/CuePadKit/Sources/CueStore` | SQLite 唯一事实源：表结构、仓储、搜索、资料库位置、跨进程变更通知 |
 | `apple/CuePadKit/Sources/CueEditor` | TextKit 2 编辑器，AppKit/UIKit 宿主 |
 | `apple/CuePadKit/Sources/CueSync` | CKSyncEngine ↔ CueStore 的记录映射、待推送、冲突与附件 |
 | `apple/CuePadKit/Sources/CueDispatch` | macOS 通用投送：前台应用、剪贴板、定向 `Cmd+V` |

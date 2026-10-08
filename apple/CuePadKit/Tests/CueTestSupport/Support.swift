@@ -45,7 +45,7 @@ public enum TestLibraries {
 }
 
 
-/// 用独立的 sqlite3 连接直接读写库文件：构造并发场景、检查落盘格式与旧库 fixture。
+/// 用独立的 sqlite3 连接直接读写库文件：构造并发场景、检查落盘格式。
 public struct RawDB {
   public let path: String
 

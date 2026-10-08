@@ -84,7 +84,7 @@ shot_mac() {
     rm -f "$pidfile"
   fi
   # 直接启动可执行文件以拿到确切 PID；不经 LaunchServices 激活，不抢当前焦点
-  # 库与 Pi 目录都隔离：不碰真实资料库、不导入 Electron 旧库、不读 ~/.pi 的会话
+  # 库与 Pi 目录都隔离：不碰真实资料库、不读 ~/.pi 的会话
   # （socket 路径受 sun_path 104 字节限制，放 /tmp）
   CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library}")" \
     PI_CODING_AGENT_DIR="$DERIVED/pi-agent" CUEPAD_PI_SOCKET_DIR="/tmp/cuepad-shot-$(id -u)" \

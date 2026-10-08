@@ -9,10 +9,6 @@ extension DebugScene {
         try? await Task.sleep(for: .milliseconds(100))
         resizeWindow()
         _ = await prepareLibrary(workspace)
-        // 像首次启动那样在界面起来之后导入旧版（Electron）资料库副本：项目页数据边导边变
-        if let path = defaults.string(forKey: "CuePadImport") {
-            do { _ = try await workspace.services.store.importElectronLibrary(from: URL(filePath: path)) } catch { workspace.fail(error) }
-        }
         if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.sidebar = .detailOnly }
         switch scene {
         case "collapsed": workspace.sidebar = .detailOnly

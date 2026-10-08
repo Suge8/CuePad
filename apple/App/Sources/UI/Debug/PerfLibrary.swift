@@ -43,13 +43,10 @@ enum PerfLibrary {
         }
         groups[0] = big
 
-        let tasks: [DemoLibrary.LegacyTask] = (0..<200).map { index in
+        let tasks: [DemoLibrary.DemoTask] = (0..<200).map { index in
             (groups[index % projectCount].name, sentence(&random, chinese: index % 3 != 0, words: 4...10), index % 5 == 0)
         }
-        let source = FileManager.default.temporaryDirectory.appending(path: "cuepad-perf-\(UUID().uuidString).db")
-        defer { try? FileManager.default.removeItem(at: source) }
-        try DemoLibrary.writeLegacy(groups, tasks: tasks, to: source)
-        _ = try await store.importElectronLibrary(from: source)
+        try await DemoLibrary.seed(store, groups: groups, tasks: tasks)
 
         let home = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
         let projects = try await store.projects()

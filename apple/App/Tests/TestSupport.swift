@@ -138,7 +138,6 @@ final class TestApp {
     /// 测试里的 Pi 可执行文件（执行器启动会话时用；不真运行）
     nonisolated static let piExecutable = URL(filePath: "/opt/test/bin/pi")
     let window = RecordingWindow()
-    let legacy: URL?
     #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     #endif
@@ -147,18 +146,10 @@ final class TestApp {
     /// 同步引擎的来源；默认用记录型替身 `sync`。
     private let syncSource: AppServices.SyncSource?
 
-    #if os(macOS)
-    init(legacy: URL? = nil, sync source: AppServices.SyncSource? = nil) {
-        self.legacy = legacy
-        syncSource = source
-        services = makeServices()
-    }
-    #else
     init(sync source: AppServices.SyncSource? = nil) {
         syncSource = source
         services = makeServices()
     }
-    #endif
 
     #if os(iOS)
     deinit { UIPasteboard.remove(withName: pasteboardName) }
@@ -180,17 +171,6 @@ final class TestApp {
         PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: directory.appending(path: "sock"))
     }
 
-    /// 没有旧库：隔离目录；有旧库：把它挂到"应用支持目录"里 Electron 版的位置（旧库位置只由这条规则决定）。
-    private func location() -> LibraryLocation {
-        guard let legacy else { return isolatedLocation }
-        let support = directory.appending(path: "support", directoryHint: .isDirectory)
-        let electron = support.appending(path: "CuePad/cuepad.db")
-        try! FileManager.default.createDirectory(at: electron.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? FileManager.default.removeItem(at: electron)
-        try! FileManager.default.createSymbolicLink(at: electron, withDestinationURL: legacy)
-        return try! LibraryLocation.resolve(environment: [:], base: .applicationSupport(support))
-    }
-
     private func makeServices() -> AppServices {
         let mac = MacDependencies(
             pi: PiBridge(socketDirectory: piPaths.socketDirectory),
@@ -208,7 +188,7 @@ final class TestApp {
             updater: updater,
             host: host,
             locatePi: { Self.piExecutable })
-        let services = try! AppServices(location: location(), defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
+        let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services
     }

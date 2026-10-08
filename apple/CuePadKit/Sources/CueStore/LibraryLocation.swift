@@ -13,9 +13,9 @@ public enum LibraryLocationError: Error, Equatable, LocalizedError {
 }
 
 /// 资料库的位置（唯一规则）。库文件 `cuepad.db` 在 `directory` 下，附件目录由 `CueStore.files` 管。
-/// - macOS：`~/Library/Application Support/CuePad/Library/`，并指向 Electron 版数据库以便导入；
+/// - macOS：`~/Library/Application Support/CuePad/Library/`；
 /// - iOS：App Group `group.com.sugeh.cuepad` 共享容器下的 `Library/`（分享扩展、小组件与主 App 共用）；
-/// - 环境变量 `CUEPAD_LIBRARY_DIR`（绝对路径）指向隔离目录，各平台通用，不导入旧库。
+/// - 环境变量 `CUEPAD_LIBRARY_DIR`（绝对路径）指向隔离目录，各平台通用。
 /// 偏好、待处理内容、快照等其他放在库目录里的东西由 App 层自己定名。
 public struct LibraryLocation: Equatable, Sendable {
   public static let environmentKey = "CUEPAD_LIBRARY_DIR"
@@ -39,8 +39,6 @@ public struct LibraryLocation: Equatable, Sendable {
   }
 
   public let directory: URL
-  /// Electron 版数据库；只有 macOS 的默认位置有，且可能不存在。
-  public let electronDatabase: URL?
   /// 是否由环境变量指向隔离目录。
   public let isIsolated: Bool
 
@@ -52,18 +50,15 @@ public struct LibraryLocation: Equatable, Sendable {
     if let override = environment[environmentKey], !override.isEmpty {
       guard override.hasPrefix("/") else { throw LibraryLocationError.relativePath(override) }
       return LibraryLocation(
-        directory: URL(filePath: override, directoryHint: .isDirectory), electronDatabase: nil, isIsolated: true)
+        directory: URL(filePath: override, directoryHint: .isDirectory), isIsolated: true)
     }
     switch base {
     case .appGroup(let container):
       guard let container else { throw LibraryLocationError.appGroupUnavailable(appGroupIdentifier) }
-      return LibraryLocation(
-        directory: container.appending(path: "Library", directoryHint: .isDirectory), electronDatabase: nil,
-        isIsolated: false)
+      return LibraryLocation(directory: container.appending(path: "Library", directoryHint: .isDirectory), isIsolated: false)
     case .applicationSupport(let support):
       return LibraryLocation(
-        directory: support.appending(path: "CuePad/Library", directoryHint: .isDirectory),
-        electronDatabase: support.appending(path: "CuePad/cuepad.db"), isIsolated: false)
+        directory: support.appending(path: "CuePad/Library", directoryHint: .isDirectory), isIsolated: false)
     }
   }
 }

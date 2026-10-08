@@ -25,7 +25,6 @@ extension AppServices {
             await self?.loadPiCheckpoint(for: file)
         }
         tasks = [
-            Task { await importLegacyIfNeeded() },
             Task {
                 do {
                     try await piExtension.refresh()

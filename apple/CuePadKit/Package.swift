@@ -17,7 +17,7 @@ let package = Package(
     targets: [
         // 卡片正文的纯文本模型：解析/序列化、标题与按行规则、分割线、变量、光标规范化。仅依赖 Foundation。
         .target(name: "CueText"),
-        // SQLite 唯一事实源、迁移、仓储、Electron 旧库导入。直接用系统 SQLite3，零第三方依赖。
+        // SQLite 唯一事实源、结构与升级、仓储。直接用系统 SQLite3，零第三方依赖。
         .target(name: "CueStore", dependencies: ["CueText"], linkerSettings: [.linkedLibrary("sqlite3")]),
         // TextKit 2 编辑器宿主（AppKit / UIKit）。
         .target(name: "CueEditor", dependencies: ["CueText"]),
@@ -34,7 +34,7 @@ let package = Package(
         .executableTarget(name: "CueCLI", dependencies: ["CueStore", "CueText"]),
         .testTarget(name: "CueCLITests", dependencies: ["CueCLI", "CueTestSupport"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
-        .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"], exclude: ["Fixtures"]),
+        .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor"]),
         .testTarget(name: "CueDispatchTests", dependencies: ["CueDispatch"]),
         .testTarget(name: "CuePiTests", dependencies: ["CuePi"], exclude: ["Fixtures"]),

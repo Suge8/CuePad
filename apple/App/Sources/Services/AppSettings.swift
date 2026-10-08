@@ -30,7 +30,7 @@ final class AppSettings {
     private var replyDrafts: [UUID: ComposerDraft] = [:]
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
-    /// W3C code 形式的加速键（如 `Alt+Space`），与 Electron 版存储格式一致。
+    /// W3C code 形式的加速键（如 `Alt+Space`）。
     var globalShortcut: String { didSet { defaults.set(globalShortcut, forKey: Key.globalShortcut) } }
     /// 通用投送后是否补发回车。
     var autoSubmit: Bool { didSet { defaults.set(autoSubmit, forKey: Key.autoSubmit) } }
@@ -132,11 +132,5 @@ final class AppSettings {
 
     func setWindowFrame(_ descriptor: String, for name: String) {
         defaults.set(descriptor, forKey: Self.frameKeyPrefix + name)
-    }
-
-    /// 旧版设置只作初始值：用户在新版里设置过的项不覆盖。
-    func adoptLegacy(theme: Theme?, globalShortcut: String?) {
-        if let theme, defaults.object(forKey: Key.theme) == nil { self.theme = theme }
-        if let globalShortcut, defaults.object(forKey: Key.globalShortcut) == nil { self.globalShortcut = globalShortcut }
     }
 }

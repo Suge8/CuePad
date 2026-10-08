@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 回归：墙排好之后才出现、但没有新编辑的卡（首次启动时后台导入旧库、同步下来）不能一律落进"更早"。
+/// 回归：墙排好之后才出现、但没有新编辑的卡（同步下来）不能一律落进"更早"。
 struct WallArrivalTests {
     @Test func 排墙后导入的旧卡按上墙规则补到墙尾_已有位置不动() {
         let calendar = WallTests.calendar

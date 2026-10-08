@@ -106,7 +106,6 @@ final class AppServices {
     #endif
 
     nonisolated enum StartupIssue: Equatable {
-        case legacyImportFailed(String)
         case globalShortcutUnavailable(String)
         /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
         case captureImportFailed(String)

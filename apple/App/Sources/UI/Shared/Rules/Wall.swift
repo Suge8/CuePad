@@ -45,7 +45,7 @@ nonisolated struct WallArrangement: Equatable, Sendable {
         let placed = Set(pinned + wall)
         let known = placed.union(older)
         let touched = cards.filter { $0.modifiedAt > arrangedAt && !placed.contains($0.id) }.sorted(by: Self.newestFirst)
-        // 排墙之后才出现、却没有新编辑的卡（旧库导入、同步下来、别处移入）按上墙规则补到墙尾，不打乱已有位置
+        // 排墙之后才出现、却没有新编辑的卡（同步下来、别处移入）按上墙规则补到墙尾，不打乱已有位置
         let arrived = cards.filter { $0.modifiedAt <= arrangedAt && !known.contains($0.id) }.sorted(by: Self.newestFirst)
 
         // 资料不靠修改时间：设为资料或取消都不改正文，当场进出这一组（新设的在前，取消的回到墙首）

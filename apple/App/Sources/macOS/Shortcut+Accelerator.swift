@@ -1,8 +1,7 @@
 #if os(macOS)
 import Carbon.HIToolbox
 
-/// 快捷键的持久化格式：W3C code 加速键（`Control+Alt+Shift+Super+KeyK`），与 Electron 版一致，
-/// 所以旧库里的 globalShortcut 可以直接采用。键位是物理键码，与键盘布局无关。
+/// 快捷键的持久化格式：W3C code 加速键（`Control+Alt+Shift+Super+KeyK`）。键位是物理键码，与键盘布局无关。
 extension Shortcut {
     private static let modifierNames: [(name: String, modifier: Modifiers)] = [
         ("Control", .control), ("Alt", .option), ("Shift", .shift), ("Super", .command),

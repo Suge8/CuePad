@@ -6,63 +6,6 @@ import Testing
 @testable import CuePad
 
 @MainActor
-struct LegacyImportTests {
-    @Test func 首次启动导入旧库并采用其主题与快捷键_再次启动不重复导入() async throws {
-        let legacy = try makeLegacyDatabase(settings: ["theme": "\"dark\"", "globalShortcut": "\"Alt+KeyZ\""])
-        let rig = TestApp(legacy: legacy)
-
-        await rig.services.importLegacyIfNeeded()
-
-        #expect(try await rig.services.store.projects().map(\.name) == ["Flow", "Career"])  // 置顶的在前
-        #expect(try await rig.services.store.tasks(.todo).flatMap(\.tasks).map(\.body) == ["first"])
-        #expect(rig.services.settings.theme == .dark)
-        #expect(rig.services.settings.globalShortcut == "Alt+KeyZ")
-        #expect(rig.hotkeys.active == [Shortcut(keyCode: 6, modifiers: .option)])
-
-        // 用户在新版里永久删除后，再次启动不能把它导回来
-        let career = try await rig.services.store.projects()[1]
-        try await rig.services.store.purgeProject(career.id)
-        let restarted = rig.relaunch()
-        await restarted.importLegacyIfNeeded()
-        #expect(try await restarted.store.projects().map(\.name) == ["Flow"])
-    }
-
-    @Test func 已有的设置不被旧库覆盖() async throws {
-        let legacy = try makeLegacyDatabase(settings: ["theme": "\"dark\"", "globalShortcut": "\"Alt+KeyZ\""])
-        let rig = TestApp(legacy: legacy)
-        rig.services.settings.theme = .light
-
-        await rig.services.importLegacyIfNeeded()
-
-        #expect(rig.services.settings.theme == .light)
-    }
-
-    @Test func 没有旧库时什么都不做() async throws {
-        let rig = TestApp(legacy: FileManager.default.temporaryDirectory.appending(path: "missing-\(UUID().uuidString).db"))
-
-        await rig.services.importLegacyIfNeeded()
-
-        #expect(rig.services.startupIssues.isEmpty)
-        #expect(try await rig.services.store.projects().isEmpty)
-    }
-
-    @Test func 旧库损坏时报告问题且下次启动重试() async throws {
-        let broken = FileManager.default.temporaryDirectory.appending(path: "broken-\(UUID().uuidString).db")
-        try Data("not a database".utf8).write(to: broken)
-        let rig = TestApp(legacy: broken)
-
-        await rig.services.importLegacyIfNeeded()
-        #expect(rig.services.startupIssues.count == 1)
-
-        try FileManager.default.removeItem(at: broken)
-        _ = try makeLegacyDatabase(at: broken)
-        let restarted = rig.relaunch()
-        await restarted.importLegacyIfNeeded()
-        #expect(try await restarted.store.projects().count == 2)
-    }
-}
-
-@MainActor
 struct GlobalShortcutTests {
     @Test(arguments: [
         ("Alt+Space", Shortcut(keyCode: 49, modifiers: .option)),
@@ -71,7 +14,7 @@ struct GlobalShortcutTests {
         ("Control+F1", Shortcut(keyCode: 122, modifiers: .control)),
         ("Shift+Digit1", Shortcut(keyCode: 18, modifiers: .shift)),
     ])
-    func 旧版加速键字符串与快捷键互转(accelerator: String, shortcut: Shortcut) {
+    func 加速键字符串与快捷键互转(accelerator: String, shortcut: Shortcut) {
         #expect(Shortcut(accelerator: accelerator) == shortcut)
         #expect(shortcut.accelerator == accelerator)
     }

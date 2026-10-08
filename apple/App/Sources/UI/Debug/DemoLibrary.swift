@@ -5,10 +5,9 @@ import UniformTypeIdentifiers
 import CueStore
 import CueText
 import Foundation
-import SQLite3
 
-/// 视觉验收的演示资料库：生成一份 Electron 旧库格式的 SQLite，经正式的导入流程写入（导入保留原修改时间，
-/// 所以墙、"更早"的周/月分组都有真实分布），再补项目介绍、目录绑定、发送记录与 Pi 历史。
+/// 视觉验收的演示资料库：项目与灵感按各自的修改时间写入（`CueStore.seed`，所以墙、"更早"的周/月分组都有真实分布），
+/// 再补任务层级、项目介绍、目录绑定、发送记录与 Pi 历史。
 /// 只在 Debug 构建、隔离资料库、`-CuePadDemo YES` 时运行。
 enum DemoLibrary {
     struct DemoProject {
@@ -18,10 +17,7 @@ enum DemoLibrary {
 
     static func seed(_ store: CueStore) async throws {
         let image = try store.files.store(sampleImage())
-        let source = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(UUID().uuidString).db")
-        defer { try? FileManager.default.removeItem(at: source) }
-        try writeLegacy(projects(image: image), tasks: tasks, to: source)
-        _ = try await store.importElectronLibrary(from: source)
+        try await seed(store, groups: projects(image: image), tasks: tasks)
         try await seedSubtasks(store)
 
         let catalog = projects(image: image)
@@ -104,7 +100,7 @@ enum DemoLibrary {
         ]
     }
 
-    private static let tasks: [LegacyTask] = [
+    private static let tasks: [DemoTask] = [
         ("CuePad", "投送队列超时报错不发键", false),
         ("CuePad", "导入旧数据时保留回收站", false),
         ("CuePad", "菜单栏面板 ⌘↩ 直接发出", false),
@@ -116,7 +112,7 @@ enum DemoLibrary {
         (nil, "续费域名", false),
     ]
 
-    typealias LegacyTask = (project: String?, text: String, done: Bool)
+    typealias DemoTask = (project: String?, text: String, done: Bool)
 
     /// 三级任务：圆桌的"乱序"一句说明、三条提示词（交给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
     /// 其中一条再带两条（第三级默认折起）；CuePad 的"投送超时"一条提示词（会是已回复，行上问要不要标记完成）。
@@ -140,48 +136,19 @@ enum DemoLibrary {
         for content in ["补 3 个重连用例", "跑一遍 16 人压测"] { _ = try await store.createTask(content, under: sort.id) }
     }
 
-    /// 写一份 Electron 旧库格式的 SQLite（之后经正式导入流程写入，导入保留原修改时间）。
-    static func writeLegacy(_ projects: [DemoProject], tasks: [LegacyTask], to url: URL) throws {
-        let now = Date.now.timeIntervalSince1970 * 1000
-        var sql = """
-            CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT, icon TEXT, color TEXT NOT NULL, sort_order INTEGER,
-              is_pinned INTEGER, deleted_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-            CREATE TABLE cards (id INTEGER PRIMARY KEY, project_id INTEGER, title TEXT, body TEXT, sort_order INTEGER,
-              is_favorite INTEGER, numbering TEXT, deleted_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-            CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT NOT NULL, color TEXT, deleted_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-            CREATE TABLE card_tags (card_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, created_at INTEGER NOT NULL);
-            CREATE TABLE tasks (id INTEGER PRIMARY KEY, content TEXT NOT NULL, project_id INTEGER, sort_order INTEGER,
-              completed_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-            CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-
-            """
-        func quoted(_ text: String) -> String { "'" + text.replacingOccurrences(of: "'", with: "''") + "'" }
-        var cardID = 1
-        // 名称为空的一组是未分类的卡
-        for (index, project) in projects.enumerated() {
-            let projectID = project.name.isEmpty ? "NULL" : "\(index + 1)"
-            if !project.name.isEmpty {
-                sql += "INSERT INTO projects VALUES (\(projectID), \(quoted(project.name)), \(quoted(project.icon)), \(quoted(project.color)), \(index), \(project.pinned ? 1 : 0), NULL, \(Int(now)), \(Int(now)));\n"
+    /// 把项目分组与任务写进库；名称为空的一组是未分类的灵感。
+    static func seed(_ store: CueStore, groups: [DemoProject], tasks: [DemoTask]) async throws {
+        let named = groups.filter { !$0.name.isEmpty }
+        func index(of name: String?) -> Int? { name.flatMap { name in named.firstIndex { $0.name == name } } }
+        let now = Date.now
+        let cards = groups.flatMap { group in
+            group.cards.map {
+                SeedCard(project: index(of: group.name), body: $0.text, pinned: $0.favorite, modifiedAt: now - $0.days * 86_400)
             }
-            for card in project.cards {
-                let stamp = Int(now - card.days * 86_400_000)
-                sql += "INSERT INTO cards VALUES (\(cardID), \(projectID), NULL, \(quoted(card.text)), \(cardID), \(card.favorite ? 1 : 0), 'none', NULL, \(stamp), \(stamp));\n"
-                cardID += 1
-            }
-        }
-        for (index, task) in tasks.enumerated() {
-            let project = task.project.flatMap { name in projects.firstIndex { $0.name == name } }.map { "\($0 + 1)" } ?? "NULL"
-            sql += "INSERT INTO tasks VALUES (\(index + 1), \(quoted(task.text)), \(project), \(index), \(task.done ? "\(Int(now))" : "NULL"), \(Int(now)), \(Int(now)));\n"
-        }
-        var handle: OpaquePointer?
-        defer { sqlite3_close(handle) }
-        var message: UnsafeMutablePointer<CChar>?
-        guard sqlite3_open(url.path, &handle) == SQLITE_OK, sqlite3_exec(handle, sql, nil, nil, &message) == SQLITE_OK else {
-            throw DemoError(message: message.map { String(cString: $0) } ?? "sqlite")
-        }
+        } + tasks.map { SeedCard(project: index(of: $0.project), body: $0.text, modifiedAt: now, kind: $0.done ? .doneTask : .task) }
+        try await store.seed(
+            projects: named.map { SeedProject(name: $0.name, icon: $0.icon, color: $0.color, pinned: $0.pinned) }, cards: cards)
     }
-
-    struct DemoError: Error { var message: String }
 
     /// 一张像界面截图的示意图：桌面底色上几块纸片。用 CoreGraphics 画，Mac 与 iOS 共用。
     /// 演示用的主目录：Mac 上是真实主目录（截图用的假 Pi 会话按它归到项目），iOS 只作显示。
