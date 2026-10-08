@@ -58,7 +58,6 @@ struct PiConversation: View {
         if session.state == .known(.error) {
             Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
         }
-
     }
 }
 
