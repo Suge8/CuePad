@@ -4,7 +4,7 @@ import CueText
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// 主窗口底部浮着的随手记：平时一行，占位写明记成什么、落到哪；聚焦或有内容时展开（想法 | 任务、落点、图片）。
+/// 主窗口底部浮着的随手记：平时一行，占位写明落到哪；聚焦或有内容时展开（左上落点、图片）。
 struct CaptureBar: View {
     let project: UUID?
 
@@ -45,8 +45,8 @@ struct CaptureComposer: View {
             VStack(alignment: .leading, spacing: 8) {
                 if expanded {
                     HStack(spacing: 8) {
-                        Spacer(minLength: 8)
                         destinationMenu
+                        Spacer(minLength: 8)
                     }
                     .transition(.opacity)
                     if !images.isEmpty { imageStrip }
@@ -76,7 +76,8 @@ struct CaptureComposer: View {
                 Image(systemName: "square.and.pencil").foregroundStyle(palette.ink2).padding(.leading, 16).padding(.bottom, 13)
                     .accessibilityHidden(true)
             }
-            TextField(CaptureCopy.placeholder(to: destination), text: $text, axis: .vertical)
+            // 展开后落点在胶囊上，占位不再写一遍
+            TextField(expanded ? CaptureCopy.prompt : CaptureCopy.placeholder(to: destination), text: $text, axis: .vertical)
                 .accessibilityLabel("随手记")
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
@@ -96,7 +97,8 @@ struct CaptureComposer: View {
                     .help("记下（↩）")
             }
         }
-        .background(expanded ? palette.paper : .clear, in: .rect(cornerRadius: 16, style: .continuous))
+        // 圆角 = 外框 22 − 内边距 8，与外框同心（菜单栏面板同样内边距 8）
+        .background(expanded ? palette.paper : .clear, in: .rect(cornerRadius: 14, style: .continuous))
         // 收起时整条都是输入区：点到图标或留白也进入输入
         .contentShape(.rect(cornerRadius: 22))
         .onTapGesture { focused = true }
@@ -177,7 +179,7 @@ private struct CaptureSurface: ViewModifier {
     }
 }
 
-/// 输入框里的圆形钮（随手记的记下，与手机的发送钮同一种）：能按时朱砂实心，不能时淡。
+/// 输入框里的圆形钮（随手记的记下，与手机的发送钮同一种）：能按时靛青实心，不能时淡。
 struct RoundSendGlyph: View {
     let enabled: Bool
     @Environment(\.palette) private var palette

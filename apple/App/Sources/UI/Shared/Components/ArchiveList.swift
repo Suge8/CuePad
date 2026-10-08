@@ -16,7 +16,7 @@ struct ArchiveList: View {
         List {
             if let cards {
                 if cards.isEmpty {
-                    EmptyState(mascot: .clean, title: "归档是空的", message: "做完或不再需要的灵感与任务，归档后在这里，照样搜得到")
+                    EmptyState(mascot: .clean, title: "归档是空的", message: "做完的灵感与任务归档后放在这里")
                         .listRowBackground(Color.clear)
                 }
                 ForEach(cards) { card in row(card) }

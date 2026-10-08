@@ -99,8 +99,8 @@ struct TasksScreen: View {
                 .buttonStyle(.plain)
                 .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
                 // 做完的一键收走：归档后不占列表，照样搜得到
-                Button("全部归档", systemImage: "archivebox") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
-                    .font(.footnote.weight(.semibold)).foregroundStyle(palette.ink2)
+                Button("全部归档") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
+                    .font(.footnote).foregroundStyle(palette.ink3)
                     .padding(.horizontal, 4).frame(minHeight: 44).contentShape(.rect)
                     .buttonStyle(.plain)
             }
