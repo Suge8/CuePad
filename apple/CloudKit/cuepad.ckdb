@@ -136,11 +136,12 @@ DEFINE SCHEMA
         role           STRING,
         text           ENCRYPTED STRING,
         at             INT64,
-        toolCount      INT64,
+        tools          ENCRYPTED STRING,
         roundStartedAt INT64,
         deliveryID     STRING,
         createdAt      INT64,
         modifiedAt     INT64,
+        toolCount      INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

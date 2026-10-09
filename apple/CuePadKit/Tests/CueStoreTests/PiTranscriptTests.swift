@@ -29,6 +29,26 @@ import Testing
     #expect(try await store.piMessages(of: "active").count == 1)  // 会话还在活动：消息再旧也留着
   }
 
+  /// 工具活动随回答那条消息存下、原样读回；旧对话（先前没有工具活动）重读会话文件时补上，内容没变就不改写记录。
+  @Test func toolActivityIsStoredWithTheReplyAndFilledInWhenAnOldMessageIsWrittenAgain() async throws {
+    let at = Date.now
+    let tools = PiChatMessage.Tools(
+      edits: 1, commands: 1, failed: 1,
+      items: [.init(kind: .edit, target: "a.swift", added: 3, removed: 1), .init(kind: .command, target: "swift test", failed: true)])
+    func reply(_ tools: PiChatMessage.Tools?) -> PiChatMessage {
+      PiChatMessage(sessionID: "s", entryID: "p1", seq: 2, role: .pi, text: "好了", at: at, tools: tools, roundStartedAt: at.addingTimeInterval(-30))
+    }
+    try await store.writePiTranscript(PiTranscript(sessionID: "s", messages: [reply(nil)], recap: PiRecap()))
+    #expect(try await store.piMessages(of: "s").first?.tools == nil)
+
+    try await store.writePiTranscript(PiTranscript(sessionID: "s", messages: [reply(tools)], recap: PiRecap()))
+    let filled = try #require(try await store.piMessages(of: "s").first)
+    #expect(filled.tools == tools)
+
+    try await store.writePiTranscript(PiTranscript(sessionID: "s", messages: [reply(tools)], recap: PiRecap()))
+    #expect(try await store.piMessages(of: "s").first?.modifiedAt == filled.modifiedAt)
+  }
+
   @Test func overlongTextIsCutAtTheLimit() {
     let message = PiChatMessage(sessionID: "s", entryID: "e", seq: 1, role: .pi, text: String(repeating: "长", count: 9_000), at: .now)
     #expect(message.text.count == PiChatMessage.textLimit && message.text.hasSuffix("…"))

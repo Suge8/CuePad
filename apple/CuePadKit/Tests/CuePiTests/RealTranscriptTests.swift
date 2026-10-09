@@ -37,7 +37,7 @@ struct RealTranscriptTests {
         #expect(messages.map(\.role) == [.user, .pi, .user, .pi, .pi])
         #expect(messages.map(\.text).prefix(4) == ["第一问", "ECHO 第一问 IMAGES[]", "[[tool:echo TOOL-OUTPUT-42]]", "TOOL_DONE"])
         #expect(!messages.contains { $0.text.contains("TOOL-OUTPUT-42\n") || $0.text == "TOOL-OUTPUT-42" })  // 工具输出不进对话
-        #expect(messages.map(\.toolCount) == [0, 0, 0, 1, 0])
+        #expect(messages.map { $0.tools?.commands } == [nil, nil, nil, 1, nil])
         #expect(messages[3].roundStartedAt.map { $0 <= messages[3].at } == true)
         #expect(messages.map(\.seq) == messages.map(\.seq).sorted() && Set(messages.map(\.seq)).count == 5)
         // 摘要：最近一轮做完的问答（机器消息那轮沿用你说的那句），没有进行中的提问
@@ -50,6 +50,23 @@ struct RealTranscriptTests {
         let next = try PiHistory.index(file: file, from: update.checkpoint)
         #expect(next.transcript.map(\.text) == ["第三问", "ECHO 第三问 IMAGES[]"])
         #expect(next.recap.lastPrompt == "第三问")
+    }
+
+    /// 真实 Pi 写出的工具结果行（键序、isError）决定摘要读不读得到失败：跑一条成功的命令、写一个文件、再跑一条退出码非 0 的命令。
+    @Test func realToolResultsDecideWhichCallsFailed() async throws {
+        let (pi, bridge, file) = try await rig()
+        defer { bridge.stop(); pi.stop() }
+
+        try pi.prompt("[[tool:echo ok]]")
+        try await eventually("成功的一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 1) }
+        try pi.prompt("[[write:out.txt]]")
+        try await eventually("写文件的一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 2) }
+        try pi.prompt("[[tool:false]]")
+        try await eventually("失败的一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 3) }
+
+        let tools = try PiHistory.index(file: file, from: nil).transcript.filter { $0.role == .pi }.map(\.tools)
+        #expect(tools.map { $0?.commands } == [1, 0, 0] && tools.map { $0?.edits } == [0, 1, 0] && tools.map { $0?.failed } == [0, 0, 1])
+        #expect(tools[1]?.items.first?.target == "out.txt" && tools[2]?.items.first?.failed == true)
     }
 
     @Test func aPromptStillRunningIsPendingInTheRecap() async throws {
