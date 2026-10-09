@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 未分类：还没归进项目的灵感，一条一行，最近的在前。点开看全文；右滑交给 Agent，左滑设为任务或移到项目（归完就离开这里）；
+/// 未分类：还没归进项目的灵感，一条一行，最近的在前。点开看全文；右滑挂到任务，左滑设为任务或移到项目（归完就离开这里）；
 /// 交给过 Agent 的行尾是那个会话的状态点。
 struct InboxScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -58,7 +58,7 @@ struct InboxScreen: View {
         .buttonStyle(.plain)
         .listRowBackground(palette.paper)
         .swipeActions(edge: .leading) {
-            Button("交给 Agent", systemImage: "paperplane.fill") { navigation.handToAgent(card) }.tint(palette.signature)
+            Button("挂到任务", systemImage: "checklist.checked") { workspace.attaching = card }.tint(palette.signature)
         }
         .swipeActions(edge: .trailing) {
             Button("设为任务", systemImage: "checklist") { workspace.toggleTodo(card.id, true) }.tint(palette.ink)

@@ -106,6 +106,8 @@ final class Workspace {
     /// 各张卡在纸页开合中的状态，按卡分开（见 `CardPresence`）。
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
     var overlay: Overlay?
+    /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
+    var attaching: Card?
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?

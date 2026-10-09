@@ -18,7 +18,7 @@ struct CaptureBar: View {
 }
 
 /// Mac 的随手记（底部输入栏与菜单栏面板共用），结构与文案同手机（`CaptureCopy`、`CaptureDraft`）：
-/// 落点项目、附图；↩ 记成灵感（⌥↩ 换行），记下后提示落点、点提示去那里；另可 ⌘↩ 直接发出（不存卡）。
+/// 落点项目、附图；↩ 记成灵感（⌥↩ 换行），记下后提示落点、点提示去那里；另可 ⌘↩ 发到应用或复制（不存卡，没有 Agent 会话）。
 struct CaptureComposer: View {
     /// 没手动换过落点时落在哪（主窗口是正在看的项目，菜单栏面板是当前项目）。
     let defaultProject: UUID?
@@ -40,10 +40,9 @@ struct CaptureComposer: View {
     private var expanded: Bool { pinnedOpen || focused || !text.isEmpty || !images.isEmpty }
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    /// 有字、没有图时才能发出去（发图走纸页）。
+    /// 有字、没有图时才能发出去（发图走纸页）：发到应用或复制，是次要动作；记下（↩）是主动作。随手记记下的是灵感，
+    /// 发给 Agent 只经任务的提示词，所以这里的目标里没有 Agent 会话。
     private var showsSend: Bool { !trimmed.isEmpty && images.isEmpty }
-    /// 发送钮这时是主钮（发给 Agent，`Workspace.sendStyle`）：记下退成次钮，一处只有一颗靛青（↩ 照样记下）。
-    private var sendIsPrimary: Bool { showsSend && workspace.sendStyle(workspace.effectiveChoice(for: project)) == .primary }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -131,7 +130,7 @@ struct CaptureComposer: View {
     }
 
     private var saveButton: some View {
-        Button(action: save) { SubmitGlyph(.save, enabled: !draft.isEmpty && !saving, prominent: !sendIsPrimary, size: .small) }
+        Button(action: save) { SubmitGlyph(.save, enabled: !draft.isEmpty && !saving, size: .small) }
             .buttonStyle(.plain)
             .disabled(draft.isEmpty || saving)
             .accessibilityLabel("记下")
@@ -139,7 +138,7 @@ struct CaptureComposer: View {
     }
 
     private var sendControl: some View {
-        SendControl(project: project, compact: pinnedOpen) { send($0) }
+        SendControl(project: project, agents: false, compact: pinnedOpen) { send($0) }
     }
 
     private var destinationMenu: some View {

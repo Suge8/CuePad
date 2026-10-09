@@ -263,7 +263,7 @@ struct SearchPalette: View {
     }
 
     private func sendSelected(_ card: Card) async {
-        await workspace.send(Outgoing.text(of: card), via: workspace.effectiveChoice(for: card.projectID), card: card.id)
+        await workspace.send(Outgoing.text(of: card), via: workspace.effectiveChoice(for: card.projectID, agents: CardMenu.handsToAgent(card)), card: card.id)
     }
 
     private func groups(_ data: PaletteData) -> [(owner: UUID?, cards: [Card])] {

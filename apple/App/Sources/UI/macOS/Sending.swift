@@ -17,11 +17,13 @@ extension Workspace {
 
     /// 当前生效的目标：用户选过或发过的（指向的 Pi 会话已结束时照样保留，界面写"已结束"，不悄悄换掉；同一个 Pi 会话重新打开了就接回新开的那个），
     /// 否则本项目的 Pi 会话——在线的优先，都结束了就是刚结束的那个（同样写"已结束"，不退回到应用）——否则上一个前台应用。
-    func effectiveChoice(for project: UUID?) -> AppServices.Destination {
-        if let sendChoice {
+    /// `agents` 为 false（发的是灵感：发给 Agent 只经任务的提示词，`CardMenu.handsToAgent`）时目标只有应用与剪贴板，选过的会话也不算。
+    func effectiveChoice(for project: UUID?, agents: Bool) -> AppServices.Destination {
+        if let sendChoice, agents || !sendChoice.isPi {
             if let live = current(sendChoice) { return live }
             if case .pi(let id, _) = sendChoice, services.pi.endedSessions[id] != nil { return sendChoice }
         }
+        guard agents else { return .app(.lastFrontmost) }
         if let live = liveSessions(in: project).first { return .pi(live.id, .send) }
         if let ended = endedSessions(in: project).first { return .pi(ended.id, .send) }
         return .app(.lastFrontmost)
@@ -168,6 +170,10 @@ extension Workspace {
                 remembering: .pi(pending.session, .send))
         }
     }
+}
+
+extension AppServices.Destination {
+    var isPi: Bool { if case .pi = self { true } else { false } }
 }
 
 /// Pi 会话（在线与本次运行里已结束的）或项目目录绑定变化时，重算会话归属的项目、记下结束的先后。

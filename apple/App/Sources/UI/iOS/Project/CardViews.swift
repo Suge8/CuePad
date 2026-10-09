@@ -2,13 +2,12 @@
 import CueStore
 import SwiftUI
 
-/// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；右滑交给 Agent、左滑设为任务；交给过 Agent 时右上角是那个会话的状态点；长按是菜单。
+/// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；右滑挂到任务、左滑设为任务；交给过 Agent 时右上角是那个会话的状态点；长按是菜单。
 struct CardTileView: View {
     let entry: CardEntry
     let lastTarget: String?
     let floated: Bool
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
 
@@ -43,16 +42,16 @@ struct CardTileView: View {
         }
         .buttonStyle(CardPressStyle())
         .zoomSource(card.id, in: zoom)
-        .rowSwipe(right: .handToAgent(card, in: navigation), left: .makeTask(card.id, in: workspace))
+        .rowSwipe(right: .attachToTask(card, in: workspace), left: .makeTask(card.id, in: workspace))
         .contextMenu { CardActions(card: card) }
         .ideaDrag(card.id)
     }
 }
 
 extension SwipeAction {
-    /// 灵感上右滑：交给 Agent（主动作，浮起交给 Agent 的输入框）。
-    @MainActor static func handToAgent(_ card: Card, in navigation: Navigation) -> SwipeAction {
-        SwipeAction(symbol: "paperplane.fill") { navigation.handToAgent(card) }
+    /// 灵感上右滑：挂到任务（主动作，弹出选任务的面板）。
+    @MainActor static func attachToTask(_ card: Card, in workspace: Workspace) -> SwipeAction {
+        SwipeAction(symbol: "checklist.checked") { workspace.attaching = card }
     }
 
     /// 灵感上左滑：设为任务（提示里可撤销）。
@@ -115,7 +114,6 @@ struct OlderRow: View {
     let isFirst: Bool
     let isLast: Bool
     @Environment(Workspace.self) private var workspace
-    @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
 
@@ -146,7 +144,7 @@ struct OlderRow: View {
             topLeadingRadius: isFirst ? Self.radius : 0, bottomLeadingRadius: isLast ? Self.radius : 0,
             bottomTrailingRadius: isLast ? Self.radius : 0, topTrailingRadius: isFirst ? Self.radius : 0, style: .continuous))
         .zoomSource(card.id, in: zoom)
-        .rowSwipe(right: .handToAgent(card, in: navigation), left: .makeTask(card.id, in: workspace))
+        .rowSwipe(right: .attachToTask(card, in: workspace), left: .makeTask(card.id, in: workspace))
         .contextMenu { CardActions(card: card) }
         .ideaDrag(card.id)
     }

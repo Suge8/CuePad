@@ -415,8 +415,7 @@ private struct CircleGlyph: View {
 }
 
 /// 输入框右下角的提交钮：存下（记成灵感）是打勾，发出（交给 Agent、回复、开新会话）是向上箭头——
-/// 两种动作长得不一样，记下不会被看成发出。能按时靛青实心（主动作），按不了（同步不通、正在提交）时淡；
-/// 旁边另有主钮时（Mac 随手记里能一按就发的发送钮）`prominent` 为 false，是墨色淡底的次钮。
+/// 两种动作长得不一样，记下不会被看成发出。能按时靛青实心（主动作），按不了（同步不通、正在提交）时淡。
 struct SubmitGlyph: View {
     enum Action {
         case save, send
@@ -431,23 +430,20 @@ struct SubmitGlyph: View {
 
     let action: Action
     let enabled: Bool
-    var prominent = true
     var size = Size.regular
     @Environment(\.palette) private var palette
 
-    init(_ action: Action, enabled: Bool, prominent: Bool = true, size: Size = .regular) {
+    init(_ action: Action, enabled: Bool, size: Size = .regular) {
         self.action = action
         self.enabled = enabled
-        self.prominent = prominent
         self.size = size
     }
 
     var body: some View {
-        let primary = enabled && prominent
         CircleGlyph(
-            systemImage: action.symbol, ink: primary ? palette.onSignature : enabled ? palette.ink : palette.ink3,
-            fill: primary ? palette.signature : palette.fill, size: size)
-            .animation(Motion.quick, value: primary)
+            systemImage: action.symbol, ink: enabled ? palette.onSignature : palette.ink3, fill: enabled ? palette.signature : palette.fill,
+            size: size)
+            .animation(Motion.quick, value: enabled)
     }
 }
 

@@ -35,6 +35,7 @@ struct MainWindow: View {
         } message: {
             Text([DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"))
         }
+        .sheet(item: $workspace.attaching) { TaskPicker(idea: $0).environment(workspace) }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
         .modifier(SessionProjectsTracker(workspace: workspace))

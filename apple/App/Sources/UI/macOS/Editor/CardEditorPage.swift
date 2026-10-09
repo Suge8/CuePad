@@ -160,7 +160,7 @@ struct CardEditorPage: View {
 
     /// 提示词卡上的"交给 Agent"：发给当前目标（与底部输入栏、灵感纸页同一个），发给 Pi 会话时提示词关联到它。
     private func hand(_ prompt: Card) {
-        let choice = workspace.effectiveChoice(for: prompt.projectID), text = Outgoing.text(of: prompt), id = prompt.id
+        let choice = workspace.effectiveChoice(for: prompt.projectID, agents: true), text = Outgoing.text(of: prompt), id = prompt.id
         Task { await workspace.send(text, via: choice, card: id) }
     }
 
@@ -339,7 +339,7 @@ struct CardEditorPage: View {
         [
             CueSelectionAction(title: "发送选中部分", systemImage: "paperplane") { stored in
                 let text = Outgoing.text(body: stored, values: card.variableValues)
-                Task { await workspace.send(text, via: workspace.effectiveChoice(for: card.projectID), card: card.id) }
+                Task { await workspace.send(text, via: workspace.effectiveChoice(for: card.projectID, agents: CardMenu.handsToAgent(card)), card: card.id) }
             },
             CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
                 workspace.convertToTasks(stored, in: card.projectID)
@@ -371,7 +371,8 @@ private enum SaveState: Equatable {
     }
 }
 
-/// 编辑页底部的玻璃操作栏。选中文字时发送只发选中的部分，并多一个"转为任务"。
+/// 编辑页底部的玻璃操作栏。灵感的主动作是"挂到任务"（⌘↩），发送只是次要的发到应用或复制；提示词的主动作是发送（可发给 Agent，⌘↩）。
+/// 选中文字时发送只发选中的部分，并多一个"转为任务"。
 private struct EditorBar: View {
     let card: Card
     let text: String
@@ -407,11 +408,32 @@ private struct EditorBar: View {
                     Text("选中部分").font(.system(size: 12, weight: .medium)).foregroundStyle(palette.ink3)
                         .transition(.opacity)
                 }
-                let start = workspace.newSessionHandOff(for: card)
-                SendControl(project: card.projectID, newSession: start.map { start in { start(outgoing(whole: false)) } }) { send($0, whole: false) }
+                if CardMenu.handsToAgent(card) {
+                    let start = workspace.newSessionHandOff(for: card)
+                    SendControl(project: card.projectID, agents: true, newSession: start.map { start in { start(outgoing(whole: false)) } }) {
+                        send($0, whole: false)
+                    }
+                } else {
+                    SendControl(project: card.projectID, agents: false, bindsReturn: false) { send($0, whole: false) }
+                    attach
+                }
             }
             .animation(Motion.quick, value: selecting)
         }
+    }
+
+    /// 灵感的主动作：挂到任务（弹出选任务的面板），⌘↩。
+    private var attach: some View {
+        Button { workspace.attaching = card } label: {
+            Label("挂到任务", systemImage: "checkmark")
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.onSignature)
+                .padding(.horizontal, 16).frame(height: 44)
+                .background(palette.signature, in: .capsule)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(PressStyle())
+        .keyboardShortcut(.return, modifiers: .command)
+        .help("挂到一个任务下，成为它的提示词（⌘↩）")
     }
 
     /// 发出去的正文：选中了就只发选中的部分（`whole` 时总是整张）。

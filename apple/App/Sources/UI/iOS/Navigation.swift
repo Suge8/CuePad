@@ -63,7 +63,7 @@ final class Navigation {
         var project: UUID??
     }
 
-    /// 要交给 Agent 的一条灵感或任务（存储格式，变量已填）：浮起交给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
+    /// 要交给 Agent 的一条提示词（存储格式，变量已填）：浮起交给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
     struct OpenTask: Identifiable {
         let id: UUID
     }
@@ -84,9 +84,9 @@ final class Navigation {
         let id = UUID()
         var project: UUID?
         var launched: Launched?
-        /// 从"交给 Agent"选了新会话：灵感或任务的正文与补的话带过来作开场。
+        /// 从"交给 Agent"选了新会话：提示词的正文与补的话带过来作开场。
         var draft: ComposerDraft?
-        /// 为哪条灵感或提示词开的（交给 Agent 时定下）：开好后关联它。
+        /// 为哪条提示词开的（交给 Agent 时定下）：开好后关联它。
         var card: UUID?
     }
 

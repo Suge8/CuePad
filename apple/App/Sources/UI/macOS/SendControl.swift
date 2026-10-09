@@ -4,13 +4,18 @@ import SwiftUI
 
 /// 发送按钮（⌘↩）+ 目标选择：主次由 `Workspace.sendStyle` 一处定——发给 Agent 能一按就发时是靛青主钮，发给应用或剪贴板是次要样式，
 /// 只能选目标时是中性的菜单。只在有内容可发时出现（由调用方决定）。
-/// 目标默认是本项目的 Pi 会话，没有则是上一个前台应用；选过的目标在本窗口内记住。按钮上写方式与目标：
+/// 目标默认是本项目的 Pi 会话，没有则是上一个前台应用；选过的目标在本窗口内记住。发的是灵感（`agents` 为 false）时只有应用与剪贴板：
+/// 发给 Agent 只经任务的提示词（`CardMenu.handsToAgent`）。按钮上写方式与目标：
 /// "发给 Agent · <会话名>"、"放进输入框 · <会话名>"、"粘贴到 <应用>"、"复制到剪贴板"，过长时只截会话名或应用名，方式不截。
 /// 还没有可发的目标时写"发送…"；选过的 Pi 会话已结束时写"<会话名> · 已结束"——这两种点开都是目标菜单。
 struct SendControl: View {
     let project: UUID?
+    /// 目标里有没有 Agent 会话。
+    let agents: Bool
     var compact = false
-    /// 给了时目标菜单的 Agent 区多一项"新会话"（从灵感或任务交给 Agent，见 `Workspace.newSessionHandOff`）。
+    /// 绑 ⌘↩：同一处另有主动作占着 ⌘↩（灵感纸页的"挂到任务"）时不绑。
+    var bindsReturn = true
+    /// 给了时目标菜单的 Agent 区多一项"新会话"（从提示词交给 Agent，见 `Workspace.newSessionHandOff`）。
     var newSession: (() -> Void)? = nil
     let send: (AppServices.Destination) -> Void
     @Environment(Workspace.self) private var workspace
@@ -18,18 +23,18 @@ struct SendControl: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let choice = workspace.effectiveChoice(for: project), style = workspace.sendStyle(choice)
+        let choice = workspace.effectiveChoice(for: project, agents: agents), style = workspace.sendStyle(choice)
         Group {
             if style != .menu {
                 HStack(spacing: 0) {
                     Button { send(choice) } label: {
-                        label(icon: AnyView(icon(choice)), text: title(choice), shortcut: "⌘↩")
+                        label(icon: AnyView(icon(choice)), text: title(choice), shortcut: bindsReturn ? "⌘↩" : nil)
                             .padding(.trailing, 8)
                     }
                     .buttonStyle(PressStyle())
-                    .keyboardShortcut(.return, modifiers: .command)
+                    .keyboardShortcut(bindsReturn ? KeyboardShortcut(.return, modifiers: .command) : nil)
                     .accessibilityLabel(spoken(choice))
-                    SendTargetMenu(project: project, newSession: newSession) {
+                    SendTargetMenu(project: project, agents: agents, newSession: newSession) {
                         Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
                             .padding(.trailing, compact ? 10 : 14).padding(.leading, 4)
                             .frame(height: compact ? 28 : 44)
@@ -37,13 +42,13 @@ struct SendControl: View {
                     }
                 }
             } else if case .pi(let id, _) = choice {
-                SendTargetMenu(project: project, newSession: newSession) {
+                SendTargetMenu(project: project, agents: agents, newSession: newSession) {
                     label(icon: AnyView(PiStateDot(shown: PiShown(state: .known(.ended)), size: 5)), text: "\(name(of: choice)) · 已结束", shortcut: nil)
                         .padding(.trailing, compact ? 12 : 16)
                 }
                 .accessibilityLabel("Agent 会话「\(workspace.sessionName(id))」已结束，选择发送目标")
             } else {
-                SendTargetMenu(project: project, newSession: newSession) {
+                SendTargetMenu(project: project, agents: agents, newSession: newSession) {
                     label(icon: AnyView(Image(systemName: "paperplane.fill").accessibilityHidden(true)), text: "发送…", shortcut: nil)
                         .padding(.trailing, compact ? 12 : 16)
                 }
@@ -102,30 +107,20 @@ struct SendControl: View {
     }
 }
 
-/// 发送目标菜单：Pi 会话（直接发送 / 放进输入框）、应用（上一个前台应用与正在运行的应用）、剪贴板。当前目标打勾。
-/// 没有运行中的 Pi 会话时，Pi 区留一行说明怎么开始。
+/// 发送目标菜单：Pi 会话（直接发送 / 放进输入框；`agents` 为 false 时没有这一区）、应用（上一个前台应用与正在运行的应用）、剪贴板。
+/// 当前目标打勾。没有运行中的 Pi 会话时，Pi 区留一行说明怎么开始。
 struct SendTargetMenu<Label: View>: View {
     let project: UUID?
+    let agents: Bool
     var newSession: (() -> Void)? = nil
     @ViewBuilder let label: () -> Label
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        let current = workspace.effectiveChoice(for: project)
+        let current = workspace.effectiveChoice(for: project, agents: agents)
         Menu {
-            Section("Agent") {
-                let sessions = services.pi.sessions
-                if let newSession { Button("新会话", systemImage: "plus", action: newSession) }
-                if sessions.isEmpty, newSession == nil {
-                    Button("没有运行中的 Agent 会话 · 在终端运行 pi 开始") {}.disabled(true)
-                }
-                ForEach(sessions) { session in
-                    let name = session.displayName
-                    option("\(name) · \(workspace.shown(session).label)", .pi(session.id, .send), current: current)
-                    option("放进 \(name) 的输入框（仅文字）", .pi(session.id, .paste), current: current)
-                }
-            }
+            if agents { agentSection(current) }
             Section("应用") {
                 option("上一个前台应用", .app(.lastFrontmost), current: current)
                 ForEach(services.runningApps().filter { $0.bundleID != nil }, id: \.pid) { app in
@@ -144,6 +139,21 @@ struct SendTargetMenu<Label: View>: View {
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
         .help("选择发送目标")
         .accessibilityLabel("选择发送目标")
+    }
+
+    private func agentSection(_ current: AppServices.Destination) -> some View {
+        Section("Agent") {
+            let sessions = services.pi.sessions
+            if let newSession { Button("新会话", systemImage: "plus", action: newSession) }
+            if sessions.isEmpty, newSession == nil {
+                Button("没有运行中的 Agent 会话 · 在终端运行 pi 开始") {}.disabled(true)
+            }
+            ForEach(sessions) { session in
+                let name = session.displayName
+                option("\(name) · \(workspace.shown(session).label)", .pi(session.id, .send), current: current)
+                option("放进 \(name) 的输入框（仅文字）", .pi(session.id, .paste), current: current)
+            }
+        }
     }
 
     /// 一个目标：当前生效的那个打勾。
