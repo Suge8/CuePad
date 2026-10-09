@@ -68,9 +68,12 @@ extension DebugScene {
         // notes 这一轮做完：交给它的两条提示词已回复
         try? await Task.sleep(for: .milliseconds(5))
         _ = try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
-            sessionID: "notes", state: .settled, title: "notes", folder: "notes", times: PiTimes(stateSince: .now, busySince: nil), modelState: demoModels)
+            sessionID: "notes", state: .settled, title: "notes", folder: "notes", projectID: projects.first { $0.name == "Career" }?.id,
+            times: PiTimes(stateSince: .now, busySince: nil), modelState: demoModels)
         let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id && !$0.body.hasPrefix("投送队列") }
         if let started = cuepad.first { try? await store.setStatus(started.id, .inProgress) }
+        // Flow 只有一条在推进的任务、没有 Agent：项目的"此刻"是这条任务
+        if let canvas = tasks.first(where: { $0.body.hasPrefix("画布缩放") }) { try? await store.setStatus(canvas.id, .inProgress) }
         if cuepad.count > 1 { try? await store.setStatus(cuepad[1].id, .done) }
         // 再完成两个别的项目的，最近完成那组跨项目、按完成时间排
         for name in ["Flow", "圆桌"] {
@@ -262,8 +265,8 @@ extension DebugScene {
                 lastPrompt: "测试都过了就部署",
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
             ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, DemoRecap(lastPrompt: "让子代理分头审查这两个分支")),
-            ("billing", .error, "模型拒绝了请求（400）：prompt is too long", nil, DemoRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
-            ("notes", .settled, nil, nil, DemoRecap(
+            ("billing", .error, "模型拒绝了请求（400）：prompt is too long", "闲鱼", DemoRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
+            ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),
             // 终端里刚开、还没说过话
             ("scratch", .settled, nil, "CuePad", DemoRecap()),

@@ -88,7 +88,7 @@ enum DemoLibrary {
                 (1.0, "撤销栈合并连续拖拽\n\n连续拖拽只记一步撤销。", false),
                 (15.0, "画布缩放\n\n双指缩放锚点跟随指针。", false),
             ]),
-            DemoProject(name: "闲鱼", icon: "shopping-bag", color: "#3F8FB8", pinned: false, directory: nil, cards: [
+            DemoProject(name: "闲鱼", icon: "shopping-bag", color: "#3F8FB8", pinned: false, directory: nil, intro: "二手相机这周挂出去", cards: [
                 (3.0, "定价补测试\n\n在接缝上给定价补验收测试。", false),
             ]),
             DemoProject(name: "个人网站", icon: "globe", color: "#C9A227", pinned: false, directory: "\(home)Project/homepage", cards: [
@@ -96,6 +96,9 @@ enum DemoLibrary {
             ]),
             DemoProject(name: "Career", icon: "briefcase", color: "#5E9E5A", pinned: false, directory: nil, cards: [
                 (20.0, "求职信\n\n按岗位描述改写第一段。", false),
+            ]),
+            DemoProject(name: "读书", icon: "book", color: "#D0607D", pinned: false, directory: nil, intro: "每周读完一章", cards: [
+                (30.0, "《设计心理学》第二章\n\n示能与意符的区别。", false),
             ]),
         ]
     }
@@ -107,6 +110,7 @@ enum DemoLibrary {
         ("圆桌", "发言轮次在 5 人以上会乱序", false),
         ("圆桌", "登录回调改走统一网关", false),
         ("圆桌", "清理旧的计费脚本", true),
+        ("Flow", "画布缩放锚点跟随指针", false),
         ("Flow", "撤销栈合并连续拖拽", false),
         (nil, "README 截图换成 Swift 版", false),
         (nil, "续费域名", false),
