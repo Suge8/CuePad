@@ -26,5 +26,17 @@ struct PiSidebarTests {
         #expect(rows.map(\.sessionID) == ["wait", "err", "tool", "old", "idle"])
         #expect(rows.first { $0.sessionID == "idle" }?.state == .known(.settled))
     }
+
+    /// 有会话在等你确认时 Agent 区排到项目上面（侧栏回答"现在要我做什么"，不能在折线以下）；
+    /// 正看着 Agent 整页时侧栏不再把同一组会话列一遍，只留"全部会话"。
+    @Test func 有等你确认时Agent区在前_看着Agent整页时侧栏不重复列会话() {
+        let waiting = [session("wait", .waitingForUser), session("tool", .tool)]
+        let busy = [session("tool", .tool), session("err", .error)]
+
+        #expect(PiSidebarAgents(rows: waiting, page: .agent).leads)
+        #expect(PiSidebarAgents(rows: waiting, page: .agent).listed.isEmpty)
+        #expect(PiSidebarAgents(rows: waiting, page: .inbox).listed.map(\.sessionID) == ["wait", "tool"])
+        #expect(!PiSidebarAgents(rows: busy, page: .inbox).leads)
+    }
 }
 #endif
