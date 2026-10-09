@@ -60,11 +60,12 @@ nonisolated enum PiChat {
     }
 
     /// 一轮工具活动的一句话："读了 3 个文件，改了 2 个文件，1 条失败"。分类按改文件、跑命令、读取、搜索、其他的优先级，
-    /// 超过两类只写前两类，其余合计成"其余 N 个"；失败的不算进各类，单独写在最后。
+    /// 三类以内全写，超过三类只写前两类、其余合计成"其余 N 个"；失败的不算进各类，单独写在最后。
     static func toolSummary(_ tools: PiChatMessage.Tools) -> String {
         let kinds = PiChatMessage.Tools.Kind.allCases.filter { tools[$0] > 0 }
-        var parts = kinds.prefix(2).map { phrase($0, tools[$0]) }
-        let rest = kinds.dropFirst(2).reduce(0) { $0 + tools[$1] }
+        let listed = kinds.count > 3 ? 2 : kinds.count
+        var parts = kinds.prefix(listed).map { phrase($0, tools[$0]) }
+        let rest = kinds.dropFirst(listed).reduce(0) { $0 + tools[$1] }
         if rest > 0 { parts.append("其余 \(rest) 个") }
         if tools.failed > 0 { parts.append("\(tools.failed) 条失败") }
         return parts.joined(separator: "，")

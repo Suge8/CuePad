@@ -60,11 +60,13 @@ struct PiChatTests {
         #expect(PiChat.meta(message(1, .user, "你好")) == nil)
     }
 
-    /// 改文件、跑命令优先于读取和搜索；超过两类只列两类，其余合计；失败的不算成功、单独写在最后。
+    /// 改文件、跑命令优先于读取和搜索；三类以内全列，超过三类只列前两类、其余合计；失败的不算成功、单独写在最后。
     @Test(arguments: [
         (PiChatMessage.Tools(edits: 2, reads: 3), "改了 2 个文件，读了 3 个文件"),
-        (PiChatMessage.Tools(edits: 2, commands: 2, reads: 3), "改了 2 个文件，运行了 2 条命令，其余 3 个"),
+        (PiChatMessage.Tools(edits: 2, commands: 2, reads: 3), "改了 2 个文件，运行了 2 条命令，读了 3 个文件"),
         (PiChatMessage.Tools(commands: 1, reads: 3, searches: 2, others: 1), "运行了 1 条命令，读了 3 个文件，其余 3 个"),
+        (PiChatMessage.Tools(edits: 1, reads: 3, searches: 1, failed: 1), "改了 1 个文件，读了 3 个文件，搜索了 1 次，1 条失败"),
+        (PiChatMessage.Tools(edits: 1, commands: 1, reads: 1, searches: 1), "改了 1 个文件，运行了 1 条命令，其余 2 个"),
         (PiChatMessage.Tools(reads: 3, searches: 1), "读了 3 个文件，搜索了 1 次"),
         (PiChatMessage.Tools(others: 4), "调用了 4 个工具"),
         (PiChatMessage.Tools(commands: 2, failed: 1), "运行了 2 条命令，1 条失败"),
