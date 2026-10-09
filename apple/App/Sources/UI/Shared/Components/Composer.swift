@@ -167,6 +167,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
     /// 短胶囊的宽：＋ 加一行短提示。
     private static var compactWidth: CGFloat { 220 }
+    private static var headerTransition: AnyTransition {
+        .asymmetric(insertion: .opacity.animation(Motion.quick.delay(0.12)), removal: .identity)
+    }
+    /// 玻璃上方允许浮出的高度（见 `field` 的裁切）。
+    private static var overhang: CGFloat { 120 }
     private var reservesSend: Bool { Send.self != EmptyView.self }
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
     private var sendVisible: Bool { reservesSend && !shrunk && (hasContent || showsSend) }
@@ -232,7 +237,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private var field: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !shrunk, expanded || keepsHeader { header.transition(.opacity) }
+            // 头部随玻璃变形进出：收起时立刻离开（淡出中的它会叠在收短的那行字上），展开时等文字区让开位置再淡入
+            if !shrunk, expanded || keepsHeader { header.transition(Self.headerTransition) }
             if !paletteCommands.isEmpty {
                 PiSlashPalette(commands: paletteCommands, highlighted: min(highlighted, paletteCommands.count - 1), pick: pick)
                     .transition(.opacity)
@@ -251,11 +257,13 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
                     shortcut: shortcut)
                     .focused(focus)
-                    .opacity(shrunkDraft == nil ? 1 : 0)
+                    // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层
+                    .animation(nil) { $0.opacity(shrunkDraft == nil ? 1 : 0) }
                     .overlay(alignment: .leading) {
                         if let shrunkDraft {
                             Text("草稿：\(shrunkDraft)").font(Typography.body).foregroundStyle(palette.ink2).lineLimit(1)
                                 .allowsHitTesting(false)
+                                .transition(.identity)
                         }
                     }
                     .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, !expanded && sendVisible ? 2 : 18)
@@ -284,6 +292,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         }
         // 收成短胶囊时居中；展开是同一块玻璃从中间向两边长到全宽
         .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
+        // 里面的东西裁在玻璃里：变形时淡出中的提交钮、工具排随玻璃一起收，不留在玻璃外。上沿不裁（往上浮出的
+        // "长按可马上说"、思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
+        .mask { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).padding(.top, -Self.overhang) }
         .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded, legible: true)
         .frame(maxWidth: .infinity)
     }
