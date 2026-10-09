@@ -71,9 +71,11 @@ nonisolated struct WallArrangement: Equatable, Sendable {
     }
 }
 
-/// "更早"列表的一组：三个月内按周（周首取日历设置），更久按月。
+/// "更早"列表的一组：三个月内按周（周首取日历设置），更久按月；只有几条（`fewLimit` 以内）时不分，排成一组。
 nonisolated struct OlderGroup: Equatable, Sendable {
     enum Period: Hashable, Sendable {
+        /// 只有几条时的唯一一组：分组的标题会比内容还多。
+        case all
         case week(start: Date)
         /// 三个月内、每周都只有一条的月份并成的一组：一周一个标题时标题比内容还多。常开，不折叠。
         case sparseMonth(start: Date)
@@ -84,6 +86,7 @@ nonisolated struct OlderGroup: Equatable, Sendable {
     var cards: [UUID]
 
     static let weeklyMonths = 3
+    static let fewLimit = 4
 
     /// 要不要给各组加日期标题：只有一组按周的卡时不要（每行自带日期）；按月的组要标题来折叠，多组时要标题来分隔。
     static func needsTitles(in groups: [OlderGroup]) -> Bool {
@@ -96,9 +99,11 @@ nonisolated struct OlderGroup: Equatable, Sendable {
 
     /// 组与组内卡片都是新的在前。
     static func group(_ cards: [CardStamp], now: Date, calendar: Calendar) -> [OlderGroup] {
+        let sorted = cards.sorted(by: { $0.modifiedAt > $1.modifiedAt })
+        if sorted.count <= fewLimit { return sorted.isEmpty ? [] : [OlderGroup(period: .all, cards: sorted.map(\.id))] }
         let weeklySince = calendar.date(byAdding: .month, value: -weeklyMonths, to: now) ?? now
         var groups: [OlderGroup] = []
-        for card in cards.sorted(by: { $0.modifiedAt > $1.modifiedAt }) {
+        for card in sorted {
             let period = period(of: card.modifiedAt, weekly: card.modifiedAt >= weeklySince, calendar: calendar)
             if groups.last?.period == period {
                 groups[groups.count - 1].cards.append(card.id)

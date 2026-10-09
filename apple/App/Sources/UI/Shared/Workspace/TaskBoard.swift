@@ -60,12 +60,12 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return try started(from: store).prefix(limit).map { try Row.read($0, projects: projects, from: store) }
     }
 
-    /// 每个项目最近开始的进行中任务的标题（项目的"此刻"一行，`ProjectNow`）：一次查询，按项目取第一条。
-    static func leading(from store: isolated CueStore) throws -> [UUID: String] {
-        var result: [UUID: String] = [:]
+    /// 各项目的进行中任务，最近开始的在前（项目的"此刻"一行，`ProjectNow`）：一次查询，按项目归拢。
+    static func leading(from store: isolated CueStore) throws -> [UUID: [ProjectNow.InProgress]] {
+        var result: [UUID: [ProjectNow.InProgress]] = [:]
         for task in try started(from: store) {
-            guard let project = task.projectID, result[project] == nil else { continue }
-            result[project] = task.title.textGlyphs
+            guard let project = task.projectID else { continue }
+            result[project, default: []].append(ProjectNow.InProgress(id: task.id, title: task.title.textGlyphs))
         }
         return result
     }

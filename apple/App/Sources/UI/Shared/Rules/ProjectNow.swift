@@ -13,6 +13,14 @@ nonisolated struct ProjectNow: Hashable, Sendable {
 
     let source: Source
     let text: String
+    /// Agent 的事是哪个会话（会话名）；项目行不写它，书架的 Agent 总览写不在项目里的那件时带上。
+    var session: String?
+
+    /// 一条进行中的任务（`TaskBoard.leading` 按项目给出，最近开始的在前）。
+    struct InProgress: Hashable, Sendable {
+        let id: UUID
+        let title: String
+    }
 
     /// Agent 的事才有状态（书架、侧栏的状态标与项目长按菜单的标题读它）。
     var shown: PiShown? {
@@ -30,29 +38,34 @@ nonisolated struct ProjectNow: Hashable, Sendable {
             .map { (item: $0, shown: shown($0)) }
             .compactMap { pair in tier(pair.shown).map { (tier: $0, item: pair.item, shown: pair.shown) } }
             .min { $0.tier < $1.tier }
-        if let agent { return ProjectNow(source: .agent(agent.shown), text: sentence(agent.item, agent.shown)) }
+        if let agent {
+            return ProjectNow(source: .agent(agent.shown), text: sentence(agent.item, agent.shown), session: agent.item.state.title)
+        }
         if let task { return ProjectNow(source: .task, text: task) }
         if let intro { return ProjectNow(source: .intro, text: intro) }
         return nil
     }
 
-    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`live` 要传此刻有事的会话
+    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`sessions` 要传此刻有事的会话
     /// （`PiSessionQuery.current`：在线的，加上还有话发给它的已结束会话），只传在线的会漏掉发给已结束会话的话。
+    /// `listed` 是同一屏已列出的任务（书架的"正在推进"），任务那一档跳过它们、取下一条；没有这种清单的地方不传。
     static func byProject(
-        _ projects: [Project], live: [PiSessionListItem], tasks: [UUID: String], shown: (PiSessionListItem) -> PiShown
+        _ projects: [Project], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], listed: Set<UUID> = [],
+        shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
         let intros = Dictionary(uniqueKeysWithValues: projects.compactMap { project in project.intro.map { (project.id, $0) } })
-        return byProject(projects.map(\.id), live: live, tasks: tasks, intros: intros, shown: shown)
+        return byProject(projects.map(\.id), sessions: sessions, tasks: tasks, intros: intros, listed: listed, shown: shown)
     }
 
     static func byProject(
-        _ projects: [UUID], live: [PiSessionListItem], tasks: [UUID: String], intros: [UUID: String],
-        shown: (PiSessionListItem) -> PiShown
+        _ projects: [UUID], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], intros: [UUID: String],
+        listed: Set<UUID> = [], shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
-        let sessions = Dictionary(grouping: live.filter { $0.state.projectID != nil }) { $0.state.projectID! }
+        let byProject = Dictionary(grouping: sessions.filter { $0.state.projectID != nil }) { $0.state.projectID! }
         var result: [UUID: ProjectNow] = [:]
         for project in projects {
-            result[project] = pick(sessions[project] ?? [], shown: shown, task: tasks[project], intro: intros[project])
+            let task = tasks[project]?.first { !listed.contains($0.id) }?.title
+            result[project] = pick(byProject[project] ?? [], shown: shown, task: task, intro: intros[project])
         }
         return result
     }

@@ -214,8 +214,9 @@ struct NewTaskField: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
-            TextField("添加任务", text: $text).textFieldStyle(.plain).font(.system(size: 13))
+            // 入口不用系统占位灰：那样看起来像不能点
+            Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+            TextField(text: $text, prompt: Text("添加任务").foregroundStyle(palette.ink2)) { Text("添加任务") }.textFieldStyle(.plain).font(.system(size: 13))
                 .accessibilityLabel("添加任务")
                 .onSubmit(add)
             if choosesProject, let projects = workspace.catalog?.projects, !projects.isEmpty {

@@ -117,8 +117,8 @@ nonisolated private struct SidebarData: Sendable {
     /// 此刻有事的会话（`PiSessionQuery.current`）：项目行的"此刻"读它。
     var sessions: [PiSessionListItem]
     var waiting: Int
-    /// 各项目最近开始的进行中任务（项目行的"此刻"，`ProjectNow`）。
-    var leading: [UUID: String]
+    /// 各项目的进行中任务，最近开始的在前（项目行的"此刻"，`ProjectNow`）。
+    var leading: [UUID: [ProjectNow.InProgress]]
 }
 
 private struct SplitSidebar: View {
@@ -139,7 +139,7 @@ private struct SplitSidebar: View {
             if let catalog = workspace.catalog {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果
                 let now = ProjectNow.byProject(
-                    catalog.projects, live: data?.sessions ?? [], tasks: data?.leading ?? [:], shown: services.settings.shown)
+                    catalog.projects, sessions: data?.sessions ?? [], tasks: data?.leading ?? [:], shown: services.settings.shown)
                 let pinned = catalog.projects.filter(\.isPinned)
                 if !pinned.isEmpty {
                     Section("置顶") { ForEach(pinned) { row($0, catalog, now: now[$0.id]) } }

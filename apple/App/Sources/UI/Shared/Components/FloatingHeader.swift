@@ -4,7 +4,7 @@ import UIKit
 
 extension View {
     /// 推入页的顶栏（全 App 只此一种）：左边系统的圆形返回，中间一块玻璃（标题，下面一行要紧信息），右边最多一个圆钮
-    /// （多个操作时调用方给一个"⋯"`Menu`）。顶上不做滚动模糊：滚上来的内容在状态栏与顶栏下淡到桌面色（`TopFade`，Mac 同一个），玻璃后面不叠字。
+    /// （多个操作时调用方给一个"⋯"`Menu`）。顶上不做滚动模糊：滚上来的内容在状态栏与顶栏下淡到页面底色（`EdgeFade`，Mac 同一个），玻璃后面不叠字。
     /// `hidden` 时返回钮、中间那块与右边的圆钮都让开（淡到透明、不可点、读屏跳过），导航栏本身留着：
     /// 顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，见 `ChatFollow.showsHeader`）；
     /// 左缘右滑返回始终可用（`EdgeBackKeeper`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出顶栏。
@@ -35,7 +35,7 @@ enum FloatingHeaderLayout {
 
 private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     /// 顶栏下沿往下再淡出这么高：刚滚到玻璃边上的字已经淡了。
-    private static var fadeBelow: CGFloat { 14 }
+    private static var fadeBelow: CGFloat { 18 }
 
     let title: String
     let hidden: Bool
@@ -47,7 +47,7 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scrollEdgeEffectHidden(true, for: .top)
-            .overlay(alignment: .top) { TopFade(below: Self.fadeBelow) }
+            .overlay(alignment: .top) { EdgeFade(edge: .top, fade: Self.fadeBelow) }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             // 系统的返回钮藏起时会淡出，但也会停掉左缘右滑返回：由 `EdgeBackKeeper` 把手势留住

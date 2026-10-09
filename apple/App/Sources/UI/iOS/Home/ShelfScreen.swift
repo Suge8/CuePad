@@ -15,10 +15,22 @@ nonisolated struct ShelfData: Sendable {
     /// 此刻有事的 Pi 会话（在线的，加上还有话发给它的已结束会话；带发给它的最近一条投送请求，`PiSessionQuery.current`）：
     /// 各项目的"此刻"一行在界面上再按本机的规则挑（`ProjectNow`）。
     var sessions: [PiSessionListItem]
-    /// 各项目最近开始的进行中任务标题（`ProjectNow` 的一档）。
-    var leading: [UUID: String]
+    /// 各项目的进行中任务，最近开始的在前（`ProjectNow` 的一档）。
+    var leading: [UUID: [ProjectNow.InProgress]]
     /// 等你确认的在线会话（书架最上面的"等你"）；个数与 Agent 角标同一个数。
     var waiting: [PiSessionListItem] { sessions.filter(\.state.waitsForYou) }
+
+    /// 书架最上面的 Agent 总览；没有在等你、出错、在跑的会话，也没有不在项目里、此刻有事的会话时为 nil。
+    @MainActor func glance(shown: (PiSessionListItem) -> PiShown) -> AgentGlance? {
+        let statuses = sessions.map { shown($0).status }
+        let glance = AgentGlance(
+            waiting: waiting.count,
+            failing: statuses.count { $0 == .failed || $0 == .delivery(.failed) },
+            reloading: statuses.count { $0 == .restart },
+            running: statuses.count { if case .working = $0 { true } else { $0 == .delivery(.sending) || $0 == .delivery(.delivering) || $0 == .delivery(.waking) || $0 == .delivery(.delivered) } },
+            loose: ProjectNow.pick(sessions.filter { $0.state.projectID == nil }, shown: shown, task: nil, intro: nil))
+        return glance.isEmpty ? nil : glance
+    }
     /// 进任务页的入口上写的数：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，没有入口。
     var tasks: TaskCounts?
     /// 正在推进的任务（进行中，最近开始的在前），书架最上面。
@@ -28,9 +40,9 @@ nonisolated struct ShelfData: Sendable {
 
     static let activeLimit = 3
 
-    /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。
+    /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。"正在推进"已列出的任务不再写一遍。
     @MainActor func now(shown: (PiSessionListItem) -> PiShown) -> [UUID: ProjectNow] {
-        ProjectNow.byProject(entries.map(\.project), live: sessions, tasks: leading, shown: shown)
+        ProjectNow.byProject(entries.map(\.project), sessions: sessions, tasks: leading, listed: Set(active.map(\.id)), shown: shown)
     }
 
     static func read(from store: isolated CueStore) throws -> ShelfData {
@@ -111,16 +123,17 @@ struct ShelfScreen: View {
         let recent = data.entries.filter { !$0.project.isPinned }
         // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
         let now = data.now(shown: services.settings.shown)
+        let glance = data.glance(shown: services.settings.shown)
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: 22) {
             if data.entries.isEmpty && data.inboxCount == 0 {
-                lead(data)
+                lead(data, glance)
                 EmptyShelf { navigation.projectForm = .init() }
-            } else if wide, !pinned.isEmpty, hasLead(data) {
+            } else if wide, !pinned.isEmpty, hasLead(data, glance) {
                 // 宽屏两栏：左边现在要干的，右边置顶项目；放不下两栏时上下排
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 20) {
-                        VStack(alignment: .leading, spacing: 22) { lead(data) }.frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: 22) { lead(data, glance) }.frame(maxWidth: .infinity)
                         // 右栏的大卡按宽度排：窄时一列叠放，宽时两列
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.pinnedMinWidth), spacing: 12)], spacing: 12) {
                             ForEach(pinned) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
@@ -129,12 +142,12 @@ struct ShelfScreen: View {
                     }
                     .frame(minWidth: Self.twoColumnWidth, idealWidth: Self.twoColumnWidth, maxWidth: .infinity)
                     VStack(alignment: .leading, spacing: 22) {
-                        lead(data)
+                        lead(data, glance)
                         pinnedGrid(pinned, columns: min(pinned.count, 4), now: now)
                     }
                 }
             } else {
-                lead(data)
+                lead(data, glance)
                 if !pinned.isEmpty {
                     // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
                     pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2), now: now)
@@ -158,7 +171,7 @@ struct ShelfScreen: View {
         .padding(.bottom, 24)
         // 任务开始、做完时"正在推进"一张张进出，下面的内容跟着挪
         .animation(Motion.snappy, value: data.active.map(\.id))
-        .animation(Motion.snappy, value: data.waiting.map(\.id))
+        .animation(Motion.snappy, value: glance == nil)
         // 宽屏不把一行项目拉满整屏：名字与计数隔太远读不成一行
         .frame(maxWidth: Self.readableWidth)
         .frame(maxWidth: .infinity)
@@ -169,15 +182,15 @@ struct ShelfScreen: View {
     private static let twoColumnWidth: CGFloat = 640
     private static let pinnedMinWidth: CGFloat = 220
 
-    private func hasLead(_ data: ShelfData) -> Bool {
-        !data.waiting.isEmpty || !data.active.isEmpty || data.tasks != nil || data.inboxCount > 0
+    private func hasLead(_ data: ShelfData, _ glance: AgentGlance?) -> Bool {
+        glance != nil || !data.active.isEmpty || data.tasks != nil || data.inboxCount > 0
     }
 
-    /// 现在要干的：等你、正在推进（没有时是任务入口）、未分类。
+    /// 现在要干的：Agent 总览、正在推进（没有时是任务入口）、未分类。
     @ViewBuilder
-    private func lead(_ data: ShelfData) -> some View {
+    private func lead(_ data: ShelfData, _ glance: AgentGlance?) -> some View {
         let tasksLine = data.active.isEmpty ? data.tasks : nil
-        if !data.waiting.isEmpty { WaitingCard(items: data.waiting).transition(Motion.item) }
+        if let glance { AgentCard(glance: glance).transition(Motion.item) }
         if !data.active.isEmpty { ActiveTasks(rows: data.active, counts: data.tasks).transition(Motion.item) }
         if data.inboxCount > 0 || tasksLine != nil {
             VStack(spacing: 0) {
@@ -190,9 +203,16 @@ struct ShelfScreen: View {
         }
     }
 
+    /// 置顶大卡按行排：每行 `columns` 张平分整行，最后一行不满时那几张也平分整行（奇数张时最后一张占满），不留空格。
+    /// 一行里的卡同高。置顶的不多，不用懒加载。
     private func pinnedGrid(_ pinned: [ShelfData.Entry], columns: Int, now: [UUID: ProjectNow]) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
-            ForEach(pinned) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
+        VStack(spacing: 12) {
+            ForEach(Array(stride(from: 0, to: pinned.count, by: columns)), id: \.self) { start in
+                HStack(spacing: 12) {
+                    ForEach(pinned[start..<min(start + columns, pinned.count)]) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -302,12 +322,17 @@ private struct PinnedShelfCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 ProjectGlyph(project: entry.project, size: glyph).padding(.bottom, 6)
                 Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
-                ProjectNowLine(now: now, font: .footnote)
+                // 空项目的大卡不留一块空白：没有可说的又没有灵感时，这一行写一句现状
+                if now == nil, entry.cardCount == 0 {
+                    Text("还没有灵感").font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
+                } else {
+                    ProjectNowLine(now: now, font: .footnote)
+                }
                 Spacer(minLength: 10)
                 ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
             }
             .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 156, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 156, maxHeight: .infinity, alignment: .topLeading)
             // 渐变只铺在填充上（不用渐变描边，见文档「视觉验收 · 性能测量」）
             .background(
                 LinearGradient(colors: [tint.opacity(palette.dark ? 0.16 : 0.1), tint.opacity(0)], startPoint: .top, endPoint: .center),
@@ -526,44 +551,71 @@ private struct ActiveTaskRow: View {
     }
 }
 
-/// 等你：有 Agent 等你确认时书架最上面的一张——几个在等；点它去 Agent 页回答。归在项目里的会话问了什么已写在那个项目的
-/// "此刻"一行，这里不再重复；只有不在项目里的（没有别处写它）才在这里写出它的问题。赭黄只落在图标与一层淡底上，问题正文是墨色。
-private struct WaitingCard: View {
-    let items: [PiSessionListItem]
+/// 书架最上面的 Agent 总览的数据（`ShelfData.glance`）：在等你确认几个（与 Agent 角标同一条规则 `waitsForYou`）、出错几个、
+/// 需要 /reload 几个、在跑几个（含话在路上），按 `ProjectNow` 的档排；以及不在任何项目里的会话里最该知道的一件（`ProjectNow` 同一条取舍）——它们没有项目行，别处写不出来。
+nonisolated struct AgentGlance: Equatable, Sendable {
+    var waiting: Int
+    var failing: Int
+    var reloading: Int
+    var running: Int
+    var loose: ProjectNow?
+
+    var isEmpty: Bool { waiting + failing + reloading + running == 0 && loose == nil }
+
+    /// "等你确认 4 · 出错 1 · 在跑 3"（短写，一行放得下三项）；只有不在项目里的那件时是 nil。
+    var counts: String? {
+        let parts = [("等你确认", waiting), ("出错", failing), ("需要 /reload", reloading), ("在跑", running)]
+            .compactMap { $0.1 > 0 ? "\($0.0) \($0.1)" : nil }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+/// 书架最上面的 Agent 一张：标题写此刻在等你、出错、在跑的会话各几个；第二行是不在任何项目里的会话里最该知道的那件
+/// （归在项目里的已写在那个项目的"此刻"一行，这里不重复）。点它去 Agent 页。有在等你确认的时候图标是赭黄问号、垫一层淡赭黄，
+/// 否则是那件事的状态标、不垫色。
+private struct AgentCard: View {
+    let glance: AgentGlance
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
 
     private static let radius: CGFloat = 20
 
     var body: some View {
-        let first = items[0].state
-        let loose = items.first { $0.state.projectID == nil }?.state
+        let asking = glance.waiting > 0
         Button(action: open) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Image(systemName: "questionmark.circle.fill").font(.title3).foregroundStyle(palette.attention)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(items.count == 1 ? "\(first.title) 在等你确认" : "\(items.count) 个 Agent 在等你确认")
-                        .font(.headline).foregroundStyle(palette.ink)
-                        .contentTransition(.numericText()).animation(Motion.snappy, value: items.count)
-                    if let loose, let ask = PiProgress.line(of: loose) {
-                        Text(items.count == 1 ? ask : "\(loose.title)：\(ask)")
-                            .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
+                Group {
+                    if asking {
+                        Image(systemName: "questionmark.circle.fill").font(.title3).foregroundStyle(palette.attention)
+                    } else if let shown = glance.loose?.shown {
+                        PiStateDot(shown: shown, size: 9)
                     }
                 }
+                .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(glance.counts ?? "Agent")
+                        .font(.headline.monospacedDigit()).foregroundStyle(palette.ink).lineLimit(1)
+                        .contentTransition(.numericText()).animation(Motion.snappy, value: glance.counts)
+                    if let loose = glance.loose {
+                        Text(loose.session.map { "\($0)：\(loose.text)" } ?? loose.text)
+                            .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
+                            .id(loose.text).transition(.opacity)
+                    }
+                }
+                .animation(Motion.quick, value: glance.loose?.text)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(palette.attention.opacity(palette.dark ? 0.14 : 0.1), in: .rect(cornerRadius: Self.radius, style: .continuous))
+            .background(asking ? palette.attention.opacity(palette.dark ? 0.14 : 0.1) : .clear, in: .rect(cornerRadius: Self.radius, style: .continuous))
             .paper(radius: Self.radius)
             .contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
         }
         .buttonStyle(CardPressStyle())
         .accessibilityElement(children: .combine)
-        .accessibilityHint("去 Agent 页回答")
+        .accessibilityHint("去 Agent 页")
     }
 
     private func open() {
