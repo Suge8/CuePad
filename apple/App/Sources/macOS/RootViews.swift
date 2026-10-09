@@ -63,6 +63,8 @@ private struct MainRoot: View {
             SettingsView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if DebugScene.scene == "projectform" {
             ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if DebugScene.scene == "newsession" {
+            NewSessionForm { _ in }.environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             MainWindow(workspace: workspace)
         }

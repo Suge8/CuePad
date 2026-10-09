@@ -11,7 +11,7 @@ struct AgentFilterMemoryTests {
     let app = TestApp()
 
     private func catalog(_ projects: [Project]) -> ProjectCatalog {
-        ProjectCatalog(projects: projects, cardCounts: [:], directories: [:])
+        ProjectCatalog(projects: projects, cardCounts: [:], directories: [:], bindings: [])
     }
 
     private func navigation(_ suite: String) -> Navigation {

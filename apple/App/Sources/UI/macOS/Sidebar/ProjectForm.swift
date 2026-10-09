@@ -3,34 +3,27 @@ import AppKit
 import CueStore
 import SwiftUI
 
-/// 项目右键菜单：共用的项目操作，加上 Mac 才有的绑定代码目录。
-struct ProjectMenu: View {
-    let project: Project
-    let rename: () -> Void
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        ProjectActions(project: project, edit: rename) {
-            Button("绑定代码目录…", systemImage: "folder") { ProjectDirectory.choose(for: project.id, workspace: workspace) }
-        }
-    }
-}
-
 enum ProjectDirectory {
-    /// 选择目录后绑定；Pi 会话按这个目录归入项目。
-    static func choose(for project: UUID, workspace: Workspace) {
+    /// 弹系统的选文件夹面板，返回选中的路径（取消为 nil）。
+    static func pick() -> String? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.prompt = "绑定"
-        panel.message = "选择这个项目的代码目录，在其中运行的 Agent 会话会归到这个项目"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let path = url.path(percentEncoded: false)
+        panel.canCreateDirectories = true
+        panel.prompt = "选择"
+        panel.message = "选择这个项目的文件夹，在其中运行的 Agent 会话会归到这个项目，新会话也开在这里"
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        return url.path(percentEncoded: false)
+    }
+
+    /// 选择文件夹后绑定；Pi 会话按这个目录归入项目。
+    static func choose(for project: UUID, workspace: Workspace) {
+        guard let path = pick() else { return }
         workspace.perform { try await $0.setDirectory(path, for: project) }
     }
 }
 
-/// 新建或编辑项目：名称、一句话介绍、图标、颜色。
+/// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以选文件夹（可不选，之后在项目菜单里绑也行）。
 struct ProjectForm: View {
     let project: Project?
     @Environment(Workspace.self) private var workspace
@@ -39,6 +32,8 @@ struct ProjectForm: View {
     @State private var intro = ""
     @State private var icon = "folder"
     @State private var color = ProjectStylePicker.colors[0].hex
+    /// 新建时选的文件夹（完整路径）；编辑项目不在这里改绑定，项目菜单里改。
+    @State private var folder: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -46,6 +41,7 @@ struct ProjectForm: View {
             TextField("名称", text: $name).textFieldStyle(.roundedBorder).onSubmit(save)
             TextField("一句话介绍（可不填）", text: $intro).textFieldStyle(.roundedBorder).onSubmit(save)
             ProjectStylePicker(icon: $icon, color: $color, cell: 30)
+            if project == nil { folderRow }
             HStack {
                 Spacer()
                 Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
@@ -65,13 +61,31 @@ struct ProjectForm: View {
         }
     }
 
+    /// 文件夹：没选时是"选择…"，选了写末段名（悬停看完整路径）并可清掉。
+    private var folderRow: some View {
+        HStack(spacing: 8) {
+            Label("文件夹", systemImage: "folder").foregroundStyle(.secondary)
+            Spacer()
+            if let folder {
+                Text(URL(filePath: folder).lastPathComponent).lineLimit(1).help(folder)
+                Button("不绑了", systemImage: "xmark.circle.fill") { self.folder = nil }
+                    .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(.secondary)
+            } else {
+                Button("选择…") { folder = ProjectDirectory.pick() }
+            }
+        }
+    }
+
     private func save() {
         let name = name.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        let project = project, intro = intro, icon = icon, color = color
+        let project = project, intro = intro, icon = icon, color = color, folder = folder
         workspace.attempt {
             let id = try await workspace.saveProject(project, name: name, intro: intro, icon: icon, color: color)
-            if project == nil { workspace.show(.project(id)) }
+            if project == nil {
+                if let folder { try await workspace.services.store.setDirectory(folder, for: id) }
+                workspace.show(.project(id))
+            }
         }
         dismiss()
     }

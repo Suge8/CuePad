@@ -72,7 +72,7 @@ private struct PiColumn: View {
         SectionLabel(text: "Agent", systemImage: "terminal")
         let sessions = workspace.liveSessions(in: project)
         if sessions.isEmpty {
-            Text(hasDirectory ? "没有运行中的会话" : "还没绑定代码目录")
+            Text(hasDirectory ? "没有运行中的会话" : "还没绑定文件夹")
                 .font(.system(size: 12.5)).foregroundStyle(palette.ink3)
                 .fixedSize(horizontal: false, vertical: true)
         }

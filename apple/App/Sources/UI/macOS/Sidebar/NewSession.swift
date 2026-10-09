@@ -4,8 +4,6 @@ import SwiftUI
 
 /// Agent 分组标题旁的 +：在本机后台开一个新会话；开好后关掉表单、在内容区打开新会话的整页。
 struct NewSessionButton: View {
-    /// 侧栏读到的会话（取没绑项目的最近目录）。
-    let recent: [PiSessionState]
     @Binding var showing: Bool
     @Environment(Workspace.self) private var workspace
 
@@ -15,7 +13,7 @@ struct NewSessionButton: View {
             .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
             .help("开一个新的 Agent 会话")
             .popover(isPresented: $showing, arrowEdge: .trailing) {
-                NewSessionForm(recent: recent) { id in
+                NewSessionForm { id in
                     showing = false
                     workspace.openSession(id)
                 }
@@ -23,35 +21,8 @@ struct NewSessionButton: View {
     }
 }
 
-/// 新会话开在哪：项目绑定的代码目录，或最近会话用过、没绑项目的目录（与那个会话同一目录）。
-private struct LaunchPlace: Identifiable {
-    let id: String
-    let place: PiLaunchPlace
-    let title: String
-    let project: Project?
-    /// 第二行：目录名或"和「会话名」同一目录"。
-    let detail: String
-
-    static func all(catalog: ProjectCatalog?, recent: [PiSessionState]) -> [LaunchPlace] {
-        let projects = (catalog?.projects ?? []).compactMap { project -> LaunchPlace? in
-            guard let directory = catalog?.directories[project.id] else { return nil }
-            return LaunchPlace(
-                id: "project-\(project.id)", place: .project(project.id), title: project.name, project: project,
-                detail: URL(filePath: directory).lastPathComponent)
-        }
-        var folders = Set<String>()
-        let others = recent.compactMap { session -> LaunchPlace? in
-            guard session.projectID == nil, let folder = session.folder, folders.insert(folder).inserted else { return nil }
-            return LaunchPlace(
-                id: "beside-\(session.sessionID)", place: .besideSession(session.sessionID), title: folder, project: nil,
-                detail: "和「\(session.title)」同一目录")
-        }
-        return projects + others
-    }
-}
-
-private struct NewSessionForm: View {
-    let recent: [PiSessionState]
+/// 新会话开在哪：只列项目（项目目录的顺序）；目录只由项目绑定推出，没绑文件夹的项目也列，选中时就地选文件夹。
+struct NewSessionForm: View {
     let opened: (String) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -72,14 +43,14 @@ private struct NewSessionForm: View {
     private static let listHeight: CGFloat = 240
 
     var body: some View {
-        let places = LaunchPlace.all(catalog: workspace.catalog, recent: recent)
-        // 没选过时默认当前项目（有代码目录的话）
-        let place = places.first { $0.id == chosen }
-            ?? places.first { $0.project != nil && $0.project?.id == workspace.currentProject } ?? places.first
+        let places = ProjectFolders.launchPlaces(
+            projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
+        // 没选过时默认当前项目
+        let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.currentProject } ?? places.first
         VStack(alignment: .leading, spacing: 12) {
             Text("新会话").font(.headline).foregroundStyle(palette.ink)
             if places.isEmpty {
-                Text("还没有可以开会话的目录：给项目绑定代码目录，或先运行一次 pi。")
+                Text("还没有项目：先新建一个项目，再给它选文件夹，就能在里面开会话。")
                     .font(.callout).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
             } else {
                 ScrollView {
@@ -95,7 +66,8 @@ private struct NewSessionForm: View {
             HStack(spacing: 8) {
                 switch stage {
                 case .idle:
-                    Text("在后台开，不占终端").font(.footnote).foregroundStyle(palette.ink3)
+                    Text(place.map { $0.binding == nil ? "「\($0.project.name)」还没有文件夹" : "在后台开，不占终端" } ?? "在后台开，不占终端")
+                        .font(.footnote).foregroundStyle(palette.ink3)
                 case .opening:
                     ProgressView().controlSize(.small)
                     Text("正在开…").font(.footnote).foregroundStyle(palette.ink3)
@@ -106,10 +78,17 @@ private struct NewSessionForm: View {
                     Text(reason).font(.footnote).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                Button("开始") { place.map(start) }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(place == nil || stage == .opening)
+                if let place, place.binding == nil {
+                    // 选好文件夹后项目目录刷新，这一处就换成"开始"
+                    Button("选文件夹…") { workspace.chooseFolder(for: place.project) }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.return, modifiers: .command)
+                } else {
+                    Button("开始") { place.map(start) }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .disabled(place == nil || stage == .opening)
+                }
             }
             .controlSize(.small)
         }
@@ -117,17 +96,14 @@ private struct NewSessionForm: View {
         .frame(width: Self.width)
     }
 
-    private func row(_ place: LaunchPlace, selected: Bool) -> some View {
+    private func row(_ place: ProjectFolders.LaunchPlace, selected: Bool) -> some View {
         Button { chosen = place.id } label: {
             HStack(spacing: 8) {
-                if let project = place.project {
-                    ProjectGlyph(project: project, size: 13)
-                } else {
-                    Image(systemName: "folder").foregroundStyle(palette.ink3).accessibilityHidden(true)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(place.title).foregroundStyle(palette.ink).lineLimit(1)
-                    Text(place.detail).font(.caption).foregroundStyle(palette.ink3).lineLimit(1)
+                ProjectGlyph(project: place.project, size: 13)
+                Text(place.project.name).foregroundStyle(place.binding == nil ? palette.ink2 : palette.ink).lineLimit(1)
+                if place.binding == nil {
+                    Image(systemName: "folder.badge.questionmark").font(.caption).foregroundStyle(palette.ink3)
+                        .help("还没有文件夹").accessibilityLabel("还没有文件夹")
                 }
                 Spacer(minLength: 4)
                 if selected { Image(systemName: "checkmark").foregroundStyle(palette.ink2).accessibilityHidden(true) }
@@ -140,13 +116,13 @@ private struct NewSessionForm: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private func start(_ place: LaunchPlace) {
+    private func start(_ place: ProjectFolders.LaunchPlace) {
         stage = .opening
         let words = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
                 let id = try await workspace.startSession(
-                    at: place.place, prompt: words.isEmpty ? nil : words, title: place.title) { stage = .connecting }
+                    in: place.project.id, prompt: words.isEmpty ? nil : words, title: place.project.name) { stage = .connecting }
                 stage = .idle
                 opened(id)
             } catch {

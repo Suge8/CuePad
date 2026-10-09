@@ -145,7 +145,7 @@ private struct ProjectHeader: View {
                     ProjectGlyph(project: project, size: 20)
                     Text(projectID == nil ? "未分类" : project?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
                 }
-                .contextMenu { if let project { ProjectMenu(project: project) { renaming = project } } }
+                .contextMenu { if let project { ProjectActions(project: project) { renaming = project } } }
                 // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏
                 if let intro = project?.intro {
                     Text(intro).font(.system(size: 15)).foregroundStyle(palette.ink2)
@@ -154,9 +154,7 @@ private struct ProjectHeader: View {
                 }
                 HStack(spacing: 4) {
                     if let project {
-                        DirectoryLink(path: directory.map(Self.abbreviated)) {
-                            ProjectDirectory.choose(for: project.id, workspace: workspace)
-                        }
+                        DirectoryLink(path: directory.map(Self.abbreviated)) { workspace.chooseFolder(for: project) }
                         if cardCount > 0 { Text("·") }
                     }
                     if cardCount > 0 { Text("\(cardCount) 条灵感").monospacedDigit() }
@@ -176,7 +174,7 @@ private struct ProjectHeader: View {
     }
 }
 
-/// 项目页头部的代码目录：没绑定时是带图标的"绑定代码目录…"，绑定后是路径；都可点，悬停有下划线、指针变手形。
+/// 项目页头部的文件夹：没绑定时是带图标的"绑定文件夹…"，绑定后是路径；都可点，悬停有下划线、指针变手形。
 private struct DirectoryLink: View {
     let path: String?
     let choose: () -> Void
@@ -188,7 +186,7 @@ private struct DirectoryLink: View {
                 Text(path).underline(hovering)
             } else {
                 Label {
-                    Text("绑定代码目录…").underline(hovering)
+                    Text("绑定文件夹…").underline(hovering)
                 } icon: {
                     Image(systemName: "folder.badge.plus")
                 }
@@ -198,7 +196,7 @@ private struct DirectoryLink: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .pointerStyle(.link)
-        .help(path == nil ? "选一个目录：在里面运行的 Agent 会出现在这个项目页" : "更换代码目录")
+        .help(path == nil ? "选一个文件夹：在里面运行的 Agent 会出现在这个项目页" : "更换文件夹")
     }
 }
 

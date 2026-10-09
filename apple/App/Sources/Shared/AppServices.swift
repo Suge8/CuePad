@@ -202,6 +202,12 @@ final class AppServices {
         uploaded(try await store.requestLaunch(launch, title: title, on: host, card: card))
     }
 
+    /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定），
+    /// 与发送同一条投送通道，写出后立即上传。结果用 `outcome(of:)`；绑好后目录绑定记录随同步回来。
+    func requestBind(_ bind: PiBind, title: String, on host: String) async throws -> DeliveryRequest {
+        uploaded(try await store.requestBind(bind, title: title, on: host))
+    }
+
     /// 请会话所在的 Mac 把这个会话的对话补写进来（7 天前活跃过、还没有对话的会话打开时调用），写出后立即上传。
     func requestTranscript(of session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestTranscript(of: session))

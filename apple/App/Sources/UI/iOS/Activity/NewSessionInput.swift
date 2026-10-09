@@ -3,43 +3,47 @@ import CueStore
 import SwiftUI
 
 /// 新会话：只有一个浮在键盘上方的输入框，写的就是给 Pi 的第一句话；头部一颗落点胶囊"新会话 · 项目名"，点开换在哪开
-/// （默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时菜单里写上 Mac 名）。发送钮就是开始：
+/// （只列项目，默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时菜单里写上 Mac 名）。发送钮就是开始：
 /// 发出后头部写进度（送达中 → Mac 在开），Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；没能打开时头部写原因，可以再发。
-/// 没有能开的地方时输入框换成一句说明。
+/// 新会话的目录只由项目绑定的文件夹推出；选中还没绑文件夹的项目时头部引导就地绑（弹候选，请 Mac 绑），绑好才能开。
+/// 没有项目时输入框换成一句说明。
 struct NewSessionInput: View {
     let start: Navigation.NewSession
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
-    @State private var places: [LaunchPlace]?
-    @State private var choice: LaunchPlace.ID?
+    /// 手机请 Mac 绑文件夹的请求（读它的进度，`ProjectFolders.bindProgress`）。
+    @State private var bindRequests: [DeliveryRequest]?
+    @State private var choice: ProjectFolders.LaunchPlace.ID?
     @State private var draft = ComposerDraft()
     @State private var launched: Navigation.NewSession.Launched?
     @State private var progress: LaunchProgress?
     @State private var sending = false
     @FocusState private var focused: Bool
 
-    /// 项目按所有项目选择器的同一个顺序（`ProjectCatalog.projects`，最近活跃的在前）。
-    private var projectOrder: [Project] { workspace.catalog?.projects ?? [] }
-    private var chosen: LaunchPlace? {
-        places?.first { $0.id == choice } ?? start.project.flatMap { project in places?.first { $0.project?.id == project } } ?? places?.first
+    /// 只列项目，按所有项目选择器的同一个顺序（`ProjectCatalog.projects`，最近活跃的在前）。
+    private var places: [ProjectFolders.LaunchPlace] {
+        ProjectFolders.launchPlaces(projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: nil)
+    }
+    private var chosen: ProjectFolders.LaunchPlace? {
+        places.first { $0.id == choice } ?? start.project.flatMap { project in places.first { $0.project.id == project } } ?? places.first
     }
     /// 发出且还没失败：输入框锁住，等它开好。
     private var inFlight: Bool { sending || (launched != nil && progress?.request?.status != .known(.failed)) }
-    private var canStart: Bool { chosen != nil && services.reachesPiHost && !inFlight }
+    private var canStart: Bool { chosen?.binding != nil && services.reachesPiHost && !inFlight }
 
     var body: some View {
         Group {
-            if places?.isEmpty == true {
-                Label("在 Mac 上给项目绑定代码目录，或在 Mac 上跑过 pi 后就能在这里开会话", systemImage: "folder")
+            if places.isEmpty {
+                Label("先新建一个项目，再给它选文件夹，就能在这里开会话", systemImage: "folder")
                     .font(.subheadline).foregroundStyle(palette.ink2)
                     .padding(18).frame(maxWidth: .infinity, alignment: .leading)
                     .glass(in: .rect(cornerRadius: 25, style: .continuous))
             } else {
                 Composer(
                     draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
-                    cardsFrom: chosen?.project?.id, pinnedOpen: true,
+                    cardsFrom: chosen?.project.id, pinnedOpen: true,
                     header: {
                         header.padding(.horizontal, 12).padding(.top, 10)
                         status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)
@@ -58,8 +62,8 @@ struct NewSessionInput: View {
             if let seed = start.draft, draft.isEmpty(accepting: [.images, .cards]) { draft = seed }
             focused = true
         }
-        .observing(services.store, [.directoryBindings, .piSessionStates], id: projectOrder, into: $places, onError: workspace.fail) {
-            [projectOrder] store in try LaunchPlace.all(projects: projectOrder, from: store)
+        .observing(services.store, [.deliveryRequests], into: $bindRequests, onError: workspace.fail) { store in
+            try store.deliveryRequests().filter { $0.mode == .known(.bind) }
         }
         .observing(services.store, [.deliveryRequests, .piSessionStates], id: launched, into: $progress, onError: workspace.fail) {
             [launched] store in
@@ -78,14 +82,15 @@ struct NewSessionInput: View {
         HStack(spacing: 8) {
             Menu {
                 Picker("在哪开", selection: Binding(get: { chosen?.id }, set: { choice = $0 })) {
-                    ForEach(places ?? []) { place in
-                        Text(place.detail.isEmpty ? place.name : "\(place.name) · \(place.detail)").tag(Optional(place.id))
+                    ForEach(places) { place in
+                        Text([place.project.name, place.detail ?? (place.binding == nil ? "还没有文件夹" : nil)].compactMap { $0 }.joined(separator: " · "))
+                            .tag(Optional(place.id))
                     }
                 }
             } label: {
                 HStack(spacing: 5) {
                     if let project = chosen?.project { ProjectGlyph(project: project, size: 12) }
-                    Text("新会话 · \(chosen?.name ?? "选在哪开")").lineLimit(1)
+                    Text("新会话 · \(chosen?.project.name ?? "选在哪开")").lineLimit(1)
                     Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3)
                 }
                 .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink)
@@ -93,14 +98,16 @@ struct NewSessionInput: View {
                 .background(palette.fill, in: .capsule)
             }
             .disabled(inFlight)
-            .accessibilityLabel("在哪开：\(chosen?.name ?? "没选")")
+            .accessibilityLabel("在哪开：\(chosen?.project.name ?? "没选")")
             Spacer(minLength: 0)
         }
     }
 
-    /// 发出后的进度，上一次没能打开的原因，或送不到 Mac 的原因。
+    /// 发出后的进度，上一次没能打开的原因，送不到 Mac 的原因，或项目还没有文件夹时的引导。
     @ViewBuilder private var status: some View {
-        if let request = progress?.request {
+        if let place = chosen, place.binding == nil, progress?.request == nil {
+            folderGuide(place.project)
+        } else if let request = progress?.request {
             if let failure = request.failure {
                 Text(failure).foregroundStyle(palette.failure)
             } else if request.status == .known(.succeeded) {
@@ -113,8 +120,31 @@ struct NewSessionInput: View {
         }
     }
 
+    /// 项目还没有文件夹：写明，给"选文件夹…"（请 Mac 绑，进度与没绑成的原因就在这一行）。
+    private func folderGuide(_ project: Project) -> some View {
+        HStack(spacing: 8) {
+            switch ProjectFolders.bindProgress(of: project.id, in: bindRequests ?? []) {
+            case .binding:
+                ProgressView().controlSize(.mini)
+                Text("Mac 正在绑定文件夹…").foregroundStyle(palette.ink3)
+            case .failed(let reason):
+                Text("没绑成：\(reason)").foregroundStyle(palette.failure)
+                chooseButton(project)
+            case nil:
+                Text("「\(project.name)」还没有文件夹").foregroundStyle(palette.ink3)
+                chooseButton(project)
+            }
+        }
+    }
+
+    private func chooseButton(_ project: Project) -> some View {
+        Button("选文件夹…") { workspace.chooseFolder(for: project) }
+            .font(.caption.weight(.semibold)).foregroundStyle(palette.signature)
+            .frame(minHeight: 44)
+    }
+
     private func launch() {
-        guard let place = chosen, canStart else { return }
+        guard let place = chosen, let binding = place.binding, canStart else { return }
         let token = UUID().uuidString
         let draft = draft
         sending = true
@@ -123,48 +153,10 @@ struct NewSessionInput: View {
             let opening = try draft.stored(in: services.store.files).nonEmpty
             // 从灵感或任务"新会话"交给 Agent：开好后它关联到这个会话（带着的那一条）
             let request = try await services.launch(
-                PiLaunch(place: place.launch, prompt: opening, token: token), title: place.name, on: place.hostID, card: start.card ?? draft.attachments.first?.card)
+                PiLaunch(project: place.project.id, prompt: opening, token: token), title: place.project.name, on: binding.hostID,
+                card: start.card ?? draft.attachments.first?.card)
             launched = .init(request: request.id, token: token)
         }
-    }
-}
-
-/// 新会话可以开在哪：绑定了代码目录的项目（每个项目 + Mac 一项，发给绑定它的那台 Mac；同一项目绑在几台 Mac 上时
-/// 写上 Mac 名让人选），以及没归入项目的会话最近用过的几个文件夹（与那个会话同一目录开、发给那个会话的 Mac，按文件夹名去重）。
-nonisolated struct LaunchPlace: Identifiable, Sendable, Equatable {
-    /// 文件夹最多列这么多个，从最近这么多个已结束的会话里找。
-    static let folderLimit = 5
-    static let scanned = 100
-
-    let id: String
-    let name: String
-    /// 名字下的一行：目录名，必要时加 Mac 名。
-    let detail: String
-    let project: Project?
-    let launch: PiLaunchPlace
-    let hostID: String
-
-    /// `projects` 是界面的项目顺序；同一项目的几台 Mac 按查询给的顺序（Mac 名）。
-    static func all(projects: [Project], from store: isolated CueStore) throws -> [LaunchPlace] {
-        let bindings = Dictionary(grouping: try store.directoryBindings(), by: \.projectID)
-        let bound = projects.flatMap { project in
-            let macs = bindings[project.id] ?? []
-            return macs.map { binding in
-                LaunchPlace(
-                    id: binding.id.uuidString, name: project.name,
-                    detail: macs.count > 1 ? "\(binding.folder) · \(binding.hostName)" : binding.folder,
-                    project: project, launch: .project(project.id), hostID: binding.hostID)
-            }
-        }
-        var seen: Set<String> = []
-        var folders: [LaunchPlace] = []
-        for item in try store.piSessionPage(PiSessionQuery(limit: scanned)).items where item.project == nil {
-            guard folders.count < folderLimit, let folder = item.state.folder, seen.insert(folder).inserted else { continue }
-            folders.append(LaunchPlace(
-                id: "folder:" + folder, name: folder, detail: "最近的会话在这里", project: nil,
-                launch: .besideSession(item.state.sessionID), hostID: item.state.hostID))
-        }
-        return bound + folders
     }
 }
 

@@ -80,7 +80,7 @@ struct AgentScreen: View {
         }
     }
 
-    /// 左边的圆钮：按项目筛"现在"与"历史"（全部 + 在 Mac 上绑了代码目录的项目，项目目录的顺序）；筛着项目时圆钮里是那个项目的图标。
+    /// 左边的圆钮：按项目筛"现在"与"历史"（全部 + 在 Mac 上绑了文件夹的项目，项目目录的顺序）；筛着项目时圆钮里是那个项目的图标。
     /// 一个能筛的项目都没有时不出现。
     @ViewBuilder private var filterMenu: some View {
         let projects = (workspace.catalog?.projects ?? []).filter { list?.projects.contains($0.id) == true || $0.id == filter }

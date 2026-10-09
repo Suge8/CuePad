@@ -107,6 +107,8 @@ final class Workspace {
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
     var overlay: Overlay?
     var notice: Notice?
+    /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
+    var folderPicker: Project?
     #if os(macOS)
     /// 鼠标停在哪张卡上、正按着哪张卡（卡片报上来的悬停与 AppKit 的鼠标事件，见 `mouse(down:)`）。不触发界面刷新。
     @ObservationIgnored private var hoveredCard: UUID?

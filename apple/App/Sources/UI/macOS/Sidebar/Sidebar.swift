@@ -108,7 +108,7 @@ struct Sidebar: View {
                 ProjectGlyph(project: project)
             }
         }
-        .contextMenu { ProjectMenu(project: project, rename: { renaming = project }) }
+        .contextMenu { ProjectActions(project: project, edit: { renaming = project }) }
     }
 
     private var footer: some View {
@@ -257,7 +257,7 @@ private struct PiSection: View {
                 HStack {
                     Text("Agent")
                     Spacer()
-                    NewSessionButton(recent: recorded, showing: $startingSession)
+                    NewSessionButton(showing: $startingSession)
                 }
                 // 系统把分组标题连同 + 合成一个读屏元素，默认动作是收起分组：+ 另给一个具名动作
                 .accessibilityAction(named: "新会话") { startingSession = true }
