@@ -71,21 +71,17 @@ struct CardMeta: View {
     }
 }
 
-/// 滚动内容在顶栏、底栏后面淡到页面底色，玻璃后面不叠字（全 App 只此一种：Mac 工具栏下与底部输入栏下，iOS 推入页的状态栏与
-/// 悬浮顶栏下、标签根页的底部栏下）。从这条边起先是一段实底（`solid`；nil 时是这条边的安全区——iOS 的状态栏加顶栏、
+/// 滚动内容在顶栏、底栏后面淡到页面底色，玻璃后面不叠字（Mac 底部输入栏下，iOS 推入页的状态栏与
+/// 悬浮顶栏下、标签根页的底部栏下；Mac 工具栏下是虚化的 `ToolbarEdge`）。从这条边起先是一段实底（`solid`；nil 时是这条边的安全区——iOS 的状态栏加顶栏、
 /// 底部栏让出的高度加主屏指示条），到栏的边沿处仍完全不透明，再往内容那边淡出 `fade` 这么高。
 /// 是盖在内容上的底色渐变，而不是遮罩：遮罩要把整面滚动内容先画到离屏缓冲再裁，侧栏开合、滚动时每帧都要重来。
-/// Mac 的栏高固定（给 `solid`），不读几何，侧栏开合时不跟着每帧重算；Mac 上用它作滚动视图的兄弟层：挂成滚动视图自己的
-/// overlay 盖不住滚进工具栏区域的那段内容（macOS 把那段放在更上层）。
+/// Mac 的栏高固定（给 `solid`），不读几何，侧栏开合时不跟着每帧重算。
 struct EdgeFade: View {
     let edge: VerticalEdge
     var solid: CGFloat?
     let fade: CGFloat
 
     #if os(macOS)
-    /// 窗口工具栏下（工具栏高 52，往内容淡出 12；页面内容的上边距要让出这 12，停在顶部时标题不被淡掉）。
-    static var underToolbar: EdgeFade { EdgeFade(edge: .top, solid: 52, fade: toolbarFade) }
-    static let toolbarFade: CGFloat = 12
     /// 底部玻璃输入栏下（输入栏连同下边距约 70，往上淡出 64）。
     static var underInputBar: EdgeFade { EdgeFade(edge: .bottom, solid: 70, fade: 64) }
     #endif
@@ -120,6 +116,39 @@ struct EdgeFade: View {
             .accessibilityHidden(true)
     }
 }
+
+#if os(macOS)
+/// 窗口工具栏下的一条边：滚上来的内容到悬浮的玻璃条目（往上一层、标题、搜索与任务）后面时虚化，再往下淡出——与 iOS 的柔和滚动边缘效果
+/// 同一种观感。系统的滚动边缘效果在这个窗口里只给得出不透明的硬边（透明标题栏下则完全没有，`scrollEdgeEffectStyle` 管不到标题栏这层），
+/// 所以自己铺：一层系统材质按渐变遮罩从实到无，叠一层由实到无的页面底色，让虚化的内容回到纸与墨的色温。遮罩只在这一条上，不碰滚动内容。
+/// 作滚动视图的兄弟层放在它上面、页面里浮在顶上的玻璃之下；"降低透明度"时退回实底渐变。
+struct ToolbarEdge: View {
+    /// 工具栏高，往内容再淡出这么多（页面内容的上边距要让出这一段，停在顶部时标题不被虚化）。
+    static let height: CGFloat = 52
+    static let fade: CGFloat = 20
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        let solid = Self.height / (Self.height + Self.fade)
+        let fading = LinearGradient(
+            stops: [.init(color: .black, location: 0), .init(color: .black, location: solid), .init(color: .clear, location: 1)],
+            startPoint: .top, endPoint: .bottom)
+        ZStack {
+            if !reduceTransparency { Rectangle().fill(.regularMaterial) }
+            LinearGradient(
+                colors: [palette.desk.opacity(reduceTransparency ? 1 : 0.72), palette.desk.opacity(reduceTransparency ? 1 : 0.4)],
+                startPoint: .top, endPoint: .bottom)
+        }
+        .mask(fading)
+        .frame(height: Self.height + Self.fade)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+#endif
 
 extension EnvironmentValues {
     /// 页面的底色（iOS 推入页由 `RouteView` 给出：纸页是纸，其余是桌面）；`EdgeFade` 淡到它。没给时是桌面。

@@ -81,20 +81,11 @@ struct SectionLabel: View {
     var systemImage: String?
     @Environment(\.palette) private var palette
 
-    /// iOS 跟随动态字体；Mac 用固定的小号字。
-    private static var font: Font {
-        #if os(iOS)
-        .caption.weight(.semibold)
-        #else
-        .system(size: 11, weight: .semibold)
-        #endif
-    }
-
     var body: some View {
         Group {
             if let systemImage { Label(text, systemImage: systemImage) } else { Text(text) }
         }
-        .font(Self.font)
+        .font(Typography.label)
         .foregroundStyle(palette.ink3)
         // 图标是装饰：读屏只读文字（否则会读出"瞄准镜十字线"这类符号名），作为小节标题
         .accessibilityElement(children: .ignore)

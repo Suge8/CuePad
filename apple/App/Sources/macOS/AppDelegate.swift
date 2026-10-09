@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         panel.setContent(RootViews.menuBarPad(services) { [weak panel] id in
             panel?.hide()
             shell.show()
-            workspace.openSession(id)
+            workspace.show(.session(id))
         })
         menuBarPanel = panel
         statusItem = StatusItemController(

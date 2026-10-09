@@ -225,7 +225,7 @@ private struct Disclosure: View {
                 if !row.isExpanded { Text("\(row.childCount)").monospacedDigit() }
                 Image(systemName: "chevron.right").fontWeight(.semibold).rotationEffect(.degrees(row.isExpanded ? 90 : 0))
             }
-            .font(.caption)
+            .font(Typography.caption)
             .foregroundStyle(palette.ink3)
             #if os(iOS)
             .frame(minWidth: 44, minHeight: 44)

@@ -145,7 +145,7 @@ struct SearchPalette: View {
 
     private func openSession(_ sessionID: String) {
         workspace.overlay = nil
-        workspace.openSession(sessionID)
+        workspace.show(.session(sessionID))
     }
 
     private var selected: Card? { data?.cards.first { $0.id == selection } }
@@ -162,7 +162,7 @@ struct SearchPalette: View {
                     if let data {
                         if data.cards.isEmpty {
                             Text(query.text.isEmpty && !query.isFiltered ? "输入关键词，或用上面的筛选" : "没有找到灵感或任务")
-                                .font(.system(size: 13)).foregroundStyle(.secondary)
+                                .font(Typography.secondary).foregroundStyle(.secondary)
                                 .padding(16)
                         }
                         ForEach(groups(data), id: \.owner) { group in
@@ -172,13 +172,13 @@ struct SearchPalette: View {
                                 Text(project?.name ?? "未分类")
                                 Text("\(group.cards.count)").foregroundStyle(.tertiary)
                             }
-                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                            .font(Typography.label).foregroundStyle(.secondary)
                             .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 2)
                             ForEach(group.cards) { card in row(card).id(card.id) }
                         }
                         if data.total > data.cards.count {
                             Button("显示更多（还有 \(data.total - data.cards.count) 条）") { query.pages += 1 }
-                                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
+                                .buttonStyle(.plain).font(Typography.meta).foregroundStyle(.secondary)
                                 .padding(10)
                         }
                     }
@@ -195,11 +195,11 @@ struct SearchPalette: View {
         return HStack(spacing: 10) {
             Image(systemName: text.images.isEmpty ? "doc.text" : "photo").frame(width: 16).foregroundStyle(.secondary)
                 .accessibilityLabel((card.isTask ? "任务" : "灵感") + (text.images.isEmpty ? "" : "，含图片"))
-            Text(Highlight.matches(text.label, query.text)).font(.system(size: 13.5)).lineLimit(1)
+            Text(Highlight.matches(text.label, query.text)).font(Typography.body).lineLimit(1)
             Spacer()
-            Text(DateLabel.short(card.modifiedAt)).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(DateLabel.short(card.modifiedAt)).font(Typography.meta).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 10).frame(height: 32)
+        .padding(.horizontal, 10).frame(height: 34)
         .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
         .contentShape(.rect)
         .onTapGesture(count: 2) { open(card) }
@@ -219,14 +219,14 @@ struct SearchPalette: View {
                     Text("\(project?.name ?? "未分类") · \(DateLabel.short(card.modifiedAt))")
                     if let send = data.lastSends[card.id] { SentMark(target: send.target.name) }
                 }
-                .font(.system(size: 11)).foregroundStyle(palette.ink3)
+                .font(Typography.meta).foregroundStyle(palette.ink3)
                 if card.isTask, let facts = Self.taskFacts(parent: data.parents[card.id], marks: data.marks[card.id]) {
-                    Text(facts).font(.system(size: 12)).foregroundStyle(palette.ink2)
+                    Text(facts).font(Typography.meta).foregroundStyle(palette.ink2)
                 }
                 if let image = text.images.first { Thumbnail(hash: image, height: 150) }
                 if !rest.isEmpty {
                     let body = Text(Highlight.matches(rest, query.text, base: VariableText.styled(rest, palette)))
-                        .font(.system(size: 13)).lineSpacing(5).foregroundStyle(palette.ink)
+                        .font(Typography.body).lineSpacing(Typography.lineSpacing).foregroundStyle(palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     ViewThatFits(in: .vertical) {
                         body.fixedSize(horizontal: false, vertical: true)
@@ -234,7 +234,7 @@ struct SearchPalette: View {
                     }
                 }
                 HStack(spacing: 12) { Text("↩ 打开"); Text("⌘↩ 发送"); Text("⌘⇧C 复制") }
-                .font(.system(size: 11)).foregroundStyle(palette.ink3).padding(.top, 4)
+                .font(Typography.meta).foregroundStyle(palette.ink3).padding(.top, 4)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -356,7 +356,7 @@ private struct FilterBar: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) { chips }
             }
-            if let total { Text("\(total) 个结果").font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary).fixedSize().layoutPriority(1) }
+            if let total { Text("\(total) 个结果").font(Typography.meta.monospacedDigit()).foregroundStyle(.secondary).fixedSize().layoutPriority(1) }
         }
     }
 
@@ -440,9 +440,9 @@ private struct FilterCapsule: View {
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6).accessibilityHidden(true)
             }
         }
-        .font(.system(size: 12))
+        .font(Typography.meta)
         .foregroundStyle(on ? AnyShapeStyle(palette.onAccent) : AnyShapeStyle(.primary))
-        .padding(.horizontal, 10).frame(height: 26)
+        .padding(.horizontal, 10).frame(height: 28)
         .background(on ? AnyShapeStyle(palette.accent) : AnyShapeStyle(palette.fill.opacity(2)), in: .capsule)
         .contentShape(.capsule)
     }

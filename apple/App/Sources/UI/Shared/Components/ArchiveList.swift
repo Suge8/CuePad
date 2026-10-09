@@ -35,11 +35,11 @@ struct ArchiveList: View {
                     .foregroundStyle(palette.ink3).frame(width: 20).accessibilityLabel(card.isTask ? "任务" : "灵感")
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.title).foregroundStyle(palette.ink).lineLimit(1)
-                    Text(project?.name ?? CaptureCopy.inbox).font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
+                    Text(project?.name ?? CaptureCopy.inbox).font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 if let archivedAt = card.archivedAt {
-                    Text("\(DateLabel.short(archivedAt)) 归档").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
+                    Text("\(DateLabel.short(archivedAt)) 归档").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
                 }
             }
             .contentShape(.rect)

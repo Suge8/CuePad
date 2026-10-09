@@ -74,7 +74,7 @@ struct SessionResultList: View {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if groups.isEmpty {
                         Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端运行 pi，会话就会出现在这里")
-                            .font(.system(size: 13)).foregroundStyle(.secondary).padding(16)
+                            .font(Typography.secondary).foregroundStyle(.secondary).padding(16)
                     }
                     ForEach(groups, id: \.key) { group in
                         header(group)
@@ -82,7 +82,7 @@ struct SessionResultList: View {
                     }
                     if more > 0 {
                         Button("显示更多（还有 \(more) 个）", action: loadMore)
-                            .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary).padding(10)
+                            .buttonStyle(.plain).font(Typography.meta).foregroundStyle(.secondary).padding(10)
                     }
                 }
                 .padding(8)
@@ -99,7 +99,7 @@ struct SessionResultList: View {
             }
             Text("\(group.sessions.count)").foregroundStyle(.tertiary)
         }
-        .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+        .font(Typography.label).foregroundStyle(.secondary)
         .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 2)
         .accessibilityAddTraits(.isHeader)
     }
