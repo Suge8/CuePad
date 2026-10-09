@@ -9,17 +9,22 @@ struct PiConversation: View {
     let session: PiSessionState
     let messages: [PiChatMessage]
     var deliveries: [DeliveryRequest] = []
+    /// 只排最近这么多条（Mac）；更早的点最上面一行再排开 `Self.step` 条。nil 是全排（iOS 靠懒加载）。
+    var window: Binding<Int>?
     @Environment(\.palette) private var palette
     @Environment(\.chatInverted) private var inverted
+    @Environment(\.chatAtNewest) private var atNewest
     @Environment(\.chatBottomSpace) private var bottomSpace
     @Environment(\.chatHighlight) private var highlight
 
     var body: some View {
-        // 懒加载：只排看得见的几条（整段排开时，长对话的每条回答都在推入那一刻排版、栅格化，转场的前一百多毫秒画不出来）。
-        // 在倒置的滚动区里（iOS）按新到旧给出，懒加载从最新那条起排
-        let entries = PiChat.entries(messages)
+        // iOS 懒加载：只排看得见的几条（整段排开时，长对话的每条回答都在推入那一刻排版、栅格化，转场的前一百多毫秒画不出来），
+        // 在倒置的滚动区里按新到旧给出，懒加载从最新那条起排。
+        // Mac 不用懒加载（见 `ChatStack`）：只排最近几条（`window`），位置才是确定的
+        let all = PiChat.entries(messages)
+        let entries = window.map { Array(all.suffix($0.wrappedValue)) } ?? all
         let outgoing = PiChat.outgoing(deliveries, messages: messages)
-        LazyVStack(alignment: .leading, spacing: Self.spacing) {
+        ChatStack(alignment: .leading, spacing: Self.spacing) {
             if inverted {
                 // 让出底下回复框与键盘占的高（`ChatScroll`）；它和第一条之间本有一份行距，扣掉
                 Color.clear.frame(height: max(0, bottomSpace - Self.spacing)).accessibilityHidden(true)
@@ -33,6 +38,9 @@ struct PiConversation: View {
                 }
                 if entries.isEmpty { RecapPreview(session: session).chatRow() }
             } else {
+                if let window, entries.count < all.count {
+                    EarlierRow(hidden: all.count - entries.count, fillsViewport: atNewest, window: window)
+                }
                 if entries.isEmpty { RecapPreview(session: session) }
                 ForEach(entries) { entry in row(entry) }
                 ForEach(outgoing) { request in OutgoingBubble(request: request, session: session) }
@@ -43,6 +51,8 @@ struct PiConversation: View {
     }
 
     private static var spacing: CGFloat { 18 }
+    /// 窗口里最初排几条、每次多排几条。
+    static let firstWindow = 4, step = 10
 
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
@@ -64,6 +74,33 @@ struct PiConversation: View {
         if session.state == .known(.error) {
             Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
         }
+    }
+}
+
+#if os(macOS)
+/// Mac 的对话整段排开最近几条、不用懒加载栈：懒加载栈靠估计高度定位，数据晚到或内容变化后再滚到最新，可见区里的行有时排不出来
+/// （页面空白，滚一下才出现）；整段排开位置是确定的。代价是排开的每条都要当场排版，所以只排最近几条。
+private typealias ChatStack = VStack
+#else
+private typealias ChatStack = LazyVStack
+#endif
+
+/// 排开的最上面一行：还有更早的对话，点一下再排开一段。贴着最新时它进了可见区，说明排开的几条铺不满一屏，自动再排开。
+private struct EarlierRow: View {
+    let hidden: Int
+    let fillsViewport: Bool
+    @Binding var window: Int
+    @Environment(\.palette) private var palette
+    @State private var visible = false
+
+    var body: some View {
+        Button("显示更早的 \(min(hidden, PiConversation.step)) 条" + (hidden > PiConversation.step ? "（共 \(hidden) 条）" : "")) {
+            window += PiConversation.step
+        }
+            .buttonStyle(.plain).font(.footnote).foregroundStyle(palette.ink3)
+            .frame(maxWidth: .infinity, minHeight: 28)
+            .onScrollVisibilityChange { visible = $0 }
+            .task(id: [visible ? 1 : 0, window]) { if visible, fillsViewport { window += PiConversation.step } }
     }
 }
 

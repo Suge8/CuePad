@@ -65,6 +65,8 @@ extension EnvironmentValues {
     @Entry var chatInverted = false
     /// 倒置的聊天滚动区底下（回复框与键盘）占的高：对话在懒加载栈里以最新那头的一行空白让出它（见 `ChatScroll`）。
     @Entry var chatBottomSpace: CGFloat = 0
+    /// 滚动区贴着最新（`ChatFollow.atNewest`）：Mac 的对话据此知道最上面一行进了可见区是不是因为排开的几条铺不满一屏。
+    @Entry var chatAtNewest = true
     /// 刚跳到的那条你的话：短暂描一圈（刻度滑条）。
     @Entry var chatHighlight: UUID?
 }
@@ -109,7 +111,7 @@ private struct ChatRow: ViewModifier {
 /// iOS 上整个滚动区倒过来（转 180°，最新在偏移 0 处），内容按新到旧给出：打开、跟随、回到最新都是滚到偏移 0，
 /// 懒加载从最新那条起排，估计高度只用在最旧的那一头、看不见的地方。正着排时最新在内容末端，它的位置要靠懒加载按估计高度
 /// 推算：回答高矮悬殊（整页粘贴的长消息、长代码块）时打开或长距离滚回最新都会落在内容外、整页空白。
-/// Mac 不倒置：滚轮不随画面翻转，倒置后滚动方向会反。
+/// Mac 不倒置：滚轮不随画面翻转，倒置后滚动方向会反；所以 Mac 的对话不用懒加载，只排最近几条（`PiConversation.window`），底锚点定位。
 struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
     private let external: Binding<ChatFollow>?
@@ -168,7 +170,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             // 铺满后伸进底下的那一段就是回复框与键盘占的高
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { below = $0 }
         #else
-        tracked(ScrollView { content }).defaultScrollAnchor(.bottom)
+        tracked(ScrollView { content.environment(\.chatAtNewest, follow.wrappedValue.atNewest) }).defaultScrollAnchor(.bottom)
         #endif
     }
 

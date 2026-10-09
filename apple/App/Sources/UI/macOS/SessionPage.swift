@@ -42,7 +42,7 @@ extension SessionDigest {
 /// Mac 的窗口本来就有一条工具栏，手机那种浮在内容上的顶栏放在它下面就是两层页头。顶栏规则与手机同一份（`ChatFollow.showsHeader`）：
 /// 看历史时标题与"⋯"让开，回到最新自动出现；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出——顶栏就在那里，
 /// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
-/// （`PiConversation`，子代理在末尾收成一行汇总），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
+/// （`PiConversation`，子代理在末尾收成一行汇总；只排最近几条，更早的点最上面一行再排开），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
 /// 底部是与手机同一个回复框（`PiReplyBar`），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
 /// 推在根页上，返回回到原来那页。
 struct SessionPage: View {
@@ -55,6 +55,8 @@ struct SessionPage: View {
     @State private var confirmingEnd = false
     @State private var renaming: PiSessionState?
     @State private var follow = ChatFollow()
+    /// 对话排开最近多少条（`PiConversation.window`）。
+    @State private var shown = PiConversation.firstWindow
 
     /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
     private static let readingWidth: CGFloat = 760
@@ -70,7 +72,8 @@ struct SessionPage: View {
         VStack(spacing: 0) {
             if let session = digest.session {
                 PiRestartNotice(session: session).padding(.horizontal, 24).padding(.top, 8).frame(maxWidth: Self.readingWidth)
-                conversation(session, digest)
+                // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
+                if stored != nil { conversation(session, digest) } else { Color.clear.frame(maxHeight: .infinity) }
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest.deliveries)
                     if let reason = shownEnd?.failure, session.state != .known(.ended) {
@@ -177,10 +180,13 @@ struct SessionPage: View {
                 if fetchingTranscript(digest) {
                     Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
                 }
-                PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries)
+                PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries, window: $shown)
             }
             .padding(.vertical, 16)
             .readingColumn(maxWidth: Self.readingWidth, inset: 24)
+            #if DEBUG
+            .onAppear { PerfProbe.mark("conversation") }
+            #endif
         }
         .frame(maxHeight: .infinity)
     }
