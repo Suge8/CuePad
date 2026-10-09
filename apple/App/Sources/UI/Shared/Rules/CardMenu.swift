@@ -4,9 +4,25 @@ import CueStore
 /// 动线是任务优先：记下灵感 → 挂到任务（成为提示词）→ 在提示词上交给 Agent → 完成并归档。所以灵感的主动作是挂到任务，
 /// 交给 Agent 只在提示词上（`handsToAgent`）；任务本身没有话可交。长按（Mac 右键）最多四项加删除，主动作排第一，删除单独在最后；
 /// 打开是点按、完成是点圆圈、缩进是轻扫和拖放，这些不进菜单；低频的（换项目、复制、改回灵感、资料）在任务页与纸页的"⋯"里（`more`）。
+/// 一行轻扫露出的动作也在这里（`swipes`）。
 nonisolated enum CardMenu {
     enum Item: Hashable, Sendable {
         case attachToTask, handToAgent, makeTask, makeIdea, complete, reopen, move, archive, resource, unresource, copy, trash
+        /// 只在轻扫里：任务在大纲里缩进、反缩进。
+        case indent, outdent
+    }
+
+    /// 一行两边轻扫露出的动作，排在前面的在最外侧、一滑到底执行它。
+    struct Swipes: Equatable, Sendable {
+        var leading: [Item]
+        var trailing: [Item]
+    }
+
+    /// 轻扫：任务右滑缩进、左滑删除与反缩进；灵感右滑挂到任务、左滑删除与设为任务。做不了的不出现
+    /// （`indent`/`outdent`：大纲里这一行此刻能不能缩进、反缩进）。提示词不在轻扫里挂到任务（已挂着），交给 Agent 在提示词卡上。
+    static func swipes(for card: Card, indent: Bool, outdent: Bool) -> Swipes {
+        guard card.isTask else { return Swipes(leading: handsToAgent(card) ? [] : [.attachToTask], trailing: [.trash, .makeTask]) }
+        return Swipes(leading: indent ? [.indent] : [], trailing: [.trash] + (outdent ? [.outdent] : []))
     }
 
     /// 能不能交给 Agent：只有提示词（挂在任务下的灵感）能。灵感先挂到任务，任务本身没有话可交。

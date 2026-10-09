@@ -455,6 +455,22 @@ final class Workspace {
         say("已归档", undo: { try await store.unarchive(id) })
     }
 
+    /// 删除一条灵感或任务（进回收站，下级提到它的位置，见 `CueStore.trashCard`）：提示里可撤销，撤销时下级回到它下面。
+    func trash(_ id: UUID) async throws {
+        let store = services.store
+        let children = try await store.children(of: id).map(\.id)
+        try await store.trashCard(id)
+        if openCard == id { openCard = nil }
+        say("已删除", undo: {
+            try await store.restoreCard(id)
+            var previous: UUID?
+            for child in children {
+                try await store.moveCard(child, to: .under(id), after: previous)
+                previous = child
+            }
+        })
+    }
+
     /// 一键归档"最近完成"的任务。
     func archiveCompletedTasks() async throws {
         let count = try await services.store.archiveCompletedTasks()

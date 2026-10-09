@@ -27,7 +27,7 @@ extension EnvironmentValues {
 
 /// 任务大纲（手机任务页与项目页、Mac 任务面板与项目页共用）：按 `TaskTree` 缩进排出可见的行，有子任务的行尾可折起展开（第三级默认折起）。
 /// 手势用系统拖放（长按抬起、与长按菜单共存；Mac 按住拖）：停在一行中部高亮、松手成为它的子任务；停在两行之间出插入线，
-/// 横向挪动改层级（插入线的起点跟着缩进）。手机上向右轻扫缩进、向左反缩进（过阈值有触感，松手生效）。落点规则全在 `TaskTree`，这里只管手势与画。
+/// 横向挪动改层级（插入线的起点跟着缩进）。手机上轻扫按 `CardMenu.swipes`：右滑缩进，左滑删除与反缩进（`rowSwipes`）。落点规则全在 `TaskTree`，这里只管手势与画。
 /// 行之间不让位（同提醒事项的插入线）：拖动期间不重排，也就不会每帧重算布局。
 struct TaskOutline<Line: View>: View {
     /// 整个看板（或项目页）的层级：拖放落点按它算，所以能从别的组拖进来。
@@ -87,9 +87,7 @@ struct TaskOutline<Line: View>: View {
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(outlineSpace)) } action: { drag.frames[row.id] = $0 }
         .onDrag { TaskDragSession.shared.begin(row.id, isTask: true) }
         #if os(iOS)
-        .rowSwipe(
-            right: structure.indent.map { SwipeAction(symbol: "increase.indent", run: $0) },
-            left: structure.outdent.map { SwipeAction(symbol: "decrease.indent", run: $0) })
+        .rowSwipes(.card(row.task, workspace: workspace, structure: structure))
         #endif
     }
 
