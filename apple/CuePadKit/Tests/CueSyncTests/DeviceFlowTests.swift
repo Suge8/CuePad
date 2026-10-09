@@ -92,6 +92,15 @@ import Testing
     #expect(seen.context == PiContextUsage(tokens: 150_000, window: 200_000) && seen.commands == commands)
   }
 
+  /// 手机请 Mac 绑文件夹：请求（只带"从哪个会话的目录取"，不带路径）到 Mac，Mac 读出同一个内容。
+  @Test func bindRequestTravelsFromPhoneToTheMac() async throws {
+    let project = try await phone.store.createProject(name: "圆桌", color: "#111")
+    let bind = PiBind(project: project.id, folder: .besideSession("s1"))
+    let made = try await phone.store.requestBind(bind, title: "圆桌", on: "mac")
+    try await cloud.exchange()
+    #expect(try await mac.store.deliveryRequest(made.id)?.bind == bind)
+  }
+
   @Test(.timeLimit(.minutes(1)))
   func deliveryRequestTravelsFromPhoneToMacAndTheResultComesBackThenIsCleanedUp() async throws {
     let executor = DeliveryExecutor(

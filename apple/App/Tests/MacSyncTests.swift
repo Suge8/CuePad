@@ -501,7 +501,7 @@ struct MacSyncTests {
         try await services.store.setDirectory(directory.path, for: project.id)
         defer { services.cancelBackgroundWork() }
 
-        let done = try await launched(PiLaunch(place: .project(project.id), prompt: "看看测试为什么挂", token: "tok-1"), title: "App")
+        let done = try await launched(PiLaunch(project: project.id, prompt: "看看测试为什么挂", token: "tok-1"), title: "App")
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-1")])
@@ -518,7 +518,7 @@ struct MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let done = try await launched(
-            PiLaunch(place: .project(project.id), prompt: "看这张设计稿\n\n![](cuepad://img/\(hash))", token: "tok-5"), title: "App")
+            PiLaunch(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://img/\(hash))", token: "tok-5"), title: "App")
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.channels.calls == [
@@ -526,20 +526,91 @@ struct MacSyncTests {
         ])
     }
 
-    @Test func 新会话_与某会话同目录_没有开场的话就不发_项目没有目录时失败() async throws {
-        let other = try folder("other")
-        _ = try await indexed("s1", cwd: other)
+    @Test func 新会话_没有开场的话就不发_项目没有目录时失败() async throws {
+        let directory = try folder("proj")
+        let project = try await services.store.createProject(name: "App", color: "#000000")
+        try await services.store.setDirectory(directory.path, for: project.id)
         let bare = try await services.store.createProject(name: "无目录", color: "#000000")
         defer { services.cancelBackgroundWork() }
 
-        let beside = try await launched(PiLaunch(place: .besideSession("s1"), prompt: nil, token: "tok-2"))
-        #expect(beside.status == .known(.succeeded))
-        #expect(rig.host.calls == [.open(directory: other.path, launchToken: "tok-2")])
+        let quiet = try await launched(PiLaunch(project: project.id, prompt: nil, token: "tok-2"))
+        #expect(quiet.status == .known(.succeeded))
+        #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-2")])
         #expect(rig.channels.calls.isEmpty)
 
-        let noDirectory = try await launched(PiLaunch(place: .project(bare.id), prompt: nil, token: "tok-3"), title: "无目录")
+        let noDirectory = try await launched(PiLaunch(project: bare.id, prompt: nil, token: "tok-3"), title: "无目录")
         #expect(noDirectory.status == .known(.failed))
         #expect(noDirectory.resultDetail == SendError.noCodeDirectory("无目录").localizedDescription)
+    }
+
+    // MARK: 手机请这台 Mac 绑定文件夹（Mac 才有完整路径；绑定只有这一条写入：本机的目录绑定）
+
+    private func bound(_ bind: PiBind) async throws -> DeliveryRequest {
+        try await services.startDeliveryExecutor()
+        let request = try await services.store.requestBind(bind, title: "App", on: TestApp.hostID)
+        return try await awaitFinished(request.id)
+    }
+
+    @Test func 绑定_取某个会话的工作目录_写成本机的目录绑定_不写发送记录() async throws {
+        let app = try folder("app")
+        _ = try await indexed("s1", cwd: app)
+        let project = try await services.store.createProject(name: "App", color: "#000000")
+        defer { services.cancelBackgroundWork() }
+
+        let done = try await bound(PiBind(project: project.id, folder: .besideSession("s1")))
+
+        #expect(done.status == .known(.succeeded))
+        #expect(try await services.store.directory(of: project.id) == app.path)
+        #expect(try await services.store.sendRecords().isEmpty)
+    }
+
+    @Test func 绑定_取另一个项目已绑的目录_换绑覆盖旧的_没有文件夹就是解除() async throws {
+        let first = try folder("first"), second = try folder("second")
+        let store = services.store
+        let source = try await store.createProject(name: "源", color: "#000000")
+        let project = try await store.createProject(name: "App", color: "#000000")
+        try await store.setDirectory(second.path, for: source.id)
+        try await store.setDirectory(first.path, for: project.id)
+        defer { services.cancelBackgroundWork() }
+
+        let moved = try await bound(PiBind(project: project.id, folder: .project(source.id)))
+        #expect(moved.status == .known(.succeeded))
+        #expect(try await store.directory(of: project.id) == second.path)
+
+        let unbound = try await bound(PiBind(project: project.id, folder: nil))
+        #expect(unbound.status == .known(.succeeded))
+        #expect(try await store.directory(of: project.id) == nil)
+        #expect(try await store.directory(of: source.id) == second.path)
+    }
+
+    /// 项目记录可能还没同步到这台 Mac（手机刚新建项目就带着文件夹）：绑定按项目 id 记，记录晚到也对得上，不因此失败。
+    @Test func 绑定_项目记录还没到本机也成功() async throws {
+        let app = try folder("app")
+        _ = try await indexed("s1", cwd: app)
+        let unseen = UUID()
+        defer { services.cancelBackgroundWork() }
+
+        let done = try await bound(PiBind(project: unseen, folder: .besideSession("s1")))
+
+        #expect(done.status == .known(.succeeded))
+        #expect(try await services.store.directory(of: unseen) == app.path)
+    }
+
+    @Test func 绑定_找不到文件夹时按失败写回_原因可读_不改现有绑定() async throws {
+        let existing = try folder("existing")
+        _ = try await indexed("gone-folder", cwd: rig.directory.appending(path: "work/gone", directoryHint: .isDirectory))
+        let project = try await services.store.createProject(name: "App", color: "#000000")
+        let bare = try await services.store.createProject(name: "无目录", color: "#000000")
+        try await services.store.setDirectory(existing.path, for: project.id)
+        defer { services.cancelBackgroundWork() }
+
+        let noSession = try await bound(PiBind(project: project.id, folder: .besideSession("nope")))
+        #expect(noSession.status == .known(.failed) && noSession.resultDetail == SendError.piSessionNotOnThisMac.localizedDescription)
+        let missing = try await bound(PiBind(project: project.id, folder: .besideSession("gone-folder")))
+        #expect(missing.status == .known(.failed) && missing.resultDetail == "目录不存在：gone")
+        let unbound = try await bound(PiBind(project: project.id, folder: .project(bare.id)))
+        #expect(unbound.status == .known(.failed) && unbound.resultDetail == SendError.noCodeDirectory("无目录").localizedDescription)
+        #expect(try await services.store.directory(of: project.id) == existing.path)
     }
 
     /// 目录被删或改名了：不启动 Pi，按失败写回，原因写目录末段名。
@@ -554,7 +625,7 @@ struct MacSyncTests {
             "接着做", to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
         let resumed = try await awaitFinished(send.id)
         #expect(resumed.status == .known(.failed) && resumed.resultDetail == "目录不存在：gone")
-        let start = try await launched(PiLaunch(place: .project(project.id), prompt: nil, token: "tok-4"), title: "App")
+        let start = try await launched(PiLaunch(project: project.id, prompt: nil, token: "tok-4"), title: "App")
         #expect(start.status == .known(.failed) && start.resultDetail == "目录不存在：moved")
         #expect(rig.host.calls.isEmpty)
     }
