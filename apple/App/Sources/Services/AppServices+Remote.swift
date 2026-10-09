@@ -133,7 +133,8 @@ extension AppServices {
         try await recordSend(request.content, to: sent, card: request.cardID)
     }
 
-    /// 作答与改配置交给扩展，不是发出去的内容，不记发送记录；其他方式返回 false。
+    /// 作答与改会话设置（会话名、模型、思考强度）交给扩展，不是发出去的内容，不记发送记录；其他方式返回 false。
+    /// 会话已结束时与发消息一样先在后台恢复（`perform`）：改名对已结束的会话也要能做，Pi 只在活着的进程里写会话名。
     private func control(_ request: DeliveryRequest, mode: DeliveryMode, in id: CuePi.PiSession.ID) async throws -> Bool {
         switch mode {
         case .answer:
@@ -142,7 +143,7 @@ extension AppServices {
         case .config:
             guard let config = request.config else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新强度，或什么都不改
             let model = config.model.map { PiModelRef(provider: $0.provider, id: $0.id) }
-            try await channels.configure(model: model, thinking: config.thinking?.rawValue, in: id)
+            try await channels.configure(model: model, thinking: config.thinking?.rawValue, name: config.name, in: id)
         default:
             return false
         }

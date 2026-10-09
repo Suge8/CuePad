@@ -138,7 +138,7 @@ nonisolated struct PiShown: Hashable, Sendable {
     }
 
     let status: Status
-    /// 会话在跑时还在路上的话："你的话排队中"（等这一轮做完再送）、"你的话发送中"；在路上的是改名时写"正在改名"。
+    /// 会话在跑时还在路上的话："你的话排队中"（等这一轮做完再送）、"你的话发送中"。
     var note: String?
     /// 计时；只有状态、没有会话的（子代理、样板）没有。
     var clock: PiClock?
@@ -152,8 +152,8 @@ nonisolated extension PiShown {
         case .failed:
             self.init(status: .delivery(.failed), clock: own)
         case let phase? where busy:
-            let note = delivery.map { PiRename.name(in: $0) == nil ? "你的话\(PiDelivery.transit($0, busy: true))" : "正在改名" }
-            self.init(status: Self.status(of: session.state), note: phase == .delivered ? nil : note, clock: own)
+            let transit = delivery.map { PiDelivery.transit($0, busy: true) }
+            self.init(status: Self.status(of: session.state), note: phase == .delivered ? nil : transit.map { "你的话\($0)" }, clock: own)
         case let phase?:
             self.init(status: .delivery(phase), clock: delivery.map { .sent(since: $0.createdAt) })
         case nil where session.state == .known(.settled):

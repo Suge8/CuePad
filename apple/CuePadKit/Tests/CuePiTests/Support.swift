@@ -114,7 +114,7 @@ final class FakeExtension: @unchecked Sendable {
     }
 
     struct Options: Sendable {
-        var protocolVersion = 5
+        var protocolVersion = PiWire.protocolVersion
         var extensionVersion = 1
         var cwd = "/work/project"
         var mode = "tui"

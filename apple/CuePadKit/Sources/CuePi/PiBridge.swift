@@ -138,8 +138,8 @@ public final class PiBridge {
 
     /// 换该会话的模型、思考强度（至少给一项）：先换模型再设强度，强度按新模型支持的范围夹取。
     /// 模型不在 Pi 的模型表里抛 `rejected("unknown_model")`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
-    public func configure(model: PiModelRef? = nil, thinking: String? = nil, in id: PiSession.ID) async throws {
-        _ = try await request(to: id) { try PiWire.configCommand(id: $0, model: model, thinking: thinking) }
+    public func configure(model: PiModelRef? = nil, thinking: String? = nil, name: String? = nil, in id: PiSession.ID) async throws {
+        _ = try await request(to: id) { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
     }
 
     private func request(to id: PiSession.ID, encode: (String) throws -> Data) async throws -> PiWire.Ack {

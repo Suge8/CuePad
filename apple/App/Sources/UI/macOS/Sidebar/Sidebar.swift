@@ -9,8 +9,9 @@ nonisolated private struct SidebarData: Sendable {
     var live: [PiSessionState]
     var ended: [PiSessionState]
     var sessionTotal: Int
-    /// 发给这些会话的最近一条投送请求（Pi 的会话 id →）。
+    /// 发给这些会话的最近一条投送请求与最近一条改名（Pi 的会话 id →）。
     var deliveries: [String: DeliveryRequest]
+    var renames: [String: DeliveryRequest]
 }
 
 struct Sidebar: View {
@@ -46,7 +47,7 @@ struct Sidebar: View {
                         }
                     }
                 }
-                PiSection(recorded: data.live + data.ended, deliveries: data.deliveries, total: data.sessionTotal)
+                PiSection(recorded: data.live + data.ended, deliveries: data.deliveries, renames: data.renames, total: data.sessionTotal)
                 if pages.showsTrash {
                     Section {
                         PageRow(page: .archive, count: 0, select: select) {
@@ -81,7 +82,8 @@ struct Sidebar: View {
             return SidebarData(
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
                 live: live.items.map(\.listed), ended: ended.items.map(\.listed), sessionTotal: live.total + ended.total,
-                deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
+                deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
+                renames: Dictionary((live.items + ended.items).compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
         }
     }
 
@@ -205,6 +207,7 @@ private struct PageRow<Title: View>: View {
 private struct PiSection: View {
     let recorded: [PiSessionState]
     let deliveries: [String: DeliveryRequest]
+    let renames: [String: DeliveryRequest]
     let total: Int
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -239,7 +242,9 @@ private struct PiSection: View {
                 // 正看着 Agent 整页时它就是这份列表，侧栏只留"全部会话"一行，不重复列一遍
                 ForEach(showsRows ? rows : [], id: \.sessionID) { session in
                     let bridge = live.first { $0.sessionID == session.sessionID }
-                    PiSessionRow(session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID])
+                    PiSessionRow(
+                        session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
+                        rename: renames[session.sessionID])
                         .sessionLink(session.sessionID)
                         .help(bridge?.state.errorMessage ?? "")
                         .contextMenu {

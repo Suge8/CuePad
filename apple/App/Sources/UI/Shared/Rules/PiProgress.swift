@@ -6,20 +6,18 @@ import Foundation
 nonisolated enum PiRowLine: Equatable {
     case ending
     case endFailed(String)
-    /// 你看过之前一直写着的没送到的原因（改名的写"没能改名"）。
+    /// 你看过之前一直写着的没送到的原因（没送到的话、没改成的名字）。
     case failed(String)
     case draft(String)
     case progress(String)
     case hint(String)
 
     /// `draft` 是回复框里的草稿（`AppSettings.draftPreview`），`end` 是此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
-    /// `undelivered` 是此刻显示为没能送达的那条请求（`PiShown.undelivered`）。
-    static func of(_ session: PiSessionState, draft: String?, end: DeliveryRequest?, undelivered: DeliveryRequest? = nil) -> PiRowLine? {
+    /// `failure` 是此刻要写的没送到的原因（`PiRename.failure` 或显示为没能送达的那条话的原因）。
+    static func of(_ session: PiSessionState, draft: String?, end: DeliveryRequest?, failure: String? = nil) -> PiRowLine? {
         if end?.isOpen == true { return .ending }
         if let reason = end?.failure { return .endFailed(reason) }
-        if let undelivered, let reason = undelivered.failure {
-            return .failed(PiRename.name(in: undelivered) == nil ? reason : "没能改名：\(reason)")
-        }
+        if let failure { return .failed(failure) }
         if let draft { return .draft(draft) }
         if let progress = PiProgress.line(of: session) { return .progress(progress) }
         if session.state == .known(.settled), !session.hasStarted { return .hint("等你说第一句") }

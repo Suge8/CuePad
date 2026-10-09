@@ -9,16 +9,18 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var deliveries: [DeliveryRequest]
     var messages: [PiChatMessage] = []
 
-    /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条）。
+    /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条改名）。
     var title: String? {
-        session.map { PiRename.title(of: $0, request: deliveries.last { $0.mode.known.map(DeliveryMode.toSession.contains) == true }) }
+        session.map { PiRename.title(of: $0, request: deliveries.last { $0.config?.name != nil }) }
     }
 
     /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因。
     /// 思考强度按显示的模型夹取（`PiThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
     var config: PiConfigShown {
         let current = PiConfigShown(model: session?.model, thinking: session?.thinking?.known, context: session?.context, pending: false, failure: nil)
-        guard let request = deliveries.last(where: { $0.config != nil }), let wanted = request.config else { return current }
+        // 只看换模型、思考强度的请求：改名同走配置请求，但与这两样无关
+        guard let request = deliveries.last(where: { $0.config.map { $0.model != nil || $0.thinking != nil } == true }),
+              let wanted = request.config else { return current }
         if request.isOpen {
             let model = wanted.model.flatMap { key in session?.models.first { $0.key == key } } ?? current.model
             let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }

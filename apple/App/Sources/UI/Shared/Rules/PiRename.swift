@@ -1,41 +1,43 @@
 import CueStore
 import Foundation
 
-/// 改会话名：发一条 Pi 的内置斜杠命令 `/name <新名>`（投送方式 `command`，与回复框里的斜杠命令同一条路，已结束的会话 Mac 先在后台恢复）。
-/// 会话名只来自 Pi（会话记录的 `title`，规则 `PiSessionName`），界面不另存；改名在路上时行上的名字由这条请求推出（`title`）。
+/// 改会话名：会话设置，与改模型、思考强度同一条路——一条带名字的配置请求（`PiConfig.name`，投送方式 `config`），
+/// 扩展用 Pi 设置会话名的接口执行；不写发送记录、不算发给会话的话。已结束的会话 Mac 先在后台恢复再改。
+/// 会话名只来自 Pi（会话记录的 `title`，规则 `PiSessionName`），界面不另存；改名在路上、没改成都由这条请求推出。
 nonisolated enum PiRename {
-    private static let prefix = "/name "
-
-    /// 新名写成的命令；只留一行（Pi 的会话名是单行），空的是 nil。
-    static func line(_ name: String) -> String? {
+    /// 新名整理成一行（Pi 的会话名是单行），空的是 nil。
+    static func clean(_ name: String) -> String? {
         let name = name.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-        return name.isEmpty ? nil : prefix + name
-    }
-
-    /// 这条请求要改成的名字；不是改名的为 nil（回复框里手打的 /name 也算）。
-    static func name(in request: DeliveryRequest) -> String? {
-        guard request.mode == .known(.command), request.content.hasPrefix(prefix) else { return nil }
-        let name = request.content.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
         return name.isEmpty ? nil : name
     }
 
-    /// 此刻显示的会话名：发给它的最近一条（`request`）是改名、还在路上时是新名；送到了而会话记录在那之后还没写过
+    /// 此刻显示的会话名：最近一条改名（`request`）还在路上时是新名；送到了而会话记录在那之后还没写过
     /// （Pi 改了名、Mac 还没同步过来）也是新名；之后、以及没改成时以会话记录为准。
     static func title(of session: PiSessionState, request: DeliveryRequest?) -> String {
-        guard let request, let name = name(in: request) else { return session.title }
+        guard let request, let name = request.config?.name else { return session.title }
         switch request.status.known {
         case .pending, .executing: return name
         case .succeeded: return session.modifiedAt > (request.completedAt ?? request.createdAt) ? session.title : name
         case .failed, nil: return session.title
         }
     }
+
+    /// 改名还在路上（行上写"正在改名"）。
+    static func isPending(_ request: DeliveryRequest?) -> Bool { request?.config?.name != nil && request?.isOpen == true }
+
+    /// 没改成的原因，留到本机看过这个会话（`seen`）为止（同没能送达的话，`PiDelivery.phase`）。
+    static func failure(_ request: DeliveryRequest?, seen: Date?) -> String? {
+        guard let request, request.config?.name != nil, let reason = request.failure,
+              (seen ?? .distantPast) <= (request.completedAt ?? request.modifiedAt) else { return nil }
+        return "没能改名：\(reason)"
+    }
 }
 
 extension AppServices {
-    /// 让 Pi 把会话改名（写一条发给它所在 Mac 的命令请求，立即上传）。新名为空时不写。
+    /// 让 Pi 把会话改名（写一条发给它所在 Mac 的配置请求，立即上传）。新名为空时不写。
     @discardableResult
     func rename(_ session: PiSessionState, to name: String) async throws -> DeliveryRequest {
-        guard let line = PiRename.line(name) else { throw CueStoreError.blankDeliveryContent }
-        return try await requestMacDelivery(line, to: session, mode: .command)
+        guard let name = PiRename.clean(name) else { throw CueStoreError.blankDeliveryContent }
+        return try await configure(PiConfig(name: name), for: session)
     }
 }
