@@ -90,7 +90,8 @@ extension CardMenu.Item {
 
     var symbol: String {
         switch self {
-        case .attachToTask: "checkmark"
+        // 挂进任务成为它下面的一条，不用对勾：对勾读作"完成、存好"，只给"记下"这类提交（`SubmitGlyph`）
+        case .attachToTask: "arrow.turn.down.right"
         case .handToAgent: "paperplane"
         case .makeTask: "checklist"
         case .makeIdea: "lightbulb"

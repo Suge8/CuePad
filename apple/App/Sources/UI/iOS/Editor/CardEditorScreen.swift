@@ -146,7 +146,7 @@ struct CardEditorScreen: View {
             if CardMenu.handsToAgent(card) {
                 MainButton(title: "交给 Agent", symbol: "paperplane.fill", action: sendToMac)
             } else {
-                MainButton(title: "挂到任务", symbol: "checkmark", action: { workspace.attaching = card })
+                MainButton(title: CardMenu.Item.attachToTask.title, symbol: CardMenu.Item.attachToTask.symbol, action: { workspace.attaching = card })
             }
         }
         .padding(.trailing, 16).padding(.bottom, 16)
@@ -211,7 +211,7 @@ struct CardEditorScreen: View {
     }
 }
 
-/// 纸页右下的主按钮：靛青胶囊（签名色只落在主动作上）。灵感是打勾的"挂到任务"，提示词是"交给 Agent"。
+/// 纸页右下的主按钮：靛青胶囊（签名色只落在主动作上）。灵感是"挂到任务"，提示词是"交给 Agent"。
 private struct MainButton: View {
     let title: String
     let symbol: String

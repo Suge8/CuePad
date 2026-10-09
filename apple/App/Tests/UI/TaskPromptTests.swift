@@ -136,6 +136,36 @@ struct TaskPromptTests {
         #expect(!tally.suggestsDone(try #require(try await store.card(task.id))))
     }
 
+    @Test func Agent在处理时卡上是看会话_做完出错或结束后才再交一次() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let prompt = try await store.createCard(body: "先复现", under: task.id)
+        #expect(try await action(of: prompt, in: task) == "handOff")
+
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+        try await enter(.tool, recorder)
+        #expect(try await action(of: prompt, in: task) == "watch atlas")
+        try await enter(.waitingForUser, recorder)
+        #expect(try await action(of: prompt, in: task) == "watch atlas")
+        try await enter(.error, recorder)
+        #expect(try await action(of: prompt, in: task) == "handAgain")
+        try await enter(.settled, recorder)
+        #expect(try await action(of: prompt, in: task) == "handAgain")
+
+        // 已有一条回答、Agent 接着跑工具：算已回复，但仍在处理，只给看会话
+        try await enter(.tool, recorder)
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "a1", seq: 1, role: .pi, text: "先看下日志", at: .now)], recap: PiRecap()))
+        #expect(try await state(of: prompt, in: task) == "replied atlas")
+        #expect(try await action(of: prompt, in: task) == "watch atlas")
+        try await enter(.settled, recorder)
+        #expect(try await action(of: prompt, in: task) == "handAgain")
+
+        // 手机重发还在路上：又是在处理
+        _ = try await store.requestDelivery("先复现，这次带上日志", to: atlas, on: "mac-a", card: prompt.id)
+        #expect(try await action(of: prompt, in: task) == "watch atlas")
+    }
+
     @Test func 任务页读到提示词与子任务_各自按放的顺序() async throws {
         let task = try await store.createTask("修乱序", in: nil)
         let first = try await store.createCard(body: "先复现", under: task.id)
@@ -170,6 +200,16 @@ struct TaskPromptTests {
     private func enter(_ state: PiWorkState, _ recorder: PiStateRecorder) async throws {
         try await Task.sleep(for: .milliseconds(5))
         _ = try await recorder.update(sessionID: "s1", state: state, title: "atlas", times: PiTimes(stateSince: .now, busySince: nil))
+    }
+
+    /// 卡上右边那颗钮；看会话写出它要打开的会话名。
+    private func action(of prompt: Card, in task: Card) async throws -> String {
+        switch try await TaskDetail.read(task.id, from: store).state(of: prompt).action {
+        case .handOff: "handOff"
+        case .handAgain: "handAgain"
+        case .watch(let item): "watch \(item.state.title)"
+        case nil: "none"
+        }
     }
 
     private func state(of prompt: Card, in task: Card) async throws -> String {

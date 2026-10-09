@@ -440,7 +440,7 @@ private struct EditorBar: View {
     /// 灵感的主动作：挂到任务（弹出选任务的面板），⌘↩。
     private var attach: some View {
         Button { workspace.attaching = card } label: {
-            Label("挂到任务", systemImage: "checkmark")
+            Label(CardMenu.Item.attachToTask.title, systemImage: CardMenu.Item.attachToTask.symbol)
                 .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onSignature)
                 .padding(.horizontal, 16).frame(height: 44)
                 .background(palette.signatureFill, in: .capsule)
