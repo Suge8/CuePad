@@ -49,6 +49,29 @@ extension MacDelivery {
         }
     }
 
+    /// 斜杠命令的进度（读投送请求，不另存）：只看最近一条命令——在路上写"正在执行 /compact…"、没成功写原因、成功就消失
+    /// （命令不进对话、不进发送记录；结果若在会话文件里，对话里自然有）。回复框上方一行显示。
+    enum CommandProgress: Equatable {
+        case running(String)
+        case failed(command: String, reason: String)
+
+        var failed: Bool { if case .failed = self { true } else { false } }
+
+        var text: String {
+            switch self {
+            case .running(let command): "正在执行 \(command)…"
+            case .failed(let command, let reason): "\(command) 没执行成功：\(reason)"
+            }
+        }
+    }
+
+    static func commandProgress(_ deliveries: [DeliveryRequest]) -> CommandProgress? {
+        guard let latest = deliveries.last(where: { $0.mode == .known(.command) }) else { return nil }
+        let command = String(latest.content.prefix { !$0.isWhitespace })
+        if let failure = latest.failure { return .failed(command: command, reason: failure) }
+        return latest.isOpen ? .running(command) : nil
+    }
+
     static func reply(to session: PiSessionState, hasImages: Bool) -> PiReply {
         guard session.state != .known(.incompatible) else { return .restartPi }
         guard session.state == .known(.waitingForUser) else { return .message(modes(for: session, hasImages: hasImages)) }

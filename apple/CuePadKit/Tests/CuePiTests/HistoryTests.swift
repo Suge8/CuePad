@@ -45,6 +45,16 @@ struct SessionFile {
                           "content": [["type": "text", "text": String(repeating: "out ", count: 50)]]]])
     }
 
+    static func compaction(_ id: String, _ parent: String, tokensBefore: Int?, at second: Int) -> String {
+        var entry: [String: Any] = ["type": "compaction", "id": id, "parentId": parent, "timestamp": stamp(second), "summary": "摘要", "firstKeptEntryId": parent]
+        if let tokensBefore { entry["tokensBefore"] = tokensBefore }
+        return line(entry)
+    }
+
+    static func entry(_ type: String, _ id: String, _ parent: String, at second: Int, _ fields: [String: Any]) -> String {
+        line(fields.merging(["type": type, "id": id, "parentId": parent, "timestamp": stamp(second)]) { a, _ in a })
+    }
+
     static func info(_ id: String, _ parent: String, name: String, at second: Int) -> String {
         line(["type": "session_info", "id": id, "parentId": parent, "timestamp": stamp(second), "name": name])
     }
@@ -114,6 +124,33 @@ struct HistoryTests {
         let h = try index(f).history
         #expect(h.sessionID == "abc" && h.cwd == "/work/proj" && h.name == "Refactor auth")
         #expect(h.lastActivity == SessionFile.date(9))
+    }
+
+    // MARK: 命令在会话文件里留下的
+
+    /// 对话只来自会话文件，与终端一致：压缩留下一条 compaction（终端里是压缩摘要那一行），对话里是一行系统行；
+    /// 换模型、改强度、改名只是设置条目，终端的对话里没有它们，这里也没有；模板与 skill 展开成一条普通的用户消息（没有投送请求 id）。
+    @Test func compactionIsASystemLineAndSettingEntriesAreNotConversation() throws {
+        var f = SessionFile(directory: dir)
+        try f.append(
+            SessionFile.header(),
+            SessionFile.user("u1", nil, "first", at: 1),
+            SessionFile.assistant("a1", "u1", text: "reply one", at: 2),
+            SessionFile.entry("model_change", "m1", "a1", at: 3, ["provider": "fake", "modelId": "echo-b"]),
+            SessionFile.entry("thinking_level_change", "t1", "m1", at: 4, ["thinkingLevel": "high"]),
+            SessionFile.info("n1", "t1", name: "改名", at: 5),
+            SessionFile.compaction("c1", "n1", tokensBefore: 63_000, at: 6),
+            SessionFile.compaction("c2", "c1", tokensBefore: 950, at: 7),
+            SessionFile.compaction("c3", "c2", tokensBefore: nil, at: 8),
+            SessionFile.user("u2", "c3", "Say hello to world.", at: 9))
+
+        let update = try index(f)
+
+        #expect(update.transcript.map(\.role) == [.user, .pi, .system, .system, .system, .user])
+        #expect(update.transcript[2...4].map(\.text) == ["已压缩上下文 · 压缩前约 63k tokens", "已压缩上下文 · 压缩前约 950 tokens", "已压缩上下文"])
+        #expect(update.transcript[2].entryID == "c1" && update.transcript[2].seq == 7 && update.transcript[2].at == SessionFile.date(6))
+        #expect(update.transcript[5].text == "Say hello to world." && update.transcript[5].deliveryID == nil)
+        #expect(update.recap.lastReply == "reply one" && update.recap.pendingPrompt == "Say hello to world.")  // 系统行不动问答摘要
     }
 
     // MARK: 增量

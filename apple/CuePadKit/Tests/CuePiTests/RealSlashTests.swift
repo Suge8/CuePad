@@ -60,6 +60,10 @@ struct RealSlashTests {
             try await eventually("压缩后已用量未知", timeout: .seconds(30)) {
                 bridge.sessions.first?.context.map { $0.tokens == nil && $0.window == 100_000 } == true
             }
+            // 压缩在会话文件里留下一条 compaction：对话里是一行系统行（真实 Pi 写的格式）
+            let transcript = try PiHistory.index(file: #require(s.sessionFile), from: nil).transcript
+            #expect(transcript.contains { $0.role == .system && $0.text.hasPrefix("已压缩上下文") })
+            #expect(transcript.filter { $0.role == .user }.count == 2)  // 命令没有变成你说的话
         }
     }
 

@@ -124,7 +124,7 @@ extension AppServices {
             let id = if let live = channels.piSessionID(forSession: ref) { live } else { try await resumeInBackground(ref, name: target.name) }
             // 执行器已把不认识的发送方式按失败写回，走到这里的都是已知方式
             guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
-            if try await control(request, mode: mode, in: id) { return }
+            if try await control(request, mode: mode, session: ref, in: id) { return }
             sent = try await sendToPi(content, session: id, mode: mode, request: request.id)
         case .known(.app):
             guard let bundleID = target.ref else { throw SendError.unsupportedTarget(target.name) }
@@ -137,9 +137,9 @@ extension AppServices {
         try await recordSend(request.content, to: sent, card: request.cardID)
     }
 
-    /// 作答与改会话设置（会话名、模型、思考强度）交给扩展，不是发出去的内容，不记发送记录；其他方式返回 false。
+    /// 作答、改会话设置（会话名、模型、思考强度）与斜杠命令交给扩展，不是发出去的内容，不记发送记录（发送记录只记内容的投送）；其他方式返回 false。
     /// 会话已结束时与发消息一样先在后台恢复（`perform`）：改名对已结束的会话也要能做，Pi 只在活着的进程里写会话名。
-    private func control(_ request: DeliveryRequest, mode: DeliveryMode, in id: CuePi.PiSession.ID) async throws -> Bool {
+    private func control(_ request: DeliveryRequest, mode: DeliveryMode, session ref: String, in id: CuePi.PiSession.ID) async throws -> Bool {
         switch mode {
         case .answer:
             guard let answer = request.answer else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新答案
@@ -148,6 +148,12 @@ extension AppServices {
             guard let config = request.config else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新强度，或什么都不改
             let model = config.model.map { PiModelRef(provider: $0.provider, id: $0.id) }
             try await channels.configure(model: model, thinking: config.thinking?.rawValue, name: config.name, in: id)
+        case .command:
+            // 命令带着卡片（交给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录
+            let content = SendContent(stored: request.content)
+            guard !content.hasImages else { throw SendError.imagesNotSupported }
+            try await channels.command(content.plainText.trimmingCharacters(in: .whitespacesAndNewlines), whenBusy: .followUp, in: id)
+            if let card = request.cardID { try await store.linkCard(card, toSession: ref) }
         default:
             return false
         }
@@ -241,13 +247,9 @@ extension AppServices {
         case .send:
             guard !session.isBusy else { throw SendError.piSessionBusy }
             whenBusy = nil
-        case .command:
-            guard !content.hasImages else { throw SendError.imagesNotSupported }
-            try await channels.command(content.plainText.trimmingCharacters(in: .whitespacesAndNewlines), whenBusy: .followUp, in: id)
-            return session.target
         case .steer: whenBusy = .steer
         case .followUp: whenBusy = .followUp
-        case .answer, .ping, .start, .transcript, .config, .end, .stop, .bind: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
+        case .answer, .command, .ping, .start, .transcript, .config, .end, .stop, .bind: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
         }
         try await channels.send(
             PiMessage(text: content.plainText, images: try piImages(in: content), whenBusy: whenBusy, deliveryID: request.uuidString), to: id)

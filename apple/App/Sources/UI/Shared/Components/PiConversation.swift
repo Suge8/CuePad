@@ -45,11 +45,16 @@ struct PiConversation: View {
     private static var spacing: CGFloat { 18 }
 
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
-        if entry.isUser {
+        switch entry.role {
+        case .user:
             UserBubble(text: entry.text, highlighted: entry.id == highlight)
                 .chatContextMenu { MessageMenu(text: entry.text, kind: .mine, session: session) } preview: { BubbleText(text: entry.text).padding(4) }
-        } else {
+        case .pi:
             ReplyBlock(text: entry.text, meta: entry.meta, session: session)
+        case .system:
+            // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
+            Text(entry.text).font(.footnote).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity).padding(.vertical, 4)
         }
     }
 

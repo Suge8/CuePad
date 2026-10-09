@@ -278,7 +278,24 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.channels.calls == [.command("/greet world", .followUp, "sess-1.100")])
-        #expect(try await services.store.sendRecords().map(\.content) == ["/greet world"])
+        #expect(try await services.store.sendRecords().isEmpty)  // 发送记录只记内容的投送，命令不记
+    }
+
+    /// 交给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录。
+    @Test func 带卡片的斜杠命令只关联卡片_不写发送记录() async throws {
+        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
+        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: false)
+        let task = try await services.store.createTask("改登录", in: nil)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestDelivery(
+            "/greet\n\n改登录", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .command, card: task.id)
+        _ = try await awaitFinished(request.id)
+
+        let linked = try #require(try await services.store.card(task.id))
+        #expect(linked.piSessionID == "sess-1" && linked.status == .inProgress)
+        #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 斜杠命令里带图片按失败写回() async throws {

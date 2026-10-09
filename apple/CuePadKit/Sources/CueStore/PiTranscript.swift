@@ -6,6 +6,8 @@ public enum PiChatRole: String, Sendable, CaseIterable {
   case user
   /// Pi 一轮做完的回答
   case pi
+  /// 会话文件里留下的一行系统记录（目前只有压缩：终端对话里那行压缩摘要）；不是谁说的话。设置类条目（换模型、改强度、改名）终端的对话里没有，这里也没有
+  case system
 }
 
 /// 会话对话里的一条消息（同步表 `piMessages`，Mac 写、各端只读，只追加）。
