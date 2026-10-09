@@ -69,7 +69,7 @@ private struct PreviewPage: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Button("关闭") { dismiss() }
-                Text(preview.title).font(.headline).foregroundStyle(palette.ink).lineLimit(1).frame(maxWidth: .infinity)
+                Text(preview.title).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(1).frame(maxWidth: .infinity)
                 if let file { ShareLink(item: file) { Image(systemName: "square.and.arrow.up") } } else { Color.clear.frame(width: 24) }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
