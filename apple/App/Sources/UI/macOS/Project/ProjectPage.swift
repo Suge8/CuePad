@@ -25,11 +25,12 @@ struct ProjectPage: View {
                     content.id("top")
                 }
                 .remembersScroll()
-                .overlay { EdgeFade.underInputBar }
+                // 内容一直滚到工具栏与底部输入栏下面；栏后面只垫最小的淡出（BarScrim），不铺实底
+                .overlay { BarScrim.underInputBar }
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.quick) { collapsed = isCollapsed }
                 }
-                EdgeFade.underToolbar
+                BarScrim.underToolbar
                 // 下滚后收成的一行：在顶部渐隐之上、工具栏那一条里，但不放进工具栏——工具栏内容只随用户操作变，
                 // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
                 if collapsed, let data, showsFocus(data) {
@@ -66,7 +67,7 @@ struct ProjectPage: View {
                     directory: projectID.flatMap { catalog?.directories[$0] }, cardCount: catalog?.cardCounts[projectID] ?? 0)
                 if let data, let arrangement = board.arrangement { page(data, arrangement) }
             }
-            .padding(.horizontal, 32).padding(.top, EdgeFade.toolbarFade + 6).padding(.bottom, 150)
+            .padding(.horizontal, 32).padding(.top, 12).padding(.bottom, 150)
         }
     }
 
