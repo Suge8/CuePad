@@ -36,6 +36,12 @@ extension Workspace {
             .sorted { (endedOrder.firstIndex(of: $0.id) ?? -1) > (endedOrder.firstIndex(of: $1.id) ?? -1) }
     }
 
+    /// 目标能一按就发：有目标（上一个前台应用找得到）、指向的 Pi 会话没结束。这时发送钮绑着 ⌘↩，是那一处唯一的主钮；
+    /// 否则发送钮只是个选目标的菜单（中性样式），主钮让给旁边的记下。
+    func readyToSend(_ choice: AppServices.Destination) -> Bool {
+        !isEnded(choice) && !(choice == .app(.lastFrontmost) && services.lastFrontmostApp() == nil)
+    }
+
     /// 目标指向的 Pi 会话已结束、也没有重新打开：发不出去，界面写"<会话名> · 已结束"，点开改选。
     func isEnded(_ choice: AppServices.Destination) -> Bool {
         if case .pi(let id, _) = choice { session(id) == nil } else { false }

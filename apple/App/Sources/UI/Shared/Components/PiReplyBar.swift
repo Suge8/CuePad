@@ -125,7 +125,7 @@ struct PiReplyBar: View {
                 .disabled(stopping || !reachable)
                 .accessibilityLabel(stopping ? "正在停止" : DeliveryMode.stop.label)
         } else if answering != nil {
-            Button(action: answer) { SendGlyph(enabled: canSend) }
+            Button(action: answer) { SubmitGlyph(.send, enabled: canSend) }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .accessibilityLabel("回答")
@@ -143,7 +143,7 @@ struct PiReplyBar: View {
                     Button(DeliveryMode.stop.label, systemImage: "stop.circle", role: .destructive, action: stop)
                 }
             } label: {
-                SendGlyph(enabled: canSend)
+                SubmitGlyph(.send, enabled: canSend)
             } primaryAction: {
                 send(first)
             }
@@ -169,7 +169,7 @@ struct PiReplyBar: View {
             .accessibilityLabel(first.label)
             .accessibilityHint(([first.explanation] + others.map { "\(Self.hold)可以\($0.label)" }).compactMap { $0 }.joined(separator: "；"))
         } else {
-            Button { if let mode = modes.first { send(mode) } } label: { SendGlyph(enabled: canSend) }
+            Button { if let mode = modes.first { send(mode) } } label: { SubmitGlyph(.send, enabled: canSend) }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .accessibilityLabel("发送")

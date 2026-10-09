@@ -2,7 +2,7 @@
 import CueDispatch
 import SwiftUI
 
-/// 实心发送按钮（⌘↩）+ 目标选择，底色是强调色（墨）。只在有内容可发时出现（由调用方决定）。
+/// 发送按钮（⌘↩）+ 目标选择：能一按就发时是靛青主钮（`Workspace.readyToSend`），只能选目标时是中性的。只在有内容可发时出现（由调用方决定）。
 /// 目标默认是本项目的 Pi 会话，没有则是上一个前台应用；选过的目标在本窗口内记住。按钮上写方式与目标：
 /// "发给 Agent · <会话名>"、"放进输入框 · <会话名>"、"发给 <应用> App"，过长时只截会话名或应用名，方式不截。
 /// 还没有可发的目标时写"发送…"；选过的 Pi 会话已结束时写"<会话名> · 已结束"——这两种点开都是目标菜单。
@@ -17,20 +17,9 @@ struct SendControl: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let choice = workspace.effectiveChoice(for: project)
+        let choice = workspace.effectiveChoice(for: project), ready = workspace.readyToSend(choice)
         Group {
-            if case .pi(let id, _) = choice, workspace.isEnded(choice) {
-                SendTargetMenu(project: project, newSession: newSession) {
-                    label(icon: AnyView(PiStateDot(shown: PiShown(state: .known(.ended)), size: 5)), text: "\(name(of: choice)) · 已结束", shortcut: nil)
-                        .padding(.trailing, compact ? 12 : 16)
-                }
-                .accessibilityLabel("Agent 会话「\(workspace.sessionName(id))」已结束，选择发送目标")
-            } else if choice == .app(.lastFrontmost), services.lastFrontmostApp() == nil {
-                SendTargetMenu(project: project, newSession: newSession) {
-                    label(icon: AnyView(Image(systemName: "paperplane.fill").accessibilityHidden(true)), text: "发送…", shortcut: nil)
-                        .padding(.trailing, compact ? 12 : 16)
-                }
-            } else {
+            if ready {
                 HStack(spacing: 0) {
                     Button { send(choice) } label: {
                         label(icon: AnyView(icon(choice)), text: title(choice), shortcut: "⌘↩")
@@ -46,12 +35,25 @@ struct SendControl: View {
                             .contentShape(.rect)
                     }
                 }
+            } else if case .pi(let id, _) = choice {
+                SendTargetMenu(project: project, newSession: newSession) {
+                    label(icon: AnyView(PiStateDot(shown: PiShown(state: .known(.ended)), size: 5)), text: "\(name(of: choice)) · 已结束", shortcut: nil)
+                        .padding(.trailing, compact ? 12 : 16)
+                }
+                .accessibilityLabel("Agent 会话「\(workspace.sessionName(id))」已结束，选择发送目标")
+            } else {
+                SendTargetMenu(project: project, newSession: newSession) {
+                    label(icon: AnyView(Image(systemName: "paperplane.fill").accessibilityHidden(true)), text: "发送…", shortcut: nil)
+                        .padding(.trailing, compact ? 12 : 16)
+                }
             }
         }
         .font(.system(size: compact ? 12.5 : 13, weight: .semibold))
-        .foregroundStyle(palette.onSignature)
-        .background(palette.signature, in: .capsule)
-        .shadow(color: .black.opacity(palette.dark ? 0 : 0.12), radius: 6, y: 2)
+        // 只有绑着 ⌘↩ 的发送是主钮（靛青）；只能选目标时是中性的
+        .foregroundStyle(ready ? palette.onSignature : palette.ink)
+        .background(ready ? palette.signature : palette.fill, in: .capsule)
+        // 浮在页面上时带一点投影；放在稿纸里（compact）是平的
+        .shadow(color: .black.opacity(palette.dark || compact ? 0 : 0.12), radius: 6, y: 2)
         .fixedSize()
     }
 

@@ -54,7 +54,7 @@ struct CaptureComposer: View {
     }
 
     private var sendButton: some View {
-        Button(action: save) { SendGlyph(enabled: !saving) }
+        Button(action: save) { SubmitGlyph(.save, enabled: !saving) }
             .buttonStyle(.plain)
             .disabled(saving)
             .keyboardShortcut(.return, modifiers: .command)
