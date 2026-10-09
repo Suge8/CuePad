@@ -255,10 +255,10 @@ struct PromptCard: View {
     /// 交出去过的状态一律"状态标 会话名 · 状态词"，名字长了只截名字。
     private func line(name: String?, word: String, tint: Color, @ViewBuilder mark: () -> some View) -> some View {
         HStack(spacing: 6) {
-            mark()
+            mark().accessibilityHidden(true)
             if let name {
                 Text(name).foregroundStyle(palette.ink2).lineLimit(1)
-                Text("·").foregroundStyle(palette.ink3)
+                Dot().foregroundStyle(palette.ink3)
             }
             Text(word).foregroundStyle(tint).lineLimit(1).fixedSize()
         }

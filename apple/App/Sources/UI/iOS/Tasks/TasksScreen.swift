@@ -48,7 +48,7 @@ struct TasksScreen: View {
             }
             group("进行中", board.inProgress, count: board.counts.inProgress, in: board)
             group("待办", board.todo, count: board.counts.todo, in: board)
-            if !board.done.isEmpty { completed(board.done) }
+            if !board.done.isEmpty { completed(board.done, count: board.counts.done) }
         }
         .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
     }
@@ -80,14 +80,14 @@ struct TasksScreen: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    private func completed(_ rows: [TaskBoard.Row]) -> some View {
+    private func completed(_ rows: [TaskBoard.Row], count: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Button {
                     withAnimation(Motion.quick) { showsCompleted.toggle() }
                 } label: {
                     HStack(spacing: 6) {
-                        Text("最近完成 \(rows.count)")
+                        Text("最近完成 \(count)")
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                             .rotationEffect(.degrees(showsCompleted ? 90 : 0)).accessibilityHidden(true)
                         Spacer()
@@ -151,7 +151,7 @@ struct TaskLine: View {
         line
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, tally.text, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, tally.text?.spoken, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
@@ -215,7 +215,7 @@ struct TaskLine: View {
     /// 标题下最多两行：进度（提示词与子任务），再是所在项目与交给的会话此刻的状态。
     private var detail: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if let counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3) }
+            if let counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3).spoken(counts) }
             if showsPlace { place }
         }
         .font(.caption)
@@ -241,7 +241,7 @@ struct TaskLine: View {
                         HStack(spacing: 4) {
                             PiStateDot(shown: shown, size: 6)
                             Text(shown.presence).foregroundStyle(shown.labelTint(palette))
-                            Text("·").foregroundStyle(palette.ink3)
+                            Dot().foregroundStyle(palette.ink3)
                             PiElapsed(shown: shown, font: .caption)
                         }
                         HStack(spacing: 4) {

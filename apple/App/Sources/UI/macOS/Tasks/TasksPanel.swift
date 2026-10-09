@@ -52,7 +52,7 @@ struct TasksPanel: View {
                     Button {
                         withAnimation(Motion.quick) { showsCompleted.toggle() }
                     } label: {
-                        Label("最近完成 \(board.done.count)", systemImage: showsCompleted ? "chevron.down" : "chevron.right")
+                        Label("最近完成 \(board.counts.done)", systemImage: showsCompleted ? "chevron.down" : "chevron.right")
                     }
                     .buttonStyle(.plain)
                     .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
@@ -131,7 +131,7 @@ struct TaskRow: View {
                     .lineLimit(2)
                     .onTapGesture(perform: open)
                 if let counts = done ? nil : TaskCopy.counts(marks) {
-                    Text(counts).font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1)
+                    Text(counts).font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1).spoken(counts)
                 }
                 if project != nil || (!done && session != nil) { place }
             }
@@ -145,7 +145,7 @@ struct TaskRow: View {
         .contextMenu { CardActions(card: task) }
         // 读屏：整行一个元素"任务内容，项目，Pi 在做什么"，值是状态，默认动作切换完成（文案见 TaskSpeech）
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([task.title, tally.text, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([task.title, tally.text?.spoken, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
         .accessibilityValue(TaskSpeech.value(task.status))
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
@@ -176,7 +176,7 @@ struct TaskRow: View {
                 HStack(spacing: 4) {
                     PiStateDot(shown: shown, size: 5)
                     Text(shown.presence).foregroundStyle(shown.labelTint(palette))
-                    Text("·").foregroundStyle(palette.ink3)
+                    Dot().foregroundStyle(palette.ink3)
                     PiElapsed(shown: shown, font: Typography.meta)
                 }
                 .lineLimit(1)

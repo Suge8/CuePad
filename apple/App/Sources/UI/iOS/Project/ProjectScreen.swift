@@ -166,8 +166,8 @@ struct ProjectScreen: View {
     }
 }
 
-/// 介绍与任务：项目的一句话介绍在纸外、顶栏下的第一行（次要墨色）；下面总是一张纸：本项目任务（"任务 · 完成 n/m"，前 3 条顶层任务连同子任务，
-/// 可拖动、缩进，同任务页；其余在任务页；一条都没有时纸里只有一行"添加任务"）+ 本项目此刻在线的 Agent 会话（这一段只回答"现在谁在干活"，
+/// 介绍与任务：项目的一句话介绍在纸外、顶栏下的第一行（次要墨色）；下面总是一张纸：本项目任务（前 3 条没做完的顶层任务连同子任务，
+/// 可拖动、缩进，同任务页；没列出的与已完成的只在纸底写个数、点开是任务页，见 `TaskCopy.more`；一条都没有时纸里只有一行"添加任务"）+ 本项目此刻在线的 Agent 会话（这一段只回答"现在谁在干活"，
 /// 已结束的不列；有历史时末尾"全部 N 个会话"看这个项目的会话列表；没有在线会话时整段不出现，同 Mac 项目页）。项目还没绑文件夹而有同名建议或正在绑时（`FolderGuide.shows`），Agent 段是绑定引导；
 /// 没有建议时不占位置，绑定在项目的"⋯"里。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
 private struct FocusCard: View {
@@ -207,15 +207,22 @@ private struct FocusCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 let roots = data.tasks.roots
                 if !roots.isEmpty {
-                    SectionLabel(text: TaskCopy.section(data.taskProgress), systemImage: "checklist").padding(.bottom, 4)
+                    SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
                     TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
                         TaskLine(task: row.task, marks: data.children[row.id]).contextMenu { CardActions(card: row.task) }
                     }
                 }
-                if roots.count > Self.visibleTasks {
-                    Button("还有 \(roots.count - Self.visibleTasks) 条") { navigation.push(.tasks) }
+                if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
+                    Button { navigation.push(.tasks) } label: {
+                        HStack(spacing: 4) {
+                            Text(more)
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
+                        }
+                        .frame(minHeight: 44).contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
-                    .frame(minHeight: 44)
+                    .accessibilityLabel(more.spoken)
                 }
                 NewTaskLine(project: data.project?.id)
             }

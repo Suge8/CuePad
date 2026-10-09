@@ -65,7 +65,7 @@ struct PreviewCard: View {
                 Image(decorative: thumbnail, scale: scale).resizable().scaledToFill()
                     .brightness(palette.dark ? -0.18 : 0)
             } else {
-                Image(systemName: Self.symbol(preview.kind)).font(.title2).foregroundStyle(palette.ink3)
+                Image(systemName: Self.symbol(preview.kind)).font(.title2).foregroundStyle(palette.ink3).accessibilityHidden(true)
             }
         }
         .frame(width: Self.side, height: Self.side)

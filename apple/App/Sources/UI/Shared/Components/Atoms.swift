@@ -23,6 +23,23 @@ extension View {
         }
     }
 }
+// MARK: 分隔点
+
+/// 一行元信息里隔开两段的"·"：只是版面，读屏不念（行要读的话由行自己的标签给）。颜色跟随外层，要淡一档的调用处自己加。
+struct Dot: View {
+    var body: some View { Text("·").accessibilityHidden(true) }
+}
+
+extension String {
+    /// 用" · "分段的一句字（`CountCopy`、`TaskCopy.more`）给读屏时分段处换成逗号，不念"·"。
+    var spoken: String { replacingOccurrences(of: " · ", with: "，") }
+}
+
+extension View {
+    /// 一句用" · "分段的字（`visible` 是它显示的文字）：读屏读 `visible.spoken`。
+    func spoken(_ visible: String) -> some View { accessibilityLabel(visible.spoken) }
+}
+
 // MARK: 项目图标
 
 struct ProjectGlyph: View {
@@ -31,7 +48,9 @@ struct ProjectGlyph: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        // 旁边总有项目名：图标只是装饰，读屏不念它的系统名
         Image(systemName: Self.symbol(project?.icon))
+            .accessibilityHidden(true)
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? .secondary)
             // 深色下提亮一档：偏灰、偏暗的项目色（如 #8A8A84）的细线图标在深底与玻璃上几乎看不见

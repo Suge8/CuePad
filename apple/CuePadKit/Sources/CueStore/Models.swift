@@ -131,16 +131,16 @@ public struct TaskCounts: Equatable, Sendable {
     self.done = done
   }
 
+  public static let zero = TaskCounts(inProgress: 0, todo: 0, done: 0)
+
   public var open: Int { inProgress + todo }
-  public var total: Int { open + done }
-  public var progress: TaskProgress { TaskProgress(done: done, total: total) }
 
   public static func + (lhs: TaskCounts, rhs: TaskCounts) -> TaskCounts {
     TaskCounts(inProgress: lhs.inProgress + rhs.inProgress, todo: lhs.todo + rhs.todo, done: lhs.done + rhs.done)
   }
 }
 
-/// 完成了几个、一共几个（项目的顶层任务、上级的直接子任务）。
+/// 完成了几个、一共几个（上级的直接子任务）。
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int

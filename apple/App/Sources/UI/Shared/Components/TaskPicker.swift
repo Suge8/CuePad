@@ -91,7 +91,7 @@ struct TaskPicker: View {
         VStack(spacing: 14) {
             Text("挂到任务").font(Typography.toolbarTitle).foregroundStyle(palette.ink)
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3)
+                Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3).accessibilityHidden(true)
                 TextField("搜索任务", text: $text).textFieldStyle(.plain).focused($searching)
             }
             .font(Typography.body)

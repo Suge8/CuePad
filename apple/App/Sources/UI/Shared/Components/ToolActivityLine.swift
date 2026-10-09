@@ -57,12 +57,13 @@ struct ToolActivityLine: View {
             Image(systemName: "wrench.and.screwdriver").imageScale(.small).accessibilityHidden(true)
             if let summary {
                 Text(summary).lineLimit(1).layoutPriority(-1)
-                Text("· \(note.took)").fixedSize()
+                Dot()
+                Text(note.took).fixedSize()
             } else {
                 Text("用时 \(note.took)").fixedSize()
             }
             if let failures = note.failures {
-                Text("·").accessibilityHidden(true)
+                Dot()
                 Text(failures).foregroundStyle(palette.failure).fixedSize()
             }
             if chevron {

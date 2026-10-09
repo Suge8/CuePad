@@ -161,9 +161,12 @@ struct PiSessionSubtitle: View {
             Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
                 .contentTransition(.opacity)
                 .animation(Motion.quick, value: shown)
-            if let undelivered { Text("· \(undelivered)").foregroundStyle(palette.failure) }
+            if let undelivered {
+                Dot().foregroundStyle(palette.failure)
+                Text(undelivered).foregroundStyle(palette.failure)
+            }
             if shown.clock != nil {
-                Text("·").foregroundStyle(palette.ink3)
+                Dot().foregroundStyle(palette.ink3)
                 // 整个 App 只有这一个计时到秒：正看着的这个会话
                 PiElapsed(shown: shown, font: Self.font, precision: .second)
             }

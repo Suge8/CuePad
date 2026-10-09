@@ -174,7 +174,7 @@ private struct ProjectHeader: View {
                 HStack(spacing: 4) {
                     if let project, let directory {
                         DirectoryLink(path: Self.abbreviated(directory)) { workspace.chooseFolder(for: project) }
-                        if cardCount > 0 { Text("·") }
+                        if cardCount > 0 { Dot() }
                     }
                     if cardCount > 0 { Text("\(cardCount) 条灵感").monospacedDigit() }
                 }

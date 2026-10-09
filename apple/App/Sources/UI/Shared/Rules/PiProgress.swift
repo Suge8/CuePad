@@ -16,6 +16,15 @@ nonisolated enum PiRowLine: Equatable {
     /// 没有更要紧的一句时，整页的行写状态词（`PiShown.label`）。
     case status(String)
 
+    /// 读屏念的那一句（行上显示的文字去掉着色、强调）。
+    var speech: String {
+        switch self {
+        case .ending: "正在结束…"
+        case .endFailed(let text), .failed(let text), .progress(let text), .hint(let text), .status(let text): text
+        case .draft(let draft): "草稿 \(draft)"
+        }
+    }
+
     /// `draft` 是回复框里的草稿（`AppSettings.draftPreview`），`end` 是此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
     /// `failure` 是此刻要写的没送到的原因（`PiRename.failure` 或显示为没能送达的那条话的原因）。
     static func of(_ session: PiSessionState, draft: String?, end: DeliveryRequest?, failure: String? = nil) -> PiRowLine? {

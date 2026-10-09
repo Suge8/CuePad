@@ -193,6 +193,7 @@ private struct HeaderDetail: View {
             Text(text.isEmpty ? " " : text).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
                 .contentTransition(.numericText())
                 .animation(Motion.quick, value: text)
+                .spoken(text)
         }
     }
 }

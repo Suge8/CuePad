@@ -233,7 +233,8 @@ extension DebugScene {
 import UIKit
 
 /// `-CuePadAXDump YES`：界面起来 4 秒后把读屏看到的元素（标签、值、特征）按顺序写进资料库目录的
-/// `ax-dump.txt`，给没有 UI 测试目标、没有 Simulator 图形界面时核对无障碍。
+/// `ax-dump.txt`（行末是元素尺寸），给没有 UI 测试目标、没有 Simulator 图形界面时核对无障碍。自动化模式下 `accessibilityHidden` 的元素也会列出，
+/// 所以多于读屏真读的；合并元素的标签（分隔点、图标名有没有混进去）才是读屏读到的。
 extension DebugScene {
     static func dumpAccessibilityIfAsked() {
         guard defaults.bool(forKey: "CuePadAXDump"), let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
@@ -257,7 +258,8 @@ extension DebugScene {
             let kind = traits.contains(.button) ? "Button" : traits.contains(.header) ? "Header" : traits.contains(.staticText) ? "Text"
                 : traits.contains(.image) ? "Image" : "Element"
             let value = node.accessibilityValue.map { " = \($0)" } ?? ""
-            lines.append("\(kind) '\(node.accessibilityLabel ?? "")'\(value)")
+            let size = node.accessibilityFrame.size
+            lines.append("\(kind) '\(node.accessibilityLabel ?? "")'\(value) [\(Int(size.width))×\(Int(size.height))]")
             return
         }
         if let elements = node.accessibilityElements as? [NSObject] {

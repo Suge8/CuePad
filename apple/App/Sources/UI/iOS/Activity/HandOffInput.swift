@@ -90,7 +90,7 @@ struct HandOffInput: View {
                 HStack(spacing: 6) {
                     if let chosen { PiStateDot(shown: services.settings.shown(chosen), size: 7) }
                     Text(chosen.map { "交给 \($0.state.title)" } ?? "交给 新会话").lineLimit(1)
-                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3)
+                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 }
                 .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink)
                 .padding(.horizontal, 12).frame(height: 32)

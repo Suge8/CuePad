@@ -271,10 +271,10 @@ struct CardEditorPage: View {
             ProjectGlyph(project: data.project, size: 12)
             Text(data.project?.name ?? "未分类").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
             if let task = data.task {
-                Text("·")
+                Dot()
                 Label(task.title, systemImage: "checklist").lineLimit(1).help("这条任务的提示词")
             }
-            Text("·")
+            Dot()
             Text(DateLabel.short(data.card.modifiedAt))
             if let status = saveState.text {
                 Text(status).foregroundStyle(saveState == .failed ? palette.failure : palette.ink3)

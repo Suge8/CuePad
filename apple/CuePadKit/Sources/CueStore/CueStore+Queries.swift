@@ -182,11 +182,11 @@ extension CueStore {
     return ordered
   }
 
-  /// 可当上级的任务：未删除的要做卡片。
-  private static let liveTask = "u.deletedAt IS NULL AND u.todoAt IS NOT NULL"
+  /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的子任务当顶层，与 `tasks(_:)` 列出的一致。
+  private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
 
   /// 各项目（nil = 未分类）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
-  /// 没有上级、上级不在（没到、在回收站），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `childMarks`。
+  /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `childMarks`。
   /// 灵感（含提示词）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
   public func taskCounts() throws -> [UUID?: TaskCounts] {
     let rows = try db.query(
