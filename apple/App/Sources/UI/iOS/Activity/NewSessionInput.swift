@@ -104,7 +104,7 @@ struct NewSessionInput: View {
             // 项目还没有文件夹：写明，同名文件夹一键绑，或自己选（请 Mac 绑，进度与没绑成的原因就在这里）
             VStack(alignment: .leading, spacing: 0) {
                 Text("「\(place.project.name)」还没有文件夹").foregroundStyle(palette.ink3)
-                ProjectFolderGuide(project: place.project, style: .line)
+                FolderGuideReader { ProjectFolderGuide(project: place.project, guide: $0, style: .line) }
             }
         } else if let request = progress?.request {
             if let failure = request.failure {

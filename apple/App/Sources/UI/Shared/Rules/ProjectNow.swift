@@ -81,7 +81,7 @@ nonisolated struct ProjectNow: Hashable, Sendable {
 
     private static func sentence(_ item: PiSessionListItem, _ shown: PiShown) -> String {
         switch shown.status {
-        case .restart: "在终端里执行 /reload 就能接上"
+        case .restart: "要在终端里重载"
         case .delivery(.failed): gist(item, shown) ?? shown.presence
         case .delivery: shown.presence
         default: gist(item, shown) ?? shown.presence

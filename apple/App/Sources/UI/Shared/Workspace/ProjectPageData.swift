@@ -15,8 +15,13 @@ nonisolated struct ProjectPageData: Sendable {
     /// 任务的直接下级（子任务与挂着的灵感），完成圈与子任务进度由它推出。
     var children: [UUID: [ChildMark]]
 
-    /// 卡片最近一次发送的目标名。
-    var lastTarget: [UUID: String] { lastSends.mapValues(\.target.name) }
+    /// 卡片最近一次发给的 Agent 会话名（同名会话写"已发过"，已下线的去处不写，`SendTarget.shownName`）。
+    var lastTarget: [UUID: String] {
+        Dictionary(uniqueKeysWithValues: lastSends.compactMap { id, send in
+            guard let name = send.target.shownName else { return nil }
+            return (id, name == project?.name ? SendCopy.sameProject : name)
+        })
+    }
 
     func stamps() -> [CardStamp] {
         cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) }

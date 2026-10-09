@@ -208,7 +208,7 @@ private struct InsertionLine: View {
     }
 }
 
-/// 行尾的折起/展开：折起时写子任务数。
+/// 行尾的折起/展开：只是一个箭头。子任务数已写在这一行的元信息里（"子任务 0/2"），折起时不在箭头旁再写一个光秃秃的数。
 private struct Disclosure: View {
     let row: TaskTree.Row
     @Binding var toggled: Set<UUID>
@@ -221,10 +221,7 @@ private struct Disclosure: View {
                 if toggled.contains(row.id) { toggled.remove(row.id) } else { toggled.insert(row.id) }
             }
         } label: {
-            HStack(spacing: 3) {
-                if !row.isExpanded { Text("\(row.childCount)").monospacedDigit() }
-                Image(systemName: "chevron.right").fontWeight(.semibold).rotationEffect(.degrees(row.isExpanded ? 90 : 0))
-            }
+            Image(systemName: "chevron.right").fontWeight(.semibold).rotationEffect(.degrees(row.isExpanded ? 90 : 0))
             .font(Typography.caption)
             .foregroundStyle(palette.ink3)
             #if os(iOS)

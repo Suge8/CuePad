@@ -194,13 +194,15 @@ struct ShelfScreen: View {
         }
     }
 
-    /// 置顶大卡按行排：每行 `columns` 张平分整行，最后一行不满时那几张也平分整行（奇数张时最后一张占满），不留空格。
+    /// 置顶大卡按行排：每行 `columns` 张平分整行，最后一行不满时那几张也平分整行，不留空格；最后一行只剩一张时它占满整行、
+    /// 横着排成矮的一条（`wide`）——不让单出来的那张（常是最不活跃、甚至空的项目）成为首屏最大的一块。
     /// 一行里的卡同高。置顶的不多，不用懒加载。
     private func pinnedGrid(_ pinned: [ShelfData.Entry], columns: Int, now: [UUID: ProjectNow]) -> some View {
         VStack(spacing: 12) {
             ForEach(Array(stride(from: 0, to: pinned.count, by: columns)), id: \.self) { start in
+                let row = pinned[start..<min(start + columns, pinned.count)]
                 HStack(spacing: 12) {
-                    ForEach(pinned[start..<min(start + columns, pinned.count)]) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
+                    ForEach(row) { PinnedShelfCard(entry: $0, now: now[$0.id], wide: row.count == 1 && columns > 1) }
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -247,7 +249,6 @@ struct ShelfScreen: View {
 private struct ShelfLine: View {
     let route: Navigation.Route
     let symbol: String
-    var tint: Color?
     let title: String
     let detail: String
     @Environment(\.palette) private var palette
@@ -258,7 +259,7 @@ private struct ShelfLine: View {
     var body: some View {
         NavigationLink(value: route) {
             HStack(spacing: 10) {
-                Image(systemName: symbol).foregroundStyle(tint ?? palette.ink2).frame(minWidth: 22).accessibilityHidden(true)
+                Image(systemName: symbol).foregroundStyle(palette.ink2).frame(minWidth: 22).accessibilityHidden(true)
                 // 辅助字号下说明换到标题下面，不被截成省略号
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout(spacing: 10))) {
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
@@ -278,13 +279,12 @@ private struct ShelfLine: View {
     }
 }
 
-/// 有没归类的灵感时的提醒（注意色的图标）：点它去未分类整理。
+/// 有没归类的灵感时的提醒：点它去未分类整理。图标是墨色——赭黄只给"等你确认"，待整理的灵感不挡任何事。
 private struct InboxReminder: View {
     let count: Int
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        ShelfLine(route: .inbox, symbol: "tray", tint: palette.attention, title: "未分类", detail: "\(count) 条待整理")
+        ShelfLine(route: .inbox, symbol: "tray", title: "未分类", detail: "\(count) 条待整理")
     }
 }
 
@@ -297,10 +297,12 @@ private struct TasksLine: View {
     }
 }
 
-/// 置顶项目的大卡：项目色从上沿淡下来的一层底、图标、名称、"此刻"一行（`ProjectNow`）、灵感数与未完成任务数。
+/// 置顶项目的大卡：项目色从上沿淡下来的一层底、图标、名称、"此刻"一行（`ProjectNow`，没有可说的就不占这一行，名字与计数靠拢）、
+/// 灵感数与未完成任务数（都没有时写"还是空的"）。`wide`：一行里单出来的那张占满整行，横着排成矮的一条，图标在左、计数在右。
 private struct PinnedShelfCard: View {
     let entry: ShelfData.Entry
     let now: ProjectNow?
+    var wide = false
     @Environment(\.palette) private var palette
     /// 项目图标随字号放大。
     @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 22
@@ -310,29 +312,52 @@ private struct PinnedShelfCard: View {
     var body: some View {
         let tint = Palette.projectTint(entry.project.color)
         NavigationLink(value: Navigation.Route.project(entry.project.id)) {
-            VStack(alignment: .leading, spacing: 6) {
-                ProjectGlyph(project: entry.project, size: glyph).padding(.bottom, 6)
-                Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
-                // 空项目的大卡不留一块空白：没有可说的又没有灵感时，这一行写一句现状
-                if now == nil, entry.cardCount == 0 {
-                    Text("还没有灵感").font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
+            Group {
+                if wide {
+                    HStack(spacing: 12) {
+                        ProjectGlyph(project: entry.project, size: glyph)
+                        VStack(alignment: .leading, spacing: 4) {
+                            name
+                            if let now { ProjectNowLine(now: now, font: Typography.meta) }
+                        }
+                        Spacer(minLength: 8)
+                        counts
+                    }
                 } else {
-                    ProjectNowLine(now: now, font: .footnote)
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProjectGlyph(project: entry.project, size: glyph).padding(.bottom, 6)
+                        name
+                        if let now { ProjectNowLine(now: now, font: Typography.meta) }
+                        Spacer(minLength: 4)
+                        counts
+                    }
                 }
-                Spacer(minLength: 10)
-                ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
             }
             .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 132, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             // 渐变只铺在填充上（不用渐变描边，见文档「视觉验收 · 性能测量」）
             .background(
-                LinearGradient(colors: [tint.opacity(palette.dark ? 0.16 : 0.1), tint.opacity(0)], startPoint: .top, endPoint: .center),
+                LinearGradient(
+                    colors: [tint.opacity(palette.dark ? 0.16 : 0.1), tint.opacity(0)],
+                    startPoint: wide ? .leading : .top, endPoint: .center),
                 in: .rect(cornerRadius: Self.radius, style: .continuous))
             .paper(radius: Self.radius)
         }
         .buttonStyle(CardPressStyle())
         .projectActions(entry.project, radius: Self.radius, pi: now?.shown)
         .accessibilityElement(children: .combine)
+    }
+
+    private var name: some View {
+        Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
+    }
+
+    @ViewBuilder private var counts: some View {
+        if entry.cardCount == 0, entry.openTasks == 0 {
+            Text("还是空的").font(Typography.caption).foregroundStyle(palette.ink3)
+        } else {
+            ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
+        }
     }
 }
 
@@ -381,12 +406,12 @@ private struct ShelfRow: View {
         typeSize.isAccessibilitySize ? horizontalPadding : horizontalPadding + tile + 12
     }
 
-    /// 行尾只留灵感数（像侧栏的计数）：把宽度让给"此刻"那一句；任务数在"此刻"与任务页里。辅助字号下照常写全。
+    /// 行尾只留灵感数（像侧栏的计数）：把宽度让给"此刻"那一句；任务数在"此刻"与任务页里；为 0 不写。辅助字号下照常写全。
     @ViewBuilder private var counts: some View {
         if stacked {
             ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
-        } else {
-            Text("\(entry.cardCount)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).counting(entry.cardCount)
+        } else if entry.cardCount > 0 {
+            Text("\(entry.cardCount)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3).counting(entry.cardCount)
                 .accessibilityLabel("\(entry.cardCount) 条灵感")
         }
     }
@@ -400,15 +425,26 @@ private struct ShelfRow: View {
                         .frame(width: Self.tile, height: Self.tile)
                         .background(Palette.projectTint(entry.project.color).opacity(0.12), in: .rect(cornerRadius: 10))
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        if stacked { ProjectGlyph(project: entry.project, size: glyph) }
-                        Text(entry.project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
+                // 行高一直是两行（名称与"此刻"）的高度，状态出现、消失时列表不跳；没有可说的时名称在行里居中，
+                // 不在上半截空出一行（同 Mac 侧栏）
+                ZStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: " ").font(.body.weight(.medium))
+                        Text(verbatim: " ").font(Typography.meta)
                     }
-                    ProjectNowLine(now: now, font: .footnote)
-                    // 辅助功能大字号下计数换到名称下方，名称不被挤成省略号
-                    if stacked { counts }
+                    .hidden()
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            if stacked { ProjectGlyph(project: entry.project, size: glyph) }
+                            Text(entry.project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
+                        }
+                        if let now { ProjectNowLine(now: now, font: Typography.meta) }
+                        // 辅助功能大字号下计数换到名称下方，名称不被挤成省略号
+                        if stacked { counts }
+                    }
+                    .frame(maxHeight: .infinity, alignment: now == nil ? .center : .top)
                 }
+                .animation(Motion.quick, value: now == nil)
                 Spacer(minLength: 8)
                 if !stacked { counts }
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3.opacity(0.7))
@@ -550,7 +586,7 @@ private struct ActiveTaskRow: View {
 
 /// 书架顶上的"Agent 此刻"一条（规则 `AgentNow`）：左边是按要紧先后叠放的几个会话头像（首字加状态标，多的写"+N"），
 /// 右边一句人话说最要紧的事、次行带过其余的；会话再多也是这两行，高度不变，变的只是字（原地淡入淡出、数字滚动）与头像的进出。
-/// 要你动手（等你确认、出错）时整条垫一层淡赭黄，否则中性。点它去 Agent 页；长按快速看前几个、点一个直接进它的对话。
+/// 要你动手时整条垫一层那个状态的淡色（等你确认赭黄、出错胭脂），否则中性。点它去 Agent 页；长按快速看前几个、点一个直接进它的对话。
 private struct AgentNowCard: View {
     let now: AgentNow
     @Environment(Navigation.self) private var navigation
@@ -564,10 +600,10 @@ private struct AgentNowCard: View {
             HStack(spacing: 14) {
                 AgentFaces(faces: now.faces, more: now.more, ground: ground)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(now.headline).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(now.headline).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(1)
                         .contentTransition(.numericText())
                     // 次行总留着：没有可补的也不让整条变矮
-                    Text(now.detail ?? " ").font(.footnote).foregroundStyle(palette.ink2).lineLimit(1)
+                    Text(now.detail ?? " ").font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
                         .id(now.detail).transition(.opacity)
                 }
                 .animation(Motion.quick, value: now.headline)
@@ -578,7 +614,7 @@ private struct AgentNowCard: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(now.needsYou ? palette.attention.opacity(Self.tint(palette)) : .clear,
+            .background(now.needsYou ? now.lead.tint(palette).opacity(Self.tint(palette)) : .clear,
                         in: .rect(cornerRadius: Self.radius, style: .continuous))
             .animation(Motion.quick, value: now.needsYou)
             .paper(radius: Self.radius)
@@ -605,12 +641,13 @@ private struct AgentNowCard: View {
 
     private static func tint(_ palette: Palette) -> Double { palette.dark ? 0.14 : 0.1 }
 
-    /// 这一条的底色（纸，要你动手时叠一层淡赭黄）：头像之间、状态标周围的那圈隔开的描边用它，看起来像镂空。
-    private var ground: Color { now.needsYou ? palette.paper.mix(with: palette.attention, by: Self.tint(palette)) : palette.paper }
+    /// 这一条的底色（纸，要你动手时叠一层那个状态的淡色）：头像之间、状态标周围的那圈隔开的描边用它，看起来像镂空。
+    private var ground: Color { now.needsYou ? palette.paper.mix(with: now.lead.tint(palette), by: Self.tint(palette)) : palette.paper }
 }
 
-/// 叠放的会话头像：首字在项目色的淡底上（没归项目的是中性底），右下角是它的状态标（`PiStateDot`，转圈与呼吸交给
-/// Core Animation，静止时不占 CPU）；前一个压着后一个，各带一圈底色描边隔开。多的在后面写"+N"。头像进出是缩放加淡入淡出。
+/// 叠放的会话头像：认得出是谁——归了项目的是项目图标在项目色的淡底上，没归项目的是文件夹名的首字母在由文件夹名推出的固定颜色上
+/// （会话名的首字常是汉字，说明不了是谁）；右下角外沿挂着它的状态标（`PiStateDot`，约 16pt，"在干活"的转圈与"要重载"分得清；
+/// 转圈与呼吸交给 Core Animation，静止时不占 CPU）。前一个压着后一个，各带一圈底色描边隔开。多的在后面写"+N"。头像进出是缩放加淡入淡出。
 private struct AgentFaces: View {
     let faces: [PiSessionListItem]
     let more: Int
@@ -618,12 +655,14 @@ private struct AgentFaces: View {
     let ground: Color
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 30
+    @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 32
 
-    /// 比例都按头像直径算：首字占 0.42；状态标的点 0.2（符号按它放大到同样分量，看上去约 0.32），中心落在右下角的外沿上，
-    /// 不压首字；相邻两个叠 0.18。
-    private var badge: CGFloat { size * 0.2 }
-    private var overlap: CGFloat { size * 0.18 }
+    /// 比例都按头像直径算：图标与首字母占 0.44；状态标的点 0.28（符号按它放大到约 0.5），中心落在右下角的外沿上；相邻两个叠 0.16。
+    private var badge: CGFloat { size * 0.28 }
+    private var overlap: CGFloat { size * 0.16 }
+
+    /// 没归项目的会话按文件夹名取一个固定的颜色：不用黄（近赭黄）与灰（像停用）。
+    private static let folderTints = ["#D9774B", "#5E9E5A", "#3F8FB8", "#3AA088", "#A260C4", "#D0607D"]
 
     var body: some View {
         // 左边的压在右边的上面：最要紧的在最前，它的状态标不被下一个盖住
@@ -633,9 +672,9 @@ private struct AgentFaces: View {
             }
             if more > 0 {
                 // 多出来的个数紧跟在叠放的头像后面，不再垫一个圆：会被前一个头像压住半边
-                Text("+\(more)").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink3)
+                Text("+\(more)").font(Typography.caption.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink3)
                     .contentTransition(.numericText())
-                    .padding(.leading, overlap + 6)
+                    .padding(.leading, overlap + badge)
                     .transition(.opacity)
             }
         }
@@ -645,20 +684,35 @@ private struct AgentFaces: View {
     }
 
     private func face(_ item: PiSessionListItem) -> some View {
-        let tint = item.project.map { Palette.projectTint($0.color) }
-        return Text(item.state.title.first.map { String($0).uppercased() } ?? "·")
-            .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
-            .foregroundStyle(tint ?? palette.ink2)
+        let tint = item.project.map { Palette.projectTint($0.color) } ?? Self.tint(folder: item.state.folder ?? item.state.title)
+        return mark(item)
+            .foregroundStyle(tint)
+            .brightness(palette.dark ? 0.12 : 0)
             .frame(width: size, height: size)
             // 实心的底：压在下面的头像不从上面的透出来
-            .background(ground.mix(with: tint ?? palette.ink, by: tint == nil ? (palette.dark ? 0.22 : 0.12) : (palette.dark ? 0.3 : 0.18)), in: .circle)
+            .background(ground.mix(with: tint, by: palette.dark ? 0.3 : 0.16), in: .circle)
             .background(ground, in: .circle.inset(by: -2.5))
             .overlay(alignment: .bottomTrailing) {
                 PiStateDot(shown: services.settings.shown(item), size: badge)
-                    .padding(2)
+                    .padding(1.5)
                     .background(ground, in: .circle)
-                    .offset(x: size * 0.14, y: size * 0.14)
+                    .offset(x: size * 0.16, y: size * 0.16)
             }
+    }
+
+    @ViewBuilder private func mark(_ item: PiSessionListItem) -> some View {
+        if let project = item.project {
+            Image(systemName: ProjectGlyph.symbol(project.icon)).font(.system(size: size * 0.44, weight: .semibold))
+        } else {
+            Text((item.state.folder ?? item.state.title).first.map { String($0).uppercased() } ?? "·")
+                .font(.system(size: size * 0.46, weight: .semibold, design: .rounded))
+        }
+    }
+
+    /// 同一个名字总是同一个颜色（不用 `hashValue`：每次启动都变）。
+    private static func tint(folder: String) -> Color {
+        let sum = folder.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
+        return Palette.projectTint(folderTints[sum % folderTints.count])
     }
 }
 #endif

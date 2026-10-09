@@ -36,3 +36,13 @@ nonisolated extension String {
     /// 空串为 nil，便于 `?? 占位`。
     var nonEmpty: String? { isEmpty ? nil : self }
 }
+
+/// 项目页的发送标记文案。项目名与会话名相同，写"已发过"而不是重复项目名。
+nonisolated enum SendCopy {
+    static let sameProject = "已发过"
+}
+
+nonisolated extension SendTarget {
+    /// 卡上"发给过谁"写的名字：只有 Agent 会话。投送到应用（剪贴板等）已经下线，旧版本留下的发送记录不再当成去处写出来。
+    var shownName: String? { kind == .known(.piSession) ? name : nil }
+}
