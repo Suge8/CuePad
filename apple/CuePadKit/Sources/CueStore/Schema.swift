@@ -36,6 +36,8 @@ enum Schema {
     "ALTER TABLE piSessionStates ADD COLUMN context TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;",
     // 19：Agent 发到手机的预览
     Upgrade(stringLiteral: previews),
+    // 20：对话里每轮回答带工具活动摘要（替换只有个数的 toolCount）；会话文件的检查点作废，下次启动从头读一遍，补出旧对话的摘要
+    "ALTER TABLE piMessages ADD COLUMN tools TEXT; ALTER TABLE piMessages DROP COLUMN toolCount; UPDATE piSessions SET checkpoint = NULL;",
   ]
 
   private static let previews = """
@@ -99,7 +101,7 @@ enum Schema {
 
     CREATE TABLE piMessages (
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
-      at INTEGER NOT NULL, toolCount INTEGER NOT NULL, roundStartedAt INTEGER, deliveryID TEXT,
+      at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
