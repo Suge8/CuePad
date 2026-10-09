@@ -11,11 +11,12 @@ struct ProjectPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var data: ProjectPageData?
     @State private var agents: AgentLinks?
+    @State private var sessions: ProjectSessions?
     @State private var board = WallBoard()
     @State private var collapsed = false
 
     private static let collapseOffset: CGFloat = 140
-    /// 空项目那一行（添加任务与绑定引导）的宽度上限：跟着内容，不铺满整页。
+    /// 空项目那一行"添加任务"的宽度上限：跟着内容，不铺满整页（下面的绑定引导与任务纸同宽，`FocusBand.tasksWidth`）。
     private static let emptyLineWidth: CGFloat = 460
 
     var body: some View {
@@ -32,7 +33,7 @@ struct ProjectPage: View {
                 // 下滚后收成的一行：浮在工具栏那一条里，但不放进工具栏——工具栏内容只随用户操作变，
                 // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
                 if collapsed, let data, showsFocus(data) {
-                    CompactFocus(data: data) {
+                    CompactFocus(data: data, agents: projectAgents) {
                         withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
                     }
                     .padding(.top, 8)
@@ -46,6 +47,9 @@ struct ProjectPage: View {
         }
         .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
         .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
+        .observing(services.store, ProjectSessions.tables, id: projectID, into: $sessions, onError: workspace.fail) { [projectID] store in
+            try projectID.map { try ProjectSessions.read($0, from: store) } ?? ProjectSessions(recorded: [], deliveries: [:], bindings: [])
+        }
         .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
@@ -74,13 +78,13 @@ struct ProjectPage: View {
         let byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
         let lastTarget = data.lastTarget
         if showsFocus(data) {
-            FocusBand(data: data)
+            FocusBand(data: data, agents: projectAgents)
         } else if let project = projectID {
             // 两边都空：不画一个只装着空态的大框，收成一行添加任务；还没绑文件夹时接着写明并给一键绑（与 Agent 栏同一个组件）
             VStack(alignment: .leading, spacing: 12) {
                 NewTaskField(project: project).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
                 if let project = data.project, !workspace.hasFolder(project.id) {
-                    ProjectFolderGuide(project: project, style: .panel).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
+                    ProjectFolderGuide(project: project, style: .panel).frame(maxWidth: FocusBand.tasksWidth, alignment: .leading)
                 }
             }
         }
@@ -129,10 +133,12 @@ struct ProjectPage: View {
         }
     }
 
-    /// 有任务或本项目的在线会话时才有"任务与 Agent"一栏；两边都空时项目页只留一行添加任务。
+    /// 有任务或本项目的在线会话（本机的与别的 Mac 上的）时才有"任务与 Agent"一栏；两边都空时项目页只留一行添加任务。
     private func showsFocus(_ data: ProjectPageData) -> Bool {
-        !data.tasks.isEmpty || !workspace.liveSessions(in: projectID).isEmpty
+        !data.tasks.isEmpty || !projectAgents.isEmpty
     }
+
+    private var projectAgents: [ProjectAgents.Row] { workspace.projectAgents(projectID, synced: sessions) }
 
     private func rearrange() {
         guard let data else { return }

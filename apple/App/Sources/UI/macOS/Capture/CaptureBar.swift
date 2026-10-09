@@ -76,8 +76,8 @@ struct CaptureComposer: View {
                 saveButton
             }
         }
-        // 圆角 = 外框 22 − 内边距 8，与外框同心（菜单栏面板同样内边距 8）
-        .background(expanded ? palette.paper : .clear, in: .rect(cornerRadius: 14, style: .continuous))
+        // 圆角 = 外框 22 − 内边距 8，与外框同心。菜单栏面板里不垫纸：面板本身就是一块玻璃，再垫一层纸就是玻璃框里套白纸的双层边
+        .background(expanded && !pinnedOpen ? palette.paper : .clear, in: .rect(cornerRadius: 14, style: .continuous))
         // 收起时整条都是输入区：点到图标或留白也进入输入
         .contentShape(.rect(cornerRadius: 22))
         .onTapGesture { focused = true }

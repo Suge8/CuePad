@@ -1,9 +1,9 @@
 import CueSync
 import SwiftUI
 
-/// 同步状态给人看的一句话、补充说明与图标（Mac 与 iOS 设置共用）。颜色只表达含义：正常是墨，需要处理是注意色，出错是失败色。
+/// 同步状态给人看的一句话、补充说明与图标（Mac 与 iOS 设置共用）。颜色只表达含义：正常是次要墨色，需要你处理的是墨色（赭黄只留给 Agent 等你确认），出错是失败色。
 struct SyncSummary: Equatable {
-    enum Tone { case normal, attention, failure }
+    enum Tone { case normal, notice, failure }
 
     let title: String
     let detail: String?
@@ -14,19 +14,19 @@ struct SyncSummary: Equatable {
         switch status {
         case .starting: (title, detail, symbol, tone) = ("正在连接 iCloud…", nil, "icloud", .normal)
         // 没有在同步是这台设备的情况（没有 iCloud 权限、隔离库），不是出错
-        case .unavailable(let reason): (title, detail, symbol, tone) = ("没有在同步", reason, "icloud.slash", .attention)
+        case .unavailable(let reason): (title, detail, symbol, tone) = ("没有在同步", reason, "icloud.slash", .notice)
         case .idle: (title, detail, symbol, tone) = ("已同步", nil, "checkmark.icloud", .normal)
         case .syncing: (title, detail, symbol, tone) = ("正在同步…", nil, "arrow.triangle.2.circlepath.icloud", .normal)
         case .noAccount:
-            (title, detail, symbol, tone) = ("iCloud 没有开启", Self.turnOnICloud, "icloud.slash", .attention)
+            (title, detail, symbol, tone) = ("iCloud 没有开启", Self.turnOnICloud, "icloud.slash", .notice)
         case .accountRestricted:
-            (title, detail, symbol, tone) = ("iCloud 账号受限", "家长控制或设备管理限制了 iCloud，本机数据照常可用", "lock.icloud", .attention)
+            (title, detail, symbol, tone) = ("iCloud 账号受限", "家长控制或设备管理限制了 iCloud，本机数据照常可用", "lock.icloud", .notice)
         case .accountUnavailable:
-            (title, detail, symbol, tone) = ("iCloud 暂时不可用", "稍后会自动重试", "exclamationmark.icloud", .attention)
+            (title, detail, symbol, tone) = ("iCloud 暂时不可用", "稍后会自动重试", "exclamationmark.icloud", .notice)
         case .quotaExceeded:
-            (title, detail, symbol, tone) = ("iCloud 空间不足", "本机改动都已保留，空间释放后自动上传", "exclamationmark.icloud", .attention)
+            (title, detail, symbol, tone) = ("iCloud 空间不足", "本机改动都已保留，空间释放后自动上传", "exclamationmark.icloud", .notice)
         case .needsDecision(let decision):
-            (title, detail, symbol, tone) = ("同步已暂停，需要你决定", Self.describe(decision), "pause.circle", .attention)
+            (title, detail, symbol, tone) = ("同步已暂停，需要你决定", Self.describe(decision), "pause.circle", .notice)
         // 底层原因（错误码、服务端说明）在设置的「没能同步」明细里按记录列出，状态这里只说人话
         case .failed: (title, detail, symbol, tone) = ("同步出错", Self.failedDetail, "xmark.icloud", .failure)
         }
@@ -35,7 +35,7 @@ struct SyncSummary: Equatable {
     func color(_ palette: Palette) -> Color {
         switch tone {
         case .normal: palette.ink2
-        case .attention: palette.attention
+        case .notice: palette.ink
         case .failure: palette.failure
         }
     }
