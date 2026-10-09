@@ -15,7 +15,8 @@ struct CardTileView: View {
     var body: some View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Navigation.Route.card(card.id)) {
-            VStack(alignment: .leading, spacing: 6) {
+            // 标题与正文挨着读成一段，日期另起一小段
+            VStack(alignment: .leading, spacing: 4) {
                 if let image = text.images.first {
                     Thumbnail(hash: image, height: 96, radius: 9).padding(.bottom, 4)
                 }
@@ -33,10 +34,10 @@ struct CardTileView: View {
                         .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
                 }
                 CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
-                    .padding(.top, 2)
+                    .padding(.top, 6)
             }
             .multilineTextAlignment(.leading)
-            .padding(12)
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .paper(radius: 16)
             .contentShape(.rect(cornerRadius: 16))
