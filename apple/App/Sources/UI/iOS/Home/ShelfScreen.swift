@@ -8,14 +8,14 @@ nonisolated struct ShelfData: Sendable {
         var project: Project
         var cardCount: Int
         var openTasks: Int
-        /// 最近修改的一张卡的标题与时间。
-        var latest: (title: String, date: Date)?
+        /// 最近改过的一条灵感（不算空白的，见 `ProjectSummary.latest`）。
+        var latest: Card?
         var id: UUID { project.id }
 
         /// 介绍；没写介绍时是最近一条灵感。
         @MainActor var summary: String? {
             if let intro = project.intro { return intro }
-            return latest.map { "\($0.title.nonEmpty ?? "无标题") · \(DateLabel.short($0.date))" }
+            return latest.map { "\($0.title.textGlyphs) · \(DateLabel.short($0.modifiedAt))" }
         }
     }
 
@@ -34,21 +34,19 @@ nonisolated struct ShelfData: Sendable {
     static let activeLimit = 3
 
     static func read(from store: isolated CueStore) throws -> ShelfData {
-        let summaries = try store.projectSummaries()
-        let counts = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) })
+        let summaries = Dictionary(uniqueKeysWithValues: try store.projectSummaries().map { ($0.projectID, $0) })
         let tasks = try store.taskCounts()
         let entries = try store.projects().map { project in
-            let latest = try store.search(SearchQuery(projects: [project.id]), limit: 1).cards.first
-            return Entry(
-                project: project, cardCount: counts[project.id] ?? 0, openTasks: tasks[project.id]?.open ?? 0,
-                latest: latest.map { (CardText($0.body).title.textGlyphs, $0.modifiedAt) })
+            Entry(
+                project: project, cardCount: summaries[project.id]?.cardCount ?? 0, openTasks: tasks[project.id]?.open ?? 0,
+                latest: summaries[project.id]?.latest)
         }
         let hasTasks = tasks.values.contains { $0.total > 0 }
         return ShelfData(
             entries: entries, live: try store.piSessionPage(.live).items,
             tasks: hasTasks ? try TaskBoard.counts(from: store) : nil,
             active: try TaskBoard.active(limit: activeLimit, from: store),
-            inboxCount: counts[nil] ?? 0,
+            inboxCount: summaries[nil]?.cardCount ?? 0,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
     }
 }
@@ -334,16 +332,18 @@ private struct PinnedShelfCard: View {
     }
 }
 
-/// 灵感数与未完成任务数，书架大卡与行里同一种写法："25 张 · 3 项任务"。
+/// 灵感数与未完成任务数，书架大卡与行里同一种写法（`CountCopy`："25 条灵感 · 3 项任务"，为 0 的不写）。
 private struct ShelfCounts: View {
     let cards: Int
     var tasks = 0
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text(tasks > 0 ? "\(cards) 条灵感 · \(tasks) 项任务" : "\(cards) 条灵感")
-            .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).counting(cards + tasks)
-            .lineLimit(1)
+        if let text = CountCopy.text((cards, "条灵感"), (tasks, "项任务")) {
+            Text(text)
+                .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).counting(cards + tasks)
+                .lineLimit(1)
+        }
     }
 }
 

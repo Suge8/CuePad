@@ -112,7 +112,7 @@ struct ProjectScreen: View {
     /// 顶栏的一行："25 条灵感 · cuepad"（绑定的文件夹只写名字；手机上取各 Mac 同步来的绑定，绑在几台上就都写）。
     private var detail: String {
         let catalog = workspace.catalog
-        let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 条灵感" : nil } ?? "还没有灵感"
+        let count = CountCopy.text((catalog?.cardCounts[projectID] ?? 0, "条灵感")) ?? "还没有灵感"
         let folders = (catalog?.bindings ?? []).filter { $0.projectID == projectID }.map(\.folder)
         return ([count] + folders).joined(separator: " · ")
     }

@@ -7,7 +7,8 @@ extension CueStore {
   public func createProject(
     name: String, color: String, icon: String? = nil
   ) throws -> Project {
-    try write {
+    try Self.requireName(name)
+    return try write {
       let now = Date.stamp
       let project = Project(
         id: UUID(), name: name, icon: icon, color: color,
@@ -22,9 +23,14 @@ extension CueStore {
     try write {
       guard var project = try find(Project.self, id) else { throw CueStoreError.notFound }
       edit(&project)
+      try Self.requireName(project.name)
       project.modifiedAt = Date.stamp
       try update(project)
     }
+  }
+
+  private static func requireName(_ name: String) throws {
+    guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankProjectName }
   }
 
   /// 进回收站；它的卡片随之隐藏（由项目推导），卡片行不动。
@@ -125,7 +131,7 @@ extension CueStore {
   }
 
   /// 任务下新写一条提示词（挂在任务下的灵感），接在下级最后，项目随任务。上级不是任务抛 `invalidParent`。可以是空的：
-  /// 写一条时先建好再进编辑，离开时还是空的就删掉（`Workspace.dropIfEmpty`）。
+  /// 写一条时先建好再进编辑，离开时还是空白就删掉（`dropIfBlank`）。
   public func createCard(body: String, under parent: UUID) throws -> Card {
     try write {
       let tree = try CardLinks(db)
@@ -307,6 +313,16 @@ extension CueStore {
   }
 
   /// 永久删除；发送记录保留内容快照。
+  /// 离开一条灵感（含提示词）的编辑时：还是空白（`Card.isBlank`）就不留下。任务、写了字或放了图的不动。
+  /// 记灵感与写提示词都是先建一条空的再进编辑，这是它们共用的收尾。
+  public func dropIfBlank(_ id: UUID) throws {
+    try write {
+      // 空白的正文不引用图片，没有附件要回收
+      guard let card = try find(Card.self, id), !card.isTask, card.isBlank else { return }
+      _ = try purgeCards(where: "id = ?", [id])
+    }
+  }
+
   public func purgeCard(_ id: UUID) throws {
     try reportingFileFailures { try write { try reclaimAttachments(purgeCards(where: "id = ?", [id])) } }
   }

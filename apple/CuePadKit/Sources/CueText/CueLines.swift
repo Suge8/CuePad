@@ -18,7 +18,7 @@ public enum CueLines {
         contentLines(stored).map(stripListMarker).filter { !$0.isEmpty }
     }
 
-    private static func text(of line: String) -> String {
+    static func text(of line: String) -> String {
         guard !CueFormat.isMarkerLine(line) else { return "" }
         let text = CueFormat.parse(line).compactMap { token -> String? in
             if case .text(let text) = token { text } else { nil }
@@ -68,17 +68,42 @@ public struct CueTask: Equatable, Sendable {
 
 /// 卡片的标题与摘要（唯一规则，App、小组件、命令行共用）。卡片没有标题字段：
 /// 标题 = 首个有文字的行（见 `CueLines.isTitleLine`）去掉开头的 `#`（Markdown 标题前缀）；
-/// 摘要 = 其后各行以空格连接，最多 `previewLimit` 字。
+/// 摘要 = 标题之后的第一段（跳过开头的空行，到下一个空行、分割线或只有图片的行为止），各行以空格连接，最多 `previewLimit` 字——
+/// 一张卡只露出开头那一段，卡与卡之间才看得出差别。
 public struct CueSummary: Equatable, Sendable {
     public static let previewLimit = 240
+    /// 搜索摘要里命中处之前留的字数。
+    public static let snippetLead = 12
 
     public var title: String
     public var preview: String
+    /// 正文里第一个 http(s) 链接的域名（去掉 www.），卡片上当小标；没有链接为 nil。
+    public var linkHost: String?
 
     public init(_ stored: String) {
-        let lines = CueLines.contentLines(stored)
-        title = lines.first.map(Self.stripHeading) ?? ""
-        preview = String(lines.dropFirst().joined(separator: " ").prefix(Self.previewLimit))
+        let lines = stored.components(separatedBy: "\n").map(CueLines.text(of:))
+        let titleIndex = lines.firstIndex { !$0.isEmpty }
+        title = titleIndex.map { Self.stripHeading(lines[$0]) } ?? ""
+        let rest = titleIndex.map { lines[($0 + 1)...].drop { $0.isEmpty } } ?? []
+        preview = String(rest.prefix { !$0.isEmpty }.joined(separator: " ").prefix(Self.previewLimit))
+        linkHost = stored.firstMatch(of: /https?:\/\/[^\s\/?#)\]]+/).flatMap { URL(string: String($0.output))?.host() }
+            .map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 }
+    }
+
+    /// 搜索结果里的摘要：标题之后的全部文字里第一处命中（不分大小写）离开头较远时，从命中处往前留 `snippetLead` 字截起、前面加"…"，
+    /// 让人看到为什么搜到它；没命中、命中在开头附近或只在标题里时就是普通摘要（`whole` 时是标题之后的全文）。
+    /// iOS 的搜索结果与 Mac ⌘K 的预览同用这一个；`whole` 给预览面板：不截到 `previewLimit`，保留换行。
+    public static func snippet(_ stored: String, matching terms: [String], whole: Bool = false) -> String {
+        let body = rest(stored, separator: whole ? "\n" : " ")
+        let hit = terms.filter { !$0.isEmpty }.compactMap { body.range(of: $0, options: .caseInsensitive)?.lowerBound }.min()
+        guard let hit, body.distance(from: body.startIndex, to: hit) > snippetLead else { return whole ? body : CueSummary(stored).preview }
+        let tail = body[body.index(hit, offsetBy: -snippetLead)...]
+        return "…" + (whole ? tail : tail.prefix(previewLimit))
+    }
+
+    /// 标题之后的全部文字，各行以 `separator` 连接。
+    private static func rest(_ stored: String, separator: String = "\n") -> String {
+        CueLines.contentLines(stored).dropFirst().joined(separator: separator)
     }
 
     private static func stripHeading(_ line: String) -> String {

@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import SwiftUI
 
 /// 给输入框选一张卡片带上（作为这次消息的附件，卡片不动）：可搜；所属项目的资料在最前（长期参考，交给 Agent 时常要带上），
@@ -160,12 +161,14 @@ struct CardRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 // 标题在前、时间靠右，与其余列表同一种读法
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(marked(text.title.nonEmpty ?? "无标题")).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
+                    Text(marked(text.label)).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
                     Spacer(minLength: 0)
                     Text(DateLabel.short(card.modifiedAt)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
                 }
-                if !text.preview.isEmpty {
-                    Text(marked(text.preview)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
+                // 搜索时摘要从命中处截起（`CueSummary.snippet`），看得出为什么搜到它
+                let preview = highlight.isEmpty ? text.preview : CueSummary.snippet(card.body, matching: terms).textGlyphs
+                if !preview.isEmpty {
+                    Text(marked(preview)).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2)
                 }
                 if let project {
                     HStack(spacing: 4) {
@@ -187,11 +190,11 @@ struct CardRow: View {
         .contentShape(.rect(cornerRadius: 16))
     }
 
+    private var terms: [String] { highlight.split(whereSeparator: \.isWhitespace).map(String.init) }
+
     /// 变量照常标色，搜索词再叠一层命中底色。
     private func marked(_ string: String) -> AttributedString {
-        highlight.split(whereSeparator: \.isWhitespace).reduce(VariableText.styled(string, palette)) { result, word in
-            Highlight.matches(string, String(word), base: result)
-        }
+        terms.reduce(VariableText.styled(string, palette)) { result, word in Highlight.matches(string, word, base: result) }
     }
 }
 

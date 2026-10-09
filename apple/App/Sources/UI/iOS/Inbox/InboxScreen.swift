@@ -42,7 +42,7 @@ struct InboxScreen: View {
         return Button { navigation.open(card: card.id) } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(text.title.nonEmpty ?? (text.images.isEmpty ? "无标题" : "图片")).font(.body.weight(.medium))
+                    Text(text.label).font(.body.weight(.medium))
                         .foregroundStyle(palette.ink).lineLimit(2)
                     Spacer(minLength: 4)
                     AgentDot(card: card.id).padding(.vertical, -8)

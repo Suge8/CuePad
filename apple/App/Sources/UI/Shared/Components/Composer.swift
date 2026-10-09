@@ -655,7 +655,7 @@ private struct AttachmentSheet: View {
     var body: some View {
         NavigationStack {
             AttachmentBody(content: outbox.content, omitsTitle: true, height: $contentHeight)
-                .navigationTitle(CardText(outbox.content).title.nonEmpty ?? "无标题")
+                .navigationTitle(CardText(outbox.content).label)
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
