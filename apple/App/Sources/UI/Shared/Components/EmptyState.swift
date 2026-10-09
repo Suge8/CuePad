@@ -58,6 +58,21 @@ enum Mascot: String {
     case error = "mascot-error"
 }
 
+/// 项目页与未分类还没有灵感：一句现状加一颗"记一条"，记到这里（iOS 浮起随手记，Mac 聚焦底部输入栏，由 `write` 给）。Mac 与 iOS 同一份。
+struct EmptyIdeas: View {
+    let write: () -> Void
+
+    var body: some View {
+        EmptyState(mascot: .empty, title: "还没有灵感") {
+            #if os(iOS)
+            Button("记一条", action: write).prominentButton().controlSize(.large)
+            #else
+            Button(action: write) { Text("记一条").primaryCapsule() }.buttonStyle(PressStyle())
+            #endif
+        }
+    }
+}
+
 /// 空库首次打开：Mac 与 iOS 同一段话；动作按钮由平台给（各自的主按钮样式）。
 struct EmptyLibrary<Action: View>: View {
     @ViewBuilder let action: Action

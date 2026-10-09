@@ -159,7 +159,7 @@ struct CardEditorPage: View {
                         let id = task.id
                         workspace.attempt { workspace.openCard = try await workspace.createPrompt(under: id).id }
                     })
-                SubtaskList(task: task, detail: taskDetail, open: { workspace.openCard = $0.id })
+                SubtaskList(detail: taskDetail, open: { workspace.openCard = $0.id })
             }
             .padding(.horizontal, 64).padding(.vertical, 8)
         }
