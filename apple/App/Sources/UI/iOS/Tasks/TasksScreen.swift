@@ -151,7 +151,7 @@ struct TaskLine: View {
         line
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, tally.text, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, tally.text?.spoken, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
@@ -215,7 +215,7 @@ struct TaskLine: View {
     /// 标题下最多两行：进度（提示词与子任务），再是所在项目与交给的会话此刻的状态。
     private var detail: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if let counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3) }
+            if let counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3).spoken(counts) }
             if showsPlace { place }
         }
         .font(.caption)

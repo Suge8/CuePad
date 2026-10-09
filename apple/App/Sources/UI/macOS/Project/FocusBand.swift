@@ -71,6 +71,7 @@ struct FocusBand: View {
             if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
                 Button(more) { workspace.overlay = .tasks }
                     .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink3)
+                    .accessibilityLabel(more.spoken)
             }
             NewTaskField(project: data.project?.id)
         }

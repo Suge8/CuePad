@@ -267,6 +267,7 @@ private struct ShelfLine: View {
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
                     Text(detail).font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
                         .contentTransition(.numericText()).animation(Motion.snappy, value: detail)
+                        .spoken(detail)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
@@ -374,6 +375,7 @@ private struct ShelfCounts: View {
             Text(text)
                 .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).counting(cards + tasks)
                 .lineLimit(1)
+                .spoken(text)
         }
     }
 }
@@ -511,7 +513,7 @@ private struct ActiveTasks: View {
             .frame(minHeight: 44).contentShape(.rect)
         }
         .buttonStyle(PressStyle())
-        .accessibilityLabel("全部任务，\(counts.summary)")
+        .accessibilityLabel("全部任务，\(counts.summary.spoken)")
     }
 }
 

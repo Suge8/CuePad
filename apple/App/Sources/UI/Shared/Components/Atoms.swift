@@ -30,6 +30,16 @@ struct Dot: View {
     var body: some View { Text("·").accessibilityHidden(true) }
 }
 
+extension String {
+    /// 用" · "分段的一句字（`CountCopy`、`TaskCopy.more`）给读屏时分段处换成逗号，不念"·"。
+    var spoken: String { replacingOccurrences(of: " · ", with: "，") }
+}
+
+extension View {
+    /// 一句用" · "分段的字（`visible` 是它显示的文字）：读屏读 `visible.spoken`。
+    func spoken(_ visible: String) -> some View { accessibilityLabel(visible.spoken) }
+}
+
 // MARK: 项目图标
 
 struct ProjectGlyph: View {

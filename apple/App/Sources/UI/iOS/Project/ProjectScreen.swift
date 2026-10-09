@@ -222,6 +222,7 @@ private struct FocusCard: View {
                     }
                     .buttonStyle(.plain)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
+                    .accessibilityLabel(more.spoken)
                 }
                 NewTaskLine(project: data.project?.id)
             }

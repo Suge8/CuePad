@@ -131,7 +131,7 @@ struct TaskRow: View {
                     .lineLimit(2)
                     .onTapGesture(perform: open)
                 if let counts = done ? nil : TaskCopy.counts(marks) {
-                    Text(counts).font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1)
+                    Text(counts).font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1).spoken(counts)
                 }
                 if project != nil || (!done && session != nil) { place }
             }
@@ -145,7 +145,7 @@ struct TaskRow: View {
         .contextMenu { CardActions(card: task) }
         // 读屏：整行一个元素"任务内容，项目，Pi 在做什么"，值是状态，默认动作切换完成（文案见 TaskSpeech）
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([task.title, tally.text, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([task.title, tally.text?.spoken, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
         .accessibilityValue(TaskSpeech.value(task.status))
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
