@@ -496,6 +496,23 @@ public enum PiSessionScope: Sendable, Equatable {
   case live, ended, all, current
 }
 
+/// 一台 Mac 上一个文件夹里跑过的 Agent 会话（`CueStore.sessionFolders`）：`sessionID` 与 `projectID` 是其中最近那个会话的。
+public struct SessionFolder: Sendable, Equatable {
+  public var hostID: String
+  public var folder: String
+  public var sessionID: String
+  public var projectID: UUID?
+  public var count: Int
+
+  public init(hostID: String, folder: String, sessionID: String, projectID: UUID?, count: Int) {
+    self.hostID = hostID
+    self.folder = folder
+    self.sessionID = sessionID
+    self.projectID = projectID
+    self.count = count
+  }
+}
+
 /// 会话列表的一页（Mac 与手机共用的唯一查询，见 `CueStore.piSessionPage`）。条件之间是"且"。
 /// 历史会话有几千条：界面只读需要的范围与页，不整表读。
 public struct PiSessionQuery: Sendable, Equatable {

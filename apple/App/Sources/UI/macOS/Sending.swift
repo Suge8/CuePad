@@ -36,10 +36,15 @@ extension Workspace {
             .sorted { (endedOrder.firstIndex(of: $0.id) ?? -1) > (endedOrder.firstIndex(of: $1.id) ?? -1) }
     }
 
-    /// 目标能一按就发：有目标（上一个前台应用找得到）、指向的 Pi 会话没结束。这时发送钮绑着 ⌘↩，是那一处唯一的主钮；
-    /// 否则发送钮只是个选目标的菜单（中性样式），主钮让给旁边的记下。
-    func readyToSend(_ choice: AppServices.Destination) -> Bool {
-        !isEnded(choice) && !(choice == .app(.lastFrontmost) && services.lastFrontmostApp() == nil)
+    /// 发送钮（⌘↩）的主次，全 App 只有这一处规则：发给 Agent 会话且能一按就发是**主钮**（靛青，那一处唯一的一颗，记下退成次钮）；
+    /// 发给应用或剪贴板是**次要**样式、字写"粘贴到 微信"——一次 ⌘↩ 不该把私人内容悄悄贴进聊天应用，所以不抢主钮、主钮留给记下；
+    /// 还没有可发的目标（上一个前台应用找不到）或选过的会话已结束时发送钮只是选目标的**菜单**。
+    enum SendStyle { case primary, secondary, menu }
+
+    func sendStyle(_ choice: AppServices.Destination) -> SendStyle {
+        if isEnded(choice) || (choice == .app(.lastFrontmost) && services.lastFrontmostApp() == nil) { return .menu }
+        if case .pi = choice { return .primary }
+        return .secondary
     }
 
     /// 目标指向的 Pi 会话已结束、也没有重新打开：发不出去，界面写"<会话名> · 已结束"，点开改选。
@@ -62,9 +67,14 @@ extension Workspace {
         (session(id) ?? services.pi.endedSessions[id]).map(\.displayName) ?? "Agent"
     }
 
-    /// 方式加目标的完整说法："发给 …" / "放进 Pi 会话「…」的输入框"，用在菜单项、提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
+    /// 方式加目标的完整说法："发给 Agent 会话「…」" / "放进 …的输入框" / "粘贴到 微信" / "复制到剪贴板"，用在菜单项、提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
     func action(for choice: AppServices.Destination) -> String {
-        if case .pi(_, .paste) = choice { "放进 \(label(for: choice))" } else { "发给 \(label(for: choice))" }
+        switch choice {
+        case .pi(_, .paste): "放进 \(label(for: choice))"
+        case .pi: "发给 \(label(for: choice))"
+        case .app: "粘贴到 \(label(for: choice))"
+        case .clipboard: "复制到剪贴板"
+        }
     }
 
     /// 目标的完整说法。

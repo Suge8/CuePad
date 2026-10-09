@@ -278,6 +278,12 @@ extension DebugScene {
             ("landing-copy", "个人网站", PiRecap(lastPrompt: "把首页标题换成新文案", lastReply: "改好了，首页标题现在是「把想法写成卡片」。")),
             ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Agent 页。")),
         ]
+        // 文件夹名与还没绑文件夹的项目同名（Flow）：项目的 Agent 空态给一键"绑定 flow 文件夹（3 个会话）"
+        for index in 1...3 {
+            let id = "flow-\(index)"
+            try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", folder: "flow", projectID: nil)
+            try? await recorder.end(sessionID: id)
+        }
         for (id, name, recap) in history {
             try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project))
             try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))

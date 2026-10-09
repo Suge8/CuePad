@@ -64,18 +64,46 @@ extension CueStore {
 // MARK: 项目目录（本机）
 
 extension CueStore {
-  /// 绑定项目的代码目录（nil = 解除）。目录因设备而异，不同步。
+  /// 绑定项目的文件夹（nil = 解除）。目录因设备而异，不同步。会话归哪个项目写在会话记录上（写入时按绑定定），
+  /// 所以绑定变了、同一个事务里把本机已有的会话（含历史）按新的绑定重新归：只改归属变了的，没变的不重写。
   public func setDirectory(_ directory: String?, for project: UUID) throws {
     try write {
-      guard let directory else {
+      if let directory {
+        try db.run(
+          """
+          INSERT INTO projectDirectories (projectID, directory) VALUES (?, ?)
+          ON CONFLICT(projectID) DO UPDATE SET directory = excluded.directory
+          """, [project, directory])
+      } else {
         try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [project])
-        return
       }
+      try reassignSessions()
+    }
+  }
+
+  /// 本机会话索引里的会话各按工作目录重算文件夹名（`folderName(ofWorkingDirectory:)`）：旧版本写下的临时目录的文件夹名在这里清掉，
+  /// 规则变了也跟着变；只改变了的。必须在写事务内调用。
+  private func refreshSessionFolders() throws {
+    let now = Date.stamp
+    for cwd in try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) } {
+      let folder = Self.folderName(ofWorkingDirectory: cwd)
+      try db.run(
+        "UPDATE piSessionStates SET folder = ?, modifiedAt = ? WHERE sessionID IN (SELECT id FROM piSessions WHERE cwd = ?) AND folder IS NOT ?",
+        [folder, now, cwd, folder])
+    }
+  }
+
+  /// 本机会话索引里的会话各按它的工作目录重新归项目（同一目录只算一次）。必须在写事务内调用。
+  private func reassignSessions() throws {
+    let directories = try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) }
+    let now = Date.stamp
+    for cwd in directories {
+      let project = cwd.isEmpty ? nil : try project(containing: URL(filePath: cwd, directoryHint: .isDirectory))?.id
       try db.run(
         """
-        INSERT INTO projectDirectories (projectID, directory) VALUES (?, ?)
-        ON CONFLICT(projectID) DO UPDATE SET directory = excluded.directory
-        """, [project, directory])
+        UPDATE piSessionStates SET projectID = ?, modifiedAt = ?
+        WHERE sessionID IN (SELECT id FROM piSessions WHERE cwd = ?) AND projectID IS NOT ?
+        """, [project, now, cwd, project])
     }
   }
 
@@ -528,6 +556,7 @@ extension CueStore {
       let unrecorded = try select(
         PiSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
       for session in unrecorded { try writePiHistory(session, host: host) }
+      try refreshSessionFolders()
       return stale.count
     }
   }
@@ -570,8 +599,8 @@ extension CueStore {
   private func writePiHistory(_ session: PiSession, host: String) throws {
     let id = PiSessionState.recordID(sessionID: session.id)
     let cwd = URL(filePath: session.cwd, directoryHint: .isDirectory)
-    let folder = session.cwd.isEmpty ? nil : cwd.lastPathComponent
-    let title = session.title.isEmpty ? folder ?? "" : session.title
+    let folder = Self.folderName(ofWorkingDirectory: session.cwd)
+    let title = session.title.isEmpty ? (session.cwd.isEmpty ? "" : cwd.lastPathComponent) : session.title
     let projectID = session.cwd.isEmpty ? nil : try project(containing: cwd)?.id
     let now = Date.stamp
     guard let existing = try find(PiSessionState.self, id) else {

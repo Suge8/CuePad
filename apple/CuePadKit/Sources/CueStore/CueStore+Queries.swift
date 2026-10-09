@@ -61,6 +61,21 @@ extension CueStore {
 
   private static func pathSegments(_ path: String) -> [Substring] { path.split(separator: "/") }
 
+  /// 会话记录里的文件夹名（`PiSessionState.folder`）：工作目录的末段；临时目录（/tmp、/var/tmp、/var/folders，含 /private 写法，或路径里有
+  /// TemporaryItems）与没有目录的没有。手机看不到路径，只据文件夹名建议绑定，临时目录不该进候选，所以由有路径的 Mac 在写入时认出——规则只此一处。
+  public static func folderName(ofWorkingDirectory cwd: String) -> String? {
+    guard !cwd.isEmpty, !isTemporary(cwd) else { return nil }
+    return URL(filePath: cwd, directoryHint: .isDirectory).lastPathComponent
+  }
+
+  private static let temporaryRoots: [[Substring]] = [["tmp"], ["var", "tmp"], ["var", "folders"]]
+
+  private static func isTemporary(_ path: String) -> Bool {
+    var segments = pathSegments(URL(filePath: path).standardizedFileURL.path)
+    if segments.first == "private" { segments.removeFirst() }
+    return segments.contains("TemporaryItems") || temporaryRoots.contains { segments.starts(with: $0) }
+  }
+
   /// 同一个目录的唯一写法：由文件系统解析（`realpath`）——符号链接（含 `/tmp` → `/private/tmp`）换成真实路径，
   /// 大小写换成磁盘上的（区分大小写的卷上写错大小写就是另一个、不存在的目录）。不存在的路径只做标准化。
   static func canonicalPath(_ path: String) -> String {

@@ -16,12 +16,8 @@ struct ProjectFoldersTests {
         DirectoryBinding(id: UUID(), projectID: project.id, hostID: host, hostName: name, folder: folder, createdAt: .now, modifiedAt: .now)
     }
 
-    private func session(_ id: String, folder: String?, host: String = "mac-a", project: Project? = nil) -> PiSessionListItem {
-        PiSessionListItem(
-            state: PiSessionState(
-                id: UUID(), sessionID: id, hostID: host, title: id, projectID: project?.id, state: .known(.settled), detail: nil, folder: folder,
-                lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now),
-            project: project)
+    private func folder(_ name: String, host: String = "mac-a", sessions: Int = 1, latest: String? = nil, project: Project? = nil) -> SessionFolder {
+        SessionFolder(hostID: host, folder: name, sessionID: latest ?? "\(host)-\(name)", projectID: project?.id, count: sessions)
     }
 
     // MARK: 新会话只列项目
@@ -82,15 +78,12 @@ struct ProjectFoldersTests {
 
     // MARK: 手机上选文件夹的候选
 
-    @Test func 候选_来自各Mac上跑过Agent的文件夹_最近的在前_同Mac同名去重() async throws {
+    @Test func 候选_来自各Mac上跑过Agent的文件夹_最近的在前_别的项目绑着的接在后面() async throws {
         let a = try await project("A")
-        let items = [
-            session("s1", folder: "app"), session("s2", folder: "site", host: "mac-b"), session("s3", folder: "app"),
-            session("s4", folder: nil), session("s5", folder: "app", host: "mac-b"),
-        ]
+        let folders = [folder("app", latest: "s1"), folder("site", host: "mac-b", latest: "s2"), folder("app", host: "mac-b", latest: "s5")]
         let known = [binding(a, host: "mac-a", name: "Studio", folder: "elsewhere"), binding(a, host: "mac-b", name: "Air", folder: "elsewhere")]
 
-        let candidates = ProjectFolders.candidates(sessions: items, bindings: known, projects: [a], excluding: nil)
+        let candidates = ProjectFolders.candidates(folders: folders, bindings: known, projects: [a], excluding: nil)
 
         #expect(candidates.map { "\($0.hostID)/\($0.folder)" } == ["mac-a/app", "mac-b/site", "mac-b/app", "mac-a/elsewhere", "mac-b/elsewhere"])
         #expect(candidates.map(\.hostName) == ["Studio", "Air", "Air", "Studio", "Air"])
@@ -100,14 +93,42 @@ struct ProjectFoldersTests {
 
     @Test func 候选_当前项目已绑的不再列_标出已被哪个项目用着_不认识的Mac没有名字() async throws {
         let a = try await project("A"), b = try await project("B")
-        let items = [session("s1", folder: "app", project: b), session("s2", folder: "site"), session("s3", folder: "other", host: "mac-x")]
+        let folders = [folder("app", sessions: 12, project: b), folder("site"), folder("other", host: "mac-x", sessions: 3)]
         let known = [binding(a, host: "mac-a", name: "Studio", folder: "site"), binding(b, host: "mac-a", name: "Studio", folder: "app")]
 
-        let candidates = ProjectFolders.candidates(sessions: items, bindings: known, projects: [a, b], excluding: a.id)
+        let candidates = ProjectFolders.candidates(folders: folders, bindings: known, projects: [a, b], excluding: a.id)
 
         #expect(candidates.map(\.folder) == ["app", "other"])  // site 已经绑给 A 了
         #expect(candidates.map(\.usedBy) == ["B", nil])
         #expect(candidates.map(\.hostName) == ["Studio", nil])
+        #expect(candidates.map(\.sessions) == [12, 3])
+    }
+
+    // MARK: 同名文件夹的建议
+
+    @Test func 建议_文件夹名与项目名相同就给一键绑定_忽略大小写_会话多的在前() async throws {
+        let cuepad = try await project("CuePad")
+        let folders = [
+            folder("site", sessions: 80), folder("CuePad", sessions: 4), folder("cuepad", sessions: 312), folder("cuepad", host: "mac-b", sessions: 7),
+        ]
+        let candidates = ProjectFolders.candidates(folders: folders, bindings: [], projects: [cuepad], excluding: cuepad.id)
+
+        let suggestions = ProjectFolders.suggestions(for: cuepad, in: candidates)
+
+        #expect(suggestions.map { "\($0.hostID)/\($0.folder)" } == ["mac-a/cuepad", "mac-b/cuepad", "mac-a/CuePad"])
+        #expect(suggestions.map(\.sessions) == [312, 7, 4])
+        let table = try await project("圆桌")
+        #expect(ProjectFolders.suggestions(for: table, in: candidates).isEmpty)  // 没有同名的：只引导去选
+    }
+
+    @Test func 建议_项目已在那台Mac上绑着就不再建议() async throws {
+        let cuepad = try await project("CuePad")
+        let folders = [folder("cuepad", sessions: 312), folder("cuepad", host: "mac-b", sessions: 7)]
+        let own = [binding(cuepad, host: "mac-a", name: "Studio", folder: "cuepad")]
+
+        let candidates = ProjectFolders.candidates(folders: folders, bindings: own, projects: [cuepad], excluding: cuepad.id)
+
+        #expect(ProjectFolders.suggestions(for: cuepad, in: candidates).map(\.hostID) == ["mac-b"])
     }
 
     // MARK: 绑定请求的进度
