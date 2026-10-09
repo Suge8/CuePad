@@ -418,7 +418,7 @@ private struct ExtensionConsent: View {
         if services.piIntegration.needsConsent {
             VStack(alignment: .leading, spacing: 8) {
                 Label("连接 Pi", systemImage: "terminal").font(Typography.label)
-                Text("安装 CuePad 扩展后，这里能看到 Pi 会话的实时状态，并能把提示词直接发进会话；还会装一个小技能，让 Agent 能把页面和截图发到手机上看。会写入 Pi 的扩展目录和 ~/.agents/skills。")
+                Text("安装 CuePad 扩展后，这里能看到 Pi 会话的实时状态，并能把提示词直接发进会话；还会装一个小技能，让 Agent 能把页面和截图发到手机上看。会写入 Pi 目录下的 extensions 与 skills。")
                     .font(Typography.meta).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {

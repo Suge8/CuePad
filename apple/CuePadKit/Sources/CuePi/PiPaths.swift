@@ -10,13 +10,8 @@ public struct PiPaths: Sendable, Equatable {
 
     public var extensionsDirectory: URL { agentDirectory.appending(path: "extensions", directoryHint: .isDirectory) }
     public var sessionsDirectory: URL { agentDirectory.appending(path: "sessions", directoryHint: .isDirectory) }
-    /// skill 装在哪：默认的 Pi 目录下是 `~/.agents/skills`（Pi 与别的 Agent——Codex、Claude Code——读同一套约定），
-    /// 换了 Pi 目录（隔离、测试）就是它自己的 `skills`，Pi 同样会发现。
-    public var skillsDirectory: URL {
-        isDefaultAgentDirectory
-            ? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".agents/skills", directoryHint: .isDirectory)
-            : agentDirectory.appending(path: "skills", directoryHint: .isDirectory)
-    }
+    /// skill 与扩展同在 Pi 目录下（Pi 自动发现 `<Pi 目录>/skills`）：App 写的文件不进用户自己维护的 `~/.agents/skills`。
+    public var skillsDirectory: URL { agentDirectory.appending(path: "skills", directoryHint: .isDirectory) }
 
     public init(
         agentDirectory: URL? = nil,

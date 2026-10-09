@@ -115,13 +115,6 @@ struct InstallerTests {
         #expect(await installer().status().file == .current)
     }
 
-    /// 默认的 Pi 目录下 skill 装进 ~/.agents/skills（Pi、以后的 Codex 与 Claude Code 都读同一份约定）；换了 Pi 目录（隔离、测试）就跟着走。
-    @Test func skillsDirectoryIsTheSharedAgentsOneOnlyForTheDefaultPiDirectory() {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        #expect(PiPaths(environment: [:]).skillsDirectory.path == home.appending(path: ".agents/skills").path)
-        #expect(paths.skillsDirectory.path == paths.agentDirectory.appending(path: "skills").path)
-    }
-
     /// App 被移动后 cuepad 的路径变了：skill 算旧版，启动时与扩展一起重写。
     @Test func aMovedAppMakesTheSkillOutdatedAndInstallRewritesIt() async throws {
         try fakePi(printing: "0.87.1")
