@@ -1,8 +1,8 @@
 #if os(macOS)
 import SwiftUI
 
-/// 设置窗口底部一行：把 `cuepad` 命令行工具装进 PATH（agent 在 bash 里直接调用）。
-struct CommandLineToolBar: View {
+/// 设置里"命令行"一节的一行：把 `cuepad` 命令行工具装进 PATH（agent 在 bash 里直接调用）。
+struct CommandLineToolRow: View {
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var error: String?
@@ -21,8 +21,6 @@ struct CommandLineToolBar: View {
             Text(detail.text).font(.caption).foregroundStyle(detail.isWarning ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
             if let error { Text(error).font(.caption).foregroundStyle(palette.attention) }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24).padding(.vertical, 12)
         .task { await tool.refresh() }
     }
 

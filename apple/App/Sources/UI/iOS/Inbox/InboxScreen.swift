@@ -28,7 +28,7 @@ struct InboxScreen: View {
         }
         .scrollContentBackground(.hidden)
         .animation(Motion.quick, value: cards?.map(\.id))
-        .floatingHeader(CaptureCopy.inbox, detail: cards.map { $0.isEmpty ? "" : "\($0.count) 条" } ?? "")
+        .floatingHeader(CaptureCopy.inbox, detail: cards.map { $0.isEmpty ? "空的" : "\($0.count) 条" } ?? "")
         .sheet(item: $moving) { MoveToProjectSheet(card: $0) }
         .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
         .observing(services.store, [.cards], into: $cards, onError: workspace.fail) { store in
