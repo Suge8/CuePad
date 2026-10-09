@@ -93,6 +93,14 @@ struct PiContextMeterTests {
         #expect(fresh.fraction == 0 && fresh.remaining == 200_000)
     }
 
+    /// 圆环旁写百分比；悬停与读屏先说这是上下文，快满了时说可以压缩。
+    @Test func 圆环旁的百分比与说明() {
+        #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).percent == "21%")
+        #expect(PiContextMeter(PiContextUsage(tokens: nil, window: 200_000)).percent == "—")
+        #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).help == "上下文 · 已用 21% · 剩 158k tokens")
+        #expect(PiContextMeter(PiContextUsage(tokens: 172_000, window: 200_000)).help == "上下文 · 已用 86% · 剩 28k tokens · 快满了，可以压缩")
+    }
+
     @Test func 文案_已用百分比加剩余_大数写k和M() {
         #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).summary == "已用 21% · 剩 158k tokens")
         #expect(PiContextMeter(PiContextUsage(tokens: 195_500, window: 200_000)).summary == "已用 98% · 剩 4.5k tokens")
