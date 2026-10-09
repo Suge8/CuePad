@@ -140,9 +140,10 @@ struct AgentPage: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// 一组行垫一张纸。
+    /// 一组行垫一张纸。组里的行也懒加载：历史的"更早"一组可能有几千行，普通 VStack 会把它们全建出来
+    /// （真实库三千条历史滚到底时内存涨到 1.4GB、每读一页卡一两秒）。
     private func card(@ViewBuilder _ rows: () -> some View) -> some View {
-        VStack(spacing: 0) { rows() }
+        LazyVStack(spacing: 0) { rows() }
             .padding(4)
             .paper(radius: 14)
     }

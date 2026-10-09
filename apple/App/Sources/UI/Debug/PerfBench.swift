@@ -50,17 +50,43 @@ enum PerfBench {
         NSApp.terminate(nil)
     }
 
+    /// `-CuePadBench agent`：打开 Agent 整页，用滚轮一路往下滚（每帧 40pt，读到底会接着读下一页），记下帧间隔、用时与内存，
+    /// 结果作为一行 JSON 打到标准输出后退出。用真实大库（几千条历史）测分页与长列表。
+    static func agent(_ workspace: Workspace) async {
+        workspace.show(.agent)
+        try? await Task.sleep(for: .seconds(3))
+        guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.fullSizeContentView) && $0.styleMask.contains(.resizable) }),
+              let view = window.contentView
+        else { return }
+        var result: [String: Any] = ["memoryBeforeMB": footprintMB()]
+        let started = Date.now
+        result["scrollDown"] = await scroll(in: window, view: view, directions: [-1], frames: agentFrames)
+        result["scrollSeconds"] = (Date.now.timeIntervalSince(started) * 10).rounded() / 10
+        result["memoryAfterMB"] = footprintMB()
+        result["scrollUp"] = await scroll(in: window, view: view, directions: [1], frames: 240)
+        let data = try! JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+        print("PERF " + String(decoding: data, as: UTF8.self))
+        NSApp.terminate(nil)
+    }
+
+    /// 往下滚的帧数：按一行约 70pt，够把三千多条历史滚到底。
+    private static let agentFrames = 6000
+
     /// 用滚轮事件把项目页从顶滚到底再滚回顶（每帧 40pt，约 2400pt/s 的快速滚动），记下每帧间隔。
-    private static func scroll(in window: NSWindow, view: NSView) async -> [String: Any] {
-        let point = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+    private static func scroll(in window: NSWindow, view: NSView, directions: [Int] = [-1, 1], frames: Int = 240) async -> [String: Any] {
+        // CGEvent 的位置是全局坐标、原点在主屏左上；窗口换算出来的屏幕坐标原点在左下，要翻一下，否则事件落不到内容区中间
+        let onScreen = window.convertPoint(toScreen: CGPoint(x: view.bounds.midX, y: view.bounds.midY))
+        let location = CGPoint(x: onScreen.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - onScreen.y)
+        let target = view.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY))
         let recorder = FrameRecorder()
         recorder.start(in: view)
-        for direction in [-1, 1] {
-            for _ in 0..<240 {
+        for direction in directions {
+            for _ in 0..<frames {
                 guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: Int32(direction * 40), wheel2: 0, wheel3: 0)
                 else { continue }
-                event.location = window.convertPoint(toScreen: point)
-                if let scroll = NSEvent(cgEvent: event) { window.sendEvent(scroll) }
+                event.location = location
+                // 直接交给内容区中间那块视图（后台窗口的 sendEvent 不保证落到滚动区），它沿响应链交给所在的滚动区
+                if let scroll = NSEvent(cgEvent: event) { target?.scrollWheel(with: scroll) }
                 await recorder.nextFrame()
             }
         }

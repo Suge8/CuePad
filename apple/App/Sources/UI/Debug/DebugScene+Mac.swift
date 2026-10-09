@@ -44,6 +44,7 @@ extension DebugScene {
         case "resize": await benchResizeWhileToggling(workspace)
         case "churn": await benchChurn(workspace)
         case "perf": await PerfBench.run(workspace)
+        case "agent": await PerfBench.agent(workspace)
         case "press": await benchPress(workspace)
         default: break
         }
