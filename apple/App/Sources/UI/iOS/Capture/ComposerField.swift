@@ -28,6 +28,7 @@ struct ComposerField: UIViewRepresentable {
         view.backgroundColor = .clear
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
+        view.showsHorizontalScrollIndicator = false
         view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return view
@@ -122,6 +123,8 @@ final class GrowingTextView: UITextView {
         // 占位从光标右边起：光标画在第一个字上会压住它（系统输入框同样留出光标的宽度）
         let caret = caretRect(for: beginningOfDocument).maxX + 1
         placeholder.frame = CGRect(x: caret, y: 0, width: bounds.width - caret, height: placeholder.font.lineHeight)
+        // 没撑满行数时没有可滚的：滚动条只在内容比框高出半行以上时开（尺寸为 0 的滚动条会作为"0页"滑块进读屏树）
+        showsVerticalScrollIndicator = contentSize.height - bounds.height > (font?.lineHeight ?? 0) / 2
         // 高度定下来之后才知道末尾在哪；还没有窗口（未上屏）时等上屏后的那次排版
         if revealsEnd, window != nil, bounds.height > 0 {
             revealsEnd = false

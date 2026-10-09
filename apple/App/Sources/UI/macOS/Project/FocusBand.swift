@@ -3,7 +3,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 任务与 Agent：本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Agent 会话。介绍在页头。
+/// 任务与 Agent：本项目任务（前几条没做完的顶层任务连同子任务，可拖动、缩进，同任务面板；没列出的与已完成的在底部写个数）+ 本项目的 Agent 会话。介绍在页头。
 /// Agent 一栏只在有话可说时出现：有在线会话，或项目还没绑文件夹而有同名建议、正在绑（绑定引导，`FolderGuide.shows`）；
 /// 否则任务独占整张纸，不留一栏"没有运行中的会话"。
 /// 纸与下面的资料、卡片墙同宽（右缘对齐，页面收得住）；纸里的任务一栏有最大宽度：任务行尾的折起、计数与"完成"跟着内容走，
@@ -54,7 +54,7 @@ struct FocusBand: View {
 
     private var tasks: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(text: TaskCopy.section(data.taskProgress), systemImage: "checklist")
+            SectionLabel(text: "任务", systemImage: "checklist")
             taskRows
         }
         .frame(maxWidth: Self.tasksWidth, alignment: .leading)
@@ -68,8 +68,8 @@ struct FocusBand: View {
                 TaskRow(
                     task: row.task, session: workspace.liveState(ofSession: row.task.piSessionID), marks: data.children[row.id], compact: true)
             }
-            if roots.count > Self.visibleTasks {
-                Button("还有 \(roots.count - Self.visibleTasks) 条") { workspace.overlay = .tasks }
+            if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
+                Button(more) { workspace.overlay = .tasks }
                     .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink3)
             }
             NewTaskField(project: data.project?.id)
@@ -177,7 +177,7 @@ extension Workspace {
     }
 }
 
-/// 下滚后收成的悬浮标题：一块玻璃写项目名、任务完成数/总数与 Agent 状态；点一下回到顶部。
+/// 下滚后收成的悬浮标题：一块玻璃写项目名、没做完的任务数与 Agent 状态；点一下回到顶部。
 struct CompactFocus: View {
     let data: ProjectPageData
     let agents: [ProjectAgents.Row]
@@ -193,7 +193,7 @@ struct CompactFocus: View {
                     ProjectGlyph(project: data.project, size: 13)
                     Text(data.project?.name ?? CaptureCopy.inbox).font(Typography.toolbarTitle).lineLimit(1)
                 }
-                Label(data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist").foregroundStyle(palette.ink2)
+                Label(data.taskCounts.open > 0 ? "任务 \(data.taskCounts.open)" : "任务", systemImage: "checklist").foregroundStyle(palette.ink2)
                 if let session {
                     let shown = services.settings.shown(session.state, delivery: session.delivery)
                     HStack(spacing: 6) {

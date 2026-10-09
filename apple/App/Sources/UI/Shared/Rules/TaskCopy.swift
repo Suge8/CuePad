@@ -2,10 +2,9 @@ import CueStore
 
 /// 子任务进度与完成上级时的确认（Mac 与 iOS 同一套）。
 enum TaskCopy {
-    /// 项目页任务段的标题："任务 · 完成 2/3"。列出的只有没做完的，所以写明分子是完成数，读者不去找分母里的另一条。
-    static func section(_ progress: TaskProgress?) -> String {
-        guard let progress, progress.done > 0 else { return "任务" }
-        return "任务 · 完成 \(progress.done)/\(progress.total)"
+    /// 项目页任务纸列出前几条没做完的顶层任务，纸底这一行写没列出的："还有 2 条 · 已完成 1"（都没有时不写）。数都来自 `TaskCounts`，纸上不另摆分数。
+    static func more(hidden: Int, done: Int) -> String? {
+        [hidden > 0 ? "还有 \(hidden) 条" : nil, done > 0 ? "已完成 \(done)" : nil].compactMap { $0 }.joined(separator: " · ").nonEmpty
     }
 
     static func progress(_ subtasks: TaskProgress) -> String { "子任务 \(subtasks.done)/\(subtasks.total)" }

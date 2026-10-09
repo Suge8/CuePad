@@ -37,10 +37,10 @@ nonisolated struct ShelfData: Sendable {
         let entries = try store.projects().map { project in
             Entry(project: project, cardCount: summaries[project.id]?.cardCount ?? 0, openTasks: tasks[project.id]?.open ?? 0)
         }
-        let hasTasks = tasks.values.contains { $0.total > 0 }
+        let all = tasks.values.reduce(.zero, +)
         return ShelfData(
             entries: entries, sessions: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store),
-            tasks: hasTasks ? try TaskBoard.counts(from: store) : nil,
+            tasks: all == .zero ? nil : all,
             active: try TaskBoard.active(limit: activeLimit, from: store),
             inboxCount: summaries[nil]?.cardCount ?? 0,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
@@ -568,13 +568,13 @@ private struct ActiveTaskRow: View {
             }
             if let session = row.session {
                 let shown = services.settings.shown(session, delivery: row.delivery)
-                if row.project != nil, !stacked { Text("·").foregroundStyle(palette.ink3).accessibilityHidden(true) }
+                if row.project != nil, !stacked { Dot().foregroundStyle(palette.ink3) }
                 // 辅助字号下计时另起一行，状态词不被截断
                 (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))) {
                     HStack(spacing: 4) {
                         PiStateDot(shown: shown, size: 6)
                         Text(shown.presence).foregroundStyle(shown.labelTint(palette))
-                        if !stacked { Text("·").foregroundStyle(palette.ink3) }
+                        if !stacked { Dot().foregroundStyle(palette.ink3) }
                     }
                     PiElapsed(shown: shown, font: .footnote)
                 }

@@ -70,7 +70,7 @@ private struct PreviewPage: View {
             HStack(spacing: 12) {
                 Button("关闭") { dismiss() }
                 Text(preview.title).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(1).frame(maxWidth: .infinity)
-                if let file { ShareLink(item: file) { Image(systemName: "square.and.arrow.up") } } else { Color.clear.frame(width: 24) }
+                if let file { ShareLink(item: file) { Image(systemName: "square.and.arrow.up").accessibilityLabel("分享") } } else { Color.clear.frame(width: 24) }
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             Divider()

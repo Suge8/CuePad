@@ -52,7 +52,7 @@ struct TasksPanel: View {
                     Button {
                         withAnimation(Motion.quick) { showsCompleted.toggle() }
                     } label: {
-                        Label("最近完成 \(board.done.count)", systemImage: showsCompleted ? "chevron.down" : "chevron.right")
+                        Label("最近完成 \(board.counts.done)", systemImage: showsCompleted ? "chevron.down" : "chevron.right")
                     }
                     .buttonStyle(.plain)
                     .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
@@ -176,7 +176,7 @@ struct TaskRow: View {
                 HStack(spacing: 4) {
                     PiStateDot(shown: shown, size: 5)
                     Text(shown.presence).foregroundStyle(shown.labelTint(palette))
-                    Text("·").foregroundStyle(palette.ink3)
+                    Dot().foregroundStyle(palette.ink3)
                     PiElapsed(shown: shown, font: Typography.meta)
                 }
                 .lineLimit(1)

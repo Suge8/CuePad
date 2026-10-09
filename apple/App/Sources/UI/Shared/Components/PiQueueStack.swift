@@ -22,9 +22,9 @@ struct PiQueueStack: View {
             if folded, !unfolded {
                 Button { unfolded = true } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "clock")
+                        Image(systemName: "clock").accessibilityHidden(true)
                         Text("\(requests.count) 句排队中")
-                        Image(systemName: "chevron.right").font(Typography.caption2.weight(.semibold))
+                        Image(systemName: "chevron.right").font(Typography.caption2.weight(.semibold)).accessibilityHidden(true)
                     }
                     .font(Typography.caption).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 6)
@@ -54,7 +54,7 @@ struct PiQueueStack: View {
     private func row(_ request: DeliveryRequest) -> some View {
         HStack(spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: "clock").font(Typography.caption).foregroundStyle(palette.ink3)
+                Image(systemName: "clock").font(Typography.caption).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 Text(PiChat.shownText(of: request))
                     .font(Typography.secondary).foregroundStyle(palette.ink2)
                     .lineLimit(1).truncationMode(.tail)

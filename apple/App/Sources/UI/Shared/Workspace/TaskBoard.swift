@@ -3,7 +3,8 @@ import Foundation
 
 /// 任务看板（手机任务页、Mac 任务面板共用）：进行中、待办、最近完成，各自跨项目。进行中与待办按顶层任务的状态分组，
 /// 子任务（没完成的，不论自己的状态）跟在它的顶层任务下（`tree`）；顺序同 `store.tasks(_:)`（项目顺序、未分类在后，同级手动顺序）。
-/// 最近完成不分项目、不分层，按完成时间从新到旧取前 `doneLimit` 条。每条带所在项目；交给 Pi 的带那个会话此刻的状态。
+/// 最近完成只列顶层任务（与 `counts.done` 同一批，也是"全部归档"动的那批；做完的子任务算在上级的进度里），不分项目、不分层，按完成时间从新到旧取前 `doneLimit` 条。
+/// 每条带所在项目；交给 Pi 的带那个会话此刻的状态。
 nonisolated struct TaskBoard: Sendable, Equatable {
     struct Row: Identifiable, Sendable, Equatable {
         var task: Card
@@ -36,7 +37,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 任务的直接下级（子任务与挂着的灵感），完成圈与子任务进度由它推出。
     var children: [UUID: [ChildMark]]
 
-    /// 两组的计数（顶层任务数，`CueStore.taskCounts` 一处定义）：任务页与面板的分组标题、书架的"任务"一行、Mac 工具栏任务钮都读它。
+    /// 两组的计数（顶层任务数，`CueStore.taskCounts` 一处定义）：任务页与面板的分组标题与"最近完成"、书架的"任务"一行、Mac 工具栏任务钮都读它。
     var counts: TaskCounts
 
     /// 看板要观察的表。
@@ -45,10 +46,14 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     static func read(from store: isolated CueStore) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         func row(_ task: Card) throws -> Row { try Row.read(task, projects: projects, from: store) }
-        let tree = try openTree(from: store)
+        // 层级限制按库里全部任务（含已完成）算：与 Store 写入时的校验同一口径
+        let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
+        let tree = TaskTree(all.filter { $0.status != .done }, all: all)
         let rows = Dictionary(uniqueKeysWithValues: try tree.ordered.map { ($0.id, try row($0)) })
         let roots = tree.roots.compactMap { rows[$0] }
-        let done = try store.tasks(.done).flatMap(\.tasks).sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+        let listed = Set(all.map(\.id))
+        let done = all.filter { $0.status == .done && !($0.parentID.map(listed.contains) ?? false) }
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
         return TaskBoard(
             tree: tree, inProgress: roots.filter { $0.task.status == .inProgress }, todo: roots.filter { $0.task.status == .todo },
             done: try done.prefix(doneLimit).map(row), rows: rows, children: try store.childMarks(), counts: try counts(from: store))
@@ -76,13 +81,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
     /// 全部项目的顶层任务计数（回收站里的项目不算）。
     static func counts(from store: isolated CueStore) throws -> TaskCounts {
-        try store.taskCounts().values.reduce(TaskCounts(inProgress: 0, todo: 0, done: 0), +)
-    }
-
-    /// 没完成的任务的层级；层级限制按库里全部任务（含已完成）算。
-    private static func openTree(from store: isolated CueStore) throws -> TaskTree {
-        let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
-        return TaskTree(all.filter { $0.status != .done }, all: all)
+        try store.taskCounts().values.reduce(.zero, +)
     }
 }
 

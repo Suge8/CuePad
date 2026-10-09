@@ -32,7 +32,8 @@ struct PiSubagentList: View {
                 }
                 Text("\(summary.total) 个子代理 · \(summary.running) 在跑").foregroundStyle(palette.ink2).monospacedDigit()
                 if summary.failed > 0 {
-                    Text("· \(summary.failed) 失败").foregroundStyle(palette.failure).monospacedDigit()
+                    Dot().foregroundStyle(palette.failure)
+                    Text("\(summary.failed) 失败").foregroundStyle(palette.failure).monospacedDigit()
                 }
                 Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
                     .rotationEffect(.degrees(expanded ? 180 : 0))
