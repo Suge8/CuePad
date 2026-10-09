@@ -74,14 +74,13 @@ enum WriteEntry {
     static let symbol = "pencil.line"
 }
 
-/// 浮在键盘上方的输入框（随手记、新会话、交给 Agent 共用）：不弹面板，背后薄薄压一层桌面色（玻璃底下的卡片不透出来抢字），浮起时随键盘升上来。
+/// 浮在键盘上方的输入框（随手记、新会话、交给 Agent 共用）：不弹面板，背后的页面不压色（内容直接透在玻璃后面），浮起时随键盘升上来。
 /// 点空白处或往下拖收起（输入框跟手往下走，没拖够就回位）；里面在忙时（内容标了 `floatingInputLocked`）不收起。
 struct FloatingInput<Content: View>: View {
     let isPresented: Bool
     let close: () -> Void
     @ViewBuilder let content: () -> Content
     @State private var locked = false
-    @Environment(\.palette) private var palette
     /// 没拖够松手时弹回原位。
     @GestureState(resetTransaction: Transaction(animation: Motion.snappy)) private var drag: CGFloat = 0
 
@@ -92,8 +91,8 @@ struct FloatingInput<Content: View>: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             if isPresented {
-                // 背后的页面虚化再压一层桌面色：只压色的话，Agent 列表这类带彩色状态标的页面还读得清，和输入框抢眼
-                Rectangle().fill(.ultraThinMaterial).overlay(palette.desk.opacity(0.45)).contentShape(.rect).ignoresSafeArea()
+                // 背后的页面不压色、不虚化（沉浸式，同回复框）：这一层透明，只接点按收起
+                Color.clear.contentShape(.rect).ignoresSafeArea()
                     .gesture(DragGesture(minimumDistance: 0).onEnded { _ in dismiss() })
                     .accessibilityHidden(true)
                 content()
