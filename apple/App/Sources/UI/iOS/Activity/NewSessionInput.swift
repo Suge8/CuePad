@@ -78,14 +78,16 @@ struct NewSessionInput: View {
             Menu {
                 Picker("在哪开", selection: Binding(get: { chosen?.id }, set: { choice = $0 })) {
                     ForEach(places) { place in
-                        Text([place.project.name, place.detail ?? (place.binding == nil ? "还没有文件夹" : nil)].compactMap { $0 }.joined(separator: " · "))
+                        let title = [place.project.name, place.detail ?? (place.binding == nil ? "还没有文件夹" : nil)].compactMap { $0 }.joined(separator: " · ")
+                        Text(title).spoken(title)
                             .tag(Optional(place.id))
                     }
                 }
             } label: {
                 HStack(spacing: 5) {
                     if let project = chosen?.project { ProjectGlyph(project: project, size: 12) }
-                    Text("新会话 · \(chosen?.project.name ?? "选在哪开")").lineLimit(1)
+                    let title = "新会话 · \(chosen?.project.name ?? "选在哪开")"
+                    Text(title).lineLimit(1).spoken(title)
                     Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 }
                 .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink)

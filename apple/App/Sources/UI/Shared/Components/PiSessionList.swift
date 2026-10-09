@@ -110,12 +110,18 @@ struct PiSessionRow: View {
                 }
                 if style.full {
                     // 你的话在路上、正在改名时先写它（短），再接最要紧的那一句
-                    let lead = text(of: searchHit ?? PiRowLine.lead(session, shown: shown, draft: draft, end: end, failure: failure), shown: shown)
-                    note.map { Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(" · ").foregroundStyle(palette.ink3))\(lead)") } ?? lead
+                    let line = searchHit ?? PiRowLine.lead(session, shown: shown, draft: draft, end: end, failure: failure)
+                    let lead = text(of: line, shown: shown)
+                    // 拼成一个 Text 后读屏读不到分段点的替代，所以整句给读屏一个用"，"分段的标签
+                    note.map {
+                        Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(" · ").foregroundStyle(palette.ink3))\(lead)")
+                            .accessibilityLabel("\($0)，\(line.speech)")
+                    } ?? lead
                 } else {
                     let line = searchHit ?? PiRowLine.of(session, draft: draft, end: end, failure: failure)
                     let rest = note.map { Text($0).foregroundStyle(palette.ink3) } ?? line.map { text(of: $0, shown: shown) }
                     Text("\(status(shown))\(rest.map { Text("\(Text(" · ").foregroundStyle(palette.ink3))\($0)") } ?? Text(verbatim: ""))")
+                        .accessibilityLabel([shown.label, note ?? line?.speech].compactMap { $0 }.joined(separator: "，"))
                 }
             }
             .font(style.line)
@@ -129,12 +135,10 @@ struct PiSessionRow: View {
 
     /// 名字后的小字：所在（项目或文件夹，按项目筛着时调用方不给项目），Mac 在后台开的再写"后台"。
     private var place: Text? {
-        let parts = [
-            PiPlace.name(of: session, project: project).map { Text(Highlight.matches($0, highlight)) },
-            session.hosted && session.state != .known(.ended) ? Text("后台") : nil,
-        ].compactMap { $0 }
+        let parts = [PiPlace.name(of: session, project: project), session.hosted && session.state != .known(.ended) ? "后台" : nil].compactMap { $0 }
         guard let first = parts.first else { return nil }
-        return parts.dropFirst().reduce(first) { Text("\($0) · \($1)") }
+        let text = parts.dropFirst().reduce(Text(Highlight.matches(first, highlight))) { Text("\($0) · \(Text(Highlight.matches($1, highlight)))") }
+        return text.accessibilityLabel(parts.joined(separator: "，"))
     }
 
     /// 搜索时名字、所在与进度都没命中、而命中在说过的话里：那一句换成那句话从命中处前几个字起的一截，看得出为什么搜到它
