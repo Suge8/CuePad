@@ -11,7 +11,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
 
     /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条改名）。
     var title: String? {
-        session.map { PiRename.title(of: $0, request: deliveries.last { $0.config?.name != nil }) }
+        session.map { PiRename.title(of: $0, request: DeliveryRequest.latestRename(in: deliveries)) }
     }
 
     /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因。

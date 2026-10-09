@@ -23,11 +23,11 @@ nonisolated enum PiRename {
     }
 
     /// 改名还在路上（行上写"正在改名"）。
-    static func isPending(_ request: DeliveryRequest?) -> Bool { request?.config?.name != nil && request?.isOpen == true }
+    static func isPending(_ request: DeliveryRequest?) -> Bool { request?.isRename == true && request?.isOpen == true }
 
     /// 没改成的原因，留到本机看过这个会话（`seen`）为止（同没能送达的话，`PiDelivery.phase`）。
     static func failure(_ request: DeliveryRequest?, seen: Date?) -> String? {
-        guard let request, request.config?.name != nil, let reason = request.failure,
+        guard let request, request.isRename, let reason = request.failure,
               (seen ?? .distantPast) <= (request.completedAt ?? request.modifiedAt) else { return nil }
         return "没能改名：\(reason)"
     }

@@ -683,6 +683,13 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 配置请求的内容；其他方式为 nil。
   public var config: PiConfig? { mode == .known(.config) ? PiConfig(stored: content) : nil }
 
+  /// 改名请求：带名字的配置请求。
+  public var isRename: Bool { config?.name != nil }
+
+  /// 一个会话的请求（按发出先后，即 `CueStore.deliveryRequests(toSession:)` 的顺序）里最近的一条改名。
+  /// 会话行（`PiSessionListItem.rename`）与会话页顶栏都按它显示名字，取法只此一处。
+  public static func latestRename(in requests: [DeliveryRequest]) -> DeliveryRequest? { requests.last(where: \.isRename) }
+
   /// 往返时间：创建 → 结果回到本机，两端都是发起设备的时钟。执行方与还没收到结果时为 nil。
   public var roundTrip: Duration? {
     resultReceivedAt.map { .milliseconds(Int64(($0.timeIntervalSince(createdAt) * 1000).rounded())) }
