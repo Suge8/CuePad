@@ -63,6 +63,9 @@ struct Palette {
     }
     /// 靛青底（`signatureFill`）上的字。
     var onSignature: Color { Color(hex: 0xF6F8FF) }
+    /// 搜索命中的字垫的底（灵感、任务、会话的搜索结果与 ⌘K 同一种）：一层靛青淡底，字保持墨色。赭黄只给等你确认，不借给它。
+    /// 命中是在构造富文本时标的、拿不到外观，所以两种外观共用一份：中等明度的靛青，浅纸上是淡蓝、暗纸上是暗蓝。
+    static let searchMatch = Color(hex: 0x4A64B8).opacity(0.22)
     /// 选中底色：侧栏与列表的当前项垫一层靛青浅底，文字保持墨色并加粗；Mac 与 iOS 共用，不用系统灰胶囊。
     var selection: Color { signature.opacity(highContrast ? 0.28 : (dark ? 0.2 : 0.12)) }
 

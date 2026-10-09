@@ -25,6 +25,12 @@ nonisolated enum ProjectFolders {
         }
     }
 
+    /// 项目绑着的文件夹名，给人看的那一行用（手机项目页顶栏）：各台 Mac 绑的同名文件夹是同一个仓库，只写一次；按绑定的先后。
+    static func names(of project: UUID, bindings: [DirectoryBinding]) -> [String] {
+        var seen = Set<String>()
+        return bindings.filter { $0.projectID == project }.map(\.folder).filter { seen.insert($0).inserted }
+    }
+
     /// 项目操作菜单里的绑定项（`ProjectActions`）：没绑是"绑定文件夹…"，绑了是"换文件夹…"加解除；
     /// Mac 上只管本机的绑定，手机上管全部，绑在几台 Mac 上时解除按 Mac 分开。
     struct Menu: Equatable {

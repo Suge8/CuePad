@@ -31,8 +31,16 @@ struct ArchiveList: View {
         let project = workspace.catalog?.project(card.projectID)
         return Button { open(card) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Image(systemName: card.isTask ? TaskGlyph.symbol(card.status) : "lightbulb")
-                    .foregroundStyle(palette.ink3).frame(width: 20).accessibilityLabel(card.isTask ? "任务" : "灵感")
+                Group {
+                    if card.isTask {
+                        TaskRingView(status: card.status, ring: .plain, done: card.status == .done, size: 17)
+                    } else {
+                        Image(systemName: "lightbulb").foregroundStyle(palette.ink3)
+                    }
+                }
+                .frame(width: 20)
+                .accessibilityElement()
+                .accessibilityLabel(card.isTask ? "任务" : "灵感")
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.title).foregroundStyle(palette.ink).lineLimit(1)
                     Text(project?.name ?? CaptureCopy.inbox).font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)

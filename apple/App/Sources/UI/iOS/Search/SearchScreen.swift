@@ -8,11 +8,10 @@ struct SearchScreen: View {
     @State private var query = PaletteQuery()
     @FocusState private var searching: Bool
     @State private var selection: TextSelection?
-    @State private var total: Int?
 
     var body: some View {
-        CardSearchResults(query: $query, scope: .all, total: $total)
-            .floatingHeader("搜索", detail: total.map { !query.text.isEmpty || query.isFiltered ? "\($0) 条" : "" } ?? "")
+        CardSearchResults(query: $query, scope: .all)
+            .floatingHeader("搜索")
             .searchable(text: $query.text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索灵感与任务")
             .searchFocused($searching)
             .searchSelection($selection)

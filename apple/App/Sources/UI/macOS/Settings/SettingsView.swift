@@ -36,7 +36,7 @@ struct SettingsView: View {
                 LabeledContent("显示或隐藏 CuePad") { ShortcutRecorder() }
                 ForEach(ReplyShortcut.allCases, id: \.self) { key in
                     LabeledContent {
-                        Text(key.symbols).foregroundStyle(palette.ink2)
+                        Keycap(text: key.symbols)
                     } label: {
                         Text(key.title)
                         Text(key.explanation)
@@ -87,20 +87,29 @@ private struct SettingsFooter: View {
     }
 }
 
-/// 点击后按下新的组合键；Esc 取消。注册失败时保留原快捷键并显示原因。
+/// 点击后按下新的组合键；Esc 取消。注册失败时保留原快捷键并显示原因。键帽与其余快捷键同一种，悬停时左边露出"更改"。
 private struct ShortcutRecorder: View {
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @State private var recording = false
+    @State private var hovering = false
     @State private var monitor: Any?
     @State private var error: String?
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            Button(recording ? "请按下组合键…" : ShortcutText.display(services.settings.globalShortcut)) {
-                recording ? stop() : start()
+            Button { recording ? stop() : start() } label: {
+                HStack(spacing: 8) {
+                    Text("更改").font(Typography.meta).foregroundStyle(palette.ink3)
+                        .opacity(hovering && !recording ? 1 : 0)
+                    Keycap(text: recording ? "请按下组合键…" : ShortcutText.display(services.settings.globalShortcut))
+                }
+                .contentShape(.rect)
             }
-            .monospaced()
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+            .animation(Motion.quick, value: hovering)
+            .help("点一下，按下新的组合键（Esc 取消）")
             if let error { Text(error).font(Typography.meta).foregroundStyle(palette.failure) }
         }
         .onDisappear(perform: stop)

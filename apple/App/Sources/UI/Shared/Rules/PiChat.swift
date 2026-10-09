@@ -52,7 +52,7 @@ nonisolated enum PiChat {
         return entries
     }
 
-    /// Pi 回答上方的一行："改了 2 个文件，运行了 5 条命令 · 2分钟"；没调工具时"用时 8秒钟"（时长写法见 `PiClock.duration`）。你的话没有。
+    /// Pi 回答上方的一行："改了 2 个文件，运行了 5 条命令 · 2 分钟"；没调工具时"用时 8 秒"（时长写法见 `PiClock.duration`）。你的话没有。
     static func meta(_ message: PiChatMessage) -> String? {
         guard message.role == .known(.pi), let started = message.roundStartedAt else { return nil }
         let took = PiClock.duration(message.at.timeIntervalSince(started))

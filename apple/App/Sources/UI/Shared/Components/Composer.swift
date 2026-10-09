@@ -259,7 +259,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         }
         // 收成短胶囊时居中；展开是同一块玻璃从中间向两边长到全宽
         .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
-        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded)
+        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded, legible: true)
         .frame(maxWidth: .infinity)
     }
 

@@ -32,6 +32,7 @@ struct AgentPage: View {
             .frame(maxWidth: Self.width)
             .frame(maxWidth: .infinity)
         }
+        .fadesUnderBars()
         .background(palette.desk)
         .environment(\.searchHighlight, query)
         .onChange(of: query) { limit = PiSessionList.pageSize }

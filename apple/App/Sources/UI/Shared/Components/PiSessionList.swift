@@ -162,7 +162,7 @@ struct PiSessionRow: View {
         switch line {
         case .ending: Text("正在结束…").foregroundStyle(palette.ink3)
         case .endFailed(let reason), .failed(let reason): Text(reason).foregroundStyle(palette.ink2)
-        case .draft(let draft): Text("\(Text("草稿").fontWeight(.semibold).foregroundStyle(palette.signature))  \(Text(draft).foregroundStyle(palette.ink2))")
+        case .draft(let draft): Text("\(Text("草稿").fontWeight(.semibold).foregroundStyle(palette.ink))  \(Text(draft).foregroundStyle(palette.ink2))")
         case .progress(let progress): Text(Highlight.matches(progress, highlight)).foregroundStyle(palette.ink2)
         case .hint(let hint): Text(hint).foregroundStyle(palette.ink3)
         case .status: status(shown)

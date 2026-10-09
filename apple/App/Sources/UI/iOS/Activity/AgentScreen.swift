@@ -65,6 +65,7 @@ struct AgentScreen: View {
         .defaultScrollAnchor(DebugScene.scene == "agent" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
         #endif
         .hidingSearch($searchHidden, searching: searchFocused || !query.isEmpty)
+        .fadesUnderBars()
         .safeAreaBar(edge: .top) {
             SearchRow(search: search, searchHidden: searchHidden) { filterMenu } trailing: { if project == nil { actions } }
         }

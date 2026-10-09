@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 会话计时怎么读（Mac 与手机同一条）：工作中"已运行"从这段连续处理开始算（思考、工具、等子代理之间切换不重置），
 /// 等你确认"已等"从进入等待算，话还在路上（会话没在跑时）"已发出"从发出算，空闲、出错、已结束是"多久前"（`DateLabel`）。哪一种由 `PiShown` 定。
-/// 怎么写只在这里：列表里（Agent 页、侧栏、项目"此刻"、书架）只到分钟、第一分钟写"不到1分钟"，不每秒换字；
+/// 怎么写只在这里：列表里（Agent 页、侧栏、项目"此刻"、书架）只到分钟、第一分钟写"不到 1 分钟"，不每秒换字；
 /// 只有会话页顶栏那一个计时到秒（`Precision`）。界面里是系统时间文本（`live`）：系统只在文字会变的时刻更新它，不经 TimelineView 或定时器重算视图。
 nonisolated enum PiClock: Hashable, Sendable, Codable {
     case running(since: Date)
@@ -22,14 +22,14 @@ nonisolated enum PiClock: Hashable, Sendable, Codable {
         return .ago(stateSince)
     }
 
-    static let locale = Locale(identifier: "zh-Hans")
-
-    /// 全 App 唯一的时长写法：只取最大的一个单位，"42秒钟"、"4分钟"、"3小时"（处理中的活跃感交给转圈）；
-    /// 到分钟时第一分钟写"不到1分钟"。
+    /// 全 App 唯一的时长写法：只取最大的一个单位，"42 秒"、"4 分钟"、"3 小时"（处理中的活跃感交给转圈）；
+    /// 到分钟时第一分钟写"不到 1 分钟"。数字与单位之间空一格，与"24 条灵感""11 分前"同一种排法；
+    /// 不用系统的单位格式：中文的宽格式把秒写成"秒钟"、数字与单位之间不空。
     static func duration(_ seconds: TimeInterval, precision: Precision = .second) -> String {
-        if precision == .minute, seconds < 60 { return "不到1分钟" }
-        return Duration.seconds(max(Int(seconds), 1))
-            .formatted(.units(allowed: [.hours, .minutes, .seconds], width: .wide, maximumUnitCount: 1, fractionalPart: .hide(rounded: .down)).locale(locale))
+        let whole = max(Int(seconds), 1)
+        if whole < 60 { return precision == .minute ? "不到 1 分钟" : "\(whole) 秒" }
+        if whole < 3600 { return "\(whole / 60) 分钟" }
+        return "\(whole / 3600) 小时"
     }
 
     var since: Date {
