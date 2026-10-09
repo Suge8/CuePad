@@ -14,7 +14,7 @@ nonisolated private struct SidebarData: Sendable {
     var renames: [String: DeliveryRequest]
     /// 项目行的"此刻"（`ProjectNow`）读的：此刻有事的会话（`PiSessionQuery.current`）与各项目最近开始的进行中任务。
     var current: [PiSessionListItem]
-    var leading: [UUID: String]
+    var leading: [UUID: [ProjectNow.InProgress]]
 }
 
 struct Sidebar: View {

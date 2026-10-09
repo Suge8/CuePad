@@ -15,8 +15,8 @@ nonisolated struct ShelfData: Sendable {
     /// 此刻有事的 Pi 会话（在线的，加上还有话发给它的已结束会话；带发给它的最近一条投送请求，`PiSessionQuery.current`）：
     /// 各项目的"此刻"一行在界面上再按本机的规则挑（`ProjectNow`）。
     var sessions: [PiSessionListItem]
-    /// 各项目最近开始的进行中任务标题（`ProjectNow` 的一档）。
-    var leading: [UUID: String]
+    /// 各项目的进行中任务，最近开始的在前（`ProjectNow` 的一档）。
+    var leading: [UUID: [ProjectNow.InProgress]]
     /// 等你确认的在线会话（书架最上面的"等你"）；个数与 Agent 角标同一个数。
     var waiting: [PiSessionListItem] { sessions.filter(\.state.waitsForYou) }
     /// 进任务页的入口上写的数：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，没有入口。
@@ -28,9 +28,9 @@ nonisolated struct ShelfData: Sendable {
 
     static let activeLimit = 3
 
-    /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。
+    /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。"正在推进"已列出的任务不再写一遍。
     @MainActor func now(shown: (PiSessionListItem) -> PiShown) -> [UUID: ProjectNow] {
-        ProjectNow.byProject(entries.map(\.project), sessions: sessions, tasks: leading, shown: shown)
+        ProjectNow.byProject(entries.map(\.project), sessions: sessions, tasks: leading, listed: Set(active.map(\.id)), shown: shown)
     }
 
     static func read(from store: isolated CueStore) throws -> ShelfData {

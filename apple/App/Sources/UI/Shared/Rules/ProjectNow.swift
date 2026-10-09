@@ -14,6 +14,12 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     let source: Source
     let text: String
 
+    /// 一条进行中的任务（`TaskBoard.leading` 按项目给出，最近开始的在前）。
+    struct InProgress: Hashable, Sendable {
+        let id: UUID
+        let title: String
+    }
+
     /// Agent 的事才有状态（书架、侧栏的状态标与项目长按菜单的标题读它）。
     var shown: PiShown? {
         if case .agent(let shown) = source { shown } else { nil }
@@ -38,21 +44,24 @@ nonisolated struct ProjectNow: Hashable, Sendable {
 
     /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`sessions` 要传此刻有事的会话
     /// （`PiSessionQuery.current`：在线的，加上还有话发给它的已结束会话），只传在线的会漏掉发给已结束会话的话。
+    /// `listed` 是同一屏已列出的任务（书架的"正在推进"），任务那一档跳过它们、取下一条；没有这种清单的地方不传。
     static func byProject(
-        _ projects: [Project], sessions: [PiSessionListItem], tasks: [UUID: String], shown: (PiSessionListItem) -> PiShown
+        _ projects: [Project], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], listed: Set<UUID> = [],
+        shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
         let intros = Dictionary(uniqueKeysWithValues: projects.compactMap { project in project.intro.map { (project.id, $0) } })
-        return byProject(projects.map(\.id), sessions: sessions, tasks: tasks, intros: intros, shown: shown)
+        return byProject(projects.map(\.id), sessions: sessions, tasks: tasks, intros: intros, listed: listed, shown: shown)
     }
 
     static func byProject(
-        _ projects: [UUID], sessions: [PiSessionListItem], tasks: [UUID: String], intros: [UUID: String],
-        shown: (PiSessionListItem) -> PiShown
+        _ projects: [UUID], sessions: [PiSessionListItem], tasks: [UUID: [InProgress]], intros: [UUID: String],
+        listed: Set<UUID> = [], shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
         let byProject = Dictionary(grouping: sessions.filter { $0.state.projectID != nil }) { $0.state.projectID! }
         var result: [UUID: ProjectNow] = [:]
         for project in projects {
-            result[project] = pick(byProject[project] ?? [], shown: shown, task: tasks[project], intro: intros[project])
+            let task = tasks[project]?.first { !listed.contains($0.id) }?.title
+            result[project] = pick(byProject[project] ?? [], shown: shown, task: task, intro: intros[project])
         }
         return result
     }

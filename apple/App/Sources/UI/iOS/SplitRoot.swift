@@ -117,8 +117,8 @@ nonisolated private struct SidebarData: Sendable {
     /// 此刻有事的会话（`PiSessionQuery.current`）：项目行的"此刻"读它。
     var sessions: [PiSessionListItem]
     var waiting: Int
-    /// 各项目最近开始的进行中任务（项目行的"此刻"，`ProjectNow`）。
-    var leading: [UUID: String]
+    /// 各项目的进行中任务，最近开始的在前（项目行的"此刻"，`ProjectNow`）。
+    var leading: [UUID: [ProjectNow.InProgress]]
 }
 
 private struct SplitSidebar: View {
