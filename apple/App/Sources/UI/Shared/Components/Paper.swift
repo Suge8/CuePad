@@ -72,8 +72,10 @@ struct CardMeta: View {
 }
 
 /// 栏后面最小的可读处理：从屏幕或窗口边沿的页面底色淡到栏的内沿全透，不铺实底、不伸进内容区——内容一直滚到栏下，
-/// 玻璃后面隐约可见（沉浸式）。能用系统滚动边缘效果（`.scrollEdgeEffectStyle(.soft, …)`）的滚动区优先用系统的；它到不了的地方用这个：
-/// iOS 推入页的状态栏那一段（倒过来的对话关掉了系统效果）、Mac 底部输入栏（macOS 上系统效果几乎看不出）。Mac 窗口工具栏下是虚化的 `ToolbarEdge`。
+/// 玻璃后面隐约可见（沉浸式）。能用系统滚动边缘效果（`.scrollEdgeEffectStyle(.soft, …)`）的滚动区优先用系统的，这一层只补它到不了的地方：
+/// iOS 推入页的状态栏那一段、Mac 底部输入栏（macOS 上系统效果几乎看不出）。Mac 窗口工具栏下是虚化的 `ToolbarEdge`。
+/// 滚动区关掉了系统效果、内容会一直滚到整条栏后面时（iOS 倒过来的对话）只压一半不够，用 `BarScrim.veil`：整条栏（状态栏加悬浮顶栏）
+/// 后面虚化并铺实，到栏下沿再往下淡出，与 `ToolbarEdge` 同一种做法（`EdgeVeil`）。
 /// `height` 是栏占的高度；nil 时取 iOS 上边安全区里状态栏那一段（安全区减去悬浮顶栏）。
 struct BarScrim: View {
     let edge: VerticalEdge
@@ -88,6 +90,16 @@ struct BarScrim: View {
 
     /// 边沿处的不透明度：只压一半，栏上的字（时间、标题）压得住，后面的内容仍看得出来。
     private static let edgeOpacity = 0.5
+
+    #if os(iOS)
+    /// 盖住整条顶栏的一层（状态栏加悬浮顶栏，高度取上边安全区），到栏下沿仍是实的，再往下淡出 `EdgeVeil.fade`。
+    /// 给关掉了系统滚动边缘效果的滚动区用（倒过来的对话）：内容滚到时间、返回钮、标题后面也读得出栏上的字。
+    static var veil: some View {
+        GeometryReader { proxy in
+            EdgeVeil(solid: proxy.safeAreaInsets.top).offset(y: -proxy.safeAreaInsets.top)
+        }
+    }
+    #endif
 
     var body: some View {
         let alignment: Alignment = edge == .top ? .top : .bottom
@@ -114,36 +126,46 @@ struct BarScrim: View {
     }
 }
 
-#if os(macOS)
-/// 窗口工具栏下的一条边：滚上来的内容到悬浮的玻璃条目（往上一层、标题、搜索与任务）后面时虚化，再往下淡出——与 iOS 的柔和滚动边缘效果
-/// 同一种观感。系统的滚动边缘效果在这个窗口里只给得出不透明的硬边（透明标题栏下则完全没有，`scrollEdgeEffectStyle` 管不到标题栏这层），
-/// 所以自己铺：一层系统材质按渐变遮罩从实到无，叠一层由实到无的页面底色，让虚化的内容回到纸与墨的色温。遮罩只在这一条上，不碰滚动内容。
-/// 作滚动视图的兄弟层放在它上面、页面里浮在顶上的玻璃之下；"降低透明度"时退回实底渐变。
-struct ToolbarEdge: View {
-    /// 工具栏高，往内容再淡出这么多（页面内容的上边距要让出这一段，停在顶部时标题不被虚化）。
-    static let height: CGFloat = 52
+/// 顶上一条栏后面的虚化：一层系统材质按渐变遮罩从实到无，叠一层由实到无的页面底色，让虚化的内容回到纸与墨的色温。
+/// 从这条边起 `solid` 那么高是实的（栏本身），再往内容淡出 `fade`。遮罩只在这一条上，不碰滚动内容；"降低透明度"时退回实底渐变。
+/// Mac 窗口工具栏下（`ToolbarEdge`）与 iOS 倒过来的对话的顶栏下（`BarScrim.veil`）都是它。
+struct EdgeVeil: View {
+    let solid: CGFloat
     static let fade: CGFloat = 20
     @Environment(\.palette) private var palette
+    @Environment(\.pageBackground) private var pageBackground
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
-        let solid = Self.height / (Self.height + Self.fade)
+        let ground = pageBackground ?? palette.desk
         let fading = LinearGradient(
-            stops: [.init(color: .black, location: 0), .init(color: .black, location: solid), .init(color: .clear, location: 1)],
+            stops: [.init(color: .black, location: 0), .init(color: .black, location: solid / (solid + Self.fade)), .init(color: .clear, location: 1)],
             startPoint: .top, endPoint: .bottom)
         ZStack {
             if !reduceTransparency { Rectangle().fill(.regularMaterial) }
             LinearGradient(
-                colors: [palette.desk.opacity(reduceTransparency ? 1 : 0.72), palette.desk.opacity(reduceTransparency ? 1 : 0.4)],
+                colors: [ground.opacity(reduceTransparency ? 1 : 0.72), ground.opacity(reduceTransparency ? 1 : 0.4)],
                 startPoint: .top, endPoint: .bottom)
         }
         .mask(fading)
-        .frame(height: Self.height + Self.fade)
+        .frame(height: solid + Self.fade)
         .frame(maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
+}
+
+#if os(macOS)
+/// 窗口工具栏下的一条边：滚上来的内容到悬浮的玻璃条目（往上一层、标题、搜索与任务）后面时虚化，再往下淡出——与 iOS 的柔和滚动边缘效果
+/// 同一种观感。系统的滚动边缘效果在这个窗口里只给得出不透明的硬边（透明标题栏下则完全没有，`scrollEdgeEffectStyle` 管不到标题栏这层），
+/// 所以自己铺（`EdgeVeil`）。作滚动视图的兄弟层放在它上面、页面里浮在顶上的玻璃之下。
+struct ToolbarEdge: View {
+    /// 工具栏高，往内容再淡出 `fade`（页面内容的上边距要让出这一段，停在顶部时标题不被虚化）。
+    static let height: CGFloat = 52
+    static let fade = EdgeVeil.fade
+
+    var body: some View { EdgeVeil(solid: Self.height) }
 }
 #endif
 

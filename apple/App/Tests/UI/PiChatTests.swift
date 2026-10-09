@@ -83,6 +83,23 @@ struct PiChatTests {
         #expect(PiChat.outgoing([said, command], messages: []).map(\.id) == [said.id])
     }
 
+    /// 列表说"没能送达"的会话，点进去顶栏不能像好了一样：状态后写几句没送到（没能送达的那几条还挂在对话末尾）。
+    @Test func 有没送到的话时_顶栏写几句没送到() async throws {
+        let app = TestApp()
+        let store = app.services.store
+        let target = SendTarget(kind: .piSession, name: "relay", ref: "relay")
+        let lost = try await store.requestDelivery("改完再跑一遍", to: target, on: "mac-fail", mode: .send)
+        _ = try await store.requestDelivery("还在路上的一句", to: target, on: "mac-wait", mode: .send)
+        #expect(PiChat.undeliveredNote(try await store.deliveryRequests(toSession: "relay"), messages: []) == nil)
+
+        let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
+        try await executor.start()
+        for _ in 0..<300 where try await store.deliveryRequest(lost.id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+        await executor.stop()
+
+        #expect(PiChat.undeliveredNote(try await store.deliveryRequests(toSession: "relay"), messages: []) == "1 句没送到")
+    }
+
     @Test func 七天前活跃过又没有对话的会话_打开时请Mac补写() async throws {
         let now = start.addingTimeInterval(30 * 86_400)
         let old = PiSessionState(

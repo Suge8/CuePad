@@ -12,18 +12,22 @@ nonisolated enum MarkdownBlock: Equatable, Sendable {
     case table(MarkdownTable)
     case rule
 
-    /// 去掉 Markdown 符号的纯文字，一块一行（列表预览用：先去符号再截断）。行内的强调、代码、链接只留文字；表格取表头。
-    static func plainLines(_ source: String) -> [String] {
-        parse(source).compactMap { block in
-            let text: String = switch block {
-            case .paragraph(let text), .heading(_, let text), .item(_, let text, _), .quote(let text): plainInline(text)
-            case .code(let text): text
-            case .table(let table): table.header.map(plainInline).joined(separator: " · ")
-            case .rule: ""
+    /// 摘要用的第一行文字（列表预览：先去符号再截断）：第一个文字块（段落、标题、列表项、引用）的第一行，行内的强调、代码、链接只留文字；
+    /// 表格与代码块跳过，整段只有它们时说它是什么。
+    static func firstPlainLine(_ source: String) -> String? {
+        let blocks = parse(source)
+        for block in blocks {
+            switch block {
+            case .paragraph(let text), .heading(_, let text), .item(_, let text, _), .quote(let text):
+                let line = text.split(whereSeparator: \.isNewline).lazy
+                    .map { plainInline(String($0)).trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
+                if let line { return line }
+            case .code, .table, .rule: continue
             }
-            let line = text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-            return line.isEmpty ? nil : line
         }
+        if blocks.contains(where: { if case .table = $0 { true } else { false } }) { return "（一张表格）" }
+        if blocks.contains(where: { if case .code = $0 { true } else { false } }) { return "（一段代码）" }
+        return nil
     }
 
     private static func plainInline(_ text: String) -> String {

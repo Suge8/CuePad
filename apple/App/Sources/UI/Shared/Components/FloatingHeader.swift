@@ -9,11 +9,13 @@ extension View {
     /// 顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，见 `ChatFollow.showsHeader`）；
     /// 左缘右滑返回始终可用（`EdgeBackKeeper`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出顶栏。
     /// 标题同时是读屏、返回菜单与多任务切换器里的名字。
+    /// `veiled`：滚动区关掉了系统的滚动边缘效果（倒过来的对话），内容会一直滚到整条栏后面——这时整条栏后面铺 `BarScrim.veil`
+    /// （虚化、到栏下沿是实的、再往下淡出），顶栏让开时也留着。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil,
+        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, veiled: Bool = false,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        modifier(FloatingHeader(title: title, hidden: hidden, reveal: reveal, detail: detail(), trailing: trailing()))
+        modifier(FloatingHeader(title: title, hidden: hidden, reveal: reveal, veiled: veiled, detail: detail(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -37,6 +39,7 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     let title: String
     let hidden: Bool
     let reveal: (() -> Void)?
+    let veiled: Bool
     let detail: Detail
     let trailing: Trailing
     @Environment(\.palette) private var palette
@@ -44,9 +47,11 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     func body(content: Content) -> some View {
         content
             // 沉浸式：内容一直滚到状态栏与顶栏下面，系统的滚动边缘效果（渐进模糊加淡出）让玻璃上的字可读；状态栏那一段再垫一层
-            // 最小的淡出（倒过来的对话关掉了系统效果，时间不能压在字上）
+            // 最小的淡出（时间不能压在字上）。关掉了系统效果的滚动区（倒过来的对话）整条栏后面铺 `BarScrim.veil`
             .scrollEdgeEffectStyle(.soft, for: .top)
-            .overlay(alignment: .top) { BarScrim(edge: .top) }
+            .overlay(alignment: .top) {
+                if veiled { BarScrim.veil } else { BarScrim(edge: .top) }
+            }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             // 系统的返回钮藏起时会淡出，但也会停掉左缘右滑返回：由 `EdgeBackKeeper` 把手势留住

@@ -13,4 +13,11 @@ nonisolated enum PiPlace {
     static func name(of state: PiSessionState, project: Project?) -> String? {
         name(project: project, folder: state.folder, besides: state.title)
     }
+
+    /// 会话页"⋯"菜单最上面的一行："在 CuePad · 后台"（所在与 Mac 在后台开的，会话页顶栏不写它们）；都没有时是 nil。
+    static func menuTitle(of state: PiSessionState, project: Project?) -> String? {
+        let parts = [name(of: state, project: project).map { "在 \($0)" }, state.hosted && state.state != .known(.ended) ? "后台" : nil]
+        let shown = parts.compactMap { $0 }
+        return shown.isEmpty ? nil : shown.joined(separator: " · ")
+    }
 }

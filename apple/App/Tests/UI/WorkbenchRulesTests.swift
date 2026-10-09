@@ -281,6 +281,15 @@ struct PiReplyRulesTests {
         #expect(PiProgress.line(of: session(.settled, reply: "- 第一条 **要点**\n- 第二条")) == "第一条 要点")
     }
 
+    /// 摘要只取文字：表格、代码块跳过，整条回答都是表格或代码时说它是什么，不把 "| 目录 | 文件数 |" 这类原文露出来。
+    @Test func 列表预览跳过表格与代码_只有它们时说是什么() {
+        let table = "| 目录 | 文件数 |\n|---|---|\n| master | 12 |"
+        #expect(PiProgress.line(of: session(.settled, reply: table + "\n\n三个目录都统计完了。还有别的")) == "三个目录都统计完了。")
+        #expect(PiProgress.line(of: session(.settled, reply: "```\nls -la\n```\n跑完了。")) == "跑完了。")
+        #expect(PiProgress.line(of: session(.settled, reply: table)) == "（一张表格）")
+        #expect(PiProgress.line(of: session(.settled, reply: "```\nls -la\n```")) == "（一段代码）")
+    }
+
     @Test func 等你确认时_文字型问题回复框就是作答框() {
         let question = PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？")
         #expect(MacDelivery.reply(to: session(.waitingForUser, question: question)) == .answer(question))

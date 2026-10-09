@@ -107,7 +107,7 @@ struct SessionPage: View {
                 ToolbarItem(placement: .navigation) { title(session, digest: digest, ending: shownEnd?.isOpen == true) }
                     .sharedBackgroundVisibility(follow.showsHeader ? .automatic : .hidden)
                 ToolbarItem(placement: .primaryAction) {
-                    menu(session, place: PiPlace.name(of: session, project: digest.project), live: live, ending: shownEnd?.isOpen == true).headerVisibility(follow.showsHeader)
+                    menu(session, place: PiPlace.menuTitle(of: session, project: digest.project), live: live, ending: shownEnd?.isOpen == true).headerVisibility(follow.showsHeader)
                 }
                 // 让开时连系统给圆钮画的玻璃一起不画
                 .sharedBackgroundVisibility(follow.showsHeader ? .automatic : .hidden)
@@ -129,7 +129,7 @@ struct SessionPage: View {
             if ending {
                 Text("正在结束…").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
             } else {
-                PiSessionSubtitle(session: session)
+                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest.deliveries, messages: digest.messages))
             }
         }
         .padding(.horizontal, 12)
@@ -154,7 +154,7 @@ struct SessionPage: View {
         let canRename = MacDelivery.canRename(session)
         if place != nil || canRename || canJump || canEnd {
             Menu("更多", systemImage: "ellipsis") {
-                if let place { Section("在 \(place)") {} }
+                if let place { Section(place) {} }
                 if canRename {
                     Button("重命名…", systemImage: "pencil") { renaming = session }
                 }

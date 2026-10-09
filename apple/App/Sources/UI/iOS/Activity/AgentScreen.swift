@@ -234,7 +234,7 @@ struct AgentScreen: View {
     }
 
     private var search: SearchCapsule {
-        SearchCapsule(prompt: workspace.catalog?.project(filter).map { "搜 \($0.name) 的会话" } ?? "搜会话、目录、说过的话", query: $query, focus: $searchFocused)
+        SearchCapsule(prompt: workspace.catalog?.project(filter).map { "搜 \($0.name) 的会话" } ?? "搜索会话", query: $query, focus: $searchFocused)
     }
 
     @ViewBuilder private var actions: some View {

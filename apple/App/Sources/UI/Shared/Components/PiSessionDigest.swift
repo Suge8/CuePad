@@ -77,9 +77,10 @@ struct PiRestartNotice: View {
 
     var body: some View {
         if session.state == .known(.incompatible) {
+            // 维护提示不是等你确认：符号用次要墨色（赭黄只给等你确认）；命令中间不许折行（"/" 后接词连接符）
             Callout(
-                tint: palette.attention, symbol: "arrow.clockwise.circle.fill",
-                text: "这个会话还在用升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里对这个会话执行 /reload 就能接上。")
+                tint: palette.ink2, symbol: "arrow.clockwise.circle.fill",
+                text: "这个会话还在用升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里对这个会话执行 /\u{2060}reload 就能接上。")
         }
     }
 }
