@@ -405,8 +405,8 @@ enum TaskMetrics {
     #endif
 }
 
-/// 任务的完成圈（`TaskRing`）：完成是对勾；待办空心、进行中左半满（与 `TaskGlyph.symbol` 同一种图形）；有下级时圈线本身是进度：
-/// 淡的整圈上按比例描一道实线弧。全 App 的任务只有这一种图形，弧的变化有短过渡。
+/// 任务的完成圈（`TaskRing`）：完成是对勾；待办空心、进行中左半满（与 `TaskGlyph.symbol` 同一种图形）；有下级时圈里是进度扇形
+/// （见 `progress`）。全 App 的任务只有这一种图形，扇形的变化有短过渡。
 struct TaskRingView: View {
     let status: TaskStatus?
     let ring: TaskRing
@@ -432,21 +432,42 @@ struct TaskRingView: View {
         .accessibilityHidden(true)
     }
 
-    /// 与 SF 的 circle / circle.lefthalf.filled 同尺寸同线宽：圈线淡、做完的比例描实，进行中照样左半满。
+    /// 与 SF 的 circle 同尺寸同线宽的实线圈（颜色照状态），圈里是进度：从 12 点顺时针的扇形，做完多少填多少。
+    /// 进行中另在左半铺一层淡的同色（同 circle.lefthalf.filled 的左半），扇形从右半开始填、正好和它错开。
+    /// 不用"淡圈上描一道弧"：小尺寸下那就是系统的加载转圈。
     private func progress(_ fraction: Double) -> some View {
-        let tint = TaskGlyph.tint(status, palette), line = max(1.4, size * 0.095), diameter = size * 0.88
+        let tint = TaskGlyph.tint(status, palette), line = max(1.4, size * 0.095)
         return ZStack {
-            Circle().stroke(tint.opacity(status == .inProgress ? 0.3 : 0.6), lineWidth: line)
-            Circle().trim(from: 0, to: fraction)
-                .stroke(status == .inProgress ? tint : palette.ink, style: StrokeStyle(lineWidth: line, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            if status == .inProgress {
-                // 与描线之间留一线缝：圈线是进度，贴住半圆就读不出左半边描到了哪
-                Circle().trim(from: 0.25, to: 0.75).fill(tint).padding(line * 1.1)
+            Circle().stroke(tint, lineWidth: line)
+            Group {
+                if status == .inProgress { Circle().trim(from: 0.25, to: 0.75).fill(tint.opacity(0.4)) }
+                Sector(fraction: fraction).fill(tint)
             }
+            // 与圈线之间留一线缝，扇形的边才读得出来
+            .padding(line * 1.1)
         }
-        .frame(width: diameter, height: diameter)
+        .frame(width: size * 0.88, height: size * 0.88)
         .frame(width: size * 1.02, height: size * 1.02)
+    }
+}
+
+/// 从 12 点顺时针的扇形，`fraction` 0…1；可动画。
+nonisolated private struct Sector: Shape {
+    var fraction: Double
+    var animatableData: Double {
+        get { fraction }
+        set { fraction = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        guard fraction > 0 else { return Path() }
+        let center = CGPoint(x: rect.midX, y: rect.midY), start = Angle.degrees(-90)
+        var path = Path()
+        path.move(to: center)
+        // 视图坐标 y 朝下：clockwise: false 在屏幕上是顺时针
+        path.addArc(center: center, radius: min(rect.width, rect.height) / 2, startAngle: start, endAngle: start + .degrees(360 * fraction), clockwise: false)
+        path.closeSubpath()
+        return path
     }
 }
 

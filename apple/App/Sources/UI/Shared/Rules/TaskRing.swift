@@ -1,7 +1,7 @@
 import CueStore
 
-/// 任务的完成圈怎么画（任务行、任务页、Mac 面板同一条规则）：没有下级是普通圆圈；有下级时圆圈本身就是进度，
-/// 按做完的下级（提示词已回复、子任务完成，见 `ChildMark`）占的比例描一道连续的弧。不分段：分段的虚线圈读起来像"加载中"。
+/// 任务的完成圈怎么画（任务行、任务页、Mac 面板同一条规则）：没有下级是普通圆圈；有下级时圈里画进度，
+/// 按做完的下级（提示词已回复、子任务完成，见 `ChildMark`）占的比例填一个从 12 点顺时针的扇形（画法见 `TaskRingView`）。
 nonisolated enum TaskRing: Equatable, Sendable {
     case plain
     case progress(done: Int, total: Int)
