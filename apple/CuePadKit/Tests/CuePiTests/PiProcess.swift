@@ -45,16 +45,18 @@ final class PiProcess: @unchecked Sendable {
     /// - Parameter modelInAgentDirectory: 假模型装进 agent 目录（不用 `-e` 加载）：CuePad 在后台托管的 Pi 只加载 agent 目录里的扩展。
     /// - Parameter alongside: 与它共用同一个临时 agent 目录、连接目录与工作目录（同一会话的第二个进程）；结束时不删共用的目录。
     /// - Parameter sessionFile: 用 `--session` 打开这个会话文件。
+    /// - Parameter discoverSkills: 让 Pi 去它的 skills 目录发现 skill（默认的安静参数里是 `--no-skills`）。
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
          oneShotPrompt: String? = nil, firecode: Bool = false, modelInAgentDirectory: Bool = false,
-         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = []) async throws {
+         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false) async throws {
         ownsRoot = other == nil
         root = try other?.root ?? makeTempDirectory()
         cwd = root.appending(path: "work")
         try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
         paths = other?.paths ?? PiPaths(agentDirectory: root.appending(path: "agent"), socketDirectory: socketDirectory ?? root.appending(path: "s"))
         if installBridge && other == nil {
-            let installer = PiIntegration(paths: paths, locator: PiExecutableLocator(searchDirectories: [realPiURL.deletingLastPathComponent()]))
+            let installer = PiIntegration(
+                paths: paths, locator: PiExecutableLocator(searchDirectories: [realPiURL.deletingLastPathComponent()]), cuepad: Self.cuepad)
             try await installer.install()
         }
 
@@ -62,7 +64,7 @@ final class PiProcess: @unchecked Sendable {
         if modelInAgentDirectory { try Self.installFakeModel(into: paths.agentDirectory) }
         let modelLoaded = firecode || modelInAgentDirectory || other != nil
 
-        var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + Self.quietArguments
+        var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + Self.quietArguments.filter { !(discoverSkills && $0 == "--no-skills") }
         args += extraArguments
         if let sessionFile { args += ["--session", sessionFile.path] }
         if !modelLoaded { args += ["-e", fixtures.appending(path: "fake-model.ts").path] }
@@ -91,6 +93,10 @@ final class PiProcess: @unchecked Sendable {
         Self.drain(out.fileHandleForReading) { [weak self] in self?.ingest($0) }
         Self.drain(errPipe.fileHandleForReading) { [weak self] data in self?.lock.withLock { self?._stderr.append(data) } }
     }
+
+    /// 与测试包同一个产物目录里构建好的 `cuepad` 命令行（`swift test` 会把它一起构建）。
+    private final class Anchor {}
+    static var cuepad: URL { Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad") }
 
     /// 不联网、不读用户配置的参数，用假模型（测试里 CuePad 在后台托管的 Pi 也带这些，见 `PiHost` 的 `extraArguments`）。
     static let quietArguments = [
