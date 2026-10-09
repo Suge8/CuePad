@@ -83,7 +83,7 @@ struct PiReplyBar: View {
                 header: {
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if focused, let failure = config?.failure {
-                        Text("没换成：\(failure)").font(.caption).foregroundStyle(palette.failure).lineLimit(2)
+                        Text("没换成：\(failure)").font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2)
                             .padding(.horizontal, 18).padding(.top, 12)
                     }
                 },
@@ -104,7 +104,7 @@ struct PiReplyBar: View {
             if case .running = progress { ProgressView().controlSize(.mini) }
             Text(progress.text).lineLimit(2)
         }
-        .font(.footnote).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
+        .font(Typography.meta).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
         .padding(.horizontal, 18)
         .transition(.opacity)
     }
@@ -134,7 +134,7 @@ struct PiReplyBar: View {
     /// 等你确认、不能发自由文本时收成的一行。
     private func notice(_ text: String, systemImage: String) -> some View {
         Label(text, systemImage: systemImage)
-            .font(.subheadline).foregroundStyle(palette.ink2)
+            .font(Typography.secondary).foregroundStyle(palette.ink2)
             .padding(.horizontal, 18).frame(maxWidth: .infinity, minHeight: 2 * Self.radius, alignment: .leading)
             .glass(in: .rect(cornerRadius: Self.radius, style: .continuous))
     }
@@ -263,7 +263,7 @@ struct SyncHint: View {
     var body: some View {
         let summary = SyncSummary(status)
         Label("\(summary.title) · \(consequence)", systemImage: summary.symbol)
-            .font(.footnote).foregroundStyle(palette.ink3)
+            .font(Typography.meta).foregroundStyle(palette.ink3)
             .lineLimit(2)
     }
 }

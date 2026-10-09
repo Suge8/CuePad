@@ -39,16 +39,16 @@ struct PiSlashPalette: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text("/" + command.name).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
-                        if let hint = command.hint { Text(hint).font(.footnote).foregroundStyle(palette.ink3) }
+                        Text("/" + command.name).font(Typography.body.weight(.semibold)).foregroundStyle(palette.ink)
+                        if let hint = command.hint { Text(hint).font(Typography.meta).foregroundStyle(palette.ink3) }
                     }
                     .lineLimit(1)
                     if let summary = command.summary {
-                        Text(summary).font(.footnote).foregroundStyle(palette.ink2).lineLimit(1)
+                        Text(summary).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 8)
-                Text(command.source.label).font(.caption).foregroundStyle(palette.ink3)
+                Text(command.source.label).font(Typography.caption).foregroundStyle(palette.ink3)
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)

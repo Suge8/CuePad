@@ -56,10 +56,10 @@ struct PiContextRing: View {
 
     private var detail: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("上下文", systemImage: "circle.dashed").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
-            Text(meter.summary).font(.footnote.monospacedDigit()).foregroundStyle(palette.ink2)
+            Label("上下文", systemImage: "circle.dashed").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
+            Text(meter.summary).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
             if meter.suggestsCompact {
-                Text("快满了。Agent 会在到顶前自动压缩，也可以现在压缩。").font(.footnote).foregroundStyle(palette.ink2)
+                Text("快满了。Agent 会在到顶前自动压缩，也可以现在压缩。").font(Typography.meta).foregroundStyle(palette.ink2)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("压缩上下文", systemImage: "arrow.down.right.and.arrow.up.left", action: compact)
                     .buttonStyle(.glass).controlSize(.small)

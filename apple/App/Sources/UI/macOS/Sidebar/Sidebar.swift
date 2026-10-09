@@ -95,14 +95,16 @@ struct Sidebar: View {
         }
     }
 
-    /// 项目行：名称，下面一行是"此刻"（`ProjectNow`，与书架同一条规则），总留着这一行的高度。
+    /// 项目行：名称，下面一行是"此刻"（`ProjectNow`，与书架同一条规则）。行高一直是两行的高度，状态出现、消失时列表不跳；
+    /// 没有可说的时名称在行里居中，不在上半截空出一行（一列里有的有、有的没有时，名称高低错落）。
     private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {
         PageRow(page: .project(project.id), count: catalog.cardCounts[project.id] ?? 0, height: Spacing.sidebarProjectRow, select: select) {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(project.name)
-                    ProjectNowLine(now: now, font: Typography.sidebarDetail, dot: 6).fontWeight(.regular)
+                    if now != nil { ProjectNowLine(now: now, font: Typography.sidebarDetail, dot: 6).fontWeight(.regular) }
                 }
+                .animation(Motion.quick, value: now == nil)
             } icon: {
                 ProjectGlyph(project: project)
             }
@@ -275,11 +277,19 @@ private struct PiSection: View {
                 // 拒绝过安装扩展时本机的在线会话不会出现：说清去哪装（别的 Mac 上在线的照样列在下面）
                 let declined = status?.file != .current && services.settings.piExtensionDeclined && live.isEmpty
                 if declined || rows.isEmpty {
-                    Text(declined ? "没装扩展，看不到本机在线的会话 · 设置 › Pi 里安装" : "没有运行中的 Agent 会话 · 在终端运行 pi 开始")
-                        .font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .selectionDisabled()
+                    // 现状一行、怎么办一行：同一句挤成两行时"·"会落到行首
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(declined ? "没装扩展，看不到本机在线的会话" : "没有运行中的 Agent 会话").foregroundStyle(palette.ink3)
+                        if declined {
+                            Button("在设置 › Pi 里安装") { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
+                                .buttonStyle(.plain).foregroundStyle(palette.ink2)
+                        } else {
+                            Text("在终端运行 pi 开始").foregroundStyle(palette.ink3)
+                        }
+                    }
+                    .font(Typography.meta)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .selectionDisabled()
                 }
                 // 在线的按会话 id 区分：状态变化时那一行不被重建。两个以上需要 /reload 的合成一行（`PiNowRow`），点开再列
                 ForEach(PiNowRow.rows(rows, state: { $0 })) { nowRow in

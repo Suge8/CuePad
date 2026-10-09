@@ -17,7 +17,7 @@ struct MarkdownText: View {
             }
         }
         // 中文正文行距放开一点：长回答是会话页的主角，读起来不挤
-        .lineSpacing(3)
+        .lineSpacing(Typography.readingLineSpacing)
         .fixedSize(horizontal: false, vertical: true)
         .textSelection(.enabled)
     }
@@ -25,25 +25,25 @@ struct MarkdownText: View {
     @ViewBuilder private func block(_ block: MarkdownBlock) -> some View {
         switch block {
         case .paragraph(let text):
-            Text(Self.inline(text, palette)).font(.body).foregroundStyle(palette.ink)
+            Text(Self.inline(text, palette)).font(Typography.reading).foregroundStyle(palette.ink)
         case .heading(let level, let text):
-            Text(Self.inline(text, palette)).font(level <= 2 ? .title3.weight(.semibold) : .body.weight(.semibold))
+            Text(Self.inline(text, palette)).font(level <= 2 ? Typography.readingHeading : Typography.reading.weight(.semibold))
                 .foregroundStyle(palette.ink)
                 .accessibilityAddTraits(.isHeader)
         case .item(let marker, let text, let depth):
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(marker == "•" && depth > 0 ? "◦" : marker).font(.body.monospacedDigit()).foregroundStyle(palette.ink3)
-                Text(Self.inline(text, palette)).font(.body).foregroundStyle(palette.ink)
+                Text(marker == "•" && depth > 0 ? "◦" : marker).font(Typography.reading.monospacedDigit()).foregroundStyle(palette.ink3)
+                Text(Self.inline(text, palette)).font(Typography.reading).foregroundStyle(palette.ink)
             }
             .padding(.leading, CGFloat(depth) * 18)
         case .quote(let text):
-            Text(Self.inline(text, palette)).font(.body).foregroundStyle(palette.ink2)
+            Text(Self.inline(text, palette)).font(Typography.reading).foregroundStyle(palette.ink2)
                 .padding(.leading, 14)
                 .overlay(alignment: .leading) { Capsule().fill(palette.ink3.opacity(0.5)).frame(width: 3) }
         case .code(let code):
             // 底色是固定的框，代码在框里滚
             ScrollView(.horizontal) {
-                Text(code).font(.footnote.monospaced()).foregroundStyle(palette.ink).padding(ChatBlock.inset)
+                Text(code).font(Typography.code).foregroundStyle(palette.ink).padding(ChatBlock.inset)
             }
             .scrollIndicatorsFlash(onAppear: true)
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
@@ -109,7 +109,7 @@ private struct MarkdownTableView: View {
             let alignment = table.alignments[column]
             CappedWidth(cap: Self.cellWidth) {
                 Text(MarkdownText.inline(text, palette))
-                    .font(header ? .subheadline.weight(.semibold) : .subheadline)
+                    .font(header ? Typography.secondary.weight(.semibold) : Typography.secondary)
                     .foregroundStyle(palette.ink)
                     .multilineTextAlignment(alignment.text)
             }

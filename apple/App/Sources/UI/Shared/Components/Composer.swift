@@ -297,9 +297,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     Image(systemName: "rectangle.on.rectangle").foregroundStyle(palette.ink3)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(card.title.nonEmpty ?? "图片").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                        Text(card.title.nonEmpty ?? "图片").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                         if !card.images.isEmpty {
-                            Text("\(card.images.count) 张图片").font(.caption).foregroundStyle(palette.ink3)
+                            Text("\(card.images.count) 张图片").font(Typography.caption).foregroundStyle(palette.ink3)
                         }
                     }
                     Spacer(minLength: 8)
@@ -600,7 +600,7 @@ private struct AttachmentBody: View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
-                    case .text(let text): Text(text).font(.body).foregroundStyle(palette.ink).textSelection(.enabled)
+                    case .text(let text): Text(text).font(Typography.body).foregroundStyle(palette.ink).textSelection(.enabled)
                     case .image(let hash): Thumbnail(hash: hash, height: 220, radius: 12)
                     case .split: Rectangle().fill(palette.hair).frame(height: 1)
                     }

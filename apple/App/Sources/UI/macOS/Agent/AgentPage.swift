@@ -24,10 +24,11 @@ struct AgentPage: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
+                heading.padding(.bottom, 18)
                 topRow.padding(.bottom, 16)
                 if let list { sessions(list) }
             }
-            .padding(.horizontal, 28).padding(.top, ToolbarEdge.fade + 6).padding(.bottom, 96)
+            .padding(.horizontal, Spacing.page).padding(.top, ToolbarEdge.fade + 6).padding(.bottom, 96)
             .frame(maxWidth: Self.width)
             .frame(maxWidth: .infinity)
         }
@@ -47,6 +48,18 @@ struct AgentPage: View {
                    id: PiSessionList.Key(filter: .init(text: query, project: filter), limit: limit),
                    into: $list, onError: workspace.fail) { [query, filter, limit] store in
             try PiSessionList.read(text: query, project: filter, historyLimit: limit, from: store)
+        }
+    }
+
+    /// 页标题：与项目页、归档、回收站同一层级；下面一行是此刻筛出的在线与历史各几个。
+    private var heading: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Agent").font(Typography.pageTitle).foregroundStyle(palette.ink)
+                .accessibilityAddTraits(.isHeader)
+            if let list {
+                Text("\(list.now.count) 个在线 · \(list.total) 个历史").font(Typography.meta).foregroundStyle(palette.ink3)
+                    .monospacedDigit()
+            }
         }
     }
 

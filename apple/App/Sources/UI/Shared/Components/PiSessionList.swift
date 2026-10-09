@@ -74,12 +74,12 @@ struct PiSessionRow: View {
         /// 整页（名字后带所在、下面一句）还是窄处（状态词接着那一句）。
         var full = false
 
+        static let page = Style(name: Typography.bodyStrong, line: Typography.secondary, meta: Typography.meta, dot: pageDot, spacing: 3, full: true)
+        static let compact = Style(name: Typography.body, line: Typography.meta, meta: Typography.meta, dot: 6, spacing: 1)
         #if os(macOS)
-        static let page = Style(name: .system(size: 14, weight: .semibold), line: .system(size: 13), meta: .system(size: 12), dot: 8, spacing: 3, full: true)
-        static let compact = Style(name: .system(size: 13, weight: .medium), line: .system(size: 11), meta: .system(size: 11), dot: 6, spacing: 1)
+        private static let pageDot: CGFloat = 8
         #else
-        static let page = Style(name: .headline, line: .subheadline, meta: .footnote, dot: 9, spacing: 3, full: true)
-        static let compact = Style(name: .body, line: .footnote, meta: .footnote, dot: 6, spacing: 1)
+        private static let pageDot: CGFloat = 9
         #endif
     }
 
