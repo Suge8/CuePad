@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// 回复框里的斜杠命令：输入 "/" 弹出的面板列哪些（过滤与排序）、输入框里的内容算不算一条命令、
-/// 命令带上的卡片怎么并进参数；上下文圆环的读数。
+/// 命令带上的卡片怎么并进参数；上下文用量条的读数。
 @MainActor
 struct PiSlashTests {
     private func command(_ name: String, _ source: PiCommandSource, summary: String? = nil, hint: String? = nil) -> PiSlashCommand {
@@ -72,7 +72,7 @@ struct PiSlashTests {
     }
 }
 
-/// 上下文圆环：已用比例决定颜色档位，文案写已用与剩余；压缩后到下一次回答前未知。
+/// 上下文用量条：已用比例决定颜色档位，文案写已用与剩余；压缩后到下一次回答前未知。
 struct PiContextMeterTests {
     @Test(arguments: [
         (21_000, PiContextMeter.Level.roomy),
@@ -93,8 +93,8 @@ struct PiContextMeterTests {
         #expect(fresh.fraction == 0 && fresh.remaining == 200_000)
     }
 
-    /// 圆环旁写百分比；悬停与读屏先说这是上下文，快满了时说可以压缩。
-    @Test func 圆环旁的百分比与说明() {
+    /// 用量条旁写百分比；悬停与读屏先说这是上下文，快满了时说可以压缩。
+    @Test func 用量条旁的百分比与说明() {
         #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).percent == "21%")
         #expect(PiContextMeter(PiContextUsage(tokens: nil, window: 200_000)).percent == "—")
         #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).help == "上下文 · 已用 21% · 剩 158k tokens")

@@ -136,7 +136,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State private var below: CGFloat = 0
 
     /// `follow`：页面要据贴底与否改别处（收起顶栏、输入框）时由页面持有；不给就自己持有。
-    /// `clearsBelow`（iOS）：最底下这么高（回复框下沿到屏幕底：横条区或键盘）不露对话，内容在回复框下沿淡到全透。
+    /// `clearsBelow`（iOS）：最底下这么高（回复框下沿到屏幕底：横条区或键盘）不露对话，内容在回复框下沿淡到全透；
+    /// 看历史时（回复框收成短胶囊）整条回复框那一段都不露，胶囊两旁没有被切开的半截气泡。
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, clearsBelow: CGFloat = 0, follow: Binding<ChatFollow>? = nil,
         @ViewBuilder content: () -> Content
@@ -160,8 +161,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     private static var inverted: Bool { false }
     #endif
     private static var newestEdge: Edge { inverted ? .top : .bottom }
-    /// 回复框下沿之上淡出的一段（在回复框玻璃后面）。
+    /// 贴着最新时回复框下沿之上淡出的一段（在回复框玻璃后面）；看历史时回复框上沿之上淡出的一段。
     private static var fade: CGFloat { 12 }
+    private static var historyFade: CGFloat { 24 }
 
     var body: some View {
         // 滚动区自己铺到屏幕底（见 `scroll`），外框仍是两条栏之间：浮在上面的"回到最新"与页面叠的东西都按可见区摆
@@ -192,14 +194,18 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             .onChange(of: below) { if follow.wrappedValue.atNewest { position.scrollTo(edge: Self.newestEdge) } }
             .newestFirst()
             .ignoresSafeArea(edges: .bottom)
-            // 回复框下面那一条（横条区）不露半截气泡：只是内容的透明度遮罩，栏外不画颜色；只随这段高度变，滚动时不重算
+            // 回复框下面那一条（横条区）不露半截气泡；看历史时回复框收成居中的短胶囊，两旁空着，整段回复框的高也不露。
+            // 只是内容的透明度遮罩，栏外不画颜色；只随这段高度与贴不贴最新变，滚动时不重算
             .mask {
+                let history = !follow.wrappedValue.atNewest
                 VStack(spacing: 0) {
                     Rectangle()
-                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Self.fade)
-                    Color.clear.frame(height: clearsBelow)
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: history ? Self.historyFade : Self.fade)
+                    Color.clear.frame(height: history ? max(clearsBelow, below) : clearsBelow)
                 }
                 .ignoresSafeArea()
+                .animation(Motion.quick, value: history)
             }
             // 铺满后伸进底下的那一段就是回复框与键盘占的高
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { below = $0 }

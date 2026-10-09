@@ -33,7 +33,7 @@ struct PiConfigControls: View {
                 }
                 .popUpAnchor(anchors[.thinking])
             }
-            if let context = shown.context { PiContextRing(session: session, usage: context) }
+            if let context = shown.context { PiContextGauge(session: session, usage: context) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }

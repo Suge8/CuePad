@@ -180,7 +180,7 @@ struct MacSyncTests {
         #expect(try await services.store.allPiSessionStates().first?.thinking == .unknown("ultra"))
     }
 
-    /// 上下文余量与斜杠命令清单写成同步记录里的结构化字段（手机据此画圆环、弹命令面板）；Pi 报的本版本不认识的来源原样留着。
+    /// 上下文余量与斜杠命令清单写成同步记录里的结构化字段（手机据此画用量条、弹命令面板）；Pi 报的本版本不认识的来源原样留着。
     @Test func 会话的上下文余量与命令清单写进同步记录() async throws {
         var reporting = session("s1")
         reporting.context = PiContext(tokens: 42_000, window: 200_000)

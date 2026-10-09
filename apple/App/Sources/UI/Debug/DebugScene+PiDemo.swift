@@ -263,7 +263,7 @@ extension DebugScene {
     }
 
     /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"。发给它的会话的话，像真的经同步那样慢慢走完：
-    /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（待你回复），
+    /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（该你了），
     /// 录"发出 → 返回列表 → 状态流转"用。
     static func runDemoMac(_ store: CueStore) async {
         let host = "demo-mac"
@@ -330,7 +330,7 @@ extension DebugScene {
         PiSlashCommand(name: "skill:frontend-design", summary: "做界面时先定视觉方向与密度", source: .known(.skill)),
     ]
 
-    /// 演示会话的上下文用量（窗口 20 万 token）：多数宽裕，atlas 用到八成多（圆环变赭黄、说明里建议压缩），billing 刚压缩过。
+    /// 演示会话的上下文用量（窗口 20 万 token）：多数宽裕，atlas 用到八成多（用量条变墨色、说明里建议压缩），billing 刚压缩过。
     private static let demoContexts: [String: PiContextUsage] = [
         "atlas": PiContextUsage(tokens: 172_000, window: 200_000),
         "homepage": PiContextUsage(tokens: 31_000, window: 200_000),
