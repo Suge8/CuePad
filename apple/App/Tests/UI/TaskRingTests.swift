@@ -3,8 +3,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 任务的完成圈：没有下级是普通圆圈；有下级时圆圈本身就是进度——提示词交给 Agent 后那一轮做完（已回复）、子任务完成都算做完，
-/// 圈按做完的比例描满一道连续的弧（不分段：分段的虚线圈像"加载中"）。
+/// 任务的完成圈：没有下级是普通圆圈；有下级时圈里画进度——提示词交给 Agent 后那一轮做完（已回复）、子任务完成都算做完，
+/// 按做完的比例画（画法是扇形，属外观，以截图验收）。
 @MainActor
 struct TaskRingTests {
     let rig = TestApp()
