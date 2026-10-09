@@ -202,13 +202,19 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 结构 17 的库（会话记录还没有上下文余量与命令清单两列、没有预览表）就地升级，已有的会话记录不丢，新列可写，预览可用。
+  /// 结构 17 的库（会话记录还没有上下文余量与命令清单两列、没有预览表、对话里只有工具个数）就地升级，已有的会话记录不丢，
+  /// 新列可写，预览可用；会话文件的检查点作废（下次从头读，补出旧对话的工具活动）。
   @Test func schema17LibraryUpgradesInPlaceAndKeepsSessionRecords() async throws {
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "旧会话")
+    try await store.upsertPiSession(PiSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
     try RawDB(fixture.url).exec(
-      "ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews; PRAGMA user_version = 17;")
+      """
+      ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews;
+      ALTER TABLE piMessages DROP COLUMN tools; ALTER TABLE piMessages ADD COLUMN toolCount INTEGER NOT NULL DEFAULT 0; PRAGMA user_version = 17;
+      """)
 
     let upgraded = try CueStore(url: fixture.url)
+    #expect(try await upgraded.piCheckpoint(of: "s1") == nil)
     #expect(try await upgraded.allPiSessionStates().map(\.title) == ["旧会话"])
     try await PiStateRecorder(store: upgraded, hostID: "mac").update(
       sessionID: "s1", state: .settled, context: PiContextUsage(tokens: 1, window: 2))
@@ -217,7 +223,7 @@ import Testing
   }
 
   /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
-  @Test(arguments: [(20, CueStoreError.unsupportedSchemaVersion(20)), (16, .schemaTooOld(16))])
+  @Test(arguments: [(21, CueStoreError.unsupportedSchemaVersion(21)), (16, .schemaTooOld(16))])
   func libraryFromAnotherSchemaVersionIsRefused(version: Int, error: CueStoreError) throws {
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

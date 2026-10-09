@@ -78,6 +78,8 @@ enum Typography {
 enum Spacing {
     /// 页面内容的左右边距。
     static let page: CGFloat = 36
+    /// 页面内容离工具栏下沿。
+    static let pageTop: CGFloat = 24
     /// 页内分组之间、分组标题到内容。
     static let section: CGFloat = 32
     static let sectionTitle: CGFloat = 12

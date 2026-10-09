@@ -26,11 +26,9 @@ struct ProjectPage: View {
                 ScrollView {
                     content.id("top")
                 }
-                .overlay { BarScrim.underInputBar }
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.quick) { collapsed = isCollapsed }
                 }
-                ToolbarEdge()
                 // 下滚后收成的一行：浮在工具栏那一条里，但不放进工具栏——工具栏内容只随用户操作变，
                 // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
                 if collapsed, let data, showsFocus(data) {
@@ -71,7 +69,7 @@ struct ProjectPage: View {
                     directory: projectID.flatMap { catalog?.directories[$0] }, cardCount: catalog?.cardCounts[projectID] ?? 0)
                 if let data, let arrangement = board.arrangement { page(data, arrangement) }
             }
-            .padding(.horizontal, Spacing.page).padding(.top, ToolbarEdge.fade + 6).padding(.bottom, 150)
+            .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 150)
         }
     }
 

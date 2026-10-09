@@ -19,6 +19,7 @@ struct IOSRootView: View {
     @State private var navigation: Navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
+    @State private var statusBarHeight: CGFloat = 0
     let alerts: PiAlertCenter
 
     init(services: AppServices, scene: SceneContext, alerts: PiAlertCenter) {
@@ -33,6 +34,9 @@ struct IOSRootView: View {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
             }
+            // 这一层还没有导航栏：上安全区就是状态栏
+            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { statusBarHeight = $0 }
+            .environment(\.statusBarHeight, statusBarHeight)
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
             // 随手记与新会话都是浮在键盘上方的输入框
             .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) { CaptureComposer() } }
@@ -101,18 +105,13 @@ struct RouteView: View {
     @Environment(\.bottomBarReserve) private var bottomBarReserve
 
     var body: some View {
-        // 底部栏是玻璃：内容一直滚到它后面（沉浸式），不自绘渐变；让出高度的 safeAreaBar 那一段由系统的柔和滚动边缘效果
-        // （渐进模糊加淡出，同顶栏）处理，栏后面的字糊开、不和标签字叠着读
+        // 沉浸式：内容一直滚到顶栏、底部栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡——系统的滚动边缘效果（渐进模糊带）全关，
+        // 也不自绘渐变；只有状态栏那一条垫最薄的一层（`StatusBarScrim`）
         page.containerBackground(background, for: .navigation)
-            .environment(\.pageBackground, background)
-            // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页。
-            // 占位不能是 Color.clear：它不生成视图，系统认不出这里有一条栏、不画边缘效果；几乎透明的一层才算（不接点按）
-            .safeAreaBar(edge: .bottom) {
-                if bottomBarReserve > 0, navigation.bottomPages == 0 {
-                    Rectangle().fill(.white.opacity(0.001)).frame(height: bottomBarReserve).allowsHitTesting(false)
-                }
-            }
-            .scrollEdgeEffectStyle(.soft, for: .bottom)
+            .scrollEdgeEffectHidden()
+            .overlay(alignment: .top) { StatusBarScrim(ground: background) }
+            // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页
+            .safeAreaPadding(.bottom, navigation.bottomPages == 0 ? bottomBarReserve : 0)
     }
 
     /// 卡片纸页在窄屏是整页的纸，宽屏是桌面上的一张纸；其余页是桌面。
@@ -294,7 +293,28 @@ private final class TabSlide {
     }
 }
 
+/// 状态栏那一条后面最薄的处理：从屏幕顶的页面底色淡到状态栏下沿全透，时间与电量压在内容上也读得清；不伸进顶栏、不模糊。
+/// 高度只取状态栏（`statusBarHeight`），顶栏与内容之间没有任何带子。
+private struct StatusBarScrim: View {
+    let ground: Color
+    @Environment(\.statusBarHeight) private var height
+
+    var body: some View {
+        LinearGradient(
+            // 时间与电量在这一条的中段：到那里仍压得住背后的字，最后一小段才淡完
+            stops: [.init(color: ground.opacity(0.95), location: 0), .init(color: ground.opacity(0.85), location: 0.65), .init(color: ground.opacity(0), location: 1)],
+            startPoint: .top, endPoint: .bottom)
+            .frame(height: height)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
 extension EnvironmentValues {
+    /// 状态栏的高（窗口根部的上安全区，导航栏之外），`StatusBarScrim` 用。
+    @Entry var statusBarHeight: CGFloat = 0
     /// 内容给 iPhone 底部栏让出的高度（`BottomBar.reserve`）；分栏布局为 0。
     @Entry var bottomBarReserve: CGFloat = 0
     /// 标签根页读到数据时调用（换标签的推移等它，见 `TabSlide`）；不在标签栏布局里时什么都不做。

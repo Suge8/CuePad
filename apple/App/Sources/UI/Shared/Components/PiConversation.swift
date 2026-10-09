@@ -81,7 +81,7 @@ struct PiConversation: View {
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
         case .pi:
-            ReplyBlock(text: entry.text, meta: entry.meta, session: session)
+            ReplyBlock(text: entry.text, meta: entry.meta, tools: entry.tools, session: session)
         case .system:
             // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
             Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
@@ -362,6 +362,7 @@ private struct RecapPreview: View {
 private struct ReplyBlock: View {
     let text: String
     let meta: String?
+    let tools: PiChatMessage.Tools?
     let session: PiSessionState
     @Environment(\.palette) private var palette
     @State private var selecting = false
@@ -372,14 +373,7 @@ private struct ReplyBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let meta {
-                // 与代码块、表格同一套底色与圆角（`ChatBlock`），收成贴着字的一小块
-                Label(meta, systemImage: "wrench.and.screwdriver")
-                    .labelStyle(MetaLabel())
-                    .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, ChatBlock.inset / 1.5).padding(.vertical, 4)
-                    .background(palette.fill, in: ChatBlock.shape)
-            }
+            if let meta { ToolActivityLine(meta: meta, tools: tools) }
             MarkdownText(source: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -501,16 +495,6 @@ private enum ChatItem: Identifiable {
         entries.reduce(into: []) { items, entry in
             guard entry.role == .preview else { return items.append(.entry(entry)) }
             if case .previews(let group) = items.last { items[items.count - 1] = .previews(group + [entry]) } else { items.append(.previews([entry])) }
-        }
-    }
-}
-
-/// 一轮回答上方的经过：小图标贴着字，比系统的 Label 间距紧，读作一行注脚。
-private struct MetaLabel: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 5) {
-            configuration.icon.imageScale(.small).accessibilityHidden(true)
-            configuration.title
         }
     }
 }

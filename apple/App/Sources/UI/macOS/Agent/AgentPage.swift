@@ -28,11 +28,10 @@ struct AgentPage: View {
                 topRow.padding(.bottom, 16)
                 if let list { sessions(list) }
             }
-            .padding(.horizontal, Spacing.page).padding(.top, ToolbarEdge.fade + 6).padding(.bottom, 96)
+            .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 96)
             .frame(maxWidth: Self.width)
             .frame(maxWidth: .infinity)
         }
-        .overlay(alignment: .top) { ToolbarEdge() }
         .background(palette.desk)
         .environment(\.searchHighlight, query)
         .onChange(of: query) { limit = PiSessionList.pageSize }
@@ -77,11 +76,11 @@ struct AgentPage: View {
             }
             .font(Typography.body)
             .padding(.horizontal, 14).frame(height: 36)
-            .glassEffect(.regular, in: .capsule)
+            .glass(in: .capsule)
             NewSessionButton(showing: $starting)
                 .font(.system(size: 14, weight: .semibold))
                 .frame(width: 36, height: 36)
-                .glassEffect(.regular.interactive(), in: .circle)
+                .glass(in: .circle, interactive: true)
         }
     }
 
@@ -107,7 +106,7 @@ struct AgentPage: View {
             }
             .font(Typography.toolbarLabel).foregroundStyle(palette.ink2)
             .padding(.horizontal, 12).frame(height: 36)
-            .glassEffect(.regular.interactive(), in: .capsule)
+            .glass(in: .capsule, interactive: true)
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
         .accessibilityLabel(current.map { "按项目看：\($0.name)" } ?? "按项目看")
