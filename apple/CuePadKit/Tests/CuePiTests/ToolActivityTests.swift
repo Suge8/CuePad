@@ -79,6 +79,22 @@ struct ToolActivityTests {
         #expect(update.transcript.last?.text == "读完了" && update.transcript.last?.tools?.commands == 1 && update.transcript.last?.tools?.reads == 1)
     }
 
+    /// Pi 以后换了工具结果行的键序（isError 提前、toolCallId 挪到长输出之后、role 不在行首）也读得对：快速路径认不出就完整解码。
+    @Test func aReorderedToolResultLineStillSaysWhichCallFailed() throws {
+        let output = String(repeating: "输出", count: 400)
+        func reordered(_ id: String, _ parent: String, call: String, failed: Bool, at second: Int) -> String {
+            #"{"type":"message","id":"\#(id)","parentId":"\#(parent)","timestamp":"\#(SessionFile.stamp(second))","message":{"isError":\#(failed),"timestamp":\#(second),"content":[{"type":"text","text":"\#(output)"}],"toolName":"bash","role":"toolResult","toolCallId":"\#(call)"}}"#
+        }
+        var f = SessionFile(directory: dir)
+        try f.append(
+            SessionFile.header(cwd: "/work/x"), SessionFile.user("u1", nil, "跑两条", at: 1),
+            Self.calls("t1", "u1", [Self.call("c1", "bash", ["command": "ls"]), Self.call("c2", "bash", ["command": "false"])], at: 2),
+            reordered("r1", "t1", call: "c1", failed: false, at: 3), reordered("r2", "r1", call: "c2", failed: true, at: 3),
+            SessionFile.assistant("a1", "r2", text: "好", at: 4))
+        let tools = try #require(try index(f).transcript.last?.tools)
+        #expect(tools.commands == 1 && tools.failed == 1 && tools.items.map(\.failed) == [false, true])
+    }
+
     @Test func aRoundWithoutToolsHasNoActivity() throws {
         var f = SessionFile(directory: dir)
         try f.append(SessionFile.header(), SessionFile.user("u1", nil, "你好", at: 1), SessionFile.assistant("a1", "u1", text: "你好", at: 2))

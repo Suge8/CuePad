@@ -213,6 +213,9 @@ public enum PiHistory {
         var content: Content?
         var stopReason: String?
         var cuepadDelivery: String?
+        /// 工具结果（role 为 toolResult）：快速路径认不出键序时由完整解码取这两项
+        var toolCallId: String?
+        var isError: Bool?
     }
 
     private enum Content: Decodable {
@@ -251,12 +254,13 @@ public enum PiHistory {
 
     private static let timestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
-    /// toolResult 行占会话体积的绝大部分（工具输出、图片），摘要只要其中的两样（哪个调用、成没成）：不做 JSON 解码，
-    /// 按 Pi 写出的固定键序在两头取。行首依次是 type, id, parentId, timestamp, message{role, toolCallId, toolName, …}，
-    /// 行尾是 …, isError, durationMs, timestamp。
+    /// toolResult 行占会话体积的绝大部分（工具输出、图片），摘要只要其中的两样（哪个调用、成没成）：先按 Pi 现在写出的键序
+    /// 在两头取，不做 JSON 解码——行首依次是 type, id, parentId, timestamp, message{role, toolCallId, toolName, …}，
+    /// 行尾是 …, isError, durationMs, timestamp。两头没找到想要的（键序变了）就不当快速路径处理，落到完整解码，结果不变、只是慢。
     private static let toolResultMarker = Data(#""role":"toolResult""#.utf8)
     private static let toolCallIDMarker = Data(#""toolCallId":""#.utf8)
     private static let failedMarker = Data(#""isError":true"#.utf8)
+    private static let succeededMarker = Data(#""isError":false"#.utf8)
     private static let headLength = 512
     private static let tailLength = 128
 
@@ -290,6 +294,8 @@ public enum PiHistory {
             switch message.role {
             case "user": userMessage(message, entry, into: &cp, transcript: &transcript)
             case "assistant": assistantMessage(message, entry, into: &cp, transcript: &transcript)
+            case "toolResult":
+                if let id = message.toolCallId { cp.round?.tools.finish(id: id, failed: message.isError == true) }
             default: break
             }
         default:
@@ -378,15 +384,16 @@ public enum PiHistory {
         contains(head(raw), toolResultMarker)
     }
 
-    /// 工具结果行里的调用 id 与成败；不是工具结果行为 nil。
+    /// 快速路径：工具结果行里的调用 id 与成败；不是工具结果行、或两头没有预期的键为 nil。
     private static func toolResult(_ raw: UnsafeRawBufferPointer) -> (id: String, failed: Bool)? {
         let head = head(raw)
-        guard isToolResult(raw), let base = head.baseAddress,
+        let tail = UnsafeRawBufferPointer(rebasing: raw.suffix(tailLength))
+        guard isToolResult(raw), let base = head.baseAddress, contains(tail, failedMarker) || contains(tail, succeededMarker),
               let hit = toolCallIDMarker.withUnsafeBytes({ memmem(base, head.count, $0.baseAddress, $0.count) })
         else { return nil }
         let start = base.distance(to: UnsafeRawPointer(hit)) + toolCallIDMarker.count
         guard let end = head[start...].firstIndex(of: 0x22) else { return nil }
-        return (String(decoding: head[start..<end], as: UTF8.self), contains(UnsafeRawBufferPointer(rebasing: raw.suffix(tailLength)), failedMarker))
+        return (String(decoding: head[start..<end], as: UTF8.self), contains(tail, failedMarker))
     }
 
     // MARK: 只读摘要
