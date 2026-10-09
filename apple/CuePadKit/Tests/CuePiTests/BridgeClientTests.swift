@@ -347,6 +347,21 @@ struct BridgeClientTests {
         }
     }
 
+    /// 被判为不兼容的会话在终端里 /reload：扩展在同一路径重新 listen，新 socket 不再被当成那个坏掉的旧连接跳过。
+    @Test func reloadAfterBeingJudgedIncompatibleConnectsTheNewSocket() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        try await eventually("appeared") { session(ext.id) != nil }
+        ext.sendRaw(#"{"t":"state","state":{"kind":"warp-drive"}}"#)
+        try await eventually("被判为不兼容并断开") { bridge.sessions.isEmpty }
+
+        ext.crash()
+        let reloaded = FakeExtension(directory: dir, sessionID: ext.sessionID)
+        try reloaded.start()
+        try await eventually("重载后的会话连上") { session(ext.id) != nil && reloaded.connectionCount == 1 }
+    }
+
     // MARK: 命令
 
     @Test func sendEncodesProtocolBytesAndReturnsDelivery() async throws {
