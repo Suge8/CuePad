@@ -24,13 +24,12 @@ struct ProjectPage: View {
                 ScrollView {
                     content.id("top")
                 }
-                .remembersScroll()
-                .overlay { EdgeFade.underInputBar }
+                .overlay { BarScrim.underInputBar }
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.quick) { collapsed = isCollapsed }
                 }
-                EdgeFade.underToolbar
-                // 下滚后收成的一行：在顶部渐隐之上、工具栏那一条里，但不放进工具栏——工具栏内容只随用户操作变，
+                ToolbarEdge()
+                // 下滚后收成的一行：浮在工具栏那一条里，但不放进工具栏——工具栏内容只随用户操作变，
                 // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
                 if collapsed, let data, showsFocus(data) {
                     CompactFocus(data: data) {
@@ -60,13 +59,13 @@ struct ProjectPage: View {
         if projectID == nil, catalog?.projects.isEmpty == true, (catalog?.cardCounts[nil] ?? 0) == 0 {
             Welcome()
         } else {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: Spacing.section) {
                 ProjectHeader(
                     projectID: projectID, project: catalog?.project(projectID),
                     directory: projectID.flatMap { catalog?.directories[$0] }, cardCount: catalog?.cardCounts[projectID] ?? 0)
                 if let data, let arrangement = board.arrangement { page(data, arrangement) }
             }
-            .padding(.horizontal, 32).padding(.top, EdgeFade.toolbarFade + 6).padding(.bottom, 150)
+            .padding(.horizontal, Spacing.page).padding(.top, ToolbarEdge.fade + 6).padding(.bottom, 150)
         }
     }
 
@@ -102,10 +101,10 @@ struct ProjectPage: View {
 
     /// 资料：长期参考的灵感，一行一条压在任务区下面。
     private func resources(_ cards: [Card], lastTarget: [UUID: String]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .bottom, spacing: 6) {
-                Text("资料").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
-                Text("\(cards.count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
+        VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("资料").font(Typography.sectionTitle).foregroundStyle(palette.ink)
+                Text("\(cards.count)").font(Typography.sectionCount).foregroundStyle(palette.ink3)
             }
             VStack(spacing: 0) {
                 ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
@@ -118,10 +117,10 @@ struct ProjectPage: View {
     }
 
     private func wallSection(title: String, count: Int, ids: [UUID], byID: [UUID: Card], lastTarget: [UUID: String]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .bottom, spacing: 6) {
-                Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
-                Text("\(count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
+        VStack(alignment: .leading, spacing: Spacing.sectionTitle) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(title).font(Typography.sectionTitle).foregroundStyle(palette.ink)
+                Text("\(count)").font(Typography.sectionCount).foregroundStyle(palette.ink3)
             }
             WallGrid(ids: ids, cards: byID, arrangedAt: board.arrangement?.arrangedAt) { card in
                 CardTile(
@@ -155,12 +154,12 @@ private struct ProjectHeader: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
                     ProjectGlyph(project: project, size: 20)
-                    Text(projectID == nil ? "未分类" : project?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
+                    Text(projectID == nil ? "未分类" : project?.name ?? "").font(Typography.pageTitle).foregroundStyle(palette.ink)
                 }
                 .contextMenu { if let project { ProjectActions(project: project) { renaming = project } } }
                 // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏
                 if let intro = project?.intro {
-                    Text(intro).font(.system(size: 15)).foregroundStyle(palette.ink2)
+                    Text(intro).font(Typography.lead).foregroundStyle(palette.ink2)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
@@ -172,7 +171,7 @@ private struct ProjectHeader: View {
                     }
                     if cardCount > 0 { Text("\(cardCount) 条灵感").monospacedDigit() }
                 }
-                .font(.system(size: 12)).foregroundStyle(palette.ink3)
+                .font(Typography.meta).foregroundStyle(palette.ink3)
             }
             // 不再放"记一条灵感"：底部的输入栏与 ⌘N 就是入口
             Spacer()
@@ -236,7 +235,7 @@ private struct PrimaryCapsule: ViewModifier {
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        content.font(.system(size: 14, weight: .semibold))
+        content.font(Typography.body.weight(.semibold))
             .foregroundStyle(palette.onSignature)
             .padding(.horizontal, 20).frame(height: 36)
             .background(palette.signature, in: .capsule)

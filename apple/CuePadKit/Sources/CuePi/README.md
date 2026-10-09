@@ -13,7 +13,7 @@
 
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录）。测试一律用临时目录，绝不碰真实 `~/.pi`。
 
-## 协议（v5）
+## 协议（v8）
 
 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，不用 `$TMPDIR`），目录 0700、socket 0600；扩展与客户端都校验"是目录、属于当前用户、0700"，客户端还校验每个 socket 文件（属主、且只有属主可读写 0600）与连接对端的 uid。`CUEPAD_PI_SOCKET_DIR` 可覆盖目录（测试与高级用法）。
 
@@ -23,8 +23,9 @@
 | --- | --- |
 | `hello` | 连接后第一条：`protocol`、`extensionVersion`、`sessionId`、`sessionFile`（可空，首条消息落盘前文件不存在）、`pid`、`cwd`、`mode`（tui/rpc）、`tty`、`term{环境变量子集}`、`state`（当前状态快照）、`launchToken`（v8 起：CuePad 开的新会话经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展的认领标识，只属于进程里的第一个会话，其余为 null）、`hosted`（v9 起：进程由 CuePad 在后台托管，即环境变量 `CUEPAD_HOSTED=1`），以及 `info` 的全部字段（恢复已有会话时近况从会话文件当前分支补回） |
 | `state` | 仅状态切换时发送：`state{kind, since(ms), busySince(ms 或 null), …}` |
-| `info` | 任一字段变化时：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理 `subagents`、模型配置 `model`/`thinking`/`models`（v2 起，见下）、上下文余量 `context` 与命令清单 `commands`（v5 起，见下）；都可空 |
+| `info` | 任一字段变化时：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理名册 `subagents`、模型配置 `model`/`thinking`/`models`（v2 起，见下）、上下文余量 `context` 与命令清单 `commands`（v5 起，见下）；都可空 |
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
+| `show` | 协议 v8 起：`cuepad_show` 工具请 CuePad 收下一个文件作手机预览：`id`、`path`（绝对路径，扩展已按工作目录解析）、`title`（可空）。发给所有连着的客户端，第一个 `shown` 回复定结果 |
 | `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
 `state.kind`：`idle`、`thinking`、`outputting`、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`delegating`（v6 起：自己这轮已歇下，还有子代理在飞）、`done`（`aborted`）、`error`（`error`）。
@@ -36,6 +37,8 @@
 对话与摘要（v12 起只来自会话文件，扩展不再上报问答近况）：`PiHistory` 按文件里的先后读出，一行一个序号（`seq`，文件只追加，重读不变）。
 
 - 你的消息：`role == "user"` 的消息全文（文字块换行连接）。整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的是扩展投进来的机器消息（如 FireCode 的子代理事件、观察员、审查结果信封），不进对话、只开始一轮；块与块之间夹着真人文字就不是机器消息。CuePad 送进去的消息带着 `cuepadDelivery`（投送请求 id，见 `send`）。
+- 系统行：会话文件里的 `compaction` 条目（压缩，终端对话里那行压缩摘要）是一条系统行，文字"已压缩上下文 · 压缩前约 63k tokens"（`tokensBefore`）。别的命令留下的只有设置条目（`model_change`、`thinking_level_change`、`session_info` 的会话名），终端的对话里没有它们，这里也不进对话；扩展命令自己什么都不写；`/reload` 不写；`/new`、`/clone` 是另一个会话文件。模板与 skill 展开成一条普通的用户消息（`<skill …>` 或模板正文），**没有** `cuepadDelivery`——命令请求不会被换成它，所以命令不是"你发出的话"，不在对话里挂气泡。
+- 预览：`cuepad_show` 工具成功的那一行（`toolName` 是 `cuepad_show`、结果的 `details.preview` 是 CuePad 给的预览记录 id）是一条 `preview` 消息，正文是这个 id，位置就是这一行的位置；失败的调用（`isError`、没有 `details.preview`）与别的工具不是。这行很小、工具名在行首附近，所以大行快路径之外单独认它。预览不改这一轮的工具数与问答摘要。
 - Pi 消息：一轮一条，取结束这一轮的助手消息（`stopReason` 不是 `toolUse`）的文字块；中途调工具时说的话、思考与工具输出不算，只记这一轮调了几个工具（`toolCall` 块数）与开始时间。
 - 摘要：`pendingPrompt` 是你说了、这一轮还没做完的那句；一轮结束时它移进 `lastPrompt`，`lastReply` 换成这一轮的回答，问与答一起更新。机器消息触发的轮没有新的提问：回答照常更新、`lastPrompt` 沿用触发它的那件事里你说的话（如 FireCode 子代理做完后的汇报，是对你那句的答复）。上次中途退出、没做完的一轮不改问答。`lastPrompt`、`pendingPrompt` 单行（空白与控制字符折成一个空格）≤500 字符，`lastReply` 保留换行 ≤1200 字符，超出以省略号结尾。
 
@@ -57,7 +60,9 @@
 
 做不到、不列的内置命令：`/settings`、`/scoped-models`、`/login`、`/logout`、`/resume`、`/tree`、`/fork`、`/trust`、`/llama`、`/bug`（终端里的选择器或弹窗，没有对应接口）；`/session`、`/hotkeys`、`/changelog`、`/copy`（只往终端打印或写 Mac 剪贴板，手机看不到）；`/export`、`/share`、`/import`（没有扩展接口，且涉及 Mac 上的文件与外发）；`/quit`（已有"结束会话"，托管进程要关标准输入才退得掉）。
 
-子代理（扩展 v5 起）：其他扩展在同一进程里开的子会话（FireCode 用 `createAgentSession`，以 `print` 模式绑定）也会加载本扩展，但 `print` 模式不开 socket，所以不会作为独立会话出现。会话文件在父会话目录的 `subagents/` 下的子会话把名字与状态登记到进程内共享的表里，父会话的 `info.subagents`（`[{name, kind}]`，`kind` 同 `state.kind`）汇总它们；名字依次取会话名、FireCode 写在子会话系统提示里的 `<firecode_worker name="…">`、首条用户消息。`PiSession.subagents`（名字与 `activity`）给界面，同步记录里是结构化的子代理列表（`PiSubagentState`）。
+预览工具（协议 v8、扩展 v19 起）：扩展在 tui/rpc 会话载入时注册工具 `cuepad_show(path, title?)`（print 模式与子代理不注册）。工具把请求写给所有连着的客户端、等第一个 `shown`（20 秒超时），成功返回 `已发到手机预览：<标题>。<note>`，`details.preview` 是预览 id；没有客户端连着（App 没在运行）立即失败，被拒绝或超时也失败并带原因。说明里写明能发的类型（与 `PiPreviewKind.supportedList` 一致）、20 MB 上限与 HTML 须是单个文件。
+
+子代理（扩展 v5 起，v18 / 协议 v7 起改读 FireCode 的名册）：FireCode 的子代理是同进程里的 `print` 模式子会话，不开 socket，不会作为独立会话出现。父会话的 `info.subagents` 原样转述 FireCode 发布在 `firecode:subagents` 频道的名册（整份、内容变了才发，停用发空名册；扩展不读它的档案、会话文件或 `subagents/` 目录，没装带名册的 FireCode 就没有子代理）：`[{name, role, state, action, startedAt, settledAt}]`，按启动序。`state` 是 FireCode 活动列表的分组原文——`running`、`review`（审查中）、`done`（已交回结果）、`failed`、`interrupted`（被中断）、`idle`（空闲）；`action` 是在做什么的一句话（FireCode 的界面语言，≤120 字符：当前工具、审查进度，落定后是结果首句或失败原因，空闲为空串）；`startedAt` 是本次运行的开始、`settledAt` 是落定时刻（毫秒，可空），界面自己算时长。`PiSession.subagents` 给界面，同步记录里是结构化的子代理列表（`PiSubagentState`，状态读成可扩展的 `Open<PiSubagentPhase>`）；动作文字随每次工具调用变，记录器把它和会话状态的细节一起合并写入，名册的人员、角色或状态变了才立即写。
 
 `detail` 是扩展 v2 加的可选字段：命令（`command`）或搜索模式（`pattern`）取首个非空行，文件类工具（`path`）取文件名，超过 120 个字符截断（含省略号）；不上报完整参数。旧扩展没有这个字段，客户端得到 `nil`。
 
@@ -65,6 +70,7 @@ CuePad → 扩展（都带 `id`）：
 
 - `{"t":"send","id","text","images":[{"mimeType","data(base64)"}],"deliverAs":"steer"|"followUp","deliveryId"}`：走 `sendUserMessage`，`deliverAs` 缺省 `followUp`，只在会话正忙时生效；图片发原图，Pi 自行缩放。`deliveryId`（v12 起，可选）是 CuePad 投送请求的 id：扩展按文字先进先出认领，在这条用户消息的 `message_end` 里写到消息对象上（`cuepadDelivery`）——扩展先收到 `message_end`、Pi 再把同一个对象写进会话文件，所以 id 随消息落盘。
 - `{"t":"command","id","text","deliverAs"}`（协议 v5 起）：斜杠命令，`text` 是以 `/` 开头的整行（命令加参数），`deliverAs`（`steer` / `followUp`，缺省 `followUp`）只对会被展开成这一轮提示词的模板与 skill 在会话正忙时生效。内置命令（先于扩展命令匹配，与 Pi 的终端一致）由扩展调上表的接口做；其余必须是 `pi.getCommands()` 里有的名字，经 `pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: true })` 交给 Pi 派发——扩展命令照常执行（会话正忙也立即执行）、模板与 skill 展开成这一轮的提示词。**不带 `expandPromptTemplates` 的 `sendUserMessage` 只把斜杠开头的话当普通文字发给模型**（`send` 就是这样），所以斜杠命令必须走 `command`。`ack` 只表示受理：扩展命令自己的输出（`ctx.ui.notify` 等）只出现在 Pi 的界面里，桥看不到；拒绝：`bad_request`（不是斜杠开头）、`unknown_command`（清单里没有，含纯终端交互的内置命令与内部命令）、`missing_argument`（必填参数没给）、`unknown_model` / `no_auth`（`/model`，同 `config`）、`failed: …`。
+- `{"t":"shown","id","ok","preview","note","error"}`（协议 v8 起，对 `show` 的回复，`id` 是 `show` 的请求 id，不带 `ack`）：`ok` 时 `preview` 是预览记录 id、`note` 是要告诉 Agent 的话（页面缺资源等，可空）；否则 `error` 是原因（文件不存在、太大、类型不支持、没开启预览）。
 - `{"t":"reload","id"}`（v10 起）：同一会话的另一个进程（CuePad 后台托管、让出前做完一轮）刚写过会话文件，这个进程看不到那些内容。从载入起没写过、且空闲时，经 `sendUserMessage("/cuepad reload-session", {expandPromptTemplates: true})` 触发本扩展注册的内部命令，命令里 `switchSession(当前会话文件)` 重新载入（Pi 只在命令上下文给切换会话的能力），`ack` 带 `reloaded: true`；文件没有多出内容就什么都不做；写过了（会话已分出支线）就不动，`ctx.ui.notify` 提示一句。重新载入时扩展照常收到 `session_shutdown`/`session_start`，同一 pid 的会话先结束再出现。
 - `{"t":"config","id","model":{"provider","id"},"thinking","name"}`（协议 v2 起，`name` 协议 v6、扩展 v17 起）：改该会话的设置，三者至少给一项。`name` 是会话名（去掉首尾空白后不能为空），走 Pi 设置会话名的接口 `pi.setSessionName`（同 `/name`），改后 `info` 的 `name` 随即上报；CuePad 的"重命名"走这里，不当成发给会话的话。先 `pi.setModel`（模型取自 `ctx.modelRegistry.find`）再 `pi.setThinkingLevel`，所以强度按新模型支持的范围由 Pi 夹取；只作用于这个会话，不改 Pi 的默认设置。成功后 `info` 里的模型配置已是新值。拒绝：`bad_request`（缺项、名字为空、强度不在 `off`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max` 里）、`unknown_model`（模型表里没有）、`no_auth`（该提供方没配好密钥，`setModel` 返回 false）。
 - `{"t":"abort","id"}`（协议 v4 起）：停止这一轮，走 Pi 的 `ctx.abort()`（与用户在 Pi 里按 Esc 同一能力）。先取消正在等的弹窗（否则这一轮卡在等你），再中止指挥官正在跑的回合，`ack` 立即回（`ok` 只表示已受理，不等歇下）；随后会话以"被中止"歇下（`state` 为 `done`、`aborted: true`），不退出，能接着说。已经空闲就什么都不做，也 `ack ok`。**只停指挥官自己这一轮**：FireCode 的子代理是独立会话，不受影响，指挥官已歇下、在等子代理（`delegating`）时没有这一轮可停，成功但状态不变；子代理落定后照常把结果投回来开始新的一轮。要连子代理一起停得在 Pi 里让指挥官 `interrupt`（FireCode 的 subagents 工具），CuePad 不做。

@@ -18,9 +18,9 @@ struct EmptyState<Action: View>: View {
                 .offset(y: shown || reduceMotion ? 0 : 10)
                 .opacity(shown || reduceMotion ? 1 : 0)
                 .accessibilityHidden(true)
-            Text(title).font(.title3.weight(.semibold)).foregroundStyle(palette.ink).padding(.top, 14)
+            Text(title).font(Typography.emptyTitle).foregroundStyle(palette.ink).padding(.top, 14)
             if let message {
-                Text(message).font(.subheadline).foregroundStyle(palette.ink2).padding(.top, 6)
+                Text(message).font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 6)
             }
             action.padding(.top, 20)
         }

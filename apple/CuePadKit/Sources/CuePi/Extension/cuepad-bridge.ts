@@ -2,8 +2,8 @@
 // 由 CuePad 安装到 Pi 扩展目录，升级时整文件覆盖，请勿手改。协议说明见 apple/CuePadKit/Sources/CuePi/README.md。
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
-//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）
+//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / show（cuepad_show 工具：请 CuePad 收下一个文件作手机预览）/ bye
+//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）/ shown（对 show 的回复）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
 import fs from "node:fs";
@@ -12,8 +12,8 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 18;
-const PROTOCOL_VERSION = 6;
+const EXTENSION_VERSION = 20;
+const PROTOCOL_VERSION = 8;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
@@ -28,15 +28,14 @@ const FIRST_MESSAGE_LIMIT = 200;
 const QUESTION_LIMIT = 500;
 /** 标记已经包装过的 ui 对象 */
 const CAPTURED = Symbol("cuepad.captured");
-/** 进程内子会话的登记表。Pi 的扩展加载器会为每个会话重新求值本模块，所以挂在进程唯一的 globalThis 上 */
-const SUBSESSIONS = Symbol.for("cuepad.bridge.subsessions");
-/** 子代理会话文件所在目录名：`<父会话文件所在目录>/subagents/`（FireCode 的约定） */
-const SUBAGENTS_DIRECTORY = "subagents";
 /** FireCode 发布"在飞子代理数"的频道（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算。
  * 与 FireCode 判断"会话进行中"用同一个事实 */
 const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
-/** FireCode 把子代理名写在子会话系统提示的这个标签上 */
-const WORKER_NAME = /<firecode_worker name="([^"]+)">/u;
+/** FireCode 发布子代理名册的频道（`{ workers }`，整份、内容变了才发，停用发空名册）：角色、状态、在做什么与时刻都取自它，
+ * 不读 FireCode 的档案或会话文件 */
+const FIRECODE_SUBAGENTS_CHANNEL = "firecode:subagents";
+/** 子代理"在做什么"一句话的字符数上限（含省略号） */
+const SUBAGENT_ACTION_LIMIT = 120;
 /** CuePad 在终端里开新会话时经这个环境变量交给扩展的认领标识，扩展在 hello 里带回 */
 const LAUNCH_TOKEN_ENV = "CUEPAD_LAUNCH_TOKEN";
 /** 需要"命令上下文"（切换会话、新会话、重载、克隆）的操作只能在命令处理函数里做：本扩展注册这一条内部命令 `/cuepad <动作>`，
@@ -47,6 +46,17 @@ const INTERNAL_COMMAND = "cuepad";
 const COMPACT_FAILURE_WINDOW_MS = 1500;
 /** 命令清单里每条说明的字符数上限（含省略号）：skill 的说明可以很长，清单随会话记录同步，只要够选命令用 */
 const COMMAND_DESCRIPTION_LIMIT = 120;
+/** 预览工具（让 Agent 把文件发到用户手机上看）的名字：CuePad 读会话文件时按它认出结果那一行（`PiHistory`） */
+const SHOW_TOOL = "cuepad_show";
+/** 等 CuePad 收下文件（读、算哈希、拷贝）的时限 */
+const SHOW_TIMEOUT_MS = 20_000;
+/** 给模型看的工具说明；文件类型与大小上限须与 `PreviewKind.supportedList`、`Preview.maxBytes` 一致（测试核对） */
+const SHOW_DESCRIPTION =
+	"把本机的一个文件发到用户手机上的 CuePad 里预览。用户在手机上指挥开发时，用它给出演示和验收：HTML 页面、界面截图、PDF、Markdown 报告。" +
+	"只发最终要给用户看的那一个文件，别把过程文件都发过去。" +
+	"可发：HTML、图片（png、jpg、gif、webp、heic、svg）、PDF、Markdown、文本（txt、json、csv、log）；单个文件不超过 20 MB。" +
+	"HTML 在手机上只读渲染、不联网，也读不到别的文件：样式与脚本要写在同一个 HTML 里，图片用 data: 地址内联，否则会缺失（发出后会告诉你缺了哪些）。" +
+	"发出后用户在手机上点对话里的预览卡查看。";
 /** Pi 内置斜杠命令里能在非 TUI 下执行的（其余是终端里的选择器、弹窗或只往终端打印，没有对应接口，不列）。
  * `hint` 有值表示带参数（`required` 为必填）。名字、说明与 Pi 的 `/` 菜单一致。
  * 内置命令在 Pi 的终端里先于扩展命令匹配，这里同样先匹配。 */
@@ -163,12 +173,19 @@ function clip(text: string, limit: number): string | null {
 	return chars.length <= limit ? chars.join("") : chars.slice(0, limit - 1).join("") + "…";
 }
 
-type Subsession = { directory: string; name: string; kind: string };
-type Registry = { sessions: Map<string, Subsession>; listeners: Set<() => void> };
-const registry: Registry = ((globalThis as any)[SUBSESSIONS] ??= { sessions: new Map(), listeners: new Set() });
+/** 手机上看的一个子代理：`state` 是 FireCode 名册的状态原文（running/review/done/failed/interrupted/idle），时刻是毫秒 */
+type Subagent = { name: string; role: string; state: string; action: string; startedAt: number | null; settledAt: number | null };
 
-function publishSubsessions() {
-	for (const listener of registry.listeners) listener();
+function subagentsOf(workers: unknown): Subagent[] {
+	if (!Array.isArray(workers)) return [];
+	return workers.map((worker: any) => ({
+		name: String(worker.name),
+		role: String(worker.role),
+		state: String(worker.state),
+		action: clip(String(worker.action ?? ""), SUBAGENT_ACTION_LIMIT) ?? "",
+		startedAt: typeof worker.startedAt === "number" ? worker.startedAt : null,
+		settledAt: typeof worker.settledAt === "number" ? worker.settledAt : null,
+	}));
 }
 
 /** 会话里第一条用户消息（按文件顺序，与 Pi 会话列表一致）。 */
@@ -226,7 +243,7 @@ export default function (pi: any) {
 	/** 会话名（`/name`）与首条用户消息：CuePad 据此按 Pi 会话列表的规则显示会话；其余是近况 */
 	type Info = {
 		name: string | null; firstMessage: string | null; question: Question | null;
-		subagents: { name: string; kind: string }[];
+		subagents: Subagent[];
 		/** 当前模型、思考强度与可换的模型（Pi 里已配好密钥的）：手机据此选 */
 		model: ReturnType<typeof describeModel> | null; thinking: string | null; models: ReturnType<typeof describeModel>[];
 		/** 上下文余量：已用 token（压缩后到下一次回答前未知，为 null）与当前模型的窗口；没有模型为 null */
@@ -242,15 +259,64 @@ export default function (pi: any) {
 	let info: Info = { name: null, firstMessage: null, question: null, subagents: [], model: null, thinking: null, models: [], context: null, commands: [] };
 	/** CuePad 送进来、还没落成会话里一条消息的投送请求：文字 → 请求 id，按发出的先后（同一文字发了两次时先发的先认领） */
 	const deliveries: { text: string; id: string }[] = [];
-	/** 本会话是某个会话的进程内子会话（子代理）时，它在登记表里的键（会话文件路径）：状态只进登记表，不开 socket */
-	let subsessionKey: string | undefined;
-	let stopWatchingSubsessions: (() => void) | undefined;
 	/** 正在弹出的对话框（最外层）。ui_prompt_start 只带标题，说明与选项要在调用时记下；`settle` 从 CuePad 作答 */
 	let asking: (Question & { settle?: (value: unknown) => void; dismiss?: () => void }) | null = null;
 
 	const write = (socket: net.Socket, message: object) => {
 		if (!socket.destroyed) socket.write(JSON.stringify(message) + "\n");
 	};
+
+	/** 发出去、等 CuePad 回话的预览请求（按请求 id）：第一个回复定结果 */
+	const showing = new Map<string, (reply: any) => void>();
+	let showToolRegistered = false;
+
+	/** 请 CuePad 收下 `file` 作预览；没有客户端连着、被拒绝或超时都抛错（工具据此失败并说明），不假装发出去了。 */
+	function requestShow(file: string, title: string | undefined): Promise<any> {
+		if (clients.size === 0) return Promise.reject(new Error("CuePad 没有连着这个会话（App 没在运行，或还没连上），没发出去"));
+		const id = randomUUID();
+		return new Promise((resolve, reject) => {
+			const timer = setTimeout(() => {
+				showing.delete(id);
+				reject(new Error("CuePad 没有回应，不确定有没有发出去"));
+			}, SHOW_TIMEOUT_MS);
+			showing.set(id, (reply) => {
+				clearTimeout(timer);
+				if (reply.ok) resolve(reply);
+				else reject(new Error(reply.error || "CuePad 没有收下"));
+			});
+			for (const client of clients) write(client, { t: "show", id, path: file, title: title ?? null });
+		});
+	}
+
+	function registerShowTool() {
+		if (showToolRegistered) return;
+		showToolRegistered = true;
+		pi.registerTool({
+			name: SHOW_TOOL,
+			label: "发到手机预览",
+			description: SHOW_DESCRIPTION,
+			promptSnippet: "把文件（HTML 页面、截图、PDF、Markdown）发到用户手机上的 CuePad 预览",
+			promptGuidelines: ["用户要看页面、截图或报告，或你做完了需要他验收的可视结果时，用 cuepad_show 发到他手机上，并在回复里说一句发了什么。"],
+			parameters: {
+				type: "object",
+				properties: {
+					path: { type: "string", description: "要发的文件路径（相对路径按当前工作目录算）" },
+					title: { type: "string", description: "一句话标题，说明这是什么（默认用文件名）" },
+				},
+				required: ["path"],
+			},
+			async execute(_toolCallId: string, params: any, _signal: unknown, _onUpdate: unknown, context: any) {
+				const given = String(params.path ?? "");
+				const file = path.resolve(context?.cwd ?? ctx.cwd, given.startsWith("~/") ? path.join(process.env.HOME ?? "", given.slice(2)) : given);
+				const title = typeof params.title === "string" && params.title.trim() ? params.title.trim() : undefined;
+				const reply = await requestShow(file, title);
+				return {
+					content: [{ type: "text", text: `已发到手机预览：${title ?? path.basename(file)}。${reply.note ?? ""}`.trim() }],
+					details: { preview: reply.preview },
+				};
+			},
+		});
+	}
 
 	/** 状态没变就不发；没有客户端时只维护状态与计时，不做任何 I/O。 */
 	function commit() {
@@ -264,11 +330,6 @@ export default function (pi: any) {
 			since = now;
 			busySince = next === "working" || next === "waiting" ? busySince ?? now : null;
 			phase = next;
-		}
-		const sub = subsessionKey && registry.sessions.get(subsessionKey);
-		if (sub) {
-			sub.kind = state.kind;
-			publishSubsessions();
 		}
 		if (clients.size === 0) return;
 		const message = { t: "state", state: { ...state, since, busySince } };
@@ -350,6 +411,10 @@ export default function (pi: any) {
 		const ack = (fields: object) => write(socket, { t: "ack", id: command?.id ?? null, ...fields });
 		const reject = (error: string) => ack({ ok: false, error });
 		try {
+			if (command?.t === "shown") {
+				showing.get(command.id)?.(command);
+				return void showing.delete(command.id);
+			}
 			if (command?.t === "send") return handleSend(command, ack, reject);
 			if (command?.t === "command") return void handleSlash(command, ack, reject).catch((error: any) => reject(`failed: ${error?.message ?? error}`));
 			if (command?.t === "answer") return handleAnswer(command, ack, reject);
@@ -601,46 +666,14 @@ export default function (pi: any) {
 		socketPath = file;
 	}
 
-	/** 顶层会话：同进程里会话文件在自己目录的 `subagents/` 下的子会话都是它的子代理，汇总进 info。 */
-	function watchSubsessions(file: string | undefined) {
-		if (!file) return;
-		const directory = path.join(path.dirname(file), SUBAGENTS_DIRECTORY);
-		const refresh = () => updateInfo({
-			subagents: [...registry.sessions.values()]
-				.filter((sub) => sub.directory === directory)
-				.map((sub) => ({ name: sub.name, kind: sub.kind })),
-		});
-		registry.listeners.add(refresh);
-		stopWatchingSubsessions = () => registry.listeners.delete(refresh);
-		refresh();
-	}
-
-	/** print 模式的会话若是子代理（会话文件在 `subagents/` 下）：登记进表，由同进程的顶层会话汇总。 */
-	function registerSubsession() {
-		const file: string | undefined = ctx.sessionManager.getSessionFile();
-		if (!file || path.basename(path.dirname(file)) !== SUBAGENTS_DIRECTORY) return;
-		const firstMessage = firstUserMessage(ctx.sessionManager.getEntries());
-		const name = pi.getSessionName() ?? WORKER_NAME.exec(ctx.getSystemPrompt?.() ?? "")?.[1] ?? firstMessage ?? path.basename(file, ".jsonl");
-		subsessionKey = file;
-		registry.sessions.set(file, { directory: path.dirname(file), name, kind: tracker.derive().kind });
-		publishSubsessions();
-	}
-
-	function unregisterSubsession() {
-		if (!subsessionKey) return;
-		registry.sessions.delete(subsessionKey);
-		subsessionKey = undefined;
-		publishSubsessions();
-	}
-
 	function stop(reason: string) {
-		stopWatchingSubsessions?.();
-		stopWatchingSubsessions = undefined;
 		for (const client of clients) {
 			write(client, { t: "bye", reason });
 			client.end();
 		}
 		clients.clear();
+		for (const settle of showing.values()) settle({ ok: false, error: "会话已结束，没发出去" });
+		showing.clear();
 		server?.close();
 		server = undefined;
 		if (socketPath) fs.rmSync(socketPath, { force: true });
@@ -695,16 +728,17 @@ export default function (pi: any) {
 		phase = "idle";
 		since = Date.now();
 		busySince = null;
-		// print/json 是没有输入框的运行：一次性的 pi -p，或其他扩展在同进程里开的子会话（FireCode 子代理）。
-		// 都不作为会话出现；子代理的状态汇总到父会话
-		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return registerSubsession();
+		// print/json 是没有输入框的运行：一次性的 pi -p，或其他扩展在同进程里开的子会话（FireCode 子代理）。都不作为会话出现
+		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return;
+		registerShowTool();
 		tty = readTTY();
 		loadedEntries = ctx.sessionManager.getEntries().length;
 		info = {
 			name: pi.getSessionName() ?? null,
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
 			question: null,
-			subagents: [],
+			// 名册由 FireCode 在自己的 session_start 里发布，先后不定，不在这里清空；会话换掉时 FireCode 停用会发空名册
+			subagents: info.subagents,
 			...modelInfo(),
 			...contextInfo(),
 			...commandInfo(),
@@ -713,14 +747,12 @@ export default function (pi: any) {
 		captureDialogs(ctx.ui);
 		try {
 			start();
-			watchSubsessions(ctx.sessionManager.getSessionFile());
 		} catch (error: any) {
 			ctx.ui.notify(`CuePad bridge disabled: ${error?.message ?? error}`, "warning");
 		}
 	});
 	pi.on("session_shutdown", (event: any) => {
 		launchToken = null;
-		unregisterSubsession();
 		stop(event.reason);
 	});
 	pi.on("model_select", () => { updateInfo(modelInfo()); refreshUsage(); });
@@ -784,6 +816,7 @@ export default function (pi: any) {
 		tracker.inFlight = typeof data?.inFlight === "number" ? data.inFlight : 0;
 		commit();
 	});
+	pi.events?.on(FIRECODE_SUBAGENTS_CHANNEL, (data: any) => updateInfo({ subagents: subagentsOf(data?.workers) }));
 	pi.on("agent_settled", () => {
 		tracker.active = false;
 		tracker.tools.clear();

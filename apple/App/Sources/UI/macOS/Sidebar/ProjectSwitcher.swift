@@ -26,13 +26,15 @@ struct ProjectSwitcher: View {
             if (workspace.catalog?.cardCounts[nil] ?? 0) > 0 {
                 Button { workspace.show(.inbox) } label: { Label("未分类", systemImage: "tray").labelStyle(.titleAndIcon) }
             }
+            Button { workspace.show(.agent) } label: { Label("Agent", systemImage: "sparkles").labelStyle(.titleAndIcon) }
+            Button { workspace.show(.archive) } label: { Label("归档", systemImage: "archivebox").labelStyle(.titleAndIcon) }
             Button { workspace.show(.trash) } label: { Label("回收站", systemImage: "trash").labelStyle(.titleAndIcon) }
         } label: {
             HStack(spacing: 6) {
                 current(projects)
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary).accessibilityHidden(true)
             }
-            .font(.system(size: 13, weight: .semibold))
+            .font(Typography.toolbarLabel.weight(.semibold))
         }
         .menuIndicator(.hidden)
         .fixedSize()
@@ -66,7 +68,7 @@ struct ProjectSwitcher: View {
         case .trash:
             Image(systemName: "trash").accessibilityHidden(true)
             Text("回收站")
-        case .agent:
+        case .agent, .session:
             Image(systemName: "sparkles").accessibilityHidden(true)
             Text("Agent")
         }

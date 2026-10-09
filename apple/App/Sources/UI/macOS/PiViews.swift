@@ -40,7 +40,7 @@ struct PiSetupGuide: View {
             Text(missing ? "在终端运行：" : "在终端运行，升级到最新版：").foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 // 命令要看得全：放不下就折行，不截断
-                Text(command).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                Text(command).font(Typography.meta.monospaced()).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 Button(copied ? "已复制" : "复制") { copy(command) }.controlSize(.small)
@@ -49,7 +49,7 @@ struct PiSetupGuide: View {
             .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 8))
             Link("了解 Pi", destination: Self.site)
         }
-        .font(.system(size: 13))
+        .font(Typography.secondary)
     }
 
     private func copy(_ command: String) {

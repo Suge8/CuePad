@@ -41,13 +41,13 @@ struct SessionScreen: View {
 
     var body: some View {
         ChatScroll(
-            followKey: PiConversation.followKey(session: session, messages: digest?.messages ?? [], deliveries: digest?.deliveries ?? []),
+            followKey: PiConversation.followKey(session: session, messages: digest?.messages ?? [], previews: digest?.previews ?? [], deliveries: digest?.deliveries ?? []),
             follow: $follow
         ) {
             // 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入
             if let digest {
                 if let session {
-                    PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries)
+                    PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
                         .padding(.vertical, 14)
                         // iPad 上一行不超过阅读宽度，居中
                         .readingColumn(maxWidth: Self.readingWidth, inset: 16)
@@ -64,7 +64,7 @@ struct SessionScreen: View {
         }
         .environment(\.chatHighlight, highlight)
         .overlay(alignment: .trailing) {
-            let marks = ChatScrubber.marks(PiChat.entries(digest?.messages ?? []))
+            let marks = ChatScrubber.marks(PiChat.entries(digest?.messages ?? [], previews: digest?.previews ?? []))
             if !marks.isEmpty {
                 ChatScrubber(marks: marks, scrolling: follow.scrolling) { id in
                     follow.jump(to: id)
@@ -88,11 +88,15 @@ struct SessionScreen: View {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                PiSessionSubtitle(session: session, project: digest?.project)
+                PiSessionSubtitle(session: session)
             }
         } trailing: {
-            if let session, MacDelivery.canRename(session) || MacDelivery.canEnd(session) {
+            if let session {
                 Menu {
+                    // 所在不挤在顶栏里：点"⋯"时写在最上面
+                    if let place = PiPlace.name(of: session, project: digest?.project) {
+                        Section("在 \(place)") {}
+                    }
                     if MacDelivery.canRename(session) {
                         Button("重命名", systemImage: "pencil") { renaming = session }.disabled(!services.reachesPiHost)
                     }
@@ -126,7 +130,8 @@ struct SessionScreen: View {
                         // 在看历史时收成短胶囊，点它展开（不挪正在读的内容）
                         PiReplyBar(
                             session: session, config: digest?.config, compact: !follow.atNewest,
-                            stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? [])
+                            stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? []),
+                            commandProgress: MacDelivery.commandProgress(digest?.deliveries ?? [])
                         ) { follow.jumpToNewest() }
                     }
                 }

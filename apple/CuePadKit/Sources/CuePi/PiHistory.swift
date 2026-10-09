@@ -16,9 +16,11 @@ public struct PiSessionHistory: Sendable, Equatable {
     }
 }
 
-/// 对话里的一条：你说的一句，或 Pi 一轮最后的回答（一轮一条；中途调工具时说的话、思考与工具输出不算）。
+/// 对话里的一条：你说的一句，或 Pi 一轮最后的回答（一轮一条；中途调工具时说的话、思考与工具输出不算），
+/// 或会话文件里的一条压缩记录（系统行：与终端对话里的压缩摘要同一件事），
+/// 或 `cuepad_show` 工具成功的那一行（预览：Agent 发到手机上看的文件，正文是 CuePad 给的预览 id）。
 public struct PiTranscriptEntry: Sendable, Equatable {
-    public enum Role: Sendable, Equatable { case user, pi }
+    public enum Role: Sendable, Equatable { case user, pi, system, preview }
 
     /// 会话文件里那一条的 id
     public var entryID: String
@@ -201,6 +203,7 @@ public enum PiHistory {
         var timestamp: String?
         var cwd: String?
         var name: String?
+        var tokensBefore: Int?
         var message: Message?
 
         var time: Date? { timestamp.flatMap { try? Date($0, strategy: PiHistory.timestampStyle) } }
@@ -211,6 +214,10 @@ public enum PiHistory {
         var content: Content?
         var stopReason: String?
         var cuepadDelivery: String?
+        var toolName: String?
+        var details: Details?
+
+        struct Details: Decodable { var preview: String? }
     }
 
     private enum Content: Decodable {
@@ -245,11 +252,14 @@ public enum PiHistory {
     /// toolResult 行占会话体积的绝大部分（工具输出、图片），又不含摘要要的东西：认出来就跳过，不做 JSON 解码。
     /// Pi 写出的键序固定为 type, id, parentId, timestamp, message，角色在行首附近。
     private static let toolResultMarker = Data(#""role":"toolResult""#.utf8)
+    /// 例外：发到手机预览的工具（`cuepad_show`）的结果要解码。整行找（不赖键序）：memmem 比读文件快得多，大行里只有字节扫描、不解码。
+    private static let showTool = "cuepad_show"
+    private static let showToolMarker = Data(#""toolName":"\#(showTool)""#.utf8)
     private static let headLength = 512
 
     private static func ingest(_ raw: UnsafeRawBufferPointer, into cp: inout PiHistoryCheckpoint, transcript: inout [PiTranscriptEntry]) {
         cp.seq += 1
-        if isToolResult(raw) { return }
+        if isToolResult(raw), !contains(raw, showToolMarker) { return }
         guard let line = decode(raw) else { return } // 损坏行跳过
         let time = line.time
         // 最后活动：最后一行的时间（Pi 按时间追加）
@@ -260,6 +270,10 @@ public enum PiHistory {
             cp.cwd = line.cwd
         case "session_info":
             cp.name = line.name
+        case "compaction":
+            transcript.append(PiTranscriptEntry(
+                entryID: line.id ?? "\(cp.seq)", seq: cp.seq, role: .system, text: compactionText(tokensBefore: line.tokensBefore),
+                at: time ?? cp.lastActivity ?? .distantPast, toolCount: 0, roundStartedAt: nil, deliveryID: nil))
         case "message":
             guard let message = line.message else { return }
             if cp.firstMessage == nil, message.role == "user" {
@@ -270,11 +284,22 @@ public enum PiHistory {
             switch message.role {
             case "user": userMessage(message, entry, into: &cp, transcript: &transcript)
             case "assistant": assistantMessage(message, entry, into: &cp, transcript: &transcript)
+            case "toolResult":
+                // 成功的 cuepad_show 调用（结果里带着 CuePad 给的预览 id）：预览在对话里的位置就是这一行的位置
+                guard message.toolName == showTool, let preview = message.details?.preview else { return }
+                transcript.append(PiTranscriptEntry(
+                    entryID: entry.id, seq: entry.seq, role: .preview, text: preview, at: entry.at, toolCount: 0, roundStartedAt: nil, deliveryID: nil))
             default: break
             }
         default:
             break
         }
+    }
+
+    /// 压缩的系统行："已压缩上下文 · 压缩前约 63k tokens"（不到 1000 写原数）。
+    private static func compactionText(tokensBefore: Int?) -> String {
+        guard let tokensBefore else { return "已压缩上下文" }
+        return "已压缩上下文 · 压缩前约 " + (tokensBefore >= 1_000 ? "\(tokensBefore / 1_000)k" : "\(tokensBefore)") + " tokens"
     }
 
     private typealias Entry = (id: String, seq: Int64, at: Date)

@@ -145,8 +145,8 @@ struct AgentScreen: View {
                             case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
                             case .reload(let items):
                                 PiReloadFold(count: items.count, expanded: $reloadOpen, style: .page)
-                                    .padding(.horizontal, 16).padding(.vertical, 12)
-                                    .listRowInsets(.init()).listRowBackground(palette.paper)
+                                    .padding(.horizontal, 16).padding(.vertical, Self.rowPadding)
+                                    .listRowInsets(.init()).listRowBackground(palette.paper).listRowSeparator(.hidden)
                                 if reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
                             }
                         }
@@ -181,14 +181,17 @@ struct AgentScreen: View {
     /// 分组标题与纸面左缘对齐（列表默认再缩进一截）。
     private static let headerInsets = EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
 
-    /// 一行：纸底，分隔线从名字起；长按与左滑都有"重命名"（读得到的会话）与"结束会话"（在线的）。
+    /// 行的上下留白：行之间不画分隔线，三行字靠留白分开（与 Mac 的 Agent 整页一样）。
+    static let rowPadding: CGFloat = 11
+
+    /// 一行：纸底；长按与左滑都有"重命名"（读得到的会话）与"结束会话"（在线的）。
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
         let endable = MacDelivery.canEnd(item.state) && end?.isOpen != true
         let renamable = MacDelivery.canRename(item.state) && services.reachesPiHost
         return SessionRow(item: item, filtered: filtered, end: end)
             .listRowInsets(.init())
             .listRowBackground(palette.paper)
-            .alignmentGuide(.listRowSeparatorLeading) { _ in 44 }
+            .listRowSeparator(.hidden)
             .swipeActions(edge: .trailing) {
                 if endable {
                     Button("结束会话", systemImage: "stop.circle") { confirmingEnd = item.state }.tint(palette.failure)
@@ -414,7 +417,7 @@ private struct SessionRow: View {
         let session = item.state
         Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
             PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, style: .page)
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .padding(.horizontal, 16).padding(.vertical, AgentScreen.rowPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
         }

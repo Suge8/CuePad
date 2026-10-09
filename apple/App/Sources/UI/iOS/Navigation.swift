@@ -252,6 +252,15 @@ final class Navigation {
         return top == .session(id)
     }
 
+    /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 列表（那一行已经在变）时不弹。
+    func showsAlert(about session: UUID) -> Bool {
+        let onAgentList = switch layout {
+        case .tabs: tab == .agent && agentPath.isEmpty
+        case .split: agentPanel || (splitRoot == .agent && splitPath.isEmpty)
+        }
+        return !onAgentList && !isViewing(session: session)
+    }
+
     /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id，记录已被删时用它读对话）；`draft` 带进它的回复框
     /// （发到 Mac 的卡片或任务），已经写的字留着。先读出这一页再推入：读库只要几毫秒，推入的第一帧就是标题与最新的对话；
     /// 先推入再读时，结果要等转场开始、主线程空出来才到，滑进来的前几帧是一张空页。读不出来时照常推入，由页面报错。

@@ -16,7 +16,7 @@ struct TaskPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 20) {
                 HStack(alignment: .top, spacing: 4) {
                     TaskRingButton(task: card, marks: detail?.marks).offset(y: -8)
                     TaskHeading(task: card).padding(.top, 2)

@@ -189,29 +189,39 @@ public enum PiPromptAnswer: Sendable, Equatable {
     case text(String)
 }
 
-/// 父会话里的一个子代理：名字与此刻在干什么。
+/// 父会话里的一个子代理，来自 FireCode 的子代理名册（`firecode:subagents`，扩展原样转述）：名字、派发角色、状态、在做什么，
+/// 以及本次运行的开始与落定时刻（界面据此算时长）。
 public struct PiSubagent: Sendable, Equatable, Decodable {
-    public enum Activity: Sendable, Equatable {
-        case working, waitingForUser, idle, error
-    }
-
     public var name: String
-    /// 扩展上报的状态种类（同 `state.kind`）
-    public var kind: String
+    public var role: String
+    /// 名册状态原文：running、review、done、failed、interrupted、idle
+    public var state: String
+    /// 在做什么的一句话；空闲时为空串
+    public var action: String
+    public var startedAt: Date?
+    public var settledAt: Date?
 
-    public init(name: String, kind: String) {
+    public init(name: String, role: String, state: String, action: String = "", startedAt: Date? = nil, settledAt: Date? = nil) {
         self.name = name
-        self.kind = kind
+        self.role = role
+        self.state = state
+        self.action = action
+        self.startedAt = startedAt
+        self.settledAt = settledAt
     }
 
-    public var activity: Activity {
-        switch kind {
-        case "thinking", "outputting", "tool", "delegating": .working
-        case "waiting_user": .waitingForUser
-        case "error": .error
-        default: .idle
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func date(_ key: CodingKeys) throws -> Date? {
+            try c.decodeIfPresent(Double.self, forKey: key).map { Date(timeIntervalSince1970: $0 / 1000) }
         }
+        self.init(
+            name: try c.decode(String.self, forKey: .name), role: try c.decode(String.self, forKey: .role),
+            state: try c.decode(String.self, forKey: .state), action: try c.decode(String.self, forKey: .action),
+            startedAt: try date(.startedAt), settledAt: try date(.settledAt))
     }
+
+    private enum CodingKeys: String, CodingKey { case name, role, state, action, startedAt, settledAt }
 }
 
 /// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致：
@@ -263,6 +273,26 @@ public struct PiImage: Sendable, Equatable {
     }
 }
 
+/// Pi 里 `cuepad_show` 工具要发到手机上看的文件（扩展已把相对路径按工作目录解析成绝对路径）。
+public struct PiShowRequest: Sendable, Equatable {
+    public var path: String
+    public var title: String?
+    public init(path: String, title: String?) {
+        self.path = path
+        self.title = title
+    }
+}
+
+/// CuePad 收下文件后给工具的回复：预览记录的 id（工具把它写进结果的 `details.preview`，对话据此定位）与要告诉 Agent 的提示（页面缺资源等）。
+public struct PiShowReply: Sendable, Equatable {
+    public var preview: String
+    public var note: String?
+    public init(preview: String, note: String?) {
+        self.preview = preview
+        self.note = note
+    }
+}
+
 public struct PiMessage: Sendable, Equatable {
     public var text: String
     public var images: [PiImage]
@@ -297,6 +327,8 @@ public enum PiBridgeError: Error, Equatable {
     case rejected(String)
     /// 会话的扩展协议版本与 CuePad 不同（见 `PiAgentState.incompatible`），不发命令
     case incompatibleExtension
+    /// 没有谁处理扩展转来的预览请求（`PiBridge.showHandler` 没设）
+    case previewUnavailable
 }
 
 extension PiBridgeError: LocalizedError {
@@ -306,6 +338,7 @@ extension PiBridgeError: LocalizedError {
         case .socketDirectoryTooLong: "Pi 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
         case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
+        case .previewUnavailable: "CuePad 没有开启预览"
         case .sessionEnded: "发送途中 Agent 会话结束了"
         case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"

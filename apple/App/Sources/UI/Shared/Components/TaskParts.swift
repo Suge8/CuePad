@@ -179,7 +179,8 @@ struct PromptCard: View {
                         .foregroundStyle(fresh ? palette.signature : palette.ink2)
                         .padding(.horizontal, fresh ? 12 : 4).frame(height: TaskMetrics.chipHeight)
                         .background(fresh ? palette.signature.opacity(0.12) : .clear, in: .capsule)
-                        .frame(minHeight: TaskMetrics.chipTarget).contentShape(.capsule)
+                        // 点得到的范围上下各多出一截，但不撑高卡片：卡片底边只比这一排低一个内边距
+                        .contentShape(.rect.inset(by: -(TaskMetrics.chipTarget - TaskMetrics.chipHeight) / 2))
                 }
                 .buttonStyle(PressStyle())
                 .disabled(text.title.isEmpty && text.images.isEmpty)
@@ -187,7 +188,9 @@ struct PromptCard: View {
         }
         .padding(TaskMetrics.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.fill, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+        // 与这一页同一种纸：略亮的纸面加一圈细线，不用灰底压重
+        .background(palette.paperLit, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.paperEdge()))
         .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
         .onTapGesture(perform: open)
         .contextMenu { CardActions(card: prompt) }
@@ -366,14 +369,14 @@ enum TaskMetrics {
     static let cardRadius: CGFloat = 14
     static let cardGap: CGFloat = 10
     #else
-    static let font = Font.system(size: 13)
-    static let icon: CGFloat = 16
-    static let rowHeight: CGFloat = 26
-    static let caption = Font.system(size: 11.5)
-    static let chipHeight: CGFloat = 22
-    static let chipTarget: CGFloat = 22
-    static let titleRing: CGFloat = 18
-    static let title = Font.system(size: 20, weight: .semibold)
+    static let font = Typography.body
+    static let icon: CGFloat = 17
+    static let rowHeight: CGFloat = 30
+    static let caption = Typography.meta
+    static let chipHeight: CGFloat = 24
+    static let chipTarget: CGFloat = 24
+    static let titleRing: CGFloat = 20
+    static let title = Font.system(size: 22, weight: .semibold)
     static let cardPadding: CGFloat = 12
     static let cardRadius: CGFloat = 10
     static let cardGap: CGFloat = 8

@@ -1,27 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 子代理的粗状态借会话状态的说法、颜色与状态标（工作中、等你确认、空闲、出错）。
-nonisolated extension PiSubagentState {
-    var shown: PiShown {
-        switch activity.known {
-        case .working: PiShown(state: .known(.thinking))
-        case .waitingForUser: PiShown(state: .known(.waitingForUser))
-        case .idle: PiShown(state: .known(.settled))
-        case .error: PiShown(state: .known(.error))
-        case nil: PiShown(state: .unknown(activity.rawValue))
-        }
-    }
-
-    var activityLabel: String {
-        switch activity.known {
-        case .working: "工作中"
-        case .idle: "空闲"
-        default: shown.label
-        }
-    }
-}
-
 nonisolated extension PiSessionState {
     /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
@@ -74,9 +53,9 @@ nonisolated enum PiDelivery: Hashable, Sendable {
             if ended { return .waking }
             return request.status == .known(.pending) ? .sending : .delivering
         case .succeeded:
-            // 斜杠命令（内置命令与扩展命令多数不会让 Pi 动起来）不等会话动；其余等会话状态跟上（进入处理中，或在送达之后变过）就让位
+            // 等会话状态跟上（进入处理中，或在送达之后变过）就让位
             let caughtUp = session.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
-            return mode == .command || caughtUp ? nil : .delivered
+            return caughtUp ? nil : .delivered
         case .failed:
             return (seen ?? .distantPast) > (request.completedAt ?? request.modifiedAt) ? nil : .failed
         case nil:
@@ -301,11 +280,13 @@ extension PiShown {
 /// 有新回复墨色实心点、待你回复灰勾、新会话灰虚线圈、已结束更淡的空心圈。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 转圈与呼吸是常驻的循环动效，交给 Core Animation（`LoopLayer`），标不在屏幕上时不画；换状态时符号淡入替换，
 /// 一轮做完（工作中 → 停下）时放一圈涟漪、点弹一下，只这一次。减弱动态效果时转圈换成静止的圈点，没有呼吸与涟漪。
-/// 旁边有状态文字时读屏跳过它；`announces` 用在只有一个标的地方（书架、侧栏的项目旁），标自己带读屏标签与悬停提示。
+/// 旁边有状态文字时读屏跳过它；`announces` 用在不写状态词的地方（整页的会话行），标自己带读屏标签。
 struct PiStateDot: View {
     let shown: PiShown
     var size: CGFloat = 8
     var announces = false
+    /// 要你动手的状态（等你确认、出错、没能送达）在标后垫一圈同色淡晕：整页列表里一眼先看到它们。静止，不占动效。
+    var halo = false
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 跟着旁边的字随辅助字号放大
@@ -334,12 +315,16 @@ struct PiStateDot: View {
                     CubicKeyframe(0, duration: 0.55)
                 }
             }
+            .background {
+                if halo, shown.needsYou { Circle().fill(tint.opacity(palette.dark ? 0.2 : 0.13)).frame(width: box * 1.55, height: box * 1.55) }
+            }
             .animation(Motion.quick, value: shown)
             .onChange(of: shown.status) { old, new in
                 if !reduceMotion, case .working = old, [.unread, .idle].contains(new) { finished += 1 }
             }
         if announces {
-            mark.accessibilityLabel(shown.presence).help(shown.presence)
+            // 只给读屏：每行一个悬停提示会让整页每行都挂一块跟踪区，滚动时跟着重算
+            mark.accessibilityLabel(shown.presence)
         } else {
             mark.accessibilityHidden(true)
         }

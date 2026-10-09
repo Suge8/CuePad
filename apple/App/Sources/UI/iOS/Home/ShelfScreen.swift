@@ -17,20 +17,6 @@ nonisolated struct ShelfData: Sendable {
     var sessions: [PiSessionListItem]
     /// 各项目的进行中任务，最近开始的在前（`ProjectNow` 的一档）。
     var leading: [UUID: [ProjectNow.InProgress]]
-    /// 等你确认的在线会话（书架最上面的"等你"）；个数与 Agent 角标同一个数。
-    var waiting: [PiSessionListItem] { sessions.filter(\.state.waitsForYou) }
-
-    /// 书架最上面的 Agent 总览；没有在等你、出错、在跑的会话，也没有不在项目里、此刻有事的会话时为 nil。
-    @MainActor func glance(shown: (PiSessionListItem) -> PiShown) -> AgentGlance? {
-        let statuses = sessions.map { shown($0).status }
-        let glance = AgentGlance(
-            waiting: waiting.count,
-            failing: statuses.count { $0 == .failed || $0 == .delivery(.failed) },
-            reloading: statuses.count { $0 == .restart },
-            running: statuses.count { if case .working = $0 { true } else { $0 == .delivery(.sending) || $0 == .delivery(.delivering) || $0 == .delivery(.waking) || $0 == .delivery(.delivered) } },
-            loose: ProjectNow.pick(sessions.filter { $0.state.projectID == nil }, shown: shown, task: nil, intro: nil))
-        return glance.isEmpty ? nil : glance
-    }
     /// 进任务页的入口上写的数：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，没有入口。
     var tasks: TaskCounts?
     /// 正在推进的任务（进行中，最近开始的在前），书架最上面。
@@ -88,8 +74,10 @@ struct ShelfScreen: View {
                 CardSearchResults(query: $query, scope: .all)
             } else {
                 ScrollView {
-                    if let data { content(data) }
+                    // 读到数据时整页淡入，不是一帧里突然铺满
+                    if let data { content(data).transition(.opacity) }
                 }
+                .animation(Motion.quick, value: data == nil)
                 .refreshable { await services.syncNow() }
                 .hidingSearch($searchHidden, searching: searching)
             }
@@ -123,17 +111,17 @@ struct ShelfScreen: View {
         let recent = data.entries.filter { !$0.project.isPinned }
         // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
         let now = data.now(shown: services.settings.shown)
-        let glance = data.glance(shown: services.settings.shown)
+        let agent = AgentNow.of(data.sessions, shown: services.settings.shown)
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
-        LazyVStack(alignment: .leading, spacing: 22) {
+        LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
             if data.entries.isEmpty && data.inboxCount == 0 {
-                lead(data, glance)
+                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }
                 EmptyShelf { navigation.projectForm = .init() }
-            } else if wide, !pinned.isEmpty, hasLead(data, glance) {
+            } else if wide, !pinned.isEmpty, hasLead(data, agent) {
                 // 宽屏两栏：左边现在要干的，右边置顶项目；放不下两栏时上下排
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 20) {
-                        VStack(alignment: .leading, spacing: 22) { lead(data, glance) }.frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }.frame(maxWidth: .infinity)
                         // 右栏的大卡按宽度排：窄时一列叠放，宽时两列
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.pinnedMinWidth), spacing: 12)], spacing: 12) {
                             ForEach(pinned) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
@@ -141,13 +129,13 @@ struct ShelfScreen: View {
                         .frame(maxWidth: .infinity)
                     }
                     .frame(minWidth: Self.twoColumnWidth, idealWidth: Self.twoColumnWidth, maxWidth: .infinity)
-                    VStack(alignment: .leading, spacing: 22) {
-                        lead(data, glance)
+                    VStack(alignment: .leading, spacing: Self.sectionGap) {
+                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }
                         pinnedGrid(pinned, columns: min(pinned.count, 4), now: now)
                     }
                 }
             } else {
-                lead(data, glance)
+                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }
                 if !pinned.isEmpty {
                     // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
                     pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2), now: now)
@@ -171,26 +159,29 @@ struct ShelfScreen: View {
         .padding(.bottom, 24)
         // 任务开始、做完时"正在推进"一张张进出，下面的内容跟着挪
         .animation(Motion.snappy, value: data.active.map(\.id))
-        .animation(Motion.snappy, value: glance == nil)
+        .animation(Motion.snappy, value: agent == nil)
         // 宽屏不把一行项目拉满整屏：名字与计数隔太远读不成一行
         .frame(maxWidth: Self.readableWidth)
         .frame(maxWidth: .infinity)
     }
 
     private static let readableWidth: CGFloat = 1080
+    /// 两级节奏：现在要干的几样（Agent 此刻、正在推进、未分类）之间紧一些，与置顶、最近这些段之间松一些。
+    private static let leadGap: CGFloat = 16
+    private static let sectionGap: CGFloat = 28
     /// 两栏各至少这么宽才并排（左栏放得下正在推进的一行任务，右栏放得下一张置顶大卡）。
     private static let twoColumnWidth: CGFloat = 640
     private static let pinnedMinWidth: CGFloat = 220
 
-    private func hasLead(_ data: ShelfData, _ glance: AgentGlance?) -> Bool {
-        glance != nil || !data.active.isEmpty || data.tasks != nil || data.inboxCount > 0
+    private func hasLead(_ data: ShelfData, _ agent: AgentNow?) -> Bool {
+        agent != nil || !data.active.isEmpty || data.tasks != nil || data.inboxCount > 0
     }
 
-    /// 现在要干的：Agent 总览、正在推进（没有时是任务入口）、未分类。
+    /// 现在要干的：Agent 此刻、正在推进（没有时是任务入口）、未分类。
     @ViewBuilder
-    private func lead(_ data: ShelfData, _ glance: AgentGlance?) -> some View {
+    private func lead(_ data: ShelfData, _ agent: AgentNow?) -> some View {
         let tasksLine = data.active.isEmpty ? data.tasks : nil
-        if let glance { AgentCard(glance: glance).transition(Motion.item) }
+        if let agent { AgentNowCard(now: agent).transition(Motion.item) }
         if !data.active.isEmpty { ActiveTasks(rows: data.active, counts: data.tasks).transition(Motion.item) }
         if data.inboxCount > 0 || tasksLine != nil {
             VStack(spacing: 0) {
@@ -332,7 +323,7 @@ private struct PinnedShelfCard: View {
                 ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
             }
             .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 156, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 132, maxHeight: .infinity, alignment: .topLeading)
             // 渐变只铺在填充上（不用渐变描边，见文档「视觉验收 · 性能测量」）
             .background(
                 LinearGradient(colors: [tint.opacity(palette.dark ? 0.16 : 0.1), tint.opacity(0)], startPoint: .top, endPoint: .center),
@@ -390,8 +381,14 @@ private struct ShelfRow: View {
         typeSize.isAccessibilitySize ? horizontalPadding : horizontalPadding + tile + 12
     }
 
-    private var counts: some View {
-        ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
+    /// 行尾只留灵感数（像侧栏的计数）：把宽度让给"此刻"那一句；任务数在"此刻"与任务页里。辅助字号下照常写全。
+    @ViewBuilder private var counts: some View {
+        if stacked {
+            ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
+        } else {
+            Text("\(entry.cardCount)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).counting(entry.cardCount)
+                .accessibilityLabel("\(entry.cardCount) 条灵感")
+        }
     }
 
     var body: some View {
@@ -551,75 +548,117 @@ private struct ActiveTaskRow: View {
     }
 }
 
-/// 书架最上面的 Agent 总览的数据（`ShelfData.glance`）：在等你确认几个（与 Agent 角标同一条规则 `waitsForYou`）、出错几个、
-/// 需要 /reload 几个、在跑几个（含话在路上），按 `ProjectNow` 的档排；以及不在任何项目里的会话里最该知道的一件（`ProjectNow` 同一条取舍）——它们没有项目行，别处写不出来。
-nonisolated struct AgentGlance: Equatable, Sendable {
-    var waiting: Int
-    var failing: Int
-    var reloading: Int
-    var running: Int
-    var loose: ProjectNow?
-
-    var isEmpty: Bool { waiting + failing + reloading + running == 0 && loose == nil }
-
-    /// "等你确认 4 · 出错 1 · 在跑 3"（短写，一行放得下三项）；只有不在项目里的那件时是 nil。
-    var counts: String? {
-        let parts = [("等你确认", waiting), ("出错", failing), ("需要 /reload", reloading), ("在跑", running)]
-            .compactMap { $0.1 > 0 ? "\($0.0) \($0.1)" : nil }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-}
-
-/// 书架最上面的 Agent 一张：标题写此刻在等你、出错、在跑的会话各几个；第二行是不在任何项目里的会话里最该知道的那件
-/// （归在项目里的已写在那个项目的"此刻"一行，这里不重复）。点它去 Agent 页。有在等你确认的时候图标是赭黄问号、垫一层淡赭黄，
-/// 否则是那件事的状态标、不垫色。
-private struct AgentCard: View {
-    let glance: AgentGlance
+/// 书架顶上的"Agent 此刻"一条（规则 `AgentNow`）：左边是按要紧先后叠放的几个会话头像（首字加状态标，多的写"+N"），
+/// 右边一句人话说最要紧的事、次行带过其余的；会话再多也是这两行，高度不变，变的只是字（原地淡入淡出、数字滚动）与头像的进出。
+/// 要你动手（等你确认、出错）时整条垫一层淡赭黄，否则中性。点它去 Agent 页；长按快速看前几个、点一个直接进它的对话。
+private struct AgentNowCard: View {
+    let now: AgentNow
     @Environment(Navigation.self) private var navigation
+    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     private static let radius: CGFloat = 20
 
     var body: some View {
-        let asking = glance.waiting > 0
         Button(action: open) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Group {
-                    if asking {
-                        Image(systemName: "questionmark.circle.fill").font(.title3).foregroundStyle(palette.attention)
-                    } else if let shown = glance.loose?.shown {
-                        PiStateDot(shown: shown, size: 9)
-                    }
+            HStack(spacing: 14) {
+                AgentFaces(faces: now.faces, more: now.more, ground: ground)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(now.headline).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                        .contentTransition(.numericText())
+                    // 次行总留着：没有可补的也不让整条变矮
+                    Text(now.detail ?? " ").font(.footnote).foregroundStyle(palette.ink2).lineLimit(1)
+                        .id(now.detail).transition(.opacity)
                 }
-                .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(glance.counts ?? "Agent")
-                        .font(.headline.monospacedDigit()).foregroundStyle(palette.ink).lineLimit(1)
-                        .contentTransition(.numericText()).animation(Motion.snappy, value: glance.counts)
-                    if let loose = glance.loose {
-                        Text(loose.session.map { "\($0)：\(loose.text)" } ?? loose.text)
-                            .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
-                            .id(loose.text).transition(.opacity)
-                    }
-                }
-                .animation(Motion.quick, value: glance.loose?.text)
-                Spacer(minLength: 8)
+                .animation(Motion.quick, value: now.headline)
+                .animation(Motion.quick, value: now.detail)
+                Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
             }
-            .padding(16)
+            .padding(.horizontal, 14).padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(asking ? palette.attention.opacity(palette.dark ? 0.14 : 0.1) : .clear, in: .rect(cornerRadius: Self.radius, style: .continuous))
+            .background(now.needsYou ? palette.attention.opacity(Self.tint(palette)) : .clear,
+                        in: .rect(cornerRadius: Self.radius, style: .continuous))
+            .animation(Motion.quick, value: now.needsYou)
             .paper(radius: Self.radius)
             .contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
         }
         .buttonStyle(CardPressStyle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("去 Agent 页")
+        .contextMenu {
+            ForEach(now.faces) { item in
+                let shown = services.settings.shown(item)
+                Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
+                    Label { Text(item.state.title); Text(shown.label) } icon: { Image(systemName: shown.symbol) }
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([now.headline, now.detail].compactMap(\.self).joined(separator: "，"))
+        .accessibilityHint("去 Agent 页；长按看前几个")
+        .accessibilityAddTraits(.isButton)
     }
 
     private func open() {
         if navigation.layout == .split { navigation.select(.agent) } else { navigation.tab = .agent }
+    }
+
+    private static func tint(_ palette: Palette) -> Double { palette.dark ? 0.14 : 0.1 }
+
+    /// 这一条的底色（纸，要你动手时叠一层淡赭黄）：头像之间、状态标周围的那圈隔开的描边用它，看起来像镂空。
+    private var ground: Color { now.needsYou ? palette.paper.mix(with: palette.attention, by: Self.tint(palette)) : palette.paper }
+}
+
+/// 叠放的会话头像：首字在项目色的淡底上（没归项目的是中性底），右下角是它的状态标（`PiStateDot`，转圈与呼吸交给
+/// Core Animation，静止时不占 CPU）；前一个压着后一个，各带一圈底色描边隔开。多的在后面写"+N"。头像进出是缩放加淡入淡出。
+private struct AgentFaces: View {
+    let faces: [PiSessionListItem]
+    let more: Int
+    /// 这一条的底色：隔开头像的描边用它。
+    let ground: Color
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 30
+
+    /// 比例都按头像直径算：首字占 0.42；状态标的点 0.2（符号按它放大到同样分量，看上去约 0.32），中心落在右下角的外沿上，
+    /// 不压首字；相邻两个叠 0.18。
+    private var badge: CGFloat { size * 0.2 }
+    private var overlap: CGFloat { size * 0.18 }
+
+    var body: some View {
+        // 左边的压在右边的上面：最要紧的在最前，它的状态标不被下一个盖住
+        HStack(spacing: -overlap) {
+            ForEach(Array(faces.enumerated()), id: \.element.id) { index, item in
+                face(item).zIndex(Double(faces.count - index)).transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
+            if more > 0 {
+                // 多出来的个数紧跟在叠放的头像后面，不再垫一个圆：会被前一个头像压住半边
+                Text("+\(more)").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink3)
+                    .contentTransition(.numericText())
+                    .padding(.leading, overlap + 6)
+                    .transition(.opacity)
+            }
+        }
+        .animation(Motion.snappy, value: faces.map(\.id))
+        .animation(Motion.snappy, value: more)
+        .accessibilityHidden(true)
+    }
+
+    private func face(_ item: PiSessionListItem) -> some View {
+        let tint = item.project.map { Palette.projectTint($0.color) }
+        return Text(item.state.title.first.map { String($0).uppercased() } ?? "·")
+            .font(.system(size: size * 0.42, weight: .semibold, design: .rounded))
+            .foregroundStyle(tint ?? palette.ink2)
+            .frame(width: size, height: size)
+            // 实心的底：压在下面的头像不从上面的透出来
+            .background(ground.mix(with: tint ?? palette.ink, by: tint == nil ? (palette.dark ? 0.22 : 0.12) : (palette.dark ? 0.3 : 0.18)), in: .circle)
+            .background(ground, in: .circle.inset(by: -2.5))
+            .overlay(alignment: .bottomTrailing) {
+                PiStateDot(shown: services.settings.shown(item), size: badge)
+                    .padding(2)
+                    .background(ground, in: .circle)
+                    .offset(x: size * 0.14, y: size * 0.14)
+            }
     }
 }
 #endif

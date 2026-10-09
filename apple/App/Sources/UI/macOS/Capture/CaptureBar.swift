@@ -88,7 +88,7 @@ struct CaptureComposer: View {
         TextField(expanded ? CaptureCopy.prompt : CaptureCopy.placeholder(to: destination), text: $text, axis: .vertical)
             .accessibilityLabel("随手记")
             .textFieldStyle(.plain)
-            .font(.system(size: 14))
+            .font(Typography.body)
             .lineLimit(expanded ? 1...8 : 1...1)
             .focused($focused)
             .onSubmit(save)
@@ -123,7 +123,7 @@ struct CaptureComposer: View {
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(palette.ink3)
                     .accessibilityHidden(true)
             }
-            .font(.system(size: 12))
+            .font(Typography.meta)
             .padding(.horizontal, 8).frame(height: 24)
             .background(palette.fill.opacity(2), in: .capsule)
             .contentShape(.capsule)

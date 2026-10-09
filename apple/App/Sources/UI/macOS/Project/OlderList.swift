@@ -14,9 +14,9 @@ struct OlderList: View {
         let total = groups.reduce(0) { $0 + $1.cards.count }
         VStack(alignment: .leading, spacing: 18) {
             // 与"资料""最近"同一种分组标题
-            HStack(alignment: .bottom, spacing: 6) {
-                Text("更早").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
-                Text("\(total)").font(.system(size: 12).monospacedDigit()).foregroundStyle(palette.ink3)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("更早").font(Typography.sectionTitle).foregroundStyle(palette.ink)
+                Text("\(total)").font(Typography.sectionCount).foregroundStyle(palette.ink3)
             }
             .id(ScrollAnchor.older)
             let titled = OlderGroup.needsTitles(in: groups)
@@ -30,12 +30,12 @@ struct OlderList: View {
         let open = isExpanded(group)
         let header = HStack {
             if group.isMonth {
-                Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).accessibilityHidden(true)
+                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).accessibilityHidden(true)
                     .rotationEffect(.degrees(open ? 90 : 0))
             }
-            Text(OlderGroupTitle.text(group.period)).font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2)
+            Text(OlderGroupTitle.text(group.period)).font(Typography.label).foregroundStyle(palette.ink2)
             Spacer()
-            Text("\(group.cards.count) 条").font(.system(size: 11)).foregroundStyle(palette.ink3)
+            Text("\(group.cards.count) 条").font(Typography.meta).foregroundStyle(palette.ink3)
         }
         .padding(.horizontal, 4)
         .contentShape(.rect)
@@ -83,18 +83,18 @@ struct OlderRow: View {
         Button(action: open) {
         HStack(spacing: 10) {
             Image(systemName: !text.images.isEmpty ? "photo" : "doc.text")
-                .font(.system(size: 12)).foregroundStyle(palette.ink3).frame(width: 18)
+                .font(.system(size: 13)).foregroundStyle(palette.ink3).frame(width: 18)
                 .accessibilityLabel(text.images.isEmpty ? "灵感" : "含图片的灵感")
             Text(text.label)
-                .font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
-            Text(text.preview).font(.system(size: 13)).foregroundStyle(palette.ink3).lineLimit(1)
+                .font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
+            Text(text.preview).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)
             AgentDot(card: card.id)
             if let lastTarget { SentMark(target: lastTarget) }
             Text(DateLabel.short(card.modifiedAt)).monospacedDigit().frame(width: 64, alignment: .trailing)
         }
-        .font(.system(size: 11.5)).foregroundStyle(palette.ink3)
-        .padding(.horizontal, 12).frame(height: 34)
+        .font(Typography.meta).foregroundStyle(palette.ink3)
+        .padding(.horizontal, 12).frame(height: 38)
         .background(hovering ? palette.fill : .clear)
         .contentShape(.rect)
         }

@@ -8,6 +8,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var project: Project?
     var deliveries: [DeliveryRequest]
     var messages: [PiChatMessage] = []
+    /// 这个会话里 Agent 发到手机上看的文件（对话里按 `.preview` 消息的位置显示，见 `PiChat.entries`）。
+    var previews: [PiPreview] = []
 
     /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条改名）。
     var title: String? {
@@ -31,7 +33,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 
     /// 会话页要观察的表。
-    static let tables: Set<StoreTable> = [.piSessionStates, .piMessages, .deliveryRequests, .projects]
+    static let tables: Set<StoreTable> = [.piSessionStates, .piMessages, .previews, .deliveryRequests, .projects]
 
     static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {
         let session = try store.piSessionPage(PiSessionQuery(id: id)).items.first?.state
@@ -40,7 +42,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             session: session,
             project: try session?.projectID.flatMap { try store.project($0) },
             deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
-            messages: try ref.map { try store.piMessages(of: $0) } ?? [])
+            messages: try ref.map { try store.piMessages(of: $0) } ?? [],
+            previews: try ref.map { try store.previews(of: $0) } ?? [])
     }
 }
 
@@ -277,7 +280,7 @@ struct PiElapsed: View {
 }
 
 /// `PiClock` 的文字在哪些时刻会变（见 `nextChange`）。
-private struct PiClockSchedule: TimelineSchedule {
+struct PiClockSchedule: TimelineSchedule {
     let clock: PiClock
 
     func entries(from startDate: Date, mode: TimelineScheduleMode) -> some Sequence<Date> {

@@ -277,6 +277,10 @@ final class AppServices {
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: library.store, host: mac.hostID)
+        mac.pi.showHandler = { [weak self] session, request in
+            guard let self else { throw PiBridgeError.previewUnavailable }
+            return try await self.showPreview(request, from: session)
+        }
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {

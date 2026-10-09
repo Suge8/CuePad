@@ -19,6 +19,8 @@ struct PiReplyBar: View {
     let compact: Bool
     /// 停止请求已发出、这一轮还没歇下（`MacDelivery.stopping`）。
     let stopping: Bool
+    /// 最近一条斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方短暂显示一行，成功就消失。
+    var commandProgress: MacDelivery.CommandProgress?
     /// 发出之后（会话页回到最新）。
     let sent: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -66,6 +68,14 @@ struct PiReplyBar: View {
         case .unanswerable: notice(Self.unanswerable, systemImage: "desktopcomputer")
         case .restartPi: notice("旧版扩展的会话发不了，在终端里执行 /reload 后再发", systemImage: "arrow.clockwise")
         case .message, .answer:
+            VStack(alignment: .leading, spacing: 6) {
+                if let commandProgress { progressLine(commandProgress) }
+                composer
+            }
+        }
+    }
+
+    private var composer: some View {
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, compact: compact, showsSend: canStop, expandsOnFocus: hasTools,
@@ -86,7 +96,17 @@ struct PiReplyBar: View {
             #if os(macOS)
             .onAppear { focused = true }
             #endif
+    }
+
+    /// 命令的进度行：不是你说的话，不进对话；在路上转圈，没成功写原因。
+    private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
+        HStack(spacing: 6) {
+            if case .running = progress { ProgressView().controlSize(.mini) }
+            Text(progress.text).lineLimit(2)
         }
+        .font(.footnote).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
+        .padding(.horizontal, 18)
+        .transition(.opacity)
     }
 
     #if os(iOS)
