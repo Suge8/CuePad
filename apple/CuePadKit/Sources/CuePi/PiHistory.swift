@@ -252,14 +252,14 @@ public enum PiHistory {
     /// toolResult 行占会话体积的绝大部分（工具输出、图片），又不含摘要要的东西：认出来就跳过，不做 JSON 解码。
     /// Pi 写出的键序固定为 type, id, parentId, timestamp, message，角色在行首附近。
     private static let toolResultMarker = Data(#""role":"toolResult""#.utf8)
-    /// 例外：发到手机预览的工具（`cuepad_show`）的结果要解码——它很小，工具名就在行首附近。
+    /// 例外：发到手机预览的工具（`cuepad_show`）的结果要解码。整行找（不赖键序）：memmem 比读文件快得多，大行里只有字节扫描、不解码。
     private static let showTool = "cuepad_show"
     private static let showToolMarker = Data(#""toolName":"\#(showTool)""#.utf8)
     private static let headLength = 512
 
     private static func ingest(_ raw: UnsafeRawBufferPointer, into cp: inout PiHistoryCheckpoint, transcript: inout [PiTranscriptEntry]) {
         cp.seq += 1
-        if isToolResult(raw), !contains(head(raw), showToolMarker) { return }
+        if isToolResult(raw), !contains(raw, showToolMarker) { return }
         guard let line = decode(raw) else { return } // 损坏行跳过
         let time = line.time
         // 最后活动：最后一行的时间（Pi 按时间追加）

@@ -39,8 +39,9 @@ struct RealPreviewTests {
         try pi.prompt("[[show:demo.html|登录页改好了]] 给我看看")
         try await finished(pi)
 
-        // 相对路径按工作目录解析成绝对路径（Pi 的工作目录是真实路径，/tmp 在 macOS 上是 /private/tmp 的链接）
-        #expect(received.map { URL(filePath: $0.path).resolvingSymlinksInPath() } == [pi.cwd.appending(path: "demo.html").resolvingSymlinksInPath()])
+        // 相对路径按工作目录解析成绝对路径；Pi 的工作目录是真实路径（/tmp 在 macOS 上是 /private/tmp 的链接），所以期望值取真实路径，字符串原样相等
+        let real = String(cString: realpath(pi.cwd.path, nil))  // resolvingSymlinksInPath 会把 /private 前缀去掉，不是真实路径
+        #expect(received.map(\.path) == ["\(real)/demo.html"])
         #expect(received.first?.title == "登录页改好了")
         let result = try toolResult(pi)
         #expect(!result.isError && result.text.contains("登录页改好了") && result.text.contains("style.css"))
