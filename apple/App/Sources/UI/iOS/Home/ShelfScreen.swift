@@ -12,12 +12,13 @@ nonisolated struct ShelfData: Sendable {
     }
 
     var entries: [Entry]
-    /// 在线的 Pi 会话（带发给它的最近一条投送请求）：各项目的"此刻"一行在界面上再按本机的规则挑（`ProjectNow`）。
-    var live: [PiSessionListItem]
+    /// 此刻有事的 Pi 会话（在线的，加上还有话发给它的已结束会话；带发给它的最近一条投送请求，`PiSessionQuery.current`）：
+    /// 各项目的"此刻"一行在界面上再按本机的规则挑（`ProjectNow`）。
+    var sessions: [PiSessionListItem]
     /// 各项目最近开始的进行中任务标题（`ProjectNow` 的一档）。
     var leading: [UUID: String]
     /// 等你确认的在线会话（书架最上面的"等你"）；个数与 Agent 角标同一个数。
-    var waiting: [PiSessionListItem] { live.filter(\.state.waitsForYou) }
+    var waiting: [PiSessionListItem] { sessions.filter(\.state.waitsForYou) }
     /// 进任务页的入口上写的数：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，没有入口。
     var tasks: TaskCounts?
     /// 正在推进的任务（进行中，最近开始的在前），书架最上面。
@@ -26,6 +27,11 @@ nonisolated struct ShelfData: Sendable {
     var trashCount: Int
 
     static let activeLimit = 3
+
+    /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。
+    @MainActor func now(shown: (PiSessionListItem) -> PiShown) -> [UUID: ProjectNow] {
+        ProjectNow.byProject(entries.map(\.project), live: sessions, tasks: leading, shown: shown)
+    }
 
     static func read(from store: isolated CueStore) throws -> ShelfData {
         let summaries = try store.projectSummaries()
@@ -36,7 +42,7 @@ nonisolated struct ShelfData: Sendable {
         }
         let hasTasks = tasks.values.contains { $0.total > 0 }
         return ShelfData(
-            entries: entries, live: try store.piSessionPage(.live).items, leading: try TaskBoard.leading(from: store),
+            entries: entries, sessions: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store),
             tasks: hasTasks ? try TaskBoard.counts(from: store) : nil,
             active: try TaskBoard.active(limit: activeLimit, from: store),
             inboxCount: counts[nil] ?? 0,
@@ -105,7 +111,7 @@ struct ShelfScreen: View {
         let pinned = data.entries.filter(\.project.isPinned)
         let recent = data.entries.filter { !$0.project.isPinned }
         // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
-        let now = ProjectNow.byProject(data.entries.map(\.project), live: data.live, tasks: data.leading, shown: services.settings.shown)
+        let now = data.now(shown: services.settings.shown)
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: 22) {
             if data.entries.isEmpty && data.inboxCount == 0 {

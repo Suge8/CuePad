@@ -36,7 +36,8 @@ nonisolated struct ProjectNow: Hashable, Sendable {
         return nil
     }
 
-    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。
+    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`live` 要传此刻有事的会话
+    /// （`PiSessionQuery.current`：在线的，加上还有话发给它的已结束会话），只传在线的会漏掉发给已结束会话的话。
     static func byProject(
         _ projects: [Project], live: [PiSessionListItem], tasks: [UUID: String], shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {

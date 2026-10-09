@@ -114,7 +114,8 @@ private struct AgentPanel: View {
 }
 
 nonisolated private struct SidebarData: Sendable {
-    var live: [PiSessionListItem]
+    /// 此刻有事的会话（`PiSessionQuery.current`）：项目行的"此刻"读它。
+    var sessions: [PiSessionListItem]
     var waiting: Int
     /// 各项目最近开始的进行中任务（项目行的"此刻"，`ProjectNow`）。
     var leading: [UUID: String]
@@ -138,7 +139,7 @@ private struct SplitSidebar: View {
             if let catalog = workspace.catalog {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果
                 let now = ProjectNow.byProject(
-                    catalog.projects, live: data?.live ?? [], tasks: data?.leading ?? [:], shown: services.settings.shown)
+                    catalog.projects, live: data?.sessions ?? [], tasks: data?.leading ?? [:], shown: services.settings.shown)
                 let pinned = catalog.projects.filter(\.isPinned)
                 if !pinned.isEmpty {
                     Section("置顶") { ForEach(pinned) { row($0, catalog, now: now[$0.id]) } }
@@ -166,8 +167,8 @@ private struct SplitSidebar: View {
             Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
         .observing(services.store, [.piSessionStates, .deliveryRequests, .cards], into: $data, onError: workspace.fail) { store in
-            let live = try store.piSessionPage(.live).items
-            return SidebarData(live: live, waiting: live.filter(\.state.waitsForYou).count, leading: try TaskBoard.leading(from: store))
+            let sessions = try store.piSessionPage(.current).items
+            return SidebarData(sessions: sessions, waiting: sessions.filter(\.state.waitsForYou).count, leading: try TaskBoard.leading(from: store))
         }
     }
 

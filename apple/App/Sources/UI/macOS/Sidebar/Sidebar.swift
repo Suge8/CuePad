@@ -12,7 +12,8 @@ nonisolated private struct SidebarData: Sendable {
     /// 发给这些会话的最近一条投送请求与最近一条改名（Pi 的会话 id →）。
     var deliveries: [String: DeliveryRequest]
     var renames: [String: DeliveryRequest]
-    /// 各项目最近开始的进行中任务（项目行的"此刻"，`ProjectNow`）。
+    /// 项目行的"此刻"（`ProjectNow`）读的：此刻有事的会话（`PiSessionQuery.current`）与各项目最近开始的进行中任务。
+    var current: [PiSessionListItem]
     var leading: [UUID: String]
 }
 
@@ -38,9 +39,7 @@ struct Sidebar: View {
         List {
             if let data, let catalog, let pages {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果
-                let now = ProjectNow.byProject(
-                    catalog.projects, live: data.live.map { PiSessionListItem(state: $0, delivery: data.deliveries[$0.sessionID]) },
-                    tasks: data.leading, shown: services.settings.shown)
+                let now = ProjectNow.byProject(catalog.projects, live: data.current, tasks: data.leading, shown: services.settings.shown)
                 if !pages.pinned.isEmpty {
                     Section("置顶") { ForEach(pages.pinned) { row($0, catalog, now: now[$0.id]) } }
                 }
@@ -92,7 +91,7 @@ struct Sidebar: View {
                 live: live.items.map(\.listed), ended: ended.items.map(\.listed), sessionTotal: live.total + ended.total,
                 deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
                 renames: Dictionary((live.items + ended.items).compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first },
-                leading: try TaskBoard.leading(from: store))
+                current: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store))
         }
     }
 

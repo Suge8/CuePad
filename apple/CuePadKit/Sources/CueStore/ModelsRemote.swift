@@ -490,9 +490,10 @@ public struct PiSubagentState: Sendable, Equatable {
   }
 }
 
-/// 会话按状态分的范围：在线的（未结束）、已结束的（含历史）、全部。
+/// 会话按状态分的范围：在线的（未结束）、已结束的（含历史）、全部；`current` 是此刻有事的——在线的，加上已结束但还有话发给它的
+/// （在唤醒、没能送达；投送请求了结后不久就被清理，所以只有这几条），项目的"此刻"读它。
 public enum PiSessionScope: Sendable, Equatable {
-  case live, ended, all
+  case live, ended, all, current
 }
 
 /// 会话列表的一页（Mac 与手机共用的唯一查询，见 `CueStore.piSessionPage`）。条件之间是"且"。
@@ -526,6 +527,8 @@ public struct PiSessionQuery: Sendable, Equatable {
 
   /// 全部在线会话（数量少，不分页）。
   public static let live = PiSessionQuery(scope: .live, limit: .max)
+  /// 此刻有事的会话（在线的与还有话发给它的已结束会话，数量少，不分页）。
+  public static let current = PiSessionQuery(scope: .current, limit: .max)
 }
 
 /// 列表里的一个会话、它所属的项目（没有绑定项目或项目已删为 nil；文件夹名在 `state.folder`），
