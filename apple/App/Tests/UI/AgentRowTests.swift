@@ -16,6 +16,13 @@ struct AgentRowTests {
         try #require(try await store.piSessionPage(PiSessionQuery()).items.first)
     }
 
+    /// 旧扩展的会话不再在对话上浮一张说明卡：状态写在会话页顶上的玻璃标题里，点标题看这一句怎么接上；别的状态没有这句。
+    @Test func 需要reload的会话_点标题看怎么接上_别的状态没有说明() {
+        #expect(PiShown(status: .restart).explanation == "这个会话还在用升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里对这个会话执行 /\u{2060}reload 就能接上。")
+        #expect(PiShown(status: .working(.thinking)).explanation == nil)
+        #expect(PiShown(status: .ended).explanation == nil)
+    }
+
     @Test func 终端里刚开的会话是新会话_不是待你回复() async throws {
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "fresh", state: .settled, title: "fresh")
 
