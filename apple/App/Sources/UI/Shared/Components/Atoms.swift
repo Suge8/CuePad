@@ -28,11 +28,14 @@ extension View {
 struct ProjectGlyph: View {
     let project: Project?
     var size: CGFloat = 13
+    @Environment(\.palette) private var palette
 
     var body: some View {
         Image(systemName: Self.symbol(project?.icon))
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? .secondary)
+            // 深色下提亮一档：偏灰、偏暗的项目色（如 #8A8A84）的细线图标在深底与玻璃上几乎看不见
+            .brightness(palette.dark ? 0.18 : 0)
             .frame(width: size + 6)
             .accessibilityHidden(true) // 项目名总在旁边，图标只是装饰
     }

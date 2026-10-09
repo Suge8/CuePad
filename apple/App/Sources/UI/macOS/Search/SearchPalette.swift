@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import SwiftUI
 
 nonisolated private struct PaletteData: Sendable {
@@ -8,6 +9,9 @@ nonisolated private struct PaletteData: Sendable {
     var projects: [Project]
     var lastSends: [UUID: LastSend]
     var targets: [SendTarget]
+    /// 结果里的任务：上级的标题与下级（提示词、子任务）各自做完没有，预览里写它的进度。
+    var parents: [UUID: String]
+    var marks: [UUID: [ChildMark]]
 }
 
 /// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
@@ -51,9 +55,14 @@ struct SearchPalette: View {
                 for owner in Set(found.cards.map(\.projectID)) {
                     lastSends.merge(try store.lastSends(in: owner)) { current, _ in current }
                 }
+                var parents: [UUID: String] = [:], marks: [UUID: [ChildMark]] = [:]
+                for task in found.cards where task.isTask {
+                    marks[task.id] = try store.childMarks(of: task.id)[task.id]
+                    if let parent = task.parentID { parents[task.id] = try store.card(parent)?.title }
+                }
                 return PaletteData(
                     cards: found.cards, total: found.totalCards, projects: try store.projects(),
-                    lastSends: lastSends, targets: try store.sendTargets())
+                    lastSends: lastSends, targets: try store.sendTargets(), parents: parents, marks: marks)
             }
             #if DEBUG
             .onChange(of: data?.cards.map(\.id)) { PerfProbe.mark("search") }
@@ -185,7 +194,7 @@ struct SearchPalette: View {
         return HStack(spacing: 10) {
             Image(systemName: text.images.isEmpty ? "doc.text" : "photo").frame(width: 16).foregroundStyle(.secondary)
                 .accessibilityLabel((card.isTask ? "任务" : "灵感") + (text.images.isEmpty ? "" : "，含图片"))
-            Text(Highlight.matches(text.title.isEmpty ? "无标题" : text.title, query.text)).font(.system(size: 13.5)).lineLimit(1)
+            Text(Highlight.matches(text.label, query.text)).font(.system(size: 13.5)).lineLimit(1)
             Spacer()
             Text(DateLabel.short(card.modifiedAt)).font(.system(size: 11)).foregroundStyle(.secondary)
         }
@@ -196,33 +205,50 @@ struct SearchPalette: View {
         .onTapGesture { selection = card.id }
     }
 
+    /// 右侧预览：标题、项目与时间、任务的上级与进度、首图、标题之后的全文（搜着词时从命中处起、命中标色）；按内容高度收起，快捷键提示紧跟在下面。
     @ViewBuilder private var preview: some View {
         if let card = selected, let data {
             let text = CardText(card.body)
+            // 搜着词时从第一处命中往前一点开始显示，命中不会落在下面看不到的地方
+            let rest = CueSummary.snippet(card.body, matching: query.text.split(whereSeparator: \.isWhitespace).map(String.init), whole: true)
             let project = data.projects.first { $0.id == card.projectID }
             VStack(alignment: .leading, spacing: 10) {
-                Text(text.title.isEmpty ? "无标题" : text.title).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
+                Text(text.label).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
                     Text("\(project?.name ?? "未分类") · \(DateLabel.short(card.modifiedAt))")
                     if let send = data.lastSends[card.id] { SentMark(target: send.target.name) }
                 }
                 .font(.system(size: 11)).foregroundStyle(palette.ink3)
+                if card.isTask, let facts = Self.taskFacts(parent: data.parents[card.id], marks: data.marks[card.id]) {
+                    Text(facts).font(.system(size: 12)).foregroundStyle(palette.ink2)
+                }
                 if let image = text.images.first { Thumbnail(hash: image, height: 150) }
-                ScrollView {
-                    Text(Highlight.matches(text.preview, query.text, base: VariableText.styled(text.preview, palette)))
+                if !rest.isEmpty {
+                    let body = Text(Highlight.matches(rest, query.text, base: VariableText.styled(rest, palette)))
                         .font(.system(size: 13)).lineSpacing(5).foregroundStyle(palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    ViewThatFits(in: .vertical) {
+                        body.fixedSize(horizontal: false, vertical: true)
+                        ScrollView { body }
+                    }
                 }
                 HStack(spacing: 12) { Text("↩ 打开"); Text("⌘↩ 发送"); Text("⌘⇧C 复制") }
-                .font(.system(size: 11)).foregroundStyle(palette.ink3)
+                .font(.system(size: 11)).foregroundStyle(palette.ink3).padding(.top, 4)
             }
             .padding(20)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .paper(radius: 16)
             .padding(10)
+            .frame(maxHeight: .infinity, alignment: .top)
         } else {
             Spacer().frame(maxWidth: .infinity)
         }
+    }
+
+    /// 任务预览的一行："上级：修乱序 · 3 条提示词 · 1 已回复 · 子任务 1/2"；什么都没有时不写。
+    private static func taskFacts(parent: String?, marks: [ChildMark]?) -> String? {
+        [parent.map { "上级：\($0)" }, PromptTally(marks).text, TaskProgress.subtasks(in: marks).map(TaskCopy.progress)]
+            .compactMap { $0 }.joined(separator: " · ").nonEmpty
     }
 
     private var shortcuts: some View {

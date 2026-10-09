@@ -28,7 +28,7 @@ struct InboxScreen: View {
         }
         .scrollContentBackground(.hidden)
         .animation(Motion.quick, value: cards?.map(\.id))
-        .floatingHeader(CaptureCopy.inbox, detail: cards.map { $0.isEmpty ? "" : "\($0.count) 条" } ?? "")
+        .floatingHeader(CaptureCopy.inbox, detail: cards.map { $0.isEmpty ? "空的" : "\($0.count) 条" } ?? "")
         .sheet(item: $moving) { MoveToProjectSheet(card: $0) }
         .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
         .observing(services.store, [.cards], into: $cards, onError: workspace.fail) { store in
@@ -42,7 +42,7 @@ struct InboxScreen: View {
         return Button { navigation.open(card: card.id) } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(text.title.nonEmpty ?? (text.images.isEmpty ? "无标题" : "图片")).font(.body.weight(.medium))
+                    Text(text.label).font(.body.weight(.medium))
                         .foregroundStyle(palette.ink).lineLimit(2)
                     Spacer(minLength: 4)
                     AgentDot(card: card.id).padding(.vertical, -8)

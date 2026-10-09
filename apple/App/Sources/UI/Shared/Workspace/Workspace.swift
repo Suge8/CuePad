@@ -481,16 +481,18 @@ final class Workspace {
         })
     }
 
-    /// 任务下写一条提示词：先建一条空的接在下级最后，调用方随即打开它的编辑；离开时还是空的由 `dropIfEmpty` 删掉。
+    /// 任务下写一条提示词：先建一条空的接在下级最后，调用方随即打开它的编辑；离开时还是空白由 `leaveEditing` 删掉。
     func createPrompt(under task: UUID) async throws -> Card {
         try await services.store.createCard(body: "", under: task)
     }
 
-    /// 离开提示词的编辑时：什么都没写（没有文字也没有图片）就不留下这条。
-    func dropIfEmpty(_ id: UUID) async throws {
-        guard let card = try await services.store.card(id), card.parentID != nil, !card.isTask,
-              CardText(card.body).title.isEmpty, CardText(card.body).images.isEmpty else { return }
-        try await services.store.purgeCard(id)
+    /// 离开一条灵感或提示词的编辑：先写下没保存的字，还是空白（`Card.isBlank`）就不留下——记一条与写提示词都是先建一条空的再编辑。
+    func leaveEditing(_ id: UUID, flush: Autosave?) {
+        let store = services.store
+        attempt {
+            await flush?.flush()
+            try await store.dropIfBlank(id)
+        }
     }
 
     /// 归档（连同下级）：不占列表、仍可搜；提示里可撤销。

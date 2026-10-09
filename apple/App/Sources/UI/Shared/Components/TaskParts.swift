@@ -162,7 +162,7 @@ struct PromptCard: View {
         let text = CardText(prompt.body)
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(text.title.nonEmpty ?? (text.images.isEmpty ? "还没写" : "\(text.images.count) 张图"))
+                Text(text.label)
                     .font(TaskMetrics.font.weight(.medium)).foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                     .lineLimit(2)
                 if !text.preview.isEmpty {

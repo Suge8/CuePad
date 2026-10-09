@@ -133,16 +133,8 @@ struct CardEditorPage: View {
         .onChange(of: paperFrame.isEmpty || initialText == nil, initial: true) { _, waiting in
             if !waiting, isOpen, stage == .paper { prepare() }
         }
-        .onDisappear {
-            // 提示词什么都没写就离开：不留下这条
-            let id = cardID, isPrompt = data?.task != nil
-            if let autosave {
-                Task {
-                    await autosave.flush()
-                    if isPrompt { try? await workspace.dropIfEmpty(id) }
-                }
-            }
-        }
+        // 什么都没写就离开（新记的一条、新写的提示词）：不留下这条
+        .onDisappear { workspace.leaveEditing(cardID, flush: autosave) }
     }
 
     /// 任务的纸页：完成圈与标题、一句说明，下面是提示词卡片与子任务（与手机任务页同一组件）。打开提示词或子任务是换一页。
@@ -395,7 +387,7 @@ private struct EditorBar: View {
                 HStack(spacing: 16) {
                     Button("复制全文", systemImage: "doc.on.doc") { send(.clipboard, whole: true) }
                         .help("复制全文（变量已填）")
-                    Button("插入分割线", systemImage: "minus") { handle.insertDivider() }
+                    Button("插入分割线", systemImage: "rectangle.split.1x2") { handle.insertDivider() }
                         .help("在光标处插入一条分割线")
                     if selecting {
                         Button("转为任务", systemImage: "checklist") {

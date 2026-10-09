@@ -5,19 +5,13 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// 设置窗口的内容：外观、iCloud 同步与冲突副本、全局快捷键、投送、Pi 扩展。操作结果就地显示在对应行下。
+/// 设置窗口的内容：外观、iCloud 同步与冲突副本、全局快捷键、投送、Pi 扩展、命令行、更新——都是同一种分组卡。操作结果就地显示在对应行下。
 struct SettingsView: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(spacing: 0) {
-            form
-            Divider()
-            CommandLineToolBar()
-            Divider()
-            UpdateBar()
-        }
+        form
         .frame(width: 520)
         // 与主窗口同一种桌面色，不用系统的白底
         .background(palette.desk)
@@ -56,10 +50,12 @@ struct SettingsView: View {
             } footer: {
                 Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把灵感和任务（含图片）直接发进会话。安装或升级后，已在运行的会话在终端里执行 /reload 就能用上。")
             }
+            Section("命令行") { CommandLineToolRow() }
+            Section("更新") { UpdateRow() }
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
-        .frame(height: 640)
+        .frame(height: 720)
     }
 }
 
@@ -311,7 +307,7 @@ private struct ConflictsSection: View {
             Section {
                 ForEach(services.conflicts, id: \.copy.id) { conflict in
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(CardText(conflict.original.body).title.isEmpty ? "无标题" : CardText(conflict.original.body).title)
+                        Text(CardText(conflict.original.body).label)
                             .font(.headline)
                         version("这台设备的版本", conflict.original, keep: .original, copy: conflict.copy.id)
                         version("另一台设备的版本", conflict.copy, keep: .copy, copy: conflict.copy.id)

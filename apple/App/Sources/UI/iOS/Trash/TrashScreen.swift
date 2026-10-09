@@ -24,7 +24,7 @@ struct TrashScreen: View {
                 if !data.projects.isEmpty {
                     Section("项目") {
                         ForEach(data.projects, id: \.project.id) { item in
-                            row(title: item.project.name, detail: "\(item.cards) 条灵感与任务", deletedAt: item.project.deletedAt,
+                            row(title: item.project.name, detail: CountCopy.text((item.cards, "条灵感与任务")) ?? "", deletedAt: item.project.deletedAt,
                                 restore: { try await $0.restoreProject(item.project.id) },
                                 purge: { try await $0.purgeProject(item.project.id) })
                         }
@@ -34,7 +34,7 @@ struct TrashScreen: View {
                     Section("灵感与任务") {
                         ForEach(data.cards) { card in
                             let text = CardText(card.body)
-                            row(title: text.title.isEmpty ? "无标题" : text.title, detail: text.preview, deletedAt: card.deletedAt,
+                            row(title: text.label, detail: text.preview, deletedAt: card.deletedAt,
                                 restore: { try await $0.restoreCard(card.id) },
                                 purge: { try await $0.purgeCard(card.id) })
                         }

@@ -115,7 +115,9 @@ final class GrowingTextView: UITextView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        placeholder.frame = CGRect(x: 0, y: 0, width: bounds.width, height: placeholder.font.lineHeight)
+        // 占位从光标右边起：光标画在第一个字上会压住它（系统输入框同样留出光标的宽度）
+        let caret = caretRect(for: beginningOfDocument).maxX + 1
+        placeholder.frame = CGRect(x: caret, y: 0, width: bounds.width - caret, height: placeholder.font.lineHeight)
         // 高度定下来之后才知道末尾在哪；还没有窗口（未上屏）时等上屏后的那次排版
         if revealsEnd, window != nil, bounds.height > 0 {
             revealsEnd = false

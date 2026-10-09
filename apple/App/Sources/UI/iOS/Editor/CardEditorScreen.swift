@@ -15,7 +15,7 @@ nonisolated private struct EditorData: Sendable {
 /// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值、发送；选中文字时发送只发选中的部分）与自动保存在这里，
 /// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目（提示词写它的任务）
 /// 与"时间 · 资料"，右下一颗"交给 Agent"（⌘↩），右边"⋯"里是分享与 `CardMenu.more`；任务是 `TaskPage`（标题、提示词、子任务）。
-/// 提示词离开时什么都没写就不留下（`Workspace.dropIfEmpty`）。
+/// 灵感与提示词离开时什么都没写就不留下（`Workspace.leaveEditing`）。
 struct CardEditorScreen: View {
     let cardID: UUID
     /// 还没读到卡时先按哪种外框排（任务浮窗里是任务），读到后以卡为准。
@@ -66,13 +66,7 @@ struct CardEditorScreen: View {
             .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { dismiss() } }
             .onAppear(perform: makeAutosave)
             .onDisappear {
-                let id = cardID, isPrompt = data?.task != nil
-                if let autosave {
-                    Task {
-                        await autosave.flush()
-                        if isPrompt { try? await workspace.dropIfEmpty(id) }
-                    }
-                }
+                workspace.leaveEditing(cardID, flush: autosave)
                 if let flushToken { services.removeBackgroundFlush(flushToken) }
             }
     }
