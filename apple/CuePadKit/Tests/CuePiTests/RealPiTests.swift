@@ -283,16 +283,6 @@ struct RealPiTests {
         }
     }
 
-    @Test func pasteReachesPisEditor() async throws {
-        try await withRig { pi, bridge, s in
-            try await bridge.paste("draft from CuePad", into: s.id)
-            let request = try await pi.waitForEvent("Pi 收到编辑器文本") {
-                $0["type"] as? String == "extension_ui_request" && $0["method"] as? String == "set_editor_text"
-            }
-            #expect(request["text"] as? String == "draft from CuePad")
-        }
-    }
-
     /// 等待用户时 `question` 是弹窗：种类、文案（确认框的标题与说明，换行分隔）、选项与这次弹窗的标识；在 Pi 里回答后清空。
     @Test func extensionDialogShowsWaitingUserWithTheQuestionThenResumes() async throws {
         try await withRig { pi, bridge, _ in

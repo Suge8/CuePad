@@ -4,7 +4,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。产品说明见 [README.md](READM
 
 ## 术语
 
-界面词只有：**灵感**、**任务**、**提示词**、**Agent**、**未分类**（没有项目的灵感）、**资料**（项目里长期参考的灵感，`isPinned`）、**归档**、**回收站**。主动线是 记下 → 交给 Agent →（看结果）→ 完成并归档。代码里灵感与任务是同一种记录 `Card`（一张 `cards` 表、一种同步记录）：`todoAt` 为空是灵感，非空是任务（"设为任务 / 改回灵感"只翻它，改回时下级提到它的位置）；状态由 `startedAt`/`completedAt` 推出；`archivedAt` 有值是归档（连同下级）。任务是一件要做成的事，正文只有标题与一句说明（`CueTask`）；挂在任务下的任务是**子任务**、挂在任务下的灵感是**提示词**（要交给 Agent 的话，同一个 `parentID`；只有任务能当上级，最多三级）。提示词交给的会话在发出后歇下就算"已回复"（由发送记录与会话状态推出，不存字段）；任务不自动完成。项目只是容器，带一句可选的 `intro`（介绍）；没有目标卡。
+界面词只有：**灵感**、**任务**、**提示词**、**Agent**、**未分类**（没有项目的灵感）、**资料**（项目里长期参考的灵感，`isPinned`）、**归档**、**回收站**。主动线是任务优先：记下灵感 → 挂到任务（成为提示词）→ 在提示词上交给 Agent →（看结果）→ 完成并归档；灵感本身不直接交给 Agent（一条卡能做什么只在 `CardMenu`）。代码里灵感与任务是同一种记录 `Card`（一张 `cards` 表、一种同步记录）：`todoAt` 为空是灵感，非空是任务（"设为任务 / 改回灵感"只翻它，改回时下级提到它的位置）；状态由 `startedAt`/`completedAt` 推出；`archivedAt` 有值是归档（连同下级）。任务是一件要做成的事，正文只有标题与一句说明（`CueTask`）；挂在任务下的任务是**子任务**、挂在任务下的灵感是**提示词**（要交给 Agent 的话，同一个 `parentID`；只有任务能当上级，最多三级）。提示词交给的会话在发出后歇下就算"已回复"（由发送记录与会话状态推出，不存字段）；任务不自动完成。项目只是容器，带一句可选的 `intro`（介绍）；没有目标卡。
 
 | 路径 | 职责 |
 | --- | --- |
@@ -18,7 +18,6 @@ Swift 原生应用（macOS / iOS / iPadOS）。产品说明见 [README.md](READM
 | `apple/CuePadKit/Sources/CueStore` | SQLite 唯一事实源：表结构、仓储、搜索、资料库位置、跨进程变更通知 |
 | `apple/CuePadKit/Sources/CueEditor` | TextKit 2 编辑器，AppKit/UIKit 宿主 |
 | `apple/CuePadKit/Sources/CueSync` | CKSyncEngine ↔ CueStore 的记录映射、待推送、冲突与附件 |
-| `apple/CuePadKit/Sources/CueDispatch` | macOS 通用投送：前台应用、剪贴板、定向 `Cmd+V` |
 | `apple/CuePadKit/Sources/CuePi` | macOS Pi 桥：扩展、socket 协议（[README](apple/CuePadKit/Sources/CuePi/README.md)）、会话历史、终端跳转 |
 | `apple/CuePadKit/Sources/CueCLI` | `cuepad` 命令行；`cuepad --help` 是其唯一文档 |
 | `apple/CuePadKit/Tests` | 各模块的 Swift Testing 测试 |

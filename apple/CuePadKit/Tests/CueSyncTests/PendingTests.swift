@@ -56,7 +56,7 @@ import Testing
   @Test func permanentDeletionEnqueuesDeletesWithoutATombstoneTable() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: project.id, body: "x")
-    let send = try await store.recordSend("s", to: SendTarget(kind: .clipboard, name: "c"), card: card.id)
+    let send = try await store.recordSend("s", to: SendTarget(kind: .piSession, name: "c"), card: card.id)
     try await rig.coordinator.reconcile()
     try await rig.simulatePush()
 

@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueDispatch
 import CuePi
 import CueStore
 import Foundation
@@ -101,7 +100,7 @@ extension AppServices {
         }
     }
 
-    /// 执行一条请求：发给 Pi 会话的在这里调用 Pi 桥（全 App 只有这一处），应用与剪贴板交给通用发送；成功后记发送记录。
+    /// 执行一条请求：发给 Pi 会话的在这里调用 Pi 桥（全 App 只有这一处）；成功后记发送记录。别的目标（旧版本写的发到应用、剪贴板）按失败写回。
     private func perform(_ request: DeliveryRequest) async throws {
         if request.mode == .known(.ping) { return }  // 连接测试：收到即成功，不碰目标、不写发送记录
         if request.mode == .known(.start) {
@@ -126,12 +125,7 @@ extension AppServices {
             guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
             if try await control(request, mode: mode, session: ref, in: id) { return }
             sent = try await sendToPi(content, session: id, mode: mode, request: request.id)
-        case .known(.app):
-            guard let bundleID = target.ref else { throw SendError.unsupportedTarget(target.name) }
-            sent = try await dispatch(content, to: .bundleID(bundleID), submit: settings.autoSubmit)
-        case .known(.clipboard):
-            sent = try copyToClipboard(content)
-        case .unknown:
+        default:
             throw SendError.unsupportedTarget(target.name)
         }
         try await recordSend(request.content, to: sent, card: request.cardID)
@@ -240,10 +234,6 @@ extension AppServices {
         guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
         let whenBusy: PiQueueMode?
         switch mode {
-        case .paste:
-            guard !content.hasImages else { throw SendError.imagesNotSupported }
-            try await channels.paste(content.plainText, into: id)
-            return session.target
         case .send:
             guard !session.isBusy else { throw SendError.piSessionBusy }
             whenBusy = nil

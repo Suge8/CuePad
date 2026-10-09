@@ -1,10 +1,8 @@
 #if os(macOS)
-import CueDispatch
 import CuePi
 import CueStore
 import CueText
 import Foundation
-import SQLite3
 import Testing
 @testable import CuePad
 
@@ -35,22 +33,20 @@ struct SendTests {
 
     // MARK: 路由
 
-    @Test func 剪贴板_文字与图片按原顺序_记录目标为剪贴板() async throws {
+    @Test func 复制_文字与图片按原顺序放进剪贴板_不是发送不记发送记录() async throws {
         let body = try await bodyWithImage()
 
-        try await services.send(body, to: .clipboard)
+        try services.copy(body)
 
-        #expect(channels.calls == [.copy(Payload([.text("before\n"), .image(png), .text("\nafter")]))])
-        let record = try #require(try await services.store.sendRecords().first)
-        #expect(record.targetKind == .known(.clipboard))
-        #expect(record.content == body)
+        #expect(channels.calls == [.copy(ClipboardContent([.text("before\n"), .image(png), .text("\nafter")]))])
+        #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 发给Pi_文字去掉图片标记_图片按序带原图和类型_记录会话id与目录名() async throws {
         try await connectedSession()
         let body = try await bodyWithImage()
 
-        try await services.send(body, to: .pi("s1.100", .send))
+        try await services.send(body, to: "s1.100", mode: .send, card: nil)
 
         let request = try #require(try await services.store.deliveryRequests().first)
         #expect(channels.calls == [
@@ -66,78 +62,21 @@ struct SendTests {
         try await connectedSession(busy: true)
 
         await #expect(throws: SendError.piSessionBusy) {
-            try await services.send("hi", to: .pi("s1.100", .send))
+            try await services.send("hi", to: "s1.100", mode: .send, card: nil)
         }
         #expect(channels.calls.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)
 
-        try await services.send("hi", to: .pi("s1.100", .steer))
+        try await services.send("hi", to: "s1.100", mode: .steer, card: nil)
         let request = try #require(try await services.store.deliveryRequests().first)
         #expect(channels.calls == [.send(PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString), "s1.100")])
     }
 
     @Test func 未知Pi会话报错且不写记录() async throws {
         await #expect(throws: PiBridgeError.unknownSession("nope")) {
-            try await services.send("hi", to: .pi("nope", .send))
+            try await services.send("hi", to: "nope", mode: .send, card: nil)
         }
         #expect(try await services.store.sendRecords().isEmpty)
-    }
-
-    @Test func 放进输入框只送文字_含图片则拒绝且什么都不发() async throws {
-        try await connectedSession()
-        try await services.send("plain", to: .pi("s1.100", .paste))
-        #expect(channels.calls == [.paste("plain", "s1.100")])
-
-        let body = try await bodyWithImage()
-        await #expect(throws: SendError.notDelivered(SendError.imagesNotSupported.localizedDescription)) {
-            try await services.send(body, to: .pi("s1.100", .paste))
-        }
-        #expect(channels.calls.count == 1)
-        #expect(try await services.store.sendRecords().count == 1)
-    }
-
-    @Test func 通用投送_先预检再隐藏窗口再投送_按设置回车_记录应用名与bundle() async throws {
-        let body = try await bodyWithImage()
-        services.settings.autoSubmit = true
-
-        try await services.send(body, to: .app(.terminal))
-
-        #expect(channels.calls == [
-            .preflight(.terminal),
-            .dispatch(Payload([.text("before\n"), .image(png), .text("\nafter")]), .terminal, submit: true),
-        ])
-        #expect(rig.window.events == ["hide"])
-        let record = try #require(try await services.store.sendRecords().first)
-        #expect(record.targetKind == .known(.app))
-        #expect(record.targetName == "Editor")
-        #expect(record.targetRef == "com.example.editor")
-    }
-
-    @Test func 通用投送预检失败_窗口不动_没有记录() async throws {
-        channels.preflightError = DispatchError.accessibilityRequired
-
-        await #expect(throws: DispatchError.accessibilityRequired) {
-            try await services.send("hi", to: .app(.lastFrontmost))
-        }
-        #expect(rig.window.events.isEmpty)
-        #expect(try await services.store.sendRecords().isEmpty)
-    }
-
-    @Test func 通用投送失败_窗口恢复_没有记录() async throws {
-        channels.dispatchError = DispatchError.targetUnavailable
-
-        await #expect(throws: DispatchError.targetUnavailable) {
-            try await services.send("hi", to: .app(.lastFrontmost))
-        }
-        #expect(rig.window.events == ["hide", "show"])
-        #expect(try await services.store.sendRecords().isEmpty)
-    }
-
-    /// 选定的应用退出后，发送按钮仍显示它的名字：按 bundle ID 找已安装的应用，不要求它在运行。
-    @Test func 应用名按bundle_ID从已安装的应用解析_找不到才用bundle_ID() {
-        // 系统自带应用的显示名随系统语言变化（Safari 在中文系统叫"Safari浏览器"），用名称不随语言变的 CuePad 自己
-        #expect(services.appName(bundleID: AppServices.bundleID) == "CuePad")
-        #expect(services.appName(bundleID: "com.example.not-installed") == "com.example.not-installed")
     }
 
     // MARK: Mac 上发给 Pi 会话
@@ -151,7 +90,7 @@ struct SendTests {
         try await services.startDeliveryExecutor()
         let workspace = Workspace(services: services)
 
-        #expect(await workspace.send("hi", via: .pi("s1.100", .steer)))
+        #expect(await workspace.send("hi", to: AgentTarget(session: "s1.100", mode: .steer)))
 
         // 发出即有请求（"你发过去的"列表立刻有这一行）
         let request = try #require(try await services.store.deliveryRequests().first)
@@ -171,35 +110,21 @@ struct SendTests {
     // MARK: 记录
 
     @Test func 记录带内容快照与关联的卡片() async throws {
+        try await connectedSession()
         let task = try await services.store.createTask("do it", in: nil)
 
-        try await services.send("snapshot text", to: .clipboard, card: task.id)
+        try await services.send("snapshot text", to: "s1.100", mode: .send, card: task.id)
 
         let record = try #require(try await services.store.sendRecords().first)
         #expect(record.content == "snapshot text")
         #expect(record.cardID == task.id)
     }
 
-    /// 投送已经成功、发送记录没写进去：调用方得到说明这件事的错误（界面据此提示且不当作没发出），而不是只进日志。
-    @Test func 已发出但记录写入失败_抛出未记录错误() async throws {
-        var handle: OpaquePointer?
-        defer { sqlite3_close(handle) }
-        try #require(sqlite3_open(services.location.databaseURL.path, &handle) == SQLITE_OK)
-        try #require(sqlite3_exec(handle, "DROP TABLE sendRecords", nil, nil, nil) == SQLITE_OK)
-
-        await #expect {
-            try await services.send("hi", to: .clipboard)
-        } throws: { error in
-            if case SendError.unrecorded = error { true } else { false }
-        }
-        #expect(channels.calls == [.copy(Payload([.text("hi")]))])
-    }
-
-    @Test func 图片文件缺失时报错_不发送不记录() async throws {
+    @Test func 复制时图片文件缺失就报错_剪贴板不动() async throws {
         let missing = CueFormat.imageMarkup(id: String(repeating: "a", count: 64))
 
-        await #expect(throws: SendError.imageUnavailable(String(repeating: "a", count: 64))) {
-            try await services.send("x \(missing)", to: .clipboard)
+        #expect(throws: SendError.imageUnavailable(String(repeating: "a", count: 64))) {
+            try services.copy("x \(missing)")
         }
         #expect(channels.calls.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)

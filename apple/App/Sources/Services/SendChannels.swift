@@ -1,6 +1,5 @@
 #if os(macOS)
 import AppKit
-import CueDispatch
 import CuePi
 import CueStore
 import Foundation
@@ -10,39 +9,23 @@ nonisolated struct PiSessionInfo {
     var isBusy: Bool
 }
 
-/// 发送的落地接缝：真实实现连 Pi 桥、Dispatcher 与系统剪贴板，测试用记录型替身。
+/// 发送的落地接缝：真实实现连 Pi 桥与系统剪贴板，测试用记录型替身。
 @MainActor
 protocol SendChannels {
     func piSession(_ id: CuePi.PiSession.ID) -> PiSessionInfo?
     /// Pi 自己的会话 id（手机与同步记录里用的）→ 这台 Mac 上桥连接的会话 id；不在这台 Mac 上则 nil。
     func piSessionID(forSession sessionID: String) -> CuePi.PiSession.ID?
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws
-    func paste(_ text: String, into id: CuePi.PiSession.ID) async throws
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws
     func configure(model: PiModelRef?, thinking: String?, name: String?, in id: CuePi.PiSession.ID) async throws
     func command(_ line: String, whenBusy: PiQueueMode?, in id: CuePi.PiSession.ID) async throws
     func abort(in id: CuePi.PiSession.ID) async throws
-    /// 权限与目标检查，不改任何状态；失败时调用方不必动窗口。
-    func preflight(_ selector: TargetSelector) async throws
-    func dispatch(_ payload: Payload, to selector: TargetSelector, submit: Bool) async throws -> AppInfo
-    func copy(_ payload: Payload) throws
-    func runningApps() -> [AppInfo]
-    func lastFrontmost() -> AppInfo?
+    func copy(_ content: ClipboardContent) throws
 }
 
 @MainActor
 struct LiveSendChannels: SendChannels {
     let pi: PiBridge
-    let apps: WorkspaceApps
-    let dispatcher: Dispatcher
-    let pasteboard = PasteboardWriter()
-
-    init(pi: PiBridge, bundleID: String) {
-        let apps = WorkspaceApps(excludedBundleID: bundleID)
-        self.pi = pi
-        self.apps = apps
-        dispatcher = .live(apps: apps)
-    }
 
     func piSession(_ id: CuePi.PiSession.ID) -> PiSessionInfo? {
         pi.sessions.first { $0.id == id }.map {
@@ -58,10 +41,6 @@ struct LiveSendChannels: SendChannels {
 
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws {
         try await pi.send(message, to: id)
-    }
-
-    func paste(_ text: String, into id: CuePi.PiSession.ID) async throws {
-        try await pi.paste(text, into: id)
     }
 
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws {
@@ -80,18 +59,7 @@ struct LiveSendChannels: SendChannels {
         try await pi.abort(id)
     }
 
-    func preflight(_ selector: TargetSelector) async throws {
-        guard Accessibility.isTrusted() else { throw DispatchError.accessibilityRequired }
-        _ = try await dispatcher.resolve(selector)
-    }
-
-    func dispatch(_ payload: Payload, to selector: TargetSelector, submit: Bool) async throws -> AppInfo {
-        try await dispatcher.dispatch(payload, to: selector, submit: submit)
-    }
-
-    func copy(_ payload: Payload) throws { try pasteboard.write(payload) }
-    func runningApps() -> [AppInfo] { apps.runningTargets() }
-    func lastFrontmost() -> AppInfo? { apps.lastFrontmost() }
+    func copy(_ content: ClipboardContent) throws { try Clipboard.write(content) }
 }
 
 extension PiAgentState {
@@ -107,7 +75,6 @@ struct MacDependencies {
     var paths: PiPaths
     var installer: PiExtensionInstaller
     var terminal: PiTerminalJumper
-    var isAccessibilityTrusted: @Sendable () -> Bool
     var hostID: String
     /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
     var wakeNotifications: NotificationCenter
@@ -121,18 +88,17 @@ struct MacDependencies {
 
     /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
     @MainActor
-    static func live(bundleID: String, location: LibraryLocation) -> MacDependencies {
+    static func live(location: LibraryLocation) -> MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)
         let installer = PiExtensionInstaller(paths: paths)
         return MacDependencies(
             pi: pi,
-            channels: LiveSendChannels(pi: pi, bundleID: bundleID),
+            channels: LiveSendChannels(pi: pi),
             hotkeys: CarbonHotkeyBackend(),
             paths: paths,
             installer: installer,
             terminal: PiTerminalJumper(),
-            isAccessibilityTrusted: Accessibility.isTrusted,
             hostID: HostIdentity.current(),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: CommandLineToolInstaller(),

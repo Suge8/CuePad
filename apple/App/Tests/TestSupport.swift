@@ -179,7 +179,6 @@ final class TestApp {
             paths: piPaths,
             installer: PiExtensionInstaller(paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")])),
             terminal: PiTerminalJumper(),
-            isAccessibilityTrusted: { true },
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
             commandLineTool: CommandLineToolInstaller(

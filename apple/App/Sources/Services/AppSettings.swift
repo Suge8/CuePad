@@ -14,7 +14,6 @@ final class AppSettings {
     private enum Key {
         static let theme = "theme"
         static let globalShortcut = "globalShortcut"
-        static let autoSubmit = "autoSubmit"
         static let currentProject = "currentProject"
         static let piExtensionDeclined = "piExtensionDeclined"
         static let commandLineToolPrompted = "commandLineToolPrompted"
@@ -34,8 +33,6 @@ final class AppSettings {
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
     /// W3C code 形式的加速键（如 `Alt+Space`）。
     var globalShortcut: String { didSet { defaults.set(globalShortcut, forKey: Key.globalShortcut) } }
-    /// 通用投送后是否补发回车。
-    var autoSubmit: Bool { didSet { defaults.set(autoSubmit, forKey: Key.autoSubmit) } }
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
@@ -130,7 +127,6 @@ final class AppSettings {
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
         globalShortcut = string(Key.globalShortcut) ?? Self.defaultGlobalShortcut
-        autoSubmit = launchArguments[Key.autoSubmit].map(Self.isTrue) ?? defaults.bool(forKey: Key.autoSubmit)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)

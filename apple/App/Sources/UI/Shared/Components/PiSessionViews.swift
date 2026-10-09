@@ -53,9 +53,9 @@ nonisolated enum PiDelivery: Hashable, Sendable {
             if ended { return .waking }
             return request.status == .known(.pending) ? .sending : .delivering
         case .succeeded:
-            // 放进输入框不会让 Pi 动起来；其余等会话状态跟上（进入处理中，或在送达之后变过）就让位
+            // 等会话状态跟上（进入处理中，或在送达之后变过）就让位
             let caughtUp = session.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
-            return mode == .paste || caughtUp ? nil : .delivered
+            return caughtUp ? nil : .delivered
         case .failed:
             return (seen ?? .distantPast) > (request.completedAt ?? request.modifiedAt) ? nil : .failed
         case nil:

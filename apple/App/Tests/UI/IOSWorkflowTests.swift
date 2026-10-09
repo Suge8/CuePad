@@ -47,7 +47,7 @@ struct IOSWorkflowTests {
     @Test func 发到Mac_请求指定会话所在的Mac_目标是该会话_方式原样交给Mac() async throws {
         let target = try await session("atlas", .settled, host: "mac-b")
 
-        for mode in [DeliveryMode.send, .steer, .followUp, .paste] {
+        for mode in [DeliveryMode.send, .steer, .followUp] {
             let request = try await app.services.requestMacDelivery("正文", to: target, mode: mode)
             #expect(request.hostID == "mac-b")
             #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
@@ -59,23 +59,22 @@ struct IOSWorkflowTests {
     /// 手机上只有一个发送：空闲直接发；Pi 正在跑一轮时默认等它做完再说，另有马上说。
     /// 手机不给"放进输入框"（人不在 Mac 前，没人去按那一下发送）。
     @Test(arguments: [
-        (PiWorkState.settled, false, [DeliveryMode.send]),
-        (.error, false, [.send]),
-        (.thinking, false, [.followUp, .steer]),
-        (.tool, false, [.followUp, .steer]),
-        (.waitingForUser, false, [.followUp, .steer]),
+        (PiWorkState.settled, [DeliveryMode.send]),
+        (.error, [.send]),
+        (.thinking, [.followUp, .steer]),
+        (.tool, [.followUp, .steer]),
+        (.waitingForUser, [.followUp, .steer]),
         // 等子代理：算工作中，但 Pi 自己这轮已经歇下，消息直接开始新的一轮（与 Mac 同一条规则）
-        (.delegating, false, [.send]),
-        (.settled, true, [.send]),
-        (.outputting, true, [.followUp, .steer]),
+        (.delegating, [.send]),
+        (.outputting, [.followUp, .steer]),
         // 已结束的也能直接发：Mac 在后台把它恢复起来再送达
-        (.ended, false, [.send]),
+        (.ended, [.send]),
     ])
-    func 手机发送_空闲直接发_忙时默认等它做完再说另有马上说_没有放进输入框(state: PiWorkState, hasImages: Bool, modes: [DeliveryMode]) {
+    func 发给会话_空闲直接发_忙时默认等它做完再说另有马上说(state: PiWorkState, modes: [DeliveryMode]) {
         let session = PiSessionState(
             id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
             lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
-        #expect(MacDelivery.modes(for: session, hasImages: hasImages) == modes)
+        #expect(MacDelivery.modes(for: session) == modes)
     }
 
     /// 旧协议的会话在线但发不了：回复框不给输入，写原因。
@@ -83,7 +82,7 @@ struct IOSWorkflowTests {
         let session = PiSessionState(
             id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(.incompatible), detail: nil, folder: nil,
             lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
-        #expect(MacDelivery.reply(to: session, hasImages: false) == .restartPi)
+        #expect(MacDelivery.reply(to: session) == .restartPi)
         #expect(!MacDelivery.canStop(session))
     }
 

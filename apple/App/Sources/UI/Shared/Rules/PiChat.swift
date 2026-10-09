@@ -47,7 +47,7 @@ nonisolated enum PiChat {
     static func outgoing(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
         let arrived = Set(messages.compactMap(\.deliveryID))
         return deliveries.filter { request in
-            guard let mode = request.mode.known, [.send, .steer, .followUp, .paste].contains(mode) else { return false }
+            guard let mode = request.mode.known, [.send, .steer, .followUp].contains(mode) else { return false }
             return !arrived.contains(request.id)
         }
     }

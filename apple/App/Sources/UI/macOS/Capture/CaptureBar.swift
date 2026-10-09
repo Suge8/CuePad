@@ -18,7 +18,7 @@ struct CaptureBar: View {
 }
 
 /// Mac 的随手记（底部输入栏与菜单栏面板共用），结构与文案同手机（`CaptureCopy`、`CaptureDraft`）：
-/// 落点项目、附图；↩ 记成灵感（⌥↩ 换行），记下后提示落点、点提示去那里；另可 ⌘↩ 直接发出（不存卡）。
+/// 落点项目、附图；↩ 记成灵感（⌥↩ 换行），记下后提示落点、点提示去那里。记下的是灵感：它要交给 Agent 先挂到任务，所以这里没有发送。
 struct CaptureComposer: View {
     /// 没手动换过落点时落在哪（主窗口是正在看的项目，菜单栏面板是当前项目）。
     let defaultProject: UUID?
@@ -38,70 +38,42 @@ struct CaptureComposer: View {
     private var project: UUID? { chosen ?? defaultProject }
     private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project)) }
     private var expanded: Bool { pinnedOpen || focused || !text.isEmpty || !images.isEmpty }
-    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-    /// 有字、没有图时才能发出去（发图走纸页）。
-    private var showsSend: Bool { !trimmed.isEmpty && images.isEmpty }
-    /// 发送钮这时是主钮（发给 Agent，`Workspace.sendStyle`）：记下退成次钮，一处只有一颗靛青（↩ 照样记下）。
-    private var sendIsPrimary: Bool { showsSend && workspace.sendStyle(workspace.effectiveChoice(for: project)) == .primary }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            VStack(alignment: .leading, spacing: 8) {
-                if expanded {
-                    HStack(spacing: 8) {
-                        destinationMenu
-                        Spacer(minLength: 8)
-                    }
-                    .transition(.opacity)
-                    if !images.isEmpty { imageStrip }
+        VStack(alignment: .leading, spacing: 8) {
+            if expanded {
+                HStack(spacing: 8) {
+                    destinationMenu
+                    Spacer(minLength: 8)
                 }
-                field
+                .transition(.opacity)
+                if !images.isEmpty { imageStrip }
             }
-            .padding(expanded && !pinnedOpen ? 8 : 0)
-            .modifier(CaptureSurface(pinned: pinnedOpen))
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(palette.ink3.opacity(focused && !pinnedOpen ? 0.5 : 0), lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
-            // 主窗口里发送钮浮在输入栏右边；菜单栏面板窄，它在稿纸里的工具排（见 `field`）
-            if showsSend, !pinnedOpen {
-                sendControl.transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
-            }
+            field
+        }
+        .padding(expanded && !pinnedOpen ? 8 : 0)
+        .modifier(CaptureSurface(pinned: pinnedOpen))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(palette.ink3.opacity(focused && !pinnedOpen ? 0.5 : 0), lineWidth: 1)
+                .allowsHitTesting(false)
         }
         .animation(Motion.quick, value: expanded)
-        .animation(Motion.snappy, value: trimmed.isEmpty)
         .onAppear { if pinnedOpen { focused = true } }
         .onChange(of: workspace.captureFocusRequests) { focused = true }
     }
 
-    /// 主窗口：一行（展开后右下是图片与记下）；菜单栏面板：文字在上，下面一排工具——图片、发送、记下，与稿纸同一边距。
-    @ViewBuilder private var field: some View {
-        Group {
-            if pinnedOpen {
-                VStack(alignment: .leading, spacing: 0) {
-                    textField
-                    HStack(spacing: 4) {
-                        imageButton
-                        Spacer(minLength: 0)
-                        if showsSend { sendControl.transition(.opacity) }
-                        saveButton
-                    }
-                    .padding([.horizontal, .bottom], 6)
-                }
-            } else {
-                HStack(alignment: .bottom, spacing: 4) {
-                    if !expanded {
-                        Image(systemName: "square.and.pencil").foregroundStyle(palette.ink2).padding(.leading, 16).padding(.bottom, 13)
-                            .accessibilityHidden(true)
-                    }
-                    textField
-                    if expanded {
-                        imageButton
-                        saveButton
-                    }
-                }
+    /// 一行：文字区，展开后右下是图片与记下。
+    private var field: some View {
+        HStack(alignment: .bottom, spacing: 4) {
+            if !expanded {
+                Image(systemName: "square.and.pencil").foregroundStyle(palette.ink2).padding(.leading, 16).padding(.bottom, 13)
+                    .accessibilityHidden(true)
+            }
+            textField
+            if expanded {
+                imageButton
+                saveButton
             }
         }
         // 圆角 = 外框 22 − 内边距 8，与外框同心（菜单栏面板同样内边距 8）
@@ -131,15 +103,11 @@ struct CaptureComposer: View {
     }
 
     private var saveButton: some View {
-        Button(action: save) { SubmitGlyph(.save, enabled: !draft.isEmpty && !saving, prominent: !sendIsPrimary, size: .small) }
+        Button(action: save) { SubmitGlyph(.save, enabled: !draft.isEmpty && !saving, size: .small) }
             .buttonStyle(.plain)
             .disabled(draft.isEmpty || saving)
             .accessibilityLabel("记下")
             .help("记下（↩）")
-    }
-
-    private var sendControl: some View {
-        SendControl(project: project, compact: pinnedOpen) { send($0) }
     }
 
     private var destinationMenu: some View {
@@ -199,12 +167,6 @@ struct CaptureComposer: View {
             images = []
         }
         focused = true
-    }
-
-    private func send(_ choice: AppServices.Destination) {
-        let body = trimmed
-        guard !body.isEmpty else { return }
-        Task { if await workspace.send(body, via: choice) { text = "" } }
     }
 }
 

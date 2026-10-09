@@ -15,7 +15,7 @@ nonisolated private struct PaletteData: Sendable {
 }
 
 /// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
-/// ↑↓ 选择，↩ 打开，⌘↩ 发送，⌘⇧C 复制。会话——上面是在线的，下面是已结束的、按结束时间分段（分页，下一页只接在末尾），
+/// ↑↓ 选择，↩ 打开，⌘↩ 发给 Agent（只有提示词），⌘⇧C 复制。会话——上面是在线的，下面是已结束的、按结束时间分段（分页，下一页只接在末尾），
 /// 右侧是它的近况与回复。
 struct SearchPalette: View {
     @Binding var scope: SearchScope
@@ -233,7 +233,11 @@ struct SearchPalette: View {
                         ScrollView { body }
                     }
                 }
-                HStack(spacing: 12) { Text("↩ 打开"); Text("⌘↩ 发送"); Text("⌘⇧C 复制") }
+                HStack(spacing: 12) {
+                    Text("↩ 打开")
+                    if CardMenu.handsToAgent(card) { Text("⌘↩ 发给 Agent") }
+                    Text("⌘⇧C 复制")
+                }
                 .font(Typography.meta).foregroundStyle(palette.ink3).padding(.top, 4)
             }
             .padding(20)
@@ -256,14 +260,16 @@ struct SearchPalette: View {
         ZStack {
             Button("发送") { if let card = selected { Task { await sendSelected(card) } } }
                 .keyboardShortcut(.return, modifiers: .command)
-            Button("复制") { if let card = selected { Task { await workspace.send(Outgoing.text(of: card), via: .clipboard, card: card.id) } } }
+            Button("复制") { if let card = selected { workspace.copy(Outgoing.text(of: card)) } }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
         }
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 
+    /// 只有提示词发给 Agent（本项目当前的会话）；灵感先挂到任务。
     private func sendSelected(_ card: Card) async {
-        await workspace.send(Outgoing.text(of: card), via: workspace.effectiveChoice(for: card.projectID), card: card.id)
+        guard CardMenu.handsToAgent(card), let target = workspace.agentTarget(for: card.projectID) else { return }
+        await workspace.send(Outgoing.text(of: card), to: target, card: card.id)
     }
 
     private func groups(_ data: PaletteData) -> [(owner: UUID?, cards: [Card])] {
@@ -371,14 +377,11 @@ private struct FilterBar: View {
             FilterCapsule(name: "含图片", value: nil, on: query.withImages)
         }
         .buttonStyle(PressStyle())
-        FilterToken(name: "发送目标", value: sentLabel, on: query.sent != .any) {
+        FilterToken(name: "Agent", value: sentLabel, on: query.sent != .any) {
             Button("任意") { query.sent = .any }
             Divider()
-            Button("从未发送") { query.sent = .never }
-            Divider()
-            Button("Agent 会话") { query.sent = .sent(kind: .known(.piSession)) }
-            Button("应用") { query.sent = .sent(kind: .known(.app)) }
-            Button("剪贴板") { query.sent = .sent(kind: .known(.clipboard)) }
+            Button("没交给过 Agent") { query.sent = .never }
+            Button("交给过 Agent") { query.sent = .sent(kind: .known(.piSession)) }
             if !targets.isEmpty {
                 Divider()
                 ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
@@ -402,13 +405,9 @@ private struct FilterBar: View {
     private var sentLabel: String {
         switch query.sent {
         case .any: "任意"
-        case .never: "从未发送"
-        case .sent(let kind, .some(let name)): kind == .known(.piSession) ? "Agent · \(name)" : name
-        case .sent(.known(.piSession), nil): "Agent 会话"
-        case .sent(.known(.app), nil): "应用"
-        case .sent(.known(.clipboard), nil): "剪贴板"
-        case .sent(.unknown(let raw), nil): raw
-        case .sent(nil, nil): "发送过"
+        case .never: "没交过"
+        case .sent(_, .some(let name)): name
+        case .sent(_, nil): "交过"
         }
     }
 }

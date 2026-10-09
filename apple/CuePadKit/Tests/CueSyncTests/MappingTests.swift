@@ -97,7 +97,7 @@ import Testing
     #expect(try await store.sendTargets().isEmpty)  // 没有关联卡片，不进目标列表
 
     // 原样推回：其他字段被编辑后，未知值不变
-    try await store.recordSend("x", to: SendTarget(kind: .known(.app), name: "a"))
+    try await store.recordSend("x", to: SendTarget(kind: .known(.piSession), name: "a"))
     let pushedSend = try #require(await rig.coordinator.record(for: send.recordID))
     #expect(pushedSend["targetKind"] as? String == "carrierPigeon")
   }
