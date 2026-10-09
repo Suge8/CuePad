@@ -106,7 +106,7 @@ struct PiReplyBar: View {
     /// 命令的进度行：不是你说的话，不进对话；在路上转圈，没成功写原因。
     private func progressLine(_ progress: MacDelivery.CommandProgress) -> some View {
         HStack(spacing: 6) {
-            if case .running = progress { ProgressView().controlSize(.mini) }
+            if case .running = progress { Spinner(.mini) }
             Text(progress.text).lineLimit(2)
         }
         .font(Typography.meta).foregroundStyle(progress.failed ? palette.failure : palette.ink3)

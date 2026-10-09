@@ -69,7 +69,7 @@ struct ProjectFolderGuide: View {
             switch progress {
             case .binding:
                 HStack(spacing: 8) {
-                    ProgressView().controlSize(.mini)
+                    Spinner(.mini)
                     Text("Mac 正在绑定文件夹…").foregroundStyle(palette.ink3)
                 }
                 .font(Self.noteFont)

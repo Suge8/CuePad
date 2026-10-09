@@ -115,7 +115,7 @@ private struct PreviewWeb: View {
             } else if let failure {
                 ContentUnavailableView("没法安全地打开这个页面", systemImage: "lock.trianglebadge.exclamationmark", description: Text(failure))
             } else {
-                ProgressView()
+                Spinner(.regular)
             }
         }
         .task {

@@ -467,7 +467,7 @@ struct StopGlyph: View {
     var body: some View {
         ZStack {
             if stopping {
-                ProgressView().controlSize(.small).tint(palette.ink2).frame(width: 36, height: 36).background(palette.fill, in: .circle)
+                Spinner(.small).frame(width: 36, height: 36).background(palette.fill, in: .circle)
             } else {
                 Image(systemName: "stop.fill").font(.caption.weight(.bold)).foregroundStyle(palette.paper)
                     .frame(width: 36, height: 36).background(palette.ink, in: .circle)

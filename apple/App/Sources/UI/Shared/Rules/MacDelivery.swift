@@ -42,8 +42,7 @@ extension MacDelivery {
     /// 正在停止：这一轮开始后发过停止请求，它还在路上或 Mac 已受理，而这一轮还没歇下（受理只表示收到，歇下看状态）。
     /// 进度只读投送请求，界面不另存。
     static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest]) -> Bool {
-        guard canStop(session) else { return false }
-        let turnStart = session.busySince ?? session.stateSince
+        guard canStop(session), let turnStart = session.busySince else { return false }
         return deliveries.contains { request in
             request.mode == .known(.stop) && request.createdAt >= turnStart
                 && (request.isOpen || request.status == .known(.succeeded))

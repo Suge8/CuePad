@@ -141,7 +141,7 @@ struct AgentPage: View {
             }
             if list.loaded < list.total {
                 // 滑到这里才读下一页
-                ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(16)
+                Spinner(.small).frame(maxWidth: .infinity).padding(16)
                     .task(id: list.loaded) { limit = list.loaded + PiSessionList.pageSize }
             }
         }

@@ -166,7 +166,7 @@ struct AgentScreen: View {
                 }
                 if list.loaded < list.total {
                     // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上（一页没填满屏幕）时接着读
-                    ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
+                    Spinner(.regular).frame(maxWidth: .infinity).listRowBackground(Color.clear)
                         .task(id: list.loaded) { limit = list.loaded + PiSessionList.pageSize }
                 }
             }

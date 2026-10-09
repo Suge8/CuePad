@@ -144,8 +144,11 @@ private struct SyncSection: View {
                     }
                 }
             } icon: {
-                Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
-                    .symbolEffect(.pulse, isActive: services.syncStatus == .syncing)
+                if services.syncStatus == .syncing {
+                    Spinner(.small)
+                } else {
+                    Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
+                }
             }
             if services.sync != nil {
                 if case .needsDecision = services.syncStatus {

@@ -164,7 +164,8 @@ struct PiSessionSubtitle: View {
             if let undelivered { Text("· \(undelivered)").foregroundStyle(palette.failure) }
             if shown.clock != nil {
                 Text("·").foregroundStyle(palette.ink3)
-                PiElapsed(shown: shown, font: Self.font)
+                // 整个 App 只有这一个计时到秒：正看着的这个会话
+                PiElapsed(shown: shown, font: Self.font, precision: .second)
             }
         }
         .font(Self.font)

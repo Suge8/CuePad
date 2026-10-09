@@ -369,7 +369,7 @@ private struct PiThinkingDial: View {
                         .transition(.opacity)
                 }
             }
-            .modifier(Breathing(active: pending && touched == nil && !reduceMotion))
+            .modifier(Breathing(active: pending && touched == nil))
     }
 
     private func bars(_ drawn: PiThinkingMeter, color: @escaping (Int) -> Color) -> some View {
@@ -387,20 +387,16 @@ private struct PiThinkingDial: View {
     }
 }
 
-/// 发出后还没送达：轻轻呼吸（只在这一小会儿，不是常驻动效）。
+/// 发出后还没送达：轻轻呼吸（只在这一小会儿）。一层胶囊底色盖在内容上一明一暗（`LoopLayer` 的 `pulse`，交给渲染服务）：
+/// SwiftUI 的 repeatForever 每帧在 App 进程里重算，一直没送达时会话页静止也占约 9% CPU。减弱动态效果时不呼吸。
 private struct Breathing: ViewModifier {
     let active: Bool
-    @State private var dim = false
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content
-            .opacity(active && dim ? 0.45 : 1)
-            .onChange(of: active, initial: true) { _, active in
-                if active {
-                    withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { dim = true }
-                } else {
-                    withAnimation(Motion.quick) { dim = false }
-                }
-            }
+        content.overlay {
+            if active, !reduceMotion { LoopLayer(kind: .pulse, color: palette.fill).mask { content }.allowsHitTesting(false) }
+        }
     }
 }
