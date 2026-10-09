@@ -31,6 +31,9 @@ nonisolated struct TaskDetail: Sendable, Equatable {
     var prompts: [Card] { children.filter { !$0.isTask } }
     var subtasks: [Card] { children.filter(\.isTask) }
 
+    /// 一页的焦点：第一条还没交出去的提示词，只有它的"交给 Agent"是靛青主钮，其余没发的退成墨色，一眼看出从哪条开始。
+    var primaryPrompt: UUID? { prompts.first { state(of: $0) == .unsent }?.id }
+
     func state(of prompt: Card) -> PromptState {
         let replied = zip(children, marks).first { $0.0.id == prompt.id }?.1.isDone ?? false
         return PromptState(isReplied: replied, handoff: agents.items[prompt.id], launching: agents.launching.contains(prompt.id))
@@ -105,7 +108,8 @@ struct PromptList: View {
                 pick
             }
             ForEach(prompts) { prompt in
-                PromptCard(prompt: prompt, state: detail?.state(of: prompt) ?? .unsent, open: { open(prompt) }, hand: { hand(prompt) })
+                PromptCard(
+                    prompt: prompt, state: detail?.state(of: prompt) ?? .unsent, primary: prompt.id == detail?.primaryPrompt, open: { open(prompt) }, hand: { hand(prompt) })
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
             Button(action: write) {
@@ -145,11 +149,13 @@ struct PromptList: View {
     }
 }
 
-/// 一条提示词：内容预览，下面一行是交给 Agent 的钮，交出去过的左边写它此刻怎样（交给某会话·处理中 / 会话已结束 / 已回复，点它看会话）：
-/// 还没发的只有靛青的"交给 Agent"（一页的焦点，不另写"未发"），交出去过的退成墨色文字"再交一次"。点卡打开大编辑区；长按是灵感的菜单。
+/// 一条提示词：内容预览，下面一行是交给 Agent 的钮，交出去过的左边写它此刻怎样（"会话名 · 思考中 / 已结束 / 已回复"，点它看会话）：
+/// 第一条还没发的是靛青的"交给 Agent"（一页的焦点，不另写"未发"，见 `TaskDetail.primaryPrompt`），其余没发的是墨色文字"交给 Agent"，
+/// 交出去过的是墨色文字"再交一次"。点卡打开大编辑区；长按是灵感的菜单。
 struct PromptCard: View {
     let prompt: Card
     let state: PromptState
+    let primary: Bool
     let open: () -> Void
     let hand: () -> Void
     @Environment(AppServices.self) private var services
@@ -174,11 +180,11 @@ struct PromptCard: View {
                 Spacer(minLength: 8)
                 let fresh = state == .unsent
                 Button(action: hand) {
-                    Label(fresh ? "交给 Agent" : "再交一次", systemImage: fresh ? "paperplane.fill" : "paperplane")
-                        .font(TaskMetrics.caption.weight(fresh ? .semibold : .medium))
-                        .foregroundStyle(fresh ? palette.signature : palette.ink2)
-                        .padding(.horizontal, fresh ? 12 : 4).frame(height: TaskMetrics.chipHeight)
-                        .background(fresh ? palette.signature.opacity(0.12) : .clear, in: .capsule)
+                    Label(fresh ? "交给 Agent" : "再交一次", systemImage: primary ? "paperplane.fill" : "paperplane")
+                        .font(TaskMetrics.caption.weight(primary ? .semibold : .medium))
+                        .foregroundStyle(primary ? palette.signature : fresh ? palette.ink : palette.ink2)
+                        .padding(.horizontal, primary ? 12 : 4).frame(height: TaskMetrics.chipHeight)
+                        .background(primary ? palette.signature.opacity(0.12) : .clear, in: .capsule)
                         // 点得到的范围上下各多出一截，但不撑高卡片：卡片底边只比这一排低一个内边距
                         .contentShape(.rect.inset(by: -(TaskMetrics.chipTarget - TaskMetrics.chipHeight) / 2))
                 }
@@ -211,28 +217,30 @@ struct PromptCard: View {
         case .working(let item):
             let shown = services.settings.shown(item)
             sessionLink(item) {
-                HStack(spacing: 6) {
-                    PiStateDot(shown: shown, size: 7)
-                    Text(item.state.title).foregroundStyle(palette.ink2).lineLimit(1)
-                    Text(shown.presence).foregroundStyle(shown.labelTint(palette)).lineLimit(1)
-                }
+                line(name: item.state.title, word: shown.label, tint: shown.labelTint(palette)) { PiStateDot(shown: shown, size: 7) }
             }
         case .ended(let item):
             sessionLink(item) {
-                HStack(spacing: 6) {
-                    Image(systemName: "stop.circle").foregroundStyle(palette.ink3)
-                    Text("会话已结束").foregroundStyle(palette.ink2)
-                    Text(item.state.title).foregroundStyle(palette.ink3).lineLimit(1)
-                }
+                line(name: item.state.title, word: "已结束", tint: palette.ink3) { Image(systemName: "stop.circle").foregroundStyle(palette.ink3) }
             }
         case .replied(let item):
             sessionLink(item) {
-                HStack(spacing: 6) {
+                line(name: item?.state.title, word: "已回复", tint: palette.ink) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.ink)
-                    Text("Agent 已回复").foregroundStyle(palette.ink)
-                    if let item { Text(item.state.title).foregroundStyle(palette.ink3).lineLimit(1) }
                 }
             }
+        }
+    }
+
+    /// 交出去过的状态一律"状态标 会话名 · 状态词"，名字长了只截名字。
+    private func line(name: String?, word: String, tint: Color, @ViewBuilder mark: () -> some View) -> some View {
+        HStack(spacing: 6) {
+            mark()
+            if let name {
+                Text(name).foregroundStyle(palette.ink2).lineLimit(1)
+                Text("·").foregroundStyle(palette.ink3)
+            }
+            Text(word).foregroundStyle(tint).lineLimit(1).fixedSize()
         }
     }
 
@@ -393,6 +401,7 @@ struct TaskRingView: View {
     let size: CGFloat
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private static let faint = 0.4
 
     var body: some View {
         Group {
@@ -412,14 +421,19 @@ struct TaskRingView: View {
 
     /// 与 SF 的 circle 同尺寸同线宽的实线圈（颜色照状态），圈里是进度：从 12 点顺时针的扇形，做完多少填多少。
     /// 进行中另在左半铺一层淡的同色（同 circle.lefthalf.filled 的左半），扇形从右半开始填、正好和它错开。
+    /// 下级全做完了圈里整个铺淡色：实心圆是"已勾掉"的通用语言，满进度画成实心就和完成的对勾分不开，任务要你自己勾。
     /// 不用"淡圈上描一道弧"：小尺寸下那就是系统的加载转圈。
     private func progress(_ fraction: Double) -> some View {
         let tint = TaskGlyph.tint(status, palette), line = max(1.4, size * 0.095)
         return ZStack {
             Circle().stroke(tint, lineWidth: line)
             Group {
-                if status == .inProgress { Circle().trim(from: 0.25, to: 0.75).fill(tint.opacity(0.4)) }
-                Sector(fraction: fraction).fill(tint)
+                if fraction >= 1 {
+                    Circle().fill(tint.opacity(Self.faint))
+                } else {
+                    if status == .inProgress { Circle().trim(from: 0.25, to: 0.75).fill(tint.opacity(Self.faint)) }
+                    Sector(fraction: fraction).fill(tint)
+                }
             }
             // 与圈线之间留一线缝，扇形的边才读得出来
             .padding(line * 1.1)

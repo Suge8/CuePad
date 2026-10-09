@@ -238,7 +238,7 @@ private struct PrimaryCapsule: ViewModifier {
         content.font(Typography.body.weight(.semibold))
             .foregroundStyle(palette.onSignature)
             .padding(.horizontal, 20).frame(height: 36)
-            .background(palette.signature, in: .capsule)
+            .background(palette.signatureFill, in: .capsule)
     }
 }
 #endif

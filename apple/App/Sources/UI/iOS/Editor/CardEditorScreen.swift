@@ -224,7 +224,7 @@ private struct MainButton: View {
                 .font(.body.weight(.semibold))
                 .foregroundStyle(palette.onSignature)
                 .padding(.horizontal, 18).frame(height: 48)
-                .background(palette.signature, in: .capsule)
+                .background(palette.signatureFill, in: .capsule)
                 .contentShape(.capsule)
         }
         .buttonStyle(PressStyle())

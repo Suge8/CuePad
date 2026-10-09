@@ -196,7 +196,7 @@ struct Thumbnail: View {
     }
 }
 
-/// 预览文字里的 `{{变量}}` 染成琥珀色标注（`Palette.variable`）。
+/// 预览文字里的 `{{变量}}`：墨色字垫深一级的底（`Palette.variable`）。
 enum VariableText {
     static func styled(_ text: String, _ palette: Palette) -> AttributedString {
         var result = AttributedString(text)

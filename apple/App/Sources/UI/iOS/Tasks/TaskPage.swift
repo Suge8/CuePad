@@ -17,15 +17,17 @@ struct TaskPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // 完成圈与"⋯"的点按区比图形大，往两边伸进页边距，图形仍与下面的内容对齐
                 HStack(alignment: .top, spacing: 4) {
                     TaskRingButton(task: card, marks: detail?.marks).offset(y: -8)
                     TaskHeading(task: card).padding(.top, 2)
                     more.offset(y: -8)
                 }
+                .padding(.horizontal, -8)
                 PromptList(task: card, detail: detail, open: { opened = $0.id }, hand: { navigation.handToAgent($0) }, write: write)
                 SubtaskList(detail: detail, open: { opened = $0.id })
             }
-            .padding(.leading, 8).padding(.trailing, 12).padding(.top, 20).padding(.bottom, 40)
+            .padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 40)
         }
         .scrollDismissesKeyboard(.interactively)
         .background(palette.paper)

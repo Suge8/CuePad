@@ -280,7 +280,7 @@ struct CardEditorPage: View {
                 Text(status).foregroundStyle(saveState == .failed ? palette.failure : palette.ink3)
                     .transition(.opacity)
             }
-            if data.card.isPinned { Image(systemName: "books.vertical.fill").help("资料") }
+            if data.card.isPinned { Label("资料", systemImage: "books.vertical") }
             if data.card.isTask { Label("任务", systemImage: "checklist") }
             Spacer(minLength: 0)
             Menu("更多", systemImage: "ellipsis") {
@@ -373,6 +373,22 @@ private enum SaveState: Equatable {
     }
 }
 
+/// 分割线按钮的图形"— · —"：系统没有贴切的符号，方框加一横的那个读不出是分割线。
+private struct DividerGlyph: View {
+    private static let segment: CGFloat = 7, line: CGFloat = 2
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 2.5) {
+            Capsule().frame(width: Self.segment, height: Self.line)
+            Circle().frame(width: 3.5, height: 3.5)
+            Capsule().frame(width: Self.segment, height: Self.line)
+        }
+        .foregroundStyle(palette.ink)
+        .frame(height: 16)
+    }
+}
+
 /// 编辑页底部的玻璃操作栏：复制全文、插分割线；主动作在右边——灵感是"挂到任务"，提示词是发给 Agent（都是 ⌘↩）。
 /// 选中文字时发送只发选中的部分，并多一个"转为任务"。
 private struct EditorBar: View {
@@ -390,7 +406,7 @@ private struct EditorBar: View {
                 HStack(spacing: 16) {
                     Button("复制全文", systemImage: "doc.on.doc") { workspace.copy(outgoing(whole: true)) }
                         .help("复制全文（变量已填）")
-                    Button("插入分割线", systemImage: "rectangle.split.1x2") { handle.insertDivider() }
+                    Button { handle.insertDivider() } label: { Label { Text("插入分割线") } icon: { DividerGlyph() } }
                         .help("在光标处插入一条分割线")
                     if selecting {
                         Button("转为任务", systemImage: "checklist") {
@@ -427,7 +443,7 @@ private struct EditorBar: View {
             Label("挂到任务", systemImage: "checkmark")
                 .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onSignature)
                 .padding(.horizontal, 16).frame(height: 44)
-                .background(palette.signature, in: .capsule)
+                .background(palette.signatureFill, in: .capsule)
                 .contentShape(.capsule)
         }
         .buttonStyle(PressStyle())
