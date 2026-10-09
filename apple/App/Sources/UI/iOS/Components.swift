@@ -16,7 +16,7 @@ struct RowPressStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .background { palette.fill.opacity(configuration.isPressed ? 1.6 : 0) }
+                .background { palette.fill.opacity(configuration.isPressed ? 1 : 0) }
                 .animation(configuration.isPressed ? nil : Motion.quick, value: configuration.isPressed)
         }
     }

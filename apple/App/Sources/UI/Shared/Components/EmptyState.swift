@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 空态与出错页：吉祥物、一句现状、一句下一步、一个可选动作（动作按钮由平台给）。全 App 的空态都用它，不用系统的 `ContentUnavailableView`：
-/// 吉祥物是品牌里唯一有表情的东西，空的时候正好让它出来。吉祥物出场时从下方轻轻弹上来，只这一次；减弱动态效果时直接在位。
+/// 空态与出错页：吉祥物、一句现状、一句下一步、一个可选动作（动作按钮由平台给）。全 App 的空态都用它，不用系统空态组件。
+/// 吉祥物出场时从下方轻轻弹上来，只这一次；减弱动态效果时直接在位。
 struct EmptyState<Action: View>: View {
     let mascot: Mascot
     let title: String
@@ -13,16 +13,16 @@ struct EmptyState<Action: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Image(mascot.rawValue).resizable().scaledToFit().frame(height: 112)
-                .scaleEffect(shown || reduceMotion ? 1 : 0.85, anchor: .bottom)
-                .offset(y: shown || reduceMotion ? 0 : 10)
+            Image(mascot.rawValue).resizable().scaledToFit().frame(height: 104)
+                .scaleEffect(shown || reduceMotion ? 1 : 0.86, anchor: .bottom)
+                .offset(y: shown || reduceMotion ? 0 : 8)
                 .opacity(shown || reduceMotion ? 1 : 0)
                 .accessibilityHidden(true)
-            Text(title).font(Typography.emptyTitle).foregroundStyle(palette.ink).padding(.top, 14)
+            Text(title).font(Typography.emptyTitle).foregroundStyle(palette.ink).padding(.top, 12)
             if let message {
-                Text(message).font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 6)
+                Text(message).font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 5)
             }
-            action.padding(.top, 20)
+            action.padding(.top, 16)
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
@@ -42,53 +42,114 @@ extension EmptyState where Action == EmptyView {
     }
 }
 
-/// 吉祥物的表情，对应 Assets 里的 `mascot-*` 图（由 `design/final/ip-*.png` 经 `design/tools/cutout.swift` 抠图、缩到 360px）。
+/// 吉祥物的表情，对应 Assets 里的 mascot 图。
 enum Mascot: String {
-    /// 打招呼：空库首次打开。
     case welcome = "mascot-welcome"
-    /// 摊手：这里还没有东西。
     case empty = "mascot-empty"
-    /// 拿放大镜：没搜到。
     case search = "mascot-search"
-    /// 靠着垃圾桶睡着：回收站是空的。
     case trash = "mascot-trash"
-    /// 捂嘴笑：都处理完了。
     case clean = "mascot-clean"
-    /// 挠头：出错了。
     case error = "mascot-error"
 }
 
-/// 项目页与未分类还没有灵感：一句现状加一颗"记一条"，记到这里（iOS 浮起随手记，Mac 聚焦底部输入栏，由 `write` 给）。Mac 与 iOS 同一份。
-/// 页上已有任务或会话时（`compact`）页面不是空的，缩成一行小字"还没有灵感 · 记一条"，不放吉祥物与实心主按钮。
+/// 项目页与未分类还没有灵感：任务存在时用轻量纸卡；完全空时用同一套组件的整页尺寸。
+/// iOS 浮起随手记，Mac 聚焦底部输入栏；两端按钮、图标、按压与出现动效共用。
 struct EmptyIdeas: View {
     var compact = false
     let write: () -> Void
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        if compact { line } else { full }
+        EmptyIdeaSurface(compact: compact, write: write)
+    }
+}
+
+private struct EmptyIdeaSurface: View {
+    let compact: Bool
+    let write: () -> Void
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown = false
+
+    var body: some View {
+        Group {
+            if compact { compactBody } else { fullBody }
+        }
+        .onAppear { withAnimation(Motion.pressUp) { shown = true } }
     }
 
-    private var line: some View {
-        HStack(spacing: 6) {
-            Text("还没有灵感 ·").foregroundStyle(palette.ink3)
-            Button("记一条", action: write).buttonStyle(.plain).fontWeight(.medium).foregroundStyle(palette.ink2)
-                #if os(iOS)
-                .frame(minHeight: 44).contentShape(.rect)
-                #endif
+    private var compactBody: some View {
+        HStack(spacing: 12) {
+            Image("mascot-empty")
+                .resizable().scaledToFit()
+                .frame(width: 40, height: 40)
+                .padding(5)
+                .background(palette.fill, in: .circle)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("还没有灵感").font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
+                Text("先记下一条，任务再慢慢拆").font(Typography.meta).foregroundStyle(palette.ink3)
+            }
+            Spacer(minLength: 8)
+            action
         }
-        .font(Typography.secondary)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 68)
+        .paper(radius: 18, lifted: true)
+        .contentShape(.rect(cornerRadius: 18, style: .continuous))
+        .scaleEffect(shown || reduceMotion ? 1 : 0.97)
+        .opacity(shown || reduceMotion ? 1 : 0)
+        .animation(Motion.pressUp, value: shown)
     }
 
-    private var full: some View {
-        EmptyState(mascot: .empty, title: "还没有灵感") {
-            #if os(iOS)
-            Button("记一条", action: write).prominentButton().controlSize(.large)
-            #else
-            Button(action: write) { Text("记一条").primaryCapsule() }.buttonStyle(PressStyle())
-            #endif
+    private var fullBody: some View {
+        VStack(spacing: 0) {
+            Image("mascot-empty")
+                .resizable().scaledToFit()
+                .frame(height: 104)
+                .scaleEffect(shown || reduceMotion ? 1 : 0.86, anchor: .bottom)
+                .offset(y: shown || reduceMotion ? 0 : 8)
+                .opacity(shown || reduceMotion ? 1 : 0)
+                .accessibilityHidden(true)
+            Text("还没有灵感").font(Typography.emptyTitle).foregroundStyle(palette.ink).padding(.top, 12)
+            Text("先记下一条，任务再慢慢拆").font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 5)
+            action.padding(.top, 16)
         }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24)
+    }
+
+    private var action: some View {
+        Button(action: write) {
+            Label("记一条", systemImage: "square.and.pencil")
+        }
+        .buttonStyle(EmptyIdeaButtonStyle(compact: compact))
+        .accessibilityLabel("记一条灵感")
+    }
+}
+
+/// 空态唯一的动作按钮：紧凑空态是轻底小胶囊，整页空态是签名色主按钮；线宽、圆角和按压保持一致。
+private struct EmptyIdeaButtonStyle: ButtonStyle {
+    let compact: Bool
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+        configuration.label
+            .font(compact ? Typography.meta.weight(.medium) : Typography.secondary.weight(.semibold))
+            .foregroundStyle(compact ? palette.signature : palette.onSignature)
+            .padding(.horizontal, compact ? 10 : 16)
+            .frame(height: compact ? 32 : 42)
+            .background(compact ? palette.selection : palette.signatureFill, in: .capsule)
+            .overlay {
+                Capsule().strokeBorder(compact ? palette.signature.opacity(0.18) : .clear, lineWidth: 1)
+            }
+            .scaleEffect(pressed && !reduceMotion ? 0.95 : 1)
+            .opacity(pressed && reduceMotion ? 0.86 : 1)
+            .animation(pressed ? Motion.pressDown : Motion.pressUp, value: pressed)
+            .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.5), trigger: pressed)
     }
 }
 

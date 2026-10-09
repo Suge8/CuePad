@@ -137,7 +137,7 @@ private struct PressBody: View {
         configuration.label
             .scaleEffect(pressed && !reduceMotion ? scale : 1)
             .brightness(pressed && darken ? -0.02 : 0)
-            .opacity(pressed && (reduceMotion || !darken) ? 0.82 : 1)
+            .opacity(pressed && (reduceMotion || !darken) ? 0.9 : 1)
             .animation(pressed ? Motion.pressDown : Motion.pressUp, value: pressed)
             .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: pressed) { _, now in haptic && now }
     }
