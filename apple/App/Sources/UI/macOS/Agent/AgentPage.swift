@@ -15,6 +15,7 @@ struct AgentPage: View {
     @State private var limit = PiSessionList.pageSize
     @State private var starting = false
     @State private var confirmingEnd: PiSessionState?
+    @State private var renaming: PiSessionState?
 
     /// 列表的宽度：一行读得完，不至于横跨整个大窗口。
     private static let width: CGFloat = 720
@@ -33,6 +34,7 @@ struct AgentPage: View {
         .background(palette.desk)
         .onChange(of: query) { limit = PiSessionList.pageSize }
         .onChange(of: filter) { limit = PiSessionList.pageSize }
+        .renameSession($renaming)
         .confirmationDialog("结束这个会话？", isPresented: Binding { confirmingEnd != nil } set: { if !$0 { confirmingEnd = nil } },
                             titleVisibility: .visible, presenting: confirmingEnd) { session in
             Button("结束会话", role: .destructive) { Task { await workspace.end(session) } }
@@ -136,11 +138,14 @@ struct AgentPage: View {
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
         let session = item.state
         let endable = MacDelivery.canEnd(session) && end?.isOpen != true
-        return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, style: .page)
+        return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, style: .page)
             .padding(.horizontal, 12).padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .sessionLink(session.sessionID)
             .contextMenu {
+                if MacDelivery.canRename(session) {
+                    Button("重命名…", systemImage: "pencil") { renaming = session }
+                }
                 if endable {
                     Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = session }
                 }

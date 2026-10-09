@@ -19,7 +19,7 @@ protocol SendChannels {
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws
     func paste(_ text: String, into id: CuePi.PiSession.ID) async throws
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws
-    func configure(model: PiModelRef?, thinking: String?, in id: CuePi.PiSession.ID) async throws
+    func configure(model: PiModelRef?, thinking: String?, name: String?, in id: CuePi.PiSession.ID) async throws
     func command(_ line: String, whenBusy: PiQueueMode?, in id: CuePi.PiSession.ID) async throws
     func abort(in id: CuePi.PiSession.ID) async throws
     /// 权限与目标检查，不改任何状态；失败时调用方不必动窗口。
@@ -68,8 +68,8 @@ struct LiveSendChannels: SendChannels {
         try await pi.answer(answer, to: prompt, in: id)
     }
 
-    func configure(model: PiModelRef?, thinking: String?, in id: CuePi.PiSession.ID) async throws {
-        try await pi.configure(model: model, thinking: thinking, in: id)
+    func configure(model: PiModelRef?, thinking: String?, name: String?, in id: CuePi.PiSession.ID) async throws {
+        try await pi.configure(model: model, thinking: thinking, name: name, in: id)
     }
 
     func command(_ line: String, whenBusy: PiQueueMode?, in id: CuePi.PiSession.ID) async throws {

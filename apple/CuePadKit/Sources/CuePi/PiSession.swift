@@ -15,7 +15,7 @@ public enum PiAgentState: Sendable, Equatable {
     /// 一轮结束且 Pi 不会再自动继续（`agent_settled`）
     case done(aborted: Bool)
     case error(message: String)
-    /// 扩展的协议版本与 CuePad 不同（升级前开的 Pi 还在跑旧扩展）：进程在、会话没死，但读不到状态、也不能发命令，要重开 Pi
+    /// 扩展的协议版本与 CuePad 不同（升级前开的 Pi 还在跑旧扩展）：进程在、会话没死，但读不到状态、也不能发命令，要在终端里对它执行 /reload（Pi 重新载入扩展，同一会话以新协议重连）
     case incompatible
 }
 
@@ -60,7 +60,7 @@ public struct PiSession: Identifiable, Sendable, Equatable {
     /// Pi 运行模式：`tui` / `rpc` / …
     public let mode: String
     public let terminal: PiTerminal
-    /// 该会话加载的扩展版本；低于 `PiExtensionBundle.version` 说明需要重启会话才能用上新扩展
+    /// 该会话加载的扩展版本；低于 `PiExtensionBundle.version` 说明要在终端里 /reload 才能用上新扩展
     public let extensionVersion: Int
     public internal(set) var state: PiAgentState
     /// 进入当前粗状态（工作中、等你确认、出错、空闲）的时间：思考、工具、等子代理之间切换不变。扩展 v6 起，旧扩展是细状态的切换时间
@@ -305,7 +305,7 @@ extension PiBridgeError: LocalizedError {
         case .insecureSocketDirectory(let path): "Pi 连接目录 \(path) 不安全：必须属于当前用户且权限为 0700"
         case .socketDirectoryTooLong: "Pi 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
-        case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，重开 Pi 后再发"
+        case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
         case .sessionEnded: "发送途中 Agent 会话结束了"
         case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"

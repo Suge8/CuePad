@@ -3,7 +3,7 @@
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
 //   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ paste（放进输入框）/ answer（回答等你确认的弹窗）/ config（换模型、思考强度）/ end（结束会话）/ abort（停止这一轮）
+//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ paste（放进输入框）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
 import fs from "node:fs";
@@ -12,8 +12,8 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 16;
-const PROTOCOL_VERSION = 5;
+const EXTENSION_VERSION = 17;
+const PROTOCOL_VERSION = 6;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
@@ -531,12 +531,15 @@ export default function (pi: any) {
 		ack({ ok: true });
 	}
 
-	/** 换模型、思考强度：先换模型（需要该提供方已配好密钥）再设强度，强度由 Pi 按新模型支持的范围夹取。 */
+	/** 会话设置：会话名（Pi 设置会话名的接口，同 `/name`）、模型、思考强度——先换模型（需要该提供方已配好密钥）再设强度，强度由 Pi 按新模型支持的范围夹取。 */
 	async function handleConfig(command: any, ack: (f: object) => void, reject: (e: string) => void) {
 		const { model, thinking } = command;
+		const name = typeof command.name === "string" ? command.name.trim() : command.name;
 		const validModel = model === undefined || (typeof model?.provider === "string" && typeof model?.id === "string");
 		const validThinking = thinking === undefined || THINKING_LEVELS.includes(thinking);
-		if (!validModel || !validThinking || (model === undefined && thinking === undefined)) return reject("bad_request");
+		const validName = name === undefined || (typeof name === "string" && name.length > 0);
+		if (!validModel || !validThinking || !validName || (model === undefined && thinking === undefined && name === undefined)) return reject("bad_request");
+		if (name) pi.setSessionName(name);
 		if (model) {
 			const target = ctx.modelRegistry.find(model.provider, model.id);
 			if (!target) return reject("unknown_model");

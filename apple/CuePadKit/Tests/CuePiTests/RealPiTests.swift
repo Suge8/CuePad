@@ -74,6 +74,11 @@ struct RealPiTests {
                 try await bridge.configure(model: PiModelRef(provider: "fake", id: "nope"), in: s.id)
             }
             await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.configure(thinking: "ultra", in: s.id) }
+
+            // 改名同一条路（Pi 设置会话名的接口），会话名随即上报；空名拒绝
+            try await bridge.configure(name: "登录修复", in: s.id)
+            try await eventually("改名") { bridge.sessions.first?.displayName == "登录修复" }
+            await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.configure(name: "  ", in: s.id) }
         }
     }
 

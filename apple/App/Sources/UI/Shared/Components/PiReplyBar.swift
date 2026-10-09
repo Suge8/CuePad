@@ -61,7 +61,7 @@ struct PiReplyBar: View {
         switch reply {
         case .answerAbove: notice("先在上面作答", systemImage: "arrow.up")
         case .unanswerable: notice(Self.unanswerable, systemImage: "desktopcomputer")
-        case .restartPi: notice("旧版扩展的会话发不了，重开 Pi 后再发", systemImage: "arrow.clockwise")
+        case .restartPi: notice("旧版扩展的会话发不了，在终端里执行 /reload 后再发", systemImage: "arrow.clockwise")
         case .message, .answer:
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,

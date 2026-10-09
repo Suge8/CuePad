@@ -127,7 +127,7 @@ nonisolated struct PiShown: Hashable, Sendable {
         case working(PiWorkState)
         case asking
         case failed
-        /// 在线，但它加载的扩展与这台 Mac 上的 CuePad 不同，要重开 Pi。
+        /// 在线，但它加载的扩展与这台 Mac 上的 CuePad 不同，要在终端里 /reload。
         case restart
         case unread
         case idle
@@ -193,7 +193,7 @@ nonisolated extension PiShown {
         case .working: "思考中"
         case .asking: "等你确认"
         case .failed: "出错"
-        case .restart: "在线 · 需要重开 Pi"
+        case .restart: "在线 · 需要 /reload"
         case .unread: "有新回复"
         case .idle: "待你回复"
         case .fresh: "新会话"
@@ -211,7 +211,7 @@ nonisolated extension PiShown {
         case .working: "Agent 正在工作"
         case .asking: "Agent 等你确认"
         case .failed: "Agent 出错"
-        case .restart: "Agent 在线，需要重开 Pi"
+        case .restart: "Agent 在线，需要在终端里 /reload"
         case .unread: "Agent 有新回复"
         case .idle: "Agent 待你回复"
         case .fresh: "Agent 新会话"
@@ -222,6 +222,9 @@ nonisolated extension PiShown {
 
     /// 名字与状态词加粗：做完了你还没看。
     var isUnread: Bool { status == .unread }
+
+    /// 此刻显示为没能送达时就是那条请求（`request` 是算这个状态用的那条），行上据此写原因（`PiRowLine`）。
+    func undelivered(_ request: DeliveryRequest?) -> DeliveryRequest? { status == .delivery(.failed) ? request : nil }
 
     /// 在动：工作中（转圈）、话在路上（呼吸）。
     var isLive: Bool {
@@ -256,7 +259,7 @@ nonisolated extension PiShown {
 }
 
 extension PiShown {
-    /// 要你动手：等你确认、出错、没能送达、需要重开 Pi。只有它们带彩色。
+    /// 要你动手：等你确认、出错、没能送达、需要 /reload。只有它们带彩色。
     var needsYou: Bool {
         switch status {
         case .asking, .restart, .failed, .delivery(.failed): true

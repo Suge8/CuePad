@@ -54,6 +54,8 @@ struct PiSessionRow: View {
     /// 发给它的最近一条投送请求（显示状态见 `PiDelivery`）。
     let delivery: DeliveryRequest?
     var end: DeliveryRequest?
+    /// 发给它的最近一条改名（`PiSessionListItem.rename`）：名字与"正在改名""没能改名"由它推出（`PiRename`）。
+    var rename: DeliveryRequest?
     var style = Style.compact
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -77,21 +79,23 @@ struct PiSessionRow: View {
 
     var body: some View {
         let shown = services.settings.shown(session, delivery: delivery)
-        let line = PiRowLine.of(session, draft: services.settings.draftPreview(for: session.id), end: end)
+        let failure = PiRename.failure(rename, seen: services.settings.sessionSeen[session.sessionID]) ?? shown.undelivered(delivery)?.failure
+        let line = PiRowLine.of(session, draft: services.settings.draftPreview(for: session.id), end: end, failure: failure)
+        let note = shown.note ?? (PiRename.isPending(rename) ? "正在改名" : nil)
         HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
             PiStateDot(shown: shown, size: style.dot)
             VStack(alignment: .leading, spacing: style.spacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(session.title).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(PiRename.title(of: session, request: rename)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 4)
                     PiElapsed(shown: shown, font: style.line)
                 }
                 if style.full {
-                    statusLine(shown)
+                    statusLine(shown, note: note)
                     text(of: line)
                 } else {
-                    // 两行：状态词接着第三行的内容（你的话在路上时是它）
-                    let rest = shown.note.map { Text($0).foregroundStyle(palette.ink3) } ?? line.map(text(of:))
+                    // 两行：状态词接着第三行的内容（你的话在路上、正在改名时是它）
+                    let rest = note.map { Text($0).foregroundStyle(palette.ink3) } ?? line.map(text(of:))
                     Text("\(status(shown))\(rest.map { Text("\(Text(" · ").foregroundStyle(palette.ink3))\($0)") } ?? Text(verbatim: ""))")
                 }
             }
@@ -109,13 +113,13 @@ struct PiSessionRow: View {
         Text(shown.label).fontWeight(shown.isUnread ? .semibold : shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
     }
 
-    /// 整页的第二行：在哪 · 状态词 · 后台 · 你的话排队中。
-    private func statusLine(_ shown: PiShown) -> some View {
+    /// 整页的第二行：在哪 · 状态词 · 后台 · 你的话排队中（或正在改名）。
+    private func statusLine(_ shown: PiShown, note: String?) -> some View {
         let parts = [
             PiPlace.name(of: session, project: project).map { Text($0).foregroundStyle(palette.ink3) },
             status(shown),
             session.hosted && session.state != .known(.ended) ? Text("后台").foregroundStyle(palette.ink3) : nil,
-            shown.note.map { Text($0).foregroundStyle(palette.ink3) },
+            note.map { Text($0).foregroundStyle(palette.ink3) },
         ].compactMap { $0 }
         return parts.dropFirst().reduce(parts[0]) { Text("\($0)\(Text(" · ").foregroundStyle(palette.ink3))\($1)") }
     }
@@ -124,7 +128,7 @@ struct PiSessionRow: View {
     private func text(of line: PiRowLine?) -> Text {
         switch line {
         case .ending: Text("正在结束…").foregroundStyle(palette.ink3)
-        case .endFailed(let reason): Text(reason).foregroundStyle(palette.failure)
+        case .endFailed(let reason), .failed(let reason): Text(reason).foregroundStyle(palette.failure)
         case .draft(let draft): Text("\(Text("草稿").fontWeight(.semibold).foregroundStyle(palette.signature))  \(Text(draft).foregroundStyle(palette.ink2))")
         case .progress(let progress): Text(progress).foregroundStyle(palette.ink2)
         case .hint(let hint): Text(hint).foregroundStyle(palette.ink3)

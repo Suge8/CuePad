@@ -30,7 +30,7 @@ final class PiExtensionManager {
         try await install()
     }
 
-    /// 新装或升级（原子写入）；已运行的会话要重启才会加载新扩展。
+    /// 新装或升级（原子写入）；已运行的会话在终端里 /reload 才会加载新扩展。
     func install() async throws {
         try await installer.install()
         status = await installer.status()

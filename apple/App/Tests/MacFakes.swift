@@ -65,7 +65,7 @@ final class FakeChannels: SendChannels {
         case send(PiMessage, String)
         case paste(String, String)
         case answer(PiPromptAnswer, String, String)
-        case configure(PiModelRef?, String?, String)
+        case configure(PiModelRef?, String?, String?, String)
         case command(String, PiQueueMode?, String)
         case abort(String)
         case preflight(TargetSelector)
@@ -90,7 +90,9 @@ final class FakeChannels: SendChannels {
     }
     func paste(_ text: String, into id: String) async throws { calls.append(.paste(text, id)) }
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: String) async throws { calls.append(.answer(answer, prompt, id)) }
-    func configure(model: PiModelRef?, thinking: String?, in id: String) async throws { calls.append(.configure(model, thinking, id)) }
+    func configure(model: PiModelRef?, thinking: String?, name: String?, in id: String) async throws {
+        calls.append(.configure(model, thinking, name, id))
+    }
     func command(_ line: String, whenBusy: PiQueueMode?, in id: String) async throws { calls.append(.command(line, whenBusy, id)) }
     func abort(in id: String) async throws { calls.append(.abort(id)) }
     func runningApps() -> [AppInfo] { [] }

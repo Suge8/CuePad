@@ -349,27 +349,31 @@ public struct PiSlashCommand: Sendable, Equatable, Identifiable {
 public struct PiConfig: Sendable, Equatable {
   public var model: PiModelKey?
   public var thinking: PiThinkingLevel?
+  /// 会话名（Pi 的 `/name`）：会话设置，与模型、思考强度同一条路。
+  public var name: String?
 
-  public init(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil) {
+  public init(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, name: String? = nil) {
     self.model = model
     self.thinking = thinking
+    self.name = name
   }
 
   private struct Stored: Codable {
     var model: PiModelKey?
     var thinking: String?
+    var name: String?
   }
 
   var stored: String {
-    String(decoding: try! JSONEncoder().encode(Stored(model: model, thinking: thinking?.rawValue)), as: UTF8.self)
+    String(decoding: try! JSONEncoder().encode(Stored(model: model, thinking: thinking?.rawValue, name: name)), as: UTF8.self)
   }
 
   /// 什么都不改、或强度是更新版本的新值（本版本不认识）时为 nil。
   init?(stored: String) {
     guard let form = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else { return nil }
     let thinking = form.thinking.map(PiThinkingLevel.init(rawValue:))
-    guard thinking != .some(nil), form.model != nil || thinking != nil else { return nil }
-    self.init(model: form.model, thinking: thinking ?? nil)
+    guard thinking != .some(nil), form.model != nil || thinking != nil || form.name != nil else { return nil }
+    self.init(model: form.model, thinking: thinking ?? nil, name: form.name)
   }
 }
 
@@ -530,12 +534,15 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var state: PiSessionState
   public var project: Project?
   public var delivery: DeliveryRequest?
+  /// 发给它的最近一条改名请求（带名字的配置请求）：改名在路上、没改成都由它推出。
+  public var rename: DeliveryRequest?
   public var id: UUID { state.id }
 
-  public init(state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil) {
+  public init(state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil) {
     self.state = state
     self.project = project
     self.delivery = delivery
+    self.rename = rename
   }
 }
 
@@ -716,6 +723,13 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   /// 配置请求的内容；其他方式为 nil。
   public var config: PiConfig? { mode == .known(.config) ? PiConfig(stored: content) : nil }
+
+  /// 改名请求：带名字的配置请求。
+  public var isRename: Bool { config?.name != nil }
+
+  /// 一个会话的请求（按发出先后，即 `CueStore.deliveryRequests(toSession:)` 的顺序）里最近的一条改名。
+  /// 会话行（`PiSessionListItem.rename`）与会话页顶栏都按它显示名字，取法只此一处。
+  public static func latestRename(in requests: [DeliveryRequest]) -> DeliveryRequest? { requests.last(where: \.isRename) }
 
   /// 往返时间：创建 → 结果回到本机，两端都是发起设备的时钟。执行方与还没收到结果时为 nil。
   public var roundTrip: Duration? {

@@ -325,7 +325,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.channels.calls == [.configure(PiModelRef(provider: "anthropic", id: "opus"), "high", "sess-1.100")])
+        #expect(rig.channels.calls == [.configure(PiModelRef(provider: "anthropic", id: "opus"), "high", nil, "sess-1.100")])
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
@@ -493,6 +493,23 @@ struct MacSyncTests {
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls == [.resume(sessionFile: indexed.path, directory: app.path)])
         #expect(rig.channels.calls == [.send(PiMessage(text: "接着做", deliveryID: request.id.uuidString), "s1.900")])
+    }
+
+    /// 改名是会话设置（配置请求带名字）：发给已结束的会话时与发消息同一条路，先在后台恢复它再交给扩展改名；不写发送记录。
+    @Test func 给已结束的会话改名_后台恢复后改_不写发送记录() async throws {
+        let app = try folder("app")
+        let indexed = try await indexed("s1", cwd: app)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestConfig(
+            PiConfig(name: "登录重试"), to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
+        let done = try await awaitFinished(request.id)
+
+        #expect(done.status == .known(.succeeded))
+        #expect(rig.host.calls == [.resume(sessionFile: indexed.path, directory: app.path)])
+        #expect(rig.channels.calls == [.configure(nil, nil, "登录重试", "s1.900")])
+        #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 新会话_后台开在项目目录_开场的话送入() async throws {
@@ -699,7 +716,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.failed))
-        #expect(done.resultDetail == "这个会话正在终端里运行旧版扩展，重开 Pi 后再发")
+        #expect(done.resultDetail == "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发")
         #expect(rig.host.calls.isEmpty)
     }
 

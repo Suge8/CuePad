@@ -54,7 +54,7 @@ struct SettingsView: View {
             } header: {
                 Text("Pi")
             } footer: {
-                Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把灵感和任务（含图片）直接发进会话。安装或升级后，已在运行的会话需要重启。")
+                Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把灵感和任务（含图片）直接发进会话。安装或升级后，已在运行的会话在终端里执行 /reload 就能用上。")
             }
         }
         .formStyle(.grouped)

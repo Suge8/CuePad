@@ -53,6 +53,7 @@ struct SessionPage: View {
     @State private var stored: SessionDigest?
     @State private var askedForTranscript = false
     @State private var confirmingEnd = false
+    @State private var renaming: PiSessionState?
     @State private var follow = ChatFollow()
 
     /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
@@ -85,6 +86,7 @@ struct SessionPage: View {
                 .padding(.horizontal, 24).padding(.bottom, 16)
                 .frame(maxWidth: Self.readingWidth)
                 .animation(Motion.quick, value: session.question)
+                .renameSession($renaming)
                 .confirmationDialog("结束这个会话？", isPresented: $confirmingEnd, titleVisibility: .visible) {
                     Button("结束会话", role: .destructive) { Task { await workspace.end(session) } }
                 } message: {
@@ -122,7 +124,7 @@ struct SessionPage: View {
     /// 工具栏标题位：会话名，下面一行"所在 · 状态 · 计时"。
     private func title(_ session: PiSessionState, digest: SessionDigest, ending: Bool) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(session.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink).lineLimit(1)
+            Text(digest.title ?? session.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink).lineLimit(1)
             if ending {
                 Text("正在结束…").font(.system(size: 12)).foregroundStyle(palette.ink3)
             } else {
@@ -144,12 +146,16 @@ struct SessionPage: View {
         }
     }
 
-    /// 工具栏右边的"⋯"：跳到终端（开在终端里的在线会话）、结束会话；两样都没有时不出现。
+    /// 工具栏右边的"⋯"：重命名、跳到终端（开在终端里的在线会话）、结束会话；都没有时不出现。
     @ViewBuilder private func menu(_ session: PiSessionState, live: CuePi.PiSession?, ending: Bool) -> some View {
         let canJump = live.map { !$0.hosted } ?? false
         let canEnd = MacDelivery.canEnd(session)
-        if canJump || canEnd {
+        let canRename = MacDelivery.canRename(session)
+        if canRename || canJump || canEnd {
             Menu("更多", systemImage: "ellipsis") {
+                if canRename {
+                    Button("重命名…", systemImage: "pencil") { renaming = session }
+                }
                 if let live, canJump {
                     Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
                 }
@@ -159,7 +165,7 @@ struct SessionPage: View {
                 }
             }
             .menuIndicator(.hidden)
-            .help("跳到终端、结束会话")
+            .help("重命名、跳到终端、结束会话")
         }
     }
 

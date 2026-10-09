@@ -294,7 +294,7 @@ struct BridgeClientTests {
 
     // MARK: 协议兼容
 
-    /// 协议不同（升级前开的旧扩展）的会话没死：照常列出、状态是"需要重开"，命令一条都不发给它，失败带原因；进程退出才算结束。
+    /// 协议不同（升级前开的旧扩展）的会话没死：照常列出、状态是"需要 /reload"，命令一条都不发给它，失败带原因；进程退出才算结束。
     @Test(arguments: [3, 99]) func 协议不同的会话在线但不可用_命令失败带原因_退出才结束(protocolVersion: Int) async throws {
         let ext = FakeExtension(directory: dir, options: .init(protocolVersion: protocolVersion, cwd: "/work/legacy"))
         try ext.start()
@@ -307,7 +307,7 @@ struct BridgeClientTests {
         await #expect(throws: PiBridgeError.incompatibleExtension) { try await bridge.send(PiMessage(text: "hi"), to: ext.id) }
         await #expect(throws: PiBridgeError.incompatibleExtension) { try await bridge.abort(ext.id) }
         #expect(ext.commands.isEmpty)
-        #expect(PiBridgeError.incompatibleExtension.errorDescription == "这个会话正在终端里运行旧版扩展，重开 Pi 后再发")
+        #expect(PiBridgeError.incompatibleExtension.errorDescription == "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发")
 
         ext.close(bye: "quit")
         try await eventually("ended") { session(ext.id) == nil && bridge.endedSessions[ext.id] != nil }
