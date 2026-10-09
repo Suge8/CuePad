@@ -30,7 +30,7 @@ private struct ConflictPair: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(CardText(conflict.original.body).title.nonEmpty ?? "无标题")
+            Text(CardText(conflict.original.body).label)
                 .font(.headline).foregroundStyle(palette.ink)
                 .accessibilityAddTraits(.isHeader)
             ViewThatFits(in: .horizontal) {

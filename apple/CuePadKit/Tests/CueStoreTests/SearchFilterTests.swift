@@ -149,7 +149,7 @@ import Testing
 
   // MARK: 按项目汇总
 
-  @Test func projectSummariesCountVisibleCardsAndLatestModification() async throws {
+  @Test func projectSummariesCountVisibleIdeasAndLatestOne() async throws {
     let a = try await store.createProject(name: "A", color: "#111")
     let b = try await store.createProject(name: "B", color: "#222")
     let gone = try await store.createProject(name: "gone", color: "#333")
@@ -170,9 +170,9 @@ import Testing
     #expect(summaries.map(\.projectID) == (try await store.projects().map(\.id)) + [nil])  // 项目的顺序，未分类最后
     let by = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0) })
     #expect([a.id, b.id, nil].map { by[$0]?.cardCount } == [2, 0, 1])
-    #expect(by[a.id]?.lastModifiedAt == Date(timeIntervalSince1970: 500))
-    #expect(by[b.id]?.lastModifiedAt == nil)
-    #expect(by[nil]?.lastModifiedAt == Date(timeIntervalSince1970: 700))
+    #expect(by[a.id]?.latest?.id == a1.id)
+    #expect(by[b.id]?.latest == nil)
+    #expect(by[nil]?.latest?.id == inbox.id)
   }
 
   @Test func projectSummariesWakeObserversOnCardChanges() async throws {

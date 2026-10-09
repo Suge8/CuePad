@@ -112,7 +112,7 @@ struct ProjectScreen: View {
     /// 顶栏的一行："25 条灵感 · cuepad"（绑定的文件夹只写名字；手机上取各 Mac 同步来的绑定，绑在几台上就都写）。
     private var detail: String {
         let catalog = workspace.catalog
-        let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 条灵感" : nil } ?? "还没有灵感"
+        let count = CountCopy.text((catalog?.cardCounts[projectID] ?? 0, "条灵感")) ?? "还没有灵感"
         let folders = (catalog?.bindings ?? []).filter { $0.projectID == projectID }.map(\.folder)
         return ([count] + folders).joined(separator: " · ")
     }
@@ -157,10 +157,11 @@ struct ProjectScreen: View {
 
 /// 介绍与任务：项目的一句话介绍 + 本项目任务（"任务 完成数/总数"，前 3 条顶层任务连同子任务，可拖动、缩进，同任务页；其余在任务页）+ 本项目的 Pi 会话（在线的全列，
 /// 再加最近结束的几个；更多的点"全部"看这个项目的 Pi 列表）。会话点开看近况、回复。
-/// 没写介绍时只有任务；什么都没有时是一行"添加任务"。
+/// 没写介绍时只有任务；什么都没有时是一行"添加任务"。项目还没绑文件夹（会话归不进来）时多一段 Agent：写明并给同名文件夹一键绑（`ProjectFolderGuide`）。
 private struct FocusCard: View {
     let data: ProjectPageData
     let pi: PiSessionList?
+    @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
@@ -201,6 +202,12 @@ private struct FocusCard: View {
                             .font(.subheadline).foregroundStyle(palette.ink3)
                             .frame(minHeight: 44)
                     }
+                }
+            } else if let project = data.project, !workspace.hasFolder(project.id) {
+                VStack(alignment: .leading, spacing: 2) {
+                    SectionLabel(text: "Agent", systemImage: "waveform.path.ecg").padding(.bottom, 6)
+                    Text("还没绑定文件夹").font(.subheadline).foregroundStyle(palette.ink3)
+                    ProjectFolderGuide(project: project, style: .line)
                 }
             }
         }

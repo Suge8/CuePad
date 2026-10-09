@@ -162,7 +162,7 @@ struct PromptCard: View {
         let text = CardText(prompt.body)
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(text.title.nonEmpty ?? (text.images.isEmpty ? "还没写" : "\(text.images.count) 张图"))
+                Text(text.label)
                     .font(TaskMetrics.font.weight(.medium)).foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                     .lineLimit(2)
                 if !text.preview.isEmpty {
@@ -426,8 +426,8 @@ struct TaskRingView: View {
     }
 }
 
-/// 从 12 点顺时针的扇形，`fraction` 0…1；可动画。
-nonisolated private struct Sector: Shape {
+/// 从 12 点顺时针的扇形，`fraction` 0…1；可动画（任务完成圈与上下文圆环共用，同一种饼图画法）。
+nonisolated struct Sector: Shape {
     var fraction: Double
     var animatableData: Double {
         get { fraction }

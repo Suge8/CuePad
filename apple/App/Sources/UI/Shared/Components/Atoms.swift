@@ -28,11 +28,14 @@ extension View {
 struct ProjectGlyph: View {
     let project: Project?
     var size: CGFloat = 13
+    @Environment(\.palette) private var palette
 
     var body: some View {
         Image(systemName: Self.symbol(project?.icon))
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? .secondary)
+            // 深色下提亮一档：偏灰、偏暗的项目色（如 #8A8A84）的细线图标在深底与玻璃上几乎看不见
+            .brightness(palette.dark ? 0.18 : 0)
             .frame(width: size + 6)
             .accessibilityHidden(true) // 项目名总在旁边，图标只是装饰
     }
@@ -102,6 +105,7 @@ struct SectionLabel: View {
 
 /// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话都用它）：一分钟内"刚刚"，一小时内"N 分前"，一天内"N 小时前"；
 /// 再往前按日历：昨天、一周内写星期、今年写月日、更早带年份。粗到小时为止，几小时前的事不写到分钟。
+/// 会话的计时会随时间刷新（`PiElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
 nonisolated enum DateLabel {
     static func short(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
         let elapsed = now.timeIntervalSince(date)

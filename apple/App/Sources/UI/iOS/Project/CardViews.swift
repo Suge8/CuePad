@@ -20,7 +20,7 @@ struct CardTileView: View {
                     Thumbnail(hash: image, height: 96, radius: 9).padding(.bottom, 4)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(text.title.nonEmpty ?? "无标题")
+                    Text(text.label)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                         .lineLimit(3)
@@ -30,7 +30,7 @@ struct CardTileView: View {
                 if !text.preview.isEmpty {
                     Text(VariableText.styled(text.preview, palette))
                         .font(.footnote).foregroundStyle(palette.ink2)
-                        .lineLimit(text.images.isEmpty ? 5 : 2)
+                        .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
                 }
                 CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
                     .padding(.top, 2)
@@ -125,7 +125,7 @@ struct OlderRow: View {
         NavigationLink(value: Navigation.Route.card(card.id)) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(text.title.nonEmpty ?? "无标题").font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(text.label).font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                     if !text.preview.isEmpty {
                         Text(text.preview).font(.footnote).foregroundStyle(palette.ink3).lineLimit(1)
                     }

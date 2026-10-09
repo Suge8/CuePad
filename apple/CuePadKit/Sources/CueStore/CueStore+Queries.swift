@@ -14,6 +14,9 @@ private let looseIdea = """
   todoAt IS NULL AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE deletedAt IS NULL AND todoAt IS NOT NULL))
   """
 
+/// 正文不是空白（与 `Card.isBlank` 同一条规则）。
+private let notBlank = "TRIM(body, char(32, 9, 10, 13)) <> ''"
+
 extension CueStore {
   /// 未删除的项目，按项目唯一的顺序（`projectOrder`）。所有项目列表与选择器都用它，界面不另排。
   public func projects() throws -> [Project] {
@@ -57,6 +60,21 @@ extension CueStore {
   }
 
   private static func pathSegments(_ path: String) -> [Substring] { path.split(separator: "/") }
+
+  /// 会话记录里的文件夹名（`PiSessionState.folder`）：工作目录的末段；临时目录（/tmp、/var/tmp、/var/folders，含 /private 写法，或路径里有
+  /// TemporaryItems）与没有目录的没有。手机看不到路径，只据文件夹名建议绑定，临时目录不该进候选，所以由有路径的 Mac 在写入时认出——规则只此一处。
+  public static func folderName(ofWorkingDirectory cwd: String) -> String? {
+    guard !cwd.isEmpty, !isTemporary(cwd) else { return nil }
+    return URL(filePath: cwd, directoryHint: .isDirectory).lastPathComponent
+  }
+
+  private static let temporaryRoots: [[Substring]] = [["tmp"], ["var", "tmp"], ["var", "folders"]]
+
+  private static func isTemporary(_ path: String) -> Bool {
+    var segments = pathSegments(URL(filePath: path).standardizedFileURL.path)
+    if segments.first == "private" { segments.removeFirst() }
+    return segments.contains("TemporaryItems") || temporaryRoots.contains { segments.starts(with: $0) }
+  }
 
   /// 同一个目录的唯一写法：由文件系统解析（`realpath`）——符号链接（含 `/tmp` → `/private/tmp`）换成真实路径，
   /// 大小写换成磁盘上的（区分大小写的卷上写错大小写就是另一个、不存在的目录）。不存在的路径只做标准化。
@@ -267,16 +285,18 @@ extension CueStore {
 
   // MARK: 汇总与搜索
 
-  /// 每个活动项目（按手动顺序）和未分类（最后）的可见卡片数、最近修改时间。一次查询，侧栏不必读全部卡片。
+  /// 每个活动项目（按手动顺序）和未分类（最后）的灵感数与最近改过的一条：散放在列表里、不是空白的灵感。两次查询，不必读全部卡片。
   public func projectSummaries() throws -> [ProjectSummary] {
-    let groups = try db.query(
-      "SELECT projectID, SUM(\(looseIdea) AND archivedAt IS NULL), MAX(modifiedAt) FROM cards WHERE \(cardVisible) GROUP BY projectID"
-    ) { (id: $0.uuidOrNil(0), count: Int($0.int(1)), last: $0.dateOrNil(2)) }
-    let byProject = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
+    let ideas = "(\(cardActive)) AND (\(looseIdea)) AND \(notBlank)"
+    let counts = Dictionary(uniqueKeysWithValues: try db.query("SELECT projectID, COUNT(*) FROM cards WHERE \(ideas) GROUP BY projectID") {
+      ($0.uuidOrNil(0), Int($0.int(1)))
+    })
+    let latest = Dictionary(uniqueKeysWithValues: try select(Card.self, where: """
+      id IN (SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY projectID ORDER BY modifiedAt DESC, id) AS rank
+        FROM cards WHERE \(ideas)) WHERE rank = 1)
+      """).map { ($0.projectID, $0) })
     let owners: [UUID?] = try projects().map(\.id) + [nil]
-    return owners.map {
-      ProjectSummary(projectID: $0, cardCount: byProject[$0]?.count ?? 0, lastModifiedAt: byProject[$0]?.last)
-    }
+    return owners.map { ProjectSummary(projectID: $0, cardCount: counts[$0] ?? 0, latest: latest[$0]) }
   }
 
   /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。

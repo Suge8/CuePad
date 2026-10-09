@@ -9,6 +9,13 @@ extension CueStore {
     case .live: conditions.append("state != '\(PiWorkState.ended.rawValue)'")
     case .ended: conditions.append("state = '\(PiWorkState.ended.rawValue)'")
     case .all: break
+    case .current:
+      let modes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+      conditions.append(
+        """
+        (state != '\(PiWorkState.ended.rawValue)' OR sessionID IN (SELECT targetRef FROM deliveryRequests
+          WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(modes))))
+        """)
     }
     if let text = query.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
       let pattern = "%" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
@@ -70,6 +77,17 @@ extension CueStore {
       if let ref = request.target.ref, latest[ref] == nil { latest[ref] = request }
     }
     return latest
+  }
+
+  /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。
+  /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。
+  public func sessionFolders() throws -> [SessionFolder] {
+    try db.query(
+      """
+      SELECT hostID, folder, sessionID, projectID, count(*), max(stateSince) FROM piSessionStates
+      WHERE folder IS NOT NULL AND folder != '' GROUP BY hostID, folder ORDER BY max(stateSince) DESC, count(*) DESC, hostID, folder
+      """
+    ) { SessionFolder(hostID: $0.text(0), folder: $0.text(1), sessionID: $0.text(2), projectID: $0.uuidOrNil(3), count: Int($0.int(4))) }
   }
 
   func writePiState(

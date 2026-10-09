@@ -8,22 +8,17 @@ nonisolated struct ShelfData: Sendable {
         var project: Project
         var cardCount: Int
         var openTasks: Int
-        /// 最近修改的一张卡的标题与时间。
-        var latest: (title: String, date: Date)?
         var id: UUID { project.id }
-
-        /// 介绍；没写介绍时是最近一条灵感。
-        @MainActor var summary: String? {
-            if let intro = project.intro { return intro }
-            return latest.map { "\($0.title.nonEmpty ?? "无标题") · \(DateLabel.short($0.date))" }
-        }
     }
 
     var entries: [Entry]
-    /// 在线的 Pi 会话（带发给它的最近一条投送请求）：项目的状态点在界面上再按本机的规则算（`PiSessionListItem.byProject`）。
-    var live: [PiSessionListItem]
+    /// 此刻有事的 Pi 会话（在线的，加上还有话发给它的已结束会话；带发给它的最近一条投送请求，`PiSessionQuery.current`）：
+    /// 各项目的"此刻"一行在界面上再按本机的规则挑（`ProjectNow`）。
+    var sessions: [PiSessionListItem]
+    /// 各项目最近开始的进行中任务标题（`ProjectNow` 的一档）。
+    var leading: [UUID: String]
     /// 等你确认的在线会话（书架最上面的"等你"）；个数与 Agent 角标同一个数。
-    var waiting: [PiSessionListItem] { live.filter(\.state.waitsForYou) }
+    var waiting: [PiSessionListItem] { sessions.filter(\.state.waitsForYou) }
     /// 进任务页的入口上写的数：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，没有入口。
     var tasks: TaskCounts?
     /// 正在推进的任务（进行中，最近开始的在前），书架最上面。
@@ -33,22 +28,23 @@ nonisolated struct ShelfData: Sendable {
 
     static let activeLimit = 3
 
+    /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。
+    @MainActor func now(shown: (PiSessionListItem) -> PiShown) -> [UUID: ProjectNow] {
+        ProjectNow.byProject(entries.map(\.project), live: sessions, tasks: leading, shown: shown)
+    }
+
     static func read(from store: isolated CueStore) throws -> ShelfData {
-        let summaries = try store.projectSummaries()
-        let counts = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) })
+        let summaries = Dictionary(uniqueKeysWithValues: try store.projectSummaries().map { ($0.projectID, $0) })
         let tasks = try store.taskCounts()
         let entries = try store.projects().map { project in
-            let latest = try store.search(SearchQuery(projects: [project.id]), limit: 1).cards.first
-            return Entry(
-                project: project, cardCount: counts[project.id] ?? 0, openTasks: tasks[project.id]?.open ?? 0,
-                latest: latest.map { (CardText($0.body).title.textGlyphs, $0.modifiedAt) })
+            Entry(project: project, cardCount: summaries[project.id]?.cardCount ?? 0, openTasks: tasks[project.id]?.open ?? 0)
         }
         let hasTasks = tasks.values.contains { $0.total > 0 }
         return ShelfData(
-            entries: entries, live: try store.piSessionPage(.live).items,
+            entries: entries, sessions: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store),
             tasks: hasTasks ? try TaskBoard.counts(from: store) : nil,
             active: try TaskBoard.active(limit: activeLimit, from: store),
-            inboxCount: counts[nil] ?? 0,
+            inboxCount: summaries[nil]?.cardCount ?? 0,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
     }
 }
@@ -113,7 +109,8 @@ struct ShelfScreen: View {
     private func content(_ data: ShelfData) -> some View {
         let pinned = data.entries.filter(\.project.isPinned)
         let recent = data.entries.filter { !$0.project.isPinned }
-        let pi = PiSessionListItem.byProject(data.live, shown: services.settings.shown)
+        // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
+        let now = data.now(shown: services.settings.shown)
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: 22) {
             if data.entries.isEmpty && data.inboxCount == 0 {
@@ -126,21 +123,21 @@ struct ShelfScreen: View {
                         VStack(alignment: .leading, spacing: 22) { lead(data) }.frame(maxWidth: .infinity)
                         // 右栏的大卡按宽度排：窄时一列叠放，宽时两列
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.pinnedMinWidth), spacing: 12)], spacing: 12) {
-                            ForEach(pinned) { PinnedShelfCard(entry: $0, pi: pi[$0.id]) }
+                            ForEach(pinned) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
                         }
                         .frame(maxWidth: .infinity)
                     }
                     .frame(minWidth: Self.twoColumnWidth, idealWidth: Self.twoColumnWidth, maxWidth: .infinity)
                     VStack(alignment: .leading, spacing: 22) {
                         lead(data)
-                        pinnedGrid(pinned, columns: min(pinned.count, 4), pi: pi)
+                        pinnedGrid(pinned, columns: min(pinned.count, 4), now: now)
                     }
                 }
             } else {
                 lead(data)
                 if !pinned.isEmpty {
                     // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
-                    pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2), pi: pi)
+                    pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2), now: now)
                 }
             }
             if !recent.isEmpty {
@@ -149,7 +146,7 @@ struct ShelfScreen: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(recent.enumerated()), id: \.element.id) { index, entry in
                             if index > 0 { Divider().padding(.leading, ShelfRow.dividerInset(typeSize)) }
-                            ShelfRow(entry: entry, pi: pi[entry.id])
+                            ShelfRow(entry: entry, now: now[entry.id])
                         }
                     }
                     .clipShape(.rect(cornerRadius: 16, style: .continuous))
@@ -193,9 +190,9 @@ struct ShelfScreen: View {
         }
     }
 
-    private func pinnedGrid(_ pinned: [ShelfData.Entry], columns: Int, pi: [UUID: PiShown]) -> some View {
+    private func pinnedGrid(_ pinned: [ShelfData.Entry], columns: Int, now: [UUID: ProjectNow]) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
-            ForEach(pinned) { PinnedShelfCard(entry: $0, pi: pi[$0.id]) }
+            ForEach(pinned) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
         }
     }
 
@@ -289,10 +286,10 @@ private struct TasksLine: View {
     }
 }
 
-/// 置顶项目的大卡：项目色从上沿淡下来的一层底、图标、名称、介绍（没写时是最近一条灵感）、Agent 此刻的状态（点加一句）、灵感数与未完成任务数。
+/// 置顶项目的大卡：项目色从上沿淡下来的一层底、图标、名称、"此刻"一行（`ProjectNow`）、灵感数与未完成任务数。
 private struct PinnedShelfCard: View {
     let entry: ShelfData.Entry
-    let pi: PiShown?
+    let now: ProjectNow?
     @Environment(\.palette) private var palette
     /// 项目图标随字号放大。
     @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 22
@@ -305,19 +302,8 @@ private struct PinnedShelfCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 ProjectGlyph(project: entry.project, size: glyph).padding(.bottom, 6)
                 Text(entry.project.name).font(.title3.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
-                if let summary = entry.summary {
-                    Text(summary).font(.footnote).foregroundStyle(palette.ink2)
-                        .lineLimit(2).multilineTextAlignment(.leading)
-                }
+                ProjectNowLine(now: now, font: .footnote)
                 Spacer(minLength: 10)
-                // Agent 状态写成字：只有一个点读不出它在说什么
-                if let pi {
-                    HStack(spacing: 5) {
-                        PiStateDot(shown: pi, size: 6)
-                        Text(pi.presence).foregroundStyle(palette.ink2).lineLimit(1)
-                    }
-                    .font(.caption)
-                }
                 ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
             }
             .padding(16)
@@ -329,21 +315,23 @@ private struct PinnedShelfCard: View {
             .paper(radius: Self.radius)
         }
         .buttonStyle(CardPressStyle())
-        .projectActions(entry.project, radius: Self.radius, pi: pi)
+        .projectActions(entry.project, radius: Self.radius, pi: now?.shown)
         .accessibilityElement(children: .combine)
     }
 }
 
-/// 灵感数与未完成任务数，书架大卡与行里同一种写法："25 张 · 3 项任务"。
+/// 灵感数与未完成任务数，书架大卡与行里同一种写法（`CountCopy`："25 条灵感 · 3 项任务"，为 0 的不写）。
 private struct ShelfCounts: View {
     let cards: Int
     var tasks = 0
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text(tasks > 0 ? "\(cards) 条灵感 · \(tasks) 项任务" : "\(cards) 条灵感")
-            .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).counting(cards + tasks)
-            .lineLimit(1)
+        if let text = CountCopy.text((cards, "条灵感"), (tasks, "项任务")) {
+            Text(text)
+                .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).counting(cards + tasks)
+                .lineLimit(1)
+        }
     }
 }
 
@@ -359,10 +347,10 @@ private struct EmptyShelf: View {
     }
 }
 
-/// 书架的一行：项目（副标题是介绍，没写介绍时是最近一条灵感）。
+/// 书架的一行：项目名，下面是"此刻"一行（`ProjectNow`）。
 private struct ShelfRow: View {
     let entry: ShelfData.Entry
-    let pi: PiShown?
+    let now: ProjectNow?
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
     /// 辅助字号下并进名称一行的图标随字号放大；平时在固定大小的图标块里。
@@ -394,10 +382,8 @@ private struct ShelfRow: View {
                     HStack(spacing: 6) {
                         if stacked { ProjectGlyph(project: entry.project, size: glyph) }
                         Text(entry.project.name).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(stacked ? 2 : 1)
-                        if let pi { PiStateDot(shown: pi, size: 6, announces: true) }
                     }
-                    Text(subtitle)
-                    .font(.footnote).foregroundStyle(palette.ink3).lineLimit(stacked ? 3 : 1)
+                    ProjectNowLine(now: now, font: .footnote)
                     // 辅助功能大字号下计数换到名称下方，名称不被挤成省略号
                     if stacked { counts }
                 }
@@ -411,11 +397,9 @@ private struct ShelfRow: View {
         }
         .buttonStyle(RowPressStyle())
         .background(palette.paper)
-        .projectActions(entry.project, radius: 16, pi: pi)
+        .projectActions(entry.project, radius: 16, pi: now?.shown)
         .accessibilityElement(children: .combine)
     }
-
-    private var subtitle: String { entry.summary ?? "还没有灵感" }
 }
 
 /// 正在推进：一屏的重点。进行中的任务排在一张纸上，每行是标题、所在项目、交给 Agent 的会话此刻在做什么，点开是任务浮窗；
@@ -542,8 +526,8 @@ private struct ActiveTaskRow: View {
     }
 }
 
-/// 等你：有 Agent 等你确认时书架最上面的一张——几个在等、第一个在问什么；点它去 Agent 页回答。
-/// 赭黄只落在图标与一层淡底上，问题正文是墨色。
+/// 等你：有 Agent 等你确认时书架最上面的一张——几个在等；点它去 Agent 页回答。归在项目里的会话问了什么已写在那个项目的
+/// "此刻"一行，这里不再重复；只有不在项目里的（没有别处写它）才在这里写出它的问题。赭黄只落在图标与一层淡底上，问题正文是墨色。
 private struct WaitingCard: View {
     let items: [PiSessionListItem]
     @Environment(Navigation.self) private var navigation
@@ -553,6 +537,7 @@ private struct WaitingCard: View {
 
     var body: some View {
         let first = items[0].state
+        let loose = items.first { $0.state.projectID == nil }?.state
         Button(action: open) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Image(systemName: "questionmark.circle.fill").font(.title3).foregroundStyle(palette.attention)
@@ -561,9 +546,9 @@ private struct WaitingCard: View {
                     Text(items.count == 1 ? "\(first.title) 在等你确认" : "\(items.count) 个 Agent 在等你确认")
                         .font(.headline).foregroundStyle(palette.ink)
                         .contentTransition(.numericText()).animation(Motion.snappy, value: items.count)
-                    if let ask = first.question?.text ?? first.detail {
-                        Text(items.count == 1 ? ask : "\(first.title)：\(ask)")
-                            .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(2).multilineTextAlignment(.leading)
+                    if let loose, let ask = PiProgress.line(of: loose) {
+                        Text(items.count == 1 ? ask : "\(loose.title)：\(ask)")
+                            .font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 8)

@@ -157,7 +157,7 @@ struct CardFace: View {
                 Thumbnail(hash: image, height: 118).padding(-8).padding(.bottom, 6)
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(text.title.isEmpty ? "无标题" : text.title)
+                Text(text.label)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                     .lineLimit(2)
@@ -167,7 +167,7 @@ struct CardFace: View {
             if !text.preview.isEmpty {
                 Text(VariableText.styled(text.preview, palette))
                     .font(.system(size: 13)).lineSpacing(3).foregroundStyle(palette.ink2)
-                    .lineLimit(text.images.isEmpty ? 4 : 2)
+                    .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
             }
             CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
                 .padding(.top, 2)

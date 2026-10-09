@@ -44,6 +44,7 @@ protocol Record: Sendable {
 
 public struct Project: Identifiable, Equatable, Sendable {
   public let id: UUID
+  /// 不会是空的：写入时空名抛 `blankProjectName`；别处（旧版本、同步）留下的空名读出来是 `untitled`。
   public var name: String
   public var icon: String?
   public var color: String
@@ -54,6 +55,8 @@ public struct Project: Identifiable, Equatable, Sendable {
   public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
+
+  public static let untitled = "未命名项目"
 }
 
 /// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
@@ -92,6 +95,8 @@ public struct Card: Identifiable, Equatable, Sendable {
   public static let maxDepth = 3
 
   public var isTask: Bool { todoAt != nil }
+  /// 空白：正文只有空白（没有文字也没有图片）。空白灵感离开编辑就不留下（`CueStore.dropIfBlank`），也不计数、不当摘要。
+  public var isBlank: Bool { body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
   /// 任务的三态；灵感为 nil。
   public var status: TaskStatus? {
@@ -306,16 +311,17 @@ public struct SearchResults: Sendable {
   public var totalCards: Int
 }
 
-/// 侧栏用：项目（nil = 未分类）的灵感数（顶层的，不含任务与提示词）与卡片最近修改时间；没有卡片时 `lastModifiedAt` 为 nil。
+/// 项目（nil = 未分类）的灵感数（散放在列表里的，不含任务、提示词与空白灵感）与最近改过的一条（书架上没写介绍时当摘要）。
 public struct ProjectSummary: Equatable, Sendable {
   public var projectID: UUID?
   public var cardCount: Int
-  public var lastModifiedAt: Date?
+  public var latest: Card?
 }
 
 public enum CueStoreError: Error, Equatable {
   case notFound
   case blankTaskContent
+  case blankProjectName
   case notAnImage
   /// 卡片或任务只能归属存在且未在回收站的项目（或不归属任何项目）。
   case invalidProject
@@ -343,6 +349,7 @@ extension CueStoreError: LocalizedError {
     switch self {
     case .notFound: "找不到这条记录，可能已被删除"
     case .blankTaskContent: "任务内容不能为空"
+    case .blankProjectName: "项目名不能为空"
     case .notAnImage: "不是可识别的图片"
     case .invalidProject: "目标项目已不存在或在回收站"
     case .notAConflictCopy: "这条不是冲突副本"
@@ -366,7 +373,8 @@ extension Project: Record {
   var bindings: [any SQLBindable] { [id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro] }
   init(row: Row) {
     self.init(
-      id: row.uuid(0), name: row.text(1), icon: row.textOrNil(2), color: row.text(3),
+      id: row.uuid(0), name: row.text(1).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Project.untitled : row.text(1),
+      icon: row.textOrNil(2), color: row.text(3),
       isPinned: row.bool(4), intro: row.textOrNil(8),
       deletedAt: row.dateOrNil(5), createdAt: row.date(6), modifiedAt: row.date(7))
   }

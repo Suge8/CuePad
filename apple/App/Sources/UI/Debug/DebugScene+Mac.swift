@@ -10,6 +10,8 @@ extension DebugScene {
         resizeWindow()
         _ = await prepareLibrary(workspace)
         if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.sidebar = .detailOnly }
+        // -CuePadSendTo <bundle id>：发送目标先选这个应用（看发送钮的次要样式，配 editor 画面）
+        if let bundleID = defaults.string(forKey: "CuePadSendTo") { workspace.sendChoice = .app(.bundleID(bundleID)) }
         switch scene {
         case "collapsed": workspace.sidebar = .detailOnly
         case "search": workspace.overlay = .search
@@ -21,6 +23,9 @@ extension DebugScene {
         case "agent":
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
             workspace.show(.agent)
+        case "projectagent":
+            // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在
+            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
         case "editor": workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)

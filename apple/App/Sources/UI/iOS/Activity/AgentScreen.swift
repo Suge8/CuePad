@@ -26,6 +26,8 @@ struct AgentScreen: View {
     @State private var renaming: PiSessionState?
     @State private var reloadOpen = false
     @State private var searchHidden = false
+    /// 还没有文件夹的项目的同名建议（顶上筛选钮的菜单里一键绑）。
+    @State private var folderGuide: FolderGuide?
     @Environment(\.tabPageReady) private var tabPageReady
 
     private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -69,6 +71,7 @@ struct AgentScreen: View {
         .modifier(Header(pushed: project != nil, count: list.map { $0.now.count + $0.total }, filter: filter))
         // 标签页的根：系统导航栏收起，只留这一排（iPad 分栏里导航栏放着分栏自己的按钮，留着）
         .toolbarVisibility(project == nil && navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
+        .observingFolderGuide(into: $folderGuide)
         .refreshable { await services.syncNow() }
         .onChange(of: list != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
         .environment(\.searchHighlight, query)
@@ -85,27 +88,47 @@ struct AgentScreen: View {
     }
 
     /// 左边的圆钮：按项目筛"现在"与"历史"（全部 + 在 Mac 上绑了文件夹的项目，项目目录的顺序）；筛着项目时圆钮里是那个项目的图标。
-    /// 一个能筛的项目都没有时不出现。
+    /// 钮始终在（两个标签根页的顶上一排结构一致）；一个能筛的项目都没有时点开写明原因，并给还没绑文件夹的项目各一项去绑。
     @ViewBuilder private var filterMenu: some View {
         let projects = (workspace.catalog?.projects ?? []).filter { list?.projects.contains($0.id) == true || $0.id == filter }
-        if !projects.isEmpty {
-            let current = workspace.catalog?.project(filter)
-            Menu {
+        let current = workspace.catalog?.project(filter)
+        Menu {
+            if projects.isEmpty {
+                Section("绑定文件夹后，那里的 Agent 会话才能按项目看") {
+                    ForEach((workspace.catalog?.projects ?? []).filter { !workspace.hasFolder($0.id) }) { project in
+                        // 有同名文件夹的一键绑（会话数写在上面），其余自己选
+                        if let named = folderGuide?.suggestions[project.id]?.first {
+                            Button { bind(named, to: project) } label: {
+                                Label(ProjectFolders.suggestionTitle(named, showsMac: false), systemImage: "folder.badge.plus")
+                            }
+                        } else {
+                            Button { workspace.chooseFolder(for: project) } label: {
+                                Label("为「\(project.name)」绑定文件夹…", systemImage: "folder.badge.plus")
+                            }
+                        }
+                    }
+                }
+            } else {
                 Picker("按项目看", selection: Binding { filter } set: { pick($0) }) {
                     Label("全部", systemImage: "square.stack").tag(UUID?.none)
                     ForEach(projects) { project in
                         Label { Text(project.name) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
                     }
                 }
-            } label: {
-                Label {
-                    Text(current.map { "按项目看：\($0.name)" } ?? "按项目看")
-                } icon: {
-                    if let current { ProjectGlyph(project: current, size: 15) } else { Image(systemName: "line.3.horizontal.decrease") }
-                }
             }
-            .sensoryFeedback(.selection, trigger: filter)
+        } label: {
+            Label {
+                Text(current.map { "按项目看：\($0.name)" } ?? "按项目看")
+            } icon: {
+                if let current { ProjectGlyph(project: current, size: 15) } else { Image(systemName: "line.3.horizontal.decrease") }
+            }
         }
+        .sensoryFeedback(.selection, trigger: filter)
+    }
+
+    private func bind(_ candidate: ProjectFolders.Candidate, to project: Project) {
+        let id = project.id, name = project.name
+        workspace.attempt { try await workspace.requestFolder(PiBind(project: id, folder: candidate.target), title: name, on: candidate.hostID) }
     }
 
     /// 会话列表。换搜索词或项目时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。
@@ -188,6 +211,12 @@ struct AgentScreen: View {
     @ViewBuilder private var empty: some View {
         if searching {
             EmptyState.noMatch(query).padding(.top, 40)
+        } else if let filter, let project = workspace.catalog?.project(filter), !workspace.hasFolder(filter) {
+            // 会话按工作目录归入项目：没绑文件夹就一个也归不进来，空态不能说"没有会话"
+            EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
+                ProjectFolderGuide(project: project)
+            }
+            .padding(.top, 40)
         } else if let filter {
             EmptyState(mascot: .empty, title: "这个项目还没有 Agent 会话") {
                 Button("新会话") { navigation.newSession = .init(project: filter) }.prominentButton().controlSize(.large)
