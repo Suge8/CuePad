@@ -19,7 +19,7 @@ struct ArchiveList: View {
                 ScrollView {
                     EmptyState(mascot: .clean, title: "归档是空的", message: "做完的灵感与任务归档后放在这里")
                         #if os(iOS)
-                        .padding(.horizontal, 16).padding(.top, 12)
+                        .padding(.horizontal, 16)
                         #endif
                 }
             } else {

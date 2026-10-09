@@ -72,6 +72,23 @@ struct AgentRowTests {
 
     }
 
+    /// 停着的会话（空闲、需要重载）没有回答时（如这一轮被中止）写你最后说的那句，比写一个状态词有用；
+    /// 列表的第二层与书架、侧栏项目行的"此刻"读的是同一句（`PiProgress`）。有回答时照旧是回答。
+    @Test func 停着的会话没有回答时写你最后说的那句() async throws {
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        try await recorder.update(sessionID: "s", state: .settled, title: "s")
+        try await store.writePiTranscript(PiTranscript(sessionID: "s", messages: [], recap: PiRecap(lastPrompt: "把排序改成稳定的\n再跑一遍", lastReply: nil)))
+        let idle = try await item()
+        #expect(PiRowLine.of(idle.state, draft: nil, end: nil) == .progress("你：把排序改成稳定的"))
+        #expect(PiProgress.line(of: idle.state) == "你：把排序改成稳定的")
+
+        try await recorder.update(sessionID: "s", state: .incompatible, title: "s")
+        #expect(PiProgress.line(of: try await item().state) == "你：把排序改成稳定的")
+
+        try await store.writePiTranscript(PiTranscript(sessionID: "s", messages: [], recap: PiRecap(lastPrompt: "把排序改成稳定的", lastReply: "改好了。全部通过。")))
+        #expect(PiProgress.line(of: try await item().state) == "改好了。")
+    }
+
     /// 已结束的会话第二层一律说它做了什么，状态只由带斜线的状态标表达：最后一句回答，没有回答写你最后说的话，
     /// 都没记下就空着——不写"已结束"（翻历史时一屏都是同一个词）。
     @Test func 已结束的会话第二层写做了什么_不写已结束() async throws {

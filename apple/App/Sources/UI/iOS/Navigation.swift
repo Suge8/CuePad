@@ -42,6 +42,14 @@ final class Navigation {
 
         var isCard: Bool { if case .card = self { true } else { false } }
 
+        /// 页顶上自带一排搜索与圆钮（`SearchRow`）：内容让到那一排下面，离栏的距离由那一页自己给。
+        var hasSearchRow: Bool {
+            switch self {
+            case .shelf, .agent, .projectSessions: true
+            default: false
+            }
+        }
+
         /// 会话页；`seed` 是推入前读好的这一页（`openSession`），通知跳转等只有 id 的入口不带。
         static func session(_ id: UUID, seed: SessionDigest? = nil) -> Route { .session(SessionRoute(id: id, seed: seed)) }
     }
