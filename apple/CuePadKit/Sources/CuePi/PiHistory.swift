@@ -16,9 +16,10 @@ public struct PiSessionHistory: Sendable, Equatable {
     }
 }
 
-/// 对话里的一条：你说的一句，或 Pi 一轮最后的回答（一轮一条；中途调工具时说的话、思考与工具输出不算）。
+/// 对话里的一条：你说的一句，或 Pi 一轮最后的回答（一轮一条；中途调工具时说的话、思考与工具输出不算），
+/// 或会话文件里的一条压缩记录（系统行：与终端对话里的压缩摘要同一件事）。
 public struct PiTranscriptEntry: Sendable, Equatable {
-    public enum Role: Sendable, Equatable { case user, pi }
+    public enum Role: Sendable, Equatable { case user, pi, system }
 
     /// 会话文件里那一条的 id
     public var entryID: String
@@ -201,6 +202,7 @@ public enum PiHistory {
         var timestamp: String?
         var cwd: String?
         var name: String?
+        var tokensBefore: Int?
         var message: Message?
 
         var time: Date? { timestamp.flatMap { try? Date($0, strategy: PiHistory.timestampStyle) } }
@@ -260,6 +262,10 @@ public enum PiHistory {
             cp.cwd = line.cwd
         case "session_info":
             cp.name = line.name
+        case "compaction":
+            transcript.append(PiTranscriptEntry(
+                entryID: line.id ?? "\(cp.seq)", seq: cp.seq, role: .system, text: compactionText(tokensBefore: line.tokensBefore),
+                at: time ?? cp.lastActivity ?? .distantPast, toolCount: 0, roundStartedAt: nil, deliveryID: nil))
         case "message":
             guard let message = line.message else { return }
             if cp.firstMessage == nil, message.role == "user" {
@@ -275,6 +281,12 @@ public enum PiHistory {
         default:
             break
         }
+    }
+
+    /// 压缩的系统行："已压缩上下文 · 压缩前约 63k tokens"（不到 1000 写原数）。
+    private static func compactionText(tokensBefore: Int?) -> String {
+        guard let tokensBefore else { return "已压缩上下文" }
+        return "已压缩上下文 · 压缩前约 " + (tokensBefore >= 1_000 ? "\(tokensBefore / 1_000)k" : "\(tokensBefore)") + " tokens"
     }
 
     private typealias Entry = (id: String, seq: Int64, at: Date)

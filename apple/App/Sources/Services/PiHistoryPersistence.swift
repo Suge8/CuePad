@@ -159,10 +159,20 @@ nonisolated extension PiTranscript {
     }
 }
 
+nonisolated extension PiChatRole {
+    init(_ role: PiTranscriptEntry.Role) {
+        self = switch role {
+        case .user: .user
+        case .pi: .pi
+        case .system: .system
+        }
+    }
+}
+
 nonisolated extension PiChatMessage {
     init(_ entry: PiTranscriptEntry, sessionID: String) {
         self.init(
-            sessionID: sessionID, entryID: entry.entryID, seq: entry.seq, role: entry.role == .user ? .user : .pi, text: entry.text,
+            sessionID: sessionID, entryID: entry.entryID, seq: entry.seq, role: PiChatRole(entry.role), text: entry.text,
             at: entry.at, toolCount: entry.toolCount, roundStartedAt: entry.roundStartedAt,
             deliveryID: entry.deliveryID.flatMap(UUID.init(uuidString:)))
     }

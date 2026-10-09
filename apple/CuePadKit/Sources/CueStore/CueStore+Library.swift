@@ -491,7 +491,7 @@ extension CueStore {
 // MARK: 发送记录、附件、Pi 会话索引
 
 extension CueStore {
-  /// 记录一次投送或复制：内容快照、目标、时间。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话；任务置为进行中
+  /// 记录一次投送或复制：内容快照、目标、时间。发送记录只记"内容"的投送——说给 Agent 的话、发到应用、复制；命令与设置（config、answer、end、stop、bind、command）不记。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话；任务置为进行中
   /// （完成了的也重新打开；任务行据此显示会话状态），提示词（任务下的灵感）连带它的任务也一样。执行投送的那台 Mac 记，
   /// 请求从哪台设备发来都一样。灵感发出去不变成任务。
   @discardableResult
@@ -503,17 +503,25 @@ extension CueStore {
         targetRef: target.ref, cardID: card, sentAt: now, modifiedAt: now)
       try insert(record)
       try registerImages(in: content)
-      if let card, target.kind == .known(.piSession), let session = target.ref {
-        try db.run(
-          """
-          UPDATE cards SET piSessionID = ?1, modifiedAt = ?2,
-            startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END,
-            completedAt = CASE WHEN todoAt IS NOT NULL THEN NULL END
-          WHERE id = ?3 OR id = (SELECT parentID FROM cards WHERE id = ?3 AND todoAt IS NULL)
-          """, [session, now, card])
-      }
+      if let card, target.kind == .known(.piSession), let session = target.ref { try linkCardInTransaction(card, toSession: session, at: now) }
       return record
     }
+  }
+
+  /// 把灵感或任务关联到一个会话（任务进行中，提示词连带它的任务也一样），不写发送记录：
+  /// 交给 Agent 的命令带着卡片时用（命令不是内容的投送，发送记录只记内容）。
+  public func linkCard(_ card: UUID, toSession session: String) throws {
+    try write { try linkCardInTransaction(card, toSession: session, at: Date.stamp) }
+  }
+
+  private func linkCardInTransaction(_ card: UUID, toSession session: String, at now: Date) throws {
+    try db.run(
+      """
+      UPDATE cards SET piSessionID = ?1, modifiedAt = ?2,
+        startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END,
+        completedAt = CASE WHEN todoAt IS NOT NULL THEN NULL END
+      WHERE id = ?3 OR id = (SELECT parentID FROM cards WHERE id = ?3 AND todoAt IS NULL)
+      """, [session, now, card])
   }
 
   /// 插入或更新会话索引（本机，不同步）；`checkpoint` 为 nil 时保留已存的检查点，非 nil 时在同一事务里替换。
