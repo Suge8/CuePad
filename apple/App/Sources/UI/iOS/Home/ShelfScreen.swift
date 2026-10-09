@@ -113,15 +113,15 @@ struct ShelfScreen: View {
         let now = data.now(shown: services.settings.shown)
         let agent = AgentNow.of(data.sessions, shown: services.settings.shown)
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
-        LazyVStack(alignment: .leading, spacing: 22) {
+        LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
             if data.entries.isEmpty && data.inboxCount == 0 {
-                lead(data, agent)
+                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }
                 EmptyShelf { navigation.projectForm = .init() }
             } else if wide, !pinned.isEmpty, hasLead(data, agent) {
                 // 宽屏两栏：左边现在要干的，右边置顶项目；放不下两栏时上下排
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 20) {
-                        VStack(alignment: .leading, spacing: 22) { lead(data, agent) }.frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }.frame(maxWidth: .infinity)
                         // 右栏的大卡按宽度排：窄时一列叠放，宽时两列
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.pinnedMinWidth), spacing: 12)], spacing: 12) {
                             ForEach(pinned) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
@@ -129,13 +129,13 @@ struct ShelfScreen: View {
                         .frame(maxWidth: .infinity)
                     }
                     .frame(minWidth: Self.twoColumnWidth, idealWidth: Self.twoColumnWidth, maxWidth: .infinity)
-                    VStack(alignment: .leading, spacing: 22) {
-                        lead(data, agent)
+                    VStack(alignment: .leading, spacing: Self.sectionGap) {
+                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }
                         pinnedGrid(pinned, columns: min(pinned.count, 4), now: now)
                     }
                 }
             } else {
-                lead(data, agent)
+                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }
                 if !pinned.isEmpty {
                     // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
                     pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2), now: now)
@@ -166,6 +166,9 @@ struct ShelfScreen: View {
     }
 
     private static let readableWidth: CGFloat = 1080
+    /// 两级节奏：现在要干的几样（Agent 此刻、正在推进、未分类）之间紧一些，与置顶、最近这些段之间松一些。
+    private static let leadGap: CGFloat = 16
+    private static let sectionGap: CGFloat = 28
     /// 两栏各至少这么宽才并排（左栏放得下正在推进的一行任务，右栏放得下一张置顶大卡）。
     private static let twoColumnWidth: CGFloat = 640
     private static let pinnedMinWidth: CGFloat = 220
@@ -378,8 +381,14 @@ private struct ShelfRow: View {
         typeSize.isAccessibilitySize ? horizontalPadding : horizontalPadding + tile + 12
     }
 
-    private var counts: some View {
-        ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
+    /// 行尾只留灵感数（像侧栏的计数）：把宽度让给"此刻"那一句；任务数在"此刻"与任务页里。辅助字号下照常写全。
+    @ViewBuilder private var counts: some View {
+        if stacked {
+            ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
+        } else {
+            Text("\(entry.cardCount)").font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3).counting(entry.cardCount)
+                .accessibilityLabel("\(entry.cardCount) 条灵感")
+        }
     }
 
     var body: some View {

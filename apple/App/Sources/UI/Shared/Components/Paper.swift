@@ -82,14 +82,14 @@ struct BarScrim: View {
     @Environment(\.pageBackground) private var pageBackground
 
     #if os(macOS)
-    /// 窗口工具栏（高 52）。
+    /// 窗口工具栏（高 52；工具栏改高时跟着改这个数）。
     static var underToolbar: BarScrim { BarScrim(edge: .top, height: 52) }
-    /// 底部玻璃输入栏连同下边距（约 70）。
-    static var underInputBar: BarScrim { BarScrim(edge: .bottom, height: 70) }
+    /// 底部玻璃输入栏（输入栏高 40 加下边距 16；改了输入栏的高度或边距时跟着改）。
+    static var underInputBar: BarScrim { BarScrim(edge: .bottom, height: 56) }
     #endif
 
-    /// 边沿处的不透明度：够让栏上的字（时间、标题）压得住，又能看出后面的内容。
-    private static let edgeOpacity = 0.82
+    /// 边沿处的不透明度：只压一半，栏上的字（时间、标题）压得住，后面的内容仍看得出来。
+    private static let edgeOpacity = 0.5
 
     var body: some View {
         let alignment: Alignment = edge == .top ? .top : .bottom

@@ -188,7 +188,9 @@ struct PromptCard: View {
         }
         .padding(TaskMetrics.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.fill, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+        // 与这一页同一种纸：略亮的纸面加一圈细线，不用灰底压重
+        .background(palette.paperLit, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.paperEdge()))
         .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
         .onTapGesture(perform: open)
         .contextMenu { CardActions(card: prompt) }

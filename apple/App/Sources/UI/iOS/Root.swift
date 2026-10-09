@@ -103,7 +103,7 @@ struct RouteView: View {
         // 底部栏是玻璃：内容一直滚到它后面（沉浸式），不自绘渐变；让出高度的 safeAreaBar 那一段由系统的滚动边缘效果处理
         page.containerBackground(background, for: .navigation)
             .environment(\.pageBackground, background)
-            // 标签栏布局：内容让出底部那一行的高度，滚动到它下面的内容渐隐。挂在每一页上：TabView 外面的安全区传不进标签页
+            // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页
             .safeAreaBar(edge: .bottom) {
                 if bottomBarReserve > 0, navigation.bottomPages == 0 { Color.clear.frame(height: bottomBarReserve) }
             }
