@@ -66,10 +66,10 @@ enum ComposerSource { case cards, photos, camera, files }
 
 /// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份，文字区各用平台的文本视图包装，见 `ComposerField`）（同 ChatGPT、Claude 的"文字在上、工具在下"）：一层玻璃，里面是
 /// （调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：左"＋"（选卡片、相册、拍照）、调用方的小圆钮
-/// （会话回复框的模型与思考强度，只在聚焦时有），右发送钮。空着又没聚焦时收成一行：＋、一行文字区（发送钮不占位）；
+/// （会话回复框的模型与思考强度，只在聚焦时有），右提交钮。空着又没聚焦时收成一行：＋、一行文字区（提交钮不占位）；
 /// 聚焦或有内容时展开成两层，＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
-/// 调用方给草稿、占位、接受的种类和发送钮，草稿怎么处理由它们决定；给了 `submit` 时 ⌘↩ 发送（iPad 外接键盘同样）。
-/// 发送钮平时有内容才出现；`showsSend` 时空着也在（收成一行时在文字区右边）——会话回复框在 Agent 跑一轮时那里是"停止"。
+/// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；给了 `submit` 时 ⌘↩ 发送（iPad 外接键盘同样）。
+/// 提交钮平时有内容才出现；`showsSend` 时空着也在（收成一行时在文字区右边）——会话回复框在 Agent 跑一轮时那里是"停止"。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
     let prompt: String
@@ -83,7 +83,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     let pinnedOpen: Bool
     /// 没聚焦、没内容时收成短胶囊（＋ 与一行提示），点它照常聚焦展开（会话页在看历史时）。
     let compact: Bool
-    /// 空着也露出发送钮的位置（见上）。
+    /// 空着也露出提交钮的位置（见上）。
     let showsSend: Bool
     let focus: FocusState<Bool>.Binding
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
@@ -129,7 +129,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         self.send = send()
     }
 
-    /// 单行时输入框高 50（字行 + 上下各 14），圆角取一半成胶囊；左下的 ＋ 与右下的发送钮同是 36 的圆，
+    /// 单行时输入框高 50（字行 + 上下各 14），圆角取一半成胶囊；左下的 ＋ 与右下的提交钮同是 36 的圆，
     /// 离边 7（= 圆角 25 − 圆半径 18），与外框同心。
     private static var radius: CGFloat { 25 }
     private static var inset: CGFloat { 8 }
@@ -234,7 +234,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             }
         }
         // 整块玻璃都是输入框：点在文字区以外（边距、两个圆钮之间的空处）也聚焦，不落空（文字区只占中间一条，
-        // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与发送钮在它上面，照旧自己接
+        // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
         .background {
             if !focused {
                 Color.clear.contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
@@ -254,7 +254,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             set: { if !$0, source == target { source = nil } })
     }
 
-    /// 发送钮的位置一直留着：有内容才放进来，输入框的宽度不随它变，文字不会因此重排。
+    /// 提交钮的位置一直留着：有内容才放进来，输入框的宽度不随它变，文字不会因此重排。
     private var sendSlot: some View {
         ZStack {
             if sendVisible { send.transition(.scale(scale: 0.6).combined(with: .opacity)) }
@@ -394,35 +394,57 @@ extension Composer where Tools == EmptyView {
     }
 }
 
-/// 输入框里两个角上的圆钮（看得见的 36，点得到的 44）：＋ 与发送钮同一个。
+/// 输入框里两个角上的圆钮（看得见的 36，点得到的 44；Mac 底部输入栏一行高，用 28 / 40）：＋ 与提交钮同一个。
 private struct CircleGlyph: View {
     let systemImage: String
     let ink: Color
     let fill: Color
+    var size = SubmitGlyph.Size.regular
 
     var body: some View {
-        Image(systemName: systemImage).font(.body.weight(.semibold))
+        Image(systemName: systemImage).font(size == .regular ? .body.weight(.semibold) : .system(size: 13, weight: .bold))
             .foregroundStyle(ink)
-            .frame(width: 36, height: 36)
+            .frame(width: size.diameter, height: size.diameter)
             .background(fill, in: .circle)
-            .frame(width: 44, height: 44)
+            .frame(width: size.target, height: size.target)
             .contentShape(.circle)
     }
 }
 
-/// 输入框右下角的圆形发送钮：能发时靛青实心（主动作），发不出（同步不通、发送中）时淡。
-struct SendGlyph: View {
+/// 输入框右下角的提交钮：存下（记成灵感）是打勾，发出（交给 Agent、回复、开新会话）是向上箭头——
+/// 两种动作长得不一样，记下不会被看成发出。能按时靛青实心（主动作），按不了（同步不通、正在提交）时淡。
+struct SubmitGlyph: View {
+    enum Action {
+        case save, send
+        var symbol: String { self == .save ? "checkmark" : "arrow.up" }
+    }
+
+    enum Size {
+        case regular, small
+        var diameter: CGFloat { self == .regular ? 36 : 28 }
+        var target: CGFloat { self == .regular ? 44 : 40 }
+    }
+
+    let action: Action
     let enabled: Bool
+    var size = Size.regular
     @Environment(\.palette) private var palette
+
+    init(_ action: Action, enabled: Bool, size: Size = .regular) {
+        self.action = action
+        self.enabled = enabled
+        self.size = size
+    }
 
     var body: some View {
         CircleGlyph(
-            systemImage: "arrow.up", ink: enabled ? palette.onSignature : palette.ink3, fill: enabled ? palette.signature : palette.fill)
+            systemImage: action.symbol, ink: enabled ? palette.onSignature : palette.ink3, fill: enabled ? palette.signature : palette.fill,
+            size: size)
             .animation(Motion.quick, value: enabled)
     }
 }
 
-/// 输入框右下角的停止钮（Agent 跑一轮时代替发送钮）：墨色实心方块；停止请求已发出、这一轮还没歇下时换成转圈，不能再点。
+/// 输入框右下角的停止钮（Agent 跑一轮时代替提交钮）：墨色实心方块；停止请求已发出、这一轮还没歇下时换成转圈，不能再点。
 struct StopGlyph: View {
     let stopping: Bool
     @Environment(\.palette) private var palette

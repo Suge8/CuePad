@@ -41,7 +41,9 @@ struct CaptureComposer: View {
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        // 菜单栏面板只有 360 宽：发送钮放在稿纸下面靠右，不和稿纸并排把它挤成一窄条
+        let layout = pinnedOpen ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 8)) : AnyLayout(HStackLayout(alignment: .bottom, spacing: 8))
+        layout {
             VStack(alignment: .leading, spacing: 8) {
                 if expanded {
                     HStack(spacing: 8) {
@@ -62,7 +64,7 @@ struct CaptureComposer: View {
             }
             if !trimmed.isEmpty, images.isEmpty {
                 SendControl(project: project, compact: pinnedOpen) { send($0) }
-                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: pinnedOpen ? .top : .trailing)))
             }
         }
         .animation(Motion.quick, value: expanded)
@@ -91,7 +93,7 @@ struct CaptureComposer: View {
                 Button("添加图片", systemImage: "photo.on.rectangle") { pickImages() }
                     .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink2)
                     .frame(width: 32, height: 40)
-                Button(action: save) { RoundSendGlyph(enabled: !draft.isEmpty && !saving) }
+                Button(action: save) { SubmitGlyph(.save, enabled: !draft.isEmpty && !saving, size: .small) }
                     .buttonStyle(.plain)
                     .disabled(draft.isEmpty || saving)
                     .accessibilityLabel("记下")
@@ -177,22 +179,6 @@ private struct CaptureSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         if pinned { content } else { content.glass(in: .rect(cornerRadius: 22), interactive: true) }
-    }
-}
-
-/// 输入框里的圆形钮（随手记的记下，与手机的发送钮同一种）：能按时靛青实心，不能时淡。
-struct RoundSendGlyph: View {
-    let enabled: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Image(systemName: "arrow.up").font(.system(size: 13, weight: .bold))
-            .foregroundStyle(enabled ? palette.onSignature : palette.ink3)
-            .frame(width: 28, height: 28)
-            .background(enabled ? palette.signature : palette.fill, in: .circle)
-            .padding(6)
-            .contentShape(.circle)
-            .animation(Motion.quick, value: enabled)
     }
 }
 #endif

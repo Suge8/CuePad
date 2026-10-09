@@ -49,7 +49,7 @@ struct NewSessionInput: View {
                         status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)
                     },
                     send: {
-                        Button(action: launch) { SendGlyph(enabled: canStart) }
+                        Button(action: launch) { SubmitGlyph(.send, enabled: canStart) }
                             .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
                     })
                 .disabled(inFlight)
