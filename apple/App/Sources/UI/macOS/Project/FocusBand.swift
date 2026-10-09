@@ -73,8 +73,7 @@ private struct PiColumn: View {
         let sessions = workspace.liveSessions(in: project?.id)
         if sessions.isEmpty {
             if let project, !workspace.hasFolder(project.id) {
-                Text("还没绑定文件夹").font(.system(size: 12.5)).foregroundStyle(palette.ink3)
-                ProjectFolderGuide(project: project, style: .line)
+                ProjectFolderGuide(project: project, style: .inset)
             } else {
                 Text("没有运行中的会话").font(.system(size: 12.5)).foregroundStyle(palette.ink3)
                     .fixedSize(horizontal: false, vertical: true)

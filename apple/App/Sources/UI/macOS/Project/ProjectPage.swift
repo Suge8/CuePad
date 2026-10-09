@@ -15,6 +15,8 @@ struct ProjectPage: View {
     @State private var collapsed = false
 
     private static let collapseOffset: CGFloat = 140
+    /// 空项目那一行（添加任务与绑定引导）的宽度上限：跟着内容，不铺满整页。
+    private static let emptyLineWidth: CGFloat = 460
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -76,13 +78,10 @@ struct ProjectPage: View {
             FocusBand(data: data)
         } else if let project = projectID {
             // 两边都空：不画一个只装着空态的大框，收成一行添加任务；还没绑文件夹时接着写明并给一键绑（与 Agent 栏同一个组件）
-            VStack(alignment: .leading, spacing: 10) {
-                NewTaskField(project: project).frame(maxWidth: 420, alignment: .leading)
+            VStack(alignment: .leading, spacing: 12) {
+                NewTaskField(project: project).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
                 if let project = data.project, !workspace.hasFolder(project.id) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("还没绑定文件夹").font(.system(size: 12.5)).foregroundStyle(palette.ink3)
-                        ProjectFolderGuide(project: project, style: .line)
-                    }
+                    ProjectFolderGuide(project: project, style: .panel).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
                 }
             }
         }
