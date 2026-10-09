@@ -54,3 +54,25 @@ struct ProjectNowTests {
         #expect(now([item("rename", .waitingForUser, question: "新分支叫什么？")])?.needsYou == true)
     }
 }
+
+#if os(iOS)
+/// 书架读到的数据里，"此刻"看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍。
+@MainActor
+struct ProjectNowShelfTests {
+    let app = TestApp()
+    var store: CueStore { app.services.store }
+
+    @Test func 发给已结束会话的话_在项目的此刻里() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await store.updateProject(project.id) { $0.intro = "多 Agent 调度本月可上线" }
+        let recorder = PiStateRecorder(store: store, hostID: "mac")
+        try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas", projectID: project.id)
+        try await recorder.end(sessionID: "atlas")
+        try await store.requestDelivery("再跑一遍", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "mac")
+
+        let shelf = try await ShelfData.read(from: store)
+
+        #expect(shelf.now(shown: app.services.settings.shown)[project.id]?.text == "正在唤醒 Agent")
+    }
+}
+#endif
