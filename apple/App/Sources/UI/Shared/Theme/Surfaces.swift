@@ -12,8 +12,10 @@ extension View {
     }
 
     /// 控件层玻璃；"降低透明度"开启时退回实底。玻璃不叠玻璃：调用方不在玻璃里再套玻璃。
-    func glass<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
-        modifier(GlassSurface(shape: shape, interactive: interactive))
+    /// `legible`：玻璃上写着要读的字（顶栏标题、提示横幅、输入框）——着色调高一档：深色下压一层暗色调，背后的亮字糊开后
+    /// 不再和上面的次要字同亮；浅色下垫一层淡纸色，背后的行糊成的灰块不再像污渍落在字周围。外沿照样通透，不是实底。
+    func glass<S: Shape>(in shape: S, interactive: Bool = false, legible: Bool = false) -> some View {
+        modifier(GlassSurface(shape: shape, interactive: interactive, legible: legible))
     }
 }
 
@@ -43,6 +45,7 @@ extension Palette {
 private struct GlassSurface<S: Shape>: ViewModifier {
     let shape: S
     let interactive: Bool
+    let legible: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.palette) private var palette
 
@@ -59,7 +62,11 @@ private struct GlassSurface<S: Shape>: ViewModifier {
     /// 全 App 自绘玻璃都是 `.regular`：内容一直滚到顶栏、底部栏、回复框后面，玻璃是唯一的遮挡，栏后面不再垫模糊或渐变带。
     /// 否决了 `.clear`（加淡色 tint 也一样）：我们玻璃后面是文字，它几乎不糊开背后的字，栏上的标题、标签与问题卡和背后的字叠在一起读不出
     /// （系统规范也只把 clear 用在照片、视频这类背景上）；系统自己的返回钮与工具栏圆钮也是 regular，两种并排会不一致。
-    private var glass: Glass { .regular.interactive(interactive) }
+    private var glass: Glass {
+        // 深色的暗色调让标题下那行次要字对背后糊开的字够 4.5:1，又不至于成一块黑斑
+        guard legible else { return .regular.interactive(interactive) }
+        return .regular.tint(palette.dark ? .black.opacity(0.4) : palette.paper.opacity(0.45)).interactive(interactive)
+    }
 }
 
 /// 动效：只有卡片 ↔ 纸是大幅空间过渡；其余为短淡入淡出。减弱动态效果时一律直接到终态或只淡入淡出。

@@ -99,7 +99,7 @@ private struct HeaderTitle<Detail: View>: View {
             }
             .padding(.horizontal, 16)
             .frame(height: FloatingHeaderLayout.height)
-            .glass(in: .capsule)
+            .glass(in: .capsule, legible: true)
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)

@@ -35,13 +35,11 @@ nonisolated private struct SearchData: Sendable {
     }
 }
 
-/// 卡片搜索的结果：筛选胶囊 + 按项目分组的卡片（多个词都要命中，最近修改在前）。书架、项目页与 iPad 搜索页共用；
+/// 卡片搜索的结果：筛选胶囊（右边写命中"N 条"）+ 按项目分组的卡片（多个词都要命中，最近修改在前）。书架、项目页与 iPad 搜索页共用；
 /// 项目范围内不分组、不出现项目筛选。
 struct CardSearchResults: View {
     @Binding var query: PaletteQuery
     let scope: CardSearchScope
-    /// 命中总数，给需要在标题上显示的页面（iPad 搜索页）。
-    var total: Binding<Int?> = .constant(nil)
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -66,8 +64,15 @@ struct CardSearchResults: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
-                FilterChips(query: $query, projects: scope == .all ? workspace.catalog?.projects ?? [] : nil, targets: data?.targets ?? [])
-                    .padding(.horizontal, -16)
+                HStack(spacing: 8) {
+                    FilterChips(query: $query, projects: scope == .all ? workspace.catalog?.projects ?? [] : nil, targets: data?.targets ?? [])
+                    if let data, !shown.text.isEmpty || shown.isFiltered {
+                        Text("\(data.total) 条").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                            .contentTransition(.numericText()).animation(Motion.quick, value: data.total)
+                            .fixedSize().padding(.trailing, 16)
+                    }
+                }
+                .padding(.horizontal, -16)
                 if let data {
                     if data.total == 0, !shown.text.isEmpty || shown.isFiltered {
                         EmptyState.noMatch(shown.text).padding(.top, 24)
@@ -96,7 +101,6 @@ struct CardSearchResults: View {
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear { settled = query }
         .onChange(of: query) { if !TextComposition.isComposing { settled = query } }
-        .onChange(of: data?.total) { total.wrappedValue = data?.total }
         .observing(services.store, [.cards, .projects, .sendRecords], id: effective, into: $data, onError: workspace.fail) { [effective] store in
             let found = try store.search(effective.store(), limit: PaletteQuery.pageSize * effective.pages)
             return SearchData(

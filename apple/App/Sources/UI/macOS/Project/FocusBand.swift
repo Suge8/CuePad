@@ -6,7 +6,8 @@ import SwiftUI
 /// 任务与 Agent：本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Agent 会话。介绍在页头。
 /// Agent 一栏只在有话可说时出现：有在线会话，或项目还没绑文件夹而有同名建议、正在绑（绑定引导，`FolderGuide.shows`）；
 /// 否则任务独占整张纸，不留一栏"没有运行中的会话"。
-/// 纸有最大宽度：任务行尾的折起、计数与"完成"跟着内容走，不在大窗口里甩到一千点开外。
+/// 纸与下面的资料、卡片墙同宽（右缘对齐，页面收得住）；纸里的任务一栏有最大宽度：任务行尾的折起、计数与"完成"跟着内容走，
+/// 不在大窗口里甩到一千点开外，多出来的宽度留白在纸里（有 Agent 一栏时它贴在纸的右边）。
 struct FocusBand: View {
     let data: ProjectPageData
     let agents: [ProjectAgents.Row]
@@ -17,7 +18,7 @@ struct FocusBand: View {
     private static let visibleTasks = 4
     /// 窄于这个宽度时两栏改成上下排，每栏都能放下一整行任务。
     private static let stackedBelow: CGFloat = 640
-    /// 任务一栏最宽多少（项目页顶上的绑定引导同宽），Agent 一栏多宽。
+    /// 任务一栏的内容最宽多少（项目页顶上的绑定引导同宽），Agent 一栏多宽。
     static let tasksWidth: CGFloat = 760
     private static let agentWidth: CGFloat = 300
 
@@ -26,7 +27,6 @@ struct FocusBand: View {
             if showsAgent { columns } else { column { tasks } }
         }
         .paper(radius: 18)
-        .frame(maxWidth: showsAgent ? Self.tasksWidth + Self.agentWidth : Self.tasksWidth, alignment: .leading)
     }
 
     private var showsAgent: Bool {
@@ -52,8 +52,15 @@ struct FocusBand: View {
         }
     }
 
-    @ViewBuilder private var tasks: some View {
-        SectionLabel(text: TaskCopy.section(data.taskProgress), systemImage: "checklist")
+    private var tasks: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: TaskCopy.section(data.taskProgress), systemImage: "checklist")
+            taskRows
+        }
+        .frame(maxWidth: Self.tasksWidth, alignment: .leading)
+    }
+
+    @ViewBuilder private var taskRows: some View {
         let roots = data.tasks.roots
         // 与任务面板同一节奏：任务行、"还有 N 条"、添加任务之间不再加栏内间距
         VStack(alignment: .leading, spacing: 2) {
@@ -80,7 +87,7 @@ struct FocusBand: View {
     }
 }
 
-/// 本项目此刻在线的 Agent 会话（与侧栏同一份"现在"，别的 Mac 上的写在哪台 Mac 上）；项目还没绑文件夹又没有会话时是绑定引导。
+/// 本项目此刻在线的 Agent 会话（与侧栏同一份"现在"，别的 Mac 上的写在哪台 Mac 上——都在同一台上时只在栏标题上写一次）；项目还没绑文件夹又没有会话时是绑定引导。
 private struct PiColumn: View {
     /// 未分类没有项目，也就没有文件夹可绑。
     let project: Project?
@@ -89,14 +96,15 @@ private struct PiColumn: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        SectionLabel(text: "Agent", systemImage: "terminal")
+        let shared = ProjectAgents.sharedHost(agents)
+        SectionLabel(text: shared.map { "Agent · \($0)" } ?? "Agent", systemImage: "terminal")
         if agents.isEmpty, let project {
             ProjectFolderGuide(project: project, guide: guide, style: .inset)
         }
         ForEach(agents) { row in
             VStack(alignment: .leading, spacing: 2) {
                 PiSessionRow(session: row.state, project: project, delivery: row.delivery)
-                if let host = row.hostName {
+                if shared == nil, let host = row.hostName {
                     Label("在 \(host) 上", systemImage: "laptopcomputer").font(Typography.meta).foregroundStyle(palette.ink3)
                 }
             }
@@ -119,6 +127,12 @@ enum ProjectAgents {
     }
 
     static let otherMac = "另一台 Mac"
+
+    /// 一栏的会话都在同一台别的 Mac 上时，那台 Mac 的名字：只在栏标题上写一次，行里不再逐个写。
+    static func sharedHost(_ rows: [Row]) -> String? {
+        guard let host = rows.first?.hostName, rows.allSatisfy({ $0.hostName == host }) else { return nil }
+        return host
+    }
 
     static func rows(
         live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], bindings: [DirectoryBinding],
@@ -192,7 +206,7 @@ struct CompactFocus: View {
             .font(Typography.toolbarLabel)
             .foregroundStyle(palette.ink)
             .padding(.horizontal, 16).frame(height: Spacing.toolbarControl)
-            .glass(in: .capsule, interactive: true)
+            .glass(in: .capsule, interactive: true, legible: true)
         }
         .buttonStyle(PressStyle(scale: 0.98))
         // 放在工具栏里时系统默认只显示图标

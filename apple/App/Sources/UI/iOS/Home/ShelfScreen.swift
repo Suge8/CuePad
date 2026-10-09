@@ -82,6 +82,8 @@ struct ShelfScreen: View {
                 .hidingSearch($searchHidden, searching: searching)
             }
         }
+        // 内容滚到顶上那一排后面时淡出（那一排是下面的 safeAreaBar，整页的遮罩管不到）
+        .fadesUnderBars()
         // 不显示标题：顶上只有那一排，内容多露出来；标题仍是读屏与多任务切换器里的名字
         .navigationTitle("灵感")
         .navigationBarTitleDisplayMode(.inline)
@@ -513,7 +515,7 @@ private struct ActiveTasks: View {
     }
 }
 
-/// 正在推进的一行：进行中圆圈（颜色同 `TaskGlyph`）、标题，下面是所在项目与会话状态。
+/// 正在推进的一行：进行中圆圈（全 App 同一个 `TaskRingView`）、标题，下面是所在项目与会话状态。
 private struct ActiveTaskRow: View {
     let row: TaskBoard.Row
     let divided: Bool
@@ -530,8 +532,7 @@ private struct ActiveTaskRow: View {
     var body: some View {
         Button { navigation.openTask(row.id) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Image(systemName: TaskGlyph.symbol(.inProgress)).font(.system(size: ring))
-                    .foregroundStyle(TaskGlyph.tint(.inProgress, palette)).accessibilityHidden(true)
+                TaskRingView(status: .inProgress, ring: .plain, done: false, size: ring)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(row.task.title.textGlyphs).font(.headline).foregroundStyle(palette.ink)
                         .lineLimit(stacked ? 4 : 2).multilineTextAlignment(.leading)
@@ -646,8 +647,9 @@ private struct AgentNowCard: View {
 }
 
 /// 叠放的会话头像：认得出是谁——归了项目的是项目图标在项目色的淡底上，没归项目的是文件夹名的首字母在由文件夹名推出的固定颜色上
-/// （会话名的首字常是汉字，说明不了是谁）；右下角外沿挂着它的状态标（`PiStateDot`，约 16pt，"在干活"的转圈与"要重载"分得清；
-/// 转圈与呼吸交给 Core Animation，静止时不占 CPU）。前一个压着后一个，各带一圈底色描边隔开。多的在后面写"+N"。头像进出是缩放加淡入淡出。
+/// （会话名的首字常是汉字，说明不了是谁）；右下角外沿挂着它的状态标（`PiStateDot`，约头像的四成，"在干活"的转圈与"要重载"分得清；
+/// 转圈与呼吸交给 Core Animation，静止时不占 CPU）——同一种状态只挂在最前面那个上：一排一样的标不多说什么，只把视线从主句上拉走。
+/// 前一个压着后一个，各带一圈底色描边隔开。多的在后面写"+N"。头像进出是缩放加淡入淡出。
 private struct AgentFaces: View {
     let faces: [PiSessionListItem]
     let more: Int
@@ -657,8 +659,8 @@ private struct AgentFaces: View {
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 32
 
-    /// 比例都按头像直径算：图标与首字母占 0.44；状态标的点 0.28（符号按它放大到约 0.5），中心落在右下角的外沿上；相邻两个叠 0.16。
-    private var badge: CGFloat { size * 0.28 }
+    /// 比例都按头像直径算：图标与首字母占 0.44；状态标的点 0.22（符号按它放大到约 0.4），中心落在右下角的外沿上；相邻两个叠 0.16。
+    private var badge: CGFloat { size * 0.22 }
     private var overlap: CGFloat { size * 0.16 }
 
     /// 没归项目的会话按文件夹名取一个固定的颜色：不用黄（近赭黄）与灰（像停用）。
@@ -666,9 +668,11 @@ private struct AgentFaces: View {
 
     var body: some View {
         // 左边的压在右边的上面：最要紧的在最前，它的状态标不被下一个盖住
+        let shown = faces.map { services.settings.shown($0) }
         HStack(spacing: -overlap) {
             ForEach(Array(faces.enumerated()), id: \.element.id) { index, item in
-                face(item).zIndex(Double(faces.count - index)).transition(.scale(scale: 0.6).combined(with: .opacity))
+                let badged = !shown[..<index].contains { $0.symbol == shown[index].symbol }
+                face(item, shown: badged ? shown[index] : nil).zIndex(Double(faces.count - index)).transition(.scale(scale: 0.6).combined(with: .opacity))
             }
             if more > 0 {
                 // 多出来的个数紧跟在叠放的头像后面，不再垫一个圆：会被前一个头像压住半边
@@ -683,7 +687,7 @@ private struct AgentFaces: View {
         .accessibilityHidden(true)
     }
 
-    private func face(_ item: PiSessionListItem) -> some View {
+    private func face(_ item: PiSessionListItem, shown: PiShown?) -> some View {
         let tint = item.project.map { Palette.projectTint($0.color) } ?? Self.tint(folder: item.state.folder ?? item.state.title)
         return mark(item)
             .foregroundStyle(tint)
@@ -693,10 +697,12 @@ private struct AgentFaces: View {
             .background(ground.mix(with: tint, by: palette.dark ? 0.3 : 0.16), in: .circle)
             .background(ground, in: .circle.inset(by: -2.5))
             .overlay(alignment: .bottomTrailing) {
-                PiStateDot(shown: services.settings.shown(item), size: badge)
-                    .padding(1.5)
-                    .background(ground, in: .circle)
-                    .offset(x: size * 0.16, y: size * 0.16)
+                if let shown {
+                    PiStateDot(shown: shown, size: badge)
+                        .padding(1.5)
+                        .background(ground, in: .circle)
+                        .offset(x: size * 0.14, y: size * 0.14)
+                }
             }
     }
 

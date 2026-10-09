@@ -77,8 +77,8 @@ extension EmptyState where Action == EmptyView {
     }
 }
 
-/// 空态的动作按钮：small 给纸卡里的次要动作，primary 给整页唯一的主动作。
-/// 两种尺寸共用同一字体、圆角、线宽、按压和触感。
+/// 空态的动作按钮：small 给纸卡里的次要动作（墨色：页上已有任务或会话时焦点不在它，签名色留给页上别处），
+/// primary 给整页唯一的主动作。两种尺寸共用同一字体、圆角、线宽、按压和触感。
 struct EmptyStateButton: View {
     enum Kind { case small, primary }
 
@@ -96,7 +96,7 @@ struct EmptyStateButton: View {
             }
         }
         .labelStyle(.titleAndIcon)
-        .buttonStyle(ControlButtonStyle(kind: kind == .small ? .highlight : .primary, compact: kind == .small))
+        .buttonStyle(ControlButtonStyle(kind: kind == .small ? .secondary : .primary, compact: kind == .small))
     }
 }
 

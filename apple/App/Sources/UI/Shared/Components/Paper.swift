@@ -137,7 +137,7 @@ enum Highlight {
             var searchStart = result.startIndex
             while searchStart < result.endIndex,
                   let range = result[searchStart...].range(of: term, options: .caseInsensitive) {
-                result[range].backgroundColor = .yellow.opacity(0.35)
+                result[range].backgroundColor = Palette.searchMatch
                 searchStart = range.upperBound
             }
         }

@@ -26,6 +26,17 @@ struct ProjectAgentsTests {
 
         #expect(rows.map(\.state.sessionID) == ["remote", "local", "other"])
         #expect(rows.map(\.hostName) == ["MacBook Air", nil, "另一台 Mac"])
+        #expect(ProjectAgents.sharedHost(rows) == nil)  // 在不同的地方：各行自己写
+    }
+
+    @Test func 会话都在同一台别的Mac上时_那台Mac只在栏标题上写一次() {
+        let studio = DirectoryBinding(
+            id: UUID(), projectID: project, hostID: "studio", hostName: "工作室的 Mac Studio", folder: "app", createdAt: .now, modifiedAt: .now)
+        let rows = ProjectAgents.rows(
+            live: [], recorded: [session("a", .tool, host: "studio"), session("b", .waitingForUser, host: "studio")], bindings: [studio], host: "this")
+
+        #expect(ProjectAgents.sharedHost(rows) == "工作室的 Mac Studio")
+        #expect(ProjectAgents.sharedHost(ProjectAgents.rows(live: [session("c", .tool, host: "this")], recorded: [], bindings: [], host: "this")) == nil)
     }
 }
 #endif

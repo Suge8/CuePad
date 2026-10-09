@@ -391,8 +391,11 @@ enum TaskMetrics {
     #endif
 }
 
-/// 任务的完成圈（`TaskRing`）：完成是对勾；待办空心、进行中左半满（与 `TaskGlyph.symbol` 同一种图形）；有下级时圈里是进度扇形
-/// （见 `progress`）。全 App 的任务只有这一种图形，扇形的变化有短过渡。
+/// 任务的完成圈（`TaskRing`），全 App 的任务只有这一种图形（行、任务页、书架"正在推进"、挂到任务面板、Mac 面板）：
+/// 完成是对勾；没完成的是一个实线圈，进行中左半填满（同 circle.lefthalf.filled），待办空心——这个形状只随状态变，
+/// 有没有下级、下级做了多少都不换掉它。有下级时进度另铺在右半：从 12 点顺时针往 6 点填一层淡色，做完多少填多少，
+/// 全做完是右半整个淡色（任务还要你自己勾：不画成实心，与完成的对勾分开）。
+/// 不用"淡圈上描一道弧"：小尺寸下那就是系统的加载转圈。扇形的变化有短过渡。
 struct TaskRingView: View {
     let status: TaskStatus?
     let ring: TaskRing
@@ -401,41 +404,37 @@ struct TaskRingView: View {
     let size: CGFloat
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private static let faint = 0.4
+    private static let faint = 0.35
 
     var body: some View {
         Group {
-            if case .progress(let finished, let total) = ring, !done {
-                progress(Double(finished) / Double(max(total, 1)))
-            } else {
-                Image(systemName: done ? "checkmark.circle.fill" : TaskGlyph.symbol(status))
+            if done || status == .done {
+                Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: size))
-                    .foregroundStyle(TaskGlyph.tint(done ? .done : status, palette))
-                    .contentTransition(.symbolEffect(.replace))
+                    .foregroundStyle(TaskGlyph.tint(.done, palette))
+                    .transition(.opacity)
+            } else {
+                open
             }
         }
         .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
         .animation(Motion.spatial(Motion.quick, reduceMotion: reduceMotion), value: ring)
+        .animation(Motion.quick, value: done)
         .accessibilityHidden(true)
     }
 
-    /// 与 SF 的 circle 同尺寸同线宽的实线圈（颜色照状态），圈里是进度：从 12 点顺时针的扇形，做完多少填多少。
-    /// 进行中另在左半铺一层淡的同色（同 circle.lefthalf.filled 的左半），扇形从右半开始填、正好和它错开。
-    /// 下级全做完了圈里整个铺淡色：实心圆是"已勾掉"的通用语言，满进度画成实心就和完成的对勾分不开，任务要你自己勾。
-    /// 不用"淡圈上描一道弧"：小尺寸下那就是系统的加载转圈。
-    private func progress(_ fraction: Double) -> some View {
+    /// 与 SF 的 circle 同尺寸同线宽的实线圈（颜色照状态）；圈里与圈线留一线缝，半圆与扇形的边才读得出来。
+    private var open: some View {
         let tint = TaskGlyph.tint(status, palette), line = max(1.4, size * 0.095)
         return ZStack {
             Circle().stroke(tint, lineWidth: line)
-            Group {
-                if fraction >= 1 {
-                    Circle().fill(tint.opacity(Self.faint))
-                } else {
-                    if status == .inProgress { Circle().trim(from: 0.25, to: 0.75).fill(tint.opacity(Self.faint)) }
-                    Sector(fraction: fraction).fill(tint)
+            ZStack {
+                if case .progress(let finished, let total) = ring {
+                    // 右半：12 点顺时针到 6 点按比例
+                    Sector(fraction: Double(finished) / Double(max(total, 1)) / 2).fill(tint.opacity(Self.faint))
                 }
+                if status == .inProgress { Circle().trim(from: 0.25, to: 0.75).fill(tint) }
             }
-            // 与圈线之间留一线缝，扇形的边才读得出来
             .padding(line * 1.1)
         }
         .frame(width: size * 0.88, height: size * 0.88)

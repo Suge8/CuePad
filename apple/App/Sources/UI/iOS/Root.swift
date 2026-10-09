@@ -106,10 +106,10 @@ struct RouteView: View {
 
     var body: some View {
         // 沉浸式：内容一直滚到顶栏、底部栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡——系统的滚动边缘效果（渐进模糊带）全关，
-        // 也不自绘渐变；只有状态栏那一条垫最薄的一层（`StatusBarScrim`）
-        page.containerBackground(background, for: .navigation)
+        // 也不自绘渐变或色带；滚进状态栏与顶栏的内容自己淡出（`fadesUnderBars`，只是透明度遮罩）
+        page.fadesUnderBars()
+            .containerBackground(background, for: .navigation)
             .scrollEdgeEffectHidden()
-            .overlay(alignment: .top) { StatusBarScrim(ground: background) }
             // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页
             .safeAreaPadding(.bottom, navigation.bottomPages == 0 ? bottomBarReserve : 0)
     }
@@ -293,28 +293,7 @@ private final class TabSlide {
     }
 }
 
-/// 状态栏那一条后面最薄的处理：从屏幕顶的页面底色淡到状态栏下沿全透，时间与电量压在内容上也读得清；不伸进顶栏、不模糊。
-/// 高度只取状态栏（`statusBarHeight`），顶栏与内容之间没有任何带子。
-private struct StatusBarScrim: View {
-    let ground: Color
-    @Environment(\.statusBarHeight) private var height
-
-    var body: some View {
-        LinearGradient(
-            // 时间与电量在这一条的中段：到那里仍压得住背后的字，最后一小段才淡完
-            stops: [.init(color: ground.opacity(0.95), location: 0), .init(color: ground.opacity(0.85), location: 0.65), .init(color: ground.opacity(0), location: 1)],
-            startPoint: .top, endPoint: .bottom)
-            .frame(height: height)
-            .frame(maxHeight: .infinity, alignment: .top)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-}
-
 extension EnvironmentValues {
-    /// 状态栏的高（窗口根部的上安全区，导航栏之外），`StatusBarScrim` 用。
-    @Entry var statusBarHeight: CGFloat = 0
     /// 内容给 iPhone 底部栏让出的高度（`BottomBar.reserve`）；分栏布局为 0。
     @Entry var bottomBarReserve: CGFloat = 0
     /// 标签根页读到数据时调用（换标签的推移等它，见 `TabSlide`）；不在标签栏布局里时什么都不做。
@@ -324,6 +303,8 @@ extension EnvironmentValues {
 /// 底部一行：左边一块玻璃里的两个标签 [灵感 | Agent]，右边一颗同高同玻璃的圆形"写"，与系统悬浮标签栏（照片、音乐：标签组靠左、
 /// 搜索圆钮靠右）同一几何——高 62、离屏幕左右与底边都是 21（与屏幕圆角同心），选中滴同心内缩 4；不随滚动收小。
 /// 玻璃上不另铺底；选中那一格是一层中性的滴（浅色压暗、深色更暗，同系统）加靛青的图标与字，未选中的是墨色。
+/// 内容滚到栏后面时，玻璃糊开的字的虚影会和标签字缠在一起：图标与标签字带一圈页面底色的细光晕（`halo`），与背后分层；
+/// 浅色下玻璃的边几乎看不出，两块玻璃各描一圈发丝线、垫一层很轻的投影，从纸上浮起来。都不是色带：栏外一点不画。
 /// 字号固定、不随动态字体放大，辅助字号下长按任一格或"写"弹出大内容查看器——系统标签栏同款取舍：栏高固定，字放大只会挤掉图标。
 /// 按住选中的那一格时滴轻轻一压，按住另一格时手指下亮出一层淡按压底，都给一下轻触感；换标签时滴在轨道里滑过去
 /// （减弱动态效果时淡出淡入、不压）。
@@ -348,6 +329,9 @@ private struct BottomBar: View {
 
     private var drop: Color { palette.dark ? Color.black.opacity(0.3) : palette.ink.opacity(0.07) }
 
+    /// 标签字与图标外的一圈光晕：页面底色，只在字形外一两点内。
+    private var halo: Color { palette.desk.opacity(palette.dark ? 0.8 : 0.9) }
+
     var body: some View {
         HStack(spacing: 12) {
             tabs
@@ -359,6 +343,7 @@ private struct BottomBar: View {
             }
             .buttonStyle(PressStyle(scale: 0.92))
             .glass(in: .circle, interactive: true)
+            .modifier(BarLift(shape: .circle))
             .accessibilityLabel(WriteEntry.title)
             .accessibilityShowsLargeContentViewer { Label(WriteEntry.title, systemImage: WriteEntry.symbol) }
         }
@@ -379,6 +364,7 @@ private struct BottomBar: View {
             .transition(.opacity)
             .frame(width: Self.tabWidth * 2 + Self.inset * 2, alignment: navigation.tab == .projects ? .leading : .trailing)
             .glass(in: .capsule, interactive: true)
+            .modifier(BarLift(shape: .capsule))
             .overlay {
                 HStack(spacing: 0) {
                     tab(.projects, title: "灵感", symbol: "lightbulb")
@@ -399,6 +385,7 @@ private struct BottomBar: View {
                 Text(title).font(.system(size: 10, weight: selected ? .semibold : .medium))
             }
             .foregroundStyle(selected ? palette.signature : palette.ink)
+            .shadow(color: halo, radius: 1.5)
             // 一格占轨道的一半，四周的边也算它的：点在滴外面一点也算点中
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
@@ -416,6 +403,18 @@ private struct BottomBar: View {
         .accessibilityLabel(title)
         .accessibilityValue(badge > 0 ? "\(badge) 个会话等你确认" : "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// 底部栏玻璃的边：浅色下描一圈发丝线、垫一层很轻的投影（玻璃在浅纸上几乎看不出边）；深色下玻璃自己的高光已经分得开。
+private struct BarLift<S: Shape>: ViewModifier {
+    let shape: S
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content
+            .overlay { if !palette.dark { shape.stroke(palette.ink.opacity(0.1), lineWidth: 0.5).allowsHitTesting(false) } }
+            .shadow(color: .black.opacity(palette.dark ? 0 : 0.06), radius: 8, y: 2)
     }
 }
 
@@ -481,7 +480,7 @@ private struct NoticeBanner: View {
                     }
                 }
                 .font(.subheadline.weight(.medium))
-                .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil)
+                .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil, legible: true)
                 // 浮在内容之上：一点投影把它和底下的纸分开
                 .shadow(color: .black.opacity(palette.dark ? 0.3 : 0.12), radius: 12, y: 4)
                 .accessibilityHint(notice.link == nil ? "" : "去那里看看")

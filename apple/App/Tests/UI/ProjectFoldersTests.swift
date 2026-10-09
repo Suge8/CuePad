@@ -51,6 +51,20 @@ struct ProjectFoldersTests {
         #expect(places.map(\.detail) == [nil, nil])
     }
 
+    // MARK: 项目页顶栏写的文件夹
+
+    @Test func 顶栏的文件夹名_几台Mac绑同名文件夹只写一次_不同名的按绑定先后都写() async throws {
+        let a = try await project("A"), b = try await project("B")
+        let bindings = [
+            binding(a, host: "mac-a", name: "Studio", folder: "cuepad"), binding(b, host: "mac-a", name: "Studio", folder: "site"),
+            binding(a, host: "mac-b", name: "Air", folder: "cuepad"), binding(a, host: "mac-c", name: "mini", folder: "cuepad-old"),
+        ]
+
+        #expect(ProjectFolders.names(of: a.id, bindings: bindings) == ["cuepad", "cuepad-old"])
+        #expect(ProjectFolders.names(of: b.id, bindings: bindings) == ["site"])
+        #expect(ProjectFolders.names(of: UUID(), bindings: bindings).isEmpty)
+    }
+
     // MARK: 项目菜单
 
     @Test func 项目菜单_没绑是绑定_绑了是换与解除_手机上绑在几台Mac上时解除按Mac分开() async throws {
