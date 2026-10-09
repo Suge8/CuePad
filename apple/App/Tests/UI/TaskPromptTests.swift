@@ -147,6 +147,17 @@ struct TaskPromptTests {
         #expect(detail.subtasks.map(\.id) == [sub.id])
     }
 
+    @Test func 一页只有一颗靛青的交给Agent_落在第一条还没发的提示词上() async throws {
+        let task = try await store.createTask("修乱序", in: nil)
+        let first = try await store.createCard(body: "先复现", under: task.id)
+        let second = try await store.createCard(body: "再改排序", under: task.id)
+        _ = try await store.createCard(body: "补用例", under: task.id)
+        #expect(try await TaskDetail.read(task.id, from: store).primaryPrompt == first.id)
+
+        try await reply(to: first)
+        #expect(try await TaskDetail.read(task.id, from: store).primaryPrompt == second.id)
+    }
+
     /// 交给 atlas，它这一轮做完。
     private func reply(to prompt: Card) async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
