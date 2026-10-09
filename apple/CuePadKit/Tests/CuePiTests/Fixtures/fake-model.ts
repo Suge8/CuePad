@@ -4,6 +4,7 @@
 //   [[fail]]      以 error 结束
 //   [[tool:CMD]]  先发起 bash 工具调用（CMD 里的字面 \n 会变成换行），收到工具结果后回复 TOOL_DONE
 //   [[write:PATH]] 先发起 write 工具调用（写 PATH），收到工具结果后回复 TOOL_DONE
+//   [[show:PATH|TITLE]] 先调用桥扩展的 cuepad_show 工具（PATH 相对工作目录，|TITLE 可省），收到工具结果后回复 TOOL_DONE
 //   [[subagent:NAME]] 先调用 FireCode 的 subagents 工具开一个子代理（任务"[[slow]] 子任务"），收到工具结果后回复 TOOL_DONE
 // 其余：回复 "ECHO <文字> IMAGES[<mime>:<base64长度>,…]"，证明文字与图片都进了模型上下文。
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
@@ -54,9 +55,12 @@ export default function (pi: any) {
 				const bash = /\[\[tool:(.+?)\]\]/.exec(text);
 				const write = /\[\[write:(.+?)\]\]/.exec(text);
 				const sub = /\[\[subagent:(.+?)\]\]/.exec(text);
-				const tool = bash ?? write ?? sub;
+				const show = /\[\[show:([^|\]]+)(?:\|([^\]]*))?\]\]/.exec(text);
+				const tool = bash ?? write ?? sub ?? show;
 				if (tool && lastMessage.role !== "toolResult") {
-					const call = sub
+					const call = show
+						? { type: "toolCall", id: "call_1", name: "cuepad_show", arguments: { path: show[1], ...(show[2] ? { title: show[2] } : {}) } }
+						: sub
 						? { type: "toolCall", id: "call_1", name: "subagents", arguments: { action: "start", worker: sub[1], role: "工程师", prompt: "[[slow]] 子任务" } }
 						: bash
 						? { type: "toolCall", id: "call_1", name: "bash", arguments: { command: bash[1].replaceAll("\\n", "\n") } }

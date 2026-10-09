@@ -48,6 +48,22 @@ import Testing
     #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)  // 跑完的结论在手机上还看得到
   }
 
+  /// Agent 发到手机的预览：Mac 写预览记录与文件，手机拿到记录和一模一样的文件；Mac 过期清理后手机的记录与文件也没了。
+  @Test func aPreviewAndItsFileTravelToThePhoneAndGoWhenTheMacDropsIt() async throws {
+    let source = mac.fixture.directory.appending(path: "demo.html")
+    try Data("<h1>登录页</h1>".utf8).write(to: source)
+    let preview = try await mac.store.addPreview(fileAt: source, title: "登录页", sessionID: "s1").preview
+    try await cloud.exchange()
+
+    let seen = try #require(try await phone.store.previews(of: "s1").first)
+    #expect(seen == preview)  // 标题、文件名、大小、哈希都到了
+    #expect(try Data(contentsOf: #require(phone.store.files.fileURL(for: seen.hash))) == Data("<h1>登录页</h1>".utf8))
+
+    try await mac.store.prunePiMessages(olderThan: 7 * 86_400, now: .now.addingTimeInterval(8 * 86_400))
+    try await cloud.exchange()
+    #expect(try await phone.store.previews(of: "s1").isEmpty && phone.store.files.fileURL(for: seen.hash) == nil)
+  }
+
   /// 子代理列表（名字与此刻在干什么）与"后台托管中"经同步往返保留。
   @Test func subagentsAndHostingTravelToThePhone() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)

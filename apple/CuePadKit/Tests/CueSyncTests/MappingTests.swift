@@ -27,6 +27,9 @@ import Testing
     try await store.writePiTranscript(PiTranscript(
       sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "e1", seq: 1, role: .user, text: "修好登录", at: .now)],
       recap: PiRecap(pendingPrompt: "修好登录")))
+    let page = rig.fixture.directory.appending(path: "demo.html")
+    try Data("<h1>登录页</h1>".utf8).write(to: page)
+    _ = try await store.addPreview(fileAt: page, title: "登录页", sessionID: "s1")
     return (card, hash)
   }
 

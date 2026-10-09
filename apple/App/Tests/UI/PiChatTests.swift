@@ -30,6 +30,25 @@ struct PiChatTests {
         #expect(PiChat.meta(message(2, .system, "已压缩上下文")) == nil)
     }
 
+    func preview(_ title: String, at second: TimeInterval = 0) -> Preview {
+        Preview(sessionID: "s", hash: String(repeating: "a", count: 64), name: "\(title).html", title: title, byteCount: 10, createdAt: start.addingTimeInterval(second))
+    }
+
+    /// 会话文件里工具调用留下的预览条在哪、预览就在对话里的哪；预览记录只提供文件与标题。
+    /// 记录还没同步到的先不显示（到了就出现）；没有对应对话条的（命令行投的）按时间接在末尾。
+    @Test func 预览卡在对话里的位置由会话文件里的那一条定() {
+        let login = preview("登录页"), report = preview("报告"), late = preview("命令行投的", at: 50), unsynced = UUID()
+        let entries = PiChat.entries(
+            [message(1, .user, "给我看看"), message(2, .preview, login.id.uuidString.lowercased()), message(3, .preview, unsynced.uuidString.lowercased()),
+             message(4, .pi, "发给你了", tools: 2, took: 30), message(5, .preview, report.id.uuidString.lowercased())],
+            previews: [late, report, login])
+
+        #expect(entries.map(\.role) == [.user, .preview, .pi, .preview, .preview])
+        #expect(entries.compactMap(\.preview).map(\.title) == ["登录页", "报告", "命令行投的"])
+        #expect(entries.map(\.isUser) == [true, false, false, false, false])
+        #expect(PiChat.meta(message(2, .preview, "x")) == nil)
+    }
+
     @Test func 每轮回答上方写调了几个工具与做了多久() {
         #expect(PiChat.meta(message(2, .pi, "好了", tools: 5, took: 125)) == "运行了 5 个工具 · 2 分")
         #expect(PiChat.meta(message(2, .pi, "好了", tools: 1, took: 40)) == "运行了 1 个工具 · 40 秒")
