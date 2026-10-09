@@ -12,9 +12,10 @@ nonisolated private struct EditorData: Sendable {
     var task: Card?
 }
 
-/// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值、发送；选中文字时发送只发选中的部分）与自动保存在这里，
+/// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值，提示词另有交给 Agent；选中文字时只发选中的部分）与自动保存在这里，
 /// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目（提示词写它的任务）
-/// 与"时间 · 资料"，右下一颗"交给 Agent"（⌘↩），右边"⋯"里是分享与 `CardMenu.more`；任务是 `TaskPage`（标题、提示词、子任务）。
+/// 与"时间 · 资料"，右下一颗主按钮（⌘↩）：灵感是"挂到任务"，提示词是"交给 Agent"（`CardMenu.handsToAgent`）；右边"⋯"里是分享与 `CardMenu.more`；
+/// 任务是 `TaskPage`（标题、提示词、子任务）。
 /// 灵感与提示词离开时什么都没写就不留下（`Workspace.leaveEditing`）。
 struct CardEditorScreen: View {
     let cardID: UUID
@@ -44,7 +45,7 @@ struct CardEditorScreen: View {
             .ownsBottomEdge()
             // 菜单项上的快捷键要等菜单打开才生效：⌘↩ 另挂一个不占位的按钮
             .background {
-                Button("交给 Agent", action: sendToMac).keyboardShortcut(.return, modifiers: .command)
+                Button("主动作", action: primary).keyboardShortcut(.return, modifiers: .command)
                     .disabled(data == nil).opacity(0).accessibilityHidden(true)
             }
             .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
@@ -79,8 +80,8 @@ struct CardEditorScreen: View {
             if let data { TaskPage(card: data.card) } else { palette.paper }
         } else {
             editor
-                // 灵感最常做的是交给 Agent：贴着正文右下一颗主按钮，写字时让给键盘上方的工具栏
-                .overlay(alignment: .bottomTrailing) { if !typing, data != nil { ideaHand.transition(.opacity) } }
+                // 贴着正文右下一颗主按钮（灵感挂到任务、提示词交给 Agent），写字时让给键盘上方的工具栏
+                .overlay(alignment: .bottomTrailing) { if !typing, let card = data?.card { mainButton(card).transition(.opacity) } }
                 .animation(Motion.quick, value: typing)
                 .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
                 .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
@@ -108,7 +109,7 @@ struct CardEditorScreen: View {
                     },
                     onInsertImage: { pickingImage = true },
                     onVariables: { editingVariables = true },
-                    onSend: sendToMac,
+                    onSend: hand(data.card),
                     selectionActions: selectionActions(data.card),
                     onError: workspace.fail)
             }
@@ -140,8 +141,26 @@ struct CardEditorScreen: View {
         .disabled(data == nil)
     }
 
-    private var ideaHand: some View {
-        AgentHandButton(action: sendToMac).padding(.trailing, 16).padding(.bottom, 16)
+    @ViewBuilder private func mainButton(_ card: Card) -> some View {
+        Group {
+            if CardMenu.handsToAgent(card) {
+                MainButton(title: "交给 Agent", symbol: "paperplane.fill", action: sendToMac)
+            } else {
+                MainButton(title: "挂到任务", symbol: "checkmark", action: { workspace.attaching = card })
+            }
+        }
+        .padding(.trailing, 16).padding(.bottom, 16)
+    }
+
+    /// 键盘上方的交给 Agent：只有提示词有。
+    private func hand(_ card: Card) -> (() -> Void)? {
+        CardMenu.handsToAgent(card) ? { sendToMac() } : nil
+    }
+
+    /// ⌘↩：右下那颗主按钮做的事。
+    private func primary() {
+        guard let card = data?.card else { return }
+        if CardMenu.handsToAgent(card) { sendToMac() } else { workspace.attaching = card }
     }
 
     /// 交给 Agent（浮起交给 Agent 的输入框）：选中了文字就只发选中的部分。
@@ -151,16 +170,15 @@ struct CardEditorScreen: View {
         navigation.handToAgent(card, text: body)
     }
 
-    /// 编辑菜单里的选区动作。
+    /// 编辑菜单里的选区动作：转为任务；提示词另有交给 Agent（只发选中的部分）。
     private func selectionActions(_ card: Card) -> [CueSelectionAction] {
-        [
-            CueSelectionAction(title: "交给 Agent", systemImage: "paperplane") { stored in
-                navigation.handToAgent(card, text: Outgoing.text(body: stored, values: card.variableValues))
-            },
-            CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
-                workspace.convertToTasks(stored, in: card.projectID)
-            },
-        ]
+        let hand = CueSelectionAction(title: "交给 Agent", systemImage: "paperplane") { stored in
+            navigation.handToAgent(card, text: Outgoing.text(body: stored, values: card.variableValues))
+        }
+        let tasks = CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
+            workspace.convertToTasks(stored, in: card.projectID)
+        }
+        return CardMenu.handsToAgent(card) ? [hand, tasks] : [tasks]
     }
 
     /// 当前编辑中的整张正文（未保存的也算），变量已填。
@@ -193,14 +211,16 @@ struct CardEditorScreen: View {
     }
 }
 
-/// 交给 Agent 的主按钮：靛青胶囊（签名色只落在主动作上），在灵感纸页右下。
-struct AgentHandButton: View {
+/// 纸页右下的主按钮：靛青胶囊（签名色只落在主动作上）。灵感是打勾的"挂到任务"，提示词是"交给 Agent"。
+private struct MainButton: View {
+    let title: String
+    let symbol: String
     let action: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
         Button(action: action) {
-            Label("交给 Agent", systemImage: "paperplane.fill")
+            Label(title, systemImage: symbol)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(palette.onSignature)
                 .padding(.horizontal, 18).frame(height: 48)

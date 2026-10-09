@@ -148,7 +148,7 @@ struct AgentPage: View {
     }
 
     private func title(_ text: String) -> some View {
-        Text(text).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
+        Text(text).font(Typography.sectionTitle).foregroundStyle(palette.ink)
             .padding(.horizontal, 4).padding(.top, 18).padding(.bottom, 8)
             .accessibilityAddTraits(.isHeader)
     }

@@ -176,7 +176,7 @@ struct SessionPage: View {
         return ChatScroll(followKey: followKey, follow: $follow) {
             VStack(spacing: 14) {
                 if fetchingTranscript(digest) {
-                    Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
+                    Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(Typography.meta).foregroundStyle(palette.ink3)
                 }
                 PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
             }
@@ -237,7 +237,7 @@ extension Workspace {
         return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id] ?? session.projectID, recap: session.recap)
     }
 
-    /// 从灵感或任务交给 Agent 的新会话（开在它所在项目绑定的文件夹）：行上先是"正在开会话"，开好后它关联到新会话。
+    /// 从提示词交给 Agent 的新会话（开在它所在项目绑定的文件夹）：行上先是"正在开会话"，开好后它关联到新会话。
     /// 没归入项目的为 nil（没有地方可开）；项目还没绑文件夹时就地弹选文件夹面板，选了接着开，取消就不开。
     func newSessionHandOff(for card: Card) -> ((String) -> Void)? {
         guard let project = card.projectID else { return nil }

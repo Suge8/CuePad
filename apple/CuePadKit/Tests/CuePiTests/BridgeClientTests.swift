@@ -430,25 +430,13 @@ struct BridgeClientTests {
         #expect(cmd["images"] == nil && cmd["deliverAs"] == nil)
     }
 
-    @Test func pasteEncodesProtocolBytes() async throws {
-        let ext = FakeExtension(directory: dir)
-        try ext.start()
-        try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
-
-        try await bridge.paste("放进输入框", into: ext.id)
-        let cmd = try #require(ext.commands.first?.json)
-        #expect(cmd["t"] as? String == "paste")
-        #expect(cmd["text"] as? String == "放进输入框")
-    }
-
     @Test func rejectionFromExtensionSurfacesAsError() async throws {
         let ext = FakeExtension(directory: dir)
         ext.onCommand = { _, _ in ["ok": false, "error": "no_editor"] }
         try ext.start()
         try bridge.start()
         try await eventually("appeared") { session(ext.id) != nil }
-        await #expect(throws: PiBridgeError.rejected("no_editor")) { try await bridge.paste("x", into: ext.id) }
+        await #expect(throws: PiBridgeError.rejected("no_editor")) { try await bridge.send(PiMessage(text: "x"), to: ext.id) }
     }
 
     @Test func sendToUnknownSessionFails() async {

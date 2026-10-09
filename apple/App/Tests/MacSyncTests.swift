@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueDispatch
 import CueStore
 import CueSync
 import Foundation
@@ -104,7 +103,7 @@ struct MacSyncTests {
 
         #expect(rig.sync.stopped == 1)
         let request = try await services.store.requestDelivery(
-            "hi", to: SendTarget(kind: .clipboard, name: "剪贴板"), on: TestApp.hostID)
+            "hi", to: SendTarget(kind: .mac, name: "CuePad"), on: TestApp.hostID)
         // 停止后不再有观察者领取：没有事件可等，给执行器足够的时间再确认仍未处理
         try await Task.sleep(for: .milliseconds(300))
         #expect(try await services.store.deliveryRequest(request.id)?.status == .known(.pending))
@@ -744,19 +743,6 @@ struct MacSyncTests {
         for try await bindings in services.store.observe([.directoryBindings], { try $0.directoryBindings() }) where bindings.isEmpty { break }
     }
 
-    @Test func 手机的放进输入框请求只粘贴文字() async throws {
-        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
-        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: false)
-        try await services.startDeliveryExecutor()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestDelivery(
-            "草稿", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .paste)
-        _ = try await awaitFinished(request.id)
-
-        #expect(rig.channels.calls == [.paste("草稿", "sess-1.100")])
-    }
-
     /// 升级前开的旧协议会话没死：桥上有它，就不能当成已结束去后台唤醒（唤醒只会再起一个进程、永远"正在唤醒"）；按桥给的原因失败写回。
     @Test func 旧协议的会话还在运行_请求不唤醒_带原因失败() async throws {
         rig.channels.bridgeIDs["sess-old"] = "sess-old.100"
@@ -788,18 +774,18 @@ struct MacSyncTests {
         #expect(rig.channels.calls.isEmpty)
     }
 
-    @Test func 通用投送请求按bundle投送_失败原因可读() async throws {
-        rig.channels.dispatchError = DispatchError.accessibilityRequired
+    /// 投送到应用已经下线：旧版本写来的发到应用、复制到剪贴板的请求按失败写回，不碰任何应用与剪贴板。
+    @Test func 旧版本写来的发到应用请求按失败写回() async throws {
         try await services.startDeliveryExecutor()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
-            "hi", to: SendTarget(kind: .app, name: "Ghostty", ref: "com.mitchellh.ghostty"), on: TestApp.hostID)
+            "hi", to: SendTarget(kind: .unknown("app"), name: "Ghostty", ref: "com.mitchellh.ghostty"), on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
-        #expect(rig.channels.calls.contains(.dispatch(Payload(text: "hi"), .bundleID("com.mitchellh.ghostty"), submit: false)))
         #expect(done.status == .known(.failed))
-        #expect(done.resultDetail == DispatchError.accessibilityRequired.localizedDescription, "写回的是错误自身的说明")
+        #expect(rig.channels.calls.isEmpty)
+        #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 本机标识由硬件UUID稳定派生_不含原值() {

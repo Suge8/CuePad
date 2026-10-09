@@ -30,6 +30,13 @@ enum Typography {
     /// 页内分组标题（资料、最近、更早、现在、历史）与它旁边的计数。
     static let sectionTitle = Font.system(size: 15, weight: .semibold)
     static let sectionCount = Font.system(size: 13).monospacedDigit()
+    /// 纸页里的标题（任务名）。
+    static let heading = Font.system(size: 22, weight: .semibold)
+    /// ⌘K 搜索框的输入与右侧预览的标题：浮层里最大的两行字。
+    static let searchField = Font.system(size: 18)
+    static let previewTitle = Font.system(size: 17, weight: .bold)
+    /// 键帽（快捷键提示）。
+    static let keycap = Font.system(size: 11, weight: .medium, design: .rounded)
     /// 页标题（项目名、归档、回收站）与其下一句介绍。
     static let pageTitle = Font.system(size: 28, weight: .bold)
     static let lead = Font.system(size: 16)
@@ -58,6 +65,7 @@ enum Typography {
     static let code = Font.footnote.monospaced()
     static let readingLineSpacing: CGFloat = 3
     static let title = Font.title3.weight(.medium)
+    static let heading = Font.title3.weight(.semibold)
     static let emptyTitle = Font.title3.weight(.semibold)
     #endif
 }

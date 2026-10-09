@@ -96,6 +96,8 @@ final class Workspace {
     /// 各张卡在纸页开合中的状态，按卡分开（见 `CardPresence`）。
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
     var overlay: Overlay?
+    /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
+    var attaching: Card?
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
@@ -108,8 +110,8 @@ final class Workspace {
     @ObservationIgnored private var pressedCard: UUID?
     private static let releaseGrace: Duration = .milliseconds(80)
     var busySend: BusySend?
-    /// 用户在本窗口选过的发送目标；nil 或已失效时用默认目标。
-    var sendChoice: AppServices.Destination?
+    /// 用户在本窗口选过或发过的 Agent 会话；nil 或已失效时用本项目的会话（`agentTarget`）。
+    var sendChoice: AgentTarget?
     /// Pi 会话（会话 id，含本次运行里已结束的）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由根视图调用 `refreshSessionProjects` 重算。
     private(set) var sessionProjects: [String: UUID] = [:]
@@ -174,7 +176,7 @@ final class Workspace {
         // 会话变化时都会来到这里：顺带记下结束的先后（桥只给出结束了哪些），默认发送目标取最后结束的那个
         for id in services.pi.endedSessions.keys where !endedOrder.contains(id) { endedOrder.append(id) }
         var result: [String: UUID] = [:]
-        // 已结束的会话也算：默认发送目标要认出"本项目刚结束的会话"（见 effectiveChoice）
+        // 已结束的会话也算：默认发送目标要认出"本项目刚结束的会话"（见 agentTarget）
         for session in services.pi.sessions + services.pi.endedSessions.values {
             do {
                 if let project = try await services.store.project(containing: session.cwd) { result[session.id] = project.id }
@@ -473,6 +475,16 @@ final class Workspace {
         let before = siblings.firstIndex(of: idea).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
         try await store.moveCard(idea, to: move.slot, after: move.after)
         say("已成为任务的提示词", undo: { try await store.moveCard(idea, to: .top(project: card.projectID), after: before) })
+    }
+
+    /// 复制正文（存储格式，变量已填）到剪贴板：普通的复制，不是发送，不记发送记录。
+    func copy(_ stored: String) {
+        do {
+            try services.copy(stored)
+            say("已复制")
+        } catch {
+            fail(error)
+        }
     }
 
     /// 界面上的设为任务 / 改回灵感：失败时提示。

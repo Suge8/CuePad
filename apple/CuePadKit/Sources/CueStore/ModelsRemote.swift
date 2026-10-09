@@ -700,7 +700,7 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
 /// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
-  case send, steer, followUp, paste
+  case send, steer, followUp
   /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
   case answer
   /// 连接测试：执行它的 Mac 收到即按成功写回，不碰 Pi、不写发送记录；往返时间就是手机到 Mac 再回来的延迟
@@ -725,7 +725,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
 
   /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。命令与设置（config、end、stop、bind）不在其中：
   /// 它们不是"你说的话"，对话只来自会话文件，进度只在回复框上方短暂显示。
-  public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .paste, .answer]
+  public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .answer]
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。

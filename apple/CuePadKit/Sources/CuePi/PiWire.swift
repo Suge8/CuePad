@@ -201,10 +201,6 @@ enum PiWire {
         return try encode(command)
     }
 
-    static func pasteCommand(id: String, text: String) throws -> Data {
-        try encode(Command(t: "paste", id: id, text: text))
-    }
-
     private struct ShownReply: Encodable {
         var t = "shown"
         var id: String

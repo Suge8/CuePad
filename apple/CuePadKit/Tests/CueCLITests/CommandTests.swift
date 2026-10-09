@@ -224,7 +224,7 @@ import Testing
     let hit = try await sb.store.createCard(in: alpha.id, body: "部署 脚本 说明")
     _ = try await sb.store.createCard(in: alpha.id, body: "部署 only")
     let other = try await sb.store.createCard(in: beta.id, body: "部署 脚本 ![](cuepad://img/\(String(repeating: "b", count: 64)))")
-    _ = try await sb.store.recordSend("x", to: SendTarget(kind: .clipboard, name: "剪贴板"), card: other.id)
+    _ = try await sb.store.recordSend("x", to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: other.id)
 
     func search(_ args: [String]) async throws -> [String: Any] {
       try #require(try await sb.jsonValue(["search"] + args) as? [String: Any])
@@ -244,8 +244,8 @@ import Testing
     #expect(try cardIDs(try await search(["脚本", "--no-images"])) == [hitID])
     #expect(try cardIDs(try await search(["脚本", "--unsent"])) == [hitID])
     #expect(try cardIDs(try await search(["脚本", "--sent"])) == [otherID])
-    #expect(try cardIDs(try await search(["--to", "clipboard"])) == [otherID])
-    #expect(try cardIDs(try await search(["--to", "app:Cursor"])).isEmpty)
+    #expect(try cardIDs(try await search(["--to", "atlas"])) == [otherID])
+    #expect(try cardIDs(try await search(["--to", "review"])).isEmpty)
     #expect(try cardIDs(try await search(["脚本", "--days", "1"])) == [hitID, otherID])
     let named = try await search(["Alph"])
     #expect(try array(named["projects"] as Any).compactMap { $0.string("name") } == ["Alpha"])
