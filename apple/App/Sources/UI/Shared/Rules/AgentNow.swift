@@ -2,8 +2,9 @@ import CueStore
 import Foundation
 
 /// 书架顶上的"Agent 此刻"一条（iPhone 与 iPad）：此刻有事的会话里挑最要紧的一档，用一句人话说（谁、在怎样），
-/// 次行补一句其余的；会话再多也只是这两行，变的是数字与叠放的头像。要紧的先后与项目的"此刻"同一档（`ProjectNow.tier`）：
-/// 等你确认 → 出错与没能送达 → 在干活与话在路上 → 有新回复 → 要 /reload；停着、已结束的不算，全都停着就没有这一条。
+/// 次行补一句其余的；会话再多也只是这两行，变的是数字与叠放的头像。要紧的先后与项目的"此刻"、Agent 页列表同一档
+/// （`ProjectNow.tier` 即 `PiShown.rank`）：等你确认 → 出错与没能送达 → 在干活与话在路上 → 要 /reload → 有新回复；
+/// 停着、已结束的不算，全都停着就没有这一条。
 nonisolated struct AgentNow: Equatable, Sendable {
     /// 主句："deploy 在问：部署到生产吗？"；同一档有好几个时说个数："3 个 Agent 在干活"。
     let headline: String
@@ -67,8 +68,8 @@ nonisolated struct AgentNow: Equatable, Sendable {
         case 0: "在等你确认"
         case 1: "出错了"
         case 2: "在干活"
-        case 3: "有新回复"
-        default: "要 /reload"
+        case 3: "要 /reload"
+        default: "有新回复"
         }
     }
 
@@ -78,8 +79,8 @@ nonisolated struct AgentNow: Equatable, Sendable {
         case 0: "在等你"
         case 1: "出错"
         case 2: "在干活"
-        case 3: "有新回复"
-        default: "要 /reload"
+        case 3: "要 /reload"
+        default: "有新回复"
         }
     }
 }

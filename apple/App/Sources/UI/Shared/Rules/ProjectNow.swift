@@ -2,8 +2,8 @@ import CueStore
 import Foundation
 
 /// 项目的"此刻"一行：每个项目只挑一件最该知道的事（书架大卡与行、iPad 侧栏、Mac 侧栏共用这一处规则）。
-/// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因）→ Agent 在跑与话在路上（在做什么）→ 有新回复（回复第一句）
-/// → 需要 /reload → 最近开始的进行中任务 → 项目介绍；都没有就是 nil，行照样留着高度。状态标与颜色都按 `PiShown`：只有要你动手的带色。
+/// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因）→ Agent 在跑与话在路上（在做什么）→ 需要 /reload
+/// → 有新回复（回复第一句）→ 最近开始的进行中任务 → 项目介绍（会话之间的先后就是会话列表的档 `PiShown.rank`）；都没有就是 nil，行照样留着高度。状态标与颜色都按 `PiShown`：只有要你动手的带色。
 nonisolated struct ProjectNow: Hashable, Sendable {
     enum Source: Hashable, Sendable {
         case agent(PiShown)
@@ -70,16 +70,12 @@ nonisolated struct ProjectNow: Hashable, Sendable {
         return result
     }
 
-    /// 会话进得了"此刻"的档：等你确认 0、出错与没能送达 1、在跑与话在路上 2、有新回复 3、需要 /reload 4（维护，排最后）；
-    /// 其余（停着、已结束）不算。书架的 Agent 此刻（`AgentNow`）按同一档排。
+    /// 会话进得了"此刻"的档，就是会话列表的档（`PiShown.rank`，Agent 页同一套）：等你确认 → 出错与没能送达 → 在跑与话在路上
+    /// → 需要 /reload → 有新回复；停着、已结束的不算。书架的 Agent 此刻（`AgentNow`）按同一档排。
     static func tier(_ shown: PiShown) -> Int? {
         switch shown.status {
-        case .asking: 0
-        case .failed, .delivery(.failed): 1
-        case .working, .delivery: 2
-        case .unread: 3
-        case .restart: 4
         case .idle, .fresh, .ended, .unknown: nil
+        default: shown.rank
         }
     }
 
