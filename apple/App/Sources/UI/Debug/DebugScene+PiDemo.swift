@@ -264,7 +264,7 @@ extension DebugScene {
             ("deploy", .waitingForUser, "部署到生产吗？", nil, DemoRecap(
                 lastPrompt: "测试都过了就部署",
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
-            ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, DemoRecap(lastPrompt: "让子代理分头审查这两个分支")),
+            ("review", .delegating, nil, nil, DemoRecap(lastPrompt: "让子代理分头审查这两个分支")),
             ("billing", .error, "模型拒绝了请求（400）：prompt is too long", "闲鱼", DemoRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
             ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),
@@ -303,10 +303,11 @@ extension DebugScene {
             _ = try? await store.createCard(in: nil, body: body)
         }
         // 后台托管、带两个子代理的会话
+        let started = Date.now.addingTimeInterval(-260)
         try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
-            PiSubagentState(name: "计费额度", activity: .known(.working)),
-            PiSubagentState(name: "登录回调", activity: .known(.waitingForUser)),
-            PiSubagentState(name: "文档", activity: .known(.idle)),
+            PiSubagentState(name: "计费额度", role: "审查员", phase: .known(.running), action: "运行 pnpm test billing", startedAt: started),
+            PiSubagentState(name: "登录回调", role: "工程师", phase: .known(.failed), action: "请求超时", startedAt: started, settledAt: started.addingTimeInterval(95)),
+            PiSubagentState(name: "文档", role: "写手", phase: .known(.done), action: "已补完 README 的同步一节", startedAt: started, settledAt: started.addingTimeInterval(180)),
         ])
         await seedBindings(store, projects: projects)
         let extra = defaults.integer(forKey: "CuePadHistory")
@@ -324,7 +325,16 @@ extension DebugScene {
         // 另一台 Mac 上的会话（演示发过去的话送达与失败）
         try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", folder: "relay")
         await seedChats(store)
+        // 会话文件里的压缩记录：对话里的一行系统行（notes 最后一轮回答之后）
+        try? await store.writePiTranscript(PiTranscript(
+            sessionID: "notes",
+            messages: [PiChatMessage(sessionID: "notes", entryID: "compaction-demo", seq: 99, role: .system, text: "已压缩上下文 · 压缩前约 63k tokens", at: .now.addingTimeInterval(-1_800))],
+            recap: PiRecap(lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")))
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
+        // -CuePadCommand YES：atlas 的会话页回复框上方有一条在路上的命令（看进度行；没有执行它的 Mac，一直在路上）
+        if defaults.bool(forKey: "CuePadCommand"), let atlas = states.first(where: { $0.sessionID == "atlas" }) {
+            _ = try? await services.requestMacDelivery("/compact", to: atlas, mode: .command)
+        }
         await seedTaskStates(store, projects: projects)
         if let relay = states.first(where: { $0.sessionID == "relay" }) {
             // 一条已送达还没进对话、一条没能送达：由一个只认这台演示 Mac 的执行器给出结果

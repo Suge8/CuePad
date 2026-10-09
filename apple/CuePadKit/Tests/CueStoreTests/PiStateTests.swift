@@ -63,6 +63,23 @@ import Testing
     }
   }
 
+  /// 子代理换了一个动作每次工具调用都发生：和其他细节一样合并；谁在、什么角色、什么状态变了才立即写。
+  @Test(.timeLimit(.minutes(1)))
+  func subagentActionsAreMergedButTheirStateChangesAreWrittenImmediately() async throws {
+    let recorder = recorder()
+    func agent(_ phase: PiSubagentPhase, _ action: String) -> [PiSubagentState] {
+      [PiSubagentState(name: "ui", role: "工程师", phase: .known(phase), action: action, startedAt: clock.now)]
+    }
+    try await recorder.update(sessionID: "s1", state: .delegating, subagents: agent(.running, "读取 a.ts"))
+
+    try await recorder.update(sessionID: "s1", state: .delegating, subagents: agent(.running, "运行 bun test"))
+    #expect(try await states()["s1"]?.subagents.first?.action == "读取 a.ts")  // 最短间隔内不写
+
+    try await recorder.update(sessionID: "s1", state: .delegating, subagents: agent(.done, "写完了"))
+    #expect(try await states()["s1"]?.subagents.first?.phase == .known(.done))  // 状态变了立即写，带着最新的动作
+    #expect(try await states()["s1"]?.subagents.first?.action == "写完了")
+  }
+
   @Test func afterTheIntervalHasPassedWorkingChangesWriteImmediately() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking)

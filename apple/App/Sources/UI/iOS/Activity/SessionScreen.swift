@@ -130,7 +130,8 @@ struct SessionScreen: View {
                         // 在看历史时收成短胶囊，点它展开（不挪正在读的内容）
                         PiReplyBar(
                             session: session, config: digest?.config, compact: !follow.atNewest,
-                            stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? [])
+                            stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? []),
+                            commandProgress: MacDelivery.commandProgress(digest?.deliveries ?? [])
                         ) { follow.jumpToNewest() }
                     }
                 }

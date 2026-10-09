@@ -359,6 +359,18 @@ import Testing
     #expect(!DeliveryMode.toSession.contains(.bind))
   }
 
+  /// 斜杠命令（压缩、命名、换模型、模板……）不是"你说的话"：不进会话的最近一条消息，也不在对话里挂气泡（对话只来自会话文件）；
+  /// 带着卡片（交给 Agent 时命令的参数）只把卡片关联到会话（任务进行中），不写发送记录——发送记录只记内容。
+  @Test func commandRequestIsNotAMessageToTheSessionAndOnlyLinksItsCard() async throws {
+    #expect(!DeliveryMode.toSession.contains(.command))
+    let task = try await store.createTask("改登录", in: nil)
+    try await store.linkCard(task.id, toSession: "s1")
+
+    let linked = try #require(try await store.card(task.id))
+    #expect(linked.piSessionID == "s1" && linked.status == .inProgress)
+    #expect(try await store.sendRecords().isEmpty)
+  }
+
   /// 结束会话请求与发送同一条投送通道；它让会话停下，不是对会话说的话。
   @Test func endRequestIsAddressedToTheSessionsMacAndIsNotAMessageToIt() async throws {
     let made = try await store.requestEnd(of: pi, on: "mac-a")

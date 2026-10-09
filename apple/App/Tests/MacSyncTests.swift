@@ -140,14 +140,23 @@ struct MacSyncTests {
         #expect(stored.stateSince == working.stateSince && stored.busySince == working.busySince)
     }
 
-    /// 子代理写成结构化列表（名字与此刻在干什么），一行一个；说明栏只写会话自己的说明。
+    /// 子代理写成结构化列表（名字、角色、状态、在做什么与本次运行的时刻），一行一个；说明栏只写会话自己的说明；
+    /// FireCode 以后新增的状态原样留着。
     @Test func 子代理写成结构化列表() async throws {
+        let started = Date(timeIntervalSince1970: 1_000)
+        let settled = Date(timeIntervalSince1970: 1_300)
         var master = session("s1", state: .delegating)
-        master.subagents = [PiSubagent(name: "ui", kind: "thinking"), PiSubagent(name: "core", kind: "error")]
+        master.subagents = [
+            PiSubagent(name: "ui", role: "工程师", state: "running", action: "运行 bun test", startedAt: started),
+            PiSubagent(name: "core", role: "审查员", state: "failed", action: "超时", startedAt: started, settledAt: settled),
+            PiSubagent(name: "docs", role: "写手", state: "napping"),
+        ]
         try await services.consumePiChanges(changes([.appeared(master)]))
         let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.subagents == [
-            PiSubagentState(name: "ui", activity: .known(.working)), PiSubagentState(name: "core", activity: .known(.error)),
+            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started),
+            PiSubagentState(name: "core", role: "审查员", phase: .known(.failed), action: "超时", startedAt: started, settledAt: settled),
+            PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping")),
         ])
         #expect(stored.detail == nil)
     }
@@ -278,7 +287,24 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.channels.calls == [.command("/greet world", .followUp, "sess-1.100")])
-        #expect(try await services.store.sendRecords().map(\.content) == ["/greet world"])
+        #expect(try await services.store.sendRecords().isEmpty)  // 发送记录只记内容的投送，命令不记
+    }
+
+    /// 交给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录。
+    @Test func 带卡片的斜杠命令只关联卡片_不写发送记录() async throws {
+        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
+        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: false)
+        let task = try await services.store.createTask("改登录", in: nil)
+        try await services.startDeliveryExecutor()
+        defer { services.cancelBackgroundWork() }
+
+        let request = try await services.store.requestDelivery(
+            "/greet\n\n改登录", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID, mode: .command, card: task.id)
+        _ = try await awaitFinished(request.id)
+
+        let linked = try #require(try await services.store.card(task.id))
+        #expect(linked.piSessionID == "sess-1" && linked.status == .inProgress)
+        #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 斜杠命令里带图片按失败写回() async throws {

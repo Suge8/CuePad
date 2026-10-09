@@ -1,27 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 子代理的粗状态借会话状态的说法、颜色与状态标（工作中、等你确认、空闲、出错）。
-nonisolated extension PiSubagentState {
-    var shown: PiShown {
-        switch activity.known {
-        case .working: PiShown(state: .known(.thinking))
-        case .waitingForUser: PiShown(state: .known(.waitingForUser))
-        case .idle: PiShown(state: .known(.settled))
-        case .error: PiShown(state: .known(.error))
-        case nil: PiShown(state: .unknown(activity.rawValue))
-        }
-    }
-
-    var activityLabel: String {
-        switch activity.known {
-        case .working: "工作中"
-        case .idle: "空闲"
-        default: shown.label
-        }
-    }
-}
-
 nonisolated extension PiSessionState {
     /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
@@ -74,9 +53,9 @@ nonisolated enum PiDelivery: Hashable, Sendable {
             if ended { return .waking }
             return request.status == .known(.pending) ? .sending : .delivering
         case .succeeded:
-            // 放进输入框、斜杠命令（内置命令与扩展命令多数不会让 Pi 动起来）不等会话动；其余等会话状态跟上（进入处理中，或在送达之后变过）就让位
+            // 放进输入框不会让 Pi 动起来；其余等会话状态跟上（进入处理中，或在送达之后变过）就让位
             let caughtUp = session.isWorking || session.stateSince > (request.completedAt ?? request.createdAt)
-            return mode == .paste || mode == .command || caughtUp ? nil : .delivered
+            return mode == .paste || caughtUp ? nil : .delivered
         case .failed:
             return (seen ?? .distantPast) > (request.completedAt ?? request.modifiedAt) ? nil : .failed
         case nil:

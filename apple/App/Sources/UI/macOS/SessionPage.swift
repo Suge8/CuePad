@@ -78,7 +78,8 @@ struct SessionPage: View {
                     }
                     PiReplyBar(
                         session: session, config: digest.config, compact: false,
-                        stopping: MacDelivery.stopping(session, deliveries: digest.deliveries)
+                        stopping: MacDelivery.stopping(session, deliveries: digest.deliveries),
+                        commandProgress: MacDelivery.commandProgress(digest.deliveries)
                     ) {
                         follow.jumpToNewest()
                     }

@@ -46,13 +46,18 @@ struct PiConversation: View {
     private static var turnGap: CGFloat { 14 }
 
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
-        if entry.isUser {
+        switch entry.role {
+        case .user:
             UserBubble(text: entry.text, highlighted: entry.id == highlight)
                 .chatContextMenu { MessageMenu(text: entry.text, kind: .mine, session: session) } preview: { BubbleText(text: entry.text).padding(4) }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
-        } else {
+        case .pi:
             ReplyBlock(text: entry.text, meta: entry.meta, session: session)
+        case .system:
+            // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
+            Text(entry.text).font(.footnote).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity).padding(.vertical, 4)
         }
     }
 
@@ -388,13 +393,9 @@ private struct OutgoingBubble: View {
 }
 
 /// Pi 此刻在做什么，接在对话末尾、与回答同一列、不加底框：一行进展（动作或状态词，干活时文字有一道流光扫过；计时已在顶上一行），
-/// 有子代理时下面每个一行：状态标、名字、状态词。回答到了它就被回答替换。
+/// 有子代理时下面是它们的汇总（`PiSubagentList`）。回答到了它就被回答替换。
 private struct LiveStatus: View {
     let session: PiSessionState
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 子代理列表就地展开着。
-    @State private var showsSubagents = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -408,49 +409,11 @@ private struct LiveStatus: View {
                         .shimmering()
                 }
             }
-            if let summary = PiSubagentSummary(session.subagents) { subagents(summary) }
+            PiSubagentList(agents: session.subagents)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .transition(.entry)
-    }
-
-    /// 一行汇总"子代理 2/3 在跑"（中性的分叉图标；有子代理在等你时另写"1 个在等你"，赭黄），点它就地展开每个子代理
-    /// （状态点、名字、状态词），再点收起。
-    private func subagents(_ summary: PiSubagentSummary) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button { showsSubagents.toggle() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.triangle.branch").foregroundStyle(palette.ink3).accessibilityHidden(true)
-                    Text("子代理 \(summary.running)/\(summary.total) 在跑").foregroundStyle(palette.ink2).monospacedDigit()
-                    if summary.waiting > 0 {
-                        Text("· \(summary.waiting) 个在等你").foregroundStyle(palette.attention).monospacedDigit()
-                    }
-                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-                        .rotationEffect(.degrees(showsSubagents ? 180 : 0))
-                        .accessibilityHidden(true)
-                }
-                .font(.subheadline)
-                .frame(minHeight: 32)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(showsSubagents ? "已展开" : "已收起")
-            if showsSubagents {
-                ForEach(Array(session.subagents.enumerated()), id: \.offset) { _, agent in
-                    HStack(spacing: 6) {
-                        PiStateDot(shown: agent.shown, size: 7)
-                        Text(agent.name).foregroundStyle(palette.ink2).lineLimit(1)
-                        Text(agent.activityLabel).foregroundStyle(agent.shown.labelTint(palette))
-                    }
-                    .font(.subheadline)
-                    .padding(.leading, 13)
-                    .accessibilityElement(children: .combine)
-                    .transition(.opacity)
-                }
-            }
-        }
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: showsSubagents)
     }
 }
 
@@ -461,20 +424,6 @@ private struct MetaLabel: LabelStyle {
             configuration.icon.imageScale(.small).accessibilityHidden(true)
             configuration.title
         }
-    }
-}
-
-/// 子代理的一行汇总：几个在跑、共几个、几个在等你。没有子代理是 nil。
-nonisolated struct PiSubagentSummary: Equatable {
-    let running: Int
-    let total: Int
-    let waiting: Int
-
-    init?(_ agents: [PiSubagentState]) {
-        guard !agents.isEmpty else { return nil }
-        running = agents.filter { $0.activity == .known(.working) }.count
-        total = agents.count
-        waiting = agents.filter { $0.activity == .known(.waitingForUser) }.count
     }
 }
 

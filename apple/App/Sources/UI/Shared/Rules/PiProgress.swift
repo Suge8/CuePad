@@ -41,7 +41,8 @@ nonisolated enum PiProgress {
         case .waitingForUser: firstLine(session.question?.text ?? session.detail)
         // 还没有具体动作时写正在处理的那句提问
         case .thinking, .outputting, .tool: session.detail.flatMap(action) ?? firstLine(session.pendingPrompt).map { "正在处理：\($0)" }
-        case .delegating, .error: firstLine(session.detail)
+        case .delegating: PiSubagentLine.of(session.subagents) ?? firstLine(session.detail)
+        case .error: firstLine(session.detail)
         case .settled, .ended, .incompatible, nil: firstSentence(session.lastReply)
         }
     }

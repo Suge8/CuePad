@@ -48,10 +48,13 @@ import Testing
     #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)  // 跑完的结论在手机上还看得到
   }
 
-  /// 子代理列表（名字与此刻在干什么）与"后台托管中"经同步往返保留。
+  /// 子代理列表（名字、角色、状态、在做什么与时刻）与"后台托管中"经同步往返保留。
   @Test func subagentsAndHostingTravelToThePhone() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
-    let subagents = [PiSubagentState(name: "ui", activity: .known(.working)), PiSubagentState(name: "core", activity: .known(.idle))]
+    let subagents = [
+      PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: Date(timeIntervalSince1970: 1_000)),
+      PiSubagentState(name: "core", role: "审查员", phase: .known(.idle)),
+    ]
     try await recorder.update(sessionID: "s1", state: .delegating, title: "指挥官", hosted: true, subagents: subagents)
     try await cloud.exchange()
 
