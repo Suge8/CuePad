@@ -36,23 +36,23 @@ nonisolated struct ProjectNow: Hashable, Sendable {
         return nil
     }
 
-    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`live` 要传此刻有事的会话
+    /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`sessions` 要传此刻有事的会话
     /// （`PiSessionQuery.current`：在线的，加上还有话发给它的已结束会话），只传在线的会漏掉发给已结束会话的话。
     static func byProject(
-        _ projects: [Project], live: [PiSessionListItem], tasks: [UUID: String], shown: (PiSessionListItem) -> PiShown
+        _ projects: [Project], sessions: [PiSessionListItem], tasks: [UUID: String], shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
         let intros = Dictionary(uniqueKeysWithValues: projects.compactMap { project in project.intro.map { (project.id, $0) } })
-        return byProject(projects.map(\.id), live: live, tasks: tasks, intros: intros, shown: shown)
+        return byProject(projects.map(\.id), sessions: sessions, tasks: tasks, intros: intros, shown: shown)
     }
 
     static func byProject(
-        _ projects: [UUID], live: [PiSessionListItem], tasks: [UUID: String], intros: [UUID: String],
+        _ projects: [UUID], sessions: [PiSessionListItem], tasks: [UUID: String], intros: [UUID: String],
         shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
-        let sessions = Dictionary(grouping: live.filter { $0.state.projectID != nil }) { $0.state.projectID! }
+        let byProject = Dictionary(grouping: sessions.filter { $0.state.projectID != nil }) { $0.state.projectID! }
         var result: [UUID: ProjectNow] = [:]
         for project in projects {
-            result[project] = pick(sessions[project] ?? [], shown: shown, task: tasks[project], intro: intros[project])
+            result[project] = pick(byProject[project] ?? [], shown: shown, task: tasks[project], intro: intros[project])
         }
         return result
     }

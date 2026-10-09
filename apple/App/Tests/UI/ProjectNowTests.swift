@@ -47,7 +47,7 @@ struct ProjectNowTests {
         let elsewhere = item("deploy", .waitingForUser, question: "部署到生产吗？", project: UUID())
         let busy = item("atlas", .tool, detail: "bash · pnpm test")
 
-        let byProject = ProjectNow.byProject([project], live: [elsewhere, busy], tasks: [:], intros: [:], shown: shown)
+        let byProject = ProjectNow.byProject([project], sessions: [elsewhere, busy], tasks: [:], intros: [:], shown: shown)
 
         #expect(byProject[project]?.text == "运行 pnpm test")
         #expect(byProject[project]?.needsYou == false)

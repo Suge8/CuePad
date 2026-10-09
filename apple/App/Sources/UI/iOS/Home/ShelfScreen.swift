@@ -30,7 +30,7 @@ nonisolated struct ShelfData: Sendable {
 
     /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。
     @MainActor func now(shown: (PiSessionListItem) -> PiShown) -> [UUID: ProjectNow] {
-        ProjectNow.byProject(entries.map(\.project), live: sessions, tasks: leading, shown: shown)
+        ProjectNow.byProject(entries.map(\.project), sessions: sessions, tasks: leading, shown: shown)
     }
 
     static func read(from store: isolated CueStore) throws -> ShelfData {
