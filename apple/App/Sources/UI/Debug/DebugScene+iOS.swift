@@ -173,16 +173,20 @@ extension DebugScene {
             if split { navigation.splitPath.removeLast() } else { navigation.agentPath.removeLast() }
         case "newsession":
             if split { navigation.select(.agent) } else { navigation.tab = .agent }
-            var sheet = Navigation.NewSession()
+            var sheet = Navigation.NewSession(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（头部引导选文件夹）
             if defaults.bool(forKey: "CuePadLaunch"),
                let table = try? await workspace.services.store.projects().first(where: { $0.name == "圆桌" })?.id {
                 let token = UUID().uuidString
                 if let request = try? await workspace.services.launch(
-                    PiLaunch(place: .project(table), prompt: "看看 scheduler 的重连问题", token: token), title: "圆桌", on: "demo-mac") {
+                    PiLaunch(project: table, prompt: "看看 scheduler 的重连问题", token: token), title: "圆桌", on: "demo-mac") {
                     sheet.launched = .init(request: request.id, token: token)
                 }
             }
             navigation.newSession = sheet
+        case "folderpicker":
+            // 给 -CuePadProject（默认闲鱼，演示里没绑文件夹）选文件夹的候选页
+            let name = defaults.string(forKey: "CuePadProject") ?? "闲鱼"
+            workspace.folderPicker = try? await workspace.services.store.projects().first { $0.name == name }
         case "projectagent":
             // 从项目页的"全部 N 个会话"进来的 Agent 页：先筛着这个项目
             if let project { open(.project(project)); navigation.push(.projectSessions(project)) }

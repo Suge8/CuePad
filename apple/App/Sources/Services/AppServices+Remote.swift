@@ -109,6 +109,10 @@ extension AppServices {
             return try await startPi(launch, request: request.id)
         }
         if request.mode == .known(.transcript) { return try await writeTranscript(of: request.content) }
+        if request.mode == .known(.bind) {
+            guard let bind = request.bind else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
+            return try await bindFolder(bind)
+        }
         let target = request.target
         let content = SendContent(stored: request.content)
         let sent: SendTarget
@@ -162,10 +166,19 @@ extension AppServices {
         try await channels.abort(in: id)
     }
 
-    /// 开新会话（不写发送记录）：在后台托管（`PiHost`），目录由本机解析：项目绑定的代码目录或某个会话的目录；
+    /// 绑定文件夹（不写发送记录）：手机只指名从哪里取，路径在这台 Mac 上解析，写进本机的目录绑定——绑定的唯一写入；
+    /// 目录绑定记录随之同步给手机。没有文件夹是解除。按项目 id 记：项目记录晚到这台 Mac 也对得上。
+    private func bindFolder(_ bind: PiBind) async throws {
+        guard let folder = bind.folder else { return try await store.setDirectory(nil, for: bind.project) }
+        let directory = try await directory(of: folder)
+        try requireDirectory(directory)
+        try await store.setDirectory(directory.path, for: bind.project)
+    }
+
+    /// 开新会话（不写发送记录）：在后台托管（`PiHost`），目录由本机按项目绑定的文件夹解析（新会话的目录只由项目绑定推出）；
     /// 带上发起方的认领标识，连上后把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它）。
     private func startPi(_ launch: PiLaunch, request: UUID) async throws {
-        let directory = try await directory(for: launch.place)
+        let directory = try await directory(of: .project(launch.project))
         try requireDirectory(directory)
         guard let pi = await locatePi() else { throw SendError.piNotInstalled }
         let id = try await host.open(in: directory, launchToken: launch.token, executable: pi)
@@ -200,8 +213,8 @@ extension AppServices {
         }
     }
 
-    private func directory(for place: PiLaunchPlace) async throws -> URL {
-        switch place {
+    private func directory(of folder: PiFolder) async throws -> URL {
+        switch folder {
         case .project(let id):
             guard let path = try await store.directory(of: id) else {
                 throw SendError.noCodeDirectory(try await store.project(id)?.name ?? "")
@@ -234,7 +247,7 @@ extension AppServices {
             return session.target
         case .steer: whenBusy = .steer
         case .followUp: whenBusy = .followUp
-        case .answer, .ping, .start, .transcript, .config, .end, .stop: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
+        case .answer, .ping, .start, .transcript, .config, .end, .stop, .bind: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
         }
         try await channels.send(
             PiMessage(text: content.plainText, images: try piImages(in: content), whenBusy: whenBusy, deliveryID: request.uuidString), to: id)

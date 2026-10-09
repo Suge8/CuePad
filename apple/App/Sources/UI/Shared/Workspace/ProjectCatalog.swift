@@ -9,8 +9,10 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
     /// 键为 nil 的是未分类。
     var cardCounts: [UUID?: Int]
     var directories: [UUID: String]
+    /// 各台 Mac 上的目录绑定（同步记录，本机的也在里面）：手机据此知道项目绑在哪台 Mac 的哪个文件夹，项目菜单与新会话落点都读它。
+    var bindings: [DirectoryBinding]
 
-    static let tables: Set<StoreTable> = [.projects, .cards, .projectDirectories]
+    static let tables: Set<StoreTable> = [.projects, .cards, .projectDirectories, .directoryBindings]
 
     func project(_ id: UUID?) -> Project? {
         id.flatMap { id in projects.first { $0.id == id } }
@@ -21,6 +23,7 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
         return ProjectCatalog(
             projects: try store.projects(),
             cardCounts: Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) }),
-            directories: try store.projectDirectories())
+            directories: try store.projectDirectories(),
+            bindings: try store.directoryBindings())
     }
 }

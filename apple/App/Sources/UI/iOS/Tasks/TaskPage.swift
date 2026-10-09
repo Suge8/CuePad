@@ -23,7 +23,7 @@ struct TaskPage: View {
                     more.offset(y: -8)
                 }
                 PromptList(task: card, detail: detail, open: { opened = $0.id }, hand: { navigation.handToAgent($0) }, write: write)
-                SubtaskList(task: card, detail: detail, open: { opened = $0.id })
+                SubtaskList(detail: detail, open: { opened = $0.id })
             }
             .padding(.leading, 8).padding(.trailing, 12).padding(.top, 20).padding(.bottom, 40)
         }

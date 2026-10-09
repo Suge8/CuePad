@@ -21,7 +21,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     var now: [PiSessionListItem]
     var ended: [PiSessionListItem]
     var total: Int
-    /// 能按它筛的项目：在 Mac 上绑了代码目录的（会话按工作目录归入项目，没绑的不会有会话）。
+    /// 能按它筛的项目：在 Mac 上绑了文件夹的（会话按工作目录归入项目，没绑的不会有会话）。
     var projects: Set<UUID>
     /// 在线会话此刻要显示的结束请求（按记录 id，`DeliveryRequest.shownEnd`）：正在结束、没能结束。会话页读同一条规则。
     var ends: [UUID: DeliveryRequest] = [:]

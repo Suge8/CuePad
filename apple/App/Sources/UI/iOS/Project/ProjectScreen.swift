@@ -66,10 +66,7 @@ struct ProjectScreen: View {
         LazyVStack(alignment: .leading, spacing: 12) {
             if data.project != nil { FocusCard(data: data, pi: pi).padding(.bottom, 12) }
             if data.cards.isEmpty {
-                EmptyState(mascot: .empty, title: "还没有灵感", message: "写一条，或者在下方随手记一条") {
-                    Button("记一条灵感", action: newCard).prominentButton().controlSize(.large)
-                }
-                .padding(.top, 24)
+                EmptyIdeas { navigation.startCapture(project: .some(projectID)) }.padding(.top, 24)
             }
             if !arrangement.pinned.isEmpty {
                 // 资料：长期参考的灵感，一行一条压在任务区下面
@@ -112,12 +109,12 @@ struct ProjectScreen: View {
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
 
-    /// 顶栏的一行："25 张卡片 · cuepad"（绑定的代码目录只写末段）。
+    /// 顶栏的一行："25 条灵感 · cuepad"（绑定的文件夹只写名字；手机上取各 Mac 同步来的绑定，绑在几台上就都写）。
     private var detail: String {
         let catalog = workspace.catalog
         let count = catalog?.cardCounts[projectID].flatMap { $0 > 0 ? "\($0) 条灵感" : nil } ?? "还没有灵感"
-        let folder = catalog?.directories[projectID].map { URL(filePath: $0).lastPathComponent }
-        return [count, folder].compactMap { $0 }.joined(separator: " · ")
+        let folders = (catalog?.bindings ?? []).filter { $0.projectID == projectID }.map(\.folder)
+        return ([count] + folders).joined(separator: " · ")
     }
 
     private func wall(_ ids: [UUID], page: ProjectPage, lastTarget: [UUID: String]) -> some View {

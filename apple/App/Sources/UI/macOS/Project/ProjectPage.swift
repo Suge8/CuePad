@@ -145,7 +145,7 @@ private struct ProjectHeader: View {
                     ProjectGlyph(project: project, size: 20)
                     Text(projectID == nil ? "未分类" : project?.name ?? "").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
                 }
-                .contextMenu { if let project { ProjectMenu(project: project) { renaming = project } } }
+                .contextMenu { if let project { ProjectActions(project: project) { renaming = project } } }
                 // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏
                 if let intro = project?.intro {
                     Text(intro).font(.system(size: 15)).foregroundStyle(palette.ink2)
@@ -154,9 +154,7 @@ private struct ProjectHeader: View {
                 }
                 HStack(spacing: 4) {
                     if let project {
-                        DirectoryLink(path: directory.map(Self.abbreviated)) {
-                            ProjectDirectory.choose(for: project.id, workspace: workspace)
-                        }
+                        DirectoryLink(path: directory.map(Self.abbreviated)) { workspace.chooseFolder(for: project) }
                         if cardCount > 0 { Text("·") }
                     }
                     if cardCount > 0 { Text("\(cardCount) 条灵感").monospacedDigit() }
@@ -176,7 +174,7 @@ private struct ProjectHeader: View {
     }
 }
 
-/// 项目页头部的代码目录：没绑定时是带图标的"绑定代码目录…"，绑定后是路径；都可点，悬停有下划线、指针变手形。
+/// 项目页头部的文件夹：没绑定时是带图标的"绑定文件夹…"，绑定后是路径；都可点，悬停有下划线、指针变手形。
 private struct DirectoryLink: View {
     let path: String?
     let choose: () -> Void
@@ -188,7 +186,7 @@ private struct DirectoryLink: View {
                 Text(path).underline(hovering)
             } else {
                 Label {
-                    Text("绑定代码目录…").underline(hovering)
+                    Text("绑定文件夹…").underline(hovering)
                 } icon: {
                     Image(systemName: "folder.badge.plus")
                 }
@@ -198,34 +196,48 @@ private struct DirectoryLink: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .pointerStyle(.link)
-        .help(path == nil ? "选一个目录：在里面运行的 Agent 会出现在这个项目页" : "更换代码目录")
+        .help(path == nil ? "选一个文件夹：在里面运行的 Agent 会出现在这个项目页" : "更换文件夹")
     }
 }
 
 private struct EmptyProject: View {
+    @Environment(Workspace.self) private var workspace
+
     var body: some View {
-        EmptyState(mascot: .empty, title: "还没有灵感", message: "在下方记一条，或按 ⌘N 新建").padding(.top, 48)
+        EmptyIdeas(write: workspace.focusCapture).padding(.top, 48)
     }
 }
 
 /// 空库首次打开：共享的 EmptyLibrary（同 iOS 的图标与文案），动作是 Mac 的主按钮。
 private struct Welcome: View {
-    @Environment(\.palette) private var palette
     @State private var creating = false
 
     var body: some View {
         EmptyLibrary {
-            Button { creating = true } label: {
-                Text("新建项目").font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(palette.onSignature)
-                    .padding(.horizontal, 20).frame(height: 36)
-                    .background(palette.signature, in: .capsule)
-            }
-            .buttonStyle(PressStyle())
-            .keyboardShortcut(.defaultAction)
+            Button { creating = true } label: { Text("新建项目").primaryCapsule() }
+                .buttonStyle(PressStyle())
+                .keyboardShortcut(.defaultAction)
         }
         .padding(.top, 160)
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
+    }
+}
+#endif
+
+#if os(macOS)
+extension View {
+    /// Mac 空态上的主按钮：靛青实心胶囊（一屏的焦点）；按压用 `PressStyle`。
+    func primaryCapsule() -> some View { modifier(PrimaryCapsule()) }
+}
+
+private struct PrimaryCapsule: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(palette.onSignature)
+            .padding(.horizontal, 20).frame(height: 36)
+            .background(palette.signature, in: .capsule)
     }
 }
 #endif

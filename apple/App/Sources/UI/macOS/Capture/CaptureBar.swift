@@ -68,6 +68,7 @@ struct CaptureComposer: View {
         .animation(Motion.quick, value: expanded)
         .animation(Motion.snappy, value: trimmed.isEmpty)
         .onAppear { if pinnedOpen { focused = true } }
+        .onChange(of: workspace.captureFocusRequests) { focused = true }
     }
 
     private var field: some View {
