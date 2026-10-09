@@ -75,17 +75,28 @@ struct StyleBoard: View {
         .foregroundStyle(palette.ink)
     }
 
+    private static let statuses: [PiShown.Status] = [
+        .working(.thinking), .delivery(.sending), .delivery(.waking), .asking, .failed, .delivery(.failed), .restart,
+        .unread, .idle, .fresh, .ended, .unknown,
+    ]
+
     private var motion: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 16) {
-                PiStateDot(state: .known(.thinking), size: 10)
-                PiStateDot(state: .known(working ? .tool : .settled), size: 10)
-                PiStateDot(state: .known(.waitingForUser), size: 10)
-                PiStateDot(state: .known(.error), size: 10)
-                PiStateDot(state: .known(.settled), unread: true, size: 10)
-                PiStateDot(state: .known(.ended), size: 10)
+                PiStateDot(shown: PiShown(status: working ? .working(.tool) : .idle), size: 10)
                 Spacer()
                 Text("\(count)").font(.title.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink).counting(count)
+            }
+            // 全部会话状态：状态标、状态词与颜色
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), alignment: .leading)], alignment: .leading, spacing: 10) {
+                ForEach(Self.statuses, id: \.self) { status in
+                    let shown = PiShown(status: status)
+                    HStack(spacing: 6) {
+                        PiStateDot(shown: shown, size: 8)
+                        Text(shown.label).font(.subheadline.weight(shown.isUnread ? .semibold : .medium)).foregroundStyle(shown.labelTint(palette))
+                            .lineLimit(1)
+                    }
+                }
             }
             VStack(spacing: 0) {
                 ForEach(rows, id: \.self) { row in

@@ -142,7 +142,7 @@ struct TaskRow: View {
         .contextMenu { CardActions(card: task) }
         // 读屏：整行一个元素"任务内容，项目，Pi 在做什么"，值是状态，默认动作切换完成（文案见 TaskSpeech）
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([task.title, tally.text, TaskRing(marks).speech, project?.name, session.map { $0.state.presence }].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityLabel([task.title, tally.text, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
         .accessibilityValue(TaskSpeech.value(task.status))
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
@@ -174,8 +174,9 @@ struct TaskRow: View {
                 let shown = services.settings.shown(session, delivery: delivery)
                 HStack(spacing: 4) {
                     PiStateDot(shown: shown, size: 5)
-                    Text(shown.presence).foregroundStyle(shown.tint(palette))
-                    PiElapsed(session: session, font: .system(size: 11))
+                    Text(shown.presence).foregroundStyle(shown.labelTint(palette))
+                    Text("·").foregroundStyle(palette.ink3)
+                    PiElapsed(shown: shown, font: .system(size: 11))
                 }
                 .sessionLink(session.sessionID)
                 .help("交给了 Agent 会话「\(session.title)」，点开看近况")

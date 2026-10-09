@@ -31,7 +31,9 @@ struct PiConversation: View {
                 ForEach(Array(entries.enumerated()).reversed(), id: \.element.id) { index, entry in
                     row(entry).chatRow().accessibilitySortPriority(-Double(index))
                 }
+                if entries.isEmpty { RecapPreview(session: session).chatRow() }
             } else {
+                if entries.isEmpty { RecapPreview(session: session) }
                 ForEach(entries) { entry in row(entry) }
                 ForEach(outgoing) { request in OutgoingBubble(request: request, session: session) }
                 ending
@@ -77,36 +79,42 @@ extension PiConversation {
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     let project: Project?
-    /// 发给它的最近一条投送请求：话还在路上时状态先写路上到哪了（`PiDelivery`）。
-    let delivery: DeliveryRequest?
     @Environment(\.palette) private var palette
 
     var body: some View {
-        // 正在看的会话没有"有新回复"
-        let shown = PiShown(state: session.state, delivery: PiDelivery.phase(of: delivery, for: session))
+        // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
+        let shown = PiShown(session)
         HStack(spacing: 4) {
-            PiStateDot(shown: shown, size: 6)
+            PiStateDot(shown: shown, size: Self.dot)
             // 所在太长时截断（最宽 `placeWidth`），状态与计时不截；整行按内容宽，不被导航栏挤
             if let place = PiPlace.name(of: session, project: project) {
                 Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
                     .frame(maxWidth: Self.placeWidth, alignment: .leading)
             }
             Group {
-                Text(shown.label).fontWeight(.medium).foregroundStyle(shown.tint(palette))
+                Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
                     .contentTransition(.opacity)
                     .animation(Motion.quick, value: shown)
                 if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
                 Text("·").foregroundStyle(palette.ink3)
-                PiElapsed(session: session, font: .caption)
+                PiElapsed(shown: shown, font: Self.font)
             }
             .fixedSize()
         }
-        .font(.caption)
+        .font(Self.font)
         .fixedSize()
         .accessibilityElement(children: .combine)
     }
 
     private static let placeWidth: CGFloat = 140
+    // Mac 的 caption 只有 10pt：顶栏这一行是这页最要紧的状态，至少 12pt
+    #if os(macOS)
+    private static let font = Font.system(size: 12)
+    private static let dot: CGFloat = 8
+    #else
+    private static let font = Font.caption
+    private static let dot: CGFloat = 6
+    #endif
 }
 
 /// 等你确认时固定在输入框上方的问题：能从这里答的是问题卡（选项一点即答，答完随问题清空而消失），
@@ -139,12 +147,12 @@ private struct UserBubble: View {
     private static let widthFraction: CGFloat = 0.78
 
     let text: String
-    var dimmed = false
+    var trip = BubbleTrip.arrived
     var highlighted = false
 
     var body: some View {
         TrailingFraction(fraction: Self.widthFraction) {
-            BubbleText(text: text, highlighted: highlighted).opacity(dimmed ? 0.7 : 1)
+            BubbleText(text: text, highlighted: highlighted, trip: trip)
         }
         .transition(.entry)
     }
@@ -154,19 +162,39 @@ private struct UserBubble: View {
 private struct BubbleText: View {
     let text: String
     var highlighted = false
+    var trip = BubbleTrip.arrived
     @Environment(\.palette) private var palette
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
-        Text(text)
-            .font(.body).foregroundStyle(palette.onBubble)
-            .textSelection(.enabled)
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(palette.bubble, in: shape)
-            .overlay(shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1))
-            .animation(Motion.quick, value: highlighted)
+        HStack(alignment: .center, spacing: 8) {
+            if trip == .failed {
+                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).accessibilityLabel("没能送达")
+            }
+            Text(text)
+                .font(.body).foregroundStyle(palette.onBubble)
+                .textSelection(.enabled)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(palette.bubble, in: shape)
+                .overlay { edge(shape) }
+                // 在路上：半透明加虚线边，浅色深色一样看得出还没到
+                .opacity(trip == .inTransit ? 0.6 : 1)
+        }
+        .animation(Motion.quick, value: highlighted)
+        .animation(Motion.quick, value: trip)
+    }
+
+    @ViewBuilder private func edge(_ shape: RoundedRectangle) -> some View {
+        switch trip {
+        case .inTransit: shape.strokeBorder(palette.ink2, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        case .failed: shape.strokeBorder(palette.failure, lineWidth: 1)
+        case .arrived: shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1)
+        }
     }
 }
+
+/// 你的话到哪了：进了对话、还在路上、没能送达。
+private enum BubbleTrip { case arrived, inTransit, failed }
 
 /// 一条消息的长按菜单（Mac 右键）只在这里定义。Pi 的回答：复制、选择文本（手机上打开可自由选择的全文；Mac 直接拖选）、
 /// 分享、存为灵感；你的话：复制、编辑后重发（放回输入框，接在已写的字后面）、存为灵感。存为灵感进会话所属的项目。
@@ -203,6 +231,27 @@ private struct MessageMenu: View {
         var draft = settings.replyDraft(for: session.id)
         draft.text = [draft.text, text].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
         settings.setReplyDraft(draft, for: session.id)
+    }
+}
+
+/// 对话还没同步过来时（很久前的会话、刚连上的会话）先放记录上的最近一轮：你说的话与 Agent 的回答；
+/// 还没说过话的会话写一句怎么开始。对话到了就被它替换。
+private struct RecapPreview: View {
+    let session: PiSessionState
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            if let prompt = session.pendingPrompt ?? session.lastPrompt {
+                Text("最近一轮 · 完整对话还在同步").font(.caption).foregroundStyle(palette.ink3)
+                UserBubble(text: prompt)
+                if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
+            } else if !session.hasStarted, session.state != .known(.ended) {
+                Text("还没说过话，在下面说第一句").font(.subheadline).foregroundStyle(palette.ink3)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -255,15 +304,20 @@ private struct OutgoingBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            UserBubble(text: text, dimmed: !failed)
+            UserBubble(text: text, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived)
             HStack(spacing: 10) {
                 if failed {
                     if let reason = request.failure { Text(reason).font(.caption).foregroundStyle(palette.failure).lineLimit(2) }
                     // 送不到 Mac 时也露出来（停用），看得出能重发
-                    Button("重发", action: retry).font(.caption.weight(.semibold)).disabled(!workspace.services.reachesPiHost)
+                    Button("重发", systemImage: "arrow.clockwise", action: retry)
+                        .font(.caption.weight(.semibold)).foregroundStyle(palette.failure)
+                        .padding(.horizontal, 10).frame(minHeight: 28)
+                        .overlay(Capsule().strokeBorder(palette.failure, lineWidth: 1))
+                        .frame(minHeight: 44).contentShape(.rect)
+                        .buttonStyle(.plain)
+                        .disabled(!workspace.services.reachesPiHost)
                 } else {
-                    // 发给已结束的会话：Mac 先在后台把它唤醒再送达
-                    DeliveryStatusLabel(request: request, waking: session.state == .known(.ended)).font(.caption)
+                    DeliveryStatusLabel(request: request, session: session).font(.caption)
                 }
             }
         }
@@ -312,7 +366,7 @@ private struct LiveStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if session.state.isWorking {
-                Text(session.detail.flatMap(PiProgress.action) ?? session.state.label)
+                Text(session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
                     .font(.subheadline.weight(.medium))
                     .lineLimit(1).truncationMode(.middle)
                     .shimmering()
@@ -324,13 +378,17 @@ private struct LiveStatus: View {
         .transition(.entry)
     }
 
-    /// 一行汇总"子代理 2/3 在跑"，点它就地展开每个子代理（状态点、名字、状态词），再点收起。
+    /// 一行汇总"子代理 2/3 在跑"（中性的分叉图标；有子代理在等你时另写"1 个在等你"，赭黄），点它就地展开每个子代理
+    /// （状态点、名字、状态词），再点收起。
     private func subagents(_ summary: PiSubagentSummary) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Button { showsSubagents.toggle() } label: {
                 HStack(spacing: 6) {
-                    PiStateDot(state: summary.lead, size: 7)
+                    Image(systemName: "arrow.triangle.branch").foregroundStyle(palette.ink3).accessibilityHidden(true)
                     Text("子代理 \(summary.running)/\(summary.total) 在跑").foregroundStyle(palette.ink2).monospacedDigit()
+                    if summary.waiting > 0 {
+                        Text("· \(summary.waiting) 个在等你").foregroundStyle(palette.attention).monospacedDigit()
+                    }
                     Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
                         .rotationEffect(.degrees(showsSubagents ? 180 : 0))
                         .accessibilityHidden(true)
@@ -344,9 +402,9 @@ private struct LiveStatus: View {
             if showsSubagents {
                 ForEach(Array(session.subagents.enumerated()), id: \.offset) { _, agent in
                     HStack(spacing: 6) {
-                        PiStateDot(state: agent.workState, size: 7)
+                        PiStateDot(shown: agent.shown, size: 7)
                         Text(agent.name).foregroundStyle(palette.ink2).lineLimit(1)
-                        Text(agent.activityLabel).foregroundStyle(agent.workState.tint(palette))
+                        Text(agent.activityLabel).foregroundStyle(agent.shown.labelTint(palette))
                     }
                     .font(.subheadline)
                     .padding(.leading, 13)
@@ -359,29 +417,28 @@ private struct LiveStatus: View {
     }
 }
 
-/// 子代理的一行汇总：几个在跑、共几个，状态点按最需要注意的那个（等你确认 → 出错 → 工作中 → 空闲）。没有子代理是 nil。
+/// 子代理的一行汇总：几个在跑、共几个、几个在等你。没有子代理是 nil。
 nonisolated struct PiSubagentSummary: Equatable {
     let running: Int
     let total: Int
-    let lead: Open<PiWorkState>
+    let waiting: Int
 
     init?(_ agents: [PiSubagentState]) {
-        guard let lead = agents.max(by: { $0.workState.urgency < $1.workState.urgency }) else { return nil }
+        guard !agents.isEmpty else { return nil }
         running = agents.filter { $0.activity == .known(.working) }.count
         total = agents.count
-        self.lead = lead.workState
+        waiting = agents.filter { $0.activity == .known(.waitingForUser) }.count
     }
 }
 
 private extension View {
-    /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过；减弱动态效果时是静止的次要色。
+    /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过（`LoopLayer`）；减弱动态效果时是静止的次要色。
     func shimmering() -> some View { modifier(Shimmer()) }
 }
 
 private struct Shimmer: ViewModifier {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var swept = false
 
     func body(content: Content) -> some View {
         if reduceMotion {
@@ -389,18 +446,7 @@ private struct Shimmer: ViewModifier {
         } else {
             content
                 .foregroundStyle(palette.ink3)
-                .overlay {
-                    content.foregroundStyle(palette.ink).mask {
-                        GeometryReader { proxy in
-                            let band = max(proxy.size.width * 0.4, 48)
-                            LinearGradient(colors: [.clear, .black, .clear], startPoint: .leading, endPoint: .trailing)
-                                .frame(width: band)
-                                .offset(x: swept ? proxy.size.width : -band)
-                        }
-                    }
-                }
-                // 渲染端插值：整段循环不触发重算视图
-                .onAppear { withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) { swept = true } }
+                .overlay { LoopLayer(kind: .sheen, color: palette.ink).mask { content } }
         }
     }
 }

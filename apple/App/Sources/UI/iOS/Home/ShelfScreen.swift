@@ -530,10 +530,10 @@ private struct ActiveTaskRow: View {
                 (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))) {
                     HStack(spacing: 4) {
                         PiStateDot(shown: shown, size: 6)
-                        Text(shown.presence).foregroundStyle(shown.tint(palette))
+                        Text(shown.presence).foregroundStyle(shown.labelTint(palette))
+                        if !stacked { Text("·").foregroundStyle(palette.ink3) }
                     }
-                    // 话还在路上时不写"已运行"：Agent 还没开始处理这句
-                    if shown.delivery == nil { PiElapsed(session: session, font: .footnote) }
+                    PiElapsed(shown: shown, font: .footnote)
                 }
                 .fixedSize(horizontal: !stacked, vertical: false)
             }

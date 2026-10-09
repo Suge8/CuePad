@@ -121,9 +121,9 @@ struct ChatFollowTests {
     }
 }
 
-/// 对话末尾的子代理只有一行汇总：几个在跑、共几个，状态点按最需要注意的那个。
+/// 对话末尾的子代理只有一行汇总：几个在跑、共几个、几个在等你。
 struct SubagentSummaryTests {
-    @Test func 汇总在跑数与总数_状态点按最需要注意的那个() {
+    @Test func 汇总在跑数_总数与在等你的数() {
         let agents = [
             PiSubagentState(name: "研究", activity: .known(.working)),
             PiSubagentState(name: "审计", activity: .known(.waitingForUser)),
@@ -134,7 +134,7 @@ struct SubagentSummaryTests {
 
         #expect(summary?.running == 2)
         #expect(summary?.total == 3)
-        #expect(summary?.lead == .known(.waitingForUser))
+        #expect(summary?.waiting == 1)
         #expect(PiSubagentSummary([]) == nil)
     }
 }

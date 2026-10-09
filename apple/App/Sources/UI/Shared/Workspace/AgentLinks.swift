@@ -28,7 +28,7 @@ extension EnvironmentValues {
 }
 
 /// 灵感或任务上的会话状态点（发送中、工作中、等你确认、有新回复……，同 `PiStateDot`）：点它看那个会话；
-/// 开新会话还没开好时是一圈靛青空心点（"正在开会话"）。没交给过 Agent 时不画。
+/// 开新会话还没开好时是一圈墨色空心点（"正在开会话"，在动的状态不占签名色，同 `PiShown.tint`）。没交给过 Agent 时不画。
 struct AgentDot: View {
     let card: UUID
     @Environment(\.cardAgents) private var agents
@@ -40,7 +40,7 @@ struct AgentDot: View {
 
     var body: some View {
         if agents.launching.contains(card) {
-            Circle().strokeBorder(palette.signature, lineWidth: 1.5).frame(width: 8, height: 8)
+            Circle().strokeBorder(palette.ink, lineWidth: 1.5).frame(width: 8, height: 8)
                 .frame(width: 28, height: 28)
                 .accessibilityLabel("正在开会话")
                 .help("正在开会话")

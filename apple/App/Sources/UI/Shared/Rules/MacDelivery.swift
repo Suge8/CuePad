@@ -32,8 +32,11 @@ extension MacDelivery {
     /// 能结束：在线，且读得到（旧版扩展的会话收不到结束命令，要在终端里退出 Pi）。
     static func canEnd(_ session: PiSessionState) -> Bool { session.state != .known(.ended) && session.state != .known(.incompatible) }
 
-    /// 回复框给不给"停止"：指挥官自己在跑一轮时（含弹窗等你确认）；等子代理时这一轮已经歇下，没有可停的。
-    static func canStop(_ session: PiSessionState) -> Bool { session.state.known?.isTurnRunning == true }
+    /// 回复框给不给"停止"：指挥官自己在跑一轮、没在等你时；等你确认时它在等你答（停止会让人以为把问题也撤了），
+    /// 等子代理时这一轮已经歇下，都没有可停的。
+    static func canStop(_ session: PiSessionState) -> Bool {
+        session.state.known?.isTurnRunning == true && session.state != .known(.waitingForUser)
+    }
 
     /// 正在停止：这一轮开始后发过停止请求，它还在路上或 Mac 已受理，而这一轮还没歇下（受理只表示收到，歇下看状态）。
     /// 进度只读投送请求，界面不另存。

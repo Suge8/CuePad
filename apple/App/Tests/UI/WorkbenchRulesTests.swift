@@ -207,11 +207,11 @@ struct PiClockTests {
         #expect(PiClock.reading(.known(.ended), stateSince: entered, busySince: nil) == .ago(entered))
     }
 
-    @Test func 时长不跳秒_一分钟内写秒_一小时内写分_以上写时与分() {
+    @Test func 时长不跳秒_一分钟内写秒_一小时内写分_以上写小时与分() {
         #expect(PiClock.duration(42) == "42 秒")
         #expect(PiClock.duration(4 * 60 + 59) == "4 分")
-        #expect(PiClock.duration(2 * 3600 + 5 * 60 + 30) == "2 时 5 分")
-        #expect(PiClock.duration(3 * 3600 + 40) == "3 时")
+        #expect(PiClock.duration(2 * 3600 + 5 * 60 + 30) == "2 小时 5 分")
+        #expect(PiClock.duration(3 * 3600 + 40) == "3 小时")
     }
 
     @Test func 超过一天的多久前写昨天或N天前() {
@@ -221,11 +221,12 @@ struct PiClockTests {
         #expect(PiClock.ago(ended).text(now: WallTests.date(2026, 10, 9, hour: 9), calendar: calendar) == "4 天前")
     }
 
-    @Test func 计时文字_已运行_已等_多久前用同一个时长格式() {
+    @Test func 计时文字_已运行_已等_已发出_多久前用同一个时长格式() {
         let now = start.addingTimeInterval(4 * 60 + 10)
         #expect(PiClock.running(since: start).text(now: now) == "已运行 4 分")
         #expect(PiClock.waiting(since: start).text(now: start.addingTimeInterval(30)) == "已等 30 秒")
-        #expect(PiClock.ago(start).text(now: start.addingTimeInterval(3600 + 120)) == "1 时 2 分前")
+        #expect(PiClock.sent(since: start).text(now: start.addingTimeInterval(3)) == "已发出 3 秒")
+        #expect(PiClock.ago(start).text(now: start.addingTimeInterval(3600 + 120)) == "1 小时 2 分前")
     }
 }
 
@@ -278,6 +279,8 @@ struct StopRulesTests {
         #expect(MacDelivery.canStop(running))
         #expect(!MacDelivery.canStop(session(.delegating, busySince: .now)))
         #expect(!MacDelivery.canStop(session(.settled, busySince: nil)))
+        // 在等你确认：它没在跑，回复框不给停止（答问题在问题卡或回复框里）
+        #expect(!MacDelivery.canStop(session(.waitingForUser, busySince: .now)))
 
         let stop = try await app.services.store.requestStop(of: SendTarget(kind: .piSession, name: "s", ref: "s"), on: "mac")
         #expect(MacDelivery.stopping(running, deliveries: [stop]))

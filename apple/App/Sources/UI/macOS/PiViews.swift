@@ -7,9 +7,6 @@ import SwiftUI
 // MARK: Pi 状态
 
 extension PiAgentState {
-    /// 归到各端共用的那套状态：颜色、状态标、状态名都按它（Shared 的 `PiWorkState`），这里不另设一份。
-    var work: Open<PiWorkState> { .known(syncRepresentation.state) }
-
     /// 出错时 Pi 上报的原文（会话行悬停看）；行上写的是摘要。
     var errorMessage: String? {
         if case .error(let message) = self { message } else { nil }

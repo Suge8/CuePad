@@ -317,7 +317,8 @@ private struct NewSessionButton: View {
     }
 }
 
-/// 同步到不了 Mac 时的同步图标（平时不出现）：点开看哪里不通。
+/// 同步到不了 Mac 时的同步图标（平时不出现）：点开看哪里不通。图标是次要墨色，右上一个小点带状态色（提示赭黄，真出错才胭脂），
+/// 不让整颗圆钮变成警报。
 private struct SyncBadge: View {
     let status: SyncStatus
     @Environment(\.palette) private var palette
@@ -326,7 +327,10 @@ private struct SyncBadge: View {
     var body: some View {
         let summary = SyncSummary(status)
         Button { open = true } label: {
-            Label(summary.title, systemImage: summary.symbol).foregroundStyle(summary.color(palette))
+            Label(summary.title, systemImage: summary.symbol).foregroundStyle(palette.ink2)
+                .overlay(alignment: .topTrailing) {
+                    Circle().fill(summary.color(palette)).frame(width: 6, height: 6).offset(x: 3, y: -1).accessibilityHidden(true)
+                }
         }
             .popover(isPresented: $open) {
                 SyncHint(status: status).padding(16).frame(idealWidth: 280).fixedSize(horizontal: false, vertical: true)
@@ -341,7 +345,8 @@ private struct SectionTitle: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text(text).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink2)
+        // 分组标题是页面的骨架：不比行里的字弱
+        Text(text).font(.headline).foregroundStyle(palette.ink)
             .padding(.horizontal, 4)
             .accessibilityAddTraits(.isHeader)
     }

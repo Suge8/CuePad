@@ -233,7 +233,7 @@ extension DebugScene {
         "billing": PiContextUsage(tokens: nil, window: 200_000),
     ]
 
-    /// 演示用的 Mac 端状态：三个 Pi 会话（一个等你确认）、一条等 Mac 接手的请求。只在库里还没有时写。
+    /// 演示用的 Mac 端状态：各种状态的 Pi 会话（含刚开的、回复框里有草稿的）、发到 Mac 的几条请求。只在库里还没有时写。
     static func seedRemote(_ services: AppServices) async {
         let store = services.store
         // 演示库的会话索引已写成历史；这里补的是在线会话，有在线的就是写过了
@@ -265,6 +265,8 @@ extension DebugScene {
             ("billing", .error, "模型拒绝了请求（400）：prompt is too long", nil, DemoRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
             ("notes", .settled, nil, nil, DemoRecap(
                 lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),
+            // 终端里刚开、还没说过话
+            ("scratch", .settled, nil, "CuePad", DemoRecap()),
             ("piwork", .settled, nil, nil, DemoRecap(
                 lastPrompt: "列出 piwork 目录下的文件", lastReply: "目录里有 3 个文件：\n- README.md\n- notes.txt\n- todo.md")),
         ]
@@ -330,6 +332,9 @@ extension DebugScene {
         if let landing = states.first(where: { $0.sessionID == "landing-copy" }) {
             // 发给已结束的会话：Mac 先在后台唤醒它
             _ = try? await services.requestMacDelivery("标题再短一点", to: landing, mode: .send)
+        }
+        if let notes = states.first(where: { $0.sessionID == "notes" }) {
+            services.settings.setReplyDraft(ComposerDraft(text: "续费域名那条再加上截止日期"), for: notes.id)
         }
         if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
             _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)

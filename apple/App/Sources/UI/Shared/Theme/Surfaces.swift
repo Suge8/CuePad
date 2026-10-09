@@ -63,7 +63,7 @@ private struct GlassSurface<S: Shape>: ViewModifier {
 
 /// 动效：只有卡片 ↔ 纸是大幅空间过渡；其余为短淡入淡出。减弱动态效果时一律直接到终态或只淡入淡出。
 /// 动效 token（Mac 与 iOS 共用）：位置与尺寸用不回弹的临界阻尼弹簧，都在 300ms 以内；弹簧从当前呈现值继续，天然可打断。
-/// 只有按压松开带一点回弹（`pressUp`），给手感；常驻的循环动效只给 Agent 在工作（`PiStateDot`），离屏即停。
+/// 只有按压松开带一点回弹（`pressUp`），给手感；常驻的循环动效只给 Agent 在工作与话在路上（`PiStateDot`）和进行中的流光，都在 `LoopLayer`（Core Animation），离屏即停。
 enum Motion {
     /// 短动效：列表里挪位置、面板、浮层、切换。
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)

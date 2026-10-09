@@ -153,6 +153,51 @@ import Testing
     await executor.stop()
   }
 
+  /// 没能送达的话在对话里留着，等用户重发或移除；到期清理不带走它（别的完成请求照常清理）。
+  @Test(.timeLimit(.minutes(1)))
+  func undeliveredMessagesStayUntilTheUserResendsOrRemovesThem() async throws {
+    let handler = Handler()
+    await handler.setOutcome(.failed("Pi 已经退出"))
+    let executor = executor(handler, retention: .seconds(60))
+    try await executor.start()
+    let message = try await store.requestDelivery("备份一下线上库", to: pi, on: "mac-a", mode: .send)
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(message.id)?.status }) { $0 == .known(.failed) }
+    await handler.setOutcome(.succeeded)
+    _ = try await store.requestDelivery("ping", to: pi, on: "mac-a", mode: .ping)
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
+
+    await clock.waitForSleeper()
+    clock.advance(.seconds(61))
+    let remaining = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.count == 1 }
+
+    #expect(remaining.map(\.id) == [message.id])
+    await executor.stop()
+  }
+
+  /// 没能送达的话也不永远留着：满 7 天后，下一次清理（如执行器重新启动）就带走它。
+  @Test(.timeLimit(.minutes(1)))
+  func undeliveredMessagesAreCleanedUpAfterSevenDays() async throws {
+    let handler = Handler()
+    await handler.setOutcome(.failed("Pi 已经退出"))
+    let first = executor(handler)
+    try await first.start()
+    let message = try await store.requestDelivery("备份一下线上库", to: pi, on: "mac-a", mode: .send)
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(message.id)?.status }) { $0 == .known(.failed) }
+    await first.stop()
+
+    clock.advance(.seconds(6 * 86_400))
+    let sixDays = executor(handler)
+    try await sixDays.start()
+    await sixDays.stop()
+    #expect(try await request(message.id) != nil)
+
+    clock.advance(.seconds(86_400 + 1))
+    let sevenDays = executor(handler)
+    try await sevenDays.start()
+    await sevenDays.stop()
+    #expect(try await request(message.id) == nil)
+  }
+
   @Test func requestInterruptedByAnAppRestartFailsAndIsNeverRunAgain() async throws {
     let handler = Handler()
     let stuck = try await store.requestDelivery("half done", to: pi, on: "mac-a")

@@ -43,9 +43,11 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     }
 }
 
-/// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、侧栏、菜单栏面板、项目页的 Agent 栏、⌘K 同一种）：
-/// 左边状态标；名字与时长（`PiElapsed`）；在哪（项目或文件夹，按项目筛着时调用方不给项目） · 状态词（带色，有新回复加粗；
-/// 后台托管的再写"后台"）；一句进度或结果（`PiProgress`，没有不占行），结束请求在路上写"正在结束…"、没能结束写原因。已结束的整行更淡。
+/// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、侧栏、菜单栏面板、项目页的 Agent 栏、⌘K 同一种，状态都经 `PiShown`）：
+/// 整页（`page`）三行——状态标与名字、时长（`PiElapsed`）；在哪（项目或文件夹，按项目筛着时调用方不给项目） · 状态词 · 后台 · 你的话排队中；
+/// 第三行（`PiRowLine`：结束进度、草稿、到哪了）。窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两行——第二行是状态词接着第三行的内容。
+/// 状态词只有要你动手的带色、有新回复加粗（`PiShown.labelTint`）。每行都占满固定的行数，什么都没有也留着高度，
+/// 状态怎么变行高都不变；文字换时原地淡入淡出。已结束的整行更淡。
 struct PiSessionRow: View {
     let session: PiSessionState
     let project: Project?
@@ -56,50 +58,77 @@ struct PiSessionRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
-    /// 字号：整页列表（Agent 页）是 `page`，侧栏、面板、⌘K 这些窄处是 `compact`。
+    /// 密度与字号：整页列表（Agent 页）是 `page`，侧栏、面板、⌘K、项目页这些窄处是 `compact`。
     struct Style {
         var name: Font
         var line: Font
         var dot: CGFloat
         var spacing: CGFloat
+        /// 三行（整页）还是两行（窄处）。
+        var full = false
 
-        static let page = Style(name: .headline, line: .subheadline, dot: 8, spacing: 3)
-        static let compact = Style(name: .body, line: .caption, dot: 6, spacing: 1)
+        static let page = Style(name: .headline, line: .subheadline, dot: 8, spacing: 3, full: true)
+        #if os(macOS)
+        static let compact = Style(name: .system(size: 13, weight: .medium), line: .system(size: 11), dot: 6, spacing: 1)
+        #else
+        static let compact = Style(name: .body, line: .footnote, dot: 6, spacing: 1)
+        #endif
     }
 
     var body: some View {
         let shown = services.settings.shown(session, delivery: delivery)
+        let line = PiRowLine.of(session, draft: services.settings.draftPreview(for: session.id), end: end)
         HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
             PiStateDot(shown: shown, size: style.dot)
             VStack(alignment: .leading, spacing: style.spacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(session.title).font(style.name).fontWeight(shown.unread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(session.title).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 4)
-                    PiElapsed(session: session, font: style.line)
+                    PiElapsed(shown: shown, font: style.line)
                 }
-                HStack(spacing: 4) {
-                    if let place = PiPlace.name(of: session, project: project) {
-                        Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
-                    }
-                    Text(shown.label).fontWeight(shown.unread ? .semibold : .medium).foregroundStyle(shown.tint(palette))
-                        .contentTransition(.opacity)
-                        .animation(Motion.quick, value: shown)
-                    if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
+                if style.full {
+                    statusLine(shown)
+                    text(of: line)
+                } else {
+                    // 两行：状态词接着第三行的内容（你的话在路上时是它）
+                    let rest = shown.note.map { Text($0).foregroundStyle(palette.ink3) } ?? line.map(text(of:))
+                    Text("\(status(shown))\(rest.map { Text("\(Text(" · ").foregroundStyle(palette.ink3))\($0)") } ?? Text(verbatim: ""))")
                 }
-                .font(style.line)
-                Group {
-                    if end?.isOpen == true {
-                        Text("正在结束…").foregroundStyle(palette.ink3)
-                    } else if let reason = end?.failure {
-                        Text(reason).foregroundStyle(palette.failure).lineLimit(2)
-                    } else if let progress = PiProgress.line(of: session) {
-                        Text(progress).foregroundStyle(palette.ink2).lineLimit(1)
-                    }
-                }
-                .font(style.line)
             }
+            .font(style.line)
+            .lineLimit(1)
+            .contentTransition(.opacity)
+            .animation(Motion.quick, value: shown)
+            .animation(Motion.quick, value: line)
         }
         .opacity(session.state == .known(.ended) ? 0.6 : 1)
         .accessibilityElement(children: .combine)
+    }
+
+    private func status(_ shown: PiShown) -> Text {
+        Text(shown.label).fontWeight(shown.isUnread ? .semibold : shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
+    }
+
+    /// 整页的第二行：在哪 · 状态词 · 后台 · 你的话排队中。
+    private func statusLine(_ shown: PiShown) -> some View {
+        let parts = [
+            PiPlace.name(of: session, project: project).map { Text($0).foregroundStyle(palette.ink3) },
+            status(shown),
+            session.hosted && session.state != .known(.ended) ? Text("后台").foregroundStyle(palette.ink3) : nil,
+            shown.note.map { Text($0).foregroundStyle(palette.ink3) },
+        ].compactMap { $0 }
+        return parts.dropFirst().reduce(parts[0]) { Text("\($0)\(Text(" · ").foregroundStyle(palette.ink3))\($1)") }
+    }
+
+    /// 第三行：总是一个 Text（没有内容时是一个空格），一直占着一行；换内容时原地淡入淡出。
+    private func text(of line: PiRowLine?) -> Text {
+        switch line {
+        case .ending: Text("正在结束…").foregroundStyle(palette.ink3)
+        case .endFailed(let reason): Text(reason).foregroundStyle(palette.failure)
+        case .draft(let draft): Text("\(Text("草稿").fontWeight(.semibold).foregroundStyle(palette.signature))  \(Text(draft).foregroundStyle(palette.ink2))")
+        case .progress(let progress): Text(progress).foregroundStyle(palette.ink2)
+        case .hint(let hint): Text(hint).foregroundStyle(palette.ink3)
+        case nil: Text(verbatim: " ")
+        }
     }
 }

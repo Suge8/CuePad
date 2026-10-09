@@ -175,7 +175,8 @@ private struct PageRow<Title: View>: View {
     private static var restingOpacity: Double { 0.85 }
 
     var body: some View {
-        let selected = workspace.page == page
+        // 会话整页推在这一页上时，当前看的是那个会话（它的行垫底），这一行不再同时选中
+        let selected = workspace.page == page && workspace.openedSession == nil
         Button { select(page) } label: {
             HStack(spacing: 6) {
                 title.fontWeight(selected ? .semibold : .regular)
@@ -211,6 +212,8 @@ private struct PiSection: View {
 
     nonisolated static let pastLimit = 5
 
+    private var showsRows: Bool { workspace.page != .agent || workspace.openedSession != nil }
+
     var body: some View {
         let status = services.piExtension.status
         let live = services.pi.sessions
@@ -231,8 +234,9 @@ private struct PiSection: View {
                         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         .selectionDisabled()
                 }
-                // 在线与已结束同一个列表、按会话 id 区分：会话结束时那一行不被重建
-                ForEach(rows, id: \.sessionID) { session in
+                // 在线与已结束同一个列表、按会话 id 区分：会话结束时那一行不被重建。
+                // 正看着 Agent 整页时它就是这份列表，侧栏只留"全部会话"一行，不重复列一遍
+                ForEach(showsRows ? rows : [], id: \.sessionID) { session in
                     let bridge = live.first { $0.sessionID == session.sessionID }
                     PiSessionRow(session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID])
                         .sessionLink(session.sessionID)

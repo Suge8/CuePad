@@ -22,12 +22,14 @@ final class AppSettings {
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
         static let agentProject = "agentProject"
+        static let holdSendLearned = "holdSendLearned"
     }
 
     private static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
 
     @ObservationIgnored private let defaults: UserDefaults
-    private var replyDrafts: [UUID: ComposerDraft] = [:]
+    /// 每个会话的草稿各是一个可观察的格子：打字只让读这个会话草稿的视图（它的回复框、它在列表里那一行）重算，别的行不动。
+    @ObservationIgnored private var replyDrafts: [UUID: ReplyDraftSlot] = [:]
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
     /// W3C code 形式的加速键（如 `Alt+Space`）。
@@ -50,6 +52,9 @@ final class AppSettings {
         [:]
         #endif
     }
+
+    /// 用过一次按住发送钮的菜单（马上说、放进输入框）：之后发送钮上不再提示"按住可…"。存储属性：用过的那一刻提示就收起。
+    var holdSendLearned: Bool { didSet { defaults.set(holdSendLearned, forKey: Key.holdSendLearned) } }
 
     /// 是否已经提示过安装命令行工具（只在首次启动提示一次）。
     var commandLineToolPrompted: Bool {
@@ -86,15 +91,35 @@ final class AppSettings {
     /// 会话回复框的草稿（按会话记录 id，iOS 与 Mac 同一份）：离开会话再回来还在；文字另存本机偏好、跨退出保留，
     /// 带上的卡片与图片只留在这次运行。
     func replyDraft(for session: UUID) -> ComposerDraft {
-        replyDrafts[session] ?? ComposerDraft(text: (defaults.dictionary(forKey: Key.replyTexts) as? [String: String])?[session.uuidString] ?? "")
+        slot(session).draft
+    }
+
+    private func slot(_ session: UUID) -> ReplyDraftSlot {
+        if let slot = replyDrafts[session] { return slot }
+        let slot = ReplyDraftSlot()
+        replyDrafts[session] = slot
+        return slot
     }
 
     /// 发出后传空草稿：文字一并从本机偏好里清掉。
     func setReplyDraft(_ draft: ComposerDraft, for session: UUID) {
-        replyDrafts[session] = draft
-        var texts = defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]
-        texts[session.uuidString] = draft.text.allSatisfy(\.isWhitespace) ? nil : draft.text
-        defaults.set(texts, forKey: Key.replyTexts)
+        slot(session).draft = draft
+        defaults.set(replyDrafts.compactMapValues { $0.draft.text.allSatisfy(\.isWhitespace) ? nil : $0.draft.text }
+            .reduce(into: [String: String]()) { $0[$1.key.uuidString] = $1.value }, forKey: Key.replyTexts)
+    }
+
+    /// 会话行上的草稿（`PiRowLine.draft`）：回复框里没发的文字的第一行；只带了灵感或图片时说带了什么。没有草稿是 nil。
+    func draftPreview(for session: UUID) -> String? {
+        let draft = replyDraft(for: session)
+        if let line = draft.text.split(whereSeparator: \.isNewline).lazy
+            .map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) {
+            return line
+        }
+        let parts = [
+            draft.attachments.isEmpty ? nil : "\(draft.attachments.count) 条灵感",
+            draft.images.isEmpty ? nil : "\(draft.images.count) 张图片",
+        ].compactMap { $0 }
+        return parts.isEmpty ? nil : "带了 " + parts.joined(separator: "、")
     }
 
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
@@ -108,7 +133,11 @@ final class AppSettings {
         autoSubmit = launchArguments[Key.autoSubmit].map(Self.isTrue) ?? defaults.bool(forKey: Key.autoSubmit)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
+        holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
+        replyDrafts = (defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]).reduce(into: [:]) { drafts, entry in
+            if let id = UUID(uuidString: entry.key) { drafts[id] = ReplyDraftSlot(ComposerDraft(text: entry.value)) }
+        }
         // 启动参数（演示截图）可以把起点挪到很早，让演示库里停下的会话都算有新回复
         if let seconds = launchArguments[Key.unreadSince].flatMap({ Double(String(describing: $0)) }) {
             unreadSince = Date(timeIntervalSince1970: seconds)
@@ -133,4 +162,12 @@ final class AppSettings {
     func setWindowFrame(_ descriptor: String, for name: String) {
         defaults.set(descriptor, forKey: Self.frameKeyPrefix + name)
     }
+}
+
+/// 一个会话回复框的草稿（`AppSettings.replyDraft`）。
+@MainActor @Observable
+private final class ReplyDraftSlot {
+    var draft: ComposerDraft
+
+    init(_ draft: ComposerDraft = ComposerDraft()) { self.draft = draft }
 }

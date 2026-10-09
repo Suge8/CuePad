@@ -76,7 +76,7 @@ struct SessionPage: View {
                         Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)")
                     }
                     PiReplyBar(
-                        session: session, config: digest.config, draft: services.settings.replyDraftBinding(for: session.id), compact: false,
+                        session: session, config: digest.config, compact: false,
                         stopping: MacDelivery.stopping(session, deliveries: digest.deliveries)
                     ) {
                         follow.jumpToNewest()
@@ -122,11 +122,11 @@ struct SessionPage: View {
     /// 工具栏标题位：会话名，下面一行"所在 · 状态 · 计时"。
     private func title(_ session: PiSessionState, digest: SessionDigest, ending: Bool) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(session.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink).lineLimit(1)
+            Text(session.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink).lineLimit(1)
             if ending {
-                Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
+                Text("正在结束…").font(.system(size: 12)).foregroundStyle(palette.ink3)
             } else {
-                PiSessionSubtitle(session: session, project: digest.project, delivery: digest.latestDelivery)
+                PiSessionSubtitle(session: session, project: digest.project)
             }
         }
         .padding(.horizontal, 6)

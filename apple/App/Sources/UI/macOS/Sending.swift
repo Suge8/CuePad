@@ -97,6 +97,13 @@ extension Workspace {
         services.pi.sessions.first { $0.id == id }
     }
 
+    /// 桥上一个在线会话此刻显示的状态：与会话行同一条规则（`PiShown`），摘要与在路上的话取同步记录。
+    func shown(_ session: CuePi.PiSession) -> PiShown {
+        services.settings.shown(
+            .live(session, hostID: services.hostID, projectID: sessionProjects[session.id], recap: sessionRecaps[session.sessionID]),
+            delivery: sessionDeliveries[session.sessionID])
+    }
+
     /// 发送存储格式正文；成功后提示，Pi 忙时转为询问马上说还是等它做完再说。返回是否已发出（发给 Pi 时是已送达）。
     @discardableResult
     func send(_ stored: String, via choice: AppServices.Destination, card: UUID? = nil) async -> Bool {
