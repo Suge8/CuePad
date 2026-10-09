@@ -41,13 +41,13 @@ struct SessionScreen: View {
 
     var body: some View {
         ChatScroll(
-            followKey: PiConversation.followKey(session: session, messages: digest?.messages ?? [], deliveries: digest?.deliveries ?? []),
+            followKey: PiConversation.followKey(session: session, messages: digest?.messages ?? [], previews: digest?.previews ?? [], deliveries: digest?.deliveries ?? []),
             follow: $follow
         ) {
             // 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入
             if let digest {
                 if let session {
-                    PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries)
+                    PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
                         .padding(.vertical, 14)
                         // iPad 上一行不超过阅读宽度，居中
                         .readingColumn(maxWidth: Self.readingWidth, inset: 16)
@@ -64,7 +64,7 @@ struct SessionScreen: View {
         }
         .environment(\.chatHighlight, highlight)
         .overlay(alignment: .trailing) {
-            let marks = ChatScrubber.marks(PiChat.entries(digest?.messages ?? []))
+            let marks = ChatScrubber.marks(PiChat.entries(digest?.messages ?? [], previews: digest?.previews ?? []))
             if !marks.isEmpty {
                 ChatScrubber(marks: marks, scrolling: follow.scrolling) { id in
                     follow.jump(to: id)

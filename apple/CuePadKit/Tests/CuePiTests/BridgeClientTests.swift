@@ -154,6 +154,38 @@ struct BridgeClientTests {
         await #expect(throws: PiBridgeError.rejected("failed: boom")) { try await bridge.abort(ext.id) }
     }
 
+    private struct ShowFailure: LocalizedError { var errorDescription: String? { "没有这个文件" } }
+
+    /// 扩展代 Pi 的工具调用转来"发到手机预览"的请求：交给 App 设的处理函数，结果（预览 id 与提示，或失败原因）按请求 id 回给扩展；
+    /// 没有处理函数就拒绝，不假装成功。
+    @Test func showRequestsGoToTheHandlerAndTheAnswerGoesBackByRequestID() async throws {
+        let ext = FakeExtension(directory: dir)
+        ext.onCommand = { _, _ in nil }
+        try ext.start()
+        try bridge.start()
+        try await eventually("发现会话") { session(ext.id) != nil }
+
+        ext.requestShow(id: "r0", path: "/work/a.html", title: nil)
+        try await eventually("没有处理函数时拒绝") { ext.shown("r0") != nil }
+        #expect(ext.shown("r0")?["ok"] as? Bool == false && (ext.shown("r0")?["error"] as? String)?.isEmpty == false)
+
+        var seen: [(String, String, String?)] = []
+        bridge.showHandler = { session, request in
+            seen.append((session.sessionID, request.path, request.title))
+            if request.path == "/gone.html" { throw ShowFailure() }
+            return PiShowReply(preview: "p-1", note: "页面引用了 a.css")
+        }
+        ext.requestShow(id: "r1", path: "/work/a.html", title: "登录页")
+        ext.requestShow(id: "r2", path: "/gone.html", title: nil)
+        try await eventually("两条都回了") { ext.shown("r1") != nil && ext.shown("r2") != nil }
+
+        #expect(seen.map(\.1) == ["/work/a.html", "/gone.html"] && seen[0].2 == "登录页" && seen[0].0 == ext.sessionID)
+        let ok = try #require(ext.shown("r1"))
+        #expect(ok["ok"] as? Bool == true && ok["preview"] as? String == "p-1" && ok["note"] as? String == "页面引用了 a.css")
+        let failed = try #require(ext.shown("r2"))
+        #expect(failed["ok"] as? Bool == false && failed["error"] as? String == "没有这个文件")
+    }
+
     @Test func hellosSnapshotReflectsStateAtConnectTime() async throws {
         let ext = FakeExtension(directory: dir)
         try ext.start()

@@ -3,7 +3,7 @@ import Foundation
 /// 表分两类。
 ///
 /// 同步表（由 CKSyncEngine 映射为 CKRecord，record type = 表名，recordName = id）：
-/// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages。约束：
+/// projects、cards、sendRecords、attachments、piSessionStates、deliveryRequests、directoryBindings、piMessages、previews。约束：
 /// - 主键是 TEXT UUID（小写），由 Swift 侧生成；
 /// - 每条记录有 `modifiedAt`（毫秒），供字段级合并与冲突判断；
 /// - 软删除只有 `deletedAt`；
@@ -33,8 +33,18 @@ enum Schema {
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`。
   static let upgrades: [Upgrade] = [
     // 18：会话记录加上下文余量与斜杠命令清单
-    "ALTER TABLE piSessionStates ADD COLUMN context TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;"
+    "ALTER TABLE piSessionStates ADD COLUMN context TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;",
+    // 19：Agent 发到手机的预览
+    Upgrade(stringLiteral: previews),
   ]
+
+  private static let previews = """
+    CREATE TABLE previews (
+      id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, hash TEXT NOT NULL, name TEXT NOT NULL, title TEXT NOT NULL,
+      byteCount INTEGER NOT NULL, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX previews_sessionID_createdAt ON previews(sessionID, createdAt);
+    """
 
   /// `PRAGMA user_version`：空库为 0，建好后为 `version`；旧于 `baseVersion` 的拒绝打开；其余旧的按 `upgrades` 就地升级；
   /// 比它新的是更新版本建的库，不打开。
@@ -84,6 +94,8 @@ enum Schema {
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
     CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
     CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
+
+    \(previews)
 
     CREATE TABLE piMessages (
       id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,

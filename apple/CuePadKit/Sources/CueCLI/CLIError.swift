@@ -29,6 +29,8 @@ struct CLIError: Error {
       self = .invalid("项目不存在或在回收站里（cuepad project list 查看可用项目）")
     case CueStoreError.notAConflictCopy:
       self = .invalid("这条不是冲突副本（cuepad conflicts list 查看副本 id）")
+    case CueStoreError.previewUnreadable, CueStoreError.previewTooLarge, CueStoreError.previewUnsupported:
+      self = .invalid(error.localizedDescription)
     default:
       self = CLIError(kind: .store, message: "\(error)")
     }

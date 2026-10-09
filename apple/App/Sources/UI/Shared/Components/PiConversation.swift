@@ -8,16 +8,18 @@ import SwiftUI
 struct PiConversation: View {
     let session: PiSessionState
     let messages: [PiChatMessage]
+    var previews: [PiPreview] = []
     var deliveries: [DeliveryRequest] = []
     @Environment(\.palette) private var palette
     @Environment(\.chatInverted) private var inverted
     @Environment(\.chatBottomSpace) private var bottomSpace
     @Environment(\.chatHighlight) private var highlight
+    @State private var opened: PiPreview?
 
     var body: some View {
         // 懒加载：只排看得见的几条（整段排开时，长对话的每条回答都在推入那一刻排版、栅格化，转场的前一百多毫秒画不出来）。
         // 在倒置的滚动区里（iOS）按新到旧给出，懒加载从最新那条起排
-        let entries = PiChat.entries(messages)
+        let entries = PiChat.entries(messages, previews: previews)
         let outgoing = PiChat.outgoing(deliveries, messages: messages)
         LazyVStack(alignment: .leading, spacing: Self.spacing) {
             if inverted {
@@ -40,6 +42,11 @@ struct PiConversation: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .previewPresenter($opened)
+        .task(id: previews.map(\.id)) {
+            // 截图验收：-CuePadOpenPreview <标题> 直接打开那张预览
+            if let title = DebugScene.defaults.string(forKey: "CuePadOpenPreview") { opened = previews.first { $0.title == title } }
+        }
     }
 
     private static var spacing: CGFloat { 16 }
@@ -58,6 +65,8 @@ struct PiConversation: View {
             // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
             Text(entry.text).font(.footnote).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity).padding(.vertical, 4)
+        case .preview:
+            if let preview = entry.preview { PreviewCard(preview: preview) { opened = $0 } }
         }
     }
 
@@ -74,12 +83,13 @@ extension PiConversation {
     /// 对话里"有新内容"的标志（滚动跟随用，见 `ChatScroll`）：多了消息、发出的话或它的送达情况变了、开始或结束处理、出错。
     struct FollowKey: Equatable {
         var messages: Int
+        var previews: Int
         var outgoing: [Open<DeliveryStatus>]
         var state: Open<PiWorkState>?
     }
 
-    static func followKey(session: PiSessionState?, messages: [PiChatMessage], deliveries: [DeliveryRequest]) -> FollowKey {
-        FollowKey(messages: messages.count, outgoing: PiChat.outgoing(deliveries, messages: messages).map(\.status), state: session?.state)
+    static func followKey(session: PiSessionState?, messages: [PiChatMessage], previews: [PiPreview] = [], deliveries: [DeliveryRequest]) -> FollowKey {
+        FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages).map(\.status), state: session?.state)
     }
 }
 

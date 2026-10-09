@@ -28,6 +28,9 @@ public final class PiBridge {
     @ObservationIgnored private var watcher: FSEventsWatcher?
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     @ObservationIgnored private var subscribers: [UUID: AsyncStream<PiSessionChange>.Continuation] = [:]
+    /// 收下 Pi 里 `cuepad_show` 工具发来的文件（App 设；Mac 把它存成预览）：返回预览 id 与要告诉 Agent 的提示，抛错就把原因交回工具。
+    /// 没设时一律拒绝。
+    @ObservationIgnored public var showHandler: (@MainActor (PiSession, PiShowRequest) async throws -> PiShowReply)?
 
     /// 一条已连接的 socket 及其未完成的命令。
     private final class Link {
@@ -267,9 +270,22 @@ public final class PiBridge {
             emit(.infoChanged(session))
         case .ack(let ack):
             if let id = ack.id { link.pending.removeValue(forKey: id)?.resume(returning: ack) }
+        case .show(let show):
+            guard let session = link.session else { throw HandlingError.messageBeforeHello }
+            Task { await answer(show, from: session, on: link) }
         case .bye(let reason):
             link.byeReason = reason
         }
+    }
+
+    private func answer(_ show: PiWire.Show, from session: PiSession, on link: Link) async {
+        let result: Result<PiShowReply, any Error>
+        if let showHandler {
+            do { result = .success(try await showHandler(session, PiShowRequest(path: show.path, title: show.title))) } catch { result = .failure(error) }
+        } else {
+            result = .failure(PiBridgeError.previewUnavailable)
+        }
+        if let data = try? PiWire.shownReply(id: show.id, result) { link.connection.write(data) }
     }
 
     private enum HandlingError: Error {
