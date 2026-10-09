@@ -28,7 +28,9 @@ struct TaskPicker: View {
                         Label("新建任务…", systemImage: "plus").foregroundStyle(palette.ink).contentShape(.rect)
                     }
                     .buttonStyle(.plain)
+                    #if os(iOS)
                     .listRowBackground(palette.paper)
+                    #endif
                 }
                 ForEach(shown, id: \.projectID) { group in
                     Section {
@@ -44,6 +46,9 @@ struct TaskPicker: View {
                     Text("还没有没做完的任务，新建一个吧").foregroundStyle(palette.ink3).listRowBackground(Color.clear)
                 }
             }
+            #if os(macOS)
+            .listStyle(.inset(alternatesRowBackgrounds: false))
+            #endif
             .scrollContentBackground(.hidden)
             .background(palette.desk)
             .navigationTitle("挂到任务")
@@ -103,7 +108,9 @@ struct TaskPicker: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        #if os(iOS)
         .listRowBackground(palette.paper)
+        #endif
     }
 
     private func attach(to task: UUID) {

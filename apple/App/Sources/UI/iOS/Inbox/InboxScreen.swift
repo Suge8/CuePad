@@ -58,7 +58,7 @@ struct InboxScreen: View {
         .buttonStyle(.plain)
         .listRowBackground(palette.paper)
         .swipeActions(edge: .leading) {
-            Button("挂到任务", systemImage: "checklist.checked") { workspace.attaching = card }.tint(palette.signature)
+            Button("挂到任务", systemImage: "checkmark") { workspace.attaching = card }.tint(palette.signature)
         }
         .swipeActions(edge: .trailing) {
             Button("设为任务", systemImage: "checklist") { workspace.toggleTodo(card.id, true) }.tint(palette.ink)

@@ -51,7 +51,7 @@ struct CardTileView: View {
 extension SwipeAction {
     /// 灵感上右滑：挂到任务（主动作，弹出选任务的面板）。
     @MainActor static func attachToTask(_ card: Card, in workspace: Workspace) -> SwipeAction {
-        SwipeAction(symbol: "checklist.checked") { workspace.attaching = card }
+        SwipeAction(symbol: "checkmark") { workspace.attaching = card }
     }
 
     /// 灵感上左滑：设为任务（提示里可撤销）。

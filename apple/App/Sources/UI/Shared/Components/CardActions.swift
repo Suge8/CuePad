@@ -24,7 +24,7 @@ struct CardActions: View {
     @ViewBuilder private func item(_ item: CardMenu.Item) -> some View {
         let id = card.id
         switch item {
-        case .attachToTask: Button("挂到任务…", systemImage: "checklist.checked") { workspace.attaching = card }
+        case .attachToTask: Button("挂到任务…", systemImage: "checkmark") { workspace.attaching = card }
         case .handToAgent: handToAgent
         case .makeTask: Button("设为任务", systemImage: "checklist") { workspace.toggleTodo(id, true) }
         case .makeIdea: Button("改回灵感", systemImage: "lightbulb") { workspace.toggleTodo(id, false) }
