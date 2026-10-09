@@ -47,23 +47,22 @@ struct ArchiveList: View {
         .buttonStyle(.plain)
         .listRowBackground(palette.paper)
         #if os(iOS)
-        .swipeActions(edge: .leading) { restore(card).tint(palette.signature) }
-        .swipeActions(edge: .trailing) { trash(card) }
+        .listSwipes(swipes(card))
         #endif
         .contextMenu {
-            restore(card)
-            trash(card)
+            let swipes = swipes(card)
+            RowActionButtons(actions: swipes.leading + swipes.trailing)
         }
     }
 
-    private func restore(_ card: Card) -> some View {
+    /// 右滑取回，左滑删除（可撤销）；长按菜单是同样两项。
+    private func swipes(_ card: Card) -> RowSwipes {
         let id = card.id
-        return Button("取回", systemImage: "arrow.uturn.backward") { workspace.perform { try await $0.unarchive(id) } }
-    }
-
-    private func trash(_ card: Card) -> some View {
-        let id = card.id
-        return Button("删除", systemImage: "trash", role: .destructive) { workspace.perform { try await $0.trashCard(id) } }
+        return RowSwipes(
+            leading: [RowAction("取回", symbol: "arrow.uturn.backward", tone: .primary) { workspace.perform { try await $0.unarchive(id) } }],
+            trailing: [RowAction(CardMenu.Item.trash.title, symbol: CardMenu.Item.trash.symbol, tone: .destructive) {
+                workspace.attempt { try await workspace.trash(id) }
+            }])
     }
 
     private func open(_ card: Card) {

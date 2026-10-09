@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；右滑挂到任务、左滑设为任务；交给过 Agent 时右上角是那个会话的状态点；长按是菜单。
+/// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；轻扫同所有灵感（`CardMenu.swipes`）；交给过 Agent 时右上角是那个会话的状态点；长按是菜单。
 struct CardTileView: View {
     let entry: CardEntry
     let lastTarget: String?
@@ -43,21 +43,9 @@ struct CardTileView: View {
         }
         .buttonStyle(CardPressStyle())
         .zoomSource(card.id, in: zoom)
-        .rowSwipe(right: .attachToTask(card, in: workspace), left: .makeTask(card.id, in: workspace))
+        .rowSwipes(.card(card, workspace: workspace), clipped: false)
         .contextMenu { CardActions(card: card) }
         .ideaDrag(card.id)
-    }
-}
-
-extension SwipeAction {
-    /// 灵感上右滑：挂到任务（主动作，弹出选任务的面板）。
-    @MainActor static func attachToTask(_ card: Card, in workspace: Workspace) -> SwipeAction {
-        SwipeAction(symbol: "checkmark") { workspace.attaching = card }
-    }
-
-    /// 灵感上左滑：设为任务（提示里可撤销）。
-    @MainActor static func makeTask(_ id: UUID, in workspace: Workspace) -> SwipeAction {
-        SwipeAction(symbol: "checklist") { workspace.toggleTodo(id, true) }
     }
 }
 
@@ -134,7 +122,7 @@ struct OlderRow: View {
             topLeadingRadius: isFirst ? Self.radius : 0, bottomLeadingRadius: isLast ? Self.radius : 0,
             bottomTrailingRadius: isLast ? Self.radius : 0, topTrailingRadius: isFirst ? Self.radius : 0, style: .continuous))
         .zoomSource(card.id, in: zoom)
-        .rowSwipe(right: .attachToTask(card, in: workspace), left: .makeTask(card.id, in: workspace))
+        .rowSwipes(.card(card, workspace: workspace))
         .contextMenu { CardActions(card: card) }
         .ideaDrag(card.id)
     }

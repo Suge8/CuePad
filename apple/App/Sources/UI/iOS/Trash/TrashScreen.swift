@@ -66,8 +66,11 @@ struct TrashScreen: View {
         title: String, detail: String, deletedAt: Date?,
         restore: @escaping @Sendable (CueStore) async throws -> Void, purge: @escaping @Sendable (CueStore) async throws -> Void
     ) -> some View {
+        let swipes = RowSwipes(
+            leading: [RowAction("恢复", symbol: "arrow.uturn.backward", tone: .primary) { workspace.perform(restore) }],
+            trailing: [RowAction("永久删除", symbol: "trash", tone: .destructive) { workspace.perform(purge) }])
         // 删除时间单独靠右：摘要再长也不把它挤出去
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).foregroundStyle(palette.ink).lineLimit(1)
                 if !detail.isEmpty { Text(detail).font(.footnote).foregroundStyle(palette.ink2).lineLimit(1) }
@@ -78,16 +81,8 @@ struct TrashScreen: View {
             }
         }
         .listRowBackground(palette.paper)
-        .swipeActions(edge: .leading) {
-            Button("恢复", systemImage: "arrow.uturn.backward") { workspace.perform(restore) }.tint(palette.accent)
-        }
-        .swipeActions(edge: .trailing) {
-            Button("永久删除", systemImage: "trash", role: .destructive) { workspace.perform(purge) }
-        }
-        .contextMenu {
-            Button("恢复", systemImage: "arrow.uturn.backward") { workspace.perform(restore) }
-            Button("永久删除", systemImage: "trash", role: .destructive) { workspace.perform(purge) }
-        }
+        .listSwipes(swipes)
+        .contextMenu { RowActionButtons(actions: swipes.leading + swipes.trailing) }
     }
 }
 

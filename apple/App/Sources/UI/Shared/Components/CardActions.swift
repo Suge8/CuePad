@@ -24,33 +24,30 @@ struct CardActions: View {
     @ViewBuilder private func item(_ item: CardMenu.Item) -> some View {
         let id = card.id
         switch item {
-        case .attachToTask: Button("挂到任务…", systemImage: "checkmark") { workspace.attaching = card }
+        case .attachToTask: Button(item.title + "…", systemImage: item.symbol) { workspace.attaching = card }
         case .handToAgent: handToAgent
-        case .makeTask: Button("设为任务", systemImage: "checklist") { workspace.toggleTodo(id, true) }
-        case .makeIdea: Button("改回灵感", systemImage: "lightbulb") { workspace.toggleTodo(id, false) }
+        case .makeTask, .makeIdea: Button(item.title, systemImage: item.symbol) { workspace.toggleTodo(id, item == .makeTask) }
         case .complete, .reopen:
-            Button(item == .complete ? "完成" : "重新打开", systemImage: item == .complete ? "checkmark.circle" : "arrow.uturn.backward.circle") {
+            Button(item.title, systemImage: item.symbol) {
                 let task = card
                 workspace.attempt { try await workspace.toggle(task) }
             }
-        case .archive: Button("归档", systemImage: "archivebox") { workspace.attempt { try await workspace.archive(id) } }
+        case .archive: Button(item.title, systemImage: item.symbol) { workspace.attempt { try await workspace.archive(id) } }
         case .resource, .unresource:
-            Button(item == .resource ? "设为资料" : "不再是资料", systemImage: item == .resource ? "books.vertical" : "books.vertical.fill") {
+            Button(item.title, systemImage: item.symbol) {
                 workspace.perform { try await $0.updateCard(id) { $0.isPinned = item == .resource } }
             }
         case .move: moveMenu
-        case .copy: copy
-        case .trash:
-            Button("删除", systemImage: "trash", role: .destructive) {
-                if workspace.openCard == id { workspace.openCard = nil }
-                workspace.perform { try await $0.trashCard(id) }
-            }
+        case .copy: Button(item.title, systemImage: item.symbol) { workspace.copy(Outgoing.text(of: card)) }
+        case .trash: Button(item.title, systemImage: item.symbol, role: .destructive) { workspace.attempt { try await workspace.trash(id) } }
+        // 只在轻扫里（`CardMenu.swipes`）
+        case .indent, .outdent: EmptyView()
         }
     }
 
     private var moveMenu: some View {
         let id = card.id, here = card.parentID == nil ? card.projectID : nil
-        return Menu("移到项目", systemImage: "folder") {
+        return Menu(CardMenu.Item.move.title, systemImage: CardMenu.Item.move.symbol) {
             ForEach(workspace.catalog?.projects ?? []) { project in
                 Button(project.name) { workspace.perform { try await $0.moveCard(id, to: .top(project: project.id), after: nil) } }
                     .disabled(card.parentID == nil && project.id == here)
@@ -60,16 +57,81 @@ struct CardActions: View {
         }
     }
 
-    private var copy: some View {
-        Button("复制", systemImage: "doc.on.doc") { workspace.copy(Outgoing.text(of: card)) }
-    }
-
     @ViewBuilder private var handToAgent: some View {
         #if os(macOS)
         let text = Outgoing.text(of: card), id = card.id
         workspace.sendButton(workspace.agentTarget(for: card.projectID)) { target in Task { await workspace.send(text, to: target, card: id) } }
         #else
-        Button("交给 Agent", systemImage: "paperplane") { navigation.handToAgent(card) }
+        Button(CardMenu.Item.handToAgent.title, systemImage: CardMenu.Item.handToAgent.symbol) { navigation.handToAgent(card) }
         #endif
+    }
+}
+
+/// 每一项的字、图标与颜色语义：长按菜单、"⋯"与轻扫共用一份。
+extension CardMenu.Item {
+    var title: String {
+        switch self {
+        case .attachToTask: "挂到任务"
+        case .handToAgent: "交给 Agent"
+        case .makeTask: "设为任务"
+        case .makeIdea: "改回灵感"
+        case .complete: "完成"
+        case .reopen: "重新打开"
+        case .move: "移到项目"
+        case .archive: "归档"
+        case .resource: "设为资料"
+        case .unresource: "不再是资料"
+        case .copy: "复制"
+        case .trash: "删除"
+        case .indent: "缩进"
+        case .outdent: "反缩进"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .attachToTask: "checkmark"
+        case .handToAgent: "paperplane"
+        case .makeTask: "checklist"
+        case .makeIdea: "lightbulb"
+        case .complete: "checkmark.circle"
+        case .reopen: "arrow.uturn.backward.circle"
+        case .move: "folder"
+        case .archive: "archivebox"
+        case .resource: "books.vertical"
+        case .unresource: "books.vertical.fill"
+        case .copy: "doc.on.doc"
+        case .trash: "trash"
+        case .indent: "increase.indent"
+        case .outdent: "decrease.indent"
+        }
+    }
+
+    var tone: ActionTone {
+        switch self {
+        case .trash: .destructive
+        case .attachToTask, .handToAgent: .primary
+        default: .neutral
+        }
+    }
+}
+
+extension RowSwipes {
+    /// 一条灵感或任务的轻扫（`CardMenu.swipes`）；`structure` 是它在任务大纲里此刻能不能缩进、反缩进。
+    @MainActor static func card(_ card: Card, workspace: Workspace, structure: TaskStructure? = nil) -> RowSwipes {
+        let swipes = CardMenu.swipes(for: card, indent: structure?.indent != nil, outdent: structure?.outdent != nil)
+        func action(_ item: CardMenu.Item) -> RowAction? {
+            let run: (() -> Void)? = switch item {
+            case .attachToTask: { workspace.attaching = card }
+            case .makeTask: { workspace.toggleTodo(card.id, true) }
+            case .trash: { workspace.attempt { try await workspace.trash(card.id) } }
+            case .indent: structure?.indent
+            case .outdent: structure?.outdent
+            // 不在轻扫里（`CardMenu.swipes` 不给）
+            default: nil
+            }
+            return run.map { RowAction(item.title, symbol: item.symbol, tone: item.tone, run: $0) }
+        }
+        return RowSwipes(leading: swipes.leading.compactMap(action), trailing: swipes.trailing.compactMap(action))
     }
 }
