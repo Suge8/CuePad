@@ -441,7 +441,7 @@ struct SubmitGlyph: View {
 
     var body: some View {
         CircleGlyph(
-            systemImage: action.symbol, ink: enabled ? palette.onSignature : palette.ink3, fill: enabled ? palette.signature : palette.fill,
+            systemImage: action.symbol, ink: enabled ? palette.onSignature : palette.ink3, fill: enabled ? palette.signatureFill : palette.fill,
             size: size)
             .animation(Motion.quick, value: enabled)
     }

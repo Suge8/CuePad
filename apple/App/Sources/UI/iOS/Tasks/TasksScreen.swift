@@ -219,7 +219,7 @@ struct TaskLine: View {
     /// 第二行：提示词计数、子任务进度、所在项目、交给的会话此刻的状态（"正在工作 · 已运行 4:02"）。
     private var detail: some View {
         HStack(spacing: 10) {
-            // 计数不截；放不下时先截项目名，再截会话状态
+            // 计数不截；放不下时会话状态先换短的写法，再截项目名
             if !done, let counts = counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3).fixedSize() }
             if let project {
                 HStack(spacing: 4) {
@@ -227,12 +227,12 @@ struct TaskLine: View {
                     Text(project.name)
                 }
                 .foregroundStyle(palette.ink3)
-                .layoutPriority(-1)
+                .layoutPriority(-0.5)
             }
             if let session, !done {
                 Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
                     let shown = services.settings.shown(session, delivery: delivery)
-                    // 放不下时先省掉用时，再只留状态点
+                    // 放不下时先省掉用时，再换成短的状态词（"思考中"）；状态点后总有字，不留一颗看不懂的点
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 4) {
                             PiStateDot(shown: shown, size: 6)
@@ -244,10 +244,14 @@ struct TaskLine: View {
                             PiStateDot(shown: shown, size: 6)
                             Text(shown.presence).foregroundStyle(shown.labelTint(palette))
                         }
-                        PiStateDot(shown: shown, size: 6).accessibilityLabel(shown.presence)
+                        HStack(spacing: 4) {
+                            PiStateDot(shown: shown, size: 6)
+                            Text(shown.label).foregroundStyle(shown.labelTint(palette))
+                        }
+                        .fixedSize()
                     }
                 }
-                .layoutPriority(-0.5)
+                .layoutPriority(-1)
                 .buttonStyle(.plain)
                 .accessibilityHint("看 Agent 的近况")
             }
@@ -302,26 +306,19 @@ struct NewTaskLine: View {
                 .onSubmit(add)
             if let projects, !projects.isEmpty {
                 Menu {
-                    Button("未分类") { chosen = .some(nil) }
+                    Button(CaptureCopy.inbox) { chosen = .some(nil) }
                     Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
-                    let current = projects.first { $0.id == target }
-                    HStack(spacing: 4) {
-                        ProjectGlyph(project: current, size: 11)
-                        Text(current?.name ?? "未分类").lineLimit(1)
-                    }
-                    .font(.footnote).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, 10).frame(minHeight: 30)
-                    .background(palette.fill, in: .capsule)
-                    .frame(minHeight: 44).contentShape(.rect)
+                    DestinationChip(project: current).frame(minHeight: 44).contentShape(.rect)
                 }
-                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未分类")")
+                .accessibilityLabel("记到 \(CaptureCopy.destination(current))")
             }
         }
     }
 
     private var target: UUID? { chosen ?? project }
+    private var current: Project? { projects?.first { $0.id == target } }
 
     private func add() {
         let content = text.trimmingCharacters(in: .whitespaces)
