@@ -53,6 +53,8 @@ struct SessionPage: View {
     @State private var stored: SessionDigest?
     @State private var askedForTranscript = false
     @State private var confirmingEnd = false
+    /// 点标题弹出的说明（需要 /reload 时）开着。
+    @State private var explaining = false
     @State private var renaming: PiSessionState?
     @State private var follow = ChatFollow()
     /// 对话排开最近多少条（`PiConversation.window`）。
@@ -71,13 +73,12 @@ struct SessionPage: View {
         let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries)
         VStack(spacing: 0) {
             if let session = digest.session {
-                PiRestartNotice(session: session).padding(.horizontal, 24).padding(.top, 8).frame(maxWidth: Self.readingWidth)
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil { conversation(session, digest) } else { Color.clear.frame(maxHeight: .infinity) }
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest.deliveries)
                     if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                        Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)")
+                        Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)", docked: true)
                     }
                     PiReplyBar(
                         session: session, config: digest.config, compact: false,
@@ -141,6 +142,14 @@ struct SessionPage: View {
         .frame(maxWidth: Self.titleWidth, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+        // 需要 /reload 的会话：状态就写在这块玻璃里，点它看怎么接上（不在对话上另浮一张卡）
+        .contentShape(.rect)
+        .onTapGesture { if follow.showsHeader, PiShown(session).explanation != nil { explaining = true } }
+        .popover(isPresented: $explaining) {
+            Text(PiShown(session).explanation ?? "").font(Typography.secondary).foregroundStyle(palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(16).frame(width: 300)
+        }
         .headerVisibility(follow.showsHeader)
         // 让开时这一块仍接指针：移上去或点一下唤出
         .background {

@@ -60,13 +60,13 @@ struct PiReplyBar: View {
     private var commandLine: String? { answering == nil ? PiSlash.line(of: draft, in: session.commands) : nil }
 
     /// 单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中。
-    private static let radius: CGFloat = 25
+    static let radius: CGFloat = 25
 
     var body: some View {
         switch reply {
         case .answerAbove: notice("先在上面作答", systemImage: "arrow.up")
         case .unanswerable: notice(Self.unanswerable, systemImage: "desktopcomputer")
-        // 怎么接上已写在顶上的说明里（`PiRestartNotice`），这里不重复
+        // 怎么接上在顶上的玻璃标题里（点它看说明，`PiShown.explanation`），这里不重复
         case .restartPi: notice("这个会话现在发不了", systemImage: "nosign")
         case .message, .answer:
             VStack(alignment: .leading, spacing: 6) {
