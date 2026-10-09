@@ -40,10 +40,13 @@ struct CaptureComposer: View {
     private var expanded: Bool { pinnedOpen || focused || !text.isEmpty || !images.isEmpty }
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// 有字、没有图时才能发出去（发图走纸页）。
+    private var showsSend: Bool { !trimmed.isEmpty && images.isEmpty }
+    /// 发送钮这时绑着 ⌘↩、是主钮：记下退成次钮，一处只有一颗靛青（↩ 照样记下）。
+    private var sendIsPrimary: Bool { showsSend && workspace.readyToSend(workspace.effectiveChoice(for: project)) }
+
     var body: some View {
-        // 菜单栏面板只有 360 宽：发送钮放在稿纸下面靠右，不和稿纸并排把它挤成一窄条
-        let layout = pinnedOpen ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 8)) : AnyLayout(HStackLayout(alignment: .bottom, spacing: 8))
-        layout {
+        HStack(alignment: .bottom, spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
                 if expanded {
                     HStack(spacing: 8) {
@@ -62,9 +65,9 @@ struct CaptureComposer: View {
                     .strokeBorder(palette.ink3.opacity(focused && !pinnedOpen ? 0.5 : 0), lineWidth: 1)
                     .allowsHitTesting(false)
             }
-            if !trimmed.isEmpty, images.isEmpty {
-                SendControl(project: project, compact: pinnedOpen) { send($0) }
-                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: pinnedOpen ? .top : .trailing)))
+            // 主窗口里发送钮浮在输入栏右边；菜单栏面板窄，它在稿纸里的工具排（见 `field`）
+            if showsSend, !pinnedOpen {
+                sendControl.transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
             }
         }
         .animation(Motion.quick, value: expanded)
@@ -73,31 +76,32 @@ struct CaptureComposer: View {
         .onChange(of: workspace.captureFocusRequests) { focused = true }
     }
 
-    private var field: some View {
-        HStack(alignment: .bottom, spacing: 4) {
-            if !expanded {
-                Image(systemName: "square.and.pencil").foregroundStyle(palette.ink2).padding(.leading, 16).padding(.bottom, 13)
-                    .accessibilityHidden(true)
-            }
-            // 展开后落点在胶囊上，占位不再写一遍
-            TextField(expanded ? CaptureCopy.prompt : CaptureCopy.placeholder(to: destination), text: $text, axis: .vertical)
-                .accessibilityLabel("随手记")
-                .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .lineLimit(expanded ? 1...8 : 1...1)
-                .focused($focused)
-                .onSubmit(save)
-                .padding(.leading, expanded ? 12 : 4).padding(.vertical, 12)
-                .frame(minHeight: expanded ? minHeight : 0, alignment: .topLeading)
-            if expanded {
-                Button("添加图片", systemImage: "photo.on.rectangle") { pickImages() }
-                    .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink2)
-                    .frame(width: 32, height: 40)
-                Button(action: save) { SubmitGlyph(.save, enabled: !draft.isEmpty && !saving, size: .small) }
-                    .buttonStyle(.plain)
-                    .disabled(draft.isEmpty || saving)
-                    .accessibilityLabel("记下")
-                    .help("记下（↩）")
+    /// 主窗口：一行（展开后右下是图片与记下）；菜单栏面板：文字在上，下面一排工具——图片、发送、记下，与稿纸同一边距。
+    @ViewBuilder private var field: some View {
+        Group {
+            if pinnedOpen {
+                VStack(alignment: .leading, spacing: 0) {
+                    textField
+                    HStack(spacing: 4) {
+                        imageButton
+                        Spacer(minLength: 0)
+                        if showsSend { sendControl.transition(.opacity) }
+                        saveButton
+                    }
+                    .padding([.horizontal, .bottom], 6)
+                }
+            } else {
+                HStack(alignment: .bottom, spacing: 4) {
+                    if !expanded {
+                        Image(systemName: "square.and.pencil").foregroundStyle(palette.ink2).padding(.leading, 16).padding(.bottom, 13)
+                            .accessibilityHidden(true)
+                    }
+                    textField
+                    if expanded {
+                        imageButton
+                        saveButton
+                    }
+                }
             }
         }
         // 圆角 = 外框 22 − 内边距 8，与外框同心（菜单栏面板同样内边距 8）
@@ -105,6 +109,37 @@ struct CaptureComposer: View {
         // 收起时整条都是输入区：点到图标或留白也进入输入
         .contentShape(.rect(cornerRadius: 22))
         .onTapGesture { focused = true }
+    }
+
+    private var textField: some View {
+        // 展开后落点在胶囊上，占位不再写一遍
+        TextField(expanded ? CaptureCopy.prompt : CaptureCopy.placeholder(to: destination), text: $text, axis: .vertical)
+            .accessibilityLabel("随手记")
+            .textFieldStyle(.plain)
+            .font(.system(size: 14))
+            .lineLimit(expanded ? 1...8 : 1...1)
+            .focused($focused)
+            .onSubmit(save)
+            .padding(.leading, expanded ? 12 : 4).padding(.vertical, 12)
+            .frame(minHeight: expanded ? minHeight : 0, alignment: .topLeading)
+    }
+
+    private var imageButton: some View {
+        Button("添加图片", systemImage: "photo.on.rectangle") { pickImages() }
+            .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink2)
+            .frame(width: 32, height: 40)
+    }
+
+    private var saveButton: some View {
+        Button(action: save) { SubmitGlyph(.save, enabled: !draft.isEmpty && !saving, prominent: !sendIsPrimary, size: .small) }
+            .buttonStyle(.plain)
+            .disabled(draft.isEmpty || saving)
+            .accessibilityLabel("记下")
+            .help("记下（↩）")
+    }
+
+    private var sendControl: some View {
+        SendControl(project: project, compact: pinnedOpen) { send($0) }
     }
 
     private var destinationMenu: some View {

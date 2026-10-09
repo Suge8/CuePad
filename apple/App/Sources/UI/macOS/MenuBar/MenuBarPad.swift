@@ -53,7 +53,7 @@ struct MenuBarPad: View {
     }
 
     private var capture: some View {
-        CaptureComposer(defaultProject: services.settings.currentProject, pinnedOpen: true, minHeight: 72)
+        CaptureComposer(defaultProject: services.settings.currentProject, pinnedOpen: true, minHeight: 48)
             .overlay(alignment: .bottomLeading) {
                 if let notice = workspace.notice {
                     Text(notice.text).font(.system(size: 11.5))
