@@ -149,30 +149,23 @@ import Testing
 
   // MARK: 按项目汇总
 
-  @Test func projectSummariesCountVisibleIdeasAndLatestOne() async throws {
+  @Test func projectSummariesCountVisibleIdeas() async throws {
     let a = try await store.createProject(name: "A", color: "#111")
     let b = try await store.createProject(name: "B", color: "#222")
     let gone = try await store.createProject(name: "gone", color: "#333")
-    let a1 = try await store.createCard(in: a.id, body: "a1")
-    let a2 = try await store.createCard(in: a.id, body: "a2")
+    _ = try await store.createCard(in: a.id, body: "a1")
+    _ = try await store.createCard(in: a.id, body: "a2")
     let a3 = try await store.createCard(in: a.id, body: "a3 trashed")
-    let inbox = try await store.createCard(in: nil, body: "i")
+    _ = try await store.createCard(in: nil, body: "i")
     _ = try await store.createCard(in: gone.id, body: "hidden with project")
-    try await store.trashCard(a3.id)
+    try await store.trashCard(a3.id)  // 回收站里的卡不计入
     try await store.trashProject(gone.id)
-    try setModified(a1, 500)
-    try setModified(a2, 300)
-    try setModified(a3, 900)  // 回收站里的卡不计入
-    try setModified(inbox, 700)
 
     let summaries = try await store.projectSummaries()
 
     #expect(summaries.map(\.projectID) == (try await store.projects().map(\.id)) + [nil])  // 项目的顺序，未分类最后
     let by = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0) })
     #expect([a.id, b.id, nil].map { by[$0]?.cardCount } == [2, 0, 1])
-    #expect(by[a.id]?.latest?.id == a1.id)
-    #expect(by[b.id]?.latest == nil)
-    #expect(by[nil]?.latest?.id == inbox.id)
   }
 
   @Test func projectSummariesWakeObserversOnCardChanges() async throws {

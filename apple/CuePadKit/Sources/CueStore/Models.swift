@@ -311,11 +311,10 @@ public struct SearchResults: Sendable {
   public var totalCards: Int
 }
 
-/// 项目（nil = 未分类）的灵感数（散放在列表里的，不含任务、提示词与空白灵感）与最近改过的一条（书架上没写介绍时当摘要）。
+/// 项目（nil = 未分类）的灵感数（散放在列表里的，不含任务、提示词与空白灵感）。
 public struct ProjectSummary: Equatable, Sendable {
   public var projectID: UUID?
   public var cardCount: Int
-  public var latest: Card?
 }
 
 public enum CueStoreError: Error, Equatable {
