@@ -145,11 +145,7 @@ struct SessionPage: View {
         // 需要 /reload 的会话：状态就写在这块玻璃里，点它看怎么接上（不在对话上另浮一张卡）
         .contentShape(.rect)
         .onTapGesture { if follow.showsHeader, PiShown(session).explanation != nil { explaining = true } }
-        .popover(isPresented: $explaining) {
-            Text(PiShown(session).explanation ?? "").font(Typography.secondary).foregroundStyle(palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(16).frame(width: 300)
-        }
+        .explanationPopover(PiShown(session).explanation, isPresented: $explaining)
         .headerVisibility(follow.showsHeader)
         // 让开时这一块仍接指针：移上去或点一下唤出
         .background {

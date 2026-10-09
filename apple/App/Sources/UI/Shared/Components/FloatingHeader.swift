@@ -116,12 +116,7 @@ private struct HeaderTitle<Detail: View>: View {
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(explanation == nil ? .isHeader : [.isHeader, .isButton])
         .accessibilityHint(explanation == nil ? "" : "看说明")
-        .popover(isPresented: $explaining) {
-            Text(explanation ?? "").font(Typography.secondary).foregroundStyle(palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(16).frame(idealWidth: 280)
-                .presentationCompactAdaptation(.popover)
-        }
+        .explanationPopover(explanation, isPresented: $explaining)
         #if DEBUG
         // 截图验收：-CuePadExplain YES 推入后直接弹出说明
         .task(id: explanation) { if explanation != nil, DebugScene.defaults.bool(forKey: "CuePadExplain") { explaining = true } }

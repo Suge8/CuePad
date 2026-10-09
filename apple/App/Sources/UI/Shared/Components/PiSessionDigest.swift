@@ -107,6 +107,24 @@ extension Callout where Accessory == EmptyView {
     }
 }
 
+extension View {
+    /// 点会话页标题弹出的一句说明（需要 /reload 时怎么接上，`PiShown.explanation`）：iPhone 顶栏中间那块玻璃与 Mac 工具栏标题共用这一份。
+    func explanationPopover(_ text: String?, isPresented: Binding<Bool>) -> some View {
+        popover(isPresented: isPresented) { ExplanationText(text: text ?? "").presentationCompactAdaptation(.popover) }
+    }
+}
+
+private struct ExplanationText: View {
+    let text: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Text(text).font(Typography.secondary).foregroundStyle(palette.ink)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(16).frame(width: 300)
+    }
+}
+
 /// 提示块的面：对话里是纸，贴在回复框上方是玻璃（与回复框同一层、同样的圆角）。
 private struct CalloutSurface: ViewModifier {
     let docked: Bool
