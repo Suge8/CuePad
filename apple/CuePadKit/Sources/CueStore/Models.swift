@@ -1,20 +1,22 @@
 import Foundation
 
-/// 发送目标种类。
+/// 投送请求与发送记录的目标种类。发出去的只有一种：发给 Agent 会话；发送记录只会是它。
 public enum SendTargetKind: String, Sendable, CaseIterable {
-  case piSession, app, clipboard
+  case piSession
+  /// 那台 Mac 上的 CuePad 本身：绑定文件夹、连接测试这类不发给会话的请求（执行器不看目标）。存储与同步的字面值沿用 "app"。
+  case mac = "app"
 }
 
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
 public enum Table: String, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
-  case piSessionStates, deliveryRequests, directoryBindings, piMessages
+  case piSessionStates, deliveryRequests, directoryBindings, piMessages, previews
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
-    .projects, .cards, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings, .piMessages,
+    .projects, .cards, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings, .piMessages, .previews,
   ]
 
   /// 同步的列（CKRecord 的字段）；不含本机列。
@@ -30,6 +32,7 @@ extension Table {
     case .deliveryRequests: DeliveryRequest.syncedColumns
     case .directoryBindings: DirectoryBinding.columns
     case .piMessages: PiChatMessage.columns
+    case .previews: PiPreview.columns
     }
   }
 }
@@ -341,6 +344,12 @@ public enum CueStoreError: Error, Equatable {
   case taskTooDeep
   /// 灵感没有状态：先"设为任务"。
   case notATask
+  /// 预览的文件不存在、读不了或不是文件（参数是它的路径）。
+  case previewUnreadable(String)
+  /// 预览的文件超过 `PiPreview.maxBytes`。
+  case previewTooLarge(limit: Int)
+  /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
+  case previewUnsupported(String)
 }
 
 extension CueStoreError: LocalizedError {
@@ -360,6 +369,9 @@ extension CueStoreError: LocalizedError {
     case .invalidParent: "只能挂到任务下，不能挂到自己或自己的下级下"
     case .taskTooDeep: "子任务最多 \(Card.maxDepth) 级"
     case .notATask: "这是灵感，先「设为任务」再改状态"
+    case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
+    case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"
+    case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
     }
   }
 }

@@ -10,12 +10,11 @@ struct NewSessionButton: View {
     var body: some View {
         Button("新会话", systemImage: "plus") { showing = true }
             .labelStyle(.iconOnly).buttonStyle(.borderless)
-            .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
             .help("开一个新的 Agent 会话")
             .popover(isPresented: $showing, arrowEdge: .trailing) {
                 NewSessionForm { id in
                     showing = false
-                    workspace.openSession(id)
+                    workspace.show(.session(id))
                 }
             }
     }
@@ -48,10 +47,10 @@ struct NewSessionForm: View {
         // 没选过时默认当前项目
         let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.currentProject } ?? places.first
         VStack(alignment: .leading, spacing: 12) {
-            Text("新会话").font(.headline).foregroundStyle(palette.ink)
+            Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
             if places.isEmpty {
                 Text("还没有项目：先新建一个项目，再给它选文件夹，就能在里面开会话。")
-                    .font(.callout).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
+                    .font(Typography.secondary).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
             } else {
                 ScrollView {
                     VStack(spacing: 2) { ForEach(places) { row($0, selected: $0.id == place?.id) } }
@@ -67,15 +66,15 @@ struct NewSessionForm: View {
                 switch stage {
                 case .idle:
                     Text(place.map { $0.binding == nil ? "「\($0.project.name)」还没有文件夹" : "在后台开，不占终端" } ?? "在后台开，不占终端")
-                        .font(.footnote).foregroundStyle(palette.ink3)
+                        .font(Typography.meta).foregroundStyle(palette.ink3)
                 case .opening:
                     ProgressView().controlSize(.small)
-                    Text("正在开…").font(.footnote).foregroundStyle(palette.ink3)
+                    Text("正在开…").font(Typography.meta).foregroundStyle(palette.ink3)
                 case .connecting:
                     ProgressView().controlSize(.small)
-                    Text("等 Agent 连上…").font(.footnote).foregroundStyle(palette.ink3)
+                    Text("等 Agent 连上…").font(Typography.meta).foregroundStyle(palette.ink3)
                 case .failed(let reason):
-                    Text(reason).font(.footnote).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
+                    Text(reason).font(Typography.meta).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 if let place, place.binding == nil {
@@ -102,7 +101,7 @@ struct NewSessionForm: View {
                 ProjectGlyph(project: place.project, size: 13)
                 Text(place.project.name).foregroundStyle(place.binding == nil ? palette.ink2 : palette.ink).lineLimit(1)
                 if place.binding == nil {
-                    Image(systemName: "folder.badge.questionmark").font(.caption).foregroundStyle(palette.ink3)
+                    Image(systemName: "folder.badge.questionmark").font(Typography.meta).foregroundStyle(palette.ink3)
                         .help("还没有文件夹").accessibilityLabel("还没有文件夹")
                 }
                 Spacer(minLength: 4)

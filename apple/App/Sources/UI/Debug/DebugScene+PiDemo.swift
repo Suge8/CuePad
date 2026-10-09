@@ -1,6 +1,7 @@
 #if DEBUG
 import CueStore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 演示库里的 Pi：Mac 同步来的会话状态（含历史）、几段对话与发到 Mac 的请求（iOS 与 Mac 的 session 画面共用）。
 extension DebugScene {
@@ -94,6 +95,88 @@ extension DebugScene {
     /// 演示对话的另一台 Mac 的执行器（留住它，结果写回后照常显示）。
     private static var relayExecutor: DeliveryExecutor?
 
+    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 用 cuepad_show 发了三个文件（对话里是三张预览卡）。
+    private static func seedPreviews(_ store: CueStore, now: Date) async {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-previews", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let page = directory.appending(path: "login-v2.html")
+        let shot = directory.appending(path: "login-mobile.png")
+        let report = directory.appending(path: "review.md")
+        try? Self.loginPage.write(to: page, atomically: true, encoding: .utf8)
+        try? Self.review.write(to: report, atomically: true, encoding: .utf8)
+        try? Self.screenshotPNG()?.write(to: shot)
+        var messages = [PiChatMessage(sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: "把登录页的新样子、手机上的截图和评审结论发给我看看", at: now.addingTimeInterval(-200))]
+        for (offset, (file, title)) in [(page, "登录页 v2：可点的完整页面"), (shot, "手机上的登录页截图"), (report, "评审结论")].enumerated() {
+            guard let added = try? await store.addPreview(fileAt: file, title: title, sessionID: "notes") else { continue }
+            messages.append(PiChatMessage(
+                sessionID: "notes", entryID: "show\(offset)", seq: Int64(9 + offset), role: .preview, text: added.preview.id.uuidString.lowercased(),
+                at: now.addingTimeInterval(-180 + Double(offset) * 10)))
+        }
+        messages.append(PiChatMessage(
+            sessionID: "notes", entryID: "p9", seq: 12, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
+            at: now.addingTimeInterval(-150), toolCount: 3, roundStartedAt: now.addingTimeInterval(-200)))
+        try? await store.writePiTranscript(PiTranscript(
+            sessionID: "notes", messages: messages,
+            recap: PiRecap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))
+    }
+
+    private static let loginPage = """
+        <!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>登录</title><style>
+        body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px -apple-system,system-ui,sans-serif;background:linear-gradient(160deg,#eef2ff,#fdf2f8);color:#1c1b19}
+        main{width:min(86vw,360px);padding:28px;border-radius:20px;background:#fff;box-shadow:0 10px 40px #4f46e522}
+        h1{margin:0 0 4px;font-size:24px} p{margin:0 0 20px;color:#6b7280}
+        input{width:100%;box-sizing:border-box;margin-bottom:12px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;font-size:16px}
+        button{width:100%;padding:13px;border:0;border-radius:12px;background:#4f46e5;color:#fff;font-size:16px;font-weight:600}
+        #ok{margin-top:14px;color:#059669;min-height:1.2em}</style></head><body><main>
+        <h1>欢迎回来</h1><p>用邮箱登录 Atlas</p>
+        <input placeholder="邮箱" value="me@example.com"><input placeholder="密码" type="password" value="secret">
+        <button onclick="document.getElementById('ok').textContent='登录成功（演示）'">登录</button><div id="ok"></div>
+        </main></body></html>
+        """
+
+    private static let review = """
+        # 登录页评审结论
+
+        改动都在 `login/` 下，**没有动接口**。
+
+        ## 已处理
+        - 错误提示从弹窗改成输入框下方的一行字
+        - 密码框加了显示/隐藏
+
+        ## 要你定
+        1. 记住我默认勾选吗？
+        2. 第三方登录放在页面底部还是顶部？
+
+        | 项 | 之前 | 现在 |
+        |:---|---:|---:|
+        | 首屏可点元素 | 9 | 5 |
+        | 登录成功率（内测） | 91% | 94% |
+        """
+
+    /// 手机宽度下登录页的"截图"：渐变底上一张白卡、两个输入框和一个按钮。
+    private static func screenshotPNG() -> Data? {
+        let view = ZStack {
+            LinearGradient(colors: [Color(red: 0.93, green: 0.95, blue: 1), Color(red: 0.99, green: 0.95, blue: 0.97)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("欢迎回来").font(.system(size: 26, weight: .bold))
+                Text("用邮箱登录 Atlas").foregroundStyle(.gray)
+                RoundedRectangle(cornerRadius: 12).stroke(.gray.opacity(0.3)).frame(height: 44).overlay(alignment: .leading) { Text("me@example.com").padding(.leading, 14) }
+                RoundedRectangle(cornerRadius: 12).stroke(.gray.opacity(0.3)).frame(height: 44).overlay(alignment: .leading) { Text("••••••").padding(.leading, 14) }
+                RoundedRectangle(cornerRadius: 12).fill(Color(red: 0.31, green: 0.27, blue: 0.9)).frame(height: 46).overlay { Text("登录").foregroundStyle(.white).bold() }
+            }
+            .padding(28).frame(width: 320).background(.white, in: RoundedRectangle(cornerRadius: 20))
+        }
+        .frame(width: 390, height: 640)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 2
+        guard let image = renderer.cgImage else { return nil }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, image, nil)
+        return CGImageDestinationFinalize(destination) ? data as Data : nil
+    }
+
     /// 演示对话：notes 是几轮做完的对话（带工具数与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
     /// relay 在另一台 Mac 上（发过去的一条已送达还没进对话、一条没能送达）。
     private static func seedChats(_ store: CueStore) async {
@@ -147,6 +230,7 @@ extension DebugScene {
             ```
             """, 3, 1.0),
         ], startedMinutesAgo: 20)
+        await seedPreviews(store, now: now)
         await chat("atlas", [
             ("跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", 5, 2),
             ("按你说的改成首次加入时间排序，把断言也改了，再跑一遍", nil, 0, 0),
@@ -264,7 +348,7 @@ extension DebugScene {
             ("deploy", .waitingForUser, "部署到生产吗？", nil, DemoRecap(
                 lastPrompt: "测试都过了就部署",
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
-            ("review", .delegating, "2 个子代理在审查：计费额度、登录回调", nil, DemoRecap(lastPrompt: "让子代理分头审查这两个分支")),
+            ("review", .delegating, nil, nil, DemoRecap(lastPrompt: "让子代理分头审查这两个分支")),
             ("billing", .error, "模型拒绝了请求（400）：prompt is too long", "闲鱼", DemoRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
             ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),
@@ -303,10 +387,11 @@ extension DebugScene {
             _ = try? await store.createCard(in: nil, body: body)
         }
         // 后台托管、带两个子代理的会话
+        let started = Date.now.addingTimeInterval(-260)
         try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
-            PiSubagentState(name: "计费额度", activity: .known(.working)),
-            PiSubagentState(name: "登录回调", activity: .known(.waitingForUser)),
-            PiSubagentState(name: "文档", activity: .known(.idle)),
+            PiSubagentState(name: "计费额度", role: "审查员", phase: .known(.running), action: "运行 pnpm test billing", startedAt: started),
+            PiSubagentState(name: "登录回调", role: "工程师", phase: .known(.failed), action: "请求超时", startedAt: started, settledAt: started.addingTimeInterval(95)),
+            PiSubagentState(name: "文档", role: "写手", phase: .known(.done), action: "已补完 README 的同步一节", startedAt: started, settledAt: started.addingTimeInterval(180)),
         ])
         await seedBindings(store, projects: projects)
         let extra = defaults.integer(forKey: "CuePadHistory")

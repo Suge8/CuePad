@@ -157,7 +157,7 @@ import Testing
   @Test func sendRecordKeepsContentSnapshotAfterCardIsPurged() async throws {
     let card = try await store.createCard(in: nil, body: "prompt v1")
     try await store.recordSend(
-      "prompt v1", to: SendTarget(kind: .app, name: "Ghostty", ref: "com.mitchellh.ghostty"),
+      "prompt v1", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"),
       card: card.id)
     try await store.updateCard(card.id) { $0.body = "prompt v2" }
     try await store.purgeCard(card.id)
@@ -165,7 +165,7 @@ import Testing
     let records = try await store.sendRecords()
     #expect(records.map(\.content) == ["prompt v1"])
     #expect(records.first?.cardID == nil)
-    #expect(records.first?.targetName == "Ghostty")
+    #expect(records.first?.targetName == "fix bug")
   }
 
   // MARK: 项目目录（本机）
@@ -202,21 +202,22 @@ import Testing
     #expect(try await reopened.card(card.id)?.body == "persisted")
   }
 
-  /// 结构 17 的库（会话记录还没有上下文余量与命令清单两列）就地升级，已有的会话记录不丢，新列可写。
+  /// 结构 17 的库（会话记录还没有上下文余量与命令清单两列、没有预览表）就地升级，已有的会话记录不丢，新列可写，预览可用。
   @Test func schema17LibraryUpgradesInPlaceAndKeepsSessionRecords() async throws {
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "旧会话")
     try RawDB(fixture.url).exec(
-      "ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; PRAGMA user_version = 17;")
+      "ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews; PRAGMA user_version = 17;")
 
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.allPiSessionStates().map(\.title) == ["旧会话"])
     try await PiStateRecorder(store: upgraded, hostID: "mac").update(
       sessionID: "s1", state: .settled, context: PiContextUsage(tokens: 1, window: 2))
     #expect(try await upgraded.allPiSessionStates().first?.context == PiContextUsage(tokens: 1, window: 2))
+    #expect(try await upgraded.previews(of: "s1").isEmpty)
   }
 
   /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
-  @Test(arguments: [(19, CueStoreError.unsupportedSchemaVersion(19)), (16, .schemaTooOld(16))])
+  @Test(arguments: [(20, CueStoreError.unsupportedSchemaVersion(20)), (16, .schemaTooOld(16))])
   func libraryFromAnotherSchemaVersionIsRefused(version: Int, error: CueStoreError) throws {
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

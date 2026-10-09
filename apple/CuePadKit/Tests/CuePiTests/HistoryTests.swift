@@ -45,6 +45,16 @@ struct SessionFile {
                           "content": [["type": "text", "text": String(repeating: "out ", count: 50)]]]])
     }
 
+    /// `cuepad_show` 工具的结果：成功时 `details.preview` 是 CuePad 给的预览 id；`padding` 把整行撑过 512 字节（大行不做 JSON 解码的快路径）
+    static func previewResult(_ id: String, _ parent: String, preview: String?, tool: String = "cuepad_show", isError: Bool = false, padding: Int = 0, at second: Int) -> String {
+        var message: [String: Any] = [
+            "role": "toolResult", "toolCallId": "c", "toolName": tool, "isError": isError, "timestamp": second,
+            "content": [["type": "text", "text": "已发到手机：登录页" + String(repeating: "。", count: padding)]],
+        ]
+        if let preview { message["details"] = ["preview": preview] }
+        return line(["type": "message", "id": id, "parentId": parent, "timestamp": stamp(second), "message": message])
+    }
+
     static func compaction(_ id: String, _ parent: String, tokensBefore: Int?, at second: Int) -> String {
         var entry: [String: Any] = ["type": "compaction", "id": id, "parentId": parent, "timestamp": stamp(second), "summary": "摘要", "firstKeptEntryId": parent]
         if let tokensBefore { entry["tokensBefore"] = tokensBefore }
@@ -151,6 +161,35 @@ struct HistoryTests {
         #expect(update.transcript[2].entryID == "c1" && update.transcript[2].seq == 7 && update.transcript[2].at == SessionFile.date(6))
         #expect(update.transcript[5].text == "Say hello to world." && update.transcript[5].deliveryID == nil)
         #expect(update.recap.lastReply == "reply one" && update.recap.pendingPrompt == "Say hello to world.")  // 系统行不动问答摘要
+    }
+
+    // MARK: 发给手机的预览
+
+    /// `cuepad_show` 工具成功的那一行（它的结果带着预览 id）在对话里成为一条预览，位置就是它在会话文件里的位置；
+    /// 失败的调用、别的工具的结果不是。行再长也一样认得出。
+    @Test func aSuccessfulShowToolResultIsAPreviewEntryAtItsPlaceInTheFile() throws {
+        let first = UUID().uuidString.lowercased(), second = UUID().uuidString.lowercased()
+        var f = SessionFile(directory: dir)
+        try f.append(
+            SessionFile.header(),
+            SessionFile.user("u1", nil, "给我看看登录页", at: 1),
+            SessionFile.assistant("a1", "u1", text: nil, stop: "toolUse", at: 2),
+            SessionFile.previewResult("t1", "a1", preview: first, at: 3),
+            SessionFile.assistant("a2", "t1", text: nil, stop: "toolUse", at: 4),
+            SessionFile.previewResult("t2", "a2", preview: second, padding: 700, at: 5),
+            SessionFile.assistant("a3", "t2", text: nil, stop: "toolUse", at: 6),
+            SessionFile.previewResult("t3", "a3", preview: nil, isError: true, at: 7),
+            SessionFile.assistant("a4", "t3", text: nil, stop: "toolUse", at: 8),
+            SessionFile.previewResult("t4", "a4", preview: UUID().uuidString, tool: "bash", at: 9),
+            SessionFile.assistant("a5", "t4", text: "发给你了", at: 10))
+
+        let update = try index(f)
+
+        #expect(update.transcript.map(\.role) == [.user, .preview, .preview, .pi])
+        #expect(update.transcript[1...2].map(\.text) == [first, second])
+        #expect(update.transcript[1].entryID == "t1" && update.transcript[1].seq == 4 && update.transcript[1].at == SessionFile.date(3))
+        #expect(update.transcript[3].toolCount == 4)  // 预览不改这一轮的工具数与问答摘要
+        #expect(update.recap.lastReply == "发给你了")
     }
 
     // MARK: 增量

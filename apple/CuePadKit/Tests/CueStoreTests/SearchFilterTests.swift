@@ -28,7 +28,7 @@ import Testing
     let c4 = try await store.createCard(in: nil, body: "gamma four")
     let c5 = try await store.createCard(in: q.id, body: "alpha five")
     try await store.recordSend("x", to: SendTarget(kind: .piSession, name: "s1-title", ref: "s1"), card: c3.id)
-    try await store.recordSend("y", to: SendTarget(kind: .app, name: "Ghostty", ref: "com.mitchellh.ghostty"), card: c4.id)
+    try await store.recordSend("y", to: SendTarget(kind: .piSession, name: "review", ref: "s2"), card: c4.id)
     for (index, card) in [c1, c2, c3, c4].enumerated() { try setModified(card, 1_000 + index * 100) }
     try setModified(c5, 10)
     return World(p: p, q: q, c1: c1, c2: c2, c3: c3, c4: c4, c5: c5)
@@ -67,9 +67,9 @@ import Testing
 
   @Test func sendTargetFilterMatchesKindAndName() async throws {
     let w = try await world()
-    #expect(try await store.search(SearchQuery(sent: .sent(kind: .known(.piSession)))).cards.map(\.id) == [w.c3.id])
-    #expect(try await store.search(SearchQuery(sent: .sent(name: "Ghostty"))).cards.map(\.id) == [w.c4.id])
-    #expect(try await store.search(SearchQuery(sent: .sent(kind: .known(.app), name: "s1-title"))).cards.isEmpty)
+    #expect(Set(try await store.search(SearchQuery(sent: .sent(kind: .known(.piSession)))).cards.map(\.id)) == [w.c3.id, w.c4.id])
+    #expect(try await store.search(SearchQuery(sent: .sent(name: "review"))).cards.map(\.id) == [w.c4.id])
+    #expect(try await store.search(SearchQuery(sent: .sent(kind: .known(.mac), name: "s1-title"))).cards.isEmpty)
     let anySend = try await store.search(SearchQuery(sent: .sent()))
     #expect(Set(anySend.cards.map(\.id)) == [w.c3.id, w.c4.id])
   }
@@ -80,7 +80,7 @@ import Testing
     #expect(Set(try await store.search(SearchQuery(text: "alpha", sent: .never)).cards.map(\.id)) == [w.c1.id, w.c2.id, w.c5.id])
     #expect(try await store.search(SearchQuery(projects: [w.p.id], hasImages: true, sent: .never)).cards.map(\.id) == [w.c1.id])
 
-    try await store.recordSend("late", to: SendTarget(kind: .clipboard, name: "clipboard"), card: w.c1.id)
+    try await store.recordSend("late", to: SendTarget(kind: .piSession, name: "late", ref: "s3"), card: w.c1.id)
     #expect(Set(try await store.search(SearchQuery(sent: .never)).cards.map(\.id)) == [w.c2.id, w.c5.id])
     let all = try await store.search(SearchQuery(sent: .any))  // 不限：已发送与未发送都在
     #expect(all.totalCards == 5)
@@ -108,7 +108,7 @@ import Testing
     let w = try await world()
     try await store.trashCard(w.c3.id)
     let live = SearchQuery(sent: .sent(kind: .known(.piSession)))
-    #expect(try await store.search(live).cards.isEmpty)
+    #expect(try await store.search(live).cards.map(\.id) == [w.c4.id])
     let trash = SearchQuery(sent: .sent(kind: .known(.piSession)), inTrash: true)
     #expect(try await store.search(trash).cards.map(\.id) == [w.c3.id])
   }

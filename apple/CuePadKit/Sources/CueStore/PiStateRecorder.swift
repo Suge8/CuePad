@@ -235,7 +235,7 @@ public actor PiStateRecorder {
     let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
     let renamed = session.written.map {
       $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID || $0.question != content.question
-        || $0.hosted != content.hosted || $0.subagents != content.subagents || $0.modelState != content.modelState
+        || $0.hosted != content.hosted || $0.subagents.map(\.shape) != content.subagents.map(\.shape) || $0.modelState != content.modelState
         || $0.commands != content.commands || $0.times != content.times
     } ?? true
     guard startsOrEndsWork || renamed || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {

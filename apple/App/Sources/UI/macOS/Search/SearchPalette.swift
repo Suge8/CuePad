@@ -15,7 +15,7 @@ nonisolated private struct PaletteData: Sendable {
 }
 
 /// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
-/// ↑↓ 选择，↩ 打开，⌘↩ 发送，⌘⇧C 复制。会话——上面是在线的，下面是已结束的、按结束时间分段（分页，下一页只接在末尾），
+/// ↑↓ 选择，↩ 打开，⌘↩ 发给 Agent（只有提示词），⌘⇧C 复制。会话——上面是在线的，下面是已结束的、按结束时间分段（分页，下一页只接在末尾），
 /// 右侧是它的近况与回复。
 struct SearchPalette: View {
     @Binding var scope: SearchScope
@@ -101,7 +101,7 @@ struct SearchPalette: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
             TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text)
-                .textFieldStyle(.plain).font(.system(size: 18))
+                .textFieldStyle(.plain).font(Typography.searchField)
                 .focused($focused)
                 .onSubmit {
                     switch scope {
@@ -145,7 +145,7 @@ struct SearchPalette: View {
 
     private func openSession(_ sessionID: String) {
         workspace.overlay = nil
-        workspace.openSession(sessionID)
+        workspace.show(.session(sessionID))
     }
 
     private var selected: Card? { data?.cards.first { $0.id == selection } }
@@ -162,7 +162,7 @@ struct SearchPalette: View {
                     if let data {
                         if data.cards.isEmpty {
                             Text(query.text.isEmpty && !query.isFiltered ? "输入关键词，或用上面的筛选" : "没有找到灵感或任务")
-                                .font(.system(size: 13)).foregroundStyle(.secondary)
+                                .font(Typography.secondary).foregroundStyle(.secondary)
                                 .padding(16)
                         }
                         ForEach(groups(data), id: \.owner) { group in
@@ -172,13 +172,13 @@ struct SearchPalette: View {
                                 Text(project?.name ?? "未分类")
                                 Text("\(group.cards.count)").foregroundStyle(.tertiary)
                             }
-                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                            .font(Typography.label).foregroundStyle(.secondary)
                             .padding(.horizontal, 10).padding(.top, 10).padding(.bottom, 2)
                             ForEach(group.cards) { card in row(card).id(card.id) }
                         }
                         if data.total > data.cards.count {
                             Button("显示更多（还有 \(data.total - data.cards.count) 条）") { query.pages += 1 }
-                                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
+                                .buttonStyle(.plain).font(Typography.meta).foregroundStyle(.secondary)
                                 .padding(10)
                         }
                     }
@@ -195,11 +195,11 @@ struct SearchPalette: View {
         return HStack(spacing: 10) {
             Image(systemName: text.images.isEmpty ? "doc.text" : "photo").frame(width: 16).foregroundStyle(.secondary)
                 .accessibilityLabel((card.isTask ? "任务" : "灵感") + (text.images.isEmpty ? "" : "，含图片"))
-            Text(Highlight.matches(text.label, query.text)).font(.system(size: 13.5)).lineLimit(1)
+            Text(Highlight.matches(text.label, query.text)).font(Typography.body).lineLimit(1)
             Spacer()
-            Text(DateLabel.short(card.modifiedAt)).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(DateLabel.short(card.modifiedAt)).font(Typography.meta).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 10).frame(height: 32)
+        .padding(.horizontal, 10).frame(height: 34)
         .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
         .contentShape(.rect)
         .onTapGesture(count: 2) { open(card) }
@@ -214,27 +214,31 @@ struct SearchPalette: View {
             let rest = CueSummary.snippet(card.body, matching: query.text.split(whereSeparator: \.isWhitespace).map(String.init), whole: true)
             let project = data.projects.first { $0.id == card.projectID }
             VStack(alignment: .leading, spacing: 10) {
-                Text(text.label).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
+                Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
                     Text("\(project?.name ?? "未分类") · \(DateLabel.short(card.modifiedAt))")
                     if let send = data.lastSends[card.id] { SentMark(target: send.target.name) }
                 }
-                .font(.system(size: 11)).foregroundStyle(palette.ink3)
+                .font(Typography.meta).foregroundStyle(palette.ink3)
                 if card.isTask, let facts = Self.taskFacts(parent: data.parents[card.id], marks: data.marks[card.id]) {
-                    Text(facts).font(.system(size: 12)).foregroundStyle(palette.ink2)
+                    Text(facts).font(Typography.meta).foregroundStyle(palette.ink2)
                 }
                 if let image = text.images.first { Thumbnail(hash: image, height: 150) }
                 if !rest.isEmpty {
                     let body = Text(Highlight.matches(rest, query.text, base: VariableText.styled(rest, palette)))
-                        .font(.system(size: 13)).lineSpacing(5).foregroundStyle(palette.ink)
+                        .font(Typography.body).lineSpacing(Typography.lineSpacing).foregroundStyle(palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     ViewThatFits(in: .vertical) {
                         body.fixedSize(horizontal: false, vertical: true)
                         ScrollView { body }
                     }
                 }
-                HStack(spacing: 12) { Text("↩ 打开"); Text("⌘↩ 发送"); Text("⌘⇧C 复制") }
-                .font(.system(size: 11)).foregroundStyle(palette.ink3).padding(.top, 4)
+                HStack(spacing: 12) {
+                    Text("↩ 打开")
+                    if CardMenu.handsToAgent(card) { Text("⌘↩ 发给 Agent") }
+                    Text("⌘⇧C 复制")
+                }
+                .font(Typography.meta).foregroundStyle(palette.ink3).padding(.top, 4)
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -256,14 +260,16 @@ struct SearchPalette: View {
         ZStack {
             Button("发送") { if let card = selected { Task { await sendSelected(card) } } }
                 .keyboardShortcut(.return, modifiers: .command)
-            Button("复制") { if let card = selected { Task { await workspace.send(Outgoing.text(of: card), via: .clipboard, card: card.id) } } }
+            Button("复制") { if let card = selected { workspace.copy(Outgoing.text(of: card)) } }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
         }
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 
+    /// 只有提示词发给 Agent（本项目当前的会话）；灵感先挂到任务。
     private func sendSelected(_ card: Card) async {
-        await workspace.send(Outgoing.text(of: card), via: workspace.effectiveChoice(for: card.projectID), card: card.id)
+        guard CardMenu.handsToAgent(card), let target = workspace.agentTarget(for: card.projectID) else { return }
+        await workspace.send(Outgoing.text(of: card), to: target, card: card.id)
     }
 
     private func groups(_ data: PaletteData) -> [(owner: UUID?, cards: [Card])] {
@@ -356,7 +362,7 @@ private struct FilterBar: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) { chips }
             }
-            if let total { Text("\(total) 个结果").font(.system(size: 11).monospacedDigit()).foregroundStyle(.secondary).fixedSize().layoutPriority(1) }
+            if let total { Text("\(total) 个结果").font(Typography.meta.monospacedDigit()).foregroundStyle(.secondary).fixedSize().layoutPriority(1) }
         }
     }
 
@@ -371,14 +377,11 @@ private struct FilterBar: View {
             FilterCapsule(name: "含图片", value: nil, on: query.withImages)
         }
         .buttonStyle(PressStyle())
-        FilterToken(name: "发送目标", value: sentLabel, on: query.sent != .any) {
+        FilterToken(name: "Agent", value: sentLabel, on: query.sent != .any) {
             Button("任意") { query.sent = .any }
             Divider()
-            Button("从未发送") { query.sent = .never }
-            Divider()
-            Button("Agent 会话") { query.sent = .sent(kind: .known(.piSession)) }
-            Button("应用") { query.sent = .sent(kind: .known(.app)) }
-            Button("剪贴板") { query.sent = .sent(kind: .known(.clipboard)) }
+            Button("没交给过 Agent") { query.sent = .never }
+            Button("交给过 Agent") { query.sent = .sent(kind: .known(.piSession)) }
             if !targets.isEmpty {
                 Divider()
                 ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
@@ -402,13 +405,9 @@ private struct FilterBar: View {
     private var sentLabel: String {
         switch query.sent {
         case .any: "任意"
-        case .never: "从未发送"
-        case .sent(let kind, .some(let name)): kind == .known(.piSession) ? "Agent · \(name)" : name
-        case .sent(.known(.piSession), nil): "Agent 会话"
-        case .sent(.known(.app), nil): "应用"
-        case .sent(.known(.clipboard), nil): "剪贴板"
-        case .sent(.unknown(let raw), nil): raw
-        case .sent(nil, nil): "发送过"
+        case .never: "没交过"
+        case .sent(_, .some(let name)): name
+        case .sent(_, nil): "交过"
         }
     }
 }
@@ -440,9 +439,9 @@ private struct FilterCapsule: View {
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).opacity(0.6).accessibilityHidden(true)
             }
         }
-        .font(.system(size: 12))
+        .font(Typography.meta)
         .foregroundStyle(on ? AnyShapeStyle(palette.onAccent) : AnyShapeStyle(.primary))
-        .padding(.horizontal, 10).frame(height: 26)
+        .padding(.horizontal, 10).frame(height: 28)
         .background(on ? AnyShapeStyle(palette.accent) : AnyShapeStyle(palette.fill.opacity(2)), in: .capsule)
         .contentShape(.capsule)
     }

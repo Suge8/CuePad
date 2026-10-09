@@ -457,36 +457,68 @@ public struct PiBind: Sendable, Equatable {
   }
 }
 
-/// 子代理此刻在干什么（同步记录里给手机看的粗状态）。
-public enum PiSubagentActivity: String, Sendable, CaseIterable {
-  case working, waitingForUser, idle, error
+/// 子代理此刻的状态，即 FireCode 子代理名册的分组：在跑、在审查、已交回结果、失败、被中断、空闲。
+public enum PiSubagentPhase: String, Sendable, CaseIterable {
+  case running, review, done, failed, interrupted, idle
 }
 
-/// 会话里的一个子代理：名字与此刻在干什么。
+/// 会话里的一个子代理（来自 FireCode 的子代理名册）：名字、派发角色、状态、在做什么，以及本次运行的开始与落定时刻
+/// （界面据此算"已工作多久"；落定后时长停在落定时刻）。
 public struct PiSubagentState: Sendable, Equatable {
   public var name: String
-  public var activity: Open<PiSubagentActivity>
+  public var role: String
+  public var phase: Open<PiSubagentPhase>
+  /// 在做什么的一句话；空闲时为空
+  public var action: String
+  public var startedAt: Date?
+  public var settledAt: Date?
 
-  public init(name: String, activity: Open<PiSubagentActivity>) {
+  public init(
+    name: String, role: String, phase: Open<PiSubagentPhase>, action: String = "", startedAt: Date? = nil, settledAt: Date? = nil
+  ) {
     self.name = name
-    self.activity = activity
+    self.role = role
+    self.phase = phase
+    self.action = action
+    self.startedAt = startedAt
+    self.settledAt = settledAt
+  }
+
+  /// 去掉"在做什么"的样子：谁在、什么角色、什么状态。动作文字随每次工具调用变，不算名册变了（记录器据此不为它绕开写入节流）。
+  var shape: PiSubagentState {
+    var shape = self
+    shape.action = ""
+    return shape
   }
 
   private struct Stored: Codable {
     var name: String
-    var activity: String
+    var role: String
+    var state: String
+    var action: String
+    var startedAt: Double?
+    var settledAt: Double?
   }
 
-  /// 同步记录里存为 JSON 数组（加密字段 `subagents`）；读不出的当作没有。
+  /// 同步记录里存为 JSON 数组（加密字段 `subagents`，时刻是 1970 年起的秒）；读不出的当作没有。
   static func stored(_ list: [PiSubagentState]) -> String? {
     guard !list.isEmpty else { return nil }
-    let data = try! JSONEncoder().encode(list.map { Stored(name: $0.name, activity: $0.activity.rawValue) })
+    let data = try! JSONEncoder().encode(
+      list.map {
+        Stored(
+          name: $0.name, role: $0.role, state: $0.phase.rawValue, action: $0.action,
+          startedAt: $0.startedAt?.timeIntervalSince1970, settledAt: $0.settledAt?.timeIntervalSince1970)
+      })
     return String(decoding: data, as: UTF8.self)
   }
 
   static func list(stored: String?) -> [PiSubagentState] {
     guard let stored, let decoded = try? JSONDecoder().decode([Stored].self, from: Data(stored.utf8)) else { return [] }
-    return decoded.map { PiSubagentState(name: $0.name, activity: Open(rawValue: $0.activity)) }
+    return decoded.map {
+      PiSubagentState(
+        name: $0.name, role: $0.role, phase: Open(rawValue: $0.state), action: $0.action,
+        startedAt: $0.startedAt.map { Date(timeIntervalSince1970: $0) }, settledAt: $0.settledAt.map { Date(timeIntervalSince1970: $0) })
+    }
   }
 }
 
@@ -668,7 +700,7 @@ public enum DeliveryStatus: String, Sendable, CaseIterable {
 /// 投送请求的发送方式（唯一定义）：直接发送、steer、followUp、放进输入框。
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
-  case send, steer, followUp, paste
+  case send, steer, followUp
   /// 回答会话正在等的弹窗；正文是 `PiAnswer`（见 `DeliveryRequest.answer`）
   case answer
   /// 连接测试：执行它的 Mac 收到即按成功写回，不碰 Pi、不写发送记录；往返时间就是手机到 Mac 再回来的延迟
@@ -693,7 +725,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
 
   /// 发给会话本身、会改变它状态的方式（说话与作答）；会话的显示状态只把这几种算进去。命令与设置（config、end、stop、bind）不在其中：
   /// 它们不是"你说的话"，对话只来自会话文件，进度只在回复框上方短暂显示。
-  public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .paste, .answer]
+  public static let toSession: Set<DeliveryMode> = [.send, .steer, .followUp, .answer]
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。

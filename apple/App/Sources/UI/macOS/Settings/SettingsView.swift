@@ -5,7 +5,7 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// 设置窗口的内容：外观、iCloud 同步与冲突副本、全局快捷键、投送、Pi 扩展、命令行、更新——都是同一种分组卡。操作结果就地显示在对应行下。
+/// 设置窗口的内容：外观、iCloud 同步与冲突副本、全局快捷键、Pi 扩展、命令行、更新——都是同一种分组卡。操作结果就地显示在对应行下。
 struct SettingsView: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -15,7 +15,6 @@ struct SettingsView: View {
         .frame(width: 520)
         // 与主窗口同一种桌面色，不用系统的白底
         .background(palette.desk)
-        .onAppear { services.accessibility.refresh() }
     }
 
     private var form: some View {
@@ -34,21 +33,13 @@ struct SettingsView: View {
             Section("快捷键") {
                 LabeledContent("显示或隐藏 CuePad") { ShortcutRecorder() }
             }
-            Section {
-                Toggle("投送到其他应用后按回车", isOn: $settings.autoSubmit)
-                AccessibilityRow()
-            } header: {
-                Text("投送")
-            } footer: {
-                Text("投送到其他应用会写入剪贴板并在目标应用里粘贴，需要辅助功能授权；发给 Agent 会话不需要。")
-            }
             if services.diagnostics.latest != nil { Section("诊断") { LastCrashRow() } }
             Section {
                 PiExtensionRow()
             } header: {
                 Text("Pi")
             } footer: {
-                Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把灵感和任务（含图片）直接发进会话。安装或升级后，已在运行的会话在终端里执行 /reload 就能用上。")
+                Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把提示词（含图片）直接发进会话。安装或升级后，已在运行的会话在终端里执行 /reload 就能用上。")
             }
             Section("命令行") { CommandLineToolRow() }
             Section("更新") { UpdateRow() }
@@ -73,7 +64,7 @@ private struct ShortcutRecorder: View {
                 recording ? stop() : start()
             }
             .monospaced()
-            if let error { Text(error).font(.caption).foregroundStyle(palette.attention) }
+            if let error { Text(error).font(Typography.meta).foregroundStyle(palette.attention) }
         }
         .onDisappear(perform: stop)
     }
@@ -131,27 +122,6 @@ enum ShortcutText {
     }
 }
 
-private struct AccessibilityRow: View {
-    @Environment(\.palette) private var palette
-    @Environment(AppServices.self) private var services
-
-    var body: some View {
-        LabeledContent("辅助功能") {
-            if services.accessibility.isTrusted {
-                Label("已授权", systemImage: "checkmark.circle.fill").foregroundStyle(palette.ink2)
-            } else {
-                HStack {
-                    Text("未授权").foregroundStyle(.secondary)
-                    Button("授权…") { services.accessibility.request() }
-                    Button("打开系统设置") {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                    }
-                }
-            }
-        }
-    }
-}
-
 private struct PiExtensionRow: View {
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
@@ -181,7 +151,7 @@ private struct PiExtensionRow: View {
             }
         }
         if let result {
-            Text(result.text).font(.caption).foregroundStyle(result.failed ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
+            Text(result.text).font(Typography.meta).foregroundStyle(result.failed ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
         }
     }
 
@@ -247,7 +217,7 @@ private struct SyncSection: View {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(summary.title)
-                            if let detail = summary.detail { Text(detail).font(.caption).foregroundStyle(palette.ink3) }
+                            if let detail = summary.detail { Text(detail).font(Typography.meta).foregroundStyle(palette.ink3) }
                         }
                     } icon: {
                         Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
@@ -264,13 +234,13 @@ private struct SyncSection: View {
                     DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
                         ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(issue.summary).font(.caption)
-                                Text(issue.message).font(.caption2.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
+                                Text(issue.summary).font(Typography.meta)
+                                Text(issue.message).font(Typography.meta.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
                             }
                         }
                     }
                 }
-                if let failure { Text(failure).font(.caption).foregroundStyle(palette.failure) }
+                if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
             }
         } header: {
             Text("iCloud 同步")
@@ -308,13 +278,13 @@ private struct ConflictsSection: View {
                 ForEach(services.conflicts, id: \.copy.id) { conflict in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(CardText(conflict.original.body).label)
-                            .font(.headline)
+                            .font(Typography.bodyStrong)
                         version("这台设备的版本", conflict.original, keep: .original, copy: conflict.copy.id)
                         version("另一台设备的版本", conflict.copy, keep: .copy, copy: conflict.copy.id)
                     }
                     .padding(.vertical, 4)
                 }
-                if let failure { Text(failure).font(.caption).foregroundStyle(palette.failure) }
+                if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
             } header: {
                 Text("\(services.conflicts.count) 条灵感或任务有两个版本")
             }
@@ -324,7 +294,7 @@ private struct ConflictsSection: View {
     private func version(_ label: String, _ card: Card, keep choice: ConflictChoice, copy: UUID) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("\(label) · \(DateLabel.short(card.modifiedAt))").font(.caption.weight(.medium)).foregroundStyle(palette.ink3)
+                Text("\(label) · \(DateLabel.short(card.modifiedAt))").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
                 Spacer()
                 Button("保留这一份") {
                     failure = nil
@@ -334,7 +304,7 @@ private struct ConflictsSection: View {
                 }
                 .controlSize(.small)
             }
-            Text(Outgoing.text(of: card)).font(.system(size: 12.5)).foregroundStyle(palette.ink2)
+            Text(Outgoing.text(of: card)).font(Typography.secondary).foregroundStyle(palette.ink2)
                 .lineLimit(6).frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)

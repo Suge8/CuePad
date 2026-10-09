@@ -297,9 +297,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     Image(systemName: "rectangle.on.rectangle").foregroundStyle(palette.ink3)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(card.title.nonEmpty ?? "图片").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                        Text(card.title.nonEmpty ?? "图片").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
                         if !card.images.isEmpty {
-                            Text("\(card.images.count) 张图片").font(.caption).foregroundStyle(palette.ink3)
+                            Text("\(card.images.count) 张图片").font(Typography.caption).foregroundStyle(palette.ink3)
                         }
                     }
                     Spacer(minLength: 8)
@@ -415,8 +415,7 @@ private struct CircleGlyph: View {
 }
 
 /// 输入框右下角的提交钮：存下（记成灵感）是打勾，发出（交给 Agent、回复、开新会话）是向上箭头——
-/// 两种动作长得不一样，记下不会被看成发出。能按时靛青实心（主动作），按不了（同步不通、正在提交）时淡；
-/// 旁边另有主钮时（Mac 随手记里能一按就发的发送钮）`prominent` 为 false，是墨色淡底的次钮。
+/// 两种动作长得不一样，记下不会被看成发出。能按时靛青实心（主动作），按不了（同步不通、正在提交）时淡。
 struct SubmitGlyph: View {
     enum Action {
         case save, send
@@ -431,23 +430,20 @@ struct SubmitGlyph: View {
 
     let action: Action
     let enabled: Bool
-    var prominent = true
     var size = Size.regular
     @Environment(\.palette) private var palette
 
-    init(_ action: Action, enabled: Bool, prominent: Bool = true, size: Size = .regular) {
+    init(_ action: Action, enabled: Bool, size: Size = .regular) {
         self.action = action
         self.enabled = enabled
-        self.prominent = prominent
         self.size = size
     }
 
     var body: some View {
-        let primary = enabled && prominent
         CircleGlyph(
-            systemImage: action.symbol, ink: primary ? palette.onSignature : enabled ? palette.ink : palette.ink3,
-            fill: primary ? palette.signature : palette.fill, size: size)
-            .animation(Motion.quick, value: primary)
+            systemImage: action.symbol, ink: enabled ? palette.onSignature : palette.ink3, fill: enabled ? palette.signatureFill : palette.fill,
+            size: size)
+            .animation(Motion.quick, value: enabled)
     }
 }
 
@@ -600,7 +596,7 @@ private struct AttachmentBody: View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                     switch block {
-                    case .text(let text): Text(text).font(.body).foregroundStyle(palette.ink).textSelection(.enabled)
+                    case .text(let text): Text(text).font(Typography.body).foregroundStyle(palette.ink).textSelection(.enabled)
                     case .image(let hash): Thumbnail(hash: hash, height: 220, radius: 12)
                     case .split: Rectangle().fill(palette.hair).frame(height: 1)
                     }

@@ -31,7 +31,7 @@ struct PiSetupGuide: View {
         let missing = installation == .notFound
         let command = missing ? Self.installCommand : Self.updateCommand
         VStack(alignment: .leading, spacing: 10) {
-            if showsTitle { Text(missing ? "安装 Pi" : "升级 Pi").font(.headline) }
+            if showsTitle { Text(missing ? "安装 Pi" : "升级 Pi").font(Typography.bodyStrong) }
             Text("Pi 是在终端里运行的 AI 编程助手。装好后，灵感和任务可以直接发进 Pi 会话。")
                 .fixedSize(horizontal: false, vertical: true)
             if case .found(_, let version) = installation {
@@ -40,7 +40,7 @@ struct PiSetupGuide: View {
             Text(missing ? "在终端运行：" : "在终端运行，升级到最新版：").foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 // 命令要看得全：放不下就折行，不截断
-                Text(command).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                Text(command).font(Typography.meta.monospaced()).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 Button(copied ? "已复制" : "复制") { copy(command) }.controlSize(.small)
@@ -49,7 +49,7 @@ struct PiSetupGuide: View {
             .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 8))
             Link("了解 Pi", destination: Self.site)
         }
-        .font(.system(size: 13))
+        .font(Typography.secondary)
     }
 
     private func copy(_ command: String) {
@@ -63,7 +63,7 @@ struct Keycap: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium, design: .rounded))
+            .font(Typography.keycap)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 5).padding(.vertical, 1)
             .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 4))

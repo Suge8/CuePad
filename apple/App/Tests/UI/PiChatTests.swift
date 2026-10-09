@@ -30,6 +30,25 @@ struct PiChatTests {
         #expect(PiChat.meta(message(2, .system, "已压缩上下文")) == nil)
     }
 
+    func preview(_ title: String, at second: TimeInterval = 0) -> PiPreview {
+        PiPreview(sessionID: "s", hash: String(repeating: "a", count: 64), name: "\(title).html", title: title, byteCount: 10, createdAt: start.addingTimeInterval(second))
+    }
+
+    /// 会话文件里工具调用留下的预览条在哪、预览就在对话里的哪；预览记录只提供文件与标题。
+    /// 记录还没同步到的先不显示（到了就出现）；没有对应对话条的（命令行投的）按时间接在末尾。
+    @Test func 预览卡在对话里的位置由会话文件里的那一条定() {
+        let login = preview("登录页"), report = preview("报告"), late = preview("命令行投的", at: 50), unsynced = UUID()
+        let entries = PiChat.entries(
+            [message(1, .user, "给我看看"), message(2, .preview, login.id.uuidString.lowercased()), message(3, .preview, unsynced.uuidString.lowercased()),
+             message(4, .pi, "发给你了", tools: 2, took: 30), message(5, .preview, report.id.uuidString.lowercased())],
+            previews: [late, report, login])
+
+        #expect(entries.map(\.role) == [.user, .preview, .pi, .preview, .preview])
+        #expect(entries.compactMap(\.preview).map(\.title) == ["登录页", "报告", "命令行投的"])
+        #expect(entries.map(\.isUser) == [true, false, false, false, false])
+        #expect(PiChat.meta(message(2, .preview, "x")) == nil)
+    }
+
     @Test func 每轮回答上方写调了几个工具与做了多久() {
         #expect(PiChat.meta(message(2, .pi, "好了", tools: 5, took: 125)) == "运行了 5 个工具 · 2 分")
         #expect(PiChat.meta(message(2, .pi, "好了", tools: 1, took: 40)) == "运行了 1 个工具 · 40 秒")
@@ -140,20 +159,46 @@ struct ChatFollowTests {
     }
 }
 
-/// 对话末尾的子代理只有一行汇总：几个在跑、共几个、几个在等你。
+/// 子代理：对话末尾一行汇总（几个在跑、共几个、几个失败），展开后每个子代理写角色、状态与已工作多久、在做什么；
+/// 会话在等子代理时，Agent 列表行的第三行说它们在干什么。
 struct SubagentSummaryTests {
-    @Test func 汇总在跑数_总数与在等你的数() {
-        let agents = [
-            PiSubagentState(name: "研究", activity: .known(.working)),
-            PiSubagentState(name: "审计", activity: .known(.waitingForUser)),
-            PiSubagentState(name: "写测试", activity: .known(.working)),
-        ]
+    private let now = Date(timeIntervalSince1970: 10_000)
 
-        let summary = PiSubagentSummary(agents)
+    private func agent(_ name: String, _ phase: PiSubagentPhase, action: String = "", started: Double? = nil, settled: Double? = nil) -> PiSubagentState {
+        PiSubagentState(
+            name: name, role: "工程师", phase: .known(phase), action: action,
+            startedAt: started.map { Date(timeIntervalSince1970: $0) }, settledAt: settled.map { Date(timeIntervalSince1970: $0) })
+    }
+
+    private func delegating(_ agents: [PiSubagentState]) -> PiSessionState {
+        PiSessionState(
+            id: UUID(), sessionID: "s", hostID: "mac", title: "指挥官", projectID: nil, state: .known(.delegating), detail: nil, folder: nil,
+            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: now, busySince: nil, createdAt: now, modifiedAt: now,
+            subagents: agents)
+    }
+
+    @Test func 汇总在跑数_总数与失败数() {
+        let summary = PiSubagentSummary([
+            agent("研究", .running), agent("审计", .review), agent("写测试", .failed), agent("文档", .done), agent("杂务", .idle),
+        ])
 
         #expect(summary?.running == 2)
-        #expect(summary?.total == 3)
-        #expect(summary?.waiting == 1)
+        #expect(summary?.total == 5)
+        #expect(summary?.failed == 1)
         #expect(PiSubagentSummary([]) == nil)
+    }
+
+    @Test func 会话在等子代理时_列表行第三行说它们在干什么() {
+        #expect(PiProgress.line(of: delegating([agent("ui", .running, action: "运行 bun test"), agent("docs", .done)])) == "ui 在干活：运行 bun test")
+        #expect(PiProgress.line(of: delegating([agent("ui", .running), agent("docs", .review), agent("core", .running)])) == "3 个子代理在干活")
+        #expect(PiProgress.line(of: delegating([agent("ui", .running), agent("core", .failed)])) == "ui 在干活")
+        #expect(PiProgress.line(of: delegating([agent("ui", .done), agent("core", .failed)])) == "子代理已交回，等 Agent 接着做")
+    }
+
+    @Test func 已工作多久_在跑的随时间走_落定的停在落定时刻() {
+        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now) == "已运行 10 分")
+        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now.addingTimeInterval(120)) == "已运行 12 分")
+        #expect(PiSubagentClock(agent("b", .done, started: 9_000, settled: 9_300))?.text(now: now) == "用时 5 分")
+        #expect(PiSubagentClock(agent("c", .idle)) == nil)
     }
 }

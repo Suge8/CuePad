@@ -16,8 +16,6 @@
 		B10000000000000000000009 /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000008 /* CueStore */; };
 		B1000000000000000000000B /* CueEditor in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000A /* CueEditor */; };
 		B1000000000000000000000D /* CueEditor in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000C /* CueEditor */; };
-		B1000000000000000000000F /* CueDispatch in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = B1000000000000000000000E /* CueDispatch */; };
-		B10000000000000000000011 /* CueDispatch in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = B10000000000000000000010 /* CueDispatch */; };
 		B10000000000000000000013 /* CuePi in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = B10000000000000000000012 /* CuePi */; };
 		B10000000000000000000015 /* CuePi in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = B10000000000000000000014 /* CuePi */; };
 		C10000000000000000000013 /* CuePadShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* CuePadShare.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -147,7 +145,6 @@
 				B10000000000000000000003 /* CueText in Frameworks */,
 				B10000000000000000000007 /* CueStore in Frameworks */,
 				B1000000000000000000000B /* CueEditor in Frameworks */,
-				B1000000000000000000000F /* CueDispatch in Frameworks */,
 				B10000000000000000000013 /* CuePi in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -160,7 +157,6 @@
 				B10000000000000000000005 /* CueText in Frameworks */,
 				B10000000000000000000009 /* CueStore in Frameworks */,
 				B1000000000000000000000D /* CueEditor in Frameworks */,
-				B10000000000000000000011 /* CueDispatch in Frameworks */,
 				B10000000000000000000015 /* CuePi in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -296,7 +292,6 @@
 				B10000000000000000000002 /* CueText */,
 				B10000000000000000000006 /* CueStore */,
 				B1000000000000000000000A /* CueEditor */,
-				B1000000000000000000000E /* CueDispatch */,
 				B10000000000000000000012 /* CuePi */,
 			);
 			productName = CuePad;
@@ -325,7 +320,6 @@
 				B10000000000000000000004 /* CueText */,
 				B10000000000000000000008 /* CueStore */,
 				B1000000000000000000000C /* CueEditor */,
-				B10000000000000000000010 /* CueDispatch */,
 				B10000000000000000000014 /* CuePi */,
 			);
 			productName = CuePadTests;
@@ -1019,16 +1013,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
 			productName = CueEditor;
-		};
-		B1000000000000000000000E /* CueDispatch */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
-			productName = CueDispatch;
-		};
-		B10000000000000000000010 /* CueDispatch */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
-			productName = CueDispatch;
 		};
 		B10000000000000000000012 /* CuePi */ = {
 			isa = XCSwiftPackageProductDependency;

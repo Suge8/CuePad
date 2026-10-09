@@ -15,4 +15,4 @@
 | `shots/raw/`、`shots/final/` | 窗口截图（2400×1520 @2x）与加框成图；`compose/` 的 hero / social 模板读 `raw/board-light-collapsed.png`。新截图到位后替换 |
 | `compose/` | HTML 合成模板 + `compose.mjs`（headless Chromium 精确画布出图；`auto` 尺寸按 body 截）；hero / social 模板支持 `?lang=en` 出英文版（`*-en-*.png`）。`compose.mjs` 需要 Node 与 `@playwright/test`（仓库不带 package.json，运行前 `npm i --no-save @playwright/test`） |
 | `visual/` | 成图：README hero、GitHub social preview、抠图素材（`design/tools/cutout.swift` 产物） |
-| `motion/demo-dispatch.gif` | README 的一键投送演示 GIF |
+| `motion/demo-dispatch.gif` | 旧版一键投送演示 GIF（投送到应用已下线，README 不再引用；落地页改版时一并替换） |

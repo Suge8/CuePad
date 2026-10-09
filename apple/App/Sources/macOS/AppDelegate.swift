@@ -36,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         do {
             services = try AppServices(
                 location: location, defaults: location.makeDefaults(), sync: .iCloud,
-                mac: .live(bundleID: AppServices.bundleID, location: location))
+                mac: .live(location: location))
         } catch {
             showLibraryFailure(LibraryFailure(error, location: location))
             return
@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         panel.setContent(RootViews.menuBarPad(services) { [weak panel] id in
             panel?.hide()
             shell.show()
-            workspace.openSession(id)
+            workspace.show(.session(id))
         })
         menuBarPanel = panel
         statusItem = StatusItemController(
@@ -104,7 +104,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        services?.accessibility.refresh()
         Task { await services?.handleActivation() }
     }
 

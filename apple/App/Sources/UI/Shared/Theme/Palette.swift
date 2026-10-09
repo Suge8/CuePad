@@ -43,7 +43,7 @@ struct Palette {
     /// 墨底上的字。
     var onAccent: Color { paper }
     /// 签名色靛青：主按钮、焦点环；选中的底（`selection`）也由它调出。只用在焦点上。
-    /// 对比度（WCAG）：标准在纸、桌面、侧栏上都 ≥ 6.2，增强对比度时 ≥ 8，主按钮上的字 ≥ 7.6。
+    /// 对比度（WCAG）：标准在纸、桌面、侧栏上都 ≥ 6.2，增强对比度时 ≥ 8，浅色主按钮上的字 ≥ 7.6（主按钮的底见 `signatureFill`）。
     var signature: Color {
         switch (dark, highContrast) {
         case (false, false): Color(hex: 0x2F4A9E)
@@ -52,17 +52,25 @@ struct Palette {
         case (true, true): Color(hex: 0xB3C4F0)
         }
     }
-    /// 靛青底上的字。
-    var onSignature: Color { dark ? Color(hex: 0x0E1526) : Color(hex: 0xF6F8FF) }
+    /// 主按钮的靛青底：浅色就是签名色；深色压到中等明度配浅字——深色的签名色是给字与焦点用的浅靛青，
+    /// 铺成实心钮在暗纸上是一块亮斑。对比度：深色下钮上的字标准 5.2、增强对比度 6.0。
+    var signatureFill: Color {
+        switch (dark, highContrast) {
+        case (false, _): signature
+        case (true, false): Color(hex: 0x4A64B8)
+        case (true, true): Color(hex: 0x3F5AAE)
+        }
+    }
+    /// 靛青底（`signatureFill`）上的字。
+    var onSignature: Color { Color(hex: 0xF6F8FF) }
     /// 选中底色：侧栏与列表的当前项垫一层靛青浅底，文字保持墨色并加粗；Mac 与 iOS 共用，不用系统灰胶囊。
     var selection: Color { signature.opacity(highContrast ? 0.28 : (dark ? 0.2 : 0.12)) }
 
     // MARK: 你的话（会话里你发出的气泡，iOS 与 Mac 共用）
 
-    /// 气泡底：浅色是墨底纸字；深色的墨是浅奶油，整块实底在暗处刺眼，改用比纸略抬升的暖深色、字仍是墨。
-    var bubble: Color { dark ? Color(hex: 0x3A352F) : ink }
-    /// 气泡上的字。
-    var onBubble: Color { dark ? ink : paper }
+    /// 气泡底：比桌面深一级的暖灰、字是墨——回答才是会话页的主角，你的话不该是一屏最重的一块；
+    /// 深色是比纸略抬升的暖深色、字仍是墨。
+    var bubble: Color { dark ? Color(hex: 0x3A352F) : Color(hex: 0xE3DED4) }
     /// 气泡的描边：深色下气泡与纸、桌面明度接近，加一圈低对比的线把边界提出来；浅色不用。
     var bubbleEdge: Color { dark ? Color.white.opacity(highContrast ? 0.22 : 0.08) : .clear }
 
@@ -73,10 +81,11 @@ struct Palette {
     /// 出错：胭脂。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
 
-    // MARK: 正文里的变量（琥珀色标注）
+    // MARK: 正文里的变量
 
-    var variable: Color { dark ? Color(hex: 0xE9B872) : Color(hex: 0x98560F) }
-    var variableBackground: Color { variable.opacity(dark ? 0.16 : 0.11) }
+    /// `{{变量}}`：墨色字垫一层比纸深一级的底。不借用注意色——赭黄在全 App 只表示"等你确认"，变量用了它就像一串警告。
+    var variable: Color { ink }
+    var variableBackground: Color { (dark ? Color.white : .black).opacity(highContrast ? 0.16 : (dark ? 0.12 : 0.07)) }
 
     static func projectTint(_ hex: String) -> Color {
         Color(hex: UInt32(hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0x8A8A8A)

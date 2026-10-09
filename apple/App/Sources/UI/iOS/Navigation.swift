@@ -63,7 +63,7 @@ final class Navigation {
         var project: UUID??
     }
 
-    /// 要交给 Agent 的一条灵感或任务（存储格式，变量已填）：浮起交给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
+    /// 要交给 Agent 的一条提示词（存储格式，变量已填）：浮起交给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
     struct OpenTask: Identifiable {
         let id: UUID
     }
@@ -84,9 +84,9 @@ final class Navigation {
         let id = UUID()
         var project: UUID?
         var launched: Launched?
-        /// 从"交给 Agent"选了新会话：灵感或任务的正文与补的话带过来作开场。
+        /// 从"交给 Agent"选了新会话：提示词的正文与补的话带过来作开场。
         var draft: ComposerDraft?
-        /// 为哪条灵感或提示词开的（交给 Agent 时定下）：开好后关联它。
+        /// 为哪条提示词开的（交给 Agent 时定下）：开好后关联它。
         var card: UUID?
     }
 
@@ -250,6 +250,15 @@ final class Navigation {
         case .split: splitPath.last
         }
         return top == .session(id)
+    }
+
+    /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 列表（那一行已经在变）时不弹。
+    func showsAlert(about session: UUID) -> Bool {
+        let onAgentList = switch layout {
+        case .tabs: tab == .agent && agentPath.isEmpty
+        case .split: agentPanel || (splitRoot == .agent && splitPath.isEmpty)
+        }
+        return !onAgentList && !isViewing(session: session)
     }
 
     /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id，记录已被删时用它读对话）；`draft` 带进它的回复框

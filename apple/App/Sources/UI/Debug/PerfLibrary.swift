@@ -54,11 +54,11 @@ enum PerfLibrary {
             try await store.setDirectory("\(home)Project/perf-\(index)", for: project.id)
         }
         let cards = try await store.cards(in: projects[0].id) + store.cards(in: projects[5].id)
-        let targets = ["cuepad", "atlas", "Ghostty", "Cursor", "剪贴板"]
+        let targets = ["cuepad", "atlas", "review", "deploy", "notes"]
         for index in 0..<500 {
             let card = cards[random.next(cards.count)]
             let name = targets[index % targets.count]
-            try await store.recordSend(card.body, to: SendTarget(kind: index % 5 < 2 ? .piSession : .app, name: name), card: card.id)
+            try await store.recordSend(card.body, to: SendTarget(kind: .piSession, name: name), card: card.id)
         }
         for index in 0..<piSessionCount {
             let cwd = index % 2 == 0 ? "\(home)Project/perf-\(index % boundProjects)" : "/Users/dev/work/repo-\(index)"

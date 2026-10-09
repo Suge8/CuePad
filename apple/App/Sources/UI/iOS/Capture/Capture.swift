@@ -40,15 +40,7 @@ struct CaptureComposer: View {
             Divider()
             ForEach(workspace.catalog?.projects ?? []) { item in Button(item.name) { navigation.capture.project = .some(item.id) } }
         } label: {
-            HStack(spacing: 6) {
-                Text("→").foregroundStyle(palette.ink3)
-                ProjectGlyph(project: workspace.catalog?.project(project), size: 13)
-                Text(destination).foregroundStyle(palette.ink).lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3).accessibilityHidden(true)
-            }
-            .font(.subheadline.weight(.medium))
-            .padding(.horizontal, 12).frame(height: 32)
-            .background(palette.fill, in: .capsule)
+            DestinationChip(project: workspace.catalog?.project(project))
         }
         .accessibilityLabel("记到 \(destination)")
     }
@@ -100,7 +92,8 @@ struct FloatingInput<Content: View>: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             if isPresented {
-                palette.desk.opacity(0.5).contentShape(.rect).ignoresSafeArea()
+                // 背后的页面虚化再压一层桌面色：只压色的话，Agent 列表这类带彩色状态标的页面还读得清，和输入框抢眼
+                Rectangle().fill(.ultraThinMaterial).overlay(palette.desk.opacity(0.45)).contentShape(.rect).ignoresSafeArea()
                     .gesture(DragGesture(minimumDistance: 0).onEnded { _ in dismiss() })
                     .accessibilityHidden(true)
                 content()

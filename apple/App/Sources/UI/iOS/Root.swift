@@ -53,6 +53,7 @@ struct IOSRootView: View {
             .sheet(item: $navigation.task) { TaskSheet(id: $0.id) }
             .sheet(item: $navigation.projectForm) { ProjectFormSheet(project: $0.project) }
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
+            .sheet(item: Binding(get: { workspace.attaching }, set: { workspace.attaching = $0 })) { TaskPicker(idea: $0) }
         }
         .overlay(alignment: .top) { NoticeBanner() }
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
@@ -70,9 +71,9 @@ struct IOSRootView: View {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link, workspace: workspace) }
         }
         .onChange(of: alerts.pendingTap, initial: true) { navigation.open(alert: alerts.consumeTap()) }
-        // 前台时会话"等你确认"、"做完了"的提示：正看着那个会话的窗口不弹；后台走系统推送
+        // 前台时会话"等你确认"、"做完了"的提示：正看着那个会话或 Agent 列表时不弹；后台走系统推送
         .onChange(of: workspace.services.sessionAlert) { _, alert in
-            guard let alert, !navigation.isViewing(session: alert.session) else { return }
+            guard let alert, navigation.showsAlert(about: alert.session) else { return }
             workspace.say(alert.text, symbol: alert.symbol, link: .session(alert.session), duration: .seconds(5))
         }
         #if DEBUG
@@ -100,13 +101,10 @@ struct RouteView: View {
     @Environment(\.bottomBarReserve) private var bottomBarReserve
 
     var body: some View {
-        // 底部栏是玻璃：滚到它后面的内容淡到页面底色（挂在让出高度之内，安全区才含底部栏那一段）
-        page.overlay(alignment: .bottom) {
-            if bottomBarReserve > 0, navigation.bottomPages == 0 { EdgeFade(edge: .bottom, fade: BottomBar.fadeAbove) }
-        }
-            .containerBackground(background, for: .navigation)
+        // 底部栏是玻璃：内容一直滚到它后面（沉浸式），不自绘渐变；让出高度的 safeAreaBar 那一段由系统的滚动边缘效果处理
+        page.containerBackground(background, for: .navigation)
             .environment(\.pageBackground, background)
-            // 标签栏布局：内容让出底部那一行的高度，滚动到它下面的内容渐隐。挂在每一页上：TabView 外面的安全区传不进标签页
+            // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页
             .safeAreaBar(edge: .bottom) {
                 if bottomBarReserve > 0, navigation.bottomPages == 0 { Color.clear.frame(height: bottomBarReserve) }
             }
@@ -322,8 +320,6 @@ private struct BottomBar: View {
 
     /// 内容在安全区之上还要给底部栏让出的高度（栏顶到安全区底边）；键盘盖住底部栏时为 0。
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin - safeBottom) }
-    /// 底部栏上沿往上再淡出这么高（`EdgeFade`）。
-    static let fadeAbove: CGFloat = 20
 
     private var drop: Color { palette.dark ? Color.black.opacity(0.3) : palette.ink.opacity(0.07) }
 

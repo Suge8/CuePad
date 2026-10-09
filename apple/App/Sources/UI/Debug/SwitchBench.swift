@@ -74,7 +74,7 @@ enum SwitchBench {
             let recorder = FrameRecorder()
             recorder.start(in: view)
             let started = Date.now
-            await PerfProbe.wait(for: "conversation", timeout: 3) { workspace.openSession(session.id) }
+            await PerfProbe.wait(for: "conversation", timeout: 3) { workspace.show(.session(session.id)) }
             let shown = PerfProbe.firstSeen["conversation"].map { PerfBench.ms($0.timeIntervalSince(started)) } ?? -1
             try? await Task.sleep(for: .milliseconds(700))
             var row = recorder.stop()
@@ -92,7 +92,7 @@ enum SwitchBench {
             let recorder = FrameRecorder()
             recorder.start(in: view)
             let started = Date.now
-            workspace.openSession(session.id)
+            workspace.show(.session(session.id))
             var first = -1.0
             while first < 0, Date.now.timeIntervalSince(started) < 2 {
                 await recorder.nextFrame()
@@ -122,7 +122,7 @@ enum SwitchBench {
         for id in sessions {
             workspace.show(.agent)
             try? await Task.sleep(for: .milliseconds(400))
-            workspace.openSession(id)
+            workspace.show(.session(id))
             await DebugScene.bulkChat(id, count: 30, store: workspace.services.store)
             try? await Task.sleep(for: .milliseconds(900))
             let shown = inkShare(of: view)
@@ -140,7 +140,7 @@ enum SwitchBench {
         for session in plan {
             workspace.show(.agent)
             try? await Task.sleep(for: .milliseconds(400))
-            workspace.openSession(session.id)
+            workspace.show(.session(session.id))
             try? await Task.sleep(for: .milliseconds(900))
             let before = conversationScroll(view)?.documentView?.frame.height ?? 0
             var frames = await PerfBench.scroll(in: window, view: view, directions: [1], frames: 150)

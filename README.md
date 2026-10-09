@@ -2,7 +2,7 @@
 
 <!-- TODO 截图待更新：以下图片仍是旧版界面，Swift 版截图另行安排，路径保持不变即可替换 -->
 <p align="center">
-  <img src="design/promo/visual/hero-readme-en-2400x1260.png" alt="CuePad: write your prompt, dispatch it in one tap" width="820" />
+  <img src="design/promo/visual/hero-readme-en-2400x1260.png" alt="CuePad: write your prompt, hand it to your agent" width="820" />
 </p>
 
 <p align="center">
@@ -14,20 +14,16 @@
 
 Local-first: everything lives in a SQLite database on your device; iCloud sync uses your own private CloudKit database. No account, no server, no telemetry.
 
-<!-- TODO 截图待更新 -->
-<p align="center">
-  <img src="design/promo/motion/demo-dispatch.gif" alt="Open an idea in CuePad, tap dispatch, and the prompt lands in the terminal" width="720" />
-</p>
-
 ## Features
 
-- **Idea → task → agent.** Ideas hold any amount of text with inline images, `{{variables}}` and dividers; make one a task and write prompts under it — each is what you hand to the agent, sent in one tap, showing whether the agent has replied — plus subtasks if needed. Projects are just containers with a one-line intro. Everything autosaves.
-- **Send to agents.** Deliver an idea or task to a running agent session (currently [Pi](https://pi.dev); text and images, no Accessibility permission needed) or to any app via clipboard and a targeted `Cmd+V`. Every send is logged with a snapshot and can be resent.
+- **Idea → task → agent.** Ideas are your library — any amount of text with inline images, `{{variables}}` and dividers. When it's time to act, attach an idea to a task and it becomes one of the task's prompts — what you hand to the agent, sent in one tap, showing whether the agent has replied — plus subtasks if needed. Projects are just containers with a one-line intro. Everything autosaves.
+- **Send to agents.** A task's prompts go straight to a running agent session (currently [Pi](https://pi.dev); text and images). Every send is logged with a snapshot and can be resent; you can always copy the text too.
 - **See your agents.** Agent sessions show live state (thinking, running a tool, waiting for you, done) and history; sessions file under the project bound to their working directory.
+- **Demos on your phone.** An agent can send a page, screenshot, PDF or report to you: it shows up as a card in the session on your phone, and tapping it opens a full-screen preview. (Pi agents get a `cuepad_show` tool; other agents can run `cuepad show <file>`.)
 - **Projects that know your code.** Bind a project to a code directory: agent sessions and the `cuepad` command line pick the right project from where they run.
-- **Selections and variables.** Send the whole thing or just the selected part, or turn selected lines into tasks; fill `{{variables}}` right before sending, each one remembers its last values.
-- **Search everywhere.** `⌘K` searches projects, ideas and tasks, filtered by project, images, send target or time.
-- **Mac.** Glass sidebar, a menu bar scratch pad that sends with `⌘↩`, and a global shortcut (`Option + Space` by default) to bring CuePad up from anywhere.
+- **Selections and variables.** Send a whole prompt or just the selected part, or turn selected lines into tasks; fill `{{variables}}` right before sending, each one remembers its last values.
+- **Search everywhere.** `⌘K` searches projects, ideas and tasks, filtered by project, images, whether it went to an agent, or time.
+- **Mac.** Glass sidebar, a menu bar scratch pad for quick ideas, and a global shortcut (`Option + Space` by default) to bring CuePad up from anywhere.
 - **iPhone and iPad.** A project bookshelf, quick capture bar, share extension and widgets. Ideas written on the phone are on the Mac a moment later, and the phone can send text to an agent session on your Mac.
 - **iCloud sync.** Per-record sync; if the same idea or task is edited offline on two devices, both versions are kept for you to choose from.
 

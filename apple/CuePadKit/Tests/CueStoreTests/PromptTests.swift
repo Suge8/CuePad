@@ -100,13 +100,6 @@ import Testing
     #expect(try await replied(task.id) == [true])
   }
 
-  @Test func 只复制或发到应用不算交给Agent() async throws {
-    let task = try await store.createTask("修重连排序", in: nil)
-    let prompt = try await store.createCard(body: "先复现", under: task.id)
-    try await store.recordSend(prompt.body, to: SendTarget(kind: .clipboard, name: "剪贴板", ref: nil), card: prompt.id)
-    #expect(try await replied(task.id) == [false])
-  }
-
   @Test func 提示词交给会话_它的任务关联到那个会话并进行中() async throws {
     let task = try await store.createTask("修重连排序", in: nil)
     let prompt = try await store.createCard(body: "先复现", under: task.id)

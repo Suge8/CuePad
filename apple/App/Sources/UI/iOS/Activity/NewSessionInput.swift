@@ -127,7 +127,7 @@ struct NewSessionInput: View {
         workspace.attempt {
             defer { sending = false }
             let opening = try draft.stored(in: services.store.files).nonEmpty
-            // 从灵感或任务"新会话"交给 Agent：开好后它关联到这个会话（带着的那一条）
+            // 从提示词"新会话"交给 Agent：开好后它关联到这个会话（带着的那一条）
             let request = try await services.launch(
                 PiLaunch(project: place.project.id, prompt: opening, token: token), title: place.project.name, on: binding.hostID,
                 card: start.card ?? draft.attachments.first?.card)

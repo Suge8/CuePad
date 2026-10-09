@@ -12,6 +12,7 @@ enum RecordMapper {
     .deliveryRequests: ["content", "targetName", "targetRef", "resultDetail"],
     .directoryBindings: ["hostName", "folder"],
     .piMessages: ["text"],
+    .previews: ["name", "title"],
   ]
 
   /// 服务端要查询的字段（订阅谓词等），schema 里建可查询索引。加密字段服务端看不见，不能出现在这里。

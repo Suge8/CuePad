@@ -1,8 +1,8 @@
 import CueStore
 import Foundation
 
-/// 会话行的第三行（全 App 的会话行同一条，`PiSessionRow`）：结束请求的进度 → 没送到的原因 → 回复框里没发的草稿 → 到哪了（`PiProgress`）→ 新会话的提示。
-/// 什么都没有时是 nil，行照样留着这一行的高度。
+/// 会话行名字下面那一句（全 App 的会话行同一条，`PiSessionRow`）：结束请求的进度 → 没送到的原因 → 回复框里没发的草稿 → 到哪了（`PiProgress`）→ 新会话的提示。
+/// 什么都没有时是 nil；整页的行这时写状态词（`lead`），窄处的行状态词本来就在前面。
 nonisolated enum PiRowLine: Equatable {
     case ending
     case endFailed(String)
@@ -11,6 +11,8 @@ nonisolated enum PiRowLine: Equatable {
     case draft(String)
     case progress(String)
     case hint(String)
+    /// 没有更要紧的一句时，整页的行写状态词（`PiShown.label`）。
+    case status(String)
 
     /// `draft` 是回复框里的草稿（`AppSettings.draftPreview`），`end` 是此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
     /// `failure` 是此刻要写的没送到的原因（`PiRename.failure` 或显示为没能送达的那条话的原因）。
@@ -24,6 +26,11 @@ nonisolated enum PiRowLine: Equatable {
         if session.state == .known(.incompatible) { return .hint("在终端里执行 /reload 就能接上") }
         return nil
     }
+
+    /// 整页的行名字下面只有这一句：等你确认时是问题、出错时是原因、工作中是在做什么，状态由状态标表达；没有这样一句时才写状态词。
+    static func lead(_ session: PiSessionState, shown: PiShown, draft: String?, end: DeliveryRequest?, failure: String? = nil) -> PiRowLine {
+        of(session, draft: draft, end: end, failure: failure) ?? .status(shown.label)
+    }
 }
 
 /// 会话"现在到哪了"的一句话（会话列表第三行、近况页状态块）：等你确认时是问题首行，干活时是当前动作（还没有动作时是正在处理的提问），
@@ -34,7 +41,8 @@ nonisolated enum PiProgress {
         case .waitingForUser: firstLine(session.question?.text ?? session.detail)
         // 还没有具体动作时写正在处理的那句提问
         case .thinking, .outputting, .tool: session.detail.flatMap(action) ?? firstLine(session.pendingPrompt).map { "正在处理：\($0)" }
-        case .delegating, .error: firstLine(session.detail)
+        case .delegating: PiSubagentLine.of(session.subagents) ?? firstLine(session.detail)
+        case .error: firstLine(session.detail)
         case .settled, .ended, .incompatible, nil: firstSentence(session.lastReply)
         }
     }

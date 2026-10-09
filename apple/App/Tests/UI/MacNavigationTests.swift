@@ -4,79 +4,53 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Mac 的导航与手机一致：侧栏点项目、Agent、会话，任务与灵感都在右侧内容区整页切换，不再弹浮窗；
-/// 有返回与前进（⌘[ ⌘]），返回回到原来那一页、原来的滚动位置；新的跳转清掉前进；开着灵感纸页时返回先收起纸页。
+/// Mac 的导航没有历史：侧栏点哪就是哪，会话也是一页；Agent 整页是会话的主页，会话页往上一层回到它（不论从哪进来）；
+/// 开着灵感纸页时往上一层先收起纸页；项目、未分类、归档、回收站与 Agent 整页没有上一层。
 @MainActor
 struct MacNavigationTests {
     let rig = TestApp()
 
-    @Test func 打开会话后返回回到原来那页_前进又回到会话() {
+    @Test func 侧栏点哪就是哪_会话也是一页() {
         let workspace = Workspace(services: rig.services)
         let project = UUID()
         workspace.show(.project(project))
+        workspace.show(.session("s1"))
+        #expect(workspace.page == .session("s1"))
 
-        workspace.openSession("s1")
-        #expect(workspace.openedSession == "s1")
-        #expect(workspace.page == .project(project))
-
-        workspace.goBack()
-        #expect(workspace.openedSession == nil)
-        #expect(workspace.page == .project(project))
-
-        workspace.goForward()
-        #expect(workspace.openedSession == "s1")
-    }
-
-    @Test func 从项目页到Agent页再返回_回到项目页() {
-        let workspace = Workspace(services: rig.services)
-        let project = UUID()
-        workspace.show(.project(project))
         workspace.show(.agent)
         #expect(workspace.page == .agent)
-
-        workspace.goBack()
+        workspace.show(.project(project))
         #expect(workspace.page == .project(project))
-        #expect(workspace.canGoForward)
     }
 
-    @Test func 新的跳转清掉前进() {
+    @Test func 会话页往上一层回到Agent整页_不论从哪进来() {
         let workspace = Workspace(services: rig.services)
-        workspace.show(.inbox)
-        workspace.openSession("s1")
-        workspace.goBack()
-        workspace.openSession("s2")
-        #expect(!workspace.canGoForward)
-        workspace.goBack()
-        #expect(workspace.openedSession == nil)
-        #expect(workspace.page == .inbox)
+        workspace.show(.project(UUID()))
+        workspace.show(.session("s1"))
+        #expect(workspace.up == .agentList)
+
+        workspace.goUp()
+        #expect(workspace.page == .agent)
+        #expect(workspace.up == nil)
     }
 
-    @Test func 开着灵感纸页时返回先收起纸页() {
+    @Test func 开着纸页时往上一层先收起纸页() {
         let workspace = Workspace(services: rig.services)
-        workspace.show(.inbox)
-        workspace.openSession("s1")
+        workspace.show(.session("s1"))
         workspace.openCard = UUID()
+        #expect(workspace.up == .closePaper)
 
-        workspace.goBack()
+        workspace.goUp()
         #expect(workspace.openCard == nil)
-        #expect(workspace.openedSession == "s1")
+        #expect(workspace.page == .session("s1"))
     }
 
-    @Test func 返回与前进回到那一页离开时的滚动位置_重新点开从顶上开始() {
+    @Test func 根页没有上一层() {
         let workspace = Workspace(services: rig.services)
-        let project = UUID()
-        workspace.show(.project(project))
-        workspace.scrolled(to: 420)
-        workspace.show(.agent)
-        workspace.scrolled(to: 90)
-
-        workspace.goBack()
-        #expect(workspace.takeRestoredScroll() == 420)
-        workspace.goForward()
-        #expect(workspace.takeRestoredScroll() == 90)
-
-        workspace.show(.project(project))
-        #expect(workspace.takeRestoredScroll() == nil)
+        for page in [Workspace.Page.project(UUID()), .inbox, .archive, .trash, .agent] {
+            workspace.show(page)
+            #expect(workspace.up == nil, "\(page)")
+        }
     }
 }
 #endif

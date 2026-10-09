@@ -10,8 +10,6 @@ extension DebugScene {
         resizeWindow()
         _ = await prepareLibrary(workspace)
         if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.sidebar = .detailOnly }
-        // -CuePadSendTo <bundle id>：发送目标先选这个应用（看发送钮的次要样式，配 editor 画面）
-        if let bundleID = defaults.string(forKey: "CuePadSendTo") { workspace.sendChoice = .app(.bundleID(bundleID)) }
         switch scene {
         case "collapsed": workspace.sidebar = .detailOnly
         case "search": workspace.overlay = .search
@@ -29,10 +27,15 @@ extension DebugScene {
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
         case "editor": workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)
+        case "attach":
+            guard let id = await card(in: workspace.currentProject, store: workspace.services.store) else { break }
+            workspace.openCard = id
+            try? await Task.sleep(for: .seconds(1))
+            workspace.attaching = try? await workspace.services.store.card(id)
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）；-CuePadChatGrow YES 时之后每 4 秒进来一条回答
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
-            if let id = sessionToOpen { workspace.openSession(id) }
+            if let id = sessionToOpen { workspace.show(.session(id)) }
             if defaults.bool(forKey: "CuePadChatGrow"), let id = sessionToOpen {
                 Task { await growChat(id, store: workspace.services.store) }
             }

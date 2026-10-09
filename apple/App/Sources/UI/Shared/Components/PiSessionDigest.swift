@@ -8,6 +8,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var project: Project?
     var deliveries: [DeliveryRequest]
     var messages: [PiChatMessage] = []
+    /// 这个会话里 Agent 发到手机上看的文件（对话里按 `.preview` 消息的位置显示，见 `PiChat.entries`）。
+    var previews: [PiPreview] = []
 
     /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条改名）。
     var title: String? {
@@ -31,7 +33,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 
     /// 会话页要观察的表。
-    static let tables: Set<StoreTable> = [.piSessionStates, .piMessages, .deliveryRequests, .projects]
+    static let tables: Set<StoreTable> = [.piSessionStates, .piMessages, .previews, .deliveryRequests, .projects]
 
     static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {
         let session = try store.piSessionPage(PiSessionQuery(id: id)).items.first?.state
@@ -40,7 +42,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             session: session,
             project: try session?.projectID.flatMap { try store.project($0) },
             deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
-            messages: try ref.map { try store.piMessages(of: $0) } ?? [])
+            messages: try ref.map { try store.piMessages(of: $0) } ?? [],
+            previews: try ref.map { try store.previews(of: $0) } ?? [])
     }
 }
 
@@ -99,7 +102,7 @@ struct Callout<Accessory: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
-            .font(prominent ? .title3.weight(.medium) : .body)
+            .font(prominent ? Typography.title : Typography.body)
             accessory
         }
         .padding(16)
@@ -142,11 +145,11 @@ struct QuestionCard: View {
             controls.disabled(answering || !services.reachesPiHost)
             if !services.reachesPiHost {
                 Text("\(SyncSummary(services.syncStatus).title)，现在答不了；同步恢复后再答，或在 Mac 上回答")
-                    .font(.footnote).foregroundStyle(palette.ink3)
+                    .font(Typography.meta).foregroundStyle(palette.ink3)
             } else if answering, sent?.status == .known(.succeeded) {
-                Text("已答，等 Mac 上的 Agent 继续").font(.footnote).foregroundStyle(palette.ink3)
+                Text("已答，等 Mac 上的 Agent 继续").font(Typography.meta).foregroundStyle(palette.ink3)
             } else if let failure {
-                Text(failure).font(.footnote).foregroundStyle(palette.failure)
+                Text(failure).font(Typography.meta).foregroundStyle(palette.failure)
             }
         }
     }
@@ -212,7 +215,7 @@ private struct AnswerButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         configuration.label
-            .font(.body.weight(.medium))
+            .font(Typography.body.weight(.medium))
             .foregroundStyle(prominent ? palette.onAccent : palette.ink)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
@@ -248,7 +251,7 @@ struct DeliveryStatusLabel: View {
             case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(palette.ink2)
             }
         }
-        .font(.footnote.weight(.medium))
+        .font(Typography.meta.weight(.medium))
         .id(request.status)
         .transition(.opacity)
         .animation(Motion.quick, value: request.status)
@@ -258,7 +261,7 @@ struct DeliveryStatusLabel: View {
 /// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："已运行 4 分"、"已等 30 秒"、"已发出 3 秒"、"1 小时 2 分前"。
 struct PiElapsed: View {
     let shown: PiShown
-    var font: Font = .footnote
+    var font: Font = Typography.meta
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -277,7 +280,7 @@ struct PiElapsed: View {
 }
 
 /// `PiClock` 的文字在哪些时刻会变（见 `nextChange`）。
-private struct PiClockSchedule: TimelineSchedule {
+struct PiClockSchedule: TimelineSchedule {
     let clock: PiClock
 
     func entries(from startDate: Date, mode: TimelineScheduleMode) -> some Sequence<Date> {

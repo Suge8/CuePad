@@ -9,8 +9,8 @@ extension Command {
     options: [
       .project("限定项目，可重复"), .inbox, .allProjects,
       Opt("images", "只要含图片的"), Opt("no-images", "只要不含图片的"),
-      Opt("sent", "只要发送过的"), Opt("unsent", "只要从未发送过的"),
-      Opt("to", "只要发送到该目标的：pi | app | clipboard，可加 :名称（如 app:Cursor）", value: "目标"),
+      Opt("sent", "只要交给过 Agent 的"), Opt("unsent", "只要从没交给过 Agent 的"),
+      Opt("to", "只要交给过这个 Agent 会话的（会话名）", value: "会话名"),
       Opt("days", "只要最近 N 天内修改过的", value: "N"),
       Opt("trash", "搜回收站里的内容"),
       Opt("limit", "最多返回几条（默认 \(defaultLimit)）", value: "N"),
@@ -82,12 +82,7 @@ extension Command {
       if wantsSent { throw CLIError.usage("--unsent 不能与 --sent / --to 同用") }
       return .never
     }
-    guard let target = args.value("to") else { return wantsSent ? .sent() : .any }
-    let parts = target.split(separator: ":", maxSplits: 1).map(String.init)
-    let kinds: [String: SendTargetKind] = ["pi": .piSession, "app": .app, "clipboard": .clipboard]
-    guard let kind = kinds[parts[0].lowercased()] else {
-      throw CLIError.usage("--to 的目标种类是 pi / app / clipboard，收到「\(target)」")
-    }
-    return .sent(kind: .known(kind), name: parts.count > 1 ? parts[1] : nil)
+    guard let name = args.value("to") else { return wantsSent ? .sent() : .any }
+    return .sent(kind: .known(.piSession), name: name)
   }
 }
