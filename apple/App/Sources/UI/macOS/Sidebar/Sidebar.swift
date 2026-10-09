@@ -215,8 +215,7 @@ private struct PiSection: View {
     @State private var renaming: PiSessionState?
     @State private var reloadOpen = false
 
-    /// 侧栏只列在线的与最近结束的这几个，其余在"全部会话"里：侧栏回答"现在"，历史不占它。
-    nonisolated static let pastLimit = 3
+    nonisolated static let pastLimit = PiSessionState.sidebarPastLimit
 
     private var showsRows: Bool { workspace.page != .agent || workspace.openedSession != nil }
 
@@ -291,8 +290,11 @@ private struct PiSection: View {
 extension PiSessionState {
     /// 侧栏 Pi 分组的行：本机在线的（桥上实时，`live`）与同步记录里没结束的（别的 Mac 上的）一起按要你注意的先后，
     /// 其后是已结束的；同一个会话只出现一次（本机实时优先），已结束的最多 `pastLimit` 行。`recorded` 是会话列表查询的一页。
+    /// 侧栏只列在线的与最近结束的这几个，其余在"全部会话"里：侧栏回答"现在"，历史不占它。
+    nonisolated static let sidebarPastLimit = 3
+
     static func sidebarRows(
-        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], pastLimit: Int
+        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], pastLimit: Int = sidebarPastLimit
     ) -> [PiSessionState] {
         let shown = Set(live.map(\.sessionID))
         let others = recorded.filter { !shown.contains($0.sessionID) }
