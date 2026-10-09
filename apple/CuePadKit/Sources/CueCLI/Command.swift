@@ -31,7 +31,7 @@ struct Command: Sendable {
 
   var name: String { path.joined(separator: " ") }
 
-  static let all: [Command] = project + card + task + [search] + conflicts
+  static let all: [Command] = project + card + task + [search, show] + conflicts
 }
 
 /// 命令的输出：文本给人读，`json` 给 agent；`--json` 时只输出后者。

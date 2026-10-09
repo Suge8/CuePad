@@ -380,7 +380,7 @@ extension CueStore {
   /// 所以记录与文件始终配对；删不掉的文件保留记录并返回其哈希。
   /// 只看被删卡片引用过的图片，不做全表扫描：刚粘贴、正文尚未保存的图片不能被顺手回收。
   /// 不处理跨设备竞态：另一台设备可能刚好在引用同一哈希。
-  private func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
+  func reclaimAttachments(_ candidates: Set<String>) throws -> [String] {
     var failed: [String] = []
     for hash in candidates.sorted() where try !isImageReferenced(hash) {
       do { try files.remove(hash: hash) } catch {
@@ -392,17 +392,18 @@ extension CueStore {
     return failed
   }
 
-  /// 还有卡片正文（含回收站里的卡）或发送记录快照（一键重发要用）引用这张图片。
+  /// 还有卡片正文（含回收站里的卡）或发送记录快照（一键重发要用）引用这张图片，或有预览用着这份文件。
   func isImageReferenced(_ hash: String) throws -> Bool {
     try db.first(
       """
       SELECT 1 FROM cards WHERE instr(body, ?1) > 0
       UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
-      """, [CueFormat.imageMarkup(id: hash)]) { _ in true } != nil
+      UNION ALL SELECT 1 FROM previews WHERE hash = ?2
+      """, [CueFormat.imageMarkup(id: hash), hash]) { _ in true } != nil
   }
 
   /// 事务已提交后，把删不掉文件的哈希作为错误报告（永久删除本身已生效）。
-  private func reportingFileFailures(_ body: () throws -> [String]) throws {
+  func reportingFileFailures(_ body: () throws -> [String]) throws {
     let failed = try body()
     if !failed.isEmpty { throw CueStoreError.attachmentFilesNotRemoved(failed) }
   }

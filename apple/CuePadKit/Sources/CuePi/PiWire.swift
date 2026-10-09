@@ -4,7 +4,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 7
+    static let protocolVersion = 8
 
     struct State: Decodable {
         var kind: String
@@ -137,6 +137,13 @@ enum PiWire {
         var error: String?
     }
 
+    /// 扩展代 Pi 的 `cuepad_show` 工具调用请 CuePad 收下一个文件作预览（协议 v8 起）；`path` 已是绝对路径
+    struct Show: Decodable {
+        var id: String
+        var path: String
+        var title: String?
+    }
+
     struct Bye: Decodable { var reason: String }
     struct StateMessage: Decodable { var state: State }
 
@@ -146,6 +153,7 @@ enum PiWire {
         case state(State)
         case info(Info)
         case ack(Ack)
+        case show(Show)
         case bye(reason: String)
     }
 
@@ -161,6 +169,7 @@ enum PiWire {
         case "state": return .state(try decoder.decode(StateMessage.self, from: line).state)
         case "info": return .info(try decoder.decode(Info.self, from: line))
         case "ack": return .ack(try decoder.decode(Ack.self, from: line))
+        case "show": return .show(try decoder.decode(Show.self, from: line))
         case "bye": return .bye(reason: try decoder.decode(Bye.self, from: line).reason)
         case let other: throw DecodeError.unknownType(other)
         }
@@ -194,6 +203,22 @@ enum PiWire {
 
     static func pasteCommand(id: String, text: String) throws -> Data {
         try encode(Command(t: "paste", id: id, text: text))
+    }
+
+    private struct ShownReply: Encodable {
+        var t = "shown"
+        var id: String
+        var ok: Bool
+        var preview: String?
+        var note: String?
+        var error: String?
+    }
+
+    static func shownReply(id: String, _ result: Result<PiShowReply, any Error>) throws -> Data {
+        switch result {
+        case .success(let shown): try encodeLine(ShownReply(id: id, ok: true, preview: shown.preview, note: shown.note))
+        case .failure(let error): try encodeLine(ShownReply(id: id, ok: false, error: error.localizedDescription))
+        }
     }
 
     private struct ReloadCommand: Encodable {

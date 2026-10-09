@@ -145,6 +145,19 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE previews (
+        "___recordID" REFERENCE QUERYABLE,
+        sessionID     STRING,
+        hash          STRING,
+        name          ENCRYPTED STRING,
+        title         ENCRYPTED STRING,
+        byteCount     INT64,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE tags (
         "___recordID" REFERENCE QUERYABLE,
         color         STRING,

@@ -127,6 +127,7 @@ struct ProjectScreen: View {
         MasonryLayout(minColumnWidth: sizeClass == .regular ? 220 : 150, maxColumns: 4, spacing: 12) {
             ForEach(ids.compactMap { page.entries[$0] }) { entry in
                 CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
+                    .transition(Motion.item)
             }
         }
     }
@@ -197,7 +198,8 @@ private struct FocusCard: View {
 
     @ViewBuilder private var intro: some View {
         if let intro = data.project?.intro {
-            Text(intro).font(.headline).foregroundStyle(palette.ink)
+            // 介绍是这个项目的一句说明，不和下面的任务抢标题的分量
+            Text(intro).font(.subheadline).foregroundStyle(palette.ink2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }

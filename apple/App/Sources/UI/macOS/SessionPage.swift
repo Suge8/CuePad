@@ -172,13 +172,13 @@ struct SessionPage: View {
     }
 
     private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
-        let followKey = PiConversation.followKey(session: session, messages: digest.messages, deliveries: digest.deliveries)
+        let followKey = PiConversation.followKey(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
         return ChatScroll(followKey: followKey, follow: $follow) {
             VStack(spacing: 14) {
                 if fetchingTranscript(digest) {
                     Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
                 }
-                PiConversation(session: session, messages: digest.messages, deliveries: digest.deliveries)
+                PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
             }
             .padding(.vertical, 16)
             .readingColumn(maxWidth: Self.readingWidth, inset: 24)

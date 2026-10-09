@@ -24,7 +24,7 @@ struct ProjectPage: View {
                 ScrollView {
                     content.id("top")
                 }
-                .overlay { EdgeFade.underInputBar }
+                .overlay { BarScrim.underInputBar }
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.quick) { collapsed = isCollapsed }
                 }

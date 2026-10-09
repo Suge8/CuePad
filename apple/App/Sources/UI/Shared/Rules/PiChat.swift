@@ -1,12 +1,15 @@
 import CueStore
 import Foundation
 
-/// 会话页对话里的一条：你说的（右侧气泡），Pi 的一轮回答（左侧全宽，上面一行这一轮的经过），或会话文件里的一行系统记录（压缩，居中一行小字）。
+/// 会话页对话里的一条：你说的（右侧气泡），Pi 的一轮回答（左侧全宽，上面一行这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
+/// 或 Agent 发到手机上看的一个文件（预览卡）。
 nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     let id: UUID
     let role: PiChatRole
     let text: String
     let meta: String?
+    /// 预览：要显示的预览记录
+    var preview: PiPreview?
 
     var isUser: Bool { role == .user }
 }
@@ -15,11 +18,21 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
 nonisolated enum PiChat {
     /// 对话按先后（消息已按 seq 升序）：你的话与 Pi 的回答各成一条，回答带这一轮的经过。认不出说话人的不显示。
     /// 对话只来自 Pi 的会话文件（唯一事实源），与终端里看到的一致。
-    static func entries(_ messages: [PiChatMessage]) -> [PiChatEntry] {
-        messages.compactMap { message in
+    /// 预览卡的位置就是会话文件里工具调用那一行的位置（`.preview` 消息，正文是预览 id），预览记录只提供文件与标题：
+    /// 记录还没同步到的先不显示；没有对应对话条的预览（命令行投的）按时间接在末尾。
+    static func entries(_ messages: [PiChatMessage], previews: [PiPreview] = []) -> [PiChatEntry] {
+        let byID = Dictionary(previews.map { ($0.id.uuidString.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
+        var placed: Set<UUID> = []
+        var entries: [PiChatEntry] = messages.compactMap { message in
             guard let role = message.role.known else { return nil }
-            return PiChatEntry(id: message.id, role: role, text: message.text, meta: meta(message))
+            guard role == .preview else { return PiChatEntry(id: message.id, role: role, text: message.text, meta: meta(message)) }
+            guard let preview = byID[message.text.lowercased()] else { return nil }
+            placed.insert(preview.id)
+            return PiChatEntry(id: message.id, role: role, text: message.text, meta: nil, preview: preview)
         }
+        entries += previews.filter { !placed.contains($0.id) }.sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }
+            .map { PiChatEntry(id: $0.id, role: .preview, text: $0.id.uuidString.lowercased(), meta: nil, preview: $0) }
+        return entries
     }
 
     /// Pi 回答上方的一行："运行了 5 个工具 · 2 分"；没调工具时"用时 8 秒"（时长写法见 `PiClock.duration`）。你的话没有。
