@@ -15,10 +15,19 @@ enum PerfProbe {
         waiting.removeValue(forKey: event)?.resume()
     }
 
-    /// 先登记等待，再执行 `trigger`，等到下一次 `event`。
-    static func wait(for event: String, after trigger: () -> Void) async {
+    /// 忘掉 `event` 的首次时间，下一次 `mark` 重新记。
+    static func reset(_ event: String) { firstSeen[event] = nil }
+
+    /// 先登记等待，再执行 `trigger`，等到下一次 `event`；给了 `timeout`（秒）时最多等这么久。
+    static func wait(for event: String, timeout: TimeInterval? = nil, after trigger: () -> Void) async {
         await withCheckedContinuation { continuation in
             waiting[event] = continuation
+            if let timeout {
+                Task {
+                    try? await Task.sleep(for: .seconds(timeout))
+                    waiting.removeValue(forKey: event)?.resume()
+                }
+            }
             trigger()
         }
     }
@@ -73,7 +82,7 @@ enum PerfBench {
     private static let agentFrames = 6000
 
     /// 用滚轮事件把项目页从顶滚到底再滚回顶（每帧 40pt，约 2400pt/s 的快速滚动），记下每帧间隔。
-    private static func scroll(in window: NSWindow, view: NSView, directions: [Int] = [-1, 1], frames: Int = 240) async -> [String: Any] {
+    static func scroll(in window: NSWindow, view: NSView, directions: [Int] = [-1, 1], frames: Int = 240) async -> [String: Any] {
         // CGEvent 的位置是全局坐标、原点在主屏左上；窗口换算出来的屏幕坐标原点在左下，要翻一下，否则事件落不到内容区中间
         let onScreen = window.convertPoint(toScreen: CGPoint(x: view.bounds.midX, y: view.bounds.midY))
         let location = CGPoint(x: onScreen.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - onScreen.y)
@@ -151,7 +160,7 @@ enum PerfBench {
         return query
     }
 
-    private static func ms(_ seconds: TimeInterval) -> Double { (seconds * 10_000).rounded() / 10 }
+    static func ms(_ seconds: TimeInterval) -> Double { (seconds * 10_000).rounded() / 10 }
 
     private static var processStart: Date {
         var info = kinfo_proc()
@@ -163,7 +172,7 @@ enum PerfBench {
     }
 
     /// 物理内存占用（活动监视器"内存"一栏同口径）。
-    private static func footprintMB() -> Double {
+    static func footprintMB() -> Double {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
         _ = withUnsafeMutablePointer(to: &info) {
@@ -175,7 +184,7 @@ enum PerfBench {
 
 /// 用窗口的 display link 记下每一帧的时间戳；帧间隔超过刷新间隔 1.5 倍的算掉帧（按缺了几帧计）。
 @MainActor
-private final class FrameRecorder: NSObject {
+final class FrameRecorder: NSObject {
     private var link: CADisplayLink?
     private var stamps: [CFTimeInterval] = []
     private var refresh: CFTimeInterval = 1.0 / 60

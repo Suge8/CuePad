@@ -11,7 +11,9 @@ struct MarkdownText: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(MarkdownBlock.parse(source).enumerated()), id: \.offset) { index, block in
+                // 选择按块开（一个块是一个独立的文本，选区本来就不跨块），悬停时只重建指针下的这一块
                 self.block(block)
+                    .selectableOnHover()
                     // 标题与上一块拉开一点，标出新的一节
                     .padding(.top, index > 0 && block.isHeading ? 6 : 0)
             }
@@ -19,7 +21,6 @@ struct MarkdownText: View {
         // 中文正文行距放开一点：长回答是会话页的主角，读起来不挤
         .lineSpacing(Typography.readingLineSpacing)
         .fixedSize(horizontal: false, vertical: true)
-        .textSelection(.enabled)
     }
 
     @ViewBuilder private func block(_ block: MarkdownBlock) -> some View {
