@@ -43,7 +43,7 @@ struct SettingsView: View {
             } header: {
                 SettingsHeader("Pi")
             } footer: {
-                SettingsFooter("扩展让 CuePad 看到 Pi 会话的实时状态，并把提示词（含图片）直接发进会话。安装或升级后，已在运行的会话在终端里执行 /reload 就能用上。")
+                SettingsFooter("扩展让 CuePad 看到 Pi 会话的实时状态，并把提示词（含图片）直接发进会话；技能让 Agent 知道怎么把页面和截图发到手机上看。安装或升级后，已在运行的会话在终端里执行 /reload 就能用上。")
             }
             Section { CommandLineToolRow() } header: { SettingsHeader("命令行") }
             Section { UpdateRow() } header: { SettingsHeader("更新") }
@@ -158,7 +158,7 @@ private struct PiExtensionRow: View {
     @State private var result: (text: String, failed: Bool)?
 
     var body: some View {
-        let status = services.piExtension.status
+        let status = services.piIntegration.status
         LabeledContent("Pi 版本") {
             switch status?.pi {
             case .none: Text("检测中…").foregroundStyle(.secondary)
@@ -171,7 +171,7 @@ private struct PiExtensionRow: View {
         if let installation = status?.pi, !installation.isSupported {
             PiSetupGuide(installation: installation, showsTitle: false)
         }
-        LabeledContent("CuePad 扩展") {
+        LabeledContent("CuePad 扩展与技能") {
             HStack {
                 Text(fileLabel(status?.file)).foregroundStyle(.secondary)
                 if status?.pi.isSupported == true, needsInstall(status?.file) {
@@ -184,17 +184,17 @@ private struct PiExtensionRow: View {
         }
     }
 
-    private func fileLabel(_ file: PiExtensionFile?) -> String {
+    private func fileLabel(_ file: PiIntegrationFile?) -> String {
         switch file {
         case .none: ""
         case .missing: "未安装"
         case .current: "已是最新"
         case .outdated(let installed): "已安装旧版（v\(installed)）"
-        case .foreign: "扩展目录里有同名的其他文件，未改动"
+        case .foreign: "扩展或技能目录里有同名的其他文件，未改动"
         }
     }
 
-    private func needsInstall(_ file: PiExtensionFile?) -> Bool {
+    private func needsInstall(_ file: PiIntegrationFile?) -> Bool {
         switch file {
         case .missing, .outdated: true
         default: false
@@ -206,7 +206,7 @@ private struct PiExtensionRow: View {
         Task {
             defer { working = false }
             do {
-                try await services.piExtension.install()
+                try await services.piIntegration.install()
                 result = ("已安装；已在运行的 Pi 会话重启后生效", false)
             } catch {
                 result = (error.localizedDescription, true)

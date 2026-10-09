@@ -34,19 +34,23 @@ struct PiChatTests {
         PiPreview(sessionID: "s", hash: String(repeating: "a", count: 64), name: "\(title).html", title: title, byteCount: 10, createdAt: start.addingTimeInterval(second))
     }
 
-    /// 会话文件里工具调用留下的预览条在哪、预览就在对话里的哪；预览记录只提供文件与标题。
-    /// 记录还没同步到的先不显示（到了就出现）；没有对应对话条的（命令行投的）按时间接在末尾。
-    @Test func 预览卡在对话里的位置由会话文件里的那一条定() {
-        let login = preview("登录页"), report = preview("报告"), late = preview("命令行投的", at: 50), unsynced = UUID()
-        let entries = PiChat.entries(
-            [message(1, .user, "给我看看"), message(2, .preview, login.id.uuidString.lowercased()), message(3, .preview, unsynced.uuidString.lowercased()),
-             message(4, .pi, "发给你了", tools: 2, took: 30), message(5, .preview, report.id.uuidString.lowercased())],
-            previews: [late, report, login])
+    /// 预览卡按创建时间插进对话：在它之前最近的那条之后（所有来源同一条规则）。一轮里发的预览在你的话之后、这一轮的回答之前，
+    /// 比最后一条还晚的接在末尾；同一时刻创建的按创建先后。
+    @Test func 预览卡按创建时间插进对话() {
+        let timed = [
+            PiChatMessage(sessionID: "s", entryID: "e1", seq: 1, role: .user, text: "给我看看", at: start),
+            PiChatMessage(sessionID: "s", entryID: "e2", seq: 2, role: .pi, text: "发给你了", at: start.addingTimeInterval(30), toolCount: 2, roundStartedAt: start),
+            PiChatMessage(sessionID: "s", entryID: "e3", seq: 3, role: .user, text: "再来一份", at: start.addingTimeInterval(100)),
+            PiChatMessage(sessionID: "s", entryID: "e4", seq: 4, role: .pi, text: "好了", at: start.addingTimeInterval(130)),
+        ]
+        let first = preview("登录页", at: 10), second = preview("截图", at: 20), third = preview("报告", at: 110), last = preview("最后", at: 500)
 
-        #expect(entries.map(\.role) == [.user, .preview, .pi, .preview, .preview])
-        #expect(entries.compactMap(\.preview).map(\.title) == ["登录页", "报告", "命令行投的"])
-        #expect(entries.map(\.isUser) == [true, false, false, false, false])
-        #expect(PiChat.meta(message(2, .preview, "x")) == nil)
+        let entries = PiChat.entries(timed, previews: [last, third, second, first])
+
+        #expect(entries.map { $0.preview?.title ?? $0.text } == ["给我看看", "登录页", "截图", "发给你了", "再来一份", "报告", "好了", "最后"])
+        #expect(entries.map(\.role) == [.user, .preview, .preview, .pi, .user, .preview, .pi, .preview])
+        #expect(entries.map(\.isUser) == [true, false, false, false, true, false, false, false])
+        #expect(PiChat.entries(timed).count == 4)  // 没有预览就只有对话
     }
 
     @Test func 每轮回答上方写调了几个工具与做了多久() {
