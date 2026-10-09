@@ -179,7 +179,8 @@ struct PromptCard: View {
                         .foregroundStyle(fresh ? palette.signature : palette.ink2)
                         .padding(.horizontal, fresh ? 12 : 4).frame(height: TaskMetrics.chipHeight)
                         .background(fresh ? palette.signature.opacity(0.12) : .clear, in: .capsule)
-                        .frame(minHeight: TaskMetrics.chipTarget).contentShape(.capsule)
+                        // 点得到的范围上下各多出一截，但不撑高卡片：卡片底边只比这一排低一个内边距
+                        .contentShape(.rect.inset(by: -(TaskMetrics.chipTarget - TaskMetrics.chipHeight) / 2))
                 }
                 .buttonStyle(PressStyle())
                 .disabled(text.title.isEmpty && text.images.isEmpty)

@@ -74,8 +74,10 @@ struct ShelfScreen: View {
                 CardSearchResults(query: $query, scope: .all)
             } else {
                 ScrollView {
-                    if let data { content(data) }
+                    // 读到数据时整页淡入，不是一帧里突然铺满
+                    if let data { content(data).transition(.opacity) }
                 }
+                .animation(Motion.quick, value: data == nil)
                 .refreshable { await services.syncNow() }
                 .hidingSearch($searchHidden, searching: searching)
             }
@@ -318,7 +320,7 @@ private struct PinnedShelfCard: View {
                 ShelfCounts(cards: entry.cardCount, tasks: entry.openTasks)
             }
             .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 156, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 132, maxHeight: .infinity, alignment: .topLeading)
             // 渐变只铺在填充上（不用渐变描边，见文档「视觉验收 · 性能测量」）
             .background(
                 LinearGradient(colors: [tint.opacity(palette.dark ? 0.16 : 0.1), tint.opacity(0)], startPoint: .top, endPoint: .center),
@@ -607,11 +609,16 @@ private struct AgentFaces: View {
     let ground: Color
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 28
+    @ScaledMetric(relativeTo: .headline) private var size: CGFloat = 30
+
+    /// 比例都按头像直径算：首字占 0.42；状态标的点 0.2（符号按它放大到同样分量，看上去约 0.32），中心落在右下角的外沿上，
+    /// 不压首字；相邻两个叠 0.18。
+    private var badge: CGFloat { size * 0.2 }
+    private var overlap: CGFloat { size * 0.18 }
 
     var body: some View {
         // 左边的压在右边的上面：最要紧的在最前，它的状态标不被下一个盖住
-        HStack(spacing: -size * 0.3) {
+        HStack(spacing: -overlap) {
             ForEach(Array(faces.enumerated()), id: \.element.id) { index, item in
                 face(item).zIndex(Double(faces.count - index)).transition(.scale(scale: 0.6).combined(with: .opacity))
             }
@@ -619,7 +626,7 @@ private struct AgentFaces: View {
                 // 多出来的个数紧跟在叠放的头像后面，不再垫一个圆：会被前一个头像压住半边
                 Text("+\(more)").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink3)
                     .contentTransition(.numericText())
-                    .padding(.leading, size * 0.3 + 4)
+                    .padding(.leading, overlap + 6)
                     .transition(.opacity)
             }
         }
@@ -638,10 +645,10 @@ private struct AgentFaces: View {
             .background(ground.mix(with: tint ?? palette.ink, by: tint == nil ? (palette.dark ? 0.22 : 0.12) : (palette.dark ? 0.3 : 0.18)), in: .circle)
             .background(ground, in: .circle.inset(by: -2.5))
             .overlay(alignment: .bottomTrailing) {
-                PiStateDot(shown: services.settings.shown(item), size: size * 0.26)
-                    .padding(1.5)
+                PiStateDot(shown: services.settings.shown(item), size: badge)
+                    .padding(2)
                     .background(ground, in: .circle)
-                    .offset(x: 3, y: 3)
+                    .offset(x: size * 0.14, y: size * 0.14)
             }
     }
 }
