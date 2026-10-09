@@ -275,7 +275,7 @@ private struct PiSection: View {
     @State private var reloadOpen = false
 
     var body: some View {
-        let status = services.piExtension.status
+        let status = services.piIntegration.status
         let live = services.pi.sessions
         let rows = PiSessionState.liveRows(
             live: live.map {
@@ -408,22 +408,22 @@ private struct PiSetupRow: View {
     }
 }
 
-/// 首次检测到 Pi 而扩展未装（或已过期）时征求同意；拒绝后同一版本不再询问。
+/// 首次检测到 Pi 而扩展与技能未装时征求同意；拒绝后不再询问、两样都不装。
 private struct ExtensionConsent: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var installing = false
 
     var body: some View {
-        if services.piExtension.needsConsent {
+        if services.piIntegration.needsConsent {
             VStack(alignment: .leading, spacing: 8) {
                 Label("连接 Pi", systemImage: "terminal").font(Typography.label)
-                Text("安装 CuePad 扩展后，这里能看到 Pi 会话的实时状态，并能把灵感和任务直接发进会话。会写入 Pi 的扩展目录。")
+                Text("安装 CuePad 扩展后，这里能看到 Pi 会话的实时状态，并能把提示词直接发进会话；还会装一个小技能，让 Agent 能把页面和截图发到手机上看。会写入 Pi 的扩展目录和 ~/.agents/skills。")
                     .font(Typography.meta).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack {
                     Button("不用了") {
-                        withAnimation(.easeOut(duration: 0.15)) { services.piExtension.decline() }
+                        withAnimation(.easeOut(duration: 0.15)) { services.piIntegration.decline() }
                         workspace.say("之后可在 设置 › Pi 里安装")
                     }
                     Button("安装") { install() }.buttonStyle(.borderedProminent).disabled(installing)
@@ -442,8 +442,8 @@ private struct ExtensionConsent: View {
         Task {
             defer { installing = false }
             do {
-                try await services.piExtension.install()
-                workspace.say("扩展已安装；已在运行的 Pi 会话重启后生效")
+                try await services.piIntegration.install()
+                workspace.say("已安装；已在运行的 Pi 会话重启后生效")
             } catch {
                 workspace.fail(error)
             }

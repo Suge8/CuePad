@@ -28,35 +28,6 @@ struct MacSyncTests {
         }
     }
 
-    // MARK: 发到手机的预览
-
-    /// Pi 里的 cuepad_show 工具经桥交来的请求：文件进库、记在这个会话名下；页面引用了别的文件时把缺的告诉 Agent（让它改成单文件再发）；
-    /// 拒绝时把原因原样交回，工具据此报错。
-    @Test func 工具请求的文件进库_页面缺的资源提示给Agent_拒绝带原因() async throws {
-        #expect(services.pi.showHandler != nil)
-        let page = rig.directory.appending(path: "demo.html")
-        try Data(#"<link rel="stylesheet" href="style.css"><h1>登录页</h1>"#.utf8).write(to: page)
-
-        let shown = try await services.showPreview(PiShowRequest(path: page.path, title: "登录页"), from: session("s1"))
-
-        let stored = try #require(try await services.store.previews(of: "s1").first)
-        #expect(shown.preview == stored.id.uuidString.lowercased() && stored.title == "登录页")
-        #expect(shown.note?.contains("style.css") == true)
-
-        let missing = rig.directory.appending(path: "nope.html").path
-        await #expect(throws: CueStoreError.previewUnreadable(missing)) {
-            try await services.showPreview(PiShowRequest(path: missing, title: nil), from: session("s1"))
-        }
-        #expect(try await services.store.previews(of: "s1").count == 1)
-    }
-
-    /// 给模型看的工具说明写在扩展里（TS），能发什么、多大，必须与 Store 的规则（`PiPreviewKind`、`PiPreview.maxBytes`）一致。
-    @Test func 扩展里的工具说明与预览规则一致() {
-        let source = PiExtensionBundle.source
-        #expect(source.contains(PiPreviewKind.supportedList))
-        #expect(source.contains("不超过 \(PiPreview.maxBytes / 1_000_000) MB"))
-    }
-
     // MARK: 退出
 
     /// 退出可能发生在主线程被占住时：在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等收尾的回复，

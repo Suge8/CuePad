@@ -73,7 +73,7 @@ struct MacDependencies {
     var channels: any SendChannels
     var hotkeys: any HotkeyBackend
     var paths: PiPaths
-    var installer: PiExtensionInstaller
+    var installer: PiIntegration
     var terminal: PiTerminalJumper
     var hostID: String
     /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
@@ -91,7 +91,8 @@ struct MacDependencies {
     static func live(location: LibraryLocation) -> MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)
-        let installer = PiExtensionInstaller(paths: paths)
+        let commandLineTool = CommandLineToolInstaller()
+        let installer = PiIntegration(paths: paths, cuepad: commandLineTool.helper)
         return MacDependencies(
             pi: pi,
             channels: LiveSendChannels(pi: pi),
@@ -101,7 +102,7 @@ struct MacDependencies {
             terminal: PiTerminalJumper(),
             hostID: HostIdentity.current(),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
-            commandLineTool: CommandLineToolInstaller(),
+            commandLineTool: commandLineTool,
             updater: location.isIsolated ? nil : SparkleUpdater(),
             host: PiHost(bridge: pi, paths: paths),
             locatePi: {

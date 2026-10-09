@@ -74,7 +74,7 @@ final class AppServices {
 
     #if os(macOS)
     /// Pi 扩展的检测与安装（写入前需征得同意）。
-    let piExtension: PiExtensionManager
+    let piIntegration: PiIntegrationManager
     /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
     let commandLineTool: CommandLineToolInstaller
     /// 自动更新（Sparkle）。
@@ -273,14 +273,10 @@ final class AppServices {
         terminal = mac.terminal
         locatePi = mac.locatePi
         host = mac.host
-        piExtension = PiExtensionManager(installer: mac.installer, settings: settings)
+        piIntegration = PiIntegrationManager(installer: mac.installer, settings: settings)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: library.store, host: mac.hostID)
-        mac.pi.showHandler = { [weak self] session, request in
-            guard let self else { throw PiBridgeError.previewUnavailable }
-            return try await self.showPreview(request, from: session)
-        }
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {

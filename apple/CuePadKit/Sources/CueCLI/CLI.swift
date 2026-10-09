@@ -31,7 +31,7 @@ enum CLI {
         let args = try Arguments(rest, options: command.options)
         json = args.json
         if args.help { return CLIResult(code: 0, out: Help.command(command), err: "") }
-        let call = Call(args: args, store: try openStore(environment: environment), directory: directory, stdin: stdin)
+        let call = Call(args: args, store: try openStore(environment: environment), environment: environment, directory: directory, stdin: stdin)
         return CLIResult(code: 0, out: try render(await command.run(call), json: json), err: "")
       }
     } catch {

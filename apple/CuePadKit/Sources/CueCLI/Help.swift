@@ -10,7 +10,7 @@ enum Help {
       cuepad task add 写发布说明          加任务
       cuepad task list                   看未完成任务
       cuepad task done <id>              完成任务
-      cuepad show 页面.html --session <id>  把文件发到手机上预览（Pi 会话的对话里出现预览卡）
+      cuepad show 页面.html              把文件发到手机上预览（在 Pi 里运行，对话里出现预览卡）
 
     默认项目：在绑定了目录的项目里运行时，读写默认限定该项目；--project 名称 / --inbox 指定，--all-projects 不限。
     全部命令：cuepad project --help、cuepad card --help、cuepad task --help、cuepad conflicts --help
