@@ -183,23 +183,17 @@ private struct FocusCard: View {
         if isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 intro
-                NewTaskLine(project: data.project?.id)
-                folderGuide
+                // "＋"与下面引导块的文件夹图标对齐在同一列
+                NewTaskLine(project: data.project?.id).padding(.leading, unbound == nil ? 0 : 8)
+                if let project = unbound { ProjectFolderGuide(project: project, style: .panel) }
             }
         } else {
             card
         }
     }
 
-    /// 项目还没绑文件夹时：写明，并给同名文件夹一键绑。
-    @ViewBuilder private var folderGuide: some View {
-        if let project = data.project, !workspace.hasFolder(project.id) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("还没绑定文件夹").font(.subheadline).foregroundStyle(palette.ink3)
-                ProjectFolderGuide(project: project, style: .line)
-            }
-        }
-    }
+    /// 还没绑文件夹的项目（会话归不进来，要给绑定引导）。
+    private var unbound: Project? { data.project.flatMap { workspace.hasFolder($0.id) ? nil : $0 } }
 
     @ViewBuilder private var intro: some View {
         if let intro = data.project?.intro {
@@ -239,10 +233,10 @@ private struct FocusCard: View {
                             .frame(minHeight: 44)
                     }
                 }
-            } else if data.project.map({ !workspace.hasFolder($0.id) }) == true {
+            } else if let project = unbound {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "Agent", systemImage: "waveform.path.ecg").padding(.bottom, 6)
-                    folderGuide
+                    ProjectFolderGuide(project: project, style: .inset)
                 }
             }
         }

@@ -2,58 +2,116 @@ import CueStore
 import SwiftUI
 
 /// 项目还没有文件夹时，"这个项目的 Agent"处的引导（iOS 与 Mac 共用）：Agent 会话按工作目录归入项目，没绑文件夹就一个会话也归不进来。
-/// 已有会话的文件夹与项目同名（忽略大小写）时直接给一键"绑定 <文件夹> 文件夹（N 个会话）"，有几个列几个让人选（规则 `ProjectFolders.suggestions`），
+/// 已有会话的文件夹与项目同名（忽略大小写）时直接给一键"绑定 <文件夹> · N 个会话"，有几个列几个让人选（规则 `ProjectFolders.suggestions`），
 /// 点了走同一条绑定通路（`PiBind` 请求让那台 Mac 绑；Mac 上是本机）；另有"选文件夹…"自己挑。绑好之后已有会话立即归进项目。
 /// 请求的进度与没绑成的原因读投送请求（`ProjectFolders.bindProgress`），写在建议上面。
 struct ProjectFolderGuide: View {
     enum Style {
-        /// 空态页里：建议是整宽按钮（第一个主钮），下面是"选文件夹…"。
+        /// 空态页里（Agent 页筛着这个项目）：标题与说明由空态写，这里只有按钮——第一个建议是主按钮，其余与"选文件夹…"是次要的。
         case page
-        /// 一行行的小字（栏里、输入框头部）。
+        /// 项目页里自成一小块纸：文件夹图标、一句"绑定文件夹，看这个项目的 Agent 会话"、下面一排按钮。
+        case panel
+        /// 同上但不自带纸（放进已有的纸里：Mac 项目页的 Agent 栏、iPhone 项目卡的 Agent 段）。
+        case inset
+        /// 一排小按钮（新会话输入框的头部；说明由调用方写）。
         case line
     }
 
     let project: Project
     var style = Style.page
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var guide: FolderGuide?
 
     var body: some View {
-        let progress = guide.flatMap { ProjectFolders.bindProgress(of: project.id, in: $0.requests) }
-        let suggestions = guide?.suggestions[project.id] ?? []
+        Group {
+            switch style {
+            case .page: actions.multilineTextAlignment(.center)
+            case .panel: block.padding(14).paper(radius: 16)
+            case .inset: block
+            case .line: actions
+            }
+        }
+        .observingFolderGuide(into: $guide)
+    }
+
+    private var progress: ProjectFolders.BindProgress? { guide.flatMap { ProjectFolders.bindProgress(of: project.id, in: $0.requests) } }
+    private var suggestions: [ProjectFolders.Candidate] { guide?.suggestions[project.id] ?? [] }
+
+    /// 图标 + 一句说明，下面是进度或按钮。
+    private var block: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "folder.badge.plus")
+                .font(.system(size: Self.iconSize, weight: .medium)).foregroundStyle(palette.ink2)
+                .frame(width: Self.tile, height: Self.tile)
+                .background(palette.fill, in: .rect(cornerRadius: 9, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("绑定文件夹，看这个项目的 Agent 会话").font(Self.titleFont).foregroundStyle(palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                actions
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// 进度或没绑成的原因在上；按钮：第一个建议是唯一带签名色的那颗（空态页是实心主按钮，其余地方是浅底的强调钮），
+    /// 其余建议与"选文件夹…"是次要的。没有同名建议时"选文件夹…"就是那一颗。
+    @ViewBuilder private var actions: some View {
+        let progress = progress, suggestions = suggestions
         let showsMac = Set(suggestions.map(\.hostID)).count > 1
-        VStack(alignment: style == .page ? .center : .leading, spacing: style == .page ? 12 : 4) {
+        VStack(alignment: style == .page ? .center : .leading, spacing: style == .page ? 10 : 6) {
             switch progress {
             case .binding:
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.mini)
                     Text("Mac 正在绑定文件夹…").foregroundStyle(palette.ink3)
                 }
-                .font(.footnote)
+                .font(Self.noteFont)
             case .failed(let reason):
-                Text("没绑成：\(reason)").font(.footnote).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
+                Text("没绑成：\(reason)").font(Self.noteFont).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)
             case nil: EmptyView()
             }
             if progress != .binding {
-                ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, candidate in
-                    Button(ProjectFolders.suggestionTitle(candidate, showsMac: showsMac)) { bind(candidate) }
-                        .accessibilityHint("让\(candidate.hostName ?? "那台 Mac")把这个文件夹绑给「\(project.name)」")
-                        .modifier(GuideButton(style: style, prominent: style == .page && index == 0))
-                }
-                Button("选文件夹…") { workspace.chooseFolder(for: project) }
-                    .modifier(GuideButton(style: style, prominent: false))
+                buttons(first: suggestions.first, others: Array(suggestions.dropFirst()), showsMac: showsMac)
             }
         }
-        .multilineTextAlignment(style == .page ? .center : .leading)
-        .observingFolderGuide(into: $guide)
+    }
+
+    @ViewBuilder
+    private func buttons(first: ProjectFolders.Candidate?, others: [ProjectFolders.Candidate], showsMac: Bool) -> some View {
+        let choose = Button("选文件夹…") { workspace.chooseFolder(for: project) }
+        if style == .page {
+            if let first { suggestion(first, showsMac: showsMac).modifier(GuideButton(kind: .solid)) }
+            ForEach(others, id: \.id) { suggestion($0, showsMac: showsMac).modifier(GuideButton(kind: .plain)) }
+            choose.modifier(GuideButton(kind: first == nil ? .solid : .plain))
+        } else {
+            // 主次同一排：一键绑在前、"选文件夹…"跟在后面；多出来的建议各占一行、次要样式
+            HStack(spacing: 8) {
+                if let first { suggestion(first, showsMac: showsMac).modifier(GuideButton(kind: .soft)) }
+                choose.modifier(GuideButton(kind: first == nil ? .soft : .plain))
+            }
+            ForEach(others, id: \.id) { suggestion($0, showsMac: showsMac).modifier(GuideButton(kind: .plain)) }
+        }
+    }
+
+    private func suggestion(_ candidate: ProjectFolders.Candidate, showsMac: Bool) -> some View {
+        Button(ProjectFolders.suggestionTitle(candidate, showsMac: showsMac)) { bind(candidate) }
+            .accessibilityHint("让\(candidate.hostName ?? "那台 Mac")把这个文件夹绑给「\(project.name)」")
     }
 
     private func bind(_ candidate: ProjectFolders.Candidate) {
         let id = project.id, name = project.name
         workspace.attempt { try await workspace.requestFolder(PiBind(project: id, folder: candidate.target), title: name, on: candidate.hostID) }
     }
+
+    #if os(iOS)
+    private static let tile: CGFloat = 32, iconSize: CGFloat = 15
+    private static let titleFont = Font.subheadline.weight(.medium), noteFont = Font.footnote
+    #else
+    private static let tile: CGFloat = 26, iconSize: CGFloat = 12
+    private static let titleFont = Font.system(size: 12.5, weight: .medium), noteFont = Font.system(size: 11.5)
+    #endif
 }
 
 /// 引导读到的数据：各个还没有文件夹的项目的同名建议，与绑定请求。
@@ -93,25 +151,38 @@ private struct FolderGuideObserver: ViewModifier {
     }
 }
 
+/// 引导里的按钮：实心主按钮（空态页的第一个建议）、浅底强调钮（签名色字垫选中底，其余地方的那一颗）、次要的墨色字。
+/// 高矮一致（iOS 点得到 44），同一排里底边对齐。
 private struct GuideButton: ViewModifier {
-    let style: ProjectFolderGuide.Style
-    let prominent: Bool
+    enum Kind { case solid, soft, plain }
+    let kind: Kind
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        switch style {
-        case .page:
+        switch kind {
+        case .solid:
             #if os(iOS)
-            if prominent { content.prominentButton().controlSize(.large) } else { content.buttonStyle(.plain).foregroundStyle(palette.ink2).frame(minHeight: 44) }
+            content.prominentButton().controlSize(.large)
             #else
-            if prominent { content.buttonStyle(.borderedProminent).controlSize(.large) } else { content.buttonStyle(.link).controlSize(.regular) }
+            content.buttonStyle(.borderedProminent).tint(palette.signature).controlSize(.large)
             #endif
-        case .line:
-            content.buttonStyle(.plain).font(.footnote.weight(.medium)).foregroundStyle(palette.signature)
-                .multilineTextAlignment(.leading)
-                #if os(iOS)
-                .frame(minHeight: 44, alignment: .leading)
-                #endif
+        case .soft:
+            content.buttonStyle(.plain).font(Self.font).foregroundStyle(palette.signature).lineLimit(1)
+                .padding(.horizontal, 12).frame(height: Self.height)
+                .background(palette.selection, in: .capsule)
+                .contentShape(.capsule)
+                .padding(.vertical, Self.hitPadding)
+        case .plain:
+            content.buttonStyle(.plain).font(Self.font).foregroundStyle(palette.ink2).lineLimit(1)
+                .padding(.horizontal, 4).frame(height: Self.height)
+                .contentShape(.rect)
+                .padding(.vertical, Self.hitPadding)
         }
     }
+
+    #if os(iOS)
+    private static let font = Font.subheadline.weight(.medium), height: CGFloat = 34, hitPadding: CGFloat = 5
+    #else
+    private static let font = Font.system(size: 12, weight: .medium), height: CGFloat = 24, hitPadding: CGFloat = 0
+    #endif
 }

@@ -95,7 +95,7 @@ nonisolated enum ProjectFolders {
     /// 建议按钮上的字："绑定 cuepad 文件夹（312 个会话）"；建议来自几台 Mac 时写上 Mac 名。
     static func suggestionTitle(_ candidate: Candidate, showsMac: Bool) -> String {
         let mac = showsMac ? candidate.hostName.map { " · \($0)" } ?? " · 另一台 Mac" : ""
-        return "绑定 \(candidate.folder) 文件夹（\(candidate.sessions) 个会话）" + mac
+        return "绑定 \(candidate.folder) · \(candidate.sessions) 个会话" + mac
     }
 
     /// 项目已经绑着文件夹（Mac 上只看本机）。
