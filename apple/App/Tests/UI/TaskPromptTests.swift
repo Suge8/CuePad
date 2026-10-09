@@ -78,7 +78,7 @@ struct TaskPromptTests {
         #expect(!tally.suggestsDone(try #require(try await store.card(task.id))))
     }
 
-    @Test func 提示词卡片_没发是未发_交给会话后处理中_那一轮做完是已回复() async throws {
+    @Test func 提示词卡片_没发过_交给会话后处理中_那一轮做完是已回复() async throws {
         let task = try await store.createTask("修乱序", in: nil)
         let prompt = try await store.createCard(body: "先复现", under: task.id)
         #expect(try await state(of: prompt, in: task) == "unsent")

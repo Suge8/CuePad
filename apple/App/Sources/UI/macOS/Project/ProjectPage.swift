@@ -203,29 +203,43 @@ private struct DirectoryLink: View {
 }
 
 private struct EmptyProject: View {
+    @Environment(Workspace.self) private var workspace
+
     var body: some View {
-        EmptyState(mascot: .empty, title: "还没有灵感", message: "在下方记一条，或按 ⌘N 新建").padding(.top, 48)
+        EmptyIdeas(write: workspace.focusCapture).padding(.top, 48)
     }
 }
 
 /// 空库首次打开：共享的 EmptyLibrary（同 iOS 的图标与文案），动作是 Mac 的主按钮。
 private struct Welcome: View {
-    @Environment(\.palette) private var palette
     @State private var creating = false
 
     var body: some View {
         EmptyLibrary {
-            Button { creating = true } label: {
-                Text("新建项目").font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(palette.onSignature)
-                    .padding(.horizontal, 20).frame(height: 36)
-                    .background(palette.signature, in: .capsule)
-            }
-            .buttonStyle(PressStyle())
-            .keyboardShortcut(.defaultAction)
+            Button { creating = true } label: { Text("新建项目").primaryCapsule() }
+                .buttonStyle(PressStyle())
+                .keyboardShortcut(.defaultAction)
         }
         .padding(.top, 160)
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
+    }
+}
+#endif
+
+#if os(macOS)
+extension View {
+    /// Mac 空态上的主按钮：靛青实心胶囊（一屏的焦点）；按压用 `PressStyle`。
+    func primaryCapsule() -> some View { modifier(PrimaryCapsule()) }
+}
+
+private struct PrimaryCapsule: ViewModifier {
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(palette.onSignature)
+            .padding(.horizontal, 20).frame(height: 36)
+            .background(palette.signature, in: .capsule)
     }
 }
 #endif

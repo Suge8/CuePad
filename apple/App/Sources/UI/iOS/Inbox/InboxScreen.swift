@@ -17,7 +17,7 @@ struct InboxScreen: View {
         List {
             if let cards {
                 if cards.isEmpty {
-                    EmptyState(mascot: .clean, title: "都归类好了", message: "在书架或这里随手记下的灵感，没选项目时先放在这里")
+                    EmptyIdeas { navigation.startCapture(project: .some(nil)) }
                         .listRowBackground(Color.clear)
                 } else {
                     Section {

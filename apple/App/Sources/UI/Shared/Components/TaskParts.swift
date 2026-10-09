@@ -145,8 +145,8 @@ struct PromptList: View {
     }
 }
 
-/// 一条提示词：内容预览，下面一行是它此刻怎样（未发 / 交给某会话·处理中 / 会话已结束 / 已回复，点它看会话）与交给 Agent 的钮：
-/// 还没发的是靛青的"交给 Agent"（一页的焦点），交出去过的退成墨色文字"再交一次"。点卡打开大编辑区；长按是灵感的菜单。
+/// 一条提示词：内容预览，下面一行是交给 Agent 的钮，交出去过的左边写它此刻怎样（交给某会话·处理中 / 会话已结束 / 已回复，点它看会话）：
+/// 还没发的只有靛青的"交给 Agent"（一页的焦点，不另写"未发"），交出去过的退成墨色文字"再交一次"。点卡打开大编辑区；长按是灵感的菜单。
 struct PromptCard: View {
     let prompt: Card
     let state: PromptState
@@ -198,7 +198,7 @@ struct PromptCard: View {
     @ViewBuilder private var status: some View {
         switch state {
         case .unsent:
-            Label("未发", systemImage: "circle.dashed").foregroundStyle(palette.ink3).font(TaskMetrics.caption)
+            EmptyView()
         case .launching:
             HStack(spacing: 6) {
                 Circle().strokeBorder(palette.signature, lineWidth: 1.5).frame(width: 8, height: 8)
@@ -250,19 +250,20 @@ struct PromptCard: View {
     }
 }
 
-/// 子任务：在提示词之后的次要一组，可勾的圈与标题（点标题打开），末尾一行就地加一个。
+/// 子任务：在提示词之后的次要一组，可勾的圈与标题（点标题打开）；没有子任务时整组不出现。
+/// 子任务不在这里加：在任务大纲里把任务拖到它上面就成了它的子任务。
 struct SubtaskList: View {
-    let task: Card
     let detail: TaskDetail?
     let open: (Card) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var adding = false
-    @State private var text = ""
-    @FocusState private var focused: Bool
 
     var body: some View {
         let subtasks = detail?.subtasks ?? []
+        if !subtasks.isEmpty { list(subtasks) }
+    }
+
+    private func list(_ subtasks: [Card]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("子任务").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
@@ -271,23 +272,6 @@ struct SubtaskList: View {
                 }
             }
             ForEach(subtasks) { row($0) }
-            if adding {
-                HStack(spacing: 8) {
-                    Image(systemName: "circle").foregroundStyle(palette.ink3).frame(width: TaskMetrics.icon).accessibilityHidden(true)
-                    TextField("子任务", text: $text).textFieldStyle(.plain).focused($focused).onSubmit(add)
-                }
-                .frame(minHeight: TaskMetrics.rowHeight)
-                .onChange(of: focused) { if !focused, text.isEmpty { adding = false } }
-            } else {
-                Button {
-                    adding = true
-                    focused = true
-                } label: {
-                    Label("加一个子任务", systemImage: "plus").foregroundStyle(palette.ink3)
-                        .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading).contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-            }
         }
         .font(TaskMetrics.font)
         .animation(Motion.quick, value: subtasks.map(\.id))
@@ -316,15 +300,6 @@ struct SubtaskList: View {
             .buttonStyle(.plain)
         }
         .sensoryFeedback(.success, trigger: child.status) { $1 == .done }
-    }
-
-    /// ↩ 加一个并留在输入里，接着写下一个。
-    private func add() {
-        let body = text.trimmingCharacters(in: .whitespacesAndNewlines), task = task
-        guard !body.isEmpty else { return adding = false }
-        text = ""
-        focused = true
-        workspace.perform { _ = try await $0.createTask(body, under: task.id) }
     }
 }
 

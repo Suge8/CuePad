@@ -108,6 +108,9 @@ final class Workspace {
     var overlay: Overlay?
     var notice: Notice?
     #if os(macOS)
+    /// 请底部输入栏聚焦的次数（空态的"记一条"）：输入栏的焦点在它自己那里，只看这个数变了就聚焦。
+    private(set) var captureFocusRequests = 0
+    func focusCapture() { captureFocusRequests += 1 }
     /// 鼠标停在哪张卡上、正按着哪张卡（卡片报上来的悬停与 AppKit 的鼠标事件，见 `mouse(down:)`）。不触发界面刷新。
     @ObservationIgnored private var hoveredCard: UUID?
     @ObservationIgnored private var pressedCard: UUID?

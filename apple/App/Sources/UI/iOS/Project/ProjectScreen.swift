@@ -66,10 +66,7 @@ struct ProjectScreen: View {
         LazyVStack(alignment: .leading, spacing: 12) {
             if data.project != nil { FocusCard(data: data, pi: pi).padding(.bottom, 12) }
             if data.cards.isEmpty {
-                EmptyState(mascot: .empty, title: "还没有灵感", message: "写一条，或者在下方随手记一条") {
-                    Button("记一条灵感", action: newCard).prominentButton().controlSize(.large)
-                }
-                .padding(.top, 24)
+                EmptyIdeas { navigation.startCapture(project: .some(projectID)) }.padding(.top, 24)
             }
             if !arrangement.pinned.isEmpty {
                 // 资料：长期参考的灵感，一行一条压在任务区下面
