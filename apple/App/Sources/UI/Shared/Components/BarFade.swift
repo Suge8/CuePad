@@ -9,9 +9,16 @@ extension View {
     /// 遮罩只随安全区变（不读滚动位置），静止时不重算也不重画；滚动时由渲染服务合成。
     /// 挂在滚动的那一层上：iOS 推入页由 `RouteView` 一处挂在整页上；标签根页的顶上那一排（`SearchRow`）是页里的
     /// `safeAreaBar`，整页的遮罩管不到它下面，所以根页另挂在自己的滚动区上（滚动区的上安全区含那一排）。
-    /// `below`：淡回全不透明的那一段往栏下沿以下再伸多长。标签根页那一排是几颗分开的圆钮，滚上来的内容刚过下沿时
-    /// 正好落在圆钮正下方，像圆钮的标签；根页给 12，并在内容顶上让出同样的 12，静止时第一行不落在淡出段里。
+    /// `below`：淡回全不透明的那一段往栏下沿以下再伸多长（`Bars.contentGap`）：紧贴栏下沿滚过的那一行也淡着，
+    /// 不和玻璃挤在一起、不在圆钮正下方像圆钮的标签。内容顶上要让出同样的高度，静止时第一行才不落在淡出段里。
     func fadesUnderBars(bottom: Bool = false, below: CGFloat = 0) -> some View { modifier(BarFade(bottom: bottom, below: below)) }
+}
+
+/// 页面内容与沉浸式栏之间的距离，只在这里定义：推入页由 `RouteView` 一处让出（上安全区再加这么多），
+/// 标签根页让到顶上那一排下面；栏下的淡出伸到同样深（`fadesUnderBars(below:)`），静止时第一行全不透明、
+/// 滚上去时贴着栏下沿的那一行已经淡了。各页不再自己写离顶栏多远。
+enum Bars {
+    static let contentGap: CGFloat = 12
 }
 
 private struct BarFade: ViewModifier {

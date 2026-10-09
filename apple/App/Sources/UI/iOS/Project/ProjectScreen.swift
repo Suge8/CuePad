@@ -107,8 +107,6 @@ struct ProjectScreen: View {
             }
         }
         .padding(.horizontal, 16)
-        // 与导航栏的路径一行隔开：iPad 的导航栏下沿不留空，不能靠它
-        .padding(.top, 12)
         .padding(.bottom, 24)
     }
 
