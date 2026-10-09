@@ -140,14 +140,23 @@ struct MacSyncTests {
         #expect(stored.stateSince == working.stateSince && stored.busySince == working.busySince)
     }
 
-    /// 子代理写成结构化列表（名字与此刻在干什么），一行一个；说明栏只写会话自己的说明。
+    /// 子代理写成结构化列表（名字、角色、状态、在做什么与本次运行的时刻），一行一个；说明栏只写会话自己的说明；
+    /// FireCode 以后新增的状态原样留着。
     @Test func 子代理写成结构化列表() async throws {
+        let started = Date(timeIntervalSince1970: 1_000)
+        let settled = Date(timeIntervalSince1970: 1_300)
         var master = session("s1", state: .delegating)
-        master.subagents = [PiSubagent(name: "ui", kind: "thinking"), PiSubagent(name: "core", kind: "error")]
+        master.subagents = [
+            PiSubagent(name: "ui", role: "工程师", state: "running", action: "运行 bun test", startedAt: started),
+            PiSubagent(name: "core", role: "审查员", state: "failed", action: "超时", startedAt: started, settledAt: settled),
+            PiSubagent(name: "docs", role: "写手", state: "napping"),
+        ]
         try await services.consumePiChanges(changes([.appeared(master)]))
         let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.subagents == [
-            PiSubagentState(name: "ui", activity: .known(.working)), PiSubagentState(name: "core", activity: .known(.error)),
+            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started),
+            PiSubagentState(name: "core", role: "审查员", phase: .known(.failed), action: "超时", startedAt: started, settledAt: settled),
+            PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping")),
         ])
         #expect(stored.detail == nil)
     }

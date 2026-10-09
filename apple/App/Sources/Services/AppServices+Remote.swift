@@ -316,15 +316,9 @@ extension CuePi.PiSession {
 
     /// 写进同步记录的子代理列表。
     var subagentStates: [PiSubagentState] {
-        subagents.map { subagent in
-            let activity: PiSubagentActivity =
-                switch subagent.activity {
-                case .working: .working
-                case .waitingForUser: .waitingForUser
-                case .idle: .idle
-                case .error: .error
-                }
-            return PiSubagentState(name: subagent.name, activity: .known(activity))
+        subagents.map {
+            PiSubagentState(
+                name: $0.name, role: $0.role, phase: Open(rawValue: $0.state), action: $0.action, startedAt: $0.startedAt, settledAt: $0.settledAt)
         }
     }
 }
