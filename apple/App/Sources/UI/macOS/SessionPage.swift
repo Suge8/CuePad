@@ -199,6 +199,7 @@ struct SessionPage: View {
             .onAppear { PerfProbe.mark("conversation") }
             #endif
         }
+        .fadesUnderBars()
         .environment(\.chatHighlight, highlight)
         .overlay(alignment: .trailing) { scrubber(digest) }
         .onChange(of: shown) {
