@@ -60,6 +60,11 @@ nonisolated struct ChatFollow: Equatable {
     }
 }
 
+enum ChatLayout {
+    /// 对话最新那头与最早那头的留白：最后一行离回复框（含排队、问题卡）至少这么远。
+    static let edge: CGFloat = 16
+}
+
 extension EnvironmentValues {
     /// 在倒置的聊天滚动区里（iOS）：内容按新到旧给出，每一行用 `chatRow()` 转回正向。
     @Entry var chatInverted = false
@@ -112,8 +117,16 @@ private struct ChatRow: ViewModifier {
 /// 懒加载从最新那条起排，估计高度只用在最旧的那一头、看不见的地方。正着排时最新在内容末端，它的位置要靠懒加载按估计高度
 /// 推算：回答高矮悬殊（整页粘贴的长消息、长代码块）时打开或长距离滚回最新都会落在内容外、整页空白。
 /// Mac 不倒置：滚轮不随画面翻转，倒置后滚动方向会反；所以 Mac 的对话不用懒加载，只排最近几条（`PiConversation.window`），底锚点定位。
+///
+/// 对话排在阅读栏里：最宽 `readingWidth`（含左右 `inset`），在滚动区里居中，上下各留 `edge`。栏的边距只能是滚动区的
+/// 内容边距（`contentMargins`），不能是内容外面的 padding 或居中的框：滚动位置跟着一行（滚动目标）走，内容变了就把那一行
+/// 对回可见区的左上角——行若离内容原点有一段边距，整段对话就被横着推出那一段（打开会话时整页右偏 16pt、气泡贴到屏幕边），
+/// 竖着吃掉最新那头的留白。内容边距在可见区的坐标里，行对回去正好是静止的位置。
 struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
+    private let readingWidth: CGFloat
+    private let inset: CGFloat
+    private let clearsBelow: CGFloat
     private let external: Binding<ChatFollow>?
     private let content: Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -123,11 +136,21 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State private var below: CGFloat = 0
 
     /// `follow`：页面要据贴底与否改别处（收起顶栏、输入框）时由页面持有；不给就自己持有。
-    init(followKey: Key, follow: Binding<ChatFollow>? = nil, @ViewBuilder content: () -> Content) {
+    /// `clearsBelow`（iOS）：最底下这么高（回复框下沿到屏幕底：横条区或键盘）不露对话，内容在回复框下沿淡到全透。
+    init(
+        followKey: Key, readingWidth: CGFloat, inset: CGFloat, clearsBelow: CGFloat = 0, follow: Binding<ChatFollow>? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
         self.followKey = followKey
+        self.clearsBelow = clearsBelow
+        self.readingWidth = readingWidth
+        self.inset = inset
         external = follow
         self.content = content()
     }
+
+    /// 阅读栏两边的边距：窄时是 `inset`，宽时把栏居中。
+    private func margin(_ width: CGFloat) -> CGFloat { max(inset, (width - readingWidth) / 2 + inset) }
 
     private var follow: Binding<ChatFollow> { external ?? $own }
 
@@ -137,6 +160,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     private static var inverted: Bool { false }
     #endif
     private static var newestEdge: Edge { inverted ? .top : .bottom }
+    /// 回复框下沿之上淡出的一段（在回复框玻璃后面）。
+    private static var fade: CGFloat { 12 }
 
     var body: some View {
         // 滚动区自己铺到屏幕底（见 `scroll`），外框仍是两条栏之间：浮在上面的"回到最新"与页面叠的东西都按可见区摆
@@ -163,19 +188,35 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         // 滚动区铺到屏幕底、不随底下的回复框与键盘缩放：滚动区缩放时可见内容跟着框底一起挪，看历史时一点输入框、多打一行，
         // 正在读的就被往上挤。它们占的高由对话在最新那头的一行空白让出：懒加载栈在可见区以外的行变高时补偏移，正在读的纹丝不动；
         // 贴着最新时滚动区停在起点，最新一行跟着回复框上沿走（离起点还差一点时补滚过去）
-        tracked(ScrollView { content.environment(\.chatBottomSpace, below) })
+        tracked(ScrollView { content.environment(\.chatBottomSpace, below) }.newestFirstScroll())
             .onChange(of: below) { if follow.wrappedValue.atNewest { position.scrollTo(edge: Self.newestEdge) } }
             .newestFirst()
             .ignoresSafeArea(edges: .bottom)
+            // 回复框下面那一条（横条区）不露半截气泡：只是内容的透明度遮罩，栏外不画颜色；只随这段高度变，滚动时不重算
+            .mask {
+                VStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Self.fade)
+                    Color.clear.frame(height: clearsBelow)
+                }
+                .ignoresSafeArea()
+            }
             // 铺满后伸进底下的那一段就是回复框与键盘占的高
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { below = $0 }
         #else
-        tracked(ScrollView { content.environment(\.chatAtNewest, follow.wrappedValue.atNewest) }).defaultScrollAnchor(.bottom)
+        tracked(ScrollView { content.environment(\.chatAtNewest, follow.wrappedValue.atNewest) }.defaultScrollAnchor(.bottom))
         #endif
     }
 
     private func tracked(_ scroll: some View) -> some View {
-        scroll
+        // 边距按滚动区的宽在同一次排版里定（GeometryReader 先拿到自己的尺寸再排里面），不写回状态：
+        // 宽屏（iPad、Mac 宽窗口）首帧就是居中的栏，不会先按窄边距排一帧再挪
+        GeometryReader { proxy in
+            scroll
+                // 栏贴着滚动区两边（手机、窄窗口）时，横向滚动的表格可以越过页边距滑到边上（`readingColumnBleeds`）
+                .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
+                .contentMargins(.horizontal, margin(proxy.size.width), for: .scrollContent)
+            .contentMargins(.vertical, ChatLayout.edge, for: .scrollContent)
             .scrollPosition($position)
             .onScrollPhaseChange { _, phase in follow.wrappedValue.scrolling = phase == .interacting || phase == .decelerating }
             .onScrollGeometryChange(for: Reading.self) { geometry in
@@ -198,6 +239,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                 if Self.inverted, follow.wrappedValue.atNewest { toNewest() }
                 follow.wrappedValue.contentChanged()
             }
+        }
     }
 
     /// 离最新处多远、一屏多高（取整：亚像素的抖动不触发更新）。
@@ -255,11 +297,15 @@ private extension View {
     /// 把滚动区倒过来。转 180° 而不是上下镜像：镜像（行列式为负）时系统长按预览截到的是空白；代价是滚动条转到了左边，所以藏起来。
     /// 不裁内容：对话一直滚到顶栏、回复框与键盘后面，上下都不淡出（系统的滚动边缘效果由 `RouteView` 全关；它按没转过的方向画，
     /// 开着时滚动区尺寸一变会把整片对话糊成一帧模糊）。
-    func newestFirst() -> some View {
+    /// 滚动区自己的设定（挂在 ScrollView 上，`tracked` 再把它包进量宽的一层）。
+    func newestFirstScroll() -> some View {
         scrollIndicators(.hidden)
             .scrollClipDisabled()
             .defaultScrollAnchor(.top)
-            .rotationEffect(.degrees(180))
+    }
+
+    func newestFirst() -> some View {
+        rotationEffect(.degrees(180))
             .environment(\.chatInverted, true)
     }
 }

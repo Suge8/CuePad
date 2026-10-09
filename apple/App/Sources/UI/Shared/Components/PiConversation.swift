@@ -338,10 +338,11 @@ private struct MessageMenu: View {
 }
 
 /// 对话还没同步过来时（很久前的会话、刚连上的会话）先放记录上的最近一轮：你说的话与 Agent 的回答；
-/// 还没说过话的会话写一句怎么开始。对话到了就被它替换。
+/// 还没说过话的会话是全 App 同一种空态（吉祥物加一句怎么开始），在对话区里居中。对话到了就被它替换。
 private struct RecapPreview: View {
     let session: PiSessionState
     @Environment(\.palette) private var palette
+    @Environment(\.chatBottomSpace) private var bottomSpace
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -350,7 +351,9 @@ private struct RecapPreview: View {
                 UserBubble(text: prompt)
                 if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
             } else if !session.hasStarted, session.state != .known(.ended) {
-                Text("还没说过话，在下面说第一句").font(Typography.secondary).foregroundStyle(palette.ink3)
+                EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")
+                    // 占满对话区（扣掉回复框让出的高与上下留白），吉祥物落在可见区中间
+                    .containerRelativeFrame(.vertical) { length, _ in max(0, length - bottomSpace - 2 * ChatLayout.edge) }
                     .frame(maxWidth: .infinity)
             }
         }
@@ -361,7 +364,7 @@ private struct RecapPreview: View {
 /// Pi 的一轮回答：上方一行弱化的经过，下面全宽 Markdown，长也直接全显；长按（Mac 右键）是消息菜单（`MessageMenu`）。
 private struct ReplyBlock: View {
     let text: String
-    let meta: String?
+    let meta: PiChat.RoundNote?
     let tools: PiChatMessage.Tools?
     let session: PiSessionState
     @Environment(\.palette) private var palette
@@ -373,7 +376,7 @@ private struct ReplyBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let meta { ToolActivityLine(meta: meta, tools: tools) }
+            if let meta { ToolActivityLine(note: meta, tools: tools) }
             MarkdownText(source: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

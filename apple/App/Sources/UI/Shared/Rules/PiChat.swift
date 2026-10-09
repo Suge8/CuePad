@@ -9,7 +9,8 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     let id: UUID
     let role: Role
     let text: String
-    let meta: String?
+    /// Pi 回答上方的注脚（`PiChat.meta`）。
+    let meta: PiChat.RoundNote?
     /// Pi 回答：这一轮的工具活动，点开 `meta` 那一行就地展开成清单
     var tools: PiChatMessage.Tools?
     /// 预览：要显示的预览记录
@@ -52,23 +53,35 @@ nonisolated enum PiChat {
         return entries
     }
 
-    /// Pi 回答上方的一行："改了 2 个文件，运行了 5 条命令 · 2 分钟"；没调工具时"用时 8 秒"（时长写法见 `PiClock.duration`）。你的话没有。
-    static func meta(_ message: PiChatMessage) -> String? {
-        guard message.role == .known(.pi), let started = message.roundStartedAt else { return nil }
-        let took = PiClock.duration(message.at.timeIntervalSince(started))
-        return message.tools.map { "\(toolSummary($0)) · \(took)" } ?? "用时 \(took)"
+    /// Pi 回答上方注脚的内容（`ToolActivityLine` 排成一行）："改了 2 个文件，运行了 5 条命令 · 1 条失败 · 2 分钟"；
+    /// 没调工具时只有用时（时长写法见 `PiClock.duration`）。
+    struct RoundNote: Equatable, Sendable {
+        /// 工具摘要从全到简的几种写法（`toolSummaries`），放不下时取下一种；只有失败的工具时为空。
+        var summaries: [String]
+        /// "N 条失败"：不跟着摘要省略或换行，单独标色放在末尾。
+        var failures: String?
+        var took: String
     }
 
-    /// 一轮工具活动的一句话："读了 3 个文件，改了 2 个文件，1 条失败"。分类按改文件、跑命令、读取、搜索、其他的优先级，
-    /// 三类以内全写，超过三类只写前两类、其余合计成"其余 N 个"；失败的不算进各类，单独写在最后。
-    static func toolSummary(_ tools: PiChatMessage.Tools) -> String {
+    /// 你的话与系统行没有注脚。
+    static func meta(_ message: PiChatMessage) -> RoundNote? {
+        guard message.role == .known(.pi), let started = message.roundStartedAt else { return nil }
+        let took = PiClock.duration(message.at.timeIntervalSince(started))
+        let failed = message.tools?.failed ?? 0
+        return RoundNote(summaries: message.tools.map(toolSummaries) ?? [], failures: failed > 0 ? "\(failed) 条失败" : nil, took: took)
+    }
+
+    /// 一轮工具活动的一句话，从全到简："改了 2 个文件，读了 3 个文件" → "改了 2 个文件，其余 3 个"。分类按改文件、跑命令、读取、
+    /// 搜索、其他的优先级，最全时三类以内全写、超过三类只写前两类；每简一档少写一类，少写的合计成"其余 N 个"。失败的不算进各类。
+    static func toolSummaries(_ tools: PiChatMessage.Tools) -> [String] {
         let kinds = PiChatMessage.Tools.Kind.allCases.filter { tools[$0] > 0 }
-        let listed = kinds.count > 3 ? 2 : kinds.count
-        var parts = kinds.prefix(listed).map { phrase($0, tools[$0]) }
-        let rest = kinds.dropFirst(listed).reduce(0) { $0 + tools[$1] }
-        if rest > 0 { parts.append("其余 \(rest) 个") }
-        if tools.failed > 0 { parts.append("\(tools.failed) 条失败") }
-        return parts.joined(separator: "，")
+        let most = kinds.count > 3 ? 2 : kinds.count
+        return stride(from: most, through: 1, by: -1).map { listed in
+            var parts = kinds.prefix(listed).map { phrase($0, tools[$0]) }
+            let rest = kinds.dropFirst(listed).reduce(0) { $0 + tools[$1] }
+            if rest > 0 { parts.append("其余 \(rest) 个") }
+            return parts.joined(separator: "，")
+        }
     }
 
     /// 改文件的行数："+12 −3"；没有增或没有删的那一半不写，算不出的也不写。

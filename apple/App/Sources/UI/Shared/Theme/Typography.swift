@@ -23,6 +23,8 @@ enum Typography {
     static let reading = Font.system(size: 15)
     static let readingHeading = Font.system(size: 18, weight: .semibold)
     static let code = Font.system(size: 13).monospaced()
+    /// 注脚里的等宽字（一轮回答的工具清单）：比代码块小一档，是回答的注脚、不跟回答抢。
+    static let codeNote = Font.system(size: 12).monospaced()
     /// 回答正文里的行内代码：约是阅读正文的 0.9 倍（等宽字同字号下比中文显得大）。
     static let inlineCode = Font.system(size: 13.5).monospaced()
     /// 阅读列的行距：长回答是会话页的主角，行高放到约 1.6 倍。
@@ -65,6 +67,7 @@ enum Typography {
     static let reading = Font.body
     static let readingHeading = Font.title3.weight(.semibold)
     static let code = Font.footnote.monospaced()
+    static let codeNote = Font.caption.monospaced()
     static let inlineCode = Font.callout.monospaced()
     static let readingLineSpacing: CGFloat = 3
     static let title = Font.title3.weight(.medium)

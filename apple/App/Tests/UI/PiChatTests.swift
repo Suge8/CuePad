@@ -54,26 +54,25 @@ struct PiChatTests {
     }
 
     @Test func 每轮回答上方写工具活动的一句话与做了多久() {
-        #expect(PiChat.meta(message(2, .pi, "好了", tools: .init(commands: 5), took: 125)) == "运行了 5 条命令 · 2 分钟")
-        #expect(PiChat.meta(message(2, .pi, "好了", tools: .init(reads: 1), took: 40)) == "读了 1 个文件 · 40 秒")
-        #expect(PiChat.meta(message(2, .pi, "好了", took: 8)) == "用时 8 秒")
+        let note = PiChat.meta(message(2, .pi, "好了", tools: .init(commands: 5, failed: 1), took: 125))
+        #expect(note == PiChat.RoundNote(summaries: ["运行了 5 条命令"], failures: "1 条失败", took: "2 分钟"))
+        #expect(PiChat.meta(message(2, .pi, "好了", took: 8)) == PiChat.RoundNote(summaries: [], failures: nil, took: "8 秒"))
         #expect(PiChat.meta(message(1, .user, "你好")) == nil)
     }
 
-    /// 改文件、跑命令优先于读取和搜索；三类以内全列，超过三类只列前两类、其余合计；失败的不算成功、单独写在最后。
+    /// 摘要固定一行：改文件、跑命令优先于读取和搜索；三类以内全列、超过三类只列前两类，其余合计；放不下时依次少列一类、
+    /// 并进"其余"（从全到简几种写法）。失败的不算进各类，"N 条失败"不在摘要里，单独标色放在末尾。
     @Test(arguments: [
-        (PiChatMessage.Tools(edits: 2, reads: 3), "改了 2 个文件，读了 3 个文件"),
-        (PiChatMessage.Tools(edits: 2, commands: 2, reads: 3), "改了 2 个文件，运行了 2 条命令，读了 3 个文件"),
-        (PiChatMessage.Tools(commands: 1, reads: 3, searches: 2, others: 1), "运行了 1 条命令，读了 3 个文件，其余 3 个"),
-        (PiChatMessage.Tools(edits: 1, reads: 3, searches: 1, failed: 1), "改了 1 个文件，读了 3 个文件，搜索了 1 次，1 条失败"),
-        (PiChatMessage.Tools(edits: 1, commands: 1, reads: 1, searches: 1), "改了 1 个文件，运行了 1 条命令，其余 2 个"),
-        (PiChatMessage.Tools(reads: 3, searches: 1), "读了 3 个文件，搜索了 1 次"),
-        (PiChatMessage.Tools(others: 4), "调用了 4 个工具"),
-        (PiChatMessage.Tools(commands: 2, failed: 1), "运行了 2 条命令，1 条失败"),
-        (PiChatMessage.Tools(failed: 2), "2 条失败"),
+        (PiChatMessage.Tools(edits: 2, reads: 3), ["改了 2 个文件，读了 3 个文件", "改了 2 个文件，其余 3 个"]),
+        (PiChatMessage.Tools(edits: 2, commands: 2, reads: 3),
+         ["改了 2 个文件，运行了 2 条命令，读了 3 个文件", "改了 2 个文件，运行了 2 条命令，其余 3 个", "改了 2 个文件，其余 5 个"]),
+        (PiChatMessage.Tools(commands: 1, reads: 3, searches: 2, others: 1), ["运行了 1 条命令，读了 3 个文件，其余 3 个", "运行了 1 条命令，其余 6 个"]),
+        (PiChatMessage.Tools(others: 4), ["调用了 4 个工具"]),
+        (PiChatMessage.Tools(commands: 2, failed: 1), ["运行了 2 条命令"]),
+        (PiChatMessage.Tools(failed: 2), []),
     ])
-    func 工具活动的一句话(tools: PiChatMessage.Tools, line: String) {
-        #expect(PiChat.toolSummary(tools) == line)
+    func 工具活动的一句话(tools: PiChatMessage.Tools, lines: [String]) {
+        #expect(PiChat.toolSummaries(tools) == lines)
     }
 
     @Test func 改文件的行数() {
