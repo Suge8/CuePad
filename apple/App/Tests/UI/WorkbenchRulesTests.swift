@@ -31,6 +31,13 @@ struct WallTests {
 
     // MARK: 上墙
 
+    /// 卡上"发给过谁"只写 Agent 会话：投送到应用（剪贴板等）已经下线，旧的发送记录不再当成去处写出来。
+    @Test func 卡上只写发给过的Agent会话_已下线的去处不写() {
+        #expect(SendTarget(kind: .piSession, name: "notes").shownName == "notes")
+        #expect(SendTarget(kind: .unknown("clipboard"), name: "剪贴板").shownName == nil)
+        #expect(SendTarget(kind: .mac, name: "Studio").shownName == nil)
+    }
+
     @Test func 两周内编辑的上墙_一个月内编辑且从未发送的上墙_其余进更早() {
         let recentSent = card(daysAgo: 3, sent: true)
         let unsent = card(daysAgo: 20)

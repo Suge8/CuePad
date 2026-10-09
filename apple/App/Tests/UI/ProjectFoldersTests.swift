@@ -131,6 +131,24 @@ struct ProjectFoldersTests {
         #expect(ProjectFolders.suggestions(for: cuepad, in: candidates).map(\.hostID) == ["mac-b"])
     }
 
+    // MARK: 引导在哪出现
+
+    /// 项目页里（不是你自己找来的地方）只在有同名一键建议、或正在绑、没绑成时出现；其余收进项目的"⋯"（读书、装修这类项目不会跑 Agent）。
+    /// Agent 页筛着这个项目的空态与新会话的头部是你冲着这个项目的 Agent 来的，绑定是唯一的下一步，总是出现。
+    @Test func 引导_项目页只在有同名建议或绑定进行中时出现_Agent空态与新会话总在() async throws {
+        let cuepad = try await project("CuePad"), reading = try await project("读书"), lone = try await project("Lone")
+        let suggestion = ProjectFolders.candidates(folders: [folder("cuepad")], bindings: [], projects: [cuepad], excluding: cuepad.id)
+        _ = try await store.requestBind(PiBind(project: lone.id, folder: .besideSession("s1")), title: "Lone", on: "mac-wait")
+        let guide = FolderGuide(suggestions: [cuepad.id: suggestion], requests: try await store.deliveryRequests())
+
+        for style in [ProjectFolderGuide.Style.panel, .inset] {
+            #expect(guide.shows(cuepad.id, in: style))
+            #expect(guide.shows(lone.id, in: style))
+            #expect(!guide.shows(reading.id, in: style))
+        }
+        for style in [ProjectFolderGuide.Style.page, .line] { #expect(guide.shows(reading.id, in: style)) }
+    }
+
     // MARK: 绑定请求的进度
 
     @Test func 进度_还在路上或已送到但绑定还没同步回来是正在绑_失败带原因_解除与别的项目不算() async throws {

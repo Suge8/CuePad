@@ -3,8 +3,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 书架顶上的"Agent 此刻"一条：按最要紧的事用人话说一句（谁、在怎样），次行补充其余的；会话多了不加行，只变数字与叠放的头像。
-/// 要紧的先后与 PiShown 一致：等你确认 → 出错（含没能送达）与要 /reload → 在干活（含话在路上）→ 有新回复；停着的不算。
+/// 书架顶上的"Agent 此刻"一条：主句只说谁、在怎样（一行放得下），次行说它在问什么、在做什么；好几个时主句说个数、次行带过其余的。
+/// 会话多了不加行，只变数字与叠放的头像。要紧的先后与 Agent 页列表一致（`PiShown.rank`）；停着的不算。
 struct AgentNowTests {
     private func item(
         _ id: String, _ state: PiWorkState, detail: String? = nil, question: String? = nil, reply: String? = nil, folder: String? = nil
@@ -21,15 +21,26 @@ struct AgentNowTests {
         AgentNow.of(sessions) { PiShown($0.state, delivery: $0.delivery, unread: $0.state.sessionID == "notes") }
     }
 
-    @Test func 只有一件时说清是谁在怎样_次行写在哪() {
+    @Test func 只有一件时主句说谁在怎样_次行说它在问什么做什么() {
         let deploy = now([item("deploy", .waitingForUser, question: "部署到生产吗？\n会替换当前线上的 1.4.2", folder: "ops")])
-        #expect(deploy?.headline == "deploy 在问：部署到生产吗？")
-        #expect(deploy?.detail == "在 ops")
+        #expect(deploy?.headline == "deploy 在等你确认")
+        #expect(deploy?.detail == "部署到生产吗？")
         #expect(deploy?.needsYou == true)
 
-        #expect(now([item("atlas", .tool, detail: "bash · pnpm test")])?.headline == "atlas 在干活：运行 pnpm test")
-        #expect(now([item("notes", .settled, reply: "整理好了。三件待办。")])?.headline == "notes 回复了：整理好了。")
-        #expect(now([item("atlas", .tool, detail: "bash · pnpm test")])?.needsYou == false)
+        let atlas = now([item("atlas", .tool, detail: "bash · pnpm test")])
+        #expect(atlas?.headline == "atlas 在干活")
+        #expect(atlas?.detail == "运行 pnpm test")
+        #expect(atlas?.needsYou == false)
+        let notes = now([item("notes", .settled, reply: "整理好了。三件待办。")])
+        #expect(notes?.headline == "notes 回复了")
+        #expect(notes?.detail == "整理好了。")
+    }
+
+    /// 只有一个在跑时次行让给它在做什么：其余的在叠放的头像与 Agent 页里。说不出在做什么时才带过其余的，再没有就写在哪。
+    @Test func 只有一件时次行先写它在做什么_说不出才写其余的或在哪() {
+        let reload = item("old-term", .incompatible, folder: "ops")
+        #expect(now([item("atlas", .tool, detail: "bash · pnpm test"), reload])?.detail == "运行 pnpm test")
+        #expect(now([reload])?.detail == "在 ops")
     }
 
     @Test func 同一件事好几个时说个数_次行列名字() {
@@ -54,11 +65,14 @@ struct AgentNowTests {
         #expect(six?.more == 4)
     }
 
-    /// 要紧的先后与点进去的 Agent 页列表同一套（`PiShown.rank`）：要 /reload 排在在干活之后、有新回复之前。
+    /// 要紧的先后与点进去的 Agent 页列表同一套（`PiShown.rank`）：要重载排在在干活之后、有新回复之前。
+    /// 首页面向人，不写终端命令：怎么重载写在那个会话页里。
     @Test func 要紧先后与Agent页列表一致() {
         let reload = item("old-term", .incompatible), notes = item("notes", .settled, reply: "整理好了。")
-        #expect(now([notes, reload])?.headline == "old-term 要在终端里 /reload")
+        #expect(now([notes, reload])?.headline == "old-term 要在终端里重载")
         #expect(now([notes, reload])?.detail == "还有 1 个有新回复")
+        #expect(now([item("a", .tool, detail: "bash · ls"), reload, item("b", .incompatible)])?.detail == "运行 ls")
+        #expect(now([item("a", .thinking), item("b", .thinking), reload, item("c", .incompatible)])?.detail == "还有 2 个要重载")
     }
 
     @Test func 都停着时没有这一条() {
