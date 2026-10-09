@@ -30,9 +30,8 @@ struct TrashPage: View {
                     }
                     if let data { content(data) }
                 }
-                .padding(.horizontal, Spacing.page).padding(.top, ToolbarEdge.fade + 6).padding(.bottom, 40)
+                .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 40)
         }
-        .overlay(alignment: .top) { ToolbarEdge() }
         .confirmationDialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty) {
             Button("清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
         } message: {

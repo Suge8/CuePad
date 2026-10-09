@@ -56,9 +56,10 @@ private struct GlassSurface<S: Shape>: ViewModifier {
         }
     }
 
-    private var glass: Glass {
-        interactive ? .regular.interactive() : .regular
-    }
+    /// 全 App 自绘玻璃都是 `.regular`：内容一直滚到顶栏、底部栏、回复框后面，玻璃是唯一的遮挡，栏后面不再垫模糊或渐变带。
+    /// 否决了 `.clear`（加淡色 tint 也一样）：我们玻璃后面是文字，它几乎不糊开背后的字，栏上的标题、标签与问题卡和背后的字叠在一起读不出
+    /// （系统规范也只把 clear 用在照片、视频这类背景上）；系统自己的返回钮与工具栏圆钮也是 regular，两种并排会不一致。
+    private var glass: Glass { .regular.interactive(interactive) }
 }
 
 /// 动效：只有卡片 ↔ 纸是大幅空间过渡；其余为短淡入淡出。减弱动态效果时一律直接到终态或只淡入淡出。

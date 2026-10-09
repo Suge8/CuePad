@@ -81,7 +81,7 @@ struct SessionScreen: View {
         }
         // 看历史时顶栏让开，点它原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）；点状态栏是系统的回到顶端，
         // 倒置的对话里顶端就是最新处，所以也会出现
-        .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }, edgeBlur: true,
+        .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() },
                         explanation: session.flatMap { PiShown($0).explanation }) {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)

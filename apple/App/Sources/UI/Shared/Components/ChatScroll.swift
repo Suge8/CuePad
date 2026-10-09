@@ -165,7 +165,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         // 贴着最新时滚动区停在起点，最新一行跟着回复框上沿走（离起点还差一点时补滚过去）
         tracked(ScrollView { content.environment(\.chatBottomSpace, below) })
             .onChange(of: below) { if follow.wrappedValue.atNewest { position.scrollTo(edge: Self.newestEdge) } }
-            .newestFirst(below: below)
+            .newestFirst()
             .ignoresSafeArea(edges: .bottom)
             // 铺满后伸进底下的那一段就是回复框与键盘占的高
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { below = $0 }
@@ -253,27 +253,14 @@ struct JumpToNewest: View {
 #if os(iOS)
 private extension View {
     /// 把滚动区倒过来。转 180° 而不是上下镜像：镜像（行列式为负）时系统长按预览截到的是空白；代价是滚动条转到了左边，所以藏起来。
-    /// 系统的滚动边缘效果按没转过的方向画：滚动区尺寸一变，它会把整片对话糊成一帧模糊（打字换行时一闪），所以关掉；
-    /// 不裁内容，对话照样从顶栏下面透出来（顶上本就不模糊）；底边自己淡出——`below` 是底下回复框（与键盘）占的高，
-    /// 从回复框上沿稍上方到伸进它下面的一段由实到无，再往下不画（系统的 soft 也是只淡出、不铺实底带）。
-    func newestFirst(below: CGFloat) -> some View {
+    /// 不裁内容：对话一直滚到顶栏、回复框与键盘后面，上下都不淡出（系统的滚动边缘效果由 `RouteView` 全关；它按没转过的方向画，
+    /// 开着时滚动区尺寸一变会把整片对话糊成一帧模糊）。
+    func newestFirst() -> some View {
         scrollIndicators(.hidden)
-            .scrollEdgeEffectHidden()
             .scrollClipDisabled()
             .defaultScrollAnchor(.top)
             .rotationEffect(.degrees(180))
-            .mask(alignment: .top) {
-                VStack(spacing: 0) {
-                    Rectangle()
-                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: chatBottomFade.length)
-                    Color.clear.frame(height: max(0, below - chatBottomFade.below))
-                }
-                .ignoresSafeArea(edges: .top)
-            }
             .environment(\.chatInverted, true)
     }
 }
-
-/// 倒置的滚动区底边的淡出：共 `length`，其中 `below` 在回复框下面；余下的一小段在回复框上沿之上，比对话的底边距（14）短，停在最新处时不淡掉内容。
-private let chatBottomFade = (length: CGFloat(44), below: CGFloat(32))
 #endif
