@@ -8,13 +8,12 @@ enum ActionTone: Sendable {
     case primary, neutral, quiet, destructive
 }
 
-/// 一行轻扫露出的一个动作（也画成长按菜单里的同一项）：标题、图标、颜色语义与要做的事。
-struct RowAction: Identifiable {
+/// 一行轻扫露出的一个动作（也画成长按菜单里的同一项与读屏动作）：标题、图标、颜色语义与要做的事。
+struct RowAction {
     let title: String
     let symbol: String
     let tone: ActionTone
     let run: () -> Void
-    var id: String { title }
 
     init(_ title: String, symbol: String, tone: ActionTone = .neutral, run: @escaping () -> Void) {
         self.title = title
@@ -30,12 +29,26 @@ struct RowSwipes {
     var trailing: [RowAction] = []
 }
 
-/// 动作画成菜单项或系统轻扫按钮：删除带破坏性角色。
-struct RowActionButton: View {
-    let action: RowAction
+/// 一串动作画成按钮：长按菜单项、系统轻扫按钮（`tinted` 时按语义上色）、读屏动作，删除带破坏性角色。
+/// 按位置加标题区分，同一边就算有两个同名动作也各是各的。
+struct RowActionButtons: View {
+    let actions: [RowAction]
+    var tinted = false
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        Button(action.title, systemImage: action.symbol, role: action.tone == .destructive ? .destructive : nil, action: action.run)
+        ForEach(actions.keyed, id: \.key) { item in
+            let action = item.action
+            Button(action.title, systemImage: action.symbol, role: action.tone == .destructive ? .destructive : nil, action: action.run)
+                .tint(tinted ? palette.actionFill(action.tone) : nil)
+        }
+    }
+}
+
+extension [RowAction] {
+    /// 每个动作配上"位置·标题"的标识（`ForEach` 用）。
+    var keyed: [(key: String, action: RowAction)] {
+        enumerated().map { ("\($0.offset)·\($0.element.title)", $0.element) }
     }
 }
 
@@ -49,7 +62,7 @@ extension View {
     /// 不在 `List` 里的行（任务大纲、卡片墙）：自绘出与系统轻扫同样的观感与行为——跟手露出圆角按钮，
     /// 松手过半停开、点按钮执行，一滑到底执行最外侧那个（过线一下触感），同一时刻只开一行；没有动作的一边只给一点阻力。
     /// `clipped`：滑开的内容裁在行内（拼在一张纸里的行）；单独的一张卡整张移开，不裁。
-    /// 读屏不从这里取动作：同样的事在长按菜单里，缩进与反缩进在任务行自己的读屏动作里。
+    /// 读屏：两边的动作同样挂成这一行的读屏动作（系统 `List` 的轻扫自带），露出的按钮本身不进读屏。
     func rowSwipes(_ swipes: RowSwipes, clipped: Bool = true) -> some View {
         modifier(SwipeRow(swipes: swipes, clipped: clipped))
     }
@@ -61,12 +74,8 @@ private struct ListSwipes: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .swipeActions(edge: .leading) { buttons(swipes.leading) }
-            .swipeActions(edge: .trailing) { buttons(swipes.trailing) }
-    }
-
-    private func buttons(_ actions: [RowAction]) -> some View {
-        ForEach(actions) { RowActionButton(action: $0).tint(palette.actionFill($0.tone)) }
+            .swipeActions(edge: .leading) { RowActionButtons(actions: swipes.leading, tinted: true) }
+            .swipeActions(edge: .trailing) { RowActionButtons(actions: swipes.trailing, tinted: true) }
     }
 }
 
@@ -115,16 +124,17 @@ private struct SwipeRow: ViewModifier {
             .gesture(HorizontalPan(changed: drag, ended: end))
             .sensoryFeedback(.impact(weight: .medium), trigger: armed) { !$0 && $1 }
             .onChange(of: OpenSwipe.shared.row) { _, open in if open != row, offset != 0 { settle(0) } }
+            .accessibilityActions { RowActionButtons(actions: swipes.leading + swipes.trailing) }
     }
 
     /// 露出的按钮：最外侧的是第一个；一滑到底时它占满整段、别的收起。
     private var buttons: some View {
-        let shown = abs(offset), ordered = offset > 0 ? side : side.reversed()
-        let first = side.first?.id
+        let shown = abs(offset), keyed = side.keyed, first = keyed.first?.key
         return HStack(spacing: 0) {
-            ForEach(ordered) { action in
-                let width = armed ? (action.id == first ? shown : 0) : shown / CGFloat(side.count)
-                button(action, width: width, stretched: armed && action.id == first)
+            ForEach(offset > 0 ? keyed : keyed.reversed(), id: \.key) { item in
+                let outermost = item.key == first
+                let width = armed ? (outermost ? shown : 0) : shown / CGFloat(side.count)
+                button(item.action, width: width, stretched: armed && outermost)
             }
         }
         .frame(width: shown, height: size.height)

@@ -51,7 +51,7 @@ struct ArchiveList: View {
         #endif
         .contextMenu {
             let swipes = swipes(card)
-            ForEach(swipes.leading + swipes.trailing) { RowActionButton(action: $0) }
+            RowActionButtons(actions: swipes.leading + swipes.trailing)
         }
     }
 

@@ -133,7 +133,6 @@ struct TaskLine: View {
     var marks: [ChildMark]?
     private var subtasks: TaskProgress? { .subtasks(in: marks) }
     private var tally: PromptTally { PromptTally(marks) }
-    @Environment(\.taskStructure) private var structure
     @State private var confirmsSubtasks = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -160,8 +159,6 @@ struct TaskLine: View {
             .accessibilityActions {
                 Button("打开") { navigation.openTask(task.id) }
                 if let session { Button("看 Agent 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
-                if let indent = structure?.indent { Button("缩进", action: indent) }
-                if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
             }
             .confirmationDialog(
                 TaskCopy.openSubtasks(subtasks), isPresented: $confirmsSubtasks, titleVisibility: .visible

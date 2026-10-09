@@ -82,7 +82,7 @@ struct TrashScreen: View {
         }
         .listRowBackground(palette.paper)
         .listSwipes(swipes)
-        .contextMenu { ForEach(swipes.leading + swipes.trailing) { RowActionButton(action: $0) } }
+        .contextMenu { RowActionButtons(actions: swipes.leading + swipes.trailing) }
     }
 }
 

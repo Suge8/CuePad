@@ -196,7 +196,7 @@ struct AgentScreen: View {
             .listRowBackground(palette.paper)
             .listRowSeparator(.hidden)
             .listSwipes(RowSwipes(trailing: trailing))
-            .contextMenu { ForEach(trailing.reversed()) { RowActionButton(action: $0) } }
+            .contextMenu { RowActionButtons(actions: trailing.reversed()) }
     }
 
 
