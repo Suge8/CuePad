@@ -312,7 +312,7 @@ private struct PiSection: View {
                     .padding(.horizontal, 10).padding(.vertical, 4)
                 }
                 // 在线的按会话 id 区分：状态变化时那一行不被重建。两个以上需要 /reload 的合成一行（`PiNowRow`），点开再列
-                ForEach(PiNowRow.rows(agents.visible, state: { $0 })) { nowRow in
+                ForEach(agents.displayRows) { nowRow in
                     switch nowRow {
                     case .session(let session): sessionRow(session, live: live)
                     case .reload(let sessions):
@@ -360,6 +360,12 @@ struct SidebarAgents {
     init(rows: [PiSessionState]) {
         visible = Array(rows.prefix(Self.limit))
         overflow = max(0, rows.count - Self.limit)
+    }
+
+    /// 多个 /reload 会话通常合成一行；如果这样会少于三行，侧栏宁可暂时逐个列出它们，保证"现在"真的露出三行。
+    var displayRows: [PiNowRow<PiSessionState>] {
+        let collapsed = PiNowRow.rows(visible, state: { $0 })
+        return collapsed.count >= Self.limit ? collapsed : visible.map(PiNowRow.session)
     }
 }
 

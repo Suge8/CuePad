@@ -35,7 +35,19 @@ struct PiSidebarTests {
 
         #expect(agents.visible.count == SidebarAgents.limit)
         #expect(agents.visible.prefix(2).map(\.sessionID) == ["wait", "err"])
+        #expect(agents.displayRows.count == SidebarAgents.limit)
         #expect(agents.overflow == recorded.count - SidebarAgents.limit)
+    }
+
+    @Test func 多个reload仍然露出三行() {
+        let agents = SidebarAgents(rows: [
+            session("reload-1", .incompatible), session("reload-2", .incompatible), session("reload-3", .incompatible)
+        ])
+
+        #expect(agents.displayRows.count == SidebarAgents.limit)
+        #expect(agents.displayRows.allSatisfy {
+            if case .session = $0 { true } else { false }
+        })
     }
 
     @Test func 侧栏Agent区行数不超过上限时全露出_没有还有N个() {
