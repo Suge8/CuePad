@@ -306,6 +306,8 @@ struct PiStateDot: View {
     let shown: PiShown
     var size: CGFloat = 8
     var announces = false
+    /// 要你动手的状态（等你确认、出错、没能送达）在标后垫一圈同色淡晕：整页列表里一眼先看到它们。静止，不占动效。
+    var halo = false
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 跟着旁边的字随辅助字号放大
@@ -333,6 +335,9 @@ struct PiStateDot: View {
                     LinearKeyframe(0.8, duration: 0.05)
                     CubicKeyframe(0, duration: 0.55)
                 }
+            }
+            .background {
+                if halo, shown.needsYou { Circle().fill(tint.opacity(palette.dark ? 0.2 : 0.13)).frame(width: box * 1.55, height: box * 1.55) }
             }
             .animation(Motion.quick, value: shown)
             .onChange(of: shown.status) { old, new in

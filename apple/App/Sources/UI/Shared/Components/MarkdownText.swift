@@ -16,6 +16,8 @@ struct MarkdownText: View {
                     .padding(.top, index > 0 && block.isHeading ? 6 : 0)
             }
         }
+        // 中文正文行距放开一点：长回答是会话页的主角，读起来不挤
+        .lineSpacing(3)
         .fixedSize(horizontal: false, vertical: true)
         .textSelection(.enabled)
     }

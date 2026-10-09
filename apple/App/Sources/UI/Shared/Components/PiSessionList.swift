@@ -62,19 +62,23 @@ struct PiSessionRow: View {
     @Environment(\.searchHighlight) private var highlight
 
     /// 密度与字号：整页列表（Agent 页）是 `page`，侧栏、面板、⌘K、项目页这些窄处是 `compact`。
+    /// 整页三行分三级：名字最重，第三行（在做什么、结果）是正文次墨，"所在 · 状态"与时长是更小一号的元信息。
     struct Style {
         var name: Font
         var line: Font
+        /// 所在 · 状态词与时长（整页）；窄处与第三行同一号。
+        var meta: Font
         var dot: CGFloat
         var spacing: CGFloat
         /// 三行（整页）还是两行（窄处）。
         var full = false
 
-        static let page = Style(name: .headline, line: .subheadline, dot: 8, spacing: 3, full: true)
         #if os(macOS)
-        static let compact = Style(name: .system(size: 13, weight: .medium), line: .system(size: 11), dot: 6, spacing: 1)
+        static let page = Style(name: .system(size: 14, weight: .semibold), line: .system(size: 13), meta: .system(size: 12), dot: 8, spacing: 3, full: true)
+        static let compact = Style(name: .system(size: 13, weight: .medium), line: .system(size: 11), meta: .system(size: 11), dot: 6, spacing: 1)
         #else
-        static let compact = Style(name: .body, line: .footnote, dot: 6, spacing: 1)
+        static let page = Style(name: .headline, line: .subheadline, meta: .footnote, dot: 9, spacing: 4, full: true)
+        static let compact = Style(name: .body, line: .footnote, meta: .footnote, dot: 6, spacing: 1)
         #endif
     }
 
@@ -84,16 +88,16 @@ struct PiSessionRow: View {
         let line = searchHit ?? PiRowLine.of(session, draft: services.settings.draftPreview(for: session.id), end: end, failure: failure)
         let note = shown.note ?? (PiRename.isPending(rename) ? "正在改名" : nil)
         HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
-            PiStateDot(shown: shown, size: style.dot)
+            PiStateDot(shown: shown, size: style.dot, halo: style.full)
             VStack(alignment: .leading, spacing: style.spacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 4)
                     // 时间只占它要的宽度，名字拿剩下的
-                    PiElapsed(shown: shown, font: style.line).fixedSize()
+                    PiElapsed(shown: shown, font: style.meta).fixedSize()
                 }
                 if style.full {
-                    statusLine(shown, note: note)
+                    statusLine(shown, note: note).font(style.meta)
                     text(of: line)
                 } else {
                     // 两行：状态词接着第三行的内容（你的话在路上、正在改名时是它）

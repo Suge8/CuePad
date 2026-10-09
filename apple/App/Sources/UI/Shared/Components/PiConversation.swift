@@ -42,12 +42,15 @@ struct PiConversation: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private static var spacing: CGFloat { 18 }
+    private static var spacing: CGFloat { 16 }
+    private static var turnGap: CGFloat { 14 }
 
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         if entry.isUser {
             UserBubble(text: entry.text, highlighted: entry.id == highlight)
                 .chatContextMenu { MessageMenu(text: entry.text, kind: .mine, session: session) } preview: { BubbleText(text: entry.text).padding(4) }
+                // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
+                .padding(.top, Self.turnGap)
         } else {
             ReplyBlock(text: entry.text, meta: entry.meta, session: session)
         }
@@ -184,7 +187,7 @@ private struct BubbleText: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         HStack(alignment: .center, spacing: 8) {
             if trip == .failed {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).accessibilityLabel("没能送达")
@@ -194,7 +197,7 @@ private struct BubbleText: View {
                 .lineLimit(lineLimit)
                 .textSelection(.enabled)
                 .background(alignment: .topLeading) { if let truncated, lineLimit != nil { fullHeight(truncated) } }
-                .padding(.horizontal, 14).padding(.vertical, 10)
+                .padding(.horizontal, 16).padding(.vertical, 11)
                 .background(palette.bubble, in: shape)
                 .overlay { edge(shape) }
                 // 在路上：半透明加虚线边，浅色深色一样看得出还没到
@@ -298,8 +301,12 @@ private struct ReplyBlock: View {
     private static let previewHeight: CGFloat = 420
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let meta { Text(meta).font(.caption).foregroundStyle(palette.ink3) }
+        VStack(alignment: .leading, spacing: 8) {
+            if let meta {
+                Label(meta, systemImage: "wrench.and.screwdriver")
+                    .labelStyle(MetaLabel())
+                    .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3)
+            }
             MarkdownText(source: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -396,10 +403,14 @@ private struct LiveStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if session.state.isWorking {
-                Text(session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1).truncationMode(.middle)
-                    .shimmering()
+                // 与列表同一个转着的状态标：会话页底部这一行和列表里那一行是同一件事在动
+                HStack(spacing: 8) {
+                    PiStateDot(shown: PiShown(session), size: 7)
+                    Text(session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1).truncationMode(.middle)
+                        .shimmering()
+                }
             }
             if let summary = PiSubagentSummary(session.subagents) { subagents(summary) }
         }
@@ -444,6 +455,16 @@ private struct LiveStatus: View {
             }
         }
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: showsSubagents)
+    }
+}
+
+/// 一轮回答上方的经过：小图标贴着字，比系统的 Label 间距紧，读作一行注脚。
+private struct MetaLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 5) {
+            configuration.icon.imageScale(.small).accessibilityHidden(true)
+            configuration.title
+        }
     }
 }
 
