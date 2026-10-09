@@ -282,16 +282,6 @@ final class FakeExtension: @unchecked Sendable {
         ])
     }
 
-    /// 扩展代工具调用发来的"发到手机预览"请求（`show`）；客户端的回复（`shown`）出现在 `commands` 里。
-    func requestShow(id: String, path: String, title: String?) {
-        broadcast(["t": "show", "id": id, "path": path, "title": title ?? NSNull()])
-    }
-
-    /// 客户端对 `show` 的回复（按请求 id）。
-    func shown(_ id: String) -> [String: Any]? {
-        commands.map(\.json).first { $0["t"] as? String == "shown" && $0["id"] as? String == id }
-    }
-
     /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。
     func setState(_ state: [String: Any]) {
         var s = state
