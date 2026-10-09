@@ -49,7 +49,7 @@ nonisolated enum PiSlash {
     }
 }
 
-/// 上下文圆环的读数（同一份规则：颜色档位、文案、是否建议压缩）。
+/// 上下文用量条的读数（同一份规则：颜色档位、文案、是否建议压缩）。
 nonisolated struct PiContextMeter: Equatable {
     enum Level: Equatable {
         /// 余量充足
@@ -64,7 +64,7 @@ nonisolated struct PiContextMeter: Equatable {
 
     static let tightFraction = 0.7
     static let criticalFraction = 0.9
-    /// 已用到这个比例建议压缩（圆环的说明里给"压缩"）
+    /// 已用到这个比例建议压缩（用量条的说明里给"压缩"）
     static let compactFraction = 0.8
 
     let usage: PiContextUsage
@@ -81,7 +81,7 @@ nonisolated struct PiContextMeter: Equatable {
 
     var suggestsCompact: Bool { (fraction ?? 0) >= Self.compactFraction }
 
-    /// 圆环旁的小字："21%"；未知时是一道横线。
+    /// 用量条旁的小字："21%"；未知时是一道横线。
     var percent: String { fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "—" }
 
     /// 悬停与读屏：先说这是上下文，快满了时说可以压缩。

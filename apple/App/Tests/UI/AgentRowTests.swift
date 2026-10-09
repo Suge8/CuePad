@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// 会话行（Agent 页、Mac 侧栏、Agent 整页、菜单栏面板共用）显示的状态与第三行：
-/// 刚开、还没有任何一轮的会话是"新会话"，不是"待你回复"或"有新回复"；做完一轮才算等你回复；
+/// 刚开、还没有任何一轮的会话是"新会话"，不是"该你了"或"有新回复"；做完一轮才算轮到你；
 /// 回复框里有没发的草稿时，第三行写草稿。
 @MainActor
 struct AgentRowTests {
@@ -23,13 +23,13 @@ struct AgentRowTests {
         #expect(PiShown(status: .ended).explanation == nil)
     }
 
-    @Test func 终端里刚开的会话是新会话_不是待你回复() async throws {
+    @Test func 终端里刚开的会话是新会话_不是该你了() async throws {
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "fresh", state: .settled, title: "fresh")
 
         #expect(settings.shown(try await item()).label == "新会话")
     }
 
-    @Test func 做完一轮后是有新回复_看过后是待你回复() async throws {
+    @Test func 做完一轮后是有新回复_看过后是该你了() async throws {
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas")
         try await store.writePiTranscript(PiTranscript(
             sessionID: "atlas", messages: [], recap: PiRecap(lastPrompt: "跑一下测试", lastReply: "全部通过。")))
@@ -38,7 +38,15 @@ struct AgentRowTests {
         #expect(settings.shown(done).label == "有新回复")
 
         settings.markSeen(done.state, at: .now.addingTimeInterval(1))
-        #expect(settings.shown(try await item()).label == "待你回复")
+        #expect(settings.shown(try await item()).label == "该你了")
+    }
+
+    /// 停下后的三态（新会话、有新回复、该你了）各是一种图形，都不用对勾：对勾只表示完成与记下，"轮到你了"不能读成"做完了"。
+    @Test func 停下后的三态图形各不相同_都不是对勾() {
+        let settled = [PiShown(status: .fresh), PiShown(status: .unread), PiShown(status: .idle)]
+        #expect(Set(settled.map(\.symbol)).count == 3)
+        #expect(settled.allSatisfy { !$0.symbol.contains("checkmark") })
+        #expect(Set(settled.map(\.label)) == ["新会话", "有新回复", "该你了"])
     }
 
     @Test func 回复框有草稿时第三行是草稿_清空后回到最后的回答() async throws {

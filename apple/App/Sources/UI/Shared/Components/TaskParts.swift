@@ -244,8 +244,9 @@ struct PromptCard: View {
             }
         case .replied(let item):
             sessionLink(item) {
+                // Agent 回了这一条：带字的对话气泡。不用对勾——对勾只表示完成，提示词有了回答不等于任务做完
                 line(name: item?.state.title, word: "已回复", tint: palette.ink) {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.ink)
+                    Image(systemName: "text.bubble.fill").foregroundStyle(palette.ink)
                 }
             }
         }
@@ -409,10 +410,10 @@ enum TaskMetrics {
 }
 
 /// 任务的完成圈（`TaskRing`），全 App 的任务只有这一种图形（行、任务页、书架"正在推进"、挂到任务面板、Mac 面板）：
-/// 完成是对勾；没完成的是一个实线圈，进行中左半填满，待办空心——这个形状只随状态变，
-/// 有没有下级、下级做了多少都不换掉它。有下级时进度另铺在右半：从 12 点顺时针往 6 点填一层淡色，做完多少填多少，
-/// 全做完是右半整个淡色（任务还要你自己勾：不画成实心，与完成的对勾分开）。
-/// 不用"淡圈上描一道弧"：小尺寸下那就是系统的加载转圈。扇形的变化有短过渡。
+/// 完成是对勾；没完成的是一个实线圈，进行中左半填满，待办空心——这个形状只随状态变，有没有下级、下级做了多少都不换掉它。
+/// 有下级时进度不画进圈里，在圈下面一条细的横条（`TaskProgressBar`）：做完的下级占多少填多少，
+/// 全做完是整条填满（任务还要你自己勾：圈不变成对勾）。圈里不画扇形或楔形：小比例时一根细楔像表盘指针、读成在计时；
+/// 也不在圈外描弧：小尺寸下那就是系统的加载转圈。进度条叠在圈下（落在行的第二行左边、元信息那一行旁边），不占行高。
 struct TaskRingView: View {
     let status: TaskStatus?
     let ring: TaskRing
@@ -421,11 +422,12 @@ struct TaskRingView: View {
     let size: CGFloat
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private static let faint = 0.35
+
+    private var finished: Bool { done || status == .done }
 
     var body: some View {
         Group {
-            if done || status == .done {
+            if finished {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: size))
                     .foregroundStyle(TaskGlyph.tint(.done, palette))
@@ -435,47 +437,48 @@ struct TaskRingView: View {
             }
         }
         .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
+        .overlay(alignment: .bottom) {
+            if !finished, case .progress(let done, let total) = ring {
+                TaskProgressBar(done: done, total: total, tint: TaskGlyph.tint(status, palette))
+                    .frame(width: size * 0.88)
+                    .offset(y: size * 0.2 + TaskProgressBar.height)
+                    .transition(.opacity)
+            }
+        }
         .animation(Motion.spatial(Motion.quick, reduceMotion: reduceMotion), value: ring)
         .animation(Motion.quick, value: done)
         .accessibilityHidden(true)
     }
 
-    /// 与 SF 的 circle 同尺寸同线宽的实线圈（颜色照状态）；圈里与圈线留一线缝，半圆与扇形的边才读得出来。
+    /// 与 SF 的 circle 同尺寸同线宽的实线圈（颜色照状态）；进行中左半填满，与圈线留一线缝。
     private var open: some View {
         let tint = TaskGlyph.tint(status, palette), line = max(1.4, size * 0.095)
         return ZStack {
             Circle().stroke(tint, lineWidth: line)
-            ZStack {
-                if case .progress(let finished, let total) = ring {
-                    // 右半：12 点顺时针到 6 点按比例
-                    Sector(fraction: Double(finished) / Double(max(total, 1)) / 2).fill(tint.opacity(Self.faint))
-                }
-                if status == .inProgress { Circle().trim(from: 0.25, to: 0.75).fill(tint) }
-            }
-            .padding(line * 1.1)
+            if status == .inProgress { Circle().trim(from: 0.25, to: 0.75).fill(tint).padding(line * 1.1) }
         }
         .frame(width: size * 0.88, height: size * 0.88)
         .frame(width: size * 1.02, height: size * 1.02)
     }
 }
 
-/// 从 12 点顺时针的扇形，`fraction` 0…1；可动画（任务完成圈与上下文圆环共用，同一种饼图画法）。
-nonisolated struct Sector: Shape {
-    var fraction: Double
-    var animatableData: Double {
-        get { fraction }
-        set { fraction = newValue }
-    }
+/// 任务圈下的进度：一条细的横条，做完的下级占的比例填实、其余是淡色的槽。不分格：圈只有十几点宽，分成几格就成了一串省略号。
+struct TaskProgressBar: View {
+    let done: Int
+    let total: Int
+    let tint: Color
 
-    func path(in rect: CGRect) -> Path {
-        guard fraction > 0 else { return Path() }
-        let center = CGPoint(x: rect.midX, y: rect.midY), start = Angle.degrees(-90)
-        var path = Path()
-        path.move(to: center)
-        // 视图坐标 y 朝下：clockwise: false 在屏幕上是顺时针
-        path.addArc(center: center, radius: min(rect.width, rect.height) / 2, startAngle: start, endAngle: start + .degrees(360 * fraction), clockwise: false)
-        path.closeSubpath()
-        return path
+    static let height: CGFloat = 3
+    private static let faint = 0.25
+
+    var body: some View {
+        Capsule().fill(tint.opacity(Self.faint))
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    Capsule().fill(tint).frame(width: proxy.size.width * Double(done) / Double(max(total, 1)))
+                }
+            }
+            .frame(height: Self.height)
     }
 }
 

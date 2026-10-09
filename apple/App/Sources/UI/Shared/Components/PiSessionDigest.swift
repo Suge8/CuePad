@@ -62,7 +62,7 @@ extension PiThinkingLevel {
 nonisolated struct PiConfigShown: Equatable {
     var model: PiModelOption?
     var thinking: PiThinkingLevel?
-    /// 上下文余量（会话记录上的，圆环显示；没有模型时为 nil）。
+    /// 上下文余量（会话记录上的，用量条显示；没有模型时为 nil）。
     var context: PiContextUsage?
     /// 换的请求还在路上。
     var pending: Bool
@@ -295,7 +295,7 @@ struct DeliveryStatusLabel: View {
                 let text = session?.state == .known(.ended) ? "正在唤醒" : PiDelivery.transit(request, busy: busy)
                 HStack(spacing: 6) { Spinner(.mini); Text(text) }.foregroundStyle(palette.ink2)
             case .known(.succeeded):
-                Label(request.roundTrip.map { "已送达 · \(PiClock.duration(Double($0.components.seconds)))" } ?? "已送达", systemImage: "checkmark.circle.fill")
+                Label(request.roundTrip.map { "已送达 · \(PiClock.duration(Double($0.components.seconds)))" } ?? "已送达", systemImage: "paperplane.fill")
                     .foregroundStyle(palette.ink2)
             case .known(.failed): Label("没能送达", systemImage: "exclamationmark.triangle.fill").foregroundStyle(palette.failure)
             case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(palette.ink2)

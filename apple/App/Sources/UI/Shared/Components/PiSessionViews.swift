@@ -15,7 +15,7 @@ nonisolated extension PiSessionState {
     /// 在处理中（思考、输出、运行工具、子代理）。
     var isWorking: Bool { state.isWorking }
 
-    /// 说过话：对话里有过一轮（做完的或进行中的）。终端里刚开、还没说过话的会话没有，它停在空闲不是"待你回复"。
+    /// 说过话：对话里有过一轮（做完的或进行中的）。终端里刚开、还没说过话的会话没有，它停在空闲不是"该你了"。
     var hasStarted: Bool { lastPrompt != nil || lastReply != nil || pendingPrompt != nil }
 }
 
@@ -111,7 +111,7 @@ extension AppSettings {
 /// Mac 侧栏与菜单栏、发送目标都经它。说法、颜色、状态标、动效、排序也都只按 `status` 分。
 /// 判定的先后：没能送达（你没看过）在最前；会话自己在跑或在等你确认时就是它的状态，发给它的话还在路上只是一个小标记（`note`）；
 /// 会话停着时话在路上就说路上到哪了（`PiDelivery`）；其余按 Pi 报的状态，停在空闲时再分——
-/// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"待你回复"。计时读哪一种（`clock`）也在这里定。
+/// 还没说过话是"新会话"，做完一轮你还没看是"有新回复"（`PiUnread`），看过是"该你了"（轮到你说下一句）。计时读哪一种（`clock`）也在这里定。
 nonisolated struct PiShown: Hashable, Sendable {
     enum Status: Hashable, Sendable {
         case delivery(PiDelivery)
@@ -187,7 +187,7 @@ nonisolated extension PiShown {
         case .failed: "出错"
         case .restart: "在线 · 需要 /reload"
         case .unread: "有新回复"
-        case .idle: "待你回复"
+        case .idle: "该你了"
         case .fresh: "新会话"
         case .ended: "已结束"
         case .unknown: "未知状态"
@@ -210,7 +210,7 @@ nonisolated extension PiShown {
         case .failed: "Agent 出错"
         case .restart: "Agent 在线，需要在终端里 /reload"
         case .unread: "Agent 有新回复"
-        case .idle: "Agent 待你回复"
+        case .idle: "Agent 在等你说下一句"
         case .fresh: "Agent 新会话"
         case .ended: "Agent 会话已结束"
         case .unknown: "Agent 状态未知"
@@ -298,7 +298,8 @@ extension PiShown {
         case .delivery: "arrow.up.circle"
         case .working: "smallcircle.filled.circle"
         case .unread: "circle.fill"
-        case .idle: "checkmark.circle"
+        // 轮到你说话：空的对话气泡。不用对勾——对勾只表示完成与记下，"该你了"读成"做完了"正好相反
+        case .idle: "bubble.left"
         case .fresh: "circle.dashed"
         // 不用空心圈：待办任务的圆圈就是它，任务行旁挨着会话状态时分不清
         case .ended: "circle.slash"
@@ -309,7 +310,7 @@ extension PiShown {
 
 /// 会话状态标（全 App 只此一份：Agent 页、书架、侧栏、Mac 侧栏与菜单栏、会话页顶栏、任务上的会话状态）：颜色 + 形状表达状态——
 /// 等你确认赭黄问号、出错胭脂叹号、没能送达胭脂折回箭头、工作中墨色转圈、话在路上墨色向上箭头（唤醒是日出）在呼吸、
-/// 有新回复墨色实心点、待你回复灰勾、新会话灰虚线圈、已结束更淡的带斜线圈（不与待办任务的空心圈相混）。`size` 是点的直径，符号按它放大到同样的视觉分量。
+/// 有新回复墨色实心点、该你了灰色空气泡、新会话灰虚线圈、已结束更淡的带斜线圈（不与待办任务的空心圈相混）。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 转圈与呼吸是常驻的循环动效，交给 Core Animation（`LoopLayer`），标不在屏幕上时不画；换状态时符号淡入替换，
 /// 一轮做完（工作中 → 停下）时放一圈涟漪、点弹一下，只这一次。减弱动态效果时转圈换成静止的圈点，没有呼吸与涟漪。
 /// 旁边有状态文字时读屏跳过它；`announces` 用在不写状态词的地方（整页的会话行），标自己带读屏标签。
