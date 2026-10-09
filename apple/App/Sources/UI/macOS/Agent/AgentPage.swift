@@ -135,7 +135,7 @@ struct AgentPage: View {
     }
 
     private func title(_ text: String) -> some View {
-        Text(text).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
+        Text(text).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink)
             .padding(.horizontal, 4).padding(.top, 18).padding(.bottom, 8)
             .accessibilityAddTraits(.isHeader)
     }
@@ -152,7 +152,7 @@ struct AgentPage: View {
         let session = item.state
         let endable = MacDelivery.canEnd(session) && end?.isOpen != true
         return PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, style: .page)
-            .padding(.horizontal, 12).padding(.vertical, 10)
+            .padding(.horizontal, 12).padding(.vertical, 9)
             .frame(maxWidth: .infinity, alignment: .leading)
             .sessionLink(session.sessionID)
             .contextMenu {

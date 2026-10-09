@@ -16,6 +16,8 @@ struct MarkdownText: View {
                     .padding(.top, index > 0 && block.isHeading ? 6 : 0)
             }
         }
+        // 中文正文行距放开一点：长回答是会话页的主角，读起来不挤
+        .lineSpacing(3)
         .fixedSize(horizontal: false, vertical: true)
         .textSelection(.enabled)
     }
@@ -41,12 +43,12 @@ struct MarkdownText: View {
         case .code(let code):
             // 底色是固定的框，代码在框里滚
             ScrollView(.horizontal) {
-                Text(code).font(.footnote.monospaced()).foregroundStyle(palette.ink).padding(12)
+                Text(code).font(.footnote.monospaced()).foregroundStyle(palette.ink).padding(ChatBlock.inset)
             }
             .scrollIndicatorsFlash(onAppear: true)
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .modifier(MoreToTheRight())
-            .background(palette.fill, in: .rect(cornerRadius: 10, style: .continuous))
+            .background(palette.fill, in: ChatBlock.shape)
         case .table(let table):
             // 表格带着自己的边框整张滚；阅读栏贴着屏幕边（手机）时滚动可以越过页边距滑到屏幕边，栏两边有空白时收在栏内
             // 贴着屏幕边时被屏幕边切开的那一列本身就看得出还有；收在栏内时右缘淡出
@@ -75,16 +77,22 @@ private extension MarkdownBlock {
     var isHeading: Bool { if case .heading = self { true } else { false } }
 }
 
+/// 对话里成块的东西（代码块、表格、一轮回答上方的工具注脚）同一套圆角、底色（`Palette.fill`）与内边距。
+enum ChatBlock {
+    static let radius: CGFloat = 12
+    static let inset: CGFloat = 12
+    static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: radius, style: .continuous) }
+}
+
 /// 表格：按列排开，每格最宽 `cellWidth`、超过就换行；列按 Markdown 的对齐（数字列常是右对齐）。
 private struct MarkdownTableView: View {
     let table: MarkdownTable
     @Environment(\.palette) private var palette
 
     private static let cellWidth: CGFloat = 240
-    private static let radius: CGFloat = 10
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        let shape = ChatBlock.shape
         Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow { cells(table.header, header: true) }
             ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in
@@ -105,7 +113,7 @@ private struct MarkdownTableView: View {
                     .foregroundStyle(palette.ink)
                     .multilineTextAlignment(alignment.text)
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
+            .padding(.horizontal, ChatBlock.inset).padding(.vertical, 8)
             .frame(maxWidth: .infinity, maxHeight: header ? .infinity : nil, alignment: alignment.frame)
             .background(header ? palette.fill : .clear)
             .gridColumnAlignment(alignment.horizontal)
