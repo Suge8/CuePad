@@ -96,13 +96,14 @@ struct OlderGroupHeader: View {
                 if collapsible && !open { Text("\(group.cards.count) 条").font(.caption).foregroundStyle(palette.ink3) }
             }
             .padding(.horizontal, 4)
-            .frame(minHeight: 44)
+            // 能折起的月份要点得到；周标题只是标题，紧贴它下面那组
+            .frame(minHeight: collapsible ? 44 : nil)
+            .padding(.top, collapsible ? 4 : 12).padding(.bottom, collapsible ? 0 : 6)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .disabled(!collapsible)
         .accessibilityValue(collapsible ? (open ? "已展开" : "已折叠") : "")
-        .padding(.top, 8)
     }
 }
 

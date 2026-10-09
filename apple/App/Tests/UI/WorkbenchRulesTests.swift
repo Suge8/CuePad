@@ -150,6 +150,18 @@ struct WallTests {
         ])
         #expect(groups.allSatisfy { !$0.isMonth })
     }
+
+    /// 更早只有几条时不分周、不分月，按时间排成一组，也不加组标题（组标题比内容还多）。
+    @Test func 更早_只有几条时排成一组不加标题() {
+        let sep16 = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 9, 16), lastSentAt: nil, isPinned: false)
+        let sep8 = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 9, 8), lastSentAt: nil, isPinned: false)
+        let april = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 4, 9), lastSentAt: nil, isPinned: false)
+
+        let groups = OlderGroup.group([april, sep16, sep8], now: now, calendar: Self.calendar)
+
+        #expect(groups.map(\.cards) == [[sep16.id, sep8.id, april.id]])
+        #expect(OlderGroup.needsTitles(in: groups) == false)
+    }
 }
 
 /// "更早"的组标题：只有一组按周的卡时不再套一层日期标题（每行自带日期）；按月的组要标题来折叠。Mac 与 iOS 同一条规则。

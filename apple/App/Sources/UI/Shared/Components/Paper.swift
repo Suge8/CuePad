@@ -44,23 +44,6 @@ struct MasonryLayout: Layout {
     }
 }
 
-/// 滚动内容在底部渐隐到桌面色，玻璃输入栏下方不叠字。是盖在内容上的桌面色渐变，而不是遮罩：
-/// 遮罩要把整面滚动内容先画到离屏缓冲再裁，侧栏开合、滚动时每帧都要重来。
-struct BottomFade: View {
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            LinearGradient(colors: [palette.desk.opacity(0), palette.desk], startPoint: .top, endPoint: .bottom).frame(height: 64)
-            palette.desk.frame(height: 70)
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
 /// 卡片上的元信息：时间、发送目标，以及任务、浮回、资料标记。Mac 用固定小字，iOS 随动态字体。
 struct CardMeta: View {
     let card: Card
@@ -88,43 +71,50 @@ struct CardMeta: View {
     }
 }
 
-/// 滚到顶栏下的内容淡到桌面色，顶栏后面不叠字（Mac 的工具栏；iOS 的状态栏与悬浮顶栏，由 `floatingHeader` 挂上）。
-/// 盖住顶栏那一段（iOS 是上边安全区）：上部是实底，往下淡开；`below` 大于 0 时再往下淡出这么高（iOS 的悬浮顶栏是玻璃，
-/// 底下的字要淡到它下沿以外才不叠）。Mac 上用它作滚动视图的兄弟层：挂成滚动视图自己的 overlay 盖不住滚进工具栏区域的那段内容
-/// （macOS 把那段放在更上层）。
-struct TopFade: View {
-    var below: CGFloat = 0
+/// 滚动内容在顶栏、底栏后面淡到页面底色，玻璃后面不叠字（全 App 只此一种：Mac 工具栏下与底部输入栏下，iOS 推入页的状态栏与
+/// 悬浮顶栏下、标签根页的底部栏下）。从这条边起先是一段实底（`solid`；nil 时是这条边的安全区——iOS 的状态栏加顶栏、
+/// 底部栏让出的高度加主屏指示条），到栏的边沿处仍完全不透明，再往内容那边淡出 `fade` 这么高。
+/// 是盖在内容上的底色渐变，而不是遮罩：遮罩要把整面滚动内容先画到离屏缓冲再裁，侧栏开合、滚动时每帧都要重来。
+/// Mac 的栏高固定（给 `solid`），不读几何，侧栏开合时不跟着每帧重算；Mac 上用它作滚动视图的兄弟层：挂成滚动视图自己的
+/// overlay 盖不住滚进工具栏区域的那段内容（macOS 把那段放在更上层）。
+struct EdgeFade: View {
+    let edge: VerticalEdge
+    var solid: CGFloat?
+    let fade: CGFloat
+
+    #if os(macOS)
+    /// 窗口工具栏下（工具栏高 52，往内容淡出 12；页面内容的上边距要让出这 12，停在顶部时标题不被淡掉）。
+    static var underToolbar: EdgeFade { EdgeFade(edge: .top, solid: 52, fade: toolbarFade) }
+    static let toolbarFade: CGFloat = 12
+    /// 底部玻璃输入栏下（输入栏连同下边距约 70，往上淡出 64）。
+    static var underInputBar: EdgeFade { EdgeFade(edge: .bottom, solid: 70, fade: 64) }
+    #endif
     @Environment(\.palette) private var palette
     @Environment(\.pageBackground) private var pageBackground
 
-    /// 顶栏那一段里实底占的比例：Mac 是工具栏的上 22pt，iOS 大约是状态栏。
-    private static let solid = 0.42
-
     var body: some View {
-        let ground = pageBackground ?? palette.desk
-        #if os(macOS)
-        // Mac 的工具栏高度固定：不读几何，侧栏开合时不跟着每帧重算
-        fade(ground, height: Self.toolbar).frame(maxHeight: .infinity, alignment: .top).ignoresSafeArea()
-        #else
-        GeometryReader { proxy in
-            let top = proxy.safeAreaInsets.top
-            fade(ground, height: top + below).offset(y: -top)
+        let alignment: Alignment = edge == .top ? .top : .bottom
+        if let solid {
+            gradient(solid: solid).frame(maxHeight: .infinity, alignment: alignment).ignoresSafeArea()
+        } else {
+            GeometryReader { proxy in
+                let inset = edge == .top ? proxy.safeAreaInsets.top : proxy.safeAreaInsets.bottom
+                gradient(solid: inset)
+                    .frame(maxHeight: .infinity, alignment: alignment)
+                    .offset(y: edge == .top ? -inset : inset)
+            }
         }
-        #endif
     }
 
-    #if os(macOS)
-    private static let toolbar: CGFloat = 52
-    #endif
-
-    /// 上部实底，到安全区下沿淡到 `below > 0` 时的七成（再往下淡出）或全透。
-    private func fade(_ ground: Color, height: CGFloat) -> some View {
-        let edge = height - below
-        let stops: [Gradient.Stop] = [
-            .init(color: ground, location: 0), .init(color: ground, location: Self.solid * edge / max(height, 1)),
-            .init(color: ground.opacity(below > 0 ? 0.7 : 0), location: edge / max(height, 1)), .init(color: ground.opacity(0), location: 1),
-        ]
-        return LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+    private func gradient(solid: CGFloat) -> some View {
+        let ground = pageBackground ?? palette.desk
+        let height = solid + fade
+        return LinearGradient(
+            stops: [
+                .init(color: ground, location: 0), .init(color: ground, location: solid / max(height, 1)),
+                .init(color: ground.opacity(0), location: 1),
+            ],
+            startPoint: edge == .top ? .top : .bottom, endPoint: edge == .top ? .bottom : .top)
             .frame(height: height)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -132,7 +122,7 @@ struct TopFade: View {
 }
 
 extension EnvironmentValues {
-    /// 页面的底色（iOS 推入页由 `RouteView` 给出：纸页是纸，其余是桌面）；`TopFade` 淡到它。没给时是桌面。
+    /// 页面的底色（iOS 推入页由 `RouteView` 给出：纸页是纸，其余是桌面）；`EdgeFade` 淡到它。没给时是桌面。
     @Entry var pageBackground: Color?
 }
 
@@ -220,6 +210,8 @@ enum OlderGroupTitle {
     static func text(_ period: OlderGroup.Period, calendar: Calendar = .current) -> String {
         let chinese = Locale(identifier: "zh_CN")
         switch period {
+        case .all:
+            return "更早"
         case .week(let start):
             // 两端都写成"月/日"，与卡片行上的日期同一种写法
             let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start

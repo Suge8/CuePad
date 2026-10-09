@@ -14,7 +14,7 @@ nonisolated private struct SidebarData: Sendable {
     var renames: [String: DeliveryRequest]
     /// 项目行的"此刻"（`ProjectNow`）读的：此刻有事的会话（`PiSessionQuery.current`）与各项目最近开始的进行中任务。
     var current: [PiSessionListItem]
-    var leading: [UUID: String]
+    var leading: [UUID: [ProjectNow.InProgress]]
 }
 
 struct Sidebar: View {
@@ -39,7 +39,7 @@ struct Sidebar: View {
         List {
             if let data, let catalog, let pages {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果
-                let now = ProjectNow.byProject(catalog.projects, live: data.current, tasks: data.leading, shown: services.settings.shown)
+                let now = ProjectNow.byProject(catalog.projects, sessions: data.current, tasks: data.leading, shown: services.settings.shown)
                 if !pages.pinned.isEmpty {
                     Section("置顶") { ForEach(pages.pinned) { row($0, catalog, now: now[$0.id]) } }
                 }

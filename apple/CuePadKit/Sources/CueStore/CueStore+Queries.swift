@@ -285,18 +285,13 @@ extension CueStore {
 
   // MARK: 汇总与搜索
 
-  /// 每个活动项目（按手动顺序）和未分类（最后）的灵感数与最近改过的一条：散放在列表里、不是空白的灵感。两次查询，不必读全部卡片。
+  /// 每个活动项目（按手动顺序）和未分类（最后）的灵感数：散放在列表里、不是空白的灵感。一次查询，不必读全部卡片。
   public func projectSummaries() throws -> [ProjectSummary] {
-    let ideas = "(\(cardActive)) AND (\(looseIdea)) AND \(notBlank)"
-    let counts = Dictionary(uniqueKeysWithValues: try db.query("SELECT projectID, COUNT(*) FROM cards WHERE \(ideas) GROUP BY projectID") {
-      ($0.uuidOrNil(0), Int($0.int(1)))
-    })
-    let latest = Dictionary(uniqueKeysWithValues: try select(Card.self, where: """
-      id IN (SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY projectID ORDER BY modifiedAt DESC, id) AS rank
-        FROM cards WHERE \(ideas)) WHERE rank = 1)
-      """).map { ($0.projectID, $0) })
+    let counts = Dictionary(uniqueKeysWithValues: try db.query(
+      "SELECT projectID, COUNT(*) FROM cards WHERE (\(cardActive)) AND (\(looseIdea)) AND \(notBlank) GROUP BY projectID"
+    ) { ($0.uuidOrNil(0), Int($0.int(1))) })
     let owners: [UUID?] = try projects().map(\.id) + [nil]
-    return owners.map { ProjectSummary(projectID: $0, cardCount: counts[$0] ?? 0, latest: latest[$0]) }
+    return owners.map { ProjectSummary(projectID: $0, cardCount: counts[$0] ?? 0) }
   }
 
   /// 卡片搜索：FTS5 索引匹配文字（可选），再按项目、图片、发送目标、修改时间筛选，最后排序分页。

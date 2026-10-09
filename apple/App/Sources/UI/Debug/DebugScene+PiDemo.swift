@@ -275,7 +275,7 @@ extension DebugScene {
         ]
         // 历史里再加两个带近况的：一个正在请 Mac 继续，一个不在项目里
         let history: [(String, String?, PiRecap)] = [
-            ("landing-copy", "个人网站", PiRecap(lastPrompt: "把首页标题换成新文案", lastReply: "改好了，首页标题现在是「把想法写成卡片」。")),
+            ("landing-copy", "旅行", PiRecap(lastPrompt: "把首页标题换成新文案", lastReply: "改好了，首页标题现在是「把想法写成卡片」。")),
             ("weekly", nil, PiRecap(lastPrompt: "汇总这周的提交", lastReply: "这周 23 个提交，主要是同步和 Agent 页。")),
         ]
         // 文件夹名与还没绑文件夹的项目同名（Flow）：项目的 Agent 空态给一键"绑定 flow 文件夹（3 个会话）"
@@ -330,6 +330,13 @@ extension DebugScene {
             // 一条已送达还没进对话、一条没能送达：由一个只认这台演示 Mac 的执行器给出结果
             _ = try? await services.requestMacDelivery("先把迁移脚本在测试库上跑一遍", to: relay, mode: .send)
             _ = try? await services.requestMacDelivery("顺便备份一下线上数据库", to: relay, mode: .send)
+            // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
+            let mini = PiStateRecorder(store: store, hostID: relay.hostID)
+            try? await mini.update(sessionID: "quote", state: .settled, title: "quote", folder: "quote", projectID: project("装修"))
+            try? await mini.end(sessionID: "quote")
+            if let quote = try? await store.piSessionPage(PiSessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
+                _ = try? await services.requestMacDelivery("把报价单备份到网盘", to: quote, mode: .send)
+            }
             relayExecutor = DeliveryExecutor(store: store, hostID: relay.hostID, onIssue: { _ in }) { request in
                 request.content.contains("备份") ? .failed("那台 Mac 上的 Pi 已经退出，没能送进去") : .succeeded
             }

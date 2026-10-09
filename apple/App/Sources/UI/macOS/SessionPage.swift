@@ -99,7 +99,7 @@ struct SessionPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // 对话滚到工具栏底下时淡掉，不和标题、按钮叠在一起
-        .overlay(alignment: .top) { TopFade() }
+        .overlay(alignment: .top) { EdgeFade.underToolbar }
         .background(palette.desk)
         .toolbar {
             if let session = digest.session {

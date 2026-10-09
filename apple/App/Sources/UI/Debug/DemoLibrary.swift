@@ -100,6 +100,12 @@ enum DemoLibrary {
             DemoProject(name: "读书", icon: "book", color: "#D0607D", pinned: false, directory: nil, intro: "每周读完一章", cards: [
                 (30.0, "《设计心理学》第二章\n\n示能与意符的区别。", false),
             ]),
+            DemoProject(name: "旅行", icon: "globe", color: "#3F8FB8", pinned: false, directory: nil, cards: [
+                (12.0, "京都行程\n\n第二天去岚山，避开周末。", false),
+            ]),
+            DemoProject(name: "装修", icon: "hammer", color: "#8A8A84", pinned: false, directory: nil, cards: [
+                (6.0, "比价\n\n三家报价，水电分开算。", false),
+            ]),
         ]
     }
 
