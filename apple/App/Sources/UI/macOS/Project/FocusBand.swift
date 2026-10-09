@@ -6,8 +6,8 @@ import SwiftUI
 /// 任务与 Agent：本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Agent 会话。介绍在页头。
 /// Agent 一栏只在有话可说时出现：有在线会话，或项目还没绑文件夹而有同名建议、正在绑（绑定引导，`FolderGuide.shows`）；
 /// 否则任务独占整张纸，不留一栏"没有运行中的会话"。
-/// 纸与下面的资料、卡片墙同宽（右缘对齐，页面收得住）；纸里的任务一栏有最大宽度：任务行尾的折起、计数与"完成"跟着内容走，
-/// 不在大窗口里甩到一千点开外，多出来的宽度留白在纸里（有 Agent 一栏时它贴在纸的右边）。
+/// 纸与下面的资料、卡片墙同宽，任务一栏铺满纸（有 Agent 一栏时铺到分隔线）：行尾的折起箭头、计数与"完成"贴着纸的右内边距，
+/// 与资料、更早行尾的日期在同一条右边线上——页面只有左右两条边线，不在纸中间另起一条。
 struct FocusBand: View {
     let data: ProjectPageData
     let agents: [ProjectAgents.Row]
@@ -18,8 +18,7 @@ struct FocusBand: View {
     private static let visibleTasks = 4
     /// 窄于这个宽度时两栏改成上下排，每栏都能放下一整行任务。
     private static let stackedBelow: CGFloat = 640
-    /// 任务一栏的内容最宽多少（项目页顶上的绑定引导同宽），Agent 一栏多宽。
-    static let tasksWidth: CGFloat = 760
+    /// Agent 一栏多宽。
     private static let agentWidth: CGFloat = 300
 
     var body: some View {
@@ -57,7 +56,6 @@ struct FocusBand: View {
             SectionLabel(text: TaskCopy.section(data.taskProgress), systemImage: "checklist")
             taskRows
         }
-        .frame(maxWidth: Self.tasksWidth, alignment: .leading)
     }
 
     @ViewBuilder private var taskRows: some View {

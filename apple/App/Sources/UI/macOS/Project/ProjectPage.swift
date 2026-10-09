@@ -17,7 +17,7 @@ struct ProjectPage: View {
     @State private var collapsed = false
 
     private static let collapseOffset: CGFloat = 140
-    /// 空项目那一行"添加任务"的宽度上限：跟着内容，不铺满整页（下面的绑定引导与任务纸同宽，`FocusBand.tasksWidth`）。
+    /// 空项目那一行"添加任务"的宽度上限：只是一行输入，跟着内容，不铺满整页（下面的绑定引导与空态是纸，与页面同宽）。
     private static let emptyLineWidth: CGFloat = 460
 
     var body: some View {
@@ -85,7 +85,7 @@ struct ProjectPage: View {
             VStack(alignment: .leading, spacing: 12) {
                 NewTaskField(project: project).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
                 if let project = data.project, !workspace.hasFolder(project.id) {
-                    ProjectFolderGuide(project: project, guide: folderGuide, style: .panel).frame(maxWidth: FocusBand.tasksWidth, alignment: .leading)
+                    ProjectFolderGuide(project: project, guide: folderGuide, style: .panel)
                 }
             }
         }
