@@ -71,8 +71,8 @@ nonisolated struct ProjectNow: Hashable, Sendable {
     }
 
     /// 会话进得了"此刻"的档：等你确认 0、出错与没能送达 1、在跑与话在路上 2、有新回复 3、需要 /reload 4（维护，排最后）；
-    /// 其余（停着、已结束）不算。
-    private static func tier(_ shown: PiShown) -> Int? {
+    /// 其余（停着、已结束）不算。书架的 Agent 此刻（`AgentNow`）按同一档排。
+    static func tier(_ shown: PiShown) -> Int? {
         switch shown.status {
         case .asking: 0
         case .failed, .delivery(.failed): 1
@@ -85,10 +85,19 @@ nonisolated struct ProjectNow: Hashable, Sendable {
 
     private static func sentence(_ item: PiSessionListItem, _ shown: PiShown) -> String {
         switch shown.status {
-        case .delivery(.failed): item.delivery?.failure ?? shown.presence
         case .restart: "在终端里执行 /reload 就能接上"
+        case .delivery(.failed): gist(item, shown) ?? shown.presence
         case .delivery: shown.presence
-        default: PiProgress.line(of: item.state) ?? shown.presence
+        default: gist(item, shown) ?? shown.presence
+        }
+    }
+
+    /// 这件事的那一句：在问什么、出错或没送到的原因、在做什么、回复的第一句；说不出时是 nil。
+    static func gist(_ item: PiSessionListItem, _ shown: PiShown) -> String? {
+        switch shown.status {
+        case .delivery(.failed): item.delivery?.failure
+        case .delivery, .restart: nil
+        default: PiProgress.line(of: item.state)
         }
     }
 }
