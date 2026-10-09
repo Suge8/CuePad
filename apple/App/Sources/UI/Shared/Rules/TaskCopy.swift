@@ -9,6 +9,11 @@ enum TaskCopy {
     }
 
     static func progress(_ subtasks: TaskProgress) -> String { "子任务 \(subtasks.done)/\(subtasks.total)" }
+
+    /// 任务行的进度一行："3 条提示词 · 1 已回复 · 子任务 1/2"；都没有时不写。所在项目与会话状态另起一行，不挤在这里。
+    static func counts(_ marks: [ChildMark]?) -> String? {
+        [PromptTally(marks).text, TaskProgress.subtasks(in: marks).map(progress)].compactMap { $0 }.joined(separator: " · ").nonEmpty
+    }
     static func hasOpen(_ subtasks: TaskProgress?) -> Bool { subtasks.map { $0.done < $0.total } ?? false }
     static func openSubtasks(_ subtasks: TaskProgress?) -> String {
         "还有 \(subtasks.map { $0.total - $0.done } ?? 0) 个子任务没完成，一起完成？"

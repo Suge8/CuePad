@@ -29,6 +29,11 @@ nonisolated struct PromptTally: Equatable, Sendable {
     }
 }
 
+/// 提示词卡上右边那颗钮做什么（见 `PromptState.action`）。
+nonisolated enum PromptAction: Equatable, Sendable {
+    case handOff, handAgain, watch
+}
+
 /// 一条提示词此刻怎样：没交出去、正在开会话、交给的会话在处理（含话还在路上）、会话没回复就结束了、那一轮做完了
 /// （已回复，见 `CueStore.childMarks`）。会话读 `AgentLinks`（在路上的请求优先，其次记在提示词上的会话）。
 nonisolated enum PromptState: Equatable, Sendable {
@@ -39,6 +44,23 @@ nonisolated enum PromptState: Equatable, Sendable {
     case ended(PiSessionListItem)
     /// 会话记录读不到时（如已从 Mac 删掉）也算回复过。
     case replied(PiSessionListItem?)
+
+    /// 卡上右边那颗钮：没交出去是交给 Agent；Agent 还在处理这条（话在路上、在干活、在等你确认）时只给看会话——
+    /// 这时出"再交一次"像是第一次没发出去；做完、出错、没送到或会话结束了才能再交一次。正在开会话时什么都不给。
+    var action: PromptAction? {
+        switch self {
+        case .unsent: .handOff
+        case .launching: nil
+        case .working(let item): Self.handling(item) ? .watch : .handAgain
+        case .ended, .replied: .handAgain
+        }
+    }
+
+    private static func handling(_ item: PiSessionListItem) -> Bool {
+        if item.delivery?.isOpen == true { return true }
+        guard let state = item.state.state.known else { return false }
+        return state.isWorking || state == .waitingForUser
+    }
 
     init(isReplied: Bool, handoff: PiSessionListItem?, launching: Bool) {
         if isReplied {

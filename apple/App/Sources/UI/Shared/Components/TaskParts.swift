@@ -151,7 +151,7 @@ struct PromptList: View {
 
 /// 一条提示词：内容预览，下面一行是交给 Agent 的钮，交出去过的左边写它此刻怎样（"会话名 · 思考中 / 已结束 / 已回复"，点它看会话）：
 /// 第一条还没发的是靛青的"交给 Agent"（一页的焦点，不另写"未发"，见 `TaskDetail.primaryPrompt`），其余没发的是墨色文字"交给 Agent"，
-/// 交出去过的是墨色文字"再交一次"。点卡打开大编辑区；长按是灵感的菜单。
+/// Agent 还在处理时是"看会话 ›"，做完、出错或结束后是墨色文字"再交一次"（`PromptState.action`）。点卡打开大编辑区；长按是灵感的菜单。
 struct PromptCard: View {
     let prompt: Card
     let state: PromptState
@@ -178,18 +178,12 @@ struct PromptCard: View {
             HStack(spacing: 8) {
                 status
                 Spacer(minLength: 8)
-                let fresh = state == .unsent
-                Button(action: hand) {
-                    Label(fresh ? "交给 Agent" : "再交一次", systemImage: primary ? "paperplane.fill" : "paperplane")
-                        .font(TaskMetrics.caption.weight(primary ? .semibold : .medium))
-                        .foregroundStyle(primary ? palette.signature : fresh ? palette.ink : palette.ink2)
-                        .padding(.horizontal, primary ? 12 : 4).frame(height: TaskMetrics.chipHeight)
-                        .background(primary ? palette.signature.opacity(0.12) : .clear, in: .capsule)
-                        // 点得到的范围上下各多出一截，但不撑高卡片：卡片底边只比这一排低一个内边距
-                        .contentShape(.rect.inset(by: -(TaskMetrics.chipTarget - TaskMetrics.chipHeight) / 2))
+                switch state.action {
+                case .handOff: handButton(fresh: true, enabled: !text.title.isEmpty || !text.images.isEmpty)
+                case .handAgain: handButton(fresh: false, enabled: true)
+                case .watch: watch
+                case nil: EmptyView()
                 }
-                .buttonStyle(PressStyle())
-                .disabled(text.title.isEmpty && text.images.isEmpty)
             }
         }
         .padding(TaskMetrics.cardPadding)
@@ -202,6 +196,33 @@ struct PromptCard: View {
         .contextMenu { CardActions(card: prompt) }
         .accessibilityElement(children: .contain)
         .accessibilityAction(named: "打开", open)
+    }
+
+    private func handButton(fresh: Bool, enabled: Bool) -> some View {
+        Button(action: hand) {
+            Label(fresh ? "交给 Agent" : "再交一次", systemImage: primary ? "paperplane.fill" : "paperplane")
+                .font(TaskMetrics.caption.weight(primary ? .semibold : .medium))
+                .foregroundStyle(primary ? palette.signature : fresh ? palette.ink : palette.ink2)
+                .padding(.horizontal, primary ? 12 : 4).frame(height: TaskMetrics.chipHeight)
+                .background(primary ? palette.signature.opacity(0.12) : .clear, in: .capsule)
+                // 点得到的范围上下各多出一截，但不撑高卡片：卡片底边只比这一排低一个内边距
+                .contentShape(.rect.inset(by: -(TaskMetrics.chipTarget - TaskMetrics.chipHeight) / 2))
+        }
+        .buttonStyle(PressStyle())
+        .disabled(!enabled)
+    }
+
+    /// Agent 还在处理这条：右边只给"看会话 ›"。
+    @ViewBuilder private var watch: some View {
+        if case .working(let item) = state {
+            sessionLink(item) {
+                HStack(spacing: 3) {
+                    Text("看会话")
+                    Image(systemName: "chevron.right").imageScale(.small).accessibilityHidden(true)
+                }
+                .font(TaskMetrics.caption.weight(.medium)).foregroundStyle(palette.ink2).padding(.horizontal, 4)
+            }
+        }
     }
 
     @ViewBuilder private var status: some View {

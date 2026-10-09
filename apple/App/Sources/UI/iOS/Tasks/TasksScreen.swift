@@ -208,23 +208,30 @@ struct TaskLine: View {
         .animation(Motion.quick, value: tally)
     }
 
-    private var hasDetail: Bool { project != nil || (!done && (session != nil || counts != nil)) }
+    private var counts: String? { done ? nil : TaskCopy.counts(marks) }
+    private var showsPlace: Bool { project != nil || (!done && session != nil) }
+    private var hasDetail: Bool { counts != nil || showsPlace }
 
-    /// "3 条提示词 · 1 已回复 · 子任务 1/2"。
-    private var counts: String? { [tally.text, subtasks.map(TaskCopy.progress)].compactMap { $0 }.joined(separator: " · ").nonEmpty }
-
-    /// 第二行：提示词计数、子任务进度、所在项目、交给的会话此刻的状态（"正在工作 · 已运行 4:02"）。
+    /// 标题下最多两行：进度（提示词与子任务），再是所在项目与交给的会话此刻的状态。
     private var detail: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3) }
+            if showsPlace { place }
+        }
+        .font(.caption)
+        .lineLimit(1)
+    }
+
+    /// 所在项目与会话状态：项目名照写不截，放不下时会话状态先省掉用时、再换短的状态词。
+    private var place: some View {
         HStack(spacing: 10) {
-            // 计数不截；放不下时会话状态先换短的写法，再截项目名
-            if !done, let counts = counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3).fixedSize() }
             if let project {
                 HStack(spacing: 4) {
                     ProjectGlyph(project: project, size: 10)
                     Text(project.name)
                 }
                 .foregroundStyle(palette.ink3)
-                .layoutPriority(-0.5)
+                .layoutPriority(1)
             }
             if let session, !done {
                 Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
@@ -245,16 +252,12 @@ struct TaskLine: View {
                             PiStateDot(shown: shown, size: 6)
                             Text(shown.label).foregroundStyle(shown.labelTint(palette))
                         }
-                        .fixedSize()
                     }
                 }
-                .layoutPriority(-1)
                 .buttonStyle(.plain)
                 .accessibilityHint("看 Agent 的近况")
             }
         }
-        .font(.caption)
-        .lineLimit(1)
     }
 
     private func tap() {

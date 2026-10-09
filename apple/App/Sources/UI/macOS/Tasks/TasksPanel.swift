@@ -130,7 +130,10 @@ struct TaskRow: View {
                     .font(Typography.body).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
                     .lineLimit(2)
                     .onTapGesture(perform: open)
-                if project != nil || (!done && (session != nil || subtasks != nil || tally.text != nil)) { detail }
+                if let counts = done ? nil : TaskCopy.counts(marks) {
+                    Text(counts).font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1)
+                }
+                if project != nil || (!done && session != nil) { place }
             }
             Spacer(minLength: 4)
             if !done, tally.suggestsDone(task) { MarkDoneChip(action: toggle).transition(.opacity) }
@@ -157,8 +160,8 @@ struct TaskRow: View {
         }
     }
 
-    /// 第二行：所在项目、交给 Pi 的会话此刻的状态（"Pi 正在工作 · 已运行 4:02"）。
-    private var detail: some View {
+    /// 进度之下一行：所在项目与交给 Pi 的会话此刻的状态（"Agent 正在工作 · 已运行 4 分钟"），项目名照写，挤不下时截会话状态。
+    private var place: some View {
         HStack(spacing: 10) {
             if let project {
                 HStack(spacing: 4) {
@@ -166,9 +169,7 @@ struct TaskRow: View {
                     Text(project.name).lineLimit(1)
                 }
                 .foregroundStyle(palette.ink3)
-            }
-            if !done, let counts = [tally.text, subtasks.map(TaskCopy.progress)].compactMap({ $0 }).joined(separator: " · ").nonEmpty {
-                Text(counts).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1)
+                .layoutPriority(2)
             }
             if let session, !done {
                 let shown = services.settings.shown(session, delivery: delivery)
@@ -178,9 +179,7 @@ struct TaskRow: View {
                     Text("·").foregroundStyle(palette.ink3)
                     PiElapsed(shown: shown, font: Typography.meta)
                 }
-                // 会话状态是这一行最要紧的：整段不折行，挤不下时让项目名与计数先截短
-                .fixedSize()
-                .layoutPriority(1)
+                .lineLimit(1)
                 .sessionLink(session.sessionID)
                 .help("交给了 Agent 会话「\(session.title)」，点开看近况")
             }
