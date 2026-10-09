@@ -273,26 +273,6 @@ public struct PiImage: Sendable, Equatable {
     }
 }
 
-/// Pi 里 `cuepad_show` 工具要发到手机上看的文件（扩展已把相对路径按工作目录解析成绝对路径）。
-public struct PiShowRequest: Sendable, Equatable {
-    public var path: String
-    public var title: String?
-    public init(path: String, title: String?) {
-        self.path = path
-        self.title = title
-    }
-}
-
-/// CuePad 收下文件后给工具的回复：预览记录的 id（工具把它写进结果的 `details.preview`，对话据此定位）与要告诉 Agent 的提示（页面缺资源等）。
-public struct PiShowReply: Sendable, Equatable {
-    public var preview: String
-    public var note: String?
-    public init(preview: String, note: String?) {
-        self.preview = preview
-        self.note = note
-    }
-}
-
 public struct PiMessage: Sendable, Equatable {
     public var text: String
     public var images: [PiImage]
@@ -327,8 +307,6 @@ public enum PiBridgeError: Error, Equatable {
     case rejected(String)
     /// 会话的扩展协议版本与 CuePad 不同（见 `PiAgentState.incompatible`），不发命令
     case incompatibleExtension
-    /// 没有谁处理扩展转来的预览请求（`PiBridge.showHandler` 没设）
-    case previewUnavailable
 }
 
 extension PiBridgeError: LocalizedError {
@@ -338,7 +316,6 @@ extension PiBridgeError: LocalizedError {
         case .socketDirectoryTooLong: "Pi 连接目录的路径太长"
         case .unknownSession: "这个 Agent 会话已经结束"
         case .incompatibleExtension: "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"
-        case .previewUnavailable: "CuePad 没有开启预览"
         case .sessionEnded: "发送途中 Agent 会话结束了"
         case .ackTimeout: "Agent 没有及时确认收到，请确认会话仍在运行"
         case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"

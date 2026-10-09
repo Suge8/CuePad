@@ -9,13 +9,15 @@ extension View {
     /// 顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，见 `ChatFollow.showsHeader`）；
     /// 左缘右滑返回始终可用（`EdgeBackKeeper`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出顶栏。
     /// 标题同时是读屏、返回菜单与多任务切换器里的名字。
-    /// `veiled`：滚动区关掉了系统的滚动边缘效果（倒过来的对话），内容会一直滚到整条栏后面——这时整条栏后面铺 `BarScrim.veil`
-    /// （虚化、到栏下沿是实的、再往下淡出），顶栏让开时也留着。
+    /// `edgeBlur`：滚动区关掉了系统的滚动边缘效果（倒过来的对话），内容会一直滚到整条栏后面——这时整条栏后面是自绘的渐进模糊
+    /// （`EdgeBlur`，与系统效果同一种观感），顶栏让开时也留着。
+    /// `explanation`：点中间那块玻璃弹出的一句说明（会话需要 /reload 时怎么接上）；没有时点它什么也不做。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, veiled: Bool = false,
+        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, edgeBlur: Bool = false, explanation: String? = nil,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        modifier(FloatingHeader(title: title, hidden: hidden, reveal: reveal, veiled: veiled, detail: detail(), trailing: trailing()))
+        modifier(FloatingHeader(
+            title: title, hidden: hidden, reveal: reveal, edgeBlur: edgeBlur, explanation: explanation, detail: detail(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -39,7 +41,8 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     let title: String
     let hidden: Bool
     let reveal: (() -> Void)?
-    let veiled: Bool
+    let edgeBlur: Bool
+    let explanation: String?
     let detail: Detail
     let trailing: Trailing
     @Environment(\.palette) private var palette
@@ -47,10 +50,10 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     func body(content: Content) -> some View {
         content
             // 沉浸式：内容一直滚到状态栏与顶栏下面，系统的滚动边缘效果（渐进模糊加淡出）让玻璃上的字可读；状态栏那一段再垫一层
-            // 最小的淡出（时间不能压在字上）。关掉了系统效果的滚动区（倒过来的对话）整条栏后面铺 `BarScrim.veil`
+            // 最小的淡出（时间不能压在字上）。关掉了系统效果的滚动区（倒过来的对话）整条栏后面是自绘的渐进模糊
             .scrollEdgeEffectStyle(.soft, for: .top)
             .overlay(alignment: .top) {
-                if veiled { BarScrim.veil } else { BarScrim(edge: .top) }
+                if edgeBlur { EdgeBlur.underBars } else { BarScrim(edge: .top) }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -62,19 +65,11 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
             .toolbar {
                 // 标题要等读库才有的页（卡片纸页）先透明，读到后淡入
                 ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                        detail
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(height: FloatingHeaderLayout.height)
-                    .glass(in: .capsule)
+                    HeaderTitle(title: title, explanation: explanation) { detail }
                     .opacity(title.isEmpty || hidden ? 0 : 1)
                     .animation(Motion.quick, value: title.isEmpty || hidden)
                     .allowsHitTesting(!hidden)
                     .accessibilityHidden(hidden)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isHeader)
                     .background {
                         if hidden, let reveal {
                             Color.clear.contentShape(.capsule).onTapGesture(perform: reveal).accessibilityHidden(true)
@@ -93,6 +88,39 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
                     .sharedBackgroundVisibility(hidden ? .hidden : .automatic)
                 }
             }
+    }
+}
+
+/// 顶栏中间那块玻璃：标题与一行要紧信息。有说明时整块是一颗按钮，点它弹出说明（状态自己持有：顶栏项推入时就建好，
+/// 改外面的状态不一定重建它）；没有说明时只是标题。
+private struct HeaderTitle<Detail: View>: View {
+    let title: String
+    let explanation: String?
+    @ViewBuilder let detail: Detail
+    @Environment(\.palette) private var palette
+    @State private var explaining = false
+
+    var body: some View {
+        Button { explaining = true } label: {
+            VStack(spacing: 1) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                detail
+            }
+            .padding(.horizontal, 16)
+            .frame(height: FloatingHeaderLayout.height)
+            .glass(in: .capsule)
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .allowsHitTesting(explanation != nil)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(explanation == nil ? .isHeader : [.isHeader, .isButton])
+        .accessibilityHint(explanation == nil ? "" : "看说明")
+        .explanationPopover(explanation, isPresented: $explaining)
+        #if DEBUG
+        // 截图验收：-CuePadExplain YES 推入后直接弹出说明
+        .task(id: explanation) { if explanation != nil, DebugScene.defaults.bool(forKey: "CuePadExplain") { explaining = true } }
+        #endif
     }
 }
 

@@ -168,6 +168,11 @@ nonisolated extension PiShown {
         }
     }
 
+    /// 会话页顶上点玻璃标题弹出的一句说明：只有需要 /reload（旧版扩展）时有——怎么接上。命令中间不许折行（"/" 后接词连接符）。
+    var explanation: String? {
+        status == .restart ? "这个会话还在用升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里对这个会话执行 /\u{2060}reload 就能接上。" : nil
+    }
+
     /// 只有一个状态标时它说的是什么（读屏标签、悬停提示、项目长按菜单的标题、任务上的会话状态）。
     var presence: String {
         switch status {

@@ -95,7 +95,7 @@ extension DebugScene {
     /// 演示对话的另一台 Mac 的执行器（留住它，结果写回后照常显示）。
     private static var relayExecutor: DeliveryExecutor?
 
-    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 用 cuepad_show 发了三个文件（对话里是三张预览卡）。
+    /// notes 会话最后一轮：你让 Agent 发页面、截图、报告来看，Agent 在命令行里 `cuepad show` 了三个文件（对话里按创建时间排在你的话与回答之间）。
     private static func seedPreviews(_ store: CueStore, now: Date) async {
         let directory = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-previews", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -105,16 +105,18 @@ extension DebugScene {
         try? Self.loginPage.write(to: page, atomically: true, encoding: .utf8)
         try? Self.review.write(to: report, atomically: true, encoding: .utf8)
         try? Self.screenshotPNG()?.write(to: shot)
-        var messages = [PiChatMessage(sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: "把登录页的新样子、手机上的截图和评审结论发给我看看", at: now.addingTimeInterval(-200))]
-        for (offset, (file, title)) in [(page, "登录页 v2：可点的完整页面"), (shot, "手机上的登录页截图"), (report, "评审结论")].enumerated() {
-            guard let added = try? await store.addPreview(fileAt: file, title: title, sessionID: "notes") else { continue }
-            messages.append(PiChatMessage(
-                sessionID: "notes", entryID: "show\(offset)", seq: Int64(9 + offset), role: .preview, text: added.preview.id.uuidString.lowercased(),
-                at: now.addingTimeInterval(-180 + Double(offset) * 10)))
+        var created: [Date] = []
+        for (file, title) in [(page, "登录页 v2：可点的完整页面"), (shot, "手机上的登录页截图"), (report, "评审结论")] {
+            if let added = try? await store.addPreview(fileAt: file, title: title, sessionID: "notes") { created.append(added.preview.createdAt) }
         }
-        messages.append(PiChatMessage(
-            sessionID: "notes", entryID: "p9", seq: 12, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
-            at: now.addingTimeInterval(-150), toolCount: 3, roundStartedAt: now.addingTimeInterval(-200)))
+        // 对话围着预览的创建时间排：你的话在先，回答在后
+        guard let first = created.first, let last = created.last else { return }
+        let messages = [
+            PiChatMessage(sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: "把登录页的新样子、手机上的截图和评审结论发给我看看", at: first.addingTimeInterval(-50)),
+            PiChatMessage(
+                sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
+                at: last.addingTimeInterval(2), toolCount: 3, roundStartedAt: first.addingTimeInterval(-50)),
+        ]
         try? await store.writePiTranscript(PiTranscript(
             sessionID: "notes", messages: messages,
             recap: PiRecap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))

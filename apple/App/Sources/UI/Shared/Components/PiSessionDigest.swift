@@ -70,28 +70,16 @@ nonisolated struct PiConfigShown: Equatable {
     var failure: String?
 }
 
-/// 会话页顶上固定的一句（不随对话滚走）：旧版扩展的会话怎么接上。
-struct PiRestartNotice: View {
-    let session: PiSessionState
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        if session.state == .known(.incompatible) {
-            // 维护提示不是等你确认：符号用次要墨色（赭黄只给等你确认）；命令中间不许折行（"/" 后接词连接符）
-            Callout(
-                tint: palette.ink2, symbol: "arrow.clockwise.circle.fill",
-                text: "这个会话还在用升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里对这个会话执行 /\u{2060}reload 就能接上。")
-        }
-    }
-}
-
-/// 对话里的提示块（等你确认的问题、出错）：一张纸，彩色只在行首的状态符号上（等你确认赭黄问号、出错胭脂叹号），
-/// 正文中性；`prominent` 时正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
+/// 提示块（等你确认的问题、出错、没能结束）：彩色只在行首的状态符号上（等你确认赭黄问号、出错胭脂叹号），正文中性；
+/// `prominent` 时正文放大（问题是这一页最醒目的东西）。下面可接作答控件。
+/// 层级只有两层：对话里的（出错的原因）是纸，属于内容；贴在回复框上方、要你处理的（`docked`：问题卡、没能结束）是玻璃，
+/// 与回复框同属底部玻璃那一层。顶上只有系统玻璃（标题、圆钮），不在对话上另浮卡片。
 struct Callout<Accessory: View>: View {
     let tint: Color
     let symbol: String
     let text: String
     var prominent = false
+    var docked = false
     @ViewBuilder var accessory: Accessory
     @Environment(\.palette) private var palette
 
@@ -108,14 +96,41 @@ struct Callout<Accessory: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(radius: 16)
+        .modifier(CalloutSurface(docked: docked))
         .accessibilityElement(children: Accessory.self == EmptyView.self ? .combine : .contain)
     }
 }
 
 extension Callout where Accessory == EmptyView {
-    init(tint: Color, symbol: String, text: String, prominent: Bool = false) {
-        self.init(tint: tint, symbol: symbol, text: text, prominent: prominent) { EmptyView() }
+    init(tint: Color, symbol: String, text: String, prominent: Bool = false, docked: Bool = false) {
+        self.init(tint: tint, symbol: symbol, text: text, prominent: prominent, docked: docked) { EmptyView() }
+    }
+}
+
+extension View {
+    /// 点会话页标题弹出的一句说明（需要 /reload 时怎么接上，`PiShown.explanation`）：iPhone 顶栏中间那块玻璃与 Mac 工具栏标题共用这一份。
+    func explanationPopover(_ text: String?, isPresented: Binding<Bool>) -> some View {
+        popover(isPresented: isPresented) { ExplanationText(text: text ?? "").presentationCompactAdaptation(.popover) }
+    }
+}
+
+private struct ExplanationText: View {
+    let text: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Text(text).font(Typography.secondary).foregroundStyle(palette.ink)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(16).frame(width: 300)
+    }
+}
+
+/// 提示块的面：对话里是纸，贴在回复框上方是玻璃（与回复框同一层、同样的圆角）。
+private struct CalloutSurface: ViewModifier {
+    let docked: Bool
+
+    func body(content: Content) -> some View {
+        if docked { content.glass(in: .rect(cornerRadius: PiReplyBar.radius, style: .continuous)) } else { content.paper(radius: 16) }
     }
 }
 
@@ -141,7 +156,7 @@ struct QuestionCard: View {
     private var failure: String? { writeError ?? sent?.failure }
 
     var body: some View {
-        Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: question.text, prominent: true) {
+        Callout(tint: palette.attention, symbol: "questionmark.circle.fill", text: question.text, prominent: true, docked: true) {
             // 送不到 Mac 时不让答：写进去的请求会一直停在送达中
             controls.disabled(answering || !services.reachesPiHost)
             if !services.reachesPiHost {

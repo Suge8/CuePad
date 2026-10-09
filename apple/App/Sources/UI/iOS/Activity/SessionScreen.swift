@@ -59,9 +59,6 @@ struct SessionScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if let session { PiRestartNotice(session: session).padding(.horizontal, 12).frame(maxWidth: Self.readingWidth) }
-        }
         .environment(\.chatHighlight, highlight)
         .overlay(alignment: .trailing) {
             let marks = ChatScrubber.marks(PiChat.entries(digest?.messages ?? [], previews: digest?.previews ?? []))
@@ -84,7 +81,8 @@ struct SessionScreen: View {
         }
         // 看历史时顶栏让开，点它原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）；点状态栏是系统的回到顶端，
         // 倒置的对话里顶端就是最新处，所以也会出现
-        .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }, veiled: true) {
+        .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }, edgeBlur: true,
+                        explanation: session.flatMap { PiShown($0).explanation }) {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
@@ -119,7 +117,7 @@ struct SessionScreen: View {
                 VStack(spacing: 8) {
                     PiQuestionDock(session: session, deliveries: digest?.deliveries ?? [])
                     if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                        Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)")
+                        Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)", docked: true)
                     }
                     // 读库完成、确认记录不在了才换成说明；推入时带着首帧状态、还没读到时照常是回复框
                     if digest != nil, digest?.session == nil {

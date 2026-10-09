@@ -81,6 +81,19 @@ struct Palette {
     /// 出错：胭脂。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
 
+    // MARK: 行动作（轻扫露出的按钮）
+
+    /// 轻扫露出的按钮底色，上面是浅色图标（`onSignature`）：删除胭脂、主动作靛青（`signatureFill`）、其余墨灰，安静的一档更浅。
+    /// 深色下都压在中等明度，图标与字的对比度 ≥ 5.2，在暗纸上也不是亮斑。
+    func actionFill(_ tone: ActionTone) -> Color {
+        switch tone {
+        case .primary: signatureFill
+        case .destructive: dark ? Color(hex: 0xB8325F) : Color(hex: 0xAD2B5C)
+        case .neutral: dark ? Color(hex: 0x6E685F) : Color(hex: 0x3A3733)
+        case .quiet: dark ? Color(hex: 0x57524B) : Color(hex: 0x6E685F)
+        }
+    }
+
     // MARK: 正文里的变量
 
     /// `{{变量}}`：墨色字垫一层比纸深一级的底。不借用注意色——赭黄在全 App 只表示"等你确认"，变量用了它就像一串警告。

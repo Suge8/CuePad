@@ -44,6 +44,7 @@ struct Reply {
 struct Call {
   let args: Arguments
   let store: CueStore
+  let environment: [String: String]
   let directory: String
   let stdin: StdinReader
 }

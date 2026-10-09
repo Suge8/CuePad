@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 任务页（书架上的"任务"一行、iPad 侧栏、项目页"还有 N 条"进入）：顶上常驻一行快速添加（↩ 即一条，落当前项目或未分类，可换）；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
-/// 子任务缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的子任务、右滑缩进左滑反缩进），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
+/// 子任务缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的子任务；轻扫见 `CardMenu.swipes`），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
 /// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `CardActions`。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -133,7 +133,6 @@ struct TaskLine: View {
     var marks: [ChildMark]?
     private var subtasks: TaskProgress? { .subtasks(in: marks) }
     private var tally: PromptTally { PromptTally(marks) }
-    @Environment(\.taskStructure) private var structure
     @State private var confirmsSubtasks = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -160,8 +159,6 @@ struct TaskLine: View {
             .accessibilityActions {
                 Button("打开") { navigation.openTask(task.id) }
                 if let session { Button("看 Agent 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
-                if let indent = structure?.indent { Button("缩进", action: indent) }
-                if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
             }
             .confirmationDialog(
                 TaskCopy.openSubtasks(subtasks), isPresented: $confirmsSubtasks, titleVisibility: .visible

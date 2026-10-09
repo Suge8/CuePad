@@ -74,8 +74,7 @@ struct CardMeta: View {
 /// 栏后面最小的可读处理：从屏幕或窗口边沿的页面底色淡到栏的内沿全透，不铺实底、不伸进内容区——内容一直滚到栏下，
 /// 玻璃后面隐约可见（沉浸式）。能用系统滚动边缘效果（`.scrollEdgeEffectStyle(.soft, …)`）的滚动区优先用系统的，这一层只补它到不了的地方：
 /// iOS 推入页的状态栏那一段、Mac 底部输入栏（macOS 上系统效果几乎看不出）。Mac 窗口工具栏下是虚化的 `ToolbarEdge`。
-/// 滚动区关掉了系统效果、内容会一直滚到整条栏后面时（iOS 倒过来的对话）只压一半不够，用 `BarScrim.veil`：整条栏（状态栏加悬浮顶栏）
-/// 后面虚化并铺实，到栏下沿再往下淡出，与 `ToolbarEdge` 同一种做法（`EdgeVeil`）。
+/// 系统效果整个用不上的滚动区（iOS 倒过来的对话、Mac 窗口工具栏下）用自绘的渐进模糊 `EdgeBlur`。
 /// `height` 是栏占的高度；nil 时取 iOS 上边安全区里状态栏那一段（安全区减去悬浮顶栏）。
 struct BarScrim: View {
     let edge: VerticalEdge
@@ -90,16 +89,6 @@ struct BarScrim: View {
 
     /// 边沿处的不透明度：只压一半，栏上的字（时间、标题）压得住，后面的内容仍看得出来。
     private static let edgeOpacity = 0.5
-
-    #if os(iOS)
-    /// 盖住整条顶栏的一层（状态栏加悬浮顶栏，高度取上边安全区），到栏下沿仍是实的，再往下淡出 `EdgeVeil.fade`。
-    /// 给关掉了系统滚动边缘效果的滚动区用（倒过来的对话）：内容滚到时间、返回钮、标题后面也读得出栏上的字。
-    static var veil: some View {
-        GeometryReader { proxy in
-            EdgeVeil(solid: proxy.safeAreaInsets.top).offset(y: -proxy.safeAreaInsets.top)
-        }
-    }
-    #endif
 
     var body: some View {
         let alignment: Alignment = edge == .top ? .top : .bottom
@@ -126,46 +115,62 @@ struct BarScrim: View {
     }
 }
 
-/// 顶上一条栏后面的虚化：一层系统材质按渐变遮罩从实到无，叠一层由实到无的页面底色，让虚化的内容回到纸与墨的色温。
-/// 从这条边起 `solid` 那么高是实的（栏本身），再往内容淡出 `fade`。遮罩只在这一条上，不碰滚动内容；"降低透明度"时退回实底渐变。
-/// Mac 窗口工具栏下（`ToolbarEdge`）与 iOS 倒过来的对话的顶栏下（`BarScrim.veil`）都是它。
-struct EdgeVeil: View {
-    let solid: CGFloat
-    static let fade: CGFloat = 20
-    @Environment(\.palette) private var palette
-    @Environment(\.pageBackground) private var pageBackground
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+/// 顶上一条栏后面的渐进模糊，自己做出与系统柔和滚动边缘效果（`.scrollEdgeEffectStyle(.soft, …)`）同一种观感：只有模糊，
+/// 从这条边往内容逐渐变弱，不铺底色带、没有可见的分界，内容在玻璃后面隐约可见。用在系统效果出不来的地方：iOS 倒过来的对话
+/// （滚动区转了 180°，系统效果画在反方向，而且尺寸一变会把整片对话糊一帧，只能关掉）的整条顶栏后面、Mac 窗口工具栏下
+/// （透明标题栏下系统效果出不来）。公开接口里没有可变半径的模糊：几层最薄的系统材质叠在一起，每层的渐变遮罩一层比一层短——
+/// 离边越近叠得越多、越糊。材质的模糊交给渲染服务，内容不动时不重算；"降低透明度"时系统把材质换成实底，遮罩照旧，从边沿的实底淡到无。
+struct EdgeBlur: View {
+    /// 从边沿往内容覆盖多高。
+    let height: CGFloat
+    /// 每层遮罩占 `height` 的比例：最长的一层到底淡完，越短的叠在越靠边处，靠边处糊到读不出字。
+    private static let spans: [CGFloat] = [1, 0.75, 0.5, 0.3]
 
     var body: some View {
-        let ground = pageBackground ?? palette.desk
-        let fading = LinearGradient(
-            stops: [.init(color: .black, location: 0), .init(color: .black, location: solid / (solid + Self.fade)), .init(color: .clear, location: 1)],
-            startPoint: .top, endPoint: .bottom)
-        ZStack {
-            if !reduceTransparency { Rectangle().fill(.regularMaterial) }
-            LinearGradient(
-                colors: [ground.opacity(reduceTransparency ? 1 : 0.72), ground.opacity(reduceTransparency ? 1 : 0.4)],
-                startPoint: .top, endPoint: .bottom)
+        ZStack(alignment: .top) {
+            ForEach(Self.spans, id: \.self) { span in
+                Rectangle().fill(.thinMaterial)
+                    .mask(alignment: .top) { Self.ramp.frame(height: height * span) }
+            }
         }
-        .mask(fading)
-        .frame(height: solid + Self.fade)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .ignoresSafeArea()
+        .frame(height: height)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
+
+    /// 由实到无的缓和曲线（smoothstep 取样）：头尾都平，看不出哪里是分界。
+    private static let ramp = LinearGradient(
+        stops: stride(from: 0.0, through: 1.0, by: 0.125).map { t in
+            Gradient.Stop(color: .black.opacity(1 - t * t * (3 - 2 * t)), location: t)
+        },
+        startPoint: .top, endPoint: .bottom)
+
+    #if os(iOS)
+    /// 盖住整条顶栏（状态栏加悬浮顶栏），再往内容延出 `beyondBar`：从屏幕顶到顶栏下沿的高按全局坐标量（这一层所在的框
+    /// 从哪里开始、它的安全区还剩多少，都加进来），铺在屏幕顶上。
+    static var underBars: some View {
+        GeometryReader { proxy in
+            let top = proxy.frame(in: .global).minY
+            EdgeBlur(height: top + proxy.safeAreaInsets.top + beyondBar).offset(y: -top)
+        }
+    }
+
+    /// 顶栏下沿往内容延出的一段：刚滚到玻璃边上的字已经开始糊。
+    private static let beyondBar: CGFloat = 16
+    #endif
 }
 
 #if os(macOS)
-/// 窗口工具栏下的一条边：滚上来的内容到悬浮的玻璃条目（往上一层、标题、搜索与任务）后面时虚化，再往下淡出——与 iOS 的柔和滚动边缘效果
-/// 同一种观感。系统的滚动边缘效果在这个窗口里只给得出不透明的硬边（透明标题栏下则完全没有，`scrollEdgeEffectStyle` 管不到标题栏这层），
-/// 所以自己铺（`EdgeVeil`）。作滚动视图的兄弟层放在它上面、页面里浮在顶上的玻璃之下。
+/// 窗口工具栏下的一条边：滚上来的内容到悬浮的玻璃条目（往上一层、标题、搜索与任务）后面时渐进地糊掉（`EdgeBlur`）——
+/// 与 iOS 的柔和滚动边缘效果同一种观感。作滚动视图的兄弟层放在它上面、页面里浮在顶上的玻璃之下。
 struct ToolbarEdge: View {
-    /// 工具栏高，往内容再淡出 `fade`（页面内容的上边距要让出这一段，停在顶部时标题不被虚化）。
+    /// 工具栏高，往内容再延出 `fade`（页面内容的上边距要让出这一段，停在顶部时标题不被糊掉）。
     static let height: CGFloat = 52
-    static let fade = EdgeVeil.fade
+    static let fade: CGFloat = 20
 
-    var body: some View { EdgeVeil(solid: Self.height) }
+    var body: some View {
+        EdgeBlur(height: Self.height + Self.fade).frame(maxHeight: .infinity, alignment: .top).ignoresSafeArea()
+    }
 }
 #endif
 
