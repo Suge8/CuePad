@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueDispatch
 import CueStore
 import CueSync
 import Foundation
@@ -733,18 +732,18 @@ struct MacSyncTests {
         #expect(rig.channels.calls.isEmpty)
     }
 
-    @Test func 通用投送请求按bundle投送_失败原因可读() async throws {
-        rig.channels.dispatchError = DispatchError.accessibilityRequired
+    /// 投送到应用已经下线：旧版本写来的发到应用、复制到剪贴板的请求按失败写回，不碰任何应用与剪贴板。
+    @Test func 旧版本写来的发到应用请求按失败写回() async throws {
         try await services.startDeliveryExecutor()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
-            "hi", to: SendTarget(kind: .app, name: "Ghostty", ref: "com.mitchellh.ghostty"), on: TestApp.hostID)
+            "hi", to: SendTarget(kind: .unknown("app"), name: "Ghostty", ref: "com.mitchellh.ghostty"), on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
-        #expect(rig.channels.calls.contains(.dispatch(Payload(text: "hi"), .bundleID("com.mitchellh.ghostty"), submit: false)))
         #expect(done.status == .known(.failed))
-        #expect(done.resultDetail == DispatchError.accessibilityRequired.localizedDescription, "写回的是错误自身的说明")
+        #expect(rig.channels.calls.isEmpty)
+        #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 本机标识由硬件UUID稳定派生_不含原值() {

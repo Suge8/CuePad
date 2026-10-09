@@ -5,14 +5,13 @@ import CueEditor
 import CueSync
 import os
 #if os(macOS)
-import CueDispatch
 import CuePi
 #else
 import UIKit
 #endif
 
 /// 组合根与界面动作的唯一入口：持有各模块的唯一实例。
-/// 界面读数据直接 `store.observe(...)`；一切副作用（投送、复制、Pi 命令、终端跳转、导入、扩展安装）只经这里，
+/// 界面读数据直接 `store.observe(...)`；一切副作用（发给 Agent、复制、Pi 命令、终端跳转、导入、扩展安装）只经这里，
 /// 发送记录也只在这里写。
 @MainActor @Observable
 final class AppServices {
@@ -23,11 +22,9 @@ final class AppServices {
     let images: any CueImageStore
     #if os(macOS)
     let pi: PiBridge
-    /// 按 bundle ID 解析出的应用名（运行期间不变）：发送按钮每次绘制都要用，逐次解析要问 LaunchServices 并读应用的 Info.plist。
-    @ObservationIgnored var appNames: [String: String] = [:]
     #endif
 
-    /// 设备本地偏好（主题、快捷键、自动发送、当前项目）。
+    /// 设备本地偏好（主题、快捷键、当前项目）。
     let settings: AppSettings
     /// 启动期间没能完成的事；界面据此提示，不静默。
     private(set) var startupIssues: [StartupIssue] = []
@@ -78,13 +75,11 @@ final class AppServices {
     #if os(macOS)
     /// Pi 扩展的检测与安装（写入前需征得同意）。
     let piExtension: PiExtensionManager
-    /// 辅助功能授权（通用投送的前提）。
-    let accessibility: AccessibilityAccess
     /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
     let commandLineTool: CommandLineToolInstaller
     /// 自动更新（Sparkle）。
     let updates: UpdateService
-    /// 主窗口显隐；通用投送前后与全局快捷键都经它。
+    /// 主窗口显隐；全局快捷键经它。
     @ObservationIgnored var windowShell: WindowShell?
 
     @ObservationIgnored let channels: any SendChannels
@@ -118,19 +113,6 @@ final class AppServices {
         /// Pi 历史索引读写 Store 失败；该会话文件不再写回。
         case piHistoryUnavailable(String)
         #endif
-    }
-
-    /// 发往哪里。正文一律是存储格式（变量已填），图片引用由这里解析成真实图片。
-    enum Destination: Equatable {
-        #if os(macOS)
-        /// 发进 Pi 会话：`send` 在会话忙时报 `SendError.piSessionBusy`，`steer`/`followUp` 忙时马上说或等它做完再说，
-        /// `paste` 只把文字放进输入框（含图片时报错）。
-        case pi(CuePi.PiSession.ID, DeliveryMode)
-        /// 通用投送：剪贴板 + 激活目标 + 定向粘贴；是否回车跟随设置。
-        case app(TargetSelector)
-        #endif
-        /// 只复制到剪贴板。
-        case clipboard
     }
 
     /// 发到 Mac：写一条投送请求，交给运行该 Pi 会话的那台 Mac（取自会话的 `hostID`）执行；
@@ -272,23 +254,6 @@ final class AppServices {
         }
     }
 
-    /// 发送并写一条发送记录；投送失败不写记录，错误原样抛给界面展示。投送成功而记录没写进去时抛 `SendError.unrecorded`。
-    /// 发给 Pi 会话不在这里直接发：写本机投送请求、等执行器的结果（见 `sendThroughRequest`）。
-    func send(_ storedText: String, to destination: Destination, card: UUID? = nil) async throws {
-        let content = SendContent(stored: storedText)
-        let target: SendTarget
-        switch destination {
-        #if os(macOS)
-        case .pi(let id, let mode):
-            try await sendThroughRequest(storedText, to: id, mode: mode, card: card)
-            return
-        case .app(let selector): target = try await dispatch(content, to: selector, submit: settings.autoSubmit)
-        #endif
-        case .clipboard: target = try copyToClipboard(content)
-        }
-        try await recordSend(storedText, to: target, card: card)
-    }
-
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
         let library = try Self.openLibrary(at: location)
@@ -309,7 +274,6 @@ final class AppServices {
         locatePi = mac.locatePi
         host = mac.host
         piExtension = PiExtensionManager(installer: mac.installer, settings: settings)
-        accessibility = AccessibilityAccess(isTrusted: mac.isAccessibilityTrusted)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: library.store, host: mac.hostID)

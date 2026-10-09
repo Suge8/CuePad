@@ -9,7 +9,7 @@ import Testing
 /// 测试宿主用的就是真实域，所以这里只读真实域来确认它没被写。
 @MainActor
 struct IsolationTests {
-    private let realKeys = ["theme", "globalShortcut", "autoSubmit", "currentProject", "NSWindow Frame main", "NSWindow Frame settings"]
+    private let realKeys = ["theme", "globalShortcut", "currentProject", "NSWindow Frame main", "NSWindow Frame settings"]
 
     private func realDomain() -> [String: NSObject?] {
         Dictionary(uniqueKeysWithValues: realKeys.map { ($0, UserDefaults.standard.object(forKey: $0) as? NSObject) })
@@ -50,10 +50,9 @@ struct IsolationTests {
         let defaults = temp.defaults
         AppSettings(defaults: defaults).theme = .light
 
-        let overridden = AppSettings(defaults: defaults, launchArguments: ["theme": "dark", "autoSubmit": "YES"])
+        let overridden = AppSettings(defaults: defaults, launchArguments: ["theme": "dark"])
 
         #expect(overridden.theme == .dark)
-        #expect(overridden.autoSubmit)
         #expect(AppSettings(defaults: defaults, launchArguments: [:]).theme == .light)
     }
 

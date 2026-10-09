@@ -1,6 +1,5 @@
 #if os(macOS)
 import AppKit
-import CueDispatch
 import CuePi
 import Foundation
 import os
@@ -13,7 +12,6 @@ extension AppServices {
         guard tasks.isEmpty else { return }
         applySavedShortcut()
         if !location.isIsolated { diagnostics.start() }
-        accessibility.refresh()
         let piChanges = pi.changes() // 先订阅再启动桥：启动时扫到的会话不能漏
         host.start()
         do {
@@ -173,25 +171,6 @@ extension AppServices {
     func jumpToTerminal(_ id: CuePi.PiSession.ID) async throws -> PiJumpResult {
         guard let session = pi.sessions.first(where: { $0.id == id }) else { throw PiBridgeError.unknownSession(id) }
         return await terminal.jump(to: session)
-    }
-
-    // MARK: 通用投送目标
-
-    func runningApps() -> [AppInfo] { channels.runningApps() }
-    func lastFrontmostApp() -> AppInfo? { channels.lastFrontmost() }
-
-    /// 已安装应用的显示名（不要求在运行）；找不到该应用时用 bundle ID 本身。
-    func appName(bundleID: String) -> String {
-        if let name = appNames[bundleID] { return name }
-        // 找不到应用时不缓存：之后装上了就能解析出名字
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID), let bundle = Bundle(url: url) else {
-            return bundleID
-        }
-        let name = bundle.localizedInfoDictionary?["CFBundleDisplayName"] ?? bundle.object(forInfoDictionaryKey: "CFBundleDisplayName")
-            ?? bundle.object(forInfoDictionaryKey: "CFBundleName")
-        let resolved = name as? String ?? url.deletingPathExtension().lastPathComponent
-        appNames[bundleID] = resolved
-        return resolved
     }
 }
 

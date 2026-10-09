@@ -60,20 +60,14 @@ struct CardActions: View {
         }
     }
 
-    @ViewBuilder private var copy: some View {
-        let text = Outgoing.text(of: card), id = card.id
-        #if os(macOS)
-        Button("复制", systemImage: "doc.on.doc") { Task { await workspace.send(text, via: .clipboard, card: id) } }
-        #else
-        Button("复制", systemImage: "doc.on.doc") { workspace.copy(card) }
-        #endif
+    private var copy: some View {
+        Button("复制", systemImage: "doc.on.doc") { workspace.copy(Outgoing.text(of: card)) }
     }
 
     @ViewBuilder private var handToAgent: some View {
-        let text = Outgoing.text(of: card), id = card.id
         #if os(macOS)
-        let choice = workspace.effectiveChoice(for: card.projectID, agents: true)
-        workspace.sendButton(choice) { Task { await workspace.send(text, via: choice, card: id) } }
+        let text = Outgoing.text(of: card), id = card.id
+        workspace.sendButton(workspace.agentTarget(for: card.projectID)) { target in Task { await workspace.send(text, to: target, card: id) } }
         #else
         Button("交给 Agent", systemImage: "paperplane") { navigation.handToAgent(card) }
         #endif

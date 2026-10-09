@@ -18,7 +18,6 @@ Swift 原生应用（macOS / iOS / iPadOS）。产品说明见 [README.md](READM
 | `apple/CuePadKit/Sources/CueStore` | SQLite 唯一事实源：表结构、仓储、搜索、资料库位置、跨进程变更通知 |
 | `apple/CuePadKit/Sources/CueEditor` | TextKit 2 编辑器，AppKit/UIKit 宿主 |
 | `apple/CuePadKit/Sources/CueSync` | CKSyncEngine ↔ CueStore 的记录映射、待推送、冲突与附件 |
-| `apple/CuePadKit/Sources/CueDispatch` | macOS 通用投送：前台应用、剪贴板、定向 `Cmd+V` |
 | `apple/CuePadKit/Sources/CuePi` | macOS Pi 桥：扩展、socket 协议（[README](apple/CuePadKit/Sources/CuePi/README.md)）、会话历史、终端跳转 |
 | `apple/CuePadKit/Sources/CueCLI` | `cuepad` 命令行；`cuepad --help` 是其唯一文档 |
 | `apple/CuePadKit/Tests` | 各模块的 Swift Testing 测试 |

@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueDispatch
 import CuePi
 import CueStore
 import Foundation
@@ -59,7 +58,7 @@ final class RecordingHost: PiHosting {
     }
 }
 
-/// 记录调用的发送通道；不碰真实 Pi、剪贴板和其他应用。
+/// 记录调用的发送通道；不碰真实 Pi 与剪贴板。
 final class FakeChannels: SendChannels {
     enum Call: Equatable {
         case send(PiMessage, String)
@@ -68,17 +67,12 @@ final class FakeChannels: SendChannels {
         case configure(PiModelRef?, String?, String?, String)
         case command(String, PiQueueMode?, String)
         case abort(String)
-        case preflight(TargetSelector)
-        case dispatch(Payload, TargetSelector, submit: Bool)
-        case copy(Payload)
+        case copy(ClipboardContent)
     }
 
     var calls: [Call] = []
     var sessions: [String: PiSessionInfo] = [:]
-    var preflightError: (any Error)?
     var sendError: (any Error)?
-    var dispatchError: (any Error)?
-    var app = AppInfo(pid: 42, bundleID: "com.example.editor", name: "Editor")
 
     func piSession(_ id: String) -> PiSessionInfo? { sessions[id] }
     /// Pi 自己的会话 id → 桥上的会话 id
@@ -95,21 +89,7 @@ final class FakeChannels: SendChannels {
     }
     func command(_ line: String, whenBusy: PiQueueMode?, in id: String) async throws { calls.append(.command(line, whenBusy, id)) }
     func abort(in id: String) async throws { calls.append(.abort(id)) }
-    func runningApps() -> [AppInfo] { [] }
-    func lastFrontmost() -> AppInfo? { nil }
-
-    func preflight(_ selector: TargetSelector) async throws {
-        calls.append(.preflight(selector))
-        if let preflightError { throw preflightError }
-    }
-
-    func dispatch(_ payload: Payload, to selector: TargetSelector, submit: Bool) async throws -> AppInfo {
-        calls.append(.dispatch(payload, selector, submit: submit))
-        if let dispatchError { throw dispatchError }
-        return app
-    }
-
-    func copy(_ payload: Payload) throws { calls.append(.copy(payload)) }
+    func copy(_ content: ClipboardContent) throws { calls.append(.copy(content)) }
 }
 
 final class RecordingWindow: ShellWindow {

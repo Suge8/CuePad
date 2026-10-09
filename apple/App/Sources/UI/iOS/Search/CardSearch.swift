@@ -101,7 +101,7 @@ struct CardSearchResults: View {
             let found = try store.search(effective.store(), limit: PaletteQuery.pageSize * effective.pages)
             return SearchData(
                 groups: SearchData.grouped(found.cards, projects: try store.projects()), total: found.totalCards, shown: found.cards.count,
-                targets: try store.sendTargets().filter { $0.kind == .known(.clipboard) })
+                targets: try store.sendTargets())
         }
     }
 }
@@ -207,15 +207,15 @@ private struct FilterChips: View {
                 .accessibilityAddTraits(query.withImages ? .isSelected : [])
             Menu {
                 Button("任意") { query.sent = .any }
-                Button("从未发送") { query.sent = .never }
-                Button("发送或复制过") { query.sent = .sent() }
+                Button("没交给过 Agent") { query.sent = .never }
+                Button("交给过 Agent") { query.sent = .sent() }
                 if !targets.isEmpty {
                     Divider()
                     ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
                         Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
                     }
                 }
-            } label: { Chip(name: "发送", value: sentLabel, on: query.sent != .any) }
+            } label: { Chip(name: "Agent", value: sentLabel, on: query.sent != .any) }
             Menu {
                 ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
             } label: { Chip(name: "时间", value: query.period.label, on: query.period != .any) }
@@ -233,10 +233,9 @@ private struct FilterChips: View {
     private var sentLabel: String {
         switch query.sent {
         case .any: "任意"
-        case .never: "从未发送"
+        case .never: "没交过"
         case .sent(_, .some(let name)): name
-        case .sent(.known(.clipboard), nil): "剪贴板"
-        case .sent: "发送过"
+        case .sent: "交过"
         }
     }
 }

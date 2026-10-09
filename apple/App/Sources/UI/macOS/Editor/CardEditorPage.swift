@@ -158,10 +158,11 @@ struct CardEditorPage: View {
         .scrollIndicators(.automatic)
     }
 
-    /// 提示词卡上的"交给 Agent"：发给当前目标（与底部输入栏、灵感纸页同一个），发给 Pi 会话时提示词关联到它。
+    /// 提示词卡上的"交给 Agent"：发给本项目当前的 Agent 会话（与提示词纸页同一个），提示词关联到它；没有会话时打开它的纸页去选。
     private func hand(_ prompt: Card) {
-        let choice = workspace.effectiveChoice(for: prompt.projectID, agents: true), text = Outgoing.text(of: prompt), id = prompt.id
-        Task { await workspace.send(text, via: choice, card: id) }
+        guard let target = workspace.agentTarget(for: prompt.projectID), !workspace.isEnded(target) else { return workspace.openCard = prompt.id }
+        let text = Outgoing.text(of: prompt), id = prompt.id
+        Task { await workspace.send(text, to: target, card: id) }
     }
 
     /// 原卡片在本页里的边框；找不到原卡片（不在墙上）时为 nil。
@@ -334,17 +335,18 @@ struct CardEditorPage: View {
             })
     }
 
-    /// 右键菜单里的选区动作，与底栏同样的两件事。
+    /// 右键菜单里的选区动作：转为任务；提示词另有"发送选中部分"（发给本项目当前的 Agent 会话）。
     private func selectionActions(_ card: Card) -> [CueSelectionAction] {
-        [
-            CueSelectionAction(title: "发送选中部分", systemImage: "paperplane") { stored in
-                let text = Outgoing.text(body: stored, values: card.variableValues)
-                Task { await workspace.send(text, via: workspace.effectiveChoice(for: card.projectID, agents: CardMenu.handsToAgent(card)), card: card.id) }
-            },
-            CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
-                workspace.convertToTasks(stored, in: card.projectID)
-            },
-        ]
+        let tasks = CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
+            workspace.convertToTasks(stored, in: card.projectID)
+        }
+        guard CardMenu.handsToAgent(card) else { return [tasks] }
+        let send = CueSelectionAction(title: "发送选中部分", systemImage: "paperplane") { stored in
+            guard let target = workspace.agentTarget(for: card.projectID) else { return }
+            let text = Outgoing.text(body: stored, values: card.variableValues)
+            Task { await workspace.send(text, to: target, card: card.id) }
+        }
+        return [send, tasks]
     }
 }
 
@@ -371,7 +373,7 @@ private enum SaveState: Equatable {
     }
 }
 
-/// 编辑页底部的玻璃操作栏。灵感的主动作是"挂到任务"（⌘↩），发送只是次要的发到应用或复制；提示词的主动作是发送（可发给 Agent，⌘↩）。
+/// 编辑页底部的玻璃操作栏：复制全文、插分割线；主动作在右边——灵感是"挂到任务"，提示词是发给 Agent（都是 ⌘↩）。
 /// 选中文字时发送只发选中的部分，并多一个"转为任务"。
 private struct EditorBar: View {
     let card: Card
@@ -386,7 +388,7 @@ private struct EditorBar: View {
         return GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
                 HStack(spacing: 16) {
-                    Button("复制全文", systemImage: "doc.on.doc") { send(.clipboard, whole: true) }
+                    Button("复制全文", systemImage: "doc.on.doc") { workspace.copy(outgoing(whole: true)) }
                         .help("复制全文（变量已填）")
                     Button("插入分割线", systemImage: "rectangle.split.1x2") { handle.insertDivider() }
                         .help("在光标处插入一条分割线")
@@ -410,11 +412,8 @@ private struct EditorBar: View {
                 }
                 if CardMenu.handsToAgent(card) {
                     let start = workspace.newSessionHandOff(for: card)
-                    SendControl(project: card.projectID, agents: true, newSession: start.map { start in { start(outgoing(whole: false)) } }) {
-                        send($0, whole: false)
-                    }
+                    SendControl(project: card.projectID, newSession: start.map { start in { start(outgoing(whole: false)) } }) { send(to: $0) }
                 } else {
-                    SendControl(project: card.projectID, agents: false, bindsReturn: false) { send($0, whole: false) }
                     attach
                 }
             }
@@ -436,10 +435,10 @@ private struct EditorBar: View {
         .help("挂到一个任务下，成为它的提示词（⌘↩）")
     }
 
-    /// 发出去的正文：选中了就只发选中的部分（`whole` 时总是整张）。
-    private func send(_ choice: AppServices.Destination, whole: Bool) {
-        let outgoing = outgoing(whole: whole), id = card.id
-        Task { await workspace.send(outgoing, via: choice, card: id) }
+    /// 发给 Agent：选中了就只发选中的部分。
+    private func send(to target: AgentTarget) {
+        let outgoing = outgoing(whole: false), id = card.id
+        Task { await workspace.send(outgoing, to: target, card: id) }
     }
 
     private func outgoing(whole: Bool) -> String {

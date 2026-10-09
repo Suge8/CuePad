@@ -60,17 +60,6 @@ extension SwipeAction {
     }
 }
 
-extension Workspace {
-    /// 复制整张卡（变量已填），写一条发送记录。
-    func copy(_ card: Card) {
-        let text = Outgoing.text(of: card), id = card.id
-        attempt {
-            try await self.services.send(text, to: .clipboard, card: id)
-            self.say("已复制")
-        }
-    }
-}
-
 /// "更早"的一组：标题行（按月的组可折叠，折叠时带张数）。
 struct OlderGroupHeader: View {
     let group: OlderGroup
