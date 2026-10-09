@@ -1,8 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 回复框工具排里思考强度条旁的上下文圆环（iOS 与 Mac 共用，读数规则见 `PiContextMeter`）：圆弧是已用的比例，
-/// 余量充足时中性，用到七成赭黄、九成胭脂；刚压缩过、Agent 还不知道已用多少时画成虚线圈。
+/// 回复框工具排里思考强度条旁的上下文圆环（iOS 与 Mac 共用，读数规则见 `PiContextMeter`）：画法与任务完成圈一样——实线圈里一块从 12 点
+/// 顺时针的扇形，扇形是已用的比例。不画"淡圈上描一道弧"：小尺寸下那就是系统的加载转圈。
+/// 余量充足时中性，用到七成赭黄、九成胭脂；刚压缩过、Agent 还不知道已用多少时是一个空的虚线圈。
 /// 点一下（Mac 悬停也有提示）说"已用 x% · 剩 y tokens"；接近上限时多一个"压缩"，等于发出 /compact。
 struct PiContextRing: View {
     let session: PiSessionState
@@ -13,7 +14,7 @@ struct PiContextRing: View {
     @State private var showsDetail = false
 
     private static let diameter: CGFloat = 18
-    private static let lineWidth: CGFloat = 2.5
+    private static let lineWidth: CGFloat = 1.8
 
     private var meter: PiContextMeter { PiContextMeter(usage) }
 
@@ -44,10 +45,9 @@ struct PiContextRing: View {
     @ViewBuilder private var ring: some View {
         if let fraction = meter.fraction {
             ZStack {
-                Circle().stroke(palette.ink.opacity(0.14), lineWidth: Self.lineWidth)
-                Circle().trim(from: 0, to: max(fraction, 0.02))
-                    .stroke(tint, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
+                Circle().stroke(tint, lineWidth: Self.lineWidth)
+                // 与圈线之间留一线缝，扇形的边才读得出来；几乎没用时也留一道细边，看得出这是一个有读数的圈
+                Sector(fraction: max(fraction, 0.03)).fill(tint).padding(Self.lineWidth * 1.6)
             }
         } else {
             Circle().stroke(tint, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round, dash: [2, 3.2]))

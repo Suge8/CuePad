@@ -232,9 +232,9 @@ private struct PiSection: View {
         } else if status != nil || !rows.isEmpty {
             Section {
                 if live.isEmpty {
-                    // 拒绝过安装扩展时，会话不会出现在这里：说清去哪装，而不是让人对着"运行 pi"困惑
+                    // 拒绝过安装扩展时本机的在线会话不会出现：说清去哪装。下面照样列着同步来的与已结束的会话，所以不能写成"装了才显示会话"
                     let declined = status?.file != .current && services.settings.piExtensionDeclined
-                    Label(declined ? "在 设置 › Pi 里安装扩展后显示会话" : "在终端运行 pi 开始", systemImage: "terminal")
+                    Label(declined ? "没装扩展，看不到本机在线的会话 · 设置 › Pi 里安装" : "在终端运行 pi 开始", systemImage: "terminal")
                         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         .selectionDisabled()
                 }

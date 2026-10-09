@@ -13,6 +13,11 @@ extension Workspace {
         #endif
     }
 
+    /// 项目已经绑着文件夹（Mac 上只看本机，手机看全部 Mac 的）。
+    func hasFolder(_ project: UUID) -> Bool {
+        ProjectFolders.isBound(project, bindings: catalog?.bindings ?? [], host: localHost)
+    }
+
     /// 给项目绑定或更换文件夹：Mac 弹系统的选文件夹面板，手机弹候选（`folderPicker`）。
     func chooseFolder(for project: Project) {
         #if os(macOS)

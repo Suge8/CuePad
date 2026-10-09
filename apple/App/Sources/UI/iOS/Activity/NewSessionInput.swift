@@ -13,8 +13,6 @@ struct NewSessionInput: View {
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
-    /// 手机请 Mac 绑文件夹的请求（读它的进度，`ProjectFolders.bindProgress`）。
-    @State private var bindRequests: [DeliveryRequest]?
     @State private var choice: ProjectFolders.LaunchPlace.ID?
     @State private var draft = ComposerDraft()
     @State private var launched: Navigation.NewSession.Launched?
@@ -62,9 +60,6 @@ struct NewSessionInput: View {
             if let seed = start.draft, draft.isEmpty(accepting: [.images, .cards]) { draft = seed }
             focused = true
         }
-        .observing(services.store, [.deliveryRequests], into: $bindRequests, onError: workspace.fail) { store in
-            try store.deliveryRequests().filter { $0.mode == .known(.bind) }
-        }
         .observing(services.store, [.deliveryRequests, .piSessionStates], id: launched, into: $progress, onError: workspace.fail) {
             [launched] store in
             guard let launched else { return LaunchProgress() }
@@ -106,7 +101,11 @@ struct NewSessionInput: View {
     /// 发出后的进度，上一次没能打开的原因，送不到 Mac 的原因，或项目还没有文件夹时的引导。
     @ViewBuilder private var status: some View {
         if let place = chosen, place.binding == nil, progress?.request == nil {
-            folderGuide(place.project)
+            // 项目还没有文件夹：写明，同名文件夹一键绑，或自己选（请 Mac 绑，进度与没绑成的原因就在这里）
+            VStack(alignment: .leading, spacing: 0) {
+                Text("「\(place.project.name)」还没有文件夹").foregroundStyle(palette.ink3)
+                ProjectFolderGuide(project: place.project, style: .line)
+            }
         } else if let request = progress?.request {
             if let failure = request.failure {
                 Text(failure).foregroundStyle(palette.failure)
@@ -118,29 +117,6 @@ struct NewSessionInput: View {
         } else if !services.reachesPiHost {
             SyncHint(status: services.syncStatus, consequence: "发不到 Mac")
         }
-    }
-
-    /// 项目还没有文件夹：写明，给"选文件夹…"（请 Mac 绑，进度与没绑成的原因就在这一行）。
-    private func folderGuide(_ project: Project) -> some View {
-        HStack(spacing: 8) {
-            switch ProjectFolders.bindProgress(of: project.id, in: bindRequests ?? []) {
-            case .binding:
-                ProgressView().controlSize(.mini)
-                Text("Mac 正在绑定文件夹…").foregroundStyle(palette.ink3)
-            case .failed(let reason):
-                Text("没绑成：\(reason)").foregroundStyle(palette.failure)
-                chooseButton(project)
-            case nil:
-                Text("「\(project.name)」还没有文件夹").foregroundStyle(palette.ink3)
-                chooseButton(project)
-            }
-        }
-    }
-
-    private func chooseButton(_ project: Project) -> some View {
-        Button("选文件夹…") { workspace.chooseFolder(for: project) }
-            .font(.caption.weight(.semibold)).foregroundStyle(palette.signature)
-            .frame(minHeight: 44)
     }
 
     private func launch() {

@@ -426,8 +426,8 @@ struct TaskRingView: View {
     }
 }
 
-/// 从 12 点顺时针的扇形，`fraction` 0…1；可动画。
-nonisolated private struct Sector: Shape {
+/// 从 12 点顺时针的扇形，`fraction` 0…1；可动画（任务完成圈与上下文圆环共用，同一种饼图画法）。
+nonisolated struct Sector: Shape {
     var fraction: Double
     var animatableData: Double {
         get { fraction }

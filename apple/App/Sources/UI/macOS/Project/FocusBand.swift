@@ -19,14 +19,14 @@ struct FocusBand: View {
             HStack(alignment: .top, spacing: 0) {
                 column { tasks }
                 divider
-                column { PiColumn(project: data.project?.id, hasDirectory: data.project.flatMap { workspace.catalog?.directories[$0.id] } != nil) }
+                column { PiColumn(project: data.project) }
                     .frame(maxWidth: 300)
             }
             .frame(minWidth: Self.stackedBelow, idealWidth: Self.stackedBelow, maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 0) {
                 column { tasks }
                 Divider().overlay(palette.hair).padding(.horizontal, 18)
-                column { PiColumn(project: data.project?.id, hasDirectory: data.project.flatMap { workspace.catalog?.directories[$0.id] } != nil) }
+                column { PiColumn(project: data.project) }
             }
         }
         .paper(radius: 18)
@@ -63,23 +63,27 @@ struct FocusBand: View {
 
 /// 本项目正在跑的 Pi 会话。
 private struct PiColumn: View {
-    let project: UUID?
-    let hasDirectory: Bool
+    /// 未分类没有项目，也就没有文件夹可绑。
+    let project: Project?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         SectionLabel(text: "Agent", systemImage: "terminal")
-        let sessions = workspace.liveSessions(in: project)
+        let sessions = workspace.liveSessions(in: project?.id)
         if sessions.isEmpty {
-            Text(hasDirectory ? "没有运行中的会话" : "还没绑定文件夹")
-                .font(.system(size: 12.5)).foregroundStyle(palette.ink3)
-                .fixedSize(horizontal: false, vertical: true)
+            if let project, !workspace.hasFolder(project.id) {
+                Text("还没绑定文件夹").font(.system(size: 12.5)).foregroundStyle(palette.ink3)
+                ProjectFolderGuide(project: project, style: .line)
+            } else {
+                Text("没有运行中的会话").font(.system(size: 12.5)).foregroundStyle(palette.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         ForEach(sessions) { session in
             PiSessionRow(
-                session: .live(session, hostID: workspace.services.hostID, projectID: project, recap: workspace.sessionRecaps[session.sessionID]),
-                project: workspace.catalog?.project(project), delivery: workspace.sessionDeliveries[session.sessionID])
+                session: .live(session, hostID: workspace.services.hostID, projectID: project?.id, recap: workspace.sessionRecaps[session.sessionID]),
+                project: project, delivery: workspace.sessionDeliveries[session.sessionID])
         }
     }
 }

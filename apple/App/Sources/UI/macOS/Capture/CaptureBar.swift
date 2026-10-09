@@ -42,8 +42,8 @@ struct CaptureComposer: View {
 
     /// 有字、没有图时才能发出去（发图走纸页）。
     private var showsSend: Bool { !trimmed.isEmpty && images.isEmpty }
-    /// 发送钮这时绑着 ⌘↩、是主钮：记下退成次钮，一处只有一颗靛青（↩ 照样记下）。
-    private var sendIsPrimary: Bool { showsSend && workspace.readyToSend(workspace.effectiveChoice(for: project)) }
+    /// 发送钮这时是主钮（发给 Agent，`Workspace.sendStyle`）：记下退成次钮，一处只有一颗靛青（↩ 照样记下）。
+    private var sendIsPrimary: Bool { showsSend && workspace.sendStyle(workspace.effectiveChoice(for: project)) == .primary }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
