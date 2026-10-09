@@ -53,10 +53,30 @@ nonisolated enum PiClock: Hashable, Sendable {
         .timer(countingUpIn: since..<Date.distantFuture, maxFieldCount: 1).locale(Self.locale)
     }
 
-    /// "多久前"的文字下一次会变的时刻：一小时内每整分钟（"刚刚"到"1 分前"也在整分钟），之后每小时。
-    func nextChange(after now: Date) -> Date {
-        let elapsed = max(now.timeIntervalSince(since), 0)
-        let step: TimeInterval = elapsed < 3600 ? 60 : 3600
-        return since.addingTimeInterval((elapsed / step).rounded(.down) * step + step)
+    /// "多久前"的系统时间文本：写法就是 `DateLabel`，系统只在文字会变的时刻（`Ago`）更新它。
+    var ago: Ago { Ago(date: since) }
+
+    /// 按 `DateLabel` 写"多久前"的格式：一小时内在整分钟变、一天内在整小时变，再往前在每天零点变（昨天、星期、月日）。
+    struct Ago: DiscreteFormatStyle {
+        let date: Date
+
+        func format(_ now: Date) -> String { DateLabel.short(date, now: now) }
+
+        func discreteInput(after now: Date) -> Date? { boundary(around: now).next }
+
+        func discreteInput(before now: Date) -> Date? { boundary(around: now).last.addingTimeInterval(-0.001) }
+
+        /// `now` 所在的那一段文字的起点与下一段的起点。
+        private func boundary(around now: Date) -> (last: Date, next: Date) {
+            let elapsed = max(now.timeIntervalSince(date), 0)
+            guard elapsed >= 86_400 else {
+                let step: TimeInterval = elapsed < 3600 ? 60 : 3600
+                let last = date.addingTimeInterval((elapsed / step).rounded(.down) * step)
+                return (last, last.addingTimeInterval(step))
+            }
+            let calendar = Calendar.current
+            let midnight = calendar.startOfDay(for: now)
+            return (midnight, calendar.date(byAdding: .day, value: 1, to: midnight) ?? now.addingTimeInterval(86_400))
+        }
     }
 }

@@ -290,8 +290,8 @@ struct PiElapsed: View {
     }
 }
 
-/// 一个计时的文字：走字的（已运行、已等、已发出）是系统计时文本，由系统在文字会变时更新、不重算视图；
-/// "多久前"按 `DateLabel` 的写法，只在它会变的整分钟、整小时重画（不在屏幕上的行不画，也就不刷新）。
+/// 一个计时的文字，都是系统时间文本（系统只在文字会变的时刻更新，不经 TimelineView 或定时器重算视图）：
+/// 走字的（已运行、已等、已发出）是系统计时（`PiClock.live`），"多久前"按 `DateLabel` 的写法（`PiClock.ago`）。
 struct PiClockText: View {
     let clock: PiClock
 
@@ -299,17 +299,8 @@ struct PiClockText: View {
         if let prefix = clock.prefix {
             Text("\(prefix) \(.currentDate, format: clock.live)")
         } else {
-            TimelineView(PiClockSchedule(clock: clock)) { Text(clock.text(now: $0.date)) }
+            Text(.currentDate, format: clock.ago)
         }
-    }
-}
-
-/// "多久前"的文字在哪些时刻会变（见 `PiClock.nextChange`）。
-struct PiClockSchedule: TimelineSchedule {
-    let clock: PiClock
-
-    func entries(from startDate: Date, mode: TimelineScheduleMode) -> some Sequence<Date> {
-        sequence(first: startDate) { clock.nextChange(after: $0) }
     }
 }
 
