@@ -116,6 +116,8 @@ private struct AgentPanel: View {
 nonisolated private struct SidebarData: Sendable {
     var live: [PiSessionListItem]
     var waiting: Int
+    /// 各项目最近开始的进行中任务（项目行的"此刻"，`ProjectNow`）。
+    var leading: [UUID: String]
 }
 
 private struct SplitSidebar: View {
@@ -134,15 +136,18 @@ private struct SplitSidebar: View {
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
             if let catalog = workspace.catalog {
+                // 各项目的"此刻"在数据变化时算一次，行只拿结果
+                let now = ProjectNow.byProject(
+                    catalog.projects, live: data?.live ?? [], tasks: data?.leading ?? [:], shown: services.settings.shown)
                 let pinned = catalog.projects.filter(\.isPinned)
                 if !pinned.isEmpty {
-                    Section("置顶") { ForEach(pinned) { row($0, catalog) } }
+                    Section("置顶") { ForEach(pinned) { row($0, catalog, now: now[$0.id]) } }
                 }
                 let recent = catalog.projects.filter { !$0.isPinned }
                 let inbox = catalog.cardCounts[nil] ?? 0
                 if !recent.isEmpty || inbox > 0 {
                     Section("最近") {
-                        ForEach(recent) { row($0, catalog) }
+                        ForEach(recent) { row($0, catalog, now: now[$0.id]) }
                         if inbox > 0 { SidebarRow(route: .inbox, title: "未分类", symbol: "tray", badge: inbox) }
                     }
                 }
@@ -160,16 +165,15 @@ private struct SplitSidebar: View {
         .toolbar {
             Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
-        .observing(services.store, [.piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) { store in
+        .observing(services.store, [.piSessionStates, .deliveryRequests, .cards], into: $data, onError: workspace.fail) { store in
             let live = try store.piSessionPage(.live).items
-            return SidebarData(live: live, waiting: live.filter(\.state.waitsForYou).count)
+            return SidebarData(live: live, waiting: live.filter(\.state.waitsForYou).count, leading: try TaskBoard.leading(from: store))
         }
     }
 
-    private func row(_ project: Project, _ catalog: ProjectCatalog) -> some View {
-        let pi = PiSessionListItem.byProject(data?.live ?? [], shown: services.settings.shown)[project.id]
-        return SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0, pi: pi)
-            .projectActions(project, radius: 10, pi: pi)
+    private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {
+        SidebarRow(route: .project(project.id), title: project.name, project: project, badge: catalog.cardCounts[project.id] ?? 0, now: now)
+            .projectActions(project, radius: 10, pi: now?.shown)
     }
 }
 
@@ -180,7 +184,8 @@ private struct SidebarRow: View {
     var symbol: String?
     var project: Project?
     var badge = 0
-    var pi: PiShown?
+    /// 项目行的"此刻"（项目行总留着这一行的高度）。
+    var now: ProjectNow?
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
@@ -192,16 +197,18 @@ private struct SidebarRow: View {
         let selected = navigation.splitRoot == route
         Button(action: choose) {
             Label {
-                // 辅助字号下名称独占一行、可换行，状态点与计数排到下一行：名称不被挤成"…"或从词中间断开
-                let layout = typeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))
-                layout {
-                    Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
-                    HStack(spacing: 6) {
-                        if let pi { PiStateDot(shown: pi, size: 6, announces: true) }
-                        Spacer(minLength: 4)
-                        if badge > 0 { Text("\(badge)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3) }
+                VStack(alignment: .leading, spacing: 1) {
+                    // 辅助字号下名称独占一行、可换行，计数排到下一行：名称不被挤成"…"或从词中间断开
+                    let layout = typeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))
+                    layout {
+                        Text(title).fontWeight(selected ? .semibold : .regular).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+                        HStack(spacing: 6) {
+                            Spacer(minLength: 4)
+                            if badge > 0 { Text("\(badge)").font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3) }
+                        }
                     }
+                    if project != nil { ProjectNowLine(now: now, font: .footnote) }
                 }
             } icon: {
                 if let symbol { Image(systemName: symbol).font(.system(size: icon)) } else { ProjectGlyph(project: project, size: icon) }

@@ -40,19 +40,6 @@ nonisolated extension PiSessionState {
     var hasStarted: Bool { lastPrompt != nil || lastReply != nil || pendingPrompt != nil }
 }
 
-nonisolated extension PiSessionListItem {
-    /// 每个项目最需要注意的会话状态（书架与侧栏的状态点，`PiShown.urgency`）。
-    static func byProject(_ items: [PiSessionListItem], shown: (PiSessionListItem) -> PiShown) -> [UUID: PiShown] {
-        var result: [UUID: PiShown] = [:]
-        for item in items {
-            guard let project = item.state.projectID else { continue }
-            let shown = shown(item)
-            if (result[project]?.urgency ?? -1) < shown.urgency { result[project] = shown }
-        }
-        return result
-    }
-}
-
 /// 发给会话、还没被它的状态吸收的那条投送请求此刻在哪一步。会话状态只来自 Mac 同步回来的记录，发出后要等 Mac 执行、写回、
 /// 再同步过来才变；投送请求是本机当场写出的，所以显示状态把它算进去：发出即"发送中"，会话进入处理中后让位给会话状态。
 nonisolated enum PiDelivery: Hashable, Sendable {
@@ -245,7 +232,7 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 同一项目有多个会话时，项目状态点显示最需要注意的那个：等你确认 → 出错 → 有新回复 → 工作中 → 停下的 → 已结束。
+    /// 选会话时排在前面的（交给 Agent 的会话选单）：等你确认 → 出错 → 有新回复 → 工作中 → 停下的 → 已结束。
     var urgency: Int {
         switch status {
         case .asking: 5
@@ -258,7 +245,7 @@ nonisolated extension PiShown {
     }
 }
 
-extension PiShown {
+nonisolated extension PiShown {
     /// 要你动手：等你确认、出错、没能送达、需要 /reload。只有它们带彩色。
     var needsYou: Bool {
         switch status {
@@ -266,7 +253,9 @@ extension PiShown {
         default: false
         }
     }
+}
 
+extension PiShown {
     /// 状态标的颜色只回答"要不要你管"：要你确认的赭黄、出错与没能送达胭脂；在动的（工作中、话在路上）是墨色、靠动效表达，
     /// 不占签名色；有新回复墨色；其余是灰。
     func tint(_ palette: Palette) -> Color {

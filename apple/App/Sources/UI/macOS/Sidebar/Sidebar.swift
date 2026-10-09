@@ -12,6 +12,8 @@ nonisolated private struct SidebarData: Sendable {
     /// 发给这些会话的最近一条投送请求与最近一条改名（Pi 的会话 id →）。
     var deliveries: [String: DeliveryRequest]
     var renames: [String: DeliveryRequest]
+    /// 各项目最近开始的进行中任务（项目行的"此刻"，`ProjectNow`）。
+    var leading: [UUID: String]
 }
 
 struct Sidebar: View {
@@ -25,6 +27,8 @@ struct Sidebar: View {
     @FocusState private var focused: Bool
 
     nonisolated private static let endedPage = PiSection.pastLimit * 2
+    /// 项目行两行（名称与"此刻"）的高度。
+    private static let projectRowHeight: CGFloat = 40
     private static let footerFade: CGFloat = 16
 
     var body: some View {
@@ -33,13 +37,17 @@ struct Sidebar: View {
         let pages = data.flatMap { data in catalog.map { SidebarPages($0, trashCount: data.trashCount) } }
         List {
             if let data, let catalog, let pages {
+                // 各项目的"此刻"在数据变化时算一次，行只拿结果
+                let now = ProjectNow.byProject(
+                    catalog.projects, live: data.live.map { PiSessionListItem(state: $0, delivery: data.deliveries[$0.sessionID]) },
+                    tasks: data.leading, shown: services.settings.shown)
                 if !pages.pinned.isEmpty {
-                    Section("置顶") { ForEach(pages.pinned) { row($0, catalog) } }
+                    Section("置顶") { ForEach(pages.pinned) { row($0, catalog, now: now[$0.id]) } }
                 }
                 // 只有内容才有意义的分组，空的时候不出现
                 if !pages.recent.isEmpty || pages.inboxCount > 0 {
                     Section("最近") {
-                        ForEach(pages.recent) { row($0, catalog) }
+                        ForEach(pages.recent) { row($0, catalog, now: now[$0.id]) }
                         if pages.inboxCount > 0 {
                             PageRow(page: .inbox, count: pages.inboxCount, select: select) {
                                 Label("未分类", systemImage: "tray")
@@ -83,7 +91,8 @@ struct Sidebar: View {
                 trashCount: try store.trashedProjects().count + store.trashedCards().count,
                 live: live.items.map(\.listed), ended: ended.items.map(\.listed), sessionTotal: live.total + ended.total,
                 deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
-                renames: Dictionary((live.items + ended.items).compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
+                renames: Dictionary((live.items + ended.items).compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first },
+                leading: try TaskBoard.leading(from: store))
         }
     }
 
@@ -102,10 +111,14 @@ struct Sidebar: View {
         }
     }
 
-    private func row(_ project: Project, _ catalog: ProjectCatalog) -> some View {
-        PageRow(page: .project(project.id), count: catalog.cardCounts[project.id] ?? 0, select: select) {
+    /// 项目行：名称，下面一行是"此刻"（`ProjectNow`，与书架同一条规则），总留着这一行的高度。
+    private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {
+        PageRow(page: .project(project.id), count: catalog.cardCounts[project.id] ?? 0, height: Self.projectRowHeight, select: select) {
             Label {
-                Text(project.name)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(project.name)
+                    ProjectNowLine(now: now, font: .system(size: 11), dot: 5).fontWeight(.regular)
+                }
             } icon: {
                 ProjectGlyph(project: project)
             }
@@ -169,6 +182,7 @@ private struct SidebarPages {
 private struct PageRow<Title: View>: View {
     let page: Workspace.Page
     let count: Int
+    var height: CGFloat = 28
     let select: (Workspace.Page) -> Void
     @ViewBuilder let title: Title
     @Environment(Workspace.self) private var workspace
@@ -189,7 +203,7 @@ private struct PageRow<Title: View>: View {
             }
             .foregroundStyle(selected ? palette.ink : palette.ink.opacity(Self.restingOpacity))
             .padding(.horizontal, 8)
-            .frame(height: 28)
+            .frame(height: height)
             .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 8))
             .contentShape(.rect)
         }

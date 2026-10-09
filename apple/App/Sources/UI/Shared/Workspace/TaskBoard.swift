@@ -57,8 +57,21 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 正在推进的任务（书架顶上）：进行中的，不分层级，最近开始的在前。
     static func active(limit: Int, from store: isolated CueStore) throws -> [Row] {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
-        let started = try store.tasks(.inProgress).flatMap(\.tasks).sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
-        return try started.prefix(limit).map { try Row.read($0, projects: projects, from: store) }
+        return try started(from: store).prefix(limit).map { try Row.read($0, projects: projects, from: store) }
+    }
+
+    /// 每个项目最近开始的进行中任务的标题（项目的"此刻"一行，`ProjectNow`）：一次查询，按项目取第一条。
+    static func leading(from store: isolated CueStore) throws -> [UUID: String] {
+        var result: [UUID: String] = [:]
+        for task in try started(from: store) {
+            guard let project = task.projectID, result[project] == nil else { continue }
+            result[project] = task.title.textGlyphs
+        }
+        return result
+    }
+
+    private static func started(from store: isolated CueStore) throws -> [Card] {
+        try store.tasks(.inProgress).flatMap(\.tasks).sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
     }
 
     /// 全部项目的顶层任务计数（回收站里的项目不算）。
