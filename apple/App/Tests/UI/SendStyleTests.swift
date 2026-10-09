@@ -19,6 +19,15 @@ struct SendStyleTests {
         #expect(workspace.sendStyle(.pi("gone.1", .send)) == .menu)  // 选过的会话已结束
     }
 
+    @Test func 灵感的发送目标不含Agent会话_选过的会话也退回应用() {
+        let workspace = Workspace(services: app.services)
+        workspace.sendChoice = .pi("s1", .send)
+
+        #expect(workspace.effectiveChoice(for: nil, agents: false) == .app(.lastFrontmost))
+        workspace.sendChoice = .clipboard
+        #expect(workspace.effectiveChoice(for: nil, agents: false) == .clipboard)
+    }
+
     @Test func 按钮上的字_应用写粘贴到_剪贴板写复制到() {
         let workspace = Workspace(services: app.services)
 
