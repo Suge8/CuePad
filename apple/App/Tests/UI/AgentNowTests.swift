@@ -54,6 +54,13 @@ struct AgentNowTests {
         #expect(six?.more == 4)
     }
 
+    /// 要紧的先后与点进去的 Agent 页列表同一套（`PiShown.rank`）：要 /reload 排在在干活之后、有新回复之前。
+    @Test func 要紧先后与Agent页列表一致() {
+        let reload = item("old-term", .incompatible), notes = item("notes", .settled, reply: "整理好了。")
+        #expect(now([notes, reload])?.headline == "old-term 要在终端里 /reload")
+        #expect(now([notes, reload])?.detail == "还有 1 个有新回复")
+    }
+
     @Test func 都停着时没有这一条() {
         #expect(now([item("old", .settled, reply: "早就看过了。"), item("done", .ended)]) == nil)
     }
