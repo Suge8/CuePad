@@ -8,6 +8,8 @@ public enum PiChatRole: String, Sendable, CaseIterable {
   case pi
   /// 会话文件里留下的一行系统记录（目前只有压缩：终端对话里那行压缩摘要）；不是谁说的话。设置类条目（换模型、改强度、改名）终端的对话里没有，这里也没有
   case system
+  /// Agent 发到手机上看的一个文件：会话文件里 `cuepad_show` 工具成功的那一行。正文是预览记录的 id（`PiPreview.id`），文件与标题在预览记录里
+  case preview
 }
 
 /// 会话对话里的一条消息（同步表 `piMessages`，Mac 写、各端只读，只追加）。
@@ -134,15 +136,22 @@ extension CueStore {
 
   /// 删掉不再需要同步的对话：会话 `window` 内没有活动（按本机会话索引里会话文件的最后活动；索引里没有的按最后一条消息）、
   /// 对话也是 `window` 之前写出的（按需补写的留够 `window`）。在写对话的那台 Mac 上调用。
+  /// 对话没了的会话的预览（`window` 之前发的）一起删，文件没有别的预览或图片用着时随之删掉。
   public func prunePiMessages(olderThan window: TimeInterval, now: Date = .now) throws {
     let cutoff = now.addingTimeInterval(-window)
-    try write {
-      try db.run(
-        """
-        DELETE FROM piMessages WHERE sessionID IN (
-          SELECT m.sessionID FROM piMessages m LEFT JOIN piSessions s ON s.id = m.sessionID GROUP BY m.sessionID
-          HAVING COALESCE(MAX(s.lastActivityAt), MAX(m.at)) < ? AND MAX(m.createdAt) < ?)
-        """, [cutoff, cutoff])
+    try reportingFileFailures {
+      try write {
+        try db.run(
+          """
+          DELETE FROM piMessages WHERE sessionID IN (
+            SELECT m.sessionID FROM piMessages m LEFT JOIN piSessions s ON s.id = m.sessionID GROUP BY m.sessionID
+            HAVING COALESCE(MAX(s.lastActivityAt), MAX(m.at)) < ? AND MAX(m.createdAt) < ?)
+          """, [cutoff, cutoff])
+        let expired = "createdAt < ? AND sessionID NOT IN (SELECT sessionID FROM piMessages)"
+        let hashes = Set(try db.query("SELECT hash FROM previews WHERE \(expired)", [cutoff]) { $0.text(0) })
+        try db.run("DELETE FROM previews WHERE \(expired)", [cutoff])
+        return try reclaimAttachments(hashes)
+      }
     }
   }
 }

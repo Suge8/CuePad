@@ -47,11 +47,11 @@ import Testing
   }
 
   @Test(arguments: [
-    ("a.html", PreviewKind.web), ("a.HTM", .web), ("a.svg", .web), ("a.png", .image), ("a.jpeg", .image), ("a.webp", .image),
+    ("a.html", PiPreviewKind.web), ("a.HTM", .web), ("a.svg", .web), ("a.png", .image), ("a.jpeg", .image), ("a.webp", .image),
     ("a.pdf", .pdf), ("a.md", .markdown), ("a.markdown", .markdown), ("a.txt", .text), ("a.json", .text), ("a.csv", .text),
   ])
-  func commonTypesHaveAKind(name: String, kind: PreviewKind) {
-    #expect(PreviewKind(fileName: name) == kind)
+  func commonTypesHaveAKind(name: String, kind: PiPreviewKind) {
+    #expect(PiPreviewKind(fileName: name) == kind)
   }
 
   @Test func refusedFilesSayWhyAndLeaveNothingBehind() async throws {
@@ -59,14 +59,16 @@ import Testing
     let folder = fixture.directory.appending(path: "folder.html")
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     let archive = try file("a.zip", "zip")
-    let big = try file("big.pdf", String(repeating: "x", count: Preview.maxBytes + 1))
+    let big = try file("big.pdf", String(repeating: "x", count: PiPreview.maxBytes + 1))
 
     await #expect(throws: CueStoreError.previewUnreadable(missing.path)) { try await store.addPreview(fileAt: missing, title: nil, sessionID: "s1") }
     await #expect(throws: CueStoreError.previewUnreadable(folder.path)) { try await store.addPreview(fileAt: folder, title: nil, sessionID: "s1") }
     await #expect(throws: CueStoreError.previewUnsupported("zip")) { try await store.addPreview(fileAt: archive, title: nil, sessionID: "s1") }
-    await #expect(throws: CueStoreError.previewTooLarge(limit: Preview.maxBytes)) { try await store.addPreview(fileAt: big, title: nil, sessionID: "s1") }
+    await #expect(throws: CueStoreError.previewTooLarge(limit: PiPreview.maxBytes)) { try await store.addPreview(fileAt: big, title: nil, sessionID: "s1") }
 
-    #expect(try await store.previews(of: "s1").isEmpty && files().isEmpty && (try RawDB(fixture.url).count("attachments")) == 0)
+    let stored = try await store.previews(of: "s1")
+    let records = try RawDB(fixture.url).count("attachments")
+    #expect(stored.isEmpty && files().isEmpty && records == 0)
   }
 
   /// 手机上预览不联网、也读不到 Mac 上的别的文件：页面引用的外部资源会缺失。文件照常存，把缺的列出来让 Agent 改成单文件再发。
@@ -102,7 +104,8 @@ import Testing
 
     try await store.prunePiMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
 
-    #expect(try await store.previews(of: "quiet").isEmpty && (try await store.previews(of: "active")).count == 1)
+    let quiet = try await store.previews(of: "quiet"), active = try await store.previews(of: "active")
+    #expect(quiet.isEmpty && active.count == 1)
     #expect(store.files.fileURL(for: shared.hash) != nil && store.files.fileURL(for: only.hash) == nil)
     #expect(try RawDB(fixture.url).rows("SELECT hash FROM attachments") == [[shared.hash]])
   }

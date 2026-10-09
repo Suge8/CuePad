@@ -45,11 +45,11 @@ struct SessionFile {
                           "content": [["type": "text", "text": String(repeating: "out ", count: 50)]]]])
     }
 
-    /// `cuepad_show` 工具的结果：成功时 `details.preview` 是 CuePad 给的预览 id；`padding` 把整行撑过 512 字节（大行不做 JSON 解码的快路径）
+    /// `cuepad_show` 工具的结果：成功时 `details.preview` 是 CuePad 给的预览 id；`padding` 把整行撑过 512 字节（大行不做 JSON 解码的快路径；撑在 toolName 之后，与 Pi 写出的键序一致：工具名在行首附近）
     static func previewResult(_ id: String, _ parent: String, preview: String?, tool: String = "cuepad_show", isError: Bool = false, padding: Int = 0, at second: Int) -> String {
         var message: [String: Any] = [
             "role": "toolResult", "toolCallId": "c", "toolName": tool, "isError": isError, "timestamp": second,
-            "content": [["type": "text", "text": "已发到手机：登录页" + String(repeating: "。", count: padding)]],
+            "content": [["type": "text", "text": "已发到手机：登录页"]], "zPadding": String(repeating: "。", count: padding),
         ]
         if let preview { message["details"] = ["preview": preview] }
         return line(["type": "message", "id": id, "parentId": parent, "timestamp": stamp(second), "message": message])

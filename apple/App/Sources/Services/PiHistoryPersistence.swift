@@ -165,6 +165,7 @@ nonisolated extension PiChatRole {
         case .user: .user
         case .pi: .pi
         case .system: .system
+        case .preview: .preview
         }
     }
 }

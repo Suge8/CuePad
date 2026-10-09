@@ -30,8 +30,8 @@ struct PiChatTests {
         #expect(PiChat.meta(message(2, .system, "已压缩上下文")) == nil)
     }
 
-    func preview(_ title: String, at second: TimeInterval = 0) -> Preview {
-        Preview(sessionID: "s", hash: String(repeating: "a", count: 64), name: "\(title).html", title: title, byteCount: 10, createdAt: start.addingTimeInterval(second))
+    func preview(_ title: String, at second: TimeInterval = 0) -> PiPreview {
+        PiPreview(sessionID: "s", hash: String(repeating: "a", count: 64), name: "\(title).html", title: title, byteCount: 10, createdAt: start.addingTimeInterval(second))
     }
 
     /// 会话文件里工具调用留下的预览条在哪、预览就在对话里的哪；预览记录只提供文件与标题。

@@ -51,6 +51,13 @@ struct MacSyncTests {
         #expect(try await services.store.previews(of: "s1").count == 1)
     }
 
+    /// 给模型看的工具说明写在扩展里（TS），能发什么、多大，必须与 Store 的规则（`PiPreviewKind`、`PiPreview.maxBytes`）一致。
+    @Test func 扩展里的工具说明与预览规则一致() {
+        let source = PiExtensionBundle.source
+        #expect(source.contains(PiPreviewKind.supportedList))
+        #expect(source.contains("不超过 \(PiPreview.maxBytes / 1_000_000) MB"))
+    }
+
     // MARK: 退出
 
     /// 退出可能发生在主线程被占住时：在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等收尾的回复，

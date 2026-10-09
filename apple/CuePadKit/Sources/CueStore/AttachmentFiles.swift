@@ -37,6 +37,13 @@ public struct AttachmentFiles: Sendable {
     return hash
   }
 
+  /// 存入任意文件（预览用）：边读边算哈希再拷贝，同哈希已在则不重写。不检查内容是不是图片。
+  public func storeFile(at source: URL) throws -> String {
+    let hash = try Self.hash(of: source)
+    try place(source, as: hash)
+    return hash
+  }
+
   /// 原图文件位置；格式不合法或文件不存在（例如尚未从 iCloud 下载）返回 nil。
   public func fileURL(for hash: String) -> URL? {
     guard Self.isValid(hash) else { return nil }
@@ -69,12 +76,11 @@ public struct AttachmentFiles: Sendable {
     try FileManager.default.removeItem(at: directory)
   }
 
-  /// 登记附件记录所需的元数据；文件不在本机返回 nil。
+  /// 登记附件记录所需的元数据；文件不在本机返回 nil。不是图片的文件（预览）格式是 "bin"。
   func metadata(hash: String) -> (byteCount: Int, format: String)? {
-    guard let url = fileURL(for: hash),
-      let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int,
-      let source = CGImageSourceCreateWithURL(url as CFURL, nil), let type = CGImageSourceGetType(source)
+    guard let url = fileURL(for: hash), let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
     else { return nil }
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let type = CGImageSourceGetType(source) else { return (size, "bin") }
     return (size, UTType(type as String)?.preferredFilenameExtension ?? "bin")
   }
 
@@ -115,14 +121,16 @@ public struct AttachmentFiles: Sendable {
 extension CueStore {
   /// 为正文里引用、本机已有文件、还没有记录的图片登记附件记录。必须在写事务内调用。
   func registerImages(in text: String) throws {
-    for hash in Set(CueFormat.imageHashes(in: text)) {
-      guard try db.first("SELECT 1 FROM attachments WHERE hash = ?", [hash], { _ in true }) == nil,
-        let metadata = files.metadata(hash: hash)
-      else { continue }
-      let now = Date.stamp
-      try insert(
-        Attachment(
-          id: UUID(), hash: hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now))
-    }
+    for hash in Set(CueFormat.imageHashes(in: text)) { try registerAttachment(hash: hash) }
+  }
+
+  /// 本机已有这个文件、还没有记录时登记附件记录（同步载体）。必须在写事务内调用。
+  func registerAttachment(hash: String) throws {
+    guard try db.first("SELECT 1 FROM attachments WHERE hash = ?", [hash], { _ in true }) == nil,
+      let metadata = files.metadata(hash: hash)
+    else { return }
+    let now = Date.stamp
+    try insert(
+      Attachment(id: UUID(), hash: hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now))
   }
 }

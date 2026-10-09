@@ -173,7 +173,7 @@ struct BridgeClientTests {
         bridge.showHandler = { session, request in
             seen.append((session.sessionID, request.path, request.title))
             if request.path == "/gone.html" { throw ShowFailure() }
-            return PiShown(preview: "p-1", note: "页面引用了 a.css")
+            return PiShowReply(preview: "p-1", note: "页面引用了 a.css")
         }
         ext.requestShow(id: "r1", path: "/work/a.html", title: "登录页")
         ext.requestShow(id: "r2", path: "/gone.html", title: nil)

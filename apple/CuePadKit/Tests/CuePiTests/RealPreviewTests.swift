@@ -30,7 +30,7 @@ struct RealPreviewTests {
         let preview = UUID().uuidString.lowercased()
         bridge.showHandler = { _, request in
             received.append(request)
-            return PiShown(preview: preview, note: "页面引用了 style.css，手机上看不到")
+            return PiShowReply(preview: preview, note: "页面引用了 style.css，手机上看不到")
         }
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
@@ -39,7 +39,9 @@ struct RealPreviewTests {
         try pi.prompt("[[show:demo.html|登录页改好了]] 给我看看")
         try await finished(pi)
 
-        #expect(received.map(\.path) == [pi.cwd.appending(path: "demo.html").path] && received.first?.title == "登录页改好了")  // 相对路径按工作目录解析成绝对路径
+        // 相对路径按工作目录解析成绝对路径（Pi 的工作目录是真实路径，/tmp 在 macOS 上是 /private/tmp 的链接）
+        #expect(received.map { URL(filePath: $0.path).resolvingSymlinksInPath() } == [pi.cwd.appending(path: "demo.html").resolvingSymlinksInPath()])
+        #expect(received.first?.title == "登录页改好了")
         let result = try toolResult(pi)
         #expect(!result.isError && result.text.contains("登录页改好了") && result.text.contains("style.css"))
         let transcript = try PiHistory.index(file: #require(bridge.sessions.first?.sessionFile), from: nil).transcript

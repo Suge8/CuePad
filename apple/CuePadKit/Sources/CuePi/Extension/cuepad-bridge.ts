@@ -2,8 +2,8 @@
 // 由 CuePad 安装到 Pi 扩展目录，升级时整文件覆盖，请勿手改。协议说明见 apple/CuePadKit/Sources/CuePi/README.md。
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
-//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / bye
-//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ paste（放进输入框）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）
+//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / show（cuepad_show 工具：请 CuePad 收下一个文件作手机预览）/ bye
+//   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ paste（放进输入框）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）/ shown（对 show 的回复）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
 import fs from "node:fs";
@@ -12,8 +12,8 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 17;
-const PROTOCOL_VERSION = 6;
+const EXTENSION_VERSION = 18;
+const PROTOCOL_VERSION = 7;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
@@ -47,6 +47,17 @@ const INTERNAL_COMMAND = "cuepad";
 const COMPACT_FAILURE_WINDOW_MS = 1500;
 /** 命令清单里每条说明的字符数上限（含省略号）：skill 的说明可以很长，清单随会话记录同步，只要够选命令用 */
 const COMMAND_DESCRIPTION_LIMIT = 120;
+/** 预览工具（让 Agent 把文件发到用户手机上看）的名字：CuePad 读会话文件时按它认出结果那一行（`PiHistory`） */
+const SHOW_TOOL = "cuepad_show";
+/** 等 CuePad 收下文件（读、算哈希、拷贝）的时限 */
+const SHOW_TIMEOUT_MS = 20_000;
+/** 给模型看的工具说明；文件类型与大小上限须与 `PreviewKind.supportedList`、`Preview.maxBytes` 一致（测试核对） */
+const SHOW_DESCRIPTION =
+	"把本机的一个文件发到用户手机上的 CuePad 里预览。用户在手机上指挥开发时，用它给出演示和验收：HTML 页面、界面截图、PDF、Markdown 报告。" +
+	"只发最终要给用户看的那一个文件，别把过程文件都发过去。" +
+	"可发：HTML、图片（png、jpg、gif、webp、heic、svg）、PDF、Markdown、文本（txt、json、csv、log）；单个文件不超过 20 MB。" +
+	"HTML 在手机上只读渲染、不联网，也读不到别的文件：样式与脚本要写在同一个 HTML 里，图片用 data: 地址内联，否则会缺失（发出后会告诉你缺了哪些）。" +
+	"发出后用户在手机上点对话里的预览卡查看。";
 /** Pi 内置斜杠命令里能在非 TUI 下执行的（其余是终端里的选择器、弹窗或只往终端打印，没有对应接口，不列）。
  * `hint` 有值表示带参数（`required` 为必填）。名字、说明与 Pi 的 `/` 菜单一致。
  * 内置命令在 Pi 的终端里先于扩展命令匹配，这里同样先匹配。 */
@@ -252,6 +263,58 @@ export default function (pi: any) {
 		if (!socket.destroyed) socket.write(JSON.stringify(message) + "\n");
 	};
 
+	/** 发出去、等 CuePad 回话的预览请求（按请求 id）：第一个回复定结果 */
+	const showing = new Map<string, (reply: any) => void>();
+	let showToolRegistered = false;
+
+	/** 请 CuePad 收下 `file` 作预览；没有客户端连着、被拒绝或超时都抛错（工具据此失败并说明），不假装发出去了。 */
+	function requestShow(file: string, title: string | undefined): Promise<any> {
+		if (clients.size === 0) return Promise.reject(new Error("CuePad 没有连着这个会话（App 没在运行，或还没连上），没发出去"));
+		const id = randomUUID();
+		return new Promise((resolve, reject) => {
+			const timer = setTimeout(() => {
+				showing.delete(id);
+				reject(new Error("CuePad 没有回应，不确定有没有发出去"));
+			}, SHOW_TIMEOUT_MS);
+			showing.set(id, (reply) => {
+				clearTimeout(timer);
+				if (reply.ok) resolve(reply);
+				else reject(new Error(reply.error || "CuePad 没有收下"));
+			});
+			for (const client of clients) write(client, { t: "show", id, path: file, title: title ?? null });
+		});
+	}
+
+	function registerShowTool() {
+		if (showToolRegistered) return;
+		showToolRegistered = true;
+		pi.registerTool({
+			name: SHOW_TOOL,
+			label: "发到手机预览",
+			description: SHOW_DESCRIPTION,
+			promptSnippet: "把文件（HTML 页面、截图、PDF、Markdown）发到用户手机上的 CuePad 预览",
+			promptGuidelines: ["用户要看页面、截图或报告，或你做完了需要他验收的可视结果时，用 cuepad_show 发到他手机上，并在回复里说一句发了什么。"],
+			parameters: {
+				type: "object",
+				properties: {
+					path: { type: "string", description: "要发的文件路径（相对路径按当前工作目录算）" },
+					title: { type: "string", description: "一句话标题，说明这是什么（默认用文件名）" },
+				},
+				required: ["path"],
+			},
+			async execute(_toolCallId: string, params: any, _signal: unknown, _onUpdate: unknown, context: any) {
+				const given = String(params.path ?? "");
+				const file = path.resolve(context?.cwd ?? ctx.cwd, given.startsWith("~/") ? path.join(process.env.HOME ?? "", given.slice(2)) : given);
+				const title = typeof params.title === "string" && params.title.trim() ? params.title.trim() : undefined;
+				const reply = await requestShow(file, title);
+				return {
+					content: [{ type: "text", text: `已发到手机预览：${title ?? path.basename(file)}。${reply.note ?? ""}`.trim() }],
+					details: { preview: reply.preview },
+				};
+			},
+		});
+	}
+
 	/** 状态没变就不发；没有客户端时只维护状态与计时，不做任何 I/O。 */
 	function commit() {
 		const state = tracker.derive();
@@ -350,6 +413,10 @@ export default function (pi: any) {
 		const ack = (fields: object) => write(socket, { t: "ack", id: command?.id ?? null, ...fields });
 		const reject = (error: string) => ack({ ok: false, error });
 		try {
+			if (command?.t === "shown") {
+				showing.get(command.id)?.(command);
+				return void showing.delete(command.id);
+			}
 			if (command?.t === "send") return handleSend(command, ack, reject);
 			if (command?.t === "command") return void handleSlash(command, ack, reject).catch((error: any) => reject(`failed: ${error?.message ?? error}`));
 			if (command?.t === "answer") return handleAnswer(command, ack, reject);
@@ -649,6 +716,8 @@ export default function (pi: any) {
 			client.end();
 		}
 		clients.clear();
+		for (const settle of showing.values()) settle({ ok: false, error: "会话已结束，没发出去" });
+		showing.clear();
 		server?.close();
 		server = undefined;
 		if (socketPath) fs.rmSync(socketPath, { force: true });
@@ -706,6 +775,7 @@ export default function (pi: any) {
 		// print/json 是没有输入框的运行：一次性的 pi -p，或其他扩展在同进程里开的子会话（FireCode 子代理）。
 		// 都不作为会话出现；子代理的状态汇总到父会话
 		if (ctx.mode !== "tui" && ctx.mode !== "rpc") return registerSubsession();
+		registerShowTool();
 		tty = readTTY();
 		loadedEntries = ctx.sessionManager.getEntries().length;
 		info = {
