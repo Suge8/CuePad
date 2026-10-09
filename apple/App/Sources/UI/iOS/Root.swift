@@ -19,7 +19,6 @@ struct IOSRootView: View {
     @State private var navigation: Navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
-    @State private var statusBarHeight: CGFloat = 0
     let alerts: PiAlertCenter
 
     init(services: AppServices, scene: SceneContext, alerts: PiAlertCenter) {
@@ -35,8 +34,6 @@ struct IOSRootView: View {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
             }
             // 这一层还没有导航栏：上安全区就是状态栏
-            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { statusBarHeight = $0 }
-            .environment(\.statusBarHeight, statusBarHeight)
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
             // 随手记与新会话都是浮在键盘上方的输入框
             .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) { CaptureComposer() } }
@@ -106,8 +103,8 @@ struct RouteView: View {
 
     var body: some View {
         // 沉浸式：内容一直滚到顶栏、底部栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡——系统的滚动边缘效果（渐进模糊带）全关，
-        // 也不自绘渐变或色带；滚进状态栏与顶栏的内容自己淡出（`fadesUnderBars`，只是透明度遮罩）
-        page.fadesUnderBars()
+        // 也不自绘渐变或色带；滚进状态栏与顶栏、底部栏的内容自己淡出（`fadesUnderBars`，只是透明度遮罩）
+        page.fadesUnderBars(bottom: navigation.bottomPages == 0)
             .containerBackground(background, for: .navigation)
             .scrollEdgeEffectHidden()
             // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页
@@ -303,7 +300,7 @@ extension EnvironmentValues {
 /// 底部一行：左边一块玻璃里的两个标签 [灵感 | Agent]，右边一颗同高同玻璃的圆形"写"，与系统悬浮标签栏（照片、音乐：标签组靠左、
 /// 搜索圆钮靠右）同一几何——高 62、离屏幕左右与底边都是 21（与屏幕圆角同心），选中滴同心内缩 4；不随滚动收小。
 /// 玻璃上不另铺底；选中那一格是一层中性的滴（浅色压暗、深色更暗，同系统）加靛青的图标与字，未选中的是墨色。
-/// 内容滚到栏后面时，玻璃糊开的字的虚影会和标签字缠在一起：图标与标签字带一圈页面底色的细光晕（`halo`），与背后分层；
+/// 内容滚到栏后面时在栏的上沿就淡掉（`RouteView` 的 `fadesUnderBars(bottom:)`）：玻璃的折射会把背后的字放大压在标签后面。
 /// 浅色下玻璃的边几乎看不出，两块玻璃各描一圈发丝线、垫一层很轻的投影，从纸上浮起来。都不是色带：栏外一点不画。
 /// 字号固定、不随动态字体放大，辅助字号下长按任一格或"写"弹出大内容查看器——系统标签栏同款取舍：栏高固定，字放大只会挤掉图标。
 /// 按住选中的那一格时滴轻轻一压，按住另一格时手指下亮出一层淡按压底，都给一下轻触感；换标签时滴在轨道里滑过去
@@ -328,9 +325,6 @@ private struct BottomBar: View {
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin - safeBottom) }
 
     private var drop: Color { palette.dark ? Color.black.opacity(0.3) : palette.ink.opacity(0.07) }
-
-    /// 标签字与图标外的一圈光晕：页面底色，只在字形外一两点内。
-    private var halo: Color { palette.desk.opacity(palette.dark ? 0.8 : 0.9) }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -385,7 +379,6 @@ private struct BottomBar: View {
                 Text(title).font(.system(size: 10, weight: selected ? .semibold : .medium))
             }
             .foregroundStyle(selected ? palette.signature : palette.ink)
-            .shadow(color: halo, radius: 1.5)
             // 一格占轨道的一半，四周的边也算它的：点在滴外面一点也算点中
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
@@ -454,6 +447,9 @@ private struct NoticeBanner: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// 横幅玻璃上垫的页面底色有多实：九成，背后的字只剩看不出的一层。
+    private static let fill = 0.9
+
     var body: some View {
         ZStack {
             if let notice = workspace.notice {
@@ -480,6 +476,9 @@ private struct NoticeBanner: View {
                     }
                 }
                 .font(.subheadline.weight(.medium))
+                // 横幅只停几秒、正好压在页面最上面那几行字上（书架的"Agent 此刻"）：玻璃上再垫一层页面底色，背后的字透不过来，
+                // 两行字不叠在一起；边缘仍是玻璃的光
+                .background(palette.desk.opacity(Self.fill), in: .capsule)
                 .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil, legible: true)
                 // 浮在内容之上：一点投影把它和底下的纸分开
                 .shadow(color: .black.opacity(palette.dark ? 0.3 : 0.12), radius: 12, y: 4)

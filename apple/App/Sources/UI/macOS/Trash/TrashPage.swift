@@ -52,11 +52,7 @@ struct TrashPage: View {
     @ViewBuilder
     private func content(_ data: TrashData) -> some View {
         if data.projects.isEmpty && data.cards.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "trash").font(.system(size: 28)).foregroundStyle(palette.ink3).accessibilityHidden(true)
-                Text("回收站是空的").font(Typography.emptyTitle).foregroundStyle(palette.ink2)
-            }
-            .frame(maxWidth: .infinity).padding(.top, 80)
+            EmptyState(mascot: .trash, title: "回收站是空的")
         }
         if !data.projects.isEmpty {
             group("项目") {

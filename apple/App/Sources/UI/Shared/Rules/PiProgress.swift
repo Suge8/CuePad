@@ -3,6 +3,8 @@ import Foundation
 
 /// 会话行名字下面那一句（全 App 的会话行同一条，`PiSessionRow`）：结束请求的进度 → 没送到的原因 → 回复框里没发的草稿 → 到哪了（`PiProgress`）→ 新会话的提示。
 /// 什么都没有时是 nil；整页的行这时写状态词（`lead`），窄处的行状态词本来就在前面。
+/// 已结束的会话第二层只写它做了什么（见 `PiProgress`），状态只由带斜线的状态标表达：翻历史时不满屏"已结束"。
+/// 没有记下回答也没有你说的话（Mac 从会话文件回填的旧历史常常只有名字，名字本身就是第一句提问）时这一层空着。
 nonisolated enum PiRowLine: Equatable {
     case ending
     case endFailed(String)
@@ -27,14 +29,15 @@ nonisolated enum PiRowLine: Equatable {
         return nil
     }
 
-    /// 整页的行名字下面只有这一句：等你确认时是问题、出错时是原因、工作中是在做什么，状态由状态标表达；没有这样一句时才写状态词。
-    static func lead(_ session: PiSessionState, shown: PiShown, draft: String?, end: DeliveryRequest?, failure: String? = nil) -> PiRowLine {
-        of(session, draft: draft, end: end, failure: failure) ?? .status(shown.label)
+    /// 整页的行名字下面只有这一句：等你确认时是问题、出错时是原因、工作中是在做什么，状态由状态标表达；没有这样一句时才写状态词，
+    /// 已结束的除外（nil：这一层空着）。
+    static func lead(_ session: PiSessionState, shown: PiShown, draft: String?, end: DeliveryRequest?, failure: String? = nil) -> PiRowLine? {
+        of(session, draft: draft, end: end, failure: failure) ?? (session.state == .known(.ended) ? nil : .status(shown.label))
     }
 }
 
 /// 会话"现在到哪了"的一句话（会话列表第三行、近况页状态块）：等你确认时是问题首行，干活时是当前动作（还没有动作时是正在处理的提问），
-/// 出错时是原因首行，空闲或已结束时是最后回答的首句。先去掉 Markdown 符号再截断。没有可说的就是 nil（不占行）。
+/// 出错时是原因首行，空闲或已结束时是最后回答的首句、没有回答时是你最后说的那句（"你：…"）。先去掉 Markdown 符号再截断。没有可说的就是 nil（不占行）。
 nonisolated enum PiProgress {
     static func line(of session: PiSessionState) -> String? {
         switch session.state.known {
@@ -43,7 +46,7 @@ nonisolated enum PiProgress {
         case .thinking, .outputting, .tool: session.detail.flatMap(action) ?? firstLine(session.pendingPrompt).map { "正在处理：\($0)" }
         case .delegating: PiSubagentLine.of(session.subagents) ?? firstLine(session.detail)
         case .error: firstLine(session.detail)
-        case .settled, .ended, .incompatible, nil: firstSentence(session.lastReply)
+        case .settled, .ended, .incompatible, nil: firstSentence(session.lastReply) ?? firstLine(session.lastPrompt).map { "你：\($0)" }
         }
     }
 

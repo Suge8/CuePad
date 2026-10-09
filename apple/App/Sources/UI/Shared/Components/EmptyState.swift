@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// 空态与出错页：吉祥物、一句现状、一句下一步、一个可选动作。全 App 共用这一套布局。
+/// 整页尺寸的那张纸与所在页面的内容同宽（左右边线与标题、其他纸对齐，中轴就是页面的中轴），纸里的字居中、最宽 420。
 /// 吉祥物出场时从下方轻轻弹上来，只这一次；减弱动态效果时直接在位。
 struct EmptyState<Action: View>: View {
     let mascot: Mascot
@@ -35,14 +36,14 @@ struct EmptyState<Action: View>: View {
                     action
                 }
                 .multilineTextAlignment(.center)
-                .padding(24)
                 .frame(maxWidth: 420)
+                .padding(24)
+                .frame(maxWidth: .infinity)
             }
         }
         .paper(radius: compact ? 18 : 24)
         .scaleEffect(shown || reduceMotion ? 1 : 0.97)
         .opacity(shown || reduceMotion ? 1 : 0)
-        .frame(maxWidth: .infinity, alignment: compact ? .leading : .center)
         .buttonStyle(ControlButtonStyle(kind: .primary))
         .onAppear { withAnimation(reduceMotion ? Motion.quick : Motion.snappy) { shown = true } }
     }

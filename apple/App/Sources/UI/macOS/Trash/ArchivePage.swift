@@ -9,8 +9,8 @@ struct ArchivePage: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("归档").font(Typography.pageTitle).foregroundStyle(palette.ink)
                 .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop)
-            ArchiveList().frame(maxWidth: 760)
-                .padding(.horizontal, 16)
+            // 与标题、回收站的纸同一条左右边线：行底与空态的纸都铺到这两条线
+            ArchiveList().padding(.horizontal, Spacing.page)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
