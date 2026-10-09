@@ -44,7 +44,7 @@ extension SessionDigest {
 /// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
 /// （`PiConversation`，子代理在末尾收成一行汇总），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
 /// 底部是与手机同一个回复框（`PiReplyBar`），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
-/// 推在根页上，返回回到原来那页。
+/// 是一页（`Workspace.Page.session`），上一层是 Agent 整页。
 struct SessionPage: View {
     let sessionID: String
     @Environment(Workspace.self) private var workspace
@@ -99,15 +99,15 @@ struct SessionPage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // 对话滚到工具栏底下时淡掉，不和标题、按钮叠在一起
-        .overlay(alignment: .top) { EdgeFade.underToolbar }
+        .overlay(alignment: .top) { ToolbarEdge() }
         .background(palette.desk)
         .toolbar {
             if let session = digest.session {
+                // 标题是悬浮的一块玻璃（与手机会话页顶栏中间那一块同一种），让开时连玻璃一起不画
                 ToolbarItem(placement: .navigation) { title(session, digest: digest, ending: shownEnd?.isOpen == true) }
-                    .sharedBackgroundVisibility(.hidden)
+                    .sharedBackgroundVisibility(follow.showsHeader ? .automatic : .hidden)
                 ToolbarItem(placement: .primaryAction) {
-                    menu(session, live: live, ending: shownEnd?.isOpen == true).headerVisibility(follow.showsHeader)
+                    menu(session, place: PiPlace.name(of: session, project: digest.project), live: live, ending: shownEnd?.isOpen == true).headerVisibility(follow.showsHeader)
                 }
                 // 让开时连系统给圆钮画的玻璃一起不画
                 .sharedBackgroundVisibility(follow.showsHeader ? .automatic : .hidden)
@@ -122,17 +122,17 @@ struct SessionPage: View {
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
-    /// 工具栏标题位：会话名，下面一行"所在 · 状态 · 计时"。
+    /// 工具栏标题位：一块玻璃里一行，会话名接"状态 · 计时"（所在写在"⋯"菜单最上面；工具栏的玻璃只有一行高）。
     private func title(_ session: PiSessionState, digest: SessionDigest, ending: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(digest.title ?? session.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink).lineLimit(1)
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(digest.title ?? session.title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             if ending {
-                Text("正在结束…").font(.system(size: 12)).foregroundStyle(palette.ink3)
+                Text("正在结束…").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
             } else {
-                PiSessionSubtitle(session: session, project: digest.project)
+                PiSessionSubtitle(session: session)
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 12)
         .frame(maxWidth: Self.titleWidth, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
@@ -147,13 +147,14 @@ struct SessionPage: View {
         }
     }
 
-    /// 工具栏右边的"⋯"：重命名、跳到终端（开在终端里的在线会话）、结束会话；都没有时不出现。
-    @ViewBuilder private func menu(_ session: PiSessionState, live: CuePi.PiSession?, ending: Bool) -> some View {
+    /// 工具栏右边的"⋯"：最上面写所在，下面重命名、跳到终端（开在终端里的在线会话）、结束会话；都没有时不出现。
+    @ViewBuilder private func menu(_ session: PiSessionState, place: String?, live: CuePi.PiSession?, ending: Bool) -> some View {
         let canJump = live.map { !$0.hosted } ?? false
         let canEnd = MacDelivery.canEnd(session)
         let canRename = MacDelivery.canRename(session)
-        if canRename || canJump || canEnd {
+        if place != nil || canRename || canJump || canEnd {
             Menu("更多", systemImage: "ellipsis") {
+                if let place { Section("在 \(place)") {} }
                 if canRename {
                     Button("重命名…", systemImage: "pencil") { renaming = session }
                 }
@@ -199,7 +200,7 @@ struct SessionPage: View {
 }
 
 extension View {
-    /// 会话行：点按在内容区打开这个会话的整页（推在当前页上）；正打开着的那个垫选中底。
+    /// 会话行：点按在内容区打开这个会话的整页；正打开着的那个垫选中底。
     func sessionLink(_ sessionID: String) -> some View { modifier(SessionLink(sessionID: sessionID)) }
 }
 
@@ -209,10 +210,10 @@ private struct SessionLink: ViewModifier {
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        let opened = workspace.openedSession == sessionID
+        let opened = workspace.page == .session(sessionID)
         Button {
             workspace.overlay = nil
-            workspace.openSession(sessionID)
+            workspace.show(.session(sessionID))
         } label: {
             content.contentShape(.rect)
         }

@@ -36,8 +36,8 @@ struct MenuBarPad: View {
                 capture
             } else if let failure = workspace.catalogFailure {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("读不出资料库", systemImage: "exclamationmark.triangle").font(.system(size: 13, weight: .medium))
-                    Text(failure).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(4)
+                    Label("读不出资料库", systemImage: "exclamationmark.triangle").font(Typography.secondary.weight(.medium))
+                    Text(failure).font(Typography.meta).foregroundStyle(.secondary).lineLimit(4)
                     Button("重试") { workspace.retryCatalog() }
                 }
                 .foregroundStyle(palette.ink)
@@ -56,7 +56,7 @@ struct MenuBarPad: View {
         CaptureComposer(defaultProject: services.settings.currentProject, pinnedOpen: true, minHeight: 48)
             .overlay(alignment: .bottomLeading) {
                 if let notice = workspace.notice {
-                    Text(notice.text).font(.system(size: 11.5))
+                    Text(notice.text).font(Typography.meta)
                         .foregroundStyle(notice.isError ? palette.failure : palette.ink3)
                         .padding(.horizontal, 20).padding(.bottom, 16)
                         .allowsHitTesting(false)

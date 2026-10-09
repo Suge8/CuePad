@@ -59,10 +59,9 @@ struct Palette {
 
     // MARK: 你的话（会话里你发出的气泡，iOS 与 Mac 共用）
 
-    /// 气泡底：浅色是墨底纸字；深色的墨是浅奶油，整块实底在暗处刺眼，改用比纸略抬升的暖深色、字仍是墨。
-    var bubble: Color { dark ? Color(hex: 0x3A352F) : ink }
-    /// 气泡上的字。
-    var onBubble: Color { dark ? ink : paper }
+    /// 气泡底：比桌面深一级的暖灰、字是墨——回答才是会话页的主角，你的话不该是一屏最重的一块；
+    /// 深色是比纸略抬升的暖深色、字仍是墨。
+    var bubble: Color { dark ? Color(hex: 0x3A352F) : Color(hex: 0xE3DED4) }
     /// 气泡的描边：深色下气泡与纸、桌面明度接近，加一圈低对比的线把边界提出来；浅色不用。
     var bubbleEdge: Color { dark ? Color.white.opacity(highContrast ? 0.22 : 0.08) : .clear }
 

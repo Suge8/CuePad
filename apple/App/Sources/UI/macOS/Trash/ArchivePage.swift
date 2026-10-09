@@ -7,12 +7,13 @@ struct ArchivePage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("归档").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
-                .padding(.horizontal, 32).padding(.top, 20)
+            Text("归档").font(Typography.pageTitle).foregroundStyle(palette.ink)
+                .padding(.horizontal, Spacing.page).padding(.top, ToolbarEdge.fade + 6)
             ArchiveList().frame(maxWidth: 760)
                 .padding(.horizontal, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(alignment: .top) { ToolbarEdge() }
     }
 }
 #endif

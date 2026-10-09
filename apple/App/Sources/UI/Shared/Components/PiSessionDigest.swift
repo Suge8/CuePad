@@ -280,7 +280,7 @@ struct PiElapsed: View {
 }
 
 /// `PiClock` 的文字在哪些时刻会变（见 `nextChange`）。
-private struct PiClockSchedule: TimelineSchedule {
+struct PiClockSchedule: TimelineSchedule {
     let clock: PiClock
 
     func entries(from startDate: Date, mode: TimelineScheduleMode) -> some Sequence<Date> {

@@ -49,13 +49,16 @@ struct PiConversation: View {
         }
     }
 
-    private static var spacing: CGFloat { 18 }
+    private static var spacing: CGFloat { 16 }
+    private static var turnGap: CGFloat { 14 }
 
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
         case .user:
             UserBubble(text: entry.text, highlighted: entry.id == highlight)
                 .chatContextMenu { MessageMenu(text: entry.text, kind: .mine, session: session) } preview: { BubbleText(text: entry.text).padding(4) }
+                // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
+                .padding(.top, Self.turnGap)
         case .pi:
             ReplyBlock(text: entry.text, meta: entry.meta, session: session)
         case .system:
@@ -90,10 +93,10 @@ extension PiConversation {
     }
 }
 
-/// 会话名下的一行小字：状态标、所在、状态词（带色）、计时；Mac 后台托管的再写"后台"。
+/// 会话名下的一行小字：状态标与状态词（带色），后面淡一级的计时；Mac 后台托管的再写"后台"。
+/// 所在不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
-    let project: Project?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -101,27 +104,20 @@ struct PiSessionSubtitle: View {
         let shown = PiShown(session)
         HStack(spacing: 4) {
             PiStateDot(shown: shown, size: Self.dot)
-            // 所在太长时截断（最宽 `placeWidth`），状态与计时不截；整行按内容宽，不被导航栏挤
-            if let place = PiPlace.name(of: session, project: project) {
-                Text("\(place) ·").foregroundStyle(palette.ink3).lineLimit(1)
-                    .frame(maxWidth: Self.placeWidth, alignment: .leading)
-            }
-            Group {
-                Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
-                    .contentTransition(.opacity)
-                    .animation(Motion.quick, value: shown)
-                if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
+            Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
+                .contentTransition(.opacity)
+                .animation(Motion.quick, value: shown)
+            if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
+            if shown.clock != nil {
                 Text("·").foregroundStyle(palette.ink3)
                 PiElapsed(shown: shown, font: Self.font)
             }
-            .fixedSize()
         }
         .font(Self.font)
         .fixedSize()
         .accessibilityElement(children: .combine)
     }
 
-    private static let placeWidth: CGFloat = 140
     // Mac 的 caption 只有 10pt：顶栏这一行是这页最要紧的状态，至少 12pt
     #if os(macOS)
     private static let font = Font.system(size: 12)
@@ -199,17 +195,17 @@ private struct BubbleText: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         HStack(alignment: .center, spacing: 8) {
             if trip == .failed {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).accessibilityLabel("没能送达")
             }
             Text(text)
-                .font(.body).foregroundStyle(palette.onBubble)
+                .font(.body).foregroundStyle(palette.ink)
                 .lineLimit(lineLimit)
                 .textSelection(.enabled)
                 .background(alignment: .topLeading) { if let truncated, lineLimit != nil { fullHeight(truncated) } }
-                .padding(.horizontal, 14).padding(.vertical, 10)
+                .padding(.horizontal, 16).padding(.vertical, 11)
                 .background(palette.bubble, in: shape)
                 .overlay { edge(shape) }
                 // 在路上：半透明加虚线边，浅色深色一样看得出还没到
@@ -313,8 +309,15 @@ private struct ReplyBlock: View {
     private static let previewHeight: CGFloat = 420
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let meta { Text(meta).font(.caption).foregroundStyle(palette.ink3) }
+        VStack(alignment: .leading, spacing: 8) {
+            if let meta {
+                // 与代码块、表格同一套底色与圆角（`ChatBlock`），收成贴着字的一小块
+                Label(meta, systemImage: "wrench.and.screwdriver")
+                    .labelStyle(MetaLabel())
+                    .font(.caption.monospacedDigit()).foregroundStyle(palette.ink2)
+                    .padding(.horizontal, ChatBlock.inset / 1.5).padding(.vertical, 4)
+                    .background(palette.fill, in: ChatBlock.shape)
+            }
             MarkdownText(source: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -400,79 +403,37 @@ private struct OutgoingBubble: View {
 }
 
 /// Pi 此刻在做什么，接在对话末尾、与回答同一列、不加底框：一行进展（动作或状态词，干活时文字有一道流光扫过；计时已在顶上一行），
-/// 有子代理时下面每个一行：状态标、名字、状态词。回答到了它就被回答替换。
+/// 有子代理时下面是它们的汇总（`PiSubagentList`）。回答到了它就被回答替换。
 private struct LiveStatus: View {
     let session: PiSessionState
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 子代理列表就地展开着。
-    @State private var showsSubagents = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if session.state.isWorking {
-                Text(session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1).truncationMode(.middle)
-                    .shimmering()
+                // 与列表同一个转着的状态标：会话页底部这一行和列表里那一行是同一件事在动
+                HStack(spacing: 8) {
+                    PiStateDot(shown: PiShown(session), size: 7)
+                    Text(session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1).truncationMode(.middle)
+                        .shimmering()
+                }
             }
-            if let summary = PiSubagentSummary(session.subagents) { subagents(summary) }
+            PiSubagentList(agents: session.subagents)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .transition(.entry)
     }
-
-    /// 一行汇总"子代理 2/3 在跑"（中性的分叉图标；有子代理在等你时另写"1 个在等你"，赭黄），点它就地展开每个子代理
-    /// （状态点、名字、状态词），再点收起。
-    private func subagents(_ summary: PiSubagentSummary) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button { showsSubagents.toggle() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.triangle.branch").foregroundStyle(palette.ink3).accessibilityHidden(true)
-                    Text("子代理 \(summary.running)/\(summary.total) 在跑").foregroundStyle(palette.ink2).monospacedDigit()
-                    if summary.waiting > 0 {
-                        Text("· \(summary.waiting) 个在等你").foregroundStyle(palette.attention).monospacedDigit()
-                    }
-                    Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-                        .rotationEffect(.degrees(showsSubagents ? 180 : 0))
-                        .accessibilityHidden(true)
-                }
-                .font(.subheadline)
-                .frame(minHeight: 32)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityValue(showsSubagents ? "已展开" : "已收起")
-            if showsSubagents {
-                ForEach(Array(session.subagents.enumerated()), id: \.offset) { _, agent in
-                    HStack(spacing: 6) {
-                        PiStateDot(shown: agent.shown, size: 7)
-                        Text(agent.name).foregroundStyle(palette.ink2).lineLimit(1)
-                        Text(agent.activityLabel).foregroundStyle(agent.shown.labelTint(palette))
-                    }
-                    .font(.subheadline)
-                    .padding(.leading, 13)
-                    .accessibilityElement(children: .combine)
-                    .transition(.opacity)
-                }
-            }
-        }
-        .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: showsSubagents)
-    }
 }
 
-/// 子代理的一行汇总：几个在跑、共几个、几个在等你。没有子代理是 nil。
-nonisolated struct PiSubagentSummary: Equatable {
-    let running: Int
-    let total: Int
-    let waiting: Int
-
-    init?(_ agents: [PiSubagentState]) {
-        guard !agents.isEmpty else { return nil }
-        running = agents.filter { $0.activity == .known(.working) }.count
-        total = agents.count
-        waiting = agents.filter { $0.activity == .known(.waitingForUser) }.count
+/// 一轮回答上方的经过：小图标贴着字，比系统的 Label 间距紧，读作一行注脚。
+private struct MetaLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 5) {
+            configuration.icon.imageScale(.small).accessibilityHidden(true)
+            configuration.title
+        }
     }
 }
 

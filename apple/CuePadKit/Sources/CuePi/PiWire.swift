@@ -4,7 +4,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 7
+    static let protocolVersion = 8
 
     struct State: Decodable {
         var kind: String
@@ -137,7 +137,7 @@ enum PiWire {
         var error: String?
     }
 
-    /// 扩展代 Pi 的 `cuepad_show` 工具调用请 CuePad 收下一个文件作预览（协议 v7 起）；`path` 已是绝对路径
+    /// 扩展代 Pi 的 `cuepad_show` 工具调用请 CuePad 收下一个文件作预览（协议 v8 起）；`path` 已是绝对路径
     struct Show: Decodable {
         var id: String
         var path: String

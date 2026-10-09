@@ -10,8 +10,9 @@ let realPiAvailable = FileManager.default.isExecutableFile(atPath: realPiURL.pat
 
 private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures")
 
-/// 本机装的 FireCode（用户的 Pi 扩展）源码；只读，测试里软链进临时 agent 目录。
-let firecodeSource = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/extensions/firecode/source").resolvingSymlinksInPath()
+/// 本机装的 FireCode（用户的 Pi 扩展）源码；只读，测试里软链进临时 agent 目录。`CUEPAD_FIRECODE_SOURCE` 指向另一份 FireCode 检出时用它（验证还没合并的 FireCode 改动）。
+let firecodeSource = (ProcessInfo.processInfo.environment["CUEPAD_FIRECODE_SOURCE"].map { URL(filePath: $0) }
+    ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/extensions/firecode/source")).resolvingSymlinksInPath()
 let firecodeAvailable = FileManager.default.fileExists(atPath: firecodeSource.appending(path: "index.ts").path)
 
 struct PiEvent: @unchecked Sendable {
