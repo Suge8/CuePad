@@ -75,6 +75,18 @@ extension CueStore {
     }
   }
 
+  /// 本机会话索引里的会话各按工作目录重算文件夹名（`folderName(ofWorkingDirectory:)`）：旧版本写下的临时目录的文件夹名在这里清掉，
+  /// 规则变了也跟着变；只改变了的。必须在写事务内调用。
+  private func refreshSessionFolders() throws {
+    let now = Date.stamp
+    for cwd in try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) } {
+      let folder = Self.folderName(ofWorkingDirectory: cwd)
+      try db.run(
+        "UPDATE piSessionStates SET folder = ?, modifiedAt = ? WHERE sessionID IN (SELECT id FROM piSessions WHERE cwd = ?) AND folder IS NOT ?",
+        [folder, now, cwd, folder])
+    }
+  }
+
   /// 本机会话索引里的会话各按它的工作目录重新归项目（同一目录只算一次）。必须在写事务内调用。
   private func reassignSessions() throws {
     let directories = try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) }
@@ -528,6 +540,7 @@ extension CueStore {
       let unrecorded = try select(
         PiSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
       for session in unrecorded { try writePiHistory(session, host: host) }
+      try refreshSessionFolders()
       return stale.count
     }
   }
@@ -570,8 +583,8 @@ extension CueStore {
   private func writePiHistory(_ session: PiSession, host: String) throws {
     let id = PiSessionState.recordID(sessionID: session.id)
     let cwd = URL(filePath: session.cwd, directoryHint: .isDirectory)
-    let folder = session.cwd.isEmpty ? nil : cwd.lastPathComponent
-    let title = session.title.isEmpty ? folder ?? "" : session.title
+    let folder = Self.folderName(ofWorkingDirectory: session.cwd)
+    let title = session.title.isEmpty ? (session.cwd.isEmpty ? "" : cwd.lastPathComponent) : session.title
     let projectID = session.cwd.isEmpty ? nil : try project(containing: cwd)?.id
     let now = Date.stamp
     guard let existing = try find(PiSessionState.self, id) else {
