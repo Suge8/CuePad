@@ -95,6 +95,8 @@ public enum PiInstallError: Error, Equatable {
     case piNotFound
     case piTooOld(found: PiVersion)
     case foreignFile
+    /// skill 没写上，把扩展还原也失败了：扩展已是新版而 skill 缺失或旧（原因是两个错误），下次检查会当作旧版重试
+    case halfInstalled(reason: String)
 }
 
 extension PiInstallError: LocalizedError {
@@ -103,6 +105,7 @@ extension PiInstallError: LocalizedError {
         case .piNotFound: "没有找到 pi 命令"
         case .piTooOld(let found): "Pi \(found) 太旧，需要 \(PiVersion.minimumSupported) 或更新"
         case .foreignFile: "Pi 的扩展或技能目录里已有同名的其他文件，没有覆盖"
+        case .halfInstalled(let reason): "扩展装上了，技能没写上，扩展也没能还原：\(reason)。下次启动会再试一次"
         }
     }
 }
@@ -165,7 +168,11 @@ public struct PiIntegration: Sendable {
         do {
             try Data(PiSkillBundle.text(cuepad: cuepad).utf8).write(to: skillFile, options: .atomic)
         } catch {
-            if let previous { try? previous.write(to: installedFile, options: .atomic) } else { try? FileManager.default.removeItem(at: installedFile) }
+            do {
+                if let previous { try previous.write(to: installedFile, options: .atomic) } else { try FileManager.default.removeItem(at: installedFile) }
+            } catch let restoreError {
+                throw PiInstallError.halfInstalled(reason: "\(error.localizedDescription)；\(restoreError.localizedDescription)")
+            }
             throw error
         }
     }
