@@ -56,6 +56,10 @@ struct CardMeta: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(DateLabel.short(card.modifiedAt))
+            // 第一个链接的域名：长段文字里一眼认出是哪张
+            if let host = text.linkHost {
+                Label(host, systemImage: "link").labelStyle(.titleAndIcon).lineLimit(1).truncationMode(.middle).layoutPriority(-1)
+            }
             if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
             if card.isTask { Image(systemName: "checklist").help("任务").accessibilityLabel("任务") }

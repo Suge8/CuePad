@@ -59,7 +59,7 @@ nonisolated struct WallColumns: Equatable, Sendable {
     static func estimatedHeight(of text: CardText, columnWidth: Double) -> Double {
         let charactersPerLine = max(8, columnWidth / 13)
         let titleLines = min(2, (Double(max(1, text.title.count)) / charactersPerLine).rounded(.up))
-        let previewLines = text.preview.isEmpty ? 0 : min(text.images.isEmpty ? 4 : 2, (Double(text.preview.count) / charactersPerLine).rounded(.up))
+        let previewLines = text.preview.isEmpty ? 0 : min(text.images.isEmpty ? Double(CardText.previewLines) : 2, (Double(text.preview.count) / charactersPerLine).rounded(.up))
         return 56 + titleLines * 19 + previewLines * 20 + (text.images.isEmpty ? 0 : 124)
     }
 }

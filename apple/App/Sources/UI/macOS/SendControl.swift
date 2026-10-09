@@ -2,9 +2,10 @@
 import CueDispatch
 import SwiftUI
 
-/// 发送按钮（⌘↩）+ 目标选择：能一按就发时是靛青主钮（`Workspace.readyToSend`），只能选目标时是中性的。只在有内容可发时出现（由调用方决定）。
+/// 发送按钮（⌘↩）+ 目标选择：主次由 `Workspace.sendStyle` 一处定——发给 Agent 能一按就发时是靛青主钮，发给应用或剪贴板是次要样式，
+/// 只能选目标时是中性的菜单。只在有内容可发时出现（由调用方决定）。
 /// 目标默认是本项目的 Pi 会话，没有则是上一个前台应用；选过的目标在本窗口内记住。按钮上写方式与目标：
-/// "发给 Agent · <会话名>"、"放进输入框 · <会话名>"、"发给 <应用> App"，过长时只截会话名或应用名，方式不截。
+/// "发给 Agent · <会话名>"、"放进输入框 · <会话名>"、"粘贴到 <应用>"、"复制到剪贴板"，过长时只截会话名或应用名，方式不截。
 /// 还没有可发的目标时写"发送…"；选过的 Pi 会话已结束时写"<会话名> · 已结束"——这两种点开都是目标菜单。
 struct SendControl: View {
     let project: UUID?
@@ -17,9 +18,9 @@ struct SendControl: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let choice = workspace.effectiveChoice(for: project), ready = workspace.readyToSend(choice)
+        let choice = workspace.effectiveChoice(for: project), style = workspace.sendStyle(choice)
         Group {
-            if ready {
+            if style != .menu {
                 HStack(spacing: 0) {
                     Button { send(choice) } label: {
                         label(icon: AnyView(icon(choice)), text: title(choice), shortcut: "⌘↩")
@@ -49,9 +50,9 @@ struct SendControl: View {
             }
         }
         .font(.system(size: compact ? 12.5 : 13, weight: .semibold))
-        // 只有绑着 ⌘↩ 的发送是主钮（靛青）；只能选目标时是中性的
-        .foregroundStyle(ready ? palette.onSignature : palette.ink)
-        .background(ready ? palette.signature : palette.fill, in: .capsule)
+        // 主钮（靛青）只有发给 Agent 的发送；发给应用与只能选目标时是中性的
+        .foregroundStyle(style == .primary ? palette.onSignature : palette.ink)
+        .background(style == .primary ? palette.signature : palette.fill, in: .capsule)
         // 浮在页面上时带一点投影；放在稿纸里（compact）是平的
         .shadow(color: .black.opacity(palette.dark || compact ? 0 : 0.12), radius: 6, y: 2)
         .fixedSize()
@@ -73,9 +74,9 @@ struct SendControl: View {
         switch choice {
         case .pi(_, .paste): "放进输入框 · \(name(of: choice))"
         case .pi: "发给 Agent · \(name(of: choice))"
-        // 应用名单独写在按钮上常认不出是应用（"发给 预览"）
-        case .app: "发给 \(name(of: choice)) App"
-        case .clipboard: "发给 \(name(of: choice))"
+        // 应用名单独写在按钮上常认不出是应用（"粘贴到 预览"），加上 App
+        case .app: "粘贴到 \(name(of: choice)) App"
+        case .clipboard: "复制到剪贴板"
         }
     }
 

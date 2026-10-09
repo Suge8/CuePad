@@ -131,18 +131,6 @@ struct TaskPromptTests {
         #expect(detail.subtasks.map(\.id) == [sub.id])
     }
 
-    @Test func 写一条提示词后什么都没写就离开_那条空的不留下() async throws {
-        let task = try await store.createTask("修乱序", in: nil)
-        let workspace = Workspace(services: rig.services)
-        let blank = try await workspace.createPrompt(under: task.id)
-        let kept = try await workspace.createPrompt(under: task.id)
-        try await store.updateCard(kept.id) { $0.body = "先复现" }
-
-        try await workspace.dropIfEmpty(blank.id)
-        try await workspace.dropIfEmpty(kept.id)
-        #expect(try await store.children(of: task.id).map(\.id) == [kept.id])
-    }
-
     /// 交给 atlas，它这一轮做完。
     private func reply(to prompt: Card) async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")

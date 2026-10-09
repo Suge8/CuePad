@@ -85,7 +85,7 @@ struct OlderRow: View {
             Image(systemName: !text.images.isEmpty ? "photo" : "doc.text")
                 .font(.system(size: 12)).foregroundStyle(palette.ink3).frame(width: 18)
                 .accessibilityLabel(text.images.isEmpty ? "灵感" : "含图片的灵感")
-            Text(text.title.isEmpty ? "无标题" : text.title)
+            Text(text.label)
                 .font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(text.preview).font(.system(size: 13)).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)

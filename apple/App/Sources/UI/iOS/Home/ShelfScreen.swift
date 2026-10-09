@@ -46,18 +46,17 @@ nonisolated struct ShelfData: Sendable {
     }
 
     static func read(from store: isolated CueStore) throws -> ShelfData {
-        let summaries = try store.projectSummaries()
-        let counts = Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) })
+        let summaries = Dictionary(uniqueKeysWithValues: try store.projectSummaries().map { ($0.projectID, $0) })
         let tasks = try store.taskCounts()
         let entries = try store.projects().map { project in
-            Entry(project: project, cardCount: counts[project.id] ?? 0, openTasks: tasks[project.id]?.open ?? 0)
+            Entry(project: project, cardCount: summaries[project.id]?.cardCount ?? 0, openTasks: tasks[project.id]?.open ?? 0)
         }
         let hasTasks = tasks.values.contains { $0.total > 0 }
         return ShelfData(
             entries: entries, sessions: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store),
             tasks: hasTasks ? try TaskBoard.counts(from: store) : nil,
             active: try TaskBoard.active(limit: activeLimit, from: store),
-            inboxCount: counts[nil] ?? 0,
+            inboxCount: summaries[nil]?.cardCount ?? 0,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
     }
 }
@@ -346,16 +345,18 @@ private struct PinnedShelfCard: View {
     }
 }
 
-/// 灵感数与未完成任务数，书架大卡与行里同一种写法："25 张 · 3 项任务"。
+/// 灵感数与未完成任务数，书架大卡与行里同一种写法（`CountCopy`："25 条灵感 · 3 项任务"，为 0 的不写）。
 private struct ShelfCounts: View {
     let cards: Int
     var tasks = 0
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Text(tasks > 0 ? "\(cards) 条灵感 · \(tasks) 项任务" : "\(cards) 条灵感")
-            .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).counting(cards + tasks)
-            .lineLimit(1)
+        if let text = CountCopy.text((cards, "条灵感"), (tasks, "项任务")) {
+            Text(text)
+                .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).counting(cards + tasks)
+                .lineLimit(1)
+        }
     }
 }
 

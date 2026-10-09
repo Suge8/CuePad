@@ -75,8 +75,16 @@ struct ProjectPage: View {
         if showsFocus(data) {
             FocusBand(data: data)
         } else if let project = projectID {
-            // 两边都空：不画一个只装着空态的大框，收成一行添加任务；绑定文件夹的入口只在页头（DirectoryLink）
-            NewTaskField(project: project).frame(maxWidth: 420, alignment: .leading)
+            // 两边都空：不画一个只装着空态的大框，收成一行添加任务；还没绑文件夹时接着写明并给一键绑（与 Agent 栏同一个组件）
+            VStack(alignment: .leading, spacing: 10) {
+                NewTaskField(project: project).frame(maxWidth: 420, alignment: .leading)
+                if let project = data.project, !workspace.hasFolder(project.id) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("还没绑定文件夹").font(.system(size: 12.5)).foregroundStyle(palette.ink3)
+                        ProjectFolderGuide(project: project, style: .line)
+                    }
+                }
+            }
         }
         if data.cards.isEmpty {
             EmptyProject()
@@ -157,9 +165,10 @@ private struct ProjectHeader: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
+                // 绑着文件夹时写路径（点它更换）；没绑时这里不说，"还没绑定文件夹"与一键绑只在任务与 Agent 那一处
                 HStack(spacing: 4) {
-                    if let project {
-                        DirectoryLink(path: directory.map(Self.abbreviated)) { workspace.chooseFolder(for: project) }
+                    if let project, let directory {
+                        DirectoryLink(path: Self.abbreviated(directory)) { workspace.chooseFolder(for: project) }
                         if cardCount > 0 { Text("·") }
                     }
                     if cardCount > 0 { Text("\(cardCount) 条灵感").monospacedDigit() }
@@ -179,29 +188,18 @@ private struct ProjectHeader: View {
     }
 }
 
-/// 项目页头部的文件夹：没绑定时是带图标的"绑定文件夹…"，绑定后是路径；都可点，悬停有下划线、指针变手形。
+/// 项目页头部绑着的文件夹路径：点它更换，悬停有下划线、指针变手形。
 private struct DirectoryLink: View {
-    let path: String?
+    let path: String
     let choose: () -> Void
     @State private var hovering = false
 
     var body: some View {
-        Button(action: choose) {
-            if let path {
-                Text(path).underline(hovering)
-            } else {
-                Label {
-                    Text("绑定文件夹…").underline(hovering)
-                } icon: {
-                    Image(systemName: "folder.badge.plus")
-                }
-                .labelStyle(.titleAndIcon)
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .pointerStyle(.link)
-        .help(path == nil ? "选一个文件夹：在里面运行的 Agent 会出现在这个项目页" : "更换文件夹")
+        Button(action: choose) { Text(path).underline(hovering) }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+            .pointerStyle(.link)
+            .help("更换文件夹")
     }
 }
 

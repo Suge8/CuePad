@@ -16,9 +16,6 @@ struct FolderCandidateList: View {
     @State private var candidates: [ProjectFolders.Candidate]?
     @State private var query = ""
 
-    /// 从最近这么多条会话记录里找文件夹（历史会话有几千条，同名的只列一个，够用）。
-    private static let scanned = 500
-
     private var shown: [ProjectFolders.Candidate] {
         let text = query.trimmingCharacters(in: .whitespaces)
         return (candidates ?? []).filter { text.isEmpty || $0.folder.localizedStandardContains(text) }
@@ -64,8 +61,7 @@ struct FolderCandidateList: View {
         .observing(services.store, [.piSessionStates, .directoryBindings, .projects], id: project, into: $candidates, onError: workspace.fail) {
             [project] store in
             ProjectFolders.candidates(
-                sessions: try store.piSessionPage(PiSessionQuery(limit: Self.scanned)).items, bindings: try store.directoryBindings(),
-                projects: try store.projects(), excluding: project)
+                folders: try store.sessionFolders(), bindings: try store.directoryBindings(), projects: try store.projects(), excluding: project)
         }
     }
 

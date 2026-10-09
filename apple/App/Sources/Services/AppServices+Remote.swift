@@ -44,7 +44,7 @@ extension AppServices {
         let (state, detail) = session.syncRepresentation
         let alert = try await piStateRecorder.update(
             sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
-            folder: session.cwd.lastPathComponent,
+            folder: CueStore.folderName(ofWorkingDirectory: session.cwd.path(percentEncoded: false)),
             projectID: try await store.project(containing: session.cwd)?.id,
             question: session.question.map(PiQuestion.init),
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
