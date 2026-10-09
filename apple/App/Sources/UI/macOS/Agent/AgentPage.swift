@@ -46,7 +46,7 @@ struct AgentPage: View {
         }
     }
 
-    /// 顶上一排：左边按项目筛（全部 + 在 Mac 上绑了代码目录的项目），中间搜索，右边新会话。
+    /// 顶上一排：左边按项目筛（全部 + 在 Mac 上绑了文件夹的项目），中间搜索，右边新会话。
     private var topRow: some View {
         HStack(spacing: 10) {
             filterMenu
@@ -61,7 +61,7 @@ struct AgentPage: View {
             .font(.system(size: 14))
             .padding(.horizontal, 14).frame(height: 36)
             .glassEffect(.regular, in: .capsule)
-            NewSessionButton(recent: (list?.ended ?? []).map(\.state), showing: $starting)
+            NewSessionButton(showing: $starting)
                 .font(.system(size: 14, weight: .semibold))
                 .frame(width: 36, height: 36)
                 .glassEffect(.regular.interactive(), in: .circle)

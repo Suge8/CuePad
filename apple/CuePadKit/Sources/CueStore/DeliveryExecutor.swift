@@ -50,7 +50,7 @@ extension CueStore {
     return try requestDelivery(mode.rawValue, to: target, on: host, mode: mode)
   }
 
-  /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或会话名）。
+  /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名）。
   /// 给了 `card`（从灵感或任务"新会话"交给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）。
   public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil) throws -> DeliveryRequest {
     try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card)
@@ -71,6 +71,12 @@ extension CueStore {
         AND r.createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = cards.id)
         AND cards.piSessionID IS NOT s.sessionID
       """, [Date.stamp])
+  }
+
+  /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除）：手机没有完整路径，由 Mac 解析并写本机的目录绑定。
+  /// `title` 是项目名（给人看的目标名）。
+  public func requestBind(_ bind: PiBind, title: String, on host: String) throws -> DeliveryRequest {
+    try requestDelivery(bind.stored, to: SendTarget(kind: .app, name: title, ref: nil), on: host, mode: .bind)
   }
 
   /// 连接测试：请 `host` 那台 Mac 收到就回。目标写成那台 Mac 上的 CuePad（执行器不看目标）。

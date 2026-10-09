@@ -373,47 +373,83 @@ public struct PiConfig: Sendable, Equatable {
   }
 }
 
-/// 新会话开在哪：某个项目绑定的代码目录，或与某个会话同一目录。手机不传路径，Mac 按本机的绑定与会话索引解析。
-public enum PiLaunchPlace: Sendable, Equatable {
+/// Mac 上的一个文件夹，由那台 Mac 解析：某个项目绑定的目录，或某个会话的工作目录。手机看不到完整路径，请求里只指名"从哪里取"。
+public enum PiFolder: Sendable, Equatable {
   case project(UUID)
   case besideSession(String)
 }
 
-/// 在 Mac 上开一个新 Pi 会话（投送方式 `start` 的正文，存为 JSON）：Mac 在后台托管它（Pi 的 RPC 模式，没有终端界面），
-/// 开场的话作为第一条消息送入。`token` 由发起方生成，带到新会话的同步记录上（`PiSessionState.launchToken`），发起方据此认领。
+/// 在 Mac 上开一个新 Pi 会话（投送方式 `start` 的正文，存为 JSON）：开在项目绑定的文件夹里——新会话的目录只由项目绑定推出；
+/// Mac 在后台托管它（Pi 的 RPC 模式，没有终端界面），开场的话作为第一条消息送入。
+/// `token` 由发起方生成，带到新会话的同步记录上（`PiSessionState.launchToken`），发起方据此认领。
 public struct PiLaunch: Sendable, Equatable {
-  public var place: PiLaunchPlace
+  public var project: UUID
   /// 开场的话（可空）。
   public var prompt: String?
   public var token: String
 
-  public init(place: PiLaunchPlace, prompt: String?, token: String) {
-    self.place = place
+  public init(project: UUID, prompt: String?, token: String) {
+    self.project = project
     self.prompt = prompt
     self.token = token
   }
 
   private struct Stored: Codable {
-    var project: UUID?
-    var besideSession: String?
+    var project: UUID
     var prompt: String?
     var token: String
   }
 
   var stored: String {
-    var form = Stored(prompt: prompt, token: token)
-    switch place {
-    case .project(let id): form.project = id
-    case .besideSession(let sessionID): form.besideSession = sessionID
+    String(decoding: try! JSONEncoder().encode(Stored(project: project, prompt: prompt, token: token)), as: UTF8.self)
+  }
+
+  init?(stored: String) {
+    guard let form = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else { return nil }
+    self.init(project: form.project, prompt: form.prompt, token: form.token)
+  }
+}
+
+/// 请 Mac 给项目绑定文件夹（投送方式 `bind` 的正文，存为 JSON）：`folder` 是从哪里取（某个会话的工作目录，或另一个项目已绑的目录），
+/// nil 是解除绑定。绑定按项目 id 记，项目记录晚到这台 Mac 也对得上。
+public struct PiBind: Sendable, Equatable {
+  public var project: UUID
+  public var folder: PiFolder?
+
+  public init(project: UUID, folder: PiFolder?) {
+    self.project = project
+    self.folder = folder
+  }
+
+  private struct Stored: Codable {
+    var project: UUID
+    var unbind: Bool?
+    var folderProject: UUID?
+    var folderSession: String?
+  }
+
+  var stored: String {
+    var form = Stored(project: project)
+    switch folder {
+    case .project(let id): form.folderProject = id
+    case .besideSession(let sessionID): form.folderSession = sessionID
+    case nil: form.unbind = true
     }
     return String(decoding: try! JSONEncoder().encode(form), as: UTF8.self)
   }
 
+  /// 来源不认识（更新版本写的）、也不是解除绑定的读不出——不能把它当成解除。
   init?(stored: String) {
-    guard let form = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)),
-      let place = form.project.map(PiLaunchPlace.project) ?? form.besideSession.map(PiLaunchPlace.besideSession)
-    else { return nil }
-    self.init(place: place, prompt: form.prompt, token: form.token)
+    guard let form = try? JSONDecoder().decode(Stored.self, from: Data(stored.utf8)) else { return nil }
+    if form.unbind == true {
+      self.init(project: form.project, folder: nil)
+    } else if let id = form.folderProject {
+      self.init(project: form.project, folder: .project(id))
+    } else if let sessionID = form.folderSession {
+      self.init(project: form.project, folder: .besideSession(sessionID))
+    } else {
+      return nil
+    }
   }
 }
 
@@ -621,6 +657,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 停止会话正在跑的这一轮（相当于在 Pi 里按 Esc：只停指挥官自己这一轮，子代理不动），会话回到等你下一句；
   /// 正文固定为 `stop`，不写发送记录
   case stop
+  /// 请 Mac 给项目绑定文件夹（或解除绑定）；正文是 `PiBind`（见 `DeliveryRequest.bind`），不写发送记录
+  case bind
   /// 斜杠命令：正文是以 / 开头的整行（命令加参数，可接着带上的卡片文字），由 Pi 派发——内置命令（压缩、命名、换模型……）、扩展命令照常执行，
   /// 提示词模板与 skill 展开成一轮提示词（会话正忙时等它做完再说）；与说话一样记发送记录、会话在忙就排队
   case command
@@ -669,6 +707,9 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   /// 新会话请求的内容；其他方式为 nil。
   public var launch: PiLaunch? { mode == .known(.start) ? PiLaunch(stored: content) : nil }
+
+  /// 绑定文件夹请求的内容；其他方式、读不出的为 nil。
+  public var bind: PiBind? { mode == .known(.bind) ? PiBind(stored: content) : nil }
 
   /// 作答请求的答案；其他方式为 nil。
   public var answer: PiAnswer? { mode == .known(.answer) ? PiAnswer(stored: content) : nil }
@@ -749,6 +790,16 @@ public struct DirectoryBinding: Identifiable, Equatable, Sendable {
   public var folder: String
   public var createdAt: Date
   public var modifiedAt: Date
+
+  public init(id: UUID, projectID: UUID, hostID: String, hostName: String, folder: String, createdAt: Date, modifiedAt: Date) {
+    self.id = id
+    self.projectID = projectID
+    self.hostID = hostID
+    self.hostName = hostName
+    self.folder = folder
+    self.createdAt = createdAt
+    self.modifiedAt = modifiedAt
+  }
 
   static func recordID(project: UUID, host: String) -> UUID { DeterministicID.uuid("directory-binding/\(project.uuidString.lowercased())/\(host)") }
 }

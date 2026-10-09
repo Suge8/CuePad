@@ -40,7 +40,7 @@ import Testing
   @Test func 同步来的会话记录带认领标识_手机上发起的灵感关联到它() async throws {
     let idea = try await store.createCard(in: nil, body: "看一下重连")
     let project = try await store.createProject(name: "圆桌", color: "#111")
-    _ = try await store.requestLaunch(PiLaunch(place: .project(project.id), prompt: idea.body, token: "t-phone"), title: "圆桌", on: "mac-a", card: idea.id)
+    _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: idea.body, token: "t-phone"), title: "圆桌", on: "mac-a", card: idea.id)
 
     let state = remoteRecord(.piSessionStates, id: PiSessionState.recordID(sessionID: "s-new"), [
       "sessionID": .text("s-new"), "hostID": .text("mac-a"), "title": .text("圆桌"), "projectID": .null,

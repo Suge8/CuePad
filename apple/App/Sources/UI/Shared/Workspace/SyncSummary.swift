@@ -72,7 +72,7 @@ extension SyncIssue {
         case "attachments": "一张图片没能同步"
         case "piSessionStates", "piMessages": "Agent 会话的内容没能同步"
         case "deliveryRequests": "一条发给 Mac 的请求没能同步"
-        case "directoryBindings": "项目的代码目录没能同步"
+        case "directoryBindings": "项目的文件夹没能同步"
         default: "同步遇到一个问题"
         }
     }

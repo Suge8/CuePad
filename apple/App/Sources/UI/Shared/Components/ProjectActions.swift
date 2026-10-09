@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目操作（Mac 右键、iOS 长按与项目页"更多"共用）：置顶、编辑名称与图标、移到回收站。
+/// 项目操作（Mac 右键、iOS 长按与项目页"更多"共用）：置顶、编辑名称与图标、绑定或更换文件夹与解除绑定（规则 `ProjectFolders.menu`）、移到回收站。
 /// 编辑表单由调用方弹出（菜单收起后它所在的视图就没了）；平台专有的操作放进 `extra`，排在移到回收站之前。
 struct ProjectActions<Extra: View>: View {
     let project: Project
@@ -15,6 +15,11 @@ struct ProjectActions<Extra: View>: View {
             workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
         }
         Button("编辑名称与图标…", systemImage: "pencil", action: edit)
+        let folders = ProjectFolders.menu(for: id, bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
+        Button(folders.bindTitle, systemImage: "folder") { workspace.chooseFolder(for: project) }
+        ForEach(folders.unbinds, id: \.binding.id) { unbind in
+            Button(unbind.title, systemImage: "folder.badge.minus") { workspace.unbindFolder(unbind.binding, of: project) }
+        }
         extra
         Divider()
         Button("移到回收站", systemImage: "trash", role: .destructive) {

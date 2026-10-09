@@ -342,6 +342,23 @@ import Testing
     #expect(!DeliveryMode.toSession.contains(.config))  // 不是对会话说的话：会话页不把它当最近一条消息
   }
 
+  /// 绑定文件夹请求（手机请 Mac 绑，Mac 才有完整路径）：正文是 JSON（项目加"从哪里取文件夹"：某个会话的工作目录或另一个项目已绑的目录；
+  /// 没有文件夹就是解除绑定），读回来是同一个内容；读不出的（没有项目、来源不认识）是 nil；不是对会话说的话。
+  @Test func bindRequestCarriesTheProjectAndWhereToTakeTheFolderFromAndIsNotAMessageToTheSession() async throws {
+    let project = UUID(), other = UUID()
+    for bind in [
+      PiBind(project: project, folder: .besideSession("s1")), PiBind(project: project, folder: .project(other)), PiBind(project: project, folder: nil),
+    ] {
+      let made = try await store.requestBind(bind, title: "圆桌", on: "mac-a")
+      let stored = try #require(try await request(made.id))
+      #expect(stored.mode == .known(.bind) && stored.hostID == "mac-a" && stored.bind == bind)
+    }
+    #expect(DeliveryMode.bind.rawValue == "bind")
+    #expect(try await store.requestDelivery("{}", to: pi, on: "mac-a", mode: .bind).bind == nil)
+    #expect(try await store.requestDelivery(#"{"project":"\#(project)","folder":{"somethingNew":"x"}}"#, to: pi, on: "mac-a", mode: .bind).bind == nil)
+    #expect(!DeliveryMode.toSession.contains(.bind))
+  }
+
   /// 结束会话请求与发送同一条投送通道；它让会话停下，不是对会话说的话。
   @Test func endRequestIsAddressedToTheSessionsMacAndIsNotAMessageToIt() async throws {
     let made = try await store.requestEnd(of: pi, on: "mac-a")

@@ -72,6 +72,7 @@ nonisolated extension DeliveryMode {
         case .config: "模型与思考强度"
         case .end: "结束会话"
         case .stop: "停止这一轮"
+        case .bind: "绑定文件夹"
         }
     }
 
@@ -81,7 +82,7 @@ nonisolated extension DeliveryMode {
         case .steer: "它做完手上这一步就会看到"
         case .followUp: "这一轮结束后再送达"
         case .paste: "只放进输入框，不发送"
-        case .send, .command, .answer, .ping, .start, .transcript, .config, .end, .stop: nil
+        case .send, .command, .answer, .ping, .start, .transcript, .config, .end, .stop, .bind: nil
         }
     }
 }

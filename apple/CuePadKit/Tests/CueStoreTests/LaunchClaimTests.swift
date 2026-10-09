@@ -13,8 +13,8 @@ import Testing
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let idea = try await store.createCard(in: project.id, body: "看一下重连")
     let task = try await store.createTask("修乱序", in: project.id)
-    _ = try await store.requestLaunch(PiLaunch(place: .project(project.id), prompt: idea.body, token: "t-idea"), title: "圆桌", on: "mac-a", card: idea.id)
-    _ = try await store.requestLaunch(PiLaunch(place: .project(project.id), prompt: "修乱序", token: "t-task"), title: "圆桌", on: "mac-a", card: task.id)
+    _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: idea.body, token: "t-idea"), title: "圆桌", on: "mac-a", card: idea.id)
+    _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: "修乱序", token: "t-task"), title: "圆桌", on: "mac-a", card: task.id)
 
     #expect(try await store.handedSessions() == [idea.id: .launching, task.id: .launching])
 
@@ -33,7 +33,7 @@ import Testing
   @Test func 之后又交给了别的会话_新会话开好时不抢回() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let idea = try await store.createCard(in: project.id, body: "看一下重连")
-    _ = try await store.requestLaunch(PiLaunch(place: .project(project.id), prompt: idea.body, token: "t-old"), title: "圆桌", on: "mac-a", card: idea.id)
+    _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: idea.body, token: "t-old"), title: "圆桌", on: "mac-a", card: idea.id)
     try await Task.sleep(for: .milliseconds(5))  // 两次交给落在不同的毫秒（请求按 createdAt 排先后）
     _ = try await store.requestDelivery(idea.body, to: SendTarget(kind: .piSession, name: "notes", ref: "s2"), on: "mac-a", card: idea.id)
 
@@ -55,7 +55,7 @@ import Testing
     ) { _ in .succeeded }
     try await executor.start()
     let launch = try await store.requestLaunch(
-      PiLaunch(place: .project(project.id), prompt: idea.body, token: "t-late"), title: "圆桌", on: "mac-a", card: idea.id)
+      PiLaunch(project: project.id, prompt: idea.body, token: "t-late"), title: "圆桌", on: "mac-a", card: idea.id)
     let plain = try await store.requestDelivery("别的", to: SendTarget(kind: .piSession, name: "notes", ref: "s2"), on: "mac-a")
     _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
 
@@ -86,7 +86,7 @@ import Testing
     ) { _ in .succeeded }
     try await executor.start()
     let launch = try await store.requestLaunch(
-      PiLaunch(place: .project(project.id), prompt: idea.body, token: "t-lost"), title: "圆桌", on: "mac-a", card: idea.id)
+      PiLaunch(project: project.id, prompt: idea.body, token: "t-lost"), title: "圆桌", on: "mac-a", card: idea.id)
     _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }
 
     await clock.waitForSleeper()

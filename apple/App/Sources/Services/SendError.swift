@@ -23,7 +23,7 @@ nonisolated enum SendError: Error, Equatable {
     case unanswerable
     /// 这台 Mac 上找不到这个会话的会话文件（被删了，或不是这台 Mac 上的会话）。
     case piSessionNotOnThisMac
-    /// 要开新会话的项目没有绑定代码目录。
+    /// 要取目录的项目（开新会话，或手机请这台 Mac 绑成另一个项目的目录）还没有绑定文件夹。
     case noCodeDirectory(String)
     /// 这台 Mac 上没有找到 Pi。
     case piNotInstalled
@@ -47,7 +47,7 @@ extension SendError: LocalizedError {
         case .executorUnavailable: "这台 Mac 上的投送执行器没有启动，发不到 Agent；请查看启动问题或重启 CuePad"
         case .unanswerable: "这个问题只能在 Mac 终端里的 Agent 那边回答"
         case .piSessionNotOnThisMac: "这台 Mac 上找不到这个会话（会话文件可能已被删除）"
-        case .noCodeDirectory(let project): "项目「\(project)」还没有绑定代码目录，不知道在哪开新会话"
+        case .noCodeDirectory(let project): "项目「\(project)」还没有绑定文件夹，不知道目录在哪"
         case .piNotInstalled: "这台 Mac 上没有找到 Pi"
         case .directoryMissing(let folder): "目录不存在：\(folder)"
         case .terminalFailed(let reason): "终端没能打开：\(reason)"

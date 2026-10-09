@@ -107,6 +107,8 @@ final class Workspace {
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
     var overlay: Overlay?
     var notice: Notice?
+    /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
+    var folderPicker: Project?
     #if os(macOS)
     /// 请底部输入栏聚焦的次数（空态的"记一条"）：输入栏的焦点在它自己那里，只看这个数变了就聚焦。
     private(set) var captureFocusRequests = 0
