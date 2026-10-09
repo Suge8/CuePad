@@ -46,4 +46,17 @@ struct AgentRowTests {
         settings.setReplyDraft(ComposerDraft(text: "  \n"), for: session.id)
         #expect(PiRowLine.of(session, draft: settings.draftPreview(for: session.id), end: nil) == .progress("全部通过。"))
     }
+
+    /// 整页的行只有两层：名字一层，下面一句最要紧的话。等你确认时就是问题、出错时是原因，状态由状态标表达，不再写状态词；
+    /// 没有这样一句话时才写状态词。
+    @Test func 整页行的第二层_有要紧的话只写那句_没有时才写状态词() async throws {
+        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        try await recorder.update(sessionID: "ask", state: .waitingForUser, detail: "部署到生产吗？", title: "ask")
+        let ask = try await item()
+        #expect(PiRowLine.lead(ask.state, shown: settings.shown(ask), draft: nil, end: nil) == .progress("部署到生产吗？"))
+
+        try await recorder.update(sessionID: "ask", state: .ended, title: "ask")
+        let ended = try await item()
+        #expect(PiRowLine.lead(ended.state, shown: settings.shown(ended), draft: nil, end: nil) == .status("已结束"))
+    }
 }
