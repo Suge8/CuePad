@@ -82,7 +82,7 @@ CuePad → 扩展（都带 `id`）：
 
 ## 版本
 
-扩展文件里的 `EXTENSION_VERSION` 是唯一版本来源，`PiExtensionBundle.version` 由它解析。`PiExtensionInstaller.status().file` 报告已安装文件是否过期；升级文件后，已在运行的会话需重启才加载新扩展。**协议号只认等于**，不做版本协商（不向下兼容旧协议）：每加一条命令或改线上格式就升一号，hello 里协议号不同的会话只读出会话 id、进程、工作目录与名字（格式可能已变，其余不解析），以状态 `.incompatible` 出现在 `sessions` 里——进程在、会话没死，所以不是"已结束"，也不会被后台唤醒；之后它的消息一概不读，所有命令抛 `PiBridgeError.incompatibleExtension`（"这个会话正在终端里运行旧版扩展，重开 Pi 后再发"），进程退出（连接断开）才结束。用户升级后在终端里退出 pi、用 `pi -c` 接着会话即可。`.incompatible` 变化事件只留给 hello 之后消息损坏的连接（已断开，不在 `sessions` 里）。
+扩展文件里的 `EXTENSION_VERSION` 是唯一版本来源，`PiExtensionBundle.version` 由它解析。`PiExtensionInstaller.status().file` 报告已安装文件是否过期；升级文件后，已在运行的会话在终端里执行 /reload 才加载新扩展（Pi 重新载入扩展，同一会话、同一进程以新协议重连；已用真实 pi 验证）。**协议号只认等于**，不做版本协商（不向下兼容旧协议）：每加一条命令或改线上格式就升一号，hello 里协议号不同的会话只读出会话 id、进程、工作目录与名字（格式可能已变，其余不解析），以状态 `.incompatible` 出现在 `sessions` 里——进程在、会话没死，所以不是"已结束"，也不会被后台唤醒；之后它的消息一概不读，所有命令抛 `PiBridgeError.incompatibleExtension`（"这个会话正在终端里运行旧版扩展，重开 Pi 后再发"），进程退出（连接断开）才结束。用户升级后在终端里退出 pi、用 `pi -c` 接着会话即可。`.incompatible` 变化事件只留给 hello 之后消息损坏的连接（已断开，不在 `sessions` 里）。
 
 ## 已知边界
 

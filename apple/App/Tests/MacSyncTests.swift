@@ -644,7 +644,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.failed))
-        #expect(done.resultDetail == "这个会话正在终端里运行旧版扩展，重开 Pi 后再发")
+        #expect(done.resultDetail == "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发")
         #expect(rig.host.calls.isEmpty)
     }
 

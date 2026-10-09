@@ -77,12 +77,13 @@ struct PiSessionRow: View {
 
     var body: some View {
         let shown = services.settings.shown(session, delivery: delivery)
-        let line = PiRowLine.of(session, draft: services.settings.draftPreview(for: session.id), end: end)
+        let line = PiRowLine.of(
+            session, draft: services.settings.draftPreview(for: session.id), end: end, undelivered: shown.undelivered(delivery))
         HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
             PiStateDot(shown: shown, size: style.dot)
             VStack(alignment: .leading, spacing: style.spacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(session.title).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(PiRename.title(of: session, request: delivery)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 4)
                     PiElapsed(shown: shown, font: style.line)
                 }
@@ -124,7 +125,7 @@ struct PiSessionRow: View {
     private func text(of line: PiRowLine?) -> Text {
         switch line {
         case .ending: Text("正在结束…").foregroundStyle(palette.ink3)
-        case .endFailed(let reason): Text(reason).foregroundStyle(palette.failure)
+        case .endFailed(let reason), .failed(let reason): Text(reason).foregroundStyle(palette.failure)
         case .draft(let draft): Text("\(Text("草稿").fontWeight(.semibold).foregroundStyle(palette.signature))  \(Text(draft).foregroundStyle(palette.ink2))")
         case .progress(let progress): Text(progress).foregroundStyle(palette.ink2)
         case .hint(let hint): Text(hint).foregroundStyle(palette.ink3)

@@ -23,6 +23,7 @@ struct AgentScreen: View {
     @State private var picked: UUID??
     @FocusState private var searchFocused: Bool
     @State private var confirmingEnd: PiSessionState?
+    @State private var renaming: PiSessionState?
     @State private var searchHidden = false
     @Environment(\.tabPageReady) private var tabPageReady
 
@@ -50,6 +51,7 @@ struct AgentScreen: View {
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .contentMargins(.top, 0, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
+        .renameSession($renaming)
         .confirmationDialog("结束这个会话？", isPresented: Binding { confirmingEnd != nil } set: { if !$0 { confirmingEnd = nil } },
                             titleVisibility: .visible, presenting: confirmingEnd) { session in
             Button("结束会话", role: .destructive) { Task { await workspace.end(session) } }
@@ -145,9 +147,10 @@ struct AgentScreen: View {
     /// 分组标题与纸面左缘对齐（列表默认再缩进一截）。
     private static let headerInsets = EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
 
-    /// 一行：纸底，分隔线从名字起；在线的会话长按与左滑都有"结束会话"。
+    /// 一行：纸底，分隔线从名字起；长按与左滑都有"重命名"（读得到的会话）与"结束会话"（在线的）。
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
         let endable = MacDelivery.canEnd(item.state) && end?.isOpen != true
+        let renamable = MacDelivery.canRename(item.state) && services.reachesPiHost
         return SessionRow(item: item, filtered: filtered, end: end)
             .listRowInsets(.init())
             .listRowBackground(palette.paper)
@@ -156,8 +159,14 @@ struct AgentScreen: View {
                 if endable {
                     Button("结束会话", systemImage: "stop.circle") { confirmingEnd = item.state }.tint(palette.failure)
                 }
+                if renamable {
+                    Button("重命名", systemImage: "pencil") { renaming = item.state }.tint(palette.ink3)
+                }
             }
             .contextMenu {
+                if renamable {
+                    Button("重命名", systemImage: "pencil") { renaming = item.state }
+                }
                 if endable {
                     Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = item.state }
                 }

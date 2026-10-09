@@ -19,6 +19,7 @@ struct SessionScreen: View {
     @State private var askedForTranscript = false
     @State private var follow = ChatFollow()
     @State private var confirmingEnd = false
+    @State private var renaming: PiSessionState?
     /// 刚从刻度滑条跳到的那条你的话，短暂描一圈。
     @State private var highlight: UUID?
 
@@ -83,23 +84,29 @@ struct SessionScreen: View {
         }
         // 看历史时顶栏让开，点它原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）；点状态栏是系统的回到顶端，
         // 倒置的对话里顶端就是最新处，所以也会出现
-        .floatingHeader(session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
+        .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
                 PiSessionSubtitle(session: session, project: digest?.project)
             }
         } trailing: {
-            if let session, MacDelivery.canEnd(session) {
+            if let session, MacDelivery.canRename(session) || MacDelivery.canEnd(session) {
                 Menu {
-                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = true }
-                        .disabled(shownEnd?.isOpen == true)
+                    if MacDelivery.canRename(session) {
+                        Button("重命名", systemImage: "pencil") { renaming = session }.disabled(!services.reachesPiHost)
+                    }
+                    if MacDelivery.canEnd(session) {
+                        Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = true }
+                            .disabled(shownEnd?.isOpen == true)
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                 }
                 .accessibilityLabel("更多")
             }
         }
+        .renameSession($renaming)
         .confirmationDialog("结束这个会话？", isPresented: $confirmingEnd, titleVisibility: .visible) {
             Button("结束会话", role: .destructive, action: end)
         } message: {

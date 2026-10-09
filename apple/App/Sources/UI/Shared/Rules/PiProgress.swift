@@ -1,23 +1,29 @@
 import CueStore
 import Foundation
 
-/// 会话行的第三行（全 App 的会话行同一条，`PiSessionRow`）：结束请求的进度 → 回复框里没发的草稿 → 到哪了（`PiProgress`）→ 新会话的提示。
+/// 会话行的第三行（全 App 的会话行同一条，`PiSessionRow`）：结束请求的进度 → 没送到的原因 → 回复框里没发的草稿 → 到哪了（`PiProgress`）→ 新会话的提示。
 /// 什么都没有时是 nil，行照样留着这一行的高度。
 nonisolated enum PiRowLine: Equatable {
     case ending
     case endFailed(String)
+    /// 你看过之前一直写着的没送到的原因（改名的写"没能改名"）。
+    case failed(String)
     case draft(String)
     case progress(String)
     case hint(String)
 
     /// `draft` 是回复框里的草稿（`AppSettings.draftPreview`），`end` 是此刻要显示的结束请求（`DeliveryRequest.shownEnd`）。
-    static func of(_ session: PiSessionState, draft: String?, end: DeliveryRequest?) -> PiRowLine? {
+    /// `undelivered` 是此刻显示为没能送达的那条请求（`PiShown.undelivered`）。
+    static func of(_ session: PiSessionState, draft: String?, end: DeliveryRequest?, undelivered: DeliveryRequest? = nil) -> PiRowLine? {
         if end?.isOpen == true { return .ending }
         if let reason = end?.failure { return .endFailed(reason) }
+        if let undelivered, let reason = undelivered.failure {
+            return .failed(PiRename.name(in: undelivered) == nil ? reason : "没能改名：\(reason)")
+        }
         if let draft { return .draft(draft) }
         if let progress = PiProgress.line(of: session) { return .progress(progress) }
         if session.state == .known(.settled), !session.hasStarted { return .hint("等你说第一句") }
-        if session.state == .known(.incompatible) { return .hint("在终端里退出，再用 pi -c 接着") }
+        if session.state == .known(.incompatible) { return .hint("在终端里执行 /reload 就能接上") }
         return nil
     }
 }

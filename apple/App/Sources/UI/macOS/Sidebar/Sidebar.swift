@@ -209,6 +209,7 @@ private struct PiSection: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var startingSession = false
+    @State private var renaming: PiSessionState?
 
     nonisolated static let pastLimit = 5
 
@@ -242,6 +243,9 @@ private struct PiSection: View {
                         .sessionLink(session.sessionID)
                         .help(bridge?.state.errorMessage ?? "")
                         .contextMenu {
+                            if MacDelivery.canRename(session) {
+                                Button("重命名…", systemImage: "pencil") { renaming = session }
+                            }
                             if let bridge, !bridge.hosted {
                                 Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
                             }
@@ -262,6 +266,7 @@ private struct PiSection: View {
                 // 系统把分组标题连同 + 合成一个读屏元素，默认动作是收起分组：+ 另给一个具名动作
                 .accessibilityAction(named: "新会话") { startingSession = true }
             }
+            .renameSession($renaming)
         }
     }
 }

@@ -9,6 +9,11 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var deliveries: [DeliveryRequest]
     var messages: [PiChatMessage] = []
 
+    /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条）。
+    var title: String? {
+        session.map { PiRename.title(of: $0, request: deliveries.last { $0.mode.known.map(DeliveryMode.toSession.contains) == true }) }
+    }
+
     /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值并带原因。
     /// 思考强度按显示的模型夹取（`PiThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
     var config: PiConfigShown {
@@ -69,7 +74,7 @@ struct PiRestartNotice: View {
         if session.state == .known(.incompatible) {
             Callout(
                 tint: palette.attention, symbol: "arrow.clockwise.circle.fill",
-                text: "这个会话还在运行升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里退出 pi，再用 pi -c 接着这个会话。")
+                text: "这个会话还在用升级前的旧版扩展，CuePad 看不到它的进展、也发不进去。在终端里对这个会话执行 /reload 就能接上。")
         }
     }
 }
