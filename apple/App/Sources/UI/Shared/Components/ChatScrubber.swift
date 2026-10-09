@@ -40,6 +40,8 @@ struct ChatScrubber: View {
     private static let reach: CGFloat = 44
     /// 右缘接住手指的宽度。
     static let width: CGFloat = 28
+    /// 刻度离右缘。
+    private static let edge: CGFloat = 3
     /// 刻度区在可见区里的上下边：上沿在三成高处（避开顶栏，进拇指够得着的区），下沿让开回复框右上方的"回到最新"圆钮。
     private static let bandTop: CGFloat = 0.3
     private static let linger: Duration = .milliseconds(900)
@@ -54,12 +56,13 @@ struct ChatScrubber: View {
                 var last = -CGFloat.infinity
                 for (index, y) in ticks(band) where y - last >= Self.minGap || index == pointed {
                     last = y
-                    // 离手指越近越长越粗越深（程序坞那样）：平时 7×1.5 的淡色短线，手指正下方 18×3 的墨色
+                    // 离手指越近越长越粗越深（程序坞那样）：平时 7×1.5 的淡色短线，手指正下方 18×3、签名色（此刻的焦点）。
+                    // 刻度贴着右缘（离边 `edge`），离气泡右缘（页边距 16）还有一段
                     let near = finger.map { max(0, 1 - abs(y - $0) / Self.reach) } ?? 0
                     let swell = near * near
                     let length = 7 + 11 * swell, thickness = 1.5 + 1.5 * swell
-                    let rect = CGRect(x: size.width - length - 6, y: y - thickness / 2, width: length, height: thickness)
-                    let color = index == pointed ? palette.ink : swell > 0 ? palette.ink.opacity(0.45 + 0.4 * swell) : palette.ink3
+                    let rect = CGRect(x: size.width - length - Self.edge, y: y - thickness / 2, width: length, height: thickness)
+                    let color = index == pointed ? palette.signature : swell > 0 ? palette.ink.opacity(0.45 + 0.4 * swell) : palette.ink3
                     context.fill(Path(roundedRect: rect, cornerRadius: thickness / 2), with: .color(color))
                 }
             }

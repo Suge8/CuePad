@@ -113,18 +113,7 @@ final class AppSettings {
     }
 
     /// 会话行上的草稿（`PiRowLine.draft`）：回复框里没发的文字的第一行；只带了灵感或图片时说带了什么。没有草稿是 nil。
-    func draftPreview(for session: UUID) -> String? {
-        let draft = replyDraft(for: session)
-        if let line = draft.text.split(whereSeparator: \.isNewline).lazy
-            .map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) {
-            return line
-        }
-        let parts = [
-            draft.attachments.isEmpty ? nil : "\(draft.attachments.count) 条灵感",
-            draft.images.isEmpty ? nil : "\(draft.images.count) 张图片",
-        ].compactMap { $0 }
-        return parts.isEmpty ? nil : "带了 " + parts.joined(separator: "、")
-    }
+    func draftPreview(for session: UUID) -> String? { replyDraft(for: session).preview }
 
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
         #if !DEBUG

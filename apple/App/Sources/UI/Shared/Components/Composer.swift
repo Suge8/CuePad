@@ -24,6 +24,19 @@ struct ComposerDraft {
     var images: [PickedImage] = []
     var attachments: [Outbox] = []
 
+    /// 一行的草稿预览（会话行"草稿 …"、看历史时收起的回复框）：文字的第一行，没有文字时写带了什么；空的为 nil。
+    var preview: String? {
+        if let line = text.split(whereSeparator: \.isNewline).lazy
+            .map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) {
+            return line
+        }
+        let parts = [
+            attachments.isEmpty ? nil : "\(attachments.count) 条灵感",
+            images.isEmpty ? nil : "\(images.count) 张图片",
+        ].compactMap { $0 }
+        return parts.isEmpty ? nil : "带了 " + parts.joined(separator: "、")
+    }
+
     /// 带的内容里有没有图片：自己选的，或带上的卡片里的。
     var hasImages: Bool { !images.isEmpty || attachments.contains { !CardText($0.content).images.isEmpty } }
 
@@ -88,6 +101,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     let showsSend: Bool
     /// 聚焦就展开成两层。会话回复框只在有工具排（模型、思考强度）时这样：已结束的会话没有工具，聚焦了也保持一行，打了字再长。
     let expandsOnFocus: Bool
+    /// 收成一行时头部也留着（会话回复框：排队的话在这块玻璃的上部）；平时头部只在展开时出现。
+    let keepsHeader: Bool
     let focus: FocusState<Bool>.Binding
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
     let commands: [PiSlashCommand]
@@ -114,12 +129,13 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
-        keeps: UUID? = nil, showsSend: Bool = false, expandsOnFocus: Bool = true, commands: [PiSlashCommand] = [],
+        keeps: UUID? = nil, showsSend: Bool = false, expandsOnFocus: Bool = true, keepsHeader: Bool = false, commands: [PiSlashCommand] = [],
         shortcuts: [ReplyShortcut: () -> Void] = [:], recall: String? = nil,
         @ViewBuilder header: () -> Header, @ViewBuilder tools: () -> Tools, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
         self.expandsOnFocus = expandsOnFocus
+        self.keepsHeader = keepsHeader
         self.keeps = keeps
         self.commands = commands
         self.showsSend = showsSend
@@ -144,14 +160,16 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 一个圆钮占的一格：36 的圆 + 四周的点按区与边距。
     static var slot: CGFloat { 50 }
 
-    private var expanded: Bool { pinnedOpen || (focused && expandsOnFocus) || !draft.isEmpty(accepting: [.images, .cards]) }
-    /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。
-    private var shrunk: Bool { compact && !expanded && !showsSend }
+    private var expanded: Bool { !shrunk && (pinnedOpen || (focused && expandsOnFocus) || !draft.isEmpty(accepting: [.images, .cards])) }
+    /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。有草稿也收（胶囊里写"草稿：第一行"）：翻历史时整宽的两层太占地方。
+    private var shrunk: Bool { compact && !focused && !pinnedOpen && !showsSend }
+    /// 收着的草稿：文字区藏起（还是同一个，焦点与输入法不断），换成一行预览。
+    private var shrunkDraft: String? { shrunk ? draft.preview : nil }
     /// 短胶囊的宽：＋ 加一行短提示。
     private static var compactWidth: CGFloat { 220 }
     private var reservesSend: Bool { Send.self != EmptyView.self }
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
-    private var sendVisible: Bool { reservesSend && (hasContent || showsSend) }
+    private var sendVisible: Bool { reservesSend && !shrunk && (hasContent || showsSend) }
 
     /// 面板此刻列的命令；不弹时为空。
     private var paletteCommands: [PiSlashCommand] {
@@ -214,7 +232,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private var field: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if expanded { header.transition(.opacity) }
+            if !shrunk, expanded || keepsHeader { header.transition(.opacity) }
             if !paletteCommands.isEmpty {
                 PiSlashPalette(commands: paletteCommands, highlighted: min(highlighted, paletteCommands.count - 1), pick: pick)
                     .transition(.opacity)
@@ -233,6 +251,13 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
                     shortcut: shortcut)
                     .focused(focus)
+                    .opacity(shrunkDraft == nil ? 1 : 0)
+                    .overlay(alignment: .leading) {
+                        if let shrunkDraft {
+                            Text("草稿：\(shrunkDraft)").font(Typography.body).foregroundStyle(palette.ink2).lineLimit(1)
+                                .allowsHitTesting(false)
+                        }
+                    }
                     .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, !expanded && sendVisible ? 2 : 18)
                     .padding(.top, 14).padding(.bottom, expanded ? 4 : 14)
                     .frame(minHeight: expanded ? nil : Self.slot)

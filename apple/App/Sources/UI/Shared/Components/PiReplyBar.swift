@@ -8,7 +8,7 @@ import SwiftUI
 /// 等你确认时按问题类型：文字型问题它就是作答框（只收文字）；选择、确认型收成一行"先在上面作答"，
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
 /// 停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
-/// 排队的话（`PiChat.queued`）在它上方一叠（`PiQueueStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
+/// 排队的话（`PiChat.queued`）在它那块玻璃的上部（`PiQueueStack`），手机上聚焦时收成一行。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都写一条投送请求给会话所在的 Mac（本机的由本机执行器送达），
 /// 发出后清空，请求马上贴到对话末尾。Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
 struct PiReplyBar: View {
@@ -72,7 +72,6 @@ struct PiReplyBar: View {
         case .restartPi: notice("这个会话现在发不了", systemImage: "nosign")
         case .message, .answer:
             VStack(alignment: .leading, spacing: 6) {
-                if !compact, !queued.isEmpty { PiQueueStack(requests: queued).transition(.opacity) }
                 if let commandProgress { progressLine(commandProgress) }
                 composer
             }
@@ -83,9 +82,10 @@ struct PiReplyBar: View {
     private var composer: some View {
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, compact: compact, showsSend: canStop, expandsOnFocus: hasTools,
+                cardsFrom: session.projectID, compact: compact, showsSend: canStop, expandsOnFocus: hasTools, keepsHeader: !queued.isEmpty,
                 commands: answering == nil ? session.commands : [], shortcuts: shortcuts, recall: recall,
                 header: {
+                    if !compact, !queued.isEmpty { PiQueueStack(requests: queued, folded: Self.foldsQueue && focused) }
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if focused, let failure = config?.failure {
                         Text("没换成：\(failure)").font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2)
@@ -115,11 +115,14 @@ struct PiReplyBar: View {
     }
 
     #if os(iOS)
+    /// 聚焦时排队的话收成一行：键盘已占了半屏，对话不能再被挤走（Mac 不收）。
+    private static let foldsQueue = true
     private static let unanswerable = "这个问题要在 Mac 上回答"
     private static let hold = "长按"
     /// 钮上方那一句：怎么用另一种说法。
     private static let holdChip = "长按可"
     #else
+    private static let foldsQueue = false
     private static let unanswerable = "这个问题要在终端里的 Agent 那边回答"
     private static let hold = "按住或 \(ReplyShortcut.sendHeld.symbols) "
     /// Mac 的浮签只写快捷键：与"按住"并写会长到盖住输入的字

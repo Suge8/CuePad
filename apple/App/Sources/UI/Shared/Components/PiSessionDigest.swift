@@ -135,6 +135,7 @@ private struct CalloutSurface: ViewModifier {
 }
 
 /// 等你确认、能从这里答的问题：确认框是"是 / 否"，选择框每个选项一个按钮，输入框填了发送。
+/// Mac 上选项带编号键帽，按 1–9 直接作答（卡片出现时拿到键盘焦点，回复框此时收成"先在上面作答"、不占键盘）。
 /// 答出去后按钮停用，等 Mac 那边弹窗收起、问题清空（卡片随之消失）；作答请求没能送达时就地写原因，可以再答。
 struct QuestionCard: View {
     let session: PiSessionState
@@ -146,6 +147,9 @@ struct QuestionCard: View {
     /// 点了的那个回答：它的按钮显示送达中。
     @State private var tapped: PiAnswerValue?
     @State private var writeError: String?
+    #if os(macOS)
+    @FocusState private var keyboard: Bool
+    #endif
 
     @Environment(AppServices.self) private var services
 
@@ -168,6 +172,18 @@ struct QuestionCard: View {
                 Text(failure).font(Typography.meta).foregroundStyle(palette.failure)
             }
         }
+        #if os(macOS)
+        .focusable(question.kind == .known(.select))
+        .focusEffectDisabled()
+        .focused($keyboard)
+        .onAppear { keyboard = question.kind == .known(.select) }
+        .onKeyPress(characters: .decimalDigits, phases: .down) { press in
+            guard let number = Int(press.characters), question.options.indices.contains(number - 1),
+                  !answering, services.reachesPiHost else { return .ignored }
+            answer(.option(question.options[number - 1]))
+            return .handled
+        }
+        #endif
     }
 
     @ViewBuilder private var controls: some View {
@@ -179,7 +195,9 @@ struct QuestionCard: View {
             }
         case .select:
             VStack(spacing: 8) {
-                ForEach(question.options, id: \.self) { option in choice(.option(option), prominent: false, leading: true) }
+                ForEach(Array(question.options.enumerated()), id: \.element) { index, option in
+                    choice(.option(option), prominent: false, leading: true, number: index < 9 ? index + 1 : nil)
+                }
             }
         case .text, nil:
             // 文字型问题在回复框里答（`MacDelivery.reply`），回复框的占位写着
@@ -188,7 +206,8 @@ struct QuestionCard: View {
     }
 
     /// 一个回答按钮：点了的那个转为"送达中"，别的变淡。
-    private func choice(_ value: PiAnswerValue, prominent: Bool, leading: Bool = false) -> some View {
+    /// `number`：Mac 上选项前的编号键帽（按这个数字键作答）。
+    private func choice(_ value: PiAnswerValue, prominent: Bool, leading: Bool = false, number: Int? = nil) -> some View {
         let busy = answering && tapped == value
         return Button { answer(value) } label: {
             HStack(spacing: 8) {
@@ -196,6 +215,9 @@ struct QuestionCard: View {
                     Spinner(.small)
                     Text("送达中")
                 } else {
+                    #if os(macOS)
+                    if let number { Keycap(text: "\(number)").accessibilityHidden(true) }
+                    #endif
                     Text(value.label).multilineTextAlignment(leading ? .leading : .center)
                 }
             }
@@ -223,20 +245,32 @@ struct QuestionCard: View {
 
 /// 问题卡上的回答按钮：淡底加细边，或墨色实底（确认的"是"），触摸目标 44pt；按下缩一点、松开回弹（`Motion.pressDown/pressUp`）。
 /// 不用签名色：确认的常是部署、覆盖这类收不回的事，品牌色不该推着人点"是"。
+/// 指针悬停时（Mac、iPad 触控板）淡底提亮一档、细边加深，看得出可点。
 private struct AnswerButtonStyle: ButtonStyle {
     let prominent: Bool
+
+    func makeBody(configuration: Configuration) -> some View { AnswerButton(prominent: prominent, configuration: configuration) }
+}
+
+private struct AnswerButton: View {
+    let prominent: Bool
+    let configuration: ButtonStyleConfiguration
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var enabled
+    @State private var hovering = false
 
-    func makeBody(configuration: Configuration) -> some View {
+    var body: some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        let lit = hovering && enabled && !prominent
         configuration.label
             .font(Typography.body.weight(.medium))
             .foregroundStyle(prominent ? palette.onAccent : palette.ink)
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            .background(prominent ? palette.accent : palette.fill, in: shape)
-            .overlay { if !prominent { shape.strokeBorder(palette.ink3.opacity(0.5), lineWidth: 1) } }
+            .background(prominent ? palette.accent : lit ? palette.paperLit : palette.fill, in: shape)
+            .overlay { if !prominent { shape.strokeBorder(lit ? palette.ink2 : palette.ink3.opacity(0.5), lineWidth: 1) } }
+            .onHover { hovering = $0 }
+            .animation(Motion.quick, value: lit)
             .contentShape(shape)
             .scaleEffect(configuration.isPressed ? Press.control : 1)
             // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
