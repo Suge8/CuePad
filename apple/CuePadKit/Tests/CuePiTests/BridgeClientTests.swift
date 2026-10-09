@@ -225,6 +225,28 @@ struct BridgeClientTests {
         try await eventually("/new 之后的新会话") { session(next.id) != nil }
     }
 
+    /// /reload：同一进程的扩展先告别再在同一路径重新 listen。新 socket 的目录事件可能先于旧连接断开被处理（负载高时常见），
+    /// 那次扫描看到的是还挂着的旧连接；旧连接断开后不会再有目录事件，会话也得重新连上。
+    @Test func reloadWhoseNewSocketIsSeenBeforeTheOldConnectionDropsStillReconnects() async throws {
+        let old = FakeExtension(directory: dir)
+        try old.start()
+        try bridge.start()
+        let log = ChangeLog(bridge)
+        try await eventually("appeared") { session(old.id) != nil }
+
+        let reloaded = FakeExtension(directory: dir, sessionID: old.sessionID)
+        try reloaded.start()
+        // 再起一个会话当标记：它出现时，桥已在新 socket 存在、旧连接还在时扫描过一次
+        let marker = FakeExtension(directory: dir)
+        try marker.start()
+        try await eventually("标记会话出现") { session(marker.id) != nil }
+
+        old.sendRaw(#"{"t":"bye","reason":"reload"}"#)
+        old.crash()
+        try await eventually("旧连接以 reload 结束") { log.ended.contains { $0.0.id == old.id && $0.1 == .closed(reason: "reload") } }
+        try await eventually("同一会话重新连上") { session(old.id) != nil && reloaded.connectionCount == 1 }
+    }
+
     @Test func connectionDropWithoutByeEndsSessionAndRemovesStaleSocket() async throws {
         let dead = try deadPid()
         let ext = FakeExtension(directory: dir, pid: dead)
@@ -323,6 +345,21 @@ struct BridgeClientTests {
         try await eventually("被判为不兼容并断开") {
             log.changes.contains { if case .incompatible = $0 { true } else { false } } && bridge.sessions.isEmpty
         }
+    }
+
+    /// 被判为不兼容的会话在终端里 /reload：扩展在同一路径重新 listen，新 socket 不再被当成那个坏掉的旧连接跳过。
+    @Test func reloadAfterBeingJudgedIncompatibleConnectsTheNewSocket() async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        try await eventually("appeared") { session(ext.id) != nil }
+        ext.sendRaw(#"{"t":"state","state":{"kind":"warp-drive"}}"#)
+        try await eventually("被判为不兼容并断开") { bridge.sessions.isEmpty }
+
+        ext.crash()
+        let reloaded = FakeExtension(directory: dir, sessionID: ext.sessionID)
+        try reloaded.start()
+        try await eventually("重载后的会话连上") { session(ext.id) != nil && reloaded.connectionCount == 1 }
     }
 
     // MARK: 命令

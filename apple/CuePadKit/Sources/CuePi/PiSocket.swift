@@ -36,6 +36,19 @@ enum PiSocketDirectory {
     }
 
     static func processIsDead(_ pid: Int32) -> Bool { kill(pid, 0) == -1 && errno == ESRCH }
+
+    /// 认出一个具体的文件：删掉再在同一路径建的不算同一个（inode 号可能被复用，加上创建时间）。
+    struct FileIdentity: Equatable {
+        let inode: ino_t
+        let bornSeconds: Int
+        let bornNanoseconds: Int
+    }
+
+    static func identity(of path: String) -> FileIdentity? {
+        var st = stat()
+        guard lstat(path, &st) == 0 else { return nil }
+        return FileIdentity(inode: st.st_ino, bornSeconds: st.st_birthtimespec.tv_sec, bornNanoseconds: st.st_birthtimespec.tv_nsec)
+    }
 }
 
 /// 一条 Unix socket 连接：按行产出，EOF（含对端被强杀）即 `lines` 结束。
