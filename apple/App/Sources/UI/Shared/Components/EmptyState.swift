@@ -1,33 +1,68 @@
 import SwiftUI
 
-/// 空态与出错页：吉祥物、一句现状、一句下一步、一个可选动作（动作按钮由平台给）。全 App 的空态都用它，不用系统的 `ContentUnavailableView`：
-/// 吉祥物是品牌里唯一有表情的东西，空的时候正好让它出来。吉祥物出场时从下方轻轻弹上来，只这一次；减弱动态效果时直接在位。
+/// 空态与出错页：吉祥物、一句现状、一句下一步、一个可选动作。全 App 共用这一套布局。
+/// 吉祥物出场时从下方轻轻弹上来，只这一次；减弱动态效果时直接在位。
 struct EmptyState<Action: View>: View {
     let mascot: Mascot
     let title: String
     var message: String?
+    var compact = false
     @ViewBuilder var action: Action
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var shown = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            Image(mascot.rawValue).resizable().scaledToFit().frame(height: 112)
-                .scaleEffect(shown || reduceMotion ? 1 : 0.85, anchor: .bottom)
-                .offset(y: shown || reduceMotion ? 0 : 10)
-                .opacity(shown || reduceMotion ? 1 : 0)
-                .accessibilityHidden(true)
-            Text(title).font(Typography.emptyTitle).foregroundStyle(palette.ink).padding(.top, 14)
-            if let message {
-                Text(message).font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, 6)
+        Group {
+            if compact {
+                // 辅助字号改为上下排，按钮不挤掉标题与说明。
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                    : AnyLayout(HStackLayout(spacing: 12))
+                layout {
+                    illustration
+                    copy
+                    if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                    action
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(spacing: 16) {
+                    illustration
+                    copy
+                    action
+                }
+                .multilineTextAlignment(.center)
+                .padding(24)
+                .frame(maxWidth: 420)
             }
-            action.padding(.top, 20)
         }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 24)
-        .onAppear { withAnimation(Motion.pressUp) { shown = true } }
+        .paper(radius: compact ? 18 : 24)
+        .scaleEffect(shown || reduceMotion ? 1 : 0.97)
+        .opacity(shown || reduceMotion ? 1 : 0)
+        .frame(maxWidth: .infinity, alignment: compact ? .leading : .center)
+        .buttonStyle(ControlButtonStyle(kind: .primary))
+        .onAppear { withAnimation(reduceMotion ? Motion.quick : Motion.snappy) { shown = true } }
+    }
+
+    private var illustration: some View {
+        Image(mascot.rawValue).resizable().scaledToFit()
+            .frame(width: compact ? 48 : 104, height: compact ? 48 : 104)
+            .accessibilityHidden(true)
+    }
+
+    private var copy: some View {
+        VStack(alignment: compact ? .leading : .center, spacing: compact ? 4 : 6) {
+            Text(title).font(compact ? Typography.secondary.weight(.medium) : Typography.emptyTitle)
+                .foregroundStyle(palette.ink)
+            if let message {
+                Text(message).font(compact ? Typography.meta : Typography.secondary)
+                    .foregroundStyle(palette.ink2)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -42,57 +77,54 @@ extension EmptyState where Action == EmptyView {
     }
 }
 
-/// 吉祥物的表情，对应 Assets 里的 `mascot-*` 图（由 `design/final/ip-*.png` 经 `design/tools/cutout.swift` 抠图、缩到 360px）。
+/// 空态的动作按钮：small 给纸卡里的次要动作，primary 给整页唯一的主动作。
+/// 两种尺寸共用同一字体、圆角、线宽、按压和触感。
+struct EmptyStateButton: View {
+    enum Kind { case small, primary }
+
+    let title: String
+    let systemImage: String?
+    var kind = Kind.primary
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            if let systemImage {
+                Label(title, systemImage: systemImage)
+            } else {
+                Text(title)
+            }
+        }
+        .labelStyle(.titleAndIcon)
+        .buttonStyle(ControlButtonStyle(kind: kind == .small ? .highlight : .primary, compact: kind == .small))
+    }
+}
+
+/// 吉祥物的表情，对应 Assets 里的 mascot 图。
 enum Mascot: String {
-    /// 打招呼：空库首次打开。
     case welcome = "mascot-welcome"
-    /// 摊手：这里还没有东西。
     case empty = "mascot-empty"
-    /// 拿放大镜：没搜到。
     case search = "mascot-search"
-    /// 靠着垃圾桶睡着：回收站是空的。
     case trash = "mascot-trash"
-    /// 捂嘴笑：都处理完了。
     case clean = "mascot-clean"
-    /// 挠头：出错了。
     case error = "mascot-error"
 }
 
-/// 项目页与未分类还没有灵感：一句现状加一颗"记一条"，记到这里（iOS 浮起随手记，Mac 聚焦底部输入栏，由 `write` 给）。Mac 与 iOS 同一份。
-/// 页上已有任务或会话时（`compact`）页面不是空的，缩成一行小字"还没有灵感 · 记一条"，不放吉祥物与实心主按钮。
+/// 项目页与未分类还没有灵感：任务存在时用轻量纸卡；完全空时复用 EmptyState 的整页布局。
+/// iOS 浮起随手记，Mac 聚焦底部输入栏；两端按钮、图标、按压与出现动效共用。
 struct EmptyIdeas: View {
     var compact = false
     let write: () -> Void
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        if compact { line } else { full }
-    }
-
-    private var line: some View {
-        HStack(spacing: 6) {
-            Text("还没有灵感 ·").foregroundStyle(palette.ink3)
-            Button("记一条", action: write).buttonStyle(.plain).fontWeight(.medium).foregroundStyle(palette.ink2)
-                #if os(iOS)
-                .frame(minHeight: 44).contentShape(.rect)
-                #endif
-        }
-        .font(Typography.secondary)
-        .padding(.horizontal, 4)
-    }
-
-    private var full: some View {
-        EmptyState(mascot: .empty, title: "还没有灵感") {
-            #if os(iOS)
-            Button("记一条", action: write).prominentButton().controlSize(.large)
-            #else
-            Button(action: write) { Text("记一条").primaryCapsule() }.buttonStyle(PressStyle())
-            #endif
+        EmptyState(mascot: .empty, title: "还没有灵感", message: "随时记下新的想法", compact: compact) {
+            EmptyStateButton(title: "记一条", systemImage: "square.and.pencil", kind: compact ? .small : .primary, action: write)
+                .accessibilityLabel("记一条灵感")
         }
     }
 }
 
-/// 空库首次打开：Mac 与 iOS 同一段话；动作按钮由平台给（各自的主按钮样式）。
+/// 空库首次打开：Mac 与 iOS 同一段话；动作按钮由平台给。
 struct EmptyLibrary<Action: View>: View {
     @ViewBuilder let action: Action
 

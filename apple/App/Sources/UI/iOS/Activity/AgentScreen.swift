@@ -211,12 +211,12 @@ struct AgentScreen: View {
             .padding(.top, 40)
         } else if let filter {
             EmptyState(mascot: .empty, title: "这个项目还没有 Agent 会话") {
-                Button("新会话") { navigation.newSession = .init(project: filter) }.prominentButton().controlSize(.large)
+                EmptyStateButton(title: "新会话", systemImage: "plus", action: { navigation.newSession = .init(project: filter) })
             }
             .padding(.top, 40)
         } else {
             EmptyState(mascot: .empty, title: "还没有 Agent 会话", message: "在 Mac 上运行 pi，或在这里开一个新会话") {
-                Button("新会话") { navigation.newSession = .init() }.prominentButton().controlSize(.large)
+                EmptyStateButton(title: "新会话", systemImage: "plus", action: { navigation.newSession = .init() })
             }
             .padding(.top, 40)
         }
@@ -257,7 +257,7 @@ struct SearchRow<Leading: View, Trailing: View>: View {
             .frame(maxWidth: .infinity)
             trailing
         }
-        .buttonStyle(CircleGlass()).menuStyle(.button).labelStyle(.iconOnly)
+        .buttonStyle(ControlButtonStyle(kind: .circular)).menuStyle(.button).labelStyle(.iconOnly)
         .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 8)
         .animation(Motion.quick, value: searchHidden)
     }
@@ -289,23 +289,9 @@ extension View {
     }
 }
 
-/// 顶上一排的圆钮：与搜索框同高的一颗玻璃圆（菜单的"⋯"同一种）。
-private struct CircleGlass: ButtonStyle {
-    @Environment(\.palette) private var palette
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.body.weight(.medium)).foregroundStyle(palette.ink)
-            .frame(width: SearchCapsule.height, height: SearchCapsule.height)
-            .contentShape(.circle)
-            .glass(in: .circle, interactive: true)
-            .opacity(configuration.isPressed ? 0.8 : 1)
-    }
-}
-
 /// 顶上一排的搜索框：玻璃胶囊。在输入或有字时右端一个叉：清空并收起键盘。
 struct SearchCapsule: View {
-    static let height: CGFloat = 44
+    static let height: CGFloat = ControlMetrics.height
     let prompt: String
     @Binding var query: String
     let focus: FocusState<Bool>.Binding
@@ -320,7 +306,7 @@ struct SearchCapsule: View {
                     query = ""
                     focus.wrappedValue = false
                 }
-                .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink3)
+                .labelStyle(.iconOnly).buttonStyle(ControlButtonStyle(kind: .quiet, compact: true))
             }
         }
         .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: Self.height)

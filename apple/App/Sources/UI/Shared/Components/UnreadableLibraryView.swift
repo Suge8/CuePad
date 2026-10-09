@@ -17,11 +17,11 @@ struct UnreadableLibraryView: View {
                 .font(.footnote).frame(maxWidth: 420)
                 // iOS 的系统默认按钮没有外形，用与"新建项目"同一个主按钮；Mac 的系统按钮本身有外形
                 #if os(iOS)
-                Button("重试", action: retry).prominentButton().controlSize(.large).frame(minHeight: 44)
+                EmptyStateButton(title: "重试", systemImage: "arrow.clockwise", action: retry)
                 ExportDiagnosticsButton(text: failure.diagnostics).controlSize(.large).frame(minHeight: 44)
                 #else
                 HStack {
-                    Button("重试", action: retry)
+                    EmptyStateButton(title: "重试", systemImage: "arrow.clockwise", kind: .small, action: retry)
                     ExportDiagnosticsButton(text: failure.diagnostics)
                 }
                 #endif

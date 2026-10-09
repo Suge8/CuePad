@@ -382,7 +382,7 @@ private struct EmptyShelf: View {
 
     var body: some View {
         EmptyLibrary {
-            Button("新建项目", action: create).prominentButton().controlSize(.large).frame(minHeight: 44)
+            EmptyStateButton(title: "新建项目", systemImage: "folder.badge.plus", action: create)
         }
         .padding(.top, 80)
     }

@@ -175,33 +175,16 @@ private struct FolderGuideObserver: ViewModifier {
 private struct GuideButton: ViewModifier {
     enum Kind { case solid, soft, plain }
     let kind: Kind
-    @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        switch kind {
-        case .solid:
-            #if os(iOS)
-            content.prominentButton().controlSize(.large)
-            #else
-            content.buttonStyle(.borderedProminent).tint(palette.signature).controlSize(.large)
-            #endif
-        case .soft:
-            content.buttonStyle(.plain).font(Self.font).foregroundStyle(palette.signature).lineLimit(1)
-                .padding(.horizontal, 12).frame(height: Self.height)
-                .background(palette.selection, in: .capsule)
-                .contentShape(.capsule)
-                .padding(.vertical, Self.hitPadding)
-        case .plain:
-            content.buttonStyle(.plain).font(Self.font).foregroundStyle(palette.ink2).lineLimit(1)
-                .padding(.horizontal, 4).frame(height: Self.height)
-                .contentShape(.rect)
-                .padding(.vertical, Self.hitPadding)
-        }
+        content.buttonStyle(ControlButtonStyle(kind: tone, compact: kind != .solid))
     }
 
-    #if os(iOS)
-    private static let font = Font.subheadline.weight(.medium), height: CGFloat = 34, hitPadding: CGFloat = 5
-    #else
-    private static let font = Typography.secondary.weight(.medium), height: CGFloat = 28, hitPadding: CGFloat = 0
-    #endif
+    private var tone: ControlButtonStyle.Kind {
+        switch kind {
+        case .solid: .primary
+        case .soft: .highlight
+        case .plain: .quiet
+        }
+    }
 }

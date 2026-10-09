@@ -101,7 +101,7 @@ enum Motion {
 /// 圆钮与卡片按下有一下轻触感，行只亮底不缩放（一屏几十行，缩放会让列表显得软）。减弱动态效果时只降透明度。
 enum Press {
     /// 圆钮、图标按钮。
-    static let button: CGFloat = 0.88
+    static let button: CGFloat = 0.9
     /// 标准按钮、胶囊。
     static let control: CGFloat = 0.95
     /// 整张卡片：大面积只缩一点，不然文字发虚。
@@ -129,16 +129,78 @@ private struct PressBody: View {
     let scale: CGFloat
     var haptic = false
     var darken = false
+
+    var body: some View {
+        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed, scale: scale, haptic: haptic, darken: darken))
+    }
+}
+
+struct PressFeedback: ViewModifier {
+    let pressed: Bool
+    let scale: CGFloat
+    var haptic = true
+    var darken = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isEnabled) private var isEnabled
 
-    var body: some View {
-        let pressed = configuration.isPressed && isEnabled
-        configuration.label
-            .scaleEffect(pressed && !reduceMotion ? scale : 1)
-            .brightness(pressed && darken ? -0.02 : 0)
-            .opacity(pressed && (reduceMotion || !darken) ? 0.82 : 1)
-            .animation(pressed ? Motion.pressDown : Motion.pressUp, value: pressed)
-            .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: pressed) { _, now in haptic && now }
+    func body(content: Content) -> some View {
+        let active = pressed && isEnabled
+        content
+            .scaleEffect(active && !reduceMotion ? scale : 1)
+            .brightness(active && darken ? -0.02 : 0)
+            .opacity(active && (reduceMotion || !darken) ? 0.9 : 1)
+            .animation(active ? Motion.pressDown : Motion.pressUp, value: active)
+            .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: active) { _, now in haptic && now }
+    }
+}
+
+/// 圆钮、胶囊与行尾动作的几何：可见尺寸按平台，iPhone 的命中高度始终至少 44。
+enum ControlMetrics {
+    #if os(iOS)
+    static let height: CGFloat = 44
+    static let compactHeight: CGFloat = 32
+    #else
+    static let height: CGFloat = 36
+    static let compactHeight: CGFloat = 28
+    #endif
+    static let stroke: CGFloat = 1
+}
+
+/// 控件只有一套外形与按压实现，空态、绑定引导和搜索栏共用；签名色只给主动作，其余是墨色。
+struct ControlButtonStyle: ButtonStyle {
+    enum Kind { case primary, highlight, secondary, quiet, circular }
+    var kind = Kind.secondary
+    var compact = false
+    @Environment(\.palette) private var palette
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        surface(configuration.label)
+            .modifier(PressFeedback(pressed: configuration.isPressed, scale: kind == .circular ? Press.button : Press.control))
+            .opacity(isEnabled ? 1 : 0.45)
+    }
+
+    @ViewBuilder private func surface(_ label: ButtonStyleConfiguration.Label) -> some View {
+        if kind == .circular {
+            label
+                .font(Typography.body.weight(.medium))
+                .foregroundStyle(palette.ink)
+                .frame(width: ControlMetrics.height, height: ControlMetrics.height)
+                .contentShape(.circle)
+                .glass(in: .circle, interactive: true)
+        } else {
+            label
+                .font((compact ? Typography.meta : Typography.secondary).weight(.medium))
+                .foregroundStyle(kind == .primary ? palette.onSignature : kind == .highlight ? palette.signature : palette.ink)
+                .padding(.horizontal, compact ? 10 : 16)
+                .padding(.vertical, 6)
+                .frame(minHeight: compact ? ControlMetrics.compactHeight : ControlMetrics.height)
+                .background(kind == .primary ? palette.signatureFill : kind == .highlight ? palette.selection : kind == .quiet ? .clear : palette.fill, in: .capsule)
+                .overlay { Capsule().strokeBorder(kind == .secondary ? palette.hair : kind == .highlight ? palette.signature.opacity(0.18) : .clear, lineWidth: ControlMetrics.stroke) }
+                #if os(iOS)
+                .frame(minHeight: ControlMetrics.height)
+                #endif
+                .contentShape(.capsule)
+        }
     }
 }

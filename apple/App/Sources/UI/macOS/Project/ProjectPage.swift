@@ -224,30 +224,11 @@ private struct Welcome: View {
 
     var body: some View {
         EmptyLibrary {
-            Button { creating = true } label: { Text("新建项目").primaryCapsule() }
-                .buttonStyle(PressStyle())
+            EmptyStateButton(title: "新建项目", systemImage: "folder.badge.plus", action: { creating = true })
                 .keyboardShortcut(.defaultAction)
         }
         .padding(.top, 160)
         .sheet(isPresented: $creating) { ProjectForm(project: nil) }
-    }
-}
-#endif
-
-#if os(macOS)
-extension View {
-    /// Mac 空态上的主按钮：靛青实心胶囊（一屏的焦点）；按压用 `PressStyle`。
-    func primaryCapsule() -> some View { modifier(PrimaryCapsule()) }
-}
-
-private struct PrimaryCapsule: ViewModifier {
-    @Environment(\.palette) private var palette
-
-    func body(content: Content) -> some View {
-        content.font(Typography.body.weight(.semibold))
-            .foregroundStyle(palette.onSignature)
-            .padding(.horizontal, 20).frame(height: 36)
-            .background(palette.signatureFill, in: .capsule)
     }
 }
 #endif
