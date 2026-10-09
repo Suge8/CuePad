@@ -158,9 +158,9 @@ struct SentMark: View {
 
     var body: some View {
         Label(target, systemImage: "paperplane").labelStyle(.titleAndIcon).lineLimit(1)
-            // 纸飞机是装饰：整体读作一句"已发给 …"
+            // 纸飞机是装饰：整体读作一句"已发给 …"；同项目时的"已发过"已经是完整文案。
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("已发给 \(target)")
+            .accessibilityLabel(target == SendCopy.sameProject ? target : "已发给 \(target)")
     }
 }
 

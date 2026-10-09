@@ -4,9 +4,11 @@ import CueStore
 import SwiftUI
 
 /// 任务与 Agent：本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Agent 会话。介绍在页头。
-/// Agent 一栏只在有话可说时出现：有在线会话，或项目还没绑文件夹（绑定引导）；否则任务独占整张纸，不留一栏"没有运行中的会话"。
+/// Agent 一栏只在有话可说时出现：有在线会话，或项目还没绑文件夹而有同名建议、正在绑（绑定引导，`FolderGuide.shows`）；
+/// 否则任务独占整张纸，不留一栏"没有运行中的会话"。
 struct FocusBand: View {
     let data: ProjectPageData
+    let guide: FolderGuide?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -22,7 +24,8 @@ struct FocusBand: View {
     }
 
     private var showsAgent: Bool {
-        !workspace.liveSessions(in: data.project?.id).isEmpty || data.project.map { !workspace.hasFolder($0.id) } == true
+        !workspace.liveSessions(in: data.project?.id).isEmpty
+            || data.project.map { !workspace.hasFolder($0.id) && guide?.shows($0.id, in: .inset) == true } == true
     }
 
     private var columns: some View {
@@ -31,20 +34,20 @@ struct FocusBand: View {
             HStack(alignment: .top, spacing: 0) {
                 column { tasks }
                 divider
-                column { PiColumn(project: data.project) }
+                column { PiColumn(project: data.project, guide: guide) }
                     .frame(maxWidth: 300)
             }
             .frame(minWidth: Self.stackedBelow, idealWidth: Self.stackedBelow, maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .leading, spacing: 0) {
                 column { tasks }
                 Divider().overlay(palette.hair).padding(.horizontal, 18)
-                column { PiColumn(project: data.project) }
+                column { PiColumn(project: data.project, guide: guide) }
             }
         }
     }
 
     @ViewBuilder private var tasks: some View {
-        SectionLabel(text: data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist")
+        SectionLabel(text: TaskCopy.section(data.taskProgress), systemImage: "checklist")
         let roots = data.tasks.roots
         // 与任务面板同一节奏：任务行、"还有 N 条"、添加任务之间不再加栏内间距
         VStack(alignment: .leading, spacing: 2) {
@@ -75,13 +78,14 @@ struct FocusBand: View {
 private struct PiColumn: View {
     /// 未分类没有项目，也就没有文件夹可绑。
     let project: Project?
+    let guide: FolderGuide?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         SectionLabel(text: "Agent", systemImage: "terminal")
         let sessions = workspace.liveSessions(in: project?.id)
         if sessions.isEmpty, let project {
-            ProjectFolderGuide(project: project, style: .inset)
+            ProjectFolderGuide(project: project, guide: guide, style: .inset)
         }
         ForEach(sessions) { session in
             PiSessionRow(
@@ -106,7 +110,7 @@ struct CompactFocus: View {
                     ProjectGlyph(project: data.project, size: 13)
                     Text(data.project?.name ?? CaptureCopy.inbox).font(Typography.toolbarTitle).lineLimit(1)
                 }
-                Label(data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist").foregroundStyle(palette.ink2)
+                Label(TaskCopy.section(data.taskProgress), systemImage: "checklist").foregroundStyle(palette.ink2)
                 if let session {
                     let shown = workspace.shown(session)
                     HStack(spacing: 6) {

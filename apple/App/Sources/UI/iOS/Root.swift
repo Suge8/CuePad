@@ -101,13 +101,18 @@ struct RouteView: View {
     @Environment(\.bottomBarReserve) private var bottomBarReserve
 
     var body: some View {
-        // 底部栏是玻璃：内容一直滚到它后面（沉浸式），不自绘渐变；让出高度的 safeAreaBar 那一段由系统的滚动边缘效果处理
+        // 底部栏是玻璃：内容一直滚到它后面（沉浸式），不自绘渐变；让出高度的 safeAreaBar 那一段由系统的柔和滚动边缘效果
+        // （渐进模糊加淡出，同顶栏）处理，栏后面的字糊开、不和标签字叠着读
         page.containerBackground(background, for: .navigation)
             .environment(\.pageBackground, background)
-            // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页
+            // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页。
+            // 占位不能是 Color.clear：它不生成视图，系统认不出这里有一条栏、不画边缘效果；几乎透明的一层才算（不接点按）
             .safeAreaBar(edge: .bottom) {
-                if bottomBarReserve > 0, navigation.bottomPages == 0 { Color.clear.frame(height: bottomBarReserve) }
+                if bottomBarReserve > 0, navigation.bottomPages == 0 {
+                    Rectangle().fill(.white.opacity(0.001)).frame(height: bottomBarReserve).allowsHitTesting(false)
+                }
             }
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
     }
 
     /// 卡片纸页在窄屏是整页的纸，宽屏是桌面上的一张纸；其余页是桌面。

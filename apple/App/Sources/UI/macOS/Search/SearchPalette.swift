@@ -217,7 +217,7 @@ struct SearchPalette: View {
                 Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
                     Text("\(project?.name ?? "未分类") · \(DateLabel.short(card.modifiedAt))")
-                    if let send = data.lastSends[card.id] { SentMark(target: send.target.name) }
+                    if let name = data.lastSends[card.id]?.target.shownName { SentMark(target: name) }
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
                 if card.isTask, let facts = Self.taskFacts(parent: data.parents[card.id], marks: data.marks[card.id]) {

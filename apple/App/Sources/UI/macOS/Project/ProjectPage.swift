@@ -11,6 +11,7 @@ struct ProjectPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var data: ProjectPageData?
     @State private var agents: AgentLinks?
+    @State private var folderGuide: FolderGuide?
     @State private var board = WallBoard()
     @State private var collapsed = false
 
@@ -46,6 +47,7 @@ struct ProjectPage: View {
         }
         .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
         .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
+        .observingFolderGuide(into: $folderGuide)
         .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
@@ -74,18 +76,19 @@ struct ProjectPage: View {
         let byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
         let lastTarget = data.lastTarget
         if showsFocus(data) {
-            FocusBand(data: data)
+            FocusBand(data: data, guide: folderGuide)
         } else if let project = projectID {
-            // 两边都空：不画一个只装着空态的大框，收成一行添加任务；还没绑文件夹时接着写明并给一键绑（与 Agent 栏同一个组件）
+            // 两边都空：不画一个只装着空态的大框，收成一行添加任务；还没绑文件夹而有同名建议时接着给一键绑（与 Agent 栏同一个组件）
             VStack(alignment: .leading, spacing: 12) {
                 NewTaskField(project: project).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
                 if let project = data.project, !workspace.hasFolder(project.id) {
-                    ProjectFolderGuide(project: project, style: .panel).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
+                    ProjectFolderGuide(project: project, guide: folderGuide, style: .panel).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
                 }
             }
         }
         if data.cards.isEmpty {
-            EmptyProject()
+            // 上面已有任务或会话时页面不是空的：空态缩成一行
+            EmptyProject(compact: showsFocus(data))
         } else {
             if !arrangement.pinned.isEmpty { resources(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }
             if !arrangement.wall.isEmpty {
@@ -202,10 +205,11 @@ private struct DirectoryLink: View {
 }
 
 private struct EmptyProject: View {
+    let compact: Bool
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        EmptyIdeas(write: workspace.focusCapture).padding(.top, 48)
+        EmptyIdeas(compact: compact, write: workspace.focusCapture).padding(.top, compact ? 0 : 48)
     }
 }
 

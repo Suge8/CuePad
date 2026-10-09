@@ -5,8 +5,11 @@ import SwiftUI
 /// 已有会话的文件夹与项目同名（忽略大小写）时直接给一键"绑定 <文件夹> · N 个会话"，有几个列几个让人选（规则 `ProjectFolders.suggestions`），
 /// 点了走同一条绑定通路（`PiBind` 请求让那台 Mac 绑；Mac 上是本机）；另有"选文件夹…"自己挑。绑好之后已有会话立即归进项目。
 /// 请求的进度与没绑成的原因读投送请求（`ProjectFolders.bindProgress`），写在建议上面。
+/// 在哪出现只有一条规则（`FolderGuide.shows`）：项目页里只在有同名建议或绑定进行中时出现，其余收进项目的"⋯"；
+/// 冲着这个项目的 Agent 来的地方（Agent 页的空态、新会话的头部）总在。数据由所在的页读一次传进来（`observingFolderGuide`），
+/// 页面据同一条规则排版（有没有 Agent 那一段）。
 struct ProjectFolderGuide: View {
-    enum Style {
+    nonisolated enum Style: Sendable {
         /// 空态页里（Agent 页筛着这个项目）：标题与说明由空态写，这里只有按钮——第一个建议是主按钮，其余与"选文件夹…"是次要的。
         case page
         /// 项目页里自成一小块纸：文件夹图标、一句"绑定文件夹，看这个项目的 Agent 会话"、下面一排按钮。
@@ -15,16 +18,19 @@ struct ProjectFolderGuide: View {
         case inset
         /// 一排小按钮（新会话输入框的头部；说明由调用方写）。
         case line
+
+        /// 你冲着这个项目的 Agent 来的地方：绑定是唯一的下一步，引导总在。项目页里的两种只是顺带一提。
+        var isSought: Bool { self == .page || self == .line }
     }
 
     let project: Project
+    let guide: FolderGuide?
     var style = Style.page
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var guide: FolderGuide?
 
     var body: some View {
-        Group {
+        if guide?.shows(project.id, in: style) ?? style.isSought {
             switch style {
             case .page: actions.multilineTextAlignment(.center)
             case .panel: block.padding(14).paper(radius: 16)
@@ -32,7 +38,6 @@ struct ProjectFolderGuide: View {
             case .line: actions
             }
         }
-        .observingFolderGuide(into: $guide)
     }
 
     private var progress: ProjectFolders.BindProgress? { guide.flatMap { ProjectFolders.bindProgress(of: project.id, in: $0.requests) } }
@@ -121,6 +126,12 @@ nonisolated struct FolderGuide: Sendable, Equatable {
 
     static let tables: Set<StoreTable> = [.piSessionStates, .directoryBindings, .projects, .deliveryRequests]
 
+    /// 引导在这里出不出现：冲着这个项目的 Agent 来的地方总在；项目页里只在有同名一键建议、或绑定在路上与没绑成时出现——
+    /// 读书、装修这类不跑 Agent 的项目不该每次打开都被要求绑文件夹，"绑定文件夹…"在项目的"⋯"里。
+    func shows(_ project: UUID, in style: ProjectFolderGuide.Style) -> Bool {
+        style.isSought || suggestions[project] != nil || ProjectFolders.bindProgress(of: project, in: requests) != nil
+    }
+
     /// `host` 是 Mac 上本机的标识：Mac 上只建议本机的文件夹；手机传 nil，看全部 Mac 的。
     static func read(host: String?, from store: isolated CueStore) throws -> FolderGuide {
         let projects = try store.projects(), bindings = try store.directoryBindings(), folders = try store.sessionFolders()
@@ -135,8 +146,16 @@ nonisolated struct FolderGuide: Sendable, Equatable {
 }
 
 extension View {
-    /// 跟着会话、目录绑定、项目与绑定请求读 `FolderGuide`。
+    /// 跟着会话、目录绑定、项目与绑定请求读 `FolderGuide`（一页读一次，传给页里的引导）。
     func observingFolderGuide(into guide: Binding<FolderGuide?>) -> some View { modifier(FolderGuideObserver(guide: guide)) }
+}
+
+/// 只在自己出现期间读 `FolderGuide`：给页里不另用这份数据的地方（Mac Agent 页的空态、新会话的头部）。
+struct FolderGuideReader<Content: View>: View {
+    @ViewBuilder let content: (FolderGuide?) -> Content
+    @State private var guide: FolderGuide?
+
+    var body: some View { content(guide).observingFolderGuide(into: $guide) }
 }
 
 private struct FolderGuideObserver: ViewModifier {

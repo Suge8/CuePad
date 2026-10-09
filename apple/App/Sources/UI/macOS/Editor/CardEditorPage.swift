@@ -118,7 +118,7 @@ struct CardEditorPage: View {
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(
                 card: card, project: try card.projectID.flatMap { try store.project($0) },
-                lastTarget: try store.lastSends(in: card.projectID)[card.id]?.target.name,
+                lastTarget: try store.lastSends(in: card.projectID)[card.id]?.target.shownName,
                 task: try card.isTask ? nil : card.parentID.flatMap { try store.card($0) })
         }
         .onChange(of: data?.card.id, initial: true) {

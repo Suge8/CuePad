@@ -59,10 +59,29 @@ enum Mascot: String {
 }
 
 /// 项目页与未分类还没有灵感：一句现状加一颗"记一条"，记到这里（iOS 浮起随手记，Mac 聚焦底部输入栏，由 `write` 给）。Mac 与 iOS 同一份。
+/// 页上已有任务或会话时（`compact`）页面不是空的，缩成一行小字"还没有灵感 · 记一条"，不放吉祥物与实心主按钮。
 struct EmptyIdeas: View {
+    var compact = false
     let write: () -> Void
+    @Environment(\.palette) private var palette
 
     var body: some View {
+        if compact { line } else { full }
+    }
+
+    private var line: some View {
+        HStack(spacing: 6) {
+            Text("还没有灵感 ·").foregroundStyle(palette.ink3)
+            Button("记一条", action: write).buttonStyle(.plain).fontWeight(.medium).foregroundStyle(palette.ink2)
+                #if os(iOS)
+                .frame(minHeight: 44).contentShape(.rect)
+                #endif
+        }
+        .font(Typography.secondary)
+        .padding(.horizontal, 4)
+    }
+
+    private var full: some View {
         EmptyState(mascot: .empty, title: "还没有灵感") {
             #if os(iOS)
             Button("记一条", action: write).prominentButton().controlSize(.large)

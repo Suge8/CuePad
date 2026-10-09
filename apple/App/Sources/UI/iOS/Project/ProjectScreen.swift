@@ -29,6 +29,7 @@ struct ProjectScreen: View {
     @State private var board = WallBoard()
     @State private var pi: PiSessionList?
     @State private var agents: AgentLinks?
+    @State private var folderGuide: FolderGuide?
 
     var body: some View {
         ScrollView {
@@ -49,6 +50,7 @@ struct ProjectScreen: View {
         .floatingHeader(project?.name ?? "", detail: detail) { actions }
         .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
         .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
+        .observingFolderGuide(into: $folderGuide)
         .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
@@ -65,9 +67,11 @@ struct ProjectScreen: View {
         let data = page.data, lastTarget = data.lastTarget
         // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
         LazyVStack(alignment: .leading, spacing: 0) {
-            if data.project != nil { FocusCard(data: data, pi: pi).padding(.bottom, Self.sectionGap) }
+            if data.project != nil { FocusCard(data: data, pi: pi, guide: folderGuide).padding(.bottom, Self.sectionGap) }
             if data.cards.isEmpty {
-                EmptyIdeas { navigation.startCapture(project: .some(projectID)) }.padding(.vertical, 24)
+                // 上面已有任务或会话时页面不是空的：空态缩成一行，不放吉祥物与实心主按钮
+                let busy = !data.tasks.roots.isEmpty || pi?.isEmpty == false
+                EmptyIdeas(compact: busy) { navigation.startCapture(project: .some(projectID)) }.padding(.vertical, busy ? 0 : 24)
             }
             if !arrangement.pinned.isEmpty {
                 // 资料：长期参考的灵感，一行一条压在任务区下面
@@ -115,10 +119,10 @@ struct ProjectScreen: View {
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
 
-    /// 顶栏的一行："25 条灵感 · cuepad"（绑定的文件夹只写名字；手机上取各 Mac 同步来的绑定，绑在几台上就都写）。
+    /// 顶栏的一行："25 条灵感 · 2 项任务 · cuepad"（为 0 的不写；绑定的文件夹只写名字，手机上取各 Mac 同步来的绑定，绑在几台上就都写）。
     private var detail: String {
         let catalog = workspace.catalog
-        let count = CountCopy.text((catalog?.cardCounts[projectID] ?? 0, "条灵感")) ?? "还没有灵感"
+        let count = CountCopy.text((catalog?.cardCounts[projectID] ?? 0, "条灵感"), (catalog?.openTasks[projectID] ?? 0, "项任务")) ?? "还没有灵感"
         let folders = (catalog?.bindings ?? []).filter { $0.projectID == projectID }.map(\.folder)
         return ([count] + folders).joined(separator: " · ")
     }
@@ -162,13 +166,14 @@ struct ProjectScreen: View {
     }
 }
 
-/// 介绍与任务：项目的一句话介绍 + 本项目任务（"任务 完成数/总数"，前 3 条顶层任务连同子任务，可拖动、缩进，同任务页；其余在任务页）+ 本项目的 Pi 会话（在线的全列，
-/// 再加最近结束的几个；更多的点"全部"看这个项目的 Pi 列表）。会话点开看近况、回复。
-/// 没写介绍时只有任务；没有任务也没有会话时不画纸，是介绍加一行"添加任务"。项目还没绑文件夹（会话归不进来）时多一段 Agent：
-/// 写明并给同名文件夹一键绑（`ProjectFolderGuide`）；收成一行时它接在"添加任务"之后，不另画一块。
+/// 介绍与任务：项目的一句话介绍在纸外、顶栏下的第一行（次要墨色）；下面总是一张纸：本项目任务（"任务 · 完成 n/m"，前 3 条顶层任务连同子任务，
+/// 可拖动、缩进，同任务页；其余在任务页；一条都没有时纸里只有一行"添加任务"）+ 本项目的 Agent 会话（在线的全列，再加最近结束的几个；
+/// 更多的点"全部"看这个项目的会话列表）。项目还没绑文件夹而有同名建议或正在绑时（`FolderGuide.shows`），Agent 段是绑定引导；
+/// 没有建议时不占位置，绑定在项目的"⋯"里。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
 private struct FocusCard: View {
     let data: ProjectPageData
     let pi: PiSessionList?
+    let guide: FolderGuide?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
@@ -177,49 +182,40 @@ private struct FocusCard: View {
     private static let visibleTasks = 3
     static let endedShown = 2
 
-    /// 既没有任务也没有会话：不画一张只装着空入口的纸，收成介绍加一行"添加任务"。
-    private var isEmpty: Bool { data.tasks.roots.isEmpty && (pi?.isEmpty ?? true) }
-
     var body: some View {
-        if isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                intro
-                // "＋"与下面引导块的文件夹图标对齐在同一列
-                NewTaskLine(project: data.project?.id).padding(.leading, unbound == nil ? 0 : 8)
-                if let project = unbound { ProjectFolderGuide(project: project, style: .panel) }
+        VStack(alignment: .leading, spacing: 12) {
+            if let intro = data.project?.intro {
+                Text(intro).font(Typography.secondary).foregroundStyle(palette.ink2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .textSelection(.enabled)
             }
-        } else {
             card
         }
     }
 
-    /// 还没绑文件夹的项目（会话归不进来，要给绑定引导）。
-    private var unbound: Project? { data.project.flatMap { workspace.hasFolder($0.id) ? nil : $0 } }
-
-    @ViewBuilder private var intro: some View {
-        if let intro = data.project?.intro {
-            // 介绍是这个项目的一句说明，不和下面的任务抢标题的分量
-            Text(intro).font(.subheadline).foregroundStyle(palette.ink2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+    /// 还没绑文件夹、而这里该给绑定引导的项目（同名建议或绑定进行中）。
+    private var guided: Project? {
+        data.project.flatMap { project in
+            !workspace.hasFolder(project.id) && guide?.shows(project.id, in: .inset) == true ? project : nil
         }
     }
 
     private var card: some View {
-        // 三段靠段标题与段间距分组，不画分割线
+        // 两段靠段标题与段间距分组，不画分割线
         VStack(alignment: .leading, spacing: 20) {
-            intro
             // 与任务页同一节奏：行自带 44pt 命中高度，行间不再加间距
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist")
-                    .padding(.bottom, 4)
                 let roots = data.tasks.roots
-                TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
-                    TaskLine(task: row.task, marks: data.children[row.id]).contextMenu { CardActions(card: row.task) }
+                if !roots.isEmpty {
+                    SectionLabel(text: TaskCopy.section(data.taskProgress), systemImage: "checklist").padding(.bottom, 4)
+                    TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
+                        TaskLine(task: row.task, marks: data.children[row.id]).contextMenu { CardActions(card: row.task) }
+                    }
                 }
                 if roots.count > Self.visibleTasks {
                     Button("还有 \(roots.count - Self.visibleTasks) 条") { navigation.push(.tasks) }
-                    .font(.subheadline).foregroundStyle(palette.ink3)
+                    .font(Typography.secondary).foregroundStyle(palette.ink3)
                     .frame(minHeight: 44)
                 }
                 NewTaskLine(project: data.project?.id)
@@ -231,18 +227,19 @@ private struct FocusCard: View {
                     let all = pi.now.count + pi.total
                     if all > pi.now.count + pi.ended.count {
                         Button("全部 \(all) 个会话") { navigation.push(.projectSessions(project.id)) }
-                            .font(.subheadline).foregroundStyle(palette.ink3)
+                            .font(Typography.secondary).foregroundStyle(palette.ink3)
                             .frame(minHeight: 44)
                     }
                 }
-            } else if let project = unbound {
+            } else if let project = guided {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "Agent", systemImage: "waveform.path.ecg").padding(.bottom, 6)
-                    ProjectFolderGuide(project: project, style: .inset)
+                    ProjectFolderGuide(project: project, guide: guide, style: .inset)
                 }
             }
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .paper(radius: 18)
     }
 

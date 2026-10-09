@@ -217,7 +217,7 @@ struct AgentScreen: View {
         } else if let filter, let project = workspace.catalog?.project(filter), !workspace.hasFolder(filter) {
             // 会话按工作目录归入项目：没绑文件夹就一个也归不进来，空态不能说"没有会话"
             EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
-                ProjectFolderGuide(project: project)
+                ProjectFolderGuide(project: project, guide: folderGuide)
             }
             .padding(.top, 40)
         } else if let filter {
