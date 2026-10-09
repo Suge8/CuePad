@@ -181,7 +181,7 @@ struct PromptCard: View {
                 switch state.action {
                 case .handOff: handButton(fresh: true, enabled: !text.title.isEmpty || !text.images.isEmpty)
                 case .handAgain: handButton(fresh: false, enabled: true)
-                case .watch: watch
+                case .watch(let item): watch(item)
                 case nil: EmptyView()
                 }
             }
@@ -213,15 +213,13 @@ struct PromptCard: View {
     }
 
     /// Agent 还在处理这条：右边只给"看会话 ›"。
-    @ViewBuilder private var watch: some View {
-        if case .working(let item) = state {
-            sessionLink(item) {
-                HStack(spacing: 3) {
-                    Text("看会话")
-                    Image(systemName: "chevron.right").imageScale(.small).accessibilityHidden(true)
-                }
-                .font(TaskMetrics.caption.weight(.medium)).foregroundStyle(palette.ink2).padding(.horizontal, 4)
+    private func watch(_ item: PiSessionListItem) -> some View {
+        sessionLink(item) {
+            HStack(spacing: 3) {
+                Text("看会话")
+                Image(systemName: "chevron.right").imageScale(.small).accessibilityHidden(true)
             }
+            .font(TaskMetrics.caption.weight(.medium)).foregroundStyle(palette.ink2).padding(.horizontal, 4)
         }
     }
 

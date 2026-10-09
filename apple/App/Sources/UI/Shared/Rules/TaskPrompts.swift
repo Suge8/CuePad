@@ -29,9 +29,10 @@ nonisolated struct PromptTally: Equatable, Sendable {
     }
 }
 
-/// 提示词卡上右边那颗钮做什么（见 `PromptState.action`）。
+/// 提示词卡上右边那颗钮做什么（见 `PromptState.action`）；看会话带着要打开的那个会话，卡片不再自己从状态里找。
 nonisolated enum PromptAction: Equatable, Sendable {
-    case handOff, handAgain, watch
+    case handOff, handAgain
+    case watch(PiSessionListItem)
 }
 
 /// 一条提示词此刻怎样：没交出去、正在开会话、交给的会话在处理（含话还在路上）、会话没回复就结束了、那一轮做完了
@@ -52,7 +53,7 @@ nonisolated enum PromptState: Equatable, Sendable {
         case .unsent: .handOff
         case .launching: nil
         // 已回复只说明这一轮有了回答（`CueStore.childMarks`），会话可能还在接着跑工具或等你确认
-        case .working(let item), .replied(let item?): Self.handling(item) ? .watch : .handAgain
+        case .working(let item), .replied(let item?): Self.handling(item) ? .watch(item) : .handAgain
         case .ended, .replied(nil): .handAgain
         }
     }
