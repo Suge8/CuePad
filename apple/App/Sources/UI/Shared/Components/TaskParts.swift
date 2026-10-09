@@ -293,9 +293,7 @@ struct SubtaskList: View {
             Button {
                 workspace.attempt { try await workspace.toggle(child) }
             } label: {
-                Image(systemName: TaskGlyph.symbol(child.status))
-                    .foregroundStyle(TaskGlyph.tint(child.status, palette))
-                    .contentTransition(.symbolEffect(.replace))
+                TaskRingView(status: child.status, ring: .plain, done: child.status == .done, size: TaskMetrics.icon * 0.72)
                     .frame(width: TaskMetrics.icon, height: TaskMetrics.rowHeight).contentShape(.rect)
             }
             .buttonStyle(.plain)
@@ -392,7 +390,7 @@ enum TaskMetrics {
 }
 
 /// 任务的完成圈（`TaskRing`），全 App 的任务只有这一种图形（行、任务页、书架"正在推进"、挂到任务面板、Mac 面板）：
-/// 完成是对勾；没完成的是一个实线圈，进行中左半填满（同 circle.lefthalf.filled），待办空心——这个形状只随状态变，
+/// 完成是对勾；没完成的是一个实线圈，进行中左半填满，待办空心——这个形状只随状态变，
 /// 有没有下级、下级做了多少都不换掉它。有下级时进度另铺在右半：从 12 点顺时针往 6 点填一层淡色，做完多少填多少，
 /// 全做完是右半整个淡色（任务还要你自己勾：不画成实心，与完成的对勾分开）。
 /// 不用"淡圈上描一道弧"：小尺寸下那就是系统的加载转圈。扇形的变化有短过渡。
@@ -462,21 +460,13 @@ nonisolated struct Sector: Shape {
     }
 }
 
-/// 任务的状态圆圈（全 App 的任务图形只按这里着色）：待办淡墨空心、进行中墨色半满、完成墨色对勾。
+/// 任务圆圈的颜色（形状只在 `TaskRingView`）：待办淡墨、进行中与完成墨色。
 /// 进行中不用签名色：在动的状态靠形状区分，签名色只给一屏的焦点。
 enum TaskGlyph {
     static func tint(_ status: TaskStatus?, _ palette: Palette) -> Color {
         switch status {
         case .done, .inProgress: palette.ink
         case .todo, nil: palette.ink3
-        }
-    }
-
-    static func symbol(_ status: TaskStatus?) -> String {
-        switch status {
-        case .done: "checkmark.circle.fill"
-        case .inProgress: "circle.lefthalf.filled"
-        case .todo, nil: "circle"
         }
     }
 }
