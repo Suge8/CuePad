@@ -76,7 +76,7 @@ struct SessionPage: View {
                         Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)")
                     }
                     PiReplyBar(
-                        session: session, config: digest.config, draft: services.settings.replyDraftBinding(for: session.id), compact: false,
+                        session: session, config: digest.config, compact: false,
                         stopping: MacDelivery.stopping(session, deliveries: digest.deliveries)
                     ) {
                         follow.jumpToNewest()

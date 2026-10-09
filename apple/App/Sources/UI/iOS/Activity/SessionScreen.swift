@@ -32,7 +32,6 @@ struct SessionScreen: View {
     /// 阅读宽度上限：iPad 上长回答一行不超过它。
     private static let readingWidth: CGFloat = 640
     private var session: PiSessionState? { digest?.session ?? lastSeen }
-    private var draft: Binding<ComposerDraft> { services.settings.replyDraftBinding(for: id) }
     /// 此刻要显示的结束（还在路上的，或没能结束、之后没再发过别的），与 Agent 页同一条规则。
     private var shownEnd: DeliveryRequest? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? []) }
     private var fetchingTranscript: Bool {
@@ -119,7 +118,7 @@ struct SessionScreen: View {
                     } else {
                         // 在看历史时收成短胶囊，点它展开（不挪正在读的内容）
                         PiReplyBar(
-                            session: session, config: digest?.config, draft: draft, compact: !follow.atNewest,
+                            session: session, config: digest?.config, compact: !follow.atNewest,
                             stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? [])
                         ) { follow.jumpToNewest() }
                     }

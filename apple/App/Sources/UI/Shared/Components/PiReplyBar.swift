@@ -15,7 +15,6 @@ struct PiReplyBar: View {
     let session: PiSessionState
     /// 模型与思考强度的显示值（在线会话聚焦时放在工具排"＋"的右边）。
     let config: PiConfigShown?
-    @Binding var draft: ComposerDraft
     /// 在看历史：收成短胶囊。
     let compact: Bool
     /// 停止请求已发出、这一轮还没歇下（`MacDelivery.stopping`）。
@@ -28,6 +27,13 @@ struct PiReplyBar: View {
     @State private var sending = false
     @State private var sentCount = 0
     @FocusState private var focused: Bool
+
+    /// 回复框的草稿（每个会话一份，`AppSettings.replyDraft`）只在回复框里读写：会话页不经手它，
+    /// 打字时只有回复框（与列表里那一行）重算，会话页、对话都不动。
+    private var draft: ComposerDraft {
+        get { services.settings.replyDraft(for: session.id) }
+        nonmutating set { services.settings.setReplyDraft(newValue, for: session.id) }
+    }
 
     private var reply: PiReply { MacDelivery.reply(to: session, hasImages: draft.hasImages) }
 
@@ -58,7 +64,7 @@ struct PiReplyBar: View {
         case .restartPi: notice("旧版扩展的会话发不了，重开 Pi 后再发", systemImage: "arrow.clockwise")
         case .message, .answer:
             Composer(
-                draft: $draft, prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
+                draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, compact: compact, showsSend: canStop, commands: answering == nil ? session.commands : [], submit: submit,
                 header: {
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
@@ -145,6 +151,21 @@ struct PiReplyBar: View {
             .buttonStyle(.plain)
             .fixedSize()
             .disabled(!canSend)
+            // 按住的菜单看不见：有字可发时在钮上方浮一句"长按可马上说"，用过一次菜单就不再出（`holdSendLearned`）。
+            // 浮层不占排版，出现时不挤动文字
+            .overlay(alignment: .bottomTrailing) {
+                if canSend, !services.settings.holdSendLearned, let other = others.first {
+                    Text("\(Self.hold)可\(other.label)").font(.caption2.weight(.medium)).foregroundStyle(palette.ink2)
+                        .padding(.horizontal, 8).frame(height: 22)
+                        .glass(in: .capsule)
+                        .fixedSize()
+                        .offset(y: -48)
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .animation(Motion.quick, value: canSend)
             .accessibilityLabel(first.label)
             .accessibilityHint(([first.explanation] + others.map { "\(Self.hold)可以\($0.label)" }).compactMap { $0 }.joined(separator: "；"))
         } else {
@@ -194,6 +215,7 @@ struct PiReplyBar: View {
 
     /// 斜杠命令走投送方式 `command`（由 Pi 展开执行），不分马上说还是等它做完再说。
     private func send(_ mode: DeliveryMode) {
+        if mode != modes.first { services.settings.holdSendLearned = true }
         let outgoing = draft, line = commandLine
         guard canSend else { return }
         sending = true
