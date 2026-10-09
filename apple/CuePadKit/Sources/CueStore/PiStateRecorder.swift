@@ -220,7 +220,10 @@ public actor PiStateRecorder {
     if let context { session.context = context }
     if let commands { session.commands = commands }
     let now = timing.now()
-    let times = times ?? session.times ?? PiTimes(stateSince: now, busySince: nil)
+    var times = times ?? session.times ?? PiTimes(stateSince: now, busySince: nil)
+    // 工作中总有这段连续处理的起点（界面的"已运行"、停止的进度都从它算）：桥上的会话由扩展给，
+    // 不带时间的调用方（演示、测试）从进入工作算
+    if state.isWorking, times.busySince == nil { times.busySince = times.stateSince }
     session.times = times
 
     let content = Content(

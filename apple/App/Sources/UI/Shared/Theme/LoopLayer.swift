@@ -1,7 +1,7 @@
 import QuartzCore
 import SwiftUI
 
-/// 常驻循环动效的唯一宿主：工作中的转圈（`orbit`）、话在路上的呼吸（`breath`）、进行中文字与最高思考强度上扫过的光（`sheen`）。
+/// 常驻循环动效的唯一宿主：工作中的转圈与等待的转圈（`orbit`，后者经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、话在路上的呼吸（`breath`）、进行中文字与最高思考强度上扫过的光（`sheen`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
 /// 减弱动态效果时由调用方不放它（或换成静止的样子）。
@@ -13,6 +13,8 @@ struct LoopLayer {
         case orbit
         /// 一道横向的光带（宽是整体的一半）从左外扫到右外，1.8s 一趟。
         case sheen
+        /// 铺满的一层颜色从无到有再回去，一明一暗 1.4s（盖在内容上，内容看起来在呼吸）。
+        case pulse
     }
 
     let kind: Kind
@@ -82,6 +84,9 @@ struct LoopLayer {
                     shape.lineWidth = width
                     shape.strokeColor = index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.22) : color
                 }
+            case .pulse:
+                loop.frame = bounds
+                loop.backgroundColor = color
             case .sheen:
                 let band = bounds.width * 0.5
                 loop.bounds = CGRect(x: 0, y: 0, width: band, height: bounds.height)
@@ -124,6 +129,15 @@ struct LoopLayer {
                 spin.byValue = Double.pi * 2
                 spin.duration = 1.1
                 return loop(spin, on: layer)
+            case .pulse:
+                let layer = CALayer()
+                let fade = CABasicAnimation(keyPath: "opacity")
+                fade.fromValue = 0
+                fade.toValue = 0.55
+                fade.duration = 0.7
+                fade.autoreverses = true
+                fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                return loop(fade, on: layer)
             case .sheen:
                 let layer = CAGradientLayer()
                 layer.startPoint = CGPoint(x: 0, y: 0.5)
@@ -145,6 +159,43 @@ struct LoopLayer {
             layer.add(animation, forKey: "loop")
             return layer
         }
+    }
+}
+
+/// 全 App 唯一的等待转圈（发送中、送达中、读下一页、正在开…）：与 Agent 状态标同一段弧（`orbit`），交给渲染服务转，App 进程不参与；
+/// 不用系统 `ProgressView`，全 App 的转圈是同一个样子、同一个颜色。减弱动态效果时是一段静止的弧。读屏读作"请稍候"，旁边的文字说在等什么。
+struct Spinner: View {
+    enum Size {
+        case mini, small, regular
+        var side: CGFloat {
+            switch self {
+            case .mini: 11
+            case .small: 15
+            case .regular: 20
+            }
+        }
+    }
+
+    var size = Size.small
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(_ size: Size = .small) { self.size = size }
+
+    var body: some View {
+        Group {
+            if reduceMotion {
+                let width = size.side * 0.14
+                Circle().stroke(palette.ink2.opacity(0.22), lineWidth: width)
+                    .overlay { Circle().trim(from: 0, to: 0.3).stroke(palette.ink2, style: StrokeStyle(lineWidth: width, lineCap: .round)) }
+                    .padding(width / 2)
+            } else {
+                LoopLayer(kind: .orbit, color: palette.ink2)
+            }
+        }
+        .frame(width: size.side, height: size.side)
+        .accessibilityElement()
+        .accessibilityLabel("请稍候")
     }
 }
 

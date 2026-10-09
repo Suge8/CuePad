@@ -47,6 +47,11 @@ struct AgentListTests {
 
         // 会话的"多久前"与计时同一粒度
         #expect(PiClock.ago(now.addingTimeInterval(-(11 * 3600 + 48 * 60))).text(now: now, calendar: calendar) == "11 小时前")
-        #expect(PiClock.running(since: now.addingTimeInterval(-(2 * 3600 + 5 * 60))).text(now: now, calendar: calendar) == "已运行 2 小时")
+        #expect(PiClock.running(since: now.addingTimeInterval(-(2 * 3600 + 5 * 60))).text(now: now, calendar: calendar) == "已运行 2小时")
+        // 列表里只到分钟、第一分钟不每秒换字；只有会话页顶栏到秒
+        #expect(PiClock.waiting(since: now.addingTimeInterval(-42)).text(now: now) == "已等 不到1分钟")
+        #expect(PiClock.waiting(since: now.addingTimeInterval(-42)).text(now: now, precision: .second) == "已等 42秒钟")
+        #expect(PiClock.running(since: now.addingTimeInterval(-42)).live(.minute).discreteInput(after: now) == now.addingTimeInterval(18))
+        #expect(PiClock.running(since: now.addingTimeInterval(-42)).live(.second).discreteInput(after: now) == now.addingTimeInterval(1))
     }
 }

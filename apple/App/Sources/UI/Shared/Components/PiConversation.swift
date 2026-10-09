@@ -49,6 +49,8 @@ struct PiConversation: View {
                 ending
             }
         }
+        // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
+        .scrollTargetLayout()
         .frame(maxWidth: .infinity, alignment: .leading)
         .previewPresenter($opened)
         #if DEBUG
@@ -125,6 +127,12 @@ private struct EarlierRow: View {
 }
 
 extension PiConversation {
+    /// Mac 只排最近几条（`window`）：要跳到 `id` 那一条（刻度滑条）时至少要排开几条。
+    static func window(reaching id: UUID, messages: [PiChatMessage], previews: [PiPreview]) -> Int? {
+        let items = ChatItem.of(PiChat.entries(messages, previews: previews))
+        return items.firstIndex { $0.id == id }.map { items.count - $0 }
+    }
+
     /// 对话里"有新内容"的标志（滚动跟随用，见 `ChatScroll`）：多了消息、发出的话或它的送达情况变了、开始或结束处理、出错。
     struct FollowKey: Equatable {
         var messages: Int
@@ -156,7 +164,8 @@ struct PiSessionSubtitle: View {
             if let undelivered { Text("· \(undelivered)").foregroundStyle(palette.failure) }
             if shown.clock != nil {
                 Text("·").foregroundStyle(palette.ink3)
-                PiElapsed(shown: shown, font: Self.font)
+                // 整个 App 只有这一个计时到秒：正看着的这个会话
+                PiElapsed(shown: shown, font: Self.font, precision: .second)
             }
         }
         .font(Self.font)
@@ -426,12 +435,7 @@ private struct OutgoingBubble: View {
         .transition(.entry)
     }
 
-    /// 带卡片的话写卡片标题与图片数，不露存储格式。
-    private var text: String {
-        let card = CardText(request.content)
-        guard !card.images.isEmpty else { return request.content }
-        return [card.title.isEmpty ? nil : card.title, "\(card.images.count) 张图片"].compactMap { $0 }.joined(separator: " · ")
-    }
+    private var text: String { PiChat.shownText(of: request) }
 
     /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
     private func retry() {

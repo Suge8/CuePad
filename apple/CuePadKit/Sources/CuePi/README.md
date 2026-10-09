@@ -29,7 +29,7 @@
 
 `state.kind`：`idle`、`thinking`、`outputting`、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`delegating`（v6 起：自己这轮已歇下，还有子代理在飞）、`done`（`aborted`）、`error`（`error`）。
 
-计时（扩展 v6 起，旧扩展的 `since` 是细状态切换时间、没有 `busySince`）：粗状态只由 `phaseOf` 一处从 `kind` 推导——工作中（思考、输出、工具、等子代理）、等你确认、出错、空闲；`kind` 又由 `StateTracker.derive()` 从自己这轮的状态、在飞子代理数与待确认弹窗推导。`since` 是进入当前粗状态的时间，细状态之间切换不变；`busySince` 是这段连续处理开始的时间：离开空闲起（提交一条消息的 `input` 事件），到自己歇下且没有子代理在飞为止，中间等你确认也不断，空闲、出错时为 null。在飞子代理数取 FireCode 发布在 `firecode:workers` 频道的 `inFlight`（在跑、在审，或已落定但结果还没交给指挥官），与 FireCode 判断"会话进行中"同一个事实。FireCode 交回结果时，在飞数在该消息的 `input` 之后、`agent_start` 之前归零，所以从 `input` 起算这一轮，连续处理在交接处不断。只有 `agent_settled` 才进入 `done`/`error`。
+计时：粗状态只由 `phaseOf` 一处从 `kind` 推导——工作中（思考、输出、工具、等子代理）、等你确认、出错、空闲；`kind` 又由 `StateTracker.derive()` 从自己这轮的状态、在飞子代理数与待确认弹窗推导。`since` 是进入当前粗状态的时间，细状态之间切换不变；`busySince` 是这段连续处理开始的时间：离开空闲起（提交一条消息的 `input` 事件），到自己歇下且没有子代理在飞为止，中间等你确认也不断，空闲、出错时为 null。在飞子代理数取 FireCode 发布在 `firecode:workers` 频道的 `inFlight`（在跑、在审，或已落定但结果还没交给指挥官），与 FireCode 判断"会话进行中"同一个事实。FireCode 交回结果时，在飞数在该消息的 `input` 之后、`agent_start` 之前归零，所以从 `input` 起算这一轮，连续处理在交接处不断。只有 `agent_settled` 才进入 `done`/`error`。
 
 会话显示名只有一条规则，在 `PiSessionName`（活动会话的 `PiSession.displayName` 与历史的 `PiSessionHistory.displayName` 都用它）：与 Pi 自己的会话列表一致，`/name` 设的名字 → 首条用户消息 → 工作目录名，控制字符换成空格、去掉首尾空白（单行）。`name`、`firstMessage` 是扩展 v3 加的；旧扩展没有，显示工作目录名。`info` 的任一字段变化时 `changes()` 给出 `.infoChanged`。
 
@@ -90,3 +90,4 @@ CuePad → 扩展（都带 `id`）：
 - FSEvents 不报告"仅 bind"的 socket 创建，扩展 `chmod` 之后才可见；客户端在启动与任何目录事件时全量重扫，扫描跳过已有连接的名字。/reload 在同一路径重建 socket（名字不变），新文件的事件可能在旧连接还挂着时就被扫过，所以一条连接断开时文件还在就当场再连一次；被判为不兼容的按文件本身（inode 与创建时间）记，同一路径的新 socket 照常去连。
 - 终端跳转：tmux、Terminal.app（按 tty）、Ghostty（按工作目录，唯一匹配才聚焦）；其他终端只激活应用。herdr 等再套一层的复用器无法定位到 pane。
 - 会话冻结（SIGSTOP）或机器休眠造成的假死不会被发现——既定取舍：不做心跳。
+- 已进 Pi 队列的话（`send` 在会话正忙时以 `followUp`/`steer` 排进去的）收不回、也改不了方式：扩展接口只有 `ctx.hasPendingMessages()`，清队列与读队列（`clearQueue`、`getFollowUpMessages`）只在 Pi 自己的会话对象与 RPC 模式的 `clear_queue` 上，扩展拿不到（Pi 1.1.0 核对）。所以 CuePad 的撤回与"改为马上说"只对还没被 Mac 领取的投送请求。

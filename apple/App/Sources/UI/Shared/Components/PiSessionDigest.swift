@@ -193,7 +193,7 @@ struct QuestionCard: View {
         return Button { answer(value) } label: {
             HStack(spacing: 8) {
                 if busy {
-                    ProgressView().controlSize(.small)
+                    Spinner(.small)
                     Text("送达中")
                 } else {
                     Text(value.label).multilineTextAlignment(leading ? .leading : .center)
@@ -259,7 +259,7 @@ struct DeliveryStatusLabel: View {
                 // 发给已结束的会话：Mac 先在后台把它唤醒再送达
                 let busy = session.map { $0.isWorking || $0.state == .known(.waitingForUser) } ?? false
                 let text = session?.state == .known(.ended) ? "正在唤醒" : PiDelivery.transit(request, busy: busy)
-                HStack(spacing: 6) { ProgressView().controlSize(.mini); Text(text) }.foregroundStyle(palette.ink2)
+                HStack(spacing: 6) { Spinner(.mini); Text(text) }.foregroundStyle(palette.ink2)
             case .known(.succeeded):
                 Label(request.roundTrip.map { "已送达 · \(PiClock.duration(Double($0.components.seconds)))" } ?? "已送达", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(palette.ink2)
@@ -274,20 +274,17 @@ struct DeliveryStatusLabel: View {
     }
 }
 
-/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："已运行 4 分"、"已等 30 秒"、"已发出 3 秒"、"1 小时 2 分前"。
+/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："已运行 4分钟"、"已等 不到1分钟"、"2 小时前"。
+/// 列表里到分钟；会话页顶栏传 `.second`。
 struct PiElapsed: View {
     let shown: PiShown
     var font: Font = Typography.meta
+    var precision = PiClock.Precision.minute
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if let clock = shown.clock { label(clock) }
-    }
-
-    private func label(_ clock: PiClock) -> some View {
-        // 只在文字会变的时刻重画；不在屏幕上的行不画，也就不刷新
-        TimelineView(PiClockSchedule(clock: clock)) { context in
-            Text(clock.text(now: context.date))
+        if let clock = shown.clock {
+            PiClockText(clock: clock, precision: precision)
                 .font(font.monospacedDigit())
                 // 状态标与状态词已带色，计时保持中性，一行里只有一处彩色
                 .foregroundStyle(palette.ink3)
@@ -295,12 +292,11 @@ struct PiElapsed: View {
     }
 }
 
-/// `PiClock` 的文字在哪些时刻会变（见 `nextChange`）。
-struct PiClockSchedule: TimelineSchedule {
+/// 一个计时的文字：系统时间文本，系统只在文字会变的时刻更新（`PiClock.Live`），不经 TimelineView 或定时器重算视图。
+struct PiClockText: View {
     let clock: PiClock
+    var precision = PiClock.Precision.minute
 
-    func entries(from startDate: Date, mode: TimelineScheduleMode) -> some Sequence<Date> {
-        sequence(first: startDate) { clock.nextChange(after: $0) }
-    }
+    var body: some View { Text(.currentDate, format: clock.live(precision)) }
 }
 

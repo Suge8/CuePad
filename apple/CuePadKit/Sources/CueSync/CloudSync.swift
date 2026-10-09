@@ -88,11 +88,11 @@ public actor CloudSync {
   }
 
   /// 立即上传这一条记录（不等引擎的自动调度，几秒）：手机写出投送请求后调用，Mac 才能尽早拉到。
-  /// 先把它登记为待办（与协调器随后的登记重复无妨），再只发这一条。
-  public func sendNow(recordName: String) async throws {
+  /// 先把它登记为待办（与协调器随后的登记重复无妨），再只发这一条。`deleted`：本机删掉了它（撤回还没被 Mac 领取的请求），发的是删除。
+  public func sendNow(recordName: String, deleted: Bool = false) async throws {
     guard let engine else { return }
     let id = CKRecord.ID(recordName: recordName, zoneID: zoneID)
-    engine.state.add(pendingRecordZoneChanges: [.saveRecord(id)])
+    engine.state.add(pendingRecordZoneChanges: [deleted ? .deleteRecord(id) : .saveRecord(id)])
     try await engine.sendChanges(CKSyncEngine.SendChangesOptions(scope: .recordIDs([id])))
   }
 

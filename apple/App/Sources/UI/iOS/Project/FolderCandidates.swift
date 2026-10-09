@@ -102,7 +102,7 @@ struct FolderPickerSheet: View {
         case .idle: EmptyView()
         case .binding(let folder):
             HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
+                Spinner(.small)
                 Text("Mac 正在绑定「\(folder)」…").font(.footnote).foregroundStyle(palette.ink2)
             }
             .frame(maxWidth: .infinity).padding(14).background(.bar)

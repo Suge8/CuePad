@@ -66,10 +66,6 @@ nonisolated enum PiSubagentClock: Equatable {
         }
     }
 
-    /// 文字下一次会变的时刻；落定的不再变。
-    func nextChange(after now: Date) -> Date? {
-        if case .running(let clock) = self { clock.nextChange(after: now) } else { nil }
-    }
 }
 
 /// 会话在等子代理时（Agent 列表行的第三行）说它们在干什么：只有一个在跑，写它的名字与动作；好几个在跑，说个数；

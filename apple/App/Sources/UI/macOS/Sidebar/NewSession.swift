@@ -68,10 +68,10 @@ struct NewSessionForm: View {
                     Text(place.map { $0.binding == nil ? "「\($0.project.name)」还没有文件夹" : "在后台开，不占终端" } ?? "在后台开，不占终端")
                         .font(Typography.meta).foregroundStyle(palette.ink3)
                 case .opening:
-                    ProgressView().controlSize(.small)
+                    Spinner(.small)
                     Text("正在开…").font(Typography.meta).foregroundStyle(palette.ink3)
                 case .connecting:
-                    ProgressView().controlSize(.small)
+                    Spinner(.small)
                     Text("等 Agent 连上…").font(Typography.meta).foregroundStyle(palette.ink3)
                 case .failed(let reason):
                     Text(reason).font(Typography.meta).foregroundStyle(palette.failure).fixedSize(horizontal: false, vertical: true)

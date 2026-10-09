@@ -33,11 +33,15 @@ extension DebugScene {
             try? await Task.sleep(for: .seconds(1))
             workspace.attaching = try? await workspace.services.store.card(id)
         case "session":
-            // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）；-CuePadChatGrow YES 时之后每 4 秒进来一条回答
+            // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）；-CuePadChatGrow YES 时之后每 4 秒进来一条回答，
+            // -CuePadChatBulk <N> 时整批进来 N 轮长对话（同 iOS；右缘刻度滑条要 6 句以上你的话才出现）
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
             if let id = sessionToOpen { workspace.show(.session(id)) }
             if defaults.bool(forKey: "CuePadChatGrow"), let id = sessionToOpen {
                 Task { await growChat(id, store: workspace.services.store) }
+            }
+            if let id = sessionToOpen, case let bulk = defaults.integer(forKey: "CuePadChatBulk"), bulk > 0 {
+                Task { await bulkChat(id, count: bulk, store: workspace.services.store) }
             }
         default: break
         }

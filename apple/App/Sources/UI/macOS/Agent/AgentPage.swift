@@ -140,7 +140,7 @@ struct AgentPage: View {
             }
             if list.loaded < list.total {
                 // 滑到这里才读下一页
-                ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(16)
+                Spinner(.small).frame(maxWidth: .infinity).padding(16)
                     .task(id: list.loaded) { limit = list.loaded + PiSessionList.pageSize }
             }
         }
@@ -168,6 +168,7 @@ struct AgentPage: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .sessionLink(session.sessionID)
             .contextMenu {
+                MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {
                     Button("重命名…", systemImage: "pencil") { renaming = session }
                 }

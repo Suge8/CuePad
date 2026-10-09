@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、编辑快捷键。
+/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、编辑快捷键，以及会话回复框的快捷键（"回复"，`ReplyShortcut`）。
 @MainActor
 enum MainMenu {
     static func install() {
@@ -31,12 +31,27 @@ enum MainMenu {
             .item("粘贴", #selector(NSText.paste(_:)), "v"),
             .item("全选", #selector(NSText.selectAll(_:)), "a"),
         ]))
+        main.addItem(replyMenu())
         let window = submenu(title: "窗口", items: [
             .item("关闭", #selector(NSWindow.performClose(_:)), "w"),
             .item("最小化", #selector(NSWindow.performMiniaturize(_:)), "m"),
         ])
         main.addItem(window)
         return main
+    }
+
+    /// 会话回复框的快捷键：动作经响应链交给回复框的文字区（`GrowingTextView.performReplyShortcut`），回复框没聚焦时停用。
+    private static func replyMenu() -> NSMenuItem {
+        let menu = NSMenu(title: "回复")
+        for key in ReplyShortcut.menu {
+            let item = menu.addItem(withTitle: key.title, action: #selector(GrowingTextView.performReplyShortcut(_:)), keyEquivalent: key.input)
+            item.keyEquivalentModifierMask = key.shift ? [.command, .shift] : .command
+            item.tag = key.rawValue
+        }
+        let holder = NSMenuItem()
+        holder.title = menu.title
+        holder.submenu = menu
+        return holder
     }
 
     private enum Entry {

@@ -7,33 +7,101 @@ import SwiftUI
 /// 松手后停一会儿再淡出，点"思考"的标只看现在是哪档；最高档填色有一道流光）。
 /// 显示值由会话记录与配置请求推出（`SessionDigest.config`）：换了之后立即显示新值、填色轻轻呼吸直到送达，没换成回到原值
 /// （原因由调用方写在输入框头部）。只给在线会话（已结束的不为换模型去唤醒 Pi），由调用方决定放不放。减弱动态效果时没有流光与呼吸。
+/// Mac 的 ⌘⇧M、⌘⇧E（`ReplyShortcut`）请弹出的那个菜单。
+enum PiConfigPick { case model, thinking }
+
 struct PiConfigControls: View {
     let session: PiSessionState
     let shown: PiConfigShown
+    /// 键盘请弹出的菜单（Mac）：弹出后清掉。
+    var opening: Binding<PiConfigPick?> = .constant(nil)
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     /// 这一排拿到的宽度：模型胶囊最宽是它的一半（`PiModelLabel.capsuleWidth`）。
     @State private var available: CGFloat = 0
+    /// 键盘弹出的菜单贴着哪枚胶囊（Mac）。
+    @State private var anchors = [PiConfigPick.model: PopUpAnchor(), .thinking: PopUpAnchor()]
 
     var body: some View {
         HStack(spacing: 6) {
             PiModelCapsule(models: session.models, current: shown.model, pending: shown.pending,
                            maxWidth: PiModelLabel.capsuleWidth(available: available)) { configure(PiConfig(model: $0)) }
+                .popUpAnchor(anchors[.model])
             if let levels = shown.model?.thinkingLevels, !levels.isEmpty {
                 PiThinkingDial(meter: PiThinkingMeter(levels: levels, current: shown.thinking), pending: shown.pending) {
                     configure(PiConfig(thinking: $0))
                 }
+                .popUpAnchor(anchors[.thinking])
             }
             if let context = shown.context { PiContextRing(session: session, usage: context) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
+        .onChange(of: opening.wrappedValue) { _, pick in
+            guard let pick else { return }
+            opening.wrappedValue = nil
+            open(pick)
+        }
+    }
+
+    /// 键盘打开的菜单：与点胶囊同样的选项（模型按提供方分组、当前打勾；思考强度是当前模型支持的档），系统菜单，方向键选、↩ 确认、Esc 关。
+    private func open(_ pick: PiConfigPick) {
+        #if os(macOS)
+        guard let anchor = anchors[pick]?.view else { return }
+        switch pick {
+        case .model:
+            let sections = PiModelLabel.groups(session.models).map { group in
+                ChoiceMenu.Section(title: group.provider, choices: group.models.map { model in
+                    ChoiceMenu.Choice(
+                        title: model.name.isEmpty ? model.key.id : model.name, subtitle: PiModelLabel.levels(model),
+                        checked: shown.model?.key == model.key) { configure(PiConfig(model: model.key)) }
+                })
+            }
+            ChoiceMenu.popUp(sections, below: anchor)
+        case .thinking:
+            let levels = shown.model?.thinkingLevels ?? []
+            ChoiceMenu.popUp([ChoiceMenu.Section(title: "思考强度", choices: levels.map { level in
+                ChoiceMenu.Choice(title: level.label, subtitle: nil, checked: shown.thinking == level) { configure(PiConfig(thinking: level)) }
+            })], below: anchor)
+        }
+        #endif
     }
 
     private func configure(_ config: PiConfig) {
         workspace.attempt { _ = try await services.configure(config, for: session) }
     }
 }
+
+/// 键盘弹出的菜单贴着的控件（只有 Mac 用得上）：控件背景里一个空的 AppKit 视图，菜单按它的位置弹出。
+final class PopUpAnchor {
+    #if os(macOS)
+    weak var view: NSView?
+    #endif
+}
+
+private extension View {
+    func popUpAnchor(_ anchor: PopUpAnchor?) -> some View {
+        #if os(macOS)
+        background { if let anchor { PopUpAnchorView(anchor: anchor) } }
+        #else
+        self
+        #endif
+    }
+}
+
+#if os(macOS)
+private struct PopUpAnchorView: NSViewRepresentable {
+    let anchor: PopUpAnchor
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        anchor.view = view
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) { anchor.view = view }
+}
+#endif
 
 // MARK: 规则
 
@@ -44,6 +112,11 @@ nonisolated enum PiModelLabel {
         if let slash = name.lastIndex(of: "/") { name = String(name[name.index(after: slash)...]) }
         name = name.replacing(/^(?i:claude)[\s\-]+/, with: "").replacing(/[\s\-]\d{8}$/, with: "")
         return name.isEmpty ? model.key.id : name
+    }
+
+    /// 模型菜单里每个模型下面那一行：它支持的思考强度。
+    static func levels(_ model: PiModelOption) -> String {
+        model.thinkingLevels.isEmpty ? "不调思考强度" : "思考 " + model.thinkingLevels.map(\.label).joined(separator: " · ")
     }
 
     /// 提供方的印上的字：提供方名字的首字母（Anthropic 是 A、OpenAI 是 O）。
@@ -137,7 +210,7 @@ private struct PiModelCapsule: View {
                     ForEach(group.models) { model in
                         Toggle(isOn: Binding(get: { current?.key == model.key }, set: { if $0 { choose(model.key) } })) {
                             Text(model.name.isEmpty ? model.key.id : model.name)
-                            Text(model.thinkingLevels.isEmpty ? "不调思考强度" : "思考 " + model.thinkingLevels.map(\.label).joined(separator: " · "))
+                            Text(PiModelLabel.levels(model))
                         }
                     }
                 }
@@ -296,7 +369,7 @@ private struct PiThinkingDial: View {
                         .transition(.opacity)
                 }
             }
-            .modifier(Breathing(active: pending && touched == nil && !reduceMotion))
+            .modifier(Breathing(active: pending && touched == nil))
     }
 
     private func bars(_ drawn: PiThinkingMeter, color: @escaping (Int) -> Color) -> some View {
@@ -314,20 +387,16 @@ private struct PiThinkingDial: View {
     }
 }
 
-/// 发出后还没送达：轻轻呼吸（只在这一小会儿，不是常驻动效）。
+/// 发出后还没送达：轻轻呼吸（只在这一小会儿）。一层胶囊底色盖在内容上一明一暗（`LoopLayer` 的 `pulse`，交给渲染服务）：
+/// SwiftUI 的 repeatForever 每帧在 App 进程里重算，一直没送达时会话页静止也占约 9% CPU。减弱动态效果时不呼吸。
 private struct Breathing: ViewModifier {
     let active: Bool
-    @State private var dim = false
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content
-            .opacity(active && dim ? 0.45 : 1)
-            .onChange(of: active, initial: true) { _, active in
-                if active {
-                    withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { dim = true }
-                } else {
-                    withAnimation(Motion.quick) { dim = false }
-                }
-            }
+        content.overlay {
+            if active, !reduceMotion { LoopLayer(kind: .pulse, color: palette.fill).mask { content }.allowsHitTesting(false) }
+        }
     }
 }

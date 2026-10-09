@@ -66,9 +66,35 @@ nonisolated enum PiDelivery: Hashable, Sendable {
 
 /// 做完了但你还没看：Pi 做完过一轮、停在空闲，且停下的时间晚于本机最后一次看这个会话；
 /// 没看过的从 `since`（启用这条规则的时刻）起算，之前就停下的不算。看的时刻记在本机偏好（`AppSettings.markSeen`）。
+/// "标为未读"把看的时刻回拨到停下之前（`markedUnread`），规则启用前就停下的也行。
 nonisolated enum PiUnread {
     static func isUnread(_ session: PiSessionState, seen: Date?, since: Date) -> Bool {
-        session.state == .known(.settled) && session.hasStarted && session.stateSince > max(seen ?? since, since)
+        isSettledReply(session) && session.stateSince > (seen ?? since)
+    }
+
+    /// 能标为未读：做完一轮停在空闲、此刻不是未读。
+    static func canMarkUnread(_ session: PiSessionState, seen: Date?, since: Date) -> Bool {
+        isSettledReply(session) && !isUnread(session, seen: seen, since: since)
+    }
+
+    /// 标为未读后记下的"看过"时刻：停下之前一刻。
+    static func markedUnread(_ session: PiSessionState) -> Date { session.stateSince.addingTimeInterval(-0.001) }
+
+    private static func isSettledReply(_ session: PiSessionState) -> Bool {
+        session.state == .known(.settled) && session.hasStarted
+    }
+}
+
+/// 会话行长按（Mac 右键）菜单里的"标为未读"：做完一轮停着、你看过了的会话才有（`PiUnread.canMarkUnread`）；
+/// 标了之后它回到"有新回复"（墨色实心点），直到你再打开它。
+struct MarkUnreadButton: View {
+    let session: PiSessionState
+    @Environment(AppServices.self) private var services
+
+    var body: some View {
+        if services.settings.canMarkUnread(session) {
+            Button("标为未读", systemImage: "circle.fill") { services.settings.markUnread(session) }
+        }
     }
 }
 
