@@ -115,7 +115,7 @@ struct PiSessionRow: View {
                     // 拼成一个 Text 后读屏读不到分段点的替代，所以整句给读屏一个用"，"分段的标签
                     note.map {
                         Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(" · ").foregroundStyle(palette.ink3))\(lead)")
-                            .accessibilityLabel("\($0)，\(line.speech)")
+                            .accessibilityLabel([$0, line?.speech].compactMap { $0 }.joined(separator: "，"))
                     } ?? lead
                 } else {
                     let line = searchHit ?? PiRowLine.of(session, draft: draft, end: end, failure: failure)
