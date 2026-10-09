@@ -294,13 +294,13 @@ import Testing
     let handler = Handler()
     let executor = executor(handler)
     try await executor.start()
-    let modes: [DeliveryMode] = [.send, .steer, .followUp, .paste]
+    let modes: [DeliveryMode] = [.send, .steer, .followUp]
     for mode in modes { _ = try await store.requestDelivery("m", to: pi, on: "mac-a", mode: mode) }
 
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 4 }
+    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 3 }
 
     #expect(await handler.seen.map(\.mode) == modes.map(Open.known))
-    #expect(modes.map(\.rawValue) == ["send", "steer", "followUp", "paste"])  // 落盘与线上的字面值
+    #expect(modes.map(\.rawValue) == ["send", "steer", "followUp"])  // 落盘与线上的字面值
     await executor.stop()
   }
 

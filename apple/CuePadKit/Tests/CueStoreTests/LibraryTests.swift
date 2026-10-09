@@ -157,7 +157,7 @@ import Testing
   @Test func sendRecordKeepsContentSnapshotAfterCardIsPurged() async throws {
     let card = try await store.createCard(in: nil, body: "prompt v1")
     try await store.recordSend(
-      "prompt v1", to: SendTarget(kind: .app, name: "Ghostty", ref: "com.mitchellh.ghostty"),
+      "prompt v1", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"),
       card: card.id)
     try await store.updateCard(card.id) { $0.body = "prompt v2" }
     try await store.purgeCard(card.id)
@@ -165,7 +165,7 @@ import Testing
     let records = try await store.sendRecords()
     #expect(records.map(\.content) == ["prompt v1"])
     #expect(records.first?.cardID == nil)
-    #expect(records.first?.targetName == "Ghostty")
+    #expect(records.first?.targetName == "fix bug")
   }
 
   // MARK: 项目目录（本机）

@@ -228,10 +228,6 @@ extension AppServices {
         guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
         let whenBusy: PiQueueMode?
         switch mode {
-        case .paste:
-            guard !content.hasImages else { throw SendError.imagesNotSupported }
-            try await channels.paste(content.plainText, into: id)
-            return session.target
         case .send:
             guard !session.isBusy else { throw SendError.piSessionBusy }
             whenBusy = nil

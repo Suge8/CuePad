@@ -62,7 +62,6 @@ final class RecordingHost: PiHosting {
 final class FakeChannels: SendChannels {
     enum Call: Equatable {
         case send(PiMessage, String)
-        case paste(String, String)
         case answer(PiPromptAnswer, String, String)
         case configure(PiModelRef?, String?, String?, String)
         case command(String, PiQueueMode?, String)
@@ -82,7 +81,6 @@ final class FakeChannels: SendChannels {
         if let sendError { throw sendError }
         calls.append(.send(message, id))
     }
-    func paste(_ text: String, into id: String) async throws { calls.append(.paste(text, id)) }
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: String) async throws { calls.append(.answer(answer, prompt, id)) }
     func configure(model: PiModelRef?, thinking: String?, name: String?, in id: String) async throws {
         calls.append(.configure(model, thinking, name, id))

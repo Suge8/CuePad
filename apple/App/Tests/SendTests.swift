@@ -79,19 +79,6 @@ struct SendTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    @Test func 放进输入框只送文字_含图片则拒绝且什么都不发() async throws {
-        try await connectedSession()
-        try await services.send("plain", to: "s1.100", mode: .paste, card: nil)
-        #expect(channels.calls == [.paste("plain", "s1.100")])
-
-        let body = try await bodyWithImage()
-        await #expect(throws: SendError.notDelivered(SendError.imagesNotSupported.localizedDescription)) {
-            try await services.send(body, to: "s1.100", mode: .paste, card: nil)
-        }
-        #expect(channels.calls.count == 1)
-        #expect(try await services.store.sendRecords().count == 1)
-    }
-
     // MARK: Mac 上发给 Pi 会话
 
     /// 发给 Pi 的东西不论从哪台设备发都只有一种记录：Mac 上发（会话详情、卡片的发送按钮、菜单栏）写一条指定本机的投送请求，

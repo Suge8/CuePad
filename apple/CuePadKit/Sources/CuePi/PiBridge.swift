@@ -117,9 +117,6 @@ public final class PiBridge {
     }
 
     /// 把文字粘贴进该会话的输入框（不发送）。
-    public func paste(_ text: String, into id: PiSession.ID) async throws {
-        _ = try await request(to: id) { try PiWire.pasteCommand(id: $0, text: text) }
-    }
 
     /// 让该会话从会话文件重新载入到最新（同一会话的另一个进程刚写过文件后）；扩展判断能否安全重载，不能就提示用户。
     public func reload(_ id: PiSession.ID) async throws {

@@ -15,16 +15,16 @@ import Testing
     let neverSent = try await store.createCard(in: p.id, body: "never")
     let trashed = try await store.createCard(in: p.id, body: "trashed")
     let inbox = try await store.createCard(in: nil, body: "inbox")
-    let clipboard = SendTarget(kind: .clipboard, name: "clipboard")
+    let review = SendTarget(kind: .piSession, name: "review", ref: "s2")
     let pi = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
 
-    let old = try await store.recordSend("a", to: clipboard, card: a.id)
+    let old = try await store.recordSend("a", to: review, card: a.id)
     try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒
     let latest = try await store.recordSend("a again", to: pi, card: a.id)
-    let onlyOnce = try await store.recordSend("b", to: clipboard, card: b.id)
-    try await store.recordSend("t", to: clipboard, card: trashed.id)
-    try await store.recordSend("i", to: clipboard, card: inbox.id)
-    try await store.recordSend("loose", to: clipboard)  // 没关联卡片
+    let onlyOnce = try await store.recordSend("b", to: review, card: b.id)
+    try await store.recordSend("t", to: review, card: trashed.id)
+    try await store.recordSend("i", to: review, card: inbox.id)
+    try await store.recordSend("loose", to: review)  // 没关联卡片
     try await store.trashCard(trashed.id)
 
     let sends = try await store.lastSends(in: p.id)
@@ -32,7 +32,7 @@ import Testing
     #expect(Set(sends.keys) == [a.id, b.id])  // 未发送、回收站、别的项目的卡都不出现
     #expect(sends[a.id]?.sentAt == latest.sentAt && latest.sentAt > old.sentAt)
     #expect(sends[a.id]?.target == pi)  // 最近一次发给谁
-    #expect(sends[b.id] == LastSend(sentAt: onlyOnce.sentAt, target: clipboard))
+    #expect(sends[b.id] == LastSend(sentAt: onlyOnce.sentAt, target: review))
     #expect(try await store.lastSends(in: nil).keys.contains(inbox.id))
     _ = neverSent
   }
@@ -44,7 +44,7 @@ import Testing
       .makeAsyncIterator()
     #expect(try await values.next() == [])
 
-    try await store.recordSend("a", to: SendTarget(kind: .app, name: "x"), card: card.id)
+    try await store.recordSend("a", to: SendTarget(kind: .piSession, name: "x", ref: "x"), card: card.id)
     #expect(try await values.next() == [card.id])
   }
 
@@ -57,22 +57,20 @@ import Testing
       try await store.recordSend(content, to: SendTarget(kind: kind, name: name, ref: ref), card: card)
       try RawDB(fixture.url).exec("UPDATE sendRecords SET sentAt = \(seconds * 1000) WHERE content = '\(content)'")
     }
-    try await send("1", .clipboard, "clipboard", at: 100, card: card.id)
-    try await send("2", .app, "Ghostty", ref: "com.mitchellh.ghostty", at: 200, card: card.id)
+    try await send("1", .piSession, "review", ref: "r1", at: 100, card: card.id)
+    try await send("2", .piSession, "notes", ref: "n1", at: 200, card: card.id)
     try await send("3", .piSession, "fix bug", ref: "old-id", at: 300, card: card.id)
     try await send("4", .piSession, "fix bug", ref: "new-id", at: 500, card: card.id)  // 同一目标再次使用
-    try await send("5", .app, "fix bug", at: 150, card: card.id)  // 同名不同种类是另一个目标
-    try await send("6", .app, "Loose", at: 900, card: nil)  // 没有关联卡片，不能筛出任何卡
-    try await send("7", .app, "Purged", at: 800, card: goneCard.id)
+    try await send("6", .piSession, "Loose", at: 900, card: nil)  // 没有关联卡片，不能筛出任何卡
+    try await send("7", .piSession, "Purged", at: 800, card: goneCard.id)
     try await store.purgeCard(goneCard.id)
 
     let targets = try await store.sendTargets()
 
     #expect(targets == [
       SendTarget(kind: .piSession, name: "fix bug", ref: "new-id"),  // ref 取该目标最近一次的
-      SendTarget(kind: .app, name: "Ghostty", ref: "com.mitchellh.ghostty"),
-      SendTarget(kind: .app, name: "fix bug"),
-      SendTarget(kind: .clipboard, name: "clipboard"),
+      SendTarget(kind: .piSession, name: "notes", ref: "n1"),
+      SendTarget(kind: .piSession, name: "review", ref: "r1"),
     ])
   }
 }

@@ -76,12 +76,12 @@ extension CueStore {
   /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除）：手机没有完整路径，由 Mac 解析并写本机的目录绑定。
   /// `title` 是项目名（给人看的目标名）。
   public func requestBind(_ bind: PiBind, title: String, on host: String) throws -> DeliveryRequest {
-    try requestDelivery(bind.stored, to: SendTarget(kind: .app, name: title, ref: nil), on: host, mode: .bind)
+    try requestDelivery(bind.stored, to: SendTarget(kind: .mac, name: title, ref: nil), on: host, mode: .bind)
   }
 
   /// 连接测试：请 `host` 那台 Mac 收到就回。目标写成那台 Mac 上的 CuePad（执行器不看目标）。
   public func requestPing(on host: String) throws -> DeliveryRequest {
-    try requestDelivery("ping", to: SendTarget(kind: .app, name: "CuePad", ref: nil), on: host, mode: .ping)
+    try requestDelivery("ping", to: SendTarget(kind: .mac, name: "CuePad", ref: nil), on: host, mode: .ping)
   }
 
   /// 所有投送请求，最近的在前。
@@ -151,7 +151,7 @@ extension CueStore {
   /// 没能送达的话（说话的几种方式）在对话里留着等用户重发或移除（重发写成后移除它），只在完成早于 `undeliveredCutoff` 时清理。
   fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, undeliveredCutoff: Date) throws -> Bool {
     let done = "status IN ('succeeded', 'failed')"
-    let talk = [DeliveryMode.send, .steer, .followUp, .paste].map { "'\($0.rawValue)'" }.joined(separator: ", ")
+    let talk = [DeliveryMode.send, .steer, .followUp].map { "'\($0.rawValue)'" }.joined(separator: ", ")
     let undelivered = "status = 'failed' AND mode IN (\(talk)) AND completedAt >= ?"
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?

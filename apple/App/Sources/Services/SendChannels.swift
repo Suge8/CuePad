@@ -16,7 +16,6 @@ protocol SendChannels {
     /// Pi 自己的会话 id（手机与同步记录里用的）→ 这台 Mac 上桥连接的会话 id；不在这台 Mac 上则 nil。
     func piSessionID(forSession sessionID: String) -> CuePi.PiSession.ID?
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws
-    func paste(_ text: String, into id: CuePi.PiSession.ID) async throws
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws
     func configure(model: PiModelRef?, thinking: String?, name: String?, in id: CuePi.PiSession.ID) async throws
     func command(_ line: String, whenBusy: PiQueueMode?, in id: CuePi.PiSession.ID) async throws
@@ -42,10 +41,6 @@ struct LiveSendChannels: SendChannels {
 
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws {
         try await pi.send(message, to: id)
-    }
-
-    func paste(_ text: String, into id: CuePi.PiSession.ID) async throws {
-        try await pi.paste(text, into: id)
     }
 
     func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws {

@@ -283,29 +283,29 @@ struct PiReplyRulesTests {
 
     @Test func 等你确认时_文字型问题回复框就是作答框() {
         let question = PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？")
-        #expect(MacDelivery.reply(to: session(.waitingForUser, question: question), hasImages: false) == .answer(question))
+        #expect(MacDelivery.reply(to: session(.waitingForUser, question: question)) == .answer(question))
     }
 
     @Test func 等你确认时_选择与确认型问题不发自由文本_先在上面作答() {
         let select = PiQuestion(promptID: "p", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
         let confirm = PiQuestion(promptID: "p", kind: .confirm, text: "部署吗？")
-        #expect(MacDelivery.reply(to: session(.waitingForUser, question: select), hasImages: false) == .answerAbove)
-        #expect(MacDelivery.reply(to: session(.waitingForUser, question: confirm), hasImages: false) == .answerAbove)
+        #expect(MacDelivery.reply(to: session(.waitingForUser, question: select)) == .answerAbove)
+        #expect(MacDelivery.reply(to: session(.waitingForUser, question: confirm)) == .answerAbove)
     }
 
     @Test func 等你确认时_这里答不了的问题不发自由文本() {
         let editor = PiQuestion(promptID: nil, kind: .unknown("editor"), text: "编辑提交说明")
-        #expect(MacDelivery.reply(to: session(.waitingForUser, question: editor), hasImages: false) == .unanswerable)
-        #expect(MacDelivery.reply(to: session(.waitingForUser), hasImages: false) == .unanswerable)
+        #expect(MacDelivery.reply(to: session(.waitingForUser, question: editor)) == .unanswerable)
+        #expect(MacDelivery.reply(to: session(.waitingForUser)) == .unanswerable)
     }
 
     @Test func Pi忙时两端默认都是等它做完再说_马上说是次级() {
-        #expect(Array(MacDelivery.modes(for: session(.thinking), hasImages: true).prefix(2)) == [.followUp, .steer])
+        #expect(Array(MacDelivery.modes(for: session(.thinking)).prefix(2)) == [.followUp, .steer])
     }
 
     @Test func 不在等你确认时照常发消息() {
-        #expect(MacDelivery.reply(to: session(.settled), hasImages: false) == .message(MacDelivery.modes(for: session(.settled), hasImages: false)))
-        #expect(MacDelivery.reply(to: session(.thinking), hasImages: false) == .message(MacDelivery.modes(for: session(.thinking), hasImages: false)))
+        #expect(MacDelivery.reply(to: session(.settled)) == .message(MacDelivery.modes(for: session(.settled))))
+        #expect(MacDelivery.reply(to: session(.thinking)) == .message(MacDelivery.modes(for: session(.thinking))))
     }
 
 }

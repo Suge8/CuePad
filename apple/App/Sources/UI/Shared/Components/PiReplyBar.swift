@@ -38,7 +38,7 @@ struct PiReplyBar: View {
     /// 工具排（模型与思考强度）只给在线会话：已结束的不为换模型去唤醒 Pi。没有工具时聚焦也不展开成两层。
     private var hasTools: Bool { config != nil && session.state != .known(.ended) && !session.models.isEmpty }
 
-    private var reply: PiReply { MacDelivery.reply(to: session, hasImages: draft.hasImages) }
+    private var reply: PiReply { MacDelivery.reply(to: session) }
 
     /// 发消息时可用的方式：第一个是点发送的方式，其余在长按菜单里。
     private var modes: [DeliveryMode] {
@@ -181,7 +181,6 @@ struct PiReplyBar: View {
     private static func symbol(_ mode: DeliveryMode) -> String {
         switch mode {
         case .steer: "bolt"
-        case .paste: "text.cursor"
         default: "paperplane"
         }
     }
