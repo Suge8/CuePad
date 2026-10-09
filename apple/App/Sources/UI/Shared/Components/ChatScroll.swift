@@ -134,8 +134,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State private var own = ChatFollow()
     /// 底下回复框与键盘占的高（iOS）。
     @State private var below: CGFloat = 0
-    /// 滚动区的宽：阅读栏两边的边距由它算出。
-    @State private var width: CGFloat = 0
 
     /// `follow`：页面要据贴底与否改别处（收起顶栏、输入框）时由页面持有；不给就自己持有。
     /// `clearsBelow`（iOS）：最底下这么高（回复框下沿到屏幕底：横条区或键盘）不露对话，内容在回复框下沿淡到全透。
@@ -152,7 +150,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     }
 
     /// 阅读栏两边的边距：窄时是 `inset`，宽时把栏居中。
-    private var margin: CGFloat { max(inset, (width - readingWidth) / 2 + inset) }
+    private func margin(_ width: CGFloat) -> CGFloat { max(inset, (width - readingWidth) / 2 + inset) }
 
     private var follow: Binding<ChatFollow> { external ?? $own }
 
@@ -190,7 +188,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         // 滚动区铺到屏幕底、不随底下的回复框与键盘缩放：滚动区缩放时可见内容跟着框底一起挪，看历史时一点输入框、多打一行，
         // 正在读的就被往上挤。它们占的高由对话在最新那头的一行空白让出：懒加载栈在可见区以外的行变高时补偏移，正在读的纹丝不动；
         // 贴着最新时滚动区停在起点，最新一行跟着回复框上沿走（离起点还差一点时补滚过去）
-        tracked(ScrollView { content.environment(\.chatBottomSpace, below) })
+        tracked(ScrollView { content.environment(\.chatBottomSpace, below) }.newestFirstScroll())
             .onChange(of: below) { if follow.wrappedValue.atNewest { position.scrollTo(edge: Self.newestEdge) } }
             .newestFirst()
             .ignoresSafeArea(edges: .bottom)
@@ -206,17 +204,19 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             // 铺满后伸进底下的那一段就是回复框与键盘占的高
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { below = $0 }
         #else
-        tracked(ScrollView { content.environment(\.chatAtNewest, follow.wrappedValue.atNewest) }).defaultScrollAnchor(.bottom)
+        tracked(ScrollView { content.environment(\.chatAtNewest, follow.wrappedValue.atNewest) }.defaultScrollAnchor(.bottom))
         #endif
     }
 
     private func tracked(_ scroll: some View) -> some View {
-        scroll
-            // 栏贴着滚动区两边（手机、窄窗口）时，横向滚动的表格可以越过页边距滑到边上（`readingColumnBleeds`）
-            .environment(\.readingColumnBleeds, width <= readingWidth)
-            .contentMargins(.horizontal, margin, for: .scrollContent)
+        // 边距按滚动区的宽在同一次排版里定（GeometryReader 先拿到自己的尺寸再排里面），不写回状态：
+        // 宽屏（iPad、Mac 宽窗口）首帧就是居中的栏，不会先按窄边距排一帧再挪
+        GeometryReader { proxy in
+            scroll
+                // 栏贴着滚动区两边（手机、窄窗口）时，横向滚动的表格可以越过页边距滑到边上（`readingColumnBleeds`）
+                .environment(\.readingColumnBleeds, proxy.size.width <= readingWidth)
+                .contentMargins(.horizontal, margin(proxy.size.width), for: .scrollContent)
             .contentMargins(.vertical, ChatLayout.edge, for: .scrollContent)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .scrollPosition($position)
             .onScrollPhaseChange { _, phase in follow.wrappedValue.scrolling = phase == .interacting || phase == .decelerating }
             .onScrollGeometryChange(for: Reading.self) { geometry in
@@ -239,6 +239,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                 if Self.inverted, follow.wrappedValue.atNewest { toNewest() }
                 follow.wrappedValue.contentChanged()
             }
+        }
     }
 
     /// 离最新处多远、一屏多高（取整：亚像素的抖动不触发更新）。
@@ -296,11 +297,15 @@ private extension View {
     /// 把滚动区倒过来。转 180° 而不是上下镜像：镜像（行列式为负）时系统长按预览截到的是空白；代价是滚动条转到了左边，所以藏起来。
     /// 不裁内容：对话一直滚到顶栏、回复框与键盘后面，上下都不淡出（系统的滚动边缘效果由 `RouteView` 全关；它按没转过的方向画，
     /// 开着时滚动区尺寸一变会把整片对话糊成一帧模糊）。
-    func newestFirst() -> some View {
+    /// 滚动区自己的设定（挂在 ScrollView 上，`tracked` 再把它包进量宽的一层）。
+    func newestFirstScroll() -> some View {
         scrollIndicators(.hidden)
             .scrollClipDisabled()
             .defaultScrollAnchor(.top)
-            .rotationEffect(.degrees(180))
+    }
+
+    func newestFirst() -> some View {
+        rotationEffect(.degrees(180))
             .environment(\.chatInverted, true)
     }
 }
