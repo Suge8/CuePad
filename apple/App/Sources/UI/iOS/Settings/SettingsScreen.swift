@@ -23,7 +23,7 @@ struct SettingsScreen: View {
                         Text("浅色").tag(AppSettings.Theme.light)
                         Text("深色").tag(AppSettings.Theme.dark)
                     } label: {
-                        Label("外观", systemImage: "circle.lefthalf.filled")
+                        Label("外观", systemImage: "sun.max")
                     }
                 }
                 SyncSection()
@@ -32,7 +32,7 @@ struct SettingsScreen: View {
                     Section {
                         NavigationLink(value: Navigation.Route.conflicts) {
                             Label("\(services.conflicts.count) 条灵感或任务有两个版本", systemImage: "square.on.square")
-                                .foregroundStyle(palette.attention)
+                                .foregroundStyle(palette.ink)
                         }
                     }
                 }
@@ -97,7 +97,7 @@ private struct AlertSection: View {
                 }
             } icon: {
                 Image(systemName: status.state == .on ? "bell.badge" : status.state == .pending ? "bell" : "bell.slash")
-                    .foregroundStyle(status.state == .problem ? palette.attention : palette.ink2)
+                    .foregroundStyle(status.state == .problem ? palette.failure : palette.ink2)
             }
             if let diagnostics = status.diagnostics {
                 DisclosureGroup("详情") {

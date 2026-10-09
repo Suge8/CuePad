@@ -4,7 +4,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Mac 侧栏 Agent 区只回答"现在"：只列在线的会话，与 iOS 的 Agent 页同序（需要 /reload 的排在工作中之后），已结束的不列（在"全部会话"里）。
+/// Mac 侧栏 Agent 区只回答"现在"：只列在线的会话，与 iOS 的 Agent 页同序（需要 /reload 的排在工作中之后），已结束的不列（在"全部会话"里）；
+/// 区域固定在侧栏底部、最多露出几行，要你注意的在前，其余收成"还有 N 个"。
 struct PiSidebarTests {
     private func session(_ id: String, _ state: PiWorkState) -> PiSessionState {
         PiSessionState(
@@ -21,22 +22,49 @@ struct PiSidebarTests {
             session("e1", .ended), session("wait", .ended), session("e2", .ended), session("e3", .ended), session("e4", .ended),
         ]
 
-        let rows = PiSessionState.sidebarRows(live: live, recorded: recorded)
+        let rows = PiSessionState.liveRows(live: live, recorded: recorded)
 
         #expect(rows.map(\.sessionID) == ["wait", "err", "tool", "old", "idle"])
         #expect(rows.first { $0.sessionID == "idle" }?.state == .known(.settled))
     }
 
-    /// 有会话在等你确认时 Agent 区排到项目上面（侧栏回答"现在要我做什么"，不能在折线以下）；
-    /// 正看着 Agent 整页时侧栏不再把同一组会话列一遍，只留"全部会话"。
-    @Test func 有等你确认时Agent区在前_看着Agent整页时侧栏不重复列会话() {
-        let waiting = [session("wait", .waitingForUser), session("tool", .tool)]
-        let busy = [session("tool", .tool), session("err", .error)]
+    @Test func 侧栏Agent区最多露出几行_等你确认与出错在前_其余收成还有N个() {
+        let recorded = (0..<7).map { session("w\($0)", .tool) } + [session("wait", .waitingForUser), session("err", .error)]
 
-        #expect(PiSidebarAgents(rows: waiting, page: .agent).leads)
-        #expect(PiSidebarAgents(rows: waiting, page: .agent).listed.isEmpty)
-        #expect(PiSidebarAgents(rows: waiting, page: .inbox).listed.map(\.sessionID) == ["wait", "tool"])
-        #expect(!PiSidebarAgents(rows: busy, page: .inbox).leads)
+        let agents = SidebarAgents(rows: PiSessionState.liveRows(live: [], recorded: recorded), page: .inbox)
+
+        #expect(agents.visible.count == SidebarAgents.limit)
+        #expect(agents.visible.prefix(2).map(\.sessionID) == ["wait", "err"])
+        #expect(agents.displayRows.count == SidebarAgents.limit)
+        #expect(agents.overflow == recorded.count - SidebarAgents.limit)
+    }
+
+    @Test func 多个reload仍然露出三行() {
+        let agents = SidebarAgents(rows: [
+            session("reload-1", .incompatible), session("reload-2", .incompatible), session("reload-3", .incompatible)
+        ], page: .inbox)
+
+        #expect(agents.displayRows.count == SidebarAgents.limit)
+        #expect(agents.displayRows.allSatisfy {
+            if case .session = $0 { true } else { false }
+        })
+    }
+
+    @Test func 看着Agent整页时侧栏不重复列会话() {
+        let waiting = [session("wait", .waitingForUser), session("tool", .tool)]
+        let agents = SidebarAgents(rows: waiting, page: .agent)
+
+        #expect(agents.visible.isEmpty)
+        #expect(agents.displayRows.isEmpty)
+        #expect(agents.overflow == 0)
+        #expect(SidebarAgents(rows: waiting, page: .inbox).visible.map(\.sessionID) == ["wait", "tool"])
+    }
+
+    @Test func 侧栏Agent区行数不超过上限时全露出_没有还有N个() {
+        let agents = SidebarAgents(rows: [session("a", .tool), session("b", .settled)], page: .inbox)
+
+        #expect(agents.visible.map(\.sessionID) == ["a", "b"])
+        #expect(agents.overflow == 0)
     }
 }
 #endif

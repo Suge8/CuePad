@@ -18,7 +18,7 @@ struct MainWindow: View {
             Sidebar()
                 // 侧栏开合时是整体滑动、宽度不变；只有拖分隔线才变
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.sidebar = $0 }
-                .navigationSplitViewColumnWidth(min: 210, ideal: 236, max: 300)
+                .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
             detail
         }

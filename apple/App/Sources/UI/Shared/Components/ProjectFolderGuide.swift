@@ -12,7 +12,7 @@ struct ProjectFolderGuide: View {
     nonisolated enum Style: Sendable {
         /// 空态页里（Agent 页筛着这个项目）：标题与说明由空态写，这里只有按钮——第一个建议是主按钮，其余与"选文件夹…"是次要的。
         case page
-        /// 项目页里自成一小块纸：文件夹图标、一句"绑定文件夹，看这个项目的 Agent 会话"、下面一排按钮。
+        /// 项目页里自成一小块纸：文件夹图标、一句"绑定文件夹，看 Agent 会话"、下面一排按钮。
         case panel
         /// 同上但不自带纸（放进已有的纸里：Mac 项目页的 Agent 栏、iPhone 项目卡的 Agent 段）。
         case inset
@@ -52,7 +52,7 @@ struct ProjectFolderGuide: View {
                 .background(palette.fill, in: .rect(cornerRadius: 9, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 8) {
-                Text("绑定文件夹，看这个项目的 Agent 会话").font(Self.titleFont).foregroundStyle(palette.ink)
+                Text("绑定文件夹，看 Agent 会话").font(Self.titleFont).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 actions
             }

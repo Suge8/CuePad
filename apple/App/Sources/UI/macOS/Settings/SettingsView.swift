@@ -20,33 +20,62 @@ struct SettingsView: View {
     private var form: some View {
         @Bindable var settings = services.settings
         return Form {
-            Section("外观") {
+            Section {
                 Picker("主题", selection: $settings.theme) {
                     Text("跟随系统").tag(AppSettings.Theme.system)
                     Text("浅色").tag(AppSettings.Theme.light)
                     Text("深色").tag(AppSettings.Theme.dark)
                 }
                 .pickerStyle(.segmented)
+            } header: {
+                SettingsHeader("外观")
             }
             SyncSection()
             ConflictsSection()
-            Section("快捷键") {
+            Section {
                 LabeledContent("显示或隐藏 CuePad") { ShortcutRecorder() }
+            } header: {
+                SettingsHeader("快捷键")
             }
-            if services.diagnostics.latest != nil { Section("诊断") { LastCrashRow() } }
+            if services.diagnostics.latest != nil { Section { LastCrashRow() } header: { SettingsHeader("诊断") } }
             Section {
                 PiExtensionRow()
             } header: {
-                Text("Pi")
+                SettingsHeader("Pi")
             } footer: {
-                Text("扩展让 CuePad 看到 Pi 会话的实时状态，并把提示词（含图片）直接发进会话。安装或升级后，已在运行的会话在终端里执行 /reload 就能用上。")
+                SettingsFooter("扩展让 CuePad 看到 Pi 会话的实时状态，并把提示词（含图片）直接发进会话。安装或升级后，已在运行的会话在终端里执行 /reload 就能用上。")
             }
-            Section("命令行") { CommandLineToolRow() }
-            Section("更新") { UpdateRow() }
+            Section { CommandLineToolRow() } header: { SettingsHeader("命令行") }
+            Section { UpdateRow() } header: { SettingsHeader("更新") }
         }
         .formStyle(.grouped)
+        .font(Typography.body)
         .scrollContentBackground(.hidden)
         .frame(height: 720)
+    }
+}
+
+/// 分组标题：比行小一号的次要墨色，行才是这一页的主体（同一号粗体时分不出层级）。
+private struct SettingsHeader: View {
+    let title: String
+    @Environment(\.palette) private var palette
+
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        Text(title).font(Typography.label).foregroundStyle(palette.ink3).padding(.top, 6)
+    }
+}
+
+/// 分组下面的说明：元信息字号的次要墨色。
+private struct SettingsFooter: View {
+    let text: String
+    @Environment(\.palette) private var palette
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text).font(Typography.meta).foregroundStyle(palette.ink3)
     }
 }
 
@@ -64,7 +93,7 @@ private struct ShortcutRecorder: View {
                 recording ? stop() : start()
             }
             .monospaced()
-            if let error { Text(error).font(Typography.meta).foregroundStyle(palette.attention) }
+            if let error { Text(error).font(Typography.meta).foregroundStyle(palette.failure) }
         }
         .onDisappear(perform: stop)
     }
@@ -136,7 +165,7 @@ private struct PiExtensionRow: View {
             case .notFound: Text("没有找到 pi 命令").foregroundStyle(.secondary)
             case .found(_, let version):
                 Text(version >= .minimumSupported ? "\(version)" : "\(version)（需要 \(PiVersion.minimumSupported) 或更新）")
-                    .foregroundStyle(version >= .minimumSupported ? AnyShapeStyle(.primary) : AnyShapeStyle(palette.attention))
+                    .foregroundStyle(version >= .minimumSupported ? AnyShapeStyle(.primary) : AnyShapeStyle(palette.failure))
             }
         }
         if let installation = status?.pi, !installation.isSupported {
@@ -151,7 +180,7 @@ private struct PiExtensionRow: View {
             }
         }
         if let result {
-            Text(result.text).font(Typography.meta).foregroundStyle(result.failed ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
+            Text(result.text).font(Typography.meta).foregroundStyle(result.failed ? AnyShapeStyle(palette.failure) : AnyShapeStyle(.secondary))
         }
     }
 
@@ -243,10 +272,10 @@ private struct SyncSection: View {
                 if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
             }
         } header: {
-            Text("iCloud 同步")
+            SettingsHeader("iCloud 同步")
         } footer: {
             if case .needsDecision = services.syncStatus {
-                Text("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载。")
+                SettingsFooter("上传：本机数据作为新内容传到当前账号。替换：丢弃本机的灵感、任务、项目与图片，从当前账号的云端重新下载。")
             }
         }
         .confirmationDialog("丢弃本机数据，改用云端的？", isPresented: $confirmErase, titleVisibility: .visible) {
@@ -286,7 +315,7 @@ private struct ConflictsSection: View {
                 }
                 if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
             } header: {
-                Text("\(services.conflicts.count) 条灵感或任务有两个版本")
+                SettingsHeader("\(services.conflicts.count) 条灵感或任务有两个版本")
             }
         }
     }
