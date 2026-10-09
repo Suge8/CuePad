@@ -31,6 +31,8 @@ nonisolated enum SendError: Error, Equatable {
     case directoryMissing(String)
     /// 终端没能打开（附终端给的原因）。
     case terminalFailed(String)
+    /// 排队的话已被 Mac 领取、交给了 Pi：Pi 的扩展接口收不回，撤回与改为马上说都晚了。
+    case alreadyHanded
 }
 
 extension SendError: LocalizedError {
@@ -51,6 +53,7 @@ extension SendError: LocalizedError {
         case .piNotInstalled: "这台 Mac 上没有找到 Pi"
         case .directoryMissing(let folder): "目录不存在：\(folder)"
         case .terminalFailed(let reason): "终端没能打开：\(reason)"
+        case .alreadyHanded: "Mac 已经把它交给 Agent，撤不回了"
         }
     }
 }

@@ -90,3 +90,4 @@ CuePad → 扩展（都带 `id`）：
 - FSEvents 不报告"仅 bind"的 socket 创建，扩展 `chmod` 之后才可见；客户端在启动与任何目录事件时全量重扫，扫描跳过已有连接的名字。/reload 在同一路径重建 socket（名字不变），新文件的事件可能在旧连接还挂着时就被扫过，所以一条连接断开时文件还在就当场再连一次；被判为不兼容的按文件本身（inode 与创建时间）记，同一路径的新 socket 照常去连。
 - 终端跳转：tmux、Terminal.app（按 tty）、Ghostty（按工作目录，唯一匹配才聚焦）；其他终端只激活应用。herdr 等再套一层的复用器无法定位到 pane。
 - 会话冻结（SIGSTOP）或机器休眠造成的假死不会被发现——既定取舍：不做心跳。
+- 已进 Pi 队列的话（`send` 在会话正忙时以 `followUp`/`steer` 排进去的）收不回、也改不了方式：扩展接口只有 `ctx.hasPendingMessages()`，清队列与读队列（`clearQueue`、`getFollowUpMessages`）只在 Pi 自己的会话对象与 RPC 模式的 `clear_queue` 上，扩展拿不到（Pi 1.1.0 核对）。所以 CuePad 的撤回与"改为马上说"只对还没被 Mac 领取的投送请求。

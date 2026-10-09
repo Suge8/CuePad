@@ -58,13 +58,40 @@ nonisolated enum PiChat {
     }
 
     /// 你发出、还没出现在对话里的话（对话里还没有 `deliveryID` 等于它的消息）：作为你的气泡接在末尾，写送达情况。
+    /// 排队的话（`queued`）不在这里：它们在回复框上方一叠，同一句话只出现一处。
     /// 作答、斜杠命令、设置、开新会话、补写对话这些不是你说的话，不算（命令在会话文件里没有带请求 id 的用户消息，挂了永远换不掉）。
     static func outgoing(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
+        unanswered(deliveries, messages: messages).filter { !isQueued($0) }
+    }
+
+    /// 排队的话：Agent 在跑时"等它做完再说"发出、还没进对话（它还没开始处理）的，按发出先后。没能送达的不算——它是对话末尾的气泡，
+    /// 在那里重发或移除。显示在回复框上方一叠（`PiQueueStack`）；还没被 Mac 领取的能撤回或改为马上说（`DeliveryRequest.isWithdrawable`）。
+    static func queued(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
+        unanswered(deliveries, messages: messages).filter(isQueued)
+    }
+
+    private static func isQueued(_ request: DeliveryRequest) -> Bool {
+        request.mode == .known(.followUp) && request.status != .known(.failed)
+    }
+
+    private static func unanswered(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> [DeliveryRequest] {
         let arrived = Set(messages.compactMap(\.deliveryID))
         return deliveries.filter { request in
             guard let mode = request.mode.known, [.send, .steer, .followUp].contains(mode) else { return false }
             return !arrived.contains(request.id)
         }
+    }
+
+    /// 你发出的一句话给人看的写法：带卡片的写卡片标题与图片数，不露存储格式。
+    static func shownText(of request: DeliveryRequest) -> String {
+        let card = CardText(request.content)
+        guard !card.images.isEmpty else { return request.content }
+        return [card.title.isEmpty ? nil : card.title, "\(card.images.count) 张图片"].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// 你在这个会话里说过的最近一句（对话里最后一条你的消息）：空回复框按 ↑ 调回它。
+    static func lastSaid(_ messages: [PiChatMessage]) -> String? {
+        messages.last { $0.role == .known(.user) }?.text
     }
 
     /// 会话页顶栏状态后的一句：你发出的话里有几句没能送达（它们还挂在对话末尾等你重发或移除）。列表那一行写"没能送达"，

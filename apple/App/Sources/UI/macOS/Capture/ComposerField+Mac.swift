@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 输入框里的多行文字区（Mac）：与 iOS 那份同样的接口与行为——高度随文字长到 `maxLines` 行后在里面滚，
 /// 输入法组字期间不从外面写回，空着时显示提示。焦点由调用方的 `.focused` 交给文本视图；文本视图自己拿到、交出焦点
-/// （点进来、Esc）时再报回 `focus`。↩ 换行，⌘↩ 由输入框的发送快捷键接走。
+/// （点进来、Esc）时再报回 `focus`。↩ 换行；⌘↩ 等回复框快捷键是主菜单"回复"里的项，经响应链交到这里（`performReplyShortcut`）。
 struct ComposerField: NSViewRepresentable {
     @Binding var text: String
     let prompt: String
@@ -14,6 +14,8 @@ struct ComposerField: NSViewRepresentable {
     let focus: FocusState<Bool>.Binding
     /// 方向键、↩/Tab、Esc 先交给调用方（斜杠命令面板打开时用）；返回 true 表示已处理，不再按文本视图的默认行为走。
     var keys: (ComposerKey) -> Bool = { _ in false }
+    /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了（菜单项停用）。
+    var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -32,6 +34,7 @@ struct ComposerField: NSViewRepresentable {
         view.isHorizontallyResizable = false
         view.autoresizingMask = [.width]
         view.focusChanged = { [weak coordinator = context.coordinator] in coordinator?.focusChanged($0) }
+        view.shortcut = { [weak coordinator = context.coordinator] in coordinator?.parent.shortcut($0) }
         let scroll = ComposerScrollView()
         scroll.documentView = view
         scroll.drawsBackground = false
@@ -115,6 +118,7 @@ final class GrowingTextView: NSTextView {
     var placeholder = ""
     var maxLines = 1
     var focusChanged: ((Bool) -> Void)?
+    var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     /// 外部刚写进文字：滚动区下一次排版后滚到末尾。
     var revealsEnd = false
     /// 最大高度：排满 `maxLines` 行中文量出来的高度（中文行比西文行高），撑满时最后一行不被切一半。
@@ -135,6 +139,17 @@ final class GrowingTextView: NSTextView {
         layout.ensureLayout(for: container)
         // 用到的范围含末尾换行后那一行空行
         return ceil(layout.usedRect(for: container).height)
+    }
+
+    /// 主菜单"回复"里的项（`MainMenu`，菜单项的 tag 是 `ReplyShortcut` 的值）：文字区是第一响应者时才找得到这里，
+    /// 所以只在回复框聚焦时可用。
+    @objc func performReplyShortcut(_ sender: NSMenuItem) {
+        ReplyShortcut(rawValue: sender.tag).flatMap(shortcut)?()
+    }
+
+    override func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        guard item.action == #selector(performReplyShortcut(_:)) else { return super.validateMenuItem(item) }
+        return ReplyShortcut(rawValue: item.tag).flatMap(shortcut) != nil
     }
 
     override func becomeFirstResponder() -> Bool {

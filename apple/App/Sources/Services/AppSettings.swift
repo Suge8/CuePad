@@ -76,6 +76,13 @@ final class AppSettings {
         PiUnread.isUnread(session, seen: sessionSeen[session.sessionID], since: unreadSince)
     }
 
+    func canMarkUnread(_ session: PiSessionState) -> Bool {
+        PiUnread.canMarkUnread(session, seen: sessionSeen[session.sessionID], since: unreadSince)
+    }
+
+    /// 标为未读：看过的时刻回拨到它停下之前（规则在 `PiUnread`）。
+    func markUnread(_ session: PiSessionState) { markSeen(session, at: PiUnread.markedUnread(session)) }
+
     func markSeen(_ session: PiSessionState, at date: Date = .now) {
         var seen = sessionSeen
         seen[session.sessionID] = date

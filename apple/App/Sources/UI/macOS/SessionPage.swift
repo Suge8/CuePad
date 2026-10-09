@@ -59,6 +59,10 @@ struct SessionPage: View {
     @State private var follow = ChatFollow()
     /// 对话排开最近多少条（`PiConversation.window`）。
     @State private var shown = PiConversation.firstWindow
+    /// 刚从刻度滑条跳到的那条你的话，短暂描一圈。
+    @State private var highlight: UUID?
+    /// 要跳到的那条还没排开：先排开，排开之后再跳（同一次更新里跳，目标还不在滚动区里）。
+    @State private var pendingJump: UUID?
 
     /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
     private static let readingWidth: CGFloat = 760
@@ -83,7 +87,9 @@ struct SessionPage: View {
                     PiReplyBar(
                         session: session, config: digest.config, compact: false,
                         stopping: MacDelivery.stopping(session, deliveries: digest.deliveries),
-                        commandProgress: MacDelivery.commandProgress(digest.deliveries)
+                        commandProgress: MacDelivery.commandProgress(digest.deliveries),
+                        queued: PiChat.queued(digest.deliveries, messages: digest.messages),
+                        recall: PiChat.lastSaid(digest.messages)
                     ) {
                         follow.jumpToNewest()
                     }
@@ -196,8 +202,45 @@ struct SessionPage: View {
             .onAppear { PerfProbe.mark("conversation") }
             #endif
         }
+        .environment(\.chatHighlight, highlight)
+        .overlay(alignment: .trailing) { scrubber(digest) }
+        .onChange(of: shown) {
+            guard let id = pendingJump else { return }
+            pendingJump = nil
+            jump(to: id)
+        }
+        .task(id: highlight) {
+            guard highlight != nil else { return }
+            try? await Task.sleep(for: .seconds(1.2))
+            highlight = nil
+        }
         .frame(maxHeight: .infinity)
     }
+
+    /// 右缘的刻度滑条（与手机同一个）：让开窗口右缘的系统滚动条；跳到的那条还没排开时先排开到它。
+    @ViewBuilder private func scrubber(_ digest: SessionDigest) -> some View {
+        let marks = ChatScrubber.marks(PiChat.entries(digest.messages, previews: digest.previews))
+        if !marks.isEmpty {
+            ChatScrubber(marks: marks, scrolling: follow.scrolling) { id in
+                let needed = PiConversation.window(reaching: id, messages: digest.messages, previews: digest.previews) ?? 0
+                if needed > shown {
+                    pendingJump = id
+                    shown = needed
+                } else {
+                    jump(to: id)
+                }
+            }
+            .padding(.trailing, Self.scrollerWidth)
+        }
+    }
+
+    private func jump(to id: UUID) {
+        follow.jump(to: id)
+        highlight = id
+    }
+
+    /// 窗口右缘系统滚动条（悬浮式）占的宽。
+    private static let scrollerWidth: CGFloat = 16
 
     private func fetchingTranscript(_ digest: SessionDigest) -> Bool {
         digest.deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen }

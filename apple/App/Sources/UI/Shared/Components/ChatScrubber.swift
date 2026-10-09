@@ -1,11 +1,10 @@
-#if os(iOS)
 import SwiftUI
 
 /// 会话右缘的刻度滑条：你发的话按先后排在右缘拇指够得着的那一段（可见区三成高处到回复框上方），只看序号、不看还没排版的行
 /// 有多高（倒置的懒加载里那些高度是估的）。平时最多画 30 个刻度，更多时每个代表按序号均分的一段；拖动时以手指为中心
 /// 鱼眼放大成逐条刻度、附近的刻度像程序坞那样变长，逐条轻触一下，旁边浮出那一条的第一行，松手（或点一下）跳过去。
-/// 平时看不见，滚动时或手指按到刻度区时淡入，停手后淡出。手势只在这一段窄条里，不碰代码块、表格的横向滚动、顶栏与返回手势。
-/// 读屏上是一个可调节的元素：上下轻扫跳到上一条、下一条你的话。
+/// 平时看不见，滚动时、手指按到刻度区时（Mac 上指针移到右缘时）淡入，停手后淡出。手势只在这一段窄条里，不碰代码块、表格的横向滚动、顶栏与返回手势。
+/// 读屏上是一个可调节的元素：上下轻扫跳到上一条、下一条你的话。iOS 与 Mac 会话页同一个（Mac 让开窗口右缘的系统滚动条）。
 struct ChatScrubber: View {
     let marks: [ChatMark]
     /// 用户正在滚对话。
@@ -19,6 +18,8 @@ struct ChatScrubber: View {
     @State private var lingering = false
     /// 读屏上一次跳到的（上一条、下一条从它算）。
     @State private var current: Int?
+    /// 指针停在右缘这条上（Mac、iPad 触控板）。
+    @State private var hovering = false
 
     /// 你发的话（按先后）：刻度与预览。不到 `minimum` 条时没有刻度。
     static func marks(_ entries: [PiChatEntry]) -> [ChatMark] {
@@ -43,7 +44,7 @@ struct ChatScrubber: View {
     private static let bandTop: CGFloat = 0.3
     private static let linger: Duration = .milliseconds(900)
 
-    private var visible: Bool { finger != nil || scrolling || lingering }
+    private var visible: Bool { finger != nil || scrolling || lingering || hovering }
 
     var body: some View {
         GeometryReader { proxy in
@@ -88,6 +89,7 @@ struct ChatScrubber: View {
             .sensoryFeedback(.selection, trigger: pointed) { _, new in new != nil }
         }
         .frame(width: Self.width)
+        .onHover { hovering = $0 }
         .task(id: scrolling || finger != nil) {
             // 停手后留一会儿再淡出
             guard !scrolling, finger == nil else { lingering = true; return }
@@ -176,4 +178,3 @@ nonisolated struct ChatMark: Equatable {
     let id: UUID
     let preview: String
 }
-#endif

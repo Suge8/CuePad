@@ -21,6 +21,14 @@ nonisolated enum PiReply: Equatable {
     case restartPi
 }
 
+/// 回复框主按钮此刻是哪一种（`MacDelivery.button`）。
+nonisolated enum PiReplyButton: Equatable {
+    case stop
+    case answer
+    /// 点按（⌘↩）用 `tap`，长按（⌘⇧↩）用 `hold`；只有一种说法时两者相同。
+    case send(tap: DeliveryMode, hold: DeliveryMode)
+}
+
 extension MacDelivery {
     /// 能结束：在线，且读得到（旧版扩展的会话收不到结束命令，要在终端里退出 Pi）。
     static func canEnd(_ session: PiSessionState) -> Bool { session.state != .known(.ended) && session.state != .known(.incompatible) }
@@ -63,6 +71,21 @@ extension MacDelivery {
         let command = String(latest.content.prefix { !$0.isWhitespace })
         if let failure = latest.failure { return .failed(command: command, reason: failure) }
         return latest.isOpen ? .running(command) : nil
+    }
+
+    /// 回复框的主按钮（一颗，按状态切换；iOS 与 Mac 同一条）：空着而 Agent 自己在跑一轮是停止（这时最可能想做的就是叫停，同 ChatGPT、Claude），
+    /// 文字型问题是作答，其余是发送——点按（⌘↩）是第一种说法，长按（⌘⇧↩）是第二种：在跑时点按等它做完再说、长按马上说，
+    /// 没在跑时两种都是直接发送；斜杠命令不分（由 Pi 展开执行）。写了字就是发送：想补充或改方向时停止反而打断，停止仍在长按菜单里。
+    /// 选择、确认型问题与发不了的会话没有主按钮（回复框收成一行说明）。
+    static func button(for session: PiSessionState, hasDraft: Bool, command: Bool = false) -> PiReplyButton? {
+        switch reply(to: session) {
+        case .answer: return .answer
+        case .message(let modes):
+            if canStop(session), !hasDraft { return .stop }
+            if command { return .send(tap: .command, hold: .command) }
+            return .send(tap: modes[0], hold: modes.dropFirst().first ?? modes[0])
+        case .answerAbove, .unanswerable, .restartPi: return nil
+        }
     }
 
     static func reply(to session: PiSessionState) -> PiReply {

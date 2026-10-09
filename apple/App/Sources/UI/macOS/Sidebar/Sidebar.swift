@@ -344,6 +344,7 @@ private struct PiSection: View {
             .sessionLink(session.sessionID)
             .help(bridge?.state.errorMessage ?? "")
             .contextMenu {
+                MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {
                     Button("重命名…", systemImage: "pencil") { renaming = session }
                 }

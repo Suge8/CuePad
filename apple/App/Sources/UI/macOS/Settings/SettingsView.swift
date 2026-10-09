@@ -34,6 +34,14 @@ struct SettingsView: View {
             ConflictsSection()
             Section {
                 LabeledContent("显示或隐藏 CuePad") { ShortcutRecorder() }
+                ForEach(ReplyShortcut.allCases, id: \.self) { key in
+                    LabeledContent {
+                        Text(key.symbols).foregroundStyle(palette.ink2)
+                    } label: {
+                        Text(key.title)
+                        Text(key.explanation)
+                    }
+                }
             } header: {
                 SettingsHeader("快捷键")
             }

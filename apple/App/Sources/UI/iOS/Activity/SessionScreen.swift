@@ -127,7 +127,9 @@ struct SessionScreen: View {
                         PiReplyBar(
                             session: session, config: digest?.config, compact: !follow.atNewest,
                             stopping: MacDelivery.stopping(session, deliveries: digest?.deliveries ?? []),
-                            commandProgress: MacDelivery.commandProgress(digest?.deliveries ?? [])
+                            commandProgress: MacDelivery.commandProgress(digest?.deliveries ?? []),
+                            queued: PiChat.queued(digest?.deliveries ?? [], messages: digest?.messages ?? []),
+                            recall: PiChat.lastSaid(digest?.messages ?? [])
                         ) { follow.jumpToNewest() }
                     }
                 }

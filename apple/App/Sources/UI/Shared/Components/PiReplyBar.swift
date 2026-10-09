@@ -2,13 +2,13 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// 会话页的回复框（iOS 与 Mac 同一份）：共用的 `Composer`，去处是这个 Pi 会话（＋ 选卡片与图片；有内容时右下角出现圆形发送钮，⌘↩ 同发送钮）。
-/// Pi 空闲时直接发；正忙时点发送钮是等它做完再说，长按选马上说；Mac 上开在终端里的还可只放进输入框（按住选）。可用的说法见 `MacDelivery.reply`。
+/// 会话页的回复框（iOS 与 Mac 同一份）：共用的 `Composer`，去处是这个 Pi 会话（＋ 选卡片与图片）。
+/// 右下角只有一颗主按钮，此刻是哪种只看 `MacDelivery.button`：空着而 Agent 自己在跑一轮是停止；写了字是发送——
+/// Pi 空闲时直接发，正忙时点按（⌘↩）等它做完再说、长按（⌘⇧↩）马上说，停止也在长按菜单里；文字型问题是作答。
 /// 等你确认时按问题类型：文字型问题它就是作答框（只收文字）；选择、确认型收成一行"先在上面作答"，
 /// 这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
-/// Agent 自己在跑一轮时（`MacDelivery.canStop`）空着的回复框右边是"停止"——这时最可能想做的就是叫停（同 ChatGPT、Claude）；
-/// 写了字就还是发送（想补充或改方向时停止反而打断），停止仍在按住发送钮的菜单里。停止发出后到这一轮歇下前转圈"正在停止"，
-/// 进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
+/// 停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
+/// 排队的话（`PiChat.queued`）在它上方一叠（`PiQueueStack`）。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都写一条投送请求给会话所在的 Mac（本机的由本机执行器送达），
 /// 发出后清空，请求马上贴到对话末尾。Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
 struct PiReplyBar: View {
@@ -21,6 +21,10 @@ struct PiReplyBar: View {
     let stopping: Bool
     /// 最近一条斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方短暂显示一行，成功就消失。
     var commandProgress: MacDelivery.CommandProgress?
+    /// 排队的话（`PiChat.queued`，页面传进来）。
+    var queued: [DeliveryRequest] = []
+    /// 空着按 ↑ 调回的那一句（`PiChat.lastSaid`）。
+    var recall: String?
     /// 发出之后（会话页回到最新）。
     let sent: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -29,6 +33,8 @@ struct PiReplyBar: View {
     @State private var sending = false
     @State private var sentCount = 0
     @FocusState private var focused: Bool
+    /// ⌘⇧M、⌘⇧E 请模型或思考强度弹出菜单（Mac）。
+    @State private var opening: PiConfigPick?
 
     /// 回复框的草稿（每个会话一份，`AppSettings.replyDraft`）只在回复框里读写：会话页不经手它，
     /// 打字时只有回复框（与列表里那一行）重算，会话页、对话都不动。
@@ -42,11 +48,6 @@ struct PiReplyBar: View {
 
     private var reply: PiReply { MacDelivery.reply(to: session) }
 
-    /// 发消息时可用的方式：第一个是点发送的方式，其余在长按菜单里。
-    private var modes: [DeliveryMode] {
-        if case .message(let modes) = reply { modes } else { [] }
-    }
-
     private var answering: PiQuestion? {
         if case .answer(let question) = reply { question } else { nil }
     }
@@ -58,6 +59,7 @@ struct PiReplyBar: View {
     private var canStop: Bool { MacDelivery.canStop(session) }
     /// 输入框里是一条已知的斜杠命令时要发出的整行（`PiSlash.line`）。
     private var commandLine: String? { answering == nil ? PiSlash.line(of: draft, in: session.commands) : nil }
+    private var button: PiReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
 
     /// 单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中。
     static let radius: CGFloat = 25
@@ -70,9 +72,11 @@ struct PiReplyBar: View {
         case .restartPi: notice("这个会话现在发不了", systemImage: "nosign")
         case .message, .answer:
             VStack(alignment: .leading, spacing: 6) {
+                if !compact, !queued.isEmpty { PiQueueStack(requests: queued).transition(.opacity) }
                 if let commandProgress { progressLine(commandProgress) }
                 composer
             }
+            .animation(Motion.quick, value: queued.map(\.id))
         }
     }
 
@@ -80,7 +84,7 @@ struct PiReplyBar: View {
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, compact: compact, showsSend: canStop, expandsOnFocus: hasTools,
-                commands: answering == nil ? session.commands : [], submit: submit,
+                commands: answering == nil ? session.commands : [], shortcuts: shortcuts, recall: recall,
                 header: {
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if focused, let failure = config?.failure {
@@ -89,7 +93,7 @@ struct PiReplyBar: View {
                     }
                 },
                 tools: {
-                    if hasTools, let config { PiConfigControls(session: session, shown: config) }
+                    if hasTools, let config { PiConfigControls(session: session, shown: config, opening: $opening) }
                 },
                 send: { sendControl }
             )
@@ -113,14 +117,32 @@ struct PiReplyBar: View {
     #if os(iOS)
     private static let unanswerable = "这个问题要在 Mac 上回答"
     private static let hold = "长按"
+    /// 钮上方那一句：怎么用另一种说法。
+    private static let holdChip = "长按可"
     #else
     private static let unanswerable = "这个问题要在终端里的 Agent 那边回答"
-    private static let hold = "按住"
+    private static let hold = "按住或 \(ReplyShortcut.sendHeld.symbols) "
+    /// Mac 的浮签只写快捷键：与"按住"并写会长到盖住输入的字
+    private static let holdChip = "\(ReplyShortcut.sendHeld.symbols) "
     #endif
 
-    /// ⌘↩：同点发送钮（忙时是默认的那种说法）。
-    private func submit() {
-        if answering != nil { answer() } else if let mode = modes.first { send(mode) }
+    /// 键盘快捷键（`ReplyShortcut`）此刻做什么：⌘↩ 同点按主按钮、⌘⇧↩ 同长按；⌘⇧M、⌘⇧E 在工具排露出时打开模型、思考强度菜单。
+    private var shortcuts: [ReplyShortcut: () -> Void] {
+        var map: [ReplyShortcut: () -> Void] = [:]
+        switch button {
+        case .answer: map[.send] = answer
+        case .send(let tap, let hold):
+            map[.send] = { send(tap) }
+            map[.sendHeld] = { send(hold, held: tap != hold) }
+        case .stop, nil: break
+        }
+        #if os(macOS)
+        if hasTools, focused {
+            map[.model] = { opening = .model }
+            map[.thinking] = { opening = .thinking }
+        }
+        #endif
+        return map
     }
 
     /// 发出后焦点去哪，两端只在这里分：手机收起键盘看对话；Mac 焦点留在回复框接着写。
@@ -141,62 +163,67 @@ struct PiReplyBar: View {
     }
 
     @ViewBuilder private var sendControl: some View {
-        if canStop, !hasDraft {
+        switch button {
+        case .stop:
             Button(action: stop) { StopGlyph(stopping: stopping) }
                 .buttonStyle(.plain)
                 .disabled(stopping || !reachable)
                 .accessibilityLabel(stopping ? "正在停止" : DeliveryMode.stop.label)
-        } else if answering != nil {
+        case .answer:
             Button(action: answer) { SubmitGlyph(.send, enabled: canSend) }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .accessibilityLabel("回答")
-        } else if let first = modes.first, modes.count > 1, commandLine == nil {
-            let others = modes.dropFirst()
-            Menu {
-                ForEach(Array(others), id: \.self) { mode in
-                    Button { send(mode) } label: {
-                        Label(mode.label, systemImage: Self.symbol(mode))
-                        if let explanation = mode.explanation { Text(explanation) }
-                    }
-                }
-                if canStop, !stopping {
-                    Divider()
-                    Button(DeliveryMode.stop.label, systemImage: "stop.circle", role: .destructive, action: stop)
-                }
-            } label: {
-                SubmitGlyph(.send, enabled: canSend)
-            } primaryAction: {
-                send(first)
-            }
-            .menuStyle(.button).menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            .fixedSize()
-            .disabled(!canSend)
-            // 按住的菜单看不见：有字可发时在钮上方浮一句"长按可马上说"，用过一次菜单就不再出（`holdSendLearned`）。
-            // 浮层不占排版，出现时不挤动文字
-            .overlay(alignment: .bottomTrailing) {
-                // 斜杠命令不是说的话，"马上说"用不上：输入以 / 开头时不出
-                if canSend, !services.settings.holdSendLearned, !draft.text.hasPrefix("/"), let other = others.first {
-                    Text("\(Self.hold)可\(other.label)").font(.caption2.weight(.medium)).foregroundStyle(palette.ink2)
-                        .padding(.horizontal, 8).frame(height: 22)
-                        .glass(in: .capsule)
-                        .fixedSize()
-                        .offset(y: -48)
-                        .transition(.opacity)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
-            .animation(Motion.quick, value: canSend)
-            .accessibilityLabel(first.label)
-            .accessibilityHint(([first.explanation] + others.map { "\(Self.hold)可以\($0.label)" }).compactMap { $0 }.joined(separator: "；"))
-        } else {
-            Button { if let mode = modes.first { send(mode) } } label: { SubmitGlyph(.send, enabled: canSend) }
+        case .send(let tap, let hold) where hold != tap:
+            holdMenu(tap: tap, hold: hold)
+        case .send(let tap, _):
+            Button { send(tap) } label: { SubmitGlyph(.send, enabled: canSend) }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .accessibilityLabel("发送")
+        case nil:
+            EmptyView()
         }
+    }
+
+    /// Agent 在跑时的发送钮：点按 `tap`（等它做完再说），长按出菜单选 `hold`（马上说）或停止。
+    private func holdMenu(tap: DeliveryMode, hold: DeliveryMode) -> some View {
+        Menu {
+            Button { send(hold, held: true) } label: {
+                Label(hold.label, systemImage: Self.symbol(hold))
+                if let explanation = hold.explanation { Text(explanation) }
+            }
+            if canStop, !stopping {
+                Divider()
+                Button(DeliveryMode.stop.label, systemImage: "stop.circle", role: .destructive, action: stop)
+            }
+        } label: {
+            SubmitGlyph(.send, enabled: canSend)
+        } primaryAction: {
+            send(tap)
+        }
+        .menuStyle(.button).menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .disabled(!canSend)
+        // 按住的菜单看不见：有字可发时在钮上方浮一句"长按可马上说"，用过一次（菜单或 ⌘⇧↩）就不再出（`holdSendLearned`）。
+        // 浮层不占排版，出现时不挤动文字
+        .overlay(alignment: .bottomTrailing) {
+            // 斜杠命令不是说的话，"马上说"用不上：输入以 / 开头时不出
+            if canSend, !services.settings.holdSendLearned, !draft.text.hasPrefix("/") {
+                Text(Self.holdChip + hold.label).font(.caption2.weight(.medium)).foregroundStyle(palette.ink2)
+                    .padding(.horizontal, 8).frame(height: 22)
+                    .glass(in: .capsule)
+                    .fixedSize()
+                    .offset(y: -48)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .animation(Motion.quick, value: canSend)
+        .accessibilityLabel(tap.label)
+        .accessibilityHint([tap.explanation, "\(Self.hold)可以\(hold.label)"].compactMap { $0 }.joined(separator: "；"))
     }
 
     /// 按住发送钮出来的其余说法的图标。
@@ -235,15 +262,16 @@ struct PiReplyBar: View {
         }
     }
 
-    /// 斜杠命令走投送方式 `command`（由 Pi 展开执行），不分马上说还是等它做完再说。
-    private func send(_ mode: DeliveryMode) {
-        if mode != modes.first { services.settings.holdSendLearned = true }
+    /// 斜杠命令走投送方式 `command`（由 Pi 展开执行），不分马上说还是等它做完再说（`MacDelivery.button`）。
+    /// `held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
+    private func send(_ mode: DeliveryMode, held: Bool = false) {
+        if held { services.settings.holdSendLearned = true }
         let outgoing = draft, line = commandLine
         guard canSend else { return }
         sending = true
         workspace.attempt {
             defer { sending = false }
-            if let line {
+            if mode == .command, let line {
                 _ = try await services.requestMacDelivery(line, to: session, mode: .command, card: outgoing.attachments.first?.card)
             } else {
                 _ = try await services.requestMacDelivery(outgoing, to: session, mode: mode)

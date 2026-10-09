@@ -14,6 +14,8 @@ struct ComposerField: UIViewRepresentable {
     let focus: FocusState<Bool>.Binding
     /// 外接键盘的方向键、↩/Tab、Esc 先交给调用方（斜杠命令面板打开时用）；返回 true 表示已处理。
     var keys: (ComposerKey) -> Bool = { _ in false }
+    /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了。外接键盘上是文字区的按键命令（按住 ⌘ 看得到）。
+    var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -48,6 +50,7 @@ struct ComposerField: UIViewRepresentable {
         view.maxLines = maxLines
         view.animatesScroll = !reduceMotion
         view.keys = keys
+        view.shortcut = shortcut
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: GrowingTextView, context: Context) -> CGSize? {
@@ -73,6 +76,7 @@ final class GrowingTextView: UITextView {
     var maxLines = 1
     var animatesScroll = true
     var keys: (ComposerKey) -> Bool = { _ in false }
+    var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     /// 外部刚写进文字：下一次排版后滚到末尾。
     var revealsEnd = false
 
@@ -123,6 +127,22 @@ final class GrowingTextView: UITextView {
             revealsEnd = false
             super.contentOffset = CGPoint(x: 0, y: max(0, contentSize.height - bounds.height))
         }
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        ReplyShortcut.menu.compactMap { key in
+            guard shortcut(key) != nil else { return nil }
+            let command = UIKeyCommand(
+                title: key.title, action: #selector(performReplyShortcut(_:)), input: key.input,
+                modifierFlags: key.shift ? [.command, .shift] : .command, propertyList: key.rawValue)
+            command.wantsPriorityOverSystemBehavior = true
+            return command
+        }
+    }
+
+    @objc private func performReplyShortcut(_ command: UIKeyCommand) {
+        guard let key = (command.propertyList as? Int).flatMap(ReplyShortcut.init(rawValue:)) else { return }
+        shortcut(key)?()
     }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {

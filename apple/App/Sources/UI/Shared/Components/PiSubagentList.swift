@@ -66,22 +66,19 @@ struct PiSubagentList: View {
         .transition(.opacity)
     }
 
-    /// 在跑的只在文字会变的时刻重画；落定的是定值。
+    /// 在跑的是系统计时文本；落定的是定值。
     private struct Elapsed: View {
         let clock: PiSubagentClock
         @Environment(\.palette) private var palette
 
         var body: some View {
-            switch clock {
-            case .running(let running):
-                TimelineView(PiClockSchedule(clock: running)) { text(at: $0.date) }
-            case .took:
-                text(at: .now)
+            Group {
+                switch clock {
+                case .running(let running): PiClockText(clock: running)
+                case .took: Text(clock.text(now: .now))
+                }
             }
-        }
-
-        private func text(at date: Date) -> some View {
-            Text(clock.text(now: date)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+            .font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
         }
     }
 }

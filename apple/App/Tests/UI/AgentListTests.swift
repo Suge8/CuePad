@@ -47,6 +47,6 @@ struct AgentListTests {
 
         // 会话的"多久前"与计时同一粒度
         #expect(PiClock.ago(now.addingTimeInterval(-(11 * 3600 + 48 * 60))).text(now: now, calendar: calendar) == "11 小时前")
-        #expect(PiClock.running(since: now.addingTimeInterval(-(2 * 3600 + 5 * 60))).text(now: now, calendar: calendar) == "已运行 2 小时")
+        #expect(PiClock.running(since: now.addingTimeInterval(-(2 * 3600 + 5 * 60))).text(now: now, calendar: calendar) == "已运行 2小时")
     }
 }

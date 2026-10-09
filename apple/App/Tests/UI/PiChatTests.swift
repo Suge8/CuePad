@@ -54,9 +54,9 @@ struct PiChatTests {
     }
 
     @Test func 每轮回答上方写调了几个工具与做了多久() {
-        #expect(PiChat.meta(message(2, .pi, "好了", tools: 5, took: 125)) == "运行了 5 个工具 · 2 分")
-        #expect(PiChat.meta(message(2, .pi, "好了", tools: 1, took: 40)) == "运行了 1 个工具 · 40 秒")
-        #expect(PiChat.meta(message(2, .pi, "好了", took: 8)) == "用时 8 秒")
+        #expect(PiChat.meta(message(2, .pi, "好了", tools: 5, took: 125)) == "运行了 5 个工具 · 2分钟")
+        #expect(PiChat.meta(message(2, .pi, "好了", tools: 1, took: 40)) == "运行了 1 个工具 · 40秒钟")
+        #expect(PiChat.meta(message(2, .pi, "好了", took: 8)) == "用时 8秒钟")
         #expect(PiChat.meta(message(1, .user, "你好")) == nil)
     }
 
@@ -217,9 +217,9 @@ struct SubagentSummaryTests {
     }
 
     @Test func 已工作多久_在跑的随时间走_落定的停在落定时刻() {
-        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now) == "已运行 10 分")
-        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now.addingTimeInterval(120)) == "已运行 12 分")
-        #expect(PiSubagentClock(agent("b", .done, started: 9_000, settled: 9_300))?.text(now: now) == "用时 5 分")
+        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now) == "已运行 10分钟")
+        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now.addingTimeInterval(120)) == "已运行 12分钟")
+        #expect(PiSubagentClock(agent("b", .done, started: 9_000, settled: 9_300))?.text(now: now) == "用时 5分钟")
         #expect(PiSubagentClock(agent("c", .idle)) == nil)
     }
 }

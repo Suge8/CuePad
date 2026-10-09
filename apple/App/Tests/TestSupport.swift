@@ -115,7 +115,7 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
     func preparePull() async throws {}
     /// 立即上传过的记录名，按调用顺序。
     let uploads = AsyncStream<String>.makeStream()
-    func sendNow(recordName: String) async throws { uploads.continuation.yield(recordName) }
+    func sendNow(recordName: String, deleted: Bool) async throws { uploads.continuation.yield(recordName) }
 
     func resolve(_ resolution: SyncResolution) async throws {
         state.withLock { $0.resolutions.append("\(resolution)") }

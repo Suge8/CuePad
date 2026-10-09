@@ -102,6 +102,25 @@ extension CueStore {
     try write { try db.run("DELETE FROM deliveryRequests WHERE id = ?", [id]) }
   }
 
+  /// 撤回一条还没被 Mac 领取的请求（`isWithdrawable`）；返回是否撤回了。与领取同一个条件（status = 'pending'），
+  /// 所以撤回与领取只有一个能成：已领取的（交给了 Pi）撤不回。
+  public func withdrawDelivery(_ id: UUID) throws -> Bool {
+    try write {
+      try db.run("DELETE FROM deliveryRequests WHERE id = ? AND status = 'pending'", [id])
+      return db.changes > 0
+    }
+  }
+
+  /// 把还没被领取的"等它做完再说"改成"马上说"；返回是否改成了（同 `withdrawDelivery`，已领取的改不了）。
+  public func promoteDelivery(_ id: UUID) throws -> Bool {
+    try write {
+      try db.run(
+        "UPDATE deliveryRequests SET mode = ?, modifiedAt = ? WHERE id = ? AND status = 'pending' AND mode = ?",
+        [DeliveryMode.steer.rawValue, Date.stamp, id, DeliveryMode.followUp.rawValue])
+      return db.changes > 0
+    }
+  }
+
   // MARK: 执行器用
 
   fileprivate func pendingDeliveries(for host: String) throws -> [DeliveryRequest] {

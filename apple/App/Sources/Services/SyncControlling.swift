@@ -12,8 +12,8 @@ nonisolated protocol SyncControlling: Sendable {
     func pullChanges() async throws
     /// 还没有主动拉取的令牌就先取
     func preparePull() async throws
-    /// 立即上传这一条记录（不等引擎调度）
-    func sendNow(recordName: String) async throws
+    /// 立即上传这一条记录（不等引擎调度）；`deleted` 时上传的是删除
+    func sendNow(recordName: String, deleted: Bool) async throws
     func resolve(_ resolution: SyncResolution) async throws
 }
 

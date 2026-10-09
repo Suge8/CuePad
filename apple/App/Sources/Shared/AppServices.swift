@@ -126,6 +126,18 @@ final class AppServices {
             mode: mode, card: card))
     }
 
+    /// 撤回还没被 Mac 领取的话（排队的话），立即把删除传上去，免得 Mac 先拉到它；已领取的撤不回，抛出原因。
+    func withdraw(_ request: DeliveryRequest) async throws {
+        guard try await store.withdrawDelivery(request.id) else { throw SendError.alreadyHanded }
+        Task { await upload(request.id, deleted: true) }
+    }
+
+    /// 把还没被 Mac 领取的"等它做完再说"改成"马上说"，立即上传；已领取的改不了，抛出原因。
+    func promote(_ request: DeliveryRequest) async throws {
+        guard try await store.promoteDelivery(request.id) else { throw SendError.alreadyHanded }
+        Task { await upload(request.id) }
+    }
+
     /// 发往别的设备的请求写出后立即上传（不等它完成），见 `upload`。
     private func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
         Task { await upload(request.id) }
@@ -134,10 +146,10 @@ final class AppServices {
 
     /// 立即只上传这一条记录，不等引擎的自动调度（几秒到几十秒）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的
     /// 会话状态后都调用。失败只记日志，引擎会照常重试。返回时这一条已经传完（或失败）。
-    func upload(_ record: UUID) async {
+    func upload(_ record: UUID, deleted: Bool = false) async {
         guard let sync else { return }
         do {
-            try await sync.sendNow(recordName: record.uuidString.lowercased())
+            try await sync.sendNow(recordName: record.uuidString.lowercased(), deleted: deleted)
         } catch {
             Self.log.notice("立即上传记录失败，等引擎自动上传：\(String(describing: error), privacy: .public)")
         }

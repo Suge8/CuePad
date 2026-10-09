@@ -169,6 +169,7 @@ struct AgentPage: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .sessionLink(session.sessionID)
             .contextMenu {
+                MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {
                     Button("重命名…", systemImage: "pencil") { renaming = session }
                 }

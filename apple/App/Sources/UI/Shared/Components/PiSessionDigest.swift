@@ -274,20 +274,15 @@ struct DeliveryStatusLabel: View {
     }
 }
 
-/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："已运行 4 分"、"已等 30 秒"、"已发出 3 秒"、"1 小时 2 分前"。
+/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："已运行 4分钟"、"已等 30秒钟"、"已发出 3秒钟"、"2 小时前"。
 struct PiElapsed: View {
     let shown: PiShown
     var font: Font = Typography.meta
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if let clock = shown.clock { label(clock) }
-    }
-
-    private func label(_ clock: PiClock) -> some View {
-        // 只在文字会变的时刻重画；不在屏幕上的行不画，也就不刷新
-        TimelineView(PiClockSchedule(clock: clock)) { context in
-            Text(clock.text(now: context.date))
+        if let clock = shown.clock {
+            PiClockText(clock: clock)
                 .font(font.monospacedDigit())
                 // 状态标与状态词已带色，计时保持中性，一行里只有一处彩色
                 .foregroundStyle(palette.ink3)
@@ -295,7 +290,21 @@ struct PiElapsed: View {
     }
 }
 
-/// `PiClock` 的文字在哪些时刻会变（见 `nextChange`）。
+/// 一个计时的文字：走字的（已运行、已等、已发出）是系统计时文本，由系统在文字会变时更新、不重算视图；
+/// "多久前"按 `DateLabel` 的写法，只在它会变的整分钟、整小时重画（不在屏幕上的行不画，也就不刷新）。
+struct PiClockText: View {
+    let clock: PiClock
+
+    var body: some View {
+        if let prefix = clock.prefix {
+            Text("\(prefix) \(.currentDate, format: clock.live)")
+        } else {
+            TimelineView(PiClockSchedule(clock: clock)) { Text(clock.text(now: $0.date)) }
+        }
+    }
+}
+
+/// "多久前"的文字在哪些时刻会变（见 `PiClock.nextChange`）。
 struct PiClockSchedule: TimelineSchedule {
     let clock: PiClock
 

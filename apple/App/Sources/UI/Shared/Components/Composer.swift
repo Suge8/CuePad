@@ -68,7 +68,8 @@ enum ComposerSource { case cards, photos, camera, files }
 /// （调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：左"＋"（选卡片、相册、拍照）、调用方的小圆钮
 /// （会话回复框的模型与思考强度，只在聚焦时有），右提交钮。空着又没聚焦时收成一行：＋、一行文字区（提交钮不占位）；
 /// 聚焦或有内容时展开成两层，＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
-/// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；给了 `submit` 时 ⌘↩ 发送（iPad 外接键盘同样）。
+/// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`：⌘↩、⌘⇧↩、⌘⇧M、⌘⇧E，
+/// 由文字区接）与空着时按 ↑ 调回的那一句（`recall`）。
 /// 提交钮平时有内容才出现；`showsSend` 时空着也在（收成一行时在文字区右边）——会话回复框在 Agent 跑一轮时那里是"停止"。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
@@ -94,7 +95,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 工具排里"＋"右边的小圆钮（会话回复框的模型与思考强度），只在聚焦时出现。
     private let tools: Tools
     private let send: Send
-    private let submit: (() -> Void)?
+    private let shortcuts: [ReplyShortcut: () -> Void]
+    /// 空着时按 ↑ 放进来的话（回复框：你在这个会话里说过的上一句）。
+    private let recall: String?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -111,7 +114,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
-        keeps: UUID? = nil, showsSend: Bool = false, expandsOnFocus: Bool = true, commands: [PiSlashCommand] = [], submit: (() -> Void)? = nil,
+        keeps: UUID? = nil, showsSend: Bool = false, expandsOnFocus: Bool = true, commands: [PiSlashCommand] = [],
+        shortcuts: [ReplyShortcut: () -> Void] = [:], recall: String? = nil,
         @ViewBuilder header: () -> Header, @ViewBuilder tools: () -> Tools, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
@@ -119,7 +123,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         self.keeps = keeps
         self.commands = commands
         self.showsSend = showsSend
-        self.submit = submit
+        self.shortcuts = shortcuts
+        self.recall = recall
         self.prompt = prompt
         self.label = label
         self.focus = focus
@@ -154,10 +159,19 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         return PiSlash.matches(draft.text, in: commands) ?? []
     }
 
-    /// 面板打开时文字区交来的按键；返回是否已处理（没处理的照常输入）。
+    /// 此刻能用的快捷键：发送的两种要有内容。
+    private func shortcut(_ key: ReplyShortcut) -> (() -> Void)? {
+        [.send, .sendHeld].contains(key) && !hasContent ? nil : shortcuts[key]
+    }
+
+    /// 文字区交来的按键：面板打开时归面板；空着时 ↑ 调回 `recall`。返回是否已处理（没处理的照常输入）。
     private func handle(_ key: ComposerKey) -> Bool {
         let list = paletteCommands
-        guard !list.isEmpty else { return false }
+        guard !list.isEmpty else {
+            guard key == .up, let recall, draft.isEmpty(accepting: [.images, .cards]) else { return false }
+            draft.text = recall
+            return true
+        }
         let current = min(highlighted, list.count - 1)
         switch key {
         case .up: highlighted = (current + list.count - 1) % list.count
@@ -193,9 +207,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .sheet(item: $previewing) { outbox in
             AttachmentSheet(outbox: outbox, expand: { expand(outbox) })
         }
-        .background {
-            if let submit, hasContent { Button("发送", action: submit).keyboardShortcut(.return, modifiers: .command).hidden() }
-        }
 #if DEBUG
         .task { await DebugScene.presetComposer($draft, source: $source, store: workspace.services.store) }
 #endif
@@ -219,7 +230,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             HStack(alignment: .bottom, spacing: 0) {
                 if !expanded, !accepts.isEmpty { plus }
                 ComposerField(
-                    text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle)
+                    text: $draft.text, prompt: prompt, label: label, maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
+                    shortcut: shortcut)
                     .focused(focus)
                     .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, !expanded && sendVisible ? 2 : 18)
                     .padding(.top, 14).padding(.bottom, expanded ? 4 : 14)
