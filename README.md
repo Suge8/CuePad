@@ -14,11 +14,6 @@
 
 Local-first: everything lives in a SQLite database on your device; iCloud sync uses your own private CloudKit database. No account, no server, no telemetry.
 
-<!-- TODO 截图待更新 -->
-<p align="center">
-  <img src="design/promo/motion/demo-dispatch.gif" alt="CuePad demo (older interface)" width="720" />
-</p>
-
 ## Features
 
 - **Idea → task → agent.** Ideas are your library — any amount of text with inline images, `{{variables}}` and dividers. When it's time to act, attach an idea to a task and it becomes one of the task's prompts — what you hand to the agent, sent in one tap, showing whether the agent has replied — plus subtasks if needed. Projects are just containers with a one-line intro. Everything autosaves.
