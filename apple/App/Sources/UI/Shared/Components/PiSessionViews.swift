@@ -301,7 +301,7 @@ extension PiShown {
 /// 有新回复墨色实心点、待你回复灰勾、新会话灰虚线圈、已结束更淡的空心圈。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 转圈与呼吸是常驻的循环动效，交给 Core Animation（`LoopLayer`），标不在屏幕上时不画；换状态时符号淡入替换，
 /// 一轮做完（工作中 → 停下）时放一圈涟漪、点弹一下，只这一次。减弱动态效果时转圈换成静止的圈点，没有呼吸与涟漪。
-/// 旁边有状态文字时读屏跳过它；`announces` 用在只有一个标的地方（书架、侧栏的项目旁），标自己带读屏标签与悬停提示。
+/// 旁边有状态文字时读屏跳过它；`announces` 用在不写状态词的地方（整页的会话行），标自己带读屏标签。
 struct PiStateDot: View {
     let shown: PiShown
     var size: CGFloat = 8
@@ -344,7 +344,8 @@ struct PiStateDot: View {
                 if !reduceMotion, case .working = old, [.unread, .idle].contains(new) { finished += 1 }
             }
         if announces {
-            mark.accessibilityLabel(shown.presence).help(shown.presence)
+            // 只给读屏：每行一个悬停提示会让整页每行都挂一块跟踪区，滚动时跟着重算
+            mark.accessibilityLabel(shown.presence)
         } else {
             mark.accessibilityHidden(true)
         }
