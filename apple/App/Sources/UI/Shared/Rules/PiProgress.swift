@@ -60,8 +60,7 @@ nonisolated enum PiProgress {
     ]
 
     static func firstLine(_ text: String?) -> String? {
-        // 先取原文第一个非空行再去符号：Markdown 会把相连的几行并成一段
-        text?.split(whereSeparator: \.isNewline).lazy.compactMap { MarkdownBlock.plainLines(String($0)).first }.first
+        text.flatMap(MarkdownBlock.firstPlainLine)
     }
 
     /// 首句：到第一个句号、问号、叹号或换行为止。

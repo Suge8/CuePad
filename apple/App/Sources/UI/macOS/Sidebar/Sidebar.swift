@@ -16,7 +16,8 @@ nonisolated private struct SidebarData: Sendable {
     var leading: [UUID: [ProjectNow.InProgress]]
 }
 
-/// 侧栏两区：项目（置顶的在前，末尾未分类）与 Agent（只列在线的会话，底部"全部会话"进 Agent 整页）；
+/// 侧栏两区：项目（置顶的在前，末尾未分类）与 Agent（只列在线的会话，底部"全部会话"进 Agent 整页；有会话等你确认时排到项目上面，
+/// 见 `PiSidebarAgents`）；
 /// 归档、回收站与设置在底栏。点哪一行，内容区就是哪一页。
 struct Sidebar: View {
     @Environment(Workspace.self) private var workspace
@@ -38,6 +39,7 @@ struct Sidebar: View {
             if let data, let catalog, let pages {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果
                 let now = ProjectNow.byProject(catalog.projects, sessions: data.current, tasks: data.leading, shown: services.settings.shown)
+                agents(data, at: .top)
                 Section {
                     ForEach(pages.projects) { row($0, catalog, now: now[$0.id]) }
                     if pages.inboxCount > 0 {
@@ -50,7 +52,7 @@ struct Sidebar: View {
                         Button("新建项目", systemImage: "plus") { creating = true }.disabled(!workspace.isLibraryReady)
                     }
                 }
-                PiSection(recorded: data.live, deliveries: data.deliveries, renames: data.renames, total: data.sessionTotal)
+                agents(data, at: .bottom)
             }
         }
         .listStyle(.sidebar)
@@ -78,6 +80,10 @@ struct Sidebar: View {
                 renames: Dictionary(live.items.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first },
                 current: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store))
         }
+    }
+
+    private func agents(_ data: SidebarData, at place: PiSection.Place) -> some View {
+        PiSection(recorded: data.live, deliveries: data.deliveries, renames: data.renames, total: data.sessionTotal, place: place)
     }
 
     private func select(_ page: Workspace.Page) {
@@ -250,10 +256,14 @@ private struct FooterPage: View {
 /// 在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话。没有在线会话时一行说怎么开始。
 /// 没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
 private struct PiSection: View {
+    /// 列在项目上面还是下面：两处各放一个，只有与 `PiSidebarAgents.leads` 相符的那个画出来。
+    enum Place { case top, bottom }
+
     let recorded: [PiSessionState]
     let deliveries: [String: DeliveryRequest]
     let renames: [String: DeliveryRequest]
     let total: Int
+    let place: Place
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -270,7 +280,10 @@ private struct PiSection: View {
                     $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: workspace.sessionRecaps[$0.sessionID])
             },
             recorded: recorded, deliveries: deliveries)
-        if let installation = status?.pi, !installation.isSupported {
+        let agents = PiSidebarAgents(rows: rows, page: workspace.page)
+        if agents.leads != (place == .top) {
+            EmptyView()
+        } else if let installation = status?.pi, !installation.isSupported {
             Section { PiSetupRow(installation: installation) } header: { SidebarHeader(title: "Agent") { EmptyView() } }
         } else if status != nil || total > 0 {
             Section {
@@ -292,7 +305,7 @@ private struct PiSection: View {
                     .selectionDisabled()
                 }
                 // 在线的按会话 id 区分：状态变化时那一行不被重建。两个以上需要 /reload 的合成一行（`PiNowRow`），点开再列
-                ForEach(PiNowRow.rows(rows, state: { $0 })) { nowRow in
+                ForEach(PiNowRow.rows(agents.listed, state: { $0 })) { nowRow in
                     switch nowRow {
                     case .session(let session): sessionRow(session, live: live)
                     case .reload(let sessions):
@@ -332,6 +345,18 @@ private struct PiSection: View {
                     Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
                 }
             }
+    }
+}
+
+/// Mac 侧栏的 Agent 区怎么摆：有会话在等你确认时排到项目上面（侧栏回答"现在要我做什么"，等你确认的不能落在折线以下）；
+/// 正看着 Agent 整页时不再列会话（整页的"现在"就是同一组），只留"全部会话"。
+struct PiSidebarAgents {
+    let listed: [PiSessionState]
+    let leads: Bool
+
+    init(rows: [PiSessionState], page: Workspace.Page) {
+        listed = page == .agent ? [] : rows
+        leads = rows.contains(where: \.waitsForYou)
     }
 }
 

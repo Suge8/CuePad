@@ -66,7 +66,8 @@ struct PiReplyBar: View {
         switch reply {
         case .answerAbove: notice("先在上面作答", systemImage: "arrow.up")
         case .unanswerable: notice(Self.unanswerable, systemImage: "desktopcomputer")
-        case .restartPi: notice("旧版扩展的会话发不了，在终端里执行 /reload 后再发", systemImage: "arrow.clockwise")
+        // 怎么接上已写在顶上的说明里（`PiRestartNotice`），这里不重复
+        case .restartPi: notice("这个会话现在发不了", systemImage: "nosign")
         case .message, .answer:
             VStack(alignment: .leading, spacing: 6) {
                 if let commandProgress { progressLine(commandProgress) }
@@ -175,7 +176,8 @@ struct PiReplyBar: View {
             // 按住的菜单看不见：有字可发时在钮上方浮一句"长按可马上说"，用过一次菜单就不再出（`holdSendLearned`）。
             // 浮层不占排版，出现时不挤动文字
             .overlay(alignment: .bottomTrailing) {
-                if canSend, !services.settings.holdSendLearned, let other = others.first {
+                // 斜杠命令不是说的话，"马上说"用不上：输入以 / 开头时不出
+                if canSend, !services.settings.holdSendLearned, !draft.text.hasPrefix("/"), let other = others.first {
                     Text("\(Self.hold)可\(other.label)").font(.caption2.weight(.medium)).foregroundStyle(palette.ink2)
                         .padding(.horizontal, 8).frame(height: 22)
                         .glass(in: .capsule)

@@ -19,7 +19,7 @@ struct PiConversation: View {
     var body: some View {
         // 懒加载：只排看得见的几条（整段排开时，长对话的每条回答都在推入那一刻排版、栅格化，转场的前一百多毫秒画不出来）。
         // 在倒置的滚动区里（iOS）按新到旧给出，懒加载从最新那条起排
-        let entries = PiChat.entries(messages, previews: previews)
+        let entries = ChatItem.of(PiChat.entries(messages, previews: previews))
         let outgoing = PiChat.outgoing(deliveries, messages: messages)
         LazyVStack(alignment: .leading, spacing: Self.spacing) {
             if inverted {
@@ -30,13 +30,13 @@ struct PiConversation: View {
                 ForEach(Array(outgoing.enumerated()).reversed(), id: \.element.id) { index, request in
                     OutgoingBubble(request: request, session: session).chatRow().accessibilitySortPriority(-Double(entries.count + index))
                 }
-                ForEach(Array(entries.enumerated()).reversed(), id: \.element.id) { index, entry in
-                    row(entry).chatRow().accessibilitySortPriority(-Double(index))
+                ForEach(Array(entries.enumerated()).reversed(), id: \.element.id) { index, item in
+                    row(item).chatRow().accessibilitySortPriority(-Double(index))
                 }
                 if entries.isEmpty { RecapPreview(session: session).chatRow() }
             } else {
                 if entries.isEmpty { RecapPreview(session: session) }
-                ForEach(entries) { entry in row(entry) }
+                ForEach(entries) { item in row(item) }
                 ForEach(outgoing) { request in OutgoingBubble(request: request, session: session) }
                 ending
             }
@@ -52,6 +52,13 @@ struct PiConversation: View {
     private static var spacing: CGFloat { 16 }
     private static var turnGap: CGFloat { 14 }
 
+    @ViewBuilder private func row(_ item: ChatItem) -> some View {
+        switch item {
+        case .previews(let group): PreviewGroup(previews: group.compactMap(\.preview)) { opened = $0 }
+        case .entry(let entry): row(entry)
+        }
+    }
+
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
         case .user:
@@ -66,7 +73,7 @@ struct PiConversation: View {
             Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity).padding(.vertical, 4)
         case .preview:
-            if let preview = entry.preview { PreviewCard(preview: preview) { opened = $0 } }
+            if let preview = entry.preview { PreviewGroup(previews: [preview]) { opened = $0 } }
         }
     }
 
@@ -93,10 +100,11 @@ extension PiConversation {
     }
 }
 
-/// 会话名下的一行小字：状态标与状态词（带色），后面淡一级的计时；Mac 后台托管的再写"后台"。
-/// 所在不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面。
+/// 会话名下的一行小字：状态标与状态词（带色），有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`），
+/// 后面淡一级的计时。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
+    var undelivered: String?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -107,7 +115,7 @@ struct PiSessionSubtitle: View {
             Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
                 .contentTransition(.opacity)
                 .animation(Motion.quick, value: shown)
-            if session.hosted, session.state != .known(.ended) { Text("· 后台").foregroundStyle(palette.ink3) }
+            if let undelivered { Text("· \(undelivered)").foregroundStyle(palette.failure) }
             if shown.clock != nil {
                 Text("·").foregroundStyle(palette.ink3)
                 PiElapsed(shown: shown, font: Self.font)
@@ -168,15 +176,9 @@ private struct UserBubble: View {
 
     var body: some View {
         TrailingFraction(fraction: Self.widthFraction) {
-            VStack(alignment: .trailing, spacing: 4) {
-                BubbleText(text: text, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines, truncated: $truncated)
-                if truncated, !expanded {
-                    Button("展开") { expanded = true }
-                        .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
-                        .buttonStyle(.plain)
-                        .frame(minHeight: 28)
-                }
-            }
+            BubbleText(
+                text: text, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines, truncated: $truncated,
+                expand: truncated && !expanded ? { expanded = true } : nil)
         }
         .transition(.entry)
     }
@@ -190,6 +192,8 @@ private struct BubbleText: View {
     var lineLimit: Int?
     /// 给了时报告文字是否被 `lineLimit` 截掉。
     var truncated: Binding<Bool>?
+    /// 折起着时：最后一行末尾渐隐，接着是"展开"（在气泡里，就在被截断的地方）。
+    var expand: (() -> Void)?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -203,6 +207,7 @@ private struct BubbleText: View {
                 .lineLimit(lineLimit)
                 .textSelection(.enabled)
                 .background(alignment: .topLeading) { if let truncated, lineLimit != nil { fullHeight(truncated) } }
+                .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
                 .padding(.horizontal, 16).padding(.vertical, 11)
                 .background(palette.bubble, in: shape)
                 .overlay { edge(shape) }
@@ -211,6 +216,18 @@ private struct BubbleText: View {
         }
         .animation(Motion.quick, value: highlighted)
         .animation(Motion.quick, value: trip)
+    }
+
+    private func expandButton(_ expand: @escaping () -> Void) -> some View {
+        HStack(spacing: 0) {
+            LinearGradient(colors: [palette.bubble.opacity(0), palette.bubble], startPoint: .leading, endPoint: .trailing).frame(width: 36)
+            Button("展开", action: expand)
+                .font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink2)
+                .buttonStyle(.plain)
+                .padding(.leading, 4)
+                .background(palette.bubble)
+        }
+        .fixedSize()
     }
 
     /// 同一宽度下排全文要多高，与折起后的高度比，量出有没有被截掉；只读几何、不影响自己的排版（藏起的全文不占位）。
@@ -407,7 +424,8 @@ private struct LiveStatus: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if session.state.isWorking {
+            // 在等子代理时，子代理那一行汇总就是进展，不再另写一行"子代理工作中"
+            if session.state.isWorking, session.state != .known(.delegating) || session.subagents.isEmpty {
                 // 与列表同一个转着的状态标：会话页底部这一行和列表里那一行是同一件事在动
                 HStack(spacing: 8) {
                     PiStateDot(shown: PiShown(session), size: 7)
@@ -422,6 +440,26 @@ private struct LiveStatus: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .transition(.entry)
+    }
+}
+
+/// 对话里的一格：一条（你的话、回答、系统行），或连着的几张预览收成的一组（同一处连着发的文件放在一张纸上）。
+private enum ChatItem: Identifiable {
+    case entry(PiChatEntry)
+    case previews([PiChatEntry])
+
+    var id: UUID {
+        switch self {
+        case .entry(let entry): entry.id
+        case .previews(let group): group[0].id
+        }
+    }
+
+    static func of(_ entries: [PiChatEntry]) -> [ChatItem] {
+        entries.reduce(into: []) { items, entry in
+            guard entry.role == .preview else { return items.append(.entry(entry)) }
+            if case .previews(let group) = items.last { items[items.count - 1] = .previews(group + [entry]) } else { items.append(.previews([entry])) }
+        }
     }
 }
 

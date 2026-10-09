@@ -52,6 +52,13 @@ nonisolated enum PiChat {
         }
     }
 
+    /// 会话页顶栏状态后的一句：你发出的话里有几句没能送达（它们还挂在对话末尾等你重发或移除）。列表那一行写"没能送达"，
+    /// 进来顶栏就不能只写会话自己的状态，像是已经好了。没有时是 nil。
+    static func undeliveredNote(_ deliveries: [DeliveryRequest], messages: [PiChatMessage]) -> String? {
+        let count = outgoing(deliveries, messages: messages).filter { $0.status == .known(.failed) }.count
+        return count > 0 ? "\(count) 句没送到" : nil
+    }
+
     /// 对话只同步最近 `transcriptWindow` 内活跃过的会话；更早的会话打开时没有对话，请它所在的 Mac 补写。
     static let transcriptWindow: TimeInterval = 7 * 86_400
 

@@ -81,6 +81,12 @@ nonisolated struct PiContextMeter: Equatable {
 
     var suggestsCompact: Bool { (fraction ?? 0) >= Self.compactFraction }
 
+    /// 圆环旁的小字："21%"；未知时是一道横线。
+    var percent: String { fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "—" }
+
+    /// 悬停与读屏：先说这是上下文，快满了时说可以压缩。
+    var help: String { "上下文 · \(summary)\(suggestsCompact ? " · 快满了，可以压缩" : "")" }
+
     /// "已用 21% · 剩 158k tokens"；未知时说明为什么。
     var summary: String {
         guard let fraction, let remaining else { return "刚压缩过 · 下次回答后更新（窗口 \(Self.abbreviated(usage.window)) tokens）" }

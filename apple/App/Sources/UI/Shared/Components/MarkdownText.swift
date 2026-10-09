@@ -67,7 +67,11 @@ struct MarkdownText: View {
             ?? AttributedString(text)
         for run in string.runs {
             if run.link != nil { string[run.range].underlineStyle = .single }
-            if run.inlinePresentationIntent?.contains(.code) == true { string[run.range].backgroundColor = palette.fill }
+            if run.inlinePresentationIntent?.contains(.code) == true {
+                string[run.range].backgroundColor = palette.fill
+                // 等宽字在同字号下比中文显得大：小一档，句子中间不鼓出一块
+                string[run.range].font = Typography.inlineCode
+            }
         }
         return string
     }

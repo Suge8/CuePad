@@ -84,19 +84,17 @@ struct SessionScreen: View {
         }
         // 看历史时顶栏让开，点它原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）；点状态栏是系统的回到顶端，
         // 倒置的对话里顶端就是最新处，所以也会出现
-        .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
+        .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() }, veiled: true) {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                PiSessionSubtitle(session: session)
+                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest?.deliveries ?? [], messages: digest?.messages ?? []))
             }
         } trailing: {
             if let session {
                 Menu {
-                    // 所在不挤在顶栏里：点"⋯"时写在最上面
-                    if let place = PiPlace.name(of: session, project: digest?.project) {
-                        Section("在 \(place)") {}
-                    }
+                    // 所在与"后台"不挤在顶栏里：点"⋯"时写在最上面
+                    if let title = PiPlace.menuTitle(of: session, project: digest?.project) { Section(title) {} }
                     if MacDelivery.canRename(session) {
                         Button("重命名", systemImage: "pencil") { renaming = session }.disabled(!services.reachesPiHost)
                     }
