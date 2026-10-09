@@ -73,7 +73,7 @@ private struct ShortcutRecorder: View {
                 recording ? stop() : start()
             }
             .monospaced()
-            if let error { Text(error).font(.caption).foregroundStyle(palette.attention) }
+            if let error { Text(error).font(Typography.meta).foregroundStyle(palette.attention) }
         }
         .onDisappear(perform: stop)
     }
@@ -181,7 +181,7 @@ private struct PiExtensionRow: View {
             }
         }
         if let result {
-            Text(result.text).font(.caption).foregroundStyle(result.failed ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
+            Text(result.text).font(Typography.meta).foregroundStyle(result.failed ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
         }
     }
 
@@ -247,7 +247,7 @@ private struct SyncSection: View {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(summary.title)
-                            if let detail = summary.detail { Text(detail).font(.caption).foregroundStyle(palette.ink3) }
+                            if let detail = summary.detail { Text(detail).font(Typography.meta).foregroundStyle(palette.ink3) }
                         }
                     } icon: {
                         Image(systemName: summary.symbol).foregroundStyle(summary.color(palette))
@@ -264,13 +264,13 @@ private struct SyncSection: View {
                     DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
                         ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(issue.summary).font(.caption)
-                                Text(issue.message).font(.caption2.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
+                                Text(issue.summary).font(Typography.meta)
+                                Text(issue.message).font(Typography.meta.monospaced()).foregroundStyle(palette.ink3).textSelection(.enabled)
                             }
                         }
                     }
                 }
-                if let failure { Text(failure).font(.caption).foregroundStyle(palette.failure) }
+                if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
             }
         } header: {
             Text("iCloud 同步")
@@ -314,7 +314,7 @@ private struct ConflictsSection: View {
                     }
                     .padding(.vertical, 4)
                 }
-                if let failure { Text(failure).font(.caption).foregroundStyle(palette.failure) }
+                if let failure { Text(failure).font(Typography.meta).foregroundStyle(palette.failure) }
             } header: {
                 Text("\(services.conflicts.count) 条灵感或任务有两个版本")
             }
@@ -324,7 +324,7 @@ private struct ConflictsSection: View {
     private func version(_ label: String, _ card: Card, keep choice: ConflictChoice, copy: UUID) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("\(label) · \(DateLabel.short(card.modifiedAt))").font(.caption.weight(.medium)).foregroundStyle(palette.ink3)
+                Text("\(label) · \(DateLabel.short(card.modifiedAt))").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
                 Spacer()
                 Button("保留这一份") {
                     failure = nil
@@ -334,7 +334,7 @@ private struct ConflictsSection: View {
                 }
                 .controlSize(.small)
             }
-            Text(Outgoing.text(of: card)).font(.system(size: 12.5)).foregroundStyle(palette.ink2)
+            Text(Outgoing.text(of: card)).font(Typography.secondary).foregroundStyle(palette.ink2)
                 .lineLimit(6).frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(10)

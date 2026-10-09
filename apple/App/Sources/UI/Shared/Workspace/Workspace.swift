@@ -16,15 +16,21 @@ final class Workspace {
         case inbox
         case archive
         case trash
-        /// Agent：全部会话的整页列表（Mac 侧栏的"Agent"）。
+        /// Agent：全部会话的整页列表（Mac 侧栏的"全部会话"），也是会话页的上一层。
         case agent
+        #if os(macOS)
+        /// 一个 Agent 会话的整页（Pi 的会话 id）。
+        case session(String)
+        #endif
     }
 
-    /// 内容区此刻是哪一页：根页，及（Mac）推在它上面的会话页。返回、前进在这些位置之间走。
-    struct Location: Hashable {
-        var page: Page
-        var session: String?
+    #if os(macOS)
+    /// 往上一层去哪（Mac 工具栏左上那一颗）：没有历史，只有层级——纸页的上一层是它底下的页，会话页的上一层是 Agent 整页。
+    enum Up: Equatable {
+        case closePaper
+        case agentList
     }
+    #endif
 
     enum Overlay: Equatable {
         case search
@@ -80,23 +86,7 @@ final class Workspace {
     /// 第几次订阅项目目录：根视图以它为 `.task` 的 id，`retryCatalog` 加一即重新订阅。
     private(set) var catalogAttempt = 0
     var sidebar: NavigationSplitViewVisibility = .all
-    var nonProjectPage: Page?
-    /// 推在根页上的会话页（Pi 的会话 id；Mac）。根页一直挂着，返回时回到原来的滚动位置。
-    private(set) var openedSession: String?
-    /// 走过的位置（返回往这里退）与退回去的位置（前进往这里走），各带离开那一页时的滚动位置；新的跳转清掉前进。
-    private var backStack: [Visit] = []
-    private var forwardStack: [Visit] = []
-    /// 当前根页此刻滚到哪（页面滚动时报上来，`scrolled(to:)`）：离开时记进历史。只记一个数，不触发界面刷新。
-    @ObservationIgnored private var liveScroll: CGFloat?
-    /// 返回、前进到的那一页该滚回哪（页面出现后取走，`takeRestoredScroll`）。
-    @ObservationIgnored private var restoredScroll: CGFloat?
-
-    private struct Visit {
-        var location: Location
-        var scroll: CGFloat?
-    }
-    /// 记多少步：够来回翻，不无限长。
-    private static let historyLimit = 50
+    private(set) var nonProjectPage: Page?
     /// 打开的卡（编辑纸页）。设成某张卡时纸页立即挂上；清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
     var openCard: UUID? {
         didSet { if let openCard { present(openCard) } }
@@ -263,74 +253,34 @@ final class Workspace {
         presentedCard = nil
     }
 
+    /// 切到一页（侧栏点哪就是哪）；开着的纸页随之收起。没有历史：Mac 的上一层见 `up`。
     func show(_ page: Page) {
-        go(to: Location(page: page, session: nil))
-    }
-
-    /// 在当前根页上推入一个会话页（Mac）。
-    func openSession(_ sessionID: String) {
-        go(to: Location(page: page, session: sessionID))
-    }
-
-    var location: Location { Location(page: page, session: openedSession) }
-    var canGoBack: Bool { openCard != nil || !backStack.isEmpty }
-    var canGoForward: Bool { !forwardStack.isEmpty }
-
-    /// 返回：开着灵感纸页时先收起纸页，否则回到上一个位置（及它离开时的滚动位置）。
-    func goBack() {
-        if openCard != nil {
-            openCard = nil
-            return
-        }
-        guard let previous = backStack.popLast() else { return }
-        forwardStack.append(Visit(location: location, scroll: liveScroll))
-        apply(previous.location, scroll: previous.scroll)
-    }
-
-    func goForward() {
-        guard let next = forwardStack.popLast() else { return }
-        backStack.append(Visit(location: location, scroll: liveScroll))
-        apply(next.location, scroll: next.scroll)
-    }
-
-    /// 根页报它此刻的滚动位置（`remembersScroll`）。
-    func scrolled(to y: CGFloat) { liveScroll = y }
-
-    /// 页面出现时取走"该滚回哪"：返回、前进到这一页时是它离开时的位置；新打开的页是 nil（从顶上开始）。
-    func takeRestoredScroll() -> CGFloat? {
-        defer { restoredScroll = nil }
-        return restoredScroll
-    }
-
-    private func go(to target: Location) {
-        guard target != location else {
-            openCard = nil
-            dismissPresented()
-            return
-        }
-        backStack.append(Visit(location: location, scroll: liveScroll))
-        if backStack.count > Self.historyLimit { backStack.removeFirst() }
-        forwardStack.removeAll()
-        apply(target, scroll: nil)
-    }
-
-    private func apply(_ target: Location, scroll: CGFloat?) {
         openCard = nil
         dismissPresented()
-        // 根页没换（只是推入、退出会话页）时它一直挂着，滚动位置本来就在
-        if target.page != page {
-            liveScroll = nil
-            restoredScroll = scroll
-        }
-        openedSession = target.session
-        switch target.page {
-        case .project(let id):
+        if case .project(let id) = page {
             nonProjectPage = nil
             holder.currentProject = id
-        case .inbox, .archive, .trash, .agent:
-            nonProjectPage = target.page
+        } else {
+            nonProjectPage = page
         }
     }
+
+    #if os(macOS)
+    /// 此刻往上一层去哪；nil 是已在顶层（项目、未分类、归档、回收站、Agent 整页）。
+    var up: Up? {
+        if openCard != nil { return .closePaper }
+        if case .session = page { return .agentList }
+        return nil
+    }
+
+    func goUp() {
+        switch up {
+        case .closePaper: openCard = nil
+        case .agentList: show(.agent)
+        case nil: break
+        }
+    }
+    #endif
 
     /// 开关浮层。⌘K 搜索每天用很多次，直接出现；任务面板从右侧滑入（短弹簧，减弱动态效果时只淡入淡出由视图决定）。
     func toggle(_ overlay: Overlay) {

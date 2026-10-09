@@ -18,11 +18,10 @@ struct TrashPage: View {
     @State private var confirmEmpty = false
 
     var body: some View {
-        ZStack(alignment: .top) {
-            ScrollView {
+        ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     HStack(alignment: .lastTextBaseline) {
-                        Text("回收站").font(.system(size: 28, weight: .bold)).foregroundStyle(palette.ink)
+                        Text("回收站").font(Typography.pageTitle).foregroundStyle(palette.ink)
                         Spacer()
                         if let data, !(data.projects.isEmpty && data.cards.isEmpty) {
                             Button("清空回收站", role: .destructive) { confirmEmpty = true }
@@ -31,11 +30,9 @@ struct TrashPage: View {
                     }
                     if let data { content(data) }
                 }
-                .padding(.horizontal, 32).padding(.top, EdgeFade.toolbarFade + 6).padding(.bottom, 40)
-            }
-            .remembersScroll()
-            EdgeFade.underToolbar
+                .padding(.horizontal, Spacing.page).padding(.top, ToolbarEdge.fade + 6).padding(.bottom, 40)
         }
+        .overlay(alignment: .top) { ToolbarEdge() }
         .confirmationDialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty) {
             Button("清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
         } message: {
@@ -57,7 +54,7 @@ struct TrashPage: View {
         if data.projects.isEmpty && data.cards.isEmpty {
             VStack(spacing: 8) {
                 Image(systemName: "trash").font(.system(size: 28)).foregroundStyle(palette.ink3).accessibilityHidden(true)
-                Text("回收站是空的").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink2)
+                Text("回收站是空的").font(Typography.emptyTitle).foregroundStyle(palette.ink2)
             }
             .frame(maxWidth: .infinity).padding(.top, 80)
         }
@@ -88,7 +85,7 @@ struct TrashPage: View {
 
     private func group(_ title: String, @ViewBuilder rows: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.ink2)
+            Text(title).font(Typography.sectionTitle).foregroundStyle(palette.ink)
             VStack(spacing: 0) { rows() }.paper(radius: 12)
         }
     }
@@ -108,13 +105,13 @@ private struct TrashRow: View {
     var body: some View {
         HStack(spacing: 10) {
             icon.frame(width: 20)
-            Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
-            Text(detail).font(.system(size: 12.5)).foregroundStyle(palette.ink3).lineLimit(1)
+            Text(title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
+            Text(detail).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
             Spacer(minLength: 12)
             // 操作在悬停时出现（右键菜单里也有），平时只看得到删除时间
             ZStack(alignment: .trailing) {
                 if let deletedAt {
-                    Text("删于 \(DateLabel.short(deletedAt))").font(.system(size: 12)).foregroundStyle(palette.ink3)
+                    Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta).foregroundStyle(palette.ink3)
                         .opacity(hovering ? 0 : 1)
                 }
                 HStack(spacing: 6) {

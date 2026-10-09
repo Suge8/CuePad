@@ -107,10 +107,10 @@ struct ProjectFolderGuide: View {
 
     #if os(iOS)
     private static let tile: CGFloat = 32, iconSize: CGFloat = 15
-    private static let titleFont = Font.subheadline.weight(.medium), noteFont = Font.footnote
+    private static let titleFont = Typography.secondary.weight(.medium), noteFont = Typography.meta
     #else
     private static let tile: CGFloat = 26, iconSize: CGFloat = 12
-    private static let titleFont = Font.system(size: 12.5, weight: .medium), noteFont = Font.system(size: 11.5)
+    private static let titleFont = Typography.secondary.weight(.medium), noteFont = Typography.meta
     #endif
 }
 
@@ -183,6 +183,6 @@ private struct GuideButton: ViewModifier {
     #if os(iOS)
     private static let font = Font.subheadline.weight(.medium), height: CGFloat = 34, hitPadding: CGFloat = 5
     #else
-    private static let font = Font.system(size: 12, weight: .medium), height: CGFloat = 24, hitPadding: CGFloat = 0
+    private static let font = Typography.secondary.weight(.medium), height: CGFloat = 28, hitPadding: CGFloat = 0
     #endif
 }

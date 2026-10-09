@@ -27,11 +27,11 @@ struct AgentPage: View {
                 topRow.padding(.bottom, 16)
                 if let list { sessions(list) }
             }
-            .padding(.horizontal, 28).padding(.top, 8).padding(.bottom, 96)
+            .padding(.horizontal, 28).padding(.top, ToolbarEdge.fade + 6).padding(.bottom, 96)
             .frame(maxWidth: Self.width)
             .frame(maxWidth: .infinity)
         }
-        .remembersScroll()
+        .overlay(alignment: .top) { ToolbarEdge() }
         .background(palette.desk)
         .environment(\.searchHighlight, query)
         .onChange(of: query) { limit = PiSessionList.pageSize }
@@ -62,7 +62,7 @@ struct AgentPage: View {
                         .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink3)
                 }
             }
-            .font(.system(size: 14))
+            .font(Typography.body)
             .padding(.horizontal, 14).frame(height: 36)
             .glassEffect(.regular, in: .capsule)
             NewSessionButton(showing: $starting)
@@ -92,7 +92,7 @@ struct AgentPage: View {
                 if let current { ProjectGlyph(project: current, size: 13) } else { Image(systemName: "line.3.horizontal.decrease") }
                 Text(current?.name ?? "全部").lineLimit(1)
             }
-            .font(.system(size: 13, weight: .medium)).foregroundStyle(palette.ink2)
+            .font(Typography.toolbarLabel).foregroundStyle(palette.ink2)
             .padding(.horizontal, 12).frame(height: 36)
             .glassEffect(.regular.interactive(), in: .capsule)
         }
@@ -122,7 +122,7 @@ struct AgentPage: View {
             let runs = PiHistorySection.split(list.ended, date: \.state.stateSince, now: .now)
             ForEach(Array(runs.enumerated()), id: \.element.section) { index, run in
                 if index == 0 { title("历史") }
-                Text(run.section.title).font(.system(size: 12, weight: .medium)).foregroundStyle(palette.ink3)
+                Text(run.section.title).font(Typography.label).foregroundStyle(palette.ink3)
                     .padding(.horizontal, 4).padding(.top, index == 0 ? 0 : 14).padding(.bottom, 6)
                 card { ForEach(run.items) { row($0, filtered: filtered, end: nil) } }
             }

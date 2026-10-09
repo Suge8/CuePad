@@ -14,8 +14,8 @@ struct TasksPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("任务").font(.system(size: 15, weight: .semibold))
-                if let board { Text("\(board.counts.inProgress + board.counts.todo)").font(.system(size: 13).monospacedDigit()).foregroundStyle(.secondary) }
+                Text("任务").font(Typography.sectionTitle)
+                if let board { Text("\(board.counts.inProgress + board.counts.todo)").font(Typography.sectionCount).foregroundStyle(.secondary) }
                 Spacer()
                 Button("关闭", systemImage: "xmark") { workspace.overlay = nil }
                     .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(.secondary)
@@ -42,7 +42,7 @@ struct TasksPanel: View {
     private func list(_ board: TaskBoard) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if board.inProgress.isEmpty && board.todo.isEmpty {
-                Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").font(.system(size: 13)).foregroundStyle(.secondary)
+                Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").font(Typography.secondary).foregroundStyle(.secondary)
                     .padding(.horizontal, 20).padding(.vertical, 12)
             }
             section("进行中", board.inProgress, count: board.counts.inProgress, in: board)
@@ -60,7 +60,7 @@ struct TasksPanel: View {
                     Button("全部归档") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
                         .buttonStyle(.plain).help("把最近完成的任务全部归档：不占列表，照样搜得到")
                 }
-                .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                .font(Typography.label).foregroundStyle(.secondary)
                 .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4)
                 if showsCompleted { rows(board.done) }
             }
@@ -75,7 +75,7 @@ struct TasksPanel: View {
                 Text(title)
                 Text("\(count)").foregroundStyle(.tertiary)
             }
-            .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            .font(Typography.label).foregroundStyle(.secondary)
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
             .accessibilityAddTraits(.isHeader)
             TaskOutline(tree: board.tree, roots: items.map(\.id)) { row in
@@ -127,7 +127,7 @@ struct TaskRow: View {
             .accessibilityLabel(done ? "回到待办" : "完成")
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
-                    .font(.system(size: 13)).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
+                    .font(Typography.body).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
                     .lineLimit(2)
                     .onTapGesture(perform: open)
                 if project != nil || (!done && (session != nil || subtasks != nil || tally.text != nil)) { detail }
@@ -147,7 +147,7 @@ struct TaskRow: View {
         .accessibilityAction { toggle() }
         .accessibilityAction(named: TaskSpeech.toggle(done: done), toggle)
         .accessibilityAction(named: "打开", open)
-        .accessibilityAction(named: "看 Agent 的近况") { if let session { workspace.openSession(session.sessionID) } }
+        .accessibilityAction(named: "看 Agent 的近况") { if let session { workspace.show(.session(session.sessionID)) } }
         .accessibilityActions {
             if let indent = structure?.indent { Button("缩进", action: indent) }
             if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
@@ -176,13 +176,13 @@ struct TaskRow: View {
                     PiStateDot(shown: shown, size: 5)
                     Text(shown.presence).foregroundStyle(shown.labelTint(palette))
                     Text("·").foregroundStyle(palette.ink3)
-                    PiElapsed(shown: shown, font: .system(size: 11))
+                    PiElapsed(shown: shown, font: Typography.meta)
                 }
                 .sessionLink(session.sessionID)
                 .help("交给了 Agent 会话「\(session.title)」，点开看近况")
             }
         }
-        .font(.system(size: 11))
+        .font(Typography.meta)
     }
 
     /// 整页打开这条任务（与灵感同一个纸页）：收起任务面板。
@@ -215,8 +215,8 @@ struct NewTaskField: View {
     var body: some View {
         HStack(spacing: 8) {
             // 入口不用系统占位灰：那样看起来像不能点
-            Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
-            TextField(text: $text, prompt: Text("添加任务").foregroundStyle(palette.ink2)) { Text("添加任务") }.textFieldStyle(.plain).font(.system(size: 13))
+            Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).foregroundStyle(palette.ink2).accessibilityHidden(true)
+            TextField(text: $text, prompt: Text("添加任务").foregroundStyle(palette.ink2)) { Text("添加任务") }.textFieldStyle(.plain).font(Typography.body)
                 .accessibilityLabel("添加任务")
                 .onSubmit(add)
             if choosesProject, let projects = workspace.catalog?.projects, !projects.isEmpty {
@@ -230,8 +230,8 @@ struct NewTaskField: View {
                         ProjectGlyph(project: current, size: 10)
                         Text(current?.name ?? "未分类").lineLimit(1)
                     }
-                    .font(.system(size: 11)).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, 8).frame(height: 22)
+                    .font(Typography.meta).foregroundStyle(palette.ink2)
+                    .padding(.horizontal, 8).frame(height: 24)
                     .background(palette.fill.opacity(2), in: .capsule)
                     .contentShape(.capsule)
                 }

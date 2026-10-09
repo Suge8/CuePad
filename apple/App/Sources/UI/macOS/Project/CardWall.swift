@@ -158,7 +158,7 @@ struct CardFace: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(text.label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Typography.bodyStrong)
                     .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
                     .lineLimit(2)
                 Spacer(minLength: 0)
@@ -166,13 +166,13 @@ struct CardFace: View {
             }
             if !text.preview.isEmpty {
                 Text(VariableText.styled(text.preview, palette))
-                    .font(.system(size: 13)).lineSpacing(3).foregroundStyle(palette.ink2)
+                    .font(Typography.body).lineSpacing(Typography.lineSpacing).foregroundStyle(palette.ink2)
                     .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
             }
-            CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
+            CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated, font: Typography.meta)
                 .padding(.top, 2)
         }
-        .padding(14)
+        .padding(16)
     }
 }
 
