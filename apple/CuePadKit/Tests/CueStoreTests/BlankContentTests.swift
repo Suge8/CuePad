@@ -30,7 +30,7 @@ import Testing
   @Test func 项目的灵感数与最近一条跳过空白灵感() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let real = try await store.createCard(in: p.id, body: "换首图")
-    try RawDB(fixture.url).exec("UPDATE cards SET modifiedAt = 1000 WHERE id = '\(real.id.uuidString)'")
+    try RawDB(fixture.url).exec("UPDATE cards SET modifiedAt = 1000 WHERE id = '\(real.id.uuidString.lowercased())'")
     _ = try await store.createCard(in: p.id, body: "")  // 更晚，但是空白的
 
     let summary = try #require(try await store.projectSummaries().first { $0.projectID == p.id })
@@ -47,7 +47,7 @@ import Testing
 
   @Test func 旧数据里空名的项目读出来叫未命名项目() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
-    try RawDB(fixture.url).exec("UPDATE projects SET name = '' WHERE id = '\(p.id.uuidString)'")
+    try RawDB(fixture.url).exec("UPDATE projects SET name = '' WHERE id = '\(p.id.uuidString.lowercased())'")
     #expect(try await store.project(p.id)?.name == "未命名项目")
     #expect(try await store.projects().map(\.name) == ["未命名项目"])
   }
