@@ -4,20 +4,18 @@ import UIKit
 
 extension View {
     /// 推入页的顶栏（全 App 只此一种）：左边系统的圆形返回，中间一块玻璃（标题，下面一行要紧信息），右边最多一个圆钮
-    /// （多个操作时调用方给一个"⋯"`Menu`）。内容一直滚到状态栏与顶栏下面（沉浸式），由系统的滚动边缘效果（`.soft`）与状态栏那一段的 `BarScrim` 保证栏上的字可读。
+    /// （多个操作时调用方给一个"⋯"`Menu`）。内容一直滚到状态栏与顶栏下面（沉浸式），栏后面不垫模糊或渐变，玻璃本身就是遮挡（见 `RouteView`）。
     /// `hidden` 时返回钮、中间那块与右边的圆钮都让开（淡到透明、不可点、读屏跳过），导航栏本身留着：
     /// 顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，见 `ChatFollow.showsHeader`）；
     /// 左缘右滑返回始终可用（`EdgeBackKeeper`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出顶栏。
     /// 标题同时是读屏、返回菜单与多任务切换器里的名字。
-    /// `edgeBlur`：滚动区关掉了系统的滚动边缘效果（倒过来的对话），内容会一直滚到整条栏后面——这时整条栏后面是自绘的渐进模糊
-    /// （`EdgeBlur`，与系统效果同一种观感），顶栏让开时也留着。
     /// `explanation`：点中间那块玻璃弹出的一句说明（会话需要 /reload 时怎么接上）；没有时点它什么也不做。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, edgeBlur: Bool = false, explanation: String? = nil,
+        _ title: String, hidden: Bool = false, reveal: (() -> Void)? = nil, explanation: String? = nil,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         modifier(FloatingHeader(
-            title: title, hidden: hidden, reveal: reveal, edgeBlur: edgeBlur, explanation: explanation, detail: detail(), trailing: trailing()))
+            title: title, hidden: hidden, reveal: reveal, explanation: explanation, detail: detail(), trailing: trailing()))
     }
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
@@ -41,7 +39,6 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
     let title: String
     let hidden: Bool
     let reveal: (() -> Void)?
-    let edgeBlur: Bool
     let explanation: String?
     let detail: Detail
     let trailing: Trailing
@@ -49,12 +46,6 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // 沉浸式：内容一直滚到状态栏与顶栏下面，系统的滚动边缘效果（渐进模糊加淡出）让玻璃上的字可读；状态栏那一段再垫一层
-            // 最小的淡出（时间不能压在字上）。关掉了系统效果的滚动区（倒过来的对话）整条栏后面是自绘的渐进模糊
-            .scrollEdgeEffectStyle(.soft, for: .top)
-            .overlay(alignment: .top) {
-                if edgeBlur { EdgeBlur.underBars } else { BarScrim(edge: .top) }
-            }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             // 系统的返回钮藏起时会淡出，但也会停掉左缘右滑返回：由 `EdgeBackKeeper` 把手势留住

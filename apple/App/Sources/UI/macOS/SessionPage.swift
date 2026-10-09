@@ -103,7 +103,6 @@ struct SessionPage: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .top) { ToolbarEdge() }
         .background(palette.desk)
         .toolbar {
             if let session = digest.session {
