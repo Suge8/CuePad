@@ -43,11 +43,12 @@ nonisolated struct PiSessionList: Sendable, Equatable {
     }
 }
 
-/// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、侧栏、菜单栏面板、项目页的 Agent 栏、⌘K 同一种，状态都经 `PiShown`）：
-/// 整页（`page`）三行——状态标与名字、时长（`PiElapsed`）；在哪（项目或文件夹，按项目筛着时调用方不给项目） · 状态词 · 后台 · 你的话排队中；
-/// 第三行（`PiRowLine`：结束进度、草稿、到哪了）。窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两行——第二行是状态词接着第三行的内容。
-/// 状态词只有要你动手的带色、有新回复加粗（`PiShown.labelTint`）。每行都占满固定的行数，什么都没有也留着高度，
-/// 状态怎么变行高都不变；文字换时原地淡入淡出。已结束的整行更淡。
+/// 一个 Agent 会话的行（iOS 的 Agent 页，Mac 的 Agent 页、侧栏、菜单栏面板、项目页的 Agent 栏、⌘K 同一种，状态都经 `PiShown`）。
+/// 整页（`page`）两层：状态标、名字、名字后小一号的所在（与"后台"）、右边时长；下面一句最要紧的话（`PiRowLine.lead`：
+/// 问题、原因、在做什么、结果，没有时才是状态词）。状态由状态标的形状与颜色表达，不再重复写状态词。
+/// 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两行——第二行是状态词接着那一句。
+/// 颜色只给状态标与状态词（`PiShown.labelTint`），句子一律次要墨色；有新回复时名字加粗。每行都占满固定的行数，
+/// 什么都没有也留着高度，状态怎么变行高都不变；文字换时原地淡入淡出。
 struct PiSessionRow: View {
     let session: PiSessionState
     let project: Project?
@@ -62,22 +63,22 @@ struct PiSessionRow: View {
     @Environment(\.searchHighlight) private var highlight
 
     /// 密度与字号：整页列表（Agent 页）是 `page`，侧栏、面板、⌘K、项目页这些窄处是 `compact`。
-    /// 整页三行分三级：名字最重，第三行（在做什么、结果）是正文次墨，"所在 · 状态"与时长是更小一号的元信息。
+    /// 整页的名字最重，下面那句是正文次墨，所在与时长是小一号的元信息。
     struct Style {
         var name: Font
         var line: Font
-        /// 所在 · 状态词与时长（整页）；窄处与第三行同一号。
+        /// 名字后的所在与右边的时长（整页）；窄处与第二行同一号。
         var meta: Font
         var dot: CGFloat
         var spacing: CGFloat
-        /// 三行（整页）还是两行（窄处）。
+        /// 整页（名字后带所在、下面一句）还是窄处（状态词接着那一句）。
         var full = false
 
         #if os(macOS)
         static let page = Style(name: .system(size: 14, weight: .semibold), line: .system(size: 13), meta: .system(size: 12), dot: 8, spacing: 3, full: true)
         static let compact = Style(name: .system(size: 13, weight: .medium), line: .system(size: 11), meta: .system(size: 11), dot: 6, spacing: 1)
         #else
-        static let page = Style(name: .headline, line: .subheadline, meta: .footnote, dot: 9, spacing: 4, full: true)
+        static let page = Style(name: .headline, line: .subheadline, meta: .footnote, dot: 9, spacing: 3, full: true)
         static let compact = Style(name: .body, line: .footnote, meta: .footnote, dot: 6, spacing: 1)
         #endif
     }
@@ -85,23 +86,37 @@ struct PiSessionRow: View {
     var body: some View {
         let shown = services.settings.shown(session, delivery: delivery)
         let failure = PiRename.failure(rename, seen: services.settings.sessionSeen[session.sessionID]) ?? shown.undelivered(delivery)?.failure
-        let line = searchHit ?? PiRowLine.of(session, draft: services.settings.draftPreview(for: session.id), end: end, failure: failure)
+        let draft = services.settings.draftPreview(for: session.id)
         let note = shown.note ?? (PiRename.isPending(rename) ? "正在改名" : nil)
         HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
-            PiStateDot(shown: shown, size: style.dot, halo: style.full)
+            // 整页不写状态词，状态标就要说出它（读屏）
+            PiStateDot(shown: shown, size: style.dot, announces: style.full, halo: style.full)
             VStack(alignment: .leading, spacing: style.spacing) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    let name = Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                    if style.full, let place {
+                        // 名字优先：放不下所在时只留名字，不把所在挤成一两个字
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                name.fixedSize()
+                                place.font(style.meta).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
+                            }
+                            name
+                        }
+                    } else {
+                        name
+                    }
                     Spacer(minLength: 4)
                     // 时间只占它要的宽度，名字拿剩下的
                     PiElapsed(shown: shown, font: style.meta).fixedSize()
                 }
                 if style.full {
-                    statusLine(shown, note: note).font(style.meta)
-                    text(of: line)
+                    // 你的话在路上、正在改名时先写它（短），再接最要紧的那一句
+                    let lead = text(of: searchHit ?? PiRowLine.lead(session, shown: shown, draft: draft, end: end, failure: failure), shown: shown)
+                    note.map { Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(" · ").foregroundStyle(palette.ink3))\(lead)") } ?? lead
                 } else {
-                    // 两行：状态词接着第三行的内容（你的话在路上、正在改名时是它）
-                    let rest = note.map { Text($0).foregroundStyle(palette.ink3) } ?? line.map(text(of:))
+                    let line = searchHit ?? PiRowLine.of(session, draft: draft, end: end, failure: failure)
+                    let rest = note.map { Text($0).foregroundStyle(palette.ink3) } ?? line.map { text(of: $0, shown: shown) }
                     Text("\(status(shown))\(rest.map { Text("\(Text(" · ").foregroundStyle(palette.ink3))\($0)") } ?? Text(verbatim: ""))")
                 }
             }
@@ -109,12 +124,22 @@ struct PiSessionRow: View {
             .lineLimit(1)
             .contentTransition(.opacity)
             .animation(Motion.quick, value: shown)
-            .animation(Motion.quick, value: line)
+            .animation(Motion.quick, value: draft)
         }
         .accessibilityElement(children: .combine)
     }
 
-    /// 搜索时名字、所在与进度都没命中、而命中在说过的话里：第三行换成那句话从命中处前几个字起的一截，看得出为什么搜到它
+    /// 名字后的小字：所在（项目或文件夹，按项目筛着时调用方不给项目），Mac 在后台开的再写"后台"。
+    private var place: Text? {
+        let parts = [
+            PiPlace.name(of: session, project: project).map { Text(Highlight.matches($0, highlight)) },
+            session.hosted && session.state != .known(.ended) ? Text("后台") : nil,
+        ].compactMap { $0 }
+        guard let first = parts.first else { return nil }
+        return parts.dropFirst().reduce(first) { Text("\($0) · \($1)") }
+    }
+
+    /// 搜索时名字、所在与进度都没命中、而命中在说过的话里：那一句换成那句话从命中处前几个字起的一截，看得出为什么搜到它
     /// （会话搜索也查说过的话）。
     private var searchHit: PiRowLine? {
         let terms = highlight.split(whereSeparator: \.isWhitespace)
@@ -133,25 +158,16 @@ struct PiSessionRow: View {
         Text(shown.label).fontWeight(shown.isUnread ? .semibold : shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
     }
 
-    /// 整页的第二行：在哪 · 状态词 · 后台 · 你的话排队中（或正在改名）。
-    private func statusLine(_ shown: PiShown, note: String?) -> some View {
-        let parts = [
-            PiPlace.name(of: session, project: project).map { Text(Highlight.matches($0, highlight)).foregroundStyle(palette.ink3) },
-            status(shown),
-            session.hosted && session.state != .known(.ended) ? Text("后台").foregroundStyle(palette.ink3) : nil,
-            note.map { Text($0).foregroundStyle(palette.ink3) },
-        ].compactMap { $0 }
-        return parts.dropFirst().reduce(parts[0]) { Text("\($0)\(Text(" · ").foregroundStyle(palette.ink3))\($1)") }
-    }
-
-    /// 第三行：总是一个 Text（没有内容时是一个空格），一直占着一行；换内容时原地淡入淡出。
-    private func text(of line: PiRowLine?) -> Text {
+    /// 那一句：总是一个 Text（没有内容时是一个空格），一直占着一行；换内容时原地淡入淡出。
+    /// 原因、问题这些句子也是次要墨色：颜色已经在状态标上，整句上色会压过名字。
+    private func text(of line: PiRowLine?, shown: PiShown) -> Text {
         switch line {
         case .ending: Text("正在结束…").foregroundStyle(palette.ink3)
-        case .endFailed(let reason), .failed(let reason): Text(reason).foregroundStyle(palette.failure)
+        case .endFailed(let reason), .failed(let reason): Text(reason).foregroundStyle(palette.ink2)
         case .draft(let draft): Text("\(Text("草稿").fontWeight(.semibold).foregroundStyle(palette.signature))  \(Text(draft).foregroundStyle(palette.ink2))")
         case .progress(let progress): Text(Highlight.matches(progress, highlight)).foregroundStyle(palette.ink2)
         case .hint(let hint): Text(hint).foregroundStyle(palette.ink3)
+        case .status: status(shown)
         case nil: Text(verbatim: " ")
         }
     }

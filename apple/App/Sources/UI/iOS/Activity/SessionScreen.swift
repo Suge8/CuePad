@@ -88,11 +88,15 @@ struct SessionScreen: View {
             if shownEnd?.isOpen == true {
                 Text("正在结束…").font(.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                PiSessionSubtitle(session: session, project: digest?.project)
+                PiSessionSubtitle(session: session)
             }
         } trailing: {
-            if let session, MacDelivery.canRename(session) || MacDelivery.canEnd(session) {
+            if let session {
                 Menu {
+                    // 所在不挤在顶栏里：点"⋯"时写在最上面
+                    if let place = PiPlace.name(of: session, project: digest?.project) {
+                        Section("在 \(place)") {}
+                    }
                     if MacDelivery.canRename(session) {
                         Button("重命名", systemImage: "pencil") { renaming = session }.disabled(!services.reachesPiHost)
                     }

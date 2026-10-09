@@ -106,7 +106,7 @@ struct SessionPage: View {
                 ToolbarItem(placement: .navigation) { title(session, digest: digest, ending: shownEnd?.isOpen == true) }
                     .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .primaryAction) {
-                    menu(session, live: live, ending: shownEnd?.isOpen == true).headerVisibility(follow.showsHeader)
+                    menu(session, place: PiPlace.name(of: session, project: digest.project), live: live, ending: shownEnd?.isOpen == true).headerVisibility(follow.showsHeader)
                 }
                 // 让开时连系统给圆钮画的玻璃一起不画
                 .sharedBackgroundVisibility(follow.showsHeader ? .automatic : .hidden)
@@ -121,14 +121,14 @@ struct SessionPage: View {
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
-    /// 工具栏标题位：会话名，下面一行"所在 · 状态 · 计时"。
+    /// 工具栏标题位：会话名，下面一行状态与计时（所在写在"⋯"菜单最上面）。
     private func title(_ session: PiSessionState, digest: SessionDigest, ending: Bool) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(digest.title ?? session.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.ink).lineLimit(1)
             if ending {
                 Text("正在结束…").font(.system(size: 12)).foregroundStyle(palette.ink3)
             } else {
-                PiSessionSubtitle(session: session, project: digest.project)
+                PiSessionSubtitle(session: session)
             }
         }
         .padding(.horizontal, 6)
@@ -146,13 +146,14 @@ struct SessionPage: View {
         }
     }
 
-    /// 工具栏右边的"⋯"：重命名、跳到终端（开在终端里的在线会话）、结束会话；都没有时不出现。
-    @ViewBuilder private func menu(_ session: PiSessionState, live: CuePi.PiSession?, ending: Bool) -> some View {
+    /// 工具栏右边的"⋯"：最上面写所在，下面重命名、跳到终端（开在终端里的在线会话）、结束会话；都没有时不出现。
+    @ViewBuilder private func menu(_ session: PiSessionState, place: String?, live: CuePi.PiSession?, ending: Bool) -> some View {
         let canJump = live.map { !$0.hosted } ?? false
         let canEnd = MacDelivery.canEnd(session)
         let canRename = MacDelivery.canRename(session)
-        if canRename || canJump || canEnd {
+        if place != nil || canRename || canJump || canEnd {
             Menu("更多", systemImage: "ellipsis") {
+                if let place { Section("在 \(place)") {} }
                 if canRename {
                     Button("重命名…", systemImage: "pencil") { renaming = session }
                 }

@@ -182,7 +182,7 @@ struct AgentScreen: View {
     private static let headerInsets = EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
 
     /// 行的上下留白：行之间不画分隔线，三行字靠留白分开（与 Mac 的 Agent 整页一样）。
-    static let rowPadding: CGFloat = 13
+    static let rowPadding: CGFloat = 11
 
     /// 一行：纸底；长按与左滑都有"重命名"（读得到的会话）与"结束会话"（在线的）。
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
