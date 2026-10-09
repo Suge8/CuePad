@@ -156,10 +156,18 @@ public struct PiIntegration: Sendable {
         case .found: break
         }
         if currentFile() == .foreign { throw PiInstallError.foreignFile }
+        // 两个文件各自原子写入，合起来靠顺序与还原：先把两个目录都建好（建不出来就什么都没写），再写扩展，
+        // skill 写不进去时把扩展还原成原来的样子（没有就删掉），不留半升级的状态。
         try FileManager.default.createDirectory(at: paths.extensionsDirectory, withIntermediateDirectories: true)
-        try Data(PiExtensionBundle.source.utf8).write(to: installedFile, options: .atomic)
         try FileManager.default.createDirectory(at: skillFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data(PiSkillBundle.text(cuepad: cuepad).utf8).write(to: skillFile, options: .atomic)
+        let previous = try? Data(contentsOf: installedFile)
+        try Data(PiExtensionBundle.source.utf8).write(to: installedFile, options: .atomic)
+        do {
+            try Data(PiSkillBundle.text(cuepad: cuepad).utf8).write(to: skillFile, options: .atomic)
+        } catch {
+            if let previous { try? previous.write(to: installedFile, options: .atomic) } else { try? FileManager.default.removeItem(at: installedFile) }
+            throw error
+        }
     }
 
     private func currentFile() -> PiIntegrationFile {

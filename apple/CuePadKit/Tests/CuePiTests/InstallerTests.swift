@@ -168,6 +168,31 @@ struct InstallerTests {
         #expect(!FileManager.default.fileExists(atPath: installedFile.path))
     }
 
+    /// 扩展与 skill 一起升级：后一步写不进去时，前一步已写的要还原，不留半升级的状态。
+    @Test func aFailureWritingTheSkillLeavesTheExtensionAsItWas() async throws {
+        try fakePi(printing: "0.87.1")
+        let old = "// CuePad Pi bridge extension\nconst EXTENSION_VERSION = 1;\n"
+        try writeInstalled(old)
+        try FileManager.default.createDirectory(at: skillFile, withIntermediateDirectories: true)  // SKILL.md 的位置被一个目录占着：写不进去
+
+        await #expect(throws: (any Error).self) { try await installer().install() }
+        #expect(try String(contentsOf: installedFile, encoding: .utf8) == old)
+
+        try FileManager.default.removeItem(at: installedFile)  // 原来没有扩展：失败后仍然没有
+        await #expect(throws: (any Error).self) { try await installer().install() }
+        #expect(!FileManager.default.fileExists(atPath: installedFile.path))
+    }
+
+    /// skill 的目录建不出来时，什么都不写。
+    @Test func aFailureCreatingTheSkillsDirectoryWritesNothing() async throws {
+        try fakePi(printing: "0.87.1")
+        try FileManager.default.createDirectory(at: paths.agentDirectory, withIntermediateDirectories: true)
+        try "占位".write(to: paths.skillsDirectory, atomically: true, encoding: .utf8)  // skills 是个文件
+
+        await #expect(throws: (any Error).self) { try await installer().install() }
+        #expect(!FileManager.default.fileExists(atPath: installedFile.path))
+    }
+
     @Test func foreignFileWithSameNameIsNeverOverwritten() async throws {
         try fakePi(printing: "0.87.1")
         try writeInstalled("export default function () { /* mine */ }\n")
