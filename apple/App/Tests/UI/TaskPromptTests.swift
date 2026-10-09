@@ -152,6 +152,15 @@ struct TaskPromptTests {
         try await enter(.settled, recorder)
         #expect(try await action(of: prompt, in: task) == .handAgain)
 
+        // 已有一条回答、Agent 接着跑工具：算已回复，但仍在处理，只给看会话
+        try await enter(.tool, recorder)
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "a1", seq: 1, role: .pi, text: "先看下日志", at: .now)], recap: PiRecap()))
+        #expect(try await state(of: prompt, in: task) == "replied atlas")
+        #expect(try await action(of: prompt, in: task) == .watch)
+        try await enter(.settled, recorder)
+        #expect(try await action(of: prompt, in: task) == .handAgain)
+
         // 手机重发还在路上：又是在处理
         _ = try await store.requestDelivery("先复现，这次带上日志", to: atlas, on: "mac-a", card: prompt.id)
         #expect(try await action(of: prompt, in: task) == .watch)

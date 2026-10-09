@@ -51,8 +51,9 @@ nonisolated enum PromptState: Equatable, Sendable {
         switch self {
         case .unsent: .handOff
         case .launching: nil
-        case .working(let item): Self.handling(item) ? .watch : .handAgain
-        case .ended, .replied: .handAgain
+        // 已回复只说明这一轮有了回答（`CueStore.childMarks`），会话可能还在接着跑工具或等你确认
+        case .working(let item), .replied(let item?): Self.handling(item) ? .watch : .handAgain
+        case .ended, .replied(nil): .handAgain
         }
     }
 
