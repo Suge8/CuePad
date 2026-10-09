@@ -23,6 +23,13 @@ struct PiChatTests {
         #expect(entries.map(\.isUser) == [true, false])
     }
 
+    /// 压缩留在会话文件里的那一行（终端里是压缩摘要）是对话里的系统行；别的角色照旧。
+    @Test func 系统行是对话里的一种() {
+        let entries = PiChat.entries([message(1, .user, "跑一下测试"), message(2, .system, "已压缩上下文 · 压缩前约 63k tokens")])
+        #expect(entries.map(\.role) == [.user, .system] && entries.map(\.isUser) == [true, false])
+        #expect(PiChat.meta(message(2, .system, "已压缩上下文")) == nil)
+    }
+
     @Test func 每轮回答上方写调了几个工具与做了多久() {
         #expect(PiChat.meta(message(2, .pi, "好了", tools: 5, took: 125)) == "运行了 5 个工具 · 2 分")
         #expect(PiChat.meta(message(2, .pi, "好了", tools: 1, took: 40)) == "运行了 1 个工具 · 40 秒")
@@ -43,6 +50,18 @@ struct PiChatTests {
         let shown = PiChat.outgoing([sent, waiting, answer], messages: [message(1, .user, "把断言也改了", delivery: sent.id)])
 
         #expect(shown.map(\.id) == [waiting.id])
+    }
+
+    /// 对话只来自会话文件：斜杠命令不是"你发出的话"，在路上、没成功、成功之后都不在对话里挂气泡
+    /// （/compact、/name、/reload 在会话文件里没有带请求 id 的用户消息，挂了就永远换不掉）。
+    @Test func 斜杠命令不是气泡() async throws {
+        let app = TestApp()
+        try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
+        let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
+        let said = try await app.services.requestMacDelivery("先说一句", to: session, mode: .send)
+        let command = try await app.services.requestMacDelivery("/compact", to: session, mode: .command)
+
+        #expect(PiChat.outgoing([said, command], messages: []).map(\.id) == [said.id])
     }
 
     @Test func 七天前活跃过又没有对话的会话_打开时请Mac补写() async throws {
