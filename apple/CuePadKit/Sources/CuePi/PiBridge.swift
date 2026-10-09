@@ -22,8 +22,9 @@ public final class PiBridge {
     @ObservationIgnored private var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
     /// 已经重试过一次的"被拒绝"socket：文件还在时不再排重试，之后只在目录事件/重扫时再看
     @ObservationIgnored private var retried: Set<String> = []
-    /// 已报告不兼容的 socket：文件还在时不再重连，避免每次目录事件都重复报告
-    @ObservationIgnored private var incompatible: Set<String> = []
+    /// 已报告不兼容的 socket 文件：同一个文件还在时不再重连，避免每次目录事件都重复报告。按文件本身认（不按名字）：
+    /// /reload 在同一路径建的新 socket 名字不变，得照常去连
+    @ObservationIgnored private var incompatible: [String: PiSocketDirectory.FileIdentity] = [:]
     @ObservationIgnored private var watcher: FSEventsWatcher?
     @ObservationIgnored private var watchTask: Task<Void, Never>?
     @ObservationIgnored private var subscribers: [UUID: AsyncStream<PiSessionChange>.Continuation] = [:]
@@ -31,13 +32,18 @@ public final class PiBridge {
     /// 一条已连接的 socket 及其未完成的命令。
     private final class Link {
         let connection: PiSocketConnection
+        /// 连上时的那个 socket 文件
+        let file: PiSocketDirectory.FileIdentity
         var session: PiSession?
         var pending: [String: CheckedContinuation<PiWire.Ack, any Error>] = [:]
         var nextCommand = 0
         var byeReason: String?
         var rejected = false
         var exitWatcher: ProcessExitWatcher?
-        init(connection: PiSocketConnection) { self.connection = connection }
+        init(connection: PiSocketConnection, file: PiSocketDirectory.FileIdentity) {
+            self.connection = connection
+            self.file = file
+        }
     }
 
     private static let ackTimeout: Duration = .seconds(10)
@@ -165,16 +171,18 @@ public final class PiBridge {
     private func scan() {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         let present = Set(names.filter { $0.hasSuffix(".sock") }.map { String($0.dropLast(".sock".count)) })
-        incompatible.formIntersection(present)
+        incompatible = incompatible.filter { present.contains($0.key) }
         retried.formIntersection(present)
-        for name in present where links[name] == nil && !incompatible.contains(name) { connect(name) }
+        for name in present where links[name] == nil { connect(name) }
     }
 
+    private func socketPath(_ name: String) -> String { directory.appending(path: name + ".sock").path }
+
     private func connect(_ name: String) {
-        let path = directory.appending(path: name + ".sock").path
-        guard PiSocketDirectory.isOwnSocket(path) else { return }
+        let path = socketPath(name)
+        guard PiSocketDirectory.isOwnSocket(path), let file = PiSocketDirectory.identity(of: path), incompatible[name] != file else { return }
         do {
-            let link = Link(connection: try PiSocketConnection(path: path))
+            let link = Link(connection: try PiSocketConnection(path: path), file: file)
             links[name] = link
             Task { await consume(link, name: name) }
         } catch PiSocketConnection.ConnectError.connect(let code) where code == ECONNREFUSED {
@@ -182,7 +190,7 @@ public final class PiBridge {
         } catch PiSocketConnection.ConnectError.connect(let code) where code == ENOENT {
             // 扫描与文件删除之间的竞态
         } catch {
-            incompatible.insert(name)
+            incompatible[name] = file
             emit(.incompatible(id: name, detail: "cannot connect: \(error)"))
         }
     }
@@ -200,7 +208,7 @@ public final class PiBridge {
     @discardableResult
     private func removeIfStale(_ name: String) -> Bool {
         guard let pid = PiSocketDirectory.pid(fromSocketName: name + ".sock"), PiSocketDirectory.processIsDead(pid) else { return false }
-        return unlink(directory.appending(path: name + ".sock").path) == 0
+        return unlink(socketPath(name)) == 0
     }
 
     // MARK: 读循环
@@ -285,14 +293,14 @@ public final class PiBridge {
     /// 不兼容/损坏：报告并断开。会话若已出现，随后走正常的结束路径。
     private func reject(_ link: Link, name: String, detail: String) {
         link.rejected = true
-        incompatible.insert(name)
+        incompatible[name] = link.file
         emit(.incompatible(id: name, detail: detail))
         link.connection.close()
     }
 
     /// 进程已退出：它的 socket 文件若还在（强杀）就删掉。正常退出时扩展自己已删。
     private func processExited(_ name: String) {
-        let path = directory.appending(path: name + ".sock").path
+        let path = socketPath(name)
         if PiSocketDirectory.isOwnSocket(path) { unlink(path) }
         orphanExitWatchers.removeValue(forKey: name)?.cancel()
     }
@@ -307,10 +315,14 @@ public final class PiBridge {
         } else {
             link.exitWatcher?.cancel()
         }
-        guard let session = link.session else { return }
-        sessions.removeAll { $0.id == session.id }
-        endedSessions[session.id] = session
-        emit(.ended(session, reason: link.byeReason.map { .closed(reason: $0) } ?? .disconnected))
+        if let session = link.session {
+            sessions.removeAll { $0.id == session.id }
+            endedSessions[session.id] = session
+            emit(.ended(session, reason: link.byeReason.map { .closed(reason: $0) } ?? .disconnected))
+        }
+        // /reload：同一进程在同一路径重新 listen。新文件的目录事件可能在这条连接还挂着时就被扫过（扫描跳过有连接的名字），
+        // 之后不会再有事件，所以收尾时文件还在就当场连一次；还是旧文件（扩展还没删）时连不上，新文件的事件随后会到
+        if FileManager.default.fileExists(atPath: socketPath(name)) { connect(name) }
     }
 }
 #endif
