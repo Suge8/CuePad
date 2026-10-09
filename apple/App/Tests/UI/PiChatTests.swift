@@ -9,16 +9,16 @@ import Testing
 struct PiChatTests {
     let start = Date(timeIntervalSince1970: 1_000_000)
 
-    func message(_ seq: Int64, _ role: PiChatRole, _ text: String, tools: Int = 0, took: TimeInterval? = nil, delivery: UUID? = nil)
+    func message(_ seq: Int64, _ role: PiChatRole, _ text: String, tools: PiChatMessage.Tools? = nil, took: TimeInterval? = nil, delivery: UUID? = nil)
         -> PiChatMessage
     {
         PiChatMessage(
             sessionID: "s", entryID: "e\(seq)", seq: seq, role: role, text: text, at: start.addingTimeInterval(took ?? 0),
-            toolCount: tools, roundStartedAt: took == nil ? nil : start, deliveryID: delivery)
+            tools: tools, roundStartedAt: took == nil ? nil : start, deliveryID: delivery)
     }
 
     @Test func 对话按先后排_你的话与Pi的回答各成一条() {
-        let entries = PiChat.entries([message(1, .user, "跑一下测试"), message(2, .pi, "全部通过", tools: 3, took: 75)])
+        let entries = PiChat.entries([message(1, .user, "跑一下测试"), message(2, .pi, "全部通过", tools: .init(commands: 3), took: 75)])
         #expect(entries.map(\.text) == ["跑一下测试", "全部通过"])
         #expect(entries.map(\.isUser) == [true, false])
     }
@@ -39,7 +39,7 @@ struct PiChatTests {
     @Test func 预览卡按创建时间插进对话() {
         let timed = [
             PiChatMessage(sessionID: "s", entryID: "e1", seq: 1, role: .user, text: "给我看看", at: start),
-            PiChatMessage(sessionID: "s", entryID: "e2", seq: 2, role: .pi, text: "发给你了", at: start.addingTimeInterval(30), toolCount: 2, roundStartedAt: start),
+            PiChatMessage(sessionID: "s", entryID: "e2", seq: 2, role: .pi, text: "发给你了", at: start.addingTimeInterval(30), tools: .init(commands: 2), roundStartedAt: start),
             PiChatMessage(sessionID: "s", entryID: "e3", seq: 3, role: .user, text: "再来一份", at: start.addingTimeInterval(100)),
             PiChatMessage(sessionID: "s", entryID: "e4", seq: 4, role: .pi, text: "好了", at: start.addingTimeInterval(130)),
         ]
@@ -53,11 +53,34 @@ struct PiChatTests {
         #expect(PiChat.entries(timed).count == 4)  // 没有预览就只有对话
     }
 
-    @Test func 每轮回答上方写调了几个工具与做了多久() {
-        #expect(PiChat.meta(message(2, .pi, "好了", tools: 5, took: 125)) == "运行了 5 个工具 · 2 分")
-        #expect(PiChat.meta(message(2, .pi, "好了", tools: 1, took: 40)) == "运行了 1 个工具 · 40 秒")
+    @Test func 每轮回答上方写工具活动的一句话与做了多久() {
+        #expect(PiChat.meta(message(2, .pi, "好了", tools: .init(commands: 5), took: 125)) == "运行了 5 条命令 · 2 分")
+        #expect(PiChat.meta(message(2, .pi, "好了", tools: .init(reads: 1), took: 40)) == "读了 1 个文件 · 40 秒")
         #expect(PiChat.meta(message(2, .pi, "好了", took: 8)) == "用时 8 秒")
         #expect(PiChat.meta(message(1, .user, "你好")) == nil)
+    }
+
+    /// 改文件、跑命令优先于读取和搜索；三类以内全列，超过三类只列前两类、其余合计；失败的不算成功、单独写在最后。
+    @Test(arguments: [
+        (PiChatMessage.Tools(edits: 2, reads: 3), "改了 2 个文件，读了 3 个文件"),
+        (PiChatMessage.Tools(edits: 2, commands: 2, reads: 3), "改了 2 个文件，运行了 2 条命令，读了 3 个文件"),
+        (PiChatMessage.Tools(commands: 1, reads: 3, searches: 2, others: 1), "运行了 1 条命令，读了 3 个文件，其余 3 个"),
+        (PiChatMessage.Tools(edits: 1, reads: 3, searches: 1, failed: 1), "改了 1 个文件，读了 3 个文件，搜索了 1 次，1 条失败"),
+        (PiChatMessage.Tools(edits: 1, commands: 1, reads: 1, searches: 1), "改了 1 个文件，运行了 1 条命令，其余 2 个"),
+        (PiChatMessage.Tools(reads: 3, searches: 1), "读了 3 个文件，搜索了 1 次"),
+        (PiChatMessage.Tools(others: 4), "调用了 4 个工具"),
+        (PiChatMessage.Tools(commands: 2, failed: 1), "运行了 2 条命令，1 条失败"),
+        (PiChatMessage.Tools(failed: 2), "2 条失败"),
+    ])
+    func 工具活动的一句话(tools: PiChatMessage.Tools, line: String) {
+        #expect(PiChat.toolSummary(tools) == line)
+    }
+
+    @Test func 改文件的行数() {
+        #expect(PiChat.diffLabel(added: 12, removed: 3) == "+12 −3")
+        #expect(PiChat.diffLabel(added: 24, removed: nil) == "+24")
+        #expect(PiChat.diffLabel(added: 2, removed: 0) == "+2")
+        #expect(PiChat.diffLabel(added: nil, removed: nil) == "")
     }
 
     @Test func 发出的话在对话里出现之前是气泡_出现之后不再显示() async throws {

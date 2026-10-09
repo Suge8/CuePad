@@ -14,7 +14,7 @@ public enum PiChatRole: String, Sendable, CaseIterable {
 ///
 /// 唯一来源是 Pi 的会话文件：Mac 读会话文件写出（在线会话随文件追加跟上，更早的按需补写），记录 id 由会话 id 与
 /// 文件里那一条的 id 算出，重读不重复。一轮一条 Pi 消息：这一轮最后的回答；中途调工具时说的话、思考与工具输出都不同步，
-/// 只记这一轮调了几个工具、从你说话起做了多久（界面写"运行了 5 个工具 · 2 分钟"）。
+/// 只记这一轮的工具活动摘要（`tools`：分类计数与一份紧凑清单，不含工具输出）和从你说话起做了多久（界面写"改了 2 个文件，运行了 5 条命令 · 2 分钟"）。
 public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// Pi 自己的会话 id（同 `PiSessionState.sessionID`）
@@ -26,8 +26,8 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public var text: String
   /// 这条消息的时间（会话文件里的时间戳）
   public var at: Date
-  /// Pi 消息：这一轮调了几个工具（0：没调）；你的消息为 0
-  public var toolCount: Int
+  /// Pi 消息：这一轮的工具活动（没调工具为 nil）；你的消息为 nil
+  public var tools: Tools?
   /// Pi 消息：这一轮从哪一刻开始（你说话或机器消息到达）；与 `at` 之差是做了多久。你的消息为 nil
   public var roundStartedAt: Date?
   /// 你的消息：它是 CuePad 的哪条投送请求送进去的（扩展把请求 id 写进会话文件里那条消息）；在终端里直接打的为 nil。
@@ -41,7 +41,7 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
   public static let textLimit = 8_000
 
   public init(
-    sessionID: String, entryID: String, seq: Int64, role: PiChatRole, text: String, at: Date, toolCount: Int = 0,
+    sessionID: String, entryID: String, seq: Int64, role: PiChatRole, text: String, at: Date, tools: Tools? = nil,
     roundStartedAt: Date? = nil, deliveryID: UUID? = nil
   ) {
     id = Self.recordID(sessionID: sessionID, entryID: entryID)
@@ -50,7 +50,7 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
     self.role = .known(role)
     self.text = text.count > Self.textLimit ? String(text.prefix(Self.textLimit - 1)) + "…" : text
     self.at = at
-    self.toolCount = toolCount
+    self.tools = tools
     self.roundStartedAt = roundStartedAt
     self.deliveryID = deliveryID
     createdAt = .stamp
@@ -66,10 +66,10 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
 extension PiChatMessage: Record {
   static let table = Table.piMessages
   static let columns = [
-    "id", "sessionID", "seq", "role", "text", "at", "toolCount", "roundStartedAt", "deliveryID", "createdAt", "modifiedAt",
+    "id", "sessionID", "seq", "role", "text", "at", "tools", "roundStartedAt", "deliveryID", "createdAt", "modifiedAt",
   ]
   var bindings: [any SQLBindable] {
-    [id, sessionID, seq, role.rawValue, text, at, Int64(toolCount), roundStartedAt, deliveryID, createdAt, modifiedAt]
+    [id, sessionID, seq, role.rawValue, text, at, tools?.stored, roundStartedAt, deliveryID, createdAt, modifiedAt]
   }
   init(row: Row) {
     id = row.uuid(0)
@@ -78,11 +78,80 @@ extension PiChatMessage: Record {
     role = Open(rawValue: row.text(3))
     text = row.text(4)
     at = row.date(5)
-    toolCount = Int(row.int(6))
+    tools = row.textOrNil(6).flatMap(Tools.init(stored:))
     roundStartedAt = row.dateOrNil(7)
     deliveryID = row.uuidOrNil(8)
     createdAt = row.date(9)
     modifiedAt = row.date(10)
+  }
+}
+
+extension PiChatMessage {
+  /// 一轮里 Agent 的工具活动：各类成功的次数（读、改文件按文件算）、失败的调用数和一份按先后的清单。
+  /// 由 Mac 从会话文件汇出（上限——清单条数与每条的长度——由那一侧定），同步记录里存为 JSON（加密字段 `tools`）。
+  public struct Tools: Codable, Equatable, Sendable {
+    /// 声明顺序即摘要里的优先级：改文件、跑命令比读取和搜索更值得说
+    public enum Kind: String, Codable, CaseIterable, Sendable {
+      case edit, command, read, search, other
+    }
+
+    public struct Item: Codable, Equatable, Sendable {
+      public var kind: Kind
+      /// 文件路径（相对工作目录）、命令的第一个非空行、搜索的模式或工具名
+      public var target: String
+      public var failed: Bool
+      /// 改文件：新增、删除的行数；算不出为 nil
+      public var added: Int?
+      public var removed: Int?
+
+      public init(kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil) {
+        self.kind = kind
+        self.target = target
+        self.failed = failed
+        self.added = added
+        self.removed = removed
+      }
+    }
+
+    public var edits: Int, commands: Int, reads: Int, searches: Int, others: Int
+    /// 失败的调用数（不在各类里）
+    public var failed: Int
+    public var items: [Item]
+
+    public init(edits: Int = 0, commands: Int = 0, reads: Int = 0, searches: Int = 0, others: Int = 0, failed: Int = 0, items: [Item] = []) {
+      self.edits = edits
+      self.commands = commands
+      self.reads = reads
+      self.searches = searches
+      self.others = others
+      self.failed = failed
+      self.items = items
+    }
+
+    /// 调用总数（成功的各类加失败的）
+    public var total: Int { edits + commands + reads + searches + others + failed }
+
+    public subscript(kind: Kind) -> Int {
+      switch kind {
+      case .edit: edits
+      case .command: commands
+      case .read: reads
+      case .search: searches
+      case .other: others
+      }
+    }
+
+    var stored: String {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = .sortedKeys  // 同样的内容同样的字节：重读时只在真的变了才改写记录
+      return String(decoding: try! encoder.encode(self), as: UTF8.self)
+    }
+
+    /// 读不出的（别的版本写的、格式不认识）当作没有。
+    init?(stored: String) {
+      guard let tools = try? JSONDecoder().decode(Self.self, from: Data(stored.utf8)) else { return nil }
+      self = tools
+    }
   }
 }
 
@@ -122,7 +191,13 @@ extension CueStore {
   /// 在调用方的写事务里写对话与摘要（原样写会话文件的投影；"已结束的会话没有进行中的提问"在读出时定，见
   /// `PiSessionState.pendingPrompt`）。会话记录还不存在时只写消息。
   func applyTranscript(_ transcript: PiTranscript) throws {
-    for message in transcript.messages { try insert(message, ignoringExisting: true) }
+    for message in transcript.messages {
+      if try insert(message, ignoringExisting: true) { continue }
+      // 已写过的消息只有工具活动会变（读文件的规则升级后重读）：同样的内容不改写，免得重复上传
+      try db.run(
+        "UPDATE piMessages SET tools = ?1, modifiedAt = ?2 WHERE id = ?3 AND tools IS NOT ?1",
+        [message.tools?.stored, Date.stamp, message.id])
+    }
     let recap = transcript.recap
     try db.run(
       """

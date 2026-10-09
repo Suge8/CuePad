@@ -173,8 +173,19 @@ nonisolated extension PiChatMessage {
     init(_ entry: PiTranscriptEntry, sessionID: String) {
         self.init(
             sessionID: sessionID, entryID: entry.entryID, seq: entry.seq, role: PiChatRole(entry.role), text: entry.text,
-            at: entry.at, toolCount: entry.toolCount, roundStartedAt: entry.roundStartedAt,
+            at: entry.at, tools: entry.tools.map(PiChatMessage.Tools.init), roundStartedAt: entry.roundStartedAt,
             deliveryID: entry.deliveryID.flatMap(UUID.init(uuidString:)))
+    }
+}
+
+nonisolated extension PiChatMessage.Tools {
+    init(_ activity: PiToolActivity) {
+        self.init(
+            edits: activity.edits, commands: activity.commands, reads: activity.reads, searches: activity.searches, others: activity.others,
+            failed: activity.failed,
+            items: activity.items.map {
+                Item(kind: Kind(rawValue: $0.kind.rawValue) ?? .other, target: $0.target, failed: $0.failed, added: $0.added, removed: $0.removed)
+            })
     }
 }
 #endif

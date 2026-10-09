@@ -11,7 +11,7 @@ enum RecordMapper {
     .piSessionStates: ["title", "detail", "folder", "lastPrompt", "lastReply", "question", "launchToken", "subagents", "pendingPrompt", "model", "thinking", "models", "context", "commands"],
     .deliveryRequests: ["content", "targetName", "targetRef", "resultDetail"],
     .directoryBindings: ["hostName", "folder"],
-    .piMessages: ["text"],
+    .piMessages: ["text", "tools"],
     .previews: ["name", "title"],
   ]
 

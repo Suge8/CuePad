@@ -115,12 +115,29 @@ extension DebugScene {
             PiChatMessage(sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: "把登录页的新样子、手机上的截图和评审结论发给我看看", at: first.addingTimeInterval(-50)),
             PiChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
-                at: last.addingTimeInterval(2), toolCount: 3, roundStartedAt: first.addingTimeInterval(-50)),
+                at: last.addingTimeInterval(2), tools: .init(commands: 3, items: [.init(kind: .command, target: "cuepad show login-v2.html"), .init(kind: .command, target: "cuepad show login-mobile.png"), .init(kind: .command, target: "cuepad show review.md")]), roundStartedAt: first.addingTimeInterval(-50)),
         ]
         try? await store.writePiTranscript(PiTranscript(
             sessionID: "notes", messages: messages,
             recap: PiRecap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))
     }
+
+    /// 演示用的工具活动：一周会议记录那一轮读了资料、改了笔记、跑了脚本。
+    private static let notesWeek = PiChatMessage.Tools(
+        edits: 2, commands: 1, reads: 3, failed: 1,
+        items: [
+            .init(kind: .read, target: "notes/2026-W39.md"), .init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .read, target: "notes/inbox.md"),
+            .init(kind: .edit, target: "notes/2026-W40.md", added: 18, removed: 4), .init(kind: .edit, target: "notes/todo.md", added: 3),
+            .init(kind: .command, target: "git status --short"), .init(kind: .command, target: "make lint-notes", failed: true),
+        ])
+
+    /// 演示用的工具活动：跑测试那一轮读了测试、跑了测试（一次失败），没有改代码。
+    private static let testRun = PiChatMessage.Tools(
+        commands: 1, reads: 2, failed: 1,
+        items: [
+            .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .read, target: "scheduler/queue.test.ts"),
+            .init(kind: .command, target: "pnpm vitest run scheduler"), .init(kind: .command, target: "pnpm vitest run scheduler --reporter=verbose", failed: true),
+        ])
 
     private static let loginPage = """
         <!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -179,11 +196,11 @@ extension DebugScene {
         return CGImageDestinationFinalize(destination) ? data as Data : nil
     }
 
-    /// 演示对话：notes 是几轮做完的对话（带工具数与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
+    /// 演示对话：notes 是几轮做完的对话（带工具活动与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
     /// relay 在另一台 Mac 上（发过去的一条已送达还没进对话、一条没能送达）。
     private static func seedChats(_ store: CueStore) async {
         let now = Date.now
-        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: Int, minutes: Double)], startedMinutesAgo: Double) async {
+        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: PiChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async {
             var messages: [PiChatMessage] = []
             var clock = now.addingTimeInterval(-startedMinutesAgo * 60)
             for (index, turn) in turns.enumerated() {
@@ -193,7 +210,7 @@ extension DebugScene {
                 if let reply = turn.pi {
                     messages.append(PiChatMessage(
                         sessionID: sessionID, entryID: "p\(index)", seq: Int64(index * 2 + 1), role: .pi, text: reply, at: clock,
-                        toolCount: turn.tools, roundStartedAt: asked))
+                        tools: turn.tools, roundStartedAt: asked))
                 }
                 clock = clock.addingTimeInterval(120)
             }
@@ -204,9 +221,9 @@ extension DebugScene {
                 recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending)))
         }
         await chat("notes", [
-            ("整理一下这周的会议记录", "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", 4, 1.5),
-            ("续费域名那条加上负责人和链接", "加好了：负责人写的是你，链接指向注册商的续费页。", 1, 0.4),
-            ("再把评审计费额度拆成两步", "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", 2, 0.8),
+            ("整理一下这周的会议记录", "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", Self.notesWeek, 1.5),
+            ("续费域名那条加上负责人和链接", "加好了：负责人写的是你，链接指向注册商的续费页。", .init(edits: 1, items: [.init(kind: .edit, target: "notes/2026-W40.md", added: 2, removed: 1)]), 0.4),
+            ("再把评审计费额度拆成两步", "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", .init(edits: 1, reads: 1, items: [.init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .edit, target: "notes/2026-W40.md", added: 5, removed: 1)]), 0.8),
             // 最坏的 Markdown：宽表（对齐语法、代码单元格、中英混排长单元格）、引用、嵌套列表、标题、链接、长代码行
             ("把三个排序方案的对比做成表格", """
             ## 对比结果
@@ -230,18 +247,18 @@ extension DebugScene {
             ```ts
             export function sortQueue(queue: Participant[]): Participant[] { return [...queue].sort((a, b) => a.firstJoinedAt - b.firstJoinedAt) }
             ```
-            """, 3, 1.0),
+            """, .init(edits: 1, reads: 2, items: [.init(kind: .read, target: "bench/sorting.md"), .init(kind: .read, target: "bench/results.csv"), .init(kind: .edit, target: "notes/sorting-compare.md", added: 24)]), 1.0),
         ], startedMinutesAgo: 20)
         await seedPreviews(store, now: now)
         await chat("atlas", [
-            ("跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", 5, 2),
-            ("按你说的改成首次加入时间排序，把断言也改了，再跑一遍", nil, 0, 0),
+            ("跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", Self.testRun, 2),
+            ("按你说的改成首次加入时间排序，把断言也改了，再跑一遍", nil, nil, 0),
         ], startedMinutesAgo: 6)
         await chat("homepage", [
-            ("把 RSS 输出改成全文", nil, 0, 0),
+            ("把 RSS 输出改成全文", nil, nil, 0),
         ], startedMinutesAgo: 3)
         await chat("relay", [
-            ("看一下线上库的迁移有没有卡住", "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", 3, 1.2),
+            ("看一下线上库的迁移有没有卡住", "迁移跑到第 14 步停住了：`add_index_on_cards` 在等锁。现在没有别的写入，可以安全重跑。", .init(commands: 3, items: [.init(kind: .command, target: "psql -c 'select * from schema_migrations order by id desc limit 3'"), .init(kind: .command, target: "psql -c 'select pid, state, query from pg_stat_activity'"), .init(kind: .command, target: "psql -c 'select * from pg_locks where not granted'")]), 1.2),
         ], startedMinutesAgo: 10)
     }
 

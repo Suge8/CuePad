@@ -285,7 +285,7 @@ struct HistorySummaryOnlyTests {
         let next = try PiHistory.index(file: file.url, from: summary.checkpoint)
         #expect(next.checkpoint == (try PiHistory.index(file: file.url, from: nil)).checkpoint)
         #expect(next.recap == PiTranscriptRecap(lastPrompt: "顺便再看下日志", lastReply: "日志里没有异常", pendingPrompt: nil))
-        #expect(next.transcript.map(\.toolCount) == [2])
+        #expect(next.transcript.map { $0.tools?.commands } == [2])
     }
 }
 

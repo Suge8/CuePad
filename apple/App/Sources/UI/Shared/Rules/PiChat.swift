@@ -10,6 +10,8 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
     let role: Role
     let text: String
     let meta: String?
+    /// Pi 回答：这一轮的工具活动，点开 `meta` 那一行就地展开成清单
+    var tools: PiChatMessage.Tools?
     /// 预览：要显示的预览记录
     var preview: PiPreview?
 
@@ -44,17 +46,44 @@ nonisolated enum PiChat {
         for message in messages {
             guard let role = message.role.known else { continue }
             place(before: message.at)
-            entries.append(PiChatEntry(id: message.id, role: PiChatEntry.Role(role), text: message.text, meta: meta(message)))
+            entries.append(PiChatEntry(id: message.id, role: PiChatEntry.Role(role), text: message.text, meta: meta(message), tools: message.tools))
         }
         place(before: nil)
         return entries
     }
 
-    /// Pi 回答上方的一行："运行了 5 个工具 · 2 分"；没调工具时"用时 8 秒"（时长写法见 `PiClock.duration`）。你的话没有。
+    /// Pi 回答上方的一行："改了 2 个文件，运行了 5 条命令 · 2 分"；没调工具时"用时 8 秒"（时长写法见 `PiClock.duration`）。你的话没有。
     static func meta(_ message: PiChatMessage) -> String? {
         guard message.role == .known(.pi), let started = message.roundStartedAt else { return nil }
         let took = PiClock.duration(message.at.timeIntervalSince(started))
-        return message.toolCount > 0 ? "运行了 \(message.toolCount) 个工具 · \(took)" : "用时 \(took)"
+        return message.tools.map { "\(toolSummary($0)) · \(took)" } ?? "用时 \(took)"
+    }
+
+    /// 一轮工具活动的一句话："读了 3 个文件，改了 2 个文件，1 条失败"。分类按改文件、跑命令、读取、搜索、其他的优先级，
+    /// 三类以内全写，超过三类只写前两类、其余合计成"其余 N 个"；失败的不算进各类，单独写在最后。
+    static func toolSummary(_ tools: PiChatMessage.Tools) -> String {
+        let kinds = PiChatMessage.Tools.Kind.allCases.filter { tools[$0] > 0 }
+        let listed = kinds.count > 3 ? 2 : kinds.count
+        var parts = kinds.prefix(listed).map { phrase($0, tools[$0]) }
+        let rest = kinds.dropFirst(listed).reduce(0) { $0 + tools[$1] }
+        if rest > 0 { parts.append("其余 \(rest) 个") }
+        if tools.failed > 0 { parts.append("\(tools.failed) 条失败") }
+        return parts.joined(separator: "，")
+    }
+
+    /// 改文件的行数："+12 −3"；没有增或没有删的那一半不写，算不出的也不写。
+    static func diffLabel(added: Int?, removed: Int?) -> String {
+        [added.flatMap { $0 > 0 ? "+\($0)" : nil }, removed.flatMap { $0 > 0 ? "−\($0)" : nil }].compactMap { $0 }.joined(separator: " ")
+    }
+
+    private static func phrase(_ kind: PiChatMessage.Tools.Kind, _ count: Int) -> String {
+        switch kind {
+        case .edit: "改了 \(count) 个文件"
+        case .command: "运行了 \(count) 条命令"
+        case .read: "读了 \(count) 个文件"
+        case .search: "搜索了 \(count) 次"
+        case .other: "调用了 \(count) 个工具"
+        }
     }
 
     /// 你发出、还没出现在对话里的话（对话里还没有 `deliveryID` 等于它的消息）：作为你的气泡接在末尾，写送达情况。
