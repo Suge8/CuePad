@@ -35,6 +35,9 @@ struct PiReplyBar: View {
         nonmutating set { services.settings.setReplyDraft(newValue, for: session.id) }
     }
 
+    /// 工具排（模型与思考强度）只给在线会话：已结束的不为换模型去唤醒 Pi。没有工具时聚焦也不展开成两层。
+    private var hasTools: Bool { config != nil && session.state != .known(.ended) && !session.models.isEmpty }
+
     private var reply: PiReply { MacDelivery.reply(to: session, hasImages: draft.hasImages) }
 
     /// 发消息时可用的方式：第一个是点发送的方式，其余在长按菜单里。
@@ -65,7 +68,8 @@ struct PiReplyBar: View {
         case .message, .answer:
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, compact: compact, showsSend: canStop, commands: answering == nil ? session.commands : [], submit: submit,
+                cardsFrom: session.projectID, compact: compact, showsSend: canStop, expandsOnFocus: hasTools,
+                commands: answering == nil ? session.commands : [], submit: submit,
                 header: {
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
                     if focused, let failure = config?.failure {
@@ -74,10 +78,7 @@ struct PiReplyBar: View {
                     }
                 },
                 tools: {
-                    // 只给在线会话：已结束的不为换模型去唤醒 Pi
-                    if let config, session.state != .known(.ended), !session.models.isEmpty {
-                        PiConfigControls(session: session, shown: config)
-                    }
+                    if hasTools, let config { PiConfigControls(session: session, shown: config) }
                 },
                 send: { sendControl }
             )

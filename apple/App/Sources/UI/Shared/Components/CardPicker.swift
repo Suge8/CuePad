@@ -194,7 +194,7 @@ struct CardRow: View {
 
     /// 变量照常标色，搜索词再叠一层命中底色。
     private func marked(_ string: String) -> AttributedString {
-        terms.reduce(VariableText.styled(string, palette)) { result, word in Highlight.matches(string, word, base: result) }
+        Highlight.matches(string, highlight, base: VariableText.styled(string, palette))
     }
 }
 

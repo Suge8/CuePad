@@ -146,13 +146,28 @@ private extension AnyTransition {
 private struct UserBubble: View {
     private static let widthFraction: CGFloat = 0.78
 
+    /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
+    private static let foldedLines = 6
+
     let text: String
     var trip = BubbleTrip.arrived
     var highlighted = false
+    @Environment(\.palette) private var palette
+    @State private var expanded = false
+    /// 折起时文字确实被截掉了（按同一宽度量全文的高度比较）。
+    @State private var truncated = false
 
     var body: some View {
         TrailingFraction(fraction: Self.widthFraction) {
-            BubbleText(text: text, highlighted: highlighted, trip: trip)
+            VStack(alignment: .trailing, spacing: 4) {
+                BubbleText(text: text, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines, truncated: $truncated)
+                if truncated, !expanded {
+                    Button("展开") { expanded = true }
+                        .font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+                        .buttonStyle(.plain)
+                        .frame(minHeight: 28)
+                }
+            }
         }
         .transition(.entry)
     }
@@ -163,6 +178,9 @@ private struct BubbleText: View {
     let text: String
     var highlighted = false
     var trip = BubbleTrip.arrived
+    var lineLimit: Int?
+    /// 给了时报告文字是否被 `lineLimit` 截掉。
+    var truncated: Binding<Bool>?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -173,7 +191,9 @@ private struct BubbleText: View {
             }
             Text(text)
                 .font(.body).foregroundStyle(palette.onBubble)
+                .lineLimit(lineLimit)
                 .textSelection(.enabled)
+                .background(alignment: .topLeading) { if let truncated, lineLimit != nil { fullHeight(truncated) } }
                 .padding(.horizontal, 14).padding(.vertical, 10)
                 .background(palette.bubble, in: shape)
                 .overlay { edge(shape) }
@@ -182,6 +202,16 @@ private struct BubbleText: View {
         }
         .animation(Motion.quick, value: highlighted)
         .animation(Motion.quick, value: trip)
+    }
+
+    /// 同一宽度下排全文要多高，与折起后的高度比，量出有没有被截掉；只读几何、不影响自己的排版（藏起的全文不占位）。
+    private func fullHeight(_ truncated: Binding<Bool>) -> some View {
+        GeometryReader { shown in
+            Text(text).font(.body).fixedSize(horizontal: false, vertical: true)
+                .frame(width: shown.size.width, alignment: .leading)
+                .hidden()
+                .onGeometryChange(for: Bool.self) { $0.size.height > shown.size.height + 1 } action: { truncated.wrappedValue = $0 }
+        }
     }
 
     @ViewBuilder private func edge(_ shape: RoundedRectangle) -> some View {

@@ -225,20 +225,23 @@ nonisolated extension PiShown {
     var rank: Int {
         switch status {
         case .asking: 0
-        case .failed, .restart, .delivery(.failed): 1
+        case .failed, .delivery(.failed): 1
         case .working, .delivery: 2
-        case .unread, .idle, .fresh, .unknown: 3
-        case .ended: 4
+        // 旧扩展的会话要 /reload 是可以晚点做的维护，不压在在跑的会话上面
+        case .restart: 3
+        case .unread, .idle, .fresh, .unknown: 4
+        case .ended: 5
         }
     }
 
-    /// 选会话时排在前面的（交给 Agent 的会话选单）：等你确认 → 出错 → 有新回复 → 工作中 → 停下的 → 已结束。
+    /// 选会话时排在前面的（交给 Agent 的会话选单）：等你确认 → 出错 → 有新回复 → 工作中 → 需要 /reload → 停下的 → 已结束。
     var urgency: Int {
         switch status {
-        case .asking: 5
-        case .failed, .restart, .delivery(.failed): 4
-        case .unread: 3
-        case .working, .delivery: 2
+        case .asking: 6
+        case .failed, .delivery(.failed): 5
+        case .unread: 4
+        case .working, .delivery: 3
+        case .restart: 2
         case .idle, .fresh, .unknown: 1
         case .ended: 0
         }
@@ -246,10 +249,10 @@ nonisolated extension PiShown {
 }
 
 nonisolated extension PiShown {
-    /// 要你动手：等你确认、出错、没能送达、需要 /reload。只有它们带彩色。
+    /// 要你动手：等你确认、出错、没能送达。只有它们带彩色（需要 /reload 是维护，次要墨色）。
     var needsYou: Bool {
         switch status {
-        case .asking, .restart, .failed, .delivery(.failed): true
+        case .asking, .failed, .delivery(.failed): true
         default: false
         }
     }
@@ -257,20 +260,21 @@ nonisolated extension PiShown {
 
 extension PiShown {
     /// 状态标的颜色只回答"要不要你管"：要你确认的赭黄、出错与没能送达胭脂；在动的（工作中、话在路上）是墨色、靠动效表达，
-    /// 不占签名色；有新回复墨色；其余是灰。
+    /// 不占签名色；有新回复墨色；需要 /reload 次要墨色；其余是灰。
     func tint(_ palette: Palette) -> Color {
         switch status {
-        case .asking, .restart: palette.attention
+        case .asking: palette.attention
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery, .unread: palette.ink
+        case .restart: palette.ink2
         case .idle, .fresh, .unknown: palette.ink3
         case .ended: palette.ink3.opacity(0.6)
         }
     }
 
-    /// 状态词的颜色：只有要你动手的那几个字带色，其余是次要墨色（有新回复是墨色，由调用方加粗）。整句不上色。
+    /// 状态词的颜色：只有要你动手的那几个字带色，有新回复是墨色（由调用方加粗），已结束是灰，其余次要墨色。整句不上色。
     func labelTint(_ palette: Palette) -> Color {
-        needsYou ? tint(palette) : isUnread ? palette.ink : palette.ink2
+        needsYou ? tint(palette) : isUnread ? palette.ink : status == .ended ? palette.ink3 : palette.ink2
     }
 
     /// 状态标的形状，与颜色一起表达状态（色弱也分得出）。工作中与有新回复是自绘的（`PiStateDot`），这里是它们静止时的样子。

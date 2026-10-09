@@ -16,6 +16,7 @@ struct AgentPage: View {
     @State private var starting = false
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
+    @State private var reloadOpen = false
 
     /// 列表的宽度：一行读得完，不至于横跨整个大窗口。
     private static let width: CGFloat = 720
@@ -32,6 +33,7 @@ struct AgentPage: View {
         }
         .remembersScroll()
         .background(palette.desk)
+        .environment(\.searchHighlight, query)
         .onChange(of: query) { limit = PiSessionList.pageSize }
         .onChange(of: filter) { limit = PiSessionList.pageSize }
         .renameSession($renaming)
@@ -105,7 +107,17 @@ struct AgentPage: View {
         } else {
             if !list.now.isEmpty {
                 title("现在")
-                card { ForEach(list.now) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
+                card {
+                    ForEach(PiNowRow.rows(list.now, state: \.state)) { nowRow in
+                        switch nowRow {
+                        case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
+                        case .reload(let items):
+                            PiReloadFold(count: items.count, expanded: $reloadOpen, style: .page)
+                                .padding(.horizontal, 12).padding(.vertical, 10)
+                            if reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
+                        }
+                    }
+                }
             }
             let runs = PiHistorySection.split(list.ended, date: \.state.stateSince, now: .now)
             ForEach(Array(runs.enumerated()), id: \.element.section) { index, run in
@@ -128,9 +140,10 @@ struct AgentPage: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// 一组行垫一张纸。
+    /// 一组行垫一张纸。组里的行也懒加载：历史的"更早"一组可能有几千行，普通 VStack 会把它们全建出来
+    /// （真实库三千条历史滚到底时内存涨到 1.4GB、每读一页卡一两秒）。
     private func card(@ViewBuilder _ rows: () -> some View) -> some View {
-        VStack(spacing: 0) { rows() }
+        LazyVStack(spacing: 0) { rows() }
             .padding(4)
             .paper(radius: 14)
     }
