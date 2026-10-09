@@ -3,79 +3,68 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// "发到手机预览"的端到端：真实 Pi + 安装器装进临时目录的真实扩展 + 假模型 + `PiBridge`。
-/// 模型调用扩展注册的 `cuepad_show` 工具 → 扩展经 socket 请求 CuePad（这里是测试里的处理函数）→ 结果回到工具 → 会话文件里留下一行带预览 id 的结果。
+/// "发给手机看"的端到端：真实 Pi + 安装器装进临时目录的扩展与 skill + 假模型 + 真实的 `cuepad` 命令行。
+/// 模型在 bash 里执行 `cuepad show`：Pi 给这条命令带着 `PI_SESSION_ID`，命令行据此认出会话、把预览写进（隔离的）资料库。
 @MainActor
 @Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"))
 struct RealPreviewTests {
-    private struct Refused: LocalizedError { var errorDescription: String? { "文件太大，上限 20 MB" } }
+    private func sqlite(_ database: URL, _ query: String) throws -> String {
+        let process = Process()
+        process.executableURL = URL(filePath: "/usr/bin/sqlite3")
+        process.arguments = [database.path, query]
+        let out = Pipe()
+        process.standardOutput = out
+        try process.run()
+        process.waitUntilExit()
+        return String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
-    /// 一次工具调用的 `tool_execution_end`：是否出错与结果文字
-    private func toolResult(_ pi: PiProcess) throws -> (isError: Bool, text: String) {
-        let event = try #require(pi.events.last { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "cuepad_show" })
+    private func bashResult(_ pi: PiProcess) throws -> (isError: Bool, text: String) {
+        let event = try #require(pi.events.last { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "bash" })
         let blocks = (event["result"] as? [String: Any])?["content"] as? [[String: Any]] ?? []
         return (event["isError"] as? Bool == true, blocks.compactMap { $0["text"] as? String }.joined())
     }
 
-    private func finished(_ pi: PiProcess) async throws {
-        _ = try await pi.waitForEvent("工具调用结束", { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "cuepad_show" })
-        _ = try await pi.waitForEvent("这一轮结束", { $0["type"] as? String == "agent_end" })
-    }
-
-    @Test func theToolSendsTheFileToCuePadAndTheConversationGetsAPreviewAtThatPlace() async throws {
-        let pi = try await PiProcess()
+    @Test func theSkillIsDiscoveredAndShowFromBashAttachesThePreviewToTheSession() async throws {
+        let library = try makeTempDirectory()
+        let pi = try await PiProcess(env: ["CUEPAD_LIBRARY_DIR": library.path], discoverSkills: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
-        var received: [PiShowRequest] = []
-        let preview = UUID().uuidString.lowercased()
-        bridge.showHandler = { _, request in
-            received.append(request)
-            return PiShowReply(preview: preview, note: "页面引用了 style.css，手机上看不到")
-        }
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
+        let session = bridge.sessions[0]
+        // Pi 从它的 skills 目录发现了安装器写的 skill
+        let skill = try #require(session.commands.first { $0.name == "skill:cuepad" })
+        #expect(skill.source == "skill" && skill.description?.contains("CuePad") == true)
         try "<h1>登录页</h1>".write(to: pi.cwd.appending(path: "demo.html"), atomically: true, encoding: .utf8)
 
-        try pi.prompt("[[show:demo.html|登录页改好了]] 给我看看")
-        try await finished(pi)
+        try pi.prompt("[[tool:\(PiProcess.cuepad.path) show demo.html --title 登录页改好了 --json]] 给我看看")
+        _ = try await pi.waitForEvent("命令结束", { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "bash" })
+        _ = try await pi.waitForEvent("这一轮结束", { $0["type"] as? String == "agent_end" })
 
-        // 相对路径按工作目录解析成绝对路径；Pi 的工作目录是真实路径（/tmp 在 macOS 上是 /private/tmp 的链接），所以期望值取真实路径，字符串原样相等
-        let real = String(cString: realpath(pi.cwd.path, nil))  // resolvingSymlinksInPath 会把 /private 前缀去掉，不是真实路径
-        #expect(received.map(\.path) == ["\(real)/demo.html"])
-        #expect(received.first?.title == "登录页改好了")
-        let result = try toolResult(pi)
-        #expect(!result.isError && result.text.contains("登录页改好了") && result.text.contains("style.css"))
-        let transcript = try PiHistory.index(file: #require(bridge.sessions.first?.sessionFile), from: nil).transcript
-        #expect(transcript.map(\.role) == [.user, .preview, .pi])
-        #expect(transcript[1].text == preview)
+        let result = try bashResult(pi)
+        #expect(!result.isError)
+        let reply = try #require(try JSONSerialization.jsonObject(with: Data(result.text.utf8)) as? [String: Any])
+        #expect(reply["session"] as? String == session.sessionID && reply["title"] as? String == "登录页改好了" && reply["name"] as? String == "demo.html")
+        #expect(try sqlite(library.appending(path: "cuepad.db"), "SELECT sessionID || '|' || title FROM previews") == "\(session.sessionID)|登录页改好了")
     }
 
-    @Test func aRefusedFileFailsTheToolWithTheReasonAndLeavesNoPreview() async throws {
-        let pi = try await PiProcess()
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
-        defer { bridge.stop(); pi.stop() }
-        bridge.showHandler = { _, _ in throw Refused() }
-        try bridge.start()
-        try await eventually("桥发现真实 Pi 会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
-
-        try pi.prompt("[[show:big.pdf]] 给我看看")
-        try await finished(pi)
-
-        let result = try toolResult(pi)
-        #expect(result.isError && result.text.contains("文件太大，上限 20 MB"))
-        let transcript = try PiHistory.index(file: #require(bridge.sessions.first?.sessionFile), from: nil).transcript
-        #expect(transcript.map(\.role) == [.user, .pi])
-    }
-
-    /// CuePad 没在运行（没有客户端连着这个会话）：工具立即失败并说明，不挂着等、不假装发出去了。
-    @Test func withoutCuePadConnectedTheToolFailsRightAway() async throws {
-        let pi = try await PiProcess()
-        defer { pi.stop() }
-        try pi.prompt("[[show:demo.html]] 给我看看")
-        try await finished(pi)
-
-        let result = try toolResult(pi)
-        #expect(result.isError && result.text.contains("CuePad"))
+    /// 不在 Pi 的 bash 里（没有 PI_SESSION_ID）时命令失败并说明，不猜是哪个会话。
+    @Test func outsidePiTheCommandRefusesAndNothingIsStored() async throws {
+        let library = try makeTempDirectory()
+        let page = library.appending(path: "demo.html")
+        try "<h1>x</h1>".write(to: page, atomically: true, encoding: .utf8)
+        let process = Process()
+        process.executableURL = PiProcess.cuepad
+        process.arguments = ["show", page.path]
+        process.environment = ["CUEPAD_LIBRARY_DIR": library.path]
+        let err = Pipe()
+        process.standardError = err
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus != 0)
+        #expect(String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).contains("PI_SESSION_ID"))
+        #expect(try sqlite(library.appending(path: "cuepad.db"), "SELECT count(*) FROM previews") == "0")
     }
 }
 #endif

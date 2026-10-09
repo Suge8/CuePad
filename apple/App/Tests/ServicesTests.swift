@@ -147,7 +147,7 @@ struct PiExtensionConsentTests {
     /// 询问卡片读 `needsConsent`：拒绝后它必须作为可观察的变化通知界面，卡片才会立即收起（之前要重启才消失）。
     @Test func 拒绝后询问的变化能被界面观察到() async throws {
         let rig = try rigWithPi(version: "0.90.0")
-        let manager = rig.services.piExtension
+        let manager = rig.services.piIntegration
         try await manager.refresh()
         let changed = Flag()
         withObservationTracking { _ = manager.needsConsent } onChange: { changed.set() }
@@ -165,7 +165,7 @@ struct PiExtensionConsentTests {
 
     @Test func 缺扩展时征求同意_拒绝后不再提示也不安装_同意后安装() async throws {
         let rig = try rigWithPi(version: "0.90.0")
-        let manager = rig.services.piExtension
+        let manager = rig.services.piIntegration
 
         try await manager.refresh()
         #expect(manager.needsConsent)
@@ -175,19 +175,22 @@ struct PiExtensionConsentTests {
         #expect(!manager.needsConsent)
         #expect(manager.status?.file == .missing)  // 拒绝过首次安装：维持不装
 
+        #expect(!FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.path))  // 拒绝：扩展与 skill 都不装
+
         try await manager.install()
         #expect(manager.status?.file == .current)
         #expect(FileManager.default.fileExists(atPath: rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts").path))
+        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))
     }
 
     @Test func Pi_版本过低或不存在时不征求同意() async throws {
         let tooOld = try rigWithPi(version: "0.80.0")
-        try await tooOld.services.piExtension.refresh()
-        #expect(!tooOld.services.piExtension.needsConsent)
+        try await tooOld.services.piIntegration.refresh()
+        #expect(!tooOld.services.piIntegration.needsConsent)
 
         let absent = TestApp()
-        try await absent.services.piExtension.refresh()
-        #expect(!absent.services.piExtension.needsConsent)
+        try await absent.services.piIntegration.refresh()
+        #expect(!absent.services.piIntegration.needsConsent)
     }
 
     /// 同意只在首次安装时问一次：已装的是我们的旧版扩展时，启动检查就静默升级到随包版本，不再询问。
@@ -198,11 +201,12 @@ struct PiExtensionConsentTests {
         let old = PiExtensionBundle.source.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = 1;")
         try old.write(to: installed, atomically: true, encoding: .utf8)
 
-        try await rig.services.piExtension.refresh()
+        try await rig.services.piIntegration.refresh()
 
-        #expect(rig.services.piExtension.status?.file == .current)
+        #expect(rig.services.piIntegration.status?.file == .current)
         #expect(try String(contentsOf: installed, encoding: .utf8) == PiExtensionBundle.source)
-        #expect(!rig.services.piExtension.needsConsent)
+        #expect(!rig.services.piIntegration.needsConsent)
+        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))  // 旧版用户升级时补上 skill
     }
 }
 #endif

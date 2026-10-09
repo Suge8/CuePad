@@ -177,7 +177,9 @@ final class TestApp {
             channels: channels,
             hotkeys: hotkeys,
             paths: piPaths,
-            installer: PiExtensionInstaller(paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")])),
+            installer: PiIntegration(
+                paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
+                cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")),
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,

@@ -10,6 +10,13 @@ public struct PiPaths: Sendable, Equatable {
 
     public var extensionsDirectory: URL { agentDirectory.appending(path: "extensions", directoryHint: .isDirectory) }
     public var sessionsDirectory: URL { agentDirectory.appending(path: "sessions", directoryHint: .isDirectory) }
+    /// skill 装在哪：默认的 Pi 目录下是 `~/.agents/skills`（Pi 与别的 Agent——Codex、Claude Code——读同一套约定），
+    /// 换了 Pi 目录（隔离、测试）就是它自己的 `skills`，Pi 同样会发现。
+    public var skillsDirectory: URL {
+        isDefaultAgentDirectory
+            ? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".agents/skills", directoryHint: .isDirectory)
+            : agentDirectory.appending(path: "skills", directoryHint: .isDirectory)
+    }
 
     public init(
         agentDirectory: URL? = nil,
@@ -24,10 +31,14 @@ public struct PiPaths: Sendable, Equatable {
     /// 由 CuePad 启动的 Pi 要带的环境：连接目录总带（桥在这里找它），Pi 目录不是默认的才带（读写同一份会话与扩展）。
     public var launchEnvironment: [String: String] {
         var environment = ["CUEPAD_PI_SOCKET_DIR": socketDirectory.path]
-        if agentDirectory.standardizedFileURL != Self.defaultAgentDirectory([:]).standardizedFileURL {
+        if !isDefaultAgentDirectory {
             environment["PI_CODING_AGENT_DIR"] = agentDirectory.path
         }
         return environment
+    }
+
+    private var isDefaultAgentDirectory: Bool {
+        agentDirectory.standardizedFileURL == Self.defaultAgentDirectory([:]).standardizedFileURL
     }
 
     private static func defaultAgentDirectory(_ environment: [String: String]) -> URL {

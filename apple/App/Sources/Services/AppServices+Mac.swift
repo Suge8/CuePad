@@ -25,7 +25,7 @@ extension AppServices {
         tasks = [
             Task {
                 do {
-                    try await piExtension.refresh()
+                    try await piIntegration.refresh()
                 } catch {
                     reportIssue(.piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\(error.localizedDescription)"))
                 }

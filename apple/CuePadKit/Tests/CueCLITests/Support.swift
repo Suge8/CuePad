@@ -17,14 +17,14 @@ final class Sandbox: @unchecked Sendable {
   }
 
   /// 默认在沙盒目录里运行：它不绑定任何项目。`cwd` 模拟从某个目录调用。
-  func call(_ arguments: [String], stdin: String? = nil, cwd: String? = nil) async -> CLIResult {
+  func call(_ arguments: [String], stdin: String? = nil, cwd: String? = nil, environment: [String: String] = [:]) async -> CLIResult {
     await CLI.run(
-      arguments, environment: ["CUEPAD_LIBRARY_DIR": directory.path], directory: cwd ?? directory.path,
+      arguments, environment: ["CUEPAD_LIBRARY_DIR": directory.path].merging(environment) { $1 }, directory: cwd ?? directory.path,
       stdin: { stdin })
   }
 
-  func run(_ arguments: String..., stdin: String? = nil, cwd: String? = nil) async -> CLIResult {
-    await call(arguments, stdin: stdin, cwd: cwd)
+  func run(_ arguments: String..., stdin: String? = nil, cwd: String? = nil, environment: [String: String] = [:]) async -> CLIResult {
+    await call(arguments, stdin: stdin, cwd: cwd, environment: environment)
   }
 
   /// 期望成功并解析 stdout 的 JSON。
@@ -32,12 +32,12 @@ final class Sandbox: @unchecked Sendable {
     try await jsonValue(arguments, stdin: stdin, cwd: cwd)
   }
 
-  func object(_ arguments: String..., stdin: String? = nil, cwd: String? = nil) async throws -> [String: Any] {
-    try #require(try await jsonValue(arguments, stdin: stdin, cwd: cwd) as? [String: Any])
+  func object(_ arguments: String..., stdin: String? = nil, cwd: String? = nil, environment: [String: String] = [:]) async throws -> [String: Any] {
+    try #require(try await jsonValue(arguments, stdin: stdin, cwd: cwd, environment: environment) as? [String: Any])
   }
 
-  func jsonValue(_ arguments: [String], stdin: String? = nil, cwd: String? = nil) async throws -> Any {
-    let result = await call(arguments + ["--json"], stdin: stdin, cwd: cwd)
+  func jsonValue(_ arguments: [String], stdin: String? = nil, cwd: String? = nil, environment: [String: String] = [:]) async throws -> Any {
+    let result = await call(arguments + ["--json"], stdin: stdin, cwd: cwd, environment: environment)
     #expect(result.code == 0, "\(arguments) → \(result.err)")
     return try JSONSerialization.jsonObject(with: Data(result.out.utf8))
   }
