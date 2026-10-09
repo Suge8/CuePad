@@ -100,17 +100,15 @@ struct SectionLabel: View {
     }
 }
 
-/// 列表与卡片上的日期：今天显示时刻，一周内显示星期，今年显示月日，更早带年份。
-enum DateLabel {
-    private static let clock: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter
-    }()
-
+/// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话都用它）：一分钟内"刚刚"，一小时内"N 分前"，一天内"N 小时前"；
+/// 再往前按日历：昨天、一周内写星期、今年写月日、更早带年份。粗到小时为止，几小时前的事不写到分钟。
+nonisolated enum DateLabel {
     static func short(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
-        if calendar.isDateInToday(date) { return clock.string(from: date) }
-        if calendar.isDateInYesterday(date) { return "昨天" }
+        let elapsed = now.timeIntervalSince(date)
+        if elapsed < 60 { return "刚刚" }
+        if elapsed < 3600 { return "\(Int(elapsed) / 60) 分前" }
+        if elapsed < 86_400 { return "\(Int(elapsed) / 3600) 小时前" }
+        if calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: now) ?? now) { return "昨天" }
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
         let chinese = Locale(identifier: "zh_CN")
         if days < 7 { return date.formatted(.dateTime.weekday(.abbreviated).locale(chinese)) }

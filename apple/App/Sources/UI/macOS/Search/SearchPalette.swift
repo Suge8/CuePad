@@ -131,6 +131,7 @@ struct SearchPalette: View {
             groups: sessionGroups, deliveries: sessions?.deliveries ?? [:],
             more: (sessions?.endedTotal ?? 0) - (sessions?.ended.count ?? 0), isFiltered: !query.text.isEmpty,
             selection: $sessionSelection, open: openSession) { sessionPages += 1 }
+            .environment(\.searchHighlight, query.text)
     }
 
     private func openSession(_ sessionID: String) {

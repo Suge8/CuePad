@@ -213,8 +213,10 @@ private struct PiSection: View {
     @Environment(AppServices.self) private var services
     @State private var startingSession = false
     @State private var renaming: PiSessionState?
+    @State private var reloadOpen = false
 
-    nonisolated static let pastLimit = 5
+    /// 侧栏只列在线的与最近结束的这几个，其余在"全部会话"里：侧栏回答"现在"，历史不占它。
+    nonisolated static let pastLimit = 3
 
     private var showsRows: Bool { workspace.page != .agent || workspace.openedSession != nil }
 
@@ -240,21 +242,14 @@ private struct PiSection: View {
                 }
                 // 在线与已结束同一个列表、按会话 id 区分：会话结束时那一行不被重建。
                 // 正看着 Agent 整页时它就是这份列表，侧栏只留"全部会话"一行，不重复列一遍
-                ForEach(showsRows ? rows : [], id: \.sessionID) { session in
-                    let bridge = live.first { $0.sessionID == session.sessionID }
-                    PiSessionRow(
-                        session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-                        rename: renames[session.sessionID])
-                        .sessionLink(session.sessionID)
-                        .help(bridge?.state.errorMessage ?? "")
-                        .contextMenu {
-                            if MacDelivery.canRename(session) {
-                                Button("重命名…", systemImage: "pencil") { renaming = session }
-                            }
-                            if let bridge, !bridge.hosted {
-                                Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
-                            }
-                        }
+                // 两个以上需要 /reload 的合成一行（`PiNowRow`），点开再列
+                ForEach(PiNowRow.rows(showsRows ? rows : [], state: { $0 })) { nowRow in
+                    switch nowRow {
+                    case .session(let session): sessionRow(session, live: live)
+                    case .reload(let sessions):
+                        PiReloadFold(count: sessions.count, expanded: $reloadOpen).selectionDisabled()
+                        if reloadOpen { ForEach(sessions) { sessionRow($0, live: live) } }
+                    }
                 }
                 if total > 0 {
                     PageRow(page: .agent, count: total, select: { workspace.show($0) }) {
@@ -273,6 +268,23 @@ private struct PiSection: View {
             }
             .renameSession($renaming)
         }
+    }
+
+    private func sessionRow(_ session: PiSessionState, live: [CuePi.PiSession]) -> some View {
+        let bridge = live.first { $0.sessionID == session.sessionID }
+        return PiSessionRow(
+            session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
+            rename: renames[session.sessionID])
+            .sessionLink(session.sessionID)
+            .help(bridge?.state.errorMessage ?? "")
+            .contextMenu {
+                if MacDelivery.canRename(session) {
+                    Button("重命名…", systemImage: "pencil") { renaming = session }
+                }
+                if let bridge, !bridge.hosted {
+                    Button("跳到所在终端", systemImage: "terminal") { workspace.jumpToTerminal(bridge.id) }
+                }
+            }
     }
 }
 

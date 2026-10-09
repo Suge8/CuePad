@@ -227,11 +227,12 @@ private struct EditorLayer: View {
 }
 
 /// 底部输入条：纸页挂着（含缩回途中）时不显示，底栏只有一套，先退后进；⌘K 打开时只是藏起来（不卸下），关掉面板的同一帧就回来。
+/// 回收站、Agent 整页与会话页不放：那里不是记灵感的地方（Agent 整页有自己的"＋"新会话，会话页有回复框），它只会压住列表最后几行。
 private struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.isLibraryReady, workspace.presentedCard == nil, workspace.page != .trash, workspace.openedSession == nil {
+        if workspace.isLibraryReady, workspace.presentedCard == nil, ![.trash, .agent].contains(workspace.page), workspace.openedSession == nil {
             let searching = workspace.overlay == .search
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)

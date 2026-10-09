@@ -188,48 +188,6 @@ struct PiPlaceTests {
     }
 }
 
-/// 会话计时怎么读：工作中从这段连续处理开始算"已运行"，等你确认从进入等待算"已等"，其余是"多久前"。
-struct PiClockTests {
-    private let start = Date(timeIntervalSince1970: 1_000)
-    private let entered = Date(timeIntervalSince1970: 1_600)
-
-    @Test func 工作中读已运行_自连续处理开始() {
-        #expect(PiClock.reading(.known(.tool), stateSince: entered, busySince: start) == .running(since: start))
-        #expect(PiClock.reading(.known(.delegating), stateSince: entered, busySince: start) == .running(since: start))
-    }
-
-    @Test func 等你确认读已等_自进入等待() {
-        #expect(PiClock.reading(.known(.waitingForUser), stateSince: entered, busySince: start) == .waiting(since: entered))
-    }
-
-    @Test func 空闲与已结束读多久前() {
-        #expect(PiClock.reading(.known(.settled), stateSince: entered, busySince: nil) == .ago(entered))
-        #expect(PiClock.reading(.known(.ended), stateSince: entered, busySince: nil) == .ago(entered))
-    }
-
-    @Test func 时长不跳秒_一分钟内写秒_一小时内写分_以上写小时与分() {
-        #expect(PiClock.duration(42) == "42 秒")
-        #expect(PiClock.duration(4 * 60 + 59) == "4 分")
-        #expect(PiClock.duration(2 * 3600 + 5 * 60 + 30) == "2 小时 5 分")
-        #expect(PiClock.duration(3 * 3600 + 40) == "3 小时")
-    }
-
-    @Test func 超过一天的多久前写昨天或N天前() {
-        let calendar = WallTests.calendar
-        let ended = WallTests.date(2026, 10, 5, hour: 22)
-        #expect(PiClock.ago(ended).text(now: WallTests.date(2026, 10, 6, hour: 23), calendar: calendar) == "昨天")
-        #expect(PiClock.ago(ended).text(now: WallTests.date(2026, 10, 9, hour: 9), calendar: calendar) == "4 天前")
-    }
-
-    @Test func 计时文字_已运行_已等_已发出_多久前用同一个时长格式() {
-        let now = start.addingTimeInterval(4 * 60 + 10)
-        #expect(PiClock.running(since: start).text(now: now) == "已运行 4 分")
-        #expect(PiClock.waiting(since: start).text(now: start.addingTimeInterval(30)) == "已等 30 秒")
-        #expect(PiClock.sent(since: start).text(now: start.addingTimeInterval(3)) == "已发出 3 秒")
-        #expect(PiClock.ago(start).text(now: start.addingTimeInterval(3600 + 120)) == "1 小时 2 分前")
-    }
-}
-
 /// Pi 历史按结束时间分段（手机 Agent 页、Mac ⌘K 共用）：今天 / 昨天 / 本周 / 本月 / 更早，周一为一周之始。
 struct PiHistorySectionTests {
     let calendar = WallTests.calendar

@@ -24,6 +24,7 @@ struct AgentScreen: View {
     @FocusState private var searchFocused: Bool
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
+    @State private var reloadOpen = false
     @State private var searchHidden = false
     @Environment(\.tabPageReady) private var tabPageReady
 
@@ -70,6 +71,7 @@ struct AgentScreen: View {
         .toolbarVisibility(project == nil && navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
         .refreshable { await services.syncNow() }
         .onChange(of: list != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
+        .environment(\.searchHighlight, query)
         .onChange(of: query) { limit = PiSessionList.pageSize }
         .onChange(of: filter) { limit = PiSessionList.pageSize }
         #if DEBUG
@@ -115,7 +117,16 @@ struct AgentScreen: View {
             Group {
                 if !list.now.isEmpty {
                     Section {
-                        ForEach(list.now) { row($0, filtered: filtered, end: list.ends[$0.id]) }
+                        ForEach(PiNowRow.rows(list.now, state: \.state)) { nowRow in
+                            switch nowRow {
+                            case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
+                            case .reload(let items):
+                                PiReloadFold(count: items.count, expanded: $reloadOpen, style: .page)
+                                    .padding(.horizontal, 16).padding(.vertical, 12)
+                                    .listRowInsets(.init()).listRowBackground(palette.paper)
+                                if reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
+                            }
+                        }
                     } header: { SectionTitle(text: "现在").listRowInsets(Self.headerInsets) }
                 }
                 let runs = PiHistorySection.split(list.ended, date: \.state.stateSince, now: .now)

@@ -59,6 +59,7 @@ struct PiSessionRow: View {
     var style = Style.compact
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.searchHighlight) private var highlight
 
     /// 密度与字号：整页列表（Agent 页）是 `page`，侧栏、面板、⌘K、项目页这些窄处是 `compact`。
     struct Style {
@@ -80,15 +81,16 @@ struct PiSessionRow: View {
     var body: some View {
         let shown = services.settings.shown(session, delivery: delivery)
         let failure = PiRename.failure(rename, seen: services.settings.sessionSeen[session.sessionID]) ?? shown.undelivered(delivery)?.failure
-        let line = PiRowLine.of(session, draft: services.settings.draftPreview(for: session.id), end: end, failure: failure)
+        let line = searchHit ?? PiRowLine.of(session, draft: services.settings.draftPreview(for: session.id), end: end, failure: failure)
         let note = shown.note ?? (PiRename.isPending(rename) ? "正在改名" : nil)
         HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
             PiStateDot(shown: shown, size: style.dot)
             VStack(alignment: .leading, spacing: style.spacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(PiRename.title(of: session, request: rename)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 4)
-                    PiElapsed(shown: shown, font: style.line)
+                    // 时间只占它要的宽度，名字拿剩下的
+                    PiElapsed(shown: shown, font: style.line).fixedSize()
                 }
                 if style.full {
                     statusLine(shown, note: note)
@@ -105,9 +107,23 @@ struct PiSessionRow: View {
             .animation(Motion.quick, value: shown)
             .animation(Motion.quick, value: line)
         }
-        .opacity(session.state == .known(.ended) ? 0.6 : 1)
         .accessibilityElement(children: .combine)
     }
+
+    /// 搜索时名字、所在与进度都没命中、而命中在说过的话里：第三行换成那句话从命中处前几个字起的一截，看得出为什么搜到它
+    /// （会话搜索也查说过的话）。
+    private var searchHit: PiRowLine? {
+        let terms = highlight.split(whereSeparator: \.isWhitespace)
+        let hits = { (text: String?) in text.map { text in terms.contains { text.localizedCaseInsensitiveContains($0) } } ?? false }
+        guard !terms.isEmpty, !hits(session.title), !hits(PiPlace.name(of: session, project: project)), !hits(PiProgress.line(of: session)),
+              let prompt = (session.pendingPrompt ?? session.lastPrompt)?.split(whereSeparator: \.isWhitespace).joined(separator: " "),
+              let hit = terms.lazy.compactMap({ prompt.range(of: $0, options: .caseInsensitive) }).first else { return nil }
+        let start = prompt.index(hit.lowerBound, offsetBy: -Self.leadIn, limitedBy: prompt.startIndex) ?? prompt.startIndex
+        return .progress("你说：\(start == prompt.startIndex ? "" : "…")\(prompt[start...])")
+    }
+
+    /// 截说过的话时命中处前面留几个字。
+    private static let leadIn = 6
 
     private func status(_ shown: PiShown) -> Text {
         Text(shown.label).fontWeight(shown.isUnread ? .semibold : shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
@@ -116,7 +132,7 @@ struct PiSessionRow: View {
     /// 整页的第二行：在哪 · 状态词 · 后台 · 你的话排队中（或正在改名）。
     private func statusLine(_ shown: PiShown, note: String?) -> some View {
         let parts = [
-            PiPlace.name(of: session, project: project).map { Text($0).foregroundStyle(palette.ink3) },
+            PiPlace.name(of: session, project: project).map { Text(Highlight.matches($0, highlight)).foregroundStyle(palette.ink3) },
             status(shown),
             session.hosted && session.state != .known(.ended) ? Text("后台").foregroundStyle(palette.ink3) : nil,
             note.map { Text($0).foregroundStyle(palette.ink3) },
@@ -130,9 +146,63 @@ struct PiSessionRow: View {
         case .ending: Text("正在结束…").foregroundStyle(palette.ink3)
         case .endFailed(let reason), .failed(let reason): Text(reason).foregroundStyle(palette.failure)
         case .draft(let draft): Text("\(Text("草稿").fontWeight(.semibold).foregroundStyle(palette.signature))  \(Text(draft).foregroundStyle(palette.ink2))")
-        case .progress(let progress): Text(progress).foregroundStyle(palette.ink2)
+        case .progress(let progress): Text(Highlight.matches(progress, highlight)).foregroundStyle(palette.ink2)
         case .hint(let hint): Text(hint).foregroundStyle(palette.ink3)
         case nil: Text(verbatim: " ")
         }
+    }
+}
+
+/// "现在"里的一行：一个会话，或两个以上需要 /reload 的会话（旧扩展，`PiShown.Status.restart`）合成的一行，点开再列出来。
+/// 它们按 `PiShown.rank` 排在一起（工作中之后），所以合成的行落在原来那一段的位置。
+enum PiNowRow<Item: Identifiable>: Identifiable {
+    case session(Item)
+    case reload([Item])
+
+    var id: AnyHashable {
+        switch self {
+        case .session(let item): AnyHashable(item.id)
+        case .reload: AnyHashable("reload")
+        }
+    }
+
+    static func rows(_ items: [Item], state: (Item) -> PiSessionState) -> [PiNowRow] {
+        let reload = items.filter { state($0).state == .known(.incompatible) }
+        guard reload.count > 1 else { return items.map(PiNowRow.session) }
+        var rows: [PiNowRow] = []
+        for item in items {
+            if state(item).state != .known(.incompatible) {
+                rows.append(.session(item))
+            } else if !rows.contains(where: { if case .reload = $0 { true } else { false } }) {
+                rows.append(.reload(reload))
+            }
+        }
+        return rows
+    }
+}
+
+/// 合成的那一行："N 个会话需要 /reload"，点它展开或收起（展开的会话由调用方接在下面）。
+struct PiReloadFold: View {
+    let count: Int
+    @Binding var expanded: Bool
+    var style = PiSessionRow.Style.compact
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button { expanded.toggle() } label: {
+            HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
+                PiStateDot(shown: PiShown(status: .restart), size: style.dot)
+                Text("\(count) 个会话需要 /reload").font(style.name).foregroundStyle(palette.ink2).lineLimit(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(style.line.weight(.semibold)).foregroundStyle(palette.ink3)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                    .accessibilityHidden(true)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .animation(Motion.quick, value: expanded)
+        .accessibilityValue(expanded ? "已展开" : "已收起")
+        .accessibilityHint("旧版扩展的会话，在终端里对它们执行 /reload")
     }
 }

@@ -190,20 +190,25 @@ enum VariableText {
     }
 }
 
+/// 搜索命中的标法（灵感搜索、⌘K、Agent 页的会话搜索同一条）：搜索词按空格分开，每个词命中处加底色（大小写不敏感）。
 enum Highlight {
-    /// 关键词命中处加底色（大小写不敏感）。
-    static func matches(_ text: String, _ term: String, base: AttributedString? = nil) -> AttributedString {
+    static func matches(_ text: String, _ query: String, base: AttributedString? = nil) -> AttributedString {
         var result = base ?? AttributedString(text)
-        let term = term.trimmingCharacters(in: .whitespaces)
-        guard !term.isEmpty else { return result }
-        var searchStart = result.startIndex
-        while searchStart < result.endIndex,
-              let range = result[searchStart...].range(of: term, options: .caseInsensitive) {
-            result[range].backgroundColor = .yellow.opacity(0.35)
-            searchStart = range.upperBound
+        for term in query.split(whereSeparator: \.isWhitespace) {
+            var searchStart = result.startIndex
+            while searchStart < result.endIndex,
+                  let range = result[searchStart...].range(of: term, options: .caseInsensitive) {
+                result[range].backgroundColor = .yellow.opacity(0.35)
+                searchStart = range.upperBound
+            }
         }
         return result
     }
+}
+
+extension EnvironmentValues {
+    /// 此刻的搜索词：列表里的会话行据此标出命中（`Highlight`）。
+    @Entry var searchHighlight = ""
 }
 
 /// "更早"分组的标题：周是日期区间，月是年月。

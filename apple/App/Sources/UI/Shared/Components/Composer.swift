@@ -85,6 +85,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     let compact: Bool
     /// 空着也露出提交钮的位置（见上）。
     let showsSend: Bool
+    /// 聚焦就展开成两层。会话回复框只在有工具排（模型、思考强度）时这样：已结束的会话没有工具，聚焦了也保持一行，打了字再长。
+    let expandsOnFocus: Bool
     let focus: FocusState<Bool>.Binding
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
     let commands: [PiSlashCommand]
@@ -109,10 +111,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
-        keeps: UUID? = nil, showsSend: Bool = false, commands: [PiSlashCommand] = [], submit: (() -> Void)? = nil,
+        keeps: UUID? = nil, showsSend: Bool = false, expandsOnFocus: Bool = true, commands: [PiSlashCommand] = [], submit: (() -> Void)? = nil,
         @ViewBuilder header: () -> Header, @ViewBuilder tools: () -> Tools, @ViewBuilder send: () -> Send
     ) {
         _draft = draft
+        self.expandsOnFocus = expandsOnFocus
         self.keeps = keeps
         self.commands = commands
         self.showsSend = showsSend
@@ -136,7 +139,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 一个圆钮占的一格：36 的圆 + 四周的点按区与边距。
     static var slot: CGFloat { 50 }
 
-    private var expanded: Bool { pinnedOpen || focused || !draft.isEmpty(accepting: [.images, .cards]) }
+    private var expanded: Bool { pinnedOpen || (focused && expandsOnFocus) || !draft.isEmpty(accepting: [.images, .cards]) }
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。
     private var shrunk: Bool { compact && !expanded && !showsSend }
     /// 短胶囊的宽：＋ 加一行短提示。
