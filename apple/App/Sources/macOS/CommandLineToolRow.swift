@@ -18,8 +18,8 @@ struct CommandLineToolRow: View {
                 if tool.state == .stale { Button("修复链接") { apply(true) } }
             }
             let detail = Self.detail(state: tool.state, pathIncludesLinkDirectory: tool.pathIncludesLinkDirectory)
-            Text(detail.text).font(.caption).foregroundStyle(detail.isWarning ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
-            if let error { Text(error).font(.caption).foregroundStyle(palette.attention) }
+            Text(detail.text).font(Typography.meta).foregroundStyle(detail.isWarning ? AnyShapeStyle(palette.attention) : AnyShapeStyle(.secondary))
+            if let error { Text(error).font(Typography.meta).foregroundStyle(palette.attention) }
         }
         .task { await tool.refresh() }
     }

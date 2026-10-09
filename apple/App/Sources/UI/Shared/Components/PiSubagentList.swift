@@ -29,11 +29,11 @@ struct PiSubagentList: View {
                 if summary.failed > 0 {
                     Text("· \(summary.failed) 个失败").foregroundStyle(palette.attention).monospacedDigit()
                 }
-                Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
                     .rotationEffect(.degrees(expanded ? 180 : 0))
                     .accessibilityHidden(true)
             }
-            .font(.subheadline)
+            .font(Typography.secondary)
             .frame(minHeight: 32)
             .contentShape(.rect)
         }
@@ -50,10 +50,10 @@ struct PiSubagentList: View {
                 Spacer(minLength: 8)
                 if let clock = PiSubagentClock(agent) { Elapsed(clock: clock) }
             }
-            .font(.subheadline)
+            .font(Typography.secondary)
             (Text(agent.label).foregroundStyle(agent.shown.labelTint(palette))
                 + Text(agent.action.isEmpty ? "" : " · \(agent.action)").foregroundStyle(palette.ink3))
-                .font(.footnote)
+                .font(Typography.meta)
                 .lineLimit(1).truncationMode(.tail)
                 .padding(.leading, 13)
         }
@@ -76,7 +76,7 @@ struct PiSubagentList: View {
         }
 
         private func text(at date: Date) -> some View {
-            Text(clock.text(now: date)).font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)
+            Text(clock.text(now: date)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
         }
     }
 }

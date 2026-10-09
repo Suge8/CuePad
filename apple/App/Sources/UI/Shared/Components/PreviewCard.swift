@@ -24,8 +24,8 @@ struct PreviewCard: View {
             HStack(spacing: 12) {
                 tile
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(preview.title).font(.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(2).multilineTextAlignment(.leading)
-                    Text(file == nil ? "正在从 iCloud 下载…" : Self.caption(preview)).font(.caption).foregroundStyle(palette.ink3)
+                    Text(preview.title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(2).multilineTextAlignment(.leading)
+                    Text(file == nil ? "正在从 iCloud 下载…" : Self.caption(preview)).font(Typography.caption).foregroundStyle(palette.ink3)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityHidden(true)

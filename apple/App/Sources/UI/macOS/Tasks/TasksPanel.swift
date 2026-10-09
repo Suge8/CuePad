@@ -27,7 +27,7 @@ struct TasksPanel: View {
                 if let board { list(board) }
             }
         }
-        .frame(width: 360)
+        .frame(width: 400)
         .frame(maxHeight: 640)
         .fixedSize(horizontal: false, vertical: true)
         .glass(in: .rect(cornerRadius: 26))
@@ -178,6 +178,9 @@ struct TaskRow: View {
                     Text("·").foregroundStyle(palette.ink3)
                     PiElapsed(shown: shown, font: Typography.meta)
                 }
+                // 会话状态是这一行最要紧的：整段不折行，挤不下时让项目名与计数先截短
+                .fixedSize()
+                .layoutPriority(1)
                 .sessionLink(session.sessionID)
                 .help("交给了 Agent 会话「\(session.title)」，点开看近况")
             }

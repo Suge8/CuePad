@@ -288,7 +288,7 @@ struct CardEditorPage: View {
             }
             .labelStyle(.iconOnly).menuStyle(.button).menuIndicator(.hidden).buttonStyle(.borderless).fixedSize()
         }
-        .font(.system(size: 12))
+        .font(Typography.meta)
         .foregroundStyle(palette.ink3)
         .padding(.horizontal, 64)
         .animation(Motion.quick, value: saveState)
@@ -407,7 +407,7 @@ private struct EditorBar: View {
                 .glass(in: .capsule, interactive: true)
                 if !names.isEmpty { VariablesChip(card: card, names: names) }
                 if selecting {
-                    Text("选中部分").font(.system(size: 12, weight: .medium)).foregroundStyle(palette.ink3)
+                    Text("选中部分").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
                         .transition(.opacity)
                 }
                 if CardMenu.handsToAgent(card) {
@@ -425,7 +425,7 @@ private struct EditorBar: View {
     private var attach: some View {
         Button { workspace.attaching = card } label: {
             Label("挂到任务", systemImage: "checkmark")
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.onSignature)
+                .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onSignature)
                 .padding(.horizontal, 16).frame(height: 44)
                 .background(palette.signature, in: .capsule)
                 .contentShape(.capsule)
@@ -463,7 +463,7 @@ private struct VariablesChip: View {
                 if names.count > 1 { Text("+\(names.count - 1)").foregroundStyle(.secondary) }
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary).accessibilityHidden(true)
             }
-            .font(.system(size: 13, weight: .medium))
+            .font(Typography.secondary.weight(.medium))
             .padding(.horizontal, 14).frame(height: 44)
             .frame(maxWidth: 260)
             .contentShape(.capsule)

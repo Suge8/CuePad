@@ -31,7 +31,7 @@ struct PiSetupGuide: View {
         let missing = installation == .notFound
         let command = missing ? Self.installCommand : Self.updateCommand
         VStack(alignment: .leading, spacing: 10) {
-            if showsTitle { Text(missing ? "安装 Pi" : "升级 Pi").font(.headline) }
+            if showsTitle { Text(missing ? "安装 Pi" : "升级 Pi").font(Typography.bodyStrong) }
             Text("Pi 是在终端里运行的 AI 编程助手。装好后，灵感和任务可以直接发进 Pi 会话。")
                 .fixedSize(horizontal: false, vertical: true)
             if case .found(_, let version) = installation {
@@ -63,7 +63,7 @@ struct Keycap: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium, design: .rounded))
+            .font(Typography.keycap)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 5).padding(.vertical, 1)
             .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 4))

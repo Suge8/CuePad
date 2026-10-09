@@ -63,7 +63,7 @@ struct PiConversation: View {
             ReplyBlock(text: entry.text, meta: entry.meta, session: session)
         case .system:
             // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
-            Text(entry.text).font(.footnote).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
+            Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity).padding(.vertical, 4)
         case .preview:
             if let preview = entry.preview { PreviewCard(preview: preview) { opened = $0 } }
@@ -118,12 +118,10 @@ struct PiSessionSubtitle: View {
         .accessibilityElement(children: .combine)
     }
 
-    // Mac 的 caption 只有 10pt：顶栏这一行是这页最要紧的状态，至少 12pt
+    private static let font = Typography.caption
     #if os(macOS)
-    private static let font = Font.system(size: 12)
     private static let dot: CGFloat = 8
     #else
-    private static let font = Font.caption
     private static let dot: CGFloat = 6
     #endif
 }
@@ -174,7 +172,7 @@ private struct UserBubble: View {
                 BubbleText(text: text, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines, truncated: $truncated)
                 if truncated, !expanded {
                     Button("展开") { expanded = true }
-                        .font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+                        .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
                         .buttonStyle(.plain)
                         .frame(minHeight: 28)
                 }
@@ -201,7 +199,7 @@ private struct BubbleText: View {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).accessibilityLabel("没能送达")
             }
             Text(text)
-                .font(.body).foregroundStyle(palette.ink)
+                .font(Typography.reading).foregroundStyle(palette.ink)
                 .lineLimit(lineLimit)
                 .textSelection(.enabled)
                 .background(alignment: .topLeading) { if let truncated, lineLimit != nil { fullHeight(truncated) } }
@@ -218,7 +216,7 @@ private struct BubbleText: View {
     /// 同一宽度下排全文要多高，与折起后的高度比，量出有没有被截掉；只读几何、不影响自己的排版（藏起的全文不占位）。
     private func fullHeight(_ truncated: Binding<Bool>) -> some View {
         GeometryReader { shown in
-            Text(text).font(.body).fixedSize(horizontal: false, vertical: true)
+            Text(text).font(Typography.reading).fixedSize(horizontal: false, vertical: true)
                 .frame(width: shown.size.width, alignment: .leading)
                 .hidden()
                 .onGeometryChange(for: Bool.self) { $0.size.height > shown.size.height + 1 } action: { truncated.wrappedValue = $0 }
@@ -284,11 +282,11 @@ private struct RecapPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             if let prompt = session.pendingPrompt ?? session.lastPrompt {
-                Text("最近一轮 · 完整对话还在同步").font(.caption).foregroundStyle(palette.ink3)
+                Text("最近一轮 · 完整对话还在同步").font(Typography.caption).foregroundStyle(palette.ink3)
                 UserBubble(text: prompt)
                 if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
             } else if !session.hasStarted, session.state != .known(.ended) {
-                Text("还没说过话，在下面说第一句").font(.subheadline).foregroundStyle(palette.ink3)
+                Text("还没说过话，在下面说第一句").font(Typography.secondary).foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -314,7 +312,7 @@ private struct ReplyBlock: View {
                 // 与代码块、表格同一套底色与圆角（`ChatBlock`），收成贴着字的一小块
                 Label(meta, systemImage: "wrench.and.screwdriver")
                     .labelStyle(MetaLabel())
-                    .font(.caption.monospacedDigit()).foregroundStyle(palette.ink2)
+                    .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink2)
                     .padding(.horizontal, ChatBlock.inset / 1.5).padding(.vertical, 4)
                     .background(palette.fill, in: ChatBlock.shape)
             }
@@ -355,17 +353,17 @@ private struct OutgoingBubble: View {
             UserBubble(text: text, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived)
             HStack(spacing: 10) {
                 if failed {
-                    if let reason = request.failure { Text(reason).font(.caption).foregroundStyle(palette.failure).lineLimit(2) }
+                    if let reason = request.failure { Text(reason).font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2) }
                     // 送不到 Mac 时也露出来（停用），看得出能重发
                     Button("重发", systemImage: "arrow.clockwise", action: retry)
-                        .font(.caption.weight(.semibold)).foregroundStyle(palette.failure)
+                        .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.failure)
                         .padding(.horizontal, 10).frame(minHeight: 28)
                         .overlay(Capsule().strokeBorder(palette.failure, lineWidth: 1))
                         .frame(minHeight: 44).contentShape(.rect)
                         .buttonStyle(.plain)
                         .disabled(!workspace.services.reachesPiHost)
                 } else {
-                    DeliveryStatusLabel(request: request, session: session).font(.caption)
+                    DeliveryStatusLabel(request: request, session: session).font(Typography.caption)
                 }
             }
         }
@@ -414,7 +412,7 @@ private struct LiveStatus: View {
                 HStack(spacing: 8) {
                     PiStateDot(shown: PiShown(session), size: 7)
                     Text(session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
-                        .font(.subheadline.weight(.medium))
+                        .font(Typography.secondary.weight(.medium))
                         .lineLimit(1).truncationMode(.middle)
                         .shimmering()
                 }

@@ -37,7 +37,7 @@ struct ProjectForm: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(project == nil ? "新建项目" : "编辑项目").font(.headline)
+            Text(project == nil ? "新建项目" : "编辑项目").font(Typography.bodyStrong)
             TextField("名称", text: $name).textFieldStyle(.roundedBorder).onSubmit(save)
             TextField("一句话介绍（可不填）", text: $intro).textFieldStyle(.roundedBorder).onSubmit(save)
             ProjectStylePicker(icon: $icon, color: $color, cell: 30)

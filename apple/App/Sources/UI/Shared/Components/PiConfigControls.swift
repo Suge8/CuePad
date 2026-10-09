@@ -150,7 +150,7 @@ private struct PiModelCapsule: View {
                 Text(current.map(PiModelLabel.short) ?? "模型").lineLimit(1).truncationMode(.tail)
                     .contentTransition(.opacity)
             }
-            .font(.footnote.weight(.medium)).foregroundStyle(palette.ink2)
+            .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
             .padding(.leading, 7).padding(.trailing, 11)
             // 按内容宽，最宽 `maxWidth`，再长截断
             .frame(maxWidth: maxWidth, alignment: .leading)
@@ -220,7 +220,7 @@ private struct PiThinkingDial: View {
     var body: some View {
         let drawn = drawn
         HStack(spacing: 6) {
-            Image(systemName: "brain").font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+            Image(systemName: "brain").font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
                 .accessibilityHidden(true)
             meterBars(drawn)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { track = $0 }
@@ -231,7 +231,7 @@ private struct PiThinkingDial: View {
         .overlay(alignment: .top) {
             if let bubble {
                 Text("思考 \(Text(bubble.label).fontWeight(.semibold).foregroundStyle(palette.ink))")
-                    .font(.caption).foregroundStyle(palette.ink3)
+                    .font(Typography.caption).foregroundStyle(palette.ink3)
                     .contentTransition(.opacity)
                     .padding(.horizontal, 10).frame(height: 26)
                     .glass(in: .capsule)

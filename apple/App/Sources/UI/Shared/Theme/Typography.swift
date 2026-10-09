@@ -5,8 +5,9 @@ import SwiftUI
 /// 比系统样式高一档，层级之间至少差 1pt、靠字重与墨色深浅再拉开。
 enum Typography {
     #if os(macOS)
-    /// 正文：卡片摘要、列表的主文字、输入框。
-    static let body = Font.system(size: 14)
+    /// 正文：卡片摘要、列表的主文字、输入框（AppKit 的输入框按 `bodySize` 取同一号）。
+    static let bodySize: CGFloat = 14
+    static let body = Font.system(size: bodySize)
     /// 强调的正文：卡片标题、列表行的名字。
     static let bodyStrong = Font.system(size: 15, weight: .semibold)
     /// 次要：说明、一行里跟在标题后的摘要、空态的说明。
@@ -15,11 +16,27 @@ enum Typography {
     static let meta = Font.system(size: 12)
     /// 小节标签（任务与 Agent 栏的"任务""Agent"、提示词、子任务）：小号加粗、次要墨色。
     static let label = Font.system(size: 12, weight: .semibold)
-    /// 最小的字：折起的计数这类附注（iOS 比元信息小一档，Mac 不再往下小）。
+    /// 最小的字：折起的计数、工具注脚这类附注（iOS 比元信息小一档，Mac 不再往下小）；caption2 是展开箭头这类更小的符号。
     static let caption = Font.system(size: 12)
+    static let caption2 = Font.system(size: 11)
+    /// 阅读：会话里的回答与你的话（Markdown 正文、列表、引用、气泡），比界面正文大一号；标题与代码同属这一列。
+    static let reading = Font.system(size: 15)
+    static let readingHeading = Font.system(size: 18, weight: .semibold)
+    static let code = Font.system(size: 13).monospaced()
+    /// 阅读列的行距：长回答是会话页的主角，行高放到约 1.6 倍。
+    static let readingLineSpacing: CGFloat = 6
+    /// 醒目的一句（等你确认的问题）。
+    static let title = Font.system(size: 17, weight: .medium)
     /// 页内分组标题（资料、最近、更早、现在、历史）与它旁边的计数。
     static let sectionTitle = Font.system(size: 15, weight: .semibold)
     static let sectionCount = Font.system(size: 13).monospacedDigit()
+    /// 纸页里的标题（任务名）。
+    static let heading = Font.system(size: 22, weight: .semibold)
+    /// ⌘K 搜索框的输入与右侧预览的标题：浮层里最大的两行字。
+    static let searchField = Font.system(size: 18)
+    static let previewTitle = Font.system(size: 17, weight: .bold)
+    /// 键帽（快捷键提示）。
+    static let keycap = Font.system(size: 11, weight: .medium, design: .rounded)
     /// 页标题（项目名、归档、回收站）与其下一句介绍。
     static let pageTitle = Font.system(size: 28, weight: .bold)
     static let lead = Font.system(size: 16)
@@ -42,6 +59,13 @@ enum Typography {
     static let meta = Font.footnote
     static let label = Font.caption.weight(.semibold)
     static let caption = Font.caption
+    static let caption2 = Font.caption2
+    static let reading = Font.body
+    static let readingHeading = Font.title3.weight(.semibold)
+    static let code = Font.footnote.monospaced()
+    static let readingLineSpacing: CGFloat = 3
+    static let title = Font.title3.weight(.medium)
+    static let heading = Font.title3.weight(.semibold)
     static let emptyTitle = Font.title3.weight(.semibold)
     #endif
 }

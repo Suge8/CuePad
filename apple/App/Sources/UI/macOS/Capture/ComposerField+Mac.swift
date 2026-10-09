@@ -111,7 +111,7 @@ final class ComposerScrollView: NSScrollView {
 }
 
 final class GrowingTextView: NSTextView {
-    static let bodyFont = NSFont.preferredFont(forTextStyle: .body)
+    static let bodyFont = NSFont.systemFont(ofSize: Typography.bodySize)
     var placeholder = ""
     var maxLines = 1
     var focusChanged: ((Bool) -> Void)?

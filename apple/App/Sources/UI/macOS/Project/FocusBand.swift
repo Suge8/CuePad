@@ -4,6 +4,7 @@ import CueStore
 import SwiftUI
 
 /// 任务与 Agent：本项目任务（"任务 完成数/总数"，前几条顶层任务连同子任务，可拖动、缩进，同任务面板）+ 本项目的 Agent 会话。介绍在页头。
+/// Agent 一栏只在有话可说时出现：有在线会话，或项目还没绑文件夹（绑定引导）；否则任务独占整张纸，不留一栏"没有运行中的会话"。
 struct FocusBand: View {
     let data: ProjectPageData
     @Environment(Workspace.self) private var workspace
@@ -14,6 +15,17 @@ struct FocusBand: View {
     private static let stackedBelow: CGFloat = 640
 
     var body: some View {
+        Group {
+            if showsAgent { columns } else { column { tasks } }
+        }
+        .paper(radius: 18)
+    }
+
+    private var showsAgent: Bool {
+        !workspace.liveSessions(in: data.project?.id).isEmpty || data.project.map { !workspace.hasFolder($0.id) } == true
+    }
+
+    private var columns: some View {
         // 由排版当场选：横排的理想宽度钉在 stackedBelow，放得下就横排，否则上下排。不读几何、不写状态
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 0) {
@@ -29,8 +41,6 @@ struct FocusBand: View {
                 column { PiColumn(project: data.project) }
             }
         }
-        .paper(radius: 18)
-        // 任务上的会话状态点开是它的详情（与侧栏、⌘K、任务面板同一个详情弹出层）
     }
 
     @ViewBuilder private var tasks: some View {
@@ -61,23 +71,17 @@ struct FocusBand: View {
     }
 }
 
-/// 本项目正在跑的 Pi 会话。
+/// 本项目正在跑的 Pi 会话；项目还没绑文件夹又没有会话时是绑定引导。
 private struct PiColumn: View {
     /// 未分类没有项目，也就没有文件夹可绑。
     let project: Project?
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
         SectionLabel(text: "Agent", systemImage: "terminal")
         let sessions = workspace.liveSessions(in: project?.id)
-        if sessions.isEmpty {
-            if let project, !workspace.hasFolder(project.id) {
-                ProjectFolderGuide(project: project, style: .inset)
-            } else {
-                Text("没有运行中的会话").font(Typography.secondary).foregroundStyle(palette.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        if sessions.isEmpty, let project {
+            ProjectFolderGuide(project: project, style: .inset)
         }
         ForEach(sessions) { session in
             PiSessionRow(

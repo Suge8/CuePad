@@ -101,7 +101,7 @@ struct SearchPalette: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
             TextField(scope == .cards ? "搜索灵感与任务" : "搜索会话", text: $query.text)
-                .textFieldStyle(.plain).font(.system(size: 18))
+                .textFieldStyle(.plain).font(Typography.searchField)
                 .focused($focused)
                 .onSubmit {
                     switch scope {
@@ -214,7 +214,7 @@ struct SearchPalette: View {
             let rest = CueSummary.snippet(card.body, matching: query.text.split(whereSeparator: \.isWhitespace).map(String.init), whole: true)
             let project = data.projects.first { $0.id == card.projectID }
             VStack(alignment: .leading, spacing: 10) {
-                Text(text.label).font(.system(size: 17, weight: .bold)).foregroundStyle(palette.ink)
+                Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
                     Text("\(project?.name ?? "未分类") · \(DateLabel.short(card.modifiedAt))")
                     if let send = data.lastSends[card.id] { SentMark(target: send.target.name) }

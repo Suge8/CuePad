@@ -278,7 +278,7 @@ private struct ConflictsSection: View {
                 ForEach(services.conflicts, id: \.copy.id) { conflict in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(CardText(conflict.original.body).label)
-                            .font(.headline)
+                            .font(Typography.bodyStrong)
                         version("这台设备的版本", conflict.original, keep: .original, copy: conflict.copy.id)
                         version("另一台设备的版本", conflict.copy, keep: .copy, copy: conflict.copy.id)
                     }

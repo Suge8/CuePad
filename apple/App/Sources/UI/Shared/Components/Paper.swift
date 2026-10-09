@@ -50,7 +50,7 @@ struct CardMeta: View {
     let text: CardText
     let lastTarget: String?
     let floated: Bool
-    var font: Font = .system(size: 11)
+    var font: Font = Typography.caption2
     @Environment(\.palette) private var palette
 
     var body: some View {

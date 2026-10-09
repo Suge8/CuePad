@@ -176,7 +176,7 @@ struct SessionPage: View {
         return ChatScroll(followKey: followKey, follow: $follow) {
             VStack(spacing: 14) {
                 if fetchingTranscript(digest) {
-                    Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
+                    Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(Typography.meta).foregroundStyle(palette.ink3)
                 }
                 PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
             }

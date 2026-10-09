@@ -41,7 +41,7 @@ struct SendControl: View {
                 }
             }
         }
-        .font(.system(size: compact ? 12.5 : 13, weight: .semibold))
+        .font((compact ? Typography.meta : Typography.secondary).weight(.semibold))
         .foregroundStyle(ready ? palette.onSignature : palette.ink)
         .background(ready ? palette.signature : palette.fill, in: .capsule)
         .shadow(color: .black.opacity(palette.dark || compact ? 0 : 0.12), radius: 6, y: 2)

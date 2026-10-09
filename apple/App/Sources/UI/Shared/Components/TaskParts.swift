@@ -364,7 +364,7 @@ enum TaskMetrics {
     static let chipHeight: CGFloat = 30
     static let chipTarget: CGFloat = 44
     static let titleRing: CGFloat = 24
-    static let title = Font.title3.weight(.semibold)
+    static let title = Typography.heading
     static let cardPadding: CGFloat = 14
     static let cardRadius: CGFloat = 14
     static let cardGap: CGFloat = 10
@@ -376,7 +376,7 @@ enum TaskMetrics {
     static let chipHeight: CGFloat = 24
     static let chipTarget: CGFloat = 24
     static let titleRing: CGFloat = 20
-    static let title = Font.system(size: 22, weight: .semibold)
+    static let title = Typography.heading
     static let cardPadding: CGFloat = 12
     static let cardRadius: CGFloat = 10
     static let cardGap: CGFloat = 8

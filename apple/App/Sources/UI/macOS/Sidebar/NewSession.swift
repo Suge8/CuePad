@@ -47,7 +47,7 @@ struct NewSessionForm: View {
         // 没选过时默认当前项目
         let place = places.first { $0.id == chosen } ?? places.first { $0.project.id == workspace.currentProject } ?? places.first
         VStack(alignment: .leading, spacing: 12) {
-            Text("新会话").font(.headline).foregroundStyle(palette.ink)
+            Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
             if places.isEmpty {
                 Text("还没有项目：先新建一个项目，再给它选文件夹，就能在里面开会话。")
                     .font(Typography.secondary).foregroundStyle(palette.ink3).fixedSize(horizontal: false, vertical: true)
