@@ -13,6 +13,8 @@ nonisolated struct ProjectNow: Hashable, Sendable {
 
     let source: Source
     let text: String
+    /// Agent 的事是哪个会话（会话名）；项目行不写它，书架的 Agent 总览写不在项目里的那件时带上。
+    var session: String?
 
     /// 一条进行中的任务（`TaskBoard.leading` 按项目给出，最近开始的在前）。
     struct InProgress: Hashable, Sendable {
@@ -36,7 +38,9 @@ nonisolated struct ProjectNow: Hashable, Sendable {
             .map { (item: $0, shown: shown($0)) }
             .compactMap { pair in tier(pair.shown).map { (tier: $0, item: pair.item, shown: pair.shown) } }
             .min { $0.tier < $1.tier }
-        if let agent { return ProjectNow(source: .agent(agent.shown), text: sentence(agent.item, agent.shown)) }
+        if let agent {
+            return ProjectNow(source: .agent(agent.shown), text: sentence(agent.item, agent.shown), session: agent.item.state.title)
+        }
         if let task { return ProjectNow(source: .task, text: task) }
         if let intro { return ProjectNow(source: .intro, text: intro) }
         return nil

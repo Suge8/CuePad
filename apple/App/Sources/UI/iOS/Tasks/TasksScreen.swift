@@ -291,8 +291,9 @@ struct NewTaskLine: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Image(systemName: "plus").foregroundStyle(palette.ink3).frame(width: 44).accessibilityHidden(true)
-            TextField("添加任务", text: $text)
+            // 入口不用系统占位灰：那样看起来像不能点
+            Image(systemName: "plus").foregroundStyle(palette.ink2).frame(width: 44).accessibilityHidden(true)
+            TextField(text: $text, prompt: Text("添加任务").foregroundStyle(palette.ink2)) { Text("添加任务") }
                 .accessibilityLabel("添加任务")
                 .frame(minHeight: 44)
                 .contentShape(.rect)

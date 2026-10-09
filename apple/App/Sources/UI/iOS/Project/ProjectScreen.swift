@@ -63,30 +63,32 @@ struct ProjectScreen: View {
     @ViewBuilder
     private func content(_ page: ProjectPage, _ arrangement: WallArrangement) -> some View {
         let data = page.data, lastTarget = data.lastTarget
-        LazyVStack(alignment: .leading, spacing: 12) {
-            if data.project != nil { FocusCard(data: data, pi: pi).padding(.bottom, 12) }
+        // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
+        LazyVStack(alignment: .leading, spacing: 0) {
+            if data.project != nil { FocusCard(data: data, pi: pi).padding(.bottom, Self.sectionGap) }
             if data.cards.isEmpty {
-                EmptyIdeas { navigation.startCapture(project: .some(projectID)) }.padding(.top, 24)
+                EmptyIdeas { navigation.startCapture(project: .some(projectID)) }.padding(.vertical, 24)
             }
             if !arrangement.pinned.isEmpty {
                 // 资料：长期参考的灵感，一行一条压在任务区下面
-                SectionHeader(title: "资料", count: arrangement.pinned.count)
+                SectionHeader(title: "资料", count: arrangement.pinned.count).padding(.bottom, Self.headerGap)
                 let ids = arrangement.pinned
                 VStack(spacing: 0) {
                     ForEach(ids.compactMap { page.entries[$0] }) { entry in
                         OlderRow(entry: entry, lastTarget: lastTarget[entry.id], isFirst: entry.id == ids.first, isLast: entry.id == ids.last)
                     }
                 }
-                .padding(.bottom, 12)
+                .padding(.bottom, Self.sectionGap)
             }
             if !arrangement.wall.isEmpty {
-                SectionHeader(title: "最近", count: arrangement.wall.count)
-                wall(arrangement.wall, page: page, lastTarget: lastTarget).padding(.bottom, 12)
+                SectionHeader(title: "最近", count: arrangement.wall.count).padding(.bottom, Self.headerGap)
+                wall(arrangement.wall, page: page, lastTarget: lastTarget).padding(.bottom, Self.sectionGap)
             }
             if !arrangement.older.isEmpty {
-                SectionHeader(title: "更早", count: arrangement.older.count).id(ScrollAnchor.older)
                 let groups = data.olderGroups(arrangement)
                 let titled = OlderGroup.needsTitles(in: groups)
+                // 有组标题时由组标题自己与段标题隔开
+                SectionHeader(title: "更早", count: arrangement.older.count).id(ScrollAnchor.older).padding(.bottom, titled ? 0 : Self.headerGap)
                 ForEach(groups, id: \.period) { group in
                     if titled { OlderGroupHeader(group: group, expanded: $expanded) }
                     if !group.isMonth || expanded.contains(group.period) {
@@ -105,6 +107,10 @@ struct ProjectScreen: View {
         .padding(.top, 12)
         .padding(.bottom, 24)
     }
+
+    /// 段与段之间、段标题与它的内容之间的距离（书架、Mac 项目页同一节奏）。
+    private static let sectionGap: CGFloat = 24
+    private static let headerGap: CGFloat = 8
 
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
@@ -157,7 +163,7 @@ struct ProjectScreen: View {
 
 /// 介绍与任务：项目的一句话介绍 + 本项目任务（"任务 完成数/总数"，前 3 条顶层任务连同子任务，可拖动、缩进，同任务页；其余在任务页）+ 本项目的 Pi 会话（在线的全列，
 /// 再加最近结束的几个；更多的点"全部"看这个项目的 Pi 列表）。会话点开看近况、回复。
-/// 没写介绍时只有任务；什么都没有时是一行"添加任务"。
+/// 没写介绍时只有任务；没有任务也没有会话时不画纸，是介绍加一行"添加任务"。
 private struct FocusCard: View {
     let data: ProjectPageData
     let pi: PiSessionList?
@@ -168,14 +174,32 @@ private struct FocusCard: View {
     private static let visibleTasks = 3
     static let endedShown = 2
 
+    /// 既没有任务也没有会话：不画一张只装着空入口的纸，收成介绍加一行"添加任务"。
+    private var isEmpty: Bool { data.tasks.roots.isEmpty && (pi?.isEmpty ?? true) }
+
     var body: some View {
+        if isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                intro
+                NewTaskLine(project: data.project?.id)
+            }
+        } else {
+            card
+        }
+    }
+
+    @ViewBuilder private var intro: some View {
+        if let intro = data.project?.intro {
+            Text(intro).font(.headline).foregroundStyle(palette.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+        }
+    }
+
+    private var card: some View {
         // 三段靠段标题与段间距分组，不画分割线
         VStack(alignment: .leading, spacing: 20) {
-            if let intro = data.project?.intro {
-                Text(intro).font(.headline).foregroundStyle(palette.ink)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-            }
+            intro
             // 与任务页同一节奏：行自带 44pt 命中高度，行间不再加间距
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: data.taskProgress.map { "任务 \($0.done)/\($0.total)" } ?? "任务", systemImage: "checklist")

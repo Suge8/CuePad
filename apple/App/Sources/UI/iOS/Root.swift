@@ -100,7 +100,11 @@ struct RouteView: View {
     @Environment(\.bottomBarReserve) private var bottomBarReserve
 
     var body: some View {
-        page.containerBackground(background, for: .navigation)
+        // 底部栏是玻璃：滚到它后面的内容淡到页面底色（挂在让出高度之内，安全区才含底部栏那一段）
+        page.overlay(alignment: .bottom) {
+            if bottomBarReserve > 0, navigation.bottomPages == 0 { EdgeFade(edge: .bottom, fade: BottomBar.fadeAbove) }
+        }
+            .containerBackground(background, for: .navigation)
             .environment(\.pageBackground, background)
             // 标签栏布局：内容让出底部那一行的高度，滚动到它下面的内容渐隐。挂在每一页上：TabView 外面的安全区传不进标签页
             .safeAreaBar(edge: .bottom) {
@@ -318,6 +322,8 @@ private struct BottomBar: View {
 
     /// 内容在安全区之上还要给底部栏让出的高度（栏顶到安全区底边）；键盘盖住底部栏时为 0。
     static func reserve(above safeBottom: CGFloat) -> CGFloat { max(0, height + margin - safeBottom) }
+    /// 底部栏上沿往上再淡出这么高（`EdgeFade`）。
+    static let fadeAbove: CGFloat = 20
 
     private var drop: Color { palette.dark ? Color.black.opacity(0.3) : palette.ink.opacity(0.07) }
 

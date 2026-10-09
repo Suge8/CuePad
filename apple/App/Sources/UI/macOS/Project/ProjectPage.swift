@@ -23,11 +23,11 @@ struct ProjectPage: View {
                     content.id("top")
                 }
                 .remembersScroll()
-                .overlay { BottomFade() }
+                .overlay { EdgeFade.underInputBar }
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.quick) { collapsed = isCollapsed }
                 }
-                TopFade()
+                EdgeFade.underToolbar
                 // 下滚后收成的一行：在顶部渐隐之上、工具栏那一条里，但不放进工具栏——工具栏内容只随用户操作变，
                 // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
                 if collapsed, let data, showsFocus(data) {
@@ -64,7 +64,7 @@ struct ProjectPage: View {
                     directory: projectID.flatMap { catalog?.directories[$0] }, cardCount: catalog?.cardCounts[projectID] ?? 0)
                 if let data, let arrangement = board.arrangement { page(data, arrangement) }
             }
-            .padding(.horizontal, 32).padding(.top, 6).padding(.bottom, 150)
+            .padding(.horizontal, 32).padding(.top, EdgeFade.toolbarFade + 6).padding(.bottom, 150)
         }
     }
 
@@ -72,7 +72,12 @@ struct ProjectPage: View {
     private func page(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
         let byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
         let lastTarget = data.lastTarget
-        if showsFocus(data) { FocusBand(data: data) }
+        if showsFocus(data) {
+            FocusBand(data: data)
+        } else if let project = projectID {
+            // 两边都空：不画一个只装着空态的大框，收成一行添加任务；绑定文件夹的入口只在页头（DirectoryLink）
+            NewTaskField(project: project).frame(maxWidth: 420, alignment: .leading)
+        }
         if data.cards.isEmpty {
             EmptyProject()
         } else {
@@ -118,9 +123,9 @@ struct ProjectPage: View {
         }
     }
 
-    /// 项目页总有任务与 Agent 一栏（添加任务、绑定目录的入口都在里面）；未分类只在有任务或会话时显示。
+    /// 有任务或本项目的在线会话时才有"任务与 Agent"一栏；两边都空时项目页只留一行添加任务。
     private func showsFocus(_ data: ProjectPageData) -> Bool {
-        projectID != nil || !data.tasks.isEmpty || !workspace.liveSessions(in: projectID).isEmpty
+        !data.tasks.isEmpty || !workspace.liveSessions(in: projectID).isEmpty
     }
 
     private func rearrange() {
