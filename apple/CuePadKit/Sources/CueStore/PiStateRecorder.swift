@@ -9,6 +9,13 @@ extension CueStore {
     case .live: conditions.append("state != '\(PiWorkState.ended.rawValue)'")
     case .ended: conditions.append("state = '\(PiWorkState.ended.rawValue)'")
     case .all: break
+    case .current:
+      let modes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+      conditions.append(
+        """
+        (state != '\(PiWorkState.ended.rawValue)' OR sessionID IN (SELECT targetRef FROM deliveryRequests
+          WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(modes))))
+        """)
     }
     if let text = query.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
       let pattern = "%" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")

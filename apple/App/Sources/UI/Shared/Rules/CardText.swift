@@ -18,7 +18,7 @@ nonisolated struct CardText: Equatable, Sendable {
     }
 }
 
-extension Card {
+nonisolated extension Card {
     /// 列表与看板里的一行：正文第一行；正文还空着时写"无标题"。
     var title: String { CueSummary(body).title.nonEmpty ?? "无标题" }
 }
