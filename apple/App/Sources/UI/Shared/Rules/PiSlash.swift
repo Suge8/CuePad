@@ -49,7 +49,8 @@ nonisolated enum PiSlash {
     }
 }
 
-/// 上下文用量条的读数（同一份规则：颜色档位、文案、是否建议压缩）。
+/// 上下文用量条的读数（同一份规则：颜色档位、文案、是否建议压缩）。刚压缩过、Pi 在下次回答前不知道已用多少时没有读数
+/// （`init?` 给 nil，界面不画这颗胶囊：一道短横或"未知"读着像减号、像控件）。
 nonisolated struct PiContextMeter: Equatable {
     enum Level: Equatable {
         /// 余量充足
@@ -58,8 +59,6 @@ nonisolated struct PiContextMeter: Equatable {
         case tight
         /// 已用超过九成，接近自动压缩
         case critical
-        /// 刚压缩过，Pi 在下次回答前不知道已用多少
-        case unknown
     }
 
     static let tightFraction = 0.7
@@ -67,29 +66,26 @@ nonisolated struct PiContextMeter: Equatable {
     /// 已用到这个比例建议压缩（用量条的说明里给"压缩"）
     static let compactFraction = 0.8
 
-    let usage: PiContextUsage
+    /// 已用的比例，0 到 1。
+    let fraction: Double
 
-    init(_ usage: PiContextUsage) { self.usage = usage }
-
-    var fraction: Double? { usage.fraction }
-
-    var level: Level {
-        guard let fraction else { return .unknown }
-        return fraction >= Self.criticalFraction ? .critical : fraction >= Self.tightFraction ? .tight : .roomy
+    init?(_ usage: PiContextUsage) {
+        guard let fraction = usage.fraction else { return nil }
+        self.fraction = fraction
     }
 
-    var suggestsCompact: Bool { (fraction ?? 0) >= Self.compactFraction }
+    var level: Level { fraction >= Self.criticalFraction ? .critical : fraction >= Self.tightFraction ? .tight : .roomy }
 
-    /// 用量条旁的小字："21%"；未知时是一道横线。
-    var percent: String { fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "—" }
+    var suggestsCompact: Bool { fraction >= Self.compactFraction }
+
+    private var used: Int { Int((fraction * 100).rounded()) }
+
+    /// 胶囊里"上下文"后面的小字："21%"。
+    var percent: String { "\(used)%" }
 
     /// 悬停与读屏：先说这是上下文，快满了时说可以压缩。
     var help: Dotted { Dotted("上下文") + summary + Dotted(suggestsCompact ? "快满了，可以压缩" : nil) }
 
-    /// "已用 21% · 剩 79%"（只写比例，用户看不到 token 数）；未知时说明为什么。
-    var summary: Dotted {
-        guard let fraction else { return Dotted("刚压缩过", "下次回答后更新") }
-        let used = Int((fraction * 100).rounded())
-        return Dotted("已用 \(used)%", "剩 \(100 - used)%")
-    }
+    /// "已用 21% · 剩 79%"（只写比例，用户看不到 token 数）。
+    var summary: Dotted { Dotted("已用 \(used)%", "剩 \(100 - used)%") }
 }

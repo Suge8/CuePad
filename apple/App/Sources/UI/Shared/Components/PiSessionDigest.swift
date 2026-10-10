@@ -308,7 +308,7 @@ struct DeliveryStatusLabel: View {
     }
 }
 
-/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："运行了 4 分钟"、"刚开始等"、"2 小时前"。
+/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："运行了 4 分钟"、"刚刚"（等你确认的第一分钟）、"2 小时前"。
 /// 列表里到分钟；会话页顶栏传 `.second`。
 struct PiElapsed: View {
     let shown: PiShown

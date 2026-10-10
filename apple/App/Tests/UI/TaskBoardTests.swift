@@ -89,6 +89,28 @@ struct TaskBoardTests {
         #expect(board.inProgress.first?.session?.state == .known(.tool))
     }
 
+    /// 书架"正在推进"：只列顶层的进行中任务（与标题上的计数同一批），Agent 等你确认的在前、正在干活的其次，同档按最近开始；放不下的数个数。
+    @Test func 正在推进先列Agent要你处理与正在干活的_再按最近开始_只列顶层() async throws {
+        let recorder = PiStateRecorder(store: store, hostID: "mac")
+        try await recorder.update(sessionID: "s1", state: .tool, detail: "bash · pnpm test", title: "atlas")
+        try await recorder.update(sessionID: "s2", state: .waitingForUser, title: "deploy")
+        let oldest = try await store.createTask("最早开始", in: nil)
+        try await store.setStatus(oldest.id, .inProgress)
+        let step = try await store.createTask("子任务", under: oldest.id)
+        try await store.setStatus(step.id, .inProgress)
+        let working = try await store.createTask("在干活", in: nil)
+        try await store.recordSend(working.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: working.id)
+        let asking = try await store.createTask("等你确认", in: nil)
+        try await store.recordSend(asking.body, to: SendTarget(kind: .piSession, name: "deploy", ref: "s2"), card: asking.id)
+        let newest = try await store.createTask("最近开始", in: nil)
+        try await store.setStatus(newest.id, .inProgress)
+
+        let active = try await TaskBoard.active(limit: 3, from: store)
+
+        #expect(active.map(\.task.id) == [asking.id, working.id, newest.id])
+        #expect(try await TaskBoard.counts(from: store).inProgress == 4)  // 标题上的"4 进行中"：顶层，不含子任务
+    }
+
     @Test func 列表第三行_Pi在想还没有动作时写正在处理的提问() {
         let now = Date(timeIntervalSince1970: 1_000)
         let session = PiSessionState(

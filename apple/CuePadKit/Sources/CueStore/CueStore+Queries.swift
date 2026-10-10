@@ -23,13 +23,12 @@ extension CueStore {
     try select(Project.self, where: "deletedAt IS NULL", orderBy: Self.projectOrder("projects"))
   }
 
-  /// 项目的顺序：置顶在前，其余按最近活动——项目自身、其下卡片（灵感与任务）的最近修改、其 Pi 会话最近的状态变化中最晚的——
-  /// 由近到远。`alias` 是查询里项目表的名字。
+  /// 项目的顺序：置顶在前，其余按最近活动——项目自身、其下卡片（灵感与任务）的最近修改中最晚的——由近到远。
+  /// Pi 会话的状态变化不算：不然 Agent 一变状态项目就换位置，侧栏在眼前跳、⌘1–9 对应的项目跟着变。`alias` 是查询里项目表的名字。
   static func projectOrder(_ alias: String) -> String {
     """
     \(alias).isPinned DESC, MAX(\(alias).modifiedAt,
-      COALESCE((SELECT MAX(modifiedAt) FROM cards WHERE projectID = \(alias).id), 0),
-      COALESCE((SELECT MAX(stateSince) FROM piSessionStates WHERE projectID = \(alias).id), 0)) DESC, \(alias).id
+      COALESCE((SELECT MAX(modifiedAt) FROM cards WHERE projectID = \(alias).id), 0)) DESC, \(alias).id
     """
   }
 

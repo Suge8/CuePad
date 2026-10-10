@@ -3,7 +3,8 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 项目只有一种顺序：置顶在前，其余按最近活动——项目自身、其下卡片（灵感与任务）的最近修改、其 Pi 会话最近的状态变化中最晚的。
+/// 项目只有一种顺序：置顶在前，其余按最近活动——项目自身、其下卡片（灵感与任务）的最近修改中最晚的。
+/// Pi 会话的状态变化不算：Agent 一变状态项目就换位置，⌘1–9 对应的项目会跟着变。
 @Suite struct ProjectOrderTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -12,7 +13,7 @@ import Testing
     try RawDB(fixture.url).exec("UPDATE \(table) SET \(column) = \(millis) WHERE id = '\(id.uuidString.lowercased())'")
   }
 
-  @Test func pinnedFirstThenMostRecentActivityAcrossCardsTasksAndPiSessions() async throws {
+  @Test func pinnedFirstThenMostRecentEditAcrossCardsAndTasks_PiSessionStateChangesDoNotMoveProjects() async throws {
     let byCard = try await store.createProject(name: "卡片新", color: "#111")
     let byTask = try await store.createProject(name: "任务新", color: "#111")
     let byPi = try await store.createProject(name: "Pi 新", color: "#111")
@@ -30,7 +31,7 @@ import Testing
     try at("piSessionStates", state.id, 1_000)
     try at("piSessionStates", state.id, 6_000, column: "stateSince")
 
-    #expect(try await store.projects().map(\.name) == ["置顶", "Pi 新", "卡片新", "任务新", "安静"])
+    #expect(try await store.projects().map(\.name) == ["置顶", "卡片新", "任务新", "安静", "Pi 新"])
   }
 
   /// 本地不再有项目的手动排序键，同步记录也不再写它。
