@@ -13,10 +13,7 @@ nonisolated struct AgentLinks: Sendable, Equatable {
 
     static func read(from store: isolated CueStore) throws -> AgentLinks {
         let handed = try store.handedSessions()
-        var sessions: [String: PiSessionListItem] = [:]
-        for case .session(let id) in Set(handed.values) {
-            sessions[id] = try store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: id))).items.first
-        }
+        let sessions = try store.piSessions(sessionIDs: handed.values.compactMap { if case .session(let id) = $0 { id } else { nil } })
         return AgentLinks(
             items: handed.compactMapValues { if case .session(let id) = $0 { sessions[id] } else { nil } },
             launching: Set(handed.filter { $0.value == .launching }.keys))

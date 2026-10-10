@@ -1,9 +1,10 @@
 #if os(macOS)
 import CuePi
 import CueStore
+import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
-nonisolated private struct SidebarData: Sendable {
+nonisolated private struct SidebarData: Sendable, Equatable {
     var trashCount: Int
     /// 同步记录里在线的会话（含别的 Mac 上的）与全部会话数。
     var live: [PiSessionState]
@@ -16,6 +17,9 @@ nonisolated private struct SidebarData: Sendable {
     /// 项目行的"此刻"（`ProjectNow`）读的：此刻有事的会话（`PiSessionQuery.current`）与各项目最近开始的进行中任务。
     var current: [PiSessionListItem]
     var leading: [UUID: [ProjectNow.InProgress]]
+
+    /// 读到的表：会话与投送请求、任务与项目（"此刻"的进行中任务、回收站条数）。项目目录里的计数不在这里读。
+    static let tables: Set<Table> = [.projects, .cards, .piSessionStates, .deliveryRequests]
 }
 
 /// 侧栏两区：项目（置顶的在前，末尾未分类；项目多时在上面滚动）与 Agent（固定在底部、只列在线的会话，最多露出几行，
@@ -84,15 +88,17 @@ struct Sidebar: View {
                     .accessibilityHidden(true)
             }
         }
-        .observing(services.store, [.projects, .cards, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) { store in
-            let live = try store.piSessionPage(.live)
+        .observing(services.store, SidebarData.tables, into: $data, onError: workspace.fail) { store in
+            // 在线的是"此刻有事的"里没结束的那些（同一个顺序），不再另读一页
+            let current = try store.piSessionPage(.current).items
+            let live = current.filter { $0.state.state != .known(.ended) }
             return SidebarData(
-                trashCount: try store.trashedProjects().count + store.trashedCards().count,
-                live: live.items.map(\.listed), sessionTotal: try store.piSessionPage(PiSessionQuery(limit: 0)).total,
-                deliveries: Dictionary(live.items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
-                renames: Dictionary(live.items.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first },
-                undelivered: PiSessionListItem.undelivered(live.items),
-                current: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store))
+                trashCount: try store.trashCount(),
+                live: live.map(\.listed), sessionTotal: try store.piSessionPage(PiSessionQuery(limit: 0)).total,
+                deliveries: Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
+                renames: Dictionary(live.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first },
+                undelivered: PiSessionListItem.undelivered(live),
+                current: current, leading: try TaskBoard.leading(from: store))
         }
     }
 
