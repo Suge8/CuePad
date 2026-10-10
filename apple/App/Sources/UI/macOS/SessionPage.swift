@@ -40,7 +40,7 @@ extension SessionDigest {
 /// 一个 Agent 会话的整页（侧栏、Agent 页、⌘K、菜单栏面板、任务上的会话状态都进这里），与手机的会话页同一套：
 /// 会话名与"所在 · 状态 · 计时"（`PiSessionSubtitle`）在窗口工具栏的标题位、紧跟返回与前进，"⋯"（跳到终端、结束会话）在工具栏右边——
 /// Mac 的窗口本来就有一条工具栏，手机那种浮在内容上的顶栏放在它下面就是两层页头。顶栏规则与手机同一份（`ChatFollow.showsHeader`）：
-/// 看历史时标题与"⋯"让开，回到最新自动出现；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出——顶栏就在那里，
+/// 看历史时标题让开（"⋯"不让开：工具栏本来就一直在，让开只留一格空位），回到最新自动出现；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出——顶栏就在那里，
 /// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
 /// （`PiConversation`，子代理在末尾收成一行汇总；只排最近几条，更早的点最上面一行再排开），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
 /// 底部是与手机同一个回复框（`PiReplyBar`），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
@@ -112,14 +112,13 @@ struct SessionPage: View {
         .background(palette.desk)
         .toolbar {
             if let session = digest.session {
-                // 标题是悬浮的一块玻璃（与手机会话页顶栏中间那一块同一种），让开时连玻璃一起不画
+                // 标题是悬浮的一块玻璃（与手机会话页顶栏中间那一块同一种），玻璃画在标题自己身上、随它一起淡出：
+                // 系统给工具栏项画的那块在推入后改 sharedBackgroundVisibility 不跟着变，让开时会留下一块空玻璃
                 ToolbarItem(placement: .navigation) { title(session, digest: digest, ending: shownEnd?.isOpen == true) }
-                    .sharedBackgroundVisibility(follow.showsHeader ? .automatic : .hidden)
+                    .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .primaryAction) {
-                    menu(session, place: PiPlace.menuTitle(of: session, project: digest.project), live: live, ending: shownEnd?.isOpen == true).headerVisibility(follow.showsHeader)
+                    menu(session, place: PiPlace.menuTitle(of: session, project: digest.project), live: live, ending: shownEnd?.isOpen == true)
                 }
-                // 让开时连系统给圆钮画的玻璃一起不画
-                .sharedBackgroundVisibility(follow.showsHeader ? .automatic : .hidden)
             }
         }
         .observing(services.store, SessionDigest.tables, id: sessionID, into: $stored,
@@ -145,6 +144,8 @@ struct SessionPage: View {
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: Self.titleWidth, alignment: .leading)
+        .frame(height: Spacing.toolbarControl)
+        .glass(in: .capsule)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
         // 需要 /reload 的会话：状态就写在这块玻璃里，点它看怎么接上（不在对话上另浮一张卡）

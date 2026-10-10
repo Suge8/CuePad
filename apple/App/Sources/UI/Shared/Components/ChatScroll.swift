@@ -2,9 +2,11 @@ import SwiftUI
 
 /// 贴着最新（规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处（自己滚回、点"回到最新"）重新贴上；
 /// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。离最新处超过一屏出"回到最新"圆钮，离开后来了新内容圆钮带一个点。
-/// 顶栏的标题与"⋯"（`showsHeader`，iPhone 与 Mac 同一条）：离开最新就让开，看历史期间怎么滑都不出现（往回滑也不出来，
+/// 顶栏让开（`showsHeader`，iPhone 与 Mac 同一条）：离开最新就让开，看历史期间怎么滑都不出现（往回滑也不出来，
 /// 免得读的时候顶栏一闪一闪）；点它原来的位置唤出（`reveal`），再滑又让开；回到最新（滑到底、点"回到最新"、发出消息）自动出现。
-/// 返回钮（Mac 是"Agent"那颗往上一层）不在这条规则里，一直在：看历史时也看得到怎么回去。
+/// 平台不同的只有"⋯"：iPhone 上跟标题一起让开（顶栏浮在对话上，少一颗圆钮就少一块遮挡，`floatingHeader` 的 `hidden`）；
+/// Mac 上只让开标题、"⋯"一直在——Mac 没有状态栏，工具栏本来就一直在，让开只在那组玻璃里留下一格空位。返回钮（Mac 是"Agent"那颗往上一层）不在这条规则里，
+/// 一直在：看历史时也看得到怎么回去。
 nonisolated struct ChatFollow: Equatable {
     private(set) var atNewest = true
     /// 离最新处超过一屏：出"回到最新"圆钮。
@@ -22,7 +24,7 @@ nonisolated struct ChatFollow: Equatable {
     /// 离最新处这么近算"在最新处"。
     static let slack: CGFloat = 24
 
-    /// 标题与"⋯"此刻露着（返回钮一直在，不归它管）。
+    /// 标题此刻露着（iPhone 的"⋯"跟着它；返回钮与 Mac 的"⋯"一直在，见上）。
     var showsHeader: Bool { atNewest || revealed }
 
     struct Target: Equatable {
