@@ -81,7 +81,7 @@ struct PiReplyBar: View {
 
     private var composer: some View {
             Composer(
-                draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? "回复 \(session.title)" : placeholder, label: "回复", focus: $focused, accepts: accepts,
+                draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, compact: compact, showsSend: canStop, expandsOnFocus: hasTools, keepsHeader: !queued.isEmpty,
                 commands: answering == nil ? session.commands : [], shortcuts: shortcuts, recall: recall,
                 header: {
@@ -241,7 +241,13 @@ struct PiReplyBar: View {
     private var placeholder: String {
         if answering != nil { return "回答上面的问题" }
         if !draft.attachments.isEmpty || !draft.images.isEmpty { return "补一句（可不填）" }
-        return "回复 \(session.title)"
+        return replyPrompt
+    }
+
+    /// 回给这个会话的那句占位：已结束的会话也能接着说——发出后它所在的 Mac 先在后台把它唤醒再送达，占位写明这一步，
+    /// 不让人以为发给了一个没人接的会话。
+    private var replyPrompt: String {
+        session.state == .known(.ended) ? "唤醒 \(session.title) 接着说" : "回复 \(session.title)"
     }
 
     private func answer() {

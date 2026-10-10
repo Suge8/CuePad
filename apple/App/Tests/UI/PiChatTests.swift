@@ -109,21 +109,30 @@ struct PiChatTests {
         #expect(PiChat.outgoing([said, command], messages: []).map(\.id) == [said.id])
     }
 
-    /// 列表说"没能送达"的会话，点进去顶栏不能像好了一样：状态后写几句没送到（没能送达的那几条还挂在对话末尾）。
-    @Test func 有没送到的话时_顶栏写几句没送到() async throws {
+    /// 没送到的话在列表行与会话页是同一个数（会话列表查询带出的 `undelivered`）：列表那一行先是"没能送达"的出错状态，
+    /// 看过以后不再整行出错，但只要那几句还没重发或移除，行上留一个小标记；会话页顶栏一直写"N 句没送到"。
+    @Test func 没送到的话_看过以后行上仍留标记_与会话页同一个数() async throws {
         let app = TestApp()
         let store = app.services.store
+        try await PiStateRecorder(store: store, hostID: "mac-fail").update(sessionID: "relay", state: .settled, title: "relay")
         let target = SendTarget(kind: .piSession, name: "relay", ref: "relay")
         let lost = try await store.requestDelivery("改完再跑一遍", to: target, on: "mac-fail", mode: .send)
         _ = try await store.requestDelivery("还在路上的一句", to: target, on: "mac-wait", mode: .send)
-        #expect(PiChat.undeliveredNote(try await store.deliveryRequests(toSession: "relay"), messages: []) == nil)
+        func item() async throws -> PiSessionListItem { try #require(try await store.piSessionPage(PiSessionQuery()).items.first) }
+        #expect(try await item().undelivered == 0)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
         try await executor.start()
         for _ in 0..<300 where try await store.deliveryRequest(lost.id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
         await executor.stop()
 
-        #expect(PiChat.undeliveredNote(try await store.deliveryRequests(toSession: "relay"), messages: []) == "1 句没送到")
+        let failed = try await item()
+        #expect(failed.undelivered == 1 && PiChat.undeliveredNote(failed.undelivered) == "1 句没送到")
+        #expect(try await SessionDigest.read(failed.id, sessionID: "relay", from: store).undelivered == 1)
+
+        app.services.settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
+        #expect(app.services.settings.shown(try await item()).status != .delivery(.failed))
+        #expect(try await item().undelivered == 1)
     }
 
     @Test func 七天前活跃过又没有对话的会话_打开时请Mac补写() async throws {

@@ -588,13 +588,18 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var delivery: DeliveryRequest?
   /// 发给它的最近一条改名请求（带名字的配置请求）：改名在路上、没改成都由它推出。
   public var rename: DeliveryRequest?
+  /// 发给它、没能送达的话有几句（说话的方式里失败、还没重发或移除的）：会话行的标记与会话页顶栏的"N 句没送到"同读这个数。
+  public var undelivered: Int
   public var id: UUID { state.id }
 
-  public init(state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil) {
+  public init(
+    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil, undelivered: Int = 0
+  ) {
     self.state = state
     self.project = project
     self.delivery = delivery
     self.rename = rename
+    self.undelivered = undelivered
   }
 }
 

@@ -77,6 +77,8 @@ struct IOSRootView: View {
             guard let alert, navigation.showsAlert(about: alert.session) else { return }
             workspace.say(alert.text, symbol: alert.symbol, link: .session(alert.session), duration: .seconds(5))
         }
+        // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
+        .onChange(of: workspace.notice.map(navigation.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }
         #if DEBUG
         .task { await DebugScene.prepare(workspace, navigation, alerts) }
         #endif

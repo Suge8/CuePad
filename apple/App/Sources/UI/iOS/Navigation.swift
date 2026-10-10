@@ -269,6 +269,13 @@ final class Navigation {
         return !onAgentList && !isViewing(session: session)
     }
 
+    /// 顶上那条提示还留不留：说的是某个会话的提示（等你确认、做完了），你进了那个会话或 Agent 列表就当场撤下
+    /// （与不弹同一条规则 `showsAlert`），不在正看着的页面上停满 5 秒；别的提示照常留到时间。
+    func keeps(_ notice: Workspace.Notice) -> Bool {
+        guard case .session(let session) = notice.link else { return true }
+        return showsAlert(about: session)
+    }
+
     /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id，记录已被删时用它读对话）；`draft` 带进它的回复框
     /// （发到 Mac 的卡片或任务），已经写的字留着。先读出这一页再推入：读库只要几毫秒，推入的第一帧就是标题与最新的对话；
     /// 先推入再读时，结果要等转场开始、主线程空出来才到，滑进来的前几帧是一张空页。读不出来时照常推入，由页面报错。
