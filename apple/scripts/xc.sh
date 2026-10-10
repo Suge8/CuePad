@@ -122,12 +122,21 @@ shot_mac() {
   echo "$out"
 }
 
+# 这个名字的模拟器是否已启动：按设备名整行精确比较（子串匹配会把别人的"critic8 iPhone 18 Pro"当成"iPhone 18 Pro"，并行时装到别人的设备上）。
+# 先取全文再比：pipefail 下管道里的 grep -q 提前退出会让前面的命令吃 SIGPIPE
+sim_booted() {
+  local list names
+  list="$(xcrun simctl list devices booted)"
+  names="$(sed -nE 's/^ +(.+) \([0-9A-F-]{36}\) \(Booted\) *$/\1/p' <<< "$list")"
+  grep -qxF "$1" <<< "$names"
+}
+
 # iOS/iPadOS：库与偏好放进隔离目录（每个设备各一个，默认 .derived/library-<ios|ipad>），启动参数原样传给 App。
 # simctl 用 SIMCTL_CHILD_ 前缀把环境变量传给模拟器里的进程。
 shot_sim() {
   mkdir -p "$(dirname "$out")"
   local booted_here=0
-  if ! xcrun simctl list devices booted | grep -qF "$device ("; then
+  if ! sim_booted "$device"; then
     xcrun simctl boot "$device"; booted_here=1
   fi
   xcrun simctl bootstatus "$device" -b >/dev/null
@@ -151,7 +160,7 @@ case "$cmd" in
   build) xcb -quiet build ;;
   test)
     # xcodebuild 会启动模拟器且不关；本次启动的由脚本关掉，已开着的不动
-    if [ -n "${device:-}" ] && ! xcrun simctl list devices booted | grep -qF "$device ("; then
+    if [ -n "${device:-}" ] && ! sim_booted "$device"; then
       trap 'xcrun simctl shutdown "$device" 2>/dev/null || true' EXIT
     fi
     xcb test "${@:3}" ;;

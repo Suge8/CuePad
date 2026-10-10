@@ -33,7 +33,7 @@ struct Sidebar: View {
                     ForEach(pages.projects) { row($0, catalog, now: now[$0.id]) }
                     if pages.inboxCount > 0 {
                         PageRow(page: .inbox, count: pages.inboxCount, select: select) {
-                            Label("未分类", systemImage: "tray")
+                            Label { Text("未分类") } icon: { ProjectGlyph(project: nil) }
                         }
                     }
                 } header: {

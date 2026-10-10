@@ -2,7 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// Agent 分组标题旁的 +：在本机后台开一个新会话；开好后关掉表单、在内容区打开新会话的整页。
+/// Agent 分组标题旁与 Agent 整页右上的 +：在本机后台开一个新会话（窗口内浮层，同其他弹层；系统 popover 从页面右侧的 + 弹出时会伸到窗口外）。
+/// 开好后关掉表单、在内容区打开新会话的整页。
 struct NewSessionButton: View {
     @Binding var showing: Bool
     @Environment(Workspace.self) private var workspace
@@ -11,7 +12,7 @@ struct NewSessionButton: View {
         Button("新会话", systemImage: "plus") { showing = true }
             .labelStyle(.iconOnly).buttonStyle(.borderless)
             .help("开一个新的 Agent 会话")
-            .popover(isPresented: $showing, arrowEdge: .trailing) {
+            .panel(isPresented: $showing) {
                 NewSessionForm { id in
                     showing = false
                     workspace.show(.session(id))
@@ -58,6 +59,7 @@ struct NewSessionForm: View {
                 .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
                 TextField("开场的话（可不填）", text: $prompt, axis: .vertical)
                     .textFieldStyle(.plain).lineLimit(2...5)
+                    .onSubmit { if let place, place.binding != nil, stage != .opening { start(place) } }
                     .padding(.horizontal, 10).padding(.vertical, 8)
                     .paper(radius: 10)
                     .accessibilityLabel("开场的话")
@@ -81,11 +83,12 @@ struct NewSessionForm: View {
                     // 选好文件夹后项目目录刷新，这一处就换成"开始"
                     Button("选文件夹…") { workspace.chooseFolder(for: place.project) }
                         .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.return, modifiers: .command)
+                        .keyboardShortcut(.defaultAction)
                 } else {
+                    // ↩ 开始（浮层开着时 ⌘ 组合键只交给主菜单，⌘↩ 到不了这里），换行用 ⌥↩
                     Button("开始") { place.map(start) }
                         .buttonStyle(.borderedProminent)
-                        .keyboardShortcut(.return, modifiers: .command)
+                        .keyboardShortcut(.defaultAction)
                         .disabled(place == nil || stage == .opening)
                 }
             }
@@ -93,6 +96,7 @@ struct NewSessionForm: View {
         }
         .padding(16)
         .frame(width: Self.width)
+        .background(palette.desk)
     }
 
     private func row(_ place: ProjectFolders.LaunchPlace, selected: Bool) -> some View {

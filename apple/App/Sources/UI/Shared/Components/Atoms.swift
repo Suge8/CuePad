@@ -100,7 +100,8 @@ struct ProjectGlyph: View {
         Image(systemName: Self.symbol(project?.icon))
             .accessibilityHidden(true)
             .font(.system(size: size, weight: .medium))
-            .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? .secondary)
+            // 未分类（没有项目）是墨色，不借系统灰或系统强调色（侧栏列表会把 Label 的图标染成强调蓝）
+            .foregroundStyle(project.map { Palette.projectTint($0.color) } ?? palette.ink2)
             // 深色下提亮一档：偏灰、偏暗的项目色（如 #8A8A84）的细线图标在深底与玻璃上几乎看不见
             .brightness(palette.dark ? 0.18 : 0)
             .frame(width: size + 6)
