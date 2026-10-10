@@ -88,15 +88,17 @@ for row in rows:
     if key not in order:
         order.append(key)
 over = 0
-print(f"{'库':6}{'交互':14}{'点击回合 ms':>12}{'预算':>7}{'掉帧':>6}{'预算':>6}{'最长帧 ms':>10}  结果")
+print(f"{'库':6}{'交互':14}{'点击回合 ms':>12}{'预算':>7}{'合计 ms':>9}{'最重一圈':>9}{'掉帧':>6}{'预算':>6}{'最长帧 ms':>10}  结果")
 for key in order:
     samples = [r for r in rows if (r["库"], r["name"]) == key]
     click = st.median(r["clickMs"] for r in samples)
     hitches = st.median(r["hitches"] for r in samples)
     worst = max(r["worstMs"] for r in samples)
+    total = st.median(r["totalMs"] for r in samples)
+    heaviest = st.median(r["maxTurnMs"] for r in samples)
     budget_click, budget_hitches = samples[0]["budgetClickMs"], samples[0]["budgetHitches"]
     ok = click <= budget_click and hitches <= budget_hitches
     over += not ok
-    print(f"{key[0]:6}{key[1]:14}{click:12.1f}{budget_click:7.0f}{hitches:6.0f}{budget_hitches:6d}{worst:10.1f}  {'ok' if ok else '超预算'}")
+    print(f"{key[0]:6}{key[1]:14}{click:12.1f}{budget_click:7.0f}{total:9.0f}{heaviest:9.1f}{hitches:6.0f}{budget_hitches:6d}{worst:10.1f}  {'ok' if ok else '超预算'}")
 sys.exit(1 if over else 0)
 PY

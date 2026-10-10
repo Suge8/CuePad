@@ -9,6 +9,7 @@ import QuartzCore
 /// 动作就是点击、快捷键最终调用的工作区方法（`show`、`openCard`、`toggle`、`toggleSidebar`），不经事件投递（那一段只有 1～5ms）。
 /// - **点击回合**：动作发出到主线程第一次回到空闲（SwiftUI 更新、布局、提交都在里面）的主线程 CPU 毫秒，只取第一圈 ≥2ms 的 run loop；
 ///   CPU 时间不随机器忙闲变，墙钟会。
+/// - **合计、最重一圈**：动作后 800ms 里主线程 CPU 的总数与最重的一圈（点击回合小而合计大，是活被挪到了后面的帧里，不是没了）。
 /// - **掉帧**：动作后 800ms 内窗口 display link 相邻两次回调间隔超过 1.5 帧的次数与最长一次（毫秒）。
 /// 开头把本实例调到前台：后台量的数字偏乐观（前台才有玻璃等实际合成），所以会抢一下焦点，量完退出。
 @MainActor
@@ -106,6 +107,9 @@ enum InteractionBench {
             "name": name,
             // CPU 不会比墙钟长：第一圈若在量之前就醒了，CPU 里带着量之前的那一段
             "clickMs": (min(click?.cpu ?? 0, click?.dur ?? 0) * 10_000).rounded() / 10,
+            // 动作后 800ms 里主线程 CPU 的总数与最重的一圈：点击回合小而总数大，说明活被挪到了后面的帧里
+            "totalMs": (log.reduce(0) { $0 + min($1.cpu, $1.dur) } * 10_000).rounded() / 10,
+            "maxTurnMs": ((log.map { min($0.cpu, $0.dur) }.max() ?? 0) * 10_000).rounded() / 10,
             "hitches": frames["hitches"] ?? 0,
             "worstMs": frames["worstFrameMs"] ?? 0,
             "budgetClickMs": budget?.clickMs ?? 0,
