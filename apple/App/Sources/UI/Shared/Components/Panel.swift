@@ -213,11 +213,11 @@ private struct WindowReader: NSViewRepresentable {
 }
 
 /// 浮层那一层。模态的：压暗整窗的底（点它关），居中一块圆角面板，内容自己定大小、太大时让出窗口四周 24。
-/// 右上角的面板：页面轻轻压暗（不拦点按，背后透出来的卡片不和面板里的字抢），面板从右侧滑入，减弱动态效果时只淡入淡出。
+/// 右上角的面板：页面轻轻压暗（不拦点按，背后透出来的卡片不和面板里的字抢），面板原地淡入淡出、不滑动——位置逐帧变时，AppKit 每帧
+/// 重算整窗的鼠标跟踪区并重设光标（`NSTrackingAreaAKManager setCursorForMouseLocation`），前台每次开合 17～19 帧超时；淡入淡出不改几何，没有这笔。
 private struct PanelLayer: View {
     @Environment(PanelHost.self) private var host
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let margin: CGFloat = 24
 
@@ -250,7 +250,7 @@ private struct PanelLayer: View {
         shown.content
             .padding(.trailing, 12).padding(.top, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
+            .transition(.opacity)
     }
 }
 
