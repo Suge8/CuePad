@@ -12,8 +12,8 @@ extension DebugScene {
         if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.sidebar = .detailOnly }
         switch scene {
         case "collapsed": workspace.sidebar = .detailOnly
-        case "search": workspace.overlay = .search
-        case "tasks": workspace.overlay = .tasks
+        case "search": workspace.searching = true
+        case "tasks": workspace.showsTasks = true
         case "task":
             // 本项目第一条没完成的顶层任务，整页打开
             let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []

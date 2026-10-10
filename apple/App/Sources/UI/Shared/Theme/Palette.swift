@@ -37,6 +37,8 @@ struct Palette {
     var placeholder: Color { ink.opacity(highContrast ? 0.55 : 0.35) }
     var hair: Color { (dark ? Color.white : .black).opacity(highContrast ? 0.3 : (dark ? 0.09 : 0.07)) }
     var fill: Color { (dark ? Color.white : .black).opacity(dark ? 0.06 : 0.04) }
+    /// Mac 上模态浮层（⌘K、弹层）下面压暗整窗的底。
+    var backdrop: Color { Color.black.opacity(dark ? 0.4 : 0.25) }
 
     // MARK: 强调
 

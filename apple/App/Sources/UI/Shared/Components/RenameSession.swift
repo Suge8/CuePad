@@ -7,7 +7,8 @@ import SwiftUI
 private struct RenameSheet: View {
     let target: PiSessionState
     @Environment(Workspace.self) private var workspace
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.closePanel) private var close
+    @Environment(\.palette) private var palette
     @State private var name = ""
     @FocusState private var focused: Bool
 
@@ -17,47 +18,78 @@ private struct RenameSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                TextField("会话名", text: $name)
-                    .labelsHidden()
-                    .focused($focused)
-                    .submitLabel(.done)
-                    .onSubmit(commit)
-            }
-            .formStyle(.grouped)
-            .navigationTitle("重命名会话")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("改名", action: commit).disabled(changed == nil) }
-            }
-        }
-        #if os(iOS)
-        .presentationDetents([.height(180)])
-        #else
-        .frame(width: 360)
-        #endif
-        .onAppear {
+        content.onAppear {
             name = target.title
             focused = true
         }
     }
 
+    private var field: some View {
+        TextField("会话名", text: $name)
+            .labelsHidden()
+            .focused($focused)
+            .submitLabel(.done)
+            .onSubmit(commit)
+    }
+
+    #if os(iOS)
+    private var content: some View {
+        NavigationStack {
+            Form { field }
+                .formStyle(.grouped)
+                .navigationTitle("重命名会话")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("取消") { close() } }
+                    ToolbarItem(placement: .confirmationAction) { Button("改名", action: commit).disabled(changed == nil) }
+                }
+        }
+        .presentationDetents([.height(180)])
+    }
+    #else
+    /// 同项目表单：标题、输入框、右下取消与改名（↩ 改名，Esc 由弹层接）。
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("重命名会话").font(Typography.bodyStrong)
+            field.textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button("取消", role: .cancel) { close() }
+                Button("改名", action: commit).keyboardShortcut(.defaultAction).disabled(changed == nil)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
+        .background(palette.desk)
+    }
+    #endif
+
     private func commit() {
         guard let name = changed else { return }
         let target = target, services = workspace.services
         workspace.attempt { try await services.rename(target, to: name) }
-        dismiss()
+        close()
     }
 }
 
 extension View {
     /// `session` 非空时弹出改名表单，关掉时置回 nil。
     func renameSession(_ session: Binding<PiSessionState?>) -> some View {
-        sheet(item: session) { RenameSheet(target: $0) }
+        panel(item: session) { RenameSheet(target: $0) }
+    }
+
+    /// `session` 非空时问要不要结束它（两端的 Agent 页与会话页）：确认后经 `Workspace.end` 发给它所在的 Mac，对话留着。
+    func endSession(_ session: Binding<PiSessionState?>) -> some View { modifier(EndSession(session: session)) }
+}
+
+private struct EndSession: ViewModifier {
+    @Binding var session: PiSessionState?
+    @Environment(Workspace.self) private var workspace
+
+    func body(content: Content) -> some View {
+        content.dialog("结束这个会话？", item: $session, message: "对话会保留，再给它发消息会在后台恢复") { session in
+            [DialogButton(title: "结束会话", role: .destructive) { Task { await workspace.end(session) } }]
+        }
     }
 }
 

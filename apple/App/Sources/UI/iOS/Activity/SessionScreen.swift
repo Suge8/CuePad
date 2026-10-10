@@ -18,7 +18,7 @@ struct SessionScreen: View {
     @State private var lastSeen: PiSessionState?
     @State private var askedForTranscript = false
     @State private var follow = ChatFollow()
-    @State private var confirmingEnd = false
+    @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
     /// 刚从刻度滑条跳到的那条你的话，短暂描一圈。
     @State private var highlight: UUID?
@@ -98,7 +98,7 @@ struct SessionScreen: View {
                         Button("重命名", systemImage: "pencil") { renaming = session }.disabled(!services.reachesPiHost)
                     }
                     if MacDelivery.canEnd(session) {
-                        Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = true }
+                        Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = session }
                             .disabled(shownEnd?.isOpen == true)
                     }
                 } label: {
@@ -108,11 +108,7 @@ struct SessionScreen: View {
             }
         }
         .renameSession($renaming)
-        .confirmationDialog("结束这个会话？", isPresented: $confirmingEnd, titleVisibility: .visible) {
-            Button("结束会话", role: .destructive, action: end)
-        } message: {
-            Text("对话会保留，再给它发消息会在后台恢复")
-        }
+        .endSession($confirmingEnd)
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {
@@ -157,11 +153,6 @@ struct SessionScreen: View {
     }
 
     /// 请会话所在的 Mac 结束它；进度与失败都从发给它的结束请求推出（`shownEnd`）。
-    private func end() {
-        guard let session else { return }
-        Task { await workspace.end(session) }
-    }
-
     /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说）。
     private func askForTranscriptIfNeeded() {
         guard !askedForTranscript, let digest, let session = digest.session, services.reachesPiHost,

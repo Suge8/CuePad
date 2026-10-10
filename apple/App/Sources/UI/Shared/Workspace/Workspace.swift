@@ -24,11 +24,6 @@ final class Workspace {
         #endif
     }
 
-    enum Overlay: Equatable {
-        case search
-        case tasks
-    }
-
     struct Notice: Identifiable, Equatable {
         let id = UUID()
         var text: Dotted
@@ -87,9 +82,18 @@ final class Workspace {
     private(set) var presentedCard: UUID?
     /// 各张卡在纸页开合中的状态，按卡分开（见 `CardPresence`）。
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
-    var overlay: Overlay?
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
     var attaching: Card?
+    #if os(macOS)
+    /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
+    var projectForm: ProjectForm.Request?
+    /// ⌘K 搜索开着（`SearchPalette`）。
+    var searching = false
+    /// 右上角的任务面板开着（`TasksPanel`）。
+    var showsTasks = false
+    /// 首次启动问要不要把 cuepad 命令行装进 PATH（`AppDelegate` 置起，主窗口弹出）。
+    var offersCommandLineTool = false
+    #endif
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
@@ -354,18 +358,8 @@ final class Workspace {
         }
     }
 
-    /// 开关浮层。⌘K 搜索每天用很多次，直接出现；任务面板从右侧滑入（短弹簧，减弱动态效果时只淡入淡出由视图决定）。
-    func toggle(_ overlay: Overlay) {
-        let next = self.overlay == overlay ? nil : overlay
-        if overlay == .search || self.overlay == .search {
-            self.overlay = next
-        } else {
-            withAnimation(Motion.snappy) { self.overlay = next }
-        }
-    }
-
     func toggleSidebar() {
-        withAnimation { sidebar = sidebar == .detailOnly ? .all : .detailOnly }
+        sidebar = sidebar == .detailOnly ? .all : .detailOnly
     }
 
     // MARK: 提示

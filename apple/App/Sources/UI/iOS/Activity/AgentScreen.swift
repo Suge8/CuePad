@@ -55,12 +55,7 @@ struct AgentScreen: View {
         .contentMargins(.top, Bars.contentGap, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
         .renameSession($renaming)
-        .confirmationDialog("结束这个会话？", isPresented: Binding { confirmingEnd != nil } set: { if !$0 { confirmingEnd = nil } },
-                            titleVisibility: .visible, presenting: confirmingEnd) { session in
-            Button("结束会话", role: .destructive) { Task { await workspace.end(session) } }
-        } message: { _ in
-            Text("对话会保留，再给它发消息会在后台恢复")
-        }
+        .endSession($confirmingEnd)
         #if DEBUG
         .defaultScrollAnchor(DebugScene.scene == "agent" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
         #endif

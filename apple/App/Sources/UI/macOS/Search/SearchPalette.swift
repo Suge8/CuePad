@@ -91,8 +91,8 @@ struct SearchPalette: View {
         // 宽高都以详情区为上限（外层留边距）：同一窗口里面板尺寸固定，结果多少都不让它长高
         .frame(maxWidth: Self.maxWidth, maxHeight: Self.height)
         // 面大、字多：玻璃之上再垫一层接近实色的纸，背后的内容不透出来干扰阅读
-        .background(palette.paper.opacity(palette.dark ? 0.9 : 0.86), in: .rect(cornerRadius: 26))
-        .glass(in: .rect(cornerRadius: 26))
+        .background(palette.paper.opacity(palette.dark ? 0.9 : 0.86), in: .rect(cornerRadius: PanelStyle.radius, style: .continuous))
+        .glass(in: .rect(cornerRadius: PanelStyle.radius, style: .continuous))
         // 第一份结果读到之前不显示：晚一帧出现，不先露一个空壳再长出内容
         .opacity((scope == .cards ? data == nil : sessions == nil) ? 0 : 1)
     }
@@ -144,7 +144,7 @@ struct SearchPalette: View {
     }
 
     private func openSession(_ sessionID: String) {
-        workspace.overlay = nil
+        workspace.searching = false
         workspace.show(.session(sessionID))
     }
 
@@ -307,7 +307,7 @@ struct SearchPalette: View {
     }
 
     private func open(_ card: Card) {
-        workspace.overlay = nil
+        workspace.searching = false
         if card.projectID != workspace.currentProject {
             workspace.show(card.projectID.map(Workspace.Page.project) ?? .inbox)
         }

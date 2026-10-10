@@ -25,7 +25,7 @@ final class SessionHeader {
 
     private(set) var state: State?
     @ObservationIgnored var rename: (PiSessionState) -> Void = { _ in }
-    @ObservationIgnored var end: () -> Void = {}
+    @ObservationIgnored var end: (PiSessionState) -> Void = { _ in }
     @ObservationIgnored var reveal: () -> Void = {}
 
     func set(_ state: State?) {
@@ -115,7 +115,7 @@ struct SessionMenuSlot: View {
                     Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(id) }
                 }
                 if state.canEnd {
-                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { workspace.sessionHeader.end() }
+                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { workspace.sessionHeader.end(state.session) }
                         .disabled(state.ending)
                 }
             }

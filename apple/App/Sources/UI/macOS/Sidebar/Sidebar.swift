@@ -25,8 +25,6 @@ struct Sidebar: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var data: SidebarData?
-    @State private var creating = false
-    @State private var renaming: Project?
     /// 点过侧栏里的页后焦点留在侧栏，方向键才有地方去
     @FocusState private var focused: Bool
 
@@ -49,7 +47,7 @@ struct Sidebar: View {
                     }
                 } header: {
                     SidebarHeader(title: "项目") {
-                        Button("新建项目", systemImage: "plus") { creating = true }.disabled(!workspace.isLibraryReady)
+                        Button("新建项目", systemImage: "plus") { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
                     }
                 }
             }
@@ -86,8 +84,6 @@ struct Sidebar: View {
                     .accessibilityHidden(true)
             }
         }
-        .sheet(isPresented: $creating) { ProjectForm(project: nil) }
-        .sheet(item: $renaming) { ProjectForm(project: $0) }
         .observing(services.store, [.projects, .cards, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) { store in
             let live = try store.piSessionPage(.live)
             return SidebarData(
@@ -118,7 +114,7 @@ struct Sidebar: View {
     /// 项目行：名称，下面一行是"此刻"（`ProjectNow`，与书架同一条规则）。行高一直是两行的高度，状态出现、消失时列表不跳；
     /// 没有可说的时名称在行里居中，不在上半截空出一行（一列里有的有、有的没有时，名称高低错落）。
     private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {
-        ProjectRow(project: project, count: catalog.cardCounts[project.id] ?? 0, now: now, select: select, edit: { renaming = project })
+        ProjectRow(project: project, count: catalog.cardCounts[project.id] ?? 0, now: now, select: select, edit: { workspace.projectForm = .init(project: project) })
             .equatable()
     }
 

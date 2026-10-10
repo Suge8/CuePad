@@ -53,7 +53,7 @@ struct SessionPage: View {
     private var header: SessionHeader { workspace.sessionHeader }
     @State private var stored: SessionDigest?
     @State private var askedForTranscript = false
-    @State private var confirmingEnd = false
+    @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
     @State private var follow = ChatFollow()
     /// 对话排开最近多少条（`PiConversation.window`）。
@@ -95,11 +95,7 @@ struct SessionPage: View {
                 .frame(maxWidth: Self.readingWidth)
                 .animation(Motion.quick, value: session.question)
                 .renameSession($renaming)
-                .confirmationDialog("结束这个会话？", isPresented: $confirmingEnd, titleVisibility: .visible) {
-                    Button("结束会话", role: .destructive) { Task { await workspace.end(session) } }
-                } message: {
-                    Text("对话会保留，再给它发消息会在后台恢复")
-                }
+                .endSession($confirmingEnd)
             } else if stored != nil {
                 EmptyState(mascot: .empty, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
                     .frame(maxHeight: .infinity)
@@ -110,7 +106,7 @@ struct SessionPage: View {
         .onChange(of: headerState(digest, live: live, shownEnd: shownEnd), initial: true) { _, state in header.set(state) }
         .onAppear {
             header.rename = { renaming = $0 }
-            header.end = { confirmingEnd = true }
+            header.end = { confirmingEnd = $0 }
             header.reveal = { follow.reveal() }
         }
         .onDisappear { header.clear(sessionID) }
@@ -213,7 +209,8 @@ private struct SessionLink: ViewModifier {
     func body(content: Content) -> some View {
         let opened = workspace.page == .session(sessionID)
         Button {
-            workspace.overlay = nil
+            workspace.searching = false
+            workspace.showsTasks = false
             workspace.show(.session(sessionID))
         } label: {
             content.contentShape(.rect)

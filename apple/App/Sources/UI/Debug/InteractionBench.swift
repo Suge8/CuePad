@@ -13,17 +13,22 @@ import QuartzCore
 /// 开头把本实例调到前台：后台量的数字偏乐观（前台才有玻璃等实际合成），所以会抢一下焦点，量完退出。
 @MainActor
 enum InteractionBench {
-    /// 每项的预算：点击回合上限（毫秒）与掉帧次数上限；前台、Release、两个库里各项的中位数都要在内。数字与 docs 的交互预算表一致，改一处要改另一处。
+    /// 每项的预算：点击回合上限（毫秒）与掉帧次数上限。预算是目标，不是现状：没达到的项如实报超预算，不改数字迁就。
+    /// 依据：144Hz 一帧 6.9ms；对点击的回应在两帧（14ms）内人感觉是"跟手"，要建内容的在四帧（28ms）内不觉得顿；掉帧最多两次。
+    /// 回访页面、收起、关闭只是换可见性，对点击要跟手；首访、打开、会话页要建视图，给四帧。
     private static let budgets: [String: (clickMs: Double, hitches: Int)] = [
-        "页面回访": (20, 1),
-        "页面首访": (25, 5),
-        "Agent 页首访": (90, 3),
-        "会话页": (200, 25),
-        "开纸页": (35, 5),
-        "收纸页": (25, 4),
-        "任务面板": (40, 16),
-        "⌘K 面板": (50, 2),
-        "侧栏开合": (70, 16),
+        "页面回访": (14, 1),
+        "页面首访": (28, 2),
+        "Agent 页首访": (28, 2),
+        "会话页": (28, 2),
+        "开纸页": (28, 2),
+        "收纸页": (14, 2),
+        "任务面板开": (28, 2),
+        "任务面板关": (14, 2),
+        "⌘K 面板开": (28, 2),
+        "⌘K 面板关": (14, 2),
+        "侧栏收起": (28, 2),
+        "侧栏展开": (28, 2),
     ]
 
     private static let turns = TurnLog()
@@ -69,12 +74,18 @@ enum InteractionBench {
             }
         }
         for _ in 0..<2 {
-            await step("任务面板") { workspace.toggle(.tasks) }
-            await step("任务面板") { workspace.toggle(.tasks) }
-            await step("⌘K 面板") { workspace.toggle(.search) }
-            await step("⌘K 面板") { workspace.toggle(.search) }
-            await step("侧栏开合") { workspace.toggleSidebar() }
-            await step("侧栏开合") { workspace.toggleSidebar() }
+            await step("任务面板开") { workspace.showsTasks = true }
+            await step("任务面板关") { workspace.showsTasks = false }
+            await step("⌘K 面板开") { workspace.searching = true }
+            await step("⌘K 面板关") { workspace.searching = false }
+        }
+        // 侧栏开合在卡最多的项目页上量：整页内容要跟着详情区的宽度重排
+        if let big = workspace.catalog?.cardCounts.filter({ $0.key != nil }).max(by: { $0.value < $1.value })?.key {
+            await step("页面回访") { workspace.show(.project(big)) }
+            for _ in 0..<2 {
+                await step("侧栏收起") { workspace.toggleSidebar() }
+                await step("侧栏展开") { workspace.toggleSidebar() }
+            }
         }
         NSApp.terminate(nil)
     }
