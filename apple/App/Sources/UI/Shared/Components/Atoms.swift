@@ -1,4 +1,5 @@
 import CueStore
+import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -9,7 +10,7 @@ import UIKit
 extension View {
     /// 订阅 Store：`id` 变化时重新订阅；每次变更重读后写入 `value`。读失败交给 `onError`。
     func observing<T: Sendable>(
-        _ store: CueStore, _ tables: Set<StoreTable>, id: some Equatable = 0, into value: Binding<T?>,
+        _ store: CueStore, _ tables: Set<Table>, id: some Equatable = 0, into value: Binding<T?>,
         onError: @escaping (any Error) -> Void = { _ in },
         _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> some View {

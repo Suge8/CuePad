@@ -14,7 +14,7 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
     /// 各台 Mac 上的目录绑定（同步记录，本机的也在里面）：手机据此知道项目绑在哪台 Mac 的哪个文件夹，项目菜单与新会话落点都读它。
     var bindings: [DirectoryBinding]
 
-    static let tables: Set<StoreTable> = [.projects, .cards, .projectDirectories, .directoryBindings]
+    static let tables: Set<Table> = [.projects, .cards, .projectDirectories, .directoryBindings]
 
     func project(_ id: UUID?) -> Project? {
         id.flatMap { id in projects.first { $0.id == id } }
