@@ -297,7 +297,7 @@ extension Workspace {
         return { [self] text in
             attempt {
                 if try await self.services.store.directory(of: project) == nil {
-                    guard let path = ProjectDirectory.pick() else { return }
+                    guard let path = await ProjectDirectory.pick() else { return }
                     try await self.services.store.setDirectory(path, for: project)
                 }
                 _ = try await self.startSession(in: project, prompt: text.nonEmpty, title: title, card: id) {}
