@@ -90,8 +90,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services?.updates.checkForUpdates()
     }
 
-    /// 主菜单"显示"里的搜索（⌘K）、任务面板（⌘⇧T）与侧栏（⌘\）：命令本身是开关，开着时同一条命令把它关掉。放在主菜单而不是窗口里的快捷键：
-    /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）；中文输入法下 ⌘\ 到不了窗口里的快捷键（微信输入法实测），主菜单收得到。
+    /// 主菜单"显示"里的搜索（⌘K）、任务面板（⌘⇧T）与侧栏（⌃⌘S）：命令本身是开关，开着时同一条命令把它关掉。放在主菜单而不是窗口里的快捷键：
+    /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
     @objc func toggleTasks(_ sender: Any?) { workspace?.showsTasks.toggle() }
     @objc func toggleSidebar(_ sender: Any?) { workspace?.toggleSidebar() }

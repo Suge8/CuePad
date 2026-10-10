@@ -34,7 +34,8 @@ enum MainMenu {
         main.addItem(submenu(title: "显示", items: [
             .item("搜索", #selector(AppDelegate.toggleSearch(_:)), "k"),
             .item("任务", #selector(AppDelegate.toggleTasks(_:)), "T"),
-            .item("侧栏", #selector(AppDelegate.toggleSidebar(_:)), "\\"),
+            // macOS 标准的显示/隐藏侧栏；不用 ⌘\：常见的 1Password 把它占作全局快捷键，按键到不了 App
+            .item("侧栏", #selector(AppDelegate.toggleSidebar(_:)), "s", [.control, .command]),
         ]))
         main.addItem(replyMenu())
         let window = submenu(title: "窗口", items: [
@@ -60,7 +61,7 @@ enum MainMenu {
     }
 
     private enum Entry {
-        case item(String, Selector, String)
+        case item(String, Selector, String, NSEvent.ModifierFlags = .command)
         case separator
     }
 
@@ -68,7 +69,8 @@ enum MainMenu {
         let menu = NSMenu(title: title)
         for entry in items {
             switch entry {
-            case let .item(title, action, key): menu.addItem(withTitle: title, action: action, keyEquivalent: key)
+            case let .item(title, action, key, modifiers):
+                menu.addItem(withTitle: title, action: action, keyEquivalent: key).keyEquivalentModifierMask = modifiers
             case .separator: menu.addItem(.separator())
             }
         }

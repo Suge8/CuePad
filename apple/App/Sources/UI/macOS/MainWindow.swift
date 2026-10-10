@@ -11,7 +11,7 @@ struct MainWindow: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.sidebar) {
             Sidebar()
-                // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌘\ 同一个入口
+                // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌃⌘S 同一个入口
                 .toolbar(removing: .sidebarToggle)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
@@ -217,13 +217,13 @@ private struct SwitcherSlot: View {
     }
 }
 
-/// 开合侧栏（`Workspace.toggleSidebar`，⌘\ 同）。
+/// 开合侧栏（`Workspace.toggleSidebar`，⌃⌘S 同）。
 private struct SidebarToggle: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         Button("侧栏", systemImage: "sidebar.left") { workspace.toggleSidebar() }
-            .help("显示或隐藏侧栏（⌘\\）")
+            .help("显示或隐藏侧栏（⌃⌘S）")
     }
 }
 
@@ -339,7 +339,7 @@ private struct TasksButton: View {
     }
 }
 
-/// 窗口级快捷键：⌘1–9 切项目、⌘N 新建卡片。⌘K 搜索、⌘⇧T 任务面板、⌘\ 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
+/// 窗口级快捷键：⌘1–9 切项目、⌘N 新建卡片。⌘K 搜索、⌘⇧T 任务面板、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
 /// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
