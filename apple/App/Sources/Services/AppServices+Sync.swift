@@ -94,7 +94,7 @@ extension AppServices {
     /// 此刻该按什么节奏主动拉（nil：不拉）。"是否在等"只在这里定义；等的对象所在的表见 `ZoneChangePuller.awaitedTables`，
     /// 加新的等待理由时一并更新：
     /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
-    ///   或有发给本机、还没结果的投送请求时，每 2 秒。闲着时也是 2 秒：Mac 上会话一连几天，这是一小时 1800 次、一天四万多次，
+    ///   或有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的）时，每 2 秒。闲着时也是 2 秒：Mac 上会话一连几天，这是一小时 1800 次、一天四万多次，
     ///   但没有推送可靠性的数据前不拿延迟换请求数；数据看 `ZoneChangePuller.lateCatches`，放慢的条件见 docs「同步」；
     /// - 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时每 3 秒（状态是活的，
     ///   不靠推送），离开即停；两者都有时每 2 秒、不限时。进入后台整体停掉（见 `stopPolling`）。
@@ -108,12 +108,7 @@ extension AppServices {
 
     /// `pollingCadence` 随它依赖的状态变化给出新值；期间跟着资料库更新 `hasOpenDeliveries`。
     func pollingCondition() -> AsyncStream<SyncPoller.Cadence?> {
-        #if os(macOS)
-        let host = hostID
-        let deliveries = openDeliveries { $0.hostID == host }
-        #else
-        let deliveries = openDeliveries { _ in true }  // 手机的请求都发往某台 Mac
-        #endif
+        let deliveries = openDeliveries()
         return AsyncStream { continuation in
             let task = Task { [weak self] in
                 guard let self else { return }
@@ -126,9 +121,9 @@ extension AppServices {
         }
     }
 
-    /// 有没有符合条件、还没结果的投送请求，请求表变化时重算；读失败时报告并结束（不再主动拉，推送与切前台照常）。
-    private func openDeliveries(_ matches: @escaping @Sendable (DeliveryRequest) -> Bool) -> AsyncStream<Bool> {
-        let changes = store.observe { store in try store.deliveryRequests().contains { $0.isOpen && matches($0) } }
+    /// 有没有还没结果的投送请求，请求表变化时重算；读失败时报告并结束（不再主动拉，推送与切前台照常）。
+    private func openDeliveries() -> AsyncStream<Bool> {
+        let changes = store.observe { store in try store.deliveryRequests().contains { $0.isOpen } }
         return AsyncStream { continuation in
             let task = Task { [weak self] in
                 do {

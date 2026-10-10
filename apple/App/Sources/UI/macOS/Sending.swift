@@ -13,6 +13,26 @@ struct AgentTarget: Equatable {
 }
 
 extension Workspace {
+    /// 一个发送目标走哪条路：本机桥上连着的会话；别的 Mac 上在线的会话；已结束的会话（在后台唤醒）。
+    enum HandOffRoute {
+        case local(CuePi.PiSession)
+        case remote(PiSessionState)
+        case ended
+    }
+
+    /// 能交给的在线会话：所有 Mac 上的（手机的交给 Agent 输入框共用同一份规则，见 `HandOffTargets`）。
+    func onlineTargets(for project: UUID?) -> [PiSessionListItem] {
+        HandOffTargets.sessions(services.liveSessions.live, project: project)
+    }
+
+    func route(of sessionID: String) -> HandOffRoute {
+        if let live = liveSession(sessionID) { return .local(live) }
+        if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && $0.state.hostID != services.hostID }) {
+            return .remote(remote.state)
+        }
+        return .ended
+    }
+
     /// 项目的 Pi 会话：按工作目录归入（Store 判定），空闲的在前。
     /// 先按格子上不变的身份筛出本项目的，再读这些格子的状态：别的项目的会话状态变化不惊动读它的视图。
     func projectSessions(in project: UUID?) -> [CuePi.PiSession] {
@@ -24,23 +44,43 @@ extension Workspace {
     }
 
     /// 当前生效的会话：用户选过或发过的（已结束时照样保留，界面写"已结束"，不悄悄换掉；同一个 Pi 会话重新打开了就是在线的那个），
-    /// 否则本项目的会话——在线的优先，都结束了就是刚结束的那个（同样写"已结束"）；本项目一个都没有时为 nil。
+    /// 否则本项目的会话——在线的优先（空闲的在前，同样空闲时本机的在前：本机直接送达），都结束了就是刚结束的那个（同样写"已结束"）；
+    /// 本项目一个都没有时为 nil。
     func agentTarget(for project: UUID?) -> AgentTarget? {
         if let sendChoice { return sendChoice }
-        if let live = projectSessions(in: project).first { return AgentTarget(session: live.sessionID) }
         guard let project else { return nil }
+        let mine = onlineTargets(for: project).filter { $0.state.projectID == project }
+        if let pick = mine.min(by: { rank($0) < rank($1) }) { return AgentTarget(session: pick.state.sessionID) }
         return endedTargets.first { $0.projectID == project }.map { AgentTarget(session: $0.sessionID) }
+    }
+
+    private func rank(_ item: PiSessionListItem) -> (busy: Int, remote: Int) {
+        let busy = liveSession(item.state.sessionID)?.state.isTurnRunning ?? item.state.state.known?.isTurnRunning ?? false
+        return (busy ? 1 : 0, item.state.hostID == services.hostID ? 0 : 1)
     }
 
     /// 能选作发送目标的已结束会话：这个窗口打开后结束、也没有重新打开的，最近结束的在前。发给它们时在后台把会话恢复起来。
     var endedTargets: [PiSessionState] { recentlyEnded.filter { liveSession($0.sessionID) == nil } }
 
     /// 会话已结束、也没有重新打开：发送时先在后台唤醒它，发送钮的状态点写"已结束"。
-    func isEnded(_ target: AgentTarget) -> Bool { liveSession(target.session) == nil }
+    func isEnded(_ target: AgentTarget) -> Bool {
+        if case .ended = route(of: target.session) { true } else { false }
+    }
 
-    /// Pi 会话的显示名：在线的取桥上的，结束了的取同步记录里的（`recentlyEnded`）。
+    /// Pi 会话的显示名：本机在线的取桥上的，别的 Mac 上的与刚结束的取同步记录里的。
     func sessionName(_ sessionID: String) -> String {
-        liveSession(sessionID)?.displayName ?? recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
+        liveSession(sessionID)?.displayName
+            ?? services.liveSessions.items.first { $0.state.sessionID == sessionID }?.state.title
+            ?? recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
+    }
+
+    /// 发送目标此刻显示的状态：本机的取桥上的实时值，别的 Mac 上的取同步记录，已结束的是"已结束"。
+    func shown(_ target: AgentTarget) -> PiShown {
+        switch route(of: target.session) {
+        case .local(let live): shown(live)
+        case .remote(let state): services.settings.shown(state, delivery: services.liveSessions.deliveries[state.sessionID])
+        case .ended: PiShown(state: .known(.ended))
+        }
     }
 
     /// 完整说法："发给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在菜单项、提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
@@ -81,10 +121,10 @@ extension Workspace {
     func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) async -> Bool {
         let done = Dotted("已" + action(for: target), target.mode == .steer || target.mode == .followUp ? target.mode.label : nil)
         do {
-            if let live = liveSession(target.session) {
-                try await services.send(stored, to: live.id, mode: target.mode, card: card)
-            } else {
-                try await services.send(stored, toEnded: target.session, named: sessionName(target.session), card: card)
+            switch route(of: target.session) {
+            case .local(let live): try await services.send(stored, to: live.id, mode: target.mode, card: card)
+            case .remote(let session): try await services.send(stored, toRemote: session, mode: target.mode, card: card)
+            case .ended: try await services.send(stored, toEnded: target.session, named: sessionName(target.session), card: card)
             }
             sendChoice = AgentTarget(session: target.session)
             say(done)
