@@ -19,7 +19,7 @@ nonisolated private struct SidebarData: Sendable {
 }
 
 /// 侧栏两区：项目（置顶的在前，末尾未分类；项目多时在上面滚动）与 Agent（固定在底部、只列在线的会话，最多露出几行，
-/// 其余与历史在"全部会话"里）；归档、回收站与设置在底栏。点哪一行，内容区就是哪一页。
+/// 其余与历史在"全部"打开的 Agent 整页里）；归档、回收站与设置在底栏。点哪一行，内容区就是哪一页。
 struct Sidebar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -261,8 +261,8 @@ private struct FooterPage: View {
 }
 
 /// Agent 区：只回答"现在"——在线的会话（本机桥上的与别的 Mac 同步来的），与 iOS 的 Agent 页同一种行（`PiSessionRow`）、
-/// 同一个顺序（`liveRows`，要你注意的在前）；固定在侧栏底部，最多露出 `SidebarAgents.limit` 行，多的写在"全部会话"行尾"还有 N 个"；
-/// 已结束的不列，"全部会话"打开 Agent 整页列表（`AgentPage`）。点会话在内容区打开它的整页，
+/// 同一个顺序（`liveRows`，要你注意的在前）；固定在侧栏底部，最多露出 `SidebarAgents.limit` 行，多的写在"全部"行尾"还有 N 个"；
+/// 已结束的不列，"全部"打开 Agent 整页列表（`AgentPage`，看着它时这一行选中，区里照常列会话）。点会话在内容区打开它的整页，
 /// 在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话。没有在线会话时一行说怎么开始。
 /// 没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
 private struct PiSection: View {
@@ -287,12 +287,8 @@ private struct PiSection: View {
                     $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: workspace.sessionRecaps[$0.sessionID])
             },
             recorded: recorded, deliveries: deliveries)
-        let agents = SidebarAgents(rows: rows, page: workspace.page)
-        if workspace.page == .agent {
-            PageRow(page: .agent, count: total, select: { workspace.show($0) }) {
-                Label("全部会话", systemImage: "rectangle.stack")
-            }
-        } else if let installation = status?.pi, !installation.isSupported {
+        let agents = SidebarAgents(rows: rows)
+        if let installation = status?.pi, !installation.isSupported {
             VStack(alignment: .leading, spacing: 2) {
                 SidebarHeader(title: "Agent") { EmptyView() }
                 PiSetupRow(installation: installation)
@@ -328,12 +324,10 @@ private struct PiSection: View {
                         if reloadOpen { ForEach(sessions) { sessionRow($0, live: live) } }
                     }
                 }
-                if total > 0 {
-                    PageRow(page: .agent, count: total, note: agents.overflow > 0 ? "还有 \(agents.overflow) 个" : nil, select: { workspace.show($0) }) {
-                        Label("全部会话", systemImage: "rectangle.stack")
-                    }
-                    .help("按项目查看、搜索全部会话")
+                PageRow(page: .agent, count: total, note: agents.overflow > 0 ? "还有 \(agents.overflow) 个" : nil, select: { workspace.show($0) }) {
+                    Label("全部", systemImage: "rectangle.stack")
                 }
+                .help("按项目查看、搜索全部会话")
             }
             .renameSession($renaming)
         }
@@ -360,15 +354,15 @@ private struct PiSection: View {
 }
 
 /// 侧栏 Agent 区露出的行：前 `limit` 行（`liveRows` 的顺序，要你注意的在前），其余只算个数。
-/// 行数有上限，区域才能固定在侧栏底部、不被项目挤到折线以下。正看 Agent 整页时不重复列会话，只留"全部会话"。
+/// 行数有上限，区域才能固定在侧栏底部、不被项目挤到折线以下；与内容区在哪一页无关。
 struct SidebarAgents {
     static let limit = 3
     let visible: [PiSessionState]
     let overflow: Int
 
-    init(rows: [PiSessionState], page: Workspace.Page) {
-        visible = page == .agent ? [] : Array(rows.prefix(Self.limit))
-        overflow = page == .agent ? 0 : max(0, rows.count - Self.limit)
+    init(rows: [PiSessionState]) {
+        visible = Array(rows.prefix(Self.limit))
+        overflow = max(0, rows.count - Self.limit)
     }
 
     /// 多个 /reload 会话通常合成一行；如果这样会少于三行，侧栏宁可暂时逐个列出它们，保证"现在"真的露出三行。
@@ -380,7 +374,7 @@ struct SidebarAgents {
 
 extension PiSessionState {
     /// "现在"的会话行（侧栏 Agent 区、项目页的 Agent 栏）：本机在线的（桥上实时，`live`）与同步记录里没结束的（别的 Mac 上的）
-    /// 一起按要你注意的先后；同一个会话只出现一次（本机实时优先）。已结束的不列，历史在"全部会话"里。`recorded` 是会话列表查询的一页。
+    /// 一起按要你注意的先后；同一个会话只出现一次（本机实时优先）。已结束的不列，历史在 Agent 整页里。`recorded` 是会话列表查询的一页。
     static func liveRows(
         live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:]
     ) -> [PiSessionState] {

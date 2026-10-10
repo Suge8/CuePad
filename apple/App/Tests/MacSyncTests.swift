@@ -104,6 +104,7 @@ struct MacSyncTests {
         (.tool(name: "read", running: ["read"], detail: "README.md"), .tool, "read · README.md"),
         (.waitingUser(kind: "confirm", title: "覆盖文件？"), .waitingForUser, "覆盖文件？"),
         (.done(aborted: false), .settled, nil),
+        (.compacting, .compacting, nil),
         (.incompatible, .incompatible, nil),
         (.error(message: #"429 {"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#), .error, "请求太频繁，稍后再试：slow down"),
     ])
@@ -128,6 +129,29 @@ struct MacSyncTests {
 
         try await services.consumePiChanges(changes([.ended(session("s1"), reason: .disconnected)]))
         #expect(try await services.store.allPiSessionStates().map(\.state) == [.known(.ended)])
+    }
+
+    /// 会话在压缩上下文时关掉，扩展留着还没交给 Pi 的话在告别里报出：这台 Mac 已经写成"送到了"的那条改记为没送到，
+    /// 走"没能送达 + 重发"那条路（列表行与会话页的没送到计数里有它）；别的会话、别的请求不动。
+    @Test func 告别里报没送到的话_记为没能送达() async throws {
+        let store = services.store
+        try await services.consumePiChanges(changes([.appeared(session("s1"))]))
+        let target = SendTarget(kind: .piSession, name: "s1", ref: "s1")
+        let lost = try await store.requestDelivery("压缩时说的话", to: target, on: TestApp.hostID, mode: .send)
+        let kept = try await store.requestDelivery("早先说的话", to: target, on: TestApp.hostID, mode: .send)
+        let executor = DeliveryExecutor(store: store, hostID: TestApp.hostID, onIssue: { _ in }) { _ in .succeeded }
+        try await executor.start()
+        for id in [lost.id, kept.id] {
+            for _ in 0..<300 where try await store.deliveryRequest(id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+        }
+        await executor.stop()
+
+        try await services.consumePiChanges(changes([.ended(session("s1"), reason: .closed(reason: "quit", undelivered: [lost.id.uuidString]))]))
+
+        let failed = try #require(try await store.deliveryRequest(lost.id))
+        #expect(failed.status == .known(.failed) && failed.resultDetail == "会话在压缩上下文时关掉了，这句没送进去")
+        #expect(try await store.deliveryRequest(kept.id)?.status == .known(.succeeded))
+        #expect(try await store.piSessionPage(PiSessionQuery()).items.first?.undelivered == 1)
     }
 
     @Test func 会话的计时基准原样写进同步记录() async throws {

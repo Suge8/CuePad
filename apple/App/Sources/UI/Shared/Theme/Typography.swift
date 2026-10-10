@@ -46,7 +46,7 @@ enum Typography {
     static let lead = Font.system(size: 16)
     /// 空态的标题。
     static let emptyTitle = Font.system(size: 17, weight: .semibold)
-    /// 工具栏：按钮上的字（往上一层、项目切换），会话页的标题与其下一行。
+    /// 工具栏：按钮上的字（收起、项目切换），会话页的标题与其下一行。
     static let toolbarLabel = Font.system(size: 13, weight: .medium)
     static let toolbarTitle = Font.system(size: 15, weight: .semibold)
     static let toolbarSubtitle = Font.system(size: 12)

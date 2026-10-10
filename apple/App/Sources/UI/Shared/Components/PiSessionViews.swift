@@ -122,7 +122,7 @@ extension AppSettings {
 nonisolated struct PiShown: Hashable, Sendable {
     enum Status: Hashable, Sendable {
         case delivery(PiDelivery)
-        /// 思考、输出、运行工具、等子代理。
+        /// 思考、输出、运行工具、等子代理、压缩上下文。
         case working(PiWorkState)
         case asking
         case failed
@@ -167,7 +167,7 @@ nonisolated extension PiShown {
 
     private static func status(of state: Open<PiWorkState>) -> Status {
         switch state.known {
-        case .thinking, .outputting, .tool, .delegating: .working(state.known!)
+        case .thinking, .outputting, .tool, .delegating, .compacting: .working(state.known!)
         case .waitingForUser: .asking
         case .error: .failed
         case .incompatible: .restart
@@ -189,6 +189,7 @@ nonisolated extension PiShown {
         case .working(.outputting): "输出中"
         case .working(.tool): "运行工具"
         case .working(.delegating): "子代理工作中"
+        case .working(.compacting): "正在压缩上下文"
         case .working: "思考中"
         case .asking: "等你确认"
         case .failed: "出错"
@@ -212,6 +213,7 @@ nonisolated extension PiShown {
         case .delivery(.waking): "正在唤醒 Agent"
         case .delivery(.failed): "没能送达 Agent"
         case .delivery: "正在发给 Agent"
+        case .working(.compacting): "Agent 正在压缩上下文"
         case .working: "Agent 正在工作"
         case .asking: "Agent 等你确认"
         case .failed: "Agent 出错"

@@ -16,21 +16,13 @@ final class Workspace {
         case inbox
         case archive
         case trash
-        /// Agent：全部会话的整页列表（Mac 侧栏的"全部会话"），也是会话页的上一层。
+        /// Agent：全部会话的整页列表（Mac 侧栏 Agent 区的"全部"）。
         case agent
         #if os(macOS)
         /// 一个 Agent 会话的整页（Pi 的会话 id）。
         case session(String)
         #endif
     }
-
-    #if os(macOS)
-    /// 往上一层去哪（Mac 工具栏左上那一颗）：没有历史，只有层级——纸页的上一层是它底下的页，会话页的上一层是 Agent 整页。
-    enum Up: Equatable {
-        case closePaper
-        case agentList
-    }
-    #endif
 
     enum Overlay: Equatable {
         case search
@@ -259,7 +251,7 @@ final class Workspace {
         presentedCard = nil
     }
 
-    /// 切到一页（侧栏点哪就是哪）；开着的纸页随之收起。没有历史：Mac 的上一层见 `up`。
+    /// 切到一页（侧栏点哪就是哪）；开着的纸页随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
     func show(_ page: Page) {
         openCard = nil
         dismissPresented()
@@ -270,23 +262,6 @@ final class Workspace {
             nonProjectPage = page
         }
     }
-
-    #if os(macOS)
-    /// 此刻往上一层去哪；nil 是已在顶层（项目、未分类、归档、回收站、Agent 整页）。
-    var up: Up? {
-        if openCard != nil { return .closePaper }
-        if case .session = page { return .agentList }
-        return nil
-    }
-
-    func goUp() {
-        switch up {
-        case .closePaper: openCard = nil
-        case .agentList: show(.agent)
-        case nil: break
-        }
-    }
-    #endif
 
     /// 开关浮层。⌘K 搜索每天用很多次，直接出现；任务面板从右侧滑入（短弹簧，减弱动态效果时只淡入淡出由视图决定）。
     func toggle(_ overlay: Overlay) {
