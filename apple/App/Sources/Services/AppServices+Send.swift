@@ -44,6 +44,13 @@ extension AppServices {
         try await deliver(storedText, to: session.sendTarget, mode: mode, card: card)
     }
 
+    /// 发给别的 Mac 上在线的会话：与手机同一条通路，写一条指定那台 Mac 的投送请求并立即上传，由它的执行器送达；这里不等结果
+    /// （会话行上有送达的进度，没送到会写"没能送达"）。直接发送而会话正忙时不写请求，抛 `SendError.piSessionBusy`。
+    func send(_ storedText: String, toRemote session: PiSessionState, mode: DeliveryMode, card: UUID?) async throws {
+        if mode == .send, session.state.known?.isTurnRunning == true { throw SendError.piSessionBusy }
+        try await requestMacDelivery(storedText, to: session, mode: mode, card: card)
+    }
+
     /// 发给已结束的会话（`name` 是它的会话名）：同样写一条指定本机的投送请求，执行器先用会话索引里的会话文件在后台把它恢复起来再送达。
     /// 索引里没有这个会话（会话文件不在这台 Mac 上）时请求带原因失败，抛 `SendError.notDelivered`。
     /// 固定直接发送（`.send`）：会话已结束，没有正在跑的一轮，"马上说""等它做完再说"都不适用。
