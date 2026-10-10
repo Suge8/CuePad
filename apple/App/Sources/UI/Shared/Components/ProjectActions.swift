@@ -18,7 +18,7 @@ struct ProjectActions<Extra: View>: View {
         let folders = ProjectFolders.menu(for: id, bindings: workspace.catalog?.bindings ?? [], host: workspace.localHost)
         Button(folders.bindTitle, systemImage: "folder") { workspace.chooseFolder(for: project) }
         ForEach(folders.unbinds, id: \.binding.id) { unbind in
-            Button(unbind.title, systemImage: "folder.badge.minus") { workspace.unbindFolder(unbind.binding, of: project) }
+            Button { workspace.unbindFolder(unbind.binding, of: project) } label: { Label { Text(unbind.title) } icon: { Image(systemName: "folder.badge.minus") } }
         }
         extra
         Divider()

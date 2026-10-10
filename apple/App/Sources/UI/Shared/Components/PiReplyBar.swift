@@ -294,7 +294,7 @@ struct SyncHint: View {
 
     var body: some View {
         let summary = SyncSummary(status)
-        Label("\(summary.title) · \(consequence)", systemImage: summary.symbol)
+        Label { Text(Dotted(summary.title, consequence)) } icon: { Image(systemName: summary.symbol) }
             .font(Typography.meta).foregroundStyle(palette.ink3)
             .lineLimit(2)
     }

@@ -340,7 +340,7 @@ private struct ConflictsSection: View {
     private func version(_ label: String, _ card: Card, keep choice: ConflictChoice, copy: UUID) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("\(label) · \(DateLabel.short(card.modifiedAt))").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
+                Text(Dotted(label, DateLabel.short(card.modifiedAt))).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
                 Spacer()
                 Button("保留这一份") {
                     failure = nil

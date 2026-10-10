@@ -226,18 +226,17 @@ struct ShelfScreen: View {
 
     private var menu: some View {
         Menu {
-            Button(count("未分类", data?.inboxCount), systemImage: "tray") { navigation.push(.inbox) }
+            Button { navigation.push(.inbox) } label: { Label { Text(count("未分类", data?.inboxCount)) } icon: { Image(systemName: "tray") } }
             Button("归档", systemImage: "archivebox") { navigation.push(.archive) }
-            Button(count("回收站", data?.trashCount), systemImage: "trash") { navigation.push(.trash) }
+            Button { navigation.push(.trash) } label: { Label { Text(count("回收站", data?.trashCount)) } icon: { Image(systemName: "trash") } }
             Button("设置", systemImage: "gearshape") { navigation.push(.settings) }
         } label: {
             Label("更多", systemImage: "ellipsis")
         }
     }
 
-    private func count(_ title: String, _ n: Int?) -> String {
-        guard let n, n > 0 else { return title }
-        return "\(title) · \(n)"
+    private func count(_ title: String, _ n: Int?) -> Dotted {
+        Dotted(title, n.flatMap { $0 > 0 ? "\($0)" : nil })
     }
 
     /// ⌘K 指名书架时聚焦搜索框（标签栏布局，见 `Navigation.searchCurrentPage`）。
@@ -253,7 +252,7 @@ private struct ShelfLine: View {
     let route: Navigation.Route
     let symbol: String
     let title: String
-    let detail: String
+    let detail: Dotted
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -268,7 +267,6 @@ private struct ShelfLine: View {
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(palette.ink)
                     Text(detail).font(.subheadline.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
                         .contentTransition(.numericText()).animation(Motion.snappy, value: detail)
-                        .spoken(detail)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.ink3)
@@ -376,7 +374,6 @@ private struct ShelfCounts: View {
             Text(text)
                 .font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).counting(cards + tasks)
                 .lineLimit(1)
-                .spoken(text)
         }
     }
 }
@@ -634,7 +631,7 @@ private struct AgentNowCard: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([now.headline, now.detail].compactMap(\.self).joined(separator: "，"))
+        .accessibilityLabel([now.headline, now.detail?.spoken].compactMap(\.self).joined(separator: "，"))
         .accessibilityHint("去 Agent 页；长按看前几个")
         .accessibilityAddTraits(.isButton)
     }

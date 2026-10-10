@@ -41,13 +41,13 @@ struct SessionNoticeTests {
         let question = PiQuestion(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         let waiting = try #require(tracker.alerts(for: try await live()).first)
-        #expect(waiting.kind == .waitingForUser && waiting.text == "homepage 在等你 · 要覆盖 feed.xml 吗？")
+        #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 在等你 · 要覆盖 feed.xml 吗？")
 
         try await recorder.update(sessionID: "s1", state: .thinking)
         _ = tracker.alerts(for: try await live())
         try await recorder.update(sessionID: "s1", state: .settled)
         let settled = try #require(tracker.alerts(for: try await live()).first)
-        #expect(settled.kind == .settled && settled.text == "homepage · 完成了")
+        #expect(settled.kind == .settled && settled.text.visible == "homepage · 完成了")
     }
 
     @Test func 会话结束后重新出现_不当成新转换() async throws {

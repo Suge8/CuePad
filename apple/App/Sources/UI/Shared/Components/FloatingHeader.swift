@@ -20,12 +20,12 @@ extension View {
 
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
     /// 那一行先留着位置，读到后标题不再上移。
-    func floatingHeader<Trailing: View>(_ title: String, detail: String? = nil, @ViewBuilder trailing: () -> Trailing) -> some View {
+    func floatingHeader<Trailing: View>(_ title: String, detail: Dotted? = nil, @ViewBuilder trailing: () -> Trailing) -> some View {
         floatingHeader(title, detail: { HeaderDetail(text: detail) }, trailing: trailing)
     }
 
     /// 没有操作的页。
-    func floatingHeader(_ title: String, detail: String? = nil) -> some View {
+    func floatingHeader(_ title: String, detail: Dotted? = nil) -> some View {
         floatingHeader(title, detail: detail) { EmptyView() }
     }
 }
@@ -185,15 +185,14 @@ private struct EdgeBackKeeper: UIViewControllerRepresentable {
 
 /// 顶栏玻璃里标题下的一行：小字、次要色、一行截断；nil 不占行，空串留着一行的位置。
 private struct HeaderDetail: View {
-    let text: String?
+    let text: Dotted?
     @Environment(\.palette) private var palette
 
     var body: some View {
         if let text {
-            Text(text.isEmpty ? " " : text).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
+            (text.isEmpty ? Text(" ") : Text(text)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).lineLimit(1)
                 .contentTransition(.numericText())
                 .animation(Motion.quick, value: text)
-                .spoken(text)
         }
     }
 }

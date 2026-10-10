@@ -77,7 +77,7 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     let signal: String?
     let reason: String?
     /// "版本（构建）· 设备 · 系统"。
-    let app: String?
+    let app: Dotted?
     /// 崩溃线程（没有标记就取第一条）的帧，最深的在前，至多 `topFrames` 个：二进制名与它里面的偏移（未符号化，靠 dSYM 还原）。
     let frames: [String]
     /// 原始 JSON（导出给开发者符号化）。
@@ -106,19 +106,18 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
         var lines = ["CuePad \(kind.name)诊断", "时间：\(date.formatted(.iso8601))"]
         if let exception { lines.append("异常：\(exception)\(signal.map { "（\($0)）" } ?? "")") }
         if let reason { lines.append("原因：\(reason)") }
-        if let app { lines.append("CuePad：\(app)") }
+        if let app { lines.append("CuePad：\(app.visible)") }
         if !frames.isEmpty { lines.append("崩溃线程顶部：\n" + frames.map { "  \($0)" }.joined(separator: "\n")) }
         return lines.joined(separator: "\n") + "\n\n原始 JSON：\n\(json)"
     }
 
     private static func key(of kind: Kind) -> String { Kind.keys.first { $0.0 == kind }!.1 }
 
-    private static func app(_ meta: [String: Any]) -> String? {
-        let parts = [
+    private static func app(_ meta: [String: Any]) -> Dotted? {
+        Dotted(
             (meta["appVersion"] as? String).map { version in "\(version)（\(meta["appBuildVersion"] as? String ?? "?")）" },
-            meta["deviceType"] as? String, meta["osVersion"] as? String,
-        ].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+            meta["deviceType"] as? String, meta["osVersion"] as? String
+        ).nonEmpty
     }
 
     /// 调用栈是树：根是最外层，沿第一个子帧走到最深处就是崩溃处。

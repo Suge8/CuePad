@@ -295,7 +295,7 @@ struct DeliveryStatusLabel: View {
                 let text = session?.state == .known(.ended) ? "正在唤醒" : PiDelivery.transit(request, busy: busy)
                 HStack(spacing: 6) { Spinner(.mini); Text(text) }.foregroundStyle(palette.ink2)
             case .known(.succeeded):
-                Label(request.roundTrip.map { "已送达 · \(PiClock.duration(Double($0.components.seconds)))" } ?? "已送达", systemImage: "paperplane.fill")
+                Label { Text(Dotted("已送达", request.roundTrip.map { PiClock.duration(Double($0.components.seconds)) })) } icon: { Image(systemName: "paperplane.fill") }
                     .foregroundStyle(palette.ink2)
             case .known(.failed): Label("没能送达", systemImage: "exclamationmark.triangle.fill").foregroundStyle(palette.failure)
             case .unknown: Label("未知状态", systemImage: "questionmark.circle").foregroundStyle(palette.ink2)

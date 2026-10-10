@@ -125,10 +125,10 @@ nonisolated enum PiChat {
     }
 
     /// 你发出的一句话给人看的写法：带卡片的写卡片标题与图片数，不露存储格式。
-    static func shownText(of request: DeliveryRequest) -> String {
+    static func shownText(of request: DeliveryRequest) -> Dotted {
         let card = CardText(request.content)
-        guard !card.images.isEmpty else { return request.content }
-        return [card.title.isEmpty ? nil : card.title, "\(card.images.count) 张图片"].compactMap { $0 }.joined(separator: " · ")
+        guard !card.images.isEmpty else { return Dotted(request.content) }
+        return Dotted(card.title, "\(card.images.count) 张图片")
     }
 
     /// 你在这个会话里说过的最近一句（对话里最后一条你的消息）：空回复框按 ↑ 调回它。

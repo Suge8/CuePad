@@ -191,7 +191,7 @@ private struct SyncSection: View {
     }
 
     private func resolve(_ resolution: SyncResolution) {
-        let done = if case .uploadLocal = resolution { "已开始上传本机数据" } else { "正在从云端重新下载" }
+        let done: Dotted = if case .uploadLocal = resolution { "已开始上传本机数据" } else { "正在从云端重新下载" }
         workspace.attempt {
             try await services.resolveSync(resolution)
             workspace.say(done)

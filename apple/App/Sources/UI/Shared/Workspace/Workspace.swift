@@ -39,7 +39,7 @@ final class Workspace {
 
     struct Notice: Identifiable, Equatable {
         let id = UUID()
-        var text: String
+        var text: Dotted
         var isError: Bool
         /// 图标；nil 时按成功/错误用默认的。
         var symbol: String?
@@ -303,7 +303,7 @@ final class Workspace {
     static let noticeDuration: Duration = .seconds(2.4)
 
     func say(
-        _ text: String, isError: Bool = false, symbol: String? = nil, link: Link? = nil, duration: Duration = Workspace.noticeDuration,
+        _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Link? = nil, duration: Duration = Workspace.noticeDuration,
         undo: (@MainActor () async throws -> Void)? = nil
     ) {
         say(
@@ -312,7 +312,7 @@ final class Workspace {
     }
 
     func say(
-        _ text: String, isError: Bool = false, symbol: String? = nil, link: Link? = nil, duration: Duration = Workspace.noticeDuration,
+        _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Link? = nil, duration: Duration = Workspace.noticeDuration,
         action: NoticeAction?
     ) {
         let notice = Notice(text: text, isError: isError, symbol: symbol, link: link, action: action)
@@ -325,7 +325,7 @@ final class Workspace {
     }
 
     func fail(_ error: any Error) {
-        say(error.localizedDescription, isError: true)
+        say(Dotted(error.localizedDescription), isError: true)
     }
 
     // MARK: 项目目录、当前项目与新建位置

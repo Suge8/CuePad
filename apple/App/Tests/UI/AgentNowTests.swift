@@ -55,7 +55,7 @@ struct AgentNowTests {
             item("deploy", .waitingForUser, question: "部署到生产吗？"), item("rename", .waitingForUser, question: "新分支叫什么？"),
         ])
         #expect(mixed?.headline == "2 个 Agent 在等你确认")
-        #expect(mixed?.detail == "还有 1 个出错 · 1 个在干活")
+        #expect(mixed?.detail?.visible == "还有 1 个出错 · 1 个在干活")
         #expect(mixed?.needsYou == true)
     }
 

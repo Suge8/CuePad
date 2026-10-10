@@ -76,15 +76,16 @@ struct PiConversation: View {
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
         case .user:
-            UserBubble(text: entry.text, highlighted: entry.id == highlight)
-                .chatContextMenu { MessageMenu(text: entry.text, kind: .mine, session: session) } preview: { BubbleText(text: entry.text).padding(4) }
+            UserBubble(text: Dotted(entry.text), highlighted: entry.id == highlight)
+                .chatContextMenu { MessageMenu(text: entry.text, kind: .mine, session: session) } preview: { BubbleText(text: Dotted(entry.text)).padding(4) }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
         case .pi:
             ReplyBlock(text: entry.text, meta: entry.meta, tools: entry.tools, session: session)
         case .system:
             // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
-            Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
+            // 系统行的文字由 CuePi 写进会话记录（"已压缩上下文 · 压缩前约 …"）：按同一个分隔点拆开，读屏读逗号
+            Text(Dotted(entry.text.components(separatedBy: Dotted.separator))).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity).padding(.vertical, 4)
         case .preview:
             if let preview = entry.preview { PreviewGroup(previews: [preview]) { opened = $0 } }
@@ -216,7 +217,7 @@ private struct UserBubble: View {
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
     private static let foldedLines = 6
 
-    let text: String
+    let text: Dotted
     var trip = BubbleTrip.arrived
     var highlighted = false
     @Environment(\.palette) private var palette
@@ -236,7 +237,7 @@ private struct UserBubble: View {
 
 /// 气泡本身（颜色是 `Palette.bubble`），长按的预览也是它。Mac 上可以直接拖选文字。
 private struct BubbleText: View {
-    let text: String
+    let text: Dotted
     var highlighted = false
     var trip = BubbleTrip.arrived
     var lineLimit: Int?
@@ -350,8 +351,8 @@ private struct RecapPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             if let prompt = session.pendingPrompt ?? session.lastPrompt {
-                Text("最近一轮 · 完整对话还在同步").font(Typography.caption).foregroundStyle(palette.ink3)
-                UserBubble(text: prompt)
+                Text(Dotted("最近一轮", "完整对话还在同步")).font(Typography.caption).foregroundStyle(palette.ink3)
+                UserBubble(text: Dotted(prompt))
                 if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
             } else if !session.hasStarted, session.state != .known(.ended) {
                 EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")
@@ -441,7 +442,7 @@ private struct OutgoingBubble: View {
         .transition(.entry)
     }
 
-    private var text: String { PiChat.shownText(of: request) }
+    private var text: Dotted { PiChat.shownText(of: request) }
 
     /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
     private func retry() {

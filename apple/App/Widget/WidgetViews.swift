@@ -15,7 +15,7 @@ private struct InboxView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("收件箱 · \(entry.snapshot.total)").font(.caption).foregroundStyle(.secondary)
+            Text(Dotted("收件箱", "\(entry.snapshot.total)")).font(.caption).foregroundStyle(.secondary)
             ForEach(entry.snapshot.cards.prefix(3), id: \.id) { card in
                 Text(card.title.isEmpty ? "图片" : card.title).font(.footnote).lineLimit(1)
             }

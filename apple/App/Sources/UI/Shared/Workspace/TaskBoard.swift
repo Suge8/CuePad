@@ -87,8 +87,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
 extension TaskCounts {
     /// "2 进行中 · 3 待办"；都做完了是"全部完成"。
-    var summary: String {
-        let parts = [inProgress > 0 ? "\(inProgress) 进行中" : nil, todo > 0 ? "\(todo) 待办" : nil].compactMap { $0 }
-        return parts.isEmpty ? "全部完成" : parts.joined(separator: " · ")
+    var summary: Dotted {
+        Dotted(inProgress > 0 ? "\(inProgress) 进行中" : nil, todo > 0 ? "\(todo) 待办" : nil).nonEmpty ?? "全部完成"
     }
 }

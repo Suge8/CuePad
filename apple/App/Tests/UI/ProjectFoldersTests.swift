@@ -78,7 +78,7 @@ struct ProjectFoldersTests {
         #expect(one.bindTitle == "换文件夹…" && one.unbinds.map(\.title) == ["解除绑定"] && one.unbinds.map(\.binding) == [studio])
 
         let two = ProjectFolders.menu(for: a.id, bindings: [studio, air], host: nil)
-        #expect(two.unbinds.map(\.title) == ["解除绑定 · Studio", "解除绑定 · Air"])
+        #expect(two.unbinds.map(\.title.visible) == ["解除绑定 · Studio", "解除绑定 · Air"])
 
         // Mac 上只管本机这一条；只绑在别的 Mac 上时对这台 Mac 仍是"绑定"
         let mac = ProjectFolders.menu(for: a.id, bindings: [studio, air], host: "mac-a")

@@ -97,17 +97,17 @@ struct PiContextMeterTests {
     @Test func 用量条旁的百分比与说明() {
         #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).percent == "21%")
         #expect(PiContextMeter(PiContextUsage(tokens: nil, window: 200_000)).percent == "—")
-        #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).help == "上下文 · 已用 21% · 剩 158k tokens")
-        #expect(PiContextMeter(PiContextUsage(tokens: 172_000, window: 200_000)).help == "上下文 · 已用 86% · 剩 28k tokens · 快满了，可以压缩")
+        #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).help.visible == "上下文 · 已用 21% · 剩 158k tokens")
+        #expect(PiContextMeter(PiContextUsage(tokens: 172_000, window: 200_000)).help.visible == "上下文 · 已用 86% · 剩 28k tokens · 快满了，可以压缩")
     }
 
     @Test func 文案_已用百分比加剩余_大数写k和M() {
-        #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).summary == "已用 21% · 剩 158k tokens")
-        #expect(PiContextMeter(PiContextUsage(tokens: 195_500, window: 200_000)).summary == "已用 98% · 剩 4.5k tokens")
-        #expect(PiContextMeter(PiContextUsage(tokens: 999_000, window: 1_000_000)).summary == "已用 100% · 剩 1k tokens")
-        #expect(PiContextMeter(PiContextUsage(tokens: 300_000, window: 1_200_000)).summary == "已用 25% · 剩 900k tokens")
-        #expect(PiContextMeter(PiContextUsage(tokens: 800, window: 1_000_000)).summary == "已用 0% · 剩 999k tokens")
-        #expect(PiContextMeter(PiContextUsage(tokens: 0, window: 2_000_000)).summary == "已用 0% · 剩 2M tokens")
+        #expect(PiContextMeter(PiContextUsage(tokens: 42_000, window: 200_000)).summary.visible == "已用 21% · 剩 158k tokens")
+        #expect(PiContextMeter(PiContextUsage(tokens: 195_500, window: 200_000)).summary.visible == "已用 98% · 剩 4.5k tokens")
+        #expect(PiContextMeter(PiContextUsage(tokens: 999_000, window: 1_000_000)).summary.visible == "已用 100% · 剩 1k tokens")
+        #expect(PiContextMeter(PiContextUsage(tokens: 300_000, window: 1_200_000)).summary.visible == "已用 25% · 剩 900k tokens")
+        #expect(PiContextMeter(PiContextUsage(tokens: 800, window: 1_000_000)).summary.visible == "已用 0% · 剩 999k tokens")
+        #expect(PiContextMeter(PiContextUsage(tokens: 0, window: 2_000_000)).summary.visible == "已用 0% · 剩 2M tokens")
     }
 
     @Test func 接近上限才建议压缩() {
@@ -118,6 +118,6 @@ struct PiContextMeterTests {
     @Test func 压缩后未知_不画比例_文案说明会在下次回答后更新() {
         let unknown = PiContextMeter(PiContextUsage(tokens: nil, window: 200_000))
         #expect(unknown.level == .unknown && unknown.fraction == nil && unknown.remaining == nil && !unknown.suggestsCompact)
-        #expect(unknown.summary == "刚压缩过 · 下次回答后更新（窗口 200k tokens）")
+        #expect(unknown.summary.visible == "刚压缩过 · 下次回答后更新（窗口 200k tokens）")
     }
 }

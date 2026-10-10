@@ -124,9 +124,8 @@ struct CardEditorScreen: View {
     }
 
     /// 顶栏的一行："改于 03:36 · 资料"；提示词是"提示词 · 改于 03:36"。
-    private static func detail(_ data: EditorData) -> String {
-        let marks = [data.card.isPinned ? "资料" : nil].compactMap { $0 }
-        return ((data.task != nil ? ["提示词"] : []) + ["改于 \(DateLabel.short(data.card.modifiedAt))"] + marks).joined(separator: " · ")
+    private static func detail(_ data: EditorData) -> Dotted {
+        Dotted(data.task != nil ? "提示词" : nil, "改于 \(DateLabel.short(data.card.modifiedAt))", data.card.isPinned ? "资料" : nil)
     }
 
     /// 顶栏右边的"⋯"：从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。

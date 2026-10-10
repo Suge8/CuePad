@@ -47,7 +47,7 @@ private struct ConflictPair: View {
 
     private func version(_ label: String, _ card: Card, keep choice: ConflictChoice) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("\(label) · \(DateLabel.short(card.modifiedAt))").font(.caption.weight(.medium)).foregroundStyle(palette.ink3)
+            Text(Dotted(label, DateLabel.short(card.modifiedAt))).font(.caption.weight(.medium)).foregroundStyle(palette.ink3)
             Text(Outgoing.text(of: card)).font(.subheadline).foregroundStyle(palette.ink2)
                 .lineLimit(12).frame(maxWidth: .infinity, alignment: .leading)
             Button("保留这一份") { keep(choice) }

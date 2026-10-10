@@ -216,7 +216,7 @@ struct SearchPalette: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
-                    Text("\(project?.name ?? "未分类") · \(DateLabel.short(card.modifiedAt))")
+                    Text(Dotted(project?.name ?? "未分类", DateLabel.short(card.modifiedAt)))
                     if let name = data.lastSends[card.id]?.target.shownName { SentMark(target: name) }
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
@@ -251,9 +251,8 @@ struct SearchPalette: View {
     }
 
     /// 任务预览的一行："上级：修乱序 · 3 条提示词 · 1 已回复 · 子任务 1/2"；什么都没有时不写。
-    private static func taskFacts(parent: String?, marks: [ChildMark]?) -> String? {
-        [parent.map { "上级：\($0)" }, PromptTally(marks).text, TaskProgress.subtasks(in: marks).map(TaskCopy.progress)]
-            .compactMap { $0 }.joined(separator: " · ").nonEmpty
+    private static func taskFacts(parent: String?, marks: [ChildMark]?) -> Dotted? {
+        (Dotted(parent.map { "上级：\($0)" }) + (PromptTally(marks).text ?? Dotted()) + Dotted(TaskProgress.subtasks(in: marks).map(TaskCopy.progress))).nonEmpty
     }
 
     private var shortcuts: some View {

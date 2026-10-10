@@ -303,8 +303,9 @@ private struct SyncAlert: View {
 /// 工具栏右上角：未完成任务数。Pi 的状态只在侧栏 Pi 区与项目页 Pi 栏出现，不挂在任务计数旁（会被读成任务出了问题）。
 private struct TasksButton: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @State private var openCount: Int?
+
+    /// 读项目目录里的数（`CueStore.taskCounts`，与别处同一个数，不另订阅再读）。
+    private var openCount: Int { workspace.catalog?.openTasks.values.reduce(0, +) ?? 0 }
 
     var body: some View {
         Button {
@@ -312,14 +313,13 @@ private struct TasksButton: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "checklist")
-                if let openCount, openCount > 0 { Text("\(openCount)").monospacedDigit() }
+                // 数字的位置从工具栏项建好起就留着（两位数的宽）：数字比工具栏项晚到时，AppKit 不会按后来加出的内容重新量它的宽，数字就画不出来
+                Text("00").hidden().overlay(alignment: .leading) { Text("\(openCount)").opacity(openCount > 0 ? 1 : 0) }
+                    .monospacedDigit()
             }
         }
         .help("任务")
-        .accessibilityLabel("任务，\(openCount ?? 0) 条未完成")
-        .observing(services.store, [.cards, .projects], into: $openCount) { store in
-            try TaskBoard.counts(from: store).open
-        }
+        .accessibilityLabel("任务，\(openCount) 条未完成")
     }
 }
 
@@ -385,7 +385,7 @@ private struct NoticeView: View {
                 HStack(spacing: 0) {
                     Button { notice.link.map(follow) } label: {
                         HStack(spacing: 6) {
-                            Label(notice.text, systemImage: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                            Label { Text(notice.text) } icon: { Image(systemName: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill") }
                             if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
                         }
                         .font(Typography.secondary.weight(.medium))

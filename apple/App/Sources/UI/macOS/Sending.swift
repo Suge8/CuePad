@@ -91,7 +91,7 @@ extension Workspace {
     /// 发给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。
     @discardableResult
     func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) async -> Bool {
-        let done = target.mode == .steer || target.mode == .followUp ? "已\(action(for: target)) · \(target.mode.label)" : "已" + action(for: target)
+        let done = Dotted("已" + action(for: target), target.mode == .steer || target.mode == .followUp ? target.mode.label : nil)
         do {
             try await services.send(stored, to: target.session, mode: target.mode, card: card)
             sendChoice = AgentTarget(session: target.session)

@@ -10,7 +10,7 @@ nonisolated struct AgentNow: Equatable, Sendable {
     let headline: String
     /// 次行：只有一个时是它在问什么、在做什么（说不出时同下）；好几个时带过其余各档（"还有 1 个出错 · 2 个在干活"，最多两档），
     /// 没有其余的时候是它们的名字；只有一个又都说不出时是它在哪。
-    let detail: String?
+    let detail: Dotted?
     /// 最要紧那一档的状态：等你确认、出错时整条按它的颜色强调（赭黄、胭脂），否则中性。
     let lead: PiShown
     /// 叠放的头像：按要紧的先后取前几个。
@@ -34,12 +34,12 @@ nonisolated struct AgentNow: Equatable, Sendable {
         let others = Dictionary(grouping: ranked.dropFirst(lead.count), by: \.tier).sorted { $0.key < $1.key }
         // 次行最多带过两档（一行放得下）：再往后的不如头像与 Agent 页里看
         let rest = others.prefix(Self.restLimit).map { "\($0.value.count) 个\(phrase(tier: $0.key))" }
-        let restLine = rest.isEmpty ? nil : "还有 " + rest.joined(separator: " · ")
-        let detail: String? = if lead.count > 1 {
-            restLine ?? lead.map(\.item.state.title).joined(separator: "、")
+        let restLine: Dotted? = rest.first.map { Dotted(["还有 " + $0] + rest.dropFirst()) }
+        let detail: Dotted? = if lead.count > 1 {
+            restLine ?? Dotted(lead.map(\.item.state.title).joined(separator: "、"))
         } else {
-            ProjectNow.gist(top.item, top.shown) ?? restLine
-                ?? PiPlace.name(of: top.item.state, project: top.item.project).map { "在 \($0)" }
+            ProjectNow.gist(top.item, top.shown).map { Dotted($0) } ?? restLine
+                ?? PiPlace.name(of: top.item.state, project: top.item.project).map { Dotted("在 \($0)") }
         }
         return AgentNow(
             headline: lead.count > 1 ? "\(lead.count) 个 Agent \(verb(tier: top.tier))" : headline(top.item, top.shown),

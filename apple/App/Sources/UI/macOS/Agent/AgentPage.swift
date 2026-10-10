@@ -57,7 +57,7 @@ struct AgentPage: View {
             Text("Agent").font(Typography.pageTitle).foregroundStyle(palette.ink)
                 .accessibilityAddTraits(.isHeader)
             if let list {
-                Text("\(list.now.count) 个在线 · \(list.total) 个历史").font(Typography.meta).foregroundStyle(palette.ink3)
+                Text(Dotted("\(list.now.count) 个在线", "\(list.total) 个历史")).font(Typography.meta).foregroundStyle(palette.ink3)
                     .monospacedDigit()
             }
         }
