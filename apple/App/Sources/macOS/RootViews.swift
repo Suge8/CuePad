@@ -13,8 +13,9 @@ enum RootViews {
     /// 设置窗口（⌘, 与菜单"设置…"）的内容。
     static func settings(_ services: AppServices) -> some View {
         SettingsView()
+            .panelHost()
             .modifier(PaletteProvider())
-        .environment(services)
+            .environment(services)
     }
 
     /// 面板随 App 常驻：项目目录从创建起就订阅，第一次打开时"记入"已是真实项目。
@@ -60,7 +61,7 @@ private struct MainRoot: View {
         if DebugScene.scene == "menubar" {
             DebugMenuBarStage().environment(workspace)
         } else if DebugScene.scene == "settings" {
-            SettingsView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            SettingsView().panelHost().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if DebugScene.scene == "projectform" {
             ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if DebugScene.scene == "newsession" {

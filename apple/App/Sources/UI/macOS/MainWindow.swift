@@ -16,13 +16,13 @@ struct MainWindow: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.sidebar) {
             Sidebar()
-                // 侧栏开合时是整体滑动、宽度不变；只有拖分隔线才变
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.sidebar = $0 }
+                // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌘\ 同一个入口
+                .toolbar(removing: .sidebarToggle)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
             detail
         }
-        .environment(workspace)
         .onChange(of: workspace.overlay) { if $1 == nil { searchScope = .cards } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.window = $0 }
         .confirmationDialog(
@@ -35,10 +35,14 @@ struct MainWindow: View {
         } message: {
             Text([DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"))
         }
-        .sheet(item: $workspace.attaching) { TaskPicker(idea: $0).environment(workspace) }
+        .panel(item: $workspace.attaching) { TaskPicker(idea: $0) }
+        .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
         .modifier(SessionProjectsTracker(workspace: workspace))
+        // 快捷键也在弹层底下：弹层开着时它们与整窗一起停用
+        .panelHost()
+        .environment(workspace)
     }
 
     private var detail: some View {
@@ -65,7 +69,7 @@ struct MainWindow: View {
             if workspace.isLibraryReady, workspace.overlay == .search {
                 // ⌘K 每天用很多次：直接出现、直接消失，不做动画
                 ZStack {
-                    Color.black.opacity(palette.dark ? 0.4 : 0.25).ignoresSafeArea()
+                    palette.backdrop.ignoresSafeArea()
                         .onTapGesture { workspace.overlay = nil }
                     SearchPalette(scope: $searchScope).padding(24)
                 }
@@ -154,12 +158,26 @@ private struct RoutedPage: View {
     }
 }
 
-/// 侧栏收起时工具栏左边的项目切换。单独一个视图读侧栏开合：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
+/// 工具栏最左：侧栏钮，侧栏收起时后面跟着项目切换。同一个工具栏项里增减（增删工具栏项会重排整条工具栏）。
+/// 单独一个视图读侧栏开合：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
 private struct SwitcherSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.sidebar == .detailOnly { ProjectSwitcher() }
+        HStack(spacing: 8) {
+            SidebarToggle()
+            if workspace.sidebar == .detailOnly { ProjectSwitcher() }
+        }
+    }
+}
+
+/// 开合侧栏（`Workspace.toggleSidebar`，⌘\ 同）。
+private struct SidebarToggle: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        Button("侧栏", systemImage: "sidebar.left") { workspace.toggleSidebar() }
+            .help("显示或隐藏侧栏（⌘\\）")
     }
 }
 

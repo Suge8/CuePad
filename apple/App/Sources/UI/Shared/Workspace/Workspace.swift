@@ -90,6 +90,10 @@ final class Workspace {
     var overlay: Overlay?
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
     var attaching: Card?
+    #if os(macOS)
+    /// 新建或编辑项目的表单（`ProjectForm`；侧栏与项目页的入口都经这里，主窗口弹出）。
+    var projectForm: ProjectForm.Request?
+    #endif
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
@@ -274,7 +278,7 @@ final class Workspace {
     }
 
     func toggleSidebar() {
-        withAnimation { sidebar = sidebar == .detailOnly ? .all : .detailOnly }
+        sidebar = sidebar == .detailOnly ? .all : .detailOnly
     }
 
     // MARK: 提示

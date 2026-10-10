@@ -231,10 +231,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .animation(Motion.quick, value: draft.attachments.map(\.id))
         .animation(Motion.quick, value: draft.images.map(\.id))
         .modifier(ImageSources(source: $source, images: $draft.images))
-        .sheet(isPresented: showing(.cards)) {
+        .panel(isPresented: showing(.cards)) {
             CardPicker(project: cardsFrom) { draft.attach($0) }
         }
-        .sheet(item: $previewing) { outbox in
+        .panel(item: $previewing) { outbox in
             AttachmentSheet(outbox: outbox, expand: { expand(outbox) })
         }
 #if DEBUG
@@ -696,7 +696,8 @@ private struct AttachmentBody: View {
 private struct AttachmentSheet: View {
     let outbox: Outbox
     let expand: (() -> Void)?
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.closePanel) private var close
+    @Environment(\.palette) private var palette
     @State private var contentHeight: CGFloat = 0
     @State private var detent = PresentationDetent.height(barHeight)
 
@@ -706,26 +707,34 @@ private struct AttachmentSheet: View {
     private static let barHeight: CGFloat = 64
     private var fitted: PresentationDetent { .height(contentHeight + Self.barHeight) }
 
+    #if os(iOS)
     var body: some View {
         NavigationStack {
             AttachmentBody(content: outbox.content, omitsTitle: true, height: $contentHeight)
                 .navigationTitle(CardText(outbox.content).label)
-                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                #endif
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
                     if let expand {
                         ToolbarItem(placement: .confirmationAction) { Button("展开编辑", action: expand) }
                     }
                 }
         }
-        #if os(iOS)
         .presentationDetents([fitted, .large], selection: $detent)
         // 内容量出来后贴合它；用户拉到满屏后不再缩回
         .onChange(of: contentHeight) { if detent != .large { detent = fitted } }
-        #else
-        .frame(width: Self.macSize.width, height: Self.macSize.height)
-        #endif
     }
+    #else
+    var body: some View {
+        VStack(spacing: 10) {
+            PanelHeader(title: CardText(outbox.content).label) {
+                if let expand { Button("展开编辑", action: expand) }
+            }
+            AttachmentBody(content: outbox.content, omitsTitle: true, height: $contentHeight)
+        }
+        .padding(.top, 18)
+        .frame(width: Self.macSize.width).frame(maxHeight: Self.macSize.height)
+        .background(palette.desk)
+    }
+    #endif
 }
