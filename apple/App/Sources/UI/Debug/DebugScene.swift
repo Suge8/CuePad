@@ -143,6 +143,10 @@ enum DebugScene {
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         preset.alertStatus = alertStatus
         if scene == "search" { preset.focusedSearch = defaults.string(forKey: "CuePadProject") == nil ? .shelf : .project }
+        if scene == "agent" {
+            preset.agentQuery = searchText
+            preset.agentFromBottom = defaults.integer(forKey: "CuePadHistory") > 0 && searchText.isEmpty
+        }
         #endif
         return preset
     }

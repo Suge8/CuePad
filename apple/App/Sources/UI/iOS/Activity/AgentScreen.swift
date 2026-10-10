@@ -64,9 +64,7 @@ struct AgentScreen: View {
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .contentMargins(.top, Bars.contentGap, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
-        #if DEBUG
-        .defaultScrollAnchor(DebugScene.scene == "agent" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
-        #endif
+        .defaultScrollAnchor(DebugHooks.preset.agentFromBottom ? .bottom : nil)
         .hidingSearch($searchHidden, searching: searchFocused || !model.query.isEmpty)
         .fadesUnderBars(below: Bars.contentGap)
         .safeAreaBar(edge: .top) {
@@ -78,9 +76,7 @@ struct AgentScreen: View {
         .refreshable { await services.syncNow() }
         .onChange(of: model.list != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
         .agentList(model, filter: filter)
-        #if DEBUG
-        .onAppear { if DebugScene.scene == "agent" { model.query = DebugScene.searchText } }
-        #endif
+        .onAppear { if let query = DebugHooks.preset.agentQuery { model.query = query } }
     }
 
     /// 左边的圆钮：按项目筛"现在"与"历史"（全部 + 在 Mac 上绑了文件夹的项目，项目目录的顺序）；筛着项目时圆钮里是那个项目的图标。
