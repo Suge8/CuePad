@@ -16,6 +16,27 @@ struct CurrentProjectTests {
         Task { await workspace.observeCatalog() }
     }
 
+    /// ⌘N 打开侧栏里此刻的第 N 个项目：项目顺序随最近活动与置顶变化，按下的那一刻按目录当前的顺序取，不能还绑在旧顺序上。
+    @Test func 项目顺序变了之后_数字键打开的是侧栏里当下的第N个() async throws {
+        _ = try await store.createProject(name: "A", color: "#000000")
+        _ = try await store.createProject(name: "B", color: "#000000")
+        let last = try await store.createProject(name: "C", color: "#000000")
+        let workspace = Workspace(services: services)
+        let catalog = observing(workspace)
+        defer { catalog.cancel() }
+        await eventually { workspace.catalog?.projects.count == 3 }
+
+        try await store.updateProject(last.id) { $0.isPinned = true }
+        await eventually { workspace.catalog?.projects.first?.id == last.id }
+        workspace.showProject(number: 1)
+        #expect(workspace.page == .project(last.id))
+        workspace.showProject(number: 3)
+        let third = try #require(workspace.catalog?.projects[2].id)
+        #expect(workspace.page == .project(third) && third != last.id)
+        workspace.showProject(number: 9)  // 没有第 9 个：不动
+        #expect(workspace.page == .project(third))
+    }
+
     @Test func 保存的项目不存在时_首屏是侧栏第一个有效项目_清掉失效的设置() async throws {
         _ = try await store.createProject(name: "A", color: "#000000")
         let pinned = try await store.createProject(name: "B", color: "#000000")
