@@ -50,9 +50,6 @@ extension View {
     /// 独占底部的页（卡片纸页、Pi 会话页）：在屏幕上时 iPhone 收起标签栏（见 `Navigation.bottomPages`）。
     func ownsBottomEdge() -> some View { modifier(BottomEdgeOwner()) }
 
-    /// 选项少的切换：平时是分段控件；辅助字号下分段控件不随字号放大，改成跟随字号的菜单按钮。
-    func scalingPickerStyle() -> some View { modifier(ScalingPickerStyle()) }
-
     /// 长按项目（书架、侧栏）：抬起这一项作预览，菜单是共用的项目操作，有 Pi 会话时菜单标题写明它的状态
     /// （说清旁边那个点是什么意思）。nil（未分类）没有菜单。
     func projectActions(_ project: Project?, radius: CGFloat, pi: PiShown?) -> some View {
@@ -113,14 +110,6 @@ private struct PageAppearance: UIViewControllerRepresentable {
             super.viewWillDisappear(animated)
             changed(false)
         }
-    }
-}
-
-private struct ScalingPickerStyle: ViewModifier {
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    @ViewBuilder func body(content: Content) -> some View {
-        if typeSize.isAccessibilitySize { content.pickerStyle(.menu) } else { content.pickerStyle(.segmented) }
     }
 }
 
