@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Darwin
 import Foundation
 import Observation
@@ -154,20 +155,20 @@ public final class PiBridge {
         _ = try await request(to: id) { try PiWire.endCommand(id: $0) }
     }
 
-    /// 停止该会话正在跑的这一轮（相当于在 Pi 里按 Esc）：`ack` 即已受理，会话随后以"被中止"歇下（`.done(aborted: true)`），能接着说。
+    /// 停止该会话正在跑的这一轮（相当于在 Pi 里按 Esc）：`ack` 即已受理，会话随后歇下（`.settled`），能接着说。
     /// 指挥官已经空闲时什么也不发生（也成功）；只停指挥官自己这一轮，它派出的子代理照常跑。
     public func abort(_ id: PiSession.ID) async throws {
         _ = try await request(to: id) { try PiWire.abortCommand(id: $0) }
     }
 
     /// 回答该会话正在等的弹窗；`promptID` 不是正在等的那个、或答案对不上时抛 `PiBridgeError.rejected`。
-    public func answer(_ answer: PiPromptAnswer, to promptID: String, in id: PiSession.ID) async throws {
+    public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
         _ = try await request(to: id) { try PiWire.answerCommand(id: $0, promptID: promptID, answer) }
     }
 
     /// 换该会话的模型、思考强度（至少给一项）：先换模型再设强度，强度按新模型支持的范围夹取。
     /// 模型不在 Pi 的模型表里抛 `rejected("unknown_model")`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
-    public func configure(model: PiModelRef? = nil, thinking: String? = nil, name: String? = nil, in id: PiSession.ID) async throws {
+    public func configure(model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, name: String? = nil, in id: PiSession.ID) async throws {
         _ = try await request(to: id) { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
     }
 
@@ -255,12 +256,12 @@ public final class PiBridge {
         case .hello(let hello):
             guard link.session == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
-            guard let state = hello.state.agentState else { throw HandlingError.unknownState(hello.state.kind) }
+            guard let work = hello.state.work else { throw HandlingError.unknownState(hello.state.kind) }
             var session = PiSession(
                 id: name, sessionID: hello.sessionId, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
-                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), mode: hello.mode,
-                terminal: PiTerminal(tty: hello.tty, environment: hello.term), extensionVersion: hello.extensionVersion,
-                state: state, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
+                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: PiTerminal(tty: hello.tty, environment: hello.term),
+                extensionVersion: hello.extensionVersion, state: work.state, detail: work.detail,
+                errorMessage: hello.state.errorMessage, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             hello.info.apply(to: &session)
             session.launchToken = hello.launchToken
             session.hosted = hello.hosted ?? false
@@ -270,15 +271,17 @@ public final class PiBridge {
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             var session = PiSession(
                 id: name, sessionID: hello.sessionId, sessionFile: nil, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
-                mode: "", terminal: PiTerminal(), extensionVersion: hello.extensionVersion, state: .incompatible, stateSince: Date())
+                terminal: PiTerminal(), extensionVersion: hello.extensionVersion, state: .incompatible, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
             appear(session, on: link)
         case .state(let wire):
             guard var session = link.session else { throw HandlingError.messageBeforeHello }
-            guard let state = wire.agentState else { throw HandlingError.unknownState(wire.kind) }
+            guard let work = wire.work else { throw HandlingError.unknownState(wire.kind) }
             let previous = session.state
-            session.state = state
+            session.state = work.state
+            session.detail = work.detail
+            session.errorMessage = wire.errorMessage
             session.stateSince = wire.sinceDate
             session.busySince = wire.busySinceDate
             update(session, on: link)

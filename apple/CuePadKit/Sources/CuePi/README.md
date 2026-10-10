@@ -1,6 +1,6 @@
 # CuePi —— Pi 桥（macOS）
 
-只依赖 Foundation/AppKit，不依赖 CueStore。三块能力，App 层各接一处：
+依赖 Foundation/AppKit 与 CueStore：Pi 会话的值类型（状态 `PiWorkState`、弹窗 `PiQuestion`、模型 `PiModelOption`、上下文 `PiContextUsage`、斜杠命令 `PiSlashCommand`、子代理 `PiSubagentState`、对话 `PiChatMessage`、摘要 `PiRecap`）只在 CueStore 定义一份，线上消息与会话文件在这里直接解码成它们，App 不再转换。三块能力，App 层各接一处：
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
@@ -29,6 +29,8 @@
 
 `state.kind`：`idle`、`thinking`、`outputting`、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`delegating`（v6 起：自己这轮已歇下，还有子代理在飞）、`compacting`（v10 起：在压缩上下文，`session_before_compact` 到 `session_compact` / `session_compact_failed`；手动 /compact、上下文快满时自动压缩、溢出后压缩再重试都是它）、`done`（`aborted`）、`error`（`error`）。
 
+解码时一处落成 `PiSession.state`（`PiWorkState`）与一句话说明 `PiSession.detail`：`idle` 与 `done` 都是 `settled`（`tools` 全集、`aborted`、`promptKind` 没有人读，不解码）；`tool` 的说明是"工具名 · 调用摘要"（没有摘要只有工具名），`waiting_user` 是 `title`，`error` 是 `PiErrorSummary.line`（原文留在 `PiSession.errorMessage`，悬停看）。"忙"的规则只在 `PiWorkState` 上：`isTurnRunning`（指挥官这一轮在跑，含等你确认；发送要不要问"马上说还是等它做完再说"读它）、`isWorking`（含等子代理）、`hasPendingWork`（工作中或等你确认；后台托管的 Pi 空闲计时与让出读它）。
+
 计时：粗状态只由 `phaseOf` 一处从 `kind` 推导——工作中（思考、输出、工具、等子代理、压缩）、等你确认、出错、空闲；`kind` 又由 `StateTracker.derive()` 从自己这轮的状态、在飞子代理数与待确认弹窗推导。`since` 是进入当前粗状态的时间，细状态之间切换不变；`busySince` 是这段连续处理开始的时间：离开空闲起（提交一条消息的 `input` 事件），到自己歇下且没有子代理在飞为止，中间等你确认也不断，空闲、出错时为 null。在飞子代理数取 FireCode 发布在 `firecode:workers` 频道的 `inFlight`（在跑、在审，或已落定但结果还没交给指挥官），与 FireCode 判断"会话进行中"同一个事实。FireCode 交回结果时，在飞数在该消息的 `input` 之后、`agent_start` 之前归零，所以从 `input` 起算这一轮，连续处理在交接处不断。只有 `agent_settled` 才进入 `done`/`error`。
 
 压缩（v10 起）：压缩期间 `kind` 是 `compacting`（等你确认的弹窗仍在它之前）。自动压缩发生在一轮里（回答之后、`agent_settled` 之前；溢出时压完重试这一轮），粗状态一直是工作中，计时不断，压完歇下照常是这一轮做完。手动 /compact 先停掉在跑的一轮，压缩本身发生在歇着的时候：结束、失败或被停止后会话回到压缩前的状态，`since`、`busySince` 也回到压缩开始时的值——压缩不是新的一轮，CuePad 据"起点退回"不提示"做完了"、也不算有新回复（`PiAlert.entering`）。手动压缩期间 Pi 拒收新消息（`Cannot submit a prompt while compaction is in progress`），扩展的 `sendUserMessage` 又不回报错误，所以这期间收到的 `send` 先留在扩展里、照常 `ack`（`delivered` 为排队），压缩结束后的下一轮事件循环按到达顺序交给 Pi；压完之前会话就关掉（退出、重新载入、换会话）时，`bye` 的 `undelivered` 报出它们的投送请求 id，CuePad 把这几条记为没送到（"没能送达 + 重发"，`CueStore.failAcceptedDeliveries`）。交给 Pi 派发的 `command` 没有投送请求 id、留着就报不出来，手动压缩期间直接拒绝（`compacting`）。进程被强杀没有告别，留着的话报不出来。自动压缩期间 Pi 自己排队，不经这里。
@@ -39,7 +41,7 @@
 
 - 你的消息：`role == "user"` 的消息全文（文字块换行连接）。整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的是扩展投进来的机器消息（如 FireCode 的子代理事件、观察员、审查结果信封），不进对话、只开始一轮；块与块之间夹着真人文字就不是机器消息。CuePad 送进去的消息带着 `cuepadDelivery`（投送请求 id，见 `send`）。
 - 系统行：会话文件里的 `compaction` 条目（压缩，终端对话里那行压缩摘要）是一条系统行，文字固定是"已压缩上下文"（不写压缩前的 token 数：这里不知道窗口多大，一个孤零零的数用户读不懂）。别的命令留下的只有设置条目（`model_change`、`thinking_level_change`、`session_info` 的会话名），终端的对话里没有它们，这里也不进对话；扩展命令自己什么都不写；`/reload` 不写；`/new`、`/clone` 是另一个会话文件。模板与 skill 展开成一条普通的用户消息（`<skill …>` 或模板正文），**没有** `cuepadDelivery`——命令请求不会被换成它，所以命令不是"你发出的话"，不在对话里挂气泡。
-- Pi 消息：一轮一条，取结束这一轮的助手消息（`stopReason` 不是 `toolUse`）的文字块；中途调工具时说的话与思考不算，工具输出不进对话，只记开始时间和这一轮的工具活动（`PiToolActivity`）：调用来自助手消息里的 `toolCall` 块（名字、参数），成败来自后面的工具结果行（`isError`）。工具按名字分五类（`edit`：edit / write；`command`：bash；`read`；`search`：grep / find / ls；`other`），各类成功的次数——读、改文件按文件算，同一个文件读两次、改两次只算一个——失败的单独计数、不进各类；清单按发生先后至多 `PiToolActivity.itemLimit` 条、每条目标至多 `targetLimit` 个字符（路径相对会话工作目录、命令取首个非空行），改文件带从参数算出的新增、删除行数（整文件写入只有新增）；一轮结束时没等到结果的调用（被中止）按成功算。工具结果行体积大，不做 JSON 解码，只按 Pi 写出的固定键序取两头：行首的 `toolCallId`，行尾 128 字节内的 `"isError":true`；两头没找到这两个键（Pi 改了键序）就落到完整 JSON 解码，结果不变、只是慢。
+- Pi 消息：一轮一条，取结束这一轮的助手消息（`stopReason` 不是 `toolUse`）的文字块；中途调工具时说的话与思考不算，工具输出不进对话，只记开始时间和这一轮的工具活动（`PiChatMessage.Tools`）：调用来自助手消息里的 `toolCall` 块（名字、参数），成败来自后面的工具结果行（`isError`）。工具按名字分五类（`edit`：edit / write；`command`：bash；`read`；`search`：grep / find / ls；`other`），各类成功的次数——读、改文件按文件算，同一个文件读两次、改两次只算一个——失败的单独计数、不进各类；清单按发生先后至多 `PiChatMessage.Tools.itemLimit` 条、每条目标至多 `targetLimit` 个字符（路径相对会话工作目录、命令取首个非空行），改文件带从参数算出的新增、删除行数（整文件写入只有新增）；一轮结束时没等到结果的调用（被中止）按成功算。工具结果行体积大，不做 JSON 解码，只按 Pi 写出的固定键序取两头：行首的 `toolCallId`，行尾 128 字节内的 `"isError":true`；两头没找到这两个键（Pi 改了键序）就落到完整 JSON 解码，结果不变、只是慢。
 - 摘要：`pendingPrompt` 是你说了、这一轮还没做完的那句；一轮结束时它移进 `lastPrompt`，`lastReply` 换成这一轮的回答，问与答一起更新。机器消息触发的轮没有新的提问：回答照常更新、`lastPrompt` 沿用触发它的那件事里你说的话（如 FireCode 子代理做完后的汇报，是对你那句的答复）。上次中途退出、没做完的一轮不改问答。`lastPrompt`、`pendingPrompt` 单行（空白与控制字符折成一个空格）≤500 字符，`lastReply` 保留换行 ≤1200 字符，超出以省略号结尾。
 
 - `question`：正在等你回答的弹窗 `{id, kind, text, options}`。`kind` 是 `confirm`/`select`/`text`（`input`）/`editor`/`custom`；`text` 是标题与说明（`confirm`）换行连接，≤500 字符；`options` 是选择框的选项原文；`id` 是这次弹窗的标识，能从 CuePad 作答的（`confirm`/`select`/`text`）才有，`editor` 没有可收起的接口、`custom` 没有文案，为 null。`ui_prompt_end` 后为 null。`ui_prompt_start` 只带标题，说明与选项靠在 `session_start` 时包装共用的 `ctx.ui` 在调用时记下；包装同时给弹窗接上一个由扩展控制的 AbortSignal（与调用方自己的合并）。

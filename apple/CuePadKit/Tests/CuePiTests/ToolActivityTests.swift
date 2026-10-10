@@ -1,6 +1,7 @@
 #if os(macOS)
 import Foundation
 import Testing
+import CueStore
 @testable import CuePi
 
 /// 每一轮 Agent 的工具活动汇成一份紧凑摘要，随回答那条消息出来：分几类、各几个、失败几个、清单里每条是什么。
@@ -54,7 +55,7 @@ struct ToolActivityTests {
     }
 
     @Test func aRoundsToolsAreClassifiedCountedAndListedWithoutOutput() throws {
-        let tools = try #require(try index(try busyRound()).transcript.last?.tools)
+        let tools = try #require(try index(try busyRound()).messages.last?.tools)
 
         // 同一个文件读两次、改两次只算一个；失败的单独记，不进各类计数
         #expect(tools.reads == 2 && tools.edits == 2 && tools.commands == 1 && tools.searches == 1 && tools.others == 1 && tools.failed == 1)
@@ -76,7 +77,7 @@ struct ToolActivityTests {
             Self.calls("t1", "u1", [["type": "toolCall", "id": "c1", "name": "bash", "arguments": "ls"], Self.call("c2", "read", ["path": 7])], at: 2),
             SessionFile.assistant("a1", "t1", text: "读完了", at: 3))
         let update = try index(f)
-        #expect(update.transcript.last?.text == "读完了" && update.transcript.last?.tools?.commands == 1 && update.transcript.last?.tools?.reads == 1)
+        #expect(update.messages.last?.text == "读完了" && update.messages.last?.tools?.commands == 1 && update.messages.last?.tools?.reads == 1)
     }
 
     /// Pi 以后换了工具结果行的键序（isError 提前、toolCallId 挪到长输出之后、role 不在行首）也读得对：快速路径认不出就完整解码。
@@ -91,14 +92,14 @@ struct ToolActivityTests {
             Self.calls("t1", "u1", [Self.call("c1", "bash", ["command": "ls"]), Self.call("c2", "bash", ["command": "false"])], at: 2),
             reordered("r1", "t1", call: "c1", failed: false, at: 3), reordered("r2", "r1", call: "c2", failed: true, at: 3),
             SessionFile.assistant("a1", "r2", text: "好", at: 4))
-        let tools = try #require(try index(f).transcript.last?.tools)
+        let tools = try #require(try index(f).messages.last?.tools)
         #expect(tools.commands == 1 && tools.failed == 1 && tools.items.map(\.failed) == [false, true])
     }
 
     @Test func aRoundWithoutToolsHasNoActivity() throws {
         var f = SessionFile(directory: dir)
         try f.append(SessionFile.header(), SessionFile.user("u1", nil, "你好", at: 1), SessionFile.assistant("a1", "u1", text: "你好", at: 2))
-        #expect(try index(f).transcript.last?.tools == nil)
+        #expect(try index(f).messages.last?.tools == nil)
     }
 
     /// 清单最多 itemLimit 条、每条目标截到 targetLimit 个字符（同步体积）；计数不受清单截断影响。
@@ -108,16 +109,16 @@ struct ToolActivityTests {
         try f.append(
             SessionFile.header(cwd: "/work/x"), SessionFile.user("u1", nil, "全看一遍", at: 1), Self.calls("t1", "u1", many, at: 2),
             SessionFile.assistant("a1", "t1", text: "看完了", at: 3))
-        let tools = try #require(try index(f).transcript.last?.tools)
-        #expect(tools.items.count == PiToolActivity.itemLimit && tools.reads == 45)
+        let tools = try #require(try index(f).messages.last?.tools)
+        #expect(tools.items.count == PiChatMessage.Tools.itemLimit && tools.reads == 45)
 
         var g = SessionFile(directory: dir, name: "long.jsonl")
         try g.append(
             SessionFile.header(cwd: "/work/x"), SessionFile.user("u1", nil, "跑", at: 1),
             Self.calls("t1", "u1", [Self.call("c1", "bash", ["command": String(repeating: "x", count: 400)])], at: 2),
             SessionFile.assistant("a1", "t1", text: "好", at: 3))
-        let target = try #require(try index(g).transcript.last?.tools?.items.first?.target)
-        #expect(target == String(repeating: "x", count: PiToolActivity.targetLimit - 1) + "…")
+        let target = try #require(try index(g).messages.last?.tools?.items.first?.target)
+        #expect(target == String(repeating: "x", count: PiChatMessage.Tools.targetLimit - 1) + "…")
     }
 
     /// 一轮跨几次读文件（在线会话每次追加都读一次）：调用在前一次、结果与回答在后一次，结果与一次读完一样；
@@ -139,9 +140,9 @@ struct ToolActivityTests {
         let resumed = try index(f, from: midway.checkpoint)
         let whole = try index(f)
 
-        #expect(resumed.transcript.last?.tools == whole.transcript.last?.tools)
-        #expect(resumed.transcript.last?.tools?.failed == 1 && resumed.transcript.last?.tools?.reads == 1 && resumed.transcript.last?.tools?.commands == 0)
-        #expect(try PiHistory.index(file: f.url, from: summary.checkpoint).transcript.last?.tools == whole.transcript.last?.tools)
+        #expect(resumed.messages.last?.tools == whole.messages.last?.tools)
+        #expect(resumed.messages.last?.tools?.failed == 1 && resumed.messages.last?.tools?.reads == 1 && resumed.messages.last?.tools?.commands == 0)
+        #expect(try PiHistory.index(file: f.url, from: summary.checkpoint).messages.last?.tools == whole.messages.last?.tools)
     }
 }
 #endif

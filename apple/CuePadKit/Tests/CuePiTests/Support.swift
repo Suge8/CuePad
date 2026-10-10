@@ -1,7 +1,11 @@
 #if os(macOS)
 import Foundation
 import Testing
+import CueStore
 @testable import CuePi
+
+/// CueStore 里也有同名的会话索引类型；这里说的都是桥上的会话。
+typealias PiSession = CuePi.PiSession
 
 // MARK: - 临时目录 / 条件等待
 
@@ -62,8 +66,8 @@ func deadPid() throws -> Int32 {
 }
 
 /// 会话文件此刻的摘要（对话的投影，见 `PiHistory`）；文件还没落盘时为 nil。
-func recap(of session: PiSession?) -> PiTranscriptRecap? {
-    session?.sessionFile.flatMap { try? PiHistory.index(file: $0, from: nil).recap }
+func recap(of session: PiSession?) -> PiRecap? {
+    session?.sessionFile.flatMap { try? PiHistory.index(file: $0, from: nil).checkpoint.recap }
 }
 
 /// 订阅 `changes()` 并记录，供测试断言事件顺序。
@@ -85,7 +89,12 @@ final class ChangeLog {
         changes.compactMap { if case .ended(let s, let r) = $0 { (s, r) } else { nil } }
     }
 
-    var states: [PiAgentState] {
+    /// 每次状态变化时的一句话说明（`PiSession.detail`）
+    var details: [String?] {
+        changes.compactMap { if case .stateChanged(let s, _) = $0 { s.detail } else { nil } }
+    }
+
+    var states: [PiWorkState] {
         changes.compactMap { if case .stateChanged(let s, _) = $0 { s.state } else { nil } }
     }
 }
