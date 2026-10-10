@@ -14,8 +14,9 @@ import UIKit
 #endif
 
 /// 没有事件可订阅的系统异步（弹窗结束、布局后改尺寸、后台任务落盘）：有界条件等待。
+/// 上限只是"确实不会来了"的兜底（机器负载高时一步会慢上几十秒），条件一成立马上返回。
 @MainActor
-func eventually(timeout: Duration = .seconds(3), _ condition: () -> Bool) async {
+func eventually(timeout: Duration = .seconds(30), _ condition: () -> Bool) async {
     let deadline = ContinuousClock.now + timeout
     while !condition(), ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(10)) }
 }

@@ -41,8 +41,9 @@ struct TimedOut: Error, CustomStringConvertible {
 }
 
 /// 条件等待：状态由 FSEvents/socket 异步推进，没有更细的完成信号可订阅时用它，禁止固定 sleep。
+/// 上限只是"确实不会来了"的兜底（机器负载高时别的进程会让一步慢上几十秒），条件一成立马上返回，所以取得宽，各处不另写。
 func eventually(
-    _ what: String, timeout: Duration = .seconds(10),
+    _ what: String, timeout: Duration = .seconds(30),
     _ condition: @MainActor () async throws -> Bool
 ) async throws {
     let deadline = ContinuousClock.now + timeout

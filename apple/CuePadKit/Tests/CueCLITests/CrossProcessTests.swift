@@ -41,7 +41,7 @@ import Testing
         return []
       }
       group.addTask {
-        try await Task.sleep(for: .seconds(15))
+        try await Task.sleep(for: .seconds(60))
         throw CancellationError()
       }
       defer { group.cancelAll() }

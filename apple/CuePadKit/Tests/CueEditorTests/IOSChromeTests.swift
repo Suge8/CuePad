@@ -21,7 +21,7 @@ struct IOSChromeTests {
         }
         h.load(stored)
         var last = -1.0, stableCount = 0
-        #expect(await h.wait(timeout: 15) {
+        #expect(await h.wait {
             let current = Double(h.textView.contentSize.height)
             stableCount = current == last ? stableCount + 1 : 0
             last = current

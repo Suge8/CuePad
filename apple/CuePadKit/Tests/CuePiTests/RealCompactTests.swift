@@ -7,7 +7,8 @@ import CueStore
 /// 压缩上下文是会话状态里的一档"工作中"（`.compacting`）：真实 Pi + 安装器装进临时目录的真实扩展 + 假模型 + `PiBridge`。
 /// 手动 /compact、上下文快满时自动压缩、上下文溢出后压缩再重试，三种都先报"在压缩"；
 /// 歇着时开始的压缩（手动）结束、失败或被停止后回到原来的状态和原来的计时起点——不是新的一轮。
-/// 摘要请求的快慢与成败由对话里的标记控制（`[[slow-compact]]`、`[[fail-compact]]`、`[[overflow]]`，见 Fixtures/fake-model.ts）。
+/// 摘要请求的停住与成败由对话里的标记控制（`[[slow-compact]]`、`[[fail-compact]]`、`[[overflow]]`，见 Fixtures/fake-model.ts）：
+/// 压缩停住多久由测试决定（`PiProcess.release`），不按时长——机器负载高时测试自己的步骤会慢过任何固定窗口。
 @MainActor
 @Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"))
 struct RealCompactTests {
@@ -17,7 +18,7 @@ struct RealCompactTests {
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
-        try await eventually("桥发现真实 Pi 会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
+        try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
         try await body(pi, bridge, bridge.sessions[0])
     }
 
@@ -25,10 +26,21 @@ struct RealCompactTests {
         try PiHistory.index(file: #require(session.sessionFile), from: nil).messages.filter { $0.role == .known(.system) }.count
     }
 
+    /// 摘要请求每次停住，都等桥上看到"在压缩"再放行（压缩会发一到两次摘要请求）；不再需要时取消。
+    private func releaseWhileCompacting(_ pi: PiProcess, _ bridge: PiBridge) -> Task<Void, any Error> {
+        Task { @MainActor in
+            while true {
+                try await pi.waitUntilHeld()
+                try await eventually("在压缩") { bridge.sessions.first?.state == .compacting }
+                try pi.release()
+            }
+        }
+    }
+
     private func reply(_ pi: PiProcess, _ bridge: PiBridge, _ text: String) async throws {
         let before = bridge.sessions.first?.stateSince
         try pi.prompt(text)
-        try await eventually("这一轮做完", timeout: .seconds(30)) {
+        try await eventually("这一轮做完") {
             bridge.sessions.first.map { $0.state == .settled && $0.stateSince != before } == true
         }
     }
@@ -45,9 +57,11 @@ struct RealCompactTests {
             let compacting = try #require(bridge.sessions.first)
             #expect(compacting.busySince != nil && compacting.stateSince > settled.stateSince)
             try await bridge.send(PiMessage(text: "压缩时说的话"), to: s.id)
+            let releasing = releaseWhileCompacting(pi, bridge)
+            defer { releasing.cancel() }
 
-            try await eventually("压完", timeout: .seconds(20)) { try self.compactions(in: s) == 1 }
-            try await eventually("压完的话送进去、答完", timeout: .seconds(30)) {
+            try await eventually("压完") { try self.compactions(in: s) == 1 }
+            try await eventually("压完的话送进去、答完") {
                 (try? PiHistory.index(file: #require(s.sessionFile), from: nil).checkpoint.recap.lastReply) == "ECHO 压缩时说的话 IMAGES[]"
             }
             try await eventually("那一轮的状态都到了桥上") { log.states.last == .settled && log.states.count >= 4 }
@@ -77,21 +91,23 @@ struct RealCompactTests {
             await #expect(throws: PiBridgeError.rejected("compacting")) { try await bridge.command("/ask", in: s.id) }
             if how == "quit" { pi.kill(SIGTERM) } else { try await bridge.command("/reload", in: s.id) }
 
-            try await eventually("会话告别", timeout: .seconds(20)) { !log.ended.isEmpty }
+            try await eventually("会话告别") { !log.ended.isEmpty }
             #expect(log.ended.first?.1 == .closed(reason: how, undelivered: [delivery]))
         }
     }
 
     @Test func 手动压缩失败或被停止_回到原来的状态与计时() async throws {
         try await withRig { pi, bridge, s in
-            // 摘要请求先等 2 秒再失败：失败在受理之后，命令照常受理
+            // 摘要请求先停住再失败：失败在受理之后，命令照常受理
             try await reply(pi, bridge, "第一轮 [[slow-compact]] [[fail-compact]]")
             try await reply(pi, bridge, "第二轮")
             let settled = try #require(bridge.sessions.first)
             let log = ChangeLog(bridge)
 
             try await bridge.command("/compact", in: s.id)
-            try await eventually("失败后回落", timeout: .seconds(20)) { log.states == [.compacting, .settled] }
+            let releasing = releaseWhileCompacting(pi, bridge)  // 命令受理后才放行，失败才在受理之后
+            try await eventually("失败后回落") { log.states == [.compacting, .settled] }
+            releasing.cancel()
             #expect(bridge.sessions.first?.stateSince == settled.stateSince)
 
             try await bridge.command("/compact", in: s.id)
@@ -108,6 +124,8 @@ struct RealCompactTests {
         try await withRig(reserveTokens: 99_000) { pi, bridge, s in
             try await reply(pi, bridge, "热身 [[slow-compact]]")
             let log = ChangeLog(bridge)
+            let releasing = releaseWhileCompacting(pi, bridge)
+            defer { releasing.cancel() }
             try await reply(pi, bridge, String(repeating: "上下文填充 ", count: 1_000))
 
             #expect(log.states.contains(.compacting))
@@ -125,6 +143,8 @@ struct RealCompactTests {
         try await withRig { pi, bridge, s in
             try await reply(pi, bridge, "热身 [[slow-compact]]")
             let log = ChangeLog(bridge)
+            let releasing = releaseWhileCompacting(pi, bridge)
+            defer { releasing.cancel() }
             try await reply(pi, bridge, "[[overflow]] 再说一遍")
 
             #expect(log.states.contains(.compacting))
