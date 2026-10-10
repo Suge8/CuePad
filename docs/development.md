@@ -11,6 +11,7 @@ apple/scripts/xc.sh build mac
 apple/scripts/xc.sh test mac
 apple/scripts/xc.sh build ios
 apple/scripts/xc.sh test ios        # 同一测试目标，跑其中 iOS 也编译的部分（Swift Testing；摘要里的 "Executed 0 tests" 只数 XCTest）
+apple/scripts/xc.sh test mac -only-testing:CuePadTests/<套件>   # `test` 后的参数原样传给 xcodebuild，用来收窄
 apple/scripts/xc.sh shot mac        # 构建 → 后台启动 → 单窗口截图 → 退出，输出 .derived/shot-mac.png
 cd apple/CuePadKit && swift test    # 共用包的全部测试
 cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行

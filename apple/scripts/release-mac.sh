@@ -22,21 +22,9 @@ python3 "$APPLE_DIR/scripts/provision.py" profiles
 
 # Sparkle 按 CFBundleVersion 比较新旧，每次发布必须递增：取时间戳
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
-  -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED" CURRENT_PROJECT_VERSION="$(date +%y%m%d%H%M)"
+  -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED" CURRENT_PROJECT_VERSION="$(build_number)"
 
-cat > "$OUT/export.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>method</key><string>developer-id</string>
-<key>teamID</key><string>${CUEPAD_TEAM_ID}</string>
-<key>signingStyle</key><string>manual</string>
-<key>signingCertificate</key><string>Developer ID Application</string>
-<key>provisioningProfiles</key><dict>
-<key>com.sugeh.cuepad</key><string>CuePad macOS DeveloperID</string>
-</dict>
-</dict></plist>
-PLIST
+export_options "$OUT/export.plist" developer-id "Developer ID Application" com.sugeh.cuepad="CuePad macOS DeveloperID"
 xcodebuild -exportArchive -archivePath "$OUT/CuePad.xcarchive" -exportOptionsPlist "$OUT/export.plist" \
   -exportPath "$OUT/export"
 
