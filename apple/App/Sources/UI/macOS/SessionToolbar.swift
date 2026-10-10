@@ -105,12 +105,15 @@ struct SessionTitleSlot: View {
 }
 
 /// 工具栏右边的"⋯"：最上面写所在，下面重命名、跳到终端（开在终端里的在线会话）、结束会话；都没有时不出现。
+/// 这个菜单项一直在工具栏里（没有内容时透明、点不到），只换里面的内容：它在工具栏的一组里时增删会让整组重建，一次进出会话页约占动作后主线程 CPU 的三分之一到一半。
 struct SessionMenuSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if let state = workspace.shownSessionHeader, state.showsMenu, state.place != nil || state.canRename || state.liveID != nil || state.canEnd {
-            Menu("更多", systemImage: "ellipsis") {
+        let state = workspace.shownSessionHeader.flatMap { $0.showsMenu ? $0 : nil }
+        let shown = state.map { $0.place != nil || $0.canRename || $0.liveID != nil || $0.canEnd } == true
+        Menu("更多", systemImage: "ellipsis") {
+            if let state {
                 if let place = state.place { Section { } header: { Text(place) } }
                 if state.canRename {
                     Button("重命名…", systemImage: "pencil") { workspace.sessionHeader.rename(state.session) }
@@ -123,9 +126,12 @@ struct SessionMenuSlot: View {
                         .disabled(state.ending)
                 }
             }
-            .menuIndicator(.hidden)
-            .help("重命名、跳到终端、结束会话")
         }
+        .menuIndicator(.hidden)
+        .help("重命名、跳到终端、结束会话")
+        .opacity(shown ? 1 : 0)
+        .disabled(!shown)
+        .accessibilityHidden(!shown)
     }
 }
 #endif
