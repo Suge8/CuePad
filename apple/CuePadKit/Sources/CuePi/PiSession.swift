@@ -10,6 +10,8 @@ public enum PiAgentState: Sendable, Equatable {
     case tool(name: String, running: [String], detail: String? = nil)
     /// 自己这轮已经歇下，还有子代理在飞（FireCode 的在飞数）：仍在处理
     case delegating
+    /// 在压缩上下文（手动 /compact、上下文快满时自动、溢出后压缩再重试）：工作中的一档
+    case compacting
     /// 扩展发起的 `ctx.ui` 弹窗（Pi 没有内置工具审批）
     case waitingUser(kind: String?, title: String?)
     /// 一轮结束且 Pi 不会再自动继续（`agent_settled`）

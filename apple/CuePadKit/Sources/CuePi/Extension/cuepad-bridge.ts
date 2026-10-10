@@ -12,8 +12,8 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-const EXTENSION_VERSION = 21;
-const PROTOCOL_VERSION = 9;
+const EXTENSION_VERSION = 22;
+const PROTOCOL_VERSION = 10;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
@@ -80,6 +80,8 @@ type State =
 	| { kind: "tool"; tool: string; tools: string[]; detail?: string }
 	/** 自己这轮已经歇下，还有子代理在飞：仍在处理 */
 	| { kind: "delegating" }
+	/** 在压缩上下文：手动 /compact、上下文快满时自动压缩、上下文溢出后压缩再重试，都是它 */
+	| { kind: "compacting" }
 	| { kind: "waiting_user"; promptKind: string; title?: string }
 	| { kind: "done"; aborted: boolean }
 	| { kind: "error"; error: string };
@@ -95,9 +97,12 @@ class StateTracker {
 	settled: State | null = null;
 	/** 在飞子代理数（FireCode 发布） */
 	inFlight = 0;
+	/** session_before_compact 到 session_compact / session_compact_failed */
+	compacting = false;
 
 	derive(): State {
 		if (this.prompt) return { kind: "waiting_user", promptKind: this.prompt.kind, title: this.prompt.title };
+		if (this.compacting) return { kind: "compacting" };
 		if (this.active) {
 			if (this.tools.size > 0) {
 				const running = [...this.tools.values()];
@@ -116,7 +121,7 @@ type Phase = "working" | "waiting" | "error" | "idle";
 /** 粗状态：计时只在它变化时动，思考、工具、等子代理之间切换不算。 */
 function phaseOf(state: State): Phase {
 	switch (state.kind) {
-		case "thinking": case "outputting": case "tool": case "delegating": return "working";
+		case "thinking": case "outputting": case "tool": case "delegating": case "compacting": return "working";
 		case "waiting_user": return "waiting";
 		case "error": return "error";
 		default: return "idle";
@@ -255,8 +260,17 @@ export default function (pi: any) {
 		if (!socket.destroyed) socket.write(JSON.stringify(message) + "\n");
 	};
 
+	/** 压缩开始时的粗状态与计时：压缩完（或失败、取消）回到同一个粗状态时，计时也回到那时的起点——
+	 * 歇着时的手动压缩不是新的一轮，压完还是原来那次"做完了"，CuePad 不因此提示、也不算有新回复。 */
+	let beforeCompaction: { phase: Phase; since: number; busySince: number | null } | null = null;
+	/** 手动压缩期间 Pi 拒收新消息（"Cannot submit a prompt while compaction is in progress"），而扩展的 sendUserMessage
+	 * 不回报错误、话会悄悄丢掉：这期间 CuePad 送来的话先留着，压缩结束再按到达顺序交给 Pi。自动压缩期间 Pi 照常排队，不经这里。 */
+	let manualCompaction = false;
+	let held: (() => void)[] = [];
+	const submit = (deliver: () => void) => { if (manualCompaction) held.push(deliver); else deliver(); };
+
 	/** 状态没变就不发；没有客户端时只维护状态与计时，不做任何 I/O。 */
-	function commit() {
+	function commit(resume?: { phase: Phase; since: number; busySince: number | null }) {
 		const state = tracker.derive();
 		const key = JSON.stringify(state);
 		if (key === lastKey) return;
@@ -264,8 +278,8 @@ export default function (pi: any) {
 		const next = phaseOf(state);
 		if (next !== phase) {
 			const now = Date.now();
-			since = now;
-			busySince = next === "working" || next === "waiting" ? busySince ?? now : null;
+			since = resume?.phase === next ? resume.since : now;
+			busySince = resume?.phase === next ? resume.busySince : next === "working" || next === "waiting" ? busySince ?? now : null;
 			phase = next;
 		}
 		if (clients.size === 0) return;
@@ -375,7 +389,7 @@ export default function (pi: any) {
 		const busy = !ctx.isIdle();
 		if (typeof command.deliveryId === "string") deliveries.push({ text, id: command.deliveryId });
 		// deliverAs 只在会话正忙时生效；总是带上，避免"检查空闲"与"发送"之间 agent 恰好开始而抛错
-		pi.sendUserMessage(content, { deliverAs });
+		submit(() => pi.sendUserMessage(content, { deliverAs }));
 		ack({ ok: true, delivered: busy ? deliverAs : "immediate" });
 	}
 
@@ -440,7 +454,7 @@ export default function (pi: any) {
 			return error ? reject(error) : ack({ ok: true });
 		}
 		if (name === INTERNAL_COMMAND || !pi.getCommands().some((c: any) => c.name === name)) return reject("unknown_command");
-		pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: true });
+		submit(() => pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: true }));
 		ack({ ok: true });
 	}
 
@@ -655,6 +669,9 @@ export default function (pi: any) {
 	pi.on("session_start", (_event: any, context: any) => {
 		ctx = context;
 		tracker = new StateTracker();
+		beforeCompaction = null;
+		manualCompaction = false;
+		held = [];
 		lastKey = JSON.stringify(tracker.derive());
 		phase = "idle";
 		since = Date.now();
@@ -736,6 +753,24 @@ export default function (pi: any) {
 		asking = null;
 		updateInfo({ question: null });
 		commit();
+	});
+	pi.on("session_before_compact", (event: any) => {
+		beforeCompaction = { phase, since, busySince };
+		manualCompaction = event.reason === "manual";
+		tracker.compacting = true;
+		commit();
+	});
+	// 压缩前就失败（没有可压缩的内容、没有模型）时只有 session_compact_failed，那时什么都没变
+	for (const event of ["session_compact", "session_compact_failed"]) pi.on(event, () => {
+		if (!tracker.compacting) return;
+		const resume = beforeCompaction ?? undefined;
+		beforeCompaction = null;
+		manualCompaction = false;
+		tracker.compacting = false;
+		commit(resume);
+		// session_compact 在 Pi 收起手动压缩的标记之前发出：下一轮事件循环再交，免得又被拒收
+		const deliveries = held.splice(0);
+		setImmediate(() => { for (const deliver of deliveries) deliver(); });
 	});
 	pi.on("agent_end", (event: any) => {
 		const last = [...event.messages].reverse().find((m: any) => m.role === "assistant");

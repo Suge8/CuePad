@@ -4,7 +4,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 9
+    static let protocolVersion = 10
 
     struct State: Decodable {
         var kind: String
@@ -27,6 +27,7 @@ enum PiWire {
             case "outputting": .outputting
             case "tool": .tool(name: tool ?? "?", running: tools ?? [], detail: detail)
             case "delegating": .delegating
+            case "compacting": .compacting
             case "waiting_user": .waitingUser(kind: promptKind, title: title)
             case "done": .done(aborted: aborted ?? false)
             case "error": .error(message: error ?? "")

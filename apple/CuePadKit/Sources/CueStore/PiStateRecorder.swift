@@ -226,7 +226,7 @@ public actor PiStateRecorder {
     subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil
   ) async throws -> PiAlert? {
     var session = sessions[sessionID] ?? Session()
-    let previous = session.observed
+    let previous = session.observed.flatMap { observed in session.times.map { (state: observed, since: $0.stateSince) } }
     session.observed = state
     if let title { session.title = title }
     if let folder { session.folder = folder }
@@ -254,7 +254,7 @@ public actor PiStateRecorder {
       sessions[sessionID] = session
       return nil
     }
-    let startsOrEndsWork = !state.isWorking || !(previous?.isWorking ?? false)
+    let startsOrEndsWork = !state.isWorking || !(previous?.state.isWorking ?? false)
     let renamed = session.written.map {
       $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID || $0.question != content.question
         || $0.hosted != content.hosted || $0.subagents.map(\.shape) != content.subagents.map(\.shape) || $0.modelState != content.modelState
@@ -273,7 +273,7 @@ public actor PiStateRecorder {
       return nil
     }
     cancelPending(&session)
-    let alert = PiAlert.entering(state, from: previous)
+    let alert = PiAlert.entering(state, since: times.stateSince, from: previous)
     let write = commit(sessionID, &session, content, notify: alert, at: now)
     sessions[sessionID] = session
     do { try await persist(write) } catch {

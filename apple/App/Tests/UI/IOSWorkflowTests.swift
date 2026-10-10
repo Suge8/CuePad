@@ -67,6 +67,8 @@ struct IOSWorkflowTests {
         // 等子代理：算工作中，但 Pi 自己这轮已经歇下，消息直接开始新的一轮（与 Mac 同一条规则）
         (.delegating, [.send]),
         (.outputting, [.followUp, .steer]),
+        // 在压缩上下文：Pi 忙着，话等压完再进（扩展在手动压缩期间替它留着）
+        (.compacting, [.followUp, .steer]),
         // 已结束的也能直接发：Mac 在后台把它恢复起来再送达
         (.ended, [.send]),
     ])

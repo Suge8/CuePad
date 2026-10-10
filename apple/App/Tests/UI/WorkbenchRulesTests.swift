@@ -289,6 +289,7 @@ struct StopRulesTests {
     @Test func 只在跑一轮时能停_发出后到歇下前是正在停止_没停成或下一轮又能停() async throws {
         let running = session(.tool, busySince: .now.addingTimeInterval(-60))
         #expect(MacDelivery.canStop(running))
+        #expect(MacDelivery.canStop(session(.compacting, busySince: .now)))  // 停止会中止压缩
         #expect(!MacDelivery.canStop(session(.delegating, busySince: .now)))
         #expect(!MacDelivery.canStop(session(.settled, busySince: nil)))
         // 在等你确认：它没在跑，回复框不给停止（答问题在问题卡或回复框里）

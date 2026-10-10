@@ -59,6 +59,8 @@ nonisolated enum PiProgress {
         // 还没有具体动作时写正在处理的那句提问
         case .thinking, .outputting, .tool: session.detail.flatMap(action) ?? firstLine(session.pendingPrompt).map { "正在处理：\($0)" }
         case .delegating: PiSubagentLine.of(session.subagents) ?? firstLine(session.detail)
+        // 状态词"正在压缩上下文"就是这一句（整页的行没有别的话时写状态词）
+        case .compacting: nil
         case .error: firstLine(session.detail)
         case .settled, .ended, .incompatible, nil: firstSentence(session.lastReply) ?? firstLine(session.lastPrompt).map { "你：\($0)" }
         }
