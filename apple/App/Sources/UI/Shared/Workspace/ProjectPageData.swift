@@ -29,7 +29,7 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
 
     /// 没完成的任务的层级；层级限制按本项目全部任务（含已完成）算。
     private static func tree(_ project: UUID?, from store: isolated CueStore) throws -> TaskTree {
-        let all = try store.tasks(.inProgress, .todo, .done).filter { $0.projectID == project }.flatMap(\.tasks)
+        let all = try store.tasks(in: project, .inProgress, .todo, .done)
         return TaskTree(all.filter { $0.status != .done }, all: all)
     }
 
@@ -39,8 +39,8 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
             cards: try store.cards(in: project),
             lastSends: try store.lastSends(in: project),
             tasks: try Self.tree(project, from: store),
-            taskCounts: try store.taskCounts()[project] ?? .zero,
-            children: try store.childMarks())
+            taskCounts: try store.taskCounts(in: project),
+            children: try store.childMarks(in: project))
     }
 }
 

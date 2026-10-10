@@ -12,7 +12,7 @@ extension AppServices {
     func startSnapshots() {
         tasks.append(Task {
             do {
-                for try await snapshots in store.observe([.projects, .cards], { try $0.widgetSnapshots() }) {
+                for try await snapshots in store.observe { try $0.widgetSnapshots() } {
                     try publish(snapshots)
                 }
             } catch {

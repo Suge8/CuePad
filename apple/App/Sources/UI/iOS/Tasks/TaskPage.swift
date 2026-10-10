@@ -33,7 +33,7 @@ struct TaskPage: View {
         .background(palette.paper)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(item: $opened) { CardEditorScreen(cardID: $0) }
-        .observing(services.store, TaskDetail.tables, id: card.id, into: $detail, onError: workspace.fail) { [id = card.id] in
+        .observing(services.store, id: card.id, into: $detail, onError: workspace.fail) { [id = card.id] in
             try TaskDetail.read(id, from: $0)
         }
     }

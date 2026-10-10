@@ -35,7 +35,7 @@ struct TrashScreen: View {
         } message: {
             Text("此操作无法撤销。")
         }
-        .observing(services.store, [.projects, .cards], into: $data, onError: workspace.fail) { store in
+        .observing(services.store, into: $data, onError: workspace.fail) { store in
             try TrashSummary.read(from: store)
         }
     }

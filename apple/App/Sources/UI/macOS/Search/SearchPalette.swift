@@ -50,7 +50,7 @@ struct SearchPalette: View {
                 sessionPages = 1
             }
             .background { if scope == .cards { shortcuts } }
-            .observing(services.store, [.cards, .projects, .sendRecords], id: query, into: $data, onError: workspace.fail) { [query] store in
+            .observing(services.store, id: query, into: $data, onError: workspace.fail) { [query] store in
                 let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
                 var lastSends: [UUID: LastSend] = [:]
                 for owner in Set(found.cards.map(\.projectID)) {
@@ -331,7 +331,7 @@ private struct SessionObservation: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .observing(services.store, [.piSessionStates, .deliveryRequests, .projects], id: key, into: $data, onError: workspace.fail) { [key] store in
+            .observing(services.store, id: key, into: $data, onError: workspace.fail) { [key] store in
                 try SessionSearchData.read(text: key.text, pages: key.pages, from: store)
             }
             .onChange(of: ids) { if selection.map(ids.contains) != true { selection = ids.first } }

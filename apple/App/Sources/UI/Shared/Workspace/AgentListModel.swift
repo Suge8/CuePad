@@ -71,8 +71,7 @@ private struct AgentListReader: ViewModifier {
             .renameSession($model.renaming)
             .endSession($model.confirmingEnd)
             .onChange(of: filter) { model.resetPaging() }
-            .observing(services.store, [.piSessionStates, .deliveryRequests, .projects, .directoryBindings],
-                       id: PiSessionList.Key(filter: .init(text: model.query, project: filter), limit: model.limit),
+            .observing(services.store, id: PiSessionList.Key(filter: .init(text: model.query, project: filter), limit: model.limit),
                        into: $model.list, onError: workspace.fail) { [query = model.query, limit = model.limit] store in
                 try PiSessionList.read(text: query, project: filter, historyLimit: limit, from: store)
             }

@@ -74,8 +74,8 @@ final class Workspace {
     #if os(macOS)
     var sidebar: NavigationSplitViewVisibility = .all
     private(set) var nonProjectPage: Page?
-    #endif
-    /// 打开的卡（编辑纸页）。设成某张卡时纸页立即挂上；清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
+    /// 打开的卡（编辑纸页；iOS 打开卡片是推入导航，见 `Navigation.open(card:)`）。设成某张卡时纸页立即挂上；
+    /// 清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
     var openCard: UUID? {
         didSet { if let openCard { present(openCard) } }
     }
@@ -83,6 +83,7 @@ final class Workspace {
     private(set) var presentedCard: UUID?
     /// 各张卡在纸页开合中的状态，按卡分开（见 `CardPresence`）。
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
+    #endif
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
     var attaching: Card?
     #if os(macOS)
@@ -98,6 +99,35 @@ final class Workspace {
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
+
+    /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）、文件夹绑定引导（`FolderGuide`）：整个窗口一份，页面直接读，
+    /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同就不写，免得页面白算。
+    private(set) var agentLinks = AgentLinks(items: [:], launching: [])
+    private(set) var folderGuide: FolderGuide?
+
+    func observeAgentLinks() async {
+        do {
+            for try await next in services.store.observe { try AgentLinks.read(from: $0) } where next != agentLinks {
+                agentLinks = next
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
+    func observeFolderGuide() async {
+        do {
+            for try await next in services.store.observe { [host = localHost] in try FolderGuide.read(host: host, from: $0) }
+            where next != folderGuide {
+                folderGuide = next
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
     #if os(macOS)
     /// 请底部输入栏聚焦的次数（空态的"记一条"）：输入栏的焦点在它自己那里，只看这个数变了就聚焦。
     private(set) var captureFocusRequests = 0
@@ -158,38 +188,10 @@ final class Workspace {
     /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
     let sessionHeader = SessionHeader()
 
-    /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）、文件夹绑定引导（`FolderGuide`）：整个窗口一份，页面直接读，
-    /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同就不写，免得页面白算。
-    private(set) var agentLinks = AgentLinks(items: [:], launching: [])
-    private(set) var folderGuide: FolderGuide?
-
-    func observeAgentLinks() async {
-        do {
-            for try await next in services.store.observe(AgentLinks.tables, { try AgentLinks.read(from: $0) }) where next != agentLinks {
-                agentLinks = next
-            }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
-        }
-    }
-
-    func observeFolderGuide() async {
-        do {
-            for try await next in services.store.observe(FolderGuide.tables, { [host = localHost] in try FolderGuide.read(host: host, from: $0) })
-            where next != folderGuide {
-                folderGuide = next
-            }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
-        }
-    }
-
     /// 跟随同步记录里在线会话的摘要与发给它们的最近一条投送请求，直到任务取消。
     func observeSessionRecaps() async {
         do {
-            for try await items in services.store.observe([.piSessionStates, .deliveryRequests], { try $0.piSessionPage(.live).items }) {
+            for try await items in services.store.observe { try $0.piSessionPage(.live).items } {
                 let recaps = Dictionary(items.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first }
                 let deliveries = Dictionary(items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
                 let undelivered = PiSessionListItem.undelivered(items)
@@ -293,7 +295,6 @@ final class Workspace {
         let gone = kept.filter { if case .project(let id) = $0 { !ids.contains(id) } else { false } }
         if !gone.isEmpty { kept.removeAll { gone.contains($0) } }
     }
-    #endif
 
     /// 纸页缩回动画结束。
     func finishClosingCard() {
@@ -331,7 +332,6 @@ final class Workspace {
         presentedCard = nil
     }
 
-    #if os(macOS)
     /// 切到一页（侧栏点哪就是哪）；开着的纸页随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
     func show(_ page: Page) {
         openCard = nil
@@ -407,7 +407,7 @@ final class Workspace {
             #if DEBUG
             try DebugScene.injectCatalogFailure(attempt: catalogAttempt)
             #endif
-            for try await next in services.store.observe(ProjectCatalog.tables, { try ProjectCatalog.read(from: $0) }) {
+            for try await next in services.store.observe { try ProjectCatalog.read(from: $0) } {
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next
                 if membershipChanged {
@@ -523,7 +523,9 @@ final class Workspace {
     func archive(_ id: UUID) async throws {
         let store = services.store
         try await store.archive(id)
+        #if os(macOS)
         if openCard == id { openCard = nil }
+        #endif
         say("已归档", undo: { try await store.unarchive(id) })
     }
 
@@ -532,7 +534,9 @@ final class Workspace {
         let store = services.store
         let children = try await store.children(of: id).map(\.id)
         try await store.trashCard(id)
+        #if os(macOS)
         if openCard == id { openCard = nil }
+        #endif
         say("已删除", undo: {
             try await store.restoreCard(id)
             var previous: UUID?
@@ -608,7 +612,8 @@ final class Workspace {
     }
 }
 
-/// 一张卡在纸页开合中的状态。按卡分开、各自可观察：开合时只有被打开的那张卡的视图重算，
+#if os(macOS)
+/// 一张卡在纸页开合中的状态（Mac 的纸页开合）。按卡分开、各自可观察：开合时只有被打开的那张卡的视图重算，
 /// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
 @MainActor @Observable
 final class CardPresence {
@@ -640,3 +645,4 @@ final class CardPresence {
         frame = nil
     }
 }
+#endif

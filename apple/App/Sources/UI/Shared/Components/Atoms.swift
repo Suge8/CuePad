@@ -15,33 +15,61 @@ extension EnvironmentValues {
 
 extension View {
     /// 订阅 Store：`id` 变化时重新订阅；每次变更重读后写入 `value`。读失败交给 `onError`。页不在前台时暂停（见 `pageActive`），回到前台重新订阅。
+    /// 依赖哪些表由读取本身定（`CueStore.observe(_:)`），这里不另写。
+    func observing<T: Sendable>(
+        _ store: CueStore, id: some Equatable = 0, into value: Binding<T?>,
+        onError: @escaping (any Error) -> Void = { _ in },
+        _ read: @escaping @Sendable (isolated CueStore) throws -> T
+    ) -> some View {
+        modifier(Observing(id: id, value: value, same: { _, _ in false }, onError: onError) { store.observe(read) })
+    }
+
+    /// 同上；读到的和上一次一样就不产出——在 Store 一侧比，没变的数据不送到主线程，界面也不重算。
+    /// 重新订阅后的第一份没有"上一次"，所以写入前再和已有的比一次。
+    func observing<T: Sendable & Equatable>(
+        _ store: CueStore, id: some Equatable = 0, into value: Binding<T?>,
+        onError: @escaping (any Error) -> Void = { _ in },
+        _ read: @escaping @Sendable (isolated CueStore) throws -> T
+    ) -> some View {
+        modifier(Observing(id: id, value: value, same: { $0 == $1 }, onError: onError) { store.observe(read) })
+    }
+
+    // 待迁移：Mac 会话页还按表名订阅（SessionPage 另有人在改，迁完删掉这两个）
     func observing<T: Sendable>(
         _ store: CueStore, _ tables: Set<Table>, id: some Equatable = 0, into value: Binding<T?>,
         onError: @escaping (any Error) -> Void = { _ in },
         _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> some View {
-        modifier(Observing(store: store, tables: tables, id: id, value: value, same: { _, _ in false }, onError: onError, read: read))
+        modifier(Observing(id: id, value: value, same: { _, _ in false }, onError: onError) { store.observe(tables, read) })
     }
 
-    /// 同上；读到的和已有的相等就不写（重新订阅后的第一份多半没变，写一次等于让整页白算一遍）。
     func observing<T: Sendable & Equatable>(
         _ store: CueStore, _ tables: Set<Table>, id: some Equatable = 0, into value: Binding<T?>,
         onError: @escaping (any Error) -> Void = { _ in },
         _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> some View {
-        modifier(Observing(store: store, tables: tables, id: id, value: value, same: { $0 == $1 }, onError: onError, read: read))
+        modifier(Observing(id: id, value: value, same: { $0 == $1 }, onError: onError) { store.observe(tables, read) })
     }
 }
 
 private struct Observing<T: Sendable, ID: Equatable>: ViewModifier {
-    let store: CueStore
-    let tables: Set<Table>
     let id: ID
     @Binding var value: T?
     let same: (T?, T) -> Bool
     let onError: (any Error) -> Void
-    let read: @Sendable (isolated CueStore) throws -> T
+    let stream: @Sendable () -> AsyncThrowingStream<T, Error>
     @Environment(\.pageActive) private var active
+
+    init(
+        id: ID, value: Binding<T?>, same: @escaping (T?, T) -> Bool, onError: @escaping (any Error) -> Void,
+        stream: @escaping @Sendable () -> AsyncThrowingStream<T, Error>
+    ) {
+        self.id = id
+        _value = value
+        self.same = same
+        self.onError = onError
+        self.stream = stream
+    }
 
     private struct Run: Equatable {
         let id: ID
@@ -52,7 +80,7 @@ private struct Observing<T: Sendable, ID: Equatable>: ViewModifier {
         content.task(id: Run(id: id, active: active)) {
             guard active else { return }
             do {
-                for try await next in store.observe(tables, read) where !same(value, next) { value = next }
+                for try await next in stream() where !same(value, next) { value = next }
             } catch is CancellationError {
             } catch {
                 onError(error)
@@ -60,6 +88,7 @@ private struct Observing<T: Sendable, ID: Equatable>: ViewModifier {
         }
     }
 }
+
 // MARK: 分隔点
 
 /// 一行元信息里隔开两段的"·"：只是版面，读屏不念（行要读的话由行自己的标签给）。颜色跟随外层，要淡一档的调用处自己加。

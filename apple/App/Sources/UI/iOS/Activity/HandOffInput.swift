@@ -59,7 +59,7 @@ struct HandOffInput: View {
             draft.attachments = [outbox]
             focused = true
         }
-        .observing(services.store, [.piSessionStates, .deliveryRequests], into: $live, onError: workspace.fail) { [project = outbox.project] store in
+        .observing(services.store, into: $live, onError: workspace.fail) { [project = outbox.project] store in
             // 本项目的在前，再按要你注意的先后
             func key(_ item: PiSessionListItem) -> (Int, Int) {
                 (item.state.projectID == project && project != nil ? 1 : 0, PiShown(item.state, delivery: item.delivery).urgency)

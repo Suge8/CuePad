@@ -57,7 +57,7 @@ extension AppServices {
         })
         tasks.append(Task {
             do {
-                for try await conflicts in store.observe([.cards], { try $0.conflicts() }) { setConflicts(conflicts) }
+                for try await conflicts in store.observe { try $0.conflicts() } { setConflicts(conflicts) }
             } catch {
                 reportIssue(.syncUnavailable("冲突列表读取失败：\(error)"))
             }
@@ -128,7 +128,7 @@ extension AppServices {
 
     /// 有没有符合条件、还没结果的投送请求，请求表变化时重算；读失败时报告并结束（不再主动拉，推送与切前台照常）。
     private func openDeliveries(_ matches: @escaping @Sendable (DeliveryRequest) -> Bool) -> AsyncStream<Bool> {
-        let changes = store.observe([.deliveryRequests]) { store in try store.deliveryRequests().contains { $0.isOpen && matches($0) } }
+        let changes = store.observe { store in try store.deliveryRequests().contains { $0.isOpen && matches($0) } }
         return AsyncStream { continuation in
             let task = Task { [weak self] in
                 do {

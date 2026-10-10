@@ -24,7 +24,7 @@ extension AppServices {
         })
         tasks.append(Task {
             var tracker = SessionAlertTracker()
-            let live = store.observe([.piSessionStates]) { try $0.piSessionPage(PiSessionQuery(scope: .live, limit: .max)).items.map(\.state) }
+            let live = store.observe { try $0.piSessionPage(PiSessionQuery(scope: .live, limit: .max)).items.map(\.state) }
             do {
                 for try await states in live {
                     let alerts = tracker.alerts(for: states, since: active.date)

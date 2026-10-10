@@ -29,7 +29,7 @@ struct TrashPage: View {
         .dialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty, message: "此操作无法撤销。发送记录会保留当时的内容快照。", buttons: [
             DialogButton(title: "清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
         ])
-        .observing(services.store, [.projects, .cards], into: $data, onError: workspace.fail) { store in
+        .observing(services.store, into: $data, onError: workspace.fail) { store in
             try TrashSummary.read(from: store)
         }
     }

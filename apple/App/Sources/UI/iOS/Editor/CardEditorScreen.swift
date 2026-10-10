@@ -53,7 +53,7 @@ struct CardEditorScreen: View {
             .sheet(isPresented: $editingVariables) {
                 if let card = data?.card { VariablesSheet(card: card, names: CueVariables.names(in: handle.text ?? liveText)) }
             }
-            .observing(services.store, [.cards, .projects], id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
+            .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
                 return EditorData(
                     card: card, project: try card.projectID.flatMap { try store.project($0) },

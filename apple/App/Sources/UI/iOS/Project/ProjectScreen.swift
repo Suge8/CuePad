@@ -28,8 +28,6 @@ struct ProjectScreen: View {
     @State private var expanded: Set<OlderGroup.Period> = []
     @State private var board = WallBoard()
     @State private var pi: PiSessionList?
-    @State private var agents: AgentLinks?
-    @State private var folderGuide: FolderGuide?
 
     var body: some View {
         ScrollView {
@@ -48,13 +46,10 @@ struct ProjectScreen: View {
             project: projectID, available: navigation.layout == .tabs && (workspace.catalog?.cardCounts[projectID] ?? 0) > 0,
             ready: page != nil)
         .floatingHeader(project?.name ?? "", detail: detail.isEmpty ? nil : detail) { actions }
-        .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
-        .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
-        .observingFolderGuide(into: $folderGuide)
-        .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $page, onError: workspace.fail) {
+        .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }
-        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects], id: projectID, into: $pi, onError: workspace.fail) { [projectID] store in
+        .observing(services.store, id: projectID, into: $pi, onError: workspace.fail) { [projectID] store in
             try PiSessionList.read(text: "", project: projectID, historyLimit: 0, from: store)
         }
         .onChange(of: page?.stamps) { rearrange() }
@@ -68,7 +63,7 @@ struct ProjectScreen: View {
         let data = page.data, lastTarget = data.lastTarget
         // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
         LazyVStack(alignment: .leading, spacing: 0) {
-            if data.project != nil { FocusCard(data: data, pi: pi, guide: folderGuide).padding(.bottom, Self.sectionGap) }
+            if data.project != nil { FocusCard(data: data, pi: pi, guide: workspace.folderGuide).padding(.bottom, Self.sectionGap) }
             if data.cards.isEmpty {
                 // 上面已有任务或会话时页面不是空的：空态缩成一行，不放吉祥物与实心主按钮
                 let busy = !data.tasks.roots.isEmpty || pi?.now.isEmpty == false

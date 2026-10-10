@@ -64,7 +64,7 @@ struct NewSessionInput: View {
             if let seed = start.draft, draft.isEmpty(accepting: [.images, .cards]) { draft = seed }
             focused = true
         }
-        .observing(services.store, [.deliveryRequests, .piSessionStates], id: launched, into: $progress, onError: workspace.fail) {
+        .observing(services.store, id: launched, into: $progress, onError: workspace.fail) {
             [launched] store in
             guard let launched else { return LaunchProgress() }
             return try LaunchProgress.read(request: launched.request, token: launched.token, from: store)
@@ -108,7 +108,7 @@ struct NewSessionInput: View {
             // 项目还没有文件夹：写明，同名文件夹一键绑，或自己选（请 Mac 绑，进度与没绑成的原因就在这里）
             VStack(alignment: .leading, spacing: 0) {
                 Text("「\(place.project.name)」还没有文件夹").foregroundStyle(palette.ink3)
-                FolderGuideReader { ProjectFolderGuide(project: place.project, guide: $0, style: .line) }
+                ProjectFolderGuide(project: place.project, guide: workspace.folderGuide, style: .line)
             }
         } else {
             switch phase {

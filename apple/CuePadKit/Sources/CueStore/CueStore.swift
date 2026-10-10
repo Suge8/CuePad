@@ -69,11 +69,23 @@ public actor CueStore {
 
   // MARK: 观察
 
-  /// 订阅：先产出一次当前值，之后每当 `tables` 中任一表被提交的写事务改动就重读并产出。
+  /// 订阅：先产出一次当前值，之后每当 `read` 读到的表被提交的写事务改动就重读并产出。依赖的表由读取本身决定
+  /// （每次读完按它实际读到的表更新，随数据走不同分支也对），调用处不另声明。
   /// 突发的多次写入会合并为一次重读。`read` 在 store 的隔离域内执行，可直接调用查询方法：
-  /// `store.observe([.cards, .projects]) { try $0.cards(in: id) }`
+  /// `store.observe { try $0.cards(in: id) }`
   /// 订阅以表为粒度：别的行改动同一张表也会重读。结果可比较（`Equatable`）时和上一次一样就不产出——比较在读取的这一侧做，
   /// 不把没变的数据送到主线程再比、也不让界面白白重算。
+  public nonisolated func observe<T: Sendable>(_ read: @escaping @Sendable (isolated CueStore) throws -> T) -> AsyncThrowingStream<T, Error> {
+    changes(nil, read) { _, _ in true }
+  }
+
+  public nonisolated func observe<T: Sendable & Equatable>(
+    _ read: @escaping @Sendable (isolated CueStore) throws -> T
+  ) -> AsyncThrowingStream<T, Error> {
+    changes(nil, read) { $0 != $1 }
+  }
+
+  /// 订阅这几张表的变化，不看 `read` 读了什么：给只把变化当作唤醒信号的订阅用（读取本身不带数据）。
   public nonisolated func observe<T: Sendable>(
     _ tables: Set<Table>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
   ) -> AsyncThrowingStream<T, Error> {
@@ -86,18 +98,20 @@ public actor CueStore {
     changes(tables, read) { $0 != $1 }
   }
 
+  /// `tables` 为 nil：依赖由每次读取实际读到的表定。
   private nonisolated func changes<T: Sendable>(
-    _ tables: Set<Table>, _ read: @escaping @Sendable (isolated CueStore) throws -> T, isNew: @escaping @Sendable (T, T) -> Bool
+    _ tables: Set<Table>?, _ read: @escaping @Sendable (isolated CueStore) throws -> T, isNew: @escaping @Sendable (T, T) -> Bool
   ) -> AsyncThrowingStream<T, Error> {
     AsyncThrowingStream { continuation in
       let (signals, signal) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
       let task = Task {
-        let token = await self.subscribe(tables, signal)
+        // 第一次读之前什么都可能改动它：先订阅全部表，读完再收窄
+        let token = await self.subscribe(tables ?? Set(Table.allCases), signal)
         signal.yield()
         do {
           var last: T?
           for await _ in signals {
-            let next = try await read(self)
+            let next = try await self.run(read, narrowing: tables == nil ? token : nil)
             if let last, !isNew(next, last) { continue }
             last = next
             continuation.yield(next)
@@ -119,6 +133,14 @@ public actor CueStore {
     let token = UUID()
     subscribers[token] = (tables, signal)
     return token
+  }
+
+  /// 读一次；`token` 非 nil 时把订阅收窄到这次实际读到的表。读与收窄在同一次 actor 执行里，其间没有写入能漏掉。
+  private func run<T>(_ read: (isolated CueStore) throws -> T, narrowing token: UUID?) throws -> T {
+    guard let token else { return try read(self) }
+    let (value, reads) = try db.tracking { try read(self) }
+    subscribers[token]?.tables = reads
+    return value
   }
 
   private func unsubscribe(_ token: UUID) { subscribers[token] = nil }

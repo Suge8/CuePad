@@ -41,7 +41,6 @@ struct AgentScreen: View {
     @FocusState private var searchFocused: Bool
     @State private var searchHidden = false
     /// 还没有文件夹的项目的同名建议（顶上筛选钮的菜单里一键绑）。
-    @State private var folderGuide: FolderGuide?
     @Environment(\.tabPageReady) private var tabPageReady
 
     init(inPanel: Bool = false, project: UUID? = nil) {
@@ -76,7 +75,6 @@ struct AgentScreen: View {
         .modifier(Header(pushed: project != nil, count: model.list.map { $0.now.count + $0.total }, filter: filter))
         // 标签页的根：系统导航栏收起，只留这一排（iPad 分栏里导航栏放着分栏自己的按钮，留着）
         .toolbarVisibility(project == nil && navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
-        .observingFolderGuide(into: $folderGuide)
         .refreshable { await services.syncNow() }
         .onChange(of: model.list != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
         .agentList(model, filter: filter)
@@ -95,7 +93,7 @@ struct AgentScreen: View {
                 Section("绑定文件夹后，那里的 Agent 会话才能按项目看") {
                     ForEach((workspace.catalog?.projects ?? []).filter { !workspace.hasFolder($0.id) }) { project in
                         // 有同名文件夹的一键绑（会话数写在上面），其余自己选
-                        if let named = folderGuide?.suggestions[project.id]?.first {
+                        if let named = workspace.folderGuide?.suggestions[project.id]?.first {
                             Button { bind(named, to: project) } label: {
                                 Label { Text(ProjectFolders.suggestionTitle(named, showsMac: false)) } icon: { Image(systemName: "folder.badge.plus") }
                             }
@@ -207,7 +205,7 @@ struct AgentScreen: View {
             EmptyState.noMatch(query).padding(.top, 40)
         case .needsFolder(let project):
             EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
-                ProjectFolderGuide(project: project, guide: folderGuide)
+                ProjectFolderGuide(project: project, guide: workspace.folderGuide)
             }
             .padding(.top, 40)
         case .none(inProject: true):
