@@ -11,12 +11,7 @@ struct ToolActivityLine: View {
     let tools: PiChatMessage.Tools?
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    #if DEBUG
-    // 截图验收：-CuePadToolsOpen YES 让每一轮的工具清单一开始就展开
-    @State private var expanded = DebugScene.defaults.bool(forKey: "CuePadToolsOpen")
-    #else
-    @State private var expanded = false
-    #endif
+    @State private var expanded = DebugHooks.preset.toolsOpen
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

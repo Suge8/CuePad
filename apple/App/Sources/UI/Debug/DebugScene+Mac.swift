@@ -184,6 +184,9 @@ extension DebugScene {
     /// `-CuePadOffscreen YES`：主窗口放在所有屏幕之外，复现窗口不可见时的布局，测量时也不挡、不露在桌面上。
     static var offscreen: Bool { defaults.bool(forKey: "CuePadOffscreen") }
 
+    /// 悬停进入与离开的次数（压力场景核对没有来回翻转的循环，见 `DebugHooks.hoverToggled`）。
+    static var hoverToggles = 0
+
     /// 放到所有屏幕的左下方之外。要在窗口第一次显示之前调用，否则会先在屏幕中央闪一下。
     static func placeOffscreen(_ window: NSWindow) {
         let screens = NSScreen.screens.map(\.frame).reduce(CGRect.null) { $0.union($1) }

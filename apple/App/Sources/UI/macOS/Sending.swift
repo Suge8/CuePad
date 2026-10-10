@@ -115,25 +115,36 @@ extension Workspace {
     }
 }
 
-/// Pi 会话（在线与本次运行里已结束的）或项目目录绑定变化时，重算会话归属的项目、记下结束的先后。
-struct SessionProjectsTracker: ViewModifier {
-    let workspace: Workspace
+extension Workspace {
+    /// Mac 的工作区随 App 常驻、主窗口与菜单栏面板共用一个：项目目录（读不出来时按"重试"重新订阅）、会话归属的项目与会话摘要都在这里跟着，
+    /// 不挂在哪个视图上——窗口隐去、面板收起都照常更新，也不会两处各订阅一份。直到所在任务取消。
+    func follow() async {
+        async let catalog: Void = followCatalog()
+        async let recaps: Void = observeSessionRecaps()
+        async let placement: Void = followSessionPlacement()
+        _ = await (catalog, recaps, placement)
+    }
 
-    private struct Key: Equatable {
+    private func followCatalog() async {
+        for await _ in Observations({ self.catalogAttempt }) { await observeCatalog() }
+    }
+
+    /// Pi 会话（在线与本次运行里已结束的）或项目目录绑定变了：重算会话归属的项目、记下结束的先后。
+    private func followSessionPlacement() async {
+        for await _ in Observations({ self.sessionPlacement }) { await refreshSessionProjects() }
+    }
+
+    private struct SessionPlacement: Equatable {
         var sessions: [String]
-        /// 已结束的单列：会话从在线变成结束时键必须变（混在一起时字符串可能不变，重算就不会触发）
+        /// 已结束的单列：会话从在线变成结束时这一项必须变（混在一起时字符串可能不变，重算就不会触发）
         var ended: Set<String>
         var directories: [UUID: String]?
     }
 
-    func body(content: Content) -> some View {
-        let pi = workspace.services.pi
-        let key = Key(
-            sessions: pi.slots.map { "\($0.id) \($0.cwd.path)" }, ended: Set(pi.endedSessions.keys),
-            directories: workspace.catalog?.directories)
-        content
-            .task(id: key) { await workspace.refreshSessionProjects() }
-            .task { await workspace.observeSessionRecaps() }
+    private var sessionPlacement: SessionPlacement {
+        let pi = services.pi
+        return SessionPlacement(
+            sessions: pi.slots.map { "\($0.id) \($0.cwd.path)" }, ended: Set(pi.endedSessions.keys), directories: catalog?.directories)
     }
 }
 #endif

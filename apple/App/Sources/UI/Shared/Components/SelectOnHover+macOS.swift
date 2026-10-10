@@ -9,10 +9,6 @@ extension View {
     func selectableOnHover() -> some View { modifier(SelectOnHover()) }
 }
 
-#if DEBUG
-/// 悬停进入与离开的次数（压力场景核对没有来回翻转的循环）。
-@MainActor var hoverToggles = 0
-#endif
 
 /// 当前保留选区的那一条（全 App 只有一个）：鼠标按下时记成指针下悬停着的那一条，没有悬停的（点在别处）就清空。
 @MainActor @Observable
@@ -44,9 +40,7 @@ private struct SelectOnHover: ViewModifier {
         // 选择随之关掉、平台视图撤走、又报"进入"……每秒几千次，主线程被占死。跟踪区只看矩形，不受上面盖了什么影响。
         .background {
             HoverSensor { inside in
-                #if DEBUG
-                hoverToggles += 1
-                #endif
+                DebugHooks.hoverToggled()
                 hovering = inside
                 if inside { focus.hovered = id } else if focus.hovered == id { focus.hovered = nil }
             }

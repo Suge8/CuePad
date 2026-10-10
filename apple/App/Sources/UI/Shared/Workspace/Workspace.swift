@@ -404,9 +404,7 @@ final class Workspace {
     func observeCatalog() async {
         catalogFailure = nil
         do {
-            #if DEBUG
-            try DebugScene.injectCatalogFailure(attempt: catalogAttempt)
-            #endif
+            try DebugHooks.willReadCatalog(attempt: catalogAttempt)
             for try await next in services.store.observe { try ProjectCatalog.read(from: $0) } {
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next

@@ -7,7 +7,8 @@
 # ios 是 iPhone 模拟器（CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
 # shot 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；
 # CUEPAD_DERIVED 指定产物目录（默认 apple/.derived）；并行的 agent 各用一个，否则同目录的构建与测试会互相覆盖。
-# CUEPAD_SHOT_LIBRARY 指定隔离资料库目录（默认 .derived/library；隔离库内含偏好设置；相对路径按当前目录解析），CUEPAD_SHOT_SETTLE 为出窗后等待渲染的秒数。
+# CUEPAD_SHOT_LIBRARY 指定隔离资料库目录（默认 .derived/library；隔离库内含偏好设置；相对路径按当前目录解析）。
+# shot 不靠固定等待：Debug 构建摆好画面、读库结果到齐、动画停下后写一个就绪标记文件（CUEPAD_SHOT_READY，见 DebugScene.signalReady），这里等它出现再截图。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -72,8 +73,22 @@ function run(argv) {
 JXA
 }
 
+# 等 App 写下就绪标记：最多 60 秒；进程先退出（崩溃）就不再等。
+wait_ready() {
+  local ready=$1 alive=$2 i
+  for i in $(seq 600); do
+    [ -f "$ready" ] && return 0
+    $alive || { echo "截图前 App 退出了" >&2; return 1; }
+    sleep 0.1
+  done
+  echo "60 秒内画面没有就绪（没有写下 ${ready}）" >&2
+  return 1
+}
+
 shot_mac() {
   mkdir -p "$(dirname "$out")"
+  local ready="$DERIVED/shot-ready"
+  rm -f "$ready"
   local exe="$app/Contents/MacOS/CuePad" pidfile="$DERIVED/shot-mac.pid" pid="" wid="" i
   # 上次被中断的截图留下的实例：只结束记录下的那个 PID，并确认它仍是这个产物目录里的 CuePad
   if [ -f "$pidfile" ]; then
@@ -87,7 +102,7 @@ shot_mac() {
   # 直接启动可执行文件以拿到确切 PID；不经 LaunchServices 激活，不抢当前焦点
   # 库与 Pi 目录都隔离：不碰真实资料库、不读 ~/.pi 的会话
   # （socket 路径受 sun_path 104 字节限制，放 /tmp）
-  CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library}")" \
+  CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library}")" CUEPAD_SHOT_READY="$ready" \
     PI_CODING_AGENT_DIR="$DERIVED/pi-agent" CUEPAD_PI_SOCKET_DIR="/tmp/cuepad-shot-$(id -u)" \
     "$exe" ${launch_args[@]+"${launch_args[@]}"} >"$DERIVED/shot-mac.log" 2>&1 &
   pid=$!
@@ -98,7 +113,7 @@ shot_mac() {
     sleep 0.1
   done
   [ -n "$wid" ] || { echo "10 秒内没有出现 CuePad 窗口" >&2; kill -TERM "$pid"; rm -f "$pidfile"; exit 1; }
-  sleep "${CUEPAD_SHOT_SETTLE:-1.5}" # 等数据读入与首帧：界面没有渲染完成的通知
+  wait_ready "$ready" "kill -0 $pid" || { kill -TERM "$pid" 2>/dev/null; rm -f "$pidfile"; exit 1; }
   screencapture -x -o -l "$wid" "$out"
   # SIGTERM 走应用的正常退出流程
   kill -TERM "$pid"
@@ -117,14 +132,18 @@ shot_sim() {
   fi
   xcrun simctl bootstatus "$device" -b >/dev/null
   xcrun simctl install "$device" "$app"
-  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library-$platform}")" \
+  local ready="$DERIVED/shot-ready-$platform"
+  rm -f "$ready"
+  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library-$platform}")" SIMCTL_CHILD_CUEPAD_SHOT_READY="$ready" \
     xcrun simctl launch "$device" "$BUNDLE_ID" ${launch_args[@]+"${launch_args[@]}"} >/dev/null
-  sleep "${CUEPAD_SHOT_SETTLE:-1.5}" # 等数据读入与首帧：simctl 没有渲染完成的通知
+  wait_ready "$ready" "sim_alive" || { xcrun simctl terminate "$device" "$BUNDLE_ID" 2>/dev/null; exit 1; }
   xcrun simctl io "$device" screenshot "$out" >/dev/null
   xcrun simctl terminate "$device" "$BUNDLE_ID"
   [ "$booted_here" = 0 ] || xcrun simctl shutdown "$device"
   echo "$out"
 }
+# 先取全文再找：pipefail 下 grep -q 提前退出会让前面的命令吃 SIGPIPE，整条判成失败
+sim_alive() { local list; list="$(xcrun simctl spawn "$device" launchctl list 2>/dev/null)"; [[ "$list" == *"UIKitApplication:$BUNDLE_ID"* ]]; }
 shot_ios() { shot_sim; }
 shot_ipad() { shot_sim; }
 

@@ -53,9 +53,7 @@ struct ProjectPage: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-            #if DEBUG
-            .onChange(of: board.arrangement != nil) { DebugScene.scrollIfNeeded(proxy) }
-            #endif
+            .debugScrollsToOlder(proxy, ready: board.arrangement != nil)
         }
         .onChange(of: active) { _, active in
             if !active { restingAgents = workspace.projectAgents(projectID, synced: sessions) }

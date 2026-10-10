@@ -223,9 +223,7 @@ struct CardTile: View {
         .contextMenu { CardActions(card: card) }
         .ideaDrag(card.id)
         .accessibilityElement(children: .combine)
-        #if DEBUG
-        .onAppear { PerfProbe.mark("content") }
-        #endif
+        .perfMark("content")
     }
 
     private func open() {

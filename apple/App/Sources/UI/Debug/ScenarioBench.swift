@@ -180,9 +180,9 @@ enum ScenarioBench {
             guard let id = await chats().last else { return }
             workspace.show(.session(id))
             try? await Task.sleep(for: .seconds(1.5))
-            hoverToggles = 0
+            DebugScene.hoverToggles = 0
             await sweep(rows: 14, columns: 3)
-            ScenarioBench.hoverTogglesSeen = hoverToggles
+            ScenarioBench.hoverTogglesSeen = DebugScene.hoverToggles
         }
 
         func resize() async {

@@ -143,13 +143,11 @@ private struct CardSearch: ViewModifier {
                     .searchFocused($focused)
                     .onAppear(perform: focusIfRequested)
                     .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
-                    #if DEBUG
                     .onAppear {
-                        guard DebugScene.activatesSearch(scope) else { return }
-                        query.text = DebugScene.searchText
+                        guard DebugHooks.preset.focusedSearch == (scope == .all ? .shelf : .project) else { return }
+                        query.text = DebugHooks.preset.searchText
                         focused = true
                     }
-                    #endif
             } else {
                 content
             }

@@ -82,6 +82,8 @@ struct CardEditorPage: View {
             }
         }
         .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { pageOrigin = $0 }
+        // 铺开到换成编辑器之前、缩回到纸隐去之前都在过渡
+        .debugSettling(isOpen ? !editorShown : !paperGone)
         .background {
             if data?.card.isTask == true {
                 Color.clear.observing(services.store, id: cardID, into: $taskDetail, onError: workspace.fail) { [cardID] in

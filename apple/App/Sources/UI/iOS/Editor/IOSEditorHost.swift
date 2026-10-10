@@ -39,14 +39,12 @@ struct IOSEditorHost: UIViewRepresentable {
         handle.view = view
         // 新建的空卡直接进入输入
         if initialText.isEmpty { DispatchQueue.main.async { view.becomeFirstResponder() } }
-        #if DEBUG
-        if let range = DebugScene.editorSelection {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        if let range = DebugHooks.preset.editorSelection {
+            DebugHooks.later(.milliseconds(500)) {
                 view.becomeFirstResponder()
                 view.selectedRange = range
             }
         }
-        #endif
         return view
     }
 

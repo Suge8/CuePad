@@ -49,13 +49,11 @@ struct ShelfScreen: View {
         .toolbarVisibility(navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
         .onAppear(perform: focusIfRequested)
         .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
-        #if DEBUG
         .onAppear {
-            guard DebugScene.activatesSearch(.all) else { return }
-            query.text = DebugScene.searchText
+            guard DebugHooks.preset.focusedSearch == .shelf else { return }
+            query.text = DebugHooks.preset.searchText
             searchFocused = true
         }
-        #endif
         .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
         .observing(services.store, into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
