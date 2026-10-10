@@ -6,8 +6,9 @@ import Foundation
 import SwiftUI
 
 /// 发给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上只有提示词发给 Agent（`CardMenu.handsToAgent`）。
+/// 会话用 Pi 自己的会话 id 认：会话结束后它还是同一个，同一个会话重新打开也不变（桥上的连接 id 含进程号，每次打开都是新的）。
 struct AgentTarget: Equatable {
-    var session: CuePi.PiSession.ID
+    var session: String
     var mode: DeliveryMode = .send
 }
 
@@ -22,65 +23,50 @@ extension Workspace {
             .sorted { !$0.state.isTurnRunning && $1.state.isTurnRunning }
     }
 
-    /// 当前生效的会话：用户选过或发过的（已结束时照样保留，界面写"已结束"，不悄悄换掉；同一个 Pi 会话重新打开了就接回新开的那个），
+    /// 当前生效的会话：用户选过或发过的（已结束时照样保留，界面写"已结束"，不悄悄换掉；同一个 Pi 会话重新打开了就是在线的那个），
     /// 否则本项目的会话——在线的优先，都结束了就是刚结束的那个（同样写"已结束"）；本项目一个都没有时为 nil。
     func agentTarget(for project: UUID?) -> AgentTarget? {
-        if let sendChoice {
-            if let live = current(sendChoice) { return live }
-            if services.pi.endedSessions[sendChoice.session] != nil { return sendChoice }
-        }
-        if let live = projectSessions(in: project).first { return AgentTarget(session: live.id) }
-        if let ended = endedSessions(in: project).first { return AgentTarget(session: ended.id) }
-        return nil
+        if let sendChoice { return sendChoice }
+        if let live = projectSessions(in: project).first { return AgentTarget(session: live.sessionID) }
+        guard let project else { return nil }
+        return endedTargets.first { $0.projectID == project }.map { AgentTarget(session: $0.sessionID) }
     }
 
-    /// 本次运行里结束了、也没有重新打开的本项目 Pi 会话，最近结束的在前。
-    private func endedSessions(in project: UUID?) -> [CuePi.PiSession] {
-        guard let project else { return [] }
-        let open = Set(services.pi.slots.map(\.sessionID))
-        return services.pi.endedSessions.values
-            .filter { sessionProjects[$0.id] == project && !open.contains($0.sessionID) }
-            .sorted { (endedOrder.firstIndex(of: $0.id) ?? -1) > (endedOrder.firstIndex(of: $1.id) ?? -1) }
+    /// 能选作发送目标的已结束会话：这个窗口打开后结束、也没有重新打开的，最近结束的在前。发给它们时在后台把会话恢复起来。
+    var endedTargets: [PiSessionState] { recentlyEnded.filter { liveSession($0.sessionID) == nil } }
+
+    /// 会话已结束、也没有重新打开：发送时先在后台唤醒它，发送钮的状态点写"已结束"。
+    func isEnded(_ target: AgentTarget) -> Bool { liveSession(target.session) == nil }
+
+    /// Pi 会话的显示名：在线的取桥上的，结束了的取同步记录里的（`recentlyEnded`）。
+    func sessionName(_ sessionID: String) -> String {
+        liveSession(sessionID)?.displayName ?? recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    /// 会话已结束、也没有重新打开：发不出去，发送钮写"<会话名> · 已结束"，点开改选。
-    func isEnded(_ target: AgentTarget) -> Bool { session(target.session) == nil }
-
-    /// 选过的会话现在指向谁：还活着就是它；已结束但同一个 Pi 会话（`sessionID`）重新打开了——新进程是新的 id——接回新开的那个；
-    /// 已结束且没有重开时为 nil。
-    private func current(_ target: AgentTarget) -> AgentTarget? {
-        guard session(target.session) == nil else { return target }
-        guard let ended = services.pi.endedSessions[target.session],
-              let reopened = services.pi.session(sessionID: ended.sessionID)
-        else { return nil }
-        return AgentTarget(session: reopened.id, mode: target.mode)
+    /// 完整说法："发给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在菜单项、提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
+    func action(for target: AgentTarget) -> String {
+        let name = sessionName(target.session)
+        return isEnded(target) ? "唤醒 Agent 会话「\(name)」并发送" : "发给 Agent 会话「\(name)」"
     }
 
-    /// Pi 会话的显示名：活着的会话，或本次运行里已结束的会话最后的样子。
-    func sessionName(_ id: CuePi.PiSession.ID) -> String {
-        (session(id) ?? services.pi.endedSessions[id]).map(\.displayName) ?? "Agent"
-    }
-
-    /// 完整说法："发给 Agent 会话「…」"，用在菜单项、提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
-    func action(for target: AgentTarget) -> String { "发给 Agent 会话「\(sessionName(target.session))」" }
-
-    /// 右键菜单里提示词的"发给 …"一项；会话已结束时写明并禁用（发了也只会报错）；本项目没有会话时是"交给 Agent"并禁用。
+    /// 右键菜单里提示词的"发给 …"一项；本项目没有会话时是"交给 Agent"并禁用。
     @ViewBuilder
     func sendButton(_ target: AgentTarget?, action: @escaping (AgentTarget) -> Void) -> some View {
-        if let target, !isEnded(target) {
+        if let target {
             Button(self.action(for: target), systemImage: "paperplane") { action(target) }
         } else {
             // 菜单项标签里的第二行 Text 是 macOS 菜单的副标题
             Button {} label: {
-                Text(target.map(self.action(for:)) ?? "交给 Agent")
-                Text(target == nil ? "本项目还没有 Agent 会话" : "已结束")
+                Text("交给 Agent")
+                Text("本项目还没有 Agent 会话")
             }
             .disabled(true)
         }
     }
 
-    func session(_ id: CuePi.PiSession.ID) -> CuePi.PiSession? {
-        services.pi.session(id: id)
+    /// 这个 Pi 会话此刻连着桥的那个进程；没有就是已结束。
+    func liveSession(_ sessionID: String) -> CuePi.PiSession? {
+        services.pi.session(sessionID: sessionID)
     }
 
     /// 桥上一个在线会话此刻显示的状态：与会话行同一条规则（`PiShown`），摘要与在路上的话取同步记录。
@@ -95,7 +81,11 @@ extension Workspace {
     func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) async -> Bool {
         let done = Dotted("已" + action(for: target), target.mode == .steer || target.mode == .followUp ? target.mode.label : nil)
         do {
-            try await services.send(stored, to: target.session, mode: target.mode, card: card)
+            if let live = liveSession(target.session) {
+                try await services.send(stored, to: live.id, mode: target.mode, card: card)
+            } else {
+                try await services.send(stored, toEnded: target.session, named: sessionName(target.session), card: card)
+            }
             sendChoice = AgentTarget(session: target.session)
             say(done)
             return true
@@ -115,22 +105,19 @@ extension Workspace {
     }
 }
 
-/// Pi 会话（在线与本次运行里已结束的）或项目目录绑定变化时，重算会话归属的项目、记下结束的先后。
+/// Pi 会话或项目目录绑定变化时，重算在线会话归属的项目；并跟随同步记录里的会话摘要与结束了的会话。
 struct SessionProjectsTracker: ViewModifier {
     let workspace: Workspace
 
     private struct Key: Equatable {
         var sessions: [String]
-        /// 已结束的单列：会话从在线变成结束时键必须变（混在一起时字符串可能不变，重算就不会触发）
-        var ended: Set<String>
         var directories: [UUID: String]?
     }
 
     func body(content: Content) -> some View {
         let pi = workspace.services.pi
         let key = Key(
-            sessions: pi.slots.map { "\($0.id) \($0.cwd.path)" }, ended: Set(pi.endedSessions.keys),
-            directories: workspace.catalog?.directories)
+            sessions: pi.slots.map { "\($0.id) \($0.cwd.path)" }, directories: workspace.catalog?.directories)
         content
             .task(id: key) { await workspace.refreshSessionProjects() }
     }

@@ -41,9 +41,6 @@ public final class PiBridge {
     public func session(id: PiSession.ID) -> PiSession? { slots.first { $0.id == id }?.session }
 
     @ObservationIgnored private let directory: URL
-    /// 本次运行里已结束的会话（最后一刻的快照），按 id。界面据此把还指向它的发送目标显示成"已结束"，而不是悄悄丢掉；
-    /// 同一个 Pi 会话重新打开会是新的 id（含进程号），从 `sessions` 里按 `sessionID` 找。
-    public private(set) var endedSessions: [PiSession.ID: PiSession] = [:]
     @ObservationIgnored private var links: [String: Link] = [:]       // socket 文件名（不含 .sock）→ 连接
     /// 没告别就断开的会话：断开可能先于进程退出被确认（强杀后进程还是僵尸），留着它的退出监视，退出时再删残留 socket
     @ObservationIgnored private var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
@@ -345,7 +342,6 @@ public final class PiBridge {
         }
         if let session = link.session {
             slots.removeAll { $0.id == session.id }
-            endedSessions[session.id] = session
             emit(.ended(session, reason: link.bye.map { .closed(reason: $0.reason, undelivered: $0.undelivered ?? []) } ?? .disconnected))
         }
         // /reload：同一进程在同一路径重新 listen。新文件的目录事件可能在这条连接还挂着时就被扫过（扫描跳过有连接的名字），

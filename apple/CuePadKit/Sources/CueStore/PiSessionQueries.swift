@@ -95,6 +95,14 @@ extension CueStore {
     return latest
   }
 
+  /// `host` 那台 Mac 上 `since` 之后结束的会话，最近结束的在前，至多 `limit` 个：Mac 的发送目标据此认出"刚结束的会话"，
+  /// 历史会话（结束时间早于 `since`）不在其中。
+  public func endedSessions(on host: String, since: Date, limit: Int) throws -> [PiSessionState] {
+    try select(
+      PiSessionState.self, where: "state = ? AND hostID = ? AND stateSince >= ?", [PiWorkState.ended.rawValue, host, since],
+      orderBy: "stateSince DESC, id", limit: limit)
+  }
+
   /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。
   /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。
   public func sessionFolders() throws -> [SessionFolder] {

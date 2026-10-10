@@ -169,8 +169,9 @@ struct RealPiTests {
 
     /// 刚用完的会话要立即进历史，不等下次启动扫描（会话目录可能在开始监听后才由 Pi 建出，见 HistoryIndexerTests）。
     /// 结束的会话仍可按 id 查到（界面据此显示"已结束"）。
-    @Test func endedSessionIsInHistoryRightAwayAndStaysLookupable() async throws {
+    @Test func endedSessionIsInHistoryRightAwayAndTheEndEventCarriesItsName() async throws {
         try await withRig { pi, bridge, s in
+            let ended = ChangeLog(bridge)
             let history = HistoryEventLog(PiHistoryIndexer(root: pi.paths.sessionsDirectory) { _ in nil })
             try await eventually("回填完成") { history.finishedBackfill }
 
@@ -182,7 +183,7 @@ struct RealPiTests {
                 history.updates.contains { $0.history.displayName == "记进历史" }
             }
             try await eventually("会话结束") { bridge.sessions.isEmpty }
-            #expect(bridge.endedSessions[s.id]?.displayName == "记进历史")
+            #expect(ended.ended.first?.0.displayName == "记进历史")
         }
     }
 

@@ -4,7 +4,7 @@
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
-| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`slots`（一个在线会话一格，格内的 `session` 原地更新）直接给界面观察，`session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）；`endedSessions` 留着本次运行里已结束会话的最后快照（按 id），界面据此把指向它的发送目标显示成"已结束" |
+| 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`slots`（一个在线会话一格，格内的 `session` 原地更新）直接给界面观察，`session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）；会话结束只经 `changes()` 的 `.ended` 报告（带最后一刻的快照），桥不留已结束会话——已结束的会话只在同步记录里（`PiSessionState`，状态 `ended`） |
 | Pi 集成 | `PiIntegration` | 检测 Pi（≥ 0.84.4）与集成状态，`install()`（新装/升级）：扩展与 skill 一起写（skill 是 `<Pi 目录>/skills/cuepad/SKILL.md`，与扩展同在 Pi 目录下，不写用户自己维护的 `~/.agents/skills`；正文写着 App 里 `cuepad` 的绝对路径，教 Agent 用 `cuepad show` 把文件发到手机，其余看 `--help`）；状态只有一份：任一个是别人的同名文件为 `foreign`（两样都不写），没装扩展为 `missing`，两样都是最新才是 `current`，其余（旧版、缺 skill、App 移动后路径变了）为 `outdated`；首次写入前 App 要先征得用户同意（拒绝时两样都不装），之后的升级由 App 静默完成 |
 | 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只认 `<会话目录>/<项目目录>/*.jsonl`（与 Pi 自己的会话列表一致，FireCode 子代理的 `subagents/` 不算）；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`），规则见下文"对话与摘要"；首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话，更早的只读摘要：逐行只找换行，只解码文件头、改名与第一条你的消息，最近一轮问答从文件尾往回解码到够用为止，得到的检查点与全读一样；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
 | 错误摘要 | `PiErrorSummary` | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |

@@ -135,7 +135,7 @@ struct CardEditorPage: View {
 
     /// 提示词卡上的"交给 Agent"：发给本项目当前的 Agent 会话（与提示词纸页同一个），提示词关联到它；没有会话时打开它的纸页去选。
     private func hand(_ prompt: Card) {
-        guard let target = workspace.agentTarget(for: prompt.projectID), !workspace.isEnded(target) else { return workspace.openCard = prompt.id }
+        guard let target = workspace.agentTarget(for: prompt.projectID) else { return workspace.openCard = prompt.id }
         let text = Outgoing.text(of: prompt), id = prompt.id
         Task { await workspace.send(text, to: target, card: id) }
     }

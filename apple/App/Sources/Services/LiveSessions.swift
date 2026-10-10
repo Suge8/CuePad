@@ -19,28 +19,38 @@ final class LiveSessions {
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
     private(set) var undelivered: [String: Int] = [:]
+    /// 这次运行里在这台 Mac 上结束的会话（运行之前就已结束的历史会话不在其中），最近结束的在前，只留最近的几个：
+    /// Mac 的发送目标认出"刚结束的会话"、给已结束的目标写会话名都读它。iOS 上没有。
+    private(set) var recentlyEnded: [PiSessionState] = []
+    private let launchedAt = Date()
+    private nonisolated static let endedWindow = 20
 
     /// 在线的会话（`items` 里没结束的）。
     var live: [PiSessionListItem] { items.filter { $0.state.state != .known(.ended) } }
 
-    /// 一次读到的：`current` 一页与会话总数。
+    /// 一次读到的：`current` 一页与会话总数；给了 `host`（Mac）时再加上那台 Mac 上 `since` 之后结束的会话。
     nonisolated struct Page: Sendable, Equatable {
         var items: [PiSessionListItem]
         var total: Int
+        var ended: [PiSessionState] = []
 
-        static func read(from store: isolated CueStore) throws -> Page {
-            Page(items: try store.piSessionPage(.current).items, total: try store.piSessionCount())
+        static func read(from store: isolated CueStore, endedOn host: String? = nil, since: Date = .now) throws -> Page {
+            Page(
+                items: try store.piSessionPage(.current).items, total: try store.piSessionCount(),
+                ended: try host.map { try store.endedSessions(on: $0, since: since, limit: LiveSessions.endedWindow) } ?? [])
         }
     }
 
     /// 跟随同步记录直到任务取消。依赖哪些表由读取定（`CueStore.observe(_:)`）。
-    func follow(_ store: CueStore) async throws {
-        for try await page in store.observe({ try Page.read(from: $0) }) { apply(page) }
+    func follow(_ store: CueStore, endedOn host: String? = nil) async throws {
+        let since = launchedAt
+        for try await page in store.observe({ try Page.read(from: $0, endedOn: host, since: since) }) { apply(page) }
     }
 
     func apply(_ page: Page) {
         if page.items != items { items = page.items }
         if page.total != total { total = page.total }
+        set(\.recentlyEnded, page.ended)
         let live = self.live
         set(\.waiting, live.filter(\.state.waitsForYou).count)
         set(\.recaps, Dictionary(live.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first })
@@ -59,7 +69,11 @@ extension AppServices {
     func startLiveSessions() {
         tasks.append(Task {
             do {
+                #if os(macOS)
+                try await liveSessions.follow(store, endedOn: hostID)
+                #else
                 try await liveSessions.follow(store)
+                #endif
             } catch {
                 reportIssue(.syncUnavailable("读取在线会话失败，会话状态不再更新：\(error)"))
             }
