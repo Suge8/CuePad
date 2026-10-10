@@ -413,7 +413,7 @@ enum TaskMetrics {
 /// 完成是对勾；没完成的是一个实线圈，进行中左半填满，待办空心——这个形状只随状态变，有没有下级、下级做了多少都不换掉它。
 /// 有下级、还没全做完时进度不画进圈里，在圈下面一条细的横条（`TaskProgressBar`）：做完的下级占多少填多少，空槽看得见；
 /// 全做完不画（`TaskRing`）。圈里不画扇形或楔形：小比例时一根细楔像表盘指针、读成在计时；也不在圈外描弧：小尺寸下那就是
-/// 系统的加载转圈。圈小于 `TaskProgressBar.minRing`（Mac 面板）时不画条：十来点宽的条只是一小撇，进度看元信息那一行。
+/// 系统的加载转圈。条只在 `TaskProgressBar.shows(ringSize:)` 时画（Mac 不画、iPhone 上小圈不画），进度看元信息那一行。
 /// 进度条叠在圈下（落在行的第二行左边、元信息那一行旁边），不占行高；条是次要墨色，不与圈连成一道下划线。
 struct TaskRingView: View {
     let status: TaskStatus?
@@ -439,7 +439,7 @@ struct TaskRingView: View {
         }
         .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
         .overlay(alignment: .bottom) {
-            if !finished, size >= TaskProgressBar.minRing, case .progress(let done, let total) = ring {
+            if !finished, TaskProgressBar.shows(ringSize: size), case .progress(let done, let total) = ring {
                 TaskProgressBar(done: done, total: total)
                     .frame(width: size * 0.88)
                     .offset(y: size * 0.24 + TaskProgressBar.height)
@@ -471,8 +471,15 @@ struct TaskProgressBar: View {
     @Environment(\.palette) private var palette
 
     static let height: CGFloat = 2
-    /// 圈小于这么大时不画条。
-    static let minRing: CGFloat = 16
+    /// 圈下画不画条。Mac 上不画：Mac 的圈最大 20 点，条只有十来点宽，像圈下一小块污点；进度在旁边那行"子任务 1/2"里已经写着。
+    /// iPhone 上圈小于 16 点时同理不画。
+    static func shows(ringSize: CGFloat) -> Bool {
+        #if os(macOS)
+        false
+        #else
+        ringSize >= 16
+        #endif
+    }
 
     var body: some View {
         Capsule().fill(palette.ink3.opacity(0.4))

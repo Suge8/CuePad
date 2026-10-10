@@ -87,7 +87,7 @@ struct Callout<Accessory: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: symbol).foregroundStyle(tint).accessibilityHidden(true)
-                Text(text).foregroundStyle(palette.ink)
+                Text(Widow.joined(text)).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }

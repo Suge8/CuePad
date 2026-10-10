@@ -84,8 +84,11 @@ struct TaskPicker: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
             }
+            // 列表滚到屏幕下沿时在主屏指示条那一段淡出，不被圆角硬裁（同任务浮窗）
+            .fadesUnderBars(bottom: true)
         }
-        .presentationDetents([.medium, .large])
+        // 一开就满高，同任务浮窗：不满高的系统浮窗是悬空的，下沿圆角会切掉最后一行、露出背后的纸页
+        .presentationDetents([.large])
     }
     #else
     /// Mac 与手机同一种质感：标题居中、右上一颗关闭钮（与手机同一个叉，Esc 也关），搜索占满一行，"新建任务…"单独一张纸，
@@ -165,9 +168,11 @@ struct TaskPicker: View {
     }
 
     private func row(_ task: Card) -> some View {
-        let parent = task.parentID.flatMap { id in groups?.lazy.flatMap(\.tasks).first { $0.id == id } }
+        let parent = task.parentID.flatMap(listed)
         return Button { attach(to: task.id) } label: {
             HStack(spacing: 10) {
+                // 子任务按层缩进（上级也在列表里时）；上级没列出来（搜索筛掉了）时靠下面那行"在「…」下"
+                if depth(of: task) > 0 { Spacer().frame(width: CGFloat(depth(of: task)) * Self.indent) }
                 TaskRingView(status: task.status, ring: .plain, done: false, size: 16)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(task.title).font(Typography.body).foregroundStyle(palette.ink).lineLimit(2)
@@ -178,6 +183,21 @@ struct TaskPicker: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+    }
+
+    /// 子任务每深一层缩进多少。
+    private static let indent: CGFloat = 20
+
+    private func listed(_ id: UUID) -> Card? { groups?.lazy.flatMap(\.tasks).first { $0.id == id } }
+
+    /// 在列表里能找到的上级有几层。
+    private func depth(of task: Card) -> Int {
+        var depth = 0, parent = task.parentID.flatMap(listed)
+        while let card = parent, depth < Card.maxDepth {
+            depth += 1
+            parent = card.parentID.flatMap(listed)
+        }
+        return depth
     }
 
     private func attach(to task: UUID) {
