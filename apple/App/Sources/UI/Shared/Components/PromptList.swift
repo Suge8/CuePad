@@ -12,9 +12,11 @@ struct PromptList: View {
     let write: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @Environment(\.cardAgents) private var agents
 
     var body: some View {
         let prompts = detail?.prompts ?? []
+        let primary = detail?.primaryPrompt(agents: agents)
         VStack(alignment: .leading, spacing: TaskMetrics.cardGap) {
             HStack(alignment: .firstTextBaseline) {
                 Text("提示词").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
@@ -26,7 +28,7 @@ struct PromptList: View {
             }
             ForEach(prompts) { prompt in
                 PromptCard(
-                    prompt: prompt, state: detail?.state(of: prompt) ?? .unsent, primary: prompt.id == detail?.primaryPrompt, open: { open(prompt) }, hand: { hand(prompt) })
+                    prompt: prompt, state: detail?.state(of: prompt, agents: agents) ?? .unsent, primary: prompt.id == primary, open: { open(prompt) }, hand: { hand(prompt) })
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
             Button(action: write) {

@@ -46,6 +46,8 @@ struct IOSRoot: View {
             .panel(item: Binding(get: { workspace.attaching }, set: { workspace.attaching = $0 })) { TaskPicker(idea: $0) }
         }
         .overlay(alignment: .top) { NoticeBanner() }
+        // 卡与行上"交给了哪个会话"的状态点读窗口里的那一份（`Workspace.agentLinks`）
+        .modifier(WindowCardAgents(workspace: workspace))
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
         .environment(\.zoomNamespace, zoom)
         .modifier(PaletteProvider())
@@ -57,6 +59,8 @@ struct IOSRoot: View {
             navigation.layout = size == .regular ? .split : .tabs
         }
         .task(id: workspace.catalogAttempt) { await workspace.observeCatalog() }
+        .task { await workspace.observeAgentLinks() }
+        .task { await workspace.observeFolderGuide() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }

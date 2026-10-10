@@ -220,7 +220,7 @@ final class AppServices {
 
     /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
     func outcome(of request: UUID) async throws -> DeliveryRequest {
-        for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(request) }) {
+        for try await current in store.observe { try $0.deliveryRequest(request) } {
             guard let current else { throw CueStoreError.notFound }
             if !current.isOpen { return current }
         }

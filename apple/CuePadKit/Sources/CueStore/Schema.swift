@@ -43,6 +43,11 @@ enum Schema {
     CREATE INDEX piSessionStates_sessionID ON piSessionStates(sessionID);
     CREATE INDEX cards_deletedAt ON cards(deletedAt) WHERE deletedAt IS NOT NULL;
     """,
+    // 22：任务、交给了会话的卡只占卡片的一小部分：列任务、数任务、找进行中的任务与交给的会话不必逐张翻全部卡片（一张一页）
+    """
+    CREATE INDEX cards_todoAt ON cards(todoAt) WHERE todoAt IS NOT NULL;
+    CREATE INDEX cards_piSessionID ON cards(piSessionID) WHERE piSessionID IS NOT NULL;
+    """,
   ]
 
   private static let previews = """
@@ -75,6 +80,8 @@ enum Schema {
     CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);
     CREATE INDEX cards_parentID ON cards(parentID);
     CREATE INDEX cards_deletedAt ON cards(deletedAt) WHERE deletedAt IS NOT NULL;
+    CREATE INDEX cards_todoAt ON cards(todoAt) WHERE todoAt IS NOT NULL;
+    CREATE INDEX cards_piSessionID ON cards(piSessionID) WHERE piSessionID IS NOT NULL;
 
     CREATE TABLE sendRecords (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL,

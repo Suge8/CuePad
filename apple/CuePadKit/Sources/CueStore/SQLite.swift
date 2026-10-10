@@ -92,9 +92,16 @@ struct Changes {
 final class SQLite {
   private var handle: OpaquePointer?
   private let changeLog = ChangeLog()
-  /// 编译好的语句，按 SQL 文本复用。用时取出、用完放回：同一条 SQL 在回调里被重入时，重入的那次临时编译一条，不共用游标。
-  private var statements: [String: OpaquePointer] = [:]
+  /// 编译好的语句，按 SQL 文本复用，连同它读到的表。用时取出、用完放回：同一条 SQL 在回调里被重入时，重入的那次临时编译一条，不共用游标。
+  private var statements: [String: Compiled] = [:]
   private static let statementLimit = 128
+  /// `tracking` 期间读到的表。
+  private var tracked: Set<Table>?
+
+  private struct Compiled {
+    var statement: OpaquePointer
+    var reads: Set<Table>
+  }
 
   init(path: String) throws {
     guard sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else {
@@ -111,7 +118,7 @@ final class SQLite {
   }
 
   deinit {
-    for statement in statements.values { sqlite3_finalize(statement) }
+    for compiled in statements.values { sqlite3_finalize(compiled.statement) }
     sqlite3_close_v2(handle)
   }
 
@@ -125,8 +132,10 @@ final class SQLite {
   }
 
   func query<T>(_ sql: String, _ arguments: [any SQLBindable] = [], _ map: (Row) throws -> T) throws -> [T] {
-    let statement = try checkOut(sql)
-    defer { checkIn(statement, sql) }
+    let compiled = try checkOut(sql)
+    let statement = compiled.statement
+    tracked?.formUnion(compiled.reads)
+    defer { checkIn(compiled, sql) }
     for (index, argument) in arguments.enumerated() {
       let position = Int32(index + 1)
       switch argument.sqlValue {
@@ -171,25 +180,49 @@ final class SQLite {
     }
   }
 
-  private func checkOut(_ sql: String) throws -> OpaquePointer {
+  /// 取出缓存的语句；没有就编译，同时由授权回调记下它读哪些表（只在编译时回调，缓存命中不再付出）。
+  private func checkOut(_ sql: String) throws -> Compiled {
     if let cached = statements.removeValue(forKey: sql) { return cached }
+    let log = ReadLog()
+    sqlite3_set_authorizer(
+      handle,
+      { context, action, table, _, _, _ in
+        if action == SQLITE_READ, let table, let known = Table(rawValue: String(cString: table)) {
+          Unmanaged<ReadLog>.fromOpaque(context!).takeUnretainedValue().tables.insert(known)
+        }
+        return SQLITE_OK
+      }, Unmanaged.passUnretained(log).toOpaque())
+    defer { sqlite3_set_authorizer(handle, nil, nil) }
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else { throw error(sql) }
-    return statement
+    return Compiled(statement: statement, reads: log.tables)
   }
 
-  private func checkIn(_ statement: OpaquePointer, _ sql: String) {
-    sqlite3_reset(statement)
-    sqlite3_clear_bindings(statement)
+  private func checkIn(_ compiled: Compiled, _ sql: String) {
+    sqlite3_reset(compiled.statement)
+    sqlite3_clear_bindings(compiled.statement)
     if statements.count >= Self.statementLimit, let evicted = statements.keys.first {
-      sqlite3_finalize(statements.removeValue(forKey: evicted))
+      sqlite3_finalize(statements.removeValue(forKey: evicted)?.statement)
     }
-    if let existing = statements.updateValue(statement, forKey: sql) { sqlite3_finalize(existing) }
+    if let existing = statements.updateValue(compiled, forKey: sql) { sqlite3_finalize(existing.statement) }
+  }
+
+  /// 执行 `body`，并给出它经 `query` 读到的表（含子查询、连接）。读一次是在持有连接的 actor 上同步完成的，期间没有别的写入。
+  func tracking<T>(_ body: () throws -> T) rethrows -> (value: T, reads: Set<Table>) {
+    tracked = []
+    defer { tracked = nil }
+    let value = try body()
+    return (value, tracked ?? [])
   }
 
   private func error(_ sql: String) -> SQLiteError {
     SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql)
   }
+}
+
+/// 语句编译时授权回调记下的读表。
+private final class ReadLog: @unchecked Sendable {
+  var tables: Set<Table> = []
 }
 
 /// 更新钩子只在持有连接的 actor 上、语句执行期间被调用，无并发访问。

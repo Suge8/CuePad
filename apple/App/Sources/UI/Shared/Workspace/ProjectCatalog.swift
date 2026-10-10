@@ -8,13 +8,17 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
     var projects: [Project]
     /// 键为 nil 的是未分类。
     var cardCounts: [UUID?: Int]
-    /// 未完成的顶层任务数（`CueStore.taskCounts`），键同上。
-    var openTasks: [UUID?: Int]
+    /// 各项目与未分类的顶层任务数（`CueStore.taskCounts`，没有任务的不在里面），键同上。给用户看的任务数只读这里。
+    var taskCounts: [UUID?: TaskCounts]
     var directories: [UUID: String]
     /// 各台 Mac 上的目录绑定（同步记录，本机的也在里面）：手机据此知道项目绑在哪台 Mac 的哪个文件夹，项目菜单与新会话落点都读它。
     var bindings: [DirectoryBinding]
 
-    static let tables: Set<Table> = [.projects, .cards, .projectDirectories, .directoryBindings]
+
+    /// 未完成的顶层任务数，键同上。
+    var openTasks: [UUID?: Int] { taskCounts.mapValues(\.open) }
+    /// 全部项目与未分类的顶层任务数。
+    var allTasks: TaskCounts { taskCounts.values.reduce(.zero, +) }
 
     func project(_ id: UUID?) -> Project? {
         id.flatMap { id in projects.first { $0.id == id } }
@@ -25,7 +29,7 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
         return ProjectCatalog(
             projects: try store.projects(),
             cardCounts: Dictionary(uniqueKeysWithValues: summaries.map { ($0.projectID, $0.cardCount) }),
-            openTasks: try store.taskCounts().mapValues(\.open),
+            taskCounts: try store.taskCounts(),
             directories: try store.projectDirectories(),
             bindings: try store.directoryBindings())
     }

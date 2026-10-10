@@ -21,11 +21,17 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             return session.waitsForYou || session.state == .known(.error) ? 0 : session.isWorking ? 1 : 2
         }
 
-        static func read(_ task: Card, projects: [UUID: Project], from store: isolated CueStore) throws -> Row {
-            let item = try task.piSessionID.flatMap {
-                try store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: $0))).items.first
-            }
-            return Row(task: task, project: task.projectID.flatMap { projects[$0] }, session: item?.state, delivery: item?.delivery)
+        /// 会话按 Pi 的会话 id 取自一次批量读（`CueStore.piSessions(sessionIDs:)`），不一行读一次。
+        init(_ task: Card, projects: [UUID: Project], sessions: [String: PiSessionListItem]) {
+            let item = task.piSessionID.flatMap { sessions[$0] }
+            self.init(task: task, project: task.projectID.flatMap { projects[$0] }, session: item?.state, delivery: item?.delivery)
+        }
+
+        init(task: Card, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?) {
+            self.task = task
+            self.project = project
+            self.session = session
+            self.delivery = delivery
         }
     }
 
@@ -46,23 +52,23 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 两组的计数（顶层任务数，`CueStore.taskCounts` 一处定义）：任务页与面板的分组标题与"最近完成"、书架的"任务"一行、Mac 工具栏任务钮都读它。
     var counts: TaskCounts
 
-    /// 看板要观察的表。
-    static let tables: Set<Table> = [.cards, .projects, .piSessionStates, .deliveryRequests]
 
     static func read(from store: isolated CueStore) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
-        func row(_ task: Card) throws -> Row { try Row.read(task, projects: projects, from: store) }
         // 层级限制按库里全部任务（含已完成）算：与 Store 写入时的校验同一口径
         let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
         let tree = TaskTree(all.filter { $0.status != .done }, all: all)
-        let rows = Dictionary(uniqueKeysWithValues: try tree.ordered.map { ($0.id, try row($0)) })
-        let roots = tree.roots.compactMap { rows[$0] }
         let listed = Set(all.map(\.id))
         let done = all.filter { $0.status == .done && !($0.parentID.map(listed.contains) ?? false) }
             .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+            .prefix(doneLimit)
+        let sessions = try store.piSessions(sessionIDs: (tree.ordered + done).compactMap(\.piSessionID))
+        func row(_ task: Card) -> Row { Row(task, projects: projects, sessions: sessions) }
+        let rows = Dictionary(uniqueKeysWithValues: tree.ordered.map { ($0.id, row($0)) })
+        let roots = tree.roots.compactMap { rows[$0] }
         return TaskBoard(
             tree: tree, inProgress: roots.filter { $0.task.status == .inProgress }, todo: roots.filter { $0.task.status == .todo },
-            done: try done.prefix(doneLimit).map(row), rows: rows, children: try store.childMarks(), counts: try counts(from: store))
+            done: done.map(row), rows: rows, children: try store.childMarks(), counts: try counts(from: store))
     }
 
     /// 书架"正在推进"：列出的行，加上放不下的还有几项（纸底写"还有 N 项"）。
@@ -73,31 +79,25 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
     /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress` 同一批，子任务跟着上级），先看交给的 Agent 在怎样——
     /// 等你确认、出错的在前，正在干活的其次，别的最后——同档最近开始的在前，再同的按原来的先后；取前 `limit` 条，其余数个数。
+    /// 排序要看每条任务的会话状态，所以会话对全部候选一次读出（进行中的任务不多），不是逐条读。
     static func active(limit: Int, from store: isolated CueStore) throws -> Active {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
-        let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
-        let tree = TaskTree(all.filter { $0.status != .done }, all: all)
-        let rows = try tree.roots.compactMap(tree.task).filter { $0.status == .inProgress }.map { try Row.read($0, projects: projects, from: store) }
-        let ordered = rows.enumerated().sorted { a, b in
-            if a.element.attention != b.element.attention { return a.element.attention < b.element.attention }
-            let (started, other) = (a.element.task.startedAt ?? .distantPast, b.element.task.startedAt ?? .distantPast)
-            return started != other ? started > other : a.offset < b.offset
-        }.map(\.element)
+        let started = try store.startedTasks(topLevelOnly: true)
+        let sessions = try store.piSessions(sessionIDs: started.compactMap(\.piSessionID))
+        let rows = started.map { Row($0, projects: projects, sessions: sessions) }
+        // `startedTasks` 已按最近开始排好（同刻按原来的先后）：只按档排，同档保持这个顺序
+        let ordered = rows.enumerated().sorted { ($0.element.attention, $0.offset) < ($1.element.attention, $1.offset) }.map(\.element)
         return Active(rows: Array(ordered.prefix(limit)), more: max(0, ordered.count - limit))
     }
 
     /// 各项目的进行中任务，最近开始的在前（项目的"此刻"一行，`ProjectNow`）：一次查询，按项目归拢。
     static func leading(from store: isolated CueStore) throws -> [UUID: [ProjectNow.InProgress]] {
         var result: [UUID: [ProjectNow.InProgress]] = [:]
-        for task in try started(from: store) {
+        for task in try store.startedTasks() {
             guard let project = task.projectID else { continue }
             result[project, default: []].append(ProjectNow.InProgress(id: task.id, title: task.title.textGlyphs))
         }
         return result
-    }
-
-    private static func started(from store: isolated CueStore) throws -> [Card] {
-        try store.tasks(.inProgress).flatMap(\.tasks).sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
     }
 
     /// 全部项目的顶层任务计数（回收站里的项目不算）。

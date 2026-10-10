@@ -211,7 +211,7 @@ import Testing
       """
       ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews;
       ALTER TABLE piMessages DROP COLUMN tools; ALTER TABLE piMessages ADD COLUMN toolCount INTEGER NOT NULL DEFAULT 0;
-      DROP INDEX piSessionStates_sessionID; DROP INDEX cards_deletedAt; PRAGMA user_version = 17;
+      DROP INDEX piSessionStates_sessionID; DROP INDEX cards_deletedAt; DROP INDEX cards_todoAt; DROP INDEX cards_piSessionID; PRAGMA user_version = 17;
       """)
 
     let upgraded = try CueStore(url: fixture.url)
@@ -224,7 +224,7 @@ import Testing
   }
 
   /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
-  @Test(arguments: [(22, CueStoreError.unsupportedSchemaVersion(22)), (16, .schemaTooOld(16))])
+  @Test(arguments: [(23, CueStoreError.unsupportedSchemaVersion(23)), (16, .schemaTooOld(16))])
   func libraryFromAnotherSchemaVersionIsRefused(version: Int, error: CueStoreError) throws {
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

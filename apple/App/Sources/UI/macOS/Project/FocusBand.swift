@@ -1,7 +1,6 @@
 #if os(macOS)
 import CuePi
 import CueStore
-import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
 /// 任务与 Agent：本项目任务（前几条没做完的顶层任务连同子任务，可拖动、缩进，同任务面板；没列出的与已完成的在底部写个数）+ 本项目的 Agent 会话。介绍在页头。
@@ -157,7 +156,6 @@ nonisolated struct ProjectSessions: Sendable, Equatable {
     var undelivered: [String: Int]
     var bindings: [DirectoryBinding]
 
-    static let tables: Set<Table> = [.piSessionStates, .deliveryRequests, .directoryBindings]
 
     static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectSessions {
         let items = try store.piSessionPage(PiSessionQuery(scope: .live, project: project, limit: .max)).items

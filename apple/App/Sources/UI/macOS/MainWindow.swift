@@ -156,7 +156,7 @@ private struct PageStack: View {
     }
 
     @ViewBuilder private func content(_ page: Workspace.Page) -> some View {
-        LinksEnvironment { pageView(page) }
+        pageView(page).modifier(WindowCardAgents(workspace: workspace))
     }
 
     @ViewBuilder private func pageView(_ page: Workspace.Page) -> some View {
@@ -203,14 +203,6 @@ private struct PageStackLayout: Layout {
 
     func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGFloat? { nil }
     func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGFloat? { nil }
-}
-
-/// 页里的卡与行读"交给了哪个会话"：整个窗口一份（`Workspace.agentLinks`），在这里放进环境，页面不各自读。
-private struct LinksEnvironment<Content: View>: View {
-    @ViewBuilder let content: Content
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View { content.environment(\.cardAgents, workspace.agentLinks) }
 }
 
 /// 工具栏最左：侧栏钮，侧栏收起时后面跟着项目切换。同一个工具栏项里增减（增删工具栏项会重排整条工具栏）。
