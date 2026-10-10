@@ -9,14 +9,9 @@ struct AgentPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var list: PiSessionList?
-    @State private var query = ""
+    @State private var model = AgentListModel()
     @State private var filter: UUID?
-    @State private var limit = PiSessionList.pageSize
     @State private var starting = false
-    @State private var confirmingEnd: PiSessionState?
-    @State private var renaming: PiSessionState?
-    @State private var reloadOpen = false
 
     /// 列表的宽度：一行读得完，不至于横跨整个大窗口。
     private static let width: CGFloat = 720
@@ -25,7 +20,7 @@ struct AgentPage: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                 topRow.padding(.bottom, 16)
-                if let list { sessions(list) }
+                if let list = model.list { sessions(list) }
             }
             .padding(.horizontal, Spacing.page).padding(.vertical, Spacing.pageTop)
             .frame(maxWidth: Self.width)
@@ -33,16 +28,7 @@ struct AgentPage: View {
         }
         .fadesUnderBars()
         .background(palette.desk)
-        .environment(\.searchHighlight, query)
-        .onChange(of: query) { limit = PiSessionList.pageSize }
-        .onChange(of: filter) { limit = PiSessionList.pageSize }
-        .renameSession($renaming)
-        .endSession($confirmingEnd)
-        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects, .directoryBindings],
-                   id: PiSessionList.Key(filter: .init(text: query, project: filter), limit: limit),
-                   into: $list, onError: workspace.fail) { [query, filter, limit] store in
-            try PiSessionList.read(text: query, project: filter, historyLimit: limit, from: store)
-        }
+        .agentList(model, filter: filter)
     }
 
     /// 顶上一排：左边按项目筛（全部 + 在 Mac 上绑了文件夹的项目），中间搜索，右边新会话。
@@ -51,9 +37,9 @@ struct AgentPage: View {
             filterMenu
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3).accessibilityHidden(true)
-                TextField(searchPrompt, text: $query).textFieldStyle(.plain)
-                if !query.isEmpty {
-                    Button("清除", systemImage: "xmark.circle.fill") { query = "" }
+                TextField(searchPrompt, text: $model.query).textFieldStyle(.plain)
+                if !model.query.isEmpty {
+                    Button("清除", systemImage: "xmark.circle.fill") { model.query = "" }
                         .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink3)
                 }
             }
@@ -72,7 +58,7 @@ struct AgentPage: View {
     }
 
     private var filterMenu: some View {
-        let projects = (workspace.catalog?.projects ?? []).filter { list?.projects.contains($0.id) == true || $0.id == filter }
+        let projects = model.filterable(in: workspace.catalog, current: filter)
         let current = workspace.catalog?.project(filter)
         return Menu {
             Picker("按项目看", selection: $filter) {
@@ -103,28 +89,27 @@ struct AgentPage: View {
             if !list.now.isEmpty {
                 title("现在")
                 card {
-                    ForEach(PiNowRow.rows(list.now, state: \.state)) { nowRow in
+                    ForEach(list.nowRows) { nowRow in
                         switch nowRow {
                         case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
                         case .reload(let items):
-                            PiReloadFold(count: items.count, expanded: $reloadOpen, style: .page)
+                            PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
                                 .padding(.horizontal, 12).padding(.vertical, 10)
-                            if reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
+                            if model.reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
                         }
                     }
                 }
             }
-            let runs = PiHistorySection.split(list.ended, date: \.state.stateSince, now: .now)
-            ForEach(Array(runs.enumerated()), id: \.element.section) { index, run in
+            ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                 if index == 0 { title("历史") }
                 Text(run.section.title).font(Typography.label).foregroundStyle(palette.ink3)
                     .padding(.horizontal, 4).padding(.top, index == 0 ? 0 : 14).padding(.bottom, 6)
                 card { ForEach(run.items) { row($0, filtered: filtered, end: nil) } }
             }
-            if list.loaded < list.total {
+            if model.hasMore {
                 // 滑到这里才读下一页
                 Spinner(.small).frame(maxWidth: .infinity).padding(16)
-                    .task(id: list.loaded) { limit = list.loaded + PiSessionList.pageSize }
+                    .task(id: list.loaded) { model.loadMore() }
             }
         }
     }
@@ -153,23 +138,25 @@ struct AgentPage: View {
             .contextMenu {
                 MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {
-                    Button("重命名…", systemImage: "pencil") { renaming = session }
+                    Button("重命名…", systemImage: "pencil") { model.renaming = session }
                 }
                 if endable {
-                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = session }
+                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { model.confirmingEnd = session }
                 }
             }
     }
 
     @ViewBuilder private var empty: some View {
-        if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+        let project = filter.flatMap { workspace.catalog?.project($0) }
+        switch model.empty(filtering: project, hasFolder: filter.map(workspace.hasFolder) ?? true) {
+        case .noMatch(let query):
             EmptyState.noMatch(query)
-        } else if let filter, let project = workspace.catalog?.project(filter), !workspace.hasFolder(filter) {
+        case .needsFolder(let project):
             EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
                 ProjectFolderGuide(project: project, guide: workspace.folderGuide)
             }
-        } else {
-            EmptyState(mascot: .empty, title: filter == nil ? "还没有 Agent 会话" : "这个项目还没有 Agent 会话",
+        case .none(let inProject):
+            EmptyState(mascot: .empty, title: inProject ? "这个项目还没有 Agent 会话" : "还没有 Agent 会话",
                        message: "在终端运行 pi，或点右上角开一个新会话") { EmptyView() }
         }
     }

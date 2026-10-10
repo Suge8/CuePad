@@ -42,6 +42,16 @@ extension CueStore {
     ) { Int($0.int(0)) } ?? 0
   }
 
+  /// 回收站里每个项目带进来的卡片数（项目被删后其下的卡片都看不见，含先前单独删除的）：一次查询，没有卡片的项目不在结果里。
+  public func trashedProjectCardCounts() throws -> [UUID: Int] {
+    Dictionary(uniqueKeysWithValues: try db.query(
+      """
+      SELECT projectID, COUNT(*) FROM cards
+      WHERE NOT (\(cardVisible)) AND projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL) GROUP BY projectID
+      """
+    ) { ($0.uuid(0), Int($0.int(1))) })
+  }
+
   /// 回收站中的项目，最近删除的在前。
   public func trashedProjects() throws -> [Project] {
     try select(Project.self, where: "deletedAt IS NOT NULL", orderBy: "deletedAt DESC, id")

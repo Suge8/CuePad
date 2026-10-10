@@ -63,10 +63,9 @@ nonisolated struct TrashSummary: Sendable {
     var count: Int { projects.count + cards.count }
 
     static func read(from store: isolated CueStore) throws -> TrashSummary {
-        TrashSummary(
-            projects: try store.trashedProjects().map {
-                TrashItem(kind: .project($0, cards: try store.search(SearchQuery(projects: [$0.id], inTrash: true), limit: 0).totalCards))
-            },
+        let counts = try store.trashedProjectCardCounts()
+        return TrashSummary(
+            projects: try store.trashedProjects().map { TrashItem(kind: .project($0, cards: counts[$0.id] ?? 0)) },
             cards: try store.trashedCards().map { TrashItem(kind: .card($0)) })
     }
 }
