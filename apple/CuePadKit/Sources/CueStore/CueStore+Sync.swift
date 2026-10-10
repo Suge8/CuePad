@@ -187,7 +187,8 @@ extension CueStore {
           failures.append(RemoteFailure(recordName: change.recordName, message: "\(error)"))
         }
       }
-      if changes.contains(where: \.touchesCards) { try repairCardTree() }
+      let cards = Set(changes.compactMap(\.cardID))
+      if !cards.isEmpty { try repairCardTree(touching: cards) }
       if changes.contains(where: \.touchesLaunches) { try claimLaunchedCards() }
     }
     return failures + (try removeFiles(of: removedHashes))
@@ -203,10 +204,11 @@ extension RemoteChange {
     }
   }
 
-  fileprivate var touchesCards: Bool {
+  /// 这条变更涉及的卡片 id；不是卡片的变更为 nil。
+  fileprivate var cardID: UUID? {
     switch self {
-    case .save(let row, _): row.table == .cards
-    case .delete(let key): key.table == .cards
+    case .save(let row, _): row.table == .cards ? UUID(uuidString: row.id) : nil
+    case .delete(let key): key.table == .cards ? UUID(uuidString: key.id) : nil
     }
   }
 
@@ -331,9 +333,9 @@ extension CueStore {
 
   /// 卡片层级在远端变更之后仍要成立（见 `CardLinks.repairs`）；改写的卡片会再推送，让各设备收敛。
   /// 修改时间至少比现有的晚一毫秒：刚收下的远端版本可能带着比本机时钟更晚的时间，改写要算作更新的版本。
-  private func repairCardTree() throws {
+  private func repairCardTree(touching changed: Set<UUID>) throws {
     let now = Date.stamp
-    for (id, link) in try CardLinks(db).repairs() {
+    for (id, link) in try CardLinks(db).repairs(touching: changed) {
       try db.run(
         "UPDATE cards SET parentID = ?, projectID = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ?", [link.parent, link.project, now, id])
     }

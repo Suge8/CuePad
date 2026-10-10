@@ -398,9 +398,8 @@ extension Card: Record {
     "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt",
   ]
   var bindings: [any SQLBindable] {
-    let variables = try! JSONEncoder.sorted.encode(variableValues)
-    return [
-      id, projectID, body, isPinned, String(decoding: variables, as: UTF8.self), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
+    [
+      id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
       parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt,
     ]
   }
@@ -449,14 +448,6 @@ extension PiSession: Record {
     self.init(
       id: row.text(0), path: row.text(1), cwd: row.text(2), title: row.text(3),
       lastActivityAt: row.date(4))
-  }
-}
-
-extension JSONEncoder {
-  fileprivate static var sorted: JSONEncoder {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = .sortedKeys
-    return encoder
   }
 }
 

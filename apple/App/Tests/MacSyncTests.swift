@@ -471,7 +471,7 @@ struct MacSyncTests {
         _ = try await services.store.requestDelivery(
             "hi", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
         while let next = await waiting.next(), next == nil {}
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(2)))
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
     }
 
     @Test func 连接测试请求立即完成_不碰Pi_不写发送记录() async throws {
