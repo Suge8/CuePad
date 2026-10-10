@@ -125,6 +125,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 跟着焦点、带动画：UIKit 文字区拿到焦点时的那次更新不带动画，直接读焦点时展开会一帧跳到位
     @State private var focused = false
+    @State private var appeared = false
     @State private var source: ComposerSource?
     @State private var previewing: Outbox?
     /// 斜杠命令面板里高亮的那一行，与按过 Esc 收起面板时的那段文字（文字再变就又弹出）。
@@ -223,7 +224,12 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .onChange(of: focus.wrappedValue, initial: true) { _, now in
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now }
+            // 出现的头几百毫秒里到位的焦点（Mac 会话页打开即聚焦）直接是展开的样子：逐帧长高要把 AppKit 的跟踪区每帧重算一遍
+            if appeared { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } } else { focused = now }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(400))
+            appeared = true
         }
         .animation(Motion.quick, value: sendVisible)
         .animation(Motion.quick, value: paletteCommands.isEmpty)

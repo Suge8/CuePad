@@ -22,6 +22,7 @@ struct SearchPalette: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.pageActive) private var active
     @State private var query = PaletteQuery()
     @State private var data: PaletteData?
     @State private var selection: UUID?
@@ -39,7 +40,7 @@ struct SearchPalette: View {
     var body: some View {
         panel
             .onAppear {
-                focused = true
+                focused = active
                 #if DEBUG
                 if query.text.isEmpty { query.text = DebugScene.searchText }
                 #endif

@@ -10,7 +10,7 @@ struct Prewarm: View {
     @State private var step = Step.idle
 
     private enum Step: CaseIterable {
-        case idle, agentPage, replyBar, newSession, done
+        case idle, palette, agentPage, replyBar, newSession, done
     }
 
     /// 回复框要一个会话：已结束的、不属于任何项目的占位，不写进任何地方。
@@ -22,6 +22,7 @@ struct Prewarm: View {
     var body: some View {
         ZStack {
             switch step {
+            case .palette: SearchPalette(scope: .constant(.cards))
             case .agentPage: AgentPage()
             case .replyBar: PiReplyBar(session: Self.session, config: nil, compact: false, stopping: false) {}
             case .newSession: NewSessionForm { _ in }

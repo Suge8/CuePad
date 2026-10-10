@@ -258,6 +258,12 @@ final class Workspace {
     @ObservationIgnored private var trimTask: Task<Void, Never>?
     static let keptPages = 4
 
+    /// 侧栏开合的动画里（约 0.2 秒）。页面此刻不接指针（`PageStack`）：分栏每帧挪动详情区，AppKit 每帧重算整窗的鼠标跟踪区、重设指针，
+    /// 页面里每个悬停区都要重算（大项目页开一次侧栏多约 120ms 主线程、掉帧 5～8 次，页面不接指针后只剩约 45ms）；这几百毫秒里页面本来也不该响应指针。
+    /// 纸页放大缩回是图层动画、不挪 AppKit 视图，量过没有这笔开销。
+    private(set) var sidebarMoving = false
+    @ObservationIgnored private var sidebarMovingTask: Task<Void, Never>?
+
     /// 刚离开的页：切页的那一帧它已经看不见，但"不在前台"（暂停订阅、停读实时状态）晚两帧才生效——页面重新求值要几十毫秒，不放在点击的回合里。
     private(set) var leaving: Page?
 
@@ -360,6 +366,15 @@ final class Workspace {
 
     func toggleSidebar() {
         sidebar = sidebar == .detailOnly ? .all : .detailOnly
+        #if os(macOS)
+        // AppKit 的分栏动画约 0.2 秒
+        sidebarMoving = true
+        sidebarMovingTask?.cancel()
+        sidebarMovingTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            if !Task.isCancelled { self?.sidebarMoving = false }
+        }
+        #endif
     }
 
     // MARK: 提示
