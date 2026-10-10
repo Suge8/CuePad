@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 主窗口：玻璃侧栏 + 当前页（侧栏点项目、Agent、会话，任务与灵感都在内容区整页切换；没有返回与前进的历史，
-/// 工具栏左上只有"往上一层"：纸页收起、会话页回到 Agent 整页）；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
+/// 主窗口：玻璃侧栏 + 当前页（侧栏点项目、Agent、会话，任务与灵感都在内容区整页切换；没有返回、前进与往上一层，
+/// 导航都在侧栏，工具栏左上只在开着纸页时有"收起"）；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -85,7 +85,7 @@ struct MainWindow: View {
         // 工具栏项常驻、只换里面的内容：增删工具栏项会让 AppKit 在开合侧栏的那一帧重建整条工具栏
         ToolbarItem(placement: .navigation) { SwitcherSlot() }
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
-        ToolbarItem(placement: .navigation) { UpButton() }
+        ToolbarItem(placement: .navigation) { CloseButton() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
@@ -163,37 +163,32 @@ private struct SwitcherSlot: View {
     }
 }
 
-/// 打开、收起卡片只改动下面三处（返回按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：
+/// 打开、收起卡片只改动下面三处（收起按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：
 /// 主窗口的视图体不读它，开合时不重算整个窗口、不重建整条工具栏。
 
-/// 工具栏左上"往上一层"（`Workspace.up`）：开着纸页时是"收起"（Esc 也行），会话页是"Agent"回到会话列表；顶层页没有它。
-/// 常驻、没有可去的地方时淡掉——条目一增一减，那一帧就要重排整条工具栏。
-private struct UpButton: View {
+/// 工具栏左上的"收起"：只在开着纸页时有（Esc 同）。工具栏项常驻、只有里面的按钮出没（增删工具栏项会重建整条工具栏）；
+/// 没有纸页时它不占位置，会话页的标题紧挨着侧栏开关。
+private struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let up = workspace.up
-        Button(action: workspace.goUp) {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
-                Text(up == .agentList ? "Agent" : "收起").font(Typography.toolbarLabel)
+        if workspace.openCard != nil {
+            Button { workspace.openCard = nil } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold))
+                    Text("收起").font(Typography.toolbarLabel)
+                }
+                .foregroundStyle(palette.ink2)
+                .padding(.leading, 10).padding(.trailing, 14)
+                .frame(height: Spacing.toolbarControl)
+                .contentShape(.capsule)
             }
-            .foregroundStyle(palette.ink2)
-            .padding(.leading, 10).padding(.trailing, 14)
-            .frame(height: Spacing.toolbarControl)
-            .contentShape(.capsule)
+            .buttonStyle(.plain)
+            .keyboardShortcut(.cancelAction)
+            .glass(in: .capsule, interactive: true)
+            .help("收起（Esc）")
         }
-        .buttonStyle(.plain)
-        .glass(in: .capsule, interactive: true)
-        .opacity(up == nil ? 0 : 1)
-        .allowsHitTesting(up != nil)
-        .accessibilityHidden(up == nil)
-        .help(up == .agentList ? "回到 Agent 会话列表" : "收起（Esc）")
-        .background {
-            if up == .closePaper { Button("收起", action: workspace.goUp).keyboardShortcut(.cancelAction).hidden() }
-        }
-        .animation(Motion.quick, value: up)
     }
 }
 
