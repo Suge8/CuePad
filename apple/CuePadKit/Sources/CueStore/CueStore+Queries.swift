@@ -211,21 +211,45 @@ extension CueStore {
   /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的子任务当顶层，与 `tasks(_:)` 列出的一致。
   private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
 
+  /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts` 与 `startedTasks` 共用。
+  private static let taskWithParent =
+    "FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(liveTask)"
+  private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
+
   /// 各项目（nil = 未分类）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
   /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `childMarks`。
   /// 灵感（含提示词）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
-  public func taskCounts() throws -> [UUID?: TaskCounts] {
+  public func taskCounts() throws -> [UUID?: TaskCounts] { try taskCounts(scope: "", []) }
+
+  /// 一个项目（nil = 未分类）的顶层任务数，口径同 `taskCounts()`；没有任务为 `.zero`。
+  public func taskCounts(in project: UUID?) throws -> TaskCounts {
+    try taskCounts(scope: "AND t.projectID IS ?", [project])[project] ?? .zero
+  }
+
+  private func taskCounts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID?: TaskCounts] {
+    // GROUP BY 写成 +t.projectID：不然 SQLite 为省排序沿 cards_projectID_modifiedAt 逐张翻全部卡片，而不走 cards_todoAt 只翻任务
     let rows = try db.query(
       """
       SELECT t.projectID, SUM(t.completedAt IS NULL AND t.startedAt IS NOT NULL), SUM(t.completedAt IS NULL AND t.startedAt IS NULL),
         SUM(t.completedAt IS NOT NULL)
-      FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(Self.liveTask)
-      WHERE \(visibleTask)
-        AND (u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))
-      GROUP BY t.projectID
-      """
+      \(Self.taskWithParent)
+      WHERE \(visibleTask) AND \(Self.topLevel) \(scope)
+      GROUP BY +t.projectID
+      """, arguments
     ) { (project: $0.uuidOrNil(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
+  }
+
+  /// 进行中的任务（已开始、没完成），最近开始的在前，同刻按项目顺序与手动顺序；回收站、归档的不列。
+  /// `topLevelOnly` 只要显示在顶层的（口径同 `taskCounts`：子任务跟着上级，上级也没完成时不单列）。
+  public func startedTasks(topLevelOnly: Bool = false) throws -> [Card] {
+    try db.query(
+      """
+      SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) \(Self.taskWithParent)
+      WHERE \(visibleTask) AND t.startedAt IS NOT NULL AND t.completedAt IS NULL \(topLevelOnly ? "AND \(Self.topLevel)" : "")
+      ORDER BY t.startedAt DESC, t.projectID IS NULL, \(Self.projectOrder("p")), t.sortKey, t.id
+      """
+    ) { Card(row: $0) }
   }
 
   /// 每条任务的直接下级，同级手动顺序：任务行的分段完成圈与"子任务 n/m"都由它推出，见 `ChildMark`；没有下级的不在结果里。
