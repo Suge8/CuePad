@@ -29,6 +29,21 @@ extension CueTextView {
         delegate?.textViewDidChange?(self)
     }
 
+    // MARK: 读屏
+
+    /// 读屏念的文字：分割线（占一个 U+FFFC）读作"分割线"，图片等其它附件照旧。
+    /// 附件没有读屏标签的接口（NSTextAttachment 没有；挂在图片上的标签 UITextView 不用），所以由文本视图的值来说。
+    public override var accessibilityValue: String? {
+        get {
+            let spoken = NSMutableString(string: textStorage.string)
+            textStorage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: textStorage.length), options: .reverse) { attachment, range, _ in
+                if attachment is CueDividerAttachment { spoken.replaceCharacters(in: range, with: "分割线") }
+            }
+            return spoken as String
+        }
+        set {}
+    }
+
     // MARK: 键盘
 
     /// 分割线下一行的行首 Backspace 整条删掉分割线；其它情况走系统默认删除。

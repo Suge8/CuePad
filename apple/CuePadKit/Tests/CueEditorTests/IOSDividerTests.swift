@@ -21,6 +21,15 @@ struct IOSDividerTests {
         #expect(h.stored == "第一段内容第二段内容")
     }
 
+    @Test("读屏：分割线读作\"分割线\"，图片仍是占位字符；文字和选区位置不受影响")
+    func spokenValue() throws {
+        let h = EditorHarness()
+        let id = try h.store.store(makePNG(width: 20, height: 20))
+        h.load("甲\n\(split)\n乙\n![](cuepad://img/\(id))")
+        #expect(h.textView.accessibilityValue == "甲\n分割线\n乙\n\u{FFFC}")
+        #expect(h.stored == "甲\n\(split)\n乙\n![](cuepad://img/\(id))")
+    }
+
     @Test("分割线真的画在页面上，主题换了颜色跟着换")
     func rendersTheLine() async throws {
         let h = EditorHarness()
