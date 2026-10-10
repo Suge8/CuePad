@@ -74,17 +74,45 @@ struct SendTargetTests {
         await expectTarget(other, "omega", ended: false)
     }
 
-    @Test func 会话结束后目标写明已结束_发不出去() async throws {
+    @Test func 会话结束后目标写明已结束_发送时在后台唤醒它() async throws {
         let alpha = try await open("a", in: "/work/alpha")
         await expectTarget(project, "alpha", ended: false)
+        let folder = rig.directory.appending(path: "work/alpha", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = "/sessions/--work-alpha--/a.jsonl"
+        try await store.upsertPiSession(PiSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
+        try await rig.services.executor.start()
+        defer { rig.services.cancelBackgroundWork() }
 
         await end(alpha)
 
         await expectTarget(project, "alpha", ended: true)
         let target = try #require(workspace.agentTarget(for: project.id))
-        #expect(workspace.action(for: target) == "发给 Agent 会话「alpha」")
-        #expect(await workspace.send("hi", to: target) == false)  // 发不出去：会话已不在桥上
-        #expect(try await store.deliveryRequests().isEmpty)
+        #expect(workspace.action(for: target) == "唤醒 Agent 会话「alpha」并发送")
+        #expect(workspace.endedTargets.map(\.sessionID) == ["a"], "菜单里列的就是这一批")
+        #expect(await workspace.send("接着做", to: target))
+
+        let request = try #require(try await store.deliveryRequests().first)
+        #expect(request.target == SendTarget(kind: .piSession, name: "alpha", ref: "a") && request.mode == .known(.send))
+        #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
+        #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: "接着做", deliveryID: request.id.uuidString)])
+        await expectTarget(project, "alpha", ended: false, "唤醒后它又在线了")
+        #expect(workspace.endedTargets.isEmpty)
+    }
+
+    @Test func 唤醒不了_会话文件不在这台Mac上_发送失败不假成功() async throws {
+        let alpha = try await open("a", in: "/work/alpha")
+        try await rig.services.executor.start()
+        defer { rig.services.cancelBackgroundWork() }
+        await end(alpha)
+        await expectTarget(project, "alpha", ended: true)
+        let target = try #require(workspace.agentTarget(for: project.id))
+
+        #expect(await workspace.send("接着做", to: target) == false)
+
+        let request = try #require(try await store.deliveryRequests().first)
+        #expect(request.status == .known(.failed))
+        #expect(rig.host.calls.isEmpty)
     }
 
     @Test func 选过的会话结束了也不换成别的() async throws {

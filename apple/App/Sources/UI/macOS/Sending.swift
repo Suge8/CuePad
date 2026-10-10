@@ -29,10 +29,13 @@ extension Workspace {
         if let sendChoice { return sendChoice }
         if let live = projectSessions(in: project).first { return AgentTarget(session: live.sessionID) }
         guard let project else { return nil }
-        return recentlyEnded.first { $0.projectID == project && liveSession($0.sessionID) == nil }.map { AgentTarget(session: $0.sessionID) }
+        return endedTargets.first { $0.projectID == project }.map { AgentTarget(session: $0.sessionID) }
     }
 
-    /// 会话已结束、也没有重新打开：发不出去，发送钮写"<会话名> · 已结束"，点开改选。
+    /// 能选作发送目标的已结束会话：这个窗口打开后结束、也没有重新打开的，最近结束的在前。发给它们时在后台把会话恢复起来。
+    var endedTargets: [PiSessionState] { recentlyEnded.filter { liveSession($0.sessionID) == nil } }
+
+    /// 会话已结束、也没有重新打开：发送时先在后台唤醒它，发送钮的状态点写"已结束"。
     func isEnded(_ target: AgentTarget) -> Bool { liveSession(target.session) == nil }
 
     /// Pi 会话的显示名：在线的取桥上的，结束了的取同步记录里的（`recentlyEnded`）。
@@ -40,19 +43,22 @@ extension Workspace {
         liveSession(sessionID)?.displayName ?? recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    /// 完整说法："发给 Agent 会话「…」"，用在菜单项、提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
-    func action(for target: AgentTarget) -> String { "发给 Agent 会话「\(sessionName(target.session))」" }
+    /// 完整说法："发给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在菜单项、提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
+    func action(for target: AgentTarget) -> String {
+        let name = sessionName(target.session)
+        return isEnded(target) ? "唤醒 Agent 会话「\(name)」并发送" : "发给 Agent 会话「\(name)」"
+    }
 
-    /// 右键菜单里提示词的"发给 …"一项；会话已结束时写明并禁用（发了也只会报错）；本项目没有会话时是"交给 Agent"并禁用。
+    /// 右键菜单里提示词的"发给 …"一项；本项目没有会话时是"交给 Agent"并禁用。
     @ViewBuilder
     func sendButton(_ target: AgentTarget?, action: @escaping (AgentTarget) -> Void) -> some View {
-        if let target, !isEnded(target) {
+        if let target {
             Button(self.action(for: target), systemImage: "paperplane") { action(target) }
         } else {
             // 菜单项标签里的第二行 Text 是 macOS 菜单的副标题
             Button {} label: {
-                Text(target.map(self.action(for:)) ?? "交给 Agent")
-                Text(target == nil ? "本项目还没有 Agent 会话" : "已结束")
+                Text("交给 Agent")
+                Text("本项目还没有 Agent 会话")
             }
             .disabled(true)
         }
@@ -75,8 +81,11 @@ extension Workspace {
     func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) async -> Bool {
         let done = Dotted("已" + action(for: target), target.mode == .steer || target.mode == .followUp ? target.mode.label : nil)
         do {
-            guard let live = liveSession(target.session) else { throw PiBridgeError.unknownSession(target.session) }
-            try await services.send(stored, to: live.id, mode: target.mode, card: card)
+            if let live = liveSession(target.session) {
+                try await services.send(stored, to: live.id, mode: target.mode, card: card)
+            } else {
+                try await services.send(stored, toEnded: target.session, named: sessionName(target.session), card: card)
+            }
             sendChoice = AgentTarget(session: target.session)
             say(done)
             return true
