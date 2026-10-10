@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// Agent 页（侧栏"全部会话"进来）：与手机的 Agent 页同构——顶上一排（按项目筛、搜索、新会话），"现在"是没结束的会话、
+/// Agent 页（侧栏 Agent 区的"全部"进来）：与手机的 Agent 页同构——没有页标题（侧栏那一行选中就说了在哪），最上面就是一排（按项目筛、搜索、新会话），"现在"是没结束的会话、
 /// 按要你注意的先后（等你确认 → 出错 → 工作中 → 空闲），"历史"是已结束的、按结束时间分段（`PiHistorySection`），
 /// 读到底再接一页。行与手机同一种（`PiSessionRow`），点行在内容区打开会话页；在线会话右键可结束（确认后发给它所在的 Mac，对话留着）。
 struct AgentPage: View {
@@ -24,11 +24,10 @@ struct AgentPage: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
-                heading.padding(.bottom, 18)
                 topRow.padding(.bottom, 16)
                 if let list { sessions(list) }
             }
-            .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 96)
+            .padding(.horizontal, Spacing.page).padding(.vertical, Spacing.pageTop)
             .frame(maxWidth: Self.width)
             .frame(maxWidth: .infinity)
         }
@@ -48,18 +47,6 @@ struct AgentPage: View {
                    id: PiSessionList.Key(filter: .init(text: query, project: filter), limit: limit),
                    into: $list, onError: workspace.fail) { [query, filter, limit] store in
             try PiSessionList.read(text: query, project: filter, historyLimit: limit, from: store)
-        }
-    }
-
-    /// 页标题：与项目页、归档、回收站同一层级；下面一行是此刻筛出的在线与历史各几个。
-    private var heading: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Agent").font(Typography.pageTitle).foregroundStyle(palette.ink)
-                .accessibilityAddTraits(.isHeader)
-            if let list {
-                Text(Dotted("\(list.now.count) 个在线", "\(list.total) 个历史")).font(Typography.meta).foregroundStyle(palette.ink3)
-                    .monospacedDigit()
-            }
         }
     }
 
