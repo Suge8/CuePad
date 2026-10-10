@@ -112,9 +112,10 @@ struct SessionPage: View {
         .background(palette.desk)
         .toolbar {
             if let session = digest.session {
-                // 标题是悬浮的一块玻璃（与手机会话页顶栏中间那一块同一种），让开时连玻璃一起不画
+                // 标题是悬浮的一块玻璃（与手机会话页顶栏中间那一块同一种），玻璃画在标题自己身上、随它一起淡出：
+                // 系统给工具栏项画的那块在推入后改 sharedBackgroundVisibility 不跟着变，让开时会留下一块空玻璃
                 ToolbarItem(placement: .navigation) { title(session, digest: digest, ending: shownEnd?.isOpen == true) }
-                    .sharedBackgroundVisibility(follow.showsHeader ? .automatic : .hidden)
+                    .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .primaryAction) {
                     menu(session, place: PiPlace.menuTitle(of: session, project: digest.project), live: live, ending: shownEnd?.isOpen == true).headerVisibility(follow.showsHeader)
                 }
@@ -145,6 +146,8 @@ struct SessionPage: View {
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: Self.titleWidth, alignment: .leading)
+        .frame(height: Spacing.toolbarControl)
+        .glass(in: .capsule)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
         // 需要 /reload 的会话：状态就写在这块玻璃里，点它看怎么接上（不在对话上另浮一张卡）

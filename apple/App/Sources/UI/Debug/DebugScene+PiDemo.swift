@@ -330,7 +330,8 @@ extension DebugScene {
         PiSlashCommand(name: "skill:frontend-design", summary: "做界面时先定视觉方向与密度", source: .known(.skill)),
     ]
 
-    /// 演示会话的上下文用量（窗口 20 万 token）：多数宽裕，atlas 用到八成多（用量条变墨色、说明里建议压缩），billing 刚压缩过。
+    /// 演示会话的上下文用量（窗口 20 万 token）：多数宽裕，atlas 用到八成多（百分比加粗转墨色、说明里建议压缩），
+    /// rename 用到九成多（胭脂那一档），billing 刚压缩过。
     private static let demoContexts: [String: PiContextUsage] = [
         "atlas": PiContextUsage(tokens: 172_000, window: 200_000),
         "homepage": PiContextUsage(tokens: 31_000, window: 200_000),

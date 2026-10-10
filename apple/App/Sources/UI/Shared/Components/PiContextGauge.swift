@@ -26,10 +26,11 @@ struct PiContextGauge: View {
         }
     }
 
-    /// 胶囊里铺到已用比例的那层淡色：比胶囊底深一档，紧了再深一点，快满了带胭脂。
+    /// 胶囊里铺到已用比例的那层淡色：比胶囊底深一档，紧了再深一点，快满了带胭脂。胭脂铺得很淡：胭脂的百分比字
+    /// 就压在这层上，铺到 0.2 时深色下只剩约 2.6:1，0.08 时与不铺色差不多（胭脂字本身在胶囊底上约 4.4:1）。
     private var used: Color {
         switch meter.level {
-        case .critical: palette.failure.opacity(0.2)
+        case .critical: palette.failure.opacity(0.08)
         case .tight: palette.ink.opacity(0.13)
         case .roomy, .unknown: palette.ink.opacity(0.08)
         }
