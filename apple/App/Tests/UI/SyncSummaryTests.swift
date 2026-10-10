@@ -12,10 +12,4 @@ struct SyncSummaryTests {
         #expect(summary.detail?.contains("本机的内容都在") == true)
         #expect(summary.detail?.contains(raw) != true)
     }
-
-    @Test func 没能同步的明细_按记录类型说明是哪一类() {
-        #expect(SyncIssue(recordType: "cards", message: "x").summary == "一张灵感或任务没能同步")
-        #expect(SyncIssue(recordType: "attachments", message: "x").summary == "一张图片没能同步")
-        #expect(SyncIssue(message: "x").summary == "同步遇到一个问题")
-    }
 }

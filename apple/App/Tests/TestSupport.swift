@@ -131,7 +131,6 @@ final class TestApp {
     #if os(macOS)
     static let hostID = "mac-test"
     let channels = FakeChannels()
-    let updater = FakeUpdater()
     let wakeCenter = NotificationCenter()
     let hotkeys = InMemoryHotkeys()
     lazy var host = RecordingHost(channels: channels)
@@ -186,7 +185,7 @@ final class TestApp {
             commandLineTool: CommandLineToolInstaller(
                 helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                 linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
-            updater: updater,
+            updater: nil,
             host: host,
             locatePi: { Self.piExecutable })
         let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)

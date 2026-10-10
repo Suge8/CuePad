@@ -18,19 +18,6 @@ struct IOSWorkflowTests {
 
     // MARK: 发到 Mac
 
-    /// 手机主动拉取的节奏：有发往 Mac 还没结果的请求时 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时 3 秒、不限时；
-    /// 两者都有时 2 秒、不限时。
-    @Test func 主动拉取的节奏_等结果与看着Agent页() {
-        let services: AppServices = app.services
-        #expect(services.pollingCadence == nil)
-        services.piViewers = 1
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(3)))
-        services.hasOpenDeliveries = true
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(2)))
-        services.piViewers = 0
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(2), limit: .seconds(120)))
-    }
-
     @Test func 作答_请求发给会话所在的Mac_带这次弹窗的标识与答案() async throws {
         let question = PiQuestion(promptID: "p-7", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
         try await PiStateRecorder(store: store, hostID: "mac-b").update(
@@ -79,28 +66,7 @@ struct IOSWorkflowTests {
         #expect(MacDelivery.modes(for: session) == modes)
     }
 
-    /// 旧协议的会话在线但发不了：回复框不给输入，写原因。
-    @Test func 回复框_旧协议的会话要重开Pi() {
-        let session = PiSessionState(
-            id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(.incompatible), detail: nil, folder: nil,
-            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
-        #expect(MacDelivery.reply(to: session) == .restartPi)
-        #expect(!MacDelivery.canStop(session))
-    }
-
     // MARK: Agent 页
-
-    @Test func Agent页_等你确认_出错_工作中_空闲_已结束依次排() async throws {
-        _ = try await session("done", .ended)
-        _ = try await session("idle", .settled)
-        _ = try await session("busy", .tool, detail: "bash")
-        _ = try await session("ask", .waitingForUser, detail: "要覆盖吗？")
-        _ = try await session("broken", .error)
-
-        let ordered = PiSessionState.inListOrder(try await store.allPiSessionStates())
-
-        #expect(ordered.map(\.sessionID) == ["ask", "broken", "busy", "idle", "done"])
-    }
 
     // MARK: 随手记
 

@@ -3,7 +3,7 @@ import Sparkle
 
 /// Sparkle 标准更新流程：EdDSA 校验、后台定期检查、增量更新。更新源与公钥在 Info.plist（SUFeedURL、SUPublicEDKey）。
 @MainActor
-final class SparkleUpdater: AppUpdater {
+final class SparkleUpdater {
     private let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
     var automaticallyChecksForUpdates: Bool {

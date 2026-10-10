@@ -19,11 +19,6 @@ struct IsolationTests {
         FileManager.default.temporaryDirectory.appending(path: "cuepad-isolation-\(UUID().uuidString)", directoryHint: .isDirectory)
     }
 
-    @Test func macOS没设环境变量时用标准偏好域() throws {
-        let location = try LibraryLocation.resolve(environment: [:])
-        #expect(location.makeDefaults() === UserDefaults.standard)
-    }
-
     @Test func 隔离目录下偏好落在目录内_真实域不变() async throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

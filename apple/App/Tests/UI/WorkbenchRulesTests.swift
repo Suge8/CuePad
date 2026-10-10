@@ -190,15 +190,9 @@ struct OlderGroupTitleRuleTests {
     let earlierWeek = OlderGroup.Period.week(start: Date(timeIntervalSince1970: -604_800))
     let month = OlderGroup.Period.month(start: Date(timeIntervalSince1970: -10_000_000))
 
-    @Test func 只有一组按周时不显示组标题() {
+    @Test func 只有一组按周时不显示组标题_按月或多于一组时显示() {
         #expect(OlderGroup.needsTitles(in: [OlderGroup(period: week, cards: [UUID()])]) == false)
-    }
-
-    @Test func 唯一一组按月时显示组标题() {
         #expect(OlderGroup.needsTitles(in: [OlderGroup(period: month, cards: [UUID()])]) == true)
-    }
-
-    @Test func 多于一组时显示组标题() {
         #expect(OlderGroup.needsTitles(in: [OlderGroup(period: week, cards: [UUID()]), OlderGroup(period: earlierWeek, cards: [UUID()])]) == true)
     }
 }

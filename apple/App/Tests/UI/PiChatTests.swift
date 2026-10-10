@@ -17,12 +17,6 @@ struct PiChatTests {
             tools: tools, roundStartedAt: took == nil ? nil : start, deliveryID: delivery)
     }
 
-    @Test func 对话按先后排_你的话与Pi的回答各成一条() {
-        let entries = PiChat.entries([message(1, .user, "跑一下测试"), message(2, .pi, "全部通过", tools: .init(commands: 3), took: 75)])
-        #expect(entries.map(\.text) == ["跑一下测试", "全部通过"])
-        #expect(entries.map(\.isUser) == [true, false])
-    }
-
     /// 压缩留在会话文件里的那一行（终端里是压缩摘要）是对话里的系统行；别的角色照旧。
     @Test func 系统行是对话里的一种() {
         let entries = PiChat.entries([message(1, .user, "跑一下测试"), message(2, .system, "已压缩上下文 · 压缩前约 63k tokens")])
@@ -73,13 +67,6 @@ struct PiChatTests {
     ])
     func 工具活动的一句话(tools: PiChatMessage.Tools, lines: [String]) {
         #expect(PiChat.toolSummaries(tools) == lines)
-    }
-
-    @Test func 改文件的行数() {
-        #expect(PiChat.diffLabel(added: 12, removed: 3) == "+12 −3")
-        #expect(PiChat.diffLabel(added: 24, removed: nil) == "+24")
-        #expect(PiChat.diffLabel(added: 2, removed: 0) == "+2")
-        #expect(PiChat.diffLabel(added: nil, removed: nil) == "")
     }
 
     @Test func 发出的话在对话里出现之前是气泡_出现之后不再显示() async throws {

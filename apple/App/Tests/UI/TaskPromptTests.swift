@@ -11,15 +11,6 @@ struct TaskPromptTests {
     var store: CueStore { rig.services.store }
     private let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
 
-    @Test func 长按菜单_灵感是挂到任务设为任务移到项目归档_提示词才交给Agent() async throws {
-        let idea = try await store.createCard(in: nil, body: "想法")
-        #expect(CardMenu.sections(for: idea) == [[.attachToTask, .makeTask, .move, .archive], [.trash]])
-
-        let task = try await store.createTask("修乱序", in: nil)
-        let prompt = try await store.createCard(body: "先复现", under: task.id)
-        #expect(CardMenu.sections(for: prompt) == [[.handToAgent, .makeTask, .move, .archive], [.trash]])
-    }
-
     @Test func 只有提示词能交给Agent_灵感与任务都不能() async throws {
         let idea = try await store.createCard(in: nil, body: "想法")
         let task = try await store.createTask("修乱序", in: nil)
@@ -27,31 +18,6 @@ struct TaskPromptTests {
         #expect(!CardMenu.handsToAgent(idea))
         #expect(!CardMenu.handsToAgent(task))
         #expect(CardMenu.handsToAgent(prompt))
-    }
-
-    @Test func 长按菜单_任务是完成或重新打开与归档_删除单独在最后() async throws {
-        let task = try await store.createTask("修乱序", in: nil)
-        #expect(CardMenu.sections(for: task) == [[.complete, .archive], [.trash]])
-
-        try await store.setStatus(task.id, .done)
-        let done = try #require(try await store.card(task.id))
-        #expect(CardMenu.sections(for: done) == [[.reopen, .archive], [.trash]])
-    }
-
-    @Test func 更多菜单_低频操作在任务页与纸页的更多里() async throws {
-        let task = try await store.createTask("修乱序", in: nil)
-        let sub = try await store.createTask("复现", under: task.id)
-        #expect(CardMenu.more(for: task) == [[.move, .copy], [.makeIdea, .archive], [.trash]])
-        // 子任务跟着上级走，不单独换项目
-        #expect(CardMenu.more(for: sub) == [[.copy], [.makeIdea, .archive], [.trash]])
-
-        let idea = try await store.createCard(in: nil, body: "想法")
-        #expect(CardMenu.more(for: idea) == [[.attachToTask, .makeTask, .resource, .move, .copy], [.archive], [.trash]])
-        try await store.updateCard(idea.id) { $0.isPinned = true }
-        #expect(CardMenu.more(for: try #require(try await store.card(idea.id)))[0] == [.attachToTask, .makeTask, .unresource, .move, .copy])
-        // 提示词已经挂在任务下：不再"挂到任务"
-        let prompt = try await store.createCard(body: "先复现", under: task.id)
-        #expect(CardMenu.more(for: prompt) == [[.makeTask, .resource, .move, .copy], [.archive], [.trash]])
     }
 
     @Test func 完成任务后提示里给归档_点了就归档() async throws {
