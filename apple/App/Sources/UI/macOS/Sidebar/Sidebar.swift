@@ -11,6 +11,8 @@ nonisolated private struct SidebarData: Sendable {
     /// 发给在线会话的最近一条投送请求与最近一条改名（Pi 的会话 id →）。
     var deliveries: [String: DeliveryRequest]
     var renames: [String: DeliveryRequest]
+    /// 没能送达的话有几句（会话行的小标记）。
+    var undelivered: [String: Int]
     /// 项目行的"此刻"（`ProjectNow`）读的：此刻有事的会话（`PiSessionQuery.current`）与各项目最近开始的进行中任务。
     var current: [PiSessionListItem]
     var leading: [UUID: [ProjectNow.InProgress]]
@@ -69,7 +71,7 @@ struct Sidebar: View {
             // Agent 区不随项目列表滚动：项目再多，要你注意的会话也一直露在侧栏里
             VStack(spacing: 0) {
                 if let data {
-                    PiSection(recorded: data.live, deliveries: data.deliveries, renames: data.renames, total: data.sessionTotal)
+                    PiSection(recorded: data.live, deliveries: data.deliveries, renames: data.renames, undelivered: data.undelivered, total: data.sessionTotal)
                         .padding(.horizontal, 10)
                 }
                 footer(showsBins: pages?.showsBins ?? false, trashCount: data?.trashCount ?? 0)
@@ -93,6 +95,7 @@ struct Sidebar: View {
                 live: live.items.map(\.listed), sessionTotal: try store.piSessionPage(PiSessionQuery(limit: 0)).total,
                 deliveries: Dictionary(live.items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
                 renames: Dictionary(live.items.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first },
+                undelivered: PiSessionListItem.undelivered(live.items),
                 current: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store))
         }
     }
@@ -266,6 +269,7 @@ private struct PiSection: View {
     let recorded: [PiSessionState]
     let deliveries: [String: DeliveryRequest]
     let renames: [String: DeliveryRequest]
+    let undelivered: [String: Int]
     let total: Int
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -339,7 +343,7 @@ private struct PiSection: View {
         let bridge = live.first { $0.sessionID == session.sessionID }
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-            rename: renames[session.sessionID])
+            rename: renames[session.sessionID], undelivered: undelivered[session.sessionID] ?? 0)
             .padding(.horizontal, 8).padding(.vertical, 5)
             .sessionLink(session.sessionID)
             .help(bridge?.state.errorMessage ?? "")

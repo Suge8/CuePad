@@ -1,6 +1,13 @@
 import CueStore
 import SwiftUI
 
+nonisolated extension PiSessionListItem {
+    /// 没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 侧栏、菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
+    static func undelivered(_ items: [PiSessionListItem]) -> [String: Int] {
+        Dictionary(items.filter { $0.undelivered > 0 }.map { ($0.state.sessionID, $0.undelivered) }) { first, _ in first }
+    }
+}
+
 nonisolated extension PiSessionState {
     /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。

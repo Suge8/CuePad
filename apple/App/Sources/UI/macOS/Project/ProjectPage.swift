@@ -49,7 +49,7 @@ struct ProjectPage: View {
         .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
         .observingFolderGuide(into: $folderGuide)
         .observing(services.store, ProjectSessions.tables, id: projectID, into: $sessions, onError: workspace.fail) { [projectID] store in
-            try projectID.map { try ProjectSessions.read($0, from: store) } ?? ProjectSessions(recorded: [], deliveries: [:], bindings: [])
+            try projectID.map { try ProjectSessions.read($0, from: store) } ?? ProjectSessions(recorded: [], deliveries: [:], undelivered: [:], bindings: [])
         }
         .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)

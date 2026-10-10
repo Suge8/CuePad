@@ -59,7 +59,7 @@ struct PiSessionRow: View {
     var rename: DeliveryRequest?
     /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
     /// 胭脂的小折回箭头（读屏念"N 句没送到"），与会话页顶栏同一个数（`PiChat.undeliveredNote`）。
-    var undelivered = 0
+    let undelivered: Int
     var style = Style.compact
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette

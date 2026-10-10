@@ -45,13 +45,16 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
     var endedTotal: Int
     /// 发给这些会话的最近一条投送请求（Pi 的会话 id →）。
     var deliveries: [String: DeliveryRequest]
+    /// 没能送达的话有几句（会话行的小标记）。
+    var undelivered: [String: Int]
 
     static func read(text: String, pages: Int, from store: isolated CueStore) throws -> SessionSearchData {
         let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max))
         let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: PiSessionList.pageSize * pages))
         return SessionSearchData(
             live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total,
-            deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
+            deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
+            undelivered: PiSessionListItem.undelivered(live.items + ended.items))
     }
 }
 
@@ -59,6 +62,7 @@ nonisolated struct SessionSearchData: Sendable, Equatable {
 struct SessionResultList: View {
     let groups: [SessionGroup]
     let deliveries: [String: DeliveryRequest]
+    let undelivered: [String: Int]
     /// 还没读到的已结束会话有多少（"显示更多"）。
     let more: Int
     let isFiltered: Bool
@@ -107,7 +111,8 @@ struct SessionResultList: View {
     private func row(_ session: PiSessionState) -> some View {
         let isSelected = session.sessionID == selection
         return PiSessionRow(
-            session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID])
+            session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
+            undelivered: undelivered[session.sessionID] ?? 0)
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
             .contentShape(.rect)

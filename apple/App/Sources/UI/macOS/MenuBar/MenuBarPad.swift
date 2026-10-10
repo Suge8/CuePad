@@ -23,7 +23,7 @@ struct MenuBarPad: View {
                     ForEach(sessions, id: \.sessionID) { session in
                         PiSessionRow(
                             session: session, project: workspace.catalog?.project(session.projectID),
-                            delivery: workspace.sessionDeliveries[session.sessionID])
+                            delivery: workspace.sessionDeliveries[session.sessionID], undelivered: workspace.sessionUndelivered[session.sessionID] ?? 0)
                             .contentShape(.rect)
                             .onTapGesture { openSession(session.sessionID) }
                             .accessibilityAddTraits(.isButton)
