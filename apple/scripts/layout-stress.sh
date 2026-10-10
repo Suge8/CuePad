@@ -16,9 +16,10 @@ inject=()
 if [ "${1:-}" = --inject-loop ]; then inject=(-CuePadGeometryLoop YES); shift; fi
 app="${1:-${CUEPAD_DERIVED:-$APPLE_DIR/.derived}/Build/Products/Debug/CuePad.app}"
 failed=0
-# 演示库里 CuePad 项目绑定的目录（Debug/DemoLibrary.swift）：假 Pi 会话用它归到该项目；真实 pi 要求目录存在，缺失时退回仓库根
-DEMO_DIR="$HOME/Project/cuepad"
-[ -d "$DEMO_DIR" ] && REAL_DIR="$DEMO_DIR" || REAL_DIR="$(cd "$APPLE_DIR/.." && pwd)"
+# 假 Pi 会话的工作目录取演示库 CuePad 项目绑定的目录（从 Debug/DemoLibrary.swift 读，不另存一份），会话由此归到该项目；
+# 真实 pi 要求目录存在，用仓库根
+DEMO_DIR="$HOME/$(sed -n 's/.*name: "CuePad".*directory: "\\(home)\([^"]*\)".*/\1/p' "$APPLE_DIR/App/Sources/UI/Debug/DemoLibrary.swift")"
+REAL_DIR="$(cd "$APPLE_DIR/.." && pwd)"
 
 run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   local name=$1 mode=$2 rounds=$3; shift 3
