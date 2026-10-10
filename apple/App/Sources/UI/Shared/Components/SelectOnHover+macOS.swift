@@ -1,22 +1,14 @@
-import SwiftUI
 #if os(macOS)
 import AppKit
-#endif
+import SwiftUI
 
 extension View {
     /// 会话里的文字可选中。Mac：鼠标悬停着的这一条才开选择；在某条里按下鼠标（开始拖选）后这条保持可选，选区留着，
     /// 直到在别处点击或在另一条里开始新的选择（`TextSelectionFocus`）。
     /// 文字选择（`textSelection`）每个文本都要另建一套排版，一屏回答全带上选择时点开会话的帧耗时多约三成。
-    func selectableOnHover() -> some View {
-        #if os(macOS)
-        modifier(SelectOnHover())
-        #else
-        textSelection(.enabled)
-        #endif
-    }
+    func selectableOnHover() -> some View { modifier(SelectOnHover()) }
 }
 
-#if os(macOS)
 #if DEBUG
 /// 悬停进入与离开的次数（压力场景核对没有来回翻转的循环）。
 @MainActor var hoverToggles = 0

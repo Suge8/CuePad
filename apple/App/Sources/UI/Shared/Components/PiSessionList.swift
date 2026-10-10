@@ -280,3 +280,16 @@ struct PiReloadFold: View {
         .accessibilityHint("旧版扩展的会话，在终端里对它们执行 /reload")
     }
 }
+
+/// 会话行长按（Mac 右键）菜单里的"标为未读"：做完一轮停着、你看过了的会话才有（`PiUnread.canMarkUnread`）；
+/// 标了之后它回到"有新回复"（墨色实心点），直到你再打开它。
+struct MarkUnreadButton: View {
+    let session: PiSessionState
+    @Environment(AppServices.self) private var services
+
+    var body: some View {
+        if services.settings.canMarkUnread(session) {
+            Button("标为未读", systemImage: "circle.fill") { services.settings.markUnread(session) }
+        }
+    }
+}

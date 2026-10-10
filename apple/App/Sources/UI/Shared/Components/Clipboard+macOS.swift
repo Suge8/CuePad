@@ -1,23 +1,15 @@
-#if os(iOS)
-import UIKit
-#else
+#if os(macOS)
 import AppKit
-#endif
 
 /// 系统剪贴板（复制不是发送，不写发送记录；复制整张卡见 `Workspace.copy`）。
 @MainActor
 enum Clipboard {
     /// 一段纯文字。
     static func copy(_ text: String) {
-        #if os(iOS)
-        UIPasteboard.general.string = text
-        #else
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        #endif
     }
 
-    #if os(macOS)
     /// 文字与图片按原顺序：一个条目两种表示——`.string` 纯文字（文本框、终端取它），有图时另有 `.rtfd` 内联图片（富文本取它）。
     /// 不并列放 `.png/.tiff`：图形应用会在其中挑图片而丢掉文字。
     static func write(_ content: ClipboardContent, to pasteboard: NSPasteboard = .general) throws {
@@ -43,10 +35,8 @@ enum Clipboard {
         guard let data = document.rtfd(from: NSRange(location: 0, length: document.length)) else { throw ClipboardError.writeFailed }
         return data
     }
-    #endif
 }
 
-#if os(macOS)
 /// 复制到剪贴板的内容：正文按原顺序切成的文字与图片（PNG）。
 nonisolated struct ClipboardContent: Sendable, Equatable {
     enum Segment: Sendable, Equatable {

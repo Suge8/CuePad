@@ -1,8 +1,6 @@
 import CueStore
 import QuickLook
 import SwiftUI
-import UniformTypeIdentifiers
-import WebKit
 
 /// 预览文件在本机的可读位置：附件目录里的文件以哈希为名，没有扩展名，系统的快速查看与"存到文件"认不出类型，
 /// 所以按原文件名放一份（缓存目录里，同卷克隆不占额外空间，系统可随时清理）。
@@ -103,83 +101,3 @@ private struct PreviewMarkdown: View {
         .task { text = (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
     }
 }
-
-/// 网页的只读离线渲染：脚本可以跑（演示页常带图表与交互），但一切联网与读别的文件的请求都被拦掉（只放行 data:、blob:、about:），
-/// 页内链接不跳转。拦截规则没能装上时不打开页面，不退回到不设防。
-private struct PreviewWeb: View {
-    let file: URL
-    @State private var rules: WKContentRuleList?
-    @State private var failure: String?
-
-    var body: some View {
-        Group {
-            if let rules {
-                PreviewWebHost(file: file, rules: rules).ignoresSafeArea(.container, edges: .bottom)
-            } else if let failure {
-                ContentUnavailableView("没法安全地打开这个页面", systemImage: "lock.trianglebadge.exclamationmark", description: Text(failure))
-            } else {
-                Spinner(.regular)
-            }
-        }
-        .task {
-            do { rules = try await PreviewWebGuard.rules() } catch { failure = error.localizedDescription }
-        }
-    }
-}
-
-/// 网页预览的防护：脚本照跑，联网与读别的文件一律拦掉，页内链接不跳转。
-enum PreviewWebGuard {
-    private static let blockEverythingButInline = """
-        [{"trigger":{"url-filter":".*"},"action":{"type":"block"}},
-         {"trigger":{"url-filter":"^data:"},"action":{"type":"ignore-previous-rules"}},
-         {"trigger":{"url-filter":"^blob:"},"action":{"type":"ignore-previous-rules"}},
-         {"trigger":{"url-filter":"^about:"},"action":{"type":"ignore-previous-rules"}}]
-        """
-
-    static func rules() async throws -> WKContentRuleList {
-        guard let list = try await WKContentRuleListStore.default().compileContentRuleList(
-            forIdentifier: "cuepad.preview.offline", encodedContentRuleList: blockEverythingButInline)
-        else { throw CocoaError(.featureUnsupported) }
-        return list
-    }
-
-    final class Coordinator: NSObject, WKNavigationDelegate {
-        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
-            // 只放行我们自己装载的那一次；点链接（含跳到别的页面）一律不动，页内锚点除外
-            if action.navigationType == .other { return .allow }
-            return action.request.url?.fragment != nil && action.request.url?.scheme == "about" ? .allow : .cancel
-        }
-    }
-
-    static func makeWebView(file: URL, rules: WKContentRuleList, delegate: Coordinator) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
-        configuration.userContentController.add(rules)
-        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-        let web = WKWebView(frame: .zero, configuration: configuration)
-        web.navigationDelegate = delegate
-        let type = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "text/html"
-        if let data = try? Data(contentsOf: file) {
-            web.load(data, mimeType: type, characterEncodingName: "utf-8", baseURL: URL(string: "about:blank")!)
-        }
-        return web
-    }
-}
-
-#if os(iOS)
-private struct PreviewWebHost: UIViewRepresentable {
-    let file: URL
-    let rules: WKContentRuleList
-    func makeCoordinator() -> PreviewWebGuard.Coordinator { PreviewWebGuard.Coordinator() }
-    func makeUIView(context: Context) -> WKWebView { PreviewWebGuard.makeWebView(file: file, rules: rules, delegate: context.coordinator) }
-    func updateUIView(_ view: WKWebView, context: Context) {}
-}
-#else
-private struct PreviewWebHost: NSViewRepresentable {
-    let file: URL
-    let rules: WKContentRuleList
-    func makeCoordinator() -> PreviewWebGuard.Coordinator { PreviewWebGuard.Coordinator() }
-    func makeNSView(context: Context) -> WKWebView { PreviewWebGuard.makeWebView(file: file, rules: rules, delegate: context.coordinator) }
-    func updateNSView(_ view: WKWebView, context: Context) {}
-}
-#endif
