@@ -448,7 +448,8 @@ extension PiSession: Record {
 }
 
 extension JSONEncoder {
-  fileprivate static var sorted: JSONEncoder {
+  /// 同步记录里存的 JSON：同样的内容同样的字节（默认的键序每次编码都不一样）。上传只带改动的字段靠它认出"没变"，重读时也只在真的变了才改写。
+  static var sorted: JSONEncoder {
     let encoder = JSONEncoder()
     encoder.outputFormatting = .sortedKeys
     return encoder

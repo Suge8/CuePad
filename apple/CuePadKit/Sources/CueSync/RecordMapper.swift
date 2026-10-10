@@ -27,11 +27,14 @@ enum RecordMapper {
   }
 
   /// `base` 是上次从服务器拿到的记录（带系统字段），在它上面改字段才能通过服务器的版本校验；没有则新建。
-  static func record(from row: SyncRow, zoneID: CKRecordZone.ID, base: CKRecord? = nil) -> CKRecord {
+  /// `isCurrent` 说这一列服务器上已经是这个值（见 `ServerValues`）：不 set，它就不在这次上传里。
+  static func record(
+    from row: SyncRow, zoneID: CKRecordZone.ID, base: CKRecord? = nil, isCurrent: (String) -> Bool = { _ in false }
+  ) -> CKRecord {
     let record = base ?? CKRecord(
       recordType: row.table.rawValue, recordID: CKRecord.ID(recordName: row.id, zoneID: zoneID))
     let encrypted = encryptedColumns[row.table] ?? []
-    for column in row.table.columns where column != "id" {
+    for column in row.table.columns where column != "id" && !isCurrent(column) {
       let value = row.fields[column] ?? .null
       if encrypted.contains(column) {
         switch value {

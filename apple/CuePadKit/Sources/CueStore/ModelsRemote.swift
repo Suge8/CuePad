@@ -137,7 +137,7 @@ public struct PiQuestion: Sendable, Equatable {
   }
 
   var stored: String {
-    let data = try! JSONEncoder().encode(Stored(promptID: promptID, kind: kind.rawValue, text: text, options: options))
+    let data = try! JSONEncoder.sorted.encode(Stored(promptID: promptID, kind: kind.rawValue, text: text, options: options))
     return String(decoding: data, as: UTF8.self)
   }
 
@@ -182,7 +182,7 @@ public struct PiAnswer: Sendable, Equatable {
     case .confirmed(let confirmed): form.confirmed = confirmed
     case .text(let text): form.text = text
     }
-    return String(decoding: try! JSONEncoder().encode(form), as: UTF8.self)
+    return String(decoding: try! JSONEncoder.sorted.encode(form), as: UTF8.self)
   }
 
   init?(stored: String) {
@@ -248,11 +248,11 @@ public struct PiModelOption: Sendable, Equatable, Identifiable {
 
   /// 同步记录里存为 JSON（加密字段 `model`、`models`）；读不出的当作没有。
   static func stored(_ option: PiModelOption?) -> String? {
-    option.map { String(decoding: try! JSONEncoder().encode($0.form), as: UTF8.self) }
+    option.map { String(decoding: try! JSONEncoder.sorted.encode($0.form), as: UTF8.self) }
   }
 
   static func stored(_ list: [PiModelOption]) -> String? {
-    list.isEmpty ? nil : String(decoding: try! JSONEncoder().encode(list.map(\.form)), as: UTF8.self)
+    list.isEmpty ? nil : String(decoding: try! JSONEncoder.sorted.encode(list.map(\.form)), as: UTF8.self)
   }
 
   static func option(stored: String?) -> PiModelOption? {
@@ -300,7 +300,7 @@ public struct PiContextUsage: Sendable, Equatable {
 
   /// 同步记录里存为 JSON（加密字段 `context`）；读不出的当作没有。
   static func stored(_ usage: PiContextUsage?) -> String? {
-    usage.map { String(decoding: try! JSONEncoder().encode(Stored(tokens: $0.tokens, window: $0.window)), as: UTF8.self) }
+    usage.map { String(decoding: try! JSONEncoder.sorted.encode(Stored(tokens: $0.tokens, window: $0.window)), as: UTF8.self) }
   }
 
   static func usage(stored: String?) -> PiContextUsage? {
@@ -338,7 +338,7 @@ public struct PiSlashCommand: Sendable, Equatable, Identifiable {
   /// 同步记录里存为 JSON 数组（加密字段 `commands`）；读不出的当作没有。
   static func stored(_ list: [PiSlashCommand]) -> String? {
     guard !list.isEmpty else { return nil }
-    let data = try! JSONEncoder().encode(list.map { Stored(name: $0.name, summary: $0.summary, source: $0.source.rawValue, hint: $0.hint) })
+    let data = try! JSONEncoder.sorted.encode(list.map { Stored(name: $0.name, summary: $0.summary, source: $0.source.rawValue, hint: $0.hint) })
     return String(decoding: data, as: UTF8.self)
   }
 
@@ -369,7 +369,7 @@ public struct PiConfig: Sendable, Equatable {
   }
 
   var stored: String {
-    String(decoding: try! JSONEncoder().encode(Stored(model: model, thinking: thinking?.rawValue, name: name)), as: UTF8.self)
+    String(decoding: try! JSONEncoder.sorted.encode(Stored(model: model, thinking: thinking?.rawValue, name: name)), as: UTF8.self)
   }
 
   /// 什么都不改、或强度是更新版本的新值（本版本不认识）时为 nil。
@@ -409,7 +409,7 @@ public struct PiLaunch: Sendable, Equatable {
   }
 
   var stored: String {
-    String(decoding: try! JSONEncoder().encode(Stored(project: project, prompt: prompt, token: token)), as: UTF8.self)
+    String(decoding: try! JSONEncoder.sorted.encode(Stored(project: project, prompt: prompt, token: token)), as: UTF8.self)
   }
 
   init?(stored: String) {
@@ -443,7 +443,7 @@ public struct PiBind: Sendable, Equatable {
     case .besideSession(let sessionID): form.folderSession = sessionID
     case nil: form.unbind = true
     }
-    return String(decoding: try! JSONEncoder().encode(form), as: UTF8.self)
+    return String(decoding: try! JSONEncoder.sorted.encode(form), as: UTF8.self)
   }
 
   /// 来源不认识（更新版本写的）、也不是解除绑定的读不出——不能把它当成解除。
@@ -507,7 +507,7 @@ public struct PiSubagentState: Sendable, Equatable {
   /// 同步记录里存为 JSON 数组（加密字段 `subagents`，时刻是 1970 年起的秒）；读不出的当作没有。
   static func stored(_ list: [PiSubagentState]) -> String? {
     guard !list.isEmpty else { return nil }
-    let data = try! JSONEncoder().encode(
+    let data = try! JSONEncoder.sorted.encode(
       list.map {
         Stored(
           name: $0.name, role: $0.role, state: $0.phase.rawValue, action: $0.action,
