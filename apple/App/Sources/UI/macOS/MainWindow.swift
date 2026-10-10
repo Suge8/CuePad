@@ -82,6 +82,9 @@ struct MainWindow: View {
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { CloseButton() }
             .sharedBackgroundVisibility(.hidden)
+        // 会话页的标题与"⋯"：项常驻、只换里面的内容（`SessionHeader`）
+        ToolbarItem(placement: .navigation) { SessionTitleSlot() }
+            .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
             SyncAlert()
@@ -90,6 +93,7 @@ struct MainWindow: View {
                 .help("搜索（⌘K）")
                 .disabled(!workspace.isLibraryReady)
             TasksButton().disabled(!workspace.isLibraryReady)
+            SessionMenuSlot()
         }
     }
 

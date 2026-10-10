@@ -150,6 +150,9 @@ final class Workspace {
         pressedCard = nil
     }
 
+    /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
+    let sessionHeader = SessionHeader()
+
     /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）、文件夹绑定引导（`FolderGuide`）：整个窗口一份，页面直接读，
     /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同就不写，免得页面白算。
     private(set) var agentLinks = AgentLinks(items: [:], launching: [])
