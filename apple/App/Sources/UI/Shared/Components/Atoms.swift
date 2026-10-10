@@ -25,7 +25,7 @@ extension View {
 
     /// 同上；读到的和已有的相等就不写（重新订阅后的第一份多半没变，写一次等于让整页白算一遍）。
     func observing<T: Sendable & Equatable>(
-        _ store: CueStore, _ tables: Set<StoreTable>, id: some Equatable = 0, into value: Binding<T?>,
+        _ store: CueStore, _ tables: Set<Table>, id: some Equatable = 0, into value: Binding<T?>,
         onError: @escaping (any Error) -> Void = { _ in },
         _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> some View {
@@ -35,7 +35,7 @@ extension View {
 
 private struct Observing<T: Sendable, ID: Equatable>: ViewModifier {
     let store: CueStore
-    let tables: Set<StoreTable>
+    let tables: Set<Table>
     let id: ID
     @Binding var value: T?
     let same: (T?, T) -> Bool
