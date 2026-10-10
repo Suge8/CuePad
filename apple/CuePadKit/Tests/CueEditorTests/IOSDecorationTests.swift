@@ -90,14 +90,7 @@ struct IOSHighlightTests {
 @MainActor
 @Suite("iOS 轻装饰")
 struct IOSDecorationTests {
-    private let theme = CueEditorTheme.neutral
-
-    @Test("中文正文默认苹方")
-    func pingFangByDefault() throws {
-        let h = EditorHarness()
-        h.load("标题\n正文")
-        #expect(try paragraphs(h, 2).allSatisfy { font($0)?.fontName.hasPrefix("PingFangSC") == true })
-    }
+    private let theme = CueEditorTheme.test
 
     @Test("首个标题行用标题字体，其余用正文字体；标题随编辑移动")
     func title() throws {

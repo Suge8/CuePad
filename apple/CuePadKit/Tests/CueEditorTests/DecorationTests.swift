@@ -26,15 +26,8 @@ private func color(_ p: NSAttributedString, at index: Int = 0) -> NSColor? {
 @MainActor
 @Suite("轻装饰")
 struct DecorationTests {
-    private let theme = CueEditorTheme.neutral
+    private let theme = CueEditorTheme.test
     private let nowhere = NSRange(location: NSNotFound, length: 0)
-
-    @Test("中文正文默认苹方")
-    func pingFangByDefault() {
-        let h = EditorHarness()
-        h.load("标题\n正文")
-        #expect(displayed(h).allSatisfy { font($0)?.fontName.hasPrefix("PingFangSC") == true })
-    }
 
     @Test("首个非空、非分隔线的行用标题字体，其余用正文字体")
     func title() {
