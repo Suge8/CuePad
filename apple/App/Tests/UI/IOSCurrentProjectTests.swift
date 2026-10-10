@@ -41,6 +41,9 @@ struct IOSCurrentProjectTests {
         let restored = navigation(.split)
         restored.restore(project: kept.id, catalog: catalog)
         #expect(restored.splitRoot == .project(kept.id))
+        restored.push(.card(UUID()))
+        restored.restore(project: kept.id, catalog: catalog)  // 窗口宽窄变化、分栏重建
+        #expect(restored.splitPath.count == 1)
 
         let gone = navigation(.split)
         gone.restore(project: trashed.id, catalog: catalog)

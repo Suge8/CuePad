@@ -178,9 +178,10 @@ final class Navigation {
     }
 
     /// 分栏：恢复窗口时选回上次侧栏选中的项目；它已不在项目目录里（进了回收站、被删）时留在书架。
-    /// 目录在门内已经读到（`CatalogGate`），这里当场判定，不先推一张空的项目页再退回。
+    /// 分栏只在目录读到后才建出（`CatalogGate`），这里当场判定，不先推一张空的项目页再退回。
+    /// 已经选着它时不动：分栏随窗口宽窄重建（宽 → 窄 → 宽）时，项目页上推入的页留着。
     func restore(project: UUID?, catalog: ProjectCatalog?) {
-        guard let project, catalog?.project(project) != nil else { return }
+        guard let project, splitRoot != .project(project), catalog?.project(project) != nil else { return }
         select(.project(project))
     }
 
