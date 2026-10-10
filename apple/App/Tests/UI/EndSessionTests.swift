@@ -31,7 +31,7 @@ struct EndSessionTests {
 
     @Test func 没能结束_那一行写Mac给的原因() async throws {
         let session = try await live("deploy")
-        let workspace = Workspace(services: app.services, holder: SceneContext())
+        let workspace = Workspace(services: app.services)
 
         await workspace.end(session)
         #expect(try await list().ends[session.id]?.isOpen == true)
@@ -44,7 +44,7 @@ struct EndSessionTests {
 
     @Test func 结束了_会话进历史且不留进度() async throws {
         let session = try await live("deploy")
-        let workspace = Workspace(services: app.services, holder: SceneContext())
+        let workspace = Workspace(services: app.services)
         let store = store
 
         await workspace.end(session)
@@ -61,7 +61,7 @@ struct EndSessionTests {
 
     @Test func 还在路上时再点_不再发第二条() async throws {
         let session = try await live("deploy")
-        let workspace = Workspace(services: app.services, holder: SceneContext())
+        let workspace = Workspace(services: app.services)
 
         await workspace.end(session)
         await workspace.end(session)
