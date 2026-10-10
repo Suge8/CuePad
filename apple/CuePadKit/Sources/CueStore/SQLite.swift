@@ -92,6 +92,9 @@ struct Changes {
 final class SQLite {
   private var handle: OpaquePointer?
   private let changeLog = ChangeLog()
+  /// 编译好的语句，按 SQL 文本复用。用时取出、用完放回：同一条 SQL 在回调里被重入时，重入的那次临时编译一条，不共用游标。
+  private var statements: [String: OpaquePointer] = [:]
+  private static let statementLimit = 128
 
   init(path: String) throws {
     guard sqlite3_open_v2(path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else {
@@ -107,7 +110,10 @@ final class SQLite {
       }, Unmanaged.passUnretained(changeLog).toOpaque())
   }
 
-  deinit { sqlite3_close_v2(handle) }
+  deinit {
+    for statement in statements.values { sqlite3_finalize(statement) }
+    sqlite3_close_v2(handle)
+  }
 
   /// 执行不带参数的一条或多条语句。
   func exec(_ sql: String) throws {
@@ -119,11 +125,8 @@ final class SQLite {
   }
 
   func query<T>(_ sql: String, _ arguments: [any SQLBindable] = [], _ map: (Row) throws -> T) throws -> [T] {
-    var statement: OpaquePointer?
-    guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-      throw error(sql)
-    }
-    defer { sqlite3_finalize(statement) }
+    let statement = try checkOut(sql)
+    defer { checkIn(statement, sql) }
     for (index, argument) in arguments.enumerated() {
       let position = Int32(index + 1)
       switch argument.sqlValue {
@@ -166,6 +169,22 @@ final class SQLite {
       try? exec("ROLLBACK")
       throw error
     }
+  }
+
+  private func checkOut(_ sql: String) throws -> OpaquePointer {
+    if let cached = statements.removeValue(forKey: sql) { return cached }
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else { throw error(sql) }
+    return statement
+  }
+
+  private func checkIn(_ statement: OpaquePointer, _ sql: String) {
+    sqlite3_reset(statement)
+    sqlite3_clear_bindings(statement)
+    if statements.count >= Self.statementLimit, let evicted = statements.keys.first {
+      sqlite3_finalize(statements.removeValue(forKey: evicted))
+    }
+    if let existing = statements.updateValue(statement, forKey: sql) { sqlite3_finalize(existing) }
   }
 
   private func error(_ sql: String) -> SQLiteError {

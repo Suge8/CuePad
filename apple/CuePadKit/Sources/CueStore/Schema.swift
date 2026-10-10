@@ -38,6 +38,11 @@ enum Schema {
     Upgrade(stringLiteral: previews),
     // 20：对话里每轮回答带工具活动摘要（替换只有个数的 toolCount）；会话文件的检查点作废，下次启动从头读一遍，补出旧对话的摘要
     "ALTER TABLE piMessages ADD COLUMN tools TEXT; ALTER TABLE piMessages DROP COLUMN toolCount; UPDATE piSessions SET checkpoint = NULL;",
+    // 21：会话相关写入按 sessionID 找状态记录；回收站按 deletedAt 数个数、列条目（部分索引，活着的卡不进）
+    """
+    CREATE INDEX piSessionStates_sessionID ON piSessionStates(sessionID);
+    CREATE INDEX cards_deletedAt ON cards(deletedAt) WHERE deletedAt IS NOT NULL;
+    """,
   ]
 
   private static let previews = """
@@ -69,6 +74,7 @@ enum Schema {
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
     CREATE INDEX cards_projectID_modifiedAt ON cards(projectID, modifiedAt);
     CREATE INDEX cards_parentID ON cards(parentID);
+    CREATE INDEX cards_deletedAt ON cards(deletedAt) WHERE deletedAt IS NOT NULL;
 
     CREATE TABLE sendRecords (
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL,
@@ -94,6 +100,7 @@ enum Schema {
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
+    CREATE INDEX piSessionStates_sessionID ON piSessionStates(sessionID);
     CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince);
     CREATE INDEX piSessionStates_projectID ON piSessionStates(projectID, stateSince);
 
