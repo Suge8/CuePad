@@ -148,7 +148,7 @@ enum PerfBench {
                 _ = try? await workspace.services.store.search(query(text).store(), limit: PaletteQuery.pageSize)
                 store.append(ms(Date.now.timeIntervalSince(start)))
             }
-            UserDefaults.standard.set(text, forKey: "CuePadSearch")
+            DebugScene.searchOverride = text
             let start = Date.now
             await PerfProbe.wait(for: "search") { workspace.searching = true }
             let shown = ms(Date.now.timeIntervalSince(start))

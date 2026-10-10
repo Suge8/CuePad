@@ -8,7 +8,7 @@
 apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -theme dark
 ```
 
-- Debug 构建认一组启动参数，完整列表与含义只写在 `App/Sources/UI/Debug/DebugScene.swift`、`DebugScene+iOS.swift` 的文档注释里；设置项可直接覆盖（`-theme dark`）。产品代码只经 `DebugHooks` 碰调试画面，不认识 `DebugScene`、不写 `#if DEBUG`。
+- Debug 构建认一组启动参数，完整列表与含义只写在 `App/Sources/UI/Debug/DebugScene.swift`、`DebugScene+iOS.swift` 的文档注释里；设置项可直接覆盖（`-theme dark`）。产品代码只经 `DebugHooks` 碰调试画面，不认识 `DebugScene`、不写 `#if DEBUG`。调试键不写进偏好域：`UserDefaults.standard` 是真实的 `com.sugeh.cuepad`，测量里要换的值（如搜索词）放内存（`DebugScene.searchOverride`），预填的搜索词只认启动参数。
 - `CUEPAD_SHOT_LIBRARY` 换库目录（默认 `.derived/library`）。截图不靠固定等待：Debug 构建摆好画面后写下就绪标记（`DebugScene.signalReady`），`shot` 等它出现再截。
 - Pi 目录同样隔离，截图不含 `~/.pi` 的会话。隔离的 Pi 目录里没装扩展，侧栏底部出现"连接 Pi"征求同意是正确状态；不要它时传 `-piExtensionDeclined YES`。
 - `settings`、`menubar` 画面把设置窗口、菜单栏面板的内容放进主窗口拍，因为只截主窗口。
