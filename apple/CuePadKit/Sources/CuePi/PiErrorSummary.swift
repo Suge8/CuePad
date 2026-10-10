@@ -1,7 +1,7 @@
 #if os(macOS)
 import Foundation
 
-/// Pi 上报的模型调用错误（`PiAgentState.error` 的原文）的人话摘要。Pi 只给出一段文字——常见是
+/// Pi 上报的模型调用错误（`error` 状态的原文）的人话摘要。Pi 只给出一段文字——常见是
 /// "状态码 + 提供方的 JSON 错误体"，也可能是网络库的报错——这里提取状态码与提供方的错误类型、消息并归类。
 /// `title` 是一句中文，`providerMessage` 是提供方给的原句（可作补充说明），`raw` 是完整原文（悬停显示）。
 public struct PiErrorSummary: Sendable, Equatable {

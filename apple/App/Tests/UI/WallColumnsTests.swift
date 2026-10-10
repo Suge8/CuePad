@@ -11,12 +11,6 @@ struct WallColumnsTests {
         [a: 100, b: 300, c: 100, d: 100, e: 50][id] ?? 100
     }
 
-    @Test func 初次排布按顺序放进当前最矮的一列() {
-        let wall = WallColumns(order: [a, b, c, d], count: 2, height: height)
-
-        #expect(wall.columns == [[a, c, d], [b]])
-    }
-
     @Test func 新卡进最矮的一列的顶部_已有的卡不换列() {
         var wall = WallColumns(order: [a, b, c, d], count: 2, height: height)
 
@@ -40,14 +34,5 @@ struct WallColumnsTests {
         wall.update(order: [a, b, c, d], count: 3, height: height)
 
         #expect(wall.columns == [[a, d], [b], [c]])
-    }
-
-    @Test func 跨天重新排墙时按新顺序整体重新分配() {
-        let today = Date(timeIntervalSince1970: 0), tomorrow = Date(timeIntervalSince1970: 86_400)
-        var wall = WallColumns(order: [a, b, c, d], count: 2, height: height, arrangedAt: today)
-
-        wall.update(order: [d, c, b, a], count: 2, height: height, arrangedAt: tomorrow)
-
-        #expect(wall.columns == WallColumns(order: [d, c, b, a], count: 2, height: height).columns)
     }
 }

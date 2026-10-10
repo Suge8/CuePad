@@ -12,6 +12,10 @@ actor SyncCoordinator {
   private var watcher: Task<Void, Never>?
   /// 有登记被搁置（配额、未预期失败）：下一次本机改动时全量对账一次，把它们重新登记。
   private var needsFullReconcile = false
+  /// 服务器上的大字段（见 `ServerValues`）与已交给引擎、还没有结果的上传版本（结果回来时用它记账，不读服务器返回的记录：
+  /// 返回的记录只带发出去的字段）。
+  private var serverValues = ServerValues()
+  private var inFlight: [String: SyncRow] = [:]
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
 
   private(set) var state = SyncState(status: .starting, issues: []) {
@@ -93,7 +97,9 @@ actor SyncCoordinator {
     do {
       guard let row = try await store.syncRow(recordName: id.recordName) else { return nil }
       let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
-      let record = RecordMapper.record(from: row, zoneID: zoneID, base: base)
+      let values = serverValues
+      let record = RecordMapper.record(from: row, zoneID: zoneID, base: base, isCurrent: { base != nil && values.isCurrent($0, in: row) })
+      inFlight[id.recordName] = row
       if row.table == .attachments {
         guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
           report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
@@ -116,6 +122,7 @@ actor SyncCoordinator {
   /// 用户对 `needsDecision` 的选择。之后需要重建引擎（引擎状态属于旧账号或已失效的云端数据，这里已清掉）。
   func resolve(_ resolution: SyncResolution) async throws {
     guard needsDecision != nil else { throw SyncError.nothingToResolve }
+    serverValues.removeAll()
     switch resolution {
     case .uploadLocal: try await store.resetSyncMetadata()
     case .eraseLocal: try await store.eraseSyncedData()
@@ -178,6 +185,7 @@ actor SyncCoordinator {
       status = .noAccount
     case .signedIn:
       // 新登录的账号：云端记录与本机记录的对应关系从零开始，本机全部重新上传。
+      serverValues.removeAll()
       try await store.resetSyncMetadata()
       status = .idle
       try await reconcile()
@@ -195,6 +203,7 @@ actor SyncCoordinator {
         report("未知的记录类型「\(record.recordType)」，已跳过（可能来自更新版本的 CuePad）", recordType: record.recordType, recordName: record.recordID.recordName)
         continue
       }
+      serverValues.learn(row)  // 服务器上就是这个样子，不管本机最后留下哪个版本
       if row.table == .attachments, !adoptAsset(of: record, row) { continue }
       changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record)))
     }
@@ -203,6 +212,7 @@ actor SyncCoordinator {
         report("未知的记录类型「\(recordType)」的删除，已跳过", recordType: recordType, recordName: id.recordName)
         continue
       }
+      serverValues.forget(id.recordName)
       changes.append(.delete(SyncKey(table: table, id: id.recordName)))
     }
     for failure in try await store.applyRemote(changes) {
@@ -234,16 +244,21 @@ actor SyncCoordinator {
   ) async throws {
     var changedSince: [CKRecord.ID] = []
     for record in saved {
-      guard let row = RecordMapper.row(from: record) else { continue }
+      guard let row = inFlight.removeValue(forKey: record.recordID.recordName) ?? RecordMapper.row(from: record) else { continue }
+      serverValues.learn(row)
       // 引擎发送的是取走时的版本；之后又改过的，引擎已移除它的待办，要重新登记
       if try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record)) { changedSince.append(record.recordID) }
     }
     var resend = changedSince
     var resendDeletes: [CKRecord.ID] = []
-    for id in deleted { try await store.dropSyncMetadata(id.recordName) }
+    for id in deleted {
+      serverValues.forget(id.recordName)
+      try await store.dropSyncMetadata(id.recordName)
+    }
 
     var blocked = false
     for (record, error) in failedSaves {
+      inFlight[record.recordID.recordName] = nil
       switch error.code {
       case .serverRecordChanged:
         if let server = error.serverRecord {
@@ -259,6 +274,7 @@ actor SyncCoordinator {
       case .unknownItem, .zoneNotFound:
         // 服务器上没有这条记录（或整个同步区没了）：忘掉旧系统字段，作为新记录重新上传。
         if error.code == .zoneNotFound { await queue.ensureZone(zoneID) }
+        serverValues.forget(record.recordID.recordName)
         try await store.dropSyncMetadata(record.recordID.recordName)
         resend.append(record.recordID)
       default:

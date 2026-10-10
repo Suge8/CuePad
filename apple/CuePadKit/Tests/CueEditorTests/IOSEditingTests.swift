@@ -81,7 +81,7 @@ struct IOSEditingTests {
     @Test("图片入库失败：报告错误、不插入")
     func importFailure() async throws {
         let h = EditorHarness()
-        let failing = CueTextView(imageStore: FailingStore())
+        let failing = CueTextView(imageStore: FailingStore(), theme: .test)
         h.window.addSubview(failing)
         h.window.layoutIfNeeded()
         var errors: [any Error] = []

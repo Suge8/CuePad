@@ -1,68 +1,17 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
-/// 一轮里 Agent 的工具活动，给对话里那条回答的"读了 3 个文件，改了 2 个文件"一行和点开的清单用：
-/// 分类计数（失败的不算进各类，单独计）加一份紧凑清单。只记是什么，不记工具输出；上限在这里定，Store 与同步原样带着。
-public struct PiToolActivity: Sendable, Codable, Equatable {
-    /// 声明顺序即摘要里的优先级：改文件、跑命令比读取和搜索更值得说。
-    public enum Kind: String, Sendable, Codable, CaseIterable {
-        case edit, command, read, search, other
-    }
-
-    public struct Item: Sendable, Codable, Equatable {
-        public var kind: Kind
-        /// 文件路径（相对工作目录）、命令的第一个非空行、搜索的模式或工具名，至多 `targetLimit` 个字符
-        public var target: String
-        public var failed: Bool
-        /// 改文件：从参数算出的新增、删除行数；算不出（读取、命令，或整文件写入不知道原有多少行）为 nil
-        public var added: Int?
-        public var removed: Int?
-    }
-
-    /// 各类成功的次数；读、改文件按文件算（同一个文件读两次、改两次只算一个）
-    public var edits = 0, commands = 0, reads = 0, searches = 0, others = 0
-    /// 失败的调用数
-    public var failed = 0
-    /// 清单，按发生先后，至多 `itemLimit` 条；超出的只进计数
-    public var items: [Item] = []
-
-    public static let itemLimit = 30
-    public static let targetLimit = 120
-
-    public subscript(kind: Kind) -> Int {
-        get {
-            switch kind {
-            case .edit: edits
-            case .command: commands
-            case .read: reads
-            case .search: searches
-            case .other: others
-            }
-        }
-        set {
-            switch kind {
-            case .edit: edits = newValue
-            case .command: commands = newValue
-            case .read: reads = newValue
-            case .search: searches = newValue
-            case .other: others = newValue
-            }
-        }
-    }
-
-    static func clip(_ text: String) -> String {
-        text.count <= targetLimit ? text : String(text.prefix(targetLimit - 1)) + "…"
-    }
-}
+typealias Tools = PiChatMessage.Tools
 
 /// 一轮里还在累计的工具活动（检查点里跨读文件带着）：调用在助手消息里，成败在后面的工具结果行里，所以调用先挂起，
-/// 结果到了再落进 `PiToolActivity`；一轮结束时没等到结果的（被中止）按成功算。
+/// 结果到了再落进 `PiChatMessage.Tools`（给对话里那条回答的"读了 3 个文件，改了 2 个文件"一行和点开的清单用；只记是什么，不记工具输出）；一轮结束时没等到结果的（被中止）按成功算。
 struct PiToolLog: Codable, Equatable {
-    private var activity = PiToolActivity()
+    private var activity = Tools()
     private var pending: [String: Call] = [:]
 
     struct Call: Codable, Equatable {
-        var kind: PiToolActivity.Kind
+        var kind: Tools.Kind
         var target: String
         var added: Int?
         var removed: Int?
@@ -78,10 +27,10 @@ struct PiToolLog: Codable, Equatable {
     }
 
     /// 这一轮的活动；一次工具都没调为 nil。
-    func summary() -> PiToolActivity? {
+    func summary() -> Tools? {
         var log = self
         for (_, call) in log.pending.sorted(by: { $0.key < $1.key }) { log.settle(call, failed: false) }
-        return log.activity == PiToolActivity() ? nil : log.activity
+        return log.activity == Tools() ? nil : log.activity
     }
 
     private mutating func settle(_ call: Call, failed: Bool) {
@@ -94,10 +43,22 @@ struct PiToolLog: Codable, Equatable {
             activity.items[index].removed = item.removed.map { $0 + (call.removed ?? 0) } ?? call.removed
             return
         } else {
-            activity[call.kind] += 1
+            activity.add(call.kind)
         }
-        if activity.items.count < PiToolActivity.itemLimit {
+        if activity.items.count < Tools.itemLimit {
             activity.items.append(.init(kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed))
+        }
+    }
+}
+
+private extension Tools {
+    mutating func add(_ kind: Kind) {
+        switch kind {
+        case .edit: edits += 1
+        case .command: commands += 1
+        case .read: reads += 1
+        case .search: searches += 1
+        case .other: others += 1
         }
     }
 }
@@ -152,17 +113,21 @@ private extension PiToolLog.Call {
         case "edit", "write", "strreplace", "str_replace", "multiedit":
             let change = arguments.lineChange
             let written = arguments.content.map { PiToolArguments.lines($0).count }
-            self.init(kind: .edit, target: PiToolActivity.clip(file ?? name), added: change?.added ?? written, removed: change?.removed)
+            self.init(kind: .edit, target: Self.clip(file ?? name), added: change?.added ?? written, removed: change?.removed)
         case "read":
-            self.init(kind: .read, target: PiToolActivity.clip(file ?? name))
+            self.init(kind: .read, target: Self.clip(file ?? name))
         case "bash", "shell":
             let line = arguments.command?.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
-            self.init(kind: .command, target: PiToolActivity.clip(line ?? name))
+            self.init(kind: .command, target: Self.clip(line ?? name))
         case "grep", "find", "ls", "glob":
-            self.init(kind: .search, target: PiToolActivity.clip(arguments.pattern ?? file ?? name))
+            self.init(kind: .search, target: Self.clip(arguments.pattern ?? file ?? name))
         default:
-            self.init(kind: .other, target: PiToolActivity.clip(name))
+            self.init(kind: .other, target: Self.clip(name))
         }
+    }
+
+    static func clip(_ text: String) -> String {
+        text.count <= Tools.targetLimit ? text : String(text.prefix(Tools.targetLimit - 1)) + "…"
     }
 
     /// 相对工作目录；工作目录之外的家目录路径写成 ~/…（完整路径不同步）。

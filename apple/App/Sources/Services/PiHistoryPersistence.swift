@@ -1,5 +1,6 @@
 #if os(macOS)
 import CuePi
+import struct CueStore.PiSession
 import CueStore
 import Foundation
 import os
@@ -85,15 +86,14 @@ actor PiHistoryPersistence {
         for update in updates {
             let history = update.history
             let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-            let session = StoredPiSession(
-                id: history.sessionID ?? update.file.deletingPathExtension().lastPathComponent,
+            let session = PiSession(
+                id: update.sessionID,
                 path: update.file.path,
                 cwd: history.cwd ?? "",
                 title: history.displayName,
                 lastActivityAt: history.lastActivity ?? modified ?? .distantPast)
             batch.append(PiSessionUpsert(
-                session: session, checkpoint: try JSONEncoder().encode(update.checkpoint),
-                transcript: try await transcript(of: update, sessionID: session.id)))
+                session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: try await transcript(of: update)))
         }
         try await storage.upsertPiSessions(batch, host: host)
         for item in batch { idsByPath?[item.session.path] = item.session.id }
@@ -102,13 +102,13 @@ actor PiHistoryPersistence {
     /// 这次读到的对话与摘要。在不在范围内只看读文件时的判定（索引器按文件修改时间，`includesTranscript`），这里不另判：
     /// 范围外只写摘要；刚进入范围（本机还没有它的对话，而这次是增量读）时从头再读一遍，补齐全部消息——
     /// "范围内的会话有全部消息"不靠读到的那一段碰巧完整。
-    private func transcript(of update: PiHistoryUpdate, sessionID: String) async throws -> PiTranscript {
-        guard update.includesTranscript else { return PiTranscript(update, sessionID: sessionID, messages: false) }
+    private func transcript(of update: PiHistoryUpdate) async throws -> PiTranscript {
+        guard update.includesTranscript else { return update.transcript }
         let incremental = update.checkpoint.offset > UInt64(update.bytesRead)
-        if incremental, try await storage.piMessages(of: sessionID).isEmpty {
-            return PiTranscript(try PiHistory.index(file: update.file, from: nil), sessionID: sessionID)
+        if incremental, try await storage.piMessages(of: update.sessionID).isEmpty {
+            return try PiHistory.index(file: update.file, from: nil).transcript
         }
-        return PiTranscript(update, sessionID: sessionID)
+        return update.transcript
     }
 
     /// 清理安静了的会话的对话：现在一次，之后每天一次，直到任务取消。清理失败记日志，下次再来。
@@ -145,47 +145,6 @@ actor PiHistoryPersistence {
         let loaded = Dictionary(rows.map { ($0.path, $0.id) }, uniquingKeysWith: { first, _ in first })
         idsByPath = loaded
         return loaded
-    }
-}
-
-nonisolated extension PiTranscript {
-    /// 读会话文件得到的对话与摘要；`messages` 为 false 时只要摘要（范围外的会话）。
-    init(_ update: PiHistoryUpdate, sessionID: String, messages: Bool = true) {
-        let recap = update.recap
-        self.init(
-            sessionID: sessionID,
-            messages: messages ? update.transcript.map { PiChatMessage($0, sessionID: sessionID) } : [],
-            recap: PiRecap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt))
-    }
-}
-
-nonisolated extension PiChatRole {
-    init(_ role: PiTranscriptEntry.Role) {
-        self = switch role {
-        case .user: .user
-        case .pi: .pi
-        case .system: .system
-        }
-    }
-}
-
-nonisolated extension PiChatMessage {
-    init(_ entry: PiTranscriptEntry, sessionID: String) {
-        self.init(
-            sessionID: sessionID, entryID: entry.entryID, seq: entry.seq, role: PiChatRole(entry.role), text: entry.text,
-            at: entry.at, tools: entry.tools.map(PiChatMessage.Tools.init), roundStartedAt: entry.roundStartedAt,
-            deliveryID: entry.deliveryID.flatMap(UUID.init(uuidString:)))
-    }
-}
-
-nonisolated extension PiChatMessage.Tools {
-    init(_ activity: PiToolActivity) {
-        self.init(
-            edits: activity.edits, commands: activity.commands, reads: activity.reads, searches: activity.searches, others: activity.others,
-            failed: activity.failed,
-            items: activity.items.map {
-                Item(kind: Kind(rawValue: $0.kind.rawValue) ?? .other, target: $0.target, failed: $0.failed, added: $0.added, removed: $0.removed)
-            })
     }
 }
 #endif

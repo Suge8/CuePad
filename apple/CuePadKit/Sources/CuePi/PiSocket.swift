@@ -1,6 +1,7 @@
 #if os(macOS)
 import Darwin
 import Foundation
+import Synchronization
 
 /// 目录与 socket 文件的属主/权限校验（扩展端做同样的检查）。
 enum PiSocketDirectory {
@@ -53,16 +54,15 @@ enum PiSocketDirectory {
 
 /// 一条 Unix socket 连接：按行产出，EOF（含对端被强杀）即 `lines` 结束。
 /// 读在专用串行队列的 DispatchSource 上；写在另一条队列上阻塞完成（图片可达数 MB）。
-final class PiSocketConnection: @unchecked Sendable {
+final class PiSocketConnection: Sendable {
     enum ConnectError: Error { case pathTooLong, socket(Int32), connect(Int32), peerNotOwner }
 
     let lines: AsyncStream<Data>
     private let fd: Int32
     private let source: DispatchSourceRead
     private let writeQueue = DispatchQueue(label: "cuepi.socket.write")
-    /// fd 是进程全局的：关闭后排队中的写入不能落到被复用的描述符上，所以写与关闭互斥
-    private let fdLock = NSLock()
-    private var isClosed = false
+    /// fd 是进程全局的：关闭后排队中的写入不能落到被复用的描述符上，所以写与关闭互斥；值是 fd 是否已关闭
+    private let closed = Mutex(false)
 
     /// 连接到本机 socket：本地 connect 是微秒级；对端进程被冻结时也由内核 backlog 接住，不会阻塞。
     init(path: String) throws {
@@ -97,9 +97,9 @@ final class PiSocketConnection: @unchecked Sendable {
             for line in buffer.append(chunk[0..<n]) { continuation.yield(line) }
         }
         source.setCancelHandler { [self] in
-            shutdown(fd, SHUT_RDWR) // 让阻塞中的写入失败返回，释放 fdLock
-            fdLock.withLock {
-                isClosed = true
+            shutdown(fd, SHUT_RDWR) // 让阻塞中的写入失败返回，释放 closed 的锁
+            closed.withLock {
+                $0 = true
                 Darwin.close(fd)
             }
             continuation.finish()
@@ -109,8 +109,8 @@ final class PiSocketConnection: @unchecked Sendable {
 
     func write(_ data: Data) {
         writeQueue.async { [self] in
-            fdLock.withLock {
-                guard !isClosed else { return }
+            closed.withLock {
+                guard !$0 else { return }
                 data.withUnsafeBytes { raw in
                     var offset = 0
                     while offset < raw.count {

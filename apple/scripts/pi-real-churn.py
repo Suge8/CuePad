@@ -4,7 +4,7 @@
 # 开新会话前等上一轮结束：测试用假模型在流进行中切换会话会读到空会话而崩溃，那不是要复现的情形。
 # 用法：python3 pi-real-churn.py <agent 目录> <socket 目录> <工作目录> [轮数=20]
 import json, os, queue, shutil, subprocess, sys, threading, time
-agent, sock, cwd = sys.argv[1], sys.argv[2], os.path.expanduser(sys.argv[3])
+agent, sock, cwd = sys.argv[1], sys.argv[2], sys.argv[3]
 rounds = int(sys.argv[4]) if len(sys.argv) > 4 else 20
 here = os.path.dirname(os.path.abspath(__file__))
 kit = os.path.join(here, "..", "CuePadKit")

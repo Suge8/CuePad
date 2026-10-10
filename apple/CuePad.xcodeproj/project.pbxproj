@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A10000000000000000000F01 /* FakeExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000F02 /* FakeExtension.swift */; };
 		D20000000000000000000003 /* CuePadNotify.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* CuePadNotify.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		D2000000000000000000000E /* CueSync in Frameworks */ = {isa = PBXBuildFile; productRef = D2000000000000000000000D /* CueSync */; };
 		D20000000000000000000102 /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = D20000000000000000000101 /* CueStore */; };
@@ -96,6 +97,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A10000000000000000000F02 /* FakeExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FakeExtension.swift; path = CuePadKit/Tests/CuePiTests/FakeExtension.swift; sourceTree = "<group>"; };
 		D20000000000000000000002 /* CuePadNotify.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CuePadNotify.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2000000000000000000000F /* NotificationService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "NotificationService-Info.plist"; sourceTree = "<group>"; };
 		D20000000000000000000010 /* NotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NotificationService.entitlements; sourceTree = "<group>"; };
@@ -194,6 +196,7 @@
 			children = (
 				A10000000000000000000020 /* Sources */,
 				A10000000000000000000021 /* Tests */,
+				A10000000000000000000F02 /* FakeExtension.swift */,
 				E10000000000000000000002 /* CueCLI */,
 				C10000000000000000000001 /* AppGroup */,
 				C10000000000000000000002 /* ShareExtension */,
@@ -491,6 +494,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000F01 /* FakeExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

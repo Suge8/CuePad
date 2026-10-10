@@ -1,7 +1,6 @@
 import CueStore
 import CueText
 import SwiftUI
-import UniformTypeIdentifiers
 #if os(iOS)
 import PhotosUI
 #else
@@ -54,16 +53,6 @@ struct ComposerDraft {
     /// 存储格式正文：图片文件在这里写入图片库。
     func stored(in files: AttachmentFiles) throws -> String {
         StoredBody.make(attachments: attachments.map(\.content), text: text, imageHashes: try images.map { try files.store($0.data) })
-    }
-}
-
-extension AppServices {
-    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（交给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
-    @discardableResult
-    func requestMacDelivery(
-        _ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
-    ) async throws -> DeliveryRequest {
-        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: card ?? draft.attachments.first?.card)
     }
 }
 
@@ -572,11 +561,15 @@ private struct ImageSources: ViewModifier {
             .onChange(of: picked) { load() }
         #else
         content
-            .fileImporter(isPresented: showing(.files), allowedContentTypes: [.image], allowsMultipleSelection: true) { result in
-                do {
-                    for url in try result.get() { images.append(PickedImage(data: try Self.read(url))) }
-                } catch {
-                    workspace.fail(error)
+            .onChange(of: source) {
+                guard source == .files else { return }
+                source = nil
+                Task {
+                    do {
+                        for data in try await FilePicker.images() { images.append(PickedImage(data: data)) }
+                    } catch {
+                        workspace.fail(error)
+                    }
                 }
             }
         #endif
@@ -599,13 +592,6 @@ private struct ImageSources: ViewModifier {
                 }
             }
         }
-    }
-    #else
-    /// 选文件面板给的是沙盒外的地址：读之前先拿访问权。
-    private static func read(_ url: URL) throws -> Data {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        return try Data(contentsOf: url)
     }
     #endif
 }

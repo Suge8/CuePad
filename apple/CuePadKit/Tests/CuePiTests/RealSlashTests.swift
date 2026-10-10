@@ -1,6 +1,7 @@
 #if os(macOS)
 import Foundation
 import Testing
+import CueStore
 @testable import CuePi
 
 /// 斜杠命令与上下文余量的端到端：真实 Pi + 安装器装进临时目录的真实扩展 + 假模型 + `PiBridge`。
@@ -50,7 +51,7 @@ struct RealSlashTests {
                 try pi.prompt("第 \(round) 轮 " + String(repeating: "上下文填充 ", count: 12_000))
                 // 以已用量涨上去为准：上一轮的"歇下"状态在新一轮开始前还留着，单看状态会提前放行
                 try await eventually("第 \(round) 轮之后已用量涨了", timeout: .seconds(30)) {
-                    (bridge.sessions.first?.context?.tokens ?? 0) > used + 10_000 && bridge.sessions.first?.state == .done(aborted: false)
+                    (bridge.sessions.first?.context?.tokens ?? 0) > used + 10_000 && bridge.sessions.first?.state == .settled
                 }
                 used = bridge.sessions.first?.context?.tokens ?? 0
             }
@@ -61,9 +62,9 @@ struct RealSlashTests {
                 bridge.sessions.first?.context.map { $0.tokens == nil && $0.window == 100_000 } == true
             }
             // 压缩在会话文件里留下一条 compaction：对话里是一行系统行（真实 Pi 写的格式）
-            let transcript = try PiHistory.index(file: #require(s.sessionFile), from: nil).transcript
-            #expect(transcript.contains { $0.role == .system && $0.text.hasPrefix("已压缩上下文") })
-            #expect(transcript.filter { $0.role == .user }.count == 2)  // 命令没有变成你说的话
+            let transcript = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
+            #expect(transcript.contains { $0.role == .known(.system) && $0.text.hasPrefix("已压缩上下文") })
+            #expect(transcript.filter { $0.role == .known(.user) }.count == 2)  // 命令没有变成你说的话
         }
     }
 
@@ -72,11 +73,11 @@ struct RealSlashTests {
         try await withRig { _, _, s in
             let byName = Dictionary(uniqueKeysWithValues: s.commands.map { ($0.name, $0) })
             for builtin in ["compact", "name", "model", "thinking", "new", "reload", "clone"] {
-                #expect(byName[builtin]?.source == "builtin", "\(builtin)")
+                #expect(byName[builtin]?.source == .known(.builtin), "\(builtin)")
             }
-            #expect(byName["shout"]?.source == "extension" && byName["shout"]?.description == "test: shout the arguments")
-            #expect(byName["greet"]?.source == "prompt" && byName["greet"]?.description == "Greet someone")
-            #expect(byName["skill:careful"]?.source == "skill" && byName["skill:careful"]?.description == "Work carefully")
+            #expect(byName["shout"]?.source == .known(.extension) && byName["shout"]?.summary == "test: shout the arguments")
+            #expect(byName["greet"]?.source == .known(.prompt) && byName["greet"]?.summary == "Greet someone")
+            #expect(byName["skill:careful"]?.source == .known(.skill) && byName["skill:careful"]?.summary == "Work carefully")
             #expect(byName["compact"]?.hint != nil && byName["new"]?.hint == nil)
             for terminalOnly in ["settings", "tree", "fork", "resume", "login", "hotkeys", "cuepad-reload", "cuepad"] {
                 #expect(byName[terminalOnly] == nil, "\(terminalOnly)")
@@ -119,11 +120,11 @@ struct RealSlashTests {
             try await eventually("改名") { bridge.sessions.first?.displayName == "登录修复" }
 
             try await bridge.command("/model fake/echo-think", in: s.id)
-            try await eventually("换模型") { bridge.sessions.first?.model?.id == "echo-think" }
+            try await eventually("换模型") { bridge.sessions.first?.model?.key.id == "echo-think" }
             try await bridge.command("/thinking high", in: s.id)
-            try await eventually("换强度") { bridge.sessions.first?.thinking == "high" }
+            try await eventually("换强度") { bridge.sessions.first?.thinking == .known(.high) }
             try await bridge.command("/model echo-b", in: s.id)  // 不带提供方：模型 id 唯一时也认
-            try await eventually("按 id 换模型") { bridge.sessions.first?.model?.id == "echo-b" }
+            try await eventually("按 id 换模型") { bridge.sessions.first?.model?.key.id == "echo-b" }
         }
     }
 
@@ -132,7 +133,7 @@ struct RealSlashTests {
         try await withRig { pi, bridge, s in
             try pi.prompt("先说一句")
             try await eventually("回复写入", timeout: .seconds(20)) { self.userTexts(of: s) == ["先说一句"] }
-            try await eventually("歇下") { bridge.sessions.first?.state == .done(aborted: false) }
+            try await eventually("歇下") { bridge.sessions.first?.state == .settled }
 
             try await bridge.command("/new", in: s.id)
             try await eventually("新会话", timeout: .seconds(20)) { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
@@ -154,7 +155,7 @@ struct RealSlashTests {
     @Test func cloneOpensACopyOfTheSession() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("要克隆的一句")
-            try await eventually("歇下", timeout: .seconds(20)) { bridge.sessions.first?.state == .done(aborted: false) }
+            try await eventually("歇下", timeout: .seconds(20)) { bridge.sessions.first?.state == .settled }
             try await bridge.command("/clone", in: s.id)
             try await eventually("克隆出新会话", timeout: .seconds(20)) { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
             try await eventually("克隆带着历史") { self.userTexts(of: bridge.sessions[0]) == ["要克隆的一句"] }

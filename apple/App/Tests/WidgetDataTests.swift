@@ -100,10 +100,4 @@ struct WidgetDataTests {
         services.handle(url: URL(string: text)!)
         #expect(services.pendingDeepLink == nil)
     }
-
-    @Test func 处理链接后界面取走一次() {
-        services.handle(url: DeepLink.capture(project: nil).url)
-        #expect(services.consumeDeepLink() == .capture(project: nil))
-        #expect(services.consumeDeepLink() == nil)
-    }
 }

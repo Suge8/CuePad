@@ -1,6 +1,7 @@
 #if os(macOS)
 import Foundation
 import Testing
+import CueStore
 @testable import CuePi
 
 private let longCommand = "echo " + String(repeating: "a", count: 200)
@@ -43,10 +44,9 @@ struct RealPiTests {
         try await withRig { pi, _, s in
             #expect(s.pid == pi.pid)
             #expect(s.cwd.resolvingSymlinksInPath().path == pi.cwd.resolvingSymlinksInPath().path)
-            #expect(s.mode == "rpc")
-            #expect(s.model?.id == "echo" && s.thinking == "off")
+            #expect(s.model?.key.id == "echo" && s.thinking == .known(.off))
             #expect(s.extensionVersion == PiExtensionBundle.version)
-            #expect(s.state == .idle)
+            #expect(s.state == .settled)
             #expect(s.terminal.program == "test-term" && s.terminal.bundleID == "com.example.term")
             #expect(s.terminal.tmuxPane == "%9" && s.terminal.tmuxSocketPath == "/tmp/tmux-test/default")
             #expect(s.sessionFile?.path.hasPrefix(pi.paths.sessionsDirectory.resolvingSymlinksInPath().path) == true
@@ -57,23 +57,22 @@ struct RealPiTests {
     /// 换模型与思考强度走真实 Pi 的扩展接口：会话上报的模型、强度与可选列表随之更新；模型不支持的强度被 Pi 夹取，找不到的模型被拒绝。
     @Test func configureSwitchesTheRealSessionsModelAndThinking() async throws {
         try await withRig { _, bridge, s in
-            #expect(s.availableModels.map(\.id).sorted() == ["echo", "echo-b", "echo-think"])
-            #expect(s.availableModels.first { $0.id == "echo" }?.thinkingLevels == ["off"])
-            #expect(s.availableModels.first { $0.id == "echo-think" }?.thinkingLevels == ["off", "minimal", "low", "medium", "high"])
+            #expect(s.availableModels.map(\.key.id).sorted() == ["echo", "echo-b", "echo-think"])
+            #expect(s.availableModels.first { $0.key.id == "echo" }?.thinkingLevels == [.off])
+            #expect(s.availableModels.first { $0.key.id == "echo-think" }?.thinkingLevels == [.off, .minimal, .low, .medium, .high])
 
-            try await bridge.configure(model: PiModelRef(provider: "fake", id: "echo-think"), thinking: "high", in: s.id)
-            try await eventually("上报跟上") { bridge.sessions.first?.model?.id == "echo-think" && bridge.sessions.first?.thinking == "high" }
+            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo-think"), thinking: .high, in: s.id)
+            try await eventually("上报跟上") { bridge.sessions.first?.model?.key.id == "echo-think" && bridge.sessions.first?.thinking == .known(.high) }
 
-            try await bridge.configure(thinking: "low", in: s.id)
-            try await eventually("只改强度") { bridge.sessions.first?.thinking == "low" }
+            try await bridge.configure(thinking: .low, in: s.id)
+            try await eventually("只改强度") { bridge.sessions.first?.thinking == .known(.low) }
 
-            try await bridge.configure(model: PiModelRef(provider: "fake", id: "echo"), thinking: "high", in: s.id)
-            try await eventually("不支持思考的模型把强度夹到 off") { bridge.sessions.first?.model?.id == "echo" && bridge.sessions.first?.thinking == "off" }
+            try await bridge.configure(model: PiModelKey(provider: "fake", id: "echo"), thinking: .high, in: s.id)
+            try await eventually("不支持思考的模型把强度夹到 off") { bridge.sessions.first?.model?.key.id == "echo" && bridge.sessions.first?.thinking == .known(.off) }
 
             await #expect(throws: PiBridgeError.rejected("unknown_model")) {
-                try await bridge.configure(model: PiModelRef(provider: "fake", id: "nope"), in: s.id)
+                try await bridge.configure(model: PiModelKey(provider: "fake", id: "nope"), in: s.id)
             }
-            await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.configure(thinking: "ultra", in: s.id) }
 
             // 改名同一条路（Pi 设置会话名的接口），会话名随即上报；空名拒绝
             try await bridge.configure(name: "登录修复", in: s.id)
@@ -89,7 +88,7 @@ struct RealPiTests {
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
-        #expect(bridge.sessions[0].availableModels.map(\.id).sorted() == ["echo", "echo-think"])  // echo 是当前模型，不在范围内也列出
+        #expect(bridge.sessions[0].availableModels.map(\.key.id).sorted() == ["echo", "echo-think"])  // echo 是当前模型，不在范围内也列出
     }
 
     /// 终端里开的会话（扩展接口 `ctx.shutdown`）：正在等你确认时，结束会取消这个弹窗，让会话能收尾（弹窗不取消，Pi 会一直等下去）。
@@ -97,7 +96,7 @@ struct RealPiTests {
     @Test func endingASessionCancelsItsPendingDialog() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("/ask")
-            try await eventually("确认框", timeout: .seconds(20)) { bridge.sessions.first?.question?.kind == "confirm" }
+            try await eventually("确认框", timeout: .seconds(20)) { bridge.sessions.first?.question?.kind == .known(.confirm) }
 
             try await bridge.end(s.id)
 
@@ -110,12 +109,12 @@ struct RealPiTests {
     @Test func abortStopsTheRunningTurnAndTheSessionTakesTheNextMessage() async throws {
         try await withRig { pi, bridge, s in
             try await bridge.abort(s.id)  // 空闲：成功，不改状态
-            #expect(bridge.sessions.first?.state == .idle)
+            #expect(bridge.sessions.first?.state == .settled)
 
             try pi.prompt("[[slow]] 很长的一轮")
             try await eventually("在跑", timeout: .seconds(10)) { bridge.sessions.first?.state == .thinking }
             try await bridge.abort(s.id)
-            try await eventually("回到等下一句", timeout: .seconds(10)) { bridge.sessions.first?.state == .done(aborted: true) }
+            try await eventually("回到等下一句", timeout: .seconds(10)) { bridge.sessions.first?.state == .settled }
 
             try pi.prompt("接着说")
             try await eventually("还能接着说", timeout: .seconds(20)) { recap(of: bridge.sessions.first)?.lastReply == "ECHO 接着说 IMAGES[]" }
@@ -126,7 +125,7 @@ struct RealPiTests {
     @Test func abortWhileWaitingForYouCancelsTheDialogAndStopsTheTurn() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("/ask")
-            try await eventually("确认框", timeout: .seconds(20)) { bridge.sessions.first?.question?.kind == "confirm" }
+            try await eventually("确认框", timeout: .seconds(20)) { bridge.sessions.first?.question?.kind == .known(.confirm) }
 
             try await bridge.abort(s.id)
 
@@ -139,7 +138,7 @@ struct RealPiTests {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)
             try pi.prompt("hello")
-            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
+            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .settled }
 
             let states = log.states
             #expect(states.first == .thinking)
@@ -192,7 +191,7 @@ struct RealPiTests {
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
             try pi.prompt("[[tool:sleep 0.3]]")
-            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
+            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .settled }
             let working = log.changes.compactMap { change -> PiSession? in
                 guard case .stateChanged(let session, _) = change else { return nil }
                 switch session.state {
@@ -222,8 +221,8 @@ struct RealPiTests {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)
             try pi.prompt("[[tool:echo hi]]")
-            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
-            #expect(log.states.contains { if case .tool(let name, let running, _) = $0 { name == "bash" && running == ["bash"] } else { false } })
+            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .settled }
+            #expect(log.states.contains(.tool) && log.details.contains { $0?.hasPrefix("bash") == true })
             try await eventually("回复", timeout: .seconds(20)) { self.replies(of: s).last == "TOOL_DONE" }
         }
     }
@@ -239,8 +238,9 @@ struct RealPiTests {
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
             try pi.prompt("[[tool:\(command)]]")
-            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
-            let details = log.states.compactMap { if case .tool(_, _, let detail) = $0 { detail } else { nil } }
+            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .settled }
+            let prefix = "bash\(PiSessionState.detailSeparator)"
+            let details = log.details.compactMap { $0?.hasPrefix(prefix) == true ? String($0!.dropFirst(prefix.count)) : nil }
             #expect(details.first == expected)
             #expect(details.allSatisfy { $0.count <= 120 && !$0.contains("second") })
         }
@@ -250,8 +250,8 @@ struct RealPiTests {
         try await withRig { pi, bridge, _ in
             let log = ChangeLog(bridge)
             try pi.prompt("[[write:\(pi.cwd.path)/notes/hello.txt]]")
-            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .done(aborted: false) }
-            #expect(log.states.contains(.tool(name: "write", running: ["write"], detail: "hello.txt")))
+            try await eventually("一轮结束", timeout: .seconds(20)) { log.states.last == .settled }
+            #expect(log.details.contains("write · hello.txt"))
         }
     }
 
@@ -270,7 +270,7 @@ struct RealPiTests {
     @Test func steerAndFollowUpAreQueuedWhileBusyAndBothProcessedInOrder() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("[[slow]] first")
-            try await eventually("进入忙碌") { bridge.sessions.first?.state != .idle }
+            try await eventually("进入忙碌") { bridge.sessions.first?.state != .settled }
 
             let steer = try await bridge.send(PiMessage(text: "STEER-ME", whenBusy: .steer), to: s.id)
             let follow = try await bridge.send(PiMessage(text: "FOLLOW-ME"), to: s.id) // 缺省 followUp
@@ -288,18 +288,18 @@ struct RealPiTests {
         try await withRig { pi, bridge, _ in
             try pi.prompt("/ask")
             try await eventually("等待用户", timeout: .seconds(20)) {
-                bridge.sessions.first?.state == .waitingUser(kind: "confirm", title: "Proceed?")
+                bridge.sessions.first?.state == .waitingForUser && bridge.sessions.first?.detail == "Proceed?"
             }
             let confirm = try #require(bridge.sessions.first?.question)
-            #expect(confirm.kind == "confirm" && confirm.text == "Proceed?\ntest dialog" && confirm.options.isEmpty && confirm.id != nil)
+            #expect(confirm.kind == .known(.confirm) && confirm.text == "Proceed?\ntest dialog" && confirm.options.isEmpty && confirm.promptID != nil)
             let dialog = try await pi.waitForEvent("对话框请求") { $0["method"] as? String == "confirm" }
             try pi.send(["type": "extension_ui_response", "id": dialog["id"] as Any, "confirmed": true])
-            try await eventually("回到空闲", timeout: .seconds(20)) { bridge.sessions.first?.state == .idle }
+            try await eventually("回到空闲", timeout: .seconds(20)) { bridge.sessions.first?.state == .settled }
             #expect(bridge.sessions.first?.question == nil)
 
             try pi.prompt("/pick")
             try await eventually("选择框的问题带选项", timeout: .seconds(20)) { bridge.sessions.first?.question?.options == ["Alpha", "Beta"] }
-            #expect(bridge.sessions.first?.question?.kind == "select" && bridge.sessions.first?.question?.text == "Which one?")
+            #expect(bridge.sessions.first?.question?.kind == .known(.select) && bridge.sessions.first?.question?.text == "Which one?")
             let select = try await pi.waitForEvent("选择框请求") { $0["method"] as? String == "select" }
             try pi.send(["type": "extension_ui_response", "id": select["id"] as Any, "value": "Alpha"])
             try await eventually("回答后清空", timeout: .seconds(20)) { bridge.sessions.first?.question == nil }
@@ -311,14 +311,14 @@ struct RealPiTests {
         try await withRig { pi, bridge, s in
             try pi.prompt("/pick")
             try await eventually("选择框", timeout: .seconds(20)) { bridge.sessions.first?.question?.options == ["Alpha", "Beta"] }
-            let pick = try #require(bridge.sessions.first?.question?.id)
+            let pick = try #require(bridge.sessions.first?.question?.promptID)
             try await bridge.answer(.option("Beta"), to: pick, in: s.id)
             _ = try await pi.waitForEvent("扩展拿到选中的第二项") { $0["method"] as? String == "notify" && $0["message"] as? String == "picked:Beta" }
             try await eventually("问题清空", timeout: .seconds(20)) { bridge.sessions.first?.question == nil }
 
             try pi.prompt("/ask")
-            try await eventually("确认框", timeout: .seconds(20)) { bridge.sessions.first?.question?.kind == "confirm" }
-            let ask = try #require(bridge.sessions.first?.question?.id)
+            try await eventually("确认框", timeout: .seconds(20)) { bridge.sessions.first?.question?.kind == .known(.confirm) }
+            let ask = try #require(bridge.sessions.first?.question?.promptID)
             try await bridge.answer(.confirmed(true), to: ask, in: s.id)
             _ = try await pi.waitForEvent("扩展拿到确认") { $0["method"] as? String == "notify" && $0["message"] as? String == "confirmed:true" }
             try await eventually("问题清空", timeout: .seconds(20)) { bridge.sessions.first?.question == nil }
@@ -329,16 +329,16 @@ struct RealPiTests {
     @Test func answeringAStalePromptIsRejected() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("/pick")
-            try await eventually("选择框", timeout: .seconds(20)) { bridge.sessions.first?.question?.id != nil }
-            let first = try #require(bridge.sessions.first?.question?.id)
+            try await eventually("选择框", timeout: .seconds(20)) { bridge.sessions.first?.question?.promptID != nil }
+            let first = try #require(bridge.sessions.first?.question?.promptID)
             try await bridge.answer(.option("Alpha"), to: first, in: s.id)
             try await eventually("问题清空", timeout: .seconds(20)) { bridge.sessions.first?.question == nil }
             await #expect(throws: PiBridgeError.rejected("no_prompt")) { try await bridge.answer(.option("Alpha"), to: first, in: s.id) }
 
             try pi.prompt("/pick")
-            try await eventually("新的选择框", timeout: .seconds(20)) { bridge.sessions.first?.question?.id.map { $0 != first } == true }
+            try await eventually("新的选择框", timeout: .seconds(20)) { bridge.sessions.first?.question?.promptID.map { $0 != first } == true }
             await #expect(throws: PiBridgeError.rejected("stale_prompt")) { try await bridge.answer(.option("Alpha"), to: first, in: s.id) }
-            let current = try #require(bridge.sessions.first?.question?.id)
+            let current = try #require(bridge.sessions.first?.question?.promptID)
             await #expect(throws: PiBridgeError.rejected("bad_answer")) { try await bridge.answer(.option("Gamma"), to: current, in: s.id) }
         }
     }
@@ -395,7 +395,7 @@ struct RealPiTests {
         try await withRig { pi, bridge, _ in
             try pi.prompt("[[fail]]")
             try await eventually("error 状态", timeout: .seconds(30)) {
-                if case .error(let message)? = bridge.sessions.first?.state { message.contains("fake model failure") } else { false }
+                bridge.sessions.first?.errorMessage?.contains("fake model failure") == true
             }
         }
     }

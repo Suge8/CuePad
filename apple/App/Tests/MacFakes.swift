@@ -1,6 +1,6 @@
 #if os(macOS)
-import CuePi
 import CueStore
+@testable import CuePi
 import Foundation
 @testable import CuePad
 
@@ -22,7 +22,8 @@ final class InMemoryHotkeys: HotkeyBackend {
     func unregister(_ handle: HotkeyHandle) { handles[handle] = nil }
 }
 
-/// 记下后台托管被要求恢复、开哪个会话，不真启动 Pi：托管的会话随即"连上"发送通道替身。
+/// 记下后台托管被要求恢复、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与终端里的 Pi 一样经 socket）。
+@MainActor
 final class RecordingHost: PiHosting {
     enum Call: Equatable {
         case resume(sessionFile: String, directory: String)
@@ -31,63 +32,67 @@ final class RecordingHost: PiHosting {
     }
 
     private(set) var calls: [Call] = []
-    let channels: FakeChannels
+    /// 已连上桥的假扩展，按 Pi 自己的会话 id。
+    private(set) var extensions: [String: FakeExtension] = [:]
+    private let bridge: PiBridge
+    private let socketDirectory: URL
 
-    init(channels: FakeChannels) { self.channels = channels }
+    init(bridge: PiBridge, socketDirectory: URL) {
+        self.bridge = bridge
+        self.socketDirectory = socketDirectory
+    }
 
     func start() {}
     func closeAll() -> @concurrent @Sendable () async -> Void { {} }
 
     func resume(sessionFile: URL, in directory: URL, executable: URL) async throws -> String {
         calls.append(.resume(sessionFile: sessionFile.path, directory: directory.path))
-        return connect(sessionFile.deletingPathExtension().lastPathComponent)
+        return try await connect(sessionFile.deletingPathExtension().lastPathComponent, cwd: directory.path).id
     }
 
-    func end(_ id: String) async throws { calls.append(.end(id)) }
+    func end(_ id: String) async throws {
+        calls.append(.end(id))
+        extensions.values.first { $0.id == id }?.close(bye: "quit")
+    }
 
     func open(in directory: URL, launchToken: String, executable: URL) async throws -> String {
         calls.append(.open(directory: directory.path, launchToken: launchToken))
-        return connect("new-\(launchToken)")
+        return try await connect("new-\(launchToken)", cwd: directory.path).id
     }
 
-    private func connect(_ sessionID: String) -> String {
-        let id = "\(sessionID).900"
-        channels.bridgeIDs[sessionID] = id
-        channels.sessions[id] = PiSessionInfo(target: SendTarget(kind: .piSession, name: sessionID, ref: sessionID), isBusy: false)
-        return id
+    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮。
+    @discardableResult
+    func connect(
+        _ sessionID: String, cwd: String, busy: Bool = false, protocolVersion: Int = PiWire.protocolVersion
+    ) async throws -> FakeExtension {
+        let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: .init(protocolVersion: protocolVersion, cwd: cwd))
+        if busy { ext.setState(["kind": "thinking"]) }
+        try bridge.start()
+        try ext.start()
+        extensions[sessionID] = ext
+        await eventually(timeout: .seconds(10)) { bridge.session(id: ext.id) != nil }
+        guard bridge.session(id: ext.id) != nil else { throw ConnectTimeout(sessionID: sessionID) }
+        return ext
     }
+
+    struct ConnectTimeout: Error { var sessionID: String }
 }
 
-/// 记录调用的发送通道；不碰真实 Pi 与剪贴板。
-final class FakeChannels: SendChannels {
-    enum Call: Equatable {
-        case send(PiMessage, String)
-        case answer(PiPromptAnswer, String, String)
-        case configure(PiModelRef?, String?, String?, String)
-        case command(String, PiQueueMode?, String)
-        case abort(String)
-        case copy(ClipboardContent)
-    }
+extension FakeExtension {
+    /// 收到的命令种类，按到达顺序。
+    var received: [String] { commands.compactMap { $0.json["t"] as? String } }
 
-    var calls: [Call] = []
-    var sessions: [String: PiSessionInfo] = [:]
-    var sendError: (any Error)?
-
-    func piSession(_ id: String) -> PiSessionInfo? { sessions[id] }
-    /// Pi 自己的会话 id → 桥上的会话 id
-    var bridgeIDs: [String: String] = [:]
-    func piSessionID(forSession sessionID: String) -> String? { bridgeIDs[sessionID] }
-    func send(_ message: PiMessage, to id: String) async throws {
-        if let sendError { throw sendError }
-        calls.append(.send(message, id))
+    /// 收到的 `send` 命令，还原成交给桥的消息。
+    var messages: [PiMessage] {
+        commands.map(\.json).filter { $0["t"] as? String == "send" }.map { json in
+            let images = (json["images"] as? [[String: String]] ?? []).map {
+                PiImage(mimeType: $0["mimeType"] ?? "", data: Data(base64Encoded: $0["data"] ?? "") ?? Data())
+            }
+            return PiMessage(
+                text: json["text"] as? String ?? "", images: images,
+                whenBusy: (json["deliverAs"] as? String).flatMap(PiQueueMode.init(rawValue:)), deliveryID: json["deliveryId"] as? String)
+        }
     }
-    func answer(_ answer: PiPromptAnswer, to prompt: String, in id: String) async throws { calls.append(.answer(answer, prompt, id)) }
-    func configure(model: PiModelRef?, thinking: String?, name: String?, in id: String) async throws {
-        calls.append(.configure(model, thinking, name, id))
-    }
-    func command(_ line: String, whenBusy: PiQueueMode?, in id: String) async throws { calls.append(.command(line, whenBusy, id)) }
-    func abort(in id: String) async throws { calls.append(.abort(id)) }
-    func copy(_ content: ClipboardContent) throws { calls.append(.copy(content)) }
 }
 
 final class RecordingWindow: ShellWindow {

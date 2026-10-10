@@ -1,4 +1,5 @@
 import CueStore
+import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
 /// 项目还没有文件夹时，"这个项目的 Agent"处的引导（iOS 与 Mac 共用）：Agent 会话按工作目录归入项目，没绑文件夹就一个会话也归不进来。
@@ -124,7 +125,7 @@ nonisolated struct FolderGuide: Sendable, Equatable {
     var suggestions: [UUID: [ProjectFolders.Candidate]]
     var requests: [DeliveryRequest]
 
-    static let tables: Set<StoreTable> = [.piSessionStates, .directoryBindings, .projects, .deliveryRequests]
+    static let tables: Set<Table> = [.piSessionStates, .directoryBindings, .projects, .deliveryRequests]
 
     /// 引导在这里出不出现：冲着这个项目的 Agent 来的地方总在；项目页里只在有同名一键建议、或绑定在路上与没绑成时出现——
     /// 读书、装修这类不跑 Agent 的项目不该每次打开都被要求绑文件夹，"绑定文件夹…"在项目的"⋯"里。

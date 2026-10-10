@@ -40,11 +40,11 @@ struct RealFirecodeTests {
         }
         #expect(recap(of: bridge.sessions.first)?.lastPrompt == "[[subagent:ui]]")
         // 子代理结束、事件交给指挥官、指挥官回应完才歇下：中间计时一直是同一段
-        try await eventually("全部歇下", timeout: .seconds(20)) { bridge.sessions.first?.state == .done(aborted: false) }
+        try await eventually("全部歇下", timeout: .seconds(20)) { bridge.sessions.first?.state == .settled }
         #expect(bridge.sessions.first?.busySince == nil)
         // 子代理做完交回：状态停在"已交回"，带落定时刻与结果首句
         let done = try #require(bridge.sessions.first?.subagents.first)
-        #expect(done.state == "done" && !done.action.isEmpty)
+        #expect(done.phase == .known(.done) && !done.action.isEmpty)
         #expect(try #require(done.settledAt) >= #require(done.startedAt))
         let busy = log.changes.compactMap { change -> Date? in
             guard case .stateChanged(let session, _) = change else { return nil }

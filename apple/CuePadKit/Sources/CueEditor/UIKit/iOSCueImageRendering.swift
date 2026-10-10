@@ -10,6 +10,20 @@ enum CueImageRendering {
         UIImage(cgImage: pixels, scale: CGFloat(pixels.width) / max(size.width, 1), orientation: .up)
     }
 
+    /// 分割线：一条横贯的细虚线，画在图的垂直中线上。
+    static func divider(size: CGSize, color: UIColor) -> UIImage {
+        UIGraphicsImageRenderer(size: size).image { _ in
+            color.setStroke()
+            let line = UIBezierPath()
+            let y = (size.height / 2).rounded(.down) + 0.5  // 1pt 线落在整点行上，不被两行像素各吃一半
+            line.move(to: CGPoint(x: 0, y: y))
+            line.addLine(to: CGPoint(x: size.width, y: y))
+            line.setLineDash([4, 3], count: 2, phase: 0)
+            line.lineWidth = 1
+            line.stroke()
+        }
+    }
+
     static func placeholder(size: CGSize, style: CueEditorTheme, missing: Bool) -> UIImage {
         UIGraphicsImageRenderer(size: size).image { _ in
             let rect = CGRect(origin: .zero, size: size)

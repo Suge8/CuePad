@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
 /// CuePad 在后台托管的 Pi：没有终端界面，以 RPC 模式运行（`pi --mode rpc`），状态与消息都走桥。
@@ -203,13 +204,13 @@ public final class PiHost {
         case .appeared(let session):
             if let hosted = processes[session.pid] {
                 hosted.sessionID = session.sessionID
-                update(hosted, busy: Self.isBusy(session.state))
+                update(hosted, busy: session.state.hasPendingWork)
             } else {
                 // 同一个会话在别处打开了：托管的那个让出
                 for hosted in processes.values where hosted.sessionID == session.sessionID { yield(hosted) }
             }
         case .stateChanged(let session, _):
-            if let hosted = processes[session.pid] { update(hosted, busy: Self.isBusy(session.state)) }
+            if let hosted = processes[session.pid] { update(hosted, busy: session.state.hasPendingWork) }
         case .ended, .infoChanged, .incompatible:
             break
         }
@@ -229,14 +230,6 @@ public final class PiHost {
         hosted.idleTimer = Task { [weak self, idleLimit] in
             guard (try? await Task.sleep(for: idleLimit)) != nil else { return }
             self?.close(hosted)
-        }
-    }
-
-    /// 在忙：这一轮在跑、在等你确认、或子代理还在跑。
-    private static func isBusy(_ state: PiAgentState) -> Bool {
-        switch state {
-        case .thinking, .outputting, .tool, .waitingUser, .delegating, .compacting: true
-        case .idle, .done, .error, .incompatible: false
         }
     }
 }

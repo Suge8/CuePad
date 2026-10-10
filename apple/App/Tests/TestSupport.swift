@@ -7,6 +7,7 @@ import ImageIO
 import UniformTypeIdentifiers
 @testable import CuePad
 #if os(macOS)
+import AppKit
 import CuePi
 #else
 import UIKit
@@ -130,11 +131,14 @@ final class TestApp {
     let sync = FakeSync()
     #if os(macOS)
     static let hostID = "mac-test"
-    let channels = FakeChannels()
-    let updater = FakeUpdater()
     let wakeCenter = NotificationCenter()
     let hotkeys = InMemoryHotkeys()
-    lazy var host = RecordingHost(channels: channels)
+    /// 复制的去处（私有命名剪贴板，不碰系统的）。
+    let pasteboard = NSPasteboard(name: .init("cuepad-tests-\(UUID().uuidString)"))
+    /// socket 路径有 104 字节上限，所以假扩展的目录放在短路径下。
+    let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
+    lazy var pi = PiBridge(socketDirectory: socketDirectory)
+    lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory)
     /// 测试里的 Pi 可执行文件（执行器启动会话时用；不真运行）
     nonisolated static let piExecutable = URL(filePath: "/opt/test/bin/pi")
     let window = RecordingWindow()
@@ -151,9 +155,14 @@ final class TestApp {
         services = makeServices()
     }
 
-    #if os(iOS)
-    deinit { UIPasteboard.remove(withName: pasteboardName) }
-    #endif
+    isolated deinit {
+        #if os(macOS)
+        pasteboard.releaseGlobally()
+        try? FileManager.default.removeItem(at: socketDirectory)
+        #else
+        UIPasteboard.remove(withName: pasteboardName)
+        #endif
+    }
 
     @discardableResult
     func relaunch() -> AppServices {
@@ -168,13 +177,12 @@ final class TestApp {
 
     #if os(macOS)
     var piPaths: PiPaths {
-        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: directory.appending(path: "sock"))
+        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory)
     }
 
     private func makeServices() -> AppServices {
         let mac = MacDependencies(
-            pi: PiBridge(socketDirectory: piPaths.socketDirectory),
-            channels: channels,
+            pi: pi,
             hotkeys: hotkeys,
             paths: piPaths,
             installer: PiIntegration(
@@ -186,9 +194,10 @@ final class TestApp {
             commandLineTool: CommandLineToolInstaller(
                 helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                 linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
-            updater: updater,
+            updater: nil,
             host: host,
-            locatePi: { Self.piExecutable })
+            locatePi: { Self.piExecutable },
+            pasteboard: pasteboard)
         let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services

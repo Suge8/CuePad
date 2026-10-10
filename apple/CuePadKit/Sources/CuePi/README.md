@@ -1,6 +1,6 @@
 # CuePi —— Pi 桥（macOS）
 
-只依赖 Foundation/AppKit，不依赖 CueStore。三块能力，App 层各接一处：
+依赖 Foundation/AppKit 与 CueStore：Pi 会话的值类型（状态 `PiWorkState`、弹窗 `PiQuestion`、模型 `PiModelOption`、上下文 `PiContextUsage`、斜杠命令 `PiSlashCommand`、子代理 `PiSubagentState`、对话 `PiChatMessage`、摘要 `PiRecap`）只在 CueStore 定义一份，线上消息与会话文件在这里直接解码成它们，App 不再转换。三块能力，App 层各接一处：
 
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
@@ -13,7 +13,7 @@
 
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录）。测试一律用临时目录，绝不碰真实 `~/.pi`。
 
-## 协议（v10）
+## 协议（v11）
 
 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，不用 `$TMPDIR`），目录 0700、socket 0600；扩展与客户端都校验"是目录、属于当前用户、0700"，客户端还校验每个 socket 文件（属主、且只有属主可读写 0600）与连接对端的 uid。`CUEPAD_PI_SOCKET_DIR` 可覆盖目录（测试与高级用法）。
 
@@ -23,11 +23,13 @@
 | --- | --- |
 | `hello` | 连接后第一条：`protocol`、`extensionVersion`、`sessionId`、`sessionFile`（可空，首条消息落盘前文件不存在）、`pid`、`cwd`、`mode`（tui/rpc）、`tty`、`term{环境变量子集}`、`state`（当前状态快照）、`launchToken`（v8 起：CuePad 开的新会话经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展的认领标识，只属于进程里的第一个会话，其余为 null）、`hosted`（v9 起：进程由 CuePad 在后台托管，即环境变量 `CUEPAD_HOSTED=1`），以及 `info` 的全部字段（恢复已有会话时近况从会话文件当前分支补回） |
 | `state` | 仅状态切换时发送：`state{kind, since(ms), busySince(ms 或 null), …}` |
-| `info` | 任一字段变化时：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理名册 `subagents`、模型配置 `model`/`thinking`/`models`（v2 起，见下）、上下文余量 `context` 与命令清单 `commands`（v5 起，见下）；都可空 |
+| `info` | 变化时只带变了的那几项（v11 起；没出现的键表示不变，`null` 是新值"没有"，数组项整份替换；`hello` 带全部）。可带：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理名册 `subagents`、模型配置 `model`/`thinking`/`models`（v2 起，见下）、上下文余量 `context` 与命令清单 `commands`（v5 起，见下）；都可空 |
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
 | `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`）、`undelivered`（v10 起：受理了却没来得及交给 Pi 的话的投送请求 id，见下"压缩"） |
 
 `state.kind`：`idle`、`thinking`、`outputting`、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`delegating`（v6 起：自己这轮已歇下，还有子代理在飞）、`compacting`（v10 起：在压缩上下文，`session_before_compact` 到 `session_compact` / `session_compact_failed`；手动 /compact、上下文快满时自动压缩、溢出后压缩再重试都是它）、`done`（`aborted`）、`error`（`error`）。
+
+解码时一处落成 `PiSession.state`（`PiWorkState`）与一句话说明 `PiSession.detail`：`idle` 与 `done` 都是 `settled`（`tools` 全集、`aborted`、`promptKind` 没有人读，不解码）；`tool` 的说明是"工具名 · 调用摘要"（没有摘要只有工具名），`waiting_user` 是 `title`，`error` 是 `PiErrorSummary.line`（原文留在 `PiSession.errorMessage`，悬停看）。"忙"的规则只在 `PiWorkState` 上：`isTurnRunning`（指挥官这一轮在跑，含等你确认；发送要不要问"马上说还是等它做完再说"读它）、`isWorking`（含等子代理）、`hasPendingWork`（工作中或等你确认；后台托管的 Pi 空闲计时与让出读它）。
 
 计时：粗状态只由 `phaseOf` 一处从 `kind` 推导——工作中（思考、输出、工具、等子代理、压缩）、等你确认、出错、空闲；`kind` 又由 `StateTracker.derive()` 从自己这轮的状态、在飞子代理数与待确认弹窗推导。`since` 是进入当前粗状态的时间，细状态之间切换不变；`busySince` 是这段连续处理开始的时间：离开空闲起（提交一条消息的 `input` 事件），到自己歇下且没有子代理在飞为止，中间等你确认也不断，空闲、出错时为 null。在飞子代理数取 FireCode 发布在 `firecode:workers` 频道的 `inFlight`（在跑、在审，或已落定但结果还没交给指挥官），与 FireCode 判断"会话进行中"同一个事实。FireCode 交回结果时，在飞数在该消息的 `input` 之后、`agent_start` 之前归零，所以从 `input` 起算这一轮，连续处理在交接处不断。只有 `agent_settled` 才进入 `done`/`error`。
 
@@ -39,7 +41,7 @@
 
 - 你的消息：`role == "user"` 的消息全文（文字块换行连接）。整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的是扩展投进来的机器消息（如 FireCode 的子代理事件、观察员、审查结果信封），不进对话、只开始一轮；块与块之间夹着真人文字就不是机器消息。CuePad 送进去的消息带着 `cuepadDelivery`（投送请求 id，见 `send`）。
 - 系统行：会话文件里的 `compaction` 条目（压缩，终端对话里那行压缩摘要）是一条系统行，文字固定是"已压缩上下文"（不写压缩前的 token 数：这里不知道窗口多大，一个孤零零的数用户读不懂）。别的命令留下的只有设置条目（`model_change`、`thinking_level_change`、`session_info` 的会话名），终端的对话里没有它们，这里也不进对话；扩展命令自己什么都不写；`/reload` 不写；`/new`、`/clone` 是另一个会话文件。模板与 skill 展开成一条普通的用户消息（`<skill …>` 或模板正文），**没有** `cuepadDelivery`——命令请求不会被换成它，所以命令不是"你发出的话"，不在对话里挂气泡。
-- Pi 消息：一轮一条，取结束这一轮的助手消息（`stopReason` 不是 `toolUse`）的文字块；中途调工具时说的话与思考不算，工具输出不进对话，只记开始时间和这一轮的工具活动（`PiToolActivity`）：调用来自助手消息里的 `toolCall` 块（名字、参数），成败来自后面的工具结果行（`isError`）。工具按名字分五类（`edit`：edit / write；`command`：bash；`read`；`search`：grep / find / ls；`other`），各类成功的次数——读、改文件按文件算，同一个文件读两次、改两次只算一个——失败的单独计数、不进各类；清单按发生先后至多 `PiToolActivity.itemLimit` 条、每条目标至多 `targetLimit` 个字符（路径相对会话工作目录、命令取首个非空行），改文件带从参数算出的新增、删除行数（整文件写入只有新增）；一轮结束时没等到结果的调用（被中止）按成功算。工具结果行体积大，不做 JSON 解码，只按 Pi 写出的固定键序取两头：行首的 `toolCallId`，行尾 128 字节内的 `"isError":true`；两头没找到这两个键（Pi 改了键序）就落到完整 JSON 解码，结果不变、只是慢。
+- Pi 消息：一轮一条，取结束这一轮的助手消息（`stopReason` 不是 `toolUse`）的文字块；中途调工具时说的话与思考不算，工具输出不进对话，只记开始时间和这一轮的工具活动（`PiChatMessage.Tools`）：调用来自助手消息里的 `toolCall` 块（名字、参数），成败来自后面的工具结果行（`isError`）。工具按名字分五类（`edit`：edit / write；`command`：bash；`read`；`search`：grep / find / ls；`other`），各类成功的次数——读、改文件按文件算，同一个文件读两次、改两次只算一个——失败的单独计数、不进各类；清单按发生先后至多 `PiChatMessage.Tools.itemLimit` 条、每条目标至多 `targetLimit` 个字符（路径相对会话工作目录、命令取首个非空行），改文件带从参数算出的新增、删除行数（整文件写入只有新增）；一轮结束时没等到结果的调用（被中止）按成功算。工具结果行体积大，不做 JSON 解码，只按 Pi 写出的固定键序取两头：行首的 `toolCallId`，行尾 128 字节内的 `"isError":true`；两头没找到这两个键（Pi 改了键序）就落到完整 JSON 解码，结果不变、只是慢。
 - 摘要：`pendingPrompt` 是你说了、这一轮还没做完的那句；一轮结束时它移进 `lastPrompt`，`lastReply` 换成这一轮的回答，问与答一起更新。机器消息触发的轮没有新的提问：回答照常更新、`lastPrompt` 沿用触发它的那件事里你说的话（如 FireCode 子代理做完后的汇报，是对你那句的答复）。上次中途退出、没做完的一轮不改问答。`lastPrompt`、`pendingPrompt` 单行（空白与控制字符折成一个空格）≤500 字符，`lastReply` 保留换行 ≤1200 字符，超出以省略号结尾。
 
 - `question`：正在等你回答的弹窗 `{id, kind, text, options}`。`kind` 是 `confirm`/`select`/`text`（`input`）/`editor`/`custom`；`text` 是标题与说明（`confirm`）换行连接，≤500 字符；`options` 是选择框的选项原文；`id` 是这次弹窗的标识，能从 CuePad 作答的（`confirm`/`select`/`text`）才有，`editor` 没有可收起的接口、`custom` 没有文案，为 null。`ui_prompt_end` 后为 null。`ui_prompt_start` 只带标题，说明与选项靠在 `session_start` 时包装共用的 `ctx.ui` 在调用时记下；包装同时给弹窗接上一个由扩展控制的 AbortSignal（与调用方自己的合并）。
@@ -48,7 +50,7 @@
 
 上下文余量（协议 v5、扩展 v16 起）：`context` 是 `{tokens, window}`——`ctx.getContextUsage()` 的已用 token（Pi 的估算）与当前模型的上下文窗口；压缩后到下一次回答前 Pi 不知道已用多少，`tokens` 为 null（窗口仍在）；没有模型为 null。上报时机：会话载入（`session_start`，含新会话、重载、恢复）、每个回合结束（`turn_end`）、一轮彻底歇下（`agent_settled`）、压缩后（`session_compact`）、换模型（`model_select`）、切换树分支（`session_tree`），内容没变不发。
 
-命令清单（协议 v5、扩展 v16 起）：`commands` 是 `[{name, description, source, hint}]`，名字不带斜杠（skill 是 `skill:名字`），`source` 是 `builtin` / `extension` / `prompt`（提示词模板）/ `skill`，说明截到 120 字符，`hint` 是内置命令的参数提示。内置之外的来自 `pi.getCommands()`，与载入的资源一致，随上面同样的时机刷新（重载会重新载入扩展，等于重新上报）；内置只列能在非 TUI 下执行的：
+命令清单（协议 v5、扩展 v16 起）：`commands` 是 `[{name, description, source, hint}]`，名字不带斜杠（skill 是 `skill:名字`），`source` 是 `builtin` / `extension` / `prompt`（提示词模板）/ `skill`，说明截到 120 字符，`hint` 是内置命令的参数提示。内置之外的来自 `pi.getCommands()`，与载入的资源一致，只在会取到不同结果的时机取：会话载入（`session_start`，含重载，重载会重新载入扩展，等于重新上报）和每次提交消息前（`before_agent_start`；其他扩展经 `resources_discover` 追加的 skill 与提示词模板在 `session_start` 之后才载入、没有事件，这是它们之后的第一个可靠时机），不随每个回合取；内置只列能在非 TUI 下执行的：
 
 | 内置命令 | 怎么做 |
 | --- | --- |

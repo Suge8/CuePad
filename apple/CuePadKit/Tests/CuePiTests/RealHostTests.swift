@@ -1,6 +1,7 @@
 #if os(macOS)
 import Foundation
 import Testing
+import CueStore
 @testable import CuePi
 
 /// 端到端：CuePad 在后台托管 Pi（RPC 模式，没有终端界面）——恢复已结束的会话、开新会话、空闲退出、用户在别处打开同一会话时交出。
@@ -137,12 +138,7 @@ struct RealHostTests {
         #expect(!bridge.sessions.contains { $0.id == resumed.id })
     }
 
-    private func busy(_ state: PiAgentState?) -> Bool {
-        switch state {
-        case .thinking?, .outputting?, .tool?: true
-        default: false
-        }
-    }
+    private func busy(_ state: PiWorkState?) -> Bool { state?.isWorking == true }
 
     /// 会话文件里的条目（跳过文件头）：id、上一条、角色、文字。
     private func entries(in file: URL) -> [(id: String, parent: String?, role: String?, text: String)] {

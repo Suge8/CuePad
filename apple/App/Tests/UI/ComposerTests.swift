@@ -29,7 +29,7 @@ struct ComposerTests {
 
         let photoHash = try #require(CueFormat.imageHashes(in: request.content).last)
         #expect(request.content == "\(card.body)\n\n照这个改\n\n![](cuepad://img/\(photoHash))")
-        #expect(app.services.images.fileURL(for: photoHash) != nil)
+        #expect(app.services.store.files.fileURL(for: photoHash) != nil)
         #expect(request.cardID == card.id)
         #expect(request.hostID == "mac-a" && request.mode == .known(.send))
     }

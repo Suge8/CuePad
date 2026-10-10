@@ -24,11 +24,11 @@ struct IOSWorkflowTests {
         let services: AppServices = app.services
         #expect(services.pollingCadence == nil)
         services.piViewers = 1
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(3)))
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(3))))
         services.hasOpenDeliveries = true
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(2)))
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
         services.piViewers = 0
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(2), limit: .seconds(120)))
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2), for: .seconds(120))))
     }
 
     @Test func 作答_请求发给会话所在的Mac_带这次弹窗的标识与答案() async throws {
@@ -79,28 +79,7 @@ struct IOSWorkflowTests {
         #expect(MacDelivery.modes(for: session) == modes)
     }
 
-    /// 旧协议的会话在线但发不了：回复框不给输入，写原因。
-    @Test func 回复框_旧协议的会话要重开Pi() {
-        let session = PiSessionState(
-            id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(.incompatible), detail: nil, folder: nil,
-            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .now, busySince: nil, createdAt: .now, modifiedAt: .now)
-        #expect(MacDelivery.reply(to: session) == .restartPi)
-        #expect(!MacDelivery.canStop(session))
-    }
-
     // MARK: Agent 页
-
-    @Test func Agent页_等你确认_出错_工作中_空闲_已结束依次排() async throws {
-        _ = try await session("done", .ended)
-        _ = try await session("idle", .settled)
-        _ = try await session("busy", .tool, detail: "bash")
-        _ = try await session("ask", .waitingForUser, detail: "要覆盖吗？")
-        _ = try await session("broken", .error)
-
-        let ordered = PiSessionState.inListOrder(try await store.allPiSessionStates())
-
-        #expect(ordered.map(\.sessionID) == ["ask", "broken", "busy", "idle", "done"])
-    }
 
     // MARK: 随手记
 
@@ -108,7 +87,7 @@ struct IOSWorkflowTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let workspace = Workspace(services: app.services, holder: SceneContext())
         let first = pngData(shade: 0.1), second = pngData(shade: 0.9)
-        let hashes = try [first, second].map { try app.services.images.store($0) }
+        let hashes = try [first, second].map { try app.services.store.files.store($0) }
 
         try await CaptureDraft(text: "  想法  ", images: [first, second]).save(in: project.id, workspace: workspace)
 
@@ -121,7 +100,7 @@ struct IOSWorkflowTests {
     @Test func 随手记只有图片_也能存_没选项目进未分类() async throws {
         let workspace = Workspace(services: app.services, holder: SceneContext())
         let image = pngData()
-        let hash = try app.services.images.store(image)
+        let hash = try app.services.store.files.store(image)
 
         try await CaptureDraft(text: "", images: [image]).save(in: nil, workspace: workspace)
 

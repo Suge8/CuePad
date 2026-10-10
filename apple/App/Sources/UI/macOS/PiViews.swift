@@ -6,13 +6,6 @@ import SwiftUI
 
 // MARK: Pi 状态
 
-extension PiAgentState {
-    /// 出错时 Pi 上报的原文（会话行悬停看）；行上写的是摘要。
-    var errorMessage: String? {
-        if case .error(let message) = self { message } else { nil }
-    }
-}
-
 /// 没装 Pi 或版本太低时的说明（侧栏 Pi 分组的引导行点开、设置的 Pi 一节）：Pi 是什么、一行可复制的命令（没装是安装命令，
 /// 版本太低是 Pi 自带的升级命令）、官网。
 struct PiSetupGuide: View {

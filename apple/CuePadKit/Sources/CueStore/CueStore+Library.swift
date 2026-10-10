@@ -97,8 +97,9 @@ extension CueStore {
   private func reassignSessions() throws {
     let directories = try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) }
     let now = Date.stamp
+    let bound = try boundDirectories()
     for cwd in directories {
-      let project = cwd.isEmpty ? nil : try project(containing: URL(filePath: cwd, directoryHint: .isDirectory))?.id
+      let project = cwd.isEmpty ? nil : Self.projectID(containing: URL(filePath: cwd, directoryHint: .isDirectory), in: bound)
       try db.run(
         """
         UPDATE piSessionStates SET projectID = ?, modifiedAt = ?
@@ -144,9 +145,8 @@ extension CueStore {
   public func createTask(_ body: String, under parent: UUID) throws -> Card {
     try requireContent(body)
     return try write {
-      let tree = try CardLinks(db)
-      guard let link = tree.links[parent], link.isTask else { throw CueStoreError.invalidParent }
-      guard tree.level(of: parent) < Card.maxDepth else { throw CueStoreError.taskTooDeep }
+      guard let link = try link(of: parent), link.isTask else { throw CueStoreError.invalidParent }
+      guard try ancestors(of: parent).count + 1 < Card.maxDepth else { throw CueStoreError.taskTooDeep }
       let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
       return try splittingPrompt(insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last)))
     }
@@ -162,8 +162,7 @@ extension CueStore {
   /// 写一条时先建好再进编辑，离开时还是空白就删掉（`dropIfBlank`）。
   public func createCard(body: String, under parent: UUID) throws -> Card {
     try write {
-      let tree = try CardLinks(db)
-      guard let link = tree.links[parent], link.isTask else { throw CueStoreError.invalidParent }
+      guard let link = try link(of: parent), link.isTask else { throw CueStoreError.invalidParent }
       let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
       return try insertCard(body, project: link.project, parent: parent, todo: false, sortKey: SortKey.after(last))
     }
@@ -223,13 +222,11 @@ extension CueStore {
     return promptID
   }
 
-  /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
-  /// 灵感没有状态，抛 `notATask`。
   /// 归档：连同下级一起（已归档的保留原时刻）。
   public func archive(_ id: UUID) throws {
     try write {
       guard try find(Card.self, id) != nil else { throw CueStoreError.notFound }
-      try setArchived([id] + (try CardLinks(db).descendants(of: id)), at: Date.stamp)
+      try setArchived([id], at: Date.stamp)
     }
   }
 
@@ -237,7 +234,7 @@ extension CueStore {
   public func unarchive(_ id: UUID) throws {
     try write {
       guard try find(Card.self, id) != nil else { throw CueStoreError.notFound }
-      try setArchived([id] + (try CardLinks(db).descendants(of: id)), at: nil)
+      try setArchived([id], at: nil)
     }
   }
 
@@ -252,21 +249,23 @@ extension CueStore {
           AND (t.parentID IS NULL OR t.parentID NOT IN (SELECT id FROM cards WHERE todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL))
         """
       ) { $0.uuid(0) }
-      let links = try CardLinks(db), now = Date.stamp
-      for id in done { try setArchived([id] + links.descendants(of: id), at: now) }
+      try setArchived(done, at: Date.stamp)
       return done.count
     }
   }
 
-  private func setArchived(_ ids: [UUID], at time: Date?) throws {
+  /// 这些卡片连同各自的下级一起归档或取回。
+  private func setArchived(_ roots: [UUID], at time: Date?) throws {
     let now = Date.stamp
     try db.run(
       """
       UPDATE cards SET archivedAt = ?1, modifiedAt = ?2
-      WHERE id IN (SELECT value FROM json_each(?3)) AND (archivedAt IS NULL) = (?1 IS NOT NULL)
-      """, [time, now, Self.idList(ids)])
+      WHERE id IN (\(Self.subtree(from: "SELECT value FROM json_each(?3)"))) AND (archivedAt IS NULL) = (?1 IS NOT NULL)
+      """, [time, now, Self.idList(roots)])
   }
 
+  /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
+  /// 灵感没有状态，抛 `notATask`。
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
@@ -278,12 +277,11 @@ extension CueStore {
       case .inProgress:
         try db.run("UPDATE cards SET startedAt = COALESCE(startedAt, ?1), completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
       case .done:
-        let subtree = [id] + (try CardLinks(db).descendants(of: id))
         try db.run(
           """
           UPDATE cards SET completedAt = ?1, modifiedAt = ?1
-          WHERE completedAt IS NULL AND todoAt IS NOT NULL AND id IN (SELECT value FROM json_each(?2))
-          """, [now, Self.idList(subtree)])
+          WHERE completedAt IS NULL AND todoAt IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
+          """, [now, id])
       }
     }
   }
@@ -292,28 +290,27 @@ extension CueStore {
   /// 挂成子任务或提示词都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），整棵子树超过 `Card.maxDepth` 级抛 `taskTooDeep`。
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws {
     try write {
-      let tree = try CardLinks(db)
-      guard let current = tree.links[id] else { throw CueStoreError.notFound }
+      guard let current = try link(of: id) else { throw CueStoreError.notFound }
       let destination: CardLinks.Link
       switch slot {
       case .top(let project):
         try requireLiveProject(project)
         destination = CardLinks.Link(parent: nil, project: project, isTask: current.isTask)
       case .under(let parent):
-        guard let target = tree.links[parent], target.isTask, parent != id, !tree.ancestors(of: parent).contains(id) else {
+        let above = try ancestors(of: parent)
+        guard let target = try link(of: parent), target.isTask, parent != id, !above.contains(id) else {
           throw CueStoreError.invalidParent
         }
-        guard tree.level(of: parent) + tree.height(of: id) <= Card.maxDepth else { throw CueStoreError.taskTooDeep }
+        guard above.count + 1 + (try height(of: id)) <= Card.maxDepth else { throw CueStoreError.taskTooDeep }
         destination = CardLinks.Link(parent: parent, project: target.project, isTask: current.isTask)
       }
       let now = Date.stamp
       try db.run("UPDATE cards SET parentID = ?, modifiedAt = ? WHERE id = ?", [destination.parent, now, id])
       if destination.project != current.project {
         try db.run(
-          "UPDATE cards SET projectID = ?, modifiedAt = ? WHERE id IN (SELECT value FROM json_each(?))",
-          [destination.project, now, Self.idList([id] + tree.descendants(of: id))])
+          "UPDATE cards SET projectID = ?, modifiedAt = ? WHERE id IN (\(Self.subtree(from: "SELECT ?3")))", [destination.project, now, id])
       }
-      try place(.cards, scope: Self.siblingScope(destination), [destination.parent ?? destination.project], id: id, after: previous)
+      try place(scope: Self.siblingScope(destination), [destination.parent ?? destination.project], id: id, after: previous)
     }
   }
 
@@ -340,7 +337,6 @@ extension CueStore {
     }
   }
 
-  /// 永久删除；发送记录保留内容快照。
   /// 离开一条灵感（含提示词）的编辑时：还是空白（`Card.isBlank`）就不留下。任务、写了字或放了图的不动。
   /// 记灵感与写提示词都是先建一条空的再进编辑，这是它们共用的收尾。
   public func dropIfBlank(_ id: UUID) throws {
@@ -351,6 +347,7 @@ extension CueStore {
     }
   }
 
+  /// 永久删除；发送记录保留内容快照。
   public func purgeCard(_ id: UUID) throws {
     try reportingFileFailures { try write { try reclaimAttachments(purgeCards(where: "id = ?", [id])) } }
   }
@@ -537,8 +534,9 @@ extension CueStore {
     let assignments = PiSession.columns.dropFirst().map { "\($0) = excluded.\($0)" }.joined(separator: ", ")
     let placeholders = (PiSession.columns + ["checkpoint"]).map { _ in "?" }.joined(separator: ", ")
     try write {
+      let bound = try boundDirectories()
       for item in batch {
-        try writePiHistory(item.session, host: host)
+        try writePiHistory(item.session, host: host, bound: bound)
         if let transcript = item.transcript { try applyTranscript(transcript) }
         try db.run(
           """
@@ -564,7 +562,8 @@ extension CueStore {
       // 反过来，有会话文件却还没有记录的（如升级前建的索引）补写
       let unrecorded = try select(
         PiSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
-      for session in unrecorded { try writePiHistory(session, host: host) }
+      let bound = try boundDirectories()
+      for session in unrecorded { try writePiHistory(session, host: host, bound: bound) }
       try refreshSessionFolders()
       return stale.count
     }
@@ -605,12 +604,12 @@ extension CueStore {
 
   /// 会话文件索引写成同步记录：没有记录时插入一条已结束的；已结束的记录更新名字、所在与最后活动时间（没变不写，
   /// 免得每次启动把几千条历史重新上传）；在线的不动（由状态写入方负责）。必须在写事务内调用。
-  private func writePiHistory(_ session: PiSession, host: String) throws {
+  private func writePiHistory(_ session: PiSession, host: String, bound: [BoundDirectory]) throws {
     let id = PiSessionState.recordID(sessionID: session.id)
     let cwd = URL(filePath: session.cwd, directoryHint: .isDirectory)
     let folder = Self.folderName(ofWorkingDirectory: session.cwd)
     let title = session.title.isEmpty ? (session.cwd.isEmpty ? "" : cwd.lastPathComponent) : session.title
-    let projectID = session.cwd.isEmpty ? nil : try project(containing: cwd)?.id
+    let projectID = session.cwd.isEmpty ? nil : Self.projectID(containing: cwd, in: bound)
     let now = Date.stamp
     guard let existing = try find(PiSessionState.self, id) else {
       _ = try insert(PiSessionState(
@@ -647,10 +646,10 @@ extension CueStore {
   /// 把 `id` 放到同一范围内 `previous` 之后：只改它自己的排序键；
   /// 两侧键相同（多设备并发产生）时，重排该范围内所有键。
   fileprivate func place(
-    _ table: Table, scope: String, _ scopeArguments: [any SQLBindable] = [], id: UUID, after previous: UUID?
+    scope: String, _ scopeArguments: [any SQLBindable] = [], id: UUID, after previous: UUID?
   ) throws {
     let siblings = try db.query(
-      "SELECT id, sortKey FROM \(table.rawValue) WHERE (\(scope)) AND id != ? ORDER BY sortKey, id",
+      "SELECT id, sortKey FROM cards WHERE (\(scope)) AND id != ? ORDER BY sortKey, id",
       scopeArguments + [id]
     ) { (id: $0.uuid(0), key: $0.text(1)) }
 
@@ -674,7 +673,7 @@ extension CueStore {
     }
     let now = Date.stamp
     for (rowID, key) in assignments {
-      try db.run("UPDATE \(table.rawValue) SET sortKey = ?, modifiedAt = ? WHERE id = ?", [key, now, rowID])
+      try db.run("UPDATE cards SET sortKey = ?, modifiedAt = ? WHERE id = ?", [key, now, rowID])
       guard db.changes > 0 else { throw CueStoreError.notFound }
     }
   }

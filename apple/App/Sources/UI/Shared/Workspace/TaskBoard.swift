@@ -47,7 +47,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     var counts: TaskCounts
 
     /// 看板要观察的表。
-    static let tables: Set<StoreTable> = [.cards, .projects, .piSessionStates, .deliveryRequests]
+    static let tables: Set<Table> = [.cards, .projects, .piSessionStates, .deliveryRequests]
 
     static func read(from store: isolated CueStore) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })

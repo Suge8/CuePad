@@ -7,16 +7,14 @@ extension PiSessionState {
     /// 桥上的实时会话写成同步记录的形状（会话行与近况共用；状态记录按节流写，会落后几秒，界面读这个）。
     /// 摘要（问与答）不在桥上：取同步记录里的（`recap`，对话的投影，文件一变就写）。
     static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?, recap: PiRecap?) -> PiSessionState {
-        let (state, detail) = session.syncRepresentation
-        let config = session.modelState
-        return PiSessionState(
+        PiSessionState(
             id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
-            projectID: projectID, state: .known(state), detail: detail, folder: session.cwd.lastPathComponent,
-            lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
+            projectID: projectID, state: .known(session.state), detail: session.detail, folder: session.cwd.lastPathComponent,
+            lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question, notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
-            launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagentStates,
-            pendingPrompt: recap?.pendingPrompt, model: config.model, thinking: config.thinking, models: config.models,
-            context: session.contextUsage, commands: session.slashCommands)
+            launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
+            pendingPrompt: recap?.pendingPrompt, model: session.model, thinking: session.thinking, models: session.availableModels,
+            context: session.context, commands: session.commands)
     }
 }
 
@@ -255,7 +253,7 @@ extension Workspace {
         return { [self] text in
             attempt {
                 if try await self.services.store.directory(of: project) == nil {
-                    guard let path = ProjectDirectory.pick() else { return }
+                    guard let path = await ProjectDirectory.pick() else { return }
                     try await self.services.store.setDirectory(path, for: project)
                 }
                 _ = try await self.startSession(in: project, prompt: text.nonEmpty, title: title, card: id) {}

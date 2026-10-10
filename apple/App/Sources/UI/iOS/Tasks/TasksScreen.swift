@@ -37,7 +37,7 @@ struct TasksScreen: View {
 
     private func content(_ board: TaskBoard) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            NewTaskLine(project: workspace.currentProject, projects: workspace.catalog?.projects)
+            NewTaskLine(project: navigation.currentProject, projects: workspace.catalog?.projects)
                 .padding(.horizontal, 6)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
             if board.inProgress.isEmpty && board.todo.isEmpty {

@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
 /// 会话列表要的摘要：会话 id、工作目录、名字、首条用户消息、最后活动时间。原文留在会话文件里，这里不复制。
@@ -16,40 +17,6 @@ public struct PiSessionHistory: Sendable, Equatable {
     }
 }
 
-/// 对话里的一条：你说的一句，或 Pi 一轮最后的回答（一轮一条；中途调工具时说的话、思考与工具输出不算），
-/// 或会话文件里的一条压缩记录（系统行：与终端对话里的压缩摘要同一件事）。
-public struct PiTranscriptEntry: Sendable, Equatable {
-    public enum Role: Sendable, Equatable { case user, pi, system }
-
-    /// 会话文件里那一条的 id
-    public var entryID: String
-    /// 那一条在文件里的行序号（文件只追加，重读不变）
-    public var seq: Int64
-    public var role: Role
-    /// 你的消息是全文（文字块换行连接）；Pi 的是这一轮最后那条助手消息的文字块（换行连接）
-    public var text: String
-    public var at: Date
-    /// Pi 消息：这一轮的工具活动（一次工具都没调为 nil）
-    public var tools: PiToolActivity?
-    /// Pi 消息：这一轮从哪一刻开始（你说话或机器消息到达）
-    public var roundStartedAt: Date?
-    /// 你的消息：CuePad 送进去时扩展写上的投送请求 id（`cuepadDelivery`）
-    public var deliveryID: String?
-}
-
-/// 会话摘要：对话的投影。`lastPrompt` 与 `lastReply` 是最近一轮做完的问答，在这一轮结束时一起更新；
-/// `pendingPrompt` 是你说了、这一轮还没做完的那句。机器消息触发的轮没有新的提问，回答照常更新、提问沿用。
-public struct PiTranscriptRecap: Sendable, Codable, Equatable {
-    /// 单行（空白与控制字符折成一个空格），至多 500 字符
-    public var lastPrompt: String?
-    /// 保留换行，至多 1200 字符
-    public var lastReply: String?
-    public var pendingPrompt: String?
-
-    static let promptLimit = 500
-    static let replyLimit = 1_200
-}
-
 /// 增量索引的可持久化状态。调用方存起来（Codable），下次传回来就只读新增字节。只存摘要与跨行的轮次状态，不存正文。
 public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 已消费到的字节偏移（总在一个换行之后）
@@ -65,7 +32,7 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var seq: Int64 = 0
     /// 这一轮还没做完：开始时间与已调的工具
     var round: Round?
-    var recap = PiTranscriptRecap()
+    var recap = PiRecap()
 
     struct Round: Sendable, Codable, Equatable {
         var startedAt: Date?
@@ -78,10 +45,14 @@ public struct PiHistoryUpdate: Sendable {
     public var checkpoint: PiHistoryCheckpoint
     public var history: PiSessionHistory
     /// 这次新读到的对话（从头读时是全部）；`includesTranscript` 为 false 时（只读了摘要）为空
-    public var transcript: [PiTranscriptEntry]
+    public var messages: [PiChatMessage]
     /// 这次读的时候要不要对话（调用方——索引器按文件修改时间——的判定）：写不写对话以它为准
     public var includesTranscript: Bool
-    public var recap: PiTranscriptRecap { checkpoint.recap }
+    /// 会话 id：会话文件头里的，没有就用文件名（与会话索引的 id 同一规则）
+    public var sessionID: String { history.sessionID ?? file.deletingPathExtension().lastPathComponent }
+    public var recap: PiRecap { checkpoint.recap }
+    /// 这次读到的对话与摘要，交给 `CueStore.writePiTranscript`
+    public var transcript: PiTranscript { PiTranscript(sessionID: sessionID, messages: messages, recap: recap) }
     /// 这次新消费的字节数（半行不算）
     public var bytesRead: Int
 }
@@ -113,11 +84,11 @@ public enum PiHistory {
         let resumed = try checkpoint.flatMap { try isResumable($0, handle: handle, size: size) ? $0 : nil }
         var state = resumed ?? PiHistoryCheckpoint()
         let start = state.offset
-        var transcript: [PiTranscriptEntry] = []
+        var transcript = Transcript(fallbackID: file.deletingPathExtension().lastPathComponent)
         let consumed: UInt64
         if wanted || resumed != nil {
             consumed = try forEachLine(handle, from: start, size: size) { line, _ in ingest(line, into: &state, transcript: &transcript) }
-            if !wanted { transcript = [] }
+            if !wanted { transcript.messages = [] }
         } else {
             var lines: [Skimmed] = []
             consumed = try forEachLine(handle, from: start, size: size) { line, offset in skim(line, at: offset, into: &state, lines: &lines) }
@@ -126,7 +97,7 @@ public enum PiHistory {
         state.offset = consumed
         try refreshFingerprint(&state, handle: handle)
         return PiHistoryUpdate(
-            file: file, checkpoint: state, history: history(of: state), transcript: transcript, includesTranscript: wanted,
+            file: file, checkpoint: state, history: history(of: state), messages: transcript.messages, includesTranscript: wanted,
             bytesRead: Int(consumed - start))
     }
 
@@ -263,7 +234,22 @@ public enum PiHistory {
     private static let headLength = 512
     private static let tailLength = 128
 
-    private static func ingest(_ raw: UnsafeRawBufferPointer, into cp: inout PiHistoryCheckpoint, transcript: inout [PiTranscriptEntry]) {
+    /// 这次新读到的对话消息；会话 id 取文件头的，没读到文件头就用文件名。
+    private struct Transcript {
+        let fallbackID: String
+        var messages: [PiChatMessage] = []
+
+        mutating func add(
+            _ cp: PiHistoryCheckpoint, entryID: String, seq: Int64, role: PiChatRole, text: String, at: Date,
+            tools: PiChatMessage.Tools? = nil, roundStartedAt: Date? = nil, deliveryID: String? = nil
+        ) {
+            messages.append(PiChatMessage(
+                sessionID: cp.sessionID ?? fallbackID, entryID: entryID, seq: seq, role: role, text: text, at: at, tools: tools,
+                roundStartedAt: roundStartedAt, deliveryID: deliveryID.flatMap(UUID.init(uuidString:))))
+        }
+    }
+
+    private static func ingest(_ raw: UnsafeRawBufferPointer, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript) {
         cp.seq += 1
         if let result = toolResult(raw) {
             cp.round?.tools.finish(id: result.id, failed: result.failed)
@@ -280,9 +266,8 @@ public enum PiHistory {
         case "session_info":
             cp.name = line.name
         case "compaction":
-            transcript.append(PiTranscriptEntry(
-                entryID: line.id ?? "\(cp.seq)", seq: cp.seq, role: .system, text: "已压缩上下文",
-                at: time ?? cp.lastActivity ?? .distantPast, tools: nil, roundStartedAt: nil, deliveryID: nil))
+            transcript.add(
+                cp, entryID: line.id ?? "\(cp.seq)", seq: cp.seq, role: .system, text: "已压缩上下文", at: time ?? cp.lastActivity ?? .distantPast)
         case "message":
             guard let message = line.message else { return }
             if cp.firstMessage == nil, message.role == "user" {
@@ -305,18 +290,16 @@ public enum PiHistory {
     private typealias Entry = (id: String, seq: Int64, at: Date)
 
     /// 你说的一句：进对话、成为进行中的提问。机器消息（扩展投进来的信封）不进对话，只开始一轮。
-    private static func userMessage(_ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout [PiTranscriptEntry]) {
+    private static func userMessage(_ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript) {
         if cp.round?.startedAt == nil { cp.round = .init(startedAt: entry.at, tools: cp.round?.tools ?? PiToolLog()) }
         let text = message.content?.joined("\n") ?? ""
         guard !isMachineMessage(text) else { return }
-        transcript.append(PiTranscriptEntry(
-            entryID: entry.id, seq: entry.seq, role: .user, text: text, at: entry.at, tools: nil, roundStartedAt: nil,
-            deliveryID: message.cuepadDelivery))
-        cp.recap.pendingPrompt = clip(collapsed(text), PiTranscriptRecap.promptLimit)
+        transcript.add(cp, entryID: entry.id, seq: entry.seq, role: .user, text: text, at: entry.at, deliveryID: message.cuepadDelivery)
+        cp.recap.pendingPrompt = clip(collapsed(text), PiRecap.promptLimit)
     }
 
     /// 助手消息：中途调工具的（`stopReason` 为 `toolUse`）只累计这一轮的工具活动；结束一轮的成一条 Pi 消息，问与答一起更新摘要。
-    private static func assistantMessage(_ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout [PiTranscriptEntry]) {
+    private static func assistantMessage(_ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript) {
         var round = cp.round ?? .init(startedAt: nil)
         for call in message.content?.toolCalls ?? [] {
             round.tools.start(id: call.id ?? "", name: call.name ?? "", arguments: call.arguments ?? PiToolArguments(), cwd: cp.cwd)
@@ -327,12 +310,12 @@ public enum PiHistory {
         }
         let text = (message.content?.joined("\n") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty {
-            transcript.append(PiTranscriptEntry(
-                entryID: entry.id, seq: entry.seq, role: .pi, text: text, at: entry.at, tools: round.tools.summary(),
-                roundStartedAt: round.startedAt, deliveryID: nil))
+            transcript.add(
+                cp, entryID: entry.id, seq: entry.seq, role: .pi, text: text, at: entry.at, tools: round.tools.summary(),
+                roundStartedAt: round.startedAt)
         }
-        cp.recap = PiTranscriptRecap(
-            lastPrompt: cp.recap.pendingPrompt ?? cp.recap.lastPrompt, lastReply: clip(text, PiTranscriptRecap.replyLimit), pendingPrompt: nil)
+        cp.recap = PiRecap(
+            lastPrompt: cp.recap.pendingPrompt ?? cp.recap.lastPrompt, lastReply: clip(text, PiRecap.replyLimit), pendingPrompt: nil)
         cp.round = nil
     }
 
@@ -458,20 +441,20 @@ public enum PiHistory {
                     unfinished = index + 1
                 }
             } else if message.role == "user", !isMachineMessage(text) {
-                lastPrompt = clip(collapsed(text), PiTranscriptRecap.promptLimit)
+                lastPrompt = clip(collapsed(text), PiRecap.promptLimit)
                 break
             }
         }
         var rest = cp
         rest.round = nil
         rest.recap.pendingPrompt = nil
-        var ignored: [PiTranscriptEntry] = []
+        var ignored = Transcript(fallbackID: "")
         for line in lines[unfinished...] where line.kind != .meta {
             try read(line)?.withUnsafeBytes { ingest($0, into: &rest, transcript: &ignored) }
         }
         cp.round = rest.round
-        cp.recap = PiTranscriptRecap(
-            lastPrompt: final == nil ? nil : lastPrompt, lastReply: final.flatMap { clip($0, PiTranscriptRecap.replyLimit) },
+        cp.recap = PiRecap(
+            lastPrompt: final == nil ? nil : lastPrompt, lastReply: final.flatMap { clip($0, PiRecap.replyLimit) },
             pendingPrompt: rest.recap.pendingPrompt)
     }
 

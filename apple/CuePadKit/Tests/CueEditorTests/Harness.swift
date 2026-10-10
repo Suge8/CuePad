@@ -16,6 +16,17 @@ func makePNG(width: Int = 1600, height: Int = 1000, seed: Int = 0, color: NSColo
     return rep.representation(using: .png, properties: [:])!
 }
 
+extension CueEditorTheme {
+    /// 测试用的最小主题：系统字体、固定色（分割线是纯红，便于从像素里认出来）。App 的纸页主题在 App 里，不在这个包。
+    static let test = CueEditorTheme(
+        font: .systemFont(ofSize: 15), titleFont: .systemFont(ofSize: 22, weight: .semibold),
+        headingFont: .systemFont(ofSize: 18, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 13, weight: .regular),
+        markerColor: .gray, codeBackground: NSColor.black.withAlphaComponent(0.06), textColor: .black, backgroundColor: .white,
+        variableColor: .purple, variableBackground: NSColor.purple.withAlphaComponent(0.12),
+        dividerColor: NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1), dividerLabelColor: .darkGray, placeholderColor: .lightGray,
+        horizontalInset: 20, verticalInset: 16, lineSpacing: 3, headingSpacing: 8, imageCornerRadius: 6, dividerHeight: 28)
+}
+
 @MainActor
 final class EditorHarness {
     let store = DirectoryImageStore()
@@ -23,7 +34,7 @@ final class EditorHarness {
     let window: NSWindow
     var textView: CueTextView { editor.textView }
 
-    init(width: CGFloat = 720, height: CGFloat = 640, theme: CueEditorTheme = .neutral) {
+    init(width: CGFloat = 720, height: CGFloat = 640, theme: CueEditorTheme = .test) {
         _ = NSApplication.shared
         editor = CueEditorView(imageStore: store, theme: theme)
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height), styleMask: [.titled, .resizable], backing: .buffered, defer: false)
@@ -81,6 +92,21 @@ final class EditorHarness {
         let rep = textView.bitmapImageRepForCachingDisplay(in: rect)!
         textView.cacheDisplay(in: rect, to: rep)
         return rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh / 2)?.usingColorSpace(.sRGB)
+    }
+
+    /// 把文本视图的一块区域真实绘制出来，看里面有没有接近 `color` 的像素。
+    func rendered(_ rect: CGRect, contains color: NSColor) -> Bool {
+        let rep = textView.bitmapImageRepForCachingDisplay(in: rect)!
+        textView.cacheDisplay(in: rect, to: rep)
+        let target = color.usingColorSpace(.sRGB)!
+        return (0..<rep.pixelsHigh).contains { y in
+            (0..<rep.pixelsWide).contains { x in
+                guard let pixel = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { return false }
+                // 色彩管理会让数值略偏：三个分量加起来离目标不到 0.6，而白底离纯色线有 2
+                return abs(pixel.redComponent - target.redComponent) + abs(pixel.greenComponent - target.greenComponent)
+                    + abs(pixel.blueComponent - target.blueComponent) < 0.6
+            }
+        }
     }
 
     func keyEvent(_ characters: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags = []) -> NSEvent {

@@ -1,22 +1,16 @@
 #if os(iOS)
 import SwiftUI
 
-/// 每个窗口的壳：注入服务、通知与窗口状态，恢复选中项目、处理深链接、进入后台前落盘；有同步时开启 Pi 通知。
+/// 每个窗口的壳：注入通知、处理深链接、进入后台前落盘；有同步时开启 Pi 通知。
 struct SceneRoot: View {
     let services: AppServices
     let alerts: PiAlertCenter
-    @State private var scene = SceneContext()
-    @SceneStorage("currentProject") private var storedProject = ""
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
-        IOSRootViews.root()
-            .environment(services)
-            .environment(scene)
+        IOSRoot(services: services, alerts: alerts)
             .environment(alerts)
             .task { if services.sync != nil { await alerts.enable() } }
-            .onAppear { scene.currentProject = UUID(uuidString: storedProject) }
-            .onChange(of: scene.currentProject) { _, project in storedProject = project?.uuidString ?? "" }
             .onOpenURL { services.handle(url: $0) }
             .onChange(of: phase) { _, phase in
                 switch phase {

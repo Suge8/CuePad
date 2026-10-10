@@ -94,6 +94,14 @@ extension Call {
     return Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0.name) })
   }
 
+  /// 项目的灵感数与绑定目录只在有项目要显示时才查。
+  func projectViews(_ projects: [Project]) async throws -> [ProjectView] {
+    guard !projects.isEmpty else { return [] }
+    let counts = Dictionary(uniqueKeysWithValues: try await store.projectSummaries().map { ($0.projectID, $0.cardCount) })
+    let directories = try await store.projectDirectories()
+    return projects.map { ProjectView(project: $0, cardCount: counts[$0.id] ?? 0, directory: directories[$0.id]) }
+  }
+
   func cardViews(_ cards: [Card]) async throws -> [CardView] {
     let names = try await projectNames()
     return cards.map { CardView(card: $0, project: $0.projectID.flatMap { names[$0] }) }

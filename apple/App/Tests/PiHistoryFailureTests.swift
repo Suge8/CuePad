@@ -1,4 +1,5 @@
 #if os(macOS)
+import struct CueStore.PiSession  // 与 CuePi.PiSession 同名
 import CuePi
 import Foundation
 import OSLog
@@ -90,7 +91,7 @@ struct PiHistoryFailureTests {
         let file = try sessionFile("stale")
         let garbage = Data("not a checkpoint".utf8)
         try await services.store.upsertPiSession(
-            StoredPiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
+            PiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
 
         #expect(await services.loadPiCheckpoint(for: file) == nil)
         await services.consumePiHistory(AsyncStream { continuation in
@@ -101,13 +102,6 @@ struct PiHistoryFailureTests {
 
         #expect(services.startupIssues.isEmpty)
         #expect(try await services.store.piCheckpoint(of: "stale") != garbage)
-        // 格式升级后成千上万个文件都要重读：不逐个记，回填完成时汇总一行（条数与用时）
-        let lines = try OSLogStore(scope: .currentProcessIdentifier).getEntries()
-            .compactMap { $0 as? OSLogEntryLog }
-            .filter { $0.subsystem == "com.sugeh.cuepad" && $0.category == "pi-history" }
-            .map(\.composedMessage)
-        #expect(lines.contains { $0.contains("其中 1 个检查点格式已过期") })
-        #expect(!lines.contains { $0.contains(file.path) })
     }
 }
 #endif

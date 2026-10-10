@@ -13,7 +13,7 @@ extension Command {
     ) { call in
       try call.args.expect()
       let scope = try await call.scope()
-      let cards = try await listedCards(call).filter {
+      let cards = try await listedCards(call, in: scope).filter {
         scope.contains($0.projectID) && (!call.args.has("pinned") || $0.isPinned)
       }
       let views = try await call.cardViews(cards)
@@ -70,7 +70,7 @@ extension Command {
     Command(
       path: ["card", "todo"], summary: "设为任务（待办）；--off 改回灵感", arguments: "<灵感或任务>",
       options: [Opt("off", "改回灵感：状态与会话关联清掉，它的下级提到它的位置")],
-      notes: Schema.output("更新后的 Card", Schema.card)
+      notes: "多行正文设为任务时，第一行留作任务，其余成为它的第一条提示词。\n" + Schema.output("更新后的 Card", Schema.card)
     ) { call in
       try call.args.expect("灵感或任务")
       let card = try await call.card(call.args.positionals[0])
@@ -107,12 +107,18 @@ extension Command {
     },
   ]
 
-  private static func listedCards(_ call: Call) async throws -> [Card] {
+  /// 范围限定到一个项目或未分类时只读那一处，不读全库再过滤。
+  private static func listedCards(_ call: Call, in scope: Scope) async throws -> [Card] {
     if call.args.has("trash") { return try await call.store.trashedCards() }
     if call.args.has("archived") { return try await call.store.archived() }
-    var cards: [Card] = []
-    for project in try await call.store.projects() { cards += try await call.store.cards(in: project.id) }
-    return cards + (try await call.store.cards(in: nil))
+    switch scope {
+    case .project(let project): return try await call.store.cards(in: project.id)
+    case .inbox: return try await call.store.cards(in: nil)
+    case .any:
+      var cards: [Card] = []
+      for project in try await call.store.projects() { cards += try await call.store.cards(in: project.id) }
+      return cards + (try await call.store.cards(in: nil))
+    }
   }
 
   private static func fresh(_ call: Call, _ id: UUID) async throws -> CardView {

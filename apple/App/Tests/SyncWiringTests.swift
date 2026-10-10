@@ -15,6 +15,15 @@ struct SyncWiringTests {
         await eventually(condition)
     }
 
+    /// Mac：有会话连着或有本机待执行的请求就每 2 秒，闲着时也不放慢（没有推送可靠性的数据前不拿延迟换请求数），都没有就不拉。
+    @Test func Mac主动拉取的节奏_有会话或请求就是2秒() {
+        let every2 = SyncPoller.Cadence(.every(.seconds(2)))
+        #expect(SyncPoller.Cadence.mac(hasOpenDeliveries: false, hasSessions: false) == nil)
+        #expect(SyncPoller.Cadence.mac(hasOpenDeliveries: false, hasSessions: true) == every2)
+        #expect(SyncPoller.Cadence.mac(hasOpenDeliveries: true, hasSessions: false) == every2)
+        #expect(SyncPoller.Cadence.mac(hasOpenDeliveries: true, hasSessions: true) == every2)
+    }
+
     @Test func 启动同步引擎_状态与问题镜像给界面() async throws {
         services.startSync()
         defer { services.cancelBackgroundWork() }
@@ -41,7 +50,7 @@ struct SyncWiringTests {
 
     struct NoEntitlement: Error {}
 
-    @Test func 引擎启动失败时进入启动问题() async throws {
+    @Test func 引擎启动失败时进入启动问题_状态写明原因() async throws {
         app.sync.startError.withLock { $0 = NoEntitlement() }
         services.startSync()
         defer { services.cancelBackgroundWork() }
@@ -53,16 +62,16 @@ struct SyncWiringTests {
             return
         }
         #expect(message.contains("NoEntitlement"))
+        guard case .unavailable(let reason) = services.syncStatus else {
+            Issue.record("\(services.syncStatus)")
+            return
+        }
+        #expect(reason.contains("没能启动"))
     }
 
     @Test func 应用激活时立即同步() async {
         await services.handleActivation()
         #expect(app.sync.syncNows == 1)
-    }
-
-    @Test func 界面的同步决定交给引擎() async throws {
-        try await services.resolveSync(.eraseLocal)
-        #expect(app.sync.resolutions == ["eraseLocal"])
     }
 
     @Test func 冲突副本经AppServices暴露_选定版本后消失() async throws {
@@ -95,18 +104,6 @@ struct SyncWiringTests {
 
     @Test func 有引擎时启动前是正在连接_不是已同步() {
         #expect(services.syncStatus == .starting)
-    }
-
-    @Test func 引擎没能启动时状态也写明原因() async throws {
-        app.sync.startError.withLock { $0 = NoEntitlement() }
-        services.startSync()
-        defer { services.cancelBackgroundWork() }
-        await wait { if case .unavailable = services.syncStatus { true } else { false } }
-        guard case .unavailable(let reason) = services.syncStatus else {
-            Issue.record("\(services.syncStatus)")
-            return
-        }
-        #expect(reason.contains("没能启动"))
     }
 
     @Test func 隔离模式与没有iCloud权限的构建不创建同步引擎() throws {

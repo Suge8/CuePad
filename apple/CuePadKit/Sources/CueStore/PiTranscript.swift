@@ -10,6 +10,29 @@ public enum PiChatRole: String, Sendable, CaseIterable {
   case system
 }
 
+/// 会话记录上的摘要（列表预览、会话页顶部用）：对话（`PiChatMessage`）的投影，由同一个写者（Mac 读会话文件）
+/// 在写对话的同一事务里写（`CueStore.writePiTranscript`），界面直接读、不和对话对账。等你回答的弹窗（`question`）
+/// 不在对话里，来自 Pi 桥，由状态记录器写。`lastPrompt` 与 `lastReply` 是最近一轮做完的问答，在这一轮结束时一起更新；
+/// 机器消息触发的轮没有新的提问，回答照常更新、提问沿用。
+public struct PiRecap: Sendable, Equatable, Codable {
+  /// 最近一轮已做完的问答里你说的那句（单行，空白与控制字符折成一个空格，至多 `promptLimit` 字符）。
+  public var lastPrompt: String?
+  /// 最近一轮已做完的问答里助手的最终回答文字（不含思考与工具调用），保留换行，至多 `replyLimit` 字符。
+  public var lastReply: String?
+  /// 进行中的提问：你说了、这一轮还没做完（单行，至多 `promptLimit` 字符）；这一轮做完时移进 `lastPrompt`，没有时为 nil。
+  /// 界面据此写"你说：… · Pi 正在处理"，上一轮的问答另行折叠，不把新提问和旧回答配在一起。
+  public var pendingPrompt: String?
+
+  public static let promptLimit = 500
+  public static let replyLimit = 1_200
+
+  public init(lastPrompt: String? = nil, lastReply: String? = nil, pendingPrompt: String? = nil) {
+    self.lastPrompt = lastPrompt
+    self.lastReply = lastReply
+    self.pendingPrompt = pendingPrompt
+  }
+}
+
 /// 会话对话里的一条消息（同步表 `piMessages`，Mac 写、各端只读，只追加）。
 ///
 /// 唯一来源是 Pi 的会话文件：Mac 读会话文件写出（在线会话随文件追加跟上，更早的按需补写），记录 id 由会话 id 与
@@ -89,7 +112,7 @@ extension PiChatMessage: Record {
 extension PiChatMessage {
   /// 一轮里 Agent 的工具活动：各类成功的次数（读、改文件按文件算）、失败的调用数和一份按先后的清单。
   /// 由 Mac 从会话文件汇出（上限——清单条数与每条的长度——由那一侧定），同步记录里存为 JSON（加密字段 `tools`）。
-  public struct Tools: Codable, Equatable, Sendable {
+  public struct Tools: StoredJSON, Equatable, Sendable {
     /// 声明顺序即摘要里的优先级：改文件、跑命令比读取和搜索更值得说
     public enum Kind: String, Codable, CaseIterable, Sendable {
       case edit, command, read, search, other
@@ -116,7 +139,12 @@ extension PiChatMessage {
     public var edits: Int, commands: Int, reads: Int, searches: Int, others: Int
     /// 失败的调用数（不在各类里）
     public var failed: Int
+    /// 清单，按发生先后，至多 `itemLimit` 条；超出的只进计数
     public var items: [Item]
+
+    public static let itemLimit = 30
+    /// 清单里一条的目标至多这么多字符
+    public static let targetLimit = 120
 
     public init(edits: Int = 0, commands: Int = 0, reads: Int = 0, searches: Int = 0, others: Int = 0, failed: Int = 0, items: [Item] = []) {
       self.edits = edits
@@ -139,18 +167,6 @@ extension PiChatMessage {
       case .search: searches
       case .other: others
       }
-    }
-
-    var stored: String {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = .sortedKeys  // 同样的内容同样的字节：重读时只在真的变了才改写记录
-      return String(decoding: try! encoder.encode(self), as: UTF8.self)
-    }
-
-    /// 读不出的（别的版本写的、格式不认识）当作没有。
-    init?(stored: String) {
-      guard let tools = try? JSONDecoder().decode(Self.self, from: Data(stored.utf8)) else { return nil }
-      self = tools
     }
   }
 }

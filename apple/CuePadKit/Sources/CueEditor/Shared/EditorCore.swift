@@ -226,9 +226,3 @@ final class EditorCore {
         range.length > 0 ? CueFormat.serialize(tokens(in: range)) : nil
     }
 }
-
-/// 文本视图树里的全部分割线视图（主题变化时要求它们重绘）。
-@MainActor
-func cueDividerViews(in root: CueView) -> [CueDividerView] {
-    (root as? CueDividerView).map { [$0] } ?? root.subviews.flatMap(cueDividerViews(in:))
-}
