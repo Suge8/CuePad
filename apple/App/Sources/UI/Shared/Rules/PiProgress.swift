@@ -4,8 +4,8 @@ import Foundation
 /// 会话行名字下面那一句（全 App 的会话行同一条，`PiSessionRow`）：结束请求的进度 → 没送到的原因 → 回复框里没发的草稿 → 到哪了（`PiProgress`）→ 新会话的提示。
 /// 什么都没有时是 nil；整页的行这时写状态词（`lead`），窄处的行状态词本来就在前面。
 /// 已结束的会话第二层只写它做了什么（见 `PiProgress`），状态只由带斜线的状态标表达：翻历史时不满屏"已结束"。
-/// 没有记下回答也没有你说的话（Mac 从会话文件回填的旧历史常常只有名字，名字本身就是第一句提问）时写"没有对话记录"：
-/// 说的是 CuePad 没记下，不断言它没回复过。
+/// 没有记下回答也没有你说的话（Mac 从会话文件回填的旧历史常常只有名字，名字本身就是第一句提问）时第二层写它的所在（项目名或文件夹名，
+/// 与名字重复的 `PiPlace.name` 已省掉）；连所在也没有时这一层不画、行收成一行高。
 nonisolated enum PiRowLine: Equatable {
     case ending
     case endFailed(String)
@@ -16,12 +16,14 @@ nonisolated enum PiRowLine: Equatable {
     case hint(String)
     /// 没有更要紧的一句时，整页的行写状态词（`PiShown.label`）。
     case status(String)
+    /// 已结束又没记下任何话的会话：第二层写它的所在，名字后面不再写（不重复）。
+    case place(String)
 
     /// 读屏念的那一句（行上显示的文字去掉着色、强调）。
     var speech: String {
         switch self {
         case .ending: "正在结束…"
-        case .endFailed(let text), .failed(let text), .progress(let text), .hint(let text), .status(let text): text
+        case .endFailed(let text), .failed(let text), .progress(let text), .hint(let text), .status(let text), .place(let text): text
         case .draft(let draft): "草稿 \(draft)"
         }
     }
@@ -40,9 +42,11 @@ nonisolated enum PiRowLine: Equatable {
     }
 
     /// 整页的行名字下面只有这一句：等你确认时是问题、出错时是原因、工作中是在做什么，状态由状态标表达；没有这样一句时才写状态词，
-    /// 已结束的除外（状态由斜线标表达，写"没有对话记录"）。
-    static func lead(_ session: PiSessionState, shown: PiShown, draft: String?, end: DeliveryRequest?, failure: String? = nil) -> PiRowLine {
-        of(session, draft: draft, end: end, failure: failure) ?? (session.state == .known(.ended) ? .hint("没有对话记录") : .status(shown.label))
+    /// 已结束的除外（状态由斜线标表达）：写它的所在 `place`，没有所在时是 nil（这一层不画）。
+    static func lead(
+        _ session: PiSessionState, shown: PiShown, place: String?, draft: String?, end: DeliveryRequest?, failure: String? = nil
+    ) -> PiRowLine? {
+        of(session, draft: draft, end: end, failure: failure) ?? (session.state == .known(.ended) ? place.map(PiRowLine.place) : .status(shown.label))
     }
 }
 

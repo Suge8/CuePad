@@ -88,13 +88,18 @@ struct PiSessionRow: View {
         let failure = PiRename.failure(rename, seen: services.settings.sessionSeen[session.sessionID]) ?? shown.undelivered(delivery)?.failure
         let draft = services.settings.draftPreview(for: session.id)
         let note = shown.note ?? (PiRename.isPending(rename) ? "正在改名" : nil)
+        // 整页：最要紧的一句（没有时写状态词；已结束又没记下话的写所在）；窄处：状态词后接这一句
+        let line = searchHit ?? (style.full
+            ? PiRowLine.lead(session, shown: shown, place: PiPlace.name(of: session, project: project), draft: draft, end: end, failure: failure)
+            : PiRowLine.of(session, draft: draft, end: end, failure: failure))
+        let placeLeads = if case .place = line { true } else { false }
         HStack(alignment: .firstTextBaseline, spacing: style.dot + 2) {
             // 整页不写状态词，状态标就要说出它（读屏）
             PiStateDot(shown: shown, size: style.dot, announces: style.full, halo: style.full)
             VStack(alignment: .leading, spacing: style.spacing) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     let name = Text(Highlight.matches(PiRename.title(of: session, request: rename), highlight)).font(style.name).fontWeight(shown.isUnread ? .semibold : nil).foregroundStyle(palette.ink).lineLimit(1)
-                    if style.full, let place {
+                    if style.full, !placeLeads, let place {
                         NameAndPlace {
                             name
                             // 放不下时宽度给到 0、裁掉：看不见，读屏照样读到
@@ -110,15 +115,16 @@ struct PiSessionRow: View {
                 }
                 if style.full {
                     // 你的话在路上、正在改名时先写它（短），再接最要紧的那一句
-                    let line = searchHit ?? PiRowLine.lead(session, shown: shown, draft: draft, end: end, failure: failure)
                     let lead = text(of: line, shown: shown)
-                    // 拼成一个 Text 后读屏读不到分段点的替代，所以整句给读屏一个用"，"分段的标签
-                    note.map {
-                        Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(Dotted.separator).foregroundStyle(palette.ink3))\(lead)")
-                            .accessibilityLabel(Dotted($0, line.speech).spoken)
-                    } ?? lead
+                    // 已结束又连所在也没有的历史会话没有第二层：这一行收成一行高，不留一行空白
+                    if note != nil || line != nil {
+                        // 拼成一个 Text 后读屏读不到分段点的替代，所以整句给读屏一个用"，"分段的标签
+                        note.map {
+                            Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(Dotted.separator).foregroundStyle(palette.ink3))\(lead)")
+                                .accessibilityLabel(Dotted($0, line?.speech).spoken)
+                        } ?? lead
+                    }
                 } else {
-                    let line = searchHit ?? PiRowLine.of(session, draft: draft, end: end, failure: failure)
                     let rest = note.map { Text($0).foregroundStyle(palette.ink3) } ?? line.map { text(of: $0, shown: shown) }
                     Text("\(status(shown))\(rest.map { Text("\(Text(Dotted.separator).foregroundStyle(palette.ink3))\($0)") } ?? Text(verbatim: ""))")
                         .accessibilityLabel(Dotted(shown.label, note ?? line?.speech).spoken)
@@ -169,6 +175,7 @@ struct PiSessionRow: View {
         case .draft(let draft): Text("\(Text("草稿").fontWeight(.semibold).foregroundStyle(palette.ink))  \(Text(draft).foregroundStyle(palette.ink2))")
         case .progress(let progress): Text(Highlight.matches(progress, highlight)).foregroundStyle(palette.ink2)
         case .hint(let hint): Text(hint).foregroundStyle(palette.ink3)
+        case .place(let place): Text(Highlight.matches(place, highlight)).foregroundStyle(palette.ink3)
         case .status: status(shown)
         case nil: Text(verbatim: " ")
         }
