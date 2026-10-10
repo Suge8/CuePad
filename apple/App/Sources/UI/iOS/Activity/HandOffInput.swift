@@ -87,14 +87,9 @@ struct HandOffInput: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
+                DestinationChip(title: Text(chosen.map { "交给 \($0.state.title)" } ?? "交给 新会话")) {
                     if let chosen { PiStateDot(shown: services.settings.shown(chosen), size: 7) }
-                    Text(chosen.map { "交给 \($0.state.title)" } ?? "交给 新会话").lineLimit(1)
-                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3).accessibilityHidden(true)
                 }
-                .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink)
-                .padding(.horizontal, 12).frame(height: 32)
-                .background(palette.fill, in: .capsule)
             }
             .accessibilityLabel(chosen.map { "交给 \($0.state.title)，点开换会话" } ?? "交给新会话")
             Spacer(minLength: 0)

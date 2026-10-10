@@ -95,31 +95,43 @@ struct CaptureComposer: View {
     }
 }
 
-/// 落点胶囊："→ 项目图标 项目名 ⌃⌄"（随手记的头部、iOS 任务页的快速添加）。
-struct DestinationChip: View {
-    let project: Project?
+/// 头部的落点胶囊："[前缀] 图标 名字 ⌃⌄"，点开换去处。随手记与 iOS 任务页的快速添加写"→ 项目图标 项目名"（init(project:)），
+/// 新会话与交给 Agent 的输入框用同一个胶囊写"新会话 · 项目名""交给 会话名"。
+struct DestinationChip<Icon: View>: View {
+    var lead: String?
+    let title: Text
+    @ViewBuilder let icon: Icon
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: Self.spacing) {
-            Text("→").foregroundStyle(palette.ink3)
-            ProjectGlyph(project: project, size: Self.glyph)
-            Text(CaptureCopy.destination(project)).foregroundStyle(palette.ink).lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down").font(Self.chevron).foregroundStyle(palette.ink3).accessibilityHidden(true)
+        HStack(spacing: ChipMetrics.spacing) {
+            if let lead { Text(lead).foregroundStyle(palette.ink3) }
+            icon
+            title.foregroundStyle(palette.ink).lineLimit(1)
+            Image(systemName: "chevron.up.chevron.down").font(ChipMetrics.chevron).foregroundStyle(palette.ink3).accessibilityHidden(true)
         }
-        .font(Self.font)
-        .padding(.horizontal, Self.inset).frame(height: Self.height)
-        .background(palette.fill.opacity(Self.fill), in: .capsule)
+        .font(ChipMetrics.font)
+        .padding(.horizontal, ChipMetrics.inset).frame(height: ChipMetrics.height)
+        .background(palette.fill.opacity(ChipMetrics.fill), in: .capsule)
         .contentShape(.capsule)
     }
+}
 
+/// 胶囊的尺寸（泛型类型里放不了静态存储属性）。
+private enum ChipMetrics {
     #if os(macOS)
-    private static let spacing: CGFloat = 5, glyph: CGFloat = 12, inset: CGFloat = 8, height: CGFloat = 24, fill = 2.0
-    private static let font = Typography.meta
-    private static let chevron = Font.system(size: 9, weight: .semibold)
+    static let spacing: CGFloat = 5, glyph: CGFloat = 12, inset: CGFloat = 8, height: CGFloat = 24, fill = 2.0
+    static let font = Typography.meta
+    static let chevron = Font.system(size: 9, weight: .semibold)
     #else
-    private static let spacing: CGFloat = 6, glyph: CGFloat = 13, inset: CGFloat = 12, height: CGFloat = 32, fill = 1.0
-    private static let font = Font.subheadline.weight(.medium)
-    private static let chevron = Font.caption2
+    static let spacing: CGFloat = 6, glyph: CGFloat = 13, inset: CGFloat = 12, height: CGFloat = 32, fill = 1.0
+    static let font = Font.subheadline.weight(.medium)
+    static let chevron = Font.caption2
     #endif
+}
+
+extension DestinationChip where Icon == ProjectGlyph {
+    init(project: Project?) {
+        self.init(lead: "→", title: Text(CaptureCopy.destination(project))) { ProjectGlyph(project: project, size: ChipMetrics.glyph) }
+    }
 }

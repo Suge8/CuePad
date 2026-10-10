@@ -87,14 +87,9 @@ struct NewSessionInput: View {
                     }
                 }
             } label: {
-                HStack(spacing: 5) {
-                    if let project = chosen?.project { ProjectGlyph(project: project, size: 12) }
-                    Text(Dotted("新会话", chosen?.project.name ?? "选在哪开")).lineLimit(1)
-                    Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                DestinationChip(title: Text(Dotted("新会话", chosen?.project.name ?? "选在哪开"))) {
+                    if let project = chosen?.project { ProjectGlyph(project: project, size: 13) }
                 }
-                .font(.subheadline.weight(.medium)).foregroundStyle(palette.ink)
-                .padding(.horizontal, 12).frame(height: 32)
-                .background(palette.fill, in: .capsule)
             }
             .disabled(inFlight)
             .accessibilityLabel("在哪开：\(chosen?.project.name ?? "没选")")
