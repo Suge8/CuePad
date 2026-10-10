@@ -16,36 +16,34 @@ struct AgentScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
-    @State private var list: PiSessionList?
-    @State private var query = ""
-    @State private var limit = PiSessionList.pageSize
-    /// 这一页上点过的筛选（`.some(nil)` 是全部）；没点过时用进来的项目或上次记下的。
-    @State private var picked: UUID??
+    @State private var model = AgentListModel()
+    /// 推入页自己的筛选（进来时是那个项目，在这里换的不记）；标签根页的筛选记在偏好里。
+    @State private var pushedFilter: UUID?
     @FocusState private var searchFocused: Bool
-    @State private var confirmingEnd: PiSessionState?
-    @State private var renaming: PiSessionState?
-    @State private var reloadOpen = false
     @State private var searchHidden = false
     /// 还没有文件夹的项目的同名建议（顶上筛选钮的菜单里一键绑）。
     @State private var folderGuide: FolderGuide?
     @Environment(\.tabPageReady) private var tabPageReady
 
-    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+    init(inPanel: Bool = false, project: UUID? = nil) {
+        self.inPanel = inPanel
+        self.project = project
+        _pushedFilter = State(initialValue: project)
+    }
 
-    /// 此刻的项目筛选：这一页上点过的，否则按 `Navigation.agentFilter`；项目进了回收站时是全部。
+    /// 此刻的项目筛选；项目进了回收站时是全部。
     private var filter: UUID? {
-        guard let picked else { return navigation.agentFilter(entered: project, catalog: workspace.catalog) }
-        return picked.flatMap { workspace.catalog?.project($0)?.id }
+        if project == nil { return navigation.agentFilter(entered: nil, catalog: workspace.catalog) }
+        return pushedFilter.flatMap { workspace.catalog?.project($0)?.id }
     }
 
     private func pick(_ id: UUID?) {
-        picked = .some(id)
-        navigation.chooseAgentFilter(id, entered: project)
+        if project == nil { navigation.chooseAgentFilter(id, entered: nil) } else { pushedFilter = id }
     }
 
     var body: some View {
         List {
-            if let list { sessions(list) }
+            if let list = model.list { sessions(list) }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
@@ -54,39 +52,30 @@ struct AgentScreen: View {
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .contentMargins(.top, Bars.contentGap, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
-        .renameSession($renaming)
-        .endSession($confirmingEnd)
         #if DEBUG
         .defaultScrollAnchor(DebugScene.scene == "agent" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
         #endif
-        .hidingSearch($searchHidden, searching: searchFocused || !query.isEmpty)
+        .hidingSearch($searchHidden, searching: searchFocused || !model.query.isEmpty)
         .fadesUnderBars(below: Bars.contentGap)
         .safeAreaBar(edge: .top) {
             SearchRow(search: search, searchHidden: searchHidden) { filterMenu } trailing: { if project == nil { actions } }
         }
-        .modifier(Header(pushed: project != nil, count: list.map { $0.now.count + $0.total }, filter: filter))
+        .modifier(Header(pushed: project != nil, count: model.list.map { $0.now.count + $0.total }, filter: filter))
         // 标签页的根：系统导航栏收起，只留这一排（iPad 分栏里导航栏放着分栏自己的按钮，留着）
         .toolbarVisibility(project == nil && navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
         .observingFolderGuide(into: $folderGuide)
         .refreshable { await services.syncNow() }
-        .onChange(of: list != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
-        .environment(\.searchHighlight, query)
-        .onChange(of: query) { limit = PiSessionList.pageSize }
-        .onChange(of: filter) { limit = PiSessionList.pageSize }
+        .onChange(of: model.list != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
+        .agentList(model, filter: filter)
         #if DEBUG
-        .onAppear { if DebugScene.scene == "agent" { query = DebugScene.searchText } }
+        .onAppear { if DebugScene.scene == "agent" { model.query = DebugScene.searchText } }
         #endif
-        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects, .directoryBindings],
-                   id: PiSessionList.Key(filter: .init(text: query, project: filter), limit: limit),
-                   into: $list, onError: workspace.fail) { [query, filter, limit] store in
-            try PiSessionList.read(text: query, project: filter, historyLimit: limit, from: store)
-        }
     }
 
     /// 左边的圆钮：按项目筛"现在"与"历史"（全部 + 在 Mac 上绑了文件夹的项目，项目目录的顺序）；筛着项目时圆钮里是那个项目的图标。
     /// 钮始终在（两个标签根页的顶上一排结构一致）；一个能筛的项目都没有时点开写明原因，并给还没绑文件夹的项目各一项去绑。
     @ViewBuilder private var filterMenu: some View {
-        let projects = (workspace.catalog?.projects ?? []).filter { list?.projects.contains($0.id) == true || $0.id == filter }
+        let projects = model.filterable(in: workspace.catalog, current: filter)
         let current = workspace.catalog?.project(filter)
         Menu {
             if projects.isEmpty {
@@ -136,20 +125,19 @@ struct AgentScreen: View {
             Group {
                 if !list.now.isEmpty {
                     Section {
-                        ForEach(PiNowRow.rows(list.now, state: \.state)) { nowRow in
+                        ForEach(list.nowRows) { nowRow in
                             switch nowRow {
                             case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
                             case .reload(let items):
-                                PiReloadFold(count: items.count, expanded: $reloadOpen, style: .page)
+                                PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
                                     .padding(.horizontal, 16).padding(.vertical, Self.rowPadding)
                                     .listRowInsets(.init()).listRowBackground(palette.paper).listRowSeparator(.hidden)
-                                if reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
+                                if model.reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
                             }
                         }
                     } header: { SectionTitle(text: "现在").listRowInsets(Self.headerInsets) }
                 }
-                let runs = PiHistorySection.split(list.ended, date: \.state.stateSince, now: .now)
-                ForEach(Array(runs.enumerated()), id: \.element.section) { index, run in
+                ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                     Section {
                         ForEach(run.items) { row($0, filtered: filtered, end: list.ends[$0.id]) }
                     } header: {
@@ -160,10 +148,10 @@ struct AgentScreen: View {
                         .listRowInsets(Self.headerInsets)
                     }
                 }
-                if list.loaded < list.total {
+                if model.hasMore {
                     // 滑到这里才读下一页。按已读条数重跑：读完一页它仍在屏幕上（一页没填满屏幕）时接着读
                     Spinner(.regular).frame(maxWidth: .infinity).listRowBackground(Color.clear)
-                        .task(id: list.loaded) { limit = list.loaded + PiSessionList.pageSize }
+                        .task(id: list.loaded) { model.loadMore() }
                 }
             }
             .transaction(value: list.filter) { $0.animation = nil }
@@ -185,8 +173,8 @@ struct AgentScreen: View {
         let endable = MacDelivery.canEnd(item.state) && end?.isOpen != true
         let renamable = MacDelivery.canRename(item.state)
         // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
-        let trailing = (endable ? [RowAction("结束会话", symbol: "stop.circle") { confirmingEnd = item.state }] : [])
-            + (renamable ? [RowAction("重命名", symbol: "pencil", tone: .quiet, enabled: services.reachesPiHost) { renaming = item.state }] : [])
+        let trailing = (endable ? [RowAction("结束会话", symbol: "stop.circle") { model.confirmingEnd = item.state }] : [])
+            + (renamable ? [RowAction("重命名", symbol: "pencil", tone: .quiet, enabled: services.reachesPiHost) { model.renaming = item.state }] : [])
         return SessionRow(item: item, filtered: filtered, end: end)
             .listRowInsets(.init())
             .listRowBackground(palette.paper)
@@ -200,20 +188,21 @@ struct AgentScreen: View {
 
 
     @ViewBuilder private var empty: some View {
-        if searching {
+        let project = filter.flatMap { workspace.catalog?.project($0) }
+        switch model.empty(filtering: project, hasFolder: filter.map(workspace.hasFolder) ?? true) {
+        case .noMatch(let query):
             EmptyState.noMatch(query).padding(.top, 40)
-        } else if let filter, let project = workspace.catalog?.project(filter), !workspace.hasFolder(filter) {
-            // 会话按工作目录归入项目：没绑文件夹就一个也归不进来，空态不能说"没有会话"
+        case .needsFolder(let project):
             EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
                 ProjectFolderGuide(project: project, guide: folderGuide)
             }
             .padding(.top, 40)
-        } else if let filter {
+        case .none(inProject: true):
             EmptyState(mascot: .empty, title: "这个项目还没有 Agent 会话") {
                 EmptyStateButton(title: "新会话", systemImage: "plus", action: { navigation.newSession = .init(project: filter) })
             }
             .padding(.top, 40)
-        } else {
+        case .none(inProject: false):
             EmptyState(mascot: .empty, title: "还没有 Agent 会话", message: "在 Mac 上运行 pi，或在这里开一个新会话") {
                 EmptyStateButton(title: "新会话", systemImage: "plus", action: { navigation.newSession = .init() })
             }
@@ -222,7 +211,7 @@ struct AgentScreen: View {
     }
 
     private var search: SearchCapsule {
-        SearchCapsule(prompt: workspace.catalog?.project(filter).map { "搜 \($0.name) 的会话" } ?? "搜索会话", query: $query, focus: $searchFocused)
+        SearchCapsule(prompt: workspace.catalog?.project(filter).map { "搜 \($0.name) 的会话" } ?? "搜索会话", query: $model.query, focus: $searchFocused)
     }
 
     @ViewBuilder private var actions: some View {

@@ -1,6 +1,11 @@
 import CueStore
 import Foundation
 import Observation
+#if canImport(UIKit)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// 设备本地偏好，存 UserDefaults，不进同步库。
 @MainActor @Observable
@@ -10,13 +15,13 @@ final class AppSettings {
     }
 
     static let defaultGlobalShortcut = "Alt+Space"
+    private static let draftDelay: Duration = .milliseconds(400)
 
-    private enum Key {
+    enum Key {
         static let theme = "theme"
         static let globalShortcut = "globalShortcut"
         static let currentProject = "currentProject"
         static let piExtensionDeclined = "piExtensionDeclined"
-        static let commandLineToolPrompted = "commandLineToolPrompted"
         static let replyTexts = "replyTexts"
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
@@ -24,11 +29,11 @@ final class AppSettings {
         static let holdSendLearned = "holdSendLearned"
     }
 
-    private static let frameKeyPrefix = "NSWindow Frame " // 与系统窗口自动保存同名同格式，沿用已存的位置
-
-    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored let defaults: UserDefaults
     /// 每个会话的草稿各是一个可观察的格子：打字只让读这个会话草稿的视图（它的回复框、它在列表里那一行）重算，别的行不动。
     @ObservationIgnored private var replyDrafts: [UUID: ReplyDraftSlot] = [:]
+    /// 草稿落盘的计时：每个键都改草稿，偏好只在停手 `draftDelay` 后写一次；有未写的草稿时才有。
+    @ObservationIgnored private var draftTimer: Task<Void, Never>?
 
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
     /// W3C code 形式的加速键（如 `Alt+Space`）。
@@ -53,17 +58,8 @@ final class AppSettings {
     /// 用过一次按住发送钮的菜单（马上说、放进输入框）：之后发送钮上不再提示"按住可…"。存储属性：用过的那一刻提示就收起。
     var holdSendLearned: Bool { didSet { defaults.set(holdSendLearned, forKey: Key.holdSendLearned) } }
 
-    /// 是否已经提示过安装命令行工具（只在首次启动提示一次）。
-    var commandLineToolPrompted: Bool {
-        get { defaults.bool(forKey: Key.commandLineToolPrompted) }
-        set { defaults.set(newValue, forKey: Key.commandLineToolPrompted) }
-    }
-
-    /// iOS Agent 页上次选的项目筛选；nil 是全部。
-    var agentProject: UUID? {
-        get { defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:)) }
-        set { defaults.set(newValue?.uuidString, forKey: Key.agentProject) }
-    }
+    /// iOS Agent 页上次选的项目筛选；nil 是全部。存储属性：选的那一刻页面就跟着变。
+    var agentProject: UUID? { didSet { defaults.set(agentProject?.uuidString, forKey: Key.agentProject) } }
 
     /// 本机最后一次看每个 Pi 会话的时间（按 sessionID），判断"有新回复"（`PiUnread`）；只留最近看的 `seenLimit` 个。
     private(set) var sessionSeen: [String: Date] { didSet { defaults.set(sessionSeen, forKey: Key.sessionSeen) } }
@@ -105,9 +101,22 @@ final class AppSettings {
         return slot
     }
 
-    /// 发出后传空草稿：文字一并从本机偏好里清掉。
+    /// 发出后传空草稿：文字一并从本机偏好里清掉。界面立即读到新草稿，偏好在停手后写一次（`flush`）。
     func setReplyDraft(_ draft: ComposerDraft, for session: UUID) {
         slot(session).draft = draft
+        draftTimer?.cancel()
+        draftTimer = Task { [weak self] in
+            try? await Task.sleep(for: Self.draftDelay)
+            guard !Task.isCancelled else { return }
+            self?.flush()
+        }
+    }
+
+    /// 把还没写的草稿文字写进偏好；离开前台与退出时由系统通知触发，没有未写的草稿时什么也不做。
+    func flush() {
+        guard let timer = draftTimer else { return }
+        timer.cancel()
+        draftTimer = nil
         defaults.set(replyDrafts.compactMapValues { $0.draft.text.allSatisfy(\.isWhitespace) ? nil : $0.draft.text }
             .reduce(into: [String: String]()) { $0[$1.key.uuidString] = $1.value }, forKey: Key.replyTexts)
     }
@@ -126,6 +135,7 @@ final class AppSettings {
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
+        agentProject = defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:))
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (defaults.dictionary(forKey: Key.replyTexts) as? [String: String] ?? [:]).reduce(into: [:]) { drafts, entry in
             if let id = UUID(uuidString: entry.key) { drafts[id] = ReplyDraftSlot(ComposerDraft(text: entry.value)) }
@@ -139,20 +149,24 @@ final class AppSettings {
             unreadSince = .now
             defaults.set(unreadSince, forKey: Key.unreadSince)
         }
+        for name in [Self.leavingForeground, Self.terminating] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.flush() }
+            }
+        }
     }
+
+    #if canImport(UIKit)
+    private static let leavingForeground = UIApplication.willResignActiveNotification
+    private static let terminating = UIApplication.willTerminateNotification
+    #else
+    private static let leavingForeground = NSApplication.willResignActiveNotification
+    private static let terminating = NSApplication.willTerminateNotification
+    #endif
 
     private static func isTrue(_ value: Any) -> Bool {
         if let flag = value as? Bool { return flag }
         return ["yes", "true", "1"].contains(String(describing: value).lowercased())
-    }
-
-    /// 窗口位置（`NSWindow.frameDescriptor` 字符串）：设备本地偏好，与其他偏好同处一个存储。
-    func windowFrame(for name: String) -> String? {
-        defaults.string(forKey: Self.frameKeyPrefix + name)
-    }
-
-    func setWindowFrame(_ descriptor: String, for name: String) {
-        defaults.set(descriptor, forKey: Self.frameKeyPrefix + name)
     }
 }
 

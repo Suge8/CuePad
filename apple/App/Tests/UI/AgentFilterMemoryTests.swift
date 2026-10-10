@@ -1,6 +1,7 @@
 #if os(iOS)
 import CueStore
 import Foundation
+import Synchronization
 import Testing
 @testable import CuePad
 
@@ -24,6 +25,17 @@ struct AgentFilterMemoryTests {
         navigation(suite).chooseAgentFilter(table.id, entered: nil)
 
         #expect(navigation(suite).agentFilter(entered: nil, catalog: catalog([table])) == table.id)
+    }
+
+    /// 页面读的是 AppSettings 本身：选的那一刻页面就跟着变，不用再留一份页面自己的"点过的筛选"。
+    @Test func 选的项目是可观察的() {
+        let settings = AppSettings(defaults: UserDefaults(suiteName: "agent-filter-\(UUID())")!, launchArguments: [:])
+        let changed = Mutex(false)
+        withObservationTracking { _ = Navigation(settings: settings).agentFilter(entered: nil, catalog: catalog([])) } onChange: {
+            changed.withLock { $0 = true }
+        }
+        settings.agentProject = UUID()
+        #expect(changed.withLock { $0 })
     }
 
     @Test func 从项目页进来先筛该项目_在那里换的不记() async throws {
