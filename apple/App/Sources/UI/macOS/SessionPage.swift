@@ -120,7 +120,7 @@ struct SessionPage: View {
             await NextFrame.wait()
             secondary = true
         }
-        .observing(services.store, SessionDigest.tables, id: sessionID, into: $stored,
+        .observing(services.store, id: sessionID, into: $stored,
                    onError: workspace.fail) { [sessionID] store in
             try SessionDigest.read(sessionID: sessionID, from: store)
         }
@@ -148,9 +148,7 @@ struct SessionPage: View {
                 }
                 PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, window: $shown)
             }
-            #if DEBUG
-            .onAppear { PerfProbe.mark("conversation") }
-            #endif
+            .perfMark("conversation")
         }
         .fadesUnderBars()
         .environment(\.chatHighlight, highlight)
@@ -236,7 +234,7 @@ extension Workspace {
     /// 本机桥上在线的这个 Pi 会话（`sessionID` 是 Pi 自己的会话 id）此刻的状态；不在线为 nil。
     func liveState(ofSession sessionID: String?) -> PiSessionState? {
         guard let sessionID, let live = services.pi.session(sessionID: sessionID) else { return nil }
-        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id], recap: sessionRecaps[sessionID])
+        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id], recap: services.liveSessions.recaps[sessionID])
     }
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
