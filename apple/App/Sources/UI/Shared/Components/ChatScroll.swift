@@ -195,17 +195,29 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             .newestFirst()
             .ignoresSafeArea(edges: .bottom)
             // 回复框下面那一条（横条区）不露半截气泡；看历史时回复框收成居中的短胶囊，两旁空着，整段回复框的高也不露。
-            // 只是内容的透明度遮罩，栏外不画颜色；只随这段高度与贴不贴最新变，滚动时不重算
+            // 只是内容的透明度遮罩，栏外不画颜色；只随这段高度与贴不贴最新变，滚动时不重算。
+            // 切换时各段的高度不变、只淡入淡出回复框那一段：高度跟着动画走时，收起中的胶囊两旁会先露出几帧没被遮住的整字
             .mask {
-                let history = !follow.wrappedValue.atNewest
-                VStack(spacing: 0) {
-                    Rectangle()
-                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                        .frame(height: history ? Self.historyFade : Self.fade)
-                    Color.clear.frame(height: history ? max(clearsBelow, below) : clearsBelow)
+                let band = max(0, below - clearsBelow)
+                ZStack {
+                    // 看历史时的样子：回复框上沿之上淡出，回复框那一段与横条区都不露
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Self.historyFade)
+                        Color.clear.frame(height: band + clearsBelow)
+                    }
+                    .ignoresSafeArea()
+                    // 贴着最新时叠上回复框那一段：内容透在回复框玻璃后面，到回复框下沿才淡出
+                    VStack(spacing: 0) {
+                        Color.clear
+                        Rectangle().frame(height: Self.historyFade + max(0, band - Self.fade))
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: min(band, Self.fade))
+                        Color.clear.frame(height: clearsBelow)
+                    }
+                    .ignoresSafeArea()
+                    .opacity(follow.wrappedValue.atNewest ? 1 : 0)
+                    .animation(Motion.quick, value: follow.wrappedValue.atNewest)
                 }
-                .ignoresSafeArea()
-                .animation(Motion.quick, value: history)
             }
             // 铺满后伸进底下的那一段就是回复框与键盘占的高
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { below = $0 }

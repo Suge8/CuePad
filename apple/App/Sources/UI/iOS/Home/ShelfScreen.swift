@@ -83,7 +83,7 @@ struct ShelfScreen: View {
             }
         }
         // 内容滚到顶上那一排后面时淡出（那一排是下面的 safeAreaBar，整页的遮罩管不到）
-        .fadesUnderBars(below: SearchRow.contentGap)
+        .fadesUnderBars(below: Bars.contentGap)
         // 不显示标题：顶上只有那一排，内容多露出来；标题仍是读屏与多任务切换器里的名字
         .navigationTitle("灵感")
         .navigationBarTitleDisplayMode(.inline)
@@ -158,7 +158,7 @@ struct ShelfScreen: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, SearchRow.contentGap)
+        .padding(.top, Bars.contentGap)
         .padding(.bottom, 24)
         // 任务开始、做完时"正在推进"一张张进出，下面的内容跟着挪
         .animation(Motion.snappy, value: data.active.map(\.id))

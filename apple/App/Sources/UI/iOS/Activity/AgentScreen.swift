@@ -52,7 +52,7 @@ struct AgentScreen: View {
         .listSectionSpacing(16)
         // 与书架同一页边距与顶距：顶上不留分组列表默认的空白，只让出搜索那一排下面统一的一小段
         .contentMargins(.horizontal, 16, for: .scrollContent)
-        .contentMargins(.top, SearchRow.contentGap, for: .scrollContent)
+        .contentMargins(.top, Bars.contentGap, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
         .renameSession($renaming)
         .confirmationDialog("结束这个会话？", isPresented: Binding { confirmingEnd != nil } set: { if !$0 { confirmingEnd = nil } },
@@ -65,7 +65,7 @@ struct AgentScreen: View {
         .defaultScrollAnchor(DebugScene.scene == "agent" && DebugScene.defaults.integer(forKey: "CuePadHistory") > 0 && DebugScene.searchText.isEmpty ? .bottom : nil)
         #endif
         .hidingSearch($searchHidden, searching: searchFocused || !query.isEmpty)
-        .fadesUnderBars(below: SearchRow.contentGap)
+        .fadesUnderBars(below: Bars.contentGap)
         .safeAreaBar(edge: .top) {
             SearchRow(search: search, searchHidden: searchHidden) { filterMenu } trailing: { if project == nil { actions } }
         }
@@ -265,10 +265,6 @@ struct SearchRow<Leading: View, Trailing: View>: View {
 }
 
 extension SearchRow where Leading == EmptyView, Trailing == EmptyView {
-    /// 内容顶离这一排下沿的距离，也是滚上来的内容在这一排下面淡回的那一段（`fadesUnderBars(below:)`）：
-    /// 静止时第一行不在淡出段里，滚动时内容不会紧贴在圆钮正下方像圆钮的标签。
-    static var contentGap: CGFloat { 12 }
-
     /// 离顶这么近时总是露出搜索框：刚开始滑、下拉回弹时不闪。
     static var revealZone: CGFloat { 24 }
 

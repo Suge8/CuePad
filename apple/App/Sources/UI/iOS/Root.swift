@@ -103,8 +103,14 @@ struct RouteView: View {
 
     var body: some View {
         // 沉浸式：内容一直滚到顶栏、底部栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡——系统的滚动边缘效果（渐进模糊带）全关，
-        // 也不自绘渐变或色带；滚进状态栏与顶栏、底部栏的内容自己淡出（`fadesUnderBars`，只是透明度遮罩）
-        page.fadesUnderBars(bottom: navigation.bottomPages == 0)
+        // 也不自绘渐变或色带；滚进状态栏与顶栏、底部栏的内容自己淡出（`fadesUnderBars`，只是透明度遮罩）。
+        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），淡出伸到同样深：静止时第一行全不透明，
+        // 滚上去贴着顶栏下沿的那一行已经淡了。顶上自带那一排的页（`SearchRow`）自己让到那一排下面
+        // （系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
+        let gap = route.hasSearchRow ? 0 : Bars.contentGap
+        page.contentMargins(.top, route.hasSearchRow ? nil : 0, for: .scrollContent)
+            .safeAreaPadding(.top, gap)
+            .fadesUnderBars(bottom: navigation.bottomPages == 0, below: gap)
             .containerBackground(background, for: .navigation)
             .scrollEdgeEffectHidden()
             // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页

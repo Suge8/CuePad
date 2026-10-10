@@ -50,7 +50,7 @@ struct TasksScreen: View {
             group("待办", board.todo, count: board.counts.todo, in: board)
             if !board.done.isEmpty { completed(board.done, count: board.counts.done) }
         }
-        .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
+        .padding(.horizontal, 16).padding(.bottom, 24)
     }
 
     @ViewBuilder private func group(_ title: String, _ roots: [TaskBoard.Row], count: Int, in board: TaskBoard) -> some View {
