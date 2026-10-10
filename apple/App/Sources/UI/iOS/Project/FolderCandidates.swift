@@ -58,7 +58,7 @@ struct FolderCandidateList: View {
         .listRowBackground(palette.paper)
         .deskBackground()
         .searchable(text: $query, prompt: "搜索文件夹")
-        .observing(services.store, [.piSessionStates, .directoryBindings, .projects], id: project, into: $candidates, onError: workspace.fail) {
+        .observing(services.store, id: project, into: $candidates, onError: workspace.fail) {
             [project] store in
             ProjectFolders.candidates(
                 folders: try store.sessionFolders(), bindings: try store.directoryBindings(), projects: try store.projects(), excluding: project)

@@ -43,7 +43,7 @@ struct TabsRoot: View {
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
         }
-        .observing(services.store, [.piSessionStates], into: $waiting) { store in
+        .observing(services.store, into: $waiting) { store in
             try store.piSessionPage(.live).items.filter(\.state.waitsForYou).count
         }
     }

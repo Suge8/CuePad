@@ -34,7 +34,7 @@ struct TasksPanel: View {
         // 浮在项目页上、背后是卡片与任务纸，自己是一整页字（`GlassInk.solid`）
         .glass(in: .rect(cornerRadius: 26), ink: .solid)
         // 点任务上的会话状态打开它的详情：与侧栏、⌘K 同一个详情弹出层
-        .observing(services.store, TaskBoard.tables, into: $board, onError: workspace.fail) {
+        .observing(services.store, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
         }
     }

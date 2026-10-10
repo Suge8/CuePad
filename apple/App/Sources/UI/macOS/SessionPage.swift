@@ -269,17 +269,17 @@ extension Workspace {
     ) async throws -> String {
         let token = UUID().uuidString
         let request = try await services.launch(PiLaunch(project: project, prompt: prompt, token: token), title: title, on: services.hostID, card: card)
-        let progress = services.store.observe([.piSessionStates, .deliveryRequests]) { store in
-            (try store.piSessionPage(PiSessionQuery(launchToken: token, limit: 1)).items.first?.state.sessionID,
-             try store.deliveryRequest(request.id))
-        }
         var reported = false
-        for try await (claimed, outcome) in progress {
-            if let claimed { return claimed }
-            if let reason = outcome?.failure { throw SendError.notDelivered(reason) }
-            if !reported, outcome?.status == .known(.succeeded) {
+        for try await progress in services.store.observe([.piSessionStates, .deliveryRequests], {
+            try LaunchProgress.read(request: request.id, token: token, from: $0)
+        }) {
+            if let claimed = progress.claimed { return claimed.sessionID }
+            switch progress.phase {
+            case .failed(let reason): throw SendError.notDelivered(reason)
+            case .opening where !reported:
                 reported = true
                 launched()
+            default: break
             }
         }
         throw CancellationError()

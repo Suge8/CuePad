@@ -25,7 +25,9 @@ struct IOSRoot: View {
             // 这一层还没有导航栏：上安全区就是状态栏
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
             // 随手记与新会话都是浮在键盘上方的输入框
-            .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) { CaptureComposer() } }
+            .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) {
+                CaptureComposer(state: $navigation.capture, defaultProject: navigation.currentProject, pinnedOpen: true, saved: navigation.finishCapture)
+            } }
             #if DEBUG
             .overlay { if DebugScene.scene == "style" { StyleBoard() } }
             #endif
@@ -46,6 +48,8 @@ struct IOSRoot: View {
             .panel(item: Binding(get: { workspace.attaching }, set: { workspace.attaching = $0 })) { TaskPicker(idea: $0) }
         }
         .overlay(alignment: .top) { NoticeBanner() }
+        // 卡与行上"交给了哪个会话"的状态点读窗口里的那一份（`Workspace.agentLinks`）
+        .modifier(WindowCardAgents(workspace: workspace))
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
         .environment(\.zoomNamespace, zoom)
         .modifier(PaletteProvider())
@@ -57,6 +61,8 @@ struct IOSRoot: View {
             navigation.layout = size == .regular ? .split : .tabs
         }
         .task(id: workspace.catalogAttempt) { await workspace.observeCatalog() }
+        .task { await workspace.observeAgentLinks() }
+        .task { await workspace.observeFolderGuide() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }

@@ -139,7 +139,7 @@ struct SessionScreen: View {
         // 回复框那一层以外的下安全区（横条区或键盘）
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { underBar = $0 }
         .ownsBottomEdge()
-        .observing(services.store, SessionDigest.tables, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
+        .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
             try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)
         }

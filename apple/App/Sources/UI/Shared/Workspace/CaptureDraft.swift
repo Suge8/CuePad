@@ -27,7 +27,7 @@ struct CaptureDraft {
         let files = store.files
         let body = StoredBody.make(text: text, imageHashes: try images.map { try files.store($0) })
         let card = try await workspace.createCard(body: body, in: project)
-        let destination = try await card.projectID.asyncFlatMap { try await store.project($0) }
+        let destination = if let id = card.projectID { try await store.project(id) } else { nil as Project? }
         workspace.say(Dotted(CaptureCopy.saved(to: CaptureCopy.destination(destination))), link: .project(card.projectID))
     }
 }
@@ -36,12 +36,5 @@ extension Workspace {
     /// Pi 的一条回答存为灵感：进该会话所属项目，没有项目进未分类；提示落点，点它过去。
     func saveReply(_ text: String, of session: PiSessionState) async throws {
         try await CaptureDraft(text: text, images: []).save(in: session.projectID, workspace: self)
-    }
-}
-
-extension Optional {
-    fileprivate func asyncFlatMap<T>(_ transform: (Wrapped) async throws -> T?) async rethrows -> T? {
-        guard let self else { return nil }
-        return try await transform(self)
     }
 }

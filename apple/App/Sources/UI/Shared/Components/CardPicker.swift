@@ -24,7 +24,7 @@ struct CardPicker: View {
         content
             .onChange(of: text) { if !TextComposition.isComposing { settled = text } }
             .onChange(of: settled) { pages = 1 }
-            .observing(services.store, [.cards, .projects], id: Key(text: settled, pages: pages), into: $data, onError: workspace.fail) {
+            .observing(services.store, id: Key(text: settled, pages: pages), into: $data, onError: workspace.fail) {
                 [project, settled, pages] store in
                 try Page.read(text: settled, project: project, limit: PaletteQuery.pageSize * pages, from: store)
             }

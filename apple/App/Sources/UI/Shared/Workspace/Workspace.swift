@@ -6,11 +6,11 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// 一个窗口（场景）的界面状态：选中的页、打开的卡、浮层、提示（Mac 另有发送目标）。数据本身不在这里，界面直接订阅 Store。
-/// 当前项目的唯一事实源由 `holder` 持有：Mac 是 `AppSettings`（整个 App 一个），iOS 是该窗口的 `SceneContext`
-/// （iPad 多窗口各选各的）。这里只记"未分类"和"回收站"这两个非项目页。
+/// 一个窗口（场景）的界面状态：项目目录、打开的卡、浮层、提示；Mac 另有选中的页与发送目标。数据本身不在这里，界面直接订阅 Store。
+/// Mac 的当前项目只存在 `AppSettings.currentProject`（整个 App 一个），这里只记非项目页；iOS 的当前项目从导航路径推出（`Navigation.currentProject`）。
 @MainActor @Observable
 final class Workspace {
+    #if os(macOS)
     nonisolated enum Page: Hashable {
         case project(UUID)
         case inbox
@@ -18,11 +18,10 @@ final class Workspace {
         case trash
         /// Agent：全部会话的整页列表（Mac 侧栏 Agent 区的"全部"）。
         case agent
-        #if os(macOS)
         /// 一个 Agent 会话的整页（Pi 的会话 id）。
         case session(String)
-        #endif
     }
+    #endif
 
     struct Notice: Identifiable, Equatable {
         let id = UUID()
@@ -72,9 +71,11 @@ final class Workspace {
     private(set) var catalogFailure: String?
     /// 第几次订阅项目目录：根视图以它为 `.task` 的 id，`retryCatalog` 加一即重新订阅。
     private(set) var catalogAttempt = 0
+    #if os(macOS)
     var sidebar: NavigationSplitViewVisibility = .all
     private(set) var nonProjectPage: Page?
-    /// 打开的卡（编辑纸页）。设成某张卡时纸页立即挂上；清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
+    /// 打开的卡（编辑纸页；iOS 打开卡片是推入导航，见 `Navigation.open(card:)`）。设成某张卡时纸页立即挂上；
+    /// 清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
     var openCard: UUID? {
         didSet { if let openCard { present(openCard) } }
     }
@@ -82,6 +83,7 @@ final class Workspace {
     private(set) var presentedCard: UUID?
     /// 各张卡在纸页开合中的状态，按卡分开（见 `CardPresence`）。
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
+    #endif
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
     var attaching: Card?
     #if os(macOS)
@@ -97,6 +99,35 @@ final class Workspace {
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
+
+    /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）、文件夹绑定引导（`FolderGuide`）：整个窗口一份，页面直接读，
+    /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同就不写，免得页面白算。
+    private(set) var agentLinks = AgentLinks(items: [:], launching: [])
+    private(set) var folderGuide: FolderGuide?
+
+    func observeAgentLinks() async {
+        do {
+            for try await next in services.store.observe { try AgentLinks.read(from: $0) } where next != agentLinks {
+                agentLinks = next
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
+    func observeFolderGuide() async {
+        do {
+            for try await next in services.store.observe { [host = localHost] in try FolderGuide.read(host: host, from: $0) }
+            where next != folderGuide {
+                folderGuide = next
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
     #if os(macOS)
     /// 请底部输入栏聚焦的次数（空态的"记一条"）：输入栏的焦点在它自己那里，只看这个数变了就聚焦。
     private(set) var captureFocusRequests = 0
@@ -157,38 +188,10 @@ final class Workspace {
     /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
     let sessionHeader = SessionHeader()
 
-    /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）、文件夹绑定引导（`FolderGuide`）：整个窗口一份，页面直接读，
-    /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同就不写，免得页面白算。
-    private(set) var agentLinks = AgentLinks(items: [:], launching: [])
-    private(set) var folderGuide: FolderGuide?
-
-    func observeAgentLinks() async {
-        do {
-            for try await next in services.store.observe(AgentLinks.tables, { try AgentLinks.read(from: $0) }) where next != agentLinks {
-                agentLinks = next
-            }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
-        }
-    }
-
-    func observeFolderGuide() async {
-        do {
-            for try await next in services.store.observe(FolderGuide.tables, { [host = localHost] in try FolderGuide.read(host: host, from: $0) })
-            where next != folderGuide {
-                folderGuide = next
-            }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
-        }
-    }
-
     /// 跟随同步记录里在线会话的摘要与发给它们的最近一条投送请求，直到任务取消。
     func observeSessionRecaps() async {
         do {
-            for try await items in services.store.observe([.piSessionStates, .deliveryRequests], { try $0.piSessionPage(.live).items }) {
+            for try await items in services.store.observe { try $0.piSessionPage(.live).items } {
                 let recaps = Dictionary(items.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first }
                 let deliveries = Dictionary(items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
                 let undelivered = PiSessionListItem.undelivered(items)
@@ -223,34 +226,25 @@ final class Workspace {
 
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
 
-    @ObservationIgnored private let holder: any CurrentProjectHolder
-
-    init(services: AppServices, holder: (any CurrentProjectHolder)? = nil) {
+    init(services: AppServices) {
         self.services = services
-        self.holder = holder ?? services.settings
     }
 
+    #if os(macOS)
     var page: Page {
         if let nonProjectPage { return nonProjectPage }
-        return (holder.currentProject ?? defaultProject).map(Page.project) ?? .inbox
+        return (services.settings.currentProject ?? defaultProject).map(Page.project) ?? .inbox
     }
 
-    /// Mac 上没打开过项目（第一次打开、打开过的进了回收站）时首屏是项目目录顺序的第一个：由目录当场推出、不写进"上次打开"，
-    /// 项目陆续同步进来时跟着目录走；只有用户切换项目才记下（`apply`）。iPhone/iPad 首屏是书架，没有当前项目是常态。
-    private var defaultProject: UUID? {
-        #if os(macOS)
-        catalog?.projects.first?.id
-        #else
-        nil
-        #endif
-    }
+    /// 没打开过项目（第一次打开、打开过的进了回收站）时首屏是项目目录顺序的第一个：由目录当场推出、不写进"上次打开"，
+    /// 项目陆续同步进来时跟着目录走；只有用户切换项目才记下（`show`）。
+    private var defaultProject: UUID? { catalog?.projects.first?.id }
 
     /// 当前项目（未分类为 nil）。回收站页没有项目。
     var currentProject: UUID? {
         if case .project(let id) = page { id } else { nil }
     }
 
-    #if os(macOS)
     /// 内容区挂着的页（`PageStack`）：去过的页留着，回访不再重建；至多 `keptPages` 个，满了换掉最久没看的。会话页不留（带着输入焦点与实时对话，挂着不看会抢键盘）。
     private(set) var kept: [Page] = []
     @ObservationIgnored private var lastSeen: [Page: Int] = [:]
@@ -301,7 +295,6 @@ final class Workspace {
         let gone = kept.filter { if case .project(let id) = $0 { !ids.contains(id) } else { false } }
         if !gone.isEmpty { kept.removeAll { gone.contains($0) } }
     }
-    #endif
 
     /// 纸页缩回动画结束。
     func finishClosingCard() {
@@ -343,7 +336,6 @@ final class Workspace {
     func show(_ page: Page) {
         openCard = nil
         dismissPresented()
-        #if os(macOS)
         let left = self.page
         keep(left)
         keep(page)
@@ -355,10 +347,9 @@ final class Workspace {
                 if self?.leaving == left { self?.leaving = nil }
             }
         }
-        #endif
         if case .project(let id) = page {
             nonProjectPage = nil
-            holder.currentProject = id
+            services.settings.currentProject = id
         } else {
             nonProjectPage = page
         }
@@ -366,7 +357,6 @@ final class Workspace {
 
     func toggleSidebar() {
         sidebar = sidebar == .detailOnly ? .all : .detailOnly
-        #if os(macOS)
         // AppKit 的分栏动画约 0.2 秒
         sidebarMoving = true
         sidebarMovingTask?.cancel()
@@ -374,8 +364,8 @@ final class Workspace {
             try? await Task.sleep(for: .milliseconds(350))
             if !Task.isCancelled { self?.sidebarMoving = false }
         }
-        #endif
     }
+    #endif
 
     // MARK: 提示
 
@@ -409,7 +399,7 @@ final class Workspace {
 
     // MARK: 项目目录、当前项目与新建位置
 
-    /// 订阅项目目录，直到所在任务取消（根视图在 `.task(id: catalogAttempt)` 里调用）；项目增删时核对当前项目。
+    /// 订阅项目目录，直到所在任务取消（根视图在 `.task(id: catalogAttempt)` 里调用）；Mac 上项目增删时核对当前项目。
     /// 读取失败时清空目录并记下原因：资料库读不出来时不能接着显示过时的项目。
     func observeCatalog() async {
         catalogFailure = nil
@@ -417,14 +407,14 @@ final class Workspace {
             #if DEBUG
             try DebugScene.injectCatalogFailure(attempt: catalogAttempt)
             #endif
-            for try await next in services.store.observe(ProjectCatalog.tables, { try ProjectCatalog.read(from: $0) }) {
+            for try await next in services.store.observe { try ProjectCatalog.read(from: $0) } {
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next
                 if membershipChanged {
                     #if os(macOS)
                     forget(projectsNotIn: Set(next.projects.map(\.id)))
-                    #endif
                     await reconcileCurrentProject()
+                    #endif
                 }
             }
         } catch is CancellationError {
@@ -438,24 +428,21 @@ final class Workspace {
         catalogAttempt += 1
     }
 
-    /// 保存的当前项目以 Store 为准：不存在或已进回收站时纠正设置——Mac 清掉（首屏由目录推出，见 `defaultProject`），
-    /// iPhone/iPad 回落到第一个有效项目（`store.projects()` 的顺序；它是分栏的选中项），没有项目则到未分类。
-    /// 根视图在项目表每次变化后调用。
+    #if os(macOS)
+    /// 保存的当前项目以 Store 为准：不存在或已进回收站时清掉设置（首屏由目录推出，见 `defaultProject`）。
+    /// 项目表每次变化后、写入撞上失效项目时调用。
     func reconcileCurrentProject() async {
-        guard let saved = holder.currentProject else { return }
+        let settings = services.settings
+        guard let saved = settings.currentProject else { return }
         do {
             let projects = try await services.store.projects()
             guard !projects.contains(where: { $0.id == saved }) else { return }
-            #if os(macOS)
-            let fallback: UUID? = nil
-            #else
-            let fallback = projects.first?.id
-            #endif
-            if holder.currentProject == saved { holder.currentProject = fallback }
+            if settings.currentProject == saved { settings.currentProject = nil }
         } catch {
             fail(error)
         }
     }
+    #endif
 
     /// 新建卡片。项目是否有效由 Store 在写事务里判定：项目已不存在或在回收站（`invalidProject`）时，
     /// 重新核对当前项目，卡片落到未分类并提示，不会写进看不见的地方。
@@ -474,7 +461,9 @@ final class Workspace {
         do {
             return try await write(project)
         } catch CueStoreError.invalidProject where project != nil {
+            #if os(macOS)
             await reconcileCurrentProject()
+            #endif
             let result = try await write(nil)
             say("原项目已不存在或在回收站，已放到未分类", isError: true)
             return result
@@ -534,7 +523,9 @@ final class Workspace {
     func archive(_ id: UUID) async throws {
         let store = services.store
         try await store.archive(id)
+        #if os(macOS)
         if openCard == id { openCard = nil }
+        #endif
         say("已归档", undo: { try await store.unarchive(id) })
     }
 
@@ -543,7 +534,9 @@ final class Workspace {
         let store = services.store
         let children = try await store.children(of: id).map(\.id)
         try await store.trashCard(id)
+        #if os(macOS)
         if openCard == id { openCard = nil }
+        #endif
         say("已删除", undo: {
             try await store.restoreCard(id)
             var previous: UUID?
@@ -619,19 +612,8 @@ final class Workspace {
     }
 }
 
-/// 当前项目的持有者。
-@MainActor
-protocol CurrentProjectHolder: AnyObject {
-    var currentProject: UUID? { get set }
-}
-
-extension AppSettings: CurrentProjectHolder {}
-
-#if os(iOS)
-extension SceneContext: CurrentProjectHolder {}
-#endif
-
-/// 一张卡在纸页开合中的状态。按卡分开、各自可观察：开合时只有被打开的那张卡的视图重算，
+#if os(macOS)
+/// 一张卡在纸页开合中的状态（Mac 的纸页开合）。按卡分开、各自可观察：开合时只有被打开的那张卡的视图重算，
 /// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
 @MainActor @Observable
 final class CardPresence {
@@ -663,3 +645,4 @@ final class CardPresence {
         frame = nil
     }
 }
+#endif

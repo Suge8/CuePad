@@ -2,54 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 书架一次读取的数据。
-nonisolated struct ShelfData: Sendable {
-    struct Entry: Sendable, Identifiable {
-        var project: Project
-        var cardCount: Int
-        var openTasks: Int
-        var id: UUID { project.id }
-    }
-
-    var entries: [Entry]
-    /// 此刻有事的 Pi 会话（在线的，加上还有话发给它的已结束会话；带发给它的最近一条投送请求，`PiSessionQuery.current`）：
-    /// 各项目的"此刻"一行在界面上再按本机的规则挑（`ProjectNow`）。
-    var sessions: [PiSessionListItem]
-    /// 各项目的进行中任务，最近开始的在前（`ProjectNow` 的一档）。
-    var leading: [UUID: [ProjectNow.InProgress]]
-    /// 进任务页的入口上写的数：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，没有入口。
-    var tasks: TaskCounts?
-    /// 正在推进的任务（顶层进行中的，Agent 要你处理的在前，规则 `TaskBoard.active`），书架最上面。
-    var active: [TaskBoard.Row]
-    /// 纸上列不下的进行中任务数：纸底写"还有 N 项"（点开是任务页）。
-    var activeMore: Int
-    var inboxCount: Int
-    var trashCount: Int
-
-    static let activeLimit = 3
-
-    /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。"正在推进"已列出的任务不再写一遍。
-    @MainActor func now(shown: (PiSessionListItem) -> PiShown) -> [UUID: ProjectNow] {
-        ProjectNow.byProject(entries.map(\.project), sessions: sessions, tasks: leading, listed: Set(active.map(\.id)), shown: shown)
-    }
-
-    static func read(from store: isolated CueStore) throws -> ShelfData {
-        let summaries = Dictionary(uniqueKeysWithValues: try store.projectSummaries().map { ($0.projectID, $0) })
-        let tasks = try store.taskCounts()
-        let entries = try store.projects().map { project in
-            Entry(project: project, cardCount: summaries[project.id]?.cardCount ?? 0, openTasks: tasks[project.id]?.open ?? 0)
-        }
-        let all = tasks.values.reduce(.zero, +)
-        let active = try TaskBoard.active(limit: activeLimit, from: store)
-        return ShelfData(
-            entries: entries, sessions: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store),
-            tasks: all == .zero ? nil : all,
-            active: active.rows, activeMore: active.more,
-            inboxCount: summaries[nil]?.cardCount ?? 0,
-            trashCount: try store.trashedProjects().count + store.trashedCards().count)
-    }
-}
-
 /// iPhone 首页：项目书架。顶上一排：左"⋯"（未分类、回收站、设置），中间搜索灵感与任务（输入时页面换成搜索结果，往下滑时藏起），右"新建项目"；
 /// iPad 分栏里这些都在侧栏，顶上不放。从上往下回答"现在该干什么"：有 Agent 等你确认时最上面一张"等你"（点它去 Agent）；
 /// 然后是一屏的重点"正在推进"：进行中的任务排在一张纸上（点开是任务浮窗），标题右边是全部任务的计数、点它进任务页；
@@ -78,7 +30,7 @@ struct ShelfScreen: View {
             } else {
                 ScrollView {
                     // 读到数据时整页淡入，不是一帧里突然铺满
-                    if let data { content(data).transition(.opacity) }
+                    if let data, let catalog = workspace.catalog { content(data, catalog).transition(.opacity) }
                 }
                 .animation(Motion.quick, value: data == nil)
                 .refreshable { await services.syncNow() }
@@ -105,28 +57,29 @@ struct ShelfScreen: View {
         }
         #endif
         .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
-        .observing(services.store, [.projects, .cards, .piSessionStates, .deliveryRequests], into: $data, onError: workspace.fail) {
+        .observing(services.store, into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }
     }
 
     @ViewBuilder
-    private func content(_ data: ShelfData) -> some View {
-        let pinned = data.entries.filter(\.project.isPinned)
-        let recent = data.entries.filter { !$0.project.isPinned }
+    private func content(_ data: ShelfData, _ catalog: ProjectCatalog) -> some View {
+        let entries = catalog.shelfEntries
+        let pinned = entries.filter(\.project.isPinned)
+        let recent = entries.filter { !$0.project.isPinned }
         // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
-        let now = data.now(shown: services.settings.shown)
+        let now = data.now(projects: catalog.projects, shown: services.settings.shown)
         let agent = AgentNow.of(data.sessions, shown: services.settings.shown)
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
-            if data.entries.isEmpty && data.inboxCount == 0 {
-                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }
+            if entries.isEmpty && catalog.inboxCount == 0 {
+                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog, agent) }
                 EmptyShelf { navigation.projectForm = .init() }
-            } else if wide, !pinned.isEmpty, hasLead(data, agent) {
+            } else if wide, !pinned.isEmpty, hasLead(data, catalog, agent) {
                 // 宽屏两栏：左边现在要干的，右边置顶项目；放不下两栏时上下排
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 20) {
-                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }.frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog, agent) }.frame(maxWidth: .infinity)
                         // 右栏的大卡按宽度排：窄时一列叠放，宽时两列
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.pinnedMinWidth), spacing: 12)], spacing: 12) {
                             ForEach(pinned) { PinnedShelfCard(entry: $0, now: now[$0.id]) }
@@ -135,12 +88,12 @@ struct ShelfScreen: View {
                     }
                     .frame(minWidth: Self.twoColumnWidth, idealWidth: Self.twoColumnWidth, maxWidth: .infinity)
                     VStack(alignment: .leading, spacing: Self.sectionGap) {
-                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }
+                        VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog, agent) }
                         pinnedGrid(pinned, columns: min(pinned.count, 4), now: now)
                     }
                 }
             } else {
-                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, agent) }
+                VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog, agent) }
                 if !pinned.isEmpty {
                     // 置顶大卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
                     pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2), now: now)
@@ -179,21 +132,22 @@ struct ShelfScreen: View {
     private static let twoColumnWidth: CGFloat = 640
     private static let pinnedMinWidth: CGFloat = 220
 
-    private func hasLead(_ data: ShelfData, _ agent: AgentNow?) -> Bool {
-        agent != nil || !data.active.isEmpty || data.tasks != nil || data.inboxCount > 0
+    private func hasLead(_ data: ShelfData, _ catalog: ProjectCatalog, _ agent: AgentNow?) -> Bool {
+        agent != nil || !data.active.isEmpty || catalog.shelfTasks != nil || catalog.inboxCount > 0
     }
 
     /// 现在要干的：Agent 此刻、正在推进（没有时是任务入口）、未分类。
     @ViewBuilder
-    private func lead(_ data: ShelfData, _ agent: AgentNow?) -> some View {
-        let tasksLine = data.active.isEmpty ? data.tasks : nil
+    private func lead(_ data: ShelfData, _ catalog: ProjectCatalog, _ agent: AgentNow?) -> some View {
+        let tasksLine = data.active.isEmpty ? catalog.shelfTasks : nil
+        let inbox = catalog.inboxCount
         if let agent { AgentNowCard(now: agent).transition(Motion.item) }
-        if !data.active.isEmpty { ActiveTasks(rows: data.active, more: data.activeMore, counts: data.tasks).transition(Motion.item) }
-        if data.inboxCount > 0 || tasksLine != nil {
+        if !data.active.isEmpty { ActiveTasks(rows: data.active, more: data.activeMore, counts: catalog.shelfTasks).transition(Motion.item) }
+        if inbox > 0 || tasksLine != nil {
             VStack(spacing: 0) {
                 if let tasksLine { TasksLine(tasks: tasksLine) }
-                if data.inboxCount > 0, tasksLine != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
-                if data.inboxCount > 0 { InboxReminder(count: data.inboxCount) }
+                if inbox > 0, tasksLine != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
+                if inbox > 0 { InboxReminder(count: inbox) }
             }
             .clipShape(.rect(cornerRadius: 16, style: .continuous))
             .paper(radius: 16)
@@ -203,7 +157,7 @@ struct ShelfScreen: View {
     /// 置顶大卡按行排：每行 `columns` 张平分整行，最后一行不满时那几张也平分整行，不留空格；最后一行只剩一张时它占满整行、
     /// 横着排成矮的一条（`wide`）——不让单出来的那张（常是最不活跃、甚至空的项目）成为首屏最大的一块。
     /// 一行里的卡同高。置顶的不多，不用懒加载。
-    private func pinnedGrid(_ pinned: [ShelfData.Entry], columns: Int, now: [UUID: ProjectNow]) -> some View {
+    private func pinnedGrid(_ pinned: [ShelfEntry], columns: Int, now: [UUID: ProjectNow]) -> some View {
         VStack(spacing: 12) {
             ForEach(Array(stride(from: 0, to: pinned.count, by: columns)), id: \.self) { start in
                 let row = pinned[start..<min(start + columns, pinned.count)]
@@ -229,7 +183,7 @@ struct ShelfScreen: View {
 
     private var menu: some View {
         Menu {
-            Button { navigation.push(.inbox) } label: { Label { Text(count("未分类", data?.inboxCount)) } icon: { Image(systemName: "tray") } }
+            Button { navigation.push(.inbox) } label: { Label { Text(count("未分类", workspace.catalog?.inboxCount)) } icon: { Image(systemName: "tray") } }
             Button("归档", systemImage: "archivebox") { navigation.push(.archive) }
             Button { navigation.push(.trash) } label: { Label { Text(count("回收站", data?.trashCount)) } icon: { Image(systemName: "trash") } }
             Button("设置", systemImage: "gearshape") { navigation.push(.settings) }
@@ -305,7 +259,7 @@ private struct TasksLine: View {
 /// 置顶项目的大卡：项目色从上沿淡下来的一层底、图标、名称、"此刻"一行（`ProjectNow`，没有可说的就不占这一行，名字与计数靠拢）、
 /// 灵感数与未完成任务数（都没有时写"还是空的"）。`wide`：一行里单出来的那张占满整行，横着排成矮的一条，图标在左、计数在右。
 private struct PinnedShelfCard: View {
-    let entry: ShelfData.Entry
+    let entry: ShelfEntry
     let now: ProjectNow?
     var wide = false
     @Environment(\.palette) private var palette
@@ -395,7 +349,7 @@ private struct EmptyShelf: View {
 
 /// 书架的一行：项目名，下面是"此刻"一行（`ProjectNow`）。
 private struct ShelfRow: View {
-    let entry: ShelfData.Entry
+    let entry: ShelfEntry
     let now: ProjectNow?
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize

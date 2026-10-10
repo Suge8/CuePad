@@ -24,6 +24,21 @@ import Testing
     #expect(try await store.trashCount() == 1)
   }
 
+  @Test func 回收站项目带进来的卡片数_一次查询_与按项目搜索一致() async throws {
+    let doomed = try await store.createProject(name: "删掉的", color: "#111")
+    let kept = try await store.createProject(name: "留着的", color: "#111")
+    let early = try await store.createCard(in: doomed.id, body: "先单独删")
+    _ = try await store.createCard(in: doomed.id, body: "随项目")
+    _ = try await store.createCard(in: kept.id, body: "活着")
+    try await store.trashCard(early.id)
+    try await store.trashProject(doomed.id)
+
+    let counts = try await store.trashedProjectCardCounts()
+
+    #expect(counts == [doomed.id: 2])
+    #expect(counts[doomed.id] == (try await store.search(SearchQuery(projects: [doomed.id], inTrash: true), limit: 0).totalCards))
+  }
+
   @Test func 一个项目的任务与下级_等于全库的再按项目筛() async throws {
     let a = try await store.createProject(name: "A", color: "#111")
     let b = try await store.createProject(name: "B", color: "#111")
@@ -47,6 +62,33 @@ import Testing
     }
     #expect(try await store.childMarks(of: release.id).keys.sorted { $0.uuidString < $1.uuidString } == [release.id])
     #expect(try await store.childMarks(of: release.id)[release.id]?.count == 2)
+  }
+
+  @Test func 进行中的任务与单项目任务数_口径同全库任务数() async throws {
+    let a = try await store.createProject(name: "A", color: "#111")
+    let b = try await store.createProject(name: "B", color: "#111")
+    let release = try await store.createTask("上线", in: a.id)
+    let step = try await store.createTask("备份", under: release.id)
+    let fix = try await store.createTask("修重连", in: b.id)
+    let loose = try await store.createTask("散的", in: nil)
+    let waiting = try await store.createTask("还没开始", in: a.id)
+    for task in [release, step, fix, loose] {
+      try await store.setStatus(task.id, .inProgress)
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    let done = try await store.createTask("做完的", in: a.id)
+    try await store.setStatus(done.id, .done)
+
+    // 最近开始的在前；子任务也算进行中，但不在顶层（它的上级也在进行中）
+    #expect(try await store.startedTasks().map(\.id) == [loose.id, fix.id, step.id, release.id])
+    #expect(try await store.startedTasks(topLevelOnly: true).map(\.id) == [loose.id, fix.id, release.id])
+    #expect(!(try await store.startedTasks().contains { $0.id == waiting.id }))
+
+    let counts = try await store.taskCounts()
+    #expect(counts.values.map(\.inProgress).reduce(0, +) == 3)  // 与顶层进行中的个数一致
+    for project in [a.id, b.id, nil] {
+      #expect(try await store.taskCounts(in: project) == counts[project] ?? .zero)
+    }
   }
 
   @Test func 一批会话的列表项_等于分页查询里的同一项() async throws {

@@ -84,12 +84,12 @@ struct CardEditorPage: View {
         .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { pageOrigin = $0 }
         .background {
             if data?.card.isTask == true {
-                Color.clear.observing(services.store, TaskDetail.tables, id: cardID, into: $taskDetail, onError: workspace.fail) { [cardID] in
+                Color.clear.observing(services.store, id: cardID, into: $taskDetail, onError: workspace.fail) { [cardID] in
                     try TaskDetail.read(cardID, from: $0)
                 }
             }
         }
-        .observing(services.store, [.cards, .projects], id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
+        .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(
                 card: card, project: try card.projectID.flatMap { try store.project($0) },

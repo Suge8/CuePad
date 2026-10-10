@@ -22,24 +22,6 @@ struct RowPressStyle: ButtonStyle {
     }
 }
 
-/// 落点胶囊："→ 图标 项目名 ⌃⌄"，点开是选项目的菜单的标签（随手记、添加任务同一种写法，一眼看出是"记到哪"）。
-struct DestinationChip: View {
-    let project: Project?
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text("→").foregroundStyle(palette.ink3)
-            ProjectGlyph(project: project, size: 13)
-            Text(CaptureCopy.destination(project)).foregroundStyle(palette.ink).lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(palette.ink3).accessibilityHidden(true)
-        }
-        .font(.subheadline.weight(.medium))
-        .padding(.horizontal, 12).frame(height: 32)
-        .background(palette.fill, in: .capsule)
-    }
-}
-
 extension View {
     /// 列表与表单铺在桌面色上，与书架、项目页同一底色。
     func deskBackground() -> some View { modifier(DeskBackground()) }

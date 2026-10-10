@@ -21,7 +21,7 @@ struct TaskPicker: View {
                 DialogButton(title: "取消", role: .cancel) {},
                 DialogButton(title: "新建并挂上", disabled: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) { createAndAttach() },
             ])
-            .observing(services.store, [.cards, .projects], id: idea.id, into: $groups, onError: workspace.fail) { [idea] store in
+            .observing(services.store, id: idea.id, into: $groups, onError: workspace.fail) { [idea] store in
                 try AttachTargets.read(for: idea, from: store)
             }
     }
