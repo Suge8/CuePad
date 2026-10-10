@@ -28,7 +28,7 @@ struct LiveSendChannels: SendChannels {
     let pi: PiBridge
 
     func piSession(_ id: CuePi.PiSession.ID) -> PiSessionInfo? {
-        pi.sessions.first { $0.id == id }.map {
+        pi.session(id: id).map {
             PiSessionInfo(
                 target: SendTarget(kind: .piSession, name: $0.displayName, ref: $0.sessionID),
                 isBusy: $0.state.isBusy)
@@ -36,7 +36,7 @@ struct LiveSendChannels: SendChannels {
     }
 
     func piSessionID(forSession sessionID: String) -> CuePi.PiSession.ID? {
-        pi.sessions.first { $0.sessionID == sessionID }?.id
+        pi.session(sessionID: sessionID)?.id
     }
 
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws {

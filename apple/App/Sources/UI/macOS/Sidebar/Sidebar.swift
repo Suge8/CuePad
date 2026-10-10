@@ -118,18 +118,8 @@ struct Sidebar: View {
     /// 项目行：名称，下面一行是"此刻"（`ProjectNow`，与书架同一条规则）。行高一直是两行的高度，状态出现、消失时列表不跳；
     /// 没有可说的时名称在行里居中，不在上半截空出一行（一列里有的有、有的没有时，名称高低错落）。
     private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {
-        PageRow(page: .project(project.id), count: catalog.cardCounts[project.id] ?? 0, height: Spacing.sidebarProjectRow, select: select) {
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(project.name)
-                    if now != nil { ProjectNowLine(now: now, font: Typography.sidebarDetail, dot: 6).fontWeight(.regular) }
-                }
-                .animation(Motion.quick, value: now == nil)
-            } icon: {
-                ProjectGlyph(project: project)
-            }
-        }
-        .contextMenu { ProjectActions(project: project, edit: { renaming = project }) }
+        ProjectRow(project: project, count: catalog.cardCounts[project.id] ?? 0, now: now, select: select, edit: { renaming = project })
+            .equatable()
     }
 
     /// 底栏：连接 Pi 的询问与启动问题（有才出现），下面一排归档、回收站与设置。
@@ -232,6 +222,32 @@ private struct PageRow<Title: View>: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
         // macOS 不把按钮的"已选中"特征交给读屏，当前页另用值念出来
         .accessibilityValue(selected ? "当前页" : "")
+    }
+}
+
+/// 项目行（行高是两行）。只随自己的项目、计数与"此刻"重算：Agent 的状态一变，侧栏的数据整个换新，没变的行不跟着重算。
+private struct ProjectRow: View, Equatable {
+    let project: Project
+    let count: Int
+    let now: ProjectNow?
+    let select: (Workspace.Page) -> Void
+    let edit: () -> Void
+
+    static func == (a: Self, b: Self) -> Bool { a.project == b.project && a.count == b.count && a.now == b.now }
+
+    var body: some View {
+        PageRow(page: .project(project.id), count: count, height: Spacing.sidebarProjectRow, select: select) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(project.name)
+                    if now != nil { ProjectNowLine(now: now, font: Typography.sidebarDetail, dot: 6).fontWeight(.regular) }
+                }
+                .animation(Motion.quick, value: now == nil)
+            } icon: {
+                ProjectGlyph(project: project)
+            }
+        }
+        .contextMenu { ProjectActions(project: project, edit: edit) }
     }
 }
 
@@ -338,6 +354,7 @@ private struct PiSection: View {
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
             rename: renames[session.sessionID], undelivered: undelivered[session.sessionID] ?? 0)
+            .equatable()
             .padding(.horizontal, 8).padding(.vertical, 5)
             .sessionLink(session.sessionID)
             .help(bridge?.state.errorMessage ?? "")

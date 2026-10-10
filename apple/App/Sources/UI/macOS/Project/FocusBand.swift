@@ -103,7 +103,7 @@ private struct PiColumn: View {
         }
         ForEach(agents) { row in
             VStack(alignment: .leading, spacing: 2) {
-                PiSessionRow(session: row.state, project: project, delivery: row.delivery, undelivered: row.undelivered)
+                PiSessionRow(session: row.state, project: project, delivery: row.delivery, undelivered: row.undelivered).equatable()
                 if shared == nil, let host = row.hostName {
                     Label("在 \(host) 上", systemImage: "laptopcomputer").font(Typography.meta).foregroundStyle(palette.ink3)
                 }

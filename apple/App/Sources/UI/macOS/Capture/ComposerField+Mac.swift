@@ -131,6 +131,7 @@ final class GrowingTextView: NSTextView {
         Self.maxHeights[maxLines] = height
         return height
     }
+    /// 量用的字体 `bodyFont` 是进程内不变的常量，所以只按行数记。
     private static var maxHeights: [Int: CGFloat] = [:]
 
     /// 按给定宽度排下现有文字要多高；空着时是一行的高度。

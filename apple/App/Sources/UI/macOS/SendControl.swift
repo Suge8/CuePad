@@ -78,7 +78,7 @@ struct SessionMenu<Label: View>: View {
         let current = workspace.agentTarget(for: project)
         Menu {
             if let newSession { Button("新会话", systemImage: "plus", action: newSession) }
-            if services.pi.sessions.isEmpty, newSession == nil {
+            if services.pi.slots.isEmpty, newSession == nil {
                 Button {} label: { Text(Dotted("没有运行中的 Agent 会话", "在终端运行 pi 开始")) }.disabled(true)
             }
             ForEach(services.pi.sessions) { session in

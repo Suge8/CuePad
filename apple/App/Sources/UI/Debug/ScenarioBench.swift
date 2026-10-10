@@ -14,12 +14,13 @@ import os
 /// - `chatStream`：会话在线忙着时，每 0.4 秒进来一条带工具活动的回答（贴着最新）；
 /// - `typing`：回复框里按 15 字/秒打 90 个字；
 /// - `hoverProject`、`hoverAgent`、`hoverChat`：真实指针在项目页卡片墙、Agent 整页、最长会话的对话里来回扫（会动真实指针，窗口要在屏幕上）；`hoverChat` 另报悬停进出的次数（`hoverToggles`），正常是个位数到几百，几千就是来回翻转的循环；
+/// - `hoverSidebar`、`sidebarScroll`：指针在侧栏里来回扫（项目行、底部 Agent 区）；侧栏项目列表用滚轮往下再往上；
 /// - `resize`：在项目页、Agent 整页、会话页各把窗口宽度从 1440 逐帧缩到 900 再拉回；
 /// - `search`：⌘K 里逐字打一个关键词。
 @MainActor
 enum ScenarioBench {
     private static let signposter = OSSignposter(logHandle: OSLog(subsystem: "com.sugeh.cuepad.perf", category: .pointsOfInterest))
-    private static let all = ["projects", "agentScroll", "chatOpen", "chatScroll", "chatStream", "typing", "hoverProject", "hoverAgent", "hoverChat", "resize", "search"]
+    private static let all = ["projects", "agentScroll", "chatOpen", "chatScroll", "chatStream", "typing", "hoverProject", "hoverAgent", "hoverChat", "hoverSidebar", "sidebarScroll", "resize", "search"]
 
     static func run(_ workspace: Workspace) async {
         if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") {} }
@@ -64,6 +65,8 @@ enum ScenarioBench {
             case "hoverProject": await hoverProject()
             case "hoverAgent": await hoverAgent()
             case "hoverChat": await hoverChat()
+            case "hoverSidebar": await hoverSidebar()
+            case "sidebarScroll": await sidebarScroll()
             case "resize": await resize()
             case "search": await search()
             default: break
@@ -159,6 +162,20 @@ enum ScenarioBench {
             await sweep(rows: 30, columns: 2)
         }
 
+        /// 侧栏（项目行与底部的 Agent 区）：停在项目页上，指针在侧栏里来回扫。
+        func hoverSidebar() async {
+            workspace.show(.project((workspace.catalog?.projects ?? []).first?.id ?? UUID()))
+            try? await Task.sleep(for: .seconds(1.5))
+            await sweep(rows: 30, columns: 1, xs: 0.03...0.15)
+        }
+
+        /// 侧栏的项目列表（50 个项目）用滚轮往下再往上。
+        func sidebarScroll() async {
+            workspace.show(.project((workspace.catalog?.projects ?? []).first?.id ?? UUID()))
+            try? await Task.sleep(for: .seconds(1.5))
+            _ = await PerfBench.scroll(in: window, view: view, directions: [-1, 1], frames: 150, atX: 0.08)
+        }
+
         func hoverChat() async {
             guard let id = await chats().last else { return }
             workspace.show(.session(id))
@@ -248,7 +265,7 @@ enum ScenarioBench {
         }
 
         /// 真实指针在内容区里蛇形来回扫，每帧移一步。
-        func sweep(rows: Int, columns: Int) async {
+        func sweep(rows: Int, columns: Int, xs: ClosedRange<Double> = 0.3...0.9) async {
             NSApp.activate()
             let bounds = window.frame
             let top = (NSScreen.screens.first?.frame.maxY ?? 0) - bounds.maxY
@@ -258,7 +275,7 @@ enum ScenarioBench {
             for row in 0..<rows {
                 for column in 0..<columns * steps {
                     let phase = Double(column) / Double(steps)
-                    let x = bounds.minX + bounds.width * (0.3 + 0.6 * (row.isMultiple(of: 2) ? phase / Double(columns) : 1 - phase / Double(columns)))
+                    let x = bounds.minX + bounds.width * (xs.lowerBound + (xs.upperBound - xs.lowerBound) * (row.isMultiple(of: 2) ? phase / Double(columns) : 1 - phase / Double(columns)))
                     let y = top + 120 + (bounds.height - 260) * Double(row) / Double(rows)
                     CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: CGPoint(x: x, y: y), mouseButton: .left)?.post(tap: .cghidEventTap)
                     await recorder.nextFrame()

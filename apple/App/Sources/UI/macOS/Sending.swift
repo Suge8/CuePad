@@ -35,7 +35,7 @@ extension Workspace {
     /// 本次运行里结束了、也没有重新打开的本项目 Pi 会话，最近结束的在前。
     private func endedSessions(in project: UUID?) -> [CuePi.PiSession] {
         guard let project else { return [] }
-        let open = Set(services.pi.sessions.map(\.sessionID))
+        let open = Set(services.pi.slots.map(\.sessionID))
         return services.pi.endedSessions.values
             .filter { sessionProjects[$0.id] == project && !open.contains($0.sessionID) }
             .sorted { (endedOrder.firstIndex(of: $0.id) ?? -1) > (endedOrder.firstIndex(of: $1.id) ?? -1) }
@@ -49,7 +49,7 @@ extension Workspace {
     private func current(_ target: AgentTarget) -> AgentTarget? {
         guard session(target.session) == nil else { return target }
         guard let ended = services.pi.endedSessions[target.session],
-              let reopened = services.pi.sessions.first(where: { $0.sessionID == ended.sessionID })
+              let reopened = services.pi.session(sessionID: ended.sessionID)
         else { return nil }
         return AgentTarget(session: reopened.id, mode: target.mode)
     }
@@ -78,7 +78,7 @@ extension Workspace {
     }
 
     func session(_ id: CuePi.PiSession.ID) -> CuePi.PiSession? {
-        services.pi.sessions.first { $0.id == id }
+        services.pi.session(id: id)
     }
 
     /// 桥上一个在线会话此刻显示的状态：与会话行同一条规则（`PiShown`），摘要与在路上的话取同步记录。
@@ -127,7 +127,7 @@ struct SessionProjectsTracker: ViewModifier {
     func body(content: Content) -> some View {
         let pi = workspace.services.pi
         let key = Key(
-            sessions: pi.sessions.map { "\($0.id) \($0.cwd.path)" }, ended: Set(pi.endedSessions.keys),
+            sessions: pi.slots.map { "\($0.id) \($0.cwd.path)" }, ended: Set(pi.endedSessions.keys),
             directories: workspace.catalog?.directories)
         content
             .task(id: key) { await workspace.refreshSessionProjects() }

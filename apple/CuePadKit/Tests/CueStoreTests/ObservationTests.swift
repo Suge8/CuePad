@@ -18,4 +18,23 @@ import Testing
     try await store.trashProject(project.id)  // 项目表变化让卡片列表重读
     #expect(try await values.next() == [])
   }
+
+  /// 订阅以表为粒度：同一张表里别的行改了，重读的结果和上一次一样就不再产出（界面不会为没变的数据重算）。
+  @Test(.timeLimit(.minutes(1))) func resultThatDidNotChangeIsNotDeliveredAgain() async throws {
+    let store = fixture.store
+    let a = try await store.createProject(name: "A", color: "#111")
+    let (reads, readSignal) = AsyncStream<Void>.makeStream()
+    var read = reads.makeAsyncIterator()
+    var values = store.observe([.projects]) { store -> String in
+      readSignal.yield()
+      return try store.project(a.id)?.name ?? ""
+    }.makeAsyncIterator()
+    #expect(try await values.next() == "A")
+    await read.next()
+
+    _ = try await store.createProject(name: "B", color: "#222")  // 同一张表，A 没变
+    await read.next()  // 订阅者已为它重读过一次
+    try await store.updateProject(a.id) { $0.name = "A2" }
+    #expect(try await values.next() == "A2")  // 中间那次重读没有再产出一个 "A"
+  }
 }

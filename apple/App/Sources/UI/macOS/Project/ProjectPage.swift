@@ -14,6 +14,8 @@ struct ProjectPage: View {
     @State private var folderGuide: FolderGuide?
     @State private var sessions: ProjectSessions?
     @State private var board = WallBoard()
+    /// 墙与"更早"要用的、由数据和分区推出的东西：数据或分区变了才重算（页上 Agent 的状态一变页面就要重算，每次都从上千张卡里重新分组太贵）。
+    @State private var shape: PageShape?
     @State private var collapsed = false
 
     private static let collapseOffset: CGFloat = 140
@@ -54,7 +56,7 @@ struct ProjectPage: View {
         .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
-        .onChange(of: data?.stamps()) { rearrange() }
+        .onChange(of: data) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
     }
 
@@ -68,16 +70,16 @@ struct ProjectPage: View {
                 ProjectHeader(
                     projectID: projectID, project: catalog?.project(projectID),
                     directory: projectID.flatMap { catalog?.directories[$0] }, cardCount: catalog?.cardCounts[projectID] ?? 0)
-                if let data, let arrangement = board.arrangement { page(data, arrangement) }
+                if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
             }
             .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 150)
         }
     }
 
     @ViewBuilder
-    private func page(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
-        let byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
-        let lastTarget = data.lastTarget
+    private func page(_ data: ProjectPageData, _ arrangement: WallArrangement, _ shape: PageShape) -> some View {
+        let byID = shape.byID
+        let lastTarget = shape.lastTarget
         if showsFocus(data) {
             FocusBand(data: data, agents: projectAgents, guide: folderGuide)
         } else if let project = projectID {
@@ -97,9 +99,7 @@ struct ProjectPage: View {
                 wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, lastTarget: lastTarget)
             }
             if !arrangement.older.isEmpty {
-                OlderList(
-                    groups: data.olderGroups(arrangement),
-                    cards: byID, lastTarget: lastTarget)
+                OlderList(groups: shape.older, cards: byID, lastTarget: lastTarget)
             }
         }
     }
@@ -143,7 +143,25 @@ struct ProjectPage: View {
 
     private func rearrange() {
         guard let data else { return }
-        board.refresh(with: data, project: projectID)
+        var next = board
+        next.refresh(with: data, project: projectID)
+        if next != board { board = next }
+        if let arrangement = next.arrangement {
+            let shape = PageShape(data, arrangement)
+            if shape != self.shape { self.shape = shape }
+        }
+    }
+}
+
+private struct PageShape: Equatable {
+    let byID: [UUID: Card]
+    let lastTarget: [UUID: String]
+    let older: [OlderGroup]
+
+    init(_ data: ProjectPageData, _ arrangement: WallArrangement) {
+        byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
+        lastTarget = data.lastTarget
+        older = data.olderGroups(arrangement)
     }
 }
 

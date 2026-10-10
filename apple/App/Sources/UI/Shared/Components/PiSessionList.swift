@@ -65,6 +65,7 @@ struct PiSessionRow: View {
     @Environment(\.palette) private var palette
     @Environment(\.searchHighlight) private var highlight
 
+
     /// 密度与字号：整页列表（Agent 页）是 `page`，侧栏、面板、⌘K、项目页这些窄处是 `compact`。
     /// 整页的名字最重，下面那句是正文次墨，所在与时长是小一号的元信息。
     struct Style {
@@ -186,6 +187,14 @@ struct PiSessionRow: View {
         case .status: status(shown)
         case nil: Text(verbatim: " ")
         }
+    }
+}
+
+/// 行只随自己的数据重算（调用处挂 .equatable()）：会话列表里一个会话的状态变了，别的行不必把名字、所在、一句话再排一遍。
+extension PiSessionRow: Equatable {
+    static func == (a: Self, b: Self) -> Bool {
+        a.session == b.session && a.project == b.project && a.delivery == b.delivery && a.end == b.end && a.rename == b.rename
+            && a.undelivered == b.undelivered && a.style.full == b.style.full && a.style.dot == b.style.dot
     }
 }
 
