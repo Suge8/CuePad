@@ -100,6 +100,32 @@ import Testing
     #expect(try await replied(task.id) == [true])
   }
 
+  /// 同一个会话连着交几条提示词：每条的"已回复"只看它自己那一轮，后面又交了一条、会话又在忙，不改前面的。
+  @Test func 同一会话连着交几条提示词_前面的已回复不因后面又交了一条而倒退() async throws {
+    let task = try await store.createTask("修重连排序", in: nil)
+    let first = try await store.createCard(body: "先复现", under: task.id)
+    let second = try await store.createCard(body: "再改排序", under: task.id)
+    let third = try await store.createCard(body: "补用例", under: task.id)
+    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+    var seq = 0
+    func round(_ prompt: Card, answered: Bool) async throws {
+      try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+      try await enter(.thinking, recorder)
+      guard answered else { return }
+      seq += 1
+      try await Task.sleep(for: .milliseconds(5))
+      try await store.writePiTranscript(PiTranscript(
+        sessionID: "s1", messages: (1...seq).map { PiChatMessage(sessionID: "s1", entryID: "p\($0)", seq: Int64($0), role: .pi, text: "做完 \($0)", at: .now) },
+        recap: PiRecap(lastPrompt: nil, lastReply: "做完 \(seq)", pendingPrompt: nil)))
+      try await enter(.settled, recorder)
+    }
+    try await round(first, answered: true)
+    try await round(second, answered: true)
+    try await round(third, answered: false)
+
+    #expect(try await replied(task.id) == [true, true, false])
+  }
+
   @Test func 提示词交给会话_它的任务关联到那个会话并进行中() async throws {
     let task = try await store.createTask("修重连排序", in: nil)
     let prompt = try await store.createCard(body: "先复现", under: task.id)
