@@ -57,7 +57,8 @@ final class Workspace {
     /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送。
     struct BusySend {
         var text: String
-        var session: CuePi.PiSession.ID
+        /// Pi 自己的会话 id（`AgentTarget.session`）
+        var session: String
         var card: UUID?
     }
     #endif
@@ -139,18 +140,15 @@ final class Workspace {
     var busySend: BusySend?
     /// 用户在本窗口选过或发过的 Agent 会话；nil 或已失效时用本项目的会话（`agentTarget`）。
     var sendChoice: AgentTarget?
-    /// Pi 会话（会话 id，含本次运行里已结束的）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
+    /// 在线 Pi 会话（桥上的连接 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由根视图调用 `refreshSessionProjects` 重算。
     private(set) var sessionProjects: [String: UUID] = [:]
-    /// 本机在线会话的摘要（Pi 自己的会话 id → 同步记录上的问与答）：桥上没有，界面把它配到桥上的实时状态上。
-    /// 由 `observeSessionRecaps` 跟随同步记录。
-    private(set) var sessionRecaps: [String: PiRecap] = [:]
-    /// 发给在线会话的最近一条投送请求（Pi 的会话 id →），同一次观察带来：Mac 上配到桥的实时状态上算显示状态（`PiDelivery`）。
-    private(set) var sessionDeliveries: [String: DeliveryRequest] = [:]
-    /// 发给在线会话、没能送达的话有几句（Pi 的会话 id →，`PiSessionListItem.undelivered`）：会话行的小标记。
-    private(set) var sessionUndelivered: [String: Int] = [:]
-    /// 本次运行里已结束的会话（会话 id），按本窗口看到它们结束的先后。可观察：默认发送目标取最后结束的那个。
-    private(set) var endedOrder: [String] = []
+    /// 在线会话的摘要（Pi 自己的会话 id → 同步记录上的问与答）：桥上没有，界面把它配到桥上的实时状态上。数据在 `LiveSessions`。
+    /// 会话页（SessionPage）还在这样读；它迁完后改读 `services.liveSessions.recaps` 并删掉这里。
+    var sessionRecaps: [String: PiRecap] { services.liveSessions.recaps }
+    /// 这次运行里在这台 Mac 上结束的会话（同步记录），最近结束的在前。可观察：默认发送目标在没有在线会话时取其中本项目最近结束的那个，
+    /// 会话名和发送菜单也读它；运行之前就已结束的历史会话不在其中。数据在 `LiveSessions`。
+    var recentlyEnded: [PiSessionState] { services.liveSessions.recentlyEnded }
 
     /// 鼠标进出一张卡。拖出卡片也就不再按着它（与按钮拖出即松开一致）。
     func hover(_ card: UUID, inside: Bool) {
@@ -188,30 +186,10 @@ final class Workspace {
     /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
     let sessionHeader = SessionHeader()
 
-    /// 跟随同步记录里在线会话的摘要与发给它们的最近一条投送请求，直到任务取消。
-    func observeSessionRecaps() async {
-        do {
-            for try await items in services.store.observe { try $0.piSessionPage(.live).items } {
-                let recaps = Dictionary(items.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first }
-                let deliveries = Dictionary(items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
-                let undelivered = PiSessionListItem.undelivered(items)
-                if recaps != sessionRecaps { sessionRecaps = recaps }
-                if deliveries != sessionDeliveries { sessionDeliveries = deliveries }
-                if undelivered != sessionUndelivered { sessionUndelivered = undelivered }
-            }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
-        }
-    }
-
     /// 重算活着的会话各归哪个项目。
     func refreshSessionProjects() async {
-        // 会话变化时都会来到这里：顺带记下结束的先后（桥只给出结束了哪些），默认发送目标取最后结束的那个
-        for id in services.pi.endedSessions.keys where !endedOrder.contains(id) { endedOrder.append(id) }
         var result: [String: UUID] = [:]
-        // 已结束的会话也算：默认发送目标要认出"本项目刚结束的会话"（见 agentTarget）
-        for session in services.pi.sessions + services.pi.endedSessions.values {
+        for session in services.pi.sessions {
             do {
                 if let project = try await services.store.project(containing: session.cwd) { result[session.id] = project.id }
             } catch {
@@ -404,9 +382,7 @@ final class Workspace {
     func observeCatalog() async {
         catalogFailure = nil
         do {
-            #if DEBUG
-            try DebugScene.injectCatalogFailure(attempt: catalogAttempt)
-            #endif
+            try DebugHooks.willReadCatalog(attempt: catalogAttempt)
             for try await next in services.store.observe { try ProjectCatalog.read(from: $0) } {
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next

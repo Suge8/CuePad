@@ -104,10 +104,7 @@ private struct HeaderTitle<Detail: View>: View {
         .accessibilityAddTraits(explanation == nil ? .isHeader : [.isHeader, .isButton])
         .accessibilityHint(explanation == nil ? "" : "看说明")
         .explanationPopover(explanation, isPresented: $explaining)
-        #if DEBUG
-        // 截图验收：-CuePadExplain YES 推入后直接弹出说明
-        .task(id: explanation) { if explanation != nil, DebugScene.defaults.bool(forKey: "CuePadExplain") { explaining = true } }
-        #endif
+        .task(id: explanation) { if explanation != nil, DebugHooks.preset.explain { explaining = true } }
     }
 }
 

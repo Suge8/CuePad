@@ -28,9 +28,6 @@ struct IOSRoot: View {
             .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) {
                 CaptureComposer(state: $navigation.capture, defaultProject: navigation.currentProject, pinnedOpen: true, saved: navigation.finishCapture)
             } }
-            #if DEBUG
-            .overlay { if DebugScene.scene == "style" { StyleBoard() } }
-            #endif
             .overlay {
                 FloatingInput(isPresented: navigation.newSession != nil, close: { navigation.newSession = nil }) {
                     if let start = navigation.newSession { NewSessionInput(start: start).id(start.id) }
@@ -74,9 +71,7 @@ struct IOSRoot: View {
         }
         // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
         .onChange(of: workspace.notice.map(navigation.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }
-        #if DEBUG
-        .task { await DebugScene.prepare(workspace, navigation, alerts) }
-        #endif
+        .debugScene(workspace, navigation, alerts)
     }
 
     private var scheme: ColorScheme? {

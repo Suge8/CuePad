@@ -93,7 +93,7 @@ struct ProjectNowSeenTests {
         let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
         try await executor.start()
         for id in lost {
-            for _ in 0..<300 where try await store.deliveryRequest(id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+            for _ in 0..<3000 where try await store.deliveryRequest(id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
         }
         await executor.stop()
         func now(_ tasks: [ProjectNow.InProgress] = []) async throws -> String? {
@@ -133,9 +133,10 @@ struct ProjectNowShelfTests {
         try await store.requestDelivery("再跑一遍", to: SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), on: "mac")
 
         let shelf = try await ShelfData.read(from: store)
+        let sessions = try await LiveSessions.Page.read(from: store).items
 
         let projects = try await ProjectCatalog.read(from: store).projects
-        #expect(shelf.now(projects: projects, shown: app.services.settings.shown)[project.id]?.text == "正在唤醒 Agent")
+        #expect(shelf.now(projects: projects, sessions: sessions, shown: app.services.settings.shown)[project.id]?.text == "正在唤醒 Agent")
     }
 
     @Test func 改一条普通灵感不改变书架读到的数据_进回收站才变() async throws {

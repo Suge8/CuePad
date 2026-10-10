@@ -18,15 +18,10 @@ enum RootViews {
             .environment(services)
     }
 
-    /// 面板随 App 常驻：项目目录从创建起就订阅，第一次打开时"记入"已是真实项目。
-    /// 没有视图生命周期可挂 `.task(id:)`，按"重试"（`catalogAttempt` 加一）后在这里重新订阅。
+    /// 面板与主窗口共用 App 常驻的那个工作区（项目目录、会话归属与摘要只订阅一份，见 `Workspace.follow`）。
     /// `openSession`：在主窗口里打开一个会话的整页（面板自己不弹详情）。
-    static func menuBarPad(_ services: AppServices, openSession: @escaping (String) -> Void) -> some View {
-        let workspace = Workspace(services: services)
-        Task {
-            for await _ in Observations({ workspace.catalogAttempt }) { await workspace.observeCatalog() }
-        }
-        return MenuBarPad(openSession: openSession)
+    static func menuBarPad(_ services: AppServices, workspace: Workspace, openSession: @escaping (String) -> Void) -> some View {
+        MenuBarPad(openSession: openSession)
             .environment(workspace)
             .modifier(PaletteProvider())
             .environment(services)
@@ -40,7 +35,6 @@ private struct MainRoot: View {
 
     var body: some View {
         content
-            .task(id: workspace.catalogAttempt) { await workspace.observeCatalog() }
             .task { await workspace.observeAgentLinks() }
             .task { await workspace.observeFolderGuide() }
             .modifier(PaletteProvider())
@@ -51,29 +45,11 @@ private struct MainRoot: View {
                 case .dark: NSAppearance(named: .darkAqua)
                 }
             }
-            #if DEBUG
-            .task { await DebugScene.prepare(workspace) }
-            .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
-            #endif
+            .debugScene(workspace)
     }
 
-    @ViewBuilder private var content: some View {
-        #if DEBUG
-        // 截图只截主窗口：菜单栏面板与设置窗口的内容放进主窗口里拍
-        if DebugScene.scene == "menubar" {
-            DebugMenuBarStage().environment(workspace)
-        } else if DebugScene.scene == "settings" {
-            SettingsView().panelHost().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if DebugScene.scene == "projectform" {
-            ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if DebugScene.scene == "newsession" {
-            NewSessionForm { _ in }.environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            MainWindow(workspace: workspace)
-        }
-        #else
-        MainWindow(workspace: workspace)
-        #endif
+    private var content: some View {
+        DebugStage(workspace: workspace) { MainWindow(workspace: workspace) }
     }
 }
 #endif

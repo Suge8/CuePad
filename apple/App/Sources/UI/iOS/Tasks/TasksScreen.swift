@@ -19,16 +19,12 @@ struct TasksScreen: View {
             ScrollView {
                 if let board { content(board) }
             }
-            #if DEBUG
             .onChange(of: board?.done.last?.id) {
-                if DebugScene.defaults.bool(forKey: "CuePadShowsDone"), let last = board?.done.last?.id { proxy.scrollTo(last, anchor: .bottom) }
+                if DebugHooks.preset.showsDone, let last = board?.done.last?.id { proxy.scrollTo(last, anchor: .bottom) }
             }
-            #endif
         }
         .floatingHeader("任务", detail: board?.counts.summary ?? "")
-        #if DEBUG
-        .onAppear { if DebugScene.defaults.bool(forKey: "CuePadShowsDone") { showsCompleted = true } }
-        #endif
+        .onAppear { if DebugHooks.preset.showsDone { showsCompleted = true } }
         .animation(.easeOut(duration: 0.2), value: board.map { [$0.inProgress, $0.todo, $0.done].flatMap { $0.map(\.id) } })
         .observing(services.store, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)

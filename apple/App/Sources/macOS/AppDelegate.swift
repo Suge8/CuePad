@@ -47,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         failureWindow?.close()
         failureWindow = nil
         let workspace = Workspace(services: services)
+        Task { await workspace.follow() }
         let window = makeMainWindow(services, workspace: workspace)
         let shell = WindowShell(window: window)
         let windowDelegate = MainWindowDelegate(shell: shell)
@@ -59,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         let panel = MenuBarPanel()
         // 菜单栏面板点会话：收起面板、把主窗口叫到前面，在它的内容区打开那个会话的整页（与侧栏同一处）
-        panel.setContent(RootViews.menuBarPad(services) { [weak panel] id in
+        panel.setContent(RootViews.menuBarPad(services, workspace: workspace) { [weak panel] id in
             panel?.hide()
             shell.show()
             workspace.show(.session(id))
@@ -166,13 +167,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     private func makeMainWindow(_ services: AppServices, workspace: Workspace) -> NSWindow {
         let window = MainWindowFactory.make(content: RootViews.mainWindow(services, workspace: workspace))
-        #if DEBUG
         // 屏幕外测量不记窗口位置：记下的屏幕外位置会让之后正常打开时窗口不见
-        if DebugScene.offscreen {
-            DebugScene.placeOffscreen(window)
-            return window
-        }
-        #endif
+        if DebugHooks.placesOffscreen(window) { return window }
         let keeper = WindowFrameKeeper(window: window, name: "main", settings: services.settings)
         if !keeper.restore() { window.center() }
         mainFrameKeeper = keeper

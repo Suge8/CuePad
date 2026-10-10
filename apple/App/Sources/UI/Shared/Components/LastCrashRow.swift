@@ -20,13 +20,7 @@ struct LastCrashRow: View {
         }
     }
 
-    private static var opensAtStart: Bool {
-        #if DEBUG
-        DebugScene.defaults.bool(forKey: "CuePadCrashSheet")
-        #else
-        false
-        #endif
-    }
+    private static var opensAtStart: Bool { DebugHooks.preset.crashSheet }
 }
 
 /// 一份诊断的摘要与导出。

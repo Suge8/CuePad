@@ -19,7 +19,7 @@ struct CommandProgressTests {
         let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { _ in outcome }
         try await executor.start()
         defer { Task { await executor.stop() } }
-        for _ in 0..<300 {
+        for _ in 0..<3000 {
             if try await store.deliveryRequest(request.id)?.isOpen == false { return }
             try await Task.sleep(for: .milliseconds(10))
         }

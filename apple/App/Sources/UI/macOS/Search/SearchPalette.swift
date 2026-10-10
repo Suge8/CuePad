@@ -41,9 +41,7 @@ struct SearchPalette: View {
         panel
             .onAppear {
                 focused = active
-                #if DEBUG
-                if query.text.isEmpty { query.text = DebugScene.searchText }
-                #endif
+                if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
             }
             .onChange(of: query.text) {
                 query.pages = 1
@@ -65,9 +63,7 @@ struct SearchPalette: View {
                     cards: found.cards, total: found.totalCards, projects: try store.projects(),
                     lastSends: lastSends, targets: try store.sendTargets(), parents: parents, marks: marks)
             }
-            #if DEBUG
-            .onChange(of: data?.cards.map(\.id)) { PerfProbe.mark("search") }
-            #endif
+            .perfMark("search", onChangeOf: data?.cards.map(\.id))
             .onChange(of: data?.cards.map(\.id)) {
                 if let ids = data?.cards.map(\.id), selection.map(ids.contains) != true { selection = ids.first }
             }

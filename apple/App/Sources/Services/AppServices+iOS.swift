@@ -11,11 +11,12 @@ extension AppServices {
         startCaptureIngest()
         startSnapshots()
         startSync()
+        startLiveSessions()
         startSessionAlerts()
         if !location.isIsolated { diagnostics.start() }
     }
 
-    /// 前台提示：本机已同步来的在线会话每次变化，由 `SessionAlertTracker` 认出"等你确认"、"做完了"的转换，交给界面。
+    /// 前台提示：本机已同步来的在线会话（`LiveSessions`）每次变化，由 `SessionAlertTracker` 认出"等你确认"、"做完了"的转换，交给界面。
     /// 不依赖推送是否到达；App 不在前台时不发（后台由系统推送提示，前台系统不再重复展示，见 `PiAlertCenter`）。
     private func startSessionAlerts() {
         let active = ActiveSince()
@@ -24,15 +25,10 @@ extension AppServices {
         })
         tasks.append(Task {
             var tracker = SessionAlertTracker()
-            let live = store.observe { try $0.piSessionPage(PiSessionQuery(scope: .live, limit: .max)).items.map(\.state) }
-            do {
-                for try await states in live {
-                    let alerts = tracker.alerts(for: states, since: active.date)
-                    guard UIApplication.shared.applicationState == .active else { continue }
-                    if let alert = alerts.last(where: { $0.kind == .waitingForUser }) ?? alerts.last { post(alert) }
-                }
-            } catch {
-                reportIssue(.syncUnavailable("读取在线会话失败，前台不再提示会话变化：\(error)"))
+            for await states in Observations({ self.liveSessions.live.map(\.state) }) {
+                let alerts = tracker.alerts(for: states, since: active.date)
+                guard UIApplication.shared.applicationState == .active else { continue }
+                if let alert = alerts.last(where: { $0.kind == .waitingForUser }) ?? alerts.last { post(alert) }
             }
         })
     }

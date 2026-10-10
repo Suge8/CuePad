@@ -70,7 +70,7 @@ final class RecordingHost: PiHosting {
         try bridge.start()
         try ext.start()
         extensions[sessionID] = ext
-        await eventually(timeout: .seconds(10)) { bridge.session(id: ext.id) != nil }
+        await eventually { bridge.session(id: ext.id) != nil }
         guard bridge.session(id: ext.id) != nil else { throw ConnectTimeout(sessionID: sessionID) }
         return ext
     }

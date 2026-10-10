@@ -93,10 +93,8 @@ extension AppServices {
     /// 发给 Pi 会话的请求（回复、作答、重发）此刻送得到执行它的 Mac：手机靠同步；Mac 上就是本机执行，总送得到。
     var reachesPiHost: Bool {
         #if os(iOS)
-        #if DEBUG
-        // 演示 Mac（-CuePadDemoMac）就在本机库里接手，隔离模式没有同步也送得到
-        if DebugScene.defaults.bool(forKey: "CuePadDemoMac") { return true }
-        #endif
+        // 演示 Mac 就在本机库里接手，隔离模式没有同步也送得到
+        if DebugHooks.preset.demoMac { return true }
         return syncStatus.reachesMac
         #else
         true

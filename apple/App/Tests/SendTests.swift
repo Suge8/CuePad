@@ -83,7 +83,7 @@ struct SendTests {
         let ext = try await connectedSession()
         let workspace = Workspace(services: services)
 
-        #expect(await workspace.send("hi", to: AgentTarget(session: ext.id, mode: .steer)))
+        #expect(await workspace.send("hi", to: AgentTarget(session: ext.sessionID, mode: .steer)))
 
         // 发出即有请求（"你发过去的"列表立刻有这一行）
         let request = try #require(try await services.store.deliveryRequests().first)

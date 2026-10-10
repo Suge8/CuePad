@@ -19,14 +19,14 @@ struct MenuBarPad: View {
         VStack(alignment: .leading, spacing: 8) {
             let sessions = PiSessionState.inListOrder(services.pi.sessions.map {
                 PiSessionState.live(
-                    $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: workspace.sessionRecaps[$0.sessionID])
+                    $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
             }).prefix(Self.sessionLimit)
             if !sessions.isEmpty {
                 VStack(alignment: .leading, spacing: 9) {
                     ForEach(sessions, id: \.sessionID) { session in
                         PiSessionRow(
                             session: session, project: workspace.catalog?.project(session.projectID),
-                            delivery: workspace.sessionDeliveries[session.sessionID], undelivered: workspace.sessionUndelivered[session.sessionID] ?? 0).equatable()
+                            delivery: services.liveSessions.deliveries[session.sessionID], undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
                             .contentShape(.rect)
                             .onTapGesture { openSession(session.sessionID) }
                             .accessibilityAddTraits(.isButton)
@@ -48,7 +48,6 @@ struct MenuBarPad: View {
             }
         }
         .frame(width: 360)
-        .modifier(SessionProjectsTracker(workspace: workspace))
     }
 
     private struct Block: ViewModifier {

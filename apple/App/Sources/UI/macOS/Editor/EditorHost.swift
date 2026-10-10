@@ -33,14 +33,12 @@ struct EditorHost: NSViewRepresentable {
         view.textView.storedText = initialText
         view.scrollerStyle = .overlay
         handle.view = view
-        #if DEBUG
-        if let range = DebugScene.editorSelection {
-            DispatchQueue.main.async {
+        if let range = DebugHooks.preset.editorSelection {
+            DebugHooks.later {
                 view.window?.makeFirstResponder(view.textView)
                 view.textView.setSelectedRange(range)
             }
         }
-        #endif
         return view
     }
 

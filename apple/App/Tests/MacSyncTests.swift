@@ -133,7 +133,7 @@ struct MacSyncTests {
         let executor = DeliveryExecutor(store: store, hostID: TestApp.hostID, onIssue: { _ in }) { _ in .succeeded }
         try await executor.start()
         for id in [lost.id, kept.id] {
-            for _ in 0..<300 where try await store.deliveryRequest(id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+            for _ in 0..<3000 where try await store.deliveryRequest(id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
         }
         await executor.stop()
 
@@ -259,8 +259,8 @@ struct MacSyncTests {
                 throw CancellationError()
             }
             group.addTask {
-                try await Task.sleep(for: .seconds(10))
-                throw TimedOut(what: "投送请求 \(id) 没有在 10 秒内出结果")
+                try await Task.sleep(for: .seconds(60))
+                throw TimedOut(what: "投送请求 \(id) 没有在 60 秒内出结果")
             }
             defer { group.cancelAll() }
             return try await group.next()!

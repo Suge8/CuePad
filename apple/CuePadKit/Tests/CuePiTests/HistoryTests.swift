@@ -404,7 +404,7 @@ struct HistoryIndexerTests {
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         var first = SessionFile(directory: project, name: "a.jsonl")
         try first.append(SessionFile.header(id: "a"), SessionFile.user("u", nil, "after pi was installed", at: 1))
-        try await eventually("后建目录里的会话被索引", timeout: .seconds(5)) {
+        try await eventually("后建目录里的会话被索引") {
             log.updates.contains { $0.history.displayName == "after pi was installed" }
         }
 
@@ -412,7 +412,7 @@ struct HistoryIndexerTests {
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         var second = SessionFile(directory: project, name: "b.jsonl")
         try second.append(SessionFile.header(id: "b"), SessionFile.user("u", nil, "after the directory came back", at: 1))
-        try await eventually("删掉再建的目录里的会话被索引", timeout: .seconds(5)) {
+        try await eventually("删掉再建的目录里的会话被索引") {
             log.updates.contains { $0.history.displayName == "after the directory came back" }
         }
     }

@@ -3,20 +3,10 @@ import CuePi
 import CueStore
 import SwiftUI
 
+/// 侧栏自己读的：回收站条数与各项目最近开始的进行中任务（项目行的"此刻"，`ProjectNow`）。会话在 `LiveSessions`。
 nonisolated private struct SidebarData: Sendable, Equatable {
     var trashCount: Int
-    /// 同步记录里在线的会话（含别的 Mac 上的）与全部会话数。
-    var live: [PiSessionState]
-    var sessionTotal: Int
-    /// 发给在线会话的最近一条投送请求与最近一条改名（Pi 的会话 id →）。
-    var deliveries: [String: DeliveryRequest]
-    var renames: [String: DeliveryRequest]
-    /// 没能送达的话有几句（会话行的小标记）。
-    var undelivered: [String: Int]
-    /// 项目行的"此刻"（`ProjectNow`）读的：此刻有事的会话（`PiSessionQuery.current`）与各项目最近开始的进行中任务。
-    var current: [PiSessionListItem]
     var leading: [UUID: [ProjectNow.InProgress]]
-
 }
 
 /// 侧栏两区：项目（置顶的在前，末尾未分类；项目多时在上面滚动）与 Agent（固定在底部、只列在线的会话，最多露出几行，
@@ -38,7 +28,7 @@ struct Sidebar: View {
         List {
             if let data, let catalog, let pages {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果
-                let now = ProjectNow.byProject(catalog.projects, sessions: data.current, tasks: data.leading, shown: services.settings.shown)
+                let now = ProjectNow.byProject(catalog.projects, sessions: services.liveSessions.items, tasks: data.leading, shown: services.settings.shown)
                 Section {
                     ForEach(pages.projects) { row($0, catalog, now: now[$0.id]) }
                     if pages.inboxCount > 0 {
@@ -69,8 +59,11 @@ struct Sidebar: View {
         .safeAreaInset(edge: .bottom) {
             // Agent 区不随项目列表滚动：项目再多，要你注意的会话也一直露在侧栏里
             VStack(spacing: 0) {
-                if let data {
-                    PiSection(recorded: data.live, deliveries: data.deliveries, renames: data.renames, undelivered: data.undelivered, total: data.sessionTotal)
+                if data != nil {
+                    let sessions = services.liveSessions
+                    PiSection(
+                        recorded: sessions.live.map(\.listed), deliveries: sessions.deliveries, renames: sessions.renames,
+                        undelivered: sessions.undelivered, total: sessions.total)
                         .padding(.horizontal, 10)
                 }
                 footer(showsBins: pages?.showsBins ?? false, trashCount: data?.trashCount ?? 0)
@@ -86,16 +79,7 @@ struct Sidebar: View {
             }
         }
         .observing(services.store, into: $data, onError: workspace.fail) { store in
-            // 在线的是"此刻有事的"里没结束的那些（同一个顺序），不再另读一页
-            let current = try store.piSessionPage(.current).items
-            let live = current.filter { $0.state.state != .known(.ended) }
-            return SidebarData(
-                trashCount: try store.trashCount(),
-                live: live.map(\.listed), sessionTotal: try store.piSessionPage(PiSessionQuery(limit: 0)).total,
-                deliveries: Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
-                renames: Dictionary(live.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first },
-                undelivered: PiSessionListItem.undelivered(live),
-                current: current, leading: try TaskBoard.leading(from: store))
+            SidebarData(trashCount: try store.trashCount(), leading: try TaskBoard.leading(from: store))
         }
     }
 
@@ -299,7 +283,7 @@ private struct PiSection: View {
         let rows = PiSessionState.liveRows(
             live: live.map {
                 PiSessionState.live(
-                    $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: workspace.sessionRecaps[$0.sessionID])
+                    $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
             },
             recorded: recorded, deliveries: deliveries)
         let agents = SidebarAgents(rows: rows)

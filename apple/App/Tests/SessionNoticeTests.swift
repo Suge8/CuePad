@@ -14,8 +14,10 @@ struct SessionNoticeTests {
 
     private func recorder() -> PiStateRecorder { PiStateRecorder(store: store, hostID: "mac") }
 
+    /// 前台提示读的版本：`LiveSessions` 里在线的（`startSessionAlerts` 同一条路）。
     private func live() async throws -> [PiSessionState] {
-        try await store.piSessionPage(PiSessionQuery(scope: .live, limit: .max)).items.map(\.state)
+        app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store))
+        return app.services.liveSessions.live.map(\.state)
     }
 
     @Test func 第一次读到只记基线_之后的转换才提示_同一版本不重复() async throws {
@@ -30,6 +32,19 @@ struct SessionNoticeTests {
         #expect(alerts.map(\.kind) == [.settled] && alerts.first?.title == "homepage")
         #expect(alerts.first?.session == settled.first?.id)
         #expect(tracker.alerts(for: settled, since: .distantPast).isEmpty)
+    }
+
+    @Test func 已结束但有话在路上的会话在列表里_不算在线_不触发提示() async throws {
+        let recorder = recorder()
+        var tracker = SessionAlertTracker()
+        try await recorder.update(sessionID: "s1", state: .settled, title: "homepage")
+        try await recorder.end(sessionID: "s1")
+        try await store.requestDelivery("再跑一遍", to: SendTarget(kind: .piSession, name: "homepage", ref: "s1"), on: "mac")
+
+        let states = try await live()
+        #expect(app.services.liveSessions.items.map(\.state.sessionID) == ["s1"])  // 在 current 里（唤醒中）
+        #expect(states.isEmpty)  // 但不是在线会话
+        #expect(tracker.alerts(for: states, since: .distantPast).isEmpty)
     }
 
     @Test func 等你确认带问题首行_做完了不带() async throws {

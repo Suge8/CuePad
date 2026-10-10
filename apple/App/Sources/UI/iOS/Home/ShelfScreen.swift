@@ -49,13 +49,11 @@ struct ShelfScreen: View {
         .toolbarVisibility(navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
         .onAppear(perform: focusIfRequested)
         .onChange(of: navigation.pendingPageSearch) { focusIfRequested() }
-        #if DEBUG
         .onAppear {
-            guard DebugScene.activatesSearch(.all) else { return }
-            query.text = DebugScene.searchText
+            guard DebugHooks.preset.focusedSearch == .shelf else { return }
+            query.text = DebugHooks.preset.searchText
             searchFocused = true
         }
-        #endif
         .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
         .observing(services.store, into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
@@ -68,8 +66,9 @@ struct ShelfScreen: View {
         let pinned = entries.filter(\.project.isPinned)
         let recent = entries.filter { !$0.project.isPinned }
         // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
-        let now = data.now(projects: catalog.projects, shown: services.settings.shown)
-        let agent = AgentNow.of(data.sessions, shown: services.settings.shown)
+        let sessions = services.liveSessions.items
+        let now = data.now(projects: catalog.projects, sessions: sessions, shown: services.settings.shown)
+        let agent = AgentNow.of(sessions, shown: services.settings.shown)
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
             if entries.isEmpty && catalog.inboxCount == 0 {

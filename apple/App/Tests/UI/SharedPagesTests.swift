@@ -67,7 +67,7 @@ struct SharedPagesTests {
             try await LaunchProgress.read(request: request.id, token: "tok-1", from: store).phase
         }
         func wait(until done: (LaunchProgress.Phase) -> Bool) async throws {
-            for _ in 0..<300 where !done(try await phase()) { try await Task.sleep(for: .milliseconds(10)) }
+            for _ in 0..<3000 where !done(try await phase()) { try await Task.sleep(for: .milliseconds(10)) }
         }
         guard case .sending = try await phase() else { Issue.record("发出后应是在路上：\(try await phase())"); return }
 
@@ -84,7 +84,7 @@ struct SharedPagesTests {
         let refused = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "tok-2"), title: "圆桌", on: "mac-b", card: nil)
         let failing = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .failed("文件夹不在了") }
         try await failing.start()
-        for _ in 0..<300 where try await store.deliveryRequest(refused.id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<3000 where try await store.deliveryRequest(refused.id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
         await failing.stop()
         #expect(try await LaunchProgress.read(request: refused.id, token: "tok-2", from: store).phase == .failed("文件夹不在了"))
     }

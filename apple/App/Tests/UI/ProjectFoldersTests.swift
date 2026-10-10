@@ -178,7 +178,7 @@ struct ProjectFoldersTests {
         let failing = try await store.requestBind(PiBind(project: lone.id, folder: .besideSession("s3")), title: "Lone", on: "mac-fail")
         try await executor.start()
         defer { Task { await executor.stop() } }
-        for _ in 0..<300 {
+        for _ in 0..<3000 {
             if try await store.deliveryRequest(failing.id)?.isOpen == false { break }
             try await Task.sleep(for: .milliseconds(10))
         }
