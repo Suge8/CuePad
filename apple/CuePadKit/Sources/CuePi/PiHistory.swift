@@ -202,7 +202,6 @@ public enum PiHistory {
         var timestamp: String?
         var cwd: String?
         var name: String?
-        var tokensBefore: Int?
         var message: Message?
 
         var time: Date? { timestamp.flatMap { try? Date($0, strategy: PiHistory.timestampStyle) } }
@@ -282,7 +281,7 @@ public enum PiHistory {
             cp.name = line.name
         case "compaction":
             transcript.append(PiTranscriptEntry(
-                entryID: line.id ?? "\(cp.seq)", seq: cp.seq, role: .system, text: compactionText(tokensBefore: line.tokensBefore),
+                entryID: line.id ?? "\(cp.seq)", seq: cp.seq, role: .system, text: "已压缩上下文",
                 at: time ?? cp.lastActivity ?? .distantPast, tools: nil, roundStartedAt: nil, deliveryID: nil))
         case "message":
             guard let message = line.message else { return }
@@ -301,12 +300,6 @@ public enum PiHistory {
         default:
             break
         }
-    }
-
-    /// 压缩的系统行："已压缩上下文 · 压缩前约 63k tokens"（不到 1000 写原数）。
-    private static func compactionText(tokensBefore: Int?) -> String {
-        guard let tokensBefore else { return "已压缩上下文" }
-        return "已压缩上下文 · 压缩前约 " + (tokensBefore >= 1_000 ? "\(tokensBefore / 1_000)k" : "\(tokensBefore)") + " tokens"
     }
 
     private typealias Entry = (id: String, seq: Int64, at: Date)

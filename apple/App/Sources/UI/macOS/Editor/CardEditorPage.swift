@@ -281,7 +281,6 @@ struct CardEditorPage: View {
                     .transition(.opacity)
             }
             if data.card.isPinned { Label("资料", systemImage: "books.vertical") }
-            if data.card.isTask { Label("任务", systemImage: "checklist") }
             Spacer(minLength: 0)
             Menu("更多", systemImage: "ellipsis") {
                 CardActions(card: data.card, more: true)

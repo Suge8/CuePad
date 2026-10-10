@@ -361,7 +361,7 @@ private struct FilterBar: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) { chips }
             }
-            if let total { Text("\(total) 个结果").font(Typography.meta.monospacedDigit()).foregroundStyle(.secondary).fixedSize().layoutPriority(1) }
+            if let total { Text(CountCopy.hits(total)).font(Typography.meta.monospacedDigit()).foregroundStyle(.secondary).fixedSize().layoutPriority(1) }
         }
     }
 

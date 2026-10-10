@@ -43,7 +43,7 @@ nonisolated struct PiSubagentSummary: Equatable {
     }
 }
 
-/// 子代理的时长怎么读：在跑的"已运行 4 分"从本次运行开始算，落定的"用时 5 分"停在落定时刻。没有开始时刻（空闲）没有时长。
+/// 子代理的时长怎么读：在跑的"运行了 4 分钟"从本次运行开始算，落定的"用时 5 分钟"停在落定时刻。没有开始时刻（空闲）没有时长。
 nonisolated enum PiSubagentClock: Equatable {
     case running(PiClock)
     case took(TimeInterval)

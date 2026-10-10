@@ -161,7 +161,7 @@ struct TaskRow: View {
         }
     }
 
-    /// 进度之下一行：所在项目与交给 Pi 的会话此刻的状态（"Agent 正在工作 · 已运行 4 分钟"），项目名照写，挤不下时截会话状态。
+    /// 进度之下一行：所在项目与交给 Pi 的会话此刻的状态（"Agent 正在工作 · 运行了 4 分钟"），项目名照写，挤不下时截会话状态。
     private var place: some View {
         HStack(spacing: 10) {
             if let project {

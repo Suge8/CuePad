@@ -134,7 +134,7 @@ struct WallTests {
 
         #expect(groups == [
             OlderGroup(period: .week(start: Self.date(2026, 8, 31, hour: 0)), cards: [thisWeekOld.id, sameWeek.id]),
-            OlderGroup(period: .week(start: Self.date(2026, 8, 24, hour: 0)), cards: [previousWeek.id]),
+            OlderGroup(period: .sparseMonth(start: Self.date(2026, 8, 1, hour: 0)), cards: [previousWeek.id]),
             OlderGroup(period: .month(start: Self.date(2026, 5, 1, hour: 0)), cards: [may.id, mayEarly.id]),
             OlderGroup(period: .month(start: Self.date(2026, 4, 1, hour: 0)), cards: [april.id]),
         ])
@@ -156,6 +156,19 @@ struct WallTests {
             OlderGroup(period: .sparseMonth(start: Self.date(2026, 7, 1, hour: 0)), cards: [jul15.id]),
         ])
         #expect(groups.allSatisfy { !$0.isMonth })
+    }
+
+    /// 分到哪个月看卡片自己的日期：周一落在上个月的那一周里，9/2 的卡属于九月，不挂在"八月"下面。
+    @Test func 更早_每周一条的月份按卡片自己的月份归组() {
+        let dates = [(9, 19), (9, 7), (9, 2), (8, 26), (8, 19), (8, 11)]
+        let cards = dates.map { CardStamp(id: UUID(), modifiedAt: Self.date(2026, $0.0, $0.1), lastSentAt: nil, isPinned: false) }
+
+        let groups = OlderGroup.group(cards.shuffled(), now: now, calendar: Self.calendar)
+
+        #expect(groups == [
+            OlderGroup(period: .sparseMonth(start: Self.date(2026, 9, 1, hour: 0)), cards: cards[0...2].map(\.id)),
+            OlderGroup(period: .sparseMonth(start: Self.date(2026, 8, 1, hour: 0)), cards: cards[3...5].map(\.id)),
+        ])
     }
 
     /// 更早只有几条时不分周、不分月，按时间排成一组，也不加组标题（组标题比内容还多）。
@@ -190,6 +203,20 @@ struct OlderGroupTitleRuleTests {
     }
 }
 
+/// "更早"的组标题写法：同一年里写"9 月"，跨年才带年份（"2025 年 12 月"），数字两边空一格；周是"8/31 – 9/6"。
+struct OlderGroupTitleTextTests {
+    let now = WallTests.date(2026, 9, 30, hour: 15)
+
+    @Test func 月份不带年份_跨年才带() {
+        func title(_ period: OlderGroup.Period) -> String { OlderGroupTitle.text(period, now: now, calendar: WallTests.calendar) }
+        #expect(title(.sparseMonth(start: WallTests.date(2026, 9, 1, hour: 0))) == "9 月")
+        #expect(title(.month(start: WallTests.date(2026, 5, 1, hour: 0))) == "5 月")
+        #expect(title(.month(start: WallTests.date(2025, 12, 1, hour: 0))) == "2025 年 12 月")
+        #expect(title(.week(start: WallTests.date(2026, 8, 31, hour: 0))) == "8/31 – 9/6")
+        #expect(title(.all) == "更早")
+    }
+}
+
 /// Pi 会话副行的"在哪"：绑定了项目写项目名，否则写文件夹名。手机上的会话记录同样带着文件夹名。
 @MainActor
 struct PiPlaceTests {
@@ -204,6 +231,14 @@ struct PiPlaceTests {
 
         let project = try await store.createProject(name: "CuePad 项目", color: "#111")
         #expect(PiPlace.name(of: state, project: project) == "CuePad 项目")
+    }
+
+    /// 会话名以所在开头（"flow 3" 在 flow 里）时不再写所在：同一行不说两遍。
+    @Test func 所在与名字开头相同时不重复() {
+        #expect(PiPlace.name(project: nil, folder: "flow", besides: "flow 3") == nil)
+        #expect(PiPlace.name(project: nil, folder: "flow", besides: "Flow") == nil)
+        #expect(PiPlace.name(project: nil, folder: "flow", besides: "规划 flow") == "flow")
+        #expect(PiPlace.name(project: nil, folder: "flow", besides: "fl") == "flow")
     }
 }
 

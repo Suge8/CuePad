@@ -67,7 +67,7 @@ struct CardSearchResults: View {
                 HStack(spacing: 8) {
                     FilterChips(query: $query, projects: scope == .all ? workspace.catalog?.projects ?? [] : nil, targets: data?.targets ?? [])
                     if let data, !shown.text.isEmpty || shown.isFiltered {
-                        Text("\(data.total) 条").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                        Text(CountCopy.hits(data.total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                             .contentTransition(.numericText()).animation(Motion.quick, value: data.total)
                             .fixedSize().padding(.trailing, 16)
                     }
