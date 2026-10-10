@@ -72,7 +72,6 @@ nonisolated struct PiContextMeter: Equatable {
     init(_ usage: PiContextUsage) { self.usage = usage }
 
     var fraction: Double? { usage.fraction }
-    var remaining: Int? { usage.tokens.map { max(0, usage.window - $0) } }
 
     var level: Level {
         guard let fraction else { return .unknown }
@@ -87,23 +86,10 @@ nonisolated struct PiContextMeter: Equatable {
     /// 悬停与读屏：先说这是上下文，快满了时说可以压缩。
     var help: Dotted { Dotted("上下文") + summary + Dotted(suggestsCompact ? "快满了，可以压缩" : nil) }
 
-    /// "已用 21% · 剩 158k tokens"；未知时说明为什么。
+    /// "已用 21% · 剩 79%"（只写比例，用户看不到 token 数）；未知时说明为什么。
     var summary: Dotted {
-        guard let fraction, let remaining else { return Dotted("刚压缩过", "下次回答后更新（窗口 \(Self.abbreviated(usage.window)) tokens）") }
-        return Dotted("已用 \(Int((fraction * 100).rounded()))%", "剩 \(Self.abbreviated(remaining)) tokens")
-    }
-
-    /// 3 位有效数字内的简写：950、9.5k、158k、1.2M。
-    static func abbreviated(_ count: Int) -> String {
-        func trimmed(_ value: Double) -> String {
-            let rounded = (value * 10).rounded() / 10
-            return rounded == rounded.rounded() ? String(Int(rounded)) : String(rounded)
-        }
-        switch count {
-        case ..<1_000: return String(count)
-        case ..<10_000: return trimmed(Double(count) / 1_000) + "k"
-        case ..<1_000_000: return String(Int((Double(count) / 1_000).rounded())) + "k"
-        default: return trimmed(Double(count) / 1_000_000) + "M"
-        }
+        guard let fraction else { return Dotted("刚压缩过", "下次回答后更新") }
+        let used = Int((fraction * 100).rounded())
+        return Dotted("已用 \(used)%", "剩 \(100 - used)%")
     }
 }

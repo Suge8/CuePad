@@ -239,8 +239,8 @@ struct SubagentSummaryTests {
     }
 
     @Test func 已工作多久_在跑的随时间走_落定的停在落定时刻() {
-        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now) == "已运行 10 分钟")
-        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now.addingTimeInterval(120)) == "已运行 12 分钟")
+        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now) == "运行了 10 分钟")
+        #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now.addingTimeInterval(120)) == "运行了 12 分钟")
         #expect(PiSubagentClock(agent("b", .done, started: 9_000, settled: 9_300))?.text(now: now) == "用时 5 分钟")
         #expect(PiSubagentClock(agent("c", .idle)) == nil)
     }

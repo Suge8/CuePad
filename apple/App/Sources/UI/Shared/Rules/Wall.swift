@@ -111,11 +111,12 @@ nonisolated struct OlderGroup: Equatable, Sendable {
                 groups.append(OlderGroup(period: period, cards: [card.id]))
             }
         }
-        return mergingSparseMonths(groups, calendar: calendar)
+        return mergingSparseMonths(groups, dates: Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0.modifiedAt) }), calendar: calendar)
     }
 
-    /// 按周的组按所在月份（周一所在的月）归拢；某个月的各周都只有一条时并成 `sparseMonth`。组本来就新的在前、同月相邻。
-    private static func mergingSparseMonths(_ groups: [OlderGroup], calendar: Calendar) -> [OlderGroup] {
+    /// 按周的组按月份归拢；某个月的各周都只有一条时并成 `sparseMonth`。组本来就新的在前、同月相邻。
+    /// 月份取这一周里最新那张卡自己的日期（不取周一所在的月：周一落在上个月的那一周里，9/2 的卡属于九月）。
+    private static func mergingSparseMonths(_ groups: [OlderGroup], dates: [UUID: Date], calendar: Calendar) -> [OlderGroup] {
         var result: [OlderGroup] = []
         var run: [OlderGroup] = []
         var runMonth: Date?
@@ -129,13 +130,13 @@ nonisolated struct OlderGroup: Equatable, Sendable {
             run = []
         }
         for group in groups {
-            guard case .week(let start) = group.period else {
+            guard case .week = group.period, let date = group.cards.first.flatMap({ dates[$0] }) else {
                 flush()
                 runMonth = nil
                 result.append(group)
                 continue
             }
-            let month = calendar.dateInterval(of: .month, for: start)?.start ?? start
+            let month = calendar.dateInterval(of: .month, for: date)?.start ?? date
             if month != runMonth { flush() }
             runMonth = month
             run.append(group)

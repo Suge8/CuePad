@@ -103,14 +103,14 @@ struct SectionLabel: View {
     }
 }
 
-/// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话都用它）：一分钟内"刚刚"，一小时内"N 分前"，一天内"N 小时前"；
+/// 全 App 唯一的"什么时候"写法（灵感、任务、回收站、Agent 会话都用它）：一分钟内"刚刚"，一小时内"N 分钟前"，一天内"N 小时前"；
 /// 再往前按日历：昨天、一周内写星期、今年写月日、更早带年份。粗到小时为止，几小时前的事不写到分钟。
 /// 会话的计时会随时间刷新（`PiElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
 nonisolated enum DateLabel {
     static func short(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
         let elapsed = now.timeIntervalSince(date)
         if elapsed < 60 { return "刚刚" }
-        if elapsed < 3600 { return "\(Int(elapsed) / 60) 分前" }
+        if elapsed < 3600 { return "\(Int(elapsed) / 60) 分钟前" }
         if elapsed < 86_400 { return "\(Int(elapsed) / 3600) 小时前" }
         if calendar.isDate(date, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: now) ?? now) { return "昨天" }
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0

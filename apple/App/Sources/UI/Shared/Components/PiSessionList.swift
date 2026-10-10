@@ -112,11 +112,14 @@ struct PiSessionRow: View {
                     // 你的话在路上、正在改名时先写它（短），再接最要紧的那一句
                     let line = searchHit ?? PiRowLine.lead(session, shown: shown, draft: draft, end: end, failure: failure)
                     let lead = text(of: line, shown: shown)
-                    // 拼成一个 Text 后读屏读不到分段点的替代，所以整句给读屏一个用"，"分段的标签
-                    note.map {
-                        Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(Dotted.separator).foregroundStyle(palette.ink3))\(lead)")
-                            .accessibilityLabel(Dotted($0, line?.speech).spoken)
-                    } ?? lead
+                    // 已结束又没记下任何话的历史会话没有第二层：这一行收成一行高，不留一行空白（翻历史时连着好几行都是）
+                    if note != nil || line != nil {
+                        // 拼成一个 Text 后读屏读不到分段点的替代，所以整句给读屏一个用"，"分段的标签
+                        note.map {
+                            Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(Dotted.separator).foregroundStyle(palette.ink3))\(lead)")
+                                .accessibilityLabel(Dotted($0, line?.speech).spoken)
+                        } ?? lead
+                    }
                 } else {
                     let line = searchHit ?? PiRowLine.of(session, draft: draft, end: end, failure: failure)
                     let rest = note.map { Text($0).foregroundStyle(palette.ink3) } ?? line.map { text(of: $0, shown: shown) }

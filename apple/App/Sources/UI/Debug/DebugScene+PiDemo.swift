@@ -431,7 +431,7 @@ extension DebugScene {
         // 会话文件里的压缩记录：对话里的一行系统行（notes 最后一轮回答之后）
         try? await store.writePiTranscript(PiTranscript(
             sessionID: "notes",
-            messages: [PiChatMessage(sessionID: "notes", entryID: "compaction-demo", seq: 99, role: .system, text: "已压缩上下文 · 压缩前约 63k tokens", at: .now.addingTimeInterval(-1_800))],
+            messages: [PiChatMessage(sessionID: "notes", entryID: "compaction-demo", seq: 99, role: .system, text: "已压缩上下文", at: .now.addingTimeInterval(-1_800))],
             recap: PiRecap(lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")))
         let states = (try? await store.piSessionPage(PiSessionQuery(limit: 100)).items.map(\.state)) ?? []
         // -CuePadCommand YES：atlas 的会话页回复框上方有一条在路上的命令（看进度行；没有执行它的 Mac，一直在路上）

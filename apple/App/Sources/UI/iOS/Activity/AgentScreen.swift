@@ -185,13 +185,13 @@ struct AgentScreen: View {
     /// 行的上下留白：行之间不画分隔线，三行字靠留白分开（与 Mac 的 Agent 整页一样）。
     static let rowPadding: CGFloat = 11
 
-    /// 一行：纸底；长按与左滑都有"结束会话"（在线的）与"重命名"（读得到的会话）。
+    /// 一行：纸底；长按与左滑都有"结束会话"（在线的）与"重命名"（读得到的会话；Mac 够不着时置灰，会话页"⋯"里同一个说法）。
     private func row(_ item: PiSessionListItem, filtered: Bool, end: DeliveryRequest?) -> some View {
         let endable = MacDelivery.canEnd(item.state) && end?.isOpen != true
-        let renamable = MacDelivery.canRename(item.state) && services.reachesPiHost
+        let renamable = MacDelivery.canRename(item.state)
         // 结束不是删除：墨色，确认框里再说清后果；会话记录没有删除（会话文件在 Mac 上，归 Pi 管）
         let trailing = (endable ? [RowAction("结束会话", symbol: "stop.circle") { confirmingEnd = item.state }] : [])
-            + (renamable ? [RowAction("重命名", symbol: "pencil", tone: .quiet) { renaming = item.state }] : [])
+            + (renamable ? [RowAction("重命名", symbol: "pencil", tone: .quiet, enabled: services.reachesPiHost) { renaming = item.state }] : [])
         return SessionRow(item: item, filtered: filtered, end: end)
             .listRowInsets(.init())
             .listRowBackground(palette.paper)

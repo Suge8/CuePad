@@ -13,12 +13,15 @@ struct RowAction {
     let title: String
     let symbol: String
     let tone: ActionTone
+    /// 此刻做不了（如 Mac 够不着时改名）：照样列出，置灰；不直接消失，用户才知道有这件事。
+    let enabled: Bool
     let run: () -> Void
 
-    init(_ title: String, symbol: String, tone: ActionTone = .neutral, run: @escaping () -> Void) {
+    init(_ title: String, symbol: String, tone: ActionTone = .neutral, enabled: Bool = true, run: @escaping () -> Void) {
         self.title = title
         self.symbol = symbol
         self.tone = tone
+        self.enabled = enabled
         self.run = run
     }
 }
@@ -41,6 +44,7 @@ struct RowActionButtons: View {
             let action = item.action
             Button(action.title, systemImage: action.symbol, role: action.tone == .destructive ? .destructive : nil, action: action.run)
                 .tint(tinted ? palette.actionFill(action.tone) : nil)
+                .disabled(!action.enabled)
         }
     }
 }
@@ -160,6 +164,7 @@ private struct SwipeRow: ViewModifier {
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle(scale: 0.9))
+        .disabled(!action.enabled)
         .clipped()
         .accessibilityHidden(true)
     }

@@ -38,7 +38,7 @@ struct AgentListTests {
         let now = WallTests.date(2026, 10, 7, hour: 15)  // 周三
         func label(_ date: Date) -> String { DateLabel.short(date, now: now, calendar: calendar) }
         #expect(label(now.addingTimeInterval(-30)) == "刚刚")
-        #expect(label(now.addingTimeInterval(-5 * 60 - 10)) == "5 分前")
+        #expect(label(now.addingTimeInterval(-5 * 60 - 10)) == "5 分钟前")
         #expect(label(now.addingTimeInterval(-(7 * 3600 + 41 * 60))) == "7 小时前")
         #expect(label(WallTests.date(2026, 10, 6, hour: 9)) == "昨天")
         #expect(label(WallTests.date(2026, 10, 5, hour: 9)) == "周一")
@@ -47,10 +47,15 @@ struct AgentListTests {
 
         // 会话的"多久前"与计时同一粒度
         #expect(PiClock.ago(now.addingTimeInterval(-(11 * 3600 + 48 * 60))).text(now: now, calendar: calendar) == "11 小时前")
-        #expect(PiClock.running(since: now.addingTimeInterval(-(2 * 3600 + 5 * 60))).text(now: now, calendar: calendar) == "已运行 2 小时")
+        #expect(PiClock.running(since: now.addingTimeInterval(-(2 * 3600 + 5 * 60))).text(now: now, calendar: calendar) == "运行了 2 小时")
         // 列表里只到分钟、第一分钟不每秒换字；只有会话页顶栏到秒
-        #expect(PiClock.waiting(since: now.addingTimeInterval(-42)).text(now: now) == "已等 不到 1 分钟")
-        #expect(PiClock.waiting(since: now.addingTimeInterval(-42)).text(now: now, precision: .second) == "已等 42 秒")
+        #expect(PiClock.waiting(since: now.addingTimeInterval(-42)).text(now: now) == "刚开始等")
+        #expect(PiClock.waiting(since: now.addingTimeInterval(-42)).text(now: now, precision: .second) == "等了 42 秒")
+        #expect(PiClock.waiting(since: now.addingTimeInterval(-3 * 60 - 5)).text(now: now) == "等了 3 分钟")
+        #expect(PiClock.running(since: now.addingTimeInterval(-42)).text(now: now) == "刚开始")
+        #expect(PiClock.running(since: now.addingTimeInterval(-4 * 60)).text(now: now) == "运行了 4 分钟")
+        #expect(PiClock.sent(since: now.addingTimeInterval(-42)).text(now: now) == "刚发出")
+        #expect(PiClock.sent(since: now.addingTimeInterval(-7 * 60 - 3)).text(now: now) == "7 分钟前发出")
         #expect(PiClock.running(since: now.addingTimeInterval(-42)).live(.minute).discreteInput(after: now) == now.addingTimeInterval(18))
         #expect(PiClock.running(since: now.addingTimeInterval(-42)).live(.second).discreteInput(after: now) == now.addingTimeInterval(1))
     }

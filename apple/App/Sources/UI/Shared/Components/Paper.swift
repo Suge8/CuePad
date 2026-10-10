@@ -150,9 +150,9 @@ extension EnvironmentValues {
     @Entry var searchHighlight = ""
 }
 
-/// "更早"分组的标题：周是日期区间，月是年月。
+/// "更早"分组的标题：周是日期区间，月是"9 月"（跨年写"2025 年 12 月"）。
 enum OlderGroupTitle {
-    static func text(_ period: OlderGroup.Period, calendar: Calendar = .current) -> String {
+    static func text(_ period: OlderGroup.Period, now: Date = .now, calendar: Calendar = .current) -> String {
         let chinese = Locale(identifier: "zh_CN")
         switch period {
         case .all:
@@ -162,10 +162,10 @@ enum OlderGroupTitle {
             let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
             let day = Date.FormatStyle.dateTime.month(.defaultDigits).day().locale(chinese)
             return "\(start.formatted(day)) – \(end.formatted(day))"
-        case .sparseMonth(let start):
-            return start.formatted(.dateTime.month(.wide).locale(chinese))
-        case .month(let start):
-            return start.formatted(.dateTime.year().month(.wide).locale(chinese))
+        case .sparseMonth(let start), .month(let start):
+            // 同一年里只写月，跨年才带年份；数字两边各空一格，与"24 条灵感"同一种排法
+            let month = calendar.component(.month, from: start)
+            return calendar.isDate(start, equalTo: now, toGranularity: .year) ? "\(month) 月" : "\(calendar.component(.year, from: start)) 年 \(month) 月"
         }
     }
 }

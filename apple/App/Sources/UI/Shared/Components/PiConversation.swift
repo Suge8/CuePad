@@ -84,8 +84,7 @@ struct PiConversation: View {
             ReplyBlock(text: entry.text, meta: entry.meta, tools: entry.tools, session: session)
         case .system:
             // 会话文件里的系统记录（压缩）：居中一行小字，不是谁说的话
-            // 系统行的文字由 CuePi 写进会话记录（"已压缩上下文 · 压缩前约 …"）：按同一个分隔点拆开，读屏读逗号
-            Text(Dotted(entry.text.components(separatedBy: Dotted.separator))).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
+            Text(entry.text).font(Typography.meta).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity).padding(.vertical, 4)
         case .preview:
             if let preview = entry.preview { PreviewGroup(previews: [preview]) { opened = $0 } }

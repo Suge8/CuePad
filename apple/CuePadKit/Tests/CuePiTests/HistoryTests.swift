@@ -147,7 +147,7 @@ struct HistoryTests {
         let update = try index(f)
 
         #expect(update.transcript.map(\.role) == [.user, .pi, .system, .system, .system, .user])
-        #expect(update.transcript[2...4].map(\.text) == ["已压缩上下文 · 压缩前约 63k tokens", "已压缩上下文 · 压缩前约 950 tokens", "已压缩上下文"])
+        #expect(update.transcript[2...4].map(\.text) == ["已压缩上下文", "已压缩上下文", "已压缩上下文"])
         #expect(update.transcript[2].entryID == "c1" && update.transcript[2].seq == 7 && update.transcript[2].at == SessionFile.date(6))
         #expect(update.transcript[5].text == "Say hello to world." && update.transcript[5].deliveryID == nil)
         #expect(update.recap.lastReply == "reply one" && update.recap.pendingPrompt == "Say hello to world.")  // 系统行不动问答摘要
