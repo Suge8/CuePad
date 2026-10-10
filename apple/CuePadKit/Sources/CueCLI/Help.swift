@@ -32,8 +32,11 @@ enum Help {
     let rows = zip(labels, options).map { "  \($0.padded(to: width))  \($1.help)" }.joined(separator: "\n")
     let usage = ["cuepad", command.name, command.arguments, command.options.isEmpty ? "" : "[选项]"]
       .filter { !$0.isEmpty }.joined(separator: " ")
-    let reference = command.arguments.contains("<灵感或任务>") || command.arguments.contains("<任务>") || command.arguments.contains("<副本>")
-      ? "\n对象参数写 id 或至少 4 位的唯一前缀（文本输出里的 8 位短 id 可直接用）。\n" : ""
+    // 参数和带值的选项（--parent <任务>、--after <灵感或任务>）都是对象引用
+    let kinds = ["<灵感或任务>", "<任务>", "<副本>"]
+    let takesReference = ([command.arguments] + options.compactMap { $0.value.map { "<\($0)>" } })
+      .contains { text in kinds.contains { text.contains($0) } }
+    let reference = takesReference ? "\n对象参数写 id 或至少 4 位的唯一前缀（文本输出里的 8 位短 id 可直接用）。\n" : ""
     return "\(command.summary)\n\n用法：\(usage)\n\n选项：\n\(rows)\n\(reference)"
       + (command.notes.isEmpty ? "" : "\n\(command.notes)\n")
   }

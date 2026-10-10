@@ -43,6 +43,38 @@ import Testing
     #expect(try await sb.store.card(UUID(uuidString: id)!)?.body == "- 新正文")
   }
 
+  /// 引用写 id 或至少 4 位的唯一前缀：不分大小写，回收站里的也找得到，同前缀多条时列出来让人写长一点。
+  @Test func cardReferencesResolveByUniquePrefix() async throws {
+    let sb = try Sandbox()
+    let first = try await sb.store.createCard(in: nil, body: "一号")
+    let second = try await sb.store.createCard(in: nil, body: "二号")
+    let trashed = try await sb.store.createCard(in: nil, body: "已删")
+    try sb.assignID(first.id, "abcd1111-0000-4000-8000-000000000001")
+    try sb.assignID(second.id, "abcd2222-0000-4000-8000-000000000002")
+    try sb.assignID(trashed.id, "beef3333-0000-4000-8000-000000000003")
+    try await sb.store.trashCard(UUID(uuidString: "beef3333-0000-4000-8000-000000000003")!)
+
+    #expect(try await sb.object("card", "show", "ABCD1").string("body") == "一号")
+    #expect(try await sb.object("card", "show", "beef").string("body") == "已删")
+
+    let shared = await sb.run("card", "show", "abcd")
+    #expect(shared.code == 1 && shared.err.contains("匹配到 2 个") && shared.err.contains("abcd1111") && shared.err.contains("abcd2222"))
+    let short = await sb.run("card", "show", "abc")
+    #expect(short.code == 1 && short.err.contains("找不到灵感或任务"))
+    let missing = await sb.run("card", "show", "ffff")
+    #expect(missing.code == 1 && missing.err.contains("找不到灵感或任务"))
+  }
+
+  /// 带值的选项（--parent、--after）也接受引用，帮助里同样说明。
+  @Test func referenceHelpCoversOptionsThatTakeReferences() async throws {
+    let sb = try Sandbox()
+    for command in [["task", "add"], ["card", "move"], ["task", "done"]] {
+      let help = await sb.call(command + ["--help"])
+      #expect(help.out.contains("至少 4 位的唯一前缀"), "\(command)")
+    }
+    #expect(!(await sb.run("task", "list", "--help")).out.contains("唯一前缀"))
+  }
+
   @Test func cardJSONShape() async throws {
     let sb = try Sandbox()
     let alpha = try await sb.project("Alpha")
