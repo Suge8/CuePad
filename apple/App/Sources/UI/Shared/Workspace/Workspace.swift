@@ -143,9 +143,6 @@ final class Workspace {
     /// 在线 Pi 会话（桥上的连接 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由根视图调用 `refreshSessionProjects` 重算。
     private(set) var sessionProjects: [String: UUID] = [:]
-    /// 在线会话的摘要（Pi 自己的会话 id → 同步记录上的问与答）：桥上没有，界面把它配到桥上的实时状态上。数据在 `LiveSessions`。
-    /// 会话页（SessionPage）还在这样读；它迁完后改读 `services.liveSessions.recaps` 并删掉这里。
-    var sessionRecaps: [String: PiRecap] { services.liveSessions.recaps }
     /// 这次运行里在这台 Mac 上结束的会话（同步记录），最近结束的在前。可观察：默认发送目标在没有在线会话时取其中本项目最近结束的那个，
     /// 会话名和发送菜单也读它；运行之前就已结束的历史会话不在其中。数据在 `LiveSessions`。
     var recentlyEnded: [PiSessionState] { services.liveSessions.recentlyEnded }

@@ -61,6 +61,8 @@ struct SessionPage: View {
     /// 要跳到的那条还没排开：先排开，排开之后再跳（同一次更新里跳，目标还不在滚动区里）。
     @State private var pendingJump: UUID?
 
+    /// 标题、状态与最新的对话先出；回复框、问题卡与"⋯"晚两帧（`NextFrame`）：它们的建立（文本视图、玻璃、菜单）占点击回合的一半，不在点的那一圈里。
+    @State private var secondary = false
     /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
     private static let readingWidth: CGFloat = 760
 
@@ -75,18 +77,23 @@ struct SessionPage: View {
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil { conversation(session, digest) } else { Color.clear.frame(maxHeight: .infinity) }
                 VStack(spacing: 8) {
-                    PiQuestionDock(session: session, deliveries: digest.deliveries)
-                    if let reason = shownEnd?.failure, session.state != .known(.ended) {
-                        Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)", docked: true)
-                    }
-                    PiReplyBar(
-                        session: session, config: digest.config, compact: false,
-                        stopping: MacDelivery.stopping(session, deliveries: digest.deliveries),
-                        commandProgress: MacDelivery.commandProgress(digest.deliveries),
-                        queued: PiChat.queued(digest.deliveries, messages: digest.messages),
-                        recall: PiChat.lastSaid(digest.messages)
-                    ) {
-                        follow.jumpToNewest()
+                    if secondary {
+                        PiQuestionDock(session: session, deliveries: digest.deliveries)
+                        if let reason = shownEnd?.failure, session.state != .known(.ended) {
+                            Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: "没能结束：\(reason)", docked: true)
+                        }
+                        PiReplyBar(
+                            session: session, config: digest.config, compact: false,
+                            stopping: MacDelivery.stopping(session, deliveries: digest.deliveries),
+                            commandProgress: MacDelivery.commandProgress(digest.deliveries),
+                            queued: PiChat.queued(digest.deliveries, messages: digest.messages),
+                            recall: PiChat.lastSaid(digest.messages)
+                        ) {
+                            follow.jumpToNewest()
+                        }
+                    } else {
+                        // 留出回复框平时的高度，它到了时对话不被顶上去
+                        Color.clear.frame(height: 2 * PiReplyBar.radius)
                     }
                 }
                 .padding(.horizontal, 24).padding(.bottom, 16)
@@ -101,14 +108,19 @@ struct SessionPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
-        .onChange(of: headerState(digest, live: live, shownEnd: shownEnd), initial: true) { _, state in header.set(state) }
+        .onChange(of: headerState(digest, live: live, shownEnd: shownEnd, menu: secondary), initial: true) { _, state in header.set(state) }
         .onAppear {
             header.rename = { renaming = $0 }
             header.end = { confirmingEnd = $0 }
             header.reveal = { follow.reveal() }
         }
         .onDisappear { header.clear(sessionID) }
-        .observing(services.store, SessionDigest.tables, id: sessionID, into: $stored,
+        .task {
+            await NextFrame.wait()
+            await NextFrame.wait()
+            secondary = true
+        }
+        .observing(services.store, id: sessionID, into: $stored,
                    onError: workspace.fail) { [sessionID] store in
             try SessionDigest.read(sessionID: sessionID, from: store)
         }
@@ -118,13 +130,13 @@ struct SessionPage: View {
     }
 
     /// 工具栏上的标题与"⋯"（`SessionHeader`）要显示的值：页面算好交过去，工具栏项在主窗口里常驻。
-    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: DeliveryRequest?) -> SessionHeader.State? {
+    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: DeliveryRequest?, menu: Bool) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
             session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered),
             ending: shownEnd?.isOpen == true, place: PiPlace.menuTitle(of: session, project: digest.project),
             liveID: live.flatMap { $0.hosted ? nil : $0.id }, canEnd: MacDelivery.canEnd(session), canRename: MacDelivery.canRename(session),
-            showsHeader: follow.showsHeader)
+            showsHeader: follow.showsHeader, showsMenu: menu)
     }
 
     private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
@@ -136,9 +148,7 @@ struct SessionPage: View {
                 }
                 PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, window: $shown)
             }
-            #if DEBUG
-            .onAppear { PerfProbe.mark("conversation") }
-            #endif
+            .perfMark("conversation")
         }
         .fadesUnderBars()
         .environment(\.chatHighlight, highlight)
@@ -224,7 +234,7 @@ extension Workspace {
     /// 本机桥上在线的这个 Pi 会话（`sessionID` 是 Pi 自己的会话 id）此刻的状态；不在线为 nil。
     func liveState(ofSession sessionID: String?) -> PiSessionState? {
         guard let sessionID, let live = services.pi.session(sessionID: sessionID) else { return nil }
-        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id], recap: sessionRecaps[sessionID])
+        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id], recap: services.liveSessions.recaps[sessionID])
     }
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。

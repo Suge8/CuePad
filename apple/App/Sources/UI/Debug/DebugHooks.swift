@@ -1,3 +1,4 @@
+import CueStore
 import SwiftUI
 #if os(macOS)
 import AppKit
@@ -74,6 +75,13 @@ enum DebugHooks {
     @MainActor static func mark(_ event: String) {
         #if DEBUG && os(macOS)
         PerfProbe.mark(event)
+        #endif
+    }
+
+    /// 输入框出现时按 `-CuePadComposer` 摆好要拍的样子（打开选卡片面板、预填文字或附件）。
+    @MainActor static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
+        #if DEBUG
+        await DebugScene.presetComposer(draft, source: source, store: store)
         #endif
     }
 
