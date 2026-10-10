@@ -37,7 +37,7 @@ public final class PiBridge {
         var session: PiSession?
         var pending: [String: CheckedContinuation<PiWire.Ack, any Error>] = [:]
         var nextCommand = 0
-        var byeReason: String?
+        var bye: PiWire.Bye?
         var rejected = false
         var exitWatcher: ProcessExitWatcher?
         init(connection: PiSocketConnection, file: PiSocketDirectory.FileIdentity) {
@@ -264,8 +264,8 @@ public final class PiBridge {
             emit(.infoChanged(session))
         case .ack(let ack):
             if let id = ack.id { link.pending.removeValue(forKey: id)?.resume(returning: ack) }
-        case .bye(let reason):
-            link.byeReason = reason
+        case .bye(let bye):
+            link.bye = bye
         }
     }
 
@@ -307,7 +307,7 @@ public final class PiBridge {
         for continuation in link.pending.values { continuation.resume(throwing: PiBridgeError.sessionEnded) }
         link.pending = [:]
         // 没有告别就断开 = 进程被强杀，socket 文件会残留：进程已确认退出就现在删，否则等它的退出通知
-        if link.byeReason == nil, link.session != nil, !removeIfStale(name), let watcher = link.exitWatcher {
+        if link.bye == nil, link.session != nil, !removeIfStale(name), let watcher = link.exitWatcher {
             orphanExitWatchers[name] = watcher
         } else {
             link.exitWatcher?.cancel()
@@ -315,7 +315,7 @@ public final class PiBridge {
         if let session = link.session {
             sessions.removeAll { $0.id == session.id }
             endedSessions[session.id] = session
-            emit(.ended(session, reason: link.byeReason.map { .closed(reason: $0) } ?? .disconnected))
+            emit(.ended(session, reason: link.bye.map { .closed(reason: $0.reason, undelivered: $0.undelivered ?? []) } ?? .disconnected))
         }
         // /reload：同一进程在同一路径重新 listen。新文件的目录事件可能在这条连接还挂着时就被扫过（扫描跳过有连接的名字），
         // 之后不会再有事件，所以收尾时文件还在就当场连一次；还是旧文件（扩展还没删）时连不上，新文件的事件随后会到

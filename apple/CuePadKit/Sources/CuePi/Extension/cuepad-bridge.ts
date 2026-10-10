@@ -264,10 +264,10 @@ export default function (pi: any) {
 	 * 歇着时的手动压缩不是新的一轮，压完还是原来那次"做完了"，CuePad 不因此提示、也不算有新回复。 */
 	let beforeCompaction: { phase: Phase; since: number; busySince: number | null } | null = null;
 	/** 手动压缩期间 Pi 拒收新消息（"Cannot submit a prompt while compaction is in progress"），而扩展的 sendUserMessage
-	 * 不回报错误、话会悄悄丢掉：这期间 CuePad 送来的话先留着，压缩结束再按到达顺序交给 Pi。自动压缩期间 Pi 照常排队，不经这里。 */
+	 * 不回报错误、话会悄悄丢掉：这期间 CuePad 送来的话先留着，压缩结束再按到达顺序交给 Pi；压完之前会话就关掉（退出、重新载入、
+	 * 换会话）时，告别里报出它们的投送请求 id（`bye.undelivered`），CuePad 记为没送到。自动压缩期间 Pi 照常排队，不经这里。 */
 	let manualCompaction = false;
-	let held: (() => void)[] = [];
-	const submit = (deliver: () => void) => { if (manualCompaction) held.push(deliver); else deliver(); };
+	let held: { deliveryId?: string; deliver: () => void }[] = [];
 
 	/** 状态没变就不发；没有客户端时只维护状态与计时，不做任何 I/O。 */
 	function commit(resume?: { phase: Phase; since: number; busySince: number | null }) {
@@ -387,9 +387,12 @@ export default function (pi: any) {
 			? text
 			: [{ type: "text", text }, ...images.map((i) => ({ type: "image", data: i.data, mimeType: i.mimeType }))];
 		const busy = !ctx.isIdle();
-		if (typeof command.deliveryId === "string") deliveries.push({ text, id: command.deliveryId });
+		const deliveryId = typeof command.deliveryId === "string" ? command.deliveryId : undefined;
+		if (deliveryId) deliveries.push({ text, id: deliveryId });
 		// deliverAs 只在会话正忙时生效；总是带上，避免"检查空闲"与"发送"之间 agent 恰好开始而抛错
-		submit(() => pi.sendUserMessage(content, { deliverAs }));
+		const deliver = () => pi.sendUserMessage(content, { deliverAs });
+		if (manualCompaction) held.push({ deliveryId, deliver });
+		else deliver();
 		ack({ ok: true, delivered: busy ? deliverAs : "immediate" });
 	}
 
@@ -454,7 +457,9 @@ export default function (pi: any) {
 			return error ? reject(error) : ack({ ok: true });
 		}
 		if (name === INTERNAL_COMMAND || !pi.getCommands().some((c: any) => c.name === name)) return reject("unknown_command");
-		submit(() => pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: true }));
+		// 命令没有投送请求 id，留着的话会话关掉时报不出来：手动压缩期间直接拒收，CuePad 照常显示没发出去
+		if (manualCompaction) return reject("compacting");
+		pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: true });
 		ack({ ok: true });
 	}
 
@@ -614,8 +619,10 @@ export default function (pi: any) {
 	}
 
 	function stop(reason: string) {
+		// 留着还没交给 Pi 的话随会话一起没了：报给 CuePad，不让它们在那边一直显示成已送达
+		const undelivered = held.splice(0).flatMap((h) => h.deliveryId ? [h.deliveryId] : []);
 		for (const client of clients) {
-			write(client, { t: "bye", reason });
+			write(client, { t: "bye", reason, undelivered });
 			client.end();
 		}
 		clients.clear();
@@ -769,8 +776,8 @@ export default function (pi: any) {
 		tracker.compacting = false;
 		commit(resume);
 		// session_compact 在 Pi 收起手动压缩的标记之前发出：下一轮事件循环再交，免得又被拒收
-		const deliveries = held.splice(0);
-		setImmediate(() => { for (const deliver of deliveries) deliver(); });
+		const waiting = held.splice(0);
+		setImmediate(() => { for (const { deliver } of waiting) deliver(); });
 	});
 	pi.on("agent_end", (event: any) => {
 		const last = [...event.messages].reverse().find((m: any) => m.role === "assistant");

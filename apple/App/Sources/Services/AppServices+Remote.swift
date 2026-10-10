@@ -27,8 +27,9 @@ extension AppServices {
             case .appeared(let session), .stateChanged(let session, _), .infoChanged(let session):
                 live[session.id] = session
                 if owner(of: session.sessionID)?.id == session.id { try await recordPiState(of: session) }
-            case .ended(let session, _):
+            case .ended(let session, let reason):
                 live[session.id] = nil
+                if case .closed(_, let undelivered) = reason, !undelivered.isEmpty { try await failUndelivered(undelivered) }
                 if let other = owner(of: session.sessionID) {
                     try await recordPiState(of: other)
                 } else {
@@ -37,6 +38,13 @@ extension AppServices {
             case .incompatible: break
             }
         }
+    }
+
+    /// 扩展受理了、还没交给 Pi 会话就关掉了的话（手动压缩期间留着的）：记为没送到，立即上传给手机。
+    private func failUndelivered(_ ids: [String]) async throws {
+        let failed = try await store.failAcceptedDeliveries(
+            ids.compactMap(UUID.init(uuidString:)), host: hostID, reason: "会话在压缩上下文时关掉了，这句没送进去")
+        for id in failed { Task { await upload(id) } }
     }
 
     private func recordPiState(of session: CuePi.PiSession) async throws {

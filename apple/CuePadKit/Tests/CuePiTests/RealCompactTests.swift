@@ -49,6 +49,7 @@ struct RealCompactTests {
             try await eventually("压完的话送进去、答完", timeout: .seconds(30)) {
                 (try? PiHistory.index(file: #require(s.sessionFile), from: nil).recap.lastReply) == "ECHO 压缩时说的话 IMAGES[]"
             }
+            try await eventually("那一轮的状态都到了桥上") { log.states.last == .done(aborted: false) && log.states.count >= 4 }
             let states = log.states
             let back = try #require(states.firstIndex(of: .compacting).map { states[($0 + 1)...] }?.first)
             #expect(back == .done(aborted: false), "压完先回到原来的歇下，再开始那句话的一轮")
@@ -56,6 +57,27 @@ struct RealCompactTests {
                 if case .stateChanged(let session, .compacting) = change { session } else { nil }
             }.first)
             #expect(resumed.stateSince == settled.stateSince && resumed.busySince == nil)
+        }
+    }
+
+    /// 压缩期间留着的话，会话在压完前退出或重新载入：告别时报出这些话没送到（投送请求 id），不悄悄丢掉；
+    /// 交给 Pi 派发的斜杠命令在手动压缩期间直接拒收（没有投送请求 id，留着就没法报）。
+    @Test(arguments: ["quit", "reload"])
+    func 压缩期间留着的话_会话压完前关掉_告别时报没送到(how: String) async throws {
+        try await withRig { pi, bridge, s in
+            try await reply(pi, bridge, "第一轮 [[slow-compact]]")
+            try await reply(pi, bridge, "第二轮")
+            let log = ChangeLog(bridge)
+
+            try await bridge.command("/compact", in: s.id)
+            try await eventually("在压缩") { bridge.sessions.first?.state == .compacting }
+            let delivery = UUID().uuidString
+            try await bridge.send(PiMessage(text: "压缩时说的话", deliveryID: delivery), to: s.id)
+            await #expect(throws: PiBridgeError.rejected("compacting")) { try await bridge.command("/ask", in: s.id) }
+            if how == "quit" { pi.kill(SIGTERM) } else { try await bridge.command("/reload", in: s.id) }
+
+            try await eventually("会话告别", timeout: .seconds(20)) { !log.ended.isEmpty }
+            #expect(log.ended.first?.1 == .closed(reason: how, undelivered: [delivery]))
         }
     }
 

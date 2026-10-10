@@ -138,7 +138,7 @@ enum PiWire {
         var error: String?
     }
 
-    struct Bye: Decodable { var reason: String }
+    struct Bye: Decodable { var reason: String; var undelivered: [String]? }
     struct StateMessage: Decodable { var state: State }
 
     enum Message {
@@ -147,7 +147,7 @@ enum PiWire {
         case state(State)
         case info(Info)
         case ack(Ack)
-        case bye(reason: String)
+        case bye(Bye)
     }
 
     enum DecodeError: Error { case unknownType(String) }
@@ -162,7 +162,7 @@ enum PiWire {
         case "state": return .state(try decoder.decode(StateMessage.self, from: line).state)
         case "info": return .info(try decoder.decode(Info.self, from: line))
         case "ack": return .ack(try decoder.decode(Ack.self, from: line))
-        case "bye": return .bye(reason: try decoder.decode(Bye.self, from: line).reason)
+        case "bye": return .bye(try decoder.decode(Bye.self, from: line))
         case let other: throw DecodeError.unknownType(other)
         }
     }
