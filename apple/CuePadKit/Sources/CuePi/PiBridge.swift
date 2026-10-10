@@ -34,7 +34,7 @@ public final class PiBridge {
     public var sessions: [PiSession] { slots.map(\.session) }
 
     /// 这个 Pi 会话（`sessionID`）在线的那个进程；同一会话开在两个进程里时取先出现的。只随这一个会话的变化通知。
-    public func session(sessionID: String) -> PiSession? { slots.first { $0.session.sessionID == sessionID }?.session }
+    public func session(sessionID: String) -> PiSession? { slots.first { $0.sessionID == sessionID }?.session }
 
     /// 这个连接（`PiSession.id`）的会话。
     public func session(id: PiSession.ID) -> PiSession? { slots.first { $0.id == id }?.session }
