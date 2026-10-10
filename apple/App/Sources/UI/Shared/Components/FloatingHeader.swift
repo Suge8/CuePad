@@ -1,13 +1,12 @@
 #if os(iOS)
 import SwiftUI
-import UIKit
 
 extension View {
     /// 推入页的顶栏（全 App 只此一种）：左边系统的圆形返回，中间一块玻璃（标题，下面一行要紧信息），右边最多一个圆钮
     /// （多个操作时调用方给一个"⋯"`Menu`）。内容一直滚到状态栏与顶栏下面（沉浸式），栏后面不垫模糊或渐变，玻璃本身就是遮挡（见 `RouteView`）。
-    /// `hidden` 时返回钮、中间那块与右边的圆钮都让开（淡到透明、不可点、读屏跳过），导航栏本身留着：
-    /// 顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，见 `ChatFollow.showsHeader`）；
-    /// 左缘右滑返回始终可用（`EdgeBackKeeper`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出顶栏。
+    /// `hidden` 时中间那块与右边的圆钮让开（淡到透明、不可点、读屏跳过），返回钮一直在——随时看得到怎么回去，
+    /// 左缘右滑返回照常是系统的；导航栏本身留着：顶栏占的高度与安全区不变，内容的边距不跟着变（会话页看历史时用，
+    /// 见 `ChatFollow.showsHeader`）；给了 `reveal` 时让开的那一块仍接点按，点它唤出。
     /// 标题同时是读屏、返回菜单与多任务切换器里的名字。
     /// `explanation`：点中间那块玻璃弹出的一句说明（会话需要 /reload 时怎么接上）；没有时点它什么也不做。
     func floatingHeader<Detail: View, Trailing: View>(
@@ -48,9 +47,6 @@ private struct FloatingHeader<Detail: View, Trailing: View>: ViewModifier {
         content
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            // 系统的返回钮藏起时会淡出，但也会停掉左缘右滑返回：由 `EdgeBackKeeper` 把手势留住
-            .navigationBarBackButtonHidden(hidden)
-            .background(EdgeBackKeeper(active: hidden))
             // 两项推入时就建好、一直在，标题与信息只在项里面换，让开也只是透明：推入转场期间系统不重建工具栏项，
             // 换项要等转场结束才显示；中间这一项不在时系统还会把标题当普通文字摆回中间
             .toolbar {
@@ -112,74 +108,6 @@ private struct HeaderTitle<Detail: View>: View {
         // 截图验收：-CuePadExplain YES 推入后直接弹出说明
         .task(id: explanation) { if explanation != nil, DebugScene.defaults.bool(forKey: "CuePadExplain") { explaining = true } }
         #endif
-    }
-}
-
-/// 返回钮藏起时左缘右滑返回照样可用。系统原来的代理在返回钮藏起时拒收右滑返回（经它的私有代理方法，公开方法拦不住），
-/// 所以只在藏起期间把导航栈的两个右滑返回手势（左缘的与 iOS 26 内容区的）换成这里的代理：栈里不止一页、不在转场中、
-/// 手指从左缘起手就放行（内容区那个只收左缘起手的，不和横向滚动抢）；返回钮回来时还原系统原来的代理，平时的取舍
-/// 全是系统的。转场、跟手与取消回弹都是系统自己的。
-private struct EdgeBackKeeper: UIViewControllerRepresentable {
-    let active: Bool
-
-    func makeUIViewController(context: Context) -> Probe { Probe() }
-
-    func updateUIViewController(_ probe: Probe, context: Context) {
-        probe.active = active
-        probe.apply()
-    }
-
-    final class Probe: UIViewController {
-        var active = false
-        private var installed: [(recognizer: UIGestureRecognizer, keeper: KeepBack)] = []
-
-        override func viewWillAppear(_ animated: Bool) {
-            super.viewWillAppear(animated)
-            apply()
-        }
-
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            restore()
-        }
-
-        func apply() {
-            guard active else { return restore() }
-            guard installed.isEmpty, let navigation = navigationController else { return }
-            for case let recognizer? in [navigation.interactivePopGestureRecognizer, navigation.interactiveContentPopGestureRecognizer] {
-                let keeper = KeepBack(navigation: navigation, original: recognizer.delegate)
-                recognizer.delegate = keeper
-                installed.append((recognizer, keeper))
-            }
-        }
-
-        private func restore() {
-            for (recognizer, keeper) in installed where recognizer.delegate === keeper { recognizer.delegate = keeper.original }
-            installed = []
-        }
-    }
-
-    final class KeepBack: NSObject, UIGestureRecognizerDelegate {
-        /// 从左缘起手算的宽度。
-        private static let edge: CGFloat = 24
-        weak var navigation: UINavigationController?
-        weak var original: UIGestureRecognizerDelegate?
-
-        init(navigation: UINavigationController, original: UIGestureRecognizerDelegate?) {
-            self.navigation = navigation
-            self.original = original
-        }
-
-        private var canPop: Bool {
-            guard let navigation else { return false }
-            return navigation.viewControllers.count > 1 && navigation.transitionCoordinator == nil
-        }
-
-        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool { canPop }
-
-        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            canPop && touch.location(in: navigation?.view).x <= Self.edge
-        }
     }
 }
 
