@@ -13,10 +13,12 @@ struct AgentTarget: Equatable {
 
 extension Workspace {
     /// 项目的 Pi 会话：按工作目录归入（Store 判定），空闲的在前。
-    func liveSessions(in project: UUID?) -> [CuePi.PiSession] {
+    /// 先按格子上不变的身份筛出本项目的，再读这些格子的状态：别的项目的会话状态变化不惊动读它的视图。
+    func projectSessions(in project: UUID?) -> [CuePi.PiSession] {
         guard let project else { return [] }
-        return services.pi.sessions
+        return services.pi.slots
             .filter { sessionProjects[$0.id] == project }
+            .map(\.session)
             .sorted { !$0.state.isBusy && $1.state.isBusy }
     }
 
@@ -27,7 +29,7 @@ extension Workspace {
             if let live = current(sendChoice) { return live }
             if services.pi.endedSessions[sendChoice.session] != nil { return sendChoice }
         }
-        if let live = liveSessions(in: project).first { return AgentTarget(session: live.id) }
+        if let live = projectSessions(in: project).first { return AgentTarget(session: live.id) }
         if let ended = endedSessions(in: project).first { return AgentTarget(session: ended.id) }
         return nil
     }
