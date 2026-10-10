@@ -353,7 +353,7 @@ private struct PiSection: View {
             .equatable()
             .padding(.horizontal, 8).padding(.vertical, 5)
             .sessionLink(session.sessionID)
-            .help(bridge?.state.errorMessage ?? "")
+            .help(bridge?.errorMessage ?? "")
             .contextMenu {
                 MarkUnreadButton(session: session)
                 if MacDelivery.canRename(session) {

@@ -169,6 +169,9 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 记录上的摘要（对话的投影）。
   public var recap: PiRecap { PiRecap(lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt) }
 
+  /// `detail` 里工具名与调用目标之间的分隔（Mac 写、手机读：`PiProgress` 据此拆开）。
+  public static let detailSeparator = " · "
+
   /// 在等你确认（弹了问题等你回答）：Agent 角标、推送与书架的"等你"都只数这一种。
   public var waitsForYou: Bool { state == .known(.waitingForUser) }
 

@@ -59,7 +59,7 @@ struct PiTranscriptTests {
     private func live(_ sessionID: String, file: URL) async throws -> CuePi.PiSession {
         let session = CuePi.PiSession(
             id: "\(sessionID).100", sessionID: sessionID, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
-            mode: "tui", terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .thinking, stateSince: .now)
+            terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .thinking, stateSince: .now)
         try await services.consumePiChanges(AsyncStream { continuation in
             continuation.yield(.appeared(session))
             continuation.finish()
@@ -125,7 +125,7 @@ struct PiTranscriptTests {
         #expect(try await record("s1").pendingPrompt == "做到一半")
 
         try await services.consumePiChanges(AsyncStream { continuation in
-            continuation.yield(.stateChanged(session, from: .idle))
+            continuation.yield(.stateChanged(session, from: .settled))
             continuation.yield(.ended(session, reason: .closed(reason: "quit")))
             continuation.finish()
         })
@@ -186,7 +186,7 @@ struct PiTranscriptTests {
     @Test func 一直开着的Mac每天清理一次对话() async throws {
         let old = try sessionFile("old", at: .now.addingTimeInterval(-30 * 86_400))
         await consume([old])
-        try await store.writePiTranscript(PiTranscript(try PiHistory.index(file: old, from: nil), sessionID: "old"))
+        try await store.writePiTranscript(try PiHistory.index(file: old, from: nil).transcript)
         #expect(try await store.piMessages(of: "old").count == 4)
 
         let days = Mutex(0)

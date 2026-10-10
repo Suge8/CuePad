@@ -14,11 +14,11 @@ struct MacSyncTests {
     var services: AppServices { rig.services }
 
     private func session(
-        _ sessionID: String, cwd: String = "/work/app", state: PiAgentState = .thinking, pid: Int32 = 100
+        _ sessionID: String, cwd: String = "/work/app", state: PiWorkState = .thinking, pid: Int32 = 100
     ) -> CuePi.PiSession {
         CuePi.PiSession(
             id: "\(sessionID).\(pid)", sessionID: sessionID, sessionFile: nil, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
-            mode: "tui", terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
+            terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
     }
 
     private func changes(_ items: [PiSessionChange]) -> AsyncStream<PiSessionChange> {
@@ -96,24 +96,15 @@ struct MacSyncTests {
 
     // MARK: Pi 状态记录
 
-    @Test(arguments: [
-        (PiAgentState.idle, PiWorkState.settled, String?.none),
-        (.thinking, .thinking, nil),
-        (.outputting, .outputting, nil),
-        (.tool(name: "bash", running: ["bash"], detail: nil), .tool, "bash"),
-        (.tool(name: "read", running: ["read"], detail: "README.md"), .tool, "read · README.md"),
-        (.waitingUser(kind: "confirm", title: "覆盖文件？"), .waitingForUser, "覆盖文件？"),
-        (.done(aborted: false), .settled, nil),
-        (.compacting, .compacting, nil),
-        (.incompatible, .incompatible, nil),
-        (.error(message: #"429 {"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#), .error, "请求太频繁，稍后再试：slow down"),
-    ])
-    func Pi状态映射成同步记录的状态与说明(agent: PiAgentState, work: PiWorkState, detail: String?) async throws {
-        try await services.consumePiChanges(changes([.appeared(session("s1", state: agent))]))
+    /// 桥上会话的状态、说明与出错原文（工具名与目标、弹窗标题、出错摘要）原样写进同步记录；它们怎么从线上消息得来见 CuePi 的桥测试。
+    @Test func 会话的状态与说明原样写进同步记录() async throws {
+        var reading = session("s1", state: .tool)
+        reading.detail = "read · README.md"
+        try await services.consumePiChanges(changes([.appeared(reading)]))
 
         let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.state == .known(work))
-        #expect(stored.detail == detail)
+        #expect(stored.state == .known(.tool))
+        #expect(stored.detail == "read · README.md")
         #expect(stored.sessionID == "s1")
         #expect(stored.hostID == TestApp.hostID)
     }
@@ -155,7 +146,7 @@ struct MacSyncTests {
     }
 
     @Test func 会话的计时基准原样写进同步记录() async throws {
-        var working = session("s1", state: .tool(name: "bash", running: ["bash"]))
+        var working = session("s1", state: .tool)
         working.stateSince = Date(timeIntervalSince1970: 1_000)
         working.busySince = Date(timeIntervalSince1970: 1_000)
         try await services.consumePiChanges(changes([.appeared(working)]))
@@ -170,9 +161,9 @@ struct MacSyncTests {
         let settled = Date(timeIntervalSince1970: 1_300)
         var master = session("s1", state: .delegating)
         master.subagents = [
-            PiSubagent(name: "ui", role: "工程师", state: "running", action: "运行 bun test", startedAt: started),
-            PiSubagent(name: "core", role: "审查员", state: "failed", action: "超时", startedAt: started, settledAt: settled),
-            PiSubagent(name: "docs", role: "写手", state: "napping"),
+            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started),
+            PiSubagentState(name: "core", role: "审查员", phase: .known(.failed), action: "超时", startedAt: started, settledAt: settled),
+            PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping")),
         ]
         try await services.consumePiChanges(changes([.appeared(master)]))
         let stored = try #require(try await services.store.allPiSessionStates().first)
@@ -186,11 +177,11 @@ struct MacSyncTests {
 
     /// 当前模型、思考强度与可选模型写成同步记录里的结构化字段；Pi 报的新强度（本版本不认识）原样留着。
     @Test func 会话的模型与思考强度和可选模型写进同步记录() async throws {
-        let sonnet = PiModel(provider: "anthropic", id: "sonnet", name: "Sonnet", thinkingLevels: ["off", "low"])
-        let opus = PiModel(provider: "anthropic", id: "opus", name: "Opus", thinkingLevels: ["off", "high", "ultra"])
+        let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low])
+        let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high])
         var configured = session("s1")
         configured.model = opus
-        configured.thinking = "high"
+        configured.thinking = .known(.high)
         configured.availableModels = [sonnet, opus]
         try await services.consumePiChanges(changes([.appeared(configured)]))
 
@@ -199,7 +190,7 @@ struct MacSyncTests {
         #expect(stored.thinking == .known(.high))
         #expect(stored.models.map(\.key.id) == ["sonnet", "opus"])
 
-        configured.thinking = "ultra"
+        configured.thinking = .unknown("ultra")
         try await services.consumePiChanges(changes([.infoChanged(configured)]))
         #expect(try await services.store.allPiSessionStates().first?.thinking == .unknown("ultra"))
     }
@@ -207,11 +198,11 @@ struct MacSyncTests {
     /// 上下文余量与斜杠命令清单写成同步记录里的结构化字段（手机据此画用量条、弹命令面板）；Pi 报的本版本不认识的来源原样留着。
     @Test func 会话的上下文余量与命令清单写进同步记录() async throws {
         var reporting = session("s1")
-        reporting.context = PiContext(tokens: 42_000, window: 200_000)
+        reporting.context = PiContextUsage(tokens: 42_000, window: 200_000)
         reporting.commands = [
-            PiCommand(name: "compact", description: "压缩上下文", source: "builtin", hint: "[说明]"),
-            PiCommand(name: "skill:review", description: nil, source: "skill", hint: nil),
-            PiCommand(name: "x", description: nil, source: "plugin", hint: nil),
+            PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]"),
+            PiSlashCommand(name: "skill:review", summary: nil, source: .known(.skill)),
+            PiSlashCommand(name: "x", summary: nil, source: .unknown("plugin")),
         ]
         try await services.consumePiChanges(changes([.appeared(reporting)]))
 
@@ -225,8 +216,8 @@ struct MacSyncTests {
     }
 
     @Test func 等你回答的弹窗写进同步记录() async throws {
-        var asked = session("s1", state: .waitingUser(kind: "select", title: "选哪个？"))
-        asked.question = PiPrompt(id: "p-1", kind: "select", text: "选哪个？", options: ["A", "B"])
+        var asked = session("s1", state: .waitingForUser)
+        asked.question = PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"])
         try await services.consumePiChanges(changes([.appeared(asked), .infoChanged(asked)]))
 
         let stored = try #require(try await services.store.allPiSessionStates().first)
@@ -374,7 +365,7 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.channels.calls == [.configure(PiModelRef(provider: "anthropic", id: "opus"), "high", nil, "sess-1.100")])
+        #expect(rig.channels.calls == [.configure(PiModelKey(provider: "anthropic", id: "opus"), .high, nil, "sess-1.100")])
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
@@ -702,7 +693,7 @@ struct MacSyncTests {
         var hosted = session("s1", pid: 100)
         hosted.hosted = true
         var mine = session("s1", pid: 200)
-        mine.state = .tool(name: "bash", running: ["bash"])
+        mine.state = .tool
         try await services.consumePiChanges(changes([
             .appeared(hosted), .appeared(mine), .stateChanged(hosted, from: .thinking), .ended(hosted, reason: .closed(reason: "quit")),
         ]))

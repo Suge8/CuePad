@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
@@ -9,31 +10,30 @@ enum PiWire {
     struct State: Decodable {
         var kind: String
         var tool: String?
-        var tools: [String]?
         var detail: String?
-        var promptKind: String?
         var title: String?
         var error: String?
-        var aborted: Bool?
         /// 进入当前粗状态的时间（毫秒）
         var since: Double
         /// 这段连续处理开始的时间（毫秒），空闲、出错时为 nil
         var busySince: Double?
 
-        var agentState: PiAgentState? {
+        /// 同步记录的状态与一句话说明（`PiSession.detail`）；不认识的种类为 nil。扩展还报的在跑工具全集、`aborted`、弹窗种类没有人读，不解码。
+        var work: (state: PiWorkState, detail: String?)? {
             switch kind {
-            case "idle": .idle
-            case "thinking": .thinking
-            case "outputting": .outputting
-            case "tool": .tool(name: tool ?? "?", running: tools ?? [], detail: detail)
-            case "delegating": .delegating
-            case "compacting": .compacting
-            case "waiting_user": .waitingUser(kind: promptKind, title: title)
-            case "done": .done(aborted: aborted ?? false)
-            case "error": .error(message: error ?? "")
+            case "idle", "done": (.settled, nil)
+            case "thinking": (.thinking, nil)
+            case "outputting": (.outputting, nil)
+            case "tool": (.tool, detail.map { "\(tool ?? "?")\(PiSessionState.detailSeparator)\($0)" } ?? tool ?? "?")
+            case "delegating": (.delegating, nil)  // 子代理在 `subagents` 里
+            case "compacting": (.compacting, nil)
+            case "waiting_user": (.waitingForUser, title)
+            case "error": (.error, PiErrorSummary(error ?? "").line)  // 手机上没有悬停看原文
             default: nil
             }
         }
+
+        var errorMessage: String? { kind == "error" ? error ?? "" : nil }
 
         var sinceDate: Date { Date(timeIntervalSince1970: since / 1000) }
         var busySinceDate: Date? { busySince.map { Date(timeIntervalSince1970: $0 / 1000) } }
@@ -46,35 +46,35 @@ enum PiWire {
         var sessionFile: String?
         var pid: Int32
         var cwd: String
-        var mode: String
         var tty: String?
         var term: [String: String]
         var state: State
-        /// CuePad 开的新会话：启动时经环境变量交给扩展的认领标识（扩展 v8 起；其余会话没有）
+        /// CuePad 开的新会话：启动时经环境变量交给扩展的认领标识（其余会话没有）
         var launchToken: String?
-        /// CuePad 在后台托管的 Pi（扩展 v9 起）
+        /// CuePad 在后台托管的 Pi
         var hosted: Bool?
         /// 与 `info` 消息同样的字段，平铺在 hello 里
-        var name: String?
-        var firstMessage: String?
-        var question: PiPrompt?
-        var subagents: [PiSubagent]?
-        var model: PiModel?
-        var thinking: String?
-        var models: [PiModel]?
-        var context: PiContext?
-        var commands: [PiCommand]?
+        var info: Info
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, sessionFile, pid, cwd, mode, tty, term, state, launchToken, hosted
-            case name, firstMessage, question, subagents, model, thinking, models, context, commands
+            case extensionVersion, sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
         }
 
-        var info: Info {
-            Info(
-                name: name, firstMessage: firstMessage, question: question, subagents: subagents, model: model, thinking: thinking, models: models,
-                context: context, commands: commands)
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            protocolVersion = try c.decode(Int.self, forKey: .protocolVersion)
+            extensionVersion = try c.decode(Int.self, forKey: .extensionVersion)
+            sessionId = try c.decode(String.self, forKey: .sessionId)
+            sessionFile = try c.decodeIfPresent(String.self, forKey: .sessionFile)
+            pid = try c.decode(Int32.self, forKey: .pid)
+            cwd = try c.decode(String.self, forKey: .cwd)
+            tty = try c.decodeIfPresent(String.self, forKey: .tty)
+            term = try c.decode([String: String].self, forKey: .term)
+            state = try c.decode(State.self, forKey: .state)
+            launchToken = try c.decodeIfPresent(String.self, forKey: .launchToken)
+            hosted = try c.decodeIfPresent(Bool.self, forKey: .hosted)
+            info = try Info(from: decoder)
         }
     }
 
@@ -105,18 +105,36 @@ enum PiWire {
         }
     }
 
-    /// 会话名、首条用户消息（扩展 v3 起）、等你回答的弹窗（v4 起）、子代理（v5 起）、模型配置（协议 v2 起）、上下文余量与命令清单（协议 v5 起）；没有的为 nil。
+    /// 会话名、首条用户消息、等你回答的弹窗、子代理、模型配置、上下文余量与命令清单；没有的为 nil。
+    /// 模型与上下文的线上格式就是同步字段的格式（直接解码成 CueStore 的类型）；弹窗、子代理、命令的键名或时刻单位不同，经下面三个线上形状转成。
     /// 问答近况不走这里：对话与摘要只来自会话文件（`PiHistory`）。
     struct Info: Decodable {
         var name: String?
         var firstMessage: String?
-        var question: PiPrompt?
-        var subagents: [PiSubagent]?
-        var model: PiModel?
-        var thinking: String?
-        var models: [PiModel]?
-        var context: PiContext?
-        var commands: [PiCommand]?
+        var question: PiQuestion?
+        var subagents: [PiSubagentState]?
+        var model: PiModelOption?
+        var thinking: Open<PiThinkingLevel>?
+        var models: [PiModelOption]?
+        var context: PiContextUsage?
+        var commands: [PiSlashCommand]?
+
+        private enum CodingKeys: String, CodingKey {
+            case name, firstMessage, question, subagents, model, thinking, models, context, commands
+        }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try c.decodeIfPresent(String.self, forKey: .name)
+            firstMessage = try c.decodeIfPresent(String.self, forKey: .firstMessage)
+            question = try c.decodeIfPresent(WireQuestion.self, forKey: .question)?.question
+            subagents = try c.decodeIfPresent([WireSubagent].self, forKey: .subagents)?.map(\.subagent)
+            model = try c.decodeIfPresent(PiModelOption.self, forKey: .model)
+            thinking = try c.decodeIfPresent(Open<PiThinkingLevel>.self, forKey: .thinking)
+            models = try c.decodeIfPresent([PiModelOption].self, forKey: .models)
+            context = try c.decodeIfPresent(PiContextUsage.self, forKey: .context)
+            commands = try c.decodeIfPresent([WireCommand].self, forKey: .commands)?.map(\.command)
+        }
 
         func apply(to session: inout PiSession) {
             session.name = name
@@ -129,6 +147,40 @@ enum PiWire {
             session.context = context
             session.commands = commands ?? []
         }
+    }
+
+    private struct WireQuestion: Decodable {
+        var id: String?
+        var kind: String
+        var text: String
+        var options: [String]?
+
+        var question: PiQuestion { PiQuestion(promptID: id, kind: Open(rawValue: kind), text: text, options: options ?? []) }
+    }
+
+    private struct WireSubagent: Decodable {
+        var name: String
+        var role: String
+        var state: String
+        var action: String
+        /// 毫秒
+        var startedAt: Double?
+        var settledAt: Double?
+
+        var subagent: PiSubagentState {
+            func date(_ milliseconds: Double?) -> Date? { milliseconds.map { Date(timeIntervalSince1970: $0 / 1000) } }
+            return PiSubagentState(
+                name: name, role: role, phase: Open(rawValue: state), action: action, startedAt: date(startedAt), settledAt: date(settledAt))
+        }
+    }
+
+    private struct WireCommand: Decodable {
+        var name: String
+        var description: String?
+        var source: String
+        var hint: String?
+
+        var command: PiSlashCommand { PiSlashCommand(name: name, summary: description, source: Open(rawValue: source), hint: hint) }
     }
 
     struct Ack: Decodable {
@@ -215,16 +267,15 @@ enum PiWire {
     static func abortCommand(id: String) throws -> Data { try encodeLine(AbortCommand(id: id)) }
 
     private struct ConfigCommand: Encodable {
-        struct Model: Encodable { var provider: String; var id: String }
         var t = "config"
         var id: String
-        var model: Model?
+        var model: PiModelKey?
         var thinking: String?
         var name: String?
     }
 
-    static func configCommand(id: String, model: PiModelRef?, thinking: String?, name: String?) throws -> Data {
-        try encodeLine(ConfigCommand(id: id, model: model.map { .init(provider: $0.provider, id: $0.id) }, thinking: thinking, name: name))
+    static func configCommand(id: String, model: PiModelKey?, thinking: PiThinkingLevel?, name: String?) throws -> Data {
+        try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, name: name))
     }
 
     private struct AnswerCommand<Value: Encodable>: Encodable {
@@ -234,7 +285,7 @@ enum PiWire {
         var value: Value
     }
 
-    static func answerCommand(id: String, promptID: String, _ answer: PiPromptAnswer) throws -> Data {
+    static func answerCommand(id: String, promptID: String, _ answer: PiAnswerValue) throws -> Data {
         switch answer {
         case .option(let value), .text(let value): try encodeLine(AnswerCommand(id: id, promptId: promptID, value: value))
         case .confirmed(let value): try encodeLine(AnswerCommand(id: id, promptId: promptID, value: value))

@@ -1,6 +1,7 @@
 #if os(macOS)
 import Foundation
 import Testing
+import CueStore
 @testable import CuePi
 
 /// 造 Pi 会话 JSONL（v3 树结构）的最小写手。字段名来自 Pi 的 session-format 文档。
@@ -146,10 +147,10 @@ struct HistoryTests {
 
         let update = try index(f)
 
-        #expect(update.transcript.map(\.role) == [.user, .pi, .system, .system, .system, .user])
-        #expect(update.transcript[2...4].map(\.text) == ["已压缩上下文", "已压缩上下文", "已压缩上下文"])
-        #expect(update.transcript[2].entryID == "c1" && update.transcript[2].seq == 7 && update.transcript[2].at == SessionFile.date(6))
-        #expect(update.transcript[5].text == "Say hello to world." && update.transcript[5].deliveryID == nil)
+        #expect(update.messages.map(\.role.known) == [.user, .pi, .system, .system, .system, .user])
+        #expect(update.messages[2...4].map(\.text) == ["已压缩上下文", "已压缩上下文", "已压缩上下文"])
+        #expect(update.messages[2].id == PiChatMessage.recordID(sessionID: update.sessionID, entryID: "c1") && update.messages[2].seq == 7 && update.messages[2].at == SessionFile.date(6))
+        #expect(update.messages[5].text == "Say hello to world." && update.messages[5].deliveryID == nil)
         #expect(update.recap.lastReply == "reply one" && update.recap.pendingPrompt == "Say hello to world.")  // 系统行不动问答摘要
     }
 
@@ -273,7 +274,7 @@ struct HistorySummaryOnlyTests {
             let full = try PiHistory.index(file: file.url, from: nil)
             let summary = try PiHistory.index(file: file.url, from: nil, transcript: false)
             #expect(summary.checkpoint == full.checkpoint, "\(file.url.lastPathComponent)")
-            #expect(summary.history == full.history && summary.transcript.isEmpty)
+            #expect(summary.history == full.history && summary.messages.isEmpty)
         }
     }
 
@@ -284,8 +285,8 @@ struct HistorySummaryOnlyTests {
 
         let next = try PiHistory.index(file: file.url, from: summary.checkpoint)
         #expect(next.checkpoint == (try PiHistory.index(file: file.url, from: nil)).checkpoint)
-        #expect(next.recap == PiTranscriptRecap(lastPrompt: "顺便再看下日志", lastReply: "日志里没有异常", pendingPrompt: nil))
-        #expect(next.transcript.map { $0.tools?.commands } == [2])
+        #expect(next.recap == PiRecap(lastPrompt: "顺便再看下日志", lastReply: "日志里没有异常", pendingPrompt: nil))
+        #expect(next.messages.map { $0.tools?.commands } == [2])
     }
 }
 
@@ -364,9 +365,9 @@ struct HistoryIndexerTests {
         try await eventually("回填完成") { log.finishedBackfill }
 
         let byName = Dictionary(uniqueKeysWithValues: log.updates.map { ($0.file.lastPathComponent, $0) })
-        #expect(byName["recent.jsonl"]?.transcript.map(\.text) == ["近的", "r-近的"])
-        #expect(byName["old.jsonl"]?.transcript.isEmpty == true)
-        #expect(byName["old.jsonl"]?.recap == PiTranscriptRecap(lastPrompt: "远的", lastReply: "r-远的", pendingPrompt: nil))
+        #expect(byName["recent.jsonl"]?.messages.map(\.text) == ["近的", "r-近的"])
+        #expect(byName["old.jsonl"]?.messages.isEmpty == true)
+        #expect(byName["old.jsonl"]?.recap == PiRecap(lastPrompt: "远的", lastReply: "r-远的", pendingPrompt: nil))
     }
 
     @Test func liveAppendsAndNewFilesAreIndexedIncrementally() async throws {

@@ -16,8 +16,8 @@ protocol SendChannels {
     /// Pi 自己的会话 id（手机与同步记录里用的）→ 这台 Mac 上桥连接的会话 id；不在这台 Mac 上则 nil。
     func piSessionID(forSession sessionID: String) -> CuePi.PiSession.ID?
     func send(_ message: PiMessage, to id: CuePi.PiSession.ID) async throws
-    func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws
-    func configure(model: PiModelRef?, thinking: String?, name: String?, in id: CuePi.PiSession.ID) async throws
+    func answer(_ answer: PiAnswerValue, to prompt: String, in id: CuePi.PiSession.ID) async throws
+    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: CuePi.PiSession.ID) async throws
     func command(_ line: String, whenBusy: PiQueueMode?, in id: CuePi.PiSession.ID) async throws
     func abort(in id: CuePi.PiSession.ID) async throws
     func copy(_ content: ClipboardContent) throws
@@ -31,7 +31,7 @@ struct LiveSendChannels: SendChannels {
         pi.session(id: id).map {
             PiSessionInfo(
                 target: SendTarget(kind: .piSession, name: $0.displayName, ref: $0.sessionID),
-                isBusy: $0.state.isBusy)
+                isBusy: $0.state.isTurnRunning)
         }
     }
 
@@ -43,11 +43,11 @@ struct LiveSendChannels: SendChannels {
         try await pi.send(message, to: id)
     }
 
-    func answer(_ answer: PiPromptAnswer, to prompt: String, in id: CuePi.PiSession.ID) async throws {
+    func answer(_ answer: PiAnswerValue, to prompt: String, in id: CuePi.PiSession.ID) async throws {
         try await pi.answer(answer, to: prompt, in: id)
     }
 
-    func configure(model: PiModelRef?, thinking: String?, name: String?, in id: CuePi.PiSession.ID) async throws {
+    func configure(model: PiModelKey?, thinking: PiThinkingLevel?, name: String?, in id: CuePi.PiSession.ID) async throws {
         try await pi.configure(model: model, thinking: thinking, name: name, in: id)
     }
 
@@ -60,11 +60,6 @@ struct LiveSendChannels: SendChannels {
     }
 
     func copy(_ content: ClipboardContent) throws { try Clipboard.write(content) }
-}
-
-extension PiAgentState {
-    /// 会话正在处理一轮：此时发消息要么马上说、要么等它做完再说（与手机同一条规则，见 `PiWorkState.isTurnRunning`）。
-    var isBusy: Bool { syncRepresentation.state.isTurnRunning }
 }
 
 /// macOS 专属依赖；`live` 是生产装配，测试逐项替换。

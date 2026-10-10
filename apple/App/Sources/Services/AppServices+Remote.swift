@@ -48,15 +48,13 @@ extension AppServices {
     }
 
     private func recordPiState(of session: CuePi.PiSession) async throws {
-        let (state, detail) = session.syncRepresentation
         let alert = try await piStateRecorder.update(
-            sessionID: session.sessionID, state: state, detail: detail, title: session.displayName,
+            sessionID: session.sessionID, state: session.state, detail: session.detail, title: session.displayName,
             folder: CueStore.folderName(ofWorkingDirectory: session.cwd.path(percentEncoded: false)),
-            projectID: try await store.project(containing: session.cwd)?.id,
-            question: session.question.map(PiQuestion.init),
+            projectID: try await store.project(containing: session.cwd)?.id, question: session.question,
             times: PiTimes(stateSince: session.stateSince, busySince: session.busySince), launchToken: session.launchToken,
-            hosted: session.hosted, subagents: session.subagentStates, modelState: session.modelState, context: session.contextUsage,
-            commands: session.slashCommands)
+            hosted: session.hosted, subagents: session.subagents, modelState: session.modelState, context: session.context,
+            commands: session.commands)
         // 带通知标志的写入立即上传（不阻塞后面的会话变化）：通知等引擎自动调度要几十秒，期间状态还可能前进而把它作废
         if alert != nil {
             let record = PiSessionState.recordID(sessionID: session.sessionID)
@@ -145,11 +143,10 @@ extension AppServices {
         switch mode {
         case .answer:
             guard let answer = request.answer else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新答案
-            try await channels.answer(answer.value.prompt, to: answer.promptID, in: id)
+            try await channels.answer(answer.value, to: answer.promptID, in: id)
         case .config:
             guard let config = request.config else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新强度，或什么都不改
-            let model = config.model.map { PiModelRef(provider: $0.provider, id: $0.id) }
-            try await channels.configure(model: model, thinking: config.thinking?.rawValue, name: config.name, in: id)
+            try await channels.configure(model: config.model, thinking: config.thinking, name: config.name, in: id)
         case .command:
             // 命令带着卡片（交给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录
             let content = SendContent(stored: request.content)
@@ -201,8 +198,7 @@ extension AppServices {
     /// 补写一个会话的对话（不写发送记录）：从本机的会话文件从头读出，与摘要一起写。
     private func writeTranscript(of sessionID: String) async throws {
         guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
-        let update = try PiHistory.index(file: URL(filePath: indexed.path), from: nil)
-        try await store.writePiTranscript(PiTranscript(update, sessionID: sessionID))
+        try await store.writePiTranscript(try PiHistory.index(file: URL(filePath: indexed.path), from: nil).transcript)
     }
 
     /// 发给已结束的会话：在后台把它恢复起来（会话索引里的会话文件与工作目录），返回连上桥的会话。
@@ -261,79 +257,6 @@ extension AppServices {
             let data = try imageData(hash)
             guard let mimeType = ImageFiles.mimeType(of: data) else { throw SendError.imageUnavailable(hash) }
             return PiImage(mimeType: mimeType, data: data)
-        }
-    }
-}
-
-extension PiQuestion {
-    /// 桥上的弹窗写成同步记录里的问题（扩展的种类名与这里同名）。
-    init(_ prompt: PiPrompt) {
-        self.init(promptID: prompt.id, kind: Open(rawValue: prompt.kind), text: prompt.text, options: prompt.options)
-    }
-}
-
-extension PiModelOption {
-    /// 桥上的模型写成同步记录里的可选项；Pi 报的本版本不认识的强度不写（手机端选不到）。
-    init(_ model: PiModel) {
-        self.init(
-            key: PiModelKey(provider: model.provider, id: model.id), name: model.name,
-            thinkingLevels: model.thinkingLevels.compactMap(PiThinkingLevel.init(rawValue:)))
-    }
-}
-
-extension PiSlashCommand {
-    /// 桥上的斜杠命令写成同步记录里的一条；Pi 报的本版本不认识的来源原样留着。
-    init(_ command: PiCommand) {
-        self.init(name: command.name, summary: command.description, source: Open(rawValue: command.source), hint: command.hint)
-    }
-}
-
-extension PiAnswerValue {
-    /// 交给桥的回答。
-    var prompt: PiPromptAnswer {
-        switch self {
-        case .option(let option): .option(option)
-        case .confirmed(let confirmed): .confirmed(confirmed)
-        case .text(let text): .text(text)
-        }
-    }
-}
-
-extension CuePi.PiSession {
-    /// 写进同步记录（与 Mac 的近况页）的状态与一句话说明。
-    var syncRepresentation: (state: PiWorkState, detail: String?) { state.syncRepresentation }
-
-    /// 写进同步记录的模型配置。
-    var modelState: PiModelState {
-        PiModelState(model: model.map(PiModelOption.init), thinking: thinking.map { Open(rawValue: $0) }, models: availableModels.map(PiModelOption.init))
-    }
-
-    /// 写进同步记录的上下文余量与命令清单。
-    var contextUsage: PiContextUsage? { context.map { PiContextUsage(tokens: $0.tokens, window: $0.window) } }
-    var slashCommands: [PiSlashCommand] { commands.map(PiSlashCommand.init) }
-
-    /// 写进同步记录的子代理列表。
-    var subagentStates: [PiSubagentState] {
-        subagents.map {
-            PiSubagentState(
-                name: $0.name, role: $0.role, phase: Open(rawValue: $0.state), action: $0.action, startedAt: $0.startedAt, settledAt: $0.settledAt)
-        }
-    }
-}
-
-extension PiAgentState {
-    /// 写进同步记录的状态与一句话说明。
-    var syncRepresentation: (state: PiWorkState, detail: String?) {
-        switch self {
-        case .idle, .done: (.settled, nil)
-        case .thinking: (.thinking, nil)
-        case .outputting: (.outputting, nil)
-        case .delegating: (.delegating, nil)  // 子代理在 `subagents` 里
-        case .compacting: (.compacting, nil)
-        case .tool(let name, _, let detail): (.tool, detail.map { "\(name)\(PiProgress.detailSeparator)\($0)" } ?? name)
-        case .waitingUser(_, let title): (.waitingForUser, title)
-        case .error(let message): (.error, PiErrorSummary(message).line)  // 手机上没有悬停看原文
-        case .incompatible: (.incompatible, nil)
         }
     }
 }
