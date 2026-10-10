@@ -163,13 +163,13 @@ struct SessionPage: View {
     }
 
     /// 工具栏右边的"⋯"：最上面写所在，下面重命名、跳到终端（开在终端里的在线会话）、结束会话；都没有时不出现。
-    @ViewBuilder private func menu(_ session: PiSessionState, place: String?, live: CuePi.PiSession?, ending: Bool) -> some View {
+    @ViewBuilder private func menu(_ session: PiSessionState, place: Dotted?, live: CuePi.PiSession?, ending: Bool) -> some View {
         let canJump = live.map { !$0.hosted } ?? false
         let canEnd = MacDelivery.canEnd(session)
         let canRename = MacDelivery.canRename(session)
         if place != nil || canRename || canJump || canEnd {
             Menu("更多", systemImage: "ellipsis") {
-                if let place { Section(place) {} }
+                if let place { Section { } header: { Text(place) } }
                 if canRename {
                     Button("重命名…", systemImage: "pencil") { renaming = session }
                 }
@@ -336,7 +336,7 @@ extension Workspace {
         Task {
             do {
                 let result = try await services.jumpToTerminal(id)
-                if let note = result.note { say(note, isError: result.precision == .failed) }
+                if let note = result.note { say(Dotted(note), isError: result.precision == .failed) }
             } catch {
                 fail(error)
             }

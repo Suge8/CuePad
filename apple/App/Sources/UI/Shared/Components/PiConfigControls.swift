@@ -53,7 +53,8 @@ struct PiConfigControls: View {
             let sections = PiModelLabel.groups(session.models).map { group in
                 ChoiceMenu.Section(title: group.provider, choices: group.models.map { model in
                     ChoiceMenu.Choice(
-                        title: model.name.isEmpty ? model.key.id : model.name, subtitle: PiModelLabel.levels(model),
+                        // 原生菜单项没有单独的读屏文字，分段直接写逗号
+                        title: model.name.isEmpty ? model.key.id : model.name, subtitle: PiModelLabel.levels(model).spoken,
                         checked: shown.model?.key == model.key) { configure(PiConfig(model: model.key)) }
                 })
             }
@@ -115,8 +116,9 @@ nonisolated enum PiModelLabel {
     }
 
     /// 模型菜单里每个模型下面那一行：它支持的思考强度。
-    static func levels(_ model: PiModelOption) -> String {
-        model.thinkingLevels.isEmpty ? "不调思考强度" : "思考 " + model.thinkingLevels.map(\.label).joined(separator: " · ")
+    static func levels(_ model: PiModelOption) -> Dotted {
+        let labels = model.thinkingLevels.map(\.label)
+        return labels.isEmpty ? "不调思考强度" : Dotted(["思考 " + labels[0]] + labels.dropFirst())
     }
 
     /// 提供方的印上的字：提供方名字的首字母（Anthropic 是 A、OpenAI 是 O）。

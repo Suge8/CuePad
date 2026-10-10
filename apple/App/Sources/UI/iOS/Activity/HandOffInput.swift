@@ -83,7 +83,7 @@ struct HandOffInput: View {
                 Divider()
                 ForEach(sessions ?? []) { item in
                     Button { choice = item.state.id } label: {
-                        Label(title(item), systemImage: item.state.id == chosen?.state.id ? "checkmark" : "")
+                        Label { Text(title(item)) } icon: { Image(systemName: item.state.id == chosen?.state.id ? "checkmark" : "") }
                     }
                 }
             } label: {
@@ -101,9 +101,8 @@ struct HandOffInput: View {
         }
     }
 
-    private func title(_ item: PiSessionListItem) -> String {
-        let place = PiPlace.name(of: item.state, project: workspace.catalog?.project(item.state.projectID))
-        return [item.state.title, place, services.settings.shown(item).label].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    private func title(_ item: PiSessionListItem) -> Dotted {
+        Dotted(item.state.title, PiPlace.name(of: item.state, project: workspace.catalog?.project(item.state.projectID)), services.settings.shown(item).label)
     }
 
     private func send() {

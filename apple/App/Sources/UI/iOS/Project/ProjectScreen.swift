@@ -121,10 +121,10 @@ struct ProjectScreen: View {
 
     /// 顶栏的一行："25 条灵感 · 2 项任务 · cuepad"（为 0 的不写；绑定的文件夹只写名字，同名的只写一次，`ProjectFolders.names`）。
     /// 全空的项目没有这一行（只写标题）：页面上的空态已经说了"还没有灵感"，一屏不说两遍。
-    private var detail: String {
+    private var detail: Dotted {
         let catalog = workspace.catalog
         let count = CountCopy.text((catalog?.cardCounts[projectID] ?? 0, "条灵感"), (catalog?.openTasks[projectID] ?? 0, "项任务"))
-        return ([count].compactMap { $0 } + ProjectFolders.names(of: projectID, bindings: catalog?.bindings ?? [])).joined(separator: " · ")
+        return (count ?? Dotted()) + Dotted(ProjectFolders.names(of: projectID, bindings: catalog?.bindings ?? []))
     }
 
     private func wall(_ ids: [UUID], page: ProjectPage, lastTarget: [UUID: String]) -> some View {
@@ -222,7 +222,6 @@ private struct FocusCard: View {
                     }
                     .buttonStyle(.plain)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
-                    .accessibilityLabel(more.spoken)
                 }
                 NewTaskLine(project: data.project?.id)
             }

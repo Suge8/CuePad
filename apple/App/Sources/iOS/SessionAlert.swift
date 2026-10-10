@@ -19,9 +19,9 @@ struct SessionAlert: Equatable, Identifiable {
         question = state.question?.text
     }
 
-    var text: String {
+    var text: Dotted {
         let content = PiAlertText.content(title: title, question: question, kind: kind)
-        return "\(content.title) · \(content.body)"
+        return Dotted(content.title, content.body)
     }
 
     var symbol: String { kind == .waitingForUser ? "questionmark.bubble.fill" : "checkmark.circle.fill" }

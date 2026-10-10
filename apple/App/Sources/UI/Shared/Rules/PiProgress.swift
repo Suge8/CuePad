@@ -59,9 +59,12 @@ nonisolated enum PiProgress {
         }
     }
 
+    /// 同步数据里工具名与目标之间的分隔（Mac 写 `AppServices+Remote`、这里读）：是数据格式，不是显示用的 `Dotted`。
+    static let detailSeparator = " · "
+
     /// Mac 同步来的工具详情是"工具名 · 目标"：写成"动作 目标"，如"运行 bun test"。不认识的工具照原名。
     static func action(_ detail: String) -> String? {
-        let parts = detail.split(separator: " · ", maxSplits: 1).map(String.init)
+        let parts = detail.split(separator: Self.detailSeparator, maxSplits: 1).map(String.init)
         guard let tool = parts.first, !tool.isEmpty else { return nil }
         let verb = verbs[tool.lowercased()] ?? tool
         return parts.count > 1 ? "\(verb) \(parts[1])" : verb

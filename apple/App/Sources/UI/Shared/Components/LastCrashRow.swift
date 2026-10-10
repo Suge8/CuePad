@@ -71,7 +71,9 @@ struct CrashReportView: View {
         #endif
     }
 
-    private func row(_ title: String, _ value: String) -> some View {
+    private func row(_ title: String, _ value: String) -> some View { row(title, Dotted(value)) }
+
+    private func row(_ title: String, _ value: Dotted) -> some View {
         LabeledContent(title) { Text(value).foregroundStyle(palette.ink3).multilineTextAlignment(.trailing).textSelection(.enabled) }
     }
 }

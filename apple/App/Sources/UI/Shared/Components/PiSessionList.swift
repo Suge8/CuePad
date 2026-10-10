@@ -114,14 +114,14 @@ struct PiSessionRow: View {
                     let lead = text(of: line, shown: shown)
                     // 拼成一个 Text 后读屏读不到分段点的替代，所以整句给读屏一个用"，"分段的标签
                     note.map {
-                        Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(" · ").foregroundStyle(palette.ink3))\(lead)")
-                            .accessibilityLabel("\($0)，\(line.speech)")
+                        Text("\(Text($0).foregroundStyle(palette.ink3))\(Text(Dotted.separator).foregroundStyle(palette.ink3))\(lead)")
+                            .accessibilityLabel(Dotted($0, line?.speech).spoken)
                     } ?? lead
                 } else {
                     let line = searchHit ?? PiRowLine.of(session, draft: draft, end: end, failure: failure)
                     let rest = note.map { Text($0).foregroundStyle(palette.ink3) } ?? line.map { text(of: $0, shown: shown) }
-                    Text("\(status(shown))\(rest.map { Text("\(Text(" · ").foregroundStyle(palette.ink3))\($0)") } ?? Text(verbatim: ""))")
-                        .accessibilityLabel([shown.label, note ?? line?.speech].compactMap { $0 }.joined(separator: "，"))
+                    Text("\(status(shown))\(rest.map { Text("\(Text(Dotted.separator).foregroundStyle(palette.ink3))\($0)") } ?? Text(verbatim: ""))")
+                        .accessibilityLabel(Dotted(shown.label, note ?? line?.speech).spoken)
                 }
             }
             .font(style.line)
@@ -137,8 +137,8 @@ struct PiSessionRow: View {
     private var place: Text? {
         let parts = [PiPlace.name(of: session, project: project), session.hosted && session.state != .known(.ended) ? "后台" : nil].compactMap { $0 }
         guard let first = parts.first else { return nil }
-        let text = parts.dropFirst().reduce(Text(Highlight.matches(first, highlight))) { Text("\($0) · \(Text(Highlight.matches($1, highlight)))") }
-        return text.accessibilityLabel(parts.joined(separator: "，"))
+        let text = parts.dropFirst().reduce(Text(Highlight.matches(first, highlight))) { Text("\($0)\(Dotted.separator)\(Text(Highlight.matches($1, highlight)))") }
+        return text.accessibilityLabel(Dotted(parts).spoken)
     }
 
     /// 搜索时名字、所在与进度都没命中、而命中在说过的话里：那一句换成那句话从命中处前几个字起的一截，看得出为什么搜到它

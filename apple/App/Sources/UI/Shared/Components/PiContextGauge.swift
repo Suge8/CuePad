@@ -41,10 +41,10 @@ struct PiContextGauge: View {
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .help(meter.help)
+        .help(meter.help.visible)
         .popover(isPresented: $showsDetail) { detail.presentationCompactAdaptation(.popover) }
         .accessibilityLabel("上下文")
-        .accessibilityValue(meter.help)
+        .accessibilityValue(meter.help.spoken)
         .animation(Motion.quick, value: meter)
     }
 

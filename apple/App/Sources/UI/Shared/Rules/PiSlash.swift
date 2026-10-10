@@ -85,12 +85,12 @@ nonisolated struct PiContextMeter: Equatable {
     var percent: String { fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? "—" }
 
     /// 悬停与读屏：先说这是上下文，快满了时说可以压缩。
-    var help: String { "上下文 · \(summary)\(suggestsCompact ? " · 快满了，可以压缩" : "")" }
+    var help: Dotted { Dotted("上下文") + summary + Dotted(suggestsCompact ? "快满了，可以压缩" : nil) }
 
     /// "已用 21% · 剩 158k tokens"；未知时说明为什么。
-    var summary: String {
-        guard let fraction, let remaining else { return "刚压缩过 · 下次回答后更新（窗口 \(Self.abbreviated(usage.window)) tokens）" }
-        return "已用 \(Int((fraction * 100).rounded()))% · 剩 \(Self.abbreviated(remaining)) tokens"
+    var summary: Dotted {
+        guard let fraction, let remaining else { return Dotted("刚压缩过", "下次回答后更新（窗口 \(Self.abbreviated(usage.window)) tokens）") }
+        return Dotted("已用 \(Int((fraction * 100).rounded()))%", "剩 \(Self.abbreviated(remaining)) tokens")
     }
 
     /// 3 位有效数字内的简写：950、9.5k、158k、1.2M。

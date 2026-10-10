@@ -321,7 +321,7 @@ extension PiAgentState {
         case .thinking: (.thinking, nil)
         case .outputting: (.outputting, nil)
         case .delegating: (.delegating, nil)  // 子代理在 `subagents` 里
-        case .tool(let name, _, let detail): (.tool, detail.map { "\(name) · \($0)" } ?? name)
+        case .tool(let name, _, let detail): (.tool, detail.map { "\(name)\(PiProgress.detailSeparator)\($0)" } ?? name)
         case .waitingUser(_, let title): (.waitingForUser, title)
         case .error(let message): (.error, PiErrorSummary(message).line)  // 手机上没有悬停看原文
         case .incompatible: (.incompatible, nil)

@@ -456,7 +456,7 @@ private struct NoticeBanner: View {
                 HStack(spacing: 0) {
                     Button { if let link = notice.link { go(link) } } label: {
                         HStack(spacing: 6) {
-                            Label(notice.text, systemImage: notice.symbol ?? (notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"))
+                            Label { Text(notice.text) } icon: { Image(systemName: notice.symbol ?? (notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")) }
                             if notice.link != nil {
                                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.ink3)
                                     .accessibilityHidden(true)
@@ -496,7 +496,7 @@ private struct NoticeBanner: View {
             return notice.isError ? .error : .success
         }
         .onChange(of: workspace.notice) { _, notice in
-            if let notice { AccessibilityNotification.Announcement(notice.text).post() }
+            if let notice { AccessibilityNotification.Announcement(notice.text.spoken).post() }
         }
     }
 

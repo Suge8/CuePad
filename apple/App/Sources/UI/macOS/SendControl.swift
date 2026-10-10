@@ -20,7 +20,7 @@ struct SendControl: View {
             if let target, ready {
                 HStack(spacing: 0) {
                     Button { send(target) } label: {
-                        label(dot: workspace.session(target.session).map(workspace.shown), text: "发给 Agent · \(name(target))", shortcut: "⌘↩")
+                        label(dot: workspace.session(target.session).map(workspace.shown), text: Dotted("发给 Agent", name(target)), shortcut: "⌘↩")
                             .padding(.trailing, 8)
                     }
                     .buttonStyle(PressStyle())
@@ -36,7 +36,7 @@ struct SendControl: View {
             } else {
                 SessionMenu(project: project, newSession: newSession) {
                     label(dot: target.map { _ in PiShown(state: .known(.ended)) },
-                          text: target.map { "\(name($0)) · 已结束" } ?? "交给 Agent…", shortcut: nil)
+                          text: target.map { Dotted(name($0), "已结束") } ?? "交给 Agent…", shortcut: nil)
                         .padding(.trailing, compact ? 12 : 16)
                 }
             }
@@ -48,7 +48,7 @@ struct SendControl: View {
         .fixedSize()
     }
 
-    private func label(dot: PiShown?, text: String, shortcut: String?) -> some View {
+    private func label(dot: PiShown?, text: Dotted, shortcut: String?) -> some View {
         HStack(spacing: 8) {
             if let dot { PiStateDot(shown: dot, size: 5) } else { Image(systemName: "paperplane.fill").accessibilityHidden(true) }
             Text(text).lineLimit(1)
@@ -79,12 +79,12 @@ struct SessionMenu<Label: View>: View {
         Menu {
             if let newSession { Button("新会话", systemImage: "plus", action: newSession) }
             if services.pi.sessions.isEmpty, newSession == nil {
-                Button("没有运行中的 Agent 会话 · 在终端运行 pi 开始") {}.disabled(true)
+                Button {} label: { Text(Dotted("没有运行中的 Agent 会话", "在终端运行 pi 开始")) }.disabled(true)
             }
             ForEach(services.pi.sessions) { session in
                 Toggle(
-                    "\(session.displayName) · \(workspace.shown(session).label)",
-                    isOn: Binding(get: { current?.session == session.id }, set: { _ in workspace.sendChoice = AgentTarget(session: session.id) }))
+                    isOn: Binding(get: { current?.session == session.id }, set: { _ in workspace.sendChoice = AgentTarget(session: session.id) })
+                ) { Text(Dotted(session.displayName, workspace.shown(session).label)) }
             }
         } label: {
             label()

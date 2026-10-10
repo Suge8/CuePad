@@ -30,8 +30,7 @@ struct PiSubagentList: View {
                 } else {
                     Image(systemName: "arrow.triangle.branch").foregroundStyle(palette.ink3).accessibilityHidden(true)
                 }
-                let counts = "\(summary.total) 个子代理 · \(summary.running) 在跑"
-                Text(counts).foregroundStyle(palette.ink2).monospacedDigit().spoken(counts)
+                Text(Dotted("\(summary.total) 个子代理", "\(summary.running) 在跑")).foregroundStyle(palette.ink2).monospacedDigit()
                 if summary.failed > 0 {
                     Dot().foregroundStyle(palette.failure)
                     Text("\(summary.failed) 失败").foregroundStyle(palette.failure).monospacedDigit()
@@ -59,11 +58,11 @@ struct PiSubagentList: View {
             }
             .font(Typography.secondary)
             (Text(agent.label).foregroundStyle(agent.shown.labelTint(palette))
-                + Text(agent.action.isEmpty ? "" : " · \(agent.action)").foregroundStyle(palette.ink3))
+                + Text(agent.action.isEmpty ? "" : "\(Dotted.separator)\(agent.action)").foregroundStyle(palette.ink3))
                 .font(Typography.meta)
                 .lineLimit(1).truncationMode(.tail)
                 .padding(.leading, 13)
-                .accessibilityLabel(agent.action.isEmpty ? agent.label : "\(agent.label)，\(agent.action)")
+                .accessibilityLabel(Dotted(agent.label, agent.action).spoken)
         }
         .accessibilityElement(children: .combine)
         .transition(.opacity)

@@ -30,16 +30,6 @@ struct Dot: View {
     var body: some View { Text("·").accessibilityHidden(true) }
 }
 
-extension String {
-    /// 用" · "分段的一句字（`CountCopy`、`TaskCopy.more`）给读屏时分段处换成逗号，不念"·"。
-    var spoken: String { replacingOccurrences(of: " · ", with: "，") }
-}
-
-extension View {
-    /// 一句用" · "分段的字（`visible` 是它显示的文字）：读屏读 `visible.spoken`。
-    func spoken(_ visible: String) -> some View { accessibilityLabel(visible.spoken) }
-}
-
 // MARK: 项目图标
 
 struct ProjectGlyph: View {
@@ -96,19 +86,19 @@ struct ProjectGlyph: View {
 // MARK: 小件
 /// 分段标题：小号半粗次要色。
 struct SectionLabel: View {
-    let text: String
+    let text: Dotted
     var systemImage: String?
     @Environment(\.palette) private var palette
 
     var body: some View {
         Group {
-            if let systemImage { Label(text, systemImage: systemImage) } else { Text(text) }
+            if let systemImage { Label { Text(text) } icon: { Image(systemName: systemImage) } } else { Text(text) }
         }
         .font(Typography.label)
         .foregroundStyle(palette.ink3)
         // 图标是装饰：读屏只读文字（否则会读出"瞄准镜十字线"这类符号名），作为小节标题
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(text)
+        .accessibilityLabel(text.spoken)
         .accessibilityAddTraits(.isHeader)
     }
 }

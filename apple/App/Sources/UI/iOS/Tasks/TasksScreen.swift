@@ -208,14 +208,14 @@ struct TaskLine: View {
         .animation(Motion.quick, value: tally)
     }
 
-    private var counts: String? { done ? nil : TaskCopy.counts(marks) }
+    private var counts: Dotted? { done ? nil : TaskCopy.counts(marks) }
     private var showsPlace: Bool { project != nil || (!done && session != nil) }
     private var hasDetail: Bool { counts != nil || showsPlace }
 
     /// 标题下最多两行：进度（提示词与子任务），再是所在项目与交给的会话此刻的状态。
     private var detail: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if let counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3).spoken(counts) }
+            if let counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3) }
             if showsPlace { place }
         }
         .font(.caption)

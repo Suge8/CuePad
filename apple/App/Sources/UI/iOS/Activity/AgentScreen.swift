@@ -100,7 +100,7 @@ struct AgentScreen: View {
                         // 有同名文件夹的一键绑（会话数写在上面），其余自己选
                         if let named = folderGuide?.suggestions[project.id]?.first {
                             Button { bind(named, to: project) } label: {
-                                Label(ProjectFolders.suggestionTitle(named, showsMac: false), systemImage: "folder.badge.plus")
+                                Label { Text(ProjectFolders.suggestionTitle(named, showsMac: false)) } icon: { Image(systemName: "folder.badge.plus") }
                             }
                         } else {
                             Button { workspace.chooseFolder(for: project) } label: {

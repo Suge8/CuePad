@@ -23,9 +23,11 @@ struct MacConnectionTest: View {
             VStack(alignment: .leading, spacing: 4) {
                 if !rounds.isEmpty {
                     let totals = rounds.map(\.total).sorted()
-                    Text("往返中位数 \(Self.text(Self.median(totals))) · 最大 \(Self.text(totals.last!))")
+                    Text(Dotted("往返中位数 \(Self.text(Self.median(totals)))", "最大 \(Self.text(totals.last!))"))
                         .font(.footnote.weight(.medium)).foregroundStyle(palette.ink)
-                    Text("上传 \(Self.text(Self.median(rounds.map(\.upload)))) · 到 Mac 执行完 \(Self.text(Self.median(rounds.map(\.toMac)))) · 回到手机 \(Self.text(Self.median(rounds.map(\.back))))")
+                    Text(Dotted(
+                        "上传 \(Self.text(Self.median(rounds.map(\.upload))))", "到 Mac 执行完 \(Self.text(Self.median(rounds.map(\.toMac))))",
+                        "回到手机 \(Self.text(Self.median(rounds.map(\.back))))"))
                         .font(.footnote.monospacedDigit()).foregroundStyle(palette.ink2)
                     Text(rounds.map { Self.text($0.total) }.joined(separator: "  "))
                         .font(.footnote.monospacedDigit()).foregroundStyle(palette.ink3)

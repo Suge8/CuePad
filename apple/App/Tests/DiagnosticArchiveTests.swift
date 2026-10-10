@@ -72,7 +72,7 @@ struct DiagnosticArchiveTests {
 
         #expect(report.exception == "EXC_BAD_ACCESS" && report.signal == "SIGSEGV")
         #expect(report.reason == "Namespace SIGNAL, Code 11 Segmentation fault: 11")
-        #expect(report.app == "0.1.0（2610082154） · iPhone18,3 · iPhone OS 27.0 (24A430)")
+        #expect(report.app?.visible == "0.1.0（2610082154） · iPhone18,3 · iPhone OS 27.0 (24A430)")
         // 取崩溃线程（不是第一条栈），最深的在前
         #expect(report.frames == ["CuePad +0x1000", "SwiftUI +0x12c", "CuePad +0x7d0", "dyld +0x64"])
     }

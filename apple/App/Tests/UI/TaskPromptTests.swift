@@ -80,13 +80,13 @@ struct TaskPromptTests {
 
         try await reply(to: first)
         tally = PromptTally(try await store.childMarks()[task.id])
-        #expect(tally.text == "2 条提示词 · 1 已回复")
-        #expect(tally.heading == "2 · 1 已回复")
+        #expect(tally.text?.visible == "2 条提示词 · 1 已回复")
+        #expect(tally.heading?.visible == "2 · 1 已回复")
         #expect(!tally.suggestsDone(task))
 
         try await reply(to: second)
         tally = PromptTally(try await store.childMarks()[task.id])
-        #expect(tally.text == "2 条提示词 · 全部已回复")
+        #expect(tally.text?.visible == "2 条提示词 · 全部已回复")
         #expect(tally.suggestsDone(task))
         // 任务不自动完成：由用户确认
         #expect(try await store.card(task.id)?.status == .inProgress)

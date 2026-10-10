@@ -62,7 +62,7 @@ struct PiQueueStack: View {
             }
             // 时钟是装饰：读屏只读这句话
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(PiChat.shownText(of: request))
+            .accessibilityLabel(PiChat.shownText(of: request).spoken)
             if request.isWithdrawable {
                 Button { promote(request) } label: {
                     Label(DeliveryMode.steer.label, systemImage: "bolt")

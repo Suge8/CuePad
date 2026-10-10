@@ -103,7 +103,7 @@ struct PreviewCard: View {
         }
     }
 
-    static func caption(_ preview: PiPreview) -> String {
+    static func caption(_ preview: PiPreview) -> Dotted {
         let label = switch preview.kind {
         case .web: "网页"
         case .image: "图片"
@@ -111,7 +111,7 @@ struct PreviewCard: View {
         case .markdown: "Markdown"
         case .text, nil: "文本"
         }
-        return "\(label) · \(size(preview.byteCount))"
+        return Dotted(label, size(preview.byteCount))
     }
 
     /// 大小一律按 KB 起写（不出现"393 字节"与"1 KB"并排）：不到 1 KB 也写 1 KB，过 1000 KB 写 MB。

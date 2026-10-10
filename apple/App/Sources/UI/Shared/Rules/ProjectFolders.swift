@@ -35,7 +35,7 @@ nonisolated enum ProjectFolders {
     /// Mac 上只管本机的绑定，手机上管全部，绑在几台 Mac 上时解除按 Mac 分开。
     struct Menu: Equatable {
         struct Unbind: Equatable {
-            let title: String
+            let title: Dotted
             let binding: DirectoryBinding
         }
 
@@ -47,7 +47,7 @@ nonisolated enum ProjectFolders {
         let own = bindings.filter { $0.projectID == project && (host == nil || $0.hostID == host) }
         return Menu(
             bindTitle: own.isEmpty ? "绑定文件夹…" : "换文件夹…",
-            unbinds: own.map { Menu.Unbind(title: own.count > 1 ? "解除绑定 · \($0.hostName)" : "解除绑定", binding: $0) })
+            unbinds: own.map { Menu.Unbind(title: Dotted("解除绑定", own.count > 1 ? $0.hostName : nil), binding: $0) })
     }
 
     /// 手机上给项目选文件夹的一个候选：Mac 上已知的一个文件夹（只有名字）与"让那台 Mac 从哪里取"。
@@ -99,9 +99,8 @@ nonisolated enum ProjectFolders {
     }
 
     /// 建议按钮上的字："绑定 cuepad 文件夹（312 个会话）"；建议来自几台 Mac 时写上 Mac 名。
-    static func suggestionTitle(_ candidate: Candidate, showsMac: Bool) -> String {
-        let mac = showsMac ? candidate.hostName.map { " · \($0)" } ?? " · 另一台 Mac" : ""
-        return "绑定 \(candidate.folder) · \(candidate.sessions) 个会话" + mac
+    static func suggestionTitle(_ candidate: Candidate, showsMac: Bool) -> Dotted {
+        Dotted("绑定 \(candidate.folder)", "\(candidate.sessions) 个会话", showsMac ? candidate.hostName ?? "另一台 Mac" : nil)
     }
 
     /// 项目已经绑着文件夹（Mac 上只看本机）。

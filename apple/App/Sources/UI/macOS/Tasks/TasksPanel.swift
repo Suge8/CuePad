@@ -131,7 +131,7 @@ struct TaskRow: View {
                     .lineLimit(2)
                     .onTapGesture(perform: open)
                 if let counts = done ? nil : TaskCopy.counts(marks) {
-                    Text(counts).font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1).spoken(counts)
+                    Text(counts).font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).lineLimit(1)
                 }
                 if project != nil || (!done && session != nil) { place }
             }

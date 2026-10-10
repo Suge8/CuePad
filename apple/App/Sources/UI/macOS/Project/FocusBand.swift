@@ -67,9 +67,8 @@ struct FocusBand: View {
                     task: row.task, session: workspace.liveState(ofSession: row.task.piSessionID), marks: data.children[row.id], compact: true)
             }
             if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
-                Button(more) { workspace.overlay = .tasks }
+                Button { workspace.overlay = .tasks } label: { Text(more) }
                     .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink3)
-                    .accessibilityLabel(more.spoken)
             }
             NewTaskField(project: data.project?.id)
         }
@@ -96,7 +95,7 @@ private struct PiColumn: View {
 
     var body: some View {
         let shared = ProjectAgents.sharedHost(agents)
-        SectionLabel(text: shared.map { "Agent · \($0)" } ?? "Agent", systemImage: "terminal")
+        SectionLabel(text: Dotted("Agent", shared), systemImage: "terminal")
         if agents.isEmpty, let project {
             ProjectFolderGuide(project: project, guide: guide, style: .inset)
         }

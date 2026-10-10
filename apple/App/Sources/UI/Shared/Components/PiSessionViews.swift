@@ -185,7 +185,7 @@ nonisolated extension PiShown {
         case .working: "思考中"
         case .asking: "等你确认"
         case .failed: "出错"
-        case .restart: "在线 · 需要 /reload"
+        case .restart: "在线，需要 /reload"
         case .unread: "有新回复"
         case .idle: "该你了"
         case .fresh: "新会话"

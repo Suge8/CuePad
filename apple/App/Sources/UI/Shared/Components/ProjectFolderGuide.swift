@@ -101,7 +101,7 @@ struct ProjectFolderGuide: View {
     }
 
     private func suggestion(_ candidate: ProjectFolders.Candidate, showsMac: Bool) -> some View {
-        Button(ProjectFolders.suggestionTitle(candidate, showsMac: showsMac)) { bind(candidate) }
+        Button { bind(candidate) } label: { Text(ProjectFolders.suggestionTitle(candidate, showsMac: showsMac)) }
             .accessibilityHint("让\(candidate.hostName ?? "那台 Mac")把这个文件夹绑给「\(project.name)」")
     }
 
