@@ -141,6 +141,8 @@ struct CardRow: View {
     #if os(iOS)
     @Environment(\.zoomNamespace) private var zoom
     #endif
+    /// 任务圈与标题同高。
+    private static let ring: CGFloat = 18
 
     var body: some View {
         if let pick {
@@ -161,6 +163,8 @@ struct CardRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 // 标题在前、时间靠右，与其余列表同一种读法
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    // 任务用全 App 同一个任务圈打头，一眼分得出任务与灵感
+                    if card.isTask { TaskRingView(status: card.status, ring: .plain, done: false, size: Self.ring) }
                     Text(marked(text.label)).font(.headline).foregroundStyle(palette.ink).lineLimit(2)
                     Spacer(minLength: 0)
                     Text(DateLabel.short(card.modifiedAt)).font(.caption.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()

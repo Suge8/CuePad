@@ -193,8 +193,17 @@ struct SearchPalette: View {
         let text = CardText(card.body)
         let isSelected = card.id == selection
         return HStack(spacing: 10) {
-            Image(systemName: text.images.isEmpty ? "doc.text" : "photo").frame(width: 16).foregroundStyle(.secondary)
-                .accessibilityLabel((card.isTask ? "任务" : "灵感") + (text.images.isEmpty ? "" : "，含图片"))
+            // 任务用全 App 同一个任务圈打头，灵感是文档或图片
+            Group {
+                if card.isTask {
+                    TaskRingView(status: card.status, ring: .plain, done: false, size: 14)
+                } else {
+                    Image(systemName: text.images.isEmpty ? "doc.text" : "photo").foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 16)
+            .accessibilityElement()
+            .accessibilityLabel((card.isTask ? "任务" : "灵感") + (text.images.isEmpty ? "" : "，含图片"))
             Text(Highlight.matches(text.label, query.text)).font(Typography.body).lineLimit(1)
             Spacer()
             Text(DateLabel.short(card.modifiedAt)).font(Typography.meta).foregroundStyle(.secondary)

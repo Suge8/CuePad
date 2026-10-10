@@ -84,6 +84,12 @@ enum ComposerSource { case cards, photos, camera, files }
 /// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`：⌘↩、⌘⇧↩、⌘⇧M、⌘⇧E，
 /// 由文字区接）与空着时按 ↑ 调回的那一句（`recall`）。
 /// 提交钮平时有内容才出现；`showsSend` 时空着也在（收成一行时在文字区右边）——会话回复框在 Agent 跑一轮时那里是"停止"。
+extension EnvironmentValues {
+    /// 输入框玻璃的着色：回复框贴在对话下面、对话照样滚到它后面，用 `legible`；浮起的输入框（随手记、新会话、交给 Agent）
+    /// 压在整页列表上、整块都是要读的字，由 `FloatingInput` 给 `solid`，工具那一排背后也不透出列表的字块。
+    @Entry var composerInk: GlassInk = .legible
+}
+
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
     let prompt: String
@@ -115,6 +121,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private let recall: String?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
+    @Environment(\.composerInk) private var composerInk
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 跟着焦点、带动画：UIKit 文字区拿到焦点时的那次更新不带动画，直接读焦点时展开会一帧跳到位
     @State private var focused = false
@@ -295,7 +302,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         // 里面的东西裁在玻璃里：变形时淡出中的提交钮、工具排随玻璃一起收，不留在玻璃外。上沿不裁（往上浮出的
         // "长按可马上说"、思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
         .mask { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).padding(.top, -Self.overhang) }
-        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded, ink: .legible)
+        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded, ink: composerInk)
         .frame(maxWidth: .infinity)
     }
 
