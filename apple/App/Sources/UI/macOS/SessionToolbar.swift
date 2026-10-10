@@ -79,6 +79,8 @@ struct SessionTitleSlot: View {
         .frame(maxWidth: Self.width, alignment: .leading)
         .frame(height: Spacing.toolbarControl)
         .glass(in: .capsule)
+        // 工具栏项的宽度固定（玻璃只画到内容那么宽）：内容一变项的尺寸就变，换会话时整条工具栏重排、整窗重算鼠标跟踪区，掉帧 8 次到 4～5 次
+        .frame(width: Self.width, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
         // 需要 /reload 的会话：状态就写在这块玻璃里，点它看怎么接上（不在对话上另浮一张卡）
