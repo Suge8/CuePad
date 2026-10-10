@@ -33,12 +33,12 @@ struct AgentScreen: View {
 
     /// 此刻的项目筛选；项目进了回收站时是全部。
     private var filter: UUID? {
-        if project == nil { return navigation.agentFilter(entered: nil, catalog: workspace.catalog) }
+        if project == nil { return navigation.agentFilter(catalog: workspace.catalog) }
         return pushedFilter.flatMap { workspace.catalog?.project($0)?.id }
     }
 
     private func pick(_ id: UUID?) {
-        if project == nil { navigation.chooseAgentFilter(id, entered: nil) } else { pushedFilter = id }
+        if project == nil { navigation.chooseAgentFilter(id) } else { pushedFilter = id }
     }
 
     var body: some View {
