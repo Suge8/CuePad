@@ -9,24 +9,34 @@ struct ProjectPage: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.pageActive) private var active
     @State private var data: ProjectPageData?
-    @State private var agents: AgentLinks?
-    @State private var folderGuide: FolderGuide?
     @State private var sessions: ProjectSessions?
     @State private var board = WallBoard()
+    /// 不在前台时 Agent 一栏沿用离开时的样子：挂着不看的页不读实时会话状态（读了它，会话每动一下这页都要重算）。
+    @State private var restingAgents: [ProjectAgents.Row] = []
     /// 墙与"更早"要用的、由数据和分区推出的东西：数据或分区变了才重算（页上 Agent 的状态一变页面就要重算，每次都从上千张卡里重新分组太贵）。
     @State private var shape: PageShape?
     @State private var collapsed = false
+    /// 首次挂上时内容分几帧出（`Stage`）：一个回合里全建要几十毫秒；留着的页回来时已经在最后一段。
+    @State private var stage = Stage.header
+
+    /// 页头先到，其余每帧一段，自上而下。
+    private enum Stage: Int, CaseIterable, Comparable {
+        case header, focus, wall, older
+        static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+    }
 
     private static let collapseOffset: CGFloat = 140
     /// 空项目那一行"添加任务"的宽度上限：只是一行输入，跟着内容，不铺满整页（下面的绑定引导与空态是纸，与页面同宽）。
     private static let emptyLineWidth: CGFloat = 460
 
     var body: some View {
+        let agents = active ? workspace.projectAgents(projectID, synced: sessions) : restingAgents
         ScrollViewReader { proxy in
             ZStack(alignment: .top) {
                 ScrollView {
-                    content.id("top")
+                    content(agents).id("top")
                 }
                 .fadesUnderBars()
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
@@ -34,8 +44,8 @@ struct ProjectPage: View {
                 }
                 // 下滚后收成的一行：浮在工具栏那一条里，但不放进工具栏——工具栏内容只随用户操作变，
                 // 不随滚动位置这种布局读数变（工具栏一变就重排整个窗口，跟着滚动位置变会形成布局循环）
-                if collapsed, let data, showsFocus(data) {
-                    CompactFocus(data: data, agents: projectAgents) {
+                if collapsed, let data, showsFocus(data, agents) {
+                    CompactFocus(data: data, agents: agents) {
                         withAnimation(Motion.spatial(Motion.panel, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
                     }
                     .padding(.top, 8)
@@ -47,21 +57,27 @@ struct ProjectPage: View {
             .onChange(of: board.arrangement != nil) { DebugScene.scrollIfNeeded(proxy) }
             #endif
         }
-        .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
-        .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
-        .observingFolderGuide(into: $folderGuide)
+        .onChange(of: active) { _, active in
+            if !active { restingAgents = workspace.projectAgents(projectID, synced: sessions) }
+        }
         .observing(services.store, ProjectSessions.tables, id: projectID, into: $sessions, onError: workspace.fail) { [projectID] store in
             try projectID.map { try ProjectSessions.read($0, from: store) } ?? ProjectSessions(recorded: [], deliveries: [:], undelivered: [:], bindings: [])
         }
-        .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: $data, onError: workspace.fail) { [projectID] store in
+        .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: dataBinding, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
-        .onChange(of: data) { rearrange() }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }
+        .task(id: shape != nil) {
+            guard shape != nil else { return }
+            for next in Stage.allCases where next > stage {
+                await NextFrame.wait()
+                stage = next
+            }
+        }
     }
 
     /// 页头（名称、目录、计数）取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
-    @ViewBuilder private var content: some View {
+    @ViewBuilder private func content(_ agents: [ProjectAgents.Row]) -> some View {
         let catalog = workspace.catalog
         if projectID == nil, catalog?.projects.isEmpty == true, (catalog?.cardCounts[nil] ?? 0) == 0 {
             Welcome()
@@ -70,36 +86,40 @@ struct ProjectPage: View {
                 ProjectHeader(
                     projectID: projectID, project: catalog?.project(projectID),
                     directory: projectID.flatMap { catalog?.directories[$0] }, cardCount: catalog?.cardCounts[projectID] ?? 0)
-                if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
+                if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape, agents) }
             }
             .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 150)
         }
     }
 
     @ViewBuilder
-    private func page(_ data: ProjectPageData, _ arrangement: WallArrangement, _ shape: PageShape) -> some View {
+    private func page(_ data: ProjectPageData, _ arrangement: WallArrangement, _ shape: PageShape, _ agents: [ProjectAgents.Row]) -> some View {
         let byID = shape.byID
         let lastTarget = shape.lastTarget
-        if showsFocus(data) {
-            FocusBand(data: data, agents: projectAgents, guide: folderGuide)
+        if stage < .focus {
+            EmptyView()
+        } else if showsFocus(data, agents) {
+            FocusBand(data: data, agents: agents, guide: workspace.folderGuide)
         } else if let project = projectID {
             // 两边都空：不画一个只装着空态的大框，收成一行添加任务；还没绑文件夹时接着写明并给一键绑（与 Agent 栏同一个组件）
             VStack(alignment: .leading, spacing: 12) {
                 NewTaskField(project: project).frame(maxWidth: Self.emptyLineWidth, alignment: .leading)
                 if let project = data.project, !workspace.hasFolder(project.id) {
-                    ProjectFolderGuide(project: project, guide: folderGuide, style: .panel)
+                    ProjectFolderGuide(project: project, guide: workspace.folderGuide, style: .panel)
                 }
             }
         }
-        if data.cards.isEmpty {
-            EmptyProject(compact: showsFocus(data))
-        } else {
-            if !arrangement.pinned.isEmpty { resources(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }
-            if !arrangement.wall.isEmpty {
-                wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, lastTarget: lastTarget)
-            }
-            if !arrangement.older.isEmpty {
-                OlderList(groups: shape.older, cards: byID, lastTarget: lastTarget)
+        if stage >= .wall {
+            if data.cards.isEmpty {
+                EmptyProject(compact: showsFocus(data, agents))
+            } else {
+                if !arrangement.pinned.isEmpty { resources(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }
+                if !arrangement.wall.isEmpty {
+                    wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, lastTarget: lastTarget)
+                }
+                if stage >= .older, !arrangement.older.isEmpty {
+                    OlderList(groups: shape.older, cards: byID, lastTarget: lastTarget)
+                }
             }
         }
     }
@@ -135,11 +155,14 @@ struct ProjectPage: View {
     }
 
     /// 有任务或本项目的在线会话（本机的与别的 Mac 上的）时才有"任务与 Agent"一栏；两边都空时项目页只留一行添加任务。
-    private func showsFocus(_ data: ProjectPageData) -> Bool {
-        !data.tasks.isEmpty || !projectAgents.isEmpty
+    private func showsFocus(_ data: ProjectPageData, _ agents: [ProjectAgents.Row]) -> Bool {
+        !data.tasks.isEmpty || !agents.isEmpty
     }
 
-    private var projectAgents: [ProjectAgents.Row] { workspace.projectAgents(projectID, synced: sessions) }
+    /// 读到的数据与由它推出的分区、墙与"更早"在同一次写入里落下：页面只多算一遍，不先露一帧只有页头的样子。
+    private var dataBinding: Binding<ProjectPageData?> {
+        Binding(get: { data }, set: { data = $0; rearrange() })
+    }
 
     private func rearrange() {
         guard let data else { return }

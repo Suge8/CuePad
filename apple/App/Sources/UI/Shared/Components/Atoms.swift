@@ -7,16 +7,52 @@ import UIKit
 
 // MARK: 订阅 Store
 
+extension EnvironmentValues {
+    /// 这一页此刻在前台。Mac 的内容区把去过的页都挂着（`Workspace.mountedPages`），不在前台的页暂停订阅（`observing`）、
+    /// 不读实时状态；其余地方没有"挂着不看"的页，默认 true。
+    @Entry var pageActive = true
+}
+
 extension View {
-    /// 订阅 Store：`id` 变化时重新订阅；每次变更重读后写入 `value`。读失败交给 `onError`。
+    /// 订阅 Store：`id` 变化时重新订阅；每次变更重读后写入 `value`。读失败交给 `onError`。页不在前台时暂停（见 `pageActive`），回到前台重新订阅。
     func observing<T: Sendable>(
         _ store: CueStore, _ tables: Set<Table>, id: some Equatable = 0, into value: Binding<T?>,
         onError: @escaping (any Error) -> Void = { _ in },
         _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> some View {
-        task(id: id) {
+        modifier(Observing(store: store, tables: tables, id: id, value: value, same: { _, _ in false }, onError: onError, read: read))
+    }
+
+    /// 同上；读到的和已有的相等就不写（重新订阅后的第一份多半没变，写一次等于让整页白算一遍）。
+    func observing<T: Sendable & Equatable>(
+        _ store: CueStore, _ tables: Set<StoreTable>, id: some Equatable = 0, into value: Binding<T?>,
+        onError: @escaping (any Error) -> Void = { _ in },
+        _ read: @escaping @Sendable (isolated CueStore) throws -> T
+    ) -> some View {
+        modifier(Observing(store: store, tables: tables, id: id, value: value, same: { $0 == $1 }, onError: onError, read: read))
+    }
+}
+
+private struct Observing<T: Sendable, ID: Equatable>: ViewModifier {
+    let store: CueStore
+    let tables: Set<StoreTable>
+    let id: ID
+    @Binding var value: T?
+    let same: (T?, T) -> Bool
+    let onError: (any Error) -> Void
+    let read: @Sendable (isolated CueStore) throws -> T
+    @Environment(\.pageActive) private var active
+
+    private struct Run: Equatable {
+        let id: ID
+        let active: Bool
+    }
+
+    func body(content: Content) -> some View {
+        content.task(id: Run(id: id, active: active)) {
+            guard active else { return }
             do {
-                for try await next in store.observe(tables, read) { value.wrappedValue = next }
+                for try await next in store.observe(tables, read) where !same(value, next) { value = next }
             } catch is CancellationError {
             } catch {
                 onError(error)

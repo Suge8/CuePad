@@ -55,6 +55,7 @@ extension DebugScene {
         case "scenarios": await ScenarioBench.run(workspace)
         case "switch": await SwitchBench.run(workspace)
         case "press": await benchPress(workspace)
+        case "interact": await InteractionBench.run(workspace)
         default: break
         }
     }

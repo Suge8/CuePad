@@ -41,6 +41,8 @@ private struct MainRoot: View {
     var body: some View {
         content
             .task(id: workspace.catalogAttempt) { await workspace.observeCatalog() }
+            .task { await workspace.observeAgentLinks() }
+            .task { await workspace.observeFolderGuide() }
             .modifier(PaletteProvider())
             .onChange(of: services.settings.theme, initial: true) { _, theme in
                 NSApp.appearance = switch theme {

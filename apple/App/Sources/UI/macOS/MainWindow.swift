@@ -7,24 +7,20 @@ import SwiftUI
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
-    /// 窗口与侧栏宽度的读数。只在这里写、只由 `PinnedPage` 读：本视图带着工具栏，读了它们就会随几何变化重算、
-    /// 每次重算都重新提交整条工具栏（AppKit 随之重排窗口），形成布局反馈环。
-    @State private var widths = WindowWidths()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.sidebar) {
             Sidebar()
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.sidebar = $0 }
                 // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌘\ 同一个入口
                 .toolbar(removing: .sidebarToggle)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
             detail
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.window = $0 }
         .background { WindowPanels(workspace: workspace) }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
+        .overlay { Prewarm().environment(workspace) }
         .modifier(SessionProjectsTracker(workspace: workspace))
         .panelHost()
         .environment(workspace)
@@ -33,7 +29,7 @@ struct MainWindow: View {
     private var detail: some View {
         ZStack {
             palette.desk.ignoresSafeArea()
-            PinnedPage(widths: widths) { page }
+            page
             EditorLayer().zIndex(1)
         }
         .overlay(alignment: .bottom) { CaptureSlot() }
@@ -44,7 +40,7 @@ struct MainWindow: View {
     }
 
     private var page: some View {
-        CatalogGate { RoutedPage() }
+        CatalogGate { PageStack() }
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -52,6 +48,9 @@ struct MainWindow: View {
         ToolbarItem(placement: .navigation) { SwitcherSlot() }
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { CloseButton() }
+            .sharedBackgroundVisibility(.hidden)
+        // 会话页的标题与"⋯"：项常驻、只换里面的内容（`SessionHeader`）
+        ToolbarItem(placement: .navigation) { SessionTitleSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
@@ -61,6 +60,7 @@ struct MainWindow: View {
                 .help("搜索（⌘K）")
                 .disabled(!workspace.isLibraryReady)
             TasksButton().disabled(!workspace.isLibraryReady)
+            SessionMenuSlot()
         }
     }
 }
@@ -131,13 +131,37 @@ private struct CardPressMonitor: NSViewRepresentable {
     }
 }
 
-/// 内容区此刻的页。读页面的只有这里，主窗口的视图体不读它，切页时不重建整条工具栏。
-private struct RoutedPage: View {
+/// 内容区：当前页与最近去过的几页都挂着（`Workspace.mountedPages`），切页只是换哪一页看得见，回访不重建、不重排、滚动位置还在。
+/// 不在前台的页：不可见、点不到、屏读跳过，暂停订阅与实时状态（`pageActive`），尺寸停在离开时的值（`PageStackLayout`）。
+/// 读页面的只有这里，主窗口的视图体不读它，切页时不重建整条工具栏。会话页不留，只在当前页时挂上。
+private struct PageStack: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        switch workspace.page {
-        case .project(let id): ProjectPage(projectID: id).id(id)
+        let current = workspace.page
+        let pages = workspace.mountedPages
+        let leaving = workspace.leaving
+        let moving = workspace.sidebarMoving
+        PageStackLayout(active: current) {
+            ForEach(pages, id: \.self) { page in
+                let active = page == current
+                content(page)
+                    .layoutValue(key: PageKey.self, value: page)
+                    .opacity(active ? 1 : 0)
+                    .allowsHitTesting(active && !moving)
+                    .accessibilityHidden(!active)
+                    .environment(\.pageActive, active || page == leaving)
+            }
+        }
+    }
+
+    @ViewBuilder private func content(_ page: Workspace.Page) -> some View {
+        LinksEnvironment { pageView(page) }
+    }
+
+    @ViewBuilder private func pageView(_ page: Workspace.Page) -> some View {
+        switch page {
+        case .project(let id): ProjectPage(projectID: id)
         case .inbox: ProjectPage(projectID: nil)
         case .archive: ArchivePage()
         case .trash: TrashPage()
@@ -145,6 +169,48 @@ private struct RoutedPage: View {
         case .session(let id): SessionPage(sessionID: id).id(id)
         }
     }
+}
+
+nonisolated private struct PageKey: LayoutValueKey {
+    static let defaultValue: Workspace.Page? = nil
+}
+
+/// 叠放挂着的页：当前页铺满，其余的沿用它们离开时的尺寸（窗口、侧栏怎么变都不再向它们提新尺寸，也就不重排）；
+/// 回到前台时按当时的尺寸排一次。不回答对齐查询（默认实现会递归问遍整页子树）。
+private struct PageStackLayout: Layout {
+    let active: Workspace.Page
+
+    final class Memo {
+        var sizes: [Workspace.Page: CGSize] = [:]
+    }
+
+    func makeCache(subviews: Subviews) -> Memo { Memo() }
+
+    /// 默认的更新会换一份新缓存：窗口每变一次尺寸，挂着的页就忘了自己离开时的尺寸、跟着重排。
+    func updateCache(_ cache: inout Memo, subviews: Subviews) {}
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGSize {
+        proposal.replacingUnspecifiedDimensions(by: .zero)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) {
+        for subview in subviews {
+            guard let page = subview[PageKey.self] else { continue }
+            if page == active { cache.sizes[page] = bounds.size }
+            subview.place(at: bounds.origin, proposal: ProposedViewSize(cache.sizes[page] ?? bounds.size))
+        }
+    }
+
+    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGFloat? { nil }
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGFloat? { nil }
+}
+
+/// 页里的卡与行读"交给了哪个会话"：整个窗口一份（`Workspace.agentLinks`），在这里放进环境，页面不各自读。
+private struct LinksEnvironment<Content: View>: View {
+    @ViewBuilder let content: Content
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View { content.environment(\.cardAgents, workspace.agentLinks) }
 }
 
 /// 工具栏最左：侧栏钮，侧栏收起时后面跟着项目切换。同一个工具栏项里增减（增删工具栏项会重排整条工具栏）。
@@ -238,49 +304,6 @@ private extension Workspace.Page {
     }
 }
 
-@Observable
-private final class WindowWidths {
-    var window: CGFloat = 0
-    var sidebar: CGFloat = 0
-}
-
-/// 页面按侧栏开合的终点宽度排版、贴左摆放：开合动画中详情区每帧变宽变窄，页面只排一次，
-/// 随详情区左缘被侧栏推着走，超出的只会是窗口右缘之外（窗口自己裁掉）。不这样做时整页（卡片墙、目标栏、更早）每帧重排，是开合卡顿的主要来源。
-/// 开合状态在这里读、不在主窗口读：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
-private struct PinnedPage<Page: View>: View {
-    let widths: WindowWidths
-    @ViewBuilder let page: Page
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let hidden = workspace.sidebar == .detailOnly
-        let width: CGFloat? = widths.window > 0 ? (hidden ? widths.window : widths.window - widths.sidebar) : nil
-        PinnedWidth(width: width) { page }
-            // 页宽一步到终点：开合侧栏的动画事务若带进来，页面会按插值宽度逐帧重排
-            .transaction(value: width) { $0.animation = nil }
-    }
-}
-
-/// 把唯一的子视图按给定宽度贴左摆放；不给宽度时铺满。
-/// 不往外报子视图的最小尺寸（否则分栏会为它压窄侧栏，侧栏变窄又改了页宽，形成循环），
-/// 也不回答对齐查询（默认实现会递归问遍整页子树，侧栏开合时每帧一次）。
-private struct PinnedWidth: Layout {
-    let width: CGFloat?
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
-        proposal.replacingUnspecifiedDimensions(by: .zero)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
-        let width = width ?? bounds.width
-        subviews.first?.place(
-            at: bounds.origin,
-            proposal: ProposedViewSize(width: width, height: bounds.height))
-    }
-
-    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
-    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
-}
 
 /// 同步需要关注时（没登录 iCloud、需要你决定、出错等）在工具栏露一个图标：悬停看原因，点开设置处理。
 /// 平时什么都不显示；随同步状态（数据）变化，不随布局变化。
@@ -412,3 +435,4 @@ private struct NoticeView: View {
     }
 }
 #endif
+

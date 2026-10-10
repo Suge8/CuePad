@@ -7,7 +7,7 @@ import SwiftUI
 /// 点了走同一条绑定通路（`PiBind` 请求让那台 Mac 绑；Mac 上是本机）；另有"选文件夹…"自己挑。绑好之后已有会话立即归进项目。
 /// 请求的进度与没绑成的原因读投送请求（`ProjectFolders.bindProgress`），写在建议上面。
 /// 在哪出现只有一条规则（`FolderGuide.shows`）：项目页里只在有同名建议或绑定进行中时出现，其余收进项目的"⋯"；
-/// 冲着这个项目的 Agent 来的地方（Agent 页的空态、新会话的头部）总在。数据由所在的页读一次传进来（`observingFolderGuide`），
+/// 冲着这个项目的 Agent 来的地方（Agent 页的空态、新会话的头部）总在。数据 Mac 读 `Workspace.folderGuide`（整窗一份），iOS 由所在的页读一次传进来（`observingFolderGuide`），
 /// 页面据同一条规则排版（有没有 Agent 那一段）。
 struct ProjectFolderGuide: View {
     nonisolated enum Style: Sendable {

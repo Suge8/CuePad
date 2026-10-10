@@ -80,17 +80,26 @@ private struct ColumnsLayout: Layout {
     let idealColumnWidth: CGFloat
     let arrangements: [Int: [[UUID]]]
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+    /// 排版结果按宽度记一份：同一轮排版里 SwiftUI 先量（`sizeThatFits`）再摆（`placeSubviews`），每张卡的高度只量一遍。
+    /// 子视图或分列变了，SwiftUI 会换一份新的缓存。
+    final class Memo {
+        var width: CGFloat?
+        var frames: [Int: CGRect] = [:]
+    }
+
+    func makeCache(subviews: Subviews) -> Memo { Memo() }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGSize {
         let width = proposal.width ?? idealColumnWidth
-        return CGSize(width: width, height: frames(width: width, subviews: subviews).values.map(\.maxY).max() ?? 0)
+        return CGSize(width: width, height: frames(width: width, subviews: subviews, memo: cache).values.map(\.maxY).max() ?? 0)
     }
 
     // 没有对齐参考线：默认实现会把问题递归问遍墙上每张卡的子树，侧栏开合时每帧一次
-    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
-    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGFloat? { nil }
+    func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGFloat? { nil }
+    func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGFloat? { nil }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
-        let frames = frames(width: bounds.width, subviews: subviews)
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) {
+        let frames = frames(width: bounds.width, subviews: subviews, memo: cache)
         for (index, subview) in subviews.enumerated() {
             guard let frame = frames[index] else { continue }
             subview.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: ProposedViewSize(frame.size))
@@ -98,6 +107,14 @@ private struct ColumnsLayout: Layout {
     }
 
     /// 子视图下标 → 位置。分列里没有的卡（刚出现、分列还没跟上的那一帧）不摆。
+    private func frames(width: CGFloat, subviews: Subviews, memo: Memo) -> [Int: CGRect] {
+        if memo.width == width { return memo.frames }
+        let frames = frames(width: width, subviews: subviews)
+        memo.width = width
+        memo.frames = frames
+        return frames
+    }
+
     private func frames(width: CGFloat, subviews: Subviews) -> [Int: CGRect] {
         let count = min(WallColumns.count(for: width, idealColumnWidth: idealColumnWidth, spacing: spacing), arrangements.keys.max() ?? 1)
         guard let columns = arrangements[count] else { return [:] }

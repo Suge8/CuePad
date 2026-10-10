@@ -30,6 +30,7 @@ struct PiReplyBar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.pageActive) private var active
     @State private var sending = false
     @State private var sentCount = 0
     @FocusState private var focused: Bool
@@ -99,7 +100,7 @@ struct PiReplyBar: View {
             )
             .sensoryFeedback(.success, trigger: sentCount)
             #if os(macOS)
-            .onAppear { focused = true }
+            .onAppear { focused = active }
             #endif
     }
 
