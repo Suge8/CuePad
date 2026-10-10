@@ -91,7 +91,7 @@ struct Callout<Accessory: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: symbol).foregroundStyle(tint).accessibilityHidden(true)
-                Text(text).foregroundStyle(palette.ink)
+                Text(Widow.joined(text)).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
@@ -312,7 +312,7 @@ struct DeliveryStatusLabel: View {
     }
 }
 
-/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："运行了 4 分钟"、"刚开始等"、"2 小时前"。
+/// 会话计时，读法与写法见 `PiClock`，读哪一种由 `PiShown.clock` 定："运行了 4 分钟"、"刚刚"（等你确认的第一分钟）、"2 小时前"。
 /// 列表里到分钟；会话页顶栏传 `.second`。
 struct PiElapsed: View {
     let shown: PiShown

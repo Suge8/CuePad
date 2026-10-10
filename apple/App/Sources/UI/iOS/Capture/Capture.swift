@@ -96,6 +96,7 @@ struct FloatingInput<Content: View>: View {
                     .gesture(DragGesture(minimumDistance: 0).onEnded { _ in dismiss() })
                     .accessibilityHidden(true)
                 content()
+                    .environment(\.composerInk, .solid)
                     .frame(maxWidth: Self.maxWidth)
                     .padding(.horizontal, 12).padding(.bottom, 8)
                     .offset(y: drag)

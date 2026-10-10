@@ -48,7 +48,7 @@ struct PiConfigControls: View {
                 }
                 .popUpAnchor(anchors[.thinking])
             }
-            if let context = shown.context { PiContextGauge(session: session, usage: context) }
+            if let meter = shown.context.flatMap(PiContextMeter.init) { PiContextGauge(session: session, meter: meter) }
         }
         .fixedSize()
     }

@@ -59,7 +59,7 @@ struct TrashPage: View {
                 ForEach(data.projects) { project in
                     TrashRow(
                         icon: AnyView(ProjectGlyph(project: project)), title: project.name,
-                        detail: CountCopy.text((data.projectCardCounts[project.id] ?? 0, "条灵感与任务"))?.visible ?? "", deletedAt: project.deletedAt,
+                        detail: CountCopy.text((data.projectCardCounts[project.id] ?? 0, "条"))?.visible ?? "", deletedAt: project.deletedAt,
                         restore: { workspace.perform { try await $0.restoreProject(project.id) } },
                         purge: { workspace.perform { try await $0.purgeProject(project.id) } })
                 }

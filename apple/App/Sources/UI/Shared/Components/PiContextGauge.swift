@@ -6,17 +6,15 @@ import SwiftUI
 /// 在小尺寸下就是加载转圈，挨着数字的一条短横会读成减号（"−86%"）；写出"上下文"三个字，数字也不会被读成别的。
 /// 与模型、思考强度同样高；用到七成百分比加粗转墨色、铺色加深；九成时铺色换成胭脂（赭黄只给等你确认），百分比仍是墨色加粗——
 /// 胭脂字压在胭脂铺色上，深色下到不了 4.5:1，颜色只放在铺色上，字留给墨色。刚压缩过、Agent 还不知道
-/// 已用多少时不铺色、数字是一道横线。悬停与读屏说"上下文 · 已用 x% · 剩 y%"（快满了加一句可以压缩）；点一下是同样的说明，
+/// 已用多少时没有这颗胶囊。悬停与读屏说"上下文 · 已用 x% · 剩 y%"（快满了加一句可以压缩）；点一下是同样的说明，
 /// 接近上限时多一个"压缩"，等于发出 /compact。
 struct PiContextGauge: View {
     let session: PiSessionState
-    let usage: PiContextUsage
+    let meter: PiContextMeter
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var showsDetail = false
-
-    private var meter: PiContextMeter { PiContextMeter(usage) }
 
     /// 百分比：余量足次要墨色，七成起墨色加粗（快满了也是墨色，胭脂只在铺色上）。
     private var tight: Bool { meter.level == .tight || meter.level == .critical }
@@ -26,7 +24,7 @@ struct PiContextGauge: View {
         switch meter.level {
         case .critical: palette.failure.opacity(0.2)
         case .tight: palette.ink.opacity(0.13)
-        case .roomy, .unknown: palette.ink.opacity(0.08)
+        case .roomy: palette.ink.opacity(0.08)
         }
     }
 
@@ -43,7 +41,7 @@ struct PiContextGauge: View {
             .background(palette.fill, in: .capsule)
             .background(alignment: .leading) {
                 GeometryReader { proxy in
-                    if let fraction = meter.fraction { used.frame(width: proxy.size.width * fraction) }
+                    used.frame(width: proxy.size.width * meter.fraction)
                 }
                 .clipShape(.capsule)
             }

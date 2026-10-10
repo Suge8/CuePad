@@ -6,8 +6,7 @@ import SwiftUI
 /// 任务与 Agent：本项目任务（前几条没做完的顶层任务连同子任务，可拖动、缩进，同任务面板；没列出的与已完成的在底部写个数）+ 本项目的 Agent 会话。介绍在页头。
 /// Agent 一栏只在有话可说时出现：有在线会话，或项目还没绑文件夹而有同名建议、正在绑（绑定引导，`FolderGuide.shows`）；
 /// 否则任务独占整张纸，不留一栏"没有运行中的会话"。
-/// 纸与下面的资料、卡片墙同宽，任务一栏铺满纸（有 Agent 一栏时铺到分隔线）：行尾的折起箭头、计数与"完成"贴着纸的右内边距，
-/// 与资料、更早行尾的日期在同一条右边线上——页面只有左右两条边线，不在纸中间另起一条。
+/// 纸与下面的资料、卡片墙同宽；任务一栏有 Agent 一栏时铺到分隔线，没有时限在阅读宽度（`readingWidth`）。
 struct FocusBand: View {
     let data: ProjectPageData
     let agents: [ProjectAgents.Row]
@@ -20,10 +19,13 @@ struct FocusBand: View {
     private static let stackedBelow: CGFloat = 640
     /// Agent 一栏多宽。
     private static let agentWidth: CGFloat = 300
+    /// 没有 Agent 一栏时任务一栏的最大宽度（阅读宽度）：行尾的折起箭头与"完成"跟着这一栏，不在大窗口里甩到一千点开外；
+    /// 纸照旧与下面同宽，多出的宽度留白在纸的右边。
+    private static let readingWidth: CGFloat = 720
 
     var body: some View {
         Group {
-            if showsAgent { columns } else { column { tasks } }
+            if showsAgent { columns } else { column { tasks.frame(maxWidth: Self.readingWidth, alignment: .leading) } }
         }
         .paper(radius: 18)
     }
