@@ -8,6 +8,26 @@ import SwiftUI
 /// 点开看近况、回复（历史会话看最后一轮，回复时 Mac 在后台恢复它）。顶上一排（`SearchRow`）：左边按项目筛，中间搜索，
 /// 右边新会话（同步到不了 Mac 时多一颗同步图标）；从项目页"全部 N 个会话"推入的那一页用推入页的悬浮顶栏（项目名、会话数、新会话），
 /// 筛选与搜索在它下面一排。在线会话长按或左滑可结束（确认后发给它所在的 Mac，对话留着）。
+/// Agent 页的项目筛选存在哪：标签页的记在本机偏好里（下次打开还是它），从项目页推入的那一页先筛进来的项目、
+/// 在那里换的只留在这一页上、不记。选中的项目进了回收站时是全部。
+struct AgentFilter {
+    private let isPushed: Bool
+    private var local: UUID?
+
+    init(entered: UUID?) {
+        isPushed = entered != nil
+        local = entered
+    }
+
+    func current(in navigation: Navigation, catalog: ProjectCatalog?) -> UUID? {
+        isPushed ? local.flatMap { catalog?.project($0)?.id } : navigation.agentFilter(catalog: catalog)
+    }
+
+    mutating func choose(_ project: UUID?, in navigation: Navigation) {
+        if isPushed { local = project } else { navigation.chooseAgentFilter(project) }
+    }
+}
+
 struct AgentScreen: View {
     var inPanel = false
     /// 从项目页进来：先筛这个项目，在这里换的筛选不记下。
@@ -17,8 +37,7 @@ struct AgentScreen: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var model = AgentListModel()
-    /// 推入页自己的筛选（进来时是那个项目，在这里换的不记）；标签根页的筛选记在偏好里。
-    @State private var pushedFilter: UUID?
+    @State private var filterChoice: AgentFilter
     @FocusState private var searchFocused: Bool
     @State private var searchHidden = false
     /// 还没有文件夹的项目的同名建议（顶上筛选钮的菜单里一键绑）。
@@ -28,18 +47,12 @@ struct AgentScreen: View {
     init(inPanel: Bool = false, project: UUID? = nil) {
         self.inPanel = inPanel
         self.project = project
-        _pushedFilter = State(initialValue: project)
+        _filterChoice = State(initialValue: AgentFilter(entered: project))
     }
 
-    /// 此刻的项目筛选；项目进了回收站时是全部。
-    private var filter: UUID? {
-        if project == nil { return navigation.agentFilter(catalog: workspace.catalog) }
-        return pushedFilter.flatMap { workspace.catalog?.project($0)?.id }
-    }
+    private var filter: UUID? { filterChoice.current(in: navigation, catalog: workspace.catalog) }
 
-    private func pick(_ id: UUID?) {
-        if project == nil { navigation.chooseAgentFilter(id) } else { pushedFilter = id }
-    }
+    private func pick(_ id: UUID?) { filterChoice.choose(id, in: navigation) }
 
     var body: some View {
         List {
