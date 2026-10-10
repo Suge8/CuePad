@@ -295,16 +295,13 @@ final class Navigation {
         }
     }
 
-    /// Agent 页的项目筛选：从项目页进来（`entered`）是该项目，否则是在 Agent 页上次选的（本机偏好）；
-    /// 选中的项目不在项目目录里（进了回收站）时是全部。
-    func agentFilter(entered: UUID?, catalog: ProjectCatalog?) -> UUID? {
-        (entered ?? settings.agentProject).flatMap { catalog?.project($0)?.id }
+    /// Agent 标签页的项目筛选：上次选的（本机偏好）；选中的项目不在项目目录里（进了回收站）时是全部。
+    func agentFilter(catalog: ProjectCatalog?) -> UUID? {
+        settings.agentProject.flatMap { catalog?.project($0)?.id }
     }
 
-    /// 在 Agent 页选了筛选：记下来；从项目页进来的那一页上换的不记。
-    func chooseAgentFilter(_ project: UUID?, entered: UUID?) {
-        if entered == nil { settings.agentProject = project }
-    }
+    /// 在 Agent 标签页选了筛选：记下来。
+    func chooseAgentFilter(_ project: UUID?) { settings.agentProject = project }
 
     /// 浮起随手记输入框；`project` 是入口指定的落点（小组件），不给时接着上次留下的草稿与落点。
     func startCapture(project: UUID?? = nil) {

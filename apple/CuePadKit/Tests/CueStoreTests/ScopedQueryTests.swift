@@ -24,6 +24,21 @@ import Testing
     #expect(try await store.trashCount() == 1)
   }
 
+  @Test func 回收站项目带进来的卡片数_一次查询_与按项目搜索一致() async throws {
+    let doomed = try await store.createProject(name: "删掉的", color: "#111")
+    let kept = try await store.createProject(name: "留着的", color: "#111")
+    let early = try await store.createCard(in: doomed.id, body: "先单独删")
+    _ = try await store.createCard(in: doomed.id, body: "随项目")
+    _ = try await store.createCard(in: kept.id, body: "活着")
+    try await store.trashCard(early.id)
+    try await store.trashProject(doomed.id)
+
+    let counts = try await store.trashedProjectCardCounts()
+
+    #expect(counts == [doomed.id: 2])
+    #expect(counts[doomed.id] == (try await store.search(SearchQuery(projects: [doomed.id], inTrash: true), limit: 0).totalCards))
+  }
+
   @Test func 一个项目的任务与下级_等于全库的再按项目筛() async throws {
     let a = try await store.createProject(name: "A", color: "#111")
     let b = try await store.createProject(name: "B", color: "#111")
