@@ -114,6 +114,83 @@ struct SendTargetTests {
         #expect(rig.host.calls.isEmpty)
     }
 
+    /// 别的 Mac 上在线的会话（同步记录里 hostID 不是本机）：与本机的会话一样是提示词的发送目标。
+    private func remoteSession(_ id: String, title: String, in project: Project, state: PiWorkState = .settled) async throws {
+        try await PiStateRecorder(store: store, hostID: "mac-b").update(
+            sessionID: id, state: state, title: title, folder: title, projectID: project.id)
+    }
+
+    @Test func 别的Mac上的在线会话也是发送目标() async throws {
+        try await remoteSession("r", title: "atlas", in: project)
+
+        await expectTarget(project, "atlas", ended: false)
+    }
+
+    @Test func 发给别的Mac上的会话_写一条指定那台Mac的投送请求_本机不执行() async throws {
+        try await remoteSession("r", title: "atlas", in: project)
+        await expectTarget(project, "atlas", ended: false)
+        let target = try #require(workspace.agentTarget(for: project.id))
+
+        #expect(await workspace.send("接着做", to: target))
+
+        let request = try #require(try await store.deliveryRequests().first)
+        #expect(request.hostID == "mac-b" && request.mode == .known(.send))
+        #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "r"))
+        #expect(rig.host.calls.isEmpty && rig.pi.sessions.isEmpty, "本机没有执行它")
+        #expect(workspace.sendChoice == AgentTarget(session: "r"))
+    }
+
+    @Test func 别的Mac上的会话正忙_先问马上说还是等它做完再说() async throws {
+        try await remoteSession("r", title: "atlas", in: project, state: .thinking)
+        await expectTarget(project, "atlas", ended: false)
+        let target = try #require(workspace.agentTarget(for: project.id))
+
+        #expect(await workspace.send("看一下", to: target) == false)
+        #expect(workspace.busySend?.session == "r")
+        #expect(try await store.deliveryRequests().isEmpty)
+
+        workspace.resolveBusySend(.steer)
+        await eventually { true }
+        for _ in 0..<100 where try await store.deliveryRequests().isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+        let request = try #require(try await store.deliveryRequests().first)
+        #expect(request.hostID == "mac-b" && request.mode == .known(.steer))
+    }
+
+    @Test func 本机和别的Mac都有会话_本机的会话是默认目标() async throws {
+        try await remoteSession("r", title: "atlas", in: project)
+        _ = try await open("a", in: "/work/alpha")
+
+        await expectTarget(project, "alpha", ended: false)
+    }
+
+    /// Mac 的发送目标、会话菜单与手机的交给 Agent 输入框列的是同一批在线会话。
+    @Test func 会话菜单与手机的目标列表是同一批() async throws {
+        _ = try await open("a", in: "/work/alpha")
+        _ = try await open("b", in: "/work/beta")
+        try await remoteSession("r", title: "atlas", in: project)
+        try await remoteSession("gone", title: "old", in: project, state: .ended)
+        await eventually { workspace.onlineTargets(for: project.id).count == 3 }
+
+        let mac = workspace.onlineTargets(for: project.id).map(\.state.sessionID)
+        let phone = HandOffTargets.sessions(rig.services.liveSessions.live, project: project.id).map(\.state.sessionID)
+
+        #expect(mac == phone && Set(mac) == ["a", "b", "r"])
+        #expect(workspace.endedTargets.isEmpty, "别的 Mac 上结束的不是本机刚结束的")
+    }
+
+    /// 同步记录里还写着"在线"的本机会话，桥上却已经没有了（还没来得及标成结束）：不是能交给的会话，菜单不列、也不当默认目标；
+    /// 与发送走的路（已结束）是同一个判定。
+    @Test func 本机记录里在线但桥上已没有的会话不列() async throws {
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
+            sessionID: "stale", state: .settled, title: "stale", folder: "stale", projectID: project.id)
+        await eventually { rig.services.liveSessions.live.map(\.state.sessionID) == ["stale"] }
+        #expect(rig.services.liveSessions.live.count == 1, "记录读到了")
+
+        #expect(workspace.onlineTargets(for: project.id).isEmpty)
+        #expect(workspace.agentTarget(for: project.id) == nil)
+        if case .ended = workspace.route(of: "stale") {} else { Issue.record("发送时它是已结束的会话") }
+    }
+
     @Test func 选过的会话结束了也不换成别的() async throws {
         let alpha = try await open("a", in: "/work/alpha")
         _ = try await open("b", in: "/work/beta")
