@@ -226,12 +226,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .animation(Motion.quick, value: draft.attachments.map(\.id))
         .animation(Motion.quick, value: draft.images.map(\.id))
         .modifier(ImageSources(source: $source, images: $draft.images))
-        .panel(isPresented: showing(.cards)) {
+        .modifier(CardPanels(on: accepts.contains(.cards), picking: showing(.cards), previewing: $previewing) {
             CardPicker(project: cardsFrom) { draft.attach($0) }
-        }
-        .panel(item: $previewing) { outbox in
+        } preview: { outbox in
             AttachmentSheet(outbox: outbox, expand: { expand(outbox) })
-        }
+        })
 #if DEBUG
         .task { await DebugScene.presetComposer($draft, source: $source, store: workspace.services.store) }
 #endif
@@ -431,6 +430,26 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
                 }
             }
+        }
+    }
+}
+
+/// 带卡片的输入框才挂的两个弹层：挑灵感或任务、看带上的那张卡。不接受卡片的（随手记）不挂，Mac 上也就不需要浮层宿主
+/// （菜单栏面板没有）。`on` 对一个输入框是定值，不会来回换结构。
+private struct CardPanels<Picker: View, Preview: View>: ViewModifier {
+    let on: Bool
+    let picking: Binding<Bool>
+    let previewing: Binding<Outbox?>
+    @ViewBuilder let picker: () -> Picker
+    @ViewBuilder let preview: (Outbox) -> Preview
+
+    func body(content: Content) -> some View {
+        if on {
+            content
+                .panel(isPresented: picking, content: picker)
+                .panel(item: previewing, content: preview)
+        } else {
+            content
         }
     }
 }

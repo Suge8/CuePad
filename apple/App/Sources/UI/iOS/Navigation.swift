@@ -64,13 +64,6 @@ final class Navigation {
         func hash(into hasher: inout Hasher) { hasher.combine(id) }
     }
 
-    /// 随手记里正在写的这一条（输入框收起后仍留着，见 `endCapture`）。
-    struct Capture {
-        var draft = ComposerDraft()
-        /// 手动换过的落点（`.some(nil)` 是未分类）；nil 时落在正在看的项目（`currentProject`）。
-        var project: UUID??
-    }
-
     /// 要交给 Agent 的一条提示词（存储格式，变量已填）：浮起交给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
     struct OpenTask: Identifiable {
         let id: UUID
@@ -102,7 +95,8 @@ final class Navigation {
     var tab: Tab = .projects
     var projectsPath: [Route] = []
     var agentPath: [Route] = []
-    var capture = Capture()
+    /// 随手记里正在写的这一条：输入框收起后仍留着（见 `endCapture`）；没换过落点时落在正在看的项目（`currentProject`）。
+    var capture = CaptureState()
     /// 随手记输入框浮在键盘上方。
     private(set) var capturing = false
     var outbox: Outbox?
@@ -322,12 +316,12 @@ final class Navigation {
     /// 收起随手记：写了东西就留着下次接着写，空的连同换过的种类与落点一起丢掉。
     func endCapture() {
         capturing = false
-        if capture.draft.isEmpty(accepting: .images) { capture = Capture() }
+        if capture.draft.isEmpty(accepting: .images) { capture = CaptureState() }
     }
 
     /// 记下了：清空并收起。
     func finishCapture() {
-        capture = Capture()
+        capture = CaptureState()
         capturing = false
     }
 
