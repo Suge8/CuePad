@@ -376,7 +376,7 @@ struct BridgeClientTests {
         #expect(PiBridgeError.incompatibleExtension.errorDescription == "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发")
 
         ext.close(bye: "quit")
-        try await eventually("ended") { session(ext.id) == nil && bridge.endedSessions[ext.id] != nil }
+        try await eventually("ended") { session(ext.id) == nil }
     }
 
     @Test func corruptedMessageDropsConnectionAsIncompatible() async throws {

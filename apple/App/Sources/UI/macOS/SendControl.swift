@@ -20,7 +20,7 @@ struct SendControl: View {
             if let target, ready {
                 HStack(spacing: 0) {
                     Button { send(target) } label: {
-                        label(dot: workspace.session(target.session).map(workspace.shown), text: Dotted("发给 Agent", name(target)), shortcut: "⌘↩")
+                        label(dot: workspace.liveSession(target.session).map(workspace.shown), text: Dotted("发给 Agent", name(target)), shortcut: "⌘↩")
                             .padding(.trailing, 8)
                     }
                     .buttonStyle(PressStyle())
@@ -83,7 +83,7 @@ struct SessionMenu<Label: View>: View {
             }
             ForEach(services.pi.sessions) { session in
                 Toggle(
-                    isOn: Binding(get: { current?.session == session.id }, set: { _ in workspace.sendChoice = AgentTarget(session: session.id) })
+                    isOn: Binding(get: { current?.session == session.sessionID }, set: { _ in workspace.sendChoice = AgentTarget(session: session.sessionID) })
                 ) { Text(Dotted(session.displayName, workspace.shown(session).label)) }
             }
         } label: {

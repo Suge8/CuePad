@@ -131,13 +131,14 @@ struct RealSlashTests {
     /// 需要会话控制权的内置命令（新会话、重新载入、克隆）经扩展自己的内部命令执行：旧会话结束、新会话出现。
     @Test func newSessionEndsTheOldOneAndOpensAnother() async throws {
         try await withRig { pi, bridge, s in
+            let log = ChangeLog(bridge)
             try pi.prompt("先说一句")
             try await eventually("回复写入", timeout: .seconds(20)) { self.userTexts(of: s) == ["先说一句"] }
             try await eventually("歇下") { bridge.sessions.first?.state == .settled }
 
             try await bridge.command("/new", in: s.id)
             try await eventually("新会话", timeout: .seconds(20)) { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
-            #expect(bridge.endedSessions[s.id] != nil)
+            #expect(log.ended.contains { $0.0.id == s.id })
             #expect(bridge.sessions[0].commands.contains { $0.name == "shout" }, "新会话照样报告命令清单")
         }
     }
