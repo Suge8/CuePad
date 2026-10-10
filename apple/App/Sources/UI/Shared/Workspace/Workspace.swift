@@ -74,8 +74,8 @@ final class Workspace {
     #if os(macOS)
     var sidebar: NavigationSplitViewVisibility = .all
     private(set) var nonProjectPage: Page?
-    #endif
-    /// 打开的卡（编辑纸页）。设成某张卡时纸页立即挂上；清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
+    /// 打开的卡（编辑纸页；iOS 打开卡片是推入导航，见 `Navigation.open(card:)`）。设成某张卡时纸页立即挂上；
+    /// 清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
     var openCard: UUID? {
         didSet { if let openCard { present(openCard) } }
     }
@@ -83,6 +83,7 @@ final class Workspace {
     private(set) var presentedCard: UUID?
     /// 各张卡在纸页开合中的状态，按卡分开（见 `CardPresence`）。
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
+    #endif
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
     var attaching: Card?
     #if os(macOS)
@@ -293,7 +294,6 @@ final class Workspace {
         let gone = kept.filter { if case .project(let id) = $0 { !ids.contains(id) } else { false } }
         if !gone.isEmpty { kept.removeAll { gone.contains($0) } }
     }
-    #endif
 
     /// 纸页缩回动画结束。
     func finishClosingCard() {
@@ -331,7 +331,6 @@ final class Workspace {
         presentedCard = nil
     }
 
-    #if os(macOS)
     /// 切到一页（侧栏点哪就是哪）；开着的纸页随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
     func show(_ page: Page) {
         openCard = nil
@@ -523,7 +522,9 @@ final class Workspace {
     func archive(_ id: UUID) async throws {
         let store = services.store
         try await store.archive(id)
+        #if os(macOS)
         if openCard == id { openCard = nil }
+        #endif
         say("已归档", undo: { try await store.unarchive(id) })
     }
 
@@ -532,7 +533,9 @@ final class Workspace {
         let store = services.store
         let children = try await store.children(of: id).map(\.id)
         try await store.trashCard(id)
+        #if os(macOS)
         if openCard == id { openCard = nil }
+        #endif
         say("已删除", undo: {
             try await store.restoreCard(id)
             var previous: UUID?
@@ -608,7 +611,8 @@ final class Workspace {
     }
 }
 
-/// 一张卡在纸页开合中的状态。按卡分开、各自可观察：开合时只有被打开的那张卡的视图重算，
+#if os(macOS)
+/// 一张卡在纸页开合中的状态（Mac 的纸页开合）。按卡分开、各自可观察：开合时只有被打开的那张卡的视图重算，
 /// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
 @MainActor @Observable
 final class CardPresence {
@@ -640,3 +644,4 @@ final class CardPresence {
         frame = nil
     }
 }
+#endif
