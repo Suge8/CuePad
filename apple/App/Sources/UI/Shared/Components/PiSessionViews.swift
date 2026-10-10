@@ -1,6 +1,13 @@
 import CueStore
 import SwiftUI
 
+nonisolated extension PiSessionListItem {
+    /// 没能送达的话有几句，按 Pi 的会话 id（只留有的）：手里只有会话记录的行（Mac 侧栏、菜单栏、⌘K、项目页 Agent 栏）按它找自己的数。
+    static func undelivered(_ items: [PiSessionListItem]) -> [String: Int] {
+        Dictionary(items.filter { $0.undelivered > 0 }.map { ($0.state.sessionID, $0.undelivered) }) { first, _ in first }
+    }
+}
+
 nonisolated extension PiSessionState {
     /// 会话列表的顺序（Agent 页、Mac 侧栏）：要你注意的在前（`PiShown.rank`），同一档保持原来的先后（最近进入当前状态的在前）。
     /// `deliveries` 是发给各会话（按 Pi 的会话 id）的最近一条投送请求：话在路上的与工作中同档，发出那一刻就挪到位。
@@ -294,7 +301,8 @@ extension PiShown {
         case .failed: "exclamationmark.circle.fill"
         case .delivery(.failed): "arrow.uturn.backward.circle.fill"
         case .restart: "arrow.clockwise.circle.fill"
-        case .delivery(.waking): "sunrise.circle"
+        // 唤醒：电源键（把歇下的会话打开），不用日出——圈里一道横线加向上箭头读成天气图标
+        case .delivery(.waking): "power.circle"
         case .delivery: "arrow.up.circle"
         case .working: "smallcircle.filled.circle"
         case .unread: "circle.fill"
@@ -309,7 +317,7 @@ extension PiShown {
 }
 
 /// 会话状态标（全 App 只此一份：Agent 页、书架、侧栏、Mac 侧栏与菜单栏、会话页顶栏、任务上的会话状态）：颜色 + 形状表达状态——
-/// 等你确认赭黄问号、出错胭脂叹号、没能送达胭脂折回箭头、工作中墨色转圈、话在路上墨色向上箭头（唤醒是日出）在呼吸、
+/// 等你确认赭黄问号、出错胭脂叹号、没能送达胭脂折回箭头、工作中墨色转圈、话在路上墨色向上箭头（唤醒是电源键）在呼吸、
 /// 有新回复墨色实心点、该你了灰色空气泡、新会话灰虚线圈、已结束更淡的带斜线圈（不与待办任务的空心圈相混）。`size` 是点的直径，符号按它放大到同样的视觉分量。
 /// 转圈与呼吸是常驻的循环动效，交给 Core Animation（`LoopLayer`），标不在屏幕上时不画；换状态时符号淡入替换，
 /// 一轮做完（工作中 → 停下）时放一圈涟漪、点弹一下，只这一次。减弱动态效果时转圈换成静止的圈点，没有呼吸与涟漪。

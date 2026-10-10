@@ -57,6 +57,9 @@ struct PiSessionRow: View {
     var end: DeliveryRequest?
     /// 发给它的最近一条改名（`PiSessionListItem.rename`）：名字与"正在改名""没能改名"由它推出（`PiRename`）。
     var rename: DeliveryRequest?
+    /// 没能送达的话有几句（`PiSessionListItem.undelivered`）：你看过以后整行不再是"没能送达"，但只要还有，时长前留一个
+    /// 胭脂的小折回箭头（读屏念"N 句没送到"），与会话页顶栏同一个数（`PiChat.undeliveredNote`）。
+    let undelivered: Int
     var style = Style.compact
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -110,6 +113,10 @@ struct PiSessionRow: View {
                         name
                     }
                     Spacer(minLength: 4)
+                    if shown.status != .delivery(.failed), let unsent = PiChat.undeliveredNote(undelivered) {
+                        Image(systemName: "arrow.uturn.backward").font(style.meta.weight(.semibold)).foregroundStyle(palette.failure)
+                            .accessibilityLabel(unsent)
+                    }
                     // 时间只占它要的宽度，名字拿剩下的
                     PiElapsed(shown: shown, font: style.meta).fixedSize()
                 }

@@ -103,7 +103,7 @@ private struct PiColumn: View {
         }
         ForEach(agents) { row in
             VStack(alignment: .leading, spacing: 2) {
-                PiSessionRow(session: row.state, project: project, delivery: row.delivery)
+                PiSessionRow(session: row.state, project: project, delivery: row.delivery, undelivered: row.undelivered)
                 if shared == nil, let host = row.hostName {
                     Label("在 \(host) 上", systemImage: "laptopcomputer").font(Typography.meta).foregroundStyle(palette.ink3)
                 }
@@ -121,6 +121,8 @@ enum ProjectAgents {
     struct Row: Identifiable {
         let state: PiSessionState
         var delivery: DeliveryRequest?
+        /// 没能送达的话有几句（会话行的小标记）。
+        var undelivered = 0
         /// 会话在哪台 Mac 上；本机为 nil。
         let hostName: String?
         var id: String { state.sessionID }
@@ -135,12 +137,12 @@ enum ProjectAgents {
     }
 
     static func rows(
-        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], bindings: [DirectoryBinding],
-        host: String
+        live: [PiSessionState], recorded: [PiSessionState], deliveries: [String: DeliveryRequest] = [:], undelivered: [String: Int] = [:],
+        bindings: [DirectoryBinding], host: String
     ) -> [Row] {
         PiSessionState.liveRows(live: live, recorded: recorded, deliveries: deliveries).map { state in
             Row(
-                state: state, delivery: deliveries[state.sessionID],
+                state: state, delivery: deliveries[state.sessionID], undelivered: undelivered[state.sessionID] ?? 0,
                 hostName: state.hostID == host
                     ? nil : bindings.first { $0.hostID == state.hostID && $0.projectID == state.projectID }?.hostName ?? otherMac)
         }
@@ -151,6 +153,7 @@ enum ProjectAgents {
 nonisolated struct ProjectSessions: Sendable, Equatable {
     var recorded: [PiSessionState]
     var deliveries: [String: DeliveryRequest]
+    var undelivered: [String: Int]
     var bindings: [DirectoryBinding]
 
     static let tables: Set<StoreTable> = [.piSessionStates, .deliveryRequests, .directoryBindings]
@@ -160,6 +163,7 @@ nonisolated struct ProjectSessions: Sendable, Equatable {
         return ProjectSessions(
             recorded: items.map(\.listed),
             deliveries: Dictionary(items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
+            undelivered: PiSessionListItem.undelivered(items),
             bindings: try store.directoryBindings().filter { $0.projectID == project })
     }
 }
@@ -173,6 +177,7 @@ extension Workspace {
         }
         return ProjectAgents.rows(
             live: live, recorded: synced?.recorded ?? [], deliveries: sessionDeliveries.merging(synced?.deliveries ?? [:]) { local, _ in local },
+            undelivered: sessionUndelivered.merging(synced?.undelivered ?? [:]) { local, _ in local },
             bindings: synced?.bindings ?? [], host: services.hostID)
     }
 }

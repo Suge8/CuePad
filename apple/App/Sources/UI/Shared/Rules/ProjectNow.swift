@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 项目的"此刻"一行：每个项目只挑一件最该知道的事（书架大卡与行、iPad 侧栏、Mac 侧栏共用这一处规则）。
-/// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因）→ Agent 在跑与话在路上（在做什么）→ 需要 /reload
+/// 按优先取第一个：Agent 等你确认（它在问什么）→ 出错与没能送达（原因；没能送达看过那个会话就不算，同会话行）→ Agent 在跑与话在路上（在做什么）→ 需要 /reload
 /// → 有新回复（回复第一句）→ 最近开始的进行中任务 → 项目介绍（会话之间的先后就是会话列表的档 `PiShown.rank`）；都没有就是 nil，行照样留着高度。状态标与颜色都按 `PiShown`：只有要你动手的带色。
 nonisolated struct ProjectNow: Hashable, Sendable {
     enum Source: Hashable, Sendable {

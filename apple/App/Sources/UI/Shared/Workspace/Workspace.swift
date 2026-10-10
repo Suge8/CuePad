@@ -120,6 +120,8 @@ final class Workspace {
     private(set) var sessionRecaps: [String: PiRecap] = [:]
     /// 发给在线会话的最近一条投送请求（Pi 的会话 id →），同一次观察带来：Mac 上配到桥的实时状态上算显示状态（`PiDelivery`）。
     private(set) var sessionDeliveries: [String: DeliveryRequest] = [:]
+    /// 发给在线会话、没能送达的话有几句（Pi 的会话 id →，`PiSessionListItem.undelivered`）：会话行的小标记。
+    private(set) var sessionUndelivered: [String: Int] = [:]
     /// 本次运行里已结束的会话（会话 id），按本窗口看到它们结束的先后。可观察：默认发送目标取最后结束的那个。
     private(set) var endedOrder: [String] = []
 
@@ -162,8 +164,10 @@ final class Workspace {
             for try await items in services.store.observe([.piSessionStates, .deliveryRequests], { try $0.piSessionPage(.live).items }) {
                 let recaps = Dictionary(items.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first }
                 let deliveries = Dictionary(items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
+                let undelivered = PiSessionListItem.undelivered(items)
                 if recaps != sessionRecaps { sessionRecaps = recaps }
                 if deliveries != sessionDeliveries { sessionDeliveries = deliveries }
+                if undelivered != sessionUndelivered { sessionUndelivered = undelivered }
             }
         } catch is CancellationError {
         } catch {

@@ -43,10 +43,12 @@ extension CueStore {
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
     let deliveries = try latestDeliveries(to: states.map(\.sessionID))
     let renames = try latestRenames(to: states.map(\.sessionID))
+    let undelivered = try undeliveredCounts(to: states.map(\.sessionID))
     return PiSessionPage(
       items: states.map {
         PiSessionListItem(
-          state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID])
+          state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
+          undelivered: undelivered[$0.sessionID] ?? 0)
       },
       total: total)
   }
@@ -60,6 +62,23 @@ extension CueStore {
       where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode = '\(DeliveryMode.config.rawValue)' AND targetRef IN (\(refs))",
       sessionIDs, orderBy: "createdAt, rowid")
     return Dictionary(grouping: configs) { $0.target.ref ?? "" }.compactMapValues(DeliveryRequest.latestRename(in:))
+  }
+
+  /// 发给这些会话、没能送达的话各有几句，按 Pi 的会话 id：说的话（直接说、马上说、等它做完再说）里失败的。失败的话不会进对话，
+  /// 一直留到你重发（新请求写成后删掉旧的）或移除；作答、命令、设置不是说的话，不算。
+  func undeliveredCounts(to sessionIDs: [String]) throws -> [String: Int] {
+    guard !sessionIDs.isEmpty else { return [:] }
+    let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
+    let modes = [DeliveryMode.send, .steer, .followUp].map { "'\($0.rawValue)'" }.joined(separator: ", ")
+    let rows = try db.query(
+      """
+      SELECT targetRef, count(*) FROM deliveryRequests
+      WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(modes)) AND status = '\(DeliveryStatus.failed.rawValue)'
+        AND targetRef IN (\(refs))
+      GROUP BY targetRef
+      """, sessionIDs
+    ) { ($0.text(0), Int($0.int(1))) }
+    return Dictionary(rows, uniquingKeysWith: +)
   }
 
   /// 发给这些会话的最近一条投送请求（只算 `DeliveryMode.toSession` 的方式），按 Pi 的会话 id。

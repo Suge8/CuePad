@@ -22,31 +22,31 @@ struct SessionNoticeTests {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
         try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage")
-        #expect(tracker.alerts(for: try await live()).isEmpty)
+        #expect(tracker.alerts(for: try await live(), since: .distantPast).isEmpty)
 
         try await recorder.update(sessionID: "s1", state: .settled)
         let settled = try await live()
-        let alerts = tracker.alerts(for: settled)
+        let alerts = tracker.alerts(for: settled, since: .distantPast)
         #expect(alerts.map(\.kind) == [.settled] && alerts.first?.title == "homepage")
         #expect(alerts.first?.session == settled.first?.id)
-        #expect(tracker.alerts(for: settled).isEmpty)
+        #expect(tracker.alerts(for: settled, since: .distantPast).isEmpty)
     }
 
     @Test func 等你确认带问题首行_做完了不带() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
         try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage")
-        _ = tracker.alerts(for: try await live())
+        _ = tracker.alerts(for: try await live(), since: .distantPast)
 
         let question = PiQuestion(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
-        let waiting = try #require(tracker.alerts(for: try await live()).first)
+        let waiting = try #require(tracker.alerts(for: try await live(), since: .distantPast).first)
         #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 在等你 · 要覆盖 feed.xml 吗？")
 
         try await recorder.update(sessionID: "s1", state: .thinking)
-        _ = tracker.alerts(for: try await live())
+        _ = tracker.alerts(for: try await live(), since: .distantPast)
         try await recorder.update(sessionID: "s1", state: .settled)
-        let settled = try #require(tracker.alerts(for: try await live()).first)
+        let settled = try #require(tracker.alerts(for: try await live(), since: .distantPast).first)
         #expect(settled.kind == .settled && settled.text.visible == "homepage · 完成了")
     }
 
@@ -54,12 +54,30 @@ struct SessionNoticeTests {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
         try await recorder.update(sessionID: "s1", state: .thinking)
-        _ = tracker.alerts(for: try await live())
+        _ = tracker.alerts(for: try await live(), since: .distantPast)
         try await recorder.end(sessionID: "s1")
-        #expect(tracker.alerts(for: try await live()).isEmpty)  // 已结束的不在在线范围里
+        #expect(tracker.alerts(for: try await live(), since: .distantPast).isEmpty)  // 已结束的不在在线范围里
 
         try await recorder.update(sessionID: "s1", state: .settled)
-        #expect(tracker.alerts(for: try await live()).isEmpty)  // 重新连上：第一次读到
+        #expect(tracker.alerts(for: try await live(), since: .distantPast).isEmpty)  // 重新连上：第一次读到
+    }
+
+    /// App 不在前台时发生的转换（冷启动、从后台回来后才同步到）不在前台补报：那一下系统推送已经提示过了。
+    @Test func 回到前台之前就发生的转换不补报_之后的照常提示() async throws {
+        let recorder = recorder()
+        var tracker = SessionAlertTracker()
+        let start = Date(timeIntervalSinceNow: -600)
+        try await recorder.update(sessionID: "s1", state: .thinking, title: "notes", times: PiTimes(stateSince: start, busySince: start))
+        _ = tracker.alerts(for: try await live(), since: .distantPast)
+
+        let away = start.addingTimeInterval(60), active = start.addingTimeInterval(120)
+        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: away, busySince: nil))
+        #expect(tracker.alerts(for: try await live(), since: active).isEmpty)
+
+        try await recorder.update(sessionID: "s1", state: .thinking, times: PiTimes(stateSince: active.addingTimeInterval(10), busySince: active.addingTimeInterval(10)))
+        _ = tracker.alerts(for: try await live(), since: active)
+        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: active.addingTimeInterval(20), busySince: nil))
+        #expect(tracker.alerts(for: try await live(), since: active).map(\.kind) == [.settled])
     }
 
     // MARK: 正看着
@@ -110,6 +128,18 @@ struct SessionNoticeTests {
         split.agentPanel = false
         split.splitRoot = .agent
         #expect(!split.showsAlert(about: session))
+    }
+
+    /// 提示弹出后才进了那个会话（或 Agent 列表）：横幅当场撤下，不在正看着的会话页上停满 5 秒。
+    @Test func 进了提示说的那个会话_横幅撤下_别的提示留着() {
+        let session = UUID()
+        let navigation = navigation(.tabs)
+        let banner = Workspace.Notice(text: "notes · 完成了", isError: false, link: .session(session))
+        let other = Workspace.Notice(text: "已复制", isError: false)
+        #expect(navigation.keeps(banner) && navigation.keeps(other))
+
+        navigation.show(session: session)
+        #expect(!navigation.keeps(banner) && navigation.keeps(other))
     }
 
     @Test func 点提示进该会话_同点开推送通知() {

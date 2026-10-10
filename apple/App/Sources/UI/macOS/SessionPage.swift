@@ -138,7 +138,7 @@ struct SessionPage: View {
                 Text("正在结束…").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
             } else {
                 // 副标题以状态标打头：图形没有文字基线，按它的底边对齐会把整行压低；对齐到行里文字的基线
-                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest.deliveries, messages: digest.messages))
+                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest.undelivered))
                     .alignmentGuide(.firstTextBaseline) { $0[.lastTextBaseline] }
             }
         }

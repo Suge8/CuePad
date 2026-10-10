@@ -23,17 +23,10 @@ struct PiConfigControls: View {
     @State private var anchors = [PiConfigPick.model: PopUpAnchor(), .thinking: PopUpAnchor()]
 
     var body: some View {
-        HStack(spacing: 6) {
-            PiModelCapsule(models: session.models, current: shown.model, pending: shown.pending,
-                           maxWidth: PiModelLabel.capsuleWidth(available: available)) { configure(PiConfig(model: $0)) }
-                .popUpAnchor(anchors[.model])
-            if let levels = shown.model?.thinkingLevels, !levels.isEmpty {
-                PiThinkingDial(meter: PiThinkingMeter(levels: levels, current: shown.thinking), pending: shown.pending) {
-                    configure(PiConfig(thinking: $0))
-                }
-                .popUpAnchor(anchors[.thinking])
-            }
-            if let meter = shown.context.flatMap(PiContextMeter.init) { PiContextGauge(session: session, meter: meter) }
+        // 放得下时思考强度写"思考 中"，窄处（手机）只写档名"中"：三枚胶囊都不截断
+        ViewThatFits(in: .horizontal) {
+            row(wordy: true)
+            row(wordy: false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
@@ -42,6 +35,22 @@ struct PiConfigControls: View {
             opening.wrappedValue = nil
             open(pick)
         }
+    }
+
+    private func row(wordy: Bool) -> some View {
+        HStack(spacing: 6) {
+            PiModelCapsule(models: session.models, current: shown.model, pending: shown.pending,
+                           maxWidth: PiModelLabel.capsuleWidth(available: available)) { configure(PiConfig(model: $0)) }
+                .popUpAnchor(anchors[.model])
+            if let levels = shown.model?.thinkingLevels, !levels.isEmpty {
+                PiThinkingDial(meter: PiThinkingMeter(levels: levels, current: shown.thinking), pending: shown.pending, wordy: wordy) {
+                    configure(PiConfig(thinking: $0))
+                }
+                .popUpAnchor(anchors[.thinking])
+            }
+            if let meter = shown.context.flatMap(PiContextMeter.init) { PiContextGauge(session: session, meter: meter) }
+        }
+        .fixedSize()
     }
 
     /// 键盘打开的菜单：与点胶囊同样的选项（模型按提供方分组、当前打勾；思考强度是当前模型支持的档），系统菜单，方向键选、↩ 确认、Esc 关。
@@ -270,6 +279,8 @@ private struct ProviderSeal: View {
 private struct PiThinkingDial: View {
     let meter: PiThinkingMeter
     let pending: Bool
+    /// 写"思考 中"；窄处只写档名。
+    let wordy: Bool
     let choose: (PiThinkingLevel) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -295,7 +306,11 @@ private struct PiThinkingDial: View {
     var body: some View {
         let drawn = drawn
         HStack(spacing: 6) {
-            Image(systemName: "brain").font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+            // 写出档名（与"上下文 86%"同一种写法）：只有一个脑图标加几根竖条要猜；按着时跟着指到的档变
+            Text("\(wordy ? "思考 " : "")\(Text(drawn.current?.label ?? "–").fontWeight(.medium).foregroundStyle(palette.ink2))")
+                .font(Typography.meta).foregroundStyle(palette.ink3)
+                .contentTransition(.opacity)
+                .fixedSize()
                 .accessibilityHidden(true)
             meterBars(drawn)
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { track = $0 }
@@ -343,7 +358,7 @@ private struct PiThinkingDial: View {
         }
     }
 
-    /// 按下与拖动：在竖格上就调到指着的档；按在"思考"的标上（还没拖动）只浮出现在的档。
+    /// 按下与拖动：在竖格上就调到指着的档；按在"思考 中"那几个字上（还没拖动）只浮出现在的档。
     private func press(_ value: DragGesture.Value) {
         let onIcon = value.location.x < track.minX && touched == nil && abs(value.translation.width) < 4
         if onIcon {

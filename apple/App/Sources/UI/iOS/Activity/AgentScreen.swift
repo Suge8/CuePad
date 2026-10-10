@@ -392,7 +392,7 @@ private struct SessionRow: View {
     var body: some View {
         let session = item.state
         Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
-            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, style: .page)
+            PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page)
                 .padding(.horizontal, 16).padding(.vertical, AgentScreen.rowPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(.rect)
