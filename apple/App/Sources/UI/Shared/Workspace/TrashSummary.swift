@@ -3,54 +3,35 @@ import Foundation
 
 /// 回收站里的一行：删除的项目（连同其卡片）或单独删除的卡片。两端的回收站页列同一批行、做同一件事（恢复、永久删除）。
 nonisolated struct TrashItem: Identifiable, Sendable {
-    enum Kind: Sendable {
-        case project(Project, cards: Int)
-        case card(Card)
-    }
-
-    let kind: Kind
-
-    var id: UUID {
-        switch kind {
-        case .project(let project, _): project.id
-        case .card(let card): card.id
-        }
-    }
-
-    var title: String {
-        switch kind {
-        case .project(let project, _): project.name
-        case .card(let card): CardText(card.body).label
-        }
-    }
-
+    let id: UUID
+    let title: String
     /// 项目写带进来的卡片数，卡片写摘要。
-    var detail: String {
-        switch kind {
-        case .project(_, let cards): CountCopy.text((cards, "条"))?.visible ?? ""
-        case .card(let card): CardText(card.body).preview
-        }
+    let detail: String
+    let deletedAt: Date?
+    /// 项目行才有（Mac 的行画项目图标）。
+    let project: Project?
+    let restore: @Sendable (CueStore) async throws -> Void
+    let purge: @Sendable (CueStore) async throws -> Void
+
+    init(_ project: Project, cards: Int) {
+        id = project.id
+        title = project.name
+        detail = CountCopy.text((cards, "条"))?.visible ?? ""
+        deletedAt = project.deletedAt
+        self.project = project
+        restore = { try await $0.restoreProject(project.id) }
+        purge = { try await $0.purgeProject(project.id) }
     }
 
-    var deletedAt: Date? {
-        switch kind {
-        case .project(let project, _): project.deletedAt
-        case .card(let card): card.deletedAt
-        }
-    }
-
-    func restore(_ store: CueStore) async throws {
-        switch kind {
-        case .project(let project, _): try await store.restoreProject(project.id)
-        case .card(let card): try await store.restoreCard(card.id)
-        }
-    }
-
-    func purge(_ store: CueStore) async throws {
-        switch kind {
-        case .project(let project, _): try await store.purgeProject(project.id)
-        case .card(let card): try await store.purgeCard(card.id)
-        }
+    init(_ card: Card) {
+        let text = CardText(card.body)
+        id = card.id
+        title = text.label
+        detail = text.preview
+        deletedAt = card.deletedAt
+        project = nil
+        restore = { try await $0.restoreCard(card.id) }
+        purge = { try await $0.purgeCard(card.id) }
     }
 }
 
@@ -65,12 +46,12 @@ nonisolated struct TrashSummary: Sendable {
     static func read(from store: isolated CueStore) throws -> TrashSummary {
         let counts = try store.trashedProjectCardCounts()
         return TrashSummary(
-            projects: try store.trashedProjects().map { TrashItem(kind: .project($0, cards: counts[$0.id] ?? 0)) },
-            cards: try store.trashedCards().map { TrashItem(kind: .card($0)) })
+            projects: try store.trashedProjects().map { TrashItem($0, cards: counts[$0.id] ?? 0) },
+            cards: try store.trashedCards().map(TrashItem.init))
     }
 }
 
 extension Workspace {
-    func restore(_ item: TrashItem) { perform { try await item.restore($0) } }
-    func purge(_ item: TrashItem) { perform { try await item.purge($0) } }
+    func restore(_ item: TrashItem) { perform(item.restore) }
+    func purge(_ item: TrashItem) { perform(item.purge) }
 }

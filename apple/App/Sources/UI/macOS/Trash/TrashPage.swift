@@ -43,7 +43,7 @@ struct TrashPage: View {
             group("项目") {
                 ForEach(data.projects) { item in
                     TrashRow(item: item, restore: { workspace.restore(item) }, purge: { workspace.purge(item) }) {
-                        if case .project(let project, _) = item.kind { ProjectGlyph(project: project) }
+                        ProjectGlyph(project: item.project)
                     }
                 }
             }
