@@ -44,7 +44,7 @@ extension SessionDigest {
 /// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
 /// （`PiConversation`，子代理在末尾收成一行汇总；只排最近几条，更早的点最上面一行再排开），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
 /// 底部是与手机同一个回复框（`PiReplyBar`），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
-/// 是一页（`Workspace.Page.session`），上一层是 Agent 整页。
+/// 是一页（`Workspace.Page.session`），左上不放返回：去别处靠侧栏。
 struct SessionPage: View {
     let sessionID: String
     @Environment(Workspace.self) private var workspace
