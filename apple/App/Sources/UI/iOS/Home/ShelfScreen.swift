@@ -21,13 +21,12 @@ nonisolated struct ShelfData: Sendable {
     var tasks: TaskCounts?
     /// 正在推进的任务（顶层进行中的，Agent 要你处理的在前，规则 `TaskBoard.active`），书架最上面。
     var active: [TaskBoard.Row]
+    /// 纸上列不下的进行中任务数：纸底写"还有 N 项"（点开是任务页）。
+    var activeMore: Int
     var inboxCount: Int
     var trashCount: Int
 
     static let activeLimit = 3
-
-    /// 标题上写着几项进行中、纸上列不下的：纸底写"还有 N 项"（点开是任务页）。
-    var activeMore: Int { max(0, (tasks?.inProgress ?? 0) - active.count) }
 
     /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。"正在推进"已列出的任务不再写一遍。
     @MainActor func now(shown: (PiSessionListItem) -> PiShown) -> [UUID: ProjectNow] {
@@ -41,10 +40,11 @@ nonisolated struct ShelfData: Sendable {
             Entry(project: project, cardCount: summaries[project.id]?.cardCount ?? 0, openTasks: tasks[project.id]?.open ?? 0)
         }
         let all = tasks.values.reduce(.zero, +)
+        let active = try TaskBoard.active(limit: activeLimit, from: store)
         return ShelfData(
             entries: entries, sessions: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store),
             tasks: all == .zero ? nil : all,
-            active: try TaskBoard.active(limit: activeLimit, from: store),
+            active: active.rows, activeMore: active.more,
             inboxCount: summaries[nil]?.cardCount ?? 0,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
     }

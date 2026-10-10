@@ -107,9 +107,11 @@ struct TaskBoardTests {
 
         let active = try await TaskBoard.active(limit: 3, from: store)
 
-        #expect(active.map(\.task.id) == [asking.id, working.id, newest.id])
+        #expect(active.rows.map(\.task.id) == [asking.id, working.id, newest.id])
+        #expect(active.more == 1)  // 标题上写 4 进行中、纸上列 3 条：纸底"还有 1 项"
         // 同档最近开始的在前：放得下时最早开始的排最后
-        #expect(try await TaskBoard.active(limit: 9, from: store).map(\.task.id) == [asking.id, working.id, newest.id, oldest.id])
+        let all = try await TaskBoard.active(limit: 9, from: store)
+        #expect(all.rows.map(\.task.id) == [asking.id, working.id, newest.id, oldest.id] && all.more == 0)
         #expect(try await TaskBoard.counts(from: store).inProgress == 4)  // 标题上的"4 进行中"：顶层，不含子任务
     }
 
