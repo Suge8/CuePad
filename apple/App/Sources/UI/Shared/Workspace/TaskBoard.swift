@@ -15,6 +15,12 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var delivery: DeliveryRequest?
         var id: UUID { task.id }
 
+        /// 书架上排前后的档：0 等你确认或出错，1 正在干活，2 其余。
+        var attention: Int {
+            guard let session else { return 2 }
+            return session.waitsForYou || session.state == .known(.error) ? 0 : session.isWorking ? 1 : 2
+        }
+
         static func read(_ task: Card, projects: [UUID: Project], from store: isolated CueStore) throws -> Row {
             let item = try task.piSessionID.flatMap {
                 try store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: $0))).items.first
@@ -59,10 +65,25 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             done: try done.prefix(doneLimit).map(row), rows: rows, children: try store.childMarks(), counts: try counts(from: store))
     }
 
-    /// 正在推进的任务（书架顶上）：进行中的，不分层级，最近开始的在前。
-    static func active(limit: Int, from store: isolated CueStore) throws -> [Row] {
+    /// 书架"正在推进"：列出的行，加上放不下的还有几项（纸底写"还有 N 项"）。
+    struct Active: Sendable, Equatable {
+        var rows: [Row]
+        var more: Int
+    }
+
+    /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress` 同一批，子任务跟着上级），先看交给的 Agent 在怎样——
+    /// 等你确认、出错的在前，正在干活的其次，别的最后——同档最近开始的在前，再同的按原来的先后；取前 `limit` 条，其余数个数。
+    static func active(limit: Int, from store: isolated CueStore) throws -> Active {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
-        return try started(from: store).prefix(limit).map { try Row.read($0, projects: projects, from: store) }
+        let all = try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
+        let tree = TaskTree(all.filter { $0.status != .done }, all: all)
+        let rows = try tree.roots.compactMap(tree.task).filter { $0.status == .inProgress }.map { try Row.read($0, projects: projects, from: store) }
+        let ordered = rows.enumerated().sorted { a, b in
+            if a.element.attention != b.element.attention { return a.element.attention < b.element.attention }
+            let (started, other) = (a.element.task.startedAt ?? .distantPast, b.element.task.startedAt ?? .distantPast)
+            return started != other ? started > other : a.offset < b.offset
+        }.map(\.element)
+        return Active(rows: Array(ordered.prefix(limit)), more: max(0, ordered.count - limit))
     }
 
     /// 各项目的进行中任务，最近开始的在前（项目的"此刻"一行，`ProjectNow`）：一次查询，按项目归拢。

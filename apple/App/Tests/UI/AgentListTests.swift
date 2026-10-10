@@ -49,7 +49,7 @@ struct AgentListTests {
         #expect(PiClock.ago(now.addingTimeInterval(-(11 * 3600 + 48 * 60))).text(now: now, calendar: calendar) == "11 小时前")
         #expect(PiClock.running(since: now.addingTimeInterval(-(2 * 3600 + 5 * 60))).text(now: now, calendar: calendar) == "运行了 2 小时")
         // 列表里只到分钟、第一分钟不每秒换字；只有会话页顶栏到秒
-        #expect(PiClock.waiting(since: now.addingTimeInterval(-42)).text(now: now) == "刚开始等")
+        #expect(PiClock.waiting(since: now.addingTimeInterval(-42)).text(now: now) == "刚刚")
         #expect(PiClock.waiting(since: now.addingTimeInterval(-42)).text(now: now, precision: .second) == "等了 42 秒")
         #expect(PiClock.waiting(since: now.addingTimeInterval(-3 * 60 - 5)).text(now: now) == "等了 3 分钟")
         #expect(PiClock.running(since: now.addingTimeInterval(-42)).text(now: now) == "刚开始")

@@ -19,8 +19,10 @@ nonisolated struct ShelfData: Sendable {
     var leading: [UUID: [ProjectNow.InProgress]]
     /// 进任务页的入口上写的数：与任务页分组同一个数（`TaskBoard.counts`）；一条任务都没有时为 nil，没有入口。
     var tasks: TaskCounts?
-    /// 正在推进的任务（进行中，最近开始的在前），书架最上面。
+    /// 正在推进的任务（顶层进行中的，Agent 要你处理的在前，规则 `TaskBoard.active`），书架最上面。
     var active: [TaskBoard.Row]
+    /// 纸上列不下的进行中任务数：纸底写"还有 N 项"（点开是任务页）。
+    var activeMore: Int
     var inboxCount: Int
     var trashCount: Int
 
@@ -38,10 +40,11 @@ nonisolated struct ShelfData: Sendable {
             Entry(project: project, cardCount: summaries[project.id]?.cardCount ?? 0, openTasks: tasks[project.id]?.open ?? 0)
         }
         let all = tasks.values.reduce(.zero, +)
+        let active = try TaskBoard.active(limit: activeLimit, from: store)
         return ShelfData(
             entries: entries, sessions: try store.piSessionPage(.current).items, leading: try TaskBoard.leading(from: store),
             tasks: all == .zero ? nil : all,
-            active: try TaskBoard.active(limit: activeLimit, from: store),
+            active: active.rows, activeMore: active.more,
             inboxCount: summaries[nil]?.cardCount ?? 0,
             trashCount: try store.trashedProjects().count + store.trashedCards().count)
     }
@@ -185,7 +188,7 @@ struct ShelfScreen: View {
     private func lead(_ data: ShelfData, _ agent: AgentNow?) -> some View {
         let tasksLine = data.active.isEmpty ? data.tasks : nil
         if let agent { AgentNowCard(now: agent).transition(Motion.item) }
-        if !data.active.isEmpty { ActiveTasks(rows: data.active, counts: data.tasks).transition(Motion.item) }
+        if !data.active.isEmpty { ActiveTasks(rows: data.active, more: data.activeMore, counts: data.tasks).transition(Motion.item) }
         if data.inboxCount > 0 || tasksLine != nil {
             VStack(spacing: 0) {
                 if let tasksLine { TasksLine(tasks: tasksLine) }
@@ -466,6 +469,7 @@ private struct ShelfRow: View {
 /// 标题右边是全部任务的计数，点它进任务页——单独一行"任务 · N 进行中"会与下面这几行重复报进行中，所以并进标题。
 private struct ActiveTasks: View {
     let rows: [TaskBoard.Row]
+    let more: Int
     let counts: TaskCounts?
     @Environment(\.palette) private var palette
 
@@ -490,10 +494,28 @@ private struct ActiveTasks: View {
                 ForEach(rows) { row in
                     ActiveTaskRow(row: row, divided: row.id != rows.first?.id).transition(Motion.item)
                 }
+                if more > 0 { moreRow }
             }
             .clipShape(.rect(cornerRadius: Self.radius, style: .continuous))
             .paper(radius: Self.radius)
         }
+    }
+
+    /// 纸底的一行：标题上的进行中数比列出的多几项。
+    private var moreRow: some View {
+        NavigationLink(value: Navigation.Route.tasks) {
+            HStack(spacing: 4) {
+                Text("还有 \(more) 项")
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
+                Spacer(minLength: 0)
+            }
+            .font(.subheadline).foregroundStyle(palette.ink3)
+            .padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .background(palette.paper)
+            .overlay(alignment: .top) { palette.hair.frame(height: 1).padding(.leading, 16) }
+            .contentShape(.rect)
+        }
+        .buttonStyle(RowPressStyle())
     }
 
     private var title: some View {
