@@ -42,8 +42,11 @@ struct WallGrid<Tile: View>: View {
     }
 
     private func rearrange(animated: Bool) {
-        let cards = cards
-        let height = { (id: UUID) in cards[id].map { WallColumns.estimatedHeight(of: CardText($0.body), columnWidth: Self.idealColumnWidth) } ?? 0 }
+        // 每张卡的高度只估一次：下面要为每种列数各分一次列，逐次估的话同一段正文要解析十几遍
+        let heights = Dictionary(uniqueKeysWithValues: ids.map { id in
+            (id, cards[id].map { WallColumns.estimatedHeight(of: CardText($0.body), columnWidth: Self.idealColumnWidth) } ?? 0)
+        })
+        let height = { (id: UUID) in heights[id] ?? 0 }
         var next = arrangements
         for count in 1...Self.maxColumns {
             if next[count] == nil {

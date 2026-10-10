@@ -99,7 +99,7 @@ extension AppServices {
     ///   不靠推送），离开即停；两者都有时每 2 秒、不限时。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
         #if os(macOS)
-        !pi.sessions.isEmpty || hasOpenDeliveries ? SyncPoller.Cadence(interval: .seconds(2)) : nil
+        !pi.slots.isEmpty || hasOpenDeliveries ? SyncPoller.Cadence(interval: .seconds(2)) : nil
         #else
         switch (hasOpenDeliveries, piViewers > 0) {
         case (true, true): SyncPoller.Cadence(interval: .seconds(2))

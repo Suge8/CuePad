@@ -70,7 +70,7 @@ struct SessionPage: View {
     private static let titleWidth: CGFloat = 420
 
     var body: some View {
-        let live = services.pi.sessions.first { $0.sessionID == sessionID }
+        let live = services.pi.session(sessionID: sessionID)
         let project = live.flatMap { workspace.catalog?.project(workspace.sessionProjects[$0.id]) }
         // 在线会话不等资料库读完就能显示
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
@@ -282,13 +282,13 @@ private struct SessionLink: ViewModifier {
 extension Workspace {
     /// 本机桥上在线的这个 Pi 会话（`sessionID` 是 Pi 自己的会话 id）此刻的状态；不在线为 nil。
     func liveState(ofSession sessionID: String?) -> PiSessionState? {
-        guard let sessionID, let live = services.pi.sessions.first(where: { $0.sessionID == sessionID }) else { return nil }
+        guard let sessionID, let live = services.pi.session(sessionID: sessionID) else { return nil }
         return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id], recap: sessionRecaps[sessionID])
     }
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
     func withLiveState(_ session: PiSessionState) -> PiSessionState {
-        guard let live = services.pi.sessions.first(where: { $0.sessionID == session.sessionID }) else { return session }
+        guard let live = services.pi.session(sessionID: session.sessionID) else { return session }
         return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id] ?? session.projectID, recap: session.recap)
     }
 

@@ -82,17 +82,23 @@ enum PerfBench {
     private static let agentFrames = 6000
 
     /// 用滚轮事件把项目页从顶滚到底再滚回顶（每帧 40pt，约 2400pt/s 的快速滚动），记下每帧间隔。
-    static func scroll(in window: NSWindow, view: NSView, directions: [Int] = [-1, 1], frames: Int = 240) async -> [String: Any] {
+    static func scroll(in window: NSWindow, view: NSView, directions: [Int] = [-1, 1], frames: Int = 240, atX: Double = 0.5) async -> [String: Any] {
         // CGEvent 的位置是全局坐标、原点在主屏左上；窗口换算出来的屏幕坐标原点在左下，要翻一下，否则事件落不到内容区中间
-        let onScreen = window.convertPoint(toScreen: CGPoint(x: view.bounds.midX, y: view.bounds.midY))
+        let onScreen = window.convertPoint(toScreen: CGPoint(x: view.bounds.width * atX, y: view.bounds.midY))
         let location = CGPoint(x: onScreen.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - onScreen.y)
-        let target = view.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY))
+        let target = view.hitTest(CGPoint(x: view.bounds.width * atX, y: view.bounds.midY))
         let recorder = FrameRecorder()
         recorder.start(in: view)
+        // -CuePadWheel trackpad：像触控板那样带手势阶段（开始、变化、结束）；默认是没有阶段的滚轮（普通鼠标）
+        let trackpad = UserDefaults.standard.string(forKey: "CuePadWheel") == "trackpad"
         for direction in directions {
-            for _ in 0..<frames {
+            for frame in 0..<frames {
                 guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: Int32(direction * 40), wheel2: 0, wheel3: 0)
                 else { continue }
+                if trackpad {
+                    event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+                    event.setIntegerValueField(.scrollWheelEventScrollPhase, value: frame == 0 ? 1 : frame == frames - 1 ? 4 : 2)
+                }
                 event.location = location
                 // 直接交给内容区中间那块视图（后台窗口的 sendEvent 不保证落到滚动区），它沿响应链交给所在的滚动区
                 if let scroll = NSEvent(cgEvent: event) { target?.scrollWheel(with: scroll) }
@@ -189,8 +195,32 @@ final class FrameRecorder: NSObject {
     private var stamps: [CFTimeInterval] = []
     private var refresh: CFTimeInterval = 1.0 / 60
     private var waiter: CheckedContinuation<Void, Never>?
+    private var cpuAtStart = 0.0
+    private var instructionsAtStart = 0.0
+
+    /// 主线程累计占用的 CPU 秒（用户态加内核态）。机器忙时帧间隔会被别的进程拖长，CPU 时间受影响小，前后对比以它为准。
+    private static func mainCPUSeconds() -> Double {
+        var info = thread_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<thread_basic_info>.size / MemoryLayout<integer_t>.size)
+        _ = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { thread_info(mach_thread_self(), thread_flavor_t(THREAD_BASIC_INFO), $0, &count) }
+        }
+        func seconds(_ time: time_value_t) -> Double { Double(time.seconds) + Double(time.microseconds) / 1_000_000 }
+        return seconds(info.user_time) + seconds(info.system_time)
+    }
+
+    /// 进程已执行的指令数（百万）。别的进程抢 CPU 时 CPU 时间也会被拉长，指令数几乎不受影响，前后对比两者都看。
+    private static func instructionsMillions() -> Double {
+        var usage = rusage_info_v4()
+        _ = withUnsafeMutablePointer(to: &usage) {
+            $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(getpid(), RUSAGE_INFO_V4, $0) }
+        }
+        return Double(usage.ri_instructions) / 1_000_000
+    }
 
     func start(in view: NSView) {
+        cpuAtStart = Self.mainCPUSeconds()
+        instructionsAtStart = Self.instructionsMillions()
         stamps = []
         let link = view.displayLink(target: self, selector: #selector(tick))
         link.add(to: .main, forMode: .common)
@@ -215,6 +245,8 @@ final class FrameRecorder: NSObject {
         let dropped = intervals.reduce(0) { $0 + max(0, Int(($1 / refresh).rounded()) - 1) }
         let span = (stamps.last ?? 0) - (stamps.first ?? 0)
         return [
+            "mainCpuMs": ((Self.mainCPUSeconds() - cpuAtStart) * 10_000).rounded() / 10,
+            "instructionsM": (Self.instructionsMillions() - instructionsAtStart).rounded(),
             "frames": stamps.count,
             "refreshHz": (1 / refresh).rounded(),
             "fps": span > 0 ? (Double(intervals.count) / span * 10).rounded() / 10 : 0,

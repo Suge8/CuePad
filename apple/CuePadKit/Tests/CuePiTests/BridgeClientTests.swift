@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import Observation
 import Testing
 @testable import CuePi
 
@@ -448,5 +449,31 @@ struct BridgeClientTests {
         _ = await (a, b)
         #expect(ext.commands.count == 2)
     }
+    // MARK: 分格观察
+
+    /// 查某个会话只随这一个会话的变化通知：别的会话状态一变，读它的视图就要重算的话，Agent 多起来时每秒几十次整页重算。
+    @Test func lookingUpOneSessionIsNotNotifiedByAnotherSessionsChanges() async throws {
+        let first = FakeExtension(directory: dir)
+        try first.start()
+        try bridge.start()
+        try await eventually("先出现的会话被发现") { session(first.id) != nil }
+        let second = FakeExtension(directory: dir)
+        try second.start()
+        try await eventually("后出现的会话被发现") { session(second.id) != nil }
+
+        let notified = Flag()
+        withObservationTracking { _ = bridge.session(sessionID: second.sessionID) } onChange: { notified.value = true }
+
+        first.setState(["kind": "thinking"])
+        try await eventually("别的会话的状态到了桥上") { session(first.id)?.state == .thinking }
+        #expect(!notified.value)
+
+        second.setState(["kind": "thinking"])
+        try await eventually("它自己的变化通知到读它的人") { notified.value }
+    }
+}
+
+private final class Flag: @unchecked Sendable {
+    nonisolated(unsafe) var value = false
 }
 #endif

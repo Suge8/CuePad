@@ -52,6 +52,7 @@ extension DebugScene {
         case "churn": await benchChurn(workspace)
         case "perf": await PerfBench.run(workspace)
         case "agent": await PerfBench.agent(workspace)
+        case "scenarios": await ScenarioBench.run(workspace)
         case "switch": await SwitchBench.run(workspace)
         case "press": await benchPress(workspace)
         default: break

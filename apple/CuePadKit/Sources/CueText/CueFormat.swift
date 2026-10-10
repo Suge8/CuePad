@@ -36,7 +36,8 @@ public enum CueFormat {
 
     /// 正文里引用的图片哈希，按出现顺序（可重复）。
     public static func imageHashes(in stored: String) -> [String] {
-        parse(stored).compactMap { if case .image(let hash) = $0 { hash } else { nil } }
+        guard stored.contains(imagePrefix) else { return [] }
+        return parse(stored).compactMap { if case .image(let hash) = $0 { hash } else { nil } }
     }
 
     public static func parse(_ stored: String) -> [CueToken] {

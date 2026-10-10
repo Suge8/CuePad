@@ -169,7 +169,7 @@ extension AppServices {
 
     /// 激活会话所在终端，尽量精确到标签页；精度与原因见返回值。
     func jumpToTerminal(_ id: CuePi.PiSession.ID) async throws -> PiJumpResult {
-        guard let session = pi.sessions.first(where: { $0.id == id }) else { throw PiBridgeError.unknownSession(id) }
+        guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
         return await terminal.jump(to: session)
     }
 }

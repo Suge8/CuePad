@@ -125,12 +125,24 @@ final class GrowingTextView: NSTextView {
     /// 外部刚写进文字：滚动区下一次排版后滚到末尾。
     var revealsEnd = false
     /// 最大高度：排满 `maxLines` 行中文量出来的高度（中文行比西文行高），撑满时最后一行不被切一半。
-    var maxHeight: CGFloat { Self.height(of: Array(repeating: "国", count: maxLines).joined(separator: "\n"), width: .greatestFiniteMagnitude) }
+    var maxHeight: CGFloat {
+        if let cached = Self.maxHeights[maxLines] { return cached }
+        let height = Self.height(of: Array(repeating: "国", count: maxLines).joined(separator: "\n"), width: .greatestFiniteMagnitude)
+        Self.maxHeights[maxLines] = height
+        return height
+    }
+    /// 量用的字体 `bodyFont` 是进程内不变的常量，所以只按行数记。
+    private static var maxHeights: [Int: CGFloat] = [:]
 
     /// 按给定宽度排下现有文字要多高；空着时是一行的高度。
+    /// SwiftUI 一次排版会问好几遍同一个宽度，字和宽度都没变就不再另起一套排版量一遍。
     func contentHeight(width: CGFloat) -> CGFloat {
-        Self.height(of: string.isEmpty ? "国" : string, width: width)
+        if let last = measured, last.string == string, last.width == width { return last.height }
+        let height = Self.height(of: string.isEmpty ? "国" : string, width: width)
+        measured = (string, width, height)
+        return height
     }
+    private var measured: (string: String, width: CGFloat, height: CGFloat)?
 
     private static func height(of string: String, width: CGFloat) -> CGFloat {
         let storage = NSTextStorage(string: string, attributes: [.font: bodyFont])

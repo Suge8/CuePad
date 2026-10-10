@@ -11,7 +11,33 @@ import Observation
 ///   命令各走各的连接，`ack` 只回给发送方；扩展不做仲裁，命令按到达顺序交给 Pi。
 @MainActor @Observable
 public final class PiBridge {
-    public private(set) var sessions: [PiSession] = []
+    /// 一个在线会话一格。状态变化只改这一格，只有读这一格的视图重算；读 `slots` 的只在会话出现、消失时重算。
+    @MainActor @Observable
+    public final class Slot: Identifiable {
+        /// 会话的身份与工作目录一经连上就不变：只读它们的视图（会话集合、归属项目）不随状态变化重算。
+        public nonisolated let id: PiSession.ID
+        public nonisolated let sessionID: String
+        public nonisolated let cwd: URL
+        public internal(set) var session: PiSession
+        init(_ session: PiSession) {
+            id = session.id
+            sessionID = session.sessionID
+            cwd = session.cwd
+            self.session = session
+        }
+    }
+
+    /// 在线会话的格子，按出现先后。界面读会话用这个（列表读 `slots`，每一行读自己那格的 `session`）或 `session(sessionID:)`。
+    public private(set) var slots: [Slot] = []
+
+    /// 在线会话的快照（读了每一格，任何一格变化都会通知读它的视图）：非界面代码与测试用，视图别读。
+    public var sessions: [PiSession] { slots.map(\.session) }
+
+    /// 这个 Pi 会话（`sessionID`）在线的那个进程；同一会话开在两个进程里时取先出现的。只随这一个会话的变化通知。
+    public func session(sessionID: String) -> PiSession? { slots.first { $0.sessionID == sessionID }?.session }
+
+    /// 这个连接（`PiSession.id`）的会话。
+    public func session(id: PiSession.ID) -> PiSession? { slots.first { $0.id == id }?.session }
 
     @ObservationIgnored private let directory: URL
     /// 本次运行里已结束的会话（最后一刻的快照），按 id。界面据此把还指向它的发送目标显示成"已结束"，而不是悄悄丢掉；
@@ -76,7 +102,7 @@ public final class PiBridge {
         links = [:]
         for watcher in orphanExitWatchers.values { watcher.cancel() }
         orphanExitWatchers = [:]
-        sessions = []
+        slots = []
         for continuation in subscribers.values { continuation.finish() }
         subscribers = [:]
     }
@@ -278,13 +304,13 @@ public final class PiBridge {
         link.exitWatcher = ProcessExitWatcher(pid: session.pid) { [weak self] in
             Task { @MainActor in self?.processExited(session.id) }
         }
-        sessions.append(session)
+        slots.append(Slot(session))
         emit(.appeared(session))
     }
 
     private func update(_ session: PiSession, on link: Link) {
         link.session = session
-        if let index = sessions.firstIndex(where: { $0.id == session.id }) { sessions[index] = session }
+        if let slot = slots.first(where: { $0.id == session.id }), slot.session != session { slot.session = session }
     }
 
     /// 不兼容/损坏：报告并断开。会话若已出现，随后走正常的结束路径。
@@ -313,7 +339,7 @@ public final class PiBridge {
             link.exitWatcher?.cancel()
         }
         if let session = link.session {
-            sessions.removeAll { $0.id == session.id }
+            slots.removeAll { $0.id == session.id }
             endedSessions[session.id] = session
             emit(.ended(session, reason: link.bye.map { .closed(reason: $0.reason, undelivered: $0.undelivered ?? []) } ?? .disconnected))
         }

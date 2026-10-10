@@ -229,7 +229,7 @@ extension AppServices {
             }
             return URL(filePath: path, directoryHint: .isDirectory)
         case .besideSession(let sessionID):
-            if let live = pi.sessions.first(where: { $0.sessionID == sessionID }) { return live.cwd }
+            if let live = pi.session(sessionID: sessionID) { return live.cwd }
             guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
             return URL(filePath: indexed.cwd, directoryHint: .isDirectory)
         }

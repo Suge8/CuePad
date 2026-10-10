@@ -2,11 +2,13 @@
 # 切会话测量（`-CuePadBench switch`，见 docs/development.md「性能测量」）要在线会话才复现"点开后对话区空白"：在线会话不等资料库读完就有状态。
 # 用法：python3 pi-live.py <socket 目录> <cuepad.db> <存活秒数> [busy]；busy 时各会话每隔零点几秒到一两秒随机换一次状态。
 # 配合隔离实例：CUEPAD_PI_SOCKET_DIR 指向同一目录。
-import json, os, random, socket, sqlite3, sys, threading, time
+import json, os, random, re, socket, sqlite3, sys, threading, time
 
 directory, library, lifetime = sys.argv[1], sys.argv[2], float(sys.argv[3])
 busy = len(sys.argv) > 4 and sys.argv[4] == "busy"
-PROTOCOL = 6  # PiWire.protocolVersion
+working = len(sys.argv) > 4 and sys.argv[4] == "working"  # 所有会话停在"思考中"，不再变
+# 协议号只在 PiWire.swift 里定义
+PROTOCOL = int(re.search(r"static let protocolVersion = (\d+)", open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../CuePadKit/Sources/CuePi/PiWire.swift")).read()).group(1))
 os.makedirs(directory, mode=0o700, exist_ok=True)
 os.chmod(directory, 0o700)
 db = sqlite3.connect(library)
@@ -31,7 +33,7 @@ def serve(session_id):
     os.chmod(path, 0o600)
     listener.listen(4)
     listener.settimeout(0.1)
-    clients, state = [], {"kind": "idle", "since": now()}
+    clients, state = [], {"kind": "thinking" if working else "idle", "since": now()}
     end, change = time.time() + lifetime, time.time() + random.uniform(0.5, 2)
     while time.time() < end:
         try:

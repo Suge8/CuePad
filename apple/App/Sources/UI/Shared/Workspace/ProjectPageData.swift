@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 项目页的内容（灵感、发送、任务）一次读取；项目的名称、图标、目录、计数在 `ProjectCatalog`。
-nonisolated struct ProjectPageData: Sendable {
+nonisolated struct ProjectPageData: Sendable, Equatable {
     var project: Project?
     /// 散放的灵感（不含任务与提示词）：卡片墙与"更早"。
     var cards: [Card]

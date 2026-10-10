@@ -9,7 +9,8 @@ import UniformTypeIdentifiers
 
 /// 性能测量用的大资料库（`-CuePadSeed perf`，只在 Debug 构建、隔离资料库、库为空时写入）：
 /// 50 个项目、5000 张卡（一个大项目 1200 张、未分类 300 张，其余分给 49 个项目），其中 300 张带 4032×3024 的 JPEG；
-/// 修改时间分布在一年内；另有 200 条任务、500 条发送记录、200 个 Pi 历史会话。内容由固定种子生成，每次一样。
+/// 修改时间分布在一年内；另有 200 条任务、500 条发送记录、200 个 Pi 历史会话，其中前 \(chatRounds.count) 个带对话（轮数见 `chatRounds`，
+/// 回答混着长段落、列表、表格、代码块与工具活动，给会话页滚动与切换用）。内容由固定种子生成，每次一样。
 enum PerfLibrary {
     static let projectCount = 50
     static let cardCount = 5000
@@ -19,6 +20,8 @@ enum PerfLibrary {
     private static let bigProjectCards = 1200
     private static let inboxCards = 300
     private static let boundProjects = 10
+    /// 带对话的历史会话（`perf-0`…）各有多少轮，长短悬殊。
+    static let chatRounds = [3, 6, 10, 16, 24, 36, 50, 70, 100, 140, 200, 300]
 
     static func seed(_ store: CueStore) async throws {
         var random = SeededRandom(seed: 20261002)
@@ -67,6 +70,50 @@ enum PerfLibrary {
                 title: sentence(&random, chinese: index % 2 == 0, words: 3...9),
                 lastActivityAt: .now.addingTimeInterval(-Double(index) * 3_600)), host: "perf-mac")
         }
+        for (index, rounds) in chatRounds.enumerated() { try await seedChat("perf-\(index)", rounds: rounds, random: &random, store: store) }
+    }
+
+    private static func seedChat(_ sessionID: String, rounds: Int, random: inout SeededRandom, store: CueStore) async throws {
+        let start = Date.now.addingTimeInterval(-Double(rounds) * 300)
+        var messages: [PiChatMessage] = []
+        for round in 0..<rounds {
+            let asked = start.addingTimeInterval(Double(round) * 300)
+            messages.append(PiChatMessage(
+                sessionID: sessionID, entryID: "u\(round)", seq: Int64(round * 2), role: .user,
+                text: sentence(&random, chinese: round % 3 != 0, words: 6...30), at: asked))
+            messages.append(PiChatMessage(
+                sessionID: sessionID, entryID: "p\(round)", seq: Int64(round * 2 + 1), role: .pi, text: answer(&random, round: round),
+                at: asked.addingTimeInterval(90), tools: round % 4 == 3 ? nil : tools(&random), roundStartedAt: asked))
+        }
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: messages[messages.count - 2].text, lastReply: messages.last?.text)))
+    }
+
+    /// 一轮回答：长段落、列表、表格、代码块轮换。
+    private static func answer(_ random: inout SeededRandom, round: Int) -> String {
+        let chinese = round % 2 == 0
+        func paragraph(_ random: inout SeededRandom) -> String {
+            sentence(&random, chinese: chinese, words: 12...40) + sentence(&random, chinese: chinese, words: 8...30)
+        }
+        switch round % 5 {
+        case 0: return paragraph(&random) + "\n\n" + paragraph(&random) + "\n\n" + paragraph(&random)
+        case 1: return paragraph(&random) + "\n\n" + (1...6).map { "- **\($0)** " + sentence(&random, chinese: chinese, words: 4...14) }.joined(separator: "\n")
+        case 2:
+            return paragraph(&random) + "\n\n| 项 | 结果 | 说明 |\n|:--|--:|:--|\n"
+                + (1...5).map { "| 用例 \($0) | \(random.next(100)) | " + sentence(&random, chinese: chinese, words: 3...10) + " |" }.joined(separator: "\n")
+        case 3:
+            return paragraph(&random) + "\n\n```swift\n" + (1...18).map { "let value\($0) = compute(\($0), retry: \(random.next(5)))" }.joined(separator: "\n") + "\n```"
+        default: return paragraph(&random)
+        }
+    }
+
+    private static func tools(_ random: inout SeededRandom) -> PiChatMessage.Tools {
+        let edits = random.next(4), reads = random.next(6), commands = random.next(5)
+        var items: [PiChatMessage.Tools.Item] = []
+        for _ in 0..<edits { items.append(.init(kind: .edit, target: "src/module\(random.next(40)).swift", added: random.next(60), removed: random.next(20))) }
+        for _ in 0..<reads { items.append(.init(kind: .read, target: "docs/note\(random.next(40)).md")) }
+        for _ in 0..<commands { items.append(.init(kind: .command, target: "pnpm test --filter pkg\(random.next(9))")) }
+        return .init(edits: edits, commands: commands, reads: reads, items: items)
     }
 
     private static func card(_ random: inout SeededRandom, images: inout ArraySlice<String>, imageShare: Double) -> (days: Double, text: String, favorite: Bool) {

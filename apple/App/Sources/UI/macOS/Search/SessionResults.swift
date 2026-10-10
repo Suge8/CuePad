@@ -112,7 +112,7 @@ struct SessionResultList: View {
         let isSelected = session.sessionID == selection
         return PiSessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
-            undelivered: undelivered[session.sessionID] ?? 0)
+            undelivered: undelivered[session.sessionID] ?? 0).equatable()
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
             .contentShape(.rect)

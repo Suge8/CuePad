@@ -318,7 +318,6 @@ final class Workspace {
             try DebugScene.injectCatalogFailure(attempt: catalogAttempt)
             #endif
             for try await next in services.store.observe(ProjectCatalog.tables, { try ProjectCatalog.read(from: $0) }) {
-                guard next != catalog else { continue }
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next
                 if membershipChanged { await reconcileCurrentProject() }

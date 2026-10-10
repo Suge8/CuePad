@@ -103,7 +103,7 @@ private struct PiColumn: View {
         }
         ForEach(agents) { row in
             VStack(alignment: .leading, spacing: 2) {
-                PiSessionRow(session: row.state, project: project, delivery: row.delivery, undelivered: row.undelivered)
+                PiSessionRow(session: row.state, project: project, delivery: row.delivery, undelivered: row.undelivered).equatable()
                 if shared == nil, let host = row.hostName {
                     Label("在 \(host) 上", systemImage: "laptopcomputer").font(Typography.meta).foregroundStyle(palette.ink3)
                 }
@@ -172,7 +172,7 @@ extension Workspace {
     /// 这个项目此刻在线的 Agent 会话：本机桥上的（实时）与同步来的（别的 Mac 上的）。
     func projectAgents(_ project: UUID?, synced: ProjectSessions?) -> [ProjectAgents.Row] {
         guard let project else { return [] }
-        let live = liveSessions(in: project).map {
+        let live = projectSessions(in: project).map {
             PiSessionState.live($0, hostID: services.hostID, projectID: project, recap: sessionRecaps[$0.sessionID])
         }
         return ProjectAgents.rows(

@@ -75,7 +75,7 @@ public final class PiHost {
     /// 不论这一轮在不在跑；终端里开的会话由扩展走 Pi 的正常退出（终端恢复原样、提示怎么恢复这个会话）。
     /// 没有在 `endTimeout` 内退出抛 `PiHostError.notEnded`。
     public func end(_ id: PiSession.ID) async throws {
-        guard let session = bridge.sessions.first(where: { $0.id == id }) else { return }
+        guard let session = bridge.session(id: id) else { return }
         let changes = bridge.changes()  // 先订阅再动手：退出的那一刻不会漏
         if let hosted = processes[session.pid] {
             close(hosted)

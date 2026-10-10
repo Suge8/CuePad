@@ -20,9 +20,13 @@ public enum CueLines {
 
     static func text(of line: String) -> String {
         guard !CueFormat.isMarkerLine(line) else { return "" }
-        let text = CueFormat.parse(line).compactMap { token -> String? in
-            if case .text(let text) = token { text } else { nil }
-        }.joined()
+        // 绝大多数行没有图片引用：不必拆成记号再拼回去
+        var text = line
+        if line.contains(CueFormat.imagePrefix) {
+            text = CueFormat.parse(line).compactMap { token -> String? in
+                if case .text(let text) = token { text } else { nil }
+            }.joined()
+        }
         let object = String(UnicodeScalar(CueFormat.objectCharacter)!)
         return text.replacingOccurrences(of: object, with: "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
@@ -81,12 +85,23 @@ public struct CueSummary: Equatable, Sendable {
     public var linkHost: String?
 
     public init(_ stored: String) {
-        let lines = stored.components(separatedBy: "\n").map(CueLines.text(of:))
-        let titleIndex = lines.firstIndex { !$0.isEmpty }
-        title = titleIndex.map { Self.stripHeading(lines[$0]) } ?? ""
-        let rest = titleIndex.map { lines[($0 + 1)...].drop { $0.isEmpty } } ?? []
-        preview = String(rest.prefix { !$0.isEmpty }.joined(separator: " ").prefix(Self.previewLimit))
-        linkHost = stored.firstMatch(of: /https?:\/\/[^\s\/?#)\]]+/).flatMap { URL(string: String($0.output))?.host() }
+        // 只读到标题之后第一段的末尾为止：长正文的后半段不用解析
+        var heading: String?
+        var paragraph: [String] = []
+        for raw in stored.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = CueLines.text(of: String(raw))
+            if heading == nil {
+                if !line.isEmpty { heading = Self.stripHeading(line) }
+            } else if !line.isEmpty {
+                paragraph.append(line)
+            } else if !paragraph.isEmpty {
+                break
+            }
+        }
+        title = heading ?? ""
+        preview = String(paragraph.joined(separator: " ").prefix(Self.previewLimit))
+        linkHost = stored.range(of: "http").flatMap { stored[$0.lowerBound...].firstMatch(of: /https?:\/\/[^\s\/?#)\]]+/) }
+            .flatMap { URL(string: String($0.output))?.host() }
             .map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 }
     }
 
