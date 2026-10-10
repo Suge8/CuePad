@@ -112,6 +112,9 @@ enum DebugHooks {
     #endif
 
     #if os(iOS)
+    /// 底部栏换标签的那条路（含推移，`TabsRoot` 挂上）：测量脚本按它换标签。
+    @MainActor static var selectTab: (Navigation.Tab) -> Void = { _ in }
+
     /// App 启动、界面出现之前：`-CuePadColdTap <会话记录 id>` 复现冷启动被通知拉起。
     @MainActor static func launched(alerts: PiAlertCenter) {
         #if DEBUG

@@ -42,6 +42,14 @@ final class Navigation {
 
         var isCard: Bool { if case .card = self { true } else { false } }
 
+        /// 独占底部的页（卡片纸页、会话页：编辑工具栏、回复框在底部，在屏上时收起底部栏，见 `ownsBottomEdge`）。
+        var ownsBottom: Bool {
+            switch self {
+            case .card, .session: true
+            default: false
+            }
+        }
+
         /// 页顶上自带一排搜索与圆钮（`SearchRow`）：内容让到那一排下面，离栏的距离由那一页自己给。
         var hasSearchRow: Bool {
             switch self {
@@ -99,6 +107,9 @@ final class Navigation {
     var capture = CaptureState()
     /// 随手记输入框浮在键盘上方。
     private(set) var capturing = false
+
+    /// 有浮在键盘上方的输入框（随手记、新会话、交给 Agent；任务浮窗开着时交给 Agent 由浮窗自己浮起）。
+    var floating: Bool { capturing || newSession != nil || (task == nil && outbox != nil) }
     var outbox: Outbox?
     /// 浮起的任务（`TaskSheet`）。
     var task: OpenTask?

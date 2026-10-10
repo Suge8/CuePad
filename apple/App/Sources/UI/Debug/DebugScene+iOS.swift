@@ -43,6 +43,10 @@ extension DebugScene {
         let project = await prepareLibrary(workspace)
         if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         if defaults.bool(forKey: "CuePadDemoMac") { Task { await runDemoMac(workspace.services.store) } }
+        if defaults.string(forKey: "CuePadBench") == "interact" {
+            Task { await IOSInteractionBench.run(workspace, navigation) }
+            return
+        }
         let split = navigation.layout == .split
         func open(_ route: Navigation.Route) {
             if split { navigation.select(route) } else { navigation.projectsPath = [route] }

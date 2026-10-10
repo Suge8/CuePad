@@ -30,6 +30,7 @@ struct TabsRoot: View {
             }
         }
         .animation(Motion.panel, value: navigation.bottomPages == 0)
+        .onAppear { DebugHooks.selectTab = select }
         // 窄窗口 iPad 接键盘：⌘K / ⌘F 聚焦当前页的搜索（与宽屏的搜索页同一组快捷键）
         .background {
             ZStack {
