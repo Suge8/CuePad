@@ -165,6 +165,28 @@ struct BridgeClientTests {
         }
     }
 
+    /// `info` 只带变了的几项：没带的项（模型表、命令清单、会话名……）保持原样，带了 null 的才清空。
+    @Test func infoCarriesOnlyWhatChangedAndLeavesTheRest() async throws {
+        let compactCommand = FakeExtension.WireCommand(name: "compact", description: "压缩", source: "builtin", hint: nil)
+        let ext = FakeExtension(directory: dir, options: .init(model: sonnet, thinking: "low", models: [sonnet, opus], context: (tokens: 1, window: 100), commands: [compactCommand]))
+        try ext.start()
+        try bridge.start()
+        try await eventually("hello 带全部") { session(ext.id)?.commands.count == 1 }
+
+        ext.sendInfo(["context": ["tokens": 50, "window": 100]])
+        try await eventually("只有上下文变了") { session(ext.id)?.context?.tokens == 50 }
+        let kept = try #require(session(ext.id))
+        #expect(kept.availableModels.count == 2 && kept.commands.count == 1 && kept.model?.key.id == "sonnet" && kept.thinking == .known(.low))
+
+        ext.sendInfo(["name": "改名了"])
+        try await eventually("会话名变了") { session(ext.id)?.name == "改名了" }
+        #expect(session(ext.id)?.context?.tokens == 50 && session(ext.id)?.availableModels.count == 2)
+
+        ext.sendInfo(["model": NSNull(), "thinking": NSNull()])
+        try await eventually("带 null 的清空") { session(ext.id)?.model == nil && session(ext.id)?.thinking == nil }
+        #expect(session(ext.id)?.availableModels.count == 2 && session(ext.id)?.commands.count == 1)
+    }
+
     // MARK: 状态
 
     @Test func stateChangesAreObservableInOrder() async throws {
