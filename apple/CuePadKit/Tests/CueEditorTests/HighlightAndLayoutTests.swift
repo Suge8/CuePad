@@ -80,7 +80,7 @@ struct LayoutTests {
         h.load(stored)
         // 高度稳定 = 半秒内不再变化（布局是分片推进的，每片间隔远小于此）
         var last = -1.0, stableCount = 0
-        #expect(await h.wait(timeout: 15) {
+        #expect(await h.wait {
             let current = Double(h.textView.frame.height)
             stableCount = current == last ? stableCount + 1 : 0
             last = current

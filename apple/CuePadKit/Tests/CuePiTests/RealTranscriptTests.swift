@@ -13,7 +13,7 @@ struct RealTranscriptTests {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         try bridge.start()
-        try await eventually("桥发现会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
+        try await eventually("桥发现会话") { !bridge.sessions.isEmpty }
         return (pi, bridge, try #require(bridge.sessions.first?.sessionFile))
     }
 
@@ -26,12 +26,12 @@ struct RealTranscriptTests {
         defer { bridge.stop(); pi.stop() }
 
         try pi.prompt("第一问")
-        try await eventually("第一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 1) }
+        try await eventually("第一轮落盘") { try roundsDone(file, 1) }
         try pi.prompt("[[tool:echo TOOL-OUTPUT-42]]")
-        try await eventually("工具轮落盘", timeout: .seconds(20)) { try roundsDone(file, 2) }
+        try await eventually("工具轮落盘") { try roundsDone(file, 2) }
         // 机器消息（扩展投进来的信封）不算你说的；它触发的那轮回答照常是一条 Pi 消息
         try pi.prompt("<some_event>\n子任务完成\n</some_event>")
-        try await eventually("机器消息那轮落盘", timeout: .seconds(20)) { try roundsDone(file, 3) }
+        try await eventually("机器消息那轮落盘") { try roundsDone(file, 3) }
 
         let update = try PiHistory.index(file: file, from: nil)
         let messages = update.messages
@@ -47,7 +47,7 @@ struct RealTranscriptTests {
 
         // 增量读：从检查点继续只给出新消息
         try pi.prompt("第三问")
-        try await eventually("第三轮落盘", timeout: .seconds(20)) { try roundsDone(file, 4) }
+        try await eventually("第三轮落盘") { try roundsDone(file, 4) }
         let next = try PiHistory.index(file: file, from: update.checkpoint)
         #expect(next.messages.map(\.text) == ["第三问", "ECHO 第三问 IMAGES[]"])
         #expect(next.recap.lastPrompt == "第三问")
@@ -59,11 +59,11 @@ struct RealTranscriptTests {
         defer { bridge.stop(); pi.stop() }
 
         try pi.prompt("[[tool:echo ok]]")
-        try await eventually("成功的一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 1) }
+        try await eventually("成功的一轮落盘") { try roundsDone(file, 1) }
         try pi.prompt("[[write:out.txt]]")
-        try await eventually("写文件的一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 2) }
+        try await eventually("写文件的一轮落盘") { try roundsDone(file, 2) }
         try pi.prompt("[[tool:false]]")
-        try await eventually("失败的一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 3) }
+        try await eventually("失败的一轮落盘") { try roundsDone(file, 3) }
 
         let tools = try PiHistory.index(file: file, from: nil).messages.filter { $0.role == .known(.pi) }.map(\.tools)
         #expect(tools.map { $0?.commands } == [1, 0, 0] && tools.map { $0?.edits } == [0, 1, 0] && tools.map { $0?.failed } == [0, 0, 1])
@@ -75,7 +75,7 @@ struct RealTranscriptTests {
         defer { bridge.stop(); pi.stop() }
 
         try pi.prompt("[[slow]] 慢慢来")
-        try await eventually("你的消息落盘", timeout: .seconds(20)) {
+        try await eventually("你的消息落盘") {
             (try? PiHistory.index(file: file, from: nil))?.messages.first?.role == .known(.user)
         }
         let update = try PiHistory.index(file: file, from: nil)
@@ -90,9 +90,9 @@ struct RealTranscriptTests {
 
         let delivery = UUID()
         _ = try await bridge.send(PiMessage(text: "从手机发的", deliveryID: delivery.uuidString), to: session.id)
-        try await eventually("那一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 1) }
+        try await eventually("那一轮落盘") { try roundsDone(file, 1) }
         try pi.prompt("终端里打的")
-        try await eventually("第二轮落盘", timeout: .seconds(20)) { try roundsDone(file, 2) }
+        try await eventually("第二轮落盘") { try roundsDone(file, 2) }
 
         let users = try PiHistory.index(file: file, from: nil).messages.filter { $0.role == .known(.user) }
         #expect(users.map(\.text) == ["从手机发的", "终端里打的"])

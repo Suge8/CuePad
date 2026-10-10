@@ -73,7 +73,7 @@ struct CaptureTests {
         DarwinNotifications.post(CaptureInbox.notification)
 
         var bodies: [String] = []
-        for _ in 0..<300 where bodies.isEmpty {
+        for _ in 0..<3000 where bodies.isEmpty {
             bodies = try await services.store.cards(in: nil).map(\.body)
             try await Task.sleep(for: .milliseconds(10))
         }

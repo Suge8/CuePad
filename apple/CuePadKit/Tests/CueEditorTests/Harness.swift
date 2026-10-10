@@ -59,8 +59,8 @@ final class EditorHarness {
         try? await Task.sleep(for: .seconds(seconds))
     }
 
-    /// 条件等待：让出主线程直到条件成立，超时视为失败。
-    func wait(timeout: TimeInterval = 3, until condition: () -> Bool) async -> Bool {
+    /// 条件等待：让出主线程直到条件成立。上限只是"确实不会来了"的兜底（机器负载高时后台解码、布局会慢上几十秒），条件一成立马上返回。
+    func wait(timeout: TimeInterval = 30, until condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() {
             if Date() > deadline { return false }

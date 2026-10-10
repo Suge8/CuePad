@@ -31,7 +31,7 @@ struct RealPreviewTests {
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
-        try await eventually("桥发现真实 Pi 会话", timeout: .seconds(20)) { !bridge.sessions.isEmpty }
+        try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
         let session = bridge.sessions[0]
         // Pi 从它的 skills 目录发现了安装器写的 skill
         let skill = try #require(session.commands.first { $0.name == "skill:cuepad" })

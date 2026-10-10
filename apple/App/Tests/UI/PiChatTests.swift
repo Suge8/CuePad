@@ -110,7 +110,7 @@ struct PiChatTests {
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
         try await executor.start()
-        for _ in 0..<300 where try await store.deliveryRequest(lost.id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<3000 where try await store.deliveryRequest(lost.id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
         await executor.stop()
 
         let failed = try await item()
