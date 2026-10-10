@@ -369,6 +369,7 @@ extension DebugScene {
                 lastPrompt: "测试都过了就部署",
                 question: PiQuestion(promptID: "demo-confirm", kind: .confirm, text: "部署到生产吗？\n会替换当前线上的 1.4.2"))),
             ("review", .delegating, nil, nil, DemoRecap(lastPrompt: "让子代理分头审查这两个分支")),
+            ("migrate", .compacting, nil, "Flow", DemoRecap(lastPrompt: "把迁移脚本拆成三步", lastReply: "拆好了，三步各自能回滚。")),
             ("billing", .error, "模型拒绝了请求（400）：prompt is too long", "闲鱼", DemoRecap(lastPrompt: "把整个 billing 目录读一遍，总结计费规则")),
             ("notes", .settled, nil, "Career", DemoRecap(
                 lastPrompt: "整理一下这周的会议记录", lastReply: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。")),

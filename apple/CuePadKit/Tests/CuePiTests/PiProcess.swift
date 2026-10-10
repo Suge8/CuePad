@@ -46,9 +46,10 @@ final class PiProcess: @unchecked Sendable {
     /// - Parameter alongside: 与它共用同一个临时 agent 目录、连接目录与工作目录（同一会话的第二个进程）；结束时不删共用的目录。
     /// - Parameter sessionFile: 用 `--session` 打开这个会话文件。
     /// - Parameter discoverSkills: 让 Pi 去它的 skills 目录发现 skill（默认的安静参数里是 `--no-skills`）。
+    /// - Parameter settings: 写进临时 agent 目录的 Pi 设置（`settings.json`），如压缩阈值。
     init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
          oneShotPrompt: String? = nil, firecode: Bool = false, modelInAgentDirectory: Bool = false,
-         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false) async throws {
+         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false, settings: [String: Any]? = nil) async throws {
         ownsRoot = other == nil
         root = try other?.root ?? makeTempDirectory()
         cwd = root.appending(path: "work")
@@ -60,6 +61,10 @@ final class PiProcess: @unchecked Sendable {
             try await installer.install()
         }
 
+        if let settings {
+            try FileManager.default.createDirectory(at: paths.agentDirectory, withIntermediateDirectories: true)
+            try JSONSerialization.data(withJSONObject: settings).write(to: paths.agentDirectory.appending(path: "settings.json"))
+        }
         if firecode { try Self.installFirecode(into: paths.agentDirectory) }
         if modelInAgentDirectory { try Self.installFakeModel(into: paths.agentDirectory) }
         let modelLoaded = firecode || modelInAgentDirectory || other != nil

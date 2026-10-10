@@ -5,6 +5,10 @@
 //   [[tool:CMD]]  先发起 bash 工具调用（CMD 里的字面 \n 会变成换行），收到工具结果后回复 TOOL_DONE
 //   [[write:PATH]] 先发起 write 工具调用（写 PATH），收到工具结果后回复 TOOL_DONE
 //   [[subagent:NAME]] 先调用 FireCode 的 subagents 工具开一个子代理（任务"[[slow]] 子任务"），收到工具结果后回复 TOOL_DONE
+//   [[overflow]]  上下文里还没有压缩摘要时以"上下文溢出"的错误结束（Pi 随即压缩再重试），有了摘要照常回复
+// 压缩摘要的请求（Pi 把要压缩的对话写成 <conversation> 或 # Conversation 开头的一条消息）里，对话带着：
+//   [[slow-compact]] 等 2 秒再给摘要（制造"正在压缩"的窗口，期间被中止以 aborted 结束）
+//   [[fail-compact]] 以 error 结束（压缩失败）
 // 其余：回复 "ECHO <文字> IMAGES[<mime>:<base64长度>,…]"，证明文字与图片都进了模型上下文。
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 
@@ -31,7 +35,8 @@ export default function (pi: any) {
 				const text = parts.filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n");
 				const images = parts.filter((p: any) => p.type === "image").map((p: any) => `${p.mimeType}:${p.data.length}`);
 
-				if (text.includes("[[slow]]")) await sleep(1500);
+				const summarizing = text.startsWith("<conversation>\n") || text.startsWith("# Conversation\n");
+				if (text.includes("[[slow]]") || (summarizing && text.includes("[[slow-compact]]"))) await sleep(summarizing ? 2000 : 1500);
 				stream.push({ type: "start", partial: msg });
 
 				// 与真实提供方一样：被中止（Esc、CuePad 的停止）就以 aborted 结束这次请求
@@ -43,9 +48,11 @@ export default function (pi: any) {
 					return;
 				}
 
-				if (text.includes("[[fail]]")) {
+				const compacted = context.messages.some((m: any) => JSON.stringify(m.content).includes("compacted into the following summary"));
+				const overflow = !summarizing && text.includes("[[overflow]]") && !compacted;
+				if (overflow || (summarizing ? text.includes("[[fail-compact]]") : text.includes("[[fail]]"))) {
 					msg.stopReason = "error";
-					msg.errorMessage = "fake model failure";
+					msg.errorMessage = overflow ? "prompt is too long: 120000 tokens > 100000 maximum" : "fake model failure";
 					stream.push({ type: "error", reason: "error", error: msg });
 					stream.end();
 					return;

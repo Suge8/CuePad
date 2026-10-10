@@ -5,6 +5,8 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   case thinking, outputting, tool, waitingForUser, settled, error
   /// 自己这轮已经歇下，还有子代理在跑：仍在处理
   case delegating
+  /// 在压缩上下文（手动 /compact、上下文快满时自动、溢出后压缩再重试）：工作中的一档，Pi 忙着，停止会中止压缩
+  case compacting
   /// 会话已结束（Pi 退出、换了会话），以及本机会话文件索引里的历史会话：记录留着，会话文件被删时才删。
   case ended
   /// 会话还在跑，但它加载的扩展协议版本与 Mac 上的 CuePad 不同（升级前开的 Pi）：读不到状态、发不了命令，要在终端里退出 Pi 再接着这个会话。
@@ -14,7 +16,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// 正在干活（思考、输出、调用工具）。
   public var isWorking: Bool {
     switch self {
-    case .thinking, .outputting, .tool, .delegating: true
+    case .thinking, .outputting, .tool, .delegating, .compacting: true
     case .waitingForUser, .settled, .error, .ended, .incompatible: false
     }
   }
@@ -22,7 +24,7 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   /// Pi 自己正在跑一轮（含弹窗等你确认）：此时发消息只能马上说或等它做完再说。等子代理不算——指挥官这轮已经歇下，消息直接开始新的一轮。
   public var isTurnRunning: Bool {
     switch self {
-    case .thinking, .outputting, .tool, .waitingForUser: true
+    case .thinking, .outputting, .tool, .waitingForUser, .compacting: true
     case .delegating, .settled, .error, .ended, .incompatible: false
     }
   }
@@ -40,10 +42,12 @@ public enum PiAlert: String, Sendable, CaseIterable {
 
   /// 要不要提示的唯一规则（Mac 置位通知标志、手机在前台读同步来的记录做 App 内提示都用它）：进入等你确认；从工作中进入完成。
   /// 首次看到的会话（没有上一个状态）不提示，重启或重新读取时不会把旧事件再提示一遍。
-  public static func entering(_ state: PiWorkState, from previous: PiWorkState?) -> PiAlert? {
-    guard let previous else { return nil }
-    if state == .waitingForUser, previous != .waitingForUser { return .waitingForUser }
-    if state == .settled, previous.isWorking { return .settled }
+  /// 状态起点（`since`）退回到上一个状态之前是回落、不是新的转换：歇着时的手动压缩做完、失败或被停止，扩展让会话回到压缩前的状态与起点，
+  /// 压完不是"做完了"。
+  public static func entering(_ state: PiWorkState, since: Date, from previous: (state: PiWorkState, since: Date)?) -> PiAlert? {
+    guard let previous, since >= previous.since else { return nil }
+    if state == .waitingForUser, previous.state != .waitingForUser { return .waitingForUser }
+    if state == .settled, previous.state.isWorking { return .settled }
     return nil
   }
 }
@@ -53,9 +57,9 @@ extension PiSessionState {
   /// 状态起点往后走了，说明中间又经过了一轮工作（没读到），按"刚从工作中来"算。
   public func alert(since previous: PiSessionState?) -> PiAlert? {
     guard let previous, let state = state.known else { return nil }
-    let before = previous.state.known
-    let missedRound = before == state && stateSince > previous.stateSince
-    return PiAlert.entering(state, from: missedRound ? .thinking : before)
+    let missedRound = previous.state.known == state && stateSince > previous.stateSince
+    let before = missedRound ? .thinking : previous.state.known
+    return PiAlert.entering(state, since: stateSince, from: before.map { ($0, previous.stateSince) })
   }
 }
 

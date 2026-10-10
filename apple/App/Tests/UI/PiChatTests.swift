@@ -247,6 +247,18 @@ struct SubagentSummaryTests {
         #expect(PiProgress.line(of: delegating([agent("ui", .done), agent("core", .failed)])) == "子代理已交回，等 Agent 接着做")
     }
 
+    /// 压缩上下文是工作中的一档：列表行、会话页顶栏、Mac 侧栏都写"正在压缩上下文"，排在工作中那一档，带转圈。
+    @Test func 在压缩上下文_各处写正在压缩上下文_与工作中同档() {
+        var session = delegating([])
+        session.state = .known(.compacting)
+        session.pendingPrompt = "把迁移跑完"
+        let shown = PiShown(session)
+
+        #expect(shown.label == "正在压缩上下文" && shown.presence == "Agent 正在压缩上下文")
+        #expect(shown.isLive && shown.rank == PiShown(state: .known(.tool)).rank)
+        #expect(PiRowLine.lead(session, shown: shown, place: nil, draft: nil, end: nil) == .status("正在压缩上下文"))
+    }
+
     @Test func 已工作多久_在跑的随时间走_落定的停在落定时刻() {
         #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now) == "运行了 10 分钟")
         #expect(PiSubagentClock(agent("a", .running, started: 9_400))?.text(now: now.addingTimeInterval(120)) == "运行了 12 分钟")

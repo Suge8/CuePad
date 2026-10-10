@@ -4,7 +4,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 9
+    static let protocolVersion = 10
 
     struct State: Decodable {
         var kind: String
@@ -27,6 +27,7 @@ enum PiWire {
             case "outputting": .outputting
             case "tool": .tool(name: tool ?? "?", running: tools ?? [], detail: detail)
             case "delegating": .delegating
+            case "compacting": .compacting
             case "waiting_user": .waitingUser(kind: promptKind, title: title)
             case "done": .done(aborted: aborted ?? false)
             case "error": .error(message: error ?? "")
@@ -137,7 +138,7 @@ enum PiWire {
         var error: String?
     }
 
-    struct Bye: Decodable { var reason: String }
+    struct Bye: Decodable { var reason: String; var undelivered: [String]? }
     struct StateMessage: Decodable { var state: State }
 
     enum Message {
@@ -146,7 +147,7 @@ enum PiWire {
         case state(State)
         case info(Info)
         case ack(Ack)
-        case bye(reason: String)
+        case bye(Bye)
     }
 
     enum DecodeError: Error { case unknownType(String) }
@@ -161,7 +162,7 @@ enum PiWire {
         case "state": return .state(try decoder.decode(StateMessage.self, from: line).state)
         case "info": return .info(try decoder.decode(Info.self, from: line))
         case "ack": return .ack(try decoder.decode(Ack.self, from: line))
-        case "bye": return .bye(reason: try decoder.decode(Bye.self, from: line).reason)
+        case "bye": return .bye(try decoder.decode(Bye.self, from: line))
         case let other: throw DecodeError.unknownType(other)
         }
     }

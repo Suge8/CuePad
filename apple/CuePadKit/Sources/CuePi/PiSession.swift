@@ -10,6 +10,8 @@ public enum PiAgentState: Sendable, Equatable {
     case tool(name: String, running: [String], detail: String? = nil)
     /// 自己这轮已经歇下，还有子代理在飞（FireCode 的在飞数）：仍在处理
     case delegating
+    /// 在压缩上下文（手动 /compact、上下文快满时自动、溢出后压缩再重试）：工作中的一档
+    case compacting
     /// 扩展发起的 `ctx.ui` 弹窗（Pi 没有内置工具审批）
     case waitingUser(kind: String?, title: String?)
     /// 一轮结束且 Pi 不会再自动继续（`agent_settled`）
@@ -243,8 +245,9 @@ public enum PiSessionName {
 public enum PiSessionEndReason: Sendable, Equatable {
     /// 连接断开且没有告别：进程被强杀/崩溃
     case disconnected
-    /// 扩展先发了 `bye`：`quit`（退出）/`new`/`resume`/`fork`/`reload`
-    case closed(reason: String)
+    /// 扩展先发了 `bye`：`quit`（退出）/`new`/`resume`/`fork`/`reload`。`undelivered` 是扩展受理了、却没来得及交给 Pi 的话
+    /// （手动压缩期间留着的，见 `send`）的投送请求 id：它们没送到
+    case closed(reason: String, undelivered: [String] = [])
 }
 
 public enum PiSessionChange: Sendable, Equatable {
@@ -324,6 +327,7 @@ extension PiBridgeError: LocalizedError {
         case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
         case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .rejected("missing_argument"): "这个命令需要带上参数"
+        case .rejected("compacting"): "Agent 正在压缩上下文，压完再发这个命令"
         case .rejected(let reason): "Agent 拒绝了这条消息：\(reason)"
         }
     }
