@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import CueSync
 
-/// "有理由等就拉"：开始在等时立即拉一次，之后按给定间隔拉，不再等即停；给了上限时，每次收到"在等"起最多拉这么久。
+/// "有理由等就拉"：每收到一个节奏就立即拉一次，之后按档位隔着拉，档位走完或不再等即停。
 @Suite(.timeLimit(.minutes(1)))
 struct SyncPollerTests {
   let time = ManualTiming()
@@ -47,7 +47,7 @@ struct SyncPollerTests {
 
   @Test func fetchesEveryIntervalWhileWaitingAndStopsWhenTheConditionClears() async throws {
     let condition = Condition()
-    let every5 = SyncPoller.Cadence(interval: .seconds(5))
+    let every5 = SyncPoller.Cadence(.every(.seconds(5)))
     var asks = condition.asks.makeAsyncIterator()
     let (task, count, fetches) = run(SyncPoller(timing: time.timing), condition)
     var fetched = fetches.makeAsyncIterator()
@@ -71,9 +71,9 @@ struct SyncPollerTests {
     #expect(count.current == 4)
   }
 
-  @Test func aLimitEndsTheWaitAndANewWaitStartsAgain() async throws {
+  @Test func aFiniteCadenceEndsAndANewOneStartsAgain() async throws {
     let condition = Condition()
-    let limited = SyncPoller.Cadence(interval: .seconds(2), limit: .seconds(6))
+    let limited = SyncPoller.Cadence(.every(.seconds(2), for: .seconds(6)))
     var asks = condition.asks.makeAsyncIterator()
     let (task, count, fetches) = run(SyncPoller(timing: time.timing), condition)
     var fetched = fetches.makeAsyncIterator()
@@ -81,13 +81,13 @@ struct SyncPollerTests {
     await asks.next()
     condition.input.yield(limited)
     await fetched.next()  // 0 秒：开始在等，立即拉
-    for _ in 0..<3 {  // 2、4、6 秒
+    for _ in 0..<2 {  // 2、4 秒
       await time.waitForSleeper()
       time.advance(.seconds(2))
       await fetched.next()
     }
     await time.waitForSleeper()
-    time.advance(.seconds(2))  // 8 秒：超过上限，不再拉
+    time.advance(.seconds(2))  // 6 秒：档位走完，不再拉
 
     await asks.next()
     condition.input.yield(limited)  // 新的一次在等：立即拉
@@ -95,7 +95,56 @@ struct SyncPollerTests {
 
     condition.input.finish()
     await task.value
-    #expect(count.current == 5)
+    #expect(count.current == 4)
+  }
+
+  /// Mac 上有会话连着但没有要等的请求：先 2 秒一次拉两分钟，之后 10 秒一次一直拉；每小时的次数（原来每 2 秒一次，一小时 1801 次）。
+  @Test func slowsDownToTheNextStepAfterTheFirstOneRunsOut() async throws {
+    let condition = Condition()
+    let idle = SyncPoller.Cadence(.every(.seconds(2), for: .seconds(120)), .every(.seconds(10)))
+    var asks = condition.asks.makeAsyncIterator()
+    let (task, count, fetches) = run(SyncPoller(timing: time.timing), condition)
+    var fetched = fetches.makeAsyncIterator()
+
+    await asks.next()
+    condition.input.yield(idle)
+    await fetched.next()
+    // 前两分钟：每 2 秒（60 次）；之后每 10 秒，到一小时整（348 次）
+    for _ in 0..<60 {
+      await time.waitForSleeper()
+      time.advance(.seconds(2))
+      await fetched.next()
+    }
+    #expect(count.current == 61)
+    for _ in 0..<348 {
+      await time.waitForSleeper()
+      time.advance(.seconds(10))
+      await fetched.next()
+    }
+    condition.input.finish()
+    await task.value
+    #expect(count.current == 409)
+  }
+
+  @Test func aNewCadenceInterruptsTheSleepAndFetchesRightAway() async throws {
+    let condition = Condition()
+    let slow = SyncPoller.Cadence(.every(.seconds(10)))
+    var asks = condition.asks.makeAsyncIterator()
+    let (task, count, fetches) = run(SyncPoller(timing: time.timing), condition)
+    var fetched = fetches.makeAsyncIterator()
+
+    await asks.next()
+    condition.input.yield(slow)
+    await fetched.next()
+    await time.waitForSleeper()  // 睡在 10 秒的间隔里
+
+    await asks.next()
+    condition.input.yield(SyncPoller.Cadence(.every(.seconds(2))))  // 来了要等的东西：不等睡醒，马上拉
+    await fetched.next()
+
+    condition.input.finish()
+    await task.value
+    #expect(count.current == 2)
   }
 
   @Test func nothingIsFetchedWhileNotWaiting() async throws {

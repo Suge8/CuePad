@@ -24,11 +24,11 @@ struct IOSWorkflowTests {
         let services: AppServices = app.services
         #expect(services.pollingCadence == nil)
         services.piViewers = 1
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(3)))
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(3))))
         services.hasOpenDeliveries = true
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(2)))
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
         services.piViewers = 0
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(2), limit: .seconds(120)))
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2), for: .seconds(120))))
     }
 
     @Test func 作答_请求发给会话所在的Mac_带这次弹窗的标识与答案() async throws {
