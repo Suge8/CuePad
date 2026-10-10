@@ -10,7 +10,7 @@ struct Prewarm: View {
     @State private var step = Step.idle
 
     private enum Step: CaseIterable {
-        case idle, palette, agentPage, replyBar, newSession, done
+        case idle, palette, agentPage, conversation, replyBar, newSession, done
     }
 
     /// 回复框要一个会话：已结束的、不属于任何项目的占位，不写进任何地方。
@@ -19,11 +19,22 @@ struct Prewarm: View {
         lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .distantPast, busySince: nil, createdAt: .distantPast,
         modifiedAt: .distantPast)
 
+    private static let messages = [
+        PiChatMessage(sessionID: "prewarm", entryID: "1", seq: 1, role: .user, text: "把这个函数改成异步的", at: .distantPast),
+        PiChatMessage(
+            sessionID: "prewarm", entryID: "2", seq: 2, role: .pi,
+            text: "改好了：\n\n- 调用方都加了 `await`\n- 错误经 `throws` 抛出\n\n```swift\nfunc load() async throws {}\n```\n\n| 文件 | 改动 |\n| --- | --- |\n| a.swift | +3 −1 |", at: .distantPast),
+    ]
+
     var body: some View {
         ZStack {
             switch step {
             case .palette: SearchPalette(scope: .constant(.cards))
             case .agentPage: AgentPage()
+            case .conversation:
+                ChatScroll(followKey: 0, readingWidth: 760, inset: 24) {
+                    PiConversation(session: Self.session, messages: Self.messages)
+                }
             case .replyBar: PiReplyBar(session: Self.session, config: nil, compact: false, stopping: false) {}
             case .newSession: NewSessionForm { _ in }
             default: Color.clear

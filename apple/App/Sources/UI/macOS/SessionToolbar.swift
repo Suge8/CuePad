@@ -21,6 +21,8 @@ final class SessionHeader {
         var canRename: Bool
         /// 对话在看历史时标题让开。
         var showsHeader: Bool
+        /// "⋯"晚于标题两帧出（建菜单约占点击回合的一半）。
+        var showsMenu: Bool
     }
 
     private(set) var state: State?
@@ -107,7 +109,7 @@ struct SessionMenuSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if let state = workspace.shownSessionHeader, state.place != nil || state.canRename || state.liveID != nil || state.canEnd {
+        if let state = workspace.shownSessionHeader, state.showsMenu, state.place != nil || state.canRename || state.liveID != nil || state.canEnd {
             Menu("更多", systemImage: "ellipsis") {
                 if let place = state.place { Section { } header: { Text(place) } }
                 if state.canRename {
