@@ -141,8 +141,8 @@ struct TaskLine: View {
     /// pending：已显示完成、还没写入；committed：已写入，等列表把它移走。
     @State private var phase = Phase.idle
 
-    /// 长按提起的那块纸的圆角。
-    private static let liftRadius: CGFloat = 12
+    /// 长按提起的那块纸的圆角：与列表那张纸同一个圆角。
+    private static let liftRadius: CGFloat = 16
     /// 完成后停留多久再移出：够看清对勾、来得及反悔。
     private static let linger: Duration = .milliseconds(900)
 
@@ -153,8 +153,12 @@ struct TaskLine: View {
             // 长按提起的是一张纸：预览是同一行垫一块纸色圆角底、与原来的行同宽。不给行本身垫底——行放在纸上，
             // 纸面上沿有一层提亮，同色的底在那里会显出一块块的方框
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            // 预览的外形也要说给系统：不说时它按自己的默认把预览裁成两端全圆
+            .contentShape(.contextMenuPreview, .rect(cornerRadius: Self.liftRadius, style: .continuous))
             .contextMenu { CardActions(card: task) } preview: {
+                // 预览是另起的一层，不继承外面的环境：调色板要带进去，否则深色下圈与字按浅色的墨画，几乎看不见
                 line.frame(width: width).background(palette.paper, in: .rect(cornerRadius: Self.liftRadius, style: .continuous))
+                    .environment(\.palette, palette)
             }
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)

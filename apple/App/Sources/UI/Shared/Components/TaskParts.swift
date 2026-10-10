@@ -471,8 +471,13 @@ struct TaskProgressBar: View {
     @Environment(\.palette) private var palette
 
     static let height: CGFloat = 2
-    /// 圈小于这么大时不画条。
+    /// 圈小于这么大时不画条。Mac 上一律不画：Mac 的圈最大 20 点，条只有十来点宽，像圈下一小块污点；
+    /// 进度在旁边那行"子任务 1/2"里已经写着。
+    #if os(macOS)
+    static let minRing: CGFloat = .infinity
+    #else
     static let minRing: CGFloat = 16
+    #endif
 
     var body: some View {
         Capsule().fill(palette.ink3.opacity(0.4))
