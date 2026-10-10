@@ -69,7 +69,7 @@ struct FocusBand: View {
                     task: row.task, session: workspace.liveState(ofSession: row.task.piSessionID), marks: data.children[row.id], compact: true)
             }
             if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
-                Button { workspace.overlay = .tasks } label: { Text(more) }
+                Button { workspace.showsTasks = true } label: { Text(more) }
                     .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink3)
             }
             NewTaskField(project: data.project?.id)

@@ -68,27 +68,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         services.start()
         window.makeKeyAndOrderFront(nil)
-        if !location.isIsolated { Task { await offerCommandLineTool(services) } }
+        if !location.isIsolated { Task { await offerCommandLineTool(services, in: workspace) } }
     }
 
-    /// 首次启动提示一次：装了就不打扰；位置被占用等情况在设置里看。
-    private func offerCommandLineTool(_ services: AppServices) async {
+    /// 首次启动提示一次（主窗口里的确认框，`Workspace.offersCommandLineTool`）：装了就不打扰；位置被占用等情况在设置里看。
+    private func offerCommandLineTool(_ services: AppServices, in workspace: Workspace) async {
         guard !services.settings.commandLineToolPrompted else { return }
         services.settings.commandLineToolPrompted = true
-        let tool = services.commandLineTool
-        await tool.refresh()
-        guard tool.state == .notInstalled else { return }
-        let alert = NSAlert()
-        alert.messageText = "把 cuepad 命令行装进 PATH？"
-        alert.informativeText = "装好后 agent 可以在 bash 里直接用 cuepad 读写你的灵感和任务。会在 ~/.local/bin/cuepad 建一个指向 App 的链接，不需要管理员权限，随时可在设置里卸载。"
-        alert.addButton(withTitle: "安装")
-        alert.addButton(withTitle: "以后再说")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        do {
-            try await tool.install()
-        } catch {
-            NSAlert(error: error).runModal()
-        }
+        await services.commandLineTool.refresh()
+        guard services.commandLineTool.state == .notInstalled else { return }
+        workspace.offersCommandLineTool = true
     }
 
     @objc func checkForUpdates(_ sender: Any?) {

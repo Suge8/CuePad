@@ -37,12 +37,7 @@ struct AgentPage: View {
         .onChange(of: query) { limit = PiSessionList.pageSize }
         .onChange(of: filter) { limit = PiSessionList.pageSize }
         .renameSession($renaming)
-        .confirmationDialog("结束这个会话？", isPresented: Binding { confirmingEnd != nil } set: { if !$0 { confirmingEnd = nil } },
-                            titleVisibility: .visible, presenting: confirmingEnd) { session in
-            Button("结束会话", role: .destructive) { Task { await workspace.end(session) } }
-        } message: { _ in
-            Text("对话会保留，再给它发消息会在后台恢复")
-        }
+        .endSession($confirmingEnd)
         .observing(services.store, [.piSessionStates, .deliveryRequests, .projects, .directoryBindings],
                    id: PiSessionList.Key(filter: .init(text: query, project: filter), limit: limit),
                    into: $list, onError: workspace.fail) { [query, filter, limit] store in

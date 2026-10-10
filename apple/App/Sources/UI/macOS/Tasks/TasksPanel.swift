@@ -8,6 +8,7 @@ import SwiftUI
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
+    @Environment(\.closePanel) private var close
     @State private var board: TaskBoard?
     @State private var showsCompleted = false
 
@@ -17,7 +18,7 @@ struct TasksPanel: View {
                 Text("任务").font(Typography.sectionTitle)
                 if let board { Text("\(board.counts.inProgress + board.counts.todo)").font(Typography.sectionCount).foregroundStyle(.secondary) }
                 Spacer()
-                Button("关闭", systemImage: "xmark") { workspace.overlay = nil }
+                Button("关闭", systemImage: "xmark") { close() }
                     .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 6)
@@ -156,9 +157,7 @@ struct TaskRow: View {
             if let indent = structure?.indent { Button("缩进", action: indent) }
             if let outdent = structure?.outdent { Button("反缩进", action: outdent) }
         }
-        .confirmationDialog(TaskCopy.openSubtasks(subtasks), isPresented: $confirmsSubtasks) {
-            Button("全部完成", action: commitToggle)
-        }
+        .dialog(TaskCopy.openSubtasks(subtasks), isPresented: $confirmsSubtasks, buttons: [DialogButton(title: "全部完成") { commitToggle() }])
     }
 
     /// 进度之下一行：所在项目与交给 Pi 的会话此刻的状态（"Agent 正在工作 · 运行了 4 分钟"），项目名照写，挤不下时截会话状态。
@@ -190,7 +189,7 @@ struct TaskRow: View {
 
     /// 整页打开这条任务（与灵感同一个纸页）：收起任务面板。
     private func open() {
-        workspace.overlay = nil
+        workspace.showsTasks = false
         workspace.openCard = task.id
     }
 

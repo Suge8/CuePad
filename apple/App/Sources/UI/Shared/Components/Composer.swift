@@ -701,8 +701,10 @@ private struct AttachmentSheet: View {
     @State private var contentHeight: CGFloat = 0
     @State private var detent = PresentationDetent.height(barHeight)
 
-    /// Mac 的面板不随内容定高：给一个读得下的大小。
+    /// Mac 的面板宽固定、高随内容（同 iPhone），最高到这么大，再长就在里面滚。
     private static let macSize = CGSize(width: 520, height: 480)
+    /// Mac 面板顶上标题那一行连同上下留白的高度，加到内容高度上就是面板高度。
+    private static let macBar: CGFloat = 56
     /// 顶栏的高度，加到内容高度上就是面板高度（只有标题的卡片就只剩顶栏）。
     private static let barHeight: CGFloat = 64
     private var fitted: PresentationDetent { .height(contentHeight + Self.barHeight) }
@@ -733,7 +735,7 @@ private struct AttachmentSheet: View {
             AttachmentBody(content: outbox.content, omitsTitle: true, height: $contentHeight)
         }
         .padding(.top, 18)
-        .frame(width: Self.macSize.width).frame(maxHeight: Self.macSize.height)
+        .frame(width: Self.macSize.width, height: min(Self.macSize.height, contentHeight + Self.macBar))
         .background(palette.desk)
     }
     #endif

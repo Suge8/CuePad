@@ -24,14 +24,10 @@ struct TaskPicker: View {
 
     var body: some View {
         content
-            .alert("新建任务", isPresented: $naming) {
-                TextField("这件事是…", text: $title)
-                Button("取消", role: .cancel) {}
-                Button("新建并挂上", action: createAndAttach)
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            } message: {
-                Text("这条灵感会成为它的第一条提示词")
-            }
+            .dialog("新建任务", isPresented: $naming, message: "这条灵感会成为它的第一条提示词", field: DialogField(prompt: "这件事是…", text: $title), buttons: [
+                DialogButton(title: "取消", role: .cancel) {},
+                DialogButton(title: "新建并挂上", disabled: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) { createAndAttach() },
+            ])
             .observing(services.store, [.cards, .projects], id: idea.id, into: $groups, onError: workspace.fail) { [idea] store in
                 try AttachTargets.read(for: idea, from: store)
             }

@@ -204,14 +204,14 @@ enum ScenarioBench {
         }
 
         func search() async {
-            workspace.overlay = .search
+            workspace.searching = true
             try? await Task.sleep(for: .milliseconds(500))
             guard let field = editableText() else { return }
             for character in "retry boundary 队列" {
                 field.insertText(String(character), replacementRange: NSRange(location: NSNotFound, length: 0))
                 try? await Task.sleep(for: .milliseconds(120))
             }
-            workspace.overlay = nil
+            workspace.searching = false
         }
 
         // MARK: 工具

@@ -77,6 +77,20 @@ extension View {
     func renameSession(_ session: Binding<PiSessionState?>) -> some View {
         panel(item: session) { RenameSheet(target: $0) }
     }
+
+    /// `session` 非空时问要不要结束它（两端的 Agent 页与会话页）：确认后经 `Workspace.end` 发给它所在的 Mac，对话留着。
+    func endSession(_ session: Binding<PiSessionState?>) -> some View { modifier(EndSession(session: session)) }
+}
+
+private struct EndSession: ViewModifier {
+    @Binding var session: PiSessionState?
+    @Environment(Workspace.self) private var workspace
+
+    func body(content: Content) -> some View {
+        content.dialog("结束这个会话？", item: $session, message: "对话会保留，再给它发消息会在后台恢复") { session in
+            [DialogButton(title: "结束会话", role: .destructive) { Task { await workspace.end(session) } }]
+        }
+    }
 }
 
 extension MacDelivery {

@@ -150,10 +150,10 @@ enum PerfBench {
             }
             UserDefaults.standard.set(text, forKey: "CuePadSearch")
             let start = Date.now
-            await PerfProbe.wait(for: "search") { workspace.overlay = .search }
+            await PerfProbe.wait(for: "search") { workspace.searching = true }
             let shown = ms(Date.now.timeIntervalSince(start))
             let total = (try? await workspace.services.store.search(query(text).store(), limit: 1).totalCards) ?? -1
-            workspace.overlay = nil
+            workspace.searching = false
             try? await Task.sleep(for: .milliseconds(300))
             rows.append(["query": text, "storeMedianMs": store.sorted()[2], "paletteMs": shown, "hits": total])
         }

@@ -41,7 +41,7 @@ private struct PreviewPresenter: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .panel(item: own, fullScreen: true) {
+            .panel(item: own, style: .fullScreen) {
                 PreviewPage(preview: $0, file: file(of: $0))
                     #if os(macOS)
                     .frame(maxWidth: 960, maxHeight: 720)
