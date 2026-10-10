@@ -93,9 +93,9 @@ extension AppServices {
 
     /// 此刻该按什么节奏主动拉（nil：不拉）。"是否在等"只在这里定义；等的对象所在的表见 `ZoneChangePuller.awaitedTables`，
     /// 加新的等待理由时一并更新：
-    /// - Mac：有发给本机、还没结果的投送请求时每 2 秒；只有桥上连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是
-    ///   没来得及标为结束的旧会话）时，先每 2 秒拉两分钟（刚连上、刚做完一件事，手机常常接着还有话），之后 10 秒一次作为推送丢了的兜底——
-    ///   Mac 上会话一连几天，原来每 2 秒一次是一小时 1800 次、一天四万多次；
+    /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
+    ///   或有发给本机、还没结果的投送请求时，每 2 秒。闲着时也是 2 秒：Mac 上会话一连几天，这是一小时 1800 次、一天四万多次，
+    ///   但没有推送可靠性的数据前不拿延迟换请求数；数据看 `ZoneChangePuller.lateCatches`，放慢的条件见 docs「同步」；
     /// - 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时每 3 秒（状态是活的，
     ///   不靠推送），离开即停；两者都有时每 2 秒、不限时。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
@@ -173,8 +173,7 @@ extension AppServices {
 extension SyncPoller.Cadence {
     /// Mac 的节奏，规则见 `AppServices.pollingCadence`。
     static func mac(hasOpenDeliveries: Bool, hasSessions: Bool) -> Self? {
-        if hasOpenDeliveries { return Self(.every(.seconds(2))) }
-        return hasSessions ? Self(.every(.seconds(2), for: .seconds(120)), .every(.seconds(10))) : nil
+        hasOpenDeliveries || hasSessions ? Self(.every(.seconds(2))) : nil
     }
 
     /// 手机的节奏，规则见 `AppServices.pollingCadence`。

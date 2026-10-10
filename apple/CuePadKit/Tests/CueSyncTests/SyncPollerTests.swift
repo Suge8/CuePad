@@ -98,8 +98,9 @@ struct SyncPollerTests {
     #expect(count.current == 4)
   }
 
-  /// Mac 上有会话连着但没有要等的请求：先 2 秒一次拉两分钟，之后 10 秒一次一直拉；每小时的次数（原来每 2 秒一次，一小时 1801 次）。
-  @Test func slowsDownToTheNextStepAfterTheFirstOneRunsOut() async throws {
+  /// 档位规则：先 2 秒一次拉两分钟，之后 10 秒一次一直拉。一小时的次数 = 立即一次 + 前两分钟 60 次 + 之后每 10 秒一次 348 次 = 409
+  /// （每 2 秒一档一小时是 1801）。目前没有哪个节奏用到多档，留给推送可靠性数据支持后放慢闲着的拉取。
+  @Test func movesToTheNextStepAfterTheFirstOneRunsOut() async throws {
     let condition = Condition()
     let idle = SyncPoller.Cadence(.every(.seconds(2), for: .seconds(120)), .every(.seconds(10)))
     var asks = condition.asks.makeAsyncIterator()
