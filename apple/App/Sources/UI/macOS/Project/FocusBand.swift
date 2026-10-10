@@ -204,7 +204,7 @@ struct CompactFocus: View {
             .font(Typography.toolbarLabel)
             .foregroundStyle(palette.ink)
             .padding(.horizontal, 16).frame(height: Spacing.toolbarControl)
-            .glass(in: .capsule, interactive: true, legible: true)
+            .glass(in: .capsule, interactive: true, ink: .legible)
         }
         .buttonStyle(PressStyle(scale: 0.98))
         // 放在工具栏里时系统默认只显示图标

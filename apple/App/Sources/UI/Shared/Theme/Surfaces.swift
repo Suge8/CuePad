@@ -12,11 +12,22 @@ extension View {
     }
 
     /// 控件层玻璃；"降低透明度"开启时退回实底。玻璃不叠玻璃：调用方不在玻璃里再套玻璃。
-    /// `legible`：玻璃上写着要读的字（顶栏标题、提示横幅、输入框）——着色调高一档：深色下压一层暗色调，背后的亮字糊开后
-    /// 不再和上面的次要字同亮；浅色下垫一层淡纸色，背后的行糊成的灰块不再像污渍落在字周围。外沿照样通透，不是实底。
-    func glass<S: Shape>(in shape: S, interactive: Bool = false, legible: Bool = false) -> some View {
-        modifier(GlassSurface(shape: shape, interactive: interactive, legible: legible))
+    /// `ink`：玻璃上写着要读的字时着色调高几档（`GlassInk`）。
+    func glass<S: Shape>(in shape: S, interactive: Bool = false, ink: GlassInk = .clear) -> some View {
+        modifier(GlassSurface(shape: shape, interactive: interactive, ink: ink))
     }
+}
+
+/// 玻璃上的字要多好读：玻璃仍是唯一的遮挡，只是着色调高，不在玻璃外面垫任何东西。
+enum GlassInk {
+    /// 圆钮、标签栏这类只有图标与短标签的玻璃。
+    case clear
+    /// 写着要读的字（顶栏标题、输入框）：深色下压一层暗色调，背后的亮字糊开后不再和上面的次要字同亮；浅色下垫一层淡纸色，
+    /// 背后的行糊成的灰块不再像污渍落在字周围。外沿照样通透。
+    case legible
+    /// 浮在一整片字上、自己也写着一行或一页字（提示横幅、Mac 底部输入栏、任务面板）：玻璃里再垫九成实的页面底色，
+    /// 背后的字透不过来，边缘仍是玻璃的光。
+    case solid
 }
 
 private struct PaperSurface: ViewModifier {
@@ -45,7 +56,7 @@ extension Palette {
 private struct GlassSurface<S: Shape>: ViewModifier {
     let shape: S
     let interactive: Bool
-    let legible: Bool
+    let ink: GlassInk
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.palette) private var palette
 
@@ -54,6 +65,8 @@ private struct GlassSurface<S: Shape>: ViewModifier {
             content
                 .background(palette.paper, in: shape)
                 .overlay(shape.stroke(palette.hair))
+        } else if ink == .solid {
+            content.background(palette.desk.opacity(0.9), in: shape).glassEffect(glass, in: shape)
         } else {
             content.glassEffect(glass, in: shape)
         }
@@ -64,7 +77,7 @@ private struct GlassSurface<S: Shape>: ViewModifier {
     /// （系统规范也只把 clear 用在照片、视频这类背景上）；系统自己的返回钮与工具栏圆钮也是 regular，两种并排会不一致。
     private var glass: Glass {
         // 深色的暗色调让标题下那行次要字对背后糊开的字够 4.5:1，又不至于成一块黑斑
-        guard legible else { return .regular.interactive(interactive) }
+        guard ink != .clear else { return .regular.interactive(interactive) }
         return .regular.tint(palette.dark ? .black.opacity(0.4) : palette.paper.opacity(0.45)).interactive(interactive)
     }
 }

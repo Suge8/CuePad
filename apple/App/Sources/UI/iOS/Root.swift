@@ -454,7 +454,10 @@ private struct NoticeBanner: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 横幅玻璃上垫的页面底色有多实：九成，背后的字只剩看不出的一层。
-    private static let fill = 0.9
+    /// 两侧让出的宽度：页边距、一颗圆钮与它和中间那块的间距，返回钮与右边的圆钮不被盖住。
+    private static let sideClearance: CGFloat = 16 + FloatingHeaderLayout.height + 8
+    /// 顶上那一排离上安全区（状态栏下沿）的距离，与 `SearchRow` 同。
+    private static let rowTop: CGFloat = 4
 
     var body: some View {
         ZStack {
@@ -481,11 +484,11 @@ private struct NoticeBanner: View {
                         .contentShape(.rect)
                     }
                 }
-                .font(.subheadline.weight(.medium))
-                // 横幅只停几秒、正好压在页面最上面那几行字上（书架的"Agent 此刻"）：玻璃上再垫一层页面底色，背后的字透不过来，
-                // 两行字不叠在一起；边缘仍是玻璃的光
-                .background(palette.desk.opacity(Self.fill), in: .capsule)
-                .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil, legible: true)
+                .font(.subheadline.weight(.medium)).lineLimit(1)
+                // 占满两侧圆钮之间那一格：整块换下中间的标题或搜索框，不在它上面露出半截
+                .frame(maxWidth: .infinity, minHeight: FloatingHeaderLayout.height)
+                // 背后是顶栏那一条（内容在那里已经淡完）：压住的标题或搜索框透不过来（`GlassInk.solid`）
+                .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil, ink: .solid)
                 // 浮在内容之上：一点投影把它和底下的纸分开
                 .shadow(color: .black.opacity(palette.dark ? 0.3 : 0.12), radius: 12, y: 4)
                 .accessibilityHint(notice.link == nil ? "" : "去那里看看")
@@ -494,8 +497,11 @@ private struct NoticeBanner: View {
                 .accessibilityAddTraits(.updatesFrequently)
             }
         }
-        // 让到顶上那一排（推入页的悬浮顶栏、标签根页自己画的搜索与按钮行）下面：返回钮、标题与按钮不被遮住
-        .padding(.top, FloatingHeaderLayout.height + 12)
+        // 横幅落在顶上那一排里（推入页的悬浮顶栏、标签根页的搜索与按钮行），与圆钮同高、在两侧圆钮之间：
+        // 那一条里内容已经淡完，横幅不会把页面上的哪一行字切成两截；只停几秒，暂时盖住中间的标题或搜索框，返回钮与右边的圆钮露在外面
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, Self.sideClearance)
+        .padding(.top, Self.rowTop)
         .animation(Motion.quick, value: workspace.notice)
         .sensoryFeedback(trigger: workspace.notice) { _, notice in
             guard let notice else { return nil }

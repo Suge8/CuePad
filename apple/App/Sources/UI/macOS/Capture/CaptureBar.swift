@@ -84,8 +84,9 @@ struct CaptureComposer: View {
     }
 
     private var textField: some View {
-        // 展开后落点在胶囊上，占位不再写一遍
-        TextField(expanded ? CaptureCopy.prompt : CaptureCopy.placeholder(to: destination), text: $text, axis: .vertical)
+        // 展开后落点在胶囊上，占位不再写一遍。占位字是 App 统一的提示色：多行的系统占位字在玻璃上近乎墨色，像已经写了一句
+        let prompt = expanded ? CaptureCopy.prompt : CaptureCopy.placeholder(to: destination)
+        return TextField(text: $text, prompt: Text(prompt).foregroundStyle(palette.placeholder), axis: .vertical) { Text(prompt) }
             .accessibilityLabel("随手记")
             .textFieldStyle(.plain)
             .font(Typography.body)
@@ -175,7 +176,8 @@ private struct CaptureSurface: ViewModifier {
     let pinned: Bool
 
     func body(content: Content) -> some View {
-        if pinned { content } else { content.glass(in: .rect(cornerRadius: 22), interactive: true) }
+        // 主窗口里背后是卡片墙：卡片上的字糊成的字块不透到"记下灵感"两旁（`GlassInk.solid`）
+        if pinned { content } else { content.glass(in: .rect(cornerRadius: 22), interactive: true, ink: .solid) }
     }
 }
 #endif

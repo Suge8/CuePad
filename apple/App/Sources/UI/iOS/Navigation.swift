@@ -106,7 +106,7 @@ final class Navigation {
     /// 随手记输入框浮在键盘上方。
     private(set) var capturing = false
     var outbox: Outbox?
-    /// 半屏浮起的任务（`TaskSheet`）。
+    /// 浮起的任务（`TaskSheet`）。
     var task: OpenTask?
     var projectForm: ProjectForm?
     var newSession: NewSession?

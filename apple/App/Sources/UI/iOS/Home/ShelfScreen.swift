@@ -554,34 +554,62 @@ private struct ActiveTaskRow: View {
         .accessibilityHint("打开任务")
     }
 
-    /// 项目与会话状态平时排成一行；辅助字号下上下排、可换行，不撑出纸外。
-    private var meta: some View {
-        let layout = stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 6))
-        return layout {
-            if let project = row.project {
-                HStack(spacing: 4) {
-                    ProjectGlyph(project: project, size: 11)
-                    Text(project.name)
+    /// 项目与会话状态平时排成一行：这一行先说"哪个项目"，放不下时先省计时、再截状态词，项目名最后才让；
+    /// 辅助字号下上下排、可换行，不撑出纸外。
+    @ViewBuilder private var meta: some View {
+        if stacked {
+            VStack(alignment: .leading, spacing: 4) {
+                project
+                if let session = row.session {
+                    let shown = services.settings.shown(session, delivery: row.delivery)
+                    VStack(alignment: .leading, spacing: 2) {
+                        presence(shown)
+                        PiElapsed(shown: shown, font: .footnote)
+                    }
                 }
-                .foregroundStyle(palette.ink3)
-                .layoutPriority(-1)
             }
+            .font(.footnote).lineLimit(2)
+        } else {
+            ViewThatFits(in: .horizontal) {
+                line(timed: true)
+                line(timed: false)
+            }
+            .font(.footnote).lineLimit(1)
+        }
+    }
+
+    private func line(timed: Bool) -> some View {
+        HStack(spacing: 6) {
+            project.fixedSize()
             if let session = row.session {
                 let shown = services.settings.shown(session, delivery: row.delivery)
-                if row.project != nil, !stacked { Dot().foregroundStyle(palette.ink3) }
-                // 辅助字号下计时另起一行，状态词不被截断
-                (stacked ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))) {
-                    HStack(spacing: 4) {
-                        PiStateDot(shown: shown, size: 6)
-                        Text(shown.presence).foregroundStyle(shown.labelTint(palette))
-                        if !stacked { Dot().foregroundStyle(palette.ink3) }
+                if row.project != nil { Dot().foregroundStyle(palette.ink3) }
+                HStack(spacing: 4) {
+                    presence(shown)
+                    if timed {
+                        Dot().foregroundStyle(palette.ink3)
+                        PiElapsed(shown: shown, font: .footnote).fixedSize()
                     }
-                    PiElapsed(shown: shown, font: .footnote)
                 }
-                .fixedSize(horizontal: !stacked, vertical: false)
             }
         }
-        .font(.footnote).lineLimit(stacked ? 2 : 1)
+    }
+
+    @ViewBuilder private var project: some View {
+        if let project = row.project {
+            HStack(spacing: 4) {
+                ProjectGlyph(project: project, size: 11)
+                Text(project.name)
+            }
+            .foregroundStyle(palette.ink3)
+        }
+    }
+
+    private func presence(_ shown: PiShown) -> some View {
+        HStack(spacing: 4) {
+            PiStateDot(shown: shown, size: 6)
+            Text(shown.presence).foregroundStyle(shown.labelTint(palette))
+        }
     }
 }
 

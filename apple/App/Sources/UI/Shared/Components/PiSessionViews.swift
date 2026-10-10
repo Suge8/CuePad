@@ -328,6 +328,8 @@ struct PiStateDot: View {
     @State private var finished = 0
 
     private var box: CGFloat { size * 1.8 * scale }
+    /// 字的中线在基线以上多高，按标的外框算（外框约等于旁边的字号）。
+    private static let midline = 0.36
 
     var body: some View {
         let tint = shown.tint(palette)
@@ -352,6 +354,9 @@ struct PiStateDot: View {
                 if halo, shown.needsYou { Circle().fill(tint.opacity(palette.dark ? 0.2 : 0.13)).frame(width: box * 1.55, height: box * 1.55) }
             }
             .animation(Motion.quick, value: shown)
+            // 旁边是字时按第一行对齐（`.firstTextBaseline`）：每种标都把自己的中心放在那一行字的中线上。不能用各自的基线——
+            // 符号有基线、转圈与实心点没有（落到底边），同一列里就高高低低；标的大小跟着旁边的字走，中线离基线约是字高的四成
+            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + box * Self.midline }
             .onChange(of: shown.status) { old, new in
                 if !reduceMotion, case .working = old, [.unread, .idle].contains(new) { finished += 1 }
             }
