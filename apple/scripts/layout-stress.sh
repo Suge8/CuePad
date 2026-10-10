@@ -20,6 +20,7 @@ failed=0
 # 真实 pi 要求目录存在，用仓库根
 DEMO_DIR="$HOME/$(sed -n 's/.*name: "CuePad".*directory: "\\(home)\([^"]*\)".*/\1/p' "$APPLE_DIR/App/Sources/UI/Debug/DemoLibrary.swift")"
 REAL_DIR="$(cd "$APPLE_DIR/.." && pwd)"
+READY_TIMEOUT="${CUEPAD_STRESS_READY_TIMEOUT:-60}" # 等资料库文件出现的秒数上限
 
 run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   local name=$1 mode=$2 rounds=$3; shift 3
@@ -31,7 +32,15 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   pid=$!
   if [ "$mode" != none ]; then
     # 资料库文件出现即 App 已起来
-    until [ -f "$lib/cuepad.db" ]; do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+    local waited=0
+    until [ -f "$lib/cuepad.db" ] || ! kill -0 "$pid" 2>/dev/null; do
+      if [ "$waited" -ge $((READY_TIMEOUT * 10)) ]; then
+        echo "${name}：$READY_TIMEOUT 秒内没有出现资料库文件，App 进程仍存活（未响应启动）" >&2
+        kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+        echo "  证据留在 ${lib}" >&2; rm -rf "$sock"; failed=1; return
+      fi
+      sleep 0.1; waited=$((waited + 1))
+    done
   fi
   if [ "$mode" = none ]; then
     wait "$pid"
