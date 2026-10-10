@@ -339,14 +339,13 @@ private struct TasksButton: View {
     }
 }
 
-/// 窗口级快捷键：⌘\ 侧栏、⌘1–9 切项目、⌘N 新建卡片。⌘K 搜索、⌘⇧T 任务面板与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
+/// 窗口级快捷键：⌘1–9 切项目、⌘N 新建卡片。⌘K 搜索、⌘⇧T 任务面板、⌘\ 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
 /// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
 
     var body: some View {
         ZStack {
-            Button("侧栏") { workspace.toggleSidebar() }.keyboardShortcut("\\")
             if workspace.isLibraryReady {
                 Button("记一条灵感") { newCard() }.keyboardShortcut("n")
             }

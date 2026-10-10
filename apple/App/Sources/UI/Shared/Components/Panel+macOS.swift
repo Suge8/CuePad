@@ -66,7 +66,9 @@ final class PanelHost {
         } else {
             withAnimation(Motion.snappy) { _ = shown.remove(at: index) }
         }
-        if let responder = responders.removeValue(forKey: id)?.value, let window { window.makeFirstResponder(responder) }
+        // 弹出前焦点在输入框里才交还；不在输入框时（点了按钮弹出的）让窗口自己当第一响应者，同弹出前——交还给 SwiftUI 的宿主视图
+        // 会让它挑页面上第一个输入框接焦点（Agent 整页的搜索框），按空格就打进了搜索框
+        if let responder = responders.removeValue(forKey: id)?.value, let window { window.makeFirstResponder(responder is NSText ? responder : nil) }
         if shown.isEmpty, let monitor {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil

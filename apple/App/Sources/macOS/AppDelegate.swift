@@ -90,16 +90,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services?.updates.checkForUpdates()
     }
 
-    /// 主菜单"显示"里的搜索（⌘K）与任务面板（⌘⇧T）：命令本身是开关，开着时同一条命令把它关掉。放在主菜单而不是窗口里的快捷键：
-    /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`），窗口里的快捷键收不到。
+    /// 主菜单"显示"里的搜索（⌘K）、任务面板（⌘⇧T）与侧栏（⌘\）：命令本身是开关，开着时同一条命令把它关掉。放在主菜单而不是窗口里的快捷键：
+    /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）；中文输入法下 ⌘\ 到不了窗口里的快捷键（微信输入法实测），主菜单收得到。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
     @objc func toggleTasks(_ sender: Any?) { workspace?.showsTasks.toggle() }
+    @objc func toggleSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
         // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
         case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === mainWindow
+        case #selector(toggleSidebar(_:)): NSApp.mainWindow === mainWindow
         default: true
         }
     }
