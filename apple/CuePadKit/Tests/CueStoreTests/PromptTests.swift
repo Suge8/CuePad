@@ -100,6 +100,64 @@ import Testing
     #expect(try await replied(task.id) == [true])
   }
 
+  /// 同一个会话连着交几条提示词：每条的"已回复"只看它自己那一轮，后面又交了一条、会话又在忙，不改前面的。
+  @Test func 同一会话连着交几条提示词_前面的已回复不因后面又交了一条而倒退() async throws {
+    let task = try await store.createTask("修重连排序", in: nil)
+    let first = try await store.createCard(body: "先复现", under: task.id)
+    let second = try await store.createCard(body: "再改排序", under: task.id)
+    let third = try await store.createCard(body: "补用例", under: task.id)
+    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+    var seq = 0
+    func round(_ prompt: Card, answered: Bool) async throws {
+      try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+      try await enter(.thinking, recorder)
+      guard answered else { return }
+      seq += 1
+      try await Task.sleep(for: .milliseconds(5))
+      try await store.writePiTranscript(PiTranscript(
+        sessionID: "s1", messages: (1...seq).map { PiChatMessage(sessionID: "s1", entryID: "p\($0)", seq: Int64($0), role: .pi, text: "做完 \($0)", at: .now) },
+        recap: PiRecap(lastPrompt: nil, lastReply: "做完 \(seq)", pendingPrompt: nil)))
+      try await enter(.settled, recorder)
+    }
+    try await round(first, answered: true)
+    try await round(second, answered: true)
+    try await round(third, answered: false)
+
+    #expect(try await replied(task.id) == [true, true, false])
+  }
+
+  /// "已回复"靠会话的对话推出，所以清理对话（会话安静 7 天后）跳过仍被提示词引用的会话：整段对话留着，已回复不退回；
+  /// 提示词归档或删除后（没人引用了）照常清理。
+  @Test func 对话清理跳过仍被提示词引用的会话_已回复的提示词不退回() async throws {
+    let task = try await store.createTask("修重连排序", in: nil)
+    let prompt = try await store.createCard(body: "先复现", under: task.id)
+    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+    try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+    try await enter(.thinking, recorder)
+    try await Task.sleep(for: .milliseconds(5))
+    try await store.writePiTranscript(PiTranscript(
+      sessionID: "s1", messages: [PiChatMessage(sessionID: "s1", entryID: "p1", seq: 1, role: .pi, text: "复现了", at: .now)],
+      recap: PiRecap(lastPrompt: nil, lastReply: "复现了", pendingPrompt: nil)))
+    try await enter(.settled, recorder)
+    try await recorder.end(sessionID: "s1")
+    // 没有提示词引用的另一个会话，对话照常被清理
+    try await store.writePiTranscript(PiTranscript(
+      sessionID: "s2", messages: [PiChatMessage(sessionID: "s2", entryID: "q1", seq: 1, role: .pi, text: "别的", at: .now)],
+      recap: PiRecap(lastPrompt: nil, lastReply: "别的", pendingPrompt: nil)))
+    #expect(try await replied(task.id) == [true])
+    let later = Date.now.addingTimeInterval(30 * 86_400)
+
+    try await store.prunePiMessages(olderThan: 7 * 86_400, now: later)
+
+    #expect(try await replied(task.id) == [true])
+    #expect(try await store.piMessages(of: "s1").count == 1)
+    #expect(try await store.piMessages(of: "s2").isEmpty)
+
+    try await store.archive(prompt.id)
+    try await store.prunePiMessages(olderThan: 7 * 86_400, now: later)
+    #expect(try await store.piMessages(of: "s1").isEmpty)
+  }
+
   @Test func 提示词交给会话_它的任务关联到那个会话并进行中() async throws {
     let task = try await store.createTask("修重连排序", in: nil)
     let prompt = try await store.createCard(body: "先复现", under: task.id)

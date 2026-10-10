@@ -30,6 +30,11 @@ private struct RenameSheet: View {
             .focused($focused)
             .submitLabel(.done)
             .onSubmit(commit)
+            // 会话名是标识（atlas、deploy-2），不是句子：自动更正会把 atlas 改成 atlas’s，首字母大写也不对
+            .autocorrectionDisabled()
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            #endif
     }
 
     #if os(iOS)

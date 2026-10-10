@@ -33,7 +33,12 @@ enum ScrollAnchor {
 enum DebugScene {
     static var defaults: UserDefaults { .standard }
     static var scene: String? { defaults.string(forKey: "CuePadScene") }
-    static var searchText: String { defaults.string(forKey: "CuePadSearch") ?? "" }
+    /// 压测按关键词换搜索词时写这里，只在内存里：写进 `UserDefaults.standard` 会落进真实偏好域，之后每个 Debug 实例的 ⌘K 都预填它。
+    static var searchOverride: String?
+    /// 搜索框预填的字：压测换的词，否则只认启动参数（参数域），不读已存的偏好。
+    static var searchText: String {
+        searchOverride ?? (UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)["CuePadSearch"] as? String) ?? ""
+    }
     /// Mac session 画面要打开的会话（演示会话的 sessionID 与会话名相同）。
     static var sessionToOpen: String? { scene == "session" ? defaults.string(forKey: "CuePadSession") : nil }
     /// 截图演示：编辑器载入后选中这一段（`起点:长度`，UTF-16）。

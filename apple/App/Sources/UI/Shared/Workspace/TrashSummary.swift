@@ -12,6 +12,8 @@ nonisolated struct TrashItem: Identifiable, Sendable {
     let project: Project?
     let restore: @Sendable (CueStore) async throws -> Void
     let purge: @Sendable (CueStore) async throws -> Void
+    /// 恢复后落在哪个项目（nil 是未分类）：卡片所在的项目还在回收站时回到未分类，所以要在恢复之后读。
+    let landing: @Sendable (CueStore) async throws -> Project?
 
     init(_ project: Project, cards: Int) {
         id = project.id
@@ -21,6 +23,7 @@ nonisolated struct TrashItem: Identifiable, Sendable {
         self.project = project
         restore = { try await $0.restoreProject(project.id) }
         purge = { try await $0.purgeProject(project.id) }
+        landing = { _ in project }
     }
 
     init(_ card: Card) {
@@ -32,6 +35,10 @@ nonisolated struct TrashItem: Identifiable, Sendable {
         project = nil
         restore = { try await $0.restoreCard(card.id) }
         purge = { try await $0.purgeCard(card.id) }
+        landing = { store in
+            guard let id = try await store.card(card.id)?.projectID else { return nil }
+            return try await store.project(id)
+        }
     }
 }
 
@@ -52,6 +59,14 @@ nonisolated struct TrashSummary: Sendable {
 }
 
 extension Workspace {
-    func restore(_ item: TrashItem) { perform(item.restore) }
+    /// 恢复并提示落点，点提示过去（与删除时的"已删除 · 撤销"对称）。
+    func restore(_ item: TrashItem) {
+        let store = services.store
+        attempt {
+            try await item.restore(store)
+            let project = try await item.landing(store)
+            self.say(Dotted("已恢复到 \(CaptureCopy.destination(project))"), link: .project(project?.id))
+        }
+    }
     func purge(_ item: TrashItem) { perform(item.purge) }
 }
