@@ -140,7 +140,7 @@ extension CueStore {
   }
 
   /// 交出去之后才知道没送到：`host` 这台 Mac 受理了、Pi 会话却在把话交给 Pi 之前关掉了（扩展在告别里报出），改记为失败，
-  /// 走"没能送达 + 重发"。执行到一半的也算（告别可能先于执行器写回结果，写回只改执行中的，不会把它改回成功）。返回改了的。
+  /// 走"没能送达 + 重发"。执行到一半的也算（告别可能先于执行器写回结果，写回不覆盖已有的结果，不会把它改回成功）。返回改了的。
   public func failAcceptedDeliveries(_ ids: [UUID], host: String, reason: String) throws -> [UUID] {
     try write {
       let now = Date.stamp
@@ -155,7 +155,8 @@ extension CueStore {
     }
   }
 
-  /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。只改执行中的（见 `failAcceptedDeliveries`）。
+  /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。只改还没有结果的（放弃的是待领取的、执行的是执行中的），
+  /// 不覆盖已经写下的结果（见 `failAcceptedDeliveries`）。
   fileprivate func finishDelivery(_ id: UUID, _ outcome: DeliveryOutcome, at completed: Date) throws {
     let (status, detail): (DeliveryStatus, String?) =
       switch outcome {
@@ -164,7 +165,7 @@ extension CueStore {
       }
     try write {
       try db.run(
-        "UPDATE deliveryRequests SET status = ?, resultDetail = ?, completedAt = ?, modifiedAt = ? WHERE id = ? AND status = 'executing'",
+        "UPDATE deliveryRequests SET status = ?, resultDetail = ?, completedAt = ?, modifiedAt = ? WHERE id = ? AND status IN ('pending', 'executing')",
         [status.rawValue, detail, completed, Date.stamp, id])
     }
   }
