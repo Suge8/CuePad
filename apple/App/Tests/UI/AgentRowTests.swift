@@ -90,15 +90,15 @@ struct AgentRowTests {
     }
 
     /// 已结束的会话第二层一律说它做了什么，状态只由带斜线的状态标表达：最后一句回答，没有回答写你最后说的话，
-    /// 都没记下就空着——不写"已结束"（翻历史时一屏都是同一个词）。
+    /// 都没记下写"没有对话记录"（CuePad 没记下，不断言没回复过）——不写"已结束"（翻历史时一屏都是同一个词）。
     @Test func 已结束的会话第二层写做了什么_不写已结束() async throws {
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
         try await recorder.update(sessionID: "s", state: .ended, title: "s")
-        func lead() async throws -> PiRowLine? {
+        func lead() async throws -> PiRowLine {
             let ended = try await item()
             return PiRowLine.lead(ended.state, shown: settings.shown(ended), draft: nil, end: nil)
         }
-        #expect(try await lead() == nil)
+        #expect(try await lead() == .hint("没有对话记录"))
 
         try await store.writePiTranscript(PiTranscript(sessionID: "s", messages: [], recap: PiRecap(lastPrompt: "规划投送队列的重试边界\n先列方案", lastReply: nil)))
         #expect(try await lead() == .progress("你：规划投送队列的重试边界"))
