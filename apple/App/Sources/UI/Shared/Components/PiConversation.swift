@@ -54,12 +54,9 @@ struct PiConversation: View {
         .scrollTargetLayout()
         .frame(maxWidth: .infinity, alignment: .leading)
         .previewPresenter($opened)
-        #if DEBUG
         .task(id: previews.map(\.id)) {
-            // 截图验收：-CuePadOpenPreview <标题> 直接打开那张预览
-            if let title = DebugScene.defaults.string(forKey: "CuePadOpenPreview") { opened = previews.first { $0.title == title } }
+            if let title = DebugHooks.preset.openPreview { opened = previews.first { $0.title == title } }
         }
-        #endif
     }
 
     private static var spacing: CGFloat { 16 }

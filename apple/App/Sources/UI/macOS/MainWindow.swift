@@ -21,7 +21,6 @@ struct MainWindow: View {
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
         .overlay { Prewarm().environment(workspace) }
-        .modifier(SessionProjectsTracker(workspace: workspace))
         .panelHost()
         .environment(workspace)
     }

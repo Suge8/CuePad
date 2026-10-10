@@ -16,9 +16,7 @@ struct SearchScreen: View {
             .searchFocused($searching)
             .searchSelection($selection)
             .onAppear {
-                #if DEBUG
-                if query.text.isEmpty { query.text = DebugScene.searchText }
-                #endif
+                if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
                 focusSearch()
             }
             .onChange(of: navigation.searchFocusRequests) { focusSearch() }

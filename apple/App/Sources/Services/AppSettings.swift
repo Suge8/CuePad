@@ -50,15 +50,8 @@ final class AppSettings {
     /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。存储属性：询问卡片据此在点"不用了"的同一刻收起。
     var piExtensionDeclined: Bool { didSet { defaults.set(piExtensionDeclined, forKey: Key.piExtensionDeclined) } }
 
-    /// 启动参数（`-theme dark` 这类）覆盖已存的设置，只在 DEBUG 构建生效：视觉验收要用，发布版不能被命令行参数改设置。
-    /// 标准偏好域自带这层覆盖；隔离模式的套件读不到，所以显式传入。
-    static var launchArgumentOverrides: [String: Any] {
-        #if DEBUG
-        UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
-        #else
-        [:]
-        #endif
-    }
+    /// 启动参数覆盖已存的设置（只在 Debug 构建，见 `DebugHooks.launchArgumentOverrides`）。
+    static var launchArgumentOverrides: [String: Any] { DebugHooks.launchArgumentOverrides }
 
     /// 用过一次按住发送钮的菜单（马上说、放进输入框）：之后发送钮上不再提示"按住可…"。存储属性：用过的那一刻提示就收起。
     var holdSendLearned: Bool { didSet { defaults.set(holdSendLearned, forKey: Key.holdSendLearned) } }

@@ -126,10 +126,105 @@ enum DebugScene {
 
     static func scrollIfNeeded(_ proxy: ScrollViewProxy) {
         guard scene == "older" else { return }
-        Task {
-            try? await Task.sleep(for: .milliseconds(300))
-            proxy.scrollTo(ScrollAnchor.older, anchor: UnitPoint(x: 0.5, y: 0.35))
+        later(.milliseconds(300)) { proxy.scrollTo(ScrollAnchor.older, anchor: UnitPoint(x: 0.5, y: 0.35)) }
+    }
+
+    /// 产品视图读的启动预设（`DebugHooks.preset`）。
+    static var preset: DebugHooks.Preset {
+        var preset = DebugHooks.Preset()
+        preset.searchText = searchText
+        preset.editorSelection = editorSelection
+        preset.toolsOpen = defaults.bool(forKey: "CuePadToolsOpen")
+        preset.explain = defaults.bool(forKey: "CuePadExplain")
+        preset.openPreview = defaults.string(forKey: "CuePadOpenPreview")
+        preset.crashSheet = defaults.bool(forKey: "CuePadCrashSheet")
+        preset.demoMac = defaults.bool(forKey: "CuePadDemoMac")
+        #if os(iOS)
+        preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
+        preset.alertStatus = alertStatus
+        if scene == "search" { preset.focusedSearch = defaults.string(forKey: "CuePadProject") == nil ? .shelf : .project }
+        #endif
+        return preset
+    }
+
+    // MARK: 截图的首帧就绪
+
+    /// 还没做完的摆画面的事（`later`）。
+    private static var pending = 0
+    /// 正在过渡的视图（`debugSettling`）。
+    private static var unsettled: Set<UUID> = []
+
+    static func settling(_ id: UUID, _ busy: Bool) {
+        if busy { unsettled.insert(id) } else { unsettled.remove(id) }
+    }
+
+    static func later(_ delay: Duration, _ work: @escaping @MainActor () -> Void) {
+        pending += 1
+        Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            work()
+            pending -= 1
         }
     }
+
+    /// `CUEPAD_SHOT_READY` 给了文件路径时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
+    /// 没有视图报着正在过渡、屏上没有进行中的一次性动画（转圈这类一直循环的不算），连着三帧都这样，再写下这个文件。`xc.sh shot` 等它出现才截图，不靠固定的等待。
+    static func signalReady(_ store: CueStore) async {
+        guard let path = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] else { return }
+        var still = 0
+        while still < 3 {
+            // 排在页面已经发出的读库之后：它回来时，那些读取也都回来了
+            _ = try? await store.projects()
+            await nextFrame()
+            still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
+        }
+        FileManager.default.createFile(atPath: path, contents: nil)
+    }
+
+    private static let longestOneShot: CFTimeInterval = 5
+
+    /// 屏上的窗口里有没有一次性的动画在跑（推入、弹出浮窗这类）；一直循环的（转圈、流光）不算。
+    private static var animating: Bool {
+        func busy(_ layer: CALayer) -> Bool {
+            // 看不见的不算（没在刷新的下拉刷新圈也一直在转）
+            guard !layer.isHidden, layer.opacity > 0 else { return false }
+            let finite = (layer.animationKeys() ?? []).contains { key in
+                guard let animation = layer.animation(forKey: key) else { return false }
+                // 一次性的：总时长不过几秒。循环的（光标闪烁、转圈、玻璃的跟随）重复次数或时长是极大值，不等它们
+                let total = animation.repeatDuration > 0 ? animation.repeatDuration : animation.duration * Double(max(animation.repeatCount, 1))
+                return total.isFinite && total <= Self.longestOneShot
+            }
+            return finite || (layer.sublayers ?? []).contains(where: busy)
+        }
+        #if os(macOS)
+        return NSApp.windows.filter(\.isVisible).compactMap(\.contentView?.superview?.layer).contains(where: busy)
+        #else
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows)
+        return windows.map(\.layer).contains(where: busy)
+        #endif
+    }
+
+    private static func nextFrame() async {
+        #if os(macOS)
+        await NextFrame.wait()
+        #else
+        await withCheckedContinuation { continuation in
+            let tick = FrameTick(continuation)
+            CADisplayLink(target: tick, selector: #selector(FrameTick.fire)).add(to: .main, forMode: .common)
+        }
+        #endif
+    }
 }
+
+#if os(iOS)
+private final class FrameTick: NSObject {
+    private var continuation: CheckedContinuation<Void, Never>?
+    init(_ continuation: CheckedContinuation<Void, Never>) { self.continuation = continuation }
+    @objc func fire(_ link: CADisplayLink) {
+        link.invalidate()
+        continuation?.resume()
+        continuation = nil
+    }
+}
+#endif
 #endif

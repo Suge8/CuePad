@@ -48,7 +48,6 @@ struct MenuBarPad: View {
             }
         }
         .frame(width: 360)
-        .modifier(SessionProjectsTracker(workspace: workspace))
     }
 
     private struct Block: ViewModifier {

@@ -58,13 +58,7 @@ struct SettingsScreen: View {
     }
 
     /// 演示模式没有同步引擎：调试参数要看"Pi 通知"各状态时照样显示这一节。
-    private static var previewsAlerts: Bool {
-        #if DEBUG
-        DebugScene.alertStatus != nil
-        #else
-        false
-        #endif
-    }
+    private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
 
     private static var version: String {
         let info = Bundle.main.infoDictionary
@@ -84,11 +78,7 @@ private struct AlertSection: View {
     var body: some View {
         let live = PiAlertStatus(
             authorization: alerts.authorization, registration: alerts.registration, subscription: services.alertSubscription)
-        #if DEBUG
-        let status = DebugScene.alertStatus ?? live
-        #else
-        let status = live
-        #endif
+        let status = DebugHooks.preset.alertStatus ?? live
         Section {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
