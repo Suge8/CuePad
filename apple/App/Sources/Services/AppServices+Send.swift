@@ -7,48 +7,27 @@ import CuePi
 import UIKit
 #endif
 
-/// 发给 Agent 与复制：正文解析 → 落地 → 发给 Agent 成功后记一条发送记录（复制不是发送，不记）。
+/// 复制：正文解析 → 放进系统剪贴板。复制不是发送，不记发送记录；发给 Agent 见 `MacExecutor`。
 extension AppServices {
-    /// 发送已经成功：记录写失败时抛 `SendError.unrecorded`，与发送失败区分开，界面按已发出处理（不重发）并提示。
-    func recordSend(_ storedText: String, to target: SendTarget, card: UUID?) async throws {
-        do {
-            try await store.recordSend(storedText, to: target, card: card)
-        } catch {
-            throw SendError.unrecorded(error.localizedDescription)
-        }
-    }
-
     /// 复制正文（存储格式，变量已填）：文字与图片按原顺序放进系统剪贴板。
     func copy(_ storedText: String) throws {
         let content = SendContent(stored: storedText)
         #if os(macOS)
-        try channels.copy(ClipboardContent(try content.segments.map { segment in
+        try Clipboard.write(ClipboardContent(try content.segments.map { segment in
             switch segment {
             case .text(let text): .text(text)
-            case .image(let hash): .image(try pngData(for: hash))
+            case .image(let hash): .image(try store.files.png(hash))
             }
-        }))
+        }), to: pasteboard)
         #else
         // 每段文字、每张图片各一个条目，按原顺序：目标应用能取到哪些由它决定
         pasteboard.setItems(try content.segments.compactMap { segment -> [String: Any]? in
             switch segment {
             case .text(let text): text.isEmpty ? nil : [UTType.utf8PlainText.identifier: text]
-            case .image(let hash): [UTType.png.identifier: try pngData(for: hash)]
+            case .image(let hash): [UTType.png.identifier: try store.files.png(hash)]
             }
         })
         #endif
-    }
-
-    func pngData(for hash: String) throws -> Data {
-        guard let png = ImageFiles.png(from: try imageData(hash)) else { throw SendError.imageUnavailable(hash) }
-        return png
-    }
-
-    func imageData(_ hash: String) throws -> Data {
-        guard let url = images.fileURL(for: hash), let data = try? ImageFiles.original(at: url) else {
-            throw SendError.imageUnavailable(hash)
-        }
-        return data
     }
 }
 
@@ -60,12 +39,17 @@ extension AppServices {
     func send(
         _ storedText: String, to id: CuePi.PiSession.ID, mode: DeliveryMode, card: UUID?
     ) async throws {
-        guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
-        if mode == .send, session.isBusy { throw SendError.piSessionBusy }
-        guard deliveryExecutor != nil else { throw SendError.executorUnavailable }
-        let request = try await store.requestDelivery(storedText, to: session.target, on: hostID, mode: mode, card: card)
+        guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
+        if mode == .send, session.state.isTurnRunning { throw SendError.piSessionBusy }
+        guard executor.isRunning else { throw SendError.executorUnavailable }
+        let request = try await store.requestDelivery(storedText, to: session.sendTarget, on: hostID, mode: mode, card: card)
         let result = try await outcome(of: request.id)
         if let reason = result.failure { throw SendError.notDelivered(reason) }
     }
+}
+
+extension CuePi.PiSession {
+    /// 发送记录与投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
+    var sendTarget: SendTarget { SendTarget(kind: .piSession, name: displayName, ref: sessionID) }
 }
 #endif

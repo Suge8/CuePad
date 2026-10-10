@@ -13,8 +13,6 @@ nonisolated struct Shortcut: Hashable, Sendable {
     /// 虚拟键码（kVK_*），与键盘布局无关。
     var keyCode: UInt32
     var modifiers: Modifiers
-
-    static let optionSpace = Shortcut(keyCode: 49, modifiers: .option)
 }
 
 nonisolated enum HotkeyError: Error, Equatable {

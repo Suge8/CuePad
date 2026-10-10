@@ -1,4 +1,5 @@
 import CueStore
+import enum CueStore.Table  // 盖过 SwiftUI.Table
 import CueText
 import SwiftUI
 
@@ -13,7 +14,7 @@ nonisolated struct TaskDetail: Sendable, Equatable {
     /// 能挑来作提示词的：本项目散放的灵感，最近改过的在前。
     var ideas: [Card]
 
-    static let tables: Set<StoreTable> = [.cards, .piSessionStates, .deliveryRequests, .sendRecords]
+    static let tables: Set<Table> = [.cards, .piSessionStates, .deliveryRequests, .sendRecords]
 
     static let ideaLimit = 20
 

@@ -1,4 +1,5 @@
 import CueStore
+import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
 /// 灵感与任务交给了哪个 Agent 会话、那个会话此刻怎样（含发送中、有新回复）：行与卡上的状态点读它。
@@ -8,7 +9,7 @@ nonisolated struct AgentLinks: Sendable, Equatable {
     /// 从这条开了新会话、还没开好（"正在开会话"）。
     var launching: Set<UUID>
 
-    static let tables: Set<StoreTable> = [.cards, .piSessionStates, .deliveryRequests]
+    static let tables: Set<Table> = [.cards, .piSessionStates, .deliveryRequests]
 
     static func read(from store: isolated CueStore) throws -> AgentLinks {
         let handed = try store.handedSessions()

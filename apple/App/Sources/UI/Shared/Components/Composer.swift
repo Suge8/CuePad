@@ -56,16 +56,6 @@ struct ComposerDraft {
     }
 }
 
-extension AppServices {
-    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（交给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
-    @discardableResult
-    func requestMacDelivery(
-        _ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
-    ) async throws -> DeliveryRequest {
-        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: card ?? draft.attachments.first?.card)
-    }
-}
-
 /// 一个去处接受草稿里的哪几种东西。
 struct ComposerKinds: OptionSet {
     let rawValue: Int

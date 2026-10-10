@@ -1,5 +1,6 @@
 #if os(macOS)
 import CuePi
+import struct CueStore.PiSession
 import CueStore
 import Foundation
 import os
@@ -85,7 +86,7 @@ actor PiHistoryPersistence {
         for update in updates {
             let history = update.history
             let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-            let session = StoredPiSession(
+            let session = PiSession(
                 id: update.sessionID,
                 path: update.file.path,
                 cwd: history.cwd ?? "",

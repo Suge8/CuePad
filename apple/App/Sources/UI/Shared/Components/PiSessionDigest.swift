@@ -1,4 +1,5 @@
 import CueStore
+import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
 /// 一个 Pi 会话页一次读取的数据：会话记录、它所在的项目、对话（从早到晚）、发给它的请求（先发的在前）。
@@ -35,7 +36,7 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 
     /// 会话页要观察的表。
-    static let tables: Set<StoreTable> = [.piSessionStates, .piMessages, .previews, .deliveryRequests, .projects]
+    static let tables: Set<Table> = [.piSessionStates, .piMessages, .previews, .deliveryRequests, .projects]
 
     static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {
         let item = try store.piSessionPage(PiSessionQuery(id: id)).items.first

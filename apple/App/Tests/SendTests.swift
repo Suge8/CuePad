@@ -10,7 +10,6 @@ import Testing
 struct SendTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
-    var channels: FakeChannels { rig.channels }
     let png = pngData()
 
     /// `before\n![](cuepad://img/<哈希>)\nafter`
@@ -19,16 +18,11 @@ struct SendTests {
         return "before\n\(CueFormat.imageMarkup(id: hash))\nafter"
     }
 
-    func idleSession(_ id: String = "s1.100", busy: Bool = false) {
-        channels.sessions[id] = PiSessionInfo(
-            target: SendTarget(kind: .piSession, name: "work", ref: "sess-1"), isBusy: busy)
-    }
-
-    /// 发给 Pi 走本机投送请求：会话要能从 Pi 的会话 id 找回桥上的连接，执行器要在运行。
-    func connectedSession(busy: Bool = false) async throws {
-        idleSession(busy: busy)
-        channels.bridgeIDs["sess-1"] = "s1.100"
-        try await services.startDeliveryExecutor()
+    /// 发给 Pi 走本机投送请求：会话要连着桥，执行器要在运行。
+    func connectedSession(busy: Bool = false) async throws -> FakeExtension {
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/work", busy: busy)
+        try await services.executor.start()
+        return ext
     }
 
     // MARK: 路由
@@ -38,19 +32,20 @@ struct SendTests {
 
         try services.copy(body)
 
-        #expect(channels.calls == [.copy(ClipboardContent([.text("before\n"), .image(png), .text("\nafter")]))])
+        #expect(rig.pasteboard.string(forType: .string) == "before\n\nafter")
+        #expect(rig.pasteboard.data(forType: .rtfd) != nil)
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 发给Pi_文字去掉图片标记_图片按序带原图和类型_记录会话id与目录名() async throws {
-        try await connectedSession()
+        let ext = try await connectedSession()
         let body = try await bodyWithImage()
 
-        try await services.send(body, to: "s1.100", mode: .send, card: nil)
+        try await services.send(body, to: ext.id, mode: .send, card: nil)
 
         let request = try #require(try await services.store.deliveryRequests().first)
-        #expect(channels.calls == [
-            .send(PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString), "s1.100")
+        #expect(ext.messages == [
+            PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString)
         ])
         let record = try #require(try await services.store.sendRecords().first)
         #expect(record.targetKind == .known(.piSession))
@@ -59,17 +54,17 @@ struct SendTests {
     }
 
     @Test func Pi会话忙时_未指定马上说还是等它做完再说则报错_指定后按方式发送() async throws {
-        try await connectedSession(busy: true)
+        let ext = try await connectedSession(busy: true)
 
         await #expect(throws: SendError.piSessionBusy) {
-            try await services.send("hi", to: "s1.100", mode: .send, card: nil)
+            try await services.send("hi", to: ext.id, mode: .send, card: nil)
         }
-        #expect(channels.calls.isEmpty)
+        #expect(ext.commands.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)
 
-        try await services.send("hi", to: "s1.100", mode: .steer, card: nil)
+        try await services.send("hi", to: ext.id, mode: .steer, card: nil)
         let request = try #require(try await services.store.deliveryRequests().first)
-        #expect(channels.calls == [.send(PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString), "s1.100")])
+        #expect(ext.messages == [PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString)])
     }
 
     @Test func 未知Pi会话报错且不写记录() async throws {
@@ -85,12 +80,10 @@ struct SendTests {
     /// 由本机执行器照远端请求的流程执行；送达后资料库里只多这条请求与它的发送记录。
     @Test(.timeLimit(.minutes(1)))
     func Mac发给Pi会话_写本机投送请求由执行器送达_只多一条请求与一条发送记录() async throws {
-        idleSession()
-        channels.bridgeIDs["sess-1"] = "s1.100"
-        try await services.startDeliveryExecutor()
+        let ext = try await connectedSession()
         let workspace = Workspace(services: services)
 
-        #expect(await workspace.send("hi", to: AgentTarget(session: "s1.100", mode: .steer)))
+        #expect(await workspace.send("hi", to: AgentTarget(session: ext.id, mode: .steer)))
 
         // 发出即有请求（"你发过去的"列表立刻有这一行）
         let request = try #require(try await services.store.deliveryRequests().first)
@@ -100,7 +93,7 @@ struct SendTests {
         for try await status in services.store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id)?.status }) {
             if status == .known(.succeeded) { break }
         }
-        #expect(channels.calls == [.send(PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString), "s1.100")])
+        #expect(ext.messages == [PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString)])
         #expect(try await services.store.deliveryRequests().count == 1)
         let record = try #require(try await services.store.sendRecords().first)
         #expect(try await services.store.sendRecords().count == 1)
@@ -110,10 +103,10 @@ struct SendTests {
     // MARK: 记录
 
     @Test func 记录带内容快照与关联的卡片() async throws {
-        try await connectedSession()
+        let ext = try await connectedSession()
         let task = try await services.store.createTask("do it", in: nil)
 
-        try await services.send("snapshot text", to: "s1.100", mode: .send, card: task.id)
+        try await services.send("snapshot text", to: ext.id, mode: .send, card: task.id)
 
         let record = try #require(try await services.store.sendRecords().first)
         #expect(record.content == "snapshot text")
@@ -122,11 +115,13 @@ struct SendTests {
 
     @Test func 复制时图片文件缺失就报错_剪贴板不动() async throws {
         let missing = CueFormat.imageMarkup(id: String(repeating: "a", count: 64))
+        rig.pasteboard.clearContents()
+        rig.pasteboard.setString("原有", forType: .string)
 
         #expect(throws: SendError.imageUnavailable(String(repeating: "a", count: 64))) {
             try services.copy("x \(missing)")
         }
-        #expect(channels.calls.isEmpty)
+        #expect(rig.pasteboard.string(forType: .string) == "原有")
         #expect(try await services.store.sendRecords().isEmpty)
     }
 }

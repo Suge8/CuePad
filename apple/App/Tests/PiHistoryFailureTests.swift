@@ -1,4 +1,5 @@
 #if os(macOS)
+import struct CueStore.PiSession  // 与 CuePi.PiSession 同名
 import CuePi
 import Foundation
 import OSLog
@@ -90,7 +91,7 @@ struct PiHistoryFailureTests {
         let file = try sessionFile("stale")
         let garbage = Data("not a checkpoint".utf8)
         try await services.store.upsertPiSession(
-            StoredPiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
+            PiSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
 
         #expect(await services.loadPiCheckpoint(for: file) == nil)
         await services.consumePiHistory(AsyncStream { continuation in

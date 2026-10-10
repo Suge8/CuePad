@@ -87,7 +87,7 @@ struct IOSWorkflowTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let workspace = Workspace(services: app.services, holder: SceneContext())
         let first = pngData(shade: 0.1), second = pngData(shade: 0.9)
-        let hashes = try [first, second].map { try app.services.images.store($0) }
+        let hashes = try [first, second].map { try app.services.store.files.store($0) }
 
         try await CaptureDraft(text: "  想法  ", images: [first, second]).save(in: project.id, workspace: workspace)
 
@@ -100,7 +100,7 @@ struct IOSWorkflowTests {
     @Test func 随手记只有图片_也能存_没选项目进未分类() async throws {
         let workspace = Workspace(services: app.services, holder: SceneContext())
         let image = pngData()
-        let hash = try app.services.images.store(image)
+        let hash = try app.services.store.files.store(image)
 
         try await CaptureDraft(text: "", images: [image]).save(in: nil, workspace: workspace)
 

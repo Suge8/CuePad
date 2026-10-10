@@ -32,7 +32,7 @@ struct IOSEditorHost: UIViewRepresentable {
     func makeCoordinator() -> KeyboardBar.Actions { KeyboardBar.Actions() }
 
     func makeUIView(context: Context) -> CueTextView {
-        let view = CueTextView(imageStore: services.images, theme: theme)
+        let view = CueTextView(imageStore: services.store.files, theme: theme)
         view.storedText = initialText
         view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator)
         view.accessibilityLabel = "正文"
