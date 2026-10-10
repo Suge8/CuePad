@@ -37,7 +37,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     }
 
     private func apply(_ text: (title: String, body: String)) {
-        Self.log.notice("改写 Pi 通知：\(text.title, privacy: .private) · \(text.body, privacy: .private)")
+        Self.log.notice("改写 Pi 通知：标题 \(text.title, privacy: .private)，正文 \(text.body, privacy: .private)")
         lock.withLock {
             content?.title = text.title
             content?.body = text.body
