@@ -5,7 +5,7 @@ import Foundation
 /// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge.ts`。
 enum PiWire {
     /// 客户端说的协议版本；hello 的版本不同就不往下解析（命令一条不发），会话只当"需要 /reload"（`OtherProtocolHello`）
-    static let protocolVersion = 10
+    static let protocolVersion = 11
 
     struct State: Decodable {
         var kind: String
@@ -105,19 +105,12 @@ enum PiWire {
         }
     }
 
-    /// 会话名、首条用户消息、等你回答的弹窗、子代理、模型配置、上下文余量与命令清单；没有的为 nil。
+    /// 会话名、首条用户消息、等你回答的弹窗、子代理、模型配置、上下文余量与命令清单。hello 带全部；`info` 消息只带变了的几项：
+    /// 键出现就是新值（null 是"没有"），没出现就是不变（模型表和命令清单很大，上下文用量每轮都变，不整份重发）。
     /// 模型与上下文的线上格式就是同步字段的格式（直接解码成 CueStore 的类型）；弹窗、子代理、命令的键名或时刻单位不同，经下面三个线上形状转成。
     /// 问答近况不走这里：对话与摘要只来自会话文件（`PiHistory`）。
     struct Info: Decodable {
-        var name: String?
-        var firstMessage: String?
-        var question: PiQuestion?
-        var subagents: [PiSubagentState]?
-        var model: PiModelOption?
-        var thinking: Open<PiThinkingLevel>?
-        var models: [PiModelOption]?
-        var context: PiContextUsage?
-        var commands: [PiSlashCommand]?
+        private var updates: [@Sendable (inout PiSession) -> Void] = []
 
         private enum CodingKeys: String, CodingKey {
             case name, firstMessage, question, subagents, model, thinking, models, context, commands
@@ -125,27 +118,26 @@ enum PiWire {
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            name = try c.decodeIfPresent(String.self, forKey: .name)
-            firstMessage = try c.decodeIfPresent(String.self, forKey: .firstMessage)
-            question = try c.decodeIfPresent(WireQuestion.self, forKey: .question)?.question
-            subagents = try c.decodeIfPresent([WireSubagent].self, forKey: .subagents)?.map(\.subagent)
-            model = try c.decodeIfPresent(PiModelOption.self, forKey: .model)
-            thinking = try c.decodeIfPresent(Open<PiThinkingLevel>.self, forKey: .thinking)
-            models = try c.decodeIfPresent([PiModelOption].self, forKey: .models)
-            context = try c.decodeIfPresent(PiContextUsage.self, forKey: .context)
-            commands = try c.decodeIfPresent([WireCommand].self, forKey: .commands)?.map(\.command)
+            func field<Value: Decodable & Sendable>(
+                _ key: CodingKeys, _ type: Value.Type, _ set: @escaping @Sendable (inout PiSession, Value?) -> Void
+            ) throws {
+                guard c.contains(key) else { return }
+                let value = try c.decodeIfPresent(type, forKey: key)
+                updates.append { set(&$0, value) }
+            }
+            try field(.name, String.self) { $0.name = $1 }
+            try field(.firstMessage, String.self) { $0.firstMessage = $1 }
+            try field(.question, WireQuestion.self) { $0.question = $1?.question }
+            try field(.subagents, [WireSubagent].self) { $0.subagents = $1?.map(\.subagent) ?? [] }
+            try field(.model, PiModelOption.self) { $0.model = $1 }
+            try field(.thinking, Open<PiThinkingLevel>.self) { $0.thinking = $1 }
+            try field(.models, [PiModelOption].self) { $0.availableModels = $1 ?? [] }
+            try field(.context, PiContextUsage.self) { $0.context = $1 }
+            try field(.commands, [WireCommand].self) { $0.commands = $1?.map(\.command) ?? [] }
         }
 
         func apply(to session: inout PiSession) {
-            session.name = name
-            session.firstMessage = firstMessage
-            session.question = question
-            session.subagents = subagents ?? []
-            session.model = model
-            session.thinking = thinking
-            session.availableModels = models ?? []
-            session.context = context
-            session.commands = commands ?? []
+            for update in updates { update(&session) }
         }
     }
 

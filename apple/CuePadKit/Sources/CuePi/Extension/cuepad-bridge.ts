@@ -2,7 +2,7 @@
 // 由 CuePad 安装到 Pi 扩展目录，升级时整文件覆盖，请勿手改。协议说明见 apple/CuePadKit/Sources/CuePi/README.md。
 //
 // 每个 Pi 会话在 socket 目录开一个 `<sessionId>.<pid>.sock`（目录 0700、socket 0600），协议是 JSON 行：
-//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（会话名、首条消息、近况变化）/ ack / bye
+//   扩展 → CuePad  hello（连接后第一条，含当前状态与 info 快照）/ state（仅状态切换）/ info（变了的那几项：会话名、首条消息、近况）/ ack / bye
 //   CuePad → 扩展  send（文字+图片，steer/followUp）/ command（斜杠命令，由 Pi 展开执行）/ answer（回答等你确认的弹窗）/ config（会话名、模型、思考强度）/ end（结束会话）/ abort（停止这一轮）
 // 只在 tui/rpc 模式启用；无客户端时不做任何 socket 写入。
 
@@ -15,8 +15,8 @@ import type {
 	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 23;
-const PROTOCOL_VERSION = 10;
+const EXTENSION_VERSION = 24;
+const PROTOCOL_VERSION = 11;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
 const SUN_PATH_LIMIT = 104;
@@ -321,12 +321,16 @@ export default function (pi: ExtensionAPI) {
 		for (const client of clients) write(client, message);
 	}
 
-	/** 有变化才发。 */
+	/** 变了的项才发，而且只发变了的那几项：模型表（几百个）与命令清单很大，上下文用量每轮都变，不能每次带上整份。
+	 * 没出现的键表示不变，null 是新值；hello 带全部。 */
 	function updateInfo(changes: Partial<Info>) {
-		const next = { ...info, ...changes };
-		if (JSON.stringify(next) === JSON.stringify(info)) return;
-		info = next;
-		for (const client of clients) write(client, { t: "info", ...info });
+		const changed: Partial<Info> = {};
+		for (const key of Object.keys(changes) as (keyof Info)[]) {
+			if (JSON.stringify(changes[key]) !== JSON.stringify(info[key])) Object.assign(changed, { [key]: changes[key] });
+		}
+		if (Object.keys(changed).length === 0) return;
+		info = { ...info, ...changed };
+		for (const client of clients) write(client, { t: "info", ...changed });
 	}
 
 	/** 此刻的模型配置；Pi 里换了模型、强度后重新取。可选的模型与 Pi 的 /model 一致：配了范围（`--models`、`enabledModels`）就是范围内的，
@@ -365,9 +369,15 @@ export default function (pi: ExtensionAPI) {
 		return { commands: [...builtin, ...resources] };
 	}
 
-	/** 上下文与命令清单会随每一轮、压缩、换模型、重载变化；有变化才发。 */
-	function refreshUsage() {
-		if (server) updateInfo({ ...contextInfo(), ...commandInfo() });
+	/** 上下文用量随每一轮、压缩、换模型、换分支变化。 */
+	function refreshContext() {
+		if (server) updateInfo(contextInfo());
+	}
+
+	/** 命令清单只会在会话载入（`session_start`，含重载）和资源扩展后变——扩展注册的命令、提示词模板、skill；后者发生在 `session_start`
+	 * 之后且没有事件，所以每次提交消息前（`before_agent_start`）取一次，而不是每一轮（`turn_end`）。 */
+	function refreshCommands() {
+		if (server) updateInfo(commandInfo());
 	}
 
 	async function hello() {
@@ -744,12 +754,13 @@ export default function (pi: ExtensionAPI) {
 		launchToken = null;
 		stop(event.reason);
 	});
-	pi.on("model_select", () => { updateInfo(modelInfo()); refreshUsage(); });
-	pi.on("thinking_level_select", () => updateInfo(modelInfo()));
-	pi.on("turn_end", refreshUsage);
-	pi.on("agent_settled", refreshUsage);
-	pi.on("session_compact", refreshUsage);
-	pi.on("session_tree", refreshUsage);
+	pi.on("model_select", () => { updateInfo(modelInfo()); refreshContext(); });
+	pi.on("thinking_level_select", () => updateInfo({ thinking: ctx.model ? pi.getThinkingLevel() : null }));
+	pi.on("before_agent_start", refreshCommands);
+	pi.on("turn_end", refreshContext);
+	pi.on("agent_settled", refreshContext);
+	pi.on("session_compact", refreshContext);
+	pi.on("session_tree", refreshContext);
 	pi.on("session_info_changed", (event) => updateInfo({ name: event.name ?? null }));
 	pi.on("message_end", (event) => {
 		if (event.message.role !== "user") return;
