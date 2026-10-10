@@ -9,6 +9,7 @@ struct MenuBarPad: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @State private var capture = CaptureState()
 
     private static let sessionLimit = 4
     private static let blockRadius: CGFloat = 22
@@ -35,7 +36,7 @@ struct MenuBarPad: View {
                 .modifier(Block())
             }
             if workspace.isLibraryReady {
-                CaptureComposer(defaultProject: services.settings.currentProject, pinnedOpen: true)
+                CaptureComposer(state: $capture, defaultProject: services.settings.currentProject, pinnedOpen: true)
             } else if let failure = workspace.catalogFailure {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("读不出资料库", systemImage: "exclamationmark.triangle").font(Typography.secondary.weight(.medium))
@@ -48,8 +49,6 @@ struct MenuBarPad: View {
         }
         .frame(width: 360)
         .modifier(SessionProjectsTracker(workspace: workspace))
-        // 共用输入框总挂着卡片面板（`Composer` 的 `panel`），没有浮层宿主就取不到环境而崩
-        .panelHost()
     }
 
     private struct Block: ViewModifier {
