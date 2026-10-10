@@ -25,7 +25,9 @@ struct IOSRoot: View {
             // 这一层还没有导航栏：上安全区就是状态栏
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
             // 随手记与新会话都是浮在键盘上方的输入框
-            .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) { CaptureComposer() } }
+            .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) {
+                CaptureComposer(state: $navigation.capture, defaultProject: navigation.currentProject, pinnedOpen: true, saved: navigation.finishCapture)
+            } }
             #if DEBUG
             .overlay { if DebugScene.scene == "style" { StyleBoard() } }
             #endif
