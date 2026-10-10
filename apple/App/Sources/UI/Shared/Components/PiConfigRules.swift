@@ -1,0 +1,95 @@
+import CueStore
+import SwiftUI
+
+
+
+/// 模型怎么写：胶囊上是提供方的印（名字的首字母）与短名（去掉"提供方/"前缀、Anthropic 模型名开头的 Claude、末尾的日期戳），菜单按提供方分组。
+nonisolated enum PiModelLabel {
+    static func short(_ model: PiModelOption) -> String {
+        var name = model.name.isEmpty ? model.key.id : model.name
+        if let slash = name.lastIndex(of: "/") { name = String(name[name.index(after: slash)...]) }
+        name = name.replacing(/^(?i:claude)[\s\-]+/, with: "").replacing(/[\s\-]\d{8}$/, with: "")
+        return name.isEmpty ? model.key.id : name
+    }
+
+    /// 模型菜单里每个模型下面那一行：它支持的思考强度。
+    static func levels(_ model: PiModelOption) -> Dotted {
+        let labels = model.thinkingLevels.map(\.label)
+        return labels.isEmpty ? "不调思考强度" : Dotted(["思考 " + labels[0]] + labels.dropFirst())
+    }
+
+    /// 提供方的印上的字：提供方名字的首字母（Anthropic 是 A、OpenAI 是 O）。
+    static func seal(_ model: PiModelOption) -> String {
+        provider(named: model.key.provider).prefix(1).uppercased()
+    }
+
+    /// 胶囊最宽是这一排宽度的一半，至少 96（短名放得下）、至多 240（iPad、Mac 宽屏不至于拉得过长）。
+    static func capsuleWidth(available: CGFloat) -> CGFloat {
+        min(max(available * 0.5, 96), 240)
+    }
+
+    /// 菜单里的分组：提供方按第一次出现的顺序。
+    static func groups(_ models: [PiModelOption]) -> [(provider: String, models: [PiModelOption])] {
+        var order: [String] = []
+        var byProvider: [String: [PiModelOption]] = [:]
+        for model in models {
+            if byProvider[model.key.provider] == nil { order.append(model.key.provider) }
+            byProvider[model.key.provider, default: []].append(model)
+        }
+        return order.map { (provider(named: $0), byProvider[$0] ?? []) }
+    }
+
+    private static func provider(named id: String) -> String {
+        switch id.lowercased() {
+        case "anthropic": "Anthropic"
+        case "openai": "OpenAI"
+        case "google", "gemini": "Google"
+        case "xai": "xAI"
+        case "deepseek": "DeepSeek"
+        case "openrouter": "OpenRouter"
+        default: id.prefix(1).uppercased() + id.dropFirst()
+        }
+    }
+}
+
+
+/// 思考强度条：格是当前模型支持的档位里除"关"以外的几档，当前档以下填满；关着时格全空。
+/// 拖动时按横向位置均分所有档（含"关"，在最左）。
+nonisolated struct PiThinkingMeter: Equatable {
+    let levels: [PiThinkingLevel]
+    let current: PiThinkingLevel?
+
+    var bars: [PiThinkingLevel] { levels.filter { $0 != .off } }
+    var filled: Int { current.flatMap { bars.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
+    var isOff: Bool { current == .off }
+    /// 填到最高一档。
+    var isMax: Bool { !bars.isEmpty && filled == bars.count }
+
+    func level(at fraction: Double) -> PiThinkingLevel {
+        let index = Int((min(max(fraction, 0), 0.999) * Double(levels.count)).rounded(.down))
+        return levels[min(index, levels.count - 1)]
+    }
+
+    /// 读屏的上一档、下一档。
+    func step(_ delta: Int) -> PiThinkingLevel? {
+        guard let current, let index = levels.firstIndex(of: current) else { return levels.first }
+        let next = index + delta
+        return levels.indices.contains(next) ? levels[next] : nil
+    }
+}
+
+
+extension PiThinkingLevel {
+    /// 思考强度给人看的名字。
+    nonisolated var label: String {
+        switch self {
+        case .off: "关"
+        case .minimal: "最低"
+        case .low: "低"
+        case .medium: "中"
+        case .high: "高"
+        case .xhigh: "很高"
+        case .max: "最高"
+        }
+    }
+}

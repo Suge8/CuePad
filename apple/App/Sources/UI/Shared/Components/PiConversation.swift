@@ -1,6 +1,7 @@
 import CueStore
 import SwiftUI
 
+
 /// 会话页的对话（iOS 会话页、Mac 会话页共用）：你的话右侧墨色气泡，Pi 的回答左侧全宽 Markdown（不折叠），
 /// 每轮回答上方一行这一轮的经过；你发出还没进对话的话接在末尾，气泡下写送达情况，失败的可重发；
 /// Pi 在处理时末尾一行流光的进展（当前动作；计时在顶上一行），有子代理时下面逐个列出它们此刻的状态；出错时末尾写原因。滚动与输入框由平台放。
@@ -100,16 +101,18 @@ struct PiConversation: View {
     }
 }
 
+
 #if os(macOS)
 /// Mac 的对话整段排开最近几条、不用懒加载栈：懒加载栈靠估计高度定位，数据晚到或内容变化后再滚到最新，可见区里的行有时排不出来
 /// （页面空白，滚一下才出现）；整段排开位置是确定的。代价是排开的每条都要当场排版，所以只排最近几条。
-private typealias ChatStack = VStack
+typealias ChatStack = VStack
 #else
 private typealias ChatStack = LazyVStack
 #endif
 
+
 /// 排开的最上面一行：还有更早的对话，点一下再排开一段。贴着最新时它进了可见区，说明排开的几条铺不满一屏，自动再排开。
-private struct EarlierRow: View {
+struct EarlierRow: View {
     let hidden: Int
     let fillsViewport: Bool
     @Binding var window: Int
@@ -125,6 +128,7 @@ private struct EarlierRow: View {
             .task(id: [visible ? 1 : 0, window]) { if visible, fillsViewport { window += PiConversation.step } }
     }
 }
+
 
 extension PiConversation {
     /// Mac 只排最近几条（`window`）：要跳到 `id` 那一条（刻度滑条）时至少要排开几条。
@@ -145,6 +149,7 @@ extension PiConversation {
         FollowKey(messages: messages.count, previews: previews.count, outgoing: PiChat.outgoing(deliveries, messages: messages).map(\.status), state: session?.state)
     }
 }
+
 
 /// 会话名下的一行小字：状态标与状态词（带色），有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`），
 /// 后面淡一级的计时。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
@@ -184,6 +189,7 @@ struct PiSessionSubtitle: View {
     #endif
 }
 
+
 /// 等你确认时固定在输入框上方的问题：能从这里答的是问题卡（选项一点即答，答完随问题清空而消失），
 /// 只能在 Mac 上答的写明原文与去处。
 struct PiQuestionDock: View {
@@ -203,290 +209,9 @@ struct PiQuestionDock: View {
     }
 }
 
-private extension AnyTransition {
-    /// 对话里一条出现或消失：只淡入淡出，动画随过渡自带。不给整段对话挂动画：倒置的滚动区里新的一条加在逻辑顶端，
-    /// 其余各行的位移若也跟着动画，正在读的那段会先被推走再滑回来
-    static let entry = AnyTransition.opacity.animation(Motion.quick)
-}
-
-/// 你的一句话：右侧气泡，最宽到所在一栏的四分之三；还在路上的整颗变淡。
-private struct UserBubble: View {
-    private static let widthFraction: CGFloat = 0.78
-
-    /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
-    private static let foldedLines = 6
-
-    let text: Dotted
-    var trip = BubbleTrip.arrived
-    var highlighted = false
-    @Environment(\.palette) private var palette
-    @State private var expanded = false
-    /// 折起时文字确实被截掉了（按同一宽度量全文的高度比较）。
-    @State private var truncated = false
-
-    var body: some View {
-        TrailingFraction(fraction: Self.widthFraction) {
-            BubbleText(
-                text: text, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines, truncated: $truncated,
-                expand: truncated && !expanded ? { expanded = true } : nil)
-        }
-        .transition(.entry)
-    }
-}
-
-/// 气泡本身（颜色是 `Palette.bubble`），长按的预览也是它。Mac 上可以直接拖选文字。
-private struct BubbleText: View {
-    let text: Dotted
-    var highlighted = false
-    var trip = BubbleTrip.arrived
-    var lineLimit: Int?
-    /// 给了时报告文字是否被 `lineLimit` 截掉。
-    var truncated: Binding<Bool>?
-    /// 折起着时：最后一行末尾渐隐，接着是"展开"（在气泡里，就在被截断的地方）。
-    var expand: (() -> Void)?
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
-        HStack(alignment: .center, spacing: 8) {
-            if trip == .failed {
-                Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).accessibilityLabel("没能送达")
-            }
-            Text(text)
-                .font(Typography.reading).foregroundStyle(palette.ink)
-                .lineLimit(lineLimit)
-                .selectableOnHover()
-                .background(alignment: .topLeading) { if let truncated, lineLimit != nil { fullHeight(truncated) } }
-                .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
-                .padding(.horizontal, 16).padding(.vertical, 11)
-                .background(palette.bubble, in: shape)
-                .overlay { edge(shape) }
-                // 在路上：半透明加虚线边，浅色深色一样看得出还没到
-                .opacity(trip == .inTransit ? 0.6 : 1)
-        }
-        .animation(Motion.quick, value: highlighted)
-        .animation(Motion.quick, value: trip)
-    }
-
-    private func expandButton(_ expand: @escaping () -> Void) -> some View {
-        HStack(spacing: 0) {
-            LinearGradient(colors: [palette.bubble.opacity(0), palette.bubble], startPoint: .leading, endPoint: .trailing).frame(width: 36)
-            Button("展开", action: expand)
-                .font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink2)
-                .buttonStyle(.plain)
-                .padding(.leading, 4)
-                .background(palette.bubble)
-        }
-        .fixedSize()
-    }
-
-    /// 同一宽度下排全文要多高，与折起后的高度比，量出有没有被截掉；只读几何、不影响自己的排版（藏起的全文不占位）。
-    private func fullHeight(_ truncated: Binding<Bool>) -> some View {
-        GeometryReader { shown in
-            Text(text).font(Typography.reading).fixedSize(horizontal: false, vertical: true)
-                .frame(width: shown.size.width, alignment: .leading)
-                .hidden()
-                .onGeometryChange(for: Bool.self) { $0.size.height > shown.size.height + 1 } action: { truncated.wrappedValue = $0 }
-        }
-    }
-
-    @ViewBuilder private func edge(_ shape: RoundedRectangle) -> some View {
-        switch trip {
-        case .inTransit: shape.strokeBorder(palette.ink2, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-        case .failed: shape.strokeBorder(palette.failure, lineWidth: 1)
-        case .arrived: shape.strokeBorder(highlighted ? palette.signature : palette.bubbleEdge, lineWidth: highlighted ? 2 : 1)
-        }
-    }
-}
-
-/// 你的话到哪了：进了对话、还在路上、没能送达。
-private enum BubbleTrip { case arrived, inTransit, failed }
-
-/// 一条消息的长按菜单（Mac 右键）只在这里定义。Pi 的回答：复制、选择文本（手机上打开可自由选择的全文；Mac 直接拖选）、
-/// 分享、存为灵感；你的话：复制、编辑后重发（放回输入框，接在已写的字后面）、存为灵感。存为灵感进会话所属的项目。
-private struct MessageMenu: View {
-    enum Kind { case reply, mine }
-
-    let text: String
-    let kind: Kind
-    let session: PiSessionState
-    var selectText: (() -> Void)?
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        Button("复制", systemImage: "doc.on.doc") {
-            Clipboard.copy(text)
-            workspace.say("已复制")
-        }
-        switch kind {
-        case .reply:
-            if let selectText { Button("选择文本", systemImage: "selection.pin.in.out", action: selectText) }
-            ShareLink(item: text) { Label("分享", systemImage: "square.and.arrow.up") }
-        case .mine:
-            Button("编辑后重发", systemImage: "square.and.pencil", action: editAgain)
-        }
-        Button("存为灵感", systemImage: "square.and.arrow.down") {
-            let text = text, session = session
-            workspace.attempt { try await workspace.saveReply(text, of: session) }
-        }
-    }
-
-    /// 放回这个会话的回复框（草稿只有一份，见 `AppSettings.replyDraft`）：已经写了字就接在后面，不覆盖。
-    private func editAgain() {
-        let settings = workspace.services.settings
-        var draft = settings.replyDraft(for: session.id)
-        draft.text = [draft.text, text].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
-        settings.setReplyDraft(draft, for: session.id)
-    }
-}
-
-/// 对话还没同步过来时（很久前的会话、刚连上的会话）先放记录上的最近一轮：你说的话与 Agent 的回答；
-/// 还没说过话的会话是全 App 同一种空态（吉祥物加一句怎么开始），在对话区里居中。对话到了就被它替换。
-private struct RecapPreview: View {
-    let session: PiSessionState
-    @Environment(\.palette) private var palette
-    @Environment(\.chatBottomSpace) private var bottomSpace
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if let prompt = session.pendingPrompt ?? session.lastPrompt {
-                Text(Dotted("最近一轮", "完整对话还在同步")).font(Typography.caption).foregroundStyle(palette.ink3)
-                UserBubble(text: Dotted(prompt))
-                if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
-            } else if !session.hasStarted, session.state != .known(.ended) {
-                EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")
-                    // 占满对话区（扣掉回复框让出的高与上下留白），吉祥物落在可见区中间
-                    .containerRelativeFrame(.vertical) { length, _ in max(0, length - bottomSpace - 2 * ChatLayout.edge) }
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// Pi 的一轮回答：上方一行弱化的经过，下面全宽 Markdown，长也直接全显；长按（Mac 右键）是消息菜单（`MessageMenu`）。
-private struct ReplyBlock: View {
-    let text: String
-    let meta: PiChat.RoundNote?
-    let tools: PiChatMessage.Tools?
-    let session: PiSessionState
-    @Environment(\.palette) private var palette
-    @State private var selecting = false
-
-    /// 长按预览的大小：长回答只露开头，不撑满屏。
-    private static let previewWidth: CGFloat = 360
-    private static let previewHeight: CGFloat = 420
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let meta { ToolActivityLine(note: meta, tools: tools) }
-            MarkdownText(source: text)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .chatContextMenu {
-            #if os(iOS)
-            MessageMenu(text: text, kind: .reply, session: session) { selecting = true }
-            #else
-            MessageMenu(text: text, kind: .reply, session: session)
-            #endif
-        } preview: {
-            MarkdownText(source: text).padding(16)
-                .frame(width: Self.previewWidth, alignment: .leading)
-                .frame(maxHeight: Self.previewHeight, alignment: .top)
-                .clipped()
-                .background(palette.paper)
-        }
-        #if os(iOS)
-        .sheet(isPresented: $selecting) { SelectableTextSheet(text: text) }
-        #endif
-        .transition(.entry)
-    }
-}
-
-/// 你发出、还没进对话的话：你的气泡，下面送达情况；没能送达时写原因，可以重发或移除。
-private struct OutgoingBubble: View {
-    let request: DeliveryRequest
-    let session: PiSessionState
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    private var failed: Bool { request.status == .known(.failed) }
-
-    var body: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            UserBubble(text: text, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived)
-            HStack(spacing: 10) {
-                if failed {
-                    if let reason = request.failure { Text(reason).font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2) }
-                    // 送不到 Mac 时也露出来（停用），看得出能重发
-                    Button("重发", systemImage: "arrow.clockwise", action: retry)
-                        .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.failure)
-                        .padding(.horizontal, 10).frame(minHeight: 28)
-                        .overlay(Capsule().strokeBorder(palette.failure, lineWidth: 1))
-                        .frame(minHeight: 44).contentShape(.rect)
-                        .buttonStyle(.plain)
-                        .disabled(!workspace.services.reachesPiHost)
-                } else {
-                    DeliveryStatusLabel(request: request, session: session).font(Typography.caption)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .chatContextMenu {
-            if failed { Button("重发", systemImage: "arrow.clockwise", action: retry).disabled(!workspace.services.reachesPiHost) }
-            Button("移除", systemImage: "xmark", role: .destructive, action: remove)
-        } preview: {
-            BubbleText(text: text).padding(4)
-        }
-        .transition(.entry)
-    }
-
-    private var text: Dotted { PiChat.shownText(of: request) }
-
-    /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
-    private func retry() {
-        let old = request, session = session
-        workspace.attempt {
-            _ = try await workspace.services.requestMacDelivery(
-                old.content, to: session, mode: old.mode.known ?? .followUp, card: old.cardID)
-            try await workspace.services.store.deleteDelivery(old.id)
-        }
-    }
-
-    private func remove() {
-        let id = request.id
-        workspace.perform { try await $0.deleteDelivery(id) }
-    }
-}
-
-/// Pi 此刻在做什么，接在对话末尾、与回答同一列、不加底框：一行进展（动作或状态词，干活时文字有一道流光扫过；计时已在顶上一行），
-/// 有子代理时下面是它们的汇总（`PiSubagentList`）。回答到了它就被回答替换。
-private struct LiveStatus: View {
-    let session: PiSessionState
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 在等子代理时，子代理那一行汇总就是进展，不再另写一行"子代理工作中"
-            if session.state.isWorking, session.state != .known(.delegating) || session.subagents.isEmpty {
-                // 与列表同一个转着的状态标：会话页底部这一行和列表里那一行是同一件事在动
-                HStack(spacing: 8) {
-                    PiStateDot(shown: PiShown(session), size: 7)
-                    Text(session.detail.flatMap(PiProgress.action) ?? PiShown(session).label)
-                        .font(Typography.secondary.weight(.medium))
-                        .lineLimit(1).truncationMode(.middle)
-                        .shimmering()
-                }
-            }
-            PiSubagentList(agents: session.subagents)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .contain)
-        .transition(.entry)
-    }
-}
 
 /// 对话里的一格：一条（你的话、回答、系统行），或连着的几张预览收成的一组（同一处连着发的文件放在一张纸上）。
-private enum ChatItem: Identifiable {
+enum ChatItem: Identifiable {
     case entry(PiChatEntry)
     case previews([PiChatEntry])
 
@@ -501,26 +226,6 @@ private enum ChatItem: Identifiable {
         entries.reduce(into: []) { items, entry in
             guard entry.role == .preview else { return items.append(.entry(entry)) }
             if case .previews(let group) = items.last { items[items.count - 1] = .previews(group + [entry]) } else { items.append(.previews([entry])) }
-        }
-    }
-}
-
-private extension View {
-    /// 进行中的文字：底色是淡墨，一道墨色的光从左往右反复扫过（`LoopLayer`）；减弱动态效果时是静止的次要色。
-    func shimmering() -> some View { modifier(Shimmer()) }
-}
-
-private struct Shimmer: ViewModifier {
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        if reduceMotion {
-            content.foregroundStyle(palette.ink2)
-        } else {
-            content
-                .foregroundStyle(palette.ink3)
-                .overlay { LoopLayer(kind: .sheen, color: palette.ink).mask { content } }
         }
     }
 }
