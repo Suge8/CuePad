@@ -32,7 +32,7 @@ public final class CueTextView: UITextView, CueEditorHost {
     private var transferDelegate: TransferDelegate?
     private var menuDelegate: MenuDelegate?
 
-    public init(imageStore: any CueImageStore, theme: CueEditorTheme = .neutral) {
+    public init(imageStore: any CueImageStore, theme: CueEditorTheme) {
         self.imageStore = imageStore
         self.theme = theme
         let stack = CueTextStack.make()
@@ -121,7 +121,6 @@ public final class CueTextView: UITextView, CueEditorHost {
         textContainerInset = UIEdgeInsets(top: style.verticalInset, left: style.horizontalInset, bottom: style.verticalInset, right: style.horizontalInset)
         typingAttributes = core.baseAttributes
         core.styleDidChange()
-        cueDividerViews(in: self).forEach { $0.setNeedsDisplay() }
     }
 
     // MARK: 编辑通知
