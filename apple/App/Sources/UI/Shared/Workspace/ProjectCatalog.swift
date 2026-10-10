@@ -14,7 +14,6 @@ nonisolated struct ProjectCatalog: Equatable, Sendable {
     /// 各台 Mac 上的目录绑定（同步记录，本机的也在里面）：手机据此知道项目绑在哪台 Mac 的哪个文件夹，项目菜单与新会话落点都读它。
     var bindings: [DirectoryBinding]
 
-    static let tables: Set<Table> = [.projects, .cards, .projectDirectories, .directoryBindings]
 
     /// 未完成的顶层任务数，键同上。
     var openTasks: [UUID?: Int] { taskCounts.mapValues(\.open) }

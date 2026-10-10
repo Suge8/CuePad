@@ -57,7 +57,7 @@ struct ShelfScreen: View {
         }
         #endif
         .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
-        .observing(services.store, ShelfData.tables, into: $data, onError: workspace.fail) {
+        .observing(services.store, into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }
     }

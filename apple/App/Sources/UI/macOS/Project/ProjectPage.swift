@@ -60,10 +60,10 @@ struct ProjectPage: View {
         .onChange(of: active) { _, active in
             if !active { restingAgents = workspace.projectAgents(projectID, synced: sessions) }
         }
-        .observing(services.store, ProjectSessions.tables, id: projectID, into: $sessions, onError: workspace.fail) { [projectID] store in
+        .observing(services.store, id: projectID, into: $sessions, onError: workspace.fail) { [projectID] store in
             try projectID.map { try ProjectSessions.read($0, from: store) } ?? ProjectSessions(recorded: [], deliveries: [:], undelivered: [:], bindings: [])
         }
-        .observing(services.store, [.cards, .projects, .sendRecords], id: projectID, into: dataBinding, onError: workspace.fail) { [projectID] store in
+        .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in rearrange() }

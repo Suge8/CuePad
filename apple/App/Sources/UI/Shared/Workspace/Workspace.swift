@@ -97,6 +97,35 @@ final class Workspace {
     var notice: Notice?
     /// 正在给哪个项目选文件夹（iOS：根视图据此弹候选；Mac 直接弹系统的选文件夹面板，不经这里）。
     var folderPicker: Project?
+
+    /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）、文件夹绑定引导（`FolderGuide`）：整个窗口一份，页面直接读，
+    /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同就不写，免得页面白算。
+    private(set) var agentLinks = AgentLinks(items: [:], launching: [])
+    private(set) var folderGuide: FolderGuide?
+
+    func observeAgentLinks() async {
+        do {
+            for try await next in services.store.observe { try AgentLinks.read(from: $0) } where next != agentLinks {
+                agentLinks = next
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
+    func observeFolderGuide() async {
+        do {
+            for try await next in services.store.observe { [host = localHost] in try FolderGuide.read(host: host, from: $0) }
+            where next != folderGuide {
+                folderGuide = next
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
     #if os(macOS)
     /// 请底部输入栏聚焦的次数（空态的"记一条"）：输入栏的焦点在它自己那里，只看这个数变了就聚焦。
     private(set) var captureFocusRequests = 0
@@ -157,38 +186,10 @@ final class Workspace {
     /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
     let sessionHeader = SessionHeader()
 
-    /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）、文件夹绑定引导（`FolderGuide`）：整个窗口一份，页面直接读，
-    /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同就不写，免得页面白算。
-    private(set) var agentLinks = AgentLinks(items: [:], launching: [])
-    private(set) var folderGuide: FolderGuide?
-
-    func observeAgentLinks() async {
-        do {
-            for try await next in services.store.observe(AgentLinks.tables, { try AgentLinks.read(from: $0) }) where next != agentLinks {
-                agentLinks = next
-            }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
-        }
-    }
-
-    func observeFolderGuide() async {
-        do {
-            for try await next in services.store.observe(FolderGuide.tables, { [host = localHost] in try FolderGuide.read(host: host, from: $0) })
-            where next != folderGuide {
-                folderGuide = next
-            }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
-        }
-    }
-
     /// 跟随同步记录里在线会话的摘要与发给它们的最近一条投送请求，直到任务取消。
     func observeSessionRecaps() async {
         do {
-            for try await items in services.store.observe([.piSessionStates, .deliveryRequests], { try $0.piSessionPage(.live).items }) {
+            for try await items in services.store.observe { try $0.piSessionPage(.live).items } {
                 let recaps = Dictionary(items.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first }
                 let deliveries = Dictionary(items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
                 let undelivered = PiSessionListItem.undelivered(items)
@@ -417,7 +418,7 @@ final class Workspace {
             #if DEBUG
             try DebugScene.injectCatalogFailure(attempt: catalogAttempt)
             #endif
-            for try await next in services.store.observe(ProjectCatalog.tables, { try ProjectCatalog.read(from: $0) }) {
+            for try await next in services.store.observe { try ProjectCatalog.read(from: $0) } {
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next
                 if membershipChanged {

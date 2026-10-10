@@ -83,7 +83,7 @@ struct TaskPromptTests {
         _ = try await store.requestDelivery("先复现，这次带上日志", to: atlas, on: "mac-a", card: prompt.id)
         #expect(try await state(of: prompt, in: task) == "working atlas")
         let detail = try await TaskDetail.read(task.id, from: store)
-        guard case .working(let item) = detail.state(of: prompt) else { return }
+        guard case .working(let item) = detail.state(of: prompt, agents: try await AgentLinks.read(from: store)) else { return }
         #expect(rig.services.settings.shown(item).presence == "正在发给 Agent")
     }
 
@@ -148,10 +148,10 @@ struct TaskPromptTests {
         let first = try await store.createCard(body: "先复现", under: task.id)
         let second = try await store.createCard(body: "再改排序", under: task.id)
         _ = try await store.createCard(body: "补用例", under: task.id)
-        #expect(try await TaskDetail.read(task.id, from: store).primaryPrompt == first.id)
+        #expect(try await TaskDetail.read(task.id, from: store).primaryPrompt(agents: AgentLinks.read(from: store)) == first.id)
 
         try await reply(to: first)
-        #expect(try await TaskDetail.read(task.id, from: store).primaryPrompt == second.id)
+        #expect(try await TaskDetail.read(task.id, from: store).primaryPrompt(agents: AgentLinks.read(from: store)) == second.id)
     }
 
     /// 交给 atlas，它这一轮做完。
@@ -170,7 +170,7 @@ struct TaskPromptTests {
 
     /// 卡上右边那颗钮；看会话写出它要打开的会话名。
     private func action(of prompt: Card, in task: Card) async throws -> String {
-        switch try await TaskDetail.read(task.id, from: store).state(of: prompt).action {
+        switch try await TaskDetail.read(task.id, from: store).state(of: prompt, agents: AgentLinks.read(from: store)).action {
         case .handOff: "handOff"
         case .handAgain: "handAgain"
         case .watch(let item): "watch \(item.state.title)"
@@ -180,7 +180,7 @@ struct TaskPromptTests {
 
     private func state(of prompt: Card, in task: Card) async throws -> String {
         let detail = try await TaskDetail.read(task.id, from: store)
-        switch detail.state(of: prompt) {
+        switch detail.state(of: prompt, agents: try await AgentLinks.read(from: store)) {
         case .unsent: return "unsent"
         case .launching: return "launching"
         case .working(let item): return "working \(item.state.title)"

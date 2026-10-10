@@ -52,8 +52,6 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     /// 两组的计数（顶层任务数，`CueStore.taskCounts` 一处定义）：任务页与面板的分组标题与"最近完成"、书架的"任务"一行、Mac 工具栏任务钮都读它。
     var counts: TaskCounts
 
-    /// 看板要观察的表。
-    static let tables: Set<Table> = [.cards, .projects, .piSessionStates, .deliveryRequests]
 
     static func read(from store: isolated CueStore) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })

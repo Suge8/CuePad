@@ -1,6 +1,5 @@
 #if os(iOS)
 import CueStore
-import enum CueStore.Table  // 盖过 SwiftUI.Table
 import Foundation
 
 /// 书架自己读的数据：项目、各项目的灵感数与任务数在窗口的项目目录（`ProjectCatalog`）里，这里只有目录里没有的。
@@ -18,9 +17,6 @@ nonisolated struct ShelfData: Sendable, Equatable {
     var trashCount: Int
 
     static let activeLimit = 3
-
-    /// 读到的表：会话与投送请求（`sessions`、`active` 的会话）、任务与项目（`leading`、`active`、回收站条数）。
-    static let tables: Set<Table> = [.projects, .cards, .piSessionStates, .deliveryRequests]
 
     /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。"正在推进"已列出的任务不再写一遍。
     @MainActor func now(projects: [Project], shown: (PiSessionListItem) -> PiShown) -> [UUID: ProjectNow] {

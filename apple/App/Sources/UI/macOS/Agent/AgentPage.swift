@@ -38,8 +38,7 @@ struct AgentPage: View {
         .onChange(of: filter) { limit = PiSessionList.pageSize }
         .renameSession($renaming)
         .endSession($confirmingEnd)
-        .observing(services.store, [.piSessionStates, .deliveryRequests, .projects, .directoryBindings],
-                   id: PiSessionList.Key(filter: .init(text: query, project: filter), limit: limit),
+        .observing(services.store, id: PiSessionList.Key(filter: .init(text: query, project: filter), limit: limit),
                    into: $list, onError: workspace.fail) { [query, filter, limit] store in
             try PiSessionList.read(text: query, project: filter, historyLimit: limit, from: store)
         }

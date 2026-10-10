@@ -10,7 +10,6 @@ struct InboxScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var cards: [Card]?
-    @State private var agents: AgentLinks?
 
     var body: some View {
         List {
@@ -28,11 +27,9 @@ struct InboxScreen: View {
         .scrollContentBackground(.hidden)
         .animation(Motion.quick, value: cards?.map(\.id))
         .floatingHeader(CaptureCopy.inbox, detail: cards.map { $0.isEmpty ? "空的" : "\($0.count) 条" } ?? "")
-        .environment(\.cardAgents, agents ?? AgentLinks(items: [:], launching: []))
-        .observing(services.store, [.cards], into: $cards, onError: workspace.fail) { store in
+        .observing(services.store, into: $cards, onError: workspace.fail) { store in
             try store.cards(in: nil).sorted { $0.modifiedAt > $1.modifiedAt }
         }
-        .observing(services.store, AgentLinks.tables, into: $agents, onError: workspace.fail) { try AgentLinks.read(from: $0) }
     }
 
     private func row(_ card: Card) -> some View {

@@ -1,5 +1,4 @@
 import CueStore
-import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
 /// 项目还没有文件夹时，"这个项目的 Agent"处的引导（iOS 与 Mac 共用）：Agent 会话按工作目录归入项目，没绑文件夹就一个会话也归不进来。
@@ -7,7 +6,7 @@ import SwiftUI
 /// 点了走同一条绑定通路（`PiBind` 请求让那台 Mac 绑；Mac 上是本机）；另有"选文件夹…"自己挑。绑好之后已有会话立即归进项目。
 /// 请求的进度与没绑成的原因读投送请求（`ProjectFolders.bindProgress`），写在建议上面。
 /// 在哪出现只有一条规则（`FolderGuide.shows`）：项目页里只在有同名建议或绑定进行中时出现，其余收进项目的"⋯"；
-/// 冲着这个项目的 Agent 来的地方（Agent 页的空态、新会话的头部）总在。数据 Mac 读 `Workspace.folderGuide`（整窗一份），iOS 由所在的页读一次传进来（`observingFolderGuide`），
+/// 冲着这个项目的 Agent 来的地方（Agent 页的空态、新会话的头部）总在。数据读 `Workspace.folderGuide`（整窗一份，页面传进来），
 /// 页面据同一条规则排版（有没有 Agent 那一段）。
 struct ProjectFolderGuide: View {
     nonisolated enum Style: Sendable {
@@ -125,8 +124,6 @@ nonisolated struct FolderGuide: Sendable, Equatable {
     var suggestions: [UUID: [ProjectFolders.Candidate]]
     var requests: [DeliveryRequest]
 
-    static let tables: Set<Table> = [.piSessionStates, .directoryBindings, .projects, .deliveryRequests]
-
     /// 引导在这里出不出现：冲着这个项目的 Agent 来的地方总在；项目页里只在有同名一键建议、或绑定在路上与没绑成时出现——
     /// 读书、装修这类不跑 Agent 的项目不该每次打开都被要求绑文件夹，"绑定文件夹…"在项目的"⋯"里。
     func shows(_ project: UUID, in style: ProjectFolderGuide.Style) -> Bool {
@@ -143,31 +140,6 @@ nonisolated struct FolderGuide: Sendable, Equatable {
             if !named.isEmpty { suggestions[project.id] = named }
         }
         return FolderGuide(suggestions: suggestions, requests: try store.deliveryRequests().filter { $0.mode == .known(.bind) })
-    }
-}
-
-extension View {
-    /// 跟着会话、目录绑定、项目与绑定请求读 `FolderGuide`（一页读一次，传给页里的引导）。
-    func observingFolderGuide(into guide: Binding<FolderGuide?>) -> some View { modifier(FolderGuideObserver(guide: guide)) }
-}
-
-/// 只在自己出现期间读 `FolderGuide`：给页里不另用这份数据的地方（Mac Agent 页的空态、新会话的头部）。
-struct FolderGuideReader<Content: View>: View {
-    @ViewBuilder let content: (FolderGuide?) -> Content
-    @State private var guide: FolderGuide?
-
-    var body: some View { content(guide).observingFolderGuide(into: $guide) }
-}
-
-private struct FolderGuideObserver: ViewModifier {
-    @Binding var guide: FolderGuide?
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-
-    func body(content: Content) -> some View {
-        content.observing(services.store, FolderGuide.tables, into: $guide, onError: workspace.fail) { [host = workspace.localHost] store in
-            try FolderGuide.read(host: host, from: store)
-        }
     }
 }
 

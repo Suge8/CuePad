@@ -30,7 +30,7 @@ struct ArchiveList: View {
             }
         }
         .animation(Motion.quick, value: cards?.map(\.id))
-        .observing(services.store, [.cards, .projects], into: $cards, onError: workspace.fail) { try $0.archived() }
+        .observing(services.store, into: $cards, onError: workspace.fail) { try $0.archived() }
     }
 
     private func row(_ card: Card) -> some View {

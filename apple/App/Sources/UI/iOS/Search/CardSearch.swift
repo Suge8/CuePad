@@ -101,7 +101,7 @@ struct CardSearchResults: View {
         .onChange(of: query.text) { query.pages = 1 }
         .onAppear { settled = query }
         .onChange(of: query) { if !TextComposition.isComposing { settled = query } }
-        .observing(services.store, [.cards, .projects, .sendRecords], id: effective, into: $data, onError: workspace.fail) { [effective] store in
+        .observing(services.store, id: effective, into: $data, onError: workspace.fail) { [effective] store in
             let found = try store.search(effective.store(), limit: PaletteQuery.pageSize * effective.pages)
             return SearchData(
                 groups: SearchData.grouped(found.cards, projects: try store.projects()), total: found.totalCards, shown: found.cards.count,

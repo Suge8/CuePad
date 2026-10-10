@@ -1,7 +1,6 @@
 #if os(macOS)
 import CuePi
 import CueStore
-import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
 nonisolated private struct SidebarData: Sendable, Equatable {
@@ -18,8 +17,6 @@ nonisolated private struct SidebarData: Sendable, Equatable {
     var current: [PiSessionListItem]
     var leading: [UUID: [ProjectNow.InProgress]]
 
-    /// 读到的表：会话与投送请求、任务与项目（"此刻"的进行中任务、回收站条数）。项目目录里的计数不在这里读。
-    static let tables: Set<Table> = [.projects, .cards, .piSessionStates, .deliveryRequests]
 }
 
 /// 侧栏两区：项目（置顶的在前，末尾未分类；项目多时在上面滚动）与 Agent（固定在底部、只列在线的会话，最多露出几行，
@@ -88,7 +85,7 @@ struct Sidebar: View {
                     .accessibilityHidden(true)
             }
         }
-        .observing(services.store, SidebarData.tables, into: $data, onError: workspace.fail) { store in
+        .observing(services.store, into: $data, onError: workspace.fail) { store in
             // 在线的是"此刻有事的"里没结束的那些（同一个顺序），不再另读一页
             let current = try store.piSessionPage(.current).items
             let live = current.filter { $0.state.state != .known(.ended) }

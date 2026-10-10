@@ -268,7 +268,7 @@ extension DebugScene {
     static func runDemoMac(_ store: CueStore) async {
         let host = "demo-mac"
         do {
-            for try await pending in store.observe([.deliveryRequests], { store in
+            for try await pending in store.observe({ store in
                 try store.deliveryRequests().filter { $0.hostID == host && $0.status == .known(.pending) }.map(\.id)
             }) where !pending.isEmpty {
                 try await Task.sleep(for: .seconds(1.2))
@@ -281,7 +281,7 @@ extension DebugScene {
                     return .succeeded
                 }
                 try await executor.start()
-                for try await open in store.observe([.deliveryRequests], { store in
+                for try await open in store.observe({ store in
                     try store.deliveryRequests().contains { pending.contains($0.id) && $0.isOpen }
                 }) where !open { break }
                 await executor.stop()

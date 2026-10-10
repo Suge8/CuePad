@@ -30,7 +30,7 @@ struct TasksScreen: View {
         .onAppear { if DebugScene.defaults.bool(forKey: "CuePadShowsDone") { showsCompleted = true } }
         #endif
         .animation(.easeOut(duration: 0.2), value: board.map { [$0.inProgress, $0.todo, $0.done].flatMap { $0.map(\.id) } })
-        .observing(services.store, TaskBoard.tables, into: $board, onError: workspace.fail) {
+        .observing(services.store, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
         }
     }

@@ -1,5 +1,4 @@
 import CueStore
-import enum CueStore.Table  // 盖过 SwiftUI.Table
 import SwiftUI
 
 /// 灵感与任务交给了哪个 Agent 会话、那个会话此刻怎样（含发送中、有新回复）：行与卡上的状态点读它。
@@ -8,8 +7,6 @@ nonisolated struct AgentLinks: Sendable, Equatable {
     var items: [UUID: PiSessionListItem]
     /// 从这条开了新会话、还没开好（"正在开会话"）。
     var launching: Set<UUID>
-
-    static let tables: Set<Table> = [.cards, .piSessionStates, .deliveryRequests]
 
     static func read(from store: isolated CueStore) throws -> AgentLinks {
         let handed = try store.handedSessions()
@@ -21,8 +18,16 @@ nonisolated struct AgentLinks: Sendable, Equatable {
 }
 
 extension EnvironmentValues {
-    /// 这一页的灵感与任务交给的会话（`AgentLinks.items`），由页面读一次放进环境，卡与行各取自己的。
+    /// 灵感与任务交给的会话（`AgentLinks.items`）：整个窗口一份（`Workspace.agentLinks`），由 `WindowCardAgents` 放进环境，
+    /// 页面、卡与行各取自己的，不自己订阅。
     @Entry var cardAgents = AgentLinks(items: [:], launching: [])
+}
+
+/// 把窗口那一份交给的会话放进环境。单独一层读它：会话状态变化时只重算这一层与读环境的卡和行，不重算外面的根视图。
+struct WindowCardAgents: ViewModifier {
+    let workspace: Workspace
+
+    func body(content: Content) -> some View { content.environment(\.cardAgents, workspace.agentLinks) }
 }
 
 /// 灵感或任务上的会话状态点（发送中、工作中、等你确认、有新回复……，同 `PiStateDot`）：点它看那个会话；

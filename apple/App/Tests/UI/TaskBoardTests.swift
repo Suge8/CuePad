@@ -115,6 +115,23 @@ struct TaskBoardTests {
         #expect(try await TaskBoard.counts(from: store).inProgress == 4)  // 标题上的"4 进行中"：顶层，不含子任务
     }
 
+    /// 项目页读的子任务进度（提示词"已回复"）取决于会话状态与投送请求：会话歇下后页面数据立即更新，不等下一次写灵感。
+    @Test(.timeLimit(.minutes(1))) func 项目页的提示词进度_会话歇下后立即更新() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let task = try await store.createTask("修乱序", in: project.id)
+        let prompt = try await store.createCard(body: "先复现", under: task.id)
+        let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
+        let recorder = PiStateRecorder(store: store, hostID: "mac")
+        try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
+        try await recorder.update(sessionID: "s1", state: .thinking, title: "atlas")
+        var pages = store.observe { try ProjectPageData.read(project.id, from: $0) }.makeAsyncIterator()
+        #expect(try await pages.next()?.children[task.id]?.map(\.isDone) == [false])
+
+        try await Task.sleep(for: .milliseconds(5))
+        try await recorder.update(sessionID: "s1", state: .settled, title: "atlas", times: PiTimes(stateSince: .now, busySince: nil))
+        #expect(try await pages.next()?.children[task.id]?.map(\.isDone) == [true])
+    }
+
     @Test func 列表第三行_Pi在想还没有动作时写正在处理的提问() {
         let now = Date(timeIntervalSince1970: 1_000)
         let session = PiSessionState(
