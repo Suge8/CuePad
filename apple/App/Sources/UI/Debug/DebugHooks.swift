@@ -29,6 +29,10 @@ enum DebugHooks {
         var alertStatus: PiAlertStatus?
         /// 一出现就聚焦并预填的搜索框：书架顶上的，或项目页的下拉搜索。
         var focusedSearch: SearchFocus?
+        /// Agent 页一出现就填进搜索框的字（`agent` 画面）。
+        var agentQuery: String?
+        /// Agent 页从底部（最早的历史）看起（`agent` 画面配 `-CuePadHistory`、没有搜索时）。
+        var agentFromBottom = false
         #endif
     }
 
