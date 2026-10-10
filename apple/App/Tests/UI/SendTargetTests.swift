@@ -178,6 +178,19 @@ struct SendTargetTests {
         #expect(workspace.endedTargets.isEmpty, "别的 Mac 上结束的不是本机刚结束的")
     }
 
+    /// 同步记录里还写着"在线"的本机会话，桥上却已经没有了（还没来得及标成结束）：不是能交给的会话，菜单不列、也不当默认目标；
+    /// 与发送走的路（已结束）是同一个判定。
+    @Test func 本机记录里在线但桥上已没有的会话不列() async throws {
+        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
+            sessionID: "stale", state: .settled, title: "stale", folder: "stale", projectID: project.id)
+        await eventually { rig.services.liveSessions.live.map(\.state.sessionID) == ["stale"] }
+        #expect(rig.services.liveSessions.live.count == 1, "记录读到了")
+
+        #expect(workspace.onlineTargets(for: project.id).isEmpty)
+        #expect(workspace.agentTarget(for: project.id) == nil)
+        if case .ended = workspace.route(of: "stale") {} else { Issue.record("发送时它是已结束的会话") }
+    }
+
     @Test func 选过的会话结束了也不换成别的() async throws {
         let alpha = try await open("a", in: "/work/alpha")
         _ = try await open("b", in: "/work/beta")

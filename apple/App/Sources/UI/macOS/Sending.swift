@@ -20,14 +20,20 @@ extension Workspace {
         case ended
     }
 
-    /// 能交给的在线会话：所有 Mac 上的（手机的交给 Agent 输入框共用同一份规则，见 `HandOffTargets`）。
+    /// 同步记录里在线的会话此刻能直接交给：别的 Mac 上的记录在线即可；本机的要桥上连着——桥上已经没有、记录还没来得及标成结束的
+    /// 不算（发送时它走"已结束"那条路，菜单和默认目标也不列它）。菜单与发送走的路都读它。
+    private func isReachable(_ state: PiSessionState) -> Bool {
+        state.hostID != services.hostID || liveSession(state.sessionID) != nil
+    }
+
+    /// 能交给的在线会话：所有 Mac 上的（手机的交给 Agent 输入框共用同一份规则，见 `HandOffTargets`），去掉本机已不在桥上的。
     func onlineTargets(for project: UUID?) -> [PiSessionListItem] {
-        HandOffTargets.sessions(services.liveSessions.live, project: project)
+        HandOffTargets.sessions(services.liveSessions.live, project: project).filter { isReachable($0.state) }
     }
 
     func route(of sessionID: String) -> HandOffRoute {
         if let live = liveSession(sessionID) { return .local(live) }
-        if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && $0.state.hostID != services.hostID }) {
+        if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && isReachable($0.state) }) {
             return .remote(remote.state)
         }
         return .ended
