@@ -70,7 +70,9 @@ enum DebugScene {
         guard let name = defaults.string(forKey: "CuePadProject"),
               let project = try? await store.projects().first(where: { $0.name == name })
         else { return nil }
+        #if os(macOS)
         workspace.show(.project(project.id))
+        #endif
         return project.id
     }
 

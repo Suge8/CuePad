@@ -20,7 +20,9 @@ final class AppSettings {
     enum Key {
         static let theme = "theme"
         static let globalShortcut = "globalShortcut"
+        #if os(macOS)
         static let currentProject = "currentProject"
+        #endif
         static let piExtensionDeclined = "piExtensionDeclined"
         static let replyTexts = "replyTexts"
         static let sessionSeen = "sessionSeen"
@@ -38,9 +40,12 @@ final class AppSettings {
     var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: Key.theme) } }
     /// W3C code 形式的加速键（如 `Alt+Space`）。
     var globalShortcut: String { didSet { defaults.set(globalShortcut, forKey: Key.globalShortcut) } }
+    #if os(macOS)
+    /// Mac 主窗口上次打开的项目（`Workspace.page` 的唯一事实源）；iOS 的当前项目从导航路径推出，不存偏好。
     var currentProject: UUID? {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
+    #endif
 
     /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。存储属性：询问卡片据此在点"不用了"的同一刻收起。
     var piExtensionDeclined: Bool { didSet { defaults.set(piExtensionDeclined, forKey: Key.piExtensionDeclined) } }
@@ -132,7 +137,9 @@ final class AppSettings {
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
         globalShortcut = string(Key.globalShortcut) ?? Self.defaultGlobalShortcut
+        #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
+        #endif
         piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
         agentProject = defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:))
