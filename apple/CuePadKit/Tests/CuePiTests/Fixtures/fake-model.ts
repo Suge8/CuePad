@@ -18,7 +18,7 @@ import { join } from "node:path";
 
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 const gateDirectory = () => join(process.env.PI_CODING_AGENT_DIR!, "fake-model-gate");
-const holdCeiling = 120_000; // 测试异常退出时不让 Pi 永远停着
+const holdCeiling = 30_000; // 测试异常退出时不让 Pi 永远停着
 let holds = 0;
 
 // 停住直到放行（取走一个 release 文件）或请求被中止。用目录变化事件等，不轮询。
