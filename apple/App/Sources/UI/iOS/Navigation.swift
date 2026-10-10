@@ -177,6 +177,13 @@ final class Navigation {
         splitPath = []
     }
 
+    /// 分栏：恢复窗口时选回上次侧栏选中的项目；它已不在项目目录里（进了回收站、被删）时留在书架。
+    /// 目录在门内已经读到（`CatalogGate`），这里当场判定，不先推一张空的项目页再退回。
+    func restore(project: UUID?, catalog: ProjectCatalog?) {
+        guard let project, catalog?.project(project) != nil else { return }
+        select(.project(project))
+    }
+
     /// 分栏：进入搜索前所在的页（含其上推入的页），退出搜索时回到这里。
     private var beforeSearch: (root: Route, path: [Route])?
 

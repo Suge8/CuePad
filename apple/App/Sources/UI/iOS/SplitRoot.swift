@@ -5,6 +5,7 @@ import SwiftUI
 /// iPad（宽）：左栏项目（含任务、Agent 等入口），右侧项目页；打开的卡片纸页推在项目页上，Agent 可在右侧面板并排看。
 /// 外接键盘与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘\ 侧栏、⌘N 新建卡片、⌘⇧N 随手记、⌘⇧T 任务、⌘, 设置。
 struct SplitRoot: View {
+    @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @State private var width: CGFloat = 0
     /// 侧栏选中的项目（窗口恢复时选回它；选的不是项目时为空，打开是书架）。只存这一个：当前项目由路径推出（`Navigation.currentProject`）
@@ -48,7 +49,7 @@ struct SplitRoot: View {
             if case .card = path.last { collapseSidebarIfNarrow() }
         }
         .background { SplitShortcuts() }
-        .onAppear { if let id = UUID(uuidString: storedProject) { navigation.select(.project(id)) } }
+        .onAppear { navigation.restore(project: UUID(uuidString: storedProject), catalog: workspace.catalog) }
         .onChange(of: navigation.splitRoot) { _, root in
             if case .project(let id) = root { storedProject = id.uuidString } else { storedProject = "" }
         }
