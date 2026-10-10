@@ -11,7 +11,7 @@ struct CaptureComposer: View {
     @State private var saving = false
     @FocusState private var focused: Bool
 
-    private var project: UUID? { navigation.capture.project ?? navigation.captureProject }
+    private var project: UUID? { navigation.capture.project ?? navigation.currentProject }
     private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project)) }
 
     var body: some View {

@@ -6,7 +6,7 @@ import Observation
 import SwiftUI
 
 /// iOS 的导航状态：标签（灵感 / Agent）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
-/// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、当前项目）在 `Workspace`。
+/// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、项目目录）在 `Workspace`。当前项目只从路径推出（`currentProject`）。
 @MainActor @Observable
 final class Navigation {
     enum Tab: Hashable {
@@ -67,7 +67,7 @@ final class Navigation {
     /// 随手记里正在写的这一条（输入框收起后仍留着，见 `endCapture`）。
     struct Capture {
         var draft = ComposerDraft()
-        /// 手动换过的落点（`.some(nil)` 是未分类）；nil 时落在正在看的页面（`captureProject`）。
+        /// 手动换过的落点（`.some(nil)` 是未分类）；nil 时落在正在看的项目（`currentProject`）。
         var project: UUID??
     }
 
@@ -127,8 +127,9 @@ final class Navigation {
         self.settings = settings
     }
 
-    /// 随手记记入的位置：正在看的项目页（含其上打开的卡），否则未分类。
-    var captureProject: UUID? {
+    /// 当前项目：正在看的项目页（含其上推入的页，如卡片纸页、项目页进的任务页），否则没有（未分类）。iOS 上"在哪个项目"
+    /// 只有这一份——书架点进项目只改路径；随手记、任务页新建任务、⌘N 的默认落点都读它。
+    var currentProject: UUID? {
         let visible: [Route] = switch layout {
         case .split: [splitRoot] + splitPath
         case .tabs: tab == .projects ? projectsPath : []
@@ -222,13 +223,12 @@ final class Navigation {
     }
 
     /// 小组件与分享扩展的链接：随手记、项目、卡片。
-    func open(_ link: DeepLink, workspace: Workspace) {
+    func open(_ link: DeepLink) {
         switch link {
         case .capture(let project):
             startCapture(project: .some(project))
         case .project(let id):
-            workspace.show(.project(id))
-            if layout == .split { select(.project(id)) } else { tab = .projects; projectsPath = [.project(id)] }
+            show(project: id)
         case .card(let id):
             if layout == .tabs { tab = .projects }
             push(.card(id))
@@ -334,8 +334,7 @@ final class Navigation {
     }
 
     /// 打开项目页（iPhone 推入项目标签，iPad 选中侧栏）。
-    func show(project id: UUID, workspace: Workspace) {
-        workspace.show(.project(id))
+    func show(project id: UUID) {
         if layout == .split { select(.project(id)) } else { tab = .projects; projectsPath = [.project(id)] }
     }
 }
