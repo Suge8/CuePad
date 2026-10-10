@@ -11,7 +11,6 @@ struct ProjectPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.pageActive) private var active
     @State private var data: ProjectPageData?
-    @State private var sessions: ProjectSessions?
     @State private var board = WallBoard()
     /// 不在前台时 Agent 一栏沿用离开时的样子：挂着不看的页不读实时会话状态（读了它，会话每动一下这页都要重算）。
     @State private var restingAgents: [ProjectAgents.Row] = []
@@ -32,7 +31,7 @@ struct ProjectPage: View {
     private static let emptyLineWidth: CGFloat = 460
 
     var body: some View {
-        let agents = active ? workspace.projectAgents(projectID, synced: sessions) : restingAgents
+        let agents = active ? workspace.projectAgents(projectID) : restingAgents
         ScrollViewReader { proxy in
             ZStack(alignment: .top) {
                 ScrollView {
@@ -58,10 +57,7 @@ struct ProjectPage: View {
             #endif
         }
         .onChange(of: active) { _, active in
-            if !active { restingAgents = workspace.projectAgents(projectID, synced: sessions) }
-        }
-        .observing(services.store, id: projectID, into: $sessions, onError: workspace.fail) { [projectID] store in
-            try projectID.map { try ProjectSessions.read($0, from: store) } ?? ProjectSessions(recorded: [], deliveries: [:], undelivered: [:], bindings: [])
+            if !active { restingAgents = workspace.projectAgents(projectID) }
         }
         .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)

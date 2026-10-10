@@ -1,6 +1,11 @@
 import Foundation
 
 extension CueStore {
+  /// 全部会话记录数（在线的与历史）。
+  public func piSessionCount() throws -> Int {
+    try db.first("SELECT count(*) FROM piSessionStates") { Int($0.int(0)) } ?? 0
+  }
+
   /// 一批 Pi 会话（Pi 的会话 id）的列表项，一次读出，按会话 id 索引；没有记录的 id 不在结果里。
   /// 列表项的内容与 `piSessionPage` 的一样（项目、最近一条投送请求、改名、没送达的话）；行与卡上要显示几十个会话的状态时用它，
   /// 不必一个会话查一次。
