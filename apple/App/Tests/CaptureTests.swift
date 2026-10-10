@@ -11,7 +11,7 @@ struct CaptureTests {
     var inbox: URL { services.location.captureDirectory }
     let png = pngData()
 
-    private func hash(of data: Data) throws -> String { try services.images.store(data) }
+    private func hash(of data: Data) throws -> String { try services.store.files.store(data) }
 
     @Test func 文字网址图片按顺序存成卡片_放进所选项目() async throws {
         let project = try await services.store.createProject(name: "P", color: "#123456")

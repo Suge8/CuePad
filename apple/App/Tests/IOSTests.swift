@@ -23,7 +23,7 @@ struct IOSTests {
     @Test func iOS上复制_文字与图片按顺序各成一个条目_不记发送记录() async throws {
         let app = TestApp()
         let png = pngData()
-        let hash = try app.services.images.store(png)
+        let hash = try app.services.store.files.store(png)
 
         try app.services.copy("前\n![](cuepad://img/\(hash))\n后")
 

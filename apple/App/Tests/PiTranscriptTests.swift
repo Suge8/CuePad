@@ -94,7 +94,7 @@ struct PiTranscriptTests {
     @Test func 七天外的会话按需补写_手机打开时发的请求由这台Mac从会话文件写出对话() async throws {
         let old = try sessionFile("old", at: .now.addingTimeInterval(-10 * 86_400))
         await consume([old])
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await store.requestTranscript(of: try await record("old"))

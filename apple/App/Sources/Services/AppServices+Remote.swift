@@ -4,8 +4,7 @@ import CueStore
 import Foundation
 import SystemConfiguration
 
-/// Mac 端的远程职责：把 Pi 会话的状态写成同步记录（手机据此显示 Pi 在干什么），
-/// 并执行手机发来、指定给这台 Mac 的投送请求。
+/// Mac 端的远程职责：把 Pi 会话的状态写成同步记录（手机据此显示 Pi 在干什么）与目录绑定。
 extension AppServices {
     // MARK: Pi 状态记录
 
@@ -62,7 +61,7 @@ extension AppServices {
         }
     }
 
-    // MARK: 投送请求（手机发来的与本机界面写的）
+    // MARK: 目录绑定
 
     /// 本机的目录绑定写成同步的目录绑定记录（手机据此知道哪些项目能在哪台 Mac 上开新会话）：先对一次，
     /// 之后本机绑定每次变化时跟上，直到后台任务取消。
@@ -78,186 +77,6 @@ extension AppServices {
                 self?.reportIssue(.syncUnavailable("目录绑定没能同步给手机：\(error)"))
             }
         })
-    }
-
-    func startDeliveryExecutor() async throws {
-        let executor = DeliveryExecutor(store: store, hostID: hostID, onIssue: { [weak self] error in
-            let message = "处理投送请求时读写资料库失败：\(error.localizedDescription)"
-            Task { @MainActor in self?.reportIssue(.syncUnavailable(message)) }
-        }, onFinished: { [weak self] id in await self?.upload(id) }) { [weak self] request in
-            guard let self else { return .failed("这台 Mac 上的 CuePad 正在退出") }
-            return await self.execute(request)
-        }
-        try await executor.start()
-        deliveryExecutor = executor
-    }
-
-    /// 失败原因写回给手机用户看，取错误自身的说明（各模块的错误都实现了 `LocalizedError`）。
-    private func execute(_ request: DeliveryRequest) async -> DeliveryOutcome {
-        do {
-            try await perform(request)
-            return .succeeded
-        } catch SendError.unrecorded(let reason) {
-            // 已经送达：写回成功，手机才不会重发；没记下发送是这台 Mac 的资料库问题，在这里报
-            reportIssue(.syncUnavailable("处理投送请求时读写资料库失败：\(reason)"))
-            return .succeeded
-        } catch {
-            return .failed(error.localizedDescription)
-        }
-    }
-
-    /// 执行一条请求：发给 Pi 会话的在这里调用 Pi 桥（全 App 只有这一处）；成功后记发送记录。别的目标（旧版本写的发到应用、剪贴板）按失败写回。
-    private func perform(_ request: DeliveryRequest) async throws {
-        if request.mode == .known(.ping) { return }  // 连接测试：收到即成功，不碰目标、不写发送记录
-        if request.mode == .known(.start) {
-            guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
-            return try await startPi(launch, request: request.id)
-        }
-        if request.mode == .known(.transcript) { return try await writeTranscript(of: request.content) }
-        if request.mode == .known(.bind) {
-            guard let bind = request.bind else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
-            return try await bindFolder(bind)
-        }
-        let target = request.target
-        let content = SendContent(stored: request.content)
-        let sent: SendTarget
-        switch target.kind {
-        case .known(.piSession):
-            guard let ref = target.ref else { throw SendError.sessionNotOnThisMac(target.name) }
-            if request.mode == .known(.end) { return try await endSession(ref) }
-            if request.mode == .known(.stop) { return try await stopTurn(ref) }
-            let id = if let live = channels.piSessionID(forSession: ref) { live } else { try await resumeInBackground(ref, name: target.name) }
-            // 执行器已把不认识的发送方式按失败写回，走到这里的都是已知方式
-            guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
-            if try await control(request, mode: mode, session: ref, in: id) { return }
-            sent = try await sendToPi(content, session: id, mode: mode, request: request.id)
-        default:
-            throw SendError.unsupportedTarget(target.name)
-        }
-        try await recordSend(request.content, to: sent, card: request.cardID)
-    }
-
-    /// 作答、改会话设置（会话名、模型、思考强度）与斜杠命令交给扩展，不是发出去的内容，不记发送记录（发送记录只记内容的投送）；其他方式返回 false。
-    /// 会话已结束时与发消息一样先在后台恢复（`perform`）：改名对已结束的会话也要能做，Pi 只在活着的进程里写会话名。
-    private func control(_ request: DeliveryRequest, mode: DeliveryMode, session ref: String, in id: CuePi.PiSession.ID) async throws -> Bool {
-        switch mode {
-        case .answer:
-            guard let answer = request.answer else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新答案
-            try await channels.answer(answer.value, to: answer.promptID, in: id)
-        case .config:
-            guard let config = request.config else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新强度，或什么都不改
-            try await channels.configure(model: config.model, thinking: config.thinking, name: config.name, in: id)
-        case .command:
-            // 命令带着卡片（交给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录
-            let content = SendContent(stored: request.content)
-            guard !content.hasImages else { throw SendError.imagesNotSupported }
-            try await channels.command(content.plainText.trimmingCharacters(in: .whitespacesAndNewlines), whenBusy: .followUp, in: id)
-            if let card = request.cardID { try await store.linkCard(card, toSession: ref) }
-        default:
-            return false
-        }
-        return true
-    }
-
-    /// 结束会话（不写发送记录）：不在这台 Mac 的桥上的已经结束，目标达成，不能为了结束它而恢复它。
-    private func endSession(_ sessionID: String) async throws {
-        guard let id = channels.piSessionID(forSession: sessionID) else { return }
-        try await host.end(id)
-    }
-
-    /// 停止这一轮（不写发送记录）：不在这台 Mac 的桥上的已经没有这一轮，目标达成，不恢复它。
-    private func stopTurn(_ sessionID: String) async throws {
-        guard let id = channels.piSessionID(forSession: sessionID) else { return }
-        try await channels.abort(in: id)
-    }
-
-    /// 绑定文件夹（不写发送记录）：手机只指名从哪里取，路径在这台 Mac 上解析，写进本机的目录绑定——绑定的唯一写入；
-    /// 目录绑定记录随之同步给手机。没有文件夹是解除。按项目 id 记：项目记录晚到这台 Mac 也对得上。
-    private func bindFolder(_ bind: PiBind) async throws {
-        guard let folder = bind.folder else { return try await store.setDirectory(nil, for: bind.project) }
-        let directory = try await directory(of: folder)
-        try requireDirectory(directory)
-        try await store.setDirectory(directory.path, for: bind.project)
-    }
-
-    /// 开新会话（不写发送记录）：在后台托管（`PiHost`），目录由本机按项目绑定的文件夹解析（新会话的目录只由项目绑定推出）；
-    /// 带上发起方的认领标识，连上后把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它）。
-    private func startPi(_ launch: PiLaunch, request: UUID) async throws {
-        let directory = try await directory(of: .project(launch.project))
-        try requireDirectory(directory)
-        guard let pi = await locatePi() else { throw SendError.piNotInstalled }
-        let id = try await host.open(in: directory, launchToken: launch.token, executable: pi)
-        if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
-            // 开场的话是存储格式（可带卡片里的图片）
-            let content = SendContent(stored: opening)
-            let text = content.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-            try await channels.send(PiMessage(text: text, images: try piImages(in: content), deliveryID: request.uuidString), to: id)
-        }
-    }
-
-    /// 补写一个会话的对话（不写发送记录）：从本机的会话文件从头读出，与摘要一起写。
-    private func writeTranscript(of sessionID: String) async throws {
-        guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
-        try await store.writePiTranscript(try PiHistory.index(file: URL(filePath: indexed.path), from: nil).transcript)
-    }
-
-    /// 发给已结束的会话：在后台把它恢复起来（会话索引里的会话文件与工作目录），返回连上桥的会话。
-    private func resumeInBackground(_ sessionID: String, name: String) async throws -> CuePi.PiSession.ID {
-        guard let indexed = try await store.piSession(sessionID) else { throw SendError.sessionNotOnThisMac(name) }
-        let directory = URL(filePath: indexed.cwd, directoryHint: .isDirectory)
-        try requireDirectory(directory)
-        guard let pi = await locatePi() else { throw SendError.piNotInstalled }
-        return try await host.resume(sessionFile: URL(filePath: indexed.path), in: directory, executable: pi)
-    }
-
-    private func requireDirectory(_ directory: URL) throws {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            throw SendError.directoryMissing(directory.lastPathComponent)
-        }
-    }
-
-    private func directory(of folder: PiFolder) async throws -> URL {
-        switch folder {
-        case .project(let id):
-            guard let path = try await store.directory(of: id) else {
-                throw SendError.noCodeDirectory(try await store.project(id)?.name ?? "")
-            }
-            return URL(filePath: path, directoryHint: .isDirectory)
-        case .besideSession(let sessionID):
-            if let live = pi.session(sessionID: sessionID) { return live.cwd }
-            guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
-            return URL(filePath: indexed.cwd, directoryHint: .isDirectory)
-        }
-    }
-
-    /// Pi 桥只认 steer / followUp 两种入队方式（界面上叫马上说、等它做完再说）：发送方式在这里一次性落到桥的消息上。
-    private func sendToPi(
-        _ content: SendContent, session id: CuePi.PiSession.ID, mode: DeliveryMode, request: UUID
-    ) async throws -> SendTarget {
-        guard let session = channels.piSession(id) else { throw PiBridgeError.unknownSession(id) }
-        let whenBusy: PiQueueMode?
-        switch mode {
-        case .send:
-            guard !session.isBusy else { throw SendError.piSessionBusy }
-            whenBusy = nil
-        case .steer: whenBusy = .steer
-        case .followUp: whenBusy = .followUp
-        case .answer, .command, .ping, .start, .transcript, .config, .end, .stop, .bind: throw SendError.unsupportedMode(mode.rawValue)  // 这几种在 perform 里处理，不走发送
-        }
-        try await channels.send(
-            PiMessage(text: content.plainText, images: try piImages(in: content), whenBusy: whenBusy, deliveryID: request.uuidString), to: id)
-        return session.target
-    }
-
-    /// 正文里的图片按原顺序取原图与类型，交给 Pi 自行缩放。
-    private func piImages(in content: SendContent) throws -> [PiImage] {
-        try content.segments.compactMap { segment -> PiImage? in
-            guard case .image(let hash) = segment else { return nil }
-            let data = try imageData(hash)
-            guard let mimeType = ImageFiles.mimeType(of: data) else { throw SendError.imageUnavailable(hash) }
-            return PiImage(mimeType: mimeType, data: data)
-        }
     }
 }
 #endif
