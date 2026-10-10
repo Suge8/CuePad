@@ -1,127 +1,16 @@
 import Foundation
 
 extension CueStore {
-  /// 会话列表的一页（Mac 与手机共用的唯一查询）。顺序见 `PiSessionPage`。
-  public func piSessionPage(_ query: PiSessionQuery) throws -> PiSessionPage {
-    var conditions: [String] = []
-    var arguments: [any SQLBindable] = []
-    switch query.scope {
-    case .live: conditions.append("state != '\(PiWorkState.ended.rawValue)'")
-    case .ended: conditions.append("state = '\(PiWorkState.ended.rawValue)'")
-    case .all: break
-    case .current:
-      let modes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
-      conditions.append(
-        """
-        (state != '\(PiWorkState.ended.rawValue)' OR sessionID IN (SELECT targetRef FROM deliveryRequests
-          WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(modes))))
-        """)
-    }
-    if let text = query.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
-      let pattern = "%" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "%", with: "\\%")
-        .replacingOccurrences(of: "_", with: "\\_") + "%"
-      conditions.append("(title LIKE ? ESCAPE '\\' OR folder LIKE ? ESCAPE '\\' OR lastPrompt LIKE ? ESCAPE '\\')")
-      arguments += [pattern, pattern, pattern]
-    }
-    if let project = query.project {
-      conditions.append("projectID = ?")
-      arguments.append(project)
-    }
-    if let token = query.launchToken {
-      conditions.append("launchToken = ?")
-      arguments.append(token)
-    }
-    if let id = query.id {
-      conditions.append("id = ?")
-      arguments.append(id)
-    }
-    let condition = conditions.isEmpty ? "1" : conditions.joined(separator: " AND ")
-    let states = try select(
-      PiSessionState.self, where: condition, arguments, orderBy: "state = 'ended', stateSince DESC, id",
-      limit: query.limit, offset: query.offset)
-    let total = try db.first("SELECT count(*) FROM piSessionStates WHERE \(condition)", arguments) { Int($0.int(0)) } ?? 0
-    let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
-    let deliveries = try latestDeliveries(to: states.map(\.sessionID))
-    let renames = try latestRenames(to: states.map(\.sessionID))
-    let undelivered = try undeliveredCounts(to: states.map(\.sessionID))
-    return PiSessionPage(
-      items: states.map {
-        PiSessionListItem(
-          state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-          undelivered: undelivered[$0.sessionID] ?? 0)
-      },
-      total: total)
-  }
-
-  /// 发给这些会话的最近一条改名，按 Pi 的会话 id（取法见 `DeliveryRequest.latestRename`）。
-  func latestRenames(to sessionIDs: [String]) throws -> [String: DeliveryRequest] {
-    guard !sessionIDs.isEmpty else { return [:] }
-    let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
-    let configs = try select(
-      DeliveryRequest.self,
-      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode = '\(DeliveryMode.config.rawValue)' AND targetRef IN (\(refs))",
-      sessionIDs, orderBy: "createdAt, rowid")
-    return Dictionary(grouping: configs) { $0.target.ref ?? "" }.compactMapValues(DeliveryRequest.latestRename(in:))
-  }
-
-  /// 发给这些会话、没能送达的话各有几句，按 Pi 的会话 id：说的话（直接说、马上说、等它做完再说）里失败的。失败的话不会进对话，
-  /// 一直留到你重发（新请求写成后删掉旧的）或移除；作答、命令、设置不是说的话，不算。
-  func undeliveredCounts(to sessionIDs: [String]) throws -> [String: Int] {
-    guard !sessionIDs.isEmpty else { return [:] }
-    let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
-    let modes = [DeliveryMode.send, .steer, .followUp].map { "'\($0.rawValue)'" }.joined(separator: ", ")
-    let rows = try db.query(
-      """
-      SELECT targetRef, count(*) FROM deliveryRequests
-      WHERE targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(modes)) AND status = '\(DeliveryStatus.failed.rawValue)'
-        AND targetRef IN (\(refs))
-      GROUP BY targetRef
-      """, sessionIDs
-    ) { ($0.text(0), Int($0.int(1))) }
-    return Dictionary(rows, uniquingKeysWith: +)
-  }
-
-  /// 发给这些会话的最近一条投送请求（只算 `DeliveryMode.toSession` 的方式），按 Pi 的会话 id。
-  /// 一次查询按会话聚合；投送请求完成后不久就被执行它的 Mac 清理，表一直很小。
-  func latestDeliveries(to sessionIDs: [String]) throws -> [String: DeliveryRequest] {
-    guard !sessionIDs.isEmpty else { return [:] }
-    let refs = Array(repeating: "?", count: sessionIDs.count).joined(separator: ", ")
-    let modes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
-    let requests = try select(
-      DeliveryRequest.self,
-      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(modes)) AND targetRef IN (\(refs))",
-      sessionIDs, orderBy: "createdAt DESC, rowid DESC")
-    var latest: [String: DeliveryRequest] = [:]
-    for request in requests {
-      if let ref = request.target.ref, latest[ref] == nil { latest[ref] = request }
-    }
-    return latest
-  }
-
-  /// 各台 Mac 上跑过 Agent 的文件夹（会话记录的文件夹名，同一台 Mac 同名的算一个）：会话数、最近的那个会话与它归的项目；最近有会话的在前，同样近的会话多的在前。临时目录的会话没有文件夹名（`folderName(ofWorkingDirectory:)`），不在其中。
-  /// 手机据此建议给项目绑哪个文件夹（见 `PiBind`）；几千条历史聚合成几十行，不整表读。
-  public func sessionFolders() throws -> [SessionFolder] {
-    try db.query(
-      """
-      SELECT hostID, folder, sessionID, projectID, count(*), max(stateSince) FROM piSessionStates
-      WHERE folder IS NOT NULL AND folder != '' GROUP BY hostID, folder ORDER BY max(stateSince) DESC, count(*) DESC, hostID, folder
-      """
-    ) { SessionFolder(hostID: $0.text(0), folder: $0.text(1), sessionID: $0.text(2), projectID: $0.uuidOrNil(3), count: Int($0.int(4))) }
-  }
-
-  func writePiState(
-    sessionID: String, hostID: String, title: String, folder: String?, projectID: UUID?, state: PiWorkState, detail: String?,
-    question: PiQuestion?, notify: PiAlert?, times: PiTimes, launchToken: String?, hosted: Bool, subagents: [PiSubagentState],
-    modelState: PiModelState, context: PiContextUsage?, commands: [PiSlashCommand]
-  ) throws {
+  func writePiState(sessionID: String, hostID: String, content: PiStateContent, notify: PiAlert?) throws {
     try write {
       let now = Date.stamp
       let record = PiSessionState(
-        id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: title, projectID: projectID,
-        state: .known(state), detail: detail, folder: folder, lastPrompt: nil, lastReply: nil,
-        question: question, notify: notify.map(Open.known), stateSince: times.stateSince, busySince: times.busySince,
-        createdAt: now, modifiedAt: now, launchToken: launchToken, hosted: hosted, subagents: subagents,
-        model: modelState.model, thinking: modelState.thinking, models: modelState.models, context: context, commands: commands)
+        id: PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: content.title,
+        projectID: content.projectID, state: .known(content.state), detail: content.detail, folder: content.folder, lastPrompt: nil,
+        lastReply: nil, question: content.question, notify: notify.map(Open.known), stateSince: content.times.stateSince,
+        busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
+        subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
+        models: content.modelState.models, context: content.context, commands: content.commands)
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       let assignments = PiSessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }
@@ -136,7 +25,7 @@ extension CueStore {
             WHEN piSessionStates.notify IS NOT NULL AND piSessionStates.state = excluded.state THEN piSessionStates.notify
           END
         """, record.bindings)
-      if launchToken != nil { try claimLaunchedCards() }
+      if content.launchToken != nil { try claimLaunchedCards() }
     }
   }
 
@@ -158,6 +47,34 @@ extension CueStore {
   }
 }
 
+/// 会话记录上由 Pi 桥与记录器写的全部字段（摘要不在其中）：会话的当前值、已写入的值与落盘用的是同一个形状。
+struct PiStateContent: Equatable, Sendable {
+  var state: PiWorkState
+  var detail: String?
+  var title = ""
+  var folder: String?
+  var projectID: UUID?
+  var question: PiQuestion?
+  var times: PiTimes
+  var launchToken: String?
+  var hosted = false
+  var subagents: [PiSubagentState] = []
+  var modelState = PiModelState()
+  var context: PiContextUsage?
+  var commands: [PiSlashCommand] = []
+
+  /// 去掉随每次工具调用不断变的细节（状态、说明、子代理的动作、上下文用量、认领标识）的样子：它变了才值得绕开写入节流。
+  var steady: PiStateContent {
+    var steady = self
+    steady.state = .settled
+    steady.detail = nil
+    steady.launchToken = nil
+    steady.context = nil
+    steady.subagents = subagents.map(\.shape)
+    return steady
+  }
+}
+
 /// 把 Pi 会话的状态变化写成同步记录（每个会话一条）。
 /// - 开始工作、等你确认、完成、出错，以及会话的标题或项目变化：立即写；
 /// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`，期间只保留最新的一次；
@@ -168,39 +85,12 @@ extension CueStore {
 /// actor 在 await 处可重入：会话状态只在 await 之前改完，不跨 await 持有副本；落盘按决定的先后串成一条任务链，
 /// 后决定的写入（含删除）不会被先决定的覆盖。
 public actor PiStateRecorder {
-  private struct Content: Equatable {
-    var state: PiWorkState
-    var detail: String?
-    var title: String
-    var folder: String?
-    var projectID: UUID?
-    var question: PiQuestion?
-    var times: PiTimes
-    var launchToken: String?
-    var hosted: Bool
-    var subagents: [PiSubagentState]
-    var modelState: PiModelState
-    var context: PiContextUsage?
-    var commands: [PiSlashCommand]
-  }
-
   private struct Session {
-    var observed: PiWorkState?
-    var title = ""
-    var folder: String?
-    var projectID: UUID?
-    var question: PiQuestion?
-    var launchToken: String?
-    var hosted = false
-    var subagents: [PiSubagentState] = []
-    var modelState = PiModelState()
-    var context: PiContextUsage?
-    var commands: [PiSlashCommand] = []
-    /// 调用方给的计时基准；没给过时（测试、演示）用第一次写入的时间，之后不变
-    var times: PiTimes?
-    var written: Content?
+    /// 最近一次更新给出的全部字段；没给过时（还没有更新）为 nil
+    var content: PiStateContent?
+    var written: PiStateContent?
     var writtenAt: Date?
-    var pending: (state: PiWorkState, detail: String?)?
+    /// 有挂起的更新（节流期内只保留最新一次，就是 `content`）时在等的定时写入
     var timer: Task<Void, Never>?
   }
 
@@ -218,6 +108,7 @@ public actor PiStateRecorder {
     self.timing = timing
   }
 
+  /// 没给的字段（nil）沿用上一次的值；`question` 与 `detail` 每次整体替换。
   /// 返回这次写入置位的通知标志（没有置位为 nil）：调用方据此立即上传这一条，通知不等引擎的自动调度。
   @discardableResult
   public func update(
@@ -226,42 +117,36 @@ public actor PiStateRecorder {
     subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil
   ) async throws -> PiAlert? {
     var session = sessions[sessionID] ?? Session()
-    let previous = session.observed.flatMap { observed in session.times.map { (state: observed, since: $0.stateSince) } }
-    session.observed = state
-    if let title { session.title = title }
-    if let folder { session.folder = folder }
-    if let projectID { session.projectID = projectID }
-    session.question = question
-    if let launchToken { session.launchToken = launchToken }
-    if let hosted { session.hosted = hosted }
-    if let subagents { session.subagents = subagents }
-    if let modelState { session.modelState = modelState }
-    if let context { session.context = context }
-    if let commands { session.commands = commands }
     let now = timing.now()
-    var times = times ?? session.times ?? PiTimes(stateSince: now, busySince: nil)
+    let previous = session.content.map { (state: $0.state, since: $0.times.stateSince) }
+    // 调用方给的计时基准；没给过时（测试、演示）用第一次写入的时间，之后不变
+    var content = session.content ?? PiStateContent(state: state, times: PiTimes(stateSince: now, busySince: nil))
+    content.state = state
+    content.detail = detail
+    content.question = question
+    if let title { content.title = title }
+    if let folder { content.folder = folder }
+    if let projectID { content.projectID = projectID }
+    if let times { content.times = times }
+    if let launchToken { content.launchToken = launchToken }
+    if let hosted { content.hosted = hosted }
+    if let subagents { content.subagents = subagents }
+    if let modelState { content.modelState = modelState }
+    if let context { content.context = context }
+    if let commands { content.commands = commands }
     // 工作中总有这段连续处理的起点（界面的"已运行"、停止的进度都从它算）：桥上的会话由扩展给，
     // 不带时间的调用方（演示、测试）从进入工作算
-    if state.isWorking, times.busySince == nil { times.busySince = times.stateSince }
-    session.times = times
+    if state.isWorking, content.times.busySince == nil { content.times.busySince = content.times.stateSince }
+    session.content = content
 
-    let content = Content(
-      state: state, detail: detail, title: session.title, folder: session.folder, projectID: session.projectID, question: session.question,
-      times: times, launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
-      modelState: session.modelState, context: session.context, commands: session.commands)
     if content == session.written {
       cancelPending(&session)
       sessions[sessionID] = session
       return nil
     }
     let startsOrEndsWork = !state.isWorking || !(previous?.state.isWorking ?? false)
-    let renamed = session.written.map {
-      $0.title != content.title || $0.folder != content.folder || $0.projectID != content.projectID || $0.question != content.question
-        || $0.hosted != content.hosted || $0.subagents.map(\.shape) != content.subagents.map(\.shape) || $0.modelState != content.modelState
-        || $0.commands != content.commands || $0.times != content.times
-    } ?? true
-    guard startsOrEndsWork || renamed || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {
-      session.pending = (state, detail)
+    let changed = session.written.map { $0.steady != content.steady } ?? true
+    guard startsOrEndsWork || changed || session.writtenAt.map({ now.timeIntervalSince($0) >= minInterval.seconds }) ?? true else {
       if session.timer == nil, let writtenAt = session.writtenAt {
         let wait = max(0, minInterval.seconds - now.timeIntervalSince(writtenAt))
         session.timer = Task { [timing] in
@@ -273,7 +158,7 @@ public actor PiStateRecorder {
       return nil
     }
     cancelPending(&session)
-    let alert = PiAlert.entering(state, since: times.stateSince, from: previous)
+    let alert = PiAlert.entering(state, since: content.times.stateSince, from: previous)
     let write = commit(sessionID, &session, content, notify: alert, at: now)
     sessions[sessionID] = session
     do { try await persist(write) } catch {
@@ -303,13 +188,8 @@ public actor PiStateRecorder {
   }
 
   private func flush(_ sessionID: String) async {
-    guard var session = sessions[sessionID], let pending = session.pending, let times = session.times else { return }
+    guard var session = sessions[sessionID], session.timer != nil, let content = session.content else { return }
     session.timer = nil
-    session.pending = nil
-    let content = Content(
-      state: pending.state, detail: pending.detail, title: session.title, folder: session.folder, projectID: session.projectID,
-      question: session.question, times: times, launchToken: session.launchToken, hosted: session.hosted,
-      subagents: session.subagents, modelState: session.modelState, context: session.context, commands: session.commands)
     let write = commit(sessionID, &session, content, at: timing.now())
     sessions[sessionID] = session
     // 定时写入没有调用方可报告；记为未写入，下一次更新会重写
@@ -322,16 +202,12 @@ public actor PiStateRecorder {
   /// 等待重复通知。状态一旦前进（如用户答完回到思考中），未上传的标志随之作废——已恢复工作的会话不该再提示"等你确认"。
   /// 会话结束（`end`）清掉标志，未上传的也不再通知。
   private func commit(
-    _ sessionID: String, _ session: inout Session, _ content: Content, notify: PiAlert? = nil, at now: Date
+    _ sessionID: String, _ session: inout Session, _ content: PiStateContent, notify: PiAlert? = nil, at now: Date
   ) -> @Sendable () async throws -> Void {
     session.written = content
     session.writtenAt = now
     return { [store, hostID] in
-      try await store.writePiState(
-        sessionID: sessionID, hostID: hostID, title: content.title, folder: content.folder, projectID: content.projectID,
-        state: content.state, detail: content.detail, question: content.question, notify: notify, times: content.times,
-        launchToken: content.launchToken, hosted: content.hosted, subagents: content.subagents,
-        modelState: content.modelState, context: content.context, commands: content.commands)
+      try await store.writePiState(sessionID: sessionID, hostID: hostID, content: content, notify: notify)
     }
   }
 
@@ -347,13 +223,12 @@ public actor PiStateRecorder {
   }
 
   /// 落盘失败：只要之后没有更新的写入，就当作没写过，下一次更新不会被去重跳过。
-  private func forgetWritten(_ sessionID: String, _ content: Content) {
+  private func forgetWritten(_ sessionID: String, _ content: PiStateContent) {
     if sessions[sessionID]?.written == content { sessions[sessionID]?.written = nil }
   }
 
   private func cancelPending(_ session: inout Session) {
     session.timer?.cancel()
     session.timer = nil
-    session.pending = nil
   }
 }
