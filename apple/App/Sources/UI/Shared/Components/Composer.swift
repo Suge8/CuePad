@@ -1,7 +1,6 @@
 import CueStore
 import CueText
 import SwiftUI
-import UniformTypeIdentifiers
 #if os(iOS)
 import PhotosUI
 #else
@@ -566,11 +565,15 @@ private struct ImageSources: ViewModifier {
             .onChange(of: picked) { load() }
         #else
         content
-            .fileImporter(isPresented: showing(.files), allowedContentTypes: [.image], allowsMultipleSelection: true) { result in
-                do {
-                    for url in try result.get() { images.append(PickedImage(data: try Self.read(url))) }
-                } catch {
-                    workspace.fail(error)
+            .onChange(of: source) {
+                guard source == .files else { return }
+                source = nil
+                Task {
+                    do {
+                        for data in try await FilePicker.images() { images.append(PickedImage(data: data)) }
+                    } catch {
+                        workspace.fail(error)
+                    }
                 }
             }
         #endif
@@ -593,13 +596,6 @@ private struct ImageSources: ViewModifier {
                 }
             }
         }
-    }
-    #else
-    /// 选文件面板给的是沙盒外的地址：读之前先拿访问权。
-    private static func read(_ url: URL) throws -> Data {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        return try Data(contentsOf: url)
     }
     #endif
 }

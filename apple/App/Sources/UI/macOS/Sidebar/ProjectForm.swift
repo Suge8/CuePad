@@ -1,25 +1,20 @@
 #if os(macOS)
-import AppKit
 import CueStore
 import SwiftUI
 
 enum ProjectDirectory {
     /// 弹系统的选文件夹面板，返回选中的路径（取消为 nil）。
-    static func pick() -> String? {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.prompt = "选择"
-        panel.message = "选择这个项目的文件夹，在其中运行的 Agent 会话会归到这个项目，新会话也开在这里"
-        guard panel.runModal() == .OK, let url = panel.url else { return nil }
-        return url.path(percentEncoded: false)
+    static func pick() async -> String? {
+        await FilePicker.folder(message: "选择这个项目的文件夹，在其中运行的 Agent 会话会归到这个项目，新会话也开在这里")?
+            .path(percentEncoded: false)
     }
 
     /// 选择文件夹后绑定；Pi 会话按这个目录归入项目。
     static func choose(for project: UUID, workspace: Workspace) {
-        guard let path = pick() else { return }
-        workspace.perform { try await $0.setDirectory(path, for: project) }
+        workspace.attempt {
+            guard let path = await pick() else { return }
+            try await workspace.services.store.setDirectory(path, for: project)
+        }
     }
 }
 
@@ -80,7 +75,7 @@ struct ProjectForm: View {
                 Button("不绑了", systemImage: "xmark.circle.fill") { self.folder = nil }
                     .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(.secondary)
             } else {
-                Button("选择…") { folder = ProjectDirectory.pick() }
+                Button("选择…") { Task { folder = await ProjectDirectory.pick() } }
             }
         }
     }

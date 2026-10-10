@@ -1,8 +1,6 @@
 #if os(macOS)
-import AppKit
 import CueText
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// 主窗口底部浮着的随手记：平时一行，占位写明落到哪；聚焦或有内容时展开（左上落点、图片）。
 struct CaptureBar: View {
@@ -12,103 +10,64 @@ struct CaptureBar: View {
 
     var body: some View {
         CaptureComposer(defaultProject: project, pinnedOpen: false)
+            // 浮在卡片墙上：背后的字不透到输入框里
+            .environment(\.composerInk, .solid)
             .frame(maxWidth: Self.width)
             .padding(.horizontal, 24)
     }
 }
 
-/// Mac 的随手记（底部输入栏与菜单栏面板共用），结构与文案同手机（`CaptureCopy`、`CaptureDraft`）：
-/// 落点项目、附图；↩ 记成灵感（⌥↩ 换行），记下后提示落点、点提示去那里。记下的是灵感：它要交给 Agent 先挂到任务，所以这里没有发送。
+/// Mac 的随手记（底部输入栏与菜单栏面板共用）：共用的 `Composer`，头部是落点，提交钮是"记下"；结构与文案同手机（`CaptureCopy`、`CaptureDraft`）。
+/// ⌘↩ 记成灵感（同回复框，↩ 换行），记下后提示落点、点提示去那里（菜单栏面板里提示就在头部右边）。记下的是灵感：它要交给 Agent 先挂到任务，所以这里没有发送。
 struct CaptureComposer: View {
     /// 没手动换过落点时落在哪（主窗口是正在看的项目，菜单栏面板是当前项目）。
     let defaultProject: UUID?
     /// 一直展开（菜单栏面板）。
     let pinnedOpen: Bool
-    var minHeight: CGFloat = 0
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var text = ""
-    @State private var images: [Data] = []
+    @State private var draft = ComposerDraft()
     /// 手动换过的落点；nil 时用 `defaultProject`。
     @State private var chosen: UUID??
     @State private var saving = false
     @FocusState private var focused: Bool
 
-    private var draft: CaptureDraft { CaptureDraft(text: text, images: images) }
     private var project: UUID? { chosen ?? defaultProject }
     private var destination: String { CaptureCopy.destination(workspace.catalog?.project(project)) }
-    private var expanded: Bool { pinnedOpen || focused || !text.isEmpty || !images.isEmpty }
+    /// 收成一行（`Composer` 同一条规则）：没有头部的落点胶囊，占位要带上落点。
+    private var collapsed: Bool { !pinnedOpen && !focused && draft.isEmpty(accepting: .images) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if expanded {
-                HStack(spacing: 8) {
-                    destinationMenu
-                    Spacer(minLength: 8)
-                }
-                .transition(.opacity)
-                if !images.isEmpty { imageStrip }
-            }
-            field
-        }
-        .padding(expanded && !pinnedOpen ? 8 : 0)
-        .modifier(CaptureSurface(pinned: pinnedOpen))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(palette.ink3.opacity(focused && !pinnedOpen ? 0.5 : 0), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
-        .animation(Motion.quick, value: expanded)
+        Composer(
+            draft: $draft, prompt: collapsed ? CaptureCopy.placeholder(to: destination) : CaptureCopy.prompt, label: "随手记", focus: $focused,
+            accepts: .images, pinnedOpen: pinnedOpen, shortcuts: [.send: save],
+            header: { header }, tools: { EmptyView() }, send: { saveButton }
+        )
         .onAppear { if pinnedOpen { focused = true } }
         .onChange(of: workspace.captureFocusRequests) { focused = true }
     }
 
-    /// 一行：文字区，展开后右下是图片与记下。
-    private var field: some View {
-        HStack(alignment: .bottom, spacing: 4) {
-            if !expanded {
-                Image(systemName: "square.and.pencil").foregroundStyle(palette.ink2).padding(.leading, 16).padding(.bottom, 13)
-                    .accessibilityHidden(true)
-            }
-            textField
-            if expanded {
-                imageButton
-                saveButton
+    private var header: some View {
+        HStack(spacing: 8) {
+            destinationMenu
+            Spacer(minLength: 8)
+            if pinnedOpen, let notice = workspace.notice {
+                Text(notice.text).font(Typography.meta)
+                    .foregroundStyle(notice.isError ? palette.failure : palette.ink3)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
             }
         }
-        // 圆角 = 外框 22 − 内边距 8，与外框同心。菜单栏面板里不垫纸：面板本身就是一块玻璃，再垫一层纸就是玻璃框里套白纸的双层边
-        .background(expanded && !pinnedOpen ? palette.paper : .clear, in: .rect(cornerRadius: 14, style: .continuous))
-        // 收起时整条都是输入区：点到图标或留白也进入输入
-        .contentShape(.rect(cornerRadius: 22))
-        .onTapGesture { focused = true }
-    }
-
-    private var textField: some View {
-        // 展开后落点在胶囊上，占位不再写一遍。占位字是 App 统一的提示色：多行的系统占位字在玻璃上近乎墨色，像已经写了一句
-        let prompt = expanded ? CaptureCopy.prompt : CaptureCopy.placeholder(to: destination)
-        return TextField(text: $text, prompt: Text(prompt).foregroundStyle(palette.placeholder), axis: .vertical) { Text(prompt) }
-            .accessibilityLabel("随手记")
-            .textFieldStyle(.plain)
-            .font(Typography.body)
-            .lineLimit(expanded ? 1...8 : 1...1)
-            .focused($focused)
-            .onSubmit(save)
-            .padding(.leading, expanded ? 12 : 4).padding(.vertical, 12)
-            .frame(minHeight: expanded ? minHeight : 0, alignment: .topLeading)
-    }
-
-    private var imageButton: some View {
-        Button("添加图片", systemImage: "photo.on.rectangle") { pickImages() }
-            .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(palette.ink2)
-            .frame(width: 32, height: 40)
+        .animation(Motion.quick, value: workspace.notice)
+        .padding(.horizontal, 12).padding(.top, 10)
     }
 
     private var saveButton: some View {
-        Button(action: save) { SubmitGlyph(.save, enabled: !draft.isEmpty && !saving, size: .small) }
+        Button(action: save) { SubmitGlyph(.save, enabled: !saving) }
             .buttonStyle(.plain)
-            .disabled(draft.isEmpty || saving)
+            .disabled(saving)
             .accessibilityLabel("记下")
-            .help("记下（↩）")
+            .help("记下（⌘↩）")
     }
 
     private var destinationMenu: some View {
@@ -133,51 +92,15 @@ struct CaptureComposer: View {
         .accessibilityLabel("记到 \(destination)")
     }
 
-    private var imageStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(Array(images.enumerated()), id: \.offset) { index, data in
-                    ZStack(alignment: .topTrailing) {
-                        Image(nsImage: NSImage(data: data) ?? NSImage()).resizable().scaledToFill()
-                            .frame(width: 52, height: 52).clipShape(.rect(cornerRadius: 8))
-                        Button("移除", systemImage: "xmark.circle.fill") { images.remove(at: index) }
-                            .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(palette.ink2).padding(2)
-                    }
-                }
-            }
-        }
-        .transition(.opacity)
-    }
-
-    private func pickImages() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = true
-        guard panel.runModal() == .OK else { return }
-        images += panel.urls.compactMap { try? Data(contentsOf: $0) }
-    }
-
     private func save() {
-        let draft = draft, project = project
-        guard !draft.isEmpty, !saving else { return }
+        let note = CaptureDraft(text: draft.text, images: draft.images.map(\.data)), project = project
+        guard !note.isEmpty, !saving else { return }
         saving = true
         workspace.attempt {
             defer { saving = false }
-            try await draft.save(in: project, workspace: workspace)
-            text = ""
-            images = []
+            try await note.save(in: project, workspace: workspace)
+            draft = ComposerDraft()
         }
-        focused = true
-    }
-}
-
-/// 随手记的外层：主窗口里是一块玻璃；菜单栏面板本身就是玻璃，里面不再叠一层。
-private struct CaptureSurface: ViewModifier {
-    let pinned: Bool
-
-    func body(content: Content) -> some View {
-        // 主窗口里背后是卡片墙：卡片上的字糊成的字块不透到"记下灵感"两旁（`GlassInk.solid`）
-        if pinned { content } else { content.glass(in: .rect(cornerRadius: 22), interactive: true, ink: .solid) }
     }
 }
 #endif

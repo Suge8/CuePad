@@ -223,14 +223,14 @@ struct NewTaskField: View {
                 .onSubmit(add)
             if choosesProject, let projects = workspace.catalog?.projects, !projects.isEmpty {
                 Menu {
-                    Button("未分类") { chosen = .some(nil) }
+                    Button(CaptureCopy.inbox) { chosen = .some(nil) }
                     Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
                     let current = projects.first { $0.id == target }
                     HStack(spacing: 4) {
                         ProjectGlyph(project: current, size: 10)
-                        Text(current?.name ?? "未分类").lineLimit(1)
+                        Text(current?.name ?? CaptureCopy.inbox).lineLimit(1)
                     }
                     .font(Typography.meta).foregroundStyle(palette.ink2)
                     .padding(.horizontal, 8).frame(height: 24)
@@ -238,7 +238,7 @@ struct NewTaskField: View {
                     .contentShape(.capsule)
                 }
                 .menuStyle(.button).buttonStyle(PressStyle()).menuIndicator(.hidden).fixedSize()
-                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? "未分类")")
+                .accessibilityLabel("挂到 \(projects.first { $0.id == target }?.name ?? CaptureCopy.inbox)")
             }
         }
         .frame(minHeight: 24)
