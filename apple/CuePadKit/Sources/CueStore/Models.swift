@@ -407,10 +407,15 @@ extension Card: Record {
   init(row: Row) {
     self.init(
       id: row.uuid(0), projectID: row.uuidOrNil(1), body: row.text(2), isPinned: row.bool(3),
-      variableValues: (try? JSONDecoder().decode([String: String].self, from: Data(row.text(4).utf8))) ?? [:],
+      variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
       piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15))
+  }
+
+  /// 几乎所有卡片没有变量取值（存成 "{}"），不为它们创建解码器。
+  private static func variables(_ stored: String) -> [String: String] {
+    stored == "{}" ? [:] : (try? JSONDecoder().decode([String: String].self, from: Data(stored.utf8))) ?? [:]
   }
 }
 

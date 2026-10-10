@@ -1,7 +1,7 @@
 import Foundation
 
-/// 全部未删除卡片的层级关系（id → 上级、项目、是不是任务），一次读出，供写入时校验与远端变更后收敛。
-/// 上级不在（没到、在回收站）的按顶层看待。
+/// 全部未删除卡片的层级关系（id → 上级、项目、是不是任务），一次读出，供远端变更后整库收敛（`repairs`）。
+/// 上级不在（没到、在回收站）的按顶层看待。写入时的校验只问需要的几行，见 `CueStore+Tree`。
 struct CardLinks {
   struct Link: Equatable {
     var parent: UUID?
@@ -10,14 +10,12 @@ struct CardLinks {
   }
 
   private(set) var links: [UUID: Link]
-  private var children: [UUID: [UUID]] = [:]
 
   init(_ db: SQLite) throws {
-    let rows = try db.query("SELECT id, parentID, projectID, todoAt IS NOT NULL FROM cards WHERE deletedAt IS NULL ORDER BY sortKey, id") {
-      (id: $0.uuid(0), link: Link(parent: $0.uuidOrNil(1), project: $0.uuidOrNil(2), isTask: $0.bool(3)))
-    }
-    links = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.link) })
-    for row in rows { if let parent = row.link.parent { children[parent, default: []].append(row.id) } }
+    links = Dictionary(
+      uniqueKeysWithValues: try db.query("SELECT id, parentID, projectID, todoAt IS NOT NULL FROM cards WHERE deletedAt IS NULL") {
+        ($0.uuid(0), Link(parent: $0.uuidOrNil(1), project: $0.uuidOrNil(2), isTask: $0.bool(3)))
+      })
   }
 
   /// 在库里的上级，自下而上；有环时走到重复处为止。
@@ -32,14 +30,6 @@ struct CardLinks {
 
   /// 第几级：顶层是 1。
   func level(of id: UUID) -> Int { ancestors(of: id).count + 1 }
-
-  /// 连自己在内往下有几级。
-  func height(of id: UUID) -> Int { 1 + ((children[id] ?? []).map(height(of:)).max() ?? 0) }
-
-  /// 全部子孙，先序。
-  func descendants(of id: UUID) -> [UUID] {
-    (children[id] ?? []).flatMap { [$0] + descendants(of: $0) }
-  }
 }
 
 extension CardLinks {
@@ -84,8 +74,6 @@ extension CardLinks {
   }
 
   private mutating func relink(_ id: UUID, parent: UUID?) {
-    if let old = links[id]?.parent { children[old]?.removeAll { $0 == id } }
     links[id]?.parent = parent
-    if let parent { children[parent, default: []].append(id) }
   }
 }

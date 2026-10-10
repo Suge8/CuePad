@@ -14,6 +14,9 @@ private let looseIdea = """
   todoAt IS NULL AND (parentID IS NULL OR parentID NOT IN (SELECT id FROM cards WHERE deletedAt IS NULL AND todoAt IS NOT NULL))
   """
 
+/// 列得出来的任务（`t` 是任务表，`p` 是它左连接的项目表）：要做、没删除、没归档，且所属项目（如果有）没删除。`tasks` 与 `taskCounts` 共用。
+private let visibleTask = "t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)"
+
 /// 正文不是空白（与 `Card.isBlank` 同一条规则）。
 private let notBlank = "TRIM(body, char(32, 9, 10, 13)) <> ''"
 
@@ -32,6 +35,13 @@ extension CueStore {
     """
   }
 
+  /// 回收站里的条数：删除的项目加单独删除的卡片（`trashedProjects()` 与 `trashedCards()` 的个数之和），只数不读正文。
+  public func trashCount() throws -> Int {
+    try db.first(
+      "SELECT (SELECT COUNT(*) FROM projects WHERE deletedAt IS NOT NULL) + (SELECT COUNT(*) FROM cards WHERE deletedAt IS NOT NULL)"
+    ) { Int($0.int(0)) } ?? 0
+  }
+
   /// 回收站中的项目，最近删除的在前。
   public func trashedProjects() throws -> [Project] {
     try select(Project.self, where: "deletedAt IS NOT NULL", orderBy: "deletedAt DESC, id")
@@ -43,19 +53,29 @@ extension CueStore {
   /// （`/a/proj` 不会误配 `/a/project`）；多个命中取绑定目录最深的，同深度取项目列表里靠前的。
   /// 只看未删除的项目，依据本机的目录绑定（`setDirectory`）。界面与命令行共用这唯一一份规则。
   public func project(containing directory: URL) throws -> Project? {
-    let target = Self.pathSegments(Self.canonicalPath(directory.path))
-    let bound = try db.query(
+    try Self.projectID(containing: directory, in: boundDirectories()).flatMap { try find(Project.self, $0) }
+  }
+
+  /// 项目绑定的目录（已换成唯一写法并按分段拆开），按项目顺序。批量归会话时读一次、对每个会话用 `projectID(containing:in:)`，
+  /// 不为每个会话重读绑定表、重做 `realpath`。
+  typealias BoundDirectory = (id: UUID, segments: [Substring])
+
+  func boundDirectories() throws -> [BoundDirectory] {
+    try db.query(
       """
       SELECT p.id, d.directory FROM projectDirectories d JOIN projects p ON p.id = d.projectID
       WHERE p.deletedAt IS NULL ORDER BY \(Self.projectOrder("p"))
       """
     ) { (id: $0.uuid(0), segments: Self.pathSegments(Self.canonicalPath($0.text(1)))) }
+  }
 
+  static func projectID(containing directory: URL, in bound: [BoundDirectory]) -> UUID? {
+    let target = pathSegments(canonicalPath(directory.path))
     var best: (id: UUID, depth: Int)?
     for candidate in bound where !candidate.segments.isEmpty && target.starts(with: candidate.segments) {
       if best.map({ candidate.segments.count > $0.depth }) ?? true { best = (candidate.id, candidate.segments.count) }
     }
-    return try best.flatMap { try find(Project.self, $0.id) }
+    return best?.id
   }
 
   private static func pathSegments(_ path: String) -> [Substring] { path.split(separator: "/") }
@@ -141,15 +161,22 @@ extension CueStore {
   /// 子任务紧跟上级）再按状态筛：上级被筛掉的子任务就排在上级原来的位置。只要完成的时不按树，最近完成在前。
   /// 回收站里的任务与回收站项目的任务不列。
   public func tasks(_ statuses: TaskStatus...) throws -> [TaskGroup] {
-    let wanted = Set(statuses)
+    try taskGroups(Set(statuses))
+  }
+
+  /// 一个项目（nil = 未分类）里这几种状态的任务，排法同 `tasks(_:)` 的一组：只读这个项目，页面不必读全库再过滤。
+  public func tasks(in project: UUID?, _ statuses: TaskStatus...) throws -> [Card] {
+    try taskGroups(Set(statuses), project: project).flatMap(\.tasks)
+  }
+
+  private func taskGroups(_ wanted: Set<TaskStatus>, project: UUID?? = nil) throws -> [TaskGroup] {
     let doneOnly = wanted == [.done]
     let tasks = try db.query(
       """
       SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
-        \(doneOnly ? " AND t.completedAt IS NOT NULL" : "")
+      WHERE \(visibleTask) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID IS ?")
       ORDER BY t.projectID IS NULL, \(Self.projectOrder("p")), \(doneOnly ? "t.completedAt DESC, t.id" : "t.sortKey, t.id")
-      """
+      """, project.map { [$0] } ?? []
     ) { Card(row: $0) }
     var groups: [TaskGroup] = []
     for task in tasks {
@@ -193,7 +220,7 @@ extension CueStore {
       SELECT t.projectID, SUM(t.completedAt IS NULL AND t.startedAt IS NOT NULL), SUM(t.completedAt IS NULL AND t.startedAt IS NULL),
         SUM(t.completedAt IS NOT NULL)
       FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(Self.liveTask)
-      WHERE t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND (t.projectID IS NULL OR p.deletedAt IS NULL)
+      WHERE \(visibleTask)
         AND (u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))
       GROUP BY t.projectID
       """
@@ -201,12 +228,17 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
-  /// 各上级任务的直接子任务（不含提示词）完成数与总数；没有子任务的不在结果里。
-  /// 每条任务的直接下级，同级手动顺序：任务行的分段完成圈与"子任务 n/m"都由它推出，见 `ChildMark`。给了 `parent` 只读它的。
+  /// 每条任务的直接下级，同级手动顺序：任务行的分段完成圈与"子任务 n/m"都由它推出，见 `ChildMark`；没有下级的不在结果里。
+  /// 不带参数读全库；`of` 只读一条任务的；`in` 只读一个项目（nil = 未分类）里的（下级与上级同项目）。
   /// 提示词（任务下的灵感）"已回复"：没有交给 Agent 的请求还在路上（手机重发、Mac 还没执行），且它最近一次交给 Pi 会话之后，
   /// 那个会话歇下了（`stateSince` 晚于发出时刻）或对话里有之后的一条回答——没回答就结束的不算。复制、发到应用不算交给 Agent。
-  public func childMarks(of parent: UUID? = nil) throws -> [UUID: [ChildMark]] {
-    let scope = parent == nil ? "" : "AND c.parentID = ?"
+  public func childMarks() throws -> [UUID: [ChildMark]] { try childMarks(scope: "", []) }
+
+  public func childMarks(of parent: UUID) throws -> [UUID: [ChildMark]] { try childMarks(scope: "AND c.parentID = ?", [parent]) }
+
+  public func childMarks(in project: UUID?) throws -> [UUID: [ChildMark]] { try childMarks(scope: "AND c.projectID IS ?", [project]) }
+
+  private func childMarks(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: [ChildMark]] {
     let session = SendTargetKind.piSession.rawValue
     let rows = try db.query(
       """
@@ -227,7 +259,7 @@ extension CueStore {
       FROM cards c
       WHERE c.parentID IS NOT NULL AND c.deletedAt IS NULL AND c.archivedAt IS NULL \(scope)
       ORDER BY c.parentID, c.sortKey, c.id
-      """, parent.map { [$0] } ?? []
+      """, arguments
     ) { (parent: $0.uuid(0), mark: ChildMark(isTask: $0.int(1) != 0, isDone: $0.int(2) != 0)) }
     return Dictionary(grouping: rows, by: \.parent).mapValues { $0.map(\.mark) }
   }
