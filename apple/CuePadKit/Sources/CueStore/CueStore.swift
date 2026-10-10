@@ -72,8 +72,22 @@ public actor CueStore {
   /// 订阅：先产出一次当前值，之后每当 `tables` 中任一表被提交的写事务改动就重读并产出。
   /// 突发的多次写入会合并为一次重读。`read` 在 store 的隔离域内执行，可直接调用查询方法：
   /// `store.observe([.cards, .projects]) { try $0.cards(in: id) }`
+  /// 订阅以表为粒度：别的行改动同一张表也会重读。结果可比较（`Equatable`）时和上一次一样就不产出——比较在读取的这一侧做，
+  /// 不把没变的数据送到主线程再比、也不让界面白白重算。
   public nonisolated func observe<T: Sendable>(
     _ tables: Set<Table>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
+  ) -> AsyncThrowingStream<T, Error> {
+    changes(tables, read) { _, _ in true }
+  }
+
+  public nonisolated func observe<T: Sendable & Equatable>(
+    _ tables: Set<Table>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
+  ) -> AsyncThrowingStream<T, Error> {
+    changes(tables, read) { $0 != $1 }
+  }
+
+  private nonisolated func changes<T: Sendable>(
+    _ tables: Set<Table>, _ read: @escaping @Sendable (isolated CueStore) throws -> T, isNew: @escaping @Sendable (T, T) -> Bool
   ) -> AsyncThrowingStream<T, Error> {
     AsyncThrowingStream { continuation in
       let (signals, signal) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
@@ -81,7 +95,13 @@ public actor CueStore {
         let token = await self.subscribe(tables, signal)
         signal.yield()
         do {
-          for await _ in signals { continuation.yield(try await read(self)) }
+          var last: T?
+          for await _ in signals {
+            let next = try await read(self)
+            if let last, !isNew(next, last) { continue }
+            last = next
+            continuation.yield(next)
+          }
           continuation.finish()
         } catch {
           continuation.finish(throwing: error)

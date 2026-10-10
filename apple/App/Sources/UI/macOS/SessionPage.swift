@@ -70,7 +70,7 @@ struct SessionPage: View {
     private static let titleWidth: CGFloat = 420
 
     var body: some View {
-        let live = services.pi.sessions.first { $0.sessionID == sessionID }
+        let live = services.liveSessions.session(sessionID)
         let project = live.flatMap { workspace.catalog?.project(workspace.sessionProjects[$0.id]) }
         // 在线会话不等资料库读完就能显示
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)

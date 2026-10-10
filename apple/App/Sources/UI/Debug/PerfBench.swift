@@ -89,10 +89,16 @@ enum PerfBench {
         let target = view.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY))
         let recorder = FrameRecorder()
         recorder.start(in: view)
+        // -CuePadWheel trackpad：像触控板那样带手势阶段（开始、变化、结束）；默认是没有阶段的滚轮（普通鼠标）
+        let trackpad = UserDefaults.standard.string(forKey: "CuePadWheel") == "trackpad"
         for direction in directions {
-            for _ in 0..<frames {
+            for frame in 0..<frames {
                 guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: Int32(direction * 40), wheel2: 0, wheel3: 0)
                 else { continue }
+                if trackpad {
+                    event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+                    event.setIntegerValueField(.scrollWheelEventScrollPhase, value: frame == 0 ? 1 : frame == frames - 1 ? 4 : 2)
+                }
                 event.location = location
                 // 直接交给内容区中间那块视图（后台窗口的 sendEvent 不保证落到滚动区），它沿响应链交给所在的滚动区
                 if let scroll = NSEvent(cgEvent: event) { target?.scrollWheel(with: scroll) }
@@ -189,8 +195,21 @@ final class FrameRecorder: NSObject {
     private var stamps: [CFTimeInterval] = []
     private var refresh: CFTimeInterval = 1.0 / 60
     private var waiter: CheckedContinuation<Void, Never>?
+    private var cpuAtStart = 0.0
+
+    /// 主线程累计占用的 CPU 秒（用户态加内核态）。机器忙时帧间隔会被别的进程拖长，CPU 时间受影响小，前后对比以它为准。
+    private static func mainCPUSeconds() -> Double {
+        var info = thread_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<thread_basic_info>.size / MemoryLayout<integer_t>.size)
+        _ = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { thread_info(mach_thread_self(), thread_flavor_t(THREAD_BASIC_INFO), $0, &count) }
+        }
+        func seconds(_ time: time_value_t) -> Double { Double(time.seconds) + Double(time.microseconds) / 1_000_000 }
+        return seconds(info.user_time) + seconds(info.system_time)
+    }
 
     func start(in view: NSView) {
+        cpuAtStart = Self.mainCPUSeconds()
         stamps = []
         let link = view.displayLink(target: self, selector: #selector(tick))
         link.add(to: .main, forMode: .common)
@@ -215,6 +234,7 @@ final class FrameRecorder: NSObject {
         let dropped = intervals.reduce(0) { $0 + max(0, Int(($1 / refresh).rounded()) - 1) }
         let span = (stamps.last ?? 0) - (stamps.first ?? 0)
         return [
+            "mainCpuMs": ((Self.mainCPUSeconds() - cpuAtStart) * 10_000).rounded() / 10,
             "frames": stamps.count,
             "refreshHz": (1 / refresh).rounded(),
             "fps": span > 0 ? (Double(intervals.count) / span * 10).rounded() / 10 : 0,

@@ -22,6 +22,8 @@ final class AppServices {
     let images: any CueImageStore
     #if os(macOS)
     let pi: PiBridge
+    /// 桥上在线会话的分格观察（`LiveSessions`）：界面读自己要的那个会话，别读 `pi.sessions` 整张表。
+    let liveSessions: LiveSessions
     #endif
 
     /// 设备本地偏好（主题、快捷键、当前项目）。
@@ -279,6 +281,7 @@ final class AppServices {
         wakeNotifications = mac.wakeNotifications
         piStateRecorder = PiStateRecorder(store: library.store, hostID: mac.hostID)
         pi = mac.pi
+        liveSessions = LiveSessions(mac.pi)
         channels = mac.channels
         hotkeyBackend = mac.hotkeys
         paths = mac.paths

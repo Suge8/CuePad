@@ -30,6 +30,7 @@ extension AppServices {
                     reportIssue(.piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\(error.localizedDescription)"))
                 }
             },
+            Task { await liveSessions.follow(pi) },
             Task { [historyStore] in
                 await historyStore.beginBackfill()  // 在索引器开始列目录之前
                 await consumePiHistory(indexer.events())
