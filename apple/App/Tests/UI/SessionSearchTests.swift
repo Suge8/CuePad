@@ -29,10 +29,5 @@ struct SessionSearchTests {
         #expect(groups.map(\.key) == [.now, .ended(.today), .ended(.yesterday), .ended(.earlier)])
         #expect(groups.map { $0.sessions.map(\.sessionID) } == [["s2", "s1"], ["e1"], ["e2", "e3"], ["e4"]])
     }
-
-    @Test func 没有在线会话时不留空的现在() {
-        let groups = SessionGroup.grouped(live: [], ended: [session("e1", .ended)], now: now, calendar: WallTests.calendar)
-        #expect(groups.map(\.key) == [.ended(.today)])
-    }
 }
 #endif

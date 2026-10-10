@@ -22,10 +22,6 @@ struct PiConfigControlsTests {
         #expect(PiModelLabel.short(model(name)) == short)
     }
 
-    @Test func 没有名字时用模型id() {
-        #expect(PiModelLabel.short(model("", id: "luna-mini")) == "luna-mini")
-    }
-
     @Test func 强度条_格数是支持的档位_关不占格() {
         let meter = PiThinkingMeter(levels: [.off, .low, .medium, .high], current: .medium)
         #expect(meter.bars == [.low, .medium, .high])

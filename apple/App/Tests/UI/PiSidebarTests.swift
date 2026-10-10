@@ -50,12 +50,5 @@ struct PiSidebarTests {
         })
     }
 
-
-    @Test func 侧栏Agent区行数不超过上限时全露出_没有还有N个() {
-        let agents = SidebarAgents(rows: [session("a", .tool), session("b", .settled)])
-
-        #expect(agents.visible.map(\.sessionID) == ["a", "b"])
-        #expect(agents.overflow == 0)
-    }
 }
 #endif

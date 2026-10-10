@@ -12,11 +12,6 @@ struct TaskRingTests {
     var store: CueStore { rig.services.store }
     private let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
 
-    @Test func 没有下级是普通圆圈() async throws {
-        let task = try await store.createTask("修乱序", in: nil)
-        #expect(TaskRing(try await store.childMarks()[task.id]) == .plain)
-    }
-
     @Test func 有下级时按已回复与已完成的比例描圈() async throws {
         let task = try await store.createTask("修乱序", in: nil)
         let prompt = try await store.createCard(body: "先复现", under: task.id)

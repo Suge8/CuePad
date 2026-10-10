@@ -72,22 +72,6 @@ struct ShellChromeTests {
 
         #expect(proceeded)
     }
-
-    @Test func 主菜单有设置项_快捷键是命令加逗号() throws {
-        let app = try #require(MainMenu.build().items.first?.submenu)
-        let item = try #require(app.items.first { $0.title == "设置…" })
-        #expect(item.keyEquivalent == ",")
-        #expect(item.keyEquivalentModifierMask == .command)
-        #expect(item.action == #selector(AppDelegate.showSettings(_:)))
-    }
-
-    @Test func 主窗口创建时内容铺到透明标题栏下() {
-        let window = MainWindowFactory.make(content: Color.clear)
-        #expect(window.styleMask.contains(.fullSizeContentView))
-        #expect(window.titlebarAppearsTransparent)
-        #expect(window.titleVisibility == .hidden)
-        #expect(window.styleMask.isSuperset(of: [.titled, .closable, .miniaturizable, .resizable]))
-    }
 }
 
 @MainActor

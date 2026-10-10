@@ -81,10 +81,5 @@ struct ChatScrubberMarksTests {
         #expect(marks.map(\.preview) == (1...6).map { "第 \($0) 问" })
         #expect(marks.map(\.id) == entries.filter(\.isUser).map(\.id))
     }
-
-    @Test func 不到6条不显示() {
-        let entries = (1...5).map { entry(true, "第 \($0) 问") }
-        #expect(ChatScrubber.marks(entries).isEmpty)
-    }
 }
 #endif

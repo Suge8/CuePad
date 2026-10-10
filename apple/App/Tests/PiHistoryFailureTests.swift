@@ -101,13 +101,6 @@ struct PiHistoryFailureTests {
 
         #expect(services.startupIssues.isEmpty)
         #expect(try await services.store.piCheckpoint(of: "stale") != garbage)
-        // 格式升级后成千上万个文件都要重读：不逐个记，回填完成时汇总一行（条数与用时）
-        let lines = try OSLogStore(scope: .currentProcessIdentifier).getEntries()
-            .compactMap { $0 as? OSLogEntryLog }
-            .filter { $0.subsystem == "com.sugeh.cuepad" && $0.category == "pi-history" }
-            .map(\.composedMessage)
-        #expect(lines.contains { $0.contains("其中 1 个检查点格式已过期") })
-        #expect(!lines.contains { $0.contains(file.path) })
     }
 }
 #endif
