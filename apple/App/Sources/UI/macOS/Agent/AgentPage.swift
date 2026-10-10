@@ -171,7 +171,7 @@ struct AgentPage: View {
             EmptyState.noMatch(query)
         } else if let filter, let project = workspace.catalog?.project(filter), !workspace.hasFolder(filter) {
             EmptyState(mascot: .empty, title: "还没绑定文件夹", message: "绑定后，在那个文件夹里跑的 Agent 会话会出现在这里") {
-                FolderGuideReader { ProjectFolderGuide(project: project, guide: $0) }
+                ProjectFolderGuide(project: project, guide: workspace.folderGuide)
             }
         } else {
             EmptyState(mascot: .empty, title: filter == nil ? "还没有 Agent 会话" : "这个项目还没有 Agent 会话",

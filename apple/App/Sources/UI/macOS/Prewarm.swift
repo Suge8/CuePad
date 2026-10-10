@@ -1,0 +1,48 @@
+#if os(macOS)
+import CueStore
+import SwiftUI
+
+/// 首次使用才付的一次性成本（视图类型、玻璃材质、文本平台控件、菜单与弹出框的桥接）在启动后空闲时先付掉：
+/// 把这些视图在窗口里隐形地挂两帧再卸下（不聚焦、不订阅，`pageActive` 为 false），每样一段，不挤在一个回合里。
+/// 用户第一次点会话、点新会话时，付的就是"第二次"的价钱（右键菜单与 ⌘K 的第一次另议：建一个不弹出的菜单没有收益，⌘K 随浮层机制走）。
+struct Prewarm: View {
+    @Environment(Workspace.self) private var workspace
+    @State private var step = Step.idle
+
+    private enum Step: CaseIterable {
+        case idle, agentPage, replyBar, newSession, done
+    }
+
+    /// 回复框要一个会话：已结束的、不属于任何项目的占位，不写进任何地方。
+    private static let session = PiSessionState(
+        id: UUID(), sessionID: "prewarm", hostID: "", title: "", projectID: nil, state: .known(.ended), detail: nil, folder: nil,
+        lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .distantPast, busySince: nil, createdAt: .distantPast,
+        modifiedAt: .distantPast)
+
+    var body: some View {
+        ZStack {
+            switch step {
+            case .agentPage: AgentPage()
+            case .replyBar: PiReplyBar(session: Self.session, config: nil, compact: false, stopping: false) {}
+            case .newSession: NewSessionForm { _ in }
+            default: Color.clear
+            }
+        }
+        .frame(width: 900, height: 560)
+        .opacity(0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .environment(\.pageActive, false)
+        .task(id: workspace.isLibraryReady) {
+            guard workspace.isLibraryReady else { return }
+            // 首屏出来、用户还没动手：等一会儿再开始
+            try? await Task.sleep(for: .seconds(2))
+            for next in Step.allCases.dropFirst() {
+                step = next
+                await NextFrame.wait()
+                await NextFrame.wait()
+            }
+        }
+    }
+}
+#endif
