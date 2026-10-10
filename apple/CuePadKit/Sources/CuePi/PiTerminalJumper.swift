@@ -156,16 +156,8 @@ public struct LivePiTerminalSystem: PiTerminalSystem {
         let extra = "/opt/homebrew/bin:/usr/local/bin"
         process.environment = ProcessInfo.processInfo.environment.merging(
             ["PATH": (ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin") + ":" + extra]) { _, new in new }
-        let out = Pipe()
-        process.standardOutput = out
         process.standardError = FileHandle.nullDevice
-        return await withCheckedContinuation { continuation in
-            process.terminationHandler = { finished in
-                let text = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                continuation.resume(returning: (finished.terminationStatus, text))
-            }
-            do { try process.run() } catch { process.terminationHandler = nil; continuation.resume(returning: (-1, "")) }
-        }
+        return await runCapturing(process) ?? (-1, "")
     }
 
     public func appleScript(_ source: String) async throws -> String {

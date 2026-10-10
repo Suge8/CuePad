@@ -1,7 +1,6 @@
 import CueStore
 import CueText
 import SwiftUI
-import UniformTypeIdentifiers
 #if os(iOS)
 import PhotosUI
 #else
@@ -54,16 +53,6 @@ struct ComposerDraft {
     /// 存储格式正文：图片文件在这里写入图片库。
     func stored(in files: AttachmentFiles) throws -> String {
         StoredBody.make(attachments: attachments.map(\.content), text: text, imageHashes: try images.map { try files.store($0.data) })
-    }
-}
-
-extension AppServices {
-    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（交给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
-    @discardableResult
-    func requestMacDelivery(
-        _ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
-    ) async throws -> DeliveryRequest {
-        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: card ?? draft.attachments.first?.card)
     }
 }
 
@@ -125,6 +114,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 跟着焦点、带动画：UIKit 文字区拿到焦点时的那次更新不带动画，直接读焦点时展开会一帧跳到位
     @State private var focused = false
+    @State private var appeared = false
     @State private var source: ComposerSource?
     @State private var previewing: Outbox?
     /// 斜杠命令面板里高亮的那一行，与按过 Esc 收起面板时的那段文字（文字再变就又弹出）。
@@ -223,7 +213,12 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .onChange(of: focus.wrappedValue, initial: true) { _, now in
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now }
+            // 出现的头几百毫秒里到位的焦点（Mac 会话页打开即聚焦）直接是展开的样子：逐帧长高要把 AppKit 的跟踪区每帧重算一遍
+            if appeared { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } } else { focused = now }
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(400))
+            appeared = true
         }
         .animation(Motion.quick, value: sendVisible)
         .animation(Motion.quick, value: paletteCommands.isEmpty)
@@ -566,11 +561,15 @@ private struct ImageSources: ViewModifier {
             .onChange(of: picked) { load() }
         #else
         content
-            .fileImporter(isPresented: showing(.files), allowedContentTypes: [.image], allowsMultipleSelection: true) { result in
-                do {
-                    for url in try result.get() { images.append(PickedImage(data: try Self.read(url))) }
-                } catch {
-                    workspace.fail(error)
+            .onChange(of: source) {
+                guard source == .files else { return }
+                source = nil
+                Task {
+                    do {
+                        for data in try await FilePicker.images() { images.append(PickedImage(data: data)) }
+                    } catch {
+                        workspace.fail(error)
+                    }
                 }
             }
         #endif
@@ -593,13 +592,6 @@ private struct ImageSources: ViewModifier {
                 }
             }
         }
-    }
-    #else
-    /// 选文件面板给的是沙盒外的地址：读之前先拿访问权。
-    private static func read(_ url: URL) throws -> Data {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        return try Data(contentsOf: url)
     }
     #endif
 }

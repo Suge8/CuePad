@@ -5,6 +5,7 @@ import CueEditor
 import CueSync
 import os
 #if os(macOS)
+import AppKit
 import CuePi
 #else
 import UIKit
@@ -19,7 +20,6 @@ final class AppServices {
     static let log = Logger(subsystem: bundleID, category: "services")
 
     let store: CueStore
-    let images: any CueImageStore
     #if os(macOS)
     let pi: PiBridge
     #endif
@@ -82,18 +82,22 @@ final class AppServices {
     /// 主窗口显隐；全局快捷键经它。
     @ObservationIgnored var windowShell: WindowShell?
 
-    @ObservationIgnored let channels: any SendChannels
     @ObservationIgnored let paths: PiPaths
     @ObservationIgnored let terminal: PiTerminalJumper
-    @ObservationIgnored let locatePi: @Sendable () async -> URL?
     @ObservationIgnored let host: any PiHosting
+    @ObservationIgnored let locatePi: @Sendable () async -> URL?
+    @ObservationIgnored let pasteboard: NSPasteboard
     @ObservationIgnored let historyStore: PiHistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
     /// 这台 Mac 的稳定标识：Pi 状态记录与投送请求都靠它区分是哪台 Mac。
     @ObservationIgnored let hostID: String
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let piStateRecorder: PiStateRecorder
-    @ObservationIgnored var deliveryExecutor: DeliveryExecutor?
+    /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
+    @ObservationIgnored lazy var executor = MacExecutor(
+        store: store, pi: pi, host: host, hostID: hostID, locatePi: locatePi,
+        uploadResult: { [weak self] id in await self?.upload(id) },
+        reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
     @ObservationIgnored lazy var hotkey = GlobalHotkey(backend: hotkeyBackend) { [weak self] in
         self?.windowShell?.toggleFromHotkey()
@@ -122,8 +126,15 @@ final class AppServices {
         _ storedText: String, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
     ) async throws -> DeliveryRequest {
         uploaded(try await store.requestDelivery(
-            storedText, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID,
-            mode: mode, card: card))
+            storedText, to: session.target, on: session.hostID, mode: mode, card: card))
+    }
+
+    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（交给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
+    @discardableResult
+    func requestMacDelivery(
+        _ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil
+    ) async throws -> DeliveryRequest {
+        try await requestMacDelivery(draft.stored(in: store.files), to: session, mode: mode, card: card ?? draft.attachments.first?.card)
     }
 
     /// 撤回还没被 Mac 领取的话（排队的话），立即把删除传上去，免得 Mac 先拉到它；已领取的撤不回，抛出原因。
@@ -162,7 +173,7 @@ final class AppServices {
             throw SendError.unanswerable
         }
         return uploaded(try await store.requestAnswer(
-            PiAnswer(promptID: promptID, value: value), to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID),
+            PiAnswer(promptID: promptID, value: value), to: session.target,
             on: session.hostID))
     }
 
@@ -170,14 +181,14 @@ final class AppServices {
     /// 当前值与可选项读会话状态的 `model`、`thinking`、`models`；结果用 `outcome(of:)` 等。
     func configure(_ config: PiConfig, for session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestConfig(
-            config, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID))
+            config, to: session.target, on: session.hostID))
     }
 
     /// 结束会话：请会话所在的 Mac 让它的 Pi 进程正常退出（与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
     /// 会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。结果用 `outcome(of:)` 等。
     func end(_ session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestEnd(
-            of: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID))
+            of: session.target, on: session.hostID))
     }
 
     /// 停止这一轮：请会话所在的 Mac 中止它正在跑的回合（相当于在 Pi 里按 Esc；与发送、作答同一条投送通道，Mac 上也走它），写出后立即上传。
@@ -185,7 +196,7 @@ final class AppServices {
     /// 结果用 `outcome(of:)` 等；界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
     func stop(_ session: PiSessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestStop(
-            of: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID))
+            of: session.target, on: session.hostID))
     }
 
     /// 请指定的 Mac 在后台开一个 Pi 新会话：与发送同一条投送通道（Mac 本机也走它），写出后立即上传。
@@ -268,18 +279,17 @@ final class AppServices {
 
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
-        let library = try Self.openLibrary(at: location)
-        store = library.store
-        images = library.images
+        let store = try Self.openLibrary(at: location)
+        self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
-        (self.sync, syncStatus) = Self.makeSync(sync, store: library.store, location: location)
+        (self.sync, syncStatus) = Self.makeSync(sync, store: store, location: location)
         hostID = mac.hostID
         wakeNotifications = mac.wakeNotifications
-        piStateRecorder = PiStateRecorder(store: library.store, hostID: mac.hostID)
+        piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID)
         pi = mac.pi
-        channels = mac.channels
+        pasteboard = mac.pasteboard
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
         terminal = mac.terminal
@@ -288,26 +298,24 @@ final class AppServices {
         piIntegration = PiIntegrationManager(installer: mac.installer, settings: settings)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
-        historyStore = PiHistoryPersistence(storage: library.store, host: mac.hostID)
+        historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {
-        let library = try Self.openLibrary(at: location)
-        store = library.store
-        images = library.images
+        let store = try Self.openLibrary(at: location)
+        self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
-        (self.sync, syncStatus) = Self.makeSync(sync, store: library.store, location: location)
+        (self.sync, syncStatus) = Self.makeSync(sync, store: store, location: location)
         self.pasteboard = pasteboard
     }
     #endif
 
     /// 资料库是唯一事实源：打不开时不能悄悄换一个空库，也不能带着它往下走——错误交给调用方，启动入口显示失败页
     /// （`UnreadableLibraryView`：原因、重试、导出诊断，不给任何写入入口），不终止进程。
-    static func openLibrary(at location: LibraryLocation) throws -> (store: CueStore, images: any CueImageStore) {
-        let store = try CueStore(url: location.databaseURL)
-        return (store, store.files)
+    static func openLibrary(at location: LibraryLocation) throws -> CueStore {
+        try CueStore(url: location.databaseURL)
     }
 
     /// 引擎没能启动：状态写明原因（与启动问题一起），不停在"正在连接"。
@@ -339,4 +347,9 @@ final class AppServices {
         Self.log.error("\(String(describing: issue), privacy: .public)")
         startupIssues.append(issue)
     }
+}
+
+extension PiSessionState {
+    /// 投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
+    var target: SendTarget { SendTarget(kind: .piSession, name: title, ref: sessionID) }
 }

@@ -7,12 +7,7 @@ extension Command {
       notes: Schema.output("[Project]", Schema.project) + "\n未分类的灵感用 cuepad card list --inbox 查看。"
     ) { call in
       try call.args.expect()
-      let counts = Dictionary(
-        uniqueKeysWithValues: try await call.store.projectSummaries().map { ($0.projectID, $0.cardCount) })
-      let directories = try await call.store.projectDirectories()
-      let views = try await call.store.projects().map {
-        ProjectView(project: $0, cardCount: counts[$0.id] ?? 0, directory: directories[$0.id])
-      }
+      let views = try await call.projectViews(try await call.store.projects())
       return listReply(views.map(\.line), json: views.map(\.json))
     }
   ]

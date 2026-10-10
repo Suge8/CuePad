@@ -56,6 +56,16 @@ final class Sandbox: @unchecked Sendable {
   }
 }
 
+extension Sandbox {
+  /// 把一条卡片的 id 改成指定值（UUID 是随机的，造不出共用前缀的两条）。
+  func assignID(_ id: UUID, _ new: String) throws {
+    var handle: OpaquePointer?
+    defer { sqlite3_close(handle) }
+    #expect(sqlite3_open(directory.appending(path: "cuepad.db").path, &handle) == SQLITE_OK)
+    #expect(sqlite3_exec(handle, "UPDATE cards SET id = '\(new)' WHERE id = '\(id.uuidString.lowercased())'", nil, nil, nil) == SQLITE_OK)
+  }
+}
+
 extension Dictionary where Key == String, Value == Any {
   func string(_ key: String) -> String? { self[key] as? String }
 }

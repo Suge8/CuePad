@@ -164,12 +164,16 @@ import Testing
     #expect(try await rig.store.allPiSessionStates().count == 2_000 + 450)
   }
 
-  private func request(_ status: String, modifiedAt: Int64) -> CKRecord {
-    remoteRecord(.deliveryRequests, id: UUID(), [
+  private func requestFields(_ status: String, modifiedAt: Int64) -> [String: SQLValue] {
+    [
       "content": .text("x"), "targetKind": .text("app"), "targetName": .text("CuePad"), "targetRef": .null,
       "hostID": .text("mac-a"), "mode": .text("send"), "cardID": .null, "taskID": .null, "status": .text(status),
       "resultDetail": .null, "handledBy": .null, "createdAt": .int(1_000), "completedAt": .null, "modifiedAt": .int(modifiedAt),
-    ])
+    ]
+  }
+
+  private func request(_ status: String, modifiedAt: Int64) -> CKRecord {
+    remoteRecord(.deliveryRequests, id: UUID(), requestFields(status, modifiedAt: modifiedAt))
   }
 
   /// 投送请求同理：本机没有的、已经有结果的（别的设备发的、早已执行完）不追；本机发出、在等结果的那条服务器上更新了就取。
@@ -192,5 +196,36 @@ import Testing
     try await puller.pull()
 
     #expect(Set(await zone.fetches.joined()) == [result.recordID, othersPending.recordID])
+  }
+  /// 服务器上落定了几秒、本机还没有的在等的记录，被主动拉取先拿到：说明推送晚了或丢了，记下来（日志与计数）；
+  /// 刚落定的（推送马上就会带来）、本机已经有了的（引擎先到）都不算。
+  final class Dated: CKRecord, @unchecked Sendable {
+    nonisolated(unsafe) var date: Date?
+    override var modificationDate: Date? { date }
+  }
+
+  private func request(_ id: UUID, modifiedAt: Int64, landed: Date) -> CKRecord {
+    let dated = Dated(recordType: "deliveryRequests", recordID: CKRecord.ID(recordName: id.uuidString.lowercased(), zoneID: testZone))
+    dated.date = landed
+    var fields = requestFields("pending", modifiedAt: modifiedAt)
+    fields["id"] = .text(id.uuidString.lowercased())
+    return RecordMapper.record(from: SyncRow(table: .deliveryRequests, fields: fields), zoneID: testZone, base: dated)
+  }
+
+  @Test func recordsFoundByPollingLongAfterTheyLandOnTheServerAreCountedAsLatePushes() async throws {
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    let (late, fresh, known) = (UUID(), UUID(), UUID())
+    let lateRecord = request(late, modifiedAt: 5_000, landed: now.addingTimeInterval(-9))
+    let freshRecord = request(fresh, modifiedAt: 5_000, landed: now.addingTimeInterval(-1))
+    let knownRecord = request(known, modifiedAt: 5_000, landed: now.addingTimeInterval(-9))
+    let zone = FakeZone([batch("t1"), batch("t2", [knownRecord]), batch("t3", [lateRecord, freshRecord, knownRecord]), batch("t4", [lateRecord])])
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator, now: { now })
+
+    try await puller.pull()  // 先取令牌（t1），再拉到 knownRecord：本机原来没有，算一条，之后本机有了
+    #expect(await puller.lateCatches == 1)
+    try await puller.pull()  // late 算一条；fresh 刚落定不算；known 本机已有同样新的不算
+    #expect(await puller.lateCatches == 2)
+    try await puller.pull()  // 同一条再来一遍：本机已有，不重复算
+    #expect(await puller.lateCatches == 2)
   }
 }

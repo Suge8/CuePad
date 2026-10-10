@@ -187,8 +187,7 @@ extension CueStore {
   /// 没能送达的话（说话的几种方式）在对话里留着等用户重发或移除（重发写成后移除它），只在完成早于 `undeliveredCutoff` 时清理。
   fileprivate func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, undeliveredCutoff: Date) throws -> Bool {
     let done = "status IN ('succeeded', 'failed')"
-    let talk = [DeliveryMode.send, .steer, .followUp].map { "'\($0.rawValue)'" }.joined(separator: ", ")
-    let undelivered = "status = 'failed' AND mode IN (\(talk)) AND completedAt >= ?"
+    let undelivered = "status = 'failed' AND mode IN (\(DeliveryMode.sqlList(DeliveryMode.talk))) AND completedAt >= ?"
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?
         AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)

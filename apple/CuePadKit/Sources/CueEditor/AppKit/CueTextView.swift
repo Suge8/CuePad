@@ -26,7 +26,7 @@ public final class CueTextView: NSTextView, CueEditorHost {
     var reportedSelection = false
     private var editObserver: (any NSObjectProtocol)?
 
-    public init(imageStore: any CueImageStore, theme: CueEditorTheme = .neutral) {
+    public init(imageStore: any CueImageStore, theme: CueEditorTheme) {
         self.imageStore = imageStore
         self.theme = theme
         let stack = CueTextStack.make()
@@ -86,7 +86,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
         textContainerInset = NSSize(width: theme.horizontalInset, height: theme.verticalInset)
         typingAttributes = core.baseAttributes
         core.styleDidChange()
-        cueDividerViews(in: self).forEach { $0.needsDisplay = true }
     }
 
     // MARK: 编辑通知

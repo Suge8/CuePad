@@ -30,10 +30,7 @@ extension AppServices {
                     reportIssue(.piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\(error.localizedDescription)"))
                 }
             },
-            Task { [historyStore] in
-                await historyStore.beginBackfill()  // 在索引器开始列目录之前
-                await consumePiHistory(indexer.events())
-            },
+            Task { await consumePiHistory(indexer.events()) },
             Task { await historyStore.keepPruned() },
             Task {
                 do {
@@ -45,7 +42,7 @@ extension AppServices {
             },
             Task {
                 do {
-                    try await startDeliveryExecutor()
+                    try await executor.start()
                 } catch {
                     reportIssue(.syncUnavailable("远程投送执行器没能启动：\(error)"))
                 }
@@ -79,12 +76,11 @@ extension AppServices {
         let hostedExit = host.closeAll()
         pi.stop()
         hotkey.unregister()
-        let executor = deliveryExecutor, sync = sync
-        deliveryExecutor = nil
+        let stopExecutor = executor.beginStop(), sync = sync
         let log = Logger(subsystem: Self.bundleID, category: "shutdown")
         return { @concurrent in
             let late = await ShutdownSteps.run([
-                ("远程投送执行器", { await executor?.stop() }),
+                ("远程投送执行器", stopExecutor),
                 ("同步引擎", { await sync?.stop() }),
                 ("后台托管的 Pi", hostedExit),
             ], within: limit)

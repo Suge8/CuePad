@@ -1,4 +1,5 @@
 #if os(macOS)
+import struct CueStore.PiSession
 import CueStore
 @testable import CuePi
 import Foundation
@@ -51,19 +52,19 @@ struct ImageStoreTests {
         let rig = TestApp()
         let png = pngData()
 
-        let id = try rig.services.images.store(png)
+        let id = try rig.services.store.files.store(png)
 
         #expect(id.count == 64)
-        #expect(try rig.services.images.store(png) == id)
+        #expect(try rig.services.store.files.store(png) == id)
         #expect(try rig.services.store.files.original(hash: id) == png)
-        let url = try #require(rig.services.images.fileURL(for: id))
+        let url = try #require(rig.services.store.files.fileURL(for: id))
         #expect(try Data(contentsOf: url) == png)
-        #expect(rig.services.images.fileURL(for: String(repeating: "0", count: 64)) == nil)
+        #expect(rig.services.store.files.fileURL(for: String(repeating: "0", count: 64)) == nil)
 
         let file = rig.directory.appending(path: "dropped.png")
         let other = pngData(shade: 0.9)
         try other.write(to: file)
-        let droppedID = try rig.services.images.store(fileAt: file)
+        let droppedID = try rig.services.store.files.store(fileAt: file)
         #expect(try rig.services.store.files.original(hash: droppedID) == other)
     }
 }
@@ -118,7 +119,7 @@ struct PiHistoryPersistenceTests {
     @Test func 回填完成后_不在会话列表里的旧行被删除() async throws {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
-        try await rig.services.store.upsertPiSession(StoredPiSession(
+        try await rig.services.store.upsertPiSession(PiSession(
             id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now), host: TestApp.hostID)
         let events = AsyncStream<PiHistoryEvent> { continuation in
             continuation.yield(.updated(try! PiHistory.index(file: file, from: nil)))

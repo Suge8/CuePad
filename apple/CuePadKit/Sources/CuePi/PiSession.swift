@@ -1,25 +1,6 @@
 #if os(macOS)
+import CueStore
 import Foundation
-
-/// 扩展上报的会话实时状态（只在内存，来自连接）。
-public enum PiAgentState: Sendable, Equatable {
-    case idle
-    case thinking
-    case outputting
-    /// `name` 是最近开始的工具，`running` 是并行执行中的全部工具名，`detail` 是该工具调用的一句话摘要（可空）
-    case tool(name: String, running: [String], detail: String? = nil)
-    /// 自己这轮已经歇下，还有子代理在飞（FireCode 的在飞数）：仍在处理
-    case delegating
-    /// 在压缩上下文（手动 /compact、上下文快满时自动、溢出后压缩再重试）：工作中的一档
-    case compacting
-    /// 扩展发起的 `ctx.ui` 弹窗（Pi 没有内置工具审批）
-    case waitingUser(kind: String?, title: String?)
-    /// 一轮结束且 Pi 不会再自动继续（`agent_settled`）
-    case done(aborted: Bool)
-    case error(message: String)
-    /// 扩展的协议版本与 CuePad 不同（升级前开的 Pi 还在跑旧扩展）：进程在、会话没死，但读不到状态、也不能发命令，要在终端里对它执行 /reload（Pi 重新载入扩展，同一会话以新协议重连）
-    case incompatible
-}
 
 /// 终端信息，来自扩展 hello 里的环境变量；供"跳到该会话所在终端"使用。
 public struct PiTerminal: Sendable, Equatable {
@@ -50,180 +31,54 @@ public struct PiTerminal: Sendable, Equatable {
     }
 }
 
-/// 一个活着的 Pi 会话（一个进程里的一个会话）。
+/// 一个活着的 Pi 会话（一个进程里的一个会话）。状态与随会话同步的各块值直接用 CueStore 的类型：桥解码出来什么样，记录器就原样写什么样。
 public struct PiSession: Identifiable, Sendable, Equatable {
     /// `<sessionId>.<pid>`：同一会话被两个进程同时打开时也唯一，等于 socket 文件名去掉 `.sock`
     public let id: String
     public let sessionID: String
-    /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil
+    /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil。只有测试读（读会话文件核对对话）
     public let sessionFile: URL?
     public let pid: Int32
     public let cwd: URL
-    /// Pi 运行模式：`tui` / `rpc` / …
-    public let mode: String
     public let terminal: PiTerminal
-    /// 该会话加载的扩展版本；低于 `PiExtensionBundle.version` 说明要在终端里 /reload 才能用上新扩展
+    /// 该会话加载的扩展版本；只有测试读（核对 /reload 后载入的是随包的扩展）
     public let extensionVersion: Int
-    public internal(set) var state: PiAgentState
-    /// 进入当前粗状态（工作中、等你确认、出错、空闲）的时间：思考、工具、等子代理之间切换不变。扩展 v6 起，旧扩展是细状态的切换时间
+    public internal(set) var state: PiWorkState
+    /// 一句话说明（同步记录的 `detail`）：工具名与调用目标、等你回答的弹窗标题、出错的摘要；其余状态为 nil
+    public internal(set) var detail: String? = nil
+    /// 出错时 Pi 上报的原文（会话行悬停看）；`detail` 里是摘要
+    public internal(set) var errorMessage: String? = nil
+    /// 进入当前粗状态（工作中、等你确认、出错、空闲）的时间：思考、工具、等子代理之间切换不变
     public internal(set) var stateSince: Date
-    /// 这段连续处理开始的时间：离开空闲起，到彻底歇下（自己歇下且没有子代理在飞）为止，中间等你确认也不断；
-    /// 空闲、出错时为 nil。扩展 v6 起，旧扩展为 nil
+    /// 这段连续处理开始的时间：离开空闲起，到彻底歇下（自己歇下且没有子代理在飞）为止，中间等你确认也不断；空闲、出错时为 nil
     public internal(set) var busySince: Date? = nil
-    /// `/name` 设的会话名（扩展 v3 起上报）
+    /// `/name` 设的会话名
     public internal(set) var name: String? = nil
-    /// 首条用户消息的开头（扩展 v3 起上报）
+    /// 首条用户消息的开头
     public internal(set) var firstMessage: String? = nil
     /// 正在等你回答的弹窗；不在等待时为 nil
-    public internal(set) var question: PiPrompt? = nil
-    /// CuePad 开的新会话带着发起方的认领标识（`PiLaunch.start` 的 token，经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展）；
-    /// 其余会话为 nil
+    public internal(set) var question: PiQuestion? = nil
+    /// CuePad 开的新会话带着发起方的认领标识（`PiLaunch.token`，经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展）；其余会话为 nil
     public internal(set) var launchToken: String? = nil
-    /// 本会话在同一进程里开的子代理（扩展 v5 起；FireCode 的子代理是进程内子会话，不作为独立会话出现）
-    public internal(set) var subagents: [PiSubagent] = []
+    /// 本会话在同一进程里开的子代理（FireCode 的子代理是进程内子会话，不作为独立会话出现）
+    public internal(set) var subagents: [PiSubagentState] = []
     /// CuePad 在后台托管的 Pi（RPC 模式，没有终端界面）：启动时经环境变量 `CUEPAD_HOSTED` 告诉扩展，扩展在 hello 里带回
     public internal(set) var hosted = false
-    /// 当前模型、思考强度（`off` … `max`）与可以换成的模型（协议 v2、扩展 v13 起）；未选模型时 `model` 与 `thinking` 为 nil
-    public internal(set) var model: PiModel? = nil
-    public internal(set) var thinking: String? = nil
-    public internal(set) var availableModels: [PiModel] = []
-    /// 上下文余量（协议 v5 起）：没有模型时为 nil
-    public internal(set) var context: PiContext? = nil
-    /// 此刻能用的斜杠命令（协议 v5 起）
-    public internal(set) var commands: [PiCommand] = []
+    /// 当前模型、思考强度与可以换成的模型；未选模型时 `model` 与 `thinking` 为 nil
+    public internal(set) var model: PiModelOption? = nil
+    public internal(set) var thinking: Open<PiThinkingLevel>? = nil
+    public internal(set) var availableModels: [PiModelOption] = []
+    /// 上下文余量：没有模型时为 nil
+    public internal(set) var context: PiContextUsage? = nil
+    /// 此刻能用的斜杠命令
+    public internal(set) var commands: [PiSlashCommand] = []
 
-    /// 会话的显示名，规则见 `PiSessionName`。旧扩展不报名字与消息，显示工作目录名。
+    public var modelState: PiModelState { PiModelState(model: model, thinking: thinking, models: availableModels) }
+
+    /// 会话的显示名，规则见 `PiSessionName`。
     public var displayName: String {
         PiSessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
     }
-}
-
-/// 一个模型的标识：提供方加模型 id（同一个 id 可以出自不同提供方）。
-public struct PiModelRef: Sendable, Hashable, Equatable {
-    public var provider: String
-    public var id: String
-
-    public init(provider: String, id: String) {
-        self.provider = provider
-        self.id = id
-    }
-}
-
-/// 会话可用的一个模型：显示名与它支持的思考强度（Pi 的 `getSupportedThinkingLevels`：不支持思考的只有 `off`）。
-public struct PiModel: Sendable, Equatable, Decodable {
-    public var provider: String
-    public var id: String
-    public var name: String
-    public var thinkingLevels: [String]
-
-    public init(provider: String, id: String, name: String, thinkingLevels: [String]) {
-        self.provider = provider
-        self.id = id
-        self.name = name
-        self.thinkingLevels = thinkingLevels
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case provider, id, name
-        case thinkingLevels = "thinking"
-    }
-}
-
-/// 上下文余量：Pi 估算的已用 token（压缩后到下一次回答前未知，为 nil）与当前模型的上下文窗口。
-public struct PiContext: Sendable, Equatable, Decodable {
-    public var tokens: Int?
-    public var window: Int
-
-    public init(tokens: Int?, window: Int) {
-        self.tokens = tokens
-        self.window = window
-    }
-}
-
-/// 一条能在这个会话里用的斜杠命令。`source` 是 `builtin`（Pi 内置里能在非 TUI 下执行的）、`extension`、`prompt`（提示词模板）、`skill`；
-/// 名字不带斜杠（skill 是 `skill:名字`）；`hint` 是参数提示，nil 表示不带参数。
-public struct PiCommand: Sendable, Equatable, Decodable {
-    public var name: String
-    public var description: String?
-    public var source: String
-    public var hint: String?
-
-    public init(name: String, description: String?, source: String, hint: String?) {
-        self.name = name
-        self.description = description
-        self.source = source
-        self.hint = hint
-    }
-}
-
-/// 等你回答的弹窗。
-public struct PiPrompt: Sendable, Equatable, Decodable {
-    /// 这次弹窗的标识，从 CuePad 作答时带上；nil 表示只能在 Pi 里答（editor、custom 弹窗）
-    public var id: String?
-    /// `confirm` / `select` / `text`，以及只能在 Pi 里答的 `editor`、`custom`
-    public var kind: String
-    /// 标题与说明（确认框），换行分隔，≤500 字符
-    public var text: String
-    /// 选择框的选项（原文，作答时按原文回传）
-    public var options: [String]
-
-    public init(id: String?, kind: String, text: String, options: [String] = []) {
-        self.id = id
-        self.kind = kind
-        self.text = text
-        self.options = options
-    }
-
-    private enum CodingKeys: String, CodingKey { case id, kind, text, options }
-
-    public init(from decoder: any Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            id: try c.decodeIfPresent(String.self, forKey: .id), kind: try c.decode(String.self, forKey: .kind),
-            text: try c.decode(String.self, forKey: .text), options: try c.decodeIfPresent([String].self, forKey: .options) ?? [])
-    }
-}
-
-/// 对弹窗的回答：选择框选一项（原文）、确认框答是或否、输入框填文字。
-public enum PiPromptAnswer: Sendable, Equatable {
-    case option(String)
-    case confirmed(Bool)
-    case text(String)
-}
-
-/// 父会话里的一个子代理，来自 FireCode 的子代理名册（`firecode:subagents`，扩展原样转述）：名字、派发角色、状态、在做什么，
-/// 以及本次运行的开始与落定时刻（界面据此算时长）。
-public struct PiSubagent: Sendable, Equatable, Decodable {
-    public var name: String
-    public var role: String
-    /// 名册状态原文：running、review、done、failed、interrupted、idle
-    public var state: String
-    /// 在做什么的一句话；空闲时为空串
-    public var action: String
-    public var startedAt: Date?
-    public var settledAt: Date?
-
-    public init(name: String, role: String, state: String, action: String = "", startedAt: Date? = nil, settledAt: Date? = nil) {
-        self.name = name
-        self.role = role
-        self.state = state
-        self.action = action
-        self.startedAt = startedAt
-        self.settledAt = settledAt
-    }
-
-    public init(from decoder: any Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        func date(_ key: CodingKeys) throws -> Date? {
-            try c.decodeIfPresent(Double.self, forKey: key).map { Date(timeIntervalSince1970: $0 / 1000) }
-        }
-        self.init(
-            name: try c.decode(String.self, forKey: .name), role: try c.decode(String.self, forKey: .role),
-            state: try c.decode(String.self, forKey: .state), action: try c.decode(String.self, forKey: .action),
-            startedAt: try date(.startedAt), settledAt: try date(.settledAt))
-    }
-
-    private enum CodingKeys: String, CodingKey { case name, role, state, action, startedAt, settledAt }
 }
 
 /// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致：
@@ -252,7 +107,7 @@ public enum PiSessionEndReason: Sendable, Equatable {
 
 public enum PiSessionChange: Sendable, Equatable {
     case appeared(PiSession)
-    case stateChanged(PiSession, from: PiAgentState)
+    case stateChanged(PiSession, from: PiWorkState)
     /// 会话名、首条消息或近况变了（`displayName` 可能随之改变）
     case infoChanged(PiSession)
     case ended(PiSession, reason: PiSessionEndReason)
@@ -308,7 +163,7 @@ public enum PiBridgeError: Error, Equatable {
     /// 扩展拒绝：`empty` / `bad_request` / `failed: …`；斜杠命令还有 `unknown_command`（清单里没有的名字）、`missing_argument`（必填参数没给）；作答时还有 `no_prompt`（没有在等的弹窗）、`stale_prompt`（标识不是正在等的那个）、
     /// `bad_answer`（答案类型或选项不对）；配置时还有 `unknown_model`（模型不在 Pi 的模型表里）、`no_auth`（该提供方没配好密钥）
     case rejected(String)
-    /// 会话的扩展协议版本与 CuePad 不同（见 `PiAgentState.incompatible`），不发命令
+    /// 会话的扩展协议版本与 CuePad 不同（见 `PiWorkState.incompatible`），不发命令
     case incompatibleExtension
 }
 

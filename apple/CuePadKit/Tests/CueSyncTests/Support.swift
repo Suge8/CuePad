@@ -126,10 +126,30 @@ func sendFields(kind: String, modifiedAt: Int64) -> [String: SQLValue] {
 
 
 
+/// 假云上服务器端的记录：上传可以只带改动的字段，服务器把它并进已有的整条记录再交给别的设备（真实的 CloudKit 就是这样）。
+final class CloudRecords: @unchecked Sendable {
+  private var records: [String: CKRecord] = [:]
+
+  func merge(_ sent: CKRecord) -> CKRecord {
+    guard let table = Table(rawValue: sent.recordType), let previous = records[sent.recordID.recordName] else {
+      records[sent.recordID.recordName] = sent
+      return sent
+    }
+    let encrypted = RecordMapper.encryptedColumns[table] ?? []
+    let merged = sent.copy() as! CKRecord
+    for column in table.columns where column != "id" && !sent.changedKeys().contains(column) {
+      if encrypted.contains(column) { merged.encryptedValues[column] = previous.encryptedValues[column] } else { merged[column] = previous[column] }
+    }
+    records[sent.recordID.recordName] = merged
+    return merged
+  }
+}
+
 /// 两台"设备"之间的假云：把一端已登记的保存与删除交给另一端（`fetched`），并回报发送成功。
 struct Loopback {
   let a: Rig
   let b: Rig
+  let cloud = CloudRecords()
   var beforeFetch: @Sendable () -> Void = {}
   var beforeApply: @Sendable () -> Void = {}
 
@@ -157,6 +177,6 @@ struct Loopback {
       saved: records, failedSaves: [], deleted: deletions.map(\.id), failedDeletes: []))
     await from.queue.discard(saves: saves, deletes: deletes)  // .sent 之前对账可能重复登记过
     beforeApply()
-    await to.coordinator.handle(.fetched(modifications: records, deletions: deletions))
+    await to.coordinator.handle(.fetched(modifications: records.map(cloud.merge), deletions: deletions))
   }
 }

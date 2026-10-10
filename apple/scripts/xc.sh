@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 用法：xc.sh <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
+# 用法：xc.sh <build|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
+#       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
 #       xc.sh release <mac|ios>   发布（mac：Developer ID 公证 zip；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
 #       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/development.md「签名与发布」
 # build/test/shot 一律用本机 ad-hoc 签名（不联网、不需要账号）；凭据文件在时 xcodebuild 仍带上 API 密钥参数。
@@ -129,7 +130,12 @@ shot_ipad() { shot_sim; }
 
 case "$cmd" in
   build) xcb -quiet build ;;
-  test) xcb test ;;
+  test)
+    # xcodebuild 会启动模拟器且不关；本次启动的由脚本关掉，已开着的不动
+    if [ -n "${device:-}" ] && ! xcrun simctl list devices booted | grep -qF "$device ("; then
+      trap 'xcrun simctl shutdown "$device" 2>/dev/null || true' EXIT
+    fi
+    xcb test "${@:3}" ;;
   shot) xcb -quiet build; "shot_$platform" ;;
   *) echo "用法：$0 <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]" >&2; exit 2 ;;
 esac

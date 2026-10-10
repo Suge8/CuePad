@@ -11,7 +11,7 @@ import SwiftUI
 /// （iPad 多窗口各选各的）。这里只记"未分类"和"回收站"这两个非项目页。
 @MainActor @Observable
 final class Workspace {
-    enum Page: Hashable {
+    nonisolated enum Page: Hashable {
         case project(UUID)
         case inbox
         case archive
@@ -154,6 +154,37 @@ final class Workspace {
         pressedCard = nil
     }
 
+    /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
+    let sessionHeader = SessionHeader()
+
+    /// 交给了会话的灵感与任务（`AgentLinks`，卡与行上的状态点读它）、文件夹绑定引导（`FolderGuide`）：整个窗口一份，页面直接读，
+    /// 不各自订阅（挂着的页也不会在每次回到前台时重读一遍）。读到和已有的相同就不写，免得页面白算。
+    private(set) var agentLinks = AgentLinks(items: [:], launching: [])
+    private(set) var folderGuide: FolderGuide?
+
+    func observeAgentLinks() async {
+        do {
+            for try await next in services.store.observe(AgentLinks.tables, { try AgentLinks.read(from: $0) }) where next != agentLinks {
+                agentLinks = next
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
+    func observeFolderGuide() async {
+        do {
+            for try await next in services.store.observe(FolderGuide.tables, { [host = localHost] in try FolderGuide.read(host: host, from: $0) })
+            where next != folderGuide {
+                folderGuide = next
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
     /// 跟随同步记录里在线会话的摘要与发给它们的最近一条投送请求，直到任务取消。
     func observeSessionRecaps() async {
         do {
@@ -219,6 +250,59 @@ final class Workspace {
         if case .project(let id) = page { id } else { nil }
     }
 
+    #if os(macOS)
+    /// 内容区挂着的页（`PageStack`）：去过的页留着，回访不再重建；至多 `keptPages` 个，满了换掉最久没看的。会话页不留（带着输入焦点与实时对话，挂着不看会抢键盘）。
+    private(set) var kept: [Page] = []
+    @ObservationIgnored private var lastSeen: [Page: Int] = [:]
+    @ObservationIgnored private var visits = 0
+    @ObservationIgnored private var trimTask: Task<Void, Never>?
+    static let keptPages = 4
+
+    /// 侧栏开合的动画里（约 0.2 秒）。页面此刻不接指针（`PageStack`）：分栏每帧挪动详情区，AppKit 每帧重算整窗的鼠标跟踪区、重设指针，
+    /// 页面里每个悬停区都要重算（大项目页开一次侧栏多约 120ms 主线程、掉帧 5～8 次，页面不接指针后只剩约 45ms）；这几百毫秒里页面本来也不该响应指针。
+    /// 纸页放大缩回是图层动画、不挪 AppKit 视图，量过没有这笔开销。
+    private(set) var sidebarMoving = false
+    @ObservationIgnored private var sidebarMovingTask: Task<Void, Never>?
+
+    /// 刚离开的页：切页的那一帧它已经看不见，但"不在前台"（暂停订阅、停读实时状态）晚两帧才生效——页面重新求值要几十毫秒，不放在点击的回合里。
+    private(set) var leaving: Page?
+
+    /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
+    var mountedPages: [Page] { kept.contains(page) ? kept : kept + [page] }
+
+    private func keep(_ page: Page) {
+        if case .session = page { return }
+        visits += 1
+        lastSeen[page] = visits
+        guard !kept.contains(page) else { return }
+        kept.append(page)
+        // 多出来的页不在这次点击里卸：卸一整页的视图树要几十毫秒，等切页的那一帧出去、安静下来再卸；连着去了很多页时先卸
+        if kept.count > Self.keptPages + 2 { trim() } else { scheduleTrim() }
+    }
+
+    private func scheduleTrim() {
+        trimTask?.cancel()
+        trimTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            self?.trim()
+        }
+    }
+
+    /// 只留最近看过的 `keptPages` 页，当前页一定留着。
+    private func trim() {
+        let current = page
+        let stale = kept.filter { $0 != current }.sorted { lastSeen[$0, default: 0] < lastSeen[$1, default: 0] }.prefix(max(0, kept.count - Self.keptPages))
+        if !stale.isEmpty { kept.removeAll { stale.contains($0) } }
+    }
+
+    /// 进了回收站或删掉的项目不再留着它的页。
+    private func forget(projectsNotIn ids: Set<UUID>) {
+        let gone = kept.filter { if case .project(let id) = $0 { !ids.contains(id) } else { false } }
+        if !gone.isEmpty { kept.removeAll { gone.contains($0) } }
+    }
+    #endif
+
     /// 纸页缩回动画结束。
     func finishClosingCard() {
         guard openCard == nil else { return }
@@ -259,6 +343,19 @@ final class Workspace {
     func show(_ page: Page) {
         openCard = nil
         dismissPresented()
+        #if os(macOS)
+        let left = self.page
+        keep(left)
+        keep(page)
+        if left != page {
+            leaving = left
+            Task { [weak self] in
+                await NextFrame.wait()
+                await NextFrame.wait()
+                if self?.leaving == left { self?.leaving = nil }
+            }
+        }
+        #endif
         if case .project(let id) = page {
             nonProjectPage = nil
             holder.currentProject = id
@@ -269,6 +366,15 @@ final class Workspace {
 
     func toggleSidebar() {
         sidebar = sidebar == .detailOnly ? .all : .detailOnly
+        #if os(macOS)
+        // AppKit 的分栏动画约 0.2 秒
+        sidebarMoving = true
+        sidebarMovingTask?.cancel()
+        sidebarMovingTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            if !Task.isCancelled { self?.sidebarMoving = false }
+        }
+        #endif
     }
 
     // MARK: 提示
@@ -314,7 +420,12 @@ final class Workspace {
             for try await next in services.store.observe(ProjectCatalog.tables, { try ProjectCatalog.read(from: $0) }) {
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next
-                if membershipChanged { await reconcileCurrentProject() }
+                if membershipChanged {
+                    #if os(macOS)
+                    forget(projectsNotIn: Set(next.projects.map(\.id)))
+                    #endif
+                    await reconcileCurrentProject()
+                }
             }
         } catch is CancellationError {
         } catch {

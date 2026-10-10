@@ -144,4 +144,20 @@ import Testing
     #expect(try await phone.store.deliveryRequest(request.id) == nil)
     await executor.stop()
   }
+
+  /// 一条状态记录带着大字段（三百个模型的清单）：第二次上传只带改动的字段，服务器并进整条记录，手机上模型清单还在、状态是新的。
+  @Test func aPartialUploadLeavesTheLargeFieldsOnTheOtherDeviceIntact() async throws {
+    let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
+    let options = (0..<300).map { PiModelOption(key: PiModelKey(provider: "p", id: "model-\($0)-with-a-long-identifier"), name: "Model \($0)", thinkingLevels: [.off, .high]) }
+    try await recorder.update(sessionID: "s1", state: .thinking, title: "t", modelState: PiModelState(model: options[0], models: options))
+    try await cloud.exchange()
+    #expect(try await phone.store.allPiSessionStates().first?.models.count == 300)
+
+    try await recorder.update(sessionID: "s1", state: .settled, detail: "做完了")
+    try await cloud.exchange()
+
+    let seen = try #require(try await phone.store.allPiSessionStates().first)
+    #expect(seen.state == .known(.settled) && seen.detail == "做完了")
+    #expect(seen.models.count == 300)
+  }
 }

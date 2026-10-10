@@ -33,12 +33,7 @@ extension Command {
     let offset = try args.integer("offset", minimum: 0) ?? 0
     let results = try await call.store.search(query, limit: limit, offset: offset)
 
-    let counts = Dictionary(
-      uniqueKeysWithValues: try await call.store.projectSummaries().map { ($0.projectID, $0.cardCount) })
-    let directories = try await call.store.projectDirectories()
-    let projects = results.projects.map {
-      ProjectView(project: $0, cardCount: counts[$0.id] ?? 0, directory: directories[$0.id])
-    }
+    let projects = try await call.projectViews(results.projects)
     let cards = try await call.cardViews(results.cards)
 
     var lines = projects.map { "项目  \($0.line)" } + cards.map(\.line)

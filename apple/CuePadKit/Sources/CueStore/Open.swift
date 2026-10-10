@@ -20,3 +20,14 @@ where Known.RawValue == String {
     if case .known(let value) = self { value } else { nil }
   }
 }
+
+extension Open: Codable {
+  public init(from decoder: any Decoder) throws {
+    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
+}

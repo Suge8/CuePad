@@ -1,6 +1,7 @@
 #if os(macOS)
 import Foundation
 import Testing
+import CueStore
 @testable import CuePi
 
 /// 端到端：会话的对话从 Pi 的会话文件读出——一轮一条 Pi 消息（只取最后的回答，工具只成摘要），你的消息带着
@@ -17,7 +18,7 @@ struct RealTranscriptTests {
     }
 
     private func roundsDone(_ file: URL, _ count: Int) throws -> Bool {
-        (try? PiHistory.index(file: file, from: nil))?.transcript.filter { $0.role == .pi }.count == count
+        (try? PiHistory.index(file: file, from: nil))?.messages.filter { $0.role == .known(.pi) }.count == count
     }
 
     @Test func multipleRoundsBecomeOrderedMessagesWithToolsOnlyAsASummary() async throws {
@@ -33,8 +34,8 @@ struct RealTranscriptTests {
         try await eventually("机器消息那轮落盘", timeout: .seconds(20)) { try roundsDone(file, 3) }
 
         let update = try PiHistory.index(file: file, from: nil)
-        let messages = update.transcript
-        #expect(messages.map(\.role) == [.user, .pi, .user, .pi, .pi])
+        let messages = update.messages
+        #expect(messages.map(\.role.known) == [.user, .pi, .user, .pi, .pi])
         #expect(messages.map(\.text).prefix(4) == ["第一问", "ECHO 第一问 IMAGES[]", "[[tool:echo TOOL-OUTPUT-42]]", "TOOL_DONE"])
         #expect(!messages.contains { $0.text.contains("TOOL-OUTPUT-42\n") || $0.text == "TOOL-OUTPUT-42" })  // 工具输出不进对话
         #expect(messages.map { $0.tools?.commands } == [nil, nil, nil, 1, nil])
@@ -48,7 +49,7 @@ struct RealTranscriptTests {
         try pi.prompt("第三问")
         try await eventually("第三轮落盘", timeout: .seconds(20)) { try roundsDone(file, 4) }
         let next = try PiHistory.index(file: file, from: update.checkpoint)
-        #expect(next.transcript.map(\.text) == ["第三问", "ECHO 第三问 IMAGES[]"])
+        #expect(next.messages.map(\.text) == ["第三问", "ECHO 第三问 IMAGES[]"])
         #expect(next.recap.lastPrompt == "第三问")
     }
 
@@ -64,7 +65,7 @@ struct RealTranscriptTests {
         try pi.prompt("[[tool:false]]")
         try await eventually("失败的一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 3) }
 
-        let tools = try PiHistory.index(file: file, from: nil).transcript.filter { $0.role == .pi }.map(\.tools)
+        let tools = try PiHistory.index(file: file, from: nil).messages.filter { $0.role == .known(.pi) }.map(\.tools)
         #expect(tools.map { $0?.commands } == [1, 0, 0] && tools.map { $0?.edits } == [0, 1, 0] && tools.map { $0?.failed } == [0, 0, 1])
         #expect(tools[1]?.items.first?.target == "out.txt" && tools[2]?.items.first?.failed == true)
     }
@@ -75,7 +76,7 @@ struct RealTranscriptTests {
 
         try pi.prompt("[[slow]] 慢慢来")
         try await eventually("你的消息落盘", timeout: .seconds(20)) {
-            (try? PiHistory.index(file: file, from: nil))?.transcript.first?.role == .user
+            (try? PiHistory.index(file: file, from: nil))?.messages.first?.role == .known(.user)
         }
         let update = try PiHistory.index(file: file, from: nil)
         #expect(update.recap.pendingPrompt == "[[slow]] 慢慢来" && update.recap.lastReply == nil)
@@ -87,14 +88,15 @@ struct RealTranscriptTests {
         defer { bridge.stop(); pi.stop() }
         let session = try #require(bridge.sessions.first)
 
-        _ = try await bridge.send(PiMessage(text: "从手机发的", deliveryID: "D-1"), to: session.id)
+        let delivery = UUID()
+        _ = try await bridge.send(PiMessage(text: "从手机发的", deliveryID: delivery.uuidString), to: session.id)
         try await eventually("那一轮落盘", timeout: .seconds(20)) { try roundsDone(file, 1) }
         try pi.prompt("终端里打的")
         try await eventually("第二轮落盘", timeout: .seconds(20)) { try roundsDone(file, 2) }
 
-        let users = try PiHistory.index(file: file, from: nil).transcript.filter { $0.role == .user }
+        let users = try PiHistory.index(file: file, from: nil).messages.filter { $0.role == .known(.user) }
         #expect(users.map(\.text) == ["从手机发的", "终端里打的"])
-        #expect(users.map(\.deliveryID) == ["D-1", nil])
+        #expect(users.map(\.deliveryID) == [delivery, nil])
     }
 }
 #endif

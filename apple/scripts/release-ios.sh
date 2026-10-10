@@ -17,26 +17,12 @@ case "$mode" in
     rm -rf "$OUT"; mkdir -p "$OUT"
     python3 "$provision" all
     # TestFlight 要求每次上传的构建号递增；App 与扩展必须一致
-    build="$(date +%y%m%d%H%M)"
+    build="$(build_number)"
     xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=iOS' \
       -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED" CURRENT_PROJECT_VERSION="$build"
-    cat > "$OUT/export.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>method</key><string>app-store-connect</string>
-<key>teamID</key><string>${CUEPAD_TEAM_ID}</string>
-<key>signingStyle</key><string>manual</string>
-<key>signingCertificate</key><string>Apple Distribution</string>
-<key>provisioningProfiles</key><dict>
-<key>com.sugeh.cuepad</key><string>CuePad iOS AppStore</string>
-<key>com.sugeh.cuepad.share</key><string>CuePad Share iOS AppStore</string>
-<key>com.sugeh.cuepad.widget</key><string>CuePad Widget iOS AppStore</string>
-<key>com.sugeh.cuepad.notify</key><string>CuePad Notify iOS AppStore</string>
-</dict>
-<key>destination</key><string>export</string>
-</dict></plist>
-PLIST
+    export_options "$OUT/export.plist" app-store-connect "Apple Distribution" \
+      com.sugeh.cuepad="CuePad iOS AppStore" com.sugeh.cuepad.share="CuePad Share iOS AppStore" \
+      com.sugeh.cuepad.widget="CuePad Widget iOS AppStore" com.sugeh.cuepad.notify="CuePad Notify iOS AppStore"
     xcodebuild -exportArchive -archivePath "$OUT/CuePad.xcarchive" -exportOptionsPlist "$OUT/export.plist" \
       -exportPath "$OUT/export"
     # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）

@@ -7,16 +7,14 @@ extension PiSessionState {
     /// 桥上的实时会话写成同步记录的形状（会话行与近况共用；状态记录按节流写，会落后几秒，界面读这个）。
     /// 摘要（问与答）不在桥上：取同步记录里的（`recap`，对话的投影，文件一变就写）。
     static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?, recap: PiRecap?) -> PiSessionState {
-        let (state, detail) = session.syncRepresentation
-        let config = session.modelState
-        return PiSessionState(
+        PiSessionState(
             id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
-            projectID: projectID, state: .known(state), detail: detail, folder: session.cwd.lastPathComponent,
-            lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question.map(PiQuestion.init), notify: nil,
+            projectID: projectID, state: .known(session.state), detail: session.detail, folder: session.cwd.lastPathComponent,
+            lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question, notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
-            launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagentStates,
-            pendingPrompt: recap?.pendingPrompt, model: config.model, thinking: config.thinking, models: config.models,
-            context: session.contextUsage, commands: session.slashCommands)
+            launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
+            pendingPrompt: recap?.pendingPrompt, model: session.model, thinking: session.thinking, models: session.availableModels,
+            context: session.context, commands: session.commands)
     }
 }
 
@@ -50,11 +48,10 @@ struct SessionPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    private var header: SessionHeader { workspace.sessionHeader }
     @State private var stored: SessionDigest?
     @State private var askedForTranscript = false
     @State private var confirmingEnd: PiSessionState?
-    /// 点标题弹出的说明（需要 /reload 时）开着。
-    @State private var explaining = false
     @State private var renaming: PiSessionState?
     @State private var follow = ChatFollow()
     /// 对话排开最近多少条（`PiConversation.window`）。
@@ -66,8 +63,6 @@ struct SessionPage: View {
 
     /// 读对话的宽度：长回答一行不至于太长，气泡也不挤。
     private static let readingWidth: CGFloat = 760
-    /// 工具栏里标题一块最宽多少：名字长时截断，不把右边的按钮挤走。
-    private static let titleWidth: CGFloat = 420
 
     var body: some View {
         let live = services.pi.session(sessionID: sessionID)
@@ -106,17 +101,13 @@ struct SessionPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.desk)
-        .toolbar {
-            if let session = digest.session {
-                // 标题是悬浮的一块玻璃（与手机会话页顶栏中间那一块同一种），玻璃画在标题自己身上、随它一起淡出：
-                // 系统给工具栏项画的那块在推入后改 sharedBackgroundVisibility 不跟着变，让开时会留下一块空玻璃
-                ToolbarItem(placement: .navigation) { title(session, digest: digest, ending: shownEnd?.isOpen == true) }
-                    .sharedBackgroundVisibility(.hidden)
-                ToolbarItem(placement: .primaryAction) {
-                    menu(session, place: PiPlace.menuTitle(of: session, project: digest.project), live: live, ending: shownEnd?.isOpen == true)
-                }
-            }
+        .onChange(of: headerState(digest, live: live, shownEnd: shownEnd), initial: true) { _, state in header.set(state) }
+        .onAppear {
+            header.rename = { renaming = $0 }
+            header.end = { confirmingEnd = $0 }
+            header.reveal = { follow.reveal() }
         }
+        .onDisappear { header.clear(sessionID) }
         .observing(services.store, SessionDigest.tables, id: sessionID, into: $stored,
                    onError: workspace.fail) { [sessionID] store in
             try SessionDigest.read(sessionID: sessionID, from: store)
@@ -126,61 +117,14 @@ struct SessionPage: View {
         .task(id: digest.session?.stateSince) { if let session = digest.session { services.settings.markSeen(session) } }
     }
 
-    /// 工具栏标题位：一块玻璃里一行，会话名接"状态 · 计时"（所在写在"⋯"菜单最上面；工具栏的玻璃只有一行高）。
-    private func title(_ session: PiSessionState, digest: SessionDigest, ending: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(digest.title ?? session.title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
-            if ending {
-                Text("正在结束…").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
-            } else {
-                // 副标题以状态标打头：图形没有文字基线，按它的底边对齐会把整行压低；对齐到行里文字的基线
-                PiSessionSubtitle(session: session, undelivered: PiChat.undeliveredNote(digest.undelivered))
-                    .alignmentGuide(.firstTextBaseline) { $0[.lastTextBaseline] }
-            }
-        }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: Self.titleWidth, alignment: .leading)
-        .frame(height: Spacing.toolbarControl)
-        .glass(in: .capsule)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-        // 需要 /reload 的会话：状态就写在这块玻璃里，点它看怎么接上（不在对话上另浮一张卡）
-        .contentShape(.rect)
-        .onTapGesture { if follow.showsHeader, PiShown(session).explanation != nil { explaining = true } }
-        .explanationPopover(PiShown(session).explanation, isPresented: $explaining)
-        .headerVisibility(follow.showsHeader)
-        // 让开时这一块仍接指针：移上去或点一下唤出
-        .background {
-            if !follow.showsHeader {
-                Color.clear.contentShape(.rect)
-                    .onHover { if $0 { follow.reveal() } }
-                    .onTapGesture { follow.reveal() }
-            }
-        }
-    }
-
-    /// 工具栏右边的"⋯"：最上面写所在，下面重命名、跳到终端（开在终端里的在线会话）、结束会话；都没有时不出现。
-    @ViewBuilder private func menu(_ session: PiSessionState, place: Dotted?, live: CuePi.PiSession?, ending: Bool) -> some View {
-        let canJump = live.map { !$0.hosted } ?? false
-        let canEnd = MacDelivery.canEnd(session)
-        let canRename = MacDelivery.canRename(session)
-        if place != nil || canRename || canJump || canEnd {
-            Menu("更多", systemImage: "ellipsis") {
-                if let place { Section { } header: { Text(place) } }
-                if canRename {
-                    Button("重命名…", systemImage: "pencil") { renaming = session }
-                }
-                if let live, canJump {
-                    Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(live.id) }
-                }
-                if canEnd {
-                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { confirmingEnd = session }
-                        .disabled(ending)
-                }
-            }
-            .menuIndicator(.hidden)
-            .help("重命名、跳到终端、结束会话")
-        }
+    /// 工具栏上的标题与"⋯"（`SessionHeader`）要显示的值：页面算好交过去，工具栏项在主窗口里常驻。
+    private func headerState(_ digest: SessionDigest, live: CuePi.PiSession?, shownEnd: DeliveryRequest?) -> SessionHeader.State? {
+        guard let session = digest.session else { return nil }
+        return SessionHeader.State(
+            session: session, title: digest.title ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered),
+            ending: shownEnd?.isOpen == true, place: PiPlace.menuTitle(of: session, project: digest.project),
+            liveID: live.flatMap { $0.hosted ? nil : $0.id }, canEnd: MacDelivery.canEnd(session), canRename: MacDelivery.canRename(session),
+            showsHeader: follow.showsHeader)
     }
 
     private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
@@ -297,7 +241,7 @@ extension Workspace {
         return { [self] text in
             attempt {
                 if try await self.services.store.directory(of: project) == nil {
-                    guard let path = ProjectDirectory.pick() else { return }
+                    guard let path = await ProjectDirectory.pick() else { return }
                     try await self.services.store.setDirectory(path, for: project)
                 }
                 _ = try await self.startSession(in: project, prompt: text.nonEmpty, title: title, card: id) {}

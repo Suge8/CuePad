@@ -2,6 +2,7 @@
 import Foundation
 import Observation
 import Testing
+import CueStore
 @testable import CuePi
 
 /// 客户端 ↔ 桥扩展的 socket 协议接缝：用假扩展（说同一字节协议）驱动 `PiBridge`。
@@ -33,10 +34,9 @@ struct BridgeClientTests {
         #expect(s.sessionID == early.sessionID)
         #expect(s.pid == getpid())
         #expect(s.cwd.path == "/work/project")
-        #expect(s.mode == "tui")
-        #expect(s.model?.id == "test-model" && s.thinking == "off")
+        #expect(s.model?.key.id == "test-model" && s.thinking == .known(.off))
         #expect(s.sessionFile?.path == "/work/session.jsonl")
-        #expect(s.state == .idle)
+        #expect(s.state == .settled)
         #expect(s.terminal == PiTerminal(tty: "ttys009", program: "ghostty", bundleID: "com.mitchellh.ghostty",
                                          tmuxPane: "%3", tmuxSocketPath: "/private/tmp/tmux-501/default"))
         #expect(s.extensionVersion == 1)
@@ -58,12 +58,12 @@ struct BridgeClientTests {
         try await eventually("hello 带模型") { session(ext.id) != nil }
 
         let first = try #require(session(ext.id))
-        #expect(first.model == PiModel(provider: "anthropic", id: "sonnet", name: "Sonnet", thinkingLevels: ["off", "low", "medium"]))
-        #expect(first.thinking == "low" && first.availableModels.map(\.id) == ["sonnet", "opus"])
+        #expect(first.model == PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low, .medium]))
+        #expect(first.thinking == .known(.low) && first.availableModels.map(\.key.id) == ["sonnet", "opus"])
 
         ext.setModel(opus, thinking: "high", models: [sonnet, opus])
-        try await eventually("info 换了模型与强度") { session(ext.id)?.model?.id == "opus" && session(ext.id)?.thinking == "high" }
-        #expect(log.changes.contains { if case .infoChanged(let s) = $0 { s.model?.id == "opus" } else { false } })
+        try await eventually("info 换了模型与强度") { session(ext.id)?.model?.key.id == "opus" && session(ext.id)?.thinking == .known(.high) }
+        #expect(log.changes.contains { if case .infoChanged(let s) = $0 { s.model?.key.id == "opus" } else { false } })
     }
 
     // MARK: 上下文余量与斜杠命令
@@ -76,13 +76,13 @@ struct BridgeClientTests {
         try await eventually("hello 带上下文与命令") { session(ext.id) != nil }
 
         let first = try #require(session(ext.id))
-        #expect(first.context == PiContext(tokens: 42_000, window: 200_000))
-        #expect(first.commands == [PiCommand(name: "compact", description: "压缩上下文", source: "builtin", hint: "[说明]")])
+        #expect(first.context == PiContextUsage(tokens: 42_000, window: 200_000))
+        #expect(first.commands == [PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]")])
 
         ext.setUsage(context: (tokens: nil, window: 200_000), commands: [compact, .init(name: "skill:review", description: nil, source: "skill")])
         try await eventually("压缩后未知，清单随之更新") { session(ext.id)?.commands.count == 2 }
-        #expect(session(ext.id)?.context == PiContext(tokens: nil, window: 200_000))
-        #expect(session(ext.id)?.commands.last == PiCommand(name: "skill:review", description: nil, source: "skill", hint: nil))
+        #expect(session(ext.id)?.context == PiContextUsage(tokens: nil, window: 200_000))
+        #expect(session(ext.id)?.commands.last == PiSlashCommand(name: "skill:review", summary: nil, source: .known(.skill), hint: nil))
 
         ext.setUsage(context: nil, commands: [])
         try await eventually("没有模型就没有上下文") { session(ext.id)?.context == nil && session(ext.id)?.commands.isEmpty == true }
@@ -115,16 +115,16 @@ struct BridgeClientTests {
         try bridge.start()
         try await eventually("发现") { session(ext.id) != nil }
 
-        try await bridge.configure(model: PiModelRef(provider: "anthropic", id: "opus"), thinking: "high", in: ext.id)
+        try await bridge.configure(model: PiModelKey(provider: "anthropic", id: "opus"), thinking: .high, in: ext.id)
         let sent = try #require(ext.commands.last?.json)
         #expect(sent["t"] as? String == "config" && sent["thinking"] as? String == "high")
         #expect(sent["model"] as? [String: String] == ["provider": "anthropic", "id": "opus"])
 
-        try await bridge.configure(thinking: "off", in: ext.id)
+        try await bridge.configure(thinking: .off, in: ext.id)
         #expect(ext.commands.last?.json["model"] == nil)
 
         await #expect(throws: PiBridgeError.rejected("unknown_model")) {
-            try await bridge.configure(model: PiModelRef(provider: "anthropic", id: "gone"), in: ext.id)
+            try await bridge.configure(model: PiModelKey(provider: "anthropic", id: "gone"), in: ext.id)
         }
         #expect(PiBridgeError.rejected("unknown_model").errorDescription?.contains("找不到") == true)
     }
@@ -161,8 +161,30 @@ struct BridgeClientTests {
         ext.setState(["kind": "tool", "tool": "bash", "tools": ["bash", "read"]])
         try bridge.start()
         try await eventually("快照带当前状态") {
-            session(ext.id)?.state == .tool(name: "bash", running: ["bash", "read"])
+            session(ext.id)?.state == .tool && session(ext.id)?.detail == "bash"
         }
+    }
+
+    /// `info` 只带变了的几项：没带的项（模型表、命令清单、会话名……）保持原样，带了 null 的才清空。
+    @Test func infoCarriesOnlyWhatChangedAndLeavesTheRest() async throws {
+        let compactCommand = FakeExtension.WireCommand(name: "compact", description: "压缩", source: "builtin", hint: nil)
+        let ext = FakeExtension(directory: dir, options: .init(model: sonnet, thinking: "low", models: [sonnet, opus], context: (tokens: 1, window: 100), commands: [compactCommand]))
+        try ext.start()
+        try bridge.start()
+        try await eventually("hello 带全部") { session(ext.id)?.commands.count == 1 }
+
+        ext.sendInfo(["context": ["tokens": 50, "window": 100]])
+        try await eventually("只有上下文变了") { session(ext.id)?.context?.tokens == 50 }
+        let kept = try #require(session(ext.id))
+        #expect(kept.availableModels.count == 2 && kept.commands.count == 1 && kept.model?.key.id == "sonnet" && kept.thinking == .known(.low))
+
+        ext.sendInfo(["name": "改名了"])
+        try await eventually("会话名变了") { session(ext.id)?.name == "改名了" }
+        #expect(session(ext.id)?.context?.tokens == 50 && session(ext.id)?.availableModels.count == 2)
+
+        ext.sendInfo(["model": NSNull(), "thinking": NSNull()])
+        try await eventually("带 null 的清空") { session(ext.id)?.model == nil && session(ext.id)?.thinking == nil }
+        #expect(session(ext.id)?.availableModels.count == 2 && session(ext.id)?.commands.count == 1)
     }
 
     // MARK: 状态
@@ -174,21 +196,43 @@ struct BridgeClientTests {
         let log = ChangeLog(bridge)
         try await eventually("appeared") { session(ext.id) != nil }
 
-        let script: [([String: Any], PiAgentState)] = [
+        let script: [([String: Any], PiWorkState)] = [
             (["kind": "thinking"], .thinking),
-            (["kind": "tool", "tool": "bash", "tools": ["bash"]], .tool(name: "bash", running: ["bash"])),
+            (["kind": "tool", "tool": "bash", "tools": ["bash"]], .tool),
             (["kind": "outputting"], .outputting),
-            (["kind": "waiting_user", "promptKind": "confirm", "title": "OK?"], .waitingUser(kind: "confirm", title: "OK?")),
-            (["kind": "error", "error": "boom"], .error(message: "boom")),
-            (["kind": "done", "aborted": true], .done(aborted: true)),
+            (["kind": "waiting_user", "promptKind": "confirm", "title": "OK?"], .waitingForUser),
+            (["kind": "error", "error": "boom"], .error),
+            (["kind": "done", "aborted": true], .settled),
         ]
         for (wire, _) in script { ext.setState(wire) }
         try await eventually("全部状态切换到达") { log.states.count == script.count }
 
         #expect(log.states == script.map(\.1))
-        #expect(session(ext.id)?.state == .done(aborted: true))
+        #expect(session(ext.id)?.state == .settled)
         let since = try #require(session(ext.id)?.stateSince)
         #expect(abs(since.timeIntervalSinceNow) < 5)
+    }
+
+    /// 状态与说明（同步记录里写的那一句）在线上消息解码时一次定下：工具名加目标、弹窗标题、出错摘要（原文另留）。
+    @Test(arguments: [
+        (["kind": "thinking"], PiWorkState.thinking, String?.none),
+        (["kind": "tool", "tool": "bash"], .tool, "bash"),
+        (["kind": "tool", "tool": "read", "detail": "README.md"], .tool, "read · README.md"),
+        (["kind": "waiting_user", "promptKind": "confirm", "title": "覆盖文件？"], .waitingForUser, "覆盖文件？"),
+        (["kind": "delegating"], .delegating, nil),
+        (["kind": "compacting"], .compacting, nil),
+        (["kind": "done"], .settled, nil),
+        (["kind": "error", "error": #"429 {"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#], .error, "请求太频繁，稍后再试：slow down"),
+    ] as [([String: String], PiWorkState, String?)])
+    func stateAndDetailAreDecodedOnce(wire: [String: String], state: PiWorkState, detail: String?) async throws {
+        let ext = FakeExtension(directory: dir)
+        try ext.start()
+        try bridge.start()
+        try await eventually("appeared") { session(ext.id) != nil }
+        ext.setState(wire)
+        try await eventually("状态到达") { session(ext.id)?.state == state }
+        #expect(session(ext.id)?.detail == detail)
+        #expect(session(ext.id)?.errorMessage == (state == .error ? wire["error"] : nil))
     }
 
     @Test func toolDetailIsExposedAndOptionalSoOlderExtensionsStillWork() async throws {
@@ -202,8 +246,7 @@ struct BridgeClientTests {
         old.setState(["kind": "tool", "tool": "bash", "tools": ["bash"]])
         current.setState(["kind": "tool", "tool": "bash", "tools": ["bash", "read"], "detail": "ls -la"])
         try await eventually("状态到达") {
-            session(old.id)?.state == .tool(name: "bash", running: ["bash"], detail: nil)
-                && session(current.id)?.state == .tool(name: "bash", running: ["bash", "read"], detail: "ls -la")
+            session(old.id)?.detail == "bash" && session(current.id)?.detail == "bash · ls -la"
         }
     }
 

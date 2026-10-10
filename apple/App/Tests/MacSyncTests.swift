@@ -1,4 +1,5 @@
 #if os(macOS)
+import struct CueStore.PiSession
 import CueStore
 import CueSync
 import Foundation
@@ -14,11 +15,11 @@ struct MacSyncTests {
     var services: AppServices { rig.services }
 
     private func session(
-        _ sessionID: String, cwd: String = "/work/app", state: PiAgentState = .thinking, pid: Int32 = 100
+        _ sessionID: String, cwd: String = "/work/app", state: PiWorkState = .thinking, pid: Int32 = 100
     ) -> CuePi.PiSession {
         CuePi.PiSession(
             id: "\(sessionID).\(pid)", sessionID: sessionID, sessionFile: nil, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
-            mode: "tui", terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
+            terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
     }
 
     private func changes(_ items: [PiSessionChange]) -> AsyncStream<PiSessionChange> {
@@ -35,7 +36,7 @@ struct MacSyncTests {
     @Test(.timeLimit(.minutes(1)))
     func 主线程被占住时退出收尾仍在上限内完成() async throws {
         services.startSync()
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         await eventually { rig.sync.started == 1 }
 
         let finish = services.beginShutdown(within: .seconds(2))
@@ -67,7 +68,7 @@ struct MacSyncTests {
 
     @Test func 退出时停止同步引擎与远程投送执行器() async throws {
         services.startSync()
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         await eventually { rig.sync.started == 1 }
 
         await services.stop()
@@ -78,7 +79,6 @@ struct MacSyncTests {
         // 停止后不再有观察者领取：没有事件可等，给执行器足够的时间再确认仍未处理
         try await Task.sleep(for: .milliseconds(300))
         #expect(try await services.store.deliveryRequest(request.id)?.status == .known(.pending))
-        #expect(rig.channels.calls.isEmpty)
     }
 
     // MARK: 唤醒
@@ -96,24 +96,15 @@ struct MacSyncTests {
 
     // MARK: Pi 状态记录
 
-    @Test(arguments: [
-        (PiAgentState.idle, PiWorkState.settled, String?.none),
-        (.thinking, .thinking, nil),
-        (.outputting, .outputting, nil),
-        (.tool(name: "bash", running: ["bash"], detail: nil), .tool, "bash"),
-        (.tool(name: "read", running: ["read"], detail: "README.md"), .tool, "read · README.md"),
-        (.waitingUser(kind: "confirm", title: "覆盖文件？"), .waitingForUser, "覆盖文件？"),
-        (.done(aborted: false), .settled, nil),
-        (.compacting, .compacting, nil),
-        (.incompatible, .incompatible, nil),
-        (.error(message: #"429 {"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#), .error, "请求太频繁，稍后再试：slow down"),
-    ])
-    func Pi状态映射成同步记录的状态与说明(agent: PiAgentState, work: PiWorkState, detail: String?) async throws {
-        try await services.consumePiChanges(changes([.appeared(session("s1", state: agent))]))
+    /// 桥上会话的状态、说明与出错原文（工具名与目标、弹窗标题、出错摘要）原样写进同步记录；它们怎么从线上消息得来见 CuePi 的桥测试。
+    @Test func 会话的状态与说明原样写进同步记录() async throws {
+        var reading = session("s1", state: .tool)
+        reading.detail = "read · README.md"
+        try await services.consumePiChanges(changes([.appeared(reading)]))
 
         let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.state == .known(work))
-        #expect(stored.detail == detail)
+        #expect(stored.state == .known(.tool))
+        #expect(stored.detail == "read · README.md")
         #expect(stored.sessionID == "s1")
         #expect(stored.hostID == TestApp.hostID)
     }
@@ -155,7 +146,7 @@ struct MacSyncTests {
     }
 
     @Test func 会话的计时基准原样写进同步记录() async throws {
-        var working = session("s1", state: .tool(name: "bash", running: ["bash"]))
+        var working = session("s1", state: .tool)
         working.stateSince = Date(timeIntervalSince1970: 1_000)
         working.busySince = Date(timeIntervalSince1970: 1_000)
         try await services.consumePiChanges(changes([.appeared(working)]))
@@ -170,9 +161,9 @@ struct MacSyncTests {
         let settled = Date(timeIntervalSince1970: 1_300)
         var master = session("s1", state: .delegating)
         master.subagents = [
-            PiSubagent(name: "ui", role: "工程师", state: "running", action: "运行 bun test", startedAt: started),
-            PiSubagent(name: "core", role: "审查员", state: "failed", action: "超时", startedAt: started, settledAt: settled),
-            PiSubagent(name: "docs", role: "写手", state: "napping"),
+            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started),
+            PiSubagentState(name: "core", role: "审查员", phase: .known(.failed), action: "超时", startedAt: started, settledAt: settled),
+            PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping")),
         ]
         try await services.consumePiChanges(changes([.appeared(master)]))
         let stored = try #require(try await services.store.allPiSessionStates().first)
@@ -186,11 +177,11 @@ struct MacSyncTests {
 
     /// 当前模型、思考强度与可选模型写成同步记录里的结构化字段；Pi 报的新强度（本版本不认识）原样留着。
     @Test func 会话的模型与思考强度和可选模型写进同步记录() async throws {
-        let sonnet = PiModel(provider: "anthropic", id: "sonnet", name: "Sonnet", thinkingLevels: ["off", "low"])
-        let opus = PiModel(provider: "anthropic", id: "opus", name: "Opus", thinkingLevels: ["off", "high", "ultra"])
+        let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low])
+        let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high])
         var configured = session("s1")
         configured.model = opus
-        configured.thinking = "high"
+        configured.thinking = .known(.high)
         configured.availableModels = [sonnet, opus]
         try await services.consumePiChanges(changes([.appeared(configured)]))
 
@@ -199,7 +190,7 @@ struct MacSyncTests {
         #expect(stored.thinking == .known(.high))
         #expect(stored.models.map(\.key.id) == ["sonnet", "opus"])
 
-        configured.thinking = "ultra"
+        configured.thinking = .unknown("ultra")
         try await services.consumePiChanges(changes([.infoChanged(configured)]))
         #expect(try await services.store.allPiSessionStates().first?.thinking == .unknown("ultra"))
     }
@@ -207,11 +198,11 @@ struct MacSyncTests {
     /// 上下文余量与斜杠命令清单写成同步记录里的结构化字段（手机据此画用量条、弹命令面板）；Pi 报的本版本不认识的来源原样留着。
     @Test func 会话的上下文余量与命令清单写进同步记录() async throws {
         var reporting = session("s1")
-        reporting.context = PiContext(tokens: 42_000, window: 200_000)
+        reporting.context = PiContextUsage(tokens: 42_000, window: 200_000)
         reporting.commands = [
-            PiCommand(name: "compact", description: "压缩上下文", source: "builtin", hint: "[说明]"),
-            PiCommand(name: "skill:review", description: nil, source: "skill", hint: nil),
-            PiCommand(name: "x", description: nil, source: "plugin", hint: nil),
+            PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]"),
+            PiSlashCommand(name: "skill:review", summary: nil, source: .known(.skill)),
+            PiSlashCommand(name: "x", summary: nil, source: .unknown("plugin")),
         ]
         try await services.consumePiChanges(changes([.appeared(reporting)]))
 
@@ -225,8 +216,8 @@ struct MacSyncTests {
     }
 
     @Test func 等你回答的弹窗写进同步记录() async throws {
-        var asked = session("s1", state: .waitingUser(kind: "select", title: "选哪个？"))
-        asked.question = PiPrompt(id: "p-1", kind: "select", text: "选哪个？", options: ["A", "B"])
+        var asked = session("s1", state: .waitingForUser)
+        asked.question = PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"])
         try await services.consumePiChanges(changes([.appeared(asked), .infoChanged(asked)]))
 
         let stored = try #require(try await services.store.allPiSessionStates().first)
@@ -282,9 +273,8 @@ struct MacSyncTests {
     }
 
     @Test func 手机的Pi直发请求在这台Mac执行并写回结果() async throws {
-        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
-        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: false)
-        try await services.startDeliveryExecutor()
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
@@ -293,15 +283,14 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         // 带上请求 id：扩展写进会话文件里那条消息，对话据此把请求气泡换成它
-        #expect(rig.channels.calls == [.send(PiMessage(text: "做这件事", whenBusy: .steer, deliveryID: request.id.uuidString), "sess-1.100")])
+        #expect(ext.messages == [PiMessage(text: "做这件事", whenBusy: .steer, deliveryID: request.id.uuidString)])
         #expect(done.handledBy == TestApp.hostID)
     }
 
     /// 斜杠命令走桥的命令通道（由 Pi 展开执行，不是当文字发出）；忙时按"等它做完再说"排队，和发出去的话一样记发送记录。
     @Test func 手机的斜杠命令请求交给桥按命令执行() async throws {
-        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
-        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
-        try await services.startDeliveryExecutor()
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
@@ -309,16 +298,16 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.channels.calls == [.command("/greet world", .followUp, "sess-1.100")])
+        let sent = try #require(ext.commands.last?.json)
+        #expect(ext.received == ["command"] && sent["text"] as? String == "/greet world" && sent["deliverAs"] as? String == "followUp")
         #expect(try await services.store.sendRecords().isEmpty)  // 发送记录只记内容的投送，命令不记
     }
 
     /// 交给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录。
     @Test func 带卡片的斜杠命令只关联卡片_不写发送记录() async throws {
-        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
-        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: false)
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
         let task = try await services.store.createTask("改登录", in: nil)
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
@@ -331,9 +320,8 @@ struct MacSyncTests {
     }
 
     @Test func 斜杠命令里带图片按失败写回() async throws {
-        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
-        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: false)
-        try await services.startDeliveryExecutor()
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         // 图片文件在本机（没到的图片执行器会等它同步过来，那是另一条路径）
@@ -343,13 +331,12 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.failed))
-        #expect(rig.channels.calls.isEmpty)
+        #expect(ext.commands.isEmpty)
     }
 
     @Test func 手机的作答请求交给扩展作答_不写发送记录() async throws {
-        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
-        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
-        try await services.startDeliveryExecutor()
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestAnswer(
@@ -358,14 +345,14 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.channels.calls == [.answer(.option("覆盖"), "p-1", "sess-1.100")])
+        let sent = try #require(ext.commands.last?.json)
+        #expect(ext.received == ["answer"] && sent["promptId"] as? String == "p-1" && sent["value"] as? String == "覆盖")
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 手机的配置请求交给桥改模型与思考强度_不写发送记录() async throws {
-        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
-        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
-        try await services.startDeliveryExecutor()
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestConfig(
@@ -374,27 +361,27 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.channels.calls == [.configure(PiModelRef(provider: "anthropic", id: "opus"), "high", nil, "sess-1.100")])
+        let sent = try #require(ext.commands.last?.json)
+        #expect(ext.received == ["config"] && sent["model"] as? [String: String] == ["provider": "anthropic", "id": "opus"] && sent["thinking"] as? String == "high")
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
     @Test func 手机的结束请求让会话收尾_不写发送记录() async throws {
-        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
-        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
-        try await services.startDeliveryExecutor()
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestEnd(of: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.host.calls == [.end("sess-1.100")])
+        #expect(rig.host.calls == [.end(ext.id)])
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
     /// 已经结束的会话（不在这台 Mac 的桥上）：目标达成，按成功写回，不能为了结束它而把它恢复起来。
     @Test func 结束已经结束的会话直接成功_不恢复() async throws {
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestEnd(of: SendTarget(kind: .piSession, name: "app", ref: "old"), on: TestApp.hostID)
@@ -405,29 +392,28 @@ struct MacSyncTests {
     }
 
     @Test func 手机的停止请求让桥中止这一轮_不写发送记录() async throws {
-        rig.channels.bridgeIDs["sess-1"] = "sess-1.100"
-        rig.channels.sessions["sess-1.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), isBusy: true)
-        try await services.startDeliveryExecutor()
+        let ext = try await rig.host.connect("sess-1", cwd: "/work/app", busy: true)
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestStop(of: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.channels.calls == [.abort("sess-1.100")])
+        #expect(ext.received == ["abort"])
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
     /// 已经结束的会话没有这一轮可停：按成功写回，不恢复它、不碰桥。
     @Test func 停止已经结束的会话直接成功_不恢复() async throws {
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestStop(of: SendTarget(kind: .piSession, name: "app", ref: "old"), on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.host.calls.isEmpty && rig.channels.calls.isEmpty)
+        #expect(rig.host.calls.isEmpty)
     }
 
     /// 停止这一轮：请求发给会话所在的 Mac，写出后立即上传。
@@ -480,25 +466,24 @@ struct MacSyncTests {
         _ = try await services.store.requestDelivery(
             "hi", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
         while let next = await waiting.next(), next == nil {}
-        #expect(services.pollingCadence == SyncPoller.Cadence(interval: .seconds(2)))
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
     }
 
     @Test func 连接测试请求立即完成_不碰Pi_不写发送记录() async throws {
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestPing(on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded) && done.mode == .known(.ping))
-        #expect(rig.channels.calls.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
     /// 写回结果后立即只上传这一条，不等引擎调度：手机才能尽早拉到结果。
     @Test(.timeLimit(.minutes(1)))
     func 执行器写回结果后立即上传这一条() async throws {
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestPing(on: TestApp.hostID)
@@ -511,7 +496,7 @@ struct MacSyncTests {
     // MARK: 后台恢复、开新会话
 
     private func launched(_ launch: PiLaunch, title: String = "app") async throws -> DeliveryRequest {
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         let request = try await services.store.requestLaunch(launch, title: title, on: TestApp.hostID)
         return try await awaitFinished(request.id)
     }
@@ -523,8 +508,8 @@ struct MacSyncTests {
         return url
     }
 
-    private func indexed(_ id: String, cwd: URL) async throws -> StoredPiSession {
-        let session = StoredPiSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd.path, title: "修好登录", lastActivityAt: .now)
+    private func indexed(_ id: String, cwd: URL) async throws -> PiSession {
+        let session = PiSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd.path, title: "修好登录", lastActivityAt: .now)
         try await services.store.upsertPiSession(session, host: TestApp.hostID)
         return session
     }
@@ -532,7 +517,7 @@ struct MacSyncTests {
     @Test func 给已结束的会话发消息_后台恢复后送达() async throws {
         let app = try folder("app")
         let indexed = try await indexed("s1", cwd: app)
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
@@ -541,14 +526,14 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls == [.resume(sessionFile: indexed.path, directory: app.path)])
-        #expect(rig.channels.calls == [.send(PiMessage(text: "接着做", deliveryID: request.id.uuidString), "s1.900")])
+        #expect(rig.host.extensions["s1"]?.messages == [PiMessage(text: "接着做", deliveryID: request.id.uuidString)])
     }
 
     /// 改名是会话设置（配置请求带名字）：发给已结束的会话时与发消息同一条路，先在后台恢复它再交给扩展改名；不写发送记录。
     @Test func 给已结束的会话改名_后台恢复后改_不写发送记录() async throws {
         let app = try folder("app")
         let indexed = try await indexed("s1", cwd: app)
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestConfig(
@@ -557,7 +542,7 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls == [.resume(sessionFile: indexed.path, directory: app.path)])
-        #expect(rig.channels.calls == [.configure(nil, nil, "登录重试", "s1.900")])
+        #expect(rig.host.extensions["s1"]?.commands.last?.json["name"] as? String == "登录重试")
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
@@ -571,7 +556,7 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-1")])
-        #expect(rig.channels.calls == [.send(PiMessage(text: "看看测试为什么挂", deliveryID: done.id.uuidString), "new-tok-1.900")])
+        #expect(rig.host.extensions["new-tok-1"]?.messages == [PiMessage(text: "看看测试为什么挂", deliveryID: done.id.uuidString)])
     }
 
     /// 开场的话里挑了带图片的卡片：图片按原图随第一条消息送达，不把存储格式的引用当文字发出去。
@@ -587,8 +572,8 @@ struct MacSyncTests {
             PiLaunch(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://img/\(hash))", token: "tok-5"), title: "App")
 
         #expect(done.status == .known(.succeeded))
-        #expect(rig.channels.calls == [
-            .send(PiMessage(text: "看这张设计稿", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: done.id.uuidString), "new-tok-5.900")
+        #expect(rig.host.extensions["new-tok-5"]?.messages == [
+            PiMessage(text: "看这张设计稿", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: done.id.uuidString)
         ])
     }
 
@@ -602,7 +587,7 @@ struct MacSyncTests {
         let quiet = try await launched(PiLaunch(project: project.id, prompt: nil, token: "tok-2"))
         #expect(quiet.status == .known(.succeeded))
         #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-2")])
-        #expect(rig.channels.calls.isEmpty)
+        #expect(rig.host.extensions["new-tok-2"]?.commands.isEmpty == true)
 
         let noDirectory = try await launched(PiLaunch(project: bare.id, prompt: nil, token: "tok-3"), title: "无目录")
         #expect(noDirectory.status == .known(.failed))
@@ -612,7 +597,7 @@ struct MacSyncTests {
     // MARK: 手机请这台 Mac 绑定文件夹（Mac 才有完整路径；绑定只有这一条写入：本机的目录绑定）
 
     private func bound(_ bind: PiBind) async throws -> DeliveryRequest {
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         let request = try await services.store.requestBind(bind, title: "App", on: TestApp.hostID)
         return try await awaitFinished(request.id)
     }
@@ -684,7 +669,7 @@ struct MacSyncTests {
         _ = try await indexed("s1", cwd: rig.directory.appending(path: "work/gone", directoryHint: .isDirectory))
         let project = try await services.store.createProject(name: "App", color: "#000000")
         try await services.store.setDirectory(rig.directory.appending(path: "work/moved").path, for: project.id)
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let send = try await services.store.requestDelivery(
@@ -702,7 +687,7 @@ struct MacSyncTests {
         var hosted = session("s1", pid: 100)
         hosted.hosted = true
         var mine = session("s1", pid: 200)
-        mine.state = .tool(name: "bash", running: ["bash"])
+        mine.state = .tool
         try await services.consumePiChanges(changes([
             .appeared(hosted), .appeared(mine), .stateChanged(hosted, from: .thinking), .ended(hosted, reason: .closed(reason: "quit")),
         ]))
@@ -740,11 +725,9 @@ struct MacSyncTests {
 
     /// 升级前开的旧协议会话没死：桥上有它，就不能当成已结束去后台唤醒（唤醒只会再起一个进程、永远"正在唤醒"）；按桥给的原因失败写回。
     @Test func 旧协议的会话还在运行_请求不唤醒_带原因失败() async throws {
-        rig.channels.bridgeIDs["sess-old"] = "sess-old.100"
-        rig.channels.sessions["sess-old.100"] = PiSessionInfo(target: SendTarget(kind: .piSession, name: "old", ref: "sess-old"), isBusy: false)
-        rig.channels.sendError = PiBridgeError.incompatibleExtension
+        try await rig.host.connect("sess-old", cwd: "/work/old", protocolVersion: 3)
         _ = try await indexed("sess-old", cwd: try folder("old"))
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
@@ -757,7 +740,7 @@ struct MacSyncTests {
     }
 
     @Test func 目标会话已结束时请求失败并说明原因() async throws {
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
@@ -766,12 +749,12 @@ struct MacSyncTests {
 
         #expect(done.status == .known(.failed))
         #expect(done.resultDetail?.contains("会话") == true)
-        #expect(rig.channels.calls.isEmpty)
+        #expect(rig.host.calls.isEmpty)
     }
 
     /// 投送到应用已经下线：旧版本写来的发到应用、复制到剪贴板的请求按失败写回，不碰任何应用与剪贴板。
     @Test func 旧版本写来的发到应用请求按失败写回() async throws {
-        try await services.startDeliveryExecutor()
+        try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestDelivery(
@@ -779,7 +762,6 @@ struct MacSyncTests {
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.failed))
-        #expect(rig.channels.calls.isEmpty)
         #expect(try await services.store.sendRecords().isEmpty)
     }
 

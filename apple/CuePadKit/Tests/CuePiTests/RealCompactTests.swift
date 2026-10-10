@@ -1,6 +1,7 @@
 #if os(macOS)
 import Foundation
 import Testing
+import CueStore
 @testable import CuePi
 
 /// 压缩上下文是会话状态里的一档"工作中"（`.compacting`）：真实 Pi + 安装器装进临时目录的真实扩展 + 假模型 + `PiBridge`。
@@ -21,14 +22,14 @@ struct RealCompactTests {
     }
 
     private func compactions(in session: PiSession) throws -> Int {
-        try PiHistory.index(file: #require(session.sessionFile), from: nil).transcript.filter { $0.role == .system }.count
+        try PiHistory.index(file: #require(session.sessionFile), from: nil).messages.filter { $0.role == .known(.system) }.count
     }
 
     private func reply(_ pi: PiProcess, _ bridge: PiBridge, _ text: String) async throws {
         let before = bridge.sessions.first?.stateSince
         try pi.prompt(text)
         try await eventually("这一轮做完", timeout: .seconds(30)) {
-            bridge.sessions.first.map { $0.state == .done(aborted: false) && $0.stateSince != before } == true
+            bridge.sessions.first.map { $0.state == .settled && $0.stateSince != before } == true
         }
     }
 
@@ -47,12 +48,12 @@ struct RealCompactTests {
 
             try await eventually("压完", timeout: .seconds(20)) { try self.compactions(in: s) == 1 }
             try await eventually("压完的话送进去、答完", timeout: .seconds(30)) {
-                (try? PiHistory.index(file: #require(s.sessionFile), from: nil).recap.lastReply) == "ECHO 压缩时说的话 IMAGES[]"
+                (try? PiHistory.index(file: #require(s.sessionFile), from: nil).checkpoint.recap.lastReply) == "ECHO 压缩时说的话 IMAGES[]"
             }
-            try await eventually("那一轮的状态都到了桥上") { log.states.last == .done(aborted: false) && log.states.count >= 4 }
+            try await eventually("那一轮的状态都到了桥上") { log.states.last == .settled && log.states.count >= 4 }
             let states = log.states
             let back = try #require(states.firstIndex(of: .compacting).map { states[($0 + 1)...] }?.first)
-            #expect(back == .done(aborted: false), "压完先回到原来的歇下，再开始那句话的一轮")
+            #expect(back == .settled, "压完先回到原来的歇下，再开始那句话的一轮")
             let resumed = try #require(log.changes.compactMap { change -> PiSession? in
                 if case .stateChanged(let session, .compacting) = change { session } else { nil }
             }.first)
@@ -90,13 +91,13 @@ struct RealCompactTests {
             let log = ChangeLog(bridge)
 
             try await bridge.command("/compact", in: s.id)
-            try await eventually("失败后回落", timeout: .seconds(20)) { log.states == [.compacting, .done(aborted: false)] }
+            try await eventually("失败后回落", timeout: .seconds(20)) { log.states == [.compacting, .settled] }
             #expect(bridge.sessions.first?.stateSince == settled.stateSince)
 
             try await bridge.command("/compact", in: s.id)
             try await eventually("在压缩") { bridge.sessions.first?.state == .compacting }
             try await bridge.abort(s.id)
-            try await eventually("停下后回落") { log.states.count == 4 && log.states.last == .done(aborted: false) }
+            try await eventually("停下后回落") { log.states.count == 4 && log.states.last == .settled }
             #expect(bridge.sessions.first?.stateSince == settled.stateSince && bridge.sessions.first?.busySince == nil)
             #expect(try compactions(in: s) == 0)
         }
@@ -110,9 +111,9 @@ struct RealCompactTests {
             try await reply(pi, bridge, String(repeating: "上下文填充 ", count: 1_000))
 
             #expect(log.states.contains(.compacting))
-            #expect(log.states.last == .done(aborted: false))
+            #expect(log.states.last == .settled)
             let working = log.changes.compactMap { change -> PiSession? in
-                if case .stateChanged(let session, _) = change, session.state != .done(aborted: false) { session } else { nil }
+                if case .stateChanged(let session, _) = change, session.state != .settled { session } else { nil }
             }
             #expect(Set(working.map(\.stateSince)).count == 1, "思考、输出、压缩是同一段工作")
             #expect(try compactions(in: s) == 1)
@@ -127,7 +128,7 @@ struct RealCompactTests {
             try await reply(pi, bridge, "[[overflow]] 再说一遍")
 
             #expect(log.states.contains(.compacting))
-            #expect(log.states.last == .done(aborted: false))
+            #expect(log.states.last == .settled)
             #expect(!log.states.contains { if case .error = $0 { true } else { false } })
             #expect(try compactions(in: s) == 1)
         }

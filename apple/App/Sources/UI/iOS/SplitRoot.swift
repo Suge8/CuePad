@@ -8,6 +8,8 @@ struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @State private var width: CGFloat = 0
+    /// 侧栏选中的项目（窗口恢复时选回它；选的不是项目时为空，打开是书架）。只存这一个：当前项目由路径推出（`Navigation.currentProject`）
+    @SceneStorage("splitProject") private var storedProject = ""
 
     private static let threeColumnWidth: CGFloat = 1100
     /// 侧栏与右侧面板随字号加宽（辅助字号下项目名不被截成"…"），各有上限，详情栏总留得下。
@@ -47,7 +49,10 @@ struct SplitRoot: View {
             if case .card = path.last { collapseSidebarIfNarrow() }
         }
         .background { SplitShortcuts() }
-        .onAppear { navigation.splitRoot = Self.route(for: workspace.page) }
+        .onAppear { navigation.restore(project: UUID(uuidString: storedProject), catalog: workspace.catalog) }
+        .onChange(of: navigation.splitRoot) { _, root in
+            if case .project(let id) = root { storedProject = id.uuidString } else { storedProject = "" }
+        }
     }
 
     /// 右侧页："写"（浮起随手记）与 Agent 面板的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
@@ -67,17 +72,6 @@ struct SplitRoot: View {
     private func collapseSidebarIfNarrow() {
         guard width < Self.threeColumnWidth, navigation.sidebar != .detailOnly else { return }
         withAnimation(Motion.panel) { navigation.sidebar = .detailOnly }
-    }
-
-    /// 打开窗口时的右侧页：当前项目，没有项目时是项目书架（与 iPhone 首页相同）。
-    static func route(for page: Workspace.Page) -> Navigation.Route {
-        switch page {
-        case .project(let id): .project(id)
-        case .inbox: .shelf
-        case .archive: .archive
-        case .trash: .trash
-        case .agent: .agent
-        }
     }
 }
 
@@ -187,7 +181,6 @@ private struct SidebarRow: View {
     var badge = 0
     /// 项目行的"此刻"（项目行总留着这一行的高度）。
     var now: ProjectNow?
-    @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -226,15 +219,9 @@ private struct SidebarRow: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    /// 选中项目同时记为当前项目（与 Mac 同一事实源）。
     private func choose() {
         if route == .search { navigation.openSearch(); return }
         navigation.select(route)
-        switch route {
-        case .project(let id): workspace.show(.project(id))
-        case .inbox: workspace.show(.inbox)
-        default: break
-        }
     }
 }
 
@@ -243,9 +230,9 @@ private struct SplitShortcuts: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
 
-    /// 新卡放进正在看的项目（搜索等页面上放进当前项目），随即打开。
+    /// 新卡放进正在看的项目（不在项目里时进未分类），随即打开。
     private func newCard() {
-        let project = navigation.captureProject ?? workspace.currentProject
+        let project = navigation.currentProject
         workspace.attempt {
             let card = try await workspace.createCard(in: project)
             if navigation.splitRoot == .search { navigation.closeSearch() }
@@ -270,7 +257,7 @@ private struct SplitShortcuts: View {
             .keyboardShortcut("\\")
             Button("任务") { navigation.showTasks() }.keyboardShortcut("t", modifiers: [.command, .shift])
             ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
-                Button("项目 \(index + 1)") { navigation.show(project: project.id, workspace: workspace) }
+                Button("项目 \(index + 1)") { navigation.show(project: project.id) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
             }
         }

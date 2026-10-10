@@ -18,6 +18,19 @@ struct IOSWorkflowTests {
 
     // MARK: 发到 Mac
 
+    /// 手机主动拉取的节奏：有发往 Mac 还没结果的请求时 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时 3 秒、不限时；
+    /// 两者都有时 2 秒、不限时。
+    @Test func 主动拉取的节奏_等结果与看着Agent页() {
+        let services: AppServices = app.services
+        #expect(services.pollingCadence == nil)
+        services.piViewers = 1
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(3))))
+        services.hasOpenDeliveries = true
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
+        services.piViewers = 0
+        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2), for: .seconds(120))))
+    }
+
     @Test func 作答_请求发给会话所在的Mac_带这次弹窗的标识与答案() async throws {
         let question = PiQuestion(promptID: "p-7", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
         try await PiStateRecorder(store: store, hostID: "mac-b").update(
@@ -74,7 +87,7 @@ struct IOSWorkflowTests {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let workspace = Workspace(services: app.services, holder: SceneContext())
         let first = pngData(shade: 0.1), second = pngData(shade: 0.9)
-        let hashes = try [first, second].map { try app.services.images.store($0) }
+        let hashes = try [first, second].map { try app.services.store.files.store($0) }
 
         try await CaptureDraft(text: "  想法  ", images: [first, second]).save(in: project.id, workspace: workspace)
 
@@ -87,7 +100,7 @@ struct IOSWorkflowTests {
     @Test func 随手记只有图片_也能存_没选项目进未分类() async throws {
         let workspace = Workspace(services: app.services, holder: SceneContext())
         let image = pngData()
-        let hash = try app.services.images.store(image)
+        let hash = try app.services.store.files.store(image)
 
         try await CaptureDraft(text: "", images: [image]).save(in: nil, workspace: workspace)
 

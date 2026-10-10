@@ -35,7 +35,7 @@ struct RealPreviewTests {
         let session = bridge.sessions[0]
         // Pi 从它的 skills 目录发现了安装器写的 skill
         let skill = try #require(session.commands.first { $0.name == "skill:cuepad" })
-        #expect(skill.source == "skill" && skill.description?.contains("CuePad") == true)
+        #expect(skill.source == .known(.skill) && skill.summary?.contains("CuePad") == true)
         try "<h1>登录页</h1>".write(to: pi.cwd.appending(path: "demo.html"), atomically: true, encoding: .utf8)
 
         try pi.prompt("[[tool:\(PiProcess.cuepad.path) show demo.html --title 登录页改好了 --json]] 给我看看")

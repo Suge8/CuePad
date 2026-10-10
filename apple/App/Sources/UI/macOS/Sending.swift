@@ -19,7 +19,7 @@ extension Workspace {
         return services.pi.slots
             .filter { sessionProjects[$0.id] == project }
             .map(\.session)
-            .sorted { !$0.state.isBusy && $1.state.isBusy }
+            .sorted { !$0.state.isTurnRunning && $1.state.isTurnRunning }
     }
 
     /// 当前生效的会话：用户选过或发过的（已结束时照样保留，界面写"已结束"，不悄悄换掉；同一个 Pi 会话重新打开了就接回新开的那个），

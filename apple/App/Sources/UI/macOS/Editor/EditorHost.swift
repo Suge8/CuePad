@@ -29,7 +29,7 @@ struct EditorHost: NSViewRepresentable {
     @Environment(AppServices.self) private var services
 
     func makeNSView(context: Context) -> CueEditorView {
-        let view = CueEditorView(imageStore: services.images, theme: theme)
+        let view = CueEditorView(imageStore: services.store.files, theme: theme)
         view.textView.storedText = initialText
         view.scrollerStyle = .overlay
         handle.view = view
