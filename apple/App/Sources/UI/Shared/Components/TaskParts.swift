@@ -350,7 +350,7 @@ struct TaskRingButton: View {
         .buttonStyle(.plain)
         .sensoryFeedback(.success, trigger: task.status) { $1 == .done }
         .accessibilityLabel(TaskSpeech.toggle(done: task.status == .done))
-        .accessibilityValue([TaskSpeech.value(task.status), TaskRing(marks).speech].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityValue([TaskSpeech.value(task.status), TaskSpeech.progress(marks)].compactMap { $0 }.joined(separator: "，"))
         .confirmationDialog(TaskCopy.openSubtasks(.subtasks(in: marks)), isPresented: $confirming, titleVisibility: .visible) {
             Button("全部完成", action: toggle)
         }
@@ -411,9 +411,10 @@ enum TaskMetrics {
 
 /// 任务的完成圈（`TaskRing`），全 App 的任务只有这一种图形（行、任务页、书架"正在推进"、挂到任务面板、Mac 面板）：
 /// 完成是对勾；没完成的是一个实线圈，进行中左半填满，待办空心——这个形状只随状态变，有没有下级、下级做了多少都不换掉它。
-/// 有下级时进度不画进圈里，在圈下面一条细的横条（`TaskProgressBar`）：做完的下级占多少填多少，
-/// 全做完是整条填满（任务还要你自己勾：圈不变成对勾）。圈里不画扇形或楔形：小比例时一根细楔像表盘指针、读成在计时；
-/// 也不在圈外描弧：小尺寸下那就是系统的加载转圈。进度条叠在圈下（落在行的第二行左边、元信息那一行旁边），不占行高。
+/// 有下级、还没全做完时进度不画进圈里，在圈下面一条细的横条（`TaskProgressBar`）：做完的下级占多少填多少，空槽看得见；
+/// 全做完不画（`TaskRing`）。圈里不画扇形或楔形：小比例时一根细楔像表盘指针、读成在计时；也不在圈外描弧：小尺寸下那就是
+/// 系统的加载转圈。圈小于 `TaskProgressBar.minRing`（Mac 面板）时不画条：十来点宽的条只是一小撇，进度看元信息那一行。
+/// 进度条叠在圈下（落在行的第二行左边、元信息那一行旁边），不占行高；条是次要墨色，不与圈连成一道下划线。
 struct TaskRingView: View {
     let status: TaskStatus?
     let ring: TaskRing
@@ -438,10 +439,10 @@ struct TaskRingView: View {
         }
         .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
         .overlay(alignment: .bottom) {
-            if !finished, case .progress(let done, let total) = ring {
-                TaskProgressBar(done: done, total: total, tint: TaskGlyph.tint(status, palette))
+            if !finished, size >= TaskProgressBar.minRing, case .progress(let done, let total) = ring {
+                TaskProgressBar(done: done, total: total)
                     .frame(width: size * 0.88)
-                    .offset(y: size * 0.2 + TaskProgressBar.height)
+                    .offset(y: size * 0.24 + TaskProgressBar.height)
                     .transition(.opacity)
             }
         }
@@ -462,20 +463,22 @@ struct TaskRingView: View {
     }
 }
 
-/// 任务圈下的进度：一条细的横条，做完的下级占的比例填实、其余是淡色的槽。不分格：圈只有十几点宽，分成几格就成了一串省略号。
+/// 任务圈下的进度：一条 2pt 的细横条，做完的下级占的比例用次要墨色填实，空槽是看得见的淡墨。不分格：圈只有十几点宽，
+/// 分成几格就成了一串省略号。
 struct TaskProgressBar: View {
     let done: Int
     let total: Int
-    let tint: Color
+    @Environment(\.palette) private var palette
 
-    static let height: CGFloat = 3
-    private static let faint = 0.25
+    static let height: CGFloat = 2
+    /// 圈小于这么大时不画条。
+    static let minRing: CGFloat = 16
 
     var body: some View {
-        Capsule().fill(tint.opacity(Self.faint))
+        Capsule().fill(palette.ink3.opacity(0.4))
             .overlay(alignment: .leading) {
                 GeometryReader { proxy in
-                    Capsule().fill(tint).frame(width: proxy.size.width * Double(done) / Double(max(total, 1)))
+                    Capsule().fill(palette.ink2).frame(width: proxy.size.width * Double(done) / Double(max(total, 1)))
                 }
             }
             .frame(height: Self.height)

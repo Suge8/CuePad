@@ -80,7 +80,7 @@ struct SessionScreen: View {
                 Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
             }
         }
-        // 看历史时顶栏让开，点它原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）；点状态栏是系统的回到顶端，
+        // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）；点状态栏是系统的回到顶端，
         // 倒置的对话里顶端就是最新处，所以也会出现
         .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() },
                         explanation: session.flatMap { PiShown($0).explanation }) {
