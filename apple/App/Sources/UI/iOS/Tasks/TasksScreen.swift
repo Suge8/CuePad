@@ -151,7 +151,7 @@ struct TaskLine: View {
         line
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, tally.text?.spoken, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, TaskSpeech.progress(marks), project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
@@ -184,7 +184,8 @@ struct TaskLine: View {
     }
 
     private var line: some View {
-        HStack(spacing: 2) {
+        // 圈对着标题第一行（`TaskRingView` 的基线），行再高也不落到中间
+        HStack(alignment: .firstTextBaseline, spacing: 2) {
             Button(action: tap) {
                 TaskRingView(status: task.status, ring: TaskRing(marks), done: done, size: 20)
                     .frame(width: 44, height: 44)

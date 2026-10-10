@@ -31,4 +31,7 @@ enum TaskSpeech {
     }
 
     static func toggle(done: Bool) -> String { done ? "标为未完成" : "标为完成" }
+
+    /// 进度念屏幕上那一行（`TaskCopy.counts`）："3 条提示词，1 已回复，子任务 1/2"；不另拼合计。
+    static func progress(_ marks: [ChildMark]?) -> String? { TaskCopy.counts(marks)?.spoken }
 }

@@ -1,11 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 回复框工具排里思考强度条旁的上下文用量（iOS 与 Mac 共用，读数规则见 `PiContextMeter`）：一条横着的细用量条，填满的部分是已用的比例，
-/// 旁边一个百分比小字（`percent`）。不画圆：圈里一块扇形像录制钮或表盘，淡圈上描一道弧在小尺寸下就是系统的加载转圈；
-/// 横条与旁边竖着长高的思考强度格也分得开。与模型、思考强度同样垫一块同高的淡胶囊，条是次要墨色。
-/// 用到七成百分比加粗、条与字转墨色，九成胭脂（赭黄只给等你确认）；刚压缩过、Agent 还不知道已用多少时是一条空槽、旁边一道横线。
-/// 悬停与读屏说"上下文 · 已用 x% · 剩 y%"（快满了加一句可以压缩）；点一下是同样的说明，接近上限时多一个"压缩"，等于发出 /compact。
+/// 回复框工具排里思考强度条旁的上下文用量（iOS 与 Mac 共用，读数规则见 `PiContextMeter`）：胶囊里写"上下文 86%"，
+/// 胶囊自己就是用量计——底下从左铺一层淡色，铺到已用的比例。不另画小图形：圈里一块扇形像录制钮或表盘，淡圈上描一道弧
+/// 在小尺寸下就是加载转圈，挨着数字的一条短横会读成减号（"−86%"）；写出"上下文"三个字，数字也不会被读成别的。
+/// 与模型、思考强度同样高；用到七成百分比加粗转墨色、铺色加深，九成胭脂（赭黄只给等你确认）；刚压缩过、Agent 还不知道
+/// 已用多少时不铺色、数字是一道横线。悬停与读屏说"上下文 · 已用 x% · 剩 y%"（快满了加一句可以压缩）；点一下是同样的说明，
+/// 接近上限时多一个"压缩"，等于发出 /compact。
 struct PiContextGauge: View {
     let session: PiSessionState
     let usage: PiContextUsage
@@ -14,11 +15,9 @@ struct PiContextGauge: View {
     @Environment(\.palette) private var palette
     @State private var showsDetail = false
 
-    private static let barSize = CGSize(width: 22, height: 5)
-
     private var meter: PiContextMeter { PiContextMeter(usage) }
 
-    /// 条与百分比同色：余量足次要墨色，七成墨色，九成胭脂。
+    /// 百分比的颜色：余量足次要墨色，七成墨色，九成胭脂。
     private var tint: Color {
         switch meter.level {
         case .critical: palette.failure
@@ -27,16 +26,32 @@ struct PiContextGauge: View {
         }
     }
 
+    /// 胶囊里铺到已用比例的那层淡色：比胶囊底深一档，紧了再深一点，快满了带胭脂。
+    private var used: Color {
+        switch meter.level {
+        case .critical: palette.failure.opacity(0.2)
+        case .tight: palette.ink.opacity(0.13)
+        case .roomy, .unknown: palette.ink.opacity(0.08)
+        }
+    }
+
     var body: some View {
         Button { showsDetail.toggle() } label: {
-            HStack(spacing: 5) {
-                bar
-                Text(meter.percent).font(Typography.meta.monospacedDigit().weight(meter.level == .roomy || meter.level == .unknown ? .medium : .bold))
+            HStack(spacing: 4) {
+                Text("上下文").foregroundStyle(palette.ink3)
+                Text(meter.percent).monospacedDigit().fontWeight(meter.level == .roomy || meter.level == .unknown ? .medium : .bold)
                     .foregroundStyle(tint)
             }
+            .font(Typography.meta)
             .padding(.horizontal, 10)
             .frame(height: 30)
             .background(palette.fill, in: .capsule)
+            .background(alignment: .leading) {
+                GeometryReader { proxy in
+                    if let fraction = meter.fraction { used.frame(width: proxy.size.width * fraction) }
+                }
+                .clipShape(.capsule)
+            }
             .frame(minHeight: 44)
             .contentShape(.capsule)
         }
@@ -46,17 +61,6 @@ struct PiContextGauge: View {
         .accessibilityLabel("上下文")
         .accessibilityValue(meter.help.spoken)
         .animation(Motion.quick, value: meter)
-    }
-
-    /// 空槽是淡色，已用的部分从左填起；几乎没用时也露一小截，看得出这是一条有读数的条。
-    private var bar: some View {
-        Capsule().fill(tint.opacity(0.22))
-            .overlay(alignment: .leading) {
-                if let fraction = meter.fraction {
-                    Capsule().fill(tint).frame(width: Self.barSize.width * max(fraction, 0.08))
-                }
-            }
-            .frame(width: Self.barSize.width, height: Self.barSize.height)
     }
 
     private var detail: some View {
