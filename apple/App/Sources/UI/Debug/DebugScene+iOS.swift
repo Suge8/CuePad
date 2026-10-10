@@ -227,6 +227,9 @@ extension DebugScene {
     }
 
     /// search 画面里该不该激活这个范围的搜索：给了项目时只激活项目页的，否则只激活书架的。
+    /// 底部栏换标签的那条路（`debugExposesTabSelect`）。
+    static var selectTab: (Navigation.Tab) -> Void = { _ in }
+
     /// `-CuePadColdTap <会话记录 id>`：复现冷启动被通知拉起，在界面出现之前就交给通知中心。
     static func coldTap(_ alerts: PiAlertCenter) {
         if let id = defaults.string(forKey: "CuePadColdTap") { alerts.receive(notification(session: id)) }

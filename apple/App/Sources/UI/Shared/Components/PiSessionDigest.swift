@@ -35,9 +35,6 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         return PiConfigShown(model: current.model, thinking: current.thinking, context: current.context, pending: false, failure: failure)
     }
 
-    /// 会话页要观察的表。
-    static let tables: Set<Table> = [.piSessionStates, .piMessages, .previews, .deliveryRequests, .projects]
-
     static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {
         let item = try store.piSessionPage(PiSessionQuery(id: id)).items.first
         let session = item?.state

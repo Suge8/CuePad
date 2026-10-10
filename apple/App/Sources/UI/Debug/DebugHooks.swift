@@ -1,3 +1,4 @@
+import CueStore
 import SwiftUI
 #if os(macOS)
 import AppKit
@@ -77,6 +78,13 @@ enum DebugHooks {
         #endif
     }
 
+    /// 输入框出现时按 `-CuePadComposer` 摆好要拍的样子（打开选卡片面板、预填文字或附件）。
+    @MainActor static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
+        #if DEBUG
+        await DebugScene.presetComposer(draft, source: source, store: store)
+        #endif
+    }
+
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
     @MainActor static func willReadCatalog(attempt: Int) throws {
         #if DEBUG
@@ -112,9 +120,6 @@ enum DebugHooks {
     #endif
 
     #if os(iOS)
-    /// 底部栏换标签的那条路（含推移，`TabsRoot` 挂上）：测量脚本按它换标签。
-    @MainActor static var selectTab: (Navigation.Tab) -> Void = { _ in }
-
     /// App 启动、界面出现之前：`-CuePadColdTap <会话记录 id>` 复现冷启动被通知拉起。
     @MainActor static func launched(alerts: PiAlertCenter) {
         #if DEBUG
@@ -125,6 +130,17 @@ enum DebugHooks {
 }
 
 extension View {
+    #if os(iOS)
+    /// 底部栏换标签的那条路（含推移）交给测量脚本（`IOSInteractionBench`）按它换标签。
+    func debugExposesTabSelect(_ select: @escaping (Navigation.Tab) -> Void) -> some View {
+        #if DEBUG
+        onAppear { DebugScene.selectTab = select }
+        #else
+        self
+        #endif
+    }
+    #endif
+
     /// 性能打点：这一页出现时（见 `DebugHooks.mark`）。
     func perfMark(_ event: String) -> some View {
         #if DEBUG

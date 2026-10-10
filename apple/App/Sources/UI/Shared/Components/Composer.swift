@@ -231,9 +231,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         } preview: { outbox in
             AttachmentSheet(outbox: outbox, expand: { expand(outbox) })
         })
-#if DEBUG
-        .task { await DebugScene.presetComposer($draft, source: $source, store: workspace.services.store) }
-#endif
+        .task { await DebugHooks.presetComposer($draft, source: $source, store: workspace.services.store) }
     }
 
     private var field: some View {

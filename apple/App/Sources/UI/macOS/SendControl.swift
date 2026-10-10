@@ -20,7 +20,7 @@ struct SendControl: View {
             if let target {
                 HStack(spacing: 0) {
                     Button { send(target) } label: {
-                        label(dot: workspace.liveSession(target.session).map(workspace.shown) ?? PiShown(state: .known(.ended)), text: Dotted("发给 Agent", name(target)), shortcut: "⌘↩")
+                        label(dot: workspace.shown(target), text: Dotted("发给 Agent", name(target)), shortcut: "⌘↩")
                             .padding(.trailing, 8)
                     }
                     .buttonStyle(PressStyle())
@@ -66,7 +66,8 @@ struct SendControl: View {
     }
 }
 
-/// 选会话的菜单：在线的 Agent 会话与刚结束的会话（当前的打勾，与发送钮的目标是同一批），可选"新会话"；都没有时留一行怎么开始。
+/// 选会话的菜单：所有 Mac 上在线的 Agent 会话（手机共用同一份规则，`HandOffTargets`）与本机刚结束的会话（当前的打勾，与发送钮的目标是同一批），
+/// 可选"新会话"；都没有时留一行怎么开始。
 struct SessionMenu<Label: View>: View {
     let project: UUID?
     var newSession: (() -> Void)? = nil
@@ -78,13 +79,15 @@ struct SessionMenu<Label: View>: View {
         let current = workspace.agentTarget(for: project)
         Menu {
             if let newSession { Button("新会话", systemImage: "plus", action: newSession) }
-            if services.pi.slots.isEmpty, workspace.endedTargets.isEmpty, newSession == nil {
+            let online = workspace.onlineTargets(for: project)
+            if online.isEmpty, workspace.endedTargets.isEmpty, newSession == nil {
                 Button {} label: { Text(Dotted("没有运行中的 Agent 会话", "在终端运行 pi 开始")) }.disabled(true)
             }
-            ForEach(services.pi.sessions) { session in
-                Toggle(
-                    isOn: Binding(get: { current?.session == session.sessionID }, set: { _ in workspace.sendChoice = AgentTarget(session: session.sessionID) })
-                ) { Text(Dotted(session.displayName, workspace.shown(session).label)) }
+            ForEach(online) { item in
+                let id = item.state.sessionID
+                Toggle(isOn: Binding(get: { current?.session == id }, set: { _ in workspace.sendChoice = AgentTarget(session: id) })) {
+                    Text(HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: workspace.shown(AgentTarget(session: id))))
+                }
             }
             ForEach(workspace.endedTargets, id: \.sessionID) { ended in
                 Toggle(

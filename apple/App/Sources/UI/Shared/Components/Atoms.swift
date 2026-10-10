@@ -34,15 +34,7 @@ extension View {
         modifier(Observing(id: id, value: value, same: { $0 == $1 }, onError: onError) { store.observe(read) })
     }
 
-    // 待迁移：Mac 会话页还按表名订阅（SessionPage 另有人在改，迁完删掉这两个）
-    func observing<T: Sendable>(
-        _ store: CueStore, _ tables: Set<Table>, id: some Equatable = 0, into value: Binding<T?>,
-        onError: @escaping (any Error) -> Void = { _ in },
-        _ read: @escaping @Sendable (isolated CueStore) throws -> T
-    ) -> some View {
-        modifier(Observing(id: id, value: value, same: { _, _ in false }, onError: onError) { store.observe(tables, read) })
-    }
-
+    /// 读取本身不碰 Store（只看文件在不在）、又要在某些表变时重读：按表名订阅。读 Store 的一律用上面两个，依赖由读取决定。
     func observing<T: Sendable & Equatable>(
         _ store: CueStore, _ tables: Set<Table>, id: some Equatable = 0, into value: Binding<T?>,
         onError: @escaping (any Error) -> Void = { _ in },

@@ -42,11 +42,11 @@ enum IOSInteractionBench {
         }
         // 底部栏换标签（含推移）
         for _ in 0..<2 {
-            await step("换到 Agent") { DebugHooks.selectTab(.agent) }
-            await step("换回灵感") { DebugHooks.selectTab(.projects) }
+            await step("换到 Agent") { DebugScene.selectTab(.agent) }
+            await step("换回灵感") { DebugScene.selectTab(.projects) }
         }
         // Agent 页点会话（先读出这一页再推入）→ 返回
-        DebugHooks.selectTab(.agent)
+        DebugScene.selectTab(.agent)
         try? await Task.sleep(for: .seconds(1))
         for id in [sessions.first, sessions.first, sessions.dropFirst().first].compactMap({ $0 }) {
             await step("进会话页") { navigation.openSession(id, store: store) }
@@ -56,7 +56,7 @@ enum IOSInteractionBench {
         if let scroll = Self.scrollView(in: Self.window) {
             for _ in 0..<2 { await stepScroll("Agent 列表滚动", scroll, step: step) }
         }
-        DebugHooks.selectTab(.projects)
+        DebugScene.selectTab(.projects)
         try? await Task.sleep(for: .seconds(1))
         for _ in 0..<2 {
             await step("打开随手记") { navigation.startCapture() }
@@ -181,7 +181,8 @@ private final class IOSFrameRecorder: NSObject {
     }
 }
 
-/// 每圈主线程 run loop 的墙钟与 CPU 时间（同 Mac 的 `TurnLog`）。
+/// 每圈主线程 run loop 的墙钟与 CPU 时间。与 Mac 的 `TurnLog`（`InteractionBench.swift`）是同一份逻辑的两份副本，
+/// 帧记录与 `FrameRecorder`（`PerfBench.swift`）同样：改一处要同改另一处，待合成两端共用的一份。
 @MainActor
 private final class IOSTurnLog {
     struct Turn {
