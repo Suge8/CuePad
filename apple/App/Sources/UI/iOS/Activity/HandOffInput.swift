@@ -13,21 +13,23 @@ struct HandOffInput: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @State private var draft = ComposerDraft()
-    @State private var live: Live?
+    @State private var configs: [UUID: PiConfigShown]?
     @State private var choice: UUID?
     @State private var sending = false
     @FocusState private var focused: Bool
 
-    /// 在线会话（本项目的在前、最近要你注意的在前）与各自模型与思考强度的显示值（`SessionDigest.config`）。
-    private struct Live: Sendable {
-        var sessions: [PiSessionListItem]
-        var configs: [UUID: PiConfigShown]
+    /// 在线会话（`LiveSessions`）：本项目的在前，再按要你注意的先后。
+    private var sessions: [PiSessionListItem] {
+        let project = outbox.project
+        func key(_ item: PiSessionListItem) -> (Int, Int) {
+            (item.state.projectID == project && project != nil ? 1 : 0, PiShown(item.state, delivery: item.delivery).urgency)
+        }
+        return services.liveSessions.live.sorted { key($0) > key($1) }
     }
-
-    private var sessions: [PiSessionListItem]? { live?.sessions }
-    private var chosen: PiSessionListItem? { sessions?.first { $0.state.id == choice } ?? sessions?.first }
-    private var canSend: Bool { services.reachesPiHost && !sending && sessions != nil }
-    private var config: PiConfigShown? { chosen.flatMap { live?.configs[$0.state.id] } }
+    private var chosen: PiSessionListItem? { let all = sessions; return all.first { $0.state.id == choice } ?? all.first }
+    private var canSend: Bool { services.reachesPiHost && !sending }
+    /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
+    private var config: PiConfigShown? { chosen.flatMap { configs?[$0.state.id] } }
 
     var body: some View {
         Composer(
@@ -59,18 +61,14 @@ struct HandOffInput: View {
             draft.attachments = [outbox]
             focused = true
         }
-        .observing(services.store, into: $live, onError: workspace.fail) { [project = outbox.project] store in
-            // 本项目的在前，再按要你注意的先后
-            func key(_ item: PiSessionListItem) -> (Int, Int) {
-                (item.state.projectID == project && project != nil ? 1 : 0, PiShown(item.state, delivery: item.delivery).urgency)
-            }
-            let sessions = try store.piSessionPage(.live).items.sorted { key($0) > key($1) }
+        // 改模型、思考强度的请求不在会话列表那一页里：按在线会话读各自的投送请求（会话变了就带着新的会话状态重读）
+        .observing(services.store, id: services.liveSessions.live, into: $configs, onError: workspace.fail) { [live = services.liveSessions.live] store in
             var configs: [UUID: PiConfigShown] = [:]
-            for item in sessions {
+            for item in live {
                 let deliveries = try store.deliveryRequests(toSession: item.state.sessionID)
                 configs[item.state.id] = SessionDigest(session: item.state, project: nil, deliveries: deliveries).config
             }
-            return Live(sessions: sessions, configs: configs)
+            return configs
         }
     }
 
@@ -81,7 +79,7 @@ struct HandOffInput: View {
                 // 新会话放最上面：会话多了也不用往下翻
                 Button("新会话…", systemImage: "plus", action: newSession)
                 Divider()
-                ForEach(sessions ?? []) { item in
+                ForEach(sessions) { item in
                     Button { choice = item.state.id } label: {
                         Label { Text(title(item)) } icon: { Image(systemName: item.state.id == chosen?.state.id ? "checkmark" : "") }
                     }

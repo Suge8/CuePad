@@ -50,6 +50,8 @@ final class AppServices {
     /// 最近一次要在前台提示的会话转换（见 `startSessionAlerts`）；每个窗口自己决定弹不弹。
     private(set) var sessionAlert: SessionAlert?
     #endif
+    /// 此刻有事的 Pi 会话，整个 App 一份（`start()` 开始跟随）：界面与服务都从这里取，不各自订阅。
+    let liveSessions = LiveSessions()
     /// 待用户处理的正文冲突（同一张卡离线并发编辑产生的副本）。
     private(set) var conflicts: [CardConflict] = []
 

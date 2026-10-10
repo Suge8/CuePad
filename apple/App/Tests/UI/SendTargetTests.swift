@@ -28,8 +28,7 @@ struct SendTargetTests {
         try rig.pi.start()
         let services: AppServices = rig.services
         Task { try await services.consumePiChanges(changes) }
-        let workspace = workspace
-        Task { await workspace.observeSessionRecaps() }
+        rig.services.startLiveSessions()
     }
 
     /// 一个连着桥的 Pi 会话（同一个会话重新打开时 `pid` 不同）。
@@ -151,12 +150,9 @@ struct SendTargetTests {
         try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
             sessionID: "old", state: .ended, title: "old", folder: "work", projectID: project.id,
             times: PiTimes(stateSince: .now.addingTimeInterval(-3_600), busySince: nil))
-        let fresh = Workspace(services: rig.services)
-        Task { await fresh.observeSessionRecaps() }
-        await fresh.refreshSessionProjects()
         try await Task.sleep(for: .milliseconds(300))
 
-        #expect(fresh.agentTarget(for: project.id) == nil)
+        #expect(workspace.agentTarget(for: project.id) == nil)
     }
 
     @Test func 别的项目的结束会话不当目标() async throws {

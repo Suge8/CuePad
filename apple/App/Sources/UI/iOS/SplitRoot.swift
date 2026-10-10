@@ -80,19 +80,15 @@ private struct AgentPanelButton: View {
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
-    @State private var waiting: Int?
 
     var body: some View {
         Button { withAnimation(Motion.panel) { navigation.agentPanel.toggle() } } label: {
             Label("Agent", systemImage: "waveform.path.ecg")
                 .overlay(alignment: .topTrailing) {
-                    if (waiting ?? 0) > 0 { Circle().fill(palette.attention).frame(width: 7, height: 7).offset(x: 3, y: -2) }
+                    if services.liveSessions.waiting > 0 { Circle().fill(palette.attention).frame(width: 7, height: 7).offset(x: 3, y: -2) }
                 }
         }
-        .accessibilityValue((waiting ?? 0) > 0 ? "\(waiting ?? 0) 个会话等你确认" : "")
-        .observing(services.store, into: $waiting) {
-            try $0.piSessionPage(.live).items.filter(\.state.waitsForYou).count
-        }
+        .accessibilityValue(services.liveSessions.waiting > 0 ? "\(services.liveSessions.waiting) 个会话等你确认" : "")
     }
 }
 
@@ -107,33 +103,26 @@ private struct AgentPanel: View {
     }
 }
 
-nonisolated private struct SidebarData: Sendable {
-    /// 此刻有事的会话（`PiSessionQuery.current`）：项目行的"此刻"读它。
-    var sessions: [PiSessionListItem]
-    var waiting: Int
-    /// 各项目的进行中任务，最近开始的在前（项目行的"此刻"，`ProjectNow`）。
-    var leading: [UUID: [ProjectNow.InProgress]]
-}
-
 private struct SplitSidebar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
-    @State private var data: SidebarData?
+    /// 各项目的进行中任务，最近开始的在前（项目行的"此刻"，`ProjectNow`）。
+    @State private var leading: [UUID: [ProjectNow.InProgress]]?
 
     var body: some View {
         List {
             Section {
                 SidebarRow(route: .shelf, title: "灵感", symbol: "lightbulb")
                 SidebarRow(route: .tasks, title: "任务", symbol: "checklist")
-                SidebarRow(route: .agent, title: "Agent", symbol: "waveform.path.ecg", badge: data?.waiting ?? 0)
+                SidebarRow(route: .agent, title: "Agent", symbol: "waveform.path.ecg", badge: services.liveSessions.waiting)
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
             if let catalog = workspace.catalog {
                 // 各项目的"此刻"在数据变化时算一次，行只拿结果
                 let now = ProjectNow.byProject(
-                    catalog.projects, sessions: data?.sessions ?? [], tasks: data?.leading ?? [:], shown: services.settings.shown)
+                    catalog.projects, sessions: services.liveSessions.items, tasks: leading ?? [:], shown: services.settings.shown)
                 let pinned = catalog.projects.filter(\.isPinned)
                 if !pinned.isEmpty {
                     Section("置顶") { ForEach(pinned) { row($0, catalog, now: now[$0.id]) } }
@@ -160,10 +149,7 @@ private struct SplitSidebar: View {
         .toolbar {
             Button("新建项目", systemImage: "folder.badge.plus") { navigation.projectForm = .init() }
         }
-        .observing(services.store, into: $data, onError: workspace.fail) { store in
-            let sessions = try store.piSessionPage(.current).items
-            return SidebarData(sessions: sessions, waiting: sessions.filter(\.state.waitsForYou).count, leading: try TaskBoard.leading(from: store))
-        }
+        .observing(services.store, into: $leading, onError: workspace.fail) { try TaskBoard.leading(from: $0) }
     }
 
     private func row(_ project: Project, _ catalog: ProjectCatalog, now: ProjectNow?) -> some View {

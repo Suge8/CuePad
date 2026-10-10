@@ -149,35 +149,18 @@ enum ProjectAgents {
     }
 }
 
-/// 项目页读的同步会话：这个项目在线的会话（含别的 Mac 上的）、发给它们的最近一条投送请求、项目在各台 Mac 上的目录绑定。
-nonisolated struct ProjectSessions: Sendable, Equatable {
-    var recorded: [PiSessionState]
-    var deliveries: [String: DeliveryRequest]
-    var undelivered: [String: Int]
-    var bindings: [DirectoryBinding]
-
-
-    static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectSessions {
-        let items = try store.piSessionPage(PiSessionQuery(scope: .live, project: project, limit: .max)).items
-        return ProjectSessions(
-            recorded: items.map(\.listed),
-            deliveries: Dictionary(items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
-            undelivered: PiSessionListItem.undelivered(items),
-            bindings: try store.directoryBindings().filter { $0.projectID == project })
-    }
-}
-
 extension Workspace {
-    /// 这个项目此刻在线的 Agent 会话：本机桥上的（实时）与同步来的（别的 Mac 上的）。
-    func projectAgents(_ project: UUID?, synced: ProjectSessions?) -> [ProjectAgents.Row] {
+    /// 这个项目此刻在线的 Agent 会话：本机桥上的（实时）与同步来的（别的 Mac 上的，`LiveSessions`），目录绑定取自项目目录。
+    func projectAgents(_ project: UUID?) -> [ProjectAgents.Row] {
         guard let project else { return [] }
+        let sessions = services.liveSessions
         let live = projectSessions(in: project).map {
-            PiSessionState.live($0, hostID: services.hostID, projectID: project, recap: sessionRecaps[$0.sessionID])
+            PiSessionState.live($0, hostID: services.hostID, projectID: project, recap: sessions.recaps[$0.sessionID])
         }
         return ProjectAgents.rows(
-            live: live, recorded: synced?.recorded ?? [], deliveries: sessionDeliveries.merging(synced?.deliveries ?? [:]) { local, _ in local },
-            undelivered: sessionUndelivered.merging(synced?.undelivered ?? [:]) { local, _ in local },
-            bindings: synced?.bindings ?? [], host: services.hostID)
+            live: live, recorded: sessions.live.filter { $0.state.projectID == project }.map(\.listed),
+            deliveries: sessions.deliveries, undelivered: sessions.undelivered,
+            bindings: catalog?.bindings.filter { $0.projectID == project } ?? [], host: services.hostID)
     }
 }
 

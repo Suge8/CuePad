@@ -143,19 +143,12 @@ final class Workspace {
     /// 在线 Pi 会话（桥上的连接 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由根视图调用 `refreshSessionProjects` 重算。
     private(set) var sessionProjects: [String: UUID] = [:]
-    /// 本机在线会话的摘要（Pi 自己的会话 id → 同步记录上的问与答）：桥上没有，界面把它配到桥上的实时状态上。
-    /// 由 `observeSessionRecaps` 跟随同步记录。
-    private(set) var sessionRecaps: [String: PiRecap] = [:]
-    /// 发给在线会话的最近一条投送请求（Pi 的会话 id →），同一次观察带来：Mac 上配到桥的实时状态上算显示状态（`PiDelivery`）。
-    private(set) var sessionDeliveries: [String: DeliveryRequest] = [:]
-    /// 发给在线会话、没能送达的话有几句（Pi 的会话 id →，`PiSessionListItem.undelivered`）：会话行的小标记。
-    private(set) var sessionUndelivered: [String: Int] = [:]
-    /// 这个窗口打开之后在这台 Mac 上结束的会话（同步记录），最近结束的在前。可观察：默认发送目标在没有在线会话时取其中本项目最近结束的那个；
-    /// 窗口打开前就已结束的历史会话不在其中。由 `observeSessionRecaps` 跟随。
-    private(set) var recentlyEnded: [PiSessionState] = []
-    @ObservationIgnored private let openedAt = Date()
-    /// 只看最近结束的这么多个会话：要找的是刚结束的，历史会话有几千个。
-    private nonisolated static let endedWindow = 20
+    /// 在线会话的摘要（Pi 自己的会话 id → 同步记录上的问与答）：桥上没有，界面把它配到桥上的实时状态上。数据在 `LiveSessions`。
+    /// 会话页（SessionPage）还在这样读；它迁完后改读 `services.liveSessions.recaps` 并删掉这里。
+    var sessionRecaps: [String: PiRecap] { services.liveSessions.recaps }
+    /// 这次运行里在这台 Mac 上结束的会话（同步记录），最近结束的在前。可观察：默认发送目标在没有在线会话时取其中本项目最近结束的那个，
+    /// 会话名和发送菜单也读它；运行之前就已结束的历史会话不在其中。数据在 `LiveSessions`。
+    var recentlyEnded: [PiSessionState] { services.liveSessions.recentlyEnded }
 
     /// 鼠标进出一张卡。拖出卡片也就不再按着它（与按钮拖出即松开一致）。
     func hover(_ card: UUID, inside: Bool) {
@@ -192,35 +185,6 @@ final class Workspace {
 
     /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
     let sessionHeader = SessionHeader()
-
-    /// 跟随同步记录里在线会话的摘要与发给它们的最近一条投送请求、以及刚结束的会话，直到任务取消。
-    func observeSessionRecaps() async {
-        struct Records: Equatable, Sendable {
-            var live: [PiSessionListItem]
-            var ended: [PiSessionListItem]
-        }
-        do {
-            let observed = services.store.observe { store in
-                Records(
-                    live: try store.piSessionPage(.live).items,
-                    ended: try store.piSessionPage(PiSessionQuery(scope: .ended, limit: Self.endedWindow)).items)
-            }
-            for try await records in observed {
-                let items = records.live
-                let ended = records.ended.map(\.state).filter { $0.hostID == services.hostID && $0.stateSince >= openedAt }
-                if ended != recentlyEnded { recentlyEnded = ended }
-                let recaps = Dictionary(items.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first }
-                let deliveries = Dictionary(items.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
-                let undelivered = PiSessionListItem.undelivered(items)
-                if recaps != sessionRecaps { sessionRecaps = recaps }
-                if deliveries != sessionDeliveries { sessionDeliveries = deliveries }
-                if undelivered != sessionUndelivered { sessionUndelivered = undelivered }
-            }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
-        }
-    }
 
     /// 重算活着的会话各归哪个项目。
     func refreshSessionProjects() async {

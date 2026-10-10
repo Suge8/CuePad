@@ -72,8 +72,8 @@ extension Workspace {
     /// 桥上一个在线会话此刻显示的状态：与会话行同一条规则（`PiShown`），摘要与在路上的话取同步记录。
     func shown(_ session: CuePi.PiSession) -> PiShown {
         services.settings.shown(
-            .live(session, hostID: services.hostID, projectID: sessionProjects[session.id], recap: sessionRecaps[session.sessionID]),
-            delivery: sessionDeliveries[session.sessionID])
+            .live(session, hostID: services.hostID, projectID: sessionProjects[session.id], recap: services.liveSessions.recaps[session.sessionID]),
+            delivery: services.liveSessions.deliveries[session.sessionID])
     }
 
     /// 发给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。
@@ -120,7 +120,6 @@ struct SessionProjectsTracker: ViewModifier {
             sessions: pi.slots.map { "\($0.id) \($0.cwd.path)" }, directories: workspace.catalog?.directories)
         content
             .task(id: key) { await workspace.refreshSessionProjects() }
-            .task { await workspace.observeSessionRecaps() }
     }
 }
 #endif

@@ -9,8 +9,6 @@ struct TabsRoot: View {
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Agent 标签的角标：等你确认的 Pi 会话数。
-    @State private var waiting: Int?
     @State private var slide = TabSlide()
     /// 安全区底边离屏幕底边的距离（键盘弹出时是键盘高）：底部栏按屏幕底边摆，内容在安全区之上再让到栏顶。
     @State private var safeBottom: CGFloat = 0
@@ -26,7 +24,7 @@ struct TabsRoot: View {
         // 底部那一行浮在上面、离屏幕底边固定距离（不随键盘升起，键盘出来时被盖住）；内容给它让出的高度在每一页上（`RouteView`）
         .overlay(alignment: .bottom) {
             if navigation.bottomPages == 0 {
-                BottomBar(waiting: waiting ?? 0, select: select)
+                BottomBar(waiting: services.liveSessions.waiting, select: select)
                     .ignoresSafeArea(edges: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -42,9 +40,6 @@ struct TabsRoot: View {
             .opacity(0)
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
-        }
-        .observing(services.store, into: $waiting) { store in
-            try store.piSessionPage(.live).items.filter(\.state.waitsForYou).count
         }
     }
 
