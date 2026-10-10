@@ -208,21 +208,9 @@ public struct PiIntegration: Sendable {
         process.executableURL = executable
         process.arguments = arguments
         process.environment = ProcessInfo.processInfo.environment.merging(["PATH": path, "PI_OFFLINE": "1"]) { _, new in new }
-        let out = Pipe()
-        process.standardOutput = out
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
-        return await withCheckedContinuation { continuation in
-            let watchdog = Task.detached {
-                try? await Task.sleep(for: timeout)
-                if !Task.isCancelled, process.isRunning { process.terminate() }
-            }
-            process.terminationHandler = { _ in
-                watchdog.cancel()
-                continuation.resume(returning: String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8))
-            }
-            do { try process.run() } catch { watchdog.cancel(); process.terminationHandler = nil; continuation.resume(returning: nil) }
-        }
+        return await runCapturing(process, timeout: timeout)?.output
     }
 }
 #endif

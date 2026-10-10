@@ -178,11 +178,13 @@ public final class PiBridge {
         link.nextCommand += 1
         let commandID = "c\(link.nextCommand)"
         let data = try encode(commandID)
+        var timeout: Task<Void, Never>?
+        defer { timeout?.cancel() }
         let ack: PiWire.Ack = try await withCheckedThrowingContinuation { continuation in
             link.pending[commandID] = continuation
             link.connection.write(data)
-            Task { [weak link] in
-                try? await Task.sleep(for: Self.ackTimeout)
+            timeout = Task { [weak link] in
+                guard (try? await Task.sleep(for: Self.ackTimeout)) != nil else { return }
                 link?.pending.removeValue(forKey: commandID)?.resume(throwing: PiBridgeError.ackTimeout)
             }
         }
