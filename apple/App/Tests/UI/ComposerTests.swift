@@ -98,7 +98,7 @@ struct ComposerTests {
 
     @Test func 回答存为卡片_进会话所属项目_没有项目进未分类_提示落点并可点过去() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let workspace = Workspace(services: app.services, holder: SceneContext())
+        let workspace = Workspace(services: app.services)
 
         try await workspace.saveReply("## 结论\n\n先迁移再切流量", of: try await session(project: project.id))
         #expect(try await store.cards(in: project.id).map(\.body) == ["## 结论\n\n先迁移再切流量"])
