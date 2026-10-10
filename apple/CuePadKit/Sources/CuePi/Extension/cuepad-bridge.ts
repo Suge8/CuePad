@@ -11,8 +11,11 @@ import net from "node:net";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import type {
+	ExtensionAPI, ExtensionCommandContext, ExtensionContext, ExtensionUIContext, ExtensionUIDialogOptions, SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 
-const EXTENSION_VERSION = 22;
+const EXTENSION_VERSION = 23;
 const PROTOCOL_VERSION = 10;
 
 /** sun_path 上限 104 字节（含结尾 NUL） */
@@ -66,12 +69,40 @@ function entriesOnDisk(file: string): number {
 /** CuePad 在后台托管的 Pi（RPC 模式、没有终端界面）启动时带这个环境变量，扩展在 hello 里带回 */
 const HOSTED_ENV = "CUEPAD_HOSTED";
 /** Pi 的思考强度，由弱到强（pi-ai 的 `ModelThinkingLevel`） */
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+const THINKING_LEVELS: readonly ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 /** 交给 CuePad 用来定位终端的环境变量 */
-const TERMINAL_ENV_KEYS = [
-	"TERM_PROGRAM", "TERM_PROGRAM_VERSION", "__CFBundleIdentifier", "TERM_SESSION_ID", "ITERM_SESSION_ID",
-	"TMUX", "TMUX_PANE", "WEZTERM_PANE", "KITTY_WINDOW_ID", "HERDR_PANE_ID",
-];
+const TERMINAL_ENV_KEYS = ["TERM_PROGRAM", "__CFBundleIdentifier", "TMUX", "TMUX_PANE"];
+
+/** Pi 的思考强度，包本身不导出这个类型 */
+type ThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
+type Model = NonNullable<ExtensionContext["model"]>;
+type UserContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
+type DeliverAs = "steer" | "followUp";
+/** CuePad 发来的一行命令：字段来自 JSON，类型没有保证，逐处校验后才用 */
+type Command = Record<string, unknown>;
+type DialogMethod = (...args: unknown[]) => unknown;
+type Ack = (fields: object) => void;
+type Reject = (error: string) => void;
+
+function isThinkingLevel(value: unknown): value is ThinkingLevel {
+	return THINKING_LEVELS.some((level) => level === value);
+}
+
+function isModelRef(value: unknown): value is { provider: string; id: string } {
+	return typeof value === "object" && value !== null && "provider" in value && typeof value.provider === "string" && "id" in value && typeof value.id === "string";
+}
+
+function isImages(value: unknown): value is { mimeType: string; data: string }[] {
+	return Array.isArray(value) && value.every((i) => typeof i?.mimeType === "string" && typeof i?.data === "string");
+}
+
+function isDeliverAs(value: unknown): value is DeliverAs {
+	return value === "steer" || value === "followUp";
+}
+
+function reason(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
 
 type State =
 	| { kind: "idle" }
@@ -129,7 +160,7 @@ function phaseOf(state: State): Phase {
 }
 
 /** 只上报一句话摘要，不上报完整参数：命令/搜索模式取首个非空行，文件类工具取文件名，超长截断。 */
-function toolDetail(args: any): string | undefined {
+function toolDetail(args: Record<string, unknown> | undefined): string | undefined {
 	const raw = typeof args?.command === "string" ? args.command
 		: typeof args?.pattern === "string" ? args.pattern
 		: typeof args?.path === "string" ? path.basename(args.path) : undefined;
@@ -149,11 +180,11 @@ function ensureSecureDirectory(dir: string): void {
 }
 
 /** 消息的文字部分（文字块用空格连接），与 Pi 会话列表取首条消息的方式一致。 */
-function messageText(message: any): string {
-	const content = message?.content;
+function messageText(message: object): string {
+	const content = "content" in message ? message.content : undefined;
 	if (typeof content === "string") return content;
 	if (!Array.isArray(content)) return "";
-	return content.filter((block: any) => block?.type === "text").map((block: any) => block.text).join(" ");
+	return content.filter((block) => block?.type === "text").map((block) => block.text).join(" ");
 }
 
 function preview(text: string): string | null {
@@ -170,9 +201,12 @@ function clip(text: string, limit: number): string | null {
 /** 手机上看的一个子代理：`state` 是 FireCode 名册的状态原文（running/review/done/failed/interrupted/idle），时刻是毫秒 */
 type Subagent = { name: string; role: string; state: string; action: string; startedAt: number | null; settledAt: number | null };
 
+/** FireCode 名册里的一项：来自另一个扩展发布的事件，字段类型没有保证 */
+type Worker = Partial<Record<"name" | "role" | "state" | "action" | "startedAt" | "settledAt", unknown>>;
+
 function subagentsOf(workers: unknown): Subagent[] {
 	if (!Array.isArray(workers)) return [];
-	return workers.map((worker: any) => ({
+	return workers.map((worker: Worker) => ({
 		name: String(worker.name),
 		role: String(worker.role),
 		state: String(worker.state),
@@ -183,9 +217,9 @@ function subagentsOf(workers: unknown): Subagent[] {
 }
 
 /** 会话里第一条用户消息（按文件顺序，与 Pi 会话列表一致）。 */
-function firstUserMessage(entries: any[]): string | null {
+function firstUserMessage(entries: SessionEntry[]): string | null {
 	for (const entry of entries) {
-		if (entry?.type !== "message" || entry.message?.role !== "user") continue;
+		if (entry.type !== "message" || entry.message.role !== "user") continue;
 		const text = messageText(entry.message);
 		if (text) return preview(text);
 	}
@@ -194,7 +228,7 @@ function firstUserMessage(entries: any[]): string | null {
 
 /** 模型支持的思考强度，与 pi-ai 的 `getSupportedThinkingLevels` 同一规则（只读模型的公开字段，不引入对 pi-ai 的依赖）：
  * 不支持思考的只有 off，`thinkingLevelMap` 里为 null 的不支持，xhigh、max 要模型显式声明。设置时 Pi 本来就会按模型夹取，这里只决定给手机列哪些。 */
-function thinkingLevels(model: any): string[] {
+function thinkingLevels(model: Model): ThinkingLevel[] {
 	if (!model.reasoning) return ["off"];
 	return THINKING_LEVELS.filter((level) => {
 		const mapped = model.thinkingLevelMap?.[level];
@@ -203,7 +237,7 @@ function thinkingLevels(model: any): string[] {
 	});
 }
 
-function describeModel(model: any) {
+function describeModel(model: Model) {
 	return { provider: model.provider, id: model.id, name: model.name ?? model.id, thinking: thinkingLevels(model) };
 }
 
@@ -216,13 +250,13 @@ function readTTY(): Promise<string | null> {
 	});
 }
 
-export default function (pi: any) {
+export default function (pi: ExtensionAPI) {
 	const socketDirectory = process.env.CUEPAD_PI_SOCKET_DIR ?? `/tmp/cuepad-${process.getuid!()}`;
 	/** 只属于这个进程里的第一个会话：读走后清掉，之后 /new 开的会话与进程内子会话都不带 */
 	let launchToken: string | null = process.env[LAUNCH_TOKEN_ENV] || null;
 	delete process.env[LAUNCH_TOKEN_ENV];
 
-	let ctx: any;
+	let ctx: ExtensionContext;
 	let server: net.Server | undefined;
 	let socketPath: string | undefined;
 	let tty: Promise<string | null> = Promise.resolve(null);
@@ -239,7 +273,7 @@ export default function (pi: any) {
 		name: string | null; firstMessage: string | null; question: Question | null;
 		subagents: Subagent[];
 		/** 当前模型、思考强度与可换的模型（Pi 里已配好密钥的）：手机据此选 */
-		model: ReturnType<typeof describeModel> | null; thinking: string | null; models: ReturnType<typeof describeModel>[];
+		model: ReturnType<typeof describeModel> | null; thinking: ThinkingLevel | null; models: ReturnType<typeof describeModel>[];
 		/** 上下文余量：已用 token（压缩后到下一次回答前未知，为 null）与当前模型的窗口；没有模型为 null */
 		context: { tokens: number | null; window: number } | null;
 		/** 此刻能用的斜杠命令：能执行的内置命令 + 扩展命令 + 提示词模板 + skill */
@@ -297,9 +331,9 @@ export default function (pi: any) {
 
 	/** 此刻的模型配置；Pi 里换了模型、强度后重新取。可选的模型与 Pi 的 /model 一致：配了范围（`--models`、`enabledModels`）就是范围内的，
 	 * 否则是已配好密钥的全部；当前模型总在其中。 */
-	function modelChoices(): any[] {
-		const scoped: any[] = (ctx.scopedModels ?? []).map((entry: any) => entry.model);
-		const choices: any[] = scoped.length > 0 ? scoped : ctx.modelRegistry.getAvailable();
+	function modelChoices(): Model[] {
+		const scoped = (ctx.scopedModels ?? []).map((entry) => entry.model);
+		const choices = scoped.length > 0 ? scoped : ctx.modelRegistry.getAvailable();
 		const current = ctx.model;
 		return current && !choices.some((m) => m.provider === current.provider && m.id === current.id) ? [...choices, current] : choices;
 	}
@@ -325,7 +359,7 @@ export default function (pi: any) {
 			name: c.name, description: c.description, source: "builtin", hint: "hint" in c ? c.hint : null,
 		}));
 		const taken = new Set<string>([INTERNAL_COMMAND, ...BUILTIN_COMMANDS.map((c) => c.name)]);
-		const resources: CommandInfo[] = pi.getCommands().filter((c: any) => !taken.has(c.name)).map((c: any) => ({
+		const resources: CommandInfo[] = pi.getCommands().filter((c) => !taken.has(c.name)).map((c) => ({
 			name: c.name, description: clip(String(c.description ?? "").replace(/\s+/g, " "), COMMAND_DESCRIPTION_LIMIT), source: c.source, hint: null,
 		}));
 		return { commands: [...builtin, ...resources] };
@@ -358,34 +392,33 @@ export default function (pi: any) {
 	}
 
 	// ---- CuePad → 扩展 ----
-	function handleCommand(socket: net.Socket, command: any) {
-		const ack = (fields: object) => write(socket, { t: "ack", id: command?.id ?? null, ...fields });
-		const reject = (error: string) => ack({ ok: false, error });
+	function handleCommand(socket: net.Socket, command: Command | null) {
+		const ack: Ack = (fields) => write(socket, { t: "ack", id: command?.id ?? null, ...fields });
+		const reject: Reject = (error) => ack({ ok: false, error });
 		try {
 			if (command?.t === "send") return handleSend(command, ack, reject);
-			if (command?.t === "command") return void handleSlash(command, ack, reject).catch((error: any) => reject(`failed: ${error?.message ?? error}`));
+			if (command?.t === "command") return void handleSlash(command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 			if (command?.t === "answer") return handleAnswer(command, ack, reject);
 			if (command?.t === "reload") return handleReload(ack);
 			if (command?.t === "end") return handleEnd(ack);
 			if (command?.t === "abort") return handleAbort(ack);
-			if (command?.t === "config") return void handleConfig(command, ack, reject).catch((error: any) => reject(`failed: ${error?.message ?? error}`));
+			if (command?.t === "config") return void handleConfig(command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 			reject("bad_request");
-		} catch (error: any) {
-			reject(`failed: ${error?.message ?? error}`);
+		} catch (error) {
+			reject(`failed: ${reason(error)}`);
 		}
 	}
 
-	function handleSend(command: any, ack: (f: object) => void, reject: (e: string) => void) {
-		const images: any[] = command.images ?? [];
-		const validImages = Array.isArray(images) && images.every((i) => typeof i?.mimeType === "string" && typeof i?.data === "string");
+	function handleSend(command: Command, ack: Ack, reject: Reject) {
+		const images = command.images ?? [];
 		const text = command.text ?? "";
 		const deliverAs = command.deliverAs ?? "followUp";
-		if (typeof text !== "string" || !validImages || (deliverAs !== "steer" && deliverAs !== "followUp")) return reject("bad_request");
+		if (typeof text !== "string" || !isImages(images) || !isDeliverAs(deliverAs)) return reject("bad_request");
 		if (text.length === 0 && images.length === 0) return reject("empty");
 
-		const content = images.length === 0
+		const content: UserContent = images.length === 0
 			? text
-			: [{ type: "text", text }, ...images.map((i) => ({ type: "image", data: i.data, mimeType: i.mimeType }))];
+			: [{ type: "text", text }, ...images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))];
 		const busy = !ctx.isIdle();
 		const deliveryId = typeof command.deliveryId === "string" ? command.deliveryId : undefined;
 		if (deliveryId) deliveries.push({ text, id: deliveryId });
@@ -401,8 +434,8 @@ export default function (pi: any) {
 	 * 这个进程从载入起没写过，就把会话从文件重新载入到最新——之后说的话接在那一轮后面，不分支；写过了（会话已分出支线）
 	 * 就不动，提示一句。Pi 只在命令里给切换会话的能力（`switchSession`），所以经 `sendUserMessage` 触发本扩展的命令。
 	 */
-	function handleReload(ack: (f: object) => void) {
-		const file: string | undefined = ctx.sessionManager.getSessionFile();
+	function handleReload(ack: Ack) {
+		const file = ctx.sessionManager.getSessionFile();
 		const inMemory = ctx.sessionManager.getEntries().length;
 		if (!file || entriesOnDisk(file) <= inMemory) return ack({ ok: true, reloaded: false });
 		if (inMemory !== loadedEntries || !ctx.isIdle()) {
@@ -420,7 +453,7 @@ export default function (pi: any) {
 
 	pi.registerCommand(INTERNAL_COMMAND, {
 		description: "CuePad 内部使用：需要命令上下文的会话操作（重新载入会话文件、新会话、重载、克隆）",
-		handler: async (action: string, command: any) => {
+		handler: async (action, command: ExtensionCommandContext) => {
 			switch (action.trim()) {
 				case "reload-session": {
 					const file = command.sessionManager.getSessionFile();
@@ -444,10 +477,10 @@ export default function (pi: any) {
 	 * 不带这个选项的 `sendUserMessage` 只把它当普通文字。清单里没有的名字拒绝，不当文字发出去。
 	 * `ack` 表示已受理：扩展命令的执行结果与报错只出现在 Pi 自己的界面（`ctx.ui`），这里看不到。
 	 */
-	async function handleSlash(command: any, ack: (f: object) => void, reject: (e: string) => void) {
+	async function handleSlash(command: Command, ack: Ack, reject: Reject) {
 		const text = command.text;
 		const deliverAs = command.deliverAs ?? "followUp";
-		if (typeof text !== "string" || !text.startsWith("/") || (deliverAs !== "steer" && deliverAs !== "followUp")) return reject("bad_request");
+		if (typeof text !== "string" || !text.startsWith("/") || !isDeliverAs(deliverAs)) return reject("bad_request");
 		const space = text.search(/\s/);
 		const name = text.slice(1, space < 0 ? undefined : space);
 		const args = space < 0 ? "" : text.slice(space + 1).trim();
@@ -456,7 +489,7 @@ export default function (pi: any) {
 			const error = await runBuiltin(builtin, args);
 			return error ? reject(error) : ack({ ok: true });
 		}
-		if (name === INTERNAL_COMMAND || !pi.getCommands().some((c: any) => c.name === name)) return reject("unknown_command");
+		if (name === INTERNAL_COMMAND || !pi.getCommands().some((c) => c.name === name)) return reject("unknown_command");
 		// 命令没有投送请求 id，留着的话会话关掉时报不出来：手动压缩期间直接拒收，CuePad 照常显示没发出去
 		if (manualCompaction) return reject("compacting");
 		pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: true });
@@ -470,7 +503,7 @@ export default function (pi: any) {
 			case "compact": return compact(args);
 			case "name": pi.setSessionName(args); return;
 			case "thinking":
-				if (!THINKING_LEVELS.includes(args)) return "bad_request";
+				if (!isThinkingLevel(args)) return "bad_request";
 				pi.setThinkingLevel(args);
 				break;
 			case "model": {
@@ -508,7 +541,7 @@ export default function (pi: any) {
 	}
 
 	/** `provider/id` 精确匹配，或模型 id 在可选模型里唯一（与 Pi 的 /model 同一份候选）。 */
-	function findModel(reference: string): any {
+	function findModel(reference: string): Model | undefined {
 		const models = modelChoices();
 		const slash = reference.indexOf("/");
 		const exact = slash > 0 ? models.find((m) => m.provider === reference.slice(0, slash) && m.id === reference.slice(slash + 1)) : undefined;
@@ -522,7 +555,7 @@ export default function (pi: any) {
 	 * 正在跑的一轮先中止、等你回答的弹窗先取消，否则 Pi 要等它们结束才会退出。RPC 模式只在读到下一条命令或这一轮结束时检查退出请求，
 	 * 所以后台托管的进程不走这里，由 `PiHost` 关掉标准输入。
 	 */
-	function handleEnd(ack: (f: object) => void) {
+	function handleEnd(ack: Ack) {
 		ack({ ok: true });
 		asking?.dismiss?.();
 		if (!ctx.isIdle()) ctx.abort();
@@ -534,20 +567,20 @@ export default function (pi: any) {
 	 * 等你回答的弹窗先取消（否则这一轮会一直卡在等你）。已经空闲就什么都不做；FireCode 的子代理是独立会话，不受影响，
 	 * 它们落定后照常把结果投回来开始新的一轮。
 	 */
-	function handleAbort(ack: (f: object) => void) {
+	function handleAbort(ack: Ack) {
 		asking?.dismiss?.();
 		if (!ctx.isIdle()) ctx.abort();
 		ack({ ok: true });
 	}
 
 	/** 会话设置：会话名（Pi 设置会话名的接口，同 `/name`）、模型、思考强度——先换模型（需要该提供方已配好密钥）再设强度，强度由 Pi 按新模型支持的范围夹取。 */
-	async function handleConfig(command: any, ack: (f: object) => void, reject: (e: string) => void) {
+	async function handleConfig(command: Command, ack: Ack, reject: Reject) {
 		const { model, thinking } = command;
 		const name = typeof command.name === "string" ? command.name.trim() : command.name;
-		const validModel = model === undefined || (typeof model?.provider === "string" && typeof model?.id === "string");
-		const validThinking = thinking === undefined || THINKING_LEVELS.includes(thinking);
-		const validName = name === undefined || (typeof name === "string" && name.length > 0);
-		if (!validModel || !validThinking || !validName || (model === undefined && thinking === undefined && name === undefined)) return reject("bad_request");
+		if (model !== undefined && !isModelRef(model)) return reject("bad_request");
+		if (thinking !== undefined && !isThinkingLevel(thinking)) return reject("bad_request");
+		if (name !== undefined && (typeof name !== "string" || name.length === 0)) return reject("bad_request");
+		if (model === undefined && thinking === undefined && name === undefined) return reject("bad_request");
 		if (name) pi.setSessionName(name);
 		if (model) {
 			const target = ctx.modelRegistry.find(model.provider, model.id);
@@ -560,7 +593,7 @@ export default function (pi: any) {
 	}
 
 	/** 回答当前弹窗：标识必须是正在等的那个（答过或换了弹窗就拒绝），答案的类型与选项要对得上。 */
-	function handleAnswer(command: any, ack: (f: object) => void, reject: (e: string) => void) {
+	function handleAnswer(command: Command, ack: Ack, reject: Reject) {
 		const pending = asking;
 		if (!pending?.settle) return reject("no_prompt");
 		if (pending.id !== command.promptId) return reject("stale_prompt");
@@ -592,7 +625,7 @@ export default function (pi: any) {
 				const line = buffer.slice(0, newline);
 				buffer = buffer.slice(newline + 1);
 				if (!line) continue;
-				let command: any;
+				let command: Command | null;
 				try {
 					command = JSON.parse(line);
 				} catch {
@@ -636,17 +669,18 @@ export default function (pi: any) {
 	/** 包装所有扩展共用的 ui 对象上的对话框方法（Pi 每次绑定界面都换新对象，session_start 前绑定）：记下文案与选项，
 	 * 并给弹窗接上一个由我们控制的 AbortSignal。从 CuePad 作答时先记下答案再 abort：Pi 的界面随之收起
 	 * （TUI 隐藏选择器，RPC 删掉待答请求），原调用按"取消"结束，包装把它换成我们的答案交回调用方。 */
-	function captureDialogs(ui: any) {
-		if (!ui || ui[CAPTURED]) return;
+	function captureDialogs(context: ExtensionUIContext) {
+		const ui = context as unknown as Record<string, DialogMethod | undefined> & { [CAPTURED]?: true };
+		if (ui[CAPTURED]) return;
 		ui[CAPTURED] = true;
 		/** `optionsAt`：对话框选项参数（含 signal）的位置；没有的（editor）不能从外面收起，只记文案 */
-		const wrap = (method: string, kind: string, optionsAt: number | null, describe: (...args: any[]) => { lines: unknown[]; options?: unknown }) => {
+		const wrap = (method: string, kind: string, optionsAt: number | null, describe: (args: unknown[]) => { lines: unknown[]; options?: unknown }) => {
 			const original = ui[method];
 			if (typeof original !== "function") return;
-			ui[method] = (...args: any[]) => {
+			ui[method] = (...args) => {
 				// 嵌套弹窗只算最外层，与 ui_prompt_start 一致
 				if (asking) return original.apply(ui, args);
-				const { lines, options } = describe(...args);
+				const { lines, options } = describe(args);
 				const question: Question = {
 					id: optionsAt === null ? null : randomUUID(),
 					kind,
@@ -659,21 +693,22 @@ export default function (pi: any) {
 				}
 				// 调用方自己的 signal 与我们的合在一起：任一触发都收起弹窗
 				const own = new AbortController();
-				const caller: AbortSignal | undefined = args[optionsAt]?.signal;
+				const callerOptions = args[optionsAt] as ExtensionUIDialogOptions | undefined;
+				const caller = callerOptions?.signal;
 				let answer: { value: unknown } | undefined;
 				asking = { ...question, settle: (value) => { answer = { value }; own.abort(); }, dismiss: () => own.abort() };
 				const call = [...args];
-				call[optionsAt] = { ...args[optionsAt], signal: caller ? AbortSignal.any([caller, own.signal]) : own.signal };
+				call[optionsAt] = { ...callerOptions, signal: caller ? AbortSignal.any([caller, own.signal]) : own.signal };
 				return Promise.resolve(original.apply(ui, call)).then((value: unknown) => (answer ? answer.value : value));
 			};
 		};
-		wrap("select", "select", 2, (title, options) => ({ lines: [title], options }));
-		wrap("confirm", "confirm", 2, (title, message) => ({ lines: [title, message] }));
-		wrap("input", "text", 2, (title) => ({ lines: [title] }));
-		wrap("editor", "editor", null, (title) => ({ lines: [title] }));
+		wrap("select", "select", 2, ([title, options]) => ({ lines: [title], options }));
+		wrap("confirm", "confirm", 2, ([title, message]) => ({ lines: [title, message] }));
+		wrap("input", "text", 2, ([title]) => ({ lines: [title] }));
+		wrap("editor", "editor", null, ([title]) => ({ lines: [title] }));
 	}
 
-	pi.on("session_start", (_event: any, context: any) => {
+	pi.on("session_start", (_event, context) => {
 		ctx = context;
 		tracker = new StateTracker();
 		beforeCompaction = null;
@@ -701,26 +736,29 @@ export default function (pi: any) {
 		captureDialogs(ctx.ui);
 		try {
 			start();
-		} catch (error: any) {
-			ctx.ui.notify(`CuePad bridge disabled: ${error?.message ?? error}`, "warning");
+		} catch (error) {
+			ctx.ui.notify(`CuePad bridge disabled: ${reason(error)}`, "warning");
 		}
 	});
-	pi.on("session_shutdown", (event: any) => {
+	pi.on("session_shutdown", (event) => {
 		launchToken = null;
 		stop(event.reason);
 	});
 	pi.on("model_select", () => { updateInfo(modelInfo()); refreshUsage(); });
 	pi.on("thinking_level_select", () => updateInfo(modelInfo()));
-	for (const event of ["turn_end", "agent_settled", "session_compact", "session_tree"]) pi.on(event, refreshUsage);
-	pi.on("session_info_changed", (event: any) => updateInfo({ name: event.name ?? null }));
-	pi.on("message_end", (event: any) => {
-		if (event.message?.role !== "user") return;
+	pi.on("turn_end", refreshUsage);
+	pi.on("agent_settled", refreshUsage);
+	pi.on("session_compact", refreshUsage);
+	pi.on("session_tree", refreshUsage);
+	pi.on("session_info_changed", (event) => updateInfo({ name: event.name ?? null }));
+	pi.on("message_end", (event) => {
+		if (event.message.role !== "user") return;
 		// 首条消息与 Pi 会话列表一致，不区分机器消息
 		updateInfo({ firstMessage: info.firstMessage ?? preview(messageText(event.message)) });
 		// CuePad 送进来的：把投送请求 id 写到这条消息上。扩展先收到 message_end、Pi 再把同一个消息对象写进会话文件，
 		// 所以 id 随消息落盘，对话（读会话文件）据此认出它
 		const index = deliveries.findIndex((d) => d.text === messageText(event.message));
-		if (index >= 0) event.message.cuepadDelivery = deliveries.splice(index, 1)[0].id;
+		if (index >= 0) Object.assign(event.message, { cuepadDelivery: deliveries.splice(index, 1)[0].id });
 	});
 
 	// ---- Pi 事件 → 状态 ----
@@ -740,16 +778,16 @@ export default function (pi: any) {
 		commit();
 	});
 	pi.on("turn_start", () => { tracker.phase = "thinking"; commit(); });
-	pi.on("message_update", (event: any) => {
+	pi.on("message_update", (event) => {
 		const type = event.assistantMessageEvent.type;
 		const next = type === "text_delta" ? "outputting" : type === "thinking_delta" ? "thinking" : tracker.phase;
 		if (next === tracker.phase) return;
 		tracker.phase = next;
 		commit();
 	});
-	pi.on("tool_execution_start", (event: any) => { tracker.tools.set(event.toolCallId, { name: event.toolName, detail: toolDetail(event.args) }); commit(); });
-	pi.on("tool_execution_end", (event: any) => { tracker.tools.delete(event.toolCallId); tracker.phase = "thinking"; commit(); });
-	pi.on("ui_prompt_start", (event: any) => {
+	pi.on("tool_execution_start", (event) => { tracker.tools.set(event.toolCallId, { name: event.toolName, detail: toolDetail(event.args) }); commit(); });
+	pi.on("tool_execution_end", (event) => { tracker.tools.delete(event.toolCallId); tracker.phase = "thinking"; commit(); });
+	pi.on("ui_prompt_start", (event) => {
 		tracker.prompt = { kind: event.kind, title: event.title };
 		const question = asking ?? { id: null, kind: event.kind, text: event.title ?? "", options: [] };
 		updateInfo({ question: { id: question.id, kind: question.kind, text: clip(question.text, QUESTION_LIMIT) ?? "", options: question.options } });
@@ -761,14 +799,14 @@ export default function (pi: any) {
 		updateInfo({ question: null });
 		commit();
 	});
-	pi.on("session_before_compact", (event: any) => {
+	pi.on("session_before_compact", (event) => {
 		beforeCompaction = { phase, since, busySince };
 		manualCompaction = event.reason === "manual";
 		tracker.compacting = true;
 		commit();
 	});
 	// 压缩前就失败（没有可压缩的内容、没有模型）时只有 session_compact_failed，那时什么都没变
-	for (const event of ["session_compact", "session_compact_failed"]) pi.on(event, () => {
+	function finishCompaction() {
 		if (!tracker.compacting) return;
 		const resume = beforeCompaction ?? undefined;
 		beforeCompaction = null;
@@ -778,17 +816,20 @@ export default function (pi: any) {
 		// session_compact 在 Pi 收起手动压缩的标记之前发出：下一轮事件循环再交，免得又被拒收
 		const waiting = held.splice(0);
 		setImmediate(() => { for (const { deliver } of waiting) deliver(); });
-	});
-	pi.on("agent_end", (event: any) => {
-		const last = [...event.messages].reverse().find((m: any) => m.role === "assistant");
+	}
+	pi.on("session_compact", finishCompaction);
+	pi.on("session_compact_failed", finishCompaction);
+	pi.on("agent_end", (event) => {
+		const last = event.messages.findLast((m) => m.role === "assistant");
 		if (last?.stopReason === "error") tracker.outcome = { kind: "error", error: last.errorMessage ?? "unknown" };
 		else if (last?.stopReason === "aborted") tracker.outcome = { kind: "done", aborted: true };
 	});
-	pi.events?.on(FIRECODE_WORKERS_CHANNEL, (data: any) => {
-		tracker.inFlight = typeof data?.inFlight === "number" ? data.inFlight : 0;
+	pi.events?.on(FIRECODE_WORKERS_CHANNEL, (data) => {
+		const { inFlight } = (data ?? {}) as { inFlight?: unknown };
+		tracker.inFlight = typeof inFlight === "number" ? inFlight : 0;
 		commit();
 	});
-	pi.events?.on(FIRECODE_SUBAGENTS_CHANNEL, (data: any) => updateInfo({ subagents: subagentsOf(data?.workers) }));
+	pi.events?.on(FIRECODE_SUBAGENTS_CHANNEL, (data) => updateInfo({ subagents: subagentsOf((data as { workers?: unknown } | null)?.workers) }));
 	pi.on("agent_settled", () => {
 		tracker.active = false;
 		tracker.tools.clear();
