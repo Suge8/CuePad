@@ -21,7 +21,7 @@ struct IOSDividerTests {
         #expect(h.stored == "第一段内容第二段内容")
     }
 
-    @Test("读屏：分割线读作\"分割线\"，图片仍是占位字符；文字和选区位置不受影响")
+    @Test("读屏：分割线读作\"分割线\"，图片仍是占位字符；存储格式不变")
     func spokenValue() throws {
         let h = EditorHarness()
         let id = try h.store.store(makePNG(width: 20, height: 20))

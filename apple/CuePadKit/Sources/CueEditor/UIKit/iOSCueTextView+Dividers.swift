@@ -33,6 +33,8 @@ extension CueTextView {
 
     /// 读屏念的文字：分割线（占一个 U+FFFC）读作"分割线"，图片等其它附件照旧。
     /// 附件没有读屏标签的接口（NSTextAttachment 没有；挂在图片上的标签 UITextView 不用），所以由文本视图的值来说。
+    /// 已知风险：每条分割线在读屏文字里是 3 个字符、在正文里是 1 个，两者的位置与长度对不上；
+    /// VoiceOver 逐字移动与选区朗读是否跑偏，模拟器的无障碍树看不出来，需要真机 VoiceOver 验证。
     public override var accessibilityValue: String? {
         get {
             let spoken = NSMutableString(string: textStorage.string)
