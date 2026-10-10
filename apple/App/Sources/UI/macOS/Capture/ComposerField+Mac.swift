@@ -17,6 +17,7 @@ struct ComposerField: NSViewRepresentable {
     /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了（菜单项停用）。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -58,6 +59,7 @@ struct ComposerField: NSViewRepresentable {
             scroll.needsLayout = true
         }
         view.placeholder = prompt
+        view.placeholderColor = NSColor(palette.placeholder)
         view.textColor = NSColor(ink)
         view.insertionPointColor = NSColor(ink)
         view.setAccessibilityLabel(label)
@@ -116,6 +118,7 @@ final class ComposerScrollView: NSScrollView {
 final class GrowingTextView: NSTextView {
     static let bodyFont = NSFont.systemFont(ofSize: Typography.bodySize)
     var placeholder = ""
+    var placeholderColor = NSColor.placeholderTextColor
     var maxLines = 1
     var focusChanged: ((Bool) -> Void)?
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
@@ -167,7 +170,7 @@ final class GrowingTextView: NSTextView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         guard string.isEmpty, !hasMarkedText() else { return }
-        (placeholder as NSString).draw(at: .zero, withAttributes: [.font: Self.bodyFont, .foregroundColor: NSColor.placeholderTextColor])
+        (placeholder as NSString).draw(at: .zero, withAttributes: [.font: Self.bodyFont, .foregroundColor: placeholderColor])
     }
 
     override func didChangeText() {

@@ -17,6 +17,7 @@ struct ComposerField: UIViewRepresentable {
     /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了。外接键盘上是文字区的按键命令（按住 ⌘ 看得到）。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -47,6 +48,7 @@ struct ComposerField: UIViewRepresentable {
         view.placeholder.text = prompt
         view.placeholder.isHidden = !view.text.isEmpty
         view.textColor = UIColor(ink)
+        view.placeholder.textColor = UIColor(palette.placeholder)
         view.accessibilityLabel = label
         view.maxLines = maxLines
         view.animatesScroll = !reduceMotion
@@ -111,7 +113,6 @@ final class GrowingTextView: UITextView {
         super.init(frame: frame, textContainer: textContainer)
         placeholder.font = .preferredFont(forTextStyle: .body)
         placeholder.adjustsFontForContentSizeCategory = true
-        placeholder.textColor = .placeholderText
         placeholder.isAccessibilityElement = false
         addSubview(placeholder)
     }

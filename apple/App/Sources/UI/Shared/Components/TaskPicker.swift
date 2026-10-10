@@ -20,6 +20,8 @@ struct TaskPicker: View {
     #endif
 
     private static let macSize = CGSize(width: 440, height: 540)
+    /// 列表在面板下沿淡出的那一段。
+    private static let bottomFade: CGFloat = 20
 
     var body: some View {
         content
@@ -86,10 +88,20 @@ struct TaskPicker: View {
         .presentationDetents([.medium, .large])
     }
     #else
-    /// Mac 与手机同一种质感：标题居中、搜索占满一行，"新建任务…"单独一张纸，每个项目一张纸、行间不画线；Esc 关闭。
+    /// Mac 与手机同一种质感：标题居中、右上一颗关闭钮（与手机同一个叉，Esc 也关），搜索占满一行，"新建任务…"单独一张纸，
+    /// 每个项目一张纸、行间不画线；列表滚到面板下沿时在最后一段淡出，不被下沿硬切。
     private var content: some View {
         VStack(spacing: 14) {
             Text("挂到任务").font(Typography.toolbarTitle).foregroundStyle(palette.ink)
+                .frame(maxWidth: .infinity)
+                .overlay(alignment: .trailing) {
+                    Button("关闭", systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
+                        .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
+                        .buttonStyle(PressStyle())
+                        .help("关闭（Esc）")
+                        .padding(.trailing, 16)
+                }
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3).accessibilityHidden(true)
                 TextField("搜索任务", text: $text).textFieldStyle(.plain).focused($searching)
@@ -123,6 +135,12 @@ struct TaskPicker: View {
                 .padding(.horizontal, 20).padding(.bottom, 20)
             }
             .scrollIndicators(.automatic)
+            .mask {
+                VStack(spacing: 0) {
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Self.bottomFade)
+                }
+            }
         }
         .padding(.top, 18)
         .frame(width: Self.macSize.width, height: Self.macSize.height)

@@ -33,6 +33,8 @@ struct Palette {
     var ink: Color { dark ? Color(hex: 0xEEE9E1) : Color(hex: 0x1C1B19) }
     var ink2: Color { ink.opacity(highContrast ? 0.85 : 0.68) }
     var ink3: Color { ink.opacity(highContrast ? 0.7 : 0.45) }
+    /// 输入框空着时的提示字：比次要墨色再淡一档，一眼分得出"还没写"与写了的字（系统的占位色在玻璃上经活力效果会被压深）。
+    var placeholder: Color { ink.opacity(highContrast ? 0.55 : 0.35) }
     var hair: Color { (dark ? Color.white : .black).opacity(highContrast ? 0.3 : (dark ? 0.09 : 0.07)) }
     var fill: Color { (dark ? Color.white : .black).opacity(dark ? 0.06 : 0.04) }
 

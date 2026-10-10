@@ -2,7 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 任务页（书架上的"任务"一行、iPad 侧栏、项目页"还有 N 条"进入）：顶上常驻一行快速添加（↩ 即一条，落当前项目或未分类，可换）；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
+/// 任务页（书架上的"任务"一行、iPad 侧栏、项目页"还有 N 条"进入）：列表顶上一行快速添加（↩ 即一条，落当前项目或未分类，可换），
+/// 跟着列表一起滚走——它是一张纸、不是玻璃，钉在顶栏下会把滚过去的列表切成上下两截；回到顶就能看到；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
 /// 子任务缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的子任务；轻扫见 `CardMenu.swipes`），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
 /// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `CardActions`。
 struct TasksScreen: View {
@@ -24,12 +25,6 @@ struct TasksScreen: View {
             }
             #endif
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            NewTaskLine(project: workspace.currentProject, projects: workspace.catalog?.projects)
-                .padding(.horizontal, 6)
-                .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
-                .padding(.horizontal, 16).padding(.vertical, 8)
-        }
         .floatingHeader("任务", detail: board?.counts.summary ?? "")
         #if DEBUG
         .onAppear { if DebugScene.defaults.bool(forKey: "CuePadShowsDone") { showsCompleted = true } }
@@ -42,6 +37,9 @@ struct TasksScreen: View {
 
     private func content(_ board: TaskBoard) -> some View {
         VStack(alignment: .leading, spacing: 20) {
+            NewTaskLine(project: workspace.currentProject, projects: workspace.catalog?.projects)
+                .padding(.horizontal, 6)
+                .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
             if board.inProgress.isEmpty && board.todo.isEmpty {
                 Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").foregroundStyle(palette.ink2)
                     .padding(.horizontal, 4).padding(.top, 8)
@@ -116,7 +114,6 @@ struct TasksScreen: View {
 
     private func line(_ task: Card, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?, marks: [ChildMark]?) -> some View {
         TaskLine(task: task, project: project, session: session, delivery: delivery, marks: marks)
-            .contextMenu { CardActions(card: task) }
     }
 }
 
@@ -134,6 +131,8 @@ struct TaskLine: View {
     private var subtasks: TaskProgress? { .subtasks(in: marks) }
     private var tally: PromptTally { PromptTally(marks) }
     @State private var confirmsSubtasks = false
+    /// 行宽：只给长按提起的预览用（与原来的行同宽），不回写影响这一行自己的排版。
+    @State private var width: CGFloat = 0
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
@@ -142,6 +141,8 @@ struct TaskLine: View {
     /// pending：已显示完成、还没写入；committed：已写入，等列表把它移走。
     @State private var phase = Phase.idle
 
+    /// 长按提起的那块纸的圆角。
+    private static let liftRadius: CGFloat = 12
     /// 完成后停留多久再移出：够看清对勾、来得及反悔。
     private static let linger: Duration = .milliseconds(900)
 
@@ -149,6 +150,12 @@ struct TaskLine: View {
 
     var body: some View {
         line
+            // 长按提起的是一张纸：预览是同一行垫一块纸色圆角底、与原来的行同宽。不给行本身垫底——行放在纸上，
+            // 纸面上沿有一层提亮，同色的底在那里会显出一块块的方框
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .contextMenu { CardActions(card: task) } preview: {
+                line.frame(width: width).background(palette.paper, in: .rect(cornerRadius: Self.liftRadius, style: .continuous))
+            }
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
             .accessibilityLabel([task.title, tally.text?.spoken, TaskRing(marks).speech, project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
