@@ -32,6 +32,7 @@ extension View {
 private struct PreviewPresenter: ViewModifier {
     @Binding var opened: PiPreview?
     @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
     @State private var quickLook: URL?
 
     private var own: Binding<PiPreview?> {
@@ -40,11 +41,13 @@ private struct PreviewPresenter: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            #if os(iOS)
-            .fullScreenCover(item: own) { PreviewPage(preview: $0, file: file(of: $0)) }
-            #else
-            .sheet(item: own) { PreviewPage(preview: $0, file: file(of: $0)).frame(minWidth: 760, minHeight: 560) }
-            #endif
+            .panel(item: own, style: .fullScreen) {
+                PreviewPage(preview: $0, file: file(of: $0))
+                    #if os(macOS)
+                    .frame(maxWidth: 960, maxHeight: 720)
+                    .background(palette.desk)
+                    #endif
+            }
             .quickLookPreview($quickLook)
             .onChange(of: opened) { _, preview in
                 guard let preview, own.wrappedValue == nil else { return }
@@ -62,13 +65,13 @@ private struct PreviewPresenter: ViewModifier {
 private struct PreviewPage: View {
     let preview: PiPreview
     let file: URL?
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Button("关闭") { dismiss() }
+                Button("关闭") { close() }
                 Text(preview.title).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(1).frame(maxWidth: .infinity)
                 if let file { ShareLink(item: file) { Image(systemName: "square.and.arrow.up").accessibilityLabel("分享") } } else { Color.clear.frame(width: 24) }
             }

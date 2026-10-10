@@ -8,14 +8,13 @@ struct TaskPicker: View {
     let idea: Card
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
     @State private var groups: [TaskGroup]?
     @State private var text = ""
     @State private var naming = false
     @State private var title = ""
     #if os(macOS)
-    @FocusState private var searching: Bool
     @State private var hovered: UUID?
     #endif
 
@@ -25,14 +24,10 @@ struct TaskPicker: View {
 
     var body: some View {
         content
-            .alert("新建任务", isPresented: $naming) {
-                TextField("这件事是…", text: $title)
-                Button("取消", role: .cancel) {}
-                Button("新建并挂上", action: createAndAttach)
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            } message: {
-                Text("这条灵感会成为它的第一条提示词")
-            }
+            .dialog("新建任务", isPresented: $naming, message: "这条灵感会成为它的第一条提示词", field: DialogField(prompt: "这件事是…", text: $title), buttons: [
+                DialogButton(title: "取消", role: .cancel) {},
+                DialogButton(title: "新建并挂上", disabled: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) { createAndAttach() },
+            ])
             .observing(services.store, [.cards, .projects], id: idea.id, into: $groups, onError: workspace.fail) { [idea] store in
                 try AttachTargets.read(for: idea, from: store)
             }
@@ -82,7 +77,7 @@ struct TaskPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索任务")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
             }
             // 列表滚到屏幕下沿时在主屏指示条那一段淡出，不被圆角硬裁（同任务浮窗）
             .fadesUnderBars(bottom: true)
@@ -95,24 +90,8 @@ struct TaskPicker: View {
     /// 每个项目一张纸、行间不画线；列表滚到面板下沿时在最后一段淡出，不被下沿硬切。
     private var content: some View {
         VStack(spacing: 14) {
-            Text("挂到任务").font(Typography.toolbarTitle).foregroundStyle(palette.ink)
-                .frame(maxWidth: .infinity)
-                .overlay(alignment: .trailing) {
-                    Button("关闭", systemImage: "xmark") { dismiss() }
-                        .labelStyle(.iconOnly).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
-                        .frame(width: 26, height: 26).background(palette.fill, in: .circle).contentShape(.circle)
-                        .buttonStyle(PressStyle())
-                        .help("关闭（Esc）")
-                        .padding(.trailing, 16)
-                }
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(palette.ink3).accessibilityHidden(true)
-                TextField("搜索任务", text: $text).textFieldStyle(.plain).focused($searching)
-            }
-            .font(Typography.body)
-            .padding(.horizontal, 12).frame(height: 34)
-            .background(palette.fill, in: .rect(cornerRadius: 10, style: .continuous))
-            .padding(.horizontal, 20)
+            PanelHeader("挂到任务")
+            PanelSearchField(prompt: "搜索任务", text: $text)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     newTask.font(Typography.body).padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -146,10 +125,8 @@ struct TaskPicker: View {
             }
         }
         .padding(.top, 18)
-        .frame(width: Self.macSize.width, height: Self.macSize.height)
+        .frame(width: Self.macSize.width).frame(maxHeight: Self.macSize.height)
         .background(palette.desk)
-        .background { Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction).hidden() }
-        .onAppear { searching = true }
     }
     #endif
 
@@ -202,13 +179,13 @@ struct TaskPicker: View {
 
     private func attach(to task: UUID) {
         let id = idea.id
-        dismiss()
+        close()
         workspace.attempt { try await workspace.attach(id, to: task) }
     }
 
     private func createAndAttach() {
         let id = idea.id, title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        dismiss()
+        close()
         workspace.attempt { try await workspace.attachToNewTask(id, title: title) }
     }
 }

@@ -10,7 +10,7 @@ struct CardPicker: View {
     let pick: (Card) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
     @State private var text = ""
     /// 拿去搜的词：输入法组字（拼音还没上屏）时不跟着变，上屏后再搜。
@@ -21,52 +21,68 @@ struct CardPicker: View {
     private static let macSize = CGSize(width: 560, height: 620)
 
     var body: some View {
+        content
+            .onChange(of: text) { if !TextComposition.isComposing { settled = text } }
+            .onChange(of: settled) { pages = 1 }
+            .observing(services.store, [.cards, .projects], id: Key(text: settled, pages: pages), into: $data, onError: workspace.fail) {
+                [project, settled, pages] store in
+                try Page.read(text: settled, project: project, limit: PaletteQuery.pageSize * pages, from: store)
+            }
+    }
+
+    #if os(iOS)
+    private var content: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    if let data {
-                        if data.shown == 0, !settled.isEmpty { EmptyState.noMatch(settled) }
-                        if !data.resources.isEmpty {
-                            header("资料", project: nil)
-                            rows(data.resources)
-                        }
-                        if !data.pinned.isEmpty {
-                            header(workspace.catalog?.project(project)?.name ?? "本项目", project: workspace.catalog?.project(project))
-                            rows(data.pinned)
-                            if !data.rest.isEmpty { header("其他", project: nil).padding(.top, 8) }
-                        }
-                        rows(data.rest, showsProject: true)
-                        if data.total > data.shown {
-                            Button("还有 \(data.total - data.shown) 条") { pages += 1 }.frame(maxWidth: .infinity).padding()
-                        }
+            list
+                .scrollDismissesKeyboard(.immediately)
+                .navigationTitle(Self.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: Self.prompt)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
+                }
+        }
+        .presentationDetents([.medium, .large])
+    }
+    #else
+    private var content: some View {
+        VStack(spacing: 14) {
+            PanelHeader(Self.title)
+            PanelSearchField(prompt: Self.prompt, text: $text)
+            list
+        }
+        .padding(.top, 18)
+        .frame(width: Self.macSize.width).frame(maxHeight: Self.macSize.height)
+        .background(palette.desk)
+    }
+    #endif
+
+    private static let title = "选一条灵感或任务"
+    private static let prompt = "搜索灵感与任务"
+
+    private var list: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                if let data {
+                    if data.shown == 0, !settled.isEmpty { EmptyState.noMatch(settled) }
+                    if !data.resources.isEmpty {
+                        header("资料", project: nil)
+                        rows(data.resources)
+                    }
+                    if !data.pinned.isEmpty {
+                        header(workspace.catalog?.project(project)?.name ?? "本项目", project: workspace.catalog?.project(project))
+                        rows(data.pinned)
+                        if !data.rest.isEmpty { header("其他", project: nil).padding(.top, 8) }
+                    }
+                    rows(data.rest, showsProject: true)
+                    if data.total > data.shown {
+                        Button("还有 \(data.total - data.shown) 条") { pages += 1 }.frame(maxWidth: .infinity).padding()
                     }
                 }
-                .padding(.horizontal, 16).padding(.bottom, 24)
             }
-            .scrollDismissesKeyboard(.immediately)
-            .background(palette.desk)
-            .navigationTitle("选一条灵感或任务")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索灵感与任务")
-            #else
-            .searchable(text: $text, prompt: "搜索灵感与任务")
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { dismiss() } }
-            }
+            .padding(.horizontal, 16).padding(.bottom, 24)
         }
-        #if os(iOS)
-        .presentationDetents([.medium, .large])
-        #else
-        .frame(width: Self.macSize.width, height: Self.macSize.height)
-        #endif
-        .onChange(of: text) { if !TextComposition.isComposing { settled = text } }
-        .onChange(of: settled) { pages = 1 }
-        .observing(services.store, [.cards, .projects], id: Key(text: settled, pages: pages), into: $data, onError: workspace.fail) {
-            [project, settled, pages] store in
-            try Page.read(text: settled, project: project, limit: PaletteQuery.pageSize * pages, from: store)
-        }
+        .background(palette.desk)
     }
 
     private func rows(_ entries: [CardEntry], showsProject: Bool = false) -> some View {
@@ -76,7 +92,7 @@ struct CardPicker: View {
                 highlight: settled
             ) { card in
                 pick(card)
-                dismiss()
+                close()
             }
         }
     }

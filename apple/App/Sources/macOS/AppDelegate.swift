@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var sigterm: DispatchSourceSignal?
     /// 资料库打不开时的失败页；重试成功即关掉。
     private var failureWindow: NSWindow?
+    /// 主窗口与它的工作区（主菜单"显示"里的开关作用在它上面）。
+    private var workspace: Workspace?
+    private weak var mainWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         sigterm = TerminationSignal.install()
@@ -51,6 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services.windowShell = shell
         self.services = services
         self.windowDelegate = windowDelegate
+        self.workspace = workspace
+        mainWindow = window
 
         let panel = MenuBarPanel()
         // 菜单栏面板点会话：收起面板、把主窗口叫到前面，在它的内容区打开那个会话的整页（与侧栏同一处）
@@ -68,35 +73,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         services.start()
         window.makeKeyAndOrderFront(nil)
-        if !location.isIsolated { Task { await offerCommandLineTool(services) } }
+        if !location.isIsolated { Task { await offerCommandLineTool(services, in: workspace) } }
     }
 
-    /// 首次启动提示一次：装了就不打扰；位置被占用等情况在设置里看。
-    private func offerCommandLineTool(_ services: AppServices) async {
+    /// 首次启动提示一次（主窗口里的确认框，`Workspace.offersCommandLineTool`）：装了就不打扰；位置被占用等情况在设置里看。
+    private func offerCommandLineTool(_ services: AppServices, in workspace: Workspace) async {
         guard !services.settings.commandLineToolPrompted else { return }
         services.settings.commandLineToolPrompted = true
-        let tool = services.commandLineTool
-        await tool.refresh()
-        guard tool.state == .notInstalled else { return }
-        let alert = NSAlert()
-        alert.messageText = "把 cuepad 命令行装进 PATH？"
-        alert.informativeText = "装好后 agent 可以在 bash 里直接用 cuepad 读写你的灵感和任务。会在 ~/.local/bin/cuepad 建一个指向 App 的链接，不需要管理员权限，随时可在设置里卸载。"
-        alert.addButton(withTitle: "安装")
-        alert.addButton(withTitle: "以后再说")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        do {
-            try await tool.install()
-        } catch {
-            NSAlert(error: error).runModal()
-        }
+        await services.commandLineTool.refresh()
+        guard services.commandLineTool.state == .notInstalled else { return }
+        workspace.offersCommandLineTool = true
     }
 
     @objc func checkForUpdates(_ sender: Any?) {
         services?.updates.checkForUpdates()
     }
 
+    /// 主菜单"显示"里的搜索（⌘K）与任务面板（⌘⇧T）：命令本身是开关，开着时同一条命令把它关掉。放在主菜单而不是窗口里的快捷键：
+    /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`），窗口里的快捷键收不到。
+    @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
+    @objc func toggleTasks(_ sender: Any?) { workspace?.showsTasks.toggle() }
+
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        item.action == #selector(checkForUpdates(_:)) ? services?.updates.canCheckForUpdates ?? false : true
+        switch item.action {
+        case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
+        // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
+        case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === mainWindow
+        default: true
+        }
     }
 
     @objc func showSettings(_ sender: Any?) {

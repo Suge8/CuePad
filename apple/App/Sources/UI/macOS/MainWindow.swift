@@ -7,38 +7,27 @@ import SwiftUI
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 窗口与侧栏宽度的读数。只在这里写、只由 `PinnedPage` 读：本视图带着工具栏，读了它们就会随几何变化重算、
     /// 每次重算都重新提交整条工具栏（AppKit 随之重排窗口），形成布局反馈环。
     @State private var widths = WindowWidths()
-    @State private var searchScope = SearchScope.cards
 
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.sidebar) {
             Sidebar()
-                // 侧栏开合时是整体滑动、宽度不变；只有拖分隔线才变
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.sidebar = $0 }
+                // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌘\ 同一个入口
+                .toolbar(removing: .sidebarToggle)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
             detail
         }
-        .environment(workspace)
-        .onChange(of: workspace.overlay) { if $1 == nil { searchScope = .cards } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { [widths] in widths.window = $0 }
-        .confirmationDialog(
-            "Agent 正在工作", isPresented: busyBinding, titleVisibility: .visible
-        ) {
-            ForEach([DeliveryMode.steer, .followUp], id: \.self) { mode in
-                Button(mode.label) { workspace.resolveBusySend(mode) }
-            }
-            Button("取消", role: .cancel) { workspace.busySend = nil }
-        } message: {
-            Text([DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"))
-        }
-        .sheet(item: $workspace.attaching) { TaskPicker(idea: $0).environment(workspace) }
+        .background { WindowPanels(workspace: workspace) }
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
         .modifier(SessionProjectsTracker(workspace: workspace))
+        .panelHost()
+        .environment(workspace)
     }
 
     private var detail: some View {
@@ -48,29 +37,6 @@ struct MainWindow: View {
             EditorLayer().zIndex(1)
         }
         .overlay(alignment: .bottom) { CaptureSlot() }
-        .overlay {
-            // 任务面板开着时页面轻轻压暗：玻璃底下透出来的卡片不和面板里的字抢；不拦点按，页面照常可用
-            if workspace.isLibraryReady, workspace.overlay == .tasks {
-                Color.black.opacity(palette.dark ? 0.22 : 0.06).ignoresSafeArea().allowsHitTesting(false).transition(.opacity)
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if workspace.isLibraryReady, workspace.overlay == .tasks {
-                TasksPanel()
-                    .padding(.trailing, 12).padding(.top, 6)
-                    .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
-            }
-        }
-        .overlay {
-            if workspace.isLibraryReady, workspace.overlay == .search {
-                // ⌘K 每天用很多次：直接出现、直接消失，不做动画
-                ZStack {
-                    Color.black.opacity(palette.dark ? 0.4 : 0.25).ignoresSafeArea()
-                        .onTapGesture { workspace.overlay = nil }
-                    SearchPalette(scope: $searchScope).padding(24)
-                }
-            }
-        }
         .overlay(alignment: .top) { NoticeView().padding(.top, 8) }
         .toolbar { toolbar }
         .toolbar(removing: .title)
@@ -91,14 +57,41 @@ struct MainWindow: View {
         ToolbarItemGroup(placement: .primaryAction) {
             SyncAlert()
             // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
-            Button("搜索", systemImage: "magnifyingglass") { workspace.toggle(.search) }
+            Button("搜索", systemImage: "magnifyingglass") { workspace.searching.toggle() }
                 .help("搜索（⌘K）")
                 .disabled(!workspace.isLibraryReady)
             TasksButton().disabled(!workspace.isLibraryReady)
         }
     }
+}
 
-    private var busyBinding: Binding<Bool> {
+/// 本窗口的浮层与确认框（都经 `panel`）。单独一个视图读它们的开合：主窗口的视图体读了，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
+private struct WindowPanels: View {
+    @Bindable var workspace: Workspace
+    @Environment(AppServices.self) private var services
+    @State private var searchScope = SearchScope.cards
+
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0)
+            // ⌘K 每天用很多次：直接出现、直接消失，不做动画
+            .panel(isPresented: $workspace.searching) { SearchPalette(scope: $searchScope) }
+            .onChange(of: workspace.searching) { if !$1 { searchScope = .cards } }
+            .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }
+            .panel(item: $workspace.attaching) { TaskPicker(idea: $0) }
+            .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
+            .dialog(
+                "Agent 正在工作", isPresented: busy,
+                message: [DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"),
+                buttons: [DeliveryMode.steer, .followUp].map { mode in DialogButton(title: mode.label) { workspace.resolveBusySend(mode) } }
+            )
+            .dialog(
+                "把 cuepad 命令行装进 PATH？", isPresented: $workspace.offersCommandLineTool,
+                message: "装好后 agent 可以在 bash 里直接用 cuepad 读写你的灵感和任务。会在 ~/.local/bin/cuepad 建一个指向 App 的链接，不需要管理员权限，随时可在设置里卸载。",
+                buttons: [DialogButton(title: "安装") { workspace.attempt { try await services.commandLineTool.install() } }]
+            )
+    }
+
+    private var busy: Binding<Bool> {
         Binding(get: { workspace.busySend != nil }, set: { if !$0 { workspace.busySend = nil } })
     }
 }
@@ -154,12 +147,26 @@ private struct RoutedPage: View {
     }
 }
 
-/// 侧栏收起时工具栏左边的项目切换。单独一个视图读侧栏开合：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
+/// 工具栏最左：侧栏钮，侧栏收起时后面跟着项目切换。同一个工具栏项里增减（增删工具栏项会重排整条工具栏）。
+/// 单独一个视图读侧栏开合：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
 private struct SwitcherSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.sidebar == .detailOnly { ProjectSwitcher() }
+        HStack(spacing: 8) {
+            SidebarToggle()
+            if workspace.sidebar == .detailOnly { ProjectSwitcher() }
+        }
+    }
+}
+
+/// 开合侧栏（`Workspace.toggleSidebar`，⌘\ 同）。
+private struct SidebarToggle: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        Button("侧栏", systemImage: "sidebar.left") { workspace.toggleSidebar() }
+            .help("显示或隐藏侧栏（⌘\\）")
     }
 }
 
@@ -210,7 +217,7 @@ private struct CaptureSlot: View {
 
     var body: some View {
         if workspace.isLibraryReady, workspace.presentedCard == nil, workspace.page.takesCapture {
-            let searching = workspace.overlay == .search
+            let searching = workspace.searching
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)
                 .allowsHitTesting(!searching)
@@ -304,7 +311,7 @@ private struct TasksButton: View {
 
     var body: some View {
         Button {
-            workspace.toggle(.tasks)
+            workspace.showsTasks.toggle()
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "checklist")
@@ -318,7 +325,7 @@ private struct TasksButton: View {
     }
 }
 
-/// 窗口级快捷键：⌘K 搜索、⌘\ 侧栏、⌘1–9 切项目、⌘N 新建卡片、Esc 关浮层。设置（⌘,）在主菜单。
+/// 窗口级快捷键：⌘\ 侧栏、⌘1–9 切项目、⌘N 新建卡片。⌘K 搜索、⌘⇧T 任务面板与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
 /// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
@@ -327,12 +334,7 @@ private struct WorkspaceShortcuts: View {
         ZStack {
             Button("侧栏") { workspace.toggleSidebar() }.keyboardShortcut("\\")
             if workspace.isLibraryReady {
-                Button("搜索") { workspace.toggle(.search) }.keyboardShortcut("k")
-                Button("任务") { workspace.toggle(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
                 Button("记一条灵感") { newCard() }.keyboardShortcut("n")
-            }
-            if workspace.overlay != nil {
-                Button("关闭") { workspace.overlay = nil }.keyboardShortcut(.cancelAction)
             }
             ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
                 Button("项目 \(index + 1)") { workspace.show(.project(project.id)) }
@@ -348,7 +350,7 @@ private struct WorkspaceShortcuts: View {
         let project = workspace.currentProject
         workspace.attempt {
             let card = try await workspace.createCard(in: project)
-            workspace.overlay = nil
+            workspace.showsTasks = false
             workspace.openCard = card.id
         }
     }

@@ -33,11 +33,9 @@ struct TrashPage: View {
                 .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, 40)
         }
         .fadesUnderBars()
-        .confirmationDialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty) {
-            Button("清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
-        } message: {
-            Text("此操作无法撤销。发送记录会保留当时的内容快照。")
-        }
+        .dialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty, message: "此操作无法撤销。发送记录会保留当时的内容快照。", buttons: [
+            DialogButton(title: "清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
+        ])
         .observing(services.store, [.projects, .cards], into: $data, onError: workspace.fail) { store in
             let projects = try store.trashedProjects()
             return TrashData(
@@ -127,11 +125,9 @@ private struct TrashRow: View {
             Button("恢复", action: restore)
             Button("永久删除…", role: .destructive) { confirming = true }
         }
-        .confirmationDialog("永久删除「\(title)」？", isPresented: $confirming) {
-            Button("永久删除", role: .destructive, action: purge)
-        } message: {
-            Text("此操作无法撤销。")
-        }
+        .dialog("永久删除「\(title)」？", isPresented: $confirming, message: "此操作无法撤销。", buttons: [
+            DialogButton(title: "永久删除", role: .destructive) { purge() }
+        ])
     }
 }
 #endif

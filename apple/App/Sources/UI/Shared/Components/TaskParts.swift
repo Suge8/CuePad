@@ -351,9 +351,7 @@ struct TaskRingButton: View {
         .sensoryFeedback(.success, trigger: task.status) { $1 == .done }
         .accessibilityLabel(TaskSpeech.toggle(done: task.status == .done))
         .accessibilityValue([TaskSpeech.value(task.status), TaskSpeech.progress(marks)].compactMap { $0 }.joined(separator: "，"))
-        .confirmationDialog(TaskCopy.openSubtasks(.subtasks(in: marks)), isPresented: $confirming, titleVisibility: .visible) {
-            Button("全部完成", action: toggle)
-        }
+        .dialog(TaskCopy.openSubtasks(.subtasks(in: marks)), isPresented: $confirming, buttons: [DialogButton(title: "全部完成") { toggle() }])
     }
 
     private func toggle() {

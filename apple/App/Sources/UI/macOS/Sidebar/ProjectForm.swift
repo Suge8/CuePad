@@ -25,9 +25,16 @@ enum ProjectDirectory {
 
 /// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以选文件夹（可不选，之后在项目菜单里绑也行）。
 struct ProjectForm: View {
+    /// 新建（`project` 为 nil）或编辑哪个项目（`Workspace.projectForm`）。
+    struct Request: Identifiable {
+        let id = UUID()
+        var project: Project?
+    }
+
     let project: Project?
     @Environment(Workspace.self) private var workspace
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.closePanel) private var close
+    @Environment(\.palette) private var palette
     @State private var name = ""
     @State private var intro = ""
     @State private var icon = "folder"
@@ -44,7 +51,8 @@ struct ProjectForm: View {
             if project == nil { folderRow }
             HStack {
                 Spacer()
-                Button("取消", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                // Esc 由弹层接（关掉即取消）
+                Button("取消", role: .cancel) { close() }
                 Button(project == nil ? "创建" : "保存", action: save)
                     .keyboardShortcut(.defaultAction)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -52,6 +60,7 @@ struct ProjectForm: View {
         }
         .padding(20)
         .frame(width: 340)
+        .background(palette.desk)
         .onAppear {
             guard let project else { return }
             name = project.name
@@ -87,7 +96,7 @@ struct ProjectForm: View {
                 workspace.show(.project(id))
             }
         }
-        dismiss()
+        close()
     }
 }
 #endif

@@ -172,7 +172,6 @@ private struct ProjectHeader: View {
     let cardCount: Int
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var renaming: Project?
 
     var body: some View {
         HStack(alignment: .bottom) {
@@ -181,7 +180,7 @@ private struct ProjectHeader: View {
                     ProjectGlyph(project: project, size: 20)
                     Text(projectID == nil ? "未分类" : project?.name ?? "").font(Typography.pageTitle).foregroundStyle(palette.ink)
                 }
-                .contextMenu { if let project { ProjectActions(project: project) { renaming = project } } }
+                .contextMenu { if let project { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } } }
                 // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏
                 if let intro = project?.intro {
                     Text(intro).font(Typography.lead).foregroundStyle(palette.ink2)
@@ -201,7 +200,6 @@ private struct ProjectHeader: View {
             // 不再放"记一条灵感"：底部的输入栏与 ⌘N 就是入口
             Spacer()
         }
-        .sheet(item: $renaming) { ProjectForm(project: $0) }
     }
 
     static func abbreviated(_ path: String) -> String {
@@ -237,15 +235,14 @@ private struct EmptyProject: View {
 
 /// 空库首次打开：共享的 EmptyLibrary（同 iOS 的图标与文案），动作是 Mac 的主按钮。
 private struct Welcome: View {
-    @State private var creating = false
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         EmptyLibrary {
-            EmptyStateButton(title: "新建项目", systemImage: "folder.badge.plus", action: { creating = true })
-                .keyboardShortcut(.defaultAction)
+            // 不挂 ↩：弹出的项目表单里 ↩ 是"创建"，下面的页再挂一个会抢
+            EmptyStateButton(title: "新建项目", systemImage: "folder.badge.plus", action: { workspace.projectForm = .init() })
         }
         .padding(.top, 160)
-        .sheet(isPresented: $creating) { ProjectForm(project: nil) }
     }
 }
 #endif
