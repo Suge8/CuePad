@@ -37,7 +37,7 @@ struct IOSEditorHost: UIViewRepresentable {
         view.accessibilityLabel = "正文"
         handle.view = view
         // 新建的空卡直接进入输入
-        if initialText.isEmpty { Task { view.becomeFirstResponder() } }
+        if initialText.isEmpty { DispatchQueue.main.async { view.becomeFirstResponder() } }
         if let range = DebugHooks.preset.editorSelection {
             DebugHooks.later(.milliseconds(500)) {
                 view.becomeFirstResponder()
