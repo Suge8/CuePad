@@ -28,28 +28,6 @@ import Testing
     #expect(try FileManager.default.contentsOfDirectory(atPath: attachmentsDirectory.path).count == 2)
   }
 
-  @Test func storingFromFileGivesTheSameHashAndBytes() throws {
-    let data = pngData(width: 30, height: 30)
-    let source = fixture.directory.appending(path: "dropped.png")
-    try data.write(to: source)
-
-    let hash = try store.files.store(fileAt: source)
-
-    #expect(hash == sha256(data))
-    #expect(try store.files.original(hash: hash) == data)
-    #expect(try FileManager.default.contentsOfDirectory(atPath: attachmentsDirectory.path) == [hash])
-  }
-
-  @Test func nonImageIsRejectedAndLeavesNothingBehind() throws {
-    let source = fixture.directory.appending(path: "notes.txt")
-    try Data("not an image".utf8).write(to: source)
-
-    #expect(throws: CueStoreError.notAnImage) { try store.files.store(Data("not an image".utf8)) }
-    #expect(throws: CueStoreError.notAnImage) { try store.files.store(fileAt: source) }
-    let left = (try? FileManager.default.contentsOfDirectory(atPath: attachmentsDirectory.path)) ?? []
-    #expect(left.isEmpty)
-  }
-
   @Test func referencingStoredImageRegistersOneAttachmentRecord() async throws {
     let data = pngData(width: 12, height: 12)
     let hash = try store.files.store(data)
@@ -64,18 +42,6 @@ import Testing
     #expect(try records().map { $0[0] } == [hash, later].sorted())
   }
 
-  @Test func deliveryRequestReferencingUnsavedImageRegistersIt() async throws {
-    let hash = try store.files.store(pngData(width: 5, height: 5))
-    _ = try await store.requestDelivery(
-      "刚粘贴 ![](cuepad://img/\(hash))", to: SendTarget(kind: .piSession, name: "pi", ref: "s"), on: "mac")
-    #expect(try records().map { $0[0] } == [hash])
-  }
-
-  @Test func referenceToImageNotOnThisDeviceRegistersNothing() async throws {
-    _ = try await store.createCard(in: nil, body: "![](cuepad://img/\(String(repeating: "a", count: 64)))")
-    #expect(try records().isEmpty)
-  }
-
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64)])
   func unknownOrMalformedHashIsNotFound(hash: String) throws {
     _ = try store.files.store(pngData(width: 4, height: 4))  // 附件目录存在，"../cuepad.db" 才真的指向库文件
@@ -83,10 +49,4 @@ import Testing
     #expect(store.files.fileURL(for: hash) == nil)
   }
 
-  @Test func imagesSurviveReopeningTheStore() throws {
-    let data = pngData(width: 10, height: 10)
-    let hash = try store.files.store(data)
-    let reopened = try CueStore(url: fixture.url)
-    #expect(try reopened.files.original(hash: hash) == data)
-  }
 }

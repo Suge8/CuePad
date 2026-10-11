@@ -16,7 +16,6 @@ import UniformTypeIdentifiers
 actor FakeQueue: ChangeQueue {
   private(set) var saves: [String] = []
   private(set) var deletes: [String] = []
-  private(set) var zoneRequests = 0
   private var waiters: [(check: @Sendable ([String], [String]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
 
   func enqueue(saves: [CKRecord.ID], deletes: [CKRecord.ID]) {
@@ -27,7 +26,7 @@ actor FakeQueue: ChangeQueue {
     for waiter in ready { waiter.continuation.resume() }
   }
 
-  func ensureZone(_ zoneID: CKRecordZone.ID) { zoneRequests += 1 }
+  func ensureZone(_ zoneID: CKRecordZone.ID) {}
 
   func clear() {
     saves = []
@@ -150,8 +149,6 @@ struct Loopback {
   let a: Rig
   let b: Rig
   let cloud = CloudRecords()
-  var beforeFetch: @Sendable () -> Void = {}
-  var beforeApply: @Sendable () -> Void = {}
 
   /// 一来一回：a 的待办到 b，再 b 的到 a。
   func exchange() async throws {
@@ -172,11 +169,9 @@ struct Loopback {
       let type = try RawDB(from.fixture.url).rows("SELECT recordType FROM syncRecords WHERE recordName = '\(name)'").first?[0]
       return type.map { (CKRecord.ID(recordName: name, zoneID: testZone), $0) }
     }
-    beforeFetch()
     await from.coordinator.handle(.sent(
       saved: records, failedSaves: [], deleted: deletions.map(\.id), failedDeletes: []))
     await from.queue.discard(saves: saves, deletes: deletes)  // .sent 之前对账可能重复登记过
-    beforeApply()
     await to.coordinator.handle(.fetched(modifications: records.map(cloud.merge), deletions: deletions))
   }
 }

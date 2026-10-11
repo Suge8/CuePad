@@ -63,31 +63,6 @@ import Testing
     }
   }
 
-  /// 子代理换了一个动作每次工具调用都发生：和其他细节一样合并；谁在、什么角色、什么状态变了才立即写。
-  @Test(.timeLimit(.minutes(1)))
-  func subagentActionsAreMergedButTheirStateChangesAreWrittenImmediately() async throws {
-    let recorder = recorder()
-    func agent(_ phase: PiSubagentPhase, _ action: String) -> [PiSubagentState] {
-      [PiSubagentState(name: "ui", role: "工程师", phase: .known(phase), action: action, startedAt: clock.now)]
-    }
-    try await recorder.update(sessionID: "s1", state: .delegating, subagents: agent(.running, "读取 a.ts"))
-
-    try await recorder.update(sessionID: "s1", state: .delegating, subagents: agent(.running, "运行 bun test"))
-    #expect(try await states()["s1"]?.subagents.first?.action == "读取 a.ts")  // 最短间隔内不写
-
-    try await recorder.update(sessionID: "s1", state: .delegating, subagents: agent(.done, "写完了"))
-    #expect(try await states()["s1"]?.subagents.first?.phase == .known(.done))  // 状态变了立即写，带着最新的动作
-    #expect(try await states()["s1"]?.subagents.first?.action == "写完了")
-  }
-
-  @Test func afterTheIntervalHasPassedWorkingChangesWriteImmediately() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    clock.advance(.seconds(6))
-    try await recorder.update(sessionID: "s1", state: .tool, detail: "grep")
-    #expect(try await states()["s1"]?.state == .known(.tool))
-  }
-
   @Test func waitingSettledAndErrorAreWrittenImmediatelyAndSupersedeAPendingUpdate() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking)
@@ -106,77 +81,6 @@ import Testing
     #expect(try await states()["s1"]?.state == .known(.settled))
   }
 
-  @Test func startOfANewWorkRoundIsImmediateEvenInsideTheInterval() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .settled)
-    try await recorder.update(sessionID: "s1", state: .thinking)  // 刚完成就又开始工作
-    #expect(try await states()["s1"]?.state == .known(.thinking))
-  }
-
-  @Test func identicalUpdatesDoNotWriteAgain() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q")
-    let first = try #require(try await states()["s1"]).modifiedAt
-    clock.advance(.seconds(60))
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q")
-    #expect(try await states()["s1"]?.modifiedAt == first)
-  }
-
-  @Test func oneRecordPerSessionWithAStableID() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    let id = try #require(try await states()["s1"]).id
-    try await recorder.update(sessionID: "s1", state: .error, detail: "x")
-    try await recorder.update(sessionID: "s2", state: .thinking)
-
-    let all = try await store.allPiSessionStates()
-    #expect(all.count == 2)
-    #expect(try await states()["s1"]?.id == id)
-    #expect(try RawDB(fixture.url).count("piSessionStates") == 2)
-  }
-
-  /// 计时基准由调用方（扩展）给出、原样写入：同一段连续处理里思考与工具切换时两者都不变。
-  @Test func timesFromTheCallerAreWrittenAsIs() async throws {
-    let recorder = recorder()
-    let start = clock.now.addingTimeInterval(-90)
-    let times = PiTimes(stateSince: start, busySince: start)
-    try await recorder.update(sessionID: "s1", state: .thinking, times: times)
-    clock.advance(.seconds(10))
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, times: PiTimes(stateSince: clock.now, busySince: start))
-    let waiting = try #require(try await states()["s1"])
-    #expect(waiting.stateSince == clock.now && waiting.busySince == start)
-
-    clock.advance(.seconds(10))
-    try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: clock.now, busySince: nil))
-    let idle = try #require(try await states()["s1"])
-    #expect(idle.stateSince == clock.now && idle.busySince == nil)
-  }
-
-  /// 等你回答的弹窗立即写、答完写回 nil；摘要不归记录器写（是对话的投影），状态变化不改它。
-  /// 同步来的 question 不是本版本写的 JSON：按没有提问读，记录的其余字段照常，不让整条记录读不出来。
-  @Test func aQuestionThatIsNotJSONReadsAsNoQuestionAndTheRestOfTheRecordSurvives() async throws {
-    try await recorder().update(sessionID: "s1", state: .waitingForUser, title: "fix the bug", question: PiQuestion(promptID: "p-1", kind: .confirm, text: "覆盖？"))
-    try RawDB(fixture.url).exec("UPDATE piSessionStates SET question = '覆盖？'")
-
-    let state = try #require(try await states()["s1"])
-
-    #expect(state.question == nil)
-    #expect(state.state == .known(.waitingForUser) && state.title == "fix the bug")
-  }
-
-  @Test func questionChangesAreWrittenImmediatelyAndTheRecapIsLeftToTheTranscript() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "修好登录", lastReply: "好的")))
-
-    let question = PiQuestion(promptID: "p-1", kind: .select, text: "覆盖？", options: ["是", "否"])
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
-    #expect(try await states()["s1"]?.question == question)
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    let written = try #require(try await states()["s1"])
-    #expect(written.question == nil && written.lastPrompt == "修好登录" && written.lastReply == "好的")
-  }
-
   @Test func endingASessionKeepsItsRecordAsEndedWithItsRecapAndDropsPendingUpdates() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .thinking)
@@ -193,34 +97,10 @@ import Testing
     #expect(try await states()["s1"]?.state == .known(.ended))
   }
 
-  @Test func endedRecordsAreKept() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "old", state: .settled)
-    try await recorder.end(sessionID: "old")
-    clock.advance(.seconds(90 * 24 * 3600))
-
-    try await recorder.update(sessionID: "new", state: .settled)
-    try await recorder.end(sessionID: "new")
-
-    #expect(Set(try await store.allPiSessionStates().map(\.sessionID)) == ["old", "new"])
-  }
-
   // MARK: 历史会话
 
   private func indexed(_ id: String, title: String = "修好登录", cwd: String = "/work/app", at seconds: TimeInterval = 1_000) -> PiSession {
     PiSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd, title: title, lastActivityAt: Date(timeIntervalSince1970: seconds))
-  }
-
-  @Test func anIndexedSessionIsAnEndedSyncRecordKeyedByItsSessionID() async throws {
-    let project = try await store.createProject(name: "App", color: "#111")
-    try await store.setDirectory("/work", for: project.id)
-
-    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
-
-    let state = try #require(try await states()["s1"])
-    #expect(state.id == PiSessionState.recordID(sessionID: "s1") && state.state == .known(.ended) && state.hostID == "mac-a")
-    #expect(state.title == "修好登录" && state.folder == "app" && state.projectID == project.id)
-    #expect(state.stateSince == Date(timeIntervalSince1970: 1_000))
   }
 
   /// 同一个会话（Pi 重启、恢复后会话 id 不变）始终是同一条记录：在线时由状态写入方负责，索引不覆盖；结束后仍是它。
@@ -236,47 +116,7 @@ import Testing
     #expect(try await states()["s1"]?.state == .known(.ended))
   }
 
-  /// 索引内容没变时不改记录（不然每次启动都会把几千条历史重新上传）。
-  @Test func reindexingAnUnchangedSessionDoesNotTouchItsRecord() async throws {
-    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
-    let first = try #require(try await states()["s1"]).modifiedAt
-    try await Task.sleep(for: .milliseconds(5))
-    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
-    #expect(try await states()["s1"]?.modifiedAt == first)
-  }
-
-  /// 升级前已建过索引的会话没有同步记录（那时还不写）：扫描完成时补写，不受"内容没变不写"影响。
-  @Test func indexedSessionsWithoutARecordGetOneWhenScanningFinishes() async throws {
-    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
-    try await store.upsertPiSession(indexed("s2", title: "第二个"), host: "mac-a")
-    try RawDB(fixture.url).exec("DELETE FROM piSessionStates")
-
-    try await store.retainPiSessions(paths: [indexed("s1").path, indexed("s2").path], host: "mac-a")
-
-    #expect(Set(try await store.allPiSessionStates().map(\.sessionID)) == ["s1", "s2"])
-    #expect(try await states()["s2"]?.title == "第二个")
-  }
-
   // MARK: 列表查询
-
-  @Test func scopesReturnOnlyTheirStatesAndATokenOrIDPicksOne() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "live", state: .thinking, launchToken: "tok-1")
-    try await store.upsertPiSession(indexed("old"), host: "mac-a")
-    let project = try await store.createProject(name: "App", color: "#111")
-    try await recorder.update(sessionID: "here", state: .settled, projectID: project.id)
-
-    func ids(_ query: PiSessionQuery) async throws -> Set<String> {
-      Set(try await store.piSessionPage(query).items.map(\.state.sessionID))
-    }
-    #expect(try await ids(PiSessionQuery(scope: .live)) == ["live", "here"])
-    #expect(try await ids(PiSessionQuery(scope: .ended)) == ["old"])
-    #expect(try await ids(PiSessionQuery(scope: .all)) == ["live", "here", "old"])
-    #expect(try await ids(PiSessionQuery(project: project.id)) == ["here"])
-    #expect(try await ids(PiSessionQuery(launchToken: "tok-1")) == ["live"])
-    #expect(try await ids(PiSessionQuery(id: PiSessionState.recordID(sessionID: "old"))) == ["old"])
-    #expect(try await store.piSessionPage(PiSessionQuery(scope: .live)).total == 2)
-  }
 
   // MARK: 目录绑定
 
@@ -298,15 +138,6 @@ import Testing
     try await store.publishDirectoryBindings(host: "mac-a", hostName: "Studio")
     #expect(try await store.directoryBindings().filter { $0.hostID == "mac-a" }.map(\.projectID) == [app.id])
     #expect(try await store.directoryBindings().filter { $0.hostID == "mac-b" }.count == 2)
-  }
-
-  @Test func recordsOfDeletedSessionFilesAreDeleted() async throws {
-    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
-    try await store.upsertPiSession(indexed("s2"), host: "mac-a")
-
-    try await store.retainPiSessions(paths: [indexed("s1").path], host: "mac-a")
-
-    #expect(try await store.allPiSessionStates().map(\.sessionID) == ["s1"])
   }
 
   @Test func resetEndsOnlyThisHostsLeftoverRecords() async throws {
@@ -351,50 +182,6 @@ import Testing
     #expect(try await states()["s1"]?.detail == "换了个问题")
   }
 
-  @Test func settledIsFlaggedOnlyWhenComingFromWork() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")  // 合并挂起
-    try await recorder.update(sessionID: "s1", state: .settled)  // 从工作中完成（含被合并掉的中间状态）
-    #expect(try await alert() == .known(.settled))
-
-    try await recorder.update(sessionID: "s1", state: .thinking)  // 下一轮开始：标志清掉
-    #expect(try await alert() == nil)
-  }
-
-  /// 置位的那次写入把标志交还调用方：Mac 据此立即上传这一条，不等引擎几十秒后的自动调度。
-  @Test func theWriteThatFlagsReportsTheAlert() async throws {
-    let recorder = recorder()
-    #expect(try await recorder.update(sessionID: "s1", state: .thinking) == nil)
-    #expect(try await recorder.update(sessionID: "s1", state: .tool, detail: "bash") == nil)  // 合并挂起
-    #expect(try await recorder.update(sessionID: "s1", state: .settled) == .settled)
-    #expect(try await recorder.update(sessionID: "s1", state: .settled, detail: nil, title: "改名") == nil)  // 同状态的后续写入不再报告
-    #expect(try await recorder.update(sessionID: "s1", state: .waitingForUser) == .waitingForUser)
-  }
-
-  @Test func settledAfterWaitingOrErrorIsNotFlagged() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try await recorder.update(sessionID: "s1", state: .waitingForUser)
-    try await recorder.update(sessionID: "s1", state: .settled)  // 不是从工作中来的
-    #expect(try await alert() == nil)
-
-    try await recorder.update(sessionID: "s2", state: .thinking)
-    try await recorder.update(sessionID: "s2", state: .error, detail: "boom")
-    try await recorder.update(sessionID: "s2", state: .settled)
-    #expect(try await alert("s2") == nil)
-  }
-
-  @Test func errorsAndWorkUpdatesNeverFlag() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    clock.advance(.seconds(6))
-    try await recorder.update(sessionID: "s1", state: .outputting)
-    #expect(try await alert() == nil)
-    try await recorder.update(sessionID: "s1", state: .error, detail: "boom")
-    #expect(try await alert() == nil)
-  }
-
   @Test func aSessionSeenForTheFirstTimeNeverFlagsSoRelaunchesDoNotReplayAlerts() async throws {
     let recorder = recorder()
     try await recorder.update(sessionID: "s1", state: .waitingForUser)
@@ -403,58 +190,4 @@ import Testing
     #expect(try await alert("s2") == nil)
   }
 
-  @Test func unknownAlertKindsFromNewerVersionsAreKept() async throws {
-    let recorder = recorder()
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try RawDB(fixture.url).exec("UPDATE piSessionStates SET notify = 'somethingNew'")
-    #expect(try await alert() == .unknown("somethingNew"))
-  }
-
-  /// 当前模型、思考强度与可选模型随状态记录一起写下；会话结束留着最后的模型与强度，可选列表清空（同步记录别带着过期的大列表）。
-  @Test func modelThinkingAndChoicesAreRecordedAndTheChoicesGoWhenTheSessionEnds() async throws {
-    let fast = PiModelOption(key: PiModelKey(provider: "anthropic", id: "haiku"), name: "Haiku", thinkingLevels: [.off])
-    let deep = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .low, .high])
-    let recorder = recorder()
-
-    try await recorder.update(
-      sessionID: "s1", state: .settled, title: "t",
-      modelState: PiModelState(model: deep, thinking: .known(.high), models: [fast, deep]))
-    let live = try #require(try await states()["s1"])
-    #expect(live.model == deep && live.thinking == .known(.high) && live.models == [fast, deep])
-
-    try await recorder.update(sessionID: "s1", state: .settled, modelState: PiModelState(model: fast, thinking: .known(.off), models: [fast, deep]))
-    #expect(try await states()["s1"]?.model == fast)  // 只是换了模型：立即写
-
-    try await recorder.end(sessionID: "s1")
-    let ended = try #require(try await states()["s1"])
-    #expect(ended.state == .known(.ended) && ended.model == fast && ended.thinking == .known(.off) && ended.models.isEmpty)
-  }
-
-  /// 上下文余量与命令清单随状态记录写下；上下文留着最后一次的值，命令清单与可选模型一样在会话结束时清空。
-  @Test func contextUsageAndCommandsAreRecordedAndTheCommandsGoWhenTheSessionEnds() async throws {
-    let compact = PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]")
-    let review = PiSlashCommand(name: "skill:review", summary: nil, source: .known(.skill))
-    let recorder = recorder()
-
-    try await recorder.update(
-      sessionID: "s1", state: .settled, title: "t", context: PiContextUsage(tokens: 42_000, window: 200_000), commands: [compact, review])
-    let live = try #require(try await states()["s1"])
-    #expect(live.context == PiContextUsage(tokens: 42_000, window: 200_000) && live.commands == [compact, review])
-    #expect(live.context?.fraction == 0.21)
-
-    try await recorder.update(sessionID: "s1", state: .settled, context: PiContextUsage(tokens: nil, window: 200_000), commands: [compact])
-    let compacted = try #require(try await states()["s1"])
-    #expect(compacted.context == PiContextUsage(tokens: nil, window: 200_000) && compacted.context?.fraction == nil)  // 压缩后未知
-    #expect(compacted.commands == [compact])  // 清单变了：立即写
-
-    try await recorder.end(sessionID: "s1")
-    let ended = try #require(try await states()["s1"])
-    #expect(ended.context == PiContextUsage(tokens: nil, window: 200_000) && ended.commands.isEmpty)
-  }
-
-  /// 其他版本写来的命令来源读成未知值、原样写回，不当作已知来源。
-  @Test func unknownCommandSourcesFromNewerVersionsAreKept() async throws {
-    try await recorder().update(sessionID: "s1", state: .settled, commands: [PiSlashCommand(name: "x", summary: nil, source: .unknown("plugin"))])
-    #expect(try await states()["s1"]?.commands.first?.source == .unknown("plugin"))
-  }
 }

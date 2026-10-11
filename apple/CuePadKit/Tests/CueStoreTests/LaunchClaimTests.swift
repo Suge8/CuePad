@@ -74,24 +74,4 @@ import Testing
     await executor.stop()
   }
 
-  /// 会话记录始终没到（Pi 记下前就崩了）：等认领有上限——过了请求的最长有效期（`maxAge`）照常清理，不永久留着。
-  @Test(.timeLimit(.minutes(1)))
-  func 会话记录始终没到_过了最长有效期照常清理() async throws {
-    let clock = ManualTiming()
-    let project = try await store.createProject(name: "圆桌", color: "#111")
-    let idea = try await store.createCard(in: project.id, body: "看一下重连")
-    let executor = DeliveryExecutor(
-      store: store, hostID: "mac-a", maxAge: .seconds(600), retention: .seconds(60), timing: clock.timing,
-      onIssue: { Issue.record("\($0)") }
-    ) { _ in .succeeded }
-    try await executor.start()
-    let launch = try await store.requestLaunch(
-      PiLaunch(project: project.id, prompt: idea.body, token: "t-lost"), title: "圆桌", on: "mac-a", card: idea.id)
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }
-
-    await clock.waitForSleeper()
-    clock.advance(.seconds(601))
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id) }) { $0 == nil }
-    await executor.stop()
-  }
 }

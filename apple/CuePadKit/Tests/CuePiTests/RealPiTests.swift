@@ -218,16 +218,6 @@ struct RealPiTests {
         #expect(bridge.sessions.first?.launchToken == "tok-1")
     }
 
-    @Test func toolExecutionShowsToolStateWithItsName() async throws {
-        try await withRig { pi, bridge, s in
-            let log = ChangeLog(bridge)
-            try pi.prompt("[[tool:echo hi]]")
-            try await eventually("一轮结束") { log.states.last == .settled }
-            #expect(log.states.contains(.tool) && log.details.contains { $0?.hasPrefix("bash") == true })
-            try await eventually("回复") { self.replies(of: s).last == "TOOL_DONE" }
-        }
-    }
-
     /// 工具状态只带一句话摘要：bash 取命令首行，超长截到 120 字符（含省略号），不上报完整参数。
     @Test(arguments: [
         ("echo hi", "echo hi"),

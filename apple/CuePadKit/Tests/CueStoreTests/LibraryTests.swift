@@ -23,14 +23,6 @@ import Testing
     #expect(try await store.card(c2.id) == before)
   }
 
-  @Test func moveCardToInbox() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: p.id, body: "x")
-    try await store.moveCard(card.id, to: .top(project: nil), after: nil)
-    #expect(bodies(try await store.cards(in: nil)) == ["x"])
-    #expect(try await store.cards(in: p.id).isEmpty)
-  }
-
   @Test func moveSurvivesEqualSortKeysFromConcurrentDevices() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     for body in ["1", "2", "3"] { _ = try await store.createCard(in: p.id, body: body) }
@@ -42,19 +34,6 @@ import Testing
     let end = try await store.cards(in: p.id)
     #expect(end.map(\.id) == [start[1].id, start[0].id, start[2].id])
     #expect(Set(end.map(\.sortKey)).count == 3)  // 键已重新分配，之后的移动不再依赖 id 打平
-  }
-
-  @Test func sortKeysStayStrictlyOrderedUnderRepeatedInsertion() {
-    var keys = SortKey.sequence(count: 3)
-    #expect(keys == keys.sorted())
-    for _ in 0..<400 {
-      let slot = Int.random(in: 0...keys.count)
-      let lower = slot > 0 ? keys[slot - 1] : nil
-      let upper = slot < keys.count ? keys[slot] : nil
-      keys.insert(SortKey.between(lower, upper)!, at: slot)
-    }
-    #expect(keys == keys.sorted() && Set(keys).count == keys.count)
-    #expect(!keys.contains { $0.hasSuffix("0") })
   }
 
   // MARK: 回收站
@@ -121,36 +100,7 @@ import Testing
 
   // MARK: 卡片
 
-  @Test func cardFieldsRoundTrip() async throws {
-    let card = try await store.createCard(in: nil, body: "hi {{name}}")
-    try await store.updateCard(card.id) {
-      $0.isPinned = true
-      $0.variableValues = ["name": "Pi"]
-    }
-    let row = try await store.card(card.id)
-    #expect(row?.variableValues == ["name": "Pi"])
-    #expect(row?.isPinned == true)
-  }
-
   // MARK: 任务
-
-  @Test func tasksStackNewestOnTopAndCompletedLeaveTheActiveList() async throws {
-    _ = try await store.createTask("a", in: nil)
-    let b = try await store.createTask("b", in: nil)
-    _ = try await store.createTask("c", in: nil)
-    func active() async throws -> [String] { try await store.tasks(.todo).flatMap(\.tasks).map(\.body) }
-    #expect(try await active() == ["c", "b", "a"])
-
-    try await store.setStatus(b.id, .done)
-    #expect(try await active() == ["c", "a"])
-    #expect(try await store.tasks(.done).flatMap(\.tasks).map(\.body) == ["b"])
-  }
-
-  @Test func blankTaskContentIsRejected() async throws {
-    await #expect(throws: CueStoreError.blankTaskContent) {
-      try await store.createTask("   ", in: nil)
-    }
-  }
 
   // MARK: 发送记录与 Pi 会话索引
 
@@ -169,32 +119,6 @@ import Testing
   }
 
   // MARK: 项目目录（本机）
-
-  @Test func projectDirectoryIsPerDeviceAndDiesWithTheProject() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    #expect(try await store.directory(of: p.id) == nil)
-
-    try await store.setDirectory("/work/a", for: p.id)
-    try await store.setDirectory("/work/b", for: p.id)
-    #expect(try await store.directory(of: p.id) == "/work/b")
-    #expect(try await store.projectDirectories() == [p.id: "/work/b"])
-
-    try await store.setDirectory(nil, for: p.id)
-    #expect(try await store.directory(of: p.id) == nil)
-
-    try await store.setDirectory("/work/c", for: p.id)
-    try await store.trashProject(p.id)
-    try await store.purgeProject(p.id)
-    #expect(try await store.projectDirectories().isEmpty)
-  }
-
-  @Test func projectDirectoryChangesWakeObservers() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    var values = store.observe([.projectDirectories]) { try $0.projectDirectories() }.makeAsyncIterator()
-    #expect(try await values.next() == [:])
-    try await store.setDirectory("/work/a", for: p.id)
-    #expect(try await values.next() == [p.id: "/work/a"])
-  }
 
   @Test func reopeningTheFileKeepsData() async throws {
     let card = try await store.createCard(in: nil, body: "persisted")

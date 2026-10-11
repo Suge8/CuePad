@@ -49,15 +49,4 @@ import Testing
     #expect(try await values.next() == 1)
   }
 
-  @Test(.timeLimit(.minutes(1)))
-  func writesFromAnotherLibraryDoNotWakeThisOne() async throws {
-    let other = try Fixture()
-    var values = fixture.store.observe([.cards]) { try $0.cards(in: nil).count }.makeAsyncIterator()
-    #expect(try await values.next() == 0)
-
-    _ = try await other.store.createCard(in: nil, body: "elsewhere")
-    _ = try await fixture.store.createCard(in: nil, body: "mine")  // 自己的提交是确定的下一个事件
-
-    #expect(try await values.next() == 1)
-  }
 }

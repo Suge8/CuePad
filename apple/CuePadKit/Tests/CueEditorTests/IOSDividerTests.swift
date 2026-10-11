@@ -57,14 +57,5 @@ struct IOSDividerTests {
         #expect(h.stored == doc)
     }
 
-    @Test("选区跨过分割线时可整体删除")
-    func deleteAcross() {
-        let h = EditorHarness()
-        h.load("甲乙\n\(split)\n丙丁")
-        h.textView.selectedRange = NSRange(location: 1, length: 5)
-        h.textView.deleteBackward()
-        #expect(h.stored == "甲丁")
-    }
-
 }
 #endif

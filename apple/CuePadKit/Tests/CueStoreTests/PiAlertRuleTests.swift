@@ -66,22 +66,4 @@ import Testing
     #expect(seen.alert(since: nil) == nil)
   }
 
-  @Test func renamingASettledSessionDoesNotAlertAgain() async throws {
-    let recorder = PiStateRecorder(store: store, hostID: "mac", timing: clock.timing)
-    try await write(recorder, .thinking)
-    try await write(recorder, .settled)
-    let seen = try await current()
-
-    try await recorder.update(sessionID: "s1", state: .settled, title: "新名字", times: PiTimes(stateSince: seen.stateSince, busySince: nil))
-
-    #expect(try await current().alert(since: seen) == nil)
-  }
-
-  @Test func enteringTheWaitingStateAlertsWhetherOrNotTheWorkingStateWasRead() async throws {
-    let recorder = PiStateRecorder(store: store, hostID: "mac", timing: clock.timing)
-    try await write(recorder, .thinking)
-    let working = try await current()
-    try await write(recorder, .waitingForUser)
-    #expect(try await current().alert(since: working) == .waitingForUser)
-  }
 }

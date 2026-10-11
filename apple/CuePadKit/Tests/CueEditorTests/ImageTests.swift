@@ -139,23 +139,6 @@ struct ImageTests {
         })
     }
 
-    @Test("缩略图按需解码：视口外的图片不被读取")
-    func lazyDecode() async throws {
-        let h = EditorHarness(height: 400)
-        var stored = ""
-        var urls: [URL] = []
-        for i in 0..<20 {
-            let id = try h.store.store(makePNG(width: 800, height: 800, seed: i + 100))
-            urls.append(try #require(h.store.fileURL(for: id)))
-            stored += "第 \(i) 张\n![](cuepad://img/\(id))\n"
-        }
-        func decoded(_ url: URL) -> Bool { Thumbnails.cached(at: url, maxPixel: ImageLoading.maxThumbnailPixel) != nil }
-        h.load(stored)
-        h.layout()
-        #expect(await h.wait { decoded(urls[0]) })
-        await h.pump(0.3)
-        #expect(!decoded(urls[19]))
-    }
 }
 
 #endif

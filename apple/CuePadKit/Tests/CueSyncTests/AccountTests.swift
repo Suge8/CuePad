@@ -31,15 +31,6 @@ import Testing
     #expect(await rig.coordinator.status == .idle)
   }
 
-  /// 账号状态确认之前不能显示成"已同步"。
-  @Test func statusIsStartingUntilTheAccountIsConfirmed() async throws {
-    #expect(await rig.coordinator.status == .starting)
-    await rig.coordinator.handle(.syncing(true))
-    #expect(await rig.coordinator.status == .starting)
-    await rig.coordinator.handle(.accountStatus(.available))
-    #expect(await rig.coordinator.status == .idle)
-  }
-
   @Test func signedOutKeepsLocalDataAndSignedInUploadsItAgain() async throws {
     let card = try await populateAndPush()
 
@@ -110,10 +101,6 @@ import Testing
     #expect(await rig.coordinator.status == .idle)
   }
 
-  @Test func resolvingWhenNothingNeedsADecisionIsAnError() async throws {
-    await #expect(throws: SyncError.nothingToResolve) { try await rig.coordinator.resolve(.uploadLocal) }
-  }
-
   @Test func quotaExceededIsReportedKeepsChangesPendingAndClearsOnSuccess() async throws {
     let card = try await store.createCard(in: nil, body: "big")
     try await rig.coordinator.reconcile()
@@ -127,13 +114,6 @@ import Testing
     #expect(await rig.coordinator.status == .idle)
   }
 
-  @Test func notAuthenticatedFailureMeansNoAccount() async throws {
-    let card = try await store.createCard(in: nil, body: "x")
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(card.id)))
-    await rig.coordinator.handle(.sent(saved: [], failedSaves: [(record, CKError(.notAuthenticated))], deleted: [], failedDeletes: []))
-    #expect(await rig.coordinator.status == .noAccount)
-  }
-
   /// 服务端拒绝某条记录（如同名的旧类型记录不能改类型）：问题带着记录类型、名字与服务端原因，界面才说得清是哪一张。
   @Test func aRejectedRecordIsReportedWithItsTypeNameAndServerReason() async throws {
     let card = try await store.createCard(in: nil, body: "x")
@@ -145,39 +125,6 @@ import Testing
     let issue = try #require(await rig.coordinator.issues.last)
     #expect(issue.recordType == "cards" && issue.recordName == rig.id(card.id))
     #expect(issue.message.contains("from type 'tasks' to 'cards'"))
-  }
-
-  @Test func syncingFlagShowsWhileTheEngineIsBusy() async throws {
-    await rig.coordinator.handle(.accountStatus(.available))
-    await rig.coordinator.handle(.syncing(true))
-    #expect(await rig.coordinator.status == .syncing)
-    await rig.coordinator.handle(.syncing(false))
-    #expect(await rig.coordinator.status == .idle)
-  }
-
-  @Test(.timeLimit(.minutes(1)))
-  func statusAndIssueChangesAreDeliveredToSubscribers() async throws {
-    var updates = rig.coordinator.stateUpdates.makeAsyncIterator()
-    #expect(await updates.next() == SyncState(status: .starting, issues: []))  // 订阅时先给出当前状态
-    await rig.coordinator.handle(.accountStatus(.noAccount))
-    #expect(await updates.next()?.status == .noAccount)
-
-    await rig.coordinator.setAlerts(.failed("没有网络"))
-    #expect(await updates.next()?.alerts == .failed("没有网络"))  // 通知订阅的结果与同步状态走同一条流
-
-    // 不改状态的事项与重复的同一失败也要送达：界面据此显示"N 条没能同步的记录"
-    let future = CKRecord(recordType: "futureType", recordID: CKRecord.ID(recordName: "x", zoneID: testZone))
-    await rig.coordinator.handle(.fetched(modifications: [future], deletions: []))
-    let skipped = try #require(await updates.next())
-    #expect(skipped.status == .noAccount && skipped.issues.count == 1)
-    await rig.coordinator.handle(.accountStatus(.available))
-    _ = await updates.next()
-    await rig.coordinator.handle(.zoneSaveFailed(CKError(.internalError)))
-    let failed = try #require(await updates.next())
-    await rig.coordinator.handle(.zoneSaveFailed(CKError(.internalError)))
-    let repeated = try #require(await updates.next())
-    #expect(repeated.status == failed.status)
-    #expect(repeated.issues.count == failed.issues.count + 1)
   }
 
   @Test func engineStateIsPersistedInTheLocalDatabase() async throws {

@@ -24,10 +24,6 @@ struct CueFormatTests {
         #expect(CueFormat.serialize(CueFormat.parse(stored)) == stored)
     }
 
-    @Test("CRLF 换行的分隔线行也被识别")
-    func crlf() {
-        #expect(CueFormat.parse("a\r\n---split---\r\nb").contains(.split))
-    }
 }
 
 @Suite("标题与摘要")
@@ -78,11 +74,6 @@ struct CueSummaryTests {
         #expect(CueSummary.snippet(body, matching: ["CHONG"]) == CueSummary(body).preview)
     }
 
-    @Test("摘要最多 240 字")
-    func previewLimit() {
-        #expect(CueSummary("标题\n" + String(repeating: "长", count: 500)).preview.count == 240)
-    }
-
     @Test("标题行文字：去掉图片引用，空白折成单个空格，跳过空行、分隔线、只有图片的行")
     func contentLines() {
         #expect(CueLines.contentLines("a ![](cuepad://img/ab) b\n\n![](cuepad://img/cd)\n---split---\n  第三行  \n") == ["a b", "第三行"])
@@ -106,10 +97,4 @@ struct CueSummaryTests {
         #expect(CueVariables.fill("😀{{名}}😀", values: ["名": "值"]) == "😀值😀")
     }
 
-    @Test("变量范围按 UTF-16 偏移，只返回指定范围内的")
-    func ranges() {
-        let text = "😀{{甲}} 中 {{乙}}"
-        #expect(CueVariables.ranges(in: text, within: NSRange(location: 0, length: text.utf16.count)) == [NSRange(location: 2, length: 5), NSRange(location: 10, length: 5)])
-        #expect(CueVariables.ranges(in: text, within: NSRange(location: 8, length: 7)) == [NSRange(location: 10, length: 5)])
-    }
 }

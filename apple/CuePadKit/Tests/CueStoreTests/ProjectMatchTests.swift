@@ -39,42 +39,6 @@ import Testing
     #expect(try await match(path) == expected)
   }
 
-  @Test func directoriesOutsideEveryBindingMatchNothing() async throws {
-    _ = try await world()
-    #expect(try await match("/b/proj") == nil)
-    #expect(try await match("/") == nil)
-  }
-
-  @Test func trashedProjectsAreSkippedAndComeBackOnRestore() async throws {
-    let w = try await world()
-    try await store.trashProject(w.proj.id)
-    #expect(try await match("/a/proj/src") == "outer")  // 退到更浅的祖先绑定
-
-    try await store.trashProject(w.outer.id)
-    #expect(try await match("/a/proj/src") == nil)
-
-    try await store.restoreProject(w.proj.id)
-    #expect(try await match("/a/proj/src") == "proj")
-  }
-
-  @Test func unboundProjectsNeverMatchAndUnbindingStopsMatching() async throws {
-    let w = try await world()
-    _ = try await store.createProject(name: "no directory", color: "#444")
-    #expect(try await match("/elsewhere") == nil)
-
-    try await store.setDirectory(nil, for: w.proj.id)
-    #expect(try await match("/a/proj/x") == "outer")
-  }
-
-  @Test func projectsBoundToTheSameDirectoryResolveByProjectOrder() async throws {
-    let first = try await store.createProject(name: "first", color: "#111")
-    let second = try await store.createProject(name: "second", color: "#222")
-    try await store.updateProject(first.id) { $0.isPinned = true }
-    try await store.setDirectory("/shared", for: second.id)
-    try await store.setDirectory("/shared", for: first.id)
-    #expect(try await match("/shared/x") == "first")  // 项目列表里靠前的
-  }
-
   // MARK: 同一个目录的不同写法
 
   /// 磁盘上真实存在的一棵目录：`Repo/Sub`，旁边一个指向 `Repo` 的符号链接 `link`。

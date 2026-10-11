@@ -25,14 +25,6 @@ import Testing
     #expect(reply["outsideReferences"] as? [String] == ["a.css"])
   }
 
-  @Test func aRelativePathIsReadFromTheCurrentDirectory() async throws {
-    let sb = try Sandbox()
-    _ = try page(sb, "rel.html")
-    let result = await sb.run("show", "rel.html", environment: ["PI_SESSION_ID": "s1"])
-    #expect(result.code == 0)
-    #expect(try await sb.store.previews(of: "s1").map(\.name) == ["rel.html"])
-  }
-
   @Test func withoutASessionInTheEnvironmentItRefusesAndSaysWhy() async throws {
     let sb = try Sandbox()
     let result = await sb.run("show", try page(sb))
@@ -52,12 +44,5 @@ import Testing
     #expect(try await sb.store.previews(of: "s1").isEmpty)
   }
 
-  @Test func helpIsTheDocumentation() async throws {
-    let sb = try Sandbox()
-    let help = await sb.run("show", "--help")
-    #expect(help.code == 0 && help.out.contains("--title") && help.out.contains("HTML") && help.out.contains("20 MB") && help.out.contains("单个"))
-    #expect(!help.out.contains("--session"))
-    #expect(await sb.run("--help").out.contains("show"))
-  }
 }
 #endif

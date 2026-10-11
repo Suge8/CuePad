@@ -64,74 +64,12 @@ final class EditorHarness {
         return true
     }
 
-    func subviews<T: UIView>(of type: T.Type) -> [T] {
-        func walk(_ view: UIView) -> [UIView] { [view] + view.subviews.flatMap(walk) }
-        return walk(textView).compactMap { $0 as? T }
-    }
-
     func setCaret(_ location: Int) { textView.selectedRange = NSRange(location: location, length: 0) }
     var caret: Int { textView.selectedRange.location }
     var stored: String { textView.storedText }
 
     func privatePasteboard() -> UIPasteboard {
         UIPasteboard(name: UIPasteboard.Name("cue-editor-tests-\(UUID().uuidString)"), create: true)!
-    }
-
-    /// 让各图层完成绘制：无宿主 App 的测试进程里没有显示周期，附件的绘制回调要手动触发。
-    func display() {
-        func display(_ layer: CALayer) { layer.displayIfNeeded(); layer.sublayers?.forEach(display) }
-        layout()
-        display(textView.layer)
-    }
-
-    /// 屏幕上真实渲染出来的文本视图（drawHierarchy 在这种环境里画不出内容，直接渲染图层树）。
-    private func renderedImage() -> CGImage? {
-        display()
-        return UIGraphicsImageRenderer(size: textView.bounds.size).image { context in
-            textView.layer.render(in: context.cgContext)
-        }.cgImage
-    }
-
-    /// 一块区域渲染后的像素（sRGB，RGBA 各 8 位）。
-    private func pixels(of rect: CGRect) -> (data: [UInt8], width: Int, height: Int)? {
-        guard let image = renderedImage() else { return nil }
-        let scale = CGFloat(image.width) / textView.bounds.width
-        let area = CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale).integral
-        guard let crop = image.cropping(to: area) else { return nil }
-        var data = [UInt8](repeating: 0, count: crop.width * crop.height * 4)
-        let context = CGContext(data: &data, width: crop.width, height: crop.height, bitsPerComponent: 8, bytesPerRow: crop.width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        context.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
-        return (data, crop.width, crop.height)
-    }
-
-    /// 一块区域的中心像素。
-    func renderedCenterColor(of rect: CGRect) -> UIColor? {
-        guard let (data, _, _) = pixels(of: CGRect(x: rect.midX, y: rect.midY, width: 1, height: 1)) else { return nil }
-        return UIColor(red: CGFloat(data[0]) / 255, green: CGFloat(data[1]) / 255, blue: CGFloat(data[2]) / 255, alpha: 1)
-    }
-
-    /// 一块区域里有没有接近 `color` 的像素。
-    func rendered(_ rect: CGRect, contains color: UIColor) -> Bool {
-        guard let (data, width, height) = pixels(of: rect) else { return false }
-        var target: (r: CGFloat, g: CGFloat, b: CGFloat) = (0, 0, 0)
-        color.getRed(&target.r, green: &target.g, blue: &target.b, alpha: nil)
-        // 色彩管理会让数值略偏：三个分量加起来离目标不到 0.6，而白底离纯色线有 2
-        return stride(from: 0, to: width * height * 4, by: 4).contains { i in
-            abs(CGFloat(data[i]) / 255 - target.r) + abs(CGFloat(data[i + 1]) / 255 - target.g) + abs(CGFloat(data[i + 2]) / 255 - target.b) < 0.6
-        }
-    }
-
-    /// 只含一张图片的行的布局矩形（文本视图坐标）。
-    func imageLineFrames() -> [CGRect] {
-        var frames: [CGRect] = []
-        let inset = textView.textContainerInset
-        textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
-            if (fragment.textElement as? NSTextParagraph)?.attributedString.string.trimmingCharacters(in: .newlines) == "\u{FFFC}" {
-                frames.append(fragment.layoutFragmentFrame.offsetBy(dx: inset.left, dy: inset.top))
-            }
-            return true
-        }
-        return frames
     }
 
     /// 编辑器在屏幕上实际展示的各段落（TextKit 布局出来的文本元素，带展示属性）。

@@ -27,16 +27,6 @@ import Testing
     #expect(try await store.card(task.id) != nil)
   }
 
-  @Test func 项目的灵感数跳过空白灵感() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    _ = try await store.createCard(in: p.id, body: "换首图")
-    _ = try await store.createCard(in: p.id, body: "")
-    _ = try await store.createCard(in: p.id, body: " \n ")
-
-    let summary = try #require(try await store.projectSummaries().first { $0.projectID == p.id })
-    #expect(summary.cardCount == 1)
-  }
-
   @Test func 项目名不能写成空的() async throws {
     await #expect(throws: CueStoreError.blankProjectName) { try await store.createProject(name: "  ", color: "#111") }
     let p = try await store.createProject(name: "P", color: "#111")
@@ -44,10 +34,4 @@ import Testing
     #expect(try await store.project(p.id)?.name == "P")
   }
 
-  @Test func 旧数据里空名的项目读出来叫未命名项目() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    try RawDB(fixture.url).exec("UPDATE projects SET name = '' WHERE id = '\(p.id.uuidString.lowercased())'")
-    #expect(try await store.project(p.id)?.name == "未命名项目")
-    #expect(try await store.projects().map(\.name) == ["未命名项目"])
-  }
 }

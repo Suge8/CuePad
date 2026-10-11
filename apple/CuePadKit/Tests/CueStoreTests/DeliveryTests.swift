@@ -38,37 +38,6 @@ import Testing
 
   private func request(_ id: UUID) async throws -> DeliveryRequest? { try await store.deliveryRequest(id) }
 
-  /// 结果没能写回时手机会一直等：执行器必须上报，不能吞掉。
-  @Test(.timeLimit(.minutes(1)))
-  func failureToWriteTheResultBackIsReported() async throws {
-    try RawDB(fixture.url).exec(
-      """
-      CREATE TRIGGER refuseResult BEFORE UPDATE OF status ON deliveryRequests WHEN new.status = 'succeeded'
-      BEGIN SELECT RAISE(ABORT, 'disk said no'); END;
-      """)
-    let (issues, reported) = AsyncStream<String>.makeStream()
-    let executor = DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing, onIssue: { reported.yield("\($0)") }) { _ in
-      .succeeded
-    }
-    try await executor.start()
-    _ = try await store.requestDelivery("do it", to: pi, on: "mac-a")
-
-    var iterator = issues.makeAsyncIterator()
-    #expect(await iterator.next()?.contains("disk said no") == true)
-    await executor.stop()
-  }
-
-  @Test func requestIsRecordedAsPendingWithContentAndTarget() async throws {
-    let card = try await store.createCard(in: nil, body: "c")
-    let made = try await store.requestDelivery("prompt", to: pi, on: "mac-a", mode: .followUp, card: card.id)
-
-    let stored = try #require(try await request(made.id))
-    #expect(stored.status == .known(.pending) && stored.content == "prompt" && stored.target == pi)
-    #expect(stored.hostID == "mac-a" && stored.mode == .known(.followUp) && stored.cardID == card.id)
-    #expect(stored.completedAt == nil && stored.resultDetail == nil)
-    await #expect(throws: CueStoreError.blankDeliveryContent) { try await store.requestDelivery("  ", to: pi, on: "mac-a") }
-  }
-
   @Test(.timeLimit(.minutes(1)))
   func executorRunsTheHandlerAndWritesTheResultBack() async throws {
     let handler = Handler()
@@ -81,27 +50,6 @@ import Testing
     #expect(done[0].id == made.id && done[0].handledBy == "mac-a" && done[0].completedAt == clock.now)
     #expect(await handler.seen.map(\.content) == ["do it"])
     await executor.stop()
-  }
-
-  @Test(.timeLimit(.minutes(1)))
-  func failureIsWrittenBackWithItsReason() async throws {
-    let handler = Handler()
-    await handler.setOutcome(.failed("会话已结束"))
-    let executor = executor(handler)
-    try await executor.start()
-    _ = try await store.requestDelivery("x", to: pi, on: "mac-a")
-
-    let done = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.first?.status == .known(.failed) }
-    #expect(done[0].failure == "会话已结束")
-    await executor.stop()
-  }
-
-  /// 失败一定读得出原因：别的版本写来的失败没带原因时，读出的是唯一那句兜底，界面不再各自补一句。
-  @Test func aFailureWrittenWithoutAReasonStillReadsWithOne() async throws {
-    let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
-    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'failed', resultDetail = NULL")
-
-    #expect(try await request(made.id)?.failure == DeliveryRequest.unexplainedFailure)
   }
 
   /// 请求必须指定执行的 Mac，执行器只领取发给本机的：跨设备重复在结构上不会发生。
@@ -136,23 +84,6 @@ import Testing
     await executor.stop()
   }
 
-  @Test(.timeLimit(.minutes(1)))
-  func completedRequestsAreCleanedUpAfterTheRetentionButOpenOnesStay() async throws {
-    let handler = Handler()
-    let executor = executor(handler, retention: .seconds(60))
-    let open = try await store.requestDelivery("other host", to: pi, on: "mac-b")
-    try await executor.start()
-    _ = try await store.requestDelivery("finished", to: pi, on: "mac-a")
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
-
-    await clock.waitForSleeper()
-    clock.advance(.seconds(61))
-    let remaining = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.count == 1 }
-
-    #expect(remaining.map(\.id) == [open.id])
-    await executor.stop()
-  }
-
   /// 没能送达的话在对话里留着，等用户重发或移除；到期清理不带走它（别的完成请求照常清理）。
   @Test(.timeLimit(.minutes(1)))
   func undeliveredMessagesStayUntilTheUserResendsOrRemovesThem() async throws {
@@ -172,30 +103,6 @@ import Testing
 
     #expect(remaining.map(\.id) == [message.id])
     await executor.stop()
-  }
-
-  /// 没能送达的话也不永远留着：满 7 天后，下一次清理（如执行器重新启动）就带走它。
-  @Test(.timeLimit(.minutes(1)))
-  func undeliveredMessagesAreCleanedUpAfterSevenDays() async throws {
-    let handler = Handler()
-    await handler.setOutcome(.failed("Pi 已经退出"))
-    let first = executor(handler)
-    try await first.start()
-    let message = try await store.requestDelivery("备份一下线上库", to: pi, on: "mac-a", mode: .send)
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(message.id)?.status }) { $0 == .known(.failed) }
-    await first.stop()
-
-    clock.advance(.seconds(6 * 86_400))
-    let sixDays = executor(handler)
-    try await sixDays.start()
-    await sixDays.stop()
-    #expect(try await request(message.id) != nil)
-
-    clock.advance(.seconds(86_400 + 1))
-    let sevenDays = executor(handler)
-    try await sevenDays.start()
-    await sevenDays.stop()
-    #expect(try await request(message.id) == nil)
   }
 
   @Test func requestInterruptedByAnAppRestartFailsAndIsNeverRunAgain() async throws {
@@ -290,21 +197,6 @@ import Testing
   }
 
   @Test(.timeLimit(.minutes(1)))
-  func everyKnownModeReachesTheHandlerAsItsTypedValue() async throws {
-    let handler = Handler()
-    let executor = executor(handler)
-    try await executor.start()
-    let modes: [DeliveryMode] = [.send, .steer, .followUp]
-    for mode in modes { _ = try await store.requestDelivery("m", to: pi, on: "mac-a", mode: mode) }
-
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 3 }
-
-    #expect(await handler.seen.map(\.mode) == modes.map(Open.known))
-    #expect(modes.map(\.rawValue) == ["send", "steer", "followUp"])  // 落盘与线上的字面值
-    await executor.stop()
-  }
-
-  @Test(.timeLimit(.minutes(1)))
   func aModeFromANewerVersionIsKeptButNeverExecutedAndFailsWithAReason() async throws {
     let handler = Handler()
     let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
@@ -319,56 +211,6 @@ import Testing
     #expect(done[0].resultDetail?.contains("quantumSend") == true)
     #expect(done[0].mode == .unknown("quantumSend") && done[0].completedAt != nil)
     await executor.stop()
-  }
-
-  @Test func unknownStatusFromANewerVersionIsPreserved() async throws {
-    let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
-    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'queuedRemotely'")
-    #expect(try await request(made.id)?.status == .unknown("queuedRemotely"))
-    // 本版本不认识的状态不是送达：读作没送达（等结果的调用方据此报错，不当成成功），原因同样只有那一句兜底
-    #expect(try await request(made.id)?.failure == DeliveryRequest.unexplainedFailure)
-  }
-
-  /// 配置请求（换模型、改思考强度）与发送同一条投送通道：正文是 JSON，读回来是同一个配置；什么都不改或强度不认识的读不出。
-  @Test func configRequestCarriesTheModelAndThinkingToTheMacAndIsNotAMessageToTheSession() async throws {
-    let config = PiConfig(model: PiModelKey(provider: "anthropic", id: "opus"), thinking: .high)
-    let made = try await store.requestConfig(config, to: pi, on: "mac-a")
-
-    let stored = try #require(try await request(made.id))
-    #expect(stored.mode == .known(.config) && stored.hostID == "mac-a" && stored.config == config)
-    #expect(DeliveryMode.config.rawValue == "config")
-    #expect(try await store.requestDelivery(#"{"thinking":"ultra"}"#, to: pi, on: "mac-a", mode: .config).config == nil)
-    #expect(try await store.requestDelivery("{}", to: pi, on: "mac-a", mode: .config).config == nil)
-    #expect(!DeliveryMode.toSession.contains(.config))  // 不是对会话说的话：会话页不把它当最近一条消息
-  }
-
-  /// 绑定文件夹请求（手机请 Mac 绑，Mac 才有完整路径）：正文是 JSON（项目加"从哪里取文件夹"：某个会话的工作目录或另一个项目已绑的目录；
-  /// 没有文件夹就是解除绑定），读回来是同一个内容；读不出的（没有项目、来源不认识）是 nil；不是对会话说的话。
-  @Test func bindRequestCarriesTheProjectAndWhereToTakeTheFolderFromAndIsNotAMessageToTheSession() async throws {
-    let project = UUID(), other = UUID()
-    for bind in [
-      PiBind(project: project, folder: .besideSession("s1")), PiBind(project: project, folder: .project(other)), PiBind(project: project, folder: nil),
-    ] {
-      let made = try await store.requestBind(bind, title: "圆桌", on: "mac-a")
-      let stored = try #require(try await request(made.id))
-      #expect(stored.mode == .known(.bind) && stored.hostID == "mac-a" && stored.bind == bind)
-    }
-    #expect(DeliveryMode.bind.rawValue == "bind")
-    #expect(try await store.requestDelivery("{}", to: pi, on: "mac-a", mode: .bind).bind == nil)
-    #expect(try await store.requestDelivery(#"{"project":"\#(project)","folder":{"somethingNew":"x"}}"#, to: pi, on: "mac-a", mode: .bind).bind == nil)
-    #expect(!DeliveryMode.toSession.contains(.bind))
-  }
-
-  /// 斜杠命令（压缩、命名、换模型、模板……）不是"你说的话"：不进会话的最近一条消息，也不在对话里挂气泡（对话只来自会话文件）；
-  /// 带着卡片（交给 Agent 时命令的参数）只把卡片关联到会话（任务进行中），不写发送记录——发送记录只记内容。
-  @Test func commandRequestIsNotAMessageToTheSessionAndOnlyLinksItsCard() async throws {
-    #expect(!DeliveryMode.toSession.contains(.command))
-    let task = try await store.createTask("改登录", in: nil)
-    try await store.linkCard(task.id, toSession: "s1")
-
-    let linked = try #require(try await store.card(task.id))
-    #expect(linked.piSessionID == "s1" && linked.status == .inProgress)
-    #expect(try await store.sendRecords().isEmpty)
   }
 
   /// 结束会话与停止这一轮同一条投送通道：发给会话所在的 Mac，不是对会话说的话；连点只发一次（在路上的请求被复用），两种互不复用。

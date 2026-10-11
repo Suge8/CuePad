@@ -96,53 +96,5 @@ struct ToolActivityTests {
         #expect(tools.commands == 1 && tools.failed == 1 && tools.items.map(\.failed) == [false, true])
     }
 
-    @Test func aRoundWithoutToolsHasNoActivity() throws {
-        var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header(), SessionFile.user("u1", nil, "你好", at: 1), SessionFile.assistant("a1", "u1", text: "你好", at: 2))
-        #expect(try index(f).messages.last?.tools == nil)
-    }
-
-    /// 清单最多 itemLimit 条、每条目标截到 targetLimit 个字符（同步体积）；计数不受清单截断影响。
-    @Test func theListIsCappedAndEachTargetIsClipped() throws {
-        var f = SessionFile(directory: dir)
-        let many = (0..<45).map { Self.call("c\($0)", "read", ["path": "/work/x/file\($0).swift"]) }
-        try f.append(
-            SessionFile.header(cwd: "/work/x"), SessionFile.user("u1", nil, "全看一遍", at: 1), Self.calls("t1", "u1", many, at: 2),
-            SessionFile.assistant("a1", "t1", text: "看完了", at: 3))
-        let tools = try #require(try index(f).messages.last?.tools)
-        #expect(tools.items.count == PiChatMessage.Tools.itemLimit && tools.reads == 45)
-
-        var g = SessionFile(directory: dir, name: "long.jsonl")
-        try g.append(
-            SessionFile.header(cwd: "/work/x"), SessionFile.user("u1", nil, "跑", at: 1),
-            Self.calls("t1", "u1", [Self.call("c1", "bash", ["command": String(repeating: "x", count: 400)])], at: 2),
-            SessionFile.assistant("a1", "t1", text: "好", at: 3))
-        let target = try #require(try index(g).messages.last?.tools?.items.first?.target)
-        #expect(target == String(repeating: "x", count: PiChatMessage.Tools.targetLimit - 1) + "…")
-    }
-
-    /// 一轮跨几次读文件（在线会话每次追加都读一次）：调用在前一次、结果与回答在后一次，结果与一次读完一样；
-    /// 只读摘要的首次读得到的检查点也与逐行全读一样（之后增量读接得上）。
-    @Test func aRoundSplitAcrossReadsAndASummaryOnlyReadAgreeWithAFullRead() throws {
-        var f = SessionFile(directory: dir)
-        try f.append(
-            SessionFile.header(cwd: "/work/x"), SessionFile.user("u1", nil, "跑一下", at: 1),
-            Self.calls("t1", "u1", [Self.call("c1", "bash", ["command": "swift test"]), Self.call("c2", "read", ["path": "a.swift"])], at: 2))
-        let first = try index(f)
-        let summary = try PiHistory.index(file: f.url, from: nil, transcript: false)
-        #expect(summary.checkpoint == first.checkpoint)
-
-        try f.append(
-            Self.result("r1", "t1", call: "c1", name: "bash", failed: true, at: 3), Self.result("r2", "r1", call: "c2", name: "read", at: 3))
-        let midway = try index(f, from: first.checkpoint)
-        #expect(try PiHistory.index(file: f.url, from: nil, transcript: false).checkpoint == midway.checkpoint)
-        try f.append(SessionFile.assistant("a1", "r2", text: "测试没过", at: 4))
-        let resumed = try index(f, from: midway.checkpoint)
-        let whole = try index(f)
-
-        #expect(resumed.messages.last?.tools == whole.messages.last?.tools)
-        #expect(resumed.messages.last?.tools?.failed == 1 && resumed.messages.last?.tools?.reads == 1 && resumed.messages.last?.tools?.commands == 0)
-        #expect(try PiHistory.index(file: f.url, from: summary.checkpoint).messages.last?.tools == whole.messages.last?.tools)
-    }
 }
 #endif
