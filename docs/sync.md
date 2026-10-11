@@ -5,9 +5,9 @@
 ## 拉取节奏
 
 节奏与理由见 `AppServices.pollingCadence` 的注释。Mac 闲着时也每 2 秒拉一次，放慢它的条件：
-- 真机上正常用一两天，`ZoneChangePuller.lateCatches` 的日志（子系统 `com.sugeh.cuepad`，类别 `sync`；记的是主动拉取比推送先拿到的记录）很少：每天个位数，且"最久已在服务器上"多在 4–8 秒。
-- 满足时才把闲着的一档放慢（`SyncPoller.Cadence` 已支持多档，例如先 2 秒拉两分钟、之后 10 秒一次，一小时 1801 次降到 409 次）；经常出现或动辄几十秒就保持 2 秒。
-- 放慢后用设置·同步的"测试到 Mac 的连接"比较闲后第一条请求多等了几秒；这个测试也量端到端往返（上传、Mac 执行完、回到手机三段的中位数）。
+- 依据是到达日志（`ArrivalLog`：别的设备写来的在等记录何时经推送、何时经主动拉取到本机，类别 `sync-latency`，Release 里也有）。实测步骤、分析命令（`xc.sh synclat`）和门槛见 [verify.md](verify.md)「同步延迟实测」。
+- 门槛满足（手机→Mac 的推送 p90 ≤ 2 秒且丢失 < 1%，样本够）才把闲着的一档放慢或删掉（`SyncPoller.Cadence` 已支持多档，例如先 2 秒拉两分钟、之后 30–60 秒一次）；否则保持 2 秒。
+- 放慢后再测一轮，并用设置·同步的"测试到 Mac 的连接"（一次 5 条，量上传、Mac 执行完、回到手机三段的中位数）比较闲后第一条请求多等了几秒。
 
 ## 发送
 
@@ -25,7 +25,7 @@
 
 ## 排查与真机验证
 
-App 的日志在 subsystem `com.sugeh.cuepad`（类别 `services`、`launch`、`shutdown`、`pi-history`、`sync`）；CloudKit 与 CKSyncEngine 的日志在 `com.apple.cloudkit`：
+App 的日志在 subsystem `com.sugeh.cuepad`（类别 `services`、`launch`、`shutdown`、`pi-history`、`sync`、`sync-latency`）；CloudKit 与 CKSyncEngine 的日志在 `com.apple.cloudkit`：
 
 ```bash
 log show --last 30m --info --debug --predicate 'subsystem == "com.sugeh.cuepad" OR (process == "CuePad" AND subsystem BEGINSWITH "com.apple.cloudkit")'

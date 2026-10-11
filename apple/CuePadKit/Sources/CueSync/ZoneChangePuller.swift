@@ -1,7 +1,6 @@
 import CloudKit
 import CueStore
 import Foundation
-import os
 
 /// 同步区里自某个令牌以来的一批变化。令牌是 `CKServerChangeToken` 的归档，测试可换成任意字节。
 struct ZoneChangeBatch: Sendable {
@@ -41,24 +40,16 @@ actor ZoneChangePuller {
   /// 取令牌那一遍带回的字段：版本（`modifiedAt`）、Pi 会话的状态与投送请求的状态（都是明文），据此判断要不要补取，不带正文。
   static let versionKeys = ["modifiedAt", "state", "status"]
 
-  /// 推送正常时，别的设备的改动在服务器上落定后一两秒内引擎就会带来。主动拉取拿到的记录已经在服务器上躺了这么久、本机却还没有，
-  /// 说明推送晚了或丢了——这是"主动拉取是否必要"的唯一直接证据，见 `lateCatches`。
-  static let pushLateAfter: TimeInterval = 4
-
-  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "sync")
-
   private let source: any ZoneChangeSource
   private let coordinator: SyncCoordinator
-  private let now: @Sendable () -> Date
+  /// 主动拉取拿到的在等的记录记进到达日志：它与引擎带来的时刻之差，就是"主动拉取是否必要"的证据（见 `ArrivalLog`）。
+  private let arrivals: ArrivalLog
   private var token: Data?
-  /// 本次运行里，主动拉取比推送先拿到（服务器上已超过 `pushLateAfter` 秒、本机还没有或较旧）的在等的记录条数。
-  /// 每次出现也记一条日志（子系统 com.sugeh.cuepad，类别 sync），数一两天就知道推送靠不靠得住、主动拉取的间隔该放多慢。
-  private(set) var lateCatches = 0
 
-  init(source: any ZoneChangeSource, coordinator: SyncCoordinator, now: @escaping @Sendable () -> Date = { Date() }) {
+  init(source: any ZoneChangeSource, coordinator: SyncCoordinator, arrivals: ArrivalLog) {
     self.source = source
     self.coordinator = coordinator
-    self.now = now
+    self.arrivals = arrivals
   }
 
   /// 拉到没有更多为止。actor 串行：同时来的两次拉取依次进行，不会用同一个令牌拉两遍再互相覆盖。
@@ -106,7 +97,9 @@ actor ZoneChangePuller {
     }.map(\.recordID)
     for start in stride(from: 0, to: wanted.count, by: CloudKitLimits.recordsPerRequest) {
       let ids = Array(wanted[start..<min(start + CloudKitLimits.recordsPerRequest, wanted.count)])
-      await coordinator.handle(.fetched(modifications: try await source.records(ids), deletions: []))
+      let records = try await source.records(ids)
+      await arrivals.pulled(records)  // 交给协调器之前：之后本机就有了
+      await coordinator.handle(.fetched(modifications: records, deletions: []))
     }
   }
 
@@ -124,22 +117,6 @@ actor ZoneChangePuller {
     }
   }
 
-  private func noteLateCatches(_ records: [CKRecord]) async {
-    let cutoff = now().addingTimeInterval(-Self.pushLateAfter)
-    let old = records.filter { record in
-      Table(rawValue: record.recordType).map(Self.awaitedTables.contains) == true && record.modificationDate.map { $0 < cutoff } == true
-    }
-    guard !old.isEmpty, let local = try? await localModifiedAts() else { return }
-    let behind = old.filter { record in
-      let known = Table(rawValue: record.recordType).flatMap { local[$0]?[record.recordID.recordName] }
-      return known.map { known in (record["modifiedAt"] as? NSNumber).map { $0.int64Value > known } ?? true } ?? true
-    }
-    guard !behind.isEmpty else { return }
-    lateCatches += behind.count
-    let oldest = behind.compactMap(\.modificationDate).min().map { now().timeIntervalSince($0) } ?? 0
-    Self.log.notice("主动拉取比推送先拿到 \(behind.count) 条（最久已在服务器上 \(oldest, format: .fixed(precision: 1)) 秒），累计 \(self.lateCatches) 条")
-  }
-
   private func localModifiedAts() async throws -> [Table: [String: Int64]] {
     var local: [Table: [String: Int64]] = [:]
     for table in Self.awaitedTables { local[table] = try await coordinator.store.modifiedAts(in: table) }
@@ -152,7 +129,7 @@ actor ZoneChangePuller {
     repeat {
       batch = try await source.changes(since: token, keys: nil)
       if !batch.modifications.isEmpty || !batch.deletions.isEmpty {
-        await noteLateCatches(batch.modifications)  // 交给协调器之前：之后本机就有了
+        await arrivals.pulled(batch.modifications)  // 交给协调器之前：之后本机就有了
         await coordinator.handle(.fetched(modifications: batch.modifications, deletions: batch.deletions))
       }
       token = batch.token
