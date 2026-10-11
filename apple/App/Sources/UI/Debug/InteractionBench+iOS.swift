@@ -13,7 +13,6 @@ import UIKit.UIGestureRecognizerSubclass
 /// - 点击回合：动作发出到主线程第一次回到空闲的主线程 CPU 毫秒（只取第一圈 ≥2ms 的 run loop）。
 /// - 合计、最重一圈：动作后 800ms 里主线程 CPU 的总数与最重的一圈；指令数（百万条）是进程在这 800ms 里执行的，不随机器忙闲变。
 /// - 掉帧：display link 相邻间隔超过 1.5 帧的次数。模拟器的合成与 GPU 和真机不同，只作参考。
-@MainActor
 enum IOSInteractionBench {
     private static let turns = TurnLog()
 
@@ -168,7 +167,6 @@ enum IOSInteractionBench {
 }
 
 /// 窗口里手指按下的那一刻（测量脚本在模拟器上真按的长按、轻点）：每个窗口挂一个（长按菜单弹在自己的窗口里），只看不拦，按下就报给等着的一方。
-@MainActor
 private final class TouchProbe: UIGestureRecognizer {
     private static var waiting: (() -> Void)?
 
@@ -194,7 +192,6 @@ private final class TouchProbe: UIGestureRecognizer {
 }
 
 /// 每帧往下滚 40pt，到底往回。
-@MainActor
 private final class ScrollDriver: NSObject {
     private let scroll: UIScrollView
     private var link: CADisplayLink?

@@ -67,7 +67,7 @@ public struct Project: Identifiable, Equatable, Sendable {
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// nil 表示未分类（收件箱）。
+  /// nil 表示未分类。
   public internal(set) var projectID: UUID?
   /// 纯字符串正文：分割线为独占行 `---split---`，图片为 `![](cuepad://img/<哈希>)`。
   public var body: String

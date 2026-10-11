@@ -17,7 +17,7 @@ enum PerfLibrary {
     static let piSessionCount = 200
     static let bigProject = "大项目"
     private static let bigProjectCards = 1200
-    private static let inboxCards = 300
+    private static let unfiledCards = 300
     private static let boundProjects = 10
     /// 带对话的历史会话（`perf-0`…）各有多少轮，长短悬殊。
     static let chatRounds = [3, 6, 10, 16, 24, 36, 50, 70, 100, 140, 200, 300]
@@ -27,17 +27,17 @@ enum PerfLibrary {
         let images = try storeImages(store)
         var imagePool = images[...]
         var groups: [DemoLibrary.DemoProject] = []
-        let otherCards = (cardCount - bigProjectCards - inboxCards) / (projectCount - 1)
+        let otherCards = (cardCount - bigProjectCards - unfiledCards) / (projectCount - 1)
         for index in 0..<projectCount {
             let name = index == 0 ? bigProject : "项目 \(index) · \(projectWords[index % projectWords.count])"
-            let count = index == 0 ? bigProjectCards : otherCards + (index <= (cardCount - bigProjectCards - inboxCards) % (projectCount - 1) ? 1 : 0)
+            let count = index == 0 ? bigProjectCards : otherCards + (index <= (cardCount - bigProjectCards - unfiledCards) % (projectCount - 1) ? 1 : 0)
             groups.append(DemoLibrary.DemoProject(
                 name: name, icon: icons[index % icons.count], color: colors[index % colors.count], pinned: index < 3, directory: nil,
                 cards: (0..<count).map { _ in card(&random, images: &imagePool, imageShare: index == 0 ? 0.12 : 0.05) }))
         }
         groups.append(DemoLibrary.DemoProject(
             name: "", icon: "", color: "", pinned: false, directory: nil,
-            cards: (0..<inboxCards).map { _ in card(&random, images: &imagePool, imageShare: 0.03) }))
+            cards: (0..<unfiledCards).map { _ in card(&random, images: &imagePool, imageShare: 0.03) }))
         // 用剩的图分给大项目最近的卡，保证 300 张都用上
         var big = groups[0]
         for (offset, hash) in imagePool.enumerated() where offset < big.cards.count {

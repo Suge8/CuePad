@@ -7,7 +7,7 @@ import SwiftUI
 
 /// iOS 的导航状态：标签（灵感 / Agent）、各标签的推入路径、随手记、发到 Mac 与项目表单、iPad 的右侧 Agent 面板。
 /// 数据不在这里，页面直接订阅 Store；共用的页面状态（提示、项目目录）在 `Workspace`。当前项目只从路径推出（`currentProject`）。
-@MainActor @Observable
+@Observable
 final class Navigation {
     enum Tab: Hashable {
         case projects, agent

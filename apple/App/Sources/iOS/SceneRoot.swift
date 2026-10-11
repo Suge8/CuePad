@@ -27,7 +27,6 @@ struct SceneRoot: View {
 }
 
 /// 让进入后台后的收尾工作有时间跑完（系统随后才挂起进程）。
-@MainActor
 enum BackgroundWork {
     static func run(_ work: @MainActor () async -> Void) async {
         var task = UIBackgroundTaskIdentifier.invalid

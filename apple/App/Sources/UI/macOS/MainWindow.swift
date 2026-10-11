@@ -171,7 +171,7 @@ private struct PageStack: View {
     @ViewBuilder private func pageView(_ page: Route) -> some View {
         switch page {
         case .project(let id): ProjectPage(projectID: id)
-        case .inbox: ProjectPage(projectID: nil)
+        case .unfiled: ProjectPage(projectID: nil)
         case .archive: ArchivePage()
         case .trash: TrashPage()
         case .agent: AgentPage()
@@ -304,7 +304,7 @@ private extension Route {
     /// 底部输入栏放不放：回收站、Agent 整页与会话页不是记灵感的地方。
     var takesCapture: Bool {
         switch self {
-        case .project, .inbox, .archive: true
+        case .project, .unfiled, .archive: true
         default: false
         }
     }

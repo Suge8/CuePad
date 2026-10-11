@@ -31,9 +31,9 @@ struct Sidebar: View {
                 let now = ProjectNow.byProject(catalog.projects, sessions: services.liveSessions.items, tasks: data.leading, shown: services.settings.shown)
                 Section {
                     ForEach(pages.projects) { row($0, catalog, now: now[$0.id]) }
-                    if pages.inboxCount > 0 {
-                        PageRow(page: .inbox, count: pages.inboxCount, select: select) {
-                            Label { Text("未分类") } icon: { ProjectGlyph(project: nil) }
+                    if pages.unfiledCount > 0 {
+                        PageRow(page: .unfiled, count: pages.unfiledCount, select: select) {
+                            Label { Text(CaptureCopy.unfiled) } icon: { ProjectGlyph(project: nil) }
                         }
                     }
                 } header: {
@@ -154,17 +154,17 @@ private struct SidebarHeader<Action: View>: View {
 /// 侧栏里能去的页，按显示顺序：项目（置顶在前，`store.projects()` 的顺序）→ 未分类 → 归档 → 回收站。方向键共用这一份顺序。
 private struct SidebarPages {
     let projects: [Project]
-    let inboxCount: Int
+    let unfiledCount: Int
     let showsBins: Bool
 
     init(_ catalog: ProjectCatalog, trashCount: Int) {
         projects = catalog.projects
-        inboxCount = catalog.cardCounts[nil] ?? 0
+        unfiledCount = catalog.cardCounts[nil] ?? 0
         showsBins = trashCount > 0 || !catalog.projects.isEmpty
     }
 
     var order: [Route] {
-        projects.map { .project($0.id) } + (inboxCount > 0 ? [.inbox] : []) + (showsBins ? [.archive, .trash] : [])
+        projects.map { .project($0.id) } + (unfiledCount > 0 ? [.unfiled] : []) + (showsBins ? [.archive, .trash] : [])
     }
 }
 

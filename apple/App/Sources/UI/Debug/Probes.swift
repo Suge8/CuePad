@@ -40,7 +40,6 @@ private func mainCPUSeconds(_ port: mach_port_t) -> Double {
 }
 
 /// 用 display link 记下每一帧的时间戳；帧间隔超过刷新间隔 1.5 倍的算掉帧。
-@MainActor
 final class FrameRecorder: NSObject {
     /// 掉帧次数、最长一帧（毫秒）与每次掉帧 [距开始的毫秒, 这一帧的毫秒]。
     struct Hitches {
@@ -82,7 +81,6 @@ final class FrameRecorder: NSObject {
 }
 
 /// 每圈主线程 run loop（醒来 → 回去睡）的墙钟与 CPU 时间；提交发生在这一圈的 BeforeWaiting，所以一圈包含一帧的更新、布局与提交。
-@MainActor
 final class TurnLog {
     struct Turn {
         var dur: CFTimeInterval
@@ -198,7 +196,6 @@ final class TurnLog {
 
 #if os(macOS)
 /// 界面里的测量点：首屏卡片出现（`content`，`perfMark`）。只在 Debug 构建里由视图调用，`interact` 等它出现再开始量。
-@MainActor
 enum PerfProbe {
     private static var waiting: [String: CheckedContinuation<Void, Never>] = [:]
     private(set) static var firstSeen: [String: Date] = [:]

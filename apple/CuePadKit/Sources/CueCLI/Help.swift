@@ -12,7 +12,7 @@ enum Help {
       cuepad task done <id>              完成任务
       cuepad show 页面.html              把文件发到手机上预览（在 Pi 里运行，对话里出现预览卡）
 
-    默认项目：在绑定了目录的项目里运行时，读写默认限定该项目；--project 名称 / --inbox 指定，--all-projects 不限。
+    默认项目：在绑定了目录的项目里运行时，读写默认限定该项目；--project 名称 / --unfiled 指定，--all-projects 不限。
     全部命令：cuepad project --help、cuepad card --help、cuepad task --help、cuepad conflicts --help
     选项与输出字段：cuepad <命令> --help，例如 cuepad card add --help
     --json 输出 JSON（失败时 stderr 为 {"error":{"code","message"}}）；退出码 0 成功、1 运行错误、2 用法错误。
@@ -55,7 +55,7 @@ enum Schema {
       + "\n  id 是小写 UUID；时间是 UTC ISO 8601 含毫秒；没有值是 null。"
   }
 
-  /// 没有 --project / --inbox 时的默认范围说明。
+  /// 没有 --project / --unfiled 时的默认范围说明。
   static func defaultProject(otherwise fallback: String) -> String {
     "默认项目：省略时用绑定了当前目录（或其上层目录）的项目；没有则\(fallback)。"
   }

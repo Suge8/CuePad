@@ -3,7 +3,6 @@ import AppKit
 
 /// 菜单栏图标。图标是模板图，随菜单栏明暗自动着色。
 /// 左键弹出面板；右键（或 Control 点击）弹出菜单。
-@MainActor
 final class StatusItemController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let togglePanel: @MainActor (CGRect) -> Void

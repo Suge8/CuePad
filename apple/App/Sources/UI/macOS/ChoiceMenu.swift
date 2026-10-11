@@ -3,7 +3,6 @@ import AppKit
 
 /// 键盘打开的选择菜单（回复框的 ⌘⇧M 模型、⌘⇧E 思考强度）：系统菜单弹在控件下沿，方向键选、↩ 确认、Esc 关，与点开胶囊同样的选项。
 /// SwiftUI 的 `Menu` 没有从代码打开的接口，所以键盘这条路用 AppKit 的菜单。
-@MainActor
 enum ChoiceMenu {
     struct Section {
         let title: String?

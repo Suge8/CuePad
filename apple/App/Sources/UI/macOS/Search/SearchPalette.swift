@@ -174,7 +174,7 @@ struct SearchPalette: View {
                             let project = data.projects.first { $0.id == group.owner }
                             HStack(spacing: 6) {
                                 ProjectGlyph(project: project, size: 11)
-                                Text(project?.name ?? "未分类")
+                                Text(project?.name ?? CaptureCopy.unfiled)
                                 Text("\(group.cards.count)").foregroundStyle(.tertiary)
                             }
                             .font(Typography.label).foregroundStyle(.secondary)
@@ -230,7 +230,7 @@ struct SearchPalette: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
                 HStack(spacing: 6) {
-                    Text(Dotted(project?.name ?? "未分类", DateLabel.short(card.modifiedAt)))
+                    Text(Dotted(project?.name ?? CaptureCopy.unfiled, DateLabel.short(card.modifiedAt)))
                     if let name = data.lastSends[card.id]?.target.shownName { SentMark(target: name) }
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
@@ -314,7 +314,7 @@ struct SearchPalette: View {
     private func open(_ card: Card) {
         workspace.searching = false
         if card.projectID != workspace.currentProject {
-            workspace.show(card.projectID.map(Route.project) ?? .inbox)
+            workspace.show(card.projectID.map(Route.project) ?? .unfiled)
         }
         workspace.openCard = card.id
     }
@@ -382,7 +382,7 @@ private struct FilterBar: View {
     @ViewBuilder private var chips: some View {
         FilterToken(name: "项目", value: projectLabel, on: query.project != nil) {
             Button("全部") { query.project = nil }
-            Button("未分类") { query.project = .some(nil) }
+            Button(CaptureCopy.unfiled) { query.project = .some(nil) }
             Divider()
             ForEach(projects) { project in Button(project.name) { query.project = project.id } }
         }
@@ -410,7 +410,7 @@ private struct FilterBar: View {
     private var projectLabel: String {
         switch query.project {
         case .none: "全部"
-        case .some(.none): "未分类"
+        case .some(.none): CaptureCopy.unfiled
         case .some(.some(let id)): projects.first { $0.id == id }?.name ?? "全部"
         }
     }

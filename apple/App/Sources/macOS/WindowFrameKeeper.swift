@@ -3,7 +3,6 @@ import AppKit
 
 /// 窗口位置与大小的记忆：存进 `AppSettings` 的偏好存储，而不是系统的窗口自动保存（它总是写标准偏好域，
 /// 隔离模式下会串到真实设置里）。
-@MainActor
 final class WindowFrameKeeper {
     private let window: NSWindow
     private let name: String

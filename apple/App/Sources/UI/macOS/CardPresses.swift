@@ -4,7 +4,7 @@ import Observation
 
 /// 各张卡的按下与打开状态（Mac）。按卡分开、各自可观察：按下与打开时只有这张卡的视图重算，
 /// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
-@MainActor @Observable
+@Observable
 final class CardPresses {
     /// 编辑页挂在屏上的卡：比 `Workspace.openCard` 晚一步清空，淡出期间仍在。
     private(set) var presented: UUID?
@@ -76,7 +76,7 @@ final class CardPresses {
 }
 
 /// 一张卡的按下状态。
-@MainActor @Observable
+@Observable
 final class CardPresence {
     /// 鼠标正按着这张卡（见 `CardPresses.mouse(down:)`）。
     fileprivate(set) var pressing = false

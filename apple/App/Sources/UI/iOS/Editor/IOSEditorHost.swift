@@ -5,7 +5,6 @@ import SwiftUI
 import UIKit
 
 /// 对编辑器的操作口：插入图片、取当前正文与选中部分。
-@MainActor
 final class IOSEditorHandle {
     fileprivate weak var view: CueTextView?
 
@@ -63,7 +62,7 @@ struct IOSEditorHost: UIViewRepresentable {
 /// 键盘上方的工具栏：分割线、插图、变量取值、收起键盘，提示词另有交给 Agent（选中文字时只发选中的部分）。
 final class KeyboardBar: UIToolbar {
     /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）：插图与变量由外部弹出选择器与面板。
-    @MainActor final class Actions {
+    final class Actions {
         var send: () -> Void = {}
         var insertImage: () -> Void = {}
         var variables: () -> Void = {}

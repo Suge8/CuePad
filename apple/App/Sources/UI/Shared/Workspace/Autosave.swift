@@ -1,7 +1,6 @@
 import Foundation
 
 /// 编辑中的正文自动保存：停手一小会儿后写入，离开页面时立即写入未保存的部分。
-@MainActor
 final class Autosave {
     private static let delay: Duration = .milliseconds(400)
 

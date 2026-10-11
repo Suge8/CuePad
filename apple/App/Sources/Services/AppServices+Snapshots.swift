@@ -29,8 +29,8 @@ extension AppServices {
     private func publish(_ snapshots: WidgetSnapshots) throws {
         let directory = location.snapshotsDirectory
         if snapshots.projects != publishedSnapshots?.projects { try Snapshots.write(snapshots.projects, to: directory) }
-        if snapshots.inbox != publishedSnapshots?.inbox {
-            try Snapshots.write(snapshots.inbox, to: directory)
+        if snapshots.unfiled != publishedSnapshots?.unfiled {
+            try Snapshots.write(snapshots.unfiled, to: directory)
             reloadWidgets()
         }
         publishedSnapshots = snapshots
@@ -46,22 +46,22 @@ extension AppServices {
 /// 快照的全部内容：与上次写出的比较，决定写哪份、要不要刷新小组件。
 nonisolated struct WidgetSnapshots: Equatable, Sendable {
     var projects: ProjectsSnapshot
-    var inbox: InboxSnapshot
+    var unfiled: UnfiledSnapshot
 }
 
 extension CueStore {
-    fileprivate static let inboxCardLimit = 5
+    fileprivate static let unfiledCardLimit = 5
 
     fileprivate func widgetSnapshots() throws -> WidgetSnapshots {
         let cards = try cards(in: nil)
-        let latest = cards.sorted { $0.modifiedAt > $1.modifiedAt }.prefix(Self.inboxCardLimit)
+        let latest = cards.sorted { $0.modifiedAt > $1.modifiedAt }.prefix(Self.unfiledCardLimit)
         return WidgetSnapshots(
             projects: ProjectsSnapshot(projects: try projects().map {
                 ProjectsSnapshot.Project(id: $0.id, name: $0.name, color: $0.color, icon: $0.icon)
             }),
-            inbox: InboxSnapshot(
+            unfiled: UnfiledSnapshot(
                 cards: latest.map {
-                    InboxSnapshot.Card(id: $0.id, title: CueSummary($0.body).title, modifiedAt: $0.modifiedAt)
+                    UnfiledSnapshot.Card(id: $0.id, title: CueSummary($0.body).title, modifiedAt: $0.modifiedAt)
                 },
                 total: cards.count))
     }

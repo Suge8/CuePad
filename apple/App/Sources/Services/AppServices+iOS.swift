@@ -35,7 +35,6 @@ extension AppServices {
 }
 
 /// 这次回到前台的时刻（启动即算一次）：前台提示只报它之后的转换（`SessionAlertTracker`）。
-@MainActor
 private final class ActiveSince {
     var date = Date()
 }

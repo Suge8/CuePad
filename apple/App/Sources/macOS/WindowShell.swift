@@ -1,7 +1,6 @@
 #if os(macOS)
 import AppKit
 
-@MainActor
 protocol ShellWindow: AnyObject {
     var isVisible: Bool { get }
     var isFocused: Bool { get }
@@ -10,7 +9,6 @@ protocol ShellWindow: AnyObject {
 }
 
 /// 主窗口的显隐规则。窗口只隐藏不销毁，真正退出由应用终止流程负责。
-@MainActor
 final class WindowShell {
     private let window: any ShellWindow
 

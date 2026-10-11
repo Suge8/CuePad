@@ -314,7 +314,7 @@ struct NewTaskLine: View {
                 .onSubmit(add)
             if let projects, !projects.isEmpty {
                 Menu {
-                    Button(CaptureCopy.inbox) { chosen = .some(nil) }
+                    Button(CaptureCopy.unfiled) { chosen = .some(nil) }
                     Divider()
                     ForEach(projects) { item in Button(item.name) { chosen = item.id } }
                 } label: {
