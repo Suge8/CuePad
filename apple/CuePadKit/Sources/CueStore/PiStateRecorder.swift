@@ -43,14 +43,19 @@ extension CueStore {
         try db.run("\(end) WHERE id = ? AND state != ?", [ended, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID), ended])
       } else {
         try db.run("\(end) WHERE hostID = ? AND state != ? AND hosted IS NULL", [ended, now, Date.stamp, host, ended])
-        try restPiStates(host: host, sessionID: nil, at: now)
+        try rest(host: host, sessionID: nil, at: now)
       }
     }
   }
 
+  /// 托管的会话进程退出后的样子（见 `rest`），在一个写事务里提交并发布变更。
+  func restPiStates(host: String, sessionID: String, at now: Date) throws {
+    try write { try rest(host: host, sessionID: sessionID, at: now) }
+  }
+
   /// 托管的会话进程退出后的样子：记录留着、托管标记留着（进程不在），歇着——没有在做的事、没有问题、没有通知。
   /// 已经歇着的不动起点（"多久前"仍从它歇下算起）；已结束的不碰，所以与用户结束会话写的已结束先后不论。
-  func restPiStates(host: String, sessionID: String?, at now: Date) throws {
+  private func rest(host: String, sessionID: String?, at now: Date) throws {
     let rest = """
       UPDATE piSessionStates SET stateSince = CASE WHEN state = ? THEN stateSince ELSE ? END, state = ?, detail = NULL, question = NULL,
         notify = NULL, busySince = NULL, subagents = NULL, models = NULL, commands = NULL, modifiedAt = ?
@@ -61,6 +66,18 @@ extension CueStore {
       try db.run("\(rest) AND id = ?", head + [PiSessionState.recordID(sessionID: sessionID)])
     } else {
       try db.run("\(rest) AND hostID = ?", head + [host])
+    }
+  }
+
+  /// 删掉这台 Mac 上歇着的托管会话里没有会话文件索引的记录（文件被删的、从没落盘的）；`live` 是此刻在线的会话，不动。
+  func deleteUnindexedHostedStates(host: String, except live: Set<String>) throws {
+    let refs = live.isEmpty ? "" : "AND sessionID NOT IN (\(Array(repeating: "?", count: live.count).joined(separator: ", ")))"
+    var arguments: [any SQLBindable] = [host, PiWorkState.ended.rawValue]
+    arguments += live.sorted().map { $0 as any SQLBindable }
+    try write {
+      try db.run(
+        "DELETE FROM piSessionStates WHERE hostID = ? AND hosted = 1 AND state != ? AND sessionID NOT IN (SELECT id FROM piSessions) \(refs)",
+        arguments)
     }
   }
 
@@ -195,6 +212,13 @@ public actor PiStateRecorder {
   public func end(sessionID: String) async throws {
     if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }
     try await endRecords(sessionID: sessionID)
+  }
+
+  /// 启动对账（历史回填完成后）：歇着的托管会话没有会话文件索引的（文件被删的、从没落盘的）删掉记录；此刻在线的（本记录器正在跟的）不动——
+  /// 它们的记录由状态变化自己写，对账与写入在这里排在同一条任务链上，不会删掉刚建立的会话。
+  public func dropUnindexedHosted() async throws {
+    let live = Set(sessions.keys)
+    try await persist { [store, hostID] in try await store.deleteUnindexedHostedStates(host: hostID, except: live) }
   }
 
   /// 会话的进程退出了、没有别的进程接着它：什么算历史只在这里定——
