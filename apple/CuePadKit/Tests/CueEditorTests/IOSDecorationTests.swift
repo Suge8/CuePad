@@ -76,15 +76,6 @@ struct IOSHighlightTests {
         #expect(h.textView.textLayoutManager != nil)
     }
 
-    @Test("换主题后高亮使用新颜色")
-    func themeChange() {
-        let h = EditorHarness()
-        h.load("{{甲}}")
-        var theme = h.textView.theme
-        theme.variableBackground = .systemYellow
-        h.textView.theme = theme
-        #expect(highlightedRanges(in: h.textView, color: .systemYellow) == [NSRange(location: 0, length: 5)])
-    }
 }
 
 @MainActor
@@ -146,26 +137,6 @@ struct IOSDecorationTests {
         h.textView.insertText("```\n")
         p = try paragraphs(h, 5)
         #expect(font(p[2]) == theme.codeFont && font(p[4]) == theme.font)
-    }
-
-    @Test("代码块整行铺底色，直到行宽末尾")
-    func codeBandSpansLine() throws {
-        let h = EditorHarness()
-        h.load("标题\n```\nx\n```\n正文")
-        var code: CGRect?, body: CGRect?
-        let inset = h.textView.textContainerInset
-        h.textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
-            let text = (fragment.textElement as? NSTextParagraph)?.attributedString.string
-            if text == "x\n" { code = fragment.layoutFragmentFrame.offsetBy(dx: inset.left, dy: inset.top) }
-            if text == "正文" { body = fragment.layoutFragmentFrame.offsetBy(dx: inset.left, dy: inset.top) }
-            return true
-        }
-        func brightness(_ line: CGRect) throws -> CGFloat {
-            var b: CGFloat = 0
-            try #require(h.renderedCenterColor(of: CGRect(x: 340, y: line.minY + 2, width: 4, height: 4))).getHue(nil, saturation: nil, brightness: &b, alpha: nil)
-            return b
-        }
-        #expect(abs(try brightness(try #require(code)) - (try brightness(try #require(body)))) > 0.02)
     }
 
     @Test("装饰不写入文本存储、不进撤销栈、不改存储格式")

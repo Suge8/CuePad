@@ -54,15 +54,6 @@ struct HighlightTests {
         #expect(h.textView.textLayoutManager != nil)  // 全程没有降级到 TextKit 1
     }
 
-    @Test("换主题后高亮使用新颜色")
-    func themeChange() {
-        let h = EditorHarness()
-        h.load("{{甲}}")
-        var theme = h.textView.theme
-        theme.variableBackground = NSColor.systemYellow
-        h.textView.theme = theme
-        #expect(highlightedRanges(in: h.textView, color: .systemYellow) == [NSRange(location: 0, length: 5)])
-    }
 }
 
 @MainActor

@@ -18,28 +18,17 @@ struct ReplyBarTests {
 
     // MARK: 主按钮
 
-    @Test func 空着而Agent在跑一轮_主按钮是停止() {
+    /// 空着而 Agent 在跑一轮是停止；有字时点按（⌘↩）等它做完再说、长按（⌘⇧↩）马上说，没在跑时两种都是直接发送，斜杠命令不分；
+    /// 等你确认时文字型问题是作答、选择型没有主按钮。
+    @Test func 主按钮按状态切换() {
         #expect(MacDelivery.button(for: session(.tool), hasDraft: false) == .stop)
         #expect(MacDelivery.button(for: session(.thinking), hasDraft: false) == .stop)
-    }
-
-    /// 点按（⌘↩）等它做完再说，长按（⌘⇧↩）马上说。
-    @Test func 有字而Agent在跑_点按等它做完_长按马上说() {
         #expect(MacDelivery.button(for: session(.tool), hasDraft: true) == .send(tap: .followUp, hold: .steer))
-    }
-
-    @Test func Agent没在跑_两种都是直接发送() {
+        #expect(MacDelivery.button(for: session(.tool), hasDraft: true, command: true) == .send(tap: .command, hold: .command))
         for state in [PiWorkState.settled, .ended, .error, .delegating] {
             #expect(MacDelivery.button(for: session(state), hasDraft: true) == .send(tap: .send, hold: .send))
             #expect(MacDelivery.button(for: session(state), hasDraft: false) == .send(tap: .send, hold: .send))
         }
-    }
-
-    @Test func 斜杠命令不分马上说与等它做完() {
-        #expect(MacDelivery.button(for: session(.tool), hasDraft: true, command: true) == .send(tap: .command, hold: .command))
-    }
-
-    @Test func 等你确认_文字型是作答_选择型没有主按钮() {
         let text = PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？")
         let pick = PiQuestion(promptID: "p", kind: .select, text: "覆盖吗？", options: ["是", "否"])
         #expect(MacDelivery.button(for: session(.waitingForUser, question: text), hasDraft: false) == .answer)

@@ -52,8 +52,8 @@ struct ReplyDraftTests {
         #expect(self.settings(suite).replyDraft(for: session).text.isEmpty)
     }
 
-    /// 回复框每个键都改草稿：界面立即读到新字，偏好只在停手后写一次，退出前冲刷。
-    @Test func 连续输入只在停手后写一次偏好() async {
+    /// 回复框每个键都改草稿：界面立即读到新字，偏好只在停手后写一次；退出前冲刷把还没写的立即写下（没有未写的草稿时什么也不做）。
+    @Test func 连续输入只在停手后写一次偏好_冲刷立即写下() async {
         let defaults = CountingDefaults(suiteName: "drafts-\(UUID())")!
         let settings = AppSettings(defaults: defaults, launchArguments: [:])
         let session = UUID()
@@ -68,18 +68,11 @@ struct ReplyDraftTests {
         await eventually { defaults.writes["replyTexts"] != nil }
         try? await Task.sleep(for: .milliseconds(600))
         #expect(defaults.writes["replyTexts"] == 1)
-    }
 
-    @Test func 冲刷把还没写的草稿立即写下() {
-        let defaults = CountingDefaults(suiteName: "drafts-\(UUID())")!
-        let settings = AppSettings(defaults: defaults, launchArguments: [:])
-        let session = UUID()
         settings.setReplyDraft(ComposerDraft(text: "没写完"), for: session)
-
         settings.flush()
         settings.flush()
-
-        #expect(defaults.writes["replyTexts"] == 1)
+        #expect(defaults.writes["replyTexts"] == 2)
         #expect(AppSettings(defaults: defaults, launchArguments: [:]).replyDraft(for: session).text == "没写完")
     }
 

@@ -379,12 +379,16 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    /// 已经结束的会话（不在这台 Mac 的桥上）：目标达成，按成功写回，不能为了结束它而把它恢复起来。
-    @Test func 结束已经结束的会话直接成功_不恢复() async throws {
+    /// 已经结束的会话（不在这台 Mac 的桥上）没有可结束的会话、也没有这一轮可停：目标达成，按成功写回，不恢复它、不碰桥。
+    @Test(arguments: [DeliveryMode.end, .stop])
+    func 结束或停止已经结束的会话直接成功_不恢复(mode: DeliveryMode) async throws {
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
 
-        let request = try await services.store.requestEnd(of: SendTarget(kind: .piSession, name: "app", ref: "old"), on: TestApp.hostID)
+        let target = SendTarget(kind: .piSession, name: "app", ref: "old")
+        let request = mode == .end
+            ? try await services.store.requestEnd(of: target, on: TestApp.hostID)
+            : try await services.store.requestStop(of: target, on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
@@ -404,55 +408,24 @@ struct MacSyncTests {
         #expect(try await services.store.sendRecords().isEmpty)
     }
 
-    /// 已经结束的会话没有这一轮可停：按成功写回，不恢复它、不碰桥。
-    @Test func 停止已经结束的会话直接成功_不恢复() async throws {
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestStop(of: SendTarget(kind: .piSession, name: "app", ref: "old"), on: TestApp.hostID)
-        let done = try await awaitFinished(request.id)
-
-        #expect(done.status == .known(.succeeded))
-        #expect(rig.host.calls.isEmpty)
-    }
-
-    /// 停止这一轮：请求发给会话所在的 Mac，写出后立即上传。
+    /// 手机上停止、结束、改配置：请求都发给会话所在的那台 Mac，写出后立即上传（与发送、作答同一条通路）。
     @Test(.timeLimit(.minutes(1)))
-    func 请求停止写给会话所在的Mac并立即上传() async throws {
+    func 请求停止_结束_改配置写给会话所在的Mac并立即上传() async throws {
         try await PiStateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .thinking, title: "远处")
         let session = try #require(try await services.store.allPiSessionStates().first)
         var uploads = rig.sync.uploads.stream.makeAsyncIterator()
 
-        let request = try await services.stop(session)
+        let stop = try await services.stop(session)
+        #expect(stop.hostID == "mac-other" && stop.mode == .known(.stop) && stop.target.ref == "far")
+        #expect(await uploads.next() == stop.id.uuidString.lowercased())
 
-        #expect(request.hostID == "mac-other" && request.mode == .known(.stop) && request.target.ref == "far")
-        #expect(await uploads.next() == request.id.uuidString.lowercased())
-    }
+        let end = try await services.end(session)
+        #expect(end.hostID == "mac-other" && end.mode == .known(.end) && end.target.ref == "far")
+        #expect(await uploads.next() == end.id.uuidString.lowercased())
 
-    /// 手机上结束会话：请求发给会话所在的 Mac，写出后立即上传。
-    @Test(.timeLimit(.minutes(1)))
-    func 请求结束会话写给会话所在的Mac并立即上传() async throws {
-        try await PiStateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .settled, title: "远处")
-        let session = try #require(try await services.store.allPiSessionStates().first)
-        var uploads = rig.sync.uploads.stream.makeAsyncIterator()
-
-        let request = try await services.end(session)
-
-        #expect(request.hostID == "mac-other" && request.mode == .known(.end) && request.target.ref == "far")
-        #expect(await uploads.next() == request.id.uuidString.lowercased())
-    }
-
-    /// 手机上改配置：请求发给会话所在的那台 Mac，写出后立即上传（与发送、作答同一条通路）。
-    @Test(.timeLimit(.minutes(1)))
-    func 请求改配置写给会话所在的Mac并立即上传() async throws {
-        try await PiStateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .settled, title: "远处")
-        let session = try #require(try await services.store.allPiSessionStates().first)
-        var uploads = rig.sync.uploads.stream.makeAsyncIterator()
-
-        let request = try await services.configure(PiConfig(thinking: .low), for: session)
-
-        #expect(request.hostID == "mac-other" && request.config == PiConfig(thinking: .low) && request.target.ref == "far")
-        #expect(await uploads.next() == request.id.uuidString.lowercased())
+        let config = try await services.configure(PiConfig(thinking: .low), for: session)
+        #expect(config.hostID == "mac-other" && config.config == PiConfig(thinking: .low) && config.target.ref == "far")
+        #expect(await uploads.next() == config.id.uuidString.lowercased())
     }
 
     /// Mac 主动拉取的条件看桥上真的连着的会话，不看资料库里的状态记录（记录可能是没来得及标为结束的旧会话）；
