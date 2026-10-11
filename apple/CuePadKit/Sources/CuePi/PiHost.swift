@@ -149,7 +149,7 @@ public final class PiHost {
         let changes = bridge.changes()  // 先订阅再启动：连上的那一刻不会漏
         try process.run()
         let pid = process.processIdentifier
-        let hosted = Hosted(process: process, stdin: stdin, gone: Task { for await _ in terminated {} })
+        let hosted = Hosted(process: process, stdin: stdin, gone: Self.watch(terminated))
         processes[pid] = hosted
         let timeout = connectTimeout
         let connecting = Task { try await withThrowingTaskGroup(of: PiSession?.self) { group in
@@ -197,6 +197,11 @@ public final class PiHost {
         Task {
             do { try await bridge.reload(successor.id) } catch { Self.log.notice("让接手的会话重新载入失败：\(String(describing: error))") }
         }
+    }
+
+    /// 不在主线程隔离里建：退出时主线程可能被占住，等进程退出的任务不能排在它后面。
+    private nonisolated static func watch(_ terminated: AsyncStream<Void>) -> Task<Void, Never> {
+        Task { for await _ in terminated {} }
     }
 
     private func close(_ hosted: Hosted) {

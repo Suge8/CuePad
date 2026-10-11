@@ -187,7 +187,8 @@ public final class PiBridge {
                 }
             }
         } onCancel: {
-            // 调用方取消：不等 ack 或超时，立即以取消结束（命令已发出，扩展照常执行）
+            // 调用方取消：不等 ack 或超时，立即以取消结束（命令已发出，扩展照常执行）。切回主线程前 ack 已到的话请求已被取走，
+            // 这里什么都不做，按正常返回
             Task { @MainActor [weak self] in self?.links[id]?.pending.removeValue(forKey: commandID)?.resume(throwing: CancellationError()) }
         }
         guard ack.ok else { throw PiBridgeError.rejected(ack.error ?? "unknown") }

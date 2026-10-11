@@ -10,7 +10,9 @@ public func runCapturing(_ process: Process, timeout: Duration? = nil) async -> 
     let (exited, exit) = AsyncStream<Int32>.makeStream()
     process.terminationHandler = { exit.yield($0.terminationStatus) }
     do { try process.run() } catch { return nil }
-    return await withTaskGroup(of: Event.self) { group in
+    // 包一层不继承取消的任务：取消调用方不影响进程，超时照样终止它，退出码照实取
+    // （withTaskCancellationShield 要 macOS 27，部署目标是 26）
+    return await Task { await withTaskGroup(of: Event.self) { group in
         group.addTask { .output(await readToEnd(out.fileHandleForReading)) }
         group.addTask {
             for await code in exited { return .exited(code) }
@@ -37,7 +39,7 @@ public func runCapturing(_ process: Process, timeout: Duration? = nil) async -> 
             }
         }
         return timedOut ? nil : (status, String(decoding: data, as: UTF8.self))
-    }
+    } }.value
 }
 
 @concurrent private func readToEnd(_ handle: FileHandle) async -> Data {
