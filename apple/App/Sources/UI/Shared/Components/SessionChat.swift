@@ -2,8 +2,8 @@ import CueStore
 import SwiftUI
 
 /// 会话页的对话区（iOS 会话页、Mac 会话页共用）：滚动区（`ChatScroll`）里只排最近几条的对话（`PiConversation`），
-/// 离最早那头不到一屏时（往上翻、或排开的几条铺不满一屏）再排开一段；正在请 Mac 补写对话时最上面一行说明；右缘的刻度滑条跳到你的某句话，跳到后描一圈。那句还没排开时先排开，
-/// 排开之后再跳：同一次更新里跳，目标还不在滚动区里。
+/// 离最早那头不到一屏时（往上翻、或排开的几条铺不满一屏）再排开一段；正在请 Mac 补写对话时最上面一行说明；右缘的刻度滑条跳到你的某句话，跳到后描一圈。先描圈、
+/// 排开（那句所在的段排成真的），下一次更新再跳：同一次更新里跳，目标还不在滚动区里。
 struct SessionChat: View {
     let session: PiSessionState
     let digest: SessionDigest
@@ -32,10 +32,10 @@ struct SessionChat: View {
         .environment(\.chatHighlight, highlight.id)
         .overlay(alignment: .trailing) { scrubber }
         .onChange(of: follow.nearOldest, initial: true) { _, near in if near { showEarlier() } }
-        .onChange(of: window) {
+        .onChange(of: pendingJump) {
             guard let id = pendingJump else { return }
             pendingJump = nil
-            jump(to: id)
+            follow.jump(to: id)
         }
     }
 
@@ -43,13 +43,10 @@ struct SessionChat: View {
         let marks = ChatScrubber.marks(PiChat.entries(digest.messages, previews: digest.previews))
         if !marks.isEmpty {
             ChatScrubber(marks: marks, scrolling: follow.scrolling) { id in
-                let needed = PiConversation.window(reaching: id, messages: digest.messages, previews: digest.previews) ?? 0
-                if needed > window {
-                    pendingJump = id
-                    window = needed
-                } else {
-                    jump(to: id)
-                }
+                // 先描圈、排开：那句所在的段这一下才排成真的（离屏远的段是空白，`PiConversation`），排好了再跳
+                highlight.flash(id)
+                window = max(window, PiConversation.window(reaching: id, messages: digest.messages, previews: digest.previews) ?? 0)
+                pendingJump = id
             }
             .padding(.trailing, scrubberInset)
         }
@@ -63,10 +60,5 @@ struct SessionChat: View {
         DebugHooks.chatShowsEarlier(from: first, of: count)
         follow.willPrepend()
         window += PiConversation.segment
-    }
-
-    private func jump(to id: UUID) {
-        follow.jump(to: id)
-        highlight.flash(id)
     }
 }

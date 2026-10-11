@@ -17,6 +17,10 @@ struct PiConversation: View {
     @Environment(\.palette) private var palette
     @Environment(\.chatHighlight) private var highlight
     @State private var opened: PiPreview?
+    /// 每段排出来的尺寸（实测）、正在屏上的段、整列的宽：离屏远的段换成同样高的空白（`segment(_:of:)`）。
+    @State private var sizes: [Int: CGSize] = [:]
+    @State private var onScreen: Set<Int> = []
+    @State private var width: CGFloat = 0
 
     var body: some View {
         let all = ChatItem.of(PiChat.entries(messages, previews: previews))
@@ -28,12 +32,12 @@ struct PiConversation: View {
             if all.isEmpty { RecapPreview(session: session) }
             // 一段一段排，每段只按内容比较：上面再排开一段、下面来了新消息时，没变的段不重算也不重排，
             // 系统直接用上次量好的尺寸（整列一起排时，每排开一段都把已排开的全部重量一遍，长对话里一次几百毫秒）
-            ForEach(first..<Self.segments(all.count), id: \.self) { index in
-                ChatSegment(
-                    items: Array(all[(index * Self.segment)..<min((index + 1) * Self.segment, all.count)]), session: session,
-                    highlight: highlight, opened: $opened
-                )
-                .equatable()
+            let last = Self.segments(all.count) - 1
+            ForEach(first..<(last + 1), id: \.self) { index in
+                segment(index, of: all, last: last)
+                    .onScrollVisibilityChange(threshold: 0.01) { visible in
+                        if visible { onScreen.insert(index) } else { onScreen.remove(index) }
+                    }
             }
             ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
             ending
@@ -41,6 +45,7 @@ struct PiConversation: View {
         // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
         .scrollTargetLayout()
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width.rounded() } action: { width = $0 }
         #if os(iOS)
         // 手机上长按出的是消息菜单，挑字走菜单里的"选择文本"：对话里的字不开行内选择，每行少建一套文字交互。
         // 挂在弹出预览之内：从这里打开的文件预览照常可选
@@ -52,9 +57,30 @@ struct PiConversation: View {
         }
     }
 
+    /// 一段：在屏上或离屏上不到 `spare` 段的、最新一段（还会长）、描圈的那条所在的段（刻度滑条正要跳过去）、还没在这个宽度下量过的段排真的；
+    /// 其余换成量好的那么高的空白。挂着的视图数就不随翻过的深度变多（整列都挂着时，翻到 300 轮前排开一段要 200ms 以上），
+    /// 内容高也不变：换的时候正在读的不动，滚动区不用补偿。
+    @ViewBuilder private func segment(_ index: Int, of all: [ChatItem], last: Int) -> some View {
+        let items = Array(all[(index * Self.segment)..<min((index + 1) * Self.segment, all.count)])
+        if let size = sizes[index], size.width == width, index != last, !onScreen.contains { abs($0 - index) <= Self.spare },
+            !items.contains(where: { $0.id == highlight })
+        {
+            Color.clear.frame(height: size.height)
+        } else {
+            ChatSegment(items: items, session: session, highlight: highlight, opened: $opened)
+                .equatable()
+                .onGeometryChange(for: CGSize.self) { CGSize(width: $0.size.width.rounded(), height: $0.size.height) } action: {
+                    sizes[index] = $0
+                }
+        }
+    }
+
+    /// 屏上那几段上下各再排几段真的：快甩时滑进来的先是排好的，不露空白。
+    static let spare = 2
+
     static var spacing: CGFloat { 16 }
     /// 最初至少排开几条；一段几条（每次再排开一段）。段按从最早那条起的位置切，排开更早的只是在上面多显示一段，已有的段不变。
-    static let firstWindow = 4, segment = 10
+    static let firstWindow = 4, segment = 5
 
     static func segments(_ count: Int) -> Int { (count + segment - 1) / segment }
 
