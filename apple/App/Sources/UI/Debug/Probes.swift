@@ -155,22 +155,30 @@ final class TurnLog {
         return (log, changedAt, since)
     }
 
-    /// 画面的指纹：窗口图层树里看得见的层（不隐藏、不透明）的位置、大小、变换、透明度与内容。动画只改显示层、不改模型层，所以不会因为转着的图标而变。
+    /// 画面的指纹：窗口图层树里看得见的层（不隐藏、不透明）的位置、大小、变换、透明度、底色、边框、圆角、阴影与内容。
+    /// 不含图层对象本身：换了个什么都不画的层不算变。动画只改显示层、不改模型层，所以不会因为转着的图标而变。
     private static func fingerprint(_ layer: CALayer) -> Int {
         var hasher = Hasher()
         func visit(_ layer: CALayer) {
             guard !layer.isHidden, layer.opacity > 0 else { return }
-            hasher.combine(ObjectIdentifier(layer))
+            // 没有大小、没有内容、没有下级的层什么也不画
+            if layer.bounds.isEmpty, layer.contents == nil, layer.sublayers?.isEmpty != false { return }
             hasher.combine(layer.position.x)
             hasher.combine(layer.position.y)
             hasher.combine(layer.bounds.width)
             hasher.combine(layer.bounds.height)
             hasher.combine(layer.opacity)
-            // 按下、缩放这类只改变换的变化也要看得到
-            hasher.combine(layer.transform.m11)
-            hasher.combine(layer.transform.m22)
-            hasher.combine(layer.transform.m41)
-            hasher.combine(layer.transform.m42)
+            // 按下、缩放、旋转这类只改变换的变化也要看得到
+            let t = layer.transform
+            for value in [t.m11, t.m12, t.m13, t.m14, t.m21, t.m22, t.m23, t.m24, t.m31, t.m32, t.m33, t.m34, t.m41, t.m42, t.m43, t.m44] {
+                hasher.combine(value)
+            }
+            hasher.combine(layer.backgroundColor)
+            hasher.combine(layer.borderWidth)
+            hasher.combine(layer.borderColor)
+            hasher.combine(layer.cornerRadius)
+            hasher.combine(layer.shadowOpacity)
+            hasher.combine(layer.shadowRadius)
             if let contents = layer.contents { hasher.combine(ObjectIdentifier(contents as AnyObject)) }
             for sublayer in layer.sublayers ?? [] { visit(sublayer) }
         }
