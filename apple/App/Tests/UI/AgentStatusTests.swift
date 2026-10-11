@@ -39,7 +39,7 @@ struct AgentStatusTests {
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
         try await executor.start()
         defer { Task { await executor.stop() } }
-        for try await status in store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id)?.status }) where status == .known(.failed) {
+        for try await status in store.observe({ try $0.deliveryRequest(request.id)?.status }) where status == .known(.failed) {
             break
         }
         try await Task.sleep(for: .milliseconds(5))

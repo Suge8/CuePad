@@ -40,7 +40,7 @@ import Testing
   @Test func lastSendsChangesWakeObservers() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: p.id, body: "a")
-    var values = store.observe([.sendRecords, .cards]) { try Set($0.lastSends(in: p.id).keys) }
+    var values = store.observe { try Set($0.lastSends(in: p.id).keys) }
       .makeAsyncIterator()
     #expect(try await values.next() == [])
 

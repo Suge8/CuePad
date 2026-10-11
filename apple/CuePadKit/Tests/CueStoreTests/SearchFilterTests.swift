@@ -170,7 +170,7 @@ import Testing
 
   @Test func projectSummariesWakeObserversOnCardChanges() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
-    var values = store.observe([.cards, .projects]) { try $0.projectSummaries().map(\.cardCount) }.makeAsyncIterator()
+    var values = store.observe { try $0.projectSummaries().map(\.cardCount) }.makeAsyncIterator()
     #expect(try await values.next() == [0, 0])
 
     _ = try await store.createCard(in: p.id, body: "x")

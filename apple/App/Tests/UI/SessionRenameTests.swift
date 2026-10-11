@@ -26,7 +26,7 @@ struct SessionRenameTests {
     private func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome) async throws -> DeliveryExecutor {
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _ in outcome }
         try await executor.start()
-        for try await open in store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id)?.isOpen }) where open == false { break }
+        for try await open in store.observe({ try $0.deliveryRequest(request.id)?.isOpen }) where open == false { break }
         return executor
     }
 

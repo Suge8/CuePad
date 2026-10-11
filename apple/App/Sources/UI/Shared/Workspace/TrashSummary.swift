@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 回收站里的一行：删除的项目（连同其卡片）或单独删除的卡片。两端的回收站页列同一批行、做同一件事（恢复、永久删除）。
-nonisolated struct TrashItem: Identifiable, Sendable {
+nonisolated struct TrashItem: Identifiable, Sendable, Equatable {
     let id: UUID
     let title: String
     /// 项目写带进来的卡片数，卡片写摘要。
@@ -14,6 +14,11 @@ nonisolated struct TrashItem: Identifiable, Sendable {
     let purge: @Sendable (CueStore) async throws -> Void
     /// 恢复后落在哪个项目（nil 是未分类）：卡片所在的项目还在回收站时回到未分类，所以要在恢复之后读。
     let landing: @Sendable (CueStore) async throws -> Project?
+
+    /// 三个动作只由 id 与种类决定，比较看显示的内容。
+    static func == (lhs: TrashItem, rhs: TrashItem) -> Bool {
+        (lhs.id, lhs.title, lhs.detail, lhs.deletedAt, lhs.project) == (rhs.id, rhs.title, rhs.detail, rhs.deletedAt, rhs.project)
+    }
 
     init(_ project: Project, cards: Int) {
         id = project.id
@@ -43,7 +48,7 @@ nonisolated struct TrashItem: Identifiable, Sendable {
 }
 
 /// 回收站此刻的内容（iOS 与 Mac 的回收站页同一份读取）。
-nonisolated struct TrashSummary: Sendable {
+nonisolated struct TrashSummary: Sendable, Equatable {
     var projects: [TrashItem]
     var cards: [TrashItem]
 

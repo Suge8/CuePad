@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 项目页的数据：读取时一并算好上墙用的卡片事实与每张卡的摘要（在 Store 的执行体上，不占主线程）。
-nonisolated private struct ProjectPage: Sendable {
+nonisolated private struct ProjectPage: Sendable, Equatable {
     var data: ProjectPageData
     var stamps: [CardStamp]
     var entries: [UUID: CardEntry]

@@ -110,7 +110,7 @@ struct CardPicker: View {
     }
 
     /// 一次读到的结果：所属项目的资料最前、本项目其余卡片其次（项目只在不分组时为 nil），其余在后；每张卡只出现一次。
-    nonisolated struct Page: Sendable {
+    nonisolated struct Page: Sendable, Equatable {
         var resources: [CardEntry] = []
         var pinned: [CardEntry]
         var rest: [CardEntry]
@@ -130,7 +130,7 @@ struct CardPicker: View {
 }
 
 /// 卡片与它的摘要。摘要在读数据时算好（Store 的执行体上），渲染与滚动时不在主线程解析正文。
-nonisolated struct CardEntry: Identifiable, Sendable {
+nonisolated struct CardEntry: Identifiable, Sendable, Equatable {
     let card: Card
     let text: CardText
     var id: UUID { card.id }

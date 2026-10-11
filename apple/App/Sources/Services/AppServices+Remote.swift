@@ -69,7 +69,7 @@ extension AppServices {
         let host = hostID
         let name = SCDynamicStoreCopyComputerName(nil, nil) as String? ?? "Mac"
         try await store.publishDirectoryBindings(host: host, hostName: name)
-        let changes = store.observe([.projectDirectories]) { _ in () }
+        let changes = store.observe { try $0.projectDirectories() }
         tasks.append(Task { [store, weak self] in
             do {
                 for try await _ in changes { try await store.publishDirectoryBindings(host: host, hostName: name) }

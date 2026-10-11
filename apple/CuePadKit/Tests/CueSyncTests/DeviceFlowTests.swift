@@ -129,7 +129,7 @@ import Testing
     let request = try await phone.store.requestDelivery("run this", to: SendTarget(kind: .piSession, name: "fix bug", ref: "s1"), on: "mac")
 
     try await cloud.exchange()  // 手机 → Mac
-    _ = try await eventually(mac.store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .known(.succeeded) }
+    _ = try await eventually(mac.store, { try $0.deliveryRequests().first?.status }) { $0 == .known(.succeeded) }
     try await cloud.exchange()  // Mac → 手机：结果回来
     let back = try #require(try await phone.store.deliveryRequest(request.id))
     #expect(back.status == .known(.succeeded))
@@ -139,7 +139,7 @@ import Testing
 
     await clock.waitForSleeper()
     clock.advance(.seconds(61))
-    _ = try await eventually(mac.store, watching: [.deliveryRequests], { try $0.deliveryRequests().count }) { $0 == 0 }
+    _ = try await eventually(mac.store, { try $0.deliveryRequests().count }) { $0 == 0 }
     try await cloud.exchange()  // 清理同步过去
     #expect(try await phone.store.deliveryRequest(request.id) == nil)
     await executor.stop()

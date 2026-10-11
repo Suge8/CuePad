@@ -3,7 +3,7 @@ import CueStore
 import CueText
 import SwiftUI
 
-nonisolated private struct PaletteData: Sendable {
+nonisolated private struct PaletteData: Sendable, Equatable {
     var cards: [Card]
     var total: Int
     var projects: [Project]
