@@ -131,7 +131,7 @@ struct TaskOutline<Line: View>: View {
     private func commit(_ dragged: TaskDragSession.Dragged, _ move: TaskMove) {
         commits += 1
         if dragged.isTask {
-            workspace.move(dragged.id, move)
+            workspace.perform { try await $0.moveCard(dragged.id, to: move.slot, after: move.after) }
         } else {
             workspace.attempt { try await workspace.attach(dragged.id, move) }
         }

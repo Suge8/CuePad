@@ -241,9 +241,9 @@ private struct SplitShortcuts: View {
                 withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
             }
             .keyboardShortcut("\\")
-            Button("任务") { navigation.showTasks() }.keyboardShortcut("t", modifiers: [.command, .shift])
+            Button("任务") { navigation.show(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
             ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
-                Button("项目 \(index + 1)") { navigation.show(project: project.id) }
+                Button("项目 \(index + 1)") { navigation.show(.project(project.id)) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
             }
         }

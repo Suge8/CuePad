@@ -69,13 +69,9 @@ struct NoticeBanner: View {
         }
     }
 
-    private func go(_ link: Workspace.Link) {
+    private func go(_ route: Route) {
         workspace.notice = nil
-        switch link {
-        case .project(let id?): navigation.show(project: id)
-        case .project(nil): navigation.showInbox()
-        case .session(let id): navigation.show(session: id)
-        }
+        navigation.show(route)
     }
 }
 #endif

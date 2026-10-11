@@ -116,7 +116,7 @@ struct CardEditorPage: View {
                     task: task, detail: taskDetail, open: { workspace.openCard = $0.id }, hand: hand,
                     write: {
                         let id = task.id
-                        workspace.attempt { workspace.openCard = try await workspace.createPrompt(under: id).id }
+                        workspace.attempt { workspace.openCard = try await workspace.services.store.createCard(body: "", under: id).id }
                     })
                 SubtaskList(detail: taskDetail, open: { workspace.openCard = $0.id })
             }
@@ -146,7 +146,7 @@ struct CardEditorPage: View {
             handle.focus()
             await NextFrame.wait()
             guard isOpen else { return }
-            workspace.opened(cardID)
+            workspace.presses.opened(cardID)
             withAnimation(Motion.quick) { shown = true } completion: { settled = true }
         }
     }

@@ -187,7 +187,7 @@ final class Navigation {
         case .capture(let project):
             startCapture(project: .some(project))
         case .project(let id):
-            show(project: id)
+            show(.project(id))
         case .card(let id):
             if layout == .tabs { tab = .projects }
             push(.card(id))
@@ -196,17 +196,22 @@ final class Navigation {
 
     /// 点开的 Pi 通知：直接打开该会话的近况。
     func open(alert tap: PiAlertTap?) {
-        if let tap { show(session: tap.sessionState) }
+        if let tap { show(.session(tap.sessionState)) }
     }
 
-    /// 打开一个会话的近况（iPhone 在 Agent 标签里，iPad 推入详情栏）；通知与前台提示的去处。
-    func show(session id: UUID) {
-        switch layout {
-        case .tabs:
+    /// 去一页（通知、小组件、侧栏共用）：会话的近况在 Agent 标签里（iPad 推入详情栏），其余在灵感标签里（iPad 选中侧栏）。
+    /// 在项目页里要能返回项目的入口（任务页）用 `push`。
+    func show(_ route: Route) {
+        switch (route, layout) {
+        case (.session, .tabs):
             tab = .agent
-            agentPath = [.session(id)]
-        case .split:
-            if splitPath.last != .session(id) { splitPath.append(.session(id)) }
+            agentPath = [route]
+        case (.session, .split):
+            if splitPath.last != route { splitPath.append(route) }
+        case (_, .split): select(route)
+        case (_, .tabs):
+            tab = .projects
+            projectsPath = [route]
         }
     }
 
@@ -231,8 +236,8 @@ final class Navigation {
     /// 顶上那条提示还留不留：说的是某个会话的提示（等你确认、做完了），你进了那个会话或 Agent 列表就当场撤下
     /// （与不弹同一条规则 `showsAlert`），不在正看着的页面上停满 5 秒；别的提示照常留到时间。
     func keeps(_ notice: Workspace.Notice) -> Bool {
-        guard case .session(let session) = notice.link else { return true }
-        return showsAlert(about: session)
+        guard case .session(let route)? = notice.link else { return true }
+        return showsAlert(about: route.id)
     }
 
     /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id，记录已被删时用它读对话）；`draft` 带进它的回复框
@@ -279,20 +284,6 @@ final class Navigation {
         capturing = false
     }
 
-    /// 打开未分类（iPhone 推入项目标签，iPad 选中侧栏）。
-    func showInbox() {
-        if layout == .split { select(.inbox) } else { tab = .projects; projectsPath = [.inbox] }
-    }
-
-    /// 打开任务页（iPhone 推入项目标签，iPad 选中侧栏）。在项目页里要能返回项目时用 `push(.tasks)`。
-    func showTasks() {
-        if layout == .split { select(.tasks) } else { tab = .projects; projectsPath = [.tasks] }
-    }
-
-    /// 打开项目页（iPhone 推入项目标签，iPad 选中侧栏）。
-    func show(project id: UUID) {
-        if layout == .split { select(.project(id)) } else { tab = .projects; projectsPath = [.project(id)] }
-    }
 }
 
 extension Route {

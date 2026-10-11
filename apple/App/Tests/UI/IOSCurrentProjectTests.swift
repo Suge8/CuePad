@@ -57,7 +57,7 @@ struct IOSCurrentProjectTests {
         #expect(phone.currentProject == project.id)
 
         let pad = navigation(.split)
-        pad.show(project: project.id)
+        pad.show(.project(project.id))
         pad.push(.card(UUID()))
         #expect(pad.currentProject == project.id)  // 项目页上打开的卡
         pad.select(.tasks)

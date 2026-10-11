@@ -4,7 +4,7 @@ import SwiftUI
 extension View {
     /// 墙上能点开的卡：显出按下（`CardPresence`）、报鼠标进出——按下时据此知道按的是哪张卡。
     func cardPresence(_ id: UUID, in workspace: Workspace) -> some View {
-        modifier(CardPresenceSource(card: id, presence: workspace.presence(of: id), workspace: workspace))
+        modifier(CardPresenceSource(card: id, presence: workspace.presses.presence(of: id), workspace: workspace))
     }
 }
 
@@ -22,7 +22,7 @@ private struct CardPresenceSource: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.cardHeld, presence.held)
-            .onHover { workspace.hover(card, inside: $0) }
+            .onHover { workspace.presses.hover(card, inside: $0) }
     }
 }
 #endif

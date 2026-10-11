@@ -89,8 +89,8 @@ enum InteractionBench {
         if let big = workspace.catalog?.cardCounts.filter({ $0.key != nil }).max(by: { $0.value < $1.value })?.key {
             await step("页面回访") { workspace.show(.project(big)) }
             for _ in 0..<2 {
-                await step("侧栏收起") { workspace.toggleSidebar() }
-                await step("侧栏展开") { workspace.toggleSidebar() }
+                await step("侧栏收起") { workspace.pages.toggleSidebar() }
+                await step("侧栏展开") { workspace.pages.toggleSidebar() }
             }
         }
         NSApp.terminate(nil)

@@ -48,7 +48,7 @@ struct TaskBoardTests {
         let todo = try await store.createTask("写首页文案", in: nil)
         let doing = try await store.createTask("补测试", in: nil)
 
-        try await workspace.start(doing)
+        try await workspace.services.store.setStatus(doing.id, .inProgress)
         #expect(try await store.card(doing.id)?.status == .inProgress)
 
         try await workspace.toggle(todo)

@@ -17,7 +17,7 @@ final class Workspace {
         /// 图标；nil 时按成功/错误用默认的。
         var symbol: String?
         /// 点提示去哪（如随手记的落点）；nil 时提示只是告知。
-        var link: Link?
+        var link: Route?
         /// 提示右边的一个动作：多是"撤销"（把刚才那一下拨回去），完成任务后是"归档"。
         var action: NoticeAction?
     }
@@ -29,15 +29,6 @@ final class Workspace {
         var isUndo = false
         let run: @MainActor () async throws -> Void
         static func == (lhs: NoticeAction, rhs: NoticeAction) -> Bool { lhs.id == rhs.id }
-    }
-
-    /// 提示能带去的地方：项目页（nil 是未分类）。
-    enum Link: Equatable {
-        case project(UUID?)
-        #if os(iOS)
-        /// 一个 Pi 会话的近况页（会话记录 id）。
-        case session(UUID)
-        #endif
     }
 
     #if os(macOS)
@@ -60,17 +51,14 @@ final class Workspace {
     /// 第几次订阅项目目录：根视图以它为 `.task` 的 id，`retryCatalog` 加一即重新订阅。
     private(set) var catalogAttempt = 0
     #if os(macOS)
-    var sidebar: NavigationSplitViewVisibility = .all
+    let pages = MacPages()
+    let presses = CardPresses()
     private(set) var nonProjectPage: Route?
     /// 打开的卡（编辑页；iOS 打开卡片是推入导航，见 `Navigation.open(card:)`）。设成某张卡时编辑页立即挂上；
     /// 清空时编辑页先淡出，淡完才卸下（见 `presentedCard`）。
     var openCard: UUID? {
-        didSet { if let openCard { present(openCard) } }
+        didSet { if let openCard { presses.present(openCard) } }
     }
-    /// 编辑页挂在屏上的卡：比 `openCard` 晚一步清空，淡出期间仍在。
-    private(set) var presentedCard: UUID?
-    /// 各张卡的按下状态，按卡分开（见 `CardPresence`）。
-    @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
     #endif
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
     var attaching: Card?
@@ -120,10 +108,6 @@ final class Workspace {
     /// 请底部输入栏聚焦的次数（空态的"记一条"）：输入栏的焦点在它自己那里，只看这个数变了就聚焦。
     private(set) var captureFocusRequests = 0
     func focusCapture() { captureFocusRequests += 1 }
-    /// 鼠标停在哪张卡上、正按着哪张卡（卡片报上来的悬停与 AppKit 的鼠标事件，见 `mouse(down:)`）。不触发界面刷新。
-    @ObservationIgnored private var hoveredCard: UUID?
-    @ObservationIgnored private var pressedCard: UUID?
-    private static let releaseGrace: Duration = .milliseconds(80)
     var busySend: BusySend?
     /// 用户在本窗口选过或发过的 Agent 会话；nil 或已失效时用本项目的会话（`agentTarget`）。
     var sendChoice: AgentTarget?
@@ -133,39 +117,6 @@ final class Workspace {
     /// 这次运行里在这台 Mac 上结束的会话（同步记录），最近结束的在前。可观察：默认发送目标在没有在线会话时取其中本项目最近结束的那个，
     /// 会话名和发送菜单也读它；运行之前就已结束的历史会话不在其中。数据在 `LiveSessions`。
     var recentlyEnded: [PiSessionState] { services.liveSessions.recentlyEnded }
-
-    /// 鼠标进出一张卡。拖出卡片也就不再按着它（与按钮拖出即松开一致）。
-    func hover(_ card: UUID, inside: Bool) {
-        if inside {
-            hoveredCard = card
-        } else {
-            if hoveredCard == card { hoveredCard = nil }
-            if pressedCard == card { release() }
-        }
-    }
-
-    /// AppKit 分发鼠标按下、松开时调用（本地事件监听，早于 SwiftUI 按钮识别按下）：按下时鼠标停着的那张卡在这一轮就显出按下，
-    /// 点下的第一帧就有反馈。
-    func mouse(down: Bool) {
-        guard down else {
-            // 松开到"打开中"接上之间隔着一两次更新：这时就放开，卡片会先弹一下再按回去（两段动画叠加还会压得更小）。
-            // 稍等再放开；打开了就由"打开中"接着按住，没打开（取消）这时才回弹
-            let card = pressedCard
-            Task {
-                try? await Task.sleep(for: Self.releaseGrace)
-                if pressedCard == card { release() }
-            }
-            return
-        }
-        guard let card = hoveredCard else { return }
-        pressedCard = card
-        presence(of: card).pressing = true
-    }
-
-    private func release() {
-        if let card = pressedCard { presence(of: card).pressing = false }
-        pressedCard = nil
-    }
 
     /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
     let sessionHeader = SessionHeader()
@@ -207,128 +158,25 @@ final class Workspace {
         if case .project(let id) = page { id } else { nil }
     }
 
-    /// 内容区挂着的页（`PageStack`）：去过的页留着，回访不再重建；至多 `keptPages` 个，满了换掉最久没看的。会话页不留（带着输入焦点与实时对话，挂着不看会抢键盘）。
-    private(set) var kept: [Route] = []
-    @ObservationIgnored private var lastSeen: [Route: Int] = [:]
-    @ObservationIgnored private var visits = 0
-    @ObservationIgnored private var trimTask: Task<Void, Never>?
-    static let keptPages = 4
-
-    /// 侧栏开合的动画里（约 0.2 秒）。页面此刻不接指针（`PageStack`）：分栏每帧挪动详情区，AppKit 每帧重算整窗的鼠标跟踪区、重设指针，
-    /// 页面里每个悬停区都要重算（大项目页开一次侧栏多约 120ms 主线程、掉帧 5～8 次，页面不接指针后只剩约 45ms）；这几百毫秒里页面本来也不该响应指针。
-    /// 编辑页开合只改透明度、不挪视图，没有这笔开销。
-    private(set) var sidebarMoving = false
-    @ObservationIgnored private var sidebarMovingTask: Task<Void, Never>?
-
-    /// 刚离开的页：切页的那一帧它已经看不见，但"不在前台"（暂停订阅、停读实时状态）晚两帧才生效——页面重新求值要几十毫秒，不放在点击的回合里。
-    private(set) var leaving: Route?
-
     /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
-    var mountedPages: [Route] { kept.contains(page) ? kept : kept + [page] }
-
-    private func keep(_ page: Route) {
-        if case .session = page { return }
-        visits += 1
-        lastSeen[page] = visits
-        guard !kept.contains(page) else { return }
-        kept.append(page)
-        // 多出来的页不在这次点击里卸：卸一整页的视图树要几十毫秒，等切页的那一帧出去、安静下来再卸；连着去了很多页时先卸
-        if kept.count > Self.keptPages + 2 { trim() } else { scheduleTrim() }
-    }
-
-    /// 启动后空闲时先挂上一页（`Prewarm`）：它先读一份数据把整页建好（`pagePrefetch`），第一次点开就是回访，
-    /// 现建整页（Agent 页十几行会话要几十毫秒）不落在点击的回合里。不算去过，留着的页满了先换掉它。
-    func premount(_ page: Route) {
-        if !kept.contains(page) { kept.append(page) }
-    }
-
-    /// 先挂上、还没去过的页（`premount`）：去过的页都记着最后一次看它。
-    func isPremounted(_ page: Route) -> Bool { lastSeen[page] == nil }
-
-    private func scheduleTrim() {
-        trimTask?.cancel()
-        trimTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(600))
-            guard !Task.isCancelled else { return }
-            self?.trim()
-        }
-    }
-
-    /// 只留最近看过的 `keptPages` 页，当前页一定留着。
-    private func trim() {
-        let current = page
-        let stale = kept.filter { $0 != current }.sorted { lastSeen[$0, default: 0] < lastSeen[$1, default: 0] }.prefix(max(0, kept.count - Self.keptPages))
-        if !stale.isEmpty { kept.removeAll { stale.contains($0) } }
-    }
-
-    /// 进了回收站或删掉的项目不再留着它的页。
-    private func forget(projectsNotIn ids: Set<UUID>) {
-        let gone = kept.filter { if case .project(let id) = $0 { !ids.contains(id) } else { false } }
-        if !gone.isEmpty { kept.removeAll { gone.contains($0) } }
-    }
+    var mountedPages: [Route] { pages.kept.contains(page) ? pages.kept : pages.kept + [page] }
 
     /// 编辑页淡出结束。
     func finishClosingCard() {
         guard openCard == nil else { return }
-        dismissPresented()
-    }
-
-    /// 编辑页准备好、开始淡入：墙上那张卡放开。
-    func opened(_ card: UUID) {
-        presence(of: card).opening = false
-    }
-
-    /// 这张卡的按下状态；卡片视图只观察自己的那一个。
-    func presence(of card: UUID) -> CardPresence {
-        if let presence = presences[card] { return presence }
-        let presence = CardPresence()
-        presences[card] = presence
-        return presence
-    }
-
-    private func present(_ card: UUID) {
-        guard presentedCard != card else { return }
-        dismissPresented()
-        presentedCard = card
-        presence(of: card).opening = true
-    }
-
-    private func dismissPresented() {
-        if let card = presentedCard { presence(of: card).opening = false }
-        presentedCard = nil
+        presses.dismiss()
     }
 
     /// 切到一页（侧栏点哪就是哪）；开着的编辑页随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
     func show(_ page: Route) {
         openCard = nil
-        dismissPresented()
-        let left = self.page
-        keep(left)
-        keep(page)
-        if left != page {
-            leaving = left
-            Task { [weak self] in
-                await NextFrame.wait()
-                await NextFrame.wait()
-                if self?.leaving == left { self?.leaving = nil }
-            }
-        }
+        presses.dismiss()
+        pages.visit(from: self.page, to: page)
         if case .project(let id) = page {
             nonProjectPage = nil
             services.settings.currentProject = id
         } else {
             nonProjectPage = page
-        }
-    }
-
-    func toggleSidebar() {
-        sidebar = sidebar == .detailOnly ? .all : .detailOnly
-        // AppKit 的分栏动画约 0.2 秒
-        sidebarMoving = true
-        sidebarMovingTask?.cancel()
-        sidebarMovingTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
-            if !Task.isCancelled { self?.sidebarMoving = false }
         }
     }
     #endif
@@ -338,7 +186,7 @@ final class Workspace {
     static let noticeDuration: Duration = .seconds(2.4)
 
     func say(
-        _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Link? = nil, duration: Duration = Workspace.noticeDuration,
+        _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
         undo: (@MainActor () async throws -> Void)? = nil
     ) {
         say(
@@ -347,7 +195,7 @@ final class Workspace {
     }
 
     func say(
-        _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Link? = nil, duration: Duration = Workspace.noticeDuration,
+        _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
         action: NoticeAction?
     ) {
         let notice = Notice(text: text, isError: isError, symbol: symbol, link: link, action: action)
@@ -376,7 +224,7 @@ final class Workspace {
                 catalog = next
                 if membershipChanged {
                     #if os(macOS)
-                    forget(projectsNotIn: Set(next.projects.map(\.id)))
+                    pages.forget(projectsNotIn: Set(next.projects.map(\.id)))
                     await reconcileCurrentProject()
                     #endif
                 }
@@ -444,34 +292,9 @@ final class Workspace {
         if current != .done { say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) }) }
     }
 
-    /// 挪动卡片（拖放、缩进、反缩进、挂成提示词）；下级随它走。
-    func move(_ id: UUID, _ move: TaskMove) {
-        perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
-    }
-
-    /// 开始做（待办 → 进行中）；`back` 为 true 时停下回到待办。
-    func start(_ task: Card, back: Bool = false) async throws {
-        try await services.store.setStatus(task.id, back ? .todo : .inProgress)
-    }
-
-    /// 设为任务 / 改回灵感（改回时下级提到它的位置）。提示里带"撤销"，点了就拨回去：多行的灵感设为任务时拆出的那条提示词
-    /// 原样合回正文。
+    /// 设为任务 / 改回灵感；提示里带"撤销"。
     func setTodo(_ id: UUID, _ on: Bool) async throws {
-        let store = services.store
-        let body = try await store.card(id)?.body
-        let prompt = try await store.setTodo(id, on)
-        say(on ? "已设为任务" : "已改回灵感", undo: {
-            if let prompt, let body {
-                try await store.purgeCard(prompt.id)
-                try await store.updateCard(id) { $0.body = body }
-            }
-            try await store.setTodo(id, !on)
-        })
-    }
-
-    /// 任务下写一条提示词：先建一条空的接在下级最后，调用方随即打开它的编辑；离开时还是空白由 `leaveEditing` 删掉。
-    func createPrompt(under task: UUID) async throws -> Card {
-        try await services.store.createCard(body: "", under: task)
+        say(on ? "已设为任务" : "已改回灵感", undo: try await services.store.settingTodo(id, on))
     }
 
     /// 离开一条灵感或提示词的编辑：先写下没保存的字，还是空白（`Card.isBlank`）就不留下——记一条与写提示词都是先建一条空的再编辑。
@@ -493,22 +316,13 @@ final class Workspace {
         say("已归档", undo: { try await store.unarchive(id) })
     }
 
-    /// 删除一条灵感或任务（进回收站，下级提到它的位置，见 `CueStore.trashCard`）：提示里可撤销，撤销时下级回到它下面。
+    /// 删除一条灵感或任务：提示里可撤销。
     func trash(_ id: UUID) async throws {
-        let store = services.store
-        let children = try await store.children(of: id).map(\.id)
-        try await store.trashCard(id)
+        let undo = try await services.store.trashing(id)
         #if os(macOS)
         if openCard == id { openCard = nil }
         #endif
-        say("已删除", undo: {
-            try await store.restoreCard(id)
-            var previous: UUID?
-            for child in children {
-                try await store.moveCard(child, to: .under(id), after: previous)
-                previous = child
-            }
-        })
+        say("已删除", undo: undo)
     }
 
     /// 一键归档"最近完成"的任务。
@@ -523,14 +337,9 @@ final class Workspace {
         try await attach(idea, TaskMove(slot: .under(task), after: last))
     }
 
-    /// 灵感挂到任务下成为提示词（挑一条或拖到任务上）：提示里的撤销把它放回原来所在的项目、原来的位置。
+    /// 灵感挂到任务下成为提示词（挑一条或拖到任务上）：提示里可撤销。
     func attach(_ idea: UUID, _ move: TaskMove) async throws {
-        let store = services.store
-        guard let card = try await store.card(idea) else { throw CueStoreError.notFound }
-        let siblings = try await store.cards(in: card.projectID).map(\.id)
-        let before = siblings.firstIndex(of: idea).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
-        try await store.moveCard(idea, to: move.slot, after: move.after)
-        say("已成为任务的提示词", undo: { try await store.moveCard(idea, to: .top(project: card.projectID), after: before) })
+        say("已成为任务的提示词", undo: try await services.store.attaching(idea, move))
     }
 
     /// 复制正文（存储格式，变量已填）到剪贴板：普通的复制，不是发送，不记发送记录。
@@ -541,11 +350,6 @@ final class Workspace {
         } catch {
             fail(error)
         }
-    }
-
-    /// 界面上的设为任务 / 改回灵感：失败时提示。
-    func toggleTodo(_ id: UUID, _ on: Bool) {
-        attempt { try await self.setTodo(id, on) }
     }
 
     /// 点提示里的动作（撤销、归档）：收起提示，做那件事。
@@ -575,17 +379,3 @@ final class Workspace {
         }
     }
 }
-
-#if os(macOS)
-/// 一张卡的按下状态（Mac）。按卡分开、各自可观察：按下与打开时只有这张卡的视图重算，
-/// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
-@MainActor @Observable
-final class CardPresence {
-    /// 鼠标正按着这张卡（见 `Workspace.mouse(down:)`）。
-    fileprivate(set) var pressing = false
-    /// 刚点开、编辑页还在看不见地准备：卡保持按下，编辑页开始淡入时放开（`Workspace.opened`）。
-    fileprivate(set) var opening = false
-    /// 卡显出按下的样子（见 `CardOpenStyle`）。
-    var held: Bool { pressing || opening }
-}
-#endif

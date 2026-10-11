@@ -28,6 +28,9 @@ nonisolated enum Route: Hashable {
         .session(SessionRoute(id: id, sessionID: sessionID, seed: seed))
     }
 
+    /// 项目页，没有项目是未分类（通知与随手记的落点）。
+    static func place(_ project: UUID?) -> Route { project.map(Route.project) ?? .inbox }
+
     /// 从 Pi 的会话 id 去会话页（Mac 的侧栏、搜索、通知）。
     static func session(_ sessionID: String) -> Route { .session(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID) }
 }

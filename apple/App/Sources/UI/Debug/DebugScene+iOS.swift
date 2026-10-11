@@ -64,7 +64,7 @@ extension DebugScene {
                 }
             }
         case "tasks":
-            navigation.showTasks()
+            navigation.show(.tasks)
         case "task":
             let store = workspace.services.store
             let tasks = (try? await store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []

@@ -94,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
     @objc func toggleTasks(_ sender: Any?) { workspace?.showsTasks.toggle() }
-    @objc func toggleSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
+    @objc func toggleSidebar(_ sender: Any?) { workspace?.pages.toggleSidebar() }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
