@@ -20,6 +20,11 @@ public final class CueTextView: NSTextView, CueEditorHost {
     /// 图片入库失败（磁盘满、文件不可读）。失败的图片不会插入。
     public var onError: ((any Error) -> Void)?
 
+    /// 宿主挂着编辑器但不让用时设为 false：不接键盘、不进按键循环（不改 `isEditable`/`isSelectable`：改它们要把整段文字重新处理一遍）。
+    public var acceptsInput = true
+
+    public override var acceptsFirstResponder: Bool { acceptsInput && super.acceptsFirstResponder }
+
     private(set) var core: EditorCore!
     private var isLoading = false
     /// 上次报告的"有没有选区"，只在变化时再报。

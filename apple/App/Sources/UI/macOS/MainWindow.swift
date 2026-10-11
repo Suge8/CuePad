@@ -271,14 +271,12 @@ private struct CloseButton: View {
     }
 }
 
-/// 打开的卡的纸页（含缩回途中）。
+/// 纸页：常驻，开哪张卡把哪张卡换进去（含缩回途中）。
 private struct EditorLayer: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.isLibraryReady, let id = workspace.presentedCard {
-            CardEditorPage(cardID: id).id(id)
-        }
+        if workspace.isLibraryReady { CardEditorPage() }
     }
 }
 
