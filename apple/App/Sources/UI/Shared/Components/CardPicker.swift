@@ -165,7 +165,7 @@ struct CardRow: View {
             Button { pick(entry.card) } label: { row }.buttonStyle(CardPressStyle())
         } else {
             #if os(iOS)
-            NavigationLink(value: Navigation.Route.card(entry.card.id)) { row }
+            NavigationLink(value: Route.card(entry.card.id)) { row }
                 .buttonStyle(CardPressStyle())
                 .zoomSource(entry.card.id, in: zoom)
                 .contextMenu { CardActions(card: entry.card) }

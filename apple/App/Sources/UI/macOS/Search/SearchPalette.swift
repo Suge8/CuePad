@@ -315,7 +315,7 @@ struct SearchPalette: View {
     private func open(_ card: Card) {
         workspace.searching = false
         if card.projectID != workspace.currentProject {
-            workspace.show(card.projectID.map(Workspace.Page.project) ?? .inbox)
+            workspace.show(card.projectID.map(Route.project) ?? .inbox)
         }
         workspace.openCard = card.id
     }

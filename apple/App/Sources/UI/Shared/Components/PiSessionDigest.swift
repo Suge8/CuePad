@@ -35,16 +35,16 @@ nonisolated struct SessionDigest: Sendable, Equatable {
         return PiConfigShown(model: current.model, thinking: current.thinking, context: current.context, pending: false, failure: failure)
     }
 
-    static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {
-        let item = try store.piSessionPage(PiSessionQuery(id: id)).items.first
+    /// 按 Pi 的会话 id 读：同步记录（在线与已结束是同一条记录）与发给它的请求、对话、预览；记录不在了（会话文件被删）时 `session` 为 nil。
+    static func read(sessionID: String, from store: isolated CueStore) throws -> SessionDigest {
+        let item = try store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: sessionID))).items.first
         let session = item?.state
-        let ref = session?.sessionID ?? sessionID
         return SessionDigest(
             session: session,
             project: try session?.projectID.flatMap { try store.project($0) },
-            deliveries: try ref.map { try store.deliveryRequests(toSession: $0) } ?? [],
-            messages: try ref.map { try store.piMessages(of: $0) } ?? [],
-            previews: try ref.map { try store.previews(of: $0) } ?? [],
+            deliveries: try store.deliveryRequests(toSession: sessionID),
+            messages: try store.piMessages(of: sessionID),
+            previews: try store.previews(of: sessionID),
             undelivered: item?.undelivered ?? 0)
     }
 }

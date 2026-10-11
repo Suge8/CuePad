@@ -187,7 +187,7 @@ enum ScenarioBench {
 
         func resize() async {
             let original = window.frame
-            for page in [Workspace.Page.project((workspace.catalog?.projects ?? []).first?.id ?? UUID()), .agent, .session(await chats().dropFirst(8).first ?? "")] {
+            for page in [Route.project((workspace.catalog?.projects ?? []).first?.id ?? UUID()), .agent, .session(await chats().dropFirst(8).first ?? "")] {
                 workspace.show(page)
                 try? await Task.sleep(for: .seconds(1.2))
                 let recorder = FrameRecorder()

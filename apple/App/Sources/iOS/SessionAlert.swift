@@ -6,14 +6,14 @@ import Foundation
 /// 一次要在前台提示的会话转换："等你确认"或"做完了"。文案与锁屏通知同一处（`PiAlertText`）。
 struct SessionAlert: Equatable, Identifiable {
     let id = UUID()
-    /// 会话记录 id（`PiSessionState.id`）。
-    let session: UUID
+    /// Pi 的会话 id。
+    let session: String
     let kind: PiAlert
     let title: String
     let question: String?
 
     init(_ state: PiSessionState, _ kind: PiAlert) {
-        session = state.id
+        session = state.sessionID
         self.kind = kind
         title = state.title
         question = state.question?.text

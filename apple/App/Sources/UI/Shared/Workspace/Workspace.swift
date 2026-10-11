@@ -10,19 +10,6 @@ import SwiftUI
 /// Mac 的当前项目只存在 `AppSettings.currentProject`（整个 App 一个），这里只记非项目页；iOS 的当前项目从导航路径推出（`Navigation.currentProject`）。
 @MainActor @Observable
 final class Workspace {
-    #if os(macOS)
-    nonisolated enum Page: Hashable {
-        case project(UUID)
-        case inbox
-        case archive
-        case trash
-        /// Agent：全部会话的整页列表（Mac 侧栏 Agent 区的"全部"）。
-        case agent
-        /// 一个 Agent 会话的整页（Pi 的会话 id）。
-        case session(String)
-    }
-    #endif
-
     struct Notice: Identifiable, Equatable {
         let id = UUID()
         var text: Dotted
@@ -48,8 +35,8 @@ final class Workspace {
     enum Link: Equatable {
         case project(UUID?)
         #if os(iOS)
-        /// 一个 Pi 会话的近况页（会话记录 id）。
-        case session(UUID)
+        /// 一个 Pi 会话的近况页（Pi 的会话 id）。
+        case session(String)
         #endif
     }
 
@@ -74,7 +61,7 @@ final class Workspace {
     private(set) var catalogAttempt = 0
     #if os(macOS)
     var sidebar: NavigationSplitViewVisibility = .all
-    private(set) var nonProjectPage: Page?
+    private(set) var nonProjectPage: Route?
     /// 打开的卡（编辑页；iOS 打开卡片是推入导航，见 `Navigation.open(card:)`）。设成某张卡时编辑页立即挂上；
     /// 清空时编辑页先淡出，淡完才卸下（见 `presentedCard`）。
     var openCard: UUID? {
@@ -206,9 +193,9 @@ final class Workspace {
     }
 
     #if os(macOS)
-    var page: Page {
+    var page: Route {
         if let nonProjectPage { return nonProjectPage }
-        return (services.settings.currentProject ?? defaultProject).map(Page.project) ?? .inbox
+        return (services.settings.currentProject ?? defaultProject).map(Route.project) ?? .inbox
     }
 
     /// 没打开过项目（第一次打开、打开过的进了回收站）时首屏是项目目录顺序的第一个：由目录当场推出、不写进"上次打开"，
@@ -221,8 +208,8 @@ final class Workspace {
     }
 
     /// 内容区挂着的页（`PageStack`）：去过的页留着，回访不再重建；至多 `keptPages` 个，满了换掉最久没看的。会话页不留（带着输入焦点与实时对话，挂着不看会抢键盘）。
-    private(set) var kept: [Page] = []
-    @ObservationIgnored private var lastSeen: [Page: Int] = [:]
+    private(set) var kept: [Route] = []
+    @ObservationIgnored private var lastSeen: [Route: Int] = [:]
     @ObservationIgnored private var visits = 0
     @ObservationIgnored private var trimTask: Task<Void, Never>?
     static let keptPages = 4
@@ -234,12 +221,12 @@ final class Workspace {
     @ObservationIgnored private var sidebarMovingTask: Task<Void, Never>?
 
     /// 刚离开的页：切页的那一帧它已经看不见，但"不在前台"（暂停订阅、停读实时状态）晚两帧才生效——页面重新求值要几十毫秒，不放在点击的回合里。
-    private(set) var leaving: Page?
+    private(set) var leaving: Route?
 
     /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
-    var mountedPages: [Page] { kept.contains(page) ? kept : kept + [page] }
+    var mountedPages: [Route] { kept.contains(page) ? kept : kept + [page] }
 
-    private func keep(_ page: Page) {
+    private func keep(_ page: Route) {
         if case .session = page { return }
         visits += 1
         lastSeen[page] = visits
@@ -251,12 +238,12 @@ final class Workspace {
 
     /// 启动后空闲时先挂上一页（`Prewarm`）：它先读一份数据把整页建好（`pagePrefetch`），第一次点开就是回访，
     /// 现建整页（Agent 页十几行会话要几十毫秒）不落在点击的回合里。不算去过，留着的页满了先换掉它。
-    func premount(_ page: Page) {
+    func premount(_ page: Route) {
         if !kept.contains(page) { kept.append(page) }
     }
 
     /// 先挂上、还没去过的页（`premount`）：去过的页都记着最后一次看它。
-    func isPremounted(_ page: Page) -> Bool { lastSeen[page] == nil }
+    func isPremounted(_ page: Route) -> Bool { lastSeen[page] == nil }
 
     private func scheduleTrim() {
         trimTask?.cancel()
@@ -312,7 +299,7 @@ final class Workspace {
     }
 
     /// 切到一页（侧栏点哪就是哪）；开着的编辑页随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
-    func show(_ page: Page) {
+    func show(_ page: Route) {
         openCard = nil
         dismissPresented()
         let left = self.page

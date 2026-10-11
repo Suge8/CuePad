@@ -30,7 +30,7 @@ struct SettingsScreen: View {
                 if services.sync != nil || Self.previewsAlerts { AlertSection() }
                 if !services.conflicts.isEmpty {
                     Section {
-                        NavigationLink(value: Navigation.Route.conflicts) {
+                        NavigationLink(value: Route.conflicts) {
                             Label("\(services.conflicts.count) 条灵感或任务有两个版本", systemImage: "square.on.square")
                                 .foregroundStyle(palette.ink)
                         }

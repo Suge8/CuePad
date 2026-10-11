@@ -189,7 +189,7 @@ struct PromptCard: View {
         let content = label().font(TaskMetrics.caption).frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
         if let item {
             #if os(iOS)
-            Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: { content }
+            Button { navigation.openSession(item.state.sessionID, store: services.store) } label: { content }
                 .buttonStyle(.plain)
                 .accessibilityHint("看 Agent 的会话")
             #else

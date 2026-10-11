@@ -100,7 +100,7 @@ struct IOSRoot: View {
 /// 推入页面的内容（iPhone 各标签的栈与 iPad 分栏共用，标签的根页也经这里）。页底色在这里一处铺在导航容器上：
 /// 各页的内容要等读库（异步）才有，铺在滚动区上时数据没到的几帧整页透明、露出系统的黑。
 struct RouteView: View {
-    let route: Navigation.Route
+    let route: Route
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -140,7 +140,7 @@ struct RouteView: View {
         case .agent: AgentScreen().countsAsPiViewer()
         case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
-        case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
+        case .session(let route): SessionScreen(sessionID: route.sessionID, seed: route.seed).countsAsPiViewer()
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))

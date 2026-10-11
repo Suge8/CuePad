@@ -164,11 +164,11 @@ private struct PageStack: View {
         }
     }
 
-    @ViewBuilder private func content(_ page: Workspace.Page) -> some View {
+    @ViewBuilder private func content(_ page: Route) -> some View {
         pageView(page).modifier(WindowCardAgents(workspace: workspace))
     }
 
-    @ViewBuilder private func pageView(_ page: Workspace.Page) -> some View {
+    @ViewBuilder private func pageView(_ page: Route) -> some View {
         switch page {
         case .project(let id): ProjectPage(projectID: id)
         case .inbox: ProjectPage(projectID: nil)
@@ -181,16 +181,16 @@ private struct PageStack: View {
 }
 
 nonisolated private struct PageKey: LayoutValueKey {
-    static let defaultValue: Workspace.Page? = nil
+    static let defaultValue: Route? = nil
 }
 
 /// 叠放挂着的页：当前页铺满，其余的沿用它们离开时的尺寸（窗口、侧栏怎么变都不再向它们提新尺寸，也就不重排）；
 /// 回到前台时按当时的尺寸排一次。不回答对齐查询（默认实现会递归问遍整页子树）。
 private struct PageStackLayout: Layout {
-    let active: Workspace.Page
+    let active: Route
 
     final class Memo {
-        var sizes: [Workspace.Page: CGSize] = [:]
+        var sizes: [Route: CGSize] = [:]
     }
 
     func makeCache(subviews: Subviews) -> Memo { Memo() }
@@ -299,7 +299,7 @@ private struct CaptureSlot: View {
     }
 }
 
-private extension Workspace.Page {
+private extension Route {
     /// 底部输入栏放不放：回收站、Agent 整页与会话页不是记灵感的地方。
     var takesCapture: Bool {
         switch self {
@@ -442,7 +442,7 @@ private struct NoticeView: View {
     /// 点提示去它说的地方（随手记的落点）。
     private func follow(_ link: Workspace.Link) {
         switch link {
-        case .project(let id): workspace.show(id.map(Workspace.Page.project) ?? .inbox)
+        case .project(let id): workspace.show(id.map(Route.project) ?? .inbox)
         }
         workspace.notice = nil
     }

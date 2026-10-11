@@ -13,7 +13,7 @@ struct CardTileView: View {
 
     var body: some View {
         let card = entry.card, text = entry.text
-        NavigationLink(value: Navigation.Route.card(card.id)) {
+        NavigationLink(value: Route.card(card.id)) {
             // 标题与正文挨着读成一段，日期另起一小段
             VStack(alignment: .leading, spacing: 4) {
                 if let image = text.images.first {
@@ -99,7 +99,7 @@ struct OlderRow: View {
 
     var body: some View {
         let card = entry.card, text = entry.text
-        NavigationLink(value: Navigation.Route.card(card.id)) {
+        NavigationLink(value: Route.card(card.id)) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(text.label).font(.subheadline.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)

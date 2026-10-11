@@ -19,12 +19,7 @@ extension PiSessionState {
 }
 
 extension SessionDigest {
-    /// Mac 端按会话 id 读：同步记录（在线与已结束是同一条记录）。在线会话再经 `live(_:hostID:project:)` 换上桥上的实时值。
-    static func read(sessionID: String, from store: isolated CueStore) throws -> SessionDigest {
-        try read(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
-    }
-
-    /// 会话在线时，状态、详情、名字与近况取桥上的实时值。
+    /// 会话在线时，状态、详情、名字与近况取桥上的实时值（`read(sessionID:from:)` 读的是同步记录）。
     func live(_ session: CuePi.PiSession?, hostID: String, project: Project?) -> SessionDigest {
         guard let session else { return self }
         var digest = self
@@ -42,7 +37,7 @@ extension SessionDigest {
 /// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
 /// （`PiConversation`，子代理在末尾收成一行汇总；只排最近几条，更早的点最上面一行再排开），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
 /// 底部是与手机同一个回复框（`PiReplyBar`），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
-/// 是一页（`Workspace.Page.session`），左上不放返回：去别处靠侧栏。
+/// 是一页（`Route.session`），左上不放返回：去别处靠侧栏。
 struct SessionPage: View {
     let sessionID: String
     @Environment(Workspace.self) private var workspace

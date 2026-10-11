@@ -35,7 +35,7 @@ enum IOSInteractionBench {
         try? await Task.sleep(for: .seconds(4))
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
-        let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 4)))?.items ?? []).map(\.state.id)
+        let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 4)))?.items ?? []).map(\.state.sessionID)
         let tasks = ((try? await store.tasks(.inProgress, .todo))?.flatMap(\.tasks) ?? []).filter { $0.parentID == nil }.map(\.id)
         guard projects.count >= 2 else { fail("演示库里不到两个项目") }
         guard sessions.count >= 2 else { fail("演示库里不到两个会话") }

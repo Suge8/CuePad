@@ -18,60 +18,6 @@ final class Navigation {
         case tabs, split
     }
 
-    /// 可推入的页面。
-    enum Route: Hashable {
-        /// 项目书架（iPhone 灵感标签的根；iPad 侧栏的"灵感"）。
-        case shelf
-        case project(UUID)
-        case inbox
-        /// 归档的灵感与任务。
-        case archive
-        case trash
-        case settings
-        case conflicts
-        /// 跨项目的任务看板（书架上一行入口、iPad 侧栏进入）。
-        case tasks
-        /// Agent 页：全部 Pi 会话。
-        case agent
-        /// 一个项目的全部 Pi 会话（同 Agent 页，只列这个项目的）。
-        case projectSessions(UUID)
-        case search
-        case card(UUID)
-        /// 一个 Pi 会话的近况与回复。
-        case session(SessionRoute)
-
-        var isCard: Bool { if case .card = self { true } else { false } }
-
-        /// 独占底部的页（卡片纸页、会话页：编辑工具栏、回复框在底部，在屏上时收起底部栏，见 `ownsBottomEdge`）。
-        var ownsBottom: Bool {
-            switch self {
-            case .card, .session: true
-            default: false
-            }
-        }
-
-        /// 页顶上自带一排搜索与圆钮（`SearchRow`）：内容让到那一排下面，离栏的距离由那一页自己给。
-        var hasSearchRow: Bool {
-            switch self {
-            case .shelf, .agent, .projectSessions: true
-            default: false
-            }
-        }
-
-        /// 会话页；`seed` 是推入前读好的这一页（`openSession`），通知跳转等只有 id 的入口不带。
-        static func session(_ id: UUID, seed: SessionDigest? = nil) -> Route { .session(SessionRoute(id: id, seed: seed)) }
-    }
-
-    /// 会话页的路由：身份只是记录 id（`PiSessionState.id`）。`seed` 是推入前读好的这一页，只作首帧
-    /// （标题、状态与最新的对话推入第一帧就在），之后一律以 Store 的观察流为准；不参与相等。
-    struct SessionRoute: Hashable {
-        let id: UUID
-        var seed: SessionDigest?
-
-        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
-        func hash(into hasher: inout Hasher) { hasher.combine(id) }
-    }
-
     /// 要交给 Agent 的一条提示词（存储格式，变量已填）：浮起交给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
     struct OpenTask: Identifiable {
         let id: UUID
@@ -254,7 +200,7 @@ final class Navigation {
     }
 
     /// 打开一个会话的近况（iPhone 在 Agent 标签里，iPad 推入详情栏）；通知与前台提示的去处。
-    func show(session id: UUID) {
+    func show(session id: String) {
         switch layout {
         case .tabs:
             tab = .agent
@@ -265,7 +211,7 @@ final class Navigation {
     }
 
     /// 这个会话的近况页此刻正在屏幕上：它是当前标签（iPad：详情栏）最上面的一页。
-    func isViewing(session id: UUID) -> Bool {
+    func isViewing(session id: String) -> Bool {
         let top = switch layout {
         case .tabs: (tab == .agent ? agentPath : projectsPath).last
         case .split: splitPath.last
@@ -274,7 +220,7 @@ final class Navigation {
     }
 
     /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 列表（那一行已经在变）时不弹。
-    func showsAlert(about session: UUID) -> Bool {
+    func showsAlert(about session: String) -> Bool {
         let onAgentList = switch layout {
         case .tabs: tab == .agent && agentPath.isEmpty
         case .split: agentPanel || (splitRoot == .agent && splitPath.isEmpty)
@@ -289,20 +235,21 @@ final class Navigation {
         return showsAlert(about: session)
     }
 
-    /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id，记录已被删时用它读对话）；`draft` 带进它的回复框
+    /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id）；`draft` 带进它的回复框
     /// （发到 Mac 的卡片或任务），已经写的字留着。先读出这一页再推入：读库只要几毫秒，推入的第一帧就是标题与最新的对话；
     /// 先推入再读时，结果要等转场开始、主线程空出来才到，滑进来的前几帧是一张空页。读不出来时照常推入，由页面报错。
-    func openSession(_ id: UUID, sessionID: String? = nil, draft: Outbox? = nil, store: CueStore) {
+    func openSession(_ sessionID: String, draft: Outbox? = nil, store: CueStore) {
         outbox = nil
         task = nil
         if let draft {
+            let id = PiSessionState.recordID(sessionID: sessionID)
             var reply = settings.replyDraft(for: id)
             reply.attachments = [draft]
             settings.setReplyDraft(reply, for: id)
         }
         Task {
-            let seed = try? await SessionDigest.read(id, sessionID: sessionID, from: store)
-            push(.session(id, seed: seed))
+            let seed = try? await SessionDigest.read(sessionID: sessionID, from: store)
+            push(.session(sessionID, seed: seed))
         }
     }
 
@@ -346,6 +293,26 @@ final class Navigation {
     /// 打开项目页（iPhone 推入项目标签，iPad 选中侧栏）。
     func show(project id: UUID) {
         if layout == .split { select(.project(id)) } else { tab = .projects; projectsPath = [.project(id)] }
+    }
+}
+
+extension Route {
+    var isCard: Bool { if case .card = self { true } else { false } }
+
+    /// 独占底部的页（卡片纸页、会话页：编辑工具栏、回复框在底部，在屏上时收起底部栏，见 `ownsBottomEdge`）。
+    var ownsBottom: Bool {
+        switch self {
+        case .card, .session: true
+        default: false
+        }
+    }
+
+    /// 页顶上自带一排搜索与圆钮（`SearchRow`）：内容让到那一排下面，离栏的距离由那一页自己给。
+    var hasSearchRow: Bool {
+        switch self {
+        case .shelf, .agent, .projectSessions: true
+        default: false
+        }
     }
 }
 

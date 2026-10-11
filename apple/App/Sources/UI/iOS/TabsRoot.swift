@@ -51,9 +51,9 @@ struct TabsRoot: View {
         withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { navigation.tab = tab }
     }
 
-    private func stack(_ tab: Navigation.Tab, _ path: Binding<[Navigation.Route]>, @ViewBuilder root: () -> some View) -> some View {
+    private func stack(_ tab: Navigation.Tab, _ path: Binding<[Route]>, @ViewBuilder root: () -> some View) -> some View {
         NavigationStack(path: path) {
-            root().navigationDestination(for: Navigation.Route.self) { RouteView(route: $0) }
+            root().navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
         .toolbarVisibility(.hidden, for: .tabBar)
         .environment(\.tabPageReady) { [slide] in slide.ready(tab) }
