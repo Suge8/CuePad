@@ -29,7 +29,7 @@ struct CaptureTests {
         #expect(CaptureQueue.pending(in: queue).isEmpty, "入库后条目应删除")
     }
 
-    @Test func 没选项目或项目已删除时进收件箱() async throws {
+    @Test func 没选项目或项目已删除时进未分类() async throws {
         let gone = try await services.store.createProject(name: "Gone", color: "#000000")
         try await services.store.trashProject(gone.id)
         try CaptureQueue.enqueue(ShareContent(text: "a"), project: nil, into: queue)
