@@ -247,6 +247,8 @@ struct SearchRow<Leading: View, Trailing: View>: View {
             .frame(maxWidth: .infinity)
             trailing
         }
+        // iPad 窗口的关闭、缩小、排列钮在左上角：这一排是自绘的、不在导航栏里，系统不替它让位，按窗口给的角落让出来（让出的宽度从搜索框里扣）
+        .containerCornerOffset(.horizontal, sizeToFit: true)
         .buttonStyle(ControlButtonStyle(kind: .circular)).menuStyle(.button).labelStyle(.iconOnly)
         .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 8)
         .animation(Motion.quick, value: searchHidden)
