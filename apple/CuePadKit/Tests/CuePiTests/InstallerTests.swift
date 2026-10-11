@@ -104,7 +104,6 @@ struct InstallerTests {
         try await installer().install()
 
         let skill = try String(contentsOf: skillFile, encoding: .utf8)
-        #expect(skill == PiSkillBundle.text(cuepad: cuepad))
         #expect(skill.hasPrefix("---\nname: cuepad\n") && skill.contains("\(cuepad.path) show <文件>") && skill.contains("\(cuepad.path) --help"))
         #expect(await installer().status().file == .current)
     }

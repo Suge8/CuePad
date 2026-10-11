@@ -90,6 +90,22 @@ struct DecorationTests {
         #expect(h.textView.textLayoutManager != nil)
     }
 
+
+    @Test("标题行就是卡片标题那一行：跳过空行、分隔线、只有图片的行", arguments: [
+        ("\n\n周报\n正文", "周报"),
+        ("![](cuepad://img/ab)\n标题", "标题"),
+        ("---split---\n![](cuepad://img/ab) 说明\n后", "说明"),
+        ("---split---\n \n![](cuepad://img/ab)![](cuepad://img/cd)\n真标题", "真标题"),
+        ("![](cuepad://img/ab)\n---split---\n", ""),
+        ("", ""),
+    ])
+    func titleLine(stored: String, expected: String) {
+        let h = EditorHarness()
+        h.load(stored)
+        let titled = displayed(h).filter { $0.length > 0 && font($0, at: $0.length - 1) == theme.titleFont }
+        let text = titled.first?.string.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        #expect(text == expected)
+    }
 }
 
 #endif
