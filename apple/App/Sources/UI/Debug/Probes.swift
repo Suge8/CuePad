@@ -158,6 +158,8 @@ final class TurnLog {
             "instructionsM": ((instructionsMillions() - instructions) * 10).rounded() / 10,
             "hitches": frames["hitches"] ?? 0,
             "worstMs": frames["worstFrameMs"] ?? 0,
+            // 每次掉帧：[距开始的毫秒, 这一帧的毫秒]
+            "hitchesAt": frames["hitchesAt"] ?? [],
         ]
     }
 }

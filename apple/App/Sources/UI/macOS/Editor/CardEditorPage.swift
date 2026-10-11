@@ -224,10 +224,12 @@ struct CardEditorPage: View {
         }
     }
 
-    /// 同一帧换回原卡片的卡面，外框缩回原卡片；缩完的同一帧纸隐去、原卡片回来，
-    /// 卸下纸页（编辑器、底栏，几十毫秒）放到下一帧，那时屏幕上已经没有变化。
+    /// 同一帧换回原卡片的卡面并卸下编辑器与底栏，外框缩回原卡片；缩完的同一帧纸隐去、原卡片回来，
+    /// 卸下纸页的其余部分放到下一帧，那时屏幕上已经没有变化。
     private func collapse() {
         editorShown = false
+        // 编辑器与底栏在缩回开始的这一帧就卸下（纸上换回卡面）：留着的话缩回途中每帧都带着它们，缩完再卸要几十毫秒
+        stage = .paper
         withAnimation(Motion.spatial(Motion.paperClose, reduceMotion: reduceMotion)) {
             expanded = false
         } completion: {
