@@ -13,7 +13,7 @@ struct TaskSheet: View {
         NavigationStack {
             CardEditorScreen(cardID: id, expectsTask: true)
                 // 内容滚到屏幕下沿时在指示条那一段淡出，不被屏幕圆角硬裁（同栏下的淡出，只是透明度）
-                .fadesUnderBars(bottom: true)
+                .fadesUnderBars()
         }
         .presentationDetents([.large])
         // 整张浮窗是一张纸：顶栏与底边不露出系统的灰底

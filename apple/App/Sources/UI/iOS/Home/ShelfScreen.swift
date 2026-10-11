@@ -37,8 +37,6 @@ struct ShelfScreen: View {
                 .hidingSearch($searchHidden, searching: searching)
             }
         }
-        // 内容滚到顶上那一排后面时淡出（那一排是下面的 safeAreaBar，整页的遮罩管不到）
-        .fadesUnderBars(below: Bars.contentGap)
         // 不显示标题：顶上只有那一排，内容多露出来；标题仍是读屏与多任务切换器里的名字
         .navigationTitle("灵感")
         .navigationBarTitleDisplayMode(.inline)

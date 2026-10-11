@@ -35,7 +35,6 @@ struct IOSRoot: View {
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
                 if !navigation.floating { pageIgnoresKeyboard = false }
             }
-            // 这一层还没有导航栏：上安全区就是状态栏
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
             // 随手记与新会话都是浮在键盘上方的输入框
             .overlay { FloatingInput(isPresented: navigation.capturing, close: navigation.endCapture) {
@@ -57,6 +56,8 @@ struct IOSRoot: View {
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
             .panel(item: Binding(get: { workspace.attaching }, set: { workspace.attaching = $0 })) { TaskPicker(idea: $0) }
         }
+        // 这一层还没有导航栏：上下安全区就是状态栏与主屏指示条，各页只在这两条里淡出（`fadesUnderBars`）
+        .measuresScreenBars()
         .overlay(alignment: .top) { NoticeBanner() }
         // 卡与行上"交给了哪个会话"的状态点读窗口里的那一份（`Workspace.agentLinks`）
         .modifier(WindowCardAgents(workspace: workspace))
@@ -106,20 +107,18 @@ struct RouteView: View {
     @Environment(\.bottomBarReserve) private var bottomBarReserve
 
     var body: some View {
-        // 沉浸式：内容一直滚到顶栏、底部栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡——系统的滚动边缘效果（渐进模糊带）全关，
-        // 也不自绘渐变或色带；滚进状态栏与顶栏、底部栏的内容自己淡出（`fadesUnderBars`，只是透明度遮罩）。
-        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），淡出伸到同样深：静止时第一行全不透明，
-        // 滚上去贴着顶栏下沿的那一行已经淡了。顶上自带那一排的页（`SearchRow`）自己让到那一排下面
-        // （系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
-        let gap = route.hasSearchRow ? 0 : Bars.contentGap
+        // 沉浸式：内容一直滚到顶栏、底部栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡，玻璃之间与下面的内容清楚可见——
+        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘渐变或色带；只有滚进状态栏与主屏指示条那两条的内容淡出（`fadesUnderBars`）。
+        // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上自带那一排的页（`SearchRow`）
+        // 自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
         page.contentMargins(.top, route.hasSearchRow ? nil : 0, for: .scrollContent)
-            .safeAreaPadding(.top, gap)
-            // 底部栏在不在只看这一页是不是独占底部的页，不读全局的"独占底部的页有几个"：那个数在推入、返回会话页与纸页时变，
-            // 读它的话两个标签里每一页（包括被盖住的）都要跟着重排一遍
-            .fadesUnderBars(bottom: !route.ownsBottom, below: gap)
+            .safeAreaPadding(.top, route.hasSearchRow ? 0 : Bars.contentGap)
+            .fadesUnderBars()
             .containerBackground(background, for: .navigation)
             .scrollEdgeEffectHidden()
-            // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页
+            // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页。
+            // 底部栏在不在只看这一页是不是独占底部的页，不读全局的"独占底部的页有几个"：那个数在推入、返回会话页与纸页时变，
+            // 读它的话两个标签里每一页（包括被盖住的）都要跟着重排一遍
             .safeAreaPadding(.bottom, route.ownsBottom ? 0 : bottomBarReserve)
     }
 
