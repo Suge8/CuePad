@@ -58,7 +58,8 @@ final class AppServices {
     /// 小组件、分享扩展打开 App 的链接，界面处理后调用 `consumeDeepLink()`。
     private(set) var pendingDeepLink: DeepLink?
 
-    @ObservationIgnored var tasks: [Task<Void, Never>] = []
+    /// 常驻的跟随者（`follow`），一起取消（`cancelBackgroundWork`）。
+    @ObservationIgnored let tasks = Followers()
     /// 有理由等就拉的任务（见 `startPolling`）；iOS 进入后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
     /// 有还没结果的投送请求（手机发出的，Mac 发给本机或别的 Mac 的）。只在主动拉取开着时跟着资料库更新，只给 `pollingCadence` 用。

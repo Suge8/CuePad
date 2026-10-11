@@ -9,7 +9,7 @@ import Synchronization
 extension AppServices {
     /// 幂等。窗口与 `windowShell` 就绪后调用。
     func start() {
-        guard tasks.isEmpty else { return }
+        guard !tasks.isRunning else { return }
         applySavedShortcut()
         if !location.isIsolated { diagnostics.start() }
         let piChanges = pi.changes() // 先订阅再启动桥：启动时扫到的会话不能漏
@@ -22,39 +22,15 @@ extension AppServices {
         let indexer = PiHistoryIndexer(root: paths.sessionsDirectory, transcriptWindow: PiHistoryPersistence.transcriptWindow) { [weak self] file in
             await self?.loadPiCheckpoint(for: file)
         }
-        tasks = [
-            Task {
-                do {
-                    try await piIntegration.refresh()
-                } catch {
-                    reportIssue(.piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\(error.localizedDescription)"))
-                }
-            },
-            Task { await consumePiHistory(indexer.events()) },
-            Task { await historyStore.keepPruned() },
-            Task {
-                do {
-                    try await resetPiState()
-                    try await consumePiChanges(piChanges)
-                } catch {
-                    reportIssue(.syncUnavailable("Agent 状态没能写入同步记录：\(error)"))
-                }
-            },
-            Task {
-                do {
-                    try await executor.start()
-                } catch {
-                    reportIssue(.syncUnavailable("远程投送执行器没能启动：\(error)"))
-                }
-            },
-            Task {
-                do {
-                    try await startDirectoryBindings()
-                } catch {
-                    reportIssue(.syncUnavailable("目录绑定没能同步给手机：\(error)"))
-                }
-            },
-        ]
+        follow(reporting: { .piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\($0.localizedDescription)") }) { try await self.piIntegration.refresh() }
+        follow { await self.consumePiHistory(indexer.events()) }
+        follow { await self.historyStore.keepPruned() }
+        follow(reporting: { .syncUnavailable("Agent 状态没能写入同步记录：\($0)") }) {
+            try await self.resetPiState()
+            try await self.consumePiChanges(piChanges)
+        }
+        follow(reporting: { .syncUnavailable("远程投送执行器没能启动：\($0)") }) { try await self.executor.start() }
+        follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
         // CKSyncEngine 靠静默推送得知别的设备的改动；macOS 要显式注册远程通知（iOS 由 PiAlertCenter 注册）。
         if sync != nil { NSApplication.shared.registerForRemoteNotifications() }
         startSync()
@@ -63,9 +39,9 @@ extension AppServices {
 
     /// 系统唤醒后立即同步：睡眠期间的推送可能没收到。
     func startWakeSync() {
-        tasks.append(Task { [wakeNotifications] in
-            for await _ in wakeNotifications.notifications(named: NSWorkspace.didWakeNotification) { await syncNow() }
-        })
+        follow { [wakeNotifications] in
+            for await _ in wakeNotifications.notifications(named: NSWorkspace.didWakeNotification) { await self.syncNow() }
+        }
     }
 
     /// 退出收尾。主线程上的部分（后台任务、Pi 连接、全局快捷键）在这里同步做完；返回的等待只涉及不在主线程上的组件

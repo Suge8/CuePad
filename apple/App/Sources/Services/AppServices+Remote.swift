@@ -70,13 +70,9 @@ extension AppServices {
         let name = SCDynamicStoreCopyComputerName(nil, nil) as String? ?? "Mac"
         try await store.publishDirectoryBindings(host: host, hostName: name)
         let changes = store.observe { try $0.projectDirectories() }
-        tasks.append(Task { [store, weak self] in
-            do {
-                for try await _ in changes { try await store.publishDirectoryBindings(host: host, hostName: name) }
-            } catch {
-                self?.reportIssue(.syncUnavailable("目录绑定没能同步给手机：\(error)"))
-            }
-        })
+        follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { [store] in
+            for try await _ in changes { try await store.publishDirectoryBindings(host: host, hostName: name) }
+        }
     }
 }
 #endif

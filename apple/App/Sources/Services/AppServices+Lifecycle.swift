@@ -38,8 +38,7 @@ extension AppServices {
 
     /// 取消后台任务（快照维护、分享入库、macOS 的 Pi 索引等）。
     func cancelBackgroundWork() {
-        tasks.forEach { $0.cancel() }
-        tasks = []
+        tasks.cancelAll()
         stopPolling()
     }
 }

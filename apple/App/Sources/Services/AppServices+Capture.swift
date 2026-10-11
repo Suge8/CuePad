@@ -18,12 +18,12 @@ extension AppServices {
 
     /// 收到扩展的通知就入库，直到任务取消。
     func startCaptureIngest() {
-        tasks.append(Task {
-            await drainCaptures()
+        follow {
+            await self.drainCaptures()
             for await _ in DarwinNotifications.notifications(named: CaptureQueue.notification) {
-                await drainCaptures()
+                await self.drainCaptures()
             }
-        })
+        }
     }
 
     private func importCapture(_ entry: CaptureQueue.Entry) async throws {
