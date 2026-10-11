@@ -6,7 +6,7 @@ import SwiftUI
 struct RecapPreview: View {
     let session: PiSessionState
     @Environment(\.palette) private var palette
-    @Environment(\.chatBottomSpace) private var bottomSpace
+    @Environment(\.chatInsets) private var insets
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -16,8 +16,8 @@ struct RecapPreview: View {
                 if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
             } else if !session.hasStarted, session.state != .known(.ended) {
                 EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")
-                    // 占满对话区（扣掉回复框让出的高与上下留白），吉祥物落在可见区中间
-                    .containerRelativeFrame(.vertical) { length, _ in max(0, length - bottomSpace - 2 * ChatLayout.edge) }
+                    // 占满对话区（扣掉上下栏让出的高与上下留白），吉祥物落在可见区中间
+                    .containerRelativeFrame(.vertical) { length, _ in max(0, length - insets.top - insets.bottom - 2 * ChatLayout.edge) }
                     .frame(maxWidth: .infinity)
             }
         }
