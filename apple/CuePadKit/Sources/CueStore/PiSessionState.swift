@@ -89,6 +89,7 @@ public struct PiSessionPage: Sendable, Equatable {
 
 /// 一个 Pi 会话的同步记录，Mac 写、手机与 Mac 的界面都只读它：每个 Pi 会话一条，记录 id 由 Pi 自己的会话 id 算出
 /// （会话文件头里的 id，Pi 重启、恢复会话后不变），所以在线与历史是同一条记录的不同状态（历史即 `ended`）。
+/// 说过话（有会话文件）的会话才进历史；托管的会话闲置退出不进历史。
 /// Mac 上在线会话的状态来自 Pi 桥，历史来自本机的会话文件索引；会话文件被删时才删记录。完整路径不同步，只有文件夹名与项目。
 public struct PiSessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -119,6 +120,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 发起方据此等到并打开"自己开的那个"会话。其余会话为 nil。
   public var launchToken: String?
   /// Mac 在后台替你托管着它（没有终端界面；给已结束的会话发消息、开新会话时由 Mac 自动启动）。这样的会话没有终端可跳。
+  /// 托管的进程闲置退出后记录留着（歇着，`hosted` 仍为真）：它仍在"现在"，发话时 Mac 把它唤醒——"托管且进程不在"就是这样表达的。
   public var hosted: Bool
   /// 会话里的子代理（FireCode 等在同一进程里开的子会话），一行一个。
   public var subagents: [PiSubagentState]

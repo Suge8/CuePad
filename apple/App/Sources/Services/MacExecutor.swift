@@ -10,13 +10,14 @@ final class MacExecutor {
     private let pi: PiBridge
     private let host: any PiHosting
     private let hostID: String
+    private let recorder: PiStateRecorder
     private let locatePi: @Sendable () async -> URL?
     private let uploadResult: @Sendable (UUID) async -> Void
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
 
     init(
-        store: CueStore, pi: PiBridge, host: any PiHosting, hostID: String,
+        store: CueStore, pi: PiBridge, host: any PiHosting, hostID: String, recorder: PiStateRecorder,
         locatePi: @escaping @Sendable () async -> URL?,
         uploadResult: @escaping @Sendable (UUID) async -> Void,
         reportIssue: @escaping @MainActor (String) -> Void
@@ -25,6 +26,7 @@ final class MacExecutor {
         self.pi = pi
         self.host = host
         self.hostID = hostID
+        self.recorder = recorder
         self.locatePi = locatePi
         self.uploadResult = uploadResult
         self.reportIssue = reportIssue
@@ -125,10 +127,12 @@ final class MacExecutor {
         if let card = request.cardID { try await store.linkCard(card, toSession: ref) }
     }
 
-    /// 结束会话（不写发送记录）：不在这台 Mac 的桥上的已经结束，目标达成，不能为了结束它而恢复它。
+    /// 结束会话（不写发送记录）：在桥上的先关掉它的进程；不在桥上的（托管着、进程已歇的，或早已结束的）没有进程可关，
+    /// 不能为了结束它而恢复它。两种都由这里记为已结束、进历史——托管的会话闲置退出不算结束，只有用户的结束请求才算。
     private func end(_ target: SendTarget) async throws {
-        guard let id = pi.session(sessionID: try sessionID(of: target))?.id else { return }
-        try await host.end(id)
+        let ref = try sessionID(of: target)
+        if let id = pi.session(sessionID: ref)?.id { try await host.end(id) }
+        try await recorder.end(sessionID: ref)
     }
 
     /// 停止这一轮（不写发送记录）：不在这台 Mac 的桥上的已经没有这一轮，目标达成，不恢复它。
