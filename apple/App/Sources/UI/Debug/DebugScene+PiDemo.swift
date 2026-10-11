@@ -385,12 +385,20 @@ extension DebugScene {
         for body in ["周末读完《设计心理学》第三章", "菜单栏面板能不能直接拖图进来？", "给落地页换一张首图"] {
             _ = try? await store.createCard(in: nil, body: body)
         }
-        // 后台托管、带两个子代理的会话
+        // 后台托管、带八个子代理的会话（两个在跑、一个失败、其余已交回或空闲：名册一行要让在跑的先被看到）
         let started = Date.now.addingTimeInterval(-260)
+        func settled(_ name: String, _ role: String, _ phase: PiSubagentPhase, _ action: String, after seconds: TimeInterval) -> PiSubagentState {
+            PiSubagentState(name: name, role: role, phase: .known(phase), action: action, startedAt: started, settledAt: started.addingTimeInterval(seconds))
+        }
         try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
             PiSubagentState(name: "计费额度", role: "审查员", phase: .known(.running), action: "运行 pnpm test billing", startedAt: started),
-            PiSubagentState(name: "登录回调", role: "工程师", phase: .known(.failed), action: "请求超时", startedAt: started, settledAt: started.addingTimeInterval(95)),
-            PiSubagentState(name: "文档", role: "写手", phase: .known(.done), action: "已补完 README 的同步一节", startedAt: started, settledAt: started.addingTimeInterval(180)),
+            PiSubagentState(name: "同步冲突", role: "工程师", phase: .known(.running), action: "改 CardLinks.repairs", startedAt: started.addingTimeInterval(40)),
+            settled("登录回调", "工程师", .failed, "请求超时", after: 95),
+            settled("文档", "写手", .done, "已补完 README 的同步一节", after: 180),
+            settled("迁移脚本", "工程师", .done, "已在测试库上跑通", after: 150),
+            settled("类型检查", "审查员", .done, "没有新增警告", after: 60),
+            settled("截图", "设计", .done, "已出浅色、深色各一组", after: 120),
+            PiSubagentState(name: "性能", role: "工程师", phase: .known(.idle), action: ""),
         ])
         await seedBindings(store, projects: projects)
         // 另一台 Mac 上的会话（演示发过去的话送达与失败）
