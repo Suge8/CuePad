@@ -86,31 +86,3 @@ struct PiChatTests {
         #expect(!PiChat.needsTranscript(recent, messages: [], now: now))
     }
 }
-
-/// 贴着最新（iOS 会话页、Mac 会话详情共用，规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处重新贴上；
-/// 输入框长高、键盘弹出这类不是用户滚动带来的位移不解除。离最新处超过一屏出"回到最新"圆钮，离开后来了新内容圆钮带一个点。
-struct ChatFollowTests {
-    /// 一屏的高。
-    private let screen: CGFloat = 700
-
-}
-
-/// 子代理：对话末尾一行汇总（几个在跑、共几个、几个失败），展开后每个子代理写角色、状态与已工作多久、在做什么；
-/// 会话在等子代理时，Agent 列表行的第三行说它们在干什么。
-struct SubagentSummaryTests {
-    private let now = Date(timeIntervalSince1970: 10_000)
-
-    private func agent(_ name: String, _ phase: PiSubagentPhase, action: String = "", started: Double? = nil, settled: Double? = nil) -> PiSubagentState {
-        PiSubagentState(
-            name: name, role: "工程师", phase: .known(phase), action: action,
-            startedAt: started.map { Date(timeIntervalSince1970: $0) }, settledAt: settled.map { Date(timeIntervalSince1970: $0) })
-    }
-
-    private func delegating(_ agents: [PiSubagentState]) -> PiSessionState {
-        PiSessionState(
-            id: UUID(), sessionID: "s", hostID: "mac", title: "指挥官", projectID: nil, state: .known(.delegating), detail: nil, folder: nil,
-            lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: now, busySince: nil, createdAt: now, modifiedAt: now,
-            subagents: agents)
-    }
-
-}

@@ -74,16 +74,4 @@ struct ShellChromeTests {
     }
 }
 
-@MainActor
-struct MenuBarPanelSizingTests {
-    @Observable @MainActor final class Height { var value: CGFloat = 120 }
-
-    private struct Content: View {
-        let height: Height
-        // 高度有伸缩范围（像真实面板里随输入增长的文本框）：窗口不会被内容的最小/最大尺寸约束带着走，
-        // 只能靠面板自己按固有尺寸调整。
-        var body: some View { Color.clear.frame(width: 300, height: height.value).frame(minHeight: 40, maxHeight: .infinity) }
-    }
-
-}
 #endif

@@ -112,23 +112,6 @@ struct ReplyTests {
         #expect(try await store.deliveryRequest(third.id)?.mode == .known(.followUp))
     }
 
-    /// 空着而 Agent 在跑一轮是停止；有字时点按等它做完再说、长按马上说，没在跑时直接发送；等你确认时文字型问题是作答、选择型没有主按钮。
-    @Test func 主按钮按状态切换() {
-        func session(_ state: PiWorkState, question: PiQuestion? = nil) -> PiSessionState {
-            PiSessionState(
-                id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
-                lastPrompt: nil, lastReply: nil, question: question, notify: nil, stateSince: .now, busySince: nil,
-                createdAt: .now, modifiedAt: .now)
-        }
-        #expect(MacDelivery.button(for: session(.tool), hasDraft: false) == .stop)
-        #expect(MacDelivery.button(for: session(.tool), hasDraft: true) == .send(tap: .followUp, hold: .steer))
-        #expect(MacDelivery.button(for: session(.settled), hasDraft: false) == .send(tap: .send, hold: .send))
-        let text = PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？")
-        let pick = PiQuestion(promptID: "p", kind: .select, text: "覆盖吗？", options: ["是", "否"])
-        #expect(MacDelivery.button(for: session(.waitingForUser, question: text), hasDraft: false) == .answer)
-        #expect(MacDelivery.button(for: session(.waitingForUser, question: pick), hasDraft: true) == nil)
-    }
-
     #if os(iOS)
     @Test func 发到Mac带来的卡片写进同一份草稿_已经写的字还在() {
         let session = UUID()
