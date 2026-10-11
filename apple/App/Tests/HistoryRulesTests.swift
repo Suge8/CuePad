@@ -13,10 +13,8 @@ nonisolated private let realPi = FileManager.default.homeDirectoryForCurrentUser
 nonisolated private let fixtures = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appending(path: "CuePadKit/Tests/CuePiTests/Fixtures")
 
-@MainActor
 @Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .timeLimit(.minutes(4)))
 struct HistoryRulesTests {
-    @MainActor
     final class Rig {
         let cwd: URL
         let host: PiHost
@@ -150,7 +148,6 @@ struct HistoryRulesTests {
 }
 
 /// Mac 本机：托管着、进程歇着的会话（记录在"现在"、桥上没有）是发送目标，状态照记录写（歇着，不写"已结束"），发送时在后台唤醒。
-@MainActor
 struct RestingTargetTests {
     let rig = TestApp()
 
@@ -168,7 +165,7 @@ struct RestingTargetTests {
         services.startLiveSessions()
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
-        await eventually { workspace.sendState.agentTarget(for: project.id) != nil }
+        try await eventually("workspace.sendState.agentTarget(for: project.id) != nil") { workspace.sendState.agentTarget(for: project.id) != nil }
 
         let target = try #require(workspace.sendState.agentTarget(for: project.id))
         #expect(target.session == "a" && workspace.sendState.onlineTargets(for: project.id).map(\.state.sessionID) == ["a"])
