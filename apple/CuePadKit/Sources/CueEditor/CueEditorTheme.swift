@@ -33,7 +33,10 @@ public struct CueEditorTheme: @unchecked Sendable {
     public var dividerLabelColor: CueColor
     /// 图片加载中或缺失时的底色。
     public var placeholderColor: CueColor
+    /// 文字离编辑区左右边的最小距离。
     public var horizontalInset: CGFloat
+    /// 一行字最宽多少（AppKit）：编辑区更宽时左右留白加大，让这一列字居中；nil 时只有 `horizontalInset`。
+    public var maxTextWidth: CGFloat?
     public var verticalInset: CGFloat
     public var lineSpacing: CGFloat
     /// `## ` 标题行上方的额外间距。
@@ -45,8 +48,8 @@ public struct CueEditorTheme: @unchecked Sendable {
         font: CueFont, titleFont: CueFont, headingFont: CueFont, codeFont: CueFont, markerColor: CueColor,
         codeBackground: CueColor, textColor: CueColor, backgroundColor: CueColor, variableColor: CueColor,
         variableBackground: CueColor, dividerColor: CueColor, dividerLabelColor: CueColor,
-        placeholderColor: CueColor, horizontalInset: CGFloat, verticalInset: CGFloat, lineSpacing: CGFloat, headingSpacing: CGFloat,
-        imageCornerRadius: CGFloat, dividerHeight: CGFloat
+        placeholderColor: CueColor, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil, verticalInset: CGFloat, lineSpacing: CGFloat,
+        headingSpacing: CGFloat, imageCornerRadius: CGFloat, dividerHeight: CGFloat
     ) {
         self.font = font
         self.titleFont = titleFont
@@ -62,6 +65,7 @@ public struct CueEditorTheme: @unchecked Sendable {
         self.dividerLabelColor = dividerLabelColor
         self.placeholderColor = placeholderColor
         self.horizontalInset = horizontalInset
+        self.maxTextWidth = maxTextWidth
         self.verticalInset = verticalInset
         self.lineSpacing = lineSpacing
         self.headingSpacing = headingSpacing

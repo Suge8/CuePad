@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中、待办、最近完成（折起），跨项目，
 /// 子任务缩进跟在上级下（`TaskOutline`：按住拖动排序、拖到一条上成为它的子任务、横向拖改层级），顶层写所在项目，
-/// 交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），点文字整页打开（与灵感同一个纸页），右键是 `CardActions`（缩进与反缩进靠拖放，读屏另有动作）。
+/// 交给 Pi 的写那个会话此刻的状态。点圆圈完成（完成的回到待办），点文字整页打开（与灵感同一个编辑页），右键是 `CardActions`（缩进与反缩进靠拖放，读屏另有动作）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -206,7 +206,7 @@ struct TaskRow: View {
         .font(Typography.meta)
     }
 
-    /// 整页打开这条任务（与灵感同一个纸页）：收起任务面板。
+    /// 整页打开这条任务（与灵感同一个编辑页）：收起任务面板。
     private func open() {
         workspace.showsTasks = false
         workspace.openCard = task.id

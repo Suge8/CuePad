@@ -75,14 +75,14 @@ final class Workspace {
     #if os(macOS)
     var sidebar: NavigationSplitViewVisibility = .all
     private(set) var nonProjectPage: Page?
-    /// 打开的卡（编辑纸页；iOS 打开卡片是推入导航，见 `Navigation.open(card:)`）。设成某张卡时纸页立即挂上；
-    /// 清空时纸页先缩回原卡片，缩完才卸下（见 `presentedCard`）。
+    /// 打开的卡（编辑页；iOS 打开卡片是推入导航，见 `Navigation.open(card:)`）。设成某张卡时编辑页立即挂上；
+    /// 清空时编辑页先淡出，淡完才卸下（见 `presentedCard`）。
     var openCard: UUID? {
         didSet { if let openCard { present(openCard) } }
     }
-    /// 纸页挂在屏上的卡：比 `openCard` 晚一步清空，缩回卡片的动画期间仍在。
+    /// 编辑页挂在屏上的卡：比 `openCard` 晚一步清空，淡出期间仍在。
     private(set) var presentedCard: UUID?
-    /// 各张卡在纸页开合中的状态，按卡分开（见 `CardPresence`）。
+    /// 各张卡的按下状态，按卡分开（见 `CardPresence`）。
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
     #endif
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
@@ -229,7 +229,7 @@ final class Workspace {
 
     /// 侧栏开合的动画里（约 0.2 秒）。页面此刻不接指针（`PageStack`）：分栏每帧挪动详情区，AppKit 每帧重算整窗的鼠标跟踪区、重设指针，
     /// 页面里每个悬停区都要重算（大项目页开一次侧栏多约 120ms 主线程、掉帧 5～8 次，页面不接指针后只剩约 45ms）；这几百毫秒里页面本来也不该响应指针。
-    /// 纸页放大缩回是图层动画、不挪 AppKit 视图，量过没有这笔开销。
+    /// 编辑页开合只改透明度、不挪视图，没有这笔开销。
     private(set) var sidebarMoving = false
     @ObservationIgnored private var sidebarMovingTask: Task<Void, Never>?
 
@@ -280,23 +280,18 @@ final class Workspace {
         if !gone.isEmpty { kept.removeAll { gone.contains($0) } }
     }
 
-    /// 纸页缩回动画结束。
+    /// 编辑页淡出结束。
     func finishClosingCard() {
         guard openCard == nil else { return }
         dismissPresented()
     }
 
-    /// 纸接过原卡片、开始放大。
-    func cover(_ card: UUID) {
-        presence(of: card).phase = .covered
+    /// 编辑页准备好、开始淡入：墙上那张卡放开。
+    func opened(_ card: UUID) {
+        presence(of: card).opening = false
     }
 
-    /// 纸页缩回到原卡片、自己隐去的同一帧：原卡片回来（纸页稍后才卸下）。
-    func uncover(_ card: UUID) {
-        presence(of: card).phase = .returned
-    }
-
-    /// 这张卡在纸页开合中的状态；卡片视图只观察自己的那一个。
+    /// 这张卡的按下状态；卡片视图只观察自己的那一个。
     func presence(of card: UUID) -> CardPresence {
         if let presence = presences[card] { return presence }
         let presence = CardPresence()
@@ -308,15 +303,15 @@ final class Workspace {
         guard presentedCard != card else { return }
         dismissPresented()
         presentedCard = card
-        presence(of: card).phase = .opening
+        presence(of: card).opening = true
     }
 
     private func dismissPresented() {
-        if let card = presentedCard { presence(of: card).reset() }
+        if let card = presentedCard { presence(of: card).opening = false }
         presentedCard = nil
     }
 
-    /// 切到一页（侧栏点哪就是哪）；开着的纸页随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
+    /// 切到一页（侧栏点哪就是哪）；开着的编辑页随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
     func show(_ page: Page) {
         openCard = nil
         dismissPresented()
@@ -595,36 +590,15 @@ final class Workspace {
 }
 
 #if os(macOS)
-/// 一张卡在纸页开合中的状态（Mac 的纸页开合）。按卡分开、各自可观察：开合时只有被打开的那张卡的视图重算，
+/// 一张卡的按下状态（Mac）。按卡分开、各自可观察：按下与打开时只有这张卡的视图重算，
 /// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
 @MainActor @Observable
 final class CardPresence {
-    enum Phase {
-        /// 没有打开。
-        case idle
-        /// 刚点开、纸页还在准备：原卡片保持按下的样子，纸从这个样子起飞。
-        case opening
-        /// 纸接过了原卡片（同一帧纸以原卡片按下的样子出现在它的位置上）：原卡片隐去，开合全程屏幕上只有一份这张卡的字。
-        case covered
-        /// 纸缩回原卡片、自己隐去：原卡片回来（不再按下），纸页下一帧卸下。
-        case returned
-    }
-
-    fileprivate(set) var phase = Phase.idle
-    /// 鼠标正按着这张卡（Mac，见 `Workspace.mouse(down:)`）。
+    /// 鼠标正按着这张卡（见 `Workspace.mouse(down:)`）。
     fileprivate(set) var pressing = false
-    /// 卡在屏幕上的位置（全局坐标），纸页从这里放大、缩回到这里；只在跟踪期间更新，不触发界面刷新。
-    @ObservationIgnored var frame: CGRect?
-
-    /// 纸页挂着期间才跟踪这张卡的位置：时时跟踪的话，滚动时每一帧都要为每张卡换算一次位置。
-    var isTracked: Bool { phase != .idle }
-    var covered: Bool { phase == .covered }
-    /// 原卡片显出按下的样子（见 `CardOpenStyle`）：鼠标按着，或已打开、纸页还在准备。
-    var held: Bool { pressing || phase == .opening }
-
-    fileprivate func reset() {
-        phase = .idle
-        frame = nil
-    }
+    /// 刚点开、编辑页还在看不见地准备：卡保持按下，编辑页开始淡入时放开（`Workspace.opened`）。
+    fileprivate(set) var opening = false
+    /// 卡显出按下的样子（见 `CardOpenStyle`）。
+    var held: Bool { pressing || opening }
 }
 #endif

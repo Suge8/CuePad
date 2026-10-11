@@ -82,7 +82,7 @@ private struct GlassSurface<S: Shape>: ViewModifier {
     }
 }
 
-/// 动效：只有卡片 ↔ 纸是大幅空间过渡；其余为短淡入淡出。减弱动态效果时一律直接到终态或只淡入淡出。
+/// 动效：没有大幅的空间过渡（Mac 打开卡片是编辑页原地淡入）；位置与尺寸只在列表、面板里小幅挪动，其余为短淡入淡出。减弱动态效果时一律直接到终态或只淡入淡出。
 /// 动效 token（Mac 与 iOS 共用）：位置与尺寸用不回弹的临界阻尼弹簧，都在 300ms 以内；弹簧从当前呈现值继续，天然可打断。
 /// 只有按压松开带一点回弹（`pressUp`），给手感；常驻的循环动效只给 Agent 在工作与话在路上（`PiStateDot`）和进行中的流光，都在 `LoopLayer`（Core Animation），离屏即停。
 enum Motion {
@@ -90,16 +90,10 @@ enum Motion {
     static let snappy = Animation.spring(duration: 0.25, bounce: 0)
     /// 卡片在墙上挪位（同列下移、新卡入场）：定长 0.24s，弹簧的尾巴会让实际时长超过 300ms。
     static let move = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.24)
-    /// 卡片放大成纸页。
-    static let paper = Animation.spring(duration: 0.28, bounce: 0)
-    /// 纸页缩回卡片：出场约为进场的 75%。用定长曲线而不是弹簧：完成回调要准时落在纸到位的那一刻，
-    /// 弹簧的完成要等尾巴收敛，纸会以空白状态在原卡上多停一两帧。
-    static let paperCloseDuration = 0.22
-    static let paperClose = Animation.timingCurve(0.3, 0, 0.1, 1, duration: paperCloseDuration)
     static let panel = snappy
     /// 颜色、透明度、悬停这类不移动位置的反馈。
     static let quick = Animation.easeOut(duration: 0.16)
-    /// 点下要打开的卡：缩到这个比例（Mac 的 `CardOpenStyle`），纸页从这个样子起飞。
+    /// 点下要打开的卡：缩到这个比例（Mac 的 `CardOpenStyle`）。
     static let pressScale: CGFloat = 0.98
     /// 点下的那一帧先直接缩到这里，余下的再缓动：动画的第一帧进度为零，全靠缓动的话点下那一帧看不出变化。
     static let pressKick: CGFloat = 0.99

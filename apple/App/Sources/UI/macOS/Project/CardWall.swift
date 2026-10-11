@@ -134,9 +134,9 @@ private struct ColumnsLayout: Layout {
     }
 }
 
-/// 点开纸页的原卡片（墙上卡片、"更早"的行、目标卡）的按压：点下的那一帧直接缩到 `Motion.pressKick`，余下到 `Motion.pressScale`
-/// 缓动；打开后纸页准备的那几帧保持按下，纸从这个样子起飞；松开没打开（拖走、取消）就回弹。按下与否看这张卡的开合状态（`cardHeld`：
-/// 鼠标按着——AppKit 分发按下事件时就记下，早于按钮识别——或已打开、纸页还在准备），按钮自己识别出的按下兜底。
+/// 点开编辑页的卡（墙上卡片、"更早"的行）的按压：点下的那一帧直接缩到 `Motion.pressKick`，余下到 `Motion.pressScale`
+/// 缓动；打开后编辑页还在准备的那几帧保持按下，编辑页淡入时松开；松开没打开（拖走、取消）就回弹。按下与否看这张卡的按下状态（`cardHeld`：
+/// 鼠标按着——AppKit 分发按下事件时就记下，早于按钮识别——或已打开、编辑页还在准备），按钮自己识别出的按下兜底。
 /// 减弱动态效果时不缩放，只略微变淡。
 struct CardOpenStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -162,9 +162,8 @@ struct CardOpenStyle: ButtonStyle {
     }
 }
 
-/// 卡面：首图、标题、摘要、元信息（时间、发送目标、浮回、任务与资料标记）。墙上的卡与纸页过渡中纸上写的字共用，
-/// 纸盖上原卡片、缩回原卡片的那一帧两者一模一样。
-struct CardFace: View {
+/// 卡面：首图、标题、摘要、元信息（时间、发送目标、浮回、任务与资料标记）。单独一个视图：悬停只改卡的外框，卡面不随之重算。
+private struct CardFace: View {
     let card: Card
     let lastTarget: String?
     let floated: Bool
@@ -196,9 +195,9 @@ struct CardFace: View {
     }
 }
 
-/// 墙上的一张卡（卡面见 `CardFace`）。
+/// 墙上的一张卡。
 struct CardTile: View {
-    /// 卡片的圆角；纸页从这个圆角起飞、缩回到这个圆角。
+    /// 卡片的圆角。
     static let radius: CGFloat = 16
 
     let card: Card
