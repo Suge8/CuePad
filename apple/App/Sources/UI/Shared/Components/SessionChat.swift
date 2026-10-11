@@ -57,7 +57,10 @@ struct SessionChat: View {
 
     /// 在上面再排开一段，正在读的不动（`ChatFollow.willPrepend`）。都排开了就什么也不做。
     private func showEarlier() {
-        guard window < ChatItem.of(PiChat.entries(digest.messages, previews: digest.previews)).count else { return }
+        let count = ChatItem.of(PiChat.entries(digest.messages, previews: digest.previews)).count
+        guard window < count else { return }
+        let first = PiConversation.firstSegment(count: count, window: window + PiConversation.segment) * PiConversation.segment
+        DebugHooks.chatShowsEarlier(from: first, of: count)
         follow.willPrepend()
         window += PiConversation.segment
     }

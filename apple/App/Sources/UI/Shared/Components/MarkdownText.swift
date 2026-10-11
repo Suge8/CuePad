@@ -13,9 +13,7 @@ struct MarkdownText: View {
             ForEach(Array(MarkdownBlock.parse(source).enumerated()), id: \.offset) { index, block in
                 // 选择按块开（一个块是一个独立的文本，选区本来就不跨块），悬停时只重建指针下的这一块
                 self.block(block)
-                #if os(macOS)
                     .selectableOnHover()
-                #endif
                     // 标题与上一块拉开一点，标出新的一节
                     .padding(.top, index > 0 && block.isHeading ? 6 : 0)
             }

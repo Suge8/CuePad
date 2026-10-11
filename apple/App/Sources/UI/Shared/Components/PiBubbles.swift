@@ -68,9 +68,7 @@ struct BubbleText: View {
             Text(text)
                 .font(Typography.reading).foregroundStyle(palette.ink)
                 .lineLimit(lineLimit)
-                #if os(macOS)
                 .selectableOnHover()
-                #endif
                 .background(alignment: .topLeading) { if let truncated, lineLimit != nil { fullHeight(truncated) } }
                 .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
                 .padding(.horizontal, 16).padding(.vertical, 11)

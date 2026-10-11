@@ -41,6 +41,11 @@ struct PiConversation: View {
         // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
         .scrollTargetLayout()
         .frame(maxWidth: .infinity, alignment: .leading)
+        #if os(iOS)
+        // 手机上长按出的是消息菜单，挑字走菜单里的"选择文本"：对话里的字不开行内选择，每行少建一套文字交互。
+        // 挂在弹出预览之内：从这里打开的文件预览照常可选
+        .environment(\.inlineTextSelection, false)
+        #endif
         .previewPresenter($opened)
         .task(id: previews.map(\.id)) {
             if let title = DebugHooks.preset.openPreview { opened = previews.first { $0.title == title } }
