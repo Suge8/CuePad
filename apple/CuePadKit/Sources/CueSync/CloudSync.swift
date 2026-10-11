@@ -15,7 +15,6 @@ public actor CloudSync {
   /// CKSyncEngine 只弱引用委托：这里是它唯一的强持有者，与 CloudSync 同生命周期。
   /// 曾经只是 `start()` 里的局部变量，返回后即被释放，引擎的事件全被丢掉（"the delegate may have been deallocated"）。
   nonisolated let engineDelegate: EngineBridge
-  private let arrivals: ArrivalLog
   private let subscribesToPiAlerts: Bool
   private var engine: CKSyncEngine?
   private var puller: ZoneChangePuller?
@@ -23,17 +22,15 @@ public actor CloudSync {
 
   /// `subscribesToPiAlerts`：是否在私有数据库建立"Pi 等你确认 / 完成"的服务端通知订阅。默认只有 iOS 建立
   /// （Mac 是记录的写方，不需要）。App 需要请求通知权限并注册远程通知，见 `PiAlertRoute`。
-  /// `deviceState`：记录到达那一刻本机的状态（前台/后台、网络、电源……），写进到达日志，见 `ArrivalLog`。
   public init(
     store: CueStore, containerIdentifier: String = "iCloud.com.sugeh.cuepad", zoneName: String = "CuePad",
-    subscribesToPiAlerts: Bool = CloudSync.subscribesToPiAlertsByDefault, deviceState: @escaping @Sendable () -> String = { "" }
+    subscribesToPiAlerts: Bool = CloudSync.subscribesToPiAlertsByDefault
   ) {
     self.subscribesToPiAlerts = subscribesToPiAlerts
     self.containerIdentifier = containerIdentifier
     zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
     coordinator = SyncCoordinator(store: store, queue: queue, zoneID: zoneID)
-    arrivals = ArrivalLog(store: store, deviceState: deviceState)
-    engineDelegate = EngineBridge(coordinator: coordinator, zoneID: zoneID, arrivals: arrivals)
+    engineDelegate = EngineBridge(coordinator: coordinator, zoneID: zoneID)
   }
 
   public static var subscribesToPiAlertsByDefault: Bool {
@@ -58,7 +55,7 @@ public actor CloudSync {
     let engine = CKSyncEngine(
       CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: state, delegate: engineDelegate))
     self.engine = engine
-    puller = ZoneChangePuller(source: DatabaseZoneChanges(database: container.privateCloudDatabase, zoneID: zoneID), coordinator: coordinator, arrivals: arrivals)
+    puller = ZoneChangePuller(source: DatabaseZoneChanges(database: container.privateCloudDatabase, zoneID: zoneID), coordinator: coordinator)
     await queue.attach(engine)
 
     try await coordinator.start()
@@ -145,12 +142,10 @@ final class EngineBridge: CKSyncEngineDelegate, Sendable {
   private static let logger = Logger(subsystem: "com.sugeh.cuepad", category: "sync")
   let coordinator: SyncCoordinator
   let zoneID: CKRecordZone.ID
-  let arrivals: ArrivalLog
 
-  init(coordinator: SyncCoordinator, zoneID: CKRecordZone.ID, arrivals: ArrivalLog) {
+  init(coordinator: SyncCoordinator, zoneID: CKRecordZone.ID) {
     self.coordinator = coordinator
     self.zoneID = zoneID
-    self.arrivals = arrivals
   }
 
   func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
@@ -179,7 +174,6 @@ final class EngineBridge: CKSyncEngineDelegate, Sendable {
         }
       }
     case .fetchedRecordZoneChanges(let changes):
-      await arrivals.engineFetched(changes.modifications.map(\.record))  // 交给协调器之前：之后本机就有了
       await coordinator.handle(.fetched(
         modifications: changes.modifications.map(\.record),
         deletions: changes.deletions.map { ($0.recordID, $0.recordType) }))
@@ -191,10 +185,7 @@ final class EngineBridge: CKSyncEngineDelegate, Sendable {
         failedDeletes: sent.failedRecordDeletes.map { ($0.key, $0.value) }))
     case .sentDatabaseChanges(let sent):
       for failure in sent.failedZoneSaves { await coordinator.handle(.zoneSaveFailed(failure.error)) }
-    case .willFetchChanges(let fetch):
-      await arrivals.engineFetchBegan(manual: fetch.context.reason == .manual)
-      await coordinator.handle(.syncing(true))
-    case .willSendChanges: await coordinator.handle(.syncing(true))
+    case .willFetchChanges, .willSendChanges: await coordinator.handle(.syncing(true))
     case .didFetchChanges, .didSendChanges: await coordinator.handle(.syncing(false))
     default: break
     }

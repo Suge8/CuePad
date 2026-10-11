@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 设置·同步里的"测试到 Mac 的连接"：给最近写过 Pi 状态的那台 Mac 依次发 5 条连接测试请求，
+/// 设置·同步里的"测试到 Mac 的连接"：给最近写过 Pi 状态的那台 Mac 依次发 10 条连接测试请求，
 /// 显示往返的中位数与最大值，以及三段（上传、到 Mac 执行完、回到手机）各自的中位数，便于看出哪段慢。
 /// 需要那台 Mac 上的 CuePad 在运行。
 struct MacConnectionTest: View {
@@ -12,7 +12,7 @@ struct MacConnectionTest: View {
     @State private var running = false
     @State private var failure: String?
 
-    private static let count = 5
+    private static let count = 10
 
     var body: some View {
         Button(running ? "正在测试…（\(rounds.count)/\(Self.count)）" : "测试到 Mac 的连接", systemImage: "antenna.radiowaves.left.and.right") {

@@ -45,7 +45,7 @@ import Testing
     let (old, oldRecord) = card("拉令牌时看到的旧卡")
     let (new, newRecord) = card("之后的新卡")
     let zone = FakeZone([batch("t1", [oldRecord]), batch("t2", [newRecord]), batch("t3")])
-    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator, arrivals: ArrivalLog(store: rig.store))
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
 
     try await puller.pull()
     try await puller.pull()
@@ -70,7 +70,7 @@ import Testing
     let zone = FakeZone(
       [batch("t1", [CKRecord(recordType: "piSessionStates", recordID: state.recordID), CKRecord(recordType: "cards", recordID: card.recordID)]), batch("t2")],
       server: [state, card])
-    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator, arrivals: ArrivalLog(store: rig.store))
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
 
     try await puller.pull()
 
@@ -81,7 +81,7 @@ import Testing
   @Test func anExpiredTokenIsDroppedAndTakenAgain() async throws {
     let (id, record) = card("令牌过期后拉到的")
     let zone = FakeZone([batch("t1"), .failure(CKError(.changeTokenExpired)), batch("t5"), batch("t6", [record])])
-    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator, arrivals: ArrivalLog(store: rig.store))
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
 
     try await puller.pull()
 
@@ -136,7 +136,7 @@ import Testing
     let zone = FakeZone(
       [.success(ZoneChangeBatch(modifications: seen, deletions: [], token: Data("t1".utf8), moreComing: false)), batch("t2")],
       server: newer + missingLive + missingEnded)
-    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator, arrivals: ArrivalLog(store: rig.store))
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
 
     try await puller.pull()
 
@@ -173,7 +173,7 @@ import Testing
     let zone = FakeZone(
       [.success(ZoneChangeBatch(modifications: seen, deletions: [], token: Data("t1".utf8), moreComing: false)), batch("t2")],
       server: [result, othersPending] + othersDone)
-    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator, arrivals: ArrivalLog(store: rig.store))
+    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
 
     try await puller.pull()
 

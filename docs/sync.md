@@ -1,13 +1,12 @@
 # 同步参考
 
-引擎、协调器、拉取器、上传去重、订阅的实现与理由写在各自文件的头注释里（`CueSync/`、`AppServices+Sync.swift`、`PiStateRecorder.swift`）。这里只补代码看不出的：放慢拉取的条件、发送的约定、通知的取舍、排查与真机验证。
+引擎、协调器、拉取器、上传去重、订阅的实现与理由写在各自文件的头注释里（`CueSync/`、`AppServices+Sync.swift`、`PiStateRecorder.swift`）。这里只补代码看不出的：拉取节奏的实测结论、发送的约定、通知的取舍、排查与真机验证。
 
 ## 拉取节奏
 
-节奏与理由见 `AppServices.pollingCadence` 的注释。Mac 闲着时也每 2 秒拉一次，放慢它的条件：
-- 依据是到达日志（`ArrivalLog`：别的设备写来的在等记录何时经推送、何时经主动拉取到本机，类别 `sync-latency`，Release 里也有）。实测步骤、分析命令（`xc.sh synclat`）和门槛见 [verify.md](verify.md)「同步延迟实测」。
-- 门槛满足（手机→Mac 的推送 p90 ≤ 2 秒且丢失 < 1%，样本够）才把闲着的一档放慢或删掉（`SyncPoller.Cadence` 已支持多档，例如先 2 秒拉两分钟、之后 30–60 秒一次）；否则保持 2 秒。
-- 放慢后再测一轮，并用设置·同步的"测试到 Mac 的连接"（一次 5 条，量上传、Mac 执行完、回到手机三段的中位数）比较闲后第一条请求多等了几秒。
+节奏与理由见 `AppServices.pollingCadence` 的注释。**2 秒主动拉取（`ZoneChangePuller`）是别的设备写来的请求到达 Mac 的主通路，不是推送之外的兜底，别放慢、别删。**
+
+实测（2026-10-12 00:06–00:13，手机发 18 条请求）：Mac 这 7 分钟一次 CloudKit 推送都没收到，18 条全靠主动拉取到达，服务器到 Mac 0.44–2.67 秒、中位约 1.1 秒；Mac 的 CuePad 进程日志里 4 小时只有 7 次 "received push via PushKit"，与请求时间对不上。推送在这台 Mac 上不能当通路；改它之前要先有新的实测，不要凭"每天四万多次请求太多"去放慢。
 
 ## 发送
 
@@ -25,7 +24,7 @@
 
 ## 排查与真机验证
 
-App 的日志在 subsystem `com.sugeh.cuepad`（类别 `services`、`launch`、`shutdown`、`pi-history`、`sync`、`sync-latency`）；CloudKit 与 CKSyncEngine 的日志在 `com.apple.cloudkit`：
+App 的日志在 subsystem `com.sugeh.cuepad`（类别 `services`、`launch`、`shutdown`、`pi-history`、`sync`）；CloudKit 与 CKSyncEngine 的日志在 `com.apple.cloudkit`：
 
 ```bash
 log show --last 30m --info --debug --predicate 'subsystem == "com.sugeh.cuepad" OR (process == "CuePad" AND subsystem BEGINSWITH "com.apple.cloudkit")'

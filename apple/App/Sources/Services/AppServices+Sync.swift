@@ -28,8 +28,7 @@ extension AppServices {
     ) -> Result<any SyncControlling, NoSync> {
         guard !location.isIsolated else { return .failure(.isolated) }
         guard hasCloudKitEntitlement else { return .failure(.noEntitlement) }
-        DeviceState.current.start()
-        return .success(CloudSync(store: store, deviceState: { DeviceState.current.snapshot() }))
+        return .success(CloudSync(store: store))
     }
 
     nonisolated enum NoSync: Error, CustomStringConvertible {
@@ -46,23 +45,19 @@ extension AppServices {
     /// 启动引擎，并让 `syncStatus`、`syncIssues`、`conflicts` 跟随，直到任务取消。没有引擎（隔离模式）什么都不做。
     func startSync() {
         guard let sync else { return }
-        tasks.append(Task {
-            for await state in sync.stateUpdates { setSyncState(state) }
-        })
-        tasks.append(Task {
+        follow {
+            for await state in sync.stateUpdates { self.setSyncState(state) }
+        }
+        follow {
             do {
                 try await sync.start()
             } catch {
-                syncFailedToStart(error)
+                self.syncFailedToStart(error)
             }
-        })
-        tasks.append(Task {
-            do {
-                for try await conflicts in store.observe { try $0.conflicts() } { setConflicts(conflicts) }
-            } catch {
-                reportIssue(.syncUnavailable("冲突列表读取失败：\(error)"))
-            }
-        })
+        }
+        follow(reporting: { .syncUnavailable("冲突列表读取失败：\($0)") }) {
+            for try await conflicts in self.store.observe({ try $0.conflicts() }) { self.setConflicts(conflicts) }
+        }
         #if os(macOS)
         startWakeSync()
         #endif
@@ -96,7 +91,7 @@ extension AppServices {
     /// 加新的等待理由时一并更新：
     /// - Mac：桥上有连着的 Pi 会话（手机可能随时发来请求；以桥为准，资料库里的状态记录可能是没来得及标为结束的旧会话），
     ///   或有还没结果的投送请求（发给本机的，或本机发给别的 Mac 上会话的）时，每 2 秒。闲着时也是 2 秒：Mac 上会话一连几天，这是一小时 1800 次、一天四万多次，
-    ///   但没有推送可靠性的数据前不拿延迟换请求数；数据看到达日志（`xc.sh synclat`），放慢的条件见 docs/sync.md「拉取节奏」；
+    ///   实测推送到不了 Mac、请求全靠这一拉，所以不放慢（docs/sync.md「拉取节奏」）；
     /// - 手机：有发往 Mac 还没结果的请求时每 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时每 3 秒（状态是活的，
     ///   不靠推送），离开即停；两者都有时每 2 秒、不限时。进入后台整体停掉（见 `stopPolling`）。
     var pollingCadence: SyncPoller.Cadence? {
