@@ -11,10 +11,13 @@ extension EnvironmentValues {
     /// 这一页此刻在前台。Mac 的内容区把去过的页都挂着（`Workspace.mountedPages`），不在前台的页暂停订阅（`observing`）、
     /// 不读实时状态；其余地方没有"挂着不看"的页，默认 true。
     @Entry var pageActive = true
+    /// 不在前台、但要先读一份数据的页：空闲时先挂上、还没去过的（`Workspace.premount`）。只读第一份，不跟着变。
+    @Entry var pagePrefetch = false
 }
 
 extension View {
-    /// 订阅 Store：`id` 变化时重新订阅；每次变更重读后写入 `value`。读失败交给 `onError`。页不在前台时暂停（见 `pageActive`），回到前台重新订阅。
+    /// 订阅 Store：`id` 变化时重新订阅；每次变更重读后写入 `value`。读失败交给 `onError`。页不在前台时暂停（见 `pageActive`），回到前台重新订阅；
+    /// 空闲时先挂上、还没去过的页（`pagePrefetch`）照样先读一份，第一次点开时内容已经建好。
     /// 依赖哪些表由读取本身定（`CueStore.observe(_:)`），这里不另写。
     func observing<T: Sendable>(
         _ store: CueStore, id: some Equatable = 0, into value: Binding<T?>,
@@ -51,6 +54,7 @@ private struct Observing<T: Sendable, ID: Equatable>: ViewModifier {
     let onError: (any Error) -> Void
     let stream: @Sendable () -> AsyncThrowingStream<T, Error>
     @Environment(\.pageActive) private var active
+    @Environment(\.pagePrefetch) private var prefetch
 
     init(
         id: ID, value: Binding<T?>, same: @escaping (T?, T) -> Bool, onError: @escaping (any Error) -> Void,
@@ -70,9 +74,12 @@ private struct Observing<T: Sendable, ID: Equatable>: ViewModifier {
 
     func body(content: Content) -> some View {
         content.task(id: Run(id: id, active: active)) {
-            guard active else { return }
+            guard active || prefetch && value == nil else { return }
             do {
-                for try await next in stream() where !same(value, next) { value = next }
+                for try await next in stream() where !same(value, next) {
+                    value = next
+                    if !active { return }
+                }
             } catch is CancellationError {
             } catch {
                 onError(error)

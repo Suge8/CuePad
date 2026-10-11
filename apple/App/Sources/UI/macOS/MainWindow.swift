@@ -157,6 +157,7 @@ private struct PageStack: View {
                     .allowsHitTesting(active && !moving)
                     .accessibilityHidden(!active)
                     .environment(\.pageActive, active || page == leaving)
+                    .environment(\.pagePrefetch, !active && workspace.isPremounted(page))
             }
         }
     }

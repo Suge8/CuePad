@@ -249,6 +249,15 @@ final class Workspace {
         if kept.count > Self.keptPages + 2 { trim() } else { scheduleTrim() }
     }
 
+    /// 启动后空闲时先挂上一页（`Prewarm`）：它先读一份数据把整页建好（`pagePrefetch`），第一次点开就是回访，
+    /// 现建整页（Agent 页十几行会话要几十毫秒）不落在点击的回合里。不算去过，留着的页满了先换掉它。
+    func premount(_ page: Page) {
+        if !kept.contains(page) { kept.append(page) }
+    }
+
+    /// 先挂上、还没去过的页（`premount`）：去过的页都记着最后一次看它。
+    func isPremounted(_ page: Page) -> Bool { lastSeen[page] == nil }
+
     private func scheduleTrim() {
         trimTask?.cancel()
         trimTask = Task { [weak self] in
