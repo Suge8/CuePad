@@ -28,18 +28,17 @@ extension CueEditorTheme {
 final class EditorHarness {
     let store = DirectoryImageStore()
     let textView: CueTextView
-    let window: UIWindow
+    let root: UIWindow
     let nowhere = NSRange(location: NSNotFound, length: 0)
 
     init(width: CGFloat = 390, height: CGFloat = 700, theme: CueEditorTheme = .test) {
         textView = CueTextView(imageStore: store, theme: theme)
-        // 测试进程里也有一个场景（宿主是 xctest 的代理 App）：窗口挂在它上面，编辑器才能成为第一响应者
-        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first!
-        window = UIWindow(windowScene: scene)
-        window.frame = CGRect(x: 0, y: 0, width: width, height: height)
-        textView.frame = window.bounds
-        window.addSubview(textView)
-        window.makeKeyAndVisible()
+        // 要一个窗口：字号档位这类特征只在窗口里往下传。包的测试进程里没有场景，只能建无场景的窗口；
+        // 那个构造在 iOS 26 标了弃用（为的是让 App 都挂到场景上），经 UIView 的构造建它，意思一样、不报弃用
+        root = (UIWindow.self as UIView.Type).init(frame: CGRect(x: 0, y: 0, width: width, height: height)) as! UIWindow
+        textView.frame = root.bounds
+        root.addSubview(textView)
+        root.makeKeyAndVisible()
     }
 
     func load(_ stored: String) {
@@ -48,7 +47,7 @@ final class EditorHarness {
     }
 
     func layout() {
-        window.layoutIfNeeded()
+        root.layoutIfNeeded()
         textView.layoutIfNeeded()
     }
 
