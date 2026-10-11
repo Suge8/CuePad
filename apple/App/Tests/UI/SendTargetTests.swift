@@ -50,7 +50,7 @@ struct SendTargetTests {
 
     /// 选定这个会话为发送目标（菜单里点一下它）。
     private func choose(_ ext: FakeExtension) {
-        workspace.sendChoice = AgentTarget(session: ext.sessionID)
+        workspace.sendState.choice = AgentTarget(session: ext.sessionID)
     }
 
     /// 等目标成为 `name`（`ended` 为是否已结束）：状态经桥、同步记录、观察流一路过来，没有更细的信号。
@@ -60,7 +60,7 @@ struct SendTargetTests {
             return workspace.sessionName(target.session) == name && workspace.isEnded(target) == ended
         }
         let target = workspace.agentTarget(for: project.id)
-        let detail = "target=\(String(describing: target)) live=\(rig.pi.sessions.map(\.id)) projects=\(workspace.sessionProjects)"
+        let detail = "target=\(String(describing: target)) live=\(rig.pi.sessions.map(\.id)) projects=\(workspace.sendState.projects)"
         #expect(target.map { workspace.sessionName($0.session) } == name, Comment(rawValue: detail), sourceLocation: sourceLocation)
         #expect(target.map(workspace.isEnded) == ended, Comment(rawValue: detail), sourceLocation: sourceLocation)
     }
@@ -131,7 +131,7 @@ struct SendTargetTests {
         #expect(request.hostID == "mac-b" && request.mode == .known(.send))
         #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "r"))
         #expect(rig.host.calls.isEmpty && rig.pi.sessions.isEmpty, "本机没有执行它")
-        #expect(workspace.sendChoice == AgentTarget(session: "r"))
+        #expect(workspace.sendState.choice == AgentTarget(session: "r"))
     }
 
     @Test func 别的Mac上的会话正忙_先问马上说还是等它做完再说() async throws {
@@ -140,7 +140,7 @@ struct SendTargetTests {
         let target = try #require(workspace.agentTarget(for: project.id))
 
         #expect(await workspace.send("看一下", to: target) == false)
-        #expect(workspace.busySend?.session == "r")
+        #expect(workspace.sendState.busy?.session == "r")
         #expect(try await store.deliveryRequests().isEmpty)
 
         workspace.resolveBusySend(.steer)

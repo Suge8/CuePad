@@ -12,7 +12,39 @@ struct AgentTarget: Equatable {
     var mode: DeliveryMode = .send
 }
 
+/// 发送与会话归属的窗口状态：用户选的目标、等用户决定的一次发送、在线会话各归哪个项目。读写它的规则都在下面的 `Workspace` 扩展里。
+@MainActor @Observable
+final class SendState {
+    /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送；`session` 是 Pi 自己的会话 id。
+    struct Busy {
+        var text: String
+        var session: String
+        var card: UUID?
+    }
+
+    var busy: Busy?
+    /// 用户在本窗口选过或发过的 Agent 会话；nil 或已失效时用本项目的会话（`Workspace.agentTarget`）。
+    var choice: AgentTarget?
+    /// 在线 Pi 会话（桥上的连接 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
+    /// 会话或目录绑定变化时由 `Workspace.follow` 调用 `refreshSessionProjects` 重算。
+    var projects: [String: UUID] = [:]
+}
+
 extension Workspace {
+    /// 重算活着的会话各归哪个项目。
+    func refreshSessionProjects() async {
+        var result: [String: UUID] = [:]
+        for session in services.pi.sessions {
+            do {
+                if let project = try await services.store.project(containing: session.cwd) { result[session.id] = project.id }
+            } catch {
+                fail(error)
+                return
+            }
+        }
+        sendState.projects = result
+    }
+
     /// 一个发送目标走哪条路：本机桥上连着的会话；别的 Mac 上在线的会话；已结束的会话（在后台唤醒）。
     enum HandOffRoute {
         case local(CuePi.PiSession)
@@ -44,7 +76,7 @@ extension Workspace {
     func projectSessions(in project: UUID?) -> [CuePi.PiSession] {
         guard let project else { return [] }
         return services.pi.slots
-            .filter { sessionProjects[$0.id] == project }
+            .filter { sendState.projects[$0.id] == project }
             .map(\.session)
             .sorted { !$0.state.isTurnRunning && $1.state.isTurnRunning }
     }
@@ -53,7 +85,7 @@ extension Workspace {
     /// 否则本项目的会话——在线的优先（空闲的在前，同样空闲时本机的在前：本机直接送达），都结束了就是刚结束的那个（同样写"已结束"）；
     /// 本项目一个都没有时为 nil。
     func agentTarget(for project: UUID?) -> AgentTarget? {
-        if let sendChoice { return sendChoice }
+        if let choice = sendState.choice { return choice }
         guard let project else { return nil }
         let mine = onlineTargets(for: project).filter { $0.state.projectID == project }
         if let pick = mine.min(by: { rank($0) < rank($1) }) { return AgentTarget(session: pick.state.sessionID) }
@@ -66,7 +98,7 @@ extension Workspace {
     }
 
     /// 能选作发送目标的已结束会话：这个窗口打开后结束、也没有重新打开的，最近结束的在前。发给它们时在后台把会话恢复起来。
-    var endedTargets: [PiSessionState] { recentlyEnded.filter { liveSession($0.sessionID) == nil } }
+    var endedTargets: [PiSessionState] { services.liveSessions.recentlyEnded.filter { liveSession($0.sessionID) == nil } }
 
     /// 会话已结束、也没有重新打开：发送时先在后台唤醒它，发送钮的状态点写"已结束"。
     func isEnded(_ target: AgentTarget) -> Bool {
@@ -77,7 +109,7 @@ extension Workspace {
     func sessionName(_ sessionID: String) -> String {
         liveSession(sessionID)?.displayName
             ?? services.liveSessions.items.first { $0.state.sessionID == sessionID }?.state.title
-            ?? recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
+            ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
     /// 发送目标此刻显示的状态：本机的取桥上的实时值，别的 Mac 上的取同步记录，已结束的是"已结束"。
@@ -118,7 +150,7 @@ extension Workspace {
     /// 桥上一个在线会话此刻显示的状态：与会话行同一条规则（`PiShown`），摘要与在路上的话取同步记录。
     func shown(_ session: CuePi.PiSession) -> PiShown {
         services.settings.shown(
-            .live(session, hostID: services.hostID, projectID: sessionProjects[session.id], recap: services.liveSessions.recaps[session.sessionID]),
+            .live(session, hostID: services.hostID, projectID: sendState.projects[session.id], recap: services.liveSessions.recaps[session.sessionID]),
             delivery: services.liveSessions.deliveries[session.sessionID])
     }
 
@@ -132,11 +164,11 @@ extension Workspace {
             case .remote(let session): try await services.send(stored, toRemote: session, mode: target.mode, card: card)
             case .ended: try await services.send(stored, toEnded: target.session, named: sessionName(target.session), card: card)
             }
-            sendChoice = AgentTarget(session: target.session)
+            sendState.choice = AgentTarget(session: target.session)
             say(done)
             return true
         } catch SendError.piSessionBusy {
-            busySend = BusySend(text: stored, session: target.session, card: card)
+            sendState.busy = SendState.Busy(text: stored, session: target.session, card: card)
             return false
         } catch {
             fail(error)
@@ -145,8 +177,8 @@ extension Workspace {
     }
 
     func resolveBusySend(_ mode: DeliveryMode) {
-        guard let pending = busySend else { return }
-        busySend = nil
+        guard let pending = sendState.busy else { return }
+        sendState.busy = nil
         Task { await send(pending.text, to: AgentTarget(session: pending.session, mode: mode), card: pending.card) }
     }
 }

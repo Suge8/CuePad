@@ -85,13 +85,13 @@ struct SessionMenu<Label: View>: View {
             }
             ForEach(online) { item in
                 let id = item.state.sessionID
-                Toggle(isOn: Binding(get: { current?.session == id }, set: { _ in workspace.sendChoice = AgentTarget(session: id) })) {
+                Toggle(isOn: Binding(get: { current?.session == id }, set: { _ in workspace.sendState.choice = AgentTarget(session: id) })) {
                     Text(HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: workspace.shown(AgentTarget(session: id))))
                 }
             }
             ForEach(workspace.endedTargets, id: \.sessionID) { ended in
                 Toggle(
-                    isOn: Binding(get: { current?.session == ended.sessionID }, set: { _ in workspace.sendChoice = AgentTarget(session: ended.sessionID) })
+                    isOn: Binding(get: { current?.session == ended.sessionID }, set: { _ in workspace.sendState.choice = AgentTarget(session: ended.sessionID) })
                 ) { Text(Dotted(ended.title, "已结束")) }
             }
         } label: {

@@ -27,19 +27,10 @@ final class Workspace {
         let title: String
         /// 撤销刚才那一下（Mac 上 ⌘Z 也能点它）。
         var isUndo = false
-        let run: @MainActor () async throws -> Void
+        let run: Undo
+        static func undo(_ run: @escaping Undo) -> Self { Self(title: "撤销", isUndo: true, run: run) }
         static func == (lhs: NoticeAction, rhs: NoticeAction) -> Bool { lhs.id == rhs.id }
     }
-
-    #if os(macOS)
-    /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送。
-    struct BusySend {
-        var text: String
-        /// Pi 自己的会话 id（`AgentTarget.session`）
-        var session: String
-        var card: UUID?
-    }
-    #endif
 
     let services: AppServices
     /// 本窗口的项目目录；nil 表示还没读到或读取失败，根视图在读到之前不显示页面。
@@ -53,6 +44,7 @@ final class Workspace {
     #if os(macOS)
     let pages = MacPages()
     let presses = CardPresses()
+    let sendState = SendState()
     private(set) var nonProjectPage: Route?
     /// 打开的卡（编辑页；iOS 打开卡片是推入导航，见 `Navigation.push`）。设成某张卡时编辑页立即挂上；
     /// 清空时编辑页先淡出，淡完才卸下（见 `presentedCard`）。
@@ -81,23 +73,15 @@ final class Workspace {
     private(set) var agentLinks = AgentLinks(items: [:], launching: [])
     private(set) var folderGuide: FolderGuide?
 
-    func observeAgentLinks() async {
-        do {
-            for try await next in services.store.observe { try AgentLinks.read(from: $0) } where next != agentLinks {
-                agentLinks = next
-            }
-        } catch is CancellationError {
-        } catch {
-            fail(error)
-        }
-    }
+    func observeAgentLinks() async { await follow(\.agentLinks) { try AgentLinks.read(from: $0) } }
 
-    func observeFolderGuide() async {
+    func observeFolderGuide() async { await follow(\.folderGuide) { [host = localHost] in try FolderGuide.read(host: host, from: $0) } }
+
+    private func follow<T: Sendable & Equatable>(
+        _ value: ReferenceWritableKeyPath<Workspace, T>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
+    ) async {
         do {
-            for try await next in services.store.observe { [host = localHost] in try FolderGuide.read(host: host, from: $0) }
-            where next != folderGuide {
-                folderGuide = next
-            }
+            for try await next in services.store.observe(read) where next != self[keyPath: value] { self[keyPath: value] = next }
         } catch is CancellationError {
         } catch {
             fail(error)
@@ -108,32 +92,8 @@ final class Workspace {
     /// 请底部输入栏聚焦的次数（空态的"记一条"）：输入栏的焦点在它自己那里，只看这个数变了就聚焦。
     private(set) var captureFocusRequests = 0
     func focusCapture() { captureFocusRequests += 1 }
-    var busySend: BusySend?
-    /// 用户在本窗口选过或发过的 Agent 会话；nil 或已失效时用本项目的会话（`agentTarget`）。
-    var sendChoice: AgentTarget?
-    /// 在线 Pi 会话（桥上的连接 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
-    /// 会话或目录绑定变化时由根视图调用 `refreshSessionProjects` 重算。
-    private(set) var sessionProjects: [String: UUID] = [:]
-    /// 这次运行里在这台 Mac 上结束的会话（同步记录），最近结束的在前。可观察：默认发送目标在没有在线会话时取其中本项目最近结束的那个，
-    /// 会话名和发送菜单也读它；运行之前就已结束的历史会话不在其中。数据在 `LiveSessions`。
-    var recentlyEnded: [PiSessionState] { services.liveSessions.recentlyEnded }
-
     /// 会话页放在窗口工具栏上的标题与菜单（`SessionHeader`）。
     let sessionHeader = SessionHeader()
-
-    /// 重算活着的会话各归哪个项目。
-    func refreshSessionProjects() async {
-        var result: [String: UUID] = [:]
-        for session in services.pi.sessions {
-            do {
-                if let project = try await services.store.project(containing: session.cwd) { result[session.id] = project.id }
-            } catch {
-                fail(error)
-                return
-            }
-        }
-        sessionProjects = result
-    }
 
     #endif
 
@@ -187,16 +147,7 @@ final class Workspace {
 
     func say(
         _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
-        undo: (@MainActor () async throws -> Void)? = nil
-    ) {
-        say(
-            text, isError: isError, symbol: symbol, link: link, duration: duration,
-            action: undo.map { NoticeAction(title: "撤销", isUndo: true, run: $0) })
-    }
-
-    func say(
-        _ text: Dotted, isError: Bool = false, symbol: String? = nil, link: Route? = nil, duration: Duration = Workspace.noticeDuration,
-        action: NoticeAction?
+        action: NoticeAction? = nil
     ) {
         let notice = Notice(text: text, isError: isError, symbol: symbol, link: link, action: action)
         self.notice = notice
@@ -294,7 +245,7 @@ final class Workspace {
 
     /// 设为任务 / 改回灵感；提示里带"撤销"。
     func setTodo(_ id: UUID, _ on: Bool) async throws {
-        say(on ? "已设为任务" : "已改回灵感", undo: try await services.store.settingTodo(id, on))
+        say(on ? "已设为任务" : "已改回灵感", action: .undo(try await services.store.settingTodo(id, on)))
     }
 
     /// 离开一条灵感或提示词的编辑：先写下没保存的字，还是空白（`Card.isBlank`）就不留下——记一条与写提示词都是先建一条空的再编辑。
@@ -313,7 +264,7 @@ final class Workspace {
         #if os(macOS)
         if openCard == id { openCard = nil }
         #endif
-        say("已归档", undo: { try await store.unarchive(id) })
+        say("已归档", action: .undo { try await store.unarchive(id) })
     }
 
     /// 删除一条灵感或任务：提示里可撤销。
@@ -322,7 +273,7 @@ final class Workspace {
         #if os(macOS)
         if openCard == id { openCard = nil }
         #endif
-        say("已删除", undo: undo)
+        say("已删除", action: .undo(undo))
     }
 
     /// 一键归档"最近完成"的任务。
@@ -339,7 +290,7 @@ final class Workspace {
 
     /// 灵感挂到任务下成为提示词（挑一条或拖到任务上）：提示里可撤销。
     func attach(_ idea: UUID, _ move: TaskMove) async throws {
-        say("已成为任务的提示词", undo: try await services.store.attaching(idea, move))
+        say("已成为任务的提示词", action: .undo(try await services.store.attaching(idea, move)))
     }
 
     /// 复制正文（存储格式，变量已填）到剪贴板：普通的复制，不是发送，不记发送记录。
@@ -374,8 +325,6 @@ final class Workspace {
     /// 执行一个 Store 写操作，失败时提示。
     func perform(_ work: @escaping @Sendable (CueStore) async throws -> Void) {
         let store = services.store
-        Task {
-            do { try await work(store) } catch { fail(error) }
-        }
+        attempt { try await work(store) }
     }
 }

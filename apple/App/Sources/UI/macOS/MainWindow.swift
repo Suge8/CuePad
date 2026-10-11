@@ -100,7 +100,7 @@ private struct WindowPanels: View {
     }
 
     private var busy: Binding<Bool> {
-        Binding(get: { workspace.busySend != nil }, set: { if !$0 { workspace.busySend = nil } })
+        Binding(get: { workspace.sendState.busy != nil }, set: { if !$0 { workspace.sendState.busy = nil } })
     }
 }
 
@@ -417,7 +417,7 @@ private struct NoticeView: View {
         ZStack {
             if let notice = workspace.notice {
                 HStack(spacing: 0) {
-                    Button { notice.link.map(follow) } label: {
+                    Button { if let link = notice.link { workspace.show(link); workspace.notice = nil } } label: {
                         HStack(spacing: 6) {
                             Label { Text(notice.text) } icon: { Image(systemName: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill") }
                             if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
@@ -438,12 +438,6 @@ private struct NoticeView: View {
             }
         }
         .animation(Motion.quick, value: workspace.notice)
-    }
-
-    /// 点提示去它说的地方（随手记的落点）。
-    private func follow(_ route: Route) {
-        workspace.show(route)
-        workspace.notice = nil
     }
 }
 #endif

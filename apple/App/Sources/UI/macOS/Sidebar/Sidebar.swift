@@ -283,7 +283,7 @@ private struct PiSection: View {
         let rows = PiSessionState.liveRows(
             live: live.map {
                 PiSessionState.live(
-                    $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
+                    $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
             },
             recorded: recorded, deliveries: deliveries)
         let agents = SidebarAgents(rows: rows)
