@@ -51,7 +51,7 @@ struct ProjectSwitcher: View {
     private static var menuIcons: [String: NSImage] = [:]
 
     private static func menuIcon(_ project: Project) -> NSImage {
-        let key = "\(project.icon)|\(project.color)"
+        let key = "\(ProjectGlyph.symbol(project.icon))|\(project.color)"
         if let cached = menuIcons[key] { return cached }
         let image = makeMenuIcon(project)
         menuIcons[key] = image

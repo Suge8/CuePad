@@ -57,8 +57,7 @@ struct PiSubagentList: View {
                 if let clock = PiSubagentClock(agent) { Elapsed(clock: clock) }
             }
             .font(Typography.secondary)
-            (Text(agent.label).foregroundStyle(agent.shown.labelTint(palette))
-                + Text(agent.action.isEmpty ? "" : "\(Dotted.separator)\(agent.action)").foregroundStyle(palette.ink3))
+            Text("\(Text(agent.label).foregroundStyle(agent.shown.labelTint(palette)))\(Text(agent.action.isEmpty ? "" : "\(Dotted.separator)\(agent.action)").foregroundStyle(palette.ink3))")
                 .font(Typography.meta)
                 .lineLimit(1).truncationMode(.tail)
                 .padding(.leading, 13)

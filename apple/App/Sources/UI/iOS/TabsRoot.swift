@@ -56,7 +56,7 @@ struct TabsRoot: View {
             root().navigationDestination(for: Route.self) { RouteView(route: $0) }
         }
         .toolbarVisibility(.hidden, for: .tabBar)
-        .environment(\.tabPageReady) { [slide] in slide.ready(tab) }
+        .environment(\.tabPageReady, TabPageReady(slide: slide, tab: tab))
         .background { TabSlide.Probe(slide: slide, tab: tab) }
     }
 }
@@ -84,7 +84,10 @@ private final class TabSlide {
         container.addSubview(snapshot)
         pending = (tab, reduceMotion, snapshot)
         start()
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.readyTimeout) { [weak self] in self?.start(force: true) }
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.readyTimeout))
+            self?.start(force: true)
+        }
     }
 
     /// 一个标签根页有了内容。
@@ -150,7 +153,17 @@ private final class TabSlide {
 extension EnvironmentValues {
     /// 内容给 iPhone 底部栏让出的高度（`BottomBar.reserve`）；分栏布局为 0。
     @Entry var bottomBarReserve: CGFloat = 0
-    /// 标签根页读到数据时调用（换标签的推移等它，见 `TabSlide`）；不在标签栏布局里时什么都不做。
-    @Entry var tabPageReady: () -> Void = {}
+    /// 标签根页读到数据时调用（换标签的推移等它，见 `TabSlide`）；不在标签栏布局里时为空。
+    @Entry var tabPageReady: TabPageReady?
+}
+
+/// 报"这个标签的根页有内容了"。是值而不是闭包：按所属推移与标签比较，环境值不会因为每次重算都换了一个闭包而让读它的页面失效。
+struct TabPageReady: Equatable {
+    fileprivate let slide: TabSlide
+    fileprivate let tab: Navigation.Tab
+
+    func callAsFunction() { slide.ready(tab) }
+
+    static func == (a: Self, b: Self) -> Bool { a.slide === b.slide && a.tab == b.tab }
 }
 #endif

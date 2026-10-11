@@ -51,7 +51,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
     /// 两组的计数（顶层任务数，`CueStore.taskCounts` 一处定义）：任务页与面板的分组标题与"最近完成"、书架的"任务"一行、Mac 工具栏任务钮都读它。
     var counts: TaskCounts
-
+    /// 三组从上到下的任务 id：列表增删、挪动的动画键，读库时算一次（放在 body 里每次重算都要分配）。
+    var order: [UUID]
 
     static func read(from store: isolated CueStore) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
@@ -66,9 +67,11 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         func row(_ task: Card) -> Row { Row(task, projects: projects, sessions: sessions) }
         let rows = Dictionary(uniqueKeysWithValues: tree.ordered.map { ($0.id, row($0)) })
         let roots = tree.roots.compactMap { rows[$0] }
+        let inProgress = roots.filter { $0.task.status == .inProgress }, todo = roots.filter { $0.task.status == .todo }
+        let finished = done.map(row)
         return TaskBoard(
-            tree: tree, inProgress: roots.filter { $0.task.status == .inProgress }, todo: roots.filter { $0.task.status == .todo },
-            done: done.map(row), rows: rows, children: try store.childMarks(), counts: try counts(from: store))
+            tree: tree, inProgress: inProgress, todo: todo, done: finished, rows: rows, children: try store.childMarks(),
+            counts: try counts(from: store), order: (inProgress + todo + finished).map(\.id))
     }
 
     /// 书架"正在推进"：列出的行，加上放不下的还有几项（纸底写"还有 N 项"）。

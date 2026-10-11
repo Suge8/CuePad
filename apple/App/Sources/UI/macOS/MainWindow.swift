@@ -81,7 +81,7 @@ private struct WindowPanels: View {
             .onChange(of: workspace.searching) { if !$1 { searchScope = .cards } else { mountsPalette = true } }
             .task(id: workspace.isLibraryReady) {
                 guard workspace.isLibraryReady else { return }
-                try? await Task.sleep(for: .seconds(2))
+                guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
                 mountsPalette = true
             }
             .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }

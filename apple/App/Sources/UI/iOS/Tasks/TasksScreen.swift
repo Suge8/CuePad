@@ -25,7 +25,7 @@ struct TasksScreen: View {
         }
         .floatingHeader("任务", detail: board?.counts.summary ?? "")
         .onAppear { if DebugHooks.preset.showsDone { showsCompleted = true } }
-        .animation(.easeOut(duration: 0.2), value: board.map { [$0.inProgress, $0.todo, $0.done].flatMap { $0.map(\.id) } })
+        .animation(.easeOut(duration: 0.2), value: board?.order)
         .observing(services.store, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
         }
@@ -270,7 +270,7 @@ struct TaskLine: View {
 
     private func tap() {
         switch (task.status == .done, phase) {
-        case (true, _): workspace.attempt { try await workspace.toggle(task) }
+        case (true, _): workspace.attempt { try await workspace.toggle(task.id) }
         case (false, .idle): if TaskCopy.hasOpen(subtasks) { confirmsSubtasks = true } else { phase = .pending }
         case (false, .pending): phase = .idle
         case (false, .committed): break
@@ -282,7 +282,7 @@ struct TaskLine: View {
         phase = .committed
         Task {
             do {
-                try await workspace.toggle(task)
+                try await workspace.toggle(task.id)
             } catch {
                 phase = .idle
                 workspace.fail(error)

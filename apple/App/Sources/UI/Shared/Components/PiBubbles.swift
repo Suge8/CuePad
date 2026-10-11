@@ -83,10 +83,11 @@ struct BubbleText: View {
     /// 同一宽度下排全文要多高，与折起后的高度比，量出有没有被截掉；只读几何、不影响自己的排版（藏起的全文不占位）。
     private func fullHeight(_ truncated: Binding<Bool>) -> some View {
         GeometryReader { shown in
+            let folded = shown.size.height
             Text(text).font(Typography.reading).fixedSize(horizontal: false, vertical: true)
                 .frame(width: shown.size.width, alignment: .leading)
                 .hidden()
-                .onGeometryChange(for: Bool.self) { $0.size.height > shown.size.height + 1 } action: { truncated.wrappedValue = $0 }
+                .onGeometryChange(for: Bool.self) { $0.size.height > folded + 1 } action: { truncated.wrappedValue = $0 }
         }
     }
 

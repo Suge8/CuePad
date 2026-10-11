@@ -12,7 +12,9 @@ final class EditorHandle {
     /// 选中部分的存储格式；没选中为 nil。
     var selection: String? { view?.textView.selectedStoredText }
     func insertDivider() { view?.textView.insertDivider() }
-    func focus() { view.map { $0.window?.makeFirstResponder($0.textView) } }
+    func focus() {
+        if let view { view.window?.makeFirstResponder(view.textView) }
+    }
 }
 
 /// CueEditorView 的 SwiftUI 宿主。正文只在创建时载入一次：之后编辑器是这张卡正文的唯一写者，

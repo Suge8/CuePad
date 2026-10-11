@@ -120,7 +120,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if appeared { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } } else { focused = now }
         }
         .task {
-            try? await Task.sleep(for: .milliseconds(400))
+            guard (try? await Task.sleep(for: .milliseconds(400))) != nil else { return }
             appeared = true
         }
         .animation(Motion.quick, value: sendVisible)

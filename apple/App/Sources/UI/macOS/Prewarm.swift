@@ -47,7 +47,7 @@ struct Prewarm: View {
         .task(id: workspace.isLibraryReady) {
             guard workspace.isLibraryReady else { return }
             // 首屏出来、用户还没动手：等一会儿再开始
-            try? await Task.sleep(for: .seconds(2))
+            guard (try? await Task.sleep(for: .seconds(2))) != nil else { return }
             workspace.pages.premount(.agent)
             await NextFrame.wait()
             await NextFrame.wait()

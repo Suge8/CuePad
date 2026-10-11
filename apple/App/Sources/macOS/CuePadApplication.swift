@@ -42,7 +42,8 @@ final class CuePadApplication: NSApplication {
     }
 }
 
-/// 等每个弹窗的宿主窗口各发出一次 didEndSheet。
+/// 等每个弹窗的宿主窗口各发出一次 didEndSheet。收到通知要同步：退出时 `terminate` 可能在主线程任务里被调用，系统在嵌套的事件循环里等收尾，
+/// 主线程上排队的任务轮不到，所以这里不用 `notifications(named:)` 的异步序列。
 private final class SheetEndWaiter {
     private var remaining: [ObjectIdentifier]
     private let proceed: @MainActor () -> Void
