@@ -42,6 +42,22 @@ import Testing
     #expect(try records().map { $0[0] } == [hash, later].sorted())
   }
 
+  @Test func nonImageIsRejectedAndLeavesNothingBehind() throws {
+    let source = fixture.directory.appending(path: "notes.txt")
+    try Data("not an image".utf8).write(to: source)
+
+    #expect(throws: CueStoreError.notAnImage) { try store.files.store(Data("not an image".utf8)) }
+    #expect(throws: CueStoreError.notAnImage) { try store.files.store(fileAt: source) }
+    let left = (try? FileManager.default.contentsOfDirectory(atPath: attachmentsDirectory.path)) ?? []
+    #expect(left.isEmpty)
+  }
+
+  @Test func deliveryRequestReferencingUnsavedImageRegistersIt() async throws {
+    let hash = try store.files.store(pngData(width: 5, height: 5))
+    _ = try await store.requestDelivery(
+      "刚粘贴 ![](cuepad://img/\(hash))", to: SendTarget(kind: .piSession, name: "pi", ref: "s"), on: "mac")
+    #expect(try records().map { $0[0] } == [hash])
+  }
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64)])
   func unknownOrMalformedHashIsNotFound(hash: String) throws {
     _ = try store.files.store(pngData(width: 4, height: 4))  // 附件目录存在，"../cuepad.db" 才真的指向库文件

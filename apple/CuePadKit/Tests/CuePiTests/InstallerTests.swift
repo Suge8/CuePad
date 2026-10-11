@@ -71,6 +71,11 @@ struct InstallerTests {
 
     // MARK: 安装 / 升级 / 卸载
 
+    @Test func statusHasNoSideEffects() async throws {
+        try fakePi(printing: "0.87.1")
+        #expect(await installer().status().pi.isSupported)
+        #expect(!FileManager.default.fileExists(atPath: paths.agentDirectory.path))
+    }
     @Test func installWritesBundledExtensionAndBecomesCurrent() async throws {
         try fakePi(printing: "0.87.1")
         #expect(await installer().status().file == .missing)

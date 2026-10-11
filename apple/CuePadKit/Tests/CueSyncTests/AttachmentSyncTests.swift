@@ -48,6 +48,11 @@ import Testing
     #expect(try Data(contentsOf: try #require(asset.fileURL)) == data)
   }
 
+  @Test func attachmentWhoseFileIsMissingIsNotPushed() async throws {
+    let attachment = try await referencedImage(pngData(width: 3, height: 3))
+    try FileManager.default.removeItem(at: try #require(store.files.fileURL(for: attachment.hash)))
+    #expect(await rig.coordinator.record(for: recordID(attachment.id)) == nil)
+  }
   @Test func downloadedAssetIsAdoptedIntoTheAttachmentDirectoryByHash() async throws {
     let data = pngData(width: 9, height: 9)
     let hash = sha256(data)

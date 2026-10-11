@@ -128,6 +128,19 @@ struct BridgeClientTests {
         #expect(bridge.sessions.isEmpty)
     }
 
+    @Test func rejectsDirectoryPathTooLongForSunPath() throws {
+        let long = PiBridge(socketDirectory: URL(filePath: "/tmp/" + String(repeating: "d", count: 60)))
+        #expect(throws: PiBridgeError.socketDirectoryTooLong) { try long.start() }
+    }
+
+    @Test func createsMissingDirectoryWithOwnerOnlyPermissions() throws {
+        let fresh = dir.appending(path: "sub")
+        try PiBridge(socketDirectory: fresh).start()
+        var st = stat()
+        #expect(lstat(fresh.path, &st) == 0)
+        #expect(st.st_mode & 0o777 == 0o700)
+        #expect(st.st_uid == getuid())
+    }
     @Test func doesNotConnectToASocketOthersCouldWriteTo() async throws {
         let ext = FakeExtension(directory: dir, options: .init(socketMode: 0o666))
         try ext.start()

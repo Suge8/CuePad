@@ -23,6 +23,10 @@ struct CueFormatTests {
         #expect(CueFormat.parse(stored).allSatisfy { if case .text = $0 { true } else { false } })
         #expect(CueFormat.serialize(CueFormat.parse(stored)) == stored)
     }
+    @Test("CRLF 换行的分隔线行也被识别")
+    func crlf() {
+        #expect(CueFormat.parse("a\r\n---split---\r\nb").contains(.split))
+    }
 
 }
 
