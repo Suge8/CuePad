@@ -84,4 +84,3 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 资料库始终只有主 App 写：分享扩展把内容放进 `Capture/`，主 App 前台收到进程间通知时入库；小组件与扩展只读主 App 写的 JSON 快照。
 - 每个窗口各有自己的导航路径，当前项目只从路径推出（`Navigation.currentProject`）；iPad 侧栏选中的项目存进这个窗口的场景存储，不放全局偏好。
 - 有同步时每个窗口出现后请求通知权限并注册远程通知；前台不展示系统通知，前台的提示是 App 内横幅（规则见 [sync.md](sync.md)「Agent 锁屏通知」）。
-
