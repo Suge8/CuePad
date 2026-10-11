@@ -9,7 +9,7 @@ enum CardSearchScope: Equatable {
     case project(UUID?)
 }
 
-nonisolated private struct SearchData: Sendable {
+nonisolated private struct SearchData: Sendable, Equatable {
     var groups: [Group]
     var total: Int
     var shown: Int
@@ -17,7 +17,7 @@ nonisolated private struct SearchData: Sendable {
     var targets: [SendTarget]
 
     /// 结果按项目分组，组按首次出现的顺序（即最相关的在前）。
-    struct Group: Identifiable, Sendable {
+    struct Group: Identifiable, Sendable, Equatable {
         var project: Project?
         var cards: [CardEntry]
         var id: UUID? { project?.id }
@@ -81,7 +81,7 @@ struct CardSearchResults: View {
                         if scope == .all {
                             HStack(spacing: 6) {
                                 ProjectGlyph(project: group.project, size: 12)
-                                SectionHeader(title: group.project?.name ?? "未分类", count: nil).padding(.horizontal, -4)
+                                SectionHeader(title: group.project?.name ?? CaptureCopy.unfiled, count: nil).padding(.horizontal, -4)
                             }
                             .padding(.top, 8)
                         }
@@ -168,7 +168,6 @@ private struct SearchSwap<Content: View>: View {
 }
 
 /// 当前输入框是否在输入法组字中（有未上屏的拼音等）。SwiftUI 的搜索框不报告这一点，问第一响应者。
-@MainActor
 enum TextComposition {
     static var isComposing: Bool {
         let probe = FirstResponderProbe()
@@ -200,7 +199,7 @@ private struct FilterChips: View {
             if let projects {
                 Menu {
                     Button("全部") { query.project = nil }
-                    Button("未分类") { query.project = .some(nil) }
+                    Button(CaptureCopy.unfiled) { query.project = .some(nil) }
                     Divider()
                     ForEach(projects) { project in Button(project.name) { query.project = project.id } }
                 } label: { Chip(name: "项目", value: projectLabel, on: query.project != nil) }
@@ -227,7 +226,7 @@ private struct FilterChips: View {
     private var projectLabel: String {
         switch query.project {
         case .none: "全部"
-        case .some(.none): "未分类"
+        case .some(.none): CaptureCopy.unfiled
         case .some(.some(let id)): projects?.first { $0.id == id }?.name ?? "全部"
         }
     }

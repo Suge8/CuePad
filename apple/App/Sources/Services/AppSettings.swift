@@ -8,7 +8,7 @@ import AppKit
 #endif
 
 /// 设备本地偏好，存 UserDefaults，不进同步库。
-@MainActor @Observable
+@Observable
 final class AppSettings {
     enum Theme: String, CaseIterable, Sendable {
         case system, light, dark
@@ -171,7 +171,7 @@ final class AppSettings {
 }
 
 /// 一个会话回复框的草稿（`AppSettings.replyDraft`）。
-@MainActor @Observable
+@Observable
 private final class ReplyDraftSlot {
     var draft: ComposerDraft
 

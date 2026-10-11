@@ -23,7 +23,7 @@ import Testing
     #expect(try await store.card(c2.id) == before)
   }
 
-  @Test func moveCardToInbox() async throws {
+  @Test func moveCardToUnfiled() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: p.id, body: "x")
     try await store.moveCard(card.id, to: .top(project: nil), after: nil)
@@ -76,7 +76,7 @@ import Testing
     #expect(try await store.trashedCards().map(\.id) == [alone.id])
   }
 
-  @Test func cardRestoredIntoTrashedProjectFallsBackToInbox() async throws {
+  @Test func cardRestoredIntoTrashedProjectFallsBackToUnfiled() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: p.id, body: "x")
     try await store.trashCard(card.id)
@@ -190,7 +190,7 @@ import Testing
 
   @Test func projectDirectoryChangesWakeObservers() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
-    var values = store.observe([.projectDirectories]) { try $0.projectDirectories() }.makeAsyncIterator()
+    var values = store.observe { try $0.projectDirectories() }.makeAsyncIterator()
     #expect(try await values.next() == [:])
     try await store.setDirectory("/work/a", for: p.id)
     #expect(try await values.next() == [p.id: "/work/a"])

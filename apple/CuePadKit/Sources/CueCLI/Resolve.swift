@@ -55,9 +55,9 @@ extension Call {
   }
 }
 
-/// `--project 项目` 与 `--inbox` 二选一的范围。
+/// `--project 项目` 与 `--unfiled` 二选一的范围。
 enum Scope {
-  case any, inbox, project(Project)
+  case any, unfiled, project(Project)
 
   /// 新建与移动的落点：未指定等同未分类。
   var target: UUID? {
@@ -68,7 +68,7 @@ enum Scope {
   func contains(_ projectID: UUID?) -> Bool {
     switch self {
     case .any: true
-    case .inbox: projectID == nil
+    case .unfiled: projectID == nil
     case .project(let project): projectID == project.id
     }
   }
@@ -77,12 +77,12 @@ enum Scope {
 extension Call {
   /// `--project 项目`、`--<nullFlag>`（未分类 / 全局）、`--all-projects` 三选一；都没给时，
   /// `implicit` 为真则用绑定了当前目录的项目，没有就不限。
-  func scope(nullFlag: String = "inbox", implicit: Bool = true) async throws -> Scope {
+  func scope(nullFlag: String = "unfiled", implicit: Bool = true) async throws -> Scope {
     let ref = args.value("project")
     let chosen = [ref != nil, args.has(nullFlag), args.has("all-projects")].filter { $0 }.count
     if chosen > 1 { throw CLIError.usage("--project、--\(nullFlag)、--all-projects 只能选一个") }
     if let ref { return .project(try await project(ref)) }
-    if args.has(nullFlag) { return .inbox }
+    if args.has(nullFlag) { return .unfiled }
     if args.has("all-projects") || !implicit { return .any }
     return try await store.project(containing: URL(filePath: directory)).map(Scope.project) ?? .any
   }

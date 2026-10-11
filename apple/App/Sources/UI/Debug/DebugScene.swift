@@ -26,7 +26,6 @@ enum ScrollAnchor {
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
 ///   `-CuePadCatalogFailure once`：每个窗口（含菜单栏面板）只有第一次读取报错，按"重试"后恢复，核对重试路径。
 /// 设置项可在参数域覆盖：`-theme dark`；Mac 隔离 Pi 目录下隐藏"连接 Pi"提示：`-piExtensionDeclined YES`。
-@MainActor
 enum DebugScene {
     static var defaults: UserDefaults { .standard }
     static var scene: String? { defaults.string(forKey: "CuePadScene") }
@@ -157,7 +156,7 @@ enum DebugScene {
 
     static func later(_ delay: Duration, _ work: @escaping @MainActor () -> Void) {
         pending += 1
-        Task { @MainActor in
+        Task {
             try? await Task.sleep(for: delay)
             work()
             pending -= 1

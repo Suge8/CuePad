@@ -43,7 +43,6 @@ final class CuePadApplication: NSApplication {
 }
 
 /// 等每个弹窗的宿主窗口各发出一次 didEndSheet。
-@MainActor
 private final class SheetEndWaiter {
     private var remaining: [ObjectIdentifier]
     private let proceed: @MainActor () -> Void

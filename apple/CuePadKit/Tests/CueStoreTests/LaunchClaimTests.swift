@@ -57,11 +57,11 @@ import Testing
     let launch = try await store.requestLaunch(
       PiLaunch(project: project.id, prompt: idea.body, token: "t-late"), title: "圆桌", on: "mac-a", card: idea.id)
     let plain = try await store.requestDelivery("别的", to: SendTarget(kind: .piSession, name: "notes", ref: "s2"), on: "mac-a")
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
+    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
 
     await clock.waitForSleeper()
     clock.advance(.seconds(121))
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(plain.id) }) { $0 == nil }
+    _ = try await eventually(store, { try $0.deliveryRequest(plain.id) }) { $0 == nil }
     #expect(try await store.deliveryRequest(launch.id) != nil)
     #expect(try await store.handedSessions() == [idea.id: .launching])
 
@@ -70,7 +70,7 @@ import Testing
 
     await clock.waitForSleeper()
     clock.advance(.seconds(61))
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id) }) { $0 == nil }
+    _ = try await eventually(store, { try $0.deliveryRequest(launch.id) }) { $0 == nil }
     await executor.stop()
   }
 
@@ -87,11 +87,11 @@ import Testing
     try await executor.start()
     let launch = try await store.requestLaunch(
       PiLaunch(project: project.id, prompt: idea.body, token: "t-lost"), title: "圆桌", on: "mac-a", card: idea.id)
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }
+    _ = try await eventually(store, { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }
 
     await clock.waitForSleeper()
     clock.advance(.seconds(601))
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(launch.id) }) { $0 == nil }
+    _ = try await eventually(store, { try $0.deliveryRequest(launch.id) }) { $0 == nil }
     await executor.stop()
   }
 }

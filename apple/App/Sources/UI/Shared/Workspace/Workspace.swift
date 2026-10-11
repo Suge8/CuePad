@@ -8,7 +8,7 @@ import SwiftUI
 
 /// 一个窗口（场景）的界面状态：项目目录、打开的卡、浮层、提示；Mac 另有选中的页与发送目标。数据本身不在这里，界面直接订阅 Store。
 /// Mac 的当前项目只存在 `AppSettings.currentProject`（整个 App 一个），这里只记非项目页；iOS 的当前项目从导航路径推出（`Navigation.currentProject`）。
-@MainActor @Observable
+@Observable
 final class Workspace {
     struct Notice: Identifiable, Equatable {
         let id = UUID()
@@ -109,7 +109,7 @@ final class Workspace {
     #if os(macOS)
     var page: Route {
         if let nonProjectPage { return nonProjectPage }
-        return (services.settings.currentProject ?? defaultProject).map(Route.project) ?? .inbox
+        return (services.settings.currentProject ?? defaultProject).map(Route.project) ?? .unfiled
     }
 
     /// 没打开过项目（第一次打开、打开过的进了回收站）时首屏是项目目录顺序的第一个：由目录当场推出、不写进"上次打开"，

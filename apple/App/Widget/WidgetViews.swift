@@ -3,15 +3,15 @@ import WidgetKit
 
 /// 小组件的界面。整块点击打开随手记（`DeepLink.capture`），卡片可用 `DeepLink.card` 链接直达。
 enum WidgetViews {
-    static func inbox(_ entry: InboxEntry) -> some View {
-        InboxView(entry: entry)
+    static func unfiled(_ entry: UnfiledEntry) -> some View {
+        UnfiledView(entry: entry)
             .widgetURL(DeepLink.capture(project: nil).url)
             .containerBackground(.background, for: .widget)
     }
 }
 
-private struct InboxView: View {
-    let entry: InboxEntry
+private struct UnfiledView: View {
+    let entry: UnfiledEntry
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {

@@ -31,7 +31,7 @@ struct SessionControlsTests {
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _ in .failed(reason) }
         try await executor.start()
         defer { Task { await executor.stop() } }
-        for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id) }) {
+        for try await current in store.observe({ try $0.deliveryRequest(request.id) }) {
             if let current, !current.isOpen { return current }
         }
         throw CancellationError()

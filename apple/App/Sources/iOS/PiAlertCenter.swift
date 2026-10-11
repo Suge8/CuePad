@@ -8,7 +8,7 @@ import UserNotifications
 /// （打开活动页并定位到该会话）。App 在前台时系统不展示通知：前台的提示是 App 内的横幅（`SessionAlertTracker`，
 /// 由同步来的会话状态驱动，不依赖推送是否到达），后台才是系统通知。进程只有一个，由 `IOSAppDelegate` 持有。
 /// 权限与注册结果都留在这里，设置页据此显示一行状态（`PiAlertStatus`）。
-@MainActor @Observable
+@Observable
 final class PiAlertCenter: NSObject, UNUserNotificationCenterDelegate {
     enum Registration: Equatable {
         case pending

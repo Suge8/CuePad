@@ -62,7 +62,7 @@ struct CaptureComposer: View {
 
     private var destinationMenu: some View {
         Menu {
-            Button(CaptureCopy.inbox) { state.project = .some(nil) }
+            Button(CaptureCopy.unfiled) { state.project = .some(nil) }
             Divider()
             ForEach(workspace.catalog?.projects ?? []) { item in Button(item.name) { state.project = .some(item.id) } }
         } label: {

@@ -19,7 +19,7 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
     var text: String?
     var urls: [URL]
     var imageFiles: [String]
-    /// nil 表示收件箱（未分类）。
+    /// nil 表示未分类。
     var project: UUID?
     var createdAt: Date
 }
@@ -27,7 +27,7 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
 /// 分享扩展与主 App 之间的数据通路：扩展只往容器里的 `Capture/` 放内容，由主 App 入库，
 /// 资料库始终只有主 App 一个写者，主 App 的界面订阅也照常触发。
 /// 每条是一个目录：先写图片，最后原子写 `capture.json`；没有 json 的目录是尚未写完的，读取时跳过。
-nonisolated enum CaptureInbox {
+nonisolated enum CaptureQueue {
     /// 扩展写完后发出的进程间通知，主 App 收到后入库。
     static let notification = "com.sugeh.cuepad.capture-enqueued"
 
@@ -40,8 +40,8 @@ nonisolated enum CaptureInbox {
         func imageURLs() -> [URL] { capture.imageFiles.map { directory.appending(path: $0) } }
     }
 
-    static func enqueue(_ content: ShareContent, project: UUID?, into inbox: URL, now: Date = .now) throws {
-        let directory = inbox.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+    static func enqueue(_ content: ShareContent, project: UUID?, into queue: URL, now: Date = .now) throws {
+        let directory = queue.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var files: [String] = []
         for (index, image) in content.images.enumerated() {
@@ -54,8 +54,8 @@ nonisolated enum CaptureInbox {
     }
 
     /// 已写完的条目，按创建时间先后。
-    static func pending(in inbox: URL) -> [Entry] {
-        let directories = (try? FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil)) ?? []
+    static func pending(in queue: URL) -> [Entry] {
+        let directories = (try? FileManager.default.contentsOfDirectory(at: queue, includingPropertiesForKeys: nil)) ?? []
         return directories.compactMap { directory -> Entry? in
             guard let data = try? Data(contentsOf: directory.appending(path: manifestName)),
                   let capture = try? decoder.decode(PendingCapture.self, from: data)

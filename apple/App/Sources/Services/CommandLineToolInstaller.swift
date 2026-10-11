@@ -18,7 +18,7 @@ nonisolated enum CommandLineToolError: Error, Equatable, LocalizedError {
 
 /// 把 App 包内的 `cuepad` 命令行工具装进 PATH：在 `~/.local/bin/cuepad` 建符号链接（不做需要提权的 /usr/local/bin）。
 /// 只认自己的链接：位置上是别的东西时不覆盖、不删除。App 换了位置后链接指向旧地方，能检测出来并修复。
-@MainActor @Observable
+@Observable
 final class CommandLineToolInstaller {
     enum State: Equatable {
         /// App 包里没有命令行二进制。

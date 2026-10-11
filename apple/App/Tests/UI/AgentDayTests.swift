@@ -28,7 +28,7 @@ struct AgentDayTests {
     private func macAnswers(_ request: DeliveryRequest, host: String, _ outcome: DeliveryOutcome) async throws {
         let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { Issue.record("执行器意外上报：\($0)") }) { _ in outcome }
         try await executor.start()
-        for try await open in store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id)?.isOpen }) where open == false { break }
+        for try await open in store.observe({ try $0.deliveryRequest(request.id)?.isOpen }) where open == false { break }
         await executor.stop()
     }
 

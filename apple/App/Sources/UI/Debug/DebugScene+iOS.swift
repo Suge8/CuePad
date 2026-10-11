@@ -4,7 +4,7 @@ import CueSync
 import SwiftUI
 import UIKit
 
-/// iOS 画面（`-CuePadScene`）：project、older、inbox、editor、attach（editor 再弹出"挂到任务"面板）、tasks、agent、send、search、trash、archive、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
+/// iOS 画面（`-CuePadScene`）：project、older、unfiled、editor、attach（editor 再弹出"挂到任务"面板）、tasks、agent、send、search、trash、archive、settings、capture、sidebar（iPad 展开侧栏）；不给是书架。
 /// search 在 iPhone 上是书架顶上的搜索框（给了 `-CuePadProject` 则是该项目页的下拉搜索），出现即聚焦并填入 `-CuePadSearch`。
 /// task 停在书架并在浮窗里打开"正在推进"的第一条（没有就是第一条待办；给了 `-CuePadTask <标题开头>` 是那一条）。
 /// session：打开 `-CuePadSession <会话名>`（默认 homepage）的近况页；send 是从卡片"发到 Mac"先选会话。
@@ -41,7 +41,7 @@ extension DebugScene {
         case "sidebar":
             if let project { open(.project(project)) }
             navigation.sidebar = .all
-        case "inbox": open(.inbox)
+        case "unfiled": open(.unfiled)
         case "trash": open(.trash)
         case "archive": open(.archive)
         case "settings": open(.settings)
@@ -142,7 +142,7 @@ extension DebugScene {
         if let handle = dlopen("/usr/lib/libAccessibility.dylib", RTLD_NOW), let symbol = dlsym(handle, "_AXSSetAutomationEnabled") {
             unsafeBitCast(symbol, to: (@convention(c) (Int32) -> Void).self)(1)
         }
-        Task { @MainActor in
+        Task {
             try? await Task.sleep(for: .seconds(4))
             var lines: [String] = []
             for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {

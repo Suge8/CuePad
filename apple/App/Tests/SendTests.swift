@@ -90,7 +90,7 @@ struct SendTests {
         #expect(request.hostID == TestApp.hostID)
         #expect(request.target == SendTarget(kind: .piSession, name: "work", ref: "sess-1"))
         #expect(request.mode == .known(.steer))
-        for try await status in services.store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id)?.status }) {
+        for try await status in services.store.observe({ try $0.deliveryRequest(request.id)?.status }) {
             if status == .known(.succeeded) { break }
         }
         #expect(ext.messages == [PiMessage(text: "hi", whenBusy: .steer, deliveryID: request.id.uuidString)])

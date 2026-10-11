@@ -103,7 +103,7 @@ struct ReplyTests {
         let executor = DeliveryExecutor(store: store, hostID: "mac", onIssue: { _ in }) { _ in .succeeded }
         let third = try await app.services.requestMacDelivery("再加一句", to: live, mode: .followUp)
         try await executor.start()
-        for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(third.id) }) where current?.isOpen == false { break }
+        for try await current in store.observe({ try $0.deliveryRequest(third.id) }) where current?.isOpen == false { break }
         await executor.stop()
         let handed = try #require(try await store.deliveryRequest(third.id))
         #expect(!handed.isWithdrawable)

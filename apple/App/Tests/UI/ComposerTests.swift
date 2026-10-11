@@ -109,7 +109,7 @@ struct ComposerTests {
             return try #require(try await store.allPiSessionStates().first { $0.sessionID == "loose" })
         }())
         #expect(try await store.cards(in: nil).map(\.body) == ["没归属的"])
-        #expect(workspace.notice?.text == "已记到 未分类" && workspace.notice?.link == .inbox)
+        #expect(workspace.notice?.text == "已记到 未分类" && workspace.notice?.link == .unfiled)
     }
 }
 #endif

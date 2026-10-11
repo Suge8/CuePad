@@ -54,7 +54,7 @@ struct ProjectsTests {
         services.settings.currentProject = third
         for project in try await store.projects() { try await store.trashProject(project.id) }
         await only.reconcileCurrentProject()
-        #expect(only.page == .inbox && services.settings.currentProject == nil)
+        #expect(only.page == .unfiled && services.settings.currentProject == nil)
     }
 
     @Test func 往失效项目存东西_落到未分类或全局_写入时被删则纠正并提示() async throws {

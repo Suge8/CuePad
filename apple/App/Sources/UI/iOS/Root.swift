@@ -131,7 +131,7 @@ struct RouteView: View {
         switch route {
         case .shelf: ShelfScreen()
         case .project(let id): ProjectScreen(projectID: id)
-        case .inbox: InboxScreen()
+        case .unfiled: UnfiledScreen()
         case .archive: ArchiveList().floatingHeader("归档")
         case .trash: TrashScreen()
         case .settings: SettingsScreen()

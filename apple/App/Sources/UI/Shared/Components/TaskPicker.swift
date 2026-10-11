@@ -39,7 +39,7 @@ struct TaskPicker: View {
     func header(_ projectID: UUID?) -> some View {
         HStack(spacing: 6) {
             ProjectGlyph(project: workspace.catalog?.project(projectID), size: 12)
-            Text(workspace.catalog?.project(projectID)?.name ?? CaptureCopy.inbox)
+            Text(workspace.catalog?.project(projectID)?.name ?? CaptureCopy.unfiled)
         }
     }
 

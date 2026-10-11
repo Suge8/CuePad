@@ -4,7 +4,6 @@ import SwiftUI
 
 /// 标准设置窗口（⌘, 与菜单"设置…"）：有标题栏、可关闭、尺寸随内容，关闭只是隐藏，再次打开复用同一个窗口。
 /// 内容视图在第一次打开时才创建。
-@MainActor
 final class SettingsWindowController {
     private let makeContent: () -> AnyView
     private let settings: AppSettings

@@ -48,7 +48,7 @@ import Testing
     #expect(hit.cards.map(\.id) == [wanted.id] && hit.totalCards == 1)
   }
 
-  @Test func projectFilterAcceptsSeveralProjectsAndInbox() async throws {
+  @Test func projectFilterAcceptsSeveralProjectsAndUnfiled() async throws {
     let w = try await world()
     #expect(Set(try await store.search(SearchQuery(projects: [w.p.id])).cards.map(\.id)) == [w.c1.id, w.c2.id])
     #expect(try await store.search(SearchQuery(projects: [nil])).cards.map(\.id) == [w.c4.id])
@@ -170,7 +170,7 @@ import Testing
 
   @Test func projectSummariesWakeObserversOnCardChanges() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
-    var values = store.observe([.cards, .projects]) { try $0.projectSummaries().map(\.cardCount) }.makeAsyncIterator()
+    var values = store.observe { try $0.projectSummaries().map(\.cardCount) }.makeAsyncIterator()
     #expect(try await values.next() == [0, 0])
 
     _ = try await store.createCard(in: p.id, body: "x")

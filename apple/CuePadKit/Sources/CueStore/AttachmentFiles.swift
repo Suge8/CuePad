@@ -124,11 +124,14 @@ extension CueStore {
     for hash in Set(CueFormat.imageHashes(in: text)) { try registerAttachment(hash: hash) }
   }
 
+  /// 这张图片有没有附件记录。记录在文件到本机之后才有（本机登记，或同步来的文件落盘后）：界面据此等远端的图片到达，订阅它就会在到达时醒来。
+  public func hasAttachment(_ hash: String) throws -> Bool {
+    try db.first("SELECT 1 FROM attachments WHERE hash = ?", [hash], { _ in true }) != nil
+  }
+
   /// 本机已有这个文件、还没有记录时登记附件记录（同步载体）。必须在写事务内调用。
   func registerAttachment(hash: String) throws {
-    guard try db.first("SELECT 1 FROM attachments WHERE hash = ?", [hash], { _ in true }) == nil,
-      let metadata = files.metadata(hash: hash)
-    else { return }
+    guard try !hasAttachment(hash), let metadata = files.metadata(hash: hash) else { return }
     let now = Date.stamp
     try insert(
       Attachment(id: UUID(), hash: hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now))

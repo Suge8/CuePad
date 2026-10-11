@@ -12,7 +12,7 @@ import Testing
     let app = fixture.store
     let cli = try CueStore(url: fixture.url)
     // 观察的是项目表；外部变更"不猜表"，整体重读，所以卡片写入也会唤醒它
-    var values = app.observe([.projects]) { try $0.cards(in: nil).map(\.body) }.makeAsyncIterator()
+    var values = app.observe { try $0.cards(in: nil).map(\.body) }.makeAsyncIterator()
     #expect(try await values.next() == [])
 
     _ = try await cli.createCard(in: nil, body: "from the other process")
@@ -24,7 +24,7 @@ import Testing
   func ownCommitsAreNotProcessedTwice() async throws {
     let app = fixture.store
     let cli = try CueStore(url: fixture.url)
-    var values = app.observe([.cards]) { try $0.cards(in: nil).count }.makeAsyncIterator()
+    var values = app.observe { try $0.cards(in: nil).count }.makeAsyncIterator()
     #expect(try await values.next() == 0)
 
     _ = try await app.createCard(in: nil, body: "own")
@@ -41,7 +41,7 @@ import Testing
     try FileManager.default.createSymbolicLink(at: link, withDestinationURL: fixture.directory)
     defer { try? FileManager.default.removeItem(at: link) }
     let viaLink = try CueStore(url: link.appending(path: "cuepad.db"))
-    var values = fixture.store.observe([.cards]) { try $0.cards(in: nil).count }.makeAsyncIterator()
+    var values = fixture.store.observe { try $0.cards(in: nil).count }.makeAsyncIterator()
     #expect(try await values.next() == 0)
 
     _ = try await viaLink.createCard(in: nil, body: "x")
@@ -52,7 +52,7 @@ import Testing
   @Test(.timeLimit(.minutes(1)))
   func writesFromAnotherLibraryDoNotWakeThisOne() async throws {
     let other = try Fixture()
-    var values = fixture.store.observe([.cards]) { try $0.cards(in: nil).count }.makeAsyncIterator()
+    var values = fixture.store.observe { try $0.cards(in: nil).count }.makeAsyncIterator()
     #expect(try await values.next() == 0)
 
     _ = try await other.store.createCard(in: nil, body: "elsewhere")

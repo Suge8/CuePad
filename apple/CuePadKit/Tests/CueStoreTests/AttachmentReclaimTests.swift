@@ -49,12 +49,12 @@ import Testing
   @Test func emptyTrashAndPurgeProjectReclaimTheirCardsImages() async throws {
     let inTrash = try await image(0.1)
     let inProject = try await image(0.2)
-    let sharedWithInbox = try await image(0.3)
+    let sharedWithUnfiled = try await image(0.3)
     let live = try await image(0.4)
     let alone = try await store.createCard(in: nil, body: ref(inTrash))
     let project = try await store.createProject(name: "P", color: "#111")
-    _ = try await store.createCard(in: project.id, body: ref(inProject) + ref(sharedWithInbox))
-    _ = try await store.createCard(in: nil, body: ref(sharedWithInbox) + ref(live))
+    _ = try await store.createCard(in: project.id, body: ref(inProject) + ref(sharedWithUnfiled))
+    _ = try await store.createCard(in: nil, body: ref(sharedWithUnfiled) + ref(live))
 
     try await store.trashCard(alone.id)
     try await store.emptyTrash()
@@ -64,7 +64,7 @@ import Testing
     try await store.trashProject(project.id)
     try await store.purgeProject(project.id)
     #expect(try !exists(inProject))
-    #expect(try exists(sharedWithInbox) && exists(live))
+    #expect(try exists(sharedWithUnfiled) && exists(live))
   }
 
   @Test func imageNotYetInsertedIntoAnyCardIsNotTouchedByUnrelatedPurges() async throws {

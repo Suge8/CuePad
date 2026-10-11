@@ -27,7 +27,7 @@ extension View {
 }
 
 /// 本窗口此刻的浮层，后开的在上（右上角的面板总在模态浮层之下）。
-@MainActor @Observable
+@Observable
 final class PanelHost {
     struct Shown: Identifiable {
         let id: UUID
