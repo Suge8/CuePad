@@ -7,7 +7,8 @@ public enum PiWorkState: String, Sendable, CaseIterable {
   case delegating
   /// 在压缩上下文（手动 /compact、上下文快满时自动、溢出后压缩再重试）：工作中的一档，Pi 忙着，停止会中止压缩
   case compacting
-  /// 会话已结束（Pi 退出、换了会话），以及本机会话文件索引里的历史会话：记录留着，会话文件被删时才删。
+  /// 会话已结束（用户在 CuePad 里结束它、终端里的 Pi 退出、换了会话），以及本机会话文件索引里的历史会话：记录留着，会话文件被删时才删。
+  /// 一句话没说过的会话（没留下会话文件）不进历史，CuePad 后台托管的会话闲置退出也不算结束（见 `PiStateRecorder.exited`）。
   case ended
   /// 会话还在跑，但它加载的扩展协议版本与 Mac 上的 CuePad 不同（升级前开的 Pi）：读不到状态、发不了命令，要在终端里退出 Pi 再接着这个会话。
   /// 它不是"已结束"，不进历史。

@@ -628,7 +628,8 @@ extension CueStore {
 
   /// 只留下这些会话文件的索引，其余（文件已删除、不再算会话的）删除，返回删掉的条数。
   /// 同时让已结束的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的已结束会话记录（文件被删的；从没落盘的，
-  /// 如 `--no-session` 或没发过消息的），补写有会话文件却没有记录的。在线的不动。
+  /// 如 `--no-session` 或没发过消息的——这也是已经留下的这类历史记录的清理，每次启动一次），补写有会话文件却没有记录的。在线的不动；
+  /// 歇着的托管会话同样要有会话文件，由 `PiStateRecorder.dropUnindexedHosted` 对账（它知道哪些是此刻在线的）。
   @discardableResult
   public func retainPiSessions(paths: Set<String>, host: String) throws -> Int {
     try write {

@@ -8,13 +8,14 @@ import SystemConfiguration
 extension AppServices {
     // MARK: Pi 状态记录
 
-    /// 启动时清掉这台 Mac 上次没来得及结束的会话记录（别的 Mac 的不动）。
+    /// 启动时清掉这台 Mac 上次没来得及结束的会话记录（别的 Mac 的不动）；托管的会话留着、歇着（见 `PiStateRecorder.exited`）。
     func resetPiState() async throws {
         try await piStateRecorder.reset()
     }
 
     /// 把 Pi 桥的会话变化写成同步记录，直到流结束。一个会话一条记录：同一会话同时有两个进程（后台托管的那个正在让给
     /// 用户在终端里打开的那个）时，记录跟着用户的；其中一个结束而另一个还在时，记录不标为结束。
+    /// 进程都退出时记录怎么处理（历史、歇着、删除）只由 `PiStateRecorder.exited` 定。
     func consumePiChanges(_ changes: AsyncStream<PiSessionChange>) async throws {
         var live: [CuePi.PiSession.ID: CuePi.PiSession] = [:]
         func owner(of sessionID: String) -> CuePi.PiSession? {
@@ -32,7 +33,7 @@ extension AppServices {
                 if let other = owner(of: session.sessionID) {
                     try await recordPiState(of: other)
                 } else {
-                    try await piStateRecorder.end(sessionID: session.sessionID)
+                    try await piStateRecorder.exited(sessionID: session.sessionID, file: session.sessionFile, hosted: session.hosted)
                 }
             case .incompatible: break
             }

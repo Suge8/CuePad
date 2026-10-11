@@ -132,6 +132,7 @@ extension AppServices {
                 backfilling = false
                 do {
                     try await historyStore.retain(files)
+                    try await piStateRecorder.dropUnindexedHosted()
                 } catch {
                     reportIssue(.piHistoryUnavailable("清理已不存在的会话失败：\(error)"))
                 }

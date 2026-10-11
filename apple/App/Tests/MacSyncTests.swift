@@ -14,11 +14,17 @@ struct MacSyncTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
 
+    /// `spoke`：留下了会话文件（说过话）；没有文件的会话结束时不进历史。
     private func session(
-        _ sessionID: String, cwd: String = "/work/app", state: PiWorkState = .thinking, pid: Int32 = 100
+        _ sessionID: String, cwd: String = "/work/app", state: PiWorkState = .thinking, pid: Int32 = 100, spoke: Bool = false
     ) -> CuePi.PiSession {
-        CuePi.PiSession(
-            id: "\(sessionID).\(pid)", sessionID: sessionID, sessionFile: nil, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
+        var file: URL?
+        if spoke {
+            file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
+            FileManager.default.createFile(atPath: file!.path, contents: Data())
+        }
+        return CuePi.PiSession(
+            id: "\(sessionID).\(pid)", sessionID: sessionID, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
             terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
     }
 
@@ -146,7 +152,7 @@ struct MacSyncTests {
         #expect(stored.projectID == project.id)
         #expect(stored.title == "app")
 
-        try await services.consumePiChanges(changes([.ended(session("s1"), reason: .disconnected)]))
+        try await services.consumePiChanges(changes([.ended(session("s1", spoke: true), reason: .disconnected)]))
         #expect(try await services.store.allPiSessionStates().map(\.state) == [.known(.ended)])
     }
 
@@ -165,7 +171,7 @@ struct MacSyncTests {
         }
         await executor.stop()
 
-        try await services.consumePiChanges(changes([.ended(session("s1"), reason: .closed(reason: "quit", undelivered: [lost.id.uuidString]))]))
+        try await services.consumePiChanges(changes([.ended(session("s1", spoke: true), reason: .closed(reason: "quit", undelivered: [lost.id.uuidString]))]))
 
         let failed = try #require(try await store.deliveryRequest(lost.id))
         #expect(failed.status == .known(.failed) && failed.resultDetail == "会话在压缩上下文时关掉了，这句没送进去")
