@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 提示词的发送钮（⌘↩）+ 选会话：发给本项目的 Agent 会话（`Workspace.agentTarget`），有目标时是靛青主钮；
+/// 提示词的发送钮（⌘↩）+ 选会话：发给本项目的 Agent 会话（`SendState.agentTarget`），有目标时是靛青主钮；
 /// 本项目还没有会话时只是选会话的菜单（中性样式）。只在有内容可发时出现（由调用方决定）。
 /// 按钮上写"发给 Agent · <会话名>"，过长只截会话名；目标会话已结束时状态点写"已结束"，发送时在后台唤醒它；
 /// 会话正忙时转为询问马上说还是等它做完再说（`Workspace.send`）。
@@ -15,18 +15,18 @@ struct SendControl: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let target = workspace.agentTarget(for: project)
+        let target = workspace.sendState.agentTarget(for: project)
         Group {
             if let target {
                 HStack(spacing: 0) {
                     Button { send(target) } label: {
-                        label(dot: workspace.shown(target), text: Dotted("发给 Agent", name(target)), shortcut: "⌘↩")
+                        label(dot: workspace.sendState.shown(target), text: Dotted("发给 Agent", name(target)), shortcut: "⌘↩")
                             .padding(.trailing, 8)
                     }
                     .buttonStyle(PressStyle())
                     .keyboardShortcut(.return, modifiers: .command)
-                    .accessibilityLabel(workspace.action(for: target))
-                    .help(workspace.isEnded(target) ? "这个会话已结束，发送时会在后台唤醒它" : "")
+                    .accessibilityLabel(workspace.sendState.action(for: target))
+                    .help(workspace.sendState.isEnded(target) ? "这个会话已结束，发送时会在后台唤醒它" : "")
                     SessionMenu(project: project, newSession: newSession) {
                         Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
                             .padding(.trailing, compact ? 10 : 14).padding(.leading, 4)
@@ -61,7 +61,7 @@ struct SendControl: View {
 
     /// 截断后的会话名。
     private func name(_ target: AgentTarget) -> String {
-        let full = workspace.sessionName(target.session), limit = compact ? 8 : 14
+        let full = workspace.sendState.sessionName(target.session), limit = compact ? 8 : 14
         return full.count > limit ? full.prefix(limit - 1) + "…" : full
     }
 }
@@ -76,20 +76,20 @@ struct SessionMenu<Label: View>: View {
     @Environment(AppServices.self) private var services
 
     var body: some View {
-        let current = workspace.agentTarget(for: project)
+        let current = workspace.sendState.agentTarget(for: project)
         Menu {
             if let newSession { Button("新会话", systemImage: "plus", action: newSession) }
-            let online = workspace.onlineTargets(for: project)
-            if online.isEmpty, workspace.endedTargets.isEmpty, newSession == nil {
+            let online = workspace.sendState.onlineTargets(for: project)
+            if online.isEmpty, workspace.sendState.endedTargets.isEmpty, newSession == nil {
                 Button {} label: { Text(Dotted("没有运行中的 Agent 会话", "在终端运行 pi 开始")) }.disabled(true)
             }
             ForEach(online) { item in
                 let id = item.state.sessionID
                 Toggle(isOn: Binding(get: { current?.session == id }, set: { _ in workspace.sendState.choice = AgentTarget(session: id) })) {
-                    Text(HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: workspace.shown(AgentTarget(session: id))))
+                    Text(HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: workspace.sendState.shown(AgentTarget(session: id))))
                 }
             }
-            ForEach(workspace.endedTargets, id: \.sessionID) { ended in
+            ForEach(workspace.sendState.endedTargets, id: \.sessionID) { ended in
                 Toggle(
                     isOn: Binding(get: { current?.session == ended.sessionID }, set: { _ in workspace.sendState.choice = AgentTarget(session: ended.sessionID) })
                 ) { Text(Dotted(ended.title, "已结束")) }

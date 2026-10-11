@@ -44,7 +44,7 @@ final class Workspace {
     #if os(macOS)
     let pages = MacPages()
     let presses = CardPresses()
-    let sendState = SendState()
+    let sendState: SendState
     private(set) var nonProjectPage: Route?
     /// 打开的卡（编辑页；iOS 打开卡片是推入导航，见 `Navigation.push`）。设成某张卡时编辑页立即挂上；
     /// 清空时编辑页先淡出，淡完才卸下（见 `presentedCard`）。
@@ -101,6 +101,9 @@ final class Workspace {
 
     init(services: AppServices) {
         self.services = services
+        #if os(macOS)
+        sendState = SendState(services: services)
+        #endif
     }
 
     #if os(macOS)

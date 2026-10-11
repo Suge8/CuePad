@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Mac 上"发给哪个 Agent 会话"：提示词的发送钮、右键菜单与会话菜单读同一个 `Workspace.agentTarget`。
+/// Mac 上"发给哪个 Agent 会话"：提示词的发送钮、右键菜单与会话菜单读同一个 `SendState.agentTarget`。
 /// 会话结束后目标不悄悄换掉，而是写明"已结束"（发不出去，点开改选）；同一个 Pi 会话重新打开了就接回新开的那个。
 @MainActor
 struct SendTargetTests {
@@ -38,14 +38,14 @@ struct SendTargetTests {
         opened.extensions.append(ext)
         await eventually { rig.pi.session(id: ext.id) != nil }
         #expect(rig.pi.session(id: ext.id) != nil)
-        await workspace.refreshSessionProjects()
+        try? await workspace.sendState.refreshSessionProjects()
         return ext
     }
 
     private func end(_ ext: FakeExtension) async {
         ext.close(bye: "quit")
         await eventually { rig.pi.session(id: ext.id) == nil }
-        await workspace.refreshSessionProjects()
+        try? await workspace.sendState.refreshSessionProjects()
     }
 
     /// 选定这个会话为发送目标（菜单里点一下它）。
@@ -56,13 +56,13 @@ struct SendTargetTests {
     /// 等目标成为 `name`（`ended` 为是否已结束）：状态经桥、同步记录、观察流一路过来，没有更细的信号。
     private func expectTarget(_ project: Project, _ name: String, ended: Bool, _ comment: Comment? = nil, sourceLocation: SourceLocation = #_sourceLocation) async {
         await eventually {
-            guard let target = workspace.agentTarget(for: project.id) else { return false }
-            return workspace.sessionName(target.session) == name && workspace.isEnded(target) == ended
+            guard let target = workspace.sendState.agentTarget(for: project.id) else { return false }
+            return workspace.sendState.sessionName(target.session) == name && workspace.sendState.isEnded(target) == ended
         }
-        let target = workspace.agentTarget(for: project.id)
+        let target = workspace.sendState.agentTarget(for: project.id)
         let detail = "target=\(String(describing: target)) live=\(rig.pi.sessions.map(\.id)) projects=\(workspace.sendState.projects)"
-        #expect(target.map { workspace.sessionName($0.session) } == name, Comment(rawValue: detail), sourceLocation: sourceLocation)
-        #expect(target.map(workspace.isEnded) == ended, Comment(rawValue: detail), sourceLocation: sourceLocation)
+        #expect(target.map { workspace.sendState.sessionName($0.session) } == name, Comment(rawValue: detail), sourceLocation: sourceLocation)
+        #expect(target.map(workspace.sendState.isEnded) == ended, Comment(rawValue: detail), sourceLocation: sourceLocation)
     }
 
     @Test func 本项目的在线会话是默认目标_按工作目录归入() async throws {
@@ -86,9 +86,9 @@ struct SendTargetTests {
         await end(alpha)
 
         await expectTarget(project, "alpha", ended: true)
-        let target = try #require(workspace.agentTarget(for: project.id))
-        #expect(workspace.action(for: target) == "唤醒 Agent 会话「alpha」并发送")
-        #expect(workspace.endedTargets.map(\.sessionID) == ["a"], "菜单里列的就是这一批")
+        let target = try #require(workspace.sendState.agentTarget(for: project.id))
+        #expect(workspace.sendState.action(for: target) == "唤醒 Agent 会话「alpha」并发送")
+        #expect(workspace.sendState.endedTargets.map(\.sessionID) == ["a"], "菜单里列的就是这一批")
         #expect(await workspace.send("接着做", to: target))
 
         let request = try #require(try await store.deliveryRequests().first)
@@ -96,7 +96,7 @@ struct SendTargetTests {
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
         #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: "接着做", deliveryID: request.id.uuidString)])
         await expectTarget(project, "alpha", ended: false, "唤醒后它又在线了")
-        #expect(workspace.endedTargets.isEmpty)
+        #expect(workspace.sendState.endedTargets.isEmpty)
     }
 
     @Test func 唤醒不了_会话文件不在这台Mac上_发送失败不假成功() async throws {
@@ -105,7 +105,7 @@ struct SendTargetTests {
         defer { rig.services.cancelBackgroundWork() }
         await end(alpha)
         await expectTarget(project, "alpha", ended: true)
-        let target = try #require(workspace.agentTarget(for: project.id))
+        let target = try #require(workspace.sendState.agentTarget(for: project.id))
 
         #expect(await workspace.send("接着做", to: target) == false)
 
@@ -123,7 +123,7 @@ struct SendTargetTests {
     @Test func 发给别的Mac上的会话_写一条指定那台Mac的投送请求_本机不执行() async throws {
         try await remoteSession("r", title: "atlas", in: project)
         await expectTarget(project, "atlas", ended: false)
-        let target = try #require(workspace.agentTarget(for: project.id))
+        let target = try #require(workspace.sendState.agentTarget(for: project.id))
 
         #expect(await workspace.send("接着做", to: target))
 
@@ -137,7 +137,7 @@ struct SendTargetTests {
     @Test func 别的Mac上的会话正忙_先问马上说还是等它做完再说() async throws {
         try await remoteSession("r", title: "atlas", in: project, state: .thinking)
         await expectTarget(project, "atlas", ended: false)
-        let target = try #require(workspace.agentTarget(for: project.id))
+        let target = try #require(workspace.sendState.agentTarget(for: project.id))
 
         #expect(await workspace.send("看一下", to: target) == false)
         #expect(workspace.sendState.busy?.session == "r")
@@ -163,13 +163,13 @@ struct SendTargetTests {
         _ = try await open("b", in: "/work/beta")
         try await remoteSession("r", title: "atlas", in: project)
         try await remoteSession("gone", title: "old", in: project, state: .ended)
-        await eventually { workspace.onlineTargets(for: project.id).count == 3 }
+        await eventually { workspace.sendState.onlineTargets(for: project.id).count == 3 }
 
-        let mac = workspace.onlineTargets(for: project.id).map(\.state.sessionID)
+        let mac = workspace.sendState.onlineTargets(for: project.id).map(\.state.sessionID)
         let phone = HandOffTargets.sessions(rig.services.liveSessions.live, project: project.id).map(\.state.sessionID)
 
         #expect(mac == phone && Set(mac) == ["a", "b", "r"])
-        #expect(workspace.endedTargets.isEmpty, "别的 Mac 上结束的不是本机刚结束的")
+        #expect(workspace.sendState.endedTargets.isEmpty, "别的 Mac 上结束的不是本机刚结束的")
     }
 
     /// 同步记录里还写着"在线"的本机会话，桥上却已经没有了（还没来得及标成结束）：不是能交给的会话，菜单不列、也不当默认目标；
@@ -180,9 +180,9 @@ struct SendTargetTests {
         await eventually { rig.services.liveSessions.live.map(\.state.sessionID) == ["stale"] }
         #expect(rig.services.liveSessions.live.count == 1, "记录读到了")
 
-        #expect(workspace.onlineTargets(for: project.id).isEmpty)
-        #expect(workspace.agentTarget(for: project.id) == nil)
-        if case .ended = workspace.route(of: "stale") {} else { Issue.record("发送时它是已结束的会话") }
+        #expect(workspace.sendState.onlineTargets(for: project.id).isEmpty)
+        #expect(workspace.sendState.agentTarget(for: project.id) == nil)
+        if case .ended = workspace.sendState.route(of: "stale") {} else { Issue.record("发送时它是已结束的会话") }
     }
 
     @Test func 选过的会话结束了也不换成别的() async throws {
@@ -223,7 +223,7 @@ struct SendTargetTests {
             times: PiTimes(stateSince: .now.addingTimeInterval(-3_600), busySince: nil))
         try await Task.sleep(for: .milliseconds(300))
 
-        #expect(workspace.agentTarget(for: project.id) == nil)
+        #expect(workspace.sendState.agentTarget(for: project.id) == nil)
     }
 
     @Test func 别的项目的结束会话不当目标() async throws {
@@ -232,7 +232,7 @@ struct SendTargetTests {
 
         await expectTarget(other, "omega", ended: true)
         try await Task.sleep(for: .milliseconds(200))
-        #expect(workspace.agentTarget(for: project.id) == nil)
+        #expect(workspace.sendState.agentTarget(for: project.id) == nil)
     }
 }
 #endif

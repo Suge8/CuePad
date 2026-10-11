@@ -154,7 +154,7 @@ extension Workspace {
     func projectAgents(_ project: UUID?) -> [ProjectAgents.Row] {
         guard let project else { return [] }
         let sessions = services.liveSessions
-        let live = projectSessions(in: project).map {
+        let live = sendState.projectSessions(in: project).map {
             PiSessionState.live($0, hostID: services.hostID, projectID: project, recap: sessions.recaps[$0.sessionID])
         }
         return ProjectAgents.rows(
