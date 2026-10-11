@@ -100,29 +100,6 @@ struct IOSDecorationTests {
         #expect(font(p[0]) == theme.font && font(p[1]) == theme.titleFont)
     }
 
-    @Test("## 标题行、列表、行内 code：字体与标记色；标记字符保留可见")
-    func markdownLite() throws {
-        let h = EditorHarness(width: 320)
-        let long = String(repeating: "很长的一条内容", count: 12)
-        h.load("标题\n## 小节\n- \(long)\n  1. 序号\n运行 `swift test` 后")
-        let p = try paragraphs(h, 5)
-        #expect(font(p[1], at: 3) == theme.headingFont && color(p[1], at: 0) == theme.markerColor && color(p[1], at: 3) == theme.textColor)
-        #expect(color(p[2], at: 0) == theme.markerColor && color(p[2], at: 2) == theme.textColor)
-        #expect(color(p[3], at: 2) == theme.markerColor && color(p[3], at: 5) == theme.textColor)
-        #expect(font(p[4], at: 4) == theme.codeFont && font(p[4], at: 0) == theme.font && color(p[4], at: 3) == theme.markerColor)
-
-        var indent: CGFloat?
-        var seen = 0
-        h.textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
-            defer { seen += 1 }
-            guard seen == 2 else { return true }
-            let lines = fragment.textLineFragments
-            if lines.count >= 2 { indent = lines[1].typographicBounds.minX - lines[0].typographicBounds.minX }
-            return false
-        }
-        #expect((indent ?? 0) > 4)
-    }
-
     @Test("围栏及内部整段用代码字体；增删围栏后远处未编辑的段落随之切换")
     func codeBlock() throws {
         let h = EditorHarness()

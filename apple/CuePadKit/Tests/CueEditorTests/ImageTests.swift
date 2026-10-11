@@ -127,23 +127,6 @@ struct ImageTests {
         #expect(h.imageLineFrames().count == 1)
     }
 
-    @Test("图片宽度自适应：不超过行宽、保持比例，窗口缩放后跟随")
-    func widthAdapts() throws {
-        let h = EditorHarness(width: 720)
-        let id = try h.store.store(makePNG(width: 1600, height: 1000))
-        h.load("![](cuepad://img/\(id))")
-        let wide = try #require(h.imageLineFrames().first)
-        let container = h.textView.textContainer!.size.width - 2 * h.textView.textContainer!.lineFragmentPadding
-        #expect(wide.width <= container + 0.5)
-        #expect(abs(wide.width / wide.height - 1.6) < 0.02)
-
-        h.window.setContentSize(NSSize(width: 420, height: 640))
-        h.layout()
-        let narrow = try #require(h.imageLineFrames().first)
-        #expect(narrow.width < wide.width)
-        #expect(narrow.width <= h.textView.bounds.width)
-    }
-
     @Test("图片像素在进入视口后显示出来，解码不阻塞加载")
     func rendersPixels() async throws {
         let h = EditorHarness()

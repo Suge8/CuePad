@@ -163,7 +163,15 @@ case "$cmd" in
     if [ -n "${device:-}" ] && ! sim_booted "$device"; then
       trap 'xcrun simctl shutdown "$device" 2>/dev/null || true' EXIT
     fi
-    xcb test "${@:3}" ;;
+    # iOS/iPad：同一个入口也在模拟器上跑 CuePadKit 的测试（iOS 编辑器等只在这里跑；macOS 上的 Kit 测试用 swift test）。
+    # 带了收窄参数（-only-testing 等）时只跑 App 那部分；两部分都跑完再按其一失败退出。
+    status=0
+    xcb test "${@:3}" || status=$?
+    if [ "$platform" != mac ] && [ "$#" -le 2 ]; then
+      (cd "$APPLE_DIR/CuePadKit" && xcodebuild test -scheme CuePadKit-Package -destination "$destination" -derivedDataPath "$DERIVED/kit-$platform" 2>&1) \
+        | { grep -v 'failed with exit code 0 but produced no further output' || true; } || status=$?
+    fi
+    exit $status ;;
   shot) xcb -quiet build; "shot_$platform" ;;
   *) echo "用法：$0 <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]" >&2; exit 2 ;;
 esac
