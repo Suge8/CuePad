@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// 会话回复框：草稿只有一份（`AppSettings`，iOS 与 Mac 同一份）：离开会话再回来还在；文字存在本机偏好、跨退出保留，
-/// 带上的卡片与图片只留在这次运行；iOS"发到 Mac"带来的卡片写进同一份草稿；发出后清空；排队的话在回复框上方一叠、没被 Mac 领取前可撤回。
+/// 带上的卡片与图片只留在这次运行；iOS"发到 Mac"带来的卡片写进同一份草稿；排队的话在回复框上方一叠、没被 Mac 领取前可撤回。
 /// 数每个键被写了几次的偏好套件。
 nonisolated private final class CountingDefaults: UserDefaults, @unchecked Sendable {
     private(set) var writes: [String: Int] = [:]
