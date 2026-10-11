@@ -57,7 +57,7 @@ struct CardEditorPage: View {
             // 纸铺开后才把墙盖住；纸本身全程不透明
             palette.desk.ignoresSafeArea().opacity(expanded ? 1 : 0)
             paperShape
-            if stage >= .editor, let data, let initialText {
+            if stage >= .bar, let data, let initialText {
                 VStack(alignment: .leading, spacing: 10) {
                     meta(data)
                     if data.card.isTask { taskContent(data.card) } else { editor(data, initialText) }
@@ -194,15 +194,12 @@ struct CardEditorPage: View {
         }
     }
 
-    /// 重活先做完再动：原卡片保持按下（`CardPresence.Phase.opening`，点下与键盘打开都一样），接下来几帧依次挂上编辑器、
-    /// 挂上底栏（都不可见）、让编辑器接过键盘，再由纸接过原卡片开始放大。这几步各要十几毫秒，放在纸还没动的时候，每步一帧；
+    /// 重活先做完再动：原卡片保持按下（`CardPresence.Phase.opening`，点下与键盘打开都一样），接下来几帧依次挂上编辑器与底栏
+    /// （都不可见，一帧：分成两帧只是多一次掉帧，每帧各要三十几毫秒）、让编辑器接过键盘，再由纸接过原卡片开始放大。这几步放在纸还没动的时候，每步一帧；
     /// 放大途中与铺满换成编辑器的每一帧，只剩动画本身与改透明度。
     private func prepare() {
         Task {
             // 每一步之前都看一眼：准备途中已经关了就停下（关闭由 collapse 收尾）
-            await NextFrame.wait()
-            guard isOpen else { return }
-            stage = .editor
             await NextFrame.wait()
             guard isOpen else { return }
             stage = .bar
@@ -326,9 +323,9 @@ struct CardEditorPage: View {
     }
 }
 
-/// 纸页挂到了哪一步：先只有（不可见的）纸，再挂编辑器、挂底栏，最后纸接过原卡片开始放大。
+/// 纸页挂到了哪一步：先只有（不可见的）纸，再挂编辑器与底栏，最后纸接过原卡片开始放大。
 private enum Stage: Int, Comparable {
-    case paper, editor, bar, launched
+    case paper, bar, launched
 
     static func < (a: Stage, b: Stage) -> Bool { a.rawValue < b.rawValue }
 }
