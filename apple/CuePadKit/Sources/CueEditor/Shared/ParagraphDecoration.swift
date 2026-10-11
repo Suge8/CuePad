@@ -15,8 +15,8 @@ extension NSAttributedString.Key {
 /// 轻装饰只改"展示"：TextKit 向内容管理器要每个段落时，返回一份带样式的副本，
 /// NSTextStorage 里的文本与属性、撤销栈和存储格式都不受影响。
 /// 渲染属性只能改颜色、下划线这类不影响布局的属性，标题字号字重只能走这条路。
-final class DecorationDelegate: NSObject, NSTextContentStorageDelegate, NSTextLayoutManagerDelegate, @unchecked Sendable {
-    private nonisolated(unsafe) weak var core: EditorCore?
+final class DecorationDelegate: NSObject, NSTextContentStorageDelegate, NSTextLayoutManagerDelegate, Sendable {
+    private weak let core: EditorCore?
 
     @MainActor init(core: EditorCore) { self.core = core }
 

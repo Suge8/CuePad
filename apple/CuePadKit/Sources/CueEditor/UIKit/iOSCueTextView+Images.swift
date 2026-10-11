@@ -62,7 +62,9 @@ extension CueTextView {
     /// 优先取文件表示（直接拷贝，不把整张图读进内存）；只有图片对象时转 PNG。回调在主线程。
     private func importImage(from provider: NSItemProvider, completion: @escaping @MainActor (Result<String, any Error>) -> Void) {
         let store = imageStore
-        func finish(_ result: Result<String, any Error>) { Task { @MainActor in completion(result) } }
+        let finish: @Sendable (Result<String, any Error>) -> Void = { result in Task { @MainActor in completion(result) } }
+        // NSItemProvider 的方法线程安全（文档），只是没有 Sendable 标注
+        nonisolated(unsafe) let provider = provider
         provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, fileError in
             if let url {
                 finish(Result { try store.store(fileAt: url) })
