@@ -38,14 +38,14 @@ struct SendTargetTests {
         opened.extensions.append(ext)
         await eventually { rig.pi.session(id: ext.id) != nil }
         #expect(rig.pi.session(id: ext.id) != nil)
-        try? await workspace.sendState.refreshSessionProjects()
+        try await workspace.sendState.refreshSessionProjects()
         return ext
     }
 
-    private func end(_ ext: FakeExtension) async {
+    private func end(_ ext: FakeExtension) async throws {
         ext.close(bye: "quit")
         await eventually { rig.pi.session(id: ext.id) == nil }
-        try? await workspace.sendState.refreshSessionProjects()
+        try await workspace.sendState.refreshSessionProjects()
     }
 
     /// 选定这个会话为发送目标（菜单里点一下它）。
@@ -83,7 +83,7 @@ struct SendTargetTests {
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
 
-        await end(alpha)
+        try await end(alpha)
 
         await expectTarget(project, "alpha", ended: true)
         let target = try #require(workspace.sendState.agentTarget(for: project.id))
@@ -103,7 +103,7 @@ struct SendTargetTests {
         let alpha = try await open("a", in: "/work/alpha")
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
-        await end(alpha)
+        try await end(alpha)
         await expectTarget(project, "alpha", ended: true)
         let target = try #require(workspace.sendState.agentTarget(for: project.id))
 
@@ -191,7 +191,7 @@ struct SendTargetTests {
         choose(alpha)
         await expectTarget(project, "alpha", ended: false)
 
-        await end(alpha)
+        try await end(alpha)
 
         await expectTarget(project, "alpha", ended: true, "beta 还在线，但用户选的是 alpha")
     }
@@ -199,7 +199,7 @@ struct SendTargetTests {
     @Test func 同一个Pi会话重新打开_目标接回新开的那个() async throws {
         let first = try await open("a", in: "/work/alpha", pid: 100)
         choose(first)
-        await end(first)
+        try await end(first)
         await expectTarget(project, "alpha", ended: true)
 
         _ = try await open("a", in: "/work/alpha", pid: 200)
@@ -210,10 +210,10 @@ struct SendTargetTests {
     @Test func 没有选过时_在线的优先_都结束了取最后结束的那个() async throws {
         let alpha = try await open("a", in: "/work/alpha")
         let beta = try await open("b", in: "/work/beta")
-        await end(alpha)
+        try await end(alpha)
         await expectTarget(project, "beta", ended: false, "beta 还在线")
 
-        await end(beta)
+        try await end(beta)
         await expectTarget(project, "beta", ended: true, "最后结束的是 beta")
     }
 
@@ -228,7 +228,7 @@ struct SendTargetTests {
 
     @Test func 别的项目的结束会话不当目标() async throws {
         let omega = try await open("o", in: "/other/omega")
-        await end(omega)
+        try await end(omega)
 
         await expectTarget(other, "omega", ended: true)
         try await Task.sleep(for: .milliseconds(200))
