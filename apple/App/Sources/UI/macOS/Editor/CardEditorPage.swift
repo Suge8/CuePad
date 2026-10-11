@@ -70,6 +70,8 @@ struct CardEditorPage: View {
     private static let radius: CGFloat = 22
 
     private var isOpen: Bool { cardID != nil && workspace.openCard == cardID }
+    /// 编辑器此刻能不能用：开着、本轮的数据到了、而且是灵感或提示词（任务的纸页没有编辑器正文）。
+    private var editable: Bool { isOpen && data?.card.isTask == false }
     /// 编辑器、底栏、任务页用的数据：本轮的到了用本轮的。
     private var shown: EditorData? { data ?? shownData }
 
@@ -136,11 +138,11 @@ struct CardEditorPage: View {
             guard let data else { return }
             shownData = data
             guard initialText == nil, data.card.id == cardID else { return }
-            // 任务的纸页上没有编辑器正文
+            // 任务的纸页上没有编辑器正文：把编辑器换成空的，不留上一张卡的字
             let body = data.card.isTask ? "" : data.card.body
             initialText = body
             liveText = body
-            if !data.card.isTask { loadKey += 1 }
+            loadKey += 1
         }
         .onChange(of: data?.card.deletedAt) { if isOpen, data?.card.deletedAt != nil { workspace.openCard = nil } }
         // 量到纸页位置、正文也读到之后才铺开：第一帧外框在原卡片上，正文按时淡入而不是读到时突然出现
@@ -275,7 +277,7 @@ struct CardEditorPage: View {
             // 看一眼：准备途中已经关了、换了卡就停下（关闭由 collapse 收尾）
             await NextFrame.wait()
             guard mine == round, isOpen else { return }
-            handle.focus()
+            if editable { handle.focus() }
             launch()
         }
     }
@@ -354,11 +356,13 @@ struct CardEditorPage: View {
     private func editor(_ data: EditorData, _ text: String) -> some View {
         EditorHost(
             loadKey: loadKey,
-            enabled: isOpen,
+            enabled: editable,
             initialText: text,
             theme: .paper(palette),
             handle: handle,
             onChange: { next in
+                // 任务的纸页上编辑器只是挂着：任何情况下都不能把它的字写进任务
+                guard editable else { return }
                 liveText = next
                 autosave?.changed(next)
             },
