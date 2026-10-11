@@ -404,6 +404,7 @@ extension DebugScene {
         // 另一台 Mac 上的会话（演示发过去的话送达与失败）
         _ = try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", folder: "relay")
         await seedChats(store)
+        if defaults.bool(forKey: "CuePadLongChat") { await seedLongChat(store, project: project("CuePad")) }
         // 会话文件里的压缩记录：对话里的一行系统行（notes 最后一轮回答之后）
         try? await store.writePiTranscript(PiTranscript(
             sessionID: "notes",

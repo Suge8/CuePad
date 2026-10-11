@@ -40,7 +40,7 @@ extension SessionDigest {
 /// Mac 的窗口本来就有一条工具栏，手机那种浮在内容上的顶栏放在它下面就是两层页头。顶栏规则与手机同一份（`ChatFollow.showsHeader`）：
 /// 看历史时标题让开（"⋯"不让开：工具栏本来就一直在，让开只留一格空位），回到最新自动出现；Mac 没有状态栏可点，鼠标移到标题原来的位置（或点它）就唤出——顶栏就在那里，
 /// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
-/// （`PiConversation`，子代理在末尾收成一行汇总；只排最近几条，更早的点最上面一行再排开），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
+/// （`SessionChat`，与手机同一个：只排最近几条，更早的点最上面一行再排开），打开即最新，离最新超过一屏出"回到最新"；
 /// 底部是与手机同一个回复框（`PiReplyBar`），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
 /// 是一页（`Route.session`），左上不放返回：去别处靠侧栏。
 struct SessionPage: View {
@@ -54,12 +54,6 @@ struct SessionPage: View {
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
     @State private var follow = ChatFollow()
-    /// 对话排开最近多少条（`PiConversation.window`）。
-    @State private var shown = PiConversation.firstWindow
-    /// 刚从刻度滑条跳到的那条你的话，短暂描一圈。
-    @State private var highlight = ChatHighlight()
-    /// 要跳到的那条还没排开：先排开，排开之后再跳（同一次更新里跳，目标还不在滚动区里）。
-    @State private var pendingJump: UUID?
 
     /// 标题、状态与最新的对话先出；回复框、问题卡与"⋯"晚两帧（`NextFrame`）：它们的建立（文本视图、玻璃、菜单）占点击回合的一半，不在点的那一圈里。
     @State private var secondary = false
@@ -75,7 +69,13 @@ struct SessionPage: View {
         VStack(spacing: 0) {
             if let session = digest.session {
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
-                if stored != nil { conversation(session, digest) } else { Color.clear.frame(maxHeight: .infinity) }
+                if stored != nil {
+                    SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth)
+                        .fadesUnderBars()
+                        .frame(maxHeight: .infinity)
+                } else {
+                    Color.clear.frame(maxHeight: .infinity)
+                }
                 VStack(spacing: 8) {
                     if secondary {
                         PiQuestionDock(session: session, deliveries: digest.deliveries)
@@ -139,60 +139,13 @@ struct SessionPage: View {
             showsHeader: follow.showsHeader, showsMenu: menu)
     }
 
-    private func conversation(_ session: PiSessionState, _ digest: SessionDigest) -> some View {
-        let followKey = PiConversation.followKey(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
-        return ChatScroll(followKey: followKey, readingWidth: Self.readingWidth, inset: 24, follow: $follow) {
-            VStack(spacing: 14) {
-                if fetchingTranscript(digest) {
-                    Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(Typography.meta).foregroundStyle(palette.ink3)
-                }
-                PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, window: $shown)
-            }
-        }
-        .fadesUnderBars()
-        .environment(\.chatHighlight, highlight.id)
-        .overlay(alignment: .trailing) { scrubber(digest) }
-        .onChange(of: shown) {
-            guard let id = pendingJump else { return }
-            pendingJump = nil
-            jump(to: id)
-        }
-        .frame(maxHeight: .infinity)
-    }
-
-    /// 右缘的刻度滑条（与手机同一个）：让开窗口右缘的系统滚动条；跳到的那条还没排开时先排开到它。
-    @ViewBuilder private func scrubber(_ digest: SessionDigest) -> some View {
-        let marks = ChatScrubber.marks(PiChat.entries(digest.messages, previews: digest.previews))
-        if !marks.isEmpty {
-            ChatScrubber(marks: marks, scrolling: follow.scrolling) { id in
-                let needed = PiConversation.window(reaching: id, messages: digest.messages, previews: digest.previews) ?? 0
-                if needed > shown {
-                    pendingJump = id
-                    shown = needed
-                } else {
-                    jump(to: id)
-                }
-            }
-            .padding(.trailing, Self.scrollerWidth)
-        }
-    }
-
-    private func jump(to id: UUID) {
-        follow.jump(to: id)
-        highlight.flash(id)
-    }
-
     /// 窗口右缘系统滚动条（悬浮式）占的宽。
     private static let scrollerWidth: CGFloat = 16
-
-    private func fetchingTranscript(_ digest: SessionDigest) -> Bool {
-        digest.deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen }
-    }
 
     /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（本机的也走同一条路）。
     private func askForTranscriptIfNeeded() {
         guard !askedForTranscript, let stored, let session = stored.session, services.reachesPiHost,
-              PiChat.needsTranscript(session, messages: stored.messages), !fetchingTranscript(stored) else { return }
+              PiChat.needsTranscript(session, messages: stored.messages), !stored.fetchingTranscript else { return }
         askedForTranscript = true
         workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }

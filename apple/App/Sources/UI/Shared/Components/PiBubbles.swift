@@ -2,23 +2,23 @@ import CueStore
 import SwiftUI
 
 extension AnyTransition {
-    /// 对话里一条出现或消失：只淡入淡出，动画随过渡自带。不给整段对话挂动画：倒置的滚动区里新的一条加在逻辑顶端，
-    /// 其余各行的位移若也跟着动画，正在读的那段会先被推走再滑回来
+    /// 对话里一条出现或消失：只淡入淡出，动画随过渡自带。不给整段对话挂动画：其余各行的位移若也跟着动画，
+    /// 底部锚定下正在读的那段会先被推走再滑回来
     static let entry = AnyTransition.opacity.animation(Motion.quick)
 }
 
 
-/// 你的一句话：右侧气泡，最宽到所在一栏的四分之三；还在路上的整颗变淡。
-struct UserBubble: View {
-    private static let widthFraction: CGFloat = 0.78
+/// 你的一句话：右侧气泡，最宽到所在一栏的四分之三；还在路上的整颗变淡。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
+struct UserBubble<Menu: View>: View {
+    private static var widthFraction: CGFloat { 0.78 }
 
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
-    private static let foldedLines = 6
+    private static var foldedLines: Int { 6 }
 
     let text: Dotted
     var trip = BubbleTrip.arrived
     var highlighted = false
-    @Environment(\.palette) private var palette
+    @ViewBuilder var menu: Menu
     @State private var expanded = false
     /// 折起时文字确实被截掉了（按同一宽度量全文的高度比较）。
     @State private var truncated = false
@@ -28,14 +28,27 @@ struct UserBubble: View {
             BubbleText(
                 text: text, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines, truncated: $truncated,
                 expand: truncated && !expanded ? { expanded = true } : nil)
+            #if os(iOS)
+            .contentShape(.contextMenuPreview, BubbleText.shape)
+            #endif
+            .contextMenu { menu }
         }
         .transition(.entry)
     }
 }
 
+extension UserBubble where Menu == EmptyView {
+    /// 没有长按菜单的气泡（近况里的上一句）。
+    init(text: Dotted, trip: BubbleTrip = .arrived, highlighted: Bool = false) {
+        self.init(text: text, trip: trip, highlighted: highlighted) { EmptyView() }
+    }
+}
 
-/// 气泡本身（颜色是 `Palette.bubble`），长按的预览也是它。Mac 上可以直接拖选文字。
+
+/// 气泡本身（颜色是 `Palette.bubble`）。Mac 上可以直接拖选文字。
 struct BubbleText: View {
+    static let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+
     let text: Dotted
     var highlighted = false
     var trip = BubbleTrip.arrived
@@ -47,7 +60,7 @@ struct BubbleText: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        let shape = Self.shape
         HStack(alignment: .center, spacing: 8) {
             if trip == .failed {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(palette.failure).accessibilityLabel("没能送达")
@@ -105,36 +118,43 @@ struct BubbleText: View {
 enum BubbleTrip { case arrived, inTransit, failed }
 
 
-/// 一条消息的长按菜单（Mac 右键）只在这里定义。Pi 的回答：复制、选择文本（手机上打开可自由选择的全文；Mac 直接拖选）、
-/// 分享、存为灵感；你的话：复制、编辑后重发（放回输入框，接在已写的字后面）、存为灵感。存为灵感进会话所属的项目。
-struct MessageMenu: View {
-    enum Kind { case reply, mine }
-
+/// 一条消息的长按菜单（Mac 右键）：有哪几项、什么顺序只在 `MessageMenu`，这里只画。存为灵感进会话所属的项目；
+/// 编辑后重发放回这个会话的回复框，已经写了字就接在后面。只属于某一行的动作（选择文本、重发、移除）由那一行给。
+struct MessageActions: View {
     let text: String
-    let kind: Kind
+    let kind: MessageMenu.Kind
     let session: PiSessionState
     var selectText: (() -> Void)?
+    var resend: (() -> Void)?
+    var remove: (() -> Void)?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("复制", systemImage: "doc.on.doc") {
-            Clipboard.copy(text)
-            workspace.say("已复制")
-        }
-        switch kind {
-        case .reply:
-            if let selectText { Button("选择文本", systemImage: "selection.pin.in.out", action: selectText) }
-            ShareLink(item: text) { Label("分享", systemImage: "square.and.arrow.up") }
-        case .mine:
-            Button("编辑后重发", systemImage: "square.and.pencil", action: editAgain)
-        }
-        Button("存为灵感", systemImage: "square.and.arrow.down") {
-            let text = text, session = session
-            workspace.attempt { try await workspace.saveReply(text, of: session) }
+        let sections = MessageMenu.sections(for: kind)
+        ForEach(sections.indices, id: \.self) { index in
+            if index > 0 { Divider() }
+            ForEach(sections[index], id: \.self, content: item)
         }
     }
 
-    /// 放回这个会话的回复框（草稿只有一份，见 `AppSettings.replyDraft`）：已经写了字就接在后面，不覆盖。
+    @ViewBuilder private func item(_ item: MessageMenu.Item) -> some View {
+        switch item {
+        case .copy: Button(item.title, systemImage: item.symbol) { workspace.copy(text) }
+        case .selectText: if let selectText { Button(item.title, systemImage: item.symbol, action: selectText) }
+        case .share: ShareLink(item: text) { Label(item.title, systemImage: item.symbol) }
+        case .saveAsIdea:
+            Button(item.title, systemImage: item.symbol) {
+                let text = text, session = session
+                workspace.attempt { try await workspace.saveReply(text, of: session) }
+            }
+        case .editAgain: Button(item.title, systemImage: item.symbol, action: editAgain)
+        case .resend:
+            if let resend { Button(item.title, systemImage: item.symbol, action: resend).disabled(!workspace.services.reachesPiHost) }
+        case .remove: if let remove { Button(item.title, systemImage: item.symbol, role: .destructive, action: remove) }
+        }
+    }
+
+    /// 草稿只有一份（`AppSettings.replyDraft`）：已经写了字就接在后面，不覆盖。
     private func editAgain() {
         let settings = workspace.services.settings
         var draft = settings.replyDraft(for: session.id)
@@ -155,7 +175,9 @@ struct OutgoingBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            UserBubble(text: text, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived)
+            UserBubble(text: text, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived) {
+                MessageActions(text: request.content, kind: .outgoing(failed: failed), session: session, resend: retry, remove: remove)
+            }
             HStack(spacing: 10) {
                 if failed {
                     if let reason = request.failure { Text(reason).font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2) }
@@ -173,12 +195,6 @@ struct OutgoingBubble: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .chatContextMenu {
-            if failed { Button("重发", systemImage: "arrow.clockwise", action: retry).disabled(!workspace.services.reachesPiHost) }
-            Button("移除", systemImage: "xmark", role: .destructive, action: remove)
-        } preview: {
-            BubbleText(text: text).padding(4)
-        }
         .transition(.entry)
     }
 

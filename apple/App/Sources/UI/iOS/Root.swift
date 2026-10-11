@@ -56,8 +56,8 @@ struct IOSRoot: View {
             .sheet(item: Binding(get: { workspace.folderPicker }, set: { workspace.folderPicker = $0 })) { FolderPickerSheet(project: $0) }
             .panel(item: Binding(get: { workspace.attaching }, set: { workspace.attaching = $0 })) { TaskPicker(idea: $0) }
         }
-        // 这一层还没有导航栏：上下安全区就是状态栏与主屏指示条，各页只在这两条里淡出（`fadesUnderBars`）
-        .measuresScreenBars()
+        // 这一层还没有导航栏：上安全区就是状态栏，各页只在这一条里淡出（`fadesUnderBars`）
+        .measuresStatusBar()
         .overlay(alignment: .top) { NoticeBanner() }
         // 卡与行上"交给了哪个会话"的状态点读窗口里的那一份（`Workspace.agentLinks`）
         .modifier(WindowCardAgents(workspace: workspace))
@@ -108,7 +108,7 @@ struct RouteView: View {
 
     var body: some View {
         // 沉浸式：内容一直滚到顶栏、底部栏、回复框的玻璃后面，玻璃本身就是唯一的遮挡，玻璃之间与下面的内容清楚可见——
-        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘渐变或色带；只有滚进状态栏与主屏指示条那两条的内容淡出（`fadesUnderBars`）。
+        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关，也不自绘渐变或色带；只有滚进状态栏时间那一段的内容淡出（`fadesUnderBars`）。
         // 内容离顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面。顶上自带那一排的页（`SearchRow`）
         // 自己让到那一排下面（系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数）
         page.contentMargins(.top, route.hasSearchRow ? nil : 0, for: .scrollContent)
