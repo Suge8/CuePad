@@ -72,7 +72,7 @@ struct RealHostTests {
 
         #expect(bridge.sessions.isEmpty)
         try await eventually("会话结束的通知到了") { log.ended.count == 1 }
-        #expect(log.ended[0].1 == .closed(reason: "quit"))
+        try await eventually("日志记下了") { log.ended[0].1 == .closed(reason: "quit") }
     }
 
     @Test func endingASessionThatIsAlreadyGoneSucceeds() async throws {

@@ -138,7 +138,7 @@ struct RealSlashTests {
 
             try await bridge.command("/new", in: s.id)
             try await eventually("新会话") { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
-            #expect(log.ended.contains { $0.0.id == s.id })
+            try await eventually("日志记下了") { log.ended.contains { $0.0.id == s.id } }
             #expect(bridge.sessions[0].commands.contains { $0.name == "shout" }, "新会话照样报告命令清单")
         }
     }

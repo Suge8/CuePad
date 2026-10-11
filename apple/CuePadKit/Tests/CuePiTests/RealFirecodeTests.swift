@@ -55,7 +55,7 @@ struct RealFirecodeTests {
         #expect(busy.allSatisfy { $0 == start }, "从派活到全部歇下只有一段连续处理")
         // 进程内子会话不作为独立会话出现
         #expect(bridge.sessions.count == 1)
-        #expect(log.changes.filter { if case .appeared = $0 { true } else { false } }.count == 1)
+        try await eventually("日志记下了") { log.changes.filter { if case .appeared = $0 { true } else { false } }.count == 1 }
     }
 }
 #endif

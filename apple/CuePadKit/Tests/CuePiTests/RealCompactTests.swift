@@ -92,7 +92,7 @@ struct RealCompactTests {
             if how == "quit" { pi.kill(SIGTERM) } else { try await bridge.command("/reload", in: s.id) }
 
             try await eventually("会话告别") { !log.ended.isEmpty }
-            #expect(log.ended.first?.1 == .closed(reason: how, undelivered: [delivery]))
+            try await eventually("日志记下了") { log.ended.first?.1 == .closed(reason: how, undelivered: [delivery]) }
         }
     }
 
@@ -128,8 +128,8 @@ struct RealCompactTests {
             defer { releasing.cancel() }
             try await reply(pi, bridge, String(repeating: "上下文填充 ", count: 1_000))
 
+            try await eventually("日志记下了") { log.states.last == .settled }
             #expect(log.states.contains(.compacting))
-            #expect(log.states.last == .settled)
             let working = log.changes.compactMap { change -> PiSession? in
                 if case .stateChanged(let session, _) = change, session.state != .settled { session } else { nil }
             }
@@ -147,8 +147,8 @@ struct RealCompactTests {
             defer { releasing.cancel() }
             try await reply(pi, bridge, "[[overflow]] 再说一遍")
 
+            try await eventually("日志记下了") { log.states.last == .settled }
             #expect(log.states.contains(.compacting))
-            #expect(log.states.last == .settled)
             #expect(!log.states.contains { if case .error = $0 { true } else { false } })
             #expect(try compactions(in: s) == 1)
         }

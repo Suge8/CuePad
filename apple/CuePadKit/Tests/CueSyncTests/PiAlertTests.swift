@@ -81,7 +81,7 @@ import Testing
     for subscription in subscriptions {
       #expect(subscription.recordType == "piSessionStates" && subscription.zoneID == zone)
       #expect(subscription.querySubscriptionOptions == [.firesOnRecordCreation, .firesOnRecordUpdate])  // 删除不通知
-      let info = try? #require(subscription.notificationInfo)
+      let info: CKSubscription.NotificationInfo? = subscription.notificationInfo
       #expect(info?.shouldSendContentAvailable == false)  // 可见通知，不是静默推送
       #expect(info?.shouldSendMutableContent == true)  // 手机上的通知服务扩展先拿到，改写成会话名与问题
       #expect(info?.alertBody == nil && info?.alertLocalizationArgs == nil && info?.desiredKeys == nil)
