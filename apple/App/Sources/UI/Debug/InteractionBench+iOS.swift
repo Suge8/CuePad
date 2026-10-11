@@ -15,7 +15,7 @@ import UIKit.UIGestureRecognizerSubclass
 /// - 掉帧：display link 相邻间隔超过 1.5 帧的次数。模拟器的合成与 GPU 和真机不同，只作参考。
 @MainActor
 enum IOSInteractionBench {
-    private static let turns = IOSTurnLog()
+    private static let turns = TurnLog()
 
     static func run(_ workspace: Workspace, _ navigation: Navigation) async {
         guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
@@ -153,7 +153,7 @@ enum IOSInteractionBench {
     private static func measure(window: Duration, pressed: (() async -> Void)?, _ action: () -> Void) async -> [String: Any] {
         try? await Task.sleep(for: .milliseconds(1200))
         if let pressed { await pressed() }
-        let recorder = IOSFrameRecorder()
+        let recorder = FrameRecorder()
         recorder.start()
         let wall = Date().timeIntervalSince1970
         let instructions = instructionsMillions()
@@ -161,34 +161,12 @@ enum IOSInteractionBench {
         action()
         try? await Task.sleep(for: window)
         let log = turns.finish()
-        let frames = recorder.stop()
-        let click = log.first { $0.dur >= 0.002 }
-        func ms(_ value: Double) -> Double { (value * 10_000).rounded() / 10 }
-        return [
-            "clickMs": ms(min(click?.cpu ?? 0, click?.dur ?? 0)),
-            "totalMs": ms(log.reduce(0) { $0 + min($1.cpu, $1.dur) }),
-            "maxTurnMs": ms(log.map { min($0.cpu, $0.dur) }.max() ?? 0),
-            "heavy": log.filter { $0.dur >= 0.008 }.map { ms(min($0.cpu, $0.dur)) },
-            "minstr": ((instructionsMillions() - instructions) * 10).rounded() / 10,
-            "hitches": frames.hitches,
-            "worstMs": frames.worstMs,
-            // 动作发出的时刻（与 xctrace 录制对时）
-            "at": wall,
-        ]
-    }
-
-    static func instructionsMillions() -> Double {
-        var usage = rusage_info_v4()
-        _ = withUnsafeMutablePointer(to: &usage) {
-            $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { pidRusage(getpid(), RUSAGE_INFO_V4, $0) }
-        }
-        return Double(usage.ri_instructions) / 1_000_000
+        var row = TurnLog.metrics(log, instructions: instructions, frames: recorder.stop())
+        // 动作发出的时刻（与 xctrace 录制对时）
+        row["at"] = wall
+        return row
     }
 }
-
-/// iOS 的 SDK 头文件里没有 `proc_pid_rusage`（libproc），符号在系统库里：只给测量用。
-@_silgen_name("proc_pid_rusage")
-private func pidRusage(_ pid: Int32, _ flavor: Int32, _ buffer: UnsafeMutablePointer<rusage_info_t?>) -> Int32
 
 /// 窗口里手指按下的那一刻（测量脚本在模拟器上真按的长按、轻点）：每个窗口挂一个（长按菜单弹在自己的窗口里），只看不拦，按下就报给等着的一方。
 @MainActor
@@ -238,87 +216,6 @@ private final class ScrollDriver: NSObject {
         var y = scroll.contentOffset.y + 40 * direction
         if y >= maxY { y = maxY; direction = -1 } else if y <= -scroll.adjustedContentInset.top { direction = 1 }
         scroll.contentOffset.y = y
-    }
-}
-
-@MainActor
-private final class IOSFrameRecorder: NSObject {
-    private var link: CADisplayLink?
-    private var stamps: [CFTimeInterval] = []
-    private var refresh: CFTimeInterval = 1.0 / 60
-
-    func start() {
-        let link = CADisplayLink(target: self, selector: #selector(tick))
-        link.add(to: .main, forMode: .common)
-        self.link = link
-    }
-
-    @objc private func tick(_ link: CADisplayLink) {
-        stamps.append(link.timestamp)
-        if link.duration > 0 { refresh = link.duration }
-    }
-
-    func stop() -> (hitches: Int, worstMs: Double) {
-        link?.invalidate()
-        let gaps = zip(stamps.dropFirst(), stamps).map { $0 - $1 }
-        return (gaps.filter { $0 > refresh * 1.5 }.count, ((gaps.max() ?? 0) * 10_000).rounded() / 10)
-    }
-}
-
-/// 每圈主线程 run loop 的墙钟与 CPU 时间。与 Mac 的 `TurnLog`（`InteractionBench.swift`）是同一份逻辑的两份副本，
-/// 帧记录与 `FrameRecorder`（`PerfBench.swift`）同样：改一处要同改另一处，待合成两端共用的一份。
-/// 已分叉一处：这里 `begin` 把 CPU 起点也挪到动作发出时，Mac 那份还只在醒来时取，合并时以这里为准。
-@MainActor
-private final class IOSTurnLog {
-    struct Turn {
-        var dur: CFTimeInterval
-        var cpu: Double
-    }
-
-    private let port = mach_thread_self()
-    private var woke: CFTimeInterval = 0
-    private var wokeCPU = 0.0
-    private var since: CFTimeInterval = 0
-    private var log: [Turn] = []
-    private var recording = false
-
-    init() {
-        let wake = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.afterWaiting.rawValue, true, Int.min) { _, _ in
-            MainActor.assumeIsolated {
-                self.woke = CACurrentMediaTime()
-                self.wokeCPU = self.cpu()
-            }
-        }
-        let sleep = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, true, Int.max) { _, _ in
-            MainActor.assumeIsolated {
-                guard self.recording else { return }
-                self.log.append(Turn(dur: CACurrentMediaTime() - max(self.woke, self.since), cpu: self.cpu() - self.wokeCPU))
-            }
-        }
-        CFRunLoopAddObserver(CFRunLoopGetMain(), wake, .commonModes)
-        CFRunLoopAddObserver(CFRunLoopGetMain(), sleep, .commonModes)
-    }
-
-    private func cpu() -> Double {
-        var info = thread_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<thread_basic_info>.size / MemoryLayout<integer_t>.size)
-        _ = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { thread_info(port, thread_flavor_t(THREAD_BASIC_INFO), $0, &count) }
-        }
-        return Double(info.user_time.seconds + info.system_time.seconds) + Double(info.user_time.microseconds + info.system_time.microseconds) / 1e6
-    }
-
-    /// 从动作发出的这一刻起量：墙钟与 CPU 的起点都在这里（动作在一圈 run loop 的中途发出，那一圈之前的工作不算）。
-    func begin(_ time: CFTimeInterval) {
-        log = []
-        since = time
-        wokeCPU = cpu()
-        recording = true
-    }
-
-    func finish() -> [Turn] {
-        recording = false
-        return log
     }
 }
 #endif

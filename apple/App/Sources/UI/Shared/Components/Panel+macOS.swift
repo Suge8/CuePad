@@ -7,7 +7,15 @@ extension View {
         item: Binding<Item?>, style: PanelStyle, close: ClosePanel, @ViewBuilder content: @escaping (Item) -> some View
     ) -> some View {
         let shown = item.wrappedValue
-        return modifier(WindowPanel(key: shown.map { AnyHashable($0.id) }, style: style, close: close) { if let shown { content(shown) } })
+        return modifier(WindowPanel(key: shown.map { AnyHashable($0.id) }, retained: false, style: style, close: close) { if let shown { content(shown) } })
+    }
+
+    /// 常驻的模态浮层（⌘K）：`mounted` 之后内容一直挂在窗口里，收起只是透明、点不到、暂停订阅（`pageActive`），再开不重建。
+    /// 一次建文本框、筛选条与列表要几十毫秒，开合又是每天很多次的事；`mounted` 前（第一次开之前）与普通浮层一样开时才建。
+    func keptPanel(isPresented: Binding<Bool>, mounted: Bool, @ViewBuilder content: @escaping () -> some View) -> some View {
+        modifier(WindowPanel(
+            key: isPresented.wrappedValue ? AnyHashable(true) : nil, retained: mounted, style: .sheet,
+            close: ClosePanel { isPresented.wrappedValue = false }, panel: content))
     }
 }
 
@@ -26,6 +34,8 @@ final class PanelHost {
         let style: PanelStyle
         let content: AnyView
         let close: ClosePanel
+        /// 常驻的浮层收起时仍在 `shown` 里（`open` 为 false）。
+        var open = true
         var modal: Bool { style != .side }
     }
 
@@ -37,18 +47,27 @@ final class PanelHost {
     /// 有浮层时本窗口的按键与工具栏点按先经这里（`takes`）。
     @ObservationIgnored private var monitor: Any?
 
-    func show(_ id: UUID, style: PanelStyle, content: AnyView, close: ClosePanel) {
-        let entry = Shown(id: id, style: style, content: content, close: close)
+    /// `open` 为 false：只把内容挂着（常驻浮层收起的样子）；已开着的变成收起。
+    func show(_ id: UUID, style: PanelStyle, content: AnyView, close: ClosePanel, open: Bool = true) {
+        var entry = Shown(id: id, style: style, content: content, close: close)
+        entry.open = open
         if let index = shown.firstIndex(where: { $0.id == id }) {
+            let wasOpen = shown[index].open
             shown[index] = entry
+            if wasOpen && !open { closed(id) } else if !wasOpen && open { opened(entry) }
             return
         }
+        if open { opened(entry) } else { shown.append(entry) }
+    }
+
+    private func opened(_ entry: Shown) {
+        let id = entry.id
         if entry.modal {
             if let window {
                 responders[id] = WeakResponder(window.firstResponder)
                 window.makeFirstResponder(nil)
             }
-            shown.append(entry)
+            if let index = shown.firstIndex(where: { $0.id == id }) { shown[index] = entry } else { shown.append(entry) }
         } else {
             withAnimation(Motion.snappy) { shown.insert(entry, at: 0) }
         }
@@ -66,10 +85,21 @@ final class PanelHost {
         } else {
             withAnimation(Motion.snappy) { _ = shown.remove(at: index) }
         }
+        released(id)
+    }
+
+    private func closed(_ id: UUID) {
+        guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
+        shown[index].open = false
+        released(id)
+    }
+
+    /// 浮层收起后：焦点交还，没有开着的浮层了就撤掉按键监听。
+    private func released(_ id: UUID) {
         // 弹出前焦点在输入框里才交还；不在输入框时（点了按钮弹出的）让窗口自己当第一响应者，同弹出前——交还给 SwiftUI 的宿主视图
         // 会让它挑页面上第一个输入框接焦点（Agent 整页的搜索框），按空格就打进了搜索框
         if let responder = responders.removeValue(forKey: id)?.value, let window { window.makeFirstResponder(responder is NSText ? responder : nil) }
-        if shown.isEmpty, let monitor {
+        if !shown.contains(where: \.open), let monitor {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
         }
@@ -79,12 +109,12 @@ final class PanelHost {
     /// 窗口里），只走主菜单——拷贝、粘贴、全选这些编辑命令由主菜单发给浮层里的输入框；工具栏那一条（内容区之外、压暗的底盖不到）的点按
     /// 等于点在浮层外面。不用停用（`disabled`）下面那层来做模态：停用整窗开、关各多 20～25ms。
     private func takes(_ event: NSEvent) -> Bool {
-        guard let top = shown.last, let window, event.window === window else { return false }
+        guard let top = shown.last(where: \.open), let window, event.window === window else { return false }
         if event.type == .keyDown, event.keyCode == Self.escape {
             top.close()
             return true
         }
-        guard let modal = shown.last(where: \.modal) else { return false }
+        guard let modal = shown.last(where: { $0.modal && $0.open }) else { return false }
         if event.type == .keyDown {
             guard event.modifierFlags.contains(.command) else { return false }
             _ = NSApp.mainMenu?.performKeyEquivalent(with: event)
@@ -106,6 +136,8 @@ private struct WeakResponder {
 private struct WindowPanel<Panel: View>: ViewModifier {
     /// 浮层的身份；nil 是收起。换了身份（另一项）就换内容。
     let key: AnyHashable?
+    /// 收起后内容仍挂着（`keptPanel`）。
+    let retained: Bool
     let style: PanelStyle
     let close: ClosePanel
     @ViewBuilder let panel: () -> Panel
@@ -114,15 +146,20 @@ private struct WindowPanel<Panel: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: key, initial: true) { _, key in
-                if key != nil {
-                    host.show(token, style: style, content: AnyView(panel().environment(\.closePanel, close)), close: close)
+            .onChange(of: Mode(key: key, retained: retained), initial: true) { _, mode in
+                if mode.key != nil || mode.retained {
+                    host.show(token, style: style, content: AnyView(panel().environment(\.closePanel, close)), close: close, open: mode.key != nil)
                 } else {
                     host.hide(token)
                 }
             }
             .onDisappear { host.hide(token) }
     }
+}
+
+private struct Mode: Equatable {
+    let key: AnyHashable?
+    let retained: Bool
 }
 
 private struct PanelHostModifier: ViewModifier {
@@ -182,15 +219,23 @@ private struct PanelLayer: View {
 
     private func modal(_ shown: PanelHost.Shown) -> some View {
         ZStack {
-            palette.backdrop.ignoresSafeArea()
-                .onTapGesture { shown.close() }
-                .accessibilityHidden(true)
+            if shown.open {
+                palette.backdrop.ignoresSafeArea()
+                    .onTapGesture { shown.close() }
+                    .accessibilityHidden(true)
+            }
             shown.content
                 .clipShape(.rect(cornerRadius: PanelStyle.radius, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: PanelStyle.radius, style: .continuous).strokeBorder(palette.hair) }
                 .shadow(color: .black.opacity(palette.dark ? 0.45 : 0.18), radius: 28, y: 10)
                 .accessibilityAddTraits(.isModal)
                 .padding(Self.margin)
+                // 常驻的浮层收起时：透明、点不到、读屏与按键快捷键都停用，订阅暂停
+                .opacity(shown.open ? 1 : 0)
+                .allowsHitTesting(shown.open)
+                .disabled(!shown.open)
+                .accessibilityHidden(!shown.open)
+                .environment(\.pageActive, shown.open)
         }
     }
 

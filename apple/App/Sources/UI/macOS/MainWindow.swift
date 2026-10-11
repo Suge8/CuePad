@@ -69,12 +69,19 @@ private struct WindowPanels: View {
     @Bindable var workspace: Workspace
     @Environment(AppServices.self) private var services
     @State private var searchScope = SearchScope.cards
+    /// ⌘K 面板启动后空闲时（`Prewarm` 同一时机）就挂上，之后一直挂着（`keptPanel`）。
+    @State private var mountsPalette = false
 
     var body: some View {
         Color.clear.frame(width: 0, height: 0)
             // ⌘K 每天用很多次：直接出现、直接消失，不做动画
-            .panel(isPresented: $workspace.searching) { SearchPalette(scope: $searchScope) }
-            .onChange(of: workspace.searching) { if !$1 { searchScope = .cards } }
+            .keptPanel(isPresented: $workspace.searching, mounted: mountsPalette) { SearchPalette(scope: $searchScope) }
+            .onChange(of: workspace.searching) { if !$1 { searchScope = .cards } else { mountsPalette = true } }
+            .task(id: workspace.isLibraryReady) {
+                guard workspace.isLibraryReady else { return }
+                try? await Task.sleep(for: .seconds(2))
+                mountsPalette = true
+            }
             .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }
             .panel(item: $workspace.attaching) { TaskPicker(idea: $0) }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
@@ -210,9 +217,17 @@ private struct SwitcherSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        HStack(spacing: 8) {
+        let collapsed = workspace.sidebar == .detailOnly
+        HStack(spacing: 0) {
             SidebarToggle()
-            if workspace.sidebar == .detailOnly { ProjectSwitcher() }
+            // 一直挂着（收起时才有宽度）：开合侧栏的那一刻不再现建全部项目的菜单。不用 disabled：环境一变整份菜单又要重算；
+            // ⌘1–9 本来就由窗口快捷键（`WorkspaceShortcuts`）接，菜单里的只是提示
+            ProjectSwitcher(collapsed: collapsed)
+                .padding(.leading, collapsed ? 8 : 0)
+                .frame(width: collapsed ? nil : 0, alignment: .leading)
+                .clipped()
+                .opacity(collapsed ? 1 : 0)
+                .accessibilityHidden(!collapsed)
         }
     }
 }

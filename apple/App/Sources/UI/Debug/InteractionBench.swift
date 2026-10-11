@@ -9,7 +9,7 @@ import QuartzCore
 /// 动作就是点击、快捷键最终调用的工作区方法（`show`、`openCard`、`toggle`、`toggleSidebar`），不经事件投递（那一段只有 1～5ms）。
 /// - **点击回合**：动作发出到主线程第一次回到空闲（SwiftUI 更新、布局、提交都在里面）的主线程 CPU 毫秒，只取第一圈 ≥2ms 的 run loop；
 ///   CPU 时间不随机器忙闲变，墙钟会。
-/// - **合计、最重一圈**：动作后 800ms 里主线程 CPU 的总数与最重的一圈（点击回合小而合计大，是活被挪到了后面的帧里，不是没了）。
+/// - **合计、最重一圈、指令数**：动作后 800ms 里主线程 CPU 的总数与最重的一圈（点击回合小而合计大，是活被挪到了后面的帧里，不是没了）；进程执行的指令数（百万）不随机器忙闲变，前后对比以它为准。两端同一份探针与键名（`Probes.swift`）。
 /// - **掉帧**：动作后 800ms 内窗口 display link 相邻两次回调间隔超过 1.5 帧的次数与最长一次（毫秒）。
 /// 开头把本实例调到前台：后台量的数字偏乐观（前台才有玻璃等实际合成），所以会抢一下焦点，量完退出。
 @MainActor
@@ -50,7 +50,10 @@ enum InteractionBench {
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
         let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 3)))?.items ?? []).map(\.state.sessionID)
+        // `-CuePadInteractOnly 会话页,开纸页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开纸页配收纸页）
+        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
         func step(_ name: String, _ action: () -> Void) async {
+            if let only, !only.contains(name) { return }
             let row = await measure(name, in: view, action)
             print("INTERACT " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
             fflush(stdout)
@@ -97,79 +100,16 @@ enum InteractionBench {
         try? await Task.sleep(for: .milliseconds(900))
         let recorder = FrameRecorder()
         recorder.start(in: view)
-        let started = CACurrentMediaTime()
-        turns.begin(started)
+        let instructions = instructionsMillions()
+        turns.begin(CACurrentMediaTime())
         action()
         try? await Task.sleep(for: .milliseconds(800))
         let log = turns.finish()
-        let frames = recorder.stop()
-        let click = log.first { $0.dur >= 0.002 }
-        let budget = budgets[name]
-        return [
-            "name": name,
-            // CPU 不会比墙钟长：第一圈若在量之前就醒了，CPU 里带着量之前的那一段
-            "clickMs": (min(click?.cpu ?? 0, click?.dur ?? 0) * 10_000).rounded() / 10,
-            // 动作后 800ms 里主线程 CPU 的总数与最重的一圈：点击回合小而总数大，说明活被挪到了后面的帧里
-            "totalMs": (log.reduce(0) { $0 + min($1.cpu, $1.dur) } * 10_000).rounded() / 10,
-            "maxTurnMs": ((log.map { min($0.cpu, $0.dur) }.max() ?? 0) * 10_000).rounded() / 10,
-            "hitches": frames["hitches"] ?? 0,
-            "worstMs": frames["worstFrameMs"] ?? 0,
-            "budgetClickMs": budget?.clickMs ?? 0,
-            "budgetHitches": budget?.hitches ?? 0,
-        ]
-    }
-}
-
-/// 每圈主线程 run loop（醒来 → 回去睡）的墙钟与 CPU 时间；提交发生在这一圈的 BeforeWaiting，所以一圈包含一帧的更新、布局与提交。
-@MainActor
-private final class TurnLog {
-    struct Turn {
-        var dur: CFTimeInterval
-        var cpu: Double
-    }
-
-    private let port = mach_thread_self()
-    private var woke: CFTimeInterval = 0
-    private var wokeCPU = 0.0
-    private var since: CFTimeInterval = 0
-    private var log: [Turn] = []
-    private var recording = false
-
-    init() {
-        let wake = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.afterWaiting.rawValue, true, Int.min) { _, _ in
-            MainActor.assumeIsolated {
-                self.woke = CACurrentMediaTime()
-                self.wokeCPU = self.cpu()
-            }
-        }
-        let sleep = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, true, Int.max) { _, _ in
-            MainActor.assumeIsolated {
-                guard self.recording else { return }
-                self.log.append(Turn(dur: CACurrentMediaTime() - max(self.woke, self.since), cpu: self.cpu() - self.wokeCPU))
-            }
-        }
-        CFRunLoopAddObserver(CFRunLoopGetMain(), wake, .commonModes)
-        CFRunLoopAddObserver(CFRunLoopGetMain(), sleep, .commonModes)
-    }
-
-    private func cpu() -> Double {
-        var info = thread_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<thread_basic_info>.size / MemoryLayout<integer_t>.size)
-        _ = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { thread_info(port, thread_flavor_t(THREAD_BASIC_INFO), $0, &count) }
-        }
-        return Double(info.user_time.seconds + info.system_time.seconds) + Double(info.user_time.microseconds + info.system_time.microseconds) / 1e6
-    }
-
-    func begin(_ time: CFTimeInterval) {
-        log = []
-        since = time
-        recording = true
-    }
-
-    func finish() -> [Turn] {
-        recording = false
-        return log
+        var row = TurnLog.metrics(log, instructions: instructions, frames: recorder.stop())
+        row["name"] = name
+        row["budgetClickMs"] = budgets[name]?.clickMs ?? 0
+        row["budgetHitches"] = budgets[name]?.hitches ?? 0
+        return row
     }
 }
 #endif

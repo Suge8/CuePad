@@ -75,5 +75,5 @@ for line in open(sys.argv[1]):
 print("交互\t第几次\t点击回合ms\t合计ms\t最重一圈ms\t指令百万\t掉帧")
 for k in order:
     m = lambda f: statistics.median(r[f] for r in rows[k])
-    print(f"{k[0]}\t{k[1]}\t{m('clickMs'):.1f}\t{m('totalMs'):.1f}\t{m('maxTurnMs'):.1f}\t{m('minstr'):.0f}\t{m('hitches'):.0f}")
+    print(f"{k[0]}\t{k[1]}\t{m('clickMs'):.1f}\t{m('totalMs'):.1f}\t{m('maxTurnMs'):.1f}\t{m('instructionsM'):.0f}\t{m('hitches'):.0f}")
 PY
