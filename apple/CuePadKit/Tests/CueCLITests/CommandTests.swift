@@ -84,16 +84,16 @@ import Testing
     let beta = try await sb.project("Beta")
     let a = try await sb.store.createCard(in: alpha.id, body: "a")
     let b = try await sb.store.createCard(in: beta.id, body: "b")
-    let inbox = try await sb.store.createCard(in: nil, body: "i")
+    let unfiled = try await sb.store.createCard(in: nil, body: "i")
 
     func ids(_ args: String...) async throws -> Set<String> {
       let items = try array(try await sb.jsonValue(["card", "list"] + args))
       return Set(items.compactMap { $0.string("id") })
     }
     func id(_ card: Card) -> String { card.id.uuidString.lowercased() }
-    #expect(try await ids() == [id(a), id(b), id(inbox)])
+    #expect(try await ids() == [id(a), id(b), id(unfiled)])
     #expect(try await ids("--project", "Beta") == [id(b)])
-    #expect(try await ids("--inbox") == [id(inbox)])
+    #expect(try await ids("--inbox") == [id(unfiled)])
     try await sb.store.updateCard(b.id) { $0.isPinned = true }
     #expect(try await ids("--pinned") == [id(b)])
   }
@@ -107,8 +107,8 @@ import Testing
 
     let moved = try await sb.object("card", "move", id, "--project", "Beta")
     #expect(moved.string("projectId") == beta.id.uuidString.lowercased())
-    let toInbox = try await sb.object("card", "move", id, "--inbox")
-    #expect(toInbox["projectId"] is NSNull)
+    let toUnfiled = try await sb.object("card", "move", id, "--inbox")
+    #expect(toUnfiled["projectId"] is NSNull)
 
     let trashed = try await sb.object("card", "trash", id)
     #expect(trashed.string("deletedAt") != nil)

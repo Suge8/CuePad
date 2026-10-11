@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 
 /// 系统的选文件面板，非模态（`begin`）：不像 `runModal` 那样把主线程关在面板的嵌套事件循环里，也不是 NSWindow sheet（见 docs/development.md）。
 /// Mac 上选文件夹、选图片都经这里；已有一个面板开着时再要一个，只是把它带到前面。
-@MainActor
 enum FilePicker {
     private static var open: NSOpenPanel?
 

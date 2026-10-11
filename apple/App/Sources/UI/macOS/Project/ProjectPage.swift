@@ -195,7 +195,7 @@ private struct ProjectHeader: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
                     ProjectGlyph(project: project, size: 20)
-                    Text(projectID == nil ? "未分类" : project?.name ?? "").font(Typography.pageTitle).foregroundStyle(palette.ink)
+                    Text(projectID == nil ? CaptureCopy.unfiled : project?.name ?? "").font(Typography.pageTitle).foregroundStyle(palette.ink)
                 }
                 .contextMenu { if let project { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } } }
                 // 介绍回答"这是什么项目"，属于页头，不占任务栏的一栏

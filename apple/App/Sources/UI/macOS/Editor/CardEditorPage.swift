@@ -164,7 +164,7 @@ struct CardEditorPage: View {
     private func meta(_ data: EditorData) -> some View {
         HStack(spacing: 8) {
             ProjectGlyph(project: data.project, size: 12)
-            Text(data.project?.name ?? "未分类").foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
+            Text(data.project?.name ?? CaptureCopy.unfiled).foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
             if let task = data.task {
                 Dot()
                 Label(task.title, systemImage: "checklist").lineLimit(1).help("这条任务的提示词")

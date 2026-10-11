@@ -4,7 +4,7 @@ import os
 
 /// 崩溃诊断：订阅 MetricKit，系统把崩溃、卡死、CPU 与磁盘写入异常的诊断（一般在下次启动或隔天）交来时存进 `DiagnosticArchive`，
 /// 设置页据 `latest` 写"上次崩溃"。只存本机、不联网；真机上拿崩溃栈靠用户在设置页"导出诊断"。
-@MainActor @Observable
+@Observable
 final class Diagnostics {
     private(set) var latest: CrashReport?
     @ObservationIgnored private let archive: DiagnosticArchive

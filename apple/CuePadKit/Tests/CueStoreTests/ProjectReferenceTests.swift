@@ -45,7 +45,7 @@ import Testing
     #expect(try raw.count("cards") == 0)
   }
 
-  @Test func liveProjectsAndInboxStillWork() async throws {
+  @Test func liveProjectsAndUnfiledStillWork() async throws {
     let live = try await store.createProject(name: "live", color: "#111")
     let card = try await store.createCard(in: live.id, body: "a")
     _ = try await store.createCard(in: nil, body: "b")

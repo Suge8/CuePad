@@ -193,7 +193,7 @@ struct CardRow: View {
                 if let project {
                     HStack(spacing: 4) {
                         ProjectGlyph(project: project, size: 10)
-                        Text(project?.name ?? "未分类")
+                        Text(project?.name ?? CaptureCopy.unfiled)
                     }
                     .font(.caption).foregroundStyle(palette.ink3).padding(.top, 2)
                 }

@@ -18,7 +18,7 @@ struct PageSearchKeyTests {
         #expect(navigation.pendingPageSearch == .project(project))
         #expect(navigation.projectsPath == [.project(project)])
 
-        for start in [(Navigation.Tab.projects, [Route.inbox]), (.agent, [])] {
+        for start in [(Navigation.Tab.projects, [Route.unfiled]), (.agent, [])] {
             navigation.tab = start.0
             navigation.projectsPath = start.1
             navigation.pendingPageSearch = nil

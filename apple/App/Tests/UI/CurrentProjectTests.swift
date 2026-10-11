@@ -82,7 +82,7 @@ struct CurrentProjectTests {
 
         await workspace.reconcileCurrentProject()
 
-        #expect(workspace.page == .inbox)
+        #expect(workspace.page == .unfiled)
         #expect(services.settings.currentProject == nil)
     }
 

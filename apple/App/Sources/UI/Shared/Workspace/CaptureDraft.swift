@@ -5,10 +5,10 @@ import Foundation
 /// 只有 Mac 底部输入栏收成一行（没有胶囊）时占位带上落点；记下后的提示写明落点，点它去那里。
 /// Mac 上 ↩ 是换行、⌘↩ 才记下，占位里写明；手机上右下的钮就是记下，不写。
 nonisolated enum CaptureCopy {
-    static let inbox = "未分类"
+    static let unfiled = "未分类"
     static var prompt: String { "记下灵感" + keyHint }
 
-    static func destination(_ project: Project?) -> String { project?.name ?? inbox }
+    static func destination(_ project: Project?) -> String { project?.name ?? unfiled }
 
     static func placeholder(to destination: String) -> String { "记下灵感 → \(destination)" + keyHint }
 

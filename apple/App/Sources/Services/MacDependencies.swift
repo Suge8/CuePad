@@ -25,7 +25,6 @@ struct MacDependencies {
     var pasteboard: NSPasteboard
 
     /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
-    @MainActor
     static func live(location: LibraryLocation) -> MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)

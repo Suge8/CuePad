@@ -13,7 +13,7 @@ import Testing
     let beta: Project
     let inAlpha: Card
     let inBeta: Card
-    let inInbox: Card
+    let inUnfiled: Card
     static let alphaDirectory = "/work/alpha"
     static let inside = "/work/alpha/src/deep"
 
@@ -24,7 +24,7 @@ import Testing
       try await sb.store.setDirectory(Self.alphaDirectory, for: alpha.id)
       inAlpha = try await sb.store.createCard(in: alpha.id, body: "共同词 alpha")
       inBeta = try await sb.store.createCard(in: beta.id, body: "共同词 beta")
-      inInbox = try await sb.store.createCard(in: nil, body: "共同词 inbox")
+      inUnfiled = try await sb.store.createCard(in: nil, body: "共同词 inbox")
       _ = try await sb.store.createTask("alpha 任务", in: alpha.id)
       _ = try await sb.store.createTask("全局任务", in: nil)
     }
@@ -64,8 +64,8 @@ import Testing
     #expect(try await w.tasks(["--global"]) == ["全局任务"])
     #expect(try await w.tasks(["--all-projects"]) == ["alpha 任务", "全局任务"])
 
-    let inbox = try await w.sb.object("card", "add", "--inbox", "--body", "x", cwd: World.inside)
-    #expect(inbox["projectId"] is NSNull)
+    let unfiled = try await w.sb.object("card", "add", "--inbox", "--body", "x", cwd: World.inside)
+    #expect(unfiled["projectId"] is NSNull)
     let beta = try await w.sb.object("card", "add", "--project", "Beta", "--body", "y", cwd: World.inside)
     #expect(beta.string("projectId") == w.beta.id.uuidString.lowercased())
     let global = try await w.sb.object("task", "add", "--global", "g", cwd: World.inside)

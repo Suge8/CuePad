@@ -40,7 +40,7 @@ import Testing
 
   // MARK: 项目被远端永久删除
 
-  @Test func remotelyPurgedProjectReleasesLocalCardsToInbox() async throws {
+  @Test func remotelyPurgedProjectReleasesLocalCardsToUnfiled() async throws {
     let project = try await store.createProject(name: "P", color: "#111")
     try await store.setDirectory("/work/p", for: project.id)
     try await rig.coordinator.reconcile()

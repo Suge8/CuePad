@@ -4,7 +4,6 @@ import SwiftUI
 
 /// 界面接入点：主窗口与菜单栏面板的根视图都在这里创建。
 /// 视图通过环境取得 `AppServices`（`@Environment(AppServices.self)`）与本窗口的 `Workspace`。
-@MainActor
 enum RootViews {
     static func mainWindow(_ services: AppServices, workspace: Workspace) -> some View {
         MainRoot(workspace: workspace).environment(services)

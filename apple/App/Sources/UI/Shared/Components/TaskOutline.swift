@@ -140,7 +140,6 @@ struct TaskOutline<Line: View>: View {
 
 /// 正被拖着的任务或灵感：一次只有一条，同一页上的几个大纲（看板的进行中与待办、项目页的任务区）都认它，所以能跨组拖，
 /// 灵感能从墙上拖到任务上。拖到页外取消时系统不通知，留着的旧值只会让下一次拖进来的外部内容被`perform`核对后拒绝。
-@MainActor
 final class TaskDragSession {
     struct Dragged {
         let id: UUID
@@ -157,7 +156,7 @@ final class TaskDragSession {
 }
 
 /// 一个大纲里的落点状态。起点与行的位置不参与排版（不观察）；落点只由高亮与插入线读，且只在变了时才写。
-@Observable @MainActor
+@Observable
 private final class OutlineDrag {
     private(set) var drop: TaskDrop?
     /// 拖进这个大纲时的横坐标：横移从这里量。

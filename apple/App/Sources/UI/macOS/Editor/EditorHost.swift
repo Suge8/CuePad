@@ -5,7 +5,6 @@ import CueText
 import SwiftUI
 
 /// 对编辑器的操作口：底部操作栏经它插分割线、取当前正文与选中部分。
-@MainActor
 final class EditorHandle {
     fileprivate weak var view: CueEditorView?
 

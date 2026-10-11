@@ -25,7 +25,7 @@ struct ProjectActions<Extra: View>: View {
         Button("移到回收站", systemImage: "trash", role: .destructive) {
             #if os(macOS)
             // 正看着它：换到未分类（iOS 上项目页自己发现项目不在了就退回，见 `ProjectScreen`）
-            if workspace.currentProject == id { workspace.show(.inbox) }
+            if workspace.currentProject == id { workspace.show(.unfiled) }
             #endif
             workspace.perform { try await $0.trashProject(id) }
         }

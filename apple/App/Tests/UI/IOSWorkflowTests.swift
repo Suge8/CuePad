@@ -106,7 +106,7 @@ struct IOSWorkflowTests {
 
         #expect(try await store.cards(in: nil).map(\.body) == ["![](cuepad://img/\(hash))"])
         #expect(workspace.notice?.text == "已记到 未分类")
-        #expect(workspace.notice?.link == .inbox)
+        #expect(workspace.notice?.link == .unfiled)
     }
 }
 #endif

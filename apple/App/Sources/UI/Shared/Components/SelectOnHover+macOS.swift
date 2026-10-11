@@ -11,7 +11,7 @@ extension View {
 
 
 /// 当前保留选区的那一条（全 App 只有一个）：鼠标按下时记成指针下悬停着的那一条，没有悬停的（点在别处）就清空。
-@MainActor @Observable
+@Observable
 private final class TextSelectionFocus {
     static let shared = TextSelectionFocus()
 

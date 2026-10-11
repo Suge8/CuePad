@@ -6,7 +6,7 @@ import Observation
 /// 底栏与侧栏的"等你确认"角标、书架、侧栏的"此刻"、前台提示、发送菜单、Mac 的会话摘要都从这里取，不各自订阅、各读一页：
 /// 读一页要查会话、项目、最近的投送请求、改名与没送达的话，会话状态每变一次，订阅了几处就读几遍。
 /// 下面这些由 `items` 推出，各自相等就不写——读它们的视图只在自己用的那份变了才重算。
-@MainActor @Observable
+@Observable
 final class LiveSessions {
     /// 此刻有事的会话：未结束的在前，各自按进入当前状态的时间从新到旧（`piSessionPage` 的顺序）。
     private(set) var items: [PiSessionListItem] = []

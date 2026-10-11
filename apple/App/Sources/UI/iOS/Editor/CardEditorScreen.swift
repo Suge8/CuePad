@@ -120,7 +120,7 @@ struct CardEditorScreen: View {
 
     /// 顶栏中间：提示词写它的任务，其余写所属项目。
     private static func place(_ data: EditorData) -> String {
-        data.task?.title ?? data.project?.name ?? "未分类"
+        data.task?.title ?? data.project?.name ?? CaptureCopy.unfiled
     }
 
     /// 顶栏的一行："改于 03:36 · 资料"；提示词是"提示词 · 改于 03:36"。

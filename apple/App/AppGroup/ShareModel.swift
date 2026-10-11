@@ -42,8 +42,8 @@ final class ShareModel {
         guard let content, state == .ready else { return false }
         state = .saving
         do {
-            try CaptureInbox.enqueue(content, project: selectedProject, into: location.captureDirectory)
-            DarwinNotifications.post(CaptureInbox.notification)
+            try CaptureQueue.enqueue(content, project: selectedProject, into: location.captureDirectory)
+            DarwinNotifications.post(CaptureQueue.notification)
             return true
         } catch {
             state = .failed(error.localizedDescription)

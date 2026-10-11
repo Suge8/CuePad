@@ -73,6 +73,8 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - HTML 只读渲染、不联网也读不到别的文件，所以必须是单个文件；`addPreview` 列出页面引用的外部地址，让 Agent 改成单文件再发。否决的方案：在 Mac 上替它内联——样式里的 url()、字体、模块脚本都要处理，漏一类就是静默缺图。
 - 网页的内容拦截规则只放行 data:、blob:、about:，规则装不上就不打开（`PreviewWebGuard`，`PreviewWebTests` 用本机端口核对）。
 
+**并发隔离。** App 各目标的默认隔离是主线程（`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`），类型、协议与函数上不再写 `@MainActor`；要离开主线程才写 `nonisolated`。函数类型（回调参数、`typealias`）不受默认隔离覆盖，需要主线程时照写 `@MainActor`。CuePadKit 没有默认隔离，里面的界面类型照写。
+
 **冲突。** iCloud 按记录同步；同一条灵感或任务离线并发编辑时保留两个版本交给用户选择，不静默覆盖。两台设备离线并发挪动可能合成环、超过三级、挂到灵感下或下级与上级不同项目：应用远端变更后按确定规则收敛（`CardLinks.repairs`，只查这次批量涉及的卡与其子孙），各设备算出同一结果并推送。
 
 **编辑器。** 存储格式是纯字符串，唯一事实源：分割线是独占行 `---split---`（发出去写成 `---`），图片是行内 `![](cuepad://img/<哈希>)`；保存只经序列化，编辑器内复制输出存储格式。不得访问 `NSTextView.layoutManager` / `UITextView.layoutManager`（一次访问就永久降级到 TextKit 1）。

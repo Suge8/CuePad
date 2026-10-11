@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 未分类：还没归进项目的灵感，一条一行，最近的在前。点开看全文；轻扫同所有灵感（`CardMenu.swipes`），移到项目在长按菜单里（归完就离开这里）；
 /// 交给过 Agent 的行尾是那个会话的状态点。
-struct InboxScreen: View {
+struct UnfiledScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(Navigation.self) private var navigation
     @Environment(AppServices.self) private var services
@@ -26,7 +26,7 @@ struct InboxScreen: View {
         }
         .scrollContentBackground(.hidden)
         .animation(Motion.quick, value: cards?.map(\.id))
-        .floatingHeader(CaptureCopy.inbox, detail: cards.map { $0.isEmpty ? "空的" : "\($0.count) 条" } ?? "")
+        .floatingHeader(CaptureCopy.unfiled, detail: cards.map { $0.isEmpty ? "空的" : "\($0.count) 条" } ?? "")
         .observing(services.store, into: $cards, onError: workspace.fail) { store in
             try store.cards(in: nil).sorted { $0.modifiedAt > $1.modifiedAt }
         }

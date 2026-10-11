@@ -84,7 +84,7 @@ private struct ListSwipes: ViewModifier {
 }
 
 /// 当前停开的那一行：另一行开始轻扫时它收回。
-@MainActor @Observable
+@Observable
 private final class OpenSwipe {
     static let shared = OpenSwipe()
     var row: UUID?

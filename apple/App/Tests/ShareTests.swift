@@ -49,7 +49,7 @@ struct ShareTests {
         let saved = await model.save()
 
         #expect(saved)
-        let entry = try #require(CaptureInbox.pending(in: location.captureDirectory).first)
+        let entry = try #require(CaptureQueue.pending(in: location.captureDirectory).first)
         #expect(entry.capture.text == "记一下")
         #expect(entry.capture.project == target.id)
     }
@@ -63,6 +63,6 @@ struct ShareTests {
 
         #expect(!saved)
         guard case .failed = model.state else { Issue.record("状态应为失败：\(model.state)"); return }
-        #expect(CaptureInbox.pending(in: app.services.location.captureDirectory).isEmpty)
+        #expect(CaptureQueue.pending(in: app.services.location.captureDirectory).isEmpty)
     }
 }

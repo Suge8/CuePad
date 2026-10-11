@@ -4,7 +4,7 @@ import Foundation
 /// 库位置的规则在 CueStore（`LibraryLocation`，唯一来源）；这里是 App 层在库目录里放的东西：
 /// 分享扩展的待入库内容、给小组件与扩展的快照、偏好设置。
 extension LibraryLocation {
-    /// 分享扩展写入、主 App 入库的待处理内容（见 `CaptureInbox`）。
+    /// 分享扩展写入、主 App 入库的待处理内容（见 `CaptureQueue`）。
     var captureDirectory: URL { directory.appending(path: "Capture", directoryHint: .isDirectory) }
     /// 主 App 写给小组件与分享扩展读的快照（见 `Snapshots`）。
     var snapshotsDirectory: URL { directory.appending(path: "Snapshots", directoryHint: .isDirectory) }
