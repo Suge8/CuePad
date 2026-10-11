@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-@MainActor
 struct SendTests {
     let rig = TestApp()
     var services: AppServices { rig.services }

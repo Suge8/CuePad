@@ -5,7 +5,6 @@ import Testing
 @testable import CuePad
 
 /// 收起动画进行中的宿主窗口：endSheet 只是发出请求，弹窗要等 `finishDismissal` 才算结束。
-@MainActor
 private final class SlowSheetWindow: NSWindow {
     private var pendingSheet: NSWindow? = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: true)
     private(set) var endRequested = false
@@ -23,11 +22,10 @@ private final class SlowSheetWindow: NSWindow {
     }
 }
 
-@MainActor
 struct ShellChromeTests {
     /// `NSApp.terminate` 在弹窗还挂着时会拒绝退出（"blocked by modal sheet"），所以继续退出之前，
     /// 弹窗必须已经真正结束，而不是刚发出 endSheet。
-    @Test func 弹窗真正结束之后才继续退出_含嵌套() async {
+    @Test func 弹窗真正结束之后才继续退出_含嵌套() async throws {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
         let sheet = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 60), styleMask: [.titled], backing: .buffered, defer: true)
         let nested = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 80, height: 40), styleMask: [.titled], backing: .buffered, defer: true)
@@ -46,7 +44,7 @@ struct ShellChromeTests {
             if sheet.attachedSheet != nil { stillAttached.append("nested") }
         }
 
-        await eventually { proceeded }
+        try await eventually("proceeded") { proceeded }
         #expect(proceeded, "弹窗没有全部结束，退出一直没有继续")
         #expect(stillAttached.isEmpty, "继续退出时这些弹窗还挂着：\(stillAttached)")
         #expect(ended == ["sheet", "nested"])

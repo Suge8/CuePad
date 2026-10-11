@@ -1,5 +1,6 @@
 #if os(macOS)
 import Foundation
+import Synchronization
 import Testing
 import CueStore
 @testable import CuePi
@@ -18,40 +19,16 @@ private let temporaryRoot: URL = {
     return root
 }()
 nonisolated(unsafe) private var temporaryRootPath = ""
-private let temporaryCounter = LockedCounter()
-
-private final class LockedCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value = 0
-    func next() -> Int { lock.withLock { value += 1; return value } }
-}
+private let temporaryCounter = Atomic(0)
 
 func makeTempDirectory() throws -> URL {
-    let dir = temporaryRoot.appending(path: String(temporaryCounter.next()), directoryHint: .isDirectory)
+    let dir = temporaryRoot.appending(path: String(temporaryCounter.add(1, ordering: .relaxed).newValue), directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     return dir
 }
 
 func makeSocketDirectory() throws -> URL {
     try makeTempDirectory()
-}
-
-struct TimedOut: Error, CustomStringConvertible {
-    var description: String
-}
-
-/// 条件等待：状态由 FSEvents/socket 异步推进，没有更细的完成信号可订阅时用它，禁止固定 sleep。
-/// 上限只是"确实不会来了"的兜底（机器负载高时别的进程会让一步慢上几十秒），条件一成立马上返回，所以取得宽，各处不另写。
-func eventually(
-    _ what: String, timeout: Duration = .seconds(30),
-    _ condition: @MainActor () async throws -> Bool
-) async throws {
-    let deadline = ContinuousClock.now + timeout
-    while ContinuousClock.now < deadline {
-        if try await condition() { return }
-        try await Task.sleep(for: .milliseconds(15))
-    }
-    throw TimedOut(description: "timed out waiting for: \(what)")
 }
 
 /// 一个从 socket 目录里消失的文件。

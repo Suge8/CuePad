@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
 import Observation
 import Testing
@@ -116,7 +117,7 @@ struct BridgeClientTests {
         try FakeExtension.makeStaleSocket(at: stale)
         try bridge.start()
         try await eventually("扫描已发生：属主已死的残留被删") { fileGone(stale) }
-        try await Task.sleep(for: .milliseconds(600)) // 覆盖对存活属主的一次重试
+        await quietPeriod(.milliseconds(600)) // 覆盖对存活属主的一次重试
         #expect(!fileGone(pending))
     }
 
@@ -145,7 +146,7 @@ struct BridgeClientTests {
         let ext = FakeExtension(directory: dir, options: .init(socketMode: 0o666))
         try ext.start()
         try bridge.start()
-        try await Task.sleep(for: .milliseconds(400))
+        await quietPeriod(.milliseconds(400))
         #expect(bridge.sessions.isEmpty && ext.connectionCount == 0)
 
         chmod(ext.socketURL.path, 0o600) // 收紧权限（属性变更触发重扫）后才会被接受

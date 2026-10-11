@@ -28,15 +28,15 @@ extension CueEditorTheme {
 final class EditorHarness {
     let store = DirectoryImageStore()
     let textView: CueTextView
-    let window: UIWindow
+    /// 编辑器挂在一个普通视图下：包的测试进程（xctest）里没有场景，不建窗口。
+    let root: UIView
     let nowhere = NSRange(location: NSNotFound, length: 0)
 
     init(width: CGFloat = 390, height: CGFloat = 700, theme: CueEditorTheme = .test) {
         textView = CueTextView(imageStore: store, theme: theme)
-        window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: height))
-        textView.frame = window.bounds
-        window.addSubview(textView)
-        window.makeKeyAndVisible()
+        root = UIView(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        textView.frame = root.bounds
+        root.addSubview(textView)
     }
 
     func load(_ stored: String) {
@@ -45,14 +45,19 @@ final class EditorHarness {
     }
 
     func layout() {
-        window.layoutIfNeeded()
+        updateTraits()
+        root.layoutIfNeeded()
         textView.layoutIfNeeded()
     }
 
     /// 让出主线程：分片布局、异步缩略图都排在主队列里。
     func pump(_ seconds: TimeInterval = 0.05) async {
         try? await Task.sleep(for: .seconds(seconds))
+        updateTraits()
     }
+
+    /// 特征（字号档位、深浅色）变了以后，窗口会在下一圈把它往下传、触发变化回调；不在窗口里就由这里推一下。
+    private func updateTraits() { root.updateTraitsIfNeeded() }
 
     /// 条件等待：让出主线程直到条件成立。上限只是"确实不会来了"的兜底（机器负载高时后台解码、布局会慢上几十秒），条件一成立马上返回。
     func wait(timeout: TimeInterval = 30, until condition: () -> Bool) async -> Bool {

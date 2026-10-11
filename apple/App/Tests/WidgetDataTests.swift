@@ -4,7 +4,6 @@ import Testing
 @testable import CuePad
 
 /// 小组件与分享扩展读的快照：主 App 跟随资料库变化写进共享容器。
-@MainActor
 struct WidgetDataTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -35,7 +34,7 @@ struct WidgetDataTests {
         _ = try await services.store.createProject(name: "新项目", color: "#abcdef")
         _ = try await services.store.createCard(in: nil, body: "未分类里的")
 
-        await eventually {
+        try await eventually("快照里有新项目与未分类") {
             Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["新项目"]
                 && Snapshots.readUnfiled(from: snapshots)?.cards.map(\.title) == ["未分类里的"]
         }

@@ -171,7 +171,7 @@ enum DebugScene {
         while still < 3 {
             // 排在页面已经发出的读库之后：它回来时，那些读取也都回来了
             _ = try? await store.projects()
-            await nextFrame()
+            await NextFrame.wait()
             still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
         }
         FileManager.default.createFile(atPath: path, contents: nil)
@@ -200,27 +200,5 @@ enum DebugScene {
         #endif
     }
 
-    private static func nextFrame() async {
-        #if os(macOS)
-        await NextFrame.wait()
-        #else
-        await withCheckedContinuation { continuation in
-            let tick = FrameTick(continuation)
-            CADisplayLink(target: tick, selector: #selector(FrameTick.fire)).add(to: .main, forMode: .common)
-        }
-        #endif
-    }
 }
-
-#if os(iOS)
-private final class FrameTick: NSObject {
-    private var continuation: CheckedContinuation<Void, Never>?
-    init(_ continuation: CheckedContinuation<Void, Never>) { self.continuation = continuation }
-    @objc func fire(_ link: CADisplayLink) {
-        link.invalidate()
-        continuation?.resume()
-        continuation = nil
-    }
-}
-#endif
 #endif

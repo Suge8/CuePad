@@ -3,7 +3,6 @@ import Testing
 @testable import CuePad
 
 /// 真实系统接口；用几乎不会被占用的组合，注册后立即释放，不触发任何按键事件。
-@MainActor
 struct CarbonHotkeyTests {
     private let rare = Shortcut(keyCode: 80, modifiers: [.command, .option, .control, .shift]) // ⌃⌥⇧⌘F19
 

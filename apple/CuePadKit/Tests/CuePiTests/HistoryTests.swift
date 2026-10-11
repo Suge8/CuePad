@@ -1,5 +1,7 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
+import Synchronization
 import Testing
 import CueStore
 @testable import CuePi
@@ -234,20 +236,18 @@ struct HistorySummaryOnlyTests {
 // MARK: - 后台索引器：首次按修改时间倒序，之后跟随文件变化
 
 /// 订阅索引器事件流并记录。
-final class HistoryEventLog: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _events: [PiHistoryEvent] = []
-    private var task: Task<Void, Never>?
+final class HistoryEventLog: Sendable {
+    private let recorded = Mutex<[PiHistoryEvent]>([])
+    /// 订阅的任务要引用自己，只能在初始化完成后起，所以放在锁里补上。
+    private let task = Mutex<Task<Void, Never>?>(nil)
 
     init(_ indexer: PiHistoryIndexer) {
         let stream = indexer.events()
-        task = Task { [weak self] in
-            for await e in stream { self?.lock.withLock { self?._events.append(e) } }
-        }
+        task.withLock { $0 = Task { [weak self] in for await e in stream { self?.recorded.withLock { $0.append(e) } } } }
     }
-    deinit { task?.cancel() }
+    deinit { task.withLock { $0?.cancel() } }
 
-    var events: [PiHistoryEvent] { lock.withLock { _events } }
+    var events: [PiHistoryEvent] { recorded.withLock { $0 } }
     var updates: [PiHistoryUpdate] { events.compactMap { if case .updated(let u) = $0 { u } else { nil } } }
     var finishedBackfill: Bool { events.contains { if case .backfillFinished = $0 { true } else { false } } }
 }

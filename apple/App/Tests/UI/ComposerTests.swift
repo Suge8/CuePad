@@ -6,7 +6,6 @@ import Testing
 @testable import CuePad
 
 /// 输入组件的两条跨边界合同：草稿（文字、图片、带上的卡片）写成什么样的投送请求正文；Pi 的一条回答存为卡片落在哪、正文是什么。
-@MainActor
 struct ComposerTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

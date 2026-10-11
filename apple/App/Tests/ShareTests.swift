@@ -4,7 +4,6 @@ import Testing
 import UniformTypeIdentifiers
 @testable import CuePad
 
-@MainActor
 struct ShareTests {
     private func provider(text: String) -> NSItemProvider { NSItemProvider(object: text as NSString) }
     private func provider(url: String) -> NSItemProvider { NSItemProvider(object: URL(string: url)! as NSURL) }

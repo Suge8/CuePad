@@ -6,37 +6,32 @@ import Testing
 @testable import CuePad
 
 /// App 层接入同步：启动引擎、镜像状态与问题、激活时立即同步、冲突与决定经 AppServices 交给界面。
-@MainActor
 struct SyncWiringTests {
     let app = TestApp()
     var services: AppServices { app.services }
-
-    private func wait(for condition: @MainActor () -> Bool) async {
-        await eventually(condition)
-    }
 
     @Test func 启动同步引擎_状态与问题镜像给界面() async throws {
         #expect(services.syncStatus == .starting)  // 引擎确认账号前不是"已同步"
         services.startSync()
         defer { services.cancelBackgroundWork() }
-        await wait { app.sync.started == 1 }
+        try await eventually("app.sync.started == 1") { app.sync.started == 1 }
         #expect(app.sync.started == 1)
 
         app.sync.emit(SyncState(status: .syncing, issues: []))
-        await wait { services.syncStatus == .syncing }
+        try await eventually("services.syncStatus == .syncing") { services.syncStatus == .syncing }
         #expect(services.syncStatus == .syncing)
 
         let issue = SyncIssue(recordType: "cards", recordName: "c1", message: "附件记录没有文件，已拒绝")
         app.sync.emit(SyncState(status: .syncing, issues: [issue]))
-        await wait { services.syncIssues == [issue] }
+        try await eventually("services.syncIssues == [issue]") { services.syncIssues == [issue] }
         #expect(services.syncIssues == [issue])
 
         app.sync.emit(SyncState(status: .syncing, issues: [], alerts: .failed("没有网络")))
-        await wait { services.alertSubscription == .failed("没有网络") }
+        try await eventually("services.alertSubscription == .failed(\"没有网络\")") { services.alertSubscription == .failed("没有网络") }
         #expect(services.alertSubscription == .failed("没有网络"))
 
         app.sync.emit(SyncState(status: .needsDecision(.accountSwitched), issues: [issue]))
-        await wait { services.syncStatus == .needsDecision(.accountSwitched) }
+        try await eventually("services.syncStatus == .needsDecision(.accountSwitched)") { services.syncStatus == .needsDecision(.accountSwitched) }
         #expect(services.syncStatus == .needsDecision(.accountSwitched))
     }
 
@@ -47,7 +42,7 @@ struct SyncWiringTests {
         services.startSync()
         defer { services.cancelBackgroundWork() }
 
-        await wait { !services.startupIssues.isEmpty }
+        try await eventually("!services.startupIssues.isEmpty") { !services.startupIssues.isEmpty }
 
         guard case .syncUnavailable(let message)? = services.startupIssues.first else {
             Issue.record("启动失败没有进入 startupIssues：\(services.startupIssues)")
@@ -74,11 +69,11 @@ struct SyncWiringTests {
         try markConflict(copy: copy.id, of: original.id)
         _ = try await services.store.createCard(in: nil, body: "触发一次重读")
 
-        await wait { services.conflicts.count == 1 }
+        try await eventually("services.conflicts.count == 1") { services.conflicts.count == 1 }
         #expect(services.conflicts.map(\.copy.body) == ["副本"])
 
         try await services.resolveConflict(copy: copy.id, keep: .original)
-        await wait { services.conflicts.isEmpty }
+        try await eventually("services.conflicts.isEmpty") { services.conflicts.isEmpty }
         #expect(services.conflicts.isEmpty)
     }
 

@@ -4,7 +4,6 @@ import Testing
 @testable import CuePad
 
 /// 提示词能交给哪些在线会话：iPhone 的交给 Agent 输入框与 Mac 的发送目标、会话菜单共用 `HandOffTargets`。
-@MainActor
 struct HandOffTargetsTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

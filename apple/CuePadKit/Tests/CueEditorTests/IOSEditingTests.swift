@@ -82,8 +82,8 @@ struct IOSEditingTests {
     func importFailure() async throws {
         let h = EditorHarness()
         let failing = CueTextView(imageStore: FailingStore(), theme: .test)
-        h.window.addSubview(failing)
-        h.window.layoutIfNeeded()
+        h.root.addSubview(failing)
+        h.root.layoutIfNeeded()
         var errors: [any Error] = []
         failing.onError = { errors.append($0) }
         let item = FakePasteItem(NSItemProvider(object: try #require(UIImage(data: makePNG(width: 20, height: 20)))))
