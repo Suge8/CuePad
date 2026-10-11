@@ -30,7 +30,7 @@ struct CardActions: View {
         case .complete, .reopen:
             Button(item.title, systemImage: item.symbol) {
                 let task = card
-                workspace.attempt { try await workspace.toggle(task) }
+                workspace.attempt { try await workspace.toggle(task.id) }
             }
         case .archive: Button(item.title, systemImage: item.symbol) { workspace.attempt { try await workspace.archive(id) } }
         case .resource, .unresource:

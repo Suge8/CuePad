@@ -83,7 +83,7 @@ struct SubtaskList: View {
     private func row(_ child: Card) -> some View {
         HStack(spacing: 8) {
             Button {
-                workspace.attempt { try await workspace.toggle(child) }
+                workspace.attempt { try await workspace.toggle(child.id) }
             } label: {
                 TaskRingView(status: child.status, ring: .plain, done: child.status == .done, size: TaskMetrics.icon * 0.72)
                     .frame(width: TaskMetrics.icon, height: TaskMetrics.rowHeight).contentShape(.rect)
@@ -129,7 +129,7 @@ struct TaskRingButton: View {
 
     private func toggle() {
         let task = task
-        workspace.attempt { try await workspace.toggle(task) }
+        workspace.attempt { try await workspace.toggle(task.id) }
     }
 }
 

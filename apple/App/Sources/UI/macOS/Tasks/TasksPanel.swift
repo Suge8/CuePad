@@ -56,11 +56,11 @@ struct TasksPanel: View {
         if lazy {
             LazyVStack(alignment: .leading, spacing: 0) { listContent(board, lazy: true) }
                 .padding(.bottom, 12)
-                .animation(Motion.quick, value: [board.inProgress, board.todo, board.done].flatMap { $0.map(\.id) })
+                .animation(Motion.quick, value: board.order)
         } else {
             VStack(alignment: .leading, spacing: 0) { listContent(board, lazy: false) }
                 .padding(.bottom, 12)
-                .animation(Motion.quick, value: [board.inProgress, board.todo, board.done].flatMap { $0.map(\.id) })
+                .animation(Motion.quick, value: board.order)
         }
     }
 
@@ -218,7 +218,7 @@ struct TaskRow: View {
 
     private func commitToggle() {
         let task = task
-        workspace.attempt { try await workspace.toggle(task) }
+        workspace.attempt { try await workspace.toggle(task.id) }
     }
 }
 

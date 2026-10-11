@@ -96,7 +96,7 @@ struct ChatScrubber: View {
         .task(id: scrolling || finger != nil) {
             // 停手后留一会儿再淡出
             guard !scrolling, finger == nil else { lingering = true; return }
-            try? await Task.sleep(for: Self.linger)
+            guard (try? await Task.sleep(for: Self.linger)) != nil else { return }
             lingering = false
         }
         .accessibilityElement()

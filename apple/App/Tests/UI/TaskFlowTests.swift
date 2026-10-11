@@ -62,7 +62,7 @@ struct TaskFlowTests {
         try await store.deleteDelivery(resend.id)
         #expect(try await tally(task).suggestsDone(task))
         #expect(try await store.card(task.id)?.status == .inProgress)
-        try await workspace.toggle(task)
+        try await workspace.toggle(task.id)
         #expect(workspace.notice?.text == "已完成")
         let archive = try #require(workspace.notice?.action)
         #expect(archive.title == "归档")
@@ -116,8 +116,8 @@ struct TaskFlowTests {
         #expect(try await store.cards(in: project.id).map(\.id) == before)
 
         let stale = try await store.createTask("续费域名", in: nil)
-        try await workspace.toggle(stale)
-        try await workspace.toggle(stale)  // 手里的副本已过时：切换以 Store 当前状态为准
+        try await workspace.toggle(stale.id)
+        try await workspace.toggle(stale.id)  // 手里的副本已过时：切换以 Store 当前状态为准
         #expect(try await store.card(stale.id)?.status == .todo)
 
         #expect(try await workspace.addTasks(fromSelection: "- 写发布说明\n\n- 更新截图", in: project.id) == 2)

@@ -51,7 +51,7 @@ struct IsolationTests {
         #expect(AppSettings(defaults: defaults, launchArguments: [:]).theme == .light)
     }
 
-    @Test func 窗口位置存进设置_不写系统的自动保存域() throws {
+    @Test func 窗口位置存进设置_不写系统的自动保存域() async throws {
         let temp = TempDefaults()
         let settings = AppSettings(defaults: temp.defaults, launchArguments: [:])
         let before = realDomain()
@@ -60,7 +60,9 @@ struct IsolationTests {
         #expect(!keeper.restore(), "没有存过位置时不应恢复")
 
         window.setFrame(NSRect(x: 200, y: 220, width: 700, height: 500), display: false)
+        await Task.yield()  // 让订阅的任务先到位，再发通知
         NotificationCenter.default.post(name: NSWindow.didMoveNotification, object: window)
+        await eventually { settings.windowFrame(for: "main") != nil }
 
         #expect(realDomain() == before)
         let other = NSWindow(contentRect: .zero, styleMask: [.titled, .resizable], backing: .buffered, defer: true)

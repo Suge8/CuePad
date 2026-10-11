@@ -57,7 +57,7 @@ struct SessionPage: View {
     /// 对话排开最近多少条（`PiConversation.window`）。
     @State private var shown = PiConversation.firstWindow
     /// 刚从刻度滑条跳到的那条你的话，短暂描一圈。
-    @State private var highlight: UUID?
+    @State private var highlight = ChatHighlight()
     /// 要跳到的那条还没排开：先排开，排开之后再跳（同一次更新里跳，目标还不在滚动区里）。
     @State private var pendingJump: UUID?
 
@@ -150,17 +150,12 @@ struct SessionPage: View {
             }
         }
         .fadesUnderBars()
-        .environment(\.chatHighlight, highlight)
+        .environment(\.chatHighlight, highlight.id)
         .overlay(alignment: .trailing) { scrubber(digest) }
         .onChange(of: shown) {
             guard let id = pendingJump else { return }
             pendingJump = nil
             jump(to: id)
-        }
-        .task(id: highlight) {
-            guard highlight != nil else { return }
-            try? await Task.sleep(for: .seconds(1.2))
-            highlight = nil
         }
         .frame(maxHeight: .infinity)
     }
@@ -184,7 +179,7 @@ struct SessionPage: View {
 
     private func jump(to id: UUID) {
         follow.jump(to: id)
-        highlight = id
+        highlight.flash(id)
     }
 
     /// 窗口右缘系统滚动条（悬浮式）占的宽。

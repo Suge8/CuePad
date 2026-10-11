@@ -21,7 +21,7 @@ struct SessionScreen: View {
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
     /// 刚从刻度滑条跳到的那条你的话，短暂描一圈。
-    @State private var highlight: UUID?
+    @State private var highlight = ChatHighlight()
     /// 回复框下面那一段的高（横条区或键盘，加回复框离它的空隙）：对话在这里不露出来。
     @State private var underBar: CGFloat = 0
     private static let barGap: CGFloat = 8
@@ -60,20 +60,15 @@ struct SessionScreen: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .environment(\.chatHighlight, highlight)
+        .environment(\.chatHighlight, highlight.id)
         .overlay(alignment: .trailing) {
             let marks = ChatScrubber.marks(PiChat.entries(digest?.messages ?? [], previews: digest?.previews ?? []))
             if !marks.isEmpty {
                 ChatScrubber(marks: marks, scrolling: follow.scrolling) { id in
                     follow.jump(to: id)
-                    highlight = id
+                    highlight.flash(id)
                 }
             }
-        }
-        .task(id: highlight) {
-            guard highlight != nil else { return }
-            try? await Task.sleep(for: .seconds(1.2))
-            highlight = nil
         }
         .overlay {
             if fetchingTranscript {

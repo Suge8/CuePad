@@ -52,7 +52,7 @@ struct ShelfScreen: View {
             query.text = DebugHooks.preset.searchText
             searchFocused = true
         }
-        .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady() } }
+        .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
         .observing(services.store, into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }

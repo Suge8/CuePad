@@ -93,7 +93,7 @@ struct PiThinkingDial: View {
     private static let lowest: CGFloat = 6
     private static let tallest: CGFloat = 16
     private static let linger: Duration = .seconds(1.2)
-    private static let space = "thinking-dial"
+    private nonisolated static let space = "thinking-dial"
 
     /// 此刻画的样子：按着时是指到的那档。
     private var drawn: PiThinkingMeter { touched.map { PiThinkingMeter(levels: meter.levels, current: $0) } ?? meter }

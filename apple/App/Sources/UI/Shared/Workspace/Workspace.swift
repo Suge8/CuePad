@@ -173,7 +173,7 @@ final class Workspace {
         catalogFailure = nil
         do {
             try DebugHooks.willReadCatalog(attempt: catalogAttempt)
-            for try await next in services.store.observe { try ProjectCatalog.read(from: $0) } {
+            for try await next in services.store.observe({ try ProjectCatalog.read(from: $0) }) {
                 let membershipChanged = catalog.map { Set($0.projects.map(\.id)) != Set(next.projects.map(\.id)) } ?? true
                 catalog = next
                 if membershipChanged {
@@ -236,14 +236,13 @@ final class Workspace {
         }
     }
 
-    /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态按 Store 的当前值决定，不看界面手里的副本：
-    /// 副本可能已过时（列表还没刷新就又点了一次），按它推算会把已勾的再勾一次。
-    func toggle(_ task: Card) async throws {
-        let store = services.store, id = task.id
-        let current = try await store.card(id)?.status
-        try await store.setStatus(id, current == .done ? .todo : .done)
+    /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态由 Store 在一个事务里按当前值定（`toggleDone`）：
+    /// 界面手里的副本可能已过时（列表还没刷新就又点了一次）。
+    func toggle(_ id: UUID) async throws {
         // 做完了就给一个归档（不自动归档）
-        if current != .done { say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) }) }
+        if try await services.store.toggleDone(id) == .done {
+            say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) })
+        }
     }
 
     /// 设为任务 / 改回灵感；提示里带"撤销"。

@@ -7,17 +7,21 @@ final class WindowFrameKeeper {
     private let window: NSWindow
     private let name: String
     private let settings: AppSettings
-    private var observers: [any NSObjectProtocol] = []
+    private var following: [Task<Void, Never>] = []
 
     init(window: NSWindow, name: String, settings: AppSettings) {
         self.window = window
         self.name = name
         self.settings = settings
-        observers = [NSWindow.didMoveNotification, NSWindow.didResizeNotification].map {
-            NotificationCenter.default.addObserver(forName: $0, object: window, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.save() }
+        following = [NSWindow.didMoveNotification, NSWindow.didResizeNotification].map { name in
+            Task { [weak self] in
+                for await _ in NotificationCenter.default.notifications(named: name, object: window) { self?.save() }
             }
         }
+    }
+
+    isolated deinit {
+        following.forEach { $0.cancel() }
     }
 
     /// 恢复上次的位置；没有存过返回 false。
