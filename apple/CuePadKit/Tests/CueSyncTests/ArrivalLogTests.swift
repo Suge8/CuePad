@@ -32,6 +32,8 @@ import Testing
     return RecordMapper.record(from: SyncRow(table: .deliveryRequests, fields: fields), zoneID: testZone, base: dated)
   }
 
+  private func stamp(_ date: Date) -> String { String(format: "%.3f", date.timeIntervalSince1970) }
+
   private func makeLog() -> (ArrivalLog, AsyncStream<String>.Iterator) {
     let (lines, sink) = AsyncStream<String>.makeStream()
     let log = ArrivalLog(store: rig.store, timing: clock.timing, deviceState: { "app=active" }, write: { sink.yield($0) })
@@ -45,13 +47,17 @@ import Testing
     var iterator = lines
     let rec = id.uuidString.lowercased().prefix(8)
 
+    let server = stamp(clock.now.addingTimeInterval(-3))
+    let pulledAt = stamp(clock.now)
+
     await log.pulled([record])
     clock.advance(.seconds(5))
+    let pushedAt = stamp(clock.now)
     await log.engineFetchBegan(manual: false)
     await log.engineFetched([record])
 
-    #expect(await iterator.next() == "latency arrive dev=\(device) path=pull kind=request rec=\(rec) v=5000 lag=3.00 app=active")
-    #expect(await iterator.next() == "latency arrive dev=\(device) path=push kind=request rec=\(rec) v=5000 lag=8.00 pullLag=3.00 app=active")
+    #expect(await iterator.next() == "latency arrive dev=\(device) path=pull kind=request rec=\(rec) v=5000 server=\(server) at=\(pulledAt) lag=3.00 app=active")
+    #expect(await iterator.next() == "latency arrive dev=\(device) path=push kind=request rec=\(rec) v=5000 server=\(server) at=\(pushedAt) lag=8.00 pullLag=3.00 app=active")
   }
 
   @Test func 主动拉取先到而推送始终没来_过了五分钟记为丢失() async throws {
@@ -65,10 +71,54 @@ import Testing
     await clock.waitForSleeper()
     clock.advance(.seconds(301))
 
-    #expect(await iterator.next() == "latency lost dev=\(device) kind=request rec=\(id.uuidString.lowercased().prefix(8)) v=5000 pullLag=3.00 after=300 app=active")
+    #expect(await iterator.next() == "latency lost dev=\(device) kind=request rec=\(id.uuidString.lowercased().prefix(8)) v=5000 server=\(stamp(clock.now.addingTimeInterval(-304))) pullLag=3.00 after=300 app=active")
   }
 
   /// 本机自己调的 fetchChanges 拿走后，引擎的令牌已越过这条记录，不会再有推送：不能记成丢失。
+  /// 主动拉取收到请求后 Mac 立即领取、执行完又写回：引擎只会带来最新版本，旧版本的推送量不到——不能记成丢失。
+  @Test func 等推送的版本已被更新的版本取代_过期时记被取代而不是丢失() async throws {
+    let id = UUID()
+    let record = request(id, modifiedAt: 5_000, landed: clock.now.addingTimeInterval(-3))
+    let (log, lines) = makeLog()
+    var iterator = lines
+
+    await log.pulled([record])
+    _ = await iterator.next()
+    await rig.coordinator.handle(.fetched(modifications: [request(id, modifiedAt: 6_000, landed: clock.now)], deletions: []))
+    await clock.waitForSleeper()
+    clock.advance(.seconds(301))
+
+    let line = await iterator.next()
+    #expect(line?.hasPrefix("latency superseded dev=\(device) kind=request rec=\(id.uuidString.lowercased().prefix(8)) v=5000") == true)
+  }
+
+  @Test func 更新的版本先到_旧版本记被取代_新版本照常记() async throws {
+    let id = UUID()
+    let (log, lines) = makeLog()
+    var iterator = lines
+
+    await log.pulled([request(id, modifiedAt: 5_000, landed: clock.now.addingTimeInterval(-3))])
+    _ = await iterator.next()
+    await log.pulled([request(id, modifiedAt: 6_000, landed: clock.now.addingTimeInterval(-1))])
+
+    #expect(await iterator.next()?.hasPrefix("latency superseded") == true)
+    #expect(await iterator.next()?.contains("path=pull") == true)
+  }
+
+  /// 启动或令牌过期后的补取也是主动拉取：本机补上后，引擎再带来同一版本就不会再记，漏了这里这条样本就整条消失。
+  @Test func 首次补取拿到的在等的记录也记为主动拉取先到() async throws {
+    let id = UUID()
+    let landed = request(id, modifiedAt: 5_000, landed: clock.now.addingTimeInterval(-3))
+    let zone = ZoneChangePullerTests.FakeZone(
+      [.success(ZoneChangeBatch(modifications: [landed], deletions: [], token: Data("t1".utf8), moreComing: false))], server: [landed])
+    let (log, lines) = makeLog()
+    var iterator = lines
+
+    try await ZoneChangePuller(source: zone, coordinator: rig.coordinator, arrivals: log).prepare()
+
+    #expect(await iterator.next()?.contains("path=pull kind=request rec=\(id.uuidString.lowercased().prefix(8))") == true)
+  }
+
   @Test func 本机手动拉取先带来的_不再等推送也不记丢失() async throws {
     let record = request(UUID(), modifiedAt: 5_000, landed: clock.now.addingTimeInterval(-3))
     let (log, lines) = makeLog()

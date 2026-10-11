@@ -97,7 +97,9 @@ actor ZoneChangePuller {
     }.map(\.recordID)
     for start in stride(from: 0, to: wanted.count, by: CloudKitLimits.recordsPerRequest) {
       let ids = Array(wanted[start..<min(start + CloudKitLimits.recordsPerRequest, wanted.count)])
-      await coordinator.handle(.fetched(modifications: try await source.records(ids), deletions: []))
+      let records = try await source.records(ids)
+      await arrivals.pulled(records)  // 交给协调器之前：之后本机就有了
+      await coordinator.handle(.fetched(modifications: records, deletions: []))
     }
   }
 

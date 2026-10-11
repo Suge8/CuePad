@@ -47,7 +47,7 @@ def log_lines(args):
     return [line.strip() for line in texts if line.strip().startswith("latency ")]
 
 
-KEYS = {"dev", "path", "kind", "rec", "v", "lag", "pullLag", "after"}
+KEYS = {"dev", "path", "kind", "rec", "v", "server", "at", "lag", "pullLag", "after"}
 
 
 def parse(line):
@@ -84,11 +84,13 @@ def collect(lines):
     for line in lines:
         event, f, state = parse(line)
         key = (f.get("dev"), f.get("rec"), f.get("v"))
-        sample = samples.setdefault(key, {"dev": f.get("dev"), "kind": f.get("kind"), "state": state, "arrivals": {}, "lost": False})
+        sample = samples.setdefault(key, {"dev": f.get("dev"), "kind": f.get("kind"), "state": state, "arrivals": {}, "lost": False, "superseded": False})
         if event == "arrive":
             sample["arrivals"].setdefault(f["path"], float(f["lag"]))
         elif event == "lost":
             sample["lost"] = True
+        elif event == "superseded":
+            sample["superseded"] = True
     return samples
 
 
@@ -99,18 +101,25 @@ def summarize(samples):
     return groups
 
 
+def is_backlog(s):
+    """很晚才经推送到、又没有主动拉取早早拿到过的：可能是 App 没开期间攒下的，也可能是推送真的慢，没法分。
+    主动拉取早早拿到过同一版本、推送却很晚才到的，是确凿的慢推送，要算进去。"""
+    arrivals = s["arrivals"]
+    return arrivals.get("push", 0) > STALE and arrivals.get("pull", STALE + 1) > STALE
+
+
 def stats(group):
-    push = [s["arrivals"]["push"] for s in group if "push" in s["arrivals"] and s["arrivals"]["push"] <= STALE]
-    backlog = sum(1 for s in group if s["arrivals"].get("push", 0) > STALE)
+    push = [s["arrivals"]["push"] for s in group if "push" in s["arrivals"] and not is_backlog(s)]
+    backlog = sum(1 for s in group if is_backlog(s))
     lost = sum(1 for s in group if s["lost"])
     pulled = [s for s in group if "pull" in s["arrivals"]]
-    early = [s["arrivals"]["push"] - s["arrivals"]["pull"] for s in pulled if "push" in s["arrivals"] and s["arrivals"]["push"] <= STALE]
+    early = [s["arrivals"]["push"] - s["arrivals"]["pull"] for s in pulled if "push" in s["arrivals"] and not is_backlog(s)]
     measurable = len(push) + lost
     return {
         "n": measurable, "p50": percentile(push, 50), "p90": percentile(push, 90), "max": max(push) if push else None,
         "lost": lost, "lossRate": lost / measurable if measurable else None,
         "pullFirst": len(pulled) / len(group) if group else 0, "early50": percentile(early, 50), "early90": percentile(early, 90),
-        "backlog": backlog, "manual": sum(1 for s in group if "manual" in s["arrivals"]),
+        "backlog": backlog, "manual": sum(1 for s in group if "manual" in s["arrivals"]), "superseded": sum(1 for s in group if s["superseded"]),
     }
 
 
@@ -119,17 +128,21 @@ def row(label, st):
     warn = "  ← 样本太少" if st["n"] < 5 else ""
     return (f"  {label:<18} 样本 {st['n']:>3}  推送 p50 {fmt(st['p50']):>6} p90 {fmt(st['p90']):>6} 最大 {fmt(st['max']):>6}  丢失 {loss:<9} "
             f"拉取先到 {st['pullFirst'] * 100:>3.0f}%（提前 p50 {fmt(st['early50'])} p90 {fmt(st['early90'])}）"
-            + (f"  积压 {st['backlog']}" if st["backlog"] else "") + (f"  手动 {st['manual']}" if st["manual"] else "") + warn)
+            + (f"  积压 {st['backlog']}" if st["backlog"] else "") + (f"  手动 {st['manual']}" if st["manual"] else "")
+            + (f"  被取代 {st['superseded']}" if st["superseded"] else "") + warn)
 
 
 def verdict(st):
     if st["n"] < MIN_SAMPLES:
         return f"样本 {st['n']} 条，不足 {MIN_SAMPLES}：先别下结论，再多测一些（正常用一两天也会攒）"
     p90, loss = st["p90"] or 0, st["lossRate"] or 0
-    if p90 <= 2 and loss < 0.01:
-        return "推送 p90 ≤ 2 秒且丢失 < 1%：Mac 主动拉取可放到 30–60 秒或删除"
     if p90 > 5 or loss > 0.05:
         return "推送 p90 > 5 秒或丢失 > 5%：保持 2 秒主动拉取"
+    if p90 <= 2 and loss < 0.01:
+        if st["backlog"]:
+            return (f"推送 p90 与丢失率达标，但有 {st['backlog']} 条超过 {STALE:.0f} 秒才经推送到、没有主动拉取佐证的记录（没排除是推送慢）："
+                    "先确认它们是不是 App 没开期间攒下的，确认前只放到 10 秒，不删")
+        return "推送 p90 ≤ 2 秒且丢失 < 1%：Mac 主动拉取可放到 30–60 秒或删除"
     return "介于两者之间：保守放到 10 秒，再测一轮；不要删"
 
 

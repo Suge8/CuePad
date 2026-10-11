@@ -8,9 +8,12 @@ import os
 /// （`xc.sh synclat`）；字段是这两处之间的约定：
 ///
 /// `latency arrive dev=mac|phone path=push|pull|manual kind=request|result|session rec=<记录名前 8 位> v=<记录版本 modifiedAt>
-/// lag=<到达时刻 - 服务器时间，秒> [pullLag=<主动拉取先到时的 lag>] <设备状态 key=value …>`
+/// server=<服务器时间，秒> at=<本机到达时刻，秒> lag=<at - server> [pullLag=<主动拉取先到时的 lag>] <设备状态 key=value …>`
+/// （server、at 是 1970 年起的秒数，三位小数）
 ///
 /// `latency lost … after=<秒>`：主动拉取先拿到后，引擎过了 `lostAfter` 仍没经推送带来。
+/// `latency superseded … after=<秒>`：同一条记录这期间已有更新的版本（如 Mac 领取、执行完又写回），引擎只会带来最新版本，
+/// 旧版本的推送延迟量不到，既不算延迟也不算丢失。
 ///
 /// 路径：`push` 是 CKSyncEngine 自己调度的拉取（推送触发，也含引擎的启动与周期拉取，所以是推送延迟的上界）；`manual` 是本机调
 /// `engine.fetchChanges`（回前台、唤醒）；`pull` 是 `ZoneChangePuller` 的主动拉取。主动拉取先到的记录要等引擎稍后补拿，补拿时再记
@@ -46,12 +49,11 @@ actor ArrivalLog {
       default: "session"
       }
     }
-
-    var key: String { "\(name)#\(version)" }
   }
 
-  /// 主动拉取先拿到、还在等推送的版本。
+  /// 主动拉取先拿到、还在等推送的版本（每条记录只等最新拿到的那个版本）。
   private struct Waiting {
+    var arrival: Arrival
     var pullLag: Double
     var state: String
     var lost: Task<Void, Never>
@@ -103,31 +105,41 @@ actor ArrivalLog {
       }
     }
     for arrival in arrivals {
-      if let pending = waiting[arrival.key] {
-        guard path != .pull else { continue }
-        pending.lost.cancel()
-        waiting[arrival.key] = nil
-        write(line("arrive", arrival, path: path, lag: lag(of: arrival), extra: "pullLag=\(fixed(pending.pullLag))", state: pending.state))
-        continue
+      if let pending = waiting[arrival.name] {
+        if arrival.version < pending.arrival.version { continue }
+        if arrival.version == pending.arrival.version {
+          guard path != .pull else { continue }
+          pending.lost.cancel()
+          waiting[arrival.name] = nil
+          write(line("arrive", arrival, path: path, lag: lag(of: arrival), extra: "pullLag=\(fixed(pending.pullLag))", state: pending.state))
+          continue
+        }
+        pending.lost.cancel()  // 更新的版本先到了：旧版本的推送不会再来
+        waiting[arrival.name] = nil
+        write(line("superseded", pending.arrival, path: nil, lag: nil, extra: "pullLag=\(fixed(pending.pullLag))", state: pending.state))
       }
       guard known[arrival.table]?[arrival.name].map({ $0 < arrival.version }) ?? true else { continue }
       let state = deviceState()
       let lag = lag(of: arrival)
       write(line("arrive", arrival, path: path, lag: lag, state: state))
-      if path == .pull { waiting[arrival.key] = Waiting(pullLag: lag, state: state, lost: lostTimer(arrival, pullLag: lag, state: state)) }
+      if path == .pull { waiting[arrival.name] = Waiting(arrival: arrival, pullLag: lag, state: state, lost: lostTimer(arrival)) }
     }
   }
 
-  private func lostTimer(_ arrival: Arrival, pullLag: Double, state: String) -> Task<Void, Never> {
+  private func lostTimer(_ arrival: Arrival) -> Task<Void, Never> {
     Task { [timing, lostAfter] in
       guard (try? await timing.sleep(lostAfter)) != nil else { return }
-      self.lost(arrival, pullLag: pullLag, state: state)
+      await self.expire(arrival)
     }
   }
 
-  private func lost(_ arrival: Arrival, pullLag: Double, state: String) {
-    guard waiting.removeValue(forKey: arrival.key) != nil else { return }
-    write(line("lost", arrival, path: nil, lag: nil, extra: "pullLag=\(fixed(pullLag)) after=\(Int(lostAfter.components.seconds))", state: state))
+  /// 过了期限引擎仍没带来这个版本：本机已有更新的版本就是被取代（量不到），否则是推送丢失。
+  private func expire(_ arrival: Arrival) async {
+    guard let pending = waiting[arrival.name], pending.arrival.version == arrival.version else { return }
+    waiting[arrival.name] = nil
+    let newest = (try? await store.modifiedAts(of: [arrival.name], in: arrival.table))?[arrival.name]
+    let event = newest.map { $0 > arrival.version } == true ? "superseded" : "lost"
+    write(line(event, arrival, path: nil, lag: nil, extra: "pullLag=\(fixed(pending.pullLag)) after=\(Int(lostAfter.components.seconds))", state: pending.state))
   }
 
   private func lag(of arrival: Arrival) -> Double { timing.now().timeIntervalSince(arrival.server) }
@@ -143,7 +155,11 @@ actor ArrivalLog {
     var fields = ["latency", event, "dev=\(device)"]
     if let path { fields.append("path=\(path.rawValue)") }
     fields += ["kind=\(arrival.kind)", "rec=\(arrival.name.prefix(8))", "v=\(arrival.version)"]
-    if let lag { fields.append("lag=\(fixed(lag))") }
+    fields.append("server=\(String(format: "%.3f", arrival.server.timeIntervalSince1970))")
+    if let lag {
+      fields.append("at=\(String(format: "%.3f", timing.now().timeIntervalSince1970))")
+      fields.append("lag=\(fixed(lag))")
+    }
     return (fields + [extra, state]).filter { !$0.isEmpty }.joined(separator: " ")
   }
 }
