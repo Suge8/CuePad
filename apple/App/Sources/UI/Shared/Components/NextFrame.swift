@@ -1,5 +1,9 @@
+import QuartzCore
 #if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// 等到屏幕下一次刷新：分几帧做的事，每一步的改动落在自己那一帧里（上一步已经提交）。
 /// 主队列异步不行：它有时排在同一次提交之前，几步又挤回一帧。
@@ -19,9 +23,13 @@ enum NextFrame {
         private var continuation: CheckedContinuation<Void, Never>?
 
         func start(_ continuation: CheckedContinuation<Void, Never>) {
+            #if os(macOS)
             guard let screen = NSScreen.main else { return continuation.resume() }
-            self.continuation = continuation
             link = screen.displayLink(target: self, selector: #selector(fire))
+            #else
+            link = CADisplayLink(target: self, selector: #selector(fire))
+            #endif
+            self.continuation = continuation
             link?.add(to: .main, forMode: .common)
         }
 
@@ -35,4 +43,3 @@ enum NextFrame {
         }
     }
 }
-#endif

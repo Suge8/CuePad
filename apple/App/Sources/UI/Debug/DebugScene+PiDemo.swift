@@ -254,7 +254,7 @@ extension DebugScene {
                 let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { request in
                     try? await Task.sleep(for: .seconds(1))
                     if let mode = request.mode.known, DeliveryMode.toSession.contains(mode), mode != .answer {
-                        try? await store.recordSend(request.content, to: request.target, card: request.cardID)
+                        _ = try? await store.recordSend(request.content, to: request.target, card: request.cardID)
                     }
                     return .succeeded
                 }
@@ -275,7 +275,7 @@ extension DebugScene {
         else { return }
         let recorder = PiStateRecorder(store: store, hostID: host)
         func set(_ state: PiWorkState) async {
-            try? await recorder.update(
+            _ = try? await recorder.update(
                 sessionID: ref, state: state, title: session.title, folder: session.folder, projectID: session.projectID)
         }
         try? await Task.sleep(for: .seconds(0.8))
@@ -364,16 +364,16 @@ extension DebugScene {
         // 文件夹名与还没绑文件夹的项目同名（Flow）：项目的 Agent 空态给一键"绑定 flow 文件夹（3 个会话）"
         for index in 1...3 {
             let id = "flow-\(index)"
-            try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", folder: "flow", projectID: nil)
+            _ = try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", folder: "flow", projectID: nil)
             try? await recorder.end(sessionID: id)
         }
         for (id, name, recap) in history {
-            try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project))
+            _ = try? await recorder.update(sessionID: id, state: .settled, detail: nil, title: id, folder: id, projectID: name.flatMap(project))
             try? await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: recap))
             try? await recorder.end(sessionID: id)
         }
         for (id, state, detail, name, recap) in sessions {
-            try? await recorder.update(
+            _ = try? await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, folder: id, projectID: name.flatMap(project), question: recap.question,
                 modelState: demoModels, context: demoContexts[id] ?? PiContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands)
             try? await store.writePiTranscript(PiTranscript(
@@ -387,14 +387,14 @@ extension DebugScene {
         }
         // 后台托管、带两个子代理的会话
         let started = Date.now.addingTimeInterval(-260)
-        try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
+        _ = try? await recorder.update(sessionID: "review", state: .delegating, hosted: true, subagents: [
             PiSubagentState(name: "计费额度", role: "审查员", phase: .known(.running), action: "运行 pnpm test billing", startedAt: started),
             PiSubagentState(name: "登录回调", role: "工程师", phase: .known(.failed), action: "请求超时", startedAt: started, settledAt: started.addingTimeInterval(95)),
             PiSubagentState(name: "文档", role: "写手", phase: .known(.done), action: "已补完 README 的同步一节", startedAt: started, settledAt: started.addingTimeInterval(180)),
         ])
         await seedBindings(store, projects: projects)
         // 另一台 Mac 上的会话（演示发过去的话送达与失败）
-        try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", folder: "relay")
+        _ = try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", folder: "relay")
         await seedChats(store)
         // 会话文件里的压缩记录：对话里的一行系统行（notes 最后一轮回答之后）
         try? await store.writePiTranscript(PiTranscript(
@@ -413,7 +413,7 @@ extension DebugScene {
             _ = try? await services.requestMacDelivery("顺便备份一下线上数据库", to: relay, mode: .send)
             // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
             let mini = PiStateRecorder(store: store, hostID: relay.hostID)
-            try? await mini.update(sessionID: "quote", state: .settled, title: "quote", folder: "quote", projectID: project("装修"))
+            _ = try? await mini.update(sessionID: "quote", state: .settled, title: "quote", folder: "quote", projectID: project("装修"))
             try? await mini.end(sessionID: "quote")
             if let quote = try? await store.piSessionPage(PiSessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
                 _ = try? await services.requestMacDelivery("把报价单备份到网盘", to: quote, mode: .send)
