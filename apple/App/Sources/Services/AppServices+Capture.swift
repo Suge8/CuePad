@@ -38,10 +38,10 @@ extension AppServices {
             hashes.map { CueFormat.imageMarkup(id: $0) }.joined(separator: "\n"),
         ].filter { !$0.isEmpty }
         let project = try await existingProject(capture.project)
-        try await store.createCard(in: project, body: sections.joined(separator: "\n\n"))
+        _ = try await store.createCard(in: project, body: sections.joined(separator: "\n\n"))
     }
 
-    /// 分享时选的项目此后可能已被删除；卡片放进已删除的项目会不可见，回到收件箱。
+    /// 分享时选的项目此后可能已被删除；卡片放进已删除的项目会不可见，回到未分类。
     private func existingProject(_ id: UUID?) async throws -> UUID? {
         guard let id else { return nil }
         guard let project = try await store.project(id), project.deletedAt == nil else { return nil }

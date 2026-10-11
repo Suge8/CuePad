@@ -165,7 +165,7 @@ final class AppServices {
         do {
             try await sync.sendNow(recordName: record.uuidString.lowercased(), deleted: deleted)
         } catch {
-            Self.log.notice("立即上传记录失败，等引擎自动上传：\(String(describing: error), privacy: .public)")
+            Self.log.notice("立即上传记录失败，等引擎自动上传：\(String(describing: error))")
         }
     }
 
@@ -223,7 +223,7 @@ final class AppServices {
 
     /// 等到投送请求有结果（已送达或没能送达）。请求在等待期间被删掉时抛 `CueStoreError.notFound`。
     func outcome(of request: UUID) async throws -> DeliveryRequest {
-        for try await current in store.observe { try $0.deliveryRequest(request) } {
+        for try await current in store.observe({ try $0.deliveryRequest(request) }) {
             guard let current else { throw CueStoreError.notFound }
             if !current.isOpen { return current }
         }
@@ -243,11 +243,23 @@ final class AppServices {
     /// 主动拉取的令牌先取好，第一次的取令牌不算进往返。超过 `timeout` 没有结果、或结果是失败时抛 `SendError.notDelivered`。
     /// 用过的请求删掉。
     func ping(_ host: String, timeout: Duration = .seconds(60)) async throws -> PingTiming {
-        try? await sync?.preparePull()
+        do {
+            try await sync?.preparePull()
+        } catch {
+            Self.log.error("连接测试取主动拉取的令牌失败，第一次往返会把它算进去：\(error.localizedDescription)")
+        }
         let started = ContinuousClock.now
         let request = try await store.requestPing(on: host)
         let written = ContinuousClock.now
-        defer { Task { [store] in try? await store.deleteDelivery(request.id) } }
+        defer {
+            Task { [store] in
+                do {
+                    try await store.deleteDelivery(request.id)
+                } catch {
+                    Self.log.error("连接测试的请求没能删掉：\(error.localizedDescription)")
+                }
+            }
+        }
         async let seen = result(of: request.id, within: timeout)
         await upload(request.id)
         let uploaded = (instant: ContinuousClock.now, date: Date())
@@ -347,7 +359,7 @@ final class AppServices {
     }
 
     func reportIssue(_ issue: StartupIssue) {
-        Self.log.error("\(String(describing: issue), privacy: .public)")
+        Self.log.error("\(String(describing: issue))")
         startupIssues.append(issue)
     }
 }

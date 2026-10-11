@@ -1,4 +1,5 @@
 #if os(macOS)
+import CuePi
 import Foundation
 import Observation
 
@@ -107,28 +108,10 @@ final class CommandLineToolInstaller {
         let process = Process()
         process.executableURL = URL(filePath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
         process.arguments = ["-ilc", "printf '\\n\(marker)%s\\n' \"$PATH\""]
-        let output = Pipe()
-        process.standardOutput = output
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
-        nonisolated(unsafe) let running = process
-        let watchdog = Task.detached {
-            try? await Task.sleep(for: .seconds(5))
-            if running.isRunning { running.terminate() }
-        }
-        return await withCheckedContinuation { continuation in
-            process.terminationHandler = { _ in
-                watchdog.cancel()
-                let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                continuation.resume(returning: text.split(separator: "\n").last { $0.hasPrefix(marker) }.map { String($0.dropFirst(marker.count)) })
-            }
-            do {
-                try process.run()
-            } catch {
-                watchdog.cancel()
-                continuation.resume(returning: nil)
-            }
-        }
+        guard let result = await runCapturing(process, timeout: .seconds(5)) else { return nil }
+        return result.output.split(separator: "\n").last { $0.hasPrefix(marker) }.map { String($0.dropFirst(marker.count)) }
     }
 }
 #endif

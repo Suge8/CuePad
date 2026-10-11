@@ -27,7 +27,7 @@ final class Diagnostics {
     /// 存下一批包的原始 JSON。存不下来时记日志，别的包照常存。
     func record(_ payloads: [Data]) {
         for payload in payloads {
-            do { try archive.store(payload) } catch { AppServices.log.error("诊断存档失败：\(String(describing: error), privacy: .public)") }
+            do { try archive.store(payload) } catch { AppServices.log.error("诊断存档失败：\(String(describing: error))") }
         }
         latest = archive.reports().first
     }
