@@ -65,6 +65,22 @@ import Testing
     #expect(try await store.trashCard(UUID()) == nil)  // 不存在的不留回执
   }
 
+  @Test func 删除与改回灵感拨回_归档的下级也回到它下面() async throws {
+    let task = try await store.createTask("上线", in: nil)
+    let live = try await store.createCard(body: "清单", under: task.id)
+    let old = try await store.createCard(body: "旧的备忘", under: task.id)
+    try await store.archive(old.id)
+
+    let trash = try #require(try await store.trashCard(task.id))
+    try await store.undo(trash)
+    let afterTrash = (try await card(old.id).parentID, try await card(live.id).parentID)
+    #expect(afterTrash == (task.id, task.id))
+
+    let todo = try #require(try await store.setTodo(task.id, false))
+    try await store.undo(todo)
+    #expect(try await card(old.id).parentID == task.id)
+  }
+
   @Test func 挪动拨回_回到原来的位置_前一个同级是任务也对() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let target = try await store.createTask("目标", in: project.id)

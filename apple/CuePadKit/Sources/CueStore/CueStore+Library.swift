@@ -198,8 +198,7 @@ extension CueStore {
       try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
       prompt = try Self.splitPrompt(db, task: id, at: now)
     } else {
-      lifted = try liveChildren(of: id)
-      try liftChildren(of: card, at: now)
+      lifted = try liftChildren(of: card, at: now)
       try db.run(
         "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, modifiedAt = ? WHERE id = ?", [now, id])
     }
@@ -281,9 +280,8 @@ extension CueStore {
   /// 界面手里的副本可能已过时，两次 `await` 之间也可能有同步来的改动插进来。返回新状态。
   public func toggleDone(_ id: UUID) throws -> TaskStatus {
     try write {
-      guard let current = try find(Card.self, id)?.status else {
-        throw try find(Card.self, id) == nil ? CueStoreError.notFound : CueStoreError.notATask
-      }
+      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
+      guard let current = card.status else { throw CueStoreError.notATask }
       return try applyStatus(id, current == .done ? .todo : .done)
     }
   }
@@ -354,8 +352,7 @@ extension CueStore {
     try write {
       guard let card = try find(Card.self, id), card.deletedAt == nil else { return nil }
       let now = Date.stamp
-      let lifted = try liveChildren(of: id)
-      try liftChildren(of: card, at: now)
+      let lifted = try liftChildren(of: card, at: now)
       try db.run("UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, id])
       return .trash(id: id, lifted: lifted)
     }
@@ -405,13 +402,6 @@ extension CueStore {
       }
       return try reclaimAttachments(orphaned)
     } }
-  }
-
-  /// 没删除、没归档的直接下级，按手动顺序（`undo` 要把它们放回去）。
-  private func liveChildren(of id: UUID) throws -> [UUID] {
-    try db.query(
-      "SELECT id FROM cards WHERE parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL ORDER BY sortKey, id", [id]
-    ) { $0.uuid(0) }
   }
 
   /// 把这些卡按顺序重新挂到 `parent` 下（已经不在的跳过）。
@@ -510,10 +500,11 @@ extension CueStore {
     return card
   }
 
-  /// 下级按原顺序提到 `card` 的位置（挂到它的上级下、排在它之后）：去掉要做、进回收站时用。
-  private func liftChildren(of card: Card, at now: Date) throws {
+  /// 下级（含已归档的）按原顺序提到 `card` 的位置（挂到它的上级下、排在它之后）：去掉要做、进回收站时用。返回被提的下级，`undo` 靠它放回去。
+  @discardableResult
+  private func liftChildren(of card: Card, at now: Date) throws -> [UUID] {
     let children = try db.query("SELECT id FROM cards WHERE parentID = ? ORDER BY sortKey, id", [card.id]) { $0.uuid(0) }
-    guard !children.isEmpty else { return }
+    guard !children.isEmpty else { return [] }
     let link = CardLinks.Link(parent: card.parentID, project: card.projectID, isTask: card.isTask)
     let upper = try db.first(
       "SELECT MIN(sortKey) FROM cards WHERE (\(Self.siblingScope(link))) AND sortKey > ?", [card.parentID ?? card.projectID, card.sortKey]
@@ -524,6 +515,7 @@ extension CueStore {
       try db.run("UPDATE cards SET parentID = ?, sortKey = ?, modifiedAt = ? WHERE id = ?", [card.parentID, key, now, child])
       lower = key
     }
+    return children
   }
 
   /// 同级的范围：同一上级下，或同一项目的顶层。
