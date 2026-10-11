@@ -55,7 +55,7 @@ struct PiDeliveryStatusTests {
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _ in .failed("Pi 没在运行") }
         try await executor.start()
         defer { Task { await executor.stop() } }
-        for try await status in store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id)?.status }) where status == .known(.failed) {
+        for try await status in store.observe({ try $0.deliveryRequest(request.id)?.status }) where status == .known(.failed) {
             break
         }
 

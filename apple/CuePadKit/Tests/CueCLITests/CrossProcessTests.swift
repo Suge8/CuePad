@@ -26,7 +26,7 @@ import Testing
     let sandbox = try Sandbox()
     let binary = Self.binary
     try #require(FileManager.default.isExecutableFile(atPath: binary.path), "先构建 cuepad 产物：\(binary.path)")
-    let stream = sandbox.store.observe([.cards]) { try $0.cards(in: nil).map(\.body) }
+    let stream = sandbox.store.observe { try $0.cards(in: nil).map(\.body) }
 
     let seen = try await withThrowingTaskGroup(of: [String].self) { group in
       group.addTask {

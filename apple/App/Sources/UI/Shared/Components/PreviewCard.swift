@@ -51,8 +51,8 @@ struct PreviewCard: View {
         .buttonStyle(.plain)
         .disabled(file == nil)
         .accessibilityLabel("预览：\(preview.title)")
-        .observing(services.store, [.attachments], id: preview.hash, into: $arrived) { [files = services.store.files, hash = preview.hash] _ in
-            files.fileURL(for: hash) != nil
+        .observing(services.store, id: preview.hash, into: $arrived) { [files = services.store.files, hash = preview.hash] store in
+            try store.hasAttachment(hash) && files.fileURL(for: hash) != nil
         }
         .task(id: file) { await loadThumbnail() }
     }

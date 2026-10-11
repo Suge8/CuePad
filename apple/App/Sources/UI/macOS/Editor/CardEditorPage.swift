@@ -5,7 +5,7 @@ import CueStore
 import CueText
 import SwiftUI
 
-nonisolated private struct EditorData: Sendable {
+nonisolated private struct EditorData: Sendable, Equatable {
     var card: Card
     var project: Project?
     /// 提示词所在的任务（挂在任务下的灵感）。

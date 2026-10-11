@@ -253,7 +253,7 @@ struct MacSyncTests {
         let store = services.store
         return try await withThrowingTaskGroup(of: DeliveryRequest.self) { group in
             group.addTask {
-                for try await request in store.observe([.deliveryRequests], { try $0.deliveryRequest(id) }) {
+                for try await request in store.observe({ try $0.deliveryRequest(id) }) {
                     if let request, request.status == .known(.succeeded) || request.status == .known(.failed) { return request }
                 }
                 throw CancellationError()
@@ -686,14 +686,14 @@ struct MacSyncTests {
 
         try await services.store.setDirectory("/Users/someone/work/app", for: project.id)
         var bound: [DirectoryBinding] = []
-        for try await bindings in services.store.observe([.directoryBindings], { try $0.directoryBindings() }) where !bindings.isEmpty {
+        for try await bindings in services.store.observe({ try $0.directoryBindings() }) where !bindings.isEmpty {
             bound = bindings
             break
         }
         #expect(bound.map(\.projectID) == [project.id] && bound.map(\.hostID) == [TestApp.hostID] && bound.map(\.folder) == ["app"])
 
         try await services.store.setDirectory(nil, for: project.id)
-        for try await bindings in services.store.observe([.directoryBindings], { try $0.directoryBindings() }) where bindings.isEmpty { break }
+        for try await bindings in services.store.observe({ try $0.directoryBindings() }) where bindings.isEmpty { break }
     }
 
     /// 升级前开的旧协议会话没死：桥上有它，就不能当成已结束去后台唤醒（唤醒只会再起一个进程、永远"正在唤醒"）；按桥给的原因失败写回。

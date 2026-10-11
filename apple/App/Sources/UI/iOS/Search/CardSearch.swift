@@ -9,7 +9,7 @@ enum CardSearchScope: Equatable {
     case project(UUID?)
 }
 
-nonisolated private struct SearchData: Sendable {
+nonisolated private struct SearchData: Sendable, Equatable {
     var groups: [Group]
     var total: Int
     var shown: Int
@@ -17,7 +17,7 @@ nonisolated private struct SearchData: Sendable {
     var targets: [SendTarget]
 
     /// 结果按项目分组，组按首次出现的顺序（即最相关的在前）。
-    struct Group: Identifiable, Sendable {
+    struct Group: Identifiable, Sendable, Equatable {
         var project: Project?
         var cards: [CardEntry]
         var id: UUID? { project?.id }

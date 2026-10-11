@@ -98,7 +98,7 @@ struct PiTranscriptTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await store.requestTranscript(of: try await record("old"))
-        for try await current in store.observe([.deliveryRequests], { try $0.deliveryRequest(request.id) }) {
+        for try await current in store.observe({ try $0.deliveryRequest(request.id) }) {
             if current?.status == .known(.succeeded) || current?.status == .known(.failed) {
                 #expect(current?.status == .known(.succeeded))
                 break
@@ -143,7 +143,7 @@ struct PiTranscriptTests {
         let indexer = PiHistoryIndexer(root: rig.piPaths.sessionsDirectory) { _ in nil }
         let consuming = Task { await services.consumePiHistory(indexer.events()) }
         defer { consuming.cancel() }
-        for try await count in store.observe([.piMessages], { try $0.piMessages(of: "s1").count }) where count == 4 { break }
+        for try await count in store.observe({ try $0.piMessages(of: "s1").count }) where count == 4 { break }
 
         let handle = try FileHandle(forWritingTo: file)
         try handle.seekToEnd()
@@ -153,9 +153,9 @@ struct PiTranscriptTests {
 
         let deadline = Task { try await Task.sleep(for: .seconds(1)) }
         let watch = Task { @MainActor in
-            for try await state in store.observe([.piMessages, .piSessionStates], {
-                (try $0.piMessages(of: "s1").last?.text, try $0.allPiSessionStates().first?.pendingPrompt)
-            }) where state.0 == "第三问" && state.1 == "第三问" { return true }
+            for try await readable in store.observe({
+                try $0.piMessages(of: "s1").last?.text == "第三问" && $0.allPiSessionStates().first?.pendingPrompt == "第三问"
+            }) where readable { return true }
             return false
         }
         Task { try? await deadline.value; watch.cancel() }
@@ -197,7 +197,7 @@ struct PiTranscriptTests {
         let pruning = Task { await services.historyStore.keepPruned(timing: timing) }
         defer { pruning.cancel() }
 
-        for try await count in store.observe([.piMessages], { try $0.piMessages(of: "old").count }) where count == 0 { break }
+        for try await count in store.observe({ try $0.piMessages(of: "old").count }) where count == 0 { break }
     }
 
     /// 写不写对话只看读文件时的判定（索引器按文件修改时间）：最近改过的文件即使里面的时间都旧也写全部消息；

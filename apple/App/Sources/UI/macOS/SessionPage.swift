@@ -267,7 +267,7 @@ extension Workspace {
         let token = UUID().uuidString
         let request = try await services.launch(PiLaunch(project: project, prompt: prompt, token: token), title: title, on: services.hostID, card: card)
         var reported = false
-        for try await progress in services.store.observe([.piSessionStates, .deliveryRequests], {
+        for try await progress in services.store.observe({
             try LaunchProgress.read(request: request.id, token: token, from: $0)
         }) {
             if let claimed = progress.claimed { return claimed.sessionID }

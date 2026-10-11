@@ -190,7 +190,7 @@ import Testing
 
   @Test func projectDirectoryChangesWakeObservers() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
-    var values = store.observe([.projectDirectories]) { try $0.projectDirectories() }.makeAsyncIterator()
+    var values = store.observe { try $0.projectDirectories() }.makeAsyncIterator()
     #expect(try await values.next() == [:])
     try await store.setDirectory("/work/a", for: p.id)
     #expect(try await values.next() == [p.id: "/work/a"])

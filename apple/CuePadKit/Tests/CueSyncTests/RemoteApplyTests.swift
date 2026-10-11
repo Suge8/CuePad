@@ -43,7 +43,7 @@ import Testing
 
   @Test(.timeLimit(.minutes(1)))
   func remoteRecordsAreInsertedInOneTransactionAndWakeObservers() async throws {
-    var values = store.observe([.projects, .cards]) { try $0.cards(in: nil).map(\.body) }.makeAsyncIterator()
+    var values = store.observe { try $0.cards(in: nil).map(\.body) }.makeAsyncIterator()
     #expect(try await values.next() == [])
 
     let project = remoteRecord(.projects, projectFields(name: "Remote", modifiedAt: 5_000))
