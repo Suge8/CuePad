@@ -29,7 +29,7 @@ extension TaskPicker {
                 ToolbarItem(placement: .cancellationAction) { Button("关闭", systemImage: "xmark", role: .cancel) { close() } }
             }
             // 列表滚到屏幕下沿时在主屏指示条那一段淡出，不被圆角硬裁（同任务浮窗）
-            .fadesUnderBars(bottom: true)
+            .fadesUnderBars()
         }
         // 一开就满高，同任务浮窗：不满高的系统浮窗是悬空的，下沿圆角会切掉最后一行、露出背后的纸页
         .presentationDetents([.large])
