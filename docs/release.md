@@ -24,7 +24,7 @@
 
 ## 自动更新（macOS）
 
-Sparkle 2（EdDSA 校验、增量更新），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉源码。更新源 `https://cue-pad.com/appcast.xml` 与公钥在 `App/Config/CuePad-macOS-Info.plist`；隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
+Sparkle 2（EdDSA 校验、增量更新），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉源码。更新源 `https://cue-pad.com/appcast.xml` 与公钥在 `App/Config/CuePad-macOS-Info.plist`；隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
 
 EdDSA 私钥在专用钥匙串（`cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。发布时：
 - `release mac` 用时间戳作构建号（Sparkle 按 `CFBundleVersion` 比较新旧，每次发布必须递增）。

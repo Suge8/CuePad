@@ -93,14 +93,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// 模态浮层（⌘K 自己就是）开着时只把 ⌘ 组合键交给主菜单（`PanelHost`）。
     @objc func toggleSearch(_ sender: Any?) { workspace?.searching.toggle() }
     @objc func toggleTasks(_ sender: Any?) { workspace?.showsTasks.toggle() }
-    @objc func toggleSidebar(_ sender: Any?) { workspace?.pages.toggleSidebar() }
+    /// 不叫 `toggleSidebar(_:)`：AppKit 的分栏控制器自己响应那个动作，在响应链上先接走，带着分栏动画开合。
+    @objc func toggleCueSidebar(_ sender: Any?) { workspace?.pages.toggleSidebar() }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
         case #selector(checkForUpdates(_:)): services?.updates.canCheckForUpdates ?? false
         // 资料库读不出来时：搜索结果能打开卡片、任务面板能增改任务，都是写入入口
         case #selector(toggleSearch(_:)), #selector(toggleTasks(_:)): workspace?.isLibraryReady == true && NSApp.mainWindow === mainWindow
-        case #selector(toggleSidebar(_:)): NSApp.mainWindow === mainWindow
+        case #selector(toggleCueSidebar(_:)): NSApp.mainWindow === mainWindow
         default: true
         }
     }

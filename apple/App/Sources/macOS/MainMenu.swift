@@ -34,7 +34,7 @@ enum MainMenu {
             .item("搜索", #selector(AppDelegate.toggleSearch(_:)), "k"),
             .item("任务", #selector(AppDelegate.toggleTasks(_:)), "T"),
             // macOS 标准的显示/隐藏侧栏；不用 ⌘\：常见的 1Password 把它占作全局快捷键，按键到不了 App
-            .item("侧栏", #selector(AppDelegate.toggleSidebar(_:)), "s", [.control, .command]),
+            .item("侧栏", #selector(AppDelegate.toggleCueSidebar(_:)), "s", [.control, .command]),
         ]))
         main.addItem(replyMenu())
         let window = submenu(title: "窗口", items: [

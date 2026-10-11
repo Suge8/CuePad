@@ -81,7 +81,7 @@ private struct PreviewPage: View {
                 default: PreviewWeb(file: file)
                 }
             } else {
-                ContentUnavailableView("读不了这个文件", systemImage: "exclamationmark.triangle").frame(maxHeight: .infinity)
+                EmptyState(mascot: .error, title: "读不了这个文件").padding(24).frame(maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

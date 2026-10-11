@@ -4,9 +4,9 @@ import CueStore
 import Darwin
 import QuartzCore
 
-/// `-CuePadBench interact`：单次交互那一下的主线程耗时，逐项与预算（docs/development.md「交互预算」）比较，
+/// `-CuePadBench interact`：单次交互那一下的主线程耗时，逐项与预算（docs/verify.md「交互预算」）比较，
 /// 每项结果作为一行 `INTERACT {json}` 打到标准输出，量完退出。配 `-CuePadDemo YES`（演示库）或 `-CuePadSeed perf`（大库）。
-/// 动作就是点击、快捷键最终调用的工作区方法（`show`、`openCard`、`toggle`、`toggleSidebar`），不经事件投递（那一段只有 1～5ms）。
+/// 动作就是点击、快捷键最终调用的工作区方法（`show`、`openCard`、`toggle`；侧栏发主菜单的动作），不经事件投递（那一段只有 1～5ms）。
 /// - **点击回合**：动作发出到画面第一次变（含这次变化的第一帧提交）为止，主线程的全部 CPU 毫秒，跨多圈 run loop 求和：挪到下一帧的活照样算进去，
 ///   直到画面第一次变（画面的变化看窗口图层树里看得见的层，见 `TurnLog`）；CPU 时间不随机器忙闲变，墙钟会。
 /// - **合计、最重一圈、指令数**：动作后 800ms 里主线程 CPU 的总数与最重的一圈（点击回合小而合计大，是活被挪到了后面的帧里，不是没了）；进程执行的指令数（百万）不随机器忙闲变，前后对比以它为准。两端同一份探针与键名（`Probes.swift`）。
@@ -17,7 +17,7 @@ enum InteractionBench {
     /// 依据：144Hz 一帧 6.9ms；对点击的回应在两帧（14ms）内人感觉是"跟手"，要建内容的在四帧（28ms）内不觉得顿；掉帧最多两次。
     /// 回访页面、收起、关闭只是换可见性，对点击要跟手；首访、打开要建视图，给四帧。
     /// 会话页单独给 90ms（人对 100ms 内的回应感知为即时）：它的第一帧必须带标题与最新的对话，晚一帧出内容的空白闪动比慢一点更差，
-    /// 而页面壳加最新对话的构建本身就在 45～70ms（工具栏与回复框等次要部分已挪到后面的帧，见 docs「页面与首次使用」）。
+    /// 而页面壳加最新对话的构建本身就在 45～70ms（工具栏与回复框等次要部分已挪到后面的帧，见 docs/development.md「页面与首次使用（Mac）」）。
     private static let budgets: [String: (clickMs: Double, hitches: Int)] = [
         "页面回访": (14, 1),
         "页面首访": (28, 2),
@@ -84,12 +84,12 @@ enum InteractionBench {
             await step("⌘K 面板开") { workspace.searching = true }
             await step("⌘K 面板关") { workspace.searching = false }
         }
-        // 侧栏开合在卡最多的项目页上量：整页内容要跟着详情区的宽度重排
+        // 侧栏开合在卡最多的项目页上量：整页内容要跟着详情区的宽度重排。走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
         if let big = workspace.catalog?.cardCounts.filter({ $0.key != nil }).max(by: { $0.value < $1.value })?.key {
             await step("页面回访") { workspace.show(.project(big)) }
             for _ in 0..<2 {
-                await step("侧栏收起") { workspace.pages.toggleSidebar() }
-                await step("侧栏展开") { workspace.pages.toggleSidebar() }
+                await step("侧栏收起") { NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil) }
+                await step("侧栏展开") { NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil) }
             }
         }
         NSApp.terminate(nil)

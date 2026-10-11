@@ -149,14 +149,13 @@ private struct PageStack: View {
         let current = workspace.page
         let pages = workspace.mountedPages
         let leaving = workspace.pages.leaving
-        let moving = workspace.pages.sidebarMoving
         PageStackLayout(active: current) {
             ForEach(pages, id: \.self) { page in
                 let active = page == current
                 content(page)
                     .layoutValue(key: PageKey.self, value: page)
                     .opacity(active ? 1 : 0)
-                    .allowsHitTesting(active && !moving)
+                    .allowsHitTesting(active)
                     .accessibilityHidden(!active)
                     .environment(\.pageActive, active || page == leaving)
                     .environment(\.pagePrefetch, !active && workspace.pages.isPremounted(page))

@@ -8,11 +8,6 @@ import SwiftUI
 final class MacPages {
     var sidebar: NavigationSplitViewVisibility = .all
 
-    /// 侧栏开合的动画里（约 0.2 秒）。页面此刻不接指针（`PageStack`）：分栏每帧挪动详情区，AppKit 每帧重算整窗的鼠标跟踪区、重设指针，
-    /// 页面里每个悬停区都要重算（大项目页开一次侧栏多约 120ms 主线程、掉帧 5～8 次，页面不接指针后只剩约 45ms）；这几百毫秒里页面本来也不该响应指针。
-    /// 编辑页开合只改透明度、不挪视图，没有这笔开销。
-    private(set) var sidebarMoving = false
-
     /// 内容区挂着的页（`PageStack`）：去过的页留着，回访不再重建；至多 `keptPages` 个，满了换掉最久没看的。会话页不留（带着输入焦点与实时对话，挂着不看会抢键盘）。
     private(set) var kept: [Route] = []
 
@@ -23,18 +18,11 @@ final class MacPages {
     @ObservationIgnored private var lastSeen: [Route: Int] = [:]
     @ObservationIgnored private var visits = 0
     @ObservationIgnored private var trimTask: Task<Void, Never>?
-    @ObservationIgnored private var sidebarTask: Task<Void, Never>?
     static let keptPages = 4
 
+    /// 侧栏开合一步到位：只改可见性，不包动画（分栏动画约 0.3 秒里每帧整窗重排、重算鼠标跟踪区，掉帧十几次）。
     func toggleSidebar() {
         sidebar = sidebar == .detailOnly ? .all : .detailOnly
-        // AppKit 的分栏动画约 0.2 秒
-        sidebarMoving = true
-        sidebarTask?.cancel()
-        sidebarTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
-            if !Task.isCancelled { self?.sidebarMoving = false }
-        }
     }
 
     /// 从 `left` 切到 `page`。
