@@ -18,9 +18,9 @@ struct SyncPollerTests {
     struct Iterator: AsyncIteratorProtocol {
       var base: AsyncStream<SyncPoller.Cadence?>.Iterator
       let ask: AsyncStream<Void>.Continuation
-      mutating func next() async -> SyncPoller.Cadence?? {
+      mutating func next(isolation actor: isolated (any Actor)?) async -> SyncPoller.Cadence?? {
         ask.yield()
-        return await base.next()
+        return await base.next(isolation: actor)
       }
     }
 

@@ -147,12 +147,12 @@ public struct PiIntegration: Sendable {
         paths.skillsDirectory.appending(path: PiSkillBundle.directoryName, directoryHint: .isDirectory).appending(path: PiSkillBundle.fileName)
     }
 
-    public func status() async -> PiIntegrationStatus {
+    @concurrent public func status() async -> PiIntegrationStatus {
         PiIntegrationStatus(pi: await detectPi(), file: currentFile())
     }
 
     /// 写入（新装或升级）。Pi 不存在/过旧、或同名文件不是我们写的时拒绝，且什么都不写。
-    public func install() async throws {
+    @concurrent public func install() async throws {
         switch await detectPi() {
         case .notFound: throw PiInstallError.piNotFound
         case .found(_, let version) where version < .minimumSupported: throw PiInstallError.piTooOld(found: version)

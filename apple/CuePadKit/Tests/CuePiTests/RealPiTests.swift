@@ -163,7 +163,7 @@ struct RealPiTests {
 
             try pi.send(["type": "set_session_name", "name": "登录修复"])  // 与 /name 同一路径
             try await eventually("改名后显示名跟上") { bridge.sessions.first?.displayName == "登录修复" }
-            #expect(log.changes.contains { if case .infoChanged(let renamed) = $0 { renamed.displayName == "登录修复" } else { false } })
+            try await eventually("日志记下了") { log.changes.contains { if case .infoChanged(let renamed) = $0 { renamed.displayName == "登录修复" } else { false } } }
         }
     }
 
@@ -183,7 +183,7 @@ struct RealPiTests {
                 history.updates.contains { $0.history.displayName == "记进历史" }
             }
             try await eventually("会话结束") { bridge.sessions.isEmpty }
-            #expect(ended.ended.first?.0.displayName == "记进历史")
+            try await eventually("日志记下了") { ended.ended.first?.0.displayName == "记进历史" }
         }
     }
 
@@ -242,7 +242,7 @@ struct RealPiTests {
             let log = ChangeLog(bridge)
             try pi.prompt("[[write:\(pi.cwd.path)/notes/hello.txt]]")
             try await eventually("一轮结束") { log.states.last == .settled }
-            #expect(log.details.contains("write · hello.txt"))
+            try await eventually("日志记下了") { log.details.contains("write · hello.txt") }
         }
     }
 
@@ -398,7 +398,7 @@ struct RealPiTests {
             let socket = pi.paths.socketDirectory.appending(path: "\(s.id).sock")
             pi.kill(SIGKILL)
             try await eventually("会话结束") { !log.ended.isEmpty }
-            #expect(log.ended.first?.1 == .disconnected)
+            try await eventually("日志记下了") { log.ended.first?.1 == .disconnected }
             try await eventually("残留 socket 被删") { fileGone(socket) }
         }
     }
@@ -408,7 +408,7 @@ struct RealPiTests {
             let log = ChangeLog(bridge)
             pi.kill(SIGTERM)
             try await eventually("会话结束") { !log.ended.isEmpty }
-            #expect(log.ended.first?.1 == .closed(reason: "quit"))
+            try await eventually("日志记下了") { log.ended.first?.1 == .closed(reason: "quit") }
             try await eventually("socket 被删") { fileGone(pi.paths.socketDirectory.appending(path: "\(s.id).sock")) }
         }
     }

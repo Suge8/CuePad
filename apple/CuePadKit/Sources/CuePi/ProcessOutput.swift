@@ -3,7 +3,7 @@ import Foundation
 
 /// 启动 `process` 并取它的标准输出与退出码（标准输出由这里接管；标准输入、标准错误由调用方设）。管道在进程运行期间就读：
 /// 输出超过管道缓冲（64 KB）时子进程写不进去会卡住，等它退出再读就永远等不到。无法启动、或超过 `timeout`（让它终止）返回 nil。
-public func runCapturing(_ process: Process, timeout: Duration? = nil) async -> (status: Int32, output: String)? {
+@concurrent public func runCapturing(_ process: Process, timeout: Duration? = nil) async -> (status: Int32, output: String)? {
     enum Event { case output(Data), exited(Int32), timedOut, idle }
     let out = Pipe()
     process.standardOutput = out

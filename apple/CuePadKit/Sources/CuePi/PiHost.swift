@@ -107,7 +107,7 @@ public final class PiHost {
 
     /// 关掉所有托管进程（App 退出时）：返回的等待在所有进程退出后结束，不需要主线程。
     @discardableResult
-    public func closeAll() -> @Sendable () async -> Void {
+    public func closeAll() -> @concurrent @Sendable () async -> Void {
         watcher?.cancel()
         watcher = nil
         let gone = processes.values.map(\.gone)

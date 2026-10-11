@@ -61,7 +61,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 预览不是会话文件里的内容：对话仍只来自会话文件，预览卡按创建时间插进对话（`PiChat.entries`）。
 - HTML 只读渲染、不联网也读不到别的文件，所以必须是单个文件；`addPreview` 列出页面引用的外部地址，让 Agent 改成单文件再发。否决的方案：在 Mac 上替它内联——样式里的 url()、字体、模块脚本都要处理，漏一类就是静默缺图。
 
-**并发隔离。** App 各目标的默认隔离是主线程（`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`），类型、协议与函数上不再写 `@MainActor`；要离开主线程才写 `nonisolated`。函数类型（回调参数、`typealias`）不受默认隔离覆盖，需要主线程时照写 `@MainActor`。CuePadKit 没有默认隔离，里面的界面类型照写。
+**并发隔离。** App 各目标的默认隔离是主线程（`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`），类型、协议与函数上不再写 `@MainActor`；要离开主线程才写 `nonisolated`。函数类型（回调参数、`typealias`）不受默认隔离覆盖，需要主线程时照写 `@MainActor`。CuePadKit 没有默认隔离，里面的界面类型照写；它与 App 一样开了 Approachable Concurrency（`Package.swift` 末尾统一设给每个 target），所以 nonisolated 的 async 函数和 async 闭包类型跑在调用方的隔离上，不会自己跳到后台。要离开调用方（启动子进程、同步读写文件、长循环）的，函数或返回的闭包类型上写 `@concurrent`。
 
 **冲突。** iCloud 按记录同步；同一条灵感或任务离线并发编辑时保留两个版本交给用户选择，不静默覆盖。两台设备离线并发挪动可能合成环、超过三级、挂到灵感下或下级与上级不同项目：应用远端变更后按确定规则收敛（`CardLinks.repairs`），各设备算出同一结果并推送。
 

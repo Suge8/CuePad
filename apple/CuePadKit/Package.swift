@@ -36,3 +36,13 @@ let package = Package(
         .testTarget(name: "CuePiTests", dependencies: ["CuePi", "CueStore"], exclude: ["Fixtures"]),
     ]
 )
+
+// Approachable Concurrency（与 App 工程的 SWIFT_APPROACHABLE_CONCURRENCY 同一组语义；其余成员在 Swift 6 模式下已默认开启）：
+// nonisolated 的 async 函数跑在调用方的隔离上，要离开调用方的写 @concurrent。
+// 库不设默认 MainActor：API 保持 nonisolated，由调用方决定在哪里跑。
+for target in package.targets {
+    target.swiftSettings = (target.swiftSettings ?? []) + [
+        .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+        .enableUpcomingFeature("InferIsolatedConformances"),
+    ]
+}
