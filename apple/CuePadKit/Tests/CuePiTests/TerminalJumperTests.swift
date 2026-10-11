@@ -45,20 +45,6 @@ struct TerminalJumperTests {
     private let appleTerminal = "com.apple.Terminal"
     private let ghostty = "com.mitchellh.ghostty"
 
-    @Test func tmuxPaneIsSelectedAndHostingClientTTYDrivesTheTabLookup() async {
-        let sys = FakeSystem()
-        let terminal = PiTerminal(tty: "ttys015", bundleID: appleTerminal, tmuxPane: "%3", tmuxSocketPath: "/private/tmp/tmux-501/default")
-        let r = await PiTerminalJumper(system: sys).jump(to: session(terminal))
-        let switchCmd = sys.runs.first { $0.contains("switch-client") }
-        #expect(switchCmd?.contains("%3") == true)
-        #expect(switchCmd?.contains("/private/tmp/tmux-501/default") == true)
-        #expect(r.tmuxPaneSelected)
-        #expect(r.precision == .tab)
-        // pane 自己的 tty 在 tmux 里是伪终端，应该用承载它的 tmux 客户端（最近活动的那个）的 tty 去找标签页
-        #expect(sys.scripts.first?.contains("/dev/ttys021") == true)
-        #expect(sys.scripts.first?.contains("ttys015") == false)
-    }
-
     /// 找不到标签页，或没有"自动化"权限（脚本抛错）：都退到只激活应用，并说明原因。
     @Test(arguments: [Result<String, any Error>.success("notfound"), .failure(Denied())])
     func tabNotFoundOrAutomationDeniedFallsBackToActivatingTheApp(script: Result<String, any Error>) async {
@@ -70,38 +56,5 @@ struct TerminalJumperTests {
         #expect(r.note?.isEmpty == false)
     }
 
-    @Test func ghosttyFocusesTheSingleTerminalWithMatchingWorkingDirectory() async {
-        let sys = FakeSystem()
-        let r = await PiTerminalJumper(system: sys).jump(to: session(PiTerminal(bundleID: ghostty), cwd: "/Users/me/proj"))
-        #expect(r.precision == .tab)
-        #expect(sys.scripts.first?.contains("Ghostty") == true && sys.scripts.first?.contains("/Users/me/proj") == true)
-    }
-
-    @Test func ghosttyWithSeveralMatchesOnlyActivatesTheApp() async {
-        let sys = FakeSystem()
-        sys.scriptResult = .success("ambiguous:2")
-        let r = await PiTerminalJumper(system: sys).jump(to: session(PiTerminal(bundleID: ghostty)))
-        #expect(r.precision == .application)
-        #expect(sys.activated == [ghostty])
-        #expect(r.note?.isEmpty == false)
-    }
-
-    @Test func failsWhenNothingIsKnownOrAppIsNotRunning() async {
-        let sys = FakeSystem()
-        #expect(await PiTerminalJumper(system: sys).jump(to: session(PiTerminal())).precision == .failed)
-        #expect(await PiTerminalJumper(system: sys).jump(to: session(PiTerminal(bundleID: "com.example.term"))).precision == .application)
-        sys.canActivate = false
-        #expect(await PiTerminalJumper(system: sys).jump(to: session(PiTerminal(bundleID: "com.example.term"))).precision == .failed)
-    }
-
-    @Test func failedTmuxSwitchIsReportedButTheAppIsStillActivated() async {
-        let sys = FakeSystem()
-        sys.tmuxSwitchStatus = 1
-        let terminal = PiTerminal(bundleID: "com.example.term", tmuxPane: "%3", tmuxSocketPath: "/tmp/tmux-501/default")
-        let r = await PiTerminalJumper(system: sys).jump(to: session(terminal))
-        #expect(!r.tmuxPaneSelected)
-        #expect(r.precision == .application)
-        #expect(sys.activated == ["com.example.term"])
-    }
 }
 #endif

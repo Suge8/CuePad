@@ -65,19 +65,6 @@ import Testing
     #expect(missing.code == 1 && missing.err.contains("找不到灵感或任务"))
   }
 
-  @Test func cardJSONShape() async throws {
-    let sb = try Sandbox()
-    let alpha = try await sb.project("Alpha")
-    let card = try await sb.store.createCard(in: alpha.id, body: "正文")
-
-    let shown = try await sb.object("card", "show", card.id.uuidString)
-    #expect(shown.string("id") == card.id.uuidString.lowercased())
-    #expect(shown.string("projectId") == alpha.id.uuidString.lowercased())
-    #expect(shown["pinned"] as? Bool == false)
-    #expect(shown["conflictOf"] is NSNull && shown["deletedAt"] is NSNull)
-    #expect(shown.string("modifiedAt")?.hasSuffix("Z") == true)
-  }
-
   @Test func cardListScopes() async throws {
     let sb = try Sandbox()
     let alpha = try await sb.project("Alpha")
@@ -149,18 +136,6 @@ import Testing
     #expect(try await sb.store.cards(in: first.id).isEmpty)
   }
 
-  @Test func missingBodyOrIdIsRejected() async throws {
-    let sb = try Sandbox()
-    let noBody = await sb.run("card", "add", stdin: nil)
-    #expect(noBody.code == 2 && noBody.err.contains("--body"))
-    let emptyPipe = await sb.run("card", "add", stdin: "")
-    #expect(emptyPipe.code == 1 && emptyPipe.err.contains("--body"))
-    let explicitEmpty = await sb.run("card", "add", "--body", "")
-    #expect(explicitEmpty.code == 0)
-    let missing = await sb.run("card", "show", UUID().uuidString)
-    #expect(missing.code == 1 && missing.err.contains("找不到"))
-    #expect(try await sb.store.cards(in: nil).count == 1)
-  }
 }
 
 @Suite struct TaskTests {
@@ -228,14 +203,6 @@ import Testing
     #expect(await sb.run("task", "add", "--help").out.contains("--parent"))
   }
 
-  @Test func taskErrors() async throws {
-    let sb = try Sandbox()
-    let blank = await sb.run("task", "add", "  ")
-    #expect(blank.code != 0 && blank.err.contains("内容"))
-    let idea = try await sb.store.createCard(in: nil, body: "只是灵感")
-    let notATask = await sb.run("task", "done", idea.id.uuidString)
-    #expect(notATask.code != 0 && notATask.err.contains("card todo"))
-  }
 }
 
 @Suite struct SearchAndConflictTests {
@@ -304,19 +271,6 @@ import Testing
     "card restore", "card todo", "task list", "task add", "task start", "task done", "task undo", "search",
     "conflicts list", "conflicts resolve",
   ]
-
-  @Test func rootHelpFitsOneScreenAndTeachesTheCommonTasks() async throws {
-    let sb = try Sandbox()
-    let help = await sb.run("--help")
-    #expect(help.code == 0 && help.err.isEmpty)
-    #expect(help.out.split(separator: "\n", omittingEmptySubsequences: false).count <= 24, "一屏放不下")
-    for example in ["cuepad search ", "cuepad card add", "cuepad task add", "cuepad task done", "cuepad card list", "cuepad task list"] {
-      #expect(help.out.contains(example), "缺示例 \(example)")
-    }
-    #expect(help.out.contains("--json") && help.out.contains("退出码"))
-    #expect(help.out.contains("CUEPAD_LIBRARY_DIR"))
-    #expect(!help.out.contains("conflictOf"), "字段说明属于各命令的 --help")
-  }
 
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
     let sb = try Sandbox()

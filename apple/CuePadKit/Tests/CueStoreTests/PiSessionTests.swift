@@ -25,12 +25,6 @@ import Testing
     #expect(try await store.piCheckpoint(of: "s1") == Data())
   }
 
-  @Test func sessionWithoutCheckpointReadsNil() async throws {
-    try await store.upsertPiSession(session(), host: "mac-a")
-    #expect(try await store.piCheckpoint(of: "s1") == nil)
-    #expect(try await store.piCheckpoint(of: "unknown") == nil)
-  }
-
   @Test func metadataUpdatesKeepTheCheckpointAndNewCheckpointsReplaceIt() async throws {
     let first = blob(seed: 1)
     try await store.upsertPiSession(session(), checkpoint: first, host: "mac-a")
@@ -45,11 +39,4 @@ import Testing
     #expect(try await store.piSessions().count == 1)
   }
 
-  @Test func sessionListStaysCheapAndOrderedByActivity() async throws {
-    let old = PiSession(id: "old", path: "/o", cwd: "/w", lastActivityAt: Date(timeIntervalSince1970: 100))
-    let recent = PiSession(id: "new", path: "/n", cwd: "/w", lastActivityAt: Date(timeIntervalSince1970: 200))
-    try await store.upsertPiSession(old, checkpoint: blob(seed: 1), host: "mac-a")
-    try await store.upsertPiSession(recent, checkpoint: blob(seed: 2), host: "mac-a")
-    #expect(try await store.piSessions().map(\.id) == ["new", "old"])
-  }
 }

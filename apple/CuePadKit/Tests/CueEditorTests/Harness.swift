@@ -69,11 +69,6 @@ final class EditorHarness {
         return true
     }
 
-    func subviews<T: NSView>(of type: T.Type) -> [T] {
-        func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
-        return walk(textView).compactMap { $0 as? T }
-    }
-
     /// 只含一张图片的行的布局矩形（文本视图坐标）。
     func imageLineFrames() -> [CGRect] {
         var frames: [CGRect] = []
@@ -92,27 +87,6 @@ final class EditorHarness {
         let rep = textView.bitmapImageRepForCachingDisplay(in: rect)!
         textView.cacheDisplay(in: rect, to: rep)
         return rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh / 2)?.usingColorSpace(.sRGB)
-    }
-
-    /// 把文本视图的一块区域真实绘制出来，看里面有没有接近 `color` 的像素。
-    func rendered(_ rect: CGRect, contains color: NSColor) -> Bool {
-        let rep = textView.bitmapImageRepForCachingDisplay(in: rect)!
-        textView.cacheDisplay(in: rect, to: rep)
-        let target = color.usingColorSpace(.sRGB)!
-        return (0..<rep.pixelsHigh).contains { y in
-            (0..<rep.pixelsWide).contains { x in
-                guard let pixel = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { return false }
-                // 色彩管理会让数值略偏：三个分量加起来离目标不到 0.6，而白底离纯色线有 2
-                return abs(pixel.redComponent - target.redComponent) + abs(pixel.greenComponent - target.greenComponent)
-                    + abs(pixel.blueComponent - target.blueComponent) < 0.6
-            }
-        }
-    }
-
-    func keyEvent(_ characters: String, keyCode: UInt16, modifiers: NSEvent.ModifierFlags = []) -> NSEvent {
-        NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0, windowNumber: window.windowNumber,
-            context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode)!
     }
 
     func privatePasteboard() -> NSPasteboard {

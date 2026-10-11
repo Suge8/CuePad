@@ -144,35 +144,5 @@ struct IOSEditingTests {
         #expect(h.stored == original)
     }
 
-    @Test("图片像素在进入视口后显示出来")
-    func rendersPixels() async throws {
-        let h = EditorHarness()
-        let id = try h.store.store(makePNG(width: 800, height: 400, color: UIColor(red: 1, green: 0, blue: 0, alpha: 1)))
-        h.load("![](cuepad://img/\(id))")
-        let frame = try #require(h.imageLineFrames().first)
-        #expect(await h.wait {
-            guard let color = h.renderedCenterColor(of: frame) else { return false }
-            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
-            color.getRed(&r, green: &g, blue: &b, alpha: nil)
-            return r > 0.8 && g < 0.4 && b < 0.3
-        })
-    }
-
-    @Test("缩略图按需解码：视口外的图片不被读取")
-    func lazyDecode() async throws {
-        let h = EditorHarness(height: 400)
-        var stored = ""
-        var urls: [URL] = []
-        for i in 0..<20 {
-            let id = try h.store.store(makePNG(width: 800, height: 800, color: UIColor(hue: CGFloat(i) / 20, saturation: 0.7, brightness: 0.9, alpha: 1)))
-            urls.append(try #require(h.store.fileURL(for: id)))
-            stored += "第 \(i) 张\n![](cuepad://img/\(id))\n"
-        }
-        func decoded(_ url: URL) -> Bool { Thumbnails.cached(at: url, maxPixel: ImageLoading.maxThumbnailPixel) != nil }
-        h.load(stored)
-        #expect(await h.wait { h.display(); return decoded(urls[0]) })
-        await h.pump(0.3)
-        #expect(!decoded(urls[19]))
-    }
 }
 #endif

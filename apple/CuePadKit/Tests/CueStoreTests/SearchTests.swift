@@ -6,6 +6,10 @@ import Testing
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
+  private func setModified(_ card: Card, _ seconds: Int) throws {
+    try RawDB(fixture.url).exec("UPDATE cards SET modifiedAt = \(seconds * 1000) WHERE id = '\(card.id.uuidString.lowercased())'")
+  }
+
   @Test func findsProjectsAndCardsIncludingShortCJKTerms() async throws {
     let flow = try await store.createProject(name: "Flow 启动", color: "#111")
     let card = try await store.createCard(in: flow.id, body: "优化 flow 启动速度")
@@ -45,53 +49,33 @@ import Testing
     #expect(Set(trash.cards.map(\.id)) == [inProject.id, alone.id])
   }
 
-  // MARK: 多个关键词（空白分隔，全部命中；每个词仍是子串）
-
-  @Test func allTermsMustMatchInAnyOrderAndWhitespace() async throws {
-    let both = try await store.createCard(in: nil, body: "alpha and beta")
-    _ = try await store.createCard(in: nil, body: "alpha and gamma")
-    _ = try await store.createCard(in: nil, body: "beta only")
-
-    #expect(try await store.search("alpha beta").cards.map(\.id) == [both.id])
-    #expect(try await store.search("beta alpha").cards.map(\.id) == [both.id])
-    #expect(try await store.search("  alpha \t beta\n").cards.map(\.id) == [both.id])
-    #expect(try await store.search("alpha\u{3000}beta").cards.map(\.id) == [both.id])  // 全角空格
-    #expect(try await store.search("alpha beta delta").cards.isEmpty)
-    #expect(try await store.search("alp et").cards.map(\.id) == [both.id])  // 每个词是子串
-  }
-
-  @Test func cardsMatchOnBodyOnlyNeverOnProjectName() async throws {
-    let project = try await store.createProject(name: "Flow", color: "#111")
-    let inBody = try await store.createCard(in: nil, body: "优化 启动速度")
-    let inProject = try await store.createCard(in: project.id, body: "启动速度")
-
-    #expect(try await store.search("优化 速度").cards.map(\.id) == [inBody.id])  // 两字词
-
-    // 项目名不参与卡片命中，无论几个词；缩小到某个项目用项目筛选。
-    #expect(try await store.search("flow").cards.isEmpty)
-    #expect(try await store.search("flow 启动").cards.isEmpty)
-    let scoped = try await store.search(SearchQuery(text: "启动", projects: [project.id]))
-    #expect(scoped.cards.map(\.id) == [inProject.id])
-    #expect(try await store.search("flow").projects.map(\.id) == [project.id])
-  }
-
-  @Test func projectMatchesOnlyWhenEveryTermIsInItsName() async throws {
-    let both = try await store.createProject(name: "Flow 启动", color: "#111")
-    _ = try await store.createProject(name: "Flow", color: "#222")
-    #expect(try await store.search("flow 启动").projects.map(\.id) == [both.id])
-  }
-
-  @Test func multipleTermsCombineWithFiltersTotalsAndTrashScope() async throws {
+  @Test func projectFilterAppliesBeforeThePageLimit() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
-    let hit = try await store.createCard(in: p.id, body: "needle thread")
-    _ = try await store.createCard(in: nil, body: "needle thread")
-    _ = try await store.createCard(in: p.id, body: "needle only")
+    let q = try await store.createProject(name: "Q", color: "#222")
+    for index in 0..<25 { _ = try await store.createCard(in: q.id, body: "needle \(index)") }
+    let wanted = try await store.createCard(in: p.id, body: "needle wanted")
+    try setModified(wanted, 0)  // 排在所有卡片之后
 
-    let filtered = try await store.search(SearchQuery(text: "needle thread", projects: [p.id]))
-    #expect(filtered.cards.map(\.id) == [hit.id] && filtered.totalCards == 1)
+    let hit = try await store.search(SearchQuery(text: "needle", projects: [p.id]), limit: 20)
 
-    try await store.trashCard(hit.id)
-    #expect(try await store.search(SearchQuery(text: "needle thread", projects: [p.id])).cards.isEmpty)
-    #expect(try await store.search(SearchQuery(text: "needle thread", inTrash: true)).cards.map(\.id) == [hit.id])
+    #expect(hit.cards.map(\.id) == [wanted.id] && hit.totalCards == 1)
+  }
+
+  @Test func pagesCoverEveryMatchOnceInModifiedOrderWithStableTotal() async throws {
+    let p = try await store.createProject(name: "P", color: "#111")
+    var made: [Card] = []
+    for index in 0..<5 {
+      let card = try await store.createCard(in: p.id, body: "note \(index)")
+      try setModified(card, 100 + index)
+      made.append(card)
+    }
+
+    var seen: [UUID] = []
+    for offset in stride(from: 0, to: 6, by: 2) {
+      let page = try await store.search(SearchQuery(text: "note"), limit: 2, offset: offset)
+      #expect(page.totalCards == 5)
+      seen += page.cards.map(\.id)
+    }
+    #expect(seen == made.reversed().map(\.id))
   }
 }

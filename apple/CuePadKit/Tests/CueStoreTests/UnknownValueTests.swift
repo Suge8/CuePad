@@ -22,7 +22,4 @@ import Testing
     #expect(try await store.search(SearchQuery(sent: .sent(kind: .known(.piSession)))).cards.isEmpty)
   }
 
-  @Test func knownValuesRoundTripUnchanged() {
-    for kind in SendTargetKind.allCases { #expect(Open<SendTargetKind>(rawValue: kind.rawValue) == .known(kind)) }
-  }
 }

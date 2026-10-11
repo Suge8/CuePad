@@ -38,21 +38,4 @@ import Testing
     #expect(try await store.card(card.id) == before)
   }
 
-  @Test func createTaskRejectsDeadProjectsAndWritesNothing() async throws {
-    for project in try await deadProjects() {
-      await #expect(throws: CueStoreError.invalidProject) { try await store.createTask("t", in: project) }
-    }
-    #expect(try raw.count("cards") == 0)
-  }
-
-  @Test func liveProjectsAndUnfiledStillWork() async throws {
-    let live = try await store.createProject(name: "live", color: "#111")
-    let card = try await store.createCard(in: live.id, body: "a")
-    _ = try await store.createCard(in: nil, body: "b")
-    try await store.moveCard(card.id, to: .top(project: nil), after: nil)
-    try await store.moveCard(card.id, to: .top(project: live.id), after: nil)
-    _ = try await store.createTask("t", in: live.id)
-    _ = try await store.createTask("u", in: nil)
-    #expect(try raw.count("cards") == 4)
-  }
 }

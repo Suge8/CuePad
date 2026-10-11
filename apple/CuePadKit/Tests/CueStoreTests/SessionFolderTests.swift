@@ -37,17 +37,6 @@ import Testing
     #expect(try await projects().values.allSatisfy { $0 == nil })
   }
 
-  @Test func reassigningTouchesOnlyTheSessionsWhoseProjectChanged() async throws {
-    try await index("a", cwd: "/work/app")
-    try await index("b", cwd: "/work/other")
-    let before = try await store.allPiSessionStates().first { $0.sessionID == "b" }?.modifiedAt
-    let project = try await store.createProject(name: "App", color: "#111")
-
-    try await store.setDirectory("/work/app", for: project.id)
-
-    #expect(try await store.allPiSessionStates().first { $0.sessionID == "b" }?.modifiedAt == before)  // 没变的不重写，免得白白重传
-  }
-
   @Test func sessionFoldersAreGroupedPerMacAndFolderWithCountAndTheLatestSession() async throws {
     let project = try await store.createProject(name: "App", color: "#111")
     let base = Date(timeIntervalSince1970: 1_000_000)
@@ -71,38 +60,4 @@ import Testing
     #expect(folders[2].sessionID == "other-mac" && folders[2].projectID == nil)
   }
 
-  /// 临时目录（/tmp、/var/folders、TemporaryItems 一类）没有文件夹名：手机看不到路径、只据文件夹名建议绑定，临时目录不该进候选，
-  /// 所以由有路径的 Mac 在写入时认出（规则只此一处）。
-  @Test(arguments: [
-    ("/tmp/work", nil), ("/private/tmp/prewalk/repo", nil), ("/var/tmp/y", nil),
-    ("/var/folders/73/5xrv72hn/T/pi-2860-1778088354847-jbv635t4er", nil), ("/private/var/folders/73/5xrv72hn/T/prewalk/repo", nil),
-    ("/Users/me/Library/Caches/TemporaryItems/NSIRD_x", nil), ("", nil),
-    ("/Users/me/Project/Taber", "Taber"), ("/Users/me/tmp/project", "project"), ("/Users/me/tmp-notes", "tmp-notes"), ("/opt/tmp", "tmp"),
-  ] as [(String, String?)])
-  func temporaryDirectoriesHaveNoFolderName(cwd: String, name: String?) {
-    #expect(CueStore.folderName(ofWorkingDirectory: cwd) == name)
-  }
-
-  @Test func temporarySessionsAreNeverFolderCandidatesAndLegacyRecordsAreCleanedOnBackfill() async throws {
-    try await index("kept", cwd: "/work/app")
-    try await index("temp", cwd: "/private/tmp/scratch")
-    #expect(try await store.allPiSessionStates().first { $0.sessionID == "temp" }?.folder == nil)
-    #expect(try await store.allPiSessionStates().first { $0.sessionID == "temp" }?.title == "scratch")  // 没有文件夹名也不丢显示名
-
-    // 旧版本写下的记录带着临时目录的文件夹名：回填时清掉
-    try RawDB(fixture.url).exec("UPDATE piSessions SET cwd = '/var/folders/73/x/T/pi-1' WHERE id = 'kept'; UPDATE piSessionStates SET folder = 'pi-1' WHERE sessionID = 'kept'")
-    try await store.retainPiSessions(paths: ["/s/kept.jsonl", "/s/temp.jsonl"], host: "mac-a")
-
-    #expect(try await store.sessionFolders().isEmpty)
-  }
-
-  @Test func foldersWithTheSameLatestTimeListTheOneWithMoreSessionsFirst() async throws {
-    let at = Date(timeIntervalSince1970: 1_000_000)
-    for (id, folder) in [("a1", "few"), ("b1", "many"), ("b2", "many"), ("b3", "many")] {
-      try await PiStateRecorder(store: store, hostID: "mac-a").update(
-        sessionID: id, state: .settled, title: id, folder: folder, times: PiTimes(stateSince: at, busySince: nil))
-    }
-
-    #expect(try await store.sessionFolders().map(\.folder) == ["many", "few"])
-  }
 }

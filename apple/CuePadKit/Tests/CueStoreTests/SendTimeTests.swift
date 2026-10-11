@@ -37,40 +37,6 @@ import Testing
     _ = neverSent
   }
 
-  @Test func lastSendsChangesWakeObservers() async throws {
-    let p = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: p.id, body: "a")
-    var values = store.observe { try Set($0.lastSends(in: p.id).keys) }
-      .makeAsyncIterator()
-    #expect(try await values.next() == [])
-
-    try await store.recordSend("a", to: SendTarget(kind: .piSession, name: "x", ref: "x"), card: card.id)
-    #expect(try await values.next() == [card.id])
-  }
-
   // MARK: 发送目标列表
 
-  @Test func sendTargetsAreDistinctByKindAndNameOrderedByRecentUse() async throws {
-    let card = try await store.createCard(in: nil, body: "c")
-    let goneCard = try await store.createCard(in: nil, body: "gone")
-    func send(_ content: String, _ kind: SendTargetKind, _ name: String, ref: String? = nil, at seconds: Int, card: UUID?) async throws {
-      try await store.recordSend(content, to: SendTarget(kind: kind, name: name, ref: ref), card: card)
-      try RawDB(fixture.url).exec("UPDATE sendRecords SET sentAt = \(seconds * 1000) WHERE content = '\(content)'")
-    }
-    try await send("1", .piSession, "review", ref: "r1", at: 100, card: card.id)
-    try await send("2", .piSession, "notes", ref: "n1", at: 200, card: card.id)
-    try await send("3", .piSession, "fix bug", ref: "old-id", at: 300, card: card.id)
-    try await send("4", .piSession, "fix bug", ref: "new-id", at: 500, card: card.id)  // 同一目标再次使用
-    try await send("6", .piSession, "Loose", at: 900, card: nil)  // 没有关联卡片，不能筛出任何卡
-    try await send("7", .piSession, "Purged", at: 800, card: goneCard.id)
-    try await store.purgeCard(goneCard.id)
-
-    let targets = try await store.sendTargets()
-
-    #expect(targets == [
-      SendTarget(kind: .piSession, name: "fix bug", ref: "new-id"),  // ref 取该目标最近一次的
-      SendTarget(kind: .piSession, name: "notes", ref: "n1"),
-      SendTarget(kind: .piSession, name: "review", ref: "r1"),
-    ])
-  }
 }

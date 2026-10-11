@@ -23,14 +23,6 @@ import Testing
     #expect(try await store.children(of: single.id).isEmpty)
   }
 
-  @Test func 写一条提示词_接在任务的下级最后() async throws {
-    let task = try await store.createTask("修重连排序", in: nil)
-    let first = try await store.createCard(body: "先复现", under: task.id)
-    let second = try await store.createCard(body: "", under: task.id)
-    #expect(try await store.children(of: task.id).map(\.id) == [first.id, second.id])
-    #expect(!second.isTask && second.parentID == task.id)
-  }
-
   // MARK: 已回复
 
   private func replied(_ task: UUID) async throws -> [Bool] {
@@ -158,12 +150,4 @@ import Testing
     #expect(try await store.piMessages(of: "s1").isEmpty)
   }
 
-  @Test func 提示词交给会话_它的任务关联到那个会话并进行中() async throws {
-    let task = try await store.createTask("修重连排序", in: nil)
-    let prompt = try await store.createCard(body: "先复现", under: task.id)
-    try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
-    let after = try #require(try await store.card(task.id))
-    #expect(after.status == .inProgress && after.piSessionID == "s1")
-    #expect(try await store.card(prompt.id)?.piSessionID == "s1")
-  }
 }

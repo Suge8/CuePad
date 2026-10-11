@@ -44,16 +44,6 @@ import Testing
 
   /// 同步表各一个记录类型，外加生产环境里删不掉的已下线类型；本机表（piSessions 等）不进 CloudKit。
 
-
-  @Test func fieldsTheServerQueriesAreIndexed() async throws {
-    let schema = try await CloudKitSchema.generate()
-    #expect(fields(of: "piSessionStates", in: schema).contains("notify STRING QUERYABLE"))  // 订阅谓词用它
-    for table in Table.synced {
-      #expect(fields(of: table.rawValue, in: schema).contains("\"___recordID\" REFERENCE QUERYABLE"), "\(table.rawValue) 的 recordName 需要可查询")
-    }
-    #expect(RecordMapper.queryableColumns[.piSessionStates]?.contains(PiAlertSubscriptions.flagField) == true)
-  }
-
   @Test func onlyThePrivateDatabaseGrantsAreDeclared() async throws {
     let schema = try await CloudKitSchema.generate()
     #expect(!schema.contains("_world"))

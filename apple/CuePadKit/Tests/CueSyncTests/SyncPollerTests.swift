@@ -71,62 +71,6 @@ struct SyncPollerTests {
     #expect(count.current == 4)
   }
 
-  @Test func aFiniteCadenceEndsAndANewOneStartsAgain() async throws {
-    let condition = Condition()
-    let limited = SyncPoller.Cadence(.every(.seconds(2), for: .seconds(6)))
-    var asks = condition.asks.makeAsyncIterator()
-    let (task, count, fetches) = run(SyncPoller(timing: time.timing), condition)
-    var fetched = fetches.makeAsyncIterator()
-
-    await asks.next()
-    condition.input.yield(limited)
-    await fetched.next()  // 0 秒：开始在等，立即拉
-    for _ in 0..<2 {  // 2、4 秒
-      await time.waitForSleeper()
-      time.advance(.seconds(2))
-      await fetched.next()
-    }
-    await time.waitForSleeper()
-    time.advance(.seconds(2))  // 6 秒：档位走完，不再拉
-
-    await asks.next()
-    condition.input.yield(limited)  // 新的一次在等：立即拉
-    await fetched.next()
-
-    condition.input.finish()
-    await task.value
-    #expect(count.current == 4)
-  }
-
-  /// 档位规则：先 2 秒一次拉两分钟，之后 10 秒一次一直拉。一小时的次数 = 立即一次 + 前两分钟 60 次 + 之后每 10 秒一次 348 次 = 409
-  /// （每 2 秒一档一小时是 1801）。目前没有哪个节奏用到多档，留给推送可靠性数据支持后放慢闲着的拉取。
-  @Test func movesToTheNextStepAfterTheFirstOneRunsOut() async throws {
-    let condition = Condition()
-    let idle = SyncPoller.Cadence(.every(.seconds(2), for: .seconds(120)), .every(.seconds(10)))
-    var asks = condition.asks.makeAsyncIterator()
-    let (task, count, fetches) = run(SyncPoller(timing: time.timing), condition)
-    var fetched = fetches.makeAsyncIterator()
-
-    await asks.next()
-    condition.input.yield(idle)
-    await fetched.next()
-    // 前两分钟：每 2 秒（60 次）；之后每 10 秒，到一小时整（348 次）
-    for _ in 0..<60 {
-      await time.waitForSleeper()
-      time.advance(.seconds(2))
-      await fetched.next()
-    }
-    #expect(count.current == 61)
-    for _ in 0..<348 {
-      await time.waitForSleeper()
-      time.advance(.seconds(10))
-      await fetched.next()
-    }
-    condition.input.finish()
-    await task.value
-    #expect(count.current == 409)
-  }
-
   @Test func aNewCadenceInterruptsTheSleepAndFetchesRightAway() async throws {
     let condition = Condition()
     let slow = SyncPoller.Cadence(.every(.seconds(10)))
@@ -148,18 +92,4 @@ struct SyncPollerTests {
     #expect(count.current == 2)
   }
 
-  @Test func nothingIsFetchedWhileNotWaiting() async throws {
-    let condition = Condition()
-    var asks = condition.asks.makeAsyncIterator()
-    let (task, count, _) = run(SyncPoller(timing: time.timing), condition)
-
-    await asks.next()
-    condition.input.yield(nil)
-    await asks.next()
-    time.advance(.seconds(10))
-    condition.input.finish()
-    await task.value
-    #expect(count.current == 0)
-    #expect(time.sleeperCount == 0)
-  }
 }

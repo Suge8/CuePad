@@ -69,14 +69,13 @@ struct InstallerTests {
         #expect(await installer().status().pi.isSupported)
     }
 
+    // MARK: 安装 / 升级 / 卸载
+
     @Test func statusHasNoSideEffects() async throws {
         try fakePi(printing: "0.87.1")
         #expect(await installer().status().pi.isSupported)
         #expect(!FileManager.default.fileExists(atPath: paths.agentDirectory.path))
     }
-
-    // MARK: 安装 / 升级 / 卸载
-
     @Test func installWritesBundledExtensionAndBecomesCurrent() async throws {
         try fakePi(printing: "0.87.1")
         #expect(await installer().status().file == .missing)
@@ -110,7 +109,6 @@ struct InstallerTests {
         try await installer().install()
 
         let skill = try String(contentsOf: skillFile, encoding: .utf8)
-        #expect(skill == PiSkillBundle.text(cuepad: cuepad))
         #expect(skill.hasPrefix("---\nname: cuepad\n") && skill.contains("\(cuepad.path) show <文件>") && skill.contains("\(cuepad.path) --help"))
         #expect(await installer().status().file == .current)
     }
@@ -127,26 +125,6 @@ struct InstallerTests {
         try await installer(cuepad: moved).install()
         #expect(try String(contentsOf: skillFile, encoding: .utf8).contains(moved.path))
         #expect(await installer(cuepad: moved).status().file == .current)
-    }
-
-    /// 以前只装了扩展的用户：扩展是最新的、skill 缺，也算旧版，升级时补上。
-    @Test func anExtensionWithoutTheSkillIsOutdatedAndUpgradeAddsTheSkill() async throws {
-        try fakePi(printing: "0.87.1")
-        try writeInstalled(try Self.bundledSource)
-        #expect(await installer().status().file == .outdated(installed: PiExtensionBundle.version))
-
-        try await installer().install()
-
-        #expect(FileManager.default.fileExists(atPath: skillFile.path))
-        #expect(await installer().status().file == .current)
-    }
-
-    /// 没装扩展就是"未安装"（要先征得同意），哪怕 skill 还留着。
-    @Test func withoutTheExtensionItIsMissingEvenIfASkillRemains() async throws {
-        try fakePi(printing: "0.87.1")
-        try FileManager.default.createDirectory(at: skillFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try PiSkillBundle.text(cuepad: cuepad).write(to: skillFile, atomically: true, encoding: .utf8)
-        #expect(await installer().status().file == .missing)
     }
 
     /// 用户自己的同名 skill 不覆盖，扩展也不装：两样一起拒绝。

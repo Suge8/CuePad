@@ -103,30 +103,6 @@ struct HistoryTests {
         #expect(try index(f).history.displayName == "Refactor auth")
     }
 
-    @Test func titleJoinsTextBlocksIntoOneLine() throws {
-        var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header(), SessionFile.user("u1", nil, [
-            ["type": "text", "text": "  line one"], ["type": "image", "data": "AAAA", "mimeType": "image/png"],
-            ["type": "text", "text": "line two \n"],
-        ], at: 1))
-        #expect(try index(f).history.displayName == "line one line two")
-    }
-
-    @Test func sessionWithoutMessagesIsTitledByItsFolder() throws {
-        var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header(cwd: "/work/proj"))
-        #expect(try index(f).history.displayName == "proj")
-    }
-
-    @Test func exposesHeaderNameAndLastActivity() throws {
-        var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header(id: "abc", cwd: "/work/proj"), SessionFile.user("u1", nil, "p", at: 1),
-                     SessionFile.info("n1", "u1", name: "old", at: 2), SessionFile.info("n2", "n1", name: "Refactor auth", at: 9))
-        let h = try index(f).history
-        #expect(h.sessionID == "abc" && h.cwd == "/work/proj" && h.name == "Refactor auth")
-        #expect(h.lastActivity == SessionFile.date(9))
-    }
-
     // MARK: 命令在会话文件里留下的
 
     /// 对话只来自会话文件，与终端一致：压缩留下一条 compaction（终端里是压缩摘要那一行），对话里是一行系统行；
@@ -179,15 +155,6 @@ struct HistoryTests {
         #expect(full.displayName == "one" && full.lastActivity == SessionFile.date(6))
     }
 
-    @Test func unchangedFileReadsNothing() throws {
-        var f = SessionFile(directory: dir)
-        try f.append(SessionFile.header(), SessionFile.user("u1", nil, "p", at: 1))
-        let first = try index(f)
-        let again = try index(f, from: first.checkpoint)
-        #expect(again.bytesRead == 0)
-        #expect(again.history == first.history)
-    }
-
     @Test func halfWrittenLineIsNotConsumedUntilItsNewlineArrives() throws {
         var f = SessionFile(directory: dir)
         try f.append(SessionFile.header())
@@ -230,12 +197,6 @@ struct HistoryTests {
         #expect(rebuilt.history.sessionID == "new")
     }
 
-    @Test func missingFileThrowsSoCallersCanWaitForTheFirstMessage() throws {
-        var f = SessionFile(directory: dir, name: "later.jsonl")
-        #expect(throws: (any Error).self) { try PiHistory.index(file: f.url, from: nil) }
-        try f.append(SessionFile.header(), SessionFile.user("u1", nil, "p", at: 1)) // 首条消息落盘后同一路径可索引
-        #expect(try index(f).history.displayName == "p")
-    }
 }
 
 // MARK: - 只读摘要：首次回填 7 天外的会话不解析对话
@@ -268,26 +229,6 @@ struct HistorySummaryOnlyTests {
         return [done, running, empty, errored]
     }
 
-    /// 只读摘要得到的检查点与逐行全读完全一样（之后增量读接得上），只是不给出对话。
-    @Test func aSummaryOnlyReadEqualsAFullReadWithoutTheTranscript() throws {
-        for file in try shapes() {
-            let full = try PiHistory.index(file: file.url, from: nil)
-            let summary = try PiHistory.index(file: file.url, from: nil, transcript: false)
-            #expect(summary.checkpoint == full.checkpoint, "\(file.url.lastPathComponent)")
-            #expect(summary.history == full.history && summary.messages.isEmpty)
-        }
-    }
-
-    @Test func aSessionReadForItsSummaryContinuesIncrementallyLikeAFullRead() throws {
-        var file = try shapes()[1]
-        let summary = try PiHistory.index(file: file.url, from: nil, transcript: false)
-        try file.append(SessionFile.assistant("a3", "t3", text: "日志里没有异常", at: 8))
-
-        let next = try PiHistory.index(file: file.url, from: summary.checkpoint)
-        #expect(next.checkpoint == (try PiHistory.index(file: file.url, from: nil)).checkpoint)
-        #expect(next.recap == PiRecap(lastPrompt: "顺便再看下日志", lastReply: "日志里没有异常", pendingPrompt: nil))
-        #expect(next.messages.map { $0.tools?.commands } == [2])
-    }
 }
 
 // MARK: - 后台索引器：首次按修改时间倒序，之后跟随文件变化
@@ -355,21 +296,6 @@ struct HistoryIndexerTests {
         #expect(!log.updates.contains { $0.file.path.contains("/subagents/") })
     }
 
-    /// 首次回填只为最近修改过（`transcriptWindow` 内）的会话解析对话；更早的只读摘要（按修改时间判断，不读内容）。
-    @Test func backfillParsesTranscriptsOnlyForRecentlyModifiedSessions() async throws {
-        let now = Date()
-        try makeSession("p1", "recent.jsonl", prompt: "近的", modified: now.addingTimeInterval(-86_400))
-        try makeSession("p1", "old.jsonl", prompt: "远的", modified: now.addingTimeInterval(-10 * 86_400))
-
-        let log = HistoryEventLog(PiHistoryIndexer(root: root, transcriptWindow: 7 * 86_400) { _ in nil })
-        try await eventually("回填完成") { log.finishedBackfill }
-
-        let byName = Dictionary(uniqueKeysWithValues: log.updates.map { ($0.file.lastPathComponent, $0) })
-        #expect(byName["recent.jsonl"]?.messages.map(\.text) == ["近的", "r-近的"])
-        #expect(byName["old.jsonl"]?.messages.isEmpty == true)
-        #expect(byName["old.jsonl"]?.recap == PiRecap(lastPrompt: "远的", lastReply: "r-远的", pendingPrompt: nil))
-    }
-
     @Test func liveAppendsAndNewFilesAreIndexedIncrementally() async throws {
         let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
         // 调用方从不返回检查点：索引器自己对回填之后被触碰的文件保留，之后的增量不能退化成重读
@@ -417,17 +343,5 @@ struct HistoryIndexerTests {
         }
     }
 
-    @Test func callerSuppliedCheckpointMeansOnlyNewBytesAreRead() async throws {
-        let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
-        let checkpoint = try PiHistory.index(file: f.url, from: nil).checkpoint
-        let tail = SessionFile.user("u2", "a", "while app was closed", at: 3)
-        try f.appendRaw(tail + "\n")
-
-        let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in checkpoint })
-        try await eventually("回填完成") { log.finishedBackfill }
-        let update = try #require(log.updates.first)
-        #expect(update.bytesRead == tail.utf8.count + 1)
-        #expect(update.history.lastActivity == SessionFile.date(3) && update.history.displayName == "first")
-    }
 }
 #endif

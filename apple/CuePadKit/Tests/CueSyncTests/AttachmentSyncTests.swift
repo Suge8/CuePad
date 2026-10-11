@@ -53,7 +53,6 @@ import Testing
     try FileManager.default.removeItem(at: try #require(store.files.fileURL(for: attachment.hash)))
     #expect(await rig.coordinator.record(for: recordID(attachment.id)) == nil)
   }
-
   @Test func downloadedAssetIsAdoptedIntoTheAttachmentDirectoryByHash() async throws {
     let data = pngData(width: 9, height: 9)
     let hash = sha256(data)

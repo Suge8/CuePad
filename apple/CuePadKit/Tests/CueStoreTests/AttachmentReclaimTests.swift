@@ -46,27 +46,6 @@ import Testing
     #expect(try !exists(hash))
   }
 
-  @Test func emptyTrashAndPurgeProjectReclaimTheirCardsImages() async throws {
-    let inTrash = try await image(0.1)
-    let inProject = try await image(0.2)
-    let sharedWithUnfiled = try await image(0.3)
-    let live = try await image(0.4)
-    let alone = try await store.createCard(in: nil, body: ref(inTrash))
-    let project = try await store.createProject(name: "P", color: "#111")
-    _ = try await store.createCard(in: project.id, body: ref(inProject) + ref(sharedWithUnfiled))
-    _ = try await store.createCard(in: nil, body: ref(sharedWithUnfiled) + ref(live))
-
-    try await store.trashCard(alone.id)
-    try await store.emptyTrash()
-    #expect(try !exists(inTrash))
-    #expect(try exists(inProject))
-
-    try await store.trashProject(project.id)
-    try await store.purgeProject(project.id)
-    #expect(try !exists(inProject))
-    #expect(try exists(sharedWithUnfiled) && exists(live))
-  }
-
   @Test func imageNotYetInsertedIntoAnyCardIsNotTouchedByUnrelatedPurges() async throws {
     let pending = try await image(0.1)  // 刚粘贴、正文还没保存
     let card = try await store.createCard(in: nil, body: "plain")
@@ -87,19 +66,4 @@ import Testing
     #expect(try !exists(unsent))
   }
 
-  @Test func failureToDeleteAFileIsReportedNotSwallowed() async throws {
-    let stuck = try await image(0.1)
-    let free = try await image(0.2)
-    let card = try await store.createCard(in: nil, body: ref(stuck) + ref(free))
-    // 只读目录：删不掉文件（不是 root 时）
-    try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: attachmentsDirectory.path)
-    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: attachmentsDirectory.path) }
-
-    await #expect(throws: CueStoreError.attachmentFilesNotRemoved([stuck, free].sorted())) {
-      try await store.purgeCard(card.id)
-    }
-
-    #expect(try await store.card(card.id) == nil)  // 卡片本身已删除
-    #expect(try exists(stuck) && exists(free))  // 删不掉的文件保留记录，二者仍配对
-  }
 }

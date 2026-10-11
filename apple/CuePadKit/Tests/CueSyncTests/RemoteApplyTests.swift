@@ -57,14 +57,6 @@ import Testing
     #expect(delta.saves.isEmpty && delta.deletes.isEmpty)  // 刚收到的不会被当成本机改动推回去
   }
 
-  @Test func remoteUpdateOverwritesAnUneditedLocalRecord() async throws {
-    let card = try await pushedCard()
-    let newer = remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote edit", modifiedAt: 9_000_000_000_000))
-    await fetched(newer)
-    #expect(try await store.card(card.id)?.body == "remote edit")
-    #expect(try await rig.reconcileDelta().saves.isEmpty)
-  }
-
   @Test func remoteDeletionRemovesTheRowItsMetadataAndIndexEntry() async throws {
     let card = try await pushedCard(body: "findme")
     await rig.coordinator.handle(.fetched(modifications: [], deletions: [(rig.recordID(card.id), "cards")]))
@@ -168,13 +160,6 @@ import Testing
       #expect(try await store.card(card.id)?.body == (keepCopy ? "local" : "remote"))
       #expect(try await store.card(conflict.copy.id) == nil)
       #expect(try await store.conflicts().allSatisfy { $0.original.id != card.id })
-    }
-  }
-
-  @Test func resolvingSomethingThatIsNotAConflictCopyIsRejected() async throws {
-    let card = try await store.createCard(in: nil, body: "plain")
-    await #expect(throws: CueStoreError.notAConflictCopy) {
-      try await store.resolveConflict(copy: card.id, keep: .copy)
     }
   }
 

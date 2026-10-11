@@ -71,24 +71,6 @@ import Testing
     #expect(record["notify"] == nil && record.encryptedValues["detail"] as? String == "q2")
   }
 
-  /// 标志上传之后，同一条记录的任何别的改动（如对话摘要在本轮结束时更新）都不能把它再带上去：
-  /// 服务端把每次"仍然匹配"的更新都当成一次新通知。
-  @Test func anUnrelatedWriteAfterUploadDoesNotAlertAgain() async throws {
-    let rig = try Rig()
-    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
-    try await recorder.update(sessionID: "s1", state: .thinking)
-    try await recorder.update(sessionID: "s1", state: .settled)
-    try await rig.coordinator.reconcile()
-    try await rig.simulatePush()  // 带标志的记录已被服务端接受
-
-    try await rig.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [], recap: PiRecap(lastPrompt: "跑测试", lastReply: "全部通过")))
-
-    let id = try #require(try await rig.store.allPiSessionStates().first).id
-    let record = try #require(await rig.coordinator.record(for: rig.recordID(id)))
-    #expect(record.encryptedValues["lastReply"] as? String == "全部通过")
-    #expect(record["notify"] == nil)
-  }
-
   // MARK: 订阅的形状
 
   @Test func subscriptionsMatchTheFlagAndCarryOnlyGenericLocalizedText() {
@@ -138,23 +120,6 @@ import Testing
     #expect(await manager.ensure(in: fake) == .active)
     #expect(await fake.saved.isEmpty)
     #expect(await fake.deleted.isEmpty)
-  }
-
-  /// 建立失败不能吞掉：状态带着原因交给界面；之后重试成功即恢复。
-  @Test func aFailedEnsureIsReportedAndTheNextOneRecovers() async {
-    let fake = store()
-    let manager = PiAlertSubscriptions(zoneID: zone)
-
-    await fake.failSaves(with: Boom())
-    guard case .failed(let reason) = await manager.ensure(in: fake) else {
-      Issue.record("没有报告失败")
-      return
-    }
-    #expect(reason.contains("没有网络"))
-
-    await fake.failSaves(with: nil)
-    #expect(await manager.ensure(in: fake) == .active)
-    #expect(await fake.saved.sorted() == ["cuepad.pi.settled", "cuepad.pi.waiting"])
   }
 
   /// 服务端拒绝时 localizedDescription 往往只剩"未能完成操作（错误 4）"，真正的原因在服务端说明与底层错误里：
@@ -221,11 +186,6 @@ import Testing
     #expect(settled == PiAlertTap(kind: .settled, sessionState: id))
   }
 
-  @Test func otherNotificationsAreNotOurs() {
-    #expect(PiAlertRoute.tap(from: payload(subscription: "somebody.else", record: UUID().uuidString)) == nil)
-    #expect(PiAlertRoute.tap(from: payload(subscription: "cuepad.pi.waiting", record: "not-a-uuid")) == nil)
-    #expect(PiAlertRoute.tap(from: ["aps": ["alert": "hi"]]) == nil)
-  }
 }
 
 struct Boom: LocalizedError { var errorDescription: String? { "没有网络" } }

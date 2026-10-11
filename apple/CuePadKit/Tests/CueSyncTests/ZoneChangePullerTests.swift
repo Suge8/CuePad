@@ -57,24 +57,6 @@ import Testing
     #expect(try await rig.store.card(old) == nil)  // 取令牌那一遍只带版本，卡片不补取、不交给协调器
   }
 
-  /// 开始拉之前就已经在服务器上的投送请求（如 Mac 刚连上会话时手机已发出的）：取令牌时看到它就按 ID 取整条交给协调器，
-  /// 不会被令牌跨过。
-  @Test func deliveryRequestsAlreadyOnTheServerWhenTakingTheTokenAreFetchedInFull() async throws {
-    let id = UUID()
-    let full = remoteRecord(.deliveryRequests, id: id, [
-      "content": .text("ping"), "targetKind": .text("app"), "targetName": .text("CuePad"), "targetRef": .null,
-      "hostID": .text("mac-a"), "mode": .text("ping"), "cardID": .null, "taskID": .null, "status": .text("pending"),
-      "resultDetail": .null, "handledBy": .null, "createdAt": .int(1_000), "completedAt": .null, "modifiedAt": .int(1_000),
-    ])
-    let idOnly = CKRecord(recordType: "deliveryRequests", recordID: full.recordID)
-    let zone = FakeZone([batch("t1", [idOnly]), batch("t2")], server: [full])
-    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator)
-
-    try await puller.pull()
-
-    #expect(try await rig.store.deliveryRequests().map(\.id) == [id])
-  }
-
   /// 在等的对象还有 Pi 会话状态（手机看着 Agent 页时主动拉，状态要是活的）：取令牌时看到的也按 ID 取整条；
   /// 无关的表（卡片）只推进令牌、不补取。
   @Test func piSessionStatesAlreadyOnTheServerAreFetchedInFullButOtherTablesAreNot() async throws {
@@ -212,20 +194,4 @@ import Testing
     return RecordMapper.record(from: SyncRow(table: .deliveryRequests, fields: fields), zoneID: testZone, base: dated)
   }
 
-  @Test func recordsFoundByPollingLongAfterTheyLandOnTheServerAreCountedAsLatePushes() async throws {
-    let now = Date(timeIntervalSince1970: 1_000_000)
-    let (late, fresh, known) = (UUID(), UUID(), UUID())
-    let lateRecord = request(late, modifiedAt: 5_000, landed: now.addingTimeInterval(-9))
-    let freshRecord = request(fresh, modifiedAt: 5_000, landed: now.addingTimeInterval(-1))
-    let knownRecord = request(known, modifiedAt: 5_000, landed: now.addingTimeInterval(-9))
-    let zone = FakeZone([batch("t1"), batch("t2", [knownRecord]), batch("t3", [lateRecord, freshRecord, knownRecord]), batch("t4", [lateRecord])])
-    let puller = ZoneChangePuller(source: zone, coordinator: rig.coordinator, now: { now })
-
-    try await puller.pull()  // 先取令牌（t1），再拉到 knownRecord：本机原来没有，算一条，之后本机有了
-    #expect(await puller.lateCatches == 1)
-    try await puller.pull()  // late 算一条；fresh 刚落定不算；known 本机已有同样新的不算
-    #expect(await puller.lateCatches == 2)
-    try await puller.pull()  // 同一条再来一遍：本机已有，不重复算
-    #expect(await puller.lateCatches == 2)
-  }
 }

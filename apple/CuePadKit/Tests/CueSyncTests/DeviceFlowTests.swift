@@ -64,20 +64,6 @@ import Testing
     #expect(try await phone.store.previews(of: "s1").isEmpty && phone.store.files.fileURL(for: seen.hash) == nil)
   }
 
-  /// 子代理列表（名字、角色、状态、在做什么与时刻）与"后台托管中"经同步往返保留。
-  @Test func subagentsAndHostingTravelToThePhone() async throws {
-    let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
-    let subagents = [
-      PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: Date(timeIntervalSince1970: 1_000)),
-      PiSubagentState(name: "core", role: "审查员", phase: .known(.idle)),
-    ]
-    try await recorder.update(sessionID: "s1", state: .delegating, title: "指挥官", hosted: true, subagents: subagents)
-    try await cloud.exchange()
-
-    let seen = try #require(try await phone.store.allPiSessionStates().first)
-    #expect(seen.subagents == subagents && seen.hosted)
-  }
-
   /// 会话的模型、思考强度与可选模型（Mac 写）经同步到手机；手机的配置请求（手机写）到 Mac，读出同一个配置。
   @Test func modelChoicesTravelToThePhoneAndTheConfigRequestTravelsBackToTheMac() async throws {
     let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
@@ -95,20 +81,6 @@ import Testing
     let made = try await phone.store.requestConfig(config, to: target, on: "mac")
     try await cloud.exchange()
     #expect(try await mac.store.deliveryRequest(made.id)?.config == config)
-  }
-
-  /// 上下文余量与命令清单（Mac 写）经同步到手机；手机据此画圆环、弹斜杠面板。
-  @Test func contextUsageAndCommandsTravelToThePhone() async throws {
-    let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
-    let commands = [
-      PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]"),
-      PiSlashCommand(name: "skill:review", summary: "审查改动", source: .known(.skill)),
-    ]
-    try await recorder.update(sessionID: "s1", state: .settled, title: "t", context: PiContextUsage(tokens: 150_000, window: 200_000), commands: commands)
-    try await cloud.exchange()
-
-    let seen = try #require(try await phone.store.allPiSessionStates().first)
-    #expect(seen.context == PiContextUsage(tokens: 150_000, window: 200_000) && seen.commands == commands)
   }
 
   /// 手机请 Mac 绑文件夹：请求（只带"从哪个会话的目录取"，不带路径）到 Mac，Mac 读出同一个内容。

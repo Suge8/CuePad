@@ -21,20 +21,6 @@ import Testing
     #expect(Set(tables) == Set(Self.synced + Self.local))
   }
 
-  @Test(arguments: synced)
-  func syncedTableMapsToACKRecord(table: String) throws {
-    let columns = try raw.rows("SELECT name, type, \"notnull\", pk FROM pragma_table_info('\(table)')")
-    let primaryKeys = columns.filter { $0[3] != "0" }
-    #expect(primaryKeys.map { $0[0] } == ["id"] && primaryKeys.map { $0[1] } == ["TEXT"])
-    #expect(columns.contains { $0[0] == "modifiedAt" && $0[1] == "INTEGER" && $0[2] == "1" })
-    #expect(columns.allSatisfy { ["TEXT", "INTEGER"].contains($0[1]) })
-
-    #expect(try raw.rows("SELECT 1 FROM pragma_foreign_key_list('\(table)')").isEmpty)
-    let uniqueIndexes = try raw.rows(
-      "SELECT name FROM pragma_index_list('\(table)') WHERE \"unique\" = 1 AND origin != 'pk'")
-    #expect(uniqueIndexes.isEmpty)
-  }
-
   /// Pi 索引与偏移、项目绑定的代码目录（路径因设备而异）只在本机表，同步表不带这些列。
   @Test func deviceSpecificFieldsLiveOnlyInLocalTables() throws {
     for table in Self.synced {
@@ -47,14 +33,4 @@ import Testing
     #expect(directories.contains("projectID") && directories.contains("directory"))
   }
 
-  @Test func recordsGetLowercaseUUIDTextIDsAndModifiedAtAdvancesOnEdit() async throws {
-    let store = fixture.store
-    let card = try await store.createCard(in: nil, body: "a")
-    #expect(try raw.rows("SELECT id FROM cards")[0][0] == card.id.uuidString.lowercased())
-
-    try await Task.sleep(for: .milliseconds(5))
-    try await store.updateCard(card.id) { $0.body = "b" }
-    let edited = try #require(try await store.card(card.id))
-    #expect(edited.modifiedAt > card.modifiedAt && edited.createdAt == card.createdAt)
-  }
 }

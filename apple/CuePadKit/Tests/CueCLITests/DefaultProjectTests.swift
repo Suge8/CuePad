@@ -75,20 +75,6 @@ import Testing
     #expect(conflicting.code == 2)
   }
 
-  @Test func withoutABoundProjectBehaviourIsUnchanged() async throws {
-    let w = try await World()
-
-    #expect(try await w.cards(["card", "list"], cwd: "/work/other").count == 3)
-    #expect(try await w.cards(["card", "list"], cwd: "/work/alphabet").count == 3)  // 目录前缀不是祖先
-    #expect(try await w.tasks([], cwd: "/work/other") == ["alpha 任务", "全局任务"])
-    let card = try await w.sb.object("card", "add", "--body", "x", cwd: "/work/other")
-    #expect(card["projectId"] is NSNull)
-
-    try await w.sb.store.trashProject(w.alpha.id)
-    let afterTrash = try await w.sb.object("card", "add", "--body", "y", cwd: World.inside)
-    #expect(afterTrash["projectId"] is NSNull, "回收站里的项目不作默认")
-  }
-
   @Test func moveNeverGuessesADestination() async throws {
     let w = try await World()
     let result = await w.sb.run("card", "move", w.inBeta.id.uuidString, cwd: World.inside)

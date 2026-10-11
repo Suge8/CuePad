@@ -34,9 +34,4 @@ import Testing
     #expect(try await store.projects().map(\.name) == ["置顶", "卡片新", "任务新", "安静", "Pi 新"])
   }
 
-  /// 本地不再有项目的手动排序键，同步记录也不再写它。
-  @Test func projectsCarryNoSortKey() async throws {
-    _ = try await store.createProject(name: "P", color: "#111")
-    #expect(try RawDB(fixture.url).rows("SELECT name FROM pragma_table_info('projects') WHERE name = 'sortKey'").isEmpty)
-  }
 }

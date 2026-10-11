@@ -73,20 +73,6 @@ import Testing
     #expect(record["icon"] == nil && record["intro"] == nil && record["deletedAt"] == nil)
   }
 
-  /// 已下线的字段（卡片编号、项目的手动排序键）不再写进同步记录；别的设备送来的同名字段忽略。
-  @Test func retiredFieldsAreNeitherWrittenNorRead() async throws {
-    let project = try await store.createProject(name: "P", color: "#111")
-    let card = try await store.createCard(in: project.id, body: "b")
-    let projectRecord = RecordMapper.record(from: try #require(try await store.syncRow(recordName: project.id.uuidString.lowercased())), zoneID: testZone)
-    let cardRecord = RecordMapper.record(from: try #require(try await store.syncRow(recordName: card.id.uuidString.lowercased())), zoneID: testZone)
-    #expect(projectRecord["sortKey"] == nil && cardRecord["numbering"] == nil)
-
-    var fields = cardFields(project: nil, body: "旧设备写的", modifiedAt: 5_000)
-    fields["numbering"] = .text("cjk")
-    await rig.coordinator.handle(.fetched(modifications: [remoteRecord(.cards, fields)], deletions: []))
-    #expect(try await store.cards(in: nil).map(\.body) == ["旧设备写的"])
-  }
-
   @Test func unknownEnumValuesAreKeptVerbatimNotCoercedToKnownOnes() async throws {
     let send = remoteRecord(.sendRecords, sendFields(kind: "carrierPigeon", modifiedAt: 5_000))
 

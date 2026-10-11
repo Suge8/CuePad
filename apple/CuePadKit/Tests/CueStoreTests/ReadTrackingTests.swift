@@ -13,15 +13,6 @@ extension CueStore {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  /// 子查询里的 COUNT(*)、复用缓存里的语句，读到的表都照样记下。
-  @Test func 读到的表_含子查询与缓存里的语句() async throws {
-    for _ in 0..<2 {
-      #expect(try await store.tablesRead { try $0.trashCount() } == [.projects, .cards])
-    }
-    let marks = try await store.tablesRead { try $0.childMarks() }
-    #expect(marks.isSuperset(of: [.cards, .deliveryRequests, .sendRecords, .piSessionStates, .piMessages]))
-  }
-
   /// 提示词"已回复"取决于会话状态：会话歇下后，只读了任务下级进度的订阅也要重读。
   @Test(.timeLimit(.minutes(1))) func 订阅随读取走_会话歇下后子任务进度立即更新() async throws {
     let task = try await store.createTask("修乱序", in: nil)

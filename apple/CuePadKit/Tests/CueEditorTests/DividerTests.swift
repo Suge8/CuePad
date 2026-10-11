@@ -65,5 +65,59 @@ struct DividerTests {
         h.textView.insertText("", replacementRange: NSRange(location: NSNotFound, length: 0))
         #expect(h.stored == "甲丁")
     }
+
+    @Test("插入：行首不多插空行、空行变分割线、文档尾落在线下新空行、选区被替换", arguments: [
+        ("abc", 0, 0, "---split---\nabc"[...], "abc"),
+        ("a\n\nb", 2, 0, "a\n---split---\nb"[...], "b"),
+        ("a", 1, 0, "a\n---split---\n"[...], ""),
+        ("a\n", 2, 0, "a\n---split---\n"[...], ""),
+        ("abcdef", 1, 4, "a\n---split---\nf"[...], "f"),
+    ] as [(String, Int, Int, Substring, String)])
+    func insertRules(text: String, location: Int, length: Int, stored: Substring, tail: String) {
+        let h = EditorHarness()
+        h.load(text)
+        h.textView.setSelectedRange(NSRange(location: location, length: length))
+        h.textView.insertDivider()
+        #expect(h.stored == String(stored))
+        #expect((h.textView.string as NSString).substring(from: h.caret) == tail)
+    }
+
+    @Test("Backspace / Delete 整条删掉分割线：文档首行连同换行，连续分割线一次一条")
+    func mergeRules() {
+        let h = EditorHarness()
+        h.load("\(split)\nb")
+        h.setCaret(2)
+        h.textView.deleteBackward(nil)
+        #expect(h.stored == "b" && h.caret == 0)
+
+        h.load("a\n\(split)\n\(split)\nb")
+        h.setCaret(6)
+        h.textView.deleteBackward(nil)
+        #expect(h.stored == "a\n\(split)\nb")
+
+        h.load("a\n\(split)")
+        h.setCaret(1)
+        h.textView.deleteForward(nil)
+        #expect(h.stored == "a")
+    }
+
+    @Test("光标不落在分割线行上：首行、末行是分割线时原位；图片与分割线同为占位字符但图片是正常停靠点")
+    func caretStops() throws {
+        let h = EditorHarness()
+        h.load("\(split)\nb")
+        h.setCaret(2)
+        h.textView.moveLeft(nil)
+        #expect(h.caret == 2)
+        h.load("a\n\(split)")
+        h.setCaret(0)
+        h.textView.moveToEndOfDocument(nil)
+        #expect(h.caret == 1)
+
+        let id = try h.store.store(makePNG(width: 40, height: 30))
+        h.load("a\n![](cuepad://img/\(id))\nb")
+        h.setCaret(1)
+        h.textView.moveRight(nil)
+        #expect(h.caret == 2)  // 图片行是一个停靠点，不像分割线那样被跨过
+    }
 }
 #endif

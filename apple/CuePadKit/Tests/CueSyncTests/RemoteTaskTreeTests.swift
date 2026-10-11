@@ -43,6 +43,78 @@ import Testing
     #expect(try await rig.reconcileDelta().saves.contains(rig.id(first)))
   }
 
+  private struct Random {
+    var state: UInt64
+    mutating func next(_ bound: Int) -> Int {
+      state = state &* 6364136223846793005 &+ 1442695040888963407
+      return Int((state >> 33) % UInt64(bound))
+    }
+  }
+
+  /// 随机造一片合规的层级，再像远端批量应用那样改几张卡（改上级——含挂到自己、后代、灵感下——、项目、是不是任务，或删掉），
+  /// 应用后用户读到的层级必须满足规则：上级是任务、与下级同项目、不成环、最多三级。
+  @Test(.timeLimit(.minutes(1)))
+  func 随机的远端批量改动之后_层级总是合规() async throws {
+    var random = Random(state: 20_261_011)
+    for round in 0..<60 {
+      let rig = try Rig()
+      let store = rig.store
+      let projects = [try await store.createProject(name: "甲", color: "#111").id, try await store.createProject(name: "乙", color: "#111").id]
+      var made: [(id: UUID, isTask: Bool, depth: Int)] = []
+      for index in 0..<(8 + random.next(25)) {
+        let project: UUID? = random.next(3) == 0 ? nil : projects[random.next(2)]
+        let parents = made.filter { $0.isTask && $0.depth < 3 }
+        let parent = parents.isEmpty || random.next(3) == 0 ? nil : parents[random.next(parents.count)]
+        let isTask = random.next(2) == 0
+        let card: Card
+        switch (isTask, parent) {
+        case (true, let parent?): card = try await store.createTask("t\(index)", under: parent.id)
+        case (true, nil): card = try await store.createTask("t\(index)", in: project)
+        case (false, let parent?): card = try await store.createCard(body: "i\(index)", under: parent.id)
+        case (false, nil): card = try await store.createCard(in: project, body: "i\(index)")
+        }
+        made.append((card.id, isTask, (parent?.depth ?? 0) + 1))
+      }
+      try await rig.coordinator.reconcile()
+      try await rig.simulatePush()
+
+      var changes: [CKRecord] = []
+      var deletions: [(id: CKRecord.ID, recordType: String)] = []
+      for pick in Set((0..<(1 + random.next(3))).map { _ in random.next(made.count) }) {
+        let current = try #require(try await store.card(made[pick].id))
+        var parent = current.parentID, project = current.projectID, isTask = current.isTask
+        switch random.next(5) {
+        case 0: parent = made[random.next(made.count)].id
+        case 1: parent = nil
+        case 2: let choices: [UUID?] = [nil, projects[0], projects[1]]; project = choices[random.next(3)]
+        case 3: isTask.toggle()
+        default:
+          deletions.append((rig.recordID(current.id), Table.cards.rawValue))
+          continue
+        }
+        var fields = cardFields(project: project, body: current.body, modifiedAt: millis(current.modifiedAt) + 1_000, sortKey: current.sortKey)
+        fields["parentID"] = parent.map { .text($0.uuidString.lowercased()) } ?? .null
+        fields["todoAt"] = isTask ? .int(1_000) : .null
+        changes.append(remoteRecord(.cards, id: current.id, fields))
+      }
+
+      await rig.coordinator.handle(.fetched(modifications: changes, deletions: deletions))
+
+      for item in made {
+        guard let card = try await store.card(item.id), card.deletedAt == nil else { continue }
+        if let parentID = card.parentID, let parent = try await store.card(parentID), parent.deletedAt == nil {
+          #expect(parent.isTask && parent.projectID == card.projectID, "第 \(round) 轮：上级须是任务且同项目")
+        }
+        var depth = 1, cursor = card.parentID
+        while let up = cursor, let next = try await store.card(up), next.deletedAt == nil, depth <= 4 {
+          depth += 1
+          cursor = next.parentID
+        }
+        #expect(depth <= 3, "第 \(round) 轮：成环或超过三级")
+      }
+    }
+  }
+
   @Test func 并发挪出第四级_提到第三级() async throws {
     let a = try await store.createTask("a", in: nil)
     let a1 = try await store.createTask("a1", under: a.id)
