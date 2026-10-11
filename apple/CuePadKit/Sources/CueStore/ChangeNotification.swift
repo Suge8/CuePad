@@ -9,11 +9,19 @@ import Foundation
 enum ChangeNotification {
   static func name(forDatabase url: URL) -> String {
     let path = url.resolvingSymlinksInPath().standardized.path
-    let digest = SHA256.hash(data: Data(path.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
+    let digest = SHA256.hash(data: Data(path.utf8)).prefix(8).hex
     return "\(LibraryLocation.appGroupIdentifier).store.\(digest)"
   }
 
   static func post(_ name: String) { notify_post(name) }
+}
+
+extension Sequence<UInt8> {
+  /// 小写十六进制。
+  var hex: String {
+    let digits = Array("0123456789abcdef".utf8)
+    return String(decoding: flatMap { [digits[Int($0 >> 4)], digits[Int($0 & 15)]] }, as: UTF8.self)
+  }
 }
 
 /// 订阅一个 Darwin 通知，以 `AsyncStream` 交出事件（突发合并为一次）；释放时注销。

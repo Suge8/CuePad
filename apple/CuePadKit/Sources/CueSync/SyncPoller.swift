@@ -59,7 +59,7 @@ public struct SyncPoller: Sendable {
   private func loop(_ cadence: Cadence, _ fetch: @escaping @Sendable () async -> Void) async {
     let start = timing.now()
     while !Task.isCancelled, let interval = cadence.interval(after: .seconds(timing.now().timeIntervalSince(start))) {
-      await Task { await fetch() }.value  // 新节奏到来只打断睡眠，不打断拉了一半的请求（取消会让它报错）
+      await Task { await fetch() }.value  // 新节奏到来只打断睡眠，不打断拉了一半的请求（取消会让它报错）。取消屏蔽 withTaskCancellationShield 要 macOS 27，部署目标是 26
       try? await timing.sleep(interval)
     }
   }

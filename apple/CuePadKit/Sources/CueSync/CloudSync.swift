@@ -1,5 +1,6 @@
 import CloudKit
 import Foundation
+import os
 
 /// iCloud 同步入口：私有数据库里一个自定义同步区，CKSyncEngine 驱动。
 ///
@@ -141,6 +142,7 @@ private actor EngineQueue: ChangeQueue {
 
 /// CKSyncEngine 的委托：只做事件翻译，逻辑全在 `SyncCoordinator`。
 final class EngineBridge: CKSyncEngineDelegate, Sendable {
+  private static let logger = Logger(subsystem: "com.sugeh.cuepad", category: "sync")
   let coordinator: SyncCoordinator
   let zoneID: CKRecordZone.ID
   let arrivals: ArrivalLog
@@ -154,7 +156,12 @@ final class EngineBridge: CKSyncEngineDelegate, Sendable {
   func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
     switch event {
     case .stateUpdate(let update):
-      if let data = try? JSONEncoder().encode(update.stateSerialization) { await coordinator.handle(.stateUpdate(data)) }
+      // 序列化不了就没法存引擎状态，下次启动要把整个同步区重拉一遍：留一条日志，不静默
+      do {
+        await coordinator.handle(.stateUpdate(try JSONEncoder().encode(update.stateSerialization)))
+      } catch {
+        Self.logger.error("引擎状态序列化失败，下次启动将重新拉取：\(error)")
+      }
     case .accountChange(let change):
       switch change.changeType {
       case .signIn: await coordinator.handle(.accountChange(.signedIn))
