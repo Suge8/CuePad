@@ -18,7 +18,7 @@ CuePad 是 Swift 原生应用：macOS 26+、iOS/iPadOS 27+，iCloud 同步，Pi 
 
 ```bash
 apple/scripts/xc.sh test mac
-apple/scripts/xc.sh test ios        # 同一测试目标，跑其中 iOS 也编译的部分（摘要里的 "Executed 0 tests" 只数 XCTest，Swift Testing 不在内）
+apple/scripts/xc.sh test ios        # App 测试里 iOS 也编译的部分，再加 CuePadKit 在模拟器上的测试（iOS 编辑器等只在这里跑；带收窄参数时只跑前者；摘要里的 "Executed 0 tests" 只数 XCTest，Swift Testing 不在内）
 apple/scripts/xc.sh test mac -only-testing:CuePadTests/<套件>   # test 后的参数原样传给 xcodebuild，用来收窄
 cd apple/CuePadKit && swift test
 cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行

@@ -97,15 +97,19 @@ import Testing
     #expect(try await match(link.appending(path: "Sub").path) == "经链接绑定")
   }
 
-  /// 不区分大小写的卷（macOS 默认）上，大小写不同的写法是同一个目录。
+  #if os(macOS)
+  /// 不区分大小写的卷（macOS 默认）上，大小写不同的写法是同一个目录。绑定的目录只在 Mac 上用；iOS 模拟器的 realpath 不修大小写，规则不适用。
   @Test(.enabled(if: caseInsensitiveTemporaryVolume)) func aDifferentlyCasedPathMatchesOnACaseInsensitiveVolume() async throws {
     let (repo, _) = try disk()
     let project = try await store.createProject(name: "小写绑定", color: "#111")
     try await store.setDirectory(repo.deletingLastPathComponent().appending(path: "repo").path, for: project.id)
     #expect(try await match(repo.appending(path: "Sub").path) == "小写绑定")
   }
+  #endif
 }
 
+#if os(macOS)
 private let caseInsensitiveTemporaryVolume =
   (try? FileManager.default.temporaryDirectory.resourceValues(forKeys: [.volumeSupportsCaseSensitiveNamesKey]))?
     .volumeSupportsCaseSensitiveNames == false
+#endif
