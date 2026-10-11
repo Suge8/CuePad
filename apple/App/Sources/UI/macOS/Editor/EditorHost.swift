@@ -19,10 +19,6 @@ final class EditorHandle {
 /// CueEditorView 的 SwiftUI 宿主。正文只在创建时载入一次：之后编辑器是这张卡正文的唯一写者，
 /// Store 回传的自身保存不再灌回编辑器（会打断光标与撤销栈）。
 struct EditorHost: NSViewRepresentable {
-    /// 换一张卡就加一：编辑器常驻，`loadKey` 变了把 `initialText` 整体换进现有的编辑器（清空撤销栈、选区回开头、滚到顶），不重建。
-    let loadKey: Int
-    /// 不可用时不接键盘（纸页收起、编辑器还挂着）。
-    let enabled: Bool
     let initialText: String
     let theme: CueEditorTheme
     let handle: EditorHandle
@@ -32,13 +28,7 @@ struct EditorHost: NSViewRepresentable {
     var onError: (any Error) -> Void = { _ in }
     @Environment(AppServices.self) private var services
 
-    /// 现在编辑器里是哪一次载入的正文。
-    final class Coordinator { var loaded = 0 }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
     func makeNSView(context: Context) -> CueEditorView {
-        context.coordinator.loaded = loadKey
         let view = CueEditorView(imageStore: services.store.files, theme: theme)
         view.textView.storedText = initialText
         view.scrollerStyle = .overlay
@@ -54,16 +44,6 @@ struct EditorHost: NSViewRepresentable {
 
     func updateNSView(_ view: CueEditorView, context: Context) {
         let textView = view.textView
-        if context.coordinator.loaded != loadKey {
-            context.coordinator.loaded = loadKey
-            textView.storedText = initialText
-            view.contentView.scroll(to: .zero)
-            view.reflectScrolledClipView(view.contentView)
-        }
-        if textView.acceptsInput != enabled {
-            textView.acceptsInput = enabled
-            if !enabled, view.window?.firstResponder === textView { view.window?.makeFirstResponder(nil) }
-        }
         textView.onChange = onChange
         textView.onSelectionChange = onSelectionChange
         textView.selectionActions = selectionActions
