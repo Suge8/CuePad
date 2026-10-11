@@ -45,6 +45,7 @@ extension DebugScene {
         switch defaults.string(forKey: "CuePadBench") {
         case "churn": await benchChurn(workspace)
         case "interact": await InteractionBench.run(workspace)
+        case "chatresize": Task { await ChatResizeBench.run() }
         default: break
         }
     }

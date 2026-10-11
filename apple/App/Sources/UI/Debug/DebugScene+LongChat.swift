@@ -7,6 +7,7 @@ import Foundation
 ///   一句话、整页长段落、40 行代码块、宽表、长列表轮换，每 25 轮你贴进来一段长文；看打开即最新、往上翻、回到最新。
 /// - `-CuePadStream YES`（配 session 画面）：打开会话后给它一轮一轮追加（你的话、思考中、回答，高矮轮换），看新内容到达时跟随最新。
 /// - `-CuePadBench chatdepth`（仅 iOS，配 session 画面打开 marathon）：测量脚本从最新处一路往上滑到第 1 轮，每排开一段量一次开销与掉帧（`ChatDepthBench`）。
+/// - `-CuePadBench chatresize`（仅 Mac，配 session 画面打开 marathon）：测量脚本翻到深处后拖窗口边改宽，每次拖动量一次开销与掉帧（`ChatResizeBench`）。
 extension DebugScene {
     static let longChat = "marathon"
     private static let longChatRounds = 300
@@ -130,6 +131,51 @@ enum ChatDepthBench {
         guard let out, let handle = try? FileHandle(forWritingTo: out) else { return }
         handle.seekToEndOfFile()
         handle.write(Data((line + "\n").utf8))
+        try? handle.close()
+    }
+}
+#endif
+
+#if os(macOS) && DEBUG
+import AppKit
+
+/// 长对话翻到深处后拖窗口边改宽的开销：从按住窗口边（开始拖动改大小）量到松手后 500ms：点击回合、合计、最重一圈（主线程 CPU 毫秒）、
+/// 指令数（百万）、掉帧。每次拖动一行 `RESIZE {json}` 写进隔离库目录下的 `chatresize.jsonl`。
+enum ChatResizeBench {
+    private static let turns = TurnLog()
+    private static var running: (recorder: FrameRecorder, instructions: Double, started: CFTimeInterval)?
+
+    static func run() async {
+        guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
+        let out = URL(filePath: dir).appending(path: "chatresize.jsonl")
+        try? Data("READY\n".utf8).write(to: out)
+        let center = NotificationCenter.default
+        for await note in center.notifications(named: NSWindow.willStartLiveResizeNotification) {
+            guard let view = (note.object as? NSWindow)?.contentView else { continue }
+            begin(view)
+            for await _ in center.notifications(named: NSWindow.didEndLiveResizeNotification).prefix(1).map({ _ in () }) {}
+            try? await Task.sleep(for: .milliseconds(500))
+            finish(out)
+        }
+    }
+
+    private static func begin(_ view: NSView) {
+        let recorder = FrameRecorder()
+        recorder.start(in: view)
+        let started = CACurrentMediaTime()
+        running = (recorder, instructionsMillions(), started)
+        turns.begin(started, root: nil)
+    }
+
+    private static func finish(_ out: URL) {
+        guard let running else { return }
+        self.running = nil
+        var row = TurnLog.metrics(turns.finish(), instructions: running.instructions, frames: running.recorder.stop())
+        ["clickMs", "visibleTurns", "seen", "heavy"].forEach { row[$0] = nil }
+        row["windowMs"] = ((CACurrentMediaTime() - running.started) * 1000).rounded()
+        guard let handle = try? FileHandle(forWritingTo: out) else { return }
+        handle.seekToEndOfFile()
+        handle.write(Data(("RESIZE " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self) + "\n").utf8))
         try? handle.close()
     }
 }

@@ -57,15 +57,17 @@ struct PiConversation: View {
         }
     }
 
-    /// 一段：在屏上或离屏上不到 `spare` 段的、最新一段（还会长）、描圈的那条所在的段（刻度滑条正要跳过去）、还没在这个宽度下量过的段排真的；
+    /// 一段：在屏上或离屏上不到 `spare` 段的、最新一段（还会长）、描圈的那条所在的段（刻度滑条正要跳过去）、还没量过的段排真的；
     /// 其余换成量好的那么高的空白。挂着的视图数就不随翻过的深度变多（整列都挂着时，翻到 300 轮前排开一段要 200ms 以上），
     /// 内容高也不变：换的时候正在读的不动，滚动区不用补偿。
+    /// 宽度变了（拖窗口、转屏），量过的高按宽度反比估（字一行排得越宽越矮），排成真的时再换成实测：
+    /// 不估就得把翻过的段全排一遍，翻到 200 轮前拖一下窗口边主线程要卡 1 秒以上。
     @ViewBuilder private func segment(_ index: Int, of all: [ChatItem], last: Int) -> some View {
         let items = Array(all[(index * Self.segment)..<min((index + 1) * Self.segment, all.count)])
-        if let size = sizes[index], size.width == width, index != last, !onScreen.contains { abs($0 - index) <= Self.spare },
+        if let size = sizes[index], width > 0, index != last, !onScreen.contains { abs($0 - index) <= Self.spare },
             !items.contains(where: { $0.id == highlight })
         {
-            Color.clear.frame(height: size.height)
+            Color.clear.frame(height: (size.height * size.width / width).rounded())
         } else {
             ChatSegment(items: items, session: session, highlight: highlight, opened: $opened)
                 .equatable()
