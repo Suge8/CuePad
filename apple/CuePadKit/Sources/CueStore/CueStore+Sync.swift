@@ -117,14 +117,6 @@ extension CueStore {
     Dictionary(uniqueKeysWithValues: try db.query("SELECT id, modifiedAt FROM \(table.rawValue)") { ($0.text(0), $0.int(1)) })
   }
 
-  /// 其中几条记录的修改时间（本机没有的不在结果里）。
-  package func modifiedAts(of ids: [String], in table: Table) throws -> [String: Int64] {
-    guard !ids.isEmpty else { return [:] }
-    let marks = ids.map { _ in "?" }.joined(separator: ",")
-    return Dictionary(
-      try db.query("SELECT id, modifiedAt FROM \(table.rawValue) WHERE id IN (\(marks))", ids) { ($0.text(0), $0.int(1)) }, uniquingKeysWith: { first, _ in first })
-  }
-
   package func systemFields(of recordName: String) throws -> Data? {
     try db.first("SELECT systemFields FROM syncRecords WHERE recordName = ?", [recordName]) { $0.blobOrNil(0) } ?? nil
   }

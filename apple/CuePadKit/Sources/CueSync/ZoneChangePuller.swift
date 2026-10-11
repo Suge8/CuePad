@@ -22,12 +22,13 @@ enum CloudKitLimits {
   static let recordsPerRequest = 400
 }
 
-/// 在等时的加速通道：不经 CKSyncEngine，直接向服务器拉同步区的变化，交给协调器与引擎同一个合并入口（`.fetched`）。
+/// 在等时的主通路：不经 CKSyncEngine，直接向服务器拉同步区的变化，交给协调器与引擎同一个合并入口（`.fetched`）。
+/// 实测推送到不了 Mac（见 docs/sync.md「拉取节奏」），别的设备写来的请求几乎全靠它到达，不是推送之外的兜底。
 ///
 /// 为什么不用 `CKSyncEngine.fetchChanges`：引擎只拉它已知"有变化"的 zone，而这份名单只由推送、
 /// 切到前台与"太久没拉"填上；没有推送时手动 fetchChanges（含限定 zone 的写法）不发任何请求。
 ///
-/// 令牌只在内存、不持久化：持久的权威是引擎状态，这里只是"在等时"的加速，重启后重新取即可。
+/// 令牌只在内存、不持久化：持久的权威是引擎状态，这里只管"在等时"的拉取，重启后重新取即可。
 /// 第一次只带版本与状态（`versionKeys`）把令牌推进到"现在"，不把整个同步区的正文拉一遍；其间看到的"在等的表"
 /// （`awaitedTables`）里要追的记录（`needsCatchUp`）按 ID 分批取整条交给协调器，不被令牌跨过；其余由引擎负责。
 /// 令牌过期时清空重取。同一批变化之后还会经引擎到达，协调器的合并是幂等的。
@@ -42,14 +43,11 @@ actor ZoneChangePuller {
 
   private let source: any ZoneChangeSource
   private let coordinator: SyncCoordinator
-  /// 主动拉取拿到的在等的记录记进到达日志：它与引擎带来的时刻之差，就是"主动拉取是否必要"的证据（见 `ArrivalLog`）。
-  private let arrivals: ArrivalLog
   private var token: Data?
 
-  init(source: any ZoneChangeSource, coordinator: SyncCoordinator, arrivals: ArrivalLog) {
+  init(source: any ZoneChangeSource, coordinator: SyncCoordinator) {
     self.source = source
     self.coordinator = coordinator
-    self.arrivals = arrivals
   }
 
   /// 拉到没有更多为止。actor 串行：同时来的两次拉取依次进行，不会用同一个令牌拉两遍再互相覆盖。
@@ -97,9 +95,7 @@ actor ZoneChangePuller {
     }.map(\.recordID)
     for start in stride(from: 0, to: wanted.count, by: CloudKitLimits.recordsPerRequest) {
       let ids = Array(wanted[start..<min(start + CloudKitLimits.recordsPerRequest, wanted.count)])
-      let records = try await source.records(ids)
-      await arrivals.pulled(records)  // 交给协调器之前：之后本机就有了
-      await coordinator.handle(.fetched(modifications: records, deletions: []))
+      await coordinator.handle(.fetched(modifications: try await source.records(ids), deletions: []))
     }
   }
 
@@ -129,7 +125,6 @@ actor ZoneChangePuller {
     repeat {
       batch = try await source.changes(since: token, keys: nil)
       if !batch.modifications.isEmpty || !batch.deletions.isEmpty {
-        await arrivals.pulled(batch.modifications)  // 交给协调器之前：之后本机就有了
         await coordinator.handle(.fetched(modifications: batch.modifications, deletions: batch.deletions))
       }
       token = batch.token
