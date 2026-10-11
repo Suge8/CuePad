@@ -32,11 +32,8 @@ final class ThumbnailLoader {
     private func render(_ url: URL, size: CGSize, scale: CGFloat, key: NSString) {
         guard inFlight.insert(key).inserted else { return }
         let radius = core.style.imageCornerRadius
-        Task { [weak self] in
-            let pixels = await Task.detached(priority: .userInitiated) {
-                Thumbnails.image(at: url, maxPixel: ImageLoading.maxThumbnailPixel)
-                    .flatMap { RoundedThumbnail.render($0, size: size, cornerRadius: radius, scale: scale) }
-            }.value
+        Task(priority: .userInitiated) { [weak self] in
+            let pixels = await Self.pixels(at: url, size: size, cornerRadius: radius, scale: scale)
             guard let self else { return }
             inFlight.remove(key)
             if let pixels {
@@ -48,6 +45,11 @@ final class ThumbnailLoader {
             }
             core.redrawImages(at: url)
         }
+    }
+
+    @concurrent private static func pixels(at url: URL, size: CGSize, cornerRadius: CGFloat, scale: CGFloat) async -> CGImage? {
+        Thumbnails.image(at: url, maxPixel: ImageLoading.maxThumbnailPixel)
+            .flatMap { RoundedThumbnail.render($0, size: size, cornerRadius: cornerRadius, scale: scale) }
     }
 }
 

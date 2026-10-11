@@ -50,7 +50,7 @@ final class CueImageAttachment: NSTextAttachment {
         for bounds: CGRect, attributes: [NSAttributedString.Key: Any], location: any NSTextLocation,
         textContainer: NSTextContainer?
     ) -> CueImage? {
-        nonisolated(unsafe) let core = core
+        let core = core
         let url = fileURL
         return MainActor.assumeIsolated { core?.thumbnails.image(at: url, size: bounds.size) }
     }

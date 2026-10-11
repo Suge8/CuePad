@@ -24,7 +24,7 @@ final class CueDividerAttachment: NSTextAttachment {
         for attributes: [NSAttributedString.Key: Any], location: any NSTextLocation, textContainer: NSTextContainer?,
         proposedLineFragment: CGRect, position: CGPoint
     ) -> CGRect {
-        nonisolated(unsafe) let core = core
+        let core = core
         let height = MainActor.assumeIsolated { core?.style.dividerHeight ?? 0 }
         return CGRect(x: 0, y: -height / 4, width: max(proposedLineFragment.width, 1), height: height)
     }
@@ -33,7 +33,7 @@ final class CueDividerAttachment: NSTextAttachment {
         for bounds: CGRect, attributes: [NSAttributedString.Key: Any], location: any NSTextLocation,
         textContainer: NSTextContainer?
     ) -> CueImage? {
-        nonisolated(unsafe) let core = core
+        let core = core
         return MainActor.assumeIsolated { core.map { CueImageRendering.divider(size: bounds.size, color: $0.resolved($0.style.dividerColor)) } }
     }
 }
