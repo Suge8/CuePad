@@ -1,8 +1,10 @@
 #if os(macOS)
 import Foundation
+import Synchronization
 @testable import CuePi
 
 /// 扮演 Pi 里的桥扩展，让客户端测试不依赖 Pi。字节协议见 CuePi 的 README 与 `PiWire`。
+/// 连接与收到的命令在 socket 队列上写、测试里读，放在锁里；`onCommand` 这类配置由测试在启动前设好。
 nonisolated final class FakeExtension: @unchecked Sendable {
     /// 线上的模型对象（`provider`、`id`、`name`、支持的思考强度 `thinking`）
     struct WireModel: Sendable {
@@ -45,12 +47,15 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     let pid: Int32
     let socketURL: URL
     private let options: Options
-    private let lock = NSLock()
-    private var listenFD: Int32 = -1
+    private struct Shared {
+        var listenFD: Int32 = -1
+        var connections: [Connection] = []
+        /// 收到的命令与此刻的状态存原样的 JSON 字节：字典里是 Any，不能交给锁，读的时候再解。
+        var commands: [(connection: Int, line: Data)] = []
+        var state = Data(#"{"kind":"idle"}"#.utf8)
+    }
+    private let shared = Mutex(Shared())
     private var source: DispatchSourceRead?
-    private var connections: [Connection] = []
-    private var _commands: [(connection: Int, json: [String: Any])] = []
-    private var currentState: [String: Any] = ["kind": "idle"]
     private let queue = DispatchQueue(label: "fake-extension")
     /// 对每条命令回一个 ack 体（不含 t/id）；nil 表示不回。
     var onCommand: @Sendable (_ connection: Int, _ command: [String: Any]) -> [String: Any]? = { _, _ in ["ok": true, "delivered": "immediate"] }
@@ -71,8 +76,10 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     var id: String { "\(sessionID).\(pid)" }
 
-    var commands: [(connection: Int, json: [String: Any])] { lock.withLock { _commands } }
-    var connectionCount: Int { lock.withLock { connections.count } }
+    var commands: [(connection: Int, json: [String: Any])] {
+        shared.withLock { $0.commands }.map { ($0.connection, Self.object($0.line)) }
+    }
+    var connectionCount: Int { shared.withLock { $0.connections.count } }
 
     func start() throws {
         try? FileManager.default.removeItem(at: socketURL)
@@ -80,7 +87,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         guard listen(fd, 8) == 0 else { throw POSIXError(.init(rawValue: errno)!) }
         // 与真实扩展一致：bind 之后 chmod（FSEvents 不报告仅 bind 的 socket 创建）
         chmod(socketURL.path, options.socketMode)
-        listenFD = fd
+        shared.withLock { $0.listenFD = fd }
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         src.setEventHandler { [weak self] in self?.accept() }
         src.resume()
@@ -107,10 +114,10 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     }
 
     private func accept() {
-        let fd = Darwin.accept(listenFD, nil, nil)
+        let fd = Darwin.accept(shared.withLock { $0.listenFD }, nil, nil)
         guard fd >= 0 else { return }
         let conn = Connection(fd: fd)
-        let index = lock.withLock { connections.append(conn); return connections.count - 1 }
+        let index = shared.withLock { $0.connections.append(conn); return $0.connections.count - 1 }
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         src.setEventHandler { [weak self, weak conn] in
             guard let self, let conn else { return }
@@ -131,11 +138,11 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     private func handle(line: Data, from index: Int) {
         guard let json = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return }
-        lock.withLock { _commands.append((index, json)) }
+        shared.withLock { $0.commands.append((index, line)) }
         guard let id = json["id"] as? String, var ack = onCommand(index, json) else { return }
         ack["t"] = "ack"
         ack["id"] = id
-        if let conn = lock.withLock({ connections[safe: index] }) { write(ack, to: conn) }
+        if let conn = shared.withLock({ $0.connections[safe: index] }) { write(ack, to: conn) }
     }
 
     private func hello() -> [String: Any] {
@@ -143,7 +150,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
             "t": "hello", "protocol": options.protocolVersion, "extensionVersion": options.extensionVersion,
             "sessionId": sessionID, "pid": Int(pid), "cwd": options.cwd, "mode": options.mode,
             "term": options.env,
-            "state": lock.withLock { currentState }.merging(["since": Self.nowMillis]) { a, _ in a },
+            "state": Self.object(shared.withLock { $0.state }).merging(["since": Self.nowMillis]) { a, _ in a },
         ]
         msg["sessionFile"] = options.sessionFile ?? NSNull()
         msg["model"] = options.model?.json ?? NSNull()
@@ -162,6 +169,10 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     static var nowMillis: Int { Int(Date().timeIntervalSince1970 * 1000) }
 
+    private static func object(_ data: Data) -> [String: Any] {
+        (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
     private func write(_ object: [String: Any], to conn: Connection) {
         guard var data = try? JSONSerialization.data(withJSONObject: object) else { return }
         data.append(0x0A)
@@ -176,7 +187,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     }
 
     private func broadcast(_ object: [String: Any]) {
-        for conn in lock.withLock({ connections }) { write(object, to: conn) }
+        for conn in shared.withLock({ $0.connections }) { write(object, to: conn) }
     }
 
     /// 发 `info`：只带变了的几项，没带的不变（hello 才带全部）；这里是模型配置那三项。
@@ -201,7 +212,8 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     func setState(_ state: [String: Any]) {
         var s = state
         s["since"] = Self.nowMillis
-        lock.withLock { currentState = s }
+        let data = try! JSONSerialization.data(withJSONObject: s)
+        shared.withLock { $0.state = data }
         broadcast(["t": "state", "state": s])
     }
 
@@ -214,9 +226,9 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     /// 不告别直接断开并留下 socket 文件（等同 kill -9）。幂等：fd 是进程全局的，重复 close 会误关别的测试刚复用的描述符。
     func crash() {
-        let (listener, open): (Int32, [Connection]) = lock.withLock {
-            defer { listenFD = -1; connections = [] }
-            return (listenFD, connections)
+        let (listener, open): (Int32, [Connection]) = shared.withLock {
+            defer { $0.listenFD = -1; $0.connections = [] }
+            return ($0.listenFD, $0.connections)
         }
         source?.cancel()
         source = nil
@@ -230,7 +242,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     /// 直接写任意一行到所有连接（协议损坏测试）
     func sendRaw(_ line: String) {
-        for conn in lock.withLock({ connections }) {
+        for conn in shared.withLock({ $0.connections }) {
             let data = Array((line + "\n").utf8)
             _ = data.withUnsafeBytes { Darwin.write(conn.fd, $0.baseAddress!, $0.count) }
         }

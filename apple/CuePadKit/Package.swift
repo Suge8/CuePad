@@ -12,6 +12,8 @@ let package = Package(
         .library(name: "CuePi", targets: ["CuePi"]),
         .library(name: "CueSync", targets: ["CueSync"]),
         .executable(name: "cuepad", targets: ["CueCLI"]),
+        // 测试共用的支撑：Kit 的测试目标与 App 的测试目标都用它（App 的测试目标经工程里的产品依赖链接）
+        .library(name: "CueTestSupport", targets: ["CueTestSupport"]),
     ],
     targets: [
         // 卡片正文的纯文本模型：解析/序列化、标题与按行规则、分割线、变量、光标规范化。仅依赖 Foundation。
@@ -24,7 +26,7 @@ let package = Package(
         .target(name: "CuePi", dependencies: ["CueStore"], exclude: ["README.md"], resources: [.copy("Extension")]),
         // iCloud 同步：CKSyncEngine ↔ CueStore 的记录映射、待推送变更、冲突与附件。
         .target(name: "CueSync", dependencies: ["CueStore"]),
-        // 测试共用的支撑（临时库目录、独立 sqlite3 连接、测试图片、手动时钟），只给测试目标依赖。
+        // 测试共用的支撑（临时库目录、独立 sqlite3 连接、测试图片、手动时钟、条件等待），只给测试目标依赖。
         .target(name: "CueTestSupport", dependencies: ["CueStore"], path: "Tests/CueTestSupport"),
         .testTarget(name: "CueSyncTests", dependencies: ["CueSync", "CueTestSupport"]),
         // `cuepad` 命令行：供人和 agent 读写本机资料库（经 CueStore，零第三方依赖）。
@@ -33,7 +35,7 @@ let package = Package(
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor"]),
-        .testTarget(name: "CuePiTests", dependencies: ["CuePi", "CueStore"], exclude: ["Fixtures"]),
+        .testTarget(name: "CuePiTests", dependencies: ["CuePi", "CueStore", "CueTestSupport"], exclude: ["Fixtures"]),
     ]
 )
 

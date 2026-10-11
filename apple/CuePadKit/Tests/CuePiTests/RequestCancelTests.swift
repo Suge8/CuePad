@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePi
@@ -13,10 +14,10 @@ struct RequestCancelTests {
         ext.onCommand = { _, _ in nil }  // 扩展收到命令不回 ack
         try ext.start()
         try bridge.start()
-        try await eventually("会话出现") { bridge.session(id: ext.id) != nil }
+        await eventually("会话出现") { bridge.session(id: ext.id) != nil }
 
         let request = Task { try await bridge.abort(ext.id) }
-        try await eventually("命令已发出") { !ext.commands.isEmpty }
+        await eventually("命令已发出") { !ext.commands.isEmpty }
         request.cancel()
 
         let started = ContinuousClock.now

@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
 import Observation
 import Testing
@@ -24,11 +25,11 @@ struct BridgeClientTests {
         let early = FakeExtension(directory: dir)
         try early.start()
         try bridge.start()
-        try await eventually("已运行的会话被发现") { session(early.id) != nil }
+        await eventually("已运行的会话被发现") { session(early.id) != nil }
 
         let late = FakeExtension(directory: dir, options: .init(cwd: "/work/other", mode: "rpc", model: nil, sessionFile: nil, tty: nil, env: [:]))
         try late.start()
-        try await eventually("启动后新增的会话被发现（FSEvents）") { session(late.id) != nil }
+        await eventually("启动后新增的会话被发现（FSEvents）") { session(late.id) != nil }
 
         let s = try #require(session(early.id))
         #expect(s.sessionID == early.sessionID)
@@ -58,19 +59,19 @@ struct BridgeClientTests {
         let ext = FakeExtension(directory: dir, options: .init(model: sonnet, thinking: "low", models: [sonnet, opus], context: (tokens: 1, window: 100), commands: [compactCommand]))
         try ext.start()
         try bridge.start()
-        try await eventually("hello 带全部") { session(ext.id)?.commands.count == 1 }
+        await eventually("hello 带全部") { session(ext.id)?.commands.count == 1 }
 
         ext.sendInfo(["context": ["tokens": 50, "window": 100]])
-        try await eventually("只有上下文变了") { session(ext.id)?.context?.tokens == 50 }
+        await eventually("只有上下文变了") { session(ext.id)?.context?.tokens == 50 }
         let kept = try #require(session(ext.id))
         #expect(kept.availableModels.count == 2 && kept.commands.count == 1 && kept.model?.key.id == "sonnet" && kept.thinking == .known(.low))
 
         ext.sendInfo(["name": "改名了"])
-        try await eventually("会话名变了") { session(ext.id)?.name == "改名了" }
+        await eventually("会话名变了") { session(ext.id)?.name == "改名了" }
         #expect(session(ext.id)?.context?.tokens == 50 && session(ext.id)?.availableModels.count == 2)
 
         ext.sendInfo(["model": NSNull(), "thinking": NSNull()])
-        try await eventually("带 null 的清空") { session(ext.id)?.model == nil && session(ext.id)?.thinking == nil }
+        await eventually("带 null 的清空") { session(ext.id)?.model == nil && session(ext.id)?.thinking == nil }
         #expect(session(ext.id)?.availableModels.count == 2 && session(ext.id)?.commands.count == 1)
     }
 
@@ -85,26 +86,26 @@ struct BridgeClientTests {
         try old.start()
         try bridge.start()
         let log = ChangeLog(bridge)
-        try await eventually("appeared") { session(old.id) != nil }
+        await eventually("appeared") { session(old.id) != nil }
 
         let reloaded = FakeExtension(directory: dir, sessionID: old.sessionID)
         try reloaded.start()
         // 再起一个会话当标记：它出现时，桥已在新 socket 存在、旧连接还在时扫描过一次
         let marker = FakeExtension(directory: dir)
         try marker.start()
-        try await eventually("标记会话出现") { session(marker.id) != nil }
+        await eventually("标记会话出现") { session(marker.id) != nil }
 
         old.sendRaw(#"{"t":"bye","reason":"reload"}"#)
         old.crash()
-        try await eventually("旧连接以 reload 结束") { log.ended.contains { $0.0.id == old.id && $0.1 == .closed(reason: "reload") } }
-        try await eventually("同一会话重新连上") { session(old.id) != nil && reloaded.connectionCount == 1 }
+        await eventually("旧连接以 reload 结束") { log.ended.contains { $0.0.id == old.id && $0.1 == .closed(reason: "reload") } }
+        await eventually("同一会话重新连上") { session(old.id) != nil && reloaded.connectionCount == 1 }
     }
 
     @Test func staleSocketFromDeadProcessIsRemovedAtStartWithoutBecomingASession() async throws {
         let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try deadPid()).sock")
         try FakeExtension.makeStaleSocket(at: stale)
         try bridge.start()
-        try await eventually("启动扫描清掉残留") { fileGone(stale) }
+        await eventually("启动扫描清掉残留") { fileGone(stale) }
         #expect(bridge.sessions.isEmpty)
     }
 
@@ -115,7 +116,7 @@ struct BridgeClientTests {
         try FakeExtension.makeStaleSocket(at: pending)
         try FakeExtension.makeStaleSocket(at: stale)
         try bridge.start()
-        try await eventually("扫描已发生：属主已死的残留被删") { fileGone(stale) }
+        await eventually("扫描已发生：属主已死的残留被删") { fileGone(stale) }
         try await Task.sleep(for: .milliseconds(600)) // 覆盖对存活属主的一次重试
         #expect(!fileGone(pending))
     }
@@ -149,7 +150,7 @@ struct BridgeClientTests {
         #expect(bridge.sessions.isEmpty && ext.connectionCount == 0)
 
         chmod(ext.socketURL.path, 0o600) // 收紧权限（属性变更触发重扫）后才会被接受
-        try await eventually("权限收紧后被发现") { session(ext.id) != nil }
+        await eventually("权限收紧后被发现") { session(ext.id) != nil }
     }
 
     // MARK: 协议兼容
@@ -159,7 +160,7 @@ struct BridgeClientTests {
         let ext = FakeExtension(directory: dir, options: .init(protocolVersion: protocolVersion, cwd: "/work/legacy"))
         try ext.start()
         try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
+        await eventually("appeared") { session(ext.id) != nil }
         let listed = try #require(session(ext.id))
         #expect(listed.state == .incompatible)
         #expect(listed.sessionID == ext.sessionID && listed.cwd.path == "/work/legacy")
@@ -170,7 +171,7 @@ struct BridgeClientTests {
         #expect(PiBridgeError.incompatibleExtension.errorDescription == "这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发")
 
         ext.close(bye: "quit")
-        try await eventually("ended") { session(ext.id) == nil }
+        await eventually("ended") { session(ext.id) == nil }
     }
 
     @Test func corruptedMessageDropsConnectionAsIncompatible() async throws {
@@ -178,9 +179,9 @@ struct BridgeClientTests {
         try ext.start()
         try bridge.start()
         let log = ChangeLog(bridge)
-        try await eventually("appeared") { session(ext.id) != nil }
+        await eventually("appeared") { session(ext.id) != nil }
         ext.sendRaw(#"{"t":"state","state":{"kind":"warp-drive"}}"#)
-        try await eventually("被判为不兼容并断开") {
+        await eventually("被判为不兼容并断开") {
             log.changes.contains { if case .incompatible = $0 { true } else { false } } && bridge.sessions.isEmpty
         }
     }
@@ -190,14 +191,14 @@ struct BridgeClientTests {
         let ext = FakeExtension(directory: dir)
         try ext.start()
         try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
+        await eventually("appeared") { session(ext.id) != nil }
         ext.sendRaw(#"{"t":"state","state":{"kind":"warp-drive"}}"#)
-        try await eventually("被判为不兼容并断开") { bridge.sessions.isEmpty }
+        await eventually("被判为不兼容并断开") { bridge.sessions.isEmpty }
 
         ext.crash()
         let reloaded = FakeExtension(directory: dir, sessionID: ext.sessionID)
         try reloaded.start()
-        try await eventually("重载后的会话连上") { session(ext.id) != nil && reloaded.connectionCount == 1 }
+        await eventually("重载后的会话连上") { session(ext.id) != nil && reloaded.connectionCount == 1 }
     }
 
     // MARK: 命令
@@ -207,7 +208,7 @@ struct BridgeClientTests {
         ext.onCommand = { _, _ in ["ok": true, "delivered": "steer"] }
         try ext.start()
         try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
+        await eventually("appeared") { session(ext.id) != nil }
 
         let png = Data([0x89, 0x50, 0x4E, 0x47])
         let delivery = try await bridge.send(PiMessage(text: "看图", images: [PiImage(mimeType: "image/png", data: png)], whenBusy: .steer), to: ext.id)
@@ -229,7 +230,7 @@ struct BridgeClientTests {
         ext.onCommand = { _, _ in ["ok": false, "error": "no_editor"] }
         try ext.start()
         try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
+        await eventually("appeared") { session(ext.id) != nil }
         await #expect(throws: PiBridgeError.rejected("no_editor")) { try await bridge.send(PiMessage(text: "x"), to: ext.id) }
     }
 
@@ -238,9 +239,9 @@ struct BridgeClientTests {
         ext.onCommand = { _, _ in nil } // 收到不回
         try ext.start()
         try bridge.start()
-        try await eventually("appeared") { session(ext.id) != nil }
+        await eventually("appeared") { session(ext.id) != nil }
         let pending = Task { try await bridge.send(PiMessage(text: "x"), to: ext.id) }
-        try await eventually("命令到达") { !ext.commands.isEmpty }
+        await eventually("命令到达") { !ext.commands.isEmpty }
         ext.crash()
         await #expect(throws: PiBridgeError.sessionEnded) { try await pending.value }
     }
@@ -255,12 +256,12 @@ struct BridgeClientTests {
         let other = PiBridge(socketDirectory: dir)
         try bridge.start()
         try other.start()
-        try await eventually("两个客户端都连上") {
+        await eventually("两个客户端都连上") {
             session(ext.id) != nil && other.sessions.contains { $0.id == ext.id } && ext.connectionCount == 2
         }
 
         ext.setState(["kind": "thinking"])
-        try await eventually("两个客户端都收到状态切换") {
+        await eventually("两个客户端都收到状态切换") {
             session(ext.id)?.state == .thinking && other.sessions.first?.state == .thinking
         }
 
@@ -276,20 +277,20 @@ struct BridgeClientTests {
         let first = FakeExtension(directory: dir)
         try first.start()
         try bridge.start()
-        try await eventually("先出现的会话被发现") { session(first.id) != nil }
+        await eventually("先出现的会话被发现") { session(first.id) != nil }
         let second = FakeExtension(directory: dir)
         try second.start()
-        try await eventually("后出现的会话被发现") { session(second.id) != nil }
+        await eventually("后出现的会话被发现") { session(second.id) != nil }
 
         let notified = Flag()
         withObservationTracking { _ = bridge.session(sessionID: second.sessionID) } onChange: { notified.value = true }
 
         first.setState(["kind": "thinking"])
-        try await eventually("别的会话的状态到了桥上") { session(first.id)?.state == .thinking }
+        await eventually("别的会话的状态到了桥上") { session(first.id)?.state == .thinking }
         #expect(!notified.value)
 
         second.setState(["kind": "thinking"])
-        try await eventually("它自己的变化通知到读它的人") { notified.value }
+        await eventually("它自己的变化通知到读它的人") { notified.value }
     }
 }
 

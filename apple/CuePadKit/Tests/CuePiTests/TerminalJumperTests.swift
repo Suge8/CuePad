@@ -1,36 +1,40 @@
 #if os(macOS)
 import Foundation
+import Synchronization
 import Testing
 @testable import CuePi
 
 /// "跳到会话所在终端"的策略选择：用假系统记录会执行哪些 tmux 命令 / AppleScript / 激活。
 struct TerminalJumperTests {
+    /// 配置项由测试在用之前设好；执行记录由被测代码在别的任务里写，放在锁里。
     final class FakeSystem: PiTerminalSystem, @unchecked Sendable {
-        private let lock = NSLock()
-        private var _runs: [[String]] = []
-        private var _scripts: [String] = []
-        private var _activated: [String] = []
+        private struct Calls {
+            var runs: [[String]] = []
+            var scripts: [String] = []
+            var activated: [String] = []
+        }
+        private let calls = Mutex(Calls())
         var tmuxClients = "100 /dev/ttys004\n300 /dev/ttys021\n200 /dev/ttys007\n" // "<最近活动> <tty>"
         var tmuxSwitchStatus: Int32 = 0
         var scriptResult: Result<String, any Error> = .success("ok")
         var canActivate = true
 
-        var runs: [[String]] { lock.withLock { _runs } }
-        var scripts: [String] { lock.withLock { _scripts } }
-        var activated: [String] { lock.withLock { _activated } }
+        var runs: [[String]] { calls.withLock { $0.runs } }
+        var scripts: [String] { calls.withLock { $0.scripts } }
+        var activated: [String] { calls.withLock { $0.activated } }
 
         func run(_ executable: String, _ arguments: [String]) async -> (status: Int32, output: String) {
-            lock.withLock { _runs.append([executable] + arguments) }
+            calls.withLock { $0.runs.append([executable] + arguments) }
             if arguments.contains("list-clients") { return (0, tmuxClients) }
             if arguments.contains("switch-client") { return (tmuxSwitchStatus, "") }
             return (0, "")
         }
         func appleScript(_ source: String) async throws -> String {
-            lock.withLock { _scripts.append(source) }
+            calls.withLock { $0.scripts.append(source) }
             return try scriptResult.get()
         }
         func activate(bundleID: String) async -> Bool {
-            lock.withLock { _activated.append(bundleID) }
+            calls.withLock { $0.activated.append(bundleID) }
             return canActivate
         }
     }

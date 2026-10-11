@@ -1,5 +1,7 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
+import Synchronization
 import Testing
 import CueStore
 @testable import CuePi
@@ -234,20 +236,18 @@ struct HistorySummaryOnlyTests {
 // MARK: - 后台索引器：首次按修改时间倒序，之后跟随文件变化
 
 /// 订阅索引器事件流并记录。
-final class HistoryEventLog: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _events: [PiHistoryEvent] = []
-    private var task: Task<Void, Never>?
+final class HistoryEventLog: Sendable {
+    private let recorded = Mutex<[PiHistoryEvent]>([])
+    /// 订阅的任务要引用自己，只能在初始化完成后起，所以放在锁里补上。
+    private let task = Mutex<Task<Void, Never>?>(nil)
 
     init(_ indexer: PiHistoryIndexer) {
         let stream = indexer.events()
-        task = Task { [weak self] in
-            for await e in stream { self?.lock.withLock { self?._events.append(e) } }
-        }
+        task.withLock { $0 = Task { [weak self] in for await e in stream { self?.recorded.withLock { $0.append(e) } } } }
     }
-    deinit { task?.cancel() }
+    deinit { task.withLock { $0?.cancel() } }
 
-    var events: [PiHistoryEvent] { lock.withLock { _events } }
+    var events: [PiHistoryEvent] { recorded.withLock { $0 } }
     var updates: [PiHistoryUpdate] { events.compactMap { if case .updated(let u) = $0 { u } else { nil } } }
     var finishedBackfill: Bool { events.contains { if case .backfillFinished = $0 { true } else { false } } }
 }
@@ -274,7 +274,7 @@ struct HistoryIndexerTests {
         let known = try PiHistory.index(file: upToDate.url, from: nil).checkpoint
 
         let log = HistoryEventLog(PiHistoryIndexer(root: root) { url in url.lastPathComponent == "b.jsonl" ? known : nil })
-        try await eventually("回填完成") { log.finishedBackfill }
+        await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.map { $0.file.lastPathComponent } == ["c.jsonl", "a.jsonl"])
         // 完成信号在全部回填更新之后
         if case .backfillFinished = log.events.last! {} else { Issue.record("backfillFinished 应是最后一个事件") }
@@ -285,14 +285,14 @@ struct HistoryIndexerTests {
         let top = try makeSession("p1", "a.jsonl", prompt: "top", modified: Date())
         try makeSession("p1/subagents", "w.jsonl", prompt: "worker", modified: Date())
         let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in nil })
-        try await eventually("回填完成") { log.finishedBackfill }
+        await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.map { $0.file.lastPathComponent } == ["a.jsonl"])
         guard case .backfillFinished(let files) = log.events.last! else { Issue.record("backfillFinished 应是最后一个事件"); return }
         #expect(files.map(\.lastPathComponent) == [top.url.lastPathComponent])
 
         try makeSession("p1/subagents", "w2.jsonl", prompt: "worker 2", modified: Date())
         try makeSession("p2", "b.jsonl", prompt: "later", modified: Date())
-        try await eventually("之后的顶层会话被索引") { log.updates.contains { $0.file.lastPathComponent == "b.jsonl" } }
+        await eventually("之后的顶层会话被索引") { log.updates.contains { $0.file.lastPathComponent == "b.jsonl" } }
         #expect(!log.updates.contains { $0.file.path.contains("/subagents/") })
     }
 
@@ -300,22 +300,22 @@ struct HistoryIndexerTests {
         let f = try makeSession("p1", "a.jsonl", prompt: "first", modified: Date())
         // 调用方从不返回检查点：索引器自己对回填之后被触碰的文件保留，之后的增量不能退化成重读
         let log = HistoryEventLog(PiHistoryIndexer(root: root) { _ in nil })
-        try await eventually("回填完成") { log.finishedBackfill }
+        await eventually("回填完成") { log.finishedBackfill }
 
         let firstAppend = [SessionFile.user("u2", "a", "second", at: 3), SessionFile.assistant("a2", "u2", text: "r2", at: 4)]
         try f.appendRaw(firstAppend.joined(separator: "\n") + "\n")
-        try await eventually("第一次追加被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(4) } }
+        await eventually("第一次追加被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(4) } }
 
         let secondAppend = SessionFile.user("u3", "a2", "third", at: 5)
         try f.appendRaw(secondAppend + "\n")
-        try await eventually("第二次追加被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(5) } }
+        await eventually("第二次追加被索引") { log.updates.contains { $0.history.lastActivity == SessionFile.date(5) } }
         let update = try #require(log.updates.last)
         #expect(update.file.lastPathComponent == "a.jsonl")
         #expect(update.bytesRead == secondAppend.utf8.count + 1)
         #expect(update.history.displayName == "first")
 
         try makeSession("p3", "fresh.jsonl", prompt: "brand new", modified: Date())
-        try await eventually("新文件被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
+        await eventually("新文件被索引") { log.updates.contains { $0.file.lastPathComponent == "fresh.jsonl" } }
     }
 
     /// 新用户常见顺序是先开 CuePad、后装 Pi：开始监听时会话目录还不存在。之后建出目录、写入会话（会话还没结束），
@@ -324,13 +324,13 @@ struct HistoryIndexerTests {
     func sessionsDirectoryCreatedAfterStartIsWatchedAndSurvivesRecreation() async throws {
         let sessions = root.appending(path: "agent/sessions")  // 连上层目录也还不存在
         let log = HistoryEventLog(PiHistoryIndexer(root: sessions) { _ in nil })
-        try await eventually("回填完成") { log.finishedBackfill }
+        await eventually("回填完成") { log.finishedBackfill }
 
         let project = sessions.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         var first = SessionFile(directory: project, name: "a.jsonl")
         try first.append(SessionFile.header(id: "a"), SessionFile.user("u", nil, "after pi was installed", at: 1))
-        try await eventually("后建目录里的会话被索引") {
+        await eventually("后建目录里的会话被索引") {
             log.updates.contains { $0.history.displayName == "after pi was installed" }
         }
 
@@ -338,7 +338,7 @@ struct HistoryIndexerTests {
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         var second = SessionFile(directory: project, name: "b.jsonl")
         try second.append(SessionFile.header(id: "b"), SessionFile.user("u", nil, "after the directory came back", at: 1))
-        try await eventually("删掉再建的目录里的会话被索引") {
+        await eventually("删掉再建的目录里的会话被索引") {
             log.updates.contains { $0.history.displayName == "after the directory came back" }
         }
     }

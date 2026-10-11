@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
 import Testing
 import CueStore
@@ -10,12 +11,12 @@ import CueStore
 struct RealHostTests {
     /// 先用一个普通 Pi 进程（假模型装在 agent 目录里，托管进程也加载得到）跑一轮、落盘，再结束它，留下一个已结束的会话文件。
     private func endedSession(_ pi: PiProcess, _ bridge: PiBridge) async throws -> (file: URL, sessionID: String) {
-        try await eventually("桥发现会话") { !bridge.sessions.isEmpty }
+        await eventually("桥发现会话") { !bridge.sessions.isEmpty }
         let session = bridge.sessions[0]
         try pi.prompt("第一轮")
-        try await eventually("回答落盘") { recap(of: session)?.lastReply != nil }
+        await eventually("回答落盘") { recap(of: session)?.lastReply != nil }
         pi.kill(SIGTERM)
-        try await eventually("会话结束") { bridge.sessions.isEmpty }
+        await eventually("会话结束") { bridge.sessions.isEmpty }
         return (try #require(session.sessionFile), session.sessionID)
     }
 
@@ -47,7 +48,7 @@ struct RealHostTests {
 
         #expect(resumed.sessionID == sessionID && resumed.hosted)
         _ = try await bridge.send(PiMessage(text: "后台接着说"), to: resumed.id)
-        try await eventually("后台进程回答了") { replies(in: file).last == "ECHO 后台接着说 IMAGES[]" }
+        await eventually("后台进程回答了") { replies(in: file).last == "ECHO 后台接着说 IMAGES[]" }
     }
 
     /// 结束会话：托管的进程被关掉（空闲时与正在跑一轮时一样），会话从桥上消失，是正常退出（bye quit）。
@@ -64,15 +65,15 @@ struct RealHostTests {
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
         if !prompt.isEmpty {
             _ = try await bridge.send(PiMessage(text: prompt), to: resumed.id)
-            try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
+            await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
         }
         let log = ChangeLog(bridge)
 
         try await host.end(resumed.id)
 
         #expect(bridge.sessions.isEmpty)
-        try await eventually("会话结束的通知到了") { log.ended.count == 1 }
-        try await eventually("日志记下了") { log.ended[0].1 == .closed(reason: "quit") }
+        await eventually("会话结束的通知到了") { log.ended.count == 1 }
+        await eventually("日志记下了") { log.ended[0].1 == .closed(reason: "quit") }
     }
 
     @Test func endingASessionThatIsAlreadyGoneSucceeds() async throws {
@@ -97,7 +98,7 @@ struct RealHostTests {
 
         #expect(opened.launchToken == "tok-1" && opened.hosted)
         _ = try await bridge.send(PiMessage(text: "开场的话"), to: opened.id)
-        try await eventually("回答了开场的话") {
+        await eventually("回答了开场的话") {
             recap(of: bridge.sessions.first { $0.id == opened.id })?.lastReply == "ECHO 开场的话 IMAGES[]"
         }
     }
@@ -114,7 +115,7 @@ struct RealHostTests {
 
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
 
-        try await eventually("空闲到点后退出") { !bridge.sessions.contains { $0.id == resumed.id } }
+        await eventually("空闲到点后退出") { !bridge.sessions.contains { $0.id == resumed.id } }
     }
 
     /// 后台托管着时，用户在自己的终端里打开同一个会话（同一会话 id 的新进程连上）：后台进程收尾退出，只剩用户那个。
@@ -132,7 +133,7 @@ struct RealHostTests {
         let mine = try await PiProcess(alongside: pi, sessionFile: file)
         defer { mine.stop() }
 
-        try await eventually("后台进程让出") {
+        await eventually("后台进程让出") {
             bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid]
         }
         #expect(!bridge.sessions.contains { $0.id == resumed.id })
@@ -166,22 +167,22 @@ struct RealHostTests {
         defer { host.closeAll() }
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
         _ = try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
-        try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
+        await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
 
         let log = ChangeLog(bridge)
         let mine = try await PiProcess(alongside: pi, sessionFile: file)
         defer { mine.stop() }
 
-        try await eventually("用户的进程连上") { bridge.sessions.contains { $0.pid == mine.pid } }
+        await eventually("用户的进程连上") { bridge.sessions.contains { $0.pid == mine.pid } }
         try pi.release()  // 后台这一轮这才做完（它停在假模型里，由测试放行）
 
         // 重新载入时用户那个进程的会话先结束再出现：第二次出现就是读到了后台那一轮
-        try await eventually("后台做完退出、用户的进程重新载入") {
+        await eventually("后台做完退出、用户的进程重新载入") {
             bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid]
                 && log.changes.count { if case .appeared(let s) = $0 { s.pid == mine.pid } else { false } } >= 2
         }
         try mine.prompt("我接着说")
-        try await eventually("用户这句落盘") { entries(in: file).contains { $0.role == "user" && $0.text == "我接着说" } }
+        await eventually("用户这句落盘") { entries(in: file).contains { $0.role == "user" && $0.text == "我接着说" } }
         let all = entries(in: file)
         let backgroundReply = try #require(all.last { $0.role == "assistant" && $0.text.contains("后台这一轮") })
         let mineEntry = try #require(all.first { $0.role == "user" && $0.text == "我接着说" })
@@ -200,13 +201,13 @@ struct RealHostTests {
         defer { host.closeAll() }
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
         _ = try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
-        try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
+        await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
 
         let mine = try await PiProcess(alongside: pi, sessionFile: file)
         defer { mine.stop() }
-        try await eventually("用户的进程连上") { bridge.sessions.contains { $0.pid == mine.pid } }
+        await eventually("用户的进程连上") { bridge.sessions.contains { $0.pid == mine.pid } }
         try mine.prompt("我自己的")
-        try await eventually("用户这句落盘") { entries(in: file).contains { $0.role == "user" && $0.text == "我自己的" } }
+        await eventually("用户这句落盘") { entries(in: file).contains { $0.role == "user" && $0.text == "我自己的" } }
         try pi.release()  // 用户先写了：后台这一轮这才做完
 
         _ = try await mine.waitForEvent("提示会话分出了支线") {
