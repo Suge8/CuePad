@@ -5,7 +5,6 @@ import Testing
 
 /// "现在在哪个项目"与往哪存：Mac 的首屏、⌘1–9、新建落点，手机的导航路径；项目失效（不存在、进了回收站、写入时被删）时回落并提示，不吞错。
 #if os(macOS)
-@MainActor
 struct ProjectsTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
@@ -25,7 +24,7 @@ struct ProjectsTests {
         let workspace = Workspace(services: services)
         let catalog = observing(workspace)
         defer { catalog.cancel() }
-        await eventually { workspace.catalog?.projects.count == 2 && services.settings.currentProject == nil }
+        try await eventually("workspace.catalog?.projects.count == 2 && services.settings.currentProject == nil") { workspace.catalog?.projects.count == 2 && services.settings.currentProject == nil }
         #expect(workspace.page == .project(pinned.id))
 
         // 没打开过项目：项目顺序变了首屏跟着变、不记成"上次打开"，用户切换才记下
@@ -33,11 +32,11 @@ struct ProjectsTests {
         services.settings.currentProject = nil
         let freshCatalog = observing(fresh)
         defer { freshCatalog.cancel() }
-        await eventually { fresh.catalog?.projects.first?.id == pinned.id }
+        try await eventually("fresh.catalog?.projects.first?.id == pinned.id") { fresh.catalog?.projects.first?.id == pinned.id }
         #expect(fresh.page == .project(pinned.id) && services.settings.currentProject == nil)
         let last = try await store.createProject(name: "C", color: "#000000")
         try await store.updateProject(last.id) { $0.isPinned = true }
-        await eventually { fresh.catalog?.projects.first?.id == last.id }
+        try await eventually("fresh.catalog?.projects.first?.id == last.id") { fresh.catalog?.projects.first?.id == last.id }
         #expect(fresh.page == .project(last.id))
 
         // ⌘N 打开侧栏里此刻的第 N 个：顺序变了不能还绑在旧顺序上；没有那么多个就不动
@@ -85,7 +84,6 @@ struct ProjectsTests {
 
 #if os(iOS)
 /// iPhone/iPad 上"现在在哪个项目"只有一份：从导航路径推出（`Navigation.currentProject`）。
-@MainActor
 struct ProjectsNavigationTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

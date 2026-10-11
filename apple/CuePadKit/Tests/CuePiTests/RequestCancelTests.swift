@@ -14,10 +14,10 @@ struct RequestCancelTests {
         ext.onCommand = { _, _ in nil }  // 扩展收到命令不回 ack
         try ext.start()
         try bridge.start()
-        await eventually("会话出现") { bridge.session(id: ext.id) != nil }
+        try await eventually("会话出现") { bridge.session(id: ext.id) != nil }
 
         let request = Task { try await bridge.abort(ext.id) }
-        await eventually("命令已发出") { !ext.commands.isEmpty }
+        try await eventually("命令已发出") { !ext.commands.isEmpty }
         request.cancel()
 
         let started = ContinuousClock.now

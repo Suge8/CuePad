@@ -14,7 +14,7 @@ struct RealTranscriptTests {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         try bridge.start()
-        await eventually("桥发现会话") { !bridge.sessions.isEmpty }
+        try await eventually("桥发现会话") { !bridge.sessions.isEmpty }
         return (pi, bridge, try #require(bridge.sessions.first?.sessionFile))
     }
 
@@ -76,7 +76,7 @@ struct RealTranscriptTests {
         defer { bridge.stop(); pi.stop() }
 
         try pi.prompt("[[slow]] 慢慢来")
-        await eventually("你的消息落盘") {
+        try await eventually("你的消息落盘") {
             (try? PiHistory.index(file: file, from: nil))?.messages.first?.role == .known(.user)
         }
         let update = try PiHistory.index(file: file, from: nil)

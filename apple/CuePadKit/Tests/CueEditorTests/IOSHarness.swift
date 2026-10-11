@@ -33,7 +33,10 @@ final class EditorHarness {
 
     init(width: CGFloat = 390, height: CGFloat = 700, theme: CueEditorTheme = .test) {
         textView = CueTextView(imageStore: store, theme: theme)
-        window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        // 测试进程里也有一个场景（宿主是 xctest 的代理 App）：窗口挂在它上面，编辑器才能成为第一响应者
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first!
+        window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: width, height: height)
         textView.frame = window.bounds
         window.addSubview(textView)
         window.makeKeyAndVisible()

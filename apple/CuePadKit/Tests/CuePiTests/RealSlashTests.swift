@@ -25,7 +25,7 @@ struct RealSlashTests {
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
-        await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
+        try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
         try await body(pi, bridge, bridge.sessions[0])
     }
 
@@ -51,7 +51,7 @@ struct RealSlashTests {
             for round in 1...2 {
                 try pi.prompt("第 \(round) 轮 " + String(repeating: "上下文填充 ", count: 12_000))
                 // 以已用量涨上去为准：上一轮的"歇下"状态在新一轮开始前还留着，单看状态会提前放行
-                await eventually("第 \(round) 轮之后已用量涨了") {
+                try await eventually("第 \(round) 轮之后已用量涨了") {
                     (bridge.sessions.first?.context?.tokens ?? 0) > used + 10_000 && bridge.sessions.first?.state == .settled
                 }
                 used = bridge.sessions.first?.context?.tokens ?? 0
@@ -59,7 +59,7 @@ struct RealSlashTests {
             #expect(used > 40_000 && used < 100_000)
 
             try await bridge.command("/compact", in: s.id)
-            await eventually("压缩后已用量未知") {
+            try await eventually("压缩后已用量未知") {
                 bridge.sessions.first?.context.map { $0.tokens == nil && $0.window == 100_000 } == true
             }
             // 压缩在会话文件里留下一条 compaction：对话里是一行系统行（真实 Pi 写的格式）
@@ -94,10 +94,10 @@ struct RealSlashTests {
             #expect(userTexts(of: s).isEmpty, "扩展命令不产生发给模型的消息")
 
             try await bridge.command("/greet world", in: s.id)
-            await eventually("模板展开后进了模型上下文") { self.userTexts(of: s) == ["Say hello to world."] }
+            try await eventually("模板展开后进了模型上下文") { self.userTexts(of: s) == ["Say hello to world."] }
 
             try await bridge.command("/skill:careful 小心点", in: s.id)
-            await eventually("skill 展开后进了模型上下文") {
+            try await eventually("skill 展开后进了模型上下文") {
                 self.userTexts(of: s).last?.contains("CAREFUL-BODY-MARKER") == true
             }
         }
@@ -118,14 +118,14 @@ struct RealSlashTests {
     @Test func builtinNameModelAndThinkingTakeEffect() async throws {
         try await withRig { _, bridge, s in
             try await bridge.command("/name 登录修复", in: s.id)
-            await eventually("改名") { bridge.sessions.first?.displayName == "登录修复" }
+            try await eventually("改名") { bridge.sessions.first?.displayName == "登录修复" }
 
             try await bridge.command("/model fake/echo-think", in: s.id)
-            await eventually("换模型") { bridge.sessions.first?.model?.key.id == "echo-think" }
+            try await eventually("换模型") { bridge.sessions.first?.model?.key.id == "echo-think" }
             try await bridge.command("/thinking high", in: s.id)
-            await eventually("换强度") { bridge.sessions.first?.thinking == .known(.high) }
+            try await eventually("换强度") { bridge.sessions.first?.thinking == .known(.high) }
             try await bridge.command("/model echo-b", in: s.id)  // 不带提供方：模型 id 唯一时也认
-            await eventually("按 id 换模型") { bridge.sessions.first?.model?.key.id == "echo-b" }
+            try await eventually("按 id 换模型") { bridge.sessions.first?.model?.key.id == "echo-b" }
         }
     }
 
@@ -134,12 +134,12 @@ struct RealSlashTests {
         try await withRig { pi, bridge, s in
             let log = ChangeLog(bridge)
             try pi.prompt("先说一句")
-            await eventually("回复写入") { self.userTexts(of: s) == ["先说一句"] }
-            await eventually("歇下") { bridge.sessions.first?.state == .settled }
+            try await eventually("回复写入") { self.userTexts(of: s) == ["先说一句"] }
+            try await eventually("歇下") { bridge.sessions.first?.state == .settled }
 
             try await bridge.command("/new", in: s.id)
-            await eventually("新会话") { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
-            await eventually("日志记下了") { log.ended.contains { $0.0.id == s.id } }
+            try await eventually("新会话") { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
+            try await eventually("日志记下了") { log.ended.contains { $0.0.id == s.id } }
             #expect(bridge.sessions[0].commands.contains { $0.name == "shout" }, "新会话照样报告命令清单")
         }
     }
@@ -148,7 +148,7 @@ struct RealSlashTests {
         try await withRig { _, bridge, s in
             let log = ChangeLog(bridge)
             try await bridge.command("/reload", in: s.id)
-            await eventually("重载后同一会话重新连上") {
+            try await eventually("重载后同一会话重新连上") {
                 !log.ended.isEmpty && bridge.sessions.first?.sessionID == s.sessionID && bridge.sessions.first?.commands.isEmpty == false
             }
         }
@@ -157,10 +157,10 @@ struct RealSlashTests {
     @Test func cloneOpensACopyOfTheSession() async throws {
         try await withRig { pi, bridge, s in
             try pi.prompt("要克隆的一句")
-            await eventually("歇下") { bridge.sessions.first?.state == .settled }
+            try await eventually("歇下") { bridge.sessions.first?.state == .settled }
             try await bridge.command("/clone", in: s.id)
-            await eventually("克隆出新会话") { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
-            await eventually("克隆带着历史") { self.userTexts(of: bridge.sessions[0]) == ["要克隆的一句"] }
+            try await eventually("克隆出新会话") { bridge.sessions.count == 1 && bridge.sessions[0].sessionID != s.sessionID }
+            try await eventually("克隆带着历史") { self.userTexts(of: bridge.sessions[0]) == ["要克隆的一句"] }
         }
     }
 }

@@ -311,12 +311,10 @@ import Testing
     #expect(Set(conflicts[0].keys) == (try await documented("Conflict", in: ["conflicts", "list"])))
   }
 
-  @Test func usageErrorsExitTwoWithPointerToHelp() async throws {
-    let sb = try Sandbox()
-    for arguments in [["nope"], ["card", "nope"], ["card", "show"], ["card", "list", "--bogus"], ["card", "add", "--body"]] {
-      let result = await sb.call(arguments)
-      #expect(result.code == 2 && result.out.isEmpty && result.err.contains("--help"), "\(arguments) → \(result)")
-    }
+  @Test(arguments: [["nope"], ["card", "nope"], ["card", "show"], ["card", "list", "--bogus"], ["card", "add", "--body"]])
+  func usageErrorsExitTwoWithPointerToHelp(arguments: [String]) async throws {
+    let result = await (try Sandbox()).call(arguments)
+    #expect(result.code == 2 && result.out.isEmpty && result.err.contains("--help"), "\(result)")
   }
 }
 #endif

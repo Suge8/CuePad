@@ -4,7 +4,6 @@ import Testing
 @testable import CuePad
 
 /// `cuepad` 命令行随 App 分发：在 ~/.local/bin 建指向 App 包内二进制的符号链接，让 agent 在 bash 里直接调用。
-@MainActor
 struct CommandLineToolTests {
     let root = FileManager.default.temporaryDirectory
         .appending(path: "cuepad-cli-tests-\(UUID().uuidString)", directoryHint: .isDirectory)

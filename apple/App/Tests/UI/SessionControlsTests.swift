@@ -5,7 +5,6 @@ import Testing
 
 /// 会话页里换模型与思考强度的显示：只由会话记录与发给它的投送请求推出（不另存界面状态）。
 /// 换了之后胶囊立即显示新值并标着在路上；没换成回到会话当前的值并写原因。
-@MainActor
 struct SessionControlsTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

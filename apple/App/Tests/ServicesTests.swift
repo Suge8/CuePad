@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-@MainActor
 struct GlobalShortcutTests {
     @Test func 启动时按设置注册_更换成功才落设置_失败回滚() throws {
         let rig = TestApp()
@@ -29,7 +28,6 @@ struct GlobalShortcutTests {
     }
 }
 
-@MainActor
 struct ImageStoreTests {
     @Test func 编辑器存入的图片按内容哈希落入库并可读回() async throws {
         let rig = TestApp()
@@ -52,7 +50,6 @@ struct ImageStoreTests {
     }
 }
 
-@MainActor
 struct PiHistoryPersistenceTests {
     private func sessionFile(in rig: TestApp, lines: [String]) throws -> URL {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
@@ -116,7 +113,6 @@ struct PiHistoryPersistenceTests {
     }
 }
 
-@MainActor
 struct PiExtensionConsentTests {
     private func rigWithPi(version: String) throws -> TestApp {
         let rig = TestApp()

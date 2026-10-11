@@ -5,7 +5,6 @@ import Testing
 @testable import CuePad
 
 /// 资料库打不开（更早或更新版本建的库）时进程不能终止：失败交给界面，带原文与库版本，界面据此写人话、可重试、可导出诊断。
-@MainActor
 struct LibraryFailureTests {
     /// 一个隔离位置，库文件是 `setup` 造出来的、结构版本为 `version` 的样子。
     private func library(version: Int, setup: String) throws -> LibraryLocation {

@@ -4,7 +4,6 @@ import Foundation
 import ImageIO
 import SQLite3
 import Synchronization
-import Testing
 import UniformTypeIdentifiers
 
 // Kit 与 App 的测试共用的支撑：临时库、独立 sqlite3 连接、测试图片、手动时钟、等待。
@@ -172,21 +171,26 @@ public final class ManualTiming: Sendable {
   }
 }
 
+/// 等不到时抛出：写明在等什么，测试就停在这里（接着往下跑只会在别处空等）。
+public struct TimedOut: Error, CustomStringConvertible {
+  public let description: String
+}
+
 /// 有界条件等待，只给没有事件可订阅的异步用（FSEvents、socket、子进程、系统弹窗与布局、后台落盘）：
-/// 条件一成立马上返回；到了上限记一条失败（写明在等什么）就返回，不抛错，同步的条件也不用写 `try`。
-/// 上限只是"确实不会来了"的兜底：机器负载高时一步会慢上几十秒，所以取得宽，各处不另写。库里的变化用下面按读取订阅的那个。
-public func eventually(
-  _ what: String = "条件成立", timeout: Duration = .seconds(30), sourceLocation: SourceLocation = #_sourceLocation,
-  _ condition: () async throws -> Bool
-) async rethrows {
+/// 条件一成立马上返回，到了上限抛 `TimedOut`。上限只是"确实不会来了"的兜底：机器负载高时一步会慢上几十秒，
+/// 所以取得宽，各处不另写。库里的变化用下面按读取订阅的那个。
+public func eventually(_ what: String, timeout: Duration = .seconds(30), _ condition: () async throws -> Bool) async throws {
   let deadline = ContinuousClock.now + timeout
   while try await !condition() {
-    guard ContinuousClock.now < deadline, !Task.isCancelled else {
-      Issue.record("等不到：\(what)", sourceLocation: sourceLocation)
-      return
-    }
-    try? await Task.sleep(for: .milliseconds(10))
+    guard ContinuousClock.now < deadline else { throw TimedOut(description: "等不到：\(what)") }
+    try await Task.sleep(for: .milliseconds(10))
   }
+}
+
+/// 等"什么都不会发生"：负向断言（停止后不再领取、权限不对就不连、链接不跳转）没有事件可等，只能给一段固定时长再确认仍没发生。
+/// 测试里固定时长的等待只经这里写，搜它就知道哪些断言靠时长（负载极高时可能假通过，不会假失败）。
+public func quietPeriod(_ duration: Duration) async {
+  try? await Task.sleep(for: duration)
 }
 
 /// 订阅读取直到条件成立（事件驱动，配合测试的时间限制，不轮询）。

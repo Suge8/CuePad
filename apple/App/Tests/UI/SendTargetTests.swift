@@ -7,7 +7,6 @@ import Testing
 
 /// Mac 上"发给哪个 Agent 会话"：提示词的发送钮、右键菜单与会话菜单读同一个 `SendState.agentTarget`。
 /// 会话结束后目标不悄悄换掉，而是写明"已结束"（发不出去，点开改选）；同一个 Pi 会话重新打开了就接回新开的那个。
-@MainActor
 struct SendTargetTests {
     let rig = TestApp()
     let workspace: Workspace
@@ -27,7 +26,9 @@ struct SendTargetTests {
         let changes = rig.pi.changes()  // 先订阅再连上会话：桥的变化写成同步记录
         try rig.pi.start()
         let services: AppServices = rig.services
-        Task { try await services.consumePiChanges(changes) }
+        Task {
+            do { try await services.consumePiChanges(changes) } catch { Issue.record(error) }
+        }
         rig.services.startLiveSessions()
     }
 
@@ -36,7 +37,7 @@ struct SendTargetTests {
         let ext = FakeExtension(directory: rig.socketDirectory, sessionID: sessionID, pid: pid, options: .init(cwd: directory))
         try ext.start()
         opened.extensions.append(ext)
-        await eventually { rig.pi.session(id: ext.id) != nil }
+        try await eventually("rig.pi.session(id: ext.id) != nil") { rig.pi.session(id: ext.id) != nil }
         #expect(rig.pi.session(id: ext.id) != nil)
         try await workspace.sendState.refreshSessionProjects()
         return ext
@@ -44,7 +45,7 @@ struct SendTargetTests {
 
     private func end(_ ext: FakeExtension) async throws {
         ext.close(bye: "quit")
-        await eventually { rig.pi.session(id: ext.id) == nil }
+        try await eventually("rig.pi.session(id: ext.id) == nil") { rig.pi.session(id: ext.id) == nil }
         try await workspace.sendState.refreshSessionProjects()
     }
 
@@ -55,7 +56,8 @@ struct SendTargetTests {
 
     /// 等目标成为 `name`（`ended` 为是否已结束）：状态经桥、同步记录、观察流一路过来，没有更细的信号。
     private func expectTarget(_ project: Project, _ name: String, ended: Bool, _ comment: Comment? = nil, sourceLocation: SourceLocation = #_sourceLocation) async {
-        await eventually {
+        // 等不到时不在这里停：下面带着桥与观察流现场的断言说得更清楚
+        try? await eventually("目标成为 \(name)") {
             guard let target = workspace.sendState.agentTarget(for: project.id) else { return false }
             return workspace.sendState.sessionName(target.session) == name && workspace.sendState.isEnded(target) == ended
         }
@@ -144,8 +146,7 @@ struct SendTargetTests {
         #expect(try await store.deliveryRequests().isEmpty)
 
         workspace.resolveBusySend(.steer)
-        await eventually { true }
-        for _ in 0..<100 where try await store.deliveryRequests().isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+        _ = try await eventually(store, { try $0.deliveryRequests().count }) { $0 > 0 }
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.hostID == "mac-b" && request.mode == .known(.steer))
     }
@@ -163,7 +164,7 @@ struct SendTargetTests {
         _ = try await open("b", in: "/work/beta")
         try await remoteSession("r", title: "atlas", in: project)
         try await remoteSession("gone", title: "old", in: project, state: .ended)
-        await eventually { workspace.sendState.onlineTargets(for: project.id).count == 3 }
+        try await eventually("workspace.sendState.onlineTargets(for: project.id).count == 3") { workspace.sendState.onlineTargets(for: project.id).count == 3 }
 
         let mac = workspace.sendState.onlineTargets(for: project.id).map(\.state.sessionID)
         let phone = HandOffTargets.sessions(rig.services.liveSessions.live, project: project.id).map(\.state.sessionID)
@@ -177,7 +178,7 @@ struct SendTargetTests {
     @Test func 本机记录里在线但桥上已没有的会话不列() async throws {
         try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
             sessionID: "stale", state: .settled, title: "stale", folder: "stale", projectID: project.id)
-        await eventually { rig.services.liveSessions.live.map(\.state.sessionID) == ["stale"] }
+        try await eventually("rig.services.liveSessions.live.map(\\.state.sessionID) == [\"stale\"]") { rig.services.liveSessions.live.map(\.state.sessionID) == ["stale"] }
         #expect(rig.services.liveSessions.live.count == 1, "记录读到了")
 
         #expect(workspace.sendState.onlineTargets(for: project.id).isEmpty)
@@ -221,7 +222,7 @@ struct SendTargetTests {
         try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
             sessionID: "old", state: .ended, title: "old", folder: "work", projectID: project.id,
             times: PiTimes(stateSince: .now.addingTimeInterval(-3_600), busySince: nil))
-        try await Task.sleep(for: .milliseconds(300))
+        await quietPeriod(.milliseconds(300))
 
         #expect(workspace.sendState.agentTarget(for: project.id) == nil)
     }
@@ -231,7 +232,7 @@ struct SendTargetTests {
         try await end(omega)
 
         await expectTarget(other, "omega", ended: true)
-        try await Task.sleep(for: .milliseconds(200))
+        await quietPeriod(.milliseconds(200))
         #expect(workspace.sendState.agentTarget(for: project.id) == nil)
     }
 }

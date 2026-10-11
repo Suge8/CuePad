@@ -211,7 +211,7 @@ final class PiProcess: @unchecked Sendable {
     /// 等到假模型又停住了一次（扩展已加载、请求已到模型）。
     func waitUntilHeld() async throws {
         let wanted = heldSeen.withLock { $0 += 1; return $0 }
-        await eventually("假模型停住") { self.heldCount() >= wanted }
+        try await eventually("假模型停住") { self.heldCount() >= wanted }
     }
 
     /// 之后每次停住都放行，不关心停几次（压缩会发一到两次摘要请求，子代理的回复又带着标记）：返回的任务在不再需要时取消。
@@ -233,7 +233,7 @@ final class PiProcess: @unchecked Sendable {
     /// 等到某条 Pi 事件（stdout 上的 JSON 行）出现
     func waitForEvent(_ what: String, _ match: @escaping @Sendable (PiEvent) -> Bool) async throws -> PiEvent {
         var found: PiEvent?
-        await eventually(what) {
+        try await eventually(what) {
             found = self.events.first(where: match)
             return found != nil
         }

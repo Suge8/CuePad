@@ -8,7 +8,6 @@ import Testing
 
 /// 会话对话：Mac 从会话文件写出——近 7 天活跃的会话自动写全部消息，更早的按需补写；会话记录上的摘要是同一次写入的投影；
 /// 文件一变就写（不经状态记录器的节流）。
-@MainActor
 struct PiTranscriptTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
@@ -152,7 +151,7 @@ struct PiTranscriptTests {
         try handle.close()
 
         let deadline = Task { try await Task.sleep(for: .seconds(1)) }
-        let watch = Task { @MainActor in
+        let watch = Task {
             for try await readable in store.observe({
                 try $0.piMessages(of: "s1").last?.text == "第三问" && $0.allPiSessionStates().first?.pendingPrompt == "第三问"
             }) where readable { return true }
