@@ -53,13 +53,12 @@ nonisolated enum PiChat {
         return entries
     }
 
-    /// Pi 回答上方注脚的内容（`ToolActivityLine` 排成一行）："改了 2 个文件，运行了 5 条命令 · 1 条失败 · 2 分钟"；
-    /// 没调工具时只有用时（时长写法见 `PiClock.duration`）。
+    /// Pi 回答上方注脚的内容（`ToolActivityLine` 排成一行）："改了 2 个文件，运行了 5 条命令 · 2 分钟"；
+    /// 没调工具时只有用时（时长写法见 `PiClock.duration`）。失败的调用与别的一样算进各类，注脚里不单独说：探索时的失败（搜不到、命令报错）是过程，
+    /// 展开的清单里每条自己写状态。
     struct RoundNote: Equatable, Sendable {
-        /// 工具摘要从全到简的几种写法（`toolSummaries`），放不下时取下一种；只有失败的工具时为空。
+        /// 工具摘要从全到简的几种写法（`toolSummaries`），放不下时取下一种；没调工具时为空。
         var summaries: [String]
-        /// "N 条失败"：不跟着摘要省略或换行，单独标色放在末尾。
-        var failures: String?
         var took: String
     }
 
@@ -67,12 +66,11 @@ nonisolated enum PiChat {
     static func meta(_ message: PiChatMessage) -> RoundNote? {
         guard message.role == .known(.pi), let started = message.roundStartedAt else { return nil }
         let took = PiClock.duration(message.at.timeIntervalSince(started))
-        let failed = message.tools?.failed ?? 0
-        return RoundNote(summaries: message.tools.map(toolSummaries) ?? [], failures: failed > 0 ? "\(failed) 条失败" : nil, took: took)
+        return RoundNote(summaries: message.tools.map(toolSummaries) ?? [], took: took)
     }
 
     /// 一轮工具活动的一句话，从全到简："改了 2 个文件，读了 3 个文件" → "改了 2 个文件，其余 3 个"。分类按改文件、跑命令、读取、
-    /// 搜索、其他的优先级，最全时三类以内全写、超过三类只写前两类；每简一档少写一类，少写的合计成"其余 N 个"。失败的不算进各类。
+    /// 搜索、其他的优先级，最全时三类以内全写、超过三类只写前两类；每简一档少写一类，少写的合计成"其余 N 个"。失败的调用也算在自己那一类里（与展开清单的行同一口径）。
     static func toolSummaries(_ tools: PiChatMessage.Tools) -> [String] {
         let kinds = PiChatMessage.Tools.Kind.allCases.filter { tools[$0] > 0 }
         let most = kinds.count > 3 ? 2 : kinds.count

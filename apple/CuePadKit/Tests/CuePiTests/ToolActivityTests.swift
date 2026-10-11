@@ -29,7 +29,7 @@ struct ToolActivityTests {
         try PiHistory.index(file: file.url, from: checkpoint)
     }
 
-    /// 读文件、改文件、跑命令、搜索、别的工具，其中一条命令失败：分类计数，失败的不算成功。
+    /// 读文件、改文件、跑命令、搜索、别的工具，其中一条命令失败：分类计数，失败的也算在自己那一类里。
     private func busyRound() throws -> SessionFile {
         var f = SessionFile(directory: dir)
         try f.append(
@@ -57,8 +57,8 @@ struct ToolActivityTests {
     @Test func aRoundsToolsAreClassifiedCountedAndListedWithoutOutput() throws {
         let tools = try #require(try index(try busyRound()).messages.last?.tools)
 
-        // 同一个文件读两次、改两次只算一个；失败的单独记，不进各类计数
-        #expect(tools.reads == 2 && tools.edits == 2 && tools.commands == 1 && tools.searches == 1 && tools.others == 1 && tools.failed == 1)
+        // 同一个文件读两次、改两次只算一个；失败的与成功的一样按类计数（摘要与清单同一口径）
+        #expect(tools.reads == 2 && tools.edits == 2 && tools.commands == 2 && tools.searches == 1 && tools.others == 1 && tools.total == tools.items.count)
         #expect(tools.items.map(\.kind) == [.read, .read, .edit, .edit, .command, .command, .search, .other])
         // 路径写成相对工作目录的；命令取第一个非空行；其他工具写工具名
         #expect(tools.items.map(\.target) == ["Sources/a.swift", "Sources/b.swift", "Sources/a.swift", "NOTES.md", "swift test --filter Foo", "false", "TODO", "subagents"])
@@ -93,7 +93,7 @@ struct ToolActivityTests {
             reordered("r1", "t1", call: "c1", failed: false, at: 3), reordered("r2", "r1", call: "c2", failed: true, at: 3),
             SessionFile.assistant("a1", "r2", text: "好", at: 4))
         let tools = try #require(try index(f).messages.last?.tools)
-        #expect(tools.commands == 1 && tools.failed == 1 && tools.items.map(\.failed) == [false, true])
+        #expect(tools.commands == 2 && tools.items.map(\.failed) == [false, true])
     }
 
 }

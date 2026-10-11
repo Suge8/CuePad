@@ -48,6 +48,9 @@ enum Schema {
     CREATE INDEX cards_todoAt ON cards(todoAt) WHERE todoAt IS NOT NULL;
     CREATE INDEX cards_piSessionID ON cards(piSessionID) WHERE piSessionID IS NOT NULL;
     """,
+    // 23：工具活动的各类计数改为失败的也算在内（与清单的行同一口径，`Tools.failed` 下线）；已存对话里的是旧口径，
+    // 会话文件的检查点作废，下次启动从头读一遍，所有消息统一成新口径
+    "UPDATE piSessions SET checkpoint = NULL;",
   ]
 
   private static let previews = """

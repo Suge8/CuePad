@@ -147,8 +147,20 @@ import Testing
     #expect(try await upgraded.previews(of: "s1").isEmpty)
   }
 
+  /// 结构 22 的库里已存的对话是旧的工具计数口径：升到 23 时会话文件的检查点作废，下次从头读。
+  @Test func schema22LibraryDropsSessionCheckpoints() async throws {
+    try await store.upsertPiSession(PiSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
+    try RawDB(fixture.url).exec("PRAGMA user_version = 22;")
+
+    let upgraded = try CueStore(url: fixture.url)
+    #expect(try await upgraded.piCheckpoint(of: "s1") == nil)
+  }
+
   /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
-  @Test(arguments: [(23, CueStoreError.unsupportedSchemaVersion(23)), (16, .schemaTooOld(16))])
+  @Test(arguments: [
+    (CueStore.supportedSchemaVersions.upperBound + 1, CueStoreError.unsupportedSchemaVersion(CueStore.supportedSchemaVersions.upperBound + 1)),
+    (16, .schemaTooOld(16)),
+  ])
   func libraryFromAnotherSchemaVersionIsRefused(version: Int, error: CueStoreError) throws {
     let url = fixture.directory.appending(path: "other/cuepad.db")
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

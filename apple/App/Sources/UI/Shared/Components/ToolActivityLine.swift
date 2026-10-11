@@ -1,8 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 一轮回答上方的注脚："改了 2 个文件，运行了 5 条命令 · 2分钟 · 1 条失败"，固定一行：放不下时摘要按优先级少写几类
-/// （`PiChat.toolSummaries` 从全到简），"N 条失败"始终整个留在末尾、胭脂。点开就地展开这一轮的工具清单，再点收起。
+/// 一轮回答上方的注脚："改了 2 个文件，运行了 5 条命令 · 2 分钟"，固定一行：放不下时摘要按优先级少写几类
+/// （`PiChat.toolSummaries` 从全到简）。失败的调用与别的一样算进各类，注脚里不单独写、不标色。点开就地展开这一轮的工具清单，再点收起。
 /// 与代码块、表格同一套底色与圆角（`ChatBlock`），收成贴着字的一小块。没调工具时只是一行"用时 8 秒"，不可点。
 /// 清单是回答的注脚：小一档的等宽字、次要墨色、行距收紧；每条一行，图标、文件路径或命令、状态——改文件写 +行数 −行数，
 /// 失败的只把"失败"两个字标胭脂；不显示工具输出。
@@ -31,12 +31,12 @@ struct ToolActivityLine: View {
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
     }
 
-    /// 读屏读的一句：最全的摘要、用时与失败。
+    /// 读屏读的一句：最全的摘要与用时。
     private var spoken: String {
-        [note.summaries.first, note.summaries.isEmpty ? "用时 \(note.took)" : note.took, note.failures].compactMap { $0 }.joined(separator: "，")
+        [note.summaries.first, note.summaries.isEmpty ? "用时 \(note.took)" : note.took].compactMap { $0 }.joined(separator: "，")
     }
 
-    /// 取第一种整行放得下的写法；最简的也放不下时截断摘要，用时与失败不截。
+    /// 取第一种整行放得下的写法；最简的也放不下时截断摘要，用时不截。
     private func header(chevron: Bool) -> some View {
         ViewThatFits(in: .horizontal) {
             ForEach(note.summaries, id: \.self) { line($0, chevron: chevron).fixedSize() }
@@ -56,10 +56,6 @@ struct ToolActivityLine: View {
                 Text(note.took).fixedSize()
             } else {
                 Text("用时 \(note.took)").fixedSize()
-            }
-            if let failures = note.failures {
-                Dot()
-                Text(failures).foregroundStyle(palette.failure).fixedSize()
             }
             if chevron {
                 Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
