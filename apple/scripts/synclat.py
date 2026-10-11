@@ -9,7 +9,7 @@
   xc.sh synclat --no-local --archive 手机.logarchive   只读 .logarchive
   xc.sh synclat --lines 文件           读已抽出的 "latency …" 行（每行一条）
 
-字段约定见 CueSync/ArrivalLog.swift。lag 起点是服务器时间、终点是本机时钟，误差零点几秒；超过 STALE 秒的是离线积压，不进分位数，单独计数。
+字段约定见 CueSync/ArrivalLog.swift；结论的回归用例：python3 apple/scripts/synclat_test.py。lag 起点是服务器时间、终点是本机时钟，误差零点几秒；超过 STALE 秒的是离线积压，不进分位数，单独计数。
 """
 import argparse, json, re, subprocess, sys
 from collections import defaultdict
@@ -129,16 +129,29 @@ def row(label, st):
     return (f"  {label:<18} 样本 {st['n']:>3}  推送 p50 {fmt(st['p50']):>6} p90 {fmt(st['p90']):>6} 最大 {fmt(st['max']):>6}  丢失 {loss:<9} "
             f"拉取先到 {st['pullFirst'] * 100:>3.0f}%（提前 p50 {fmt(st['early50'])} p90 {fmt(st['early90'])}）"
             + (f"  积压 {st['backlog']}" if st["backlog"] else "") + (f"  手动 {st['manual']}" if st["manual"] else "")
-            + (f"  被取代 {st['superseded']}" if st["superseded"] else "") + warn)
+            + (f"  被取代 {st['superseded']}（{superseded_share(st) * 100:.0f}%）" if st["superseded"] else "") + warn)
+
+
+def superseded_share(st):
+    """被取代的占（可量到的 + 被取代的）的比例。"""
+    total = st["n"] + st["superseded"]
+    return st["superseded"] / total if total else 0.0
 
 
 def verdict(st):
     if st["n"] < MIN_SAMPLES:
         return f"样本 {st['n']} 条，不足 {MIN_SAMPLES}：先别下结论，再多测一些（正常用一两天也会攒）"
-    p90, loss = st["p90"] or 0, st["lossRate"] or 0
+    p90, loss, superseded = st["p90"] or 0, st["lossRate"] or 0, superseded_share(st)
     if p90 > 5 or loss > 0.05:
         return "推送 p90 > 5 秒或丢失 > 5%：保持 2 秒主动拉取"
+    # 被取代 = 主动拉取先拿到、Mac 领取执行写回之后引擎只剩最新版本：推送没能抢在拉取与执行之前，旧版本的推送延迟量不到。
+    # 这不是丢失，但恰恰是主动拉取在起作用的请求；把它们排除在外会把"能删"高估。
+    if superseded > 0.2:
+        return f"{superseded * 100:.0f}% 的请求是主动拉取先拿到、推送没来得及（被取代 {st['superseded']} 条）：主动拉取在实际起作用，保持 2 秒"
     if p90 <= 2 and loss < 0.01:
+        if superseded > 0.01:
+            return (f"推送 p90 与丢失率达标，但 {superseded * 100:.0f}% 的请求（被取代 {st['superseded']} 条）是主动拉取先拿到、推送没来得及，"
+                    "它们的推送延迟量不到：只放到 10 秒，不删")
         if st["backlog"]:
             return (f"推送 p90 与丢失率达标，但有 {st['backlog']} 条超过 {STALE:.0f} 秒才经推送到、没有主动拉取佐证的记录（没排除是推送慢）："
                     "先确认它们是不是 App 没开期间攒下的，确认前只放到 10 秒，不删")
