@@ -3,7 +3,8 @@ import Testing
 @testable import CueStore
 
 /// 层级收敛只查这次涉及的卡和它们的子孙，结果必须和整库收敛一模一样（各设备算出同一结果）：
-/// 随机造一片合规的层级，再像远端批量应用那样改几张卡（改上级、项目、是不是任务，或删掉），两种算法比对。
+/// 随机造一片合规的层级，再像远端批量应用那样改几张卡（改上级、项目、是不是任务，或删掉），两种算法比对；
+/// 比对之外，修复后的层级还要独立满足规则本身：上级是任务、同项目、不成环、最多三级。
 @Suite(.timeLimit(.minutes(1))) struct CardLinksRepairTests {
   struct Random {
     var state: UInt64
@@ -56,6 +57,13 @@ import Testing
       let everything = links.repairs(touching: Set(links.links.keys).union(touched))
       if !everything.isEmpty { violating += 1 }
       #expect(links.repairs(touching: touched) == everything)
+      let repaired = links.links.merging(everything) { _, fixed in fixed }
+      for (id, link) in repaired {
+        if let parent = link.parent, let up = repaired[parent] { #expect(up.isTask && up.project == link.project) }
+        var depth = 1, cursor = link.parent
+        while let up = cursor, let next = repaired[up], depth <= Card.maxDepth + 1 { depth += 1; cursor = next.parent }
+        #expect(depth <= Card.maxDepth, "\(id) 成环或超过三级")
+      }
     }
     #expect(violating > 100)  // 随机改动确实常常造出违规，比对不是空转
   }
