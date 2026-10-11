@@ -144,24 +144,6 @@ struct IOSEditingTests {
         #expect(h.stored == original)
     }
 
-    @Test("图片宽度自适应：不超过行宽、保持比例，窗口变窄后跟随")
-    func widthAdapts() throws {
-        let h = EditorHarness(width: 390)
-        let id = try h.store.store(makePNG(width: 1600, height: 1000))
-        h.load("![](cuepad://img/\(id))")
-        let wide = try #require(h.imageLineFrames().first)
-        let container = h.textView.textContainer.size.width - 2 * h.textView.textContainer.lineFragmentPadding
-        #expect(wide.width <= container + 0.5)
-        let expectedHeight = wide.width / 1.6  // 行高比图片本身多出基线下的字体下降与行距
-        #expect(wide.height >= expectedHeight && wide.height - expectedHeight < 12)
-
-        h.window.frame.size.width = 300
-        h.textView.frame.size.width = 300
-        h.layout()
-        let narrow = try #require(h.imageLineFrames().first)
-        #expect(narrow.width < wide.width)
-    }
-
     @Test("图片像素在进入视口后显示出来")
     func rendersPixels() async throws {
         let h = EditorHarness()

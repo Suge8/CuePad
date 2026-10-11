@@ -1,5 +1,9 @@
 # 验收与测量
 
+## 测试入口
+
+`xc.sh test ios` 同一个命令里先跑 App 的 iOS 测试，再在模拟器上跑 CuePadKit 的测试：手机编辑器的测试（粘贴、分割线、选区、输入法组合、动态字体）只在这里跑；带 `-only-testing` 等收窄参数时只跑 App 那部分。命令列表见 [development.md](development.md)。
+
 ## 视觉验收
 
 `xc.sh shot mac` 直接启动产物里的可执行文件并记下它的 PID（不经 LaunchServices 激活，不抢焦点；上次中断遗留的实例只按记下的 PID 结束），按该 PID 找窗口后只截该窗口（首次需给终端授予屏幕录制权限），以 SIGTERM 退出。`shot ios` / `shot ipad` 构建 → 模拟器安装启动 → 截图 → 终止。`--` 之后是 App 启动参数：

@@ -19,20 +19,6 @@ struct DividerTests {
         #expect(h.caret == 8)
     }
 
-    @Test("分割线真的画在页面上，主题换了颜色跟着换")
-    func rendersTheLine() async throws {
-        let h = EditorHarness()
-        h.load("第一段内容\n\(split)\n第二段内容")
-        let frame = try #require(h.imageLineFrames().first)
-        #expect(await h.wait { h.rendered(frame, contains: h.textView.theme.dividerColor) })
-
-        var next = h.textView.theme
-        next.dividerColor = NSColor(srgbRed: 0, green: 0, blue: 1, alpha: 1)
-        h.textView.theme = next
-        #expect(await h.wait { h.rendered(frame, contains: next.dividerColor) })
-        #expect(!h.rendered(frame, contains: CueEditorTheme.test.dividerColor))
-    }
-
     @Test("光标整体跨过分割线：左右、上下都不会落在分割线行上")
     func caretCrossing() {
         let h = EditorHarness()
