@@ -120,12 +120,6 @@ struct SendTargetTests {
             sessionID: id, state: state, title: title, folder: title, projectID: project.id)
     }
 
-    @Test func 别的Mac上的在线会话也是发送目标() async throws {
-        try await remoteSession("r", title: "atlas", in: project)
-
-        await expectTarget(project, "atlas", ended: false)
-    }
-
     @Test func 发给别的Mac上的会话_写一条指定那台Mac的投送请求_本机不执行() async throws {
         try await remoteSession("r", title: "atlas", in: project)
         await expectTarget(project, "atlas", ended: false)

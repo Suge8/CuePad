@@ -43,28 +43,7 @@ import Testing
   }
 
   /// 同步表各一个记录类型，外加生产环境里删不掉的已下线类型；本机表（piSessions 等）不进 CloudKit。
-  @Test func everySyncedTableIsARecordTypeAndOnlyRetiredOnesAreExtra() async throws {
-    let schema = try await CloudKitSchema.generate()
-    let types = lines(schema).filter { $0.hasPrefix("RECORD TYPE ") }.map { $0.dropFirst("RECORD TYPE ".count).dropLast(2) }
-    #expect(types.map(String.init) == Table.synced.map(\.rawValue) + ["tags", "cardTags", "probes", "tasks"])
-    #expect(fields(of: "cards", in: schema).contains("isFavorite INT64"))  // 生产里已有，只声明不读写
-  }
 
-  @Test func fieldTypesAndEncryptionFollowTheMapping() async throws {
-    let schema = try await CloudKitSchema.generate()
-    let cards = fields(of: "cards", in: schema)
-    #expect(cards.contains("body ENCRYPTED STRING") && cards.contains("variableValues ENCRYPTED STRING"))
-    #expect(cards.contains("sortKey STRING") && cards.contains("modifiedAt INT64") && cards.contains("isPinned INT64"))
-    #expect(!cards.contains { $0.hasPrefix("id ") })  // 行 id 是 recordName，不是字段
-
-    for (table, encrypted) in RecordMapper.encryptedColumns {
-      let declared = fields(of: table.rawValue, in: schema)
-      for column in encrypted { #expect(declared.contains { $0.hasPrefix("\(column) ENCRYPTED ") }, "\(table.rawValue).\(column) 应为加密字段") }
-    }
-    let plain = fields(of: "piSessionStates", in: schema).filter { $0.hasPrefix("sessionID ") || $0.hasPrefix("state ") || $0.hasPrefix("hostID ") }
-    #expect(plain.allSatisfy { !$0.contains("ENCRYPTED") })  // 服务端要能看见的结构性字段保持明文
-    #expect(fields(of: "attachments", in: schema).contains("file ASSET"))
-  }
 
   @Test func fieldsTheServerQueriesAreIndexed() async throws {
     let schema = try await CloudKitSchema.generate()

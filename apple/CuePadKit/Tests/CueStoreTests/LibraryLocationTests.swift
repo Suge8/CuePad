@@ -16,28 +16,18 @@ import Testing
     }
   }
 
-  @Test func absoluteOverrideIsUsedVerbatim() throws {
-    let location = try LibraryLocation.resolve(
-      environment: ["CUEPAD_LIBRARY_DIR": "/tmp/cuepad-isolated"], base: .applicationSupport(URL(filePath: "/x")))
-    #expect(location.directory.path == "/tmp/cuepad-isolated")
-    #expect(location.isIsolated)
-    #expect(location.databaseURL.path == "/tmp/cuepad-isolated/cuepad.db")
-  }
-
-  @Test func emptyOverrideCountsAsUnset() throws {
-    let location = try LibraryLocation.resolve(environment: ["CUEPAD_LIBRARY_DIR": ""], base: .applicationSupport(URL(filePath: "/support")))
-    #expect(location.directory.path == "/support/CuePad/Library" && !location.isIsolated)
-  }
-
-  @Test func macLibraryLivesInApplicationSupport() throws {
-    let location = try LibraryLocation.resolve(environment: [:], base: .applicationSupport(URL(filePath: "/support")))
-    #expect(location.directory.path == "/support/CuePad/Library")
-    #expect(location.databaseURL.path == "/support/CuePad/Library/cuepad.db")
-  }
-
-  @Test func iOSLibraryLivesInTheAppGroupContainer() throws {
-    let location = try LibraryLocation.resolve(environment: [:], base: .appGroup(container: URL(filePath: "/group")))
-    #expect(location.directory.path == "/group/Library")
+  /// 位置按平台与环境变量定：Mac 在应用支持目录、iOS 在共享容器；非空的绝对路径覆盖（隔离），空值当没设。
+  @Test(arguments: [
+    (["CUEPAD_LIBRARY_DIR": "/tmp/cuepad-isolated"], LibraryLocation.Base.applicationSupport(URL(filePath: "/x")), "/tmp/cuepad-isolated", true),
+    (["CUEPAD_LIBRARY_DIR": "/tmp/iso"], .appGroup(container: nil), "/tmp/iso", true),
+    (["CUEPAD_LIBRARY_DIR": ""], .applicationSupport(URL(filePath: "/support")), "/support/CuePad/Library", false),
+    ([:], .applicationSupport(URL(filePath: "/support")), "/support/CuePad/Library", false),
+    ([:], .appGroup(container: URL(filePath: "/group")), "/group/Library", false),
+  ] as [([String: String], LibraryLocation.Base, String, Bool)])
+  func locationFollowsPlatformAndOverride(environment: [String: String], base: LibraryLocation.Base, directory: String, isolated: Bool) throws {
+    let location = try LibraryLocation.resolve(environment: environment, base: base)
+    #expect(location.directory.path == directory && location.isIsolated == isolated)
+    #expect(location.databaseURL.path == directory + "/cuepad.db")
   }
 
   @Test func missingAppGroupEntitlementIsAReadableError() {
@@ -50,11 +40,6 @@ import Testing
     } catch {
       Issue.record("错误类型不对：\(error)")
     }
-  }
-
-  @Test func overrideWinsOnEveryPlatform() throws {
-    let location = try LibraryLocation.resolve(environment: ["CUEPAD_LIBRARY_DIR": "/tmp/iso"], base: .appGroup(container: nil))
-    #expect(location.directory.path == "/tmp/iso")
   }
 
   @Test func storeOpensTheLibraryAtItsLocation() async throws {

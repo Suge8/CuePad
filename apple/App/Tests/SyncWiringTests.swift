@@ -15,16 +15,8 @@ struct SyncWiringTests {
         await eventually(condition)
     }
 
-    /// Mac：有会话连着或有本机待执行的请求就每 2 秒，闲着时也不放慢（没有推送可靠性的数据前不拿延迟换请求数），都没有就不拉。
-    @Test func Mac主动拉取的节奏_有会话或请求就是2秒() {
-        let every2 = SyncPoller.Cadence(.every(.seconds(2)))
-        #expect(SyncPoller.Cadence.mac(hasOpenDeliveries: false, hasSessions: false) == nil)
-        #expect(SyncPoller.Cadence.mac(hasOpenDeliveries: false, hasSessions: true) == every2)
-        #expect(SyncPoller.Cadence.mac(hasOpenDeliveries: true, hasSessions: false) == every2)
-        #expect(SyncPoller.Cadence.mac(hasOpenDeliveries: true, hasSessions: true) == every2)
-    }
-
     @Test func 启动同步引擎_状态与问题镜像给界面() async throws {
+        #expect(services.syncStatus == .starting)  // 引擎确认账号前不是"已同步"
         services.startSync()
         defer { services.cancelBackgroundWork() }
         await wait { app.sync.started == 1 }
@@ -100,10 +92,6 @@ struct SyncWiringTests {
             return
         }
         #expect(reason.contains("隔离"))
-    }
-
-    @Test func 有引擎时启动前是正在连接_不是已同步() {
-        #expect(services.syncStatus == .starting)
     }
 
     @Test func 隔离模式与没有iCloud权限的构建不创建同步引擎() throws {

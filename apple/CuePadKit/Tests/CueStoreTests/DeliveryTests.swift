@@ -371,25 +371,19 @@ import Testing
     #expect(try await store.sendRecords().isEmpty)
   }
 
-  /// 结束会话请求与发送同一条投送通道；它让会话停下，不是对会话说的话。
-  @Test func endRequestIsAddressedToTheSessionsMacAndIsNotAMessageToIt() async throws {
-    let made = try await store.requestEnd(of: pi, on: "mac-a")
+  /// 结束会话与停止这一轮同一条投送通道：发给会话所在的 Mac，不是对会话说的话；连点只发一次（在路上的请求被复用），两种互不复用。
+  @Test func endAndStopRequestsAreAddressedToTheSessionsMacAreNotMessagesAndAreNotWrittenTwiceWhileOpen() async throws {
+    let end = try await store.requestEnd(of: pi, on: "mac-a")
+    let stop = try await store.requestStop(of: pi, on: "mac-a")
 
-    let stored = try #require(try await request(made.id))
-    #expect(stored.mode == .known(.end) && stored.hostID == "mac-a" && stored.target == pi && stored.isOpen)
-    #expect(DeliveryMode.end.rawValue == "end")
-    #expect(!DeliveryMode.toSession.contains(.end))
-  }
-
-  /// 停止这一轮与结束同一条投送通道：不是对会话说的话；连点只发一次（在路上的停止请求被复用）。
-  @Test func stopRequestIsAddressedToTheSessionsMacIsNotAMessageAndIsNotWrittenTwiceWhileOpen() async throws {
-    let made = try await store.requestStop(of: pi, on: "mac-a")
-
-    let stored = try #require(try await request(made.id))
-    #expect(stored.mode == .known(.stop) && stored.hostID == "mac-a" && stored.target == pi && stored.isOpen)
-    #expect(DeliveryMode.stop.rawValue == "stop")
-    #expect(!DeliveryMode.toSession.contains(.stop))
-    #expect(try await store.requestStop(of: pi, on: "mac-a").id == made.id)
-    #expect(try await store.requestEnd(of: pi, on: "mac-a").id != made.id)  // 与结束互不复用
+    for (made, mode) in [(end, DeliveryMode.end), (stop, .stop)] {
+      let stored = try #require(try await request(made.id))
+      #expect(stored.mode == .known(mode) && stored.hostID == "mac-a" && stored.target == pi && stored.isOpen)
+      #expect(!DeliveryMode.toSession.contains(mode))
+    }
+    #expect(DeliveryMode.end.rawValue == "end" && DeliveryMode.stop.rawValue == "stop")
+    #expect(try await store.requestStop(of: pi, on: "mac-a").id == stop.id)
+    #expect(try await store.requestEnd(of: pi, on: "mac-a").id == end.id)
+    #expect(end.id != stop.id)
   }
 }

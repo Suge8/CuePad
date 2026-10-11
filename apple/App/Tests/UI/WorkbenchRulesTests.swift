@@ -327,31 +327,20 @@ struct PiReplyRulesTests {
         #expect(PiProgress.line(of: session(.settled, reply: "```\nls -la\n```")) == "（一段代码）")
     }
 
-    @Test func 等你确认时_文字型问题回复框就是作答框() {
-        let question = PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？")
-        #expect(MacDelivery.reply(to: session(.waitingForUser, question: question)) == .answer(question))
-    }
-
-    @Test func 等你确认时_选择与确认型问题不发自由文本_先在上面作答() {
-        let select = PiQuestion(promptID: "p", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
-        let confirm = PiQuestion(promptID: "p", kind: .confirm, text: "部署吗？")
-        #expect(MacDelivery.reply(to: session(.waitingForUser, question: select)) == .answerAbove)
-        #expect(MacDelivery.reply(to: session(.waitingForUser, question: confirm)) == .answerAbove)
-    }
-
-    @Test func 等你确认时_这里答不了的问题不发自由文本() {
+    /// 等你确认时：文字型问题回复框就是作答框；选择与确认型先在上面作答，这里答不了的不发自由文本。不在等你确认时照常发消息，忙时默认等它做完再说。
+    @Test func 回复框按问题类型是作答_先在上面作答_答不了_或照常发消息() {
+        let text = PiQuestion(promptID: "p", kind: .text, text: "新分支叫什么？")
+        #expect(MacDelivery.reply(to: session(.waitingForUser, question: text)) == .answer(text))
+        for kind in [PiQuestionKind.select, .confirm] {
+            let question = PiQuestion(promptID: "p", kind: .known(kind), text: "确定吗？", options: ["是", "否"])
+            #expect(MacDelivery.reply(to: session(.waitingForUser, question: question)) == .answerAbove)
+        }
         let editor = PiQuestion(promptID: nil, kind: .unknown("editor"), text: "编辑提交说明")
         #expect(MacDelivery.reply(to: session(.waitingForUser, question: editor)) == .unanswerable)
         #expect(MacDelivery.reply(to: session(.waitingForUser)) == .unanswerable)
-    }
 
-    @Test func Pi忙时两端默认都是等它做完再说_马上说是次级() {
         #expect(Array(MacDelivery.modes(for: session(.thinking)).prefix(2)) == [.followUp, .steer])
-    }
-
-    @Test func 不在等你确认时照常发消息() {
         #expect(MacDelivery.reply(to: session(.settled)) == .message(MacDelivery.modes(for: session(.settled))))
         #expect(MacDelivery.reply(to: session(.thinking)) == .message(MacDelivery.modes(for: session(.thinking))))
     }
-
 }

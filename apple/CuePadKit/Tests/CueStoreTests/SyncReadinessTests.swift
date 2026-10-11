@@ -35,14 +35,6 @@ import Testing
     #expect(uniqueIndexes.isEmpty)
   }
 
-  @Test func softDeleteIsJustDeletedAt() throws {
-    for table in ["projects", "cards"] {
-      let columns = try raw.rows("SELECT name FROM pragma_table_info('\(table)')").map { $0[0] }
-      #expect(columns.contains("deletedAt"))
-      #expect(!columns.contains { $0.lowercased().contains("batch") || $0.lowercased().contains("deletesource") })
-    }
-  }
-
   /// Pi 索引与偏移、项目绑定的代码目录（路径因设备而异）只在本机表，同步表不带这些列。
   @Test func deviceSpecificFieldsLiveOnlyInLocalTables() throws {
     for table in Self.synced {

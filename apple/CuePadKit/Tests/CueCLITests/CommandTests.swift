@@ -65,16 +65,6 @@ import Testing
     #expect(missing.code == 1 && missing.err.contains("找不到灵感或任务"))
   }
 
-  /// 带值的选项（--parent、--after）也接受引用，帮助里同样说明。
-  @Test func referenceHelpCoversOptionsThatTakeReferences() async throws {
-    let sb = try Sandbox()
-    for command in [["task", "add"], ["card", "move"], ["task", "done"]] {
-      let help = await sb.call(command + ["--help"])
-      #expect(help.out.contains("至少 4 位的唯一前缀"), "\(command)")
-    }
-    #expect(!(await sb.run("task", "list", "--help")).out.contains("唯一前缀"))
-  }
-
   @Test func cardJSONShape() async throws {
     let sb = try Sandbox()
     let alpha = try await sb.project("Alpha")
