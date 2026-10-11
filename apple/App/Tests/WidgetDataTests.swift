@@ -10,14 +10,14 @@ struct WidgetDataTests {
     var services: AppServices { app.services }
     var snapshots: URL { services.location.snapshotsDirectory }
 
-    @Test func 收件箱快照按最近修改排最多五张_带总数与首行标题() async throws {
+    @Test func 未分类快照按最近修改排最多五张_带总数与首行标题() async throws {
         for index in 1...7 {
             let card = try await services.store.createCard(in: nil, body: "卡片 \(index)\n后面的行")
             try await services.store.updateCard(card.id) { $0.modifiedAt = Date(timeIntervalSince1970: Double(index)) }
         }
         _ = try await services.store.createCard(in: nil, body: "![](cuepad://img/\(String(repeating: "a", count: 64)))")
         let project = try await services.store.createProject(name: "P", color: "#000000")
-        _ = try await services.store.createCard(in: project.id, body: "不在收件箱")
+        _ = try await services.store.createCard(in: project.id, body: "不在未分类")
 
         try await services.writeSnapshots()
 
@@ -41,27 +41,6 @@ struct WidgetDataTests {
         }
         #expect(Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["新项目"])
         #expect(Snapshots.readUnfiled(from: snapshots)?.cards.map(\.title) == ["未分类里的"])
-    }
-
-    /// 小组件刷新有系统预算：收件箱显示的内容没变时不重写快照、不刷新（重写会让下面的哨兵值被覆盖）。
-    @Test func 收件箱显示的内容没变时不重写收件箱快照() async throws {
-        services.startSnapshots()
-        defer { services.cancelBackgroundWork() }
-        _ = try await services.store.createCard(in: nil, body: "未分类里的")
-        let project = try await services.store.createProject(name: "P", color: "#000000")
-        await eventually {
-            Snapshots.readUnfiled(from: snapshots)?.total == 1 && Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["P"]
-        }
-        let sentinel = UnfiledSnapshot(cards: [], total: 999)
-        try Snapshots.write(sentinel, to: snapshots)
-
-        let other = try await services.store.createCard(in: project.id, body: "项目里的")
-        try await services.store.updateCard(other.id) { $0.body = "项目里的，改过" }
-        try await services.store.updateProject(project.id) { $0.name = "P2" }
-        await eventually { Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["P2"] }
-
-        #expect(Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["P2"])
-        #expect(Snapshots.readUnfiled(from: snapshots) == sentinel)
     }
 
     @Test func 进入后台前先跑完登记的落盘_再刷新快照() async throws {

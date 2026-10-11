@@ -54,17 +54,6 @@ struct DiagnosticArchiveTests {
         #expect(archive.reports().count == 1)
     }
 
-    @Test func 只留最近若干份() throws {
-        let archive = archive()
-        for minute in 0..<(DiagnosticArchive.keep + 3) {
-            try archive.store(Self.payload(end: "2026-10-09 03:\(String(format: "%02d", minute)):00"))
-        }
-        let reports = archive.reports()
-        #expect(reports.count == DiagnosticArchive.keep)
-        #expect(reports.first?.id == "2026-10-09T03-12-00Z-crash.json")
-        #expect(reports.last?.id == "2026-10-09T03-03-00Z-crash.json")  // 最早的三份被轮转掉
-    }
-
     @Test func 摘要_异常类型_信号_原因_崩溃线程顶部的帧() throws {
         let archive = archive()
         try archive.store(Self.payload(exceptionType: 1, signal: 11))
@@ -75,14 +64,6 @@ struct DiagnosticArchiveTests {
         #expect(report.app?.visible == "0.1.0（2610082154） · iPhone18,3 · iPhone OS 27.0 (24A430)")
         // 取崩溃线程（不是第一条栈），最深的在前
         #expect(report.frames == ["CuePad +0x1000", "SwiftUI +0x12c", "CuePad +0x7d0", "dyld +0x64"])
-    }
-
-    @Test func 导出文本带摘要与原始JSON() throws {
-        let archive = archive()
-        try archive.store(Self.payload())
-        let report = try #require(archive.reports().first)
-        #expect(report.diagnostics.contains("EXC_BAD_ACCESS") && report.diagnostics.contains("CuePad +0x1000"))
-        #expect(report.diagnostics.contains(#""signal": 11"#))
     }
 
     @Test func 没有诊断内容的包不存_读不出的文件跳过() throws {

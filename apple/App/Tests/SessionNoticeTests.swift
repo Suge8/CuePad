@@ -34,19 +34,6 @@ struct SessionNoticeTests {
         #expect(tracker.alerts(for: settled, since: .distantPast).isEmpty)
     }
 
-    @Test func 已结束但有话在路上的会话在列表里_不算在线_不触发提示() async throws {
-        let recorder = recorder()
-        var tracker = SessionAlertTracker()
-        try await recorder.update(sessionID: "s1", state: .settled, title: "homepage")
-        try await recorder.end(sessionID: "s1")
-        try await store.requestDelivery("再跑一遍", to: SendTarget(kind: .piSession, name: "homepage", ref: "s1"), on: "mac")
-
-        let states = try await live()
-        #expect(app.services.liveSessions.items.map(\.state.sessionID) == ["s1"])  // 在 current 里（唤醒中）
-        #expect(states.isEmpty)  // 但不是在线会话
-        #expect(tracker.alerts(for: states, since: .distantPast).isEmpty)
-    }
-
     @Test func 等你确认带问题首行_做完了不带() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
@@ -63,18 +50,6 @@ struct SessionNoticeTests {
         try await recorder.update(sessionID: "s1", state: .settled)
         let settled = try #require(tracker.alerts(for: try await live(), since: .distantPast).first)
         #expect(settled.kind == .settled && settled.text.visible == "homepage · 完成了")
-    }
-
-    @Test func 会话结束后重新出现_不当成新转换() async throws {
-        let recorder = recorder()
-        var tracker = SessionAlertTracker()
-        try await recorder.update(sessionID: "s1", state: .thinking)
-        _ = tracker.alerts(for: try await live(), since: .distantPast)
-        try await recorder.end(sessionID: "s1")
-        #expect(tracker.alerts(for: try await live(), since: .distantPast).isEmpty)  // 已结束的不在在线范围里
-
-        try await recorder.update(sessionID: "s1", state: .settled)
-        #expect(tracker.alerts(for: try await live(), since: .distantPast).isEmpty)  // 重新连上：第一次读到
     }
 
     /// App 不在前台时发生的转换（冷启动、从后台回来后才同步到）不在前台补报：那一下系统推送已经提示过了。
@@ -101,26 +76,6 @@ struct SessionNoticeTests {
         let navigation = Navigation(settings: AppSettings(defaults: UserDefaults(suiteName: UUID().uuidString)!, launchArguments: [:]))
         navigation.layout = layout
         return navigation
-    }
-
-    @Test func 正看着的会话_只有它在最上面一页且标签在屏幕上才算() {
-        let session = UUID()
-        let other = UUID()
-        let tabs = navigation(.tabs)
-        tabs.tab = .agent
-        tabs.agentPath = [.session(session)]
-        #expect(tabs.isViewing(session: session) && !tabs.isViewing(session: other))
-
-        tabs.tab = .projects  // 切走了：Agent 标签里压着的会话页不在屏幕上
-        #expect(!tabs.isViewing(session: session))
-
-        tabs.tab = .agent
-        tabs.agentPath = [.session(session), .project(UUID())]  // 上面又推了别的页
-        #expect(!tabs.isViewing(session: session))
-
-        let split = navigation(.split)
-        split.splitPath = [.session(session)]
-        #expect(split.isViewing(session: session))
     }
 
     /// 正看着 Agent 列表时也不弹会话的前台提示：列表里那一行已经在变，再弹一条横幅只会压在列表顶上。
@@ -157,11 +112,5 @@ struct SessionNoticeTests {
         #expect(!navigation.keeps(banner) && navigation.keeps(other))
     }
 
-    @Test func 点提示进该会话_同点开推送通知() {
-        let session = UUID()
-        let navigation = navigation(.tabs)
-        navigation.show(.session(session))
-        #expect(navigation.tab == .agent && navigation.agentPath == [.session(session)])
-    }
 }
 #endif

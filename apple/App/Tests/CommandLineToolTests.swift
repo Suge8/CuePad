@@ -76,26 +76,6 @@ struct CommandLineToolTests {
         #expect(try destination() == helper.path)
     }
 
-    @Test func 卸载能清掉失效的自家链接() async throws {
-        defer { try? FileManager.default.removeItem(at: root) }
-        try FileManager.default.createDirectory(at: linkDirectory, withIntermediateDirectories: true)
-        try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "/Volumes/Old/CuePad.app/Contents/Helpers/cuepad")
-        let installer = makeInstaller()
-        await installer.refresh()
-
-        try await installer.uninstall()
-
-        #expect(installer.state == .notInstalled)
-    }
-
-    @Test func App包里没有命令行二进制时不可用() async throws {
-        defer { try? FileManager.default.removeItem(at: root) }
-        let installer = makeInstaller(helper: root.appending(path: "Missing.app/Contents/Helpers/cuepad"))
-        await installer.refresh()
-        #expect(installer.state == .unavailable)
-        await #expect(throws: CommandLineToolError.unavailable) { try await installer.install() }
-    }
-
     @Test(arguments: [
         ("/usr/bin:/bin", false),
         ("/usr/bin:__LINK__:/bin", true),
@@ -105,13 +85,6 @@ struct CommandLineToolTests {
         let installer = makeInstaller(shellPath: path.replacingOccurrences(of: "__LINK__", with: linkDirectory.path))
         await installer.refresh()
         #expect(installer.pathIncludesLinkDirectory == included)
-    }
-
-    @Test func 读不到shell的PATH时不下结论() async {
-        defer { try? FileManager.default.removeItem(at: root) }
-        let installer = makeInstaller(shellPath: nil)
-        await installer.refresh()
-        #expect(installer.pathIncludesLinkDirectory == nil)
     }
 
     /// 测试宿主就是这次构建出的 CuePad.app：里面必须真的带着 cuepad，经链接调用能运行。

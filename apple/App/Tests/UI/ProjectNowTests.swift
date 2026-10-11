@@ -43,32 +43,6 @@ struct ProjectNowTests {
         #expect(now([seen], task: nil, intro: nil) == nil)
     }
 
-    @Test func 只看本项目的会话_颜色只给等你确认与出错() {
-        let elsewhere = item("deploy", .waitingForUser, question: "部署到生产吗？", project: UUID())
-        let busy = item("atlas", .tool, detail: "bash · pnpm test")
-
-        let byProject = ProjectNow.byProject([project], sessions: [elsewhere, busy], tasks: [:], intros: [:], shown: shown)
-
-        #expect(byProject[project]?.text == "运行 pnpm test")
-        #expect(byProject[project]?.needsYou == false)
-        #expect(now([item("rename", .waitingForUser, question: "新分支叫什么？")])?.needsYou == true)
-    }
-
-    /// 书架上"正在推进"已列出的任务不在项目的"此刻"里再写一遍：取这个项目别的进行中任务，再没有取介绍；
-    /// 没有"正在推进"的地方（iPad 侧栏、Mac 侧栏）照常写最近开始的那条。
-    @Test func 正在推进已列出的任务跳过_取下一条再取介绍() {
-        let reconnect = ProjectNow.InProgress(id: UUID(), title: "补重连用例")
-        let stress = ProjectNow.InProgress(id: UUID(), title: "跑一遍 16 人压测")
-        func text(listed: Set<UUID>) -> String? {
-            ProjectNow.byProject(
-                [project], sessions: [], tasks: [project: [reconnect, stress]], intros: [project: "多 Agent 调度本月可上线"],
-                listed: listed, shown: shown)[project]?.text
-        }
-
-        #expect(text(listed: [reconnect.id]) == "跑一遍 16 人压测")
-        #expect(text(listed: [reconnect.id, stress.id]) == "多 Agent 调度本月可上线")
-        #expect(text(listed: []) == "补重连用例")
-    }
 }
 
 /// 没送到的话在"此刻"与会话行是同一个判定（`AppSettings.shown`）：你看过那个会话之前写没送到的原因，

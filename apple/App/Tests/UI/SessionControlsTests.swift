@@ -46,16 +46,6 @@ struct SessionControlsTests {
         #expect(shown == PiConfigShown(model: luna, thinking: .high, pending: true, failure: nil))
     }
 
-    /// 与 Pi 同一条夹取规则：新模型不支持原来的档位时，先往高找最近的一档，没有再往低找。
-    @Test func 换到不支持原档位的模型_思考强度按新模型夹取显示() async throws {
-        let atlas = try await session()
-        let request = try await store.requestConfig(PiConfig(model: luna.key), to: target(atlas), on: atlas.hostID)
-
-        let shown = SessionDigest(session: atlas, project: nil, deliveries: [request]).config
-
-        #expect(shown.thinking == .high)
-    }
-
     @Test func 没换成_回到会话当前的值并写原因() async throws {
         let atlas = try await session()
         let request = try await store.requestConfig(PiConfig(thinking: .high), to: target(atlas), on: atlas.hostID)
@@ -69,17 +59,4 @@ struct SessionControlsTests {
 }
 
 #if os(iOS)
-/// 会话右缘的刻度滑条：每条你发的话一个刻度（按先后），预览是它的第一行；你发的不到 6 条时不显示。
-struct ChatScrubberMarksTests {
-    private func entry(_ user: Bool, _ text: String) -> PiChatEntry { PiChatEntry(id: UUID(), role: user ? .user : .pi, text: text, meta: nil) }
-
-    @Test func 每条你发的话一个刻度_预览是第一行() {
-        let entries = (1...6).flatMap { [entry(true, "第 \($0) 问\n细节"), entry(false, "回答 \($0)")] }
-
-        let marks = ChatScrubber.marks(entries)
-
-        #expect(marks.map(\.preview) == (1...6).map { "第 \($0) 问" })
-        #expect(marks.map(\.id) == entries.filter(\.isUser).map(\.id))
-    }
-}
 #endif

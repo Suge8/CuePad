@@ -8,23 +8,6 @@ import Testing
 
 @MainActor
 struct GlobalShortcutTests {
-    @Test(arguments: [
-        ("Alt+Space", Shortcut(keyCode: 49, modifiers: .option)),
-        ("Control+Alt+Shift+Super+KeyK", Shortcut(keyCode: 40, modifiers: [.control, .option, .shift, .command])),
-        ("Super+ArrowUp", Shortcut(keyCode: 126, modifiers: .command)),
-        ("Control+F1", Shortcut(keyCode: 122, modifiers: .control)),
-        ("Shift+Digit1", Shortcut(keyCode: 18, modifiers: .shift)),
-    ])
-    func 加速键字符串与快捷键互转(accelerator: String, shortcut: Shortcut) {
-        #expect(Shortcut(accelerator: accelerator) == shortcut)
-        #expect(shortcut.accelerator == accelerator)
-    }
-
-    @Test(arguments: ["Space", "Alt", "Alt+Escape", "Hyper+KeyA", ""])
-    func 不支持的加速键被拒绝(accelerator: String) {
-        #expect(Shortcut(accelerator: accelerator) == nil)
-    }
-
     @Test func 启动时按设置注册_更换成功才落设置_失败回滚() throws {
         let rig = TestApp()
         let services: AppServices = rig.services

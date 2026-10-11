@@ -96,17 +96,45 @@ struct MacSyncTests {
 
     // MARK: Pi 状态记录
 
-    /// 桥上会话的状态、说明与出错原文（工具名与目标、弹窗标题、出错摘要）原样写进同步记录；它们怎么从线上消息得来见 CuePi 的桥测试。
-    @Test func 会话的状态与说明原样写进同步记录() async throws {
-        var reading = session("s1", state: .tool)
-        reading.detail = "read · README.md"
-        try await services.consumePiChanges(changes([.appeared(reading)]))
+    /// 桥上会话的每个字段原样写进同步记录（手机据此画状态、计时、子代理、用量条、命令面板、模型选择与弹窗）；
+    /// 它们怎么从线上消息得来见 CuePi 的桥测试。本版本不认识的新取值原样留着。
+    @Test func 会话的状态与各字段原样写进同步记录() async throws {
+        let started = Date(timeIntervalSince1970: 1_000)
+        let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low])
+        let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high])
+        let subagents = [
+            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started),
+            PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping")),
+        ]
+        let commands = [
+            PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]"),
+            PiSlashCommand(name: "x", summary: nil, source: .unknown("plugin")),
+        ]
+        let question = PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"])
+        var live = session("s1", state: .waitingForUser)
+        live.detail = "read · README.md"
+        live.stateSince = started
+        live.busySince = started
+        live.subagents = subagents
+        live.model = opus
+        live.thinking = .unknown("ultra")
+        live.availableModels = [sonnet, opus]
+        live.context = PiContextUsage(tokens: 42_000, window: 200_000)
+        live.commands = commands
+        live.question = question
+        live.launchToken = "tok-1"
+        try await services.consumePiChanges(changes([.appeared(live)]))
 
         let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.state == .known(.tool))
-        #expect(stored.detail == "read · README.md")
-        #expect(stored.sessionID == "s1")
-        #expect(stored.hostID == TestApp.hostID)
+        #expect(stored.state == .known(.waitingForUser) && stored.detail == "read · README.md")
+        #expect(stored.sessionID == "s1" && stored.hostID == TestApp.hostID)
+        #expect(stored.stateSince == started && stored.busySince == started)
+        #expect(stored.subagents == subagents)
+        #expect(stored.model == opus && stored.thinking == .unknown("ultra") && stored.models.map(\.key.id) == ["sonnet", "opus"])
+        #expect(stored.context == PiContextUsage(tokens: 42_000, window: 200_000))
+        #expect(stored.commands == commands)
+        #expect(stored.question == question)
+        #expect(try await services.store.piSessionPage(PiSessionQuery(launchToken: "tok-1")).items.map(\.state.sessionID) == ["s1"])
     }
 
     @Test func 会话按工作目录归入项目_结束后记录保留为已结束() async throws {
@@ -143,85 +171,6 @@ struct MacSyncTests {
         #expect(failed.status == .known(.failed) && failed.resultDetail == "会话在压缩上下文时关掉了，这句没送进去")
         #expect(try await store.deliveryRequest(kept.id)?.status == .known(.succeeded))
         #expect(try await store.piSessionPage(PiSessionQuery()).items.first?.undelivered == 1)
-    }
-
-    @Test func 会话的计时基准原样写进同步记录() async throws {
-        var working = session("s1", state: .tool)
-        working.stateSince = Date(timeIntervalSince1970: 1_000)
-        working.busySince = Date(timeIntervalSince1970: 1_000)
-        try await services.consumePiChanges(changes([.appeared(working)]))
-        let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.stateSince == working.stateSince && stored.busySince == working.busySince)
-    }
-
-    /// 子代理写成结构化列表（名字、角色、状态、在做什么与本次运行的时刻），一行一个；说明栏只写会话自己的说明；
-    /// FireCode 以后新增的状态原样留着。
-    @Test func 子代理写成结构化列表() async throws {
-        let started = Date(timeIntervalSince1970: 1_000)
-        let settled = Date(timeIntervalSince1970: 1_300)
-        var master = session("s1", state: .delegating)
-        master.subagents = [
-            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started),
-            PiSubagentState(name: "core", role: "审查员", phase: .known(.failed), action: "超时", startedAt: started, settledAt: settled),
-            PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping")),
-        ]
-        try await services.consumePiChanges(changes([.appeared(master)]))
-        let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.subagents == [
-            PiSubagentState(name: "ui", role: "工程师", phase: .known(.running), action: "运行 bun test", startedAt: started),
-            PiSubagentState(name: "core", role: "审查员", phase: .known(.failed), action: "超时", startedAt: started, settledAt: settled),
-            PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping")),
-        ])
-        #expect(stored.detail == nil)
-    }
-
-    /// 当前模型、思考强度与可选模型写成同步记录里的结构化字段；Pi 报的新强度（本版本不认识）原样留着。
-    @Test func 会话的模型与思考强度和可选模型写进同步记录() async throws {
-        let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low])
-        let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high])
-        var configured = session("s1")
-        configured.model = opus
-        configured.thinking = .known(.high)
-        configured.availableModels = [sonnet, opus]
-        try await services.consumePiChanges(changes([.appeared(configured)]))
-
-        let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.model == PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high]))
-        #expect(stored.thinking == .known(.high))
-        #expect(stored.models.map(\.key.id) == ["sonnet", "opus"])
-
-        configured.thinking = .unknown("ultra")
-        try await services.consumePiChanges(changes([.infoChanged(configured)]))
-        #expect(try await services.store.allPiSessionStates().first?.thinking == .unknown("ultra"))
-    }
-
-    /// 上下文余量与斜杠命令清单写成同步记录里的结构化字段（手机据此画用量条、弹命令面板）；Pi 报的本版本不认识的来源原样留着。
-    @Test func 会话的上下文余量与命令清单写进同步记录() async throws {
-        var reporting = session("s1")
-        reporting.context = PiContextUsage(tokens: 42_000, window: 200_000)
-        reporting.commands = [
-            PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]"),
-            PiSlashCommand(name: "skill:review", summary: nil, source: .known(.skill)),
-            PiSlashCommand(name: "x", summary: nil, source: .unknown("plugin")),
-        ]
-        try await services.consumePiChanges(changes([.appeared(reporting)]))
-
-        let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.context == PiContextUsage(tokens: 42_000, window: 200_000))
-        #expect(stored.commands == [
-            PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin), hint: "[说明]"),
-            PiSlashCommand(name: "skill:review", summary: nil, source: .known(.skill)),
-            PiSlashCommand(name: "x", summary: nil, source: .unknown("plugin")),
-        ])
-    }
-
-    @Test func 等你回答的弹窗写进同步记录() async throws {
-        var asked = session("s1", state: .waitingForUser)
-        asked.question = PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"])
-        try await services.consumePiChanges(changes([.appeared(asked), .infoChanged(asked)]))
-
-        let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.question == PiQuestion(promptID: "p-1", kind: .select, text: "选哪个？", options: ["A", "B"]))
     }
 
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
@@ -668,13 +617,6 @@ struct MacSyncTests {
         let records = try await services.store.allPiSessionStates()
         #expect(records.count == 1)
         #expect(records.first?.hosted == false && records.first?.state == .known(.tool))
-    }
-
-    @Test func 新会话的认领标识写进同步记录() async throws {
-        var started = session("s9")
-        started.launchToken = "tok-9"
-        try await services.consumePiChanges(changes([.appeared(started)]))
-        #expect(try await services.store.piSessionPage(PiSessionQuery(launchToken: "tok-9")).items.map(\.state.sessionID) == ["s9"])
     }
 
     /// 项目在哪台 Mac 上绑定了目录（只带目录末段名）同步给手机：Mac 绑定、解绑后随之写、删。

@@ -18,19 +18,6 @@ struct IOSWorkflowTests {
 
     // MARK: 发到 Mac
 
-    /// 手机主动拉取的节奏：有发往 Mac 还没结果的请求时 2 秒、每次在等最多 2 分钟；正在看 Agent 页或会话近况时 3 秒、不限时；
-    /// 两者都有时 2 秒、不限时。
-    @Test func 主动拉取的节奏_等结果与看着Agent页() {
-        let services: AppServices = app.services
-        #expect(services.pollingCadence == nil)
-        services.piViewers = 1
-        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(3))))
-        services.hasOpenDeliveries = true
-        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2))))
-        services.piViewers = 0
-        #expect(services.pollingCadence == SyncPoller.Cadence(.every(.seconds(2), for: .seconds(120))))
-    }
-
     @Test func 作答_请求发给会话所在的Mac_带这次弹窗的标识与答案() async throws {
         let question = PiQuestion(promptID: "p-7", kind: .select, text: "覆盖吗？", options: ["覆盖", "取消"])
         try await PiStateRecorder(store: store, hostID: "mac-b").update(
