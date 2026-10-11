@@ -42,13 +42,16 @@ private func mainCPUSeconds(_ port: mach_port_t) -> Double {
 /// 用 display link 记下每一帧的时间戳；帧间隔超过刷新间隔 1.5 倍的算掉帧。
 @MainActor
 final class FrameRecorder: NSObject {
+    /// 掉帧次数、最长一帧（毫秒）与每次掉帧 [距开始的毫秒, 这一帧的毫秒]。
+    struct Hitches {
+        var count = 0
+        var worstMs = 0.0
+        var at: [[Double]] = []
+    }
+
     private var link: CADisplayLink?
     private var stamps: [CFTimeInterval] = []
     private var refresh: CFTimeInterval = 1.0 / 60
-    private var waiter: CheckedContinuation<Void, Never>?
-    private let port = mach_thread_self()
-    private var cpuAtStart = 0.0
-    private var instructionsAtStart = 0.0
 
     #if os(macOS)
     func start(in view: NSView) { begin(view.displayLink(target: self, selector: #selector(tick))) }
@@ -57,8 +60,6 @@ final class FrameRecorder: NSObject {
     #endif
 
     private func begin(_ link: CADisplayLink) {
-        cpuAtStart = mainCPUSeconds(port)
-        instructionsAtStart = instructionsMillions()
         stamps = []
         link.add(to: .main, forMode: .common)
         self.link = link
@@ -67,34 +68,16 @@ final class FrameRecorder: NSObject {
     @objc private func tick(_ link: CADisplayLink) {
         stamps.append(link.timestamp)
         refresh = link.duration > 0 ? link.duration : refresh
-        waiter?.resume()
-        waiter = nil
     }
 
-    func nextFrame() async {
-        await withCheckedContinuation { waiter = $0 }
-    }
-
-    func stop() -> [String: Any] {
+    func stop() -> Hitches {
         link?.invalidate()
         link = nil
         let intervals = zip(stamps.dropFirst(), stamps).map { $0 - $1 }
-        let dropped = intervals.reduce(0) { $0 + max(0, Int(($1 / refresh).rounded()) - 1) }
-        let span = (stamps.last ?? 0) - (stamps.first ?? 0)
-        return [
-            "mainCpuMs": ((mainCPUSeconds(port) - cpuAtStart) * 10_000).rounded() / 10,
-            "instructionsM": (instructionsMillions() - instructionsAtStart).rounded(),
-            "frames": stamps.count,
-            "refreshHz": (1 / refresh).rounded(),
-            "fps": span > 0 ? (Double(intervals.count) / span * 10).rounded() / 10 : 0,
-            "droppedFrames": dropped,
-            "hitches": intervals.filter { $0 > refresh * 1.5 }.count,
-            "worstFrameMs": ((intervals.max() ?? 0) * 10_000).rounded() / 10,
-            // 每次卡顿：[距开始的毫秒, 这一帧的毫秒]，用来分清卡在哪一刻
-            "hitchesAt": zip(stamps.dropFirst(), intervals).filter { $0.1 > refresh * 1.5 }.map {
-                [(($0.0 - (stamps.first ?? 0)) * 1000).rounded(), ($0.1 * 10_000).rounded() / 10]
-            },
-        ]
+        let slow = zip(stamps.dropFirst(), intervals).filter { $0.1 > refresh * 1.5 }
+        return Hitches(
+            count: slow.count, worstMs: ((intervals.max() ?? 0) * 10_000).rounded() / 10,
+            at: slow.map { [(($0.0 - (stamps.first ?? 0)) * 1000).rounded(), ($0.1 * 10_000).rounded() / 10] })
     }
 }
 
@@ -192,7 +175,7 @@ final class TurnLog {
     /// - visibleTurns：clickMs 里有几圈。
     /// - totalMs、maxTurnMs：动作后量的这段时间里主线程 CPU 的总数与最重的一圈；heavy 是 ≥3ms 的各圈（几毫秒醒来、几毫秒 CPU）。
     /// - instructionsM：进程在这段时间里执行的指令数（百万）。
-    static func metrics(_ turns: (log: [Turn], changedAt: Int?, start: CFTimeInterval), instructions: Double, frames: [String: Any]) -> [String: Any] {
+    static func metrics(_ turns: (log: [Turn], changedAt: Int?, start: CFTimeInterval), instructions: Double, frames: FrameRecorder.Hitches) -> [String: Any] {
         func ms(_ value: Double) -> Double { (value * 10_000).rounded() / 10 }
         let log = turns.log
         let visible = log.prefix((turns.changedAt ?? log.count - 1) + 1)
@@ -205,11 +188,30 @@ final class TurnLog {
             // ≥3ms 的各圈：[动作发出后第几毫秒醒来, 这一圈的 CPU 毫秒]
             "heavy": log.filter { min($0.cpu, $0.dur) >= 0.003 }.map { [((($0.at - turns.start) * 1000).rounded()), ms(min($0.cpu, $0.dur))] },
             "instructionsM": ((instructionsMillions() - instructions) * 10).rounded() / 10,
-            "hitches": frames["hitches"] ?? 0,
-            "worstMs": frames["worstFrameMs"] ?? 0,
+            "hitches": frames.count,
+            "worstMs": frames.worstMs,
             // 每次掉帧：[距开始的毫秒, 这一帧的毫秒]
-            "hitchesAt": frames["hitchesAt"] ?? [],
+            "hitchesAt": frames.at,
         ]
     }
 }
+
+#if os(macOS)
+/// 界面里的测量点：首屏卡片出现（`content`，`perfMark`）。只在 Debug 构建里由视图调用，`interact` 等它出现再开始量。
+@MainActor
+enum PerfProbe {
+    private static var waiting: [String: CheckedContinuation<Void, Never>] = [:]
+    private(set) static var firstSeen: [String: Date] = [:]
+
+    static func mark(_ event: String) {
+        if firstSeen[event] == nil { firstSeen[event] = .now }
+        waiting.removeValue(forKey: event)?.resume()
+    }
+
+    /// 等到下一次 `event`。
+    static func wait(for event: String) async {
+        await withCheckedContinuation { waiting[event] = $0 }
+    }
+}
+#endif
 #endif

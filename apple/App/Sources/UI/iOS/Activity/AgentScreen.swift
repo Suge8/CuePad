@@ -64,7 +64,6 @@ struct AgentScreen: View {
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .contentMargins(.top, Bars.contentGap, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
-        .defaultScrollAnchor(DebugHooks.preset.agentFromBottom ? .bottom : nil)
         .hidingSearch($searchHidden, searching: searchFocused || !model.query.isEmpty)
         .safeAreaBar(edge: .top) {
             SearchRow(search: search, searchHidden: searchHidden) { filterMenu } trailing: { if project == nil { actions } }
