@@ -16,7 +16,7 @@ struct PiConversation: View {
     @Environment(\.palette) private var palette
     @Environment(\.chatInverted) private var inverted
     @Environment(\.chatAtNewest) private var atNewest
-    @Environment(\.chatBottomSpace) private var bottomSpace
+    @Environment(\.chatInsets) private var insets
     @Environment(\.chatHighlight) private var highlight
     @State private var opened: PiPreview?
 
@@ -30,7 +30,7 @@ struct PiConversation: View {
         ChatStack(alignment: .leading, spacing: Self.spacing) {
             if inverted {
                 // 让出底下回复框与键盘占的高（`ChatScroll`）；它和第一条之间本有一份行距，扣掉
-                Color.clear.frame(height: max(0, bottomSpace - Self.spacing)).accessibilityHidden(true)
+                Color.clear.frame(height: max(0, insets.bottom - Self.spacing)).accessibilityHidden(true)
                 // 读屏仍按先后读：越早的越先
                 ending.chatRow().accessibilitySortPriority(-Double(entries.count + outgoing.count))
                 ForEach(Array(outgoing.enumerated()).reversed(), id: \.element.id) { index, request in
@@ -40,6 +40,8 @@ struct PiConversation: View {
                     row(item).chatRow().accessibilitySortPriority(-Double(index))
                 }
                 if entries.isEmpty { RecapPreview(session: session).chatRow() }
+                // 最早那头让出顶上的栏（同上）
+                Color.clear.frame(height: max(0, insets.top - Self.spacing)).accessibilityHidden(true)
             } else {
                 if let window, entries.count < all.count {
                     EarlierRow(hidden: all.count - entries.count, fillsViewport: atNewest, window: window)

@@ -64,6 +64,13 @@ nonisolated struct ChatFollow: Equatable {
     }
 }
 
+/// 倒置的聊天滚动区（iOS）铺满整屏，上下被栏占的高：`top` 是状态栏、顶栏与离顶栏的距离，在最早那头让出；
+/// `bottom` 是回复框与横条区或键盘，在最新那头让出。
+nonisolated struct ChatInsets: Equatable {
+    var top: CGFloat = 0
+    var bottom: CGFloat = 0
+}
+
 enum ChatLayout {
     /// 对话最新那头与最早那头的留白：最后一行离回复框（含排队、问题卡）至少这么远。
     static let edge: CGFloat = 16
@@ -72,8 +79,8 @@ enum ChatLayout {
 extension EnvironmentValues {
     /// 在倒置的聊天滚动区里（iOS）：内容按新到旧给出，每一行用 `chatRow()` 转回正向。
     @Entry var chatInverted = false
-    /// 倒置的聊天滚动区底下（回复框与键盘）占的高：对话在懒加载栈里以最新那头的一行空白让出它（见 `ChatScroll`）。
-    @Entry var chatBottomSpace: CGFloat = 0
+    /// 倒置的聊天滚动区上下被栏占的高（见 `ChatScroll`）：对话在懒加载栈两头各以一行空白让出它们。
+    @Entry var chatInsets = ChatInsets()
     /// 滚动区贴着最新（`ChatFollow.atNewest`）：Mac 的对话据此知道最上面一行进了可见区是不是因为排开的几条铺不满一屏。
     @Entry var chatAtNewest = true
     /// 刚跳到的那条你的话：短暂描一圈（刻度滑条）。
@@ -136,8 +143,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var position = ScrollPosition(edge: Self.newestEdge)
     @State private var own = ChatFollow()
-    /// 底下回复框与键盘占的高（iOS）。
-    @State private var below: CGFloat = 0
+    /// 上下被栏占的高（iOS）。
+    @State private var insets = ChatInsets()
 
     /// `follow`：页面要据贴底与否改别处（收起顶栏、输入框）时由页面持有；不给就自己持有。
     /// `clearsBelow`（iOS）：最底下这么高（回复框下沿到屏幕底：横条区或键盘）不露对话，内容在回复框下沿淡到全透；
@@ -191,18 +198,19 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
 
     @ViewBuilder private var scroll: some View {
         #if os(iOS)
-        // 滚动区铺到屏幕底、不随底下的回复框与键盘缩放：滚动区缩放时可见内容跟着框底一起挪，看历史时一点输入框、多打一行，
-        // 正在读的就被往上挤。它们占的高由对话在最新那头的一行空白让出：懒加载栈在可见区以外的行变高时补偏移，正在读的纹丝不动；
-        // 贴着最新时滚动区停在起点，最新一行跟着回复框上沿走（离起点还差一点时补滚过去）
-        tracked(ScrollView { content.environment(\.chatBottomSpace, below) }.newestFirstScroll())
-            .onChange(of: below) { if follow.wrappedValue.atNewest { position.scrollTo(edge: Self.newestEdge) } }
+        // 滚动区上下都铺满整屏、不随回复框与键盘缩放：滚动区缩放时可见内容跟着框底一起挪，看历史时一点输入框、多打一行，
+        // 正在读的就被往上挤。上下被栏占的高由对话两头各一行空白让出（安全区不能交给滚动区自己当内容边距：它倒着转，边距会落到另一头）：
+        // 懒加载栈在可见区以外的行变高时补偏移，正在读的纹丝不动；贴着最新时滚动区停在起点，最新一行跟着回复框上沿走（离起点还差一点时补滚过去）。
+        // 顶上也要铺满：懒加载栈只排滚动区框里的行，框若止于顶栏下沿，滚进顶栏后面（沉浸式，那里看得见）的整条气泡会被收掉、凭空消失
+        tracked(ScrollView { content.environment(\.chatInsets, insets) }.newestFirstScroll())
+            .onChange(of: insets.bottom) { if follow.wrappedValue.atNewest { position.scrollTo(edge: Self.newestEdge) } }
             .newestFirst()
-            .ignoresSafeArea(edges: .bottom)
+            .ignoresSafeArea(edges: .vertical)
             // 回复框下面那一条（横条区）不露半截气泡；看历史时回复框收成居中的短胶囊，两旁空着，整段回复框的高也不露。
             // 只是内容的透明度遮罩，栏外不画颜色；只随这段高度与贴不贴最新变，滚动时不重算。
             // 切换时各段的高度不变、只淡入淡出回复框那一段：高度跟着动画走时，收起中的胶囊两旁会先露出几帧没被遮住的整字
             .mask {
-                let band = max(0, below - clearsBelow)
+                let band = max(0, insets.bottom - clearsBelow)
                 ZStack {
                     // 看历史时的样子：回复框上沿之上淡出，回复框那一段与横条区都不露
                     VStack(spacing: 0) {
@@ -223,8 +231,8 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                     .animation(Motion.quick, value: follow.wrappedValue.atNewest)
                 }
             }
-            // 铺满后伸进底下的那一段就是回复框与键盘占的高
-            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { below = $0 }
+            // 铺满后伸进上下的那两段就是栏占的高
+            .onGeometryChange(for: ChatInsets.self) { ChatInsets(top: $0.safeAreaInsets.top, bottom: $0.safeAreaInsets.bottom) } action: { insets = $0 }
         #else
         tracked(ScrollView { content.environment(\.chatAtNewest, follow.wrappedValue.atNewest) }.defaultScrollAnchor(.bottom))
         #endif
@@ -317,12 +325,11 @@ struct JumpToNewest: View {
 #if os(iOS)
 private extension View {
     /// 把滚动区倒过来。转 180° 而不是上下镜像：镜像（行列式为负）时系统长按预览截到的是空白；代价是滚动条转到了左边，所以藏起来。
-    /// 不裁内容：对话一直滚到顶栏、回复框与键盘后面，上下都不淡出（系统的滚动边缘效果由 `RouteView` 全关；它按没转过的方向画，
-    /// 开着时滚动区尺寸一变会把整片对话糊成一帧模糊）。
+    /// 对话一直滚到顶栏、回复框与键盘后面（滚动区铺满整屏，见 `ChatScroll`），系统的滚动边缘效果由 `RouteView` 全关
+    /// （它按没转过的方向画，开着时滚动区尺寸一变会把整片对话糊成一帧模糊）。
     /// 滚动区自己的设定（挂在 ScrollView 上，`tracked` 再把它包进量宽的一层）。
     func newestFirstScroll() -> some View {
         scrollIndicators(.hidden)
-            .scrollClipDisabled()
             .defaultScrollAnchor(.top)
     }
 
