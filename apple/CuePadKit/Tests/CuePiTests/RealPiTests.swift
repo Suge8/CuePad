@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
 import Testing
 import CueStore
@@ -446,7 +447,7 @@ struct RealPiTests {
         try await pi.waitUntilHeld()  // 假模型停住：扩展早已加载过，要开 socket 此刻已开
         try pi.release()
         await pi.waitUntilExit()
-        try await Task.sleep(for: .milliseconds(200))
+        await quietPeriod(.milliseconds(200))
         #expect(log.changes.isEmpty)
         #expect(bridge.sessions.isEmpty)
     }

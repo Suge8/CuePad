@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueTestSupport
 import Foundation
 import Synchronization
 import Testing
@@ -28,16 +29,21 @@ final class PiProcess: @unchecked Sendable {
     let cwd: URL
     private let process = Process()
     private let stdin = Pipe()
-    private let lock = NSLock()
-    private var _events: [PiEvent] = []
-    private var pending = Data()
     private let errPipe = Pipe()
-    private var _stderr = Data()
+    /// 两条读线程写、测试读的输出。
+    private struct Output {
+        var events: [PiEvent] = []
+        var pending = Data()
+        var stderr = Data()
+    }
+    private let output = Mutex(Output())
+    /// 进程退出时结束（`terminationHandler`）：等退出就等它，不轮询。
+    private let exited: Task<Void, Never>
     /// Pi 的 stderr（诊断用）
-    var stderr: String { lock.withLock { String(decoding: _stderr, as: UTF8.self) } }
+    var stderr: String { output.withLock { String(decoding: $0.stderr, as: UTF8.self) } }
 
     var pid: Int32 { process.processIdentifier }
-    var events: [PiEvent] { lock.withLock { _events } }
+    var events: [PiEvent] { output.withLock { $0.events } }
 
     /// - Parameter installBridge: 先用安装器把桥扩展装进临时 agent 目录，让 Pi 按自己的发现规则加载。
     /// - Parameter oneShotPrompt: 非 nil 时以 print 模式跑这条 prompt 然后退出（否则 RPC 常驻）。
@@ -52,6 +58,9 @@ final class PiProcess: @unchecked Sendable {
          oneShotPrompt: String? = nil, firecode: Bool = false, modelInAgentDirectory: Bool = false,
          alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false, settings: [String: Any]? = nil) async throws {
         ownsRoot = other == nil
+        let (exit, ended) = AsyncStream<Void>.makeStream()
+        process.terminationHandler = { _ in ended.finish() }
+        exited = Task { for await _ in exit {} }
         root = try other?.root ?? makeTempDirectory()
         cwd = root.appending(path: "work")
         try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
@@ -97,7 +106,7 @@ final class PiProcess: @unchecked Sendable {
         if oneShotPrompt != nil { try stdin.fileHandleForWriting.close() } // print 模式会读 stdin 直到 EOF
         // 专用线程读到 EOF：readabilityHandler 在句柄被关闭后会抛 ObjC 异常
         Self.drain(out.fileHandleForReading) { [weak self] in self?.ingest($0) }
-        Self.drain(errPipe.fileHandleForReading) { [weak self] data in self?.lock.withLock { self?._stderr.append(data) } }
+        Self.drain(errPipe.fileHandleForReading) { [weak self] data in self?.output.withLock { $0.stderr.append(data) } }
     }
 
     /// 与测试包同一个产物目录里构建好的 `cuepad` 命令行（`swift test` 会把它一起构建）。
@@ -169,12 +178,12 @@ final class PiProcess: @unchecked Sendable {
     }
 
     private func ingest(_ data: Data) {
-        lock.withLock {
-            pending.append(data)
-            while let nl = pending.firstIndex(of: 0x0A) {
-                let line = pending[pending.startIndex..<nl]
-                pending = Data(pending[pending.index(after: nl)...])
-                if let json = try? JSONSerialization.jsonObject(with: line) as? [String: Any] { _events.append(PiEvent(json: json)) }
+        output.withLock { output in
+            output.pending.append(data)
+            while let nl = output.pending.firstIndex(of: 0x0A) {
+                let line = output.pending[output.pending.startIndex..<nl]
+                output.pending = Data(output.pending[output.pending.index(after: nl)...])
+                if let json = try? JSONSerialization.jsonObject(with: line) as? [String: Any] { output.events.append(PiEvent(json: json)) }
             }
         }
     }
@@ -187,9 +196,7 @@ final class PiProcess: @unchecked Sendable {
 
     func prompt(_ text: String) throws { try send(["type": "prompt", "message": text]) }
 
-    func waitUntilExit() async {
-        while process.isRunning { try? await Task.sleep(for: .milliseconds(20)) }
-    }
+    func waitUntilExit() async { await exited.value }
 
     func kill(_ signal: Int32) { Darwin.kill(process.processIdentifier, signal) }
 

@@ -5,7 +5,6 @@ import Testing
 
 /// 斜杠命令不进对话、不进发送记录；它的进度只在回复框上方一行短暂显示（一处规则 `MacDelivery.commandProgress`）：
 /// 在路上写"正在执行 /compact…"，没成功写原因，成功就消失（结果若在会话文件里，对话里自然有）。只看最近一条命令。
-@MainActor
 struct CommandProgressTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -19,10 +18,7 @@ struct CommandProgressTests {
         let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { _ in outcome }
         try await executor.start()
         defer { Task { await executor.stop() } }
-        for _ in 0..<3000 {
-            if try await store.deliveryRequest(request.id)?.isOpen == false { return }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.isOpen }) { $0 == false }
     }
 
     @Test func 在路上写正在执行_只取命令的名字() async throws {

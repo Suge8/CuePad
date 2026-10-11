@@ -4,7 +4,6 @@ import Testing
 @testable import CuePad
 
 /// 两端共用的页面状态：Agent 页的分页与空态、回收站的内容与操作、新会话从发出到认领的进度。
-@MainActor
 struct SharedPagesTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -68,19 +67,19 @@ struct SharedPagesTests {
         let workspace = Workspace(services: app.services)
         let summary = try await TrashSummary.read(from: store)
 
-        func restored(_ item: TrashItem) async -> Workspace.Notice? {
+        func restored(_ item: TrashItem) async throws -> Workspace.Notice? {
             workspace.restore(item)
-            await eventually { workspace.notice != nil }
+            try await eventually("workspace.notice != nil") { workspace.notice != nil }
             defer { workspace.notice = nil }
             return workspace.notice
         }
-        let inProject = await restored(try #require(summary.cards.first { $0.id == card.id }))
+        let inProject = try await restored(try #require(summary.cards.first { $0.id == card.id }))
         #expect(inProject?.text.visible == "已恢复到 圆桌" && inProject?.link == .project(project.id))
-        let unfiled = await restored(try #require(summary.cards.first { $0.id == loose.id }))
+        let unfiled = try await restored(try #require(summary.cards.first { $0.id == loose.id }))
         #expect(unfiled?.text.visible == "已恢复到 未分类" && unfiled?.link == .unfiled)
 
         try await store.trashProject(project.id)
-        let whole = await restored(try #require(try await TrashSummary.read(from: store).projects.first))
+        let whole = try await restored(try #require(try await TrashSummary.read(from: store).projects.first))
         #expect(whole?.text.visible == "已恢复到 圆桌" && whole?.link == .project(project.id))
     }
 
@@ -92,14 +91,11 @@ struct SharedPagesTests {
         func phase() async throws -> LaunchProgress.Phase {
             try await LaunchProgress.read(request: request.id, token: "tok-1", from: store).phase
         }
-        func wait(until done: (LaunchProgress.Phase) -> Bool) async throws {
-            for _ in 0..<3000 where !done(try await phase()) { try await Task.sleep(for: .milliseconds(10)) }
-        }
         guard case .sending = try await phase() else { Issue.record("发出后应是在路上：\(try await phase())"); return }
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _ in .succeeded }
         try await executor.start()
-        try await wait { $0 == .opening }
+        _ = try await eventually(store, { try LaunchProgress.read(request: request.id, token: "tok-1", from: $0).phase }) { $0 == .opening }
         #expect(try await phase() == .opening)
 
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .thinking, title: "圆桌", launchToken: "tok-1")
@@ -110,7 +106,7 @@ struct SharedPagesTests {
         let refused = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "tok-2"), title: "圆桌", on: "mac-b", card: nil)
         let failing = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _ in .failed("文件夹不在了") }
         try await failing.start()
-        for _ in 0..<3000 where try await store.deliveryRequest(refused.id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+        _ = try await eventually(store, { try $0.deliveryRequest(refused.id)?.isOpen }) { $0 == false }
         await failing.stop()
         #expect(try await LaunchProgress.read(request: refused.id, token: "tok-2", from: store).phase == .failed("文件夹不在了"))
     }

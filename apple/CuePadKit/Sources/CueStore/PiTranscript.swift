@@ -110,7 +110,7 @@ extension PiChatMessage: Record {
 }
 
 extension PiChatMessage {
-  /// 一轮里 Agent 的工具活动：各类成功的次数（读、改文件按文件算）、失败的调用数和一份按先后的清单。
+  /// 一轮里 Agent 的工具活动：各类调用的次数（失败的也算，读、改文件按文件算）和一份按先后的清单（每条自己标成败）。
   /// 由 Mac 从会话文件汇出（上限——清单条数与每条的长度——由那一侧定），同步记录里存为 JSON（加密字段 `tools`）。
   public struct Tools: StoredJSON, Equatable, Sendable {
     /// 声明顺序即摘要里的优先级：改文件、跑命令比读取和搜索更值得说
@@ -136,9 +136,8 @@ extension PiChatMessage {
       }
     }
 
+    /// 各类的调用数，失败的也算在自己那一类里（与清单的行同一口径）
     public var edits: Int, commands: Int, reads: Int, searches: Int, others: Int
-    /// 失败的调用数（不在各类里）
-    public var failed: Int
     /// 清单，按发生先后，至多 `itemLimit` 条；超出的只进计数
     public var items: [Item]
 
@@ -146,18 +145,17 @@ extension PiChatMessage {
     /// 清单里一条的目标至多这么多字符
     public static let targetLimit = 120
 
-    public init(edits: Int = 0, commands: Int = 0, reads: Int = 0, searches: Int = 0, others: Int = 0, failed: Int = 0, items: [Item] = []) {
+    public init(edits: Int = 0, commands: Int = 0, reads: Int = 0, searches: Int = 0, others: Int = 0, items: [Item] = []) {
       self.edits = edits
       self.commands = commands
       self.reads = reads
       self.searches = searches
       self.others = others
-      self.failed = failed
       self.items = items
     }
 
-    /// 调用总数（成功的各类加失败的）
-    public var total: Int { edits + commands + reads + searches + others + failed }
+    /// 调用总数
+    public var total: Int { edits + commands + reads + searches + others }
 
     public subscript(kind: Kind) -> Int {
       switch kind {

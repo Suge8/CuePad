@@ -9,16 +9,21 @@ import AppKit
 @testable import CuePi
 
 /// Mac 端的同步职责：唤醒时同步；把 Pi 会话状态写成同步记录；执行手机发来的投送请求。
-@MainActor
 struct MacSyncTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
 
+    /// `spoke`：留下了会话文件（说过话）；没有文件的会话结束时不进历史。
     private func session(
-        _ sessionID: String, cwd: String = "/work/app", state: PiWorkState = .thinking, pid: Int32 = 100
+        _ sessionID: String, cwd: String = "/work/app", state: PiWorkState = .thinking, pid: Int32 = 100, spoke: Bool = false
     ) -> CuePi.PiSession {
-        CuePi.PiSession(
-            id: "\(sessionID).\(pid)", sessionID: sessionID, sessionFile: nil, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
+        var file: URL?
+        if spoke {
+            file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
+            FileManager.default.createFile(atPath: file!.path, contents: Data())
+        }
+        return CuePi.PiSession(
+            id: "\(sessionID).\(pid)", sessionID: sessionID, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
             terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: state, stateSince: .now)
     }
 
@@ -37,7 +42,7 @@ struct MacSyncTests {
     func 主线程被占住时退出收尾仍在上限内完成() async throws {
         services.startSync()
         try await services.executor.start()
-        await eventually { rig.sync.started == 1 }
+        try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
 
         let finish = services.beginShutdown(within: .seconds(2))
         let done = DispatchSemaphore(value: 0)
@@ -57,7 +62,7 @@ struct MacSyncTests {
     @Test(.timeLimit(.minutes(1)))
     func 退出收尾有上限_组件卡住时到点放行并指出是哪个() async throws {
         services.startSync()
-        await eventually { rig.sync.started == 1 }
+        try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
         rig.sync.stopHangs.withLock { $0 = true }
 
         let late = await services.stop(within: .milliseconds(200))
@@ -69,28 +74,28 @@ struct MacSyncTests {
     @Test func 退出时停止同步引擎与远程投送执行器() async throws {
         services.startSync()
         try await services.executor.start()
-        await eventually { rig.sync.started == 1 }
+        try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
 
         await services.stop()
 
         #expect(rig.sync.stopped == 1)
         let request = try await services.store.requestDelivery(
             "hi", to: SendTarget(kind: .mac, name: "CuePad"), on: TestApp.hostID)
-        // 停止后不再有观察者领取：没有事件可等，给执行器足够的时间再确认仍未处理
-        try await Task.sleep(for: .milliseconds(300))
+        // 停止后不再有观察者领取：给执行器足够的时间再确认仍未处理
+        await quietPeriod(.milliseconds(300))
         #expect(try await services.store.deliveryRequest(request.id)?.status == .known(.pending))
     }
 
     // MARK: 唤醒
 
-    @Test func 系统唤醒时立即同步() async {
+    @Test func 系统唤醒时立即同步() async throws {
         services.startSync()
         defer { services.cancelBackgroundWork() }
-        await eventually { rig.sync.started == 1 }
+        try await eventually("rig.sync.started == 1") { rig.sync.started == 1 }
 
         rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
 
-        await eventually { rig.sync.syncNows == 1 }
+        try await eventually("rig.sync.syncNows == 1") { rig.sync.syncNows == 1 }
         #expect(rig.sync.syncNows == 1)
     }
 
@@ -146,7 +151,7 @@ struct MacSyncTests {
         #expect(stored.projectID == project.id)
         #expect(stored.title == "app")
 
-        try await services.consumePiChanges(changes([.ended(session("s1"), reason: .disconnected)]))
+        try await services.consumePiChanges(changes([.ended(session("s1", spoke: true), reason: .disconnected)]))
         #expect(try await services.store.allPiSessionStates().map(\.state) == [.known(.ended)])
     }
 
@@ -161,11 +166,11 @@ struct MacSyncTests {
         let executor = DeliveryExecutor(store: store, hostID: TestApp.hostID, onIssue: { _ in }) { _ in .succeeded }
         try await executor.start()
         for id in [lost.id, kept.id] {
-            for _ in 0..<3000 where try await store.deliveryRequest(id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+            _ = try await eventually(store, { try $0.deliveryRequest(id)?.isOpen }) { $0 == false }
         }
         await executor.stop()
 
-        try await services.consumePiChanges(changes([.ended(session("s1"), reason: .closed(reason: "quit", undelivered: [lost.id.uuidString]))]))
+        try await services.consumePiChanges(changes([.ended(session("s1", spoke: true), reason: .closed(reason: "quit", undelivered: [lost.id.uuidString]))]))
 
         let failed = try #require(try await store.deliveryRequest(lost.id))
         #expect(failed.status == .known(.failed) && failed.resultDetail == "会话在压缩上下文时关掉了，这句没送进去")
@@ -254,7 +259,7 @@ struct MacSyncTests {
 
     /// 交给 Agent 时命令带着卡片（卡片文字是参数）：卡片关联到会话、任务进行中，照样不写发送记录。
     @Test func 带卡片的斜杠命令只关联卡片_不写发送记录() async throws {
-        let ext = try await rig.host.connect("sess-1", cwd: "/work/app")
+        _ = try await rig.host.connect("sess-1", cwd: "/work/app")
         let task = try await services.store.createTask("改登录", in: nil)
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }

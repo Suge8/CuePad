@@ -23,7 +23,6 @@ final class InMemoryHotkeys: HotkeyBackend {
 }
 
 /// 记下后台托管被要求恢复、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与终端里的 Pi 一样经 socket）。
-@MainActor
 final class RecordingHost: PiHosting {
     enum Call: Equatable {
         case resume(sessionFile: String, directory: String)
@@ -70,7 +69,7 @@ final class RecordingHost: PiHosting {
         try bridge.start()
         try ext.start()
         extensions[sessionID] = ext
-        await eventually { bridge.session(id: ext.id) != nil }
+        try await eventually("bridge.session(id: ext.id) != nil") { bridge.session(id: ext.id) != nil }
         guard bridge.session(id: ext.id) != nil else { throw ConnectTimeout(sessionID: sessionID) }
         return ext
     }

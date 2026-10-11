@@ -8,7 +8,6 @@ import Testing
 @testable import CuePad
 
 /// Pi 历史索引读写 Store 失败：报告问题，并停止该文件的写回（库异常时反复重写只会放大问题）。
-@MainActor
 struct PiHistoryFailureTests {
     let app = TestApp()
     var services: AppServices { app.services }

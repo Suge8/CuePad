@@ -5,7 +5,6 @@ import Testing
 
 /// 任务优先的主动线，按用户走的路写：灵感挂成提示词 → 交给 Agent → 它回复 → 全部回复后完成并归档；中途撤销；整理任务的层级；
 /// 各处写的任务数是同一批。规则单测（行的状态怎么推、任务树怎么算）都从这些动作里走一遍，不单独测。
-@MainActor
 struct TaskFlowTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }

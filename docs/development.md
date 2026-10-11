@@ -67,13 +67,14 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 **编辑器。** 存储格式是纯字符串（`CueFormat`），唯一事实源；保存只经序列化，编辑器内复制输出存储格式。不得访问 `NSTextView.layoutManager` / `UITextView.layoutManager`（一次访问就永久降级到 TextKit 1）。
 
-**Pi 桥。** 协议、版本策略、多客户端、已知边界与 Pi 集成（扩展与 skill 的安装、升级、同意）都以 CuePi README 为准；App 层只有 `PiIntegrationManager` 管首次同意与静默升级，没有第二套状态。实时状态只在内存，历史只来自 Pi 会话文件。
+**Pi 桥。** 协议、版本策略、多客户端、已知边界与 Pi 集成（扩展与 skill 的安装、升级、同意）都以 CuePi README 为准；App 层只有 `PiIntegrationManager` 管首次同意与静默升级，没有第二套状态。实时状态只在内存，历史只来自 Pi 会话文件。什么算历史只在 `PiStateRecorder.exited` 定：一句话没说过的会话（没留下会话文件）关掉后记录直接删掉，不进历史；CuePad 后台托管的会话闲置退出不算结束，记录留着、歇着，仍在"现在"、发话时 Mac 唤醒它，用户在 CuePad 里结束它或终端里的 Pi 退出才进历史。
 
 **命令行。** `cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标构建、随 App 签名与公证；设置里的开关在 `~/.local/bin/cuepad` 建符号链接。`cuepad --help` 是其唯一文档。
 
 **测试。** Swift Testing。
 - 测试只用替身或不产生按键事件的系统调用，不向其他应用发送键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。
 - App 测试经 `TestApp`（`TestSupport.swift`）拿服务：临时库、独立 UserDefaults、私有命名剪贴板与内存热键；后台托管 Pi 用记录型替身（`RecordingHost`）。
+- 等待只有一份（`CueTestSupport`，Kit 与 App 的测试共用）：库里的变化按读取订阅着等（`eventually(store, read)`）；没有事件可订阅的系统异步才用有界条件等待（`eventually { }`）；负向断言（"不会发生"）的固定时长只经 `quietPeriod`。
 - 与 Pi 的交互走真 `PiBridge` + 假扩展（`FakeExtension`，socket 上说桥协议；socket 路径有 104 字节上限，所以目录在 /tmp 下），不碰真实资料库、`~/.pi` 和其他应用。
 - 真实 Pi 与本机 FireCode 的端到端测试（`Real*Tests`）读 `~/.pi` 里装的 FireCode 源码，`CUEPAD_FIRECODE_SOURCE` 指向另一份检出时改读它。
 

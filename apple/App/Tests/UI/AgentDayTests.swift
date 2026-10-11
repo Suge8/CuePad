@@ -6,7 +6,6 @@ import Testing
 
 /// Agent 页上看到的会话，按它一天里的样子写：新会话、做完一轮没看、看过、有草稿；发话后发送中、排队、没能送达（留到看过为止）、
 /// 唤醒已结束的会话；改名与结束会话（手机请 Mac 做，Mac 写回结果）；列表的先后与筛选。行的文字与图形怎么拼不单独测，从这些状态里读。
-@MainActor
 struct AgentDayTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

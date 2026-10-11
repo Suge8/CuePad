@@ -5,7 +5,6 @@ import Testing
 
 /// 会话页对话的规则（iOS 会话页、Mac 会话详情共用）：消息怎么排、每轮回答上方的经过怎么写、发出的话什么时候是气泡、
 /// 什么时候请 Mac 补写对话。
-@MainActor
 struct PiChatTests {
     let start = Date(timeIntervalSince1970: 1_000_000)
 
@@ -62,7 +61,7 @@ struct PiChatTests {
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
         try await executor.start()
-        for _ in 0..<3000 where try await store.deliveryRequest(lost.id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+        _ = try await eventually(store, { try $0.deliveryRequest(lost.id)?.isOpen }) { $0 == false }
         await executor.stop()
 
         let failed = try await item()

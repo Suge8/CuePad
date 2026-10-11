@@ -4,7 +4,6 @@ import Testing
 @testable import CuePad
 
 /// 分享扩展 → 主 App 的数据通路：扩展只写共享容器里的待入库目录，主 App 入库成卡片。
-@MainActor
 struct CaptureTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -72,11 +71,7 @@ struct CaptureTests {
 
         DarwinNotifications.post(CaptureQueue.notification)
 
-        var bodies: [String] = []
-        for _ in 0..<3000 where bodies.isEmpty {
-            bodies = try await services.store.cards(in: nil).map(\.body)
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        let bodies = try await eventually(services.store, { try $0.cards(in: nil).map(\.body) }) { !$0.isEmpty }
         #expect(bodies == ["来自扩展"])
     }
 }

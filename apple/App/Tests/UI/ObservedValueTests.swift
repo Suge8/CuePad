@@ -5,7 +5,6 @@ import Testing
 @testable import CuePad
 
 /// 界面订阅的读取一律可比较：写入读到同一张表、结果没变时，不再把一份相同的数据送到主线程。
-@MainActor
 struct ObservedValueTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -18,12 +17,12 @@ struct ObservedValueTests {
             for try await _ in store.observe({ try TrashSummary.read(from: $0) }) { deliveries.withLock { $0 += 1 } }
         }
         defer { following.cancel() }
-        await eventually { deliveries.withLock { $0 } == 1 }
+        try await eventually("deliveries.withLock { $0 } == 1") { deliveries.withLock { $0 } == 1 }
 
         for index in 0..<5 { _ = try await store.createCard(in: nil, body: "不相干 \(index)") }
         let doomed = try await store.createCard(in: nil, body: "要删的")
         try await store.trashCard(doomed.id)
-        await eventually { deliveries.withLock { $0 } >= 2 }
+        try await eventually("deliveries.withLock { $0 } >= 2") { deliveries.withLock { $0 } >= 2 }
 
         #expect(deliveries.withLock { $0 } == 2)
     }

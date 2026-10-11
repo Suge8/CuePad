@@ -15,7 +15,6 @@ nonisolated private final class CountingDefaults: UserDefaults, @unchecked Senda
     }
 }
 
-@MainActor
 struct ReplyTests {
     private func settings(_ suite: String) -> AppSettings {
         AppSettings(defaults: UserDefaults(suiteName: suite)!, launchArguments: [:])
@@ -39,7 +38,7 @@ struct ReplyTests {
     }
 
     /// 回复框每个键都改草稿：界面立即读到新字，偏好只在停手后写一次；退出前冲刷把还没写的立即写下（没有未写的草稿时什么也不做）。
-    @Test func 连续输入只在停手后写一次偏好_冲刷立即写下() async {
+    @Test func 连续输入只在停手后写一次偏好_冲刷立即写下() async throws {
         let defaults = CountingDefaults(suiteName: "drafts-\(UUID())")!
         let settings = AppSettings(defaults: defaults, launchArguments: [:])
         let session = UUID()
@@ -51,8 +50,8 @@ struct ReplyTests {
 
         #expect(settings.replyDraft(for: session).text.count == 200)
         #expect(defaults.writes["replyTexts"] == nil)
-        await eventually { defaults.writes["replyTexts"] != nil }
-        try? await Task.sleep(for: .milliseconds(600))
+        try await eventually("defaults.writes[\"replyTexts\"] != nil") { defaults.writes["replyTexts"] != nil }
+        await quietPeriod(.milliseconds(600))
         #expect(defaults.writes["replyTexts"] == 1)
 
         settings.setReplyDraft(ComposerDraft(text: "没写完"), for: session)

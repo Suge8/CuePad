@@ -5,7 +5,6 @@ import Testing
 
 /// 项目与文件夹（iOS 与 Mac 共用的规则）：新会话只列项目；项目操作菜单里的绑定与解除；手机上给项目选文件夹时的候选；绑定请求的进度。
 /// 手机看不到 Mac 的完整路径，候选里只有文件夹名，由 Mac 按"取哪个会话的目录"解析成路径。
-@MainActor
 struct ProjectFoldersTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -76,10 +75,7 @@ struct ProjectFoldersTests {
         let failing = try await store.requestBind(PiBind(project: lone.id, folder: .besideSession("s3")), title: "Lone", on: "mac-fail")
         try await executor.start()
         defer { Task { await executor.stop() } }
-        for _ in 0..<3000 {
-            if try await store.deliveryRequest(failing.id)?.isOpen == false { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        _ = try await eventually(store, { try $0.deliveryRequest(failing.id)?.isOpen }) { $0 == false }
         #expect(ProjectFolders.bindProgress(of: lone.id, in: try await store.deliveryRequests()) == .failed("目录不存在：gone"))
     }
 }

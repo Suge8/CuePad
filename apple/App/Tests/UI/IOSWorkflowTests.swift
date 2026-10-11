@@ -6,7 +6,6 @@ import Testing
 @testable import CuePad
 
 /// iOS 界面的三条跨边界合同：发到 Mac 的请求形状（Mac 执行器按它执行）、活动页的会话顺序与角标、随手记带图入库。
-@MainActor
 struct IOSWorkflowTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -31,16 +30,14 @@ struct IOSWorkflowTests {
         #expect(request.answer == PiAnswer(promptID: "p-7", value: .option("覆盖")))
     }
 
-    @Test func 发到Mac_请求指定会话所在的Mac_目标是该会话_方式原样交给Mac() async throws {
+    @Test(arguments: [DeliveryMode.send, .steer, .followUp])
+    func 发到Mac_请求指定会话所在的Mac_目标是该会话_方式原样交给Mac(mode: DeliveryMode) async throws {
         let target = try await session("atlas", .settled, host: "mac-b")
-
-        for mode in [DeliveryMode.send, .steer, .followUp] {
-            let request = try await app.services.requestMacDelivery("正文", to: target, mode: mode)
-            #expect(request.hostID == "mac-b")
-            #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
-            #expect(request.mode == .known(mode))
-            #expect(request.status == .known(.pending))
-        }
+        let request = try await app.services.requestMacDelivery("正文", to: target, mode: mode)
+        #expect(request.hostID == "mac-b")
+        #expect(request.target == SendTarget(kind: .piSession, name: "atlas", ref: "atlas"))
+        #expect(request.mode == .known(mode))
+        #expect(request.status == .known(.pending))
     }
 
     /// 手机上只有一个发送：空闲直接发；Pi 正在跑一轮时默认等它做完再说，另有马上说。

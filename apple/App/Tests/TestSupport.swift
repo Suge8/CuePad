@@ -1,10 +1,9 @@
 import CueStore
-import CoreGraphics
 import CueSync
+// 测试共用的支撑（临时库目录、测试图片、条件等待）与 Kit 的测试同一份；整个测试目标都能用
+@_exported import CueTestSupport
 import Foundation
 import Synchronization
-import ImageIO
-import UniformTypeIdentifiers
 @testable import CuePad
 #if os(macOS)
 import AppKit
@@ -13,53 +12,6 @@ import CuePi
 import UIKit
 #endif
 
-/// 没有事件可订阅的系统异步（弹窗结束、布局后改尺寸、后台任务落盘）：有界条件等待。
-/// 上限只是"确实不会来了"的兜底（机器负载高时一步会慢上几十秒），条件一成立马上返回。
-@MainActor
-func eventually(timeout: Duration = .seconds(30), _ condition: () -> Bool) async {
-    let deadline = ContinuousClock.now + timeout
-    while !condition(), ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(10)) }
-}
-
-/// 纯色 4×4 PNG；`shade` 不同则字节不同。
-func pngData(shade: CGFloat = 0.5) -> Data {
-    let context = CGContext(
-        data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 0,
-        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-    context.setFillColor(red: shade, green: 0.2, blue: 0.8, alpha: 1)
-    context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
-    let data = NSMutableData()
-    let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)!
-    CGImageDestinationAddImage(destination, context.makeImage()!, nil)
-    CGImageDestinationFinalize(destination)
-    return data as Data
-}
-
-/// 测试用资料库的临时目录。库会被服务里的后台任务一直持有到它们自己结束，删掉仍打开的库文件时 SQLite 报
-/// "database integrity compromised … vnode unlinked while in use"；所以本次运行不删自己的目录，
-/// 而是在下次运行开始时清掉已经结束的运行（进程已不在）留下的目录。
-enum TestLibraries {
-    private static let root = FileManager.default.temporaryDirectory.appending(path: "cuepad-app-test-libraries", directoryHint: .isDirectory)
-    private static let run: URL = {
-        removeFinishedRuns()
-        return root.appending(path: "\(getpid())", directoryHint: .isDirectory)
-    }()
-
-    /// 本次运行里一个新的空目录。
-    static func makeDirectory() -> URL {
-        let directory = run.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-        try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
-    }
-
-    private static func removeFinishedRuns() {
-        let runs = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
-        for name in runs {
-            guard let pid = Int32(name), kill(pid, 0) == -1, errno == ESRCH else { continue }
-            try? FileManager.default.removeItem(at: root.appending(path: name))
-        }
-    }
-}
 
 /// 临时目录里的独立偏好存储，释放时连目录一起删除。
 final class TempDefaults {

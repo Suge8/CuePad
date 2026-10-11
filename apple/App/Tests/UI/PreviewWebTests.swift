@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Synchronization
 import Testing
 import WebKit
 @testable import CuePad
@@ -7,19 +8,17 @@ import WebKit
 /// 手机上预览的网页：脚本能跑，但联网请求一律被拦掉（页面里的 fetch、图片都到不了网络）。
 /// 用本机的监听端口当"外网"：没有拦截规则的对照页面请求能到，装了规则的请求到不了。两页各用各的端口：对照页的请求什么时候到
 /// 都算不到装了规则的那一页头上（共用一个计数时，对照页晚到的图片请求在负载下会被误算成拦截漏了）。
-@MainActor
 struct PreviewWebTests {
     /// 记录收到几个连接的本机端口
     private nonisolated final class Probe: @unchecked Sendable {
         private let listener = try! NWListener(using: .tcp, on: .any)
-        private let lock = NSLock()
-        private var count = 0
-        var hits: Int { lock.withLock { count } }
+        private let count = Atomic(0)
+        var hits: Int { count.load(ordering: .relaxed) }
         var port: UInt16 { listener.port!.rawValue }
 
         init() async {
             listener.newConnectionHandler = { [self] connection in
-                lock.withLock { count += 1 }
+                count.add(1, ordering: .relaxed)
                 connection.start(queue: .global())
                 connection.send(content: Data("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nAccess-Control-Allow-Origin: *\r\n\r\n".utf8), completion: .contentProcessed { _ in connection.cancel() })
             }
@@ -50,10 +49,9 @@ struct PreviewWebTests {
 
     private func settledTitle(_ page: WebPage) async throws -> String {
         var title = ""
-        let deadline = ContinuousClock.now + .seconds(10)
-        while ContinuousClock.now < deadline, title.isEmpty {
+        try await eventually("页面里的请求都落定、写下标题", timeout: .seconds(10)) {
             title = try await page.callJavaScript("return document.title") as? String ?? ""
-            if title.isEmpty { try await Task.sleep(for: .milliseconds(30)) }
+            return !title.isEmpty
         }
         return title
     }
@@ -78,7 +76,7 @@ struct PreviewWebTests {
         try html.write(to: file, atomically: true, encoding: .utf8)
         func click(_ id: String, on page: WebPage) async throws -> (title: String, hash: String) {
             _ = try await page.callJavaScript("document.getElementById(id).click()", arguments: ["id": id])
-            try await Task.sleep(for: .milliseconds(500))
+            await quietPeriod(.milliseconds(500))
             let state = try await page.callJavaScript("return [document.title, location.hash]") as? [String] ?? []
             return (state[0], state[1])
         }

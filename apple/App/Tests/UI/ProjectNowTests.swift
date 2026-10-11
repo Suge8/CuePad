@@ -47,7 +47,6 @@ struct ProjectNowTests {
 
 /// 没送到的话在"此刻"与会话行是同一个判定（`AppSettings.shown`）：你看过那个会话之前写没送到的原因，
 /// 看过以后不再写（会话行只留小标记），"此刻"按其余档往下取——在线的会话停着就轮到进行中的任务，已结束的轮到项目介绍。
-@MainActor
 struct ProjectNowSeenTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -67,7 +66,7 @@ struct ProjectNowSeenTests {
         let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _ in .failed("Pi 已经退出") }
         try await executor.start()
         for id in lost {
-            for _ in 0..<3000 where try await store.deliveryRequest(id)?.isOpen != false { try await Task.sleep(for: .milliseconds(10)) }
+            _ = try await eventually(store, { try $0.deliveryRequest(id)?.isOpen }) { $0 == false }
         }
         await executor.stop()
         func now(_ tasks: [ProjectNow.InProgress] = []) async throws -> String? {
@@ -93,7 +92,6 @@ struct ProjectNowSeenTests {
 
 #if os(iOS)
 /// 书架读到的数据里，"此刻"看得到发给已结束会话的话：发出后在唤醒、没能送达时，项目写的是它，不回落到任务或介绍。
-@MainActor
 struct ProjectNowShelfTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

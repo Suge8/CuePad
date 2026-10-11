@@ -3,9 +3,10 @@ import CueStore
 import Foundation
 import ImageIO
 import SQLite3
+import Synchronization
 import UniformTypeIdentifiers
 
-// CueStore、CueSync、命令行测试共用的支撑：临时库、独立 sqlite3 连接、测试图片、手动时钟、事件驱动的等待。
+// Kit 与 App 的测试共用的支撑：临时库、独立 sqlite3 连接、测试图片、手动时钟、等待。
 
 /// 临时目录里的真实库文件（目录的清理见 `TestLibraries`）。
 public final class Fixture: @unchecked Sendable {
@@ -87,7 +88,7 @@ public struct RawDB {
 }
 
 /// 纯色 PNG；`shade` 不同则字节不同。
-public func pngData(width: Int, height: Int, shade: CGFloat = 0.5) -> Data {
+public func pngData(width: Int = 4, height: Int = 4, shade: CGFloat = 0.5) -> Data {
   let context = CGContext(
     data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
     space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -101,24 +102,28 @@ public func pngData(width: Int, height: Int, shade: CGFloat = 0.5) -> Data {
 }
 
 /// 手动推进的时钟：`now` 只在 `advance` 时前进，`sleep` 挂起到 `advance` 越过截止时间。
-public final class ManualTiming: @unchecked Sendable {
-  private let lock = NSLock()
-  private var current: Date
-  private var sleepers: [UUID: (deadline: Date, continuation: CheckedContinuation<Void, Error>)] = [:]
-  private var sleeperWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+public final class ManualTiming: Sendable {
+  private struct State {
+    var current: Date
+    var sleepers: [UUID: (deadline: Date, continuation: CheckedContinuation<Void, Error>)] = [:]
+    var sleeperWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+  }
+  private let state: Mutex<State>
 
   /// 默认从真实的现在开始（毫秒精度）：Store 用真实时间给记录盖章，两者要在同一时间线上。
-  public init(start: Date = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 * 1000).rounded() / 1000)) { current = start }
+  public init(start: Date = Date(timeIntervalSince1970: (Date().timeIntervalSince1970 * 1000).rounded() / 1000)) {
+    state = Mutex(State(current: start))
+  }
 
-  public var now: Date { lock.withLock { current } }
+  public var now: Date { state.withLock { $0.current } }
   public var timing: Timing { Timing(now: { self.now }, sleep: { try await self.sleep($0) }) }
-  public var sleeperCount: Int { lock.withLock { sleepers.count } }
+  public var sleeperCount: Int { state.withLock { $0.sleepers.count } }
 
   public func advance(_ duration: Duration) {
-    let due: [CheckedContinuation<Void, Error>] = lock.withLock {
-      current = current.addingTimeInterval(Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18)
-      let ready = sleepers.filter { $0.value.deadline <= current }
-      for id in ready.keys { sleepers[id] = nil }
+    let due: [CheckedContinuation<Void, Error>] = state.withLock { state in
+      state.current = state.current.addingTimeInterval(Self.seconds(duration))
+      let ready = state.sleepers.filter { $0.value.deadline <= state.current }
+      for id in ready.keys { state.sleepers[id] = nil }
       return ready.values.map(\.continuation)
     }
     for continuation in due { continuation.resume() }
@@ -130,17 +135,15 @@ public final class ManualTiming: @unchecked Sendable {
     let id = UUID()
     await withTaskCancellationHandler {
       await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-        lock.lock()
-        if !sleepers.isEmpty || Task.isCancelled {
-          lock.unlock()
-          continuation.resume()
-        } else {
-          sleeperWaiters[id] = continuation
-          lock.unlock()
+        let ready = state.withLock { state in
+          if !state.sleepers.isEmpty || Task.isCancelled { return true }
+          state.sleeperWaiters[id] = continuation
+          return false
         }
+        if ready { continuation.resume() }
       }
     } onCancel: {
-      lock.withLock { sleeperWaiters.removeValue(forKey: id) }?.resume()
+      state.withLock { $0.sleeperWaiters.removeValue(forKey: id) }?.resume()
     }
   }
 
@@ -148,24 +151,46 @@ public final class ManualTiming: @unchecked Sendable {
     let id = UUID()
     try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        lock.lock()
         // 取消可能发生在登记之前（此时 onCancel 找不到它），登记时要再看一次
-        if Task.isCancelled {
-          lock.unlock()
-          continuation.resume(throwing: CancellationError())
-          return
+        let waiters: [CheckedContinuation<Void, Never>]? = state.withLock { state in
+          if Task.isCancelled { return nil }
+          state.sleepers[id] = (state.current.addingTimeInterval(Self.seconds(duration)), continuation)
+          defer { state.sleeperWaiters = [:] }
+          return Array(state.sleeperWaiters.values)
         }
-        sleepers[id] = (current.addingTimeInterval(Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18), continuation)
-        let waiters = sleeperWaiters.values
-        sleeperWaiters = [:]
-        lock.unlock()
+        guard let waiters else { return continuation.resume(throwing: CancellationError()) }
         for waiter in waiters { waiter.resume() }
       }
     } onCancel: {
-      let continuation = lock.withLock { sleepers.removeValue(forKey: id)?.continuation }
-      continuation?.resume(throwing: CancellationError())
+      state.withLock { $0.sleepers.removeValue(forKey: id)?.continuation }?.resume(throwing: CancellationError())
     }
   }
+
+  private static func seconds(_ duration: Duration) -> TimeInterval {
+    Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18
+  }
+}
+
+/// 等不到时抛出：写明在等什么，测试就停在这里（接着往下跑只会在别处空等）。
+public struct TimedOut: Error, CustomStringConvertible {
+  public let description: String
+}
+
+/// 有界条件等待，只给没有事件可订阅的异步用（FSEvents、socket、子进程、系统弹窗与布局、后台落盘）：
+/// 条件一成立马上返回，到了上限抛 `TimedOut`。上限只是"确实不会来了"的兜底：机器负载高时一步会慢上几十秒，
+/// 所以取得宽，各处不另写。库里的变化用下面按读取订阅的那个。
+public func eventually(_ what: String, timeout: Duration = .seconds(30), _ condition: () async throws -> Bool) async throws {
+  let deadline = ContinuousClock.now + timeout
+  while try await !condition() {
+    guard ContinuousClock.now < deadline else { throw TimedOut(description: "等不到：\(what)") }
+    try await Task.sleep(for: .milliseconds(10))
+  }
+}
+
+/// 等"什么都不会发生"：负向断言（停止后不再领取、权限不对就不连、链接不跳转）没有事件可等，只能给一段固定时长再确认仍没发生。
+/// 测试里固定时长的等待只经这里写，搜它就知道哪些断言靠时长（负载极高时可能假通过，不会假失败）。
+public func quietPeriod(_ duration: Duration) async {
+  try? await Task.sleep(for: duration)
 }
 
 /// 订阅读取直到条件成立（事件驱动，配合测试的时间限制，不轮询）。

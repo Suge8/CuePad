@@ -15,6 +15,7 @@
 		B10000000000000000000005 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* CueText */; };
 		B10000000000000000000007 /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000006 /* CueStore */; };
 		B10000000000000000000009 /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000008 /* CueStore */; };
+		B10000000000000000000031 /* CueTestSupport in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000030 /* CueTestSupport */; };
 		B1000000000000000000000B /* CueEditor in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000A /* CueEditor */; };
 		B1000000000000000000000D /* CueEditor in Frameworks */ = {isa = PBXBuildFile; productRef = B1000000000000000000000C /* CueEditor */; };
 		B10000000000000000000013 /* CuePi in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = B10000000000000000000012 /* CuePi */; };
@@ -158,6 +159,7 @@
 				D1000000000000000000A00B /* CueSync in Frameworks */,
 				B10000000000000000000005 /* CueText in Frameworks */,
 				B10000000000000000000009 /* CueStore in Frameworks */,
+				B10000000000000000000031 /* CueTestSupport in Frameworks */,
 				B1000000000000000000000D /* CueEditor in Frameworks */,
 				B10000000000000000000015 /* CuePi in Frameworks */,
 			);
@@ -322,6 +324,7 @@
 				D1000000000000000000A002 /* CueSync */,
 				B10000000000000000000004 /* CueText */,
 				B10000000000000000000008 /* CueStore */,
+				B10000000000000000000030 /* CueTestSupport */,
 				B1000000000000000000000C /* CueEditor */,
 				B10000000000000000000014 /* CuePi */,
 			);
@@ -1007,6 +1010,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
 			productName = CueStore;
+		};
+		B10000000000000000000030 /* CueTestSupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueTestSupport;
 		};
 		B1000000000000000000000A /* CueEditor */ = {
 			isa = XCSwiftPackageProductDependency;

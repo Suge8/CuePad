@@ -197,17 +197,18 @@ final class TurnLog {
 #if os(macOS)
 /// 界面里的测量点：首屏卡片出现（`content`，`perfMark`）。只在 Debug 构建里由视图调用，`interact` 等它出现再开始量。
 enum PerfProbe {
-    private static var waiting: [String: CheckedContinuation<Void, Never>] = [:]
+    /// 同一个事件可以有几处同时在等：每一处都要醒。
+    private static var waiting: [String: [CheckedContinuation<Void, Never>]] = [:]
     private(set) static var firstSeen: [String: Date] = [:]
 
     static func mark(_ event: String) {
         if firstSeen[event] == nil { firstSeen[event] = .now }
-        waiting.removeValue(forKey: event)?.resume()
+        for continuation in waiting.removeValue(forKey: event) ?? [] { continuation.resume() }
     }
 
     /// 等到下一次 `event`。
     static func wait(for event: String) async {
-        await withCheckedContinuation { waiting[event] = $0 }
+        await withCheckedContinuation { waiting[event, default: []].append($0) }
     }
 }
 #endif

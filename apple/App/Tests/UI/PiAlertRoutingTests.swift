@@ -8,7 +8,6 @@ import UserNotifications
 @testable import CuePad
 
 /// 点开锁屏上的 Pi 通知：直接打开触发它的那个会话的近况页；别的通知不改导航。
-@MainActor
 struct PiAlertRoutingTests {
     /// CloudKit 查询订阅通知的 userInfo（形状同 CueSync 的路由测试）。
     private func payload(subscription: String, record: UUID) -> [AnyHashable: Any] {

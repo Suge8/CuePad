@@ -7,7 +7,6 @@ import Testing
 
 /// 手机在前台时的会话提示：本机已同步来的会话状态出现"等你确认"、"做完了"转换时，窗口顶上弹一行（点它进该会话）；
 /// 正看着那个会话时不弹。转换的判定是 `PiAlert` 的同一条规则（Mac 置位推送标志也用它），这里只管"读到的版本"怎么变成提示。
-@MainActor
 struct SessionNoticeTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
