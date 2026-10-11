@@ -90,32 +90,18 @@ struct PiContextMeterTests {
         #expect(meter(tokens).level == level)
     }
 
-    @Test func 读数_比例夹在0到1() {
-        #expect(meter(230_000).fraction == 1)
-        #expect(meter(0).fraction == 0)
-    }
-
-    /// 胶囊里写百分比；悬停与读屏先说这是上下文，快满了时说可以压缩。
-    @Test func 胶囊里的百分比与说明() {
+    /// 比例夹在 0 到 1；胶囊里写百分比，悬停与读屏先说这是上下文，快满了说可以压缩；只写比例不写 token 数
+    /// （用户看不到 token，"剩 158k tokens" 读不懂），已用与剩余加起来是整数的 100%；接近上限才建议压缩。压缩后未知：没有读数、不画胶囊。
+    @Test func 读数与文案() {
+        #expect(meter(230_000).fraction == 1 && meter(0).fraction == 0)
         #expect(meter(42_000).percent == "21%")
         #expect(meter(42_000).help.visible == "上下文 · 已用 21% · 剩 79%")
         #expect(meter(172_000).help.visible == "上下文 · 已用 86% · 剩 14% · 快满了，可以压缩")
-    }
-
-    /// 只写比例：用户看不到 token 数，"剩 158k tokens" 读不懂；已用与剩余加起来是整数的 100%。
-    @Test func 文案_已用百分比加剩余百分比() {
         #expect(meter(42_000).summary.visible == "已用 21% · 剩 79%")
         #expect(meter(195_500).summary.visible == "已用 98% · 剩 2%")
         #expect(meter(999_000, window: 1_000_000).summary.visible == "已用 100% · 剩 0%")
         #expect(meter(0, window: 2_000_000).summary.visible == "已用 0% · 剩 100%")
-    }
-
-    @Test func 接近上限才建议压缩() {
-        #expect(!meter(159_999).suggestsCompact)
-        #expect(meter(160_000).suggestsCompact)
-    }
-
-    @Test func 压缩后未知_没有读数_不画胶囊() {
+        #expect(!meter(159_999).suggestsCompact && meter(160_000).suggestsCompact)
         #expect(PiContextMeter(PiContextUsage(tokens: nil, window: 200_000)) == nil)
     }
 }

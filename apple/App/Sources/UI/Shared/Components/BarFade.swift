@@ -1,70 +1,96 @@
 import SwiftUI
 
 extension View {
-    /// 沉浸式栏下的内容淡出：内容滚进上安全区（iOS 是状态栏加顶栏或标签根页顶上那一排，Mac 是窗口工具栏那一条）时，
-    /// 按位置降低它自己的不透明度：状态栏与圆钮、标题胶囊后面全透，只在栏的下沿最后一小段淡回全不透明。
-    /// `bottom` 时下安全区（iPhone 底部栏所在的那一段）同样处理：玻璃的折射会把背后的字放大、扭曲着压在标签后面，
-    /// 所以内容一进栏的上沿就淡掉，标签后面只剩页面底色。
-    /// 只是内容的透明度遮罩（mask），不往栏后面画任何颜色：栏后没有内容的地方就是页面底色本身，玻璃仍是唯一的遮挡。
-    /// 遮罩只随安全区变（不读滚动位置），静止时不重算也不重画；滚动时由渲染服务合成。
-    /// 挂在滚动的那一层上：iOS 推入页由 `RouteView` 一处挂在整页上；标签根页的顶上那一排（`SearchRow`）是页里的
-    /// `safeAreaBar`，整页的遮罩管不到它下面，所以根页另挂在自己的滚动区上（滚动区的上安全区含那一排）。
-    /// `below`：淡回全不透明的那一段往栏下沿以下再伸多长（`Bars.contentGap`）：紧贴栏下沿滚过的那一行也淡着，
-    /// 不和玻璃挤在一起、不在圆钮正下方像圆钮的标签。内容顶上要让出同样的高度，静止时第一行才不落在淡出段里。
-    func fadesUnderBars(bottom: Bool = false, below: CGFloat = 0) -> some View { modifier(BarFade(bottom: bottom, below: below)) }
+    /// 沉浸式页面的内容只在屏幕最上、最下那一条淡出：iOS 是状态栏（灵动岛那一带）与主屏指示条（`ScreenBars`），
+    /// Mac 是窗口工具栏那一条。顶栏、搜索那一排、底部栏与回复框的玻璃浮在清楚的内容上，玻璃本身就是唯一的遮挡；
+    /// 内容离栏多远靠内容边距（`Bars.contentGap`），不靠遮罩。
+    /// 只是内容的透明度遮罩（mask），不往栏后面画任何颜色。遮罩只随页面在屏幕上的位置变（不读滚动位置），静止时不重算也不重画。
+    /// 挂在整页上（iOS 推入页与标签根页由 `RouteView` 一处挂上；浮窗里的页自己挂）：页面不碰屏幕上下沿时什么也不遮。
+    func fadesUnderBars() -> some View { modifier(BarFade()) }
 }
 
-/// 页面内容与沉浸式栏之间的距离，只在这里定义：推入页由 `RouteView` 一处让出（上安全区再加这么多），
-/// 标签根页让到顶上那一排下面；栏下的淡出伸到同样深（`fadesUnderBars(below:)`），静止时第一行全不透明、
-/// 滚上去时贴着栏下沿的那一行已经淡了。各页不再自己写离顶栏多远。
+/// 页面内容与沉浸式栏之间的距离，只在这里定义：推入页由 `RouteView` 一处让出（上安全区再加这么多），标签根页让到顶上那一排下面。
+/// 各页不再自己写离顶栏多远。
 enum Bars {
     static let contentGap: CGFloat = 12
 }
 
-private struct BarFade: ViewModifier {
-    let bottom: Bool
-    let below: CGFloat
+#if os(iOS)
+/// 屏幕上状态栏的下沿与主屏指示条的上沿（全局坐标）：窗口的根视图（还没有导航栏，上下安全区就是这两条）量出来往下传。
+nonisolated struct ScreenBars: Equatable, Sendable {
+    var top: CGFloat = 0
+    var bottom: CGFloat = .infinity
+}
 
-    /// 栏下沿往上多少开始淡回：比圆钮下沿到栏下沿的空隙（标签根页那一排 8，推入页的导航栏约 10）短，圆钮与标题胶囊后面一点影子都不留。
-    private static let edge: CGFloat = 6
-    /// 底部栏上沿往里多深淡到全透：玻璃的边缘一段折射最强，背后的字在这段里就淡完。
-    private static let bottomEdge: CGFloat = 18
+extension EnvironmentValues {
+    @Entry var screenBars = ScreenBars()
+}
+
+extension View {
+    /// 窗口根视图上量出状态栏与主屏指示条的位置，交给里面各页的 `fadesUnderBars`。
+    func measuresScreenBars() -> some View { modifier(ScreenBarsReader()) }
+}
+
+private struct ScreenBarsReader: ViewModifier {
+    @State private var bars = ScreenBars()
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: ScreenBars.self) { proxy in
+                let frame = proxy.frame(in: .global)
+                return ScreenBars(top: frame.minY, bottom: frame.maxY)
+            } action: { bars = $0 }
+            .environment(\.screenBars, bars)
+    }
+}
+#endif
+
+private struct BarFade: ViewModifier {
+    #if os(iOS)
+    @Environment(\.screenBars) private var bars
+    #else
+    /// Mac：栏下沿往上多少开始淡回，比工具栏圆钮下沿到栏下沿的空隙短，圆钮后面一点影子都不留。
+    private static let macEdge: CGFloat = 6
+    #endif
 
     func body(content: Content) -> some View {
         content.mask {
             GeometryReader { proxy in
-                let top = proxy.safeAreaInsets.top, floor = bottom ? proxy.safeAreaInsets.bottom : 0
+                let (top, bottom, ramp) = bands(proxy)
                 VStack(spacing: 0) {
-                    LinearGradient(stops: Self.topStops(band: top, below: below), startPoint: .top, endPoint: .bottom).frame(height: top + below)
+                    LinearGradient(stops: Self.stops(band: top, ramp: ramp), startPoint: .top, endPoint: .bottom).frame(height: top)
                     Rectangle()
-                    LinearGradient(stops: Self.bottomStops(band: floor), startPoint: .top, endPoint: .bottom).frame(height: floor)
+                    LinearGradient(stops: Self.stops(band: bottom, ramp: bottom), startPoint: .bottom, endPoint: .top).frame(height: bottom)
                 }
                 .ignoresSafeArea()
             }
         }
     }
 
-    /// 从屏幕顶往下：一直全透，到栏下沿前 `edge` 才起，先慢后快，到下沿以下 `below` 处全不透明。
-    private static func topStops(band: CGFloat, below: CGFloat) -> [Gradient.Stop] {
-        guard band > edge else { return [.init(color: .black, location: 0), .init(color: .black, location: 1)] }
-        let height = band + below, start = (band - edge) / height
+    /// 上下各淡多高、上面那条在最后多长里淡回（iOS 状态栏的下半条，Mac 只在工具栏下沿那一小段）。
+    private func bands(_ proxy: GeometryProxy) -> (top: CGFloat, bottom: CGFloat, ramp: CGFloat) {
+        #if os(iOS)
+        // 遮罩铺满整页（含安全区）：页面的上下沿压在状态栏、指示条上的那一段
+        let frame = proxy.frame(in: .global)
+        let top = max(0, bars.top - (frame.minY - proxy.safeAreaInsets.top))
+        let bottom = max(0, frame.maxY + proxy.safeAreaInsets.bottom - bars.bottom)
+        // 上面：灵动岛与时间那半条全透，下半条渐进淡回
+        return (top, bottom, top / 2)
+        #else
+        let top = proxy.safeAreaInsets.top
+        return (top, 0, min(Self.macEdge, top))
+        #endif
+    }
+
+    /// 从屏幕边往里：全透，到离内沿 `ramp` 处起先慢后快，到内沿全不透明。
+    private static func stops(band: CGFloat, ramp: CGFloat) -> [Gradient.Stop] {
+        guard band > 0, ramp > 0 else { return [.init(color: .black, location: 0), .init(color: .black, location: 1)] }
+        let start = (band - ramp) / band
         return [
             .init(color: .black.opacity(0), location: 0),
             .init(color: .black.opacity(0), location: start),
             .init(color: .black.opacity(0.15), location: start + (1 - start) / 2),
             .init(color: .black, location: 1),
-        ]
-    }
-
-    /// 从底部栏上沿往下：全不透明，`bottomEdge` 内淡到全透，往下一直全透。
-    private static func bottomStops(band: CGFloat) -> [Gradient.Stop] {
-        guard band > bottomEdge else { return [.init(color: .black, location: 0), .init(color: .black, location: 1)] }
-        let end = bottomEdge / band
-        return [
-            .init(color: .black, location: 0),
-            .init(color: .black.opacity(0.15), location: end / 2),
-            .init(color: .black.opacity(0), location: end),
-            .init(color: .black.opacity(0), location: 1),
         ]
     }
 }

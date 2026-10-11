@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// Mac 的归档页：大标题下面是共用的 `ArchiveList`（右键取回或删除，点开是纸页）。
+/// Mac 的归档页：大标题下面是共用的 `ArchiveList`（右键取回或删除，点开是编辑页）。
 struct ArchivePage: View {
     @Environment(\.palette) private var palette
 

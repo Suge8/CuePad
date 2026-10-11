@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 主窗口：玻璃侧栏 + 当前页（侧栏点项目、Agent、会话，任务与灵感都在内容区整页切换；没有返回、前进与往上一层，
-/// 导航都在侧栏，工具栏左上只在开着纸页时有"收起"）；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
+/// 导航都在侧栏，工具栏左上只在开着编辑页时有"收起"）；卡片编辑页、⌘K 搜索、任务面板、底部输入栏、提示都在详情区之上。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -11,8 +11,10 @@ struct MainWindow: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.sidebar) {
             Sidebar()
-                // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌃⌘S 同一个入口
+                // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌃⌘S 同一个入口。
+                // 同访达：它是侧栏这一栏的工具栏项，侧栏开着时在侧栏顶上、红绿灯右边，收起后留在原处，成了工具栏最左的一颗
                 .toolbar(removing: .sidebarToggle)
+                .toolbar { ToolbarItem { SidebarToggle() } }
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
             detail
@@ -212,24 +214,20 @@ private struct PageStackLayout: Layout {
     func explicitAlignment(of guide: VerticalAlignment, in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Memo) -> CGFloat? { nil }
 }
 
-/// 工具栏最左：侧栏钮，侧栏收起时后面跟着项目切换。同一个工具栏项里增减（增删工具栏项会重排整条工具栏）。
+/// 内容区工具栏最左：侧栏收起时的项目切换（紧跟在侧栏钮后面）。同一个工具栏项里增减（增删工具栏项会重排整条工具栏）。
 /// 单独一个视图读侧栏开合：主窗口的视图体读了它，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
 private struct SwitcherSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         let collapsed = workspace.sidebar == .detailOnly
-        HStack(spacing: 0) {
-            SidebarToggle()
-            // 一直挂着（收起时才有宽度）：开合侧栏的那一刻不再现建全部项目的菜单。不用 disabled：环境一变整份菜单又要重算；
-            // ⌘1–9 本来就由窗口快捷键（`WorkspaceShortcuts`）接，菜单里的只是提示
-            ProjectSwitcher(collapsed: collapsed)
-                .padding(.leading, collapsed ? 8 : 0)
-                .frame(width: collapsed ? nil : 0, alignment: .leading)
-                .clipped()
-                .opacity(collapsed ? 1 : 0)
-                .accessibilityHidden(!collapsed)
-        }
+        // 一直挂着（收起时才有宽度）：开合侧栏的那一刻不再现建全部项目的菜单。不用 disabled：环境一变整份菜单又要重算；
+        // ⌘1–9 本来就由窗口快捷键（`WorkspaceShortcuts`）接，菜单里的只是提示
+        ProjectSwitcher(collapsed: collapsed)
+            .frame(width: collapsed ? nil : 0, alignment: .leading)
+            .clipped()
+            .opacity(collapsed ? 1 : 0)
+            .accessibilityHidden(!collapsed)
     }
 }
 
@@ -246,8 +244,8 @@ private struct SidebarToggle: View {
 /// 打开、收起卡片只改动下面三处（收起按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：
 /// 主窗口的视图体不读它，开合时不重算整个窗口、不重建整条工具栏。
 
-/// 工具栏左上的"收起"：只在开着纸页时有（Esc 同）。工具栏项常驻、只有里面的按钮出没（增删工具栏项会重建整条工具栏）；
-/// 没有纸页时它不占位置，会话页的标题紧挨着侧栏开关。
+/// 工具栏左上的"收起"：只在开着编辑页时有（Esc 同）。工具栏项常驻、只有里面的按钮出没（增删工具栏项会重建整条工具栏）；
+/// 没有编辑页时它不占位置，会话页的标题紧挨着侧栏开关。
 private struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -272,7 +270,7 @@ private struct CloseButton: View {
     }
 }
 
-/// 打开的卡的纸页（含缩回途中）。
+/// 打开的卡的编辑页（含淡出途中）。
 private struct EditorLayer: View {
     @Environment(Workspace.self) private var workspace
 
@@ -283,7 +281,7 @@ private struct EditorLayer: View {
     }
 }
 
-/// 底部输入条：纸页挂着（含缩回途中）时不显示，底栏只有一套，先退后进；⌘K 打开时只是藏起来（不卸下），关掉面板的同一帧就回来。
+/// 底部输入条：编辑页挂着（含淡出途中）时不显示，底栏只有一套，先退后进；⌘K 打开时只是藏起来（不卸下），关掉面板的同一帧就回来。
 /// 回收站、Agent 整页与会话页不放：那里不是记灵感的地方（Agent 整页有自己的"＋"新会话，会话页有回复框），它只会压住列表最后几行。
 private struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace

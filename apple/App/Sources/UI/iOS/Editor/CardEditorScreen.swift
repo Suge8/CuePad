@@ -101,7 +101,7 @@ struct CardEditorScreen: View {
             if let data, let initialText {
                 IOSEditorHost(
                     initialText: initialText,
-                    theme: .paper(palette, horizontalInset: inset),
+                    theme: .editor(palette, horizontalInset: inset),
                     handle: handle,
                     onChange: { next in
                         liveText = next

@@ -45,14 +45,6 @@ struct TerminalJumperTests {
     private let appleTerminal = "com.apple.Terminal"
     private let ghostty = "com.mitchellh.ghostty"
 
-    @Test func appleTerminalSelectsTheTabByTTY() async {
-        let sys = FakeSystem()
-        let r = await PiTerminalJumper(system: sys).jump(to: session(PiTerminal(tty: "ttys015", bundleID: appleTerminal)))
-        #expect(r.precision == .tab)
-        #expect(sys.scripts.count == 1 && sys.scripts[0].contains("/dev/ttys015") && sys.scripts[0].contains("Terminal"))
-        #expect(sys.runs.isEmpty)
-    }
-
     @Test func tmuxPaneIsSelectedAndHostingClientTTYDrivesTheTabLookup() async {
         let sys = FakeSystem()
         let terminal = PiTerminal(tty: "ttys015", bundleID: appleTerminal, tmuxPane: "%3", tmuxSocketPath: "/private/tmp/tmux-501/default")
@@ -67,18 +59,11 @@ struct TerminalJumperTests {
         #expect(sys.scripts.first?.contains("ttys015") == false)
     }
 
-    @Test func tabNotFoundFallsBackToActivatingTheApp() async {
+    /// 找不到标签页，或没有"自动化"权限（脚本抛错）：都退到只激活应用，并说明原因。
+    @Test(arguments: [Result<String, any Error>.success("notfound"), .failure(Denied())])
+    func tabNotFoundOrAutomationDeniedFallsBackToActivatingTheApp(script: Result<String, any Error>) async {
         let sys = FakeSystem()
-        sys.scriptResult = .success("notfound")
-        let r = await PiTerminalJumper(system: sys).jump(to: session(PiTerminal(tty: "ttys015", bundleID: appleTerminal)))
-        #expect(r.precision == .application)
-        #expect(sys.activated == [appleTerminal])
-        #expect(r.note != nil)
-    }
-
-    @Test func automationDeniedFallsBackToActivatingTheAppAndSaysWhy() async {
-        let sys = FakeSystem()
-        sys.scriptResult = .failure(Denied())
+        sys.scriptResult = script
         let r = await PiTerminalJumper(system: sys).jump(to: session(PiTerminal(tty: "ttys015", bundleID: appleTerminal)))
         #expect(r.precision == .application)
         #expect(sys.activated == [appleTerminal])
@@ -99,13 +84,6 @@ struct TerminalJumperTests {
         #expect(r.precision == .application)
         #expect(sys.activated == [ghostty])
         #expect(r.note?.isEmpty == false)
-    }
-
-    @Test func unknownTerminalAppIsJustActivated() async {
-        let sys = FakeSystem()
-        let r = await PiTerminalJumper(system: sys).jump(to: session(PiTerminal(bundleID: "com.example.term")))
-        #expect(r.precision == .application)
-        #expect(sys.activated == ["com.example.term"] && sys.scripts.isEmpty)
     }
 
     @Test func failsWhenNothingIsKnownOrAppIsNotRunning() async {

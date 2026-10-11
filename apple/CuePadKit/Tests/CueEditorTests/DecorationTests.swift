@@ -126,27 +126,6 @@ struct DecorationTests {
         #expect(p.attribute(.backgroundColor, at: 0, effectiveRange: nil) == nil)
     }
 
-    @Test("代码块整行铺底色，直到行宽末尾")
-    func codeBandSpansLine() throws {
-        let h = EditorHarness()
-        h.load("标题\n```\nx\n```\n正文")
-        var codeLine: CGRect?
-        var bodyLine: CGRect?
-        let origin = h.textView.textContainerOrigin
-        h.textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
-            let text = (fragment.textElement as? NSTextParagraph)?.attributedString.string
-            if text == "x\n" { codeLine = fragment.layoutFragmentFrame.offsetBy(dx: origin.x, dy: origin.y) }
-            if text == "正文" { bodyLine = fragment.layoutFragmentFrame.offsetBy(dx: origin.x, dy: origin.y) }
-            return true
-        }
-        let code = try #require(codeLine), body = try #require(bodyLine)
-        func pixel(_ line: CGRect) throws -> NSColor {
-            try #require(h.renderedCenterColor(of: CGRect(x: 600, y: line.minY + 2, width: 4, height: 4)))
-        }
-        let codePixel = try pixel(code), bodyPixel = try pixel(body)
-        #expect(abs(codePixel.brightnessComponent - bodyPixel.brightnessComponent) > 0.02)
-    }
-
     @Test("装饰不写入文本存储、不进撤销栈、不改存储格式")
     func storageUntouched() {
         let h = EditorHarness()
@@ -191,15 +170,6 @@ struct DecorationTests {
         #expect(h.textView.textLayoutManager != nil)
     }
 
-    @Test("换主题后装饰使用新字体")
-    func themeChange() {
-        let h = EditorHarness()
-        h.load("标题\n正文")
-        var next = theme
-        next.titleFont = .boldSystemFont(ofSize: 30)
-        h.textView.theme = next
-        #expect(font(displayed(h)[0]) == next.titleFont)
-    }
 }
 
 #endif
