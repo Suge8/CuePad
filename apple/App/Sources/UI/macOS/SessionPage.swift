@@ -148,7 +148,6 @@ struct SessionPage: View {
                 }
                 PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, window: $shown)
             }
-            .perfMark("conversation")
         }
         .fadesUnderBars()
         .environment(\.chatHighlight, highlight)

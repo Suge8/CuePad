@@ -84,7 +84,7 @@ struct IOSRoot: View {
         }
         // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
         .onChange(of: workspace.notice.map(navigation.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }
-        .debugScene(workspace, navigation, alerts)
+        .debugScene(workspace, navigation)
     }
 
     private var scheme: ColorScheme? {

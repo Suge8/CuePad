@@ -1,40 +1,27 @@
 #!/usr/bin/env bash
-# 用法：perf-mac.sh <cold|scenarios|interact> [次数=3]
-#   cold       冷启动与整段场景：合成大库（-CuePadSeed perf：50 项目、5000 卡、300 张大图、200 个 Pi 历史会话）上的 -CuePadBench perf，
-#              每次一行 JSON：冷启动到首屏、内存、滚动与开合纸页的帧间隔、⌘K 搜索延迟。
-#   scenarios  持续场景：同一个大库上的 -CuePadBench scenarios（侧栏切项目、Agent 页滚动、会话滚动与流式、打字、悬停、缩放窗口、⌘K 逐字打），
-#              每次一行 JSON，每项的帧间隔与掉帧；库里的会话最好先用 pi-live.py 连到桥上。
-#   interact   单次交互：演示库与大库上的 -CuePadBench interact，逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）与掉帧，取各次的中位数，
-#              与交互预算（docs/development.md「交互预算」）比较并列成表；有一项超了就以 1 退出。
-# 说明见 docs/development.md「性能测量」。
-# cold、scenarios 用打开了编译优化的 Debug 构建（测量代码只在 Debug 里，未优化的 SwiftUI 慢得多、数字没有意义），产物在 ${CUEPAD_DERIVED:-apple/.derived}-perf；
-# interact 用 Release（带 DEBUG 条件，只为留下测量代码）：预算按用户拿到的构建定，产物在 ${CUEPAD_DERIVED:-apple/.derived}-perf-release。
+# 用法：perf-mac.sh [次数=3]
+#   单次交互：演示库与大库（-CuePadSeed perf：50 项目、5000 卡、300 张大图、200 个 Pi 历史会话，前 12 个带长对话）上的 -CuePadBench interact，
+#   逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）、合计、最重一圈、指令数与掉帧，取各次的中位数，
+#   与交互预算（docs/verify.md「交互预算」）比较并列成表；有一项超了就以 1 退出。
+#   -CuePadInteractOnly 项,项 只量列出的几项（前后对比省下整套流程），用法见 docs/verify.md。
+# 用 Release（带 DEBUG 条件，只为留下测量代码）：预算按用户拿到的构建定；产物在 ${CUEPAD_DERIVED:-apple/.derived}-perf-release。
+# iOS 的单次交互见 perf-ios.sh。
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-mode="${1:-}"
-runs="${2:-3}"
-case "$mode" in cold | scenarios | interact) ;; *) echo "用法：$0 <cold|scenarios|interact> [次数]" >&2; exit 2 ;; esac
+runs="${1:-3}"
 
-if [ "$mode" = interact ]; then
-  DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}-perf-release"
-  CONFIG=Release
-  FLAGS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG')
-else
-  DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}-perf"
-  CONFIG=Debug
-  FLAGS=(SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule GCC_OPTIMIZATION_LEVEL=s)
-fi
-EXE="$DERIVED/Build/Products/$CONFIG/CuePad.app/Contents/MacOS/CuePad"
+DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}-perf-release"
+EXE="$DERIVED/Build/Products/Release/CuePad.app/Contents/MacOS/CuePad"
 LIBRARY="$DERIVED/library-perf"
 
 mkdir -p "$DERIVED"
 [ -f "$DERIVED/.gitignore" ] || echo '*' > "$DERIVED/.gitignore"
 # 本机 ad-hoc 签名；关掉 hardened runtime，否则 ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
-xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration "$CONFIG" \
+xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Release \
   -destination 'platform=macOS,arch=arm64' -derivedDataPath "$DERIVED" -quiet build \
   DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS-local.entitlements \
-  "${FLAGS[@]}" ENABLE_HARDENED_RUNTIME=NO \
+  'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' ENABLE_HARDENED_RUNTIME=NO \
   >"$DERIVED/build.log" 2>&1 || { tail -30 "$DERIVED/build.log" >&2; exit 1; }
 
 # exec：在后台调用时 $! 就是 CuePad 本身，结束它不会留下进程
@@ -57,16 +44,7 @@ if [ ! -f "$LIBRARY/cuepad.db" ]; then
   wait "$pid" || true
 fi
 
-if [ "$mode" != interact ]; then
-  bench=perf
-  [ "$mode" = scenarios ] && bench=scenarios
-  for _ in $(seq "$runs"); do
-    launch "$LIBRARY" -CuePadBench "$bench" -CuePadWindowSize 1440x900 2>/dev/null | sed -n 's/^PERF //p'
-  done
-  exit 0
-fi
-
-# interact：每次都是全新进程（首访就是首访）；演示库每次重建，大库用同一份
+# 每次都是全新进程（首访就是首访）；演示库每次重建，大库用同一份
 collect() {
   local label="$1"; shift
   for _ in $(seq "$runs"); do

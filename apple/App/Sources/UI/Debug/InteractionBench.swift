@@ -37,7 +37,7 @@ enum InteractionBench {
     private static let turns = TurnLog()
 
     static func run(_ workspace: Workspace) async {
-        if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") {} }
+        if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") }
         if UserDefaults.standard.bool(forKey: "CuePadDemo") { await DebugScene.seedRemote(workspace.services) }
         try? await Task.sleep(for: .seconds(3))
         guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.fullSizeContentView) && $0.styleMask.contains(.resizable) }),

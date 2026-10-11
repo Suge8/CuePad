@@ -1,42 +1,33 @@
 #if DEBUG
 import CueStore
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// 演示库里的 Pi：Mac 同步来的会话状态（含历史）、几段对话与发到 Mac 的请求（iOS 与 Mac 的 session 画面共用）。
 extension DebugScene {
-    /// 每 4 秒给会话写进一条 Pi 的回答，共 30 条。
-    static func growChat(_ sessionID: String, store: CueStore) async {
-        for index in 1...30 {
-            try? await Task.sleep(for: .seconds(4))
-            let text = "第 \(index) 条新回答：" + String(repeating: "这一段用来把对话撑长，看滚动跟随。", count: 4)
-            try? await store.writePiTranscript(PiTranscript(
-                sessionID: sessionID,
-                messages: [PiChatMessage(sessionID: sessionID, entryID: UUID().uuidString, seq: Int64(Date.now.timeIntervalSince1970 * 1000), role: .pi, text: text, at: .now)],
-                recap: PiRecap(lastReply: text)))
-        }
+    /// 会话里的一轮：你的话、Pi 的回答（还没答完是 nil）与这一轮的工具活动，问与答的时刻。
+    struct ChatTurn {
+        var you: String
+        var pi: String?
+        var tools: PiChatMessage.Tools?
+        var asked: Date
+        var answered: Date
     }
 
-    /// 1.5 秒后一次写进 `count` 轮长对话（像 Mac 补写一个老会话的对话那样整批到达），核对整批到达时停在最新。
-    static func bulkChat(_ sessionID: String, count: Int, store: CueStore) async {
-        try? await Task.sleep(for: .seconds(1.5))
-        let start = Int64(Date.now.timeIntervalSince1970) * 100
-        let table = "\n\n| 项 | 结果 |\n|:--|--:|\n| 用例 | 12 |\n| 失败 | 2 |"
-        let messages = (0..<count * 2).map { index in
-            let pi = index % 2 == 1
-            // 高度差得很远的回答（一行、长段落、表格、长代码块），懒加载按估计高度排时误差最大；代码块末行很宽，核对横向滚动
-            let round = index / 2 + 1
-            let body = switch round % 4 {
-            case 0: "好的。"
-            case 1: String(repeating: "整批到达的长回答，用来撑出很高的对话。", count: 12)
-            case 2: "结果如下：" + table
-            default: "改动如下：\n\n```swift\n" + (1...30).map { "let value\($0) = compute(\($0))" }.joined(separator: "\n")
-                + "\nlet all = [" + (1...30).map { "value\($0)" }.joined(separator: ", ") + "]\n```"
+    /// 把几轮写成会话的对话与摘要（最后一轮没答完，它的话是进行中的提问）。演示对话与大库的长对话共用。
+    static func writeChat(_ sessionID: String, _ turns: [ChatTurn], store: CueStore) async throws {
+        var messages: [PiChatMessage] = []
+        for (index, turn) in turns.enumerated() {
+            messages.append(PiChatMessage(sessionID: sessionID, entryID: "u\(index)", seq: Int64(index * 2), role: .user, text: turn.you, at: turn.asked))
+            if let reply = turn.pi {
+                messages.append(PiChatMessage(
+                    sessionID: sessionID, entryID: "p\(index)", seq: Int64(index * 2 + 1), role: .pi, text: reply, at: turn.answered,
+                    tools: turn.tools, roundStartedAt: turn.asked))
             }
-            let text = pi ? "第 \(round) 轮回答：" + body : "第 \(round) 个问题"
-            return PiChatMessage(sessionID: sessionID, entryID: "bulk-\(start)-\(index)", seq: start + Int64(index), role: pi ? .pi : .user, text: text, at: .now)
         }
-        try? await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: PiRecap(lastReply: messages.last?.text)))
+        let done = turns.last { $0.pi != nil }
+        let pending = turns.last.flatMap { $0.pi == nil ? $0.you : nil }
+        try await store.writePiTranscript(PiTranscript(
+            sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending)))
     }
 
     /// 两台 Mac 的项目目录绑定：工作室的 Mac 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
@@ -189,11 +180,7 @@ extension DebugScene {
         .frame(width: 390, height: 640)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2
-        guard let image = renderer.cgImage else { return nil }
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(destination, image, nil)
-        return CGImageDestinationFinalize(destination) ? data as Data : nil
+        return renderer.cgImage.map { DemoLibrary.encode($0) }
     }
 
     /// 演示对话：notes 是几轮做完的对话（带工具活动与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
@@ -201,24 +188,15 @@ extension DebugScene {
     private static func seedChats(_ store: CueStore) async {
         let now = Date.now
         func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: PiChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async {
-            var messages: [PiChatMessage] = []
             var clock = now.addingTimeInterval(-startedMinutesAgo * 60)
-            for (index, turn) in turns.enumerated() {
+            var rounds: [ChatTurn] = []
+            for turn in turns {
                 let asked = clock
-                messages.append(PiChatMessage(sessionID: sessionID, entryID: "u\(index)", seq: Int64(index * 2), role: .user, text: turn.you, at: asked))
                 clock = asked.addingTimeInterval(turn.minutes * 60)
-                if let reply = turn.pi {
-                    messages.append(PiChatMessage(
-                        sessionID: sessionID, entryID: "p\(index)", seq: Int64(index * 2 + 1), role: .pi, text: reply, at: clock,
-                        tools: turn.tools, roundStartedAt: asked))
-                }
+                rounds.append(ChatTurn(you: turn.you, pi: turn.pi, tools: turn.tools, asked: asked, answered: clock))
                 clock = clock.addingTimeInterval(120)
             }
-            let done = turns.last { $0.pi != nil }
-            let pending = turns.last.flatMap { $0.pi == nil ? $0.you : nil }
-            try? await store.writePiTranscript(PiTranscript(
-                sessionID: sessionID, messages: messages,
-                recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending)))
+            try? await writeChat(sessionID, rounds, store: store)
         }
         await chat("notes", [
             ("整理一下这周的会议记录", "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", Self.notesWeek, 1.5),
@@ -415,18 +393,6 @@ extension DebugScene {
             PiSubagentState(name: "文档", role: "写手", phase: .known(.done), action: "已补完 README 的同步一节", startedAt: started, settledAt: started.addingTimeInterval(180)),
         ])
         await seedBindings(store, projects: projects)
-        let extra = defaults.integer(forKey: "CuePadHistory")
-        for index in 0..<extra {
-            let id = "history-\(index + 1)"
-            let name = ["CuePad", "圆桌", nil][index % 3]
-            let ended = Date.now.addingTimeInterval(-Double(index + 1) * 8 * 3600)
-            let past = PiStateRecorder(store: store, hostID: "demo-mac", timing: Timing(now: { ended }, sleep: { _ in }))
-            try? await past.update(
-                sessionID: id, state: .settled, detail: nil, title: "历史会话 \(index + 1)", folder: id, projectID: name.flatMap(project))
-            try? await store.writePiTranscript(PiTranscript(
-                sessionID: id, messages: [], recap: PiRecap(lastPrompt: "第 \(index + 1) 个", lastReply: "做完了")))
-            try? await past.end(sessionID: id)
-        }
         // 另一台 Mac 上的会话（演示发过去的话送达与失败）
         try? await PiStateRecorder(store: store, hostID: "demo-mini").update(sessionID: "relay", state: .settled, title: "relay", folder: "relay")
         await seedChats(store)

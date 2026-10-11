@@ -1,7 +1,5 @@
 import CueStore
-import ImageIO
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// 滚动定位锚点。
 enum ScrollAnchor {
@@ -11,16 +9,15 @@ enum ScrollAnchor {
 #if DEBUG
 /// 视觉验收用的启动参数（只在 Debug 构建读取，配合 `CUEPAD_LIBRARY_DIR` 使用隔离资料库）：
 /// - `-CuePadDemo YES`：库为空时写入演示数据；
-/// - `-CuePadSeed perf`（仅 Mac）：库为空时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench perf`；
+/// - `-CuePadSeed perf`（仅 Mac）：库为空时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
 /// - `-CuePadProject <名称>`：打开该项目；
 /// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor、attach（editor 再弹出"挂到任务"面板）、task（整页打开本项目第一条任务）、search、tasks、trash、archive、settings、menubar、projectform；
-///   agent 打开 Agent 整页列表，agentfirst 等空闲时先挂上的 Agent 页读完一份后改数据（新会话、atlas 出错）、改窗口为 1100x720 再点开，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`）；
+///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；
 /// - `-CuePadSearch <关键词>`：search 画面的预填关键词；`-CuePadCard <正文开头>`：editor 画面打开哪张卡；`-CuePadSelect <起点:长度>`：编辑器载入后选中这一段（看选区操作）；
 /// - `-CuePadWindowSize 1280x800`（仅 Mac）：主窗口尺寸（内容铺满标题栏，即整窗尺寸）；`-CuePadSidebar hidden`（仅 Mac）：任何画面都先收起侧栏；
-/// - `-CuePadBench <sidebar|motion|resize|churn|perf|agent|switch|scenarios|interact|press>`（仅 Mac；perf、agent（Agent 整页一路滚到底）见 `PerfBench`，interact（单次交互的点击回合与掉帧，与交互预算比较）见 `InteractionBench`，switch（切会话的耗时与对话区是否空白）见 `SwitchBench`，scenarios（侧栏切项目、会话页滚动与流式、回复框打字、悬停、缩放窗口、⌘K 逐字打，按场景切信号标记）见 `ScenarioBench`，press 配 `-CuePadPressAt x,y` 连拍按压）：开合侧栏 10 次 / 存卡后开合纸页（都在结束后退出，给 Instruments 或连拍取帧）；
-///   resize 在侧栏开合途中拉窄窗口后停住，给截图核对页宽；churn 边加卡边逐点拉宽窗口，查布局反馈环（结束后退出）；
-/// - `-CuePadScenario a,b`（仅 Mac，配 `-CuePadBench scenarios`）：只跑列出的场景，名字见 `ScenarioBench`；`-CuePadWheel trackpad`：压测里的滚轮事件带触控板的手势阶段（默认是没有阶段的普通滚轮）；
+/// - `-CuePadBench <interact|churn>`（量完退出）：interact 是单次交互的点击回合与掉帧，与交互预算比较（Mac 见 `InteractionBench`，iOS 见 `IOSInteractionBench`，`-CuePadInteractOnly 项,项` 只量列出的几项）；
+///   churn（仅 Mac）边加卡边逐点拉宽窗口，查布局反馈环（`layout-stress.sh`）；
 /// - `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
 /// - `-CuePadToolsOpen YES`：会话页每一轮回答上方的工具清单一开始就展开（`ToolActivityLine`）；
@@ -33,11 +30,9 @@ enum ScrollAnchor {
 enum DebugScene {
     static var defaults: UserDefaults { .standard }
     static var scene: String? { defaults.string(forKey: "CuePadScene") }
-    /// 压测按关键词换搜索词时写这里，只在内存里：写进 `UserDefaults.standard` 会落进真实偏好域，之后每个 Debug 实例的 ⌘K 都预填它。
-    static var searchOverride: String?
-    /// 搜索框预填的字：压测换的词，否则只认启动参数（参数域），不读已存的偏好。
+    /// 搜索框预填的字：只认启动参数（参数域），不读已存的偏好（`UserDefaults.standard` 是真实的偏好域）。
     static var searchText: String {
-        searchOverride ?? (UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)["CuePadSearch"] as? String) ?? ""
+        (UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)["CuePadSearch"] as? String) ?? ""
     }
     /// Mac session 画面要打开的会话（演示会话的 sessionID 与会话名相同）。
     static var sessionToOpen: String? { scene == "session" ? defaults.string(forKey: "CuePadSession") : nil }
@@ -115,11 +110,7 @@ enum DebugScene {
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         context.setFillColor(red: red, green: green, blue: blue, alpha: 1)
         context.fill(CGRect(origin: .zero, size: size))
-        let data = NSMutableData()
-        let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)!
-        CGImageDestinationAddImage(destination, context.makeImage()!, nil)
-        CGImageDestinationFinalize(destination)
-        return data as Data
+        return DemoLibrary.encode(context.makeImage()!)
     }
 
     /// `-CuePadCard` 指定（或最近修改）的一张卡。
@@ -148,10 +139,7 @@ enum DebugScene {
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         preset.alertStatus = alertStatus
         if scene == "search" { preset.focusedSearch = defaults.string(forKey: "CuePadProject") == nil ? .shelf : .project }
-        if scene == "agent" {
-            preset.agentQuery = searchText
-            preset.agentFromBottom = defaults.integer(forKey: "CuePadHistory") > 0 && searchText.isEmpty
-        }
+        if scene == "agent" { preset.agentQuery = searchText }
         #endif
         return preset
     }
