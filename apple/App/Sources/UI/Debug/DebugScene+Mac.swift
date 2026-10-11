@@ -1,5 +1,6 @@
 #if os(macOS) && DEBUG
 import AppKit
+import CueStore
 import QuartzCore
 import SwiftUI
 
@@ -20,6 +21,19 @@ extension DebugScene {
             workspace.openCard = tasks.first { $0.parentID == nil && $0.projectID == workspace.currentProject }?.id ?? tasks.first?.id
         case "agent":
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+            workspace.show(.agent)
+        case "agentfirst":
+            // 第一次点开先挂上的 Agent 页（`Workspace.premount`）：等预热把它挂上并读完一份，再改数据、改窗口尺寸，然后才点开，
+            // 看到的应是改后的数据、铺满新尺寸
+            if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
+            try? await Task.sleep(for: .seconds(4))
+            NSLog("agentfirst: Agent 页已先挂上 = %@", "\(workspace.mountedPages.contains(.agent))")
+            let recorder = PiStateRecorder(store: workspace.services.store, hostID: "demo-mac")
+            try? await recorder.update(sessionID: "prefetch-later", state: .thinking, detail: nil, title: "预读之后才开的会话", folder: "later", projectID: nil)
+            try? await recorder.update(sessionID: "atlas", state: .error, detail: "预读之后才出的错", title: "atlas", folder: "atlas", projectID: nil)
+            mainWindow?.setContentSize(NSSize(width: 1100, height: 720))
+            mainWindow?.center()
+            try? await Task.sleep(for: .seconds(1))
             workspace.show(.agent)
         case "projectagent":
             // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在
