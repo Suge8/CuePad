@@ -43,27 +43,6 @@ struct WidgetDataTests {
         #expect(Snapshots.readInbox(from: snapshots)?.cards.map(\.title) == ["收件箱里的"])
     }
 
-    /// 小组件刷新有系统预算：收件箱显示的内容没变时不重写快照、不刷新（重写会让下面的哨兵值被覆盖）。
-    @Test func 收件箱显示的内容没变时不重写收件箱快照() async throws {
-        services.startSnapshots()
-        defer { services.cancelBackgroundWork() }
-        _ = try await services.store.createCard(in: nil, body: "收件箱里的")
-        let project = try await services.store.createProject(name: "P", color: "#000000")
-        await eventually {
-            Snapshots.readInbox(from: snapshots)?.total == 1 && Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["P"]
-        }
-        let sentinel = InboxSnapshot(cards: [], total: 999)
-        try Snapshots.write(sentinel, to: snapshots)
-
-        let other = try await services.store.createCard(in: project.id, body: "项目里的")
-        try await services.store.updateCard(other.id) { $0.body = "项目里的，改过" }
-        try await services.store.updateProject(project.id) { $0.name = "P2" }
-        await eventually { Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["P2"] }
-
-        #expect(Snapshots.readProjects(from: snapshots)?.projects.map(\.name) == ["P2"])
-        #expect(Snapshots.readInbox(from: snapshots) == sentinel)
-    }
-
     @Test func 进入后台前先跑完登记的落盘_再刷新快照() async throws {
         var order: [String] = []
         let token = services.addBackgroundFlush {

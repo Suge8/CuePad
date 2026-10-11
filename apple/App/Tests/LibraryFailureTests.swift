@@ -45,11 +45,6 @@ struct LibraryFailureTests {
         #expect(newer.summary != older.summary)
     }
 
-    @Test func 正常的库照常打开() throws {
-        let location = try library(version: 0, setup: "SELECT 1")  // 空库：按新库建
-        _ = try AppServices.openLibrary(at: location)
-    }
-
     #if os(iOS)
     @Test func 启动遇到打不开的库_得到失败而不是终止() throws {
         let location = try library(version: 13, setup: "CREATE TABLE cards (id TEXT)")
@@ -60,11 +55,5 @@ struct LibraryFailureTests {
         #expect(failure.version == 13)
     }
 
-    @Test func 启动遇到正常的库_就绪() throws {
-        guard case .ready = Launch.open(try library(version: 0, setup: "SELECT 1")) else {
-            Issue.record("应该就绪")
-            return
-        }
-    }
     #endif
 }

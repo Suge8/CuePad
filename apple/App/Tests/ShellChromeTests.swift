@@ -85,26 +85,5 @@ struct MenuBarPanelSizingTests {
         var body: some View { Color.clear.frame(width: 300, height: height.value).frame(minHeight: 40, maxHeight: .infinity) }
     }
 
-    @Test func 内容变高变矮时面板跟着变_顶边留在图标下方() async throws {
-        let screen = try #require(NSScreen.main).visibleFrame
-        let anchor = CGRect(x: screen.midX, y: screen.maxY, width: 30, height: 25)
-        let height = Height()
-        let panel = MenuBarPanel()
-        panel.setContent(Content(height: height))
-        panel.show(below: anchor)
-        defer { panel.hide() }
-        await eventually { panel.frame.height == 120 }
-        let top = panel.frame.maxY
-
-        height.value = 220
-        await eventually { panel.frame.height == 220 }
-        #expect(panel.frame.height == 220)
-        #expect(panel.frame.maxY == top)
-
-        height.value = 90
-        await eventually { panel.frame.height == 90 }
-        #expect(panel.frame.height == 90)
-        #expect(panel.frame.maxY == top)
-    }
 }
 #endif

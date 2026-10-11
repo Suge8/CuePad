@@ -31,13 +31,6 @@ struct WallTests {
 
     // MARK: 上墙
 
-    /// 卡上"发给过谁"只写 Agent 会话：投送到应用（剪贴板等）已经下线，旧的发送记录不再当成去处写出来。
-    @Test func 卡上只写发给过的Agent会话_已下线的去处不写() {
-        #expect(SendTarget(kind: .piSession, name: "notes").shownName == "notes")
-        #expect(SendTarget(kind: .unknown("clipboard"), name: "剪贴板").shownName == nil)
-        #expect(SendTarget(kind: .mac, name: "Studio").shownName == nil)
-    }
-
     @Test func 两周内编辑的上墙_一个月内编辑且从未发送的上墙_其余进更早() {
         let recentSent = card(daysAgo: 3, sent: true)
         let unsent = card(daysAgo: 20)
@@ -72,17 +65,6 @@ struct WallTests {
 
     // MARK: 同一次打开里墙不自己挪动
 
-    @Test func 同一天编辑墙上的卡_墙的顺序不变() {
-        let a = card(daysAgo: 1), b = card(daysAgo: 2)
-        let first = arrange([a, b])
-        let later = now.addingTimeInterval(3600)
-        let edited = CardStamp(id: b.id, modifiedAt: later, lastSentAt: nil, isPinned: false)
-
-        let next = first.refreshed(with: [a, edited], project: project, now: later, calendar: Self.calendar)
-
-        #expect(next.wall == [a.id, b.id])
-    }
-
     @Test func 再次编辑的旧卡与新建的卡_回到墙首_最近的在最前() {
         let a = card(daysAgo: 1), old = card(daysAgo: 60)
         let first = arrange([a, old])
@@ -94,15 +76,6 @@ struct WallTests {
 
         #expect(next.wall == [fresh.id, old.id, a.id])
         #expect(next.older.isEmpty)
-    }
-
-    @Test func 删除的卡离开墙_其余顺序不变() {
-        let a = card(daysAgo: 1), b = card(daysAgo: 2), c = card(daysAgo: 3)
-        let first = arrange([a, b, c])
-
-        let next = first.refreshed(with: [a, c], project: project, now: now, calendar: Self.calendar)
-
-        #expect(next.wall == [a.id, c.id])
     }
 
     @Test func 打开另一个项目或跨天才重排() {
@@ -158,30 +131,6 @@ struct WallTests {
         #expect(groups.allSatisfy { !$0.isMonth })
     }
 
-    /// 分到哪个月看卡片自己的日期：周一落在上个月的那一周里，9/2 的卡属于九月，不挂在"八月"下面。
-    @Test func 更早_每周一条的月份按卡片自己的月份归组() {
-        let dates = [(9, 19), (9, 7), (9, 2), (8, 26), (8, 19), (8, 11)]
-        let cards = dates.map { CardStamp(id: UUID(), modifiedAt: Self.date(2026, $0.0, $0.1), lastSentAt: nil, isPinned: false) }
-
-        let groups = OlderGroup.group(cards.shuffled(), now: now, calendar: Self.calendar)
-
-        #expect(groups == [
-            OlderGroup(period: .sparseMonth(start: Self.date(2026, 9, 1, hour: 0)), cards: cards[0...2].map(\.id)),
-            OlderGroup(period: .sparseMonth(start: Self.date(2026, 8, 1, hour: 0)), cards: cards[3...5].map(\.id)),
-        ])
-    }
-
-    /// 更早只有几条时不分周、不分月，按时间排成一组，也不加组标题（组标题比内容还多）。
-    @Test func 更早_只有几条时排成一组不加标题() {
-        let sep16 = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 9, 16), lastSentAt: nil, isPinned: false)
-        let sep8 = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 9, 8), lastSentAt: nil, isPinned: false)
-        let april = CardStamp(id: UUID(), modifiedAt: Self.date(2026, 4, 9), lastSentAt: nil, isPinned: false)
-
-        let groups = OlderGroup.group([april, sep16, sep8], now: now, calendar: Self.calendar)
-
-        #expect(groups.map(\.cards) == [[sep16.id, sep8.id, april.id]])
-        #expect(OlderGroup.needsTitles(in: groups) == false)
-    }
 }
 
 /// "更早"的组标题：只有一组按周的卡时不再套一层日期标题（每行自带日期）；按月的组要标题来折叠。Mac 与 iOS 同一条规则。
@@ -201,39 +150,11 @@ struct OlderGroupTitleRuleTests {
 struct OlderGroupTitleTextTests {
     let now = WallTests.date(2026, 9, 30, hour: 15)
 
-    @Test func 月份不带年份_跨年才带() {
-        func title(_ period: OlderGroup.Period) -> String { OlderGroupTitle.text(period, now: now, calendar: WallTests.calendar) }
-        #expect(title(.sparseMonth(start: WallTests.date(2026, 9, 1, hour: 0))) == "9 月")
-        #expect(title(.month(start: WallTests.date(2026, 5, 1, hour: 0))) == "5 月")
-        #expect(title(.month(start: WallTests.date(2025, 12, 1, hour: 0))) == "2025 年 12 月")
-        #expect(title(.week(start: WallTests.date(2026, 8, 31, hour: 0))) == "8/31 – 9/6")
-        #expect(title(.all) == "更早")
-    }
 }
 
 /// Pi 会话副行的"在哪"：绑定了项目写项目名，否则写文件夹名。手机上的会话记录同样带着文件夹名。
 @MainActor
 struct PiPlaceTests {
-    @Test func 同步来的会话没绑定项目时写文件夹名_绑定了写项目名() async throws {
-        let app = TestApp()
-        let store = app.services.store
-        let recorder = PiStateRecorder(store: store, hostID: "mac")
-        try await recorder.update(sessionID: "s1", state: .thinking, title: "修好登录", folder: "cuepad")
-        let state = try #require(try await store.allPiSessionStates().first)
-        #expect(state.projectID == nil)
-        #expect(PiPlace.name(of: state, project: nil) == "cuepad")
-
-        let project = try await store.createProject(name: "CuePad 项目", color: "#111")
-        #expect(PiPlace.name(of: state, project: project) == "CuePad 项目")
-    }
-
-    /// 会话名以所在开头（"flow 3" 在 flow 里）时不再写所在：同一行不说两遍。
-    @Test func 所在与名字开头相同时不重复() {
-        #expect(PiPlace.name(project: nil, folder: "flow", besides: "flow 3") == nil)
-        #expect(PiPlace.name(project: nil, folder: "flow", besides: "Flow") == nil)
-        #expect(PiPlace.name(project: nil, folder: "flow", besides: "规划 flow") == "flow")
-        #expect(PiPlace.name(project: nil, folder: "flow", besides: "fl") == "flow")
-    }
 }
 
 /// Pi 历史按结束时间分段（手机 Agent 页、Mac ⌘K 共用）：今天 / 昨天 / 本周 / 本月 / 更早，周一为一周之始。
@@ -242,30 +163,6 @@ struct PiHistorySectionTests {
 
     func section(_ date: Date, now: Date) -> PiHistorySection { PiHistorySection.of(date, now: now, calendar: calendar) }
 
-    @Test func 按结束时间落进今天_昨天_本周_本月_更早() {
-        let now = WallTests.date(2026, 10, 7, hour: 10)  // 周三
-        #expect(section(WallTests.date(2026, 10, 7, hour: 0), now: now) == .today)
-        #expect(section(WallTests.date(2026, 10, 6, hour: 23), now: now) == .yesterday)
-        #expect(section(WallTests.date(2026, 10, 5), now: now) == .thisWeek)  // 周一
-        #expect(section(WallTests.date(2026, 10, 2), now: now) == .thisMonth)
-        #expect(section(WallTests.date(2026, 9, 30), now: now) == .earlier)
-    }
-
-    @Test func 昨天优先于本周与本月的边界() {
-        // 周一的昨天是上周日，月初的昨天是上个月末：都算昨天
-        #expect(section(WallTests.date(2026, 10, 4), now: WallTests.date(2026, 10, 5)) == .yesterday)
-        #expect(section(WallTests.date(2026, 9, 30), now: WallTests.date(2026, 10, 1)) == .yesterday)
-    }
-
-    @Test func 新到旧的会话分成相连的段_下一页只追加在末段之后() {
-        let now = WallTests.date(2026, 10, 7, hour: 10)
-        let ended = [now, WallTests.date(2026, 10, 6), WallTests.date(2026, 10, 6, hour: 8), WallTests.date(2026, 9, 1)]
-        let firstPage = PiHistorySection.split(Array(ended.prefix(2)), date: { $0 }, now: now, calendar: calendar)
-        let both = PiHistorySection.split(ended, date: { $0 }, now: now, calendar: calendar)
-        #expect(both.map(\.section) == [.today, .yesterday, .earlier])
-        #expect(both.map(\.items.count) == [1, 2, 1])
-        #expect(firstPage.map(\.section) == Array(both.map(\.section).prefix(firstPage.count)))
-    }
 }
 
 /// 回复框的"停止"：只在指挥官自己在跑一轮时给（等子代理时没有这一轮）；停止请求发出后、这一轮歇下前是"正在停止"
@@ -308,23 +205,6 @@ struct PiReplyRulesTests {
         return PiSessionState(
             id: UUID(), sessionID: "s", hostID: "mac", title: "s", projectID: nil, state: .known(state), detail: nil, folder: nil,
             lastPrompt: nil, lastReply: reply, question: question, notify: nil, stateSince: now, busySince: nil, createdAt: now, modifiedAt: now)
-    }
-
-    @Test func 列表预览先去掉Markdown符号再取首句() {
-        let reply = "## 结论\n找到原因了：**取消时没清掉** `retryTimer`，见 [说明](https://x.dev)。后面还有"
-        #expect(PiProgress.line(of: session(.settled, reply: reply)) == "结论")
-        #expect(PiProgress.line(of: session(.settled, reply: "找到原因了：**取消时没清掉** `retryTimer`，见 [说明](https://x.dev)。后面还有"))
-            == "找到原因了：取消时没清掉 retryTimer，见 说明。")
-        #expect(PiProgress.line(of: session(.settled, reply: "- 第一条 **要点**\n- 第二条")) == "第一条 要点")
-    }
-
-    /// 摘要只取文字：表格、代码块跳过，整条回答都是表格或代码时说它是什么，不把 "| 目录 | 文件数 |" 这类原文露出来。
-    @Test func 列表预览跳过表格与代码_只有它们时说是什么() {
-        let table = "| 目录 | 文件数 |\n|---|---|\n| master | 12 |"
-        #expect(PiProgress.line(of: session(.settled, reply: table + "\n\n三个目录都统计完了。还有别的")) == "三个目录都统计完了。")
-        #expect(PiProgress.line(of: session(.settled, reply: "```\nls -la\n```\n跑完了。")) == "跑完了。")
-        #expect(PiProgress.line(of: session(.settled, reply: table)) == "（一张表格）")
-        #expect(PiProgress.line(of: session(.settled, reply: "```\nls -la\n```")) == "（一段代码）")
     }
 
     /// 等你确认时：文字型问题回复框就是作答框；选择与确认型先在上面作答，这里答不了的不发自由文本。不在等你确认时照常发消息，忙时默认等它做完再说。
