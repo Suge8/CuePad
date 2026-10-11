@@ -222,7 +222,7 @@ private struct SplitShortcuts: View {
         workspace.attempt {
             let card = try await workspace.createCard(in: project)
             if navigation.splitRoot == .search { navigation.closeSearch() }
-            navigation.open(card: card.id)
+            navigation.push(.card(card.id))
         }
     }
 

@@ -100,10 +100,6 @@ final class Navigation {
         }
     }
 
-    func open(card id: UUID) {
-        push(.card(id))
-    }
-
     /// 交给 Agent：浮起交给 Agent 的输入框，正文带在里面（`HandOffInput`）。
     func handToAgent(_ card: Card, text: String? = nil) {
         outbox = Outbox(content: text ?? Outgoing.text(of: card), card: card.id, project: card.projectID)

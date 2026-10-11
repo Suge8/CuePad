@@ -34,7 +34,7 @@ struct InboxScreen: View {
 
     private func row(_ card: Card) -> some View {
         let text = CardText(card.body)
-        return Button { navigation.open(card: card.id) } label: {
+        return Button { navigation.push(.card(card.id)) } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(text.label).font(.body.weight(.medium))

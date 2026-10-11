@@ -142,7 +142,7 @@ struct ProjectScreen: View {
         let project = projectID
         workspace.attempt {
             let card = try await workspace.createCard(in: project)
-            navigation.open(card: card.id)
+            navigation.push(.card(card.id))
         }
     }
 
