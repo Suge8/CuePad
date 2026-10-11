@@ -70,7 +70,7 @@ nonisolated enum PiChat {
     }
 
     /// 一轮工具活动的一句话，从全到简："改了 2 个文件，读了 3 个文件" → "改了 2 个文件，其余 3 个"。分类按改文件、跑命令、读取、
-    /// 搜索、其他的优先级，最全时三类以内全写、超过三类只写前两类；每简一档少写一类，少写的合计成"其余 N 个"。失败的不算进各类。
+    /// 搜索、其他的优先级，最全时三类以内全写、超过三类只写前两类；每简一档少写一类，少写的合计成"其余 N 个"。失败的调用也算在自己那一类里（与展开清单的行同一口径）。
     static func toolSummaries(_ tools: PiChatMessage.Tools) -> [String] {
         let kinds = PiChatMessage.Tools.Kind.allCases.filter { tools[$0] > 0 }
         let most = kinds.count > 3 ? 2 : kinds.count

@@ -115,7 +115,7 @@ extension DebugScene {
 
     /// 演示用的工具活动：一周会议记录那一轮读了资料、改了笔记、跑了脚本。
     private static let notesWeek = PiChatMessage.Tools(
-        edits: 2, commands: 1, reads: 3, failed: 1,
+        edits: 2, commands: 2, reads: 3,
         items: [
             .init(kind: .read, target: "notes/2026-W39.md"), .init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .read, target: "notes/inbox.md"),
             .init(kind: .edit, target: "notes/2026-W40.md", added: 18, removed: 4), .init(kind: .edit, target: "notes/todo.md", added: 3),
@@ -124,7 +124,7 @@ extension DebugScene {
 
     /// 演示用的工具活动：跑测试那一轮读了测试、跑了测试（一次失败），没有改代码。
     private static let testRun = PiChatMessage.Tools(
-        commands: 1, reads: 2, failed: 1,
+        commands: 2, reads: 2,
         items: [
             .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .read, target: "scheduler/queue.test.ts"),
             .init(kind: .command, target: "pnpm vitest run scheduler"), .init(kind: .command, target: "pnpm vitest run scheduler --reporter=verbose", failed: true),
