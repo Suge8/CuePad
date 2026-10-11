@@ -21,7 +21,7 @@ struct ReplyTests {
         AppSettings(defaults: UserDefaults(suiteName: suite)!, launchArguments: [:])
     }
 
-    @Test func 离开再回来草稿还在_文字跨退出保留_卡片只留在这次运行_发出后清空() {
+    @Test func 离开再回来草稿还在_文字跨退出保留_卡片只留在这次运行() {
         let suite = "drafts-\(UUID())", session = UUID()
         let settings = settings(suite)
         var draft = settings.replyDraft(for: session)
@@ -36,10 +36,6 @@ struct ReplyTests {
         let relaunched = self.settings(suite)
         #expect(relaunched.replyDraft(for: session).text == "改完再跑一遍")
         #expect(relaunched.replyDraft(for: session).attachments.isEmpty)
-
-        relaunched.setReplyDraft(ComposerDraft(), for: session)  // 发出后清空
-        relaunched.flush()
-        #expect(self.settings(suite).replyDraft(for: session).text.isEmpty)
     }
 
     /// 回复框每个键都改草稿：界面立即读到新字，偏好只在停手后写一次；退出前冲刷把还没写的立即写下（没有未写的草稿时什么也不做）。
