@@ -29,7 +29,8 @@ extension CueStore {
     }
   }
 
-  /// 把这台 Mac 的会话记为已结束（`sessionID` 为 nil 时是它全部未结束的会话），近况留着。
+  /// 把这台 Mac 的会话记为已结束，近况留着。`sessionID` 为 nil 时是启动对账：上次没来得及结束的会话都记为已结束，
+  /// 只有托管着的（进程随上次退出而歇下，仍可唤醒）改记为歇着、不进历史。
   func endPiStates(host: String, sessionID: String?, at now: Date) throws {
     try write {
       let ended = PiWorkState.ended.rawValue
@@ -41,9 +42,31 @@ extension CueStore {
       if let sessionID {
         try db.run("\(end) WHERE id = ? AND state != ?", [ended, now, Date.stamp, PiSessionState.recordID(sessionID: sessionID), ended])
       } else {
-        try db.run("\(end) WHERE hostID = ? AND state != ?", [ended, now, Date.stamp, host, ended])
+        try db.run("\(end) WHERE hostID = ? AND state != ? AND hosted IS NULL", [ended, now, Date.stamp, host, ended])
+        try restPiStates(host: host, sessionID: nil, at: now)
       }
     }
+  }
+
+  /// 托管的会话进程退出后的样子：记录留着、托管标记留着（进程不在），歇着——没有在做的事、没有问题、没有通知。
+  /// 已经歇着的不动起点（"多久前"仍从它歇下算起）；已结束的不碰，所以与用户结束会话写的已结束先后不论。
+  func restPiStates(host: String, sessionID: String?, at now: Date) throws {
+    let rest = """
+      UPDATE piSessionStates SET stateSince = CASE WHEN state = ? THEN stateSince ELSE ? END, state = ?, detail = NULL, question = NULL,
+        notify = NULL, busySince = NULL, subagents = NULL, models = NULL, commands = NULL, modifiedAt = ?
+      WHERE hosted = 1 AND state != ?
+      """
+    let head: [any SQLBindable] = [PiWorkState.settled.rawValue, now, PiWorkState.settled.rawValue, Date.stamp, PiWorkState.ended.rawValue]
+    if let sessionID {
+      try db.run("\(rest) AND id = ?", head + [PiSessionState.recordID(sessionID: sessionID)])
+    } else {
+      try db.run("\(rest) AND hostID = ?", head + [host])
+    }
+  }
+
+  /// 删掉一个会话的记录（同步删除）：会话结束时没有留下会话文件的，不进历史。
+  func deletePiState(sessionID: String) throws {
+    try write { try db.run("DELETE FROM piSessionStates WHERE id = ?", [PiSessionState.recordID(sessionID: sessionID)]) }
   }
 }
 
@@ -79,8 +102,8 @@ struct PiStateContent: Equatable, Sendable {
 /// - 开始工作、等你确认、完成、出错，以及会话的标题或项目变化：立即写；
 /// - 工作中的细节变化（输出、调用哪个工具）：合并，两次写入之间至少隔 `minInterval`，期间只保留最新的一次；
 /// - 近况（`PiRecap`）变化：立即写；
-/// - 与已写入内容相同的更新不再写；会话结束时把记录标为已结束（近况留给手机看，记录与会话文件同存亡，
-///   见 `CueStore.retainPiSessions`）并丢弃挂起的更新。
+/// - 与已写入内容相同的更新不再写；会话的进程退出时按 `exited` 处理记录（历史、歇着、删除）并丢弃挂起的更新；用户结束会话时
+///   标为已结束（近况留给手机看，记录与会话文件同存亡，见 `CueStore.retainPiSessions`）。
 ///
 /// actor 在 await 处可重入：会话状态只在 await 之前改完，不跨 await 持有副本；落盘按决定的先后串成一条任务链，
 /// 后决定的写入（含删除）不会被先决定的覆盖。
@@ -168,10 +191,29 @@ public actor PiStateRecorder {
     return alert
   }
 
-  /// 会话结束：记录标为已结束。
+  /// 会话结束：记录标为已结束（用户在 CuePad 里结束会话、终端里的 Pi 退出），进历史。
   public func end(sessionID: String) async throws {
     if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }
     try await endRecords(sessionID: sessionID)
+  }
+
+  /// 会话的进程退出了、没有别的进程接着它：什么算历史只在这里定——
+  /// - 没留下会话文件的（Pi 在第一条消息落盘前不建文件，`--no-session` 也没有）：一句话没说过，不进历史，记录删掉（同步删除）；
+  /// - CuePad 后台托管的：闲置退出不算结束，记录留着、歇着，仍在"现在"，发话由本机执行器照常唤醒；
+  /// - 其余（终端里的 Pi 退出）：记为已结束，进历史。
+  /// 托管的会话要结束，由用户的结束请求写 `end`。
+  public func exited(sessionID: String, file: URL?, hosted: Bool) async throws {
+    if var session = sessions.removeValue(forKey: sessionID) { cancelPending(&session) }
+    let id = sessionID
+    let now = timing.now()
+    let spoke = file.map { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) } ?? false
+    if !spoke {
+      try await persist { [store] in try await store.deletePiState(sessionID: id) }
+    } else if hosted {
+      try await persist { [store, hostID] in try await store.restPiStates(host: hostID, sessionID: id, at: now) }
+    } else {
+      try await endRecords(sessionID: id)
+    }
   }
 
   /// 这台 Mac 遗留的记录都标为已结束（App 启动时：上次没来得及结束的会话；还活着的会重新登记）。

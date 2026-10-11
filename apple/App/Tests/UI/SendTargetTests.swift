@@ -33,7 +33,10 @@ struct SendTargetTests {
 
     /// 一个连着桥的 Pi 会话（同一个会话重新打开时 `pid` 不同）。
     private func open(_ sessionID: String, in directory: String, pid: Int32 = 100) async throws -> FakeExtension {
-        let ext = FakeExtension(directory: rig.socketDirectory, sessionID: sessionID, pid: pid, options: .init(cwd: directory))
+        // 说过话的会话才有会话文件：结束后进历史（没有文件的结束时不进历史）
+        let file = FileManager.default.temporaryDirectory.appending(path: "send-target-\(UUID().uuidString).jsonl")
+        FileManager.default.createFile(atPath: file.path, contents: Data())
+        let ext = FakeExtension(directory: rig.socketDirectory, sessionID: sessionID, pid: pid, options: .init(cwd: directory, sessionFile: file.path))
         try ext.start()
         opened.extensions.append(ext)
         await eventually { rig.pi.session(id: ext.id) != nil }

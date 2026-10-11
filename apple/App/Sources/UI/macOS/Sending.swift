@@ -23,7 +23,8 @@ final class SendState {
         var card: UUID?
     }
 
-    /// 一个发送目标走哪条路：本机桥上连着的会话；别的 Mac 上在线的会话；已结束的会话（在后台唤醒）。
+    /// 一个发送目标走哪条路：本机桥上连着的会话；别的 Mac 上在线的会话；本机桥上没有的会话（已结束的，或托管着、进程歇着的）：
+    /// 发送时由本机执行器在后台唤醒。
     enum Route {
         case local(CuePi.PiSession)
         case remote(PiSessionState)
@@ -51,10 +52,11 @@ final class SendState {
         projects = result
     }
 
-    /// 同步记录里在线的会话此刻能直接交给：别的 Mac 上的记录在线即可；本机的要桥上连着——桥上已经没有、记录还没来得及标成结束的
-    /// 不算（发送时它走"已结束"那条路，菜单和默认目标也不列它）。菜单与发送走的路都读它。
+    /// 同步记录里在线的会话此刻能交给：别的 Mac 上的记录在线即可；本机的要桥上连着，或是托管着的（进程歇着也列出，发送时唤醒）——
+    /// 终端里开的会话桥上已经没有、记录还没来得及标成结束的不算（发送时它走"唤醒"那条路，菜单和默认目标也不列它）。
+    /// 菜单与发送走的路都读它。
     private func isReachable(_ state: PiSessionState) -> Bool {
-        state.hostID != services.hostID || liveSession(state.sessionID) != nil
+        state.hostID != services.hostID || state.hosted || liveSession(state.sessionID) != nil
     }
 
     /// 能交给的在线会话：所有 Mac 上的（手机的交给 Agent 输入框共用同一份规则，见 `HandOffTargets`），去掉本机已不在桥上的。
@@ -64,7 +66,7 @@ final class SendState {
 
     func route(of sessionID: String) -> Route {
         if let live = liveSession(sessionID) { return .local(live) }
-        if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && isReachable($0.state) }) {
+        if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && $0.state.hostID != services.hostID }) {
             return .remote(remote.state)
         }
         return .ended
@@ -99,7 +101,7 @@ final class SendState {
     /// 能选作发送目标的已结束会话：这个窗口打开后结束、也没有重新打开的，最近结束的在前。发给它们时在后台把会话恢复起来。
     var endedTargets: [PiSessionState] { services.liveSessions.recentlyEnded.filter { liveSession($0.sessionID) == nil } }
 
-    /// 会话已结束、也没有重新打开：发送时先在后台唤醒它，发送钮的状态点写"已结束"。
+    /// 本机桥上没有这个会话：发送时先在后台唤醒它。发送钮的状态点照记录写——已结束的写"已结束"，托管着、进程歇着的写它歇着的状态。
     func isEnded(_ target: AgentTarget) -> Bool {
         if case .ended = route(of: target.session) { true } else { false }
     }
@@ -114,9 +116,13 @@ final class SendState {
     /// 发送目标此刻显示的状态：本机的取桥上的实时值，别的 Mac 上的取同步记录，已结束的是"已结束"。
     func shown(_ target: AgentTarget) -> PiShown {
         switch route(of: target.session) {
-        case .local(let live): shown(live)
-        case .remote(let state): services.settings.shown(state, delivery: services.liveSessions.deliveries[state.sessionID])
-        case .ended: PiShown(state: .known(.ended))
+        case .local(let live):
+            return shown(live)
+        case .remote(let state):
+            return services.settings.shown(state, delivery: services.liveSessions.deliveries[state.sessionID])
+        case .ended:
+            let resting = services.liveSessions.live.first { $0.state.sessionID == target.session && $0.state.hostID == services.hostID }
+            return resting.map { services.settings.shown($0) } ?? PiShown(state: .known(.ended))
         }
     }
 
