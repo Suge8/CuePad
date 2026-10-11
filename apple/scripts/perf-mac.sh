@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 用法：perf-mac.sh <cold|scenarios|interact> [次数=3]
 #   cold       冷启动与整段场景：合成大库（-CuePadSeed perf：50 项目、5000 卡、300 张大图、200 个 Pi 历史会话）上的 -CuePadBench perf，
-#              每次一行 JSON：冷启动到首屏、内存、滚动与开合纸页的帧间隔、⌘K 搜索延迟。
+#              每次一行 JSON：冷启动到首屏、内存、滚动与开合编辑页的帧间隔、⌘K 搜索延迟。
 #   scenarios  持续场景：同一个大库上的 -CuePadBench scenarios（侧栏切项目、Agent 页滚动、会话滚动与流式、打字、悬停、缩放窗口、⌘K 逐字打），
 #              每次一行 JSON，每项的帧间隔与掉帧；库里的会话最好先用 pi-live.py 连到桥上。
 #   interact   单次交互：演示库与大库上的 -CuePadBench interact，逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）与掉帧，取各次的中位数，

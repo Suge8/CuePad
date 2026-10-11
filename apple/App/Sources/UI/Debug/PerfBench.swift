@@ -33,7 +33,7 @@ enum PerfProbe {
     }
 }
 
-/// `-CuePadBench perf`：在当前项目页上依次测冷启动到首屏、滚动、开合纸页、⌘K 搜索与内存，结果作为一行 JSON 打到标准输出后退出。
+/// `-CuePadBench perf`：在当前项目页上依次测冷启动到首屏、滚动、开合编辑页、⌘K 搜索与内存，结果作为一行 JSON 打到标准输出后退出。
 /// 配合 `-CuePadSeed perf` 生成的大库（第一次运行只写库，之后的运行才是冷启动）。
 @MainActor
 enum PerfBench {

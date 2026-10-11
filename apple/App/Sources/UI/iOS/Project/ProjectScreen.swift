@@ -152,7 +152,7 @@ struct ProjectScreen: View {
         if next.refresh(with: data, project: projectID) {
             board = next
         } else {
-            withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) { board = next }
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { board = next }
         }
     }
 }

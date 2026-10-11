@@ -74,7 +74,7 @@ extension DebugScene {
         }
     }
 
-    /// 动效连拍用：存一张新卡（看分列是否稳定、同列下移），再开合一张墙上的卡（看纸页沿原路放大与缩回）。
+    /// 动效连拍用：存一张新卡（看分列是否稳定、同列下移），再开合一张墙上的卡（看编辑页原地淡入淡出）。
     private static func benchMotion(_ workspace: Workspace) async {
         try? await Task.sleep(for: .seconds(3))
         workspace.attempt { _ = try await workspace.createCard(body: "新记下的一条\n看看它落在哪一列", in: workspace.currentProject) }

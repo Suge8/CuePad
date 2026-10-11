@@ -24,8 +24,8 @@ enum InteractionBench {
         "页面首访": (28, 2),
         "Agent 页首访": (28, 2),
         "会话页": (90, 2),
-        "开纸页": (28, 2),
-        "收纸页": (14, 2),
+        "开编辑页": (28, 2),
+        "收编辑页": (14, 2),
         "任务面板开": (28, 2),
         "任务面板关": (14, 2),
         "⌘K 面板开": (28, 2),
@@ -50,7 +50,7 @@ enum InteractionBench {
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
         let sessions = ((try? await store.piSessionPage(PiSessionQuery(limit: 3)))?.items ?? []).map(\.state.sessionID)
-        // `-CuePadInteractOnly 会话页,开纸页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开纸页配收纸页）
+        // `-CuePadInteractOnly 会话页,开编辑页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）
         let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
         func step(_ name: String, _ action: () -> Void) async {
             if let only, !only.contains(name) { return }
@@ -75,8 +75,8 @@ enum InteractionBench {
         if let a { await step("页面回访") { workspace.show(.project(a)) } }
         if let card = try? await store.cards(in: workspace.currentProject).first?.id {
             for _ in 0..<2 {
-                await step("开纸页") { workspace.openCard = card }
-                await step("收纸页") { workspace.openCard = nil }
+                await step("开编辑页") { workspace.openCard = card }
+                await step("收编辑页") { workspace.openCard = nil }
             }
         }
         for _ in 0..<2 {

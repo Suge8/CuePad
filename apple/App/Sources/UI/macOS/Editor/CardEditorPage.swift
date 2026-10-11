@@ -8,23 +8,19 @@ import SwiftUI
 nonisolated private struct EditorData: Sendable {
     var card: Card
     var project: Project?
-    /// 这张卡最近一次发给谁：过渡中纸上的卡面与墙上那张一模一样（见 `CardFace`）。
-    var lastTarget: String?
     /// 提示词所在的任务（挂在任务下的灵感）。
     var task: Card?
 }
 
-/// 打开的卡：纸从墙上那张卡的边框连续放大成居中的纸页，关闭时沿原路缩回那张卡的边框。
-/// 过渡中只动纸的外框（一块实色形状，不重新排字），纸上写着原卡片的标题与摘要；纸始终在最上层。
-/// 任何一帧屏幕上只有一份这张卡的字：纸上的卡面与编辑器位置、字号不同，铺满（缩回前）的同一帧互换，
-/// 不淡入淡出（交叉淡化是两份字叠影，先退后进中间是空白纸）；墙上原卡片在纸接过它（开始放大）的同一帧隐去，纸缩回后的同一帧回来。
-/// 纸底下的项目页保持挂载，关掉后回到原来的滚动位置。
+/// 打开的卡：编辑页铺满内容区、与页面同底色（纸感留在墙上的卡片与底色上，这里不再画纸）；字限在 `textWidth` 一列里居中，
+/// 编辑区本身铺满，两侧空白处也能滚。打开、收起都是原地淡入淡出，不动几何：前台每帧几何变化会让 AppKit 重算整窗的鼠标跟踪区。
+/// 重活先在看不见时做完——挂上编辑器与底栏、让编辑器接过键盘，各占一帧——再淡入；这几帧里墙上那张卡保持按下（`CardPresence.opening`）。
+/// 编辑页底下的项目页保持挂载，关掉后回到原来的滚动位置。
 struct CardEditorPage: View {
     let cardID: UUID
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var data: EditorData?
     @State private var initialText: String?
     @State private var liveText = ""
@@ -33,57 +29,52 @@ struct CardEditorPage: View {
     @State private var handle = EditorHandle()
     @State private var autosave: Autosave?
     @State private var saveState = SaveState.idle
-    /// 纸是否已铺开（外框在纸页位置）；false 时外框落在原卡片上。
-    @State private var expanded = false
-    /// 纸上是编辑器（true）还是原卡片的卡面（false）。
-    @State private var editorShown = false
-    /// 已经挂上的部分（见 `prepare`）。
-    @State private var stage = Stage.paper
-    /// 缩回原卡片后纸隐去，下一帧再卸下纸页。
-    @State private var paperGone = false
-    @State private var pageOrigin: CGPoint = .zero
-    @State private var paperFrame: CGRect = .zero
+    /// 编辑器与底栏已挂上（不可见，见 `prepare`）。
+    @State private var mounted = false
+    /// 编辑页看得见（淡入、淡出的终点）。
+    @State private var shown = false
+    /// 淡入走完了。
+    @State private var settled = false
+    /// 收起的淡出走完了（之后才卸下）。
+    @State private var gone = false
     /// 任务才有：提示词与子任务（与手机任务页同一份 `TaskDetail`）。
     @State private var taskDetail: TaskDetail?
 
-    private static let paperWidth: CGFloat = 760
+    /// 一行字最宽：苹方 15.5pt 约 44 个字，再宽读到行尾回头找下一行就费劲。
+    fileprivate static let textWidth: CGFloat = 680
+    /// 字离编辑区左右边的最小距离（窗口窄时）。
+    fileprivate static let inset: CGFloat = 24
     private static let barClearance: CGFloat = 84
-    private static let radius: CGFloat = 22
+    /// 编辑区下沿淡出的那一段（内容自己的透明度，不往上画颜色）。
+    private static let bottomFade: CGFloat = 28
 
     private var isOpen: Bool { workspace.openCard == cardID }
 
     var body: some View {
         ZStack(alignment: .top) {
-            // 纸铺开后才把墙盖住；纸本身全程不透明
-            palette.desk.ignoresSafeArea().opacity(expanded ? 1 : 0)
-            paperShape
-            if stage >= .bar, let data, let initialText {
-                VStack(alignment: .leading, spacing: 10) {
+            if mounted, let data, let initialText {
+                VStack(spacing: 10) {
                     meta(data)
                     if data.card.isTask { taskContent(data.card) } else { editor(data, initialText) }
                 }
-                .frame(maxWidth: Self.paperWidth)
-                .padding(.horizontal, 24)
-                .padding(.top, 46)
+                .padding(.top, Spacing.pageTop)
                 .padding(.bottom, Self.barClearance)
-                .opacity(editorShown ? 1 : 0)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(palette.desk.ignoresSafeArea())
         .overlay(alignment: .bottom) {
-            // 底栏不在纸上：提前挂好、不可见，随编辑器出现后淡入、关闭时先退
-            if stage >= .bar, let data, !data.card.isTask {
-                let shown = isOpen && editorShown
+            // 底栏挂在页面之上、与编辑器同时挂好，随编辑页一起淡入淡出
+            if mounted, let data, !data.card.isTask {
                 EditorBar(card: data.card, text: liveText, handle: handle, selecting: selecting)
                     .padding(.bottom, 16)
-                    .opacity(shown ? 1 : 0)
                     .disabled(!shown)
                     .accessibilityHidden(!shown)
-                    .animation(.easeOut(duration: 0.12), value: shown)
             }
         }
-        .onGeometryChange(for: CGPoint.self) { $0.frame(in: .global).origin } action: { pageOrigin = $0 }
-        // 铺开到换成编辑器之前、缩回到纸隐去之前都在过渡
-        .debugSettling(isOpen ? !editorShown : !paperGone)
+        .opacity(shown ? 1 : 0)
+        .allowsHitTesting(shown)
+        .debugSettling(isOpen ? !settled : !gone)
         .background {
             if data?.card.isTask == true {
                 Color.clear.observing(services.store, id: cardID, into: $taskDetail, onError: workspace.fail) { [cardID] in
@@ -95,7 +86,6 @@ struct CardEditorPage: View {
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(
                 card: card, project: try card.projectID.flatMap { try store.project($0) },
-                lastTarget: try store.lastSends(in: card.projectID)[card.id]?.target.shownName,
                 task: try card.isTask ? nil : card.parentID.flatMap { try store.card($0) })
         }
         .onChange(of: data?.card.id, initial: true) {
@@ -106,15 +96,15 @@ struct CardEditorPage: View {
         .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.openCard = nil } }
         .onChange(of: isOpen) { if !isOpen { collapse() } }
         .onAppear(perform: makeAutosave)
-        // 量到纸页位置、正文也读到之后才铺开：第一帧外框在原卡片上，正文按时淡入而不是读到时突然出现
-        .onChange(of: paperFrame.isEmpty || initialText == nil, initial: true) { _, waiting in
-            if !waiting, isOpen, stage == .paper { prepare() }
+        // 正文读到之后才开始准备
+        .onChange(of: initialText == nil, initial: true) { _, waiting in
+            if !waiting, isOpen, !mounted { prepare() }
         }
         // 什么都没写就离开（新记的一条、新写的提示词）：不留下这条
         .onDisappear { workspace.leaveEditing(cardID, flush: autosave) }
     }
 
-    /// 任务的纸页：完成圈与标题、一句说明，下面是提示词卡片与子任务（与手机任务页同一组件）。打开提示词或子任务是换一页。
+    /// 任务的编辑页：完成圈与标题、一句说明，下面是提示词卡片与子任务（与手机任务页同一组件）。打开提示词或子任务是换一页。
     private func taskContent(_ task: Card) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -130,115 +120,44 @@ struct CardEditorPage: View {
                     })
                 SubtaskList(detail: taskDetail, open: { workspace.openCard = $0.id })
             }
-            .padding(.horizontal, 64).padding(.vertical, 8)
+            .column()
+            .padding(.vertical, 8)
         }
         .scrollIndicators(.automatic)
     }
 
-    /// 提示词卡上的"交给 Agent"：发给本项目当前的 Agent 会话（与提示词纸页同一个），提示词关联到它；没有会话时打开它的纸页去选。
+    /// 提示词卡上的"交给 Agent"：发给本项目当前的 Agent 会话（与提示词编辑页同一个），提示词关联到它；没有会话时打开它的编辑页去选。
     private func hand(_ prompt: Card) {
         guard let target = workspace.agentTarget(for: prompt.projectID) else { return workspace.openCard = prompt.id }
         let text = Outgoing.text(of: prompt), id = prompt.id
         Task { await workspace.send(text, to: target, card: id) }
     }
 
-    /// 原卡片在本页里的边框；找不到原卡片（不在墙上）时为 nil。
-    private var sourceFrame: CGRect? {
-        workspace.presence(of: cardID).frame.map { $0.offsetBy(dx: -pageOrigin.x, dy: -pageOrigin.y) }
-    }
-
-    /// 纸此刻的边框：铺开时是纸页的位置，否则是原卡片的边框。
-    private var paperRect: CGRect {
-        expanded || sourceFrame == nil || reduceMotion ? paperFrame : sourceFrame!
-    }
-
-    /// 纸的外框：铺开时是纸页的位置，否则是原卡片的边框（找不到原卡片时从纸页位置略缩小淡入）。
-    private var paperShape: some View {
-        // 圆角与大小都从原卡片按下的样子起飞（见 `CardOpenStyle`），随铺开过渡到纸页；缩回时落回原卡片松开的样子
-        let shape = RoundedRectangle(cornerRadius: expanded ? Self.radius : CardTile.radius, style: .continuous)
-        let launching = isOpen && !expanded && !reduceMotion
-        let source = sourceFrame
-        let rect = paperRect
-        return ZStack(alignment: .top) {
-            // 占位：量出纸页铺开时的位置
-            Color.clear
-                .frame(maxWidth: Self.paperWidth, maxHeight: .infinity)
-                .padding(.horizontal, 24)
-                .padding(.top, 6)
-                .ignoresSafeArea(edges: .bottom)
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
-                    paperFrame = $0.offsetBy(dx: -pageOrigin.x, dy: -pageOrigin.y)
-                }
-            shape.fill(palette.paper)
-                .overlay(shape.strokeBorder(palette.hair))
-                .shadow(color: .black.opacity(palette.dark ? 0 : 0.06), radius: 12, y: 4)
-                .frame(width: max(rect.width, 1), height: max(rect.height, 1))
-                // 过渡中纸上是原卡片的卡面（编辑器只在铺开后出现）：放大、缩回的每一帧纸上都有字，盖上与落回时与原卡片一模一样
-                .overlay(alignment: .topLeading) {
-                    if let data {
-                        // 按原卡片的宽度排版、不随纸变宽重新折行：纸放大时字留在原处，只是纸边退开
-                        CardFace(
-                            card: data.card, lastTarget: data.lastTarget, floated: false)
-                            .frame(width: (source ?? rect).width, alignment: .topLeading)
-                            .opacity(editorShown ? 0 : 1)
-                            .accessibilityHidden(true)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .clipShape(shape)
-                .scaleEffect(launching ? Motion.pressScale : 1)
-                .position(x: rect.midX, y: rect.midY)
-                // 纸在开始放大时才接过原卡片（准备期间是原卡片自己按着），收起时一直在，缩回原卡片后隐去
-                .opacity(data == nil || paperGone || stage < .launched && isOpen || source == nil && !expanded ? 0 : 1)
-                .allowsHitTesting(false)
-        }
-    }
-
-    /// 重活先做完再动：原卡片保持按下（`CardPresence.Phase.opening`，点下与键盘打开都一样），接下来几帧依次挂上编辑器与底栏
-    /// （都不可见，一帧：分成两帧只是多一次掉帧，每帧各要三十几毫秒）、让编辑器接过键盘，再由纸接过原卡片开始放大。这几步放在纸还没动的时候，每步一帧；
-    /// 放大途中与铺满换成编辑器的每一帧，只剩动画本身与改透明度。
+    /// 看不见时先把重活做完，每步一帧：挂上编辑器与底栏（一帧：分成两帧只是多一次掉帧）、让编辑器接过键盘
+    /// （要激活输入法上下文，与输入法进程同步往返），最后放开墙上那张卡、淡入。淡入的每一帧只剩改透明度。
     private func prepare() {
         Task {
             // 每一步之前都看一眼：准备途中已经关了就停下（关闭由 collapse 收尾）
             await NextFrame.wait()
             guard isOpen else { return }
-            stage = .bar
-            // 编辑器接过键盘要激活输入法上下文（与输入法进程同步往返），也放在动之前
+            mounted = true
             await NextFrame.wait()
             guard isOpen else { return }
             handle.focus()
             await NextFrame.wait()
-            if isOpen { launch() }
+            guard isOpen else { return }
+            workspace.opened(cardID)
+            withAnimation(Motion.quick) { shown = true } completion: { settled = true }
         }
     }
 
-    /// 纸接过原卡片：同一帧原卡片隐去、纸以按下的样子出现在它的位置上，随即放大。
-    private func launch() {
-        stage = .launched
-        workspace.cover(cardID)
-        withAnimation(Motion.spatial(Motion.paper, reduceMotion: reduceMotion)) {
-            expanded = true
-        } completion: {
-            // 铺满的同一帧换成编辑器；铺开途中已经关了就不换
-            if isOpen { editorShown = true }
-        }
-    }
-
-    /// 同一帧换回原卡片的卡面并卸下编辑器与底栏，外框缩回原卡片；缩完的同一帧纸隐去、原卡片回来，
-    /// 卸下纸页的其余部分放到下一帧，那时屏幕上已经没有变化。
+    /// 原地淡出，淡完卸下。
     private func collapse() {
-        editorShown = false
-        // 编辑器与底栏在缩回开始的这一帧就卸下（纸上换回卡面）：留着的话缩回途中每帧都带着它们，缩完再卸要几十毫秒
-        stage = .paper
-        withAnimation(Motion.spatial(Motion.paperClose, reduceMotion: reduceMotion)) {
-            expanded = false
+        withAnimation(Motion.quick) {
+            shown = false
         } completion: {
-            paperGone = true
-            workspace.uncover(cardID)
-            Task {
-                await NextFrame.wait()
-                workspace.finishClosingCard()
-            }
+            gone = true
+            workspace.finishClosingCard()
         }
     }
 
@@ -265,7 +184,7 @@ struct CardEditorPage: View {
         }
         .font(Typography.meta)
         .foregroundStyle(palette.ink3)
-        .padding(.horizontal, 64)
+        .column()
         .animation(Motion.quick, value: saveState)
         // "已保存"只亮一会儿；状态再变（又在保存、出错）时这次计时作废
         .task(id: saveState) {
@@ -278,7 +197,7 @@ struct CardEditorPage: View {
     private func editor(_ data: EditorData, _ text: String) -> some View {
         EditorHost(
             initialText: text,
-            theme: .paper(palette),
+            theme: .editor(palette, horizontalInset: Self.inset, maxTextWidth: Self.textWidth),
             handle: handle,
             onChange: { next in
                 liveText = next
@@ -287,11 +206,11 @@ struct CardEditorPage: View {
             onSelectionChange: { selecting = $0 },
             selectionActions: selectionActions(data.card),
             onError: workspace.fail)
-        .overlay(alignment: .bottom) {
-            LinearGradient(colors: [palette.paper.opacity(0), palette.paper], startPoint: .top, endPoint: .bottom)
-                .frame(height: 28)
-                .padding(.horizontal, 1) // 让出纸边描边
-                .allowsHitTesting(false)
+        .mask {
+            VStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Self.bottomFade)
+            }
         }
     }
 
@@ -325,11 +244,13 @@ struct CardEditorPage: View {
     }
 }
 
-/// 纸页挂到了哪一步：先只有（不可见的）纸，再挂编辑器与底栏，最后纸接过原卡片开始放大。
-private enum Stage: Int, Comparable {
-    case paper, bar, launched
-
-    static func < (a: Stage, b: Stage) -> Bool { a.rawValue < b.rawValue }
+private extension View {
+    /// 编辑页里与正文同一列：最宽 `textWidth`、居中，窗口窄时离边至少 `inset`（编辑器自己按同样的数居中，见 `CueEditorTheme.maxTextWidth`）。
+    func column() -> some View {
+        frame(maxWidth: CardEditorPage.textWidth, alignment: .leading)
+            .padding(.horizontal, CardEditorPage.inset)
+            .frame(maxWidth: .infinity)
+    }
 }
 
 /// 保存状态：平时不显示；保存中显示，保存完显示"已保存"一会儿，失败一直显示直到下次保存成功。

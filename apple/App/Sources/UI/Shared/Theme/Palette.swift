@@ -155,9 +155,9 @@ enum Typeface {
 }
 
 extension CueEditorTheme {
-    /// 编辑页的纸面主题。颜色是固定值而非动态色：外观切换时整体替换主题。
-    /// `horizontalInset` 随平台：Mac 纸页宽，iPhone 贴近屏幕边。iOS 上字号是 Dynamic Type 的设计基准。
-    static func paper(_ palette: Palette, horizontalInset: CGFloat = 64) -> CueEditorTheme {
+    /// 编辑页的主题。颜色是固定值而非动态色：外观切换时整体替换主题。
+    /// 左右留白随平台：Mac 编辑页铺满、字限在 `maxTextWidth` 一列里居中，iPhone 贴近屏幕边。iOS 上字号是 Dynamic Type 的设计基准。
+    static func editor(_ palette: Palette, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil) -> CueEditorTheme {
         let size: CGFloat = 15.5
         return CueEditorTheme(
             font: Typeface.pingFang(size),
@@ -167,7 +167,7 @@ extension CueEditorTheme {
             markerColor: CueColor(palette.ink3),
             codeBackground: CueColor(palette.fill),
             textColor: CueColor(palette.ink),
-            // 纸由宿主画（带 1px 描边）；编辑器不画底，否则实色底会盖住纸边描边，在编辑区上下沿形成台阶
+            // 底色由宿主画（Mac 是页面底色，iPhone 是纸色）；编辑器不画底，下沿的淡出才透得出宿主的底
             backgroundColor: .clear,
             variableColor: CueColor(palette.variable),
             variableBackground: CueColor(palette.variableBackground),
@@ -175,6 +175,7 @@ extension CueEditorTheme {
             dividerLabelColor: CueColor(palette.ink2),
             placeholderColor: CueColor(palette.fill),
             horizontalInset: horizontalInset,
+            maxTextWidth: maxTextWidth,
             verticalInset: 8,
             lineSpacing: 7,
             headingSpacing: 10,

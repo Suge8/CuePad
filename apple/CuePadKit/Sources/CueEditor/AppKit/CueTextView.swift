@@ -83,7 +83,7 @@ public final class CueTextView: NSTextView, CueEditorHost {
         core.style = theme
         backgroundColor = theme.backgroundColor
         drawsBackground = true
-        textContainerInset = NSSize(width: theme.horizontalInset, height: theme.verticalInset)
+        textContainerInset = NSSize(width: horizontalInset(forWidth: frame.width), height: theme.verticalInset)
         typingAttributes = core.baseAttributes
         core.styleDidChange()
     }
@@ -106,7 +106,16 @@ public final class CueTextView: NSTextView, CueEditorHost {
     public override func setFrameSize(_ newSize: NSSize) {
         let widthChanged = newSize.width != frame.width
         super.setFrameSize(newSize)
-        if widthChanged { core.settler.restart() }
+        guard widthChanged else { return }
+        let inset = horizontalInset(forWidth: newSize.width)
+        if inset != textContainerInset.width { textContainerInset.width = inset }
+        core.settler.restart()
+    }
+
+    /// 左右留白：至少 `horizontalInset`；有最大行宽时宽出来的部分平分到两边，字居中成一列。
+    private func horizontalInset(forWidth width: CGFloat) -> CGFloat {
+        guard let maxTextWidth = theme.maxTextWidth else { return theme.horizontalInset }
+        return max(theme.horizontalInset, ((width - maxTextWidth) / 2).rounded(.down))
     }
 
     // MARK: CueEditorHost
