@@ -29,11 +29,20 @@ nonisolated extension PiSubagentState {
     }
 }
 
-/// 一行汇总：几个在跑、共几个、几个失败。没有子代理是 nil。
+/// 一行汇总：在跑的个数是主句（第一眼要看到的），共几个是次句，失败的另算。没有子代理是 nil。
 nonisolated struct PiSubagentSummary: Equatable {
     let running: Int
     let total: Int
     let failed: Int
+
+    /// 主句：有在跑的写"2 个在跑"；都停了只写总数"8 个子代理"。
+    var lead: String { running > 0 ? "\(running) 个在跑" : "\(total) 个子代理" }
+
+    /// 次句：除了在跑的还有别的，补上总数"共 8 个"；全在跑或都停了没有。
+    var tail: String? { running > 0 && total > running ? "共 \(total) 个" : nil }
+
+    /// 失败的个数写在末尾；没有失败时为 nil。
+    var failure: String? { failed > 0 ? "\(failed) 失败" : nil }
 
     init?(_ agents: [PiSubagentState]) {
         guard !agents.isEmpty else { return nil }

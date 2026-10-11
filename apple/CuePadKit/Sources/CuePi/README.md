@@ -8,7 +8,7 @@
 | Pi 集成 | `PiIntegration` | 检测 Pi（≥ 0.84.4）与集成状态，`install()`（新装/升级）：扩展与 skill 一起写（skill 是 `<Pi 目录>/skills/cuepad/SKILL.md`，与扩展同在 Pi 目录下，不写用户自己维护的 `~/.agents/skills`；正文写着 App 里 `cuepad` 的绝对路径，教 Agent 用 `cuepad show` 把文件发到手机，其余看 `--help`）；状态只有一份：任一个是别人的同名文件为 `foreign`（两样都不写），没装扩展为 `missing`，两样都是最新才是 `current`，其余（旧版、缺 skill、App 移动后路径变了）为 `outdated`；首次写入前 App 要先征得用户同意（拒绝时两样都不装），之后的升级由 App 静默完成 |
 | 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只认 `<会话目录>/<项目目录>/*.jsonl`（与 Pi 自己的会话列表一致，FireCode 子代理的 `subagents/` 不算）；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`），规则见下文"对话与摘要"；首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话，更早的只读摘要：逐行只找换行，只解码文件头、改名与第一条你的消息，最近一轮问答从文件尾往回解码到够用为止，得到的检查点与全读一样；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
 | 错误摘要 | `PiErrorSummary` | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
-| 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话，连上桥后返回；空闲满时限退出；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退）；让出的进程退出后对接手的进程发 `reload`；`closeAll()` 关掉全部（关标准输入，RPC 模式读到 EOF 正常收尾）；`end(id)` 结束一个在线会话并等它退出（托管的关标准输入，终端里的走扩展的 `end` 命令） |
+| 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话，连上桥后返回；空闲满时限退出（不算结束：会话记录留着、歇着，仍在"现在"，发话时再恢复）；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退）；让出的进程退出后对接手的进程发 `reload`；`closeAll()` 关掉全部（关标准输入，RPC 模式读到 EOF 正常收尾）；`end(id)` 结束一个在线会话并等它退出（托管的关标准输入，终端里的走扩展的 `end` 命令） |
 | 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
 
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录）。
@@ -21,7 +21,7 @@
 
 | `t` | 内容 |
 | --- | --- |
-| `hello` | 连接后第一条：`protocol`、`extensionVersion`、`sessionId`、`sessionFile`（可空，首条消息落盘前文件不存在）、`pid`、`cwd`、`mode`（tui/rpc）、`tty`、`term{环境变量子集}`、`state`（当前状态快照）、`launchToken`（CuePad 开的新会话经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展的认领标识，只属于进程里的第一个会话，其余为 null）、`hosted`（进程由 CuePad 在后台托管，即环境变量 `CUEPAD_HOSTED=1`），以及 `info` 的全部字段（恢复已有会话时近况从会话文件当前分支补回） |
+| `hello` | 连接后第一条：`protocol`、`extensionVersion`、`sessionId`、`sessionFile`（可空，`--no-session` 没有；路径在第一条消息落盘前就给出，文件要等第一条消息落盘才存在——没有文件的会话结束时不进历史）、`pid`、`cwd`、`mode`（tui/rpc）、`tty`、`term{环境变量子集}`、`state`（当前状态快照）、`launchToken`（CuePad 开的新会话经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展的认领标识，只属于进程里的第一个会话，其余为 null）、`hosted`（进程由 CuePad 在后台托管，即环境变量 `CUEPAD_HOSTED=1`），以及 `info` 的全部字段（恢复已有会话时近况从会话文件当前分支补回） |
 | `state` | 仅状态切换时发送：`state{kind, since(ms), busySince(ms 或 null), …}` |
 | `info` | 变化时只带变了的那几项（没出现的键表示不变，`null` 是新值"没有"，数组项整份替换；`hello` 带全部）。可带：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理名册 `subagents`、模型配置 `model`/`thinking`/`models`、上下文余量 `context` 与命令清单 `commands`（见下）；都可空 |
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
@@ -41,7 +41,7 @@
 
 - 你的消息：`role == "user"` 的消息全文（文字块换行连接）。整条文字只由一个或多个 `<名字>\n…\n</名字>` 块组成的是扩展投进来的机器消息（如 FireCode 的子代理事件、观察员、审查结果信封），不进对话、只开始一轮；块与块之间夹着真人文字就不是机器消息。CuePad 送进去的消息带着 `cuepadDelivery`（投送请求 id，见 `send`）。
 - 系统行：会话文件里的 `compaction` 条目（压缩，终端对话里那行压缩摘要）是一条系统行，文字固定是"已压缩上下文"（不写压缩前的 token 数：这里不知道窗口多大，一个孤零零的数用户读不懂）。别的命令留下的只有设置条目（`model_change`、`thinking_level_change`、`session_info` 的会话名），终端的对话里没有它们，这里也不进对话；扩展命令自己什么都不写；`/reload` 不写；`/new`、`/clone` 是另一个会话文件。模板与 skill 展开成一条普通的用户消息（`<skill …>` 或模板正文），**没有** `cuepadDelivery`——命令请求不会被换成它，所以命令不是"你发出的话"，不在对话里挂气泡。
-- Pi 消息：一轮一条，取结束这一轮的助手消息（`stopReason` 不是 `toolUse`）的文字块；中途调工具时说的话与思考不算，工具输出不进对话，只记开始时间和这一轮的工具活动（`PiChatMessage.Tools`）：调用来自助手消息里的 `toolCall` 块（名字、参数），成败来自后面的工具结果行（`isError`）。工具按名字分五类（`edit`：edit / write；`command`：bash；`read`；`search`：grep / find / ls；`other`），各类成功的次数——读、改文件按文件算，同一个文件读两次、改两次只算一个——失败的单独计数、不进各类；清单按发生先后至多 `PiChatMessage.Tools.itemLimit` 条、每条目标至多 `targetLimit` 个字符（路径相对会话工作目录、命令取首个非空行），改文件带从参数算出的新增、删除行数（整文件写入只有新增）；一轮结束时没等到结果的调用（被中止）按成功算。工具结果行体积大，不做 JSON 解码，只按 Pi 写出的固定键序取两头：行首的 `toolCallId`，行尾 128 字节内的 `"isError":true`；两头没找到这两个键（Pi 改了键序）就落到完整 JSON 解码，结果不变、只是慢。
+- Pi 消息：一轮一条，取结束这一轮的助手消息（`stopReason` 不是 `toolUse`）的文字块；中途调工具时说的话与思考不算，工具输出不进对话，只记开始时间和这一轮的工具活动（`PiChatMessage.Tools`）：调用来自助手消息里的 `toolCall` 块（名字、参数），成败来自后面的工具结果行（`isError`）。工具按名字分五类（`edit`：edit / write；`command`：bash；`read`；`search`：grep / find / ls；`other`），各类调用的次数（失败的也算在自己那一类里，清单每条自己标成败）——读、改文件按文件算，同一个文件成功地读两次、改两次只算一个；清单按发生先后至多 `PiChatMessage.Tools.itemLimit` 条、每条目标至多 `targetLimit` 个字符（路径相对会话工作目录、命令取首个非空行），改文件带从参数算出的新增、删除行数（整文件写入只有新增）；一轮结束时没等到结果的调用（被中止）按成功算。工具结果行体积大，不做 JSON 解码，只按 Pi 写出的固定键序取两头：行首的 `toolCallId`，行尾 128 字节内的 `"isError":true`；两头没找到这两个键（Pi 改了键序）就落到完整 JSON 解码，结果不变、只是慢。
 - 摘要：`pendingPrompt` 是你说了、这一轮还没做完的那句；一轮结束时它移进 `lastPrompt`，`lastReply` 换成这一轮的回答，问与答一起更新。机器消息触发的轮没有新的提问：回答照常更新、`lastPrompt` 沿用触发它的那件事里你说的话（如 FireCode 子代理做完后的汇报，是对你那句的答复）。上次中途退出、没做完的一轮不改问答。`lastPrompt`、`pendingPrompt` 单行（空白与控制字符折成一个空格）≤500 字符，`lastReply` 保留换行 ≤1200 字符，超出以省略号结尾。
 
 - `question`：正在等你回答的弹窗 `{id, kind, text, options}`。`kind` 是 `confirm`/`select`/`text`（`input`）/`editor`/`custom`；`text` 是标题与说明（`confirm`）换行连接，≤500 字符；`options` 是选择框的选项原文；`id` 是这次弹窗的标识，能从 CuePad 作答的（`confirm`/`select`/`text`）才有，`editor` 没有可收起的接口、`custom` 没有文案，为 null。`ui_prompt_end` 后为 null。`ui_prompt_start` 只带标题，说明与选项靠在 `session_start` 时包装共用的 `ctx.ui` 在调用时记下；包装同时给弹窗接上一个由扩展控制的 AbortSignal（与调用方自己的合并）。

@@ -98,7 +98,7 @@ final class AppServices {
     @ObservationIgnored let piStateRecorder: PiStateRecorder
     /// 执行发给这台 Mac 的投送请求（手机发来的与本机界面写的）；`start()` 时启动。
     @ObservationIgnored lazy var executor = MacExecutor(
-        store: store, pi: pi, host: host, hostID: hostID, locatePi: locatePi,
+        store: store, pi: pi, host: host, hostID: hostID, recorder: piStateRecorder, locatePi: locatePi,
         uploadResult: { [weak self] id in await self?.upload(id) },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 

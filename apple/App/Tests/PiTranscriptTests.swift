@@ -108,6 +108,35 @@ struct PiTranscriptTests {
         #expect(try await store.sendRecords().isEmpty)
     }
 
+    /// 工具计数口径变了、会话文件检查点作废后从头重读：七天外却还存着对话的会话（仍被提示词引用而没清掉）也要把已存的消息重写成新口径，
+    /// 不能只有近七天的会话更新、同一界面留着两种口径。
+    @Test func 检查点作废后从头重读_七天外存着对话的会话也更新已存消息的工具计数() async throws {
+        let at = Date.now.addingTimeInterval(-10 * 86_400)
+        let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appending(path: "old.jsonl")
+        func stamp(_ seconds: Double) -> String { at.addingTimeInterval(seconds).formatted(Self.iso) }
+        let lines = [
+            #"{"type":"session","version":3,"id":"old","timestamp":"\#(stamp(0))","cwd":"/work/x"}"#,
+            line("u1", nil, at: at, user: "跑一下"),
+            #"{"type":"message","id":"t1","parentId":"u1","timestamp":"\#(stamp(1))","message":{"role":"assistant","stopReason":"toolUse","content":[{"type":"toolCall","id":"c1","name":"bash","arguments":{"command":"false"}}],"timestamp":2}}"#,
+            #"{"type":"message","id":"r1","parentId":"t1","timestamp":"\#(stamp(2))","message":{"role":"toolResult","toolCallId":"c1","toolName":"bash","isError":true,"content":[{"type":"text","text":"exit 1"}],"timestamp":3}}"#,
+            line("a1", "r1", at: at.addingTimeInterval(3), reply: "没通过"),
+        ]
+        try (lines.joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.modificationDate: at.addingTimeInterval(3)], ofItemAtPath: file.path)
+        // 旧口径存下的回答：失败的命令不在各类计数里
+        let stale = PiChatMessage(
+            sessionID: "old", entryID: "a1", seq: 2, role: .pi, text: "没通过", at: at.addingTimeInterval(3),
+            tools: .init(items: [.init(kind: .command, target: "false", failed: true)]), roundStartedAt: at)
+        try await store.writePiTranscript(PiTranscript(sessionID: "old", messages: [stale], recap: PiRecap()))
+
+        await consume([file])
+
+        let reply = try #require(try await store.piMessages(of: "old").first { $0.role == .known(.pi) })
+        #expect(reply.tools?.commands == 1 && reply.tools?.total == reply.tools?.items.count)
+    }
+
     /// 摘要只有对话这一个写者：Pi 桥上的状态变化不改它；会话结束后没有进行中的提问。
     @Test func 状态变化不改摘要_会话结束后没有进行中的提问() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))

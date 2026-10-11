@@ -102,12 +102,16 @@ actor PiHistoryPersistence {
     /// 这次读到的对话与摘要。在不在范围内只看读文件时的判定（索引器按文件修改时间，`includesTranscript`），这里不另判：
     /// 范围外只写摘要；刚进入范围（本机还没有它的对话，而这次是增量读）时从头再读一遍，补齐全部消息——
     /// "范围内的会话有全部消息"不靠读到的那一段碰巧完整。
+    /// 范围外的会话本机却存着它的对话（仍被提示词引用而没清掉，或按需补写的），检查点作废后从头读也整份重读：
+    /// 已存的消息跟着读文件的规则更新，不留旧样子。
     private func transcript(of update: PiHistoryUpdate) async throws -> PiTranscript {
-        guard update.includesTranscript else { return update.transcript }
         let incremental = update.checkpoint.offset > UInt64(update.bytesRead)
-        if incremental, try await storage.piMessages(of: update.sessionID).isEmpty {
-            return try PiHistory.index(file: update.file, from: nil).transcript
-        }
+        func hasStoredMessages() async throws -> Bool { try await !storage.piMessages(of: update.sessionID).isEmpty }
+        func wholeFile() throws -> PiTranscript { try PiHistory.index(file: update.file, from: nil).transcript }
+        // 范围内的增量读：本机还没有它的对话就补齐
+        if update.includesTranscript, incremental, try await !hasStoredMessages() { return try wholeFile() }
+        // 范围外的从头读：本机存着它的对话就重写
+        if !update.includesTranscript, !incremental, try await hasStoredMessages() { return try wholeFile() }
         return update.transcript
     }
 

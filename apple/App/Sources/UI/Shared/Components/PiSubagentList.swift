@@ -1,8 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 会话页对话末尾的子代理：一行汇总"3 个子代理 · 1 在跑 · 1 失败"（有在跑的时前面是转着的状态标，都停了是中性的分叉图标；
-/// 失败是胭脂——赭黄只给等你确认），点它就地展开每个子代理，再点收起。会话在等子代理时这一行就是对话末尾的进展，不再另写一行状态。
+/// 会话页对话末尾的子代理：一行汇总"2 个在跑 · 共 8 个 · 1 失败"——在跑的个数是主句、用正文墨色，共几个是次句、退成次要墨色
+/// （有在跑的时前面是转着的状态标；都停了只写"8 个子代理"，整行退成次要墨色，中性的分叉图标，不抢眼）；
+/// 失败是胭脂——赭黄只给等你确认。点它就地展开每个子代理，再点收起。会话在等子代理时这一行就是对话末尾的进展，不再另写一行状态。
 /// 展开的每个子代理两行：状态点、名字、角色、运行了多久（或用时）；状态词加在做什么的一句话。没有子代理时不画。
 struct PiSubagentList: View {
     let agents: [PiSubagentState]
@@ -30,10 +31,15 @@ struct PiSubagentList: View {
                 } else {
                     Image(systemName: "arrow.triangle.branch").foregroundStyle(palette.ink3).accessibilityHidden(true)
                 }
-                Text(Dotted("\(summary.total) 个子代理", "\(summary.running) 在跑")).foregroundStyle(palette.ink2).monospacedDigit()
-                if summary.failed > 0 {
+                Text(summary.lead).fontWeight(summary.running > 0 ? .medium : .regular)
+                    .foregroundStyle(summary.running > 0 ? palette.ink : palette.ink3).monospacedDigit()
+                if let tail = summary.tail {
+                    Dot()
+                    Text(tail).foregroundStyle(palette.ink3).monospacedDigit()
+                }
+                if let failure = summary.failure {
                     Dot().foregroundStyle(palette.failure)
-                    Text("\(summary.failed) 失败").foregroundStyle(palette.failure).monospacedDigit()
+                    Text(failure).foregroundStyle(palette.failure).monospacedDigit()
                 }
                 Image(systemName: "chevron.down").font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
                     .rotationEffect(.degrees(expanded ? 180 : 0))
@@ -44,6 +50,7 @@ struct PiSubagentList: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure).spoken)
         .accessibilityValue(expanded ? "已展开" : "已收起")
     }
 

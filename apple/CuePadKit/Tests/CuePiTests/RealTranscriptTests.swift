@@ -67,8 +67,8 @@ struct RealTranscriptTests {
         try await eventually("失败的一轮落盘") { try roundsDone(file, 3) }
 
         let tools = try PiHistory.index(file: file, from: nil).messages.filter { $0.role == .known(.pi) }.map(\.tools)
-        #expect(tools.map { $0?.commands } == [1, 0, 0] && tools.map { $0?.edits } == [0, 1, 0] && tools.map { $0?.failed } == [0, 0, 1])
-        #expect(tools[1]?.items.first?.target == "out.txt" && tools[2]?.items.first?.failed == true)
+        #expect(tools.map { $0?.commands } == [1, 0, 1] && tools.map { $0?.edits } == [0, 1, 0])
+        #expect(tools[1]?.items.first?.target == "out.txt" && tools.map { $0?.items.map(\.failed) } == [[false], [false], [true]])
     }
 
     @Test func aPromptStillRunningIsPendingInTheRecap() async throws {

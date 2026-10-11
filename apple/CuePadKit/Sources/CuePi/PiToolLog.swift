@@ -33,18 +33,16 @@ struct PiToolLog: Codable, Equatable {
         return log.activity == Tools() ? nil : log.activity
     }
 
+    /// 失败的调用与成功的一样按类计数、各占清单里一行（只是行上标着失败）；同一个文件成功地读或改多次合成一行、只算一次。
     private mutating func settle(_ call: Call, failed: Bool) {
-        if failed {
-            activity.failed += 1
-        } else if call.kind == .edit || call.kind == .read,
-                  let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
+        if !failed, call.kind == .edit || call.kind == .read,
+           let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
             let item = activity.items[index]
             activity.items[index].added = item.added.map { $0 + (call.added ?? 0) } ?? call.added
             activity.items[index].removed = item.removed.map { $0 + (call.removed ?? 0) } ?? call.removed
             return
-        } else {
-            activity.add(call.kind)
         }
+        activity.add(call.kind)
         if activity.items.count < Tools.itemLimit {
             activity.items.append(.init(kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed))
         }
