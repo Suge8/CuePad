@@ -58,8 +58,7 @@ struct ComposerField: UIViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: GrowingTextView, context: Context) -> CGSize? {
         guard let width = proposal.width else { return nil }
-        let content = view.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
-        return CGSize(width: width, height: min(content, view.maxHeight))
+        return CGSize(width: width, height: min(view.contentHeight(width: width), view.maxHeight))
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -86,13 +85,14 @@ final class GrowingTextView: UITextView {
     /// 最大高度：同一字体下排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），
     /// 撑满时最后一行不被切一半；字号大到放不下时少排几行。
     var maxHeight: CGFloat {
-        let key = "\(maxLines)|\(font?.pointSize ?? 0)"
-        if key != rulerKey {
-            ruler.font = font
-            ruler.text = Array(repeating: "国", count: maxLines).joined(separator: "\n")
-            rulerHeight = ruler.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)).height
-            rulerKey = key
-        }
+        let key = RulerKey(lines: maxLines, size: font?.pointSize ?? 0)
+        let rulerHeight = Self.rulerHeights[key] ?? {
+            Self.ruler.font = font
+            Self.ruler.text = Array(repeating: "国", count: maxLines).joined(separator: "\n")
+            let height = Self.ruler.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)).height
+            Self.rulerHeights[key] = height
+            return height
+        }()
         // 大字号档位下 6 行会高过键盘上方放得下的空间（头部叠到文字上、最后一行被玻璃边切掉）：按整行数收到窗口高度的 3 成以内
         let pitch = rulerHeight / CGFloat(maxLines)
         let limit = (window?.bounds.height ?? .greatestFiniteMagnitude) * 0.3
@@ -100,14 +100,26 @@ final class GrowingTextView: UITextView {
         return lines == maxLines ? rulerHeight : ceil(pitch * CGFloat(lines))
     }
 
-    private let ruler: UITextView = {
+    /// 量行高的那一个文字区，全部输入框共用：每个输入框各建一个是又一套 TextKit（打开回复框、随手记都要现建一次）。
+    private static let ruler: UITextView = {
         let view = UITextView()
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
         return view
     }()
-    private var rulerKey = ""
-    private var rulerHeight: CGFloat = 0
+    private struct RulerKey: Hashable { var lines: Int; var size: CGFloat }
+    private static var rulerHeights: [RulerKey: CGFloat] = [:]
+
+    /// 这些字在这个宽度下排出来多高。SwiftUI 一次排版里会问好几遍（每层容器量一次），文字与宽度没变时用上次量的
+    /// （每量一次都是一遍 TextKit 排版，进会话页时这里占主线程一成；Mac 的那份同样记着）。
+    func contentHeight(width: CGFloat) -> CGFloat {
+        let size = font?.pointSize ?? 0
+        if let last = measured, last.text == text, last.width == width, last.size == size { return last.height }
+        let height = sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        measured = (text, width, size, height)
+        return height
+    }
+    private var measured: (text: String, width: CGFloat, size: CGFloat, height: CGFloat)?
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)

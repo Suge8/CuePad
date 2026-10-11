@@ -130,6 +130,17 @@ enum DebugHooks {
 }
 
 extension View {
+    #if os(iOS)
+    /// 底部栏换标签的那条路（含推移）交给测量脚本（`IOSInteractionBench`）按它换标签。
+    func debugExposesTabSelect(_ select: @escaping (Navigation.Tab) -> Void) -> some View {
+        #if DEBUG
+        onAppear { DebugScene.selectTab = select }
+        #else
+        self
+        #endif
+    }
+    #endif
+
     /// 性能打点：这一页出现时（见 `DebugHooks.mark`）。
     func perfMark(_ event: String) -> some View {
         #if DEBUG

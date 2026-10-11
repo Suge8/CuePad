@@ -6,6 +6,8 @@ import SwiftUI
 struct IOSRoot: View {
     @State private var workspace: Workspace
     @State private var navigation: Navigation
+    /// 页面此刻不躲键盘（浮起的输入框开着，或刚收起、键盘还没落下）。
+    @State private var pageIgnoresKeyboard = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Namespace private var zoom
     let alerts: PiAlertCenter
@@ -21,6 +23,17 @@ struct IOSRoot: View {
         CatalogGate {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
+            }
+            // 浮起的输入框（随手记、新会话、交给 Agent）盖在页面上、自己随键盘升起：这时页面不躲键盘，
+            // 否则键盘一出来、一收起，底下整页（连同另一个标签里的页）都要按新的安全区重排一遍
+            .ignoresSafeArea(pageIgnoresKeyboard ? .keyboard : [], edges: .bottom)
+            .onChange(of: navigation.floating) { _, floating in if floating { pageIgnoresKeyboard = true } }
+            // 收起时等键盘落下再恢复躲键盘（收起的一刻键盘还在，马上恢复就是多排一遍）；页里自己的输入框要弹键盘时立刻恢复
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+                if !navigation.floating { pageIgnoresKeyboard = false }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                if !navigation.floating { pageIgnoresKeyboard = false }
             }
             // 这一层还没有导航栏：上安全区就是状态栏
             // 会写资料库的面板挂在门内：读不出资料库时（包括从小组件深链打开随手记）不弹出，读到后再弹
@@ -87,7 +100,6 @@ struct IOSRoot: View {
 /// 各页的内容要等读库（异步）才有，铺在滚动区上时数据没到的几帧整页透明、露出系统的黑。
 struct RouteView: View {
     let route: Navigation.Route
-    @Environment(Navigation.self) private var navigation
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -102,11 +114,13 @@ struct RouteView: View {
         let gap = route.hasSearchRow ? 0 : Bars.contentGap
         page.contentMargins(.top, route.hasSearchRow ? nil : 0, for: .scrollContent)
             .safeAreaPadding(.top, gap)
-            .fadesUnderBars(bottom: navigation.bottomPages == 0, below: gap)
+            // 底部栏在不在只看这一页是不是独占底部的页，不读全局的"独占底部的页有几个"：那个数在推入、返回会话页与纸页时变，
+            // 读它的话两个标签里每一页（包括被盖住的）都要跟着重排一遍
+            .fadesUnderBars(bottom: !route.ownsBottom, below: gap)
             .containerBackground(background, for: .navigation)
             .scrollEdgeEffectHidden()
             // 标签栏布局：内容让出底部那一行的高度，滚到底时最后一行不被底部栏盖住。挂在每一页上：TabView 外面的安全区传不进标签页
-            .safeAreaPadding(.bottom, navigation.bottomPages == 0 ? bottomBarReserve : 0)
+            .safeAreaPadding(.bottom, route.ownsBottom ? 0 : bottomBarReserve)
     }
 
     /// 卡片纸页在窄屏是整页的纸，宽屏是桌面上的一张纸；其余页是桌面。
