@@ -181,6 +181,16 @@ public enum CardSlot: Hashable, Sendable {
   case under(UUID)
 }
 
+/// 一次卡片改动的回执：足够原样拨回去的快照，在改动的同一个事务里读到，所以不会和库里的实际写入对不上（`CueStore.undo`）。
+public enum CardChange: Sendable, Equatable {
+  /// 设为任务（`on`）或改回灵感：改动前的正文与变量取值，拆出的提示词，提上去的下级。
+  case todo(id: UUID, on: Bool, body: String, variableValues: [String: String], prompt: UUID?, lifted: [UUID])
+  /// 删除：提上去的下级。
+  case trash(id: UUID, lifted: [UUID])
+  /// 挪动：原来的位置与原来的前一个同级。
+  case move(id: UUID, from: CardSlot, after: UUID?)
+}
+
 public struct SendRecord: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// 发送时的内容快照；卡片之后改动或删除都不影响。

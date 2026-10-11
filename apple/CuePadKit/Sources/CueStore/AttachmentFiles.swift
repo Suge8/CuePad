@@ -18,7 +18,7 @@ public struct AttachmentFiles: Sendable {
     guard let source = CGImageSourceCreateWithData(data as CFData, nil), Self.isImage(source) else {
       throw CueStoreError.notAnImage
     }
-    let hash = Self.hex(SHA256.hash(data: data))
+    let hash = SHA256.hash(data: data).hex
     let url = directory.appending(path: hash)
     if !FileManager.default.fileExists(atPath: url.path) {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -104,14 +104,12 @@ public struct AttachmentFiles: Sendable {
     defer { try? handle.close() }
     var hasher = SHA256()
     while let chunk = try handle.read(upToCount: chunkSize), !chunk.isEmpty { hasher.update(data: chunk) }
-    return hex(hasher.finalize())
+    return hasher.finalize().hex
   }
 
   private static func isImage(_ source: CGImageSource) -> Bool {
     CGImageSourceGetType(source) != nil && CGImageSourceGetCount(source) > 0
   }
-
-  private static func hex(_ digest: SHA256.Digest) -> String { digest.map { String(format: "%02x", $0) }.joined() }
 
   private static func isValid(_ hash: String) -> Bool {
     hash.utf8.count == 64 && hash.utf8.allSatisfy { ($0 >= 0x30 && $0 <= 0x39) || ($0 >= 0x61 && $0 <= 0x66) }

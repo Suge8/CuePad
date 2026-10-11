@@ -85,7 +85,8 @@ extension CueStore {
   /// 规则变了也跟着变；只改变了的。必须在写事务内调用。
   private func refreshSessionFolders() throws {
     let now = Date.stamp
-    for cwd in try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) } {
+    let directories = try db.query("SELECT DISTINCT cwd FROM piSessions") { $0.text(0) }
+    for cwd in directories {
       let folder = Self.folderName(ofWorkingDirectory: cwd)
       try db.run(
         "UPDATE piSessionStates SET folder = ?, modifiedAt = ? WHERE sessionID IN (SELECT id FROM piSessions WHERE cwd = ?) AND folder IS NOT ?",
@@ -179,24 +180,30 @@ extension CueStore {
     }
   }
 
-  /// 设为任务 / 改回灵感。设为任务：成为待办的任务；多行的话第一行留作任务，其余成为它的第一条提示词（`CueTask.split`），
-  /// 返回那条提示词。改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。
+  /// 设为任务 / 改回灵感。设为任务：成为待办的任务；多行的话第一行留作任务，其余成为它的第一条提示词（`CueTask.split`）。
+  /// 改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。已经是这个样子时什么都不做、返回 nil；
+  /// 否则返回回执（`undo` 拨回）。
   @discardableResult
-  public func setTodo(_ id: UUID, _ on: Bool) throws -> Card? {
-    try write {
-      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
-      guard card.isTask != on else { return nil }
-      let now = Date.stamp
-      if on {
-        try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
-        return try Self.splitPrompt(db, task: id, at: now).flatMap { try find(Card.self, $0) }
-      } else {
-        try liftChildren(of: card, at: now)
-        try db.run(
-          "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, modifiedAt = ? WHERE id = ?", [now, id])
-        return nil
-      }
+  public func setTodo(_ id: UUID, _ on: Bool) throws -> CardChange? {
+    try write { try applyTodo(id, on) }
+  }
+
+  @discardableResult
+  private func applyTodo(_ id: UUID, _ on: Bool) throws -> CardChange? {
+    guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
+    guard card.isTask != on else { return nil }
+    let now = Date.stamp
+    var prompt: UUID?, lifted: [UUID] = []
+    if on {
+      try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
+      prompt = try Self.splitPrompt(db, task: id, at: now)
+    } else {
+      lifted = try liveChildren(of: id)
+      try liftChildren(of: card, at: now)
+      try db.run(
+        "UPDATE cards SET todoAt = NULL, startedAt = NULL, completedAt = NULL, piSessionID = NULL, modifiedAt = ? WHERE id = ?", [now, id])
     }
+    return .todo(id: id, on: on, body: card.body, variableValues: card.variableValues, prompt: prompt, lifted: lifted)
   }
 
   /// 任务正文除标题外还有话时拆出来（`CueTask.split`）：其余成为排在它下级最前的一条提示词，
@@ -267,30 +274,56 @@ extension CueStore {
   /// 改任务的状态：进行中记开始时间（已有的保留），完成记完成时间（保留开始时间）并连带没完成的下级任务，回到待办两个都清空。
   /// 灵感没有状态，抛 `notATask`。
   public func setStatus(_ id: UUID, _ status: TaskStatus) throws {
+    try write { _ = try applyStatus(id, status) }
+  }
+
+  /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态按库里此刻的值决定，读与改在一个事务里——
+  /// 界面手里的副本可能已过时，两次 `await` 之间也可能有同步来的改动插进来。返回新状态。
+  public func toggleDone(_ id: UUID) throws -> TaskStatus {
     try write {
-      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
-      guard let current = card.status else { throw CueStoreError.notATask }
-      guard current != status else { return }
-      let now = Date.stamp
-      switch status {
-      case .todo: try db.run("UPDATE cards SET startedAt = NULL, completedAt = NULL, modifiedAt = ? WHERE id = ?", [now, id])
-      case .inProgress:
-        try db.run("UPDATE cards SET startedAt = COALESCE(startedAt, ?1), completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
-      case .done:
-        try db.run(
-          """
-          UPDATE cards SET completedAt = ?1, modifiedAt = ?1
-          WHERE completedAt IS NULL AND todoAt IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
-          """, [now, id])
+      guard let current = try find(Card.self, id)?.status else {
+        throw try find(Card.self, id) == nil ? CueStoreError.notFound : CueStoreError.notATask
       }
+      return try applyStatus(id, current == .done ? .todo : .done)
     }
+  }
+
+  /// 把任务改成 `status`（必须在写事务内）；返回改后的状态。已经是它时不动。
+  @discardableResult
+  private func applyStatus(_ id: UUID, _ status: TaskStatus) throws -> TaskStatus {
+    guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
+    guard let current = card.status else { throw CueStoreError.notATask }
+    guard current != status else { return status }
+    let now = Date.stamp
+    switch status {
+    case .todo: try db.run("UPDATE cards SET startedAt = NULL, completedAt = NULL, modifiedAt = ? WHERE id = ?", [now, id])
+    case .inProgress:
+      try db.run("UPDATE cards SET startedAt = COALESCE(startedAt, ?1), completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
+    case .done:
+      try db.run(
+        """
+        UPDATE cards SET completedAt = ?1, modifiedAt = ?1
+        WHERE completedAt IS NULL AND todoAt IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?2")))
+        """, [now, id])
+    }
+    return status
   }
 
   /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、
   /// 挂成子任务或提示词都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），整棵子树超过 `Card.maxDepth` 级抛 `taskTooDeep`。
-  public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws {
-    try write {
+  /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级）。
+  @discardableResult
+  public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
+    try write { try relocate(id, to: slot, after: previous) }
+  }
+
+  @discardableResult
+  private func relocate(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
       guard let current = try link(of: id) else { throw CueStoreError.notFound }
+      let origin = Self.siblingScope(current), originKey = current.parent ?? current.project
+      let siblings = try db.query("SELECT id FROM cards WHERE (\(origin)) ORDER BY sortKey, id", [originKey]) { $0.uuid(0) }
+      let before = siblings.firstIndex(of: id).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
+      let from: CardSlot = current.parent.map(CardSlot.under) ?? .top(project: current.project)
       let destination: CardLinks.Link
       switch slot {
       case .top(let project):
@@ -311,29 +344,82 @@ extension CueStore {
           "UPDATE cards SET projectID = ?, modifiedAt = ? WHERE id IN (\(Self.subtree(from: "SELECT ?3")))", [destination.project, now, id])
       }
       try place(scope: Self.siblingScope(destination), [destination.parent ?? destination.project], id: id, after: previous)
-    }
+      return .move(id: id, from: from, after: before)
   }
 
   /// 进回收站；它的下级按原顺序提到它的位置（不连带进回收站）。
-  public func trashCard(_ id: UUID) throws {
+  /// 返回回执（`undo` 恢复它、让提上去的下级回到它下面）；不存在或已在回收站时什么都不做、返回 nil。
+  @discardableResult
+  public func trashCard(_ id: UUID) throws -> CardChange? {
     try write {
-      guard let card = try find(Card.self, id), card.deletedAt == nil else { return }
+      guard let card = try find(Card.self, id), card.deletedAt == nil else { return nil }
       let now = Date.stamp
+      let lifted = try liveChildren(of: id)
       try liftChildren(of: card, at: now)
       try db.run("UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, id])
+      return .trash(id: id, lifted: lifted)
     }
   }
 
   /// 恢复；如果所属项目仍在回收站，卡片回到未分类，否则会不可见。
   public func restoreCard(_ id: UUID) throws {
-    try write {
-      try db.run(
-        """
-        UPDATE cards SET deletedAt = NULL, modifiedAt = ?,
-          projectID = CASE WHEN projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)
-                           THEN NULL ELSE projectID END
-        WHERE id = ?
-        """, [Date.stamp, id])
+    try write { try restoreRow(id) }
+  }
+
+  private func restoreRow(_ id: UUID) throws {
+    try db.run(
+      """
+      UPDATE cards SET deletedAt = NULL, modifiedAt = ?,
+        projectID = CASE WHEN projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)
+                         THEN NULL ELSE projectID END
+      WHERE id = ?
+      """, [Date.stamp, id])
+  }
+
+  /// 拨回一次改动（`setTodo`、`trashCard`、`moveCard` 的回执），整个拨回是一个事务：
+  /// 设为任务拆出的提示词删掉、正文与变量取值合回；改回灵感后下级回到它下面；删除恢复、提上去的下级回到它下面；挪动放回原来的位置。
+  /// 其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
+  public func undo(_ change: CardChange) throws {
+    try reportingFileFailures { try write {
+      var orphaned: Set<String> = []
+      switch change {
+      case .todo(let id, let on, let body, let variableValues, let prompt, let lifted):
+        if let prompt {
+          orphaned = try purgeCards(where: "id = ?", [prompt])
+          if var card = try find(Card.self, id) {
+            card.body = body
+            card.variableValues = variableValues
+            card.modifiedAt = Date.stamp
+            try update(card)
+          }
+          try registerImages(in: body)
+        }
+        try applyTodo(id, !on)
+        try adopt(lifted, by: id)
+      case .trash(let id, let lifted):
+        try restoreRow(id)
+        try adopt(lifted, by: id)
+      case .move(let id, let slot, let after):
+        let survivor = try after.flatMap { try find(Card.self, $0)?.id }
+        try relocate(id, to: slot, after: survivor)
+      }
+      return try reclaimAttachments(orphaned)
+    } }
+  }
+
+  /// 没删除、没归档的直接下级，按手动顺序（`undo` 要把它们放回去）。
+  private func liveChildren(of id: UUID) throws -> [UUID] {
+    try db.query(
+      "SELECT id FROM cards WHERE parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL ORDER BY sortKey, id", [id]
+    ) { $0.uuid(0) }
+  }
+
+  /// 把这些卡按顺序重新挂到 `parent` 下（已经不在的跳过）。
+  private func adopt(_ children: [UUID], by parent: UUID) throws {
+    var previous: UUID?
+    for child in children where try link(of: child) != nil {
+      try relocate(child, to: .under(parent), after: previous)
+      previous = child
     }
   }
 
