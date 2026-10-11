@@ -74,7 +74,7 @@ protocol SubscriptionStore: Sendable {
 /// 也不设 `desiredKeys`。只订阅创建与更新（删除不通知）。谓词按标志而不是按状态，因为"同一状态下的重复更新"
 /// 与"从工作中进入完成"这类转换在谓词里表达不了；标志只在转换那一次写入上置位（见 `PiStateRecorder`）。
 /// 标志在上传前会被同状态的更新沿用；状态已前进或会话已结束时未上传的标志作废（见 `PiStateRecorder`）。
-/// `piSessionStates.notify` 的可查询索引由生成的数据结构声明（`RecordMapper.queryableColumns`，见 docs「CloudKit 数据结构」）。
+/// `piSessionStates.notify` 的可查询索引由生成的数据结构声明（`RecordMapper.queryableColumns`，见 docs/release.md「CloudKit 数据结构」）。
 /// 生产环境拒绝客户端创建没部署过的查询订阅（"attempting to create a subscription in a production container"，
 /// 区域与数据库订阅不受限）：订阅类型是 schema 的一部分，不在 .ckdb 里，只能在开发环境用同样的定义建一次，再在控制台
 /// 「Deploy Schema Changes」。所以改订阅定义（谓词、选项、通知文案 key）等于改 schema，要重做这两步。

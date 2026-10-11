@@ -2,7 +2,7 @@
 # 用法：xc.sh <build|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
 #       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
 #       xc.sh release <mac|ios>   发布（mac：Developer ID 公证 zip；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
-#       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/development.md「签名与发布」
+#       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/release.md
 # build/test/shot 一律用本机 ad-hoc 签名（不联网、不需要账号）；凭据文件在时 xcodebuild 仍带上 API 密钥参数。
 # ios 是 iPhone 模拟器（CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
 # shot 的启动参数原样传给 App（如 `-- -CuePadDemo YES -CuePadScene editor -theme dark`）；

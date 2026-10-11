@@ -7,7 +7,7 @@
   identity <distribution|development>  本机没有该证书的私钥时创建证书，放进专用钥匙串
   profiles                      创建并安装描述文件：iOS（App Store；有已登记设备时再建 Development）与 macOS（Developer ID）
   device <UDID> <名称>          登记一台真机
-  devid-csr                     为 Developer ID Application 证书生成私钥与 CSR（证书只有账号持有人能创建，见 docs/development.md「签名与发布」）
+  devid-csr                     为 Developer ID Application 证书生成私钥与 CSR（证书只有账号持有人能创建，见 docs/release.md）
   devid-import <.cer 路径>      把网页上下载的 Developer ID 证书连同私钥导入专用钥匙串
   unlock                        解锁专用钥匙串并加入搜索列表（发布脚本用）
   all                           ids → identity distribution → profiles
@@ -218,7 +218,7 @@ MAC_PROFILE = "CuePad macOS DeveloperID"
 def ensure_mac_profile(ids):
     certs = local_cert_ids("Developer ID Application", "DEVELOPER_ID_APPLICATION,DEVELOPER_ID_APPLICATION_G2")
     if not certs:
-        print("本机没有 Developer ID Application 证书：跳过 macOS 描述文件（见 docs/development.md「签名与发布」）")
+        print("本机没有 Developer ID Application 证书：跳过 macOS 描述文件（见 docs/release.md）")
         return
     for old in api("GET", f"/v1/profiles?filter[name]={MAC_PROFILE.replace(' ', '%20')}&limit=50")["data"]:
         api("DELETE", f"/v1/profiles/{old['id']}")

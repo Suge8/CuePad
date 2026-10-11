@@ -85,18 +85,3 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 每个窗口各有自己的导航路径，当前项目只从路径推出（`Navigation.currentProject`）；iPad 侧栏选中的项目存进这个窗口的场景存储，不放全局偏好。
 - 有同步时每个窗口出现后请求通知权限并注册远程通知；前台不展示系统通知，前台的提示是 App 内横幅（规则见 [sync.md](sync.md)「Agent 锁屏通知」）。
 
-## 同步
-
-见 [sync.md](sync.md)。
-
-### CloudKit 数据结构
-
-见 [release.md](release.md)「CloudKit 数据结构」。
-
-### 交互预算
-
-见 [verify.md](verify.md)「交互预算」。
-
-## 签名与发布
-
-见 [release.md](release.md)。

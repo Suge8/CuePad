@@ -14,7 +14,7 @@ struct PreviewWeb: View {
             if let page {
                 WebView(page).ignoresSafeArea(.container, edges: .bottom)
             } else if let failure {
-                ContentUnavailableView("没法安全地打开这个页面", systemImage: "lock.trianglebadge.exclamationmark", description: Text(failure))
+                EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: failure).padding(24).frame(maxHeight: .infinity)
             } else {
                 Spinner(.regular)
             }
