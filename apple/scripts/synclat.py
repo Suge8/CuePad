@@ -108,18 +108,35 @@ def is_backlog(s):
     return arrivals.get("push", 0) > STALE and arrivals.get("pull", STALE + 1) > STALE
 
 
+def outcome(s):
+    """每条样本的结局，互斥且完备：push 推送已观测（含主动拉取先到后引擎补拿）；lost 推送丢失；superseded 被更新版本取代（推送量不到）；
+    manual 被本机手动拉取先拿走（引擎令牌已越过，推送量不到）；pending 只有主动拉取到达、还没结案。
+    后三种都是"推送没观测到"，不能当作推送可靠的证据。"""
+    if "push" in s["arrivals"]:
+        return "push"
+    if s["lost"]:
+        return "lost"
+    if s["superseded"]:
+        return "superseded"
+    if "manual" in s["arrivals"]:
+        return "manual"
+    return "pending"
+
+
 def stats(group):
-    push = [s["arrivals"]["push"] for s in group if "push" in s["arrivals"] and not is_backlog(s)]
-    backlog = sum(1 for s in group if is_backlog(s))
-    lost = sum(1 for s in group if s["lost"])
+    outcomes = [outcome(s) for s in group]
+    count = {name: outcomes.count(name) for name in ("push", "lost", "superseded", "manual", "pending")}
+    pushed = [s for s, o in zip(group, outcomes) if o == "push"]
+    push = [s["arrivals"]["push"] for s in pushed if not is_backlog(s)]
+    backlog = sum(1 for s in pushed if is_backlog(s))
     pulled = [s for s in group if "pull" in s["arrivals"]]
     early = [s["arrivals"]["push"] - s["arrivals"]["pull"] for s in pulled if "push" in s["arrivals"] and not is_backlog(s)]
-    measurable = len(push) + lost
+    measurable = len(push) + count["lost"]
     return {
         "n": measurable, "p50": percentile(push, 50), "p90": percentile(push, 90), "max": max(push) if push else None,
-        "lost": lost, "lossRate": lost / measurable if measurable else None,
+        "lost": count["lost"], "lossRate": count["lost"] / measurable if measurable else None,
         "pullFirst": len(pulled) / len(group) if group else 0, "early50": percentile(early, 50), "early90": percentile(early, 90),
-        "backlog": backlog, "manual": sum(1 for s in group if "manual" in s["arrivals"]), "superseded": sum(1 for s in group if s["superseded"]),
+        "backlog": backlog, "manual": count["manual"], "superseded": count["superseded"], "pending": count["pending"],
     }
 
 
@@ -128,29 +145,37 @@ def row(label, st):
     warn = "  ← 样本太少" if st["n"] < 5 else ""
     return (f"  {label:<18} 样本 {st['n']:>3}  推送 p50 {fmt(st['p50']):>6} p90 {fmt(st['p90']):>6} 最大 {fmt(st['max']):>6}  丢失 {loss:<9} "
             f"拉取先到 {st['pullFirst'] * 100:>3.0f}%（提前 p50 {fmt(st['early50'])} p90 {fmt(st['early90'])}）"
-            + (f"  积压 {st['backlog']}" if st["backlog"] else "") + (f"  手动 {st['manual']}" if st["manual"] else "")
-            + (f"  被取代 {st['superseded']}（{superseded_share(st) * 100:.0f}%）" if st["superseded"] else "") + warn)
+            + (f"  积压 {st['backlog']}" if st["backlog"] else "")
+            + (f"  推送未观测 {unobserved(st)}（{unobserved_share(st) * 100:.0f}%：被取代 {st['superseded']}、手动 {st['manual']}）" if unobserved(st) else "")
+            + (f"  未结案 {st['pending']}" if st["pending"] else "") + warn)
 
 
-def superseded_share(st):
-    """被取代的占（可量到的 + 被取代的）的比例。"""
-    total = st["n"] + st["superseded"]
-    return st["superseded"] / total if total else 0.0
+def unobserved(st):
+    """已结案、但推送没能观测到的（被取代 + 被手动拉取先拿走）。丢失另算，在 n 里。"""
+    return st["superseded"] + st["manual"]
+
+
+def unobserved_share(st):
+    total = st["n"] + unobserved(st)
+    return unobserved(st) / total if total else 0.0
 
 
 def verdict(st):
     if st["n"] < MIN_SAMPLES:
         return f"样本 {st['n']} 条，不足 {MIN_SAMPLES}：先别下结论，再多测一些（正常用一两天也会攒）"
-    p90, loss, superseded = st["p90"] or 0, st["lossRate"] or 0, superseded_share(st)
+    p90, loss, superseded = st["p90"] or 0, st["lossRate"] or 0, unobserved_share(st)
     if p90 > 5 or loss > 0.05:
         return "推送 p90 > 5 秒或丢失 > 5%：保持 2 秒主动拉取"
+    if st["pending"]:
+        return (f"还有 {st['pending']} 条主动拉取先拿到的请求没结案（引擎最多要 5 分钟才会带来或判丢；App 中途退出的也停在这里）："
+                "最后一条操作后等满 5 分钟再取数，现在不下结论")
     # 被取代 = 主动拉取先拿到、Mac 领取执行写回之后引擎只剩最新版本：推送没能抢在拉取与执行之前，旧版本的推送延迟量不到。
     # 这不是丢失，但恰恰是主动拉取在起作用的请求；把它们排除在外会把"能删"高估。
     if superseded > 0.2:
-        return f"{superseded * 100:.0f}% 的请求是主动拉取先拿到、推送没来得及（被取代 {st['superseded']} 条）：主动拉取在实际起作用，保持 2 秒"
+        return f"{superseded * 100:.0f}% 的请求是主动拉取先拿到、推送没观测到（被取代 {st['superseded']}、手动拉取先拿走 {st['manual']}）：主动拉取在实际起作用，保持 2 秒"
     if p90 <= 2 and loss < 0.01:
         if superseded > 0.01:
-            return (f"推送 p90 与丢失率达标，但 {superseded * 100:.0f}% 的请求（被取代 {st['superseded']} 条）是主动拉取先拿到、推送没来得及，"
+            return (f"推送 p90 与丢失率达标，但 {superseded * 100:.0f}% 的请求（被取代 {st['superseded']}、手动拉取先拿走 {st['manual']}）推送没观测到，"
                     "它们的推送延迟量不到：只放到 10 秒，不删")
         if st["backlog"]:
             return (f"推送 p90 与丢失率达标，但有 {st['backlog']} 条超过 {STALE:.0f} 秒才经推送到、没有主动拉取佐证的记录（没排除是推送慢）："

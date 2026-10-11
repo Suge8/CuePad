@@ -54,6 +54,27 @@ class Verdict(unittest.TestCase):
         self.assertNotIn("可放到 30–60 秒或删除", out)
         self.assertIn("保持 2 秒", out)
 
+    def test_requests_the_pull_got_first_and_not_yet_settled_block_any_verdict(self):
+        lines = [push(f"a{i:07d}", 1.0) for i in range(20)] + [pull(f"b{i:07d}", 1.0) for i in range(20)]
+        out = run(lines)
+        self.assertNotIn("可放到 30–60 秒或删除", out)
+        self.assertIn("没结案", out)
+        self.assertIn("等满 5 分钟", out)
+
+    def test_settled_pull_first_requests_that_were_pushed_later_do_not_block(self):
+        lines = [push(f"a{i:07d}", 1.0) for i in range(20)]
+        for i in range(20):
+            lines += [pull(f"b{i:07d}", 1.0), push(f"b{i:07d}", 1.5, pull_lag=1.0)]
+        self.assertIn("可放到 30–60 秒或删除", run(lines))
+
+    def test_requests_a_manual_fetch_took_first_count_as_unobserved(self):
+        lines = [push(f"a{i:07d}", 1.0) for i in range(20)]
+        for i in range(20):
+            lines += [pull(f"b{i:07d}", 1.0), f"latency arrive dev=mac path=manual kind=request rec=b{i:07d} v=1 lag=2.00 pullLag=1.00 {STATE}"]
+        out = run(lines)
+        self.assertNotIn("可放到 30–60 秒或删除", out)
+        self.assertIn("保持 2 秒", out)
+
     def test_unconfirmed_backlog_blocks_deletion(self):
         lines = [push(f"a{i:07d}", 1.0) for i in range(25)] + [push(f"d{i:07d}", 900.0) for i in range(3)]
         out = run(lines)
