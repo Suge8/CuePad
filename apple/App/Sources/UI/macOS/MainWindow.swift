@@ -222,7 +222,7 @@ private struct SwitcherSlot: View {
             SidebarToggle()
             // 一直挂着（收起时才有宽度）：开合侧栏的那一刻不再现建全部项目的菜单。不用 disabled：环境一变整份菜单又要重算；
             // ⌘1–9 本来就由窗口快捷键（`WorkspaceShortcuts`）接，菜单里的只是提示
-            ProjectSwitcher()
+            ProjectSwitcher(collapsed: collapsed)
                 .padding(.leading, collapsed ? 8 : 0)
                 .frame(width: collapsed ? nil : 0, alignment: .leading)
                 .clipped()
