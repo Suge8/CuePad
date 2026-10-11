@@ -50,6 +50,7 @@ struct NewSessionInput: View {
                         header.padding(.horizontal, 12).padding(.top, 10)
                         status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)
                     },
+                    tools: { EmptyView() },
                     send: {
                         Button(action: launch) { SubmitGlyph(.send, enabled: canStart) }
                             .buttonStyle(.plain).disabled(!canStart).accessibilityLabel("开始")
