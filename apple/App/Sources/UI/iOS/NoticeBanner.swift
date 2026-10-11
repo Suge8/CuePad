@@ -44,7 +44,7 @@ struct NoticeBanner: View {
                 .font(.subheadline.weight(.medium)).lineLimit(1)
                 // 占满两侧圆钮之间那一格：整块换下中间的标题或搜索框，不在它上面露出半截
                 .frame(maxWidth: .infinity, minHeight: FloatingHeaderLayout.height)
-                // 背后是顶栏那一条（内容在那里已经淡完）：压住的标题或搜索框透不过来（`GlassInk.solid`）
+                // 背后是顶栏那一条，内容滚到这里仍清楚可见：用实一档的玻璃，压住的标题、搜索框与正文都透不过来（`GlassInk.solid`）
                 .glass(in: .capsule, interactive: notice.link != nil || notice.action != nil, ink: .solid)
                 // 浮在内容之上：一点投影把它和底下的纸分开
                 .shadow(color: .black.opacity(palette.dark ? 0.3 : 0.12), radius: 12, y: 4)
@@ -55,7 +55,7 @@ struct NoticeBanner: View {
             }
         }
         // 横幅落在顶上那一排里（推入页的悬浮顶栏、标签根页的搜索与按钮行），与圆钮同高、在两侧圆钮之间：
-        // 那一条里内容已经淡完，横幅不会把页面上的哪一行字切成两截；只停几秒，暂时盖住中间的标题或搜索框，返回钮与右边的圆钮露在外面
+        // 横幅是实底，背后滚过的正文不会透出来与它叠字；只停几秒，暂时盖住中间的标题或搜索框，返回钮与右边的圆钮露在外面
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Self.sideClearance)
         .padding(.top, Self.rowTop)
