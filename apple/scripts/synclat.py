@@ -9,12 +9,16 @@
   xc.sh synclat --no-local --archive 手机.logarchive   只读 .logarchive
   xc.sh synclat --lines 文件           读已抽出的 "latency …" 行（每行一条）
 
-字段约定见 CueSync/ArrivalLog.swift；结论的回归用例：python3 apple/scripts/synclat_test.py。lag 起点是服务器时间、终点是本机时钟，误差零点几秒；超过 STALE 秒的是离线积压，不进分位数，单独计数。
+字段约定见 CueSync/ArrivalLog.swift；结论的回归用例：python3 apple/scripts/synclat_test.py。lag 起点是服务器时间、终点是本机时钟，误差零点几秒。
+
+每条请求的结局互斥且完备：推送（含主动拉取先到、引擎稍后补拿）/ 丢失 / 被取代 / 手动 / 未结案（见 outcome()）。后三种是"推送没观测到"，
+不当作推送可靠的证据；有未结案不下结论。很晚（超过 STALE 秒）才经推送到、又没有主动拉取早早拿到过的记为"积压"，不进分位数、单独计数，
+并挡住"可删除"的结论；主动拉取早早拿到过、推送却很晚才到的，是确凿的慢推送，照常计入分位数。
 """
 import argparse, json, re, subprocess, sys
 from collections import defaultdict
 
-STALE = 120.0           # 超过这么久才到的，是 App 没开期间攒下的，不是推送延迟
+STALE = 120.0           # 经推送超过这么久才到、又没有主动拉取佐证的，记为积压（可能是 App 没开期间攒下的，也可能推送真的慢，分不出）
 MIN_SAMPLES = 20        # 少于这个数不下结论
 PREDICATE = 'subsystem == "com.sugeh.cuepad" AND category == "sync-latency"'
 
