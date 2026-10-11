@@ -33,9 +33,9 @@ final class EditorHarness {
 
     init(width: CGFloat = 390, height: CGFloat = 700, theme: CueEditorTheme = .test) {
         textView = CueTextView(imageStore: store, theme: theme)
-        // 要一个窗口：字号档位这类特征只在窗口里往下传。包的测试进程里没有场景，只能建无场景的窗口；
-        // 那个构造在 iOS 26 标了弃用（为的是让 App 都挂到场景上），经 UIView 的构造建它，意思一样、不报弃用
-        root = (UIWindow.self as UIView.Type).init(frame: CGRect(x: 0, y: 0, width: width, height: height)) as! UIWindow
+        // 要一个窗口：字号档位这类特征只在窗口里往下传。包的测试进程（xctest）里没有场景，只能用无场景的构造，
+        // 它在 iOS 26 标了弃用，这条警告留着：去掉它要给这些测试换一个有场景的宿主
+        root = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: height))
         textView.frame = root.bounds
         root.addSubview(textView)
         root.makeKeyAndVisible()
