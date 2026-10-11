@@ -1,6 +1,7 @@
 #if os(macOS)
 import CueStore
 import Foundation
+import OSLog
 
 /// CuePad 在后台托管的 Pi：没有终端界面，以 RPC 模式运行（`pi --mode rpc`），状态与消息都走桥。
 /// 给已结束的会话发消息时恢复它（`resume`），开新会话（`open`）；托管的进程经环境变量 `CUEPAD_HOSTED` 告诉扩展，
@@ -13,6 +14,7 @@ import Foundation
 /// - 退出靠关掉它的标准输入：RPC 模式读到 EOF 后正常收尾（扩展先发 bye）。App 退出时一并关掉（`closeAll`）。
 @MainActor
 public final class PiHost {
+    private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "pi-host")
     private let bridge: PiBridge
     private let paths: PiPaths
     private let idleLimit: Duration
@@ -27,15 +29,18 @@ public final class PiHost {
     private final class Hosted {
         let process: Process
         let stdin: Pipe
+        /// 进程退出后结束（可以被多处等）。
+        let gone: Task<Void, Never>
         var sessionID: String?
         var busy = false
         /// 有人在别处打开了同一个会话：做完这一轮就退。
         var yielding = false
         var idleTimer: Task<Void, Never>?
 
-        init(process: Process, stdin: Pipe) {
+        init(process: Process, stdin: Pipe, gone: Task<Void, Never>) {
             self.process = process
             self.stdin = stdin
+            self.gone = gone
         }
     }
 
@@ -105,13 +110,11 @@ public final class PiHost {
     public func closeAll() -> @Sendable () async -> Void {
         watcher?.cancel()
         watcher = nil
-        let running = processes.values.map(\.process)
+        let gone = processes.values.map(\.gone)
         for hosted in processes.values { close(hosted) }
         processes = [:]
         return {
-            for process in running {
-                while process.isRunning { try? await Task.sleep(for: .milliseconds(20)) }
-            }
+            for exit in gone { await exit.value }
         }
     }
 
@@ -135,16 +138,18 @@ public final class PiHost {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         let (exited, exit) = AsyncStream<Void>.makeStream()
+        let (terminated, terminate) = AsyncStream<Void>.makeStream()
         process.terminationHandler = { [weak self] ended in
             let pid = ended.processIdentifier
             exit.yield()
             exit.finish()
+            terminate.finish()
             Task { @MainActor in self?.exited(pid) }
         }
         let changes = bridge.changes()  // 先订阅再启动：连上的那一刻不会漏
         try process.run()
         let pid = process.processIdentifier
-        let hosted = Hosted(process: process, stdin: stdin)
+        let hosted = Hosted(process: process, stdin: stdin, gone: Self.watch(terminated))
         processes[pid] = hosted
         let timeout = connectTimeout
         let connecting = Task { try await withThrowingTaskGroup(of: PiSession?.self) { group in
@@ -189,7 +194,14 @@ public final class PiHost {
         hosted.idleTimer?.cancel()
         guard hosted.yielding, let sessionID = hosted.sessionID,
               let successor = bridge.sessions.first(where: { $0.sessionID == sessionID && $0.pid != pid }) else { return }
-        Task { try? await bridge.reload(successor.id) }
+        Task {
+            do { try await bridge.reload(successor.id) } catch { Self.log.notice("让接手的会话重新载入失败：\(String(describing: error))") }
+        }
+    }
+
+    /// 不在主线程隔离里建：退出时主线程可能被占住，等进程退出的任务不能排在它后面。
+    private nonisolated static func watch(_ terminated: AsyncStream<Void>) -> Task<Void, Never> {
+        Task { for await _ in terminated {} }
     }
 
     private func close(_ hosted: Hosted) {

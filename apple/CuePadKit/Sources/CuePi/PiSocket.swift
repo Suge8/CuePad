@@ -89,12 +89,10 @@ final class PiSocketConnection: Sendable {
         lines = stream
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "cuepi.socket.read"))
         self.source = source
-        let buffer = LineBuffer()
+        let reader = LineReader()
         source.setEventHandler {
-            var chunk = [UInt8](repeating: 0, count: 256 * 1024)
-            let n = read(fd, &chunk, chunk.count)
-            if n <= 0 { source.cancel(); return }
-            for line in buffer.append(chunk[0..<n]) { continuation.yield(line) }
+            guard let lines = reader.read(from: fd) else { return source.cancel() }
+            for line in lines { continuation.yield(line) }
         }
         source.setCancelHandler { [self] in
             shutdown(fd, SHUT_RDWR) // 让阻塞中的写入失败返回，释放 closed 的锁
@@ -126,18 +124,29 @@ final class PiSocketConnection: Sendable {
     func close() { source.cancel() }
 }
 
-private final class LineBuffer: @unchecked Sendable {
-    private var data = Data()
+/// 从 socket 读出完整的行。只在读事件的串行队列上用：读缓冲复用，不是每次读都分配 256KB；
+/// 余下的半行留在 `pending`，每次读完一次性扔掉已切出的部分（不是每切一行复制一遍余量）。
+private final class LineReader: @unchecked Sendable {
+    private var scratch = [UInt8](repeating: 0, count: 256 * 1024)
+    private var pending = Data()
 
-    func append(_ bytes: ArraySlice<UInt8>) -> [Data] {
-        data.append(contentsOf: bytes)
-        var out: [Data] = []
-        while let newline = data.firstIndex(of: 0x0A) {
-            let line = data[data.startIndex..<newline]
-            if !line.isEmpty { out.append(Data(line)) }
-            data = Data(data[data.index(after: newline)...])
+    /// 读一次，返回这次凑齐的行（不含换行、不含空行）；EOF 或读失败返回 nil。
+    func read(from fd: Int32) -> [Data]? {
+        let n = scratch.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
+        guard n > 0 else { return nil }
+        pending.append(contentsOf: scratch[0..<n])
+        var lines: [Data] = []
+        var start = 0
+        pending.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress else { return }
+            while start < raw.count, let hit = memchr(base + start, 0x0A, raw.count - start) {
+                let end = base.distance(to: UnsafeRawPointer(hit))
+                if end > start { lines.append(Data(bytes: base + start, count: end - start)) }
+                start = end + 1
+            }
         }
-        return out
+        pending.removeSubrange(0..<start)
+        return lines
     }
 }
 
