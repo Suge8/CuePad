@@ -117,7 +117,7 @@ actor PiHistoryPersistence {
             do {
                 try await storage.prunePiMessages(olderThan: Self.transcriptWindow, now: timing.now())
             } catch {
-                Self.log.error("清理对话失败：\(String(describing: error), privacy: .public)")
+                Self.log.error("清理对话失败：\(String(describing: error))")
             }
         } while (try? await timing.sleep(.seconds(86_400))) != nil
     }

@@ -10,15 +10,11 @@ import WidgetKit
 extension AppServices {
     /// 项目或卡片变化时重读快照，直到任务取消。
     func startSnapshots() {
-        tasks.append(Task {
-            do {
-                for try await snapshots in store.observe { try $0.widgetSnapshots() } {
-                    try publish(snapshots)
-                }
-            } catch {
-                reportIssue(.widgetDataUnavailable("\(error)"))
+        follow(reporting: { .widgetDataUnavailable("\($0)") }) {
+            for try await snapshots in self.store.observe({ try $0.widgetSnapshots() }) {
+                try self.publish(snapshots)
             }
-        })
+        }
     }
 
     /// 立即按当前库内容更新快照。

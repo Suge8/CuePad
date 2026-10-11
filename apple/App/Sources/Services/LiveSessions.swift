@@ -67,16 +67,12 @@ final class LiveSessions {
 extension AppServices {
     /// 开始跟随在线会话（`start()` 调用）；读失败时报告并停止。
     func startLiveSessions() {
-        tasks.append(Task {
-            do {
-                #if os(macOS)
-                try await liveSessions.follow(store, endedOn: hostID)
-                #else
-                try await liveSessions.follow(store)
-                #endif
-            } catch {
-                reportIssue(.syncUnavailable("读取在线会话失败，会话状态不再更新：\(error)"))
-            }
-        })
+        follow(reporting: { .syncUnavailable("读取在线会话失败，会话状态不再更新：\($0)") }) {
+            #if os(macOS)
+            try await self.liveSessions.follow(self.store, endedOn: self.hostID)
+            #else
+            try await self.liveSessions.follow(self.store)
+            #endif
+        }
     }
 }

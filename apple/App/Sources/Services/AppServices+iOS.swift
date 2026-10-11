@@ -7,7 +7,7 @@ import UIKit
 extension AppServices {
     /// 幂等。
     func start() {
-        guard tasks.isEmpty else { return }
+        guard !tasks.isRunning else { return }
         startCaptureIngest()
         startSnapshots()
         startSync()
@@ -20,17 +20,17 @@ extension AppServices {
     /// 不依赖推送是否到达；App 不在前台时不发（后台由系统推送提示，前台系统不再重复展示，见 `PiAlertCenter`）。
     private func startSessionAlerts() {
         let active = ActiveSince()
-        tasks.append(Task {
+        follow {
             for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) { active.date = .now }
-        })
-        tasks.append(Task {
+        }
+        follow {
             var tracker = SessionAlertTracker()
             for await states in Observations({ self.liveSessions.live.map(\.state) }) {
                 let alerts = tracker.alerts(for: states, since: active.date)
                 guard UIApplication.shared.applicationState == .active else { continue }
-                if let alert = alerts.last(where: { $0.kind == .waitingForUser }) ?? alerts.last { post(alert) }
+                if let alert = alerts.last(where: { $0.kind == .waitingForUser }) ?? alerts.last { self.post(alert) }
             }
-        })
+        }
     }
 }
 
