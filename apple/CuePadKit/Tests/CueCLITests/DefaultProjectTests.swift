@@ -5,7 +5,7 @@ import Testing
 
 @testable import CueCLI
 
-/// 不给 --project / --inbox 时，默认范围是绑定了当前目录（或其祖先目录）的项目。
+/// 不给 --project / --unfiled 时，默认范围是绑定了当前目录（或其祖先目录）的项目。
 @Suite struct DefaultProjectTests {
   private struct World {
     let sb: Sandbox
@@ -24,7 +24,7 @@ import Testing
       try await sb.store.setDirectory(Self.alphaDirectory, for: alpha.id)
       inAlpha = try await sb.store.createCard(in: alpha.id, body: "共同词 alpha")
       inBeta = try await sb.store.createCard(in: beta.id, body: "共同词 beta")
-      inUnfiled = try await sb.store.createCard(in: nil, body: "共同词 inbox")
+      inUnfiled = try await sb.store.createCard(in: nil, body: "共同词 unfiled")
       _ = try await sb.store.createTask("alpha 任务", in: alpha.id)
       _ = try await sb.store.createTask("全局任务", in: nil)
     }
@@ -57,14 +57,14 @@ import Testing
     let w = try await World()
 
     #expect(try await w.cards(["card", "list", "--project", "Beta"]) == ["共同词 beta"])
-    #expect(try await w.cards(["card", "list", "--inbox"]) == ["共同词 inbox"])
-    #expect(try await w.cards(["card", "list", "--all-projects"]) == ["共同词 alpha", "共同词 beta", "共同词 inbox"])
+    #expect(try await w.cards(["card", "list", "--unfiled"]) == ["共同词 unfiled"])
+    #expect(try await w.cards(["card", "list", "--all-projects"]) == ["共同词 alpha", "共同词 beta", "共同词 unfiled"])
     #expect(try await w.cards(["search", "共同词", "--all-projects"]).count == 3)
-    #expect(try await w.cards(["search", "共同词", "--inbox"]) == ["共同词 inbox"])
+    #expect(try await w.cards(["search", "共同词", "--unfiled"]) == ["共同词 unfiled"])
     #expect(try await w.tasks(["--global"]) == ["全局任务"])
     #expect(try await w.tasks(["--all-projects"]) == ["alpha 任务", "全局任务"])
 
-    let unfiled = try await w.sb.object("card", "add", "--inbox", "--body", "x", cwd: World.inside)
+    let unfiled = try await w.sb.object("card", "add", "--unfiled", "--body", "x", cwd: World.inside)
     #expect(unfiled["projectId"] is NSNull)
     let beta = try await w.sb.object("card", "add", "--project", "Beta", "--body", "y", cwd: World.inside)
     #expect(beta.string("projectId") == w.beta.id.uuidString.lowercased())

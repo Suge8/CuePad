@@ -93,7 +93,7 @@ import Testing
     func id(_ card: Card) -> String { card.id.uuidString.lowercased() }
     #expect(try await ids() == [id(a), id(b), id(unfiled)])
     #expect(try await ids("--project", "Beta") == [id(b)])
-    #expect(try await ids("--inbox") == [id(unfiled)])
+    #expect(try await ids("--unfiled") == [id(unfiled)])
     try await sb.store.updateCard(b.id) { $0.isPinned = true }
     #expect(try await ids("--pinned") == [id(b)])
   }
@@ -107,7 +107,7 @@ import Testing
 
     let moved = try await sb.object("card", "move", id, "--project", "Beta")
     #expect(moved.string("projectId") == beta.id.uuidString.lowercased())
-    let toUnfiled = try await sb.object("card", "move", id, "--inbox")
+    let toUnfiled = try await sb.object("card", "move", id, "--unfiled")
     #expect(toUnfiled["projectId"] is NSNull)
 
     let trashed = try await sb.object("card", "trash", id)
@@ -201,7 +201,7 @@ import Testing
 
   @Test func ideaBecomesATaskAndBack() async throws {
     let sb = try Sandbox()
-    let idea = try await sb.object("card", "add", "--inbox", "--body", "修重连")
+    let idea = try await sb.object("card", "add", "--unfiled", "--body", "修重连")
     let id = try #require(idea.string("id"))
     #expect(idea.string("kind") == "idea" && idea["status"] is NSNull)
 
