@@ -34,11 +34,6 @@ final class Followers {
         supervisor?.cancel()
         supervisor = nil
     }
-
-    /// `AppServices+Sync.swift` 里的三个跟随者还是 `tasks.append(Task { … })` 的写法；那个文件改成 `follow` 后删掉它。
-    func append(_ task: Task<Void, Never>) {
-        add { await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() } }
-    }
 }
 
 extension AppServices {
