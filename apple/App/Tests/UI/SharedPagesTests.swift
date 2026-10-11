@@ -77,7 +77,7 @@ struct SharedPagesTests {
         let inProject = await restored(try #require(summary.cards.first { $0.id == card.id }))
         #expect(inProject?.text.visible == "已恢复到 圆桌" && inProject?.link == .project(project.id))
         let unfiled = await restored(try #require(summary.cards.first { $0.id == loose.id }))
-        #expect(unfiled?.text.visible == "已恢复到 未分类" && unfiled?.link == .project(nil))
+        #expect(unfiled?.text.visible == "已恢复到 未分类" && unfiled?.link == .inbox)
 
         try await store.trashProject(project.id)
         let whole = await restored(try #require(try await TrashSummary.read(from: store).projects.first))

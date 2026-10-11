@@ -30,7 +30,7 @@ struct SplitRoot: View {
             HStack(spacing: 0) {
                 NavigationStack(path: $navigation.splitPath) {
                     page(navigation.splitRoot)
-                        .navigationDestination(for: Navigation.Route.self) { page($0) }
+                        .navigationDestination(for: Route.self) { page($0) }
                 }
                 if navigation.agentPanel {
                     Divider().ignoresSafeArea()
@@ -56,7 +56,7 @@ struct SplitRoot: View {
     }
 
     /// 右侧页："写"（浮起随手记）与 Agent 面板的开关在每一页上（推入的页也有），卡片纸页除外——它有自己的复制、发送与更多。
-    @ViewBuilder private func page(_ route: Navigation.Route) -> some View {
+    @ViewBuilder private func page(_ route: Route) -> some View {
         if route.isCard {
             RouteView(route: route)
         } else {
@@ -163,7 +163,7 @@ private struct SplitSidebar: View {
 
 /// 侧栏的一项。选中态是共用的选中底色加粗字（不是实心胶囊）：只告诉你"在这里"，不抢内容的注意。
 private struct SidebarRow: View {
-    let route: Navigation.Route
+    let route: Route
     let title: String
     var symbol: String?
     var project: Project?
@@ -225,7 +225,7 @@ private struct SplitShortcuts: View {
         workspace.attempt {
             let card = try await workspace.createCard(in: project)
             if navigation.splitRoot == .search { navigation.closeSearch() }
-            navigation.open(card: card.id)
+            navigation.push(.card(card.id))
         }
     }
 
@@ -244,9 +244,9 @@ private struct SplitShortcuts: View {
                 withAnimation(Motion.panel) { navigation.sidebar = navigation.sidebar == .detailOnly ? .automatic : .detailOnly }
             }
             .keyboardShortcut("\\")
-            Button("任务") { navigation.showTasks() }.keyboardShortcut("t", modifiers: [.command, .shift])
+            Button("任务") { navigation.show(.tasks) }.keyboardShortcut("t", modifiers: [.command, .shift])
             ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
-                Button("项目 \(index + 1)") { navigation.show(project: project.id) }
+                Button("项目 \(index + 1)") { navigation.show(.project(project.id)) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
             }
         }

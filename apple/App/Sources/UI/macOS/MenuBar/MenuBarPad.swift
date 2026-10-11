@@ -19,7 +19,7 @@ struct MenuBarPad: View {
         VStack(alignment: .leading, spacing: 8) {
             let sessions = PiSessionState.inListOrder(services.pi.sessions.map {
                 PiSessionState.live(
-                    $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
+                    $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
             }).prefix(Self.sessionLimit)
             if !sessions.isEmpty {
                 VStack(alignment: .leading, spacing: 9) {

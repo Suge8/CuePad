@@ -65,7 +65,7 @@ extension Workspace {
         attempt {
             try await item.restore(store)
             let project = try await item.landing(store)
-            self.say(Dotted("已恢复到 \(CaptureCopy.destination(project))"), link: .project(project?.id))
+            self.say(Dotted("已恢复到 \(CaptureCopy.destination(project))"), link: .place(project?.id))
         }
     }
     func purge(_ item: TrashItem) { perform(item.purge) }

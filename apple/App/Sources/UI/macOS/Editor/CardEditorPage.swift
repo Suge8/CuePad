@@ -116,7 +116,7 @@ struct CardEditorPage: View {
                     task: task, detail: taskDetail, open: { workspace.openCard = $0.id }, hand: hand,
                     write: {
                         let id = task.id
-                        workspace.attempt { workspace.openCard = try await workspace.createPrompt(under: id).id }
+                        workspace.attempt { workspace.openCard = try await workspace.services.store.createCard(body: "", under: id).id }
                     })
                 SubtaskList(detail: taskDetail, open: { workspace.openCard = $0.id })
             }
@@ -128,7 +128,7 @@ struct CardEditorPage: View {
 
     /// 提示词卡上的"交给 Agent"：发给本项目当前的 Agent 会话（与提示词编辑页同一个），提示词关联到它；没有会话时打开它的编辑页去选。
     private func hand(_ prompt: Card) {
-        guard let target = workspace.agentTarget(for: prompt.projectID) else { return workspace.openCard = prompt.id }
+        guard let target = workspace.sendState.agentTarget(for: prompt.projectID) else { return workspace.openCard = prompt.id }
         let text = Outgoing.text(of: prompt), id = prompt.id
         Task { await workspace.send(text, to: target, card: id) }
     }
@@ -146,7 +146,7 @@ struct CardEditorPage: View {
             handle.focus()
             await NextFrame.wait()
             guard isOpen else { return }
-            workspace.opened(cardID)
+            workspace.presses.opened(cardID)
             withAnimation(Motion.quick) { shown = true } completion: { settled = true }
         }
     }
@@ -236,7 +236,7 @@ struct CardEditorPage: View {
         }
         guard CardMenu.handsToAgent(card) else { return [tasks] }
         let send = CueSelectionAction(title: "发送选中部分", systemImage: "paperplane") { stored in
-            guard let target = workspace.agentTarget(for: card.projectID) else { return }
+            guard let target = workspace.sendState.agentTarget(for: card.projectID) else { return }
             let text = Outgoing.text(body: stored, values: card.variableValues)
             Task { await workspace.send(text, to: target, card: card.id) }
         }

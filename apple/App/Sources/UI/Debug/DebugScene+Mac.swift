@@ -10,9 +10,9 @@ extension DebugScene {
         try? await Task.sleep(for: .milliseconds(100))
         resizeWindow()
         _ = await prepareLibrary(workspace)
-        if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.sidebar = .detailOnly }
+        if defaults.string(forKey: "CuePadSidebar") == "hidden" { workspace.pages.sidebar = .detailOnly }
         switch scene {
-        case "collapsed": workspace.sidebar = .detailOnly
+        case "collapsed": workspace.pages.sidebar = .detailOnly
         case "search": workspace.searching = true
         case "tasks": workspace.showsTasks = true
         case "task":

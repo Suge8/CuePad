@@ -153,14 +153,14 @@ struct SessionNoticeTests {
         let other = Workspace.Notice(text: "已复制", isError: false)
         #expect(navigation.keeps(banner) && navigation.keeps(other))
 
-        navigation.show(session: session)
+        navigation.show(.session(session))
         #expect(!navigation.keeps(banner) && navigation.keeps(other))
     }
 
     @Test func 点提示进该会话_同点开推送通知() {
         let session = UUID()
         let navigation = navigation(.tabs)
-        navigation.show(session: session)
+        navigation.show(.session(session))
         #expect(navigation.tab == .agent && navigation.agentPath == [.session(session)])
     }
 }

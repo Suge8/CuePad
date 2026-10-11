@@ -83,13 +83,13 @@ struct Sidebar: View {
         }
     }
 
-    private func select(_ page: Workspace.Page) {
+    private func select(_ page: Route) {
         workspace.show(page)
         focused = true
     }
 
     /// 方向键：上一页 / 下一页，到头不循环；当前页不在侧栏里时从第一页开始。
-    private static func page(after current: Workspace.Page, in order: [Workspace.Page], moving direction: MoveCommandDirection) -> Workspace.Page? {
+    private static func page(after current: Route, in order: [Route], moving direction: MoveCommandDirection) -> Route? {
         guard let index = order.firstIndex(of: current) else { return order.first }
         switch direction {
         case .up: return index > order.startIndex ? order[index - 1] : nil
@@ -163,19 +163,19 @@ private struct SidebarPages {
         showsBins = trashCount > 0 || !catalog.projects.isEmpty
     }
 
-    var order: [Workspace.Page] {
+    var order: [Route] {
         projects.map { .project($0.id) } + (inboxCount > 0 ? [.inbox] : []) + (showsBins ? [.archive, .trash] : [])
     }
 }
 
 /// 侧栏里通向一页的一行：当前页垫选中底色、文字加粗；其余用 85% 的墨，不发灰。
 private struct PageRow<Title: View>: View {
-    let page: Workspace.Page
+    let page: Route
     let count: Int
     /// 有时代替计数写在行尾（"还有 N 个"）。
     var note: String?
     var height = Spacing.sidebarRow
-    let select: (Workspace.Page) -> Void
+    let select: (Route) -> Void
     @ViewBuilder let title: Title
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -213,7 +213,7 @@ private struct ProjectRow: View, Equatable {
     let project: Project
     let count: Int
     let now: ProjectNow?
-    let select: (Workspace.Page) -> Void
+    let select: (Route) -> Void
     let edit: () -> Void
 
     static func == (a: Self, b: Self) -> Bool { a.project == b.project && a.count == b.count && a.now == b.now }
@@ -236,10 +236,10 @@ private struct ProjectRow: View, Equatable {
 
 /// 底栏里通向一页的图标钮（归档、回收站）：当前页垫选中底色。
 private struct FooterPage: View {
-    let page: Workspace.Page
+    let page: Route
     let title: String
     let systemImage: String
-    let select: (Workspace.Page) -> Void
+    let select: (Route) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -283,7 +283,7 @@ private struct PiSection: View {
         let rows = PiSessionState.liveRows(
             live: live.map {
                 PiSessionState.live(
-                    $0, hostID: services.hostID, projectID: workspace.sessionProjects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
+                    $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
             },
             recorded: recorded, deliveries: deliveries)
         let agents = SidebarAgents(rows: rows)

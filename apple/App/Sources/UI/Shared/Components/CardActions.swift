@@ -26,7 +26,7 @@ struct CardActions: View {
         switch item {
         case .attachToTask: Button(item.title + "…", systemImage: item.symbol) { workspace.attaching = card }
         case .handToAgent: handToAgent
-        case .makeTask, .makeIdea: Button(item.title, systemImage: item.symbol) { workspace.toggleTodo(id, item == .makeTask) }
+        case .makeTask, .makeIdea: Button(item.title, systemImage: item.symbol) { workspace.attempt { try await workspace.setTodo(id, item == .makeTask) } }
         case .complete, .reopen:
             Button(item.title, systemImage: item.symbol) {
                 let task = card
@@ -60,7 +60,7 @@ struct CardActions: View {
     @ViewBuilder private var handToAgent: some View {
         #if os(macOS)
         let text = Outgoing.text(of: card), id = card.id
-        workspace.sendButton(workspace.agentTarget(for: card.projectID)) { target in Task { await workspace.send(text, to: target, card: id) } }
+        workspace.sendButton(workspace.sendState.agentTarget(for: card.projectID)) { target in Task { await workspace.send(text, to: target, card: id) } }
         #else
         Button(CardMenu.Item.handToAgent.title, systemImage: CardMenu.Item.handToAgent.symbol) { navigation.handToAgent(card) }
         #endif
@@ -124,7 +124,7 @@ extension RowSwipes {
         func action(_ item: CardMenu.Item) -> RowAction? {
             let run: (() -> Void)? = switch item {
             case .attachToTask: { workspace.attaching = card }
-            case .makeTask: { workspace.toggleTodo(card.id, true) }
+            case .makeTask: { workspace.attempt { try await workspace.setTodo(card.id, true) } }
             case .trash: { workspace.attempt { try await workspace.trash(card.id) } }
             case .indent: structure?.indent
             case .outdent: structure?.outdent

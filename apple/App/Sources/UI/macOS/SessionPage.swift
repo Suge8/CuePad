@@ -42,7 +42,7 @@ extension SessionDigest {
 /// 指针过去是桌面上"看一眼顶上"的自然动作。中间是对话
 /// （`PiConversation`，子代理在末尾收成一行汇总；只排最近几条，更早的点最上面一行再排开），打开即最新，离最新超过一屏出"回到最新"（`ChatScroll`，Mac 不倒置）；
 /// 底部是与手机同一个回复框（`PiReplyBar`），等你确认时问题卡固定在它上方。很久以前的会话没有对话时请它所在的 Mac 补写。
-/// 是一页（`Workspace.Page.session`），左上不放返回：去别处靠侧栏。
+/// 是一页（`Route.session`），左上不放返回：去别处靠侧栏。
 struct SessionPage: View {
     let sessionID: String
     @Environment(Workspace.self) private var workspace
@@ -68,7 +68,7 @@ struct SessionPage: View {
 
     var body: some View {
         let live = services.pi.session(sessionID: sessionID)
-        let project = live.flatMap { workspace.catalog?.project(workspace.sessionProjects[$0.id]) }
+        let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
         // 在线会话不等资料库读完就能显示
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
         let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries)
@@ -233,13 +233,13 @@ extension Workspace {
     /// 本机桥上在线的这个 Pi 会话（`sessionID` 是 Pi 自己的会话 id）此刻的状态；不在线为 nil。
     func liveState(ofSession sessionID: String?) -> PiSessionState? {
         guard let sessionID, let live = services.pi.session(sessionID: sessionID) else { return nil }
-        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id], recap: services.liveSessions.recaps[sessionID])
+        return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id], recap: services.liveSessions.recaps[sessionID])
     }
 
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
     func withLiveState(_ session: PiSessionState) -> PiSessionState {
         guard let live = services.pi.session(sessionID: session.sessionID) else { return session }
-        return .live(live, hostID: services.hostID, projectID: sessionProjects[live.id] ?? session.projectID, recap: session.recap)
+        return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap)
     }
 
     /// 从提示词交给 Agent 的新会话（开在它所在项目绑定的文件夹）：行上先是"正在开会话"，开好后它关联到新会话。

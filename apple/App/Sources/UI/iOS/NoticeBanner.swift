@@ -20,7 +20,7 @@ struct NoticeBanner: View {
         ZStack {
             if let notice = workspace.notice {
                 HStack(spacing: 0) {
-                    Button { if let link = notice.link { go(link) } } label: {
+                    Button { if let link = notice.link { workspace.notice = nil; navigation.show(link) } } label: {
                         HStack(spacing: 6) {
                             Label { Text(notice.text) } icon: { Image(systemName: notice.symbol ?? (notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")) }
                             if notice.link != nil {
@@ -68,15 +68,6 @@ struct NoticeBanner: View {
         }
         .onChange(of: workspace.notice) { _, notice in
             if let notice { AccessibilityNotification.Announcement(notice.text.spoken).post() }
-        }
-    }
-
-    private func go(_ link: Workspace.Link) {
-        workspace.notice = nil
-        switch link {
-        case .project(let id?): navigation.show(project: id)
-        case .project(nil): navigation.showInbox()
-        case .session(let id): navigation.show(session: id)
         }
     }
 }

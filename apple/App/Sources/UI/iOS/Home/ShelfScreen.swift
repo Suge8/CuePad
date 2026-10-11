@@ -203,7 +203,7 @@ struct ShelfScreen: View {
 
 /// 书架顶上的一行：图标、标题、说明，点进一页。
 private struct ShelfLine: View {
-    let route: Navigation.Route
+    let route: Route
     let symbol: String
     let title: String
     let detail: Dotted
@@ -267,7 +267,7 @@ private struct PinnedShelfCard: View {
 
     var body: some View {
         let tint = Palette.projectTint(entry.project.color)
-        NavigationLink(value: Navigation.Route.project(entry.project.id)) {
+        NavigationLink(value: Route.project(entry.project.id)) {
             Group {
                 if wide {
                     HStack(spacing: 12) {
@@ -373,7 +373,7 @@ private struct ShelfRow: View {
     }
 
     var body: some View {
-        NavigationLink(value: Navigation.Route.project(entry.project.id)) {
+        NavigationLink(value: Route.project(entry.project.id)) {
             HStack(spacing: 12) {
                 // 辅助功能大字号下图标并进名称一行，文字从行首开始，不空出一列图标宽
                 if !stacked {
@@ -454,7 +454,7 @@ private struct ActiveTasks: View {
 
     /// 纸底的一行：标题上的进行中数比列出的多几项。
     private var moreRow: some View {
-        NavigationLink(value: Navigation.Route.tasks) {
+        NavigationLink(value: Route.tasks) {
             HStack(spacing: 4) {
                 Text("还有 \(more) 项")
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
@@ -475,7 +475,7 @@ private struct ActiveTasks: View {
     }
 
     private func allTasks(_ counts: TaskCounts) -> some View {
-        NavigationLink(value: Navigation.Route.tasks) {
+        NavigationLink(value: Route.tasks) {
             HStack(spacing: 3) {
                 Text(counts.summary).contentTransition(.numericText()).animation(Motion.snappy, value: counts.summary)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).accessibilityHidden(true)

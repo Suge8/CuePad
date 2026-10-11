@@ -48,7 +48,7 @@ struct TaskPage: View {
     /// 写一条提示词：先建好，直接进入它的编辑。
     private func write() {
         let task = card.id
-        workspace.attempt { opened = try await workspace.createPrompt(under: task).id }
+        workspace.attempt { opened = try await workspace.services.store.createCard(body: "", under: task).id }
     }
 }
 #endif

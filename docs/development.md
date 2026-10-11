@@ -57,7 +57,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 绑定文件夹经 `FilePicker`（Mac，非模态，不用 `runModal`）或 `FolderPickerSheet`（手机，经投送请求让 Mac 绑），规则同一份 `ProjectFolders`。
 
 **Mac 页面与首次成本。**
-- 内容区把去过的页都挂着（`PageStack`，至多 `Workspace.keptPages` 个），切页只换哪一页看得见；不在前台的页不可见、点不到、暂停订阅（`observing` 读 `pageActive`）。会话页不留。
+- 内容区把去过的页都挂着（`PageStack`，至多 `MacPages.keptPages` 个），切页只换哪一页看得见；不在前台的页不可见、点不到、暂停订阅（`observing` 读 `pageActive`）。会话页不留。
 - 整个窗口一份的数据页面直接读、不各自订阅：`Workspace.agentLinks`、`folderGuide`；整个 App 一份的此刻有事的会话 `AppServices.liveSessions`。只有按搜索词、项目或分页筛的列表各自查。
 - 首次使用才付的一次性成本在启动后空闲时先付掉（`Prewarm`）；新增有首次成本的界面要加进去，加之前量出收益。成本是现建整页本身、付一次替身也省不掉的页（Agent 页：十几行会话的成本摊在按钮、右键菜单、走字计时、状态标等几十个视图上，没有单个热点）直接把真的那一页先挂上（`Workspace.premount`），它不在前台也先读一份数据（`pagePrefetch`），第一次点开就是回访。
 - 会话页的标题与"⋯"是主窗口常驻的工具栏项，进出会话页不增删工具栏项（"⋯"没有内容时透明、点不到；增删会让整组重建），标题项宽度固定（尺寸一变整条工具栏重排）。会话页第一圈只出标题、状态与最新的对话，回复框、问题卡与"⋯"晚两帧（`NextFrame`）。

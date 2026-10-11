@@ -281,7 +281,7 @@ struct SearchPalette: View {
 
     /// 只有提示词发给 Agent（本项目当前的会话）；灵感先挂到任务。
     private func sendSelected(_ card: Card) async {
-        guard CardMenu.handsToAgent(card), let target = workspace.agentTarget(for: card.projectID) else { return }
+        guard CardMenu.handsToAgent(card), let target = workspace.sendState.agentTarget(for: card.projectID) else { return }
         await workspace.send(Outgoing.text(of: card), to: target, card: card.id)
     }
 
@@ -314,7 +314,7 @@ struct SearchPalette: View {
     private func open(_ card: Card) {
         workspace.searching = false
         if card.projectID != workspace.currentProject {
-            workspace.show(card.projectID.map(Workspace.Page.project) ?? .inbox)
+            workspace.show(card.projectID.map(Route.project) ?? .inbox)
         }
         workspace.openCard = card.id
     }

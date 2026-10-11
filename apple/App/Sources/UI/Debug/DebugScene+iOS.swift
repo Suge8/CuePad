@@ -25,7 +25,7 @@ extension DebugScene {
             return
         }
         let split = navigation.layout == .split
-        func open(_ route: Navigation.Route) {
+        func open(_ route: Route) {
             if split { navigation.select(route) } else { navigation.projectsPath = [route] }
         }
         func openCard() async {
@@ -64,7 +64,7 @@ extension DebugScene {
                 }
             }
         case "tasks":
-            navigation.showTasks()
+            navigation.show(.tasks)
         case "task":
             let store = workspace.services.store
             let tasks = (try? await store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []

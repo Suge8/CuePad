@@ -9,7 +9,7 @@ struct MainWindow: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $workspace.sidebar) {
+        NavigationSplitView(columnVisibility: Bindable(workspace.pages).sidebar) {
             Sidebar()
                 // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌃⌘S 同一个入口。
                 // 同访达：它是侧栏这一栏的工具栏项，侧栏开着时在侧栏顶上、红绿灯右边，收起后留在原处，成了工具栏最左的一颗
@@ -100,7 +100,7 @@ private struct WindowPanels: View {
     }
 
     private var busy: Binding<Bool> {
-        Binding(get: { workspace.busySend != nil }, set: { if !$0 { workspace.busySend = nil } })
+        Binding(get: { workspace.sendState.busy != nil }, set: { if !$0 { workspace.sendState.busy = nil } })
     }
 }
 
@@ -131,7 +131,7 @@ private struct CardPressMonitor: NSViewRepresentable {
             monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { [weak self] event in
                 MainActor.assumeIsolated {
                     guard let self, event.window === self.window, !event.modifierFlags.contains(.control) else { return }
-                    self.workspace.mouse(down: event.type == .leftMouseDown)
+                    self.workspace.presses.mouse(down: event.type == .leftMouseDown)
                 }
                 return event
             }
@@ -148,8 +148,8 @@ private struct PageStack: View {
     var body: some View {
         let current = workspace.page
         let pages = workspace.mountedPages
-        let leaving = workspace.leaving
-        let moving = workspace.sidebarMoving
+        let leaving = workspace.pages.leaving
+        let moving = workspace.pages.sidebarMoving
         PageStackLayout(active: current) {
             ForEach(pages, id: \.self) { page in
                 let active = page == current
@@ -159,38 +159,39 @@ private struct PageStack: View {
                     .allowsHitTesting(active && !moving)
                     .accessibilityHidden(!active)
                     .environment(\.pageActive, active || page == leaving)
-                    .environment(\.pagePrefetch, !active && workspace.isPremounted(page))
+                    .environment(\.pagePrefetch, !active && workspace.pages.isPremounted(page))
             }
         }
     }
 
-    @ViewBuilder private func content(_ page: Workspace.Page) -> some View {
+    @ViewBuilder private func content(_ page: Route) -> some View {
         pageView(page).modifier(WindowCardAgents(workspace: workspace))
     }
 
-    @ViewBuilder private func pageView(_ page: Workspace.Page) -> some View {
+    @ViewBuilder private func pageView(_ page: Route) -> some View {
         switch page {
         case .project(let id): ProjectPage(projectID: id)
         case .inbox: ProjectPage(projectID: nil)
         case .archive: ArchivePage()
         case .trash: TrashPage()
         case .agent: AgentPage()
-        case .session(let id): SessionPage(sessionID: id).id(id)
+        case .session(let route): if let id = route.sessionID { SessionPage(sessionID: id).id(id) }
+        default: EmptyView()  // 其余是 iOS 的页
         }
     }
 }
 
 nonisolated private struct PageKey: LayoutValueKey {
-    static let defaultValue: Workspace.Page? = nil
+    static let defaultValue: Route? = nil
 }
 
 /// 叠放挂着的页：当前页铺满，其余的沿用它们离开时的尺寸（窗口、侧栏怎么变都不再向它们提新尺寸，也就不重排）；
 /// 回到前台时按当时的尺寸排一次。不回答对齐查询（默认实现会递归问遍整页子树）。
 private struct PageStackLayout: Layout {
-    let active: Workspace.Page
+    let active: Route
 
     final class Memo {
-        var sizes: [Workspace.Page: CGSize] = [:]
+        var sizes: [Route: CGSize] = [:]
     }
 
     func makeCache(subviews: Subviews) -> Memo { Memo() }
@@ -220,7 +221,7 @@ private struct SwitcherSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let collapsed = workspace.sidebar == .detailOnly
+        let collapsed = workspace.pages.sidebar == .detailOnly
         // 一直挂着（收起时才有宽度）：开合侧栏的那一刻不再现建全部项目的菜单。不用 disabled：环境一变整份菜单又要重算；
         // ⌘1–9 本来就由窗口快捷键（`WorkspaceShortcuts`）接，菜单里的只是提示
         ProjectSwitcher(collapsed: collapsed)
@@ -231,12 +232,12 @@ private struct SwitcherSlot: View {
     }
 }
 
-/// 开合侧栏（`Workspace.toggleSidebar`，⌃⌘S 同）。
+/// 开合侧栏（`MacPages.toggleSidebar`，⌃⌘S 同）。
 private struct SidebarToggle: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("侧栏", systemImage: "sidebar.left") { workspace.toggleSidebar() }
+        Button("侧栏", systemImage: "sidebar.left") { workspace.pages.toggleSidebar() }
             .help("显示或隐藏侧栏（⌃⌘S）")
     }
 }
@@ -275,7 +276,7 @@ private struct EditorLayer: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.isLibraryReady, let id = workspace.presentedCard {
+        if workspace.isLibraryReady, let id = workspace.presses.presented {
             CardEditorPage(cardID: id).id(id)
         }
     }
@@ -287,7 +288,7 @@ private struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.isLibraryReady, workspace.presentedCard == nil, workspace.page.takesCapture {
+        if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.page.takesCapture {
             let searching = workspace.searching
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)
@@ -299,12 +300,12 @@ private struct CaptureSlot: View {
     }
 }
 
-private extension Workspace.Page {
+private extension Route {
     /// 底部输入栏放不放：回收站、Agent 整页与会话页不是记灵感的地方。
     var takesCapture: Bool {
         switch self {
         case .project, .inbox, .archive: true
-        case .trash, .agent, .session: false
+        default: false
         }
     }
 }
@@ -416,7 +417,7 @@ private struct NoticeView: View {
         ZStack {
             if let notice = workspace.notice {
                 HStack(spacing: 0) {
-                    Button { notice.link.map(follow) } label: {
+                    Button { if let link = notice.link { workspace.show(link); workspace.notice = nil } } label: {
                         HStack(spacing: 6) {
                             Label { Text(notice.text) } icon: { Image(systemName: notice.isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill") }
                             if notice.link != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).accessibilityHidden(true) }
@@ -437,14 +438,6 @@ private struct NoticeView: View {
             }
         }
         .animation(Motion.quick, value: workspace.notice)
-    }
-
-    /// 点提示去它说的地方（随手记的落点）。
-    private func follow(_ link: Workspace.Link) {
-        switch link {
-        case .project(let id): workspace.show(id.map(Workspace.Page.project) ?? .inbox)
-        }
-        workspace.notice = nil
     }
 }
 #endif

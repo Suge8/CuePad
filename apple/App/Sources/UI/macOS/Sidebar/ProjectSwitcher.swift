@@ -92,6 +92,8 @@ private struct CurrentPage: View {
         case .agent, .session:
             Image(systemName: "sparkles").accessibilityHidden(true)
             Text("Agent")
+        default:
+            EmptyView()
         }
     }
 }
