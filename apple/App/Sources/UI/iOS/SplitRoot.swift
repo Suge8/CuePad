@@ -93,12 +93,15 @@ private struct AgentPanelButton: View {
 }
 
 /// 右侧 Agent 面板。不套导航栈、不放工具栏：iPadOS 的详情栏只有一条工具栏，面板里的工具栏会并进去。
+/// 它不经 `RouteView`，沉浸式的那几件自己挂：离顶上那一排的距离让在安全区里（用外边距的话列表停在边距下沿、
+/// 滚上去被一刀切齐），内容一直滚到工具栏的玻璃后面，只在状态栏那一条淡出。
 private struct AgentPanel: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
         AgentScreen(inPanel: true).countsAsPiViewer()
-            .padding(.top, 8)
+            .safeAreaPadding(.top, 8)
+            .fadesUnderBars()
             .background(palette.desk.ignoresSafeArea())
     }
 }
