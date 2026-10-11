@@ -8,13 +8,11 @@ extension EnvironmentValues {
     @Entry var composerInk: GlassInk = .legible
 }
 
-/// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份，文字区各用平台的文本视图包装，见 `ComposerField`；图片来源、带上的卡片的菜单与面板
-/// 各平台的部分在 `Composer+iOS`、`Composer+macOS`）（同 ChatGPT、Claude 的"文字在上、工具在下"）：一层玻璃，里面是
-/// （调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：左"＋"（选卡片、相册、拍照）、调用方的小圆钮
-/// （会话回复框的模型与思考强度，只在聚焦时有），右提交钮。空着又没聚焦时收成一行：＋、一行文字区（提交钮不占位）；
-/// 聚焦或有内容时展开成两层，＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
-/// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`：⌘↩、⌘⇧↩、⌘⇧M、⌘⇧E，
-/// 由文字区接）与空着时按 ↑ 调回的那一句（`recall`）。提交钮平时有内容才出现（`submitsEmpty` 见下）。
+/// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；图片来源与带上的卡片的菜单、面板
+/// 在 `Composer+iOS`、`Composer+macOS`）：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：
+/// 左"＋"（选卡片、相册、拍照）、调用方的小圆钮（会话回复框的模型与思考强度，只在聚焦时有），右提交钮。空着又没聚焦时收成一行
+/// （提交钮不占位）；聚焦或有内容时展开成两层，＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文，能"展开编辑"成这次要发的文字。
+/// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`）与空着时按 ↑ 调回的那一句（`recall`）。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
     let prompt: String
@@ -60,12 +58,16 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// "＋"在一行与两层之间挪位时是同一颗（连续移动）。
     @Namespace private var layout
 
+    /// 单行时输入框高 50（字行 + 上下各 14），圆角取一半成胶囊；圆钮一格 50（36 的圆 + 四周的点按区与边距）、离边 8，与外框同心。
+    private static var radius: CGFloat { 25 }
+    private static var inset: CGFloat { 8 }
+    private static var slot: CGFloat { 50 }
+
     private var expanded: Bool { !shrunk && (pinnedOpen || (focused && expandsOnFocus) || !draft.isEmpty(accepting: [.images, .cards])) }
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。有草稿也收（胶囊里写"草稿：第一行"）：翻历史时整宽的两层太占地方。
     private var shrunk: Bool { compact && !focused && !pinnedOpen && !submitsEmpty }
     /// 收着的草稿：文字区藏起（还是同一个，焦点与输入法不断），换成一行预览。
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
-    /// 短胶囊的宽：＋ 加一行短提示。
     private static var compactWidth: CGFloat { 220 }
     private static var headerTransition: AnyTransition {
         .asymmetric(insertion: .opacity.animation(Motion.quick.delay(0.12)), removal: .identity)
@@ -75,7 +77,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
     private var sendVisible: Bool { !shrunk && (hasContent || submitsEmpty) }
 
-    /// 面板此刻列的命令；不弹时为空。
     private var paletteCommands: [PiSlashCommand] {
         guard expanded, dismissedPalette != draft.text else { return [] }
         return PiSlash.matches(draft.text, in: commands) ?? []
@@ -146,15 +147,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 Divider().padding(.horizontal, 12)
             }
             if accepts.contains(.cards) {
-                ForEach(draft.attachments) { outbox in
-                    AttachmentChip(
-                        outbox: outbox, removable: outbox.card != keeps, open: { previewing = outbox }, expand: { expand(outbox) },
-                        drop: { drop(outbox) })
-                        .padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
-                }
+                ForEach(draft.attachments) { chip($0).padding([.horizontal, .top], Self.inset).transition(.opacity) }
             }
             if accepts.contains(.images), !draft.images.isEmpty {
-                ImageStrip(images: $draft.images).padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
+                imageStrip.padding([.horizontal, .top], Self.inset).transition(.opacity)
             }
             // 文字区一直是这一个（换形态时不重建，焦点与输入法组合都不断）；一行时"＋"在它左边
             HStack(alignment: .bottom, spacing: 0) {
@@ -174,7 +170,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     }
                     .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, !expanded && sendVisible ? 2 : 18)
                     .padding(.top, 14).padding(.bottom, expanded ? 4 : 14)
-                    .frame(minHeight: expanded ? nil : ComposerMetrics.slot)
+                    .frame(minHeight: expanded ? nil : Self.slot)
                 if !expanded, sendVisible { sendSlot }
             }
             if expanded {
@@ -191,7 +187,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
         .background {
             if !focused {
-                Color.clear.contentShape(.rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
+                Color.clear.contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
                     .onTapGesture { focus.wrappedValue = true }
                     .accessibilityHidden(true)
             }
@@ -200,8 +196,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
         // 里面的东西裁在玻璃里：变形时淡出中的提交钮、工具排随玻璃一起收，不留在玻璃外。上沿不裁（往上浮出的
         // "长按可马上说"、思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
-        .mask { RoundedRectangle(cornerRadius: ComposerMetrics.radius, style: .continuous).padding(.top, -Self.overhang) }
-        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), interactive: !expanded, ink: composerInk)
+        .mask { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).padding(.top, -Self.overhang) }
+        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded, ink: composerInk)
         .frame(maxWidth: .infinity)
     }
 
@@ -210,7 +206,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         ZStack {
             if sendVisible { send().transition(.scale(scale: 0.6).combined(with: .opacity)) }
         }
-        .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
+        .frame(width: Self.slot, height: Self.slot)
     }
 
     private var plus: some View {
@@ -223,13 +219,76 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             }
         } label: {
             CircleGlyph(fill: palette.fill) { Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(palette.ink) }
-                .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
+                .frame(width: Self.slot, height: Self.slot)
                 .matchedGeometryEffect(id: "plus", in: layout)
         }
         .menuStyle(.button).menuIndicator(.hidden)
         .buttonStyle(.plain)
         .fixedSize()
         .accessibilityLabel("添加")
+    }
+
+    /// 带上的卡片或任务：标题、图片数，可移除；点一下看全文，长按是预览与"展开编辑"。
+    private func chip(_ outbox: Outbox) -> some View {
+        let card = CardText(outbox.content)
+        let removable = outbox.card != keeps
+        let shape = RoundedRectangle(cornerRadius: Self.radius - Self.inset, style: .continuous)
+        return HStack(spacing: 0) {
+            Button { previewing = outbox } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "rectangle.on.rectangle").foregroundStyle(palette.ink3)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(card.title.nonEmpty ?? "图片").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                        if !card.images.isEmpty {
+                            Text("\(card.images.count) 张图片").font(Typography.caption).foregroundStyle(palette.ink3)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                }
+                .padding(.leading, 12).frame(minHeight: 44)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("带上：\(card.title.nonEmpty ?? "图片")")
+            .accessibilityHint("看全文")
+            if removable {
+                Button("不带了", systemImage: "xmark") { drop(outbox) }
+                    .labelStyle(.iconOnly).foregroundStyle(palette.ink3)
+                    .frame(width: 44, height: 44).contentShape(.rect)
+                    .buttonStyle(.plain)
+            }
+        }
+        .background(palette.fill, in: shape)
+        .attachmentContextMenu(outbox, shape: shape) {
+            if removable {
+                Button("展开编辑", systemImage: "text.cursor") { expand(outbox) }
+                Button("不带了", systemImage: "xmark", role: .destructive) { drop(outbox) }
+            }
+        }
+    }
+
+    private var imageStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(draft.images) { image in
+                    ZStack(alignment: .topTrailing) {
+                        image.preview.resizable().scaledToFill()
+                            .frame(width: 64, height: 64)
+                            .clipShape(.rect(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(palette.hair))
+                        Button { draft.images.removeAll { $0.id == image.id } } label: {
+                            Image(systemName: "xmark.circle.fill").symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .black.opacity(0.55)).font(.body)
+                                .frame(width: 44, height: 44, alignment: .topTrailing)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("移除这张图片")
+                    }
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
+            }
+        }
     }
 
     private func drop(_ outbox: Outbox) { draft.attachments.removeAll { $0.id == outbox.id } }
