@@ -54,10 +54,10 @@ nonisolated enum PiChat {
     }
 
     /// Pi 回答上方注脚的内容（`ToolActivityLine` 排成一行）："改了 2 个文件，运行了 5 条命令 · 2 分钟"；
-    /// 没调工具时只有用时（时长写法见 `PiClock.duration`）。失败的调用不在注脚里说：探索时的失败（搜不到、命令报错）是过程，
+    /// 没调工具时只有用时（时长写法见 `PiClock.duration`）。失败的调用与别的一样算进各类，注脚里不单独说：探索时的失败（搜不到、命令报错）是过程，
     /// 展开的清单里每条自己写状态。
     struct RoundNote: Equatable, Sendable {
-        /// 工具摘要从全到简的几种写法（`toolSummaries`），放不下时取下一种；只有失败的工具时为空。
+        /// 工具摘要从全到简的几种写法（`toolSummaries`），放不下时取下一种；没调工具时为空。
         var summaries: [String]
         var took: String
     }
