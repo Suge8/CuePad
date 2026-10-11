@@ -106,10 +106,13 @@ actor PiHistoryPersistence {
     /// 已存的消息跟着读文件的规则更新，不留旧样子。
     private func transcript(of update: PiHistoryUpdate) async throws -> PiTranscript {
         let incremental = update.checkpoint.offset > UInt64(update.bytesRead)
-        // 只有这两种读法需要问 Store：范围内的增量读（没存过要补齐）、范围外的从头读（存过要重写）
-        guard update.includesTranscript == incremental else { return update.transcript }
-        let stored = try await !storage.piMessages(of: update.sessionID).isEmpty
-        return stored != update.includesTranscript ? try PiHistory.index(file: update.file, from: nil).transcript : update.transcript
+        func hasStoredMessages() async throws -> Bool { try await !storage.piMessages(of: update.sessionID).isEmpty }
+        func wholeFile() throws -> PiTranscript { try PiHistory.index(file: update.file, from: nil).transcript }
+        // 范围内的增量读：本机还没有它的对话就补齐
+        if update.includesTranscript, incremental, try await !hasStoredMessages() { return try wholeFile() }
+        // 范围外的从头读：本机存着它的对话就重写
+        if !update.includesTranscript, !incremental, try await hasStoredMessages() { return try wholeFile() }
+        return update.transcript
     }
 
     /// 清理安静了的会话的对话：现在一次，之后每天一次，直到任务取消。清理失败记日志，下次再来。
