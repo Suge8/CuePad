@@ -4,7 +4,7 @@
 #              每次一行 JSON：冷启动到首屏、内存、滚动与开合纸页的帧间隔、⌘K 搜索延迟。
 #   scenarios  持续场景：同一个大库上的 -CuePadBench scenarios（侧栏切项目、Agent 页滚动、会话滚动与流式、打字、悬停、缩放窗口、⌘K 逐字打），
 #              每次一行 JSON，每项的帧间隔与掉帧；库里的会话最好先用 pi-live.py 连到桥上。
-#   interact   单次交互：演示库与大库上的 -CuePadBench interact，逐项量点击回合（主线程 CPU 毫秒）与掉帧，取各次的中位数，
+#   interact   单次交互：演示库与大库上的 -CuePadBench interact，逐项量点击回合（动作发出到画面第一次变的主线程 CPU 毫秒）与掉帧，取各次的中位数，
 #              与交互预算（docs/development.md「交互预算」）比较并列成表；有一项超了就以 1 退出。
 # 说明见 docs/development.md「性能测量」。
 # cold、scenarios 用打开了编译优化的 Debug 构建（测量代码只在 Debug 里，未优化的 SwiftUI 慢得多、数字没有意义），产物在 ${CUEPAD_DERIVED:-apple/.derived}-perf；
@@ -100,6 +100,7 @@ for key in order:
     budget_click, budget_hitches = samples[0]["budgetClickMs"], samples[0]["budgetHitches"]
     ok = click <= budget_click and hitches <= budget_hitches
     over += not ok
-    print(f"{key[0]:6}{key[1]:14}{click:12.1f}{budget_click:7.0f}{total:9.0f}{instructions:8.0f}{heaviest:9.1f}{hitches:6.0f}{budget_hitches:6d}{worst:10.1f}  {'ok' if ok else '超预算'}")
+    unseen = '，未见变化' if not all(r["seen"] for r in samples) else ''
+    print(f"{key[0]:6}{key[1]:14}{click:12.1f}{budget_click:7.0f}{total:9.0f}{instructions:8.0f}{heaviest:9.1f}{hitches:6.0f}{budget_hitches:6d}{worst:10.1f}  {'ok' if ok else '超预算'}{unseen}")
 sys.exit(1 if over else 0)
 PY

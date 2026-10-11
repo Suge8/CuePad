@@ -104,6 +104,8 @@ final class TurnLog {
     struct Turn {
         var dur: CFTimeInterval
         var cpu: Double
+        /// 这一圈醒来的时刻（`CACurrentMediaTime`）。
+        var at: CFTimeInterval
     }
 
     private let port = mach_thread_self()
@@ -112,6 +114,11 @@ final class TurnLog {
     private var since: CFTimeInterval = 0
     private var log: [Turn] = []
     private var recording = false
+    /// 看画面有没有变的那棵图层树（窗口的根图层）与动作发出时它的指纹。
+    private var root: CALayer?
+    private var baseline = 0
+    /// 画面第一次变发生在第几圈（`log` 的下标）；还没变为 nil。
+    private var changedAt: Int?
 
     init() {
         let wake = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.afterWaiting.rawValue, true, Int.min) { _, _ in
@@ -123,7 +130,9 @@ final class TurnLog {
         let sleep = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, true, Int.max) { _, _ in
             MainActor.assumeIsolated {
                 guard self.recording else { return }
-                self.log.append(Turn(dur: CACurrentMediaTime() - max(self.woke, self.since), cpu: mainCPUSeconds(self.port) - self.wokeCPU))
+                self.log.append(Turn(dur: CACurrentMediaTime() - max(self.woke, self.since), cpu: mainCPUSeconds(self.port) - self.wokeCPU, at: max(self.woke, self.since)))
+                // 这一圈的提交已做完：画面和动作发出时不一样了，这一圈就是第一次变（指纹的计算不在任何一圈的 CPU 里）
+                if self.changedAt == nil, let root = self.root, Self.fingerprint(root) != self.baseline { self.changedAt = self.log.count - 1 }
             }
         }
         CFRunLoopAddObserver(CFRunLoopGetMain(), wake, .commonModes)
@@ -131,30 +140,70 @@ final class TurnLog {
     }
 
     /// 从动作发出的这一刻起量：墙钟与 CPU 的起点都在这里（动作在一圈 run loop 的中途发出，那一圈之前的工作不算）。
-    func begin(_ time: CFTimeInterval) {
+    func begin(_ time: CFTimeInterval, root: CALayer?) {
         log = []
         since = time
+        self.root = root
+        baseline = root.map(Self.fingerprint) ?? 0
+        changedAt = nil
         wokeCPU = mainCPUSeconds(port)
         recording = true
     }
 
-    func finish() -> [Turn] {
+    func finish() -> (log: [Turn], changedAt: Int?, start: CFTimeInterval) {
         recording = false
-        return log
+        return (log, changedAt, since)
+    }
+
+    /// 画面的指纹：窗口图层树里看得见的层（不隐藏、不透明）的位置、大小、变换、透明度、底色、边框、圆角、阴影与内容。
+    /// 不含图层对象本身：换了个什么都不画的层不算变。动画只改显示层、不改模型层，所以不会因为转着的图标而变。
+    private static func fingerprint(_ layer: CALayer) -> Int {
+        var hasher = Hasher()
+        func visit(_ layer: CALayer) {
+            guard !layer.isHidden, layer.opacity > 0 else { return }
+            // 没有大小、没有内容、没有下级的层什么也不画
+            if layer.bounds.isEmpty, layer.contents == nil, layer.sublayers?.isEmpty != false { return }
+            hasher.combine(layer.position.x)
+            hasher.combine(layer.position.y)
+            hasher.combine(layer.bounds.width)
+            hasher.combine(layer.bounds.height)
+            hasher.combine(layer.opacity)
+            // 按下、缩放、旋转这类只改变换的变化也要看得到
+            let t = layer.transform
+            for value in [t.m11, t.m12, t.m13, t.m14, t.m21, t.m22, t.m23, t.m24, t.m31, t.m32, t.m33, t.m34, t.m41, t.m42, t.m43, t.m44] {
+                hasher.combine(value)
+            }
+            hasher.combine(layer.backgroundColor)
+            hasher.combine(layer.borderWidth)
+            hasher.combine(layer.borderColor)
+            hasher.combine(layer.cornerRadius)
+            hasher.combine(layer.shadowOpacity)
+            hasher.combine(layer.shadowRadius)
+            if let contents = layer.contents { hasher.combine(ObjectIdentifier(contents as AnyObject)) }
+            for sublayer in layer.sublayers ?? [] { visit(sublayer) }
+        }
+        visit(layer)
+        return hasher.finalize()
     }
 
     /// 一次交互的指标行（两端同一份键名）：
-    /// - clickMs：动作发出到主线程第一次回到空闲的 CPU 毫秒（只取第一圈 ≥2ms 的 run loop；CPU 不会比墙钟长，所以取两者小的）。
-    /// - totalMs、maxTurnMs：动作后量的这段时间里主线程 CPU 的总数与最重的一圈；heavy 是 ≥8ms 的各圈。
+    /// - clickMs：动作发出到画面第一次变（含这次变化的第一帧提交）为止，主线程的全部 CPU 毫秒，跨多圈求和；挪到下一圈的活照样算进去，直到画面第一次变
+    ///   （CPU 不会比墙钟长，每圈取两者小的）。画面在量的这段时间里一直没变时 `seen` 为 false，clickMs 是整段的合计。
+    /// - visibleTurns：clickMs 里有几圈。
+    /// - totalMs、maxTurnMs：动作后量的这段时间里主线程 CPU 的总数与最重的一圈；heavy 是 ≥3ms 的各圈（几毫秒醒来、几毫秒 CPU）。
     /// - instructionsM：进程在这段时间里执行的指令数（百万）。
-    static func metrics(_ log: [Turn], instructions: Double, frames: [String: Any]) -> [String: Any] {
+    static func metrics(_ turns: (log: [Turn], changedAt: Int?, start: CFTimeInterval), instructions: Double, frames: [String: Any]) -> [String: Any] {
         func ms(_ value: Double) -> Double { (value * 10_000).rounded() / 10 }
-        let click = log.first { $0.dur >= 0.002 }
+        let log = turns.log
+        let visible = log.prefix((turns.changedAt ?? log.count - 1) + 1)
         return [
-            "clickMs": ms(min(click?.cpu ?? 0, click?.dur ?? 0)),
+            "clickMs": ms(visible.reduce(0) { $0 + min($1.cpu, $1.dur) }),
+            "visibleTurns": visible.count,
+            "seen": turns.changedAt != nil,
             "totalMs": ms(log.reduce(0) { $0 + min($1.cpu, $1.dur) }),
             "maxTurnMs": ms(log.map { min($0.cpu, $0.dur) }.max() ?? 0),
-            "heavy": log.filter { $0.dur >= 0.008 }.map { ms(min($0.cpu, $0.dur)) },
+            // ≥3ms 的各圈：[动作发出后第几毫秒醒来, 这一圈的 CPU 毫秒]
+            "heavy": log.filter { min($0.cpu, $0.dur) >= 0.003 }.map { [((($0.at - turns.start) * 1000).rounded()), ms(min($0.cpu, $0.dur))] },
             "instructionsM": ((instructionsMillions() - instructions) * 10).rounded() / 10,
             "hitches": frames["hitches"] ?? 0,
             "worstMs": frames["worstFrameMs"] ?? 0,

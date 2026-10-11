@@ -7,8 +7,8 @@ import QuartzCore
 /// `-CuePadBench interact`：单次交互那一下的主线程耗时，逐项与预算（docs/development.md「交互预算」）比较，
 /// 每项结果作为一行 `INTERACT {json}` 打到标准输出，量完退出。配 `-CuePadDemo YES`（演示库）或 `-CuePadSeed perf`（大库）。
 /// 动作就是点击、快捷键最终调用的工作区方法（`show`、`openCard`、`toggle`、`toggleSidebar`），不经事件投递（那一段只有 1～5ms）。
-/// - **点击回合**：动作发出到主线程第一次回到空闲（SwiftUI 更新、布局、提交都在里面）的主线程 CPU 毫秒，只取第一圈 ≥2ms 的 run loop；
-///   CPU 时间不随机器忙闲变，墙钟会。
+/// - **点击回合**：动作发出到画面第一次变（含这次变化的第一帧提交）为止，主线程的全部 CPU 毫秒，跨多圈 run loop 求和：挪到下一帧的活照样算进去，
+///   直到画面第一次变（画面的变化看窗口图层树里看得见的层，见 `TurnLog`）；CPU 时间不随机器忙闲变，墙钟会。
 /// - **合计、最重一圈、指令数**：动作后 800ms 里主线程 CPU 的总数与最重的一圈（点击回合小而合计大，是活被挪到了后面的帧里，不是没了）；进程执行的指令数（百万）不随机器忙闲变，前后对比以它为准。两端同一份探针与键名（`Probes.swift`）。
 /// - **掉帧**：动作后 800ms 内窗口 display link 相邻两次回调间隔超过 1.5 帧的次数与最长一次（毫秒）。
 /// 开头把本实例调到前台：后台量的数字偏乐观（前台才有玻璃等实际合成），所以会抢一下焦点，量完退出。
@@ -101,11 +101,10 @@ enum InteractionBench {
         let recorder = FrameRecorder()
         recorder.start(in: view)
         let instructions = instructionsMillions()
-        turns.begin(CACurrentMediaTime())
+        turns.begin(CACurrentMediaTime(), root: view.window?.contentView?.superview?.layer ?? view.layer)
         action()
         try? await Task.sleep(for: .milliseconds(800))
-        let log = turns.finish()
-        var row = TurnLog.metrics(log, instructions: instructions, frames: recorder.stop())
+        var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())
         row["name"] = name
         row["budgetClickMs"] = budgets[name]?.clickMs ?? 0
         row["budgetHitches"] = budgets[name]?.hitches ?? 0

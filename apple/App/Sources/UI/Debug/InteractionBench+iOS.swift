@@ -157,11 +157,10 @@ enum IOSInteractionBench {
         recorder.start()
         let wall = Date().timeIntervalSince1970
         let instructions = instructionsMillions()
-        turns.begin(CACurrentMediaTime())
+        turns.begin(CACurrentMediaTime(), root: Self.window?.layer)
         action()
         try? await Task.sleep(for: window)
-        let log = turns.finish()
-        var row = TurnLog.metrics(log, instructions: instructions, frames: recorder.stop())
+        var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())
         // 动作发出的时刻（与 xctrace 录制对时）
         row["at"] = wall
         return row
