@@ -12,12 +12,18 @@ struct TasksPanel: View {
     @State private var board: TaskBoard?
     @State private var showsCompleted = false
 
-    /// 顶层任务多到面板放不下时（行至少 34pt，640pt 的面板里二十条就满了）行按需建、面板定高：
+    /// 看得见的行（含默认展开的子任务，"最近完成"展开时再加上它）多到面板放不下时（行至少 34pt，640pt 的面板里二十行就满了）行按需建、面板定高：
     /// 普通栈要在打开的那一圈把上百行都量一遍（大库上约 150ms）。不多时照旧由内容撑开高度，懒加载栈在高度跟着内容变时会漏画。
     private static let lazyFrom = 20
 
+    private func isLazy(_ board: TaskBoard?) -> Bool {
+        guard let board else { return false }
+        let open = board.tree.rows(of: (board.inProgress + board.todo).map(\.id), toggled: []).count
+        return open + (showsCompleted ? board.done.count : 0) >= Self.lazyFrom
+    }
+
     var body: some View {
-        let lazy = (board.map { $0.inProgress.count + $0.todo.count } ?? 0) >= Self.lazyFrom
+        let lazy = isLazy(board)
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("任务").font(Typography.sectionTitle)
@@ -46,34 +52,42 @@ struct TasksPanel: View {
     }
 
     // 任务不多时不用 LazyVStack：面板高度随内容撑开，懒加载栈在行于两组之间移动、展开"最近完成"时会漏画或留下旧状态的行。
-    private func list(_ board: TaskBoard, lazy: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if board.inProgress.isEmpty && board.todo.isEmpty {
-                Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").font(Typography.secondary).foregroundStyle(.secondary)
-                    .padding(.horizontal, 20).padding(.vertical, 12)
-            }
-            section("进行中", board.inProgress, count: board.counts.inProgress, in: board, lazy: lazy)
-            section("待办", board.todo, count: board.counts.todo, in: board, lazy: lazy)
-            if !board.done.isEmpty {
-                HStack {
-                    Button {
-                        withAnimation(Motion.quick) { showsCompleted.toggle() }
-                    } label: {
-                        Label("最近完成 \(board.counts.done)", systemImage: showsCompleted ? "chevron.down" : "chevron.right")
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
-                    Spacer()
-                    Button("全部归档") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
-                        .buttonStyle(.plain).help("把最近完成的任务全部归档：不占列表，照样搜得到")
-                }
-                .font(Typography.label).foregroundStyle(.secondary)
-                .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4)
-                if showsCompleted { rows(board.done) }
-            }
+    @ViewBuilder private func list(_ board: TaskBoard, lazy: Bool) -> some View {
+        if lazy {
+            LazyVStack(alignment: .leading, spacing: 0) { listContent(board, lazy: true) }
+                .padding(.bottom, 12)
+                .animation(Motion.quick, value: [board.inProgress, board.todo, board.done].flatMap { $0.map(\.id) })
+        } else {
+            VStack(alignment: .leading, spacing: 0) { listContent(board, lazy: false) }
+                .padding(.bottom, 12)
+                .animation(Motion.quick, value: [board.inProgress, board.todo, board.done].flatMap { $0.map(\.id) })
         }
-        .padding(.bottom, 12)
-        .animation(Motion.quick, value: [board.inProgress, board.todo, board.done].flatMap { $0.map(\.id) })
+    }
+
+    @ViewBuilder private func listContent(_ board: TaskBoard, lazy: Bool) -> some View {
+        if board.inProgress.isEmpty && board.todo.isEmpty {
+            Text(board.done.isEmpty ? "还没有任务，在上面写一条" : "全部完成了").font(Typography.secondary).foregroundStyle(.secondary)
+                .padding(.horizontal, 20).padding(.vertical, 12)
+        }
+        section("进行中", board.inProgress, count: board.counts.inProgress, in: board, lazy: lazy)
+        section("待办", board.todo, count: board.counts.todo, in: board, lazy: lazy)
+        if !board.done.isEmpty {
+            HStack {
+                Button {
+                    withAnimation(Motion.quick) { showsCompleted.toggle() }
+                } label: {
+                    Label("最近完成 \(board.counts.done)", systemImage: showsCompleted ? "chevron.down" : "chevron.right")
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(showsCompleted ? "已展开" : "已折叠")
+                Spacer()
+                Button("全部归档") { workspace.attempt { try await workspace.archiveCompletedTasks() } }
+                    .buttonStyle(.plain).help("把最近完成的任务全部归档：不占列表，照样搜得到")
+            }
+            .font(Typography.label).foregroundStyle(.secondary)
+            .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 4)
+            if showsCompleted { rows(board.done) }
+        }
     }
 
     @ViewBuilder private func section(_ title: String, _ items: [TaskBoard.Row], count: Int, in board: TaskBoard, lazy: Bool) -> some View {
