@@ -6,7 +6,6 @@ import SwiftUI
 struct RecapPreview: View {
     let session: PiSessionState
     @Environment(\.palette) private var palette
-    @Environment(\.chatInsets) private var insets
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -16,8 +15,8 @@ struct RecapPreview: View {
                 if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
             } else if !session.hasStarted, session.state != .known(.ended) {
                 EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")
-                    // 占满对话区（扣掉上下栏让出的高与上下留白），吉祥物落在可见区中间
-                    .containerRelativeFrame(.vertical) { length, _ in max(0, length - insets.top - insets.bottom - 2 * ChatLayout.edge) }
+                    // 占满对话区（扣掉上下留白），吉祥物落在可见区中间
+                    .containerRelativeFrame(.vertical) { length, _ in max(0, length - 2 * ChatLayout.edge) }
                     .frame(maxWidth: .infinity)
             }
         }
@@ -32,12 +31,7 @@ struct ReplyBlock: View {
     let meta: PiChat.RoundNote?
     let tools: PiChatMessage.Tools?
     let session: PiSessionState
-    @Environment(\.palette) private var palette
     @State private var selecting = false
-
-    /// 长按预览的大小：长回答只露开头，不撑满屏。
-    private static let previewWidth: CGFloat = 360
-    private static let previewHeight: CGFloat = 420
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -45,19 +39,7 @@ struct ReplyBlock: View {
             MarkdownText(source: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .chatContextMenu {
-            #if os(iOS)
-            MessageMenu(text: text, kind: .reply, session: session) { selecting = true }
-            #else
-            MessageMenu(text: text, kind: .reply, session: session)
-            #endif
-        } preview: {
-            MarkdownText(source: text).padding(16)
-                .frame(width: Self.previewWidth, alignment: .leading)
-                .frame(maxHeight: Self.previewHeight, alignment: .top)
-                .clipped()
-                .background(palette.paper)
-        }
+        .contextMenu { MessageActions(text: text, kind: .reply, session: session, selectText: { selecting = true }) }
         #if os(iOS)
         .sheet(isPresented: $selecting) { SelectableTextSheet(text: text) }
         #endif

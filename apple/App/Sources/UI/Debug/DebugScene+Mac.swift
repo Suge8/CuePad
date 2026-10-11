@@ -36,7 +36,10 @@ extension DebugScene {
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
-            if let id = sessionToOpen { workspace.show(.session(id)) }
+            if let id = sessionToOpen {
+                workspace.show(.session(id))
+                if defaults.bool(forKey: "CuePadStream") { Task { await stream(id, store: workspace.services.store) } }
+            }
         default: break
         }
         switch defaults.string(forKey: "CuePadBench") {

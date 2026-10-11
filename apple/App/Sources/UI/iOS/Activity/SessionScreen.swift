@@ -3,8 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 一个 Pi 会话的对话（Agent 页的会话行、锁屏通知、"发到 Mac"选好会话后都进这里），聊天式：
-/// 顶上与返回钮同排的一块玻璃：会话名，下面一行小字"所在 · 状态 · 计时"；中间是对话（`PiConversation`，子代理列在末尾的进展下），打开停在最新；
-/// 底部是回复框（标签栏收起，回复框独占底部），等你确认时问题卡固定在它上方。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
+/// 顶上与返回钮同排的一块玻璃：会话名，下面一行小字"所在 · 状态 · 计时"；中间是对话（`SessionChat`，与 Mac 同一个），打开停在最新；
+/// 底部是浮在对话上的回复框（标签栏收起，回复框独占底部），等你确认时问题卡固定在它上方；对话滚到顶栏与回复框的玻璃后面都清楚可见。已结束的会话也能回复（Mac 在后台把它恢复起来再送达）。
 /// 很久以前的会话没有对话时请 Mac 补写，补写中写一句"正在从 Mac 取对话…"。
 /// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的内容，底部换成说明。
 struct SessionScreen: View {
@@ -20,10 +20,6 @@ struct SessionScreen: View {
     @State private var follow = ChatFollow()
     @State private var confirmingEnd: PiSessionState?
     @State private var renaming: PiSessionState?
-    /// 刚从刻度滑条跳到的那条你的话，短暂描一圈。
-    @State private var highlight = ChatHighlight()
-    /// 回复框下面那一段的高（横条区或键盘，加回复框离它的空隙）：对话在这里不露出来。
-    @State private var underBar: CGFloat = 0
     private static let barGap: CGFloat = 8
 
     /// `seed`：推入前读好的这一页（`Navigation.openSession`），首帧即用，之后以 Store 的观察流为准。
@@ -38,45 +34,23 @@ struct SessionScreen: View {
     private var session: PiSessionState? { digest?.session ?? lastSeen }
     /// 此刻要显示的结束（还在路上的，或没能结束、之后没再发过别的），与 Agent 页同一条规则。
     private var shownEnd: DeliveryRequest? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? []) }
-    private var fetchingTranscript: Bool {
-        digest?.deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } == true
-    }
 
     var body: some View {
-        ChatScroll(
-            followKey: PiConversation.followKey(session: session, messages: digest?.messages ?? [], previews: digest?.previews ?? [], deliveries: digest?.deliveries ?? []),
-            // iPad 上一行不超过阅读宽度，居中
-            readingWidth: Self.readingWidth, inset: 16, clearsBelow: underBar + Self.barGap, follow: $follow
-        ) {
+        Group {
             // 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入
             if let digest {
                 if let session {
-                    PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
+                    SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 16, follow: $follow)
                 } else {
                     EmptyState(mascot: .search, title: "找不到这个会话", message: "Mac 上这个会话的文件可能已经删掉了")
-                    .padding(.top, 60)
-                    .chatRow()
+                        .padding(.horizontal, 16)
+                        .frame(maxHeight: .infinity)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .scrollDismissesKeyboard(.interactively)
-        .environment(\.chatHighlight, highlight.id)
-        .overlay(alignment: .trailing) {
-            let marks = ChatScrubber.marks(PiChat.entries(digest?.messages ?? [], previews: digest?.previews ?? []))
-            if !marks.isEmpty {
-                ChatScrubber(marks: marks, scrolling: follow.scrolling) { id in
-                    follow.jump(to: id)
-                    highlight.flash(id)
-                }
-            }
-        }
-        .overlay {
-            if fetchingTranscript {
-                Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(palette.ink3)
-            }
-        }
-        // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）；点状态栏是系统的回到顶端，
-        // 倒置的对话里顶端就是最新处，所以也会出现
+        // 看历史时标题与"⋯"让开（返回钮留着），点标题原来的位置唤出，回到最新自动出现（`ChatFollow.showsHeader`）
         .floatingHeader(digest?.title ?? session?.title ?? "", hidden: !follow.showsHeader, reveal: { follow.reveal() },
                         explanation: session.flatMap { PiShown($0).explanation }) {
             if shownEnd?.isOpen == true {
@@ -130,10 +104,10 @@ struct SessionScreen: View {
                 .frame(maxWidth: Self.readingWidth)
                 .frame(maxWidth: .infinity)
                 .animation(Motion.quick, value: session.question)
+                // 浮在整片对话上、自己也写着字：玻璃里垫实底，背后的字透不过来（`GlassInk.solid`）
+                .environment(\.composerInk, .solid)
             }
         }
-        // 回复框那一层以外的下安全区（横条区或键盘）
-        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { underBar = $0 }
         .ownsBottomEdge()
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
                    into: $digest, onError: workspace.fail) { [id, lastSeen] store in
@@ -152,7 +126,7 @@ struct SessionScreen: View {
     /// 很久以前的会话没有对话：请它所在的 Mac 补写一次（同步不通时等通了再说）。
     private func askForTranscriptIfNeeded() {
         guard !askedForTranscript, let digest, let session = digest.session, services.reachesPiHost,
-              PiChat.needsTranscript(session, messages: digest.messages), !fetchingTranscript else { return }
+              PiChat.needsTranscript(session, messages: digest.messages), !digest.fetchingTranscript else { return }
         askedForTranscript = true
         workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }

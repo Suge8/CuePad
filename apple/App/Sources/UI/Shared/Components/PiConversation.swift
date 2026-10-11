@@ -11,46 +11,24 @@ struct PiConversation: View {
     let messages: [PiChatMessage]
     var previews: [PiPreview] = []
     var deliveries: [DeliveryRequest] = []
-    /// 只排最近这么多条（Mac）；更早的点最上面一行再排开 `Self.step` 条。nil 是全排（iOS 靠懒加载）。
-    var window: Binding<Int>?
+    /// 只排最近这么多条（不用懒加载栈，见 `ChatScroll`）；更早的由 `showEarlier` 再排开 `Self.step` 条。
+    let window: Int
+    var showEarlier: () -> Void = {}
     @Environment(\.palette) private var palette
-    @Environment(\.chatInverted) private var inverted
-    @Environment(\.chatAtNewest) private var atNewest
-    @Environment(\.chatInsets) private var insets
     @Environment(\.chatHighlight) private var highlight
     @State private var opened: PiPreview?
 
     var body: some View {
-        // iOS 懒加载：只排看得见的几条（整段排开时，长对话的每条回答都在推入那一刻排版、栅格化，转场的前一百多毫秒画不出来），
-        // 在倒置的滚动区里按新到旧给出，懒加载从最新那条起排。
-        // Mac 不用懒加载（见 `ChatStack`）：只排最近几条（`window`），位置才是确定的
         let all = ChatItem.of(PiChat.entries(messages, previews: previews))
-        let entries = window.map { Array(all.suffix($0.wrappedValue)) } ?? all
-        let outgoing = PiChat.outgoing(deliveries, messages: messages)
-        ChatStack(alignment: .leading, spacing: Self.spacing) {
-            if inverted {
-                // 让出底下回复框与键盘占的高（`ChatScroll`）；它和第一条之间本有一份行距，扣掉
-                Color.clear.frame(height: max(0, insets.bottom - Self.spacing)).accessibilityHidden(true)
-                // 读屏仍按先后读：越早的越先
-                ending.chatRow().accessibilitySortPriority(-Double(entries.count + outgoing.count))
-                ForEach(Array(outgoing.enumerated()).reversed(), id: \.element.id) { index, request in
-                    OutgoingBubble(request: request, session: session).chatRow().accessibilitySortPriority(-Double(entries.count + index))
-                }
-                ForEach(Array(entries.enumerated()).reversed(), id: \.element.id) { index, item in
-                    row(item).chatRow().accessibilitySortPriority(-Double(index))
-                }
-                if entries.isEmpty { RecapPreview(session: session).chatRow() }
-                // 最早那头让出顶上的栏（同上）
-                Color.clear.frame(height: max(0, insets.top - Self.spacing)).accessibilityHidden(true)
-            } else {
-                if let window, entries.count < all.count {
-                    EarlierRow(hidden: all.count - entries.count, fillsViewport: atNewest, window: window)
-                }
-                if entries.isEmpty { RecapPreview(session: session) }
-                ForEach(entries) { item in row(item) }
-                ForEach(outgoing) { request in OutgoingBubble(request: request, session: session) }
-                ending
+        let entries = Array(all.suffix(window))
+        VStack(alignment: .leading, spacing: Self.spacing) {
+            if entries.count < all.count {
+                EarlierRow(hidden: all.count - entries.count, action: showEarlier)
             }
+            if entries.isEmpty { RecapPreview(session: session) }
+            ForEach(entries) { item in row(item) }
+            ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
+            ending
         }
         // 刻度滑条按 id 跳到你的某句话（`ChatFollow.jump`）：滚动区只认滚动目标布局里的行
         .scrollTargetLayout()
@@ -76,8 +54,9 @@ struct PiConversation: View {
     @ViewBuilder private func row(_ entry: PiChatEntry) -> some View {
         switch entry.role {
         case .user:
-            UserBubble(text: Dotted(entry.text), highlighted: entry.id == highlight)
-                .chatContextMenu { MessageMenu(text: entry.text, kind: .mine, session: session) } preview: { BubbleText(text: Dotted(entry.text)).padding(4) }
+            UserBubble(text: Dotted(entry.text), highlighted: entry.id == highlight) {
+                MessageActions(text: entry.text, kind: .mine, session: session)
+            }
                 // 你的话开始新的一轮：轮与轮之间比轮内（你的话与它的回答）松一截
                 .padding(.top, Self.turnGap)
         case .pi:
@@ -101,36 +80,23 @@ struct PiConversation: View {
 }
 
 
-#if os(macOS)
-/// Mac 的对话整段排开最近几条、不用懒加载栈：懒加载栈靠估计高度定位，数据晚到或内容变化后再滚到最新，可见区里的行有时排不出来
-/// （页面空白，滚一下才出现）；整段排开位置是确定的。代价是排开的每条都要当场排版，所以只排最近几条。
-typealias ChatStack = VStack
-#else
-private typealias ChatStack = LazyVStack
-#endif
-
-
-/// 排开的最上面一行：还有更早的对话，点一下再排开一段。贴着最新时它进了可见区，说明排开的几条铺不满一屏，自动再排开。
+/// 排开的最上面一行：还有更早的对话。往上翻快到这里时会自动再排开一段（`ChatFollow.nearOldest`），点它（读屏）也能排开。
 struct EarlierRow: View {
     let hidden: Int
-    let fillsViewport: Bool
-    @Binding var window: Int
+    let action: () -> Void
     @Environment(\.palette) private var palette
-    @State private var visible = false
 
     var body: some View {
-        Button("更早的 \(min(hidden, PiConversation.step)) 条") { window += PiConversation.step }
+        Button("更早的 \(min(hidden, PiConversation.step)) 条", action: action)
             .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity, minHeight: 28)
-            .onScrollVisibilityChange { visible = $0 }
-            .task(id: [visible ? 1 : 0, window]) { if visible, fillsViewport { window += PiConversation.step } }
     }
 }
 
 
 extension PiConversation {
-    /// Mac 只排最近几条（`window`）：要跳到 `id` 那一条（刻度滑条）时至少要排开几条。
+    /// 只排最近几条（`window`）：要跳到 `id` 那一条（刻度滑条）时至少要排开几条。
     static func window(reaching id: UUID, messages: [PiChatMessage], previews: [PiPreview]) -> Int? {
         let items = ChatItem.of(PiChat.entries(messages, previews: previews))
         return items.firstIndex { $0.id == id }.map { items.count - $0 }

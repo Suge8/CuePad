@@ -14,6 +14,9 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     /// 没能送达的话有几句（会话列表查询带出的同一个数，`PiSessionListItem.undelivered`）。
     var undelivered = 0
 
+    /// 正在请 Mac 补写对话（很久以前的会话没有对话时）。
+    var fetchingTranscript: Bool { deliveries.contains { $0.mode == .known(.transcript) && $0.isOpen } }
+
     /// 顶栏写的会话名：改名在路上时是新名（`PiRename`，与会话行读同一条：发给它的最近一条改名）。
     var title: String? {
         session.map { PiRename.title(of: $0, request: DeliveryRequest.latestRename(in: deliveries)) }

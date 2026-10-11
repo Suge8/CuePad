@@ -32,7 +32,7 @@ struct Prewarm: View {
             switch step {
             case .conversation:
                 ChatScroll(followKey: 0, readingWidth: 760, inset: 24) {
-                    PiConversation(session: Self.session, messages: Self.messages)
+                    PiConversation(session: Self.session, messages: Self.messages, window: PiConversation.firstWindow)
                 }
             case .replyBar: PiReplyBar(session: Self.session, config: nil, compact: false, stopping: false) {}
             case .newSession: NewSessionForm { _ in }
