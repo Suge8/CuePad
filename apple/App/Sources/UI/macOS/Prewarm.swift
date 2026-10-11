@@ -11,7 +11,7 @@ struct Prewarm: View {
     @State private var step = Step.idle
 
     private enum Step: CaseIterable {
-        case idle, agentPage, conversation, replyBar, newSession, done
+        case idle, conversation, replyBar, newSession, done
     }
 
     /// 回复框要一个会话：已结束的、不属于任何项目的占位，不写进任何地方。
@@ -48,8 +48,10 @@ struct Prewarm: View {
             guard workspace.isLibraryReady else { return }
             // 首屏出来、用户还没动手：等一会儿再开始
             try? await Task.sleep(for: .seconds(2))
+            workspace.premount(.agent)
+            await NextFrame.wait()
+            await NextFrame.wait()
             for next in Step.allCases.dropFirst() {
-                if next == .agentPage { workspace.premount(.agent) }
                 step = next
                 await NextFrame.wait()
                 await NextFrame.wait()
