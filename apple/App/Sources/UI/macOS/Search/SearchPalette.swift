@@ -39,9 +39,18 @@ struct SearchPalette: View {
 
     var body: some View {
         panel
-            .onAppear {
+            // 常驻（`keptPanel`）：开合不重建，每次开时聚焦，收起时清掉上一次的查询与结果
+            .onChange(of: active, initial: true) {
                 focused = active
-                if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
+                if active {
+                    if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
+                } else {
+                    query = PaletteQuery()
+                    data = nil
+                    sessions = nil
+                    selection = nil
+                    sessionSelection = nil
+                }
             }
             .onChange(of: query.text) {
                 query.pages = 1

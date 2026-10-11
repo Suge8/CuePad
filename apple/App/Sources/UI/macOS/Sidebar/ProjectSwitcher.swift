@@ -31,7 +31,7 @@ struct ProjectSwitcher: View {
             Button { workspace.show(.trash) } label: { Label("回收站", systemImage: "trash").labelStyle(.titleAndIcon) }
         } label: {
             HStack(spacing: 6) {
-                current(projects)
+                CurrentPage(projects: projects)
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary).accessibilityHidden(true)
             }
             .font(Typography.toolbarLabel.weight(.semibold))
@@ -43,7 +43,18 @@ struct ProjectSwitcher: View {
     }
 
     /// 菜单项里 SwiftUI 的前景色不生效，用带项目色的非模板符号图。
+    /// 按（符号，颜色）缓存：菜单每次重算（侧栏收起、每次开合）都要给每个项目配一张，现建一张约半毫秒。
+    private static var menuIcons: [String: NSImage] = [:]
+
     private static func menuIcon(_ project: Project) -> NSImage {
+        let key = "\(project.icon)|\(project.color)"
+        if let cached = menuIcons[key] { return cached }
+        let image = makeMenuIcon(project)
+        menuIcons[key] = image
+        return image
+    }
+
+    private static func makeMenuIcon(_ project: Project) -> NSImage {
         let color = NSColor(Palette.projectTint(project.color))
         let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
             .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
@@ -52,8 +63,14 @@ struct ProjectSwitcher: View {
         image.isTemplate = false
         return image
     }
+}
 
-    @ViewBuilder private func current(_ projects: [Project]) -> some View {
+/// 胶囊里的当前页：单独一个视图读 `workspace.page`，切页时只重算它，不重算上面那份包含全部项目的菜单。
+private struct CurrentPage: View {
+    let projects: [Project]
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
         switch workspace.page {
         case .project(let id):
             let project = projects.first { $0.id == id }

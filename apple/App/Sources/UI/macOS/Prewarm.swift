@@ -4,13 +4,13 @@ import SwiftUI
 
 /// 首次使用才付的一次性成本（视图类型、玻璃材质、文本平台控件、菜单与弹出框的桥接）在启动后空闲时先付掉：
 /// 把这些视图在窗口里隐形地挂两帧再卸下（不聚焦、不订阅，`pageActive` 为 false），每样一段，不挤在一个回合里。
-/// 用户第一次点会话、点新会话时，付的就是"第二次"的价钱（右键菜单与 ⌘K 的第一次另议：建一个不弹出的菜单没有收益，⌘K 随浮层机制走）。
+/// 用户第一次点会话、点新会话时，付的就是"第二次"的价钱（右键菜单的第一次另议：建一个不弹出的菜单没有收益；⌘K 面板不在这里，启动后空闲时直接常驻挂上，见 `keptPanel`）。
 struct Prewarm: View {
     @Environment(Workspace.self) private var workspace
     @State private var step = Step.idle
 
     private enum Step: CaseIterable {
-        case idle, palette, agentPage, conversation, replyBar, newSession, done
+        case idle, agentPage, conversation, replyBar, newSession, done
     }
 
     /// 回复框要一个会话：已结束的、不属于任何项目的占位，不写进任何地方。
@@ -29,7 +29,6 @@ struct Prewarm: View {
     var body: some View {
         ZStack {
             switch step {
-            case .palette: SearchPalette(scope: .constant(.cards))
             case .agentPage: AgentPage()
             case .conversation:
                 ChatScroll(followKey: 0, readingWidth: 760, inset: 24) {
