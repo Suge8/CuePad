@@ -83,7 +83,7 @@ struct PiReplyBar: View {
     private var composer: some View {
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, compact: compact, showsSend: canStop, expandsOnFocus: hasTools, keepsHeader: !queued.isEmpty,
+                cardsFrom: session.projectID, compact: compact, submitsEmpty: canStop, expandsOnFocus: hasTools, keepsHeader: !queued.isEmpty,
                 commands: answering == nil ? session.commands : [], shortcuts: shortcuts, recall: recall,
                 header: {
                     if !compact, !queued.isEmpty { PiQueueStack(requests: queued, folded: Self.foldsQueue && focused) }

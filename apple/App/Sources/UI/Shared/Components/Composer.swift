@@ -72,7 +72,7 @@ enum ComposerSource { case cards, photos, camera, files }
 /// 聚焦或有内容时展开成两层，＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文（长按也有预览），能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`：⌘↩、⌘⇧↩、⌘⇧M、⌘⇧E，
 /// 由文字区接）与空着时按 ↑ 调回的那一句（`recall`）。
-/// 提交钮平时有内容才出现；`showsSend` 时空着也在（收成一行时在文字区右边）——会话回复框在 Agent 跑一轮时那里是"停止"。
+/// 提交钮平时有内容才出现；`submitsEmpty` 时空着也在（收成一行时在文字区右边）——会话回复框在 Agent 跑一轮时那里是"停止"。
 extension EnvironmentValues {
     /// 输入框玻璃的着色：回复框贴在对话下面、对话照样滚到它后面，用 `legible`；浮起的输入框（随手记、新会话、交给 Agent）
     /// 压在整页列表上、整块都是要读的字，由 `FloatingInput` 给 `solid`，工具那一排背后也不透出列表的字块。
@@ -92,8 +92,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     let pinnedOpen: Bool
     /// 没聚焦、没内容时收成短胶囊（＋ 与一行提示），点它照常聚焦展开（会话页在看历史时）。
     let compact: Bool
-    /// 空着也露出提交钮的位置（见上）。
-    let showsSend: Bool
+    /// 空着也能提交：提交钮的位置一直在、快捷键不要求有内容（新会话的第一句话可不填；会话回复框在 Agent 跑一轮时空着的钮是"停止"）。
+    /// 输入框写着"可不填"的，都靠它——空草稿能不能提交只在这里定。
+    let submitsEmpty: Bool
     /// 聚焦就展开成两层。会话回复框只在有工具排（模型、思考强度）时这样：已结束的会话没有工具，聚焦了也保持一行，打了字再长。
     let expandsOnFocus: Bool
     /// 收成一行时头部也留着（会话回复框：排队的话在这块玻璃的上部）；平时头部只在展开时出现。
@@ -126,7 +127,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
-        keeps: UUID? = nil, showsSend: Bool = false, expandsOnFocus: Bool = true, keepsHeader: Bool = false, commands: [PiSlashCommand] = [],
+        keeps: UUID? = nil, submitsEmpty: Bool = false, expandsOnFocus: Bool = true, keepsHeader: Bool = false, commands: [PiSlashCommand] = [],
         shortcuts: [ReplyShortcut: () -> Void] = [:], recall: String? = nil,
         @ViewBuilder header: () -> Header, @ViewBuilder tools: () -> Tools, @ViewBuilder send: () -> Send
     ) {
@@ -135,7 +136,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         self.keepsHeader = keepsHeader
         self.keeps = keeps
         self.commands = commands
-        self.showsSend = showsSend
+        self.submitsEmpty = submitsEmpty
         self.shortcuts = shortcuts
         self.recall = recall
         self.prompt = prompt
@@ -159,7 +160,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private var expanded: Bool { !shrunk && (pinnedOpen || (focused && expandsOnFocus) || !draft.isEmpty(accepting: [.images, .cards])) }
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。有草稿也收（胶囊里写"草稿：第一行"）：翻历史时整宽的两层太占地方。
-    private var shrunk: Bool { compact && !focused && !pinnedOpen && !showsSend }
+    private var shrunk: Bool { compact && !focused && !pinnedOpen && !submitsEmpty }
     /// 收着的草稿：文字区藏起（还是同一个，焦点与输入法不断），换成一行预览。
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
     /// 短胶囊的宽：＋ 加一行短提示。
@@ -171,7 +172,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private static var overhang: CGFloat { 120 }
     private var reservesSend: Bool { Send.self != EmptyView.self }
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
-    private var sendVisible: Bool { reservesSend && !shrunk && (hasContent || showsSend) }
+    private var sendVisible: Bool { reservesSend && !shrunk && (hasContent || submitsEmpty) }
 
     /// 面板此刻列的命令；不弹时为空。
     private var paletteCommands: [PiSlashCommand] {
@@ -181,7 +182,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     /// 此刻能用的快捷键：发送的两种要有内容。
     private func shortcut(_ key: ReplyShortcut) -> (() -> Void)? {
-        [.send, .sendHeld].contains(key) && !hasContent ? nil : shortcuts[key]
+        [.send, .sendHeld].contains(key) && !hasContent && !submitsEmpty ? nil : shortcuts[key]
     }
 
     /// 文字区交来的按键：面板打开时归面板；空着时 ↑ 调回 `recall`。返回是否已处理（没处理的照常输入）。
@@ -456,11 +457,11 @@ extension Composer where Tools == EmptyView {
     init(
         draft: Binding<ComposerDraft>, prompt: String, label: String, focus: FocusState<Bool>.Binding,
         accepts: ComposerKinds = [.images, .cards], cardsFrom: UUID? = nil, pinnedOpen: Bool = false, compact: Bool = false,
-        @ViewBuilder header: () -> Header, @ViewBuilder send: () -> Send
+        submitsEmpty: Bool = false, @ViewBuilder header: () -> Header, @ViewBuilder send: () -> Send
     ) {
         self.init(
             draft: draft, prompt: prompt, label: label, focus: focus, accepts: accepts, cardsFrom: cardsFrom, pinnedOpen: pinnedOpen,
-            compact: compact, header: header, tools: { EmptyView() }, send: send)
+            compact: compact, submitsEmpty: submitsEmpty, header: header, tools: { EmptyView() }, send: send)
     }
 }
 

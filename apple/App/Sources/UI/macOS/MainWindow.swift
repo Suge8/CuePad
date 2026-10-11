@@ -11,7 +11,7 @@ struct MainWindow: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $workspace.sidebar) {
             Sidebar()
-                // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌘\ 同一个入口
+                // 系统的侧栏钮走 AppKit 的分栏动画（约 300ms 里每帧整窗重排）；换成自己的（`SidebarToggle`），与 ⌃⌘S 同一个入口
                 .toolbar(removing: .sidebarToggle)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 320)
         } detail: {
@@ -232,13 +232,13 @@ private struct SwitcherSlot: View {
     }
 }
 
-/// 开合侧栏（`Workspace.toggleSidebar`，⌘\ 同）。
+/// 开合侧栏（`Workspace.toggleSidebar`，⌃⌘S 同）。
 private struct SidebarToggle: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
         Button("侧栏", systemImage: "sidebar.left") { workspace.toggleSidebar() }
-            .help("显示或隐藏侧栏（⌘\\）")
+            .help("显示或隐藏侧栏（⌃⌘S）")
     }
 }
 
@@ -354,20 +354,28 @@ private struct TasksButton: View {
     }
 }
 
-/// 窗口级快捷键：⌘\ 侧栏、⌘1–9 切项目、⌘N 新建卡片。⌘K 搜索、⌘⇧T 任务面板与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
+extension Workspace {
+    /// ⌘1–9：打开侧栏里此刻的第 number 个项目。快捷键只绑数字，按下的那一刻才按项目目录当前的顺序取：
+    /// 顺序随最近活动与置顶变化，绑在某个项目上会在顺序变了之后打开错的。没有那么多个项目时什么也不做。
+    func showProject(number: Int) {
+        guard let projects = catalog?.projects, projects.indices.contains(number - 1) else { return }
+        show(.project(projects[number - 1].id))
+    }
+}
+
+/// 窗口级快捷键：⌘1–9 切项目、⌘N 新建卡片。⌘K 搜索、⌘⇧T 任务面板、⌃⌘S 侧栏与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
 /// ⌘1–9 的唯一处理者在这里：工具栏的项目切换菜单收起时不响应其菜单项的快捷键（实测），菜单里的 ⌘ 只是提示。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
 
     var body: some View {
         ZStack {
-            Button("侧栏") { workspace.toggleSidebar() }.keyboardShortcut("\\")
             if workspace.isLibraryReady {
                 Button("记一条灵感") { newCard() }.keyboardShortcut("n")
             }
-            ForEach(Array((workspace.catalog?.projects ?? []).prefix(9).enumerated()), id: \.offset) { index, project in
-                Button("项目 \(index + 1)") { workspace.show(.project(project.id)) }
-                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
+            ForEach(Array(1...9).prefix(workspace.catalog?.projects.count ?? 0), id: \.self) { number in
+                Button("项目 \(number)") { workspace.showProject(number: number) }
+                    .keyboardShortcut(KeyEquivalent(Character("\(number)")))
             }
         }
         .opacity(0)

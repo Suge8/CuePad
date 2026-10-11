@@ -3,13 +3,22 @@ import Foundation
 
 /// 随手记的文案（iOS 浮起的输入框、Mac 底部输入栏与菜单栏面板共用）：记下的都是灵感；落点写在头部的胶囊上，占位只写"记下灵感"，
 /// 只有 Mac 底部输入栏收成一行（没有胶囊）时占位带上落点；记下后的提示写明落点，点它去那里。
+/// Mac 上 ↩ 是换行、⌘↩ 才记下，占位里写明；手机上右下的钮就是记下，不写。
 nonisolated enum CaptureCopy {
     static let inbox = "未分类"
-    static let prompt = "记下灵感"
+    static var prompt: String { "记下灵感" + keyHint }
 
     static func destination(_ project: Project?) -> String { project?.name ?? inbox }
 
-    static func placeholder(to destination: String) -> String { "\(prompt) → \(destination)" }
+    static func placeholder(to destination: String) -> String { "记下灵感 → \(destination)" + keyHint }
+
+    private static var keyHint: String {
+        #if os(macOS)
+        "（⌘↩ 记下）"
+        #else
+        ""
+        #endif
+    }
 
     static func saved(to destination: String) -> String { "已记到 \(destination)" }
 }

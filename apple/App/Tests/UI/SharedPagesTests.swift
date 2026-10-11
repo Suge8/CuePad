@@ -58,6 +58,32 @@ struct SharedPagesTests {
         #expect(try await store.card(lone.id)?.deletedAt == nil)
     }
 
+    /// 恢复后给一句提示写明落点、点它过去（与删除时的"已删除 · 撤销"对称）；卡片所在的项目还在回收站时落到未分类。
+    @Test func 回收站恢复后提示落点_点它过去() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let card = try await store.createCard(in: project.id, body: "项目里的一条")
+        let loose = try await store.createCard(in: nil, body: "没有项目的一条")
+        try await store.trashCard(card.id)
+        try await store.trashCard(loose.id)
+        let workspace = Workspace(services: app.services)
+        let summary = try await TrashSummary.read(from: store)
+
+        func restored(_ item: TrashItem) async -> Workspace.Notice? {
+            workspace.restore(item)
+            await eventually { workspace.notice != nil }
+            defer { workspace.notice = nil }
+            return workspace.notice
+        }
+        let inProject = await restored(try #require(summary.cards.first { $0.id == card.id }))
+        #expect(inProject?.text.visible == "已恢复到 圆桌" && inProject?.link == .project(project.id))
+        let unfiled = await restored(try #require(summary.cards.first { $0.id == loose.id }))
+        #expect(unfiled?.text.visible == "已恢复到 未分类" && unfiled?.link == .project(nil))
+
+        try await store.trashProject(project.id)
+        let whole = await restored(try #require(try await TrashSummary.read(from: store).projects.first))
+        #expect(whole?.text.visible == "已恢复到 圆桌" && whole?.link == .project(project.id))
+    }
+
     // MARK: 新会话进度
 
     @Test func 新会话从发出到认领_失败带着原因() async throws {

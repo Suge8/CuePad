@@ -42,7 +42,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 **数据。**
 - 灵感与任务是同一张表、同一种同步记录 `Card`（术语见 AGENTS.md）。层级只有 `parentID`，只经 `createTask(_:under:)`、`createCard(body:under:)`、`moveCard` 改，校验在 Store 写入时做；手动顺序用分数索引字符串，避免多设备排序冲突。
 - 项目只有一种顺序，在 `CueStore.projects()` 的 SQL 里一处定义，所有项目列表与选择器都用它；Pi 会话的状态变化不计入，否则 Agent 一动，侧栏项目就换位置、⌘1–9 跟着变。
-- 给用户看的任务数只有一处定义 `CueStore.taskCounts`（只计显示在顶层的任务），各处不另算；子任务进度与提示词计数只写在上级那一行（`childMarks`）。
+- 给用户看的任务数只有一处定义 `CueStore.taskCounts`（只计显示在顶层的任务），各处不另算；子任务进度与提示词计数只写在上级那一行（`childMarks`）。提示词的"已回复"由发送记录、会话状态与会话的对话推出，不存字段，所以清理对话（`prunePiMessages`，会话安静 7 天后）跳过仍被未归档、未删除的提示词引用的会话，整段对话留着。
 - 空白灵感离开编辑就不留下，收尾只有 `CueStore.dropIfBlank` 一处。
 - 软删除只留 `deletedAt`；项目删除时其下的灵感与任务随项目进回收站，由项目推导，不逐条记录来源。
 - 设备本地偏好进 UserDefaults，不进同步库；变量上次取值存在那条灵感或任务上并同步。

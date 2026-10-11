@@ -105,10 +105,11 @@ struct SessionScreen: View {
                     Image(systemName: "ellipsis")
                 }
                 .accessibilityLabel("更多")
+                // 确认框挂在"⋯"上，系统从这颗钮弹出；挂在整页上会指向页面中间随便一处
+                .endSession($confirmingEnd)
             }
         }
         .renameSession($renaming)
-        .endSession($confirmingEnd)
         .safeAreaBar(edge: .bottom, spacing: 0) {
             if let session {
                 VStack(spacing: 8) {

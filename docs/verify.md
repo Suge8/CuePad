@@ -8,7 +8,7 @@
 apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -theme dark
 ```
 
-- Debug 构建认一组启动参数，完整列表与含义只写在 `App/Sources/UI/Debug/DebugScene.swift`、`DebugScene+iOS.swift` 的文档注释里；设置项可直接覆盖（`-theme dark`）。产品代码只经 `DebugHooks` 碰调试画面，不认识 `DebugScene`、不写 `#if DEBUG`。
+- Debug 构建认一组启动参数，完整列表与含义只写在 `App/Sources/UI/Debug/DebugScene.swift`、`DebugScene+iOS.swift` 的文档注释里；设置项可直接覆盖（`-theme dark`）。产品代码只经 `DebugHooks` 碰调试画面，不认识 `DebugScene`、不写 `#if DEBUG`。调试键不写进偏好域：`UserDefaults.standard` 是真实的 `com.sugeh.cuepad`，测量里要换的值（如搜索词）放内存（`DebugScene.searchOverride`），预填的搜索词只认启动参数。
 - `CUEPAD_SHOT_LIBRARY` 换库目录（默认 `.derived/library`）。截图不靠固定等待：Debug 构建摆好画面后写下就绪标记（`DebugScene.signalReady`），`shot` 等它出现再截。
 - Pi 目录同样隔离，截图不含 `~/.pi` 的会话。隔离的 Pi 目录里没装扩展，侧栏底部出现"连接 Pi"征求同意是正确状态；不要它时传 `-piExtensionDeclined YES`。
 - `settings`、`menubar` 画面把设置窗口、菜单栏面板的内容放进主窗口拍，因为只截主窗口。
@@ -17,7 +17,7 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 
 ## 性能测量
 
-入口只有 `apple/scripts/perf-mac.sh <cold|scenarios|interact> [次数]`，各模式量什么见脚本头注释，场景与指标在 `App/Sources/UI/Debug/` 的 `*Bench.swift`。方法与坑：
+入口只有 `apple/scripts/perf-mac.sh <cold|scenarios|interact> [次数]`，各模式量什么见脚本头注释，场景与指标在 `App/Sources/UI/Debug/` 的 `*Bench.swift`。iOS 的单次交互是 `apple/scripts/perf-ios.sh [次数]`（iPhone 模拟器先重启、演示库、每次全新进程，首次与再次分开；长按菜单要 `axe` 真按；带 DEBUG 条件的 Release，只为留下测量代码；有一次没量完就整次失败）：模拟器的合成与 GPU 不同于真机，只看主线程 CPU 与指令数；首次数里有模拟器才有的 Swift 一致性查找，要在真机上用 Instruments 复核。方法与坑：
 
 - 前后对比以进程执行的指令数（`instructionsM`）为准：机器忙时帧间隔和 CPU 时间都会被别的进程拖歪。旧新两个构建交替各跑三遍取中位数。悬停类场景要窗口在前台才有指针事件，有的轮次整项几乎没有工作量（指令数低一个量级），比较前先剔掉。
 - 掉帧与动画类指标必须在前台量：AppKit 的动画只在前台跑，前台每次几何变化还要重算鼠标跟踪区，后台量的数字偏乐观（`interact` 自己把实例调到前台，其余场景先把自己启动的实例调到前台，会抢一下焦点，集中批量跑）。窗口还得在屏幕上：放到屏幕外（`-CuePadOffscreen`）时 display link 不走，屏幕外只用于布局与日志类场景。

@@ -18,14 +18,8 @@ struct HandOffInput: View {
     @State private var sending = false
     @FocusState private var focused: Bool
 
-    /// 在线会话（`LiveSessions`）：本项目的在前，再按要你注意的先后。
-    private var sessions: [PiSessionListItem] {
-        let project = outbox.project
-        func key(_ item: PiSessionListItem) -> (Int, Int) {
-            (item.state.projectID == project && project != nil ? 1 : 0, PiShown(item.state, delivery: item.delivery).urgency)
-        }
-        return services.liveSessions.live.sorted { key($0) > key($1) }
-    }
+    /// 能交给的在线会话（Mac 的发送目标共用同一份规则）。
+    private var sessions: [PiSessionListItem] { HandOffTargets.sessions(services.liveSessions.live, project: outbox.project) }
     private var chosen: PiSessionListItem? { let all = sessions; return all.first { $0.state.id == choice } ?? all.first }
     private var canSend: Bool { services.reachesPiHost && !sending }
     /// 选中会话的模型与思考强度的显示值（`SessionDigest.config`）。
@@ -95,7 +89,7 @@ struct HandOffInput: View {
     }
 
     private func title(_ item: PiSessionListItem) -> Dotted {
-        Dotted(item.state.title, PiPlace.name(of: item.state, project: workspace.catalog?.project(item.state.projectID)), services.settings.shown(item).label)
+        HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: services.settings.shown(item))
     }
 
     private func send() {

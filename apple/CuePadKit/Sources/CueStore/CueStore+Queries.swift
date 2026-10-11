@@ -266,6 +266,7 @@ extension CueStore {
   /// 不带参数读全库；`of` 只读一条任务的；`in` 只读一个项目（nil = 未分类）里的（下级与上级同项目）。
   /// 提示词（任务下的灵感）"已回复"：没有交给 Agent 的请求还在路上（手机重发、Mac 还没执行），且它最近一次交给 Pi 会话之后，
   /// 那个会话歇下了（`stateSince` 晚于发出时刻）或对话里有之后的一条回答——没回答就结束的不算。复制、发到应用不算交给 Agent。
+  /// 对话是证据，所以清理对话时跳过仍被提示词引用的会话（`prunePiMessages`），已回复不会随对话清掉而退回。
   public func childMarks() throws -> [UUID: [ChildMark]] { try childMarks(scope: "", []) }
 
   public func childMarks(of parent: UUID) throws -> [UUID: [ChildMark]] { try childMarks(scope: "AND c.parentID = ?", [parent]) }
