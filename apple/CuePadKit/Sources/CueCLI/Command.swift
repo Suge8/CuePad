@@ -14,7 +14,7 @@ struct Opt {
   }
 
   static func project(_ help: String) -> Opt { Opt("project", "\(help)（名称不分大小写，或 id）", value: "项目") }
-  static let inbox = Opt("inbox", "未分类（不属于任何项目）")
+  static let unfiled = Opt("unfiled", "未分类（不属于任何项目）")
   static let global = Opt("global", "全局（不属于任何项目）")
   static let allProjects = Opt("all-projects", "不限项目（忽略当前目录的默认项目）")
   static let body = Opt("body", "正文；省略则读 stdin。原样读写，不裁剪；stdin 为空报错，要空正文写 --body ''", value: "正文")

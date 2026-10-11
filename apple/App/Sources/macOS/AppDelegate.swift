@@ -4,7 +4,6 @@ import AppKit
 import SwiftUI
 import os
 
-@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var services: AppServices?
     private var windowDelegate: MainWindowDelegate?

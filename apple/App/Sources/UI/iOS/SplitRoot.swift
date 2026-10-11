@@ -131,11 +131,11 @@ private struct SplitSidebar: View {
                     Section("置顶") { ForEach(pinned) { row($0, catalog, now: now[$0.id]) } }
                 }
                 let recent = catalog.projects.filter { !$0.isPinned }
-                let inbox = catalog.cardCounts[nil] ?? 0
-                if !recent.isEmpty || inbox > 0 {
+                let unfiled = catalog.cardCounts[nil] ?? 0
+                if !recent.isEmpty || unfiled > 0 {
                     Section("最近") {
                         ForEach(recent) { row($0, catalog, now: now[$0.id]) }
-                        if inbox > 0 { SidebarRow(route: .inbox, title: "未分类", symbol: "tray", badge: inbox) }
+                        if unfiled > 0 { SidebarRow(route: .unfiled, title: CaptureCopy.unfiled, symbol: "tray", badge: unfiled) }
                     }
                 }
             }

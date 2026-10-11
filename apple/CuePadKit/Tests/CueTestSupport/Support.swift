@@ -168,12 +168,12 @@ public final class ManualTiming: @unchecked Sendable {
   }
 }
 
-/// 订阅表变更直到条件成立（事件驱动，配合测试的时间限制，不轮询）。
-public func eventually<T: Sendable>(
-  _ store: CueStore, watching tables: Set<Table>, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
+/// 订阅读取直到条件成立（事件驱动，配合测试的时间限制，不轮询）。
+public func eventually<T: Sendable & Equatable>(
+  _ store: CueStore, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
   until predicate: @Sendable (T) -> Bool
 ) async throws -> T {
-  for try await value in store.observe(tables, read) where predicate(value) { return value }
+  for try await value in store.observe(read) where predicate(value) { return value }
   throw CancellationError()
 }
 

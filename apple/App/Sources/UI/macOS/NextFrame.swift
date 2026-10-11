@@ -3,7 +3,6 @@ import AppKit
 
 /// 等到屏幕下一次刷新：分几帧做的事，每一步的改动落在自己那一帧里（上一步已经提交）。
 /// 主队列异步不行：它有时排在同一次提交之前，几步又挤回一帧。
-@MainActor
 enum NextFrame {
     static func wait() async {
         await withCheckedContinuation { continuation in

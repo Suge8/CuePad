@@ -4,7 +4,6 @@ import SwiftUI
 
 /// 菜单栏图标下方的弹出面板宿主：承载界面提供的 SwiftUI 视图，自身无边框透明，
 /// 材质与形状由内容决定。不激活应用，失去键盘焦点或按 Esc 即收起。
-@MainActor
 final class MenuBarPanel: NSObject, NSWindowDelegate {
     private static let edgeMargin: CGFloat = 8
     private static let anchorGap: CGFloat = 4

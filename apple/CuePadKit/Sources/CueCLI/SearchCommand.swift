@@ -7,7 +7,7 @@ extension Command {
   static let search = Command(
     path: ["search"], summary: "搜索灵感与任务（多个词都要命中，子串，不分大小写；命中正文）", arguments: "[词...]",
     options: [
-      .project("限定项目，可重复"), .inbox, .allProjects,
+      .project("限定项目，可重复"), .unfiled, .allProjects,
       Opt("images", "只要含图片的"), Opt("no-images", "只要不含图片的"),
       Opt("sent", "只要交给过 Agent 的"), Opt("unsent", "只要从没交给过 Agent 的"),
       Opt("to", "只要交给过这个 Agent 会话的（会话名）", value: "会话名"),
@@ -51,12 +51,12 @@ extension Command {
     let args = call.args
     var query = SearchQuery(text: args.positionals.joined(separator: " "), inTrash: args.has("trash"))
 
-    if args.has("all-projects"), !args.all("project").isEmpty || args.has("inbox") {
-      throw CLIError.usage("--all-projects 不能与 --project / --inbox 同用")
+    if args.has("all-projects"), !args.all("project").isEmpty || args.has("unfiled") {
+      throw CLIError.usage("--all-projects 不能与 --project / --unfiled 同用")
     }
     var owners = Set<UUID?>()
     for ref in args.all("project") { owners.insert(try await call.project(ref).id) }
-    if args.has("inbox") { owners.insert(nil) }
+    if args.has("unfiled") { owners.insert(nil) }
     if owners.isEmpty, case .project(let project) = try await call.scope() { owners.insert(project.id) }
     if !owners.isEmpty { query.projects = owners }
 

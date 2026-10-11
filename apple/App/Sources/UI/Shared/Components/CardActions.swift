@@ -52,7 +52,7 @@ struct CardActions: View {
                 Button(project.name) { workspace.perform { try await $0.moveCard(id, to: .top(project: project.id), after: nil) } }
                     .disabled(card.parentID == nil && project.id == here)
             }
-            Button(CaptureCopy.inbox) { workspace.perform { try await $0.moveCard(id, to: .top(project: nil), after: nil) } }
+            Button(CaptureCopy.unfiled) { workspace.perform { try await $0.moveCard(id, to: .top(project: nil), after: nil) } }
                 .disabled(card.parentID == nil && here == nil)
         }
     }
@@ -119,7 +119,7 @@ extension CardMenu.Item {
 
 extension RowSwipes {
     /// 一条灵感或任务的轻扫（`CardMenu.swipes`）；`structure` 是它在任务大纲里此刻能不能缩进、反缩进。
-    @MainActor static func card(_ card: Card, workspace: Workspace, structure: TaskStructure? = nil) -> RowSwipes {
+    static func card(_ card: Card, workspace: Workspace, structure: TaskStructure? = nil) -> RowSwipes {
         let swipes = CardMenu.swipes(for: card, indent: structure?.indent != nil, outdent: structure?.outdent != nil)
         func action(_ item: CardMenu.Item) -> RowAction? {
             let run: (() -> Void)? = switch item {

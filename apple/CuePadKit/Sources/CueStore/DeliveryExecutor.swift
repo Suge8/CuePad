@@ -129,6 +129,12 @@ extension CueStore {
       orderBy: "createdAt, rowid")
   }
 
+  /// 执行器要醒来的理由：有新的请求等着，或有附件到达（等图片的请求这时才能继续）。
+  fileprivate func executorQueue(for host: String) throws -> DeliveryQueue {
+    DeliveryQueue(
+      pending: try pendingDeliveries(for: host).map(\.id), attachments: try db.first("SELECT count(*) FROM attachments") { Int($0.int(0)) } ?? 0)
+  }
+
   /// 领取：只有仍是 pending 的请求能被领取，同一请求不会被执行两次。
   fileprivate func claimDelivery(_ id: UUID, host: String) throws -> Bool {
     try write {
@@ -245,10 +251,9 @@ public actor DeliveryExecutor {
     guard watcher == nil else { return }
     try await store.failInterruptedDeliveries(host: hostID, at: timing.now())
     if try await deleteExpired() { scheduleCleanup() }
-    watcher = Task { [store, onIssue] in
-      // 附件也要观察：等图片的请求在图片到达时才能继续
+    watcher = Task { [store, hostID, onIssue] in
       do {
-        for try await _ in store.observe([.deliveryRequests, .attachments], { _ in () }) { await self.process() }
+        for try await _ in store.observe({ try $0.executorQueue(for: hostID) }) { await self.process() }
       } catch {
         onIssue(error)
       }
@@ -340,4 +345,10 @@ public actor DeliveryExecutor {
     cleanup = nil
     if rescheduling { scheduleCleanup() }
   }
+}
+
+/// 执行器看的队列状态（`CueStore.executorQueue`）：等执行的请求，与附件记录数。
+struct DeliveryQueue: Equatable, Sendable {
+  var pending: [UUID]
+  var attachments: Int
 }

@@ -19,7 +19,6 @@ struct CuePadApp: App {
 }
 
 /// 进程只创建一个 `AppServices`，所有窗口共用。资料库打不开时不终止进程：失败页给原因、重试与诊断。
-@MainActor
 enum Launch {
     case ready(AppServices)
     case failed(LibraryFailure)

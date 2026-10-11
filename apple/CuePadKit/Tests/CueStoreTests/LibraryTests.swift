@@ -55,7 +55,7 @@ import Testing
     #expect(try await store.trashedCards().map(\.id) == [alone.id])
   }
 
-  @Test func cardRestoredIntoTrashedProjectFallsBackToInbox() async throws {
+  @Test func cardRestoredIntoTrashedProjectFallsBackToUnfiled() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let card = try await store.createCard(in: p.id, body: "x")
     try await store.trashCard(card.id)

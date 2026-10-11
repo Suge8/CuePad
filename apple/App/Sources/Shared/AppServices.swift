@@ -14,7 +14,7 @@ import UIKit
 /// 组合根与界面动作的唯一入口：持有各模块的唯一实例。
 /// 界面读数据直接 `store.observe(...)`；一切副作用（发给 Agent、复制、Pi 命令、终端跳转、导入、扩展安装）只经这里，
 /// 发送记录也只在这里写。
-@MainActor @Observable
+@Observable
 final class AppServices {
     static let bundleID = "com.sugeh.cuepad"
     static let log = Logger(subsystem: bundleID, category: "services")

@@ -192,7 +192,6 @@ final class GrowingTextView: NSTextView {
 }
 
 /// 当前输入框是否在输入法组字中（有未上屏的拼音等）：问窗口的第一响应者。
-@MainActor
 enum TextComposition {
     static var isComposing: Bool {
         (NSApp.keyWindow?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true

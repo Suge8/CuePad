@@ -26,7 +26,7 @@ struct ProjectSwitcher: View {
             }
             Divider()
             if (workspace.catalog?.cardCounts[nil] ?? 0) > 0 {
-                Button { workspace.show(.inbox) } label: { Label(CaptureCopy.inbox, systemImage: "tray").labelStyle(.titleAndIcon) }
+                Button { workspace.show(.unfiled) } label: { Label(CaptureCopy.unfiled, systemImage: "tray").labelStyle(.titleAndIcon) }
             }
             Button { workspace.show(.agent) } label: { Label("Agent", systemImage: "sparkles").labelStyle(.titleAndIcon) }
             Button { workspace.show(.archive) } label: { Label("归档", systemImage: "archivebox").labelStyle(.titleAndIcon) }
@@ -80,9 +80,9 @@ private struct CurrentPage: View {
             let project = projects.first { $0.id == id }
             ProjectGlyph(project: project, size: 12)
             Text(project?.name ?? "")
-        case .inbox:
+        case .unfiled:
             Image(systemName: "tray").accessibilityHidden(true)
-            Text(CaptureCopy.inbox)
+            Text(CaptureCopy.unfiled)
         case .archive:
             Image(systemName: "archivebox").accessibilityHidden(true)
             Text("归档")

@@ -39,7 +39,7 @@ enum DebugHooks {
     enum SearchFocus { case shelf, project }
     #endif
 
-    @MainActor static let preset: Preset = {
+    static let preset: Preset = {
         #if DEBUG
         DebugScene.preset
         #else
@@ -58,11 +58,11 @@ enum DebugHooks {
     }
 
     /// 稍后做一件摆画面的事（如编辑器载入后选中一段）：Debug 里记作"还在摆"，截图的就绪标记等它做完。
-    @MainActor static func later(_ delay: Duration = .zero, _ work: @escaping @MainActor () -> Void) {
+    static func later(_ delay: Duration = .zero, _ work: @escaping @MainActor () -> Void) {
         #if DEBUG
         DebugScene.later(delay, work)
         #else
-        Task { @MainActor in
+        Task {
             try? await Task.sleep(for: delay)
             work()
         }
@@ -70,21 +70,21 @@ enum DebugHooks {
     }
 
     /// 性能打点：某件事第一次出现（`interact` 等它，见 `PerfProbe`）。
-    @MainActor static func mark(_ event: String) {
+    static func mark(_ event: String) {
         #if DEBUG && os(macOS)
         PerfProbe.mark(event)
         #endif
     }
 
     /// 输入框出现时按 `-CuePadComposer` 摆好要拍的样子（打开选卡片面板、预填文字或附件）。
-    @MainActor static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
+    static func presetComposer(_ draft: Binding<ComposerDraft>, source: Binding<ComposerSource?>, store: CueStore) async {
         #if DEBUG
         await DebugScene.presetComposer(draft, source: source, store: store)
         #endif
     }
 
     /// 第 `attempt` 次订阅项目目录之前：`-CuePadCatalogFailure` 在这里注入读取失败。
-    @MainActor static func willReadCatalog(attempt: Int) throws {
+    static func willReadCatalog(attempt: Int) throws {
         #if DEBUG
         try DebugScene.injectCatalogFailure(attempt: attempt)
         #endif
@@ -99,7 +99,7 @@ enum DebugHooks {
     #endif
 
     /// `-CuePadOffscreen`：主窗口放到所有屏幕之外、不记位置，返回 true；否则什么都不做。
-    @MainActor static func placesOffscreen(_ window: NSWindow) -> Bool {
+    static func placesOffscreen(_ window: NSWindow) -> Bool {
         #if DEBUG
         guard DebugScene.offscreen else { return false }
         DebugScene.placeOffscreen(window)

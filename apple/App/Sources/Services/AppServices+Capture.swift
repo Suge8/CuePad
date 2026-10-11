@@ -6,10 +6,10 @@ import Foundation
 extension AppServices {
     /// 把 `Capture/` 里已写完的条目存成卡片并删除条目。失败的条目保留（下次再试）并报告。
     func drainCaptures() async {
-        for entry in CaptureInbox.pending(in: location.captureDirectory) {
+        for entry in CaptureQueue.pending(in: location.captureDirectory) {
             do {
                 try await importCapture(entry)
-                try CaptureInbox.remove(entry)
+                try CaptureQueue.remove(entry)
             } catch {
                 reportIssue(.captureImportFailed("\(error)"))
             }
@@ -20,13 +20,13 @@ extension AppServices {
     func startCaptureIngest() {
         tasks.append(Task {
             await drainCaptures()
-            for await _ in DarwinNotifications.notifications(named: CaptureInbox.notification) {
+            for await _ in DarwinNotifications.notifications(named: CaptureQueue.notification) {
                 await drainCaptures()
             }
         })
     }
 
-    private func importCapture(_ entry: CaptureInbox.Entry) async throws {
+    private func importCapture(_ entry: CaptureQueue.Entry) async throws {
         var hashes: [String] = []
         for url in entry.imageURLs() {
             hashes.append(try store.files.store(fileAt: url))

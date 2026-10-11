@@ -14,7 +14,7 @@ struct AgentTarget: Equatable {
 
 /// 发给哪个 Agent 会话的状态与规则：用户选的目标、等用户决定的一次发送、在线会话各归哪个项目，以及据此推出的默认目标、
 /// 目标走哪条路送达、显示的名字与状态。不碰界面提示：成败由调用方（`Workspace.send`）说。
-@MainActor @Observable
+@Observable
 final class SendState {
     /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送；`session` 是 Pi 自己的会话 id。
     struct Busy {

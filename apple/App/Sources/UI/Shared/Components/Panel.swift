@@ -3,7 +3,7 @@ import SwiftUI
 /// 关掉自己所在的弹层（`panel`）。Mac 的窗口内浮层没有系统的 `dismiss`，两端的弹层内容都用它。
 struct ClosePanel {
     let run: @MainActor () -> Void
-    @MainActor func callAsFunction() { run() }
+    func callAsFunction() { run() }
 }
 
 extension EnvironmentValues {

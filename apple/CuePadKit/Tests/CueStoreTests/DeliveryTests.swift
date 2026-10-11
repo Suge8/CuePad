@@ -45,7 +45,7 @@ import Testing
     try await executor.start()
     let made = try await store.requestDelivery("do it", to: pi, on: "mac-a")
 
-    let done = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.first?.status == .known(.succeeded) }
+    let done = try await eventually(store, { try $0.deliveryRequests() }) { $0.first?.status == .known(.succeeded) }
 
     #expect(done[0].id == made.id && done[0].handledBy == "mac-a" && done[0].completedAt == clock.now)
     #expect(await handler.seen.map(\.content) == ["do it"])
@@ -61,7 +61,7 @@ import Testing
     let mine = try await store.requestDelivery("for a", to: pi, on: "mac-a")
     try await executor.start()
 
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
+    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
 
     #expect(await handler.seen.map(\.id) == [mine.id])
     #expect(try await request(other.id)?.status == .known(.pending))
@@ -77,7 +77,7 @@ import Testing
       _ = try await store.requestDelivery("r\(index)", to: pi, on: "mac-a")
       clock.advance(.milliseconds(5))
     }
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 4 }
+    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 4 }
 
     #expect(await handler.seen.map(\.content) == ["r0", "r1", "r2", "r3"])
     #expect(await handler.maxConcurrent == 1)
@@ -92,14 +92,14 @@ import Testing
     let executor = executor(handler, retention: .seconds(60))
     try await executor.start()
     let message = try await store.requestDelivery("备份一下线上库", to: pi, on: "mac-a", mode: .send)
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequest(message.id)?.status }) { $0 == .known(.failed) }
+    _ = try await eventually(store, { try $0.deliveryRequest(message.id)?.status }) { $0 == .known(.failed) }
     await handler.setOutcome(.succeeded)
     _ = try await store.requestDelivery("ping", to: pi, on: "mac-a", mode: .ping)
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
+    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
 
     await clock.waitForSleeper()
     clock.advance(.seconds(61))
-    let remaining = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.count == 1 }
+    let remaining = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 1 }
 
     #expect(remaining.map(\.id) == [message.id])
     await executor.stop()
@@ -130,7 +130,7 @@ import Testing
     let executor = executor(handler, maxAge: .seconds(600))
     try await executor.start()
 
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().first?.status }) { $0 == .known(.failed) }
+    _ = try await eventually(store, { try $0.deliveryRequests().first?.status }) { $0 == .known(.failed) }
     let after = try #require(try await request(stale.id))
     #expect(after.resultDetail?.isEmpty == false)
     #expect(await handler.seen.isEmpty)
@@ -155,7 +155,7 @@ import Testing
     _ = try await store.requestDelivery("plain", to: pi, on: "mac-a")
 
     // 排在后面的普通请求先执行，说明前面那条被跳过而不是抢跑
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
+    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 1 }
     #expect(try await store.deliveryRequest(waiting.id)?.status == .known(.pending))
 
     // 图片同步到了：文件放进附件目录，附件记录随后应用
@@ -166,7 +166,7 @@ import Testing
     ]
     _ = try await store.applyRemote([.save(SyncRow(table: .attachments, fields: arrived), systemFields: Data())])
 
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
+    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
     #expect(await runs.entries.map(\.name) == ["plain", "look"])
     #expect(await runs.entries.last?.imagePresent == true)  // 执行时图片已经在本机
     await executor.stop()
@@ -188,7 +188,7 @@ import Testing
     try await two.start()
     for index in 0..<6 { _ = try await store.requestDelivery("r\(index)", to: pi, on: "mac-a") }
 
-    _ = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 6 }
+    _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 6 }
 
     let all = await first.seen.map(\.id) + second.seen.map(\.id)
     #expect(all.count == 6 && Set(all).count == 6)  // 领取是原子的
@@ -205,7 +205,7 @@ import Testing
 
     let executor = executor(handler)
     try await executor.start()
-    let done = try await eventually(store, watching: [.deliveryRequests], { try $0.deliveryRequests() }) { $0.first?.status == .known(.failed) }
+    let done = try await eventually(store, { try $0.deliveryRequests() }) { $0.first?.status == .known(.failed) }
 
     #expect(await handler.seen.isEmpty)  // 不认识的发送方式不执行，也不猜成 send
     #expect(done[0].resultDetail?.contains("quantumSend") == true)

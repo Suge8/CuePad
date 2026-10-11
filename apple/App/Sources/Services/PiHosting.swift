@@ -3,7 +3,6 @@ import CuePi
 import Foundation
 
 /// 后台托管 Pi 的接缝（真实实现是 `PiHost`，测试换成只记录参数的替身）：返回连上桥的会话 id。
-@MainActor
 protocol PiHosting: AnyObject {
     func start()
     /// 关掉所有托管进程；返回的等待在它们都退出后结束。

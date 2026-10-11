@@ -47,7 +47,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 软删除只留 `deletedAt`；项目删除时其下的灵感与任务随项目进回收站，由项目推导，不逐条记录来源。
 - 设备本地偏好进 UserDefaults，不进同步库；变量上次取值存在那条灵感或任务上并同步。
 - 同步记录里的枚举字段读出为 `Open<已知枚举>`：其他版本写入、本版本不认识的值是 `.unknown`，原样写回，不当成已知值；本机只写已知值。
-- 界面据 Store 的观察流重读，不在内存复制状态。观察以表为粒度；依赖哪些表由读取自己决定（`CueStore.observe(_:)` 靠 SQLite 授权回调记下读到的表），调用处不写表名；只把变化当唤醒信号的订阅才显式写表。结果可比较时和上一次一样就不产出，比较在读取一侧做。
+- 界面据 Store 的观察流重读，不在内存复制状态。观察以表为粒度；依赖哪些表由读取自己决定（`CueStore.observe` 靠 SQLite 授权回调记下读到的表），订阅只有这一种写法、调用处不写表名；只要"变了就叫我"的也读一个会跟着变的值（计数、列表、记录在不在，如 `hasAttachment`）。读到的值一律可比较（`Equatable`），和上一次一样就不产出——比较只在 Store 一侧做一次，重新订阅时手里已有的值当作上一次（`observe(after:)`），主线程不再比。
 - 改表结构：在 `Schema.upgrades` 末尾追加一步并同步改 `create`；升级里任何会因数据冲突失败的语句都会让启动失败，要考虑别的设备已经同步来的数据。当前结构版本与基线见 `Schema`。
 
 **界面里的项目。**
@@ -72,6 +72,8 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 预览不是会话文件里的内容：对话仍只来自会话文件，预览卡按创建时间插进对话（`PiChat.entries`）。
 - HTML 只读渲染、不联网也读不到别的文件，所以必须是单个文件；`addPreview` 列出页面引用的外部地址，让 Agent 改成单文件再发。否决的方案：在 Mac 上替它内联——样式里的 url()、字体、模块脚本都要处理，漏一类就是静默缺图。
 - 网页的内容拦截规则只放行 data:、blob:、about:，规则装不上就不打开（`PreviewWebGuard`，`PreviewWebTests` 用本机端口核对）。
+
+**并发隔离。** App 各目标的默认隔离是主线程（`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`），类型、协议与函数上不再写 `@MainActor`；要离开主线程才写 `nonisolated`。函数类型（回调参数、`typealias`）不受默认隔离覆盖，需要主线程时照写 `@MainActor`。CuePadKit 没有默认隔离，里面的界面类型照写。
 
 **冲突。** iCloud 按记录同步；同一条灵感或任务离线并发编辑时保留两个版本交给用户选择，不静默覆盖。两台设备离线并发挪动可能合成环、超过三级、挂到灵感下或下级与上级不同项目：应用远端变更后按确定规则收敛（`CardLinks.repairs`，只查这次批量涉及的卡与其子孙），各设备算出同一结果并推送。
 

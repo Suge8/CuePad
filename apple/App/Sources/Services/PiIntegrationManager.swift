@@ -5,7 +5,7 @@ import Observation
 /// CuePad 与 Pi 的集成（扩展 + skill，一起装、一起升级）的检测、首次安装与升级。同意只在首次安装时问一次：界面读 `needsConsent` 决定是否询问，
 /// 用户同意调 `install()`，拒绝调 `decline()`（之后不再询问、两样都不装）。已装的是 CuePad 写的时，`refresh()` 发现与随包版本不同
 /// （含 App 被移动后 skill 里的 cuepad 路径变了）就静默升级，不再询问——随包版本只在 App 更新后变化，而 App 启动时就会 `refresh()`。
-@MainActor @Observable
+@Observable
 final class PiIntegrationManager {
     private(set) var status: PiIntegrationStatus?
 

@@ -6,7 +6,7 @@ import SwiftUI
 /// 会话页要放在窗口工具栏上的东西：标题（会话名接"状态 · 计时"）与"⋯"（所在、重命名、跳到终端、结束会话）。
 /// 工具栏项在主窗口里常驻（`SessionTitleSlot`、`SessionMenuSlot`），随页面切换换里面的内容：增删工具栏项会重建整条工具栏，
 /// 进出会话页、换会话时那要占点击回合的一半。会话页只把算好的值与动作交到这里；不是会话页时槽里是空的。
-@MainActor @Observable
+@Observable
 final class SessionHeader {
     struct State: Equatable {
         var session: PiSessionState

@@ -65,7 +65,6 @@ struct TabsRoot: View {
 /// 等新的一页有了内容（标签根页读到数据时报 `tabPageReady`）再一起推：新页从选中滴去的那一侧推入，旧页的快照往另一边推出。
 /// 第一次切到某一页时它要现建、现读，旧页就多停那几十毫秒，不露出空白；减弱动态效果时新页直接在位，旧页的快照淡出。
 /// 动的只是两张视图层，不碰页面的状态。
-@MainActor
 private final class TabSlide {
     private static let duration = 0.28
     /// 新页迟迟没报有内容（读库出错）时最多等这么久，不让快照一直盖着。

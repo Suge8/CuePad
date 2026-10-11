@@ -24,14 +24,12 @@ nonisolated enum HotkeyError: Error, Equatable {
 typealias HotkeyHandle = UInt32
 
 /// 系统全局热键接缝：真实实现是 Carbon `RegisterEventHotKey`，测试用内存替身。
-@MainActor
 protocol HotkeyBackend: AnyObject {
     func register(_ shortcut: Shortcut, handler: @escaping @MainActor () -> Void) throws -> HotkeyHandle
     func unregister(_ handle: HotkeyHandle)
 }
 
 /// 单槽全局快捷键：更换时先注册新的，成功才释放旧的，失败则旧的继续生效。
-@MainActor
 final class GlobalHotkey {
     private let backend: any HotkeyBackend
     private let onTrigger: @MainActor () -> Void

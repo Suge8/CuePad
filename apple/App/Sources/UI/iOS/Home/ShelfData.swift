@@ -45,7 +45,7 @@ extension ProjectCatalog {
     }
 
     /// 没归项目的灵感数。
-    var inboxCount: Int { cardCounts[nil] ?? 0 }
+    var unfiledCount: Int { cardCounts[nil] ?? 0 }
 
     /// 进任务页的入口上写的数：全部项目的顶层任务数，与任务页分组同一个数；一条任务都没有时为 nil，没有入口。
     var shelfTasks: TaskCounts? { allTasks == .zero ? nil : allTasks }

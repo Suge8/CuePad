@@ -178,7 +178,7 @@ struct CompactFocus: View {
             HStack(spacing: 14) {
                 HStack(spacing: 6) {
                     ProjectGlyph(project: data.project, size: 13)
-                    Text(data.project?.name ?? CaptureCopy.inbox).font(Typography.toolbarTitle).lineLimit(1)
+                    Text(data.project?.name ?? CaptureCopy.unfiled).font(Typography.toolbarTitle).lineLimit(1)
                 }
                 Label(data.taskCounts.open > 0 ? "任务 \(data.taskCounts.open)" : "任务", systemImage: "checklist").foregroundStyle(palette.ink2)
                 if let session {

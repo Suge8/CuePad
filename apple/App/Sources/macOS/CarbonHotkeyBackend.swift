@@ -1,7 +1,6 @@
 #if os(macOS)
 import Carbon.HIToolbox
 
-@MainActor
 final class CarbonHotkeyBackend: HotkeyBackend {
     private static let signature: OSType = 0x4355_4550 // 'CUEP'
 

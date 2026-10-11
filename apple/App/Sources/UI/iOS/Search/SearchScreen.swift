@@ -28,7 +28,7 @@ struct SearchScreen: View {
         instant.disablesAnimations = true
         withTransaction(instant) { searching = true }
         // 搜索框成为焦点之后再选中：同一刻设置的选区会被获得焦点时放在末尾的光标覆盖
-        Task { @MainActor in selection = TextSelection(range: query.text.startIndex..<query.text.endIndex) }
+        Task { selection = TextSelection(range: query.text.startIndex..<query.text.endIndex) }
     }
 }
 #endif

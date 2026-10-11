@@ -5,7 +5,6 @@ import SwiftUI
 private typealias WindowClass = DebugHooks.MainWindowClass
 
 /// 主窗口的外框在创建时定好：内容铺到透明标题栏下（侧栏可以通顶），标题隐藏，界面不再在运行时改窗口样式。
-@MainActor
 enum MainWindowFactory {
     static func make<Content: View>(content: Content) -> NSWindow {
         let window = WindowClass(

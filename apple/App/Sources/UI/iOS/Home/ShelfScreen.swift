@@ -69,7 +69,7 @@ struct ShelfScreen: View {
         let agent = AgentNow.of(sessions, shown: services.settings.shown)
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
-            if entries.isEmpty && catalog.inboxCount == 0 {
+            if entries.isEmpty && catalog.unfiledCount == 0 {
                 VStack(alignment: .leading, spacing: Self.leadGap) { lead(data, catalog, agent) }
                 EmptyShelf { navigation.projectForm = .init() }
             } else if wide, !pinned.isEmpty, hasLead(data, catalog, agent) {
@@ -130,21 +130,21 @@ struct ShelfScreen: View {
     private static let pinnedMinWidth: CGFloat = 220
 
     private func hasLead(_ data: ShelfData, _ catalog: ProjectCatalog, _ agent: AgentNow?) -> Bool {
-        agent != nil || !data.active.isEmpty || catalog.shelfTasks != nil || catalog.inboxCount > 0
+        agent != nil || !data.active.isEmpty || catalog.shelfTasks != nil || catalog.unfiledCount > 0
     }
 
     /// 现在要干的：Agent 此刻、正在推进（没有时是任务入口）、未分类。
     @ViewBuilder
     private func lead(_ data: ShelfData, _ catalog: ProjectCatalog, _ agent: AgentNow?) -> some View {
         let tasksLine = data.active.isEmpty ? catalog.shelfTasks : nil
-        let inbox = catalog.inboxCount
+        let unfiled = catalog.unfiledCount
         if let agent { AgentNowCard(now: agent).transition(Motion.item) }
         if !data.active.isEmpty { ActiveTasks(rows: data.active, more: data.activeMore, counts: catalog.shelfTasks).transition(Motion.item) }
-        if inbox > 0 || tasksLine != nil {
+        if unfiled > 0 || tasksLine != nil {
             VStack(spacing: 0) {
                 if let tasksLine { TasksLine(tasks: tasksLine) }
-                if inbox > 0, tasksLine != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
-                if inbox > 0 { InboxReminder(count: inbox) }
+                if unfiled > 0, tasksLine != nil { Divider().padding(.leading, ShelfLine.dividerInset) }
+                if unfiled > 0 { UnfiledReminder(count: unfiled) }
             }
             .clipShape(.rect(cornerRadius: 16, style: .continuous))
             .paper(radius: 16)
@@ -180,7 +180,7 @@ struct ShelfScreen: View {
 
     private var menu: some View {
         Menu {
-            Button { navigation.push(.inbox) } label: { Label { Text(count("未分类", workspace.catalog?.inboxCount)) } icon: { Image(systemName: "tray") } }
+            Button { navigation.push(.unfiled) } label: { Label { Text(count(CaptureCopy.unfiled, workspace.catalog?.unfiledCount)) } icon: { Image(systemName: "tray") } }
             Button("归档", systemImage: "archivebox") { navigation.push(.archive) }
             Button { navigation.push(.trash) } label: { Label { Text(count("回收站", data?.trashCount)) } icon: { Image(systemName: "trash") } }
             Button("设置", systemImage: "gearshape") { navigation.push(.settings) }
@@ -236,11 +236,11 @@ private struct ShelfLine: View {
 }
 
 /// 有没归类的灵感时的提醒：点它去未分类整理。图标是墨色——赭黄只给"等你确认"，待整理的灵感不挡任何事。
-private struct InboxReminder: View {
+private struct UnfiledReminder: View {
     let count: Int
 
     var body: some View {
-        ShelfLine(route: .inbox, symbol: "tray", title: "未分类", detail: "\(count) 条待整理")
+        ShelfLine(route: .unfiled, symbol: "tray", title: CaptureCopy.unfiled, detail: "\(count) 条待整理")
     }
 }
 

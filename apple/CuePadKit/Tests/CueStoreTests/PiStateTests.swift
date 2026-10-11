@@ -42,7 +42,7 @@ import Testing
 
     await clock.waitForSleeper()
     clock.advance(.seconds(5))
-    let merged = try await eventually(store, watching: [.piSessionStates], { try $0.allPiSessionStates() }) { $0.first?.state == .known(.tool) }
+    let merged = try await eventually(store, { try $0.allPiSessionStates() }) { $0.first?.state == .known(.tool) }
     #expect(merged.count == 1 && merged[0].detail == "edit")  // 只有最新的一次落盘
   }
 
