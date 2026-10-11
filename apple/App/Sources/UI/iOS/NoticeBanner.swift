@@ -59,6 +59,8 @@ struct NoticeBanner: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Self.sideClearance)
         .padding(.top, Self.rowTop)
+        // iPad 窄窗口：顶上那一排整排让开左上的窗口钮（`SearchRow`），横幅在同一排里，按同一个窗口角让，不盖住被挪过去的圆钮
+        .containerCornerOffset(.horizontal, sizeToFit: true)
         .animation(Motion.quick, value: workspace.notice)
         .sensoryFeedback(trigger: workspace.notice) { _, notice in
             guard let notice else { return nil }
