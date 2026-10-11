@@ -64,7 +64,6 @@ struct AgentScreen: View {
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .contentMargins(.top, Bars.contentGap, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
-        .defaultScrollAnchor(DebugHooks.preset.agentFromBottom ? .bottom : nil)
         .hidingSearch($searchHidden, searching: searchFocused || !model.query.isEmpty)
         .safeAreaBar(edge: .top) {
             SearchRow(search: search, searchHidden: searchHidden) { filterMenu } trailing: { if project == nil { actions } }
@@ -381,7 +380,7 @@ private struct SessionRow: View {
 
     var body: some View {
         let session = item.state
-        Button { navigation.openSession(session.sessionID, store: services.store) } label: {
+        Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
             PiSessionRow(session: session, project: filtered ? nil : item.project, delivery: item.delivery, end: end, rename: item.rename, undelivered: item.undelivered, style: .page).equatable()
                 .padding(.horizontal, 16).padding(.vertical, AgentScreen.rowPadding)
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -72,7 +72,6 @@ struct SearchPalette: View {
                     cards: found.cards, total: found.totalCards, projects: try store.projects(),
                     lastSends: lastSends, targets: try store.sendTargets(), parents: parents, marks: marks)
             }
-            .perfMark("search", onChangeOf: data?.cards.map(\.id))
             .onChange(of: data?.cards.map(\.id)) {
                 if let ids = data?.cards.map(\.id), selection.map(ids.contains) != true { selection = ids.first }
             }

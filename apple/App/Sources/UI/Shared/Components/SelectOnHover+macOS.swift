@@ -40,7 +40,6 @@ private struct SelectOnHover: ViewModifier {
         // 选择随之关掉、平台视图撤走、又报"进入"……每秒几千次，主线程被占死。跟踪区只看矩形，不受上面盖了什么影响。
         .background {
             HoverSensor { inside in
-                DebugHooks.hoverToggled()
                 hovering = inside
                 if inside { focus.hovered = id } else if focus.hovered == id { focus.hovered = nil }
             }

@@ -70,7 +70,7 @@ struct NewSessionInput: View {
             guard let launched else { return LaunchProgress() }
             return try LaunchProgress.read(request: launched.request, token: launched.token, from: store)
         }
-        .onChange(of: progress?.claimed?.sessionID) { _, session in
+        .onChange(of: progress?.claimed?.id) { _, session in
             guard let session else { return }
             navigation.newSession = nil
             navigation.openSession(session, store: services.store)

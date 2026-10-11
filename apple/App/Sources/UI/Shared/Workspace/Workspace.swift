@@ -35,8 +35,8 @@ final class Workspace {
     enum Link: Equatable {
         case project(UUID?)
         #if os(iOS)
-        /// 一个 Pi 会话的近况页（Pi 的会话 id）。
-        case session(String)
+        /// 一个 Pi 会话的近况页（会话记录 id）。
+        case session(UUID)
         #endif
     }
 

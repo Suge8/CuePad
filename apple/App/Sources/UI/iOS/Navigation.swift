@@ -200,7 +200,7 @@ final class Navigation {
     }
 
     /// 打开一个会话的近况（iPhone 在 Agent 标签里，iPad 推入详情栏）；通知与前台提示的去处。
-    func show(session id: String) {
+    func show(session id: UUID) {
         switch layout {
         case .tabs:
             tab = .agent
@@ -211,7 +211,7 @@ final class Navigation {
     }
 
     /// 这个会话的近况页此刻正在屏幕上：它是当前标签（iPad：详情栏）最上面的一页。
-    func isViewing(session id: String) -> Bool {
+    func isViewing(session id: UUID) -> Bool {
         let top = switch layout {
         case .tabs: (tab == .agent ? agentPath : projectsPath).last
         case .split: splitPath.last
@@ -220,7 +220,7 @@ final class Navigation {
     }
 
     /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 列表（那一行已经在变）时不弹。
-    func showsAlert(about session: String) -> Bool {
+    func showsAlert(about session: UUID) -> Bool {
         let onAgentList = switch layout {
         case .tabs: tab == .agent && agentPath.isEmpty
         case .split: agentPanel || (splitRoot == .agent && splitPath.isEmpty)
@@ -235,21 +235,20 @@ final class Navigation {
         return showsAlert(about: session)
     }
 
-    /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id）；`draft` 带进它的回复框
+    /// 在当前位置推入一个会话的近况页（`sessionID` 是 Pi 的会话 id，记录已被删时用它读对话）；`draft` 带进它的回复框
     /// （发到 Mac 的卡片或任务），已经写的字留着。先读出这一页再推入：读库只要几毫秒，推入的第一帧就是标题与最新的对话；
     /// 先推入再读时，结果要等转场开始、主线程空出来才到，滑进来的前几帧是一张空页。读不出来时照常推入，由页面报错。
-    func openSession(_ sessionID: String, draft: Outbox? = nil, store: CueStore) {
+    func openSession(_ id: UUID, sessionID: String? = nil, draft: Outbox? = nil, store: CueStore) {
         outbox = nil
         task = nil
         if let draft {
-            let id = PiSessionState.recordID(sessionID: sessionID)
             var reply = settings.replyDraft(for: id)
             reply.attachments = [draft]
             settings.setReplyDraft(reply, for: id)
         }
         Task {
-            let seed = try? await SessionDigest.read(sessionID: sessionID, from: store)
-            push(.session(sessionID, seed: seed))
+            let seed = try? await SessionDigest.read(id, sessionID: sessionID, from: store)
+            push(.session(id, sessionID: sessionID, seed: seed))
         }
     }
 

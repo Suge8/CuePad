@@ -32,8 +32,6 @@ enum DebugHooks {
         var focusedSearch: SearchFocus?
         /// Agent 页一出现就填进搜索框的字（`agent` 画面）。
         var agentQuery: String?
-        /// Agent 页从底部（最早的历史）看起（`agent` 画面配 `-CuePadHistory`、没有搜索时）。
-        var agentFromBottom = false
         #endif
     }
 
@@ -71,7 +69,7 @@ enum DebugHooks {
         #endif
     }
 
-    /// 性能打点：某件事第一次出现（测量脚本等它，见 `PerfProbe`）。
+    /// 性能打点：某件事第一次出现（`interact` 等它，见 `PerfProbe`）。
     @MainActor static func mark(_ event: String) {
         #if DEBUG && os(macOS)
         PerfProbe.mark(event)
@@ -110,22 +108,6 @@ enum DebugHooks {
         false
         #endif
     }
-
-    /// 悬停进入或离开一次（压力场景核对没有来回翻转的循环）。
-    @MainActor static func hoverToggled() {
-        #if DEBUG
-        DebugScene.hoverToggles += 1
-        #endif
-    }
-    #endif
-
-    #if os(iOS)
-    /// App 启动、界面出现之前：`-CuePadColdTap <会话记录 id>` 复现冷启动被通知拉起。
-    @MainActor static func launched(alerts: PiAlertCenter) {
-        #if DEBUG
-        DebugScene.coldTap(alerts)
-        #endif
-    }
     #endif
 }
 
@@ -145,15 +127,6 @@ extension View {
     func perfMark(_ event: String) -> some View {
         #if DEBUG
         onAppear { DebugHooks.mark(event) }
-        #else
-        self
-        #endif
-    }
-
-    /// 性能打点：`value` 每变一次（如搜索结果到了）。
-    func perfMark(_ event: String, onChangeOf value: some Equatable) -> some View {
-        #if DEBUG
-        onChange(of: value) { DebugHooks.mark(event) }
         #else
         self
         #endif
@@ -194,11 +167,11 @@ extension View {
 
     #if os(iOS)
     /// 窗口根上：按启动参数摆好调试画面（样板页盖在最上层），摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
-    func debugScene(_ workspace: Workspace, _ navigation: Navigation, _ alerts: PiAlertCenter) -> some View {
+    func debugScene(_ workspace: Workspace, _ navigation: Navigation) -> some View {
         #if DEBUG
         overlay { if DebugScene.scene == "style" { StyleBoard() } }
             .task {
-                await DebugScene.prepare(workspace, navigation, alerts)
+                await DebugScene.prepare(workspace, navigation)
                 await DebugScene.signalReady(workspace.services.store)
             }
         #else

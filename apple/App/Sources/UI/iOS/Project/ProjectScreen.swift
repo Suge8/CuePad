@@ -247,7 +247,7 @@ private struct FocusCard: View {
     private func sessionLine(_ item: PiSessionListItem) -> some View {
         let session = item.state
         // 项目卡里已经是这个项目：不再写所在
-        return Button { navigation.openSession(session.sessionID, store: services.store) } label: {
+        return Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
             PiSessionRow(session: session, project: nil, delivery: item.delivery, rename: item.rename, undelivered: item.undelivered).equatable()
                 .padding(.vertical, 6)
                 .frame(minHeight: 44)

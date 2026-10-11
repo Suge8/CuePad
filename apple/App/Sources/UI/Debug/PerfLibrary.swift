@@ -3,7 +3,6 @@ import CoreGraphics
 import CueStore
 import CueText
 import Foundation
-import ImageIO
 import Synchronization
 import UniformTypeIdentifiers
 
@@ -75,18 +74,13 @@ enum PerfLibrary {
 
     private static func seedChat(_ sessionID: String, rounds: Int, random: inout SeededRandom, store: CueStore) async throws {
         let start = Date.now.addingTimeInterval(-Double(rounds) * 300)
-        var messages: [PiChatMessage] = []
-        for round in 0..<rounds {
+        let turns = (0..<rounds).map { round in
             let asked = start.addingTimeInterval(Double(round) * 300)
-            messages.append(PiChatMessage(
-                sessionID: sessionID, entryID: "u\(round)", seq: Int64(round * 2), role: .user,
-                text: sentence(&random, chinese: round % 3 != 0, words: 6...30), at: asked))
-            messages.append(PiChatMessage(
-                sessionID: sessionID, entryID: "p\(round)", seq: Int64(round * 2 + 1), role: .pi, text: answer(&random, round: round),
-                at: asked.addingTimeInterval(90), tools: round % 4 == 3 ? nil : tools(&random), roundStartedAt: asked))
+            return DebugScene.ChatTurn(
+                you: sentence(&random, chinese: round % 3 != 0, words: 6...30), pi: answer(&random, round: round),
+                tools: round % 4 == 3 ? nil : tools(&random), asked: asked, answered: asked.addingTimeInterval(90))
         }
-        try await store.writePiTranscript(PiTranscript(
-            sessionID: sessionID, messages: messages, recap: PiRecap(lastPrompt: messages[messages.count - 2].text, lastReply: messages.last?.text)))
+        try await DebugScene.writeChat(sessionID, turns, store: store)
     }
 
     /// 一轮回答：长段落、列表、表格、代码块轮换。
@@ -181,11 +175,7 @@ enum PerfLibrary {
             context.setFillColor(red: random.unit(), green: random.unit(), blue: random.unit(), alpha: 0.35)
             context.fillEllipse(in: rect)
         }
-        let output = NSMutableData()
-        let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)!
-        CGImageDestinationAddImage(destination, context.makeImage()!, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
-        CGImageDestinationFinalize(destination)
-        return output as Data
+        return DemoLibrary.encode(context.makeImage()!, as: .jpeg, quality: 0.85)
     }
 
     private static let projectWords = ["发布", "增长", "研究", "运营", "客户端", "后端", "设计系统", "数据", "招聘", "文档"]

@@ -626,7 +626,7 @@ private struct AgentNowCard: View {
         .contextMenu {
             ForEach(now.faces) { item in
                 let shown = services.settings.shown(item)
-                Button { navigation.openSession(item.state.sessionID, store: services.store) } label: {
+                Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
                     Label { Text(item.state.title); Text(shown.label) } icon: { Image(systemName: shown.symbol) }
                 }
             }

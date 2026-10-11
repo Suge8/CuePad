@@ -115,7 +115,7 @@ struct PiChatTests {
 
         let failed = try await item()
         #expect(failed.undelivered == 1 && PiChat.undeliveredNote(failed.undelivered) == "1 句没送到")
-        #expect(try await SessionDigest.read(sessionID: "relay", from: store).undelivered == 1)
+        #expect(try await SessionDigest.read(failed.id, sessionID: "relay", from: store).undelivered == 1)
 
         app.services.settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
         #expect(app.services.settings.shown(try await item()).status != .delivery(.failed))

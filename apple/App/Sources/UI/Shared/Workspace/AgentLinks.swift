@@ -50,7 +50,7 @@ struct AgentDot: View {
         } else if let item = agents.items[card] {
             let shown = services.settings.shown(item)
             #if os(iOS)
-            Button { navigation.openSession(item.state.sessionID, store: services.store) } label: {
+            Button { navigation.openSession(item.state.id, sessionID: item.state.sessionID, store: services.store) } label: {
                 PiStateDot(shown: shown, size: 8).frame(width: 28, height: 28).contentShape(.rect)
             }
             .buttonStyle(.plain)

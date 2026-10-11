@@ -8,7 +8,7 @@ import SwiftUI
 /// 很久以前的会话没有对话时请 Mac 补写，补写中写一句"正在从 Mac 取对话…"。
 /// 会话记录在页面打开期间被删掉（Mac 上的会话文件被删）时，照样显示最后一次看到的内容，底部换成说明。
 struct SessionScreen: View {
-    let sessionID: String
+    let id: UUID
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
@@ -27,8 +27,8 @@ struct SessionScreen: View {
     private static let barGap: CGFloat = 8
 
     /// `seed`：推入前读好的这一页（`Navigation.openSession`），首帧即用，之后以 Store 的观察流为准。
-    init(sessionID: String, seed: SessionDigest? = nil) {
-        self.sessionID = sessionID
+    init(id: UUID, seed: SessionDigest? = nil) {
+        self.id = id
         _digest = State(initialValue: seed)
         _lastSeen = State(initialValue: seed?.session)
     }
@@ -140,8 +140,9 @@ struct SessionScreen: View {
         // 回复框那一层以外的下安全区（横条区或键盘）
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { underBar = $0 }
         .ownsBottomEdge()
-        .observing(services.store, id: sessionID, into: $digest, onError: workspace.fail) { [sessionID] store in
-            try SessionDigest.read(sessionID: sessionID, from: store)
+        .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
+                   into: $digest, onError: workspace.fail) { [id, lastSeen] store in
+            try SessionDigest.read(id, sessionID: lastSeen?.sessionID, from: store)
         }
         .onChange(of: digest, initial: true) { _, digest in
             if let session = digest?.session { lastSeen = session }
@@ -160,6 +161,11 @@ struct SessionScreen: View {
         askedForTranscript = true
         workspace.attempt { _ = try await services.requestTranscript(of: session) }
     }
+}
+
+private struct DigestKey: Equatable {
+    var id: UUID
+    var sessionID: String?
 }
 
 #endif

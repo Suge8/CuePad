@@ -175,7 +175,8 @@ private struct PageStack: View {
         case .archive: ArchivePage()
         case .trash: TrashPage()
         case .agent: AgentPage()
-        case .session(let id): SessionPage(sessionID: id).id(id)
+        case .session(let route): if let id = route.sessionID { SessionPage(sessionID: id).id(id) }
+        default: EmptyView()  // 其余是 iOS 的页
         }
     }
 }
@@ -304,7 +305,7 @@ private extension Route {
     var takesCapture: Bool {
         switch self {
         case .project, .inbox, .archive: true
-        case .trash, .agent, .session: false
+        default: false
         }
     }
 }

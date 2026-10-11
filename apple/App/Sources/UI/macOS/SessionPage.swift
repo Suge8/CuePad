@@ -19,7 +19,12 @@ extension PiSessionState {
 }
 
 extension SessionDigest {
-    /// 会话在线时，状态、详情、名字与近况取桥上的实时值（`read(sessionID:from:)` 读的是同步记录）。
+    /// Mac 端按会话 id 读：同步记录（在线与已结束是同一条记录）。在线会话再经 `live(_:hostID:project:)` 换上桥上的实时值。
+    static func read(sessionID: String, from store: isolated CueStore) throws -> SessionDigest {
+        try read(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
+    }
+
+    /// 会话在线时，状态、详情、名字与近况取桥上的实时值。
     func live(_ session: CuePi.PiSession?, hostID: String, project: Project?) -> SessionDigest {
         guard let session else { return self }
         var digest = self
@@ -143,7 +148,6 @@ struct SessionPage: View {
                 }
                 PiConversation(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, window: $shown)
             }
-            .perfMark("conversation")
         }
         .fadesUnderBars()
         .environment(\.chatHighlight, highlight)

@@ -85,7 +85,7 @@ struct IOSRoot: View {
         }
         // 弹出后才进了那个会话（或 Agent 列表）：当场撤下
         .onChange(of: workspace.notice.map(navigation.keeps)) { _, keeps in if keeps == false { workspace.notice = nil } }
-        .debugScene(workspace, navigation, alerts)
+        .debugScene(workspace, navigation)
     }
 
     private var scheme: ColorScheme? {
@@ -140,7 +140,7 @@ struct RouteView: View {
         case .agent: AgentScreen().countsAsPiViewer()
         case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
-        case .session(let route): SessionScreen(sessionID: route.sessionID, seed: route.seed).countsAsPiViewer()
+        case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))

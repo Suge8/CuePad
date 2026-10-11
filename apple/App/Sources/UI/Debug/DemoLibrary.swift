@@ -197,9 +197,14 @@ enum DemoLibrary {
             }
         }
         fill(CGRect(x: 40, y: 30, width: 180, height: 26), radius: 6, (ink.0, ink.1, ink.2, 1))
+        return encode(context.makeImage()!)
+    }
+
+    /// 把一张图编成 PNG（或给了 `quality` 的 JPEG）：演示图片、大库的照片、截图示意图共用。
+    nonisolated static func encode(_ image: CGImage, as type: UTType = .png, quality: Double? = nil) -> Data {
         let output = NSMutableData()
-        let destination = CGImageDestinationCreateWithData(output, UTType.png.identifier as CFString, 1, nil)!
-        CGImageDestinationAddImage(destination, context.makeImage()!, nil)
+        let destination = CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, image, quality.map { [kCGImageDestinationLossyCompressionQuality: $0] as CFDictionary })
         CGImageDestinationFinalize(destination)
         return output as Data
     }

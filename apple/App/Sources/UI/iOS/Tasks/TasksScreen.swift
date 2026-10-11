@@ -165,7 +165,7 @@ struct TaskLine: View {
             .accessibilityAction { tap() }
             .accessibilityActions {
                 Button("打开") { navigation.openTask(task.id) }
-                if let session { Button("看 Agent 的近况") { navigation.openSession(session.sessionID, store: services.store) } }
+                if let session { Button("看 Agent 的近况") { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } }
             }
             .confirmationDialog(
                 TaskCopy.openSubtasks(subtasks), isPresented: $confirmsSubtasks, titleVisibility: .visible
@@ -242,7 +242,7 @@ struct TaskLine: View {
                 .layoutPriority(1)
             }
             if let session, !done {
-                Button { navigation.openSession(session.sessionID, store: services.store) } label: {
+                Button { navigation.openSession(session.id, sessionID: session.sessionID, store: services.store) } label: {
                     let shown = services.settings.shown(session, delivery: delivery)
                     // 放不下时先省掉用时，再换成短的状态词（"思考中"）；状态点后总有字，不留一颗看不懂的点
                     ViewThatFits(in: .horizontal) {
