@@ -11,7 +11,7 @@ struct PiConversation: View {
     let messages: [PiChatMessage]
     var previews: [PiPreview] = []
     var deliveries: [DeliveryRequest] = []
-    /// 只排最近这么多条（不用懒加载栈，见 `ChatScroll`）；更早的由 `showEarlier` 再排开 `Self.step` 条。
+    /// 至少排开最近这么多条（不用懒加载栈，见 `ChatScroll`）；更早的由 `showEarlier` 再排开一段。
     let window: Int
     var showEarlier: () -> Void = {}
     @Environment(\.palette) private var palette
@@ -20,13 +20,21 @@ struct PiConversation: View {
 
     var body: some View {
         let all = ChatItem.of(PiChat.entries(messages, previews: previews))
-        let entries = Array(all.suffix(window))
+        let first = Self.firstSegment(count: all.count, window: window)
         VStack(alignment: .leading, spacing: Self.spacing) {
-            if entries.count < all.count {
-                EarlierRow(hidden: all.count - entries.count, action: showEarlier)
+            if first > 0 {
+                EarlierRow(hidden: first * Self.segment, action: showEarlier)
             }
-            if entries.isEmpty { RecapPreview(session: session) }
-            ForEach(entries) { item in row(item) }
+            if all.isEmpty { RecapPreview(session: session) }
+            // 一段一段排，每段只按内容比较：上面再排开一段、下面来了新消息时，没变的段不重算也不重排，
+            // 系统直接用上次量好的尺寸（整列一起排时，每排开一段都把已排开的全部重量一遍，长对话里一次几百毫秒）
+            ForEach(first..<Self.segments(all.count), id: \.self) { index in
+                ChatSegment(
+                    items: Array(all[(index * Self.segment)..<min((index + 1) * Self.segment, all.count)]), session: session,
+                    highlight: highlight, opened: $opened
+                )
+                .equatable()
+            }
             ForEach(PiChat.outgoing(deliveries, messages: messages)) { request in OutgoingBubble(request: request, session: session) }
             ending
         }
@@ -39,10 +47,51 @@ struct PiConversation: View {
         }
     }
 
-    private static var spacing: CGFloat { 16 }
-    /// 窗口里最初排几条、每次多排几条。
-    static let firstWindow = 4, step = 10
+    static var spacing: CGFloat { 16 }
+    /// 最初至少排开几条；一段几条（每次再排开一段）。段按从最早那条起的位置切，排开更早的只是在上面多显示一段，已有的段不变。
+    static let firstWindow = 4, segment = 10
+
+    static func segments(_ count: Int) -> Int { (count + segment - 1) / segment }
+
+    /// 排开最近 `window` 条要从第几段起。
+    static func firstSegment(count: Int, window: Int) -> Int { max(0, count - window) / segment }
+
+    /// 对话末尾：处理中的进展（带子代理）、出错的原因。
+    @ViewBuilder private var ending: some View {
+        if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
+        if session.state == .known(.error) {
+            Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
+        }
+    }
+}
+
+
+/// 对话里的一段（`PiConversation.segment` 条）。只按内容比较：同样的几条、描圈的那条（只看本段里的）、同一个会话就不重算。
+private struct ChatSegment: View, Equatable {
+    let items: [ChatItem]
+    let session: PiSessionState
+    let highlight: UUID?
+    @Binding var opened: PiPreview?
+    @Environment(\.palette) private var palette
+
+    init(items: [ChatItem], session: PiSessionState, highlight: UUID?, opened: Binding<PiPreview?>) {
+        self.items = items
+        self.session = session
+        self.highlight = highlight.flatMap { id in items.contains { $0.id == id } ? id : nil }
+        _opened = opened
+    }
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.items == rhs.items && lhs.highlight == rhs.highlight && lhs.session.id == rhs.session.id && lhs.session.projectID == rhs.session.projectID
+    }
+
     private static var turnGap: CGFloat { 14 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: PiConversation.spacing) {
+            ForEach(items) { item in row(item) }
+        }
+    }
 
     @ViewBuilder private func row(_ item: ChatItem) -> some View {
         switch item {
@@ -69,14 +118,6 @@ struct PiConversation: View {
             if let preview = entry.preview { PreviewGroup(previews: [preview]) { opened = $0 } }
         }
     }
-
-    /// 对话末尾：处理中的进展（带子代理）、出错的原因。
-    @ViewBuilder private var ending: some View {
-        if session.state.isWorking || !session.subagents.isEmpty { LiveStatus(session: session) }
-        if session.state == .known(.error) {
-            Callout(tint: palette.failure, symbol: "exclamationmark.circle.fill", text: session.detail ?? "Mac 没有说明原因")
-        }
-    }
 }
 
 
@@ -87,7 +128,7 @@ struct EarlierRow: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Button("更早的 \(min(hidden, PiConversation.step)) 条", action: action)
+        Button("更早的 \(min(hidden, PiConversation.segment)) 条", action: action)
             .font(Typography.caption.weight(.semibold)).foregroundStyle(palette.ink3)
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity, minHeight: 28)
@@ -96,7 +137,7 @@ struct EarlierRow: View {
 
 
 extension PiConversation {
-    /// 只排最近几条（`window`）：要跳到 `id` 那一条（刻度滑条）时至少要排开几条。
+    /// 要跳到 `id` 那一条（刻度滑条）时至少要排开最近几条（`window`）。
     static func window(reaching id: UUID, messages: [PiChatMessage], previews: [PiPreview]) -> Int? {
         let items = ChatItem.of(PiChat.entries(messages, previews: previews))
         return items.firstIndex { $0.id == id }.map { items.count - $0 }
@@ -176,7 +217,7 @@ struct PiQuestionDock: View {
 
 
 /// 对话里的一格：一条（你的话、回答、系统行），或连着的几张预览收成的一组（同一处连着发的文件放在一张纸上）。
-enum ChatItem: Identifiable {
+nonisolated enum ChatItem: Identifiable, Equatable {
     case entry(PiChatEntry)
     case previews([PiChatEntry])
 

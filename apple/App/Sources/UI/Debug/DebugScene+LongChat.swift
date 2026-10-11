@@ -6,6 +6,7 @@ import Foundation
 /// - `-CuePadLongChat YES`（配 `-CuePadDemo YES`）：演示库多一个 300 轮的会话 marathon（CuePad 项目），回答高矮悬殊——
 ///   一句话、整页长段落、40 行代码块、宽表、长列表轮换，每 25 轮你贴进来一段长文；看打开即最新、往上翻、回到最新。
 /// - `-CuePadStream YES`（配 session 画面）：打开会话后给它一轮一轮追加（你的话、思考中、回答，高矮轮换），看新内容到达时跟随最新。
+/// - `-CuePadBench chatdepth`（仅 iOS，配 session 画面打开 marathon）：测量脚本从最新处一路往上滑到第 1 轮，这里按秒量主线程开销与掉帧（`ChatDepthBench`）。
 extension DebugScene {
     static let longChat = "marathon"
     private static let longChatRounds = 300
@@ -62,6 +63,71 @@ extension DebugScene {
         case 4: return (1...12).map { "- 第 \($0) 项：" + ($0 % 2 == 0 ? "已完成" : "还差一点，等上游合并") }.joined(separator: "\n")
         default: return paragraph
         }
+    }
+}
+#endif
+
+#if os(iOS) && DEBUG
+import QuartzCore
+import UIKit
+
+/// 长对话一路往上滑到第 1 轮的开销：由测量脚本在模拟器上真滑（程序改偏移不算用户滚动，滚动区贴着最新会把它滚回去），
+/// 这里每 1 秒量一段：合计、最重一圈（主线程 CPU 毫秒）、指令数（百万）、掉帧；`roundsBack` 是这一段结束时离最新处大约多少轮
+/// （按偏移在内容里的比例折算，懒加载栈的总高是估的，只作参考）。每段一行 `DEPTH {json}` 写进隔离库目录下的 `chatdepth.jsonl`；
+/// 到顶后连着三段不动、或量满 7 分钟就写 `DONE` 退出。
+enum ChatDepthBench {
+    private static let turns = TurnLog()
+    private static let rounds = 300
+
+    static func run() async {
+        guard let dir = ProcessInfo.processInfo.environment["CUEPAD_LIBRARY_DIR"] else { return }
+        let out = URL(filePath: dir).appending(path: "chatdepth.jsonl")
+        try? Data().write(to: out)
+        func write(_ line: String) {
+            guard let handle = try? FileHandle(forWritingTo: out) else { return }
+            handle.seekToEndOfFile()
+            handle.write(Data((line + "\n").utf8))
+            try? handle.close()
+        }
+        try? await Task.sleep(for: .seconds(4))
+        guard let window, let scroll = chatScroll(in: window) else { write("FAIL 找不到对话的滚动区"); exit(1) }
+        write("READY")
+        var stillAtTop = 0
+        var seconds = 0
+        while stillAtTop < 3, seconds < 420 {
+            seconds += 1
+            let recorder = FrameRecorder()
+            recorder.start()
+            let instructions = instructionsMillions()
+            turns.begin(CACurrentMediaTime(), root: nil)
+            try? await Task.sleep(for: .seconds(1))
+            var row = TurnLog.metrics(turns.finish(), instructions: instructions, frames: recorder.stop())
+            let top = -scroll.adjustedContentInset.top
+            let span = max(1, scroll.contentSize.height + scroll.adjustedContentInset.bottom - scroll.bounds.height - top)
+            let back = Int(((1 - (scroll.contentOffset.y - top) / span) * Double(rounds)).rounded())
+            row["roundsBack"] = back
+            row["height"] = scroll.contentSize.height.rounded()
+            ["clickMs", "visibleTurns", "seen", "heavy"].forEach { row[$0] = nil }
+            write("DEPTH " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
+            stillAtTop = scroll.contentOffset.y <= top + 1 ? stillAtTop + 1 : 0
+        }
+        write("DONE")
+        exit(0)
+    }
+
+    private static var window: UIWindow? {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }
+    }
+
+    /// 内容最高的那个滚动区就是对话。
+    private static func chatScroll(in view: UIView) -> UIScrollView? {
+        var best: UIScrollView?
+        func visit(_ view: UIView) {
+            if let scroll = view as? UIScrollView, !scroll.isHidden, scroll.contentSize.height > (best?.contentSize.height ?? 0) { best = scroll }
+            view.subviews.forEach(visit)
+        }
+        visit(view)
+        return best
     }
 }
 #endif

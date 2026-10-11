@@ -78,6 +78,7 @@ extension DebugScene {
             if split { navigation.select(.agent) } else { navigation.tab = .agent }
             navigation.openSession(session.id, sessionID: session.sessionID, store: workspace.services.store)
             if defaults.bool(forKey: "CuePadStream") { Task { await stream(session.sessionID, store: workspace.services.store) } }
+            if defaults.string(forKey: "CuePadBench") == "chatdepth" { Task { await ChatDepthBench.run() } }
         case "newsession":
             if split { navigation.select(.agent) } else { navigation.tab = .agent }
             var sheet = Navigation.NewSession(project: project)  // -CuePadProject 闲鱼：先选中还没绑文件夹的项目（头部引导选文件夹）

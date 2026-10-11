@@ -39,6 +39,8 @@ struct ReplyBlock: View {
             MarkdownText(source: text)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // 整块都接长按（只靠字形判定时，按在行距、留白里会落空）
+        .contentShape(.rect)
         .contextMenu { MessageActions(text: text, kind: .reply, session: session, selectText: { selecting = true }) }
         #if os(iOS)
         .sheet(isPresented: $selecting) { SelectableTextSheet(text: text) }

@@ -59,7 +59,7 @@ struct SessionChat: View {
     private func showEarlier() {
         guard window < ChatItem.of(PiChat.entries(digest.messages, previews: digest.previews)).count else { return }
         follow.willPrepend()
-        window += PiConversation.step
+        window += PiConversation.segment
     }
 
     private func jump(to id: UUID) {
