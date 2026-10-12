@@ -170,7 +170,8 @@ import Testing
     #expect(try await upgraded.card(sub.id)?.parentID == top.id)
   }
 
-  /// 结构 26 的库里任务的正文可能带一句说明（第二行起）：升到 27 时拆成任务的第一条提示词（排在最前、不带会话），任务只留标题，带新的修改时间。
+  /// 结构 26 的库里任务的正文可能带一句说明（第二行起）：升到 27 时拆成任务的草稿（不带会话），任务只留标题，带新的修改时间；
+  /// 任务已有草稿的并进它末尾，不另立一条。
   @Test func schema26LibrarySplitsTaskNotesIntoPrompts() async throws {
     let task = try await store.createTask("修乱序", in: nil)
     let first = try await store.createCard(body: "先复现", under: task.id)
@@ -182,59 +183,66 @@ import Testing
     let upgradedTask = try #require(try await upgraded.card(task.id))
     #expect(upgradedTask.body == "修乱序" && upgradedTask.modifiedAt > before && upgradedTask.piSessionID == "s1")
     let prompts = try await upgraded.children(of: task.id)
-    #expect(prompts.map(\.body) == ["第 6 位重连后会排到最前", "先复现"] && prompts.map(\.id).last == first.id)
+    #expect(prompts.map(\.id) == [first.id] && prompts[0].body == "先复现\n\n第 6 位重连后会排到最前")
     #expect(prompts[0].piSessionID == nil && !prompts[0].isTask && prompts[0].modifiedAt > before)
   }
 
-  /// 结构 27 的库里步骤（顶层任务下的任务）下可能挂着提示词、记着会话：升到 28 时提示词按原顺序（先步骤、再各自的顺序）接到顶层任务已有的下级之后，
-  /// 带新的修改时间；步骤上的会话清掉，任务自己的留着，发送记录不动。
-  @Test func schema27LibraryMovesStepPromptsToTheTopTask() async throws {
+  /// 结构 27 的库里有步骤的任务下可能挂着提示词、记着会话，步骤下也可能有好几条提示词：升到 28 时有步骤的任务的提示词移到第一个没完成的步骤、
+  /// 会话交给第一个步骤（步骤已有会话的丢弃上级的），一个叶子的多条提示词按顺序并成一条，带新的修改时间；发送记录不动。
+  @Test func schema27LibraryPutsDraftsAndSessionsOnLeaves() async throws {
     let top = try await store.createTask("修乱序", in: nil)
-    let own = try await store.createCard(body: "任务自己的提示词", under: top.id)
-    let step1 = try await store.createTask("复现", under: top.id)
-    let step2 = try await store.createTask("改排序", under: top.id)
-    let loose = [try await store.createCard(in: nil, body: "步骤二的第二条"), try await store.createCard(in: nil, body: "步骤二的第一条"),
-                 try await store.createCard(in: nil, body: "步骤一的提示词")]
-    try await store.linkCard(top.id, toSession: "s1")
-    try await store.linkCard(step1.id, toSession: "s2")
-    try await store.recordSend("发过的", to: SendTarget(kind: .piSession, name: "atlas", ref: "s2"), card: step1.id)
-    let before = try #require(try await store.card(loose[2].id)).modifiedAt
-    // 旧版本允许的结构：提示词直接挂在步骤下（同级顺序：步骤二的第一条在第二条之前）
-    let sql = [(loose[2], step1, "a"), (loose[1], step2, "a"), (loose[0], step2, "b")].map {
-      "UPDATE cards SET parentID = '\($0.1.id.uuidString.lowercased())', sortKey = '\($0.2)' WHERE id = '\($0.0.id.uuidString.lowercased())';"
-    }.joined()
+    let done = try await store.createTask("复现", under: top.id)
+    let open = try await store.createTask("改排序", under: top.id)
+    try await store.setStatus(done.id, .done)
+    let ideas = [
+      try await store.createCard(in: nil, body: "任务自己的"), try await store.createCard(in: nil, body: "复现的"),
+      try await store.createCard(in: nil, body: "改排序的第一条"), try await store.createCard(in: nil, body: "改排序的第二条"),
+    ]
+    let pins: [(Card, Card, String)] = [(ideas[0], top, "a"), (ideas[1], done, "a"), (ideas[2], open, "b"), (ideas[3], open, "c")]
+    let sessions = [(top, "s1"), (open, "s2")]
+    let sql = pins.map { "UPDATE cards SET parentID = '\($1.id.uuidString.lowercased())', sortKey = '\($2)' WHERE id = '\($0.id.uuidString.lowercased())';" }.joined()
+      + sessions.map { "UPDATE cards SET piSessionID = '\($1)' WHERE id = '\($0.id.uuidString.lowercased())';" }.joined()
     try RawDB(fixture.url).exec(sql + "PRAGMA user_version = 27;")
+    let before = try #require(try await store.card(ideas[0].id)).modifiedAt
 
     let upgraded = try CueStore(url: fixture.url)
-    let order = try await upgraded.children(of: top.id).filter { !$0.isTask }
-    #expect(order.map(\.id) == [own.id, loose[2].id, loose[1].id, loose[0].id] && order[1].modifiedAt > before)
-    #expect(try await upgraded.children(of: step1.id).isEmpty)
-    #expect(try await upgraded.children(of: step2.id).isEmpty)
-    #expect(try await upgraded.card(step1.id)?.piSessionID == nil)
-    #expect(try await upgraded.card(top.id)?.piSessionID == "s1")
-    #expect(try await upgraded.sendRecords().map(\.cardID) == [step1.id])
+    #expect(try await upgraded.children(of: top.id).map(\.id) == [done.id, open.id])
+    #expect(try await upgraded.children(of: done.id).map(\.id) == [ideas[1].id])
+    let merged = try await upgraded.children(of: open.id)
+    #expect(merged.map(\.id) == [ideas[0].id] && merged[0].modifiedAt > before)
+    #expect(merged[0].body == "任务自己的\n\n改排序的第一条\n\n改排序的第二条")
+    #expect(try await upgraded.card(top.id)?.piSessionID == nil)
+    #expect(try await upgraded.card(done.id)?.piSessionID == "s1")
+    #expect(try await upgraded.card(open.id)?.piSessionID == "s2")
   }
 
   /// 结构 25 的库里已经发出去的提示词（记着交给的会话、没有在路上或失败的请求）升到 26 时删掉，任务记下的会话与发送记录留着；
-  /// 资料、没发的、没送到的、不挂在任务下的灵感不动。
+  /// 资料、没发的、没送到的、不挂在任务下的灵感不动（之后升到 28 时，一个叶子上没发的与没送到的并成一条）。
   @Test func schema25LibraryDropsDeliveredPrompts() async throws {
     let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
     let task = try await store.createTask("修乱序", in: nil)
-    let delivered = try await store.createCard(body: "先复现", under: task.id)
-    let resource = try await store.createCard(body: "常用说明", under: task.id)
-    let unsent = try await store.createCard(body: "还没发", under: task.id)
-    let failed = try await store.createCard(body: "没送到", under: task.id)
+    let ideas = [
+      try await store.createCard(in: nil, body: "先复现"), try await store.createCard(in: nil, body: "常用说明"),
+      try await store.createCard(in: nil, body: "还没发"), try await store.createCard(in: nil, body: "没送到"),
+    ]
+    let (delivered, resource, unsent, failed) = (ideas[0], ideas[1], ideas[2], ideas[3])
     let loose = try await store.createCard(in: nil, body: "散放的灵感")
+    try await store.updateCard(resource.id) { $0.isPinned = true }
+    try await store.linkCard(task.id, toSession: "s1")
     try await store.recordSend(delivered.body, to: atlas, card: delivered.id)
     try await store.linkCard(resource.id, toSession: "s1")
-    try await store.updateCard(resource.id) { $0.isPinned = true }
     try await store.linkCard(loose.id, toSession: "s1")
     let request = try await store.requestDelivery(failed.body, to: atlas, on: "mac", card: failed.id)
     try await store.linkCard(failed.id, toSession: "s1")
-    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'failed' WHERE id = '\(request.id.uuidString.lowercased())'; PRAGMA user_version = 25;")
+    // 旧版本允许的结构：同一个任务下有好几条提示词
+    let parents = zip(ideas, ["a", "b", "c", "d"]).map {
+      "UPDATE cards SET parentID = '\(task.id.uuidString.lowercased())', sortKey = '\($1)' WHERE id = '\($0.id.uuidString.lowercased())';"
+    }.joined()
+    try RawDB(fixture.url).exec(parents + "UPDATE deliveryRequests SET status = 'failed' WHERE id = '\(request.id.uuidString.lowercased())'; PRAGMA user_version = 25;")
 
     let upgraded = try CueStore(url: fixture.url)
-    #expect(try await upgraded.children(of: task.id).map(\.id) == [resource.id, unsent.id, failed.id])
+    #expect(try await upgraded.children(of: task.id).map(\.id) == [resource.id, unsent.id])
+    #expect(try await upgraded.card(unsent.id)?.body == "还没发\n\n没送到")
     #expect(try await upgraded.card(loose.id) != nil)
     #expect(try await upgraded.card(task.id)?.piSessionID == "s1")
     #expect(try await upgraded.trashedCards().isEmpty)

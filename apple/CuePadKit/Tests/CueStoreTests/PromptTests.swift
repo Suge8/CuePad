@@ -21,11 +21,16 @@ import Testing
     #expect(try await store.children(of: single.id).isEmpty)
   }
 
-  @Test func 步骤没有提示词_它多出来的话成为顶层任务的第一条提示词() async throws {
+  @Test func 步骤是叶子_多出来的话是它自己的草稿_再多出来的并进同一条() async throws {
     let top = try await store.createTask("修乱序", in: nil)
     let step = try await store.createTask("复现\n先看日志", under: top.id)
     #expect(try await store.card(step.id)?.body == "复现")
-    #expect(try await store.children(of: step.id).isEmpty)
-    #expect(try await store.children(of: top.id).map(\.body) == ["先看日志", "复现"])
+    #expect(try await store.children(of: top.id).map(\.id) == [step.id])
+    let draft = try #require(try await store.children(of: step.id).first)
+    #expect(draft.body == "先看日志")
+
+    try await store.updateCard(step.id) { $0.body = "复现\n再来一遍" }
+    let children = try await store.children(of: step.id)
+    #expect(children.map(\.id) == [draft.id] && children[0].body == "先看日志\n\n再来一遍")
   }
 }

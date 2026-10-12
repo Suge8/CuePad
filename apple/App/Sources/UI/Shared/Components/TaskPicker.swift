@@ -50,15 +50,20 @@ struct TaskPicker: View {
         let words = text.trimmingCharacters(in: .whitespaces)
         return (groups ?? []).compactMap { group in
             let tasks = words.isEmpty ? group.tasks : group.tasks.filter { $0.title.localizedCaseInsensitiveContains(words) }
-            return tasks.isEmpty ? nil : AttachTargets.Group(projectID: group.projectID, tasks: tasks)
+            return tasks.isEmpty ? nil : AttachTargets.Group(projectID: group.projectID, tasks: tasks, parents: group.parents)
         }
     }
 
-    func row(_ task: Card) -> some View {
+    func row(_ task: Card, in group: AttachTargets.Group) -> some View {
         Button { attach(to: task.id) } label: {
             HStack(spacing: 10) {
                 TaskRingView(status: task.status, ring: .plain, done: false, size: 16)
-                Text(task.title).font(Typography.body).foregroundStyle(palette.ink).lineLimit(2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(task.title).font(Typography.body).foregroundStyle(palette.ink).lineLimit(2)
+                    if let parent = task.parentID.flatMap({ group.parents[$0] }) {
+                        Text("在「\(parent.title)」下").font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
+                    }
+                }
                 Spacer(minLength: 0)
             }
             .contentShape(.rect)

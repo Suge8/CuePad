@@ -14,8 +14,8 @@ extension CueStore {
 
   /// 卡片的上级、项目与是不是任务；没有或已在回收站为 nil。
   func link(of id: UUID) throws -> CardLinks.Link? {
-    try db.first("SELECT parentID, projectID, todoAt IS NOT NULL FROM cards WHERE id = ? AND deletedAt IS NULL", [id]) {
-      CardLinks.Link(parent: $0.uuidOrNil(0), project: $0.uuidOrNil(1), isTask: $0.bool(2))
+    try db.first("SELECT parentID, projectID, todoAt IS NOT NULL, isPinned FROM cards WHERE id = ? AND deletedAt IS NULL", [id]) {
+      CardLinks.Link(parent: $0.uuidOrNil(0), project: $0.uuidOrNil(1), isTask: $0.bool(2), isPinned: $0.bool(3))
     }
   }
 

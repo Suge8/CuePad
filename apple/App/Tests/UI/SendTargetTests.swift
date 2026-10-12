@@ -59,7 +59,7 @@ struct SendTargetTests {
         return (task, try await store.createCard(body: "提示词", under: task.id))
     }
 
-    /// 同一任务再加一条提示词。
+    /// 同一任务再写一条提示词（上一条已用掉之后）。
     private func sibling(of task: Card) async throws -> Card {
         try await store.createCard(body: "另一条提示词", under: task.id)
     }
@@ -84,13 +84,14 @@ struct SendTargetTests {
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
         let (task, first) = try await prompt(in: project)
-        let second = try await sibling(of: task)
         let (_, elsewhere) = try await prompt(in: project)
         try await expectDestination(first.id, .newSession, "本项目有在线会话，但没交给过：任务默认开新会话")
 
         workspace.sendState.pick(.session("a"), for: first)
         workspace.handOff(first)
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "a" }
+        _ = try await eventually(store, { try $0.card(first.id) }) { $0 == nil }  // 送达就用掉
+        let second = try await sibling(of: task)  // 之后写的新提示词
 
         let nextWindow = Workspace(services: rig.services)
         #expect(nextWindow.sendState.picks.isEmpty)
@@ -100,14 +101,12 @@ struct SendTargetTests {
 
     @Test func 挑过的去处只对所在任务生效() async throws {
         _ = try await open("a", in: "/work/alpha")
-        let (task, first) = try await prompt(in: project)
-        let second = try await sibling(of: task)
+        let (_, first) = try await prompt(in: project)
         let (_, other) = try await prompt(in: project)
 
         workspace.sendState.pick(.session("a"), for: first)
 
         try await expectDestination(first.id, .session("a"))
-        try await expectDestination(second.id, .session("a"), "同一任务的提示词一起")
         try await expectDestination(other.id, .newSession)
     }
 

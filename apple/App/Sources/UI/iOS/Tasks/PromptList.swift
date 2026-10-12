@@ -33,16 +33,19 @@ struct PromptList: View {
                     hand: { hand(prompt) })
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-            Button(action: write) {
-                Label(prompts.isEmpty ? "写一条提示词：要 Agent 做什么" : "写一条提示词", systemImage: "plus")
-                    .font(TaskMetrics.font.weight(.medium)).foregroundStyle(palette.ink2)
-                    .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading)
-                    .padding(.horizontal, TaskMetrics.cardPadding)
-                    .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous)
-                        .strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-                    .contentShape(.rect)
+            // 一个叶子最多一条草稿：已有就不再给"写一条"
+            if prompts.allSatisfy(\.isPinned) {
+                Button(action: write) {
+                    Label("写一条提示词：要 Agent 做什么", systemImage: "plus")
+                        .font(TaskMetrics.font.weight(.medium)).foregroundStyle(palette.ink2)
+                        .frame(maxWidth: .infinity, minHeight: TaskMetrics.rowHeight, alignment: .leading)
+                        .padding(.horizontal, TaskMetrics.cardPadding)
+                        .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous)
+                            .strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+                        .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle(scale: 0.98))
             }
-            .buttonStyle(PressStyle(scale: 0.98))
         }
         .animation(Motion.quick, value: prompts.map(\.id))
     }
