@@ -2,15 +2,14 @@
 import CueStore
 import SwiftUI
 
-/// 任务浮窗：点任务或它的提示词（项目页的任务区、任务面板、⌘K、归档）就在当前页上弹出，不换页。左右两栏，像邮件：
-/// 左边是这件事——完成圈、就地改的标题、待发的提示词一条一行（`PromptLine`，点哪条右边就编辑哪条；送达就用掉了，
-/// 发过的话在会话里看）、子任务；
-/// 右边是一张纸：选中那条提示词的编辑区与操作栏（去处、发给 Agent，⌘↩ 同主钮）。点开任务时右边是第一条还没交出去的提示词；
-/// 一条都没有时右边请你写第一条。整页的编辑页只给散放的灵感。
+/// 任务浮窗：点任务（项目页、任务面板、⌘K、归档）或它的一条提示词就在当前页上弹出，不换页。一件事和它的 Agent，一栏从上往下：
+/// 标题（就地改）→ 步骤（勾选清单，只有勾和字）→ 这件事的 Agent 此刻怎样（点"打开会话"看全部对话，对话不在这里）→
+/// 还没发的草稿 → 底下的输入框：写下一句要对 Agent 说的话（就是一条提示词），⌘↩ 发出，送达就用掉了、成了会话里的一句。
+/// 整页的编辑页只给散放的灵感。
 struct TaskSheet: View {
     struct Request: Identifiable, Equatable {
         let id: UUID
-        /// 右边编辑的那条提示词；nil 时取第一条还没交出去的。换它不换浮窗（浮窗按 `id` 认）。
+        /// 输入框里正在写的那条草稿；nil 时取第一条。换它不换浮窗（浮窗按 `id` 认）。
         var prompt: UUID?
     }
 
@@ -22,22 +21,16 @@ struct TaskSheet: View {
     @Environment(\.closePanel) private var close
     @State private var data: SheetData?
 
-    private static let size = CGSize(width: 880, height: 600)
-    private static let listWidth: CGFloat = 300
+    private static let size = CGSize(width: 640, height: 600)
 
     var body: some View {
         // ZStack 而不是 Group：数据读到之前 Group 里没有视图，挂在它上面的读库也就不会开始
         ZStack {
             if let data {
-                // 不画分隔线：左栏在浮窗的底色上，右栏是一张纸，两块靠底色分开
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     header(data)
-                    HStack(spacing: 0) {
-                        list(data).frame(width: Self.listWidth)
-                        detail(data)
-                            .background(palette.paperLit, in: .rect(cornerRadius: 12, style: .continuous))
-                            .padding([.trailing, .bottom], 12)
-                    }
+                    ScrollView { overview(data) }.scrollBounceBehavior(.basedOnSize)
+                    composer(data)
                 }
             }
         }
@@ -46,17 +39,12 @@ struct TaskSheet: View {
         .observing(services.store, id: taskID, into: $data, onError: workspace.fail) { [taskID] in try SheetData.read(taskID, from: $0) }
         // 别处删掉、归档了它，或改回了灵感：浮窗收起
         .onChange(of: data?.gone) { if data?.gone == true { close() } }
-        // 默认选中的那条也记下来：左边那一行垫选中色，与点过的一样
-        .onChange(of: data.flatMap { selected($0)?.id }, initial: true) { _, id in
-            if let id, workspace.openTask?.id == taskID, workspace.openTask?.prompt == nil { workspace.openTask?.prompt = id }
-        }
     }
 
-    /// 选中的提示词：点过的那条，否则第一条还没交出去的，再否则第一条。
-    private func selected(_ data: SheetData) -> Card? {
+    /// 输入框里的草稿：点过的那条，否则第一条。
+    private func draft(_ data: SheetData) -> Card? {
         let prompts = data.detail.prompts
-        let chosen = workspace.openTask?.prompt ?? data.detail.primaryPrompt(agents: agents)
-        return prompts.first { $0.id == chosen } ?? prompts.first
+        return prompts.first { $0.id == workspace.openTask?.prompt } ?? prompts.first
     }
 
     private func header(_ data: SheetData) -> some View {
@@ -64,12 +52,6 @@ struct TaskSheet: View {
             ProjectGlyph(project: data.project, size: 12)
             Text(data.project?.name ?? CaptureCopy.unfiled)
                 .foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
-            if let parent = data.parent {
-                Dot()
-                Button { workspace.open(parent) } label: { Label(parent.title, systemImage: "arrow.turn.left.up").lineLimit(1) }
-                    .buttonStyle(.plain)
-                    .help("回到上级任务")
-            }
             Spacer(minLength: 12)
             Menu("更多", systemImage: "ellipsis") { CardActions(card: data.task, more: true) }
                 .labelStyle(.iconOnly).menuStyle(.button).menuIndicator(.hidden).buttonStyle(.borderless).fixedSize()
@@ -81,89 +63,125 @@ struct TaskSheet: View {
         }
         .font(Typography.meta)
         .foregroundStyle(palette.ink3)
-        .padding(.horizontal, 18).frame(height: 48)
+        .padding(.horizontal, 20).frame(height: 48)
     }
 
-    private func list(_ data: SheetData) -> some View {
-        let task = data.task
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .top, spacing: 4) {
-                    TaskRingButton(task: task, prompts: data.detail.prompts.count, subtasks: data.detail.progress).padding(.top, 2)
-                    // 换成另一条任务时重建：标题与说明的草稿只属于那一条
-                    TaskHeading(task: task).id(task.id)
-                }
+    private func overview(_ data: SheetData) -> some View {
+        let task = data.task, draft = draft(data)
+        return VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .top, spacing: 4) {
+                TaskRingButton(task: task, prompts: data.detail.prompts.count, subtasks: data.detail.progress).padding(.top, 2)
+                // 换成另一条任务时重建：标题的草稿只属于那一条
+                TaskHeading(task: task).id(task.id)
+            }
+            .padding(.horizontal, 4)
+            Steps(task: task, steps: data.detail.subtasks)
+            if let item = agents.items[task.id] { AgentStatus(item: item) }
+            // 输入框里那条之外的草稿：点哪条就到输入框里接着写
+            let others = data.detail.prompts.filter { $0.id != draft?.id }
+            if !others.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    SectionLabel(text: "提示词").padding(.horizontal, TaskRow.inset)
-                    ForEach(data.detail.prompts) { prompt in
-                        PromptLine(prompt: prompt)
-                    }
-                    addRow("写一条提示词") {
-                        let id = task.id, store = services.store
-                        workspace.attempt { workspace.open(try await store.createCard(body: "", under: id)) }
-                    }
-                    // 发出去的提示词用掉了，原话与回答都在会话里
-                    if let session = task.piSessionID {
-                        Button { workspace.show(.session(session)) } label: {
-                            HStack(spacing: TaskRow.columnGap) {
-                                Image(systemName: "bubble.left.and.text.bubble.right").frame(width: TaskRow.ringColumn)
-                                Text("发过的话在会话里看")
-                                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
-                            }
-                            .font(Typography.meta).foregroundStyle(palette.ink3)
-                            .padding(.horizontal, TaskRow.inset).frame(minHeight: 26)
-                            .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                if data.parent == nil {
-                    VStack(alignment: .leading, spacing: 2) {
-                        SubtaskList(detail: data.detail, open: workspace.open).padding(.horizontal, TaskRow.inset)
-                        NewTaskField(project: task.projectID, parent: task.id)
-                    }
+                    SectionLabel(text: "还没发的").padding(.horizontal, TaskRow.inset)
+                    ForEach(others) { PromptLine(prompt: $0) }
                 }
             }
-            .padding(.horizontal, 10).padding(.vertical, 16)
         }
-        .scrollIndicators(.automatic)
+        .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 16)
     }
 
-    private func addRow(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: TaskRow.columnGap) {
-                Image(systemName: "plus").font(.system(size: 12, weight: .semibold)).frame(width: TaskRow.ringColumn)
-                Text(title).font(Typography.secondary)
-            }
-            .foregroundStyle(palette.ink2)
-            .padding(.horizontal, TaskRow.inset)
-            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder private func detail(_ data: SheetData) -> some View {
-        if let prompt = selected(data) {
-            PromptEditor(prompt: prompt, task: data.task).id(prompt.id)
-        } else {
-            VStack(spacing: 14) {
-                Text("这件事要 Agent 做什么？").font(Typography.emptyTitle).foregroundStyle(palette.ink)
-                Text("写一条提示词，写好就能发给 Agent").font(Typography.secondary).foregroundStyle(palette.ink3)
+    /// 底下的输入框：有草稿就是它的编辑区与操作栏；没有时一行"写下一句要对 Agent 说的话"，点了新建一条接着写。
+    @ViewBuilder private func composer(_ data: SheetData) -> some View {
+        Group {
+            if let draft = draft(data) {
+                PromptEditor(prompt: draft, task: data.task).id(draft.id)
+            } else {
                 Button {
                     let id = data.task.id, store = services.store
                     workspace.attempt { workspace.open(try await store.createCard(body: "", under: id)) }
                 } label: {
-                    Label("写一条提示词", systemImage: "square.and.pencil").primaryCapsule(palette)
+                    Text("写下一句要对 Agent 说的话…").font(Typography.body).foregroundStyle(palette.placeholder)
+                        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .contentShape(.rect)
                 }
-                .buttonStyle(PressStyle())
+                .buttonStyle(.plain)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .background(palette.paperLit, in: .rect(cornerRadius: 14, style: .continuous))
+        .padding([.horizontal, .bottom], 12)
     }
 }
 
-/// 右栏：选中那条提示词的编辑区（铺满、自己滚）与下面的操作栏；上沿一行写保存状态。打开时编辑器接过键盘；
+/// 步骤：任务里的勾选清单（数据上是这件事的子任务），点圈勾掉、右键是它的菜单；末尾一行添加。没有步骤时只有那一行。
+private struct Steps: View {
+    let task: Card
+    let steps: [Card]
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(steps) { step in
+                let done = step.status == .done
+                HStack(spacing: TaskRow.columnGap) {
+                    Button { workspace.attempt { try await workspace.toggle(step.id) } } label: {
+                        TaskRingView(status: step.status, ring: .plain, done: done, size: 13).frame(width: TaskRow.ringColumn)
+                    }
+                    .buttonStyle(PressStyle(scale: 0.85))
+                    .accessibilityLabel(TaskSpeech.toggle(done: done))
+                    Text(step.title).font(Typography.body).strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink).lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, TaskRow.inset).frame(minHeight: 28)
+                .contentShape(.rect)
+                .contextMenu { CardActions(card: step) }
+                .sensoryFeedback(.success, trigger: step.status) { $1 == .done }
+            }
+            NewTaskField(project: task.projectID, parent: task.id)
+        }
+        .animation(Motion.quick, value: steps.map(\.id))
+    }
+}
+
+/// 这件事的 Agent 此刻怎样：状态标、会话名、状态词与最要紧的一句（`PiRowLine`），右边"打开会话"——全部对话在会话页里看。
+private struct AgentStatus: View {
+    let item: PiSessionListItem
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let state = workspace.withLiveState(item.state)
+        let shown = services.settings.shown(state, delivery: item.delivery)
+        let line = PiRowLine.of(state, draft: nil, end: nil, failure: shown.undelivered(item.delivery)?.failure)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            PiStateDot(shown: shown, size: 7).frame(width: TaskRow.ringColumn)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(state.title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(shown.label).font(Typography.meta).foregroundStyle(shown.labelTint(palette))
+                }
+                if let line { Text(line.speech).font(Typography.secondary).foregroundStyle(palette.ink2).lineLimit(2) }
+            }
+            Spacer(minLength: 8)
+            Button { workspace.show(.session(state.sessionID)) } label: {
+                HStack(spacing: 3) {
+                    Text("打开会话")
+                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                }
+                .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+                .padding(.horizontal, 10).frame(height: 26)
+                .background(palette.fill, in: .capsule)
+                .contentShape(.capsule)
+            }
+            .buttonStyle(PressStyle())
+        }
+        .padding(12)
+        .background(palette.paperLit, in: .rect(cornerRadius: 12, style: .continuous))
+    }
+}
+
+/// 输入框：草稿的编辑区（自己滚）与操作栏（去处、发给 Agent，⌘↩ 同主钮）。打开时编辑器接过键盘；
 /// 换一条、关浮窗都经 `CardEditing.leave` 写下没保存的字，空白的不留下。
 private struct PromptEditor: View {
     let prompt: Card
@@ -172,19 +190,20 @@ private struct PromptEditor: View {
     @Environment(\.palette) private var palette
     @State private var editing: CardEditing?
 
+    private static let height: CGFloat = 200
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let editing {
+                editing.field(prompt, theme: .editor(palette, horizontalInset: 16))
                 HStack {
-                    Text("提示词").font(Typography.label).foregroundStyle(palette.ink3)
                     SaveStatus(editing: editing).font(Typography.meta)
+                    EditorBar(card: prompt, task: task, editing: editing)
                 }
-                .padding(.horizontal, 24).padding(.top, 14)
-                editing.field(prompt, theme: .editor(palette, horizontalInset: 20))
-                EditorBar(card: prompt, task: task, editing: editing).padding(.horizontal, 16).padding(.bottom, 14)
+                .padding(.horizontal, 12).padding(.bottom, 10)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(height: Self.height)
         .task {
             editing = CardEditing(prompt, workspace: workspace)
             await NextFrame.wait()

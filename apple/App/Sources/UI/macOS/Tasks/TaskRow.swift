@@ -216,7 +216,7 @@ struct PromptLine: View {
     }
 }
 
-/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的子任务（任务浮窗里）；`choosesProject` 时右边可换落到哪个项目（任务面板跨项目）。
+/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的一个步骤（任务浮窗里）；`choosesProject` 时右边可换落到哪个项目（任务面板跨项目）。
 struct NewTaskField: View {
     let project: UUID?
     var parent: UUID?
@@ -230,7 +230,7 @@ struct NewTaskField: View {
     @FocusState private var focused: Bool
 
     private var target: UUID? { chosen ?? project }
-    private var prompt: String { parent == nil ? "添加任务" : "添加子任务" }
+    private var prompt: String { parent == nil ? "添加任务" : "添加步骤" }
 
     var body: some View {
         HStack(spacing: TaskRow.columnGap) {
