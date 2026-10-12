@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Pi 回答的 Markdown 渲染（块见 `MarkdownBlock`）：相邻的非表格块排成**一个** `Text`（`AttributedString`），所以一条回答的段落、列表、标题、引用、
-/// 代码块是一个选择单元：双击选词、三击选段、⌘A、拖着连选、右键复制都是系统的文字选择，不用每块各开一套。表格单独一块、整张横向滚，里面的字不开选择
-/// （一格一个交互视图，一张表几十个，滚动时一帧帧都要付；整条回答的复制在右键菜单里）。
+/// 代码块是一个选择单元：双击选词、三击选段、⌘A、拖着连选、右键复制都是系统的文字选择，不用每块各开一套。表格单独一块、整张横向滚，自己可选（一格一个选择单元，选不到表格外；
+/// 表格前后的正文是两段 `Text`，也不连在一起）。
 /// `Text` 只认字体、颜色、底色、链接、下划线这类行内属性，不认段落缩进与段距，所以结构用字符摆：块与块之间隔一个小字号的空行当段距，
 /// 列表项是缩进的空格加序号，引用前一个竖条字符，代码块是等宽字加底色；列表项折行时回到左边，不悬挂缩进。
 /// 行内：链接加下划线（强调色是墨，不画线就认不出），行内代码垫一层淡底。表格只画细线：表头淡底，行间一道线。
@@ -23,7 +23,7 @@ struct MarkdownText: View, Equatable {
                 case .table(let table):
                     // 表格带着自己的边框整张滚；阅读栏贴着屏幕边（手机）时滚动可以越过页边距滑到屏幕边，栏两边有空白时收在栏内
                     // 贴着屏幕边时被屏幕边切开的那一列本身就看得出还有；收在栏内时右缘淡出
-                    ScrollView(.horizontal) { MarkdownTableView(table: table) }
+                    ScrollView(.horizontal) { MarkdownTableView(table: table).selectable() }
                         .scrollIndicatorsFlash(onAppear: true)
                         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
                         .scrollClipDisabled(columnBleeds)
