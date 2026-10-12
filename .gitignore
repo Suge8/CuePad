@@ -19,3 +19,6 @@ __pycache__/
 
 # Local dev notes (internal planning brief, not for public tree)
 /plan.md
+
+# Vercel CLI 的项目关联（落地页部署）
+.vercel/
