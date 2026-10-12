@@ -63,7 +63,7 @@ public struct Project: Identifiable, Equatable, Sendable {
 }
 
 /// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
-/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与提示词（挂在任务下的灵感，要发给 Agent 的话）；任务的正文只是标题与一句说明（`CueTask`）。
+/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与提示词（挂在任务下的灵感，要发给 Agent 的话）；任务的正文只有标题，多出来的话都是提示词（`CueLines.split`）。
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID

@@ -77,6 +77,17 @@ enum Schema {
       ) { $0.uuid(0) }
       _ = try CueStore.consumePrompts(delivered, in: db)
     },
+    // 27：任务的正文只有标题。旧任务的第二行起（一句说明）按设为任务的规则（`CueLines.split`）拆成它的第一条提示词：不带会话与发送记录，
+    // 说明从没发给过 Agent。回收站与归档里的任务一并处理；modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      let now = Date.stamp
+      let tasks = try db.query("SELECT id, modifiedAt FROM cards WHERE todoAt IS NOT NULL AND instr(body, char(10)) > 0") {
+        (id: $0.uuid(0), modifiedAt: $0.date(1))
+      }
+      for (id, modifiedAt) in tasks {
+        _ = try CueStore.splitPrompt(db, task: id, at: max(now, modifiedAt.addingTimeInterval(0.001)), carryingHandoff: false)
+      }
+    },
   ]
 
   private static let syncSent = """

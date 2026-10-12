@@ -172,6 +172,22 @@ import Testing
     #expect(try await upgraded.card(prompt.id)?.parentID == sub.id)
   }
 
+  /// 结构 26 的库里任务的正文可能带一句说明（第二行起）：升到 27 时拆成任务的第一条提示词（排在最前、不带会话），任务只留标题，带新的修改时间。
+  @Test func schema26LibrarySplitsTaskNotesIntoPrompts() async throws {
+    let task = try await store.createTask("修乱序", in: nil)
+    let first = try await store.createCard(body: "先复现", under: task.id)
+    try await store.linkCard(task.id, toSession: "s1")
+    let before = try #require(try await store.card(task.id)).modifiedAt
+    try RawDB(fixture.url).exec("UPDATE cards SET body = '修乱序\n第 6 位重连后会排到最前' WHERE id = '\(task.id.uuidString.lowercased())'; PRAGMA user_version = 26;")
+
+    let upgraded = try CueStore(url: fixture.url)
+    let upgradedTask = try #require(try await upgraded.card(task.id))
+    #expect(upgradedTask.body == "修乱序" && upgradedTask.modifiedAt > before && upgradedTask.piSessionID == "s1")
+    let prompts = try await upgraded.children(of: task.id)
+    #expect(prompts.map(\.body) == ["第 6 位重连后会排到最前", "先复现"] && prompts.map(\.id).last == first.id)
+    #expect(prompts[0].piSessionID == nil && !prompts[0].isTask && prompts[0].modifiedAt > before)
+  }
+
   /// 结构 25 的库里已经发出去的提示词（记着交给的会话、没有在路上或失败的请求）升到 26 时删掉，任务记下的会话与发送记录留着；
   /// 资料、没发的、没送到的、不挂在任务下的灵感不动。
   @Test func schema25LibraryDropsDeliveredPrompts() async throws {

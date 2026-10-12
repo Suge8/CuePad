@@ -31,42 +31,21 @@ public enum CueLines {
         return text.replacingOccurrences(of: object, with: "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
+    /// 任务的正文只有标题；一段多行的话变成任务时拆开：第一个有文字的行留给任务，其余（文字与图片，原样）成为它的一条提示词；
+    /// 只有那一行时提示词为 nil。
+    public static func split(_ stored: String) -> (task: String, prompt: String?) {
+        var lines = stored.components(separatedBy: "\n")
+        guard let index = lines.firstIndex(where: isTitleLine) else { return (stored, nil) }
+        let heading = lines.remove(at: index)
+        let rest = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasContent = !contentLines(rest).isEmpty || !CueFormat.imageHashes(in: rest).isEmpty
+        return (heading, hasContent ? rest : nil)
+    }
+
     private static func stripListMarker(_ line: String) -> String {
         line.replacing(/^(?:[-*•]|\d+[.)])\s+/, with: "", maxReplacements: 1)
             .replacing(/^\[[ xX]?\]\s*/, with: "", maxReplacements: 1)
             .trimmingCharacters(in: .whitespaces)
-    }
-}
-
-/// 任务的正文：标题与可选的一句说明（任务是一件要做成的事；要发给 Agent 的话是挂在它下面的提示词）。
-/// 存成两行：第一行标题，第二行说明。
-public struct CueTask: Equatable, Sendable {
-    public var title: String
-    public var note: String
-
-    public init(title: String, note: String = "") {
-        self.title = title
-        self.note = note
-    }
-
-    public init(_ stored: String) {
-        title = CueSummary(stored).title
-        note = CueLines.contentLines(stored).dropFirst().joined(separator: " ")
-    }
-
-    public var stored: String {
-        let title = title.trimmingCharacters(in: .whitespacesAndNewlines), note = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        return note.isEmpty ? title : "\(title)\n\(note)"
-    }
-
-    /// 一段多行的话变成任务时拆开：第一个有文字的行留给任务，其余（文字与图片，原样）成为它的一条提示词；只有那一行时提示词为 nil。
-    public static func split(_ stored: String) -> (task: String, prompt: String?) {
-        var lines = stored.components(separatedBy: "\n")
-        guard let index = lines.firstIndex(where: CueLines.isTitleLine) else { return (stored, nil) }
-        let heading = lines.remove(at: index)
-        let rest = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        let hasContent = !CueLines.contentLines(rest).isEmpty || !CueFormat.imageHashes(in: rest).isEmpty
-        return (heading, hasContent ? rest : nil)
     }
 }
 
