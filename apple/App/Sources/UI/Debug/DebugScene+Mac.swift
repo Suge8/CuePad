@@ -46,6 +46,7 @@ extension DebugScene {
         case "churn": await benchChurn(workspace)
         case "interact": await InteractionBench.run(workspace)
         case "chatresize": Task { await ChatResizeBench.run() }
+        case "chatscroll": Task { await ChatScrollBench.run() }
         default: break
         }
     }

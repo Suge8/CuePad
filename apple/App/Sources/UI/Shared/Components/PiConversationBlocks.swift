@@ -36,7 +36,7 @@ struct ReplyBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let meta { ToolActivityLine(note: meta, tools: tools) }
-            MarkdownText(source: text)
+            MarkdownText(source: text).equatable()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // 整块都接长按（只靠字形判定时，按在行距、留白里会落空）
