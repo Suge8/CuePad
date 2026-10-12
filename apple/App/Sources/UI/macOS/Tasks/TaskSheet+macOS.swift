@@ -73,7 +73,7 @@ struct TaskSheet: View {
                 TaskHeading(task: task).id(task.id)
             }
             PromptList(
-                task: task, detail: data.detail, open: workspace.open, hand: workspace.handOff,
+                task: task, detail: data.detail, open: workspace.open, hand: { workspace.handOff($0) },
                 write: {
                     let id = task.id, store = services.store
                     workspace.attempt { workspace.open(try await store.createCard(body: "", under: id)) }
