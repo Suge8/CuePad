@@ -15,7 +15,7 @@ nonisolated private struct EditorData: Sendable, Equatable {
 /// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值，提示词另有发给 Agent；选中文字时只发选中的部分）与自动保存在这里，
 /// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目（提示词写它的任务）
 /// 与"时间 · 资料"，右下一颗主按钮（⌘↩）：灵感是"挂到任务"，提示词是"发给 Agent"（`CardMenu.handsToAgent`）；右边"⋯"里是分享与 `CardMenu.more`；
-/// 任务是 `TaskPage`（标题、提示词、子任务）。
+/// 任务是 `TaskPage`（标题、提示词、步骤）。
 /// 灵感与提示词离开时什么都没写就不留下（`Workspace.leaveEditing`）。
 struct CardEditorScreen: View {
     let cardID: UUID

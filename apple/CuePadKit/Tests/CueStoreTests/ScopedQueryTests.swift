@@ -34,7 +34,7 @@ import Testing
     let other = try await store.createTask("别处", in: b.id)
     _ = try await store.createCard(body: "别处的提示词", under: other.id)
     let loose = try await store.createTask("散的", in: nil)
-    _ = try await store.createTask("散的子任务", under: loose.id)
+    _ = try await store.createTask("散的步骤", under: loose.id)
 
     for project in [a.id, b.id, nil] {
       let all = try await store.tasks(.inProgress, .todo, .done).flatMap(\.tasks).filter { $0.projectID == project }
@@ -45,7 +45,7 @@ import Testing
       let progress = try await store.subtaskProgress().filter { parent, _ in all.contains { $0.id == parent } }
       #expect(try await store.subtaskProgress(in: project) == progress)
     }
-    // 只算子任务：上线下面一条已完成的子任务加一条提示词，进度是 1/1
+    // 只算步骤：上线下面一条已完成的步骤加一条提示词，进度是 1/1
     #expect(try await store.subtaskProgress(of: release.id) == [release.id: TaskProgress(done: 1, total: 1)])
   }
 

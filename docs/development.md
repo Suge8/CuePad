@@ -32,7 +32,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 **数据。**
 - 层级只有 `parentID`，只经 `createTask(_:under:)`、`createCard(body:under:)`、`moveCard` 改，校验在 Store 写入时做；手动顺序用分数索引字符串，避免多设备排序冲突。
 - 项目只有一种顺序 `CueStore.projects()`，所有项目列表与选择器都用它。
-- 给用户看的任务数只有一处定义 `CueStore.taskCounts`（只计显示在顶层的任务），各处不另算；子任务进度（`subtaskProgress`）与提示词条数只写在上级那一行。
+- 给用户看的任务数只有一处定义 `CueStore.taskCounts`（只计显示在顶层的任务），各处不另算；步骤进度（`subtaskProgress`）与提示词条数只写在上级那一行。
 - 空白灵感离开编辑就不留下，收尾只有 `CueStore.dropIfBlank` 一处。
 - 提示词送达即用掉，规则只有一处（`PromptConsumption`）：发给会话或开新会话的投送请求写下成功结果的同一个事务里，把它带着的提示词（任务下的灵感，非资料）彻底删掉，任务记下会话、发送记录留快照；删的是行，同步靠下次对账发现。开新会话的请求在等会话记录时改记到任务上，认领的是任务。旧库里已发出去的在 `Schema.upgrades` 第 26 步删。Mac 上提示词的编辑页要处理"卡被删了"（发出去后卡就没了）。
 - 软删除只留 `deletedAt`；项目删除时其下的灵感与任务随项目进回收站，由项目推导，不逐条记录来源。
@@ -66,7 +66,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 **并发隔离。** App 各目标的默认隔离是主线程（`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`），类型、协议与函数上不再写 `@MainActor`；要离开主线程才写 `nonisolated`。函数类型（回调参数、`typealias`）不受默认隔离覆盖，需要主线程时照写 `@MainActor`。CuePadKit 没有默认隔离，里面的界面类型照写；它与 App 一样开了 Approachable Concurrency（`Package.swift` 末尾统一设给每个 target），所以 nonisolated 的 async 函数和 async 闭包类型跑在调用方的隔离上，不会自己跳到后台。要离开调用方（启动子进程、同步读写文件、长循环）的，函数或返回的闭包类型上写 `@concurrent`。
 
-**冲突。** iCloud 按记录同步；同一条灵感或任务离线并发编辑时保留两个版本交给用户选择，不静默覆盖。两台设备离线并发挪动可能合成环、任务超过两级、挂到灵感下或下级与上级不同项目：应用远端变更后按确定规则收敛（`CardLinks.repairs`），各设备算出同一结果并推送。
+**冲突。** iCloud 按记录同步；同一条灵感或任务离线并发编辑时保留两个版本交给用户选择，不静默覆盖。两台设备离线并发挪动可能合成环、任务超过两级、提示词挂到步骤下、挂到灵感下或下级与上级不同项目：应用远端变更后按确定规则收敛（`CardLinks.repairs`），各设备算出同一结果并推送。
 
 **编辑器。** 存储格式是纯字符串（`CueFormat`），唯一事实源；保存只经序列化，编辑器内复制输出存储格式。不得访问 `NSTextView.layoutManager` / `UITextView.layoutManager`（一次访问就永久降级到 TextKit 1）。
 

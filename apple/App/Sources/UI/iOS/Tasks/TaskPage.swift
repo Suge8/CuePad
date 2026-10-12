@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 任务页（任务浮窗里、或整页推入）：顶上是完成圈与任务的标题（`TaskHeading`），右上"⋯"；
 /// 主体是提示词卡片（`PromptList`）——点开是灵感的大编辑区，卡上就地发给 Agent，末尾写一条新的并直接进入编辑；
-/// 子任务在提示词之后（`SubtaskList`）。提示词与子任务都在这一页的导航里推进去。
+/// 步骤在提示词之后（`SubtaskList`）。步骤自己的页只有标题（步骤是勾选清单里的一条，没有提示词）。提示词与步骤都在这一页的导航里推进去。
 struct TaskPage: View {
     let card: Card
     @Environment(Workspace.self) private var workspace
@@ -24,7 +24,9 @@ struct TaskPage: View {
                     more.offset(y: -8)
                 }
                 .padding(.horizontal, -8)
-                PromptList(task: card, detail: detail, open: { opened = $0.id }, hand: { navigation.handToAgent($0) }, write: write)
+                if card.parentID == nil {
+                    PromptList(task: card, detail: detail, open: { opened = $0.id }, hand: { navigation.handToAgent($0) }, write: write)
+                }
                 SubtaskList(detail: detail, open: { opened = $0.id })
             }
             .padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 40)

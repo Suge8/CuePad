@@ -27,7 +27,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
         var task: Card
         /// 0 起。
         var depth: Int
-        /// 这组里的直接子任务数。
+        /// 这组里的直接步骤数。
         var childCount: Int
         var id: UUID { task.id }
     }
@@ -37,7 +37,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
     private var parents: [UUID: UUID] = [:]
     private var tasks: [UUID: Card] = [:]
     private var order: [Card] = []
-    /// 层级限制按库里的整棵树算（含已完成、不显示的子任务）：与 Store 写入时的校验同一口径。
+    /// 层级限制按库里的整棵树算（含已完成、不显示的步骤）：与 Store 写入时的校验同一口径。
     private var everything: [Card] = []
     private var structure = Structure([])
 
@@ -100,7 +100,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
 
     // MARK: 缩进与反缩进
 
-    /// 成为上一个同级的最后一个子任务；没有上一个同级、或整棵子树会超过最深一级时为 nil。
+    /// 成为上一个同级的最后一个步骤；没有上一个同级、或整棵子树会超过最深一级时为 nil。
     func indent(_ id: UUID) -> TaskMove? {
         let siblings = parents[id].map(children(of:)) ?? roots
         guard let index = siblings.firstIndex(of: id), index > 0 else { return nil }
@@ -118,7 +118,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
     // MARK: 拖放
 
     /// 拖着 `dragged` 停在 `point`（与 `frames` 同一坐标系）时的落点。`rows` 是可见的行，`depthShift` 是手指横向挪了几级
-    /// （右正左负）。停在一行中部是成为它的子任务（排在最后）；在两行之间时，层级取原层级加横移、夹在这个位置可取的范围内。
+    /// （右正左负）。停在一行中部是成为它的步骤（排在最后）；在两行之间时，层级取原层级加横移、夹在这个位置可取的范围内。
     /// 不能落进自己的子树；与原位置相同时为 nil。
     func drop(_ dragged: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint, depthShift: Int) -> TaskDrop? {
         let excluded = Set([dragged] + descendants(of: dragged))
@@ -143,7 +143,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
         let lowest = next?.depth ?? 0
         let highest = min(previous.map { $0.depth + 1 } ?? 0, Self.deepest - height + 1)
         guard lowest <= highest else { return nil }
-        // 想要的层级放不下（上级在库里比看上去深，或带着已完成的深层子任务）时往浅里退
+        // 想要的层级放不下（上级在库里比看上去深，或带着已完成的深层步骤）时往浅里退
         for depth in stride(from: min(max(depth(of: dragged) + depthShift, lowest), highest), through: lowest, by: -1) {
             let move = gapMove(dragged, depth: depth, previous: previous, next: next)
             if case .under(let parent) = move.slot, !fits(dragged, under: parent) { continue }

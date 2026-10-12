@@ -20,4 +20,12 @@ import Testing
     try await store.setTodo(single.id, true)
     #expect(try await store.children(of: single.id).isEmpty)
   }
+
+  @Test func 步骤没有提示词_它多出来的话成为顶层任务的第一条提示词() async throws {
+    let top = try await store.createTask("修乱序", in: nil)
+    let step = try await store.createTask("复现\n先看日志", under: top.id)
+    #expect(try await store.card(step.id)?.body == "复现")
+    #expect(try await store.children(of: step.id).isEmpty)
+    #expect(try await store.children(of: top.id).map(\.body) == ["先看日志", "复现"])
+  }
 }

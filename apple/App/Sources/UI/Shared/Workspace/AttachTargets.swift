@@ -1,14 +1,19 @@
 import CueStore
 import Foundation
 
-/// 灵感能挂到哪些任务（"挂到任务"的选择面板）：没做完的任务（含子任务，先序），按项目分组——灵感所在项目的在前，
+/// 灵感能挂到哪些任务（"挂到任务"的选择面板）：没做完的顶层任务（提示词只挂在顶层任务下，步骤不是目标），按项目分组——灵感所在项目的在前，
 /// 其余按项目的顺序（`CueStore.projects()`），没归项目的最后。
 nonisolated enum AttachTargets {
-    static func read(for idea: Card, from store: isolated CueStore) throws -> [TaskGroup] {
-        let byProject = Dictionary(uniqueKeysWithValues: try store.tasks(.inProgress, .todo).map { ($0.projectID, $0) })
+    struct Group: Equatable, Sendable {
+        var projectID: UUID?
+        var tasks: [Card]
+    }
+
+    static func read(for idea: Card, from store: isolated CueStore) throws -> [Group] {
+        let byProject = Dictionary(uniqueKeysWithValues: try store.tasks(.inProgress, .todo).map { ($0.projectID, $0.tasks.filter { $0.parentID == nil }) })
         var owners: [UUID?] = [idea.projectID]
         for id in try store.projects().map(\.id) + [nil] where !owners.contains(id) { owners.append(id) }
-        return owners.compactMap { byProject[$0] }.filter { !$0.tasks.isEmpty }
+        return owners.compactMap { owner in byProject[owner].map { Group(projectID: owner, tasks: $0) } }.filter { !$0.tasks.isEmpty }
     }
 }
 

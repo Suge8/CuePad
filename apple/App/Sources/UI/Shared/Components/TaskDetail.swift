@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 一条任务的下级：任务页一次读出，各块只画。提示词发给的会话在窗口那一份里（`AgentLinks`，环境 `cardAgents`）。
 nonisolated struct TaskDetail: Sendable, Equatable {
-    /// 提示词与子任务，同级手动顺序。
+    /// 提示词与步骤，同级手动顺序。
     var children: [Card]
     /// 能挑来作提示词的：本项目散放的灵感，最近改过的在前。
     var ideas: [Card]
@@ -20,7 +20,7 @@ nonisolated struct TaskDetail: Sendable, Equatable {
     var prompts: [Card] { children.filter { !$0.isTask } }
     var subtasks: [Card] { children.filter(\.isTask) }
 
-    /// 子任务完成了几个；没有子任务为 nil。完成圈与"子任务 n/m"按它画。
+    /// 步骤完成了几个；没有步骤为 nil。完成圈与"步骤 n/m"按它画。
     var progress: TaskProgress? {
         let subtasks = subtasks
         return subtasks.isEmpty ? nil : TaskProgress(done: subtasks.filter { $0.status == .done }.count, total: subtasks.count)

@@ -142,7 +142,7 @@ extension CueStore {
     }
   }
 
-  /// 新子任务放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
+  /// 新步骤放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
   public func createTask(_ body: String, under parent: UUID) throws -> Card {
     try requireContent(body)
     return try write {
@@ -160,14 +160,20 @@ extension CueStore {
   }
 
   /// 任务下新写一条提示词（挂在任务下的灵感），接在下级最后，项目随任务。上级不是任务抛 `invalidParent`。可以是空的：
-  /// 写一条时先建好再进编辑，离开时还是空白就删掉（`dropIfBlank`）。
+  /// 写一条时先建好再进编辑，离开时还是空白就删掉（`dropIfBlank`）。提示词只挂在顶层任务下：给步骤写的落到步骤的上级（`promptHome`）。
   public func createCard(body: String, under parent: UUID) throws -> Card {
     try write {
       guard let link = try link(of: parent), link.isTask else { throw CueStoreError.invalidParent }
-      let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
-      return try insertCard(body, project: link.project, parent: parent, todo: false, sortKey: SortKey.after(last))
+      let home = try promptHome(parent)
+      let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [home]) { $0.textOrNil(0) } ?? nil
+      return try insertCard(body, project: link.project, parent: home, todo: false, sortKey: SortKey.after(last))
     }
   }
+
+  /// 提示词挂在哪个任务下：提示词只挂在顶层任务下（步骤是任务里的勾选清单，没有提示词），所以往步骤下挂的，落到步骤的上级。
+  /// 不拒绝而是改挂：远端收敛（`CardLinks.repairs`）与结构升级本来就这样处理，本机写入同一个结果，界面不必为"挂在步骤上"另做一条出错的路。
+  /// `task` 必须是任务。
+  private func promptHome(_ task: UUID) throws -> UUID { try ancestors(of: task).last ?? task }
 
   /// 改正文、置顶、变量取值。归属、结构、状态、删除对调用方只读，各有专门的方法（编译期保证）。
   public func updateCard(_ id: UUID, _ edit: @Sendable (inout Card) -> Void) throws {
@@ -183,7 +189,7 @@ extension CueStore {
   }
 
   /// 设为任务 / 改回灵感。设为任务：成为待办的任务；多行的话第一行留作任务，其余成为它的第一条提示词（`CueLines.split`）。
-  /// 改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。挂在第 `Card.maxTaskDepth` 级任务下的提示词设为任务抛 `taskTooDeep`。已经是这个样子时什么都不做、返回 nil；
+  /// 改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。已经是这个样子时什么都不做、返回 nil；
   /// 否则返回回执（`undo` 拨回）。
   @discardableResult
   public func setTodo(_ id: UUID, _ on: Bool) throws -> CardChange? {
@@ -197,7 +203,6 @@ extension CueStore {
     let now = Date.stamp
     var prompt: UUID?, lifted: [UUID] = []
     if on {
-      guard try ancestors(of: id).count < Card.maxTaskDepth else { throw CueStoreError.taskTooDeep }
       try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
       prompt = try Self.splitPrompt(db, task: id, at: now)
     } else {
@@ -208,22 +213,25 @@ extension CueStore {
     return .todo(id: id, on: on, body: card.body, variableValues: card.variableValues, prompt: prompt, lifted: lifted)
   }
 
-  /// 任务正文除标题外还有话时拆出来（`CueLines.split`）：其余成为排在它下级最前的一条提示词，
+  /// 任务正文除标题外还有话时拆出来（`CueLines.split`）：其余成为排在顶层任务（步骤的话是它的上级）下级最前的一条提示词，
   /// 带着任务的变量取值；`carryingHandoff`（设为任务：灵感原本交给过会话）时再带上会话，发给 Agent 的记录（发送记录、投送请求）跟到提示词上。
   /// 返回提示词的 id，没有可拆的为 nil。设为任务、新建任务与结构升级共用。
   static func splitPrompt(_ db: SQLite, task: UUID, at now: Date, carryingHandoff: Bool = true) throws -> UUID? {
     guard let body = try db.first("SELECT body FROM cards WHERE id = ?", [task], { $0.text(0) }) else { return nil }
     let (heading, prompt) = CueLines.split(body)
     guard let prompt else { return nil }
-    let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE parentID = ?", [task]) { $0.textOrNil(0) } ?? nil
+    let home = try db.first(
+      "SELECT COALESCE((SELECT p.id FROM cards p WHERE p.id = c.parentID AND p.todoAt IS NOT NULL AND p.deletedAt IS NULL), c.id) FROM cards c WHERE c.id = ?",
+      [task]) { $0.uuid(0) } ?? task
+    let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE parentID = ?", [home]) { $0.textOrNil(0) } ?? nil
     let promptID = UUID()
     try db.run(
       """
       INSERT INTO cards (id, projectID, body, isPinned, variableValues, sortKey, conflictOf, deletedAt, createdAt, modifiedAt,
         parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt)
-      SELECT ?1, projectID, ?2, 0, variableValues, ?3, NULL, NULL, createdAt, ?4, id, NULL, NULL, NULL, CASE WHEN ?6 THEN piSessionID END, archivedAt
+      SELECT ?1, projectID, ?2, 0, variableValues, ?3, NULL, NULL, createdAt, ?4, ?7, NULL, NULL, NULL, CASE WHEN ?6 THEN piSessionID END, archivedAt
       FROM cards WHERE id = ?5
-      """, [promptID, prompt, SortKey.before(first), now, task, carryingHandoff ? 1 : 0])
+      """, [promptID, prompt, SortKey.before(first), now, task, carryingHandoff ? 1 : 0, home])
     try db.run("UPDATE cards SET body = ?, variableValues = '{}', modifiedAt = ? WHERE id = ?", [heading, now, task])
     for table in carryingHandoff ? ["sendRecords", "deliveryRequests"] : [] {
       try db.run("UPDATE \(table) SET cardID = ?, modifiedAt = ? WHERE cardID = ?", [promptID, now, task])
@@ -248,7 +256,7 @@ extension CueStore {
   }
 
   /// 任务页"最近完成"的一键归档：已完成的顶层任务（及其下级）全部归档，返回归档了几条任务。
-  /// 没做完的任务下已完成的子任务算在上级的进度里，不单独归档。
+  /// 没做完的任务下已完成的步骤算在上级的进度里，不单独归档。
   public func archiveCompletedTasks() throws -> Int {
     try write {
       let done = try db.query(
@@ -311,8 +319,10 @@ extension CueStore {
   }
 
   /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、
-  /// 挂成子任务或提示词都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），任务的子树超过 `Card.maxTaskDepth` 级任务抛 `taskTooDeep`（提示词挂在任一级任务下都行）。
-  /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级）。
+  /// 挂成步骤或提示词都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），任务的子树超过 `Card.maxTaskDepth` 级任务抛 `taskTooDeep`。
+  /// 提示词只挂在顶层任务下（`promptHome`）：灵感挂到步骤上落到步骤的上级、排在它的提示词最后（给的 `previous` 作废）；
+  /// 带着提示词的任务挂到别的任务下成为步骤时，它的提示词改挂到那个任务下、接在它的提示词之后。
+  /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级，改挂的提示词回到它下面）。
   @discardableResult
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
     try write { try relocate(id, to: slot, after: previous) }
@@ -326,6 +336,8 @@ extension CueStore {
       let before = siblings.firstIndex(of: id).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
       let from: CardSlot = current.parent.map(CardSlot.under) ?? .top(project: current.project)
       let destination: CardLinks.Link
+      var previous = previous
+      var hoisting: UUID?
       switch slot {
       case .top(let project):
         try requireLiveProject(project)
@@ -335,8 +347,15 @@ extension CueStore {
         guard let target = try link(of: parent), target.isTask, parent != id, !above.contains(id) else {
           throw CueStoreError.invalidParent
         }
-        if current.isTask, above.count + 1 + (try taskHeight(of: id)) > Card.maxTaskDepth { throw CueStoreError.taskTooDeep }
-        destination = CardLinks.Link(parent: parent, project: target.project, isTask: current.isTask)
+        if current.isTask {
+          if above.count + 1 + (try taskHeight(of: id)) > Card.maxTaskDepth { throw CueStoreError.taskTooDeep }
+          hoisting = parent
+          destination = CardLinks.Link(parent: parent, project: target.project, isTask: true)
+        } else {
+          let home = try promptHome(parent)
+          if home != parent { previous = try lastChild(of: home, except: id) }
+          destination = CardLinks.Link(parent: home, project: target.project, isTask: false)
+        }
       }
       let now = Date.stamp
       try db.run("UPDATE cards SET parentID = ?, modifiedAt = ? WHERE id = ?", [destination.parent, now, id])
@@ -344,8 +363,25 @@ extension CueStore {
         try db.run(
           "UPDATE cards SET projectID = ?, modifiedAt = ? WHERE id IN (\(Self.subtree(from: "SELECT ?3")))", [destination.project, now, id])
       }
+      let hoisted = try hoisting.map { try hoistPrompts(of: id, to: $0, at: now) } ?? []
       try place(scope: Self.siblingScope(destination), [destination.parent ?? destination.project], id: id, after: previous)
-      return .move(id: id, from: from, after: before)
+      return .move(id: id, from: from, after: before, hoisted: hoisted)
+  }
+
+  private func lastChild(of parent: UUID, except id: UUID) throws -> UUID? {
+    try db.first("SELECT id FROM cards WHERE parentID = ? AND id != ? ORDER BY sortKey DESC, id DESC LIMIT 1", [parent, id]) { $0.uuid(0) }
+  }
+
+  /// 任务成了步骤：它的提示词按原顺序接到 `top`（顶层任务）已有的下级之后。返回挪过去的提示词，供撤销放回。
+  private func hoistPrompts(of task: UUID, to top: UUID, at now: Date) throws -> [UUID] {
+    let prompts = try db.query("SELECT id FROM cards WHERE parentID = ? AND todoAt IS NULL ORDER BY sortKey, id", [task]) { $0.uuid(0) }
+    var last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [top]) { $0.textOrNil(0) } ?? nil
+    for prompt in prompts {
+      let key = SortKey.after(last)
+      try db.run("UPDATE cards SET parentID = ?, sortKey = ?, modifiedAt = ? WHERE id = ?", [top, key, now, prompt])
+      last = key
+    }
+    return prompts
   }
 
   /// 进回收站；它的下级按原顺序提到它的位置（不连带进回收站）。
@@ -416,9 +452,10 @@ extension CueStore {
     case .trash(let id, let lifted):
       try restoreRow(id)
       try adopt(lifted, by: id)
-    case .move(let id, let slot, let after):
+    case .move(let id, let slot, let after, let hoisted):
       let survivor = try after.flatMap { try find(Card.self, $0)?.id }
       try relocate(id, to: slot, after: survivor)
+      try adopt(hoisted, by: id)
     }
     return orphaned
   }
