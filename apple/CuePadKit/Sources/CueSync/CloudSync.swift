@@ -109,6 +109,7 @@ public actor CloudSync {
       engine.state.add(pendingRecordZoneChanges: [change])  // 服务器没收下（限流、服务暂不可用等）：引擎照常重试
       throw SyncError.notUploaded
     }
+    engine.state.remove(pendingRecordZoneChanges: [change])  // 重传时结果入口可能又登记过一次
   }
 
   /// 立即拉取并推送（不等引擎的自动调度）。通知订阅没建成的话顺便重试，并按数据库重新登记待推送（回到前台时调用）。

@@ -26,7 +26,9 @@
 
 ## 排查与真机验证
 
-投送请求的时间线：手机每次立即上传一行"用时"（类别 `services`）；Mac 每条请求到达一行"创建后 X 秒到服务器，再 Y 秒到本机"、领取一行"创建后 X 秒"（类别 `delivery`）。X 大是发送方上传慢，Y 大是拉取慢，到达与领取的间隔大是执行器。
+投送请求的时间线：手机每次立即上传一行"用时"（类别 `services`）；Mac 每条请求到达一行"创建后 X 秒到服务器，再 Y 秒到本机"、领取一行"创建后 X 秒"（类别 `delivery`）。X 大是发送方上传慢，Y 大是拉取慢，到达与领取的间隔大是执行器。立即上传被服务器拒绝或整个请求失败时，`delivery` 里有一行带错误码与服务器说明（`SyncCoordinator.sendNow`）。
+
+立即上传与引擎可能同时传同一条记录（引擎刚把上一版传上去、结果还在路上），本机带的版本标签就是旧的，被服务器以 `serverRecordChanged` 拒绝：`sendNow` 记下服务器的版本后马上带新标签重传，不回落引擎（回落要多等一轮调度）；两边的结果乱序回来时，旧版的结果不会把版本标签退回去（`markPushed`）。
 
 App 的日志在 subsystem `com.sugeh.cuepad`（类别 `services`、`launch`、`shutdown`、`pi-history`、`sync`）；CloudKit 与 CKSyncEngine 的日志在 `com.apple.cloudkit`：
 

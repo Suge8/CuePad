@@ -7,6 +7,7 @@ import os
 actor SyncCoordinator {
   private static let issueLimit = 50
   private static let inFlightLimit = 4
+  private static let sendNowAttempts = 3
   private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
 
   let store: CueStore
@@ -123,13 +124,38 @@ actor SyncCoordinator {
 
   /// 立即把一条记录直接存到服务器（不经引擎的队列，见 `RecordUploader`）；结果与引擎发送的结果同一个入口处理。
   /// 整个请求失败（离线）时抛出；返回服务器是否收下了这一条（没收下的，调用方要把它交回引擎重试）。
+  /// 引擎可能刚把这条记录的上一版传上去、结果还在路上，本机带的版本标签就是旧的，服务器以 `serverRecordChanged` 拒绝：
+  /// 结果入口已经记下服务器的版本与新标签，这里马上带着它重传（回落引擎要多等一轮调度），本机版本比服务器的旧就不用传了。
   func sendNow(_ id: CKRecord.ID, deleted: Bool, via uploader: any RecordUploader) async throws -> Bool {
-    guard needsDecision == nil else { return true }
-    let saving = deleted ? nil : await record(for: id)
-    guard deleted || saving != nil else { return true }  // 行已不在：没有可传的
-    let sent = try await uploader.upload(saving: saving.map { [$0] } ?? [], deleting: deleted ? [id] : [])
-    await handle(.sent(saved: sent.saved, failedSaves: sent.failedSaves, deleted: sent.deleted, failedDeletes: sent.failedDeletes))
-    return sent.saved.contains { $0.recordID == id } || sent.deleted.contains(id)
+    for _ in 0..<Self.sendNowAttempts {
+      guard needsDecision == nil else { return true }
+      let saving = deleted ? nil : await record(for: id)
+      guard deleted || saving != nil else { return true }  // 行已不在：没有可传的
+      let sent = try await attempt(saving.map { [$0] } ?? [], deleting: deleted ? [id] : [], via: uploader)
+      await handle(.sent(saved: sent.saved, failedSaves: sent.failedSaves, deleted: sent.deleted, failedDeletes: sent.failedDeletes))
+      if sent.saved.contains(where: { $0.recordID == id }) || sent.deleted.contains(id) { return true }
+      let superseded = sent.failedSaves.contains { $0.record.recordID == id && $0.error.code == .serverRecordChanged }
+      guard superseded else { return false }
+      if try await !store.isPending(id.recordName) { return true }  // 服务器的版本更新，已留下
+    }
+    return false
+  }
+
+  /// 一次直接上传；没收下的与整个请求的失败都带着服务器给的原因记日志（错误码与说明不含个人内容）。
+  private func attempt(_ saving: [CKRecord], deleting: [CKRecord.ID], via uploader: any RecordUploader) async throws -> SentRecords {
+    do {
+      let sent = try await uploader.upload(saving: saving, deleting: deleting)
+      for (record, error) in sent.failedSaves { Self.logRejected(record.recordID, error) }
+      for (id, error) in sent.failedDeletes { Self.logRejected(id, error) }
+      return sent
+    } catch {
+      Self.log.notice("立即上传整个请求失败：\(error.brief, privacy: .public)")
+      throw error
+    }
+  }
+
+  private static func logRejected(_ id: CKRecord.ID, _ error: CKError) {
+    log.notice("立即上传被服务器拒绝 \(id.recordName.prefix(8), privacy: .public)：\(error.brief, privacy: .public)")
   }
 
   var alertSubscription: PiAlertSubscriptionStatus { state.alerts }

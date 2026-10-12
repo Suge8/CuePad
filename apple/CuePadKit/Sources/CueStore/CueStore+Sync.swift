@@ -125,12 +125,15 @@ extension CueStore {
   /// 返回本机版本是否在这之后又改过（仍待推送）。
   package func markPushed(_ row: SyncRow, systemFields: Data) throws -> Bool {
     try write {
-      try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
+      // 引擎与立即上传的结果可能乱序回来：更新的一版已经记过的话，旧版的结果不能把版本标签与推送时间退回去
+      let recorded = try db.first("SELECT pushedModifiedAt FROM syncRecords WHERE recordName = ?", [row.id]) { $0.int(0) }
+      let pushed = max(recorded ?? row.modifiedAt, row.modifiedAt)
+      if pushed == row.modifiedAt { try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt) }
       // 通知标志随这次上传送出，之后不能再被本机别的改动带上去（见 `PiStateRecorder`）；不动修改时间，不会让记录重新待推送
       if row.table == .piSessionStates, let sent = row.fields["notify"], sent != .null {
         try db.run("UPDATE piSessionStates SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])
       }
-      return try readSyncRow(row.table, row.id).map { $0.modifiedAt > row.modifiedAt } ?? false
+      return try readSyncRow(row.table, row.id).map { $0.modifiedAt > pushed } ?? false
     }
   }
 
