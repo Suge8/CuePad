@@ -87,7 +87,7 @@ struct TaskSheet: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 4) {
-                    TaskRingButton(task: task, marks: data.detail.marks).padding(.top, 2)
+                    TaskRingButton(task: task, prompts: data.detail.prompts.count, subtasks: data.detail.progress).padding(.top, 2)
                     // 换成另一条任务时重建：标题与说明的草稿只属于那一条
                     TaskHeading(task: task).id(task.id)
                 }

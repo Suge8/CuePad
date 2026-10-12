@@ -105,7 +105,7 @@ struct TasksPanel: View {
                 let info = board.rows[row.id]
                 TaskRow(
                     task: row.task, depth: row.depth, project: row.depth == 0 ? info?.project : nil,
-                    session: info?.session, delivery: info?.delivery, marks: board.children[row.id],
+                    session: info?.session, delivery: info?.delivery, subtasks: board.subtasks[row.id],
                     prompts: board.prompts[row.id] ?? [], expanded: row.isExpanded)
             }
             .padding(.horizontal, 12)

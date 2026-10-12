@@ -11,7 +11,7 @@ nonisolated private struct PaletteData: Sendable, Equatable {
     var targets: [SendTarget]
     /// 结果里的任务：上级的标题与下级（提示词、子任务）各自做完没有，预览里写它的进度。
     var parents: [UUID: String]
-    var marks: [UUID: [ChildMark]]
+    var subtasks: [UUID: TaskProgress]
 }
 
 /// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
@@ -63,14 +63,14 @@ struct SearchPalette: View {
                 for owner in Set(found.cards.map(\.projectID)) {
                     lastSends.merge(try store.lastSends(in: owner)) { current, _ in current }
                 }
-                var parents: [UUID: String] = [:], marks: [UUID: [ChildMark]] = [:]
+                var parents: [UUID: String] = [:], subtasks: [UUID: TaskProgress] = [:]
                 for task in found.cards where task.isTask {
-                    marks[task.id] = try store.childMarks(of: task.id)[task.id]
+                    subtasks[task.id] = try store.subtaskProgress(of: task.id)[task.id]
                     if let parent = task.parentID { parents[task.id] = try store.card(parent)?.title }
                 }
                 return PaletteData(
                     cards: found.cards, total: found.totalCards, projects: try store.projects(),
-                    lastSends: lastSends, targets: try store.sendTargets(), parents: parents, marks: marks)
+                    lastSends: lastSends, targets: try store.sendTargets(), parents: parents, subtasks: subtasks)
             }
             .onChange(of: data?.cards.map(\.id)) {
                 if let ids = data?.cards.map(\.id), selection.map(ids.contains) != true { selection = ids.first }
@@ -234,7 +234,7 @@ struct SearchPalette: View {
                     if let name = data.lastSends[card.id]?.target.shownName { SentMark(target: name) }
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
-                if card.isTask, let facts = Self.taskFacts(parent: data.parents[card.id], marks: data.marks[card.id]) {
+                if card.isTask, let facts = Self.taskFacts(parent: data.parents[card.id], subtasks: data.subtasks[card.id]) {
                     Text(facts).font(Typography.meta).foregroundStyle(palette.ink2)
                 }
                 if let image = text.images.first { Thumbnail(hash: image, height: 150) }
@@ -265,8 +265,8 @@ struct SearchPalette: View {
     }
 
     /// 任务预览的一行："上级：修乱序 · 子任务 1/2"；什么都没有时不写。
-    private static func taskFacts(parent: String?, marks: [ChildMark]?) -> Dotted? {
-        Dotted(parent.map { "上级：\($0)" }, TaskProgress.subtasks(in: marks).map(TaskCopy.progress)).nonEmpty
+    private static func taskFacts(parent: String?, subtasks: TaskProgress?) -> Dotted? {
+        Dotted(parent.map { "上级：\($0)" }, subtasks.map(TaskCopy.progress)).nonEmpty
     }
 
     private var shortcuts: some View {

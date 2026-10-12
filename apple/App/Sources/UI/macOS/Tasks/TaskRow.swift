@@ -15,8 +15,8 @@ struct TaskRow: View {
     /// 发给 Agent 的任务：同步来的会话记录（别的 Mac 上的也有）与发给它的最近一条投送请求；本机在线的会话在行里换上桥上的实时状态。
     var session: PiSessionState?
     var delivery: DeliveryRequest?
-    /// 子任务做完没有（完成圈与进度由它推出）。
-    var marks: [ChildMark]?
+    /// 子任务做了几个（完成圈与进度由它推出）。
+    var subtasks: TaskProgress?
     /// 挂在它下面的提示词，展开时逐条列出。
     var prompts: [Card] = []
     var expanded = true
@@ -40,7 +40,6 @@ struct TaskRow: View {
 
     private var live: PiSessionState? { session.map(workspace.withLiveState) }
     private var done: Bool { task.status == .done }
-    private var subtasks: TaskProgress? { .subtasks(in: marks) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -57,7 +56,7 @@ struct TaskRow: View {
     private var head: some View {
         HStack(alignment: .firstTextBaseline, spacing: Self.columnGap) {
             Button { toggle() } label: {
-                TaskRingView(status: task.status, ring: TaskRing(marks), done: done, size: depth == 0 ? 15 : 13)
+                TaskRingView(status: task.status, ring: TaskRing(subtasks), done: done, size: depth == 0 ? 15 : 13)
                     .frame(width: Self.ringColumn)
             }
             .buttonStyle(PressStyle(scale: 0.85))

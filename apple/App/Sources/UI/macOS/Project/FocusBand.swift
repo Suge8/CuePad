@@ -40,7 +40,7 @@ struct FocusBand: View {
                 let agent = cardAgents.items[row.id]
                 TaskRow(
                     task: row.task, depth: row.depth, session: agent?.state, delivery: agent?.delivery,
-                    marks: data.children[row.id], prompts: data.prompts[row.id] ?? [], expanded: row.isExpanded)
+                    subtasks: data.subtasks[row.id], prompts: data.prompts[row.id] ?? [], expanded: row.isExpanded)
             }
             if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
                 Button { workspace.showsTasks = true } label: { Text(more) }
