@@ -303,7 +303,8 @@ actor SyncCoordinator {
   ) async throws {
     var changedSince: [CKRecord.ID] = []
     for record in saved {
-      guard let row = try await sentRow(record) ?? RecordMapper.row(from: record) else { continue }
+      // 每一版发出前都记进了 syncSent，读不到只会是更新的一版已经落账、把它清掉了：这条结果已过时，不记账
+      guard let row = try await sentRow(record) else { continue }
       serverValues.learn(row)
       // 引擎发送的是取走时的版本；之后又改过的，引擎已移除它的待办，要重新登记
       if try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record)) { changedSince.append(record.recordID) }
