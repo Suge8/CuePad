@@ -3,7 +3,7 @@ import CueText
 import SwiftUI
 
 extension EnvironmentValues {
-    /// 输入框玻璃的着色：回复框贴在对话下面、对话照样滚到它后面，用 `legible`；浮起的输入框（随手记、新会话、交给 Agent）
+    /// 输入框玻璃的着色：回复框贴在对话下面、对话照样滚到它后面，用 `legible`；浮起的输入框（随手记、新会话、发给 Agent）
     /// 压在整页列表上、整块都是要读的字，由 `FloatingInput` 给 `solid`，工具那一排背后也不透出列表的字块。
     @Entry var composerInk: GlassInk = .legible
 }
@@ -25,7 +25,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var pinnedOpen = false
     /// 没聚焦、没内容时收成短胶囊（＋ 与一行提示），点它照常聚焦展开（会话页在看历史时）。
     var compact = false
-    /// 这张带上的卡片不能拿掉（交给 Agent 的输入框是为它打开的）。
+    /// 这张带上的卡片不能拿掉（发给 Agent 的输入框是为它打开的）。
     var keeps: UUID?
     /// 空着也能提交：提交钮的位置一直在、快捷键不要求有内容（新会话的第一句话可不填；会话回复框在 Agent 跑一轮时空着的钮是"停止"）。
     /// 输入框写着"可不填"的，都靠它——空草稿能不能提交只在这里定。

@@ -12,7 +12,7 @@ import UIKit
 #endif
 
 /// 组合根与界面动作的唯一入口：持有各模块的唯一实例。
-/// 界面读数据直接 `store.observe(...)`；一切副作用（交给 Agent、复制、Pi 命令、终端跳转、导入、扩展安装）只经这里，
+/// 界面读数据直接 `store.observe(...)`；一切副作用（发给 Agent、复制、Pi 命令、终端跳转、导入、扩展安装）只经这里，
 /// 发送记录也只在这里写。
 @Observable
 final class AppServices {
@@ -132,7 +132,7 @@ final class AppServices {
             storedText, to: session.target, on: session.hostID, mode: mode, card: card))
     }
 
-    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（交给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
+    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（发给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
     @discardableResult
     func requestMacDelivery(
         _ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil

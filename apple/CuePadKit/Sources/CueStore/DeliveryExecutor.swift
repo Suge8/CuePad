@@ -52,14 +52,14 @@ extension CueStore {
   }
 
   /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名）。
-  /// 给了 `card`（从灵感或任务"新会话"交给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）。
+  /// 给了 `card`（从灵感或任务"新会话"发给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）。
   public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil) throws -> DeliveryRequest {
     try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card)
   }
 
   /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
   /// 关联到它，任务同时进行中——与发给已有会话后 `recordSend` 的结果一样。会话记录在本机写下（Mac 的记录器）或同步过来时都在这里认领。
-  /// 只认最近一次：带 `cardID` 的请求都是交给 Agent，之后又交给了别处就以那次为准，旧的新会话开好也不抢回（同 `handedSessions`）。
+  /// 只认最近一次：带 `cardID` 的请求都是发给 Agent，之后又交给了别处就以那次为准，旧的新会话开好也不抢回（同 `handedSessions`）。
   func claimLaunchedCards() throws {
     try db.run(
       """

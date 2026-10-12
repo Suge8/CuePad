@@ -232,7 +232,7 @@ struct SendTargetTests {
         #expect(request.hostID == "mac-b" && request.mode == .known(.steer))
     }
 
-    /// Mac 的去处菜单与手机的交给 Agent 输入框列的是同一批在线会话。
+    /// Mac 的去处菜单与手机的发给 Agent 输入框列的是同一批在线会话。
     @Test func 去处菜单与手机的目标列表是同一批() async throws {
         _ = try await open("a", in: "/work/alpha")
         _ = try await open("b", in: "/work/beta")

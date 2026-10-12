@@ -190,7 +190,7 @@ nonisolated extension PiShown {
         switch status {
         case .delivery(.waking): "正在唤醒 Agent"
         case .delivery(.failed): "没能送达 Agent"
-        case .delivery: "正在交给 Agent"
+        case .delivery: "正在发给 Agent"
         case .working(.compacting): "Agent 正在压缩上下文"
         case .working: "Agent 正在工作"
         case .asking: "Agent 等你确认"
@@ -231,7 +231,7 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 选会话时排在前面的（交给 Agent 的会话选单）：等你确认 → 出错 → 有新回复 → 工作中 → 需要 /reload → 停下的 → 已结束。
+    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认 → 出错 → 有新回复 → 工作中 → 需要 /reload → 停下的 → 已结束。
     var urgency: Int {
         switch status {
         case .asking: 6

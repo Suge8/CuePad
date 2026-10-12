@@ -1,6 +1,6 @@
 import Foundation
 
-/// 投送请求与发送记录的目标种类。发出去的只有一种：交给 Agent 会话；发送记录只会是它。
+/// 投送请求与发送记录的目标种类。发出去的只有一种：发给 Agent 会话；发送记录只会是它。
 public enum SendTargetKind: String, Sendable, CaseIterable {
   case piSession
   /// 那台 Mac 上的 CuePad 本身：绑定文件夹、连接测试这类不发给会话的请求（执行器不看目标）。存储与同步的字面值沿用 "app"。
@@ -63,7 +63,7 @@ public struct Project: Identifiable, Equatable, Sendable {
 }
 
 /// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
-/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与提示词（挂在任务下的灵感，要交给 Agent 的话）；任务的正文只是标题与一句说明（`CueTask`）。
+/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与提示词（挂在任务下的灵感，要发给 Agent 的话）；任务的正文只是标题与一句说明（`CueTask`）。
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -86,10 +86,10 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var parentID: UUID?
   /// "设为任务"的时间：有值是任务，nil 是灵感。
   public internal(set) var todoAt: Date?
-  /// 开始做的时间（手动置为进行中、或交给 Agent 时）；回到待办时清空。
+  /// 开始做的时间（手动置为进行中、或发给 Agent 时）；回到待办时清空。
   public internal(set) var startedAt: Date?
   public internal(set) var completedAt: Date?
-  /// 交给 Agent 的会话（Pi 自己的会话 id），灵感与任务的行据此显示会话此刻的状态。
+  /// 发给 Agent 的会话（Pi 自己的会话 id），灵感与任务的行据此显示会话此刻的状态。
   public internal(set) var piSessionID: String?
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
@@ -140,7 +140,7 @@ public struct TaskCounts: Equatable, Sendable {
   }
 }
 
-/// 完成了几个、一共几个（上级的直接子任务）。
+/// 子任务完成了几个、一共几个（上级的直接子任务，见 `CueStore.subtaskProgress`）。
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int
@@ -149,32 +149,12 @@ public struct TaskProgress: Equatable, Sendable {
     self.done = done
     self.total = total
   }
-
-  /// 直接子任务的完成数与总数；没有子任务时为 nil。
-  public static func subtasks(in marks: [ChildMark]?) -> TaskProgress? {
-    let subtasks = (marks ?? []).filter(\.isTask)
-    return subtasks.isEmpty ? nil : TaskProgress(done: subtasks.filter(\.isDone).count, total: subtasks.count)
-  }
 }
 
 /// 灵感或任务交给了 Agent 的哪里：一个会话（Pi 会话 id），或正在开的新会话（还没开好、没认领到）。见 `CueStore.handedSessions`。
 public enum AgentHandoff: Hashable, Sendable {
   case session(String)
   case launching
-}
-
-/// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；提示词（挂着的灵感）交给 Agent 后那一轮做完（已回复）算做完。
-/// 见 `CueStore.childMarks`。
-public struct ChildMark: Equatable, Sendable {
-  public let id: UUID
-  public let isTask: Bool
-  public let isDone: Bool
-
-  public init(id: UUID, isTask: Bool, isDone: Bool) {
-    self.id = id
-    self.isTask = isTask
-    self.isDone = isDone
-  }
 }
 
 /// 卡片挂在哪：某项目（nil = 未分类）的顶层，或某条任务下面（项目随它）。

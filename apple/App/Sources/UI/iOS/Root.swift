@@ -24,7 +24,7 @@ struct IOSRoot: View {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { TabsRoot() }
             }
-            // 浮起的输入框（随手记、新会话、交给 Agent）盖在页面上、自己随键盘升起：这时页面不躲键盘，
+            // 浮起的输入框（随手记、新会话、发给 Agent）盖在页面上、自己随键盘升起：这时页面不躲键盘，
             // 否则键盘一出来、一收起，底下整页（连同另一个标签里的页）都要按新的安全区重排一遍
             .ignoresSafeArea(pageIgnoresKeyboard ? .keyboard : [], edges: .bottom)
             .onChange(of: navigation.floating) { _, floating in if floating { pageIgnoresKeyboard = true } }
@@ -45,7 +45,7 @@ struct IOSRoot: View {
                     if let start = navigation.newSession { NewSessionInput(start: start).id(start.id) }
                 }
             }
-            // 交给 Agent 的输入框；任务浮窗开着时由浮窗自己浮起（浮在浮窗下面会被挡住）
+            // 发给 Agent 的输入框；任务浮窗开着时由浮窗自己浮起（浮在浮窗下面会被挡住）
             .overlay {
                 FloatingInput(isPresented: navigation.task == nil && navigation.outbox != nil, close: { navigation.outbox = nil }) {
                     if let outbox = navigation.outbox { HandOffInput(outbox: outbox).id(outbox.id) }

@@ -12,8 +12,8 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var tasks: TaskTree
     /// 本项目顶层任务的个数（`CueStore.taskCounts`）：纸里列的是没做完的，做完的只写个数。
     var taskCounts: TaskCounts
-    /// 任务的直接下级（子任务与挂着的灵感），完成圈与子任务进度由它推出。
-    var children: [UUID: [ChildMark]]
+    /// 任务的子任务完成了几个，完成圈与"子任务 n/m"由它推出。
+    var subtasks: [UUID: TaskProgress]
     /// 任务下的提示词：任务列表在每条任务下直接列出。
     var prompts: [UUID: [Card]]
 
@@ -42,7 +42,7 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
             lastSends: try store.lastSends(in: project),
             tasks: try Self.tree(project, from: store),
             taskCounts: try store.taskCounts(in: project),
-            children: try store.childMarks(in: project),
+            subtasks: try store.subtaskProgress(in: project),
             prompts: try store.prompts(in: project))
     }
 }

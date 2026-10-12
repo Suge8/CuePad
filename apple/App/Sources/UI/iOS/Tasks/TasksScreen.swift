@@ -53,9 +53,9 @@ struct TasksScreen: View {
                 header(title, count: count)
                 TaskOutline(tree: board.tree, roots: roots.map(\.id)) { row in
                     let info = board.rows[row.id]
-                    line(
-                        row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session, delivery: info?.delivery,
-                        marks: board.children[row.id])
+                    TaskLine(
+                        task: row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session, delivery: info?.delivery,
+                        prompts: board.prompts[row.id]?.count ?? 0, subtasks: board.subtasks[row.id])
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
@@ -100,16 +100,12 @@ struct TasksScreen: View {
             }
             if showsCompleted {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { line($0.task, project: $0.project, session: $0.session, delivery: $0.delivery, marks: nil).id($0.id) }
+                    ForEach(rows) { TaskLine(task: $0.task, project: $0.project, session: $0.session, delivery: $0.delivery).id($0.id) }
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
             }
         }
-    }
-
-    private func line(_ task: Card, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?, marks: [ChildMark]?) -> some View {
-        TaskLine(task: task, project: project, session: session, delivery: delivery, marks: marks)
     }
 }
 
@@ -122,10 +118,9 @@ struct TaskLine: View {
     /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况），以及发给它的最近一条投送请求。
     var session: PiSessionState?
     var delivery: DeliveryRequest?
-    /// 直接下级（提示词与子任务）；完成圈分段、提示词计数与子任务进度由它推出。
-    var marks: [ChildMark]?
-    private var subtasks: TaskProgress? { .subtasks(in: marks) }
-    private var tally: PromptTally { PromptTally(marks) }
+    /// 提示词条数与子任务进度：元信息一行与完成圈由它们推出。
+    var prompts = 0
+    var subtasks: TaskProgress?
     @State private var confirmsSubtasks = false
     /// 行宽：只给长按提起的预览用（与原来的行同宽），不回写影响这一行自己的排版。
     @State private var width: CGFloat = 0
@@ -158,7 +153,7 @@ struct TaskLine: View {
             }
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, TaskSpeech.progress(marks), project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, TaskSpeech.progress(prompts: prompts, subtasks: subtasks), project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
@@ -194,7 +189,7 @@ struct TaskLine: View {
         // 圈对着标题第一行（`TaskRingView` 的基线），行再高也不落到中间
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             Button(action: tap) {
-                TaskRingView(status: task.status, ring: TaskRing(marks), done: done, size: 20)
+                TaskRingView(status: task.status, ring: TaskRing(subtasks), done: done, size: 20)
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
@@ -211,12 +206,10 @@ struct TaskLine: View {
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(.rect)
             .onTapGesture { navigation.openTask(task.id) }
-            if !done, tally.suggestsDone(task) { MarkDoneChip(action: tap).transition(.opacity) }
         }
-        .animation(Motion.quick, value: tally)
     }
 
-    private var counts: Dotted? { done ? nil : TaskCopy.counts(marks) }
+    private var counts: Dotted? { done ? nil : TaskCopy.counts(prompts: prompts, subtasks: subtasks) }
     private var showsPlace: Bool { project != nil || (!done && session != nil) }
     private var hasDetail: Bool { counts != nil || showsPlace }
 

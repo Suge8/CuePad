@@ -9,9 +9,9 @@ enum TaskCopy {
 
     static func progress(_ subtasks: TaskProgress) -> String { "子任务 \(subtasks.done)/\(subtasks.total)" }
 
-    /// 任务行的进度一行："3 条提示词 · 1 已回复 · 子任务 1/2"；都没有时不写。所在项目与会话状态另起一行，不挤在这里。
-    static func counts(_ marks: [ChildMark]?) -> Dotted? {
-        ((PromptTally(marks).text ?? Dotted()) + Dotted(TaskProgress.subtasks(in: marks).map(progress))).nonEmpty
+    /// 任务行的一行："3 条提示词 · 子任务 1/2"；都没有时不写。所在项目与会话状态另起一行，不挤在这里。
+    static func counts(prompts: Int, subtasks: TaskProgress?) -> Dotted? {
+        Dotted(prompts > 0 ? "\(prompts) 条提示词" : nil, subtasks.map(progress)).nonEmpty
     }
     static func hasOpen(_ subtasks: TaskProgress?) -> Bool { subtasks.map { $0.done < $0.total } ?? false }
     static func openSubtasks(_ subtasks: TaskProgress?) -> String {
@@ -32,6 +32,6 @@ enum TaskSpeech {
 
     static func toggle(done: Bool) -> String { done ? "标为未完成" : "标为完成" }
 
-    /// 进度念屏幕上那一行（`TaskCopy.counts`）："3 条提示词，1 已回复，子任务 1/2"；不另拼合计。
-    static func progress(_ marks: [ChildMark]?) -> String? { TaskCopy.counts(marks)?.spoken }
+    /// 进度念屏幕上那一行（`TaskCopy.counts`）："3 条提示词，子任务 1/2"；不另拼合计。
+    static func progress(prompts: Int, subtasks: TaskProgress?) -> String? { TaskCopy.counts(prompts: prompts, subtasks: subtasks)?.spoken }
 }

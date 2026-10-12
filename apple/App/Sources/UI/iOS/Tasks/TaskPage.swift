@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 任务页（任务浮窗里、或整页推入）：顶上是完成圈与任务的标题、一句说明（`TaskHeading`），右上"⋯"；
-/// 主体是提示词卡片（`PromptList`）——点开是灵感的大编辑区，卡上就地交给 Agent，末尾写一条新的并直接进入编辑；
+/// 主体是提示词卡片（`PromptList`）——点开是灵感的大编辑区，卡上就地发给 Agent，末尾写一条新的并直接进入编辑；
 /// 子任务在提示词之后（`SubtaskList`）。提示词与子任务都在这一页的导航里推进去。
 struct TaskPage: View {
     let card: Card
@@ -19,7 +19,7 @@ struct TaskPage: View {
             VStack(alignment: .leading, spacing: 20) {
                 // 完成圈与"⋯"的点按区比图形大，往两边伸进页边距，图形仍与下面的内容对齐
                 HStack(alignment: .top, spacing: 4) {
-                    TaskRingButton(task: card, marks: detail?.marks).offset(y: -8)
+                    TaskRingButton(task: card, prompts: detail?.prompts.count ?? 0, subtasks: detail?.progress).offset(y: -8)
                     TaskHeading(task: card).padding(.top, 2)
                     more.offset(y: -8)
                 }

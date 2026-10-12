@@ -46,8 +46,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     var done: [Row]
     /// 没完成的任务（含子任务）各自的项目与会话。
     var rows: [UUID: Row]
-    /// 任务的直接下级（子任务与挂着的灵感），完成圈与子任务进度由它推出。
-    var children: [UUID: [ChildMark]]
+    /// 任务的子任务完成了几个，完成圈与"子任务 n/m"由它推出。
+    var subtasks: [UUID: TaskProgress]
     /// 任务下的提示词：每条任务下直接列出。
     var prompts: [UUID: [Card]]
 
@@ -72,7 +72,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let inProgress = roots.filter { $0.task.status == .inProgress }, todo = roots.filter { $0.task.status == .todo }
         let finished = done.map(row)
         return TaskBoard(
-            tree: tree, inProgress: inProgress, todo: todo, done: finished, rows: rows, children: try store.childMarks(), prompts: try store.prompts(),
+            tree: tree, inProgress: inProgress, todo: todo, done: finished, rows: rows, subtasks: try store.subtaskProgress(), prompts: try store.prompts(),
             counts: try counts(from: store), order: (inProgress + todo + finished).map(\.id))
     }
 
