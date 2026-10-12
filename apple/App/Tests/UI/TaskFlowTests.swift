@@ -180,8 +180,8 @@ struct TaskFlowTests {
             try await store.moveCard(id, to: move.slot, after: move.after)
         }
 
-        let folded = try await tree().rows(toggled: [])
-        #expect(folded.map(\.id) == [a.id, a1.id, a2.id, b.id] && folded.map(\.depth) == [0, 1, 1, 0])
+        let listed = try await tree().rows()
+        #expect(listed.map(\.id) == [a.id, a1.id, a2.id, b.id] && listed.map(\.depth) == [0, 1, 1, 0])
 
         // 缩进成为上一个同级的最后一个子任务；没有上一个同级、或任务会超过两级时不能缩进
         #expect(try await tree().indent(a.id) == nil)
@@ -195,7 +195,7 @@ struct TaskFlowTests {
         #expect(try await tree().outdent(b.id) == nil)
 
         // 拖到一行中部成为它的子任务；不能拖进自己的子树；灵感拖到任务行上成为提示词、行外不接
-        let rows = try await tree().rows(toggled: [])
+        let rows = try await tree().rows()
         let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
         let middle = CGPoint(x: 100, y: 66)
         try await apply(try await tree().drop(b.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)?.move, b.id)
@@ -217,7 +217,7 @@ struct TaskFlowTests {
         let all = try await store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
         let tree = TaskTree(all.filter { $0.status != .done }, all: all)
         #expect(tree.indent(second.id) == nil)
-        let rows = tree.rows(toggled: [])
+        let rows = tree.rows()
         let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
         let onto = tree.drop(second.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)
         #expect(onto?.mark != .onto(first.id))
@@ -227,7 +227,7 @@ struct TaskFlowTests {
         let loose = try await store.createTask("续费域名", in: nil)
         let other = try await store.createTask("换首图", in: site.id)
         let flat = TaskTree(try await store.tasks(.inProgress, .todo).flatMap(\.tasks).filter { [loose.id, other.id].contains($0.id) })
-        let flatRows = flat.rows(toggled: [])
+        let flatRows = flat.rows()
         let flatFrames = Dictionary(uniqueKeysWithValues: flatRows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
         #expect(flat.drop(loose.id, rows: flatRows, frames: flatFrames, at: CGPoint(x: 100, y: 66), depthShift: 0) == nil)
     }

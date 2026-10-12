@@ -3,7 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 任务浮窗：点任务或它的提示词（项目页的任务区、任务面板、⌘K、归档）就在当前页上弹出，不换页。左右两栏，像邮件：
-/// 左边是这件事——完成圈、就地改的标题与一句说明、提示词一条一行（与项目页同一种行 `PromptLine`，点哪条右边就编辑哪条）、子任务；
+/// 左边是这件事——完成圈、就地改的标题与一句说明、待发的提示词一条一行（`PromptLine`，点哪条右边就编辑哪条；送达就用掉了，
+/// 发过的话在会话里看）、子任务；
 /// 右边是选中那条提示词的编辑区与操作栏（复制、去处、发给 Agent，⌘↩ 同主钮）。点开任务时右边是第一条还没交出去的提示词；
 /// 一条都没有时右边请你写第一条。整页的编辑页只给散放的灵感。
 struct TaskSheet: View {
@@ -99,6 +100,20 @@ struct TaskSheet: View {
                     addRow("写一条提示词") {
                         let id = task.id, store = services.store
                         workspace.attempt { workspace.open(try await store.createCard(body: "", under: id)) }
+                    }
+                    // 发出去的提示词用掉了，原话与回答都在会话里
+                    if let session = task.piSessionID {
+                        Button { workspace.show(.session(session)) } label: {
+                            HStack(spacing: TaskRow.columnGap) {
+                                Image(systemName: "bubble.left.and.text.bubble.right").frame(width: TaskRow.ringColumn)
+                                Text("发过的话在会话里看")
+                                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
+                            }
+                            .font(Typography.meta).foregroundStyle(palette.ink3)
+                            .padding(.horizontal, TaskRow.inset).frame(minHeight: 26)
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 if data.parent == nil {

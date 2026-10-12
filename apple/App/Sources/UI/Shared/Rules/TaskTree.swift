@@ -21,7 +21,7 @@ nonisolated struct TaskDrop: Equatable, Sendable {
 }
 
 /// 一组任务的层级（手机任务页与项目页、Mac 任务面板与项目页共用）：按输入顺序（同级的手动顺序）建树，上级不在这组里的当顶层；
-/// 排出可见的行（默认都展开），算缩进、反缩进与拖放落点各是哪一次移动。任务最多几级只在 `Card.maxTaskDepth`（提示词不在树里，不算一级）。
+/// 排出可见的行（只有两级，全部列出、不折起），算缩进、反缩进与拖放落点各是哪一次移动。任务最多几级只在 `Card.maxTaskDepth`（提示词不在树里，不算一级）。
 nonisolated struct TaskTree: Equatable, Sendable {
     struct Row: Identifiable, Equatable, Sendable {
         var task: Card
@@ -29,7 +29,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         var depth: Int
         /// 这组里的直接子任务数。
         var childCount: Int
-        var isExpanded: Bool
         var id: UUID { task.id }
     }
 
@@ -87,17 +86,13 @@ nonisolated struct TaskTree: Equatable, Sendable {
 
     func descendants(of id: UUID) -> [UUID] { children(of: id).flatMap { [$0] + descendants(of: $0) } }
 
-    /// 默认都展开（只有两级，展开也不深）；`toggled` 里的折起。
-    static func isExpanded(_ id: UUID, toggled: Set<UUID>) -> Bool { !toggled.contains(id) }
-
     /// 可见的行：从 `roots`（默认全部顶层）往下，先序。
-    func rows(of roots: [UUID]? = nil, toggled: Set<UUID>) -> [Row] {
+    func rows(of roots: [UUID]? = nil) -> [Row] {
         var rows: [Row] = []
         func visit(_ id: UUID, _ depth: Int) {
             guard let task = tasks[id] else { return }
-            let expanded = Self.isExpanded(id, toggled: toggled)
-            rows.append(Row(task: task, depth: depth, childCount: children(of: id).count, isExpanded: expanded))
-            if expanded { for child in children(of: id) { visit(child, depth + 1) } }
+            rows.append(Row(task: task, depth: depth, childCount: children(of: id).count))
+            for child in children(of: id) { visit(child, depth + 1) }
         }
         for root in roots ?? self.roots { visit(root, 0) }
         return rows

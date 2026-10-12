@@ -3,8 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中、待办、最近完成（折起），跨项目，
-/// 子任务缩进跟在上级下、提示词列在各自的任务下（`TaskOutline` 与 `TaskRow`：按住拖动排序、拖到一条上成为它的子任务、横向拖改层级），
-/// 顶层写所在项目，交给 Pi 的写那个会话此刻的状态。点任务弹出任务浮窗（面板留着），点提示词在任务浮窗里就地展开编辑。
+/// 子任务缩进跟在上级下（`TaskOutline` 与 `TaskRow`：按住拖动排序、拖到一条上成为它的子任务、横向拖改层级），一件事一行，
+/// 顶层写所在项目，行尾一格"下一步"（同项目页）。点任务弹出任务浮窗（面板留着）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -12,15 +12,14 @@ struct TasksPanel: View {
     @State private var board: TaskBoard?
     @State private var showsCompleted = false
 
-    /// 看得见的行（含默认展开的子任务，"最近完成"展开时再加上它）多到面板放不下时（行至少 34pt，640pt 的面板里二十行就满了）行按需建、面板定高：
+    /// 看得见的行（含子任务，"最近完成"展开时再加上它）多到面板放不下时（行至少 34pt，640pt 的面板里二十行就满了）行按需建、面板定高：
     /// 普通栈要在打开的那一圈把上百行都量一遍（大库上约 150ms）。不多时照旧由内容撑开高度，懒加载栈在高度跟着内容变时会漏画。
     private static let lazyFrom = 20
 
     private func isLazy(_ board: TaskBoard?) -> Bool {
         guard let board else { return false }
-        let open = board.tree.rows(of: (board.inProgress + board.todo).map(\.id), toggled: [])
-        let prompts = open.reduce(0) { $0 + (board.prompts[$1.id]?.count ?? 0) }
-        return open.count + prompts + (showsCompleted ? board.done.count : 0) >= Self.lazyFrom
+        let open = board.tree.rows(of: (board.inProgress + board.todo).map(\.id)).count
+        return open + (showsCompleted ? board.done.count : 0) >= Self.lazyFrom
     }
 
     var body: some View {
@@ -46,7 +45,7 @@ struct TasksPanel: View {
         .fixedSize(horizontal: false, vertical: !lazy)
         // 浮在项目页上、背后是卡片与任务纸，自己是一整页字（`GlassInk.solid`）
         .glass(in: .rect(cornerRadius: 26), ink: .solid)
-        // 面板挂在页面之外：提示词行读的"交给了哪个会话"在这里补上
+        // 面板挂在页面之外：读"交给了哪个会话"的行在这里补上
         .modifier(WindowCardAgents(workspace: workspace))
         .observing(services.store, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
@@ -101,12 +100,12 @@ struct TasksPanel: View {
             .font(Typography.label).foregroundStyle(.secondary)
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
             .accessibilityAddTraits(.isHeader)
-            TaskOutline(tree: board.tree, roots: items.map(\.id), lazy: lazy, folds: { TaskRow.folds($0, prompts: board.prompts) }) { row in
+            TaskOutline(tree: board.tree, roots: items.map(\.id), lazy: lazy) { row in
                 let info = board.rows[row.id]
                 TaskRow(
                     task: row.task, depth: row.depth, project: row.depth == 0 ? info?.project : nil,
                     session: info?.session, delivery: info?.delivery, subtasks: board.subtasks[row.id],
-                    prompts: board.prompts[row.id] ?? [], expanded: row.isExpanded)
+                    pending: board.prompts[row.id]?.count ?? 0)
             }
             .padding(.horizontal, 12)
         }
