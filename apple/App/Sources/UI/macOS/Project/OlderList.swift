@@ -82,9 +82,7 @@ struct OlderRow: View {
         let text = CardText(card.body)
         Button(action: open) {
         HStack(spacing: 10) {
-            Image(systemName: !text.images.isEmpty ? "photo" : "doc.text")
-                .font(.system(size: 13)).foregroundStyle(palette.ink3).frame(width: 18)
-                .accessibilityLabel(text.images.isEmpty ? "灵感" : "含图片的灵感")
+            RowGlyph(images: !text.images.isEmpty)
             Text(text.label)
                 .font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(text.preview).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
@@ -96,13 +94,14 @@ struct OlderRow: View {
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, 12).frame(height: 38)
         .background(hovering ? palette.fill : .clear)
+        .background { SelectedFill() }
         .contentShape(.rect)
         }
         .buttonStyle(CardOpenStyle())
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
-        .contextMenu { CardActions(card: card) }
+        .contextMenu { CardActions(card: card, selectable: true) }
         .ideaDrag(card.id)
         .accessibilityElement(children: .combine)
     }
@@ -110,7 +109,37 @@ struct OlderRow: View {
 
 extension OlderRow {
     fileprivate func open() {
-        workspace.openCard = card.id
+        guard !workspace.presses.takesClick(on: card.id, command: NSEvent.modifierFlags.contains(.command)) else { return }
+        workspace.open(card)
+    }
+}
+
+/// 行首的小图标；批量选择里选上时换成签名色的对勾。
+private struct RowGlyph: View {
+    let images: Bool
+    @Environment(\.cardSelected) private var selected
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Group {
+            if selected {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(palette.onSignature, palette.signature)
+            } else {
+                Image(systemName: images ? "photo" : "doc.text").foregroundStyle(palette.ink3)
+            }
+        }
+        .font(.system(size: 13)).frame(width: 18)
+        .accessibilityLabel(selected ? "已选" : images ? "含图片的灵感" : "灵感")
+    }
+}
+
+/// 选上的行垫一层选中色。
+private struct SelectedFill: View {
+    @Environment(\.cardSelected) private var selected
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if selected { palette.selection }
     }
 }
 #endif

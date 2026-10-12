@@ -288,7 +288,9 @@ private struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.page.takesCapture {
+        if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.presses.isSelecting {
+            SelectionBar().padding(.bottom, 16).transition(.opacity)
+        } else if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.page.takesCapture {
             let searching = workspace.searching
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)

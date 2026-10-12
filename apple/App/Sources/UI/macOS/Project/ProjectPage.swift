@@ -57,6 +57,10 @@ struct ProjectPage: View {
         .onChange(of: active) { _, active in
             if !active { restingAgents = workspace.projectAgents(projectID) }
         }
+        // 批量选择的"全选"范围：看得见的这一页上散放的灵感（资料、墙、更早），按页上的顺序
+        .onChange(of: SelectableKey(active: active, ids: board.arrangement.map { $0.pinned + $0.wall + $0.older }), initial: true) { _, key in
+            if key.active, let ids = key.ids { workspace.presses.selectable = ids }
+        }
         .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) { [projectID] store in
             try ProjectPageData.read(projectID, from: store)
         }
@@ -168,6 +172,11 @@ struct ProjectPage: View {
             if shape != self.shape { self.shape = shape }
         }
     }
+}
+
+private struct SelectableKey: Equatable {
+    let active: Bool
+    let ids: [UUID]?
 }
 
 private struct PageShape: Equatable {

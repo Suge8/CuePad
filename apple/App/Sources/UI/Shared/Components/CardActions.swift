@@ -8,13 +8,15 @@ struct CardActions: View {
     let card: Card
     /// "⋯"里的那一份（`CardMenu.more`）；false 是长按菜单。
     var more = false
+    /// 在能批量选择的地方（Mac 项目页的墙与列表）：菜单里多一项"选择"。
+    var selectable = false
     @Environment(Workspace.self) private var workspace
     #if os(iOS)
     @Environment(Navigation.self) private var navigation
     #endif
 
     var body: some View {
-        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card)
+        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable)
         ForEach(sections.indices, id: \.self) { index in
             if index > 0 { Divider() }
             ForEach(sections[index], id: \.self, content: item)
@@ -40,6 +42,10 @@ struct CardActions: View {
         case .move: moveMenu
         case .copy: Button(item.title, systemImage: item.symbol) { workspace.copy(Outgoing.text(of: card)) }
         case .trash: Button(item.title, systemImage: item.symbol, role: .destructive) { workspace.attempt { try await workspace.trash(id) } }
+        case .select:
+            #if os(macOS)
+            Button(item.title, systemImage: item.symbol) { workspace.presses.toggle(id) }
+            #endif
         // 只在轻扫里（`CardMenu.swipes`）
         case .indent, .outdent: EmptyView()
         }
@@ -84,6 +90,7 @@ extension CardMenu.Item {
         case .unresource: "不再是资料"
         case .copy: "复制"
         case .trash: "删除"
+        case .select: "选择"
         case .indent: "缩进"
         case .outdent: "反缩进"
         }
@@ -104,6 +111,7 @@ extension CardMenu.Item {
         case .unresource: "books.vertical.fill"
         case .copy: "doc.on.doc"
         case .trash: "trash"
+        case .select: "checkmark.circle"
         case .indent: "increase.indent"
         case .outdent: "decrease.indent"
         }

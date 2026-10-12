@@ -140,6 +140,7 @@ final class Workspace {
 
     /// 打开一条灵感或任务：任务在浮层里看（盖在当前页上，右上角的任务面板留着），灵感与提示词进编辑页。
     func open(_ card: Card) {
+        presses.clearSelection()
         if card.isTask { return openTask = .init(id: card.id) }
         openTask = nil
         showsTasks = false
@@ -150,6 +151,7 @@ final class Workspace {
     func show(_ page: Route) {
         openCard = nil
         openTask = nil
+        presses.clearSelection()
         presses.dismiss()
         pages.visit(from: self.page, to: page)
         if case .project(let id) = page {
@@ -286,13 +288,15 @@ final class Workspace {
         say("已归档", action: .undo { try await store.unarchive(id) })
     }
 
-    /// 删除一条灵感或任务：提示里可撤销。
-    func trash(_ id: UUID) async throws {
-        let undo = try await services.store.trashing(id)
+    /// 删除灵感或任务（一条，或 Mac 上批量选中的几条，一次写入）：提示里可撤销，撤销把这一批一起拨回。
+    func trash(_ id: UUID) async throws { try await trash([id]) }
+
+    func trash(_ ids: [UUID]) async throws {
+        let undo = try await services.store.trashing(ids)
         #if os(macOS)
-        closeIfOpen(id)
+        ids.forEach(closeIfOpen)
         #endif
-        say("已删除", action: .undo(undo))
+        say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo(undo))
     }
 
     /// 一键归档"最近完成"的任务。

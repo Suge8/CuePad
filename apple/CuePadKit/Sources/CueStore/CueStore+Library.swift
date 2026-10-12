@@ -349,13 +349,19 @@ extension CueStore {
   /// 进回收站；它的下级按原顺序提到它的位置（不连带进回收站）。
   /// 返回回执（`undo` 恢复它、让提上去的下级回到它下面）；不存在或已在回收站时什么都不做、返回 nil。
   @discardableResult
-  public func trashCard(_ id: UUID) throws -> CardChange? {
+  public func trashCard(_ id: UUID) throws -> CardChange? { try trashCards([id]).first }
+
+  /// 一次删除多条（Mac 上批量选中的灵感）：同一个事务，库只通知一次；每条的规则同 `trashCard`，回执按给出的顺序，跳过的不在里面。
+  @discardableResult
+  public func trashCards(_ ids: [UUID]) throws -> [CardChange] {
     try write {
-      guard let card = try find(Card.self, id), card.deletedAt == nil else { return nil }
       let now = Date.stamp
-      let lifted = try liftChildren(of: card, at: now)
-      try db.run("UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, id])
-      return .trash(id: id, lifted: lifted)
+      return try ids.compactMap { id in
+        guard let card = try find(Card.self, id), card.deletedAt == nil else { return nil }
+        let lifted = try liftChildren(of: card, at: now)
+        try db.run("UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, id])
+        return .trash(id: id, lifted: lifted)
+      }
     }
   }
 
@@ -377,32 +383,42 @@ extension CueStore {
   /// 拨回一次改动（`setTodo`、`trashCard`、`moveCard` 的回执），整个拨回是一个事务：
   /// 设为任务拆出的提示词删掉、正文与变量取值合回；改回灵感后下级回到它下面；删除恢复、提上去的下级回到它下面；挪动放回原来的位置。
   /// 其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
-  public func undo(_ change: CardChange) throws {
+  public func undo(_ change: CardChange) throws { try undo([change]) }
+
+  /// 一次拨回多个回执（批量删除的撤销），同一个事务，倒序拨回。
+  public func undo(_ changes: [CardChange]) throws {
     try reportingFileFailures { try write {
       var orphaned: Set<String> = []
-      switch change {
-      case .todo(let id, let on, let body, let variableValues, let prompt, let lifted):
-        if let prompt {
-          orphaned = try purgeCards(where: "id = ?", [prompt])
-          if var card = try find(Card.self, id) {
-            card.body = body
-            card.variableValues = variableValues
-            card.modifiedAt = Date.stamp
-            try update(card)
-          }
-          try registerImages(in: body)
-        }
-        try applyTodo(id, !on)
-        try adopt(lifted, by: id)
-      case .trash(let id, let lifted):
-        try restoreRow(id)
-        try adopt(lifted, by: id)
-      case .move(let id, let slot, let after):
-        let survivor = try after.flatMap { try find(Card.self, $0)?.id }
-        try relocate(id, to: slot, after: survivor)
-      }
+      for change in changes.reversed() { orphaned.formUnion(try undoRow(change)) }
       return try reclaimAttachments(orphaned)
     } }
+  }
+
+  /// 拨回一个回执（在调用方的事务里）；返回因此不再被引用的图片。
+  private func undoRow(_ change: CardChange) throws -> Set<String> {
+    var orphaned: Set<String> = []
+    switch change {
+    case .todo(let id, let on, let body, let variableValues, let prompt, let lifted):
+      if let prompt {
+        orphaned = try purgeCards(where: "id = ?", [prompt])
+        if var card = try find(Card.self, id) {
+          card.body = body
+          card.variableValues = variableValues
+          card.modifiedAt = Date.stamp
+          try update(card)
+        }
+        try registerImages(in: body)
+      }
+      try applyTodo(id, !on)
+      try adopt(lifted, by: id)
+    case .trash(let id, let lifted):
+      try restoreRow(id)
+      try adopt(lifted, by: id)
+    case .move(let id, let slot, let after):
+      let survivor = try after.flatMap { try find(Card.self, $0)?.id }
+      try relocate(id, to: slot, after: survivor)
+    }
+    return orphaned
   }
 
   /// 把这些卡按顺序重新挂到 `parent` 下（已经不在的跳过）。

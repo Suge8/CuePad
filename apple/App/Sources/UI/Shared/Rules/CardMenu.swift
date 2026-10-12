@@ -8,6 +8,8 @@ import CueStore
 nonisolated enum CardMenu {
     enum Item: Hashable, Sendable {
         case attachToTask, handToAgent, makeTask, makeIdea, complete, reopen, move, archive, resource, unresource, copy, trash
+        /// 开始批量选择（Mac 项目页上散放的灵感）。
+        case select
         /// 只在轻扫里：任务在大纲里缩进、反缩进。
         case indent, outdent
     }
@@ -28,10 +30,10 @@ nonisolated enum CardMenu {
     /// 能不能交给 Agent：只有提示词（挂在任务下的灵感）能。灵感先挂到任务，任务本身没有话可交。
     static func handsToAgent(_ card: Card) -> Bool { !card.isTask && card.parentID != nil }
 
-    /// 长按菜单，组间画分隔线。
-    static func sections(for card: Card) -> [[Item]] {
+    /// 长按菜单，组间画分隔线。`selectable`：这张卡在能批量选择的地方（Mac 项目页的墙与列表），删除前多一项"选择"。
+    static func sections(for card: Card, selectable: Bool = false) -> [[Item]] {
         switch card.status {
-        case nil: [[handsToAgent(card) ? .handToAgent : .attachToTask, .makeTask, .move, .archive], [.trash]]
+        case nil: [[handsToAgent(card) ? .handToAgent : .attachToTask, .makeTask, .move, .archive], (selectable ? [.select] : []) + [.trash]]
         case .done: [[.reopen, .archive], [.trash]]
         case .todo, .inProgress: [[.complete, .archive], [.trash]]
         }

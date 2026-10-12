@@ -15,6 +15,10 @@ extension DebugScene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
         case "search": workspace.searching = true
         case "tasks": workspace.showsTasks = true
+        case "select":
+            // 批量选择：选上本页前三条灵感
+            try? await Task.sleep(for: .seconds(1))
+            for id in workspace.presses.selectable.prefix(3) { workspace.presses.toggle(id) }
         case "task":
             // 本项目第一条没完成的顶层任务，在任务浮层里打开
             let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
