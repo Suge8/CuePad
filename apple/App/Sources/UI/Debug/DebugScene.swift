@@ -19,7 +19,7 @@ enum ScrollAnchor {
 /// - `-CuePadBench <interact|churn|chatdepth>`（量完退出）：interact 是单次交互的点击回合与掉帧，与交互预算比较（Mac 见 `InteractionBench`，iOS 见 `IOSInteractionBench`，`-CuePadInteractOnly 项,项` 只量列出的几项）；
 ///   chatdepth（仅 iOS）是长对话从最新处一路往上翻到第 1 轮、每排开一段的开销（`ChatDepthBench`，见 `DebugScene+LongChat.swift`）；
 ///   chatresize（仅 Mac，不退出）是长对话翻到深处后每次拖窗口边改宽的开销（`ChatResizeBench`，同一文件）；
-///   chatscroll（仅 Mac，量完退出）是长对话里滚动的每圈主线程 CPU 与指令数（`ChatScrollBench`，同一文件；方法与限制见 docs/verify.md「会话页滚动」）；
+///   chatscroll（仅 Mac，量完退出）是长对话里滚动的每圈主线程 CPU、指令数与掉帧（`ChatScrollBench`，同一文件；`-CuePadScrollDriver`、`-CuePadScrollPointer` 与方法限制见 docs/verify.md「会话页滚动」）；
 ///   churn（仅 Mac）边加卡边逐点拉宽窗口，查布局反馈环（`layout-stress.sh`）；
 /// - `-CuePadOffscreen YES`（仅 Mac）：主窗口放在所有屏幕之外（第一次显示前就放好、不被系统夹回，也不记位置），复现窗口不可见时的布局、测量时不露在桌面上；
 /// - `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检；
