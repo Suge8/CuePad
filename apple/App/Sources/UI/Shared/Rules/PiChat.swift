@@ -130,9 +130,9 @@ nonisolated enum PiChat {
         return Dotted(card.title, card.images.isEmpty ? nil : "\(card.images.count) 张图片")
     }
 
-    /// 你在这个会话里说过的最近一句的文字（对话里最后一条你的消息，图片不带）：空回复框按 ↑ 调回它。
+    /// 你在这个会话里说过的最近一句（对话里最后一条你的消息，存储格式，文字与图片）：空回复框按 ↑ 调回它。
     static func lastSaid(_ messages: [PiChatMessage]) -> String? {
-        messages.last { $0.role == .known(.user) }.map { CueFormat.plainText($0.text) }?.nonEmpty
+        messages.last { $0.role == .known(.user) }?.text.nonEmpty
     }
 
     /// 有几句没能送达时的说法（它们还挂在对话末尾等你重发或移除）："1 句没送到"；数来自会话列表查询（`PiSessionListItem.undelivered`）。

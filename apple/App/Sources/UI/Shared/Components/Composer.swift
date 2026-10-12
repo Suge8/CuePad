@@ -32,7 +32,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
     var commands: [PiSlashCommand] = []
     var shortcuts: [ReplyShortcut: () -> Void] = [:]
-    /// 空着时按 ↑ 放进来的话（回复框：你在这个会话里说过的上一句）。
+    /// 空着时按 ↑ 放进来的话，存储格式（回复框：你在这个会话里说过的上一句，文字与图片）。
     var recall: String?
     @ViewBuilder let header: () -> Header
     /// 工具排里"＋"右边的小圆钮（会话回复框的模型与思考强度）：一直展开的形态里一直在，会收起的形态里只在聚焦时出现。
@@ -83,7 +83,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         let list = paletteCommands
         guard !list.isEmpty else {
             guard key == .up, let recall, draft.isEmpty(accepting: [.images, .cards]) else { return false }
-            draft.text = recall
+            draft.append(stored: recall, files: workspace.services.store.files)
             return true
         }
         let current = min(highlighted, list.count - 1)
@@ -280,23 +280,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private func drop(_ outbox: Outbox) { draft.attachments.removeAll { $0.id == outbox.id } }
 
-    /// 展开编辑：卡片的文字放进输入框（接在已写的字前面）、图片放进图片条，不再作为整张卡带上，原卡片不动。
+    /// 展开编辑：卡片的文字与图片放回输入框（`ComposerDraft.append`），不再作为整张卡带上，原卡片不动。
     private func expand(_ outbox: Outbox) {
-        let text = CueFormat.parse(outbox.content).map { token in
-            switch token {
-            case .text(let text): text
-            case .split: "---"
-            case .image: ""
-            }
-        }
-        .joined()
-        .replacing(/\n{3,}/, with: "\n\n")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-        let images = CardText(outbox.content).images.compactMap { hash in
-            workspace.services.store.files.fileURL(for: hash).flatMap { try? Data(contentsOf: $0) }.map(PickedImage.init(data:))
-        }
-        draft.text = [text, draft.text].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
-        draft.images = images + draft.images
+        draft.append(stored: outbox.content, files: workspace.services.store.files)
         drop(outbox)
         previewing = nil
         focus.wrappedValue = true
