@@ -142,12 +142,12 @@ extension CueStore {
     }
   }
 
-  /// 新子任务放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxDepth` 级抛 `taskTooDeep`。
+  /// 新子任务放在 `parent` 的下级最后，项目随它。上级不是任务抛 `invalidParent`，已在第 `Card.maxTaskDepth` 级抛 `taskTooDeep`。
   public func createTask(_ body: String, under parent: UUID) throws -> Card {
     try requireContent(body)
     return try write {
       guard let link = try link(of: parent), link.isTask else { throw CueStoreError.invalidParent }
-      guard try ancestors(of: parent).count + 1 < Card.maxDepth else { throw CueStoreError.taskTooDeep }
+      guard try ancestors(of: parent).count + 1 < Card.maxTaskDepth else { throw CueStoreError.taskTooDeep }
       let last = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [parent]) { $0.textOrNil(0) } ?? nil
       return try splittingPrompt(insertCard(body, project: link.project, parent: parent, todo: true, sortKey: SortKey.after(last)))
     }
@@ -181,7 +181,7 @@ extension CueStore {
   }
 
   /// 设为任务 / 改回灵感。设为任务：成为待办的任务；多行的话第一行留作任务，其余成为它的第一条提示词（`CueTask.split`）。
-  /// 改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。已经是这个样子时什么都不做、返回 nil；
+  /// 改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。挂在第 `Card.maxTaskDepth` 级任务下的提示词设为任务抛 `taskTooDeep`。已经是这个样子时什么都不做、返回 nil；
   /// 否则返回回执（`undo` 拨回）。
   @discardableResult
   public func setTodo(_ id: UUID, _ on: Bool) throws -> CardChange? {
@@ -195,6 +195,7 @@ extension CueStore {
     let now = Date.stamp
     var prompt: UUID?, lifted: [UUID] = []
     if on {
+      guard try ancestors(of: id).count < Card.maxTaskDepth else { throw CueStoreError.taskTooDeep }
       try db.run("UPDATE cards SET todoAt = ?1, startedAt = NULL, completedAt = NULL, modifiedAt = ?1 WHERE id = ?2", [now, id])
       prompt = try Self.splitPrompt(db, task: id, at: now)
     } else {
@@ -308,7 +309,7 @@ extension CueStore {
   }
 
   /// 挪到 `slot` 里 `previous` 之后（nil = 最前），下级随它走、项目随新位置。卡片墙上的排序、换项目、缩进、
-  /// 挂成子任务或提示词都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），整棵子树超过 `Card.maxDepth` 级抛 `taskTooDeep`。
+  /// 挂成子任务或提示词都是它。只能挂到任务下、不能挂到自己或自己的下级下（`invalidParent`），任务的子树超过 `Card.maxTaskDepth` 级任务抛 `taskTooDeep`（提示词挂在任一级任务下都行）。
   /// 返回回执（`undo` 把它放回原来的位置：原来的上级或项目、原来的前一个同级）。
   @discardableResult
   public func moveCard(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
@@ -332,7 +333,7 @@ extension CueStore {
         guard let target = try link(of: parent), target.isTask, parent != id, !above.contains(id) else {
           throw CueStoreError.invalidParent
         }
-        guard above.count + 1 + (try height(of: id)) <= Card.maxDepth else { throw CueStoreError.taskTooDeep }
+        if current.isTask, above.count + 1 + (try taskHeight(of: id)) > Card.maxTaskDepth { throw CueStoreError.taskTooDeep }
         destination = CardLinks.Link(parent: parent, project: target.project, isTask: current.isTask)
       }
       let now = Date.stamp

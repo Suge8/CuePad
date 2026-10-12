@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 灵感与任务是同一种记录（Card）：差别只是"要做"（`todoAt`）。任务三态、可有子任务（最多三级）与提示词（挂在任务下的灵感）；
+/// 灵感与任务是同一种记录（Card）：差别只是"要做"（`todoAt`）。任务三态、可有子任务（任务最多两级）与提示词（挂在任务下的灵感）；
 /// 只有任务能当上级；去掉"要做"或进回收站时，下级按原顺序提到它的位置；归档连同下级。
 @Suite struct TaskTests {
   let fixture = try! Fixture()
@@ -31,24 +31,25 @@ import Testing
     let back = try await card(idea.id)
     #expect(back.isTask == false && back.status == nil && back.body == "把发言轮次修好")
 
-    // 层级：只有任务能当上级，灵感挂在任务下是提示词；子任务跟随上级的项目，最多三级
+    // 层级：只有任务能当上级，灵感挂在任务下是提示词；子任务跟随上级的项目，任务最多两级、提示词挂在任一级任务下不算一级
     let top = try await store.createTask("修重连", in: project.id)
     let shot = try await store.createCard(in: nil, body: "候选图截图")
     try await store.moveCard(shot.id, to: .under(top.id), after: nil)
     let second = try await store.createTask("改排序", under: top.id)
-    let third = try await store.createTask("补用例", under: second.id)
+    let third = try await store.createCard(body: "补用例", under: second.id)
     #expect(try await store.children(of: top.id).map(\.id) == [shot.id, second.id])
     #expect(second.projectID == project.id && third.parentID == second.id && third.projectID == project.id)
     await #expect(throws: CueStoreError.invalidParent) { try await store.moveCard(idea.id, to: .under(shot.id), after: nil) }
     await #expect(throws: CueStoreError.invalidParent) { try await store.createTask("x", under: shot.id) }
-    await #expect(throws: CueStoreError.taskTooDeep) { try await store.createTask("第四级", under: third.id) }
+    await #expect(throws: CueStoreError.taskTooDeep) { try await store.createTask("第三级", under: second.id) }
+    await #expect(throws: CueStoreError.taskTooDeep) { try await store.setTodo(third.id, true) }  // 子任务下的提示词不能升成第三级任务
 
     // 完成上级：没完成的下级一起完成，已完成的保留原时间；重新打开上级不动下级
     let finished = try await store.createTask("写说明", under: top.id)
     try await store.setStatus(finished.id, .done)
     let finishedAt = try #require(try await card(finished.id).completedAt)
     try await store.setStatus(top.id, .done)
-    for id in [top.id, second.id, third.id] { #expect(try await card(id).status == .done) }
+    for id in [top.id, second.id] { #expect(try await card(id).status == .done) }
     #expect(try await card(finished.id).completedAt == finishedAt)
     try await store.setStatus(top.id, .todo)
     #expect(try await card(second.id).status == .done)
@@ -59,22 +60,24 @@ import Testing
     #expect(try await store.taskCounts()[project.id] == TaskCounts(inProgress: 0, todo: 1, done: 1))
   }
 
-  @Test func 移动_不能成环或超三级_换项目带着子树_取消要做与进回收站时下级上提() async throws {
+  @Test func 移动_不能成环或任务超两级_换项目带着子树_取消要做与进回收站时下级上提() async throws {
     let site = try await store.createProject(name: "网站", color: "#111")
     let table = try await store.createProject(name: "圆桌", color: "#111")
     let a = try await store.createTask("a", in: nil)
     let a1 = try await store.createTask("a1", under: a.id)
-    let a2 = try await store.createTask("a2", under: a1.id)
     let b = try await store.createTask("b", in: nil)
     let b1 = try await store.createTask("b1", under: b.id)
 
-    await #expect(throws: CueStoreError.invalidParent) { try await store.moveCard(a.id, to: .under(a2.id), after: nil) }
+    await #expect(throws: CueStoreError.invalidParent) { try await store.moveCard(a.id, to: .under(a1.id), after: nil) }
     await #expect(throws: CueStoreError.taskTooDeep) { try await store.moveCard(a.id, to: .under(b1.id), after: nil) }
     #expect(try await card(a.id).parentID == nil)
+    let note = try await store.createCard(in: nil, body: "备注")
+    try await store.moveCard(note.id, to: .under(b1.id), after: nil)  // 提示词挂在第二级任务下
+    #expect(try await card(note.id).parentID == b1.id)
 
     // 挂到别的项目的任务下：整棵子树换到那个项目，同级按放的位置排
     let moving = try await store.createTask("换首图", in: site.id)
-    let child = try await store.createTask("裁图", under: moving.id)
+    let child = try await store.createCard(body: "裁图", under: moving.id)
     let parent = try await store.createTask("上线", in: table.id)
     let first = try await store.createTask("备份", under: parent.id)
     let last = try await store.createTask("发布", under: parent.id)
@@ -83,19 +86,22 @@ import Testing
     #expect(try await card(child.id).projectID == table.id)
 
     // 取消要做、进回收站：下级按原顺序提到它的位置
-    let top = try await store.createTask("上线前", in: nil)
-    let before = try await store.createTask("前一条", under: top.id)
-    let middle = try await store.createTask("备份", under: top.id)
+    let release = try await store.createProject(name: "发布", color: "#111")
+    let after = try await store.createTask("后一条", in: release.id)
+    let middle = try await store.createTask("备份", in: release.id)
+    let before = try await store.createTask("前一条", in: release.id)
     let prompt = try await store.createCard(in: nil, body: "备份脚本")
     try await store.moveCard(prompt.id, to: .under(middle.id), after: nil)
     let sub = try await store.createTask("导出", under: middle.id)
-    let after = try await store.createTask("后一条", under: top.id)
+    func tasks() async throws -> [UUID] { try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == release.id }.map(\.id) }
     try await store.setTodo(middle.id, false)
-    #expect(try await store.children(of: top.id).map(\.id) == [before.id, middle.id, prompt.id, sub.id, after.id])
+    #expect(try await tasks() == [before.id, sub.id, after.id])
+    let lifted = try await [card(prompt.id), card(sub.id)]
+    #expect(lifted.allSatisfy { $0.parentID == nil && $0.projectID == release.id } && lifted[0].sortKey < lifted[1].sortKey)
     try await store.setTodo(middle.id, true)
     try await store.moveCard(sub.id, to: .under(middle.id), after: nil)
     try await store.trashCard(middle.id)
-    #expect(try await store.children(of: top.id).map(\.id) == [before.id, sub.id, prompt.id, after.id])
+    #expect(try await tasks() == [before.id, sub.id, after.id])
   }
 
   @Test func 归档不占列表仍可搜到_连同下级一起取回_一键全部归档只动已完成的顶层任务() async throws {

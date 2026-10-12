@@ -82,7 +82,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-  /// 上级任务；nil 是顶层。只有任务能当上级，层级最多 `maxDepth`；上级不在库里或不可见时按顶层看待。
+  /// 上级任务；nil 是顶层。只有任务能当上级，任务最多 `maxTaskDepth` 级；上级不在库里或不可见时按顶层看待。
   public internal(set) var parentID: UUID?
   /// "设为任务"的时间：有值是任务，nil 是灵感。
   public internal(set) var todoAt: Date?
@@ -94,8 +94,8 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
 
-  /// 任务 → 子任务 → 子任务（提示词挂在哪一级都算在它下面一级）。
-  public static let maxDepth = 3
+  /// 任务最多两级：任务 → 子任务。提示词（任务下的灵感）挂在任一级任务下，不算一级。
+  public static let maxTaskDepth = 2
 
   public var isTask: Bool { todoAt != nil }
   /// 空白：正文只有空白（没有文字也没有图片）。空白灵感离开编辑就不留下（`CueStore.dropIfBlank`），也不计数、不当摘要。
@@ -350,7 +350,7 @@ public enum CueStoreError: Error, Equatable {
   case schemaTooOld(Int)
   /// 只能挂到存在的任务下，不能挂到自己或自己的下级下。
   case invalidParent
-  /// 挂上去后会超过 `Card.maxDepth` 级。
+  /// 挂上去后任务会超过 `Card.maxTaskDepth` 级。
   case taskTooDeep
   /// 灵感没有状态：先"设为任务"。
   case notATask
@@ -377,7 +377,7 @@ extension CueStoreError: LocalizedError {
     case .unsupportedSchemaVersion(let version): "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
     case .schemaTooOld(let version): "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它"
     case .invalidParent: "只能挂到任务下，不能挂到自己或自己的下级下"
-    case .taskTooDeep: "子任务最多 \(Card.maxDepth) 级"
+    case .taskTooDeep: "任务最多 \(Card.maxTaskDepth) 级（任务 → 子任务），提示词不限"
     case .notATask: "这是灵感，先「设为任务」再改状态"
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"

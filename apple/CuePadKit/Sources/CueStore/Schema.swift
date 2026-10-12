@@ -51,6 +51,16 @@ enum Schema {
     // 23：工具活动的各类计数改为失败的也算在内（与清单的行同一口径，`Tools.failed` 下线）；已存对话里的是旧口径，
     // 会话文件的检查点作废，下次启动从头读一遍，所有消息统一成新口径
     "UPDATE piSessions SET checkpoint = NULL;",
+    // 24：任务最多两级，提示词不算一级。旧规则下第 3 级的任务（含回收站里的，恢复后同样超限）改挂到上级的上级，与 `CardLinks.repairs` 同一规则；
+    // 旧规则最深就是第 3 级，一步够。modifiedAt 必须变大，改动才会同步出去
+    Upgrade { db in
+      try db.run(
+        """
+        UPDATE cards SET parentID = (SELECT p.parentID FROM cards p WHERE p.id = cards.parentID), modifiedAt = MAX(modifiedAt + 1, ?)
+        WHERE todoAt IS NOT NULL AND parentID IN (
+          SELECT p.id FROM cards p JOIN cards g ON g.id = p.parentID WHERE p.deletedAt IS NULL AND g.deletedAt IS NULL)
+        """, [Date.stamp])
+    },
   ]
 
   private static let previews = """

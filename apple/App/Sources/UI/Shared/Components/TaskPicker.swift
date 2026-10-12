@@ -85,7 +85,7 @@ struct TaskPicker: View {
     /// 在列表里能找到的上级有几层。
     private func depth(of task: Card) -> Int {
         var depth = 0, parent = task.parentID.flatMap(listed)
-        while let card = parent, depth < Card.maxDepth {
+        while let card = parent, depth < Card.maxTaskDepth {
             depth += 1
             parent = card.parentID.flatMap(listed)
         }
