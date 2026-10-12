@@ -146,14 +146,15 @@ struct PressFeedback: ViewModifier {
     private static let dimmed = 0.6
     private static let shade = 0.05
 
+    /// 原生控件的高亮没有过渡：按下、松开都在那一帧到位（按下不在动画事务里，不另挂动画修饰）。
+    /// 每种只挂自己要的那一个效果：亮度滤镜挂在每颗按钮上，按钮里的字都要另画一遍。
     func body(content: Content) -> some View {
         let active = pressed && isEnabled
-        let card = kind == .card
-        content
-            .opacity(active && !card ? Self.dimmed : 1)
-            .brightness(active && card ? (palette.dark ? Self.shade : -Self.shade) : 0)
-            // 原生控件的高亮没有过渡：按下、松开都在那一帧到位
-            .animation(nil, value: active)
+        if kind == .card {
+            content.brightness(active ? (palette.dark ? Self.shade : -Self.shade) : 0)
+        } else {
+            content.opacity(active ? Self.dimmed : 1)
+        }
     }
     #else
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
