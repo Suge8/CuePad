@@ -57,13 +57,14 @@ struct CardActions: View {
         }
     }
 
-    @ViewBuilder private var handToAgent: some View {
-        #if os(macOS)
-        let text = Outgoing.text(of: card), id = card.id
-        workspace.sendButton(workspace.sendState.agentTarget(for: card.projectID)) { target in Task { await workspace.send(text, to: target, card: id) } }
-        #else
-        Button(CardMenu.Item.handToAgent.title, systemImage: CardMenu.Item.handToAgent.symbol) { navigation.handToAgent(card) }
-        #endif
+    private var handToAgent: some View {
+        Button(CardMenu.Item.handToAgent.title, systemImage: CardMenu.Item.handToAgent.symbol) {
+            #if os(macOS)
+            workspace.handOff(card)
+            #else
+            navigation.handToAgent(card)
+            #endif
+        }
     }
 }
 

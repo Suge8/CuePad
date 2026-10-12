@@ -1,105 +1,137 @@
 #if os(macOS)
+import CueStore
 import SwiftUI
 
-/// 提示词的发送钮（⌘↩）+ 选会话：发给本项目的 Agent 会话（`SendState.agentTarget`），有目标时是靛青主钮；
-/// 本项目还没有会话时只是选会话的菜单（中性样式）。只在有内容可发时出现（由调用方决定）。
-/// 按钮上写"发给 Agent · <会话名>"，过长只截会话名；目标会话已结束时状态点写"已结束"，发送时在后台唤醒它；
-/// 会话正忙时转为询问马上说还是等它做完再说（`Workspace.send`）。
+/// 提示词编辑页底栏右边的"去处 + 交给 Agent"：去处写明白交给哪里（`SendState.destination`：会话是状态点加会话名，新会话写"新会话"加文件夹或项目名），
+/// 点去处是换去处的菜单（只对这条提示词所在的任务生效）；靛青主钮"交给 Agent"（⌘↩）按去处交出去（`Workspace.handOff`）。
+/// 没有默认去处（没归入项目、也没交给过会话）时只有主钮，点开就是选去处的菜单。会话已结束时去处写"已结束"，交出时在后台唤醒它。
 struct SendControl: View {
-    let project: UUID?
-    var compact = false
-    /// 给了时菜单最上面多一项"新会话"（见 `Workspace.newSessionHandOff`）。
-    var newSession: (() -> Void)? = nil
-    let send: (AgentTarget) -> Void
+    let prompt: Card
+    /// 提示词所在的任务。
+    let task: Card?
+    /// 要交出去的正文（选中了就只是选中的部分）。
+    let outgoing: () -> String
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let target = workspace.sendState.agentTarget(for: project)
-        Group {
-            if let target {
-                HStack(spacing: 0) {
-                    Button { send(target) } label: {
-                        label(dot: workspace.sendState.shown(target), text: Dotted("发给 Agent", name(target)), shortcut: "⌘↩")
-                            .padding(.trailing, 8)
-                    }
+        if let destination = workspace.sendState.destination(of: prompt, task: task) {
+            HStack(spacing: 10) {
+                DestinationMenu(prompt: prompt, current: destination) { chip(destination) }
+                    .glass(in: .capsule, interactive: true)
+                Button { workspace.handOff(prompt, text: outgoing()) } label: { handLabel(shortcut: true) }
                     .buttonStyle(PressStyle())
                     .keyboardShortcut(.return, modifiers: .command)
-                    .accessibilityLabel(workspace.sendState.action(for: target))
-                    .help(workspace.sendState.isEnded(target) ? "这个会话已结束，发送时会在后台唤醒它" : "")
-                    SessionMenu(project: project, newSession: newSession) {
-                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                            .padding(.trailing, compact ? 10 : 14).padding(.leading, 4)
-                            .frame(height: compact ? 28 : 44)
-                            .contentShape(.rect)
-                    }
-                }
-            } else {
-                SessionMenu(project: project, newSession: newSession) {
-                    label(dot: nil, text: "交给 Agent…", shortcut: nil)
-                        .padding(.trailing, compact ? 12 : 16)
-                }
+                    .help(help(destination))
             }
+        } else {
+            DestinationMenu(prompt: prompt, current: nil) { handLabel(shortcut: false) }
         }
-        .font((compact ? Typography.meta : Typography.secondary).weight(.semibold))
-        .foregroundStyle(target != nil ? palette.onSignature : palette.ink)
-        .background(target != nil ? palette.signatureFill : palette.fill, in: .capsule)
-        .shadow(color: .black.opacity(palette.dark || compact ? 0 : 0.12), radius: 6, y: 2)
-        .fixedSize()
     }
 
-    private func label(dot: PiShown?, text: Dotted, shortcut: String?) -> some View {
+    private func handLabel(shortcut: Bool) -> some View {
         HStack(spacing: 8) {
-            if let dot { PiStateDot(shown: dot, size: 5) } else { Image(systemName: "paperplane.fill").accessibilityHidden(true) }
-            Text(text).lineLimit(1)
-            if let shortcut { Text(shortcut).opacity(0.6) }
+            Text("交给 Agent")
+            if shortcut { Text("⌘↩").opacity(0.6) }
         }
-        .padding(.leading, compact ? 12 : 16)
-        .frame(height: compact ? 28 : 44)
-        .contentShape(.rect)
+        .primaryCapsule(palette)
     }
 
-    /// 截断后的会话名。
-    private func name(_ target: AgentTarget) -> String {
-        let full = workspace.sendState.sessionName(target.session), limit = compact ? 8 : 14
-        return full.count > limit ? full.prefix(limit - 1) + "…" : full
+    private func chip(_ destination: HandOffDestination) -> some View {
+        let state = workspace.sendState
+        return HStack(spacing: 7) {
+            switch destination {
+            case .session(let id):
+                let target = AgentTarget(session: id)
+                PiStateDot(shown: state.shown(target), size: 6)
+                Text(Self.truncated(state.sessionName(id))).lineLimit(1)
+                if state.isEnded(target) { Text("已结束").foregroundStyle(palette.ink3) }
+            case .newSession:
+                Image(systemName: "plus").font(.system(size: 11, weight: .semibold)).accessibilityHidden(true)
+                Text(Dotted("新会话", newSessionPlace)).lineLimit(1)
+            }
+            Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(palette.ink3).accessibilityHidden(true)
+        }
+        .font(Typography.secondary.weight(.medium))
+        .foregroundStyle(palette.ink)
+        .padding(.horizontal, 14).frame(height: 44)
+        .contentShape(.capsule)
+    }
+
+    /// 新会话开在哪：项目绑定的文件夹名，还没绑就写项目名（交出时会先让选文件夹）。
+    private var newSessionPlace: String? {
+        guard let project = prompt.projectID else { return nil }
+        let folder = workspace.catalog?.directories[project].map { URL(filePath: $0).lastPathComponent }
+        return Self.truncated(folder ?? workspace.catalog?.project(project)?.name ?? "")
+    }
+
+    private func help(_ destination: HandOffDestination) -> String {
+        switch destination {
+        case .session(let id): workspace.sendState.action(for: AgentTarget(session: id))
+        case .newSession: "在 \(newSessionPlace ?? "项目")里开新会话并交给它"
+        }
+    }
+
+    private static func truncated(_ name: String, limit: Int = 14) -> String {
+        name.count > limit ? name.prefix(limit - 1) + "…" : name
     }
 }
 
-/// 选会话的菜单：所有 Mac 上在线的 Agent 会话（手机共用同一份规则，`HandOffTargets`）与本机刚结束的会话（当前的打勾，与发送钮的目标是同一批），
-/// 可选"新会话"；都没有时留一行怎么开始。
-struct SessionMenu<Label: View>: View {
-    let project: UUID?
-    var newSession: (() -> Void)? = nil
-    @ViewBuilder let label: () -> Label
+extension View {
+    /// 底栏与浮层里的靛青主钮外观（签名色只给主钮）。
+    func primaryCapsule(_ palette: Palette) -> some View {
+        font(Typography.secondary.weight(.semibold))
+            .foregroundStyle(palette.onSignature)
+            .padding(.horizontal, 16).frame(height: 44)
+            .background(palette.signatureFill, in: .capsule)
+            .contentShape(.capsule)
+    }
+}
+
+/// 选去处的菜单：新会话（项目里的提示词才有）、本项目的在线会话、其他在线会话、本窗口刚结束的会话（可在后台唤醒）；当前的打勾。
+/// 选择只记在这条提示词所在的任务上，不发送。在线会话与手机共用同一份列表规则（`HandOffTargets`）。
+struct DestinationMenu<Trigger: View>: View {
+    let prompt: Card
+    let current: HandOffDestination?
+    @ViewBuilder let label: () -> Trigger
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
 
     var body: some View {
-        let current = workspace.sendState.agentTarget(for: project)
+        let state = workspace.sendState
+        let online = state.onlineTargets(for: prompt.projectID)
+        let here = online.filter { $0.state.projectID == prompt.projectID && prompt.projectID != nil }
+        let elsewhere = online.filter { item in !here.contains { $0.id == item.id } }
+        let groups = [here, elsewhere].filter { !$0.isEmpty }
         Menu {
-            if let newSession { Button("新会话", systemImage: "plus", action: newSession) }
-            let online = workspace.sendState.onlineTargets(for: project)
-            if online.isEmpty, workspace.sendState.endedTargets.isEmpty, newSession == nil {
-                Button {} label: { Text(Dotted("没有运行中的 Agent 会话", "在终端运行 pi 开始")) }.disabled(true)
-            }
-            ForEach(online) { item in
-                let id = item.state.sessionID
-                Toggle(isOn: Binding(get: { current?.session == id }, set: { _ in workspace.sendState.choice = AgentTarget(session: id) })) {
-                    Text(HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: workspace.sendState.shown(AgentTarget(session: id))))
+            if prompt.projectID != nil { choice(.newSession) { Label("新会话", systemImage: "plus") } }
+            ForEach(groups.indices, id: \.self) { index in
+                if index > 0 || prompt.projectID != nil { Divider() }
+                ForEach(groups[index]) { item in
+                    let id = item.state.sessionID
+                    choice(.session(id)) {
+                        Text(HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: state.shown(AgentTarget(session: id))))
+                    }
                 }
             }
-            ForEach(workspace.sendState.endedTargets, id: \.sessionID) { ended in
-                Toggle(
-                    isOn: Binding(get: { current?.session == ended.sessionID }, set: { _ in workspace.sendState.choice = AgentTarget(session: ended.sessionID) })
-                ) { Text(Dotted(ended.title, "已结束")) }
+            if !state.endedTargets.isEmpty {
+                Divider()
+                ForEach(state.endedTargets, id: \.sessionID) { ended in
+                    choice(.session(ended.sessionID)) { Text(Dotted(ended.title, "已结束")) }
+                }
+            }
+            if prompt.projectID == nil, online.isEmpty, state.endedTargets.isEmpty {
+                Button {} label: { Text(Dotted("没有运行中的 Agent 会话", "在终端运行 pi 开始")) }.disabled(true)
             }
         } label: {
             label()
         }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-        .help("选择 Agent 会话")
+        .menuStyle(.button).buttonStyle(PressStyle(scale: 0.97)).menuIndicator(.hidden).fixedSize()
+        .help("选择交给哪个 Agent 会话")
         .accessibilityLabel("选择 Agent 会话")
+    }
+
+    private func choice<Content: View>(_ destination: HandOffDestination, @ViewBuilder _ content: () -> Content) -> some View {
+        Toggle(isOn: Binding(get: { current == destination }, set: { _ in workspace.sendState.pick(destination, for: prompt) })) { content() }
     }
 }
 #endif

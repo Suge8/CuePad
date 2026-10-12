@@ -15,7 +15,7 @@ nonisolated private struct PaletteData: Sendable, Equatable {
 }
 
 /// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
-/// ↑↓ 选择，↩ 打开，⌘↩ 发给 Agent（只有提示词），⌘⇧C 复制。会话——上面是在线的，下面是已结束的、按结束时间分段（分页，下一页只接在末尾），
+/// ↑↓ 选择，↩ 打开，⌘↩ 交给 Agent（只有提示词），⌘⇧C 复制。会话——上面是在线的，下面是已结束的、按结束时间分段（分页，下一页只接在末尾），
 /// 右侧是它的近况与回复。
 struct SearchPalette: View {
     @Binding var scope: SearchScope
@@ -249,7 +249,7 @@ struct SearchPalette: View {
                 }
                 HStack(spacing: 12) {
                     Text("↩ 打开")
-                    if CardMenu.handsToAgent(card) { Text("⌘↩ 发给 Agent") }
+                    if CardMenu.handsToAgent(card) { Text("⌘↩ 交给 Agent") }
                     Text("⌘⇧C 复制")
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3).padding(.top, 4)
@@ -271,7 +271,7 @@ struct SearchPalette: View {
 
     private var shortcuts: some View {
         ZStack {
-            Button("发送") { if let card = selected { Task { await sendSelected(card) } } }
+            Button("交给 Agent") { if let card = selected { handOff(card) } }
                 .keyboardShortcut(.return, modifiers: .command)
             Button("复制") { if let card = selected { workspace.copy(Outgoing.text(of: card)) } }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
@@ -279,10 +279,9 @@ struct SearchPalette: View {
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 
-    /// 只有提示词发给 Agent（本项目当前的会话）；灵感先挂到任务。
-    private func sendSelected(_ card: Card) async {
-        guard CardMenu.handsToAgent(card), let target = workspace.sendState.agentTarget(for: card.projectID) else { return }
-        await workspace.send(Outgoing.text(of: card), to: target, card: card.id)
+    /// 只有提示词交给 Agent（去处规则同编辑页）；灵感先挂到任务。
+    private func handOff(_ card: Card) {
+        if CardMenu.handsToAgent(card) { workspace.handOff(card) }
     }
 
     private func groups(_ data: PaletteData) -> [(owner: UUID?, cards: [Card])] {

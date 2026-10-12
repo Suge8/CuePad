@@ -114,9 +114,12 @@ enum DebugScene {
         return DemoLibrary.encode(context.makeImage()!)
     }
 
-    /// `-CuePadCard` 指定（或最近修改）的一张卡。
+    /// `-CuePadCard` 指定（或最近修改）的一张卡：灵感，或进行中、待办任务下的提示词。
     static func card(in project: UUID?, store: CueStore) async -> UUID? {
-        let cards = (try? await store.cards(in: project)) ?? []
+        var cards = (try? await store.cards(in: project)) ?? []
+        for task in (try? await store.tasks(in: project, .todo, .inProgress)) ?? [] {
+            cards += ((try? await store.children(of: task.id)) ?? []).filter { !$0.isTask }
+        }
         let prefix = defaults.string(forKey: "CuePadCard") ?? ""
         return cards.filter { $0.body.hasPrefix(prefix) }.max { $0.modifiedAt < $1.modifiedAt }?.id
     }

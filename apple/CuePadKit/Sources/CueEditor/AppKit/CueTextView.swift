@@ -127,20 +127,30 @@ public final class CueTextView: NSTextView, CueEditorHost {
 }
 
 extension CueTextView {
+    /// 右键菜单最上面：选中文字时的选区动作（外部提供），再是常驻的"插入分割线"，各自与后面隔一条线。
     public override func menu(for event: NSEvent) -> NSMenu? {
-        let menu = super.menu(for: event)
-        guard let menu, let stored = selectedStoredText, !selectionActions.isEmpty else { return menu }
-        for (index, action) in selectionActions.enumerated() {
-            let item = NSMenuItem(title: action.title, action: #selector(performSelectionAction(_:)), keyEquivalent: "")
-            item.image = NSImage(systemSymbolName: action.systemImage, accessibilityDescription: nil)
-            item.target = self
-            item.tag = index
-            item.representedObject = stored
-            menu.insertItem(item, at: index)
+        guard let menu = super.menu(for: event) else { return nil }
+        var head: [NSMenuItem] = []
+        if let stored = selectedStoredText, !selectionActions.isEmpty {
+            for (index, action) in selectionActions.enumerated() {
+                let item = NSMenuItem(title: action.title, action: #selector(performSelectionAction(_:)), keyEquivalent: "")
+                item.image = NSImage(systemSymbolName: action.systemImage, accessibilityDescription: nil)
+                item.target = self
+                item.tag = index
+                item.representedObject = stored
+                head.append(item)
+            }
+            head.append(.separator())
         }
-        menu.insertItem(.separator(), at: selectionActions.count)
+        let divider = NSMenuItem(title: "插入分割线", action: #selector(insertDividerFromMenu), keyEquivalent: "")
+        divider.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: nil)
+        divider.target = self
+        head += [divider, .separator()]
+        for (index, item) in head.enumerated() { menu.insertItem(item, at: index) }
         return menu
     }
+
+    @objc private func insertDividerFromMenu() { insertDivider() }
 
     @objc private func performSelectionAction(_ item: NSMenuItem) {
         guard selectionActions.indices.contains(item.tag), let stored = item.representedObject as? String else { return }
