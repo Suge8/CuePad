@@ -45,6 +45,7 @@ struct HistoryImageTests {
         let note = "[Image: original 3000x2000, displayed at 1500x1000. Multiply coordinates by 2.00 to map to original image.]"
         #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n" + note, folder: "x") == "看这张")
         #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n[Image: original 3000x2", folder: "x") == "看这张")
+        #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n" + note + "\n\n", folder: "x") == "看这张")
         #expect(PiSessionName.display(name: nil, firstMessage: "[Image converted from image/webp to image/png.]", folder: "x") == "x")
     }
 

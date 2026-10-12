@@ -92,9 +92,10 @@ public enum PiSessionName {
     }
 
     /// Pi 把图片缩小或转格式后，在你的话末尾加给模型看的说明行（`[Image: original …]`、`[Image converted from …]`）：CuePad 里一律不显示，
-    /// 会话名、对话、摘要都经这里去掉。按行首认（扩展给的首条消息被截断时说明行可能不完整），只去末尾连续的说明行，其余原样。
+    /// 会话名、对话、摘要都经这里去掉。按行首认（扩展给的首条消息被截断时说明行可能不完整），只去末尾连续的说明行（说明行后面的空行不挡），其余原样。
     public static func withoutImageNotes(_ text: String) -> String {
         var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
         guard let last = lines.last, isImageNote(last) else { return text }
         while let last = lines.last, isImageNote(last) { lines.removeLast() }
         return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
