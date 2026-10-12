@@ -21,7 +21,11 @@ import Testing
     var offline = false
     var rejection: CKError?
 
+    /// 服务器收下一条后立刻执行（模拟上传期间本机又改了这条记录）。
+    var afterAccepting: (@Sendable () throws -> Void)?
+
     func goOffline() { offline = true }
+    func onAccept(_ action: @escaping @Sendable () throws -> Void) { afterAccepting = action }
     func reject(with error: CKError) { rejection = error }
 
     func record(_ name: String) -> CKRecord? { current[name] }
@@ -45,6 +49,7 @@ import Testing
           current[name] = accepted
           saved.append(name)
           sent.saved.append(accepted)
+          try afterAccepting?()
         }
       }
       for id in ids {
@@ -114,9 +119,9 @@ import Testing
     await server.reject(with: CKError(.requestRateLimited))
     let made = try await phone.store.requestDelivery("继续", to: target, on: "mac")
 
-    let received = try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server)
+    let result = try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server)
 
-    #expect(!received)
+    #expect(result == .rejected)
     #expect(try await phone.reconcileDelta().saves == [phone.id(made.id)])
   }
 
@@ -140,7 +145,7 @@ import Testing
     let server = Server()
     let made = try await phone.store.requestDelivery("继续", to: target, on: "mac")
 
-    #expect(try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server))
+    #expect(try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server) == .received)
     #expect(await server.row(phone.id(made.id))?.fields["status"] == .text("pending"))
   }
 
@@ -148,10 +153,10 @@ import Testing
   @Test func theSameRecordUploadedDirectlyTwiceInARowIsAcceptedBothTimes() async throws {
     let server = Server()
     let made = try await phone.store.requestDelivery("继续", to: target, on: "mac", mode: .followUp)
-    #expect(try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server))
+    #expect(try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server) == .received)
     #expect(try await phone.store.promoteDelivery(made.id))
 
-    #expect(try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server))
+    #expect(try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server) == .received)
     #expect(await server.row(phone.id(made.id))?.fields["mode"] == .text("steer"))
     #expect(try await phone.reconcileDelta().saves.isEmpty)
   }
@@ -162,13 +167,13 @@ import Testing
     let server = Server()
     let made = try await phone.store.requestDelivery("继续", to: target, on: "mac", mode: .followUp)
     let id = phone.recordID(made.id)
-    #expect(try await phone.coordinator.sendNow(id, deleted: false, via: server))
+    #expect(try await phone.coordinator.sendNow(id, deleted: false, via: server) == .received)
     #expect(try await phone.store.promoteDelivery(made.id))
     let engines = try #require(await phone.coordinator.record(for: id))  // 引擎取走的版本
     _ = try await server.upload(saving: [engines], deleting: [])  // 它先到了服务器，结果（新标签）还没回到本机
     try RawDB(phone.fixture.url).exec("UPDATE deliveryRequests SET status = 'succeeded', modifiedAt = modifiedAt + 1")
 
-    #expect(try await phone.coordinator.sendNow(id, deleted: false, via: server))
+    #expect(try await phone.coordinator.sendNow(id, deleted: false, via: server) == .received)
     #expect(await server.row(phone.id(made.id))?.fields["status"] == .text("succeeded"))
     #expect(try await phone.reconcileDelta().saves.isEmpty)
   }
@@ -178,12 +183,12 @@ import Testing
     let server = Server()
     let made = try await phone.store.requestDelivery("继续", to: target, on: "mac", mode: .followUp)
     let id = phone.recordID(made.id)
-    #expect(try await phone.coordinator.sendNow(id, deleted: false, via: server))
+    #expect(try await phone.coordinator.sendNow(id, deleted: false, via: server) == .received)
     #expect(try await phone.store.promoteDelivery(made.id))
     let engines = try #require(await phone.coordinator.record(for: id))
     let engineResult = try await server.upload(saving: [engines], deleting: [])
     try RawDB(phone.fixture.url).exec("UPDATE deliveryRequests SET status = 'succeeded', modifiedAt = modifiedAt + 1")
-    #expect(try await phone.coordinator.sendNow(id, deleted: false, via: server))
+    #expect(try await phone.coordinator.sendNow(id, deleted: false, via: server) == .received)
 
     await phone.coordinator.handle(.sent(saved: engineResult.saved, failedSaves: [], deleted: [], failedDeletes: []))
 
@@ -195,12 +200,12 @@ import Testing
   func theResultWrittenBackOnTheMacIsAcceptedOnItsDirectUpload() async throws {
     let server = Server()
     let made = try await phone.store.requestDelivery("继续", to: target, on: "mac")
-    #expect(try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server))
+    #expect(try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server) == .received)
     await mac.coordinator.handle(.fetched(modifications: [try #require(await server.record(phone.id(made.id)))], deletions: []))
     let (uploads, uploaded) = AsyncStream.makeStream(of: Bool.self)
     let mac = mac
     let executor = DeliveryExecutor(store: mac.store, hostID: "mac", onIssue: { Issue.record("\($0)") }, onFinished: { id in
-      uploaded.yield((try? await mac.coordinator.sendNow(mac.recordID(id), deleted: false, via: server)) ?? false)
+      uploaded.yield((try? await mac.coordinator.sendNow(mac.recordID(id), deleted: false, via: server)) == .received)
     }) { _ in .succeeded }
     try await executor.start()
 
@@ -208,5 +213,25 @@ import Testing
     #expect(await results.next() == true)
     #expect(await server.row(phone.id(made.id))?.fields["status"] == .text("succeeded"))
     await executor.stop()
+  }
+
+  /// 上传期间本机又改过这条记录：这一版传好了，更新的版本要留给引擎，不能当成都传完了。
+  @Test func aVersionWrittenWhileUploadingIsLeftForTheEngine() async throws {
+    let server = Server()
+    let made = try await phone.store.requestDelivery("继续", to: target, on: "mac")
+    let url = phone.fixture.url
+    await server.onAccept { try RawDB(url).exec("UPDATE deliveryRequests SET status = 'executing', modifiedAt = modifiedAt + 1") }
+
+    let result = try await phone.coordinator.sendNow(phone.recordID(made.id), deleted: false, via: server)
+
+    #expect(result == .receivedWithNewerVersionPending)
+    #expect(await phone.queue.saves.contains(phone.id(made.id)))
+  }
+
+  /// 失败日志里的原因要带服务器的说明：`localizedDescription` 只有"错误 14"。
+  @Test func theLoggedReasonCarriesTheServersExplanation() {
+    let error = CKError(.serverRecordChanged, userInfo: ["ServerErrorDescription": "record to insert already exists"])
+
+    #expect(error.brief.contains("14") && error.brief.contains("record to insert already exists"))
   }
 }
