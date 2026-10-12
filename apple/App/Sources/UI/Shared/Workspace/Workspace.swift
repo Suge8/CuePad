@@ -51,7 +51,7 @@ final class Workspace {
     var openCard: UUID? {
         didSet { if let openCard { presses.present(openCard) } }
     }
-    /// 浮层里看着的任务（`TaskSheet`）：盖在当前页上，不换页。
+    /// 浮窗里看着的任务（`TaskSheet`）：盖在当前页上，不换页。
     var openTask: TaskSheet.Request?
     #endif
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
@@ -126,7 +126,7 @@ final class Workspace {
     /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
     var mountedPages: [Route] { pages.kept.contains(page) ? pages.kept : pages.kept + [page] }
 
-    /// 这一条归档或删掉了：开着它的编辑页或任务浮层收起。
+    /// 这一条归档或删掉了：开着它的编辑页或任务浮窗收起。
     private func closeIfOpen(_ id: UUID) {
         if openCard == id { openCard = nil }
         if openTask?.id == id { openTask = nil }
@@ -149,7 +149,7 @@ final class Workspace {
         openCard = card.id
     }
 
-    /// 切到一页（侧栏点哪就是哪）；开着的编辑页与任务浮层随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
+    /// 切到一页（侧栏点哪就是哪）；开着的编辑页与任务浮窗随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
     func show(_ page: Route) {
         openCard = nil
         openTask = nil

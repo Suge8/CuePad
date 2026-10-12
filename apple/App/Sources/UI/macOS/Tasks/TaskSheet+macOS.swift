@@ -35,7 +35,7 @@ struct TaskSheet: View {
         .fixedSize(horizontal: false, vertical: true)
         .background(palette.desk)
         .observing(services.store, id: taskID, into: $data, onError: workspace.fail) { [taskID] in try SheetData.read(taskID, from: $0) }
-        // 别处删掉、归档了它，或改回了灵感：浮层收起
+        // 别处删掉、归档了它，或改回了灵感：浮窗收起
         .onChange(of: data?.gone) { if data?.gone == true { close() } }
     }
 
