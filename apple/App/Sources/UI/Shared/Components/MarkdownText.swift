@@ -1,66 +1,124 @@
 import SwiftUI
 
-/// Pi 回答的 Markdown 渲染（块见 `MarkdownBlock`）：块内用系统的行内 Markdown，链接加下划线（强调色是墨，不画线就认不出），
-/// 行内代码垫一层淡底。标题分两级字号；列表保留缩进与序号；引用左侧一道竖线；代码块与表格等宽或按列排开，宽了横向滚，
-/// 出现时闪一下滚动条提示还有内容。表格只画细线：表头淡底，行间一道线。
-struct MarkdownText: View {
+/// Pi 回答的 Markdown 渲染（块见 `MarkdownBlock`）：相邻的非表格块排成**一个** `Text`（`AttributedString`），所以一条回答的段落、列表、标题、引用、
+/// 代码块是一个选择单元：双击选词、三击选段、⌘A、拖着连选、右键复制都是系统的文字选择，不用每块各开一套。表格单独一块、整张横向滚，自己可选（一格一个选择单元，选不到表格外；
+/// 表格前后的正文是两段 `Text`，也不连在一起）。
+/// `Text` 只认字体、颜色、底色、链接、下划线这类行内属性，不认段落缩进与段距，所以结构用字符摆：块与块之间隔一个小字号的空行当段距，
+/// 列表项是缩进的空格加序号，引用前一个竖条字符，代码块是等宽字加底色；列表项折行时回到左边，不悬挂缩进。
+/// 行内：链接加下划线（强调色是墨，不画线就认不出），行内代码垫一层淡底。表格只画细线：表头淡底，行间一道线。
+struct MarkdownText: View, Equatable {
     let source: String
     @Environment(\.palette) private var palette
     @Environment(\.readingColumnBleeds) private var columnBleeds
 
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.source == rhs.source }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(MarkdownBlock.parse(source).enumerated()), id: \.offset) { index, block in
-                // 选择按块开（一个块是一个独立的文本，选区本来就不跨块），悬停时只重建指针下的这一块
-                self.block(block)
-                    .selectableOnHover()
-                    // 标题与上一块拉开一点，标出新的一节
-                    .padding(.top, index > 0 && block.isHeading ? 6 : 0)
+            ForEach(Array(Run.of(source, palette).enumerated()), id: \.offset) { _, run in
+                switch run {
+                case .prose(let text):
+                    // 中文正文行距放开一点：长回答是会话页的主角，读起来不挤
+                    Text(text).lineSpacing(Typography.readingLineSpacing).selectable()
+                case .table(let table):
+                    // 表格带着自己的边框整张滚；阅读栏贴着屏幕边（手机）时滚动可以越过页边距滑到屏幕边，栏两边有空白时收在栏内
+                    // 贴着屏幕边时被屏幕边切开的那一列本身就看得出还有；收在栏内时右缘淡出
+                    ScrollView(.horizontal) { MarkdownTableView(table: table).selectable() }
+                        .scrollIndicatorsFlash(onAppear: true)
+                        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                        .scrollClipDisabled(columnBleeds)
+                        .modifier(MoreToTheRight(enabled: !columnBleeds))
+                }
             }
         }
-        // 中文正文行距放开一点：长回答是会话页的主角，读起来不挤
-        .lineSpacing(Typography.readingLineSpacing)
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    @ViewBuilder private func block(_ block: MarkdownBlock) -> some View {
-        switch block {
-        case .paragraph(let text):
-            Text(Self.inline(text, palette)).font(Typography.reading).foregroundStyle(palette.ink)
-        case .heading(let level, let text):
-            Text(Self.inline(text, palette)).font(level <= 2 ? Typography.readingHeading : Typography.reading.weight(.semibold))
-                .foregroundStyle(palette.ink)
-                .accessibilityAddTraits(.isHeader)
-        case .item(let marker, let text, let depth):
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(marker == "•" && depth > 0 ? "◦" : marker).font(Typography.reading.monospacedDigit()).foregroundStyle(palette.ink3)
-                Text(Self.inline(text, palette)).font(Typography.reading).foregroundStyle(palette.ink)
+    /// 回答里相邻的非表格块是一段文字，表格自成一块。
+    private enum Run {
+        case prose(AttributedString)
+        case table(MarkdownTable)
+
+        static func of(_ source: String, _ palette: Palette) -> [Run] {
+            var runs: [Run] = []
+            var pending: [MarkdownBlock] = []
+            func flush() {
+                if !pending.isEmpty { runs.append(.prose(MarkdownText.attributed(pending, palette))) }
+                pending = []
             }
-            .padding(.leading, CGFloat(depth) * 18)
-        case .quote(let text):
-            Text(Self.inline(text, palette)).font(Typography.reading).foregroundStyle(palette.ink2)
-                .padding(.leading, 14)
-                .overlay(alignment: .leading) { Capsule().fill(palette.ink3.opacity(0.5)).frame(width: 3) }
-        case .code(let code):
-            // 底色是固定的框，代码在框里滚
-            ScrollView(.horizontal) {
-                Text(code).font(Typography.code).foregroundStyle(palette.ink).padding(ChatBlock.inset)
+            for block in MarkdownBlock.parse(source) {
+                if case .table(let table) = block {
+                    flush()
+                    runs.append(.table(table))
+                } else {
+                    pending.append(block)
+                }
             }
-            .scrollIndicatorsFlash(onAppear: true)
-            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-            .modifier(MoreToTheRight())
-            .background(palette.fill, in: ChatBlock.shape)
-        case .table(let table):
-            // 表格带着自己的边框整张滚；阅读栏贴着屏幕边（手机）时滚动可以越过页边距滑到屏幕边，栏两边有空白时收在栏内
-            // 贴着屏幕边时被屏幕边切开的那一列本身就看得出还有；收在栏内时右缘淡出
-            ScrollView(.horizontal) { MarkdownTableView(table: table) }
-                .scrollIndicatorsFlash(onAppear: true)
-                .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-                .scrollClipDisabled(columnBleeds)
-                .modifier(MoreToTheRight(enabled: !columnBleeds))
-        case .rule:
-            Rectangle().fill(palette.hair).frame(height: 1).padding(.vertical, 4)
+            flush()
+            return runs
         }
+    }
+
+    /// 一串块排成一段带属性的文字。块与块之间的段距是一个换行加一个小字号的空行（`Text` 不认段距）；连着的列表项只隔一个换行。
+    static func attributed(_ blocks: [MarkdownBlock], _ palette: Palette) -> AttributedString {
+        func styled(_ source: String, font: Font, color: Color, background: Color? = nil) -> AttributedString {
+            var text = inline(source, palette)
+            // 行内代码已经带了自己的字体与底色，其余按这一块的
+            for run in text.runs where run.font == nil { text[run.range].font = font }
+            text.foregroundColor = color
+            if let background { text.backgroundColor = background }
+            return text
+        }
+        func newline(gap: CGFloat? = nil) -> AttributedString {
+            var line = AttributedString("\n")
+            line.font = .system(size: 1)
+            guard let gap else { return line }
+            var spacer = AttributedString("\n")
+            spacer.font = .system(size: gap)
+            return line + spacer
+        }
+        var result = AttributedString()
+        var previous: MarkdownBlock?
+        for block in blocks {
+            if let previous {
+                switch (previous, block) {
+                case (.item, .item): result += newline()
+                case (_, .heading): result += newline(gap: 8)
+                default: result += newline(gap: 2)
+                }
+            }
+            previous = block
+            switch block {
+            case .paragraph(let text): result += styled(text, font: Typography.reading, color: palette.ink)
+            case .heading(let level, let text):
+                result += styled(text, font: level <= 2 ? Typography.readingHeading : Typography.reading.weight(.semibold), color: palette.ink)
+            case .item(let marker, let text, let depth):
+                var lead = AttributedString(String(repeating: "\u{2003}\u{2003}", count: depth) + (marker == "•" && depth > 0 ? "◦" : marker) + "\u{2002}")
+                lead.font = Typography.reading
+                lead.foregroundColor = palette.ink3
+                result += lead + styled(text, font: Typography.reading, color: palette.ink)
+            case .quote(let text):
+                var bar = AttributedString("▎ ")
+                bar.font = Typography.reading
+                bar.foregroundColor = palette.ink3
+                result += bar + styled(text, font: Typography.reading, color: palette.ink2)
+            case .code(let code):
+                // 空行也要有一个字，底色才连得上
+                let lines = code.split(separator: "\n", omittingEmptySubsequences: false).map { $0.isEmpty ? " " : String($0) }
+                var block = AttributedString(lines.joined(separator: "\n"))
+                block.font = Typography.code
+                block.foregroundColor = palette.ink
+                block.backgroundColor = palette.fill
+                result += block
+            case .rule:
+                var rule = AttributedString("———")
+                rule.font = Typography.reading
+                rule.foregroundColor = palette.hair
+                result += rule
+            case .table: break
+            }
+        }
+        return result
     }
 
     static func inline(_ text: String, _ palette: Palette) -> AttributedString {
@@ -76,10 +134,6 @@ struct MarkdownText: View {
         }
         return string
     }
-}
-
-private extension MarkdownBlock {
-    var isHeading: Bool { if case .heading = self { true } else { false } }
 }
 
 /// 对话里成块的东西（代码块、表格、一轮回答上方的工具注脚）同一套圆角、底色（`Palette.fill`）与内边距。

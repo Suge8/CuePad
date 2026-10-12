@@ -24,6 +24,14 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 - SwiftUI 模板用 `--attach` 没有数据，要 `--launch` 一份换了 bundle id 的 App 副本（复制后改 `CFBundleIdentifier` 并重签名）；视图更新表与 hitch 表（`hitches`、`hitches-updates`、`hitches-renders`、`hitches-gpu`）都在里面。
 - `Animation Hitches` 模板单独录会写出几十 GB，别用；`--launch` 的进程结束后可能停在暂停状态，按它的 PID 结束。
 
+### 会话页滚动（Mac，不碰指针、不抢焦点）
+
+`-CuePadBench chatscroll`（配 `-CuePadDemo YES -CuePadLongChat YES -CuePadScene session -CuePadSession marathon -CuePadWindowSize 1440x900 -CuePadOffscreen YES`，场景在 `DebugScene+LongChat.swift`）：对 300 轮的长对话先往上翻几趟热身，再量慢速触控板（600px/s）、快速触控板（2400px/s）、鼠标滚轮三组，每组下上下上四趟，一组一行 `CHATSCROLL {json}`，量完退出。
+- 按触控板与滚轮的节奏在进程内直接挪滚动视图的裁剪区原点，补发 `willStartLiveScroll` 与 `didEndLiveScroll` 两个通知（滚动区据此知道"用户在滚"）：不碰真实指针、不向系统发事件。启动要用 `open -g -n -a <app> --stdout <文件> --env … --args …`（后台启动，不激活）：直接执行二进制会把应用调到前台抢焦点。
+- 指标：主线程每圈 CPU（≥0.2ms 的圈）的 p50/p90/p99、超 6.9ms（144Hz 一帧）与 16ms 的圈数、总 CPU、进程指令数（前后对比以它为准）、`movedPx`（为 0 数字作废）。别人在编译时 CPU 时间会被拖歪，指令数基本不动；对话在热身时的排开是跟时机有关的，不同次的内容大小会差一点，要排除它就把初始排开的条数固定成同一个值再比（同一个值下三遍指令数相差不到 1%）。
+- 屏幕外量不到：AppKit 的滚轮事件与动画那一段（靠 display link）、真实指针在窗口里时每帧重设光标的成本（自定义指针的机器上很贵）、合成与掉帧，这些要在前台量。
+- Time Profiler：`xctrace record --template 'Time Profiler' --attach <pid>`，pid 用 `pgrep -f` 在后台启动后取。
+
 ### 交互预算
 
 预算表只在 `InteractionBench.budgets`，指标的定义在 `InteractionBench` 与 `Probes.swift` 的注释里，跑法在 `perf-mac.sh` 头注释里；和预算比的数至少跑两遍取中位数。

@@ -1,3 +1,4 @@
+import Synchronization
 import SwiftUI
 
 /// 贴着最新（规则同 use-stick-to-bottom）：只有用户自己滚走才解除贴底，回到最新处（自己滚回、点"回到最新"）重新贴上；
@@ -22,8 +23,17 @@ nonisolated struct ChatFollow: Equatable {
     private(set) var jumps = 0
     /// 请滚动区跳到的那一条（`jump(to:)`）。
     private(set) var target: Target?
-    /// 用户正拖着或甩着滚动区（滚动区写入）。
-    var scrolling = false
+    /// 用户正拖着或甩着滚动区（滚动区写入）。刚开始滚时人已经离开了最新处（读数先到）就在这里解除贴底。
+    var scrolling = false {
+        didSet {
+            if scrolling, !withinSlack {
+                atNewest = false
+                revealed = false
+            }
+        }
+    }
+    /// 最近一次读数里离最新处不超过 `slack`。
+    private var withinSlack = true
     /// 在看历史时点顶部唤出了顶栏。
     private var revealed = false
     /// 离最新处这么近算"在最新处"。
@@ -37,11 +47,13 @@ nonisolated struct ChatFollow: Equatable {
         let request = UUID()
     }
 
-    /// 滚动区此刻离最新处 `distance`、离最早处 `fromOldest`（一屏高 `screen`）；`byUser`：是用户拖着或甩着带来的。
-    mutating func scrolled(distance: CGFloat, fromOldest: CGFloat, screen: CGFloat, byUser: Bool) {
-        showsJump = distance > screen
-        nearOldest = fromOldest < screen
-        if distance <= Self.slack {
+    /// 滚动区此刻的位置，只说够不够近：离最新处不超过 `slack`、超过一屏，离最早处不到一屏。读数是每帧都变的，状态不能跟着每帧写，
+    /// 所以滚动区只在这三条越线时才来报（`ChatScroll`）；`byUser`：是用户拖着或甩着带来的。
+    mutating func scrolled(atNewest near: Bool, beyondScreen: Bool, nearOldest: Bool, byUser: Bool) {
+        showsJump = beyondScreen
+        self.nearOldest = nearOldest
+        withinSlack = near
+        if near {
             atNewest = true
             hasUnseen = false
             revealed = false
@@ -105,6 +117,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var own = ChatFollow()
+    @State private var offset = ScrollOffset()
 
     /// `follow`：页面要据贴底与否改别处（收起顶栏、输入框）时由页面持有；不给就自己持有。
     init(followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>? = nil, @ViewBuilder content: () -> Content) {
@@ -135,22 +148,24 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                 .onScrollGeometryChange(for: Reading.self) { geometry in
                     // 可见区底边 = 偏移 + 顶部 inset + 容器高（containerSize 已扣掉上下 inset）
                     let read = geometry.contentOffset.y + geometry.contentInsets.top
+                    let distance = max(0, (geometry.contentSize.height - read - geometry.containerSize.height).rounded())
+                    let screen = geometry.containerSize.height.rounded()
+                    offset.set(max(0, read.rounded()))
                     return Reading(
-                        distance: max(0, (geometry.contentSize.height - read - geometry.containerSize.height).rounded()),
-                        fromOldest: max(0, read.rounded()),
+                        offBottom: distance > 0, nearNewest: distance <= ChatFollow.slack, beyondScreen: distance > screen, nearOldest: read < screen,
                         height: geometry.contentSize.height.rounded(),
-                        screen: geometry.containerSize.height.rounded(),
                         end: (geometry.contentSize.height - geometry.containerSize.height).rounded(), inset: geometry.contentInsets.top.rounded())
                 } action: { previous, reading in
                     if follow.wrappedValue.prepending, reading.height > previous.height {
                         follow.wrappedValue.prepended()
-                        position.scrollTo(y: previous.fromOldest + reading.height - previous.height)
+                        position.scrollTo(y: offset.previous + reading.height - previous.height)
                         return
                     }
-                    follow.wrappedValue.scrolled(distance: reading.distance, fromOldest: reading.fromOldest, screen: reading.screen, byUser: follow.wrappedValue.scrolling)
+                    follow.wrappedValue.scrolled(
+                        atNewest: reading.nearNewest, beyondScreen: reading.beyondScreen, nearOldest: reading.nearOldest, byUser: follow.wrappedValue.scrolling)
                     // 底锚只管内容变高；回复框长高、键盘弹出、栏的高度第一次加进内容边距（这一下系统把偏移放回顶上），
                     // 都会离开底：贴着最新就补滚到底。在读数里补（布局定下来之后）
-                    if reading.distance > 0, follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
+                    if reading.offBottom, follow.wrappedValue.atNewest, !follow.wrappedValue.scrolling {
                         settle(end: reading.end)
                     }
                 }
@@ -172,12 +187,24 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
         }
     }
 
-    /// 离最新处多远、一屏多高（取整：亚像素的抖动不触发更新）。
+    /// 偏移的最近两个读数：往上排开一段时要用排开之前的偏移补高度差（`ChatFollow.prepending`）。读数闭包不一定在主线程，所以带锁；
+    /// 它不是状态，写它不触发任何更新。
+    private final class ScrollOffset: Sendable {
+        private let values = Mutex<(previous: CGFloat, current: CGFloat)>((0, 0))
+
+        func set(_ value: CGFloat) { values.withLock { $0 = ($0.current, value) } }
+
+        var previous: CGFloat { values.withLock { $0.previous } }
+    }
+
+    /// 滚动区的读数：只留下会让状态改变的几条越线（离最新处近不近、超没超一屏、离最早处近不近）与内容高、边距，每帧都变的偏移不进来。
+    /// `action` 只在读数变了才跑，滚动时每帧不碰页面的状态。
     private struct Reading: Equatable {
-        var distance: CGFloat
-        var fromOldest: CGFloat
+        var offBottom: Bool
+        var nearNewest: Bool
+        var beyondScreen: Bool
+        var nearOldest: Bool
         var height: CGFloat
-        var screen: CGFloat
         /// 滚到最新处时可见区顶边在内容里的位置（`scrollTo(y:)` 的 y，不含内容边距）。
         var end: CGFloat
         /// 顶部的内容边距：它一变系统就把偏移放回顶上，读数要跟着变，才会再补滚一次。

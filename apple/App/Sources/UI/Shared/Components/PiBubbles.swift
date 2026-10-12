@@ -76,8 +76,8 @@ struct BubbleText: View {
             Text(text)
                 .font(Typography.reading).foregroundStyle(palette.ink)
                 .lineLimit(lineLimit)
-                .selectableOnHover()
-                .background(alignment: .topLeading) { if let truncated, lineLimit != nil { fullHeight(truncated) } }
+                .selectable()
+                .background(alignment: .topLeading) { if let truncated, mayTruncate { fullHeight(truncated) } }
                 .overlay(alignment: .bottomTrailing) { if let expand { expandButton(expand) } }
                 .padding(.horizontal, 16).padding(.vertical, 11)
                 .background(palette.bubble, in: shape)
@@ -87,6 +87,14 @@ struct BubbleText: View {
         }
         .animation(Motion.quick, value: highlighted)
         .animation(Motion.quick, value: trip)
+    }
+
+    /// 折起着、而且长到可能被截：每个气泡多挂一份量全文高的视图（每个几何读数都是一次布局回调），所以短的话（绝大多数）不挂。
+    /// 一行至少放得下 40 个字节（窄到手机上的气泡，拉丁字母约 7pt 宽、汉字三字节），没到 `lineLimit` 行的字节数、又没有那么多换行的话排不满。
+    private var mayTruncate: Bool {
+        guard let lineLimit else { return false }
+        let visible = text.visible
+        return visible.utf8.count > 40 * lineLimit || visible.utf8.lazy.filter { $0 == 10 }.count >= lineLimit
     }
 
     private func expandButton(_ expand: @escaping () -> Void) -> some View {

@@ -14,10 +14,12 @@ struct SessionChat: View {
     var scrubberInset: CGFloat = 0
     @State private var window = PiConversation.firstWindow
     @State private var highlight = ChatHighlight()
+    @State private var derived = ChatDerived()
     @State private var pendingJump: UUID?
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let _ = derived.refresh(digest)
         let followKey = PiConversation.followKey(session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries)
         ChatScroll(followKey: followKey, readingWidth: readingWidth, inset: inset, follow: $follow) {
             VStack(spacing: 14) {
@@ -25,7 +27,7 @@ struct SessionChat: View {
                     Label("正在从 Mac 取对话…", systemImage: "arrow.down.circle").font(Typography.meta).foregroundStyle(palette.ink3)
                 }
                 PiConversation(
-                    session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, window: window,
+                    session: session, items: derived.items, messages: digest.messages, deliveries: digest.deliveries, window: window,
                     showEarlier: showEarlier)
             }
         }
@@ -40,12 +42,11 @@ struct SessionChat: View {
     }
 
     @ViewBuilder private var scrubber: some View {
-        let marks = ChatScrubber.marks(PiChat.entries(digest.messages, previews: digest.previews))
-        if !marks.isEmpty {
-            ChatScrubber(marks: marks, scrolling: follow.scrolling) { id in
+        if !derived.marks.isEmpty {
+            ChatScrubber(marks: derived.marks, scrolling: follow.scrolling) { id in
                 // 先描圈、排开：那句所在的段这一下才排成真的（离屏远的段是空白，`PiConversation`），排好了再跳
                 highlight.flash(id)
-                window = max(window, PiConversation.window(reaching: id, messages: digest.messages, previews: digest.previews) ?? 0)
+                window = max(window, PiConversation.window(reaching: id, in: derived.items) ?? 0)
                 pendingJump = id
             }
             .padding(.trailing, scrubberInset)
@@ -54,7 +55,7 @@ struct SessionChat: View {
 
     /// 在上面再排开一段，正在读的不动（`ChatFollow.willPrepend`）。都排开了就什么也不做。
     private func showEarlier() {
-        let count = ChatItem.of(PiChat.entries(digest.messages, previews: digest.previews)).count
+        let count = derived.items.count
         guard window < count else { return }
         let first = PiConversation.firstSegment(count: count, window: window + PiConversation.segment) * PiConversation.segment
         DebugHooks.chatShowsEarlier(from: first, of: count)

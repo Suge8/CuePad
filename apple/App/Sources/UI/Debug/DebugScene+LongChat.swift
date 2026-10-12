@@ -8,6 +8,7 @@ import Foundation
 /// - `-CuePadStream YES`（配 session 画面）：打开会话后给它一轮一轮追加（你的话、思考中、回答，高矮轮换），看新内容到达时跟随最新。
 /// - `-CuePadBench chatdepth`（仅 iOS，配 session 画面打开 marathon）：测量脚本从最新处一路往上滑到第 1 轮，每排开一段量一次开销与掉帧（`ChatDepthBench`）。
 /// - `-CuePadBench chatresize`（仅 Mac，配 session 画面打开 marathon）：测量脚本翻到深处后拖窗口边改宽，每次拖动量一次开销与掉帧（`ChatResizeBench`）。
+/// - `-CuePadBench chatscroll`（仅 Mac，配 session 画面打开 marathon）：在进程内投递滚轮与触控板事件滚对话，量每圈主线程 CPU 与指令数（`ChatScrollBench`）。
 extension DebugScene {
     static let longChat = "marathon"
     private static let longChatRounds = 300
@@ -177,6 +178,141 @@ enum ChatResizeBench {
         handle.seekToEndOfFile()
         handle.write(Data(("RESIZE " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self) + "\n").utf8))
         try? handle.close()
+    }
+}
+#endif
+
+#if os(macOS) && DEBUG
+import AppKit
+import QuartzCore
+
+/// 长对话里滚轮与触控板滚动的开销（`-CuePadBench chatscroll`，配 session 画面打开 marathon，建议配 `-CuePadOffscreen YES`）：先往上翻几趟把对话排开、量过高度，
+/// 再各量三组手势（慢速触控板 600px/s、快速触控板 2400px/s、鼠标滚轮），每组下上下上共四趟，一组一行 `CHATSCROLL {json}`，量完退出。
+/// 按触控板与滚轮的节奏在进程内直接挪对话滚动视图的裁剪区原点（不经 AppKit 的滚轮事件与动画：那条路靠 display link，屏幕外不走）：
+/// 不碰真实指针、不把窗口调到前台、不向系统发任何事件，所以能在屏幕外跑；屏幕外量不了掉帧，指标是主线程每圈 CPU 的 p90/p99（毫秒）、超 6.9ms（144Hz 一帧）与 16ms 的圈数、总 CPU、
+/// 进程指令数（百万，前后对比以它为准）；`movedPx` 是滚过的距离（为 0 说明没滚动起来，数字作废）。
+/// 屏幕外量不到的：AppKit 滚轮事件与动画那一段、真实指针在窗口里时每帧重设光标的成本、合成与掉帧（见 docs/verify.md）。
+enum ChatScrollBench {
+    private static let turns = TurnLog()
+
+    private struct Event {
+        var at: Double
+        var dy: Double
+        var phase: Int64 = 0
+        var momentum: Int64 = 0
+        var lines = false
+    }
+
+    private struct Gesture {
+        let name: String
+        let speed: Double
+        let wheel: Bool
+    }
+
+    static func run() async {
+        var found: (NSWindow, NSScrollView)?
+        for _ in 0..<90 {
+            try? await Task.sleep(for: .seconds(1))
+            if let window = NSApp.windows.first(where: { $0.styleMask.contains(.resizable) && $0.styleMask.contains(.fullSizeContentView) }),
+               let content = window.contentView, let scroll = chatScroll(in: content) { found = (window, scroll); break }
+        }
+        guard let (window, scroll) = found else { print("CHATSCROLL-ERR 找不到对话的滚动视图"); fflush(stdout); exit(1) }
+        try? await Task.sleep(for: .seconds(3))
+
+        func play(up: Bool, _ gesture: Gesture) async {
+            let clock = ContinuousClock()
+            let start = clock.now
+            // 滚动区据这两个通知知道"用户在滚"（贴底的跟随据此不把偏移拉回去）：手势的头尾补发
+            NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scroll)
+            defer { NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll) }
+            for event in Self.events(up: up, gesture) {
+                try? await clock.sleep(until: start + .seconds(event.at))
+                // 直接挪裁剪区的原点：AppKit 的滚轮动画靠 display link 推进，屏幕外不走；SwiftUI 看到的是同样的偏移变化
+                let clip = scroll.contentView
+                var origin = clip.bounds.origin
+                origin.y -= event.dy * (event.lines ? 10 : 1)
+                clip.scroll(to: clip.constrainBoundsRect(NSRect(origin: origin, size: clip.bounds.size)).origin)
+                scroll.reflectScrolledClipView(clip)
+            }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+
+        // 热身：往上翻几趟排开更早的对话、量过各段的高度，再回来一点
+        let warm = Gesture(name: "warm", speed: 2400, wheel: false)
+        for _ in 0..<7 { await play(up: true, warm) }
+        for _ in 0..<2 { await play(up: false, warm) }
+        try? await Task.sleep(for: .seconds(1))
+
+        for gesture in [Gesture(name: "slow", speed: 600, wheel: false), Gesture(name: "fast", speed: 2400, wheel: false), Gesture(name: "wheel", speed: 0, wheel: true)] {
+            let instructions = instructionsMillions()
+            let started = CACurrentMediaTime()
+            turns.begin(started, root: nil)
+            var moved = 0.0
+            for index in 0..<4 {
+                let before = scroll.contentView.bounds.origin.y
+                await play(up: index % 2 == 1, gesture)
+                moved += abs(scroll.contentView.bounds.origin.y - before)
+            }
+            let log = turns.finish()
+            var row = TurnLog.metrics(log, instructions: instructions, frames: FrameRecorder.Hitches())
+            ["clickMs", "visibleTurns", "seen", "heavy", "hitches", "worstMs", "hitchesAt"].forEach { row[$0] = nil }
+            let cpu = log.log.map { min($0.cpu, $0.dur) * 1000 }.filter { $0 >= 0.2 }.sorted()
+            func percentile(_ p: Double) -> Double { cpu.isEmpty ? 0 : (cpu[min(cpu.count - 1, Int(Double(cpu.count) * p))] * 100).rounded() / 100 }
+            row["set"] = gesture.name
+            row["turns"] = cpu.count
+            row["p50"] = percentile(0.5)
+            row["p90"] = percentile(0.9)
+            row["p99"] = percentile(0.99)
+            row["over6.9"] = cpu.filter { $0 > 6.9 }.count
+            row["over16"] = cpu.filter { $0 > 16 }.count
+            row["movedPx"] = moved.rounded()
+            row["wallS"] = ((CACurrentMediaTime() - started) * 10).rounded() / 10
+            row["onScreen"] = window.isVisible && window.occlusionState.contains(.visible)
+            row["frontmostIsMe"] = NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
+            print("CHATSCROLL " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self))
+            fflush(stdout)
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        exit(0)
+    }
+
+    /// 对话的滚动视图：窗口里文档比可见区高两倍以上的最大那个（代码块、表格的横向滚动区不满足）。
+    private static func chatScroll(in root: NSView) -> NSScrollView? {
+        var best: NSScrollView?
+        func visit(_ view: NSView) {
+            if let scroll = view as? NSScrollView, scroll.frame.width > 300, let document = scroll.documentView,
+               document.frame.height > 2 * scroll.contentView.bounds.height,
+               best.map({ scroll.frame.width * scroll.frame.height > $0.frame.width * $0.frame.height }) ?? true { best = scroll }
+            view.subviews.forEach(visit)
+        }
+        visit(root)
+        return best
+    }
+
+    /// 一趟手势的事件：触控板是手指按 `speed`（px/s）匀速滑 1.2 秒（120Hz），抬手后惯性按 0.3 秒的时间常数衰减；滚轮是每 30ms 一格 3 行共 40 格。
+    private static func events(up: Bool, _ gesture: Gesture) -> [Event] {
+        let sign = up ? 1.0 : -1.0
+        if gesture.wheel { return (0..<40).map { Event(at: Double($0) * 0.03, dy: sign * 3, lines: true) } }
+        let step = 1.0 / 120
+        var events: [Event] = [], carry = 0.0, time = 0.0
+        func push(_ velocity: Double, phase: Int64 = 0, momentum: Int64 = 0) {
+            carry += velocity * step
+            let dy = carry.rounded()
+            carry -= dy
+            events.append(Event(at: time, dy: dy, phase: phase, momentum: momentum))
+            time += step
+        }
+        for index in 0..<Int(1.2 / step) { push(sign * gesture.speed, phase: index == 0 ? 1 : 2) }
+        events.append(Event(at: time, dy: 0, phase: 4))
+        time += step
+        var velocity = sign * gesture.speed, first = true
+        while abs(velocity) * step > 0.7 {
+            push(velocity, momentum: first ? 1 : 2)
+            first = false
+            velocity *= exp(-step / 0.3)
+        }
+        events.append(Event(at: time, dy: 0, momentum: 3))
+        return events
     }
 }
 #endif

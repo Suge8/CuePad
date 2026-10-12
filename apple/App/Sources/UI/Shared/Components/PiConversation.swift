@@ -8,8 +8,10 @@ import SwiftUI
 /// 减弱动态效果下也只有淡入淡出。
 struct PiConversation: View {
     let session: PiSessionState
+    /// 对话里的每一格（`ChatDerived` 按对话数据推好的）。
+    let items: [ChatItem]
+    /// 发出还没进对话的话要对着已有的消息认。
     let messages: [PiChatMessage]
-    var previews: [PiPreview] = []
     var deliveries: [DeliveryRequest] = []
     /// 至少排开最近这么多条（不用懒加载栈，见 `ChatScroll`）；更早的由 `showEarlier` 再排开一段。
     let window: Int
@@ -23,7 +25,7 @@ struct PiConversation: View {
     @State private var width: CGFloat = 0
 
     var body: some View {
-        let all = ChatItem.of(PiChat.entries(messages, previews: previews))
+        let all = items
         let first = Self.firstSegment(count: all.count, window: window)
         VStack(alignment: .leading, spacing: Self.spacing) {
             if first > 0 {
@@ -52,8 +54,10 @@ struct PiConversation: View {
         .environment(\.inlineTextSelection, false)
         #endif
         .previewPresenter($opened)
-        .task(id: previews.map(\.id)) {
-            if let title = DebugHooks.preset.openPreview { opened = previews.first { $0.title == title } }
+        .task(id: items.count) {
+            guard let title = DebugHooks.preset.openPreview else { return }
+            opened = items.flatMap { item -> [PiPreview] in if case .previews(let group) = item { group.compactMap(\.preview) } else { [] } }
+                .first { $0.title == title }
         }
     }
 
@@ -78,7 +82,7 @@ struct PiConversation: View {
     }
 
     /// 屏上那几段上下各再排几段真的：快甩时滑进来的先是排好的，不露空白。
-    static let spare = 2
+    static let spare = 1
 
     static var spacing: CGFloat { 16 }
     /// 最初至少排开几条；一段几条（每次再排开一段）。段按从最早那条起的位置切，排开更早的只是在上面多显示一段，已有的段不变。
@@ -171,9 +175,8 @@ struct EarlierRow: View {
 
 extension PiConversation {
     /// 要跳到 `id` 那一条（刻度滑条）时至少要排开最近几条（`window`）。
-    static func window(reaching id: UUID, messages: [PiChatMessage], previews: [PiPreview]) -> Int? {
-        let items = ChatItem.of(PiChat.entries(messages, previews: previews))
-        return items.firstIndex { $0.id == id }.map { items.count - $0 }
+    static func window(reaching id: UUID, in items: [ChatItem]) -> Int? {
+        items.firstIndex { $0.id == id }.map { items.count - $0 }
     }
 
     /// 对话里"有新内容"的标志（滚动跟随用，见 `ChatScroll`）：多了消息、发出的话或它的送达情况变了、开始或结束处理、出错。
