@@ -148,7 +148,7 @@ struct CardOpenStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .modifier(PressFeedback(pressed: configuration.isPressed || held, scale: Press.card, haptic: false, darken: true))
+                .modifier(PressFeedback(pressed: configuration.isPressed || held, darken: true))
         }
     }
 }

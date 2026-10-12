@@ -112,7 +112,8 @@ enum Motion {
 /// 手机：按下快、松开带一点回弹；圆钮与卡片按下有一下轻触感，行只亮底不缩放（一屏几十行，缩放会让列表显得软）；减弱动态效果时只降透明度。
 /// Mac 照原生控件（访达、邮件、备忘录的按钮、列表与卡片都这样）：按下的那一刻变淡（卡片压暗一层），松开即复原，
 /// 不缩放、不回弹、不震动——缩放与回弹是触屏的习惯，在指针下显得软、慢；触控板的震动在 macOS 只给对齐这类反馈，点按钮不震。
-/// 下面的比例只给手机。
+/// 缩放比例与震动开关只有手机有（Mac 不缩放、不震动），Mac 的调用处不传。
+#if os(iOS)
 enum Press {
     /// 圆钮、图标按钮。
     static let button: CGFloat = 0.9
@@ -121,40 +122,42 @@ enum Press {
     /// 整张卡片：大面积只缩一点，不然文字发虚。
     static let card: CGFloat = 0.97
 }
+#endif
 
-/// 圆钮、图标按钮与胶囊的按下反馈（两端的样子见 `Press`）；`scale` 只给手机。
+/// 圆钮、图标按钮与胶囊的按下反馈（两端的样子见 `PressFeedback`）。
 struct PressStyle: ButtonStyle {
+    #if os(iOS)
     var scale: CGFloat = Press.control
+    #endif
 
     func makeBody(configuration: Configuration) -> some View {
-        PressBody(configuration: configuration, scale: scale, haptic: true)
+        #if os(iOS)
+        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed, scale: scale))
+        #else
+        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed))
+        #endif
     }
 }
 
 /// 整张卡片的按下反馈：压暗一层（手机另缩到 97%、松开弹回、一下轻触感）。
 struct CardPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        PressBody(configuration: configuration, scale: Press.card, haptic: true, darken: true)
-    }
-}
-
-private struct PressBody: View {
-    let configuration: ButtonStyleConfiguration
-    let scale: CGFloat
-    var haptic = false
-    var darken = false
-
-    var body: some View {
-        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed, scale: scale, haptic: haptic, darken: darken))
+        #if os(iOS)
+        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed, darken: true, scale: Press.card))
+        #else
+        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed, darken: true))
+        #endif
     }
 }
 
 struct PressFeedback: ViewModifier {
     let pressed: Bool
-    let scale: CGFloat
-    var haptic = true
     var darken = false
+    #if os(iOS)
+    var scale = Press.control
+    var haptic = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #endif
     @Environment(\.isEnabled) private var isEnabled
 
     #if os(macOS)
@@ -206,7 +209,11 @@ struct ControlButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         surface(configuration.label)
+            #if os(iOS)
             .modifier(PressFeedback(pressed: configuration.isPressed, scale: kind == .circular ? Press.button : Press.control))
+            #else
+            .modifier(PressFeedback(pressed: configuration.isPressed))
+            #endif
             .opacity(isEnabled ? 1 : 0.45)
     }
 

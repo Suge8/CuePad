@@ -40,7 +40,11 @@ struct PromptList: View {
                         .strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
                     .contentShape(.rect)
             }
+            #if os(iOS)
             .buttonStyle(PressStyle(scale: 0.98))
+            #else
+            .buttonStyle(PressStyle())
+            #endif
         }
         .animation(Motion.quick, value: prompts.map(\.id))
     }
