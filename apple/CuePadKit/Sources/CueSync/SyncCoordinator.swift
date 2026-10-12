@@ -1,10 +1,13 @@
 import CloudKit
 import Foundation
+import os
 
 /// 同步逻辑：待推送对账、远端变更应用、发送结果处理、账号与状态。
 /// 不接触 CKSyncEngine；与引擎之间只有 `CloudEvent`（进）和 `ChangeQueue`、`record(for:)`（出）。
 actor SyncCoordinator {
   private static let issueLimit = 50
+  private static let inFlightLimit = 4
+  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
 
   let store: CueStore
   private let queue: any ChangeQueue
@@ -12,10 +15,11 @@ actor SyncCoordinator {
   private var watcher: Task<Void, Never>?
   /// 有登记被搁置（配额、未预期失败）：下一次本机改动时全量对账一次，把它们重新登记。
   private var needsFullReconcile = false
-  /// 服务器上的大字段（见 `ServerValues`）与已交给引擎、还没有结果的上传版本（结果回来时用它记账，不读服务器返回的记录：
-  /// 返回的记录只带发出去的字段）。
+  /// 服务器上的大字段（见 `ServerValues`）与已交出去、还没有结果的上传版本（结果回来时用它记账，不读服务器返回的记录：
+  /// 返回的记录只带发出去的字段）。引擎的上传与立即上传可以重叠，同一条记录会有几个版本在路上，按修改时间区分，
+  /// 结果回来时取它自己那一版记账。
   private var serverValues = ServerValues()
-  private var inFlight: [String: SyncRow] = [:]
+  private var inFlight: [String: [Int64: SyncRow]] = [:]
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
 
   private(set) var state = SyncState(status: .starting, issues: []) {
@@ -99,7 +103,10 @@ actor SyncCoordinator {
       let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
       let values = serverValues
       let record = RecordMapper.record(from: row, zoneID: zoneID, base: base, isCurrent: { base != nil && values.isCurrent($0, in: row) })
-      inFlight[id.recordName] = row
+      var versions = inFlight[id.recordName] ?? [:]
+      versions[row.modifiedAt] = row
+      for stale in versions.keys.sorted().dropLast(Self.inFlightLimit) { versions[stale] = nil }  // 取了没发出去的版本不会有结果，只留最近几版
+      inFlight[id.recordName] = versions
       if row.table == .attachments {
         guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
           report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
@@ -112,6 +119,17 @@ actor SyncCoordinator {
       report(error, recordName: id.recordName)
       return nil
     }
+  }
+
+  /// 立即把一条记录直接存到服务器（不经引擎的队列，见 `RecordUploader`）；结果与引擎发送的结果同一个入口处理。
+  /// 整个请求失败（离线）时抛出；返回服务器是否收下了这一条（没收下的，调用方要把它交回引擎重试）。
+  func sendNow(_ id: CKRecord.ID, deleted: Bool, via uploader: any RecordUploader) async throws -> Bool {
+    guard needsDecision == nil else { return true }
+    let saving = deleted ? nil : await record(for: id)
+    guard deleted || saving != nil else { return true }  // 行已不在：没有可传的
+    let sent = try await uploader.upload(saving: saving.map { [$0] } ?? [], deleting: deleted ? [id] : [])
+    await handle(.sent(saved: sent.saved, failedSaves: sent.failedSaves, deleted: sent.deleted, failedDeletes: sent.failedDeletes))
+    return sent.saved.contains { $0.recordID == id } || sent.deleted.contains(id)
   }
 
   var alertSubscription: PiAlertSubscriptionStatus { state.alerts }
@@ -204,6 +222,7 @@ actor SyncCoordinator {
         continue
       }
       serverValues.learn(row)  // 服务器上就是这个样子，不管本机最后留下哪个版本
+      if row.table == .deliveryRequests { traceArrival(of: record, row) }
       if row.table == .attachments, !adoptAsset(of: record, row) { continue }
       changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record)))
     }
@@ -218,6 +237,16 @@ actor SyncCoordinator {
     for failure in try await store.applyRemote(changes) {
       report(failure.message, recordType: nil, recordName: failure.recordName)
     }
+  }
+
+  /// 投送请求（及其结果）到达的时间线：创建 → 服务器（对端上传用了多久）→ 本机（拉取用了多久）。
+  private func traceArrival(of record: CKRecord, _ row: SyncRow) {
+    guard case .int(let created)? = row.fields["createdAt"], case .text(let status)? = row.fields["status"],
+      let stored = record.modificationDate
+    else { return }
+    let toServer = stored.timeIntervalSince(Date(timeIntervalSince1970: Double(created) / 1000))
+    Self.log.info(
+      "投送请求到达 \(record.recordID.recordName.prefix(8), privacy: .public) \(status, privacy: .public)：创建后 \(toServer, format: .fixed(precision: 1)) 秒到服务器，再 \(Date.now.timeIntervalSince(stored), format: .fixed(precision: 1)) 秒到本机")
   }
 
   /// 附件记录必须带文件且内容与哈希一致，才把文件放进附件目录；否则拒绝这条记录并报告。
@@ -238,13 +267,21 @@ actor SyncCoordinator {
 
   // MARK: 发送结果
 
+  /// 取走这条记录发出去的那一版（发出去的记录和服务器返回的记录都带着当时的 `modifiedAt`）。
+  private func takeInFlight(_ record: CKRecord) -> SyncRow? {
+    let name = record.recordID.recordName
+    guard let stamp = (record["modifiedAt"] as? NSNumber)?.int64Value, let row = inFlight[name]?.removeValue(forKey: stamp) else { return nil }
+    if inFlight[name]?.isEmpty == true { inFlight[name] = nil }
+    return row
+  }
+
   private func processSent(
     _ saved: [CKRecord], _ failedSaves: [(record: CKRecord, error: CKError)], _ deleted: [CKRecord.ID],
     _ failedDeletes: [(id: CKRecord.ID, error: CKError)]
   ) async throws {
     var changedSince: [CKRecord.ID] = []
     for record in saved {
-      guard let row = inFlight.removeValue(forKey: record.recordID.recordName) ?? RecordMapper.row(from: record) else { continue }
+      guard let row = takeInFlight(record) ?? RecordMapper.row(from: record) else { continue }
       serverValues.learn(row)
       // 引擎发送的是取走时的版本；之后又改过的，引擎已移除它的待办，要重新登记
       if try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record)) { changedSince.append(record.recordID) }
@@ -258,7 +295,7 @@ actor SyncCoordinator {
 
     var blocked = false
     for (record, error) in failedSaves {
-      inFlight[record.recordID.recordName] = nil
+      _ = takeInFlight(record)
       switch error.code {
       case .serverRecordChanged:
         if let server = error.serverRecord {

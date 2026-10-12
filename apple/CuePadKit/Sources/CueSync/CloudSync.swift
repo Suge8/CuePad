@@ -18,6 +18,7 @@ public actor CloudSync {
   private let subscribesToPiAlerts: Bool
   private var engine: CKSyncEngine?
   private var puller: ZoneChangePuller?
+  private var uploader: (any RecordUploader)?
   private var accountWatcher: Task<Void, Never>?
 
   /// `subscribesToPiAlerts`：是否在私有数据库建立"Pi 等你确认 / 完成"的服务端通知订阅。默认只有 iOS 建立
@@ -56,6 +57,7 @@ public actor CloudSync {
       CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: state, delegate: engineDelegate))
     self.engine = engine
     puller = ZoneChangePuller(source: DatabaseZoneChanges(database: container.privateCloudDatabase, zoneID: zoneID), coordinator: coordinator)
+    uploader = DatabaseRecordUploader(database: container.privateCloudDatabase)
     await queue.attach(engine)
 
     try await coordinator.start()
@@ -76,6 +78,7 @@ public actor CloudSync {
     await queue.attach(nil)
     engine = nil
     puller = nil
+    uploader = nil
   }
 
   /// 直接向服务器拉一次同步区的变化（不经引擎、不推送本机改动）：推送之外的主动拉取，见 `SyncPoller`、`ZoneChangePuller`。
@@ -88,13 +91,24 @@ public actor CloudSync {
     try await puller?.prepare()
   }
 
-  /// 立即上传这一条记录（不等引擎的自动调度，几秒）：手机写出投送请求后调用，Mac 才能尽早拉到。
-  /// 先把它登记为待办（与协调器随后的登记重复无妨），再只发这一条。`deleted`：本机删掉了它（撤回还没被 Mac 领取的请求），发的是删除。
+  /// 立即上传这一条记录（不等引擎的自动调度，也不排进引擎的队列，见 `RecordUploader`）：手机写出投送请求后调用，Mac 才能尽早拉到。
+  /// `deleted`：本机删掉了它（撤回还没被 Mac 领取的请求），发的是删除。引擎里排着的这一条先去掉，免得再发一遍；整个请求失败（离线）时放回去，由引擎重试。
   public func sendNow(recordName: String, deleted: Bool = false) async throws {
-    guard let engine else { return }
+    guard let engine, let uploader else { return }
     let id = CKRecord.ID(recordName: recordName, zoneID: zoneID)
-    engine.state.add(pendingRecordZoneChanges: [deleted ? .deleteRecord(id) : .saveRecord(id)])
-    try await engine.sendChanges(CKSyncEngine.SendChangesOptions(scope: .recordIDs([id])))
+    let change: CKSyncEngine.PendingRecordZoneChange = deleted ? .deleteRecord(id) : .saveRecord(id)
+    engine.state.remove(pendingRecordZoneChanges: [change])
+    let received: Bool
+    do {
+      received = try await coordinator.sendNow(id, deleted: deleted, via: uploader)
+    } catch {
+      engine.state.add(pendingRecordZoneChanges: [change])
+      throw error
+    }
+    guard received else {
+      engine.state.add(pendingRecordZoneChanges: [change])  // 服务器没收下（限流、服务暂不可用等）：引擎照常重试
+      throw SyncError.notUploaded
+    }
   }
 
   /// 立即拉取并推送（不等引擎的自动调度）。通知订阅没建成的话顺便重试，并按数据库重新登记待推送（回到前台时调用）。

@@ -1,5 +1,6 @@
 import CueText
 import Foundation
+import os
 
 extension CueStore {
   /// 手机端：写一条投送请求，等 `host` 指定的那台 Mac 执行。必须指定：只有被指定的 Mac 会领取，
@@ -226,6 +227,7 @@ public actor DeliveryExecutor {
   private let onIssue: @Sendable (any Error) -> Void
   private let onFinished: @Sendable (DeliveryRequest.ID) async -> Void
   private let handler: @Sendable (DeliveryRequest) async -> DeliveryOutcome
+  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
   private var watcher: Task<Void, Never>?
   private var cleanup: Task<Void, Never>?
   private var processing = false
@@ -292,7 +294,11 @@ public actor DeliveryExecutor {
         continue
       }
       if hasMissingImages(request) { continue }
-      if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true { return request }
+      if await reporting({ try await store.claimDelivery(request.id, host: hostID) }) == true {
+        let age = timing.now().timeIntervalSince(request.createdAt)
+        Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
+        return request
+      }
     }
     return nil
   }
