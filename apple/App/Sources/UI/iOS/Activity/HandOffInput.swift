@@ -28,7 +28,7 @@ struct HandOffInput: View {
     var body: some View {
         Composer(
             draft: $draft, prompt: "补一句（可不填）", label: "交给 Agent", focus: $focused,
-            accepts: [.images, .cards], cardsFrom: outbox.project, pinnedOpen: true, keeps: outbox.card, commands: chosen?.state.commands ?? [],
+            accepts: [.images, .cards], cardsFrom: outbox.project, keeps: outbox.card, commands: chosen?.state.commands ?? [],
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)
                 if !services.reachesPiHost {

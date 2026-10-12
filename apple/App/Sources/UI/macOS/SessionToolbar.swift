@@ -21,7 +21,7 @@ final class SessionHeader {
         var canRename: Bool
         /// 对话在看历史时标题让开。
         var showsHeader: Bool
-        /// "⋯"晚于标题两帧出（建菜单约占点击回合的一半）。
+        /// "⋯"里的菜单项晚于标题两帧建（建菜单约占点击回合的一半）；钮本身与标题同时出，工具栏只重排一次。
         var showsMenu: Bool
     }
 
@@ -48,8 +48,9 @@ extension Workspace {
     }
 }
 
-/// 工具栏标题位：一块玻璃里一行，会话名接"状态 · 计时"（所在写在"⋯"菜单最上面；工具栏的玻璃只有一行高）。
+/// 工具栏标题位：一块玻璃里一行，会话名接状态（`PiSessionSubtitle`：只在在跑或要你注意时有；所在写在"⋯"菜单最上面，工具栏的玻璃只有一行高）。
 /// 玻璃画在标题自己身上、随它一起淡出：系统给工具栏项画的那块不随内容显隐，让开时会留下一块空玻璃。
+/// 玻璃只包住内容（最宽 `width`，名字再长就截断），外面占的位置固定是 `width`：项的尺寸一变整条工具栏重排。
 struct SessionTitleSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -78,17 +79,16 @@ struct SessionTitleSlot: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(maxWidth: Self.width, alignment: .leading)
         .frame(height: Spacing.toolbarControl)
         .glass(in: .capsule)
-        // 工具栏项的宽度固定（玻璃只画到内容那么宽）：内容一变项的尺寸就变，换会话时整条工具栏重排、整窗重算鼠标跟踪区，掉帧 8 次到 4～5 次
-        .frame(width: Self.width, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
         // 需要 /reload 的会话：状态就写在这块玻璃里，点它看怎么接上（不在对话上另浮一张卡）
-        .contentShape(.rect)
+        .contentShape(.capsule)
         .onTapGesture { if state.showsHeader, PiShown(session).explanation != nil { explaining = true } }
         .explanationPopover(PiShown(session).explanation, isPresented: $explaining)
+        // 工具栏项的宽度固定（玻璃只画到内容那么宽）：内容一变项的尺寸就变，换会话时整条工具栏重排、整窗重算鼠标跟踪区，掉帧 8 次到 4～5 次
+        .frame(width: Self.width, alignment: .leading)
         .opacity(state.showsHeader ? 1 : 0)
         .animation(Motion.quick, value: state.showsHeader)
         .allowsHitTesting(state.showsHeader)
@@ -104,34 +104,42 @@ struct SessionTitleSlot: View {
     }
 }
 
-/// 工具栏右边的"⋯"：最上面写所在，下面重命名、跳到终端（开在终端里的在线会话）、结束会话；都没有时不出现。
-/// 这个菜单项一直在工具栏里（没有内容时透明、点不到），只换里面的内容：它在工具栏的一组里时增删会让整组重建，一次进出会话页约占动作后主线程 CPU 的三分之一到一半。
+/// 工具栏右上的"⋯"：最上面写所在，下面重命名、跳到终端（开在终端里的在线会话）、结束会话；不在会话页或都没有时不出现、不占位。
+/// 它是单独的工具栏项、不共用系统的玻璃底（`sharedBackgroundVisibility(.hidden)`），圆钮的玻璃自己画，与"收起"同一种做法：
+/// 项一直在，只有里面的钮出没（增删工具栏项会重建整条工具栏，一次进出会话页约占动作后主线程 CPU 的三分之一到一半）。
 struct SessionMenuSlot: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        let state = workspace.shownSessionHeader.flatMap { $0.showsMenu ? $0 : nil }
-        let shown = state.map { $0.place != nil || $0.canRename || $0.liveID != nil || $0.canEnd } == true
-        Menu("更多", systemImage: "ellipsis") {
-            if let state {
-                if let place = state.place { Section { } header: { Text(place) } }
-                if state.canRename {
-                    Button("重命名…", systemImage: "pencil") { workspace.sessionHeader.rename(state.session) }
+        // 钮与标题同一圈出现（项的尺寸只变一次，换会话时不变）；菜单里的项晚两帧（`showsMenu`）
+        if let state = workspace.shownSessionHeader, state.place != nil || state.canRename || state.liveID != nil || state.canEnd {
+            Menu {
+                if state.showsMenu {
+                    if let place = state.place { Section { } header: { Text(place) } }
+                    if state.canRename {
+                        Button("重命名…", systemImage: "pencil") { workspace.sessionHeader.rename(state.session) }
+                    }
+                    if let id = state.liveID {
+                        Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(id) }
+                    }
+                    if state.canEnd {
+                        Button("结束会话", systemImage: "stop.circle", role: .destructive) { workspace.sessionHeader.end(state.session) }
+                            .disabled(state.ending)
+                    }
                 }
-                if let id = state.liveID {
-                    Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(id) }
-                }
-                if state.canEnd {
-                    Button("结束会话", systemImage: "stop.circle", role: .destructive) { workspace.sessionHeader.end(state.session) }
-                        .disabled(state.ending)
-                }
+            } label: {
+                Image(systemName: "ellipsis").font(.system(size: 15, weight: .medium)).foregroundStyle(palette.ink)
+                    .frame(width: Spacing.toolbarControl, height: Spacing.toolbarControl)
+                    .contentShape(.circle)
             }
+            .menuStyle(.button).menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .fixedSize()
+            .glass(in: .circle, interactive: true)
+            .help("重命名、跳到终端、结束会话")
+            .accessibilityLabel("更多")
         }
-        .menuIndicator(.hidden)
-        .help("重命名、跳到终端、结束会话")
-        .opacity(shown ? 1 : 0)
-        .disabled(!shown)
-        .accessibilityHidden(!shown)
     }
 }
 #endif

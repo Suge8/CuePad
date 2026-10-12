@@ -91,5 +91,7 @@ enum Spacing {
     /// 侧栏行高：单行与项目的两行（名称与"此刻"）。
     static let sidebarRow: CGFloat = 32
     static let sidebarProjectRow: CGFloat = 46
+    /// 侧栏行首的图标列（项目图标、会话状态标在里面居中）。
+    static let sidebarIcon: CGFloat = 20
 }
 #endif

@@ -10,13 +10,15 @@ import SwiftUI
 /// 停止发出后到这一轮歇下前转圈"正在停止"，进度只读投送请求（`MacDelivery.stopping`，页面传进来）。
 /// 排队的话（`PiChat.queued`）在它那块玻璃的上部（`PiQueueStack`），手机上聚焦时收成一行。键盘：`ReplyShortcut`（⌘↩、⌘⇧↩、⌘⇧M 模型、⌘⇧E 思考强度、空着按 ↑ 调回上一句）。
 /// 同步到不了 Mac 时不能发，聚焦后写明原因。两端都写一条投送请求给会话所在的 Mac（本机的由本机执行器送达），
-/// 发出后清空，请求马上贴到对话末尾。Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
+/// 发出后清空，请求马上贴到对话末尾。形态（`form`）：Mac 一直是两层（上面文字区，下面 ＋、模型与思考强度、发送），失焦也不收；
+/// 手机空着没聚焦时一行，在线会话聚焦就展开（已结束的没有工具排，打了字再长），在看历史时收成短胶囊（停止钮在时不收）。
+/// Mac 上打开即聚焦、发出后焦点留着接着写；手机发出后收起键盘。
 struct PiReplyBar: View {
     let session: PiSessionState
-    /// 模型与思考强度的显示值（在线会话聚焦时放在工具排"＋"的右边）。
+    /// 模型与思考强度的显示值（在线会话放在工具排"＋"的右边）。
     let config: PiConfigShown?
-    /// 在看历史：收成短胶囊。
-    let compact: Bool
+    /// 在看历史：收成短胶囊（只有手机这样）。
+    var compact = false
     /// 停止请求已发出、这一轮还没歇下（`MacDelivery.stopping`）。
     let stopping: Bool
     /// 最近一条斜杠命令的进度（`MacDelivery.commandProgress`，页面传进来）：在路上与没成功时在回复框上方短暂显示一行，成功就消失。
@@ -44,8 +46,16 @@ struct PiReplyBar: View {
         nonmutating set { services.settings.setReplyDraft(newValue, for: session.id) }
     }
 
-    /// 工具排（模型与思考强度）只给在线会话：已结束的不为换模型去唤醒 Pi。没有工具时聚焦也不展开成两层。
+    /// 工具排（模型与思考强度）只给在线会话：已结束的不为换模型去唤醒 Pi。
     private var hasTools: Bool { config != nil && session.state != .known(.ended) && !session.models.isEmpty }
+
+    private var form: ComposerForm {
+        #if os(macOS)
+        .open
+        #else
+        compact && !canStop ? .capsule(opensOnFocus: hasTools) : .line(opensOnFocus: hasTools)
+        #endif
+    }
 
     private var reply: PiReply { MacDelivery.reply(to: session) }
 
@@ -62,8 +72,8 @@ struct PiReplyBar: View {
     private var commandLine: String? { answering == nil ? PiSlash.line(of: draft, in: session.commands) : nil }
     private var button: PiReplyButton? { MacDelivery.button(for: session, hasDraft: hasDraft, command: commandLine != nil) }
 
-    /// 单行时是胶囊：高 = 字行 + 上下各 14，发送钮 36 居中。
-    static let radius: CGFloat = 25
+    /// 与输入框同一个圆角（贴在它上方的问题卡、收成一行的说明用）。
+    static let radius = ComposerMetrics.radius
 
     var body: some View {
         switch reply {
@@ -83,12 +93,12 @@ struct PiReplyBar: View {
     private var composer: some View {
             Composer(
                 draft: services.settings.replyDraftBinding(for: session.id), prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
-                cardsFrom: session.projectID, compact: compact, submitsEmpty: canStop, expandsOnFocus: hasTools, keepsHeader: !queued.isEmpty,
+                cardsFrom: session.projectID, form: form, submitsEmpty: canStop, keepsHeader: !queued.isEmpty,
                 commands: answering == nil ? session.commands : [], shortcuts: shortcuts, recall: recall,
                 header: {
                     if !compact, !queued.isEmpty { PiQueueStack(requests: queued, folded: Self.foldsQueue && focused) }
                     if !reachable { SyncHint(status: services.syncStatus).padding(.horizontal, 18).padding(.top, 12) }
-                    if focused, let failure = config?.failure {
+                    if form == .open || focused, let failure = config?.failure {
                         Text("没换成：\(failure)").font(Typography.caption).foregroundStyle(palette.failure).lineLimit(2)
                             .padding(.horizontal, 18).padding(.top, 12)
                     }
@@ -130,7 +140,7 @@ struct PiReplyBar: View {
     private static let holdChip = "\(ReplyShortcut.sendHeld.symbols) "
     #endif
 
-    /// 键盘快捷键（`ReplyShortcut`）此刻做什么：⌘↩ 同点按主按钮、⌘⇧↩ 同长按；⌘⇧M、⌘⇧E 在工具排露出时打开模型、思考强度菜单。
+    /// 键盘快捷键（`ReplyShortcut`）此刻做什么：⌘↩ 同点按主按钮、⌘⇧↩ 同长按；⌘⇧M、⌘⇧E 在有工具排时打开模型、思考强度菜单（按键只在文字区聚焦时到这里）。
     private var shortcuts: [ReplyShortcut: () -> Void] {
         var map: [ReplyShortcut: () -> Void] = [:]
         switch button {
@@ -141,7 +151,7 @@ struct PiReplyBar: View {
         case .stop, nil: break
         }
         #if os(macOS)
-        if hasTools, focused {
+        if hasTools {
             map[.model] = { opening = .model }
             map[.thinking] = { opening = .thinking }
         }

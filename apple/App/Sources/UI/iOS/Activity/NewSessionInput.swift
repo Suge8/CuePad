@@ -45,7 +45,7 @@ struct NewSessionInput: View {
             } else {
                 Composer(
                     draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
-                    cardsFrom: chosen?.project.id, pinnedOpen: true, submitsEmpty: true,
+                    cardsFrom: chosen?.project.id, submitsEmpty: true,
                     header: {
                         header.padding(.horizontal, 12).padding(.top, 10)
                         status.font(.caption).lineLimit(2).padding(.horizontal, 18).padding(.top, 8)

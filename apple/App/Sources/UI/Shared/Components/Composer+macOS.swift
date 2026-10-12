@@ -14,6 +14,11 @@ extension ComposerSource {
     static var imageChoices: [(title: String, symbol: String, source: ComposerSource)] { [("图片文件…", "photo", .files)] }
 }
 
+extension ComposerMetrics {
+    /// 一直展开（`ComposerForm.open`）、只有一行字时输入框的高度：会话页在回复框晚到的两帧里按它留位，对话不被顶上去。
+    static let openOneLine = textTop + GrowingTextView().maxHeight + textBottomOpen + slot
+}
+
 /// "＋"里图片的来源：选图片文件，选好的追加到图片条。
 struct ImageSources: ViewModifier {
     @Binding var source: ComposerSource?

@@ -16,7 +16,7 @@ struct CaptureComposer: View {
     @Binding var state: CaptureState
     /// 没手动换过落点时落在哪（iOS 与 Mac 主窗口是正在看的项目，菜单栏面板是上次打开的项目）。
     let defaultProject: UUID?
-    /// 一直展开、出现即聚焦（iOS 浮起的输入框、Mac 菜单栏面板）；否则聚焦或有内容时才展开。
+    /// 一直展开、出现即聚焦（iOS 浮起的输入框、Mac 菜单栏面板，形态 `.open`）；否则聚焦或有内容时才展开。
     let pinnedOpen: Bool
     /// 记下之后（iOS 收起输入框）；草稿在这之前已清空。
     var saved: () -> Void = {}
@@ -33,7 +33,7 @@ struct CaptureComposer: View {
     var body: some View {
         Composer(
             draft: $state.draft, prompt: collapsed ? CaptureCopy.placeholder(to: destination) : CaptureCopy.prompt, label: "随手记",
-            focus: $focused, accepts: .images, pinnedOpen: pinnedOpen, shortcuts: [.send: save],
+            focus: $focused, accepts: .images, form: pinnedOpen ? .open : .line(opensOnFocus: true), shortcuts: [.send: save],
             header: { header }, tools: { EmptyView() }, send: { saveButton }
         )
         // 一直展开的浮起的同一刻聚焦：键盘与输入框一起上来
