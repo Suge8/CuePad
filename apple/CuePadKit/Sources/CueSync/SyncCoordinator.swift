@@ -18,7 +18,7 @@ actor SyncCoordinator {
   private var needsFullReconcile = false
   /// 服务器上的大字段（见 `ServerValues`）与已交出去、还没有结果的上传版本（结果回来时用它记账，不读服务器返回的记录：
   /// 返回的记录只带发出去的字段）。引擎的上传与立即上传可以重叠，同一条记录会有几个版本在路上，按修改时间区分，
-  /// 结果回来时取它自己那一版记账。
+  /// 结果回来时取它自己那一版记账。只在内存、有数量上限，只管记账；自己的版本回声的识别不靠它（见 `syncSent`）。
   private var serverValues = ServerValues()
   private var inFlight: [String: [Int64: SyncRow]] = [:]
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
