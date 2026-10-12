@@ -217,10 +217,11 @@ public enum PiHistory {
         /// 文字块用空格连接（与 Pi 会话列表取首条消息一致）
         var text: String { joined(" ") }
 
+        /// 文字块（去掉 Pi 附给模型的图片说明，`PiSessionName.withoutImageNotes`）用 `separator` 连接。
         func joined(_ separator: String) -> String {
             switch self {
-            case .text(let s): s
-            case .blocks(let b): b.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: separator)
+            case .text(let s): PiSessionName.withoutImageNotes(s)
+            case .blocks(let b): b.compactMap { $0.type == "text" ? $0.text.map(PiSessionName.withoutImageNotes) : nil }.joined(separator: separator)
             }
         }
 
@@ -229,7 +230,7 @@ public enum PiHistory {
             return b.filter { $0.type == "toolCall" }
         }
 
-        /// 你说的一句：`text` 是文字块（去掉 Pi 附给模型的图片说明）用换行连接，摘要、机器消息判断都用它；
+        /// 你说的一句：`text` 是文字块用换行连接（`joined`），摘要、机器消息判断都用它；
         /// `stored` 是文字与图片按块的原顺序拼成的正文格式（`files` 为 nil 时不要图片，等同 `text`）。
         func said(storing files: AttachmentFiles?) throws -> (text: String, stored: String) {
             guard case .blocks(let blocks) = self else { return (text, text) }
@@ -237,7 +238,7 @@ public enum PiHistory {
             for block in blocks {
                 switch block.type {
                 case "text":
-                    let piece = PiHistory.withoutImageNotes(block.text ?? "")
+                    let piece = PiSessionName.withoutImageNotes(block.text ?? "")
                     if !piece.isEmpty { texts.append(piece); pieces.append(piece) }
                 case "image":
                     guard let files, let data = block.data.flatMap({ Data(base64Encoded: $0) }) else { continue }
@@ -248,19 +249,6 @@ public enum PiHistory {
             let text = texts.joined(separator: "\n")
             return (text, files == nil ? text : pieces.joined(separator: "\n"))
         }
-    }
-
-    /// Pi 把图片缩小或转格式后，在你的话末尾加给模型看的说明行（`formatDimensionNote` 等）；对话里不显示。
-    private static func isImageNote(_ line: Substring) -> Bool {
-        (line.hasPrefix("[Image: original ") && line.hasSuffix(" to map to original image.]"))
-            || (line.hasPrefix("[Image converted from ") && line.hasSuffix(".]"))
-    }
-
-    static func withoutImageNotes(_ text: String) -> String {
-        var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        guard let last = lines.last, isImageNote(last) else { return text }
-        while let last = lines.last, isImageNote(last) { lines.removeLast() }
-        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static let timestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)

@@ -88,7 +88,20 @@ public enum PiSessionName {
     public static let firstMessageLimit = 200
 
     public static func display(name: String?, firstMessage: String?, folder: String) -> String {
-        [name, firstMessage].lazy.compactMap { $0.map(singleLine) }.first { !$0.isEmpty } ?? folder
+        [name, firstMessage.map(withoutImageNotes)].lazy.compactMap { $0.map(singleLine) }.first { !$0.isEmpty } ?? folder
+    }
+
+    /// Pi 把图片缩小或转格式后，在你的话末尾加给模型看的说明行（`[Image: original …]`、`[Image converted from …]`）：CuePad 里一律不显示，
+    /// 会话名、对话、摘要都经这里去掉。按行首认（扩展给的首条消息被截断时说明行可能不完整），只去末尾连续的说明行，其余原样。
+    public static func withoutImageNotes(_ text: String) -> String {
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        guard let last = lines.last, isImageNote(last) else { return text }
+        while let last = lines.last, isImageNote(last) { lines.removeLast() }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isImageNote(_ line: Substring) -> Bool {
+        line.hasPrefix("[Image: original ") || line.hasPrefix("[Image converted from ")
     }
 
     private static func singleLine(_ text: String) -> String {

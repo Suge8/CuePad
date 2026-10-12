@@ -33,10 +33,19 @@ struct HistoryImageTests {
         let users = update.messages.filter { $0.role == .known(.user) }
         #expect(users.map(\.text) == ["看这张\n![](cuepad://img/\(hash(sent)))", "![](cuepad://img/\(hash(pasted)))"])
         #expect(update.recap.pendingPrompt == nil && update.recap.lastPrompt == "看这张" && update.recap.lastReply == "看到了")
+        #expect(update.history.displayName == "看这张")
         for data in [sent, pasted] {
             #expect(try store.files.original(hash: hash(data)) == data)
             #expect(try await store.hasAttachment(hash(data)))
         }
+    }
+
+    /// 活动会话的首条消息来自扩展（原文，可能被截断在说明行中间）：显示名同样不带说明行。
+    @Test func 说明行不进会话名() {
+        let note = "[Image: original 3000x2000, displayed at 1500x1000. Multiply coordinates by 2.00 to map to original image.]"
+        #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n" + note, folder: "x") == "看这张")
+        #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n[Image: original 3000x2", folder: "x") == "看这张")
+        #expect(PiSessionName.display(name: nil, firstMessage: "[Image converted from image/webp to image/png.]", folder: "x") == "x")
     }
 
     @Test func 旧规则存下的消息重读后更新正文() async throws {
