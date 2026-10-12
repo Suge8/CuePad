@@ -9,7 +9,7 @@ enum WriteEntry {
     static let symbol = "pencil.line"
 }
 
-/// 浮在键盘上方的输入框（随手记、新会话、交给 Agent 共用）：不弹面板，背后的页面不压色（内容直接透在玻璃后面），浮起时随键盘升上来。
+/// 浮在键盘上方的输入框（随手记、新会话、发给 Agent 共用）：不弹面板，背后的页面不压色（内容直接透在玻璃后面），浮起时随键盘升上来。
 /// 点空白处或往下拖收起（输入框跟手往下走，没拖够就回位）；里面在忙时（内容标了 `floatingInputLocked`）不收起。
 struct FloatingInput<Content: View>: View {
     let isPresented: Bool

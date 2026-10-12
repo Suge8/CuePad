@@ -118,7 +118,7 @@ final class MacExecutor {
         try await pi.configure(model: config.model, thinking: config.thinking, name: config.name, in: id)
     }
 
-    /// 命令带着卡片（交给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录。
+    /// 命令带着卡片（发给 Agent 时卡片文字是参数）：卡片关联到会话，但不写发送记录。
     private func runCommand(_ request: DeliveryRequest) async throws {
         let content = SendContent(stored: request.content)
         guard !content.hasImages else { throw SendError.imagesNotSupported }

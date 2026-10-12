@@ -200,7 +200,7 @@ private struct FocusCard: View {
                 if !roots.isEmpty {
                     SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
                     TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
-                        TaskLine(task: row.task, marks: data.children[row.id])
+                        TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
                     }
                 }
                 if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {

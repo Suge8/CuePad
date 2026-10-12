@@ -12,9 +12,9 @@ nonisolated private struct EditorData: Sendable, Equatable {
     var task: Card?
 }
 
-/// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值，提示词另有交给 Agent；选中文字时只发选中的部分）与自动保存在这里，
+/// 打开的灵感或任务：正文编辑（键盘上方是工具栏：分割线、插图、变量取值，提示词另有发给 Agent；选中文字时只发选中的部分）与自动保存在这里，
 /// 外框分两种：灵感是一整张纸页（宽 iPad 上是居中的纸，两侧露出桌面），顶栏是共用的悬浮顶栏——中间写所属项目（提示词写它的任务）
-/// 与"时间 · 资料"，右下一颗主按钮（⌘↩）：灵感是"挂到任务"，提示词是"交给 Agent"（`CardMenu.handsToAgent`）；右边"⋯"里是分享与 `CardMenu.more`；
+/// 与"时间 · 资料"，右下一颗主按钮（⌘↩）：灵感是"挂到任务"，提示词是"发给 Agent"（`CardMenu.handsToAgent`）；右边"⋯"里是分享与 `CardMenu.more`；
 /// 任务是 `TaskPage`（标题、提示词、子任务）。
 /// 灵感与提示词离开时什么都没写就不留下（`Workspace.leaveEditing`）。
 struct CardEditorScreen: View {
@@ -80,7 +80,7 @@ struct CardEditorScreen: View {
             if let data { TaskPage(card: data.card) } else { palette.paper }
         } else {
             editor
-                // 贴着正文右下一颗主按钮（灵感挂到任务、提示词交给 Agent），写字时让给键盘上方的工具栏
+                // 贴着正文右下一颗主按钮（灵感挂到任务、提示词发给 Agent），写字时让给键盘上方的工具栏
                 .overlay(alignment: .bottomTrailing) { if !typing, let card = data?.card { mainButton(card).transition(.opacity) } }
                 .animation(Motion.quick, value: typing)
                 .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
@@ -143,7 +143,7 @@ struct CardEditorScreen: View {
     @ViewBuilder private func mainButton(_ card: Card) -> some View {
         Group {
             if CardMenu.handsToAgent(card) {
-                MainButton(title: "交给 Agent", symbol: "paperplane.fill", action: sendToMac)
+                MainButton(title: "发给 Agent", symbol: "paperplane.fill", action: sendToMac)
             } else {
                 MainButton(title: CardMenu.Item.attachToTask.title, symbol: CardMenu.Item.attachToTask.symbol, action: { workspace.attaching = card })
             }
@@ -151,7 +151,7 @@ struct CardEditorScreen: View {
         .padding(.trailing, 16).padding(.bottom, 16)
     }
 
-    /// 键盘上方的交给 Agent：只有提示词有。
+    /// 键盘上方的发给 Agent：只有提示词有。
     private func hand(_ card: Card) -> (() -> Void)? {
         CardMenu.handsToAgent(card) ? { sendToMac() } : nil
     }
@@ -162,16 +162,16 @@ struct CardEditorScreen: View {
         if CardMenu.handsToAgent(card) { sendToMac() } else { workspace.attaching = card }
     }
 
-    /// 交给 Agent（浮起交给 Agent 的输入框）：选中了文字就只发选中的部分。
+    /// 发给 Agent（浮起发给 Agent 的输入框）：选中了文字就只发选中的部分。
     private func sendToMac() {
         guard let card = data?.card else { return }
         let body = handle.selection.map { Outgoing.text(body: $0, values: card.variableValues) } ?? outgoing(card)
         navigation.handToAgent(card, text: body)
     }
 
-    /// 编辑菜单里的选区动作：转为任务；提示词另有交给 Agent（只发选中的部分）。
+    /// 编辑菜单里的选区动作：转为任务；提示词另有发给 Agent（只发选中的部分）。
     private func selectionActions(_ card: Card) -> [CueSelectionAction] {
-        let hand = CueSelectionAction(title: "交给 Agent", systemImage: "paperplane") { stored in
+        let hand = CueSelectionAction(title: "发给 Agent", systemImage: "paperplane") { stored in
             navigation.handToAgent(card, text: Outgoing.text(body: stored, values: card.variableValues))
         }
         let tasks = CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
@@ -210,7 +210,7 @@ struct CardEditorScreen: View {
     }
 }
 
-/// 纸页右下的主按钮：靛青胶囊（签名色只落在主动作上）。灵感是"挂到任务"，提示词是"交给 Agent"。
+/// 纸页右下的主按钮：靛青胶囊（签名色只落在主动作上）。灵感是"挂到任务"，提示词是"发给 Agent"。
 private struct MainButton: View {
     let title: String
     let symbol: String

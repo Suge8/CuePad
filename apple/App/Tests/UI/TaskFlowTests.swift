@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 任务优先的主动线，按用户走的路写：灵感挂成提示词 → 交给 Agent → 它回复 → 全部回复后完成并归档；中途撤销；整理任务的层级；
+/// 任务优先的主动线，按用户走的路写：灵感挂成提示词 → 发给 Agent（话在路上、没送到、重发、已发）→ 完成并归档；中途撤销；整理任务的层级；
 /// 各处写的任务数是同一批。规则单测（行的状态怎么推、任务树怎么算）都从这些动作里走一遍，不单独测。
 struct TaskFlowTests {
     let rig = TestApp()
@@ -12,7 +12,7 @@ struct TaskFlowTests {
 
     // MARK: 灵感走完全程
 
-    @Test func 灵感挂成提示词_交给Agent_已回复_完成并归档() async throws {
+    @Test func 灵感挂成提示词_发给Agent_没送到可重发_完成并归档() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let first = try await store.createCard(in: project.id, body: "日志在 logs/0918.txt")
         let second = try await store.createCard(in: project.id, body: "再改排序")
@@ -26,40 +26,37 @@ struct TaskFlowTests {
         let third = try await store.createCard(body: "补用例", under: task.id)
         #expect(try await store.children(of: task.id).map(\.id) == [first.id, second.id, third.id])
         #expect(try await store.cards(in: project.id).isEmpty)
-        #expect(try await tally(task).text == "3 条提示词")
+        #expect(TaskCopy.counts(prompts: 3, subtasks: nil)?.visible == "3 条提示词")
         #expect(try await primary(task) == first.id)
 
-        // 交给 Agent：任务进行中并关联会话；它做完一轮是已回复，下一条成了那页唯一靛青的"交给 Agent"
+        // 发给 Agent：任务进行中并关联会话；发出去的是已发，不写 Agent 做没做完，下一条成了那页唯一靛青的"发给 Agent"
         let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-        #expect(try await state(of: first, in: task) == "unsent")
+        try await recorder.update(sessionID: "s1", state: .settled, title: "atlas")
+        #expect(try await delivery(of: first) == .unsent)
         try await store.recordSend(first.body, to: atlas, card: first.id)
-        try await enter(.thinking, recorder)
-        #expect(try await state(of: first, in: task) == "working atlas")
-        #expect(try await action(of: first, in: task) == "watch atlas")
+        #expect(try await delivery(of: first) == .sent)
         let started = try #require(try await store.card(task.id))
         #expect(started.status == .inProgress && started.piSessionID == "s1")
-        try await answer(1, recorder)
-        #expect(try await state(of: first, in: task) == "replied atlas")
-        #expect(try await action(of: first, in: task) == "handAgain")
-        #expect(try await tally(task).text?.visible == "3 条提示词 · 1 已回复")
         #expect(try await primary(task) == second.id)
 
-        // 同一个会话连着交：前面的已回复不因后面又交了一条、会话又在忙而倒退
-        try await store.recordSend(second.body, to: atlas, card: second.id)
-        try await enter(.thinking, recorder)
-        try await answer(2, recorder)
-        try await store.recordSend(third.body, to: atlas, card: third.id)
-        try await enter(.thinking, recorder)
-        #expect(try await replied(task) == [true, true, false])
-        // 手机重发还在路上：又是在处理，不算已回复
-        let resend = try await store.requestDelivery("先看日志", to: atlas, on: "mac-a", card: first.id)
-        #expect(try await state(of: first, in: task) == "working atlas")
-        #expect(try await replied(task) == [false, true, false])
+        // 话在路上是发送中；Mac 受理后会话在交给 Pi 之前关掉了，是没送到（带原因），只有它能重发；别的提示词不受影响
+        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+        let request = try await store.requestDelivery(second.body, to: atlas, on: "mac-a", card: second.id)
+        #expect(try await delivery(of: second) == .sending)
+        try await executor.start()
+        _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.succeeded) }
+        _ = try await store.failAcceptedDeliveries([request.id], host: "mac-a", reason: "会话在送达前关掉了")
+        #expect(try await delivery(of: second) == .failed("会话在送达前关掉了"))
+        let failed = try await delivery(of: second), sent = try await delivery(of: first)
+        #expect(failed.canSend && !sent.canSend)
+        #expect(try await primary(task) == third.id)
 
-        // 全部回复后行尾出现"完成"，任务不自动完成；用户勾选，提示里给归档
-        try await answer(3, recorder)
-        try await store.deleteDelivery(resend.id)
-        #expect(try await tally(task).suggestsDone(task))
+        let again = try await store.requestDelivery(second.body, to: atlas, on: "mac-a", card: second.id)
+        _ = try await eventually(store, { try $0.deliveryRequest(again.id)?.status }) { $0 == .known(.succeeded) }
+        #expect(try await delivery(of: second) == .sent)
+        await executor.stop()
+
+        // 任务不自动完成；用户勾选，提示里给归档
         #expect(try await store.card(task.id)?.status == .inProgress)
         try await workspace.toggle(task.id)
         #expect(workspace.notice?.text == "已完成")
@@ -67,22 +64,6 @@ struct TaskFlowTests {
         #expect(archive.title == "归档")
         try await archive.run()
         #expect(try await store.card(task.id)?.archivedAt != nil)
-    }
-
-    @Test func 会话没回复就结束了_提示词是会话已结束_不算全部已回复() async throws {
-        let task = try await store.createTask("修乱序", in: nil)
-        let prompt = try await store.createCard(body: "先复现", under: task.id)
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-        try await store.recordSend(prompt.body, to: atlas, card: prompt.id)
-        try await enter(.tool, recorder)
-        try await enter(.waitingForUser, recorder)
-        #expect(try await action(of: prompt, in: task) == "watch atlas")  // Agent 在处理：只给看会话
-        try await recorder.end(sessionID: "s1")
-
-        #expect(try await state(of: prompt, in: task) == "ended atlas")
-        #expect(try await action(of: prompt, in: task) == "handAgain")
-        #expect(try await tally(task).text == "1 条提示词")
-        #expect(!(try await tally(task).suggestsDone(try #require(try await store.card(task.id)))))
     }
 
     // MARK: 撤销与批量
@@ -253,47 +234,11 @@ struct TaskFlowTests {
 
     // MARK: 共用的小件
 
-    private func tally(_ task: Card) async throws -> PromptTally { PromptTally(try await store.childMarks()[task.id]) }
-
-    private func replied(_ task: Card) async throws -> [Bool] {
-        (try await store.childMarks(of: task.id)[task.id] ?? []).filter { !$0.isTask }.map(\.isDone)
-    }
-
     private func primary(_ task: Card) async throws -> UUID? {
         try await TaskDetail.read(task.id, from: store).primaryPrompt(agents: AgentLinks.read(from: store))
     }
 
-    /// 会话 atlas 进入 `state`（时刻晚于刚才的发出：按毫秒比先后）。
-    private func enter(_ state: PiWorkState, _ recorder: PiStateRecorder) async throws {
-        try await Task.sleep(for: .milliseconds(5))
-        _ = try await recorder.update(sessionID: "s1", state: state, title: "atlas", times: PiTimes(stateSince: .now, busySince: nil))
-    }
-
-    /// 这一轮做完：对话里多一条回答（已回复靠对话认，会话之后又在忙时也不退回），会话歇下。
-    private func answer(_ count: Int, _ recorder: PiStateRecorder) async throws {
-        try await Task.sleep(for: .milliseconds(5))
-        try await store.writePiTranscript(PiTranscript(
-            sessionID: "s1", messages: (1...count).map { PiChatMessage(sessionID: "s1", entryID: "a\($0)", seq: Int64($0), role: .pi, text: "做完 \($0)", at: .now) },
-            recap: PiRecap()))
-        try await enter(.settled, recorder)
-    }
-
-    private func action(of prompt: Card, in task: Card) async throws -> String {
-        switch try await TaskDetail.read(task.id, from: store).state(of: prompt, agents: AgentLinks.read(from: store)).action {
-        case .handOff: "handOff"
-        case .handAgain: "handAgain"
-        case .watch(let item): "watch \(item.state.title)"
-        case nil: "none"
-        }
-    }
-
-    private func state(of prompt: Card, in task: Card) async throws -> String {
-        switch try await TaskDetail.read(task.id, from: store).state(of: prompt, agents: AgentLinks.read(from: store)) {
-        case .unsent: "unsent"
-        case .launching: "launching"
-        case .working(let item): "working \(item.state.title)"
-        case .ended(let item): "ended \(item.state.title)"
-        case .replied(let item): "replied \(item?.state.title ?? "")"
-        }
+    private func delivery(of prompt: Card) async throws -> PromptDelivery {
+        PromptDelivery(prompt.id, agents: try await AgentLinks.read(from: store))
     }
 }

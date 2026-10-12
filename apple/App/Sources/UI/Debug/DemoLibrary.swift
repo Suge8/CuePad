@@ -124,8 +124,8 @@ enum DemoLibrary {
 
     typealias DemoTask = (project: String?, text: String, done: Bool)
 
-    /// 两级任务：圆桌的"乱序"一句说明、四条提示词（交给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
-    /// 其中一条下再挂两条提示词；CuePad 的"投送超时"一条提示词（会是已回复，行尾出现"完成"）。
+    /// 两级任务：圆桌的"乱序"一句说明、四条提示词（发给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
+    /// 其中一条下再挂两条提示词；CuePad 的"投送超时"一条提示词（会发给 notes）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         if let timeout = tasks.first(where: { $0.body.hasPrefix("投送队列") }) {

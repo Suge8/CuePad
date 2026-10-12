@@ -22,7 +22,7 @@ struct IOSEditorHost: UIViewRepresentable {
     let onChange: (String) -> Void
     let onInsertImage: () -> Void
     let onVariables: () -> Void
-    /// 键盘上方的"交给 Agent"；nil 时没有这一颗（灵感不直接交给 Agent，见 `CardMenu.handsToAgent`）。
+    /// 键盘上方的"发给 Agent"；nil 时没有这一颗（灵感不直接发给 Agent，见 `CardMenu.handsToAgent`）。
     let onSend: (() -> Void)?
     var selectionActions: [CueSelectionAction] = []
     var onError: (any Error) -> Void = { _ in }
@@ -59,7 +59,7 @@ struct IOSEditorHost: UIViewRepresentable {
     }
 }
 
-/// 键盘上方的工具栏：分割线、插图、变量取值、收起键盘，提示词另有交给 Agent（选中文字时只发选中的部分）。
+/// 键盘上方的工具栏：分割线、插图、变量取值、收起键盘，提示词另有发给 Agent（选中文字时只发选中的部分）。
 final class KeyboardBar: UIToolbar {
     /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）：插图与变量由外部弹出选择器与面板。
     final class Actions {
@@ -71,7 +71,7 @@ final class KeyboardBar: UIToolbar {
     private var base: [UIBarButtonItem] = []
     private var send: UIBarButtonItem?
 
-    /// 有没有交给 Agent：卡在打开期间可能挂到任务成了提示词，随宿主更新切换。
+    /// 有没有发给 Agent：卡在打开期间可能挂到任务成了提示词，随宿主更新切换。
     var showsSend = false {
         didSet { if showsSend != oldValue { setItems(base + (showsSend ? [send].compactMap { $0 } : []), animated: false) } }
     }
@@ -86,7 +86,7 @@ final class KeyboardBar: UIToolbar {
             item.accessibilityLabel = label
             return item
         }
-        let send = item("交给 Agent", "paperplane.fill") { _ in actions.send() }
+        let send = item("发给 Agent", "paperplane.fill") { _ in actions.send() }
         send.style = .prominent
         self.send = send
         base = [

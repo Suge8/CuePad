@@ -42,11 +42,11 @@ import Testing
       let open = all.filter { $0.status != .done }
       #expect(try await store.tasks(in: project, .inProgress, .todo) == open)
 
-      let marks = try await store.childMarks().filter { parent, _ in all.contains { $0.id == parent } }
-      #expect(try await store.childMarks(in: project) == marks)
+      let progress = try await store.subtaskProgress().filter { parent, _ in all.contains { $0.id == parent } }
+      #expect(try await store.subtaskProgress(in: project) == progress)
     }
-    #expect(try await store.childMarks(of: release.id).keys.sorted { $0.uuidString < $1.uuidString } == [release.id])
-    #expect(try await store.childMarks(of: release.id)[release.id]?.count == 2)
+    // 只算子任务：上线下面一条已完成的子任务加一条提示词，进度是 1/1
+    #expect(try await store.subtaskProgress(of: release.id) == [release.id: TaskProgress(done: 1, total: 1)])
   }
 
   @Test func 一批会话的列表项_等于分页查询里的同一项() async throws {

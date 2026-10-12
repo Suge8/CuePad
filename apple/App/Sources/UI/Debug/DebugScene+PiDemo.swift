@@ -41,9 +41,8 @@ extension DebugScene {
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 
-    /// 任务三态与提示词：圆桌"乱序"的第一条提示词交给 notes 已回复、第二条交给 atlas 在处理、第三条没发（任务进行中）、
-    /// 第四条交给 deploy 等你确认（项目页任务下的提示词进度行：已回复、工作中、等你确认三种样子）；
-    /// CuePad"投送超时"的提示词交给 notes 已回复（行尾出现"完成"）；CuePad、Flow、圆桌各完成一条（先后完成）。
+    /// 任务三态与提示词：圆桌"乱序"的第一、二、四条提示词发给了会话 notes、atlas、deploy（已发），第三条没发（任务进行中）；
+    /// CuePad"投送超时"的提示词发给 notes；CuePad、Flow、圆桌各完成一条（先后完成）。
     private static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
         guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }
         func prompts(_ prefix: String) async -> [Card] {
@@ -59,7 +58,7 @@ extension DebugScene {
         await send(timeout.first, to: "notes")
         await send(order.dropFirst().first, to: "atlas")
         await send(order.dropFirst(3).first, to: "deploy")
-        // notes 这一轮做完：交给它的两条提示词已回复
+        // notes 这一轮做完，会话歇下
         try? await Task.sleep(for: .milliseconds(5))
         _ = try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
             sessionID: "notes", state: .settled, title: "notes", folder: "notes", projectID: projects.first { $0.name == "Career" }?.id,

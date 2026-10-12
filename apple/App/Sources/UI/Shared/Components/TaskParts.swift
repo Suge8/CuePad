@@ -4,7 +4,7 @@ import SwiftUI
 
 
 // 任务浮窗（手机、Mac 都是盖在当前页上的一层）的几块：任务是一件要做成的事——标题与一句说明（`TaskHeading`）；
-// 要交给 Agent 的话是挂在它下面的提示词，一张一张卡（`PromptList`），是这一页的主体；子任务是次要的一组（`SubtaskList`）。
+// 要发给 Agent 的话是挂在它下面的提示词，一张一张卡（`PromptList`），是这一页的主体；子任务是次要的一组（`SubtaskList`）。
 
 
 /// 任务的标题（单行）与可选的一句说明，就地改、自动保存（存成两行，见 `CueTask`）。标题里按回车跳到说明。
@@ -70,7 +70,7 @@ struct SubtaskList: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("子任务").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
-                if let progress = TaskProgress.subtasks(in: detail?.marks) {
+                if let progress = detail?.progress {
                     Text("\(progress.done)/\(progress.total)").monospacedDigit().font(TaskMetrics.caption).foregroundStyle(palette.ink3)
                 }
             }
@@ -108,46 +108,28 @@ struct SubtaskList: View {
 /// 任务页标题左边的完成圈：点它完成（完成的回到待办）；还有没完成的子任务时先问一句，确认后一起完成。
 struct TaskRingButton: View {
     let task: Card
-    let marks: [ChildMark]?
+    let prompts: Int
+    let subtasks: TaskProgress?
     var size: CGFloat = TaskMetrics.titleRing
     @Environment(Workspace.self) private var workspace
     @State private var confirming = false
 
     var body: some View {
         Button {
-            if task.status != .done, TaskCopy.hasOpen(.subtasks(in: marks)) { confirming = true } else { toggle() }
+            if task.status != .done, TaskCopy.hasOpen(subtasks) { confirming = true } else { toggle() }
         } label: {
-            TaskRingView(status: task.status, ring: TaskRing(marks), done: task.status == .done, size: size)
+            TaskRingView(status: task.status, ring: TaskRing(subtasks), done: task.status == .done, size: size)
                 .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.success, trigger: task.status) { $1 == .done }
         .accessibilityLabel(TaskSpeech.toggle(done: task.status == .done))
-        .accessibilityValue([TaskSpeech.value(task.status), TaskSpeech.progress(marks)].compactMap { $0 }.joined(separator: "，"))
-        .dialog(TaskCopy.openSubtasks(.subtasks(in: marks)), isPresented: $confirming, buttons: [DialogButton(title: "全部完成") { toggle() }])
+        .accessibilityValue([TaskSpeech.value(task.status), TaskSpeech.progress(prompts: prompts, subtasks: subtasks)].compactMap { $0 }.joined(separator: "，"))
+        .dialog(TaskCopy.openSubtasks(subtasks), isPresented: $confirming, buttons: [DialogButton(title: "全部完成") { toggle() }])
     }
 
     private func toggle() {
         let task = task
         workspace.attempt { try await workspace.toggle(task.id) }
-    }
-}
-
-
-/// 任务行尾的"完成"：提示词都已回复、任务还没完成时出现，点了才完成（任务不自动完成）。行上已写着"全部已回复"，钮只写动作。
-struct MarkDoneChip: View {
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: action) {
-            Text("完成")
-                .font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink)
-                .padding(.horizontal, 10).frame(height: TaskMetrics.chipHeight)
-                .overlay(Capsule().strokeBorder(palette.hair))
-                .frame(minHeight: TaskMetrics.chipTarget).contentShape(.capsule)
-        }
-        .buttonStyle(PressStyle())
-        .accessibilityHint("提示词都已回复")
     }
 }

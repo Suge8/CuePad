@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 交给 Agent：浮在键盘上方的输入框（与随手记、新会话同一种），提示词的正文已经带在里面，可以补一句；
+/// 发给 Agent：浮在键盘上方的输入框（与随手记、新会话同一种），提示词的正文已经带在里面，可以补一句；
 /// 头部一颗胶囊选交给哪个会话（菜单最上面是"新会话"，其下本项目的在前、最近要你注意的在前）。发出即收起，
 /// 提示词卡上随即出现那个会话的状态（发送中 → 工作中 → 有新回复；开新会话时先是"正在开会话"，开好后同样关联）。
 /// 没有在线会话时发送就是开新会话。工具排里是选中会话的模型与思考强度（与会话页回复框同一组件 `PiConfigControls`）。
@@ -27,7 +27,7 @@ struct HandOffInput: View {
 
     var body: some View {
         Composer(
-            draft: $draft, prompt: "补一句（可不填）", label: "交给 Agent", focus: $focused,
+            draft: $draft, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
             accepts: [.images, .cards], cardsFrom: outbox.project, pinnedOpen: true, keeps: outbox.card, commands: chosen?.state.commands ?? [],
             header: {
                 header.padding(.horizontal, 12).padding(.top, 10)

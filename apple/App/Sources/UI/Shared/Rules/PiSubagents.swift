@@ -78,7 +78,7 @@ nonisolated enum PiSubagentClock: Equatable {
 }
 
 /// 会话在等子代理时（Agent 列表行的第三行）说它们在干什么：只有一个在跑，写它的名字与动作；好几个在跑，说个数；
-/// 都停了（结果还没交给 Agent）说已交回。
+/// 都停了（结果还没发给 Agent）说已交回。
 nonisolated enum PiSubagentLine {
     static func of(_ agents: [PiSubagentState]) -> String? {
         guard !agents.isEmpty else { return nil }

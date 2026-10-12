@@ -38,7 +38,7 @@ public enum CueLines {
     }
 }
 
-/// 任务的正文：标题与可选的一句说明（任务是一件要做成的事；要交给 Agent 的话是挂在它下面的提示词）。
+/// 任务的正文：标题与可选的一句说明（任务是一件要做成的事；要发给 Agent 的话是挂在它下面的提示词）。
 /// 存成两行：第一行标题，第二行说明。
 public struct CueTask: Equatable, Sendable {
     public var title: String

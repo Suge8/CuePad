@@ -207,7 +207,7 @@ extension CueStore {
   }
 
   /// 任务正文除标题外还有话时拆出来（`CueTask.split`）：其余成为排在它下级最前的一条提示词，
-  /// 带着任务的变量取值与会话；交给 Agent 的记录（发送记录、投送请求）跟到提示词上。返回提示词的 id，没有可拆的为 nil。
+  /// 带着任务的变量取值与会话；发给 Agent 的记录（发送记录、投送请求）跟到提示词上。返回提示词的 id，没有可拆的为 nil。
   /// 设为任务与新建任务共用。
   static func splitPrompt(_ db: SQLite, task: UUID, at now: Date) throws -> UUID? {
     guard let body = try db.first("SELECT body FROM cards WHERE id = ?", [task], { $0.text(0) }) else { return nil }
@@ -602,7 +602,7 @@ extension CueStore {
   }
 
   /// 把灵感或任务关联到一个会话（任务进行中，提示词连带它的任务也一样），不写发送记录：
-  /// 交给 Agent 的命令带着卡片时用（命令不是内容的投送，发送记录只记内容）。
+  /// 发给 Agent 的命令带着卡片时用（命令不是内容的投送，发送记录只记内容）。
   public func linkCard(_ card: UUID, toSession session: String) throws {
     try write { try linkCardInTransaction(card, toSession: session, at: Date.stamp) }
   }
