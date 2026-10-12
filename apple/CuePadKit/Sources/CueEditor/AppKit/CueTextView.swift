@@ -19,6 +19,9 @@ public final class CueTextView: NSTextView, CueEditorHost {
     public var selectionActions: [CueSelectionAction] = []
     /// 图片入库失败（磁盘满、文件不可读）。失败的图片不会插入。
     public var onError: ((any Error) -> Void)?
+    /// ⌘↩ 的主动作（发给 Agent、挂到任务）：编辑器自己接，不靠外面按钮的快捷键——浮层开着时窗口不接 ⌘ 组合键，
+    /// 只交给主菜单与焦点所在的视图（`PanelHost`）。nil 时 ⌘↩ 照常往下传。
+    public var onSubmit: (() -> Void)?
 
     private(set) var core: EditorCore!
     private var isLoading = false
@@ -127,20 +130,39 @@ public final class CueTextView: NSTextView, CueEditorHost {
 }
 
 extension CueTextView {
-    public override func menu(for event: NSEvent) -> NSMenu? {
-        let menu = super.menu(for: event)
-        guard let menu, let stored = selectedStoredText, !selectionActions.isEmpty else { return menu }
-        for (index, action) in selectionActions.enumerated() {
-            let item = NSMenuItem(title: action.title, action: #selector(performSelectionAction(_:)), keyEquivalent: "")
-            item.image = NSImage(systemSymbolName: action.systemImage, accessibilityDescription: nil)
-            item.target = self
-            item.tag = index
-            item.representedObject = stored
-            menu.insertItem(item, at: index)
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if let onSubmit, modifiers == .command, event.charactersIgnoringModifiers == "\r" {
+            onSubmit()
+            return true
         }
-        menu.insertItem(.separator(), at: selectionActions.count)
+        return super.performKeyEquivalent(with: event)
+    }
+
+    /// 右键菜单最上面：选中文字时的选区动作（外部提供），再是常驻的"插入分割线"，各自与后面隔一条线。
+    public override func menu(for event: NSEvent) -> NSMenu? {
+        guard let menu = super.menu(for: event) else { return nil }
+        var head: [NSMenuItem] = []
+        if let stored = selectedStoredText, !selectionActions.isEmpty {
+            for (index, action) in selectionActions.enumerated() {
+                let item = NSMenuItem(title: action.title, action: #selector(performSelectionAction(_:)), keyEquivalent: "")
+                item.image = NSImage(systemSymbolName: action.systemImage, accessibilityDescription: nil)
+                item.target = self
+                item.tag = index
+                item.representedObject = stored
+                head.append(item)
+            }
+            head.append(.separator())
+        }
+        let divider = NSMenuItem(title: "插入分割线", action: #selector(insertDividerFromMenu), keyEquivalent: "")
+        divider.image = NSImage(systemSymbolName: "rectangle.split.1x2", accessibilityDescription: nil)
+        divider.target = self
+        head += [divider, .separator()]
+        for (index, item) in head.enumerated() { menu.insertItem(item, at: index) }
         return menu
     }
+
+    @objc private func insertDividerFromMenu() { insertDivider() }
 
     @objc private func performSelectionAction(_ item: NSMenuItem) {
         guard selectionActions.indices.contains(item.tag), let stored = item.representedObject as? String else { return }

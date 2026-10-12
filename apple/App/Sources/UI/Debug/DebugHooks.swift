@@ -105,6 +105,21 @@ enum DebugHooks {
     typealias MainWindowClass = NSWindow
     #endif
 
+    /// 脚本截图（给了 `CUEPAD_SHOT_READY`）：App 在后台跑，主窗口排在所有窗口最后——不抢前台和键盘，也不盖住正在用的窗口；
+    /// 按窗口截图截得到被挡住的窗口。
+    static var staysInBackground: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] != nil
+        #else
+        false
+        #endif
+    }
+
+    /// 显示主窗口：平时到最前并接过键盘；脚本截图时排在最后（`staysInBackground`）。
+    static func present(_ window: NSWindow) {
+        if staysInBackground { window.orderBack(nil) } else { window.makeKeyAndOrderFront(nil) }
+    }
+
     /// `-CuePadOffscreen`：主窗口放到所有屏幕之外、不记位置，返回 true；否则什么都不做。
     static func placesOffscreen(_ window: NSWindow) -> Bool {
         #if DEBUG

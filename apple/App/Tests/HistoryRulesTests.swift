@@ -147,11 +147,11 @@ struct HistoryRulesTests {
     }
 }
 
-/// Mac 本机：托管着、进程歇着的会话（记录在"现在"、桥上没有）是发送目标，状态照记录写（歇着，不写"已结束"），发送时在后台唤醒。
+/// Mac 本机：托管着、进程歇着的会话（记录在"现在"、桥上没有）是任务绑着的会话时，交出草稿在后台唤醒它。
 struct RestingTargetTests {
     let rig = TestApp()
 
-    @Test func 托管着进程歇着的会话是发送目标_发送时唤醒() async throws {
+    @Test func 托管着进程歇着的会话_交出时唤醒() async throws {
         let services: AppServices = rig.services
         let workspace = Workspace(services: services)
         let store = services.store
@@ -165,15 +165,13 @@ struct RestingTargetTests {
         services.startLiveSessions()
         try await services.executor.start()
         defer { services.cancelBackgroundWork() }
-        try await eventually("workspace.sendState.agentTarget(for: project.id) != nil") { workspace.sendState.agentTarget(for: project.id) != nil }
+        let task = try await store.createTask("任务", in: project.id)
+        let draft = try await store.createCard(body: "接着做", under: task.id)
+        try await store.linkCard(task.id, toSession: "a")
 
-        let target = try #require(workspace.sendState.agentTarget(for: project.id))
-        #expect(target.session == "a" && workspace.sendState.onlineTargets(for: project.id).map(\.state.sessionID) == ["a"])
-        #expect(workspace.sendState.shown(target).status != .ended, "歇着，不是已结束")
-        #expect(workspace.sendState.endedTargets.isEmpty)
+        workspace.handOff(draft)
 
-        #expect(await workspace.send("接着做", to: target))
-
+        try await eventually("唤醒后话送到") { rig.host.extensions["a"]?.messages.isEmpty == false }
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
         let request = try #require(try await store.deliveryRequests().first)
         #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: "接着做", deliveryID: request.id.uuidString)])

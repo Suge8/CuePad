@@ -72,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsWindow = SettingsWindowController(settings: services.settings) { RootViews.settings(services) }
 
         services.start()
-        window.makeKeyAndOrderFront(nil)
+        DebugHooks.present(window)
         if !location.isIsolated { Task { await offerCommandLineTool(services, in: workspace) } }
     }
 

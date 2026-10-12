@@ -132,7 +132,7 @@ final class AppServices {
             storedText, to: session.target, on: session.hostID, mode: mode, card: card))
     }
 
-    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（交给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
+    /// 把草稿发给一个 Pi 会话（写投送请求）：关联 `card`（发给 Agent 时是为它打开的那条，不随附件增删），没给时是带上的第一张。
     @discardableResult
     func requestMacDelivery(
         _ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil

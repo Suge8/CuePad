@@ -37,7 +37,9 @@ struct SessionScreen: View {
 
     var body: some View {
         Group {
-            // 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入
+            // 读到库再整段出现：对话从空变满不算"新内容"，不逐条淡入。
+            // 读到前也要有一个真的视图（不能什么都不排）：这一页里的 .task 要等视图出现才启动，读库的 .observing 就挂在它上面；
+            // 没有首帧时（点通知、点横幅）整页没有任何视图，读库不启动，页面永远空白
             if let digest {
                 if let session {
                     SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 16, follow: $follow)
@@ -46,6 +48,8 @@ struct SessionScreen: View {
                         .padding(.horizontal, 16)
                         .frame(maxHeight: .infinity)
                 }
+            } else {
+                Color.clear
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

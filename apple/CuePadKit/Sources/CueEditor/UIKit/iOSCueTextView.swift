@@ -109,7 +109,6 @@ public final class CueTextView: UITextView, CueEditorHost {
         var result = theme
         result.font = scaled(theme.font, .body)
         result.codeFont = scaled(theme.codeFont, .body)
-        result.titleFont = scaled(theme.titleFont, .title1)
         result.headingFont = scaled(theme.headingFont, .title2)
         return result
     }

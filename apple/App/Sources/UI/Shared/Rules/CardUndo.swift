@@ -12,8 +12,8 @@ extension CueStore {
     }
 
     /// 删除一条灵感或任务（进回收站，下级提到它的位置，见 `trashCard`）；撤销时下级回到它下面。
-    func trashing(_ id: UUID) async throws -> Undo {
-        undoing(try trashCard(id))
+    func trashing(_ ids: [UUID]) async throws -> Undo {
+        undoing(try trashCards(ids))
     }
 
     /// 灵感挂到任务下成为提示词（挑一条或拖到任务上）；撤销把它放回原来所在的项目、原来的位置。
@@ -21,8 +21,10 @@ extension CueStore {
         undoing(try moveCard(idea, to: move.slot, after: move.after))
     }
 
-    private nonisolated func undoing(_ change: CardChange?) -> Undo {
-        guard let change else { return {} }
-        return { try await self.undo(change) }
+    private nonisolated func undoing(_ change: CardChange?) -> Undo { undoing(change.map { [$0] } ?? []) }
+
+    private nonisolated func undoing(_ changes: [CardChange]) -> Undo {
+        guard !changes.isEmpty else { return {} }
+        return { try await self.undo(changes) }
     }
 }

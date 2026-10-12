@@ -53,7 +53,7 @@ extension SendError: LocalizedError {
         case .piNotInstalled: "这台 Mac 上没有找到 Pi"
         case .directoryMissing(let folder): "目录不存在：\(folder)"
         case .terminalFailed(let reason): "终端没能打开：\(reason)"
-        case .alreadyHanded: "Mac 已经把它交给 Agent，撤不回了"
+        case .alreadyHanded: "Mac 已经把它发给 Agent，撤不回了"
         }
     }
 }

@@ -75,7 +75,7 @@ struct IOSDecorationTests {
     @Test("动态字体：系统字号档位变化后，各角色的字体跟着放大")
     func dynamicType() async throws {
         let h = EditorHarness()
-        h.load("标题\n正文")
+        h.load("# 标题\n正文")
         let before = try paragraphs(h, 2).map { font($0)?.pointSize ?? 0 }
         h.textView.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
         #expect(await h.wait { (font(h.displayed().last ?? NSAttributedString())?.pointSize ?? 0) > before[1] * 1.5 })

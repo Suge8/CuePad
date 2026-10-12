@@ -51,6 +51,8 @@ final class Workspace {
     var openCard: UUID? {
         didSet { if let openCard { presses.present(openCard) } }
     }
+    /// 浮窗里看着的任务（`TaskSheet`）：盖在当前页上，不换页。
+    var openTask: TaskSheet.Request?
     #endif
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
     var attaching: Card?
@@ -124,15 +126,37 @@ final class Workspace {
     /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
     var mountedPages: [Route] { pages.kept.contains(page) ? pages.kept : pages.kept + [page] }
 
+    /// 这一条归档或删掉了：开着它的编辑页或任务浮窗收起。
+    private func closeIfOpen(_ id: UUID) {
+        if openCard == id { openCard = nil }
+        if openTask?.id == id { openTask = nil }
+    }
+
     /// 编辑页淡出结束。
     func finishClosingCard() {
         guard openCard == nil else { return }
         presses.dismiss()
     }
 
-    /// 切到一页（侧栏点哪就是哪）；开着的编辑页随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
+    /// 打开一条灵感或任务：任务在浮窗里看（盖在当前页上，右上角的任务面板留着；步骤是它上级的浮窗、选中这一步）；
+    /// 任务的草稿（提示词）打开它的任务；散放的灵感进整页的编辑页。
+    func open(_ card: Card) {
+        presses.clearSelection()
+        if card.isTask { return openTask = card.parentID.map { .init(id: $0, step: card.id) } ?? .init(id: card.id) }
+        if let task = card.parentID {
+            let store = services.store
+            return attempt { if let task = try await store.card(task) { self.open(task) } }
+        }
+        openTask = nil
+        showsTasks = false
+        openCard = card.id
+    }
+
+    /// 切到一页（侧栏点哪就是哪）；开着的编辑页与任务浮窗随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
     func show(_ page: Route) {
         openCard = nil
+        openTask = nil
+        presses.clearSelection()
         presses.dismiss()
         pages.visit(from: self.page, to: page)
         if case .project(let id) = page {
@@ -238,10 +262,16 @@ final class Workspace {
 
     /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态由 Store 在一个事务里按当前值定（`toggleDone`）：
     /// 界面手里的副本可能已过时（列表还没刷新就又点了一次）。
+    /// 完成就是做完了：它（和它的步骤）交给的会话还在线的，一起结束（`end`）。
     func toggle(_ id: UUID) async throws {
         // 做完了就给一个归档（不自动归档）
-        if try await services.store.toggleDone(id) == .done {
-            say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) })
+        guard try await services.store.toggleDone(id) == .done else { return }
+        say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) })
+        let store = services.store
+        let cards = [try await store.card(id)].compactMap(\.self) + (try await store.children(of: id))
+        let sessions = Set(cards.compactMap(\.piSessionID))
+        for state in services.liveSessions.live.map(\.state) where sessions.contains(state.sessionID) && state.state != .known(.ended) {
+            await end(state)
         }
     }
 
@@ -264,18 +294,20 @@ final class Workspace {
         let store = services.store
         try await store.archive(id)
         #if os(macOS)
-        if openCard == id { openCard = nil }
+        closeIfOpen(id)
         #endif
         say("已归档", action: .undo { try await store.unarchive(id) })
     }
 
-    /// 删除一条灵感或任务：提示里可撤销。
-    func trash(_ id: UUID) async throws {
-        let undo = try await services.store.trashing(id)
+    /// 删除灵感或任务（一条，或 Mac 上批量选中的几条，一次写入）：提示里可撤销，撤销把这一批一起拨回。
+    func trash(_ id: UUID) async throws { try await trash([id]) }
+
+    func trash(_ ids: [UUID]) async throws {
+        let undo = try await services.store.trashing(ids)
         #if os(macOS)
-        if openCard == id { openCard = nil }
+        ids.forEach(closeIfOpen)
         #endif
-        say("已删除", action: .undo(undo))
+        say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo(undo))
     }
 
     /// 一键归档"最近完成"的任务。

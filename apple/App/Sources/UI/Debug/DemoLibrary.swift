@@ -124,26 +124,23 @@ enum DemoLibrary {
 
     typealias DemoTask = (project: String?, text: String, done: Bool)
 
-    /// 三级任务：圆桌的"乱序"一句说明、三条提示词（交给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
-    /// 其中一条再带两条（第三级默认折起）；CuePad 的"投送超时"一条提示词（会是已回复，行尾出现"完成"）。
+    /// 两级任务：圆桌的"乱序"四个步骤，每个步骤是叶子、一条提示词（发给 Agent 的状态见 `DebugScene.seedTaskStates`）；
+    /// CuePad 的"投送超时"是叶子、一条提示词（演示里发给 notes，送达后用掉）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         if let timeout = tasks.first(where: { $0.body.hasPrefix("投送队列") }) {
             _ = try await store.createCard(body: "投送超时时先重试一次，还失败再报错，并在提示里写明原因", under: timeout.id)
         }
         guard let order = tasks.first(where: { $0.body.hasPrefix("发言轮次") }) else { return }
-        try await store.updateCard(order.id) { $0.body += "\n第 6 位重连后会排到最前" }
-        for body in [
-            "跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码，告诉我原因和改法",
-            "按首次加入时间排序，把断言也改了，再跑一遍",
-            "改完补 3 个重连用例，覆盖断线、超时、换设备",
+        for (step, prompt) in [
+            ("复现乱序", "跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码，告诉我原因和改法"),
+            ("改成按首次加入时间排序", "按首次加入时间排序，把断言也改了，再跑一遍"),
+            ("补 3 个重连用例", "改完补 3 个重连用例，覆盖断线、超时、换设备"),
+            ("部署到预发环境", "测试都过了就部署到预发环境"),
         ] {
-            _ = try await store.createCard(body: body, under: order.id)
+            let leaf = try await store.createTask(step, under: order.id)
+            _ = try await store.createCard(body: prompt, under: leaf.id)
         }
-        let reproduce = try await store.createTask("复现乱序", under: order.id)
-        try await store.setStatus(reproduce.id, .done)
-        let sort = try await store.createTask("改成按首次加入时间排序", under: order.id)
-        for content in ["补 3 个重连用例", "跑一遍 16 人压测"] { _ = try await store.createTask(content, under: sort.id) }
     }
 
     /// 把项目分组与任务写进库；名称为空的一组是未分类的灵感。

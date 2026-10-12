@@ -50,7 +50,7 @@ struct MainWindow: View {
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { CloseButton() }
             .sharedBackgroundVisibility(.hidden)
-        // 会话页的标题与"⋯"：项常驻、只换里面的内容（`SessionHeader`）
+        // 会话页的标题（`SessionHeader`）；右上的"⋯"（`PageMenuSlot`）是当前页的操作：项常驻、只换里面的内容
         ToolbarItem(placement: .navigation) { SessionTitleSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
@@ -61,7 +61,7 @@ struct MainWindow: View {
                 .help("搜索（⌘K）")
                 .disabled(!workspace.isLibraryReady)
             TasksButton().disabled(!workspace.isLibraryReady)
-            SessionMenuSlot()
+            PageMenuSlot()
         }
     }
 }
@@ -85,6 +85,7 @@ private struct WindowPanels: View {
                 mountsPalette = true
             }
             .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }
+            .panel(item: $workspace.openTask) { TaskSheet(taskID: $0.id) }
             .panel(item: $workspace.attaching) { TaskPicker(idea: $0) }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
             .dialog(
@@ -287,7 +288,9 @@ private struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.page.takesCapture {
+        if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.presses.isSelecting {
+            SelectionBar().padding(.bottom, 16).transition(.opacity)
+        } else if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.page.takesCapture {
             let searching = workspace.searching
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)
@@ -385,9 +388,7 @@ private struct WorkspaceShortcuts: View {
     private func newCard() {
         let project = workspace.currentProject
         workspace.attempt {
-            let card = try await workspace.createCard(in: project)
-            workspace.showsTasks = false
-            workspace.openCard = card.id
+            workspace.open(try await workspace.createCard(in: project))
         }
     }
 }

@@ -5,15 +5,15 @@ import CueText
 import Foundation
 import SwiftUI
 
-/// 发给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上只有提示词发给 Agent（`CardMenu.handsToAgent`）。
+/// 交给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上只有提示词发给 Agent（`CardMenu.handsToAgent`）。
 /// 会话用 Pi 自己的会话 id 认：会话结束后它还是同一个，同一个会话重新打开也不变（桥上的连接 id 含进程号，每次打开都是新的）。
 struct AgentTarget: Equatable {
     var session: String
     var mode: DeliveryMode = .send
 }
 
-/// 发给哪个 Agent 会话的状态与规则：用户选的目标、等用户决定的一次发送、在线会话各归哪个项目，以及据此推出的默认目标、
-/// 目标走哪条路送达、显示的名字与状态。不碰界面提示：成败由调用方（`Workspace.send`）说。
+/// 发给 Agent 会话的状态与规则：等用户决定的一次发送、在线会话各归哪个项目、目标走哪条路送达、显示的名字与状态。
+/// 发到哪只有一条规则（`Workspace.handOff`）：任务绑着的会话，没绑就开一个以任务命名的新会话。不碰界面提示：成败由调用方（`Workspace.send`）说。
 @Observable
 final class SendState {
     /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送；`session` 是 Pi 自己的会话 id。
@@ -32,8 +32,6 @@ final class SendState {
     }
 
     var busy: Busy?
-    /// 用户在本窗口选过或发过的 Agent 会话；nil 或已失效时用本项目的会话（`agentTarget`）。
-    var choice: AgentTarget?
     /// 在线 Pi 会话（桥上的连接 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由 `Workspace.follow` 调用 `refreshSessionProjects` 重算。
     private(set) var projects: [String: UUID] = [:]
@@ -53,13 +51,12 @@ final class SendState {
     }
 
     /// 同步记录里在线的会话此刻能交给：别的 Mac 上的记录在线即可；本机的要桥上连着，或是托管着的（进程歇着也列出，发送时唤醒）——
-    /// 终端里开的会话桥上已经没有、记录还没来得及标成结束的不算（发送时它走"唤醒"那条路，菜单和默认目标也不列它）。
-    /// 菜单与发送走的路都读它。
+    /// 终端里开的会话桥上已经没有、记录还没来得及标成结束的不算（发送时它走"唤醒"那条路）。
     private func isReachable(_ state: PiSessionState) -> Bool {
         state.hostID != services.hostID || state.hosted || liveSession(state.sessionID) != nil
     }
 
-    /// 能交给的在线会话：所有 Mac 上的（手机的交给 Agent 输入框共用同一份规则，见 `HandOffTargets`），去掉本机已不在桥上的。
+    /// 能交给的在线会话：所有 Mac 上的（手机的发给 Agent 输入框共用同一份规则，见 `HandOffTargets`），去掉本机已不在桥上的。
     func onlineTargets(for project: UUID?) -> [PiSessionListItem] {
         HandOffTargets.sessions(services.liveSessions.live, project: project).filter { isReachable($0.state) }
     }
@@ -72,36 +69,7 @@ final class SendState {
         return .ended
     }
 
-    /// 项目的 Pi 会话：按工作目录归入（Store 判定），空闲的在前。
-    /// 先按格子上不变的身份筛出本项目的，再读这些格子的状态：别的项目的会话状态变化不惊动读它的视图。
-    func projectSessions(in project: UUID?) -> [CuePi.PiSession] {
-        guard let project else { return [] }
-        return services.pi.slots
-            .filter { projects[$0.id] == project }
-            .map(\.session)
-            .sorted { !$0.state.isTurnRunning && $1.state.isTurnRunning }
-    }
-
-    /// 当前生效的会话：用户选过或发过的（已结束时照样保留，界面写"已结束"，不悄悄换掉；同一个 Pi 会话重新打开了就是在线的那个），
-    /// 否则本项目的会话——在线的优先（空闲的在前，同样空闲时本机的在前：本机直接送达），都结束了就是刚结束的那个（同样写"已结束"）；
-    /// 本项目一个都没有时为 nil。
-    func agentTarget(for project: UUID?) -> AgentTarget? {
-        if let choice { return choice }
-        guard let project else { return nil }
-        let mine = onlineTargets(for: project).filter { $0.state.projectID == project }
-        if let pick = mine.min(by: { rank($0) < rank($1) }) { return AgentTarget(session: pick.state.sessionID) }
-        return endedTargets.first { $0.projectID == project }.map { AgentTarget(session: $0.sessionID) }
-    }
-
-    private func rank(_ item: PiSessionListItem) -> (busy: Int, remote: Int) {
-        let busy = liveSession(item.state.sessionID)?.state.isTurnRunning ?? item.state.state.known?.isTurnRunning ?? false
-        return (busy ? 1 : 0, item.state.hostID == services.hostID ? 0 : 1)
-    }
-
-    /// 能选作发送目标的已结束会话：这个窗口打开后结束、也没有重新打开的，最近结束的在前。发给它们时在后台把会话恢复起来。
-    var endedTargets: [PiSessionState] { services.liveSessions.recentlyEnded.filter { liveSession($0.sessionID) == nil } }
-
-    /// 本机桥上没有这个会话：发送时先在后台唤醒它。发送钮的状态点照记录写——已结束的写"已结束"，托管着、进程歇着的写它歇着的状态。
+    /// 本机桥上没有这个会话：发送时先在后台唤醒它。
     func isEnded(_ target: AgentTarget) -> Bool {
         if case .ended = route(of: target.session) { true } else { false }
     }
@@ -113,27 +81,7 @@ final class SendState {
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    /// 发送目标此刻显示的状态：本机的取桥上的实时值，别的 Mac 上的取同步记录，已结束的是"已结束"。
-    func shown(_ target: AgentTarget) -> PiShown {
-        switch route(of: target.session) {
-        case .local(let live):
-            return shown(live)
-        case .remote(let state):
-            return services.settings.shown(state, delivery: services.liveSessions.deliveries[state.sessionID])
-        case .ended:
-            let resting = services.liveSessions.live.first { $0.state.sessionID == target.session && $0.state.hostID == services.hostID }
-            return resting.map { services.settings.shown($0) } ?? PiShown(state: .known(.ended))
-        }
-    }
-
-    /// 桥上一个在线会话此刻显示的状态：与会话行同一条规则（`PiShown`），摘要与在路上的话取同步记录。
-    private func shown(_ session: CuePi.PiSession) -> PiShown {
-        services.settings.shown(
-            .live(session, hostID: services.hostID, projectID: projects[session.id], recap: services.liveSessions.recaps[session.sessionID]),
-            delivery: services.liveSessions.deliveries[session.sessionID])
-    }
-
-    /// 完整说法："发给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在菜单项、提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
+    /// 完整说法："发给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在送达后的提示。
     func action(for target: AgentTarget) -> String {
         let name = sessionName(target.session)
         return isEnded(target) ? "唤醒 Agent 会话「\(name)」并发送" : "发给 Agent 会话「\(name)」"
@@ -144,7 +92,7 @@ final class SendState {
         services.pi.session(sessionID: sessionID)
     }
 
-    /// 发给 Agent（存储格式正文），成功记下它为选定目标。返回是否已送达：会话正忙时记下这次发送（`busy`）等用户选，返回 false；其余失败抛出。
+    /// 发给 Agent（存储格式正文）。返回是否已送达：会话正忙时记下这次发送（`busy`）等用户选，返回 false；其余失败抛出。
     func send(_ stored: String, to target: AgentTarget, card: UUID?) async throws -> Bool {
         do {
             switch route(of: target.session) {
@@ -152,7 +100,6 @@ final class SendState {
             case .remote(let session): try await services.send(stored, toRemote: session, mode: target.mode, card: card)
             case .ended: try await services.send(stored, toEnded: target.session, named: sessionName(target.session), card: card)
             }
-            choice = AgentTarget(session: target.session)
             return true
         } catch SendError.piSessionBusy {
             busy = Busy(text: stored, session: target.session, card: card)
@@ -162,19 +109,28 @@ final class SendState {
 }
 
 extension Workspace {
-    /// 右键菜单里提示词的"发给 …"一项；本项目没有会话时是"交给 Agent"并禁用。
-    @ViewBuilder
-    func sendButton(_ target: AgentTarget?, action: @escaping (AgentTarget) -> Void) -> some View {
-        if let target {
-            Button(sendState.action(for: target), systemImage: "paperplane") { action(target) }
-        } else {
-            // 菜单项标签里的第二行 Text 是 macOS 菜单的副标题
-            Button {} label: {
-                Text("交给 Agent")
-                Text("本项目还没有 Agent 会话")
+    /// 把任务的草稿（提示词）发给 Agent：任务绑着会话就发进那个会话，没绑就在项目绑定的文件夹开一个以任务命名的新会话、绑上它
+    /// （没绑文件夹时就地弹选文件夹，取消就不开）。会话正忙时转为询问。送达后草稿就用掉了（Store 删掉它）。
+    func handOff(_ prompt: Card) {
+        let text = Outgoing.text(of: prompt), id = prompt.id, store = services.store
+        attempt {
+            guard let parent = prompt.parentID, let task = try await store.card(parent) else { return }
+            if let session = task.piSessionID {
+                await self.send(text, to: AgentTarget(session: session), card: id)
+            } else {
+                try await self.startSession(for: task, prompt: id, text: text)
             }
-            .disabled(true)
         }
+    }
+
+    /// 在任务所在项目绑定的文件夹开新会话，会话名就是任务名，话作为第一句；开好后任务绑上它。
+    private func startSession(for task: Card, prompt: UUID, text: String) async throws {
+        guard let project = task.projectID else { return say("未分类的任务没有文件夹，开不了会话", isError: true) }
+        if try await services.store.directory(of: project) == nil {
+            guard let path = await ProjectDirectory.pick() else { return }
+            try await services.store.setDirectory(path, for: project)
+        }
+        _ = try await startSession(in: project, prompt: text.nonEmpty, title: task.title, card: prompt) {}
     }
 
     /// 发给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。

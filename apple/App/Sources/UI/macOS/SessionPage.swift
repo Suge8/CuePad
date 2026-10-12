@@ -68,6 +68,9 @@ struct SessionPage: View {
         let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries)
         VStack(spacing: 0) {
             if let session = digest.session {
+                SessionTaskBar(sessionID: sessionID, projectID: session.projectID, title: session.title)
+                    .padding(.horizontal, 24).padding(.top, 8)
+                    .frame(maxWidth: Self.readingWidth)
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil {
                     SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth)
@@ -178,32 +181,17 @@ private struct SessionLink: ViewModifier {
 }
 
 extension Workspace {
-    /// 本机桥上在线的这个 Pi 会话（`sessionID` 是 Pi 自己的会话 id）此刻的状态；不在线为 nil。
-    func liveState(ofSession sessionID: String?) -> PiSessionState? {
-        guard let sessionID, let live = services.pi.session(sessionID: sessionID) else { return nil }
-        return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id], recap: services.liveSessions.recaps[sessionID])
-    }
-
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
     func withLiveState(_ session: PiSessionState) -> PiSessionState {
         guard let live = services.pi.session(sessionID: session.sessionID) else { return session }
         return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap)
     }
 
-    /// 从提示词交给 Agent 的新会话（开在它所在项目绑定的文件夹）：行上先是"正在开会话"，开好后它关联到新会话。
-    /// 没归入项目的为 nil（没有地方可开）；项目还没绑文件夹时就地弹选文件夹面板，选了接着开，取消就不开。
-    func newSessionHandOff(for card: Card) -> ((String) -> Void)? {
-        guard let project = card.projectID else { return nil }
-        let title = catalog?.projects.first { $0.id == project }?.name ?? "新会话", id = card.id
-        return { [self] text in
-            attempt {
-                if try await self.services.store.directory(of: project) == nil {
-                    guard let path = await ProjectDirectory.pick() else { return }
-                    try await self.services.store.setDirectory(path, for: project)
-                }
-                _ = try await self.startSession(in: project, prompt: text.nonEmpty, title: title, card: id) {}
-            }
-        }
+    /// 同 `withLiveState(_:)`，会话列表项的会话换上桥上的实时状态。
+    func withLiveState(_ item: PiSessionListItem) -> PiSessionListItem {
+        var item = item
+        item.state = withLiveState(item.state)
+        return item
     }
 
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。

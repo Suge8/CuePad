@@ -21,15 +21,14 @@ nonisolated struct TaskDrop: Equatable, Sendable {
 }
 
 /// 一组任务的层级（手机任务页与项目页、Mac 任务面板与项目页共用）：按输入顺序（同级的手动顺序）建树，上级不在这组里的当顶层；
-/// 排出可见的行（第三级默认折起），算缩进、反缩进与拖放落点各是哪一次移动。层级数只在 `Card.maxDepth`。
+/// 排出可见的行（只有两级，全部列出、不折起），算缩进、反缩进与拖放落点各是哪一次移动。任务最多几级只在 `Card.maxTaskDepth`（提示词不在树里，不算一级）。
 nonisolated struct TaskTree: Equatable, Sendable {
     struct Row: Identifiable, Equatable, Sendable {
         var task: Card
         /// 0 起。
         var depth: Int
-        /// 这组里的直接子任务数。
+        /// 这组里的直接步骤数。
         var childCount: Int
-        var isExpanded: Bool
         var id: UUID { task.id }
     }
 
@@ -38,11 +37,12 @@ nonisolated struct TaskTree: Equatable, Sendable {
     private var parents: [UUID: UUID] = [:]
     private var tasks: [UUID: Card] = [:]
     private var order: [Card] = []
-    /// 层级限制按库里的整棵树算（含已完成、不显示的子任务）：与 Store 写入时的校验同一口径。
+    /// 层级限制按库里的整棵树算（含已完成、不显示的步骤）：与 Store 写入时的校验同一口径。
     private var everything: [Card] = []
     private var structure = Structure([])
 
-    private static let deepest = Card.maxDepth - 1
+    /// 最深一级任务的缩进层数（0 起）。
+    private static let deepest = Card.maxTaskDepth - 1
 
     /// `ordered` 是要显示的任务（同级手动顺序）；`all` 是同一范围里库中的全部任务（含已完成），省略时同 `ordered`。
     init(_ ordered: [Card], all: [Card]? = nil) {
@@ -86,17 +86,13 @@ nonisolated struct TaskTree: Equatable, Sendable {
 
     func descendants(of id: UUID) -> [UUID] { children(of: id).flatMap { [$0] + descendants(of: $0) } }
 
-    /// 顶层默认展开、第二级默认折起（第三级藏在下面）；`toggled` 里的反过来。
-    static func isExpanded(_ id: UUID, depth: Int, toggled: Set<UUID>) -> Bool { (depth == 0) != toggled.contains(id) }
-
     /// 可见的行：从 `roots`（默认全部顶层）往下，先序。
-    func rows(of roots: [UUID]? = nil, toggled: Set<UUID>) -> [Row] {
+    func rows(of roots: [UUID]? = nil) -> [Row] {
         var rows: [Row] = []
         func visit(_ id: UUID, _ depth: Int) {
             guard let task = tasks[id] else { return }
-            let expanded = Self.isExpanded(id, depth: depth, toggled: toggled)
-            rows.append(Row(task: task, depth: depth, childCount: children(of: id).count, isExpanded: expanded))
-            if expanded { for child in children(of: id) { visit(child, depth + 1) } }
+            rows.append(Row(task: task, depth: depth, childCount: children(of: id).count))
+            for child in children(of: id) { visit(child, depth + 1) }
         }
         for root in roots ?? self.roots { visit(root, 0) }
         return rows
@@ -104,7 +100,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
 
     // MARK: 缩进与反缩进
 
-    /// 成为上一个同级的最后一个子任务；没有上一个同级、或整棵子树会超过最深一级时为 nil。
+    /// 成为上一个同级的最后一个步骤；没有上一个同级、或整棵子树会超过最深一级时为 nil。
     func indent(_ id: UUID) -> TaskMove? {
         let siblings = parents[id].map(children(of:)) ?? roots
         guard let index = siblings.firstIndex(of: id), index > 0 else { return nil }
@@ -122,7 +118,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
     // MARK: 拖放
 
     /// 拖着 `dragged` 停在 `point`（与 `frames` 同一坐标系）时的落点。`rows` 是可见的行，`depthShift` 是手指横向挪了几级
-    /// （右正左负）。停在一行中部是成为它的子任务（排在最后）；在两行之间时，层级取原层级加横移、夹在这个位置可取的范围内。
+    /// （右正左负）。停在一行中部是成为它的步骤（排在最后）；在两行之间时，层级取原层级加横移、夹在这个位置可取的范围内。
     /// 不能落进自己的子树；与原位置相同时为 nil。
     func drop(_ dragged: UUID, rows: [Row], frames: [UUID: CGRect], at point: CGPoint, depthShift: Int) -> TaskDrop? {
         let excluded = Set([dragged] + descendants(of: dragged))
@@ -147,7 +143,7 @@ nonisolated struct TaskTree: Equatable, Sendable {
         let lowest = next?.depth ?? 0
         let highest = min(previous.map { $0.depth + 1 } ?? 0, Self.deepest - height + 1)
         guard lowest <= highest else { return nil }
-        // 想要的层级放不下（上级在库里比看上去深，或带着已完成的深层子任务）时往浅里退
+        // 想要的层级放不下（上级在库里比看上去深，或带着已完成的深层步骤）时往浅里退
         for depth in stride(from: min(max(depth(of: dragged) + depthShift, lowest), highest), through: lowest, by: -1) {
             let move = gapMove(dragged, depth: depth, previous: previous, next: next)
             if case .under(let parent) = move.slot, !fits(dragged, under: parent) { continue }

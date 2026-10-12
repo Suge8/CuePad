@@ -109,6 +109,7 @@ enum Mascot: String {
     case trash = "mascot-trash"
     case clean = "mascot-clean"
     case error = "mascot-error"
+    case hello = "mascot-hello"
 }
 
 /// 项目页与未分类还没有灵感：任务存在时用轻量纸卡；完全空时复用 EmptyState 的整页布局。

@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 
-/// 从灵感或任务"新会话"交给 Agent：开会话的请求带着这条灵感或任务，Mac 开好、会话记录带回认领标识（launchToken）时，
+/// 从灵感或任务"新会话"发给 Agent：开会话的请求带着这条灵感或任务，Mac 开好、会话记录带回认领标识（launchToken）时，
 /// 它就关联到那个会话（piSessionID），与发给已有会话同一个结果；开好前状态点显示"正在开会话"。
 @Suite struct LaunchClaimTests {
   let fixture = try! Fixture()
