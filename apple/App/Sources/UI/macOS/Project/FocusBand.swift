@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 项目页的任务：前几条没做完的任务，一件事一行（步骤只写进度，在任务浮窗里；可拖动排序、拖到一行上成为它的步骤，同任务面板；没列出的与已完成的在底部写个数）。
-/// 每行行尾一格"下一步"（`TaskRow`、`TaskNext`）：Agent 那边要你做什么，或还有几条提示词待发；提示词本身在任务浮窗里。
+/// 项目页的任务：前几条没做完的任务连同它们的步骤，一行一件（可拖动、缩进，同任务面板；没列出的与已完成的在底部写个数）。
+/// 每行行尾一格"下一步"（`TaskRow`、`TaskNext`）：交给的 Agent 要你做什么，或写好了还没开始；要 Agent 做什么在任务浮窗里写。
 /// 会话的全部列表在侧栏，这里不另开一栏。
 /// 项目还没绑文件夹时，任务下面接一行绑定引导（`ProjectFolderGuide`，有同名建议、正在绑时才出现，见 `FolderGuide.shows`）。
 /// 纸与下面的资料、卡片墙同宽；任务限在阅读宽度（`readingWidth`）：行尾的"下一步"跟着这一栏，不在大窗口里甩到一千点开外。
@@ -35,11 +35,11 @@ struct FocusBand: View {
         let roots = data.tasks.roots
         // 与任务面板同一种行；行带内边距（悬停的淡底），整列往外让出这一截，字与栏标题对齐
         VStack(alignment: .leading, spacing: 0) {
-            TaskOutline(tree: data.tasks.topLevel(Array(roots.prefix(Self.visibleTasks)))) { row in
+            TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
                 let agent = cardAgents.items[row.id]
                 TaskRow(
                     task: row.task, session: agent?.state, delivery: agent?.delivery,
-                    subtasks: data.subtasks[row.id], pending: data.prompts[row.id]?.count ?? 0)
+                    subtasks: data.subtasks[row.id], hasDraft: data.prompts[row.id] != nil)
             }
             if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
                 Button { workspace.showsTasks = true } label: { Text(more) }

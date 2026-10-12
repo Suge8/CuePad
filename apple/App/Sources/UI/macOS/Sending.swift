@@ -12,14 +12,8 @@ struct AgentTarget: Equatable {
     var mode: DeliveryMode = .send
 }
 
-/// 一条提示词发给 Agent 的去处：某个会话，或在本项目的文件夹里开新会话。
-enum HandOffDestination: Hashable {
-    case session(String)
-    case newSession
-}
-
-/// 交给哪个 Agent 会话的状态与规则：用户为任务挑的去处、等用户决定的一次发送、在线会话各归哪个项目，以及据此推出的提示词去处（`destination`，
-/// 唯一的规则）、目标走哪条路送达、显示的名字与状态。不碰界面提示：成败由调用方（`Workspace.send`）说。
+/// 发给 Agent 会话的状态与规则：等用户决定的一次发送、在线会话各归哪个项目、目标走哪条路送达、显示的名字与状态。
+/// 发到哪只有一条规则（`Workspace.handOff`）：任务绑着的会话，没绑就开一个以任务命名的新会话。不碰界面提示：成败由调用方（`Workspace.send`）说。
 @Observable
 final class SendState {
     /// Pi 会话正忙时待用户选择马上说或等它做完再说的一次发送；`session` 是 Pi 自己的会话 id。
@@ -38,8 +32,6 @@ final class SendState {
     }
 
     var busy: Busy?
-    /// 用户在本窗口为任务挑的去处，按任务的 id；只对那个任务生效，窗口关了就没有。
-    private(set) var picks: [UUID: HandOffDestination] = [:]
     /// 在线 Pi 会话（桥上的连接 id）各自归属的项目，由 Store 按工作目录判定（`project(containing:)`）；
     /// 会话或目录绑定变化时由 `Workspace.follow` 调用 `refreshSessionProjects` 重算。
     private(set) var projects: [String: UUID] = [:]
@@ -86,38 +78,6 @@ final class SendState {
             .filter { projects[$0.id] == project }
             .map(\.session)
             .sorted { !$0.state.isTurnRunning && $1.state.isTurnRunning }
-    }
-
-    /// 一条提示词默认交给哪里（一个任务一个 Agent 会话，同一任务的提示词接着发到同一个会话，新任务默认开新会话）：
-    /// 用户在本窗口为它所在任务挑过的去处；否则它所在任务或它自己上次交给的会话（`recordSend` 记在两者上），只要这个会话还能送达或能在后台唤醒；
-    /// 否则在本项目绑定的文件夹开新会话；没归入项目的没有默认（nil，由用户选）。`task` 是提示词所在的任务。
-    func destination(of prompt: Card, task: Card?) -> HandOffDestination? {
-        if let pick = prompt.parentID.flatMap({ picks[$0] }), canHand(to: pick) { return pick }
-        if let last = [task?.piSessionID, prompt.piSessionID].compactMap(\.self).first(where: canHand(toSession:)) { return .session(last) }
-        return prompt.projectID == nil ? nil : .newSession
-    }
-
-    /// 为提示词所在的任务挑去处。
-    func pick(_ destination: HandOffDestination, for prompt: Card) {
-        if let task = prompt.parentID { picks[task] = destination }
-    }
-
-    /// 交出去之后任务靠它自己的关联接着发到那个会话，挑过的不再留着。
-    func clearPick(for prompt: Card) {
-        if let task = prompt.parentID { picks[task] = nil }
-    }
-
-    private func canHand(to destination: HandOffDestination) -> Bool {
-        switch destination {
-        case .session(let id): canHand(toSession: id)
-        case .newSession: true
-        }
-    }
-
-    /// 会话此刻能交给：在线可达的，或本窗口刚结束、可以在后台唤醒的。
-    private func canHand(toSession sessionID: String) -> Bool {
-        services.liveSessions.live.contains { $0.state.sessionID == sessionID && isReachable($0.state) }
-            || endedTargets.contains { $0.sessionID == sessionID }
     }
 
     /// 能选作发送目标的已结束会话：这个窗口打开后结束、也没有重新打开的，最近结束的在前。发给它们时在后台把会话恢复起来。
@@ -183,32 +143,28 @@ final class SendState {
 }
 
 extension Workspace {
-    /// 把提示词发给 Agent，去处按 `SendState.destination`：整条正文，或 `text`（选中的部分，变量已填）。
-    /// 会话正忙时转为询问；新会话开在项目绑定的文件夹（没绑时就地弹选文件夹，取消就不开）；没有默认去处时打开提示词的编辑页去选。
-    func handOff(_ prompt: Card, text: String? = nil) {
-        let text = text ?? Outgoing.text(of: prompt), id = prompt.id
+    /// 把任务的草稿（提示词）发给 Agent：任务绑着会话就发进那个会话，没绑就在项目绑定的文件夹开一个以任务命名的新会话、绑上它
+    /// （没绑文件夹时就地弹选文件夹，取消就不开）。会话正忙时转为询问。送达后草稿就用掉了（Store 删掉它）。
+    func handOff(_ prompt: Card) {
+        let text = Outgoing.text(of: prompt), id = prompt.id, store = services.store
         attempt {
-            var task: Card?
-            if let parent = prompt.parentID { task = try await self.services.store.card(parent) }
-            switch self.sendState.destination(of: prompt, task: task) {
-            // 交出去之后去处记在任务上（`recordSend`），挑过的不再留着：之后只认任务上记的那一个
-            case .session(let session): if await self.send(text, to: AgentTarget(session: session), card: id) { self.sendState.clearPick(for: prompt) }
-            case .newSession: try await self.startNewSession(for: prompt, text: text)
-            case nil: self.open(prompt)
+            guard let parent = prompt.parentID, let task = try await store.card(parent) else { return }
+            if let session = task.piSessionID {
+                await self.send(text, to: AgentTarget(session: session), card: id)
+            } else {
+                try await self.startSession(for: task, prompt: id, text: text)
             }
         }
     }
 
-    /// 在提示词所在项目绑定的文件夹开新会话，话作为第一句：行上先是"正在开会话"，开好后它和任务关联到新会话。
-    private func startNewSession(for prompt: Card, text: String) async throws {
-        guard let project = prompt.projectID else { return }
+    /// 在任务所在项目绑定的文件夹开新会话，会话名就是任务名，话作为第一句；开好后任务绑上它。
+    private func startSession(for task: Card, prompt: UUID, text: String) async throws {
+        guard let project = task.projectID else { return say("未分类的任务没有文件夹，开不了会话", isError: true) }
         if try await services.store.directory(of: project) == nil {
             guard let path = await ProjectDirectory.pick() else { return }
             try await services.store.setDirectory(path, for: project)
         }
-        let title = catalog?.project(project)?.name ?? "新会话"
-        _ = try await startSession(in: project, prompt: text.nonEmpty, title: title, card: prompt.id) {}
-        sendState.clearPick(for: prompt)
+        _ = try await startSession(in: project, prompt: text.nonEmpty, title: task.title, card: prompt) {}
     }
 
     /// 发给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。

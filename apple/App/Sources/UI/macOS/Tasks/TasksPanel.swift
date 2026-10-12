@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中、待办、最近完成（折起），跨项目，
-/// 一件事一行（`TaskOutline` 与 `TaskRow`：按住拖动排序、拖到一条上成为它的步骤；步骤只写进度，在任务浮窗里），
+/// 步骤缩进跟在任务下（`TaskOutline` 与 `TaskRow`：按住拖动排序、拖到一条上成为它的步骤、横向拖改层级），一行一件，
 /// 顶层写所在项目，行尾一格"下一步"（同项目页）。点任务弹出任务浮窗（面板留着）。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
@@ -12,13 +12,13 @@ struct TasksPanel: View {
     @State private var board: TaskBoard?
     @State private var showsCompleted = false
 
-    /// 看得见的行（"最近完成"展开时再加上它）多到面板放不下时（行至少 34pt，640pt 的面板里二十行就满了）行按需建、面板定高：
+    /// 看得见的行（含步骤，"最近完成"展开时再加上它）多到面板放不下时（行至少 34pt，640pt 的面板里二十行就满了）行按需建、面板定高：
     /// 普通栈要在打开的那一圈把上百行都量一遍（大库上约 150ms）。不多时照旧由内容撑开高度，懒加载栈在高度跟着内容变时会漏画。
     private static let lazyFrom = 20
 
     private func isLazy(_ board: TaskBoard?) -> Bool {
         guard let board else { return false }
-        let open = board.inProgress.count + board.todo.count
+        let open = board.tree.rows(of: (board.inProgress + board.todo).map(\.id)).count
         return open + (showsCompleted ? board.done.count : 0) >= Self.lazyFrom
     }
 
@@ -100,12 +100,12 @@ struct TasksPanel: View {
             .font(Typography.label).foregroundStyle(.secondary)
             .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 4)
             .accessibilityAddTraits(.isHeader)
-            TaskOutline(tree: board.tree.topLevel(items.map(\.id)), lazy: lazy) { row in
+            TaskOutline(tree: board.tree, roots: items.map(\.id), lazy: lazy) { row in
                 let info = board.rows[row.id]
                 TaskRow(
                     task: row.task, project: info?.project,
                     session: info?.session, delivery: info?.delivery, subtasks: board.subtasks[row.id],
-                    pending: board.prompts[row.id]?.count ?? 0)
+                    hasDraft: board.prompts[row.id] != nil)
             }
             .padding(.horizontal, 12)
         }

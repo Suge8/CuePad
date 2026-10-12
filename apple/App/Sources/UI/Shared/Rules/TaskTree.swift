@@ -75,11 +75,6 @@ nonisolated struct TaskTree: Equatable, Sendable {
         let kept = Set(roots.flatMap { [$0] + descendants(of: $0) })
         return TaskTree(order.filter { kept.contains($0.id) }, all: everything)
     }
-    /// 只留这些顶层任务、不带它们的步骤（Mac 的项目页与任务面板一件事一行，步骤在任务浮窗里）；拖到一行上照样成为它的步骤。
-    func topLevel(_ roots: [UUID]) -> TaskTree {
-        let kept = Set(roots)
-        return TaskTree(order.filter { kept.contains($0.id) }, all: everything)
-    }
     func task(_ id: UUID) -> Card? { tasks[id] }
     func children(of id: UUID) -> [UUID] { children[id] ?? [] }
 

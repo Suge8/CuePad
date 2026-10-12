@@ -138,12 +138,15 @@ final class Workspace {
         presses.dismiss()
     }
 
-    /// 打开一条灵感或任务：任务在浮窗里看（盖在当前页上，右上角的任务面板留着）；提示词是它任务的浮窗、它自己就地展开编辑；
-    /// 散放的灵感进整页的编辑页。
+    /// 打开一条灵感或任务：任务在浮窗里看（盖在当前页上，右上角的任务面板留着；步骤是它上级的浮窗、选中这一步）；
+    /// 任务的草稿（提示词）打开它的任务；散放的灵感进整页的编辑页。
     func open(_ card: Card) {
         presses.clearSelection()
-        if card.isTask { return openTask = .init(id: card.id) }
-        if let task = card.parentID { return openTask = .init(id: task, prompt: card.id) }
+        if card.isTask { return openTask = card.parentID.map { .init(id: $0, step: card.id) } ?? .init(id: card.id) }
+        if let task = card.parentID {
+            let store = services.store
+            return attempt { if let task = try await store.card(task) { self.open(task) } }
+        }
         openTask = nil
         showsTasks = false
         openCard = card.id
@@ -259,10 +262,16 @@ final class Workspace {
 
     /// 点任务的圆圈：待办与进行中都变完成，完成的回到待办。下一个状态由 Store 在一个事务里按当前值定（`toggleDone`）：
     /// 界面手里的副本可能已过时（列表还没刷新就又点了一次）。
+    /// 完成就是做完了：它（和它的步骤）交给的会话还在线的，一起结束（`end`）。
     func toggle(_ id: UUID) async throws {
         // 做完了就给一个归档（不自动归档）
-        if try await services.store.toggleDone(id) == .done {
-            say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) })
+        guard try await services.store.toggleDone(id) == .done else { return }
+        say("已完成", action: NoticeAction(title: "归档") { try await self.archive(id) })
+        let store = services.store
+        let cards = [try await store.card(id)].compactMap(\.self) + (try await store.children(of: id))
+        let sessions = Set(cards.compactMap(\.piSessionID))
+        for state in services.liveSessions.live.map(\.state) where sessions.contains(state.sessionID) && state.state != .known(.ended) {
+            await end(state)
         }
     }
 
