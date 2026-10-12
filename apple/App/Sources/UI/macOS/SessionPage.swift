@@ -68,6 +68,9 @@ struct SessionPage: View {
         let shownEnd = DeliveryRequest.shownEnd(in: digest.deliveries)
         VStack(spacing: 0) {
             if let session = digest.session {
+                SessionTaskBar(sessionID: sessionID, projectID: session.projectID, title: session.title)
+                    .padding(.horizontal, 24).padding(.top, 8)
+                    .frame(maxWidth: Self.readingWidth)
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil {
                     SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth)
