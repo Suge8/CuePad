@@ -9,7 +9,7 @@ nonisolated private struct PaletteData: Sendable, Equatable {
     var projects: [Project]
     var lastSends: [UUID: LastSend]
     var targets: [SendTarget]
-    /// 结果里的任务：上级的标题与下级（提示词、子任务）各自做完没有，预览里写它的进度。
+    /// 结果里的任务：上级的标题与下级（提示词、步骤）各自做完没有，预览里写它的进度。
     var parents: [UUID: String]
     var subtasks: [UUID: TaskProgress]
 }
@@ -264,7 +264,7 @@ struct SearchPalette: View {
         }
     }
 
-    /// 任务预览的一行："上级：修乱序 · 子任务 1/2"；什么都没有时不写。
+    /// 任务预览的一行："上级：修乱序 · 步骤 1/2"；什么都没有时不写。
     private static func taskFacts(parent: String?, subtasks: TaskProgress?) -> Dotted? {
         Dotted(parent.map { "上级：\($0)" }, subtasks.map(TaskCopy.progress)).nonEmpty
     }

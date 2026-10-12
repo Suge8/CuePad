@@ -112,7 +112,7 @@ struct TaskSheet: View {
     }
 }
 
-/// 步骤：任务里的勾选清单（数据上是这件事的子任务），点圈勾掉、右键是它的菜单；末尾一行添加。没有步骤时只有那一行。
+/// 步骤：任务里的勾选清单（数据上是挂在这件事下的任务），点圈勾掉、右键是它的菜单；末尾一行添加。没有步骤时只有那一行。
 private struct Steps: View {
     let task: Card
     let steps: [Card]
@@ -213,7 +213,7 @@ private struct PromptEditor: View {
     }
 }
 
-/// 浮窗一次读出的东西：任务、所在项目、上级（子任务才有）与下级。
+/// 浮窗一次读出的东西：任务、所在项目、上级（步骤才有）与下级。
 nonisolated private struct SheetData: Sendable, Equatable {
     var task: Card
     var project: Project?

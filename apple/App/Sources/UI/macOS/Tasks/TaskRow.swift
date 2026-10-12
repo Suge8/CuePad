@@ -2,19 +2,18 @@
 import CueStore
 import SwiftUI
 
-/// 一条任务（项目页的任务区与任务面板同一种行），一行：完成圈（点它完成；还有没完成的子任务时先问）、标题（面板里跨项目时后面写所在项目）、
-/// 子任务进度，行尾一格"下一步"（`TaskNext`：Agent 等你确认、出错、有新回复、正在做，点了打开会话；或"待发 N 条"，点了打开任务浮窗）。
+/// 一条任务（项目页的任务区与任务面板同一种行），一行：完成圈（点它完成；还有没勾的步骤时先问）、标题（面板里跨项目时后面写所在项目）、
+/// 步骤进度，行尾一格"下一步"（`TaskNext`：Agent 等你确认、出错、有新回复、正在做，点了打开会话；或"待发 N 条"，点了打开任务浮窗）。
 /// 一个任务一个 Agent 会话，它此刻怎样只在这一格说；提示词不列在这里，在任务浮窗里。点行的其余地方弹出任务浮窗（`TaskSheet`）。
-/// 顶层的行与上一组之间多留一点空，子任务的圈小一号：一眼分出哪几条是一件事。右键是 `CardActions`。
+/// 右键是 `CardActions`。
 struct TaskRow: View {
     let task: Card
-    var depth = 0
     /// 跨项目列着时写上所在项目；项目页里不写。
     var project: Project?
     /// 交给 Agent 的任务：同步来的会话记录（别的 Mac 上的也有）与发给它的最近一条投送请求；本机在线的会话在行里换上桥上的实时状态。
     var session: PiSessionState?
     var delivery: DeliveryRequest?
-    /// 子任务做了几个（完成圈与进度由它推出）。
+    /// 步骤勾了几个（完成圈与进度由它推出）。
     var subtasks: TaskProgress?
     /// 写了还没发的提示词有几条（送达的就用掉了，不算）。
     var pending = 0
@@ -43,13 +42,13 @@ struct TaskRow: View {
         let next = next
         HStack(alignment: .firstTextBaseline, spacing: Self.columnGap) {
             Button { toggle() } label: {
-                TaskRingView(status: task.status, ring: TaskRing(subtasks), done: done, size: depth == 0 ? 15 : 13)
+                TaskRingView(status: task.status, ring: TaskRing(subtasks), done: done, size: 15)
                     .frame(width: Self.ringColumn)
             }
             .buttonStyle(PressStyle(scale: 0.85))
             .accessibilityLabel(done ? "回到待办" : "完成")
             Text(task.title)
-                .font(depth == 0 ? Typography.body.weight(.medium) : Typography.body)
+                .font(Typography.body.weight(.medium))
                 .strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
                 .lineLimit(1)
                 .layoutPriority(1)
@@ -75,9 +74,8 @@ struct TaskRow: View {
         .onHover { hovering = $0 }
         .onTapGesture(perform: open)
         .contextMenu { CardActions(card: task) }
-        // 顶层的一组与上一组之间多留一点空
-        .padding(.top, depth == 0 ? 6 : 0)
-        // 读屏：整行一个元素"任务内容，项目，子任务进度，下一步"，值是状态，默认动作切换完成（文案见 TaskSpeech）
+        .padding(.vertical, 2)
+        // 读屏：整行一个元素"任务内容，项目，步骤进度，下一步"，值是状态，默认动作切换完成（文案见 TaskSpeech）
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([task.title, project?.name, subtasks.map(TaskCopy.progress), next.map(NextStep.speech)].compactMap { $0 }.joined(separator: "，"))
         .accessibilityValue(TaskSpeech.value(task.status))

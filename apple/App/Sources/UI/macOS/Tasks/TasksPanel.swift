@@ -103,7 +103,7 @@ struct TasksPanel: View {
             TaskOutline(tree: board.tree.topLevel(items.map(\.id)), lazy: lazy) { row in
                 let info = board.rows[row.id]
                 TaskRow(
-                    task: row.task, depth: row.depth, project: row.depth == 0 ? info?.project : nil,
+                    task: row.task, project: info?.project,
                     session: info?.session, delivery: info?.delivery, subtasks: board.subtasks[row.id],
                     pending: board.prompts[row.id]?.count ?? 0)
             }

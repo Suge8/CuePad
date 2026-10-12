@@ -38,7 +38,7 @@ struct FocusBand: View {
             TaskOutline(tree: data.tasks.topLevel(Array(roots.prefix(Self.visibleTasks)))) { row in
                 let agent = cardAgents.items[row.id]
                 TaskRow(
-                    task: row.task, depth: row.depth, session: agent?.state, delivery: agent?.delivery,
+                    task: row.task, session: agent?.state, delivery: agent?.delivery,
                     subtasks: data.subtasks[row.id], pending: data.prompts[row.id]?.count ?? 0)
             }
             if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
