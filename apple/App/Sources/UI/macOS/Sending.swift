@@ -51,8 +51,7 @@ final class SendState {
     }
 
     /// 同步记录里在线的会话此刻能交给：别的 Mac 上的记录在线即可；本机的要桥上连着，或是托管着的（进程歇着也列出，发送时唤醒）——
-    /// 终端里开的会话桥上已经没有、记录还没来得及标成结束的不算（发送时它走"唤醒"那条路，菜单和默认目标也不列它）。
-    /// 菜单与发送走的路都读它。
+    /// 终端里开的会话桥上已经没有、记录还没来得及标成结束的不算（发送时它走"唤醒"那条路）。
     private func isReachable(_ state: PiSessionState) -> Bool {
         state.hostID != services.hostID || state.hosted || liveSession(state.sessionID) != nil
     }
@@ -70,20 +69,7 @@ final class SendState {
         return .ended
     }
 
-    /// 项目的 Pi 会话：按工作目录归入（Store 判定），空闲的在前。
-    /// 先按格子上不变的身份筛出本项目的，再读这些格子的状态：别的项目的会话状态变化不惊动读它的视图。
-    func projectSessions(in project: UUID?) -> [CuePi.PiSession] {
-        guard let project else { return [] }
-        return services.pi.slots
-            .filter { projects[$0.id] == project }
-            .map(\.session)
-            .sorted { !$0.state.isTurnRunning && $1.state.isTurnRunning }
-    }
-
-    /// 能选作发送目标的已结束会话：这个窗口打开后结束、也没有重新打开的，最近结束的在前。发给它们时在后台把会话恢复起来。
-    var endedTargets: [PiSessionState] { services.liveSessions.recentlyEnded.filter { liveSession($0.sessionID) == nil } }
-
-    /// 本机桥上没有这个会话：发送时先在后台唤醒它。去处里的状态点照记录写——已结束的写"已结束"，托管着、进程歇着的写它歇着的状态。
+    /// 本机桥上没有这个会话：发送时先在后台唤醒它。
     func isEnded(_ target: AgentTarget) -> Bool {
         if case .ended = route(of: target.session) { true } else { false }
     }
@@ -95,27 +81,7 @@ final class SendState {
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    /// 发送目标此刻显示的状态：本机的取桥上的实时值，别的 Mac 上的取同步记录，已结束的是"已结束"。
-    func shown(_ target: AgentTarget) -> PiShown {
-        switch route(of: target.session) {
-        case .local(let live):
-            return shown(live)
-        case .remote(let state):
-            return services.settings.shown(state, delivery: services.liveSessions.deliveries[state.sessionID])
-        case .ended:
-            let resting = services.liveSessions.live.first { $0.state.sessionID == target.session && $0.state.hostID == services.hostID }
-            return resting.map { services.settings.shown($0) } ?? PiShown(state: .known(.ended))
-        }
-    }
-
-    /// 桥上一个在线会话此刻显示的状态：与会话行同一条规则（`PiShown`），摘要与在路上的话取同步记录。
-    private func shown(_ session: CuePi.PiSession) -> PiShown {
-        services.settings.shown(
-            .live(session, hostID: services.hostID, projectID: projects[session.id], recap: services.liveSessions.recaps[session.sessionID]),
-            delivery: services.liveSessions.deliveries[session.sessionID])
-    }
-
-    /// 完整说法："发给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
+    /// 完整说法："发给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在送达后的提示。
     func action(for target: AgentTarget) -> String {
         let name = sessionName(target.session)
         return isEnded(target) ? "唤醒 Agent 会话「\(name)」并发送" : "发给 Agent 会话「\(name)」"

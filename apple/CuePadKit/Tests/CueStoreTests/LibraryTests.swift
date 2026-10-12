@@ -188,7 +188,7 @@ import Testing
   }
 
   /// 结构 27 的库里有步骤的任务下可能挂着提示词、记着会话，步骤下也可能有好几条提示词：升到 28 时有步骤的任务的提示词移到第一个没完成的步骤、
-  /// 会话交给第一个步骤（步骤已有会话的丢弃上级的），一个叶子的多条提示词按顺序并成一条，带新的修改时间；发送记录不动。
+  /// 会话也交给它（它已有会话的丢弃上级的），一个叶子的多条提示词按顺序并成一条，带新的修改时间；发送记录不动。
   @Test func schema27LibraryPutsDraftsAndSessionsOnLeaves() async throws {
     let top = try await store.createTask("修乱序", in: nil)
     let done = try await store.createTask("复现", under: top.id)
@@ -212,7 +212,7 @@ import Testing
     #expect(merged.map(\.id) == [ideas[0].id] && merged[0].modifiedAt > before)
     #expect(merged[0].body == "任务自己的\n\n改排序的第一条\n\n改排序的第二条")
     #expect(try await upgraded.card(top.id)?.piSessionID == nil)
-    #expect(try await upgraded.card(done.id)?.piSessionID == "s1")
+    #expect(try await upgraded.card(done.id)?.piSessionID == nil)
     #expect(try await upgraded.card(open.id)?.piSessionID == "s2")
   }
 

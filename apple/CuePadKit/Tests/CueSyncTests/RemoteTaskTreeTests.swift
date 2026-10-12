@@ -130,14 +130,13 @@ import Testing
     #expect(try await store.card(note.id)?.parentID == b1.id)  // b1 是步骤也是叶子：草稿留在它下面
   }
 
-  @Test func 提示词与会话只在叶子上_远端让叶子有了步骤_草稿落到第一个没完成的步骤并成一条_会话交给第一个步骤() async throws {
+  @Test func 提示词与会话只在叶子上_远端让叶子有了步骤_草稿与会话落到第一个没完成的步骤_草稿并成一条() async throws {
     let top = try await store.createTask("上线", in: nil)
     let first = try await store.createTask("备份", in: nil)
     let second = try await store.createTask("发布", in: nil)
     let later = try await store.createCard(in: nil, body: "第二条")
     let earlier = try await store.createCard(in: nil, body: "第一条")  // 新灵感排在最前：排序键更小
     try await store.linkCard(top.id, toSession: "s1")
-    try await store.linkCard(second.id, toSession: "s2")
     try await pushed()
 
     func record(_ card: Card, parent: UUID, sortKey: String, task: Bool = true, done: Bool = false, session: String? = nil) -> CKRecord {
@@ -150,7 +149,7 @@ import Testing
     }
     // 另一台设备给"上线"加了两个步骤（备份已完成），又把两条灵感挂在"上线"下
     let changes = [
-      record(first, parent: top.id, sortKey: "a", done: true), record(second, parent: top.id, sortKey: "b", session: "s2"),
+      record(first, parent: top.id, sortKey: "a", done: true), record(second, parent: top.id, sortKey: "b"),
       record(later, parent: top.id, sortKey: "c", task: false), record(earlier, parent: top.id, sortKey: "b", task: false),
     ]
     await rig.coordinator.handle(.fetched(modifications: changes, deletions: []))
@@ -160,8 +159,8 @@ import Testing
     #expect(try await store.card(later.id) == nil)
     #expect(try await store.children(of: top.id).filter { !$0.isTask }.isEmpty)
     #expect(try await store.card(top.id)?.piSessionID == nil)
-    #expect(try await store.card(first.id)?.piSessionID == "s1")
-    #expect(try await store.card(second.id)?.piSessionID == "s2")
+    #expect(try await store.card(first.id)?.piSessionID == nil)
+    #expect(try await store.card(second.id)?.piSessionID == "s1")
   }
 
   @Test func 父任务在别处换了项目_步骤跟过去_父任务还没到的不动() async throws {

@@ -19,7 +19,7 @@ struct CardLinks {
   private static let columns = "id, parentID, projectID, todoAt IS NOT NULL, isPinned, completedAt IS NOT NULL, piSessionID IS NOT NULL"
 
   private(set) var links: [UUID: Link]
-  /// 全部卡片按同级顺序（排序键、id）排的 id：合并提示词与选第一个步骤都按它。
+  /// 全部卡片按同级顺序（排序键、id）排的 id：合并提示词与选落点的步骤都按它。
   private var order: [UUID]
   private var rank: [UUID: Int]
   private var children: [UUID: [UUID]] = [:]
@@ -59,7 +59,7 @@ struct CardLinks {
   /// 任务的步骤（没删除的下级任务），按顺序。
   private func steps(of task: UUID) -> [UUID] { (children[task] ?? []).filter { links[$0]?.isTask == true } }
 
-  /// 提示词挂在任务下时实际落在哪个叶子：任务自己是叶子就是它；有步骤的话是第一个没完成的步骤，没有就第一个步骤。
+  /// 提示词与会话从任务移下来时落在哪个叶子：任务自己是叶子就是它；有步骤的话是第一个没完成的步骤，没有就第一个步骤。
   func home(of task: UUID) -> UUID { Self.leaf(among: steps(of: task), links) ?? task }
 
   private static func leaf(among steps: [UUID], _ links: [UUID: Link]) -> UUID? { steps.first { links[$0]?.isDone == false } ?? steps.first }
@@ -84,14 +84,14 @@ extension CardLinks {
     var links: [UUID: Link] = [:]
     /// 留下的那条提示词 → 并进它的其余提示词（按顺序；其余的删掉）。
     var merges: [UUID: [UUID]] = [:]
-    /// 有步骤的任务记着的会话 → 接手的第一个步骤；步骤自己已有会话时为 nil（任务的丢弃）。
+    /// 有步骤的任务记着的会话 → 接手的叶子（`home(of:)`）；叶子自己已有会话时为 nil（任务的丢弃）。
     var sessions: [(task: UUID, step: UUID?)] = []
   }
 
   /// 离线并发的改动合并后可能违反层级规则；按确定的规则收敛，各设备算出同一结果：
   /// 挂在灵感下的（别处取消了要做）提到那个灵感的位置（挂到它的上级下）；环里 id 最小的回到顶层；
   /// 第 `maxTaskDepth + 1` 级的任务改挂到上级的上级；下级跟随上级的项目；
-  /// 有步骤的任务下的提示词改挂到 `home(of:)`、记着的会话交给第一个步骤；一个叶子多条提示词的，按顺序并进第一条。
+  /// 有步骤的任务下的提示词改挂到 `home(of:)`、记着的会话也交给它；一个叶子多条提示词的，按顺序并进第一条。
   ///
   /// 只查 `changed`（这次远端变更涉及的卡）、它们的全部子孙，以及它们的上级与上级的全部下级（步骤增减会改变这些下级的归属）：
   /// 层级规则只看一张卡自己、它的上级链和它的下级，这次没动过的卡，上级链上没有动过的就不会新违规（应用之前层级是成立的）。
@@ -129,7 +129,7 @@ extension CardLinks {
     return repairs
   }
 
-  /// 提示词与会话只在叶子上（见类型注释）：有步骤的任务把提示词改挂到 `home(of:)`、会话交给第一个步骤；叶子上多条提示词并进第一条。
+  /// 提示词与会话只在叶子上（见类型注释）：有步骤的任务把提示词与会话都交给 `home(of:)`；叶子上多条提示词并进第一条。
   /// `region` 里的任务与它们的上级各查一遍（步骤刚加上或挪走的上级就是这样被查到的）。
   private mutating func settleHandoffs(in region: [UUID], _ repairs: inout Repairs) {
     let tasks = Set(region.flatMap { id in [id, links[id]?.parent].compactMap(\.self) }).filter { links[$0]?.isTask == true }
@@ -149,7 +149,7 @@ extension CardLinks {
         relink(draft, parent: home)
         kids[home, default: []].append(draft)
       }
-      if links[task]?.hasSession == true { repairs.sessions.append((task, links[steps[0]]?.hasSession == true ? nil : steps[0])) }
+      if links[task]?.hasSession == true { repairs.sessions.append((task, links[home]?.hasSession == true ? nil : home)) }
       leaves.insert(home)
     }
     for leaf in leaves.sorted(by: { $0.uuidString < $1.uuidString }) {
