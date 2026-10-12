@@ -172,6 +172,33 @@ import Testing
     #expect(try await upgraded.card(prompt.id)?.parentID == sub.id)
   }
 
+  /// 结构 25 的库里已经发出去的提示词（记着交给的会话、没有在路上或失败的请求）升到 26 时删掉，任务记下的会话与发送记录留着；
+  /// 资料、没发的、没送到的、不挂在任务下的灵感不动。
+  @Test func schema25LibraryDropsDeliveredPrompts() async throws {
+    let atlas = SendTarget(kind: .piSession, name: "atlas", ref: "s1")
+    let task = try await store.createTask("修乱序", in: nil)
+    let delivered = try await store.createCard(body: "先复现", under: task.id)
+    let resource = try await store.createCard(body: "常用说明", under: task.id)
+    let unsent = try await store.createCard(body: "还没发", under: task.id)
+    let failed = try await store.createCard(body: "没送到", under: task.id)
+    let loose = try await store.createCard(in: nil, body: "散放的灵感")
+    try await store.recordSend(delivered.body, to: atlas, card: delivered.id)
+    try await store.linkCard(resource.id, toSession: "s1")
+    try await store.updateCard(resource.id) { $0.isPinned = true }
+    try await store.linkCard(loose.id, toSession: "s1")
+    let request = try await store.requestDelivery(failed.body, to: atlas, on: "mac", card: failed.id)
+    try await store.linkCard(failed.id, toSession: "s1")
+    try RawDB(fixture.url).exec("UPDATE deliveryRequests SET status = 'failed' WHERE id = '\(request.id.uuidString.lowercased())'; PRAGMA user_version = 25;")
+
+    let upgraded = try CueStore(url: fixture.url)
+    #expect(try await upgraded.children(of: task.id).map(\.id) == [resource.id, unsent.id, failed.id])
+    #expect(try await upgraded.card(loose.id) != nil)
+    #expect(try await upgraded.card(task.id)?.piSessionID == "s1")
+    #expect(try await upgraded.trashedCards().isEmpty)
+    #expect(try await upgraded.archived().isEmpty)
+    #expect(try await upgraded.sendRecords().map(\.cardID) == [nil])
+  }
+
   /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
   @Test(arguments: [
     (CueStore.supportedSchemaVersions.upperBound + 1, CueStoreError.unsupportedSchemaVersion(CueStore.supportedSchemaVersions.upperBound + 1)),

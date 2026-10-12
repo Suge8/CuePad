@@ -458,6 +458,10 @@ extension CueStore {
   /// 删卡并在同一事务里清理引用它的记录（同步表没有外键级联）。返回这些卡正文引用过的图片哈希，
   /// 由调用方在同一事务里交给 `reclaimAttachments` 判断是否已无人引用。
   private func purgeCards(where condition: String, _ arguments: [any SQLBindable] = []) throws -> Set<String> {
+    try Self.purgeCards(where: condition, arguments, in: db)
+  }
+
+  static func purgeCards(where condition: String, _ arguments: [any SQLBindable] = [], in db: SQLite) throws -> Set<String> {
     let ids = "SELECT id FROM cards WHERE \(condition)"
     let bodies = try db.query("SELECT body FROM cards WHERE \(condition)", arguments) { $0.text(0) }
     let referenced = Set(bodies.flatMap(CueFormat.imageHashes(in:)))

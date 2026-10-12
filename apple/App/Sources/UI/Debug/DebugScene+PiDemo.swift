@@ -41,17 +41,19 @@ extension DebugScene {
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 
-    /// 任务三态与提示词：圆桌"乱序"的第一、二、四条提示词发给了会话 notes、atlas、deploy（已发），第三条没发（任务进行中）；
-    /// CuePad"投送超时"的提示词发给 notes；CuePad、Flow、圆桌各完成一条（先后完成）。
+    /// 任务三态与提示词：圆桌"乱序"的第一、二、四条提示词发给了会话 notes、atlas、deploy（送达，提示词已用掉，任务记着会话），第三条没发（任务进行中）；
+    /// CuePad"投送超时"的提示词发给 notes（同样用掉）；CuePad、Flow、圆桌各完成一条（先后完成）。
     private static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
         guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }
         func prompts(_ prefix: String) async -> [Card] {
             guard let task = tasks.first(where: { $0.body.hasPrefix(prefix) }) else { return [] }
             return ((try? await store.children(of: task.id)) ?? []).filter { !$0.isTask }
         }
+        // 送达的提示词已用掉（资料库里删了），任务记着会话
         func send(_ prompt: Card?, to session: String) async {
             guard let prompt else { return }
             _ = try? await store.recordSend(prompt.body, to: SendTarget(kind: .piSession, name: session, ref: session), card: prompt.id)
+            try? await store.purgeCard(prompt.id)
         }
         let order = await prompts("发言轮次"), timeout = await prompts("投送队列")
         await send(order.first, to: "notes")

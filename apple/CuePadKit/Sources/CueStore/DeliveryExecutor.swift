@@ -164,16 +164,21 @@ extension CueStore {
 
   /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。只改还没有结果的（放弃的是待领取的、执行的是执行中的），
   /// 不覆盖已经写下的结果（见 `failAcceptedDeliveries`）。
+  /// 发给会话（或开新会话）成功时，在同一个事务里把它带着的提示词用掉（`consumePrompt`）。
   fileprivate func finishDelivery(_ id: UUID, _ outcome: DeliveryOutcome, at completed: Date) throws {
     let (status, detail): (DeliveryStatus, String?) =
       switch outcome {
       case .succeeded: (.succeeded, nil)
       case .failed(let reason): (.failed, reason)
       }
-    try write {
-      try db.run(
-        "UPDATE deliveryRequests SET status = ?, resultDetail = ?, completedAt = ?, modifiedAt = ? WHERE id = ? AND status IN ('pending', 'executing')",
-        [status.rawValue, detail, completed, Date.stamp, id])
+    try reportingFileFailures {
+      try write {
+        try db.run(
+          "UPDATE deliveryRequests SET status = ?, resultDetail = ?, completedAt = ?, modifiedAt = ? WHERE id = ? AND status IN ('pending', 'executing')",
+          [status.rawValue, detail, completed, Date.stamp, id])
+        guard status == .succeeded, db.changes > 0 else { return [] }
+        return try reclaimAttachments(consumePrompt(deliveredBy: id))
+      }
     }
   }
 
@@ -198,9 +203,7 @@ extension CueStore {
     let awaitingClaim = """
       mode = 'start' AND status = 'succeeded' AND cardID IS NOT NULL AND completedAt >= ?
         AND createdAt = (SELECT MAX(q.createdAt) FROM deliveryRequests q WHERE q.cardID = deliveryRequests.cardID)
-        AND NOT EXISTS (
-          SELECT 1 FROM piSessionStates s
-          WHERE s.launchToken = CASE WHEN json_valid(deliveryRequests.content) THEN json_extract(deliveryRequests.content, '$.token') END)
+        AND \(Self.launchUnclaimed)
       """
     return try write {
       try db.run(
