@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 任务浮窗：点任务或它的提示词（项目页的任务区、任务面板、⌘K、归档）就在当前页上弹出，不换页。左右两栏，像邮件：
 /// 左边是这件事——完成圈、就地改的标题与一句说明、提示词一条一行（与项目页同一种行 `PromptLine`，点哪条右边就编辑哪条）、子任务；
-/// 右边是选中那条提示词的编辑区与操作栏（复制、去处、交给 Agent，⌘↩ 同主钮）。点开任务时右边是第一条还没交出去的提示词；
+/// 右边是选中那条提示词的编辑区与操作栏（复制、去处、发给 Agent，⌘↩ 同主钮）。点开任务时右边是第一条还没交出去的提示词；
 /// 一条都没有时右边请你写第一条。整页的编辑页只给散放的灵感。
 struct TaskSheet: View {
     struct Request: Identifiable, Equatable {
@@ -94,7 +94,7 @@ struct TaskSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     SectionLabel(text: "提示词").padding(.horizontal, TaskRow.inset)
                     ForEach(data.detail.prompts) { prompt in
-                        PromptLine(prompt: prompt, replied: data.detail.marks.first { $0.id == prompt.id }?.isDone ?? false)
+                        PromptLine(prompt: prompt)
                     }
                     addRow("写一条提示词") {
                         let id = task.id, store = services.store
@@ -133,7 +133,7 @@ struct TaskSheet: View {
         } else {
             VStack(spacing: 14) {
                 Text("这件事要 Agent 做什么？").font(Typography.emptyTitle).foregroundStyle(palette.ink)
-                Text("写一条提示词，写好就能交给 Agent").font(Typography.secondary).foregroundStyle(palette.ink3)
+                Text("写一条提示词，写好就能发给 Agent").font(Typography.secondary).foregroundStyle(palette.ink3)
                 Button {
                     let id = data.task.id, store = services.store
                     workspace.attempt { workspace.open(try await store.createCard(body: "", under: id)) }

@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 提示词编辑页底栏右边的"去处 + 交给 Agent"：去处写明白交给哪里（`SendState.destination`：会话是状态点加会话名，新会话写"新会话"加文件夹或项目名），
-/// 点去处是换去处的菜单（只对这条提示词所在的任务生效）；靛青主钮"交给 Agent"（⌘↩）按去处交出去（`Workspace.handOff`）。
+/// 提示词编辑页底栏右边的"去处 + 发给 Agent"：去处写明白交给哪里（`SendState.destination`：会话是状态点加会话名，新会话写"新会话"加文件夹或项目名），
+/// 点去处是换去处的菜单（只对这条提示词所在的任务生效）；靛青主钮"发给 Agent"（⌘↩）按去处交出去（`Workspace.handOff`）。
 /// 没有默认去处（没归入项目、也没交给过会话）时只有主钮，点开就是选去处的菜单。会话已结束时去处写"已结束"，交出时在后台唤醒它。
 struct SendControl: View {
     let prompt: Card
@@ -30,7 +30,7 @@ struct SendControl: View {
 
     private func handLabel(shortcut: Bool) -> some View {
         HStack(spacing: 8) {
-            Text("交给 Agent")
+            Text("发给 Agent")
             if shortcut { Text("⌘↩").opacity(0.6) }
         }
         .primaryCapsule(palette)
@@ -67,7 +67,7 @@ struct SendControl: View {
     private func help(_ destination: HandOffDestination) -> String {
         switch destination {
         case .session(let id): workspace.sendState.action(for: AgentTarget(session: id))
-        case .newSession: "在 \(newSessionPlace ?? "项目")里开新会话并交给它"
+        case .newSession: "在 \(newSessionPlace ?? "项目")里开新会话并发给它"
         }
     }
 
@@ -125,7 +125,7 @@ struct DestinationMenu<Trigger: View>: View {
             label()
         }
         .menuStyle(.button).buttonStyle(PressStyle(scale: 0.97)).menuIndicator(.hidden).fixedSize()
-        .help("选择交给哪个 Agent 会话")
+        .help("选择发给哪个 Agent 会话")
         .accessibilityLabel("选择 Agent 会话")
     }
 

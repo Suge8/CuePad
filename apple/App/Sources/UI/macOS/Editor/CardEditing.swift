@@ -15,7 +15,7 @@ final class CardEditing {
     @ObservationIgnored let handle = EditorHandle()
     /// 打字中的正文（底栏据此认出变量）。
     private(set) var text: String
-    /// 编辑器里有没有选中文字：有时"交给 Agent"只交出选中的部分。
+    /// 编辑器里有没有选中文字：有时"发给 Agent"只交出选中的部分。
     private(set) var selecting = false
     private(set) var saveState = SaveState.idle
     @ObservationIgnored private let workspace: Workspace
@@ -47,7 +47,7 @@ final class CardEditing {
         Outgoing.text(body: (whole ? nil : handle.selection) ?? handle.text ?? text, values: card.variableValues)
     }
 
-    /// 主动作（底栏的主钮与编辑器里的 ⌘↩ 同一个）：提示词交给 Agent，灵感挂到任务。
+    /// 主动作（底栏的主钮与编辑器里的 ⌘↩ 同一个）：提示词发给 Agent，灵感挂到任务。
     func submit(_ card: Card) {
         if CardMenu.handsToAgent(card) { workspace.handOff(card, text: outgoing(card, whole: false)) } else { workspace.attaching = card }
     }
@@ -70,13 +70,13 @@ final class CardEditing {
             onError: workspace.fail)
     }
 
-    /// 右键菜单里的选区动作：转为任务；提示词另有"交给 Agent"（只交出选中的部分）。
+    /// 右键菜单里的选区动作：转为任务；提示词另有"发给 Agent"（只交出选中的部分）。
     private static func selectionActions(_ card: Card, workspace: Workspace) -> [CueSelectionAction] {
         let tasks = CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
             workspace.convertToTasks(stored, in: card.projectID)
         }
         guard CardMenu.handsToAgent(card) else { return [tasks] }
-        let send = CueSelectionAction(title: "交给 Agent", systemImage: "paperplane") { stored in
+        let send = CueSelectionAction(title: "发给 Agent", systemImage: "paperplane") { stored in
             workspace.handOff(card, text: Outgoing.text(body: stored, values: card.variableValues))
         }
         return [send, tasks]
@@ -121,8 +121,8 @@ enum SaveState: Equatable {
 }
 
 /// 编辑的操作栏（整页编辑页浮在底部，任务浮窗里接在提示词的编辑区下面）：左边复制全文（变量已填）与变量；右边是主动作——
-/// 灵感是"挂到任务"，提示词是去处加"交给 Agent"（⌘↩ 由编辑器自己接，同 `CardEditing.submit`）。
-/// 选中文字时"交给 Agent"只交出选中的部分，栏上写一句"选中部分"。分割线与转为任务在编辑器的右键菜单里。
+/// 灵感是"挂到任务"，提示词是去处加"发给 Agent"（⌘↩ 由编辑器自己接，同 `CardEditing.submit`）。
+/// 选中文字时"发给 Agent"只交出选中的部分，栏上写一句"选中部分"。分割线与转为任务在编辑器的右键菜单里。
 struct EditorBar: View {
     let card: Card
     /// 提示词所在的任务（提示词才有）。

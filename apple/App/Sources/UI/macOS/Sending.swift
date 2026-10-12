@@ -5,14 +5,14 @@ import CueText
 import Foundation
 import SwiftUI
 
-/// 交给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上只有提示词交给 Agent（`CardMenu.handsToAgent`）。
+/// 交给哪个 Agent 会话、用哪种方式（直接发送；会话正忙时马上说或等它做完再说）。Mac 上只有提示词发给 Agent（`CardMenu.handsToAgent`）。
 /// 会话用 Pi 自己的会话 id 认：会话结束后它还是同一个，同一个会话重新打开也不变（桥上的连接 id 含进程号，每次打开都是新的）。
 struct AgentTarget: Equatable {
     var session: String
     var mode: DeliveryMode = .send
 }
 
-/// 一条提示词交给 Agent 的去处：某个会话，或在本项目的文件夹里开新会话。
+/// 一条提示词发给 Agent 的去处：某个会话，或在本项目的文件夹里开新会话。
 enum HandOffDestination: Hashable {
     case session(String)
     case newSession
@@ -65,7 +65,7 @@ final class SendState {
         state.hostID != services.hostID || state.hosted || liveSession(state.sessionID) != nil
     }
 
-    /// 能交给的在线会话：所有 Mac 上的（手机的交给 Agent 输入框共用同一份规则，见 `HandOffTargets`），去掉本机已不在桥上的。
+    /// 能交给的在线会话：所有 Mac 上的（手机的发给 Agent 输入框共用同一份规则，见 `HandOffTargets`），去掉本机已不在桥上的。
     func onlineTargets(for project: UUID?) -> [PiSessionListItem] {
         HandOffTargets.sessions(services.liveSessions.live, project: project).filter { isReachable($0.state) }
     }
@@ -155,10 +155,10 @@ final class SendState {
             delivery: services.liveSessions.deliveries[session.sessionID])
     }
 
-    /// 完整说法："交给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
+    /// 完整说法："发给 Agent 会话「…」"（已结束的是"唤醒 Agent 会话「…」并发送"），用在提示与读屏（按钮上另有省略后的写法，见 `SendControl`）。
     func action(for target: AgentTarget) -> String {
         let name = sessionName(target.session)
-        return isEnded(target) ? "唤醒 Agent 会话「\(name)」并发送" : "交给 Agent 会话「\(name)」"
+        return isEnded(target) ? "唤醒 Agent 会话「\(name)」并发送" : "发给 Agent 会话「\(name)」"
     }
 
     /// 这个 Pi 会话此刻连着桥的那个进程；没有就是已结束。
@@ -166,7 +166,7 @@ final class SendState {
         services.pi.session(sessionID: sessionID)
     }
 
-    /// 交给 Agent（存储格式正文）。返回是否已送达：会话正忙时记下这次发送（`busy`）等用户选，返回 false；其余失败抛出。
+    /// 发给 Agent（存储格式正文）。返回是否已送达：会话正忙时记下这次发送（`busy`）等用户选，返回 false；其余失败抛出。
     func send(_ stored: String, to target: AgentTarget, card: UUID?) async throws -> Bool {
         do {
             switch route(of: target.session) {
@@ -183,7 +183,7 @@ final class SendState {
 }
 
 extension Workspace {
-    /// 把提示词交给 Agent，去处按 `SendState.destination`：整条正文，或 `text`（选中的部分，变量已填）。
+    /// 把提示词发给 Agent，去处按 `SendState.destination`：整条正文，或 `text`（选中的部分，变量已填）。
     /// 会话正忙时转为询问；新会话开在项目绑定的文件夹（没绑时就地弹选文件夹，取消就不开）；没有默认去处时打开提示词的编辑页去选。
     func handOff(_ prompt: Card, text: String? = nil) {
         let text = text ?? Outgoing.text(of: prompt), id = prompt.id
@@ -211,7 +211,7 @@ extension Workspace {
         sendState.clearPick(for: prompt)
     }
 
-    /// 交给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。
+    /// 发给 Agent（存储格式正文）；成功后提示，会话正忙时转为询问马上说还是等它做完再说。返回是否已送达。
     @discardableResult
     func send(_ stored: String, to target: AgentTarget, card: UUID? = nil) async -> Bool {
         let done = Dotted("已" + sendState.action(for: target), target.mode == .steer || target.mode == .followUp ? target.mode.label : nil)
