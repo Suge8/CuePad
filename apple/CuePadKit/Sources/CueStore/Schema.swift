@@ -13,7 +13,7 @@ import Foundation
 ///
 /// 同步表里的本机列（不进 CKRecord）：deliveryRequests.resultReceivedAt。
 ///
-/// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
+/// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
 ///
 /// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields` / `retiredTypes`，生产环境删不掉）。
@@ -51,7 +51,13 @@ enum Schema {
     // 23：工具活动的各类计数改为失败的也算在内（与清单的行同一口径，`Tools.failed` 下线）；已存对话里的是旧口径，
     // 会话文件的检查点作废，下次启动从头读一遍，所有消息统一成新口径
     "UPDATE piSessions SET checkpoint = NULL;",
+    // 24：本机交给过服务器、结果还没落账的版本（见 `syncSent`）
+    Upgrade(stringLiteral: syncSent),
   ]
+
+  private static let syncSent = """
+    CREATE TABLE syncSent (recordName TEXT NOT NULL, modifiedAt INTEGER NOT NULL, PRIMARY KEY (recordName, modifiedAt)) STRICT, WITHOUT ROWID;
+    """
 
   private static let previews = """
     CREATE TABLE previews (
@@ -155,6 +161,9 @@ enum Schema {
       pushedModifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
+    -- 本机交给过服务器、结果还没落账的版本（记录名 + 修改时间）：这一版经拉取回到本机是自己的回声，不是别的设备的编辑。
+    -- 落账（pushedModifiedAt 推进到它或更新）时清掉；落账之后的回声由 pushedModifiedAt 认出。
+    \(syncSent)
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。

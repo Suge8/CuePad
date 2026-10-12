@@ -133,7 +133,7 @@ import Testing
     try await store.upsertPiSession(PiSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
     try RawDB(fixture.url).exec(
       """
-      ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews;
+      ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews; DROP TABLE syncSent;
       ALTER TABLE piMessages DROP COLUMN tools; ALTER TABLE piMessages ADD COLUMN toolCount INTEGER NOT NULL DEFAULT 0;
       DROP INDEX piSessionStates_sessionID; DROP INDEX cards_deletedAt; DROP INDEX cards_todoAt; DROP INDEX cards_piSessionID; PRAGMA user_version = 17;
       """)
@@ -150,7 +150,7 @@ import Testing
   /// 结构 22 的库里已存的对话是旧的工具计数口径：升到 23 时会话文件的检查点作废，下次从头读。
   @Test func schema22LibraryDropsSessionCheckpoints() async throws {
     try await store.upsertPiSession(PiSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
-    try RawDB(fixture.url).exec("PRAGMA user_version = 22;")
+    try RawDB(fixture.url).exec("DROP TABLE syncSent; PRAGMA user_version = 22;")
 
     let upgraded = try CueStore(url: fixture.url)
     #expect(try await upgraded.piCheckpoint(of: "s1") == nil)

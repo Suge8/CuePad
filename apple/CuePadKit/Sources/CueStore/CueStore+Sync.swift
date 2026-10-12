@@ -121,6 +121,11 @@ extension CueStore {
     try db.first("SELECT systemFields FROM syncRecords WHERE recordName = ?", [recordName]) { $0.blobOrNil(0) } ?? nil
   }
 
+  /// 本机把这一版交给服务器（引擎或立即上传构造记录时）：结果落账前它若经拉取回来，要能认出是自己的。
+  package func noteSent(_ row: SyncRow) throws {
+    try write { try db.run("INSERT OR IGNORE INTO syncSent (recordName, modifiedAt) VALUES (?, ?)", [row.id, row.modifiedAt]) }
+  }
+
   /// 服务器已接受这条记录：记下它的系统字段与被推送版本的修改时间。之后再改才会重新变成待推送。
   /// 返回本机版本是否在这之后又改过（仍待推送）。
   package func markPushed(_ row: SyncRow, systemFields: Data) throws -> Bool {
@@ -140,7 +145,10 @@ extension CueStore {
   /// 服务器上已没有这条记录（删除已确认、或本来就不存在）：忘掉它的元数据。
   /// 数据表里还有该记录时，它因此重新变成待上传。
   package func dropSyncMetadata(_ recordName: String) throws {
-    try write { try db.run("DELETE FROM syncRecords WHERE recordName = ?", [recordName]) }
+    try write {
+      try db.run("DELETE FROM syncRecords WHERE recordName = ?", [recordName])
+      try db.run("DELETE FROM syncSent WHERE recordName = ?", [recordName])
+    }
   }
 
   package func engineState() throws -> Data? {
@@ -159,6 +167,7 @@ extension CueStore {
   package func resetSyncMetadata() throws {
     try write {
       try db.run("DELETE FROM syncRecords")
+      try db.run("DELETE FROM syncSent")
       try db.run("DELETE FROM syncState")
     }
   }
@@ -169,6 +178,7 @@ extension CueStore {
       for table in Table.synced { try db.run("DELETE FROM \(table.rawValue)") }
       try db.run("DELETE FROM projectDirectories")
       try db.run("DELETE FROM syncRecords")
+      try db.run("DELETE FROM syncSent")
       try db.run("DELETE FROM syncState")
     }
     try files.removeAll()
@@ -241,6 +251,7 @@ extension CueStore {
       INSERT INTO syncRecords (recordName, recordType, systemFields, pushedModifiedAt) VALUES (?, ?, ?, ?)
       ON CONFLICT(recordName) DO UPDATE SET systemFields = excluded.systemFields, pushedModifiedAt = excluded.pushedModifiedAt
       """, [id, table.rawValue, systemFields, pushed])
+    try db.run("DELETE FROM syncSent WHERE recordName = ? AND modifiedAt <= ?", [id, pushed])
   }
 
   private func overwrite(_ row: SyncRow) throws {
@@ -264,6 +275,7 @@ extension CueStore {
       }
       try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
+      try db.run("DELETE FROM syncSent WHERE recordName = ?", [key.id])
       if key.table == .projects {
         // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的），
         // 与本地 purgeProject 一致地释放到未分类，内容保留，不悬空隐藏。
@@ -283,7 +295,7 @@ extension CueStore {
   /// - 本机自上次推送后没改过：直接采用远端。
   /// - 本机有未推送的改动：`modifiedAt` 较新的整条记录留下，同刻以服务器为准（服务器是唯一裁决者，各设备因此收敛）；
   ///   卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。
-  /// 本机自己上传的版本回来（回声）不是并发编辑：已落账的回声由推送时间认出（`applyVersion`），落账前的由协调器认出。
+  /// 本机自己上传的版本回来（回声）不是并发编辑：落账前的回声由 `syncSent` 认出，落账后的由推送时间认出（都在 `applyVersion`）。
   /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data) throws {
     let awaitingResult = try remote.table == .deliveryRequests && isAwaitingResult(remote.id)
@@ -301,6 +313,11 @@ extension CueStore {
     if remote.table == .piSessionStates { remote.fields["notify"] = .null }
     let table = remote.table
     let pushed = try db.first("SELECT pushedModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) { $0.int(0) }
+    // 本机交出去、结果还没落账的版本回来了（自己的回声）：服务器收下了它，记账；本机的行不动
+    if try db.first("SELECT 1 FROM syncSent WHERE recordName = ? AND modifiedAt = ?", [remote.id, remote.modifiedAt]) { _ in true } != nil {
+      if remote.modifiedAt > (pushed ?? .min) { try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt) }
+      return
+    }
     guard let local = try readSyncRow(table, remote.id) else {
       if pushed != nil { return }
       try overwrite(remote)

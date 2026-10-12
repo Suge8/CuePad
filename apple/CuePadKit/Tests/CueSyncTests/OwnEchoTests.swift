@@ -76,6 +76,28 @@ import Testing
     try await expectNoCopyAndLocalKept(card, body: "第 13 版")
   }
 
+  /// 交出去的版本、结果还没落账就重启了，之后本机又改过，那一版才回来。
+  @Test func anUploadedVersionPulledBackAfterARestartBeforeItsResultIsNotAConflict() async throws {
+    let (card, uploaded) = try await editedAndHandedToTheEngine("第一版")
+    _ = try await edit(card, "第二版")
+    let restarted = SyncCoordinator(store: store, queue: rig.queue, zoneID: testZone)
+
+    await restarted.handle(.fetched(modifications: [uploaded], deletions: []))
+
+    try await expectNoCopyAndLocalKept(card, body: "第二版")
+  }
+
+  /// 同一条记录连着交出很多版、结果都没回来，最早那一版的回声才到。
+  @Test func theFirstOfManyUploadedVersionsPulledBackBeforeAnyResultIsNotAConflict() async throws {
+    let (card, first) = try await editedAndHandedToTheEngine("第 1 版")
+    for number in 2...9 { _ = try await edit(card, "第 \(number) 版") }
+    _ = try await edit(card, "第 10 版")
+
+    try await pull([first])
+
+    try await expectNoCopyAndLocalKept(card, body: "第 10 版")
+  }
+
   /// 上传其实成功了但结果丢了（超时），引擎重传时被服务器以 serverRecordChanged 拒绝，附上的服务器版本就是刚传的这一版。
   @Test func aRejectionWhoseServerVersionIsTheOneJustSentIsAcknowledged() async throws {
     let (card, uploaded) = try await editedAndHandedToTheEngine("第一版")

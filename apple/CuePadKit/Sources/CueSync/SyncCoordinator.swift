@@ -108,6 +108,7 @@ actor SyncCoordinator {
       versions[row.modifiedAt] = row
       for stale in versions.keys.sorted().dropLast(Self.inFlightLimit) { versions[stale] = nil }  // 取了没发出去的版本不会有结果，只留最近几版
       inFlight[id.recordName] = versions
+      try await store.noteSent(row)  // 持久：结果落账前的回声要能认出，重启与在途版本多少都不影响
       if row.table == .attachments {
         guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
           report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
@@ -250,12 +251,6 @@ actor SyncCoordinator {
         report("未知的记录类型「\(record.recordType)」，已跳过（可能来自更新版本的 CuePad）", recordType: record.recordType, recordName: record.recordID.recordName)
         continue
       }
-      if inFlight[row.id]?[row.modifiedAt] != nil {
-        // 本机刚交出去、结果还没落账的版本回来了（自己的回声）：服务器收下了它，记下新标签，不是别处的编辑。
-        // 本机之后又改过的话，那一版的待办在引擎里，不用在这里重新登记。落账之后回来的回声由 `applyVersion` 按推送时间认出。
-        _ = try await acknowledge(record, sent: nil)
-        continue
-      }
       serverValues.learn(row)  // 服务器上就是这个样子，不管本机最后留下哪个版本
       if row.table == .deliveryRequests { traceArrival(of: record, row) }
       if row.table == .attachments, !adoptAsset(of: record, row) { continue }
@@ -305,7 +300,7 @@ actor SyncCoordinator {
   /// 取走这条记录发出去的那一版（发出去的记录和服务器返回的记录都带着当时的 `modifiedAt`）。
   private func takeInFlight(_ record: CKRecord) -> SyncRow? {
     let name = record.recordID.recordName
-    guard let stamp = record.modifiedStamp, let row = inFlight[name]?.removeValue(forKey: stamp) else { return nil }
+    guard let stamp = (record["modifiedAt"] as? NSNumber)?.int64Value, let row = inFlight[name]?.removeValue(forKey: stamp) else { return nil }
     if inFlight[name]?.isEmpty == true { inFlight[name] = nil }
     return row
   }
@@ -314,11 +309,14 @@ actor SyncCoordinator {
     _ saved: [CKRecord], _ failedSaves: [(record: CKRecord, error: CKError)], _ deleted: [CKRecord.ID],
     _ failedDeletes: [(id: CKRecord.ID, error: CKError)]
   ) async throws {
-    var resend: [CKRecord.ID] = []
+    var changedSince: [CKRecord.ID] = []
     for record in saved {
+      guard let row = takeInFlight(record) ?? RecordMapper.row(from: record) else { continue }
+      serverValues.learn(row)
       // 引擎发送的是取走时的版本；之后又改过的，引擎已移除它的待办，要重新登记
-      if try await acknowledge(record, sent: takeInFlight(record)) { resend.append(record.recordID) }
+      if try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record)) { changedSince.append(record.recordID) }
     }
+    var resend = changedSince
     var resendDeletes: [CKRecord.ID] = []
     for id in deleted {
       serverValues.forget(id.recordName)
@@ -327,7 +325,7 @@ actor SyncCoordinator {
 
     var blocked = false
     for (record, error) in failedSaves {
-      defer { _ = takeInFlight(record) }  // 服务器版本就是刚传的这一版时，下面的合并要在它还算在途时认出回声
+      _ = takeInFlight(record)
       switch error.code {
       case .serverRecordChanged:
         if let server = error.serverRecord {
@@ -366,14 +364,6 @@ actor SyncCoordinator {
     if !resend.isEmpty || !resendDeletes.isEmpty { await queue.enqueue(saves: resend, deletes: resendDeletes) }
   }
 
-  /// 服务器收下了这一版（`sent` 是发出去的那一行，没有就读记录）：记下它的系统字段与推送时间。
-  /// 返回之后本机又改过：引擎已移除这条记录的待办，要重新登记。
-  private func acknowledge(_ record: CKRecord, sent: SyncRow?) async throws -> Bool {
-    guard let row = sent ?? RecordMapper.row(from: record) else { return false }
-    serverValues.learn(row)
-    return try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record))
-  }
-
   /// 把 CloudKit 错误映射到状态。返回 true 表示这类失败不应立刻重试。瞬时网络类错误交给引擎自己重试。
   @discardableResult
   private func classify(_ error: CKError, recordType: String? = nil, recordName: String?) -> Bool {
@@ -407,9 +397,4 @@ actor SyncCoordinator {
   }
 
   private func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }
-}
-
-extension CKRecord {
-  /// 记录里的版本号：行的 `modifiedAt`（毫秒）。
-  fileprivate var modifiedStamp: Int64? { (self["modifiedAt"] as? NSNumber)?.int64Value }
 }
