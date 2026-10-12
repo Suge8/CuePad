@@ -163,7 +163,7 @@ private struct SwipeRow: ViewModifier {
             .frame(width: width, height: size.height)
             .contentShape(.rect)
         }
-        .buttonStyle(PressStyle(scale: 0.9))
+        .buttonStyle(PressStyle(.button))
         .disabled(!action.enabled)
         .clipped()
         .accessibilityHidden(true)

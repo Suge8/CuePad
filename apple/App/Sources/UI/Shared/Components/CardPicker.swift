@@ -162,11 +162,11 @@ struct CardRow: View {
 
     var body: some View {
         if let pick {
-            Button { pick(entry.card) } label: { row }.buttonStyle(CardPressStyle())
+            Button { pick(entry.card) } label: { row }.buttonStyle(PressStyle(.card))
         } else {
             #if os(iOS)
             NavigationLink(value: Route.card(entry.card.id)) { row }
-                .buttonStyle(CardPressStyle())
+                .buttonStyle(PressStyle(.card))
                 .zoomSource(entry.card.id, in: zoom)
                 .contextMenu { CardActions(card: entry.card) }
             #endif

@@ -54,7 +54,7 @@ struct StyleBoard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Button {} label: { Image(systemName: "plus").frame(width: 44, height: 44).glass(in: .circle) }
-                    .buttonStyle(PressStyle(scale: Press.button))
+                    .buttonStyle(PressStyle(.button))
                 Button {} label: { Text("胶囊").padding(.horizontal, 16).frame(height: 36).background(palette.fill, in: .capsule) }
                     .buttonStyle(PressStyle())
                 Button("主按钮") {}.prominentButton().controlSize(.large)
@@ -64,7 +64,7 @@ struct StyleBoard: View {
             Button {} label: {
                 Text("整张卡片").frame(maxWidth: .infinity, minHeight: 64).paper(radius: 16)
             }
-            .buttonStyle(CardPressStyle())
+            .buttonStyle(PressStyle(.card))
             Button {} label: {
                 Text("一行").frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).padding(.horizontal, 16)
                     .contentShape(.rect)

@@ -134,7 +134,7 @@ private struct ColumnsLayout: Layout {
     }
 }
 
-/// 点开编辑页的卡（墙上卡片、"更早"的行）的按压：样子同 `CardPressStyle`（`PressFeedback`，Mac 是按下即压暗、松开即复原），
+/// 点开编辑页的卡（墙上卡片、"更早"的行）的按压：样子同 `PressStyle(.card)`（`PressFeedback`，Mac 是按下即压暗、松开即复原），
 /// 只是按下与否看这张卡的按下状态（`cardHeld`：鼠标按着——AppKit 分发按下事件时就记下，早于按钮识别——或已打开、编辑页还在准备），
 /// 按钮自己识别出的按下兜底：打开后编辑页还在准备的那几帧保持按下，编辑页淡入时松开；松开没打开（拖走、取消）就复原。
 struct CardOpenStyle: ButtonStyle {
@@ -148,7 +148,7 @@ struct CardOpenStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .modifier(PressFeedback(pressed: configuration.isPressed || held, darken: true))
+                .modifier(PressFeedback(pressed: configuration.isPressed || held, kind: .card))
         }
     }
 }

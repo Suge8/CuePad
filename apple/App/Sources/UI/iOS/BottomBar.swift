@@ -40,7 +40,7 @@ struct BottomBar: View {
                     .frame(width: Self.height, height: Self.height)
                     .contentShape(.circle)
             }
-            .buttonStyle(PressStyle(scale: 0.92))
+            .buttonStyle(PressStyle(.button))
             .glass(in: .circle, interactive: true)
             .modifier(BarLift(shape: .circle))
             .accessibilityLabel(WriteEntry.title)

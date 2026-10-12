@@ -277,11 +277,7 @@ private struct AnswerButton: View {
             .onHover { hovering = $0 }
             .animation(Motion.quick, value: lit)
             .contentShape(shape)
-            #if os(iOS)
-            .modifier(PressFeedback(pressed: configuration.isPressed, haptic: false))
-            #else
             .modifier(PressFeedback(pressed: configuration.isPressed))
-            #endif
             // 停用（送不到 Mac、已经答了）时变淡，看得出点不了
             .opacity(enabled ? 1 : 0.45)
     }

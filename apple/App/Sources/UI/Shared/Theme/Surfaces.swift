@@ -108,56 +108,36 @@ enum Motion {
     }
 }
 
-/// 按压反馈只有这几类（`PressStyle`、`CardPressStyle`、`RowPressStyle`、系统的主按钮），按下的样子只在 `PressFeedback` 定。
-/// 手机：按下快、松开带一点回弹；圆钮与卡片按下有一下轻触感，行只亮底不缩放（一屏几十行，缩放会让列表显得软）；减弱动态效果时只降透明度。
+/// 按压反馈只有这几类（`PressStyle` 按种类、`RowPressStyle`、系统的主按钮）。调用处只说按的是哪一种（`Press`），两端写法相同；
+/// 每种在各平台长什么样只在 `PressFeedback` 定。
+/// 手机：按下快、松开带一点回弹，按种类缩到不同比例，按下有一下轻触感；行只亮底不缩放（一屏几十行，缩放会让列表显得软）；减弱动态效果时只降透明度。
 /// Mac 照原生控件（访达、邮件、备忘录的按钮、列表与卡片都这样）：按下的那一刻变淡（卡片压暗一层），松开即复原，
 /// 不缩放、不回弹、不震动——缩放与回弹是触屏的习惯，在指针下显得软、慢；触控板的震动在 macOS 只给对齐这类反馈，点按钮不震。
-/// 缩放比例与震动开关只有手机有（Mac 不缩放、不震动），Mac 的调用处不传。
-#if os(iOS)
 enum Press {
     /// 圆钮、图标按钮。
-    static let button: CGFloat = 0.9
+    case button
     /// 标准按钮、胶囊。
-    static let control: CGFloat = 0.95
-    /// 整张卡片：大面积只缩一点，不然文字发虚。
-    static let card: CGFloat = 0.97
+    case control
+    /// 整张卡片。
+    case card
+    /// 整宽的一条（虚线框的"写一条提示词"）。
+    case wide
 }
-#endif
 
-/// 圆钮、图标按钮与胶囊的按下反馈（两端的样子见 `PressFeedback`）。
+/// 按钮的按下反馈，按种类（`Press`）。
 struct PressStyle: ButtonStyle {
-    #if os(iOS)
-    var scale: CGFloat = Press.control
-    #endif
+    let kind: Press
+
+    init(_ kind: Press = .control) { self.kind = kind }
 
     func makeBody(configuration: Configuration) -> some View {
-        #if os(iOS)
-        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed, scale: scale))
-        #else
-        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed))
-        #endif
-    }
-}
-
-/// 整张卡片的按下反馈：压暗一层（手机另缩到 97%、松开弹回、一下轻触感）。
-struct CardPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        #if os(iOS)
-        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed, darken: true, scale: Press.card))
-        #else
-        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed, darken: true))
-        #endif
+        configuration.label.modifier(PressFeedback(pressed: configuration.isPressed, kind: kind))
     }
 }
 
 struct PressFeedback: ViewModifier {
     let pressed: Bool
-    var darken = false
-    #if os(iOS)
-    var scale = Press.control
-    var haptic = true
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    #endif
+    var kind = Press.control
     @Environment(\.isEnabled) private var isEnabled
 
     #if os(macOS)
@@ -168,21 +148,35 @@ struct PressFeedback: ViewModifier {
 
     func body(content: Content) -> some View {
         let active = pressed && isEnabled
+        let card = kind == .card
         content
-            .opacity(active && !darken ? Self.dimmed : 1)
-            .brightness(active && darken ? (palette.dark ? Self.shade : -Self.shade) : 0)
+            .opacity(active && !card ? Self.dimmed : 1)
+            .brightness(active && card ? (palette.dark ? Self.shade : -Self.shade) : 0)
             // 原生控件的高亮没有过渡：按下、松开都在那一帧到位
             .animation(nil, value: active)
     }
     #else
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 各种类缩到多少：大面积只缩一点，不然文字发虚。
+    private var scale: CGFloat {
+        switch kind {
+        case .button: 0.9
+        case .control: 0.95
+        case .card: 0.97
+        case .wide: 0.98
+        }
+    }
+
     func body(content: Content) -> some View {
         let active = pressed && isEnabled
+        let card = kind == .card
         content
             .scaleEffect(active && !reduceMotion ? scale : 1)
-            .brightness(active && darken ? -0.02 : 0)
-            .opacity(active && (reduceMotion || !darken) ? 0.9 : 1)
+            .brightness(active && card ? -0.02 : 0)
+            .opacity(active && (reduceMotion || !card) ? 0.9 : 1)
             .animation(active ? Motion.pressDown : Motion.pressUp, value: active)
-            .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: active) { _, now in haptic && now }
+            .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: active) { _, now in now }
     }
     #endif
 }
@@ -209,11 +203,7 @@ struct ControlButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         surface(configuration.label)
-            #if os(iOS)
-            .modifier(PressFeedback(pressed: configuration.isPressed, scale: kind == .circular ? Press.button : Press.control))
-            #else
-            .modifier(PressFeedback(pressed: configuration.isPressed))
-            #endif
+            .modifier(PressFeedback(pressed: configuration.isPressed, kind: kind == .circular ? .button : .control))
             .opacity(isEnabled ? 1 : 0.45)
     }
 

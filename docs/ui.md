@@ -9,7 +9,7 @@
 - 签名色靛青（`signature`）只落在焦点上，一屏通常一两处：主按钮与发送钮、选中项的浅底、iPhone 底部栏选中的那一格、选中的筛选胶囊。在动的状态不占签名色，靠形状与动效；其余彩色只表示要你注意的状态（等你确认赭黄、出错胭脂，再配形状）与项目，赭黄不借给别的用途。
 - 状态图形全 App 只有一份：任务只按 `TaskGlyph` 着色，任务圈只有 `TaskRingView`，会话状态标只有 `PiStateDot`；有新回复是墨色实心点，对勾只表示完成与记下。
 - 玻璃上写着要读的字时用 `GlassInk.legible`；浮在一整片字上、自己也写着字的（提示横幅、浮起的输入框、手机会话页的回复框、Mac 底部输入栏、任务面板）用 `GlassInk.solid`。输入框的提示字一律 `Palette.placeholder`。"降低透明度""增强对比度"开启时退回实底。
-- 动效：位移与尺寸用无回弹弹簧，不超过 300ms（令牌在 `Motion`）；按压只有四类（`PressStyle`、`CardPressStyle`、`RowPressStyle`、系统玻璃主按钮），按下的样子只在 `PressFeedback` 一处定：手机缩放回弹加轻触感，Mac 照原生控件按下即变淡（卡片压暗）、松开即复原，不缩放、不回弹、不震动；常驻循环动效只有 `LoopLayer` 里那几种，用 Core Animation（SwiftUI 的 `repeatForever` 与符号动效每帧在 App 进程里重算，静止的 Agent 页也占约 9% CPU）；等待的转圈用 `Spinner`，不用系统 `ProgressView`；减弱动态效果时退为短淡入淡出。
+- 动效：位移与尺寸用无回弹弹簧，不超过 300ms（令牌在 `Motion`）；按压只有三类（`PressStyle`、`RowPressStyle`、系统玻璃主按钮）；`PressStyle` 的调用处只给语义种类（`Press`：圆钮、控件、卡片、整宽的一条），两端写法相同，每种的样子只在 `PressFeedback` 一处定：手机按种类缩放回弹加轻触感，Mac 照原生控件按下即变淡（卡片压暗）、松开即复原，不缩放、不回弹、不震动；常驻循环动效只有 `LoopLayer` 里那几种，用 Core Animation（SwiftUI 的 `repeatForever` 与符号动效每帧在 App 进程里重算，静止的 Agent 页也占约 9% CPU）；等待的转圈用 `Spinner`，不用系统 `ProgressView`；减弱动态效果时退为短淡入淡出。
 - Mac 指针与悬停照访达、邮件：按钮、行与卡片都是箭头，手形只给打开链接的字（`pointerStyle(.link)`）；系统控件与工具栏项的悬停、焦点环交给系统，自绘的只在悬停才露出东西的地方给反馈（行尾露出的动作、卡片浮起一层阴影、列表行的淡底），悬停不挪位置；单击选中、双击打开的列表两种点按并列识别，单击不等双击间隔。
 - 字体：中文正文一律苹方。字号、行距与 Mac 页面间距只在 `Typography`、`Spacing` 按角色定义，界面里不另写字号；Mac 没有动态字体且系统样式偏小，按角色给固定字号、比系统高一档。
 - 空态与出错页一律是吉祥物加一句现状（`EmptyState`），不用系统 `ContentUnavailableView`。

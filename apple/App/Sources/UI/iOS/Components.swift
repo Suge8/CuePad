@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 import UIKit
 
-/// 列表行的按下反馈：铺一层底色（整卡用共用的 `CardPressStyle`）。按下即出现，松开 160ms 淡去。
+/// 列表行的按下反馈：铺一层底色（整卡用共用的 `PressStyle(.card)`）。按下即出现，松开 160ms 淡去。
 struct RowPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         RowPress(configuration: configuration)

@@ -300,7 +300,7 @@ private struct PinnedShelfCard: View {
                 in: .rect(cornerRadius: Self.radius, style: .continuous))
             .paper(radius: Self.radius)
         }
-        .buttonStyle(CardPressStyle())
+        .buttonStyle(PressStyle(.card))
         .projectActions(entry.project, radius: Self.radius, pi: now?.shown)
         .accessibilityElement(children: .combine)
     }
@@ -623,7 +623,7 @@ private struct AgentNowCard: View {
             .paper(radius: Self.radius)
             .contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
         }
-        .buttonStyle(CardPressStyle())
+        .buttonStyle(PressStyle(.card))
         .contextMenu {
             ForEach(now.faces) { item in
                 let shown = services.settings.shown(item)

@@ -41,7 +41,7 @@ struct CardTileView: View {
             .paper(radius: 16)
             .contentShape(.rect(cornerRadius: 16))
         }
-        .buttonStyle(CardPressStyle())
+        .buttonStyle(PressStyle(.card))
         .zoomSource(card.id, in: zoom)
         .rowSwipes(.card(card, workspace: workspace), clipped: false)
         .contextMenu { CardActions(card: card) }
