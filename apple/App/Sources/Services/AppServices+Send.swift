@@ -7,7 +7,7 @@ import CuePi
 import UIKit
 #endif
 
-/// 复制：正文解析 → 放进系统剪贴板。复制不是发送，不记发送记录；发给 Agent 见 `MacExecutor`。
+/// 复制：正文解析 → 放进系统剪贴板。复制不是发送，不记发送记录；交给 Agent 见 `MacExecutor`。
 extension AppServices {
     /// 复制正文（存储格式，变量已填）：文字与图片按原顺序放进系统剪贴板。
     func copy(_ storedText: String) throws {

@@ -190,7 +190,7 @@ nonisolated extension PiShown {
         switch status {
         case .delivery(.waking): "正在唤醒 Agent"
         case .delivery(.failed): "没能送达 Agent"
-        case .delivery: "正在发给 Agent"
+        case .delivery: "正在交给 Agent"
         case .working(.compacting): "Agent 正在压缩上下文"
         case .working: "Agent 正在工作"
         case .asking: "Agent 等你确认"

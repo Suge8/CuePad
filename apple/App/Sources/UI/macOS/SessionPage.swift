@@ -190,22 +190,6 @@ extension Workspace {
         return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap)
     }
 
-    /// 从提示词交给 Agent 的新会话（开在它所在项目绑定的文件夹）：行上先是"正在开会话"，开好后它关联到新会话。
-    /// 没归入项目的为 nil（没有地方可开）；项目还没绑文件夹时就地弹选文件夹面板，选了接着开，取消就不开。
-    func newSessionHandOff(for card: Card) -> ((String) -> Void)? {
-        guard let project = card.projectID else { return nil }
-        let title = catalog?.projects.first { $0.id == project }?.name ?? "新会话", id = card.id
-        return { [self] text in
-            attempt {
-                if try await self.services.store.directory(of: project) == nil {
-                    guard let path = await ProjectDirectory.pick() else { return }
-                    try await self.services.store.setDirectory(path, for: project)
-                }
-                _ = try await self.startSession(in: project, prompt: text.nonEmpty, title: title, card: id) {}
-            }
-        }
-    }
-
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
     /// 请求已执行（Pi 已启动）时先调 `launched`：之后等的是 Pi 自己连上。
     /// `card`：从这条灵感或任务开的，开好后它关联到新会话。

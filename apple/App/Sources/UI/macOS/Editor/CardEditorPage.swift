@@ -24,7 +24,7 @@ struct CardEditorPage: View {
     @State private var data: EditorData?
     @State private var initialText: String?
     @State private var liveText = ""
-    /// 编辑器里有没有选中文字：有时底栏的发送只发选中的部分，并多一个"转为任务"。
+    /// 编辑器里有没有选中文字：有时底栏的"交给 Agent"只交出选中的部分。
     @State private var selecting = false
     @State private var handle = EditorHandle()
     @State private var autosave: Autosave?
@@ -66,7 +66,7 @@ struct CardEditorPage: View {
         .overlay(alignment: .bottom) {
             // 底栏挂在页面之上、与编辑器同时挂好，随编辑页一起淡入淡出
             if mounted, let data, !data.card.isTask {
-                EditorBar(card: data.card, text: liveText, handle: handle, selecting: selecting)
+                EditorBar(card: data.card, task: data.task, text: liveText, handle: handle, selecting: selecting)
                     .padding(.bottom, 16)
                     .disabled(!shown)
                     .accessibilityHidden(!shown)
@@ -126,12 +126,8 @@ struct CardEditorPage: View {
         .scrollIndicators(.automatic)
     }
 
-    /// 提示词卡上的"交给 Agent"：发给本项目当前的 Agent 会话（与提示词编辑页同一个），提示词关联到它；没有会话时打开它的编辑页去选。
-    private func hand(_ prompt: Card) {
-        guard let target = workspace.sendState.agentTarget(for: prompt.projectID) else { return workspace.openCard = prompt.id }
-        let text = Outgoing.text(of: prompt), id = prompt.id
-        Task { await workspace.send(text, to: target, card: id) }
-    }
+    /// 提示词卡上的"交给 Agent"：与提示词编辑页同一个去处规则。
+    private func hand(_ prompt: Card) { workspace.handOff(prompt) }
 
     /// 看不见时先把重活做完，每步一帧：挂上编辑器与底栏（一帧：分成两帧只是多一次掉帧）、让编辑器接过键盘
     /// （要激活输入法上下文，与输入法进程同步往返），最后放开墙上那张卡、淡入。淡入的每一帧只剩改透明度。
@@ -229,16 +225,14 @@ struct CardEditorPage: View {
             })
     }
 
-    /// 右键菜单里的选区动作：转为任务；提示词另有"发送选中部分"（发给本项目当前的 Agent 会话）。
+    /// 右键菜单里的选区动作：转为任务；提示词另有"交给 Agent"（只交出选中的部分）。
     private func selectionActions(_ card: Card) -> [CueSelectionAction] {
         let tasks = CueSelectionAction(title: "转为任务", systemImage: "checklist") { stored in
             workspace.convertToTasks(stored, in: card.projectID)
         }
         guard CardMenu.handsToAgent(card) else { return [tasks] }
-        let send = CueSelectionAction(title: "发送选中部分", systemImage: "paperplane") { stored in
-            guard let target = workspace.sendState.agentTarget(for: card.projectID) else { return }
-            let text = Outgoing.text(body: stored, values: card.variableValues)
-            Task { await workspace.send(text, to: target, card: card.id) }
+        let send = CueSelectionAction(title: "交给 Agent", systemImage: "paperplane") { stored in
+            workspace.handOff(card, text: Outgoing.text(body: stored, values: card.variableValues))
         }
         return [send, tasks]
     }
@@ -269,26 +263,11 @@ private enum SaveState: Equatable {
     }
 }
 
-/// 分割线按钮的图形"— · —"：系统没有贴切的符号，方框加一横的那个读不出是分割线。
-private struct DividerGlyph: View {
-    private static let segment: CGFloat = 7, line: CGFloat = 2
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 2.5) {
-            Capsule().frame(width: Self.segment, height: Self.line)
-            Circle().frame(width: 3.5, height: 3.5)
-            Capsule().frame(width: Self.segment, height: Self.line)
-        }
-        .foregroundStyle(palette.ink)
-        .frame(height: 16)
-    }
-}
-
-/// 编辑页底部的玻璃操作栏：复制全文、插分割线；主动作在右边——灵感是"挂到任务"，提示词是发给 Agent（都是 ⌘↩）。
-/// 选中文字时发送只发选中的部分，并多一个"转为任务"。
+/// 编辑页底部的操作栏：左边复制全文（变量已填）与变量；右边是主动作——灵感是"挂到任务"，提示词是去处加"交给 Agent"（都是 ⌘↩）。
+/// 选中文字时"交给 Agent"只交出选中的部分，栏上写一句"选中部分"。分割线与转为任务在编辑器的右键菜单里。
 private struct EditorBar: View {
     let card: Card
+    let task: Card?
     let text: String
     let handle: EditorHandle
     let selecting: Bool
@@ -299,58 +278,40 @@ private struct EditorBar: View {
         let names = CueVariables.names(in: text)
         return GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
-                HStack(spacing: 16) {
-                    Button("复制全文", systemImage: "doc.on.doc") { workspace.copy(outgoing(whole: true)) }
-                        .help("复制全文（变量已填）")
-                    Button { handle.insertDivider() } label: { Label { Text("插入分割线") } icon: { DividerGlyph() } }
-                        .help("在光标处插入一条分割线")
-                    if selecting {
-                        Button("转为任务", systemImage: "checklist") {
-                            if let selection = handle.selection { workspace.convertToTasks(selection, in: card.projectID) }
-                        }
-                        .help("选中的每一行成为一个任务")
-                        .transition(.opacity)
-                    }
+                Button { workspace.copy(outgoing(whole: true)) } label: {
+                    Label("复制", systemImage: "doc.on.doc")
+                        .font(Typography.secondary.weight(.medium))
+                        .padding(.horizontal, 16).frame(height: 44)
+                        .contentShape(.capsule)
                 }
-                .labelStyle(.iconOnly)
-                .buttonStyle(PressStyle(scale: 0.88))
-                .font(.system(size: 14))
-                .padding(.horizontal, 16).frame(height: 44)
+                .buttonStyle(PressStyle(scale: 0.97))
                 .glass(in: .capsule, interactive: true)
+                .help("复制全文（变量已填）")
                 if !names.isEmpty { VariablesChip(card: card, names: names) }
+                Spacer(minLength: 0)
                 if selecting {
                     Text("选中部分").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3)
                         .transition(.opacity)
                 }
                 if CardMenu.handsToAgent(card) {
-                    let start = workspace.newSessionHandOff(for: card)
-                    SendControl(project: card.projectID, newSession: start.map { start in { start(outgoing(whole: false)) } }) { send(to: $0) }
+                    SendControl(prompt: card, task: task) { outgoing(whole: false) }
                 } else {
                     attach
                 }
             }
             .animation(Motion.quick, value: selecting)
         }
+        .column()
     }
 
     /// 灵感的主动作：挂到任务（弹出选任务的面板），⌘↩。
     private var attach: some View {
         Button { workspace.attaching = card } label: {
-            Label(CardMenu.Item.attachToTask.title, systemImage: CardMenu.Item.attachToTask.symbol)
-                .font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.onSignature)
-                .padding(.horizontal, 16).frame(height: 44)
-                .background(palette.signatureFill, in: .capsule)
-                .contentShape(.capsule)
+            Label(CardMenu.Item.attachToTask.title, systemImage: CardMenu.Item.attachToTask.symbol).primaryCapsule(palette)
         }
         .buttonStyle(PressStyle())
         .keyboardShortcut(.return, modifiers: .command)
         .help("挂到一个任务下，成为它的提示词（⌘↩）")
-    }
-
-    /// 发给 Agent：选中了就只发选中的部分。
-    private func send(to target: AgentTarget) {
-        let outgoing = outgoing(whole: false), id = card.id
-        Task { await workspace.send(outgoing, to: target, card: id) }
     }
 
     private func outgoing(whole: Bool) -> String {

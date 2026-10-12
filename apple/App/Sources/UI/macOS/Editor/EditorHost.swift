@@ -4,14 +4,13 @@ import CueEditor
 import CueText
 import SwiftUI
 
-/// 对编辑器的操作口：底部操作栏经它插分割线、取当前正文与选中部分。
+/// 对编辑器的操作口：底部操作栏经它取当前正文与选中部分。
 final class EditorHandle {
     fileprivate weak var view: CueEditorView?
 
     var text: String? { view?.textView.storedText }
     /// 选中部分的存储格式；没选中为 nil。
     var selection: String? { view?.textView.selectedStoredText }
-    func insertDivider() { view?.textView.insertDivider() }
     func focus() {
         if let view { view.window?.makeFirstResponder(view.textView) }
     }
