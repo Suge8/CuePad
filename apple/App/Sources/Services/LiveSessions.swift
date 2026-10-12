@@ -8,8 +8,9 @@ import Observation
 /// 下面这些由 `items` 推出，各自相等就不写——读它们的视图只在自己用的那份变了才重算。
 @Observable
 final class LiveSessions {
-    /// 此刻有事的会话：未结束的在前，各自按进入当前状态的时间从新到旧（`piSessionPage` 的顺序）。
-    private(set) var items: [PiSessionListItem] = []
+    /// 此刻有事的会话：未结束的在前，各自按进入当前状态的时间从新到旧（`piSessionPage` 的顺序）。nil 是启动后还没读到第一份：
+    /// 项目的"此刻"（`ProjectNow`）等它，不先按"没有会话"写任务、读到后再换成会话状态。
+    private(set) var items: [PiSessionListItem]?
     /// 全部会话记录数（含历史）。
     private(set) var total = 0
     /// 等你确认的在线会话数。
@@ -26,7 +27,7 @@ final class LiveSessions {
     private nonisolated static let endedWindow = 20
 
     /// 在线的会话（`items` 里没结束的）。
-    var live: [PiSessionListItem] { items.filter { $0.state.state != .known(.ended) } }
+    var live: [PiSessionListItem] { (items ?? []).filter { $0.state.state != .known(.ended) } }
 
     /// 一次读到的：`current` 一页与会话总数；给了 `host`（Mac）时再加上那台 Mac 上 `since` 之后结束的会话。
     nonisolated struct Page: Sendable, Equatable {
@@ -44,7 +45,13 @@ final class LiveSessions {
     /// 跟随同步记录直到任务取消。依赖哪些表由读取定（`CueStore.observe(_:)`）。
     func follow(_ store: CueStore, endedOn host: String? = nil) async throws {
         let since = launchedAt
-        for try await page in store.observe({ try Page.read(from: $0, endedOn: host, since: since) }) { apply(page) }
+        do {
+            for try await page in store.observe({ try Page.read(from: $0, endedOn: host, since: since) }) { apply(page) }
+        } catch {
+            // 读失败由调用方报告；等着第一份的页面（项目的"此刻"）不因此一直空着，按没有会话排
+            if items == nil { items = [] }
+            throw error
+        }
     }
 
     func apply(_ page: Page) {

@@ -165,16 +165,17 @@ enum DebugScene {
         }
     }
 
-    /// `CUEPAD_SHOT_READY` 给了文件路径时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
+    /// `CUEPAD_SHOT_READY` 给了文件路径时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、在线会话读到了第一份（`LiveSessions.items`，
+    /// 侧栏与书架的项目要等它才排）、摆画面的事都做完了、
     /// 没有视图报着正在过渡、屏上没有进行中的一次性动画（转圈这类一直循环的不算），连着三帧都这样，再写下这个文件。`xc.sh shot` 等它出现才截图，不靠固定的等待。
-    static func signalReady(_ store: CueStore) async {
+    static func signalReady(_ services: AppServices) async {
         guard let path = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"] else { return }
         var still = 0
         while still < 3 {
             // 排在页面已经发出的读库之后：它回来时，那些读取也都回来了
-            _ = try? await store.projects()
+            _ = try? await services.store.projects()
             await NextFrame.wait()
-            still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
+            still = pending == 0 && unsettled.isEmpty && services.liveSessions.items != nil && !animating ? still + 1 : 0
         }
         FileManager.default.createFile(atPath: path, contents: nil)
     }

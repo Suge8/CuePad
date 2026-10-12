@@ -29,8 +29,9 @@ struct Sidebar: View {
         let pages = data.flatMap { data in catalog.map { SidebarPages($0, trashCount: data.trashCount) } }
         VStack(spacing: 0) {
             SidebarSplit {
-                if let data, let catalog, let pages {
-                    projects(pages, catalog, data: data)
+                // 会话也读到了才排：项目的"此刻"要看会话，先按没有会话写出任务、再换成会话状态是一次先错后对的闪变
+                if let data, let catalog, let pages, let items = services.liveSessions.items {
+                    projects(pages, catalog, data: data, sessions: items)
                     let sessions = services.liveSessions
                     PiSection(
                         recorded: sessions.live.map(\.listed), deliveries: sessions.deliveries, renames: sessions.renames,
@@ -54,9 +55,9 @@ struct Sidebar: View {
         }
     }
 
-    private func projects(_ pages: SidebarPages, _ catalog: ProjectCatalog, data: SidebarData) -> some View {
+    private func projects(_ pages: SidebarPages, _ catalog: ProjectCatalog, data: SidebarData, sessions: [PiSessionListItem]) -> some View {
         // 各项目的"此刻"在数据变化时算一次，行只拿结果
-        let now = ProjectNow.byProject(catalog.projects, sessions: services.liveSessions.items, tasks: data.leading, shown: services.settings.shown)
+        let now = ProjectNow.byProject(catalog.projects, sessions: sessions, tasks: data.leading, shown: services.settings.shown)
         return VStack(alignment: .leading, spacing: 0) {
             SidebarHeader(title: "项目") {
                 Button("新建项目", systemImage: "plus") { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)

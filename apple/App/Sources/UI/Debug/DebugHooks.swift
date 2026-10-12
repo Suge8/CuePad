@@ -163,7 +163,7 @@ extension View {
         #if DEBUG
         task {
             await DebugScene.prepare(workspace)
-            await DebugScene.signalReady(workspace.services.store)
+            await DebugScene.signalReady(workspace.services)
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
         #else
@@ -179,7 +179,7 @@ extension View {
         overlay { if DebugScene.scene == "style" { StyleBoard() } }
             .task {
                 await DebugScene.prepare(workspace, navigation)
-                await DebugScene.signalReady(workspace.services.store)
+                await DebugScene.signalReady(workspace.services)
             }
         #else
         self

@@ -109,7 +109,7 @@ final class SendState {
     /// Pi 会话的显示名：本机在线的取桥上的，别的 Mac 上的与刚结束的取同步记录里的。
     func sessionName(_ sessionID: String) -> String {
         liveSession(sessionID)?.displayName
-            ?? services.liveSessions.items.first { $0.state.sessionID == sessionID }?.state.title
+            ?? services.liveSessions.items?.first { $0.state.sessionID == sessionID }?.state.title
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
