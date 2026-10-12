@@ -11,8 +11,9 @@ nonisolated private struct SidebarData: Sendable, Equatable {
 
 /// 侧栏从上到下：项目（置顶的在前，末尾未分类）、紧接着 Agent（只列在线的会话，全部列出；其余与历史在"全部"打开的 Agent 整页里），
 /// 底栏是归档、回收站与设置。点哪一行，内容区就是哪一页。两区按内容高度分（`SidebarSplit`）：放得下时各占所需、Agent 紧跟项目，
-/// 剩下的空白在 Agent 区下面；放不下时 Agent 区先拿到所需（最多可用高度的一半），项目区拿剩下的、自己滚动，Agent 区一直停在看得见的地方；
-/// Agent 多到超过一半时它也在自己的区里滚动，"全部"一行留在区底。两区都是普通栈：项目与在线会话是几十行的量级，行高固定。
+/// 剩下的空白在 Agent 区下面；放不下时项目区保住至少一半可用高度，Agent 区先拿到所需、但最多拿到项目区用剩的高度，
+/// 项目区拿剩下的、自己滚动（方向键与 ⌘1–9 换到的项目滚到露出），Agent 区一直停在看得见的地方；Agent 多到超过这个上限时
+/// 在自己的区里滚动，"全部"一行留在区底（项目少时上限就是项目区用剩的全部，不在下面空着）。两区都是普通栈：项目与在线会话是几十行的量级，行高固定。
 /// 每一行同一套横向尺寸：图标列（项目图标、会话状态标居中）同宽，项目名、会话名与"全部"落在同一条竖线上。
 struct Sidebar: View {
     @Environment(Workspace.self) private var workspace
@@ -60,7 +61,7 @@ struct Sidebar: View {
             SidebarHeader(title: "项目") {
                 Button("新建项目", systemImage: "plus") { workspace.projectForm = .init() }.disabled(!workspace.isLibraryReady)
             }
-            SidebarScroll {
+            SidebarScroll(revealsPage: true) {
                 ProjectRows(pages: pages, catalog: catalog, now: now, select: select).padding(.horizontal, SidebarMetrics.edge)
             }
         }
@@ -123,32 +124,41 @@ private enum SidebarMetrics {
 }
 
 /// 侧栏一区的滚动：放得下时不弹；下面还有没露出的行时底边淡出一截，看得出能往下滚（只换一层遮盖，不影响排版）。
+/// `revealsPage`：当前页是区里的一行（打开时、方向键、⌘1–9 换到）时滚到它刚好露出，行以页（`Route`）为 id。
 private struct SidebarScroll<Content: View>: View {
+    var revealsPage = false
     @ViewBuilder let content: Content
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var continues = false
 
     private static var fade: CGFloat { 16 }
 
     var body: some View {
-        ScrollView { content }
-            .scrollBounceBehavior(.basedOnSize)
-            .onScrollGeometryChange(for: Bool.self) { $0.visibleRect.maxY < $0.contentSize.height - 1 } action: { continues = $1 }
-            .overlay(alignment: .bottom) {
-                if continues {
-                    LinearGradient(colors: [palette.sidebar.opacity(0), palette.sidebar], startPoint: .top, endPoint: .bottom)
-                        .frame(height: Self.fade)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
+        ScrollViewReader { proxy in
+            ScrollView { content }
+                .scrollBounceBehavior(.basedOnSize)
+                .onScrollGeometryChange(for: Bool.self) { $0.visibleRect.maxY < $0.contentSize.height - 1 } action: { continues = $1 }
+                .onChange(of: revealsPage ? workspace.page : nil, initial: true) { _, page in
+                    // 不给锚点：只滚到刚好露出，已经看得见的不动
+                    if let page { proxy.scrollTo(page) }
                 }
+        }
+        .overlay(alignment: .bottom) {
+            if continues {
+                LinearGradient(colors: [palette.sidebar.opacity(0), palette.sidebar], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Self.fade)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
+        }
     }
 }
 
 /// 侧栏的项目区与 Agent 区按内容高度分可用高度（规则见 `Sidebar`）：只按两区此刻要多高排，不把量到的尺寸写回状态。
 /// 不回答对齐查询（默认实现会递归问遍两区的每一行）。
 private struct SidebarSplit: Layout {
-    /// Agent 区放不下时最多占可用高度的这一份。
+    /// 放不下时项目区至少保住可用高度的这一份；Agent 区的上限是项目区用剩的高度。
     private static let agentShare: CGFloat = 0.5
 
     static func heights(available: CGFloat, projects: CGFloat, agents: CGFloat) -> (projects: CGFloat, agents: CGFloat) {
@@ -237,6 +247,7 @@ private struct ProjectRows: View {
                     project: project, count: catalog.cardCounts[project.id] ?? 0, now: now[project.id], selected: current == .project(project.id),
                     select: select, edit: { workspace.projectForm = .init(project: project) })
                     .equatable()
+                    .id(Route.project(project.id))
             }
             if pages.unfiledCount > 0 {
                 PageRow(page: .unfiled, count: pages.unfiledCount, selected: current == .unfiled, select: select) {
@@ -244,6 +255,7 @@ private struct ProjectRows: View {
                 } title: {
                     Text(CaptureCopy.unfiled)
                 }
+                .id(Route.unfiled)
             }
         }
     }
