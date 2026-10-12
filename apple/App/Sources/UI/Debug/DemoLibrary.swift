@@ -124,8 +124,8 @@ enum DemoLibrary {
 
     typealias DemoTask = (project: String?, text: String, done: Bool)
 
-    /// 三级任务：圆桌的"乱序"一句说明、三条提示词（交给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
-    /// 其中一条再带两条（第三级默认折起）；CuePad 的"投送超时"一条提示词（会是已回复，行尾出现"完成"）。
+    /// 两级任务：圆桌的"乱序"一句说明、三条提示词（交给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
+    /// 其中一条下再挂两条提示词；CuePad 的"投送超时"一条提示词（会是已回复，行尾出现"完成"）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         if let timeout = tasks.first(where: { $0.body.hasPrefix("投送队列") }) {
@@ -143,7 +143,7 @@ enum DemoLibrary {
         let reproduce = try await store.createTask("复现乱序", under: order.id)
         try await store.setStatus(reproduce.id, .done)
         let sort = try await store.createTask("改成按首次加入时间排序", under: order.id)
-        for content in ["补 3 个重连用例", "跑一遍 16 人压测"] { _ = try await store.createTask(content, under: sort.id) }
+        for content in ["补 3 个重连用例", "跑一遍 16 人压测"] { _ = try await store.createCard(body: content, under: sort.id) }
     }
 
     /// 把项目分组与任务写进库；名称为空的一组是未分类的灵感。

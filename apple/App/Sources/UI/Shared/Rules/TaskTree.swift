@@ -21,7 +21,7 @@ nonisolated struct TaskDrop: Equatable, Sendable {
 }
 
 /// 一组任务的层级（手机任务页与项目页、Mac 任务面板与项目页共用）：按输入顺序（同级的手动顺序）建树，上级不在这组里的当顶层；
-/// 排出可见的行（默认都展开），算缩进、反缩进与拖放落点各是哪一次移动。层级数只在 `Card.maxDepth`。
+/// 排出可见的行（默认都展开），算缩进、反缩进与拖放落点各是哪一次移动。任务最多几级只在 `Card.maxTaskDepth`（提示词不在树里，不算一级）。
 nonisolated struct TaskTree: Equatable, Sendable {
     struct Row: Identifiable, Equatable, Sendable {
         var task: Card
@@ -42,7 +42,8 @@ nonisolated struct TaskTree: Equatable, Sendable {
     private var everything: [Card] = []
     private var structure = Structure([])
 
-    private static let deepest = Card.maxDepth - 1
+    /// 最深一级任务的缩进层数（0 起）。
+    private static let deepest = Card.maxTaskDepth - 1
 
     /// `ordered` 是要显示的任务（同级手动顺序）；`all` 是同一范围里库中的全部任务（含已完成），省略时同 `ordered`。
     init(_ ordered: [Card], all: [Card]? = nil) {

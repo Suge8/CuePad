@@ -156,6 +156,22 @@ import Testing
     #expect(try await upgraded.piCheckpoint(of: "s1") == nil)
   }
 
+  /// 结构 23 的库里可能已有第 3 级的任务（旧规则允许）：升到 24 时改挂到上级的上级并带新的修改时间（才会同步出去）；第二级任务下的提示词不动。
+  @Test func schema23LibraryLiftsThirdLevelTasks() async throws {
+    let top = try await store.createTask("上线", in: nil)
+    let sub = try await store.createTask("备份", under: top.id)
+    let deep = try await store.createTask("导出", in: nil)
+    let prompt = try await store.createCard(body: "导出脚本", under: sub.id)
+    let before = try #require(try await store.card(deep.id)).modifiedAt
+    try RawDB(fixture.url).exec("UPDATE cards SET parentID = '\(sub.id.uuidString.lowercased())' WHERE id = '\(deep.id.uuidString.lowercased())'; PRAGMA user_version = 23;")
+
+    let upgraded = try CueStore(url: fixture.url)
+    let lifted = try #require(try await upgraded.card(deep.id))
+    #expect(lifted.parentID == top.id && lifted.modifiedAt > before)
+    #expect(try await upgraded.card(sub.id)?.parentID == top.id)
+    #expect(try await upgraded.card(prompt.id)?.parentID == sub.id)
+  }
+
   /// 更新版本建的库与更早版本建的库（不再升级旧结构）都拒绝打开，不在错位的表结构上读写。
   @Test(arguments: [
     (CueStore.supportedSchemaVersions.upperBound + 1, CueStoreError.unsupportedSchemaVersion(CueStore.supportedSchemaVersions.upperBound + 1)),

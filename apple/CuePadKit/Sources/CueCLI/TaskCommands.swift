@@ -26,7 +26,7 @@ extension Command {
       path: ["task", "add"], summary: "新建任务（顶层的放在项目最前，子任务放在上级的下级最后）", arguments: "<正文...>",
       options: [
         .project("挂到该项目"), .global,
-        Opt("parent", "作为该任务的子任务（项目随它；任务 → 子任务 → 子任务，最多 \(Card.maxDepth) 级）", value: "任务"),
+        Opt("parent", "作为该任务的子任务（项目随它；任务 → 子任务，最多 \(Card.maxTaskDepth) 级）", value: "任务"),
       ],
       notes: Schema.defaultProject(otherwise: "是全局任务") + "；给了 --parent 时不能再给 --project / --global。\n"
         + "正文取所有位置参数，以空格连接：第一行是任务，其余几行成为它的提示词（要交给 Agent 的话）。已有的灵感用 cuepad card todo 变成任务。\n"

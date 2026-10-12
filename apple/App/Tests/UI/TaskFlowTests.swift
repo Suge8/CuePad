@@ -186,13 +186,12 @@ struct TaskFlowTests {
 
     // MARK: 整理任务的层级
 
-    /// a（a1（a1x）、a2）、b。界面给出的每一次移动，Store 都接受。
+    /// a（a1、a2）、b。界面给出的每一次移动，Store 都接受。
     @Test func 整理任务_缩进_反缩进_拖放_界面给出的移动Store都接受() async throws {
         let a = try await store.createTask("a", in: nil)
         let b = try await store.createTask("b", in: nil)
         try await store.moveCard(a.id, to: .top(project: nil), after: nil)
         let a1 = try await store.createTask("a1", under: a.id)
-        let a1x = try await store.createTask("a1x", under: a1.id)
         let a2 = try await store.createTask("a2", under: a.id)
         func tree() async throws -> TaskTree { TaskTree(try await store.tasks(.todo).flatMap(\.tasks)) }
         func apply(_ move: TaskMove?, _ id: UUID) async throws {
@@ -201,12 +200,12 @@ struct TaskFlowTests {
         }
 
         let folded = try await tree().rows(toggled: [])
-        #expect(folded.map(\.id) == [a.id, a1.id, a2.id, b.id] && folded.map(\.depth) == [0, 1, 1, 0])  // 第三级默认折起
-        #expect(try await tree().rows(toggled: [a1.id]).map(\.id) == [a.id, a1.id, a1x.id, a2.id, b.id])
+        #expect(folded.map(\.id) == [a.id, a1.id, a2.id, b.id] && folded.map(\.depth) == [0, 1, 1, 0])
 
-        // 缩进成为上一个同级的最后一个子任务；没有上一个同级、或会超过三级时不能缩进
+        // 缩进成为上一个同级的最后一个子任务；没有上一个同级、或任务会超过两级时不能缩进
         #expect(try await tree().indent(a.id) == nil)
         #expect(try await tree().indent(a1.id) == nil)
+        #expect(try await tree().indent(a2.id) == nil)
         try await apply(try await tree().indent(b.id), b.id)
         #expect(try await store.card(b.id)?.parentID == a.id)
         // 反缩进成为原上级的下一个同级；顶层不能反缩进
@@ -218,22 +217,20 @@ struct TaskFlowTests {
         let rows = try await tree().rows(toggled: [])
         let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
         let middle = CGPoint(x: 100, y: 66)
-        try await apply(try await tree().drop(b.id, rows: rows, frames: frames, at: middle, depthShift: 0)?.move, b.id)
-        #expect(try await store.card(b.id)?.parentID == a1.id)
+        try await apply(try await tree().drop(b.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)?.move, b.id)
+        #expect(try await store.card(b.id)?.parentID == a.id)
         #expect(try await tree().drop(a.id, rows: rows, frames: frames, at: middle, depthShift: 0) == nil)
         let idea = try await store.createCard(in: nil, body: "日志")
         let onto = try await tree().drop(idea: idea.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 46))
         try await apply(onto?.move, idea.id)
         #expect(try await store.card(idea.id)?.parentID == a1.id)
         #expect(try await tree().drop(idea: idea.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 400)) == nil)
-        _ = a2
     }
 
     /// 层级限制与 Store 同一口径：已完成、不显示的子任务也算层级；拖起来又放回原处什么都不改。
-    @Test func 带着已完成第三级子任务的任务不能再缩进_拖起来放回原处不换项目() async throws {
-        let top = try await store.createTask("上线", in: nil)
-        let first = try await store.createTask("备份", under: top.id)
-        let second = try await store.createTask("发布", under: top.id)
+    @Test func 带着已完成子任务的任务不能再缩进_拖起来放回原处不换项目() async throws {
+        let second = try await store.createTask("发布", in: nil)
+        let first = try await store.createTask("备份", in: nil)
         let done = try await store.createTask("写说明", under: second.id)
         try await store.setStatus(done.id, .done)
         let all = try await store.tasks(.inProgress, .todo, .done).flatMap(\.tasks)
@@ -241,7 +238,7 @@ struct TaskFlowTests {
         #expect(tree.indent(second.id) == nil)
         let rows = tree.rows(toggled: [])
         let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
-        let onto = tree.drop(second.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 66), depthShift: 0)
+        let onto = tree.drop(second.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 22), depthShift: 0)
         #expect(onto?.mark != .onto(first.id))
         if let move = onto?.move { try await store.moveCard(second.id, to: move.slot, after: move.after) }
 

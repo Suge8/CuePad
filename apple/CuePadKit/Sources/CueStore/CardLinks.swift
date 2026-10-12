@@ -34,14 +34,14 @@ struct CardLinks {
     return chain
   }
 
-  /// 第几级：顶层是 1。
+  /// 第几级：顶层是 1。只有任务的级别受 `Card.maxTaskDepth` 限制。
   func level(of id: UUID) -> Int { ancestors(of: id).count + 1 }
 }
 
 extension CardLinks {
   /// 离线并发的改动合并后可能违反层级规则；按确定的规则收敛，各设备算出同一结果：
   /// 挂在灵感下的（别处取消了要做）提到那个灵感的位置（挂到它的上级下）；环里 id 最小的回到顶层；
-  /// 挂在第 `maxDepth` 级下的改挂到第 `maxDepth - 1` 级上；下级跟随上级的项目。返回要改写的卡片。
+  /// 第 `maxTaskDepth + 1` 级的任务改挂到上级的上级（提示词不受限）；下级跟随上级的项目。返回要改写的卡片。
   ///
   /// 只查 `changed`（这次远端变更涉及的卡）和它们的全部子孙：层级规则只看一张卡自己、它的上级链和它的下级，
   /// 这次没动过的卡，上级链上没有动过的就不会新违规（应用之前层级是成立的）。整库一万张卡时，每次含卡片的远端批量应用不再整库重算。
@@ -59,10 +59,10 @@ extension CardLinks {
       let breaker = cycle.min { $0.uuidString.lowercased() < $1.uuidString.lowercased() }!
       fixed.relink(breaker, parent: nil)
     }
-    while let deep = region.first(where: { fixed.links[$0] != nil && fixed.level(of: $0) > Card.maxDepth }) {
-      // 最浅的超限者：它的上级在第 maxDepth 级，改挂到上级的上级
+    while let deep = region.first(where: { fixed.links[$0]?.isTask == true && fixed.level(of: $0) > Card.maxTaskDepth }) {
+      // 最浅的超限任务：它的上级在第 maxTaskDepth 级，改挂到上级的上级
       let chain = fixed.ancestors(of: deep)
-      let shallowest = ([deep] + chain).last { fixed.level(of: $0) > Card.maxDepth }!
+      let shallowest = ([deep] + chain).last { fixed.level(of: $0) > Card.maxTaskDepth }!
       fixed.relink(shallowest, parent: fixed.links[shallowest]?.parent.flatMap { fixed.links[$0]?.parent })
     }
     for id in region where fixed.links[id] != nil {
