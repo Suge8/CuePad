@@ -53,9 +53,15 @@ final class CardEditing {
         Outgoing.text(body: handle.selection ?? handle.text ?? text, values: card.variableValues)
     }
 
-    /// 主动作（底栏的主钮与编辑器里的 ⌘↩ 同一个）：提示词发给 Agent，灵感挂到任务。
+    /// 主动作（底栏的主钮与编辑器里的 ⌘↩ 同一个）：提示词发给 Agent，灵感挂到任务。发之前先写下没保存的字：
+    /// 提示词送达就用掉了，之后再写就没有地方了。
     func submit(_ card: Card) {
-        if CardMenu.handsToAgent(card) { workspace.handOff(card, text: outgoing(card, whole: false)) } else { workspace.attaching = card }
+        guard CardMenu.handsToAgent(card) else { return workspace.attaching = card }
+        let text = outgoing(card), autosave = autosave, workspace = workspace
+        Task {
+            await autosave?.flush()
+            workspace.handOff(card, text: text)
+        }
     }
 
     /// 离开编辑：写下没保存的字，空白的不留下。
