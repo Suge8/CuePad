@@ -216,8 +216,9 @@ struct SearchPalette: View {
         .padding(.horizontal, 10).frame(height: 34)
         .background(isSelected ? palette.fill.opacity(3) : .clear, in: .rect(cornerRadius: 9))
         .contentShape(.rect)
-        .onTapGesture(count: 2) { open(card) }
+        // 单击即选中、双击打开（同访达）：双击与单击并列识别——单击排在双击后面时要等过双击间隔才选中，点下去顿半拍
         .onTapGesture { selection = card.id }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { open(card) })
     }
 
     /// 右侧预览：标题、项目与时间、任务的上级与进度、首图、标题之后的全文（搜着词时从命中处起、命中标色）；按内容高度收起，快捷键提示紧跟在下面。

@@ -290,7 +290,7 @@ private struct PageRow<Icon: View, Title: View>: View {
             .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 8))
             .contentShape(.rect)
         }
-        .buttonStyle(PressStyle(scale: 0.98))
+        .buttonStyle(PressStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
         // macOS 不把按钮的"已选中"特征交给读屏，当前页另用值念出来
         .accessibilityValue(selected ? "当前页" : "")
@@ -342,7 +342,7 @@ private struct FooterPage: View {
                 .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 8))
                 .contentShape(.rect)
         }
-        .buttonStyle(PressStyle(scale: Press.button))
+        .buttonStyle(PressStyle())
         .help(title)
         .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -495,7 +495,7 @@ private struct PiSetupRow: View {
                 Image(systemName: "terminal")
             }
         }
-        .buttonStyle(PressStyle(scale: 0.98))
+        .buttonStyle(PressStyle())
         .popover(isPresented: $showing, arrowEdge: .trailing) {
             PiSetupGuide(installation: installation).padding(16).frame(width: 360)
         }

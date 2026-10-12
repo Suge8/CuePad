@@ -170,7 +170,7 @@ private struct SessionLink: ViewModifier {
         } label: {
             content.contentShape(.rect)
         }
-        .buttonStyle(PressStyle(scale: 0.98))
+        .buttonStyle(PressStyle())
         .background(opened ? palette.selection : .clear, in: .rect(cornerRadius: 8))
         .accessibilityAddTraits(opened ? .isSelected : [])
         .accessibilityHint("打开会话")

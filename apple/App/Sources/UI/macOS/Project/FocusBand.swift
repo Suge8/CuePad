@@ -195,7 +195,7 @@ struct CompactFocus: View {
             .padding(.horizontal, 16).frame(height: Spacing.toolbarControl)
             .glass(in: .capsule, interactive: true, ink: .legible)
         }
-        .buttonStyle(PressStyle(scale: 0.98))
+        .buttonStyle(PressStyle())
         // 放在工具栏里时系统默认只显示图标
         .labelStyle(.titleAndIcon)
         .help("回到顶部")

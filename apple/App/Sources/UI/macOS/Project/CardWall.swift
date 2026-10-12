@@ -134,10 +134,9 @@ private struct ColumnsLayout: Layout {
     }
 }
 
-/// 点开编辑页的卡（墙上卡片、"更早"的行）的按压：点下的那一帧直接缩到 `Motion.pressKick`，余下到 `Motion.pressScale`
-/// 缓动；打开后编辑页还在准备的那几帧保持按下，编辑页淡入时松开；松开没打开（拖走、取消）就回弹。按下与否看这张卡的按下状态（`cardHeld`：
-/// 鼠标按着——AppKit 分发按下事件时就记下，早于按钮识别——或已打开、编辑页还在准备），按钮自己识别出的按下兜底。
-/// 减弱动态效果时不缩放，只略微变淡。
+/// 点开编辑页的卡（墙上卡片、"更早"的行）的按压：样子同 `CardPressStyle`（`PressFeedback`，Mac 是按下即压暗、松开即复原），
+/// 只是按下与否看这张卡的按下状态（`cardHeld`：鼠标按着——AppKit 分发按下事件时就记下，早于按钮识别——或已打开、编辑页还在准备），
+/// 按钮自己识别出的按下兜底：打开后编辑页还在准备的那几帧保持按下，编辑页淡入时松开；松开没打开（拖走、取消）就复原。
 struct CardOpenStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         Pressed(configuration: configuration)
@@ -146,18 +145,10 @@ struct CardOpenStyle: ButtonStyle {
     private struct Pressed: View {
         let configuration: Configuration
         @Environment(\.cardHeld) private var held
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-        private static let reducedOpacity = 0.85
 
         var body: some View {
-            let down = configuration.isPressed || held
             configuration.label
-                .scaleEffect(down && !reduceMotion ? Motion.pressKick : 1)
-                .opacity(down && reduceMotion ? Self.reducedOpacity : 1)
-                .animation(down ? nil : Motion.press, value: down)
-                .scaleEffect(down && !reduceMotion ? Motion.pressScale / Motion.pressKick : 1)
-                .animation(Motion.press, value: down)
+                .modifier(PressFeedback(pressed: configuration.isPressed || held, scale: Press.card, haptic: false, darken: true))
         }
     }
 }
@@ -204,7 +195,6 @@ struct CardTile: View {
     let lastTarget: String?
     let floated: Bool
     @Environment(Workspace.self) private var workspace
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     var body: some View {
@@ -215,7 +205,6 @@ struct CardTile: View {
         .contentShape(.rect(cornerRadius: Self.radius))
         }
         .buttonStyle(CardOpenStyle())
-        .offset(y: hovering && !reduceMotion ? -1 : 0)
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)

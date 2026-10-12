@@ -313,7 +313,7 @@ private struct EditorBar: View {
                     }
                 }
                 .labelStyle(.iconOnly)
-                .buttonStyle(PressStyle(scale: 0.88))
+                .buttonStyle(PressStyle())
                 .font(.system(size: 14))
                 .padding(.horizontal, 16).frame(height: 44)
                 .glass(in: .capsule, interactive: true)
@@ -380,7 +380,7 @@ private struct VariablesChip: View {
             .frame(maxWidth: 260)
             .contentShape(.capsule)
         }
-        .buttonStyle(PressStyle(scale: 0.97))
+        .buttonStyle(PressStyle())
         .glass(in: .capsule, interactive: true)
         .popover(isPresented: $editing, arrowEdge: .top) { VariablesForm(card: card, names: names) { editing = false } }
         .help("变量取值")

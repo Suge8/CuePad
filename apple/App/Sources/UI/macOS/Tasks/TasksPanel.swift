@@ -144,7 +144,7 @@ struct TaskRow: View {
             Button { toggle() } label: {
                 TaskRingView(status: task.status, ring: TaskRing(marks), done: done, size: compact ? 12 : 14)
             }
-            .buttonStyle(PressStyle(scale: 0.85))
+            .buttonStyle(PressStyle())
             .accessibilityLabel(done ? "回到待办" : "完成")
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)

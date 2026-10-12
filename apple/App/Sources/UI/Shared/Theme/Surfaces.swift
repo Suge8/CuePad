@@ -93,11 +93,7 @@ enum Motion {
     static let panel = snappy
     /// 颜色、透明度、悬停这类不移动位置的反馈。
     static let quick = Animation.easeOut(duration: 0.16)
-    /// 点下要打开的卡：缩到这个比例（Mac 的 `CardOpenStyle`）。
-    static let pressScale: CGFloat = 0.98
-    /// 点下的那一帧先直接缩到这里，余下的再缓动：动画的第一帧进度为零，全靠缓动的话点下那一帧看不出变化。
-    static let pressKick: CGFloat = 0.99
-    /// Mac 点开卡片（`CardOpenStyle`）的按下与回弹。
+    /// 手机底部栏那一格的按下与回弹。
     static let press = Animation.easeOut(duration: 0.1)
     /// 按下：快、不回弹，手指一落就到位。
     static let pressDown = Animation.spring(duration: 0.14, bounce: 0)
@@ -112,8 +108,11 @@ enum Motion {
     }
 }
 
-/// 按压反馈只有这几类（`PressStyle`、`CardPressStyle`、`RowPressStyle`、系统的主按钮），按下快、松开带一点回弹；
-/// 圆钮与卡片按下有一下轻触感，行只亮底不缩放（一屏几十行，缩放会让列表显得软）。减弱动态效果时只降透明度。
+/// 按压反馈只有这几类（`PressStyle`、`CardPressStyle`、`RowPressStyle`、系统的主按钮），按下的样子只在 `PressFeedback` 定。
+/// 手机：按下快、松开带一点回弹；圆钮与卡片按下有一下轻触感，行只亮底不缩放（一屏几十行，缩放会让列表显得软）；减弱动态效果时只降透明度。
+/// Mac 照原生控件（访达、邮件、备忘录的按钮、列表与卡片都这样）：按下的那一刻变淡（卡片压暗一层），松开即复原，
+/// 不缩放、不回弹、不震动——缩放与回弹是触屏的习惯，在指针下显得软、慢；触控板的震动在 macOS 只给对齐这类反馈，点按钮不震。
+/// 下面的比例只给手机。
 enum Press {
     /// 圆钮、图标按钮。
     static let button: CGFloat = 0.9
@@ -123,7 +122,7 @@ enum Press {
     static let card: CGFloat = 0.97
 }
 
-/// 圆钮、图标按钮与胶囊的按下反馈：弹簧缩放 + 一下轻触感。`scale` 见 `Press`。
+/// 圆钮、图标按钮与胶囊的按下反馈（两端的样子见 `Press`）；`scale` 只给手机。
 struct PressStyle: ButtonStyle {
     var scale: CGFloat = Press.control
 
@@ -132,7 +131,7 @@ struct PressStyle: ButtonStyle {
     }
 }
 
-/// 整张卡片的按下反馈：缩到 97%、略压暗，松开弹回，按下一下轻触感。
+/// 整张卡片的按下反馈：压暗一层（手机另缩到 97%、松开弹回、一下轻触感）。
 struct CardPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         PressBody(configuration: configuration, scale: Press.card, haptic: true, darken: true)
@@ -158,6 +157,21 @@ struct PressFeedback: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isEnabled) private var isEnabled
 
+    #if os(macOS)
+    @Environment(\.palette) private var palette
+    /// 按钮按下时内容的透明度；卡片不变淡（整张变淡像停用），压暗一层。
+    private static let dimmed = 0.6
+    private static let shade = 0.05
+
+    func body(content: Content) -> some View {
+        let active = pressed && isEnabled
+        content
+            .opacity(active && !darken ? Self.dimmed : 1)
+            .brightness(active && darken ? (palette.dark ? Self.shade : -Self.shade) : 0)
+            // 原生控件的高亮没有过渡：按下、松开都在那一帧到位
+            .animation(nil, value: active)
+    }
+    #else
     func body(content: Content) -> some View {
         let active = pressed && isEnabled
         content
@@ -167,6 +181,7 @@ struct PressFeedback: ViewModifier {
             .animation(active ? Motion.pressDown : Motion.pressUp, value: active)
             .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: active) { _, now in haptic && now }
     }
+    #endif
 }
 
 /// 圆钮、胶囊与行尾动作的几何：可见尺寸按平台，iPhone 的命中高度始终至少 44。

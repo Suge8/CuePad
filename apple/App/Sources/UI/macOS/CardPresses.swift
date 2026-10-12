@@ -55,8 +55,8 @@ final class CardPresses {
     /// 点下的第一帧就有反馈。
     func mouse(down: Bool) {
         guard down else {
-            // 松开到"打开中"接上之间隔着一两次更新：这时就放开，卡片会先弹一下再按回去（两段动画叠加还会压得更小）。
-            // 稍等再放开；打开了就由"打开中"接着按住，没打开（取消）这时才回弹
+            // 松开到"打开中"接上之间隔着一两次更新：这时就放开，卡片会先亮一下再压暗回去。
+            // 稍等再放开；打开了就由"打开中"接着按住，没打开（取消）这时才复原
             let card = pressed
             Task {
                 try? await Task.sleep(for: Self.releaseGrace)

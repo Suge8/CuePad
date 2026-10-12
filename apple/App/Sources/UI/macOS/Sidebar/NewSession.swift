@@ -115,7 +115,7 @@ struct NewSessionForm: View {
             .background(selected ? palette.selection : .clear, in: .rect(cornerRadius: 7))
             .contentShape(.rect)
         }
-        .buttonStyle(PressStyle(scale: 0.98))
+        .buttonStyle(PressStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
