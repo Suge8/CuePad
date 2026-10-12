@@ -98,14 +98,17 @@ public actor CloudSync {
     let id = CKRecord.ID(recordName: recordName, zoneID: zoneID)
     let change: CKSyncEngine.PendingRecordZoneChange = deleted ? .deleteRecord(id) : .saveRecord(id)
     engine.state.remove(pendingRecordZoneChanges: [change])
-    let received: Bool
+    let result: SendNowResult
     do {
-      received = try await coordinator.sendNow(id, deleted: deleted, via: uploader)
+      result = try await coordinator.sendNow(id, deleted: deleted, via: uploader)
     } catch {
       engine.state.add(pendingRecordZoneChanges: [change])
       throw error
     }
-    guard received else {
+    switch result {
+    case .received: engine.state.remove(pendingRecordZoneChanges: [change])  // 重传时结果入口可能又登记过一次
+    case .receivedWithNewerVersionPending: break  // 更新的版本由结果入口登记，引擎来传
+    case .rejected:
       engine.state.add(pendingRecordZoneChanges: [change])  // 服务器没收下（限流、服务暂不可用等）：引擎照常重试
       throw SyncError.notUploaded
     }

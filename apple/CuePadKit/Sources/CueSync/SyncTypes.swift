@@ -70,6 +70,15 @@ public struct SyncIssue: Equatable, Sendable {
 }
 
 extension Error {
+  /// 写进日志的原因：CloudKit 错误取错误码、服务器的说明（`localizedDescription` 常只剩"错误 14"，说明在 userInfo 的文字项里，
+  /// 如 `ServerErrorDescription`）与建议的重试间隔；整个 `description` 带记录内容，不进日志。
+  var brief: String {
+    guard let error = self as? CKError else { return localizedDescription }
+    let reasons = error.errorUserInfo.sorted { $0.key < $1.key }.compactMap { key, value in (value as? String).map { "\(key)=\($0)" } }
+    let retry = error.retryAfterSeconds.map { "，\($0) 秒后重试" } ?? ""
+    return "\(error.code.rawValue) \(error.code)" + (reasons.isEmpty ? "" : " " + reasons.joined(separator: "，")) + retry
+  }
+
   /// 给人排查用的完整原因：CloudKit 被服务端拒绝时 `localizedDescription` 常只剩"错误 N"，服务端说明与底层错误在 `description` 里。
   var diagnosis: String { "\(localizedDescription)（\(self)）" }
 }

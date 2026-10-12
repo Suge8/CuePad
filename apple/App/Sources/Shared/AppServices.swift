@@ -167,7 +167,7 @@ final class AppServices {
             try await sync.sendNow(recordName: record.uuidString.lowercased(), deleted: deleted)
             Self.log.info("立即上传 \(record.uuidString.prefix(8), privacy: .public) 用时 \(Date.now.timeIntervalSince(began), format: .fixed(precision: 1)) 秒")
         } catch {
-            Self.log.notice("立即上传记录失败，等引擎自动上传：\(String(describing: error))")
+            Self.log.notice("立即上传记录失败，等引擎自动上传：\(error.localizedDescription, privacy: .public)")
         }
     }
 

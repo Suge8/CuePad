@@ -9,6 +9,16 @@ struct SentRecords: Sendable {
   var failedDeletes: [(id: CKRecord.ID, error: CKError)] = []
 }
 
+/// 立即上传一条记录的结局。
+enum SendNowResult: Equatable {
+  /// 服务器收下了，本机没有更新的版本待传。
+  case received
+  /// 服务器收下了，但上传期间本机又改过：更新的版本仍待推送（已登记给引擎）。
+  case receivedWithNewerVersionPending
+  /// 服务器没收下，仍待推送。
+  case rejected
+}
+
 /// 能把记录直接存进（或从中删除）同步区的数据库（真实实现见 `DatabaseRecordUploader`）。
 protocol RecordUploader: Sendable {
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords
