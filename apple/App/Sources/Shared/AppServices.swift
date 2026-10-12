@@ -158,12 +158,14 @@ final class AppServices {
         return request
     }
 
-    /// 立即只上传这一条记录，不等引擎的自动调度（几秒到几十秒）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的
+    /// 立即只上传这一条记录，不等引擎的自动调度（几秒到几十秒），也不排在引擎正在做的事后面（`CloudSync.sendNow`）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的
     /// 会话状态后都调用。失败只记日志，引擎会照常重试。返回时这一条已经传完（或失败）。
     func upload(_ record: UUID, deleted: Bool = false) async {
         guard let sync else { return }
+        let began = Date.now
         do {
             try await sync.sendNow(recordName: record.uuidString.lowercased(), deleted: deleted)
+            Self.log.info("立即上传 \(record.uuidString.prefix(8), privacy: .public) 用时 \(Date.now.timeIntervalSince(began), format: .fixed(precision: 1)) 秒")
         } catch {
             Self.log.notice("立即上传记录失败，等引擎自动上传：\(String(describing: error))")
         }

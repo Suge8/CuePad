@@ -51,6 +51,30 @@ actor FakeQueue: ChangeQueue {
   }
 }
 
+/// 按顺序回放的数据库替身：记下每次被要的令牌与要哪些字段（nil：整条），以及每次按 ID 取了哪些记录。
+actor FakeZone: ZoneChangeSource {
+  private(set) var calls: [(token: Data?, keys: [String]?)] = []
+  private(set) var fetches: [[CKRecord.ID]] = []
+  private var responses: [Result<ZoneChangeBatch, any Error>]
+  /// 按 ID 取整条记录时的服务器内容。
+  var server: [CKRecord.ID: CKRecord] = [:]
+
+  init(_ responses: [Result<ZoneChangeBatch, any Error>], server: [CKRecord] = []) {
+    self.responses = responses
+    self.server = Dictionary(uniqueKeysWithValues: server.map { ($0.recordID, $0) })
+  }
+
+  func changes(since token: Data?, keys: [String]?) async throws -> ZoneChangeBatch {
+    calls.append((token, keys))
+    return try responses.removeFirst().get()
+  }
+
+  func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] {
+    fetches.append(ids)
+    return ids.compactMap { server[$0] }
+  }
+}
+
 let testZone = CKRecordZone.ID(zoneName: "CuePadTest", ownerName: CKCurrentUserDefaultName)
 
 /// 一套 store + 同步协调器 + 假队列。

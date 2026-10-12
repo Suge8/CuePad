@@ -1,10 +1,12 @@
 import CloudKit
 import Foundation
+import os
 
 /// 同步逻辑：待推送对账、远端变更应用、发送结果处理、账号与状态。
 /// 不接触 CKSyncEngine；与引擎之间只有 `CloudEvent`（进）和 `ChangeQueue`、`record(for:)`（出）。
 actor SyncCoordinator {
   private static let issueLimit = 50
+  private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
 
   let store: CueStore
   private let queue: any ChangeQueue
@@ -114,6 +116,16 @@ actor SyncCoordinator {
     }
   }
 
+  /// 立即把一条记录直接存到服务器（不经引擎的队列，见 `RecordUploader`）；结果与引擎发送的结果同一个入口处理。
+  /// 整个请求失败（离线）时抛出，记录仍待推送。
+  func sendNow(_ id: CKRecord.ID, deleted: Bool, via uploader: any RecordUploader) async throws {
+    guard needsDecision == nil else { return }
+    let saving = deleted ? nil : await record(for: id)
+    guard deleted || saving != nil else { return }  // 行已不在：没有可传的
+    let sent = try await uploader.upload(saving: saving.map { [$0] } ?? [], deleting: deleted ? [id] : [])
+    await handle(.sent(saved: sent.saved, failedSaves: sent.failedSaves, deleted: sent.deleted, failedDeletes: sent.failedDeletes))
+  }
+
   var alertSubscription: PiAlertSubscriptionStatus { state.alerts }
   func setAlerts(_ alerts: PiAlertSubscriptionStatus) { state.alerts = alerts }
 
@@ -204,6 +216,7 @@ actor SyncCoordinator {
         continue
       }
       serverValues.learn(row)  // 服务器上就是这个样子，不管本机最后留下哪个版本
+      if row.table == .deliveryRequests { traceArrival(of: record, row) }
       if row.table == .attachments, !adoptAsset(of: record, row) { continue }
       changes.append(.save(row, systemFields: RecordMapper.encodeSystemFields(record)))
     }
@@ -218,6 +231,16 @@ actor SyncCoordinator {
     for failure in try await store.applyRemote(changes) {
       report(failure.message, recordType: nil, recordName: failure.recordName)
     }
+  }
+
+  /// 投送请求（及其结果）到达的时间线：创建 → 服务器（对端上传用了多久）→ 本机（拉取用了多久）。
+  private func traceArrival(of record: CKRecord, _ row: SyncRow) {
+    guard case .int(let created)? = row.fields["createdAt"], case .text(let status)? = row.fields["status"],
+      let stored = record.modificationDate
+    else { return }
+    let toServer = stored.timeIntervalSince(Date(timeIntervalSince1970: Double(created) / 1000))
+    Self.log.info(
+      "投送请求到达 \(record.recordID.recordName.prefix(8), privacy: .public) \(status, privacy: .public)：创建后 \(toServer, format: .fixed(precision: 1)) 秒到服务器，再 \(Date.now.timeIntervalSince(stored), format: .fixed(precision: 1)) 秒到本机")
   }
 
   /// 附件记录必须带文件且内容与哈希一致，才把文件放进附件目录；否则拒绝这条记录并报告。
