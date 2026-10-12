@@ -180,7 +180,7 @@ extension CueStore {
     }
   }
 
-  /// 设为任务 / 改回灵感。设为任务：成为待办的任务；多行的话第一行留作任务，其余成为它的第一条提示词（`CueTask.split`）。
+  /// 设为任务 / 改回灵感。设为任务：成为待办的任务；多行的话第一行留作任务，其余成为它的第一条提示词（`CueLines.split`）。
   /// 改回：回到灵感（状态与会话关联清掉），它的下级按原顺序提到它的位置。挂在第 `Card.maxTaskDepth` 级任务下的提示词设为任务抛 `taskTooDeep`。已经是这个样子时什么都不做、返回 nil；
   /// 否则返回回执（`undo` 拨回）。
   @discardableResult
@@ -206,12 +206,12 @@ extension CueStore {
     return .todo(id: id, on: on, body: card.body, variableValues: card.variableValues, prompt: prompt, lifted: lifted)
   }
 
-  /// 任务正文除标题外还有话时拆出来（`CueTask.split`）：其余成为排在它下级最前的一条提示词，
-  /// 带着任务的变量取值与会话；发给 Agent 的记录（发送记录、投送请求）跟到提示词上。返回提示词的 id，没有可拆的为 nil。
-  /// 设为任务与新建任务共用。
-  static func splitPrompt(_ db: SQLite, task: UUID, at now: Date) throws -> UUID? {
+  /// 任务正文除标题外还有话时拆出来（`CueLines.split`）：其余成为排在它下级最前的一条提示词，
+  /// 带着任务的变量取值；`carryingHandoff`（设为任务：灵感原本交给过会话）时再带上会话，发给 Agent 的记录（发送记录、投送请求）跟到提示词上。
+  /// 返回提示词的 id，没有可拆的为 nil。设为任务、新建任务与结构升级共用。
+  static func splitPrompt(_ db: SQLite, task: UUID, at now: Date, carryingHandoff: Bool = true) throws -> UUID? {
     guard let body = try db.first("SELECT body FROM cards WHERE id = ?", [task], { $0.text(0) }) else { return nil }
-    let (heading, prompt) = CueTask.split(body)
+    let (heading, prompt) = CueLines.split(body)
     guard let prompt else { return nil }
     let first = try db.first("SELECT MIN(sortKey) FROM cards WHERE parentID = ?", [task]) { $0.textOrNil(0) } ?? nil
     let promptID = UUID()
@@ -219,11 +219,11 @@ extension CueStore {
       """
       INSERT INTO cards (id, projectID, body, isPinned, variableValues, sortKey, conflictOf, deletedAt, createdAt, modifiedAt,
         parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt)
-      SELECT ?1, projectID, ?2, 0, variableValues, ?3, NULL, NULL, createdAt, ?4, id, NULL, NULL, NULL, piSessionID, archivedAt
+      SELECT ?1, projectID, ?2, 0, variableValues, ?3, NULL, NULL, createdAt, ?4, id, NULL, NULL, NULL, CASE WHEN ?6 THEN piSessionID END, archivedAt
       FROM cards WHERE id = ?5
-      """, [promptID, prompt, SortKey.before(first), now, task])
+      """, [promptID, prompt, SortKey.before(first), now, task, carryingHandoff ? 1 : 0])
     try db.run("UPDATE cards SET body = ?, variableValues = '{}', modifiedAt = ? WHERE id = ?", [heading, now, task])
-    for table in ["sendRecords", "deliveryRequests"] {
+    for table in carryingHandoff ? ["sendRecords", "deliveryRequests"] : [] {
       try db.run("UPDATE \(table) SET cardID = ?, modifiedAt = ? WHERE cardID = ?", [promptID, now, task])
     }
     return promptID

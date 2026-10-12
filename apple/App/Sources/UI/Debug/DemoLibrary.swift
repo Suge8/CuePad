@@ -124,7 +124,7 @@ enum DemoLibrary {
 
     typealias DemoTask = (project: String?, text: String, done: Bool)
 
-    /// 两级任务：圆桌的"乱序"一句说明、四条提示词（发给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
+    /// 两级任务：圆桌的"乱序"四条提示词（发给 Agent 的状态见 `DebugScene.seedTaskStates`），两条子任务（一条已完成），
     /// 其中一条下再挂两条提示词；CuePad 的"投送超时"一条提示词（演示里发给 notes，送达后用掉）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
@@ -132,7 +132,6 @@ enum DemoLibrary {
             _ = try await store.createCard(body: "投送超时时先重试一次，还失败再报错，并在提示里写明原因", under: timeout.id)
         }
         guard let order = tasks.first(where: { $0.body.hasPrefix("发言轮次") }) else { return }
-        try await store.updateCard(order.id) { $0.body += "\n第 6 位重连后会排到最前" }
         for body in [
             "跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码，告诉我原因和改法",
             "按首次加入时间排序，把断言也改了，再跑一遍",

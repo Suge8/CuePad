@@ -3,51 +3,41 @@ import CueText
 import SwiftUI
 
 
-// 任务浮窗（手机、Mac 都是盖在当前页上的一层）的几块：任务是一件要做成的事——标题与一句说明（`TaskHeading`）；
+// 任务浮窗（手机、Mac 都是盖在当前页上的一层）的几块：任务是一件要做成的事——只有标题（`TaskHeading`）；
 // 要发给 Agent 的话是挂在它下面的提示词，一张一张卡（`PromptList`），是这一页的主体；子任务是次要的一组（`SubtaskList`）。
 
 
-/// 任务的标题（单行）与可选的一句说明，就地改、自动保存（存成两行，见 `CueTask`）。标题里按回车跳到说明。
+/// 任务的标题（单行），就地改、自动保存。回车结束编辑。
 struct TaskHeading: View {
     let task: Card
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var title = ""
-    @State private var note = ""
     @State private var autosave: Autosave?
-    @FocusState private var focus: Field?
-    private enum Field { case title, note }
+    @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            TextField("这件事是…", text: $title, axis: .vertical)
-                .font(TaskMetrics.title).foregroundStyle(task.status == .done ? palette.ink3 : palette.ink)
-                .lineLimit(1...3).focused($focus, equals: .title)
-                .onChange(of: title) { _, next in
-                    // 标题只有一行：回车去写说明
-                    if next.contains("\n") { title = next.replacingOccurrences(of: "\n", with: ""); focus = .note }
-                    save()
-                }
-            TextField("加一句说明（可不填）", text: $note, axis: .vertical)
-                .font(TaskMetrics.font).foregroundStyle(palette.ink2)
-                .lineLimit(1...3).focused($focus, equals: .note)
-                .onChange(of: note) { save() }
-        }
-        .textFieldStyle(.plain)
-        .onAppear {
-            let text = CueTask(task.body)
-            title = text.title
-            note = text.note
-            let store = services.store, id = task.id
-            autosave = Autosave(save: { body in try await store.updateCard(id) { $0.body = body } }, onError: workspace.fail)
-        }
-        .onDisappear { if let autosave { Task { await autosave.flush() } } }
+        TextField("这件事是…", text: $title, axis: .vertical)
+            .font(TaskMetrics.title).foregroundStyle(task.status == .done ? palette.ink3 : palette.ink)
+            .lineLimit(1...3).focused($focused)
+            .onChange(of: title) { _, next in
+                // 标题只有一行：回车结束编辑
+                if next.contains("\n") { title = next.replacingOccurrences(of: "\n", with: ""); focused = false }
+                save()
+            }
+            .textFieldStyle(.plain)
+            .onAppear {
+                title = CueSummary(task.body).title
+                let store = services.store, id = task.id
+                autosave = Autosave(save: { body in try await store.updateCard(id) { $0.body = body } }, onError: workspace.fail)
+            }
+            .onDisappear { if let autosave { Task { await autosave.flush() } } }
     }
 
     private func save() {
-        let stored = CueTask(title: title, note: note).stored
-        guard stored != CueTask(task.body).stored else { return }
+        let stored = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard stored != CueSummary(task.body).title else { return }
         autosave?.changed(stored)
     }
 }
