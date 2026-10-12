@@ -27,7 +27,7 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
             workspace.show(.agent)
         case "projectagent":
-            // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在
+            // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，交出去的提示词带进度行（工作中、等你确认、已回复）
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)

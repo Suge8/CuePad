@@ -34,7 +34,7 @@ struct TasksPanel: View {
                     .labelStyle(.iconOnly).buttonStyle(.borderless).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 6)
-            NewTaskField(project: workspace.currentProject, choosesProject: true)
+            NewTaskField(project: workspace.currentProject, choosesProject: true, autofocus: true)
                 .padding(.horizontal, 20).padding(.bottom, 6)
             ScrollView {
                 if let board { list(board, lazy: lazy) }
@@ -46,7 +46,8 @@ struct TasksPanel: View {
         .fixedSize(horizontal: false, vertical: !lazy)
         // 浮在项目页上、背后是卡片与任务纸，自己是一整页字（`GlassInk.solid`）
         .glass(in: .rect(cornerRadius: 26), ink: .solid)
-        // 点任务上的会话状态打开它的详情：与侧栏、⌘K 同一个详情弹出层
+        // 面板挂在页面之外：提示词行读的"交给了哪个会话"在这里补上
+        .modifier(WindowCardAgents(workspace: workspace))
         .observing(services.store, into: $board, onError: workspace.fail) {
             try TaskBoard.read(from: $0)
         }
@@ -104,7 +105,7 @@ struct TasksPanel: View {
                 let info = board.rows[row.id]
                 TaskRow(
                     task: row.task, depth: row.depth, project: row.depth == 0 ? info?.project : nil,
-                    session: info?.session.map(workspace.withLiveState), delivery: info?.delivery, marks: board.children[row.id],
+                    session: info?.session, delivery: info?.delivery, marks: board.children[row.id],
                     prompts: board.prompts[row.id] ?? [], expanded: row.isExpanded)
             }
             .padding(.horizontal, 12)
@@ -113,7 +114,7 @@ struct TasksPanel: View {
 
     private func rows(_ items: [TaskBoard.Row]) -> some View {
         ForEach(items) { row in
-            TaskRow(task: row.task, project: row.project, session: row.session.map(workspace.withLiveState), delivery: row.delivery)
+            TaskRow(task: row.task, project: row.project, session: row.session, delivery: row.delivery)
                 .padding(.horizontal, 12)
         }
     }

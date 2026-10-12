@@ -5,12 +5,15 @@ import Observation
 /// 各张卡的按下、打开与选中状态（Mac）。按卡分开、各自可观察：按下、打开、选中时只有这张卡的视图重算，
 /// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
 ///
-/// 批量选择：⌘ 点一张卡或右键"选择"开始，之后点卡就是选上或取消，底部换成批量操作栏（`SelectionBar`）；一条都没选了就回到平常。
+/// 批量选择：⌘ 点一张卡、右键"选择"或工具栏"⋯"里的"选择灵感"开始，之后点卡就是选上或取消，底部换成批量操作栏（`SelectionBar`）；
+/// 取消到一条都不剩也还在选择中，按操作栏的"完成"（Esc）或切页、打开卡才回到平常。
 @Observable
 final class CardPresses {
     /// 编辑页挂在屏上的卡：比 `Workspace.openCard` 晚一步清空，淡出期间仍在。
     private(set) var presented: UUID?
-    /// 选中的卡（批量操作）；空着就不在选择中。只有底部的操作栏读它，卡各自读自己的 `CardPresence.selected`。
+    /// 在批量选择中（可以一条都还没选）。
+    private(set) var isSelecting = false
+    /// 选中的卡（批量操作）。只有底部的操作栏读它，卡各自读自己的 `CardPresence.selected`。
     private(set) var selected: Set<UUID> = []
     /// 当前页能选的卡（"全选"的范围），由看得见的项目页报来，按页上的顺序。
     @ObservationIgnored var selectable: [UUID] = []
@@ -29,7 +32,7 @@ final class CardPresses {
         return presence
     }
 
-    var isSelecting: Bool { !selected.isEmpty }
+    func beginSelecting() { isSelecting = true }
 
     /// 点卡时先问这里：在选择中或按着 ⌘ 时这一下是选上或取消（返回 true，不打开）。
     func takesClick(on card: UUID, command: Bool) -> Bool {
@@ -49,10 +52,16 @@ final class CardPresses {
     func clearSelection() {
         for card in selected { presence(of: card).selected = false }
         selected = []
+        isSelecting = false
     }
 
     private func set(_ card: UUID, selected on: Bool) {
-        if on { selected.insert(card) } else { selected.remove(card) }
+        if on {
+            isSelecting = true
+            selected.insert(card)
+        } else {
+            selected.remove(card)
+        }
         presence(of: card).selected = on
     }
 

@@ -26,6 +26,7 @@ struct SelectionBar: View {
                     .contentShape(.capsule)
             }
             .keyboardShortcut(.delete, modifiers: .command)
+            .disabled(count == 0)
             .help("删除选中的 \(count) 条（⌘⌫），可撤销")
         }
         .buttonStyle(PressStyle())
