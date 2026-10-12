@@ -16,7 +16,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 并行的 agent 各设 `CUEPAD_DERIVED=/tmp/<名字>`，截图用的隔离库与 Pi 目录随之落在该目录下。
 
-编译报"没有这个成员"但代码里明明有，通常是旧的模块缓存：删掉 `<产物目录>/Build/Products/<平台>/Cue*.swiftmodule` 再编。
+编译报"没有这个成员"但代码里明明有，或改了 CuePadKit 里公开类型的存储属性之后 App 一启动就崩在 Kit 的释放里（依赖它的模块没重编，还按旧的内存布局读），都是旧的模块缓存：删掉 `<产物目录>/Build/Products/<平台>/Cue*.swiftmodule` 再编，仍不行就换一个空的产物目录整编。
 
 ## 代码地图
 

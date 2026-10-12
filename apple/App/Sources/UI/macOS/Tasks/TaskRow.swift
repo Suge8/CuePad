@@ -176,7 +176,8 @@ struct PromptLine: View {
         }
         .padding(.horizontal, TaskRow.inset)
         .frame(minHeight: 26)
-        .background(hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
+        // 正在任务浮窗里编辑的那条垫选中色
+        .background(workspace.openTask?.prompt == prompt.id ? palette.selection : hovering ? palette.fill : .clear, in: .rect(cornerRadius: 8, style: .continuous))
         .contentShape(.rect)
         .onHover { hovering = $0 }
         .onTapGesture { workspace.open(prompt) }
