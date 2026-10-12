@@ -5,7 +5,7 @@ import SwiftUI
 /// 任务浮窗：点任务或它的提示词（项目页的任务区、任务面板、⌘K、归档）就在当前页上弹出，不换页。左右两栏，像邮件：
 /// 左边是这件事——完成圈、就地改的标题与一句说明、待发的提示词一条一行（`PromptLine`，点哪条右边就编辑哪条；送达就用掉了，
 /// 发过的话在会话里看）、子任务；
-/// 右边是选中那条提示词的编辑区与操作栏（复制、去处、发给 Agent，⌘↩ 同主钮）。点开任务时右边是第一条还没交出去的提示词；
+/// 右边是一张纸：选中那条提示词的编辑区与操作栏（去处、发给 Agent，⌘↩ 同主钮）。点开任务时右边是第一条还没交出去的提示词；
 /// 一条都没有时右边请你写第一条。整页的编辑页只给散放的灵感。
 struct TaskSheet: View {
     struct Request: Identifiable, Equatable {
@@ -29,13 +29,14 @@ struct TaskSheet: View {
         // ZStack 而不是 Group：数据读到之前 Group 里没有视图，挂在它上面的读库也就不会开始
         ZStack {
             if let data {
+                // 不画分隔线：左栏在浮窗的底色上，右栏是一张纸，两块靠底色分开
                 VStack(spacing: 0) {
                     header(data)
-                    Divider().overlay(palette.hair)
                     HStack(spacing: 0) {
                         list(data).frame(width: Self.listWidth)
-                        Divider().overlay(palette.hair)
                         detail(data)
+                            .background(palette.paperLit, in: .rect(cornerRadius: 12, style: .continuous))
+                            .padding([.trailing, .bottom], 12)
                     }
                 }
             }

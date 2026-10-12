@@ -48,9 +48,9 @@ final class CardEditing {
     /// "已保存"亮过一会儿之后回到平时。
     func settleSaved() { if saveState == .saved { saveState = .idle } }
 
-    /// 交出去或复制的正文（变量已填）：选中了就只是选中的部分，`whole` 时整条。
-    func outgoing(_ card: Card, whole: Bool) -> String {
-        Outgoing.text(body: (whole ? nil : handle.selection) ?? handle.text ?? text, values: card.variableValues)
+    /// 发出去的正文（变量已填）：选中了就只是选中的部分。
+    func outgoing(_ card: Card) -> String {
+        Outgoing.text(body: handle.selection ?? handle.text ?? text, values: card.variableValues)
     }
 
     /// 主动作（底栏的主钮与编辑器里的 ⌘↩ 同一个）：提示词发给 Agent，灵感挂到任务。
@@ -126,7 +126,7 @@ enum SaveState: Equatable {
     }
 }
 
-/// 编辑的操作栏（整页编辑页浮在底部，任务浮窗里接在提示词的编辑区下面）：左边复制全文（变量已填）与变量；右边是主动作——
+/// 编辑的操作栏（整页编辑页浮在底部，任务浮窗里接在提示词的编辑区下面）：左边是变量（有才出现）；右边是主动作——
 /// 灵感是"挂到任务"，提示词是去处加"发给 Agent"（⌘↩ 由编辑器自己接，同 `CardEditing.submit`）。
 /// 选中文字时"发给 Agent"只交出选中的部分，栏上写一句"选中部分"。分割线与转为任务在编辑器的右键菜单里。
 struct EditorBar: View {
@@ -141,15 +141,6 @@ struct EditorBar: View {
         let names = CueVariables.names(in: editing.text), selecting = editing.selecting
         return GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
-                Button { workspace.copy(editing.outgoing(card, whole: true)) } label: {
-                    Label("复制", systemImage: "doc.on.doc")
-                        .font(Typography.secondary.weight(.medium))
-                        .padding(.horizontal, 16).frame(height: 44)
-                        .contentShape(.capsule)
-                }
-                .buttonStyle(PressStyle(scale: 0.97))
-                .glass(in: .capsule, interactive: true)
-                .help("复制全文（变量已填）")
                 if !names.isEmpty { VariablesChip(card: card, names: names) }
                 Spacer(minLength: 0)
                 if selecting {
