@@ -2,7 +2,7 @@ import Foundation
 import SQLite3
 
 /// 绑定到语句的值。只有 CueStore 用到的三种存储类。
-package enum SQLValue: Sendable, Equatable {
+package enum SQLValue: Codable, Sendable, Equatable {
   case null
   case int(Int64)
   case text(String)

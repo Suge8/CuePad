@@ -51,7 +51,7 @@ enum Schema {
     // 23：工具活动的各类计数改为失败的也算在内（与清单的行同一口径，`Tools.failed` 下线）；已存对话里的是旧口径，
     // 会话文件的检查点作废，下次启动从头读一遍，所有消息统一成新口径
     "UPDATE piSessions SET checkpoint = NULL;",
-    // 24：本机交给过服务器、结果还没落账的版本（见 `syncSent`）
+    // 24：本机交给过服务器、结果还没落账的版本整行（见 `syncSent`）
     Upgrade(stringLiteral: syncSent),
     // 25：任务最多两级，提示词不算一级。旧规则下第 3 级的任务（含回收站里的，恢复后同样超限）改挂到上级的上级，与 `CardLinks.repairs` 同一规则；
     // 旧规则最深就是第 3 级，一步够。modifiedAt 必须变大，改动才会同步出去
@@ -66,7 +66,7 @@ enum Schema {
   ]
 
   private static let syncSent = """
-    CREATE TABLE syncSent (recordName TEXT NOT NULL, modifiedAt INTEGER NOT NULL, PRIMARY KEY (recordName, modifiedAt)) STRICT, WITHOUT ROWID;
+    CREATE TABLE syncSent (recordName TEXT NOT NULL, modifiedAt INTEGER NOT NULL, row BLOB NOT NULL, PRIMARY KEY (recordName, modifiedAt)) STRICT, WITHOUT ROWID;
     """
 
   private static let previews = """
@@ -171,8 +171,8 @@ enum Schema {
       pushedModifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
-    -- 本机交给过服务器、结果还没落账的版本（记录名 + 修改时间）：这一版经拉取回到本机是自己的回声，不是别的设备的编辑。
-    -- 落账（pushedModifiedAt 推进到它或更新）时清掉；落账之后的回声由 pushedModifiedAt 认出。
+    -- 本机交给过服务器、结果还没落账的版本（整行，JSON）：这一版经拉取回到本机是自己的回声，不是别的设备的编辑；
+    -- 结果回来时按它记账（上传的记录只带改动的字段，不能读回来）。落账（pushedModifiedAt 推进到它或更新）时清掉；落账之后的回声由 pushedModifiedAt 认出。
     \(syncSent)
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 

@@ -13,7 +13,7 @@ package struct SyncKey: Hashable, Sendable {
 }
 
 /// 一条同步表记录：`fields` 含 `id` 与该表全部列（NULL 为 `.null`）。
-package struct SyncRow: Equatable, Sendable {
+package struct SyncRow: Codable, Equatable, Sendable {
   package var table: Table
   package var fields: [String: SQLValue]
 
@@ -121,9 +121,16 @@ extension CueStore {
     try db.first("SELECT systemFields FROM syncRecords WHERE recordName = ?", [recordName]) { $0.blobOrNil(0) } ?? nil
   }
 
-  /// 本机把这一版交给服务器（引擎或立即上传构造记录时）：结果落账前它若经拉取回来，要能认出是自己的。
+  /// 本机把这一版交给服务器（引擎或立即上传构造记录时）：结果落账前它若经拉取回来，要能认出是自己的；结果回来时按它记账。
   package func noteSent(_ row: SyncRow) throws {
-    try write { try db.run("INSERT OR IGNORE INTO syncSent (recordName, modifiedAt) VALUES (?, ?)", [row.id, row.modifiedAt]) }
+    let encoded = try JSONEncoder().encode(row)
+    try write { try db.run("INSERT OR IGNORE INTO syncSent (recordName, modifiedAt, row) VALUES (?, ?, ?)", [row.id, row.modifiedAt, encoded]) }
+  }
+
+  /// 本机交出去、结果还没落账的那一版；没有（已落账、或更新的版本已落账而清掉了）为 nil。落账时才清掉（`markPushed`），读它不改任何东西。
+  package func sentRow(recordName: String, modifiedAt: Int64) throws -> SyncRow? {
+    let encoded = try db.first("SELECT row FROM syncSent WHERE recordName = ? AND modifiedAt = ?", [recordName, modifiedAt]) { $0.blobOrNil(0) } ?? nil
+    return try encoded.map { try JSONDecoder().decode(SyncRow.self, from: $0) }
   }
 
   /// 服务器已接受这条记录：记下它的系统字段与被推送版本的修改时间。之后再改才会重新变成待推送。
