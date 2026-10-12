@@ -190,8 +190,9 @@ extension PiConversation {
 }
 
 
-/// 会话名下的一行小字：状态标与状态词（带色），有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`），
-/// 后面淡一级的计时。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
+/// 会话顶栏（Mac 工具栏标题、手机顶栏）里名字旁的状态，只在在跑或要你注意时出现：在跑（工作中、话在路上）是状态标、状态词与到秒的计时；
+/// 等你确认、出错、没能送达、需要 /reload、已结束只有状态标与状态词（带色）；有没送到的话时接一句胭脂的"N 句没送到"（`PiChat.undeliveredNote`）。
+/// 歇着（该你了、新会话、有新回复）什么都不写，顶栏只有名字。所在与"后台"不放在这里（顶栏一行只说一件事），写在"⋯"菜单的最上面（`PiPlace.menuTitle`）。
 struct PiSessionSubtitle: View {
     let session: PiSessionState
     var undelivered: String?
@@ -200,24 +201,29 @@ struct PiSessionSubtitle: View {
     var body: some View {
         // 顶栏只说会话自己的状态：你的话到哪了写在气泡下面（`DeliveryStatusLabel`）；正在看的会话没有"有新回复"
         let shown = PiShown(session)
-        HStack(spacing: 4) {
-            PiStateDot(shown: shown, size: Self.dot)
-            Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
-                .contentTransition(.opacity)
-                .animation(Motion.quick, value: shown)
-            if let undelivered {
-                Dot().foregroundStyle(palette.failure)
-                Text(undelivered).foregroundStyle(palette.failure)
+        let speaks = shown.isLive || shown.needsYou || shown.status == .restart || shown.status == .ended
+        if speaks || undelivered != nil {
+            HStack(spacing: 4) {
+                if speaks {
+                    PiStateDot(shown: shown, size: Self.dot)
+                    Text(shown.label).fontWeight(shown.needsYou ? .medium : nil).foregroundStyle(shown.labelTint(palette))
+                        .contentTransition(.opacity)
+                        .animation(Motion.quick, value: shown)
+                }
+                if let undelivered {
+                    if speaks { Dot().foregroundStyle(palette.failure) }
+                    Text(undelivered).foregroundStyle(palette.failure)
+                }
+                if shown.isLive, shown.clock != nil {
+                    Dot().foregroundStyle(palette.ink3)
+                    // 整个 App 只有这一个计时到秒：正看着的这个会话
+                    PiElapsed(shown: shown, font: Self.font, precision: .second)
+                }
             }
-            if shown.clock != nil {
-                Dot().foregroundStyle(palette.ink3)
-                // 整个 App 只有这一个计时到秒：正看着的这个会话
-                PiElapsed(shown: shown, font: Self.font, precision: .second)
-            }
+            .font(Self.font)
+            .fixedSize()
+            .accessibilityElement(children: .combine)
         }
-        .font(Self.font)
-        .fixedSize()
-        .accessibilityElement(children: .combine)
     }
 
     private static let font = Typography.caption

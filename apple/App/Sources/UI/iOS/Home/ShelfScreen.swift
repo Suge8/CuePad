@@ -64,9 +64,10 @@ struct ShelfScreen: View {
         let pinned = entries.filter(\.project.isPinned)
         let recent = entries.filter { !$0.project.isPinned }
         // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
+        // 在线会话读到前"此刻"先留空白（`ProjectNow.byProject`），Agent 那一张等读到再出
         let sessions = services.liveSessions.items
         let now = data.now(projects: catalog.projects, sessions: sessions, shown: services.settings.shown)
-        let agent = AgentNow.of(sessions, shown: services.settings.shown)
+        let agent = sessions.flatMap { AgentNow.of($0, shown: services.settings.shown) }
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
             if entries.isEmpty && catalog.unfiledCount == 0 {

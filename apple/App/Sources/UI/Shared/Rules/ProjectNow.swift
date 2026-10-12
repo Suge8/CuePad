@@ -46,6 +46,16 @@ nonisolated struct ProjectNow: Hashable, Sendable {
         return nil
     }
 
+    /// 在线会话还没读到第一份（`LiveSessions.items` 为 nil）时：读到后一定有"此刻"的项目（有进行中任务或介绍）先留一行空白，
+    /// 其余先不留；读到后空白原地淡入真的那句。不先写任务再被会话换掉（先错后对的闪变），名称也不挪位置。
+    static func byProject(
+        _ projects: [Project], sessions: [PiSessionListItem]?, tasks: [UUID: [InProgress]], listed: Set<UUID> = [],
+        shown: (PiSessionListItem) -> PiShown
+    ) -> [UUID: ProjectNow] {
+        let known = byProject(projects, sessions: sessions ?? [], tasks: tasks, listed: listed, shown: shown)
+        return sessions == nil ? known.mapValues { _ in ProjectNow(source: .intro, text: "") } : known
+    }
+
     /// 全部项目一次算完（界面在数据变化时算一次，行只拿结果）：会话按 `projectID` 归到项目。`sessions` 要传此刻有事的会话
     /// （`PiSessionQuery.current`：在线的，加上还有话发给它的已结束会话），只传在线的会漏掉发给已结束会话的话。
     /// `listed` 是同一屏已列出的任务（书架的"正在推进"），任务那一档跳过它们、取下一条；没有这种清单的地方不传。

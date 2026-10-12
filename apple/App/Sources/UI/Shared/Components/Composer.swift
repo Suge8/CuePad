@@ -10,8 +10,8 @@ extension EnvironmentValues {
 
 /// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；图片来源与带上的卡片的菜单、面板
 /// 在 `Composer+iOS`、`Composer+macOS`）：一层玻璃，里面是（调用方放的）头部、带上的卡片、图片条、文字区，以及底下一整排工具：
-/// 左"＋"（选卡片、相册、拍照）、调用方的小圆钮（会话回复框的模型与思考强度，只在聚焦时有），右提交钮。空着又没聚焦时收成一行
-/// （提交钮不占位）；聚焦或有内容时展开成两层，＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文，能"展开编辑"成这次要发的文字。
+/// 左"＋"（选卡片、相册、拍照）、调用方的小圆钮（会话回复框的模型与思考强度），右提交钮。几时一行、几时两层只看 `form`（`ComposerForm`）：
+/// 一行时提交钮不占位，展开成两层时 ＋ 从文字区左边落到工具排左端，同一块玻璃连续变形。带上的卡片点一下看全文，能"展开编辑"成这次要发的文字。
 /// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`）与空着时按 ↑ 调回的那一句（`recall`）。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
@@ -21,17 +21,12 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var accepts: ComposerKinds = [.images, .cards]
     /// 选卡片时排在前面的项目（回复框是会话所属的项目）。
     var cardsFrom: UUID?
-    /// 一直展开（浮起的随手记）。
-    var pinnedOpen = false
-    /// 没聚焦、没内容时收成短胶囊（＋ 与一行提示），点它照常聚焦展开（会话页在看历史时）。
-    var compact = false
+    var form = ComposerForm.open
     /// 这张带上的卡片不能拿掉（交给 Agent 的输入框是为它打开的）。
     var keeps: UUID?
     /// 空着也能提交：提交钮的位置一直在、快捷键不要求有内容（新会话的第一句话可不填；会话回复框在 Agent 跑一轮时空着的钮是"停止"）。
     /// 输入框写着"可不填"的，都靠它——空草稿能不能提交只在这里定。
     var submitsEmpty = false
-    /// 聚焦就展开成两层。会话回复框只在有工具排（模型、思考强度）时这样：已结束的会话没有工具，聚焦了也保持一行，打了字再长。
-    var expandsOnFocus = true
     /// 收成一行时头部也留着（会话回复框：排队的话在这块玻璃的上部）；平时头部只在展开时出现。
     var keepsHeader = false
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
@@ -40,7 +35,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 空着时按 ↑ 放进来的话（回复框：你在这个会话里说过的上一句）。
     var recall: String?
     @ViewBuilder let header: () -> Header
-    /// 工具排里"＋"右边的小圆钮（会话回复框的模型与思考强度），只在聚焦时出现。
+    /// 工具排里"＋"右边的小圆钮（会话回复框的模型与思考强度）：一直展开的形态里一直在，会收起的形态里只在聚焦时出现。
     @ViewBuilder let tools: () -> Tools
     @ViewBuilder let send: () -> Send
     @Environment(Workspace.self) private var workspace
@@ -49,7 +44,6 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 跟着焦点、带动画：UIKit 文字区拿到焦点时的那次更新不带动画，直接读焦点时展开会一帧跳到位
     @State private var focused = false
-    @State private var appeared = false
     @State private var source: ComposerSource?
     @State private var previewing: Outbox?
     /// 斜杠命令面板里高亮的那一行，与按过 Esc 收起面板时的那段文字（文字再变就又弹出）。
@@ -58,14 +52,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// "＋"在一行与两层之间挪位时是同一颗（连续移动）。
     @Namespace private var layout
 
-    /// 单行时输入框高 50（字行 + 上下各 14），圆角取一半成胶囊；圆钮一格 50（36 的圆 + 四周的点按区与边距）、离边 8，与外框同心。
-    private static var radius: CGFloat { 25 }
-    private static var inset: CGFloat { 8 }
-    private static var slot: CGFloat { 50 }
 
-    private var expanded: Bool { !shrunk && (pinnedOpen || (focused && expandsOnFocus) || !draft.isEmpty(accepting: [.images, .cards])) }
+    private var expanded: Bool { !shrunk && (form == .open || (focused && form.opensOnFocus) || !draft.isEmpty(accepting: [.images, .cards])) }
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。有草稿也收（胶囊里写"草稿：第一行"）：翻历史时整宽的两层太占地方。
-    private var shrunk: Bool { compact && !focused && !pinnedOpen && !submitsEmpty }
+    private var shrunk: Bool { form.isCapsule && !focused }
+    private var showsTools: Bool { form == .open || focused }
     /// 收着的草稿：文字区藏起（还是同一个，焦点与输入法不断），换成一行预览。
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
     private static var compactWidth: CGFloat { 220 }
@@ -116,12 +107,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: shrunk)
         .animation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion), value: expanded)
         .onChange(of: focus.wrappedValue, initial: true) { _, now in
-            // 出现的头几百毫秒里到位的焦点（Mac 会话页打开即聚焦）直接是展开的样子：逐帧长高要把 AppKit 的跟踪区每帧重算一遍
-            if appeared { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } } else { focused = now }
-        }
-        .task {
-            guard (try? await Task.sleep(for: .milliseconds(400))) != nil else { return }
-            appeared = true
+            // 一直展开时焦点不改形状，不起动画：Mac 会话页打开即聚焦，白跑的一段动画每帧都要 AppKit 重算整窗的跟踪区
+            if form == .open { focused = now } else { withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { focused = now } }
         }
         .animation(Motion.quick, value: sendVisible)
         .animation(Motion.quick, value: paletteCommands.isEmpty)
@@ -147,10 +134,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 Divider().padding(.horizontal, 12)
             }
             if accepts.contains(.cards) {
-                ForEach(draft.attachments) { chip($0).padding([.horizontal, .top], Self.inset).transition(.opacity) }
+                ForEach(draft.attachments) { chip($0).padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity) }
             }
             if accepts.contains(.images), !draft.images.isEmpty {
-                imageStrip.padding([.horizontal, .top], Self.inset).transition(.opacity)
+                imageStrip.padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
             }
             // 文字区一直是这一个（换形态时不重建，焦点与输入法组合都不断）；一行时"＋"在它左边
             HStack(alignment: .bottom, spacing: 0) {
@@ -169,14 +156,14 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                         }
                     }
                     .padding(.leading, !expanded && !accepts.isEmpty ? 2 : 18).padding(.trailing, !expanded && sendVisible ? 2 : 18)
-                    .padding(.top, 14).padding(.bottom, expanded ? 4 : 14)
-                    .frame(minHeight: expanded ? nil : Self.slot)
+                    .padding(.top, ComposerMetrics.textTop).padding(.bottom, expanded ? ComposerMetrics.textBottomOpen : ComposerMetrics.textTop)
+                    .frame(minHeight: expanded ? nil : ComposerMetrics.slot)
                 if !expanded, sendVisible { sendSlot }
             }
             if expanded {
                 HStack(spacing: 0) {
                     if !accepts.isEmpty { plus }
-                    if focused { tools().transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity)) }
+                    if showsTools { tools().transition(.scale(scale: 0.6, anchor: .leading).combined(with: .opacity)) }
                     Spacer(minLength: 0)
                     sendSlot
                 }
@@ -187,7 +174,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
         .background {
             if !focused {
-                Color.clear.contentShape(.rect(cornerRadius: Self.radius, style: .continuous))
+                Color.clear.contentShape(.rect(cornerRadius: ComposerMetrics.radius, style: .continuous))
                     .onTapGesture { focus.wrappedValue = true }
                     .accessibilityHidden(true)
             }
@@ -196,8 +183,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .frame(maxWidth: shrunk ? Self.compactWidth : .infinity, alignment: .leading)
         // 里面的东西裁在玻璃里：变形时淡出中的提交钮、工具排随玻璃一起收，不留在玻璃外。上沿不裁（往上浮出的
         // "长按可马上说"、思考强度的读数要露在玻璃上方），所以裁的形状向上伸出去
-        .mask { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).padding(.top, -Self.overhang) }
-        .glass(in: .rect(cornerRadius: Self.radius, style: .continuous), interactive: !expanded, ink: composerInk)
+        .mask { RoundedRectangle(cornerRadius: ComposerMetrics.radius, style: .continuous).padding(.top, -Self.overhang) }
+        .glass(in: .rect(cornerRadius: ComposerMetrics.radius, style: .continuous), interactive: !expanded, ink: composerInk)
         .frame(maxWidth: .infinity)
     }
 
@@ -206,7 +193,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         ZStack {
             if sendVisible { send().transition(.scale(scale: 0.6).combined(with: .opacity)) }
         }
-        .frame(width: Self.slot, height: Self.slot)
+        .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
     }
 
     private var plus: some View {
@@ -219,7 +206,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             }
         } label: {
             CircleGlyph(fill: palette.fill) { Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(palette.ink) }
-                .frame(width: Self.slot, height: Self.slot)
+                .frame(width: ComposerMetrics.slot, height: ComposerMetrics.slot)
                 .matchedGeometryEffect(id: "plus", in: layout)
         }
         .menuStyle(.button).menuIndicator(.hidden)
@@ -232,7 +219,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private func chip(_ outbox: Outbox) -> some View {
         let card = CardText(outbox.content)
         let removable = outbox.card != keeps
-        let shape = RoundedRectangle(cornerRadius: Self.radius - Self.inset, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: ComposerMetrics.radius - ComposerMetrics.inset, style: .continuous)
         return HStack(spacing: 0) {
             Button { previewing = outbox } label: {
                 HStack(spacing: 10) {
@@ -314,6 +301,36 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         previewing = nil
         focus.wrappedValue = true
     }
+}
+
+/// 输入框的尺寸：单行时高 `slot`（字行 + 上下各 `textTop`），圆角取一半成胶囊；圆钮一格 `slot`（36 的圆 + 四周的点按区与边距）、
+/// 离边 `inset`，与外框同心；两层时文字区下面只留 `textBottomOpen`，再下面是一格高的工具排。
+enum ComposerMetrics {
+    static let radius: CGFloat = 25
+    static let inset: CGFloat = 8
+    static let slot: CGFloat = 50
+    static let textTop: CGFloat = 14
+    static let textBottomOpen: CGFloat = 4
+}
+
+/// 输入框的形态，几时一行、几时两层只在这里定（一个输入框一个值，调用方按场景给）。
+enum ComposerForm: Equatable {
+    /// 一直是两层、工具排一直在：浮起的输入框（随手记、新会话、交给 Agent）、Mac 菜单栏面板、Mac 会话回复框。
+    case open
+    /// 空着又没聚焦时收成一行；有内容时两层，`opensOnFocus` 时聚焦也展开（Mac 底部输入栏；手机会话回复框：
+    /// 有工具排时聚焦就展开，已结束的会话没有工具，聚焦了也保持一行，打了字再长）。
+    case line(opensOnFocus: Bool)
+    /// 没聚焦时收成短胶囊（＋ 与一行提示，有草稿写"草稿：第一行"），点它聚焦后同 `line`（手机会话页在看历史时）。
+    case capsule(opensOnFocus: Bool)
+
+    var opensOnFocus: Bool {
+        switch self {
+        case .open: true
+        case .line(let opens), .capsule(let opens): opens
+        }
+    }
+
+    var isCapsule: Bool { if case .capsule = self { true } else { false } }
 }
 
 /// 带卡片的输入框才挂的两个弹层：挑灵感或任务、看带上的那张卡。不接受卡片的（随手记）不挂，Mac 上也就不需要浮层宿主
