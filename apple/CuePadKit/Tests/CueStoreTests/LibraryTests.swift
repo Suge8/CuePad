@@ -156,7 +156,7 @@ import Testing
     #expect(try await upgraded.piCheckpoint(of: "s1") == nil)
   }
 
-  /// 结构 23 的库里可能已有第 3 级的任务（旧规则允许）：升到 24 时改挂到上级的上级并带新的修改时间（才会同步出去）；第二级任务下的提示词不动。
+  /// 结构 23 的库里可能已有第 3 级的任务（旧规则允许）：升到 25 时改挂到上级的上级并带新的修改时间（才会同步出去）；第二级任务下的提示词不动。
   @Test func schema23LibraryLiftsThirdLevelTasks() async throws {
     let top = try await store.createTask("上线", in: nil)
     let sub = try await store.createTask("备份", under: top.id)
