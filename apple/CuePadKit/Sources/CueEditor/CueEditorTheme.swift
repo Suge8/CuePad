@@ -15,9 +15,7 @@ public typealias CueFont = UIFont
 public struct CueEditorTheme: @unchecked Sendable {
     /// 正文字体。
     public var font: CueFont
-    /// 首个非空行（卡片标题）的字体。
-    public var titleFont: CueFont
-    /// `## ` 标题行的字体。
+    /// `# ` `## ` 等标题行的字体（各级同一个）。
     public var headingFont: CueFont
     /// 代码块与行内 code 的字体。
     public var codeFont: CueFont
@@ -39,20 +37,19 @@ public struct CueEditorTheme: @unchecked Sendable {
     public var maxTextWidth: CGFloat?
     public var verticalInset: CGFloat
     public var lineSpacing: CGFloat
-    /// `## ` 标题行上方的额外间距。
+    /// `# ` 标题行上方的额外间距。
     public var headingSpacing: CGFloat
     public var imageCornerRadius: CGFloat
     public var dividerHeight: CGFloat
 
     public init(
-        font: CueFont, titleFont: CueFont, headingFont: CueFont, codeFont: CueFont, markerColor: CueColor,
+        font: CueFont, headingFont: CueFont, codeFont: CueFont, markerColor: CueColor,
         codeBackground: CueColor, textColor: CueColor, backgroundColor: CueColor, variableColor: CueColor,
         variableBackground: CueColor, dividerColor: CueColor, dividerLabelColor: CueColor,
         placeholderColor: CueColor, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil, verticalInset: CGFloat, lineSpacing: CGFloat,
         headingSpacing: CGFloat, imageCornerRadius: CGFloat, dividerHeight: CGFloat
     ) {
         self.font = font
-        self.titleFont = titleFont
         self.headingFont = headingFont
         self.codeFont = codeFont
         self.markerColor = markerColor

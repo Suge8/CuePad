@@ -2,7 +2,7 @@ import Foundation
 
 public enum CueLineKind: Equatable, Sendable {
     case body
-    /// `## 标题`
+    /// `# 标题`、`## 标题`…（各级同一个样式）
     case heading
     /// `- ` 或 `1. ` 列表项
     case list
@@ -15,26 +15,21 @@ public enum CueLineKind: Equatable, Sendable {
 /// 一行的轻装饰描述。标记字符保留可见，宿主只降低它们的存在感，不做所见即所得。
 public struct CueLineStyle: Equatable, Sendable {
     public var kind: CueLineKind
-    /// 是否是卡片标题。
-    public var isTitle: Bool
     /// 行首标记（缩进 + `##␣`、`-␣`、`1.␣`，或整条围栏行）的 UTF-16 长度；无标记为 0。
     public var markerLength: Int
     /// 行内 code（含两侧反引号）的范围，相对行首。
     public var inlineCode: [NSRange]
 
-    public init(kind: CueLineKind, isTitle: Bool, markerLength: Int, inlineCode: [NSRange]) {
+    public init(kind: CueLineKind, markerLength: Int, inlineCode: [NSRange]) {
         self.kind = kind
-        self.isTitle = isTitle
         self.markerLength = markerLength
         self.inlineCode = inlineCode
     }
 }
 
-/// 一份运行时正文的装饰上下文：标题位置与围栏位置是全文性质，逐行样式据此判定。
-/// 范围：`^#{1,6}\s`、`^\s*-\s`、顶格 ``` 围栏，另加有序列表、行内 code 与标题行。
+/// 一份运行时正文的装饰上下文：围栏位置是全文性质，逐行样式据此判定。
+/// 范围：`^#{1,6}\s`、`^\s*-\s`、顶格 ``` 围栏，另加有序列表与行内 code。第一行和别的行一样是正文，没有自动标题。
 public struct CueDecorations: Sendable {
-    /// 标题行（`CueLines.isTitleLine`）的行首偏移；没有则为 nil。
-    public let titleLocation: Int?
     /// 顶格 ``` 围栏行的数量。奇数说明有围栏未闭合，其后的行都是代码。
     public var fenceCount: Int { fences.count }
     private let fences: [Int]
@@ -42,36 +37,22 @@ public struct CueDecorations: Sendable {
     private static let fence = "```"
 
     public init(_ buffer: CueBuffer) {
-        titleLocation = Self.titleLocation(in: buffer)
         fences = Self.fenceLocations(in: buffer.text)
     }
 
     /// `line` 是不含换行的行内容，`location` 是它的行首偏移。
     public func style(ofLine line: String, at location: Int) -> CueLineStyle {
-        let isTitle = location == titleLocation
         if line.hasPrefix(Self.fence) {
-            return CueLineStyle(kind: .fence, isTitle: isTitle, markerLength: line.utf16.count, inlineCode: [])
+            return CueLineStyle(kind: .fence, markerLength: line.utf16.count, inlineCode: [])
         }
         if fencesBefore(location) % 2 == 1 {
-            return CueLineStyle(kind: .code, isTitle: isTitle, markerLength: 0, inlineCode: [])
+            return CueLineStyle(kind: .code, markerLength: 0, inlineCode: [])
         }
         let (kind, marker) = Self.classify(line)
-        return CueLineStyle(kind: kind, isTitle: isTitle, markerLength: marker, inlineCode: Self.inlineCode(in: line))
+        return CueLineStyle(kind: kind, markerLength: marker, inlineCode: Self.inlineCode(in: line))
     }
 
     // MARK: 全文性质
-
-    /// 标题行的判定只有一处：`CueLines.isTitleLine`。
-    private static func titleLocation(in buffer: CueBuffer) -> Int? {
-        var location = 0
-        while location <= buffer.length {
-            let line = buffer.line(at: location)
-            let text = buffer.text.substring(with: NSRange(location: line.start, length: line.end - line.start))
-            if CueLines.isTitleLine(text) { return line.start }
-            location = line.end + 1
-        }
-        return nil
-    }
 
     private static func fenceLocations(in text: NSString) -> [Int] {
         var result: [Int] = []
