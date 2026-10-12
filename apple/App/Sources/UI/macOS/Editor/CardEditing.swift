@@ -30,7 +30,13 @@ final class CardEditing {
         autosave = Autosave(
             save: { [weak self] body in
                 self?.saveState = .saving
-                try await store.updateCard(id) { $0.body = body }
+                do {
+                    try await store.updateCard(id) { $0.body = body }
+                } catch CueStoreError.notFound {
+                    // 提示词送达就从库里删掉了（用掉了）：发出之后再打的字没有地方可写，也不算出错
+                    self?.saveState = .idle
+                    return
+                }
                 self?.saveState = .saved
             },
             onError: { [weak self] error in
@@ -151,7 +157,7 @@ struct EditorBar: View {
                         .transition(.opacity)
                 }
                 if CardMenu.handsToAgent(card) {
-                    SendControl(prompt: card, task: task) { editing.outgoing(card, whole: false) }
+                    SendControl(prompt: card, task: task) { editing.submit(card) }
                 } else {
                     attach
                 }

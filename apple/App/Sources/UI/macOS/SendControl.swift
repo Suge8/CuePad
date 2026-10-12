@@ -9,8 +9,8 @@ struct SendControl: View {
     let prompt: Card
     /// 提示词所在的任务。
     let task: Card?
-    /// 要交出去的正文（选中了就只是选中的部分）。
-    let outgoing: () -> String
+    /// 发出去（`CardEditing.submit`：先写下没保存的字，选中了就只发选中的部分）。
+    let send: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
@@ -19,7 +19,7 @@ struct SendControl: View {
             HStack(spacing: 10) {
                 DestinationMenu(prompt: prompt, current: destination) { chip(destination) }
                     .glass(in: .capsule, interactive: true)
-                Button { workspace.handOff(prompt, text: outgoing()) } label: { handLabel(shortcut: true) }
+                Button(action: send) { handLabel(shortcut: true) }
                     .buttonStyle(PressStyle())
                     .help(help(destination))
             }
