@@ -18,8 +18,9 @@ struct TasksPanel: View {
 
     private func isLazy(_ board: TaskBoard?) -> Bool {
         guard let board else { return false }
-        let open = board.tree.rows(of: (board.inProgress + board.todo).map(\.id), toggled: []).count
-        return open + (showsCompleted ? board.done.count : 0) >= Self.lazyFrom
+        let open = board.tree.rows(of: (board.inProgress + board.todo).map(\.id), toggled: [])
+        let prompts = open.reduce(0) { $0 + (board.prompts[$1.id]?.count ?? 0) }
+        return open.count + prompts + (showsCompleted ? board.done.count : 0) >= Self.lazyFrom
     }
 
     var body: some View {

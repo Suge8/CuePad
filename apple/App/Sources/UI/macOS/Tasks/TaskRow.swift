@@ -50,7 +50,8 @@ struct TaskRow: View {
                 }
             }
         }
-        .padding(.top, depth == 0 ? 4 : 0)
+        // 顶层的一组与上一组之间多留一点空
+        .padding(.top, depth == 0 ? 8 : 0)
         .dialog(TaskCopy.openSubtasks(subtasks), isPresented: $confirmsSubtasks, buttons: [DialogButton(title: "全部完成") { commitToggle() }])
     }
 
