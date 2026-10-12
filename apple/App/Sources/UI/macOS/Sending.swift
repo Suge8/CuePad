@@ -193,7 +193,7 @@ extension Workspace {
             switch self.sendState.destination(of: prompt, task: task) {
             case .session(let session): await self.send(text, to: AgentTarget(session: session), card: id)
             case .newSession: try await self.startNewSession(for: prompt, text: text)
-            case nil: self.openCard = id
+            case nil: self.open(prompt)
             }
         }
     }
