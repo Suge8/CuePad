@@ -177,6 +177,8 @@ extension CueStore {
       card.modifiedAt = Date.stamp
       try update(card)
       try registerImages(in: card.body)
+      // 任务正文只有标题：写进来的多余的话（命令行、别的版本同步来又被改过的）同样拆成它的提示词
+      if card.isTask { _ = try Self.splitPrompt(db, task: id, at: card.modifiedAt, carryingHandoff: false) }
     }
   }
 

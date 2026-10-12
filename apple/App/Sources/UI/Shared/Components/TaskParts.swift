@@ -35,10 +35,11 @@ struct TaskHeading: View {
             .onDisappear { if let autosave { Task { await autosave.flush() } } }
     }
 
+    /// 只换标题那一行：正文里若还有别的话（旧版本同步来的），一并写回，由 Store 拆成提示词，不在改标题时丢掉。
     private func save() {
-        let stored = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard stored != CueSummary(task.body).title else { return }
-        autosave?.changed(stored)
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard title != CueSummary(task.body).title else { return }
+        autosave?.changed(CueLines.split(task.body).prompt.map { title + "\n" + $0 } ?? title)
     }
 }
 
