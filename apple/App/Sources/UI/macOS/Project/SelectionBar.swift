@@ -1,7 +1,8 @@
 #if os(macOS)
 import SwiftUI
 
-/// 批量选择时替下底部输入栏的一条玻璃操作栏：选了几条、全选、删除（⌫，提示里可撤销）、完成（Esc）。
+/// 批量选择时替下底部输入栏的一条玻璃操作栏：选了几条、全选（⌘A）、删除（⌘⌫，同访达，提示里可撤销）、完成（Esc）。
+/// 删除不用单独的 ⌫：没有修饰键的快捷键会先于浮层里的输入框接到退格；带 ⌘ 的在浮层开着时不交给窗口（`PanelHost`）。
 struct SelectionBar: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -24,8 +25,8 @@ struct SelectionBar: View {
                     .background(palette.failure, in: .capsule)
                     .contentShape(.capsule)
             }
-            .keyboardShortcut(.delete, modifiers: [])
-            .help("删除选中的 \(count) 条（⌫），可撤销")
+            .keyboardShortcut(.delete, modifiers: .command)
+            .help("删除选中的 \(count) 条（⌘⌫），可撤销")
         }
         .buttonStyle(PressStyle())
         .font(Typography.secondary)

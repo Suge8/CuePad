@@ -102,7 +102,7 @@ final class SendState {
         if let task = prompt.parentID { picks[task] = destination }
     }
 
-    /// 新会话开好后任务靠它自己的关联接着发到那个会话，挑过的不再留着。
+    /// 交出去之后任务靠它自己的关联接着发到那个会话，挑过的不再留着。
     func clearPick(for prompt: Card) {
         if let task = prompt.parentID { picks[task] = nil }
     }
@@ -191,7 +191,8 @@ extension Workspace {
             var task: Card?
             if let parent = prompt.parentID { task = try await self.services.store.card(parent) }
             switch self.sendState.destination(of: prompt, task: task) {
-            case .session(let session): await self.send(text, to: AgentTarget(session: session), card: id)
+            // 交出去之后去处记在任务上（`recordSend`），挑过的不再留着：之后只认任务上记的那一个
+            case .session(let session): if await self.send(text, to: AgentTarget(session: session), card: id) { self.sendState.clearPick(for: prompt) }
             case .newSession: try await self.startNewSession(for: prompt, text: text)
             case nil: self.open(prompt)
             }

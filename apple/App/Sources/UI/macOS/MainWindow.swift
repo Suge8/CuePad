@@ -388,9 +388,7 @@ private struct WorkspaceShortcuts: View {
     private func newCard() {
         let project = workspace.currentProject
         workspace.attempt {
-            let card = try await workspace.createCard(in: project)
-            workspace.showsTasks = false
-            workspace.openCard = card.id
+            workspace.open(try await workspace.createCard(in: project))
         }
     }
 }
