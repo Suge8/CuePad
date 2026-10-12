@@ -50,8 +50,8 @@ struct MainWindow: View {
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { CloseButton() }
             .sharedBackgroundVisibility(.hidden)
-        // 会话页的标题与右上的"⋯"：项常驻、只换里面的内容（`SessionHeader`）
-        ToolbarItem(placement: .navigation) { SessionTitleSlot() }
+        // 会话页的标题（居中）与右上的"⋯"：项常驻、只换里面的内容（`SessionHeader`）。.principal 在详情区里居中，与对话的阅读栏同一条中线
+        ToolbarItem(placement: .principal) { SessionTitleSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
         ToolbarItemGroup(placement: .primaryAction) {
@@ -246,7 +246,7 @@ private struct SidebarToggle: View {
 /// 主窗口的视图体不读它，开合时不重算整个窗口、不重建整条工具栏。
 
 /// 工具栏左上的"收起"：只在开着编辑页时有（Esc 同）。工具栏项常驻、只有里面的按钮出没（增删工具栏项会重建整条工具栏）；
-/// 没有编辑页时它不占位置，会话页的标题紧挨着侧栏开关。
+/// 没有编辑页时它不占位置。
 private struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
