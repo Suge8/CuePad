@@ -3,7 +3,10 @@ import CueStore
 import CueSync
 import Foundation
 import ObjectiveC
+import SwiftUI
 import Testing
+import UIKit
+import Vision
 import UserNotifications
 @testable import CuePad
 
@@ -97,6 +100,46 @@ struct PiAlertRoutingTests {
 
         #expect(onMain)
         #expect(alerts.pendingTap != nil)
+    }
+
+    // MARK: 点通知进会话页
+
+    /// 在测试宿主的场景里挂一个真窗口，把整个 iPhone 界面放进去。
+    private func show(_ root: some View) throws -> UIWindow {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: root)
+        window.makeKeyAndVisible()
+        return window
+    }
+
+    /// 窗口此刻画出来的文字（对截图做文字识别）：用户看到什么就是什么；测试里读屏没开，SwiftUI 不生成读屏元素，只能这样读。
+    private func visibleText(in window: UIWindow) throws -> String {
+        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLanguages = ["zh-Hans", "en-US"]
+        try VNImageRequestHandler(cgImage: try #require(image.cgImage)).perform([request])
+        return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+    }
+
+    /// 冷启动点通知：点开的通知在界面建好之前就记下了，页面带着只有记录 id 的路由挂上，打开后要能读到对话，底部栏让位给回复框。
+    @Test func 点通知进会话页_对话显示出来() async throws {
+        let app = TestApp()
+        let store = app.services.store
+        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas")
+        let session = try #require(try await store.allPiSessionStates().first)
+        let said = PiChatMessage(sessionID: "atlas", entryID: "u1", seq: 1, role: .user, text: "接口约定改成 v2", at: .now)
+        try await store.writePiTranscript(PiTranscript(sessionID: "atlas", messages: [said], recap: PiRecap(pendingPrompt: said.text)))
+
+        let alerts = PiAlertCenter()
+        alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session.id))
+        let window = try show(IOSRoot(services: app.services, alerts: alerts).environment(alerts))
+        defer { window.isHidden = true }
+
+        try await eventually("会话页显示对话、底部栏让位给回复框") {
+            let text = try visibleText(in: window)
+            return text.contains("接口约定") && !text.contains("灵感")
+        }
     }
 }
 #endif
