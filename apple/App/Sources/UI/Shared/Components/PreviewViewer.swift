@@ -2,14 +2,14 @@ import CueStore
 import QuickLook
 import SwiftUI
 
-/// 预览文件在本机的可读位置：附件目录里的文件以哈希为名，没有扩展名，系统的快速查看与"存到文件"认不出类型，
-/// 所以按原文件名放一份（缓存目录里，同卷克隆不占额外空间，系统可随时清理）。
+/// 附件目录里的文件在本机的可读位置：文件以哈希为名，没有扩展名，系统的快速查看与"存到文件"认不出类型，
+/// 所以按文件名放一份（缓存目录里，同卷克隆不占额外空间，系统可随时清理）。预览文件与对话里的图片共用。
 nonisolated enum PreviewFile {
-    static func url(for preview: PiPreview, original: URL) -> URL? {
+    static func url(hash: String, name: String, original: URL) -> URL? {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appending(path: "CuePadPreviews", directoryHint: .isDirectory).appending(path: preview.hash, directoryHint: .isDirectory)
-        // 记录来自同步：文件名不能带路径
-        let target = directory.appending(path: preview.name.replacing("/", with: "_").replacing("..", with: "_"))
+            .appending(path: "CuePadPreviews", directoryHint: .isDirectory).appending(path: hash, directoryHint: .isDirectory)
+        // 文件名来自同步的记录：不能带路径
+        let target = directory.appending(path: name.replacing("/", with: "_").replacing("..", with: "_"))
         guard !FileManager.default.fileExists(atPath: target.path) else { return target }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -55,7 +55,7 @@ private struct PreviewPresenter: ViewModifier {
     }
 
     private func file(of preview: PiPreview) -> URL? {
-        services.store.files.fileURL(for: preview.hash).flatMap { PreviewFile.url(for: preview, original: $0) }
+        services.store.files.fileURL(for: preview.hash).flatMap { PreviewFile.url(hash: preview.hash, name: preview.name, original: $0) }
     }
 }
 

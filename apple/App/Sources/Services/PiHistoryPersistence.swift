@@ -107,7 +107,7 @@ actor PiHistoryPersistence {
     private func transcript(of update: PiHistoryUpdate) async throws -> PiTranscript {
         let incremental = update.checkpoint.offset > UInt64(update.bytesRead)
         func hasStoredMessages() async throws -> Bool { try await !storage.piMessages(of: update.sessionID).isEmpty }
-        func wholeFile() throws -> PiTranscript { try PiHistory.index(file: update.file, from: nil).transcript }
+        func wholeFile() throws -> PiTranscript { try PiHistory.index(file: update.file, from: nil, files: storage.files).transcript }
         // 范围内的增量读：本机还没有它的对话就补齐
         if update.includesTranscript, incremental, try await !hasStoredMessages() { return try wholeFile() }
         // 范围外的从头读：本机存着它的对话就重写

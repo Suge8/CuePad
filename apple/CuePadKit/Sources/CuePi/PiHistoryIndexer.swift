@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
 /// 后台索引 Pi 会话目录：先按修改时间倒序回填（最近的会话最先可用），发出 `backfillFinished` 后
@@ -10,18 +11,21 @@ import Foundation
 public struct PiHistoryIndexer: Sendable {
     private let root: URL
     private let transcriptWindow: TimeInterval
+    private let files: AttachmentFiles
     private let checkpoint: @Sendable (URL) async -> PiHistoryCheckpoint?
 
     private static let liveCacheLimit = 64
 
     /// - Parameter transcriptWindow: 首次读（没有检查点）时只为这么久之内修改过的会话文件解析对话（按修改时间，不读内容），
-    ///   更早的只读摘要（见 `PiHistory.index(file:from:transcript:)`）。
+    ///   更早的只读摘要（见 `PiHistory.index(file:from:transcript:files:)`）。
+    /// - Parameter files: 你的消息里的图片存进的附件目录。
     public init(
-        root: URL = PiPaths().sessionsDirectory, transcriptWindow: TimeInterval = .infinity,
+        root: URL = PiPaths().sessionsDirectory, transcriptWindow: TimeInterval = .infinity, files: AttachmentFiles,
         checkpoint: @escaping @Sendable (URL) async -> PiHistoryCheckpoint?
     ) {
         self.root = root
         self.transcriptWindow = transcriptWindow
+        self.files = files
         self.checkpoint = checkpoint
     }
 
@@ -45,19 +49,19 @@ public struct PiHistoryIndexer: Sendable {
             if let cached = live[file] { base = cached } else { base = await checkpoint(file) }
             let recent = (modified ?? Self.modified(file)).map { $0 > Date.now.addingTimeInterval(-transcriptWindow) } ?? true
             // 文件已被删除/尚未落盘等：跳过，等下一次变化
-            guard let update = try? PiHistory.index(file: file, from: base, transcript: recent) else { return }
+            guard let update = try? PiHistory.index(file: file, from: base, transcript: recent, files: files) else { return }
             if remember { live[file] = update.checkpoint }
             if update.bytesRead > 0 || base == nil { continuation.yield(.updated(update)) }
         }
 
         // 回填时记住最近修改的那批文件（正在被 Pi 写入的最可能是它们）：之后的事件（包括 FSEvents
         // 对回填前写入的迟到通知）落到缓存上，不会重读也不会重复发出
-        let files = Self.sessionFiles(under: root)
-        for (rank, file) in files.enumerated() {
+        let found = Self.sessionFiles(under: root)
+        for (rank, file) in found.enumerated() {
             if Task.isCancelled { return }
             await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit)
         }
-        continuation.yield(.backfillFinished(sessionFiles: files.map(\.url)))
+        continuation.yield(.backfillFinished(sessionFiles: found.map(\.url)))
 
         for await paths in watcher.paths {
             if Task.isCancelled { return }

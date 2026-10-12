@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import Foundation
 
 /// 会话页对话里的一条：你说的（右侧气泡），Pi 的一轮回答（左侧全宽，上面一行这一轮的经过），会话文件里的一行系统记录（压缩，居中一行小字），
@@ -8,6 +9,7 @@ nonisolated struct PiChatEntry: Identifiable, Equatable, Sendable {
 
     let id: UUID
     let role: Role
+    /// 你的话是存储格式正文（`CueFormat`，可带图片），其余是纯文字或 Markdown
     let text: String
     /// Pi 回答上方的注脚（`PiChat.meta`）。
     let meta: PiChat.RoundNote?
@@ -122,16 +124,15 @@ nonisolated enum PiChat {
         }
     }
 
-    /// 你发出的一句话给人看的写法：带卡片的写卡片标题与图片数，不露存储格式。
+    /// 排队的一句话在一行里的写法：标题与图片数，不露存储格式（排队的话只占一行，图片数代替缩略图）。
     static func shownText(of request: DeliveryRequest) -> Dotted {
         let card = CardText(request.content)
-        guard !card.images.isEmpty else { return Dotted(request.content) }
-        return Dotted(card.title, "\(card.images.count) 张图片")
+        return Dotted(card.title, card.images.isEmpty ? nil : "\(card.images.count) 张图片")
     }
 
-    /// 你在这个会话里说过的最近一句（对话里最后一条你的消息）：空回复框按 ↑ 调回它。
+    /// 你在这个会话里说过的最近一句的文字（对话里最后一条你的消息，图片不带）：空回复框按 ↑ 调回它。
     static func lastSaid(_ messages: [PiChatMessage]) -> String? {
-        messages.last { $0.role == .known(.user) }?.text
+        messages.last { $0.role == .known(.user) }.map { CueFormat.plainText($0.text) }?.nonEmpty
     }
 
     /// 有几句没能送达时的说法（它们还挂在对话末尾等你重发或移除）："1 句没送到"；数来自会话列表查询（`PiSessionListItem.undelivered`）。

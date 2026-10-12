@@ -89,7 +89,7 @@ struct PreviewCard: View {
             return
         }
         let request = QLThumbnailGenerator.Request(
-            fileAt: PreviewFile.url(for: preview, original: file) ?? file, size: CGSize(width: Self.side, height: Self.side), scale: scale, representationTypes: .thumbnail)
+            fileAt: PreviewFile.url(hash: preview.hash, name: preview.name, original: file) ?? file, size: CGSize(width: Self.side, height: Self.side), scale: scale, representationTypes: .thumbnail)
         thumbnail = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).cgImage
     }
 

@@ -11,7 +11,7 @@ struct RecapPreview: View {
         VStack(alignment: .leading, spacing: 18) {
             if let prompt = session.pendingPrompt ?? session.lastPrompt {
                 Text(Dotted("最近一轮", "完整对话还在同步")).font(Typography.caption).foregroundStyle(palette.ink3)
-                UserBubble(text: Dotted(prompt))
+                UserBubble(stored: prompt)
                 if session.pendingPrompt == nil, let reply = session.lastReply { MarkdownText(source: reply) }
             } else if !session.hasStarted, session.state != .known(.ended) {
                 EmptyState(mascot: .welcome, title: "还没说过话", message: "在下面说第一句")

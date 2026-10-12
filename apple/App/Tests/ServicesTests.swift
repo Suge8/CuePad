@@ -67,7 +67,7 @@ struct PiHistoryPersistenceTests {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
         let events = AsyncStream<PiHistoryEvent> { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil)))
+            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: rig.services.store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
         }
@@ -90,7 +90,7 @@ struct PiHistoryPersistenceTests {
         #expect(try await restarted.historyStore.checkpoint(for: file) != nil)
         let data = try #require(try await restarted.store.piCheckpoint(of: "sess-1"))
         let checkpoint = try JSONDecoder().decode(PiHistoryCheckpoint.self, from: data)
-        let resumed = try PiHistory.index(file: file, from: checkpoint)
+        let resumed = try PiHistory.index(file: file, from: checkpoint, files: rig.services.store.files)
         #expect(resumed.bytesRead == reply.utf8.count + 1)
         #expect(resumed.history.displayName == "fix the build")
     }
@@ -102,7 +102,7 @@ struct PiHistoryPersistenceTests {
         try await rig.services.store.upsertPiSession(PiSession(
             id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now), host: TestApp.hostID)
         let events = AsyncStream<PiHistoryEvent> { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil)))
+            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: rig.services.store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
         }

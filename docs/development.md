@@ -53,6 +53,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 会话页的标题与"⋯"是主窗口常驻的工具栏项，进出会话页不增删工具栏项（见 `SessionToolbar.swift`），标题项宽度固定（尺寸一变整条工具栏重排）。会话页第一圈只出标题、状态与最新的对话，回复框、问题卡与"⋯"晚两帧（`NextFrame`）。
 
 **图片。** 按内容哈希存文件去重，正文存附件引用。文件经 `CueStore.files` 同步写入（编辑器在主线程直接用）；附件记录（同步载体）由引用它的写入在同一事务里登记，没被引用的图片不上传。缩略图只有 CueEditor 的 `Thumbnails` 一套，派生数据，不落盘不同步。
+对话里你的消息带的图片同样是附件：Mac 读会话文件（`PiHistory`）时把图片块存进附件目录，消息正文写成含 `![](cuepad://img/<哈希>)` 的正文格式，`writePiTranscript` 在同一事务里登记附件记录，所以图片随对话同步到手机；对话被清理（`prunePiMessages`）时没人再引用的图片一起回收。已存的旧消息在读会话文件的规则变了之后靠"检查点作废、从头重读"补上（`Schema.upgrades` 里清空检查点的那几步，重读时消息正文内容不同才改写）。
 
 **复制。** `AppServices.copy` 一处，不写发送记录。Mac 上单条目同时放文字与 PNG 时图形应用只取其一，所以含图的正文写成按原顺序含图的 RTFD 并附纯文字兜底（`Clipboard.write`）；iOS 每段文字、每张图片各一个条目。
 

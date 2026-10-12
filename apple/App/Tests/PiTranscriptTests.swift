@@ -46,7 +46,7 @@ struct PiTranscriptTests {
             for file in files {
                 let modified = try! file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate!
                 let recent = modified > .now.addingTimeInterval(-PiHistoryPersistence.transcriptWindow)
-                continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, transcript: recent)))
+                continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, transcript: recent, files: store.files)))
             }
             continuation.yield(.backfillFinished(sessionFiles: files))
             continuation.finish()
@@ -168,7 +168,7 @@ struct PiTranscriptTests {
     @Test func 文件追加一条用户消息后_摘要与消息在1秒内可读() async throws {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         _ = try await live("s1", file: file)
-        let indexer = PiHistoryIndexer(root: rig.piPaths.sessionsDirectory) { _ in nil }
+        let indexer = PiHistoryIndexer(root: rig.piPaths.sessionsDirectory, files: store.files) { _ in nil }
         let consuming = Task { await services.consumePiHistory(indexer.events()) }
         defer { consuming.cancel() }
         for try await count in store.observe({ try $0.piMessages(of: "s1").count }) where count == 4 { break }
@@ -214,7 +214,7 @@ struct PiTranscriptTests {
     @Test func 一直开着的Mac每天清理一次对话() async throws {
         let old = try sessionFile("old", at: .now.addingTimeInterval(-30 * 86_400))
         await consume([old])
-        try await store.writePiTranscript(try PiHistory.index(file: old, from: nil).transcript)
+        try await store.writePiTranscript(try PiHistory.index(file: old, from: nil, files: store.files).transcript)
         #expect(try await store.piMessages(of: "old").count == 4)
 
         let days = Mutex(0)
@@ -234,8 +234,8 @@ struct PiTranscriptTests {
         let oldInside = try sessionFile("old-inside", at: .now.addingTimeInterval(-30 * 86_400))
         let recentInside = try sessionFile("recent-inside", at: .now.addingTimeInterval(-3_600))
         await services.consumePiHistory(AsyncStream { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: oldInside, from: nil, transcript: true)))
-            continuation.yield(.updated(try! PiHistory.index(file: recentInside, from: nil, transcript: false)))
+            continuation.yield(.updated(try! PiHistory.index(file: oldInside, from: nil, transcript: true, files: store.files)))
+            continuation.yield(.updated(try! PiHistory.index(file: recentInside, from: nil, transcript: false, files: store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [oldInside, recentInside]))
             continuation.finish()
         })

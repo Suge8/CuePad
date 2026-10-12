@@ -23,7 +23,7 @@ struct PiHistoryFailureTests {
 
     private func events(for files: [URL]) -> AsyncStream<PiHistoryEvent> {
         AsyncStream { continuation in
-            for file in files { continuation.yield(.updated(try! PiHistory.index(file: file, from: nil))) }
+            for file in files { continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: services.store.files))) }
             continuation.finish()
         }
     }
@@ -94,7 +94,7 @@ struct PiHistoryFailureTests {
 
         #expect(await services.loadPiCheckpoint(for: file) == nil)
         await services.consumePiHistory(AsyncStream { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil)))
+            continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: services.store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
         })

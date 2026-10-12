@@ -465,12 +465,16 @@ extension CueStore {
     return failed
   }
 
-  /// 还有卡片正文（含回收站里的卡）或发送记录快照（一键重发要用）引用这张图片，或有预览用着这份文件。
+  /// 对话里你的消息中带图片的行（只有你的消息引用图片）；`?1` 是图片引用或它的开头 `CueFormat.imagePrefix`。
+  static let userImages = "role = '\(PiChatRole.user.rawValue)' AND instr(text, ?1) > 0"
+
+  /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）或对话里你的消息引用这张图片，或有预览用着这份文件。
   func isImageReferenced(_ hash: String) throws -> Bool {
     try db.first(
       """
       SELECT 1 FROM cards WHERE instr(body, ?1) > 0
       UNION ALL SELECT 1 FROM sendRecords WHERE instr(content, ?1) > 0
+      UNION ALL SELECT 1 FROM piMessages WHERE \(Self.userImages)
       UNION ALL SELECT 1 FROM previews WHERE hash = ?2
       """, [CueFormat.imageMarkup(id: hash), hash]) { _ in true } != nil
   }

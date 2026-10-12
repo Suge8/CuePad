@@ -1,5 +1,6 @@
 #if DEBUG
 import CueStore
+import CueText
 import SwiftUI
 
 /// 演示库里的 Pi：Mac 同步来的会话状态（含历史）、几段对话与发到 Mac 的请求（iOS 与 Mac 的 session 画面共用）。
@@ -103,7 +104,9 @@ extension DebugScene {
         // 对话围着预览的创建时间排：你的话在先，回答在后
         guard let first = created.first, let last = created.last else { return }
         let messages = [
-            PiChatMessage(sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: "把登录页的新样子、手机上的截图和评审结论发给我看看", at: first.addingTimeInterval(-50)),
+            PiChatMessage(
+                sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张" + (screenshotMarkup(store).map { "\n" + $0 } ?? ""),
+                at: first.addingTimeInterval(-50)),
             PiChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: "发给你了：完整页面可以直接点按钮试交互，截图是 iPhone 宽度下的样子，评审结论里有两处要你定。",
                 at: last.addingTimeInterval(2), tools: .init(commands: 3, items: [.init(kind: .command, target: "cuepad show login-v2.html"), .init(kind: .command, target: "cuepad show login-mobile.png"), .init(kind: .command, target: "cuepad show review.md")]), roundStartedAt: first.addingTimeInterval(-50)),
@@ -163,6 +166,11 @@ extension DebugScene {
         | 首屏可点元素 | 9 | 5 |
         | 登录成功率（内测） | 91% | 94% |
         """
+
+    /// 演示用的一张图（手机上的登录页）存进附件目录，返回正文里引用它的写法；你的话带图片的演示（对话里的、还在路上的）用它。
+    private static func screenshotMarkup(_ store: CueStore) -> String? {
+        screenshotPNG().flatMap { try? store.files.store($0) }.map(CueFormat.imageMarkup(id:))
+    }
 
     /// 手机宽度下登录页的"截图"：渐变底上一张白卡、两个输入框和一个按钮。
     private static func screenshotPNG() -> Data? {
@@ -418,7 +426,8 @@ extension DebugScene {
         await seedTaskStates(store, projects: projects)
         if let relay = states.first(where: { $0.sessionID == "relay" }) {
             // 一条已送达还没进对话、一条没能送达：由一个只认这台演示 Mac 的执行器给出结果
-            _ = try? await services.requestMacDelivery("先把迁移脚本在测试库上跑一遍", to: relay, mode: .send)
+            _ = try? await services.requestMacDelivery(
+                "先把迁移脚本在测试库上跑一遍，报错长这样" + (screenshotMarkup(store).map { "\n" + $0 } ?? ""), to: relay, mode: .send)
             _ = try? await services.requestMacDelivery("顺便备份一下线上数据库", to: relay, mode: .send)
             // 发给那台 Mac 上已结束的会话、没能送达：装修项目的"此刻"写这条的原因
             let mini = PiStateRecorder(store: store, hostID: relay.hostID)

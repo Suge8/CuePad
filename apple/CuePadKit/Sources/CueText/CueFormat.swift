@@ -34,6 +34,20 @@ public enum CueFormat {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// 去掉图片后的文字（给输入框、分享、一行摘要）：分割线写成 `---`，图片留下的空行折叠，去掉首尾空白。
+    public static func plainText(_ stored: String) -> String {
+        parse(stored).map { token in
+            switch token {
+            case .text(let text): text
+            case .split: "---"
+            case .image: ""
+            }
+        }
+        .joined()
+        .replacing(/\n{3,}/, with: "\n\n")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// 正文里引用的图片哈希，按出现顺序（可重复）。
     public static func imageHashes(in stored: String) -> [String] {
         guard stored.contains(imagePrefix) else { return [] }

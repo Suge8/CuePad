@@ -1,3 +1,4 @@
+import CueText
 import SwiftUI
 
 /// 会话右缘的刻度滑条：你发的话按先后排在右缘拇指够得着的那一段（可见区三成高处到回复框上方），只看序号、不看行有多高
@@ -23,7 +24,7 @@ struct ChatScrubber: View {
 
     /// 你发的话（按先后）：刻度与预览。不到 `minimum` 条时没有刻度。
     static func marks(_ entries: [PiChatEntry]) -> [ChatMark] {
-        let marks = entries.filter(\.isUser).map { ChatMark(id: $0.id, preview: firstLine($0.text)) }
+        let marks = entries.filter(\.isUser).map { ChatMark(id: $0.id, preview: preview($0.text)) }
         return marks.count < minimum ? [] : marks
     }
 
@@ -171,8 +172,11 @@ struct ChatScrubber: View {
         }
     }
 
-    private static func firstLine(_ text: String) -> String {
-        text.split(whereSeparator: \.isNewline).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+    /// 一条话的第一行文字；只有图片时写张数。
+    private static func preview(_ stored: String) -> String {
+        if let line = CueFormat.plainText(stored).split(whereSeparator: \.isNewline).first { return line.trimmingCharacters(in: .whitespaces) }
+        let images = CueFormat.imageHashes(in: stored).count
+        return images > 0 ? "\(images) 张图片" : ""
     }
 }
 

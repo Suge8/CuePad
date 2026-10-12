@@ -1,5 +1,6 @@
 import CueStore
 import CueTestSupport
+import CueText
 import Foundation
 import Testing
 
@@ -27,6 +28,35 @@ import Testing
     try await store.prunePiMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
     #expect(try await store.piMessages(of: "quiet").isEmpty)
     #expect(try await store.piMessages(of: "active").count == 1)  // 会话还在活动：消息再旧也留着
+  }
+
+  /// 对话里的图片：登记附件记录随对话同步；对话被清理后没人用的图片随之回收，卡片还用着的留下。
+  @Test func imagesInMessagesAreRegisteredAndReclaimedWithTheConversation() async throws {
+    let now = Date.now
+    let longAgo = now.addingTimeInterval(-30 * 86_400)
+    let only = try store.files.store(pngData(width: 8, height: 8, shade: 0.1))
+    let shared = try store.files.store(pngData(width: 8, height: 8, shade: 0.9))
+    _ = try await store.createCard(in: nil, body: CueFormat.imageMarkup(id: shared))
+    try await store.upsertPiSession(PiSession(id: "s", path: "/s/s.jsonl", cwd: "/w", lastActivityAt: longAgo), host: "mac")
+    let text = "看\n\(CueFormat.imageMarkup(id: only))\n\(CueFormat.imageMarkup(id: shared))"
+    try await store.writePiTranscript(
+      PiTranscript(sessionID: "s", messages: [PiChatMessage(sessionID: "s", entryID: "u", seq: 1, role: .user, text: text, at: longAgo)], recap: PiRecap()))
+    #expect(try await store.hasAttachment(only))
+
+    try await store.prunePiMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
+
+    #expect(try await !store.hasAttachment(only) && store.files.fileURL(for: only) == nil)
+    #expect(try await store.hasAttachment(shared) && store.files.fileURL(for: shared) != nil)
+  }
+
+  /// 超长正文只截文字，图片引用不能被切断。
+  @Test func clippingKeepsImageReferencesWhole() {
+    let reference = CueFormat.imageMarkup(id: String(repeating: "a", count: 64))
+    let message = PiChatMessage(
+      sessionID: "s", entryID: "u", seq: 1, role: .user, text: String(repeating: "字", count: PiChatMessage.textLimit + 50) + "\n" + reference, at: .now)
+    #expect(message.text.hasSuffix("…" + reference))
+    #expect(CueFormat.imageHashes(in: message.text) == [String(repeating: "a", count: 64)])
+    #expect(CueFormat.plainText(message.text).count == PiChatMessage.textLimit)
   }
 
 }

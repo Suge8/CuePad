@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueStore
+import CueText
 import Foundation
 
 /// 会话列表要的摘要：会话 id、工作目录、名字、首条用户消息、最后活动时间。原文留在会话文件里，这里不复制。
@@ -74,9 +75,14 @@ public enum PiHistory {
     /// 从检查点继续索引 `file`（没有检查点或检查点已失效则从头）。文件不存在时抛错——
     /// 会话文件在第一条消息落盘前并不存在，调用方等文件出现再来。
     ///
+    /// 你的消息里的图片当场存进 `files`（按内容哈希，已有的不重写），对话里只留 `![](cuepad://img/<哈希>)`：Pi 的会话文件是图片唯一的来源，
+    /// 终端里贴的图片附件目录里原本没有。不是图片的块跳过；存不下（磁盘错误）时抛错，不留一条缺图的消息。
+    ///
     /// `transcript` 为 false 时不要对话（7 天外的会话）：从头读时只读摘要——逐行只找换行，只解码文件头、改名与第一条你的消息，
     /// 最近一轮的问答从文件尾往回解码到够用为止；得到的检查点与逐行全读一样，之后增量读接得上。
-    public static func index(file: URL, from checkpoint: PiHistoryCheckpoint?, transcript wanted: Bool = true) throws -> PiHistoryUpdate {
+    public static func index(
+        file: URL, from checkpoint: PiHistoryCheckpoint?, transcript wanted: Bool = true, files: AttachmentFiles
+    ) throws -> PiHistoryUpdate {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
         let size = try handle.seekToEnd()
@@ -84,10 +90,10 @@ public enum PiHistory {
         let resumed = try checkpoint.flatMap { try isResumable($0, handle: handle, size: size) ? $0 : nil }
         var state = resumed ?? PiHistoryCheckpoint()
         let start = state.offset
-        var transcript = Transcript(fallbackID: file.deletingPathExtension().lastPathComponent)
+        var transcript = Transcript(fallbackID: file.deletingPathExtension().lastPathComponent, files: files)
         let consumed: UInt64
         if wanted || resumed != nil {
-            consumed = try forEachLine(handle, from: start, size: size) { line, _ in ingest(line, into: &state, transcript: &transcript) }
+            consumed = try forEachLine(handle, from: start, size: size) { line, _ in try ingest(line, into: &state, transcript: &transcript) }
             if !wanted { transcript.messages = [] }
         } else {
             var lines: [Skimmed] = []
@@ -195,6 +201,8 @@ public enum PiHistory {
         struct Block: Decodable {
             var type: String
             var text: String?
+            /// 图片（type 为 image）：base64 原字节。不解码成 Data：别的块里若有同名字段，整行就解不开了
+            var data: String?
             /// 工具调用（type 为 toolCall）
             var id: String?
             var name: String?
@@ -220,6 +228,39 @@ public enum PiHistory {
             guard case .blocks(let b) = self else { return [] }
             return b.filter { $0.type == "toolCall" }
         }
+
+        /// 你说的一句：`text` 是文字块（去掉 Pi 附给模型的图片说明）用换行连接，摘要、机器消息判断都用它；
+        /// `stored` 是文字与图片按块的原顺序拼成的正文格式（`files` 为 nil 时不要图片，等同 `text`）。
+        func said(storing files: AttachmentFiles?) throws -> (text: String, stored: String) {
+            guard case .blocks(let blocks) = self else { return (text, text) }
+            var texts: [String] = [], pieces: [String] = []
+            for block in blocks {
+                switch block.type {
+                case "text":
+                    let piece = PiHistory.withoutImageNotes(block.text ?? "")
+                    if !piece.isEmpty { texts.append(piece); pieces.append(piece) }
+                case "image":
+                    guard let files, let data = block.data.flatMap({ Data(base64Encoded: $0) }) else { continue }
+                    do { pieces.append(CueFormat.imageMarkup(id: try files.store(data))) } catch CueStoreError.notAnImage { continue }
+                default: break
+                }
+            }
+            let text = texts.joined(separator: "\n")
+            return (text, files == nil ? text : pieces.joined(separator: "\n"))
+        }
+    }
+
+    /// Pi 把图片缩小或转格式后，在你的话末尾加给模型看的说明行（`formatDimensionNote` 等）；对话里不显示。
+    private static func isImageNote(_ line: Substring) -> Bool {
+        (line.hasPrefix("[Image: original ") && line.hasSuffix(" to map to original image.]"))
+            || (line.hasPrefix("[Image converted from ") && line.hasSuffix(".]"))
+    }
+
+    static func withoutImageNotes(_ text: String) -> String {
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        guard let last = lines.last, isImageNote(last) else { return text }
+        while let last = lines.last, isImageNote(last) { lines.removeLast() }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static let timestampStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
@@ -234,9 +275,11 @@ public enum PiHistory {
     private static let headLength = 512
     private static let tailLength = 128
 
-    /// 这次新读到的对话消息；会话 id 取文件头的，没读到文件头就用文件名。
+    /// 这次新读到的对话消息；会话 id 取文件头的，没读到文件头就用文件名。`files` 是你的消息里的图片要存进的附件目录；
+    /// nil 是只为推出检查点状态而重放的行（消息丢弃，不存图片）。
     private struct Transcript {
         let fallbackID: String
+        let files: AttachmentFiles?
         var messages: [PiChatMessage] = []
 
         mutating func add(
@@ -249,7 +292,7 @@ public enum PiHistory {
         }
     }
 
-    private static func ingest(_ raw: UnsafeRawBufferPointer, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript) {
+    private static func ingest(_ raw: UnsafeRawBufferPointer, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript) throws {
         cp.seq += 1
         if let result = toolResult(raw) {
             cp.round?.tools.finish(id: result.id, failed: result.failed)
@@ -276,7 +319,7 @@ public enum PiHistory {
             }
             let entry = (id: line.id ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
             switch message.role {
-            case "user": userMessage(message, entry, into: &cp, transcript: &transcript)
+            case "user": try userMessage(message, entry, into: &cp, transcript: &transcript)
             case "assistant": assistantMessage(message, entry, into: &cp, transcript: &transcript)
             case "toolResult":
                 if let id = message.toolCallId { cp.round?.tools.finish(id: id, failed: message.isError == true) }
@@ -290,12 +333,14 @@ public enum PiHistory {
     private typealias Entry = (id: String, seq: Int64, at: Date)
 
     /// 你说的一句：进对话、成为进行中的提问。机器消息（扩展投进来的信封）不进对话，只开始一轮。
-    private static func userMessage(_ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript) {
+    private static func userMessage(
+        _ message: Message, _ entry: Entry, into cp: inout PiHistoryCheckpoint, transcript: inout Transcript
+    ) throws {
         if cp.round?.startedAt == nil { cp.round = .init(startedAt: entry.at, tools: cp.round?.tools ?? PiToolLog()) }
-        let text = message.content?.joined("\n") ?? ""
-        guard !isMachineMessage(text) else { return }
-        transcript.add(cp, entryID: entry.id, seq: entry.seq, role: .user, text: text, at: entry.at, deliveryID: message.cuepadDelivery)
-        cp.recap.pendingPrompt = clip(collapsed(text), PiRecap.promptLimit)
+        let said = try message.content?.said(storing: transcript.files) ?? (text: "", stored: "")
+        guard !isMachineMessage(said.text) else { return }
+        transcript.add(cp, entryID: entry.id, seq: entry.seq, role: .user, text: said.stored, at: entry.at, deliveryID: message.cuepadDelivery)
+        cp.recap.pendingPrompt = clip(collapsed(said.text), PiRecap.promptLimit)
     }
 
     /// 助手消息：中途调工具的（`stopReason` 为 `toolUse`）只累计这一轮的工具活动；结束一轮的成一条 Pi 消息，问与答一起更新摘要。
@@ -434,7 +479,12 @@ public enum PiHistory {
         var unfinished = 0 // 最后一条回答之后的第一行
         for (index, skimmed) in lines.enumerated().reversed() where skimmed.kind == .other {
             guard let line = try decoded(skimmed), line.type == "message", let message = line.message else { continue }
-            let text = message.content?.joined("\n") ?? ""
+            let text: String
+            if message.role == "user" {
+                text = try message.content?.said(storing: nil).text ?? ""
+            } else {
+                text = message.content?.joined("\n") ?? ""
+            }
             if final == nil {
                 if message.role == "assistant", message.stopReason != "toolUse" {
                     final = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -448,9 +498,9 @@ public enum PiHistory {
         var rest = cp
         rest.round = nil
         rest.recap.pendingPrompt = nil
-        var ignored = Transcript(fallbackID: "")
+        var ignored = Transcript(fallbackID: "", files: nil)
         for line in lines[unfinished...] where line.kind != .meta {
-            try read(line)?.withUnsafeBytes { ingest($0, into: &rest, transcript: &ignored) }
+            try read(line)?.withUnsafeBytes { try ingest($0, into: &rest, transcript: &ignored) }
         }
         cp.round = rest.round
         cp.recap = PiRecap(

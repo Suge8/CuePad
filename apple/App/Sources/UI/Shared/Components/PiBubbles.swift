@@ -1,4 +1,5 @@
 import CueStore
+import CueText
 import SwiftUI
 
 extension AnyTransition {
@@ -9,13 +10,14 @@ extension AnyTransition {
 
 
 /// 你的一句话：右侧气泡，最宽到所在一栏的四分之三；还在路上的整颗变淡。长按（Mac 右键）是 `menu`，预览就是这颗气泡。
+/// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`）；送达前后同一个样子。
 struct UserBubble<Menu: View>: View {
     private static var widthFraction: CGFloat { 0.78 }
 
     /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
     private static var foldedLines: Int { 6 }
 
-    let text: Dotted
+    let stored: String
     var trip = BubbleTrip.arrived
     var highlighted = false
     @ViewBuilder var menu: Menu
@@ -24,10 +26,16 @@ struct UserBubble<Menu: View>: View {
     @State private var truncated = false
 
     var body: some View {
+        let text = CueFormat.plainText(stored), images = CueFormat.imageHashes(in: stored)
         TrailingFraction(fraction: Self.widthFraction) {
-            BubbleText(
-                text: text, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines, truncated: $truncated,
-                expand: truncated && !expanded ? { expanded = true } : nil)
+            VStack(alignment: .trailing, spacing: 6) {
+                if !text.isEmpty || images.isEmpty {
+                    BubbleText(
+                        text: Dotted(text), highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
+                        truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil)
+                }
+                if !images.isEmpty { ChatImages(hashes: images, trip: trip) }
+            }
             #if os(iOS)
             .contentShape(.contextMenuPreview, BubbleText.shape)
             #endif
@@ -39,8 +47,8 @@ struct UserBubble<Menu: View>: View {
 
 extension UserBubble where Menu == EmptyView {
     /// 没有长按菜单的气泡（近况里的上一句）。
-    init(text: Dotted, trip: BubbleTrip = .arrived, highlighted: Bool = false) {
-        self.init(text: text, trip: trip, highlighted: highlighted) { EmptyView() }
+    init(stored: String, trip: BubbleTrip = .arrived, highlighted: Bool = false) {
+        self.init(stored: stored, trip: trip, highlighted: highlighted) { EmptyView() }
     }
 }
 
@@ -119,7 +127,8 @@ enum BubbleTrip { case arrived, inTransit, failed }
 
 
 /// 一条消息的长按菜单（Mac 右键）：有哪几项、什么顺序只在 `MessageMenu`，这里只画。存为灵感进会话所属的项目；
-/// 编辑后重发放回这个会话的回复框，已经写了字就接在后面。只属于某一行的动作（选择文本、重发、移除）由那一行给。
+/// 编辑后重发放回这个会话的回复框（文字进输入框、图片进图片条），已经写了字就接在后面。只属于某一行的动作（选择文本、重发、移除）由那一行给。
+/// `text`：你的话是存储格式正文（复制与存为灵感连图片一起；分享只给文字），Pi 的回答是 Markdown。
 struct MessageActions: View {
     let text: String
     let kind: MessageMenu.Kind
@@ -141,7 +150,7 @@ struct MessageActions: View {
         switch item {
         case .copy: Button(item.title, systemImage: item.symbol) { workspace.copy(text) }
         case .selectText: if let selectText { Button(item.title, systemImage: item.symbol, action: selectText) }
-        case .share: ShareLink(item: text) { Label(item.title, systemImage: item.symbol) }
+        case .share: ShareLink(item: kind == .reply ? text : CueFormat.plainText(text)) { Label(item.title, systemImage: item.symbol) }
         case .saveAsIdea:
             Button(item.title, systemImage: item.symbol) {
                 let text = text, session = session
@@ -158,7 +167,7 @@ struct MessageActions: View {
     private func editAgain() {
         let settings = workspace.services.settings
         var draft = settings.replyDraft(for: session.id)
-        draft.text = [draft.text, text].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
+        draft.append(stored: text, files: workspace.services.store.files)
         settings.setReplyDraft(draft, for: session.id)
     }
 }
@@ -175,7 +184,7 @@ struct OutgoingBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            UserBubble(text: text, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived) {
+            UserBubble(stored: request.content, trip: failed ? .failed : request.isOpen ? .inTransit : .arrived) {
                 MessageActions(text: request.content, kind: .outgoing(failed: failed), session: session, resend: retry, remove: remove)
             }
             HStack(spacing: 10) {
@@ -197,8 +206,6 @@ struct OutgoingBubble: View {
         .frame(maxWidth: .infinity, alignment: .trailing)
         .transition(.entry)
     }
-
-    private var text: Dotted { PiChat.shownText(of: request) }
 
     /// 同样的内容与方式再发一次；新请求写成后移除这条失败的。
     private func retry() {

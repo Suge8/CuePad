@@ -7,23 +7,22 @@ import UniformTypeIdentifiers
 /// 图片文件：按内容哈希（SHA-256 十六进制）存放在库文件旁的 `Attachments/`，文件名就是哈希。是附件目录的唯一入口。
 ///
 /// 读写都不经过 `CueStore` actor，编辑器可在主线程同步调用。附件记录（同步用）不在这里写：
-/// 引用图片的写入（卡片正文、投送请求、发送记录）在同一事务里为本机已有文件的哈希登记，
+/// 引用图片的写入（卡片正文、投送请求、发送记录、对话里你的消息）在同一事务里为本机已有文件的哈希登记，
 /// 所以没被引用的图片不上传，被引用的本机图片一定有记录。
 public struct AttachmentFiles: Sendable {
   let directory: URL
   private static let chunkSize = 1 << 20
 
-  /// 存入图片数据，返回内容哈希（写进正文的 `cuepad://img/<哈希>`）。不是图片抛 `notAnImage`；同哈希文件已在则不重写。
+  /// 存入图片数据，返回内容哈希（写进正文的 `cuepad://img/<哈希>`）。同哈希文件已在则不重写、不再解析；不是图片抛 `notAnImage`。
   public func store(_ data: Data) throws -> String {
+    let hash = SHA256.hash(data: data).hex
+    let url = directory.appending(path: hash)
+    guard !FileManager.default.fileExists(atPath: url.path) else { return hash }
     guard let source = CGImageSourceCreateWithData(data as CFData, nil), Self.isImage(source) else {
       throw CueStoreError.notAnImage
     }
-    let hash = SHA256.hash(data: data).hex
-    let url = directory.appending(path: hash)
-    if !FileManager.default.fileExists(atPath: url.path) {
-      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-      try data.write(to: url, options: .atomic)
-    }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try data.write(to: url, options: .atomic)
     return hash
   }
 

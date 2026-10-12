@@ -40,6 +40,14 @@ struct ComposerDraft {
         attachments.append(Outbox(content: Outgoing.text(of: card), card: card.id, project: card.projectID))
     }
 
+    /// 把存储格式正文放回输入框（编辑后重发）：文字接在已写的字后面（空一行），图片接进图片条。本机没有文件的图片略过。
+    mutating func append(stored: String, files: AttachmentFiles) {
+        text = [text, CueFormat.plainText(stored)].filter { !$0.allSatisfy(\.isWhitespace) }.joined(separator: "\n\n")
+        images += CueFormat.imageHashes(in: stored).compactMap { hash in
+            files.fileURL(for: hash).flatMap { try? Data(contentsOf: $0) }.flatMap(PickedImage.init(data:))
+        }
+    }
+
     /// 按去处接受的种类，有没有可发的东西（不接受的种类不算）。
     func isEmpty(accepting kinds: ComposerKinds) -> Bool {
         text.allSatisfy(\.isWhitespace) && (!kinds.contains(.images) || images.isEmpty) && (!kinds.contains(.cards) || attachments.isEmpty)

@@ -180,7 +180,7 @@ final class MacExecutor {
     /// 补写一个会话的对话：从本机的会话文件从头读出，与摘要一起写。
     private func writeTranscript(of sessionID: String) async throws {
         guard let indexed = try await store.piSession(sessionID) else { throw SendError.piSessionNotOnThisMac }
-        try await store.writePiTranscript(try PiHistory.index(file: URL(filePath: indexed.path), from: nil).transcript)
+        try await store.writePiTranscript(try PiHistory.index(file: URL(filePath: indexed.path), from: nil, files: store.files).transcript)
     }
 
     /// 绑定文件夹：手机只指名从哪里取，路径在这台 Mac 上解析，写进本机的目录绑定——绑定的唯一写入；

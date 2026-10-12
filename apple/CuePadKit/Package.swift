@@ -23,7 +23,7 @@ let package = Package(
         // TextKit 2 编辑器宿主（AppKit / UIKit）。
         .target(name: "CueEditor", dependencies: ["CueText"]),
         // macOS Pi 桥：扩展（随包资源）、socket 客户端、会话历史索引、终端跳转。仅 macOS，iOS 目标不依赖。
-        .target(name: "CuePi", dependencies: ["CueStore"], exclude: ["README.md"], resources: [.copy("Extension")]),
+        .target(name: "CuePi", dependencies: ["CueStore", "CueText"], exclude: ["README.md"], resources: [.copy("Extension")]),
         // iCloud 同步：CKSyncEngine ↔ CueStore 的记录映射、待推送变更、冲突与附件。
         .target(name: "CueSync", dependencies: ["CueStore"]),
         // 测试共用的支撑（临时库目录、独立 sqlite3 连接、测试图片、手动时钟、条件等待），只给测试目标依赖。

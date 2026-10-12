@@ -19,7 +19,7 @@ extension AppServices {
         } catch {
             reportIssue(.piBridgeUnavailable("\(error)"))
         }
-        let indexer = PiHistoryIndexer(root: paths.sessionsDirectory, transcriptWindow: PiHistoryPersistence.transcriptWindow) { [weak self] file in
+        let indexer = PiHistoryIndexer(root: paths.sessionsDirectory, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files) { [weak self] file in
             await self?.loadPiCheckpoint(for: file)
         }
         follow(reporting: { .piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\($0.localizedDescription)") }) { try await self.piIntegration.refresh() }

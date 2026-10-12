@@ -1,3 +1,4 @@
+import CueText
 import Foundation
 
 /// 对话里一条消息的说话人。
@@ -33,7 +34,7 @@ public struct PiRecap: Sendable, Equatable, Codable {
   }
 }
 
-/// 会话对话里的一条消息（同步表 `piMessages`，Mac 写、各端只读，只追加）。
+/// 会话对话里的一条消息（同步表 `piMessages`，Mac 写、各端只读，只追加；读会话文件的规则变了之后重读，已写过的消息的正文与工具活动会更新）。
 ///
 /// 唯一来源是 Pi 的会话文件：Mac 读会话文件写出（在线会话随文件追加跟上，更早的按需补写），记录 id 由会话 id 与
 /// 文件里那一条的 id 算出，重读不重复。一轮一条 Pi 消息：这一轮最后的回答；中途调工具时说的话、思考与工具输出都不同步，
@@ -45,7 +46,8 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
   /// 在会话里的先后：会话文件里那一条的序号（文件只追加，重读不变）。对话按它升序排
   public var seq: Int64
   public var role: Open<PiChatRole>
-  /// 正文，至多 `PiChatMessage.textLimit` 个字符，超出截断并以省略号结尾
+  /// 正文。你的消息是 CuePad 正文格式（`CueFormat`：文字，图片是 `![](cuepad://img/<哈希>)`，与投送请求的 content 同一种），
+  /// Pi 的回答与系统行是纯文字。文字至多 `PiChatMessage.textLimit` 个字符，超出截断并以省略号结尾（图片引用不计、不截）
   public var text: String
   /// 这条消息的时间（会话文件里的时间戳）
   public var at: Date
@@ -71,13 +73,37 @@ public struct PiChatMessage: Identifiable, Equatable, Sendable {
     self.sessionID = sessionID
     self.seq = seq
     self.role = .known(role)
-    self.text = text.count > Self.textLimit ? String(text.prefix(Self.textLimit - 1)) + "…" : text
+    self.text = Self.clipped(text)
     self.at = at
     self.tools = tools
     self.roundStartedAt = roundStartedAt
     self.deliveryID = deliveryID
     createdAt = .stamp
     modifiedAt = createdAt
+  }
+
+  /// 文字超过上限时截断，图片引用原样保留：切坏引用会让图片变成一段乱码。
+  private static func clipped(_ text: String) -> String {
+    guard text.count > textLimit else { return text }
+    let tokens = CueFormat.parse(text)
+    let length = tokens.reduce(0) { total, token in
+      if case .text(let piece) = token { return total + piece.count }
+      return total
+    }
+    guard length > textLimit else { return text }
+    var room = textLimit - 1
+    var kept: [CueToken] = []
+    for token in tokens {
+      guard case .text(let piece) = token else {
+        kept.append(token)
+        continue
+      }
+      guard room > 0 else { continue }
+      kept.append(.text(String(piece.prefix(room))))
+      room -= piece.count
+      if room <= 0 { kept.append(.text("…")) }
+    }
+    return CueFormat.serialize(kept)
   }
 
   /// 会话文件里一条（你的消息、或一轮最后的回答）对应的记录 id，任何时候重读都一样。
@@ -206,11 +232,12 @@ extension CueStore {
   /// `PiSessionState.pendingPrompt`）。会话记录还不存在时只写消息。
   func applyTranscript(_ transcript: PiTranscript) throws {
     for message in transcript.messages {
+      try registerImages(in: message.text)
       if try insert(message, ignoringExisting: true) { continue }
-      // 已写过的消息只有工具活动会变（读文件的规则升级后重读）：同样的内容不改写，免得重复上传
+      // 已写过的消息只有正文和工具活动会变（读会话文件的规则升级后重读）：同样的内容不改写，免得重复上传
       try db.run(
-        "UPDATE piMessages SET tools = ?1, modifiedAt = ?2 WHERE id = ?3 AND tools IS NOT ?1",
-        [message.tools?.stored, Date.stamp, message.id])
+        "UPDATE piMessages SET text = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (text IS NOT ?1 OR tools IS NOT ?2)",
+        [message.text, message.tools?.stored, Date.stamp, message.id])
     }
     let recap = transcript.recap
     try db.run(
@@ -225,23 +252,26 @@ extension CueStore {
   /// 对话也是 `window` 之前写出的（按需补写的留够 `window`）。在写对话的那台 Mac 上调用。
   /// 仍被提示词（未归档、未删除的任务下的灵感）引用的会话跳过、整段对话留着：提示词的"已回复"靠对话推出（`childMarks`），
   /// 清掉对话它会退回"没回复"；提示词归档或删除后没人引用了，下次照常清理。
-  /// 对话没了的会话的预览（`window` 之前发的）一起删，文件没有别的预览或图片用着时随之删掉。
+  /// 对话没了的会话的预览（`window` 之前发的）一起删，文件没有别的预览或图片用着时随之删掉；对话里的图片同样，没有卡片、发送记录、别的对话用着时随之删掉。
   public func prunePiMessages(olderThan window: TimeInterval, now: Date = .now) throws {
     let cutoff = now.addingTimeInterval(-window)
     try reportingFileFailures {
       try write {
-        try db.run(
+        let quiet = """
+          SELECT m.sessionID FROM piMessages m LEFT JOIN piSessions s ON s.id = m.sessionID GROUP BY m.sessionID
+          HAVING COALESCE(MAX(s.lastActivityAt), MAX(m.at)) < ? AND MAX(m.createdAt) < ?
+            AND NOT EXISTS (
+              SELECT 1 FROM sendRecords r JOIN cards c ON c.id = r.cardID
+              WHERE r.targetKind = '\(SendTargetKind.piSession.rawValue)' AND r.targetRef = m.sessionID
+                AND c.parentID IS NOT NULL AND c.todoAt IS NULL AND c.deletedAt IS NULL AND c.archivedAt IS NULL)
           """
-          DELETE FROM piMessages WHERE sessionID IN (
-            SELECT m.sessionID FROM piMessages m LEFT JOIN piSessions s ON s.id = m.sessionID GROUP BY m.sessionID
-            HAVING COALESCE(MAX(s.lastActivityAt), MAX(m.at)) < ? AND MAX(m.createdAt) < ?
-              AND NOT EXISTS (
-                SELECT 1 FROM sendRecords r JOIN cards c ON c.id = r.cardID
-                WHERE r.targetKind = '\(SendTargetKind.piSession.rawValue)' AND r.targetRef = m.sessionID
-                  AND c.parentID IS NOT NULL AND c.todoAt IS NULL AND c.deletedAt IS NULL AND c.archivedAt IS NULL))
-          """, [cutoff, cutoff])
+        let said = try db.query(
+          "SELECT text FROM piMessages WHERE \(Self.userImages) AND sessionID IN (\(quiet))",
+          [CueFormat.imagePrefix, cutoff, cutoff]) { $0.text(0) }
+        var hashes = Set(said.flatMap(CueFormat.imageHashes(in:)))
+        try db.run("DELETE FROM piMessages WHERE sessionID IN (\(quiet))", [cutoff, cutoff])
         let expired = "createdAt < ? AND sessionID NOT IN (SELECT sessionID FROM piMessages)"
-        let hashes = Set(try db.query("SELECT hash FROM previews WHERE \(expired)", [cutoff]) { $0.text(0) })
+        hashes.formUnion(try db.query("SELECT hash FROM previews WHERE \(expired)", [cutoff]) { $0.text(0) })
         try db.run("DELETE FROM previews WHERE \(expired)", [cutoff])
         return try reclaimAttachments(hashes)
       }
