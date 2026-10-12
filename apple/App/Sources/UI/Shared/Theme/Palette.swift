@@ -161,7 +161,6 @@ extension CueEditorTheme {
         let size: CGFloat = 15.5
         return CueEditorTheme(
             font: Typeface.pingFang(size),
-            titleFont: Typeface.pingFang(28, weight: .semibold),
             headingFont: Typeface.pingFang(18, weight: .semibold),
             codeFont: .monospacedSystemFont(ofSize: size - 2, weight: .regular),
             markerColor: CueColor(palette.ink3),

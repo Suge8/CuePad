@@ -25,20 +25,17 @@ struct DecorationTests {
     private let theme = CueEditorTheme.test
     private let nowhere = NSRange(location: NSNotFound, length: 0)
 
-    @Test("标题随编辑移动：新标题换字体，未被编辑的旧标题恢复正文字体")
-    func titleMoves() {
+    @Test("第一行和别的行一样是正文；写 # 的行才是标题，随输入换字体")
+    func firstLineIsBody() {
         let h = EditorHarness()
-        h.load("\n第二行")
-        #expect(font(displayed(h)[1]) == theme.titleFont)
+        h.load("先复现\n# 小节")
+        var p = displayed(h)
+        #expect(font(p[0]) == theme.font && font(p[1]) == theme.headingFont)
 
         h.setCaret(0)
-        h.textView.insertText("首", replacementRange: nowhere)
-        var p = displayed(h)
-        #expect(font(p[0]) == theme.titleFont && font(p[1]) == theme.font)
-
-        h.textView.deleteBackward(nil)
+        h.textView.insertText("# ", replacementRange: nowhere)
         p = displayed(h)
-        #expect(font(p[0]) == theme.font && font(p[1]) == theme.titleFont)
+        #expect(font(p[0]) == theme.headingFont && h.stored == "# 先复现\n# 小节")
     }
 
     @Test("增删围栏后，远处未被编辑的段落随之切换代码/正文")
@@ -71,40 +68,23 @@ struct DecorationTests {
         #expect(h.textView.undoManager?.canUndo == false)
     }
 
-    @Test("与输入法组合共存：组合中标题易主，标记文本不被打断")
+    @Test("与输入法组合共存：标记文本不被打断，各行样式不变")
     func withComposing() {
         let h = EditorHarness()
-        h.load("\n次行")
+        h.load("\n# 次行")
         h.setCaret(0)
 
         h.textView.setMarkedText("shou", selectedRange: NSRange(location: 4, length: 0), replacementRange: nowhere)
         #expect(h.textView.hasMarkedText() && h.textView.markedRange() == NSRange(location: 0, length: 4))
         var p = displayed(h)
-        #expect(font(p[0]) == theme.titleFont && font(p[1]) == theme.font)
+        #expect(font(p[0]) == theme.font && font(p[1]) == theme.headingFont)
 
         h.textView.insertText("首", replacementRange: nowhere)
         #expect(!h.textView.hasMarkedText())
-        #expect(h.stored == "首\n次行")
+        #expect(h.stored == "首\n# 次行")
         p = displayed(h)
-        #expect(font(p[0]) == theme.titleFont && font(p[1]) == theme.font)
+        #expect(font(p[0]) == theme.font && font(p[1]) == theme.headingFont)
         #expect(h.textView.textLayoutManager != nil)
-    }
-
-
-    @Test("标题行就是卡片标题那一行：跳过空行、分隔线、只有图片的行", arguments: [
-        ("\n\n周报\n正文", "周报"),
-        ("![](cuepad://img/ab)\n标题", "标题"),
-        ("---split---\n![](cuepad://img/ab) 说明\n后", "说明"),
-        ("---split---\n \n![](cuepad://img/ab)![](cuepad://img/cd)\n真标题", "真标题"),
-        ("![](cuepad://img/ab)\n---split---\n", ""),
-        ("", ""),
-    ])
-    func titleLine(stored: String, expected: String) {
-        let h = EditorHarness()
-        h.load(stored)
-        let titled = displayed(h).filter { $0.length > 0 && font($0, at: $0.length - 1) == theme.titleFont }
-        let text = titled.first?.string.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        #expect(text == expected)
     }
 }
 
