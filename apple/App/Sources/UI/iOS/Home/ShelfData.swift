@@ -16,9 +16,9 @@ nonisolated struct ShelfData: Sendable, Equatable {
     static let activeLimit = 3
 
     /// 各项目的"此刻"（`ProjectNow`）：数据变化时算一次，卡与行只拿结果。"正在推进"已列出的任务不再写一遍。
-    /// `sessions` 是此刻有事的 Pi 会话（`LiveSessions.items`，各项目的"此刻"一行再按本机的规则挑）。
+    /// `sessions` 是此刻有事的 Pi 会话（`LiveSessions.items`，各项目的"此刻"一行再按本机的规则挑；nil 是还没读到）。
     @MainActor func now(
-        projects: [Project], sessions: [PiSessionListItem], shown: (PiSessionListItem) -> PiShown
+        projects: [Project], sessions: [PiSessionListItem]?, shown: (PiSessionListItem) -> PiShown
     ) -> [UUID: ProjectNow] {
         ProjectNow.byProject(projects, sessions: sessions, tasks: leading, listed: Set(active.map(\.id)), shown: shown)
     }

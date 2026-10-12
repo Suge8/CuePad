@@ -122,10 +122,10 @@ private struct SplitSidebar: View {
                 SidebarRow(route: .agent, title: "Agent", symbol: "waveform.path.ecg", badge: services.liveSessions.waiting)
                 SidebarRow(route: .search, title: "搜索", symbol: "magnifyingglass")
             }
-            // 会话也读到了才排项目：它们的"此刻"要看会话，不先写任务再换成会话状态
-            if let catalog = workspace.catalog, let sessions = services.liveSessions.items {
-                // 各项目的"此刻"在数据变化时算一次，行只拿结果
-                let now = ProjectNow.byProject(catalog.projects, sessions: sessions, tasks: leading ?? [:], shown: services.settings.shown)
+            if let catalog = workspace.catalog {
+                // 各项目的"此刻"在数据变化时算一次，行只拿结果；在线会话读到前先留空白（`ProjectNow.byProject`）
+                let now = ProjectNow.byProject(
+                    catalog.projects, sessions: services.liveSessions.items, tasks: leading ?? [:], shown: services.settings.shown)
                 let pinned = catalog.projects.filter(\.isPinned)
                 if !pinned.isEmpty {
                     Section("置顶") { ForEach(pinned) { row($0, catalog, now: now[$0.id]) } }

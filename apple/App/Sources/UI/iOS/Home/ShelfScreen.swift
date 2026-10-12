@@ -29,12 +29,10 @@ struct ShelfScreen: View {
                 CardSearchResults(query: $query, scope: .all)
             } else {
                 ScrollView {
-                    // 读到数据时整页淡入，不是一帧里突然铺满；会话也读到了才排（"此刻"与 Agent 那一行要看会话，不先错后对）
-                    if let data, let catalog = workspace.catalog, let sessions = services.liveSessions.items {
-                        content(data, catalog, sessions: sessions).transition(.opacity)
-                    }
+                    // 读到数据时整页淡入，不是一帧里突然铺满
+                    if let data, let catalog = workspace.catalog { content(data, catalog).transition(.opacity) }
                 }
-                .animation(Motion.quick, value: data == nil || services.liveSessions.items == nil)
+                .animation(Motion.quick, value: data == nil)
                 .refreshable { await services.syncNow() }
                 .hidingSearch($searchHidden, searching: searching)
             }
@@ -54,20 +52,22 @@ struct ShelfScreen: View {
             query.text = DebugHooks.preset.searchText
             searchFocused = true
         }
-        .onChange(of: data != nil && services.liveSessions.items != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
+        .onChange(of: data != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
         .observing(services.store, into: $data, onError: workspace.fail) {
             try ShelfData.read(from: $0)
         }
     }
 
     @ViewBuilder
-    private func content(_ data: ShelfData, _ catalog: ProjectCatalog, sessions: [PiSessionListItem]) -> some View {
+    private func content(_ data: ShelfData, _ catalog: ProjectCatalog) -> some View {
         let entries = catalog.shelfEntries
         let pinned = entries.filter(\.project.isPinned)
         let recent = entries.filter { !$0.project.isPinned }
         // 各项目的"此刻"在数据变化时算一次，卡与行只拿结果
+        // 在线会话读到前"此刻"先留空白（`ProjectNow.byProject`），Agent 那一张等读到再出
+        let sessions = services.liveSessions.items
         let now = data.now(projects: catalog.projects, sessions: sessions, shown: services.settings.shown)
-        let agent = AgentNow.of(sessions, shown: services.settings.shown)
+        let agent = sessions.flatMap { AgentNow.of($0, shown: services.settings.shown) }
         let wide = sizeClass == .regular && !typeSize.isAccessibilitySize
         LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
             if entries.isEmpty && catalog.unfiledCount == 0 {

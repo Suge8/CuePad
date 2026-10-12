@@ -9,7 +9,7 @@ import Observation
 @Observable
 final class LiveSessions {
     /// 此刻有事的会话：未结束的在前，各自按进入当前状态的时间从新到旧（`piSessionPage` 的顺序）。nil 是启动后还没读到第一份：
-    /// 项目的"此刻"（`ProjectNow`）等它，不先按"没有会话"写任务、读到后再换成会话状态。
+    /// 项目的"此刻"（`ProjectNow.byProject`）在它到之前只留空白，不先按"没有会话"写任务、读到后再换成会话状态。
     private(set) var items: [PiSessionListItem]?
     /// 全部会话记录数（含历史）。
     private(set) var total = 0
