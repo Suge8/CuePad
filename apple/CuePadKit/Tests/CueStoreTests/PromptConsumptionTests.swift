@@ -25,7 +25,8 @@ import Testing
   @Test(.timeLimit(.minutes(1))) func 送达就用掉_任务记着会话_发送记录留着快照() async throws {
     let task = try await store.createTask("修乱序", in: nil)
     let sent = try await store.createCard(body: "先复现", under: task.id)
-    let waiting = try await store.createCard(body: "再改排序", under: task.id)
+    let other = try await store.createTask("改文案", in: nil)
+    let waiting = try await store.createCard(body: "再改排序", under: other.id)  // 一个叶子一条草稿：另一条在别的任务上
     let executor = executor()
     try await executor.start()
 
@@ -35,7 +36,8 @@ import Testing
 
     #expect(try await store.trashedCards().isEmpty)
     #expect(try await store.archived().isEmpty)
-    #expect(try await store.children(of: task.id).map(\.id) == [waiting.id])
+    #expect(try await store.children(of: task.id).isEmpty)
+    #expect(try await store.children(of: other.id).map(\.id) == [waiting.id])
     #expect(try await store.card(task.id)?.piSessionID == "s1")
     let records = try await store.sendRecords()
     #expect(records.map(\.content) == ["先复现"] && records.first?.cardID == nil)
@@ -46,7 +48,8 @@ import Testing
     let resource = try await store.createCard(body: "常用说明", under: task.id)
     try await store.updateCard(resource.id) { $0.isPinned = true }
     let failing = try await store.createCard(body: "没送到的", under: task.id)
-    let waiting = try await store.createCard(body: "还在路上的", under: task.id)
+    let other = try await store.createTask("改文案", in: nil)
+    let waiting = try await store.createCard(body: "还在路上的", under: other.id)
 
     let failed = try await store.requestDelivery(failing.body, to: atlas, on: "mac-a", card: failing.id)
     let delivered = try await store.requestDelivery(resource.body, to: atlas, on: "mac-a", card: resource.id)
@@ -59,7 +62,8 @@ import Testing
     await executor.stop()
 
     #expect(try await store.deliveryRequest(delivered.id)?.status == .known(.succeeded))
-    #expect(try await store.children(of: task.id).map(\.id) == [resource.id, failing.id, waiting.id])
+    #expect(try await store.children(of: task.id).map(\.id) == [resource.id, failing.id])
+    #expect(try await store.children(of: other.id).map(\.id) == [waiting.id])
   }
 
   @Test(.timeLimit(.minutes(1))) func 开新会话送达_提示词用掉_会话开好后认领的是任务() async throws {

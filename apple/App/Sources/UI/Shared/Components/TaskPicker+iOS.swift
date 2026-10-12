@@ -8,7 +8,7 @@ extension TaskPicker {
                 Section { newTask.listRowBackground(palette.paper) }
                 ForEach(shown, id: \.projectID) { group in
                     Section {
-                        ForEach(group.tasks) { task in row(task).listRowBackground(palette.paper) }
+                        ForEach(group.tasks) { task in row(task, in: group).listRowBackground(palette.paper) }
                     } header: {
                         header(group.projectID)
                     }

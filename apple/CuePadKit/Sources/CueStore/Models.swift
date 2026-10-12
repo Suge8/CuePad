@@ -119,6 +119,14 @@ public struct TaskGroup: Equatable, Sendable {
   public internal(set) var tasks: [Card]
 }
 
+/// 能绑会话的叶子任务，步骤带着它的上级（`CueStore.bindableTasks`）。
+public struct BindableTask: Identifiable, Equatable, Sendable {
+  public let task: Card
+  /// 步骤的上级任务；顶层任务为 nil。
+  public let parent: Card?
+  public var id: UUID { task.id }
+}
+
 /// 一组顶层任务按状态的个数（`CueStore.taskCounts`）：给用户看的任务数与完成数都是它。
 public struct TaskCounts: Equatable, Sendable {
   public var inProgress: Int
@@ -169,8 +177,10 @@ public enum CardChange: Sendable, Equatable {
   case todo(id: UUID, on: Bool, body: String, variableValues: [String: String], prompt: UUID?, lifted: [UUID])
   /// 删除：提上去的下级。
   case trash(id: UUID, lifted: [UUID])
-  /// 挪动：原来的位置与原来的前一个同级；任务挪成步骤时改挂走的提示词（拨回时放回它下面）。
-  case move(id: UUID, from: CardSlot, after: UUID?, hoisted: [UUID])
+  /// 挪动：原来的位置与原来的前一个同级。
+  case move(id: UUID, from: CardSlot, after: UUID?)
+  /// 灵感挂到已有草稿的叶子上：并进草稿，灵感删掉。带着删掉的灵感整张卡与草稿并之前的正文、变量取值，拨回时原样还原。
+  case fold(idea: Card, draft: UUID, body: String, variableValues: [String: String])
 }
 
 public struct SendRecord: Identifiable, Equatable, Sendable {
@@ -334,6 +344,8 @@ public enum CueStoreError: Error, Equatable {
   case invalidParent
   /// 挂上去后任务会超过 `Card.maxTaskDepth` 级。
   case taskTooDeep
+  /// 只能绑在叶子（没有步骤的任务）上；有步骤的任务绑到它的某个步骤上。
+  case notALeaf
   /// 灵感没有状态：先"设为任务"。
   case notATask
   /// 预览的文件不存在、读不了或不是文件（参数是它的路径）。
@@ -360,6 +372,7 @@ extension CueStoreError: LocalizedError {
     case .schemaTooOld(let version): "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它"
     case .invalidParent: "只能挂到任务下，不能挂到自己或自己的下级下"
     case .taskTooDeep: "任务最多 \(Card.maxTaskDepth) 级（任务 → 步骤）"
+    case .notALeaf: "有步骤的任务不直接绑会话，绑到它的某个步骤上"
     case .notATask: "这是灵感，先「设为任务」再改状态"
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"

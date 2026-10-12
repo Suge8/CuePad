@@ -115,7 +115,7 @@ import Testing
     }
   }
 
-  @Test func 并发挪出第三级任务_提到第二级_步骤下的提示词改挂到顶层任务() async throws {
+  @Test func 并发挪出第三级任务_提到第二级_叶子的提示词跟着() async throws {
     let a = try await store.createTask("a", in: nil)
     let a1 = try await store.createTask("a1", under: a.id)
     let b = try await store.createTask("b", in: nil)
@@ -127,7 +127,41 @@ import Testing
 
     #expect(try await store.card(b.id)?.parentID == a.id)
     #expect(try await store.card(b1.id)?.parentID == a.id)
-    #expect(try await store.card(note.id)?.parentID == a.id)  // b1 成了步骤，它的提示词回到顶层任务下
+    #expect(try await store.card(note.id)?.parentID == b1.id)  // b1 是步骤也是叶子：草稿留在它下面
+  }
+
+  @Test func 提示词与会话只在叶子上_远端让叶子有了步骤_草稿落到第一个没完成的步骤并成一条_会话交给第一个步骤() async throws {
+    let top = try await store.createTask("上线", in: nil)
+    let first = try await store.createTask("备份", in: nil)
+    let second = try await store.createTask("发布", in: nil)
+    let later = try await store.createCard(in: nil, body: "第二条")
+    let earlier = try await store.createCard(in: nil, body: "第一条")  // 新灵感排在最前：排序键更小
+    try await store.linkCard(top.id, toSession: "s1")
+    try await store.linkCard(second.id, toSession: "s2")
+    try await pushed()
+
+    func record(_ card: Card, parent: UUID, sortKey: String, task: Bool = true, done: Bool = false, session: String? = nil) -> CKRecord {
+      var fields = cardFields(project: nil, body: card.body, modifiedAt: millis(card.modifiedAt) + 1_000, sortKey: sortKey)
+      fields["parentID"] = .text(parent.uuidString.lowercased())
+      fields["todoAt"] = task ? .int(1_000) : .null
+      fields["completedAt"] = done ? .int(3_000) : .null
+      fields["piSessionID"] = session.map { .text($0) } ?? .null
+      return remoteRecord(.cards, id: card.id, fields)
+    }
+    // 另一台设备给"上线"加了两个步骤（备份已完成），又把两条灵感挂在"上线"下
+    let changes = [
+      record(first, parent: top.id, sortKey: "a", done: true), record(second, parent: top.id, sortKey: "b", session: "s2"),
+      record(later, parent: top.id, sortKey: "c", task: false), record(earlier, parent: top.id, sortKey: "b", task: false),
+    ]
+    await rig.coordinator.handle(.fetched(modifications: changes, deletions: []))
+
+    let drafts = try await store.children(of: second.id).filter { !$0.isTask }
+    #expect(drafts.map(\.id) == [earlier.id] && drafts[0].body == "第一条\n\n第二条")
+    #expect(try await store.card(later.id) == nil)
+    #expect(try await store.children(of: top.id).filter { !$0.isTask }.isEmpty)
+    #expect(try await store.card(top.id)?.piSessionID == nil)
+    #expect(try await store.card(first.id)?.piSessionID == "s1")
+    #expect(try await store.card(second.id)?.piSessionID == "s2")
   }
 
   @Test func 父任务在别处换了项目_步骤跟过去_父任务还没到的不动() async throws {

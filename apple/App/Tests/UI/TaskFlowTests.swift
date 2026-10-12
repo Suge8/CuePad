@@ -23,12 +23,17 @@ struct TaskFlowTests {
         try await workspace.attachToNewTask(first.id, title: "修乱序")
         let task = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.title == "修乱序" })
         #expect(task.projectID == project.id && workspace.notice?.text == "已成为任务的提示词")
-        try await workspace.attach(second.id, to: task.id)
+        try await workspace.attach(second.id, to: task.id)  // 一个叶子一条草稿：并进去，灵感删掉
         let third = try await store.createCard(body: "补用例", under: task.id)
-        #expect(try await store.children(of: task.id).map(\.id) == [first.id, second.id, third.id])
+        #expect(third.id == first.id)
+        #expect(try await store.children(of: task.id).map(\.id) == [first.id])
+        #expect(try await store.card(first.id)?.body == "日志在 logs/0918.txt\n\n再改排序\n\n补用例")
+        #expect(try await store.card(second.id) == nil)
         #expect(try await store.cards(in: project.id).isEmpty)
-        #expect(TaskCopy.counts(prompts: 3, subtasks: nil)?.visible == "3 条提示词")
+        #expect(TaskCopy.counts(prompts: 1, subtasks: nil)?.visible == "1 条提示词")
         #expect(try await primary(task) == first.id)
+        let neighbour = try await store.createTask("改文案", in: project.id)
+        let waiting = try await store.createCard(body: "别的任务的话", under: neighbour.id)
 
         // 话在路上是发送中；没送到的带原因、留在原地，只有它能重发，别的提示词不受影响
         try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas")
@@ -44,15 +49,16 @@ struct TaskFlowTests {
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         #expect(try await delivery(of: first) == .failed("会话在送达前关掉了"))
-        #expect(try await delivery(of: second) == .unsent)
-        #expect(try await primary(task) == second.id)
+        #expect(try await delivery(of: waiting) == .unsent)
+        #expect(try await primary(neighbour) == waiting.id)
 
         // 重发送达：提示词用掉（不进归档、回收站），任务进行中并记着会话，发送记录留着话
         delivers.withLock { $0 = true }
         try await store.requestDelivery(first.body, to: atlas, on: "mac-a", card: first.id)
         _ = try await eventually(store, { try $0.card(first.id) }) { $0 == nil }
         await executor.stop()
-        #expect(try await store.children(of: task.id).map(\.id) == [second.id, third.id])
+        #expect(try await store.children(of: task.id).isEmpty)
+        #expect(try await store.children(of: neighbour.id).map(\.id) == [waiting.id])
         #expect(try await store.trashedCards().isEmpty)
         #expect(try await store.archived().isEmpty)
         let started = try #require(try await store.card(task.id))
@@ -206,7 +212,7 @@ struct TaskFlowTests {
         let idea = try await store.createCard(in: nil, body: "日志")
         let onto = try await tree().drop(idea: idea.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 46))
         try await apply(onto?.move, idea.id)
-        #expect(try await store.card(idea.id)?.parentID == a.id)  // 拖到步骤上：提示词落在步骤的顶层任务下
+        #expect(try await store.card(idea.id)?.parentID == a1.id)  // 拖到步骤上：步骤是叶子，草稿挂在它下面
         #expect(try await tree().drop(idea: idea.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 400)) == nil)
     }
 

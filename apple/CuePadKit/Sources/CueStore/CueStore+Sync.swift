@@ -364,13 +364,8 @@ extension CueStore {
   }
 
   /// 卡片层级在远端变更之后仍要成立（见 `CardLinks.repairs`）；改写的卡片会再推送，让各设备收敛。
-  /// 修改时间至少比现有的晚一毫秒：刚收下的远端版本可能带着比本机时钟更晚的时间，改写要算作更新的版本。
   private func repairCardTree(touching changed: Set<UUID>) throws {
-    let now = Date.stamp
-    for (id, link) in try CardLinks(db).repairs(touching: changed) {
-      try db.run(
-        "UPDATE cards SET parentID = ?, projectID = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ?", [link.parent, link.project, now, id])
-    }
+    try Self.apply(try CardLinks(db).repairs(touching: changed), in: db, at: Date.stamp)
   }
 
   /// 被淘汰的卡片版本存成一张新卡（和留下的版本同项目、放在项目最前），指回原卡。副本是灵感（不带状态、上级与会话），

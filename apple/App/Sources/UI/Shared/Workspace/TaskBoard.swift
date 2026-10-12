@@ -23,7 +23,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
         /// 会话按 Pi 的会话 id 取自一次批量读（`CueStore.piSessions(sessionIDs:)`），不一行读一次。
         init(_ task: Card, projects: [UUID: Project], sessions: [String: PiSessionListItem]) {
-            let item = task.parentID == nil ? task.piSessionID.flatMap { sessions[$0] } : nil  // 步骤不交给 Agent
+            let item = task.piSessionID.flatMap { sessions[$0] }
             self.init(task: task, project: task.projectID.flatMap { projects[$0] }, session: item?.state, delivery: item?.delivery)
         }
 

@@ -88,29 +88,12 @@ enum Schema {
         _ = try CueStore.splitPrompt(db, task: id, at: max(now, modifiedAt.addingTimeInterval(0.001)), carryingHandoff: false)
       }
     },
-    // 28：步骤降为步骤（只有勾和文字），提示词只挂在顶层任务下。步骤下的提示词按原顺序（先步骤、再各自的顺序）接到顶层任务已有的下级之后，
-    // 与 `CardLinks.repairs` 同一规则；步骤上记着的会话清掉（步骤不交给 Agent；发送记录留着，已发的话照样查得到）。modifiedAt 变大，改动才会同步出去
+    // 28：任务 → 步骤 → 会话。草稿（提示词）与会话只在叶子（没有步骤的任务）上，一个叶子最多一条草稿（`CardLinks`）。
+    // 有步骤的任务下的提示词移到第一个没完成的步骤（没有就第一个步骤），它记着的会话交给第一个步骤（步骤已有会话的就丢弃上级的），
+    // 一个叶子有多条提示词的按顺序并成一条：整库按远端收敛同一条规则（`CardLinks.repairs`）算一遍。modifiedAt 变大，改动才会同步出去
     Upgrade { db in
-      let now = Date.stamp
-      let steps = "SELECT s.id FROM cards s JOIN cards t ON t.id = s.parentID AND t.todoAt IS NOT NULL AND t.deletedAt IS NULL WHERE s.todoAt IS NOT NULL"
-      let moves = try db.query(
-        """
-        SELECT c.id, s.parentID, c.modifiedAt FROM cards c
-        JOIN cards s ON s.id = c.parentID AND s.todoAt IS NOT NULL
-        JOIN cards t ON t.id = s.parentID AND t.todoAt IS NOT NULL AND t.deletedAt IS NULL
-        WHERE c.todoAt IS NULL ORDER BY s.parentID, s.sortKey, s.id, c.sortKey, c.id
-        """
-      ) { (id: $0.uuid(0), top: $0.uuid(1), modifiedAt: $0.date(2)) }
-      var last: [UUID: String] = [:]
-      for move in moves {
-        var previous = last[move.top]
-        if previous == nil { previous = try db.first("SELECT MAX(sortKey) FROM cards WHERE parentID = ?", [move.top]) { $0.textOrNil(0) } ?? nil }
-        let key = SortKey.after(previous)
-        try db.run(
-          "UPDATE cards SET parentID = ?, sortKey = ?, modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ?", [move.top, key, now, move.id])
-        last[move.top] = key
-      }
-      try db.run("UPDATE cards SET piSessionID = NULL, modifiedAt = MAX(modifiedAt + 1, ?) WHERE piSessionID IS NOT NULL AND id IN (\(steps))", [now])
+      let links = try CardLinks(db)
+      try CueStore.apply(links.repairs(touching: Set(links.links.keys)), in: db, at: Date.stamp)
     },
   ]
 
