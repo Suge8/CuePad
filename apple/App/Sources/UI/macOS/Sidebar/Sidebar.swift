@@ -427,7 +427,7 @@ private struct PiConnectCard: View {
                 .frame(width: 28, height: 28).background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 1) {
                 Text(kind == .ask ? "连接 Pi" : "装上 Pi 扩展").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
-                Text(kind == .ask ? "看到会话、交任务" : "才能看到本机会话").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
+                Text(kind == .ask ? "看会话、交任务" : "看到本机会话").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
             }
             Spacer(minLength: 4)
             VStack(spacing: 4) {
