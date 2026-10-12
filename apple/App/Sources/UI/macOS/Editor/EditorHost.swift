@@ -25,6 +25,8 @@ struct EditorHost: NSViewRepresentable {
     let onChange: (String) -> Void
     var onSelectionChange: (Bool) -> Void = { _ in }
     var selectionActions: [CueSelectionAction] = []
+    /// ⌘↩ 的主动作（见 `CueTextView.onSubmit`）。
+    var onSubmit: (() -> Void)?
     var onError: (any Error) -> Void = { _ in }
     @Environment(AppServices.self) private var services
 
@@ -47,6 +49,7 @@ struct EditorHost: NSViewRepresentable {
         textView.onChange = onChange
         textView.onSelectionChange = onSelectionChange
         textView.selectionActions = selectionActions
+        textView.onSubmit = onSubmit
         textView.onError = onError
         if !Self.sameLook(textView.theme, theme) { textView.theme = theme }
     }

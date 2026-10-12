@@ -106,8 +106,8 @@ final class PanelHost {
     }
 
     /// 这个事件由浮层接下（不再交给窗口）则为真。Esc 关最上面那一层。模态的开着时：带 ⌘ 的组合键不交给窗口（下面那层的快捷键都在
-    /// 窗口里），只走主菜单——拷贝、粘贴、全选这些编辑命令由主菜单发给浮层里的输入框；工具栏那一条（内容区之外、压暗的底盖不到）的点按
-    /// 等于点在浮层外面。不用停用（`disabled`）下面那层来做模态：停用整窗开、关各多 20～25ms。
+    /// 窗口里），先走主菜单——拷贝、粘贴、全选这些编辑命令由主菜单发给浮层里的输入框；主菜单不接的再只问焦点所在的视图（浮层里编辑器的 ⌘↩），
+    /// 不问整个窗口。工具栏那一条（内容区之外、压暗的底盖不到）的点按等于点在浮层外面。不用停用（`disabled`）下面那层来做模态：停用整窗开、关各多 20～25ms。
     private func takes(_ event: NSEvent) -> Bool {
         guard let top = shown.last(where: \.open), let window, event.window === window else { return false }
         if event.type == .keyDown, event.keyCode == Self.escape {
@@ -117,7 +117,7 @@ final class PanelHost {
         guard let modal = shown.last(where: { $0.modal && $0.open }) else { return false }
         if event.type == .keyDown {
             guard event.modifierFlags.contains(.command) else { return false }
-            _ = NSApp.mainMenu?.performKeyEquivalent(with: event)
+            if NSApp.mainMenu?.performKeyEquivalent(with: event) != true { _ = (window.firstResponder as? NSView)?.performKeyEquivalent(with: event) }
             return true
         }
         guard !window.contentLayoutRect.contains(event.locationInWindow) else { return false }

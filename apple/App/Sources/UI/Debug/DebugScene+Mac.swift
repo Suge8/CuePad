@@ -31,12 +31,16 @@ extension DebugScene {
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
-        case "editor": workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)
+        case "editor":
+            // 散放的灵感进编辑页，提示词在它任务的浮窗里展开
+            if let id = await card(in: workspace.currentProject, store: workspace.services.store),
+               let card = try? await workspace.services.store.card(id) { workspace.open(card) }
         case "attach":
-            guard let id = await card(in: workspace.currentProject, store: workspace.services.store) else { break }
-            workspace.openCard = id
+            guard let id = await card(in: workspace.currentProject, store: workspace.services.store),
+                  let card = try? await workspace.services.store.card(id) else { break }
+            workspace.open(card)
             try? await Task.sleep(for: .seconds(1))
-            workspace.attaching = try? await workspace.services.store.card(id)
+            workspace.attaching = card
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }

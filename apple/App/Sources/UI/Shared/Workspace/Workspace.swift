@@ -138,10 +138,12 @@ final class Workspace {
         presses.dismiss()
     }
 
-    /// 打开一条灵感或任务：任务在浮层里看（盖在当前页上，右上角的任务面板留着），灵感与提示词进编辑页。
+    /// 打开一条灵感或任务：任务在浮窗里看（盖在当前页上，右上角的任务面板留着）；提示词是它任务的浮窗、它自己就地展开编辑；
+    /// 散放的灵感进整页的编辑页。
     func open(_ card: Card) {
         presses.clearSelection()
         if card.isTask { return openTask = .init(id: card.id) }
+        if let task = card.parentID { return openTask = .init(id: task, prompt: card.id) }
         openTask = nil
         showsTasks = false
         openCard = card.id

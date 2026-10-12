@@ -2,14 +2,18 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 任务的提示词：一张一张卡（内容预览与此刻怎样），点开是大编辑区，卡上就地"交给 Agent"；末尾"写一条提示词"新建并进入编辑。
+/// 任务的提示词：一张一张卡（内容预览与此刻怎样），卡上就地"交给 Agent"；末尾"写一条提示词"新建并进入编辑。
+/// 点开一条：手机推进它的编辑页；Mac 在任务浮窗里就地展开成编辑区（`expanded` 那一条换成 `editor` 给的视图）。
 /// 右上可从本项目的灵感里挑一条挂上来。
-struct PromptList: View {
+struct PromptList<Editor: View>: View {
     let task: Card
     let detail: TaskDetail?
     let open: (Card) -> Void
     let hand: (Card) -> Void
     let write: () -> Void
+    /// 就地展开编辑的那一条（Mac 任务浮窗）。
+    var expanded: UUID?
+    @ViewBuilder var editor: (Card) -> Editor
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.cardAgents) private var agents
@@ -27,9 +31,16 @@ struct PromptList: View {
                 pick
             }
             ForEach(prompts) { prompt in
-                PromptCard(
-                    prompt: prompt, state: detail?.state(of: prompt, agents: agents) ?? .unsent, primary: prompt.id == primary, open: { open(prompt) }, hand: { hand(prompt) })
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                Group {
+                    if prompt.id == expanded {
+                        editor(prompt)
+                    } else {
+                        PromptCard(
+                            prompt: prompt, state: detail?.state(of: prompt, agents: agents) ?? .unsent, primary: prompt.id == primary,
+                            open: { open(prompt) }, hand: { hand(prompt) })
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
             Button(action: write) {
                 Label(prompts.isEmpty ? "写一条提示词：要 Agent 做什么" : "写一条提示词", systemImage: "plus")
@@ -68,6 +79,13 @@ struct PromptList: View {
     }
 }
 
+
+extension PromptList where Editor == EmptyView {
+    /// 不就地编辑（手机：点开推进编辑页）。
+    init(task: Card, detail: TaskDetail?, open: @escaping (Card) -> Void, hand: @escaping (Card) -> Void, write: @escaping () -> Void) {
+        self.init(task: task, detail: detail, open: open, hand: hand, write: write, expanded: nil) { _ in EmptyView() }
+    }
+}
 
 /// 一条提示词：内容预览，下面一行是交给 Agent 的钮，交出去过的左边写它此刻怎样（"会话名 · 思考中 / 已结束 / 已回复"，点它看会话）：
 /// 第一条还没发的是靛青的"交给 Agent"（一页的焦点，不另写"未发"，见 `TaskDetail.primaryPrompt`），其余没发的是墨色文字"交给 Agent"，

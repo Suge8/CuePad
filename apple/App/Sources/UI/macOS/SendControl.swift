@@ -21,7 +21,6 @@ struct SendControl: View {
                     .glass(in: .capsule, interactive: true)
                 Button { workspace.handOff(prompt, text: outgoing()) } label: { handLabel(shortcut: true) }
                     .buttonStyle(PressStyle())
-                    .keyboardShortcut(.return, modifiers: .command)
                     .help(help(destination))
             }
         } else {

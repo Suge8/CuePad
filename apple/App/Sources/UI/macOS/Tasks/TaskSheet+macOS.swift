@@ -2,12 +2,14 @@
 import CueStore
 import SwiftUI
 
-/// 任务浮层：点任务（项目页的任务区、任务面板、⌘K、归档）就在当前页上弹出，不换页。上面是所在项目（子任务另写上级，点它回到上级）、
-/// 完成圈、就地改的标题与一句说明；下面是它的提示词（点开进编辑页，卡上直接交给 Agent）与子任务（点开换成子任务的浮层），
-/// 顶层任务末尾可直接添加子任务。整页的编辑页只给灵感与提示词：任务只有标题与一句说明，用不着整页。
+/// 任务浮窗：点任务或它的提示词（项目页的任务区、任务面板、⌘K、归档）就在当前页上弹出，不换页。上面是所在项目（子任务另写上级，点它回到上级）、
+/// 完成圈、就地改的标题与一句说明；下面是它的提示词——点一条就在原地展开成编辑区（`PromptEditor`），卡上直接交给 Agent——
+/// 与子任务（点开换成子任务的浮窗），顶层任务末尾可直接添加子任务。整页的编辑页只给散放的灵感。
 struct TaskSheet: View {
     struct Request: Identifiable, Equatable {
         let id: UUID
+        /// 就地展开编辑的那条提示词。换它不换浮窗（浮窗按 `id` 认）。
+        var prompt: UUID?
     }
 
     let taskID: UUID
@@ -17,8 +19,8 @@ struct TaskSheet: View {
     @Environment(\.closePanel) private var close
     @State private var data: SheetData?
 
-    private static let width: CGFloat = 580
-    private static let maxHeight: CGFloat = 680
+    private static let width: CGFloat = 640
+    private static let maxHeight: CGFloat = 720
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -77,7 +79,9 @@ struct TaskSheet: View {
                 write: {
                     let id = task.id, store = services.store
                     workspace.attempt { workspace.open(try await store.createCard(body: "", under: id)) }
-                })
+                },
+                expanded: workspace.openTask?.prompt
+            ) { PromptEditor(prompt: $0, task: task).id($0.id) }
             if data.parent == nil {
                 VStack(alignment: .leading, spacing: 4) {
                     SubtaskList(detail: data.detail, open: workspace.open)
@@ -89,7 +93,44 @@ struct TaskSheet: View {
     }
 }
 
-/// 浮层一次读出的东西：任务、所在项目、上级（子任务才有）与下级。
+/// 浮窗里就地展开的一条提示词：上沿写"提示词"与保存状态、右边收起；中间是定高、自己滚的编辑区；下面接编辑的操作栏
+/// （复制、去处、交给 Agent，⌘↩ 同主钮）。展开时编辑器接过键盘；收起、换一条、关浮窗都经 `CardEditing.leave` 写下没保存的字。
+private struct PromptEditor: View {
+    let prompt: Card
+    let task: Card
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @State private var editing: CardEditing?
+
+    private static let editorHeight: CGFloat = 280
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text("编辑提示词").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3)
+                if let editing { SaveStatus(editing: editing).font(TaskMetrics.caption) }
+                Spacer()
+                Button("收起", systemImage: "chevron.up") { workspace.openTask?.prompt = nil }
+                    .labelStyle(.titleAndIcon).font(TaskMetrics.caption).foregroundStyle(palette.ink2).buttonStyle(.plain)
+            }
+            if let editing {
+                editing.field(prompt, theme: .editor(palette, horizontalInset: 4)).frame(height: Self.editorHeight)
+                EditorBar(card: prompt, task: task, editing: editing)
+            }
+        }
+        .padding(TaskMetrics.cardPadding)
+        .background(palette.paperLit, in: .rect(cornerRadius: TaskMetrics.cardRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius, style: .continuous).strokeBorder(palette.signature.opacity(0.35)))
+        .task {
+            editing = CardEditing(prompt, workspace: workspace)
+            await NextFrame.wait()
+            editing?.handle.focus()
+        }
+        .onDisappear { editing?.leave() }
+    }
+}
+
+/// 浮窗一次读出的东西：任务、所在项目、上级（子任务才有）与下级。
 nonisolated private struct SheetData: Sendable, Equatable {
     var task: Card
     var project: Project?

@@ -19,6 +19,9 @@ public final class CueTextView: NSTextView, CueEditorHost {
     public var selectionActions: [CueSelectionAction] = []
     /// 图片入库失败（磁盘满、文件不可读）。失败的图片不会插入。
     public var onError: ((any Error) -> Void)?
+    /// ⌘↩ 的主动作（交给 Agent、挂到任务）：编辑器自己接，不靠外面按钮的快捷键——浮层开着时窗口不接 ⌘ 组合键，
+    /// 只交给主菜单与焦点所在的视图（`PanelHost`）。nil 时 ⌘↩ 照常往下传。
+    public var onSubmit: (() -> Void)?
 
     private(set) var core: EditorCore!
     private var isLoading = false
@@ -127,6 +130,15 @@ public final class CueTextView: NSTextView, CueEditorHost {
 }
 
 extension CueTextView {
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if let onSubmit, modifiers == .command, event.charactersIgnoringModifiers == "\r" {
+            onSubmit()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     /// 右键菜单最上面：选中文字时的选区动作（外部提供），再是常驻的"插入分割线"，各自与后面隔一条线。
     public override func menu(for event: NSEvent) -> NSMenu? {
         guard let menu = super.menu(for: event) else { return nil }
