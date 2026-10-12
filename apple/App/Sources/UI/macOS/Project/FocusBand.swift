@@ -3,7 +3,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 任务与 Agent：本项目任务（前几条没做完的顶层任务连同子任务，可拖动、缩进，同任务面板；没列出的与已完成的在底部写个数）+ 本项目的 Agent 会话。介绍在页头。
+/// 任务与 Agent：本项目任务（前几条没做完的顶层任务连同子任务与各自的提示词，可拖动、缩进，同任务面板；没列出的与已完成的在底部写个数）+ 本项目的 Agent 会话。介绍在页头。
 /// Agent 一栏只在有话可说时出现：有在线会话，或项目还没绑文件夹而有同名建议、正在绑（绑定引导，`FolderGuide.shows`）；
 /// 否则任务独占整张纸，不留一栏"没有运行中的会话"。
 /// 纸与下面的资料、卡片墙同宽；任务一栏有 Agent 一栏时铺到分隔线，没有时限在阅读宽度（`readingWidth`）。
@@ -54,7 +54,7 @@ struct FocusBand: View {
     }
 
     private var tasks: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             SectionLabel(text: "任务", systemImage: "checklist")
             taskRows
         }
@@ -62,18 +62,23 @@ struct FocusBand: View {
 
     @ViewBuilder private var taskRows: some View {
         let roots = data.tasks.roots
-        // 与任务面板同一节奏：任务行、"还有 N 条"、添加任务之间不再加栏内间距
-        VStack(alignment: .leading, spacing: 2) {
-            TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
+        // 与任务面板同一种行；行带内边距（悬停的淡底），整列往外让出这一截，字与栏标题对齐
+        VStack(alignment: .leading, spacing: 0) {
+            TaskOutline(
+                tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks)), folds: { TaskRow.folds($0, prompts: data.prompts) }
+            ) { row in
                 TaskRow(
-                    task: row.task, session: workspace.liveState(ofSession: row.task.piSessionID), marks: data.children[row.id], compact: true)
+                    task: row.task, depth: row.depth, session: workspace.liveState(ofSession: row.task.piSessionID),
+                    marks: data.children[row.id], prompts: data.prompts[row.id] ?? [], expanded: row.isExpanded)
             }
             if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
                 Button { workspace.showsTasks = true } label: { Text(more) }
                     .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink3)
+                    .padding(.horizontal, TaskRow.inset + TaskRow.ringColumn + TaskRow.columnGap).padding(.vertical, 6)
             }
-            NewTaskField(project: data.project?.id)
+            NewTaskField(project: data.project?.id).padding(.top, 2)
         }
+        .padding(.horizontal, -TaskRow.inset)
     }
 
     private var divider: some View {

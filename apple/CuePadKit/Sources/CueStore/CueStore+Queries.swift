@@ -277,7 +277,7 @@ extension CueStore {
     let session = SendTargetKind.piSession.rawValue
     let rows = try db.query(
       """
-      SELECT c.parentID, c.todoAt IS NOT NULL,
+      SELECT c.parentID, c.id, c.todoAt IS NOT NULL,
         CASE WHEN c.todoAt IS NOT NULL THEN c.completedAt IS NOT NULL
         ELSE NOT EXISTS (
           SELECT 1 FROM deliveryRequests r
@@ -295,8 +295,21 @@ extension CueStore {
       WHERE c.parentID IS NOT NULL AND c.deletedAt IS NULL AND c.archivedAt IS NULL \(scope)
       ORDER BY c.parentID, c.sortKey, c.id
       """, arguments
-    ) { (parent: $0.uuid(0), mark: ChildMark(isTask: $0.int(1) != 0, isDone: $0.int(2) != 0)) }
+    ) { (parent: $0.uuid(0), mark: ChildMark(id: $0.uuid(1), isTask: $0.int(2) != 0, isDone: $0.int(3) != 0)) }
     return Dictionary(grouping: rows, by: \.parent).mapValues { $0.map(\.mark) }
+  }
+
+  /// 任务下的提示词（挂在任务下的灵感），按上级分组、同级手动顺序：任务列表在每条任务下直接列出它们，不必打开任务。
+  /// 不带参数读全库；`in` 只读一个项目（nil = 未分类）里的。归档、回收站里的不列。
+  public func prompts() throws -> [UUID: [Card]] { try prompts(scope: "", []) }
+
+  public func prompts(in project: UUID?) throws -> [UUID: [Card]] { try prompts(scope: "AND projectID IS ?", [project]) }
+
+  private func prompts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: [Card]] {
+    let cards = try select(
+      Card.self, where: "parentID IS NOT NULL AND todoAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL \(scope)", arguments,
+      orderBy: "parentID, sortKey, id")
+    return Dictionary(grouping: cards) { $0.parentID! }
   }
 
   /// 发送记录，最近的在前（同一毫秒按写入先后）。

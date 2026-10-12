@@ -316,7 +316,7 @@ struct SearchPalette: View {
         if card.projectID != workspace.currentProject {
             workspace.show(card.projectID.map(Route.project) ?? .unfiled)
         }
-        workspace.openCard = card.id
+        workspace.open(card)
     }
 }
 

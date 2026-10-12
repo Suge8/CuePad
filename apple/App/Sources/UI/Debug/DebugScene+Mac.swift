@@ -16,9 +16,9 @@ extension DebugScene {
         case "search": workspace.searching = true
         case "tasks": workspace.showsTasks = true
         case "task":
-            // 本项目第一条没完成的顶层任务，整页打开
+            // 本项目第一条没完成的顶层任务，在任务浮层里打开
             let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
-            workspace.openCard = tasks.first { $0.parentID == nil && $0.projectID == workspace.currentProject }?.id ?? tasks.first?.id
+            if let task = tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.open(task) }
         case "agent":
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
             workspace.show(.agent)

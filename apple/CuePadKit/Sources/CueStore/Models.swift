@@ -166,10 +166,12 @@ public enum AgentHandoff: Hashable, Sendable {
 /// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；提示词（挂着的灵感）交给 Agent 后那一轮做完（已回复）算做完。
 /// 见 `CueStore.childMarks`。
 public struct ChildMark: Equatable, Sendable {
+  public let id: UUID
   public let isTask: Bool
   public let isDone: Bool
 
-  public init(isTask: Bool, isDone: Bool) {
+  public init(id: UUID, isTask: Bool, isDone: Bool) {
+    self.id = id
     self.isTask = isTask
     self.isDone = isDone
   }

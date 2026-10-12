@@ -12,7 +12,7 @@ nonisolated private struct EditorData: Sendable, Equatable {
     var task: Card?
 }
 
-/// 打开的卡：编辑页铺满内容区、与页面同底色（纸感留在墙上的卡片与底色上，这里不再画纸）；字限在 `textWidth` 一列里居中，
+/// 打开的灵感或提示词（任务在浮层里看，见 `TaskSheet`）：编辑页铺满内容区、与页面同底色（纸感留在墙上的卡片与底色上，这里不再画纸）；字限在 `textWidth` 一列里居中，
 /// 编辑区本身铺满，两侧空白处也能滚。打开、收起都是原地淡入淡出，不动几何：前台每帧几何变化会让 AppKit 重算整窗的鼠标跟踪区。
 /// 重活先在看不见时做完——挂上编辑器与底栏、让编辑器接过键盘，各占一帧——再淡入；这几帧里墙上那张卡保持按下（`CardPresence.opening`）。
 /// 编辑页底下的项目页保持挂载，关掉后回到原来的滚动位置。
@@ -37,8 +37,6 @@ struct CardEditorPage: View {
     @State private var settled = false
     /// 收起的淡出走完了（之后才卸下）。
     @State private var gone = false
-    /// 任务才有：提示词与子任务（与手机任务页同一份 `TaskDetail`）。
-    @State private var taskDetail: TaskDetail?
 
     /// 一行字最宽：苹方 15.5pt 约 44 个字，再宽读到行尾回头找下一行就费劲。
     fileprivate static let textWidth: CGFloat = 680
@@ -55,7 +53,7 @@ struct CardEditorPage: View {
             if mounted, let data, let initialText {
                 VStack(spacing: 10) {
                     meta(data)
-                    if data.card.isTask { taskContent(data.card) } else { editor(data, initialText) }
+                    editor(data, initialText)
                 }
                 .padding(.top, Spacing.pageTop)
                 .padding(.bottom, Self.barClearance)
@@ -65,7 +63,7 @@ struct CardEditorPage: View {
         .background(palette.desk.ignoresSafeArea())
         .overlay(alignment: .bottom) {
             // 底栏挂在页面之上、与编辑器同时挂好，随编辑页一起淡入淡出
-            if mounted, let data, !data.card.isTask {
+            if mounted, let data {
                 EditorBar(card: data.card, text: liveText, handle: handle, selecting: selecting)
                     .padding(.bottom, 16)
                     .disabled(!shown)
@@ -75,13 +73,6 @@ struct CardEditorPage: View {
         .opacity(shown ? 1 : 0)
         .allowsHitTesting(shown)
         .debugSettling(isOpen ? !settled : !gone)
-        .background {
-            if data?.card.isTask == true {
-                Color.clear.observing(services.store, id: cardID, into: $taskDetail, onError: workspace.fail) { [cardID] in
-                    try TaskDetail.read(cardID, from: $0)
-                }
-            }
-        }
         .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(
@@ -94,6 +85,12 @@ struct CardEditorPage: View {
             liveText = card.body
         }
         .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.openCard = nil } }
+        // 在"⋯"里设为任务：这页收起，任务在浮层里接着看
+        .onChange(of: data?.card.isTask) {
+            guard let card = data?.card, card.isTask else { return }
+            workspace.openCard = nil
+            workspace.open(card)
+        }
         .onChange(of: isOpen) { if !isOpen { collapse() } }
         .onAppear(perform: makeAutosave)
         // 正文读到之后才开始准备
@@ -102,35 +99,6 @@ struct CardEditorPage: View {
         }
         // 什么都没写就离开（新记的一条、新写的提示词）：不留下这条
         .onDisappear { workspace.leaveEditing(cardID, flush: autosave) }
-    }
-
-    /// 任务的编辑页：完成圈与标题、一句说明，下面是提示词卡片与子任务（与手机任务页同一组件）。打开提示词或子任务是换一页。
-    private func taskContent(_ task: Card) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack(alignment: .top, spacing: 6) {
-                    TaskRingButton(task: task, marks: taskDetail?.marks).padding(.top, 3)
-                    TaskHeading(task: task)
-                }
-                PromptList(
-                    task: task, detail: taskDetail, open: { workspace.openCard = $0.id }, hand: hand,
-                    write: {
-                        let id = task.id
-                        workspace.attempt { workspace.openCard = try await workspace.services.store.createCard(body: "", under: id).id }
-                    })
-                SubtaskList(detail: taskDetail, open: { workspace.openCard = $0.id })
-            }
-            .column()
-            .padding(.vertical, 8)
-        }
-        .scrollIndicators(.automatic)
-    }
-
-    /// 提示词卡上的"交给 Agent"：发给本项目当前的 Agent 会话（与提示词编辑页同一个），提示词关联到它；没有会话时打开它的编辑页去选。
-    private func hand(_ prompt: Card) {
-        guard let target = workspace.sendState.agentTarget(for: prompt.projectID) else { return workspace.openCard = prompt.id }
-        let text = Outgoing.text(of: prompt), id = prompt.id
-        Task { await workspace.send(text, to: target, card: id) }
     }
 
     /// 看不见时先把重活做完，每步一帧：挂上编辑器与底栏（一帧：分成两帧只是多一次掉帧）、让编辑器接过键盘
@@ -167,7 +135,9 @@ struct CardEditorPage: View {
             Text(data.project?.name ?? CaptureCopy.unfiled).foregroundStyle(data.project.map { Palette.projectTint($0.color) } ?? palette.ink3)
             if let task = data.task {
                 Dot()
-                Label(task.title, systemImage: "checklist").lineLimit(1).help("这条任务的提示词")
+                Button { workspace.open(task) } label: { Label(task.title, systemImage: "checklist").lineLimit(1) }
+                    .buttonStyle(.plain)
+                    .help("这条任务的提示词，点开看任务")
             }
             Dot()
             Text(DateLabel.short(data.card.modifiedAt))

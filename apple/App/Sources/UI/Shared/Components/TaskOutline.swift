@@ -25,7 +25,8 @@ extension EnvironmentValues {
     @Entry var taskStructure: TaskStructure?
 }
 
-/// 任务大纲（手机任务页与项目页、Mac 任务面板与项目页共用）：按 `TaskTree` 缩进排出可见的行，有子任务的行尾可折起展开（第三级默认折起）。
+/// 任务大纲（手机任务页与项目页、Mac 任务面板与项目页共用）：按 `TaskTree` 缩进排出可见的行，有下级的行尾可折起展开（默认展开；
+/// 哪些行算有下级由 `folds` 定：手机只看子任务，Mac 的行里还列着提示词）。
 /// 手势用系统拖放（长按抬起、与长按菜单共存；Mac 按住拖）：停在一行中部高亮、松手成为它的子任务；停在两行之间出插入线，
 /// 横向挪动改层级（插入线的起点跟着缩进）。手机上轻扫按 `CardMenu.swipes`：右滑缩进，左滑删除与反缩进（`rowSwipes`）。落点规则全在 `TaskTree`，这里只管手势与画。
 /// 行之间不让位（同提醒事项的插入线）：拖动期间不重排，也就不会每帧重算布局。
@@ -35,6 +36,7 @@ struct TaskOutline<Line: View>: View {
     /// 这个大纲显示的范围：行、缩进与反缩进按它算。
     private let tree: TaskTree
     private let line: (TaskTree.Row) -> Line
+    private let folds: (TaskTree.Row) -> Bool
     /// 行按需建（只建看得见的）：外面给了固定高度的滚动区、行数多到一屏放不下时用，否则整列的行都要在打开的那一圈里量一遍。
     private let lazy: Bool
     @Environment(Workspace.self) private var workspace
@@ -44,8 +46,12 @@ struct TaskOutline<Line: View>: View {
     @State private var commits = 0
 
     /// `roots`：只显示这些顶层任务及其子树（看板的一组、项目页的前几条），结构操作也只在里面算；nil 是全部。
-    init(tree: TaskTree, roots: [UUID]? = nil, lazy: Bool = false, @ViewBuilder line: @escaping (TaskTree.Row) -> Line) {
+    init(
+        tree: TaskTree, roots: [UUID]? = nil, lazy: Bool = false, folds: @escaping (TaskTree.Row) -> Bool = { $0.childCount > 0 },
+        @ViewBuilder line: @escaping (TaskTree.Row) -> Line
+    ) {
         self.lazy = lazy
+        self.folds = folds
         whole = tree
         self.tree = roots.map(tree.scoped(to:)) ?? tree
         self.line = line
@@ -84,9 +90,10 @@ struct TaskOutline<Line: View>: View {
         let structure = TaskStructure(
             indent: tree.indent(row.id).map { move in { commit(row.id, move) } },
             outdent: tree.outdent(row.id).map { move in { commit(row.id, move) } })
-        return HStack(spacing: 0) {
+        // 箭头对齐行的第一排（Mac 的行下面还列着提示词）
+        return HStack(alignment: .top, spacing: 0) {
             line(row)
-            if row.childCount > 0 { Disclosure(row: row, toggled: $toggled) }
+            if folds(row) { Disclosure(row: row, toggled: $toggled) }
         }
         .padding(.leading, CGFloat(row.depth) * Self.indentWidth)
         .background { DropHighlight(drag: drag, id: row.id) }
@@ -213,7 +220,7 @@ private struct InsertionLine: View {
     }
 }
 
-/// 行尾的折起/展开：只是一个箭头。子任务数已写在这一行的元信息里（"子任务 0/2"），折起时不在箭头旁再写一个光秃秃的数。
+/// 行尾的折起/展开：只是一个箭头。下级的数写在这一行的元信息里（"2 条提示词 · 子任务 0/2"），折起时不在箭头旁再写一个光秃秃的数。
 private struct Disclosure: View {
     let row: TaskTree.Row
     @Binding var toggled: Set<UUID>
@@ -232,12 +239,12 @@ private struct Disclosure: View {
             #if os(iOS)
             .frame(minWidth: 44, minHeight: 44)
             #else
-            .frame(minWidth: 24, minHeight: 22)
+            .frame(minWidth: 24, minHeight: TaskMetrics.rowHeight)
             #endif
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(row.isExpanded ? "折起子任务" : "展开 \(row.childCount) 个子任务")
+        .accessibilityLabel(row.isExpanded ? "折起" : "展开")
     }
 }
 

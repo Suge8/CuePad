@@ -14,6 +14,8 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var taskCounts: TaskCounts
     /// 任务的直接下级（子任务与挂着的灵感），完成圈与子任务进度由它推出。
     var children: [UUID: [ChildMark]]
+    /// 任务下的提示词：任务列表在每条任务下直接列出。
+    var prompts: [UUID: [Card]]
 
     /// 卡片最近一次发给的 Agent 会话名（同名会话写"已发过"，已下线的去处不写，`SendTarget.shownName`）。
     var lastTarget: [UUID: String] {
@@ -40,7 +42,8 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
             lastSends: try store.lastSends(in: project),
             tasks: try Self.tree(project, from: store),
             taskCounts: try store.taskCounts(in: project),
-            children: try store.childMarks(in: project))
+            children: try store.childMarks(in: project),
+            prompts: try store.prompts(in: project))
     }
 }
 

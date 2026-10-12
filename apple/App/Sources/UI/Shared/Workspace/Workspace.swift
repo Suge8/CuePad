@@ -51,6 +51,8 @@ final class Workspace {
     var openCard: UUID? {
         didSet { if let openCard { presses.present(openCard) } }
     }
+    /// 浮层里看着的任务（`TaskSheet`）：盖在当前页上，不换页。
+    var openTask: TaskSheet.Request?
     #endif
     /// 正在给它挑任务的灵感（"挂到任务"的选择面板，`TaskPicker`；两端各由窗口的根视图弹出）。
     var attaching: Card?
@@ -124,15 +126,30 @@ final class Workspace {
     /// 此刻挂着的页：留着的加上当前页（首屏、目录纠正出来的页还没经过 `show`；会话页只在是当前页时在里面）。
     var mountedPages: [Route] { pages.kept.contains(page) ? pages.kept : pages.kept + [page] }
 
+    /// 这一条归档或删掉了：开着它的编辑页或任务浮层收起。
+    private func closeIfOpen(_ id: UUID) {
+        if openCard == id { openCard = nil }
+        if openTask?.id == id { openTask = nil }
+    }
+
     /// 编辑页淡出结束。
     func finishClosingCard() {
         guard openCard == nil else { return }
         presses.dismiss()
     }
 
-    /// 切到一页（侧栏点哪就是哪）；开着的编辑页随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
+    /// 打开一条灵感或任务：任务在浮层里看（盖在当前页上，右上角的任务面板留着），灵感与提示词进编辑页。
+    func open(_ card: Card) {
+        if card.isTask { return openTask = .init(id: card.id) }
+        openTask = nil
+        showsTasks = false
+        openCard = card.id
+    }
+
+    /// 切到一页（侧栏点哪就是哪）；开着的编辑页与任务浮层随之收起。没有历史，也没有上一层：Mac 的导航都在侧栏。
     func show(_ page: Route) {
         openCard = nil
+        openTask = nil
         presses.dismiss()
         pages.visit(from: self.page, to: page)
         if case .project(let id) = page {
@@ -264,7 +281,7 @@ final class Workspace {
         let store = services.store
         try await store.archive(id)
         #if os(macOS)
-        if openCard == id { openCard = nil }
+        closeIfOpen(id)
         #endif
         say("已归档", action: .undo { try await store.unarchive(id) })
     }
@@ -273,7 +290,7 @@ final class Workspace {
     func trash(_ id: UUID) async throws {
         let undo = try await services.store.trashing(id)
         #if os(macOS)
-        if openCard == id { openCard = nil }
+        closeIfOpen(id)
         #endif
         say("已删除", action: .undo(undo))
     }
