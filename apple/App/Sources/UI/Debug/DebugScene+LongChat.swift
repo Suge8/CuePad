@@ -241,8 +241,17 @@ enum ChatScrollBench {
             ? corners.max { abs($0.x - center.midX) < abs($1.x - center.midX) } ?? .zero
             : CGPoint(x: center.midX, y: primaryHeight - center.midY)
         let original = CGEvent(source: nil)?.location ?? .zero
+        var pointerMoved = false
+        /// 任何退出路径（含出错提前退出）都从这里走：动过指针就放回原处。
+        func finish(_ code: Int32) -> Never {
+            if pointerMoved { CGWarpMouseCursorPosition(original) }
+            fflush(stdout)
+            exit(code)
+        }
+        var attempted = 0, delivered = 0
 
         func deliver(_ event: Event, real: Bool) {
+            attempted += 1
             let clip = scroll.contentView
             switch driver {
             case .direct:
@@ -251,6 +260,7 @@ enum ChatScrollBench {
                 origin.y -= event.dy * (event.lines ? 10 : 1)
                 clip.scroll(to: clip.constrainBoundsRect(NSRect(origin: origin, size: clip.bounds.size)).origin)
                 scroll.reflectScrolledClipView(clip)
+                delivered += 1
             case .process, .hid:
                 guard let cg = CGEvent(scrollWheelEvent2Source: nil, units: event.lines ? .line : .pixel, wheelCount: 1, wheel1: Int32(event.dy.rounded()), wheel2: 0, wheel3: 0)
                 else { return }
@@ -263,8 +273,10 @@ enum ChatScrollBench {
                     guard NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber else { return }
                     cg.location = spot
                     cg.post(tap: .cghidEventTap)
+                    delivered += 1
                 } else if let ns = NSEvent(cgEvent: cg) {
                     scroll.scrollWheel(with: ns)
+                    delivered += 1
                 }
             }
         }
@@ -290,6 +302,7 @@ enum ChatScrollBench {
         try? await Task.sleep(for: .seconds(1))
         let movesPointer = driver != .direct && (pointer == "in" || pointer == "out")
         if movesPointer {
+            pointerMoved = true
             CGWarpMouseCursorPosition(spot)
             try? await Task.sleep(for: .milliseconds(500))
         }
@@ -304,8 +317,8 @@ enum ChatScrollBench {
                 try? await Task.sleep(for: .milliseconds(500))
             }
             guard ready else {
-                CGWarpMouseCursorPosition(original)
-                print("CHATSCROLL-ERR 本窗口不在指针下的最上层"); fflush(stdout); exit(1)
+                print("CHATSCROLL-ERR 本窗口不在指针下的最上层")
+                finish(1)
             }
         }
         let pointerInWindow = window.frame.contains(NSEvent.mouseLocation)
@@ -316,6 +329,8 @@ enum ChatScrollBench {
             let instructions = instructionsMillions()
             let started = CACurrentMediaTime()
             turns.begin(started, root: nil)
+            attempted = 0
+            delivered = 0
             var moved = 0.0
             for index in 0..<4 {
                 let before = scroll.contentView.bounds.origin.y
@@ -337,6 +352,9 @@ enum ChatScrollBench {
             row["over16"] = cpu.filter { $0 > 16 }.count
             row["movedPx"] = moved.rounded()
             row["wallS"] = ((CACurrentMediaTime() - started) * 10).rounded() / 10
+            // 窗口不在指针下时 hid 会丢事件：投递数与应投数不等，这一组的滚动工作量就和别组不同，数字作废
+            row["events"] = attempted
+            row["delivered"] = delivered
             row["driver"] = driver.rawValue
             row["pointerInWindow"] = pointerInWindow
             row["frontmostIsMe"] = NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid()
@@ -344,8 +362,7 @@ enum ChatScrollBench {
             fflush(stdout)
             try? await Task.sleep(for: .milliseconds(500))
         }
-        if movesPointer { CGWarpMouseCursorPosition(original) }
-        exit(0)
+        finish(0)
     }
 
     /// 对话的滚动视图：窗口里文档比可见区高两倍以上的最大那个（代码块、表格的横向滚动区不满足）。

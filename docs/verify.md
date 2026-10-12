@@ -28,7 +28,7 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 
 `-CuePadBench chatscroll`（配 `-CuePadDemo YES -CuePadLongChat YES -CuePadScene session -CuePadSession marathon -CuePadWindowSize 1440x900 -CuePadOffscreen YES`，场景在 `DebugScene+LongChat.swift`）：对 300 轮的长对话先往上翻几趟热身，再量慢速触控板（600px/s）、快速触控板（2400px/s）、鼠标滚轮三组，每组下上下上四趟，一组一行 `CHATSCROLL {json}`，量完退出。
 - 按触控板与滚轮的节奏在进程内直接挪滚动视图的裁剪区原点，补发 `willStartLiveScroll` 与 `didEndLiveScroll` 两个通知（滚动区据此知道"用户在滚"）：不碰真实指针、不向系统发事件。启动要用 `open -g -n -a <app> --stdout <文件> --env … --args …`（后台启动，不激活）：直接执行二进制会把应用调到前台抢焦点。
-- 指标：主线程每圈 CPU（≥0.2ms 的圈）的 p50/p90/p99、超 6.9ms（144Hz 一帧）与 16ms 的圈数、总 CPU、进程指令数（前后对比以它为准）、`movedPx`（为 0 数字作废）。别人在编译时 CPU 时间会被拖歪，指令数基本不动；对话在热身时的排开是跟时机有关的，不同次的内容大小会差一点，要排除它就把初始排开的条数固定成同一个值再比（同一个值下三遍指令数相差不到 1%）。
+- 指标：主线程每圈 CPU（≥0.2ms 的圈）的 p50/p90/p99、超 6.9ms（144Hz 一帧）与 16ms 的圈数、总 CPU、进程指令数（前后对比以它为准）、`movedPx`（为 0 数字作废）、`events` 与 `delivered`（应投与实际投出的事件数，不等时这一组的滚动工作量和别组不同，数字作废）。别人在编译时 CPU 时间会被拖歪，指令数基本不动；对话在热身时的排开是跟时机有关的，不同次的内容大小会差一点，要排除它就把初始排开的条数固定成同一个值再比（同一个值下三遍指令数相差不到 1%）。
 - 屏幕外量不到：AppKit 的滚轮事件与动画那一段（靠 display link）、真实指针在窗口里时每帧重设光标的成本（自定义指针的机器上很贵）、合成与掉帧，这些要在前台量，没人用电脑时跑（会把应用调到前台、移动真实指针，量完放回）：
   - `-CuePadScrollDriver process`：滚轮事件在进程内交给滚动视图（`scrollWheel(with:)`），走 AppKit 的滚轮与动画，不碰指针；`hid`：经窗口服务器发真实滚轮事件，要配 `-CuePadScrollPointer in`，本窗口不在指针下的最上层就一个事件也不发、报错退出。
   - `-CuePadScrollPointer in|out`：热身之后把指针移到对话区中央（in）或窗口外的屏幕角落（out），量完放回。结果带 `pointerInWindow`：指针在窗口里时 AppKit 每帧还要重设光标，两种条件的数不能混着比。
