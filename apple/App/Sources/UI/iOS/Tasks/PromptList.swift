@@ -68,9 +68,9 @@ struct PromptList: View {
 }
 
 
-/// 一条提示词：内容预览，下面一行左边写发没发出去（`PromptDelivery`：发送中、没送到的原因、已发；没发的不写），右边是钮：
+/// 一条提示词：内容预览，下面一行左边写发没发出去（`PromptDelivery`：发送中、没送到的原因；没发的不写），右边是钮：
 /// 没发的"发给 Agent"——第一条是靛青的（一页的焦点，见 `TaskDetail.primaryPrompt`），其余是墨色文字；没送到的"重发"。
-/// 发出去的就是发出去了，不再给钮；Agent 做到哪了只在任务那一行写。点卡打开大编辑区；长按是灵感的菜单。
+/// 送达的提示词已经用掉（资料库里删了），不在这里；Agent 做到哪了只在任务那一行写。点卡打开大编辑区；长按是灵感的菜单。
 struct PromptCard: View {
     let prompt: Card
     let delivery: PromptDelivery
@@ -135,8 +135,6 @@ struct PromptCard: View {
             .font(TaskMetrics.caption)
         case .failed(let reason):
             Text(reason).font(TaskMetrics.caption).foregroundStyle(palette.failure).lineLimit(2)
-        case .sent:
-            Text("已发").font(TaskMetrics.caption).foregroundStyle(palette.ink3)
         }
     }
 }

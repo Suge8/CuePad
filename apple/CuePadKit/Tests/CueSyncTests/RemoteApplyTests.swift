@@ -84,6 +84,23 @@ import Testing
     #expect(try await rig.reconcileDelta().deletes == [rig.id(card.id)])
   }
 
+  /// 提示词送达就用掉：删掉的行下次对账就是要向服务器删的记录，别的设备随之没有这条提示词。
+  @Test(.timeLimit(.minutes(1)))
+  func deliveredPromptIsDeletedOnTheServerToo() async throws {
+    let task = try await store.createTask("修乱序", in: nil)
+    let prompt = try await store.createCard(body: "先复现", under: task.id)
+    try await rig.coordinator.reconcile()
+    try await rig.simulatePush()
+    let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+    try await executor.start()
+
+    try await store.requestDelivery(prompt.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), on: "mac-a", card: prompt.id)
+    _ = try await eventually(store, { try $0.card(prompt.id) }) { $0 == nil }
+    await executor.stop()
+
+    #expect(try await rig.reconcileDelta().deletes == [rig.id(prompt.id)])
+  }
+
   // MARK: 冲突
 
   @Test func newerLocalEditWinsNonBodyFieldsAndStaysPendingForPush() async throws {

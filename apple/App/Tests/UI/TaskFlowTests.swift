@@ -1,9 +1,10 @@
 import CueStore
 import Foundation
+import Synchronization
 import Testing
 @testable import CuePad
 
-/// 任务优先的主动线，按用户走的路写：灵感挂成提示词 → 发给 Agent（话在路上、没送到、重发、已发）→ 完成并归档；中途撤销；整理任务的层级；
+/// 任务优先的主动线，按用户走的路写：灵感挂成提示词 → 发给 Agent（话在路上、没送到可重发、送达后提示词用掉）→ 完成并归档；中途撤销；整理任务的层级；
 /// 各处写的任务数是同一批。规则单测（行的状态怎么推、任务树怎么算）都从这些动作里走一遍，不单独测。
 struct TaskFlowTests {
     let rig = TestApp()
@@ -12,7 +13,7 @@ struct TaskFlowTests {
 
     // MARK: 灵感走完全程
 
-    @Test func 灵感挂成提示词_发给Agent_没送到可重发_完成并归档() async throws {
+    @Test func 灵感挂成提示词_发给Agent_没送到可重发_送达后用掉_完成并归档() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let first = try await store.createCard(in: project.id, body: "日志在 logs/0918.txt")
         let second = try await store.createCard(in: project.id, body: "再改排序")
@@ -29,35 +30,36 @@ struct TaskFlowTests {
         #expect(TaskCopy.counts(prompts: 3, subtasks: nil)?.visible == "3 条提示词")
         #expect(try await primary(task) == first.id)
 
-        // 发给 Agent：任务进行中并关联会话；发出去的是已发，不写 Agent 做没做完，下一条成了那页唯一靛青的"发给 Agent"
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-        try await recorder.update(sessionID: "s1", state: .settled, title: "atlas")
+        // 话在路上是发送中；没送到的带原因、留在原地，只有它能重发，别的提示词不受影响
+        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas")
         #expect(try await delivery(of: first) == .unsent)
-        try await store.recordSend(first.body, to: atlas, card: first.id)
-        #expect(try await delivery(of: first) == .sent)
-        let started = try #require(try await store.card(task.id))
-        #expect(started.status == .inProgress && started.piSessionID == "s1")
+        let delivers = Mutex(false)
+        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request in
+            guard delivers.withLock({ $0 }) else { return .failed("会话在送达前关掉了") }
+            _ = try? await store.recordSend(request.content, to: atlas, card: request.cardID)
+            return .succeeded
+        }
+        let request = try await store.requestDelivery(first.body, to: atlas, on: "mac-a", card: first.id)
+        #expect(try await delivery(of: first) == .sending)
+        try await executor.start()
+        _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
+        #expect(try await delivery(of: first) == .failed("会话在送达前关掉了"))
+        #expect(try await delivery(of: second) == .unsent)
         #expect(try await primary(task) == second.id)
 
-        // 话在路上是发送中；Mac 受理后会话在交给 Pi 之前关掉了，是没送到（带原因），只有它能重发；别的提示词不受影响
-        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
-        let request = try await store.requestDelivery(second.body, to: atlas, on: "mac-a", card: second.id)
-        #expect(try await delivery(of: second) == .sending)
-        try await executor.start()
-        _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.succeeded) }
-        _ = try await store.failAcceptedDeliveries([request.id], host: "mac-a", reason: "会话在送达前关掉了")
-        #expect(try await delivery(of: second) == .failed("会话在送达前关掉了"))
-        let failed = try await delivery(of: second), sent = try await delivery(of: first)
-        #expect(failed.canSend && !sent.canSend)
-        #expect(try await primary(task) == third.id)
-
-        let again = try await store.requestDelivery(second.body, to: atlas, on: "mac-a", card: second.id)
-        _ = try await eventually(store, { try $0.deliveryRequest(again.id)?.status }) { $0 == .known(.succeeded) }
-        #expect(try await delivery(of: second) == .sent)
+        // 重发送达：提示词用掉（不进归档、回收站），任务进行中并记着会话，发送记录留着话
+        delivers.withLock { $0 = true }
+        try await store.requestDelivery(first.body, to: atlas, on: "mac-a", card: first.id)
+        _ = try await eventually(store, { try $0.card(first.id) }) { $0 == nil }
         await executor.stop()
+        #expect(try await store.children(of: task.id).map(\.id) == [second.id, third.id])
+        #expect(try await store.trashedCards().isEmpty)
+        #expect(try await store.archived().isEmpty)
+        let started = try #require(try await store.card(task.id))
+        #expect(started.status == .inProgress && started.piSessionID == "s1")
+        #expect(try await store.sendRecords().map(\.content) == [first.body])
 
         // 任务不自动完成；用户勾选，提示里给归档
-        #expect(try await store.card(task.id)?.status == .inProgress)
         try await workspace.toggle(task.id)
         #expect(workspace.notice?.text == "已完成")
         let archive = try #require(workspace.notice?.action)

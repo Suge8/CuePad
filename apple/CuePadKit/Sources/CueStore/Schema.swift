@@ -63,6 +63,20 @@ enum Schema {
           SELECT p.id FROM cards p JOIN cards g ON g.id = p.parentID WHERE p.deletedAt IS NULL AND g.deletedAt IS NULL)
         """, [Date.stamp])
     },
+    // 26：提示词送达即用掉（`PromptConsumption`）。旧库里已经发出去的提示词同样删掉：任务下的灵感（非资料、没进回收站），
+    // 记着交给的会话（发给会话、开新会话认领后），或有成功的发送请求；还有在路上或失败的请求的留着（没送到的可重发）。
+    // 删的是行：同步表的删除由下次对账发现（`pendingDeletes`），不另记墓碑。图片文件不在这里回收：发出去的话的发送记录快照仍引用它们。
+    Upgrade { db in
+      let delivered = try db.query(
+        """
+        SELECT c.id FROM cards c WHERE \(CueStore.isPrompt("c")) AND c.deletedAt IS NULL
+          AND (c.piSessionID IS NOT NULL
+            OR EXISTS (SELECT 1 FROM deliveryRequests r WHERE r.cardID = c.id AND r.status = 'succeeded' AND \(CueStore.delivers("r"))))
+          AND NOT EXISTS (SELECT 1 FROM deliveryRequests r WHERE r.cardID = c.id AND r.status IN ('pending', 'executing', 'failed'))
+        """
+      ) { $0.uuid(0) }
+      _ = try CueStore.consumePrompts(delivered, in: db)
+    },
   ]
 
   private static let syncSent = """

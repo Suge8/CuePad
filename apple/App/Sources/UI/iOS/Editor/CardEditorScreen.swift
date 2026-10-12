@@ -53,7 +53,10 @@ struct CardEditorScreen: View {
             .sheet(isPresented: $editingVariables) {
                 if let card = data?.card { VariablesSheet(card: card, names: CueVariables.names(in: handle.text ?? liveText)) }
             }
-            .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
+            // 提示词送达就用掉（资料库里删了）：卡没了就收起，不当错误
+            .observing(services.store, id: cardID, into: $data, onError: { error in
+                if case .notFound = error as? CueStoreError { dismiss() } else { workspace.fail(error) }
+            }) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
                 return EditorData(
                     card: card, project: try card.projectID.flatMap { try store.project($0) },

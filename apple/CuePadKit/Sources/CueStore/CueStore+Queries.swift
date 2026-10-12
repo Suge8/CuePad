@@ -158,7 +158,7 @@ extension CueStore {
     return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
   }
 
-  private static let toSessionModes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+  static let toSessionModes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
   /// 还没执行完的请求（`r`）。
   private static let openRequest = "r.status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.executing.rawValue)')"
 
