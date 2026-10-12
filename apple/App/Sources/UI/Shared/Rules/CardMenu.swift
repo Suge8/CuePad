@@ -40,7 +40,7 @@ nonisolated enum CardMenu {
     }
 
     /// 任务页与纸页的"⋯"。提示词已经挂在任务下，不再"挂到任务"；发给 Agent 在页面上（提示词卡与提示词的纸页），不在这里。
-    /// 子任务跟着上级走，不单独换项目。
+    /// 步骤跟着上级走，不单独换项目。
     static func more(for card: Card) -> [[Item]] {
         guard card.isTask else {
             let attach: [Item] = handsToAgent(card) ? [] : [.attachToTask]

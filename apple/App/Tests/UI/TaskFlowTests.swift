@@ -122,7 +122,7 @@ struct TaskFlowTests {
         try await store.setStatus(closed.id, .done)
         try await store.setStatus(reopened.id, .todo)
         let archived = try await store.createTask("旧的", in: project)
-        _ = try await store.createTask("旧的子任务", under: archived.id)
+        _ = try await store.createTask("旧的步骤", under: archived.id)
         try await store.archive(archived.id)
         let stranded = try await store.createTask("上级归档了", in: project)
         let orphan = try await store.createTask("孤儿", under: stranded.id)
@@ -151,7 +151,7 @@ struct TaskFlowTests {
         try await recorder.update(sessionID: "s2", state: .waitingForUser, title: "deploy")
         let oldest = try await store.createTask("最早开始", in: nil)
         try await store.setStatus(oldest.id, .inProgress)
-        let step = try await store.createTask("子任务", under: oldest.id)
+        let step = try await store.createTask("步骤", under: oldest.id)
         try await store.setStatus(step.id, .inProgress)
         let working = try await store.createTask("在干活", in: nil)
         try await store.recordSend(working.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), card: working.id)
@@ -164,7 +164,7 @@ struct TaskFlowTests {
 
         #expect(active.rows.map(\.task.id) == [asking.id, working.id, newest.id] && active.more == 1)
         #expect(active.rows.first { $0.task.id == working.id }?.session?.state == .known(.tool))
-        #expect(try await TaskBoard.counts(from: store).inProgress == 4)  // 标题上的"4 进行中"：顶层，不含子任务
+        #expect(try await TaskBoard.counts(from: store).inProgress == 4)  // 标题上的"4 进行中"：顶层，不含步骤
     }
 
     // MARK: 整理任务的层级
@@ -185,7 +185,7 @@ struct TaskFlowTests {
         let listed = try await tree().rows()
         #expect(listed.map(\.id) == [a.id, a1.id, a2.id, b.id] && listed.map(\.depth) == [0, 1, 1, 0])
 
-        // 缩进成为上一个同级的最后一个子任务；没有上一个同级、或任务会超过两级时不能缩进
+        // 缩进成为上一个同级的最后一个步骤；没有上一个同级、或任务会超过两级时不能缩进
         #expect(try await tree().indent(a.id) == nil)
         #expect(try await tree().indent(a1.id) == nil)
         #expect(try await tree().indent(a2.id) == nil)
@@ -196,7 +196,7 @@ struct TaskFlowTests {
         #expect(try await store.card(b.id)?.parentID == nil)
         #expect(try await tree().outdent(b.id) == nil)
 
-        // 拖到一行中部成为它的子任务；不能拖进自己的子树；灵感拖到任务行上成为提示词、行外不接
+        // 拖到一行中部成为它的步骤；不能拖进自己的子树；灵感拖到任务行上成为提示词、行外不接
         let rows = try await tree().rows()
         let frames = Dictionary(uniqueKeysWithValues: rows.enumerated().map { ($1.id, CGRect(x: 0, y: CGFloat($0) * 44, width: 300, height: 44)) })
         let middle = CGPoint(x: 100, y: 66)
@@ -206,12 +206,12 @@ struct TaskFlowTests {
         let idea = try await store.createCard(in: nil, body: "日志")
         let onto = try await tree().drop(idea: idea.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 46))
         try await apply(onto?.move, idea.id)
-        #expect(try await store.card(idea.id)?.parentID == a1.id)
+        #expect(try await store.card(idea.id)?.parentID == a.id)  // 拖到步骤上：提示词落在步骤的顶层任务下
         #expect(try await tree().drop(idea: idea.id, rows: rows, frames: frames, at: CGPoint(x: 100, y: 400)) == nil)
     }
 
-    /// 层级限制与 Store 同一口径：已完成、不显示的子任务也算层级；拖起来又放回原处什么都不改。
-    @Test func 带着已完成子任务的任务不能再缩进_拖起来放回原处不换项目() async throws {
+    /// 层级限制与 Store 同一口径：已完成、不显示的步骤也算层级；拖起来又放回原处什么都不改。
+    @Test func 带着已完成步骤的任务不能再缩进_拖起来放回原处不换项目() async throws {
         let second = try await store.createTask("发布", in: nil)
         let first = try await store.createTask("备份", in: nil)
         let done = try await store.createTask("写说明", under: second.id)

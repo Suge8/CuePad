@@ -64,7 +64,7 @@ struct TaskProgressBar: View {
     @Environment(\.palette) private var palette
 
     static let height: CGFloat = 2
-    /// 圈下画不画条。Mac 上不画：Mac 的圈最大 20 点，条只有十来点宽，像圈下一小块污点；进度在旁边那行"子任务 1/2"里已经写着。
+    /// 圈下画不画条。Mac 上不画：Mac 的圈最大 20 点，条只有十来点宽，像圈下一小块污点；进度在旁边那行"步骤 1/2"里已经写着。
     /// iPhone 上圈小于 16 点时同理不画。
     static func shows(ringSize: CGFloat) -> Bool {
         #if os(macOS)

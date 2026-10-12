@@ -63,7 +63,7 @@ public struct Project: Identifiable, Equatable, Sendable {
 }
 
 /// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
-/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与提示词（挂在任务下的灵感，要发给 Agent 的话）；任务的正文只有标题，多出来的话都是提示词（`CueLines.split`）。
+/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——步骤（顶层任务下的任务，勾选清单里的一条）与提示词（挂在顶层任务下的灵感，要发给 Agent 的话）；任务的正文只有标题，多出来的话都是提示词（`CueLines.split`）。
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -94,7 +94,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
 
-  /// 任务最多两级：任务 → 子任务。提示词（任务下的灵感）挂在任一级任务下，不算一级。
+  /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在顶层任务下（`CueStore.promptHome`），不算一级。
   public static let maxTaskDepth = 2
 
   public var isTask: Bool { todoAt != nil }
@@ -140,7 +140,7 @@ public struct TaskCounts: Equatable, Sendable {
   }
 }
 
-/// 子任务完成了几个、一共几个（上级的直接子任务，见 `CueStore.subtaskProgress`）。
+/// 步骤完成了几个、一共几个（任务的直接步骤，见 `CueStore.subtaskProgress`）。
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int
@@ -169,8 +169,8 @@ public enum CardChange: Sendable, Equatable {
   case todo(id: UUID, on: Bool, body: String, variableValues: [String: String], prompt: UUID?, lifted: [UUID])
   /// 删除：提上去的下级。
   case trash(id: UUID, lifted: [UUID])
-  /// 挪动：原来的位置与原来的前一个同级。
-  case move(id: UUID, from: CardSlot, after: UUID?)
+  /// 挪动：原来的位置与原来的前一个同级；任务挪成步骤时改挂走的提示词（拨回时放回它下面）。
+  case move(id: UUID, from: CardSlot, after: UUID?, hoisted: [UUID])
 }
 
 public struct SendRecord: Identifiable, Equatable, Sendable {
@@ -359,7 +359,7 @@ extension CueStoreError: LocalizedError {
     case .unsupportedSchemaVersion(let version): "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
     case .schemaTooOld(let version): "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它"
     case .invalidParent: "只能挂到任务下，不能挂到自己或自己的下级下"
-    case .taskTooDeep: "任务最多 \(Card.maxTaskDepth) 级（任务 → 子任务），提示词不限"
+    case .taskTooDeep: "任务最多 \(Card.maxTaskDepth) 级（任务 → 步骤）"
     case .notATask: "这是灵感，先「设为任务」再改状态"
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"

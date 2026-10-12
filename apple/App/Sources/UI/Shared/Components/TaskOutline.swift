@@ -26,7 +26,7 @@ extension EnvironmentValues {
 }
 
 /// 任务大纲（手机任务页与项目页、Mac 任务面板与项目页共用）：按 `TaskTree` 缩进排出全部行（只有两级，不折起）。
-/// 手势用系统拖放（长按抬起、与长按菜单共存；Mac 按住拖）：停在一行中部高亮、松手成为它的子任务；停在两行之间出插入线，
+/// 手势用系统拖放（长按抬起、与长按菜单共存；Mac 按住拖）：停在一行中部高亮、松手成为它的步骤；停在两行之间出插入线，
 /// 横向挪动改层级（插入线的起点跟着缩进）。手机上轻扫按 `CardMenu.swipes`：右滑缩进，左滑删除与反缩进（`rowSwipes`）。落点规则全在 `TaskTree`，这里只管手势与画。
 /// 行之间不让位（同提醒事项的插入线）：拖动期间不重排，也就不会每帧重算布局。
 struct TaskOutline<Line: View>: View {
@@ -169,7 +169,7 @@ private final class OutlineDrag {
     }
 }
 
-/// 停在这一行中部时的高亮（松手成为它的子任务）。
+/// 停在这一行中部时的高亮（松手成为它的步骤）。
 private struct DropHighlight: View {
     let drag: OutlineDrag
     let id: UUID

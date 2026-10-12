@@ -5,9 +5,9 @@ import Testing
 
 @testable import CueSync
 
-/// 远端变更下的任务层级不变量：两台设备离线并发地挪任务，合并后可能出现环、任务超过两级、子任务与父任务不在同一项目。
+/// 远端变更下的任务层级不变量：两台设备离线并发地挪任务，合并后可能出现环、任务超过两级、步骤与父任务不在同一项目。
 /// 应用远端变更后按确定的规则收敛（各设备算出同一结果），修正写回并推送：
-/// 环里 id 最小的那条回到顶层；第三级的任务提到第二级（挂到上级的上级下，提示词不受限）；子任务跟随父任务的项目。
+/// 环里 id 最小的那条回到顶层；第三级的任务提到第二级（挂到上级的上级下）；步骤下的提示词改挂到顶层任务；步骤跟随父任务的项目。
 /// 父任务还没到（乱序）的不动。
 @Suite struct RemoteTaskTreeTests {
   let rig = try! Rig()
@@ -115,7 +115,7 @@ import Testing
     }
   }
 
-  @Test func 并发挪出第三级任务_提到第二级_提示词不受限() async throws {
+  @Test func 并发挪出第三级任务_提到第二级_步骤下的提示词改挂到顶层任务() async throws {
     let a = try await store.createTask("a", in: nil)
     let a1 = try await store.createTask("a1", under: a.id)
     let b = try await store.createTask("b", in: nil)
@@ -127,10 +127,10 @@ import Testing
 
     #expect(try await store.card(b.id)?.parentID == a.id)
     #expect(try await store.card(b1.id)?.parentID == a.id)
-    #expect(try await store.card(note.id)?.parentID == b1.id)
+    #expect(try await store.card(note.id)?.parentID == a.id)  // b1 成了步骤，它的提示词回到顶层任务下
   }
 
-  @Test func 父任务在别处换了项目_子任务跟过去_父任务还没到的不动() async throws {
+  @Test func 父任务在别处换了项目_步骤跟过去_父任务还没到的不动() async throws {
     let site = try await store.createProject(name: "网站", color: "#111")
     let table = try await store.createProject(name: "圆桌", color: "#111")
     let parent = try await store.createTask("上线", in: site.id)

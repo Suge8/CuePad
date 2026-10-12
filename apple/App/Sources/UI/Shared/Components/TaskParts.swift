@@ -4,7 +4,7 @@ import SwiftUI
 
 
 // 任务浮窗（手机、Mac 都是盖在当前页上的一层）的几块：任务是一件要做成的事——只有标题（`TaskHeading`）；
-// 要发给 Agent 的话是挂在它下面的提示词，一张一张卡（`PromptList`），是这一页的主体；子任务是次要的一组（`SubtaskList`）。
+// 要发给 Agent 的话是挂在它下面的提示词，一张一张卡（`PromptList`），是这一页的主体；步骤是次要的一组（`SubtaskList`）。
 
 
 /// 任务的标题（单行），就地改、自动保存。回车结束编辑。
@@ -44,8 +44,8 @@ struct TaskHeading: View {
 }
 
 
-/// 子任务：在提示词之后的次要一组，可勾的圈与标题（点标题打开）；没有子任务时整组不出现。
-/// 子任务不在这里加：Mac 浮窗在它下面接一行"添加子任务"，手机在任务大纲里把任务拖到它上面。
+/// 步骤：在提示词之后的次要一组，可勾的圈与标题（点标题打开）；没有步骤时整组不出现。
+/// 步骤不在这里加：Mac 浮窗在它下面接一行"添加步骤"，手机在任务大纲里把任务拖到它上面。
 struct SubtaskList: View {
     let detail: TaskDetail?
     let open: (Card) -> Void
@@ -60,7 +60,7 @@ struct SubtaskList: View {
     private func list(_ subtasks: [Card]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("子任务").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
+                Text("步骤").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.ink3).accessibilityAddTraits(.isHeader)
                 if let progress = detail?.progress {
                     Text("\(progress.done)/\(progress.total)").monospacedDigit().font(TaskMetrics.caption).foregroundStyle(palette.ink3)
                 }
@@ -96,7 +96,7 @@ struct SubtaskList: View {
 }
 
 
-/// 任务页标题左边的完成圈：点它完成（完成的回到待办）；还有没完成的子任务时先问一句，确认后一起完成。
+/// 任务页标题左边的完成圈：点它完成（完成的回到待办）；还有没完成的步骤时先问一句，确认后一起完成。
 struct TaskRingButton: View {
     let task: Card
     let prompts: Int

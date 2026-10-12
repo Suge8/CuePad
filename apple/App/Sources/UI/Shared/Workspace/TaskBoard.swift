@@ -2,8 +2,8 @@ import CueStore
 import Foundation
 
 /// 任务看板（手机任务页、Mac 任务面板共用）：进行中、待办、最近完成，各自跨项目。进行中与待办按顶层任务的状态分组，
-/// 子任务（没完成的，不论自己的状态）跟在它的顶层任务下（`tree`）；顺序同 `store.tasks(_:)`（项目顺序、未分类在后，同级手动顺序）。
-/// 最近完成只列顶层任务（与 `counts.done` 同一批，也是"全部归档"动的那批；做完的子任务算在上级的进度里），不分项目、不分层，按完成时间从新到旧取前 `doneLimit` 条。
+/// 步骤（没完成的，不论自己的状态）跟在它的顶层任务下（`tree`）；顺序同 `store.tasks(_:)`（项目顺序、未分类在后，同级手动顺序）。
+/// 最近完成只列顶层任务（与 `counts.done` 同一批，也是"全部归档"动的那批；做完的步骤算在上级的进度里），不分项目、不分层，按完成时间从新到旧取前 `doneLimit` 条。
 /// 每条带所在项目；交给 Pi 的带那个会话此刻的状态。
 nonisolated struct TaskBoard: Sendable, Equatable {
     struct Row: Identifiable, Sendable, Equatable {
@@ -23,7 +23,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
 
         /// 会话按 Pi 的会话 id 取自一次批量读（`CueStore.piSessions(sessionIDs:)`），不一行读一次。
         init(_ task: Card, projects: [UUID: Project], sessions: [String: PiSessionListItem]) {
-            let item = task.piSessionID.flatMap { sessions[$0] }
+            let item = task.parentID == nil ? task.piSessionID.flatMap { sessions[$0] } : nil  // 步骤不交给 Agent
             self.init(task: task, project: task.projectID.flatMap { projects[$0] }, session: item?.state, delivery: item?.delivery)
         }
 
@@ -44,9 +44,9 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     var inProgress: [Row]
     var todo: [Row]
     var done: [Row]
-    /// 没完成的任务（含子任务）各自的项目与会话。
+    /// 没完成的任务（含步骤）各自的项目与会话。
     var rows: [UUID: Row]
-    /// 任务的子任务完成了几个，完成圈与"子任务 n/m"由它推出。
+    /// 任务的步骤完成了几个，完成圈与"步骤 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
     /// 任务下的提示词：每条任务下直接列出。
     var prompts: [UUID: [Card]]
@@ -82,7 +82,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var more: Int
     }
 
-    /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress` 同一批，子任务跟着上级），先看交给的 Agent 在怎样——
+    /// 正在推进的任务（书架顶上）：顶层的进行中任务（与 `counts.inProgress` 同一批，步骤跟着上级），先看交给的 Agent 在怎样——
     /// 等你确认、出错的在前，正在干活的其次，别的最后——同档最近开始的在前，再同的按原来的先后；取前 `limit` 条，其余数个数。
     /// 排序要看每条任务的会话状态，所以会话对全部候选一次读出（进行中的任务不多），不是逐条读。
     static func active(limit: Int, from store: isolated CueStore) throws -> Active {

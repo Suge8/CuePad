@@ -1,21 +1,21 @@
 import CueStore
 
-/// 子任务进度与完成上级时的确认（Mac 与 iOS 同一套）。
+/// 步骤进度与完成上级时的确认（Mac 与 iOS 同一套）。
 enum TaskCopy {
     /// 项目页任务纸列出前几条没做完的顶层任务，纸底这一行写没列出的："还有 2 条 · 已完成 1"（都没有时不写）。数都来自 `TaskCounts`，纸上不另摆分数。
     static func more(hidden: Int, done: Int) -> Dotted? {
         Dotted(hidden > 0 ? "还有 \(hidden) 条" : nil, done > 0 ? "已完成 \(done)" : nil).nonEmpty
     }
 
-    static func progress(_ subtasks: TaskProgress) -> String { "子任务 \(subtasks.done)/\(subtasks.total)" }
+    static func progress(_ subtasks: TaskProgress) -> String { "步骤 \(subtasks.done)/\(subtasks.total)" }
 
-    /// 任务行的一行："3 条提示词 · 子任务 1/2"；都没有时不写。所在项目与会话状态另起一行，不挤在这里。
+    /// 任务行的一行："3 条提示词 · 步骤 1/2"；都没有时不写。所在项目与会话状态另起一行，不挤在这里。
     static func counts(prompts: Int, subtasks: TaskProgress?) -> Dotted? {
         Dotted(prompts > 0 ? "\(prompts) 条提示词" : nil, subtasks.map(progress)).nonEmpty
     }
     static func hasOpen(_ subtasks: TaskProgress?) -> Bool { subtasks.map { $0.done < $0.total } ?? false }
     static func openSubtasks(_ subtasks: TaskProgress?) -> String {
-        "还有 \(subtasks.map { $0.total - $0.done } ?? 0) 个子任务没完成，一起完成？"
+        "还有 \(subtasks.map { $0.total - $0.done } ?? 0) 个步骤没完成，一起完成？"
     }
 }
 
@@ -32,6 +32,6 @@ enum TaskSpeech {
 
     static func toggle(done: Bool) -> String { done ? "标为未完成" : "标为完成" }
 
-    /// 进度念屏幕上那一行（`TaskCopy.counts`）："3 条提示词，子任务 1/2"；不另拼合计。
+    /// 进度念屏幕上那一行（`TaskCopy.counts`）："3 条提示词，步骤 1/2"；不另拼合计。
     static func progress(prompts: Int, subtasks: TaskProgress?) -> String? { TaskCopy.counts(prompts: prompts, subtasks: subtasks)?.spoken }
 }
