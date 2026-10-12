@@ -138,6 +138,7 @@ struct PiAlertRoutingTests {
 
         try await eventually("会话页显示对话、底部栏让位给回复框") {
             let text = try visibleText(in: window)
+            // 底部栏收起就是屏幕上看不到它那一格的"灵感"二字；底部栏改了文案，这里跟着改
             return text.contains("接口约定") && !text.contains("灵感")
         }
     }
