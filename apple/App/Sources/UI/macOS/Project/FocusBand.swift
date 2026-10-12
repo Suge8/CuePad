@@ -12,6 +12,7 @@ struct FocusBand: View {
     let agents: [ProjectAgents.Row]
     let guide: FolderGuide?
     @Environment(Workspace.self) private var workspace
+    @Environment(\.cardAgents) private var cardAgents
     @Environment(\.palette) private var palette
 
     private static let visibleTasks = 4
@@ -67,8 +68,9 @@ struct FocusBand: View {
             TaskOutline(
                 tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks)), folds: { TaskRow.folds($0, prompts: data.prompts) }
             ) { row in
+                let agent = cardAgents.items[row.id]
                 TaskRow(
-                    task: row.task, depth: row.depth, session: workspace.liveState(ofSession: row.task.piSessionID),
+                    task: row.task, depth: row.depth, session: agent?.state, delivery: agent?.delivery,
                     marks: data.children[row.id], prompts: data.prompts[row.id] ?? [], expanded: row.isExpanded)
             }
             if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {

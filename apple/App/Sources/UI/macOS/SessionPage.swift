@@ -178,16 +178,17 @@ private struct SessionLink: ViewModifier {
 }
 
 extension Workspace {
-    /// 本机桥上在线的这个 Pi 会话（`sessionID` 是 Pi 自己的会话 id）此刻的状态；不在线为 nil。
-    func liveState(ofSession sessionID: String?) -> PiSessionState? {
-        guard let sessionID, let live = services.pi.session(sessionID: sessionID) else { return nil }
-        return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id], recap: services.liveSessions.recaps[sessionID])
-    }
-
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
     func withLiveState(_ session: PiSessionState) -> PiSessionState {
         guard let live = services.pi.session(sessionID: session.sessionID) else { return session }
         return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap)
+    }
+
+    /// 同 `withLiveState(_:)`，会话列表项的会话换上桥上的实时状态。
+    func withLiveState(_ item: PiSessionListItem) -> PiSessionListItem {
+        var item = item
+        item.state = withLiveState(item.state)
+        return item
     }
 
     /// 在本机后台开新会话，等到它出现：返回新会话的 Pi 会话 id（按发起时生成的标识认领）；没能开出来时抛出执行端写回的原因。
