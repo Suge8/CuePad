@@ -20,7 +20,7 @@ extension DebugScene {
             try? await Task.sleep(for: .seconds(1))
             for id in workspace.presses.selectable.prefix(3) { workspace.presses.toggle(id) }
         case "task":
-            // 本项目第一条没完成的顶层任务，在任务浮层里打开
+            // 本项目第一条没完成的顶层任务，在任务浮窗里打开
             let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
             if let task = tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.open(task) }
         case "agent":

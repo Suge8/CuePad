@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 /// 一条任务（项目页的任务区与任务面板同一种行）：圆圈分三态（待办空心、进行中半满、完成对勾），点它完成（完成的回到待办；
-/// 还有没完成的子任务时先问，确认后一起完成）；点行的其余地方弹出任务浮层（`TaskSheet`）。标题下一行写进度（折起时连提示词条数）、
+/// 还有没完成的子任务时先问，确认后一起完成）；点行的其余地方弹出任务浮窗（`TaskSheet`）。标题下一行写进度（折起时连提示词条数）、
 /// 所在项目（面板里跨项目时）与交给 Pi 的会话此刻的状态。展开时它的提示词一条一行列在下面（`PromptLine`），不用打开任务就看得到、点得开。
 /// 顶层的行与上一组之间多留一点空，子任务的圈小一号：一眼分出哪几条是一件事。右键是 `CardActions`。
 struct TaskRow: View {
@@ -144,7 +144,7 @@ struct TaskRow: View {
 
 /// 任务下的一条提示词：左边一个小标记说它此刻怎样（没交出去是空的对话框、在处理是会话状态点、已回复是实心对话框），
 /// 字与任务标题对齐、一行截断；交出去过的右边写状态词。指针停上去时右边出一颗钮（交给 Agent / 再交一次 / 看会话，同 `PromptState.action`）。
-/// 点行进编辑页；按住可拖到别的任务上。交出去之后下面多一行小字（`PromptProgress`）。
+/// 点行在任务浮窗里就地展开编辑；按住可拖到别的任务上。交出去之后下面多一行小字（`PromptProgress`）。
 struct PromptLine: View {
     let prompt: Card
     let replied: Bool
@@ -256,7 +256,7 @@ private struct PromptProgress: View {
     }
 }
 
-/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的子任务（任务浮层里）；`choosesProject` 时右边可换落到哪个项目（任务面板跨项目）。
+/// 一行新建任务：↩ 添加，保持焦点以便连续输入。`parent` 给了时建成它的子任务（任务浮窗里）；`choosesProject` 时右边可换落到哪个项目（任务面板跨项目）。
 struct NewTaskField: View {
     let project: UUID?
     var parent: UUID?

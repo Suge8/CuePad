@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 右上角面板：顶上一行快速添加；下面是共用的任务看板（`TaskBoard`）——进行中、待办、最近完成（折起），跨项目，
 /// 子任务缩进跟在上级下、提示词列在各自的任务下（`TaskOutline` 与 `TaskRow`：按住拖动排序、拖到一条上成为它的子任务、横向拖改层级），
-/// 顶层写所在项目，交给 Pi 的写那个会话此刻的状态。点任务弹出任务浮层（面板留着），点提示词进编辑页。
+/// 顶层写所在项目，交给 Pi 的写那个会话此刻的状态。点任务弹出任务浮窗（面板留着），点提示词在任务浮窗里就地展开编辑。
 struct TasksPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
