@@ -43,12 +43,15 @@ public enum SyncResolution: Sendable {
 
 public enum SyncError: Error, Equatable, Sendable {
   case nothingToResolve
+  /// 立即上传时服务器没有收下这条记录；它仍待推送，引擎会重试。
+  case notUploaded
 }
 
 extension SyncError: LocalizedError {
   public var errorDescription: String? {
     switch self {
     case .nothingToResolve: "没有需要处理的同步决定"
+    case .notUploaded: "服务器没有收下这条记录，稍后自动重试"
     }
   }
 }
