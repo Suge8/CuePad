@@ -283,6 +283,7 @@ extension CueStore {
   /// - 本机自上次推送后没改过：直接采用远端。
   /// - 本机有未推送的改动：`modifiedAt` 较新的整条记录留下，同刻以服务器为准（服务器是唯一裁决者，各设备因此收敛）；
   ///   卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。
+  /// 本机自己上传的版本回来（回声）不到这里：协调器在 `applyFetched` 里先认出并跳过，否则本机已有更新编辑时会被当成并发编辑。
   /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data) throws {
     let awaitingResult = try remote.table == .deliveryRequests && isAwaitingResult(remote.id)
