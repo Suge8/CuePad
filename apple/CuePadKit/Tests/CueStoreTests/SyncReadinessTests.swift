@@ -10,7 +10,7 @@ import Testing
     "projects", "cards", "sendRecords", "attachments", "piSessionStates", "deliveryRequests", "directoryBindings",
     "piMessages", "previews",
   ]
-  static let local = ["piSessions", "projectDirectories", "syncRecords", "syncState"]
+  static let local = ["piSessions", "projectDirectories", "syncRecords", "syncSent", "syncState"]
   let fixture = try! Fixture()
   var raw: RawDB { RawDB(fixture.url) }
 
