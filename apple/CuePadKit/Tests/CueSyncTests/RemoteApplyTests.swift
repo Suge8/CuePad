@@ -131,7 +131,8 @@ import Testing
     let card = try await pushedCard(body: "base")
     let local = try await editCard(card, body: "local version")
 
-    await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote version", modifiedAt: local - 1_000)))
+    // 另一台设备在本机上次同步之后、本机编辑之前改的
+    await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote version", modifiedAt: local - 1)))
 
     let conflict = try #require(try await store.conflicts().first)
     #expect(conflict.original.body == "local version" && conflict.copy.body == "remote version")

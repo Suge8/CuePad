@@ -283,7 +283,7 @@ extension CueStore {
   /// - 本机自上次推送后没改过：直接采用远端。
   /// - 本机有未推送的改动：`modifiedAt` 较新的整条记录留下，同刻以服务器为准（服务器是唯一裁决者，各设备因此收敛）；
   ///   卡片正文不同时，被淘汰的正文另存为冲突副本，不静默覆盖。
-  /// 本机自己上传的版本回来（回声）不到这里：协调器在 `applyFetched` 里先认出并跳过，否则本机已有更新编辑时会被当成并发编辑。
+  /// 本机自己上传的版本回来（回声）不是并发编辑：已落账的回声由推送时间认出（`applyVersion`），落账前的由协调器认出。
   /// 排序键相同不在这里处理：读取时按 id 打平，移动时重排。
   private func applySave(_ remote: SyncRow, _ systemFields: Data) throws {
     let awaitingResult = try remote.table == .deliveryRequests && isAwaitingResult(remote.id)
@@ -314,6 +314,10 @@ extension CueStore {
       try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt)
       return
     }
+
+    // 远端不比本机已记下的推送版本新：是本机自己上传过的版本（回声）或更旧的，本机已有更新的编辑，没有什么要合并的。
+    // 别的设备并发编辑的版本晚于本机上次同步的版本，不会落在这里。
+    if let pushed, remote.modifiedAt <= pushed { return }
 
     let remoteWins = remote.modifiedAt >= local.modifiedAt
     if table == .cards, let localBody = local.text("body"), let remoteBody = remote.text("body"), localBody != remoteBody {

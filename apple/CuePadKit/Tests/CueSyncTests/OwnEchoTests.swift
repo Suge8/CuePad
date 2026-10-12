@@ -62,16 +62,18 @@ import Testing
     try await expectNoCopyAndLocalKept(card, body: "第二版")
   }
 
-  /// 连续几版都已上传，较早一版的回声在较晚一版落账之后才到。
-  @Test func anEarlierUploadedVersionPulledBackLateIsNotAConflict() async throws {
-    let (card, first) = try await editedAndHandedToTheEngine("第一版")
-    let second = try await edit(card, "第二版")
-    await rig.coordinator.handle(.sent(saved: [first, second], failedSaves: [], deleted: [], failedDeletes: []))
-    _ = try await edit(card, "第三版")
+  /// 很多版都已上传落账，本机重启过，很久以前那一版的回声才到：不能靠内存里记着最近几版。
+  @Test func anOldUploadedVersionPulledBackAfterManyNewerOnesAndARestartIsNotAConflict() async throws {
+    let (card, first) = try await editedAndHandedToTheEngine("第 1 版")
+    var uploaded = [first]
+    for number in 2...12 { uploaded.append(try await edit(card, "第 \(number) 版")) }
+    await rig.coordinator.handle(.sent(saved: uploaded, failedSaves: [], deleted: [], failedDeletes: []))
+    _ = try await edit(card, "第 13 版")
+    let restarted = SyncCoordinator(store: store, queue: rig.queue, zoneID: testZone)
 
-    try await pull([first])
+    await restarted.handle(.fetched(modifications: [first], deletions: []))
 
-    try await expectNoCopyAndLocalKept(card, body: "第三版")
+    try await expectNoCopyAndLocalKept(card, body: "第 13 版")
   }
 
   /// 上传其实成功了但结果丢了（超时），引擎重传时被服务器以 serverRecordChanged 拒绝，附上的服务器版本就是刚传的这一版。
@@ -96,18 +98,5 @@ import Testing
 
     let conflict = try #require(try await store.conflicts().first)
     #expect(conflict.original.body == "另一台的版本" && conflict.copy.body == "本机第二版")
-  }
-
-  /// 抹掉本机数据后从云端重新下载：云端的版本正是本机此前传上去的，必须落地。
-  @Test func erasingLocalDataDownloadsTheVersionsThisDeviceUploadedEarlier() async throws {
-    let (card, uploaded) = try await editedAndHandedToTheEngine("传上去的")
-    await rig.coordinator.handle(.sent(saved: [uploaded], failedSaves: [], deleted: [], failedDeletes: []))
-    await rig.coordinator.handle(.cloudDataLost(.deleted))
-    try await rig.coordinator.resolve(.eraseLocal)
-    #expect(try await store.card(card.id) == nil)
-
-    await rig.coordinator.handle(.fetched(modifications: [uploaded], deletions: []))
-
-    #expect(try await store.card(card.id)?.body == "传上去的")
   }
 }

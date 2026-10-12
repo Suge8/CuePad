@@ -7,7 +7,6 @@ import os
 actor SyncCoordinator {
   private static let issueLimit = 50
   private static let inFlightLimit = 4
-  private static let sentVersionLimit = 8
   private static let sendNowAttempts = 3
   private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
 
@@ -22,10 +21,6 @@ actor SyncCoordinator {
   /// 结果回来时取它自己那一版记账。
   private var serverValues = ServerValues()
   private var inFlight: [String: [Int64: SyncRow]] = [:]
-  /// 本机交给服务器的版本（记录名 → 修改时间，最近几版）。服务器上就是这一版的记录回到本机——主动拉取、引擎拉取、
-  /// 或被拒时附上的服务器版本（上一次上传其实成功了、结果丢了）——是自己的回声，不是别的设备的编辑：本机此时多半已有更新的编辑，
-  /// 当成并发编辑会留下冲突副本。结果落账前、落账后都要认，所以不随 `inFlight` 一起清；只在内存，重启后拉取从"现在"开始，不会再收到旧回声。
-  private var sentVersions: [String: [Int64]] = [:]
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
 
   private(set) var state = SyncState(status: .starting, issues: []) {
@@ -113,7 +108,6 @@ actor SyncCoordinator {
       versions[row.modifiedAt] = row
       for stale in versions.keys.sorted().dropLast(Self.inFlightLimit) { versions[stale] = nil }  // 取了没发出去的版本不会有结果，只留最近几版
       inFlight[id.recordName] = versions
-      sentVersions[id.recordName] = Array(((sentVersions[id.recordName] ?? []) + [row.modifiedAt]).suffix(Self.sentVersionLimit))
       if row.table == .attachments {
         guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
           report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
@@ -175,7 +169,7 @@ actor SyncCoordinator {
   /// 用户对 `needsDecision` 的选择。之后需要重建引擎（引擎状态属于旧账号或已失效的云端数据，这里已清掉）。
   func resolve(_ resolution: SyncResolution) async throws {
     guard needsDecision != nil else { throw SyncError.nothingToResolve }
-    forgetServerState()
+    serverValues.removeAll()
     switch resolution {
     case .uploadLocal: try await store.resetSyncMetadata()
     case .eraseLocal: try await store.eraseSyncedData()
@@ -238,7 +232,7 @@ actor SyncCoordinator {
       status = .noAccount
     case .signedIn:
       // 新登录的账号：云端记录与本机记录的对应关系从零开始，本机全部重新上传。
-      forgetServerState()
+      serverValues.removeAll()
       try await store.resetSyncMetadata()
       status = .idle
       try await reconcile()
@@ -249,12 +243,6 @@ actor SyncCoordinator {
 
   // MARK: 远端变更
 
-  /// 引擎与服务器的对应关系作废（账号换了、本机数据抹掉）：此前的上传记录不再说明服务器上有什么。
-  private func forgetServerState() {
-    serverValues.removeAll()
-    sentVersions = [:]
-  }
-
   private func applyFetched(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
     var changes: [RemoteChange] = []
     for record in modifications where !CloudKitSchema.retiredTypeNames.contains(record.recordType) {
@@ -262,8 +250,10 @@ actor SyncCoordinator {
         report("未知的记录类型「\(record.recordType)」，已跳过（可能来自更新版本的 CuePad）", recordType: record.recordType, recordName: record.recordID.recordName)
         continue
       }
-      if sentVersions[row.id]?.contains(row.modifiedAt) == true {
-        _ = try await acknowledge(record, sent: nil)  // 自己上传的版本：服务器收下了它，记下新标签，不是别处的编辑
+      if inFlight[row.id]?[row.modifiedAt] != nil {
+        // 本机刚交出去、结果还没落账的版本回来了（自己的回声）：服务器收下了它，记下新标签，不是别处的编辑。
+        // 本机之后又改过的话，那一版的待办在引擎里，不用在这里重新登记。落账之后回来的回声由 `applyVersion` 按推送时间认出。
+        _ = try await acknowledge(record, sent: nil)
         continue
       }
       serverValues.learn(row)  // 服务器上就是这个样子，不管本机最后留下哪个版本
@@ -337,7 +327,7 @@ actor SyncCoordinator {
 
     var blocked = false
     for (record, error) in failedSaves {
-      _ = takeInFlight(record)
+      defer { _ = takeInFlight(record) }  // 服务器版本就是刚传的这一版时，下面的合并要在它还算在途时认出回声
       switch error.code {
       case .serverRecordChanged:
         if let server = error.serverRecord {
