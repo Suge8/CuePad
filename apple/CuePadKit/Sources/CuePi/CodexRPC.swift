@@ -34,7 +34,10 @@ final class CodexRPC {
 
     // MARK: 建立
 
-    /// 起一个 `codex app-server --listen stdio://` 并完成握手。
+    /// 握手（`initialize`）至多等这么久：对端卡住时不让调用方一直等。
+    static let handshakeTimeout: Duration = .seconds(30)
+
+    /// 起一个 `codex app-server --listen stdio://` 并完成握手；握手失败或超时时停掉这个进程再抛错。
     static func launch(_ executable: URL, environment: [String: String], directory: URL? = nil) async throws -> CodexRPC {
         let process = Process()
         process.executableURL = executable
@@ -54,6 +57,11 @@ final class CodexRPC {
         return rpc
     }
 
+    /// 停掉对端：自己起的进程直接终止（不等它读到 EOF 收尾，用于它卡住时），控制 socket 断开。
+    func terminate() {
+        transport.terminate()
+    }
+
     /// 连上常驻服务的控制 socket 并完成握手；socket 不在或连不上抛错。
     static func connect(socket path: String) async throws -> CodexRPC {
         let (fd, pid, leftover) = try await openWebSocket(path)
@@ -65,11 +73,25 @@ final class CodexRPC {
         return rpc
     }
 
+    /// 握手；失败或超过 `handshakeTimeout` 时停掉对端、等它走完再抛错（超时抛 `timedOut`）。
     private func handshake() async throws {
-        _ = try await call("initialize", [
-            "clientInfo": ["name": "cuepad", "title": "CuePad", "version": "1"],
-            "capabilities": ["experimentalApi": true],
-        ])
+        var timedOut = false
+        let timer = Task { [weak self] in
+            guard (try? await Task.sleep(for: Self.handshakeTimeout)) != nil else { return }
+            timedOut = true
+            self?.terminate()
+        }
+        defer { timer.cancel() }
+        do {
+            _ = try await call("initialize", [
+                "clientInfo": ["name": "cuepad", "title": "CuePad", "version": "1"],
+                "capabilities": ["experimentalApi": true],
+            ])
+        } catch {
+            terminate()
+            await reader?.value
+            throw timedOut ? CodexRPCError.timedOut : error
+        }
         send(["method": "initialized"])
     }
 
@@ -151,6 +173,13 @@ final class CodexRPC {
             case .socket(let socket): socket.close()
             }
         }
+
+        func terminate() {
+            switch self {
+            case .stdio(let process, _): if process.isRunning { process.terminate() }
+            case .socket(let socket): socket.close()
+            }
+        }
     }
 
     /// 写入排在一条串行队列上：大图片写进管道时不卡主线程，先后顺序不变。
@@ -215,6 +244,8 @@ enum CodexRPCError: Error, Equatable {
     case server(code: Int, message: String)
     case closed
     case unreachable
+    /// 对端没有及时握手（已停掉它）
+    case timedOut
 }
 
 extension CodexRPCError: LocalizedError {
@@ -223,6 +254,7 @@ extension CodexRPCError: LocalizedError {
         case .server(_, let message): "Codex 拒绝了：\(message)"
         case .closed: "Codex 的 app-server 没有回应就退出了"
         case .unreachable: "连不上 Codex 的常驻服务"
+        case .timedOut: "Codex 的 app-server 没有及时回应"
         }
     }
 }

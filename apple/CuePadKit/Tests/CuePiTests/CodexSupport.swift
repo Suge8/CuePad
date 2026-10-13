@@ -31,26 +31,33 @@ func solidPNG(red: CGFloat, green: CGFloat, blue: CGFloat) throws -> Data {
     return data as Data
 }
 
-/// 一个临时的 Codex 配置目录，与它配套的 CuePad 钩子 socket 目录与工作目录。
+/// 一个临时的 Codex 配置目录，与它配套的 CuePad 钩子 socket 目录与工作目录。起的 codex 与接入用的环境把家目录、各家的配置目录、
+/// XDG 目录、CuePad 的资料库与 socket 目录都指到这里，不读写真实的配置与资料库。
 struct CodexHome {
     let root: URL
     var home: URL { root.appending(path: "codex", directoryHint: .isDirectory) }
     var work: URL { root.appending(path: "work", directoryHint: .isDirectory) }
     var sockets: URL { root.appending(path: "s", directoryHint: .isDirectory) }
     var paths: AgentPaths {
-        AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: ["CODEX_HOME": home.path])
+        AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
     }
     var locator: ExecutableLocator { ExecutableLocator(searchDirectories: [realCodexURL!.deletingLastPathComponent()]) }
-    /// 起 codex 时的环境：配置目录与钩子 socket 目录指到这里
     var environment: [String: String] {
-        ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("CUEPAD_") && !$0.key.hasPrefix("HERDR") && !$0.key.hasPrefix("TMUX") }
-            .merging(["CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path]) { $1 }
+        let isolated = ["CUEPAD_", "HERDR", "TMUX", "XDG_", "CLAUDE_", "OPENCODE_", "CODEX_", "PI_"]
+        func path(_ name: String) -> String { root.appending(path: name).path }
+        return ProcessInfo.processInfo.environment.filter { key, _ in !isolated.contains { key.hasPrefix($0) } }.merging([
+            "HOME": path("user"), "XDG_CONFIG_HOME": path("xdg/config"), "XDG_DATA_HOME": path("xdg/data"),
+            "XDG_STATE_HOME": path("xdg/state"), "XDG_CACHE_HOME": path("xdg/cache"), "CLAUDE_CONFIG_DIR": path("claude"),
+            "OPENCODE_CONFIG_DIR": path("opencode"), "PI_CODING_AGENT_DIR": path("pi"), "CUEPAD_LIBRARY_DIR": path("library"),
+            "CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path,
+        ]) { $1 }
     }
 
     init() throws {
         root = try makeTempDirectory()
-        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        for directory in [home, work, root.appending(path: "user")] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
     }
 
     /// 能跑模型的配置：复制凭据、最便宜的模型、不检查更新、常驻服务不自动升级、工作目录受信任。
@@ -133,16 +140,26 @@ final class CodexRig {
     let bridge: PiBridge
     let runtime: CodexRuntime
 
+    /// 中途失败时停掉已经起来的、删掉临时目录（含复制的凭据）再抛错。
     init(approvals: String = "never") async throws {
-        codex = try CodexHome()
-        try codex.signIn(approvals: approvals)
-        try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: PiProcess.cuepad).install(.codex)
-        hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
-        try hooks.start()
-        bridge = PiBridge(socketDirectory: codex.sockets)
-        try bridge.start()
-        runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locator: codex.locator)
-        try runtime.start()
+        let codex = try CodexHome()
+        let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
+        let bridge = PiBridge(socketDirectory: codex.sockets)
+        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, locator: codex.locator)
+        do {
+            try codex.signIn(approvals: approvals)
+            try await AgentIntegration(paths: codex.paths, locator: codex.locator, cuepad: PiProcess.cuepad).install(.codex)
+            try hooks.start()
+            try bridge.start()
+            try runtime.start()
+        } catch {
+            await runtime.stop()()
+            hooks.stop()
+            bridge.stop()
+            codex.remove()
+            throw error
+        }
+        (self.codex, self.hooks, self.bridge, self.runtime) = (codex, hooks, bridge, runtime)
     }
 
     /// 关掉托管的进程；终端测试起的常驻服务与它的升级进程按登记的进程号停掉，删掉它在共用的 /tmp/codex-daemon-<uid> 里留下的

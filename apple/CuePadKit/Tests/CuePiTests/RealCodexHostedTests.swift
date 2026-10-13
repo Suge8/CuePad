@@ -50,7 +50,8 @@ struct RealCodexHostedTests {
                 IndexedSession(id: session.sessionID, path: file.path, cwd: rig.codex.work.path, lastActivityAt: .now, agent: .codex))
             #expect(rig.bridge.session(id: resumed)?.hosted == true && rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
             _ = try await rig.bridge.send(PiMessage(text: "Reply with the single word AGAIN."), to: resumed)
-            try await eventually("接着回答了", timeout: .seconds(120)) { rig.replies(session).last?.contains("AGAIN") == true }
+            // 前一句要它答小写，模型可能沿用：大小写不论
+            try await eventually("接着回答了", timeout: .seconds(120)) { rig.replies(session).last?.uppercased().contains("AGAIN") == true }
         }
     }
 
@@ -60,7 +61,7 @@ struct RealCodexHostedTests {
             let id = try await rig.runtime.open(in: rig.codex.work, launchToken: "token-2")
             let page = rig.codex.work.appending(path: "page.html")
 
-            _ = try await rig.bridge.send(PiMessage(text: "Run exactly this shell command (it needs network access, request escalation if the sandbox blocks it): curl -s -o page.html https://example.com"), to: id)
+            _ = try await rig.bridge.send(PiMessage(text: "Run exactly this shell command, requesting escalated sandbox permissions up front because it needs network access: curl -s -o page.html https://example.com"), to: id)
             try await eventually("等你确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)

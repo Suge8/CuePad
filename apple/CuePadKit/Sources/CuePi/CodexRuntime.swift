@@ -149,15 +149,16 @@ public final class CodexRuntime: AgentRuntime {
         paths.home(of: .codex).appending(path: "app-server-control/app-server-control.sock").path
     }
 
+    /// 托管进程的环境：`AgentPaths` 的环境（App 里是自己的环境，隔离测试里指到临时目录），配置目录与钩子 socket 目录照它定。
     private var codexEnvironment: [String: String] {
-        ProcessInfo.processInfo.environment.merging([
+        paths.environment.merging([
             "CODEX_HOME": paths.home(of: .codex).path,
             "CUEPAD_PI_SOCKET_DIR": paths.pi.socketDirectory.path,
             "PATH": locator.searchDirectories.map(\.path).joined(separator: ":"),
         ]) { $1 }
     }
 
-    /// 起一个托管进程交给 `body`；超过 `launchTimeout` 关掉进程（等着的请求随之失败），出错时也关掉。
+    /// 起一个托管进程交给 `body`；超过 `launchTimeout` 停掉进程（等着的请求随之失败），出错时也停掉。握手由 `CodexRPC.launch` 自己限时。
     private func withLaunchTimeout(_ body: @MainActor (CodexRPC) async throws -> PiSession.ID) async throws -> PiSession.ID {
         guard let codex = locator.candidates(AgentKind.codex.command).first else { throw AgentRuntimeError.notInstalled(.codex) }
         let launched = Launched()
@@ -165,7 +166,7 @@ public final class CodexRuntime: AgentRuntime {
         let timer = Task { [launched] in
             guard (try? await Task.sleep(for: timeout)) != nil else { return }
             launched.timedOut = true
-            launched.rpc?.close()
+            launched.rpc?.terminate()
         }
         defer { timer.cancel() }
         do {
@@ -176,7 +177,7 @@ public final class CodexRuntime: AgentRuntime {
             return try await body(rpc)
         } catch {
             if let rpc = launched.rpc { await rpc.shutdown() }
-            throw launched.timedOut ? AgentRuntimeError.launchTimedOut(.codex) : error
+            throw launched.timedOut || error as? CodexRPCError == .timedOut ? AgentRuntimeError.launchTimedOut(.codex) : error
         }
     }
 
@@ -262,9 +263,17 @@ public final class CodexRuntime: AgentRuntime {
         guard let thread = read["thread"] as? CodexRPC.Object, thread["parentThreadId"] is NSNull || thread["parentThreadId"] == nil else { return nil }
         if tracked[id] != nil { return id }
         var session = makeSession(thread, pid: rpc.pid)
-        if (thread["status"] as? CodexRPC.Object)?["type"] as? String == "active" { session.state = .thinking; session.busySince = .now }
+        // 正在跑一轮：停止、插话要这一轮的 id，从最近一轮取（钩子要等下一个事件才带来）
+        var running: String?
+        if (thread["status"] as? CodexRPC.Object)?["type"] as? String == "active" {
+            let turns = try await rpc.call("thread/turns/list", ["threadId": threadID, "limit": 1])
+            running = ((turns["data"] as? [CodexRPC.Object])?.first).flatMap { $0["status"] as? String == "inProgress" ? $0["id"] as? String : nil }
+        }
+        if tracked[id] != nil { return id }
+        if running != nil { Self.move(&session, to: .thinking) }
         attach(session)
-        tracked[id]?.turnRunning = session.state == .thinking
+        tracked[id]?.turnID = running
+        tracked[id]?.turnRunning = running != nil
         return id
     }
 
@@ -668,7 +677,9 @@ public final class CodexRuntime: AgentRuntime {
 
     fileprivate func abort(_ id: PiSession.ID) async throws {
         guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        guard session.turnRunning, let turn = session.turnID else { return }
+        guard session.turnRunning else { return }
+        // 在跑的一轮总带着 id（钩子与接上时读到的都有）；没有就是状态坏了，不能当作停下了
+        guard let turn = session.turnID else { throw PiBridgeError.rejected("failed: 不知道正在跑的是哪一轮") }
         try await call(session, "turn/interrupt", ["threadId": session.threadID, "turnId": turn])
     }
 

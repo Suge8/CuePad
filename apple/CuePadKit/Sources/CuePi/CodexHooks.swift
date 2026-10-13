@@ -10,7 +10,9 @@ import Foundation
 ///   （`hooks/list` 给出键与哈希，`config/batchWrite` 写入，和 `/hooks` 里点信任同一条路）；查状态不起进程，按 Codex 的规则自己算
 ///   （`hook_hash`：事件名与只含这一条的组，转成键排好序的紧凑 JSON 取 SHA-256），与 `config.toml` 里的比——对不上（没信任、
 ///   用户删了排在前面的组使组号变了、Codex 改了算法）就是旧版，重装时重新信任。
-/// - 卸载删掉 CuePad 的信任条目（`config/batchWrite` 对带引号的键写 null），因此空出来的 `[hooks.state]`、`[hooks]` 一并删掉。
+/// - 卸载删掉 CuePad 的信任条目（`config/batchWrite` 对带引号的键写 null）。CuePad 建的结构（文件、`hooks`、事件数组、
+///   `[hooks]`、`[hooks.state]`）空了一并删掉，用户原有的空结构留着：哪些是 CuePad 建的从文件本身看不出来（用户的 `"Stop": []`
+///   插进一组后与 CuePad 新建的一模一样），所以第一次装时记下装之前有什么（`Footprint`，放在 CuePad 自己的技能目录里，卸载时删掉）。
 struct CodexHooks: AgentHookConfig {
     let home: URL
     let locator: ExecutableLocator
@@ -29,6 +31,31 @@ struct CodexHooks: AgentHookConfig {
 
     private var hooksFile: URL { home.appending(path: "hooks.json") }
     private var configFile: URL { home.appending(path: "config.toml") }
+    private var footprintFile: URL { home.appending(path: "skills/\(AgentSkill.name)/codex-hooks.json") }
+
+    /// 第一次装之前有什么、哪些结构是 CuePad 建的。没有记录（被删了）时什么结构都当作用户的，卸载只删组与信任条目。
+    struct Footprint: Codable, Equatable {
+        /// 装之前 hooks.json、config.toml 在不在
+        var hooksFile: Bool
+        var configFile: Bool
+        /// CuePad 在 hooks.json 里建的 `hooks` 对象与事件数组
+        var hooksObject = false
+        var events: [String] = []
+        /// CuePad 在 config.toml 里建的 `[hooks]`、`[hooks.state]`；第一次写信任时才知道
+        var hooksTable: Bool?
+        var stateTable: Bool?
+
+        static let unknown = Footprint(hooksFile: true, configFile: true)
+    }
+
+    private func footprint() -> Footprint? {
+        (try? Data(contentsOf: footprintFile)).flatMap { try? JSONDecoder().decode(Footprint.self, from: $0) }
+    }
+
+    private func save(_ footprint: Footprint) throws {
+        try FileManager.default.createDirectory(at: footprintFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(footprint).write(to: footprintFile, options: .atomic)
+    }
 
     // MARK: 状态
 
@@ -52,15 +79,21 @@ struct CodexHooks: AgentHookConfig {
     func install(command: String) async throws {
         let original = try? Data(contentsOf: hooksFile)
         guard original.map({ (try? CodexJSONTree($0)) != nil }) ?? true else { throw CodexHooksError.malformed }
-        var text = try Self.removingOurs(from: original ?? Data("{}".utf8))
-        text = try Self.appending(Self.events.map { ($0.name, Self.group($0, command: command)) }, to: text)
-        if text != original { try text.write(to: hooksFile, options: .atomic) }
-        try await trust(command: command)
+        var footprint = footprint()
+            ?? Footprint(hooksFile: original != nil, configFile: FileManager.default.fileExists(atPath: configFile.path))
+        let kept = try Self.removingOurs(from: original ?? Data("{}".utf8), dropping: nil)
+        let appended = try Self.appending(Self.events.map { ($0.name, Self.group($0, command: command)) }, to: kept)
+        footprint.hooksObject = footprint.hooksObject || appended.createdHooks
+        footprint.events += appended.createdEvents.filter { !footprint.events.contains($0) }
+        try save(footprint)
+        if appended.text != original { try appended.text.write(to: hooksFile, options: .atomic) }
+        try await trust(command: command, footprint: footprint)
         guard files(command: command) == .current else { throw CodexHooksError.notTrusted }
     }
 
     func uninstall() async throws {
-        guard let original = try? Data(contentsOf: hooksFile) else { return }
+        let footprint = footprint() ?? .unknown
+        guard let original = try? Data(contentsOf: hooksFile) else { return try forgetFootprint() }
         guard let tree = try? CodexJSONTree(original) else { throw CodexHooksError.malformed }
         let path = Self.realPath(hooksFile)
         let config = (try? String(contentsOf: configFile, encoding: .utf8)) ?? ""
@@ -68,17 +101,22 @@ struct CodexHooks: AgentHookConfig {
             let groups = Self.groups(of: event.name, in: tree)
             return groups.indices.filter { Self.isOurs(groups[$0], in: original) }.map { Self.key(path, event.label, $0) }
         }.filter { Self.trustedHash(of: $0, in: config) != nil }
-        if !keys.isEmpty { try await untrust(keys) }
-        let text = try Self.removingOurs(from: original)
-        if (try CodexJSONTree(text)).root.members.isEmpty {
+        if !keys.isEmpty { try await untrust(keys, footprint: footprint) }
+        let text = try Self.removingOurs(from: original, dropping: footprint)
+        if !footprint.hooksFile, (try CodexJSONTree(text)).root.members.isEmpty {
             try FileManager.default.removeItem(at: hooksFile)
         } else if text != original {
             try text.write(to: hooksFile, options: .atomic)
         }
+        try forgetFootprint()
     }
 
-    /// 让 Codex 信任 CuePad 的条目：它列出的键与哈希原样写回。
-    private func trust(command: String) async throws {
+    private func forgetFootprint() throws {
+        if FileManager.default.fileExists(atPath: footprintFile.path) { try FileManager.default.removeItem(at: footprintFile) }
+    }
+
+    /// 让 Codex 信任 CuePad 的条目：它列出的键与哈希原样写回。第一次写之前记下 `[hooks]`、`[hooks.state]` 原来在不在。
+    private func trust(command: String, footprint: Footprint) async throws {
         try await withCodex { rpc in
             let list = try await rpc.call("hooks/list", ["cwds": [home.path]])
             let listed = (list["data"] as? [CodexRPC.Object])?.first
@@ -92,27 +130,42 @@ struct CodexHooks: AgentHookConfig {
                 state[key] = ["trusted_hash": hash]
             }
             guard !state.isEmpty else { return }
+            if footprint.stateTable == nil {
+                let hooks = try await userHooks(rpc)
+                var updated = footprint
+                updated.hooksTable = hooks == nil
+                updated.stateTable = hooks?["state"] == nil
+                try save(updated)
+            }
             try await rpc.call("config/batchWrite", ["edits": [["keyPath": "hooks.state", "value": state, "mergeStrategy": "upsert"]]])
         }
     }
 
-    /// 删掉这些信任条目；`[hooks.state]` 因此空了就删掉它，`[hooks]` 也只剩空的就一并删掉。只剩空文件的 `config.toml` 删掉。
-    private func untrust(_ keys: [String]) async throws {
+    /// 删掉这些信任条目；CuePad 建的 `[hooks.state]` 因此空了就删掉它，CuePad 建的 `[hooks]` 也只剩它就一并删掉。
+    /// 装之前没有 `config.toml`、删完只剩空白的，删掉文件。
+    private func untrust(_ keys: [String], footprint: Footprint) async throws {
         try await withCodex { rpc in
-            let read = try await rpc.call("config/read", ["includeLayers": true])
-            let user = (read["layers"] as? [CodexRPC.Object])?.first { ($0["name"] as? CodexRPC.Object)?["type"] as? String == "user" }
-            let hooks = (user?["config"] as? CodexRPC.Object)?["hooks"] as? CodexRPC.Object ?? [:]
+            let hooks = try await userHooks(rpc) ?? [:]
             let state = hooks["state"] as? CodexRPC.Object ?? [:]
             var edits: [CodexRPC.Object] = keys.map { ["keyPath": "hooks.state.\(Self.quoted($0))", "value": NSNull(), "mergeStrategy": "replace"] }
-            if Set(state.keys).isSubset(of: keys) {
+            if footprint.stateTable == true, Set(state.keys).isSubset(of: keys) {
                 edits.append(["keyPath": "hooks.state", "value": NSNull(), "mergeStrategy": "replace"])
-                if hooks.keys.allSatisfy({ $0 == "state" }) { edits.append(["keyPath": "hooks", "value": NSNull(), "mergeStrategy": "replace"]) }
+                if footprint.hooksTable == true, hooks.keys.allSatisfy({ $0 == "state" }) {
+                    edits.append(["keyPath": "hooks", "value": NSNull(), "mergeStrategy": "replace"])
+                }
             }
             try await rpc.call("config/batchWrite", ["edits": edits])
         }
-        if let left = try? String(contentsOf: configFile, encoding: .utf8), left.allSatisfy(\.isWhitespace) {
+        if !footprint.configFile, let left = try? String(contentsOf: configFile, encoding: .utf8), left.allSatisfy(\.isWhitespace) {
             try FileManager.default.removeItem(at: configFile)
         }
+    }
+
+    /// 用户层 `config.toml` 里的 `[hooks]`（不含别的层与缺省值）；没有为 nil。
+    @MainActor private func userHooks(_ rpc: CodexRPC) async throws -> CodexRPC.Object? {
+        let read = try await rpc.call("config/read", ["includeLayers": true])
+        let user = (read["layers"] as? [CodexRPC.Object])?.first { ($0["name"] as? CodexRPC.Object)?["type"] as? String == "user" }
+        return (user?["config"] as? CodexRPC.Object)?["hooks"] as? CodexRPC.Object
     }
 
     /// 起一个指向这个配置目录的 `codex app-server`，用完关掉并等它退出。
@@ -212,25 +265,32 @@ struct CodexHooks: AgentHookConfig {
 
     // MARK: 就地改写 hooks.json
 
-    /// 删掉 CuePad 的组；某个事件因此没有组了就删掉这个事件，`hooks` 空了也删掉。一次删一处、重新扫描，删法是插入的逆操作。
-    static func removingOurs(from text: Data) throws -> Data {
+    /// 删掉 CuePad 的组；`dropping` 里记着的 CuePad 建的事件数组与 `hooks` 因此空了也删掉（nil：结构都留着，升级时用）。
+    /// 一次删一处、重新扫描，删法是插入的逆操作。
+    static func removingOurs(from text: Data, dropping footprint: Footprint?) throws -> Data {
         var text = text
         while true {
             let tree = try CodexJSONTree(text)
             guard let hooks = tree.root.member("hooks") else { return text }
-            if hooks.members.isEmpty {
-                text = tree.root.removing(member: "hooks", in: text)
+            if let array = hooks.members.first(where: { $0.value.elements?.contains { isOurs($0, in: text) } == true })?.value {
+                text = array.removing(element: array.elements!.firstIndex { isOurs($0, in: text) }!, in: text)
                 continue
             }
-            guard let (event, array) = hooks.members.first(where: { $0.value.elements?.contains { isOurs($0, in: text) } == true }).map({ ($0.key, $0.value) })
-            else { return text }
-            let index = array.elements!.firstIndex { isOurs($0, in: text) }!
-            text = array.elements!.count == 1 ? hooks.removing(member: event, in: text) : array.removing(element: index, in: text)
+            guard let footprint else { return text }
+            if let event = hooks.members.first(where: { footprint.events.contains($0.key) && $0.value.elements?.isEmpty == true })?.key {
+                text = hooks.removing(member: event, in: text)
+            } else if footprint.hooksObject, hooks.members.isEmpty {
+                return tree.root.removing(member: "hooks", in: text)
+            } else {
+                return text
+            }
         }
     }
 
-    /// 把组追加到各事件的数组末尾（没有这个事件、没有 `hooks` 就建上），插入紧凑的 JSON。
-    static func appending(_ groups: [(event: String, group: [String: Any])], to text: Data) throws -> Data {
+    /// 把组追加到各事件的数组末尾（没有这个事件、没有 `hooks` 就建上），插入紧凑的 JSON；一并给出新建了哪些结构。
+    static func appending(
+        _ groups: [(event: String, group: [String: Any])], to text: Data
+    ) throws -> (text: Data, createdHooks: Bool, createdEvents: [String]) {
         func encoded(_ value: Any) throws -> String {
             String(decoding: try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .withoutEscapingSlashes, .fragmentsAllowed]), as: UTF8.self)
         }
@@ -238,22 +298,25 @@ struct CodexHooks: AgentHookConfig {
         guard let hooks = tree.root.member("hooks") else {
             var object: [String: Any] = [:]
             for (event, group) in groups { object[event] = [group] }
-            return tree.root.inserting(member: "\"hooks\":" + (try encoded(object)), in: text)
+            return (tree.root.inserting(member: "\"hooks\":" + (try encoded(object)), in: text), true, groups.map(\.event))
         }
         var edits: [(at: Int, text: String)] = []
+        var created: [(event: String, member: String)] = []
         for (event, group) in groups {
             if let array = hooks.member(event) {
                 edits.append(array.insertion(element: try encoded(group)))
             } else {
-                edits.append(hooks.insertion(member: (try encoded(event)) + ":[" + (try encoded(group)) + "]"))
+                created.append((event, (try encoded(event)) + ":[" + (try encoded(group)) + "]"))
             }
         }
+        // 新建的事件一次插进去（空对象里逐个插会缺逗号）
+        if !created.isEmpty { edits.append(hooks.insertion(member: created.map(\.member).joined(separator: ","))) }
         var result = text
         // 同一位置的插入按原顺序：从后往前插，同位置的后一个先插
         for edit in edits.enumerated().sorted(by: { ($0.element.at, $0.offset) > ($1.element.at, $1.offset) }).map(\.element) {
             result.insert(contentsOf: Data(edit.text.utf8), at: result.startIndex + edit.at)
         }
-        return result
+        return (result, false, created.map(\.event))
     }
 }
 

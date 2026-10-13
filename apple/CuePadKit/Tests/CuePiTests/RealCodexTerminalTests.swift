@@ -19,7 +19,7 @@ struct RealCodexTerminalTests {
             // 在终端里说的话：会话出现在 CuePad 里（不是托管的），做完后歇下
             try terminal.type("Reply with the single word READY.")
             try await eventually("终端会话的回答", timeout: .seconds(120)) {
-                rig.session.map { rig.replies($0).last?.contains("READY") == true && $0.state == .settled } ?? false
+                rig.session.map { rig.replies($0).last?.uppercased().contains("READY") == true && $0.state == .settled } ?? false
             }
             let session = try #require(rig.session)
             #expect(!session.hosted && session.agent == .codex)
@@ -28,7 +28,7 @@ struct RealCodexTerminalTests {
             // 从 CuePad 说：空闲时马上开始，会话文件里认得出是这次投送
             let hello = UUID()
             #expect(try await rig.bridge.send(PiMessage(text: "Reply with the single word PONG.", deliveryID: hello.uuidString), to: id) == .immediate)
-            try await eventually("回答了 CuePad 的话", timeout: .seconds(120)) { rig.replies(session).last?.contains("PONG") == true }
+            try await eventually("回答了 CuePad 的话", timeout: .seconds(120)) { rig.replies(session).last?.uppercased().contains("PONG") == true }
             #expect(try rig.transcript(session).messages.contains { $0.deliveryID == hello && $0.text == "Reply with the single word PONG." })
             try await eventually("终端里也显示了这句话") { terminal.printed("PONG") }
 
@@ -37,7 +37,7 @@ struct RealCodexTerminalTests {
             try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 8") == true }
             #expect(try await rig.bridge.send(PiMessage(text: "Also append the word STEERED to your final reply.", whenBusy: .steer), to: id) == .queued(.steer))
             try await eventually("插话进了这一轮的回答", timeout: .seconds(120)) {
-                rig.bridge.session(id: id)?.state == .settled && rig.replies(session).last?.contains("STEERED") == true
+                rig.bridge.session(id: id)?.state == .settled && rig.replies(session).last?.uppercased().contains("STEERED") == true
             }
 
             // 停止这一轮
@@ -49,7 +49,7 @@ struct RealCodexTerminalTests {
             #expect(rig.replies(session).count == replies)
 
             // 权限确认：终端里不弹框，在 CuePad 里允许后命令照常跑
-            _ = try await rig.bridge.send(PiMessage(text: "Run exactly this shell command (it needs network access, request escalation if the sandbox blocks it): curl -s -o page.html https://example.com"), to: id)
+            _ = try await rig.bridge.send(PiMessage(text: "Run exactly this shell command, requesting escalated sandbox permissions up front because it needs network access: curl -s -o page.html https://example.com"), to: id)
             try await eventually("等你确认", timeout: .seconds(120)) { rig.bridge.session(id: id)?.question?.promptID != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(question.kind == .known(.confirm) && question.text.contains("curl"))
@@ -67,13 +67,20 @@ struct RealCodexTerminalTests {
             }
             try await eventually("压完歇下", timeout: .seconds(60)) { rig.bridge.session(id: id)?.state == .settled }
 
-            // CuePad 晚于终端里的会话启动：从常驻服务里认出它，名字随之读到
+            // CuePad 晚于终端里的会话启动、而它正在跑一轮：从常驻服务里认出它与名字，能插话、能停下这一轮
+            _ = try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 45`, then reply with the single word LATE."), to: id)
+            try await eventually("在跑命令", timeout: .seconds(120)) { rig.bridge.session(id: id)?.detail?.contains("sleep 45") == true }
             let later = PiBridge(socketDirectory: rig.codex.root.appending(path: "s2"))
             try later.start()
             let runtime = CodexRuntime(bridge: later, paths: rig.codex.paths, hooks: rig.hooks, locator: rig.codex.locator)
             try runtime.start()
-            try await eventually("认出了终端里的会话") { later.session(sessionID: session.sessionID)?.displayName == "终端里的会话" }
-            #expect(later.session(sessionID: session.sessionID)?.state == .settled)
+            try await eventually("认出了终端里正在跑的会话") {
+                later.session(sessionID: session.sessionID).map { $0.displayName == "终端里的会话" && $0.state.isWorking } ?? false
+            }
+            let lateID = try #require(later.session(sessionID: session.sessionID)?.id)
+            #expect(try await later.send(PiMessage(text: "Also append the word LATER.", whenBusy: .steer), to: lateID) == .queued(.steer))
+            try await later.abort(lateID)
+            try await eventually("停下了", timeout: .seconds(20)) { later.session(id: lateID)?.state == .settled }
             await runtime.stop()()
             later.stop()
         }
