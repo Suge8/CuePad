@@ -78,6 +78,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 **测试。** Swift Testing。
 - 测试只用替身或不产生按键事件的系统调用，不向其他应用发送键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。
+- 用户可见行为的端到端测试从 `Workspace` 的方法走（界面的按钮、菜单调的就是它），断言库、提示与回复框，写在 `App/Tests/UI` 的流程测试里；接线与长相按 [verify.md](verify.md) 的交互验收验。
 - App 测试经 `TestApp`（`TestSupport.swift`）拿服务：临时库、独立 UserDefaults、私有命名剪贴板与内存热键；后台托管 Pi 用记录型替身（`RecordingHost`）。
 - 等待只有一份（`CueTestSupport`，Kit 与 App 的测试共用）：库里的变化按读取订阅着等（`eventually(store, read)`）；没有事件可订阅的系统异步才用有界条件等待（`eventually { }`）；负向断言（"不会发生"）的固定时长只经 `quietPeriod`。
 - iOS 界面级测试把 `IOSRoot` 挂进宿主的窗口，对窗口截图做文字识别来读屏幕上的字：测试里读屏没开，SwiftUI 不生成读屏元素，读不到。

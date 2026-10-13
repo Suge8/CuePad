@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 用法：xc.sh <build|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
+#       xc.sh run mac [-- 启动参数…]   同 shot 的隔离实例在后台跑着不退（给 bcu 操作），就绪后打印 PID；下次 run/shot 先结束它
 #       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
 #       xc.sh release <mac|ios>   发布（mac：公证 zip 与 appcast 替换到 GitHub Release，可加 --dry-run 只出本地产物；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
 #       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/release.md
@@ -34,6 +35,7 @@ esac
 out="${3:-$DERIVED/shot-$platform.png}"
 launch_args=()
 if [ "$#" -gt 3 ] && [ "$4" = "--" ]; then launch_args=("${@:5}"); fi
+if [ "$cmd" = run ] && [ "${3:-}" = "--" ]; then launch_args=("${@:4}"); fi
 
 case "$platform" in
   mac) destination='platform=macOS,arch=arm64'; products="$DERIVED/Build/Products/Debug" ;;
@@ -85,12 +87,11 @@ wait_ready() {
   return 1
 }
 
-shot_mac() {
-  mkdir -p "$(dirname "$out")"
-  local ready="$DERIVED/shot-ready"
+# 后台启动隔离的 Debug 实例，PID 记进 pidfile、留在 pid（调用方先设好 ready 与 pidfile）。
+start_mac() {
+  local exe="$app/Contents/MacOS/CuePad"
   rm -f "$ready"
-  local exe="$app/Contents/MacOS/CuePad" pidfile="$DERIVED/shot-mac.pid" pid="" wid=""
-  # 上次被中断的截图留下的实例：只结束记录下的那个 PID，并确认它仍是这个产物目录里的 CuePad
+  # 上次被中断的截图或 run 留下的实例：只结束记录下的那个 PID，并确认它仍是这个产物目录里的 CuePad
   if [ -f "$pidfile" ]; then
     pid="$(cat "$pidfile")"
     if [ "$(ps -o comm= -p "$pid" 2>/dev/null)" = "$exe" ]; then
@@ -107,6 +108,19 @@ shot_mac() {
     "$exe" ${launch_args[@]+"${launch_args[@]}"} >"$DERIVED/shot-mac.log" 2>&1 &
   pid=$!
   echo "$pid" > "$pidfile"
+}
+
+run_mac() {
+  local ready="$DERIVED/shot-ready" pidfile="$DERIVED/shot-mac.pid" pid=""
+  start_mac
+  wait_ready "$ready" "kill -0 $pid" || { kill -TERM "$pid" 2>/dev/null; rm -f "$pidfile"; exit 1; }
+  echo "$pid"
+}
+
+shot_mac() {
+  mkdir -p "$(dirname "$out")"
+  local ready="$DERIVED/shot-ready" pidfile="$DERIVED/shot-mac.pid" pid="" wid=""
+  start_mac
   for _ in $(seq 100); do
     wid="$(window_id "$pid")"
     [ -n "$wid" ] && break
@@ -173,5 +187,6 @@ case "$cmd" in
     fi
     exit $status ;;
   shot) xcb -quiet build; "shot_$platform" ;;
+  run) [ "$platform" = mac ] || { echo "run 只有 mac：iOS 模拟器没有可操作的窗口，用 shot" >&2; exit 2; }; xcb -quiet build; run_mac ;;
   *) echo "用法：$0 <build|test|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]" >&2; exit 2 ;;
 esac

@@ -1,6 +1,6 @@
 # CuePad 模块索引
 
-Swift 原生应用（macOS / iOS / iPadOS）。产品说明见 [README.md](README.md)。开发命令与约定见 [docs/development.md](docs/development.md)，改动前先读；碰到下面的事再读对应文件：同步、投送请求、CloudKit 订阅 → [docs/sync.md](docs/sync.md)；界面配色、动效、布局、渲染性能 → [docs/ui.md](docs/ui.md)；截图验收、性能测量、崩溃诊断 → [docs/verify.md](docs/verify.md)；签名、发布、Sparkle、CloudKit 结构部署 → [docs/release.md](docs/release.md)；Pi 桥与 socket 协议 → CuePi README（见下表）。
+Swift 原生应用（macOS / iOS / iPadOS）。产品说明见 [README.md](README.md)。开发命令与约定见 [docs/development.md](docs/development.md)，改动前先读；碰到下面的事再读对应文件：同步、投送请求、CloudKit 订阅 → [docs/sync.md](docs/sync.md)；界面配色、动效、布局、渲染性能 → [docs/ui.md](docs/ui.md)；截图与交互验收、性能测量、崩溃诊断 → [docs/verify.md](docs/verify.md)；签名、发布、Sparkle、CloudKit 结构部署 → [docs/release.md](docs/release.md)；Pi 桥与 socket 协议 → CuePi README（见下表）。
 
 ## 术语
 
