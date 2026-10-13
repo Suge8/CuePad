@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 # 源码约束检查：每条规则是"某写法只准出现在白名单路径里"，命中就列出位置、原因与该用什么，退出 1。
-# xc.sh check 与提交钩子（apple/scripts/hooks）都跑它。只扫 App 与 CuePadKit 的 Swift，// 之后的注释不算。
+# 用法：lint.sh [--staged]   默认查工作区；--staged 查暂存区里的内容（提交钩子用，结论对应实际提交）。xc.sh check 跑默认模式。
+# 只扫 App 与 CuePadKit 的 Swift，// 之后的注释不算。
 # 每条规则的原因与替代只写在它的报错里；新规则先在一个真实违规（历史提交或临时注入）上证明会红再加。
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
+if [ "${1:-}" = --staged ]; then
+  # 把暂存区（钩子里是 git 给的 GIT_INDEX_FILE，部分提交时是临时索引）的 Swift 文件取到临时目录，在那里跑同一组规则。
+  # git 命令在检出根目录跑：钩子里设了 GIT_DIR，git 把当前目录当检出根
+  staged="$(mktemp -d)"
+  trap 'rm -rf "$staged"' EXIT
+  git ls-files -z -- 'apple/App/*.swift' 'apple/CuePadKit/*.swift' | git checkout-index -z --stdin --prefix="$staged/"
+  cd "$staged"
+fi
+cd apple
 
 status=0
 # forbid <原因与替代> <正则（PCRE2）> [白名单路径…]
