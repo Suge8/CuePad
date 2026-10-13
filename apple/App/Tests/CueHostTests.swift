@@ -1,4 +1,5 @@
 #if os(macOS)
+import CuePi
 import CueStore
 import Darwin
 import Foundation
@@ -27,10 +28,10 @@ struct CueHostTests {
             let port = try await model.start()
             let timing = CueTiming(
                 quiet: .milliseconds(500), quietLimit: .seconds(2), talking: .zero, patrolAfter: .seconds(3600), mergeAfter: .seconds(3600),
-                restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], quietHours: [])
-            let scan = CueRuntimeScan(available: [CueRuntimeOption(runtime: .pi, executable: realPi)], path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
+                restarts: [.milliseconds(200), .milliseconds(200), .milliseconds(200)], retryWake: .seconds(1), quietHours: [])
+            let launch = CueLaunch(executable: realPi, path: realPi.deletingLastPathComponent().path + ":/usr/bin:/bin", agents: [])
             app = TestApp(cue: CueDependencies(
-                scan: { scan }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
+                scan: { [CueRuntimeOption(runtime: .pi, executable: realPi)] }, launch: { $0 == .pi ? launch : nil }, helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"), notifier: notifier, timing: timing))
             let agent = app.piPaths.agentDirectory
             try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
             try Data(#"{"providers":{"fake":{"baseUrl":"http://127.0.0.1:\#(port)/v1","api":"openai-completions","apiKey":"fake","models":[{"id":"fake-model","contextWindow":200000}]}}}"#.utf8)
@@ -93,20 +94,20 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// Cue 经工具建任务并开工：执行器在项目文件夹开出会话，按 Cue 指定的模型与思考强度配置后送进草稿。
+    /// Cue 经工具建任务并开工：执行器在项目文件夹开出会话，会话名是任务标题、模型与思考强度是 Cue 指定的（启动参数，一步生效），再送进草稿。
     /// 会话歇下后，攒过安静窗口 Cue 自己醒来，这一轮的动态写成灰色一行（note）。
     @Test func 建任务开工_会话歇下后Cue醒来写动态() async throws {
         let rig = try await Rig()
         try await rig.say("请建个任务并开工")
         try await rig.message(.cue, containing: "办好了")
-        try await eventually("执行器开出会话") { rig.app.host.calls.contains { if case .open(let directory, _) = $0 { directory == rig.folder.path } else { false } } }
+        try await eventually("执行器开出会话") { rig.app.host.calls.contains { if case .open(let directory, _, _, _, _) = $0 { directory == rig.folder.path } else { false } } }
         let session = try #require(rig.app.host.extensions.values.first)
         try await eventually("配置后送进草稿") { session.received.contains("send") }
-        let config = try #require(session.commands.map(\.json).first { $0["t"] as? String == "config" })
-        #expect((config["model"] as? [String: String]) == ["provider": "fake", "id": "fake-model"])
-        #expect(config["thinking"] as? String == "high")
+        #expect(rig.app.host.calls.contains {
+            if case .open(_, _, let name, let model, let thinking) = $0 { name == "修好登录页" && model == "fake/fake-model" && thinking == "high" } else { false }
+        })
         #expect(session.messages.first?.text == "把登录页修好")
-        #expect(session.received.firstIndex(of: "config")! < session.received.firstIndex(of: "send")!)
+        #expect(!session.received.contains("config"))
 
         // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
         let task = try #require(try await rig.store.cueBoard().first?.task)
@@ -127,6 +128,53 @@ struct CueHostTests {
         try await rig.message(.cue, containing: "办好了")
         try await rig.store.answerCueMessage(question.id, answer: "B")
         try await rig.message(.cue, containing: "知道了：B")
+        try await rig.store.answerCueMessage(question.id, answer: "A")  // 改了主意
+        try await rig.message(.cue, containing: "知道了：A")
+        await rig.stop()
+    }
+
+    /// Cue 自己醒来的一轮出错：出错写成一条 Cue 的消息，基线不前移；隔一会儿再醒一次，那次看到的还是同一处变化。
+    @Test func 自己醒来出错后隔一会儿重试() async throws {
+        let rig = try await Rig()
+        try await rig.say("请建个任务并开工")
+        try await rig.message(.cue, containing: "办好了")
+        try await eventually("执行器开出会话") { !rig.app.host.extensions.isEmpty }
+        let session = try #require(rig.app.host.extensions.values.first)
+        let task = try #require(try await rig.store.cueBoard().first?.task)
+        try await rig.store.linkCard(task.id, toSession: session.sessionID)
+        try await rig.store.updateCard(task.id) { $0.body = "修好登录页 先出一次错" }  // 标题进信封：假模型据此第一次报错
+        session.setState(["kind": "thinking"])
+        session.setState(["kind": "idle"])
+        try await rig.message(.cue, containing: "bad things happened")
+        try await rig.message(.note, containing: "登录页那边歇下了")
+        await rig.stop()
+    }
+
+    /// 大脑在一轮中途被杀：这一轮里交出去的你的话退回，重起后重新交给新的大脑，照常回答。
+    @Test func 一轮中途被杀_你的话重新交出() async throws {
+        let rig = try await Rig()
+        let first = try #require(rig.brainPIDs.first)
+        try await rig.say("请慢慢想")
+        try await eventually("交给了大脑") { try await rig.store.undeliveredCueMessages().isEmpty }
+        try await eventually("Cue 在想") { rig.services.cue.state == .thinking }
+        kill(first, SIGKILL)
+        try await rig.message(.cue, containing: "收到：请慢慢想")
+        #expect(!rig.brainPIDs.contains(first))
+        await rig.stop()
+    }
+
+    /// 开新会话时模型不对：Pi 起来就退出，带着 Pi 的原话报错，桥上不留会话。
+    @Test func 开新会话模型无效时整体失败() async throws {
+        let rig = try await Rig()
+        let paths = rig.app.piPaths
+        let bridge = PiBridge(socketDirectory: paths.socketDirectory)
+        try bridge.start()
+        let host = PiHost(bridge: bridge, paths: paths)
+        await #expect(throws: PiHostError.exited(#"Error: Model "nope/x" not found. Use --list-models to see available models."#)) {
+            _ = try await host.open(in: rig.folder, launchToken: "t", name: "修登录页", model: PiModelKey(provider: "nope", id: "x"), executable: realPi)
+        }
+        #expect(bridge.sessions.isEmpty)
+        bridge.stop()
         await rig.stop()
     }
 
@@ -154,10 +202,20 @@ struct CueHostTests {
 }
 
 /// 本进程里的假 OpenAI chat completions 端点（流式）：按最后一条消息照剧本回，用量固定为 `usage` 个输入 token。
+/// 剧本里有的只演第一次（`once`）：第一次出错、第一次不回（连接挂着，等大脑被杀）。
 nonisolated final class FakeModel: Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "fake-model")
     private let usage: Int
+    private let played = Mutex<Set<String>>([])
+    /// 不回的请求的连接：留着，免得释放时断开
+    private let hung = Mutex<[NWConnection]>([])
+
+    private enum Reply {
+        case delta([String: Any], finish: String)
+        case error(String)
+        case hang
+    }
 
     init(usage: Int) throws {
         let parameters = NWParameters.tcp
@@ -210,7 +268,15 @@ nonisolated final class FakeModel: Sendable {
 
     private func respond(_ connection: NWConnection, _ body: Data) {
         let request = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] ?? [:]
-        let (delta, finish) = Self.script(request)
+        let delta: [String: Any], finish: String
+        switch script(request) {
+        case .hang: return hung.withLock { $0.append(connection) }
+        case .error(let message):
+            let json = String(decoding: try! JSONSerialization.data(withJSONObject: ["error": ["message": message, "type": "invalid_request_error"]]), as: UTF8.self)
+            let out = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(json.utf8.count)\r\nConnection: close\r\n\r\n" + json
+            return connection.send(content: Data(out.utf8), completion: .contentProcessed { _ in connection.cancel() })
+        case .delta(let value, let reason): (delta, finish) = (value, reason)
+        }
         var out = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n"
         let usage: [String: Any] = ["prompt_tokens": usage, "completion_tokens": 5, "total_tokens": usage + 5]
         for choice in [["index": 0, "delta": delta] as [String: Any], ["index": 0, "delta": [String: Any](), "finish_reason": finish]] {
@@ -223,14 +289,16 @@ nonisolated final class FakeModel: Sendable {
     }
 
     /// 剧本：看最后一条消息。工具的结果——建好了任务就开工，否则说"办好了"；你的话与信封——按关键词调工具或回一句。
-    private static func script(_ request: [String: Any]) -> (delta: [String: Any], finish: String) {
+    private func once(_ key: String) -> Bool { played.withLock { $0.insert(key).inserted } }
+
+    private func script(_ request: [String: Any]) -> Reply {
         let tools = (request["tools"] as? [[String: Any]] ?? []).compactMap { ($0["function"] as? [String: Any])?["name"] as? String }
         func tool(_ suffix: String) -> String { tools.first { $0.hasSuffix(suffix) } ?? suffix }
-        func call(_ suffix: String, _ arguments: [String: Any]) -> (delta: [String: Any], finish: String) {
+        func call(_ suffix: String, _ arguments: [String: Any]) -> Reply {
             let json = String(decoding: try! JSONSerialization.data(withJSONObject: arguments), as: UTF8.self)
-            return (["role": "assistant", "tool_calls": [["index": 0, "id": "call-\(UUID().uuidString.prefix(8))", "type": "function", "function": ["name": tool(suffix), "arguments": json]]]], "tool_calls")
+            return .delta(["role": "assistant", "tool_calls": [["index": 0, "id": "call-\(UUID().uuidString.prefix(8))", "type": "function", "function": ["name": tool(suffix), "arguments": json]]]], finish: "tool_calls")
         }
-        func say(_ text: String) -> (delta: [String: Any], finish: String) { (["role": "assistant", "content": text], "stop") }
+        func say(_ text: String) -> Reply { .delta(["role": "assistant", "content": text], finish: "stop") }
 
         let last = (request["messages"] as? [[String: Any]])?.last ?? [:]
         let text: String = switch last["content"] {
@@ -249,7 +317,11 @@ nonisolated final class FakeModel: Sendable {
         if text.contains("memory renew 写交接") { return call("memory", ["action": "renew", "handoff": "交接：在跟登录页"]) }
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "prompt": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "先做哪个？", "choices": ["A", "B"]]) }
-        if text.contains("醒来：跟进的会话有动静") { return say("登录页那边歇下了") }
+        if text.contains("请慢慢想"), once("hang") { return .hang }
+        if text.contains("醒来：跟进的会话有动静") {
+            if text.contains("先出一次错"), once("error") { return .error("bad things happened") }
+            return say("登录页那边歇下了")
+        }
         if text.contains("醒来：刚启用") { return say("我看了一眼") }
         return say("收到：" + (text.split(separator: "\n").last.map(String.init) ?? ""))
     }

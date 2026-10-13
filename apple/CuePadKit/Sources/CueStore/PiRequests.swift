@@ -86,14 +86,18 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
   /// 开场的话（可空）。
   public var prompt: String?
   public var token: String
-  /// 开好后换成的模型与思考强度（可选，nil 用 Pi 的默认）。强度是更新版本的新值时整条读不出，按不认识的请求失败。
+  /// 会话名、模型与思考强度（可选，nil 用 Pi 的默认），作为 Pi 的启动参数一起生效。强度是更新版本的新值时整条读不出，按不认识的请求失败。
+  public var name: String?
   public var model: PiModelKey?
   public var thinking: PiThinkingLevel?
 
-  public init(project: UUID, prompt: String?, token: String, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil) {
+  public init(
+    project: UUID, prompt: String?, token: String, name: String? = nil, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil
+  ) {
     self.project = project
     self.prompt = prompt
     self.token = token
+    self.name = name
     self.model = model
     self.thinking = thinking
   }

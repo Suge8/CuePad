@@ -162,17 +162,15 @@ final class MacExecutor {
     // MARK: 不指向某个会话的请求（都不写发送记录）
 
     /// 开新会话：在后台托管（`PiHost`），目录由本机按项目绑定的文件夹解析（新会话的目录只由项目绑定推出）；
-    /// 带上发起方的认领标识，连上后先换成请求指定的模型与思考强度（`PiLaunch.model` / `thinking`，经扩展的 config），
-    /// 再把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它）。
+    /// 带上发起方的认领标识与会话名、模型、思考强度（Pi 的启动参数，一步生效：模型无效时 Pi 起不来，请求整体失败、不留会话），
+    /// 连上后把开场的话作为第一条消息送进去（带着这条请求的 id，对话据此认出它）。
     private func startSession(_ request: DeliveryRequest) async throws {
         guard let launch = request.launch else { throw SendError.unsupportedMode(request.mode.rawValue) }  // 更新版本写的新内容
         let directory = try await directory(of: .project(launch.project))
         try requireDirectory(directory)
         guard let executable = await locatePi() else { throw SendError.piNotInstalled }
-        let id = try await host.open(in: directory, launchToken: launch.token, executable: executable)
-        if launch.model != nil || launch.thinking != nil {
-            try await pi.configure(model: launch.model, thinking: launch.thinking, in: id)
-        }
+        let id = try await host.open(
+            in: directory, launchToken: launch.token, name: launch.name, model: launch.model, thinking: launch.thinking, executable: executable)
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
             // 开场的话是存储格式（可带卡片里的图片）
             let content = SendContent(stored: opening)

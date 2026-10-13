@@ -19,8 +19,10 @@ enum CueState: Equatable {
 
 /// 管理器的外部依赖；`MacDependencies.cue` 给出，测试换成替身。
 struct CueDependencies {
-    /// 查本机能用的运行时（生产是 `CueRuntimes.scan`）
-    var scan: @Sendable () async -> CueRuntimeScan
+    /// 查本机装了且登录了的运行时（生产是 `CueRuntimes.scan`，慢）
+    var scan: @Sendable () async -> [CueRuntimeOption]
+    /// 起大脑前找可执行文件等（生产是 `CueRuntimes.launch`，不问登录）
+    var launch: @Sendable (CueRuntime) async -> CueLaunch?
     /// App 里的 `cuepad` 命令行：Cue 的 MCP 服务
     var helper: URL
     var notifier: any CueNotifying
@@ -37,7 +39,9 @@ protocol CueNotifying: AnyObject {
 /// - 启用：按 `CueRuntimes.order` 选第一家装了且登录了的运行时，写 `cueProfile`（住这台 Mac、默认模型、低思考强度）；
 ///   另一台 Mac 启用就是接管，这台看到 `hostID` 变了就停下。停用只清 `enabledAt`。
 /// - Cue 住在这台 Mac 且已启用时起一个 `CueKeeper` 值班；名字、运行时、模型、强度变了就换一个（新班次）。
-/// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只在值班的这台 Mac 上、Cue 页没开着、本地 8–23 点之间推。
+/// - 本机运行时的登录状态（`runtimes`）只在启用、换运行时与大脑起不来时重新查（状态命令慢）。
+/// - 通知只推"等你"（带选项的 Cue 消息）与 urgent 的 Cue 消息，只由值班的这台 Mac 判断：Cue 页没开着、本地 8–23 点之间，
+///   这台 Mac 发本机通知，并给消息置推送标志（`CueStore.flagCueMessageForPush`），手机由服务端订阅推送（见 `AlertSubscriptions`）。
 @Observable
 final class CueService {
     private(set) var state: CueState = .asleep
@@ -54,6 +58,8 @@ final class CueService {
     @ObservationIgnored private let piAgentDirectory: URL
     @ObservationIgnored private let dependencies: CueDependencies
     @ObservationIgnored private var duty: (shift: Shift, keeper: CueKeeper, task: Task<Void, Never>)?
+    /// 上次看到的设置里的运行时：变了就重新查本机的运行时
+    @ObservationIgnored private var lastRuntime: Open<CueRuntime>?
     private static let log = Logger(subsystem: AppServices.bundleID, category: "cue")
 
     /// 换了就要新班次的设置。
@@ -81,7 +87,7 @@ final class CueService {
 
     /// 让 Cue 住在这台 Mac 并启用（另一台 Mac 上的会停下）。
     func enable() async throws {
-        guard let pick = await refreshRuntimes().available.first else { throw EnableError.noRuntime }
+        guard let pick = await refreshRuntimes().first else { throw EnableError.noRuntime }
         try await store.updateCueProfile { [hostID] profile in
             profile.hostID = hostID
             profile.runtime = .known(pick.runtime)
@@ -96,10 +102,10 @@ final class CueService {
     }
 
     @discardableResult
-    func refreshRuntimes() async -> CueRuntimeScan {
-        let scan = await dependencies.scan()
-        runtimes = scan.available.map(\.runtime)
-        return scan
+    func refreshRuntimes() async -> [CueRuntimeOption] {
+        let available = await dependencies.scan()
+        runtimes = available.map(\.runtime)
+        return available
     }
 
     func requestOpen() { pendingOpen = true }
@@ -129,13 +135,16 @@ final class CueService {
     }
 
     private func apply(_ profile: CueProfile?) async {
+        if let runtime = profile?.runtime, let last = lastRuntime, runtime != last { Task { await refreshRuntimes() } }
+        lastRuntime = profile?.runtime ?? lastRuntime
         guard let profile, profile.hostID == hostID, profile.enabledAt != nil else { return await endDuty() }
         let shift = Shift(name: profile.name, runtime: profile.runtime, model: profile.model, effort: profile.effort)
         guard duty?.shift != shift else { return }
         await endDuty()
         let keeper = CueKeeper(
             CueKeeper.Setup(
-                store: store, profile: profile, scan: dependencies.scan, helper: dependencies.helper, library: library,
+                store: store, profile: profile, launch: dependencies.launch,
+                startFailed: { [weak self] in Task { await self?.refreshRuntimes() } }, helper: dependencies.helper, library: library,
                 piAgentDirectory: piAgentDirectory, directory: library.appending(path: "Cue", directoryHint: .isDirectory), timing: dependencies.timing)
         ) { [weak self] in self?.state = $0 }
         state = .idle
@@ -165,6 +174,11 @@ final class CueService {
             let name = (try? await store.cueProfile())?.name ?? CueProfile.defaultName
             for message in fresh {
                 await dependencies.notifier.post(id: message.id, title: name, body: CueFormat.plainText(message.text))
+                do {
+                    try await store.flagCueMessageForPush(message.id)
+                } catch {
+                    Self.log.error("Cue 消息没能标上手机推送：\(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }

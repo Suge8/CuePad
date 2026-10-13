@@ -16,7 +16,7 @@ extension CueStore {
       let now = Date.stamp
       let message = CueMessage(
         id: UUID(), author: .known(author), text: text, choices: options?.isEmpty == false ? options : nil, urgent: urgent, taskID: task,
-        answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: now, modifiedAt: now)
+        answer: nil, answeredAt: nil, deliveredAt: nil, createdAt: now, modifiedAt: now, notify: false)
       try insert(message)
       try registerImages(in: text)
       return message
@@ -32,13 +32,33 @@ extension CueStore {
     }
   }
 
-  /// 这些你的消息已交给 Cue 的大脑（Cue 住的那台 Mac 写）。已记过的不改。
+  /// 这些你的消息、"等你"上的回答已交给 Cue 的大脑（Cue 住的那台 Mac 写）。已记过的不改，回答在那之后改过的再记一次。
   public func markCueMessagesDelivered(_ ids: [UUID], at time: Date = .now) throws {
     guard !ids.isEmpty else { return }
     try write {
       try db.run(
-        "UPDATE cueMessages SET deliveredAt = ?1, modifiedAt = ?2 WHERE id IN (SELECT value FROM json_each(?3)) AND deliveredAt IS NULL",
-        [time, Date.stamp, Self.idList(ids)])
+        """
+        UPDATE cueMessages SET deliveredAt = ?1, modifiedAt = ?2 WHERE id IN (SELECT value FROM json_each(?3))
+          AND (deliveredAt IS NULL OR (answeredAt IS NOT NULL AND answeredAt > deliveredAt))
+        """, [time, Date.stamp, Self.idList(ids)])
+    }
+  }
+
+  /// 交出去的这些没被 Cue 读完（大脑在那一轮中途退出）：清掉送达，下一个大脑重新交。
+  public func unmarkCueMessagesDelivered(_ ids: [UUID]) throws {
+    guard !ids.isEmpty else { return }
+    try write {
+      try db.run(
+        "UPDATE cueMessages SET deliveredAt = NULL, modifiedAt = ?1 WHERE id IN (SELECT value FROM json_each(?2)) AND deliveredAt IS NOT NULL",
+        [Date.stamp, Self.idList(ids)])
+    }
+  }
+
+  /// 要推到手机：置推送标志（值班的 Mac 按通知规则调用；见 `CueMessage.notify`）。
+  public func flagCueMessageForPush(_ id: UUID) throws {
+    try write {
+      try db.run(
+        "UPDATE cueMessages SET notify = ?1, modifiedAt = ?2 WHERE id = ?3 AND notify IS NULL", [CueMessage.notifyFlag, Date.stamp, id])
     }
   }
 
@@ -50,6 +70,13 @@ extension CueStore {
   /// 你说了、还没交给 Cue 的大脑的消息，从早到晚。
   public func undeliveredCueMessages() throws -> [CueMessage] {
     try select(CueMessage.self, where: "author = 'you' AND deliveredAt IS NULL", orderBy: "createdAt, rowid")
+  }
+
+  /// "等你"上你的回答还没交给 Cue 的大脑的（没交过，或交过之后改了），从早到晚。
+  public func undeliveredCueAnswers() throws -> [CueMessage] {
+    try select(
+      CueMessage.self, where: "author = 'cue' AND answeredAt IS NOT NULL AND (deliveredAt IS NULL OR deliveredAt < answeredAt)",
+      orderBy: "createdAt, rowid")
   }
 
   /// 在等你回答的消息（`CueMessage.isWaiting`），从早到晚。

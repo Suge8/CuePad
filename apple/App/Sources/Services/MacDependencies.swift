@@ -45,6 +45,7 @@ struct MacDependencies {
             pasteboard: .general,
             cue: CueDependencies(
                 scan: { [runtimes = CueRuntimes(piAgentDirectory: paths.agentDirectory)] in await runtimes.scan() },
+                launch: { [runtimes = CueRuntimes(piAgentDirectory: paths.agentDirectory)] in await runtimes.launch($0) },
                 helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"),
                 notifier: location.isIsolated ? LoggedCueNotifier() : SystemCueNotifier()))
     }

@@ -20,6 +20,8 @@ nonisolated struct CueTiming: Sendable {
     var mergeAfter: Duration = .seconds(600)
     /// 大脑意外退出或起不来后，第 n 次重试前等多久；都失败就停在"起不来"。
     var restarts: [Duration] = [.seconds(2), .seconds(10), .seconds(60)]
+    /// Cue 自己醒来的一轮出错后，隔这么久再醒一次（只一次）。
+    var retryWake: Duration = .seconds(120)
     /// 这些钟点（本地）不推通知。
     var quietHours: Set<Int> = [23, 0, 1, 2, 3, 4, 5, 6, 7]
 }
@@ -38,8 +40,10 @@ nonisolated struct CueTiming: Sendable {
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
 /// 一轮是谁发起的决定回复写成什么：你发起的（含插进来的话）写成 `cue`，Cue 自己醒来的写成 `note`（折成灰色一行、不推送）。
+/// 基线（变化从哪一刻算起、上次的看板）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。
+/// Cue 自己醒来（5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
 /// 上下文用到 `renewAt` 后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
-/// 连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
+/// 那一轮里交出去的你的话清掉送达、重起后重新交；连续失败超过次数写一条 Cue 消息、停在"起不来"，等你的下一条消息再试。
 final class CueKeeper {
     /// 上下文用到这么多 token 就请 Cue 换新。
     nonisolated static let renewAt = 60_000
@@ -49,7 +53,10 @@ final class CueKeeper {
     struct Setup {
         var store: CueStore
         var profile: CueProfile
-        var scan: @Sendable () async -> CueRuntimeScan
+        /// 找起大脑要的可执行文件等（不问登录）
+        var launch: @Sendable (CueRuntime) async -> CueLaunch?
+        /// 大脑起不来：请 `CueService` 重新查一遍本机的运行时
+        var startFailed: () -> Void
         /// `cuepad` 命令行（MCP 服务）
         var helper: URL
         /// App 正在用的资料库目录：MCP 服务经 `CUEPAD_LIBRARY_DIR` 打开同一个库
@@ -62,9 +69,9 @@ final class CueKeeper {
 
     /// 跨班次、跨 App 重启的对账进度（本机，只给这台 Mac 的管理器用）。
     private nonisolated struct Progress: Codable {
-        /// 上次醒来的时刻：变化从这之后算
+        /// 基线：变化从这之后算（上一次做完的一轮醒来的时刻）
         var since = Date.now
-        /// 上次醒来时看板上的任务；nil 是还没醒过（不比跟进集合）
+        /// 基线时看板上的任务；nil 是还没醒过（不比跟进集合）
         var followed: [UUID]?
         var patrolDay: String?
         var patrols = 0
@@ -72,6 +79,28 @@ final class CueKeeper {
         var patrolledIdle: Date?
         /// 已为哪一次启用（`CueProfile.enabledAt`）醒来过
         var greeted: Date?
+    }
+
+    /// 在跑的一轮。
+    private struct Turn {
+        /// 回复写成谁的
+        var author: CueAuthor
+        /// Cue 自己醒来的这一轮为什么醒、附了什么（出错要退避、重试同一次醒来）；你发起的为 nil
+        var selfStarted: (wake: CueWake, extra: String?)?
+        /// 这一轮里交出去的你的消息与回答：大脑中途退出时清掉送达
+        var delivered: [UUID] = []
+        /// 醒来时的基线候选：这一轮做完且没出错才前移到它
+        var baseline: (since: Date, followed: [UUID])?
+        /// 这一轮报的错（原文）
+        var failure: String?
+    }
+
+    /// Cue 自己醒来的一轮出错了：之后自己醒来先等着，直到 `retryAt`（只一次）或有新变化（晚于 `latest`）。
+    private struct Setback {
+        var latest: Date?
+        var retryAt: Date?
+        var wake: CueWake
+        var extra: String?
     }
 
     private nonisolated enum Input: Sendable {
@@ -97,14 +126,14 @@ final class CueKeeper {
     private(set) var brain: (any CueBrain)?
     private var shift = 0
     private var shiftStart = Date.distantPast
-    /// 这一轮的回复写成谁的；nil 是没有在跑的一轮
-    private var turn: CueAuthor?
+    private var turn: Turn?
     private var contextUsed: Int?
     private var lastTurnEnd = Date.now
     private var failures = 0
     private var restarting = false
     private var stuck: String?
     private var lastFailure: String?
+    private var setback: Setback?
     private var mergesTried: Set<[Int]> = []
     private var window: (first: Date, last: Date, latest: Date)?
     private var timer: Task<Void, Never>?
@@ -159,19 +188,19 @@ final class CueKeeper {
     private func startShift(wake: CueWake? = nil) async {
         restarting = false
         let profile = setup.profile
-        let scan = await setup.scan()
-        guard let runtime = profile.runtime.known, let option = scan.option(runtime) else {
-            return await broke("这台 Mac 上的 \(profile.runtime.rawValue) 没装或没登录")
+        guard let runtime = profile.runtime.known, let launch = await setup.launch(runtime) else {
+            setup.startFailed()
+            return await broke("这台 Mac 上没有找到 \(profile.runtime.rawValue)")
         }
         do {
             let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
             try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
             let memory = CueMemoryView(try await setup.store.cueMemory())
             let config = CueBrainConfig(
-                runtime: runtime, executable: option.executable, model: profile.model, effort: profile.effort?.known,
-                systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: scan.agents), workingDirectory: work,
+                runtime: runtime, executable: launch.executable, model: profile.model, effort: profile.effort?.known,
+                systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents), workingDirectory: work,
                 mcp: [setup.helper.path, "mcp"],
-                environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, "PI_CODING_AGENT_DIR": setup.piAgentDirectory.path, "PATH": scan.path])
+                environment: ["CUEPAD_LIBRARY_DIR": setup.library.path, "PI_CODING_AGENT_DIR": setup.piAgentDirectory.path, "PATH": launch.path])
             let brain = try await config.startBrain()
             shift += 1
             let id = shift, input = input
@@ -182,17 +211,25 @@ final class CueKeeper {
             mergesTried = []
             Task { for await event in brain.events { input.yield(.brain(id, event)) } }
             Self.log.notice("Cue 第 \(id) 个班次开始（\(runtime.rawValue, privacy: .public)）")
-            if let wake { try await wakeUp(wake, as: .note) }
+            if let wake { _ = try await wakeUp(wake, as: .note) }
         } catch {
+            setup.startFailed()
             await broke(error.localizedDescription)
         }
     }
 
-    /// 大脑起不来或意外退出：退避重试，都失败就停在"起不来"。
+    /// 大脑起不来、发不进去或意外退出：这一轮交出去的你的话清掉送达，退避重试，都失败就停在"起不来"。
     private func broke(_ reason: String) async {
         Self.log.error("Cue 的大脑出了问题：\(reason, privacy: .public)")
         if let brain { await brain.stop() }
         brain = nil
+        if let delivered = turn?.delivered, !delivered.isEmpty {
+            do {
+                try await setup.store.unmarkCueMessagesDelivered(delivered)
+            } catch {
+                Self.log.error("Cue 没读完的消息没能退回：\(error.localizedDescription, privacy: .public)")
+            }
+        }
         turn = nil
         failures += 1
         guard failures <= setup.timing.restarts.count else {
@@ -213,41 +250,57 @@ final class CueKeeper {
         if case .context = event {} else { Self.log.info("Cue 的大脑：\(String(describing: event).prefix(200), privacy: .private)") }
         switch event {
         case .turnStarted:
-            if turn == nil { turn = .cue }  // 没有醒来就开始的一轮只能是插进来的你的话开的
+            if turn == nil { turn = Turn(author: .cue) }  // 没有醒来就开始的一轮只能是插进来的你的话开的
         case .reply(let text):
-            await say(turn ?? .note, text)
+            await say(turn?.author ?? .note, text)
             lastFailure = nil
         case .context(let used, _):
             contextUsed = used
         case .failed(let raw):
+            turn?.failure = raw
             let summary = PiErrorSummary(raw)
             let line = summary.kind == .other ? raw : "\(summary.title)\n\(raw)"  // 认不出的错，摘要只是原文的首行
             guard line != lastFailure else { return }  // 同一个错一轮轮重复（如额度）只说一次
             lastFailure = line
             await say(.cue, "这一轮出错了：\(line)")
         case .turnFinished:
+            guard let finished = turn else { return }
             turn = nil
             lastTurnEnd = .now
             failures = 0
-            await absorbOwnChanges()
+            if let failure = finished.failure {
+                if let woke = finished.selfStarted { await setBack(failure, retrying: woke) }
+            } else {
+                setback = nil
+                await advanceBaseline(finished.baseline)
+            }
         case .exited(let reason):
             brain = nil
-            turn = nil
-            if let reason { await broke("大脑退出了（\(reason)）") }
+            if let reason { await broke("大脑退出了（\(reason)）") } else { turn = nil }
         }
     }
 
-    /// 一轮做完：看板以此刻为准（这一轮里 Cue 自己建的、交还的不算变化）；这一轮里会话的动静留到下次醒来，其余变化（多是 Cue 自己做的）不再报。
-    private func absorbOwnChanges() async {
+    /// 一轮做完、没出错：基线前移到醒来时，看板以此刻为准（这一轮里 Cue 自己建的、交还的不算变化）；
+    /// 这一轮里会话的动静留到下次醒来，其余变化（多是 Cue 自己做的）不再报。
+    private func advanceBaseline(_ baseline: (since: Date, followed: [UUID])?) async {
+        if let baseline { (progress.since, progress.followed) = (baseline.since, baseline.followed) }
         do {
             let changes = try await setup.store.cueChanges(since: progress.since, followed: progress.followed.map(Set.init))
             let sessions: Set<CueChange.Kind> = [.settled, .waitingForUser, .failed, .youSpoke]
             progress.since = changes.filter { sessions.contains($0.kind) }.map(\.at).min()?.addingTimeInterval(-0.001) ?? .now
             progress.followed = try await setup.store.cueBoard().map(\.task.id)
-            save()
         } catch {
             Self.log.error("Cue 读变化失败：\(error.localizedDescription, privacy: .public)")
         }
+        save()
+    }
+
+    /// Cue 自己醒来的一轮出错：第一次出错（且不是额度、登录）隔一会儿再醒一次，否则等新变化。
+    private func setBack(_ failure: String, retrying woke: (wake: CueWake, extra: String?)) async {
+        let latest = try? await setup.store.cueChanges(since: progress.since, followed: progress.followed.map(Set.init)).map(\.at).max()
+        let kind = PiErrorSummary(failure).kind
+        let retry = setback == nil && kind != .quota && kind != .authentication
+        setback = Setback(latest: latest, retryAt: retry ? .now + setup.timing.retryWake.seconds : nil, wake: woke.wake, extra: woke.extra)
     }
 
     // MARK: 对账
@@ -258,9 +311,8 @@ final class CueKeeper {
         guard !restarting else { return }
         do {
             let store = setup.store, now = Date.now
-            let messages = try await store.cueMessages(limit: 50)
             let yours = try await store.undeliveredCueMessages()
-            let answers = messages.filter { $0.author == .known(.cue) && $0.choices != nil && $0.answeredAt != nil && $0.deliveredAt == nil }
+            let answers = try await store.undeliveredCueAnswers()
             if !yours.isEmpty || !answers.isEmpty {
                 if stuck != nil {
                     stuck = nil
@@ -268,18 +320,25 @@ final class CueKeeper {
                     await startShift()
                 }
                 guard let brain else { return }
+                let ids = (yours + answers).map(\.id)
                 let said = (yours.map(\.text) + answers.map(Self.answerLine)).joined(separator: "\n\n")
                 if turn != nil {
-                    try await brain.send(said)
-                    turn = .cue
+                    do {
+                        try await brain.send(said)
+                    } catch {
+                        return await broke("发不进去：\(error.localizedDescription)")
+                    }
+                    turn?.author = .cue
+                    turn?.delivered += ids
                 } else {
-                    try await wakeUp(.message, as: .cue, said: said)
+                    guard try await wakeUp(.message, as: .cue, said: said, delivering: ids) else { return }
                 }
-                try await store.markCueMessagesDelivered((yours + answers).map(\.id))
+                try await store.markCueMessagesDelivered(ids)
                 return
             }
             guard let brain, turn == nil, stuck == nil else { return }
 
+            let messages = try await store.cueMessages(limit: 50)
             if let handoff = messages.last(where: { $0.author == .known(.handoff) && $0.createdAt > shiftStart }) {
                 await brain.stop()
                 self.brain = nil
@@ -289,14 +348,15 @@ final class CueKeeper {
 
             if progress.greeted != setup.profile.enabledAt {
                 progress.greeted = setup.profile.enabledAt
-                return try await wakeUp(.enabled, as: .note)
+                _ = try await wakeUp(.enabled, as: .note)
+                return
             }
 
             let due = try await store.dueCueReminders(at: now)
             if !due.isEmpty {
                 var lines: [CueIndexedLine] = []
                 for line in due { if let index = try await store.cueLineIndex(line.id) { lines.append(CueIndexedLine(index: index, line: line)) } }
-                try await wakeUp(.reminder(lines), as: .note)
+                guard try await wakeUp(.reminder(lines), as: .note) else { return }
                 for line in due { try await store.clearCueReminder(line.id) }
                 return
             }
@@ -306,7 +366,20 @@ final class CueKeeper {
             let timing = setup.timing
             let lastSpoke = messages.last { $0.author == .known(.you) }?.createdAt
             let changes = try await store.cueChanges(since: progress.since, followed: progress.followed.map(Set.init))
-            if let latest = changes.map(\.at).max() {
+            let latest = changes.map(\.at).max()
+            // 出错之后：有新变化就是新事件，照常；没有就等重试的时刻，过了这一次就只等新变化
+            if let held = setback {
+                if let latest, latest > held.latest ?? .distantPast {
+                    setback = nil
+                } else if let retryAt = held.retryAt, now >= retryAt {
+                    setback?.retryAt = nil
+                    window = nil
+                    return _ = try await wakeUp(held.wake, as: .note, selfStarted: true, extra: held.extra)
+                } else {
+                    return schedule([deadlines.min(), held.retryAt].compactMap { $0 }.min())
+                }
+            }
+            if let latest {
                 var current = window ?? (first: now, last: now, latest: latest)
                 if latest > current.latest { (current.last, current.latest) = (now, latest) }
                 window = current
@@ -314,7 +387,7 @@ final class CueKeeper {
                 let ready = max(settled, lastSpoke.map { $0 + timing.talking.seconds } ?? .distantPast)
                 if now >= ready {
                     window = nil
-                    return try await wakeUp(.sessionActivity, as: .note)
+                    return _ = try await wakeUp(.sessionActivity, as: .note, selfStarted: true)
                 }
                 deadlines.append(ready)
             } else {
@@ -327,7 +400,7 @@ final class CueKeeper {
                     progress.patrols = (progress.patrolDay == today ? progress.patrols : 0) + 1
                     progress.patrolDay = today
                     progress.patrolledIdle = lastSpoke ?? setup.profile.enabledAt
-                    return try await wakeUp(.idle, as: .note)
+                    return _ = try await wakeUp(.idle, as: .note, selfStarted: true)
                 }
                 deadlines.append(due)
             }
@@ -337,7 +410,7 @@ final class CueKeeper {
                 let ready = lastTurnEnd + timing.mergeAfter.seconds
                 if now >= ready {
                     mergesTried.insert([merge.lo, merge.hi])
-                    return try await wakeUp(.idle, as: .note, extra: CueMemoryView.mergePrompt(merge))
+                    return _ = try await wakeUp(.idle, as: .note, selfStarted: true, extra: CueMemoryView.mergePrompt(merge))
                 }
                 deadlines.append(ready)
             }
@@ -360,9 +433,12 @@ final class CueKeeper {
         return Calendar.current.nextDate(after: earliest, matching: DateComponents(hour: Self.patrolHours.lowerBound), matchingPolicy: .nextTime)
     }
 
-    /// 发一个信封让 Cue 醒来，这一轮的回复写成 `author` 的。
-    private func wakeUp(_ wake: CueWake, as author: CueAuthor, said: String? = nil, extra: String? = nil) async throws {
-        guard let brain else { return }
+    /// 发一个信封让 Cue 醒来，这一轮的回复写成 `author` 的；`delivering` 是随信封交出去的你的消息与回答。
+    /// 发不进去时按大脑出了问题处理，返回 false。
+    private func wakeUp(
+        _ wake: CueWake, as author: CueAuthor, selfStarted: Bool = false, said: String? = nil, delivering: [UUID] = [], extra: String? = nil
+    ) async throws -> Bool {
+        guard let brain else { return false }
         let store = setup.store, now = Date.now
         let board = try await store.cueBoard()
         let envelope = CueEnvelope.render(CueEnvelope.Input(
@@ -373,18 +449,18 @@ final class CueKeeper {
         if let used = contextUsed, used >= Self.renewAt { parts.append("上下文到了换新线：先用 memory renew 写交接备忘，再结束这一轮。") }
         if let extra { parts.append(extra) }
         if let said { parts.append(said) }
-        turn = author
+        turn = Turn(
+            author: author, selfStarted: selfStarted ? (wake, extra) : nil, delivered: delivering, baseline: (now, board.map(\.task.id)))
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
         do {
             try await brain.send(parts.joined(separator: "\n"))
         } catch {
-            turn = nil
+            turn?.delivered = []  // 还没记送达
             await broke("发不进去：\(error.localizedDescription)")
-            return
+            return false
         }
-        progress.since = now
-        progress.followed = board.map(\.task.id)
         save()
+        return true
     }
 
     private func say(_ author: CueAuthor, _ text: String) async {
