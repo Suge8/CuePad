@@ -50,7 +50,7 @@ nonisolated struct PiSessionList: Sendable, Equatable {
 ///   会话的模型、子代理（角色图标，颜色是它的状态，后接在跑 / 共几个；没有时空着）。要你看的三种状态卡片铺一层很淡的状态色（`PiShown.wash`）。
 ///   已结束的（历史）两层：名字与时长、所在，没有状态标。
 /// - 窄处（`compact`：Mac 侧栏、菜单栏、⌘K、项目页）两层：状态标、名字、时长；状态词接读数（`PiStatusLine`）。
-/// 时长只有一种写法：在这个状态里待了多久（`PiClock.Wording.bare`）。搜索命中在说过的话里时，状态那一层换成命中的那一截。
+/// 时长只有一种写法：在这个状态里待了多久（`PiClock.Style.span`）。搜索命中在说过的话里时，状态那一层换成命中的那一截。
 struct PiSessionRow: View {
     let session: PiSessionState
     /// 所在的项目；按项目筛着时调用方不给（整页不再写所在）。
@@ -106,11 +106,8 @@ struct PiSessionRow: View {
                     if let searchHit {
                         Text(Highlight.matches(searchHit, highlight)).foregroundStyle(palette.ink2)
                     } else if !ended {
-                        Text(shown.label).fontWeight(shown.isColored ? .semibold : .medium).foregroundStyle(shown.labelTint(palette))
-                        if let note = facts.note {
-                            Dot()
-                            Text(note.text).foregroundStyle(note.isFailure ? palette.failure : palette.ink2)
-                        }
+                        StateWord(shown: shown)
+                        if let note = facts.note { Dot(); NoteWord(note: note) }
                     }
                 }
                 .font(style.line)
@@ -121,9 +118,7 @@ struct PiSessionRow: View {
         .contentTransition(.opacity)
         .animation(Motion.quick, value: shown)
         .animation(Motion.quick, value: facts)
-        .padding(.horizontal, 16).padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background { SessionCard(wash: ended ? nil : shown.wash(palette)) }
+        .sessionCard(wash: ended ? nil : shown.wash(palette))
         .accessibilityElement(children: .combine)
     }
 
@@ -158,7 +153,7 @@ struct PiSessionRow: View {
                     .accessibilityLabel(unsent)
             }
             // 时间只占它要的宽度，名字拿剩下的
-            PiElapsed(shown: shown, font: style.meta, wording: .bare).fixedSize()
+            PiElapsed(shown: shown, font: style.meta, style: .span).fixedSize()
         }
     }
 
@@ -193,19 +188,62 @@ extension PiSessionRow: Equatable {
     }
 }
 
-/// Agent 页的会话卡片面：纸色圆角卡片，要你看的状态再铺一层很淡的状态色（`PiShown.wash`），换状态时淡入淡出。
-/// 静态内容卡：不加阴影与描边，靠纸比桌面亮一档分层。
-struct SessionCard: View {
+/// Agent 页的一张会话卡片（会话、合成的"需要 /reload"）：留白、纸色圆角面，要你看的状态再铺一层很淡的状态色（`PiShown.wash`），
+/// 换状态时淡入淡出。静态内容卡：不加阴影与描边，靠纸比桌面亮一档分层。
+struct SessionCard: ViewModifier {
     var wash: Color?
     @Environment(\.palette) private var palette
 
     static let radius: CGFloat = 18
 
-    var body: some View {
+    func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
-        shape.fill(palette.paper)
-            .overlay { shape.fill(wash?.opacity(palette.dark ? 0.08 : 0.07) ?? .clear) }
-            .animation(Motion.quick, value: wash)
+        content
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                // 深色的纸更暗，状态色要浓一点才看得出
+                shape.fill(palette.paper)
+                    .overlay { shape.fill(wash?.opacity(palette.dark ? 0.08 : 0.07) ?? .clear) }
+                    .animation(Motion.quick, value: wash)
+            }
+    }
+}
+
+extension View {
+    func sessionCard(wash: Color? = nil) -> some View { modifier(SessionCard(wash: wash)) }
+}
+
+/// 状态词：带色的状态与状态标同色、加粗一档（`PiShown.labelTint`）。
+private struct StateWord: View {
+    let shown: PiShown
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Text(shown.label).fontWeight(shown.isColored ? .semibold : .medium).foregroundStyle(shown.labelTint(palette))
+    }
+}
+
+/// 状态词后此刻的短词（`PiRowFacts.Note`）：没能结束、没能改名是胭脂。
+private struct NoteWord: View {
+    let note: PiRowFacts.Note
+    @Environment(\.palette) private var palette
+
+    var body: some View { Text(note.text).foregroundStyle(note.isFailure ? palette.failure : palette.ink2) }
+}
+
+/// 子代理在跑 / 共几个（在跑的数是晴蓝）；窄处前面带一个分叉图标（`branch`），整页卡片后面接角色图标。
+private struct SubagentCount: View {
+    let summary: PiSubagentSummary
+    var branch = false
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let running = Text("\(summary.running)").foregroundStyle(summary.running > 0 ? palette.live : palette.ink2).fontWeight(.semibold)
+        let icon = branch ? Text("\(Image(systemName: "arrow.triangle.branch"))\u{2009}") : Text(verbatim: "")
+        Text("\(icon)\(running)/\(summary.total)")
+            .monospacedDigit().foregroundStyle(palette.ink2)
+            .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure).spoken)
     }
 }
 
@@ -275,15 +313,12 @@ private struct SubagentRoster: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            Text("\(Text("\(summary.running)").foregroundStyle(summary.running > 0 ? palette.live : palette.ink2).fontWeight(.semibold))/\(summary.total)")
-                .monospacedDigit().foregroundStyle(palette.ink2).fixedSize().padding(.trailing, 2)
+            SubagentCount(summary: summary).fixedSize().padding(.trailing, 2)
             ForEach(Array(summary.lineup.prefix(Self.shown).enumerated()), id: \.offset) { _, agent in
-                Image(systemName: agent.roleSymbol).imageScale(.small).foregroundStyle(color(agent))
+                Image(systemName: agent.roleSymbol).imageScale(.small).foregroundStyle(color(agent)).accessibilityHidden(true)
             }
         }
         .frame(minWidth: 0, alignment: .leading).clipped()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure).spoken)
     }
 
     private func color(_ agent: PiSubagentState) -> Color {
@@ -292,23 +327,15 @@ private struct SubagentRoster: View {
 }
 
 /// 窄处的状态一行：状态色的状态词 → 此刻的短词 → 子代理在跑 / 共几个 → 上下文用了多少。放不下的从后往前整项丢掉（`FactsLayout`）。字号由外面给。
-struct PiStatusLine: View {
+private struct PiStatusLine: View {
     let shown: PiShown
     let facts: PiRowFacts
-    @Environment(\.palette) private var palette
 
     var body: some View {
         FactsLayout {
-            Text(shown.label).fontWeight(shown.isUnread ? .semibold : .medium).foregroundStyle(shown.labelTint(palette)).fact()
-            if let note = facts.note {
-                Text(note.text).foregroundStyle(note.isFailure ? palette.failure : palette.ink2).fact()
-            }
-            if let subagents = facts.subagents {
-                Text("\(Image(systemName: "arrow.triangle.branch"))\u{2009}\(Text("\(subagents.running)").foregroundStyle(subagents.running > 0 ? palette.live : palette.ink2).fontWeight(.semibold))/\(subagents.total)")
-                    .monospacedDigit().foregroundStyle(palette.ink2)
-                    .accessibilityLabel(Dotted(subagents.lead, subagents.tail, subagents.failure).spoken)
-                    .fact()
-            }
+            StateWord(shown: shown).fact()
+            if let note = facts.note { NoteWord(note: note).fact() }
+            if let subagents = facts.subagents { SubagentCount(summary: subagents, branch: true).fact() }
             if let context = facts.context { ContextFact(meter: context).fact() }
         }
         .lineLimit(1)

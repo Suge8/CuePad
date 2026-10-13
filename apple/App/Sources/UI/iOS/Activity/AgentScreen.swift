@@ -57,7 +57,7 @@ struct AgentScreen: View {
         List {
             if let list = model.list { sessions(list) }
         }
-        // 每个会话一张卡片（`SessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
+        // 每个会话一张卡片（`sessionCard`）：平铺列表、行不画底，分组标题是普通的行（平铺列表的分组标题会吸顶）
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         // 与书架同一页边距与顶距：顶上不留分组列表默认的空白，只让出搜索那一排下面统一的一小段
@@ -135,8 +135,7 @@ struct AgentScreen: View {
                         case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
                         case .reload(let items):
                             PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                                .background { SessionCard() }
+                                .sessionCard()
                                 .cardRow()
                             if model.reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
                         }

@@ -88,14 +88,13 @@ struct AgentPage: View {
         } else {
             if !list.now.isEmpty {
                 title("现在")
-                card {
+                cards {
                     ForEach(list.nowRows) { nowRow in
                         switch nowRow {
                         case .session(let item): row(item, filtered: filtered, end: list.ends[item.id])
                         case .reload(let items):
                             PiReloadFold(count: items.count, expanded: $model.reloadOpen, style: .page)
-                                .padding(.horizontal, 16).padding(.vertical, 14)
-                                .background { SessionCard() }
+                                .sessionCard()
                             if model.reloadOpen { ForEach(items) { row($0, filtered: filtered, end: list.ends[$0.id]) } }
                         }
                     }
@@ -105,7 +104,7 @@ struct AgentPage: View {
                 if index == 0 { title("历史") }
                 Text(run.section.title).font(Typography.label).foregroundStyle(palette.ink3)
                     .padding(.horizontal, 4).padding(.top, index == 0 ? 0 : 14).padding(.bottom, 6)
-                card { ForEach(run.items) { row($0, filtered: filtered, end: nil) } }
+                cards { ForEach(run.items) { row($0, filtered: filtered, end: nil) } }
             }
             if model.hasMore {
                 // 滑到这里才读下一页
@@ -121,9 +120,9 @@ struct AgentPage: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// 一组会话卡片（每张自带卡片面，`SessionCard`）。组里的卡片也懒加载：历史的"更早"一组可能有几千张，普通 VStack 会把它们全建出来
+    /// 一组会话卡片（每张自带卡片面，`sessionCard`）。组里的卡片也懒加载：历史的"更早"一组可能有几千张，普通 VStack 会把它们全建出来
     /// （真实库三千条历史滚到底时内存涨到 1.4GB、每读一页卡一两秒）。
-    private func card(@ViewBuilder _ rows: () -> some View) -> some View {
+    private func cards(@ViewBuilder _ rows: () -> some View) -> some View {
         LazyVStack(spacing: 8) { rows() }
     }
 

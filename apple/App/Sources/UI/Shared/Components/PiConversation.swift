@@ -222,7 +222,7 @@ struct PiSessionSubtitle: View {
                 if shown.isLive, shown.clock != nil {
                     Dot().foregroundStyle(palette.ink3)
                     // 整个 App 只有这一个计时到秒：正看着的这个会话
-                    PiElapsed(shown: shown, font: Self.font, precision: .second)
+                    PiElapsed(shown: shown, font: Self.font, style: .header)
                 }
             }
             .font(Self.font)
