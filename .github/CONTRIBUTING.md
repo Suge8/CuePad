@@ -5,7 +5,7 @@ Thanks for your interest in CuePad. This guide covers how to set up the project,
 ## Prerequisites
 
 - macOS with Xcode 27 (the app targets macOS 26 and iOS/iPadOS 27)
-- No developer account is needed: local builds and tests are ad-hoc signed. Only the release commands need App Store Connect credentials (see [docs/development.md](../docs/development.md)).
+- No developer account is needed: local builds and tests are ad-hoc signed. Only the release commands need App Store Connect credentials (see [docs/release.md](../docs/release.md)).
 
 ## Setup and common commands
 
@@ -20,7 +20,7 @@ cd apple/CuePadKit && swift test  # shared package: store, sync, editor, Pi brid
 
 `xc.sh` builds into `apple/.derived/`. If several builds run at once, give each its own directory: `CUEPAD_DERIVED=/tmp/xxx apple/scripts/xc.sh build mac`.
 
-Architecture, conventions, and the screenshot workflow live in [docs/development.md](../docs/development.md).
+Conventions and guardrails are in [AGENTS.md](../AGENTS.md); UI, sync, verification, and release notes are in [docs/](../docs/). Run `apple/scripts/xc.sh check` before committing.
 
 ## Before you open a pull request
 
@@ -30,7 +30,7 @@ Architecture, conventions, and the screenshot workflow live in [docs/development
 
 ## Commit and PR conventions
 
-- Use [Conventional Commits](https://www.conventionalcommits.org): `feat:`, `fix:`, `docs:`, `test:`, `chore:`, `refactor:`.
+- Most commits use a [Conventional Commits](https://www.conventionalcommits.org) type, usually with a scope: `feat(mac): …`, `fix(pi): …`, `chore: …`. The description can be in Chinese or English.
 - Write one logical change per commit.
 - In the PR description, explain what changed and how you verified it.
 

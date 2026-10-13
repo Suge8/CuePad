@@ -31,6 +31,8 @@ enum Schema {
   static let baseVersion = 17
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`。
+  /// 一步里任何会因数据冲突失败的语句（加唯一索引、NOT NULL、按假定的数据形状改写）都会让启动失败、库打不开：
+  /// 要按别的设备已经同步来的、任意形状的数据写。
   static let upgrades: [Upgrade] = [
     // 18：会话记录加上下文余量与斜杠命令清单
     "ALTER TABLE piSessionStates ADD COLUMN context TEXT; ALTER TABLE piSessionStates ADD COLUMN commands TEXT;",

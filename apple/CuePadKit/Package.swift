@@ -1,7 +1,6 @@
 // swift-tools-version: 6.4
 import PackageDescription
 
-// 模块边界见 docs/development.md「代码地图」。
 let package = Package(
     name: "CuePadKit",
     platforms: [.macOS(.v26), .iOS(.v27)],

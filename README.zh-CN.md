@@ -65,7 +65,7 @@ apple/scripts/xc.sh build mac    # 还有 build ios、test mac、shot mac
 cd apple/CuePadKit && swift test
 ```
 
-架构、命令与约定见 [docs/development.md](docs/development.md)。
+命令与开发约定见 [AGENTS.md](AGENTS.md) 与 [docs/](docs/)。
 
 ## 参与贡献
 

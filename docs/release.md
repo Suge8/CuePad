@@ -12,7 +12,7 @@
 
 ## 命令
 
-命令的步骤以 `xc.sh` 与 `scripts/` 下脚本的头注释为准，这里只列入口。发布命令只在没有未提交改动的检出里运行（否则拒绝），产物对应一个提交：共用的主检出常有并行中的改动，发布用单独的干净检出。
+命令的步骤以 `xc.sh` 与 `scripts/` 下脚本的头注释为准，这里只列入口。对外发布（`release`、上传 TestFlight、替换 GitHub Release）只在用户明确要求时做：发出去的包会推给所有用户。发布命令只在没有未提交改动的检出里运行（否则拒绝），产物对应一个提交：共用的主检出常有并行中的改动，发布用单独的干净检出。
 
 | 命令 | 作用 |
 | --- | --- |
@@ -60,10 +60,10 @@ xcrun cktool import-schema $C --validate --file apple/CloudKit/cuepad.ckdb
 xcrun cktool export-schema $C --output-file /tmp/dev.ckdb   # 回读：服务端把字段按字母序排列并补系统字段，逐类型核对字段与权限
 ```
 
-生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构，所以映射再改时重复"生成 → 导入开发环境 → 控制台部署"。发布带新字段或新记录类型的版本前必须先部署：生产容器里写未部署的字段或类型会让整条记录保存失败，Agent 会话状态与预览就同步不上去。
+生产环境只能在 CloudKit 控制台网页点「Deploy Schema Changes」部署开发环境的结构，由用户本人在控制台确认；agent 只做导出、回读与对比（`cktool export-schema --environment production`），不代为部署。映射再改时重复"生成 → 导入开发环境 → 用户在控制台部署"。发布带新字段或新记录类型的版本前先部署：生产容器里写未部署的字段或类型会让整条记录保存失败，这类记录就同步不上去。`release-mac.sh` 发布前回读生产结构与 `cuepad.ckdb` 对比，缺的先部署再发。
 
 生产环境的结构只能增不能删：已下线的记录类型与字段在生成器里（`CloudKitSchema.retiredTypes` / `retiredFields`）照原样声明，客户端不再读写。
 
 订阅也是 schema 的一部分，但不在 `.ckdb` 里，cktool 看不到也导不出：生产环境拒绝客户端创建没部署过的查询订阅（CKErrorDomain 12，底层 BadSyntax 2006），区域与数据库订阅不受限；订阅类型按通知形状匹配（换成 alertBody 的变体会被拒）。所以改订阅的定义要先让开发环境签名的构建在开发容器里保存同样的订阅，再在控制台 Deploy Schema Changes——确认页的 Record Types、Indexes、Security Roles 都显示 0、也不单独列出订阅，但部署照样生效。
 
-`piSessionStates.context`、`piSessionStates.commands`、`piMessages.tools` 与记录类型 `previews` 已于 10-09 在控制台部署到生产（部署时用 `cktool` 回读核对过）。`cards.archivedAt` 未核实：发布前用 `cktool export-schema` 回读生产环境核对，缺的先部署。管理令牌过期时，在钥匙串 `cuepad-cloudkit-management-token` 里更新。
+管理令牌过期时，在钥匙串 `cuepad-cloudkit-management-token` 里更新。

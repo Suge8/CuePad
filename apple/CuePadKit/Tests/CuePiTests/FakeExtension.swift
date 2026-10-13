@@ -5,6 +5,7 @@ import Synchronization
 
 /// 扮演 Pi 里的桥扩展，让客户端测试不依赖 Pi。字节协议见 CuePi 的 README 与 `PiWire`。
 /// 连接与收到的命令在 socket 队列上写、测试里读，放在锁里；`onCommand` 这类配置由测试在启动前设好。
+/// CuePadKit 的桥测试与 App 测试共用这一份：App 工程不同步这个目录，是直接引用这个文件，改名或挪位置要同时改工程文件。
 nonisolated final class FakeExtension: @unchecked Sendable {
     /// 线上的模型对象（`provider`、`id`、`name`、支持的思考强度 `thinking`）
     struct WireModel: Sendable {

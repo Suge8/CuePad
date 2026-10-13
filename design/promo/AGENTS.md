@@ -1,6 +1,6 @@
 # design/promo 物料索引
 
-宣传物料的合成模板与成图。新截图来自 `apple/scripts/xc.sh shot`（隔离演示库，见 docs/development.md），不碰真实用户数据。
+宣传物料的合成模板与成图。新截图来自 `apple/scripts/xc.sh shot`（隔离演示库，见 docs/verify.md），不碰真实用户数据。
 
 ## 产品文案定稿（对外描述的单一事实源）
 

@@ -94,7 +94,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
 
-  /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在顶层任务下（`CueStore.promptHome`），不算一级。
+  /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在叶子下（`CueStore.promptHome`），不算一级。
   public static let maxTaskDepth = 2
 
   public var isTask: Bool { todoAt != nil }

@@ -65,7 +65,7 @@ apple/scripts/xc.sh build mac    # also: build ios, test mac, shot mac
 cd apple/CuePadKit && swift test
 ```
 
-Architecture, commands and conventions: [docs/development.md](docs/development.md).
+Commands and conventions for contributors: [AGENTS.md](AGENTS.md) and [docs/](docs/).
 
 ## Contributing
 
