@@ -45,6 +45,7 @@ public struct PiHistoryIndexer: Sendable {
         let watcher = FSEventsWatcher(root: root) // 先开始监听：回填期间的变化不会丢
         defer { watcher.stop() }
         var live = LiveCache(limit: Self.liveCacheLimit)
+        var excluded: Set<URL> = []
 
         func index(_ file: URL, modified: Date?, remember: Bool) async {
             let base: PiHistoryCheckpoint?
@@ -53,6 +54,10 @@ public struct PiHistoryIndexer: Sendable {
             // 文件已被删除/尚未落盘等：跳过，等下一次变化
             guard let update = try? PiHistory.index(file: file, agent: agent, from: base, transcript: recent, files: files) else { return }
             if remember { live[file] = update.checkpoint }
+            if update.checkpoint.excluded == true {
+                excluded.insert(file)
+                return
+            }
             if update.bytesRead > 0 || base == nil { continuation.yield(.updated(update)) }
         }
 
@@ -64,7 +69,7 @@ public struct PiHistoryIndexer: Sendable {
             if Task.isCancelled { return }
             await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit)
         }
-        continuation.yield(.backfillFinished(sessionFiles: found.map(\.url)))
+        continuation.yield(.backfillFinished(sessionFiles: found.map(\.url).filter { !excluded.contains($0) }))
 
         for await paths in watcher.paths {
             if Task.isCancelled { return }
