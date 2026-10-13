@@ -442,7 +442,7 @@ final class CueKeeper {
         let store = setup.store, now = Date.now
         let board = try await store.cueBoard()
         let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: now, contextUsed: contextUsed, renewAt: Self.renewAt, since: progress.since,
+            now: now, contextUsed: contextUsed, renewAt: Self.renewAt, since: progress.since, projects: try await store.cueProjects(),
             changes: try await store.cueChanges(since: progress.since, followed: progress.followed.map(Set.init)),
             board: board, waiting: try await store.cueMessagesWaitingForYou(), wake: wake, said: nil))
         var parts = [envelope]

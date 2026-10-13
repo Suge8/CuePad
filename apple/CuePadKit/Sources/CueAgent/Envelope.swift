@@ -19,7 +19,7 @@ public enum CueWake: Equatable, Sendable {
 }
 
 /// 交给 Cue 的大脑的一轮输入：一个 `<cue>` 块，你的话（若有）接在块后面。
-/// 块里第一行是"时间 · 上下文 已用 / 换新线"，然后是变化、跟进中、等你、醒来的原因。
+/// 块里第一行是"时间 · 上下文 已用 / 换新线"，然后是项目、变化、跟进中、等你、醒来的原因。
 public enum CueEnvelope {
   public struct Input: Sendable {
     public var now: Date
@@ -29,6 +29,8 @@ public enum CueEnvelope {
     /// 用到这么多 token 就该换新上下文。
     public var renewAt: Int
     public var since: Date
+    /// 所有项目（`CueStore.cueProjects`）：Cue 据此把活放进项目。
+    public var projects: [CueProject]
     public var changes: [CueChange]
     public var board: [CueBoardItem]
     public var waiting: [CueMessage]
@@ -37,7 +39,7 @@ public enum CueEnvelope {
     public var said: String?
 
     public init(
-      now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, since: Date, changes: [CueChange],
+      now: Date, timeZone: TimeZone = .current, contextUsed: Int?, renewAt: Int, since: Date, projects: [CueProject], changes: [CueChange],
       board: [CueBoardItem], waiting: [CueMessage], wake: CueWake, said: String?
     ) {
       self.now = now
@@ -45,6 +47,7 @@ public enum CueEnvelope {
       self.contextUsed = contextUsed
       self.renewAt = renewAt
       self.since = since
+      self.projects = projects
       self.changes = changes
       self.board = board
       self.waiting = waiting
@@ -58,6 +61,8 @@ public enum CueEnvelope {
     calendar.timeZone = input.timeZone
     let used = input.contextUsed.map(tokens) ?? "未知"
     var lines = ["<cue>", "\(stamp(input.now, calendar)) · 上下文 \(used) / 换新线 \(tokens(input.renewAt))"]
+
+    lines.append("项目：" + (input.projects.isEmpty ? "无" : input.projects.map { $0.name + ($0.hasFolder ? "" : "（没绑文件夹）") }.joined(separator: "、")))
 
     let since = calendar.isDate(input.since, inSameDayAs: input.now) ? clock(input.since, calendar) : stamp(input.since, calendar)
     lines.append("变化（\(since) 之后）：" + (input.changes.isEmpty ? "无" : ""))

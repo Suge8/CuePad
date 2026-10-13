@@ -15,6 +15,20 @@ public enum CueHandOff: Equatable, Sendable {
   }
 }
 
+/// Cue 眼里的一个项目（`CueStore.cueProjects`）。
+public struct CueProject: Identifiable, Equatable, Sendable {
+  public var id: UUID
+  public var name: String
+  /// 绑了文件夹（开得了会话）。
+  public var hasFolder: Bool
+
+  public init(id: UUID, name: String, hasFolder: Bool) {
+    self.id = id
+    self.name = name
+    self.hasFolder = hasFolder
+  }
+}
+
 /// 看板上的一件事：Cue 跟进的一个顶层任务。
 public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var task: Card
@@ -244,6 +258,12 @@ extension CueStore {
   }
 
   // MARK: 看板与变化
+
+  /// 所有项目（没进回收站的，顺序同 `projects()`）与有没有绑文件夹（本机或任何一台 Mac）：Cue 据此知道活能放进哪里、哪里开得了会话。
+  public func cueProjects() throws -> [CueProject] {
+    let bound = Set(try db.query("SELECT projectID FROM projectDirectories UNION SELECT projectID FROM directoryBindings") { $0.uuid(0) })
+    return try projects().map { CueProject(id: $0.id, name: $0.name, hasFolder: bound.contains($0.id)) }
+  }
 
   /// Cue 跟进的、没做完的顶层任务（没删除、没归档），按项目与手动顺序。
   public func cueBoard() throws -> [CueBoardItem] {

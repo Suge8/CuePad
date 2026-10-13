@@ -65,6 +65,9 @@ import Testing
     let tools = try #require(try await server.request("tools/list", [:])["tools"] as? [[String: Any]])
     #expect(tools.compactMap { $0["name"] as? String } == ["task", "tell", "memory"])
     #expect(tools.compactMap { ($0["description"] as? String)?.count }.reduce(0, +) <= 2000)
+    // 用户发起的一轮直接回复，不先 tell 一遍
+    let tell = try #require(tools.first { $0["name"] as? String == "tell" }?["description"] as? String)
+    #expect(tell.contains("用户发起的一轮直接回复"))
 
     let added = try await server.call(
       "task", ["action": "add", "title": "重写发布脚本", "project": "演示", "steps": ["调研", "改脚本"], "prompt": "先读 release.sh"])
@@ -91,6 +94,30 @@ import Testing
     #expect(try await store.recallCue("发布前").lines.map(\.line.pinned) == [true])
     _ = try await server.call("memory", ["action": "forget", "line": "#0"])
     #expect(try await store.cueMemory().lines.map { $0.deletedAt != nil } == [true])
+  }
+
+  /// 没给项目建的任务落在未分类：Cue 用 edit 的 project 把它连同步骤与草稿挪进项目，就能开工。
+  @Test(.timeLimit(.minutes(1))) func cueMovesAnUnfiledTaskIntoAProject() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    let project = try await sandbox.project("greet")
+    try await store.setDirectory("/tmp/greet", for: project.id)
+    try await store.updateCueProfile { $0.hostID = "mac-a" }
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+
+    let added = try await server.call("task", ["action": "add", "title": "加问候语", "steps": ["写文案"], "prompt": "先看现有问候"])
+    let taskID = try #require(added["task"] as? String)
+    let task = try #require(UUID(uuidString: taskID))
+    let step = try #require(try await store.children(of: task).first)
+    let draft = try #require(try await store.children(of: step.id).first)
+    #expect(try await store.card(task)?.projectID == nil)
+
+    _ = try await server.call("task", ["action": "edit", "task": taskID, "project": "greet"])
+    for id in [task, step.id, draft.id] { #expect(try await store.card(id)?.projectID == project.id) }
+    _ = try await server.call("task", ["action": "start", "task": taskID])
+    #expect(try await store.deliveryRequests().first?.launch?.project == project.id)
   }
 
   /// 刚启用或巡视时 Cue 看用户手上所有没做完的事：谁在跟进都列，按项目分组、未分类在最后，做完的不列；太多时只列 60 行，说还有几件。
