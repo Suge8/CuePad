@@ -1,0 +1,38 @@
+import CueAgent
+import CueStore
+import CueTestSupport
+import Foundation
+import Testing
+
+/// 记忆视图（OptMem 的读法）：Cue 按"待合并"把块写成摘要之后，视图的行数固定在预算内，一直记着的全列、最新的原样。
+@Suite struct MemoryViewTests {
+  let fixture = try! Fixture()
+  var store: CueStore { fixture.store }
+
+  @Test func mergingWhatTheViewAsksForKeepsItWithinBudget() async throws {
+    for index in 0..<40 {
+      try await store.noteCueLine("第 \(index) 条", source: .cue, pinned: index == 5)
+      try await Task.sleep(for: .milliseconds(2))  // 序号按记下的先后
+    }
+    var view = CueMemoryView(try await store.cueMemory(), budget: 10)
+    #expect(!view.merges.isEmpty)
+
+    for _ in 0..<10 where !view.merges.isEmpty {
+      for merge in view.merges { try await store.setCueSummary(lo: merge.lo, hi: merge.hi, text: "#\(merge.lo)-\(merge.hi - 1) 的摘要") }
+      view = CueMemoryView(try await store.cueMemory(), budget: 10)
+    }
+
+    #expect(view.merges.isEmpty)
+    #expect(view.pinned.map(\.line.text) == ["第 5 条"])
+    #expect(view.entries.count == 9)
+    #expect(view.entries.last == .line(index: 39, text: "第 39 条"))
+    #expect(!view.pinnedOverBudget)
+
+    // 忘掉一条：覆盖它的摘要作废，它所在的块重新拆开、等待合并
+    let forgotten = try #require(try await store.cueLine(at: 1))
+    try await store.forgetCueLine(forgotten.id)
+    let after = CueMemoryView(try await store.cueMemory(), budget: 10)
+    #expect(!after.merges.isEmpty)
+    #expect(!after.entries.contains(.line(index: 1, text: "第 1 条")))
+  }
+}

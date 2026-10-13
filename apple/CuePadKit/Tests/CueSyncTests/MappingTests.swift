@@ -30,6 +30,9 @@ import Testing
     let page = rig.fixture.directory.appending(path: "demo.html")
     try Data("<h1>登录页</h1>".utf8).write(to: page)
     _ = try await store.addPreview(fileAt: page, title: "登录页", sessionID: "s1")
+    try await store.addCueMessage(.cue, text: "要不要升级？", choices: ["要", "不要"], urgent: true, task: card.id)
+    try await store.noteCueLine("发布前先跑检查", source: .you, pinned: true, remindAt: .now.addingTimeInterval(60))
+    try await store.updateCueProfile { $0.hostID = "mac" }
     return (card, hash)
   }
 

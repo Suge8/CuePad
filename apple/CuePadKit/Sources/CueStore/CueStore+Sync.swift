@@ -269,7 +269,7 @@ extension CueStore {
       """
       INSERT INTO \(row.table.rawValue) (\(columns.joined(separator: ", "))) VALUES (\(placeholders))
       ON CONFLICT(id) DO UPDATE SET \(assignments)
-      """, columns.map { row.fields[$0] ?? .null })
+      """, columns.map { column in row.fields[column].flatMap { $0 == .null ? nil : $0 } ?? row.table.missingDefaults[column] ?? .null })
   }
 
   /// 返回被删附件的哈希（提交后回收文件）。
@@ -381,6 +381,7 @@ extension CueStore {
     fields["sortKey"] = .text(SortKey.before(first))
     fields["deletedAt"] = .null
     fields["isPinned"] = .int(0)
+    fields["cueFollows"] = .int(0)
     for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID"] { fields[column] = .null }
     fields["createdAt"] = now.sqlValue
     fields["modifiedAt"] = now.sqlValue

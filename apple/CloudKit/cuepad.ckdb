@@ -33,6 +33,7 @@ DEFINE SCHEMA
         completedAt    INT64,
         piSessionID    STRING,
         archivedAt     INT64,
+        cueFollows     INT64,
         isFavorite     INT64,
         numbering      STRING,
         GRANT WRITE TO "_creator",
@@ -111,6 +112,7 @@ DEFINE SCHEMA
         createdAt     INT64,
         completedAt   INT64,
         modifiedAt    INT64,
+        origin        STRING,
         taskID        STRING,
         partIDs       STRING,
         GRANT WRITE TO "_creator",
@@ -154,6 +156,48 @@ DEFINE SCHEMA
         title         ENCRYPTED STRING,
         byteCount     INT64,
         createdAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cueMessages (
+        "___recordID" REFERENCE QUERYABLE,
+        author        STRING,
+        text          ENCRYPTED STRING,
+        choices       ENCRYPTED STRING,
+        urgent        INT64,
+        taskID        STRING,
+        answer        ENCRYPTED STRING,
+        answeredAt    INT64,
+        deliveredAt   INT64,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cueLines (
+        "___recordID" REFERENCE QUERYABLE,
+        text          ENCRYPTED STRING,
+        pinned        INT64,
+        source        STRING,
+        remindAt      INT64,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        deletedAt     INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cueProfile (
+        "___recordID" REFERENCE QUERYABLE,
+        name          ENCRYPTED STRING,
+        hostID        STRING,
+        runtime       STRING,
+        model         ENCRYPTED STRING,
+        effort        ENCRYPTED STRING,
+        enabledAt     INT64,
         modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"

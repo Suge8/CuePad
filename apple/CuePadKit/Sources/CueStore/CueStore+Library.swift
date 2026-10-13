@@ -187,7 +187,7 @@ extension CueStore {
   /// 提示词挂在哪个任务下：提示词只挂在叶子（没有步骤的任务）下，往有步骤的任务上挂的落到它的第一个没完成的步骤（没有就第一个步骤），
   /// 见 `CardLinks.home(of:)`。不拒绝而是改挂：远端收敛（`CardLinks.repairs`）与结构升级本来就这样处理，本机写入同一个结果，
   /// 界面不必为"挂在有步骤的任务上"另做一条出错的路。`task` 必须是任务。
-  private func promptHome(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
+  func promptHome(_ task: UUID) throws -> UUID { try CardLinks(db, around: [task]).home(of: task) }
 
   /// 叶子的草稿：它下面第一条提示词（不是资料的灵感）；没有为 nil。
   static func draft(of leaf: UUID, in db: SQLite) throws -> UUID? {
@@ -325,7 +325,7 @@ extension CueStore {
 
   /// 把任务改成 `status`（必须在写事务内）；返回改后的状态。已经是它时不动。
   @discardableResult
-  private func applyStatus(_ id: UUID, _ status: TaskStatus) throws -> TaskStatus {
+  func applyStatus(_ id: UUID, _ status: TaskStatus) throws -> TaskStatus {
     guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
     guard let current = card.status else { throw CueStoreError.notATask }
     guard current != status else { return status }
@@ -615,7 +615,7 @@ extension CueStore {
     link.parent == nil ? "parentID IS NULL AND projectID IS ?" : "parentID = ?"
   }
 
-  private static func idList(_ ids: [UUID]) -> String {
+  static func idList(_ ids: some Sequence<UUID>) -> String {
     "[" + ids.map { "\"\($0.uuidString.lowercased())\"" }.joined(separator: ",") + "]"
   }
 }

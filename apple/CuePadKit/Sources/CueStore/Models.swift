@@ -11,13 +11,25 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, deliveryRequests, directoryBindings, piMessages, previews
+  case cueMessages, cueLines, cueProfile, cueSummaries
 }
 
 extension Table {
   /// 进入 iCloud 同步的表；其余是本机表。
   package static let synced: [Table] = [
     .projects, .cards, .sendRecords, .attachments, .piSessionStates, .deliveryRequests, .directoryBindings, .piMessages, .previews,
+    .cueMessages, .cueLines, .cueProfile,
   ]
+
+  /// 远端记录没有这些列（更早的版本写的）时本机落的值：NOT NULL 的列不能写 NULL。
+  var missingDefaults: [String: SQLValue] {
+    switch self {
+    case .cards: ["cueFollows": .int(0)]
+    case .cueMessages: ["urgent": .int(0)]
+    case .cueLines: ["pinned": .int(0)]
+    default: [:]
+    }
+  }
 
   /// 同步的列（CKRecord 的字段）；不含本机列。
   package var columns: [String] {
@@ -33,6 +45,10 @@ extension Table {
     case .directoryBindings: DirectoryBinding.columns
     case .piMessages: PiChatMessage.columns
     case .previews: PiPreview.columns
+    case .cueMessages: CueMessage.columns
+    case .cueLines: CueMemoryLine.columns
+    case .cueProfile: CueProfile.columns
+    case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]
     }
   }
 }
@@ -93,6 +109,9 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var piSessionID: String?
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
+  /// 这件事由 Cue 跟进（否则是你自己）：只有顶层任务能是真，挂到别的任务下、改回灵感时归零（库里的触发器守住，见 `Schema`）。
+  /// 你在 CuePad 里亲自对它的会话说话时也归零（`requestDelivery`）。
+  public internal(set) var cueFollows = false
 
   /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在叶子下（`CueStore.promptHome`），不算一级。
   public static let maxTaskDepth = 2
@@ -354,6 +373,24 @@ public enum CueStoreError: Error, Equatable {
   case previewTooLarge(limit: Int)
   /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
+  /// 会话正在跑一轮，直接发送不写请求：改用马上说（steer）或等它做完再说（followUp）。
+  case sessionBusy
+  /// 叶子还没有会话（参数是叶子标题）。
+  case noSession(String)
+  /// 正在为叶子开新会话，开好前不再开（参数是叶子标题）。
+  case launching(String)
+  /// 任务所在的项目没绑文件夹，开不了会话（参数是项目名；未分类为空）。
+  case noFolder(String)
+  /// 会话此刻没有能从 CuePad 作答的提问。
+  case nothingToAnswer
+  /// 答案不在可选的里面（参数是可选的答案）。
+  case invalidAnswer([String])
+  /// 一条记忆超过 `CueMemoryLine.maxBytes` 字节。
+  case memoryLineTooLong(Int)
+  /// 摘要的区间不是记忆里对齐的 2 的幂区间。
+  case invalidSummaryRange
+  /// Cue 还没启用（没有 `cueProfile`，或没选住在哪台 Mac）。
+  case cueNotEnabled
 }
 
 extension CueStoreError: LocalizedError {
@@ -377,6 +414,15 @@ extension CueStoreError: LocalizedError {
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
+    case .sessionBusy: "会话正在做事，直接发送会被拒：改用马上说，或等它做完再说"
+    case .noSession(let title): "「\(title)」还没有会话，先开工"
+    case .launching(let title): "正在为「\(title)」开会话，等它开好"
+    case .noFolder(let project): project.isEmpty ? "未分类的任务没有文件夹，开不了会话" : "项目「\(project)」没绑文件夹，开不了会话"
+    case .nothingToAnswer: "会话此刻没有等你回答的提问（或只能在 Pi 里答）"
+    case .invalidAnswer(let options): "答案要是其中之一：\(options.joined(separator: " / "))"
+    case .memoryLineTooLong(let limit): "一条记忆最多 \(limit) 字节（UTF-8）"
+    case .invalidSummaryRange: "摘要区间要是记忆里对齐的 2 的幂区间（lo 是 hi - lo 的倍数）"
+    case .cueNotEnabled: "Cue 还没启用"
     }
   }
 }
@@ -400,12 +446,12 @@ extension Card: Record {
   static let table = Table.cards
   static let columns = [
     "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
-    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt",
+    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "cueFollows",
   ]
   var bindings: [any SQLBindable] {
     [
       id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
-      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt,
+      parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, cueFollows,
     ]
   }
   init(row: Row) {
@@ -414,7 +460,7 @@ extension Card: Record {
       variableValues: Self.variables(row.text(4)),
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12), completedAt: row.dateOrNil(13),
-      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15))
+      piSessionID: row.textOrNil(14), archivedAt: row.dateOrNil(15), cueFollows: row.bool(16))
   }
 
   /// 几乎所有卡片没有变量取值（存成 "{}"），不为它们创建解码器。
