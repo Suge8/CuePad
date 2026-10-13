@@ -48,7 +48,8 @@ struct MacDependencies {
                 .pi: PiRuntime(host: PiHost(bridge: pi, paths: paths.pi), locate: { await agents.locatePi() }),
                 .claudeCode: ClaudeCodeRuntime(bridge: pi, paths: paths, hooks: hooks),
                 .codex: CodexRuntime(bridge: pi, paths: paths, hooks: hooks),
-                .opencode: OpenCodeRuntime(bridge: pi, paths: paths, store: store, hostID: hostID),
+                .opencode: OpenCodeRuntime(
+                    bridge: pi, paths: paths, store: store, hostID: hostID, transcriptWindow: PiHistoryPersistence.transcriptWindow),
             ] },
             pasteboard: .general)
     }
