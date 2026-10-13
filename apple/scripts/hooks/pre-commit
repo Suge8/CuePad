@@ -1,0 +1,3 @@
+#!/bin/sh
+# 启用：git config core.hooksPath apple/scripts/hooks（见 xc.sh 头注释）。钩子在检出根目录运行。
+exec apple/scripts/lint.sh

@@ -17,6 +17,7 @@ LIBRARY="$DERIVED/library-perf"
 
 mkdir -p "$DERIVED"
 # 本机 ad-hoc 签名；关掉 hardened runtime，否则 ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
+# shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
 xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration Release \
   -destination 'platform=macOS,arch=arm64' -derivedDataPath "$DERIVED" -quiet build \
   DEVELOPMENT_TEAM= CODE_SIGN_IDENTITY=- CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS-local.entitlements \

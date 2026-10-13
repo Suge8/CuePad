@@ -123,9 +123,7 @@ final class AppSettings {
     func draftPreview(for session: UUID) -> String? { replyDraft(for: session).preview }
 
     init(defaults: UserDefaults, launchArguments: [String: Any] = AppSettings.launchArgumentOverrides) {
-        #if !DEBUG
-        if defaults === UserDefaults.standard { defaults.removeVolatileDomain(forName: UserDefaults.argumentDomain) }
-        #endif
+        DebugHooks.dropLaunchArguments(from: defaults)
         self.defaults = defaults
         func string(_ key: String) -> String? { (launchArguments[key] as? String) ?? defaults.string(forKey: key) }
         theme = string(Key.theme).flatMap(Theme.init(rawValue:)) ?? .system
