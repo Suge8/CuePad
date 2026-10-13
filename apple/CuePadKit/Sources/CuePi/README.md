@@ -25,7 +25,7 @@
 | `state` | 仅状态切换时发送：`state{kind, since(ms), busySince(ms 或 null), …}` |
 | `info` | 变化时只带变了的那几项（没出现的键表示不变，`null` 是新值"没有"，数组项整份替换；`hello` 带全部）。可带：`name`（`/name` 设的会话名）、`firstMessage`（首条用户消息的前 200 个字符）、等你回答的弹窗 `question`、子代理名册 `subagents`、模型配置 `model`/`thinking`/`models`、上下文余量 `context` 与命令清单 `commands`（见下）；都可空 |
 | `ack` | 命令回应：`id`、`ok`、`delivered`（`immediate`/`steer`/`followUp`）或 `error`（`empty`/`bad_request`/`failed: …`） |
-| `quota` | 订阅额度的一次观测（属于账号，不属于会话，见下"订阅额度"）：`provider`、`windows[{seconds, used, resetsAt, model}]`、`complete` |
+| `quota` | 订阅额度的一次观测（属于账号，不属于会话，见下"订阅额度"）：`provider`、`windows[{seconds, used, resetsAt, model, binding}]`、`complete` |
 | `bye` | 扩展主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`）、`undelivered`（受理了却没来得及交给 Pi 的话的投送请求 id，见下"压缩"） |
 
 `state.kind`：`idle`、`thinking`、`outputting`、`tool`（`tool`=最近开始的工具，`tools`=并行中的全部，可选 `detail`=该调用的一句话摘要）、`waiting_user`（`promptKind`、`title`；只覆盖扩展发起的 `ctx.ui` 弹窗）、`delegating`（自己这轮已歇下，还有子代理在飞）、`compacting`（在压缩上下文，`session_before_compact` 到 `session_compact` / `session_compact_failed`；手动 /compact、上下文快满时自动压缩、溢出后压缩再重试都是它）、`done`（`aborted`）、`error`（`error`）。
@@ -81,8 +81,8 @@ CuePad → 扩展（都带 `id`）：
 
 订阅额度：只有 Pi 用 OAuth 订阅登录的 Claude（`anthropic`）与 Codex（`openai-codex`）有额度窗口，其余提供方是按量的 API 密钥，不报。窗口 `seconds` 是长度，`used` 是已用比例（0..1，到顶后可能略超 1），`resetsAt` 是重置时刻（Unix 秒），`model` 是只算某个模型的窗口的显示名（Claude 按模型的周额度，如 `Fable`），算整个账号的为 null。两个来源，都发给所有客户端：
 
-- 回复里带回的（零额外请求）：Claude 每次回复的响应头（`after_provider_response`，当前模型的提供方是 `anthropic` 且带 `anthropic-ratelimit-unified-5h/7d-utilization` 与 `-reset`；API 密钥的回复没有这些头）只有 5 小时与本周，没有按模型的周额度，`complete` 为 false；Codex 流里的 `codex.rate_limits` 事件（`provider_stream_event`，`rate_limits.primary`/`secondary` 的 `used_percent`、`window_minutes`、`reset_at`）是全部窗口，`complete` 为 true。与这个提供方上次发出的完全相同就不发。
-- 查用量接口（`quota` 命令）：Claude `GET https://api.anthropic.com/api/oauth/usage`（头 `anthropic-beta: oauth-2025-04-20`，取 `limits[]` 里 `session`、`weekly_all`、`weekly_scoped`），Codex `GET https://chatgpt.com/backend-api/wham/usage`（头 `ChatGPT-Account-Id` 取自令牌，取 `rate_limit.primary_window`/`secondary_window`），都只读、不耗额度，单个请求 3 秒超时；令牌经 `ctx.modelRegistry.getProviderAuth` 取（Pi 负责刷新），CuePad 不碰 Pi 的登录文件。结果总发（`complete` 为 true），不与上次比较。
+- 回复里带回的（零额外请求）：Claude 每次回复的响应头（`after_provider_response`，当前模型的提供方是 `anthropic` 且带 `anthropic-ratelimit-unified-5h/7d-utilization` 与 `-reset`；API 密钥的回复没有这些头）只有 5 小时与本周，没有按模型的周额度，`complete` 为 false；`anthropic-ratelimit-unified-representative-claim`（`five_hour` / `seven_day`）指的那个窗口带 `binding: true`（提供方说此刻卡着的就是它，CuePad 胶囊的环与总览据此选窗口；其余窗口不带这个键）。Codex 流里的 `codex.rate_limits` 事件（`provider_stream_event`，`rate_limits.primary`/`secondary` 的 `used_percent`、`window_minutes`、`reset_at`）是全部窗口，`complete` 为 true，没有 `binding`。每次观测都发、不去重：值没变的观测也说明刚观测过，写不写库与"更新于"由 CuePad 定（`CueStore.recordQuota`）。
+- 查用量接口（`quota` 命令）：Claude `GET https://api.anthropic.com/api/oauth/usage`（头 `anthropic-beta: oauth-2025-04-20`，取 `limits[]` 里 `session`、`weekly_all`、`weekly_scoped`），Codex `GET https://chatgpt.com/backend-api/wham/usage`（头 `ChatGPT-Account-Id` 取自令牌，取 `rate_limit.primary_window`/`secondary_window`），都只读、不耗额度，单个请求 3 秒超时；令牌经 `ctx.modelRegistry.getProviderAuth` 取（Pi 负责刷新），CuePad 不碰 Pi 的登录文件。结果 `complete` 为 true，没有 `binding`（CuePad 沿用上次响应头的判定）。
 
 扩展只在 `tui` 与 `rpc` 模式启用；`print`/`json`（一次性的 `pi -p`）不开 socket，也就不会出现在会话列表里。
 

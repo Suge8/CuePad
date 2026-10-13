@@ -10,12 +10,39 @@ public struct QuotaWindow: Sendable, Equatable, Codable {
   public var resetsAt: Date
   /// 只算某个模型的窗口（Claude 按模型的周额度，提供方给的显示名，如 "Fable"）；算整个账号的为 nil
   public var model: String?
+  /// 提供方说此刻卡着的就是这个窗口（Claude 响应头的 representative-claim）；提供方没说的（用量接口、Codex）为 false
+  public var isBinding: Bool
 
-  public init(seconds: Int, used: Double, resetsAt: Date, model: String? = nil) {
+  public init(seconds: Int, used: Double, resetsAt: Date, model: String? = nil, isBinding: Bool = false) {
     self.seconds = seconds
     self.used = used
     self.resetsAt = resetsAt
     self.model = model
+    self.isBinding = isBinding
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case seconds, used, resetsAt, model
+    case isBinding = "binding"
+  }
+
+  /// 线上与存储里 `binding` 只在为真时出现。
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    seconds = try c.decode(Int.self, forKey: .seconds)
+    used = try c.decode(Double.self, forKey: .used)
+    resetsAt = try c.decode(Date.self, forKey: .resetsAt)
+    model = try c.decodeIfPresent(String.self, forKey: .model)
+    isBinding = try c.decodeIfPresent(Bool.self, forKey: .isBinding) ?? false
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(seconds, forKey: .seconds)
+    try c.encode(used, forKey: .used)
+    try c.encode(resetsAt, forKey: .resetsAt)
+    try c.encodeIfPresent(model, forKey: .model)
+    if isBinding { try c.encode(true, forKey: .isBinding) }
   }
 
   /// 同一个窗口：长度与模型相同。
@@ -75,8 +102,10 @@ public struct AccountQuota: Identifiable, Equatable, Sendable {
   /// 整个账号的窗口（不含按模型的），从短到长：仪表的外圈到内圈。
   public var accountWindows: [QuotaWindow] { windows.filter { $0.model == nil } }
 
-  /// 卡着的窗口：此刻用得最多的那个。`model` 给了时按模型的周额度也算（只算名字出现在模型 id 或名字里的，如 Fable 之于 claude-fable-5）。
+  /// 卡着的窗口：提供方说了是哪个（`QuotaWindow.isBinding`，Claude）且还没过重置时间就是它；没说（Codex、用量接口刚替换过）
+  /// 或它已重置时，是此刻用得最多的那个。`model` 给了时按模型的周额度也参与比较（只算名字出现在模型 id 或名字里的，如 Fable 之于 claude-fable-5）。
   public func binding(at now: Date, model: String? = nil) -> QuotaWindow? {
+    if let claimed = windows.first(where: { $0.isBinding && now < $0.resetsAt }) { return claimed }
     let model = model?.lowercased()
     return windows.filter { window in
       guard let scope = window.model?.lowercased() else { return true }
@@ -100,10 +129,17 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
     self.complete = complete
   }
 
-  /// 并进已存的窗口，排成 `AccountQuota.windows` 的顺序。
+  /// 并进已存的窗口，排成 `AccountQuota.windows` 的顺序。这次观测没说哪个卡着（用量接口、Codex）时，沿用已存的那个说法：
+  /// 提供方的判定只来自 Claude 的响应头，下一次回复会更新它。
   func merged(into stored: [QuotaWindow]) -> [QuotaWindow] {
-    let kept = complete ? [] : stored.filter { old in !windows.contains { $0.isSameWindow(as: old) } }
-    return (windows + kept).sorted(by: Self.order)
+    var reported = windows
+    if !reported.contains(where: \.isBinding), let claimed = stored.first(where: \.isBinding),
+      let index = reported.firstIndex(where: { $0.isSameWindow(as: claimed) })
+    {
+      reported[index].isBinding = true
+    }
+    let kept = complete ? [] : stored.filter { old in !reported.contains { $0.isSameWindow(as: old) } }
+    return (reported + kept).sorted(by: Self.order)
   }
 
   /// 短的在前；同长的整个账号在前、按模型的按名字在后。
@@ -164,7 +200,7 @@ extension CueStore {
     guard old.count == new.count else { return true }
     func percent(_ window: QuotaWindow) -> Int { Int((window.used * 100).rounded()) }
     return zip(old, new).contains { old, new in
-      !old.isSameWindow(as: new) || percent(old) != percent(new)
+      !old.isSameWindow(as: new) || percent(old) != percent(new) || old.isBinding != new.isBinding
         || abs(old.resetsAt.timeIntervalSince(new.resetsAt)) > AccountQuota.resetTolerance
     }
   }

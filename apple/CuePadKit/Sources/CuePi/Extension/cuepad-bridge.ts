@@ -86,8 +86,9 @@ const QUOTA_PROVIDERS: Record<string, { url: string; headers: (token: string) =>
 	},
 };
 
-/** 一个额度窗口：长度（秒）、已用比例（0..1）、重置时刻（Unix 秒）、只算某个模型时的模型显示名 */
-type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null };
+/** 一个额度窗口：长度（秒）、已用比例（0..1）、重置时刻（Unix 秒）、只算某个模型时的模型显示名；
+ * `binding` 是提供方说此刻卡着的就是它（Claude 响应头的 representative-claim），提供方没说的不带 */
+type QuotaWindow = { seconds: number; used: number; resetsAt: number; model: string | null; binding?: true };
 /** 一个提供方的一次观测；`complete` 是全部窗口（查用量接口得到的），回复里带回的只有一部分 */
 type Quota = { provider: string; windows: QuotaWindow[]; complete: boolean };
 
@@ -104,11 +105,20 @@ function quotaWindow(seconds: number | null, used: number | null, resetsAt: numb
 	return seconds !== null && seconds > 0 && used !== null && used >= 0 && resetsAt !== null ? [{ seconds, used, resetsAt, model }] : [];
 }
 
-/** Claude 每次回复的响应头：5 小时与本周两个窗口（比例 0..1、重置 Unix 秒），没有按模型的周额度。API 密钥的回复没有这些头。 */
+/** Claude 响应头里的窗口：头里的名字、representative-claim 里的名字、长度。 */
+const CLAUDE_HEADER_WINDOWS = [
+	{ header: "5h", claim: "five_hour", seconds: FIVE_HOURS },
+	{ header: "7d", claim: "seven_day", seconds: WEEK },
+] as const;
+
+/** Claude 每次回复的响应头：5 小时与本周两个窗口（比例 0..1、重置 Unix 秒），没有按模型的周额度；representative-claim 指的那个标为卡着的。
+ * API 密钥的回复没有这些头。 */
 function claudeHeaderWindows(headers: Record<string, string>): QuotaWindow[] {
 	const header = (window: string, field: string) => finite(headers[`anthropic-ratelimit-unified-${window}-${field}`]);
-	return [["5h", FIVE_HOURS], ["7d", WEEK]].flatMap(([window, seconds]) =>
-		quotaWindow(seconds as number, header(window as string, "utilization"), header(window as string, "reset")));
+	const claim = headers["anthropic-ratelimit-unified-representative-claim"];
+	return CLAUDE_HEADER_WINDOWS.flatMap((w) =>
+		quotaWindow(w.seconds, header(w.header, "utilization"), header(w.header, "reset"))
+			.map((window): QuotaWindow => w.claim === claim ? { ...window, binding: true } : window));
 }
 
 /** Claude 的用量接口：`limits[]` 里的 5 小时、本周与按模型的周额度（百分比、ISO 时刻）。 */
@@ -407,17 +417,13 @@ export default function (pi: ExtensionAPI) {
 		for (const client of clients) write(client, { t: "info", ...changed });
 	}
 
-	/** 每个提供方上次发出的额度：回复里带回的值多半不变，变了才发 */
-	const sentQuota = new Map<string, string>();
 	/** 正在查的额度：几个客户端同时要时共用这一次 */
 	let quotaFetch: Promise<string[]> | null = null;
 
-	/** 额度不属于会话、属于账号：发给所有客户端，由 CuePad 记到账号上。`fresh`（查用量接口得到的）总发，CuePad 据此刷新"更新于"。 */
-	function reportQuota(quota: Quota, fresh = false) {
+	/** 额度不属于会话、属于账号：每次观测都发给所有客户端（一行，随每次回复），由 CuePad 记到账号上。
+	 * 不在这里去重：值没变的观测也说明刚观测过，"更新于"要跟上；写不写库只由 CuePad 定（`CueStore.recordQuota`）。 */
+	function reportQuota(quota: Quota) {
 		if (clients.size === 0 || quota.windows.length === 0) return;
-		const key = JSON.stringify(quota);
-		if (!fresh && sentQuota.get(quota.provider) === key) return;
-		sentQuota.set(quota.provider, key);
 		for (const client of clients) write(client, { t: "quota", ...quota });
 	}
 
@@ -436,7 +442,7 @@ export default function (pi: ExtensionAPI) {
 		if (!response.ok) throw new Error(`${provider}: HTTP ${response.status}`);
 		const windows = source.parse(await response.json());
 		if (windows.length === 0) throw new Error(`${provider}: unrecognized usage format`);
-		reportQuota({ provider, windows, complete: true }, true);
+		reportQuota({ provider, windows, complete: true });
 		return true;
 	}
 
