@@ -4,6 +4,8 @@ import Foundation
 
 /// Cue 这次为什么醒来。
 public enum CueWake: Equatable, Sendable {
+  /// 刚启用：第一次醒来
+  case enabled
   /// 你发来新消息
   case message
   /// 跟进的会话有动静
@@ -79,6 +81,7 @@ public enum CueEnvelope {
 
   private static func wake(_ wake: CueWake) -> String {
     switch wake {
+    case .enabled: "刚启用"
     case .message: "你发来新消息"
     case .sessionActivity: "跟进的会话有动静"
     case .idle: "空闲，例行看一眼"
@@ -105,8 +108,10 @@ public enum CueEnvelope {
   }
 
   /// 看板上一件事的一行（信封与 peek 共用）。
-  static func boardLine(_ item: CueBoardItem, now: Date) -> String {
+  /// `showingFollower` 写上谁在跟进（看所有事时用；看板上都是 Cue 跟进的，不写）。
+  static func boardLine(_ item: CueBoardItem, now: Date, showingFollower: Bool = false) -> String {
     var parts = ["\(title(item.task))（\(short(item.task.id))）"]
+    if showingFollower { parts.append(item.task.cueFollows ? "你跟进" : "用户自己") }
     if let progress = item.progress { parts.append("步骤 \(progress.done)/\(progress.total)") }
     let state = item.session.map { state($0.state) } ?? (item.launching ? "正在开会话" : "没开工")
     let leaf = item.leaf.id == item.task.id ? "" : "\(title(item.leaf)) › "

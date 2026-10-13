@@ -377,6 +377,8 @@ public enum CueStoreError: Error, Equatable {
   case sessionBusy
   /// 叶子还没有会话（参数是叶子标题）。
   case noSession(String)
+  /// 有步骤的任务还有这么多步骤没完成，不能整件完成。
+  case stepsRemaining(Int)
   /// 正在为叶子开新会话，开好前不再开（参数是叶子标题）。
   case launching(String)
   /// 任务所在的项目没绑文件夹，开不了会话（参数是项目名；未分类为空）。
@@ -416,6 +418,7 @@ extension CueStoreError: LocalizedError {
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
     case .sessionBusy: "会话正在做事，直接发送会被拒：改用马上说，或等它做完再说"
     case .noSession(let title): "「\(title)」还没有会话，先开工"
+    case .stepsRemaining(let count): "还有 \(count) 个步骤没完成"
     case .launching(let title): "正在为「\(title)」开会话，等它开好"
     case .noFolder(let project): project.isEmpty ? "未分类的任务没有文件夹，开不了会话" : "项目「\(project)」没绑文件夹，开不了会话"
     case .nothingToAnswer: "会话此刻没有等你回答的提问（或只能在 Pi 里答）"

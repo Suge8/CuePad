@@ -187,15 +187,22 @@ extension CueStore {
     return try requestStop(of: SendTarget(kind: .piSession, name: state?.title ?? card.title, ref: card.piSessionID), on: state?.hostID ?? host, cue: cue)
   }
 
-  /// 完成叶子并结束它的会话（写结束请求）；返回结束请求，没有会话为 nil。
+  /// 完成一件事并结束它的会话（写结束请求），返回结束请求。叶子直接完成；有步骤的任务要步骤都完成了才行
+  /// （还有没完成的抛 `stepsRemaining`），完成后结束各步骤上还没结束的会话。
   @discardableResult
-  public func completeLeaf(_ leaf: UUID, host: String, cue: Bool = false) throws -> DeliveryRequest? {
-    let card = try requireLeaf(leaf)
-    try write { _ = try applyStatus(leaf, .done) }
-    guard let sessionID = card.piSessionID else { return nil }
-    let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
-    guard state?.state != .known(.ended) else { return nil }
-    return try requestEnd(of: SendTarget(kind: .piSession, name: state?.title ?? card.title, ref: sessionID), on: state?.hostID ?? host, cue: cue)
+  public func completeTask(_ task: UUID, host: String, cue: Bool = false) throws -> [DeliveryRequest] {
+    guard let link = try link(of: task), let card = try find(Card.self, task) else { throw CueStoreError.notFound }
+    guard link.isTask else { throw CueStoreError.notATask }
+    let steps = try select(Card.self, where: "parentID = ? AND todoAt IS NOT NULL AND deletedAt IS NULL", [task], orderBy: "sortKey, id")
+    let remaining = steps.filter { $0.completedAt == nil }.count
+    guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
+    try write { _ = try applyStatus(task, .done) }
+    return try (steps.isEmpty ? [card] : steps).compactMap { leaf in
+      guard let sessionID = leaf.piSessionID else { return nil }
+      let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
+      guard state?.state != .known(.ended) else { return nil }
+      return try requestEnd(of: SendTarget(kind: .piSession, name: state?.title ?? leaf.title, ref: sessionID), on: state?.hostID ?? host, cue: cue)
+    }
   }
 
   /// 这件事由 Cue 跟进（`on`）还是你自己：给步骤也行，记在它的顶层任务上。返回顶层任务。
@@ -240,7 +247,15 @@ extension CueStore {
 
   /// Cue 跟进的、没做完的顶层任务（没删除、没归档），按项目与手动顺序。
   public func cueBoard() throws -> [CueBoardItem] {
-    let tasks = try followedTasks(where: Self.onBoard)
+    try boardItems(try followedTasks(where: Self.onBoard))
+  }
+
+  /// 所有没做完的顶层任务（不论谁在跟进；没删除、没归档），按项目顺序、未分类在最后，同项目按手动顺序：Cue 刚启用和巡视时看你手上有哪些事。
+  public func openTopTasks() throws -> [CueBoardItem] {
+    try boardItems(try topTasks(followedOnly: false, where: Self.onBoard))
+  }
+
+  private func boardItems(_ tasks: [Card]) throws -> [CueBoardItem] {
     guard !tasks.isEmpty else { return [] }
     let links = try CardLinks(db, around: tasks.map(\.id))
     let leaves = try cards(Set(tasks.map { links.home(of: $0.id) }))
@@ -365,10 +380,14 @@ extension CueStore {
   }
 
   private func followedTasks(where condition: String, _ arguments: [any SQLBindable] = []) throws -> [Card] {
+    try topTasks(followedOnly: true, where: condition, arguments)
+  }
+
+  private func topTasks(followedOnly: Bool, where condition: String, _ arguments: [any SQLBindable] = []) throws -> [Card] {
     try db.query(
       """
       SELECT \(Card.columns.map { "t.\($0)" }.joined(separator: ", ")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE t.cueFollows = 1 AND t.parentID IS NULL AND t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (p.id IS NULL OR p.deletedAt IS NULL)
+      WHERE \(followedOnly ? "t.cueFollows = 1 AND" : "") t.parentID IS NULL AND t.todoAt IS NOT NULL AND t.deletedAt IS NULL AND (p.id IS NULL OR p.deletedAt IS NULL)
         AND \(condition)
       ORDER BY t.projectID IS NULL, \(Self.projectOrder("p")), t.sortKey, t.id
       """, arguments

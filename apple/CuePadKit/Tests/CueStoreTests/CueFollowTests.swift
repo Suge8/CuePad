@@ -55,6 +55,24 @@ import Testing
     #expect(changes.map(\.kind) == [.left] && changes.first?.taskID == task.id && changes.first?.detail == "删了")
   }
 
+  /// 用户收下之后 Cue 把整件事完成：还有步骤没做完时不行（说还剩几个）；步骤都做完了，任务完成，各步骤上还在的会话都请它结束。
+  @Test func aTaskWithStepsCompletesOnlyWhenEveryStepIsDone() async throws {
+    let task = try await store.createTask("发布", in: nil)
+    let steps = [try await store.createTask("改脚本", under: task.id), try await store.createTask("跑检查", under: task.id)]
+    let recorder = PiStateRecorder(store: store, hostID: "mac")
+    for (step, session) in zip(steps, ["s1", "s2"]) {
+      try await store.linkCard(step.id, toSession: session)
+      try await recorder.update(sessionID: session, state: .settled, title: session)
+    }
+    try await store.setStatus(steps[0].id, .done)
+    await #expect(throws: CueStoreError.stepsRemaining(1)) { try await store.completeTask(task.id, host: "mac") }
+
+    try await store.setStatus(steps[1].id, .done)
+    let ends = try await store.completeTask(task.id, host: "mac")
+    #expect(try await store.card(task.id)?.status == .done)
+    #expect(Set(ends.compactMap(\.target.ref)) == ["s1", "s2"] && ends.allSatisfy { $0.mode == .known(.end) })
+  }
+
   /// 只有顶层任务能由 Cue 跟进：挂到别的任务下就不再是。
   @Test func aFollowedTaskMovedUnderAnotherIsNoLongerFollowed() async throws {
     let parent = try await store.createTask("上线", in: nil)

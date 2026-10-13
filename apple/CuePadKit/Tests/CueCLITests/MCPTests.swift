@@ -92,5 +92,34 @@ import Testing
     _ = try await server.call("memory", ["action": "forget", "line": "#0"])
     #expect(try await store.cueMemory().lines.map { $0.deletedAt != nil } == [true])
   }
+
+  /// 刚启用或巡视时 Cue 看用户手上所有没做完的事：谁在跟进都列，按项目分组、未分类在最后，做完的不列；太多时只列 60 行，说还有几件。
+  @Test(.timeLimit(.minutes(1))) func cueSeesEveryOpenTaskGroupedByProject() async throws {
+    try #require(FileManager.default.isExecutableFile(atPath: Self.binary.path), "先构建 cuepad 产物：\(Self.binary.path)")
+    let sandbox = try Sandbox()
+    let store = sandbox.store
+    let project = try await sandbox.project("演示")
+    let mine = try await store.createTask("用户自己的事", in: project.id)
+    let followed = try await store.createTask("Cue 跟进的事", in: nil)
+    try await store.setCueFollows(followed.id, true)
+    let done = try await store.createTask("做完的事", in: project.id)
+    try await store.setStatus(done.id, .done)
+    let server = try Server(library: sandbox.directory)
+    defer { server.close() }
+
+    let all = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek", "all": true]])
+    let text = try #require((all["content"] as? [[String: Any]])?.first?["text"] as? String)
+    let tasks = try #require((all["structuredContent"] as? [String: Any])?["tasks"] as? [[String: Any]])
+    #expect(tasks.compactMap { $0["id"] as? String } == [mine.id, followed.id].map { $0.uuidString.lowercased() })
+    #expect(tasks.compactMap { $0["follows"] as? Bool } == [false, true])
+    #expect(text.split(separator: "\n").filter { $0.hasSuffix("：") && !$0.hasPrefix("-") }.dropFirst().map(String.init) == ["演示：", "未分类："])
+
+    for index in 0..<70 { _ = try await store.createTask("事 \(index)", in: nil) }
+    let many = try await server.request("tools/call", ["name": "task", "arguments": ["action": "peek", "all": true]])
+    let lines = try #require((many["content"] as? [[String: Any]])?.first?["text"] as? String).split(separator: "\n")
+    #expect(lines.count == 60)
+    let shown = lines.filter { $0.hasPrefix("- ") }.count
+    #expect(lines.last.map(String.init) == "还有 \(72 - shown) 件")
+  }
 }
 #endif
