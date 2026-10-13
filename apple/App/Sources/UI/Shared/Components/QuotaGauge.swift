@@ -138,6 +138,7 @@ struct QuotaArc: View {
     let window: QuotaMeter.Window
     let inset: CGFloat
     let line: CGFloat
+    var showsPace = true
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -148,7 +149,7 @@ struct QuotaArc: View {
             ring.trim(from: 0, to: window.used)
                 .stroke(QuotaInk.fill(window.level, palette), style: StrokeStyle(lineWidth: line, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-            if window.pace > 0 {
+            if showsPace, window.pace > 0 {
                 // 刻度两侧压出一道缝（与底色无关），再画刻度
                 PaceTick(fraction: window.pace, radiusInset: inset + line / 2, length: line + 3)
                     .stroke(.black, style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
@@ -187,12 +188,13 @@ private nonisolated struct PaceTick: Shape {
     }
 }
 
-/// 仪表中间的提供方图标。
+/// 仪表中间的提供方图标（`PiProvider`，次要墨色）。
 struct QuotaMark: View {
     let provider: String
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        ProviderSeal(letter: String(QuotaMeter.accountName(provider).prefix(1)))
+        PiProvider(id: provider).image.font(.system(size: 13)).foregroundStyle(palette.ink2)
     }
 }
 

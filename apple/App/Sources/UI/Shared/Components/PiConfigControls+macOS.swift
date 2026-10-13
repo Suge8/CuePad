@@ -9,8 +9,9 @@ extension PiConfigControls {
         guard let anchor = anchors[pick]?.view else { return }
         switch pick {
         case .model:
+            let now = Date.now
             let sections = PiModelLabel.groups(session.models).map { group in
-                ChoiceMenu.Section(title: group.provider.name, choices: group.models.map { model in
+                ChoiceMenu.Section(title: PiModelLabel.title(group.provider, quotas: services.accountQuotas.items, at: now), choices: group.models.map { model in
                     ChoiceMenu.Choice(
                         // 原生菜单项没有单独的读屏文字，分段直接写逗号
                         title: model.name.isEmpty ? model.key.id : model.name, subtitle: PiModelLabel.levels(model).spoken,

@@ -6,13 +6,16 @@ struct PiModelCapsule: View {
     let current: PiModelOption?
     let pending: Bool
     let maxWidth: CGFloat
+    /// 订阅额度：分组标题写各窗口的用量，胶囊上的图标外一圈环是卡着的那个窗口
+    let quotas: [AccountQuota]
     let choose: (PiModelKey) -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let now = Date.now
         Menu {
             ForEach(PiModelLabel.groups(models), id: \.provider.id) { group in
-                Section(group.provider.name) {
+                Section(PiModelLabel.title(group.provider, quotas: quotas, at: now)) {
                     ForEach(group.models) { model in
                         Toggle(isOn: Binding(get: { current?.key == model.key }, set: { if $0 { choose(model.key) } })) {
                             Text(model.name.isEmpty ? model.key.id : model.name)
@@ -24,7 +27,8 @@ struct PiModelCapsule: View {
         } label: {
             HStack(spacing: 6) {
                 // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
-                ProviderSeal(letter: current.map(PiModelLabel.seal)).modifier(Breathing(active: pending))
+                ProviderBadge(provider: current.map { PiProvider(id: $0.key.provider) }, binding: binding(at: now))
+                    .modifier(Breathing(active: pending))
                     .accessibilityHidden(true)
                 Text(current.map(PiModelName.short) ?? "模型").lineLimit(1).truncationMode(.tail)
                     .contentTransition(.opacity)
@@ -46,27 +50,34 @@ struct PiModelCapsule: View {
         #endif
         .buttonStyle(.plain)
         .accessibilityLabel("模型")
-        .accessibilityValue(current?.name ?? "未知")
+        .accessibilityValue(Dotted(current?.name ?? "未知", binding(at: .now).map { "\($0.name)额度已用 \($0.percent)" }).spoken)
+    }
+
+    /// 当前模型的提供方卡着的那个窗口（按模型的周额度只算这个模型的）。
+    private func binding(at now: Date) -> QuotaMeter.Window? {
+        guard let current, let quota = quotas.first(where: { $0.provider == current.key.provider }) else { return nil }
+        return quota.binding(at: now, model: current.key.id).map { QuotaMeter.Window($0, at: now) }
     }
 }
 
 
-/// 提供方的印：一方墨色小印，反白一个衬线首字母（纸与墨）；还不知道是哪个模型时是一方空印。
-struct ProviderSeal: View {
-    let letter: String?
+/// 胶囊上的提供方图标（次要墨色）；这家有订阅额度时外面一圈细环：卡着的那个窗口用了多少（`QuotaArc`，不画匀速刻度），
+/// 没有额度的提供方只有图标、占同样大，换模型时不跳。还不知道是哪个模型时是通用图标，淡一档。
+struct ProviderBadge: View {
+    let provider: PiProvider?
+    let binding: QuotaMeter.Window?
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 16
+    @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 20
 
     var body: some View {
-        RoundedRectangle(cornerRadius: side * 0.28, style: .continuous)
-            .fill(letter == nil ? palette.ink3.opacity(0.4) : palette.ink2)
-            .frame(width: side, height: side)
-            .overlay {
-                if let letter {
-                    Text(letter).font(.system(size: side * 0.66, weight: .bold, design: .serif)).foregroundStyle(palette.paper)
-                        .contentTransition(.opacity)
-                }
-            }
+        ZStack {
+            if let binding { QuotaArc(window: binding, inset: 0, line: 1.5, showsPace: false) }
+            (provider?.image ?? Image(systemName: "cpu"))
+                .font(.system(size: side * 0.52))
+                .foregroundStyle(provider == nil ? palette.ink3 : palette.ink2)
+                .contentTransition(.opacity)
+        }
+        .frame(width: side, height: side)
     }
 }
 

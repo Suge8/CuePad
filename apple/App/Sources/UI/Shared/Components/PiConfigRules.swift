@@ -11,9 +11,9 @@ nonisolated enum PiModelLabel {
         return labels.isEmpty ? "不调思考强度" : Dotted(["思考 " + labels[0]] + labels.dropFirst())
     }
 
-    /// 提供方的印上的字：提供方名字的首字母（Anthropic 是 A、OpenAI 是 O）。
-    static func seal(_ model: PiModelOption) -> String {
-        PiProvider(id: model.key.provider).name.prefix(1).uppercased()
+    /// 分组标题：这家有订阅额度时写"Claude · 5 小时 14% · 本周 8%"（`QuotaMeter.menuTitle`），否则是提供方名。
+    static func title(_ provider: PiProvider, quotas: [AccountQuota], at now: Date) -> String {
+        quotas.first { $0.provider == provider.id }.map { QuotaMeter($0, at: now).menuTitle.visible } ?? provider.name
     }
 
     /// 胶囊最宽是这一排宽度的一半，至少 96（短名放得下）、至多 240（iPad、Mac 宽屏不至于拉得过长）。
