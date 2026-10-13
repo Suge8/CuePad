@@ -45,6 +45,7 @@ struct CuePage: View {
             .onDisappear(perform: markSeen)
             .previewPresenter($opened)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
+            .modifier(CueViewing(active: active))
             #if os(iOS)
             .onChange(of: thread != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
             #endif
@@ -79,6 +80,17 @@ struct CuePage: View {
             body
         } else {
             body.floatingHeader(cue.name, detail: Dotted(cue.presence.line(name: cue.name) ?? "")) { trailing }
+                // 提示（操作结果、别的会话做完了）排在页头下面、占自己的位置，不浮在页头上（`NoticeBanner` 这时不出现）
+                .safeAreaBar(edge: .top, spacing: 0) {
+                    if let notice = workspace.notice {
+                        NoticeCapsule(notice: notice).padding(.horizontal, 16).padding(.top, 8)
+                            .frame(maxWidth: Self.readingWidth)
+                            .transition(.opacity)
+                            .id(notice.id)
+                    }
+                }
+                .animation(Motion.quick, value: workspace.notice)
+                .modifier(NoticeFeedback(notice: workspace.notice))
         }
     }
 
@@ -206,4 +218,31 @@ struct CuePage: View {
     }
 
     private func markSeen() { services.settings.cueSeenAt = .now }
+}
+
+/// Cue 页在前台时算一个在看的：大于 0 时不推 Cue 的通知（Mac 是 `CueService.pageViewers`，iPhone 与 iPad 是 `PiAlertCenter.cuePageViewers`）。
+/// Mac 的页离开后还挂着，所以按在不在前台算，不按出现与消失。
+private struct CueViewing: ViewModifier {
+    let active: Bool
+    @Environment(AppServices.self) private var services
+    #if os(iOS)
+    @Environment(PiAlertCenter.self) private var alerts
+    #endif
+    @State private var counted = false
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: active, initial: true) { count(active) }
+            .onDisappear { count(false) }
+    }
+
+    private func count(_ on: Bool) {
+        guard on != counted else { return }
+        counted = on
+        #if os(macOS)
+        services.cue.pageViewers += on ? 1 : -1
+        #else
+        alerts.cuePageViewers += on ? 1 : -1
+        #endif
+    }
 }

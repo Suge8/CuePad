@@ -2,7 +2,8 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 此刻在做什么（头像的表情与环、页头的一句、菜单栏面板的一行）。管理器（Mac 上的 `services.cue`）接入前由库推出（`derive`）：
+/// Cue 此刻在做什么（头像的表情与环、页头的一句、菜单栏面板的一行）。Cue 住在这台 Mac 上时就是管理器的状态（`services.cue.state`，见 `CueWatch`）；
+/// 手机与别的 Mac 上没有管理器，由库推出（`derive`）：
 /// 没启用是睡着；你最近一句已交给它、之后它还没说话是在想；没交出去超过 `undeliveredGrace` 是起不来（它住的那台 Mac 多半没开）。
 nonisolated enum CuePresence: Equatable, Sendable {
     case asleep
@@ -21,6 +22,17 @@ nonisolated enum CuePresence: Equatable, Sendable {
         if pending.delivered { return .thinking }
         return overdue ? .unreachable(offline) : .thinking
     }
+
+    #if os(macOS)
+    init(_ state: CueState) {
+        switch state {
+        case .asleep: self = .asleep
+        case .idle: self = .idle
+        case .thinking: self = .thinking
+        case .failed(let reason): self = .unreachable(reason)
+        }
+    }
+    #endif
 
     /// 页头、菜单栏面板那一句；空闲时不写。
     func line(name: String) -> String? {
@@ -53,6 +65,8 @@ nonisolated enum CueMood: String, Sendable {
 nonisolated struct CueDigest: Equatable, Sendable {
     var name: String
     var enabled: Bool
+    /// 住在哪台 Mac。
+    var hostID: String?
     /// "等你 N"（`CueWaiting.count`）。
     var waiting: Int
     /// Cue 最近对你说的一句（纯文字）。
@@ -67,7 +81,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
         var delivered: Bool
     }
 
-    static let empty = CueDigest(name: CueProfile.defaultName, enabled: false, waiting: 0, lastSaid: nil, lastSaidDone: false, pendingYou: nil)
+    static let empty = CueDigest(name: CueProfile.defaultName, enabled: false, hostID: nil, waiting: 0, lastSaid: nil, lastSaidDone: false, pendingYou: nil)
 
     static func read(from store: isolated CueStore) throws -> CueDigest {
         let profile = try store.cueProfile()
@@ -78,7 +92,7 @@ nonisolated struct CueDigest: Equatable, Sendable {
         let saidTask = try said?.taskID.flatMap { try store.card($0) }
         return CueDigest(
             name: profile?.name ?? CueProfile.defaultName,
-            enabled: profile?.enabledAt != nil && profile?.hostID != nil,
+            enabled: profile?.enabledAt != nil && profile?.hostID != nil, hostID: profile?.hostID,
             waiting: try CueWaiting.count(in: store),
             lastSaid: said.map { CueFormat.plainText($0.text) },
             lastSaidDone: saidTask?.status == .done,

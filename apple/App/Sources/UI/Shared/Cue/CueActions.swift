@@ -6,6 +6,9 @@ import Foundation
 extension Workspace {
     /// 跟随 Cue 的现状（窗口根视图调用）。
     func observeCue() async {
+        #if os(macOS)
+        cue.attach(services.cue, hostID: services.hostID)
+        #endif
         do {
             try await cue.follow(services.store)
         } catch is CancellationError {
@@ -42,6 +45,12 @@ extension Workspace {
             await services.upload(top.id)
             self.say(on ? "已交给 \(name)" : "已收回，你自己做")
         }
+    }
+
+    /// 这个会话（记录 id）绑着的任务由 Cue 跟进。
+    func cueFollows(sessionRecord: UUID) async throws -> Bool {
+        guard let sessionID = services.liveSessions.items?.first(where: { $0.state.id == sessionRecord })?.state.sessionID else { return false }
+        return try await CueWaiting.followed(sessionID, in: services.store)
     }
 
     // MARK: 记忆

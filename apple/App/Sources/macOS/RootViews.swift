@@ -38,6 +38,8 @@ private struct MainRoot: View {
             .task { await workspace.observeAgentLinks() }
             .task { await workspace.observeFolderGuide() }
             .task { await workspace.observeCue() }
+            // 点了 Cue 的通知：主窗口已叫到前面，这里进 Cue 页
+            .onChange(of: services.cue.pendingOpen, initial: true) { if services.cue.consumeOpen() { workspace.show(.cue) } }
             .modifier(PaletteProvider())
             .onChange(of: services.settings.theme, initial: true) { _, theme in
                 NSApp.appearance = switch theme {

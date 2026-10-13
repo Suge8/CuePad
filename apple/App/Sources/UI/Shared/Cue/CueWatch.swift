@@ -14,13 +14,26 @@ final class CueWatch {
     /// "Cue 记得什么"开着。
     var showsMemory = false
     @ObservationIgnored private var deadline: Task<Void, Never>?
+    #if os(macOS)
+    /// 这台 Mac 的管理器与标识：Cue 住在这台时状态以管理器为准。
+    @ObservationIgnored private var host: (service: CueService, id: String)?
+    #endif
 
-    var presence: CuePresence { CuePresence.derive(digest, overdue: overdue) }
+    var presence: CuePresence {
+        #if os(macOS)
+        if let host, digest.hostID == host.id, digest.enabled { return CuePresence(host.service.state) }
+        #endif
+        return CuePresence.derive(digest, overdue: overdue)
+    }
     var name: String { digest.name }
 
     func mood(composing: Bool = false) -> CueMood {
         CueMood.of(presence, waiting: digest.waiting, composing: composing, justDone: digest.lastSaidDone)
     }
+
+    #if os(macOS)
+    func attach(_ service: CueService, hostID: String) { host = (service, hostID) }
+    #endif
 
     /// 跟随资料库直到任务取消。
     func follow(_ store: CueStore) async throws {

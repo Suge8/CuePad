@@ -3,7 +3,8 @@ import CueStore
 import SwiftUI
 
 /// 设置里的"Cue"一节：名字、住在哪台 Mac（这台与绑过文件夹的别的 Mac）、它的大脑用哪个 Agent 与模型、启用或停用。都写进同步的 `CueProfile`，
-/// 别的设备上看到的是同一份。启用要先选好住在哪台 Mac。
+/// 别的设备上看到的是同一份。启用、停用经这台 Mac 的管理器（`services.cue`）：启用就是让 Cue 住在这台 Mac，挑第一家装好并登录了的 Agent；
+/// 这台一家都没有时就地说明。Agent 只列这台装好的（住在别的 Mac 上时全列）。
 struct CueSettingsSection: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -53,8 +54,11 @@ struct CueSettingsSection: View {
             Text("还没选").tag(String?.none)
             ForEach(data.hosts) { Text($0.name).tag(Optional($0.id)) }
         }
+        let here = profile.hostID == services.hostID
         Picker("用哪个 Agent", selection: Binding(get: { profile.runtime.known ?? .pi }, set: { runtime in update { $0.runtime = .known(runtime) } })) {
-            ForEach(CueRuntime.allCases, id: \.self) { Text($0.label).tag($0) }
+            ForEach(CueRuntime.allCases, id: \.self) { runtime in
+                Text(runtime.label).tag(runtime).selectionDisabled(here && !services.cue.runtimes.contains(runtime))
+            }
         }
         LabeledContent("模型") {
             TextField("模型", text: $model, prompt: Text("默认")).labelsHidden().multilineTextAlignment(.trailing)
@@ -64,8 +68,22 @@ struct CueSettingsSection: View {
             Text("默认").tag(PiThinkingLevel?.none)
             ForEach(PiThinkingLevel.allCases, id: \.self) { Text($0.label).tag(Optional($0)) }
         }
-        Toggle("启用 Cue", isOn: Binding(get: { profile.enabledAt != nil }, set: { on in update { $0.enabledAt = on ? .now : nil } }))
-            .disabled(profile.hostID == nil)
+        Toggle("在这台 Mac 上启用 Cue", isOn: Binding(get: { here && profile.enabledAt != nil }, set: enable))
+        if !here, profile.enabledAt != nil, let host = data.hosts.first(where: { $0.id == profile.hostID }) {
+            Text("\(profile.name) 住在\(host.name)上；在这里启用就搬到这台").font(Typography.meta).foregroundStyle(palette.ink3)
+        }
+    }
+
+    private func enable(_ on: Bool) {
+        failure = nil
+        let cue = services.cue
+        Task {
+            do {
+                if on { try await cue.enable() } else { try await cue.disable() }
+            } catch {
+                failure = error.localizedDescription
+            }
+        }
     }
 
     private func update(_ edit: @escaping @Sendable (inout CueProfile) -> Void) {

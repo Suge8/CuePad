@@ -217,6 +217,14 @@ final class Navigation {
         }
     }
 
+    /// Cue 页此刻是看着的那一页（iPhone 的 Agent 标签根、iPad 侧栏选着它）。
+    var showsCuePage: Bool {
+        switch layout {
+        case .tabs: tab == .agent && agentPath.isEmpty
+        case .split: splitRoot == .cue && splitPath.isEmpty
+        }
+    }
+
     /// 这个会话的近况页此刻正在屏幕上：它是当前标签（iPad：详情栏）最上面的一页。
     func isViewing(session id: UUID) -> Bool {
         let top = switch layout {

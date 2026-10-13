@@ -210,7 +210,7 @@ struct CueNotes: View {
     }
 }
 
-/// Cue 说的一句：左侧全宽 Markdown（同会话里 Agent 的回答）；带选项的已答过时下面一行写你的回答，还在等的写"在等你回答"（问题本身固定在输入框上方）。
+/// Cue 说的一句：左侧全宽 Markdown（同会话里 Agent 的回答）；问过你的、答了的下面一行写你选的那一项（还在等的不在对话里，见 `CueThread.rows`）。
 struct CueSays: View {
     let message: CueMessage
     @Environment(\.palette) private var palette
@@ -220,8 +220,6 @@ struct CueSays: View {
             MarkdownText(source: message.text).equatable()
             if let answer = message.answer {
                 Label(answer, systemImage: "arrowshape.turn.up.left").font(Typography.meta).foregroundStyle(palette.ink3)
-            } else if message.isWaiting {
-                Label("在等你回答", systemImage: "questionmark.circle.fill").font(Typography.meta).foregroundStyle(palette.attention)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
