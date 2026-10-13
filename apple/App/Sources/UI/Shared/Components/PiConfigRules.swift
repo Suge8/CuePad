@@ -11,11 +11,6 @@ nonisolated enum PiModelLabel {
         return labels.isEmpty ? "不调思考强度" : Dotted(["思考 " + labels[0]] + labels.dropFirst())
     }
 
-    /// 提供方的印上的字：提供方名字的首字母（Anthropic 是 A、OpenAI 是 O）。
-    static func seal(_ model: PiModelOption) -> String {
-        PiProvider(id: model.key.provider).name.prefix(1).uppercased()
-    }
-
     /// 胶囊最宽是这一排宽度的一半，至少 96（短名放得下）、至多 240（iPad、Mac 宽屏不至于拉得过长）。
     static func capsuleWidth(available: CGFloat) -> CGFloat {
         min(max(available * 0.5, 96), 240)

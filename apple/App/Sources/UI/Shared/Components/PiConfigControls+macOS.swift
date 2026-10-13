@@ -4,17 +4,18 @@ import CueStore
 import SwiftUI
 
 extension PiConfigControls {
-    /// 键盘打开的菜单：与点胶囊同样的选项（模型按提供方分组、当前打勾；思考强度是当前模型支持的档），系统菜单，方向键选、↩ 确认、Esc 关。
+    /// 弹出选择菜单（点模型胶囊与键盘共用）：模型按提供方分组（标题与每项带提供方图标）、当前打勾；思考强度是当前模型支持的档。
     func open(_ pick: PiConfigPick) {
         guard let anchor = anchors[pick]?.view else { return }
         switch pick {
         case .model:
             let sections = PiModelLabel.groups(session.models).map { group in
-                ChoiceMenu.Section(title: group.provider.name, choices: group.models.map { model in
+                let image = group.provider.nsImage
+                return ChoiceMenu.Section(title: group.provider.name, image: image, choices: group.models.map { model in
                     ChoiceMenu.Choice(
                         // 原生菜单项没有单独的读屏文字，分段直接写逗号
                         title: model.name.isEmpty ? model.key.id : model.name, subtitle: PiModelLabel.levels(model).spoken,
-                        checked: shown.model?.key == model.key) { configure(PiConfig(model: model.key)) }
+                        image: image, checked: shown.model?.key == model.key) { configure(PiConfig(model: model.key)) }
                 })
             }
             ChoiceMenu.popUp(sections, below: anchor)

@@ -1,15 +1,27 @@
 import CueStore
 import SwiftUI
 
+/// 模型胶囊：提供方图标 + 模型短名。iOS 点开是 SwiftUI 的菜单；Mac 点开与 ⌘⇧M 是同一个 AppKit 菜单（`ChoiceMenu`，
+/// SwiftUI 在 Mac 上把菜单项里的图片丢掉，分组标题与模型项要带提供方图标）。
 struct PiModelCapsule: View {
     let models: [PiModelOption]
     let current: PiModelOption?
     let pending: Bool
     let maxWidth: CGFloat
     let choose: (PiModelKey) -> Void
+    #if os(macOS)
+    /// 弹出 AppKit 的模型菜单。
+    let pick: () -> Void
+    #endif
     @Environment(\.palette) private var palette
 
     var body: some View {
+        #if os(macOS)
+        Button(action: pick) { label }
+            .buttonStyle(.plain)
+            .accessibilityLabel("模型")
+            .accessibilityValue(current?.name ?? "未知")
+        #else
         Menu {
             ForEach(PiModelLabel.groups(models), id: \.provider.id) { group in
                 Section(group.provider.name) {
@@ -17,56 +29,41 @@ struct PiModelCapsule: View {
                         Toggle(isOn: Binding(get: { current?.key == model.key }, set: { if $0 { choose(model.key) } })) {
                             Text(model.name.isEmpty ? model.key.id : model.name)
                             Text(PiModelLabel.levels(model))
+                            group.provider.image
                         }
                     }
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
-                ProviderSeal(letter: current.map(PiModelLabel.seal)).modifier(Breathing(active: pending))
-                    .accessibilityHidden(true)
-                Text(current.map(PiModelName.short) ?? "模型").lineLimit(1).truncationMode(.tail)
-                    .contentTransition(.opacity)
-            }
-            .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-            .padding(.leading, 7).padding(.trailing, 11)
-            // 按内容宽，最宽 `maxWidth`，再长截断
-            .frame(maxWidth: maxWidth, alignment: .leading)
-            .fixedSize(horizontal: true, vertical: false)
-            .frame(height: 30)
-            .background(palette.fill, in: .capsule)
-            .frame(minHeight: 44)
-            .contentShape(.capsule)
-            .animation(Motion.quick, value: current?.key)
+            label
         }
         .menuIndicator(.hidden)
-        #if os(macOS)
-        .menuStyle(.button)
-        #endif
         .buttonStyle(.plain)
         .accessibilityLabel("模型")
         .accessibilityValue(current?.name ?? "未知")
+        #endif
     }
-}
 
-
-/// 提供方的印：一方墨色小印，反白一个衬线首字母（纸与墨）；还不知道是哪个模型时是一方空印。
-struct ProviderSeal: View {
-    let letter: String?
-    @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 16
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: side * 0.28, style: .continuous)
-            .fill(letter == nil ? palette.ink3.opacity(0.4) : palette.ink2)
-            .frame(width: side, height: side)
-            .overlay {
-                if let letter {
-                    Text(letter).font(.system(size: side * 0.66, weight: .bold, design: .serif)).foregroundStyle(palette.paper)
-                        .contentTransition(.opacity)
-                }
-            }
+    private var label: some View {
+        HStack(spacing: 5) {
+            // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
+            (current.map { PiProvider(id: $0.key.provider).image } ?? PiProvider.unknown)
+                .contentTransition(.opacity)
+                .modifier(Breathing(active: pending))
+                .accessibilityHidden(true)
+            Text(current.map(PiModelName.short) ?? "模型").lineLimit(1).truncationMode(.tail)
+                .contentTransition(.opacity)
+        }
+        .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+        .padding(.leading, 10).padding(.trailing, 11)
+        // 按内容宽，最宽 `maxWidth`，再长截断
+        .frame(maxWidth: maxWidth, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(height: 30)
+        .background(palette.fill, in: .capsule)
+        .frame(minHeight: 44)
+        .contentShape(.capsule)
+        .animation(Motion.quick, value: current?.key)
     }
 }
 
