@@ -17,6 +17,8 @@ nonisolated struct QuotaMeter: Equatable {
         /// 照这速度什么时候用完；没超过匀速刻度为 nil
         let exhaustion: Date?
         let level: PiContextMeter.Level
+        /// 过了重置时间、还没有新的观测：下一次什么时候重置不知道，只写"已重置"
+        let hasReset: Bool
         var id: String { name }
 
         var percent: String { "\(Int((used * 100).rounded()))%" }
@@ -29,6 +31,7 @@ nonisolated struct QuotaMeter: Equatable {
             resetsAt = window.resetsAt
             exhaustion = window.exhaustion(at: now)
             level = PiContextMeter.level(of: used)
+            hasReset = now >= window.resetsAt
         }
 
         /// 照这速度还能用多久的短语："约 2 小时 10 分钟"（读数时刻定下，不跟着走；与"5 小时"同一种写法，取两个单位）。

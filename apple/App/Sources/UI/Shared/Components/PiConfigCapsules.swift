@@ -12,7 +12,11 @@ struct PiModelCapsule: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let now = Date.now
+        // 卡着的窗口到了重置时刻，环与分组标题随即按已重置画
+        QuotaMoments(quotas) { now in menu(at: now) }
+    }
+
+    private func menu(at now: Date) -> some View {
         Menu {
             ForEach(PiModelLabel.groups(models), id: \.provider.id) { group in
                 Section(PiModelLabel.title(group.provider, quotas: quotas, at: now)) {
@@ -50,7 +54,7 @@ struct PiModelCapsule: View {
         #endif
         .buttonStyle(.plain)
         .accessibilityLabel("模型")
-        .accessibilityValue(Dotted(current?.name ?? "未知", binding(at: .now).map { "\($0.name)额度已用 \($0.percent)" }).spoken)
+        .accessibilityValue(Dotted(current?.name ?? "未知", binding(at: now).map { "\($0.name)额度已用 \($0.percent)" }).spoken)
     }
 
     /// 当前模型的提供方卡着的那个窗口（按模型的周额度只算这个模型的）。

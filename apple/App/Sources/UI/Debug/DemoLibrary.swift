@@ -50,14 +50,17 @@ enum DemoLibrary {
     }
 
     /// 订阅额度：Claude 的 5 小时略超匀速刻度（照这速度会提前用完）、本周宽松、按模型的周额度几乎没用；Codex 本周已过九成（胭脂）。
+    /// `-CuePadQuotaResetIn <秒>`：Claude 的 5 小时窗口这么多秒后重置，截图等到重置之后再拍（核对仪表在那一刻变成已重置）。
     private static func seedQuotas(_ store: CueStore) async throws {
         let now = Date.now
+        let resetIn = DebugScene.defaults.double(forKey: "CuePadQuotaResetIn")
+        if resetIn > 0 { DebugHooks.later(.seconds(resetIn + 5)) {} }
         func window(_ seconds: Int, used: Double, left: TimeInterval, model: String? = nil) -> QuotaWindow {
             QuotaWindow(seconds: seconds, used: used, resetsAt: now.addingTimeInterval(left), model: model)
         }
         let (hours5, week) = (5 * 3_600, 7 * 86_400)
         try await store.recordQuota(QuotaReport(provider: "anthropic", windows: [
-            window(hours5, used: 0.68, left: 2 * 3_600 + 14 * 60), window(week, used: 0.38, left: 4 * 86_400 + 3 * 3_600),
+            window(hours5, used: 0.68, left: resetIn > 0 ? resetIn : 2 * 3_600 + 14 * 60), window(week, used: 0.38, left: 4 * 86_400 + 3 * 3_600),
             window(week, used: 0.12, left: 4 * 86_400 + 3 * 3_600, model: "Fable"),
         ], complete: true), host: "demo-mac")
         try await store.recordQuota(QuotaReport(provider: "openai-codex", windows: [

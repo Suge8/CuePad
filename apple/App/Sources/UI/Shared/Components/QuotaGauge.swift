@@ -4,31 +4,53 @@ import SwiftUI
 /// 订阅额度的仪表（读数规则在 `QuotaMeter`）。
 ///
 /// - `QuotaStrip`：Agent 页顶部（Mac 与 iOS）与 Mac 菜单栏面板的总览，一排放得下就并排、放不下一个一行，每个账号一枚 `QuotaChip`：仪表加两行字——账号名
-///   （数据陈旧时接一句"x 分钟前"），下面一句：超了匀速刻度写"照这速度约 X 后用完"，否则写卡着的窗口多久后重置（系统计时文字，自己走）。
+///   （数据陈旧时接一句"x 分钟前"），下面一句：超了匀速刻度写"照这速度约 X 后用完"，否则写卡着的窗口多久后重置（系统计时文字，自己走），
+///   过了重置时间还没有新观测的写"已重置"。
 ///   点开是明细（`QuotaDetail`）：各窗口的用量条、按模型的周额度、"更新于 x 分钟前"。还没有额度记录时整条不出现。
 /// - `QuotaDial`：提供方图标外两圈细弧，外圈是短窗口（5 小时），内圈是长窗口（本周）；只有一个窗口（Codex 常见）就一圈。
 ///   弧从 12 点顺时针铺到已用的比例，弧上一道刻度是匀速刻度（窗口已过的时间该用到多少），刻度在弧外面压出一道缝，任何底色上都读得出。
 ///
 /// 配色只用墨：余量足是次要墨色，七成起是墨色，九成起与用完是胭脂（同上下文快满的口径，不借赭黄、不用靛青）。
-/// 读数只在新观测到达（或重画）时变：弧与刻度用无回弹弹簧过去，减弱动态效果时淡入淡出；没有常驻动画与定时器。
+/// 读数在新观测到达时变，另外在每个窗口的重置时刻各变一次（`QuotaMoments`：等到重置是业务语义，不是周期刷新）：
+/// 弧与刻度用无回弹弹簧过去，减弱动态效果时淡入淡出；没有常驻动画与周期定时器。
 struct QuotaStrip: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let now = Date.now
-        let meters = services.accountQuotas.items.map { QuotaMeter($0, at: now) }.filter { !$0.rings.isEmpty }
-        if !meters.isEmpty {
-            // 一排放得下就并排，放不下（手机竖屏）一个账号一行
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 22) { chips(meters) }
-                VStack(alignment: .leading, spacing: 12) { chips(meters) }
+        let quotas = services.accountQuotas.items
+        if !quotas.isEmpty {
+            QuotaMoments(quotas) { now in
+                let meters = quotas.map { QuotaMeter($0, at: now) }.filter { !$0.rings.isEmpty }
+                // 一排放得下就并排，放不下（手机竖屏）一个账号一行
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: 22) { chips(meters) }
+                    VStack(alignment: .leading, spacing: 12) { chips(meters) }
+                }
             }
         }
     }
 
     private func chips(_ meters: [QuotaMeter]) -> some View {
         ForEach(meters, id: \.provider) { QuotaChip(meter: $0) }
+    }
+}
+
+/// 按额度读数画的内容：此刻画一次，之后只在还没到的各个重置时刻各重画一次（`TimelineView` 的显式时刻表，由系统在那一刻唤醒），
+/// 过了重置时间的窗口随即按已重置画（`QuotaWindow.used(at:)`）。
+struct QuotaMoments<Content: View>: View {
+    let moments: [Date]
+    @ViewBuilder let content: (Date) -> Content
+
+    init(_ quotas: [AccountQuota], @ViewBuilder content: @escaping (Date) -> Content) {
+        let now = Date.now
+        moments = Set(quotas.flatMap(\.windows).map(\.resetsAt).filter { $0 > now }).sorted()
+        self.content = content
+    }
+
+    var body: some View {
+        // 时刻表开始前的那一帧，时刻表给的日期可能早于此刻：取两者较晚的
+        TimelineView(.explicit(moments)) { context in content(max(context.date, .now)) }
     }
 }
 
@@ -101,7 +123,9 @@ private struct QuotaSummary: View {
 
     var body: some View {
         if let window = meter.binding {
-            if window.isSpent {
+            if window.hasReset {
+                Text("\(window.name)\(Dotted.inline)已重置").foregroundStyle(palette.ink3)
+            } else if window.isSpent {
                 Text("已用完\(Dotted.inline)\(Text(window.resetsAt, style: .relative))后重置").foregroundStyle(palette.failure)
             } else if let runway = window.runway(from: .now) {
                 Text("照这速度\(runway)后用完").foregroundStyle(window.level == .critical ? palette.failure : palette.ink2)
@@ -237,8 +261,14 @@ private struct QuotaBarRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(window.name).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink)
-                Text("\(Dotted.inline)\(Text(window.resetsAt, style: .relative))后重置").font(Typography.caption).foregroundStyle(palette.ink3)
-                    .monospacedDigit()
+                Group {
+                    if window.hasReset {
+                        Text("\(Dotted.inline)已重置")
+                    } else {
+                        Text("\(Dotted.inline)\(Text(window.resetsAt, style: .relative))后重置")
+                    }
+                }
+                .font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
                 Spacer(minLength: 8)
                 Text(window.percent).font(Typography.meta.monospacedDigit()).fontWeight(window.level == .roomy ? .medium : .bold)
                     .foregroundStyle(window.level == .critical ? palette.failure : palette.ink)
