@@ -196,10 +196,13 @@ struct TaskLine: View {
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: phase) { $0 == .idle && $1 == .pending }
             VStack(alignment: .leading, spacing: 3) {
-                Text(task.title.textGlyphs)
-                    .font(.body).strikethrough(done)
-                    .foregroundStyle(done ? palette.ink3 : palette.ink)
-                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(task.title.textGlyphs)
+                        .font(.body).strikethrough(done)
+                        .foregroundStyle(done ? palette.ink3 : palette.ink)
+                        .lineLimit(2)
+                    if task.cueFollows { CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 } }
+                }
                 if hasDetail { detail }
             }
             .padding(.vertical, hasDetail ? 6 : 0)

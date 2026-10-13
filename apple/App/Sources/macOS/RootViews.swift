@@ -36,6 +36,7 @@ private struct MainRoot: View {
         content
             .task { await workspace.observeAgentLinks() }
             .task { await workspace.observeFolderGuide() }
+            .task { await workspace.observeCue() }
             .modifier(PaletteProvider())
             .onChange(of: services.settings.theme, initial: true) { _, theme in
                 NSApp.appearance = switch theme {

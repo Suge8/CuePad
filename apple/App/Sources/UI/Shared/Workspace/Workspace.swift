@@ -33,6 +33,8 @@ final class Workspace {
     }
 
     let services: AppServices
+    /// Cue 的现状与 Cue 页的草稿（`CueWatch`，根视图里 `observeCue` 跟随）。
+    let cue = CueWatch()
     /// 本窗口的项目目录；nil 表示还没读到或读取失败，根视图在读到之前不显示页面。
     private(set) var catalog: ProjectCatalog?
     /// 资料库读得出来（项目目录已读到）。没读到或读取失败时，凡是会写资料库的入口都不出现或不可用。

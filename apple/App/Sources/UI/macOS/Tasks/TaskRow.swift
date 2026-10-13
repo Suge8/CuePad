@@ -46,6 +46,7 @@ struct TaskRow: View {
                 .strikethrough(done).foregroundStyle(done ? palette.ink3 : palette.ink)
                 .lineLimit(1)
                 .layoutPriority(1)
+            if task.cueFollows { CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 } }
             if let project {
                 // 挤不下时先让项目名缩，标题与进度照写
                 HStack(spacing: 4) {

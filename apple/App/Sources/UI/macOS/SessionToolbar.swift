@@ -80,6 +80,9 @@ struct SessionTitleSlot: View {
             if let task { ring(task) }
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if (state.task?.parent ?? task)?.cueFollows == true {
+                        CueFollowMark().alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+                    }
                     Text(state.title).font(task == nil ? Typography.toolbarTitle : Typography.toolbarTitlePaired).foregroundStyle(palette.ink)
                         .lineLimit(1).layoutPriority(1)
                         .accessibilityAddTraits(.isHeader)

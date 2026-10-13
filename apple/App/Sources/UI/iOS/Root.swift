@@ -74,6 +74,7 @@ struct IOSRoot: View {
         .task(id: workspace.catalogAttempt) { await workspace.observeCatalog() }
         .task { await workspace.observeAgentLinks() }
         .task { await workspace.observeFolderGuide() }
+        .task { await workspace.observeCue() }
         .onChange(of: workspace.services.pendingDeepLink, initial: true) {
             if let link = workspace.services.consumeDeepLink() { navigation.open(link) }
         }
@@ -137,6 +138,7 @@ struct RouteView: View {
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
         case .tasks: TasksScreen()
+        case .cue: CuePage().countsAsPiViewer()
         case .agent: AgentScreen().countsAsPiViewer()
         case .projectSessions(let id): AgentScreen(project: id).countsAsPiViewer()
         case .search: SearchScreen()
