@@ -245,29 +245,69 @@ struct RealHostTests {
     }
 
     /// App 更新后扩展协议号变了：还在跑旧扩展的托管进程没有终端能 /reload，CuePad 让它退出；下次发消息用新扩展恢复，话送达。
+    /// 上一版 App 托管的进程在跑旧协议的扩展（App 更新了）：新 App 一看到就让它退出，下次发话用新扩展恢复。
     @Test func anIncompatibleHostedProcessIsToldToExitAndTheNextMessageResumesIt() async throws {
         let pi = try await PiProcess(modelInAgentDirectory: true)
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         let (file, sessionID) = try await endedSession(pi, bridge)
+        let installed = pi.paths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
+        let current = try String(contentsOf: installed, encoding: .utf8)
+        try OldExtension.otherProtocol.rewrite(current).write(to: installed, atomically: true, encoding: .utf8)
+        let left = try await PiProcess(alongside: pi, sessionFile: file, env: [PiHost.hostedVariable: "120"])
+        defer { left.stop() }
+        try await eventually("旧扩展的托管进程在桥上") { bridge.sessions.contains { $0.sessionID == sessionID && $0.state == .incompatible && $0.hosted } }
+        try current.write(to: installed, atomically: true, encoding: .utf8)  // 新 App 装好了新扩展
+
         let host = host(pi, bridge)
         host.start()
         defer { stopHostedProcesses(bridge) }
-        let installed = pi.paths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
-        let current = try String(contentsOf: installed, encoding: .utf8)
-        try current.replacing(/const PROTOCOL_VERSION = \d+;/, with: "const PROTOCOL_VERSION = 1;").write(to: installed, atomically: true, encoding: .utf8)
 
-        let old = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
-
-        #expect(old.state == .incompatible && old.hosted)
-        try await eventually("旧扩展的托管进程退出了") { kill(old.pid, 0) != 0 && !bridge.sessions.contains { $0.id == old.id } }
-
-        try current.write(to: installed, atomically: true, encoding: .utf8)  // App 装好了新扩展
+        try await eventually("旧扩展的托管进程退出了") { !bridge.sessions.contains { $0.sessionID == sessionID } }
+        await left.waitUntilExit()
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
         #expect(resumed.sessionID == sessionID && resumed.state != .incompatible)
         _ = try await bridge.send(PiMessage(text: "换上新扩展之后"), to: resumed.id)
         try await eventually("话送达、有回答") { replies(in: file).last == "ECHO 换上新扩展之后 IMAGES[]" }
+    }
+
+    /// 磁盘上的扩展不是随包版本（接入没修好）：托管启动起出的进程读不懂托管约定，既不会空闲自退、CuePad 也不认它——
+    /// 启动报错，进程退出，不留孤儿。
+    @Test(arguments: OldExtension.allCases)
+    func aHostedLaunchOnAnExtensionThatCannotHonorHostingIsStoppedAndReported(_ old: OldExtension) async throws {
+        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let (file, sessionID) = try await endedSession(pi, bridge)
+        let installed = pi.paths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
+        try old.rewrite(String(contentsOf: installed, encoding: .utf8)).write(to: installed, atomically: true, encoding: .utf8)
+        let host = host(pi, bridge)
+        host.start()
+        let changes = bridge.changes()
+
+        await #expect(throws: PiHostError.extensionMismatch) { try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL) }
+
+        var launched: Int32?
+        for await change in changes {
+            if case .appeared(let session) = change, session.sessionID == sessionID { launched = session.pid; break }
+        }
+        let pid = try #require(launched)
+        defer { kill(pid, SIGTERM) }  // 见红时别留下
+        try await eventually("起出的进程退出了") { kill(pid, 0) != 0 }
+    }
+
+    /// 读不懂托管约定的旧扩展：协议号不同的，与把 `CUEPAD_HOSTED` 当作 "1" 来认的（协议号没变）。
+    enum OldExtension: CaseIterable, Sendable {
+        case otherProtocol, oldHostedValue
+
+        func rewrite(_ source: String) -> String {
+            switch self {
+            case .otherProtocol: source.replacing(/const PROTOCOL_VERSION = \d+;/, with: "const PROTOCOL_VERSION = 1;")
+            case .oldHostedValue: source.replacing(/const IS_HOSTED = .*;/, with: "const IS_HOSTED = process.env[HOSTED_ENV] === \"1\";")
+            }
+        }
     }
 }
 #endif

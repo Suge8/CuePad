@@ -72,7 +72,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 **编辑器。** 存储格式是纯字符串（`CueFormat`），唯一事实源；保存只经序列化，编辑器内复制输出存储格式。不得访问 `NSTextView.layoutManager` / `UITextView.layoutManager`（一次访问就永久降级到 TextKit 1）。
 
-**Pi 桥。** 协议、版本策略、多客户端、已知边界与接入 Pi（扩展、skill 与命令行链接三样一起写、一起删）都以 CuePi README 为准；App 层只有 `PiIntegrationManager` 管首次同意、静默修复与移除，只存"拒绝过"一个偏好，其余从磁盘读出，没有第二套状态。隔离运行（`CUEPAD_LIBRARY_DIR`）只在同时指定 `PI_CODING_AGENT_DIR` 与 `CUEPAD_BIN_DIR` 时接入，否则不问、不修、不能接入：开发构建不会把真实 `~/.pi`、`~/.local/bin` 改成指向自己。实时状态只在内存，历史只来自 Pi 会话文件。什么算历史只在 `PiStateRecorder.exited` 定：一句话没说过的会话（没留下会话文件）关掉后记录直接删掉，不进历史；CuePad 后台托管的会话闲置退出不算结束，记录留着、歇着，仍在"现在"、发话时 Mac 唤醒它，用户在 CuePad 里结束它或终端里的 Pi 退出才进历史。
+**Pi 桥。** 协议、版本策略、多客户端、已知边界与接入 Pi（扩展、skill 与命令行链接三样一起写、一起删）都以 CuePi README 为准；App 层只有 `PiIntegrationManager` 管首次同意、静默修复与移除，只存"拒绝过"一个偏好，其余从磁盘读出，没有第二套状态。启动时投送执行器等第一次接入刷新做完才起：后台托管的 Pi 加载磁盘上的扩展，App 更新后要先换成随包版本。隔离运行（`CUEPAD_LIBRARY_DIR`）只在同时指定 `PI_CODING_AGENT_DIR` 与 `CUEPAD_BIN_DIR` 时接入，否则不问、不修、不能接入：开发构建不会把真实 `~/.pi`、`~/.local/bin` 改成指向自己。实时状态只在内存，历史只来自 Pi 会话文件。什么算历史只在 `PiStateRecorder.exited` 定：一句话没说过的会话（没留下会话文件）关掉后记录直接删掉，不进历史；CuePad 后台托管的会话闲置退出不算结束，记录留着、歇着，仍在"现在"、发话时 Mac 唤醒它，用户在 CuePad 里结束它或终端里的 Pi 退出才进历史。
 
 **命令行。** `cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标构建、随 App 签名与公证；接入 Pi 时在链接目录（`CUEPAD_BIN_DIR`，缺省 `~/.local/bin`）建 `cuepad` 符号链接。skill 里写的是链接的绝对路径，App 的位置只在链接里：App 移动后只修链接。`cuepad --help` 是其唯一文档。
 

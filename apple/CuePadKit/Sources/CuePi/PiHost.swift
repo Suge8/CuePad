@@ -96,6 +96,8 @@ public final class PiHost {
     // MARK: 进程
 
     /// 启动并等它的会话连上桥；进程先退出或超时（这时让它退出）都抛错。
+    /// 连上的扩展必须读得懂托管约定（报出 `hosted`、协议号相同）：不然起出的进程既不会空闲自退、CuePad 也不认它是托管的，
+    /// 成了没人管的孤儿。磁盘上的扩展不是随包版本（接入修复失败、Pi 太旧没修、别人改过）时就是这样，这时让它退出并报错。
     private func launch(
         _ executable: URL, _ arguments: [String], in directory: URL, environment: [String: String]
     ) async throws -> PiSession {
@@ -130,14 +132,20 @@ public final class PiHost {
             defer { group.cancelAll() }
             return try await group.next() ?? nil
         } }
+        let session: PiSession
         do {
             let value = try await withTaskCancellationHandler { try await connecting.value } onCancel: { connecting.cancel() }
-            guard let session = value else { throw CancellationError() }
-            return session
+            guard let value else { throw CancellationError() }
+            session = value
         } catch {
             kill(pid, SIGTERM)
             throw error
         }
+        guard session.hosted, session.state != .incompatible else {
+            stop(pid)  // 协议号不同而报了 hosted 的，桥上的变化也会让它退出：只发一次
+            throw PiHostError.extensionMismatch
+        }
+        return session
     }
 
     /// 扩展读这个环境变量判断自己是被 CuePad 托管的，值是空闲多少秒后退出。
@@ -254,6 +262,8 @@ public enum PiHostError: Error, Equatable {
     case notConnected
     /// 请它结束后一直没退出（多半还卡在需要你在终端里处理的地方）
     case notEnded
+    /// Pi 加载的 CuePad 扩展不是这个版本的，不能托管（已让它退出）
+    case extensionMismatch
 }
 
 extension PiHostError: LocalizedError {
@@ -262,6 +272,7 @@ extension PiHostError: LocalizedError {
         case .exited: "在后台启动的 Pi 没连上就退出了"
         case .notConnected: "在后台启动的 Pi 一直没连上"
         case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
+        case .extensionMismatch: "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发"
         }
     }
 }

@@ -22,19 +22,32 @@ extension AppServices {
         let indexer = PiHistoryIndexer(root: paths.sessionsDirectory, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files) { [weak self] file in
             await self?.loadPiCheckpoint(for: file)
         }
-        follow(reporting: { .piBridgeUnavailable("Pi 接入没能修复：\($0.localizedDescription)") }) { try await self.piIntegration.refresh() }
         follow { await self.consumePiHistory(indexer.events()) }
         follow { await self.historyStore.keepPruned() }
         follow(reporting: { .syncUnavailable("Agent 状态没能写入同步记录：\($0)") }) {
             try await self.resetPiState()
             try await self.consumePiChanges(piChanges)
         }
-        follow(reporting: { .syncUnavailable("远程投送执行器没能启动：\($0)") }) { try await self.executor.start() }
+        // 执行器在接入刷新之后才启动：托管的 Pi 加载磁盘上的扩展，App 更新后要先换成随包版本，旧扩展读不懂托管约定。
+        // 刷新失败也照样启动——托管启动时核对连上的扩展，对不上就让它退出并报错（`PiHostError.extensionMismatch`）。
+        follow(reporting: { .syncUnavailable("远程投送执行器没能启动：\($0)") }) {
+            await self.refreshPiIntegration()
+            try await self.executor.start()
+        }
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
         // CKSyncEngine 靠静默推送得知别的设备的改动；macOS 要显式注册远程通知（iOS 由 PiAlertCenter 注册）。
         if sync != nil { NSApplication.shared.registerForRemoteNotifications() }
         startSync()
         startLiveSessions()
+    }
+
+    /// 读出接入 Pi 的状态，已接入而有哪样旧了就静默修复；失败报告一次。
+    private func refreshPiIntegration() async {
+        do {
+            try await piIntegration.refresh()
+        } catch where !Task.isCancelled {
+            reportIssue(.piBridgeUnavailable("Pi 接入没能修复：\(error.localizedDescription)"))
+        } catch {}
     }
 
     /// 系统唤醒后立即同步：睡眠期间的推送可能没收到。
