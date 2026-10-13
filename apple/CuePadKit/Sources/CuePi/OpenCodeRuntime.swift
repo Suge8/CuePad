@@ -162,32 +162,31 @@ public final class OpenCodeRuntime: AgentRuntime {
         ingestQueue = []
     }
 
-    /// 跟着事件流，直到服务停了或连不上：连上一次就重拉一次快照，断了就重连；一次也没连上就等登记文件的下一次变化。
+    /// 跟着事件流，直到服务停了（进程退出、登记文件没了或换了，任务随连接一起取消）：每次连上都重拉快照；断了、连不上或快照失败就隔一会儿重连。
+    /// 服务"又能连了"没有事件可等，所以按退避重试：间隔从 1 秒翻倍到 30 秒，连上并拉完快照后复位。
     private func follow(_ connection: Connection) async {
+        var delay = Self.retryFloor
         while !Task.isCancelled, self.connection === connection {
-            var connected = false
             do {
                 for try await event in connection.client.events() {
                     guard self.connection === connection else { return }
                     if event.type == "server.connected" {
-                        connected = true
-                        do {
-                            try await snapshot(connection)
-                        } catch {
-                            // 快照读不懂（接口变了）时重连也一样：停在这里，等服务换了再来
-                            Self.log.error("OpenCode 快照失败：\(String(describing: error), privacy: .public)")
-                            return
-                        }
+                        try await snapshot(connection)
+                        delay = Self.retryFloor
                     } else {
                         await apply(event, connection)
                     }
                 }
             } catch {
-                Self.log.error("OpenCode 事件流断开：\(String(describing: error), privacy: .public)")
+                Self.log.error("OpenCode 事件流断开或快照失败，\(delay, privacy: .public) 后重连：\(String(describing: error), privacy: .public)")
             }
-            guard connected else { return }
+            guard (try? await Task.sleep(for: delay)) != nil else { return }
+            delay = min(delay * 2, Self.retryCeiling)
         }
     }
+
+    private static let retryFloor: Duration = .seconds(1)
+    private static let retryCeiling: Duration = .seconds(30)
 
     // MARK: 快照
 
@@ -208,8 +207,13 @@ public final class OpenCodeRuntime: AgentRuntime {
         for info in topLevel {
             var tracked = sessions[info.id] ?? Tracked(info: info)
             tracked.info = info
+            // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（出错原文在线会话由 refreshLive 补上）
             tracked.running = active.contains(info.id)
-            if !tracked.running { tracked.activity = .thinking; tracked.detail = nil }
+            tracked.activity = .thinking
+            tracked.detail = nil
+            tracked.toolNames = [:]
+            tracked.compacting = false
+            tracked.failure = !tracked.running && info.outcome == "failed" ? Self.unknownFailure : nil
             if tracked.running || info.updatedAt >= connection.startedAt, ended[info.id].map({ info.updatedAt > $0 }) ?? true {
                 tracked.online = true
             }
@@ -257,6 +261,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         sessions[id]?.questions = permissions.map(Self.question) + forms.map(Self.question)
         sessions[id]?.tokens = last?.tokens?.context
         if tracked.info.model == nil { sessions[id]?.info.model = last?.model }
+        if tracked.failure != nil, let error = last?.error?.message { sessions[id]?.failure = error }
     }
 
     /// 工作目录的模型与命令（没取过才取）。
@@ -274,6 +279,7 @@ public final class OpenCodeRuntime: AgentRuntime {
     }
 
     private static let compact = "compact"
+    private static let unknownFailure = "出错了"
 
     // MARK: 事件
 
@@ -381,7 +387,7 @@ public final class OpenCodeRuntime: AgentRuntime {
             await change(sessionID, connection) {
                 $0.running = false
                 $0.toolNames = [:]
-                $0.failure = event.type == "session.execution.failed" ? (data.error?.message ?? data.error?.type ?? "出错了") : nil
+                $0.failure = event.type == "session.execution.failed" ? (data.error?.message ?? data.error?.type ?? Self.unknownFailure) : nil
             }
             enqueueIngest(sessionID, urgent: true)
         default:
@@ -676,7 +682,6 @@ public final class OpenCodeRuntime: AgentRuntime {
             guard !title.isEmpty else { throw PiBridgeError.rejected("bad_request") }
             struct Update: Encodable { var title: String }
             try await connection.client.call("PATCH", "/api/session/\(sessionID)", body: Update(title: title))
-            sessions[sessionID]?.info.title = title
         }
         if model != nil || thinking != nil {
             let current = tracked.info.model
@@ -689,9 +694,8 @@ public final class OpenCodeRuntime: AgentRuntime {
             let ref = OpenCodeModelRef(id: target.id, providerID: target.providerID, variant: variant)
             struct Switch: Encodable { var model: OpenCodeModelRef }
             try await connection.client.call("POST", "/api/session/\(sessionID)/model", body: Switch(model: ref))
-            sessions[sessionID]?.info.model = OpenCodeModelRef(id: ref.id, providerID: ref.providerID, variant: variant ?? "default")
         }
-        publish(sessionID)
+        // 桥上的名字与模型只随服务自己的事件（改名、选模型）更新，不在这里先写
     }
 
     /// 按模型支持的强度夹取：支持就用它，否则取最接近的一档（一样近取低的）。
@@ -877,6 +881,8 @@ public final class OpenCodeRuntime: AgentRuntime {
                 checkpoint = try? JSONDecoder().decode(OpenCodeHistory.Checkpoint.self, from: data)
             }
             let (next, transcript) = try await OpenCodeHistory.read(connection.client, info, from: checkpoint, files: store.files)
+            // 读的时候会话被删了：删除时已对过账，这里再写就把索引写回来了
+            guard self.connection === connection, sessions[sessionID] != nil else { return }
             checkpoints[sessionID] = next
             try await store.upsertPiSessions(
                 [PiSessionUpsert(

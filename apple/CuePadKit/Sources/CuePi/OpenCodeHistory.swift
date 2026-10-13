@@ -17,6 +17,8 @@ struct OpenCodeMessage: Decodable, Sendable {
     /// 压缩：`running` / `completed` / `failed`
     var status: String?
     var tokens: OpenCodeTokens?
+    /// 助手这一步出错的原因
+    var error: OpenCodeFailure?
     var time: Time
 
     struct Time: Decodable, Sendable {
