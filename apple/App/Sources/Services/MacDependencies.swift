@@ -22,6 +22,7 @@ struct MacDependencies {
     var locatePi: @Sendable () async -> URL?
     /// 复制的去处。
     var pasteboard: NSPasteboard
+    var cue: CueDependencies
 
     /// 自动更新随正式位置启用；隔离模式（开发与验收）不去读真实的更新源与偏好。
     static func live(location: LibraryLocation) -> MacDependencies {
@@ -41,7 +42,11 @@ struct MacDependencies {
             locatePi: {
                 if case .found(let executable, _) = await installer.status().pi { executable } else { nil }
             },
-            pasteboard: .general)
+            pasteboard: .general,
+            cue: CueDependencies(
+                scan: { [runtimes = CueRuntimes(piAgentDirectory: paths.agentDirectory)] in await runtimes.scan() },
+                helper: Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"),
+                notifier: location.isIsolated ? LoggedCueNotifier() : SystemCueNotifier()))
     }
 }
 #endif
