@@ -39,7 +39,8 @@ nonisolated struct CueTiming: Sendable {
 /// 6. 空闲巡视：没在跟进任何事、你很久没说话、本地 9–23 点，每段空闲最多一次、每天最多 3 次。
 /// 7. 记忆有待合并的块且空闲够久：醒来附上合并提示（同一块一个班次只请一次）。
 ///
-/// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送）。
+/// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`，其余 Cue 自己醒来的写成 `note`（折成灰色一行、不推送）；
+/// Cue 自己醒来的一轮里已经用 tell 对你说过话的，最后的回复不再写 note（几乎是同一句）。
 /// 基线（变化从哪一刻算起、上次的看板）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。
 /// Cue 自己醒来（刚启用、换新、提醒与 5–7）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次，再错就等下一个新变化；额度、登录类的错不重试。
 /// 上下文用到 `renewAt` 后，下一次醒来的信封里提示先写交接。大脑意外退出或起不来按 `CueTiming.restarts` 退避重试，
@@ -85,6 +86,8 @@ final class CueKeeper {
     private struct Turn {
         /// 回复写成谁的
         var author: CueAuthor
+        /// 醒来（或插话开出这一轮）的时刻：Cue 在这之后用 tell 说过话，自己醒来的这一轮最后就不再写 note
+        var startedAt = Date.now
         /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒、附了什么（出错要退避、重试同一次醒来）；你发起的为 nil
         var selfStarted: (wake: CueWake, extra: String?)?
         /// 这一轮里交出去的你的消息与回答：大脑中途退出时清掉送达
@@ -252,8 +255,10 @@ final class CueKeeper {
         case .turnStarted:
             if turn == nil { turn = Turn(author: .cue) }  // 没有醒来就开始的一轮只能是插进来的你的话开的
         case .reply(let text):
-            await say(turn?.author ?? .note, text)
             lastFailure = nil
+            let author = turn?.author ?? .note
+            if author == .note, await hasTold(since: turn?.startedAt ?? lastTurnEnd) { return }  // 已经对你说过了，动态那一行只是复述
+            await say(author, text)
         case .context(let used, _):
             contextUsed = used
         case .failed(let raw):
@@ -462,6 +467,16 @@ final class CueKeeper {
         }
         save()
         return true
+    }
+
+    /// Cue 在 `since` 之后写过给你的消息（tell）。
+    private func hasTold(since: Date) async -> Bool {
+        do {
+            return try await setup.store.cueMessages(limit: 50).contains { $0.author == .known(.cue) && $0.createdAt >= since }
+        } catch {
+            Self.log.error("Cue 读对话失败：\(error.localizedDescription, privacy: .public)")
+            return false
+        }
     }
 
     private func say(_ author: CueAuthor, _ text: String) async {
