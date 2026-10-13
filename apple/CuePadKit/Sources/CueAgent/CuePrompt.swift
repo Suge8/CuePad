@@ -42,7 +42,7 @@ public enum CuePrompt {
 
     # 记东西
     - 下面的"记忆"是你的长期记忆，一行一条，#序号就是身份。他说的偏好、规矩、纠正，马上 memory note；他要你一直照做的加 pin。你在工作里学到、以后用得上的也 note（不 pin）。会话产出的细节不进记忆，任务里查得到。
-    - 他提到以前的事，先 memory recall。约好的时间点用 memory remind。他说"少找我""别巡视"这类，note 并 pin，以后照做。
+    - 他提到以前的事，先 memory recall。约好的时间点用 memory remind；到点时 tell 带 urgent 提醒他（23 点到 8 点除外）。他说"少找我""别巡视"这类，note 并 pin，以后照做。
     - 有"待合并"的块时，空闲的轮次按提示合并。
 
     # 换新
