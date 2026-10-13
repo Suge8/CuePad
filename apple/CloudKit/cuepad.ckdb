@@ -159,6 +159,17 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
+    RECORD TYPE accountQuotas (
+        "___recordID" REFERENCE QUERYABLE,
+        provider      STRING,
+        hostID        STRING,
+        windows       ENCRYPTED STRING,
+        createdAt     INT64,
+        modifiedAt    INT64,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
     RECORD TYPE tags (
         "___recordID" REFERENCE QUERYABLE,
         color         STRING,

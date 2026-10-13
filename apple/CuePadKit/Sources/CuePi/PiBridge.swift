@@ -169,6 +169,12 @@ public final class PiBridge {
         _ = try await request(to: id) { try PiWire.configCommand(id: $0, model: model, thinking: thinking, name: name) }
     }
 
+    /// 请该会话的扩展查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），
+    /// 再返回；有一家没查到抛 `rejected("failed: …")`（查到的那几家照常报出）。
+    public func refreshQuota(in id: PiSession.ID) async throws {
+        _ = try await request(to: id) { try PiWire.quotaCommand(id: $0) }
+    }
+
     private func request(to id: PiSession.ID, encode: (String) throws -> Data) async throws -> PiWire.Ack {
         guard let link = links[id], let session = link.session else { throw PiBridgeError.unknownSession(id) }
         guard session.state != .incompatible else { throw PiBridgeError.incompatibleExtension }
@@ -300,6 +306,9 @@ public final class PiBridge {
             if let id = ack.id { link.pending.removeValue(forKey: id)?.resume(returning: ack) }
         case .bye(let bye):
             link.bye = bye
+        case .quota(let report):
+            guard link.session != nil else { throw HandlingError.messageBeforeHello }
+            emit(.quota(report))
         }
     }
 

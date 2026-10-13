@@ -35,6 +35,7 @@ extension AppServices {
                 } else {
                     try await piStateRecorder.exited(sessionID: session.sessionID, file: session.sessionFile, hosted: session.hosted)
                 }
+            case .quota(let report): try await store.recordQuota(report, host: hostID)
             case .incompatible: break
             }
         }

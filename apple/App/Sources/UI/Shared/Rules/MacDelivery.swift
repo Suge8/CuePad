@@ -110,6 +110,7 @@ nonisolated extension DeliveryMode {
         case .end: "结束会话"
         case .stop: "停止这一轮"
         case .bind: "绑定文件夹"
+        case .quota: "刷新额度"
         }
     }
 
@@ -118,7 +119,7 @@ nonisolated extension DeliveryMode {
         switch self {
         case .steer: "它做完手上这一步就会看到"
         case .followUp: "这一轮结束后再送达"
-        case .send, .command, .answer, .ping, .start, .transcript, .config, .end, .stop, .bind: nil
+        case .send, .command, .answer, .ping, .start, .transcript, .config, .end, .stop, .bind, .quota: nil
         }
     }
 }
