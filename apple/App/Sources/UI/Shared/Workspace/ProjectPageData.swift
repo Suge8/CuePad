@@ -10,7 +10,9 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var lastSends: [UUID: LastSend]
     /// 本项目没完成的任务的层级，同级按手动顺序。
     var tasks: TaskTree
-    /// 本项目顶层任务的个数（`CueStore.taskCounts`）：纸里列的是没做完的，做完的只写个数。
+    /// 本项目最近完成的顶层任务（`TaskBoard.recentlyDone`）：纸底"已完成"展开时列出。
+    var done: [Card]
+    /// 本项目顶层任务的个数（`CueStore.taskCounts`）：纸底的"还有 N 条"与"已完成 M"。
     var taskCounts: TaskCounts
     /// 任务的步骤完成了几个，完成圈与"步骤 n/m"由它推出。
     var subtasks: [UUID: TaskProgress]
@@ -29,18 +31,15 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
         cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) }
     }
 
-    /// 没完成的任务的层级；层级限制按本项目全部任务（含已完成）算。
-    private static func tree(_ project: UUID?, from store: isolated CueStore) throws -> TaskTree {
-        let all = try store.tasks(in: project, .inProgress, .todo, .done)
-        return TaskTree(all.filter { $0.status != .done }, all: all)
-    }
-
     static func read(_ project: UUID?, from store: isolated CueStore) throws -> ProjectPageData {
-        ProjectPageData(
+        // 层级限制按本项目全部任务（含已完成）算
+        let all = try store.tasks(in: project, .inProgress, .todo, .done)
+        return ProjectPageData(
             project: try project.flatMap { try store.project($0) },
             cards: try store.cards(in: project),
             lastSends: try store.lastSends(in: project),
-            tasks: try Self.tree(project, from: store),
+            tasks: TaskTree(all.filter { $0.status != .done }, all: all),
+            done: TaskBoard.recentlyDone(all),
             taskCounts: try store.taskCounts(in: project),
             subtasks: try store.subtaskProgress(in: project),
             prompts: try store.prompts(in: project))

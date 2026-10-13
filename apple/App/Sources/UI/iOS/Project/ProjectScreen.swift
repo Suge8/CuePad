@@ -26,6 +26,8 @@ struct ProjectScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var page: ProjectPage?
     @State private var expanded: Set<OlderGroup.Period> = []
+    /// 任务纸的开合放在页面上：任务纸是懒加载列表里的一格，划出屏幕再回来不丢。
+    @State private var fold = DebugHooks.preset.taskFold
     @State private var board = WallBoard()
     @State private var pi: PiSessionList?
 
@@ -60,7 +62,7 @@ struct ProjectScreen: View {
         let data = page.data, lastTarget = data.lastTarget
         // 行距为 0：同一组的"更早"行拼成一张纸（首尾圆角、行间分隔线），段与段之间的距离各自写在段上
         LazyVStack(alignment: .leading, spacing: 0) {
-            if data.project != nil { FocusCard(data: data, pi: pi, guide: workspace.folderGuide).padding(.bottom, Self.sectionGap) }
+            if data.project != nil { FocusCard(data: data, pi: pi, guide: workspace.folderGuide, fold: $fold).padding(.bottom, Self.sectionGap) }
             if data.cards.isEmpty {
                 // 上面已有任务或会话时页面不是空的：空态缩成一行，不放吉祥物与实心主按钮
                 let busy = !data.tasks.roots.isEmpty || pi?.now.isEmpty == false
@@ -158,17 +160,19 @@ struct ProjectScreen: View {
 }
 
 /// 介绍与任务：项目的一句话介绍在纸外、顶栏下的第一行（次要墨色）；下面总是一张纸：本项目任务（前 3 条没做完的顶层任务连同步骤，
-/// 可拖动、缩进，同任务页；没列出的与已完成的只在纸底写个数、点开是任务页，见 `TaskCopy.more`；一条都没有时纸里只有一行"添加任务"）+ 本项目此刻在线的 Agent 会话（这一段只回答"现在谁在干活"，
+/// 可拖动、缩进，同任务页；没列出的与最近完成的在纸底写个数，点了在纸里原地展开、各自开合，无回弹弹簧，见 `TaskFold`；一条都没有时纸里只有一行"添加任务"）+ 本项目此刻在线的 Agent 会话（这一段只回答"现在谁在干活"，
 /// 已结束的不列；有历史时末尾"全部 N 个会话"看这个项目的会话列表；没有在线会话时整段不出现，同 Mac 项目页）。项目还没绑文件夹而有同名建议或正在绑时（`FolderGuide.shows`），Agent 段是绑定引导；
 /// 没有建议时不占位置，绑定在项目的"⋯"里。三种项目（多、少、只有任务）是同一个结构，切换项目时眼睛不用重新找。
 private struct FocusCard: View {
     let data: ProjectPageData
     let pi: PiSessionList?
     let guide: FolderGuide?
+    @Binding var fold: TaskFold
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(Navigation.self) private var navigation
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let visibleTasks = 3
 
@@ -197,22 +201,25 @@ private struct FocusCard: View {
             // 与任务页同一节奏：行自带 44pt 命中高度，行间不再加间距
             VStack(alignment: .leading, spacing: 0) {
                 let roots = data.tasks.roots
+                let hidden = TaskFold.hidden(roots.count, limit: Self.visibleTasks)
+                let done = data.taskCounts.done
                 if !roots.isEmpty {
                     SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
-                    TaskOutline(tree: data.tasks, roots: Array(roots.prefix(Self.visibleTasks))) { row in
+                    TaskOutline(tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks)) { row in
                         TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
                     }
                 }
-                if let more = TaskCopy.more(hidden: roots.count - Self.visibleTasks, done: data.taskCounts.done) {
-                    Button { navigation.push(.tasks) } label: {
-                        HStack(spacing: 4) {
-                            Text(more)
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).accessibilityHidden(true)
-                        }
-                        .frame(minHeight: 44).contentShape(.rect)
+                if hidden > 0 || done > 0 {
+                    HStack(spacing: 6) {
+                        if hidden > 0 { toggle(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
+                        if hidden > 0, done > 0 { Dot() }
+                        if done > 0 { toggle(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
                     }
-                    .buttonStyle(.plain)
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
+                }
+                if fold.showsDone {
+                    // 同任务页里已完成的行：淡一档，点圆圈回到待办
+                    ForEach(data.done) { TaskLine(task: $0) }
                 }
                 NewTaskLine(project: data.project?.id)
             }
@@ -242,6 +249,21 @@ private struct FocusCard: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .paper(radius: 18)
+    }
+
+    /// 纸底展开或收起的一格。
+    private func toggle(_ title: String, open: Bool, _ key: WritableKeyPath<TaskFold, Bool>) -> some View {
+        Button {
+            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
+        } label: {
+            HStack(spacing: 4) {
+                Text(title)
+                Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold)).accessibilityHidden(true)
+            }
+            .frame(minHeight: 44).contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(open ? "已展开" : "已折叠")
     }
 
     private func sessionLine(_ item: PiSessionListItem) -> some View {
