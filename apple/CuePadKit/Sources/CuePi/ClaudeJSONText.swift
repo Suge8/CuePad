@@ -37,19 +37,13 @@ struct ClaudeJSONText {
     /// 这个值的原文。
     func text(of node: Node) -> Data { Data(bytes[node.start..<node.end]) }
 
-    /// 原文里除了空白就是一个空对象。
-    var isEmptyObject: Bool {
-        guard let node = try? root(), node.kind == .object else { return false }
-        return node.items.isEmpty
-    }
-
-    /// 删掉容器 `container` 里第 `index` 项：是最后一项时连同它前面的逗号与空白一起删（正好是 `append` 加进去的那段），
-    /// 否则连同它后面到下一项之前的部分删；只剩它一项时容器里清空。
+    /// 删掉容器 `container` 里第 `index` 项，正好删掉 `append` 加它时加进去的字节：是最后一项时连同它前面的逗号与空白，
+    /// 只剩它一项时只删它自己（容器里原有的空白不动），否则连同它后面到下一项之前的部分。
     mutating func remove(_ index: Int, in container: Node) {
         let items = container.items
         let range: Range<Int>
         if items.count == 1 {
-            range = (container.start + 1)..<(container.end - 1)
+            range = items[index].start..<items[index].value.end
         } else if index == items.count - 1 {
             range = items[index - 1].value.end..<items[index].value.end
         } else {
@@ -58,17 +52,32 @@ struct ClaudeJSONText {
         bytes.removeSubrange(range)
     }
 
-    /// 在容器末尾加一项（对象的成员写成 `"键": 值`）。`render` 按给定的缩进写出值，写多行时续行用它。
+    /// 在容器末尾加一项（对象的成员写成 `"键": 值`）。非空容器在最后一项后面接 `,\n<缩进>`；空容器紧贴着左括号放进去，
+    /// 原有的空白一个字节不动——删掉它（`remove`）就回到原样。
     mutating func append(key: String?, in container: Node, render: (_ indent: String, _ unit: String) -> String) {
-        let unit = indentUnit
-        let base = indentation(at: container.start)
-        let inner = base + unit
-        let item = (key.map { Self.quoted($0) + ": " } ?? "") + render(inner, unit)
+        let item = itemText(key: key, in: container, render: render)
         if let last = container.items.last {
-            bytes.insert(contentsOf: Array(",\n\(inner)\(item)".utf8), at: last.value.end)
+            bytes.insert(contentsOf: Array(",\n\(context(of: container).inner)\(item)".utf8), at: last.value.end)
         } else {
-            bytes.replaceSubrange((container.start + 1)..<(container.end - 1), with: Array("\n\(inner)\(item)\n\(base)".utf8))
+            bytes.insert(contentsOf: Array(item.utf8), at: container.start + 1)
         }
+    }
+
+    /// `append` 会在这个容器里写出的那一项（从键到值的末尾）。
+    func itemText(key: String?, in container: Node, render: (_ indent: String, _ unit: String) -> String) -> String {
+        let context = context(of: container)
+        return (key.map { Self.quoted($0) + ": " } ?? "") + render(context.inner, context.unit)
+    }
+
+    /// 容器里第 `index` 项的原文（从键到值的末尾）。
+    func itemText(_ index: Int, in container: Node) -> String {
+        String(decoding: bytes[container.items[index].start..<container.items[index].value.end], as: UTF8.self)
+    }
+
+    /// 容器里的项所用的缩进：容器所在那一行的缩进再加一级。
+    private func context(of container: Node) -> (inner: String, unit: String) {
+        let unit = indentUnit
+        return (indentation(at: container.start) + unit, unit)
     }
 
     static func quoted(_ string: String) -> String {

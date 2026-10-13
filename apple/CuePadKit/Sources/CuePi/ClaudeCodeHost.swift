@@ -378,7 +378,13 @@ final class ClaudeHostedSession: SessionLink {
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed?.isEmpty == true { throw PiBridgeError.rejected("bad_request") }
         if let model {
-            do { _ = try await request(["subtype": "set_model", "model": .string(model.id)]) } catch PiBridgeError.rejected { throw PiBridgeError.rejected("unknown_model") }
+            // Claude Code 换模型时先向服务端核对：只有"不支持这个模型"才是模型表里没有，别的（网络、限流、认证）照原话报
+            do {
+                _ = try await request(["subtype": "set_model", "model": .string(model.id)])
+            } catch PiBridgeError.rejected(let reason) {
+                let unknown = ["unsupported model", "not found", "unknown model", "invalid model"].contains { reason.lowercased().contains($0) }
+                throw PiBridgeError.rejected(unknown ? "unknown_model" : "failed: \(reason)")
+            }
             update { session in session.model = session.availableModels.first { $0.key == model } ?? ClaudeCode.model(model.id) }
         }
         if let thinking {

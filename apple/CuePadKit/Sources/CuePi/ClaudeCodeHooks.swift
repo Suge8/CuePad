@@ -4,8 +4,8 @@ import Foundation
 
 /// Claude Code 的钩子：CuePad 的条目写在 `<配置目录>/settings.json` 的 `hooks` 键里（Claude Code 把各层配置的钩子合并着跑，
 /// 用户级的就是这一份）。每个事件一组 `{"hooks": [{"type": "command", "command": "<cuepad> hook claude", "timeout": …}]}`，
-/// 加在该事件已有的组后面；别人的组、别的键原样留着，文件按原文改（`ClaudeJSONText`），卸载后与装之前逐字节一致，
-/// 因此空出来的事件、`hooks` 键一并删掉，只剩一个空对象时连文件也删。认 CuePad 的组只看命令（路径可能是旧位置）。
+/// 加在该事件已有的组后面；别人的组、别的键原样留着，文件按原文改（`ClaudeJSONText`）。卸载删回装之前的样子、逐字节一致：
+/// CuePad 新加的事件、`hooks` 键、整个文件整项删，用户原有的（哪怕空着）只删其中 CuePad 的组。认 CuePad 的组只看命令（路径可能是旧位置）。
 struct ClaudeCodeHooks: AgentHookConfig {
     let home: URL
 
@@ -41,33 +41,40 @@ struct ClaudeCodeHooks: AgentHookConfig {
     }
 
     func install(command: String) async throws {
-        var text = try removingMine(from: (try? Data(contentsOf: settings)) ?? Data("{}\n".utf8))
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        // 没有文件、或文件是 CuePad 建的且之后没人动过（升级换了路径）：整个写成 CuePad 建的样子，卸载时整个删
+        let data = try? Data(contentsOf: settings)
+        guard let data, !commands(in: data).contains(where: { data == Data(Self.fileText(command: $0).utf8) }) else {
+            return try Data(Self.fileText(command: command).utf8).write(to: settings, options: .atomic)
+        }
+        var text = try removingMine(from: data)
         let root = try text.root()
-        if root.member("hooks") == nil { text.append(key: "hooks", in: root) { _, _ in "{}" } }
+        guard let hooks = root.member("hooks")?.value else {
+            text.append(key: "hooks", in: root) { Self.hooksText(command: command, indent: $0, unit: $1) }
+            return try text.data.write(to: settings, options: .atomic)
+        }
+        guard hooks.kind == .object else { throw ClaudeHooksError.unexpectedShape(settings.path) }
         for event in Self.events {
             let hooks = try hooksObject(of: text)
             if let existing = hooks.member(event)?.value {
                 guard existing.kind == .array else { throw ClaudeHooksError.unexpectedShape(settings.path) }
-                text.append(key: nil, in: existing) { indent, unit in Self.groupText(command: command, event: event, indent: indent, unit: unit) }
+                text.append(key: nil, in: existing) { Self.groupText(command: command, event: event, indent: $0, unit: $1) }
             } else {
-                text.append(key: event, in: hooks) { indent, unit in
-                    "[\n\(indent)\(unit)\(Self.groupText(command: command, event: event, indent: indent + unit, unit: unit))\n\(indent)]"
-                }
+                text.append(key: event, in: hooks) { Self.eventText(command: command, event: event, indent: $0, unit: $1) }
             }
         }
-        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         try text.data.write(to: settings, options: .atomic)
     }
 
     func uninstall() async throws {
         guard let data = try? Data(contentsOf: settings) else { return }
+        // 文件是 CuePad 建的、之后没人动过：整个删掉（装之前没有它）
+        if let command = commands(in: data).first, data == Data(Self.fileText(command: command).utf8) {
+            return try FileManager.default.removeItem(at: settings)
+        }
         let text = try removingMine(from: data)
         guard text.data != data else { return }
-        if text.isEmptyObject {
-            try FileManager.default.removeItem(at: settings)
-        } else {
-            try text.data.write(to: settings, options: .atomic)
-        }
+        try text.data.write(to: settings, options: .atomic)
     }
 
     // MARK: 条目
@@ -104,28 +111,63 @@ struct ClaudeCodeHooks: AgentHookConfig {
             """
     }
 
+    /// CuePad 新加的一个事件的值：只有它那一组的数组
+    private static func eventText(command: String, event: String, indent: String, unit: String) -> String {
+        "[\n\(indent + unit)\(groupText(command: command, event: event, indent: indent + unit, unit: unit))\n\(indent)]"
+    }
+
+    /// CuePad 新加的 `hooks` 对象：全部事件
+    private static func hooksText(command: String, indent: String, unit: String) -> String {
+        let inner = indent + unit
+        let members = events.map { "\(inner)\(ClaudeJSONText.quoted($0)): \(eventText(command: command, event: $0, indent: inner, unit: unit))" }
+        return "{\n\(members.joined(separator: ",\n"))\n\(indent)}"
+    }
+
+    /// 原来没有 settings.json 时 CuePad 建的整个文件
+    private static func fileText(command: String) -> String {
+        "{\n  \"hooks\": \(hooksText(command: command, indent: "  ", unit: "  "))\n}\n"
+    }
+
+    /// 文件里 CuePad 条目用的命令（可能是 App 搬家前的旧路径）
+    private func commands(in data: Data) -> [String] {
+        let groups = ClaudeJSON.parse(data)?["hooks"]?.object?.values.flatMap { $0.array ?? [] } ?? []
+        return groups.filter(isMine).compactMap { $0["hooks"]?.array?.first?["command"]?.string }
+    }
+
     private func hooksObject(of text: ClaudeJSONText) throws -> ClaudeJSONText.Node {
         guard let hooks = try text.root().member("hooks")?.value, hooks.kind == .object else { throw ClaudeHooksError.unexpectedShape(settings.path) }
         return hooks
     }
 
-    /// 删掉 CuePad 的组；因此空了的事件、`hooks` 对象一并删（用户自己留的空结构不碰）。文件不是 JSON 对象就不动它、抛错。
+    /// 删掉 CuePad 加的东西，每一处都删回 `append` 之前的样子：CuePad 新加的 `hooks` 对象、新加的事件原样还在（文字与 `append` 写出的一致）就整项删掉，
+    /// 否则只删其中 CuePad 的组；用户自己的结构（哪怕空着）不删。文件不是 JSON 对象就不动它、抛错。
     private func removingMine(from data: Data) throws -> ClaudeJSONText {
         var text = ClaudeJSONText(data)
         guard let root = try? text.root(), root.kind == .object else { throw ClaudeHooksError.unreadable(settings.path) }
         while true {
-            guard let hooks = try text.root().member("hooks")?.value, hooks.kind == .object else { return text }
-            let found = hooks.items.lazy.compactMap { member -> (event: String, group: Int, in: ClaudeJSONText.Node)? in
-                guard member.value.kind == .array,
-                      let group = member.value.items.firstIndex(where: { isMine(ClaudeJSON.parse(text.text(of: $0.value))) }) else { return nil }
-                return (member.key ?? "", group, member.value)
-            }.first
-            guard let found else { return text }
-            text.remove(found.group, in: found.in)
-            let emptied = try hooksObject(of: text)
-            if let (index, array) = emptied.member(found.event), array.items.isEmpty { text.remove(index, in: emptied) }
             let root = try text.root()
-            if let (index, hooks) = root.member("hooks"), hooks.items.isEmpty { text.remove(index, in: root) }
+            guard let (hooksIndex, hooks) = root.member("hooks"), hooks.kind == .object else { return text }
+            let command = commands(in: text.data).first
+            if let command, text.itemText(hooksIndex, in: root)
+                == text.itemText(key: "hooks", in: root, render: { Self.hooksText(command: command, indent: $0, unit: $1) }) {
+                text.remove(hooksIndex, in: root)
+                continue
+            }
+            if let command, let event = hooks.items.indices.first(where: { index in
+                let key = hooks.items[index].key ?? ""
+                return Self.events.contains(key) && text.itemText(index, in: hooks)
+                    == text.itemText(key: key, in: hooks, render: { Self.eventText(command: command, event: key, indent: $0, unit: $1) })
+            }) {
+                text.remove(event, in: hooks)
+                continue
+            }
+            let group = hooks.items.lazy.compactMap { member -> (index: Int, in: ClaudeJSONText.Node)? in
+                guard member.value.kind == .array,
+                      let index = member.value.items.firstIndex(where: { isMine(ClaudeJSON.parse(text.text(of: $0.value))) }) else { return nil }
+                return (index, member.value)
+            }.first
+            guard let group else { return text }
+            text.remove(group.index, in: group.in)
         }
     }
 }

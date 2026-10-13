@@ -60,28 +60,39 @@ struct RealClaudeHostTests {
         }
     }
 
-    /// 换模型与强度、改名（设置与斜杠命令两条路）都改到会话自己身上，之后的回答用的是新模型。
+    /// 换模型与强度、改名（设置与斜杠命令两条路）都改到 Claude Code 自己身上：之后的回答是新模型、新强度答的（看会话文件里它记下的），名字写进了会话文件。
     @Test func cuePadChangesModelEffortAndNameOfAHostedSession() async throws {
         try await ClaudeTestbed.run { testbed in
             try testbed.runtime.start()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t")
-            let mimo = PiModelKey(provider: ClaudeCode.provider, id: "mimo-v2.5")
+            let file = try #require(testbed.bridge.session(id: id)?.sessionFile)
+            // 测试网关上除了缺省的 mimo-v2.5，还能用的另一个模型
+            let pro = PiModelKey(provider: ClaudeCode.provider, id: "mimo-v2.5-pro")
 
-            try await testbed.bridge.configure(model: mimo, thinking: .low, name: "托管改名", in: id)
-            let session = try #require(testbed.bridge.session(id: id))
-            #expect(session.model?.key == mimo && session.thinking == .known(.low) && session.displayName == "托管改名")
+            try await testbed.bridge.configure(model: pro, thinking: .low, name: "托管改名", in: id)
             await #expect(throws: PiBridgeError.rejected("unknown_model")) {
                 try await testbed.bridge.configure(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model"), in: id)
             }
-
             try await testbed.bridge.command("/rename 命令改名", in: id)
-            try await eventually("斜杠命令改了名", timeout: .seconds(60)) { testbed.bridge.session(id: id)?.displayName == "命令改名" }
+            try await eventually("斜杠命令改了名、歇下", timeout: .seconds(60)) {
+                testbed.bridge.session(id: id)?.displayName == "命令改名" && testbed.bridge.session(id: id)?.state == .settled
+            }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await testbed.bridge.command("/no-such-command", in: id) }
 
             _ = try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id)
-            #expect(try testbed.transcript(session.sessionFile).history.name == "命令改名")
+            let answered = try #require(lastAnswer(in: file))
+            #expect(answered.model == "mimo-v2.5-pro")
+            #expect(answered.effort == "low")
+            #expect(try testbed.transcript(file).history.name == "命令改名")
         }
+    }
+
+    /// 会话文件里最后一条模型回答记下的模型与强度
+    private func lastAnswer(in file: URL) -> (model: String?, effort: String?)? {
+        let lines = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n")
+        return lines.reversed().lazy.compactMap { ClaudeJSON.parse(Data($0.utf8)) }.first { $0["type"]?.string == "assistant" }
+            .map { ($0["message"]?["model"]?.string, $0["effort"]?.string) }
     }
 
     /// 结束托管的会话：进程退出、下桥；之后在后台接着它，上一轮说过的它还记得。

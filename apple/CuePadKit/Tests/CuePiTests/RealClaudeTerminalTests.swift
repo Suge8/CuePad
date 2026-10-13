@@ -11,7 +11,7 @@ import Testing
 @Suite(.enabled(if: realClaudeAvailable && tmuxURL != nil, "需要 claude、tmux 与 ~/.pi/agent/auth.json 里的小米密钥"), .serialized, .timeLimit(.minutes(8)))
 struct RealClaudeTerminalTests {
     /// 用户自己的 settings.json：别的设置、自己的一个 Stop 钩子
-    static let userSettings = """
+    nonisolated static let userSettings = """
         {
           "theme": "dark",
           "hooks": {
@@ -33,9 +33,8 @@ struct RealClaudeTerminalTests {
 
         """
 
-    @Test func aTerminalSessionAppearsReceivesCuePadsMessageAndUninstallRestoresTheSettingsByteForByte() async throws {
+    @Test func aTerminalSessionAppearsAndReceivesCuePadsMessage() async throws {
         try await ClaudeTestbed.run(settings: Self.userSettings) { testbed in
-            #expect(await testbed.integration.status(of: .claudeCode).files == .current)
             try testbed.runtime.start()
 
             let terminal = try await testbed.terminal()
@@ -52,21 +51,30 @@ struct RealClaudeTerminalTests {
             await #expect(throws: PiBridgeError.unsupported) {
                 try await testbed.bridge.send(PiMessage(text: "看图", images: [PiImage(mimeType: "image/png", data: redPNG)]), to: session.id)
             }
-
-            try await testbed.integration.uninstall(.claudeCode)
-            #expect(try String(contentsOf: testbed.config.appending(path: "settings.json"), encoding: .utf8) == Self.userSettings)
-            #expect(await testbed.integration.status(of: .claudeCode).files == .missing)
         }
     }
 
-    @Test func installingIntoAConfigWithoutSettingsAndUninstallingLeavesNoSettingsFile() async throws {
-        try await ClaudeTestbed.run() { testbed in
-            let settings = testbed.config.appending(path: "settings.json")
-            #expect(FileManager.default.fileExists(atPath: settings.path))
+    /// 接入只把 CuePad 的钩子合并进用户自己的 settings.json；关掉接入（中间 App 搬过家、升级过也一样）后与装之前逐字节一致：
+    /// 原来没有文件就没有文件，原来空着的对象、`hooks`、事件数组都原样留着。
+    @Test(arguments: [
+        nil, Self.userSettings, "{}", "{ }\n", "{\n  \"hooks\": {}\n}\n", #"{"hooks":{"Stop":[]},"theme":"dark"}"#,
+        "{\n  \"hooks\": {\n    \"Stop\": [\n    ]\n  }\n}\n",
+    ])
+    func connectingAndDisconnectingLeavesTheUsersSettingsByteForByte(settings: String?) async throws {
+        try await ClaudeTestbed.run(installHooks: false, settings: settings) { testbed in
+            let file = testbed.config.appending(path: "settings.json")
+            let moved = AgentIntegration(
+                paths: testbed.paths, locator: ExecutableLocator(searchDirectories: [claudeURL!.deletingLastPathComponent()]),
+                cuepad: testbed.root.appending(path: "Moved/CuePad.app/Contents/Helpers/cuepad"))
 
-            try await testbed.integration.uninstall(.claudeCode)
+            try await testbed.integration.install(.claudeCode)
+            #expect(await testbed.integration.status(of: .claudeCode).files == .current)
+            try await moved.install(.claudeCode)
+            #expect(await moved.status(of: .claudeCode).files == .current)
+            try await moved.uninstall(.claudeCode)
 
-            #expect(!FileManager.default.fileExists(atPath: settings.path))
+            #expect((try? String(contentsOf: file, encoding: .utf8)) == settings)
+            #expect(await moved.status(of: .claudeCode).files == .missing)
         }
     }
 
