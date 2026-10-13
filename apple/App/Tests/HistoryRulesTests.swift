@@ -54,7 +54,8 @@ struct HistoryRulesTests {
 
         func shutdown() {
             services.cancelBackgroundWork()
-            host.closeAll()
+            // 托管的 Pi 不随 CuePad 结束：桥上还在的（本用例临时 socket 目录里的，是本用例启动的）逐个让它退出
+            for session in bridge.sessions where session.hosted { kill(session.pid, SIGTERM) }
             bridge.stop()
         }
 

@@ -79,6 +79,7 @@ enum PiWire {
     }
 
     /// 协议版本不同的 hello：格式可能已变，只读认得出会话的几项（其余字段读不出就当没有）。
+    /// `hosted` 也读：托管的旧版进程没有终端能 /reload，CuePad 要认出它、让它退出（`PiHost`）。
     struct OtherProtocolHello: Decodable {
         var protocolVersion: Int
         var extensionVersion: Int
@@ -87,10 +88,11 @@ enum PiWire {
         var cwd: String
         var name: String?
         var firstMessage: String?
+        var hosted: Bool
 
         enum CodingKeys: String, CodingKey {
             case protocolVersion = "protocol"
-            case extensionVersion, sessionId, pid, cwd, name, firstMessage
+            case extensionVersion, sessionId, pid, cwd, name, firstMessage, hosted
         }
 
         init(from decoder: any Decoder) throws {
@@ -102,6 +104,7 @@ enum PiWire {
             cwd = try c.decode(String.self, forKey: .cwd)
             name = try? c.decode(String.self, forKey: .name)
             firstMessage = try? c.decode(String.self, forKey: .firstMessage)
+            hosted = (try? c.decode(Bool.self, forKey: .hosted)) ?? false
         }
     }
 

@@ -50,7 +50,6 @@ extension AppServices {
     /// 卡住的组件不拦着退出，记一条日志指出是哪个；等待的结果是它的名字，按时结束为 nil。
     func beginShutdown(within limit: Duration = .seconds(2)) -> @Sendable () async -> String? {
         cancelBackgroundWork()
-        let hostedExit = host.closeAll()
         pi.stop()
         hotkey.unregister()
         let stopExecutor = executor.beginStop(), sync = sync
@@ -59,7 +58,6 @@ extension AppServices {
             let late = await ShutdownSteps.run([
                 ("远程投送执行器", stopExecutor),
                 ("同步引擎", { await sync?.stop() }),
-                ("后台托管的 Pi", hostedExit),
             ], within: limit)
             if let late { log.error("退出收尾：\(late, privacy: .public) 没在 \(limit, privacy: .public) 内结束，已放行退出") }
             return late

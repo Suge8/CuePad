@@ -5,7 +5,8 @@ import Testing
 import CueStore
 @testable import CuePi
 
-/// 端到端：CuePad 在后台托管 Pi（RPC 模式，没有终端界面）——恢复已结束的会话、开新会话、空闲退出、用户在别处打开同一会话时交出。
+/// 端到端：CuePad 在后台托管 Pi（RPC 模式，没有终端界面）——恢复已结束的会话、开新会话、空闲退出、用户在别处打开同一会话时交出、
+/// 不随 CuePad 结束、扩展协议变了的托管进程被换掉。
 @MainActor
 @Suite(.enabled(if: realPiAvailable, "需要 ~/.local/bin/pi"), .timeLimit(.minutes(2)))
 struct RealHostTests {
@@ -20,7 +21,8 @@ struct RealHostTests {
         return (try #require(session.sessionFile), session.sessionID)
     }
 
-    private func host(_ pi: PiProcess, _ bridge: PiBridge, idleLimit: Duration = .seconds(1800)) -> PiHost {
+    /// 空闲时限给得短：测试进程意外退出时，留下的托管进程不久也会自己退。
+    private func host(_ pi: PiProcess, _ bridge: PiBridge, idleLimit: Duration = .seconds(120)) -> PiHost {
         PiHost(bridge: bridge, paths: pi.paths, idleLimit: idleLimit, extraArguments: PiProcess.quietArguments)
     }
 
@@ -42,7 +44,7 @@ struct RealHostTests {
         let (file, sessionID) = try await endedSession(pi, bridge)
         let host = host(pi, bridge)
         host.start()
-        defer { host.closeAll() }
+        defer { stopHostedProcesses(bridge) }
 
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
 
@@ -61,7 +63,7 @@ struct RealHostTests {
         let (file, _) = try await endedSession(pi, bridge)
         let host = host(pi, bridge)
         host.start()
-        defer { host.closeAll() }
+        defer { stopHostedProcesses(bridge) }
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
         if !prompt.isEmpty {
             _ = try await bridge.send(PiMessage(text: prompt), to: resumed.id)
@@ -92,7 +94,7 @@ struct RealHostTests {
         try bridge.start()
         let host = host(pi, bridge)
         host.start()
-        defer { host.closeAll() }
+        defer { stopHostedProcesses(bridge) }
 
         let opened = try await host.open(in: pi.cwd, launchToken: "tok-1", executable: realPiURL)
 
@@ -111,7 +113,7 @@ struct RealHostTests {
         let (file, _) = try await endedSession(pi, bridge)
         let host = host(pi, bridge, idleLimit: .seconds(1))
         host.start()
-        defer { host.closeAll() }
+        defer { stopHostedProcesses(bridge) }
 
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
 
@@ -127,7 +129,7 @@ struct RealHostTests {
         let (file, sessionID) = try await endedSession(pi, bridge)
         let host = host(pi, bridge)
         host.start()
-        defer { host.closeAll() }
+        defer { stopHostedProcesses(bridge) }
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
 
         let mine = try await PiProcess(alongside: pi, sessionFile: file)
@@ -164,7 +166,7 @@ struct RealHostTests {
         let (file, sessionID) = try await endedSession(pi, bridge)
         let host = host(pi, bridge)
         host.start()
-        defer { host.closeAll() }
+        defer { stopHostedProcesses(bridge) }
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
         _ = try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
         try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
@@ -198,7 +200,7 @@ struct RealHostTests {
         let (file, sessionID) = try await endedSession(pi, bridge)
         let host = host(pi, bridge)
         host.start()
-        defer { host.closeAll() }
+        defer { stopHostedProcesses(bridge) }
         let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
         _ = try await bridge.send(PiMessage(text: "[[slow]] 后台这一轮"), to: resumed.id)
         try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
@@ -214,6 +216,58 @@ struct RealHostTests {
             $0["method"] as? String == "notify" && ($0["message"] as? String)?.contains("支线") == true
         }
         #expect(bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [mine.pid])
+    }
+
+    /// 托管的进程不随 CuePad 结束：发出一轮后 CuePad 这一侧整个没了（桥与托管服务都停掉，相当于 App 退出），这一轮照常跑完；
+    /// 新起的一套桥重新连上，看到同一个进程、标着托管、状态是做完了。
+    @Test func aHostedSessionOutlivesCuePadAndIsSeenAgainByTheNextOne() async throws {
+        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let first = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { pi.stop() }
+        try first.start()
+        var host: PiHost? = host(pi, first)
+        host?.start()
+        let opened = try #require(try await host?.open(in: pi.cwd, launchToken: "tok-outlive", executable: realPiURL))
+        _ = try await first.send(PiMessage(text: "[[slow]] 跑到一半 CuePad 退出"), to: opened.id)
+        try await eventually("后台在忙") { busy(first.sessions.first { $0.id == opened.id }?.state) }
+
+        host = nil
+        first.stop()
+        try pi.release()
+
+        let next = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { stopHostedProcesses(next); next.stop() }
+        try next.start()
+        try await eventually("新的桥看到它做完了这一轮") {
+            next.sessions.first { $0.pid == opened.pid }.map { $0.hosted && $0.state == .settled } == true
+        }
+        #expect(recap(of: next.sessions.first { $0.pid == opened.pid })?.lastReply?.contains("跑到一半") == true)
+    }
+
+    /// App 更新后扩展协议号变了：还在跑旧扩展的托管进程没有终端能 /reload，CuePad 让它退出；下次发消息用新扩展恢复，话送达。
+    @Test func anIncompatibleHostedProcessIsToldToExitAndTheNextMessageResumesIt() async throws {
+        let pi = try await PiProcess(modelInAgentDirectory: true)
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let (file, sessionID) = try await endedSession(pi, bridge)
+        let host = host(pi, bridge)
+        host.start()
+        defer { stopHostedProcesses(bridge) }
+        let installed = pi.paths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
+        let current = try String(contentsOf: installed, encoding: .utf8)
+        try current.replacing(/const PROTOCOL_VERSION = \d+;/, with: "const PROTOCOL_VERSION = 1;").write(to: installed, atomically: true, encoding: .utf8)
+
+        let old = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
+
+        #expect(old.state == .incompatible && old.hosted)
+        try await eventually("旧扩展的托管进程退出了") { kill(old.pid, 0) != 0 && !bridge.sessions.contains { $0.id == old.id } }
+
+        try current.write(to: installed, atomically: true, encoding: .utf8)  // App 装好了新扩展
+        let resumed = try await host.resume(sessionFile: file, in: pi.cwd, executable: realPiURL)
+        #expect(resumed.sessionID == sessionID && resumed.state != .incompatible)
+        _ = try await bridge.send(PiMessage(text: "换上新扩展之后"), to: resumed.id)
+        try await eventually("话送达、有回答") { replies(in: file).last == "ECHO 换上新扩展之后 IMAGES[]" }
     }
 }
 #endif
