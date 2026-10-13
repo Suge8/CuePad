@@ -12,7 +12,7 @@ import CuePi
 @Observable
 final class AccountQuotas {
     private(set) var items: [AccountQuota] = []
-    @ObservationIgnored private var running: Task<Void, any Error>?
+    @ObservationIgnored private var running: Task<Bool, any Error>?
     @ObservationIgnored private var nextAllowed = Date.distantPast
 
     nonisolated static let failureCooldown: TimeInterval = 2 * 60
@@ -25,16 +25,19 @@ final class AccountQuotas {
     func needsRefresh(at now: Date) -> Bool { items.isEmpty || items.contains { $0.isStale(at: now) } }
 
     /// 需要时用 `refresh` 查一次（Mac 经在线会话里的扩展，手机请 Mac 查）；正在查就等那一次。
-    func refreshIfStale(using refresh: @escaping @MainActor () async throws -> Void) async throws {
-        if let running { return try await running.value }
+    /// `refresh` 返回 false 是此刻没有可问的（没有在线会话、不知道哪台 Mac）：不算查过，有了可问的再来（见 `refreshesQuota`）。
+    func refreshIfStale(using refresh: @escaping @MainActor () async throws -> Bool) async throws {
+        if let running {
+            _ = try await running.value
+            return
+        }
         let now = Date.now
         guard now >= nextAllowed, needsRefresh(at: now) else { return }
         let task = Task { try await refresh() }
         running = task
         defer { running = nil }
         do {
-            try await task.value
-            nextAllowed = now.addingTimeInterval(AccountQuota.staleAfter)
+            if try await task.value { nextAllowed = now.addingTimeInterval(AccountQuota.staleAfter) }
         } catch {
             nextAllowed = now.addingTimeInterval(Self.failureCooldown)
             throw error
@@ -60,23 +63,35 @@ extension AppServices {
     }
 
     #if os(macOS)
+    /// 此刻有没有可问的：在线的会话（额度视图据此在会话连上时再看一次）。
+    var canRefreshQuota: Bool { !pi.slots.isEmpty }
+
     /// 手机发来的刷新请求（投送方式 `quota`）：与本机视图同一套节流，失败照常写回原因（手机不提示）。
     func refreshQuotaForRequest() async throws {
+        guard canRefreshQuota else { throw SendError.noLiveSession }
         try await accountQuotas.refreshIfStale(using: refreshQuota)
     }
 
     /// 经在线会话里的扩展查（它有 Pi 的令牌与自动刷新，App 不碰 Pi 的登录文件），查到的随桥的 `.quota` 写进库。
-    private func refreshQuota() async throws {
-        guard let session = pi.slots.first(where: { $0.session.state != .incompatible }) else { throw SendError.noLiveSession }
+    private func refreshQuota() async throws -> Bool {
+        guard let session = pi.slots.first(where: { $0.session.state != .incompatible }) else { return false }
         try await pi.refreshQuota(in: session.id)
+        return true
     }
     #else
+    /// 此刻有没有可问的：知道哪台 Mac（写过额度的，或有在线会话的）。
+    var canRefreshQuota: Bool { quotaHost != nil }
+
+    private var quotaHost: String? {
+        accountQuotas.items.max { $0.modifiedAt < $1.modifiedAt }?.hostID ?? liveSessions.live.first?.state.hostID
+    }
+
     /// 请最近写过额度的那台 Mac 查（还没有额度记录时，请有在线会话的 Mac），写出后立即上传、不等结果：新值随同步回来。
-    private func refreshQuota() async throws {
-        let host = accountQuotas.items.max { $0.modifiedAt < $1.modifiedAt }?.hostID ?? liveSessions.live.first?.state.hostID
-        guard let host else { return }
+    private func refreshQuota() async throws -> Bool {
+        guard let host = quotaHost else { return false }
         let request = try await store.requestQuotaRefresh(on: host)
         Task { await upload(request.id) }
+        return true
     }
     #endif
 }

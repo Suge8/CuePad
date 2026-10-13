@@ -140,6 +140,7 @@ enum DebugScene {
         preset.openPreview = defaults.string(forKey: "CuePadOpenPreview")
         preset.crashSheet = defaults.bool(forKey: "CuePadCrashSheet")
         preset.demoMac = defaults.bool(forKey: "CuePadDemoMac")
+        preset.quotaDetail = defaults.string(forKey: "CuePadQuotaDetail")
         #if os(iOS)
         preset.showsDone = defaults.bool(forKey: "CuePadShowsDone")
         preset.alertStatus = alertStatus
