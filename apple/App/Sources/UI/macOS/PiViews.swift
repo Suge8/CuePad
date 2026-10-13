@@ -25,7 +25,7 @@ struct PiSetupGuide: View {
         let command = missing ? Self.installCommand : Self.updateCommand
         VStack(alignment: .leading, spacing: 10) {
             if showsTitle { Text(missing ? "安装 Pi" : "升级 Pi").font(Typography.bodyStrong) }
-            Text("Pi 是在终端里运行的 AI 编程助手。装好后，灵感和任务可以直接发进 Pi 会话。")
+            Text("Pi 是在终端里运行的 AI 编程助手。装好后，灵感和任务可以直接发进 Agent 会话。")
                 .fixedSize(horizontal: false, vertical: true)
             if case .found(_, let version) = installation {
                 Text("现在是 \(version)，需要 \(PiVersion.minimumSupported) 或更新。").foregroundStyle(.secondary)

@@ -51,7 +51,7 @@ struct SettingsView: View {
             } header: {
                 SettingsHeader("Pi")
             } footer: {
-                SettingsFooter("接入会写三样东西：扩展让 CuePad 看到 Pi 会话的实时状态、把提示词（含图片）发进会话；技能让 Agent 知道怎么把页面和截图发到手机上看；cuepad 命令行让 Agent 读写你的灵感和任务。关掉开关只删这三样。接入或修复后，已在运行的会话在终端里执行 /reload 就能用上。")
+                SettingsFooter("接入会写三样东西：扩展让 CuePad 看到 Agent 会话的实时状态、把提示词（含图片）发进会话；技能让 Agent 知道怎么把页面和截图发到手机上看；cuepad 命令行让 Agent 读写你的灵感和任务。关掉开关只删这三样。接入或修复后，已在运行的会话在终端里执行 /reload 就能用上。")
             }
             Section { UpdateRow() } header: { SettingsHeader("更新") }
         }

@@ -546,7 +546,7 @@ private struct PiConnectCard: View {
             defer { connecting = false }
             do {
                 try await manager.connect()
-                workspace.say("已接入；已在运行的 Pi 会话执行 /reload 后生效")
+                workspace.say("已接入；已在运行的 Agent 会话在终端里执行 /reload 后生效")
             } catch {
                 workspace.fail(error)
             }
