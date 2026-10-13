@@ -11,11 +11,14 @@ final class BrainProcess: Sendable {
     let pid: pid_t
     private let input: Int32
     let lines: AsyncStream<Data>
-    private let exit: Task<Int32, Never>
     private struct State {
         var inputOpen = true
         var stopping = false
         var stderr = Data()
+        /// waitpid 拿到的状态；nil 是还没退出
+        var status: Int32?
+        /// 等退出的人：退出时都以 true 唤醒，限时的到点以 false 唤醒（各自只唤醒一次）
+        var waiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
     }
     /// 读线程与调用方共享（`Mutex` 不可复制，放进引用里给读线程）
     private final class Shared: Sendable { let state = Mutex(State()) }
@@ -61,17 +64,19 @@ final class BrainProcess: Sendable {
             }
         } done: {}
         // 阻塞在 waitpid 的专用线程：进程退出即回收（不留僵尸），再结束组里剩下的
-        let (exited, reaped) = AsyncStream<Int32>.makeStream()
         let spawned = pid
         Thread.detachNewThread {
             let pid = spawned
             var status: Int32 = 0
             while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
             killpg(pid, SIGKILL)
-            reaped.yield(status)
-            reaped.finish()
+            let waiters = shared.state.withLock { s in
+                s.status = status
+                defer { s.waiters = [:] }
+                return s.waiters.values
+            }
+            for waiter in waiters { waiter.resume(returning: true) }
         }
-        exit = Task { for await status in exited { return status }; return -1 }
     }
 
     /// 写一条 JSON（一行）。
@@ -104,28 +109,35 @@ final class BrainProcess: Sendable {
         kill(pid, SIGTERM)
         if await exited(within: grace) { return }
         killpg(pid, SIGKILL)
-        _ = await exit.value
+        _ = await exited(within: nil)
     }
 
     /// 读完标准输出（逐行交给 `handle`）后等进程退出，返回退出原因；是 `stop()` 让它退出的返回 nil。
     func pump(_ handle: (Data) -> Void) async -> String? {
         for await line in lines { handle(line) }
-        let status = await exit.value
-        let (stopping, stderr) = shared.state.withLock { ($0.stopping, $0.stderr) }
+        _ = await exited(within: nil)
+        let (status, stopping, stderr) = shared.state.withLock { ($0.status ?? -1, $0.stopping, $0.stderr) }
         if stopping { return nil }
         let code = (status & 0x7F) == 0 ? "退出码 \((status >> 8) & 0xFF)" : "被信号 \(status & 0x7F) 结束"
         let tail = String(decoding: stderr, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return tail.isEmpty ? code : "\(code)：\(tail)"
     }
 
-    private func exited(within limit: Duration) async -> Bool {
-        let exit = exit
-        return await withTaskGroup(of: Bool.self) { group in
-            group.addTask { _ = await exit.value; return true }
-            group.addTask { try? await Task.sleep(for: limit); return false }
-            let first = await group.next() ?? false
-            group.cancelAll()
-            return first
+    /// 等进程退出，至多 `limit`（nil 不限时）；退出了返回 true。到点不管进程有没有退出都立刻返回，好接着升级信号。
+    private func exited(within limit: Duration?) async -> Bool {
+        let id = UUID()
+        let shared = shared
+        return await withCheckedContinuation { continuation in
+            let exited = shared.state.withLock { s in
+                if s.status == nil { s.waiters[id] = continuation }
+                return s.status != nil
+            }
+            if exited { return continuation.resume(returning: true) }
+            guard let limit else { return }
+            Task {
+                try? await Task.sleep(for: limit)
+                shared.state.withLock { $0.waiters.removeValue(forKey: id) }?.resume(returning: false)
+            }
         }
     }
 

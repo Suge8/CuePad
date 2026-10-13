@@ -32,6 +32,17 @@ actor PiBrain: CueBrain {
 
     func start(_ config: CueBrainConfig) async throws {
         guard process == nil else { return }
+        do {
+            try await launch(config)
+        } catch {
+            // 握手失败：调用方拿不到这个大脑，起了的进程与临时文件这里收拾
+            await stop()
+            if let directory { try? FileManager.default.removeItem(at: directory) }
+            throw error
+        }
+    }
+
+    private func launch(_ config: CueBrainConfig) async throws {
         let directory = try makeBrainDirectory()
         self.directory = directory
         let prompt = directory.appending(path: "system-prompt.md")

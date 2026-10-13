@@ -38,6 +38,16 @@ actor CodexBrain: CueBrain {
 
     func start(_ config: CueBrainConfig) async throws {
         guard process == nil else { return }
+        do {
+            try await launch(config)
+        } catch {
+            // 握手失败：调用方拿不到这个大脑，起了的进程与临时文件这里收拾
+            await stop()
+            throw error
+        }
+    }
+
+    private func launch(_ config: CueBrainConfig) async throws {
         let arguments = ["app-server", "-c", "notify=[]", "-c", "web_search=\"disabled\""]
             + Self.disabledFeatures.flatMap { ["--disable", $0] }
         let process = try BrainProcess(
