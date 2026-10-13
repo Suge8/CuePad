@@ -302,6 +302,9 @@ public struct CueTools: Sendable {
       ])
   }
 
+  /// peek 里每个叶子最新的那条回答最多给这么多字。
+  static let latestReplyLimit = 4000
+
   /// peek all 的文字最多这么多行（含开头一行、项目名与"还有 N 件"）。
   static let overviewLimit = 60
 
@@ -322,9 +325,17 @@ public struct CueTools: Sendable {
       }
       lines.append(head)
       if let draft = leaf.draft { lines.append("  草稿：\(CueEnvelope.clip(CueFormat.plainText(draft.body), 200))") }
-      for message in leaf.recent {
-        let who = message.role == .known(.user) ? "你" : "Pi"
-        lines.append("  \(who)：\(CueEnvelope.clip(CueFormat.plainText(message.text), 300))")
+      // 最新的那条回答给全文（常是测试输出、验收证据），更早的截短
+      let latest = leaf.recent.lastIndex { $0.role == .known(.pi) }
+      for (index, message) in leaf.recent.enumerated() {
+        let text = CueFormat.plainText(message.text)
+        guard index == latest else {
+          lines.append("  \(message.role == .known(.user) ? "你" : "Pi")：\(CueEnvelope.clip(text, 300))")
+          continue
+        }
+        let full = text.count > Self.latestReplyLimit
+          ? String(text.prefix(Self.latestReplyLimit)) + "\n（后面还有 \(text.count - Self.latestReplyLimit) 字，截掉了）" : text
+        lines.append("  Pi（最新的回答）：\n" + full.split(separator: "\n", omittingEmptySubsequences: false).map { "    " + $0 }.joined(separator: "\n"))
       }
       if !leaf.previews.isEmpty { lines.append("  预览：" + leaf.previews.map(\.name).joined(separator: "、")) }
     }

@@ -22,7 +22,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var author: Open<CueAuthor>
   /// 正文（`CueFormat`）；你的消息可带图片引用。
   public var text: String
-  /// 给你的选项；有选项的 Cue 消息就是"等你"。
+  /// 给你的选项；有选项的 Cue 消息在等你（规则见 `CueStore.cueMessagesWaitingForYou`）。
   public var choices: [String]?
   /// 要推送到手机。
   public var urgent: Bool
@@ -37,9 +37,6 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
   /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 锁屏通知」）。
   var notify: Bool = false
-
-  /// 在等你回答：Cue 带选项问的、还没答。
-  public var isWaiting: Bool { author == .known(.cue) && choices != nil && answeredAt == nil }
 }
 
 extension CueMessage: Record {
