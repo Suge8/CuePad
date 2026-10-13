@@ -135,11 +135,6 @@ extension Workspace {
         try await bind(session.sessionID, to: try await createTask(session.title, in: session.projectID).id)
     }
 
-    /// 解开任务绑着的会话：会话照常，任务状态不变。
-    func unbind(_ leaf: UUID) async throws {
-        try await services.store.unbindSession(from: leaf)
-    }
-
     /// 在任务所在项目绑定的文件夹开新会话，会话以任务命名（`CueStore.requestLaunch`），话作为第一句；开好后任务绑上它。
     private func startSession(for task: Card, prompt: UUID, text: String) async throws {
         guard let project = task.projectID else { return say("未分类的任务没有文件夹，开不了会话", isError: true) }

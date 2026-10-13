@@ -159,17 +159,17 @@ struct SessionMenuItems: View {
             }
             Menu("绑定到任务", systemImage: "link") {
                 ForEach(link.bindable) { item in
-                    Button(Dotted(item.parent?.title, item.task.title).visible) { run { try await $0.bind(session.sessionID, to: item.task.id) } }
+                    Button(Dotted(item.parent?.title, item.task.title).visible) { workspace.attempt { try await workspace.bind(session.sessionID, to: item.task.id) } }
                 }
                 if !link.bindable.isEmpty { Divider() }
-                Button("新建任务并绑定", systemImage: "plus") { run { try await $0.bindNewTask(to: session) } }
+                Button("新建任务并绑定", systemImage: "plus") { workspace.attempt { try await workspace.bindNewTask(to: session) } }
             }
             if link.tasks.count == 1, let item = link.tasks.first {
-                Button("解除绑定", systemImage: "link.badge.minus") { run { try await $0.unbind(item.task.id) } }  // 解除不改会话也不改任务状态
+                Button("解除绑定", systemImage: "link.badge.minus") { unbind(item.task.id) }
             } else if !link.tasks.isEmpty {
                 Menu("解除绑定", systemImage: "link.badge.minus") {
                     ForEach(link.tasks) { item in
-                        Button(Dotted(item.parent?.title, item.task.title).visible) { run { try await $0.unbind(item.task.id) } }
+                        Button(Dotted(item.parent?.title, item.task.title).visible) { unbind(item.task.id) }
                     }
                 }
             }
@@ -187,10 +187,8 @@ struct SessionMenuItems: View {
         }
     }
 
-    private func run(_ work: @escaping @MainActor (Workspace) async throws -> Void) {
-        let workspace = workspace
-        workspace.attempt { try await work(workspace) }
-    }
+    /// 解除不改会话，也不改任务状态。
+    private func unbind(_ task: UUID) { workspace.perform { try await $0.unbindSession(from: task) } }
 }
 /// 会话绑着的事（含做完了的，先绑的在前）与本项目还能绑的。
 nonisolated struct SessionTaskLink: Sendable, Equatable {

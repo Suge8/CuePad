@@ -19,7 +19,7 @@ struct SessionBindItems: View {
             Divider()
             Button("解除绑定", systemImage: "link.badge.minus") {
                 let id = leaf.id
-                workspace.attempt { try await workspace.unbind(id) }
+                workspace.perform { try await $0.unbindSession(from: id) }
             }
         }
     }
