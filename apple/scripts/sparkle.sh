@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
-# Sparkle 自动更新的发布侧：EdDSA 密钥（专用钥匙串，不入库）与 appcast 生成。
-# 用法：sparkle.sh key              确保密钥存在，打印公钥（SUPublicEDKey）
-#       sparkle.sh appcast <zip>    把公证后的 zip 收进更新历史目录并生成/更新 appcast.xml（含增量更新）
-# 更新历史（历史 zip、增量包、appcast.xml）是发布的累计事实，放在产物目录之外的 ~/.appstoreconnect/cuepad-updates/：
-# 清理产物目录或换 CUEPAD_DERIVED 都不影响；appcast.xml 另复制一份到 <产物目录>/release/mac/。
-# 更新包的下载地址前缀用 CUEPAD_UPDATE_URL_PREFIX（默认 https://cue-pad.com/downloads/）；是否部署由人决定。
+# Sparkle 自动更新的发布侧：EdDSA 密钥（专用钥匙串，不入库）、appcast 生成与签名校验。
+# 用法：sparkle.sh key                          确保密钥存在，打印公钥（SUPublicEDKey）
+#       sparkle.sh appcast <zip> <下载地址前缀>   在 zip 旁生成只含这一版的 appcast.xml（enclosure = 前缀 + zip 文件名），打印其路径
+#       sparkle.sh verify <zip> <appcast.xml>    用 appcast 里 enclosure 的 EdDSA 签名校验 zip
+# 只发完整包，不做增量：安装包放在一个固定的 GitHub Release 里，每次发布替换，那里不留历史版本。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 KEYCHAIN="$HOME/.appstoreconnect/cuepad-signing.keychain-db"
 KEY_SERVICE=cuepad-sparkle-ed25519
 TOOLS="$HOME/.appstoreconnect/sparkle"
-UPDATES="$HOME/.appstoreconnect/cuepad-updates"
-DERIVED="${CUEPAD_DERIVED:-$APPLE_DIR/.derived}"
-PREFIX="${CUEPAD_UPDATE_URL_PREFIX:-https://cue-pad.com/downloads/}"
 
 # 命令行工具随 Sparkle 的二进制发布包分发；版本与校验和只在 Vendor/Sparkle/Package.swift 里写一份
 tools() {
@@ -49,15 +45,27 @@ ensure_key() {
 case "${1:-}" in
   key) ensure_key ;;
   appcast)
-    zip="${2:?用法：sparkle.sh appcast <zip>}"
+    zip="${2:?用法：sparkle.sh appcast <zip> <下载地址前缀>}"
+    prefix="${3:?用法：sparkle.sh appcast <zip> <下载地址前缀>}"
     ensure_key >/dev/null
     bin="$(tools)"
-    mkdir -p "$UPDATES"
-    cp "$zip" "$UPDATES/"
-    private_key | "$bin/generate_appcast" --ed-key-file - --download-url-prefix "$PREFIX" \
-      --link "https://cue-pad.com" "$UPDATES"
-    cp "$UPDATES/appcast.xml" "$DERIVED/release/mac/appcast.xml"
-    echo "$DERIVED/release/mac/appcast.xml"
+    # generate_appcast 收录目录里的全部安装包并沿用已有的 appcast.xml：给它一个只有这个 zip 的新目录
+    feed="$(mktemp -d)"
+    cp "$zip" "$feed/"
+    private_key | "$bin/generate_appcast" --ed-key-file - --download-url-prefix "$prefix" --link "https://cue-pad.com" "$feed" >&2
+    appcast="$(dirname "$zip")/appcast.xml"
+    mv "$feed/appcast.xml" "$appcast"
+    rm -rf "$feed"
+    echo "$appcast"
     ;;
-  *) echo "用法：$0 <key|appcast <zip>>" >&2; exit 2 ;;
+  verify)
+    zip="${2:?用法：sparkle.sh verify <zip> <appcast.xml>}"
+    appcast="${3:?用法：sparkle.sh verify <zip> <appcast.xml>}"
+    signature="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$appcast")"
+    [ "$(wc -l <<<"$signature")" -eq 1 ] && [ -n "$signature" ] || { echo "appcast 里应恰有一个 EdDSA 签名" >&2; exit 1; }
+    unlock
+    bin="$(tools)"
+    private_key | "$bin/sign_update" --verify --ed-key-file - "$zip" "$signature"
+    ;;
+  *) echo "用法：$0 <key | appcast <zip> <下载地址前缀> | verify <zip> <appcast.xml>>" >&2; exit 2 ;;
 esac

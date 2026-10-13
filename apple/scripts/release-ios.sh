@@ -4,6 +4,7 @@
 # 前提：docs/release.md。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=_signing.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_signing.sh"
 require_asc
 
@@ -16,10 +17,10 @@ case "$mode" in
   testflight)
     rm -rf "$OUT"; mkdir -p "$OUT"
     python3 "$provision" all
-    # TestFlight 要求每次上传的构建号递增；App 与扩展必须一致
-    build="$(build_number)"
+    # 版本由 release_versions 推出，命令行设置同时作用于 App 与扩展，两者一致
+    read -ra versions <<<"$(release_versions)"
     xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=iOS' \
-      -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED" CURRENT_PROJECT_VERSION="$build"
+      -archivePath "$OUT/CuePad.xcarchive" -derivedDataPath "$DERIVED" "${versions[@]}"
     export_options "$OUT/export.plist" app-store-connect "Apple Distribution" \
       com.sugeh.cuepad="CuePad iOS AppStore" com.sugeh.cuepad.share="CuePad Share iOS AppStore" \
       com.sugeh.cuepad.widget="CuePad Widget iOS AppStore" com.sugeh.cuepad.notify="CuePad Notify iOS AppStore"
@@ -27,7 +28,7 @@ case "$mode" in
       -exportPath "$OUT/export"
     # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）
     xcrun altool --upload-app -f "$OUT/export/CuePad.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
-    echo "已上传构建 ${build}，App Store Connect 处理完成后出现在 TestFlight"
+    echo "已上传 ${versions[*]}，App Store Connect 处理完成后出现在 TestFlight"
     python3 "$APPLE_DIR/scripts/testflight.py" group
     ;;
   device)

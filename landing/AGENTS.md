@@ -25,7 +25,7 @@ bun run build     # vite build + adapter-vercel（本地 Node≥26 时 runtime �
 
 ## 约定
 
-- 下载入口一律 `LINKS.download`（`/releases/latest/download/CuePad-mac-arm64.zip` 稳定直链）；旁路 GitHub 星标/源码用 `LINKS.repo`。下载产物由 `xc.sh release mac` 产出。
+- 下载入口一律 `LINKS.download`，指向 `releases/latest/download/CuePad-mac-arm64.zip`；这个文件名由 `xc.sh release mac` 发布，别改。旁路 GitHub 星标/源码用 `LINKS.repo`。
 - GSAP 全部在 `onMount` + `gsap.context(scope)` 内创建，卸载 `ctx.revert()`；移动端（<48rem）与 reduced-motion 跳过 pin/飞行/粒子。
 - Sim 投送芯片动画不要依赖 `fill:'forwards'` 残留——完成后必须 `cancel()`，否则动画样式压过内联样式永久可见。
 - 新增文案只改 `DICT`（双语同改）；产品事实以根 [README.md](../README.md) 为准。

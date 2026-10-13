@@ -1,7 +1,7 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// Sparkle 以官方发布的二进制 xcframework 引入（EdDSA 校验的更新流程与增量更新，系统框架没有等价物）；
+// Sparkle 以官方发布的二进制 xcframework 引入（EdDSA 校验的更新流程，系统框架没有等价物）；
 // 不依赖 Sparkle 的源码仓库。升级版本时同时改这里的 url 与 checksum（`swift package compute-checksum <zip>`）；
 // scripts/sparkle.sh 从这里读同一份 url 与 checksum 取出命令行工具，版本只有这一处。
 let package = Package(

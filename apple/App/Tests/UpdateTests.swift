@@ -7,7 +7,7 @@ import Testing
 struct UpdateTests {
     @Test func 真实构建里带着更新源地址与EdDSA公钥() throws {
         let info = Bundle.main.infoDictionary ?? [:]
-        #expect(info["SUFeedURL"] as? String == "https://cue-pad.com/appcast.xml")
+        #expect((info["SUFeedURL"] as? String).flatMap(URL.init(string:))?.scheme == "https")
         let key = try #require(info["SUPublicEDKey"] as? String, "缺少 SUPublicEDKey")
         #expect(Data(base64Encoded: key)?.count == 32, "EdDSA 公钥应是 32 字节的 base64")
         #expect(info["SUEnableAutomaticChecks"] as? Bool == true)

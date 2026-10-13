@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 用法：xc.sh <build|shot> <mac|ios|ipad> [截图输出路径] [-- 启动参数…]
 #       xc.sh test <mac|ios|ipad> [xcodebuild 参数…]   参数原样透传，如收窄：-only-testing:CuePadTests/SuiteName
-#       xc.sh release <mac|ios>   发布（mac：Developer ID 公证 zip；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
+#       xc.sh release <mac|ios>   发布（mac：公证 zip 与 appcast 替换到 GitHub Release，可加 --dry-run 只出本地产物；ios：上传 TestFlight）；xc.sh device  开发构建装到连接的真机
 #       xc.sh provision           开通标识、能力、证书与描述文件；前提见 docs/release.md
 # build/test/shot 一律用本机 ad-hoc 签名（不联网、不需要账号）；凭据文件在时 xcodebuild 仍带上 API 密钥参数。
 # ios 是 iPhone 模拟器（CUEPAD_IOS_DEVICE，默认 iPhone 17），ipad 是 iPad 模拟器（CUEPAD_IPAD_DEVICE，默认 iPad Pro 11-inch (M5)）；build/test 两者共用同一份模拟器产物。
@@ -12,6 +12,7 @@
 set -euo pipefail
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=_signing.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_signing.sh"
 absolute() { case "$1" in /*) echo "$1" ;; *) echo "$PWD/$1" ;; esac; }
 DERIVED="$(absolute "${CUEPAD_DERIVED:-$APPLE_DIR/.derived}")"
@@ -74,8 +75,8 @@ JXA
 
 # 等 App 写下就绪标记：最多 60 秒；进程先退出（崩溃）就不再等。
 wait_ready() {
-  local ready=$1 alive=$2 i
-  for i in $(seq 600); do
+  local ready=$1 alive=$2
+  for _ in $(seq 600); do
     [ -f "$ready" ] && return 0
     $alive || { echo "截图前 App 退出了" >&2; return 1; }
     sleep 0.1
@@ -88,7 +89,7 @@ shot_mac() {
   mkdir -p "$(dirname "$out")"
   local ready="$DERIVED/shot-ready"
   rm -f "$ready"
-  local exe="$app/Contents/MacOS/CuePad" pidfile="$DERIVED/shot-mac.pid" pid="" wid="" i
+  local exe="$app/Contents/MacOS/CuePad" pidfile="$DERIVED/shot-mac.pid" pid="" wid=""
   # 上次被中断的截图留下的实例：只结束记录下的那个 PID，并确认它仍是这个产物目录里的 CuePad
   if [ -f "$pidfile" ]; then
     pid="$(cat "$pidfile")"
@@ -106,7 +107,7 @@ shot_mac() {
     "$exe" ${launch_args[@]+"${launch_args[@]}"} >"$DERIVED/shot-mac.log" 2>&1 &
   pid=$!
   echo "$pid" > "$pidfile"
-  for i in $(seq 100); do
+  for _ in $(seq 100); do
     wid="$(window_id "$pid")"
     [ -n "$wid" ] && break
     sleep 0.1

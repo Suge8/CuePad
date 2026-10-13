@@ -17,19 +17,32 @@
 | 命令 | 作用 |
 | --- | --- |
 | `xc.sh provision` | 幂等：App ID 与能力、Apple Distribution 证书、iOS 与 macOS 描述文件 |
-| `xc.sh release mac` | 归档（Developer ID）→ 公证 → 装订 → 校验 → `<产物目录>/release/mac/CuePad-<版本>-mac.zip`，并生成 `appcast.xml` |
-| `xc.sh release ios` | 归档 → 导出 IPA → 上传 TestFlight → 加入内部测试组（构建号取时间戳，自动递增） |
+| `xc.sh release mac` | 归档（Developer ID）→ 公证 → 装订 → zip 与签名的 `appcast.xml` → 替换 GitHub Release 的资产 → 从公开地址回读校验；`--dry-run` 停在本地产物不上传 |
+| `xc.sh release ios` | 归档 → 导出 IPA → 上传 TestFlight → 加入内部测试组 |
 | `xc.sh device` | 登记连接的真机 → 开发构建 → 安装并启动 |
 | `scripts/testflight.py builds` | 列出 TestFlight 构建与处理状态 |
 
+## 版本号
+
+发布时由同一个时间戳推出两个版本（`_signing.sh` 的 `release_versions`，mac 与 iOS 共用）：显示版本是日期（`2026.10.13`），构建号是分钟（`2610131639`）。TestFlight 与 Sparkle 按构建号比较新旧；同日多次发布显示版本相同，Sparkle 的更新提示会在后面补上构建号。工程里的 `MARKETING_VERSION` 只用于本机构建。
+
 ## 自动更新（macOS）
 
-Sparkle 2（EdDSA 校验、增量更新），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉源码。更新源 `https://cue-pad.com/appcast.xml` 与公钥在 `App/Config/CuePad-macOS-Info.plist`；隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
+Sparkle 2（EdDSA 校验，只发完整包、不做增量），以官方二进制 xcframework 引入：`Vendor/Sparkle/Package.swift` 只有一个 `binaryTarget`（url + checksum，升级版本改这一处），不拉源码。更新源（`SUFeedURL`，即下面固定 Release 里的 `appcast.xml`）与公钥在 `App/Config/CuePad-macOS-Info.plist`；隔离模式（`CUEPAD_LIBRARY_DIR`）不启动更新器。
 
-EdDSA 私钥在专用钥匙串（`cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。发布时：
-- `release mac` 用时间戳作构建号（Sparkle 按 `CFBundleVersion` 比较新旧，每次发布必须递增）。
-- 公证、装订后把 zip 收进更新历史目录 `~/.appstoreconnect/cuepad-updates/` 并生成 `appcast.xml`（含与历史版本的增量包，所以历史 zip 必须留在这里；它在产物目录之外，清理产物目录或换 `CUEPAD_DERIVED` 不影响）。
-- 下载地址前缀用 `CUEPAD_UPDATE_URL_PREFIX`（默认 `https://cue-pad.com/downloads/`）；把历史目录里的 zip、增量包与 `appcast.xml` 部署到对应位置由人决定。
+EdDSA 私钥在专用钥匙串（`cuepad-sparkle-ed25519`，不入库；`scripts/sparkle.sh key` 首次运行时生成并打印公钥）。
+
+下载位置只有一处：GitHub 仓库 `Suge8/CuePad` 里一个固定的 Release（标签 `v0.1.0`，标题 "CuePad for Mac"）。发布不新建版本或标签，`release mac` 每次原地替换它的资产，都经 `releases/latest/download/<文件名>` 访问。资产固定是三个：
+
+| 资产 | 用途 |
+| --- | --- |
+| `CuePad-mac-arm64.zip` | 官网下载按钮的固定地址 |
+| `appcast.xml` | 更新源，只含最新这一版 |
+| `CuePad-mac-arm64-<构建号>.zip` | 与官网包是同一个文件，appcast 的 enclosure 指向它 |
+
+enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：如果 enclosure 用固定名字，换包与换 appcast 之间会有一段旧签名配新包的窗口，落后的客户端更新时验签失败；第二次上传失败时这种不配套会一直留着。所以上传顺序是：带构建号的新包 → `appcast.xml` → 官网包 → 删上一版带构建号的包。线上的 appcast 任何时刻都指向一个存在且签名配套的包，中途失败也一样，重跑 `release mac` 即可补齐。
+
+更新链只依赖这个 Release，不经过官网。`releases/latest/download/` 会 302 到 GitHub 的下载服务器，Sparkle 用系统默认的 URLSession 取 appcast 与安装包，跟随 HTTPS 重定向。
 
 ## App 图标
 

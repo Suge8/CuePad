@@ -1,10 +1,14 @@
+# shellcheck shell=bash
 # 被 xc.sh 与发布脚本 source：读取 App Store Connect 凭据，产出 xcodebuild 的自动签名参数。
 # 凭据文件（默认 ~/.appstoreconnect/cuepad.env，可用 CUEPAD_ASC_ENV 指定）字段：ASC_KEY_ID、ASC_ISSUER_ID、ASC_KEY_PATH、CUEPAD_TEAM_ID。
 # 文件缺失时 asc_auth 为空：本机 ad-hoc 构建与测试照常，只有发布命令会报错。绝不回显凭据内容。
 ASC_ENV="${CUEPAD_ASC_ENV:-$HOME/.appstoreconnect/cuepad.env}"
 asc_auth=()
 if [ -f "$ASC_ENV" ]; then
-  set -a; . "$ASC_ENV"; set +a
+  set -a
+  # shellcheck source=/dev/null
+  . "$ASC_ENV"
+  set +a
   asc_auth=(-allowProvisioningUpdates
     -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
 fi
@@ -29,8 +33,12 @@ $([ "$method" = app-store-connect ] && echo '<key>destination</key><string>expor
 PLIST
 }
 
-# 构建号：分钟时间戳，每次发布必须递增（TestFlight 与 Sparkle 都按它比较新旧）
-build_number() { date +%y%m%d%H%M; }
+# 发布版本的 xcodebuild 设置，由同一个时间戳推出：显示版本是日期（2026.10.13），构建号是分钟（2610131639）。
+# TestFlight 与 Sparkle 都按构建号比较新旧，所以它必须递增：发布是串行的，一次要几分钟（公证），分钟精度够；同日多次发布显示版本相同，Sparkle 的更新提示会补上构建号区分。
+release_versions() {
+  local now; now="$(date +%s)"
+  echo "MARKETING_VERSION=$(date -r "$now" +%Y.%-m.%-d) CURRENT_PROJECT_VERSION=$(date -r "$now" +%y%m%d%H%M)"
+}
 
 require_asc() {
   [ "${#asc_auth[@]}" -gt 0 ] || { echo "缺少 App Store Connect 凭据文件：$ASC_ENV（字段见 docs/release.md）" >&2; exit 1; }
