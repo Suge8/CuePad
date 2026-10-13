@@ -45,7 +45,7 @@ struct CueHostTests {
             try await app.services.store.setDirectory(folder.path, for: project.id)
             app.services.start()
             try await app.services.cue.enable()
-            try await message(.note, containing: "我看了一眼")  // 刚启用的第一次醒来
+            try await message(.cue, containing: "我看了一眼")  // 刚启用的第一次醒来：你正看着屏幕，正常显示
         }
 
         func stop() async {

@@ -32,7 +32,7 @@ public struct CueTools: Sendable {
         "name": "task",
         "description": """
           派活与跟进 CuePad 的任务（你不写代码，活交给会话做）。task 写 id 前缀或标题。
-          add{title,project?,steps?,prompt?} 建任务，默认由你跟进；edit{task,title?,prompt?,steps?} 改标题、草稿或追加步骤；
+          add{title,project?,steps?,prompt?} 建任务，默认由你跟进；edit{task,title?,prompt?,steps?,project?} 改标题、草稿、追加步骤或挪到项目；
           start{task,agent?,model?,effort?} 开工：叶子绑着会话就把草稿发进去，没绑就在项目文件夹开新会话；
           say{task,text,when:now|after|answer,value?} 对叶子的会话说话（now 马上说，after 等它做完，answer 回答它的提问，value 是选项或 yes/no）；
           peek{task?,all?} 只读：不带 task 看看板，带 task 看叶子、近况、最近几轮问答与预览，all:true 看用户手上所有没做完的事；
@@ -51,7 +51,7 @@ public struct CueTools: Sendable {
       ],
       [
         "name": "tell",
-        "description": "对用户说一句（Cue 页里你的一行）。带 choices 就是在等用户选；urgent 推送到手机，只用在真要他马上看的事；task 关联到一个任务。",
+        "description": "对用户说一句（Cue 页里你的一行）。用在你自己醒来的轮次；用户发起的一轮直接回复，只有要他选时才 tell 带 choices。带 choices 就是在等用户选；urgent 推送到手机，只用在真要他马上看的事；task 关联到一个任务。",
         "inputSchema": schema(
           ["text": string, "choices": ["type": "array", "items": string], "urgent": ["type": "boolean"], "task": string],
           required: ["text"]),
@@ -162,7 +162,7 @@ public struct CueTools: Sendable {
       let leaf = try await store.workingLeaf(of: top.id)
       text += leaf.id == top.id ? "，带着草稿" : "，草稿在「\(title(leaf))」上"
     }
-    text += project == nil ? "（未分类：开不了会话，要开工先请用户放进项目）。" : "，在项目「\(project!.name)」里，由你跟进。"
+    text += project == nil ? "（未分类，开不了会话：用 edit 的 project 放进项目再开工）。" : "，在项目「\(project!.name)」里，由你跟进。"
     return .ok(text, ["task": id(top.id), "steps": steps.map(id), "prompt": prompt.map(id) ?? NSNull()])
   }
 
@@ -193,7 +193,13 @@ public struct CueTools: Sendable {
       }
       done.append("草稿写在「\(title(leaf))」上")
     }
-    guard !done.isEmpty else { throw Failure("edit 至少给 title、prompt、steps 之一") }
+    if let ref = args.string("project") {
+      let project = try await project(ref)
+      let top = try await store.topTask(of: card.id)
+      try await store.moveCard(top, to: .top(project: project.id), after: nil)
+      done.append("连同步骤与草稿挪到了项目「\(project.name)」" + (try await store.cueProjects().first { $0.id == project.id }?.hasFolder == true ? "" : "（它没绑文件夹，开工前请用户绑一个）"))
+    }
+    guard !done.isEmpty else { throw Failure("edit 至少给 title、prompt、steps、project 之一") }
     return .ok("「\(title(card))」（\(short(card.id))）：\(done.joined(separator: "，"))。", ["task": id(card.id)])
   }
 
