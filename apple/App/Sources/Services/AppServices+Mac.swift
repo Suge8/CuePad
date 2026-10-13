@@ -35,6 +35,7 @@ extension AppServices {
             try await self.executor.start()
         }
         follow(reporting: { .syncUnavailable("目录绑定没能同步给手机：\($0)") }) { try await self.startDirectoryBindings() }
+        startCue()
         // CKSyncEngine 靠静默推送得知别的设备的改动；macOS 要显式注册远程通知（iOS 由 PiAlertCenter 注册）。
         if sync != nil { NSApplication.shared.registerForRemoteNotifications() }
         startSync()
@@ -65,11 +66,12 @@ extension AppServices {
         cancelBackgroundWork()
         pi.stop()
         hotkey.unregister()
-        let stopExecutor = executor.beginStop(), sync = sync
+        let stopExecutor = executor.beginStop(), stopCue = cue.beginStop(), sync = sync
         let log = Logger(subsystem: Self.bundleID, category: "shutdown")
         return { @concurrent in
             let late = await ShutdownSteps.run([
                 ("远程投送执行器", stopExecutor),
+                ("Cue", stopCue),
                 ("同步引擎", { await sync?.stop() }),
             ], within: limit)
             if let late { log.error("退出收尾：\(late, privacy: .public) 没在 \(limit, privacy: .public) 内结束，已放行退出") }
@@ -81,6 +83,17 @@ extension AppServices {
     @discardableResult
     func stop(within limit: Duration = .seconds(2)) async -> String? {
         await beginShutdown(within: limit)()
+    }
+
+    /// Cue：本机能用的运行时、按设置值班、通知；点通知把主窗口叫到前面、请界面打开 Cue 页。
+    private func startCue() {
+        cue.notifier.onOpen = { [weak self] in
+            self?.cue.requestOpen()
+            self?.windowShell?.show()
+        }
+        follow { await self.cue.refreshRuntimes() }
+        follow(reporting: { .piBridgeUnavailable("Cue 没能值班：\($0)") }) { try await self.cue.follow() }
+        follow(reporting: { .piBridgeUnavailable("Cue 的通知没能开始：\($0)") }) { try await self.cue.followNotifications() }
     }
 
     // MARK: 全局快捷键

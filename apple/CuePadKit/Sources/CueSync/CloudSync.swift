@@ -21,8 +21,8 @@ public actor CloudSync {
   private var uploader: (any RecordUploader)?
   private var accountWatcher: Task<Void, Never>?
 
-  /// `subscribesToPiAlerts`：是否在私有数据库建立"Pi 等你确认 / 完成"的服务端通知订阅。默认只有 iOS 建立
-  /// （Mac 是记录的写方，不需要）。App 需要请求通知权限并注册远程通知，见 `PiAlertRoute`。
+  /// `subscribesToPiAlerts`：是否在私有数据库建立"Pi 等你确认 / 完成"与 Cue 消息的服务端通知订阅（`AlertSubscriptions`）。默认只有 iOS 建立
+  /// （Mac 是记录的写方，不需要）。App 需要请求通知权限并注册远程通知，见 `PiAlertRoute`、`CueAlertRoute`。
   public init(
     store: CueStore, containerIdentifier: String = "iCloud.com.sugeh.cuepad", zoneName: String = "CuePad",
     subscribesToPiAlerts: Bool = CloudSync.subscribesToPiAlertsByDefault
@@ -61,12 +61,12 @@ public actor CloudSync {
     await queue.attach(engine)
 
     try await coordinator.start()
-    await ensurePiAlertSubscriptions(container)
+    await ensureAlertSubscriptions(container)
     accountWatcher = Task { [coordinator, weak self] in
       for await _ in NotificationCenter.default.notifications(named: .CKAccountChanged) {
         guard let account = try? await container.accountStatus() else { continue }
         await coordinator.handle(.accountStatus(account))
-        await self?.ensurePiAlertSubscriptions(container)  // 账号切换后新账号的数据库里还没有订阅
+        await self?.ensureAlertSubscriptions(container)  // 账号切换后新账号的数据库里还没有订阅
       }
     }
   }
@@ -118,16 +118,16 @@ public actor CloudSync {
   public func syncNow() async throws {
     guard let engine else { return }
     if subscribesToPiAlerts, await coordinator.alertSubscription != .active {
-      await ensurePiAlertSubscriptions(CKContainer(identifier: containerIdentifier))
+      await ensureAlertSubscriptions(CKContainer(identifier: containerIdentifier))
     }
     try await engine.fetchChanges()
     try await coordinator.reconcile()  // 待推送以数据库为准：引擎对失败的记录不一定重试，丢了的在这里补登记
     try await engine.sendChanges()
   }
 
-  private func ensurePiAlertSubscriptions(_ container: CKContainer) async {
+  private func ensureAlertSubscriptions(_ container: CKContainer) async {
     guard subscribesToPiAlerts else { return }
-    let status = await PiAlertSubscriptions(zoneID: zoneID).ensure(in: DatabaseSubscriptions(database: container.privateCloudDatabase))
+    let status = await AlertSubscriptions(zoneID: zoneID).ensure(in: DatabaseSubscriptions(database: container.privateCloudDatabase))
     await coordinator.setAlerts(status)
   }
 

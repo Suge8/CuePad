@@ -22,6 +22,8 @@ final class AppServices {
     let store: CueStore
     #if os(macOS)
     let pi: PiBridge
+    /// 总控 Agent Cue（只在 Mac 上值班）。
+    let cue: CueService
     #endif
 
     /// 设备本地偏好（主题、快捷键、当前项目）。
@@ -313,6 +315,7 @@ final class AppServices {
         piIntegration = PiIntegrationManager(installer: mac.installer, settings: settings, isEnabled: !location.isIsolated || mac.paths.isExplicit)
         updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
+        cue = CueService(store: store, hostID: mac.hostID, library: location.directory, piAgentDirectory: mac.paths.agentDirectory, dependencies: mac.cue)
     }
     #else
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, pasteboard: UIPasteboard = .general) throws {

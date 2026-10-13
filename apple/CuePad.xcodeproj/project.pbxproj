@@ -30,6 +30,7 @@
 		E1000000000000000000000F /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000D /* CueStore */; };
 		E10000000000000000000010 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000E /* CueText */; };
 		E10000000000000000000012 /* CueAgent in Frameworks */ = {isa = PBXBuildFile; productRef = E10000000000000000000011 /* CueAgent */; };
+		E10000000000000000000014 /* CueAgent in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = E10000000000000000000013 /* CueAgent */; };
 		F1000000000000000000A003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = F1000000000000000000A002 /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -150,6 +151,7 @@
 				B10000000000000000000007 /* CueStore in Frameworks */,
 				B1000000000000000000000B /* CueEditor in Frameworks */,
 				B10000000000000000000013 /* CuePi in Frameworks */,
+				E10000000000000000000014 /* CueAgent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -300,6 +302,7 @@
 				B10000000000000000000006 /* CueStore */,
 				B1000000000000000000000A /* CueEditor */,
 				B10000000000000000000012 /* CuePi */,
+				E10000000000000000000013 /* CueAgent */,
 			);
 			productName = CuePad;
 			productReference = A10000000000000000000002 /* CuePad.app */;
@@ -1065,6 +1068,11 @@
 			productName = CueStore;
 		};
 		E10000000000000000000011 /* CueAgent */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueAgent;
+		};
+		E10000000000000000000013 /* CueAgent */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
 			productName = CueAgent;

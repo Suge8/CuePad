@@ -61,9 +61,17 @@ public final class PiHost {
         try await launch(executable, ["--session", sessionFile.path], in: directory, environment: [:])
     }
 
-    /// 在后台于 `directory` 开一个新会话，带上发起方的认领标识；等它连上桥后返回。
-    public func open(in directory: URL, launchToken: String, executable: URL) async throws -> PiSession {
-        try await launch(executable, [], in: directory, environment: ["CUEPAD_LAUNCH_TOKEN": launchToken])
+    /// 在后台于 `directory` 开一个新会话，带上发起方的认领标识；等它连上桥后返回。会话名、模型与思考强度是 Pi 的启动参数
+    /// （`--name`、`--model`、`--thinking`），给了就一起生效；模型不存在或没登录时 Pi 起来就退出，抛 `exited` 并带上 Pi 的原话。
+    public func open(
+        in directory: URL, launchToken: String, name: String? = nil, model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil,
+        executable: URL
+    ) async throws -> PiSession {
+        var arguments: [String] = []
+        if let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { arguments += ["--name", name] }
+        if let model { arguments += ["--model", "\(model.provider)/\(model.id)"] }
+        if let thinking { arguments += ["--thinking", thinking.rawValue] }
+        return try await launch(executable, arguments, in: directory, environment: ["CUEPAD_LAUNCH_TOKEN": launchToken])
     }
 
     /// 结束一个在线会话，等它真的退出（已经不在线就什么都不做）：托管的给它的进程发 SIGTERM，Pi 优雅收尾，不论这一轮在不在跑；
@@ -103,8 +111,10 @@ public final class PiHost {
     ) async throws -> PiSession {
         let changes = bridge.changes()  // 先订阅再启动：连上的那一刻不会漏
         let (exited, exit) = AsyncStream<Void>.makeStream()
+        let errors = try Self.scratchFile()
+        defer { close(errors) }
         let pid = try Self.spawn(
-            executable, ["--mode", "rpc"] + arguments + extraArguments, in: directory,
+            executable, ["--mode", "rpc"] + arguments + extraArguments, in: directory, stderr: errors,
             environment: ProcessInfo.processInfo.environment
                 .merging(paths.launchEnvironment) { $1 }
                 .merging(environment) { $1 }
@@ -123,7 +133,7 @@ public final class PiHost {
             }
             group.addTask {
                 for await _ in exited {}
-                throw PiHostError.exited
+                throw PiHostError.exited(Self.tail(of: errors))
             }
             group.addTask {
                 try await Task.sleep(for: timeout)
@@ -161,9 +171,10 @@ public final class PiHost {
     /// - 只继承下面列出的文件描述符（`POSIX_SPAWN_CLOEXEC_DEFAULT`）：App 打开的文件与连接不漏进去；
     /// - 标准输入是一根管道的读端，写端也交给它自己（放在 3 号）：还有写端开着，读端永远读不到 EOF，RPC 模式就不会收尾；
     ///   App 这边启动后立刻关掉两端。否决 `/dev/null`（立刻 EOF）与命名管道（要在磁盘上建、要清理）。
-    /// - 标准输出、标准错误丢到空设备：RPC 的事件与回应走桥，不读。
+    /// - 标准输出丢到空设备：RPC 的事件与回应走桥，不读；标准错误写进 `stderr`（已删掉名字的临时文件），没连上就退出时读它的末尾当原因。
     private nonisolated static func spawn(
-        _ executable: URL, _ arguments: [String], in directory: URL, environment: [String: String], onExit: @escaping @Sendable () -> Void
+        _ executable: URL, _ arguments: [String], in directory: URL, stderr: Int32, environment: [String: String],
+        onExit: @escaping @Sendable () -> Void
     ) throws -> pid_t {
         var lifeline: [Int32] = [0, 0]
         guard pipe(&lifeline) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
@@ -174,7 +185,7 @@ public final class PiHost {
         posix_spawn_file_actions_adddup2(&actions, lifeline[0], STDIN_FILENO)
         posix_spawn_file_actions_adddup2(&actions, lifeline[1], 3)
         posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0)
-        posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0)
+        posix_spawn_file_actions_adddup2(&actions, stderr, STDERR_FILENO)
         posix_spawn_file_actions_addchdir(&actions, directory.path)
         var attributes: posix_spawnattr_t? = nil
         posix_spawnattr_init(&attributes)
@@ -188,6 +199,27 @@ public final class PiHost {
         guard code == 0 else { throw POSIXError(.init(rawValue: code) ?? .EIO) }
         reap(pid, onExit: onExit)
         return pid
+    }
+
+    /// 一个已删掉名字的临时文件（只剩描述符）：进程退出后随最后一个描述符关闭而释放，不用清理。
+    private nonisolated static func scratchFile() throws -> Int32 {
+        var template = Array((NSTemporaryDirectory() + "cuepad-pi-XXXXXX").utf8CString)
+        let fd = mkstemp(&template)
+        guard fd >= 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
+        unlink(String(cString: template))
+        return fd
+    }
+
+    /// 标准错误的最后一个非空行（至多 300 个字符）；空为 nil。
+    private nonisolated static func tail(of fd: Int32) -> String? {
+        var info = stat()
+        guard fstat(fd, &info) == 0, info.st_size > 0 else { return nil }
+        let count = Int(min(info.st_size, 4096))
+        var buffer = [UInt8](repeating: 0, count: count)
+        guard pread(fd, &buffer, count, off_t(info.st_size) - off_t(count)) == count else { return nil }
+        let line = String(decoding: buffer, as: UTF8.self).split(whereSeparator: \.isNewline)
+            .last { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.map { String($0.prefix(300)) }
+        return line?.trimmingCharacters(in: .whitespaces)
     }
 
     /// 等进程退出（内核的进程事件，不轮询）后回收，免得留下僵尸。事件源在退出前一直握着自己。
@@ -256,8 +288,8 @@ public final class PiHost {
 }
 
 public enum PiHostError: Error, Equatable {
-    /// 后台启动的 Pi 还没连上就退出了
-    case exited
+    /// 后台启动的 Pi 还没连上就退出了（Pi 在标准错误里说的最后一句；没说为 nil）
+    case exited(String?)
     /// 等了很久 Pi 都没连上（已让它退出）
     case notConnected
     /// 请它结束后一直没退出（多半还卡在需要你在终端里处理的地方）
@@ -269,7 +301,7 @@ public enum PiHostError: Error, Equatable {
 extension PiHostError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .exited: "在后台启动的 Pi 没连上就退出了"
+        case .exited(let reason): "在后台启动的 Pi 没连上就退出了" + (reason.map { "：\($0)" } ?? "")
         case .notConnected: "在后台启动的 Pi 一直没连上"
         case .notEnded: "会话没有按时结束，可能还在等你在终端里处理"
         case .extensionMismatch: "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发"
