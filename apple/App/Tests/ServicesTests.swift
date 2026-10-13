@@ -113,80 +113,36 @@ struct PiHistoryPersistenceTests {
     }
 }
 
-struct PiExtensionConsentTests {
-    private func rigWithPi(version: String) throws -> TestApp {
+struct AgentUpgradeTests {
+    /// 装过的不再询问：App 更新后启动检查就把旧版的扩展静默升级到随包版本，缺的技能一起补上。
+    @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
         let rig = TestApp()
         let bin = rig.directory.appending(path: "bin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         let script = bin.appending(path: "pi")
-        try "#!/bin/sh\necho \(version)\n".write(to: script, atomically: true, encoding: .utf8)
+        try "#!/bin/sh\necho 0.90.0\n".write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        return rig
-    }
-
-    /// 询问卡片读 `needsConsent`：拒绝后它必须作为可观察的变化通知界面，卡片才会立即收起（之前要重启才消失）。
-    @Test func 拒绝后询问的变化能被界面观察到() async throws {
-        let rig = try rigWithPi(version: "0.90.0")
-        let manager = rig.services.piIntegration
-        try await manager.refresh()
-        let changed = Flag()
-        withObservationTracking { _ = manager.needsConsent } onChange: { changed.set() }
-
-        manager.decline()
-
-        #expect(changed.value)
-        #expect(!manager.needsConsent)
-    }
-
-    nonisolated private final class Flag: @unchecked Sendable {
-        private(set) var value = false
-        func set() { value = true }
-    }
-
-    @Test func 缺扩展时征求同意_拒绝后不再提示也不安装_同意后安装() async throws {
-        let rig = try rigWithPi(version: "0.90.0")
-        let manager = rig.services.piIntegration
-
-        try await manager.refresh()
-        #expect(manager.needsConsent)
-
-        manager.decline()
-        try await manager.refresh()
-        #expect(!manager.needsConsent)
-        #expect(manager.status?.file == .missing)  // 拒绝过首次安装：维持不装
-
-        #expect(!FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.path))  // 拒绝：扩展与 skill 都不装
-
-        try await manager.install()
-        #expect(manager.status?.file == .current)
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts").path))
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))
-    }
-
-    @Test func Pi_版本过低或不存在时不征求同意() async throws {
-        let tooOld = try rigWithPi(version: "0.80.0")
-        try await tooOld.services.piIntegration.refresh()
-        #expect(!tooOld.services.piIntegration.needsConsent)
-
-        let absent = TestApp()
-        try await absent.services.piIntegration.refresh()
-        #expect(!absent.services.piIntegration.needsConsent)
-    }
-
-    /// 同意只在首次安装时问一次：已装的是我们的旧版扩展时，启动检查就静默升级到随包版本，不再询问。
-    @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
-        let rig = try rigWithPi(version: "0.90.0")
         let installed = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
         try FileManager.default.createDirectory(at: rig.piPaths.extensionsDirectory, withIntermediateDirectories: true)
         let old = PiExtensionBundle.source.replacing(/const EXTENSION_VERSION = \d+;/, with: "const EXTENSION_VERSION = 1;")
         try old.write(to: installed, atomically: true, encoding: .utf8)
 
-        try await rig.services.piIntegration.refresh()
+        try await rig.services.agents.refresh()
 
-        #expect(rig.services.piIntegration.status?.file == .current)
+        #expect(rig.services.agents.status(.pi)?.files == .current)
         #expect(try String(contentsOf: installed, encoding: .utf8) == PiExtensionBundle.source)
-        #expect(!rig.services.piIntegration.needsConsent)
-        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))  // 旧版用户升级时补上 skill
+        #expect(FileManager.default.fileExists(atPath: rig.piPaths.skillsDirectory.appending(path: "cuepad/SKILL.md").path))
+    }
+
+    /// 没装过的不碰：检测完什么都不写，等用户自己接入。
+    @Test func 没接入过的Agent启动检查不写任何文件() async throws {
+        let rig = TestApp()
+        try FileManager.default.createDirectory(at: rig.directory.appending(path: "claude"), withIntermediateDirectories: true)
+
+        try await rig.services.agents.refresh()
+
+        #expect(rig.services.agents.status(.claudeCode) == AgentStatus(presence: .found(nil), files: .missing))
+        #expect(FileManager.default.subpaths(atPath: rig.directory.appending(path: "claude").path) == [])
     }
 }
 #endif

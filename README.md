@@ -19,7 +19,7 @@ Local-first: everything lives in a SQLite database on your device; iCloud sync u
 - **Idea → task → agent.** Ideas are your library — any amount of text with inline images, `{{variables}}` and dividers. When it's time to act, attach an idea to a task and it becomes one of the task's prompts — what you hand to the agent, sent in one tap, showing whether the agent has replied — plus a checklist of steps if needed. Projects are just containers with a one-line intro. Everything autosaves.
 - **Send to agents.** A task's prompts go straight to a running agent session (currently [Pi](https://pi.dev); text and images). Every send is logged with a snapshot and can be resent; you can always copy the text too.
 - **See your agents.** Agent sessions show live state (thinking, running a tool, waiting for you, done) and history; sessions file under the project bound to their working directory.
-- **Demos on your phone.** An agent can send a page, screenshot, PDF or report to you: it shows up as a card in the session on your phone, and tapping it opens a full-screen preview. (CuePad installs a small skill for Pi so the agent knows to run `cuepad show <file>`.)
+- **Demos on your phone.** An agent can send a page, screenshot, PDF or report to you: it shows up as a card in the session on your phone, and tapping it opens a full-screen preview. (Pi only: CuePad's skill for Pi teaches the agent `cuepad show <file>`.)
 - **Projects that know your code.** Bind a project to a code directory: agent sessions and the `cuepad` command line pick the right project from where they run.
 - **Selections and variables.** Send a whole prompt or just the selected part, or turn selected lines into tasks; fill `{{variables}}` right before sending, each one remembers its last values.
 - **Search everywhere.** `⌘K` searches projects, ideas and tasks, filtered by project, images, whether it went to an agent, or time.
@@ -38,7 +38,9 @@ cuepad task add Write release notes
 cuepad task done <id>
 ```
 
-Run inside a directory that a project is bound to and it works on that project by default. `--json` gives stable output for agents. Install it from CuePad's Settings (it links to `~/.local/bin/cuepad`); `cuepad --help` and `cuepad <command> --help` are the full reference.
+Run inside a directory that a project is bound to and it works on that project by default. `--json` gives stable output for agents. `cuepad --help` and `cuepad <command> --help` are the full reference.
+
+**Works with Pi, Claude Code, Codex and OpenCode.** On first launch (and any time in Settings → Agent) flip a switch per agent: CuePad drops one small skill into that agent's own folder (`~/.pi/agent/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.config/opencode/skills`) so it knows how to use `cuepad`; Pi also gets the bridge extension for live state, sending and previews. Nothing is written until you flip it, and switching it off removes everything CuePad wrote. The same place can link `cuepad` into `~/.local/bin` for your own terminal.
 
 ## Download
 

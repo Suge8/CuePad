@@ -29,10 +29,10 @@ struct HistoryRulesTests {
             let paths = PiPaths(
                 agentDirectory: directory.appending(path: "agent"),
                 socketDirectory: URL(filePath: "/tmp/hr-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory))
-            let installer = PiIntegration(
-                paths: paths, locator: PiExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
+            let agents = AgentIntegration(
+                pi: paths, environment: [:], locator: ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
                 cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"))
-            try await installer.install()
+            try await agents.install(.pi)
             let extensions = paths.agentDirectory.appending(path: "extensions")
             try FileManager.default.createDirectory(at: extensions, withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: fixtures.appending(path: "fake-model.ts"), to: extensions.appending(path: "fake-model.ts"))
@@ -42,7 +42,7 @@ struct HistoryRulesTests {
                 bridge: bridge, paths: paths, idleLimit: .seconds(2),
                 extraArguments: ["--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes", "--model", "fake/echo", "--thinking", "off"])
             let mac = MacDependencies(
-                pi: bridge, hotkeys: InMemoryHotkeys(), paths: paths, installer: installer, terminal: PiTerminalJumper(),
+                pi: bridge, hotkeys: InMemoryHotkeys(), paths: paths, agents: agents, terminal: PiTerminalJumper(),
                 hostID: TestApp.hostID, wakeNotifications: NotificationCenter(),
                 commandLineTool: CommandLineToolInstaller(
                     helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),

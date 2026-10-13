@@ -47,7 +47,7 @@ public final class PiHost {
     /// - Parameter extraArguments: 加在 `pi --mode rpc` 后面的参数（测试用来指定假模型、不联网）。
     public init(
         bridge: PiBridge, paths: PiPaths, idleLimit: Duration = .seconds(30 * 60), connectTimeout: Duration = .seconds(30),
-        endTimeout: Duration = .seconds(10), searchPath: [URL] = PiExecutableLocator.standard.searchDirectories, extraArguments: [String] = []
+        endTimeout: Duration = .seconds(10), searchPath: [URL] = ExecutableLocator.standard.searchDirectories, extraArguments: [String] = []
     ) {
         self.bridge = bridge
         self.paths = paths

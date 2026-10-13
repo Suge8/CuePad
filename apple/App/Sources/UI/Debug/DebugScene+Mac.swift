@@ -15,6 +15,7 @@ extension DebugScene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
         case "search": workspace.searching = true
         case "tasks": workspace.showsTasks = true
+        case "agentsetup": workspace.showsAgentSetup = true
         case "select":
             // 批量选择：选上本页前三条灵感
             try? await Task.sleep(for: .seconds(1))

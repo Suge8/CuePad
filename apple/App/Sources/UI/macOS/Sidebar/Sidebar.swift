@@ -352,7 +352,7 @@ private struct FooterPage: View {
 /// 同一个顺序（`liveRows`，要你注意的在前），全部列出（两个以上需要 /reload 的合成一行，`PiNowRow`，点开再列）；
 /// 区的高度与滚动见 `Sidebar`。已结束的不列，"全部"打开 Agent 整页列表（`AgentPage`，看着它时这一行选中，区里照常列会话）。
 /// 点会话在内容区打开它的整页，在线会话右键可跳到所在终端、悬停看出错原文；标题旁的 + 开新会话。没有在线会话时一行说怎么开始。
-/// 没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装。
+/// 没装 Pi 或版本太低时，这里是一行引导，点开说明怎么装；装了 Pi 而没接入 CuePad（本机的会话因此看不到）时，没有本机会话就在这里就地接入。
 private struct PiSection: View {
     let recorded: [PiSessionState]
     let deliveries: [String: DeliveryRequest]
@@ -368,7 +368,7 @@ private struct PiSection: View {
     @State private var reloadOpen = false
 
     var body: some View {
-        let status = services.piIntegration.status
+        let status = services.agents.status(.pi)
         let live = services.pi.sessions
         let rows = PiSessionState.liveRows(
             live: live.map {
@@ -376,19 +376,19 @@ private struct PiSection: View {
                     $0, hostID: services.hostID, projectID: workspace.sendState.projects[$0.id], recap: services.liveSessions.recaps[$0.sessionID])
             },
             recorded: recorded, deliveries: deliveries)
-        if let installation = status?.pi, !installation.isSupported {
+        if let status, !status.isAvailable {
             VStack(alignment: .leading, spacing: 0) {
                 SidebarHeader(title: "Agent") { EmptyView() }
-                PiSetupRow(installation: installation).padding(.horizontal, SidebarMetrics.edge + SidebarMetrics.inset)
+                PiSetupRow(presence: status.presence).padding(.horizontal, SidebarMetrics.edge + SidebarMetrics.inset)
             }
         } else if status != nil || total > 0 {
             VStack(alignment: .leading, spacing: 0) {
                 SidebarHeader(title: "Agent") { NewSessionButton(showing: $startingSession) }
                     .accessibilityElement(children: .contain)
                     .accessibilityAddTraits(.isHeader)
-                // 扩展没装（第一次问，或拒绝过而本机的会话因此看不到）：在这一区里就地装，别的 Mac 上在线的照样列在下面
-                if let connect = PiConnect(manager: services.piIntegration, declined: services.settings.piExtensionDeclined, hasLocal: !live.isEmpty) {
-                    PiConnectCard(kind: connect).padding(.horizontal, SidebarMetrics.edge)
+                // 没接入：本机的会话看不到，在这一区里就地接入，别的 Mac 上在线的照样列在下面
+                if status?.files == .missing, live.isEmpty {
+                    PiConnectCard().padding(.horizontal, SidebarMetrics.edge)
                 } else if rows.isEmpty {
                     // 现状一行、怎么办一行：同一句挤成两行时"·"会落到行首
                     VStack(alignment: .leading, spacing: 2) {
@@ -474,16 +474,16 @@ private struct AllSessionsRow: View {
     }
 }
 
-/// 没装 Pi 或版本太低：侧栏 Pi 分组里的一行引导，点开是安装说明（`PiSetupGuide`）。
+/// 没装 Pi 或版本太低：侧栏 Pi 分组里的一行引导，点开是安装说明（`AgentSetupGuide`）。
 private struct PiSetupRow: View {
-    let installation: PiInstallation
+    let presence: AgentStatus.Presence
     @State private var showing = false
 
     var body: some View {
         Button { showing = true } label: {
             Label {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(installation == .notFound ? "安装 Pi" : "升级 Pi").foregroundStyle(.primary)
+                    Text(presence == .notFound ? "安装 Pi" : "升级 Pi").foregroundStyle(.primary)
                     Text("把灵感和任务直接发进 Pi").font(Typography.meta).foregroundStyle(.secondary)
                 }
             } icon: {
@@ -492,25 +492,14 @@ private struct PiSetupRow: View {
         }
         .buttonStyle(PressStyle())
         .popover(isPresented: $showing, arrowEdge: .trailing) {
-            PiSetupGuide(installation: installation).padding(16).frame(width: 360)
+            AgentSetupGuide(kind: .pi, presence: presence)
         }
     }
 }
 
-/// Agent 区里装 CuePad 扩展的那一块要怎么说：第一次检测到 Pi 而扩展没装时问一次；拒绝过、本机的会话因此看不到时只留一行就地安装。
-private enum PiConnect {
-    case ask, declined
-
-    init?(manager: PiIntegrationManager, declined: Bool, hasLocal: Bool) {
-        if manager.needsConsent { self = .ask; return }
-        guard declined, !hasLocal, let status = manager.status, status.pi.isSupported, status.file != .current else { return nil }
-        self = .declined
-    }
-}
-
-/// 装 CuePad 扩展的小卡（扩展与技能一起装，见 `PiIntegrationManager`）：一个图标、一句话说装了能做什么，右边"安装"；第一次问时多一颗"不用了"。
+/// 接入 Pi 的小卡（扩展与技能一起装，见 `AgentIntegrations`）：一个图标、一句话说接入了能做什么，右边"接入"。
+/// 没有"不用了"：没接入时本机的会话在这一区里看不到，这张卡就是这一区如实的空态。
 private struct PiConnectCard: View {
-    let kind: PiConnect
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -521,40 +510,32 @@ private struct PiConnectCard: View {
             Image(systemName: "puzzlepiece.extension").font(.system(size: 14)).foregroundStyle(palette.ink2)
                 .frame(width: 28, height: 28).background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 1) {
-                Text(kind == .ask ? "连接 Pi" : "装上 Pi 扩展").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
-                Text(kind == .ask ? "看会话、交任务" : "看到本机会话").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
+                Text("接入 Pi").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
+                Text("看会话、交任务").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
             }
             Spacer(minLength: 4)
-            VStack(spacing: 4) {
-                Button(action: install) {
-                    Text(installing ? "安装中" : "安装").font(Typography.meta.weight(.semibold)).foregroundStyle(palette.onSignature)
-                        .padding(.horizontal, 12).frame(height: 24)
-                        .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
-                }
-                .buttonStyle(PressStyle())
-                .disabled(installing)
-                if kind == .ask {
-                    Button("不用了") {
-                        withAnimation(Motion.quick) { services.piIntegration.decline() }
-                    }
-                    .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink3)
-                }
+            Button(action: install) {
+                Text(installing ? "接入中" : "接入").font(Typography.meta.weight(.semibold)).foregroundStyle(palette.onSignature)
+                    .padding(.horizontal, 12).frame(height: 24)
+                    .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
             }
+            .buttonStyle(PressStyle())
+            .disabled(installing)
         }
         .padding(10)
         .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
-        .help("扩展让 CuePad 看到 Pi 会话的实时状态、把话发进会话；技能让 Agent 能把页面和截图发到手机上看。会写入 Pi 目录下的 extensions 与 skills。")
+        .help("CuePad 往 Pi 目录的 extensions 与 skills 里各写一个文件：看到会话的实时状态、把话发进会话，Agent 也能把页面和截图发到手机上看。在设置里关掉即删除。")
         .transition(.opacity)
     }
 
     private func install() {
         installing = true
-        let manager = services.piIntegration
+        let agents = services.agents
         Task {
             defer { installing = false }
             do {
-                try await manager.install()
-                workspace.say("已安装；已在运行的 Pi 会话重启后生效")
+                try await agents.install(.pi)
+                workspace.say("已接入；已在运行的 Pi 会话执行 /reload 后生效")
             } catch {
                 workspace.fail(error)
             }

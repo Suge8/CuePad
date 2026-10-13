@@ -354,6 +354,8 @@ public enum CueStoreError: Error, Equatable {
   case previewTooLarge(limit: Int)
   /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
+  /// 资料库文件只能读（多半是 Agent 的沙箱挡住了写入）。
+  case readOnlyLibrary
 }
 
 extension CueStoreError: LocalizedError {
@@ -377,6 +379,7 @@ extension CueStoreError: LocalizedError {
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"
     case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
+    case .readOnlyLibrary: "资料库是只读的，写不进去"
     }
   }
 }

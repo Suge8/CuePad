@@ -76,8 +76,8 @@ final class AppServices {
     #endif
 
     #if os(macOS)
-    /// Pi 扩展的检测与安装（写入前需征得同意）。
-    let piIntegration: PiIntegrationManager
+    /// 接入各个 Agent（技能，Pi 另有扩展）的检测、安装与卸载。
+    let agents: AgentIntegrations
     /// 命令行工具 `cuepad` 的安装（链接到 ~/.local/bin）。
     let commandLineTool: CommandLineToolInstaller
     /// 自动更新（Sparkle）。
@@ -312,7 +312,7 @@ final class AppServices {
         terminal = mac.terminal
         locatePi = mac.locatePi
         host = mac.host
-        piIntegration = PiIntegrationManager(installer: mac.installer, settings: settings)
+        agents = AgentIntegrations(mac.agents)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater)
         historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)

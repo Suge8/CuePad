@@ -47,13 +47,11 @@ struct SettingsView: View {
             }
             if services.diagnostics.latest != nil { Section { LastCrashRow() } header: { SettingsHeader("诊断") } }
             Section {
-                PiExtensionRow()
+                AgentRows()
+                CommandLineToolRow()
             } header: {
-                SettingsHeader("Pi")
-            } footer: {
-                SettingsFooter("扩展让 CuePad 看到 Pi 会话的实时状态，并把提示词（含图片）直接发进会话；技能让 Agent 知道怎么把页面和截图发到手机上看。安装或升级后，已在运行的会话在终端里执行 /reload 就能用上。")
+                SettingsHeader("Agent")
             }
-            Section { CommandLineToolRow() } header: { SettingsHeader("命令行") }
             Section { UpdateRow() } header: { SettingsHeader("更新") }
         }
         .formStyle(.grouped)
@@ -165,70 +163,6 @@ enum ShortcutText {
         let modifiers = parts.dropLast().map { symbols[$0] ?? $0 }.joined()
         let name = key.hasPrefix("Key") ? String(key.dropFirst(3)) : key.hasPrefix("Digit") ? String(key.dropFirst(5)) : key
         return modifiers + (name.count > 1 ? " \(name)" : name)
-    }
-}
-
-private struct PiExtensionRow: View {
-    @Environment(\.palette) private var palette
-    @Environment(AppServices.self) private var services
-    @State private var working = false
-    @State private var result: (text: String, failed: Bool)?
-
-    var body: some View {
-        let status = services.piIntegration.status
-        LabeledContent("Pi 版本") {
-            switch status?.pi {
-            case .none: Text("检测中…").foregroundStyle(.secondary)
-            case .notFound: Text("没有找到 pi 命令").foregroundStyle(.secondary)
-            case .found(_, let version):
-                Text(version >= .minimumSupported ? "\(version)" : "\(version)（需要 \(PiVersion.minimumSupported) 或更新）")
-                    .foregroundStyle(version >= .minimumSupported ? AnyShapeStyle(.primary) : AnyShapeStyle(palette.failure))
-            }
-        }
-        if let installation = status?.pi, !installation.isSupported {
-            PiSetupGuide(installation: installation, showsTitle: false)
-        }
-        LabeledContent("CuePad 扩展与技能") {
-            HStack {
-                Text(fileLabel(status?.file)).foregroundStyle(.secondary)
-                if status?.pi.isSupported == true, needsInstall(status?.file) {
-                    Button(status?.file == .missing ? "安装" : "升级", action: install).disabled(working)
-                }
-            }
-        }
-        if let result {
-            Text(result.text).font(Typography.meta).foregroundStyle(result.failed ? AnyShapeStyle(palette.failure) : AnyShapeStyle(.secondary))
-        }
-    }
-
-    private func fileLabel(_ file: PiIntegrationFile?) -> String {
-        switch file {
-        case .none: ""
-        case .missing: "未安装"
-        case .current: "已是最新"
-        case .outdated(let installed): "已安装旧版（v\(installed)）"
-        case .foreign: "扩展或技能目录里有同名的其他文件，未改动"
-        }
-    }
-
-    private func needsInstall(_ file: PiIntegrationFile?) -> Bool {
-        switch file {
-        case .missing, .outdated: true
-        default: false
-        }
-    }
-
-    private func install() {
-        working = true
-        Task {
-            defer { working = false }
-            do {
-                try await services.piIntegration.install()
-                result = ("已安装；已在运行的 Pi 会话重启后生效", false)
-            } catch {
-                result = (error.localizedDescription, true)
-            }
-        }
     }
 }
 

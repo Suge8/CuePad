@@ -73,16 +73,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         services.start()
         DebugHooks.present(window)
-        if !location.isIsolated { Task { await offerCommandLineTool(services, in: workspace) } }
-    }
-
-    /// 首次启动提示一次（主窗口里的确认框，`Workspace.offersCommandLineTool`）：装了就不打扰；位置被占用等情况在设置里看。
-    private func offerCommandLineTool(_ services: AppServices, in workspace: Workspace) async {
-        guard !services.settings.commandLineToolPrompted else { return }
-        services.settings.commandLineToolPrompted = true
-        await services.commandLineTool.refresh()
-        guard services.commandLineTool.state == .notInstalled else { return }
-        workspace.offersCommandLineTool = true
+        // 首次启动出现一次接入 Agent 的面板（主窗口里的浮层），之后在设置里改；隔离库（开发与验收）不弹
+        if !location.isIsolated, !services.settings.agentSetupShown {
+            services.settings.agentSetupShown = true
+            workspace.showsAgentSetup = true
+        }
     }
 
     @objc func checkForUpdates(_ sender: Any?) {

@@ -23,7 +23,6 @@ final class AppSettings {
         #if os(macOS)
         static let currentProject = "currentProject"
         #endif
-        static let piExtensionDeclined = "piExtensionDeclined"
         static let replyTexts = "replyTexts"
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
@@ -46,9 +45,6 @@ final class AppSettings {
         didSet { defaults.set(currentProject?.uuidString, forKey: Key.currentProject) }
     }
     #endif
-
-    /// 用户拒绝过首次安装 Pi 扩展：之后不再询问、不安装。存储属性：询问卡片据此在点"不用了"的同一刻收起。
-    var piExtensionDeclined: Bool { didSet { defaults.set(piExtensionDeclined, forKey: Key.piExtensionDeclined) } }
 
     /// 启动参数覆盖已存的设置（只在 Debug 构建，见 `DebugHooks.launchArgumentOverrides`）。
     static var launchArgumentOverrides: [String: Any] { DebugHooks.launchArgumentOverrides }
@@ -133,7 +129,6 @@ final class AppSettings {
         #if os(macOS)
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         #endif
-        piExtensionDeclined = launchArguments[Key.piExtensionDeclined].map(Self.isTrue) ?? defaults.bool(forKey: Key.piExtensionDeclined)
         holdSendLearned = defaults.bool(forKey: Key.holdSendLearned)
         agentProject = defaults.string(forKey: Key.agentProject).flatMap(UUID.init(uuidString:))
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
@@ -163,11 +158,6 @@ final class AppSettings {
     private static let leavingForeground = NSApplication.willResignActiveNotification
     private static let terminating = NSApplication.willTerminateNotification
     #endif
-
-    private static func isTrue(_ value: Any) -> Bool {
-        if let flag = value as? Bool { return flag }
-        return ["yes", "true", "1"].contains(String(describing: value).lowercased())
-    }
 }
 
 /// 一个会话回复框的草稿（`AppSettings.replyDraft`）。

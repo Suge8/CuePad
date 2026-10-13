@@ -62,7 +62,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 **复制。** `AppServices.copy` 一处，不写发送记录。Mac 上单条目同时放文字与 PNG 时图形应用只取其一，所以含图的正文写成按原顺序含图的 RTFD 并附纯文字兜底（`Clipboard.write`）；iOS 每段文字、每张图片各一个条目。
 
 **预览（Agent 发到手机上看的文件）。**
-- Agent 在命令行执行 `cuepad show <文件> [--title 标题]`：不在 Agent 里加别的东西，以后接 Codex、Claude Code 同样是这条命令加同一份 skill。会话由环境变量 `PI_SESSION_ID` 认出，认不出就报错、不猜。
+- Agent 在命令行执行 `cuepad show <文件> [--title 标题]`：不在 Agent 里加别的东西。会话由环境变量 `PI_SESSION_ID` 认出，认不出就报错、不猜；预览挂在 Pi 会话的对话里，所以只有 Pi 的技能提它（Claude Code、Codex、OpenCode 的会话不在 CuePad 里，`CLAUDE_CODE_SESSION_ID`、`CODEX_THREAD_ID` 认得出会话也没处显示）。
 - 预览不是会话文件里的内容：对话仍只来自会话文件，预览卡按创建时间插进对话（`PiChat.entries`）。
 - HTML 只读渲染、不联网也读不到别的文件，所以必须是单个文件；`addPreview` 列出页面引用的外部地址，让 Agent 改成单文件再发。否决的方案：在 Mac 上替它内联——样式里的 url()、字体、模块脚本都要处理，漏一类就是静默缺图。
 
@@ -72,9 +72,11 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 
 **编辑器。** 存储格式是纯字符串（`CueFormat`），唯一事实源；保存只经序列化，编辑器内复制输出存储格式。不得访问 `NSTextView.layoutManager` / `UITextView.layoutManager`（一次访问就永久降级到 TextKit 1）。
 
-**Pi 桥。** 协议、版本策略、多客户端、已知边界与 Pi 集成（扩展与 skill 的安装、升级、同意）都以 CuePi README 为准；App 层只有 `PiIntegrationManager` 管首次同意与静默升级，没有第二套状态。实时状态只在内存，历史只来自 Pi 会话文件。什么算历史只在 `PiStateRecorder.exited` 定：一句话没说过的会话（没留下会话文件）关掉后记录直接删掉，不进历史；CuePad 后台托管的会话闲置退出不算结束，记录留着、歇着，仍在"现在"、发话时 Mac 唤醒它，用户在 CuePad 里结束它或终端里的 Pi 退出才进历史。
+**接入 Agent。** Pi 接得最深（扩展 + 技能），Claude Code、Codex、OpenCode 只装技能，教 Agent 用 `cuepad`；装在哪、怎么认、怎么删干净以 CuePi README「接入 Agent」为准。App 层只有 `AgentIntegrations` 一份状态：装只在用户点了之后（首次启动的接入面板 `AgentSetupPanel`、设置里的开关、侧栏的「接入 Pi」，开关就是同意、不预先勾选），装过的启动时静默升级。
 
-**命令行。** `cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标构建、随 App 签名与公证；设置里的开关在 `~/.local/bin/cuepad` 建符号链接。`cuepad --help` 是其唯一文档。
+**Pi 桥。** 协议、版本策略、多客户端与已知边界都以 CuePi README 为准。实时状态只在内存，历史只来自 Pi 会话文件。什么算历史只在 `PiStateRecorder.exited` 定：一句话没说过的会话（没留下会话文件）关掉后记录直接删掉，不进历史；CuePad 后台托管的会话闲置退出不算结束，记录留着、歇着，仍在"现在"、发话时 Mac 唤醒它，用户在 CuePad 里结束它或终端里的 Pi 退出才进历史。
+
+**命令行。** `cuepad` 随 App 分发在 `CuePad.app/Contents/Helpers/cuepad`，由 `CuePadCLI` 目标构建、随 App 签名与公证；接入面板与设置里的开关在 `~/.local/bin/cuepad` 建符号链接（Agent 的技能写的是 App 里的绝对路径，不靠它）。`cuepad --help` 是其唯一文档。资料库只读（Agent 的沙箱挡住写入，如 Codex 默认的 workspace-write）时报 `read_only`，让 Agent 到沙箱外重跑。
 
 **测试。** Swift Testing。
 - 测试只用替身或不产生按键事件的系统调用，不向其他应用发送键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。

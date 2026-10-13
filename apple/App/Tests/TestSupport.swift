@@ -133,13 +133,19 @@ final class TestApp {
         PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory)
     }
 
+    /// 其余 Agent 的配置目录也在临时目录里，按它们自己认的环境变量给。
+    var agentHomes: [String: String] {
+        ["CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
+         "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path]
+    }
+
     private func makeServices() -> AppServices {
         let mac = MacDependencies(
             pi: pi,
             hotkeys: hotkeys,
             paths: piPaths,
-            installer: PiIntegration(
-                paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
+            agents: AgentIntegration(
+                pi: piPaths, environment: agentHomes, locator: ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
                 cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")),
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,

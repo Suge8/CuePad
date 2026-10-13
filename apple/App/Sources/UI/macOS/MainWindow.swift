@@ -94,11 +94,7 @@ private struct WindowPanels: View {
                 message: [DeliveryMode.steer, .followUp].map { "\($0.label)：\($0.explanation ?? "")" }.joined(separator: "\n"),
                 buttons: [DeliveryMode.steer, .followUp].map { mode in DialogButton(title: mode.label) { workspace.resolveBusySend(mode) } }
             )
-            .dialog(
-                "把 cuepad 命令行装进 PATH？", isPresented: $workspace.offersCommandLineTool,
-                message: "装好后 agent 可以在 bash 里直接用 cuepad 读写你的灵感和任务。会在 ~/.local/bin/cuepad 建一个指向 App 的链接，不需要管理员权限，随时可在设置里卸载。",
-                buttons: [DialogButton(title: "安装") { workspace.attempt { try await services.commandLineTool.install() } }]
-            )
+            .panel(isPresented: $workspace.showsAgentSetup) { AgentSetupPanel() }
     }
 
     private var busy: Binding<Bool> {

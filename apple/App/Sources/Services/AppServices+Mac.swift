@@ -22,7 +22,7 @@ extension AppServices {
         let indexer = PiHistoryIndexer(root: paths.sessionsDirectory, transcriptWindow: PiHistoryPersistence.transcriptWindow, files: store.files) { [weak self] file in
             await self?.loadPiCheckpoint(for: file)
         }
-        follow(reporting: { .piBridgeUnavailable("CuePad 的 Pi 扩展没能升级：\($0.localizedDescription)") }) { try await self.piIntegration.refresh() }
+        follow(reporting: { .piBridgeUnavailable("CuePad 写给 Agent 的技能或扩展没能升级：\($0.localizedDescription)") }) { try await self.agents.refresh() }
         follow { await self.consumePiHistory(indexer.events()) }
         follow { await self.historyStore.keepPruned() }
         follow(reporting: { .syncUnavailable("Agent 状态没能写入同步记录：\($0)") }) {

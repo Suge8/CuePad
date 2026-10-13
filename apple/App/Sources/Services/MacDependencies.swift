@@ -9,7 +9,7 @@ struct MacDependencies {
     var pi: PiBridge
     var hotkeys: any HotkeyBackend
     var paths: PiPaths
-    var installer: PiIntegration
+    var agents: AgentIntegration
     var terminal: PiTerminalJumper
     var hostID: String
     /// 系统唤醒通知所在的通知中心（生产是 NSWorkspace 的）。
@@ -29,21 +29,19 @@ struct MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)
         let commandLineTool = CommandLineToolInstaller()
-        let installer = PiIntegration(paths: paths, cuepad: commandLineTool.helper)
+        let agents = AgentIntegration(pi: paths, cuepad: commandLineTool.helper)
         return MacDependencies(
             pi: pi,
             hotkeys: CarbonHotkeyBackend(),
             paths: paths,
-            installer: installer,
+            agents: agents,
             terminal: PiTerminalJumper(),
             hostID: HostIdentity.current(),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             commandLineTool: commandLineTool,
             updater: location.isIsolated ? nil : SparkleUpdater(),
             host: PiHost(bridge: pi, paths: paths),
-            locatePi: {
-                if case .found(let executable, _) = await installer.status().pi { executable } else { nil }
-            },
+            locatePi: { await agents.locatePi() },
             pasteboard: .general)
     }
 }

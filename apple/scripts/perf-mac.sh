@@ -27,7 +27,7 @@ xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration 
 launch() {
   local library="$1"; shift
   CUEPAD_LIBRARY_DIR="$library" PI_CODING_AGENT_DIR="$DERIVED/pi-agent" CUEPAD_PI_SOCKET_DIR="/tmp/cuepad-perf-$(id -u)" \
-    exec "$EXE" -piExtensionDeclined YES "$@"
+    exec "$EXE" "$@"
 }
 
 # 第一次：写入大库并把大项目设为当前项目，写完结束；之后的运行才是冷启动

@@ -5,7 +5,7 @@
 | 能力 | 入口 | 说明 |
 | --- | --- | --- |
 | 实时状态与发送 | `PiBridge`（`@MainActor @Observable`） | 发现并连接所有活着的会话；`slots`（一个在线会话一格，格内的 `session` 原地更新）直接给界面观察，`session(sessionID:)` 取单个会话、`sessions` 是全部会话的快照（非界面代码与测试用），`changes()` 给通知；`send` / `command`（斜杠命令）/ `configure`（会话名、模型与思考强度）/ `abort`（停止这一轮）；会话结束只经 `changes()` 的 `.ended` 报告（带最后一刻的快照），桥不留已结束会话——已结束的会话只在同步记录里（`PiSessionState`，状态 `ended`） |
-| Pi 集成 | `PiIntegration` | 检测 Pi（≥ 0.84.4）与集成状态，`install()`（新装/升级）：扩展与 skill 一起写（skill 是 `<Pi 目录>/skills/cuepad/SKILL.md`，与扩展同在 Pi 目录下，不写用户自己维护的 `~/.agents/skills`；正文写着 App 里 `cuepad` 的绝对路径，教 Agent 用 `cuepad show` 把文件发到手机，其余看 `--help`）；状态只有一份：任一个是别人的同名文件为 `foreign`（两样都不写），没装扩展为 `missing`，两样都是最新才是 `current`，其余（旧版、缺 skill、App 移动后路径变了）为 `outdated`；首次写入前 App 要先征得用户同意（拒绝时两样都不装），之后的升级由 App 静默完成 |
+| 接入 Agent | `AgentIntegration` | Pi、Claude Code、Codex、OpenCode：检测（Pi 读 `pi --version`，≥ 0.84.4；其余有命令或有配置目录就算在，含桌面版）、`install`（新装/升级）、`uninstall`（删掉 CuePad 写的全部文件与因此空出来的目录，Agent 已卸掉也能删）。每家只写进它自己的配置目录 `<目录>/skills/cuepad/SKILL.md`，目录按各家认的环境变量定（`PI_CODING_AGENT_DIR`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`/`XDG_CONFIG_HOME`），不写几家共用、用户自己维护的 `~/.agents/skills`；OpenCode 也读 `~/.claude/skills`，同名同内容按名字去重。Pi 另写扩展，两样一起装、一起升级（技能写不进去时扩展还原）。技能很短，写着 App 里 `cuepad` 的绝对路径，其余看 `--help`：手机预览（`show`）挂在 Pi 会话的对话里，只有 Pi 的提；Codex 默认在沙箱里跑命令、资料库在沙箱外，它的提醒写入要申请。状态只有一份：任一个是别人的同名文件为 `foreign`（不写也不删），没装为 `missing`，与随包内容一致为 `current`，其余（旧版、缺一样、App 移动后路径变了）为 `outdated`；写入前 App 要先征得用户同意，之后的升级由 App 静默完成 |
 | 历史索引 | `PiHistory.index` / `PiHistoryIndexer` | 只认 `<会话目录>/<项目目录>/*.jsonl`（与 Pi 自己的会话列表一致，FireCode 子代理的 `subagents/` 不算）；回填完成时给出全部会话文件，App 据此删掉不在其中的旧索引；增量读取，给出会话列表要的摘要（id、工作目录、名字、首条用户消息（标题规则与活动会话同一处：`PiSessionName`）、最后活动），以及这次新读到的对话（`transcript`）与问答摘要（`recap`），规则见下文"对话与摘要"；首次读（没有检查点）时只为 `transcriptWindow` 内修改过的文件（按修改时间，不读内容）解析对话，更早的只读摘要：逐行只找换行，只解码文件头、改名与第一条你的消息，最近一轮问答从文件尾往回解码到够用为止，得到的检查点与全读一样；检查点（Codable，不含正文）由 App 存进 Store，再传回来；会话目录可以在开始监听时还不存在（先装 CuePad、后装 Pi）或被删再建：盯着最近的已存在上层目录，出现后切过去并整体重扫一次 |
 | 错误摘要 | `PiErrorSummary` | Pi 只上报错误原文（常是"状态码 + 提供方 JSON"）：提取状态码与提供方消息并归类（认证、额度用完——按消息内容识别、不论状态码，限流、请求被拒、服务端、网络），`title` 一句中文，`line` 再附提供方原句，`raw` 原文供悬停 |
 | 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话，连上桥后返回；空闲满时限退出（不算结束：会话记录留着、歇着，仍在"现在"，发话时再恢复）；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退）；让出的进程退出后对接手的进程发 `reload`；`closeAll()` 关掉全部（关标准输入，RPC 模式读到 EOF 正常收尾）；`end(id)` 结束一个在线会话并等它退出（托管的关标准输入，终端里的走扩展的 `end` 命令） |
@@ -86,7 +86,7 @@ CuePad → 扩展（都带 `id`）：
 
 ## 版本
 
-扩展文件里的 `EXTENSION_VERSION` 是唯一版本来源，`PiExtensionBundle.version` 由它解析。`PiIntegration.status().file` 报告已安装的扩展与 skill 是否过期；升级文件后，已在运行的会话在终端里执行 /reload 才加载新扩展（Pi 重新载入扩展，同一会话、同一进程以新协议重连；已用真实 pi 验证）。**协议号只认等于**，不做版本协商（不向下兼容旧协议）：每加一条命令或改线上格式就升一号，hello 里协议号不同的会话只读出会话 id、进程、工作目录与名字（格式可能已变，其余不解析），以状态 `.incompatible` 出现在 `sessions` 里——进程在、会话没死，所以不是"已结束"，也不会被后台唤醒；之后它的消息一概不读，所有命令抛 `PiBridgeError.incompatibleExtension`（"这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"），进程退出（连接断开）才结束。用户升级后在终端里对这个会话执行 `/reload` 即可。`.incompatible` 变化事件只留给 hello 之后消息损坏的连接（已断开，不在 `sessions` 里）。
+扩展文件里的 `EXTENSION_VERSION` 是唯一版本来源，`PiExtensionBundle.version` 由它解析。`AgentIntegration.status(of: .pi).files` 报告已安装的扩展与技能是否过期；升级文件后，已在运行的会话在终端里执行 /reload 才加载新扩展（Pi 重新载入扩展，同一会话、同一进程以新协议重连；已用真实 pi 验证）。**协议号只认等于**，不做版本协商（不向下兼容旧协议）：每加一条命令或改线上格式就升一号，hello 里协议号不同的会话只读出会话 id、进程、工作目录与名字（格式可能已变，其余不解析），以状态 `.incompatible` 出现在 `sessions` 里——进程在、会话没死，所以不是"已结束"，也不会被后台唤醒；之后它的消息一概不读，所有命令抛 `PiBridgeError.incompatibleExtension`（"这个会话正在终端里运行旧版扩展，在终端里执行 /reload 后再发"），进程退出（连接断开）才结束。用户升级后在终端里对这个会话执行 `/reload` 即可。`.incompatible` 变化事件只留给 hello 之后消息损坏的连接（已断开，不在 `sessions` 里）。
 
 ## 已知边界
 
