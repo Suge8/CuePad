@@ -88,6 +88,14 @@ nonisolated struct CueDigest: Equatable, Sendable {
     private static let recentWindow = 40
 }
 
+nonisolated extension CueSnapshot {
+    /// 小组件那一份：表情按库推出的状态定（小组件里没有"交不出去满 30 秒"的计时，按没超时算）。
+    init(digest: CueDigest) {
+        let mood = CueMood.of(CuePresence.derive(digest, overdue: false), waiting: digest.waiting, justDone: digest.lastSaidDone)
+        self.init(name: digest.name, waiting: digest.waiting, lastSaid: digest.lastSaid?.firstLine, mood: mood.rawValue)
+    }
+}
+
 /// "等你 N" 只有一处算：Cue 带选项问你、还没答的，加上不由 Cue 跟进的会话里在等你回答的
 /// （Cue 跟进的会话等回答由 Cue 去答或转问你，不重复算）。
 nonisolated enum CueWaiting {

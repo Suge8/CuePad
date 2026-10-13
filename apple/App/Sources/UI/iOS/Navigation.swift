@@ -187,6 +187,8 @@ final class Navigation {
         case .card(let id):
             if layout == .tabs { tab = .projects }
             push(.card(id))
+        case .cue:
+            show(.cue)
         }
     }
 
@@ -199,6 +201,10 @@ final class Navigation {
     /// 在项目页里要能返回项目的入口（任务页）用 `push`。
     func show(_ route: Route) {
         switch (route, layout) {
+        // Cue 是 Agent 标签的根
+        case (.cue, .tabs):
+            tab = .agent
+            agentPath = []
         case (.session, .tabs):
             tab = .agent
             agentPath = [route]

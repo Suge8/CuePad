@@ -166,7 +166,7 @@ struct CuePreviewThumb: View {
     }
 }
 
-extension String {
+nonisolated extension String {
     /// 第一行非空的字（近况、提问只占一行）。
     var firstLine: String {
         split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
