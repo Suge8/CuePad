@@ -79,9 +79,17 @@ extension CueStore {
       orderBy: "createdAt, rowid")
   }
 
-  /// 在等你回答的消息（`CueMessage.isWaiting`），从早到晚。
+  /// 在等你回答的消息，从早到晚。"在等你"只有这一条规则，由事实推出、不另记状态：Cue 带选项问的、还没答，
+  /// 而且没关联任务，或关联的任务（或步骤）还没做完——完成、归档、删了（含随项目进回收站、永久删除）的就不再等。
   public func cueMessagesWaitingForYou() throws -> [CueMessage] {
-    try select(CueMessage.self, where: "author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL", orderBy: "createdAt, rowid")
+    try select(
+      CueMessage.self,
+      where: """
+        author = 'cue' AND choices IS NOT NULL AND answeredAt IS NULL AND (taskID IS NULL OR EXISTS (
+          SELECT 1 FROM cards c LEFT JOIN projects p ON p.id = c.projectID
+          WHERE c.id = cueMessages.taskID AND c.completedAt IS NULL AND c.archivedAt IS NULL AND c.deletedAt IS NULL AND p.deletedAt IS NULL))
+        """,
+      orderBy: "createdAt, rowid")
   }
 }
 
