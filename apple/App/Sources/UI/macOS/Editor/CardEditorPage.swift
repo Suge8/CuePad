@@ -66,7 +66,10 @@ struct CardEditorPage: View {
         .opacity(shown ? 1 : 0)
         .allowsHitTesting(shown)
         .debugSettling(isOpen ? !settled : !gone)
-        .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
+        // 卡没了（并进了草稿、接进了会话的回复框）就收起，不当成出错
+        .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
+            if case CueStoreError.notFound = error { workspace.openCard = nil } else { workspace.fail(error) }
+        }) { [cardID] store in
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(card: card, project: try card.projectID.flatMap { try store.project($0) })
         }

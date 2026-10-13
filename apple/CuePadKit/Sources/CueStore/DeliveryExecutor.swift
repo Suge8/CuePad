@@ -51,15 +51,27 @@ extension CueStore {
     return try requestDelivery(mode.rawValue, to: target, on: host, mode: mode)
   }
 
-  /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名）。
-  /// 给了 `card`（从灵感或任务"新会话"发给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）。
+  /// 请 `host` 那台 Mac 开一个新 Pi 会话（后台托管）。`title` 是给人看的目标名（项目名或任务名）。
+  /// 给了 `card`（从灵感或任务"新会话"发给 Agent）：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`）；
+  /// 它是任务或任务下的提示词时，会话以那个任务（叶子）的标题命名。
   public func requestLaunch(_ launch: PiLaunch, title: String, on host: String, card: UUID? = nil) throws -> DeliveryRequest {
-    try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card)
+    var launch = launch
+    launch.name = try card.flatMap(taskTitle(for:))
+    return try requestDelivery(launch.stored, to: SendTarget(kind: .piSession, name: title, ref: nil), on: host, mode: .start, card: card)
+  }
+
+  /// 卡所在的任务的标题：任务是它自己，提示词是它挂着的任务；散放的灵感、没有标题的任务没有。
+  private func taskTitle(for card: UUID) throws -> String? {
+    guard let card = try find(Card.self, card) else { return nil }
+    let task = card.isTask ? card : try card.parentID.flatMap { try find(Card.self, $0) }
+    guard let title = task.map({ CueSummary($0.body).title }), !title.isEmpty else { return nil }
+    return title
   }
 
   /// 认领：最近一次是"开新会话"请求的灵感与任务，等那个会话带着请求里的 `token` 记下（`PiSessionState.launchToken`）时
   /// 关联到它，任务同时进行中——与发给已有会话后 `recordSend` 的结果一样。会话记录在本机写下（Mac 的记录器）或同步过来时都在这里认领。
   /// 只认最近一次：带 `cardID` 的请求都是发给 Agent，之后又交给了别处就以那次为准，旧的新会话开好也不抢回（同 `handedSessions`）。
+  /// 绑定、解绑会话也算之后的一次交给：它们把指向这张卡的开新会话请求作废（`bindSession`、`unbindSession`）。
   func claimLaunchedCards() throws {
     try db.run(
       """

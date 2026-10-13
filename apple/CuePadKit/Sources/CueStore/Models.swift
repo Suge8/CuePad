@@ -119,8 +119,8 @@ public struct TaskGroup: Equatable, Sendable {
   public internal(set) var tasks: [Card]
 }
 
-/// 能绑会话的叶子任务，步骤带着它的上级（`CueStore.bindableTasks`）。
-public struct BindableTask: Identifiable, Equatable, Sendable {
+/// 叶子任务，步骤带着它的上级（能绑会话的 `CueStore.bindableTasks`、绑着会话的 `CueStore.tasks(boundTo:)`）：界面写"上级 · 步骤"。
+public struct LeafTask: Identifiable, Equatable, Sendable {
   public let task: Card
   /// 步骤的上级任务；顶层任务为 nil。
   public let parent: Card?
@@ -181,6 +181,8 @@ public enum CardChange: Sendable, Equatable {
   case move(id: UUID, from: CardSlot, after: UUID?)
   /// 灵感挂到已有草稿的叶子上：并进草稿，灵感删掉。带着删掉的灵感整张卡与草稿并之前的正文、变量取值，拨回时原样还原。
   case fold(idea: Card, draft: UUID, body: String, variableValues: [String: String])
+  /// 灵感挂到绑了会话的叶子上：绑了会话的叶子不留提示词，灵感删掉，正文由界面接进会话 `session` 的回复框。拨回时灵感原样还原。
+  case handed(idea: Card, session: String)
 }
 
 public struct SendRecord: Identifiable, Equatable, Sendable {

@@ -46,7 +46,7 @@ cd apple/CuePadKit && swift build -c release --product cuepad   # 命令行
 - 每个窗口一份项目目录 `ProjectCatalog`；名称、图标、计数、目录、⌘1–9 顺序和所有项目选择器都从它同步取，页面与菜单不各自再读。
 - 目录读到前根视图不显示页面，所以进入项目页、打开菜单的第一帧就是真实值；顶栏的标题与信息在推入时定下，推入后再改会让整页跳一下，不能等页面数据。
 - 项目操作与灵感、任务的操作各只有一份定义（`ProjectActions`、`CardActions`），Mac 右键、iOS 长按与"更多"共用，平台只补各自的发送。
-- Mac 上提示词交给哪个 Agent 会话只有一处规则（`SendState.destination`）：一个任务一个会话，用户为任务挑的去处优先，其次是任务或提示词上次交给的会话，否则在项目文件夹开新会话；编辑页底栏、右键菜单、⌘K、选区菜单都经 `Workspace.handOff`，不各自挑会话。
+- Mac 上提示词交给哪个 Agent 会话只有一处规则（`Workspace.handOff`）：任务绑着会话就发进那个会话，没绑就在项目文件夹开一个以任务命名的新会话（会话名由 `CueStore.requestLaunch` 按带着的卡定，手机发起的同样）；各个入口都经它，不各自挑会话。
 - 绑定文件夹经 `FilePicker`（Mac，非模态，不用 `runModal`）或 `FolderPickerSheet`（手机，经投送请求让 Mac 绑），规则同一份 `ProjectFolders`。
 
 **页面与首次使用（Mac）。**

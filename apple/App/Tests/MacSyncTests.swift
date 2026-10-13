@@ -422,9 +422,9 @@ struct MacSyncTests {
 
     // MARK: 后台恢复、开新会话
 
-    private func launched(_ launch: PiLaunch, title: String = "app") async throws -> DeliveryRequest {
+    private func launched(_ launch: PiLaunch, title: String = "app", card: UUID? = nil) async throws -> DeliveryRequest {
         try await services.executor.start()
-        let request = try await services.store.requestLaunch(launch, title: title, on: TestApp.hostID)
+        let request = try await services.store.requestLaunch(launch, title: title, on: TestApp.hostID, card: card)
         return try await awaitFinished(request.id)
     }
 
@@ -484,6 +484,24 @@ struct MacSyncTests {
         #expect(done.status == .known(.succeeded))
         #expect(rig.host.calls == [.open(directory: directory.path, launchToken: "tok-1")])
         #expect(rig.host.extensions["new-tok-1"]?.messages == [PiMessage(text: "看看测试为什么挂", deliveryID: done.id.uuidString)])
+    }
+
+    /// 从步骤开的新会话叫步骤名：先起名，再送开场的话（会话名不会先成了第一句话）。
+    @Test func 新会话_从步骤开_以步骤命名() async throws {
+        let directory = try folder("proj")
+        let project = try await services.store.createProject(name: "App", color: "#000000")
+        try await services.store.setDirectory(directory.path, for: project.id)
+        defer { services.cancelBackgroundWork() }
+        let task = try await services.store.createTask("上线", in: project.id)
+        let step = try await services.store.createTask("备份数据库", under: task.id)
+        let prompt = try await services.store.createCard(body: "先把库备份一份", under: step.id)
+
+        let done = try await launched(PiLaunch(project: project.id, prompt: prompt.body, token: "tok-6"), card: prompt.id)
+
+        #expect(done.status == .known(.succeeded))
+        let ext = try #require(rig.host.extensions["new-tok-6"])
+        #expect(ext.received == ["config", "send"])
+        #expect(ext.commands.first?.json["name"] as? String == "备份数据库")
     }
 
     /// 开场的话里挑了带图片的卡片：图片按原图随第一条消息送达，不把存储格式的引用当文字发出去。
