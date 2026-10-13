@@ -64,7 +64,7 @@ enum PerfLibrary {
         }
         for index in 0..<piSessionCount {
             let cwd = index % 2 == 0 ? "\(home)Project/perf-\(index % boundProjects)" : "/Users/dev/work/repo-\(index)"
-            try await store.upsertPiSession(PiSession(
+            try await store.upsertPiSession(IndexedSession(
                 id: "perf-\(index)", path: "/tmp/perf-\(index).jsonl", cwd: cwd,
                 title: sentence(&random, chinese: index % 2 == 0, words: 3...9),
                 lastActivityAt: .now.addingTimeInterval(-Double(index) * 3_600)), host: "perf-mac")

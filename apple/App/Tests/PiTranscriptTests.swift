@@ -57,7 +57,7 @@ struct PiTranscriptTests {
     /// 桥上看到这个会话在线（状态记录器写出未结束的记录；不结束）。
     private func live(_ sessionID: String, file: URL) async throws -> CuePi.PiSession {
         let session = CuePi.PiSession(
-            id: "\(sessionID).100", sessionID: sessionID, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
+            id: "\(sessionID).100", sessionID: sessionID, agent: .pi, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
             terminal: PiTerminal(), extensionVersion: PiExtensionBundle.version, state: .thinking, stateSince: .now)
         try await services.consumePiChanges(AsyncStream { continuation in
             continuation.yield(.appeared(session))

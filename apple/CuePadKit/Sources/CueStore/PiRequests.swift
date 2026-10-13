@@ -86,11 +86,14 @@ public struct PiLaunch: Sendable, Equatable, StoredJSON {
   /// 开场的话（可空）。
   public var prompt: String?
   public var token: String
+  /// 用哪个 Agent 开；旧版本写的没有，是 Pi
+  public var agent: AgentKind?
 
-  public init(project: UUID, prompt: String?, token: String) {
+  public init(project: UUID, prompt: String?, token: String, agent: AgentKind = .pi) {
     self.project = project
     self.prompt = prompt
     self.token = token
+    self.agent = agent
   }
 }
 

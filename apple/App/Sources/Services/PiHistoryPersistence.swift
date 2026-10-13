@@ -1,6 +1,5 @@
 #if os(macOS)
 import CuePi
-import struct CueStore.PiSession
 import CueStore
 import Foundation
 import os
@@ -86,7 +85,7 @@ actor PiHistoryPersistence {
         for update in updates {
             let history = update.history
             let modified = try? update.file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-            let session = PiSession(
+            let session = IndexedSession(
                 id: update.sessionID,
                 path: update.file.path,
                 cwd: history.cwd ?? "",
@@ -136,7 +135,7 @@ actor PiHistoryPersistence {
         }
         let paths = Set(files.map(\.path))
         let started = ContinuousClock.now
-        let removed = try await storage.retainPiSessions(paths: paths, host: host)
+        let removed = try await storage.retainPiSessions(paths: paths, agent: .pi, host: host)
         idsByPath = idsByPath?.filter { paths.contains($0.key) }
         if removed > 0 {
             Self.log.notice("回填完成：删掉 \(removed) 条不在会话列表里的旧索引，用时 \(ContinuousClock.now - started, privacy: .public)")

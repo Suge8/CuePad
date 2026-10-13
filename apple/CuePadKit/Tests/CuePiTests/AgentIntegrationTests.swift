@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Foundation
 import Testing
 @testable import CuePi
@@ -35,7 +36,7 @@ struct AgentIntegrationTests {
     }
 
     private func integration(cuepad: URL? = nil) -> AgentIntegration {
-        AgentIntegration(pi: paths, environment: environment, locator: ExecutableLocator(searchDirectories: [bin]), cuepad: cuepad ?? self.cuepad)
+        AgentIntegration(paths: AgentPaths(pi: paths, environment: environment), locator: ExecutableLocator(searchDirectories: [bin]), cuepad: cuepad ?? self.cuepad)
     }
 
     private func fakeAgent(_ command: String, printing output: String = "") throws {

@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 后台索引 Pi 会话目录：先按修改时间倒序回填（最近的会话最先可用），发出 `backfillFinished` 后
+/// 后台索引一个 Agent 的会话目录（Pi、Claude Code、Codex 的会话文件）：先按修改时间倒序回填（最近的会话最先可用），发出 `backfillFinished` 后
 /// 用 FSEvents 跟随文件变化，只读新增字节。
 ///
 /// 不持有全部检查点：起点由调用方通过 `checkpoint` 提供（App 层从 Store 读），每个 `updated`
@@ -10,6 +10,7 @@ import Foundation
 /// 这样调用方持久化滞后时增量也不会退化成重读。
 public struct PiHistoryIndexer: Sendable {
     private let root: URL
+    private let agent: AgentKind
     private let transcriptWindow: TimeInterval
     private let files: AttachmentFiles
     private let checkpoint: @Sendable (URL) async -> PiHistoryCheckpoint?
@@ -20,10 +21,11 @@ public struct PiHistoryIndexer: Sendable {
     ///   更早的只读摘要（见 `PiHistory.index(file:from:transcript:files:)`）。
     /// - Parameter files: 你的消息里的图片存进的附件目录。
     public init(
-        root: URL = PiPaths().sessionsDirectory, transcriptWindow: TimeInterval = .infinity, files: AttachmentFiles,
+        root: URL = PiPaths().sessionsDirectory, agent: AgentKind = .pi, transcriptWindow: TimeInterval = .infinity, files: AttachmentFiles,
         checkpoint: @escaping @Sendable (URL) async -> PiHistoryCheckpoint?
     ) {
         self.root = root
+        self.agent = agent
         self.transcriptWindow = transcriptWindow
         self.files = files
         self.checkpoint = checkpoint
@@ -49,14 +51,15 @@ public struct PiHistoryIndexer: Sendable {
             if let cached = live[file] { base = cached } else { base = await checkpoint(file) }
             let recent = (modified ?? Self.modified(file)).map { $0 > Date.now.addingTimeInterval(-transcriptWindow) } ?? true
             // 文件已被删除/尚未落盘等：跳过，等下一次变化
-            guard let update = try? PiHistory.index(file: file, from: base, transcript: recent, files: files) else { return }
+            guard let update = try? PiHistory.index(file: file, agent: agent, from: base, transcript: recent, files: files) else { return }
             if remember { live[file] = update.checkpoint }
             if update.bytesRead > 0 || base == nil { continuation.yield(.updated(update)) }
         }
 
         // 回填时记住最近修改的那批文件（正在被 Pi 写入的最可能是它们）：之后的事件（包括 FSEvents
         // 对回填前写入的迟到通知）落到缓存上，不会重读也不会重复发出
-        let found = Self.sessionFiles(under: root)
+        let depth = Self.depth(of: agent)
+        let found = Self.sessionFiles(under: root, depth: depth)
         for (rank, file) in found.enumerated() {
             if Task.isCancelled { return }
             await index(file.url, modified: file.modified, remember: rank < Self.liveCacheLimit)
@@ -66,22 +69,26 @@ public struct PiHistoryIndexer: Sendable {
         for await paths in watcher.paths {
             if Task.isCancelled { return }
             if paths.contains(root.path) { // 丢事件：整体重扫
-                for file in Self.sessionFiles(under: root) { await index(file.url, modified: file.modified, remember: true) }
+                for file in Self.sessionFiles(under: root, depth: depth) { await index(file.url, modified: file.modified, remember: true) }
                 continue
             }
-            for path in Set(paths) where Self.isSessionFile(path, under: root) {
+            for path in Set(paths) where Self.isSessionFile(path, under: root, depth: depth) {
                 await index(URL(filePath: path), modified: nil, remember: true)
             }
         }
     }
 
-    /// 会话文件只有 `<root>/<项目目录>/*.jsonl`，与 Pi 自己的会话列表一致；更深的（如 FireCode 子代理的
-    /// `<项目目录>/subagents/*.jsonl`）不是会话列表里的会话。
-    private static func isSessionFile(_ path: String, under root: URL) -> Bool {
+    /// 会话文件在 `root` 下第几层，与各家自己的会话列表一致：Pi 与 Claude Code 是 `<root>/<项目目录>/*.jsonl`（更深的，如子代理的
+    /// `<项目目录>/…/subagents/*.jsonl`，不是会话列表里的会话）；Codex 是 `<root>/YYYY/MM/DD/rollout-*.jsonl`。
+    private static func depth(of agent: AgentKind) -> Int { agent == .codex ? 4 : 2 }
+
+    private static func isSessionFile(_ path: String, under root: URL, depth: Int) -> Bool {
         let url = URL(filePath: path)
+        guard url.pathExtension == "jsonl" else { return false }
+        var parent = url
+        for _ in 0..<depth { parent = parent.deletingLastPathComponent() }
         // FSEvents 报 /private/var/…，解析符号链接后的 root 是 /var/…：两边都解析再比
-        return url.pathExtension == "jsonl"
-            && url.deletingLastPathComponent().deletingLastPathComponent().resolvingSymlinksInPath().path == root.resolvingSymlinksInPath().path
+        return parent.resolvingSymlinksInPath().path == root.resolvingSymlinksInPath().path
     }
 
     private static func modified(_ file: URL) -> Date? {
@@ -89,13 +96,13 @@ public struct PiHistoryIndexer: Sendable {
     }
 
     /// 全部会话文件与修改时间，最近修改的在前。
-    private static func sessionFiles(under root: URL) -> [(url: URL, modified: Date)] {
+    private static func sessionFiles(under root: URL, depth: Int) -> [(url: URL, modified: Date)] {
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]) else { return [] }
         var files: [(URL, Date)] = []
         for case let url as URL in walker {
-            guard walker.level == 2 else { continue }
-            walker.skipDescendants()  // 项目目录里的子目录（如 subagents/）不进
+            guard walker.level == depth else { continue }
+            walker.skipDescendants()  // 更深的子目录（如 subagents/）不进
             guard url.pathExtension == "jsonl" else { continue }
             let values = try? url.resourceValues(forKeys: Set(keys))
             guard values?.isRegularFile == true else { continue }

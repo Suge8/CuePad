@@ -66,7 +66,7 @@ import Testing
     try await recorder.end(sessionID: "old-ended")
     // 有会话文件的有索引（本机会话文件索引）；"hosted-silent" 与 "old-ended" 没有
     for id in ["terminal", "hosted"] {
-      try await store.upsertPiSession(PiSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", title: id, lastActivityAt: .now), host: host)
+      try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", title: id, lastActivityAt: .now), host: host)
     }
 
     try await recorder.reset()
@@ -75,7 +75,7 @@ import Testing
 
     // 对账之后才连上桥的新会话（还没有会话文件）：记录器正在跟它，对账不删
     try await recorder.update(sessionID: "live-new", state: .settled, title: "live-new", hosted: true)
-    try await store.retainPiSessions(paths: ["/s/terminal.jsonl", "/s/hosted.jsonl"], host: host)
+    try await store.retainPiSessions(paths: ["/s/terminal.jsonl", "/s/hosted.jsonl"], agent: .pi, host: host)
     try await recorder.dropUnindexedHosted()
     #expect(Set(try await states().keys) == ["terminal", "hosted", "live-new"], "没有会话文件的已结束与歇着的托管记录被清掉，有的与在线的留着")
   }

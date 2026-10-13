@@ -42,7 +42,7 @@ struct TerminalJumperTests {
     struct Denied: Error {}
 
     private func session(_ terminal: PiTerminal, cwd: String = "/Users/me/proj") -> PiSession {
-        PiSession(id: "s.1", sessionID: "s", sessionFile: nil, pid: 1, cwd: URL(filePath: cwd), 
+        PiSession(id: "s.1", sessionID: "s", agent: .pi, sessionFile: nil, pid: 1, cwd: URL(filePath: cwd), 
                   terminal: terminal, extensionVersion: 1, state: .settled, stateSince: Date())
     }
 

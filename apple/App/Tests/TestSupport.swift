@@ -145,7 +145,7 @@ final class TestApp {
             hotkeys: hotkeys,
             paths: piPaths,
             agents: AgentIntegration(
-                pi: piPaths, environment: agentHomes, locator: ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
+                paths: AgentPaths(pi: piPaths, environment: agentHomes), locator: ExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
                 cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")),
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,

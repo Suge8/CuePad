@@ -1,21 +1,8 @@
 #if os(macOS)
+import CueStore
 import Foundation
 
-/// CuePad 能接入的 Agent。Pi 接得最深（扩展 + 技能：实时状态、发提示词、手机预览），其余经技能教 Agent 用 `cuepad` 命令。
-public enum AgentKind: String, CaseIterable, Sendable, Identifiable {
-    case pi, claudeCode, codex, opencode
-
-    public var id: Self { self }
-
-    public var name: String {
-        switch self {
-        case .pi: "Pi"
-        case .claudeCode: "Claude Code"
-        case .codex: "Codex"
-        case .opencode: "OpenCode"
-        }
-    }
-
+extension AgentKind {
     /// 可执行文件名
     var command: String {
         switch self {
@@ -114,42 +101,36 @@ public struct ExecutableLocator: Sendable {
     }
 }
 
-/// CuePad 接入各个 Agent：检测、安装、升级与卸载它们的技能（Pi 另加桥扩展，一起装、一起升级）。
+/// CuePad 接入各个 Agent：检测、安装、升级与卸载它们的技能与上报通道（Pi 是桥扩展，Claude Code、Codex 是钩子；OpenCode 直连它的服务，不用装），一起装、一起升级。
 /// `status` 没有任何副作用；写入只发生在 `install`，调用方要先征得用户同意；`uninstall` 删掉 CuePad 写的全部文件和因此空出来的目录。
 /// 技能只写进每个 Agent 自己的配置目录（`<目录>/skills/cuepad/SKILL.md`），不写几家共用的 `~/.agents/skills`：
 /// 那里是用户自己维护的，且会被好几家同时读到。OpenCode 也读 `~/.claude/skills`，两份同名同内容，按名字去重。
 public struct AgentIntegration: Sendable {
-    private let pi: PiPaths
-    private let environment: [String: String]
+    private let paths: AgentPaths
+    private var pi: PiPaths { paths.pi }
     private let locator: ExecutableLocator
     /// App 里的命令行工具（`Contents/Helpers/cuepad`），技能里写它的绝对路径
     private let cuepad: URL
 
-    public init(
-        pi: PiPaths = PiPaths(), environment: [String: String] = ProcessInfo.processInfo.environment,
-        locator: ExecutableLocator = .standard, cuepad: URL
-    ) {
-        self.pi = pi
-        self.environment = environment
+    public init(paths: AgentPaths = AgentPaths(), locator: ExecutableLocator = .standard, cuepad: URL) {
+        self.paths = paths
         self.locator = locator
         self.cuepad = cuepad
     }
 
-    /// Agent 的配置目录，环境变量与各家自己认的一致。
-    public func home(of kind: AgentKind) -> URL {
-        let user = FileManager.default.homeDirectoryForCurrentUser
-        func directory(_ variable: String) -> URL? {
-            environment[variable].flatMap { $0.isEmpty ? nil : URL(filePath: ($0 as NSString).expandingTildeInPath, directoryHint: .isDirectory) }
-        }
-        return switch kind {
-        case .pi: pi.agentDirectory
-        case .claudeCode: directory("CLAUDE_CONFIG_DIR") ?? user.appending(path: ".claude", directoryHint: .isDirectory)
-        case .codex: directory("CODEX_HOME") ?? user.appending(path: ".codex", directoryHint: .isDirectory)
-        case .opencode:
-            directory("OPENCODE_CONFIG_DIR")
-                ?? (directory("XDG_CONFIG_HOME") ?? user.appending(path: ".config", directoryHint: .isDirectory)).appending(path: "opencode", directoryHint: .isDirectory)
+    public func home(of kind: AgentKind) -> URL { paths.home(of: kind) }
+
+    /// Claude Code、Codex 的钩子配置（其余没有钩子）。
+    private func hooks(_ kind: AgentKind) -> (any AgentHookConfig)? {
+        switch kind {
+        case .claudeCode: ClaudeCodeHooks(home: home(of: kind))
+        case .codex: CodexHooks(home: home(of: kind), locator: locator)
+        case .pi, .opencode: nil
         }
     }
+
+    /// 写进钩子配置的命令：App 里 `cuepad` 的绝对路径（App 被移动后它变了，钩子就成了旧版，启动时重写）。
+    private func hookCommand(_ kind: AgentKind) -> String { "\(AgentSkill.shellQuoted(cuepad.path)) hook \(kind.rawValue)" }
 
     /// CuePad 的技能所在的目录（`<配置目录>/skills/cuepad`）。
     public func skillDirectory(of kind: AgentKind) -> URL {
@@ -175,6 +156,7 @@ public struct AgentIntegration: Sendable {
         try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard kind == .pi else {
             try Data(AgentSkill.text(for: kind, cuepad: cuepad).utf8).write(to: skill, options: .atomic)
+            try await hooks(kind)?.install(command: hookCommand(kind))
             return
         }
         // 两个文件各自原子写入，合起来靠顺序与还原：先把两个目录都建好（建不出来就什么都没写），再写扩展，
@@ -198,6 +180,7 @@ public struct AgentIntegration: Sendable {
     /// Agent 已经卸掉了也能删；有别人的同名文件时什么都不删。
     @concurrent public func uninstall(_ kind: AgentKind) async throws {
         try refuseForeign(kind)
+        try await hooks(kind)?.uninstall()
         var files = [skillFile(kind)]
         if kind == .pi { files.append(extensionFile) }
         for file in files where FileManager.default.fileExists(atPath: file.path) {
@@ -226,9 +209,14 @@ public struct AgentIntegration: Sendable {
         let skillIsForeign = skill.map { !$0.contains(AgentSkill.ownershipMarker) } ?? false
         let expectedSkill = AgentSkill.text(for: kind, cuepad: cuepad)
         guard kind == .pi else {
-            if skillIsForeign { return .foreign }
-            guard let skill else { return .missing }
-            return skill == expectedSkill ? .current : .outdated
+            let hooks = hooks(kind)?.files(command: hookCommand(kind))
+            if skillIsForeign || hooks == .foreign { return .foreign }
+            let skillState: AgentStatus.Files = skill.map { $0 == expectedSkill ? .current : .outdated } ?? .missing
+            switch (skillState, hooks ?? skillState) {
+            case (.missing, .missing): return .missing
+            case (.current, .current): return .current
+            default: return .outdated
+            }
         }
         let installed = read(extensionFile)
         if isForeignExtension(installed) || skillIsForeign { return .foreign }
@@ -325,8 +313,19 @@ enum AgentSkill {
     }
 
     /// 路径里有空格等字符时 Agent 的 shell 会拆开它。
-    private static func shellQuoted(_ path: String) -> String {
+    static func shellQuoted(_ path: String) -> String {
         path.allSatisfy { $0.isLetter || $0.isNumber || "/._-+".contains($0) } ? path : "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
+}
+#endif
+
+#if os(macOS)
+/// Claude Code、Codex 的钩子配置：CuePad 的条目合并进用户自己的配置文件（别人的条目原样留着），卸载只删 CuePad 的条目。
+/// 认 CuePad 的条目只看命令（`<cuepad> hook <agent>`，路径可能是旧位置）。
+protocol AgentHookConfig: Sendable {
+    /// 没有 CuePad 的条目为 `.missing`；条目齐全、命令就是 `command` 为 `.current`；其余（缺事件、旧路径、没被信任）为 `.outdated`。
+    func files(command: String) -> AgentStatus.Files
+    func install(command: String) async throws
+    func uninstall() async throws
 }
 #endif

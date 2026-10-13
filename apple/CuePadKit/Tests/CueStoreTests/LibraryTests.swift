@@ -130,7 +130,7 @@ import Testing
   /// 新列可写，预览可用；会话文件的检查点作废（下次从头读，补出旧对话的工具活动）。
   @Test func schema17LibraryUpgradesInPlaceAndKeepsSessionRecords() async throws {
     try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "旧会话")
-    try await store.upsertPiSession(PiSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
+    try await store.upsertPiSession(IndexedSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
     try RawDB(fixture.url).exec(
       """
       ALTER TABLE piSessionStates DROP COLUMN context; ALTER TABLE piSessionStates DROP COLUMN commands; DROP TABLE previews; DROP TABLE syncSent;
@@ -149,7 +149,7 @@ import Testing
 
   /// 结构 22 的库里已存的对话是旧的工具计数口径：升到 23 时会话文件的检查点作废，下次从头读。
   @Test func schema22LibraryDropsSessionCheckpoints() async throws {
-    try await store.upsertPiSession(PiSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
+    try await store.upsertPiSession(IndexedSession(id: "s1", path: "/s/s1.jsonl", cwd: "/w", lastActivityAt: .now), checkpoint: Data([1]), host: "mac")
     try RawDB(fixture.url).exec("DROP TABLE syncSent; PRAGMA user_version = 22;")
 
     let upgraded = try CueStore(url: fixture.url)

@@ -29,7 +29,7 @@ struct MacDependencies {
         let paths = PiPaths()
         let pi = PiBridge(socketDirectory: paths.socketDirectory)
         let commandLineTool = CommandLineToolInstaller()
-        let agents = AgentIntegration(pi: paths, cuepad: commandLineTool.helper)
+        let agents = AgentIntegration(paths: AgentPaths(pi: paths), cuepad: commandLineTool.helper)
         return MacDependencies(
             pi: pi,
             hotkeys: CarbonHotkeyBackend(),

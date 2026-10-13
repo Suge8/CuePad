@@ -1,5 +1,6 @@
 #if os(macOS)
 import CuePi
+import CueStore
 import SwiftUI
 
 /// 没装某个 Agent（或 Pi 版本太低）时的说明（设置与首次接入面板里那一行的"安装方法"、侧栏的引导行点开）：一行可复制的官方安装命令

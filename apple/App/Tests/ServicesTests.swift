@@ -1,5 +1,4 @@
 #if os(macOS)
-import struct CueStore.PiSession
 import CueStore
 @testable import CuePi
 import Foundation
@@ -99,7 +98,7 @@ struct PiHistoryPersistenceTests {
     @Test func 回填完成后_不在会话列表里的旧行被删除() async throws {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
-        try await rig.services.store.upsertPiSession(PiSession(
+        try await rig.services.store.upsertPiSession(IndexedSession(
             id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now), host: TestApp.hostID)
         let events = AsyncStream<PiHistoryEvent> { continuation in
             continuation.yield(.updated(try! PiHistory.index(file: file, from: nil, files: rig.services.store.files)))

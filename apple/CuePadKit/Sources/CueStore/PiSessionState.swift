@@ -131,6 +131,8 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
   /// 上下文余量（Pi 桥上报；已结束的会话留着最后一次的值）与此刻能用的斜杠命令（已结束的会话清空）。旧版本写的记录没有。
   public var context: PiContextUsage?
   public var commands: [PiSlashCommand]
+  /// 哪个 Agent 的会话。旧版本写的记录没有，是 Pi。
+  public var agent: Open<AgentKind>
 
   /// 公开给 Mac 端：把桥上的实时会话也写成这种形状，交给同一个近况界面。
   public init(
@@ -139,7 +141,7 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [PiSubagentState] = [], pendingPrompt: String? = nil, model: PiModelOption? = nil,
     thinking: Open<PiThinkingLevel>? = nil, models: [PiModelOption] = [], context: PiContextUsage? = nil,
-    commands: [PiSlashCommand] = []
+    commands: [PiSlashCommand] = [], agent: Open<AgentKind> = .known(.pi)
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -166,7 +168,11 @@ public struct PiSessionState: Identifiable, Equatable, Sendable {
     self.models = models
     self.context = context
     self.commands = commands
+    self.agent = agent
   }
+
+  /// 从 CuePad 能对它做什么（规则见 `AgentCapabilities.of`）；本版本不认识的 Agent 只能发文字。
+  public var capabilities: AgentCapabilities { agent.known.map { .of($0, hosted: hosted) } ?? [] }
 
   /// 记录上的摘要（对话的投影）。
   public var recap: PiRecap { PiRecap(lastPrompt: lastPrompt, lastReply: lastReply, pendingPrompt: pendingPrompt) }
@@ -188,13 +194,13 @@ extension PiSessionState: Record {
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
     "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "models", "context", "commands",
+    "model", "thinking", "models", "context", "commands", "agent",
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
      model.map(JSONColumn.encode), thinking?.rawValue, JSONColumn.encodeList(models), context.map(JSONColumn.encode),
-     JSONColumn.encodeList(commands)]
+     JSONColumn.encodeList(commands), agent.rawValue]
   }
   init(row: Row) {
     self.init(
@@ -210,6 +216,7 @@ extension PiSessionState: Record {
       model: JSONColumn.decode(PiModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)),
       models: JSONColumn.decodeList(PiModelOption.self, from: row.textOrNil(22)),
       context: JSONColumn.decode(PiContextUsage.self, from: row.textOrNil(23)),
-      commands: JSONColumn.decodeList(PiSlashCommand.self, from: row.textOrNil(24)))
+      commands: JSONColumn.decodeList(PiSlashCommand.self, from: row.textOrNil(24)),
+      agent: row.textOrNil(25).map(Open.init(rawValue:)) ?? .known(.pi))
   }
 }

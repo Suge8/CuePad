@@ -30,7 +30,7 @@ struct HistoryRulesTests {
                 agentDirectory: directory.appending(path: "agent"),
                 socketDirectory: URL(filePath: "/tmp/hr-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory))
             let agents = AgentIntegration(
-                pi: paths, environment: [:], locator: ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
+                paths: AgentPaths(pi: paths, environment: [:]), locator: ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]),
                 cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"))
             try await agents.install(.pi)
             let extensions = paths.agentDirectory.appending(path: "extensions")
@@ -159,7 +159,7 @@ struct RestingTargetTests {
         let folder = rig.directory.appending(path: "work/alpha", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = "/sessions/--work-alpha--/a.jsonl"
-        try await store.upsertPiSession(PiSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
+        try await store.upsertPiSession(IndexedSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
         try await services.piStateRecorder.update(
             sessionID: "a", state: .settled, title: "alpha", projectID: project.id, hosted: true)
         services.startLiveSessions()

@@ -10,7 +10,7 @@ extension CueStore {
         lastReply: nil, question: content.question, notify: notify.map(Open.known), stateSince: content.times.stateSince,
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking,
-        models: content.modelState.models, context: content.context, commands: content.commands)
+        models: content.modelState.models, context: content.context, commands: content.commands, agent: .known(content.agent))
       // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
       let assignments = PiSessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "notify" && !PiSessionState.recapColumns.contains($0) }
@@ -102,6 +102,7 @@ struct PiStateContent: Equatable, Sendable {
   var modelState = PiModelState()
   var context: PiContextUsage?
   var commands: [PiSlashCommand] = []
+  var agent = AgentKind.pi
 
   /// 去掉随每次工具调用不断变的细节（状态、说明、子代理的动作、上下文用量、认领标识）的样子：它变了才值得绕开写入节流。
   var steady: PiStateContent {

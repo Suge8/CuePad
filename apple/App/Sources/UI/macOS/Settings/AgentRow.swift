@@ -1,5 +1,6 @@
 #if os(macOS)
 import CuePi
+import CueStore
 import SwiftUI
 
 /// 设置与首次接入面板里的 Agent 那几行（`AgentRow`），两处同一份。

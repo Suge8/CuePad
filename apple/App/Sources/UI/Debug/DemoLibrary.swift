@@ -42,7 +42,7 @@ enum DemoLibrary {
         }
         let home = demoHome
         for (index, item) in [("cuepad", "规划投送队列的重试边界"), ("atlas", "多 Agent 调度压测"), ("homepage", "首页改版文案")].enumerated() {
-            try await store.upsertPiSession(PiSession(
+            try await store.upsertPiSession(IndexedSession(
                 id: "demo-\(index)", path: "/tmp/demo-\(index).jsonl", cwd: "\(home)Project/\(item.0)",
                 title: item.1, lastActivityAt: .now.addingTimeInterval(-Double(index + 1) * 5400)), host: "demo-mac")
         }
