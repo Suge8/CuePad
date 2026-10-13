@@ -16,12 +16,14 @@ struct PageMenuSlot: View {
         case session(SessionHeader.State?)
         /// 项目页；未分类是 nil。
         case project(UUID?)
+        case cue
         case none
 
         var help: String {
             switch self {
             case .session: "完成或绑定任务、重命名、跳到终端、结束会话"
             case .project: "选择灵感、新建任务、项目操作"
+            case .cue: "记得什么"
             case .none: ""
             }
         }
@@ -32,6 +34,7 @@ struct PageMenuSlot: View {
         case .session: .session(workspace.shownSessionHeader)
         case .project(let id): .project(id)
         case .unfiled: .project(nil)
+        case .cue: .cue
         default: .none
         }
     }
@@ -42,6 +45,9 @@ struct PageMenuSlot: View {
             switch content {
             case .session(let state?): if state.showsMenu { SessionMenuItems(state: state) }
             case .project(let id): ProjectMenuItems(projectID: id)
+            case .cue:
+                Button("\(workspace.cue.name) 记得什么", systemImage: "brain") { workspace.cue.showsMemory = true }
+                Button("Cue 设置…", systemImage: "gearshape") { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
             case .session(nil), .none: EmptyView()
             }
         } label: {

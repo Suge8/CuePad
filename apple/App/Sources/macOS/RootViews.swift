@@ -10,17 +10,18 @@ enum RootViews {
     }
 
     /// 设置窗口（⌘, 与菜单"设置…"）的内容。
-    static func settings(_ services: AppServices) -> some View {
+    static func settings(_ services: AppServices, cueBar: CueBar) -> some View {
         SettingsView()
+            .environment(cueBar)
             .panelHost()
             .modifier(PaletteProvider())
             .environment(services)
     }
 
     /// 面板与主窗口共用 App 常驻的那个工作区（项目目录、会话归属与摘要只订阅一份，见 `Workspace.follow`）。
-    /// `openSession`：在主窗口里打开一个会话的整页（面板自己不弹详情）。
-    static func menuBarPad(_ services: AppServices, workspace: Workspace, openSession: @escaping (String) -> Void) -> some View {
-        MenuBarPad(openSession: openSession)
+    /// `open`：在主窗口里打开一页（会话、Cue 页；面板自己不弹详情）。
+    static func menuBarPad(_ services: AppServices, workspace: Workspace, open: @escaping (Route) -> Void) -> some View {
+        MenuBarPad(open: open)
             .environment(workspace)
             .modifier(PaletteProvider())
             .environment(services)

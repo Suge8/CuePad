@@ -9,7 +9,7 @@ nonisolated private struct SidebarData: Sendable, Equatable {
     var leading: [UUID: [ProjectNow.InProgress]]
 }
 
-/// 侧栏从上到下：项目（置顶的在前，末尾未分类）、紧接着 Agent（只列在线的会话，全部列出；其余与历史在"全部"打开的 Agent 整页里），
+/// 侧栏从上到下：Cue（`CueSidebarRow`）、项目（置顶的在前，末尾未分类）、紧接着 Agent（只列在线的会话，全部列出；其余与历史在"全部"打开的 Agent 整页里），
 /// 底栏是归档、回收站与设置。点哪一行，内容区就是哪一页。两区按内容高度分（`SidebarSplit`）：放得下时各占所需、Agent 紧跟项目，
 /// 剩下的空白在 Agent 区下面；放不下时项目区保住至少一半可用高度，Agent 区先拿到所需、但最多拿到项目区用剩的高度，
 /// 项目区拿剩下的、自己滚动（方向键与 ⌘1–9 换到的项目滚进可见区），Agent 区一直停在看得见的地方；Agent 多到超过这个上限时
@@ -28,6 +28,7 @@ struct Sidebar: View {
         let catalog = workspace.catalog
         let pages = data.flatMap { data in catalog.map { SidebarPages($0, trashCount: data.trashCount) } }
         VStack(spacing: 0) {
+            CueSidebarRow(select: select)
             SidebarSplit {
                 if let data, let catalog, let pages {
                     projects(pages, catalog, data: data)

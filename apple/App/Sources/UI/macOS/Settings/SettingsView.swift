@@ -5,9 +5,11 @@ import CueStore
 import CueSync
 import SwiftUI
 
-/// 设置窗口的内容：外观、iCloud 同步与冲突副本、全局快捷键、接入 Pi、更新——都是同一种分组卡。操作结果就地显示在对应行下。
+/// 设置窗口的内容：外观、Cue、iCloud 同步与冲突副本、全局快捷键、接入 Pi、更新——都是同一种分组卡。操作结果就地显示在对应行下。
 struct SettingsView: View {
     @Environment(AppServices.self) private var services
+    /// "对 Cue 说"的快捷键（调试画面里没有）。
+    @Environment(CueBar.self) private var cueBar: CueBar?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -30,10 +32,16 @@ struct SettingsView: View {
             } header: {
                 SettingsHeader("外观")
             }
+            CueSettingsSection()
             SyncSection()
             ConflictsSection()
             Section {
-                LabeledContent("显示或隐藏 CuePad") { ShortcutRecorder() }
+                LabeledContent("显示或隐藏 CuePad") {
+                    ShortcutRecorder(accelerator: services.settings.globalShortcut, apply: services.setGlobalShortcut)
+                }
+                if let cueBar {
+                    LabeledContent("对 Cue 说") { ShortcutRecorder(accelerator: cueBar.shortcut, apply: cueBar.setShortcut) }
+                }
                 ForEach(ReplyShortcut.allCases, id: \.self) { key in
                     LabeledContent {
                         Keycap(text: key.symbols)
@@ -88,8 +96,10 @@ private struct SettingsFooter: View {
 
 /// 点击后按下新的组合键；Esc 取消。注册失败时保留原快捷键并显示原因。键帽与其余快捷键同一种，悬停时左边露出"更改"。
 private struct ShortcutRecorder: View {
+    let accelerator: String
+    /// 注册新的组合键；失败时抛出，原来的照用。
+    let apply: (String) throws -> Void
     @Environment(\.palette) private var palette
-    @Environment(AppServices.self) private var services
     @State private var recording = false
     @State private var hovering = false
     @State private var monitor: Any?
@@ -101,7 +111,7 @@ private struct ShortcutRecorder: View {
                 HStack(spacing: 8) {
                     Text("更改").font(Typography.meta).foregroundStyle(palette.ink3)
                         .opacity(hovering && !recording ? 1 : 0)
-                    Keycap(text: recording ? "请按下组合键…" : ShortcutText.display(services.settings.globalShortcut))
+                    Keycap(text: recording ? "请按下组合键…" : ShortcutText.display(accelerator))
                 }
                 .contentShape(.rect)
             }
@@ -145,7 +155,7 @@ private struct ShortcutRecorder: View {
             return
         }
         do {
-            try services.setGlobalShortcut(accelerator)
+            try apply(accelerator)
         } catch HotkeyError.occupied {
             error = "这个组合已被其他应用占用"
         } catch {

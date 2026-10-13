@@ -37,6 +37,11 @@ extension DebugScene {
             }
             workspace.show(.cue)
             if scene == "cuememory" { workspace.cue.showsMemory = true }
+        case "menubar", "cuebar", "settings":
+            if defaults.bool(forKey: "CuePadDemo") {
+                await seedRemote(workspace.services)
+                await seedCue(workspace.services)
+            }
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
         case "editor":
@@ -117,13 +122,16 @@ final class DebugWindow: NSWindow {
     }
 }
 
-/// `menubar` 画面：截图只截主窗口，所以把菜单栏面板放在桌面图上拍；`settings` 同理放设置窗口的内容。
+/// `menubar` 画面：截图只截主窗口，所以把菜单栏面板放在桌面图上拍（`cuebar` 是"对 Cue 说"的输入条）；`settings` 同理放设置窗口的内容。
 struct DebugMenuBarStage: View {
+    /// `cuebar` 画面：放"对 Cue 说"的输入条。
+    var cueBar = false
+
     var body: some View {
         ZStack(alignment: .top) {
             LinearGradient(colors: [Color(hex: 0xC98F5A), Color(hex: 0x3E5566)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 .ignoresSafeArea()
-            MenuBarPad().padding(.top, 40)
+            if cueBar { CueBarView(bar: nil).padding(.top, 120) } else { MenuBarPad().padding(.top, 40) }
         }
     }
 }

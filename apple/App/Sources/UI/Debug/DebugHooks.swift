@@ -233,6 +233,7 @@ struct DebugStage<Main: View>: View {
         #if DEBUG
         switch DebugScene.scene {
         case "menubar": DebugMenuBarStage().environment(workspace)
+        case "cuebar": DebugMenuBarStage(cueBar: true).environment(workspace)
         case "settings": SettingsView().panelHost().frame(maxWidth: .infinity, maxHeight: .infinity)
         case "projectform": ProjectForm(project: nil).environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
         case "newsession": NewSessionForm { _ in }.environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity)

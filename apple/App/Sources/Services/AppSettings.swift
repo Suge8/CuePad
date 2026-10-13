@@ -14,7 +14,8 @@ final class AppSettings {
         case system, light, dark
     }
 
-    static let defaultGlobalShortcut = "Alt+Space"
+    /// ⌥Space 留给"对 Cue 说"（`CueBar`）。
+    static let defaultGlobalShortcut = "Alt+Shift+Space"
     private static let draftDelay: Duration = .milliseconds(400)
 
     enum Key {

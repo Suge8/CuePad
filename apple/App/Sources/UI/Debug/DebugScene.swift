@@ -11,7 +11,7 @@ enum ScrollAnchor {
 /// - `-CuePadDemo YES`：库为空时写入演示数据；
 /// - `-CuePadSeed perf`（仅 Mac）：库为空时写入性能测量用的大资料库（`PerfLibrary`），配合 `-CuePadBench interact`；
 /// - `-CuePadProject <名称>`：打开该项目；
-/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张：散放的灵感进编辑页，提示词在它任务的浮窗里展开）、attach（editor 再弹出"挂到任务"面板）、task（在任务浮窗里打开本项目第一条任务）、search、tasks、select（批量选择本页前三条灵感）、trash、archive、settings、menubar、projectform；
+/// - `-CuePadScene <画面>`：初始画面。Mac：collapsed、older、editor（-CuePadCard 那张：散放的灵感进编辑页，提示词在它任务的浮窗里展开）、attach（editor 再弹出"挂到任务"面板）、task（在任务浮窗里打开本项目第一条任务）、search、tasks、select（批量选择本页前三条灵感）、trash、archive、settings、menubar、cuebar（"对 Cue 说"的输入条）、projectform；
 ///   cue 打开 Cue 页、cuememory 再打开"Cue 记得什么"（演示数据见 `DebugScene+Cue.swift`）；
 ///   agent 打开 Agent 整页列表，session 整页打开 `-CuePadSession <会话名>`（这两个画面配 `-CuePadDemo YES` 时写入 Mac 同步来的演示会话，见 `DebugScene+PiDemo.swift`；notes 里你的话带一张图、relay 里发出还没进对话的话带一张图，核对对话里的图片；长对话与追加中的对话见 `DebugScene+LongChat.swift`）；
 ///   iOS 见 `DebugScene+iOS.swift`；
