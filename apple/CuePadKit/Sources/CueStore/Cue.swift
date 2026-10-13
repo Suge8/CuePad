@@ -118,7 +118,8 @@ public struct CueProfile: Equatable, Sendable {
   public var hostID: String?
   public var runtime: Open<CueRuntime>
   public var model: String?
-  public var effort: String?
+  /// 思考强度：三种运行时都用这一个枚举，各家在大脑里映射。
+  public var effort: Open<PiThinkingLevel>?
   /// 启用的时刻；nil 是没启用。
   public var enabledAt: Date?
   public var modifiedAt: Date
@@ -129,7 +130,7 @@ public struct CueProfile: Equatable, Sendable {
 
   public init(
     name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<CueRuntime> = .known(.pi), model: String? = nil,
-    effort: String? = nil, enabledAt: Date? = nil, modifiedAt: Date = .now
+    effort: Open<PiThinkingLevel>? = nil, enabledAt: Date? = nil, modifiedAt: Date = .now
   ) {
     self.name = name
     self.hostID = hostID
@@ -144,11 +145,11 @@ public struct CueProfile: Equatable, Sendable {
 extension CueProfile: Record {
   static let table = Table.cueProfile
   static let columns = ["id", "name", "hostID", "runtime", "model", "effort", "enabledAt", "modifiedAt"]
-  var bindings: [any SQLBindable] { [Self.recordID, name, hostID, runtime.rawValue, model, effort, enabledAt, modifiedAt] }
+  var bindings: [any SQLBindable] { [Self.recordID, name, hostID, runtime.rawValue, model, effort?.rawValue, enabledAt, modifiedAt] }
   init(row: Row) {
     let name = row.text(1).trimmingCharacters(in: .whitespacesAndNewlines)
     self.init(
       name: name.isEmpty ? Self.defaultName : name, hostID: row.textOrNil(2), runtime: Open(rawValue: row.text(3)),
-      model: row.textOrNil(4), effort: row.textOrNil(5), enabledAt: row.dateOrNil(6), modifiedAt: row.date(7))
+      model: row.textOrNil(4), effort: row.textOrNil(5).map(Open.init(rawValue:)), enabledAt: row.dateOrNil(6), modifiedAt: row.date(7))
   }
 }

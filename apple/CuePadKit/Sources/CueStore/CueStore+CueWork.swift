@@ -44,8 +44,10 @@ public struct CueChange: Equatable, Sendable {
     case done
     /// 你在会话里亲自说了话（在终端里打的）
     case youSpoke
-    /// 你经 CuePad 亲自对会话说了话，任务收回给你（不再由 Cue 跟进）
-    case takenOver
+    /// 你把这件事交给 Cue 跟进
+    case joined
+    /// 不再由 Cue 跟进：你接手了、删了、归档了等（`detail` 说明）；完成了的只报 `done`
+    case left
   }
 
   public var kind: Kind
@@ -54,7 +56,7 @@ public struct CueChange: Equatable, Sendable {
   /// 变化所在的叶子；任务本身完成为 nil。
   public var leaf: Card?
   public var at: Date
-  /// 提问、错误、你说的话。
+  /// 提问、错误、你说的话、为什么不再跟进。
   public var detail: String?
   /// 会话记录里已有的摘要。
   public var recap: PiRecap?
@@ -218,7 +220,7 @@ extension CueStore {
 
   /// Cue 跟进的、没做完的顶层任务（没删除、没归档），按项目与手动顺序。
   public func cueBoard() throws -> [CueBoardItem] {
-    let tasks = try followedTasks(where: "t.completedAt IS NULL AND t.archivedAt IS NULL")
+    let tasks = try followedTasks(where: Self.onBoard)
     guard !tasks.isEmpty else { return [] }
     let links = try CardLinks(db, around: tasks.map(\.id))
     let leaves = try cards(Set(tasks.map { links.home(of: $0.id) }))
@@ -234,11 +236,16 @@ extension CueStore {
     }
   }
 
+  /// 看板上的（跟进中的）：没做完、没归档。
+  private static let onBoard = "t.completedAt IS NULL AND t.archivedAt IS NULL"
+
   /// `since` 之后 Cue 跟进的事里的变化，从早到晚：会话歇下、等回答、出错（按会话进入这个状态的时刻），叶子或任务完成，
-  /// 你在会话的终端里亲自说了话；以及你经 CuePad 亲自说话收回了的任务（只看得到投送请求还在的，完成后保留约一分钟）。
-  public func cueChanges(since: Date) throws -> [CueChange] {
+  /// 你在会话的终端里亲自说了话。`followed` 是上次醒来时看板上的任务 id：给了就和此刻的看板比，
+  /// 多出来的是交给了 Cue（`joined`），少了的是不再跟进（`left`，完成了的只报 `done`）；nil 不比（如管理器刚启动）。
+  public func cueChanges(since: Date, followed: Set<UUID>? = nil) throws -> [CueChange] {
     let tasks = try followedTasks(where: "(t.completedAt IS NULL OR t.completedAt > ?)", [since])
     var changes: [CueChange] = []
+    if let followed { changes += try membershipChanges(from: followed, since: since, reported: Set(tasks.map(\.id))) }
     if !tasks.isEmpty {
       let steps = Dictionary(
         grouping: try select(
@@ -276,12 +283,30 @@ extension CueStore {
           recap: sessions[message.sessionID]?.recap))
       }
     }
-    for request in try select(DeliveryRequest.self, where: "origin = ? AND createdAt > ?", [DeliveryOrigin.takeover.rawValue, since]) {
-      guard let sessionID = request.target.ref, let leaf = try task(boundTo: sessionID), let top = try find(Card.self, try topTask(of: leaf.id)) else { continue }
-      changes.append(CueChange(
-        kind: .takenOver, task: top, leaf: leaf, at: request.createdAt, detail: CueFormat.plainText(request.content), recap: nil))
-    }
     return changes.sorted { $0.at < $1.at }
+  }
+
+  /// 跟进集合的差异：此刻看板上有、`followed` 里没有的是 `joined`；反过来的是 `left`，带上原因。
+  /// 完成了的报 `done`（`reported` 里的已经报过，不重复）；永久删除的卡已读不到，不报。
+  private func membershipChanges(from followed: Set<UUID>, since: Date, reported: Set<UUID>) throws -> [CueChange] {
+    let current = try followedTasks(where: Self.onBoard)
+    var changes = current.filter { !followed.contains($0.id) }.map { CueChange(kind: .joined, task: $0, leaf: nil, at: $0.modifiedAt) }
+    let gone = followed.subtracting(current.map(\.id))
+    let trashedProjects = Set(try select(Project.self, where: "deletedAt IS NOT NULL").map(\.id))
+    for card in try cards(gone).values {
+      if let done = card.completedAt {
+        if !reported.contains(card.id), done > since { changes.append(CueChange(kind: .done, task: card, leaf: nil, at: done)) }
+        continue
+      }
+      let reason =
+        if card.deletedAt != nil || card.projectID.map(trashedProjects.contains) == true { "删了" }
+        else if card.archivedAt != nil { "归档了" }
+        else if card.todoAt == nil { "改回了灵感" }
+        else if card.parentID != nil { "挂到了别的任务下" }
+        else { "你接手了" }
+      changes.append(CueChange(kind: .left, task: card, leaf: nil, at: card.modifiedAt, detail: reason))
+    }
+    return changes
   }
 
   /// 一件事的细节；给步骤也行，按它的顶层任务给。`rounds` 是每个叶子带几轮最近的问答。

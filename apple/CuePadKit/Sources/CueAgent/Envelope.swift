@@ -95,7 +95,8 @@ public enum CueEnvelope {
       case .failed: "出错"
       case .done: "完成"
       case .youSpoke: "你在会话里说了话"
-      case .takenOver: "你接手了"
+      case .joined: "交给你跟进"
+      case .left: "不再由你跟进"
       }
     var text = "[\(label)] \(where_(change.task, change.leaf))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }

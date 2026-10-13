@@ -44,9 +44,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
 }
 
 /// 请求是谁写的：没有值是你（经 CuePad 的界面或命令行）；Cue 写的标 `cue`。
-/// `takeover` 也是你：你在 Cue 跟进的叶子会话里亲自说的话，这次写入把任务收回给你（`Card.cueFollows` 归零）。
 public enum DeliveryOrigin: String, Sendable, CaseIterable {
-  case cue, takeover
+  case cue
 }
 
 /// 手机发给 Mac 的投送请求：手机写内容与目标，Mac 执行后写回结果，完成后清理。

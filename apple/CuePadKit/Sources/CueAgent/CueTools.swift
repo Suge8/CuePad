@@ -201,7 +201,7 @@ public struct CueTools: Sendable {
     if leaf.piSessionID != nil, detail?.draft == nil { throw Failure("「\(title(leaf))」已有会话：用 say 对它说话") }
     let model = try args.string("model").map { ref -> PiModelKey in
       let parts = ref.split(separator: "/", maxSplits: 1).map(String.init)
-      guard parts.count == 2 else { throw Failure("model 写 provider/id，例如 anthropic/claude-sonnet-4-5") }
+      guard parts.count == 2 else { throw Failure("model 写成 provider/id：提供方与模型 id 用 / 隔开") }
       return PiModelKey(provider: parts[0], id: parts[1])
     }
     let effort = try args.string("effort").map { raw -> PiThinkingLevel in
