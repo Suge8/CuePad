@@ -11,8 +11,8 @@ struct PiModelCapsule: View {
 
     var body: some View {
         Menu {
-            ForEach(PiModelLabel.groups(models), id: \.provider) { group in
-                Section(group.provider) {
+            ForEach(PiModelLabel.groups(models), id: \.provider.id) { group in
+                Section(group.provider.name) {
                     ForEach(group.models) { model in
                         Toggle(isOn: Binding(get: { current?.key == model.key }, set: { if $0 { choose(model.key) } })) {
                             Text(model.name.isEmpty ? model.key.id : model.name)
@@ -26,7 +26,7 @@ struct PiModelCapsule: View {
                 // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
                 ProviderSeal(letter: current.map(PiModelLabel.seal)).modifier(Breathing(active: pending))
                     .accessibilityHidden(true)
-                Text(current.map(PiModelLabel.short) ?? "模型").lineLimit(1).truncationMode(.tail)
+                Text(current.map(PiModelName.short) ?? "模型").lineLimit(1).truncationMode(.tail)
                     .contentTransition(.opacity)
             }
             .font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)

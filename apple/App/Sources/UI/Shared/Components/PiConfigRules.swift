@@ -3,15 +3,8 @@ import SwiftUI
 
 
 
-/// 模型怎么写：胶囊上是提供方的印（名字的首字母）与短名（去掉"提供方/"前缀、Anthropic 模型名开头的 Claude、末尾的日期戳），菜单按提供方分组。
+/// 模型菜单怎么写：按提供方（`PiProvider`）分组，每个模型下面写它支持的思考强度；胶囊上的短名见 `PiModelName`。
 nonisolated enum PiModelLabel {
-    static func short(_ model: PiModelOption) -> String {
-        var name = model.name.isEmpty ? model.key.id : model.name
-        if let slash = name.lastIndex(of: "/") { name = String(name[name.index(after: slash)...]) }
-        name = name.replacing(/^(?i:claude)[\s\-]+/, with: "").replacing(/[\s\-]\d{8}$/, with: "")
-        return name.isEmpty ? model.key.id : name
-    }
-
     /// 模型菜单里每个模型下面那一行：它支持的思考强度。
     static func levels(_ model: PiModelOption) -> Dotted {
         let labels = model.thinkingLevels.map(\.label)
@@ -20,7 +13,7 @@ nonisolated enum PiModelLabel {
 
     /// 提供方的印上的字：提供方名字的首字母（Anthropic 是 A、OpenAI 是 O）。
     static func seal(_ model: PiModelOption) -> String {
-        provider(named: model.key.provider).prefix(1).uppercased()
+        PiProvider(id: model.key.provider).name.prefix(1).uppercased()
     }
 
     /// 胶囊最宽是这一排宽度的一半，至少 96（短名放得下）、至多 240（iPad、Mac 宽屏不至于拉得过长）。
@@ -29,26 +22,14 @@ nonisolated enum PiModelLabel {
     }
 
     /// 菜单里的分组：提供方按第一次出现的顺序。
-    static func groups(_ models: [PiModelOption]) -> [(provider: String, models: [PiModelOption])] {
+    static func groups(_ models: [PiModelOption]) -> [(provider: PiProvider, models: [PiModelOption])] {
         var order: [String] = []
         var byProvider: [String: [PiModelOption]] = [:]
         for model in models {
             if byProvider[model.key.provider] == nil { order.append(model.key.provider) }
             byProvider[model.key.provider, default: []].append(model)
         }
-        return order.map { (provider(named: $0), byProvider[$0] ?? []) }
-    }
-
-    private static func provider(named id: String) -> String {
-        switch id.lowercased() {
-        case "anthropic": "Anthropic"
-        case "openai": "OpenAI"
-        case "google", "gemini": "Google"
-        case "xai": "xAI"
-        case "deepseek": "DeepSeek"
-        case "openrouter": "OpenRouter"
-        default: id.prefix(1).uppercased() + id.dropFirst()
-        }
+        return order.map { (PiProvider(id: $0), byProvider[$0] ?? []) }
     }
 }
 
