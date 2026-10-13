@@ -94,6 +94,8 @@ final class SendState {
 
     /// 发给 Agent（存储格式正文）。返回是否已送达：会话正忙时记下这次发送（`busy`）等用户选，返回 false；其余失败抛出。
     func send(_ stored: String, to target: AgentTarget, card: UUID?) async throws -> Bool {
+        // 收不了图片的会话只发文字（`AgentCapabilities.images`）
+        let stored = capabilities(of: target.session).contains(.images) ? stored : ComposerDraft.withoutImages(stored)
         do {
             switch route(of: target.session) {
             case .local(let live): try await services.send(stored, to: live.id, mode: target.mode, card: card)

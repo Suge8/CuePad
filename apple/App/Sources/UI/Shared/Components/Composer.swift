@@ -227,7 +227,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(card.title.nonEmpty ?? "图片").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                        if !card.images.isEmpty {
+                        // 去处收不了图片时卡片里的图片不发（`ComposerDraft.accepting`），不写张数
+                        if accepts.contains(.images), !card.images.isEmpty {
                             Text("\(card.images.count) 张图片").font(Typography.caption).foregroundStyle(palette.ink3)
                         }
                     }

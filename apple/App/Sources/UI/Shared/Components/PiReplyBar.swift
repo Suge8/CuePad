@@ -293,7 +293,7 @@ struct PiReplyBar: View {
     /// `held`：用的是长按那一种（菜单或 ⌘⇧↩），之后不再提示。
     private func send(_ mode: DeliveryMode, held: Bool = false) {
         if held { services.settings.holdSendLearned = true }
-        let outgoing = draft, line = commandLine
+        let outgoing = draft.accepting(accepts), line = commandLine
         guard canSend else { return }
         sending = true
         workspace.attempt {

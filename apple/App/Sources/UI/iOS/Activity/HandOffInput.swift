@@ -97,7 +97,7 @@ struct HandOffInput: View {
     private func send() {
         guard canSend else { return }
         guard let session = chosen?.state else { return newSession() }
-        let sent = draft, mode = MacDelivery.modes(for: session).first ?? .send
+        let sent = draft.accepting(session.composerKinds), mode = MacDelivery.modes(for: session).first ?? .send
         let line = PiSlash.line(of: sent, in: session.usableCommands)
         sending = true
         workspace.attempt {
