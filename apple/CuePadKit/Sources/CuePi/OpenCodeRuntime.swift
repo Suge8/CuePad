@@ -207,7 +207,7 @@ public final class OpenCodeRuntime: AgentRuntime {
         for info in topLevel {
             var tracked = sessions[info.id] ?? Tracked(info: info)
             tracked.info = info
-            // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（出错原文在线会话由 refreshLive 补上）
+            // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（在线会话的压缩中与出错原文由 refreshLive 补上）
             tracked.running = active.contains(info.id)
             tracked.activity = .thinking
             tracked.detail = nil
@@ -257,9 +257,12 @@ public final class OpenCodeRuntime: AgentRuntime {
             forms += try await client.get(OpenCodeData<[OpenCodeForm]>.self, "/api/session/\(asker)/form").data
         }
         let last = try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(id)/message?type=assistant&limit=1").data.first
+        // 压缩开始与结束之间，最近一条压缩消息是 running：断线时错过了开始事件，从它恢复"压缩中"
+        let compaction = try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(id)/message?type=compaction&limit=1").data.first
         try await catalog(tracked.directory, client)
         sessions[id]?.questions = permissions.map(Self.question) + forms.map(Self.question)
         sessions[id]?.tokens = last?.tokens?.context
+        sessions[id]?.compacting = compaction?.status == "running"
         if tracked.info.model == nil { sessions[id]?.info.model = last?.model }
         if tracked.failure != nil, let error = last?.error?.message { sessions[id]?.failure = error }
     }
