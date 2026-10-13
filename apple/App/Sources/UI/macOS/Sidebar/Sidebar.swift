@@ -386,14 +386,20 @@ private struct PiSection: View {
                 SidebarHeader(title: "Agent") { NewSessionButton(showing: $startingSession) }
                     .accessibilityElement(children: .contain)
                     .accessibilityAddTraits(.isHeader)
-                // 扩展没装（第一次问，或拒绝过而本机的会话因此看不到）：在这一区里就地装，别的 Mac 上在线的照样列在下面
-                if let connect = PiConnect(manager: services.piIntegration, declined: services.settings.piExtensionDeclined, hasLocal: !live.isEmpty) {
-                    PiConnectCard(kind: connect).padding(.horizontal, SidebarMetrics.edge)
+                // 第一次检测到 Pi 而没接入：在这一区里就地问，别的 Mac 上在线的照样列在下面
+                if services.piIntegration.needsConsent {
+                    PiConnectCard().padding(.horizontal, SidebarMetrics.edge)
                 } else if rows.isEmpty {
                     // 现状一行、怎么办一行：同一句挤成两行时"·"会落到行首
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("没有运行中的 Agent 会话").foregroundStyle(palette.ink3)
-                        Text("在终端运行 pi 开始").foregroundStyle(palette.ink3)
+                        if status?.isConnected == false {
+                            Text("未接入 Pi，看不到本机会话").foregroundStyle(palette.ink3)
+                            Button("在设置里接入") { NSApp.sendAction(#selector(AppDelegate.showSettings(_:)), to: nil, from: nil) }
+                                .buttonStyle(.plain).foregroundStyle(palette.ink2)
+                        } else {
+                            Text("没有运行中的 Agent 会话").foregroundStyle(palette.ink3)
+                            Text("在终端运行 pi 开始").foregroundStyle(palette.ink3)
+                        }
                     }
                     .font(Typography.meta)
                     .padding(.horizontal, SidebarMetrics.edge + SidebarMetrics.inset).padding(.vertical, 4)
@@ -497,64 +503,50 @@ private struct PiSetupRow: View {
     }
 }
 
-/// Agent 区里装 CuePad 扩展的那一块要怎么说：第一次检测到 Pi 而扩展没装时问一次；拒绝过、本机的会话因此看不到时只留一行就地安装。
-private enum PiConnect {
-    case ask, declined
-
-    init?(manager: PiIntegrationManager, declined: Bool, hasLocal: Bool) {
-        if manager.needsConsent { self = .ask; return }
-        guard declined, !hasLocal, let status = manager.status, status.pi.isSupported, status.file != .current else { return nil }
-        self = .declined
-    }
-}
-
-/// 装 CuePad 扩展的小卡（扩展与技能一起装，见 `PiIntegrationManager`）：一个图标、一句话说装了能做什么，右边"安装"；第一次问时多一颗"不用了"。
+/// 第一次检测到 Pi 时问一次要不要接入（`PiIntegrationManager.needsConsent`）：一个图标、一句话说接入了能做什么，右边"接入"与"不用了"。
 private struct PiConnectCard: View {
-    let kind: PiConnect
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var installing = false
+    @State private var connecting = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             Image(systemName: "puzzlepiece.extension").font(.system(size: 14)).foregroundStyle(palette.ink2)
                 .frame(width: 28, height: 28).background(palette.fill, in: .rect(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 1) {
-                Text(kind == .ask ? "连接 Pi" : "装上 Pi 扩展").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
-                Text(kind == .ask ? "看会话、交任务" : "看到本机会话").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
+                Text("接入 Pi").font(Typography.label).foregroundStyle(palette.ink).lineLimit(1)
+                Text("看会话、交任务").font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
             }
             Spacer(minLength: 4)
             VStack(spacing: 4) {
-                Button(action: install) {
-                    Text(installing ? "安装中" : "安装").font(Typography.meta.weight(.semibold)).foregroundStyle(palette.onSignature)
+                Button(action: connect) {
+                    Text(connecting ? "接入中" : "接入").font(Typography.meta.weight(.semibold)).foregroundStyle(palette.onSignature)
                         .padding(.horizontal, 12).frame(height: 24)
                         .background(palette.signatureFill, in: .capsule).contentShape(.capsule)
                 }
                 .buttonStyle(PressStyle())
-                .disabled(installing)
-                if kind == .ask {
-                    Button("不用了") {
-                        withAnimation(Motion.quick) { services.piIntegration.decline() }
-                    }
-                    .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink3)
+                .disabled(connecting)
+                Button("不用了") {
+                    withAnimation(Motion.quick) { services.piIntegration.decline() }
                 }
+                .buttonStyle(.plain).font(Typography.meta).foregroundStyle(palette.ink3)
             }
         }
         .padding(10)
         .background(palette.paper, in: .rect(cornerRadius: 12, style: .continuous))
-        .help("扩展让 CuePad 看到 Pi 会话的实时状态、把话发进会话；技能让 Agent 能把页面和截图发到手机上看。会写入 Pi 目录下的 extensions 与 skills。")
+        .help("会写三个文件：\(PiConnectItem.allCases.map { (services.piIntegration.installer.location(of: $0).path as NSString).abbreviatingWithTildeInPath }.joined(separator: "、"))。在设置里随时移除。")
         .transition(.opacity)
     }
 
-    private func install() {
-        installing = true
+    private func connect() {
+        connecting = true
         let manager = services.piIntegration
         Task {
-            defer { installing = false }
+            defer { connecting = false }
             do {
-                try await manager.install()
-                workspace.say("已安装；已在运行的 Pi 会话重启后生效")
+                try await manager.connect()
+                workspace.say("已接入；已在运行的 Pi 会话执行 /reload 后生效")
             } catch {
                 workspace.fail(error)
             }

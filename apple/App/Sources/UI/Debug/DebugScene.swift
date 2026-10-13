@@ -28,7 +28,7 @@ enum ScrollAnchor {
 /// - `-CuePadExplain YES`（仅 iOS）：推入页顶栏有说明时（会话需要 /reload）直接弹出，核对点标题的说明；
 /// - `-CuePadCatalogFailure YES`：项目目录读取直接报错（重试也一样），核对读取失败画面；
 ///   `-CuePadCatalogFailure once`：每个窗口（含菜单栏面板）只有第一次读取报错，按"重试"后恢复，核对重试路径。
-/// 设置项可在参数域覆盖：`-theme dark`；Mac 隔离 Pi 目录下隐藏"连接 Pi"提示：`-piExtensionDeclined YES`。
+/// 设置项可在参数域覆盖：`-theme dark`。
 enum DebugScene {
     static var defaults: UserDefaults { .standard }
     static var scene: String? { defaults.string(forKey: "CuePadScene") }

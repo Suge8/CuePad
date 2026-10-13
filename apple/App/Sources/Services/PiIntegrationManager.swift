@@ -2,42 +2,67 @@
 import CuePi
 import Observation
 
-/// CuePad 与 Pi 的集成（扩展 + skill，一起装、一起升级）的检测、首次安装与升级。同意只在首次安装时问一次：界面读 `needsConsent` 决定是否询问，
-/// 用户同意调 `install()`，拒绝调 `decline()`（之后不再询问、两样都不装）。已装的是 CuePad 写的时，`refresh()` 发现与随包版本不同
-/// （含 App 被移动后 skill 里的 cuepad 路径变了）就静默升级，不再询问——随包版本只在 App 更新后变化，而 App 启动时就会 `refresh()`。
+/// 接入 Pi（扩展、skill 与 `cuepad` 命令行链接，见 `PiIntegration`）的唯一状态：除了"拒绝过"这一个偏好，全部从磁盘读出。
+/// 首次检测到可用的 Pi 时问一次（`needsConsent`）：同意调 `connect()`，拒绝调 `decline()`，之后不再问、什么都不写。
+/// 已接入时 `refresh()` 发现哪样旧了或缺了（App 更新后随包版本变了、App 移动后链接指向旧位置）就静默修复，不再询问。
 @Observable
 final class PiIntegrationManager {
     private(set) var status: PiIntegrationStatus?
+    /// 用户 shell 的 PATH 里是否有链接所在目录；外层 nil 是还没查，内层 nil 是读不出来。
+    private(set) var linkDirectoryInShellPath: Bool??
+    /// 隔离运行（开发构建）而 Pi 目录或链接目录是缺省的真实位置时为 false：不询问、不修复、不能接入（`PiPaths.isExplicit`）。
+    let isEnabled: Bool
 
-    @ObservationIgnored private let installer: PiIntegration
+    @ObservationIgnored let installer: PiIntegration
     @ObservationIgnored private let settings: AppSettings
 
-    init(installer: PiIntegration, settings: AppSettings) {
+    init(installer: PiIntegration, settings: AppSettings, isEnabled: Bool) {
         self.installer = installer
         self.settings = settings
+        self.isEnabled = isEnabled
     }
 
-    /// Pi 可用（版本够新），还没装过，且用户没有拒绝过。
+    /// Pi 可用（版本够新），没接入，没有位置被别人占着，且用户没有拒绝过。
     var needsConsent: Bool {
-        guard let status, status.pi.isSupported, status.file == .missing else { return false }
-        return !settings.piExtensionDeclined
+        guard isEnabled, let status, status.pi.isSupported, !status.isConnected, status.blocked.isEmpty else { return false }
+        return !settings.piConnectDeclined
     }
 
-    /// 检测状态；已装的是旧版（或内容不同的）CuePad 集成时升级到随包版本。升级失败抛错，状态仍反映磁盘上的旧版。
+    /// 读状态；已接入而有哪样不是最新时静默修复。修复失败抛错，状态仍反映磁盘上的样子。
     func refresh() async throws {
         status = await installer.status()
-        guard let status, status.pi.isSupported, case .outdated = status.file else { return }
-        try await install()
+        guard isEnabled, let status, status.pi.isSupported, status.isConnected, !status.isCurrent else { return }
+        try await write { try await installer.install() }
     }
 
-    /// 新装或升级（原子写入）；已运行的会话在终端里 /reload 才会加载新扩展。
-    func install() async throws {
-        try await installer.install()
-        status = await installer.status()
+    /// 接入（或修复）三样；已运行的会话在终端里 /reload 才会加载新扩展。
+    func connect() async throws {
+        try await write { try await installer.install() }
+        settings.piConnectDeclined = false
+    }
+
+    /// 移除 CuePad 写的三样，并记为拒绝过：之后不再询问、不再修复。
+    func disconnect() async throws {
+        try await write { try await installer.uninstall() }
+        settings.piConnectDeclined = true
     }
 
     func decline() {
-        settings.piExtensionDeclined = true
+        settings.piConnectDeclined = true
+    }
+
+    func checkShellPath() async {
+        linkDirectoryInShellPath = .some(await installer.linkDirectoryInShellPath())
+    }
+
+    private func write(_ action: () async throws -> Void) async throws {
+        do {
+            try await action()
+        } catch {
+            status = await installer.status()
+            throw error
+        }
+        status = await installer.status()
     }
 }
 #endif

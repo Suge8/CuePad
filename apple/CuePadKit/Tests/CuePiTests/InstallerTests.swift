@@ -3,34 +3,27 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 安装器只在临时 agent 目录里装，且用假 `pi` 脚本报版本；绝不碰真实 ~/.pi。
+/// 安装器只在临时目录里装（Pi 目录与链接目录都在里面），且用假 `pi` 脚本报版本；绝不碰真实 ~/.pi 与 ~/.local/bin。
+/// 接入、移除、别人的文件、App 移动后修复的端到端用例在 App 的测试里（`PiConnectTests`）。
 struct InstallerTests {
     let root: URL
     let paths: PiPaths
     let bin: URL
-    /// App 里的命令行工具（skill 里写它的绝对路径）
-    var cuepad: URL { root.appending(path: "CuePad.app/Contents/Helpers/cuepad") }
     var installedFile: URL { paths.extensionsDirectory.appending(path: "cuepad-bridge.ts") }
     var skillFile: URL { paths.skillsDirectory.appending(path: "cuepad/SKILL.md") }
-
-    /// 随包分发的扩展源文件（事实源）
-    static var bundledSource: String {
-        get throws {
-            let file = URL(filePath: #filePath).deletingLastPathComponent()
-                .appending(path: "../../Sources/CuePi/Extension/cuepad-bridge.ts").standardized
-            return try String(contentsOf: file, encoding: .utf8)
-        }
-    }
+    var link: URL { paths.binDirectory.appending(path: "cuepad") }
 
     init() throws {
         root = try makeTempDirectory()
-        paths = PiPaths(agentDirectory: root.appending(path: "agent"), socketDirectory: root.appending(path: "s"))
+        paths = PiPaths(agentDirectory: root.appending(path: "agent"), socketDirectory: root.appending(path: "s"), binDirectory: root.appending(path: "home/.local/bin"))
         bin = root.appending(path: "bin")
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
     }
 
-    private func installer(cuepad: URL? = nil) -> PiIntegration {
-        PiIntegration(paths: paths, locator: PiExecutableLocator(searchDirectories: [bin]), cuepad: cuepad ?? self.cuepad)
+    private func installer() -> PiIntegration {
+        PiIntegration(
+            paths: paths, locator: PiExecutableLocator(searchDirectories: [bin]),
+            helper: root.appending(path: "CuePad.app/Contents/Helpers/cuepad"), shellPath: { nil })
     }
 
     private func fakePi(printing output: String) throws {
@@ -39,9 +32,8 @@ struct InstallerTests {
         chmod(script.path, 0o755)
     }
 
-    private func writeInstalled(_ text: String) throws {
-        try FileManager.default.createDirectory(at: paths.extensionsDirectory, withIntermediateDirectories: true)
-        try text.write(to: installedFile, atomically: true, encoding: .utf8)
+    private func exists(_ file: URL) -> Bool {
+        (try? FileManager.default.attributesOfItem(atPath: file.path)) != nil  // 不跟随链接：失效的链接也算在
     }
 
     // MARK: Pi 版本检测
@@ -69,116 +61,33 @@ struct InstallerTests {
         #expect(await installer().status().pi.isSupported)
     }
 
-    // MARK: 安装 / 升级 / 卸载
+    // MARK: 三样一起写
 
-    @Test func statusHasNoSideEffects() async throws {
-        try fakePi(printing: "0.87.1")
-        #expect(await installer().status().pi.isSupported)
-        #expect(!FileManager.default.fileExists(atPath: paths.agentDirectory.path))
-    }
-    @Test func installWritesBundledExtensionAndBecomesCurrent() async throws {
-        try fakePi(printing: "0.87.1")
-        #expect(await installer().status().file == .missing)
-
-        try await installer().install()
-
-        #expect(try String(contentsOf: installedFile, encoding: .utf8) == Self.bundledSource)
-        #expect(await installer().status().file == .current)
-        let source = try Self.bundledSource
-        let declared = try #require(source.firstMatch(of: /const EXTENSION_VERSION = (\d+);/).flatMap { Int($0.1) })
-        #expect(PiExtensionBundle.version == declared && declared > 0)
-    }
-
-    @Test func olderInstalledCopyIsDetectedAndUpgraded() async throws {
-        try fakePi(printing: "0.87.1")
-        try writeInstalled("// CuePad Pi bridge extension\nconst EXTENSION_VERSION = 0;\n")
-        #expect(await installer().status().file == .outdated(installed: 0))
-
-        try await installer().install()
-
-        #expect(await installer().status().file == .current)
-        #expect(try String(contentsOf: installedFile, encoding: .utf8) == Self.bundledSource)
-    }
-
-    // MARK: skill（和扩展一起装、一起升级）
-
-    /// 用户同意的那一次装两样：扩展，和一个很短的 skill（写着 App 里 cuepad 的绝对路径，Pi 从 skills 目录发现它）。
-    @Test func installWritesTheSkillWithTheCLIPathAlongsideTheExtension() async throws {
-        try fakePi(printing: "0.87.1")
-
-        try await installer().install()
-
-        let skill = try String(contentsOf: skillFile, encoding: .utf8)
-        #expect(skill.hasPrefix("---\nname: cuepad\n") && skill.contains("\(cuepad.path) show <文件>") && skill.contains("\(cuepad.path) --help"))
-        #expect(await installer().status().file == .current)
-    }
-
-    /// App 被移动后 cuepad 的路径变了：skill 算旧版，启动时与扩展一起重写。
-    @Test func aMovedAppMakesTheSkillOutdatedAndInstallRewritesIt() async throws {
-        try fakePi(printing: "0.87.1")
-        try await installer().install()
-        let moved = root.appending(path: "Other/CuePad.app/Contents/Helpers/cuepad")
-
-        let status = await installer(cuepad: moved).status()
-        #expect(status.file == .outdated(installed: PiExtensionBundle.version))
-
-        try await installer(cuepad: moved).install()
-        #expect(try String(contentsOf: skillFile, encoding: .utf8).contains(moved.path))
-        #expect(await installer(cuepad: moved).status().file == .current)
-    }
-
-    /// 用户自己的同名 skill 不覆盖，扩展也不装：两样一起拒绝。
-    @Test func aForeignSkillWithTheSameNameStopsTheWholeInstallAndIsNeverOverwritten() async throws {
-        try fakePi(printing: "0.87.1")
-        try FileManager.default.createDirectory(at: skillFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try "---\nname: cuepad\n---\n我自己的\n".write(to: skillFile, atomically: true, encoding: .utf8)
-        #expect(await installer().status().file == .foreign)
-
-        await #expect(throws: PiInstallError.foreignFile) { try await installer().install() }
-        #expect(try String(contentsOf: skillFile, encoding: .utf8) == "---\nname: cuepad\n---\n我自己的\n")
-        #expect(!FileManager.default.fileExists(atPath: installedFile.path))
-    }
-
-    /// 扩展与 skill 一起升级：后一步写不进去时，前一步已写的要还原，不留半升级的状态。
-    @Test func aFailureWritingTheSkillLeavesTheExtensionAsItWas() async throws {
+    /// 三样一起写：中途写不进去时，已写的还原成原来的样子（原来没有就删掉），不留半接入的状态。
+    @Test func aFailureMidwayRestoresWhatWasAlreadyWritten() async throws {
         try fakePi(printing: "0.87.1")
         let old = "// CuePad Pi bridge extension\nconst EXTENSION_VERSION = 1;\n"
-        try writeInstalled(old)
+        try FileManager.default.createDirectory(at: paths.extensionsDirectory, withIntermediateDirectories: true)
+        try old.write(to: installedFile, atomically: true, encoding: .utf8)
         try FileManager.default.createDirectory(at: skillFile, withIntermediateDirectories: true)  // SKILL.md 的位置被一个目录占着：写不进去
 
         await #expect(throws: (any Error).self) { try await installer().install() }
         #expect(try String(contentsOf: installedFile, encoding: .utf8) == old)
+        #expect(!exists(link))
 
         try FileManager.default.removeItem(at: installedFile)  // 原来没有扩展：失败后仍然没有
         await #expect(throws: (any Error).self) { try await installer().install() }
-        #expect(!FileManager.default.fileExists(atPath: installedFile.path))
-    }
-
-    /// skill 的目录建不出来时，什么都不写。
-    @Test func aFailureCreatingTheSkillsDirectoryWritesNothing() async throws {
-        try fakePi(printing: "0.87.1")
-        try FileManager.default.createDirectory(at: paths.agentDirectory, withIntermediateDirectories: true)
-        try "占位".write(to: paths.skillsDirectory, atomically: true, encoding: .utf8)  // skills 是个文件
-
-        await #expect(throws: (any Error).self) { try await installer().install() }
-        #expect(!FileManager.default.fileExists(atPath: installedFile.path))
-    }
-
-    @Test func foreignFileWithSameNameIsNeverOverwritten() async throws {
-        try fakePi(printing: "0.87.1")
-        try writeInstalled("export default function () { /* mine */ }\n")
-        #expect(await installer().status().file == .foreign)
-
-        await #expect(throws: PiInstallError.foreignFile) { try await installer().install() }
-        #expect(try String(contentsOf: installedFile, encoding: .utf8) == "export default function () { /* mine */ }\n")
+        #expect(!exists(installedFile))
+        #expect(!exists(link))
     }
 
     @Test func installRefusesWithoutSupportedPiAndWritesNothing() async throws {
         await #expect(throws: PiInstallError.piNotFound) { try await installer().install() }
         try fakePi(printing: "0.84.3")
         await #expect(throws: PiInstallError.piTooOld(found: PiVersion(0, 84, 3))) { try await installer().install() }
-        #expect(!FileManager.default.fileExists(atPath: paths.extensionsDirectory.path))
-        #expect(!FileManager.default.fileExists(atPath: paths.skillsDirectory.path))
+        #expect(!exists(paths.extensionsDirectory))
+        #expect(!exists(paths.skillsDirectory))
+        #expect(!exists(paths.binDirectory))
     }
 }
 #endif

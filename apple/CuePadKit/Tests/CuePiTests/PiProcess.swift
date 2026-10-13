@@ -64,10 +64,11 @@ final class PiProcess: @unchecked Sendable {
         root = try other?.root ?? makeTempDirectory()
         cwd = root.appending(path: "work")
         try FileManager.default.createDirectory(at: cwd, withIntermediateDirectories: true)
-        paths = other?.paths ?? PiPaths(agentDirectory: root.appending(path: "agent"), socketDirectory: socketDirectory ?? root.appending(path: "s"))
+        paths = other?.paths ?? PiPaths(
+            agentDirectory: root.appending(path: "agent"), socketDirectory: socketDirectory ?? root.appending(path: "s"), binDirectory: root.appending(path: "bin"))
         if installBridge && other == nil {
             let installer = PiIntegration(
-                paths: paths, locator: PiExecutableLocator(searchDirectories: [realPiURL.deletingLastPathComponent()]), cuepad: Self.cuepad)
+                paths: paths, locator: PiExecutableLocator(searchDirectories: [realPiURL.deletingLastPathComponent()]), helper: Self.cuepad, shellPath: { nil })
             try await installer.install()
         }
 

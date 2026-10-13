@@ -130,8 +130,10 @@ final class TestApp {
 
     #if os(macOS)
     var piPaths: PiPaths {
-        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory)
+        PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory, binDirectory: directory.appending(path: "home/.local/bin"))
     }
+    /// App 里的命令行工具在哪（接入 Pi 时链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
+    lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
 
     private func makeServices() -> AppServices {
         let mac = MacDependencies(
@@ -140,13 +142,10 @@ final class TestApp {
             paths: piPaths,
             installer: PiIntegration(
                 paths: piPaths, locator: PiExecutableLocator(searchDirectories: [directory.appending(path: "bin")]),
-                cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")),
+                helper: helper, shellPath: { nil }),
             terminal: PiTerminalJumper(),
             hostID: Self.hostID,
             wakeNotifications: wakeCenter,
-            commandLineTool: CommandLineToolInstaller(
-                helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
-                linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
             updater: nil,
             host: host,
             locatePi: { Self.piExecutable },

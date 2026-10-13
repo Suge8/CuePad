@@ -9,7 +9,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。产品说明见 [README.md](READM
 | 路径 | 职责 |
 | --- | --- |
 | `apple/CuePad.xcodeproj` | 多平台 App 工程：macOS 与 iOS/iPadOS 主 App、分享扩展、小组件、命令行目标；签名事实源 `apple/App/Config/Signing.xcconfig` |
-| `apple/App/Sources/Shared`、`Services` | 组合根 `AppServices` 与服务：发送、同步、Pi 扩展管理、命令行工具安装、快照 |
+| `apple/App/Sources/Shared`、`Services` | 组合根 `AppServices` 与服务：发送、同步、接入 Pi（扩展、skill、命令行链接）、快照 |
 | `apple/App/Sources/macOS` | Mac 壳层：窗口、全局快捷键、菜单栏图标与面板 |
 | `apple/App/Sources/iOS`、`apple/App/AppGroup`、`ShareExtension`、`Widget`、`NotificationService` | iOS/iPadOS 入口、App Group 位置与快照、分享扩展、小组件、通知服务扩展 |
 | `apple/App/Sources/UI` | 界面：`Shared/` 组件、主题、规则、工作区状态；`macOS/`、`iOS/` 各平台界面；`Debug/` 视觉验收场景与演示数据 |
