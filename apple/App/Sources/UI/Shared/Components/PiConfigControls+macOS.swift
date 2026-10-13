@@ -10,7 +10,7 @@ extension PiConfigControls {
         switch pick {
         case .model:
             let sections = PiModelLabel.groups(session.models).map { group in
-                ChoiceMenu.Section(title: group.provider, choices: group.models.map { model in
+                ChoiceMenu.Section(title: group.provider.name, choices: group.models.map { model in
                     ChoiceMenu.Choice(
                         // 原生菜单项没有单独的读屏文字，分段直接写逗号
                         title: model.name.isEmpty ? model.key.id : model.name, subtitle: PiModelLabel.levels(model).spoken,
