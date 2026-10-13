@@ -223,8 +223,8 @@ final class Navigation {
     /// 会话的前台提示（等你确认、做完了）弹不弹：正看着那个会话，或正看着 Agent 列表（那一行已经在变）时不弹。
     func showsAlert(about session: UUID) -> Bool {
         let onAgentList = switch layout {
-        case .tabs: tab == .agent && agentPath.isEmpty
-        case .split: agentPanel || (splitRoot == .agent && splitPath.isEmpty)
+        case .tabs: tab == .agent && agentPath.last == .agent
+        case .split: splitRoot == .agent && splitPath.isEmpty
         }
         return !onAgentList && !isViewing(session: session)
     }

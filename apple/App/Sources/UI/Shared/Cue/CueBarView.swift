@@ -45,6 +45,10 @@ struct CueBarView: View {
     }
 }
 
+#endif
+
+import SwiftUI
+
 /// 一行 Cue 的现状（侧栏最上面、菜单栏面板、输入条）：头像、名字、此刻在做什么或它最近一句，有等你的写"等你 N"（赭黄）。
 struct CueStatusRow<Trailing: View>: View {
     var font = Typography.body.weight(.semibold)
@@ -73,9 +77,6 @@ struct CueStatusRow<Trailing: View>: View {
 extension CueStatusRow where Trailing == EmptyView {
     init(font: Font = Typography.body.weight(.semibold)) { self.init(font: font) { EmptyView() } }
 }
-#endif
-
-import SwiftUI
 
 /// "等你 N"：赭黄的字（等你确认的颜色），没有在等的不画。Mac 侧栏、菜单栏面板、iPad 侧栏用它；iPhone 底栏是角标。
 struct CueWaitingBadge: View {

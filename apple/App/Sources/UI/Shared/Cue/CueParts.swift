@@ -37,10 +37,12 @@ struct CueHead: View {
         VStack(spacing: 8) {
             CueAvatar(mood: cue.mood(composing: composing), presence: cue.presence, size: .head)
             Text(cue.name).font(Typography.emptyTitle).foregroundStyle(palette.ink)
-            Text(cue.presence.line(name: cue.name) ?? "交给我的事，我替你跟着")
-                .font(Typography.secondary).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
-                .multilineTextAlignment(.center)
-                .contentTransition(.opacity)
+            if let line = cue.presence.line(name: cue.name) {
+                Text(line)
+                    .font(Typography.secondary).foregroundStyle(cue.presence.isUnreachable ? palette.failure : palette.ink3)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)

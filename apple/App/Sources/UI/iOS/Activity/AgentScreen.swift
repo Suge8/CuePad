@@ -69,8 +69,6 @@ struct AgentScreen: View {
             SearchRow(search: search, searchHidden: searchHidden) { filterMenu } trailing: { if project == nil { actions } }
         }
         .modifier(Header(pushed: project != nil, count: model.list.map { $0.now.count + $0.total }, filter: filter))
-        // 标签页的根：系统导航栏收起，只留这一排（iPad 分栏里导航栏放着分栏自己的按钮，留着）
-        .toolbarVisibility(project == nil && navigation.layout == .tabs ? .hidden : .automatic, for: .navigationBar)
         .refreshable { await services.syncNow() }
         .onChange(of: model.list != nil, initial: true) { _, loaded in if loaded { tabPageReady?() } }
         .agentList(model, filter: filter)
@@ -321,7 +319,7 @@ private struct Header: ViewModifier {
                 NewSessionButton(project: filter)
             }
         } else {
-            content.navigationTitle("Agent").navigationBarTitleDisplayMode(.inline)
+            content.navigationTitle("会话").navigationBarTitleDisplayMode(.inline)
         }
     }
 }
