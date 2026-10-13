@@ -6,16 +6,25 @@ import SwiftUI
 /// `Text` 只认字体、颜色、底色、链接、下划线这类行内属性，不认段落缩进与段距，所以结构用字符摆：块与块之间隔一个小字号的空行当段距，
 /// 列表项是缩进的空格加序号，引用前一个竖条字符，代码块是等宽字加底色；列表项折行时回到左边，不悬挂缩进。
 /// 行内：链接加下划线（强调色是墨，不画线就认不出），行内代码垫一层淡底。表格只画细线：表头淡底，行间一道线。
+/// 批注过的那几处（`notes`，见 `ReplyNote`）垫选中色的浅底、下面一道签名色的点线，是一个链接：点它打开那条批注。
 struct MarkdownText: View, Equatable {
     let source: String
+    var notes: [ReplyNote] = []
     @Environment(\.palette) private var palette
     @Environment(\.readingColumnBleeds) private var columnBleeds
 
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.source == rhs.source }
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.source == rhs.source && lhs.notes == rhs.notes }
+
+    /// 每段可选文字（相邻的非表格块排成的那一个 `Text`）渲染出来的字，按先后：批注按它认出选区在哪条回答的第几段（`ReplyNote.run`）。
+    static func proseTexts(_ source: String) -> [String] {
+        Run.of(source, Palette(.light), notes: []).compactMap { run in
+            if case .prose(let text) = run { String(text.characters) } else { nil }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(Run.of(source, palette).enumerated()), id: \.offset) { _, run in
+            ForEach(Array(Run.of(source, palette, notes: notes).enumerated()), id: \.offset) { _, run in
                 switch run {
                 case .prose(let text):
                     // 中文正文行距放开一点：长回答是会话页的主角，读起来不挤
@@ -39,11 +48,16 @@ struct MarkdownText: View, Equatable {
         case prose(AttributedString)
         case table(MarkdownTable)
 
-        static func of(_ source: String, _ palette: Palette) -> [Run] {
+        static func of(_ source: String, _ palette: Palette, notes: [ReplyNote]) -> [Run] {
             var runs: [Run] = []
             var pending: [MarkdownBlock] = []
+            var prose = 0
             func flush() {
-                if !pending.isEmpty { runs.append(.prose(MarkdownText.attributed(pending, palette))) }
+                guard !pending.isEmpty else { return }
+                var text = MarkdownText.attributed(pending, palette)
+                for note in notes where note.run == prose { MarkdownText.mark(note, in: &text, palette) }
+                runs.append(.prose(text))
+                prose += 1
                 pending = []
             }
             for block in MarkdownBlock.parse(source) {
@@ -119,6 +133,13 @@ struct MarkdownText: View, Equatable {
             }
         }
         return result
+    }
+
+    private static func mark(_ note: ReplyNote, in text: inout AttributedString, _ palette: Palette) {
+        guard let range = Range(note.range, in: text), String(text[range].characters) == note.quote else { return }
+        text[range].backgroundColor = palette.selection
+        text[range].underlineStyle = Text.LineStyle(pattern: .dot, color: palette.signature)
+        text[range].link = note.url
     }
 
     static func inline(_ text: String, _ palette: Palette) -> AttributedString {

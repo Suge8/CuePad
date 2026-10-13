@@ -72,6 +72,7 @@ struct SessionPage: View {
                 // 数据读到前不排对话：在线会话不等资料库就有状态，先排出来是空对话，数据到了再长成整段
                 if stored != nil {
                     SessionChat(session: session, digest: digest, readingWidth: Self.readingWidth, inset: 24, follow: $follow, scrubberInset: Self.scrollerWidth)
+                        .replyNotes(session: session.id, messages: digest.messages)
                         .fadesUnderBars()
                         .frame(maxHeight: .infinity)
                 } else {
@@ -88,7 +89,8 @@ struct SessionPage: View {
                             stopping: MacDelivery.stopping(session, deliveries: digest.deliveries),
                             commandProgress: MacDelivery.commandProgress(digest.deliveries),
                             queued: PiChat.queued(digest.deliveries, messages: digest.messages),
-                            recall: PiChat.lastSaid(digest.messages)
+                            recall: PiChat.lastSaid(digest.messages),
+                            revealNote: { follow.seek($0.entry) }
                         ) {
                             follow.jumpToNewest()
                         }

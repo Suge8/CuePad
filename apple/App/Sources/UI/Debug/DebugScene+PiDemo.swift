@@ -455,7 +455,12 @@ extension DebugScene {
             _ = try? await services.requestMacDelivery("标题再短一点", to: landing, mode: .send)
         }
         if let notes = states.first(where: { $0.sessionID == "notes" }) {
-            services.settings.setReplyDraft(ComposerDraft(text: "续费域名那条再加上截止日期"), for: notes.id)
+            // 回复框里还挂着两条对最后那轮回答的批注（对话里那两处带高亮）
+            let reply = PiChatMessage.recordID(sessionID: "notes", entryID: "p9")
+            services.settings.setReplyDraft(ComposerDraft(text: "续费域名那条再加上截止日期", notes: [
+                ReplyNote(entry: reply, run: 0, location: 5, quote: "完整页面可以直接点按钮试交互", note: "要能离线打开"),
+                ReplyNote(entry: reply, run: 0, location: 38, quote: "评审结论里有两处要你定", note: "这两处我来定，先列出来"),
+            ]), for: notes.id)
         }
         if let cuepad = states.first(where: { $0.sessionID == "cuepad" }) {
             _ = try? await services.requestMacDelivery("超时后先重试一次，还失败再报错", to: cuepad, mode: .steer)

@@ -25,18 +25,19 @@ struct RecapPreview: View {
 }
 
 
-/// Pi 的一轮回答：上方一行弱化的经过，下面全宽 Markdown，长也直接全显；长按（Mac 右键）是消息菜单（`MessageMenu`）。
+/// Pi 的一轮回答：上方一行弱化的经过，下面全宽 Markdown，长也直接全显，批注过的地方带高亮（`notes`）；长按（Mac 右键）是消息菜单（`MessageMenu`）。
 struct ReplyBlock: View {
     let text: String
     let meta: PiChat.RoundNote?
     let tools: PiChatMessage.Tools?
     let session: PiSessionState
+    let notes: [ReplyNote]
     @State private var selecting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let meta { ToolActivityLine(note: meta, tools: tools) }
-            MarkdownText(source: text).equatable()
+            MarkdownText(source: text, notes: notes).equatable()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // 整块都接长按（只靠字形判定时，按在行距、留白里会落空）
