@@ -8,6 +8,8 @@ nonisolated struct PiProvider: Equatable, Identifiable {
     /// Pi 的提供方 id（`PiModelKey.provider`）。
     let id: String
     let name: String
+    /// 订阅账号的产品名（Claude、Codex）：额度按账号显示时用它（`QuotaMeter`）；不是订阅登录的提供方为提供方名。
+    let account: String
     /// 资源目录里的符号名；nil 是没见过的提供方。
     private let symbol: String?
 
@@ -15,8 +17,10 @@ nonisolated struct PiProvider: Equatable, Identifiable {
         self.id = id
         if let known = Self.known[id.lowercased()] {
             (name, symbol) = (known.name, "provider-" + known.icon)
+            account = known.account ?? known.name
         } else {
             (name, symbol) = (id.prefix(1).uppercased() + id.dropFirst(), nil)
+            account = name
         }
     }
 
@@ -42,21 +46,21 @@ nonisolated struct PiProvider: Equatable, Identifiable {
 
     private static let generic = "cpu"
 
-    /// 提供方 id → 显示名与图标（`provider-<图标>`）。同一家的几个入口共用一个图标。
-    private static let known: [String: (name: String, icon: String)] = [
-        "anthropic": ("Anthropic", "anthropic"),
-        "openai": ("OpenAI", "openai"),
-        "openai-codex": ("OpenAI Codex", "openai"),
-        "google": ("Google", "gemini"),
-        "google-vertex": ("Google Vertex", "gemini"),
-        "xai": ("xAI", "xai"),
-        "deepseek": ("DeepSeek", "deepseek"),
-        "kimi-coding": ("Kimi", "kimi"),
-        "moonshotai": ("Moonshot AI", "kimi"),
-        "moonshotai-cn": ("Moonshot AI", "kimi"),
-        "xiaomi": ("Xiaomi MiMo", "mimo"),
-        "xiaomi-token-plan-cn": ("Xiaomi MiMo", "mimo"),
-        "openrouter": ("OpenRouter", "openrouter"),
+    /// 提供方 id → 显示名与图标（`provider-<图标>`），有订阅额度的另有账号的产品名。同一家的几个入口共用一个图标。
+    private static let known: [String: (name: String, icon: String, account: String?)] = [
+        "anthropic": ("Anthropic", "anthropic", "Claude"),
+        "openai": ("OpenAI", "openai", nil),
+        "openai-codex": ("OpenAI Codex", "openai", "Codex"),
+        "google": ("Google", "gemini", nil),
+        "google-vertex": ("Google Vertex", "gemini", nil),
+        "xai": ("xAI", "xai", nil),
+        "deepseek": ("DeepSeek", "deepseek", nil),
+        "kimi-coding": ("Kimi", "kimi", nil),
+        "moonshotai": ("Moonshot AI", "kimi", nil),
+        "moonshotai-cn": ("Moonshot AI", "kimi", nil),
+        "xiaomi": ("Xiaomi MiMo", "mimo", nil),
+        "xiaomi-token-plan-cn": ("Xiaomi MiMo", "mimo", nil),
+        "openrouter": ("OpenRouter", "openrouter", nil),
     ]
 }
 

@@ -41,20 +41,20 @@ nonisolated struct QuotaMeter: Equatable {
     }
 
     let provider: String
-    /// 账号叫什么：订阅的产品名（Claude、Codex），不是提供方（Anthropic、OpenAI）
+    /// 账号叫什么：订阅的产品名（Claude、Codex，`PiProvider.account`），不是提供方（Anthropic、OpenAI）
     let account: String
     /// 仪表的圈，外到内：整个账号的窗口从短到长（Claude 是 5 小时、本周，Codex 按套餐一到两个）
     let rings: [Window]
     /// 按模型的周额度（明细里列在后面）
     let scoped: [Window]
-    /// 卡着的窗口：此刻用得最多的那个（整个账号的里挑）
+    /// 卡着的窗口，规则见 `AccountQuota.binding(at:model:)`（提供方的判定优先，没有时取用得最多的；总览不按模型挑）
     let binding: Window?
     let updatedAt: Date
     let isStale: Bool
 
     init(_ quota: AccountQuota, at now: Date) {
         provider = quota.provider
-        account = Self.accountName(quota.provider)
+        account = PiProvider(id: quota.provider).account
         rings = quota.accountWindows.map { Window($0, at: now) }
         scoped = quota.windows.filter { $0.model != nil }.map { Window($0, at: now) }
         binding = quota.binding(at: now).map { Window($0, at: now) }
@@ -68,14 +68,6 @@ nonisolated struct QuotaMeter: Equatable {
     /// 读屏：账号与每个窗口的用量，卡着的那个怎么样。
     var spoken: String {
         Dotted([account] + (rings + scoped).map { "\($0.name)已用 \($0.percent)" } + [binding.flatMap { $0.runway(from: .now).map { "照这速度\($0)后用完" } }]).spoken
-    }
-
-    static func accountName(_ provider: String) -> String {
-        switch provider {
-        case "anthropic": "Claude"
-        case "openai-codex": "Codex"
-        default: provider
-        }
     }
 
     /// 一段时长：最大的两个单位，"3 天 4 小时"、"2 小时 10 分钟"、"25 分钟"。
