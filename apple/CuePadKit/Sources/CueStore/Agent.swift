@@ -53,7 +53,7 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
     // 终端里的会话只能经它的收件箱插话、经钩子作答（Claude Code 的跨会话消息只收文字）
     case .claudeCode: return [.steer, .answer]
     // 终端里的会话由 Codex 的常驻服务承载，经它的控制接口说话；作答经钩子
-    case .codex: return [.images, .steer, .abort, .model, .rename, .answer]
+    case .codex: return [.images, .steer, .abort, .model, .rename, .commands, .answer]
     }
   }
 }

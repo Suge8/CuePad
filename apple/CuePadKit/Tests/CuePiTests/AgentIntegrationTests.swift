@@ -84,7 +84,8 @@ struct AgentIntegrationTests {
 
     /// 每家的技能写进它自己文档里的个人技能目录，正文写着 App 里 cuepad 的绝对路径；手机预览只有 Pi 的技能提，Codex 的提醒沙箱。
     /// 关掉时 CuePad 写的文件与因此空出来的目录都删掉，配置目录里别的东西不动。
-    @Test(arguments: AgentKind.allCases)
+    /// Codex 的钩子要真 codex 来信任，它的接入与删除见 `CodexHooksTests`。
+    @Test(arguments: AgentKind.allCases.filter { $0 != .codex })
     func installWritesTheSkillWhereTheAgentReadsItAndUninstallLeavesNoTrace(kind: AgentKind) async throws {
         try installAll()
         let home = skillFile(kind).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -148,10 +149,9 @@ struct AgentIntegrationTests {
     @Test func aMovedAppMakesInstalledFilesOutdatedAndInstallRewritesThem() async throws {
         try installAll()
         try await integration().install(.pi)
-        try await integration().install(.codex)
         let moved = root.appending(path: "Other/CuePad.app/Contents/Helpers/cuepad")
 
-        for kind in [AgentKind.pi, .codex] {
+        for kind in [AgentKind.pi] {
             #expect(await integration(cuepad: moved).status(of: kind).files == .outdated)
             try await integration(cuepad: moved).install(kind)
             #expect(try String(contentsOf: skillFile(kind), encoding: .utf8).contains(moved.path))
