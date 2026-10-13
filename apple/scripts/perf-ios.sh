@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用法：perf-ios.sh [次数=3]
+# 用法：perf-ios.sh [次数=3] [启动参数…]   启动参数原样传给 App，如任务多时：perf-ios.sh 3 -CuePadManyTasks 150 -CuePadProject CuePad
 #   iPhone 模拟器上的单次交互（-CuePadBench interact，`IOSInteractionBench`）：演示库，每次全新进程，逐项量点击回合、合计、最重一圈
 #   （主线程 CPU 毫秒）、进程指令数（百万条）与掉帧，按"第几次"分开取各次的中位数列成表。
 #   模拟器的合成与 GPU 和真机不同：只看主线程 CPU 与指令数，掉帧只作参考；第一次的数里有模拟器才有的 Swift 一致性查找，真机要另量。
@@ -36,7 +36,7 @@ for run in $(seq "$runs"); do
   library="$DERIVED/library-$run"
   rm -rf "$library"
   out="$library/interact.jsonl"
-  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" xcrun simctl launch "$DEVICE" "$BUNDLE_ID" -CuePadDemo YES -CuePadBench interact >/dev/null
+  SIMCTL_CHILD_CUEPAD_LIBRARY_DIR="$library" xcrun simctl launch "$DEVICE" "$BUNDLE_ID" -CuePadDemo YES -CuePadBench interact "${@:2}" >/dev/null
   sleep 2
   # 量完自己退出；最多等 5 分钟。其间按 App 要的点真按
   pressed=0 finished=0 deadline=$(( $(date +%s) + 300 )) tick=0

@@ -175,6 +175,9 @@ private struct FocusCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let visibleTasks = 3
+    /// 没做完的任务（含步骤）有这么多时大纲行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
+    /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建、淡出再淡入。
+    private static let lazyFrom = 20
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -186,6 +189,7 @@ private struct FocusCard: View {
             }
             card
         }
+        .debugExposesTaskFold { toggle(\.showsAll) }
     }
 
     /// 还没绑文件夹、而这里该给绑定引导的项目（同名建议或绑定进行中）。
@@ -205,15 +209,15 @@ private struct FocusCard: View {
                 let done = data.taskCounts.done
                 if !roots.isEmpty {
                     SectionLabel(text: "任务", systemImage: "checklist").padding(.bottom, 4)
-                    TaskOutline(tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks)) { row in
+                    TaskOutline(tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks), lazy: data.tasks.ordered.count >= Self.lazyFrom) { row in
                         TaskLine(task: row.task, prompts: data.prompts[row.id]?.count ?? 0, subtasks: data.subtasks[row.id])
                     }
                 }
                 if hidden > 0 || done > 0 {
                     HStack(spacing: 6) {
-                        if hidden > 0 { toggle(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
+                        if hidden > 0 { toggleButton(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
                         if hidden > 0, done > 0 { Dot() }
-                        if done > 0 { toggle(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
+                        if done > 0 { toggleButton(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
                     }
                     .font(Typography.secondary).foregroundStyle(palette.ink3)
                 }
@@ -251,11 +255,13 @@ private struct FocusCard: View {
         .paper(radius: 18)
     }
 
+    private func toggle(_ key: WritableKeyPath<TaskFold, Bool>) {
+        withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
+    }
+
     /// 纸底展开或收起的一格。
-    private func toggle(_ title: String, open: Bool, _ key: WritableKeyPath<TaskFold, Bool>) -> some View {
-        Button {
-            withAnimation(Motion.spatial(Motion.snappy, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
-        } label: {
+    private func toggleButton(_ title: String, open: Bool, _ key: WritableKeyPath<TaskFold, Bool>) -> some View {
+        Button { toggle(key) } label: {
             HStack(spacing: 4) {
                 Text(title)
                 Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold)).accessibilityHidden(true)
