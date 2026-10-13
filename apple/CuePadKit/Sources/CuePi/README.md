@@ -11,6 +11,12 @@
 | 后台托管 | `PiHost` | 以 RPC 模式在后台恢复已结束的会话、开新会话，连上桥后返回。进程一启动就脱离 App（新会话组，只继承列出的文件描述符，见"协议"一节的"托管"），自己管生死：App 退出、更新、崩溃都不影响它，新起的 App 经桥重新看到它；这里不记进程，有哪些托管会话只看桥。空闲满时限由扩展自己退出（不算结束：会话记录留着、歇着，仍在"现在"，发话时再恢复）；同一会话在别处打开时让出（空闲即退，在跑一轮则这一轮做完再退），退出后对接手的进程发 `reload`；协议号不同的托管会话没有终端能 /reload，让它退出，下次发话用新扩展恢复；`end(id)` 结束一个在线会话并等它退出（托管的给 hello 里的 pid 发 SIGTERM，终端里的走扩展的 `end` 命令）。让出、不兼容退出与结束都只发 SIGTERM，Pi 收到后优雅收尾（扩展发 `bye quit`、删 socket） |
 | 跳到终端 | `PiTerminalJumper` | 用 hello 里的终端信息激活会话所在终端，尽量精确到标签页 |
 
+## Cue 的大脑（`Brain/`）
+
+常驻总控 Agent「Cue」的大脑是 CuePad 起的一个运行时子进程：`CueBrainConfig.startBrain()` 按 `runtime` 起 `PiBrain` / `CodexBrain` / `ClaudeBrain`，三家同一个协议 `CueBrain`（`send` 空闲时开始一轮、正忙时插进当前这一轮；`abort`；`stop` 等进程连同子进程退出）与同形的事件 `CueBrainEvent`（规则在类型的头注释里）。系统提示整份替换，原生工具只有读文件类，外加 `mcp` 给的 CuePad MCP 服务；运行时不落会话、不进各自的历史，也不加载 CuePad 的桥扩展（不出现在 Agent 会话列表里）。只用参数、环境变量与临时文件，不改用户的配置文件、不换配置目录（换了会丢登录）。各家的启动参数与取舍写在各实现的头注释里。
+
+端到端测试 `RealBrainTests` 用真实运行时与用户自己的账号，要花钱，默认不跑：`CUEPAD_BRAIN_TESTS=pi,codex,claude swift test --filter RealBrainTests`，模型用 `CUEPAD_BRAIN_MODEL_PI` 等换；MCP 是 `Tests/CuePiTests/Fixtures/mcp-echo.mjs`（要 node）。
+
 `PiPaths` 是目录的唯一来源（`PI_CODING_AGENT_DIR`、socket 目录、命令行链接目录 `CUEPAD_BIN_DIR`）。
 
 ## 协议（v11）

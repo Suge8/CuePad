@@ -175,7 +175,7 @@ public final class PiHost {
         posix_spawn_file_actions_adddup2(&actions, lifeline[1], 3)
         posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0)
         posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0)
-        posix_spawn_file_actions_addchdir_np(&actions, directory.path)
+        posix_spawn_file_actions_addchdir(&actions, directory.path)
         var attributes: posix_spawnattr_t? = nil
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
