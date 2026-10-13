@@ -173,6 +173,7 @@ DEFINE SCHEMA
         deliveredAt   INT64,
         createdAt     INT64,
         modifiedAt    INT64,
+        notify        STRING QUERYABLE,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

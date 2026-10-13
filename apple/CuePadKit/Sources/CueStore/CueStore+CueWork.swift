@@ -127,7 +127,7 @@ extension CueStore {
       throw CueStoreError.noFolder(try find(Project.self, project)?.name ?? "")
     }
     let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-    let launch = PiLaunch(project: project, prompt: trimmed.isEmpty ? nil : content, token: UUID().uuidString, model: model, thinking: thinking)
+    let launch = PiLaunch(project: project, prompt: trimmed.isEmpty ? nil : content, token: UUID().uuidString, name: card.title, model: model, thinking: thinking)
     return .started(try requestLaunch(launch, title: card.title, on: launchHost, card: carrier, cue: cue))
   }
 

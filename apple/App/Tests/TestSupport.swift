@@ -162,7 +162,7 @@ final class TestApp {
             locatePi: { Self.piExecutable },
             pasteboard: pasteboard,
             cue: cue ?? CueDependencies(
-                scan: { CueRuntimeScan(available: [], path: "", agents: []) }, helper: helper, notifier: RecordingCueNotifier()))
+                scan: { [] }, launch: { _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
         let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
         services.windowShell = WindowShell(window: window)
         return services

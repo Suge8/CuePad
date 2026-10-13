@@ -17,6 +17,10 @@ final class PiAlertCenter: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private(set) var pendingTap: PiAlertTap?
+    /// 点开的 Cue 通知（那条 Cue 消息的 id）：界面打开 Cue 页后调 `consumeCueTap()`。
+    private(set) var pendingCueTap: UUID?
+    /// 开着的 Cue 页数（Cue 页出现时加一、消失时减一）：大于 0 时前台不弹 Cue 的通知。
+    var cuePageViewers = 0
     private(set) var authorization: UNAuthorizationStatus = .notDetermined
     private(set) var registration: Registration = .pending
     @ObservationIgnored private var enabled = false
@@ -59,9 +63,15 @@ final class PiAlertCenter: NSObject, UNUserNotificationCenterDelegate {
         registration = .failed(error.localizedDescription)
     }
 
-    /// 点开的通知；不是 Pi 通知则忽略。
+    /// 点开的通知；不是 Pi 或 Cue 的通知则忽略。
     func receive(_ userInfo: [AnyHashable: Any]) {
         if let tap = PiAlertRoute.tap(from: userInfo) { pendingTap = tap }
+        if let message = CueAlertRoute.message(from: userInfo) { pendingCueTap = message }
+    }
+
+    func consumeCueTap() -> UUID? {
+        defer { pendingCueTap = nil }
+        return pendingCueTap
     }
 
     func consumeTap() -> PiAlertTap? {
@@ -75,10 +85,13 @@ final class PiAlertCenter: NSObject, UNUserNotificationCenterDelegate {
         receive(response.notification.request.content.userInfo)
     }
 
-    /// 前台收到的通知不展示：同一件事由 App 内横幅提示（正看着那个会话时连横幅也不弹）。
+    /// 前台收到的 Pi 通知不展示：同一件事由 App 内横幅提示（正看着那个会话时连横幅也不弹）。
+    /// Cue 的通知没有 App 内横幅：Cue 页没开着就照常弹，开着就不弹（对话里已经看到了）。
     func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions { [] }
+    ) async -> UNNotificationPresentationOptions {
+        CueAlertRoute.message(from: notification.request.content.userInfo) != nil && cuePageViewers == 0 ? [.banner, .list, .sound] : []
+    }
 }
 
 /// 通知代理必须在启动完成前设好，冷启动时点开的通知才不会丢。

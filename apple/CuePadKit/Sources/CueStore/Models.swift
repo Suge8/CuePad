@@ -21,6 +21,9 @@ extension Table {
     .cueMessages, .cueLines, .cueProfile,
   ]
 
+  /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
+  package static let notifyFlagged: Set<Table> = [.piSessionStates, .cueMessages]
+
   /// 远端记录没有这些列（更早的版本写的）时本机落的值：NOT NULL 的列不能写 NULL。
   var missingDefaults: [String: SQLValue] {
     switch self {

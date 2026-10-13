@@ -71,7 +71,7 @@ struct SendTargetTests {
         workspace.handOff(draft)
 
         try await eventually("rig.host.calls 里有在项目文件夹打开") { !rig.host.calls.isEmpty }
-        guard case .open(let directory, let token) = try #require(rig.host.calls.first) else {
+        guard case .open(let directory, let token, _, _, _) = try #require(rig.host.calls.first) else {
             Issue.record("没有开新会话")
             return
         }

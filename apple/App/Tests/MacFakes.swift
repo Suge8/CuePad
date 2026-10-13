@@ -26,7 +26,7 @@ final class InMemoryHotkeys: HotkeyBackend {
 final class RecordingHost: PiHosting {
     enum Call: Equatable {
         case resume(sessionFile: String, directory: String)
-        case open(directory: String, launchToken: String)
+        case open(directory: String, launchToken: String, name: String? = nil, model: String? = nil, thinking: String? = nil)
         case end(String)
     }
 
@@ -53,8 +53,11 @@ final class RecordingHost: PiHosting {
         extensions.values.first { $0.id == id }?.close(bye: "quit")
     }
 
-    func open(in directory: URL, launchToken: String, executable: URL) async throws -> String {
-        calls.append(.open(directory: directory.path, launchToken: launchToken))
+    func open(
+        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?, executable: URL
+    ) async throws -> String {
+        calls.append(.open(
+            directory: directory.path, launchToken: launchToken, name: name, model: model.map { "\($0.provider)/\($0.id)" }, thinking: thinking?.rawValue))
         return try await connect("new-\(launchToken)", cwd: directory.path).id
     }
 

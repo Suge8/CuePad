@@ -30,10 +30,13 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var taskID: UUID?
   public var answer: String?
   public var answeredAt: Date?
-  /// 你的消息被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）。
+  /// 你的消息（或 Cue 的"等你"上你的回答）被交给 Cue 的大脑的时刻（由 Cue 住的那台 Mac 写）；回答改过、晚于它时要再交一次。
   public var deliveredAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
+  /// 手机推送的标志（明文、可查询，服务端订阅按它出通知）：值班的 Mac 按通知规则置位，随那一次上传送出后清掉，
+  /// 远端带回来的不留（同 `PiSessionState.notify`，见 docs/sync.md「Agent 锁屏通知」）。
+  var notify: Bool = false
 
   /// 在等你回答：Cue 带选项问的、还没答。
   public var isWaiting: Bool { author == .known(.cue) && choices != nil && answeredAt == nil }
@@ -42,17 +45,19 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
 extension CueMessage: Record {
   static let table = Table.cueMessages
   static let columns = [
-    "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt",
+    "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify",
   ]
+  /// `notify` 的值（订阅的谓词按它）。
+  package static let notifyFlag = "cue"
   var bindings: [any SQLBindable] {
-    [id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt]
+    [id, author.rawValue, text, choices.map { JSONColumn.encode($0) }, urgent, taskID, answer, answeredAt, deliveredAt, createdAt, modifiedAt, notify ? Self.notifyFlag : nil]
   }
   init(row: Row) {
     self.init(
       id: row.uuid(0), author: Open(rawValue: row.text(1)), text: row.text(2),
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
-      modifiedAt: row.date(10))
+      modifiedAt: row.date(10), notify: row.textOrNil(11) != nil)
   }
 }
 
@@ -127,6 +132,8 @@ public struct CueProfile: Equatable, Sendable {
   public static let defaultName = "Cue"
   /// 只有一行：任何设备上都是这个 id。
   static let recordID = DeterministicID.uuid("cue-profile")
+  /// 它在 CloudKit 里的记录名（通知服务扩展取 Cue 的名字用）。
+  package static var syncRecordName: String { recordID.uuidString.lowercased() }
 
   public init(
     name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<CueRuntime> = .known(.pi), model: String? = nil,
