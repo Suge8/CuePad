@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 任务页（书架上的"任务"一行、iPad 侧栏、项目页"还有 N 条"进入）：列表顶上一行快速添加（↩ 即一条，落当前项目或未分类，可换），
 /// 跟着列表一起滚走——它是一张纸、不是玻璃，钉在顶栏下会把滚过去的列表切成上下两截；回到顶就能看到；下面按 进行中 / 待办 / 最近完成（折起）分组，跨项目，
-/// 子任务缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的子任务；轻扫见 `CardMenu.swipes`），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
+/// 步骤缩进跟在上级下（`TaskOutline`：长按拖动排序、拖到一条上成为它的步骤；轻扫见 `CardMenu.swipes`），顶层写所在项目，交给 Pi 的写那个会话此刻在做什么。
 /// 点圆圈完成（完成的点了回到待办），点文字在浮窗里打开（`TaskSheet`），长按是 `CardActions`。
 struct TasksScreen: View {
     @Environment(Workspace.self) private var workspace
@@ -53,9 +53,9 @@ struct TasksScreen: View {
                 header(title, count: count)
                 TaskOutline(tree: board.tree, roots: roots.map(\.id)) { row in
                     let info = board.rows[row.id]
-                    line(
-                        row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session, delivery: info?.delivery,
-                        marks: board.children[row.id])
+                    TaskLine(
+                        task: row.task, project: row.depth == 0 ? info?.project : nil, session: info?.session, delivery: info?.delivery,
+                        prompts: board.prompts[row.id]?.count ?? 0, subtasks: board.subtasks[row.id])
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
@@ -100,21 +100,17 @@ struct TasksScreen: View {
             }
             if showsCompleted {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { line($0.task, project: $0.project, session: $0.session, delivery: $0.delivery, marks: nil).id($0.id) }
+                    ForEach(rows) { TaskLine(task: $0.task, project: $0.project, session: $0.session, delivery: $0.delivery).id($0.id) }
                 }
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(palette.paper, in: .rect(cornerRadius: 16, style: .continuous))
             }
         }
     }
-
-    private func line(_ task: Card, project: Project?, session: PiSessionState?, delivery: DeliveryRequest?, marks: [ChildMark]?) -> some View {
-        TaskLine(task: task, project: project, session: session, delivery: delivery, marks: marks)
-    }
 }
 
 /// 一条任务：圆圈分三态（待办空心、进行中半满、完成对勾），点文字在浮窗里打开。点圆圈立即显示完成（对勾、删除线、成功触感），停留片刻再从列表移出；
-/// 这段时间里再点一下就撤销。还有没完成的子任务时先问一句，确认后连子任务一起完成。已完成的任务点一下立即回到待办。
+/// 这段时间里再点一下就撤销。还有没完成的步骤时先问一句，确认后连步骤一起完成。已完成的任务点一下立即回到待办。
 struct TaskLine: View {
     let task: Card
     /// 任务页跨项目列着，写上所在项目；项目页里不写。
@@ -122,10 +118,9 @@ struct TaskLine: View {
     /// 交给 Pi 的任务：那个会话此刻在做什么（点它看近况），以及发给它的最近一条投送请求。
     var session: PiSessionState?
     var delivery: DeliveryRequest?
-    /// 直接下级（提示词与子任务）；完成圈分段、提示词计数与子任务进度由它推出。
-    var marks: [ChildMark]?
-    private var subtasks: TaskProgress? { .subtasks(in: marks) }
-    private var tally: PromptTally { PromptTally(marks) }
+    /// 提示词条数与步骤进度：元信息一行与完成圈由它们推出。
+    var prompts = 0
+    var subtasks: TaskProgress?
     @State private var confirmsSubtasks = false
     /// 行宽：只给长按提起的预览用（与原来的行同宽），不回写影响这一行自己的排版。
     @State private var width: CGFloat = 0
@@ -158,7 +153,7 @@ struct TaskLine: View {
             }
             // 读屏把一行当一个元素："任务内容，未完成"（文案见 TaskSpeech）；双击即勾选（与圆圈同一个动作），长按菜单照常可用
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel([task.title, TaskSpeech.progress(marks), project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
+            .accessibilityLabel([task.title, TaskSpeech.progress(prompts: prompts, subtasks: subtasks), project?.name, session.map { services.settings.shown($0, delivery: delivery).presence }].compactMap { $0 }.joined(separator: "，"))
             .accessibilityValue(phase == .idle ? TaskSpeech.value(task.status) : TaskSpeech.value(.done))
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(hint)
@@ -194,7 +189,7 @@ struct TaskLine: View {
         // 圈对着标题第一行（`TaskRingView` 的基线），行再高也不落到中间
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             Button(action: tap) {
-                TaskRingView(status: task.status, ring: TaskRing(marks), done: done, size: 20)
+                TaskRingView(status: task.status, ring: TaskRing(subtasks), done: done, size: 20)
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
@@ -211,16 +206,14 @@ struct TaskLine: View {
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(.rect)
             .onTapGesture { navigation.openTask(task.id) }
-            if !done, tally.suggestsDone(task) { MarkDoneChip(action: tap).transition(.opacity) }
         }
-        .animation(Motion.quick, value: tally)
     }
 
-    private var counts: Dotted? { done ? nil : TaskCopy.counts(marks) }
+    private var counts: Dotted? { done ? nil : TaskCopy.counts(prompts: prompts, subtasks: subtasks) }
     private var showsPlace: Bool { project != nil || (!done && session != nil) }
     private var hasDetail: Bool { counts != nil || showsPlace }
 
-    /// 标题下最多两行：进度（提示词与子任务），再是所在项目与交给的会话此刻的状态。
+    /// 标题下最多两行：进度（提示词与步骤），再是所在项目与交给的会话此刻的状态。
     private var detail: some View {
         VStack(alignment: .leading, spacing: 2) {
             if let counts { Text(counts).monospacedDigit().foregroundStyle(palette.ink3) }

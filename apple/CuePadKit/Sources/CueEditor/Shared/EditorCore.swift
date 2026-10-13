@@ -47,7 +47,7 @@ final class EditorCore {
     var style: CueEditorTheme
 
     /// 自上次刷新以来的编辑：新坐标下的范围与长度变化。
-    private var pendingEdits: [(range: NSRange, delta: Int)] = []
+    private var pendingEdits: [NSRange] = []
     /// 现有段落是按哪份装饰上下文排版的。
     var flushedDecorations = CueDecorations(CueBuffer(text: "", isSplit: { _ in false }))
     var decorations = CueDecorations(CueBuffer(text: "", isSplit: { _ in false }))
@@ -164,7 +164,7 @@ final class EditorCore {
     /// storage 的 didProcessEditing：此刻 TextKit 的内容管理器还没同步新文本，位置换算要等下一个同步点。
     func storageDidProcessEditing() {
         guard storage.editedMask.contains(.editedCharacters) else { return }
-        pendingEdits.append((storage.editedRange, storage.changeInLength))
+        pendingEdits.append(storage.editedRange)
         decorations = CueDecorations(buffer())
         DispatchQueue.main.async { [weak self] in self?.flushHighlight() }
     }
@@ -175,7 +175,7 @@ final class EditorCore {
         let edits = pendingEdits
         pendingEdits = []
         // 多次编辑累积时新旧坐标混杂，直接全文重扫
-        refreshVariableHighlight(around: edits.count == 1 ? edits[0].range : nil)
+        refreshVariableHighlight(around: edits.count == 1 ? edits[0] : nil)
         restyleAfter(edits)
     }
 

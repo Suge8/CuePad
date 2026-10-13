@@ -8,7 +8,7 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 }
 
 /// 可观察的表；`CueStore.observe` 按它们订阅变更。
-public enum Table: String, Sendable, CaseIterable {
+public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, deliveryRequests, directoryBindings, piMessages, previews
 }
@@ -63,7 +63,7 @@ public struct Project: Identifiable, Equatable, Sendable {
 }
 
 /// 唯一的内容记录。界面上叫灵感或任务：同一种记录，差别只是 `todoAt`（"设为任务"时写上，"改回灵感"时清掉）。
-/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——子任务（任务）与提示词（挂在任务下的灵感，要交给 Agent 的话）；任务的正文只是标题与一句说明（`CueTask`）。
+/// 灵感没有状态；任务有三态（由开始与完成两个时间推出）、可有下级——步骤（顶层任务下的任务，勾选清单里的一条）与提示词（挂在顶层任务下的灵感，要发给 Agent 的话）；任务的正文只有标题，多出来的话都是提示词（`CueLines.split`）。
 /// 结构（上级、要做、状态）对调用方只读，各有专门的方法：`setTodo`、`setStatus`、`moveCard`、`createTask`。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -82,20 +82,20 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-  /// 上级任务；nil 是顶层。只有任务能当上级，层级最多 `maxDepth`；上级不在库里或不可见时按顶层看待。
+  /// 上级任务；nil 是顶层。只有任务能当上级，任务最多 `maxTaskDepth` 级；上级不在库里或不可见时按顶层看待。
   public internal(set) var parentID: UUID?
   /// "设为任务"的时间：有值是任务，nil 是灵感。
   public internal(set) var todoAt: Date?
-  /// 开始做的时间（手动置为进行中、或交给 Agent 时）；回到待办时清空。
+  /// 开始做的时间（手动置为进行中、或发给 Agent 时）；回到待办时清空。
   public internal(set) var startedAt: Date?
   public internal(set) var completedAt: Date?
-  /// 交给 Agent 的会话（Pi 自己的会话 id），灵感与任务的行据此显示会话此刻的状态。
+  /// 发给 Agent 的会话（Pi 自己的会话 id），灵感与任务的行据此显示会话此刻的状态。
   public internal(set) var piSessionID: String?
   /// 归档的时刻：做完或不再需要，留着可搜、不占列表；连同下级一起归档、一起取回（`archive` / `unarchive`）。
   public internal(set) var archivedAt: Date?
 
-  /// 任务 → 子任务 → 子任务（提示词挂在哪一级都算在它下面一级）。
-  public static let maxDepth = 3
+  /// 任务最多两级：任务 → 步骤。提示词（任务下的灵感）只挂在顶层任务下（`CueStore.promptHome`），不算一级。
+  public static let maxTaskDepth = 2
 
   public var isTask: Bool { todoAt != nil }
   /// 空白：正文只有空白（没有文字也没有图片）。空白灵感离开编辑就不留下（`CueStore.dropIfBlank`），也不计数、不当摘要。
@@ -119,6 +119,14 @@ public struct TaskGroup: Equatable, Sendable {
   public internal(set) var tasks: [Card]
 }
 
+/// 能绑会话的叶子任务，步骤带着它的上级（`CueStore.bindableTasks`）。
+public struct BindableTask: Identifiable, Equatable, Sendable {
+  public let task: Card
+  /// 步骤的上级任务；顶层任务为 nil。
+  public let parent: Card?
+  public var id: UUID { task.id }
+}
+
 /// 一组顶层任务按状态的个数（`CueStore.taskCounts`）：给用户看的任务数与完成数都是它。
 public struct TaskCounts: Equatable, Sendable {
   public var inProgress: Int
@@ -140,7 +148,7 @@ public struct TaskCounts: Equatable, Sendable {
   }
 }
 
-/// 完成了几个、一共几个（上级的直接子任务）。
+/// 步骤完成了几个、一共几个（任务的直接步骤，见 `CueStore.subtaskProgress`）。
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int
@@ -149,30 +157,12 @@ public struct TaskProgress: Equatable, Sendable {
     self.done = done
     self.total = total
   }
-
-  /// 直接子任务的完成数与总数；没有子任务时为 nil。
-  public static func subtasks(in marks: [ChildMark]?) -> TaskProgress? {
-    let subtasks = (marks ?? []).filter(\.isTask)
-    return subtasks.isEmpty ? nil : TaskProgress(done: subtasks.filter(\.isDone).count, total: subtasks.count)
-  }
 }
 
 /// 灵感或任务交给了 Agent 的哪里：一个会话（Pi 会话 id），或正在开的新会话（还没开好、没认领到）。见 `CueStore.handedSessions`。
 public enum AgentHandoff: Hashable, Sendable {
   case session(String)
   case launching
-}
-
-/// 任务的一个直接下级（同级手动顺序）：子任务完成算做完；提示词（挂着的灵感）交给 Agent 后那一轮做完（已回复）算做完。
-/// 见 `CueStore.childMarks`。
-public struct ChildMark: Equatable, Sendable {
-  public let isTask: Bool
-  public let isDone: Bool
-
-  public init(isTask: Bool, isDone: Bool) {
-    self.isTask = isTask
-    self.isDone = isDone
-  }
 }
 
 /// 卡片挂在哪：某项目（nil = 未分类）的顶层，或某条任务下面（项目随它）。
@@ -189,6 +179,8 @@ public enum CardChange: Sendable, Equatable {
   case trash(id: UUID, lifted: [UUID])
   /// 挪动：原来的位置与原来的前一个同级。
   case move(id: UUID, from: CardSlot, after: UUID?)
+  /// 灵感挂到已有草稿的叶子上：并进草稿，灵感删掉。带着删掉的灵感整张卡与草稿并之前的正文、变量取值，拨回时原样还原。
+  case fold(idea: Card, draft: UUID, body: String, variableValues: [String: String])
 }
 
 public struct SendRecord: Identifiable, Equatable, Sendable {
@@ -350,8 +342,10 @@ public enum CueStoreError: Error, Equatable {
   case schemaTooOld(Int)
   /// 只能挂到存在的任务下，不能挂到自己或自己的下级下。
   case invalidParent
-  /// 挂上去后会超过 `Card.maxDepth` 级。
+  /// 挂上去后任务会超过 `Card.maxTaskDepth` 级。
   case taskTooDeep
+  /// 只能绑在叶子（没有步骤的任务）上；有步骤的任务绑到它的某个步骤上。
+  case notALeaf
   /// 灵感没有状态：先"设为任务"。
   case notATask
   /// 预览的文件不存在、读不了或不是文件（参数是它的路径）。
@@ -377,7 +371,8 @@ extension CueStoreError: LocalizedError {
     case .unsupportedSchemaVersion(let version): "资料库由更新版本的 CuePad 建立（结构版本 \(version)），这个版本打不开"
     case .schemaTooOld(let version): "资料库由更早版本的 CuePad 建立（结构版本 \(version)），这个版本不再升级它"
     case .invalidParent: "只能挂到任务下，不能挂到自己或自己的下级下"
-    case .taskTooDeep: "子任务最多 \(Card.maxDepth) 级"
+    case .taskTooDeep: "任务最多 \(Card.maxTaskDepth) 级（任务 → 步骤）"
+    case .notALeaf: "有步骤的任务不直接绑会话，绑到它的某个步骤上"
     case .notATask: "这是灵感，先「设为任务」再改状态"
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let limit): "文件太大，预览上限 \(limit / 1_000_000) MB"

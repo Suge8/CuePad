@@ -18,7 +18,7 @@ final class Navigation {
         case tabs, split
     }
 
-    /// 要交给 Agent 的一条提示词（存储格式，变量已填）：浮起交给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
+    /// 要发给 Agent 的一条提示词（存储格式，变量已填）：浮起发给 Agent 的输入框（`HandOffInput`），选会话、补一句再发出。
     struct OpenTask: Identifiable {
         let id: UUID
     }
@@ -39,9 +39,9 @@ final class Navigation {
         let id = UUID()
         var project: UUID?
         var launched: Launched?
-        /// 从"交给 Agent"选了新会话：提示词的正文与补的话带过来作开场。
+        /// 从"发给 Agent"选了新会话：提示词的正文与补的话带过来作开场。
         var draft: ComposerDraft?
-        /// 为哪条提示词开的（交给 Agent 时定下）：开好后关联它。
+        /// 为哪条提示词开的（发给 Agent 时定下）：开好后关联它。
         var card: UUID?
     }
 
@@ -54,7 +54,7 @@ final class Navigation {
     /// 随手记输入框浮在键盘上方。
     private(set) var capturing = false
 
-    /// 有浮在键盘上方的输入框（随手记、新会话、交给 Agent；任务浮窗开着时交给 Agent 由浮窗自己浮起）。
+    /// 有浮在键盘上方的输入框（随手记、新会话、发给 Agent；任务浮窗开着时发给 Agent 由浮窗自己浮起）。
     var floating: Bool { capturing || newSession != nil || (task == nil && outbox != nil) }
     var outbox: Outbox?
     /// 浮起的任务（`TaskSheet`）。
@@ -100,12 +100,12 @@ final class Navigation {
         }
     }
 
-    /// 交给 Agent：浮起交给 Agent 的输入框，正文带在里面（`HandOffInput`）。
+    /// 发给 Agent：浮起发给 Agent 的输入框，正文带在里面（`HandOffInput`）。
     func handToAgent(_ card: Card, text: String? = nil) {
         outbox = Outbox(content: text ?? Outgoing.text(of: card), card: card.id, project: card.projectID)
     }
 
-    /// 交给 Agent 时选了新会话：收起交给 Agent 的输入框，换成新会话的，草稿带过去。
+    /// 发给 Agent 时选了新会话：收起发给 Agent 的输入框，换成新会话的，草稿带过去。
     func handOffToNewSession(_ draft: ComposerDraft, card: UUID?) {
         let project = outbox?.project
         outbox = nil

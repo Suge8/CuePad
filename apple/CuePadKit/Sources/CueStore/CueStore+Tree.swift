@@ -14,12 +14,12 @@ extension CueStore {
 
   /// 卡片的上级、项目与是不是任务；没有或已在回收站为 nil。
   func link(of id: UUID) throws -> CardLinks.Link? {
-    try db.first("SELECT parentID, projectID, todoAt IS NOT NULL FROM cards WHERE id = ? AND deletedAt IS NULL", [id]) {
-      CardLinks.Link(parent: $0.uuidOrNil(0), project: $0.uuidOrNil(1), isTask: $0.bool(2))
+    try db.first("SELECT parentID, projectID, todoAt IS NOT NULL, isPinned FROM cards WHERE id = ? AND deletedAt IS NULL", [id]) {
+      CardLinks.Link(parent: $0.uuidOrNil(0), project: $0.uuidOrNil(1), isTask: $0.bool(2), isPinned: $0.bool(3))
     }
   }
 
-  /// 在库里的上级，自下而上；它在第几级是 `count + 1`。
+  /// 在库里的上级，自下而上；任务在第几级是 `count + 1`（任务的上级都是任务）。
   func ancestors(of id: UUID) throws -> [UUID] {
     try db.query(
       """
@@ -30,14 +30,14 @@ extension CueStore {
       """, [id]) { $0.uuid(0) }
   }
 
-  /// 连自己在内往下有几级。只数到 `Card.maxDepth`：判断超限够了，也让环里的数据数得完。
-  func height(of id: UUID) throws -> Int {
+  /// 任务连自己在内往下有几级任务（提示词不算一级）。只数到 `Card.maxTaskDepth`：判断超限够了，也让环里的数据数得完。
+  func taskHeight(of id: UUID) throws -> Int {
     try db.first(
       """
       WITH RECURSIVE sub(id, depth) AS (
         SELECT ?1, 1 UNION SELECT c.id, sub.depth + 1 FROM cards c JOIN sub ON c.parentID = sub.id
-        WHERE c.deletedAt IS NULL AND sub.depth < ?2)
+        WHERE c.deletedAt IS NULL AND c.todoAt IS NOT NULL AND sub.depth < ?2)
       SELECT MAX(depth) FROM sub
-      """, [id, Card.maxDepth]) { Int($0.int(0)) } ?? 1
+      """, [id, Card.maxTaskDepth]) { Int($0.int(0)) } ?? 1
   }
 }

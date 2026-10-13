@@ -21,7 +21,7 @@ extension TaskPicker {
                             header(group.projectID).font(Typography.label).foregroundStyle(palette.ink3).padding(.leading, 4)
                             VStack(spacing: 0) {
                                 ForEach(group.tasks) { task in
-                                    HoverRow { row(task) }
+                                    HoverRow { row(task, in: group) }
                                 }
                             }
                             .padding(4)

@@ -33,7 +33,7 @@ struct ComposerTests {
         #expect(request.hostID == "mac-a" && request.mode == .known(.send))
     }
 
-    /// 交给 Agent 时用"＋ 选灵感"带上本项目的资料：卡片作为这次消息的附件跟着发出（提示词在前、资料在后），
+    /// 发给 Agent 时用"＋ 选灵感"带上本项目的资料：卡片作为这次消息的附件跟着发出（提示词在前、资料在后），
     /// 卡片本身不动——仍在原项目的资料组里；请求关联的仍是那条提示词。选卡片的面板里本项目资料排在最前。
     @Test func 交给Agent时带上资料作附件_正文含它_资料原地不动_面板里资料在最前() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
@@ -60,7 +60,7 @@ struct ComposerTests {
         #expect(try await store.cards(in: project.id).filter(\.isPinned).map(\.id) == [reference.id])
     }
 
-    /// 交给 Agent 的输入框是为某条提示词打开的：请求始终关联这条提示词（打开时定下，不随附件增删），
+    /// 发给 Agent 的输入框是为某条提示词打开的：请求始终关联这条提示词（打开时定下，不随附件增删），
     /// 即使附件里只剩资料，状态点也在提示词上、资料行不出现。
     @Test func 交给Agent时附件里没有那条提示词_请求仍关联它_状态点在提示词不在资料() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")

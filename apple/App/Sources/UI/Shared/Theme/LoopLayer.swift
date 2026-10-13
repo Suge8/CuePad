@@ -1,7 +1,8 @@
 import QuartzCore
 import SwiftUI
 
-/// 常驻循环动效的唯一宿主：工作中的转圈与等待的转圈（`orbit`，后者经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、话在路上的呼吸（`breath`）、进行中文字与最高思考强度上扫过的光（`sheen`）。
+/// 常驻循环动效的唯一宿主：工作中的转圈与等待的转圈（`orbit`，后者经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、话在路上的呼吸（`breath`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
+/// Agent 在做时任务浮窗里吉祥物的轻轻上下浮动（`float`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
 /// 减弱动态效果时由调用方不放它（或换成静止的样子）。
@@ -15,6 +16,8 @@ struct LoopLayer {
         case sheen
         /// 铺满的一层颜色从无到有再回去，一明一暗 1.4s（盖在内容上，内容看起来在呼吸）。
         case pulse
+        /// 一张图（等比铺满）上下浮动 8pt，一上一下 1.8s。
+        case float(CGImage)
     }
 
     let kind: Kind
@@ -87,6 +90,8 @@ struct LoopLayer {
             case .pulse:
                 loop.frame = bounds
                 loop.backgroundColor = color
+            case .float:
+                loop.frame = bounds
             case .sheen:
                 let band = bounds.width * 0.5
                 loop.bounds = CGRect(x: 0, y: 0, width: band, height: bounds.height)
@@ -138,6 +143,17 @@ struct LoopLayer {
                 fade.autoreverses = true
                 fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 return loop(fade, on: layer)
+            case .float(let image):
+                let layer = CALayer()
+                layer.contents = image
+                layer.contentsGravity = .resizeAspect
+                let bob = CABasicAnimation(keyPath: "transform.translation.y")
+                bob.fromValue = 0
+                bob.toValue = 8
+                bob.duration = 0.9
+                bob.autoreverses = true
+                bob.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                return loop(bob, on: layer)
             case .sheen:
                 let layer = CAGradientLayer()
                 layer.startPoint = CGPoint(x: 0, y: 0.5)

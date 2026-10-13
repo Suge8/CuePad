@@ -19,7 +19,7 @@ func makePNG(width: Int = 1600, height: Int = 1000, seed: Int = 0, color: NSColo
 extension CueEditorTheme {
     /// 测试用的最小主题：系统字体、固定色（分割线是纯红，便于从像素里认出来）。App 的纸页主题在 App 里，不在这个包。
     static let test = CueEditorTheme(
-        font: .systemFont(ofSize: 15), titleFont: .systemFont(ofSize: 22, weight: .semibold),
+        font: .systemFont(ofSize: 15),
         headingFont: .systemFont(ofSize: 18, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 13, weight: .regular),
         markerColor: .gray, codeBackground: NSColor.black.withAlphaComponent(0.06), textColor: .black, backgroundColor: .white,
         variableColor: .purple, variableBackground: NSColor.purple.withAlphaComponent(0.12),

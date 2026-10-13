@@ -31,9 +31,23 @@ import Testing
     #expect(try await store.children(of: idea.id).isEmpty)
   }
 
+  @Test func 批量删除一次撤销_全部回到原处() async throws {
+    let project = try await store.createProject(name: "P", color: "#111")
+    let ideas = [try await store.createCard(in: project.id, body: "一"), try await store.createCard(in: project.id, body: "二"),
+                 try await store.createCard(in: project.id, body: "三")]
+    let kept = try await store.createCard(in: project.id, body: "留着")
+    let order = try await topOrder(project.id)
+
+    let changes = try await store.trashCards(ideas.map(\.id))
+    #expect(try await store.cards(in: project.id).map(\.id) == [kept.id])
+    try await store.undo(changes)
+
+    #expect(try await topOrder(project.id) == order)
+  }
+
   @Test func 改回灵感拨回_下级回到它下面() async throws {
     let task = try await store.createTask("修重连", in: nil)
-    let first = try await store.createCard(body: "先复现", under: task.id)
+    let first = try await store.createTask("先复现", under: task.id)
     let second = try await store.createTask("补用例", under: task.id)
 
     let change = try #require(try await store.setTodo(task.id, false))
@@ -51,9 +65,10 @@ import Testing
 
   @Test func 删除拨回_下级按原顺序回到它下面() async throws {
     let task = try await store.createTask("上线", in: nil)
-    let a = try await store.createCard(body: "清单", under: task.id)
-    let b = try await store.createTask("备份", under: task.id)
     let c = try await store.createCard(body: "回滚方案", under: task.id)
+    try await store.updateCard(c.id) { $0.isPinned = true }  // 资料挂在有步骤的任务下也不动
+    let a = try await store.createTask("清单", under: task.id)
+    let b = try await store.createTask("备份", under: task.id)
 
     let change = try #require(try await store.trashCard(task.id))
     let trashed = try await card(task.id), lifted = try await card(a.id)
@@ -61,14 +76,15 @@ import Testing
     try await store.undo(change)
 
     #expect(try await card(task.id).deletedAt == nil)
-    #expect(try await store.children(of: task.id).map(\.id) == [a.id, b.id, c.id])
+    #expect(try await store.children(of: task.id).map(\.id) == [c.id, a.id, b.id])
     #expect(try await store.trashCard(UUID()) == nil)  // 不存在的不留回执
   }
 
   @Test func 删除与改回灵感拨回_归档的下级也回到它下面() async throws {
     let task = try await store.createTask("上线", in: nil)
-    let live = try await store.createCard(body: "清单", under: task.id)
     let old = try await store.createCard(body: "旧的备忘", under: task.id)
+    try await store.updateCard(old.id) { $0.isPinned = true }
+    let live = try await store.createCard(body: "清单", under: task.id)
     try await store.archive(old.id)
 
     let trash = try #require(try await store.trashCard(task.id))

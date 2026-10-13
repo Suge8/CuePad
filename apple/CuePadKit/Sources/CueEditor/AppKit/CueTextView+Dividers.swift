@@ -3,7 +3,7 @@ import AppKit
 import CueText
 
 extension CueTextView {
-    /// 在光标处插入一条分割线（外部工具栏的按钮调用）。
+    /// 在光标处插入一条分割线（右键菜单的"插入分割线"调用）。
     public func insertDivider() {
         apply(core.buffer().dividerEdit(selection: selectedRange()))
     }

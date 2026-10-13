@@ -9,7 +9,7 @@ struct CaptureState {
 }
 
 /// 随手记（iOS 浮起的输入框、Mac 底部输入栏与菜单栏面板共用）：共用的 `Composer`，头部左上是落点菜单（先看去哪、再写），
-/// 提交钮是"记下"（⌘↩，↩ 换行）。记下的是灵感：它要交给 Agent 先挂到任务，所以这里没有发送；记下后提示落点、点提示去那里。
+/// 提交钮是"记下"（⌘↩，↩ 换行）。记下的是灵感：它要发给 Agent 先挂到任务，所以这里没有发送；记下后提示落点、点提示去那里。
 /// 文案与存法见 `CaptureCopy`、`CaptureDraft`。两端只差：Mac 底部输入栏平时收成一行、占位带上落点（`pinnedOpen` 为 false），
 /// 菜单栏面板的提示写在头部右边。
 struct CaptureComposer: View {
@@ -96,7 +96,7 @@ struct CaptureComposer: View {
 }
 
 /// 头部的落点胶囊："[前缀] 图标 名字 ⌃⌄"，点开换去处。随手记与 iOS 任务页的快速添加写"→ 项目图标 项目名"（init(project:)），
-/// 新会话与交给 Agent 的输入框用同一个胶囊写"新会话 · 项目名""交给 会话名"。
+/// 新会话与发给 Agent 的输入框用同一个胶囊写"新会话 · 项目名""交给 会话名"。
 struct DestinationChip<Icon: View>: View {
     var lead: String?
     let title: Text

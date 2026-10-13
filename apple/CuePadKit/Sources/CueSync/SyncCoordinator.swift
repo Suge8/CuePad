@@ -6,7 +6,6 @@ import os
 /// 不接触 CKSyncEngine；与引擎之间只有 `CloudEvent`（进）和 `ChangeQueue`、`record(for:)`（出）。
 actor SyncCoordinator {
   private static let issueLimit = 50
-  private static let inFlightLimit = 4
   private static let sendNowAttempts = 3
   private static let log = Logger(subsystem: "com.sugeh.cuepad", category: "delivery")
 
@@ -16,11 +15,10 @@ actor SyncCoordinator {
   private var watcher: Task<Void, Never>?
   /// 有登记被搁置（配额、未预期失败）：下一次本机改动时全量对账一次，把它们重新登记。
   private var needsFullReconcile = false
-  /// 服务器上的大字段（见 `ServerValues`）与已交出去、还没有结果的上传版本（结果回来时用它记账，不读服务器返回的记录：
-  /// 返回的记录只带发出去的字段）。引擎的上传与立即上传可以重叠，同一条记录会有几个版本在路上，按修改时间区分，
-  /// 结果回来时取它自己那一版记账。
+  /// 服务器上的大字段（见 `ServerValues`）。已交出去、还没有结果的上传版本记在库里（`CueStore.noteSent`）：结果回来时用它记账，
+  /// 不读服务器返回的记录（返回的记录只带发出去的字段）；引擎的上传与立即上传可以重叠，同一条记录会有几个版本在路上，
+  /// 按修改时间区分，结果回来时取它自己那一版。
   private var serverValues = ServerValues()
-  private var inFlight: [String: [Int64: SyncRow]] = [:]
   private var subscribers: [UUID: AsyncStream<SyncState>.Continuation] = [:]
 
   private(set) var state = SyncState(status: .starting, issues: []) {
@@ -104,10 +102,6 @@ actor SyncCoordinator {
       let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
       let values = serverValues
       let record = RecordMapper.record(from: row, zoneID: zoneID, base: base, isCurrent: { base != nil && values.isCurrent($0, in: row) })
-      var versions = inFlight[id.recordName] ?? [:]
-      versions[row.modifiedAt] = row
-      for stale in versions.keys.sorted().dropLast(Self.inFlightLimit) { versions[stale] = nil }  // 取了没发出去的版本不会有结果，只留最近几版
-      inFlight[id.recordName] = versions
       if row.table == .attachments {
         guard case .text(let hash)? = row.fields["hash"], let file = store.files.fileURL(for: hash) else {
           report("附件文件不在本机，未上传", recordType: row.table.rawValue, recordName: id.recordName)
@@ -115,6 +109,7 @@ actor SyncCoordinator {
         }
         record["file"] = CKAsset(fileURL: file)
       }
+      try await store.noteSent(row)  // 取了没发出去的版本不会有结果，留到这条记录下一次落账时清掉
       return record
     } catch {
       report(error, recordName: id.recordName)
@@ -296,12 +291,10 @@ actor SyncCoordinator {
 
   // MARK: 发送结果
 
-  /// 取走这条记录发出去的那一版（发出去的记录和服务器返回的记录都带着当时的 `modifiedAt`）。
-  private func takeInFlight(_ record: CKRecord) -> SyncRow? {
-    let name = record.recordID.recordName
-    guard let stamp = (record["modifiedAt"] as? NSNumber)?.int64Value, let row = inFlight[name]?.removeValue(forKey: stamp) else { return nil }
-    if inFlight[name]?.isEmpty == true { inFlight[name] = nil }
-    return row
+  /// 这条记录发出去的那一版（发出去的记录和服务器返回的记录都带着当时的 `modifiedAt`）；落账时才从库里清掉。
+  private func sentRow(_ record: CKRecord) async throws -> SyncRow? {
+    guard let stamp = (record["modifiedAt"] as? NSNumber)?.int64Value else { return nil }
+    return try await store.sentRow(recordName: record.recordID.recordName, modifiedAt: stamp)
   }
 
   private func processSent(
@@ -310,7 +303,8 @@ actor SyncCoordinator {
   ) async throws {
     var changedSince: [CKRecord.ID] = []
     for record in saved {
-      guard let row = takeInFlight(record) ?? RecordMapper.row(from: record) else { continue }
+      // 每一版发出前都记进了 syncSent，读不到只会是更新的一版已经落账、把它清掉了：这条结果已过时，不记账
+      guard let row = try await sentRow(record) else { continue }
       serverValues.learn(row)
       // 引擎发送的是取走时的版本；之后又改过的，引擎已移除它的待办，要重新登记
       if try await store.markPushed(row, systemFields: RecordMapper.encodeSystemFields(record)) { changedSince.append(record.recordID) }
@@ -324,7 +318,6 @@ actor SyncCoordinator {
 
     var blocked = false
     for (record, error) in failedSaves {
-      _ = takeInFlight(record)
       switch error.code {
       case .serverRecordChanged:
         if let server = error.serverRecord {

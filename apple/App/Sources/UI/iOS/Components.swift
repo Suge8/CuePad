@@ -61,21 +61,16 @@ private struct ProjectContextMenu: ViewModifier {
 
 private struct BottomEdgeOwner: ViewModifier {
     @Environment(Navigation.self) private var navigation
-    @State private var counted = false
 
     func body(content: Content) -> some View {
-        content.background {
-            PageAppearance { visible in
-                guard visible != counted else { return }
-                counted = visible
-                navigation.bottomPages += visible ? 1 : -1
-            }
-        }
+        content.background { PageAppearance { navigation.bottomPages += $0 ? 1 : -1 } }
     }
 }
 
 /// 页面在屏幕上（含推入、返回途中）的起止，跟 UIKit 的出现回调走：手势返回在手指开始拖时就收到"将消失"，
 /// 取消返回再收到"将出现"。SwiftUI 的导航路径要到松手才变，跟它走标签栏会晚出现。
+/// 每个探针控制器各记自己在不在屏上：导航栈带着现成的路径第一次建出来时（冷启动点通知）同一页会先后建出两个控制器，
+/// 新的先出现、旧的才消失；按页面共用一个"已计入"标记时，旧的消失把新的那一份也扣掉，底部栏就盖在回复框上。
 private struct PageAppearance: UIViewControllerRepresentable {
     let changed: (Bool) -> Void
 
@@ -84,13 +79,22 @@ private struct PageAppearance: UIViewControllerRepresentable {
 
     final class Probe: UIViewController {
         var changed: (Bool) -> Void = { _ in }
+        private var shown = false
+
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
-            changed(true)
+            set(true)
         }
+
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
-            changed(false)
+            set(false)
+        }
+
+        private func set(_ visible: Bool) {
+            guard visible != shown else { return }
+            shown = visible
+            changed(visible)
         }
     }
 }

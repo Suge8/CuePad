@@ -3,8 +3,8 @@ import CuePi
 import CueStore
 import SwiftUI
 
-/// 会话页要放在窗口工具栏上的东西：居中的标题（会话名接状态）与右上的"⋯"（所在、重命名、跳到终端、结束会话）。
-/// 工具栏项在主窗口里常驻（`SessionTitleSlot`、`SessionMenuSlot`），随页面切换换里面的内容：增删工具栏项会重建整条工具栏，
+/// 会话页要放在窗口工具栏上的东西：居中的标题（会话名接状态）与右上"⋯"里的会话操作（所在、重命名、跳到终端、结束会话）。
+/// 工具栏项在主窗口里常驻（`SessionTitleSlot`、`PageMenuSlot`），随页面切换换里面的内容：增删工具栏项会重建整条工具栏，
 /// 进出会话页、换会话时那要占点击回合的一半。会话页只把算好的值与动作交到这里；不是会话页时槽里是空的。
 @Observable
 final class SessionHeader {
@@ -23,6 +23,9 @@ final class SessionHeader {
         var showsHeader: Bool
         /// "⋯"里的菜单项晚于标题两帧建（建菜单约占点击回合的一半）；钮本身与标题同时出，工具栏只重排一次。
         var showsMenu: Bool
+
+        /// "⋯"里有东西可放。
+        var hasActions: Bool { place != nil || canRename || liveID != nil || canEnd }
     }
 
     private(set) var state: State?
@@ -108,41 +111,22 @@ struct SessionTitleSlot: View {
     }
 }
 
-/// 工具栏右上的"⋯"：最上面写所在，下面重命名、跳到终端（开在终端里的在线会话）、结束会话；不在会话页或都没有时不出现、不占位。
-/// 它是单独的工具栏项、不共用系统的玻璃底（`sharedBackgroundVisibility(.hidden)`），圆钮的玻璃自己画，与"收起"同一种做法：
-/// 项一直在，只有里面的钮出没（增删工具栏项会重建整条工具栏，一次进出会话页约占动作后主线程 CPU 的三分之一到一半）。
-struct SessionMenuSlot: View {
+/// "⋯"里会话页的那几项：最上面写所在，下面重命名、跳到终端（开在终端里的在线会话）、结束会话。
+struct SessionMenuItems: View {
+    let state: SessionHeader.State
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        // 钮与标题同一圈出现（项的尺寸只变一次，换会话时不变）；菜单里的项晚两帧（`showsMenu`）
-        if let state = workspace.shownSessionHeader, state.place != nil || state.canRename || state.liveID != nil || state.canEnd {
-            Menu {
-                if state.showsMenu {
-                    if let place = state.place { Section { } header: { Text(place) } }
-                    if state.canRename {
-                        Button("重命名…", systemImage: "pencil") { workspace.sessionHeader.rename(state.session) }
-                    }
-                    if let id = state.liveID {
-                        Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(id) }
-                    }
-                    if state.canEnd {
-                        Button("结束会话", systemImage: "stop.circle", role: .destructive) { workspace.sessionHeader.end(state.session) }
-                            .disabled(state.ending)
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis").font(.system(size: 15, weight: .medium)).foregroundStyle(palette.ink)
-                    .frame(width: Spacing.toolbarControl, height: Spacing.toolbarControl)
-                    .contentShape(.circle)
-            }
-            .menuStyle(.button).menuIndicator(.hidden)
-            .buttonStyle(.plain)
-            .fixedSize()
-            .glass(in: .circle, interactive: true)
-            .help("重命名、跳到终端、结束会话")
-            .accessibilityLabel("更多")
+        if let place = state.place { Section { } header: { Text(place) } }
+        if state.canRename {
+            Button("重命名…", systemImage: "pencil") { workspace.sessionHeader.rename(state.session) }
+        }
+        if let id = state.liveID {
+            Button("跳到终端窗口", systemImage: "macwindow") { workspace.jumpToTerminal(id) }
+        }
+        if state.canEnd {
+            Button("结束会话", systemImage: "stop.circle", role: .destructive) { workspace.sessionHeader.end(state.session) }
+                .disabled(state.ending)
         }
     }
 }

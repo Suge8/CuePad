@@ -4,7 +4,7 @@ import SwiftUI
 /// 输入框里的按键（面板打开时由输入框的文字区交给面板处理）。
 enum ComposerKey { case up, down, accept, dismiss }
 
-/// 输入 "/" 弹出的斜杠命令面板（回复框与交给 Agent 的输入框共用，嵌在输入框的玻璃里）：每行一条命令——名字、参数提示、一行说明，
+/// 输入 "/" 弹出的斜杠命令面板（回复框与发给 Agent 的输入框共用，嵌在输入框的玻璃里）：每行一条命令——名字、参数提示、一行说明，
 /// 右侧标明来源（内置、扩展、模板、技能）；方向键移动高亮、↩ 或 Tab 选中、Esc 收起，点按直接选。选中只把 "/名字 " 放进输入框，接着写参数，发送照常。
 struct PiSlashPalette: View {
     let commands: [PiSlashCommand]

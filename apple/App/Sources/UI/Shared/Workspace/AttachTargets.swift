@@ -1,14 +1,27 @@
 import CueStore
 import Foundation
 
-/// 灵感能挂到哪些任务（"挂到任务"的选择面板）：没做完的任务（含子任务，先序），按项目分组——灵感所在项目的在前，
-/// 其余按项目的顺序（`CueStore.projects()`），没归项目的最后。
+/// 灵感能挂到哪些任务（"挂到任务"的选择面板）：没做完的叶子（没有步骤的任务——提示词只挂在叶子下；有步骤的任务不列，
+/// 步骤带着上级一起给），按项目分组——灵感所在项目的在前，其余按项目的顺序（`CueStore.projects()`），没归项目的最后。
 nonisolated enum AttachTargets {
-    static func read(for idea: Card, from store: isolated CueStore) throws -> [TaskGroup] {
-        let byProject = Dictionary(uniqueKeysWithValues: try store.tasks(.inProgress, .todo).map { ($0.projectID, $0) })
+    struct Group: Equatable, Sendable {
+        var projectID: UUID?
+        var tasks: [Card]
+        /// 步骤的上级（只给列出的步骤）。
+        var parents: [UUID: Card]
+    }
+
+    static func read(for idea: Card, from store: isolated CueStore) throws -> [Group] {
+        let hasSteps = Set(try store.tasks(.inProgress, .todo, .done).flatMap(\.tasks).compactMap(\.parentID))
+        let byProject = Dictionary(uniqueKeysWithValues: try store.tasks(.inProgress, .todo).map { ($0.projectID, $0.tasks) })
         var owners: [UUID?] = [idea.projectID]
         for id in try store.projects().map(\.id) + [nil] where !owners.contains(id) { owners.append(id) }
-        return owners.compactMap { byProject[$0] }.filter { !$0.tasks.isEmpty }
+        return try owners.compactMap { owner -> Group? in
+            guard let tasks = byProject[owner]?.filter({ !hasSteps.contains($0.id) }), !tasks.isEmpty else { return nil }
+            var parents: [UUID: Card] = [:]
+            for case let id? in Set(tasks.map(\.parentID)) { parents[id] = try store.card(id) }
+            return Group(projectID: owner, tasks: tasks, parents: parents)
+        }
     }
 }
 

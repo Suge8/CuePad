@@ -99,7 +99,7 @@ shot_mac() {
     fi
     rm -f "$pidfile"
   fi
-  # 直接启动可执行文件以拿到确切 PID；不经 LaunchServices 激活，不抢当前焦点
+  # 直接启动可执行文件以拿到确切 PID；App 见到 CUEPAD_SHOT_READY 就在后台跑、窗口排在最后，不抢当前焦点也不盖住别的窗口
   # 库与 Pi 目录都隔离：不碰真实资料库、不读 ~/.pi 的会话
   # （socket 路径受 sun_path 104 字节限制，放 /tmp）
   CUEPAD_LIBRARY_DIR="$(absolute "${CUEPAD_SHOT_LIBRARY:-$DERIVED/library}")" CUEPAD_SHOT_READY="$ready" \

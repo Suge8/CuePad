@@ -2,7 +2,7 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 带上的一张卡片或任务（输入框里的，或 iOS 交给 Agent 时浮起的那一份）。
+/// 带上的一张卡片或任务（输入框里的，或 iOS 发给 Agent 时浮起的那一份）。
 struct Outbox: Identifiable {
     let id = UUID()
     var content: String
@@ -11,7 +11,7 @@ struct Outbox: Identifiable {
     var project: UUID?
 }
 
-/// 输入框里的东西：文字、图片、带上的灵感或任务（可带几张，按带上的顺序；第一张是这次关联的那条——交给 Agent 时是那条提示词）。存成卡片（随手记）、发给 Pi（回复）、开场的话（新会话）都是它，
+/// 输入框里的东西：文字、图片、带上的灵感或任务（可带几张，按带上的顺序；第一张是这次关联的那条——发给 Agent 时是那条提示词）。存成卡片（随手记）、发给 Pi（回复）、开场的话（新会话）都是它，
 /// 去处只决定怎么处理这份草稿。
 struct ComposerDraft {
     var text = ""

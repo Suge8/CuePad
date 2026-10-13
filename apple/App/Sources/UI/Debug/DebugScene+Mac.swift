@@ -15,24 +15,32 @@ extension DebugScene {
         case "collapsed": workspace.pages.sidebar = .detailOnly
         case "search": workspace.searching = true
         case "tasks": workspace.showsTasks = true
+        case "select":
+            // 批量选择：选上本页前三条灵感
+            try? await Task.sleep(for: .seconds(1))
+            for id in workspace.presses.selectable.prefix(3) { workspace.presses.toggle(id) }
         case "task":
-            // 本项目第一条没完成的顶层任务，整页打开
+            // 本项目第一条没完成的顶层任务，在任务浮窗里打开
             let tasks = (try? await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)) ?? []
-            workspace.openCard = tasks.first { $0.parentID == nil && $0.projectID == workspace.currentProject }?.id ?? tasks.first?.id
+            if let task = tasks.first(where: { $0.parentID == nil && $0.projectID == workspace.currentProject }) ?? tasks.first { workspace.open(task) }
         case "agent":
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
             workspace.show(.agent)
         case "projectagent":
-            // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在
+            // 项目页（-CuePadProject）的 Agent 栏，演示会话与同名文件夹的会话都在；圆桌的任务下，发出去的提示词带发送状态
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }
         case "trash": workspace.show(.trash)
         case "archive": workspace.show(.archive)
-        case "editor": workspace.openCard = await card(in: workspace.currentProject, store: workspace.services.store)
+        case "editor":
+            // 散放的灵感进编辑页，提示词在它任务的浮窗里展开
+            if let id = await card(in: workspace.currentProject, store: workspace.services.store),
+               let card = try? await workspace.services.store.card(id) { workspace.open(card) }
         case "attach":
-            guard let id = await card(in: workspace.currentProject, store: workspace.services.store) else { break }
-            workspace.openCard = id
+            guard let id = await card(in: workspace.currentProject, store: workspace.services.store),
+                  let card = try? await workspace.services.store.card(id) else { break }
+            workspace.open(card)
             try? await Task.sleep(for: .seconds(1))
-            workspace.attaching = try? await workspace.services.store.card(id)
+            workspace.attaching = card
         case "session":
             // 整页打开 -CuePadSession（演示会话的 sessionID 与会话名相同）
             if defaults.bool(forKey: "CuePadDemo") { await seedRemote(workspace.services) }

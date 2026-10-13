@@ -231,7 +231,7 @@ nonisolated extension PiShown {
         }
     }
 
-    /// 选会话时排在前面的（交给 Agent 的会话选单）：等你确认 → 出错 → 有新回复 → 工作中 → 需要 /reload → 停下的 → 已结束。
+    /// 选会话时排在前面的（发给 Agent 的会话选单）：等你确认 → 出错 → 有新回复 → 工作中 → 需要 /reload → 停下的 → 已结束。
     var urgency: Int {
         switch status {
         case .asking: 6

@@ -158,17 +158,17 @@ extension CueStore {
     return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })
   }
 
-  private static let toSessionModes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+  static let toSessionModes = DeliveryMode.toSession.map { "'\($0.rawValue)'" }.joined(separator: ", ")
   /// 还没执行完的请求（`r`）。
   private static let openRequest = "r.status IN ('\(DeliveryStatus.pending.rawValue)', '\(DeliveryStatus.executing.rawValue)')"
 
-  /// 一张任务的下级（子任务与提示词），按手动顺序；在回收站的不列。
+  /// 一张任务的下级（步骤与提示词），按手动顺序；在回收站的不列。
   public func children(of parent: UUID) throws -> [Card] {
     try select(Card.self, where: "parentID = ? AND deletedAt IS NULL AND archivedAt IS NULL", [parent], orderBy: "sortKey, id")
   }
 
   /// 这几种状态的任务，按项目分组：项目顺序同 `projects()`，未分类的在最后。组内是整棵任务树的先序（同级按手动顺序，
-  /// 子任务紧跟上级）再按状态筛：上级被筛掉的子任务就排在上级原来的位置。只要完成的时不按树，最近完成在前。
+  /// 步骤紧跟上级）再按状态筛：上级被筛掉的步骤就排在上级原来的位置。只要完成的时不按树，最近完成在前。
   /// 回收站里的任务与回收站项目的任务不列。
   public func tasks(_ statuses: TaskStatus...) throws -> [TaskGroup] {
     try taskGroups(Set(statuses))
@@ -218,7 +218,7 @@ extension CueStore {
     return ordered
   }
 
-  /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的子任务当顶层，与 `tasks(_:)` 列出的一致。
+  /// 可当上级的任务：列得出来的（没删除、没归档）要做卡片。上级不在这里的步骤当顶层，与 `tasks(_:)` 列出的一致。
   private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
 
   /// 任务（`t`）连着它的项目（`p`）与列得出来的上级（`u`）；顶层的条件见 `topLevel`。`taskCounts` 与 `startedTasks` 共用。
@@ -227,7 +227,7 @@ extension CueStore {
   private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
 
   /// 各项目（nil = 未分类）的顶层任务按状态的个数——给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：
-  /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；子任务的进度见 `childMarks`。
+  /// 没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）；步骤的进度见 `subtaskProgress`。
   /// 灵感（含提示词）不算；没有任务的项目不在结果里；回收站里的任务与回收站项目不算。
   public func taskCounts() throws -> [UUID?: TaskCounts] { try taskCounts(scope: "", []) }
 
@@ -251,7 +251,7 @@ extension CueStore {
   }
 
   /// 进行中的任务（已开始、没完成），最近开始的在前，同刻按项目顺序与手动顺序；回收站、归档的不列。
-  /// `topLevelOnly` 只要显示在顶层的（口径同 `taskCounts`：子任务跟着上级，上级也没完成时不单列）。
+  /// `topLevelOnly` 只要显示在顶层的（口径同 `taskCounts`：步骤跟着上级，上级也没完成时不单列）。
   public func startedTasks(topLevelOnly: Bool = false) throws -> [Card] {
     try db.query(
       """
@@ -262,41 +262,37 @@ extension CueStore {
     ) { Card(row: $0) }
   }
 
-  /// 每条任务的直接下级，同级手动顺序：任务行的分段完成圈与"子任务 n/m"都由它推出，见 `ChildMark`；没有下级的不在结果里。
+  /// 每条任务的步骤完成了几个、一共几个：任务行的完成圈与"步骤 n/m"由它推出；没有步骤的不在结果里。
   /// 不带参数读全库；`of` 只读一条任务的；`in` 只读一个项目（nil = 未分类）里的（下级与上级同项目）。
-  /// 提示词（任务下的灵感）"已回复"：没有交给 Agent 的请求还在路上（手机重发、Mac 还没执行），且它最近一次交给 Pi 会话之后，
-  /// 那个会话歇下了（`stateSince` 晚于发出时刻）或对话里有之后的一条回答——没回答就结束的不算。复制、发到应用不算交给 Agent。
-  /// 对话是证据，所以清理对话时跳过仍被提示词引用的会话（`prunePiMessages`），已回复不会随对话清掉而退回。
-  public func childMarks() throws -> [UUID: [ChildMark]] { try childMarks(scope: "", []) }
+  /// 提示词不在其中：提示词只表示发没发出去（见 `prompts()` 与 `handedSessions()`），不算任务的进度。
+  public func subtaskProgress() throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "", []) }
 
-  public func childMarks(of parent: UUID) throws -> [UUID: [ChildMark]] { try childMarks(scope: "AND c.parentID = ?", [parent]) }
+  public func subtaskProgress(of parent: UUID) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND parentID = ?", [parent]) }
 
-  public func childMarks(in project: UUID?) throws -> [UUID: [ChildMark]] { try childMarks(scope: "AND c.projectID IS ?", [project]) }
+  public func subtaskProgress(in project: UUID?) throws -> [UUID: TaskProgress] { try subtaskProgress(scope: "AND projectID IS ?", [project]) }
 
-  private func childMarks(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: [ChildMark]] {
-    let session = SendTargetKind.piSession.rawValue
+  private func subtaskProgress(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: TaskProgress] {
     let rows = try db.query(
       """
-      SELECT c.parentID, c.todoAt IS NOT NULL,
-        CASE WHEN c.todoAt IS NOT NULL THEN c.completedAt IS NOT NULL
-        ELSE NOT EXISTS (
-          SELECT 1 FROM deliveryRequests r
-          WHERE r.cardID = c.id AND (r.mode = 'start' OR r.mode IN (\(Self.toSessionModes))) AND \(Self.openRequest))
-        AND EXISTS (
-          SELECT 1 FROM sendRecords s
-          WHERE s.cardID = c.id AND s.targetKind = '\(session)'
-            AND s.sentAt = (SELECT MAX(q.sentAt) FROM sendRecords q WHERE q.cardID = c.id AND q.targetKind = '\(session)')
-            AND (EXISTS (SELECT 1 FROM piSessionStates p WHERE p.sessionID = s.targetRef
-                   AND p.state = '\(PiWorkState.settled.rawValue)' AND p.stateSince > s.sentAt)
-              OR EXISTS (SELECT 1 FROM piMessages m WHERE m.sessionID = s.targetRef
-                   AND m.role = '\(PiChatRole.pi.rawValue)' AND m.at > s.sentAt)))
-        END
-      FROM cards c
-      WHERE c.parentID IS NOT NULL AND c.deletedAt IS NULL AND c.archivedAt IS NULL \(scope)
-      ORDER BY c.parentID, c.sortKey, c.id
+      SELECT parentID, COUNT(*), COUNT(completedAt) FROM cards
+      WHERE parentID IS NOT NULL AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL \(scope)
+      GROUP BY parentID
       """, arguments
-    ) { (parent: $0.uuid(0), mark: ChildMark(isTask: $0.int(1) != 0, isDone: $0.int(2) != 0)) }
-    return Dictionary(grouping: rows, by: \.parent).mapValues { $0.map(\.mark) }
+    ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(2)), total: Int($0.int(1)))) }
+    return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
+  }
+
+  /// 任务下的提示词（挂在任务下的灵感），按上级分组、同级手动顺序：任务列表在每条任务下直接列出它们，不必打开任务。
+  /// 不带参数读全库；`in` 只读一个项目（nil = 未分类）里的。归档、回收站里的不列。
+  public func prompts() throws -> [UUID: [Card]] { try prompts(scope: "", []) }
+
+  public func prompts(in project: UUID?) throws -> [UUID: [Card]] { try prompts(scope: "AND projectID IS ?", [project]) }
+
+  private func prompts(scope: String, _ arguments: [any SQLBindable]) throws -> [UUID: [Card]] {
+    let cards = try select(
+      Card.self, where: "parentID IS NOT NULL AND todoAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL \(scope)", arguments,
+      orderBy: "parentID, sortKey, id")
+    return Dictionary(grouping: cards) { $0.parentID! }
   }
 
   /// 发送记录，最近的在前（同一毫秒按写入先后）。

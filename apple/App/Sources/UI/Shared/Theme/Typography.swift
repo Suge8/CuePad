@@ -14,7 +14,7 @@ enum Typography {
     static let secondary = Font.system(size: 13)
     /// 元信息：时间、计数、路径、标记。
     static let meta = Font.system(size: 12)
-    /// 小节标签（任务与 Agent 栏的"任务""Agent"、提示词、子任务）：小号加粗、次要墨色。
+    /// 小节标签（任务与 Agent 栏的"任务""Agent"、提示词、步骤）：小号加粗、次要墨色。
     static let label = Font.system(size: 12, weight: .semibold)
     /// 最小的字：折起的计数、工具注脚这类附注（iOS 比元信息小一档，Mac 不再往下小）；caption2 是展开箭头这类更小的符号。
     static let caption = Font.system(size: 12)

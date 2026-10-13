@@ -42,23 +42,27 @@ extension DebugScene {
         for id in others { if let directory = directories[id] { try? await store.setDirectory(directory, for: id) } }
     }
 
-    /// 任务三态与提示词：圆桌"乱序"的第一条提示词交给 notes 已回复、第二条交给 atlas 在处理、第三条没发（任务进行中）；
-    /// CuePad"投送超时"的提示词交给 notes 已回复（行尾出现"完成"）；CuePad、Flow、圆桌各完成一条（先后完成）。
+    /// 任务三态与提示词：圆桌"乱序"的步骤"复现乱序""改成按首次加入时间排序""部署到预发环境"的提示词发给了会话 notes、atlas、deploy
+    /// （送达，提示词已用掉，步骤记着会话；复现乱序随后完成），"补 3 个重连用例"的没发；
+    /// CuePad"投送超时"的提示词发给 notes（同样用掉）；CuePad、Flow、圆桌各完成一条（先后完成）。
     private static func seedTaskStates(_ store: CueStore, projects: [Project]) async {
         guard let tasks = try? await store.tasks(.todo).flatMap(\.tasks) else { return }
         func prompts(_ prefix: String) async -> [Card] {
             guard let task = tasks.first(where: { $0.body.hasPrefix(prefix) }) else { return [] }
             return ((try? await store.children(of: task.id)) ?? []).filter { !$0.isTask }
         }
+        // 送达的提示词已用掉（资料库里删了），任务记着会话
         func send(_ prompt: Card?, to session: String) async {
             guard let prompt else { return }
             _ = try? await store.recordSend(prompt.body, to: SendTarget(kind: .piSession, name: session, ref: session), card: prompt.id)
+            try? await store.purgeCard(prompt.id)
         }
-        let order = await prompts("发言轮次"), timeout = await prompts("投送队列")
-        await send(order.first, to: "notes")
-        await send(timeout.first, to: "notes")
-        await send(order.dropFirst().first, to: "atlas")
-        // notes 这一轮做完：交给它的两条提示词已回复
+        await send(await prompts("复现乱序").first, to: "notes")
+        await send(await prompts("投送队列").first, to: "notes")
+        await send(await prompts("改成按首次").first, to: "atlas")
+        await send(await prompts("部署到预发").first, to: "deploy")
+        if let reproduce = tasks.first(where: { $0.body.hasPrefix("复现乱序") }) { try? await store.setStatus(reproduce.id, .done) }
+        // notes 这一轮做完，会话歇下
         try? await Task.sleep(for: .milliseconds(5))
         _ = try? await PiStateRecorder(store: store, hostID: "demo-mac").update(
             sessionID: "notes", state: .settled, title: "notes", folder: "notes", projectID: projects.first { $0.name == "Career" }?.id,

@@ -84,6 +84,23 @@ import Testing
     #expect(try await rig.reconcileDelta().deletes == [rig.id(card.id)])
   }
 
+  /// 提示词送达就用掉：删掉的行下次对账就是要向服务器删的记录，别的设备随之没有这条提示词。
+  @Test(.timeLimit(.minutes(1)))
+  func deliveredPromptIsDeletedOnTheServerToo() async throws {
+    let task = try await store.createTask("修乱序", in: nil)
+    let prompt = try await store.createCard(body: "先复现", under: task.id)
+    try await rig.coordinator.reconcile()
+    try await rig.simulatePush()
+    let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _ in .succeeded }
+    try await executor.start()
+
+    try await store.requestDelivery(prompt.body, to: SendTarget(kind: .piSession, name: "atlas", ref: "s1"), on: "mac-a", card: prompt.id)
+    _ = try await eventually(store, { try $0.card(prompt.id) }) { $0 == nil }
+    await executor.stop()
+
+    #expect(try await rig.reconcileDelta().deletes == [rig.id(prompt.id)])
+  }
+
   // MARK: 冲突
 
   @Test func newerLocalEditWinsNonBodyFieldsAndStaysPendingForPush() async throws {
@@ -131,7 +148,8 @@ import Testing
     let card = try await pushedCard(body: "base")
     let local = try await editCard(card, body: "local version")
 
-    await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote version", modifiedAt: local - 1_000)))
+    // 另一台设备在本机上次同步之后、本机编辑之前改的
+    await fetched(remoteRecord(.cards, id: card.id, cardFields(project: nil, body: "remote version", modifiedAt: local - 1)))
 
     let conflict = try #require(try await store.conflicts().first)
     #expect(conflict.original.body == "local version" && conflict.copy.body == "remote version")

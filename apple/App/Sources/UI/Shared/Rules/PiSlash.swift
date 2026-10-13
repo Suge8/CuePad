@@ -39,7 +39,7 @@ nonisolated enum PiSlash {
     static func insertion(for command: PiSlashCommand) -> String { "/\(command.name) " }
 
     /// 草稿是一条已知的斜杠命令时，要发出的整行；否则为 nil（当普通消息发）。
-    /// 命令行是输入的文字（首个词是清单里的名字），带上的卡片文字接在后面当参数（交给 Agent 时）；带图片的不算命令，命令不能携带图片。
+    /// 命令行是输入的文字（首个词是清单里的名字），带上的卡片文字接在后面当参数（发给 Agent 时）；带图片的不算命令，命令不能携带图片。
     @MainActor static func line(of draft: ComposerDraft, in commands: [PiSlashCommand]) -> String? {
         let typed = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard typed.hasPrefix("/"), !draft.hasImages else { return nil }

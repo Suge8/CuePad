@@ -14,7 +14,7 @@ extension NSAttributedString.Key {
 
 /// 轻装饰只改"展示"：TextKit 向内容管理器要每个段落时，返回一份带样式的副本，
 /// NSTextStorage 里的文本与属性、撤销栈和存储格式都不受影响。
-/// 渲染属性只能改颜色、下划线这类不影响布局的属性，标题字号字重只能走这条路。
+/// 渲染属性只能改颜色、下划线这类不影响布局的属性，`#` 标题的字号字重只能走这条路。
 final class DecorationDelegate: NSObject, NSTextContentStorageDelegate, NSTextLayoutManagerDelegate, Sendable {
     private weak let core: EditorCore?
 
@@ -74,7 +74,7 @@ extension EditorCore {
         let hasNewline = range.length > 0 && text.character(at: NSMaxRange(range) - 1) == 0x0A
         let lineRange = NSRange(location: range.location, length: range.length - (hasNewline ? 1 : 0))
         let line = decorations.style(ofLine: text.substring(with: lineRange), at: range.location)
-        guard line.isTitle || line.kind != .body || !line.inlineCode.isEmpty else { return nil }
+        guard line.kind != .body || !line.inlineCode.isEmpty else { return nil }
         let paragraph = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
         decorate(paragraph, line: line)
         return NSTextParagraph(attributedString: paragraph)
@@ -85,8 +85,6 @@ extension EditorCore {
         let isCode = line.kind == .fence || line.kind == .code
         if isCode {
             paragraph.addAttributes([.font: style.codeFont, .cueCodeBand: resolved(style.codeBackground)], range: whole)
-        } else if line.isTitle {
-            paragraph.addAttributes([.font: style.titleFont, .paragraphStyle: paragraphStyle()], range: whole)
         } else if line.kind == .heading {
             paragraph.addAttributes([.font: style.headingFont, .paragraphStyle: paragraphStyle(spacingBefore: style.headingSpacing)], range: whole)
         } else if line.kind == .list {
@@ -122,28 +120,16 @@ extension EditorCore {
         storage.edited(.editedAttributes, range: range, changeInLength: 0)
     }
 
-    /// 编辑之后，让受影响的未编辑段落按新上下文重排：标题易主、围栏奇偶翻转。
-    func restyleAfter(_ edits: [(range: NSRange, delta: Int)]) {
+    /// 编辑之后，让受影响的未编辑段落按新上下文重排：围栏奇偶翻转。
+    func restyleAfter(_ edits: [NSRange]) {
         let old = flushedDecorations
         flushedDecorations = decorations
         let length = storage.length
         guard edits.count == 1 else { return restyle(NSRange(location: 0, length: length)) }
-        let (edit, delta) = edits[0]
-        if old.titleLocation != decorations.titleLocation {
-            let mappedOld = old.titleLocation.flatMap { location -> Int? in
-                if location < edit.location { return location }
-                return location >= NSMaxRange(edit) - delta ? location + delta : nil
-            }
-            [mappedOld, decorations.titleLocation].compactMap { $0 }.forEach { restyle(paragraphRange(at: $0)) }
-        }
+        let edit = edits[0]
         if (decorations.fenceCount - old.fenceCount) % 2 != 0 {
             let start = min(NSMaxRange(edit), length)
             restyle(NSRange(location: start, length: length - start))
         }
-    }
-
-    private func paragraphRange(at location: Int) -> NSRange {
-        let text = storage.mutableString
-        return text.paragraphRange(for: NSRange(location: min(location, text.length), length: 0))
     }
 }

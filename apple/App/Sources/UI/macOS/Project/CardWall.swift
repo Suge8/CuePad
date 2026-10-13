@@ -202,20 +202,41 @@ struct CardTile: View {
         CardFace(card: card, lastTarget: lastTarget, floated: floated)
         .frame(maxWidth: .infinity, alignment: .leading)
         .paper(radius: Self.radius, lifted: hovering)
+        .overlay { SelectedFrame(radius: Self.radius) }
         .contentShape(.rect(cornerRadius: Self.radius))
         }
         .buttonStyle(CardOpenStyle())
         .cardPresence(card.id, in: workspace)
         .onHover { hovering = $0 }
         .animation(Motion.quick, value: hovering)
-        .contextMenu { CardActions(card: card) }
+        .contextMenu { CardActions(card: card, selectable: true) }
         .ideaDrag(card.id)
         .accessibilityElement(children: .combine)
         .perfMark("content")
     }
 
     private func open() {
-        workspace.openCard = card.id
+        guard !workspace.presses.takesClick(on: card.id, command: NSEvent.modifierFlags.contains(.command)) else { return }
+        workspace.open(card)
+    }
+}
+
+/// 批量选择里选上的卡：一圈签名色的边，右上角一个对勾。
+private struct SelectedFrame: View {
+    let radius: CGFloat
+    @Environment(\.cardSelected) private var selected
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if selected {
+            RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(palette.signature, lineWidth: 2)
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundStyle(palette.onSignature, palette.signature)
+                        .padding(10)
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+        }
     }
 }
 

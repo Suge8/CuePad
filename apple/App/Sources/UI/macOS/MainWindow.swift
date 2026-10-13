@@ -50,7 +50,7 @@ struct MainWindow: View {
         // 工具栏给条目画的玻璃底不随内容显隐（隐去时会留一个空圆钮），所以关掉它、由按钮自己画
         ToolbarItem(placement: .navigation) { CloseButton() }
             .sharedBackgroundVisibility(.hidden)
-        // 会话页的标题（居中）与右上的"⋯"：项常驻、只换里面的内容（`SessionHeader`）。.principal 在详情区里居中，与对话的阅读栏同一条中线
+        // 会话页的标题（`SessionHeader`，居中）；右上的"⋯"（`PageMenuSlot`）是当前页的操作：项常驻、只换里面的内容。.principal 在详情区里居中，与对话的阅读栏同一条中线
         ToolbarItem(placement: .principal) { SessionTitleSlot() }
             .sharedBackgroundVisibility(.hidden)
         ToolbarSpacer(.flexible)
@@ -62,7 +62,7 @@ struct MainWindow: View {
                 .disabled(!workspace.isLibraryReady)
             TasksButton().disabled(!workspace.isLibraryReady)
         }
-        ToolbarItem(placement: .primaryAction) { SessionMenuSlot() }
+        ToolbarItem(placement: .primaryAction) { PageMenuSlot() }
             .sharedBackgroundVisibility(.hidden)
     }
 }
@@ -86,6 +86,7 @@ private struct WindowPanels: View {
                 mountsPalette = true
             }
             .panel(isPresented: $workspace.showsTasks, style: .side) { TasksPanel() }
+            .panel(item: $workspace.openTask) { TaskSheet(taskID: $0.id) }
             .panel(item: $workspace.attaching) { TaskPicker(idea: $0) }
             .panel(item: $workspace.projectForm) { ProjectForm(project: $0.project) }
             .dialog(
@@ -288,7 +289,9 @@ private struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.page.takesCapture {
+        if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.presses.isSelecting {
+            SelectionBar().padding(.bottom, 16).transition(.opacity)
+        } else if workspace.isLibraryReady, workspace.presses.presented == nil, workspace.page.takesCapture {
             let searching = workspace.searching
             CaptureBar(project: workspace.currentProject).padding(.bottom, 16)
                 .opacity(searching ? 0 : 1)
@@ -386,9 +389,7 @@ private struct WorkspaceShortcuts: View {
     private func newCard() {
         let project = workspace.currentProject
         workspace.attempt {
-            let card = try await workspace.createCard(in: project)
-            workspace.showsTasks = false
-            workspace.openCard = card.id
+            workspace.open(try await workspace.createCard(in: project))
         }
     }
 }

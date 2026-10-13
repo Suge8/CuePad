@@ -9,9 +9,9 @@ nonisolated private struct PaletteData: Sendable, Equatable {
     var projects: [Project]
     var lastSends: [UUID: LastSend]
     var targets: [SendTarget]
-    /// 结果里的任务：上级的标题与下级（提示词、子任务）各自做完没有，预览里写它的进度。
+    /// 结果里的任务：上级的标题与下级（提示词、步骤）各自做完没有，预览里写它的进度。
     var parents: [UUID: String]
-    var marks: [UUID: [ChildMark]]
+    var subtasks: [UUID: TaskProgress]
 }
 
 /// ⌘K：两个范围。卡片——跨项目搜索，四个筛选（项目、含图片、发送目标、时间），结果按项目分组，右侧纸面预览；
@@ -63,14 +63,14 @@ struct SearchPalette: View {
                 for owner in Set(found.cards.map(\.projectID)) {
                     lastSends.merge(try store.lastSends(in: owner)) { current, _ in current }
                 }
-                var parents: [UUID: String] = [:], marks: [UUID: [ChildMark]] = [:]
+                var parents: [UUID: String] = [:], subtasks: [UUID: TaskProgress] = [:]
                 for task in found.cards where task.isTask {
-                    marks[task.id] = try store.childMarks(of: task.id)[task.id]
+                    subtasks[task.id] = try store.subtaskProgress(of: task.id)[task.id]
                     if let parent = task.parentID { parents[task.id] = try store.card(parent)?.title }
                 }
                 return PaletteData(
                     cards: found.cards, total: found.totalCards, projects: try store.projects(),
-                    lastSends: lastSends, targets: try store.sendTargets(), parents: parents, marks: marks)
+                    lastSends: lastSends, targets: try store.sendTargets(), parents: parents, subtasks: subtasks)
             }
             .onChange(of: data?.cards.map(\.id)) {
                 if let ids = data?.cards.map(\.id), selection.map(ids.contains) != true { selection = ids.first }
@@ -235,7 +235,7 @@ struct SearchPalette: View {
                     if let name = data.lastSends[card.id]?.target.shownName { SentMark(target: name) }
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
-                if card.isTask, let facts = Self.taskFacts(parent: data.parents[card.id], marks: data.marks[card.id]) {
+                if card.isTask, let facts = Self.taskFacts(parent: data.parents[card.id], subtasks: data.subtasks[card.id]) {
                     Text(facts).font(Typography.meta).foregroundStyle(palette.ink2)
                 }
                 if let image = text.images.first { Thumbnail(hash: image, height: 150) }
@@ -265,14 +265,14 @@ struct SearchPalette: View {
         }
     }
 
-    /// 任务预览的一行："上级：修乱序 · 3 条提示词 · 1 已回复 · 子任务 1/2"；什么都没有时不写。
-    private static func taskFacts(parent: String?, marks: [ChildMark]?) -> Dotted? {
-        (Dotted(parent.map { "上级：\($0)" }) + (PromptTally(marks).text ?? Dotted()) + Dotted(TaskProgress.subtasks(in: marks).map(TaskCopy.progress))).nonEmpty
+    /// 任务预览的一行："上级：修乱序 · 步骤 1/2"；什么都没有时不写。
+    private static func taskFacts(parent: String?, subtasks: TaskProgress?) -> Dotted? {
+        Dotted(parent.map { "上级：\($0)" }, subtasks.map(TaskCopy.progress)).nonEmpty
     }
 
     private var shortcuts: some View {
         ZStack {
-            Button("发送") { if let card = selected { Task { await sendSelected(card) } } }
+            Button("发给 Agent") { if let card = selected { handOff(card) } }
                 .keyboardShortcut(.return, modifiers: .command)
             Button("复制") { if let card = selected { workspace.copy(Outgoing.text(of: card)) } }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
@@ -280,10 +280,9 @@ struct SearchPalette: View {
         .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 
-    /// 只有提示词发给 Agent（本项目当前的会话）；灵感先挂到任务。
-    private func sendSelected(_ card: Card) async {
-        guard CardMenu.handsToAgent(card), let target = workspace.sendState.agentTarget(for: card.projectID) else { return }
-        await workspace.send(Outgoing.text(of: card), to: target, card: card.id)
+    /// 只有提示词发给 Agent（去处规则同编辑页）；灵感先挂到任务。
+    private func handOff(_ card: Card) {
+        if CardMenu.handsToAgent(card) { workspace.handOff(card) }
     }
 
     private func groups(_ data: PaletteData) -> [(owner: UUID?, cards: [Card])] {
@@ -317,7 +316,7 @@ struct SearchPalette: View {
         if card.projectID != workspace.currentProject {
             workspace.show(card.projectID.map(Route.project) ?? .unfiled)
         }
-        workspace.openCard = card.id
+        workspace.open(card)
     }
 }
 
@@ -394,8 +393,8 @@ private struct FilterBar: View {
         FilterToken(name: "Agent", value: sentLabel, on: query.sent != .any) {
             Button("任意") { query.sent = .any }
             Divider()
-            Button("没交给过 Agent") { query.sent = .never }
-            Button("交给过 Agent") { query.sent = .sent(kind: .known(.piSession)) }
+            Button("没发给过 Agent") { query.sent = .never }
+            Button("发给过 Agent") { query.sent = .sent(kind: .known(.piSession)) }
             if !targets.isEmpty {
                 Divider()
                 ForEach(Array(targets.enumerated()), id: \.offset) { _, target in

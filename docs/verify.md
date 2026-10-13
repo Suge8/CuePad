@@ -9,6 +9,7 @@ apple/scripts/xc.sh shot mac out.png -- -CuePadDemo YES -CuePadScene editor -the
 ```
 
 - Debug 构建认一组启动参数，完整列表与含义只写在 `App/Sources/UI/Debug/DebugScene.swift`、`DebugScene+iOS.swift` 的文档注释里。产品代码只经 `DebugHooks` 碰调试画面，不认识 `DebugScene`、不写 `#if DEBUG`。调试键不写进偏好域（`UserDefaults.standard` 是真实的 `com.sugeh.cuepad`）：预填的搜索词只认启动参数。
+- 截图与 App 测试不抢前台：截图（给了 `CUEPAD_SHOT_READY`）与测试宿主都以后台 App 运行，不进程序坞、不接键盘，截图的主窗口排在所有窗口最后（`DebugHooks.staysInBackground`），按窗口截图照样截得到。要前台的只有量交互与动画（见下文"性能测量"），它会抢焦点、动指针，跑之前先确认用户此刻不在用这台 Mac。
 - 窗口尺寸用 `-CuePadWindowSize` 定；不给时沿用这个隔离库上次记下的位置与尺寸（偏好在隔离库里）。
 - 布局反馈环压力：`apple/scripts/layout-stress.sh`，场景与判定见脚本头注释。界面侧的约束见 [ui.md](ui.md)。
 

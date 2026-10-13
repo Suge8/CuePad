@@ -13,7 +13,7 @@ import Foundation
 ///
 /// 同步表里的本机列（不进 CKRecord）：deliveryRequests.resultReceivedAt。
 ///
-/// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
+/// 本机表（不同步）：piSessions、projectDirectories、syncRecords、syncSent、syncState、searchIndex（FTS5，由触发器随同步表维护，可随时重建）。
 ///
 /// 同步表只加表或可空列，不改已有列：其他版本的设备仍按旧字段读写同一批记录。下线的字段与表删掉本地列、不再读写，
 /// CloudKit 里照原样声明为已下线（`CloudKitSchema.retiredFields` / `retiredTypes`，生产环境删不掉）。
@@ -51,9 +51,57 @@ enum Schema {
     // 23：工具活动的各类计数改为失败的也算在内（与清单的行同一口径，`Tools.failed` 下线）；已存对话里的是旧口径，
     // 会话文件的检查点作废，下次启动从头读一遍，所有消息统一成新口径
     "UPDATE piSessions SET checkpoint = NULL;",
-    // 24：对话里你的消息改用正文格式（文字加图片引用），去掉 Pi 附给模型的图片说明；会话文件的检查点作废，下次启动从头读一遍，已存的消息跟着更新、补出图片
+    // 24：本机交给过服务器、结果还没落账的版本整行（见 `syncSent`）
+    Upgrade(stringLiteral: syncSent),
+    // 25：任务最多两级，提示词不算一级。旧规则下第 3 级的任务（含回收站里的，恢复后同样超限）改挂到上级的上级，与 `CardLinks.repairs` 同一规则；
+    // 旧规则最深就是第 3 级，一步够。modifiedAt 必须变大，改动才会同步出去
+    Upgrade { db in
+      try db.run(
+        """
+        UPDATE cards SET parentID = (SELECT p.parentID FROM cards p WHERE p.id = cards.parentID), modifiedAt = MAX(modifiedAt + 1, ?)
+        WHERE todoAt IS NOT NULL AND parentID IN (
+          SELECT p.id FROM cards p JOIN cards g ON g.id = p.parentID WHERE p.deletedAt IS NULL AND g.deletedAt IS NULL)
+        """, [Date.stamp])
+    },
+    // 26：提示词送达即用掉（`PromptConsumption`）。旧库里已经发出去的提示词同样删掉：任务下的灵感（非资料、没进回收站），
+    // 记着交给的会话（发给会话、开新会话认领后），或有成功的发送请求；还有在路上或失败的请求的留着（没送到的可重发）。
+    // 删的是行：同步表的删除由下次对账发现（`pendingDeletes`），不另记墓碑。图片文件不在这里回收：发出去的话的发送记录快照仍引用它们。
+    Upgrade { db in
+      let delivered = try db.query(
+        """
+        SELECT c.id FROM cards c WHERE \(CueStore.isPrompt("c")) AND c.deletedAt IS NULL
+          AND (c.piSessionID IS NOT NULL
+            OR EXISTS (SELECT 1 FROM deliveryRequests r WHERE r.cardID = c.id AND r.status = 'succeeded' AND \(CueStore.delivers("r"))))
+          AND NOT EXISTS (SELECT 1 FROM deliveryRequests r WHERE r.cardID = c.id AND r.status IN ('pending', 'executing', 'failed'))
+        """
+      ) { $0.uuid(0) }
+      _ = try CueStore.consumePrompts(delivered, in: db)
+    },
+    // 27：任务的正文只有标题。旧任务的第二行起（一句说明）按设为任务的规则（`CueLines.split`）拆成它的第一条提示词：不带会话与发送记录，
+    // 说明从没发给过 Agent。回收站与归档里的任务一并处理；modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      let now = Date.stamp
+      let tasks = try db.query("SELECT id, modifiedAt FROM cards WHERE todoAt IS NOT NULL AND instr(body, char(10)) > 0") {
+        (id: $0.uuid(0), modifiedAt: $0.date(1))
+      }
+      for (id, modifiedAt) in tasks {
+        _ = try CueStore.splitPrompt(db, task: id, at: max(now, modifiedAt.addingTimeInterval(0.001)), carryingHandoff: false)
+      }
+    },
+    // 28：任务 → 步骤 → 会话。草稿（提示词）与会话只在叶子（没有步骤的任务）上，一个叶子最多一条草稿（`CardLinks`）。
+    // 有步骤的任务下的提示词移到第一个没完成的步骤（没有就第一个步骤），它记着的会话也交给那个步骤（它已有会话的就丢弃上级的），
+    // 一个叶子有多条提示词的按顺序并成一条：整库按远端收敛同一条规则（`CardLinks.repairs`）算一遍。modifiedAt 变大，改动才会同步出去
+    Upgrade { db in
+      let links = try CardLinks(db)
+      try CueStore.apply(links.repairs(touching: Set(links.links.keys)), in: db, at: Date.stamp)
+    },
+    // 29：对话里你的消息改用正文格式（文字加图片引用），去掉 Pi 附给模型的图片说明；会话文件的检查点作废，下次启动从头读一遍，已存的消息跟着更新、补出图片
     "UPDATE piSessions SET checkpoint = NULL;",
   ]
+
+  private static let syncSent = """
+    CREATE TABLE syncSent (recordName TEXT NOT NULL, modifiedAt INTEGER NOT NULL, row BLOB NOT NULL, PRIMARY KEY (recordName, modifiedAt)) STRICT, WITHOUT ROWID;
+    """
 
   private static let previews = """
     CREATE TABLE previews (
@@ -157,6 +205,9 @@ enum Schema {
       pushedModifiedAt INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX syncRecords_recordType ON syncRecords(recordType);
+    -- 本机交给过服务器、结果还没落账的版本（整行，JSON）：这一版经拉取回到本机是自己的回声，不是别的设备的编辑；
+    -- 结果回来时按它记账（上传的记录只带改动的字段，不能读回来）。落账（pushedModifiedAt 推进到它或更新）时清掉；落账之后的回声由 pushedModifiedAt 认出。
+    \(syncSent)
     CREATE TABLE syncState (key TEXT PRIMARY KEY NOT NULL, value BLOB NOT NULL) STRICT;
 
     -- trigram 分词：中文等无空格文本可子串匹配；LIKE 在其上对任意长度关键字都正确（3 字符以上走索引）。
